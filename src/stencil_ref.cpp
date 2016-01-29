@@ -1,0 +1,70 @@
+/*****************************************************************************
+
+YASK: Yet Another Stencil Kernel
+Copyright (c) 2014-2016, Intel Corporation
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to
+deal in the Software without restriction, including without limitation the
+rights to use, copy, modify, merge, publish, distribute, sublicense, and/or
+sell copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+* The above copyright notice and this permission notice shall be included in
+  all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
+IN THE SOFTWARE.
+
+*****************************************************************************/
+
+#include "stencil.hpp"
+
+// Calculate nreps time steps of stencil over grid using scalar code.
+void calc_steps_ref(StencilContext& context, const int nreps)
+{
+    // get problem sizes (in points, not vector lengths).
+    Grid5d* grid = context.grid;
+    assert(grid);
+    MATRIX_TYPE& data = grid->getData();
+    const long d1 = data.getDimX();
+    const long d2 = data.getDimY();
+    const long d3 = data.getDimZ();
+
+    // Instantiate a stencil function.
+    StencilBase* stencilFunc = new STENCIL_REF(context.vel);
+    assert(stencilFunc);
+
+    // time steps.
+    printf("running %i reference time step(s)...\n", nreps);
+    for(int t0 = 1; t0 <= nreps; t0 += TIME_STEPS) {
+
+        // variables.
+        for (int v0 = 0; v0 < NUM_VARS; v0++) {
+
+#pragma omp parallel for
+            for(int iz=0; iz<d3; iz++) {
+
+                CREW_FOR_LOOP
+                    for(int iy=0; iy<d2; iy++) {
+
+                        for(int ix=0; ix<d1; ix++) {
+
+                            // Evaluate the reference scalar code.
+                            GridValue next = stencilFunc->value(*grid, t0 + TIME_STEPS, t0, v0, ix, iy, iz);
+
+                            // Save result.
+                            grid->writeVal(next, t0 + TIME_STEPS, v0, ix, iy, iz);
+                        }
+                    }
+            }
+        }
+    } // iterations.
+
+    delete stencilFunc;
+}
