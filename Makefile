@@ -72,7 +72,7 @@ expr_size	=	50
 omp_schedule	=	dynamic
 
 # whether to use Intel CREW.
-crew		= 	1
+crew		= 	0
 
 # gen-loops args for outer 3 sets of loops:
 
@@ -117,12 +117,14 @@ ifeq ($(arch),knc)
 CPPFLAGS		+= -mmic
 CPPFLAGS	+= 	-DINTRIN512
 FB_FLAGS2  	=       -pknc $(fold)
+crew		=	1
 
 else ifeq ($(arch),knl)
 
 CPPFLAGS	+=	-xMIC-AVX512
 CPPFLAGS	+= 	-DINTRIN512
 FB_FLAGS2  	=       -p512 $(fold)
+crew		=	1
 
 else ifeq ($(arch),skx)
 
@@ -140,7 +142,6 @@ else
 
 CPPFLAGS	+=	-xHOST
 FB_FLAGS2   	=	-pcpp $(fold)
-crew		=	0
 
 endif # arch-specific.
 
