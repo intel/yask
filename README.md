@@ -13,7 +13,7 @@ processors.
 
 Supported Platform
 * 64-bit Linux
-* Intel(R) Xeon Phi(TM) processor (for performance), or any Intel Architecture platform (for functional testing)
+* Intel(R) Xeon Phi(TM) coprocessor (for performance), or any Intel Architecture platform (for functional testing)
 
 Pre-requisites:
 * Intel(R) C++ compiler,

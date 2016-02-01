@@ -69,9 +69,13 @@ void operator+=(GridValue& lhs, double rhs) {
 
 ExprPtr operator-(const ExprPtr& lhs, const ExprPtr& rhs) {
 
+#ifdef USE_ADD_NEG
     // Generate A + -B instead of A - B to allow easy reordering.
     ExprPtr nrhs = make_shared<NegExpr>(rhs);
     return lhs + nrhs;
+#else
+    return make_shared<SubExpr>(lhs, rhs);
+#endif    
 }
 ExprPtr operator-(double lhs, const ExprPtr& rhs) {
     ExprPtr p = make_shared<ConstExpr>(lhs);
