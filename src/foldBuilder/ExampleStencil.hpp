@@ -78,34 +78,40 @@ public:
 
     // Calculate and return the value of stencil at u(t2, v0, i, j, k)
     // based on u(t0, v0, ...);
-    virtual GridValue value(Grid5d& u, int t2, int t0, int v0, int i, int j, int k) const {
-        assert(t2 >= t0);
+    virtual GridValue value(Grid5d& u, int tW, int t0, int v0, int i, int j, int k) const {
 
-        // just the current value?
-        if (t2 == t0)
+        // if the wanted time (tW) is <= the last known time (t0),
+        // we are done--just return the known value from the grid.
+        if (tW <= t0)
             return u(t0, v0, i, j, k);
 
-        // not the current value; calc t2-1 based on t0.
-        int t1 = t2 - 1;
+        // not known; calc using values at tW-1 recursively.
+        int tm1 = tW - 1;  // one timestep ago.
 
         // start with center value.
-        GridValue v = coeff(0, 0, 0, 0) * value(u, t1, t0, v0, i, j, k);
+        GridValue v = coeff(0, 0, 0, 0) * value(u, tm1, t0, v0, i, j, k);
 
-        // add values from x, y, and z axes.
+        // Add values from x, y, and z axes.
         if (_doAxes) {
             for (int r = 1; r <= _order/2; r++) {
 
-                // x-axis.
-                v += coeff(0, -r, 0, 0) * value(u, t1, t0, v0, i-r, j, k);
-                v += coeff(0, +r, 0, 0) * value(u, t1, t0, v0, i+r, j, k);
-
-                // y-axis.
-                v += coeff(0, 0, -r, 0) * value(u, t1, t0, v0, i, j-r, k);
-                v += coeff(0, 0, +r, 0) * value(u, t1, t0, v0, i, j+r, k);
-
-                // z-axis.
-                v += coeff(0, 0, 0, -r) * value(u, t1, t0, v0, i, j, k-r);
-                v += coeff(0, 0, 0, +r) * value(u, t1, t0, v0, i, j, k+r);
+                // On the axes, assume values are isotropic, i.e., the same
+                // for all points the same distance from the origin.
+                double c = coeff(0, +r, 0, 0);
+                v += c * 
+                    (
+                     // x-axis.
+                     value(u, tm1, t0, v0, i-r, j, k) +
+                     value(u, tm1, t0, v0, i+r, j, k) +
+            
+                     // y-axis.
+                     value(u, tm1, t0, v0, i, j-r, k) +
+                     value(u, tm1, t0, v0, i, j+r, k) +
+            
+                     // z-axis.
+                     value(u, tm1, t0, v0, i, j, k-r) +
+                     value(u, tm1, t0, v0, i, j, k+r)
+                     );
             }
         }
 
@@ -114,22 +120,22 @@ public:
             for (int r = 1; r <= _order/2; r++) {
 
                 // x-y diagonal.
-                v += coeff(0, -r, -r, 0) * value(u, t1, t0, v0, i-r, j-r, k);
-                v += coeff(0, +r, -r, 0) * value(u, t1, t0, v0, i+r, j-r, k);
-                v -= coeff(0, -r, +r, 0) * value(u, t1, t0, v0, i-r, j+r, k);
-                v -= coeff(0, +r, +r, 0) * value(u, t1, t0, v0, i+r, j+r, k);
+                v += coeff(0, -r, -r, 0) * value(u, tm1, t0, v0, i-r, j-r, k);
+                v += coeff(0, +r, -r, 0) * value(u, tm1, t0, v0, i+r, j-r, k);
+                v -= coeff(0, -r, +r, 0) * value(u, tm1, t0, v0, i-r, j+r, k);
+                v -= coeff(0, +r, +r, 0) * value(u, tm1, t0, v0, i+r, j+r, k);
 
                 // x-z diagonal.
-                v += coeff(0, -r, 0, -r) * value(u, t1, t0, v0, i-r, j, k-r);
-                v += coeff(0, +r, 0, +r) * value(u, t1, t0, v0, i+r, j, k+r);
-                v -= coeff(0, -r, 0, +r) * value(u, t1, t0, v0, i-r, j, k+r);
-                v -= coeff(0, +r, 0, -r) * value(u, t1, t0, v0, i+r, j, k-r);
+                v += coeff(0, -r, 0, -r) * value(u, tm1, t0, v0, i-r, j, k-r);
+                v += coeff(0, +r, 0, +r) * value(u, tm1, t0, v0, i+r, j, k+r);
+                v -= coeff(0, -r, 0, +r) * value(u, tm1, t0, v0, i-r, j, k+r);
+                v -= coeff(0, +r, 0, -r) * value(u, tm1, t0, v0, i+r, j, k-r);
 
                 // y-z diagonal.
-                v += coeff(0, 0, -r, -r) * value(u, t1, t0, v0, i, j-r, k-r);
-                v += coeff(0, 0, +r, +r) * value(u, t1, t0, v0, i, j+r, k+r);
-                v -= coeff(0, 0, -r, +r) * value(u, t1, t0, v0, i, j-r, k+r);
-                v -= coeff(0, 0, +r, -r) * value(u, t1, t0, v0, i, j+r, k-r);
+                v += coeff(0, 0, -r, -r) * value(u, tm1, t0, v0, i, j-r, k-r);
+                v += coeff(0, 0, +r, +r) * value(u, tm1, t0, v0, i, j+r, k+r);
+                v -= coeff(0, 0, -r, +r) * value(u, tm1, t0, v0, i, j-r, k+r);
+                v -= coeff(0, 0, +r, -r) * value(u, tm1, t0, v0, i, j+r, k-r);
             }
         }
 
@@ -139,34 +145,34 @@ public:
                 for (int m = r+1; m <= _order/2; m++) {
 
                     // x-y plane.
-                    v += coeff(0, -r, -m, 0) * value(u, t1, t0, v0, i-r, j-m, k);
-                    v += coeff(0, -m, -r, 0) * value(u, t1, t0, v0, i-m, j-r, k);
-                    v += coeff(0, +r, +m, 0) * value(u, t1, t0, v0, i+r, j+m, k);
-                    v += coeff(0, +m, +r, 0) * value(u, t1, t0, v0, i+m, j+r, k);
-                    v -= coeff(0, -r, +m, 0) * value(u, t1, t0, v0, i-r, j+m, k);
-                    v -= coeff(0, -m, +r, 0) * value(u, t1, t0, v0, i-m, j+r, k);
-                    v -= coeff(0, +r, -m, 0) * value(u, t1, t0, v0, i+r, j-m, k);
-                    v -= coeff(0, +m, -r, 0) * value(u, t1, t0, v0, i+m, j-r, k);
+                    v += coeff(0, -r, -m, 0) * value(u, tm1, t0, v0, i-r, j-m, k);
+                    v += coeff(0, -m, -r, 0) * value(u, tm1, t0, v0, i-m, j-r, k);
+                    v += coeff(0, +r, +m, 0) * value(u, tm1, t0, v0, i+r, j+m, k);
+                    v += coeff(0, +m, +r, 0) * value(u, tm1, t0, v0, i+m, j+r, k);
+                    v -= coeff(0, -r, +m, 0) * value(u, tm1, t0, v0, i-r, j+m, k);
+                    v -= coeff(0, -m, +r, 0) * value(u, tm1, t0, v0, i-m, j+r, k);
+                    v -= coeff(0, +r, -m, 0) * value(u, tm1, t0, v0, i+r, j-m, k);
+                    v -= coeff(0, +m, -r, 0) * value(u, tm1, t0, v0, i+m, j-r, k);
 
                     // x-z plane.
-                    v += coeff(0, -r, 0, -m) * value(u, t1, t0, v0, i-r, j, k-m);
-                    v += coeff(0, -m, 0, -r) * value(u, t1, t0, v0, i-m, j, k-r);
-                    v += coeff(0, +r, 0, +m) * value(u, t1, t0, v0, i+r, j, k+m);
-                    v += coeff(0, +m, 0, +r) * value(u, t1, t0, v0, i+m, j, k+r);
-                    v -= coeff(0, -r, 0, +m) * value(u, t1, t0, v0, i-r, j, k+m);
-                    v -= coeff(0, -m, 0, +r) * value(u, t1, t0, v0, i-m, j, k+r);
-                    v -= coeff(0, +r, 0, -m) * value(u, t1, t0, v0, i+r, j, k-m);
-                    v -= coeff(0, +m, 0, -r) * value(u, t1, t0, v0, i+m, j, k-r);
+                    v += coeff(0, -r, 0, -m) * value(u, tm1, t0, v0, i-r, j, k-m);
+                    v += coeff(0, -m, 0, -r) * value(u, tm1, t0, v0, i-m, j, k-r);
+                    v += coeff(0, +r, 0, +m) * value(u, tm1, t0, v0, i+r, j, k+m);
+                    v += coeff(0, +m, 0, +r) * value(u, tm1, t0, v0, i+m, j, k+r);
+                    v -= coeff(0, -r, 0, +m) * value(u, tm1, t0, v0, i-r, j, k+m);
+                    v -= coeff(0, -m, 0, +r) * value(u, tm1, t0, v0, i-m, j, k+r);
+                    v -= coeff(0, +r, 0, -m) * value(u, tm1, t0, v0, i+r, j, k-m);
+                    v -= coeff(0, +m, 0, -r) * value(u, tm1, t0, v0, i+m, j, k-r);
 
                     // y-z plane.
-                    v += coeff(0, 0, -r, -m) * value(u, t1, t0, v0, i, j-r, k-m);
-                    v += coeff(0, 0, -m, -r) * value(u, t1, t0, v0, i, j-m, k-r);
-                    v += coeff(0, 0, +r, +m) * value(u, t1, t0, v0, i, j+r, k+m);
-                    v += coeff(0, 0, +m, +r) * value(u, t1, t0, v0, i, j+m, k+r);
-                    v -= coeff(0, 0, -r, +m) * value(u, t1, t0, v0, i, j-r, k+m);
-                    v -= coeff(0, 0, -m, +r) * value(u, t1, t0, v0, i, j-m, k+r);
-                    v -= coeff(0, 0, +r, -m) * value(u, t1, t0, v0, i, j+r, k-m);
-                    v -= coeff(0, 0, +m, -r) * value(u, t1, t0, v0, i, j+m, k-r);
+                    v += coeff(0, 0, -r, -m) * value(u, tm1, t0, v0, i, j-r, k-m);
+                    v += coeff(0, 0, -m, -r) * value(u, tm1, t0, v0, i, j-m, k-r);
+                    v += coeff(0, 0, +r, +m) * value(u, tm1, t0, v0, i, j+r, k+m);
+                    v += coeff(0, 0, +m, +r) * value(u, tm1, t0, v0, i, j+m, k+r);
+                    v -= coeff(0, 0, -r, +m) * value(u, tm1, t0, v0, i, j-r, k+m);
+                    v -= coeff(0, 0, -m, +r) * value(u, tm1, t0, v0, i, j-m, k+r);
+                    v -= coeff(0, 0, +r, -m) * value(u, tm1, t0, v0, i, j+r, k-m);
+                    v -= coeff(0, 0, +m, -r) * value(u, tm1, t0, v0, i, j+m, k-r);
                 }
             }
         }
@@ -178,14 +184,14 @@ public:
                     for (int rz = 1; rz <= _order/2; rz++) {
 
                         // Each quadrant.
-                        v += coeff(rx, ry, rz, 0) * value(u, t1, t0, v0, i+rx, j+ry, k+rz);
-                        v += coeff(rx, -ry, -rz, 0) * value(u, t1, t0, v0, i+rx, j-ry, k-rz);
-                        v -= coeff(rx, ry, -rz, 0) * value(u, t1, t0, v0, i+rx, j+ry, k-rz);
-                        v -= coeff(rx, -ry, rz, 0) * value(u, t1, t0, v0, i+rx, j-ry, k+rz);
-                        v += coeff(-rx, ry, rz, 0) * value(u, t1, t0, v0, i-rx, j+ry, k+rz);
-                        v += coeff(-rx, -ry, -rz, 0) * value(u, t1, t0, v0, i-rx, j-ry, k-rz);
-                        v -= coeff(-rx, ry, -rz, 0) * value(u, t1, t0, v0, i-rx, j+ry, k-rz);
-                        v -= coeff(-rx, -ry, rz, 0) * value(u, t1, t0, v0, i-rx, j-ry, k+rz);
+                        v += coeff(rx, ry, rz, 0) * value(u, tm1, t0, v0, i+rx, j+ry, k+rz);
+                        v += coeff(rx, -ry, -rz, 0) * value(u, tm1, t0, v0, i+rx, j-ry, k-rz);
+                        v -= coeff(rx, ry, -rz, 0) * value(u, tm1, t0, v0, i+rx, j+ry, k-rz);
+                        v -= coeff(rx, -ry, rz, 0) * value(u, tm1, t0, v0, i+rx, j-ry, k+rz);
+                        v += coeff(-rx, ry, rz, 0) * value(u, tm1, t0, v0, i-rx, j+ry, k+rz);
+                        v += coeff(-rx, -ry, -rz, 0) * value(u, tm1, t0, v0, i-rx, j-ry, k-rz);
+                        v -= coeff(-rx, ry, -rz, 0) * value(u, tm1, t0, v0, i-rx, j+ry, k-rz);
+                        v -= coeff(-rx, -ry, rz, 0) * value(u, tm1, t0, v0, i-rx, j-ry, k+rz);
                     }
         }
 
