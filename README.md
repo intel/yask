@@ -29,22 +29,4 @@ Pre-requisites:
   tool and library paths are in the proper environment variables.
 * Download and unzip the YASK source-code.
 
-Example build commands:
-* 'cd' to the directory containing the Makefile.
-* Type one of the following commands, depending on your target architecture:
-  * 'make arch=knc' for an Intel Xeon Phi coprocessor (MIC).
-  * 'make arch=knl' for 'MIC-AVX512' code generation.
-* For other build options, see the comments in the Makefile. Example options:
-  * Stencil type.
-  * Stencil order (size).
-  * Vector folding.
-  * Loop ordering.
-
-Example run commands:
-* Type  command to run with the default settings:
-  * './stencil-run.sh -mic <n>' to run natively on Xeon Phi card number <n>.
-  * 'sde -knl -- ./stencil-run.sh -arch knl' to run the MIC-AVX512 version on
-    the emulator.
-* For other run options, add '-help' to one of the above commands.
-
-For more information, visit https://01.org/yask.
+To continue with building and running, see YASK-intro.pdf in the docs directory.
