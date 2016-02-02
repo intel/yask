@@ -23,8 +23,8 @@
 
 # typical invocations:
 # make -j8
-# make -j8 arch=knc order=8
-# make -j8 arch=knl shape=ave fold='2 1 4' cluster='2 1 1'
+# make -j8 arch=knl order=8
+# make -j8 arch=skx shape=ave fold='2 1 4' cluster='2 1 1'
 
 # example debug builds:
 # make arch=knl  OMPFLAGS='-qopenmp-stubs'
@@ -39,7 +39,7 @@ tsteps		=	1
 
 # target architecture: knc, knl, skx, hsw, host.
 # code is only functional (not optimized) for any arch w/o 512-bit vectors.
-arch            = 	knl
+arch            = 	knc
 
 # number of vars (grids) to solve.
 vars		=	1
@@ -71,7 +71,12 @@ expr_size	=	50
 # OMP schedule policy.
 omp_schedule	=	dynamic
 
-# whether to use Intel CREW.
+# Whether to use Intel CREW.
+# Off by default, but turned on by default below for
+# certain architectures.
+# If you get linker errors about missing 'kmp*' symbols, your
+# compiler does not support crew for the specified architecture,
+# and you should specify 'crew=0' as a make argument.
 crew		= 	0
 
 # gen-loops args for outer 3 sets of loops:
