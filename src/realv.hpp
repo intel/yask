@@ -406,6 +406,9 @@ ALWAYS_INLINE void realv_permute2(realv& res, const realv& ctrl,
         res.r[i] = sel ? tmpb.r[idx] : tmpa.r[idx];
     }
 
+#elif defined(ARCH_KNC)
+    cerr << "error: 2-input permute not supported on KNC" << endl;
+    exit(1);
 #elif REAL_BYTES == 4
     res.m512i = _mm512_permutex2var_epi32(a.m512i, ctrl.m512i, b.m512i);
 #else
