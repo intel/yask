@@ -22,7 +22,7 @@
 ##############################################################################
 
 # typical invocations:
-# make -j8
+# make -j8 arch=knc
 # make -j8 arch=knl order=8
 # make -j8 arch=skx shape=ave fold='2 1 4' cluster='2 1 1'
 
@@ -39,7 +39,7 @@ tsteps		=	1
 
 # target architecture: knc, knl, skx, hsw, host.
 # code is only functional (not optimized) for any arch w/o 512-bit vectors.
-arch            = 	knc
+arch            =	knc
 
 # number of vars (grids) to solve.
 vars		=	1
@@ -104,7 +104,10 @@ LFLAGS          =    	-lpthread
 CPPFLAGS        =   	-g -O3 -std=c++11 -Wall
 OMPFLAGS	=	-fopenmp 
 LFLAGS          =       $(CPPFLAGS) -lrt -g
-GEN_HEADERS     =	$(addprefix src/,stencil_outer_loops.hpp stencil_region_loops.hpp stencil_block_loops.hpp mapping.hpp real_matrices.hpp stencil_code.hpp stencil_macros.hpp)
+GEN_HEADERS     =	$(addprefix src/,stencil_outer_loops.hpp \
+				stencil_region_loops.hpp stencil_block_loops.hpp \
+				mapping.hpp real_matrices.hpp stencil_macros.hpp \
+				stencil_vector_code.hpp stencil_scalar_code.hpp)
 
 # real (FP) size.
 CPPFLAGS	+=	-DREAL_BYTES=$(real_bytes)
@@ -117,36 +120,40 @@ ARCH		:=	$(shell echo $(arch) | tr '[:lower:]' '[:upper:]')
 CPPFLAGS	+= 	-DARCH_$(ARCH)
 
 # arch-specific settings
-ifeq ($(arch),knc)
+ifeq ($(arch),)
+
+$(error Architecture not specified; use, e.g., arch=knc|knl|skx)
+
+else ifeq ($(arch),knc)
 
 CPPFLAGS		+= -mmic
 CPPFLAGS	+= 	-DINTRIN512
-FB_FLAGS2  	=       -pknc $(fold)
+FB_TARGET  	=       knc
 crew		=	1
 
 else ifeq ($(arch),knl)
 
 CPPFLAGS	+=	-xMIC-AVX512
 CPPFLAGS	+= 	-DINTRIN512
-FB_FLAGS2  	=       -p512 $(fold)
+FB_TARGET  	=       512
 crew		=	1
 
 else ifeq ($(arch),skx)
 
 CPPFLAGS	+=	-xCORE_AVX512
 CPPFLAGS	+= 	-DINTRIN512
-FB_FLAGS2  	=       -p512 $(fold)
+FB_TARGET  	=       512
 
 else ifeq ($(arch),hsw)
 
 CPPFLAGS	+=	-xCORE-AVX2
-FB_FLAGS2   	=	-pcpp $(fold)
+FB_TARGET  	=       cpp
 
 # any other arch.
 else
 
 CPPFLAGS	+=	-xHOST
-FB_FLAGS2   	=	-pcpp $(fold)
+FB_TARGET  	=       cpp
 
 endif # arch-specific.
 
@@ -224,10 +231,14 @@ foldBuilder: src/foldBuilder/*.cpp src/foldBuilder/*.hpp
 src/stencil_macros.hpp: foldBuilder
 	./$< $(FB_FLAGS) -pm $(fold) > $@
 
-src/stencil_code.hpp: foldBuilder
-	./$< $(FB_FLAGS) $(FB_FLAGS2) > $@
+src/stencil_vector_code.hpp: foldBuilder
+	./$< $(FB_FLAGS) -pv$(FB_TARGET) $(fold) > $@
 	gindent $@ || indent $@
 	@grep -m1 -A3 Calculate $@
+
+src/stencil_scalar_code.hpp: foldBuilder
+	./$< $(FB_FLAGS) -es 10 -pscpp > $@
+	gindent $@ || indent $@
 
 %.$(arch).o: %.cpp src/*.hpp src/foldBuilder/*.hpp $(GEN_HEADERS)
 	$(CC) $(CPPFLAGS) -Isrc/foldBuilder -c -o $@ $<

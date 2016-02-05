@@ -23,11 +23,56 @@ IN THE SOFTWARE.
 
 *****************************************************************************/
 
-////////// Support for C++ vector-code generation //////////////
+////////// Support for C++ scalar and vector-code generation //////////////
 
 #include "Vec.hpp"
 
-// Output simple C++ code.
+/////////// Scalar code /////////////
+
+// Outputs a C++ compilable scalar code.
+class CppPrintHelper : public PrintHelper {
+
+public:
+    CppPrintHelper() { }
+    virtual ~CppPrintHelper() { }
+
+    // Format a real, preserving precision.
+    static string formatReal(double v) {
+
+        // IEEE double gives 15-17 significant decimal digits of precision per
+        // https://en.wikipedia.org/wiki/Double-precision_floating-point_format.
+        // Some precision might be lost if/when cast to a float, but that's ok.
+        ostringstream oss;
+        oss << setprecision(17) << scientific << v;
+        return oss.str();
+    }
+    
+    // Return a constant expression.
+    // This is overloaded to preserve precision.
+    virtual string addConstExpr(ostream& os, double v) {
+        return formatReal(v);
+    }
+
+    // Return a grid reference.
+    // The 'os' parameter is provided for derived types that
+    // need to write intermediate code to a stream.
+    virtual string constructPoint(ostream& os, const GridPoint& gp) {
+        ostringstream oss;
+        oss << "context." << gp.name() << "->readVal(";
+            if (gp._tOk) oss << "t0 + " << gp._t;
+            if (gp._vOk) oss << ", v0";
+            if (gp._tOk || gp._vOk) oss << ", ";
+            oss << "i + " << gp._i <<
+                ", j + " << gp._j <<
+                ", k + " << gp._k <<
+                ", __LINE__)" << endl;
+        return oss.str();
+    }
+};
+
+/////////// Vector code /////////////
+
+// Output simple C++ vector code.
 class CppVecPrintHelper : public VecPrintHelper {
 
 public:
@@ -35,12 +80,13 @@ public:
         VecPrintHelper(vv) { }
 
 protected:
+    map<string,string> _codes; // code expressions defined.
+    map<double,string> _consts; // const expressions defined.
 
-    // Define a constant if needed, writing definition statement to os.
-    // Creates a vector with all elements set to v.
-    // If not needed, do not write to os.
-    // Either way, return var name.
-    virtual string makeConst(ostream& os, double v) {
+    // Define a constant if not already defined, writing definition
+    // statement to os.  Creates a vector with all elements set to v.  If
+    // not needed, do not write to os.  Either way, return var name.
+    virtual string addConstExpr(ostream& os, double v) {
         if (_consts.count(v) == 0) {
 
             // Create new var.
@@ -48,21 +94,34 @@ protected:
             int vlen = _vv.getVecLen();
 
             // A comment.
-            streamsize prec = os.precision();
             os << " // Create a const vector with all values set to " << v << "." << endl;
 
-            // IEEE double gives 15-17 significant decial digits of precision per
-            // https://en.wikipedia.org/wiki/Double-precision_floating-point_format.
-            // Some precision might be lost if/when cast to a float, but that's ok.
+            string vstr = CppPrintHelper::formatReal(v);
             os << setprecision(17) << scientific << " static const " <<
-                getVarType() << " " << _consts[v] << " = { .r = { " << v;
+                getVarType() << " " << _consts[v] << " = { .r = { " << vstr;
             for (int i = 1; i < vlen; i++)
-                os << ", " << v;
+                os << ", " << vstr;
             os << " } };" << endl;
-            os.unsetf(ios_base::floatfield);
-            os << setprecision(prec);
         }
         return _consts[v];
+    }
+
+    // Define a var if not already defined, writing definition statement to
+    // os.  Creates a vector with all elements set to code.  If not needed,
+    // do not write to os.  Either way, return var name.
+    virtual string addCodeExpr(ostream& os, const string& code) {
+        if (_codes.count(code) == 0) {
+
+            // Create new var.
+            _codes[code] = makeVarName();
+            int vlen = _vv.getVecLen();
+
+            // A comment.
+            os << " // Create a vector with all values set to same value." << endl;
+            os << " const " << getVarType() << " " << _codes[code] << " = " <<
+                code << ";" << endl;
+        }
+        return _codes[code];
     }
 
     // Print required memory reads.
@@ -163,60 +222,4 @@ public:
             os << " _mm_prefetch(p, " << hint << ");" << endl;
         }
     }
-};
-
-// Outputs a C++ compilable version of the AST
-// in a top-down fashion.
-class CppVecPrintVisitorTopDown : public PrintVisitorTopDown {
-protected:
-    string _exprStr;
-    
-public:
-    // os is used for printing intermediate results as needed.
-    CppVecPrintVisitorTopDown(ostream& os, PrintHelper& ph) :
-        PrintVisitorTopDown(os, ph) { }
-
-    // A point: output the code to create the vector block.
-    virtual void visit(GridPoint* gp) {
-        _oss << dynamic_cast<CppVecPrintHelper&>(_ph).constructPoint(_os, *gp);
-    }
-
-    // A constant.
-    virtual void visit(ConstExpr* ce) {
-
-        // Create new var for const if not defined.
-        double v = ce->getVal();
-        string constVar = _ph.makeConst(_os, v);
-
-        // Use var.
-        _oss << constVar;
-    }
-};
-
-// Outputs a C++ compilable version of the AST
-// in a bottom-up fashion w/temp vars.
-class CppVecPrintVisitor : public PrintVisitorBottomUp {
-protected:
-    bool _doSort;                   // sort commutative exprs?
-
-    // Output a comment explaining the following calculations.
-    virtual void comment(Expr* ep) {
-        PrintVisitorTopDown* commenter = newPrintVisitorTopDown();
-        ep->accept(commenter);
-        _os << endl << " // Calculate " << commenter->getExprStr() << "..." << endl;
-        delete commenter;
-    }
-
-public:
-    // os is used for printing intermediate results as needed.
-    CppVecPrintVisitor(ostream& os, PrintHelper& ph, int maxPoints,
-                       bool doSort = true) :
-        PrintVisitorBottomUp(os, ph, maxPoints),
-        _doSort(doSort) { }
-
-    // make a new top-down visitor.
-    virtual PrintVisitorTopDown* newPrintVisitorTopDown() {
-        return new CppVecPrintVisitorTopDown(_os, _ph);
-    }
-
 };

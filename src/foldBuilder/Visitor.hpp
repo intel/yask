@@ -32,10 +32,12 @@ using namespace std;
 // Base class for an Expr-tree visitor.
 class ExprVisitor {
 public:
+    virtual ~ExprVisitor() { }
 
     // Leaf-node visitors.
-    virtual void visit(ConstExpr* ce) {}
-    virtual void visit(GridPoint* gp) {}
+    virtual void visit(ConstExpr* ce) { }
+    virtual void visit(CodeExpr* ce) { }
+    virtual void visit(GridPoint* gp) { }
 
     // By default, a unary visitor just visits its operand.
     virtual void visit(UnaryExpr* ue) {
@@ -60,15 +62,14 @@ public:
 
 // Base class to define methods for printing.
 class PrintHelper {
-    int _varNum;                // var number.
+    int _varNum;                // current var number.
 
 protected:
     string _varPrefix;          // first part of var name.
     string _varType;            // type, if any, of var.
-    map<double,string> _consts; // constants defined.
 
 public:
-    PrintHelper(const string& varPrefix = "var", const string& varType = "") :
+    PrintHelper(const string& varPrefix = "var", const string& varType = "real") :
         _varNum(1), _varPrefix(varPrefix), _varType(varType) { }
 
     virtual ~PrintHelper() { }
@@ -87,12 +88,27 @@ public:
         return oss.str();
     }
 
+    // Return any code expression.
+    // The 'os' parameter is provided for derived types that
+    // need to write intermediate code to a stream.
+    virtual string addCodeExpr(ostream& os, const string& code) {
+        return code;
+    }
+
     // Return a constant expression.
-    // The 'os' parameter is for derived types.
-    virtual string makeConst(ostream& os, double v) {
+    // The 'os' parameter is provided for derived types that
+    // need to write intermediate code to a stream.
+    virtual string addConstExpr(ostream& os, double v) {
         ostringstream oss;
         oss << v;
         return oss.str();
+    }
+
+    // Return a grid reference.
+    // The 'os' parameter is provided for derived types that
+    // need to write intermediate code to a stream.
+    virtual string constructPoint(ostream& os, const GridPoint& gp) {
+        return gp.makeStr();
     }
 };
 
@@ -142,12 +158,17 @@ public:
 
     // A point.
     virtual void visit(GridPoint* gp) {
-        _oss << gp->makeStr();
+        _oss << _ph.constructPoint(_os, *gp);
     }
 
     // A constant.
     virtual void visit(ConstExpr* ce) {
-        _oss << ce->getVal();
+        _oss << _ph.addConstExpr(_os, ce->getVal());
+    }
+
+    // Some code.
+    virtual void visit(CodeExpr* ce) {
+        _oss << _ph.addCodeExpr(_os, ce->getCode());
     }
 
     // A unary operator.
@@ -180,8 +201,10 @@ public:
     }
 };
 
-// Outputs a simple, human-readable version of the AST
-// in a bottom-up fashion on multiple lines w/temp vars.
+// Outputs a simple, human-readable version of the AST in a bottom-up
+// fashion with multiple expressions, each assigned to a temp var.  The
+// maxPoints parameter controls the size of each separate expression. Within
+// each expression, a top-down visitor is used.
 class PrintVisitorBottomUp : public PrintVisitorBase {
 
 protected:
@@ -225,6 +248,11 @@ public:
 
     // A constant: just set expr.
     virtual void visit(ConstExpr* ce) {
+        tryTopDown(ce, true);
+    }
+
+    // Code: just set expr.
+    virtual void visit(CodeExpr* ce) {
         tryTopDown(ce, true);
     }
 

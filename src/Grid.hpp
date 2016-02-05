@@ -58,11 +58,6 @@ public:
         return _data.read1(n, i, j, k, line);
     }
 
-    // Implements read operator().
-    GridValue operator()(long i, long j, long k) const {
-        return readVal(i, j, k, __LINE__);
-    }
-
     // Write one element of the grid for testing.
     void writeVal(REAL val, long i, long j, long k, int line=0) {
         int n = 0;
@@ -142,11 +137,6 @@ public:
     REAL readVal(int t, int var, long i, long j, long k, int line) const {
         int n = getMatIndex(t, var);
         return _data.read1(n, i, j, k, line);
-    }
-
-    // Implements read operator().
-    GridValue operator()(int t, int var, long i, long j, long k) const {
-        return readVal(t, var, i, j, k, __LINE__);
     }
 
     // Write one element of the grid for testing.

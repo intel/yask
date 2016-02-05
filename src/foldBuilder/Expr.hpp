@@ -43,6 +43,7 @@ typedef shared_ptr<Expr> ExprPtr;
 // The base class for all expression nodes.
 class Expr {
 public:
+    virtual ~Expr() { }
 
     // For visitors.
     virtual void accept(ExprVisitor* ev) =0;
@@ -79,12 +80,14 @@ ExprPtr operator*(const ExprPtr& lhs, double rhs);
 void operator*=(GridValue& lhs, const ExprPtr& rhs);
 void operator*=(GridValue& lhs, double rhs);
 
+// A simple constant value.
 class ConstExpr : public Expr {
 protected:
     double _f;
 
 public:
     ConstExpr(double f) : _f(f) { }
+    virtual ~ConstExpr() { }
 
     double getVal() const {
         return _f;
@@ -93,6 +96,24 @@ public:
     virtual void accept(ExprVisitor* ev);
 };
 
+// Any expression that returns a real (not from a grid).
+class CodeExpr : public Expr {
+protected:
+    string _code;
+
+public:
+    CodeExpr(const string& code) :
+        _code(code) { }
+    virtual ~CodeExpr() { }
+
+    const string& getCode() const {
+        return _code;
+    }
+
+    virtual void accept(ExprVisitor* ev);
+};
+
+// Base class for any unary operator.
 class UnaryExpr : public Expr {
 public:
     ExprPtr _rhs;
@@ -101,6 +122,7 @@ public:
 public:
     UnaryExpr(const string& opStr, ExprPtr rhs) :
         _rhs(rhs), _opStr(opStr) { }
+    virtual ~UnaryExpr() { }
 
     ExprPtr getRhs() {
         return _rhs;
@@ -113,16 +135,19 @@ public:
     }
 };
 
+// A negation.
 class NegExpr : public UnaryExpr {
 public:
+    NegExpr(ExprPtr rhs) :
+        UnaryExpr(getOpStr(), rhs) { }
+    virtual ~NegExpr() { }
+
     static string getOpStr() {
         return "-";
     }
-
-    NegExpr(ExprPtr rhs) :
-        UnaryExpr(getOpStr(), rhs) { }
 };
 
+// Base class for any binary operator.
 class BinaryExpr : public UnaryExpr {
 public:
     ExprPtr _lhs;
@@ -130,6 +155,7 @@ public:
 public:
     BinaryExpr(ExprPtr lhs, const string& opStr, ExprPtr rhs) :
         UnaryExpr(opStr, rhs), _lhs(lhs) { }
+    virtual ~BinaryExpr() { }
 
     ExprPtr getLhs() {
         return _lhs;
@@ -142,28 +168,32 @@ public:
     }
 };
 
+// Subtraction operator.
 class SubExpr : public BinaryExpr {
 public:
+    SubExpr(ExprPtr lhs, ExprPtr rhs) :
+        BinaryExpr(lhs, getOpStr(), rhs) { }
+    virtual ~SubExpr() { }
+
     static string getOpStr() {
         return "-";
     }
-
-    SubExpr(ExprPtr lhs, ExprPtr rhs) :
-        BinaryExpr(lhs, getOpStr(), rhs) { }
 };
 
+// Division operator.
 class DivExpr : public BinaryExpr {
 public:
+    DivExpr(ExprPtr lhs, ExprPtr rhs) :
+        BinaryExpr(lhs, getOpStr(), rhs) { }
+    virtual ~DivExpr() { }
+
     static string getOpStr() {
         return "/";
     }
-
-    DivExpr(ExprPtr lhs, ExprPtr rhs) :
-        BinaryExpr(lhs, getOpStr(), rhs) { }
 };
 
-// A list of binary exprs that can be rearranged,
-// e.g., a * b * c.
+// A list of exprs with a common operator that can be rearranged,
+// e.g., 'a * b * c' or 'a + b + c'.
 class CommutativeExpr : public Expr {
 public:
     ExprPtrVec _ops;
@@ -179,6 +209,8 @@ public:
         _ops.push_back(lhs);
         _ops.push_back(rhs);
     }
+
+    virtual ~CommutativeExpr() { }
 
     ExprPtrVec& getOps() {
         return _ops;
@@ -206,27 +238,31 @@ public:
     }
 };
 
+// One or more addition operators.
 class AddExpr : public CommutativeExpr {
 public:
+    AddExpr(ExprPtr lhs, ExprPtr rhs) :
+        CommutativeExpr(lhs, getOpStr(), rhs) { }
+    virtual ~AddExpr() { }
+
     static string getOpStr() {
         return "+";
     }
-
-    AddExpr(ExprPtr lhs, ExprPtr rhs) :
-        CommutativeExpr(lhs, getOpStr(), rhs) { }
 };
 
+// One or more multiplication operators.
 class MultExpr : public CommutativeExpr {
 public:
+    MultExpr(ExprPtr lhs, ExprPtr rhs) :
+        CommutativeExpr(lhs, getOpStr(), rhs) { }
+    virtual ~MultExpr() { }
+    
     static string getOpStr() {
         return "*";
     }
-
-    MultExpr(ExprPtr lhs, ExprPtr rhs) :
-        CommutativeExpr(lhs, getOpStr(), rhs) { }
 };
 
-// One specific 5D point.
+// One specific point in a grid.
 class GridPoint : public Triple, public Expr {
 
 protected:
@@ -234,12 +270,14 @@ protected:
 
 public:
     int _t, _v;
-    bool _tOk, _vOk;
+    bool _tOk, _vOk;            // whether t and v are meaningful.
 
+    // Construct a 5D point.
     GridPoint(const string& name, int t, int v, int i, int j, int k) :
         Triple(i, j, k), _name(name), 
         _t(t), _v(v), _tOk(true), _vOk(true) {}
 
+    // Construct a 3D point.
     GridPoint(const string& name, int i, int j, int k) :
         Triple(i, j, k), _name(name),
         _t(-1), _v(-1), _tOk(false), _vOk(false) {}
@@ -325,7 +363,7 @@ public:
 
 };
 
-// A 3D collectoin of GridPoints.
+// A 3D collection of GridPoints.
 // no time or var.
 class Grid3d : public Grid {
 public:

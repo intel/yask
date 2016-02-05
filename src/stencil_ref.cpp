@@ -25,6 +25,9 @@ IN THE SOFTWARE.
 
 #include "stencil.hpp"
 
+// Include auto-generated scalar stencil code.
+#include "stencil_scalar_code.hpp"
+
 // Calculate nreps time steps of stencil over grid using scalar code.
 void calc_steps_ref(StencilContext& context, const int nreps)
 {
@@ -35,10 +38,6 @@ void calc_steps_ref(StencilContext& context, const int nreps)
     const long d1 = data.getDimX();
     const long d2 = data.getDimY();
     const long d3 = data.getDimZ();
-
-    // Instantiate a stencil function.
-    StencilBase* stencilFunc = new STENCIL_REF(context.vel);
-    assert(stencilFunc);
 
     // time steps.
     printf("running %i reference time step(s)...\n", nreps);
@@ -55,16 +54,14 @@ void calc_steps_ref(StencilContext& context, const int nreps)
 
                         for(int ix=0; ix<d1; ix++) {
 
+                            TRACE_MSG("calc_scalar(%d, %d, %d, %d, %d)", 
+                                      t0, v0, ix, iy, iz);
+                            
                             // Evaluate the reference scalar code.
-                            GridValue next = stencilFunc->value(*grid, t0 + TIME_STEPS, t0, v0, ix, iy, iz);
-
-                            // Save result.
-                            grid->writeVal(next, t0 + TIME_STEPS, v0, ix, iy, iz);
+                            calc_stencil_scalar(context, t0, v0, ix, iy, iz);
                         }
                     }
             }
         }
     } // iterations.
-
-    delete stencilFunc;
 }

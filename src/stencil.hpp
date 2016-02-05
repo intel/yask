@@ -172,9 +172,6 @@ public:
 extern double getTimeInSecs();
 extern int roundUp(int dim, int mult, string name);
 
-// Scalar version of stencil calculation.
-#include STENCIL_HEADER
-
 // Reference stencil calculations.
 void calc_steps_ref(StencilContext& context, const int nreps);
 

@@ -20,13 +20,13 @@ Pre-requisites:
   https://software.intel.com/en-us/intel-parallel-studio-xe.
 * Intel(R) Software Development Emulator (optional, for functional testing),
   https://software.intel.com/en-us/articles/intel-software-development-emulator.
-* Perl 5.010 or later with the following libraries installed
+* Perl 5.010 or later with the following modules installed
   * String::Tokenizer,
     http://search.cpan.org/~stevan/String-Tokenizer-0.05/lib/String/Tokenizer.pm
   * Algorithm::Loops,
     http://search.cpan.org/~tyemq/Algorithm-Loops-1.031/lib/Algorithm/Loops.pm
-* Install all these pre-requisites  and ensure that all
-  tool and library paths are in the proper environment variables.
-* Download and unzip the YASK source-code.
+* Install all these pre-requisites and ensure that all
+  tool and library paths are included in the proper environment variables.
+* Git-clone or download the YASK source code.
 
 To continue with building and running, see YASK-intro.pdf in the docs directory.

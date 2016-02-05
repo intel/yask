@@ -26,7 +26,7 @@ IN THE SOFTWARE.
 #include "stencil.hpp"
 
 // Include auto-generated vectorized stencil code.
-#include "stencil_code.hpp"
+#include "stencil_vector_code.hpp"
 
 //////////////// Macros for prefetching /////////////////
 

@@ -33,15 +33,6 @@ class AveStencil : public StencilBase {
 public:
     AveStencil(int order=2) :
         StencilBase(order) { }
-    AveStencil(int order, shared_ptr<Dir> dir) : 
-        StencilBase(order, dir) { }
-
-    // Set direction.
-    // Return true if successful.
-    virtual bool setDir(shared_ptr<Dir> dir) {
-        _dir = dir;
-        return _dir->isNone() || _dir->isPos();  // only handling pos direction.
-    }
 
     // Calculate and return the value of stencil at u(t2, v0, i, j, k)
     // based on u(t0, v0, ...);
@@ -56,25 +47,16 @@ public:
         // not the current value; calc t2-1 based on t0.
         int t1 = t2 - 1;
 
-        // starting points.
-        int rx0, ry0, rz0;
-        rx0 = ry0 = rz0 = -_order/2; // default: all points in stencil.
-        if (_dir->isX())
-            rx0 = _order/2; // only do leading x face.
-        else if (_dir->isY())
-             ry0 = _order/2; // only do leading y face.
-        else if (_dir->isZ())
-            rz0 = _order/2; // only do leading z face.
-        assert(_dir->isPos());  // only handling pos direction.
-
         // calc requested parts.
+        int rBegin = -_order/2;
+        int rEnd = _order/2;
         GridValue v;
-        for (int rx = rx0; rx <= _order/2; rx++)
-            for (int ry = ry0; ry <= _order/2; ry++)
-                for (int rz = rz0; rz <= _order/2; rz++)
+        for (int rx = rBegin; rx <= rEnd; rx++)
+            for (int ry = rBegin; ry <= rEnd; ry++)
+                for (int rz = rBegin; rz <= rEnd; rz++)
                     v += value(u, t1, t0, v0, i+rx, j+ry, k+rz);
 
-        // adjust by average of whole cube, regardless of parts calculated.
+        // divide by number of points to find average.
         double n = double(_order + 1);
         v *= 1.f / (n*n*n);
 

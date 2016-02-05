@@ -131,6 +131,9 @@ void operator*=(GridValue& lhs, double rhs) {
 void ConstExpr::accept(ExprVisitor* ev) {
     ev->visit(this);
 }
+void CodeExpr::accept(ExprVisitor* ev) {
+    ev->visit(this);
+}
 void UnaryExpr::accept(ExprVisitor* ev) {
     ev->visit(this);
 }
