@@ -36,18 +36,21 @@ IN THE SOFTWARE.
 #include <string>
 using namespace std;
 
+// values for 32-bit, single-precision reals.
 #if REAL_BYTES == 4
 #define REAL float
 #define CTRL_INT unsigned __int32
-#define CTRL_SEL_BIT 0x8
-#define CTRL_IDX_MASK 0x7
+#define CTRL_IDX_MASK 0xf
+#define CTRL_SEL_BIT 0x10
 #define V512_ELEMS 16
 #define MMASK __mmask16
+
+// values for 64-bit, double-precision reals.
 #elif REAL_BYTES == 8
 #define REAL double
 #define CTRL_INT unsigned __int64
-#define CTRL_SEL_BIT 0x10
-#define CTRL_IDX_MASK 0xf
+#define CTRL_IDX_MASK 0x7
+#define CTRL_SEL_BIT 0x8
 #define V512_ELEMS 8
 #define MMASK __mmask8
 #else
