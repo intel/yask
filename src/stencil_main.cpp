@@ -86,7 +86,7 @@ int main(int argc, char** argv)
 #ifdef DEBUG
     printf("*** WARNING: binary compiled with DEBUG; ignore performance results.\n");
 #endif
-#ifdef EMU_INTRINSICS
+#if defined(EMU_INTRINSICS) && (VLEN > 1)
     printf("*** WARNING: binary compiled with EMU_INTRINSICS; ignore performance results.\n");
 #endif
 #ifdef MODEL_CACHE

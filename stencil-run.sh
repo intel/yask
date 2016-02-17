@@ -26,7 +26,7 @@
 # Purpose: run stencil kernel in specified environment.
 
 # defaults.
-arch=knc
+arch=host
 affinity=balanced
 exe_prefix=" "
 

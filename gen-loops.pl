@@ -58,9 +58,12 @@ my @dims;                       # names of dimensions.
 my @results;                    # names of result buffers.
 my $genericCache = "L#";        # a string placeholder for L1 or L2.
 
-# space-filling path bit fields.
-my $pSerp = 0x1;                # serpentine.
-my $pSquare = 0x2;                # square_wave.
+# loop-feature bit fields.
+my $bSerp = 0x1;                # serpentine path
+my $bSquare = 0x2;              # square_wave path
+my $bPipe = 0x4;                # pipeline
+my $bPrefetch = 0x8;            # prefetch code
+my $bSimd = 0x10;               # simd prefix
 
 # Returns next token.
 sub checkToken($$$) {
@@ -245,7 +248,7 @@ sub addIndexVars2($$$$$) {
     my $code = shift;           # ref to list of code lines.
     my $loopDims = shift;           # ref to list of dimensions.
     my $isPrefetch = shift;     # true if for prefetch vars.
-    my $path = shift;           # bits for path types.
+    my $features = shift;           # bits for path types.
     my $loopStack = shift;      # whole stack, including enclosing dims.
 
     my $itype = indexType(@$loopDims);
@@ -305,7 +308,7 @@ sub addIndexVars2($$$$$) {
             }
 
             # apply square-wave to inner 2 dimensions if requested.
-            my $isInnerSquare = @$loopDims >=2 && $isInner && ($path & $pSquare);
+            my $isInnerSquare = @$loopDims >=2 && $isInner && ($features & $bSquare);
             if ($isInnerSquare) {
 
                 my $divar2 = "${divar}_x2";
@@ -326,7 +329,7 @@ sub addIndexVars2($$$$$) {
 
             # reverse order of every-other traversal if requested.
             # for inner dim with square-wave, do every 2.
-            if (($path & $pSerp) && defined $prevDivar) {
+            if (($features & $bSerp) && defined $prevDivar) {
                 if ($isInnerSquare) {
                     push @$code,
                     " // Reverse direction of $divar after every-other iteration of $prevDivar for 'square_wave serpentine' path.",
@@ -364,7 +367,7 @@ sub beginLoop($$$$$$) {
     my $loopDims = shift;           # ref to list of dimensions.
     my $prefix = shift;         # ref to list of prefix code. May be undef.
     my $endVal = shift;         # value of end-point (start point is already set). May be undef.
-    my $path = shift;           # bits for path types.
+    my $features = shift;           # bits for path types.
     my $loopStack = shift;      # whole stack, including enclosing dims.
 
     $endVal = numVar(@$loopDims) if !defined $endVal;
@@ -373,7 +376,7 @@ sub beginLoop($$$$$$) {
     push @$code, " for ( ; $ivar < $endVal; $ivar++) {";
 
     # add inner index vars.
-    addIndexVars2($code, $loopDims, 0, $path, $loopStack);
+    addIndexVars2($code, $loopDims, 0, $features, $loopStack);
 }
 
 # end simple or collapsed loop body.
@@ -403,9 +406,7 @@ sub processCode($) {
 
     # modifiers before loop() statements.
     my @loopPrefix;             # string(s) to put before loop body.
-    my $piping = 0;             # using a pipeline to calculate $innerDim.
-    my $prefetch = 0;           # generate prefetch code.
-    my $path = 0;               # bits for path types.
+    my $features = 0;           # bits for loop features.
 
     # lists of code parts to be output.
     # set at calc() statements.
@@ -444,23 +445,31 @@ sub processCode($) {
 
             # turn off compiler prefetch if we are generating prefetch.
             push @loopPrefix, '_Pragma("noprefetch")';
-            $prefetch = 1;
+            $features |= $bPrefetch;
             warn "info: generating prefetching in following loop.\n";
+        }
+
+        # generate simd in next loop.
+        elsif (lc $tok eq 'simd') {
+
+            push @loopPrefix, '_Pragma("simd")';
+            $features |= $bSimd;
+            warn "info: generating SIMD in following loop.\n";
         }
 
         # use pipelining in next loop if possible.
         elsif (lc $tok eq 'pipe') {
-            $piping = 1;
+            $features |= $bPipe;
         }
         
         # use serpentine path in next loop if possible.
         elsif (lc $tok eq 'serpentine') {
-            $path |= $pSerp;
+            $features |= $bSerp;
         }
         
         # use square_wave path in next loop if possible.
         elsif (lc $tok eq 'square_wave') {
-            $path |= $pSquare;
+            $features |= $bSquare;
         }
         
         # beginning of a loop.
@@ -489,13 +498,13 @@ sub processCode($) {
             }
 
             # check for piping legality.
-            if ($piping) {
+            if ($features & $bPipe) {
                 if (@loopDims == 1) {
                     warn "info: pipelining following loop.\n";
                 } else {
                     warn "warning: pipeline requested, but it is not possible because there are ".
                         scalar(@loopDims). " dimensions in following loop.\n";
-                    $piping = 0;
+                    $features &= ~$bPipe;
                 }
             }
 
@@ -511,14 +520,12 @@ sub processCode($) {
             # if it is the inner loop, we might need more than one loop body, so
             # it will be generated when the '}' is seen.
             if (!defined $innerDim) {
-                beginLoop(\@code, \@loopDims, \@loopPrefix, undef, $path, \@loopStack);
+                beginLoop(\@code, \@loopDims, \@loopPrefix, undef, $features, \@loopStack);
 
                 # clear data for this loop.
                 undef @loopDims;
                 undef @loopPrefix;
-                $piping = 0;
-                $prefetch = 0;
-                $path = 0;
+                $features = 0;
             }
         }
 
@@ -550,7 +557,7 @@ sub processCode($) {
                 
                 # code for prefetches.
                 # e.g., prefetch_L1_fn(...); prefetch_L2_fn_z(...);
-                if ($prefetch) {
+                if ($features & $bPrefetch) {
                     push @pfStmtsFullHere, "  $OPT{pfPrefix}${genericCache}_$arg($calcArgs, ".
                         startStopArgs(). ");";
                     push @pfStmtsFullAhead, "  $OPT{pfPrefix}${genericCache}_$arg($calcArgs, ".
@@ -566,7 +573,7 @@ sub processCode($) {
 
                 # add pipe prefix and direction suffix to function name.
                 # e.g., pipe_fn_z.
-                if ($piping) {
+                if ($features & $bPipe) {
                     $arg = $OPT{pipePrefix}.$arg.'_'.$innerDim;
                 }
 
@@ -603,10 +610,10 @@ sub processCode($) {
 
                 # declare pipeline vars.
                 push @code, " // Pipeline accumulators.", " MAKE_PIPE_$ucDir;"
-                    if ($piping);
+                    if ($features & $bPipe);
 
                 # prefetch-starting code.
-                if ($prefetch) {
+                if ($features & $bPrefetch) {
                     for my $i (0..1) {
                         my $cache = ($i==0) ? 2 : 1; # fetch to L2 first.
 
@@ -614,7 +621,7 @@ sub processCode($) {
                         push @pfCode, " // Prime prefetch to $genericCache.";
                         
                         # prefetch loop.
-                        beginLoop(\@pfCode, \@loopDims, \@loopPrefix, $pfd, $path, \@loopStack);
+                        beginLoop(\@pfCode, \@loopDims, \@loopPrefix, $pfd, $features, \@loopStack);
                         push @pfCode, " // Prefetch to $genericCache.", @pfStmtsFullHere;
                         endLoop(\@pfCode);
 
@@ -629,13 +636,13 @@ sub processCode($) {
                 }           # PF.
 
                 # pipeline-priming loop.
-                if ($piping) {
+                if ($features & $bPipe) {
 
                     # start the loop STENCIL_ORDER before 0.
                     # TODO: make this more general.
                     push @code, " // Prime the calculation pipeline.",
                     " $iVar = -STENCIL_ORDER;";
-                    beginLoop(\@code, \@loopDims, \@loopPrefix, 0, $path, \@loopStack);
+                    beginLoop(\@code, \@loopDims, \@loopPrefix, 0, $features, \@loopStack);
 
                     # select only pipe instructions, change calc to prime prefix.
                     my @primeStmts = grep(m=//|$OPT{pipePrefix}=, @calcStmts);
@@ -646,7 +653,7 @@ sub processCode($) {
                 }
 
                 # midpoint calculation.
-                if ($prefetch) {
+                if ($features & $bPrefetch) {
                     push @code, " // Point where L2-prefetch policy changes.",
                     " // This covers all L1 fetches, even unneeded one(s) beyond end.",
                     " const ".indexType(@loopDims)." ".midVar(@loopDims).
@@ -659,7 +666,7 @@ sub processCode($) {
                 # 1: w/o L2 prefetch from midpoint to end.
                 # if no prefetch:
                 # 0: no prefetch from start to end.
-                my $lastLoop = $prefetch ? 1 : 0;
+                my $lastLoop = ($features & $bPrefetch) ? 1 : 0;
                 for my $loop (0 .. $lastLoop) {
 
                     my $name = "Computation";
@@ -669,13 +676,13 @@ sub processCode($) {
                     my $comment = " // $name loop.";
                     $comment .= " Same as previous loop, except no L2 prefetch." if $loop==1;
                     push @code, $comment;
-                    beginLoop(\@code, \@loopDims, \@loopPrefix, $endVal, $path, \@loopStack);
+                    beginLoop(\@code, \@loopDims, \@loopPrefix, $endVal, $features, \@loopStack);
 
                     # loop body.
                     push @code, " // $name.", @calcStmts;
 
                     # prefetch for future iterations.
-                    if ($prefetch) {
+                    if ($features & $bPrefetch) {
                         for my $i (0..1) {
                             my $cache = ($i==0) ? 2 : 1; # fetch to L2 first.
                             my @pfCode;
@@ -683,7 +690,7 @@ sub processCode($) {
                             if ($cache == 2 && $loop == 1) {
                                 push @pfCode, " // Not prefetching to $genericCache in this loop.";
                             } else {
-                                addIndexVars2(\@pfCode, \@loopDims, 1, $path, \@loopStack);
+                                addIndexVars2(\@pfCode, \@loopDims, 1, $features, \@loopStack);
                                 push @pfCode, " // Prefetch to $genericCache.", @pfStmtsFullAhead;
                             }
 
@@ -707,9 +714,7 @@ sub processCode($) {
                 undef $innerDim;
                 undef @loopDims;
                 undef @loopPrefix;
-                $piping = 0;
-                $prefetch = 0;
-                $path = 0;
+                $features = 0;
             }                   # inner loop.
 
             # pop stacks.

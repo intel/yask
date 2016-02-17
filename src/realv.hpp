@@ -23,7 +23,7 @@ IN THE SOFTWARE.
 
 *****************************************************************************/
 
-// This file defines macros and functions to use for vectors of floats or doubles.
+// This file defines a union to use for vectors of floats or doubles.
 
 #ifndef _REALV_H
 #define _REALV_H
@@ -59,7 +59,9 @@ using namespace std;
 
 // Emulate instrinsics for unsupported VLEN.
 // Only 512-bit vectors supported.
-#if VLEN != V512_ELEMS
+#if VLEN == 1
+#define EMU_INTRINSICS
+#elif VLEN != V512_ELEMS
 #warning "Emulating intrinsics because VLEN elements != 512 bits"
 #define EMU_INTRINSICS
 #elif !defined(INTRIN512)
@@ -68,7 +70,7 @@ using namespace std;
 #endif
 
 // Macro for looping through an aligned realv.
-#ifdef DEBUG
+#if defined(DEBUG) || (VLEN==1)
 #define SIMD_LOOP(i)                            \
     for (int i=0; i<VLEN; i++)
 #else
@@ -197,17 +199,36 @@ union realv {
         return res;
     }
 
-    // load/store.
-    // TODO: allow optional use of intrinsics like _mm512_load_ps.
+    // load.
     inline void loadFrom(const realv* from) {
-        *this = *from;
+#ifdef EMU_INTRINSICS
+        SIMD_LOOP(i) r[i] = (*from)[i];
+#elif REAL_BYTES == 4
+        m512r = _mm512_load_ps((void*)from);
+#else
+        m512r = _mm512_load_pd((void*)from);
+#endif
     }
+
+    // store.
     inline void storeTo(realv* to) const {
-#ifdef __INTEL_COMPILER
+#if defined(__INTEL_COMPILER) && (VLEN > 1)
         _Pragma("vector nontemporal")
             SIMD_LOOP(i) (*to)[i] = r[i];
+#elif defined(EMU_INTRINSICS)
+        SIMD_LOOP(i) (*to)[i] = r[i];
+#elif REAL_BYTES == 4
+#if defined(ARCH_KNC)
+        _mm512_storenrngo_ps((void*)to, m512r);
 #else
-            *to = *this;
+        _mm512_stream_ps((void*)to, m512r);
+#endif
+#else
+#if defined(ARCH_KNC)
+        _mm512_storenrngo_pd((void*)to, m512r);
+#else
+        _mm512_stream_pd((void*)to, m512r);
+#endif
 #endif
     }
 

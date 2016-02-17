@@ -37,9 +37,8 @@ shape		= 	iso3dfd
 # number of time steps to calculate at once.
 tsteps		=	1
 
-# target architecture: knc, knl, skx, hsw, host.
-# code is only functional (not optimized) for any arch w/o 512-bit vectors.
-arch            =	knc
+# target architecture: see options below.
+arch            =	host
 
 # number of vars (grids) to solve.
 vars		=	1
@@ -63,9 +62,11 @@ fold		=	1 4 4
 else
 fold		=	1 2 4
 endif
+
+# how many vectors to compute at once.
 cluster		=	1 1 1
 
-# heuristic for expression-size threshold.
+# heuristic for expression-size threshold in foldBuilder.
 expr_size	=	50
 
 # OMP schedule policy.
@@ -78,20 +79,6 @@ omp_schedule	=	dynamic
 # compiler does not support crew for the specified architecture,
 # and you should specify 'crew=0' as a make argument.
 crew		= 	0
-
-# gen-loops args for outer 3 sets of loops:
-
-# Outer loops break up the whole problem into smaller regions.
-OUTER_LOOP_ARGS		=	-dims 'dv,dx,dy,dz' 
-OUTER_LOOP_ARGS		+=	'loop(dv,dz,dy,dx) { calc(region); }'
-
-# Region loops break up a region using OpenMP threading into blocks.
-REGION_LOOP_ARGS	=     	-dims 'rv,rx,ry,rz' -ompSchedule $(omp_schedule)
-REGION_LOOP_ARGS	+=	'serpentine omp loop(rv,rz,ry,rx) { calc(block); }'
-
-# Block loops break up a block into vector clusters.
-BLOCK_LOOP_ARGS		=     	-dims 'bv,bx,by,bz'
-BLOCK_LOOP_ARGS		+=	'loop(bv) { crew loop(bz) { loop(by) { loop(bx) { calc(cluster); } } } }'
 
 FB_CC    	=       $(CC)
 FB_CCFLAGS 	=	-g -O0 -std=c++11 -Wall  # no opt to reduce compile time.
@@ -122,38 +109,44 @@ CPPFLAGS	+= 	-DARCH_$(ARCH)
 # arch-specific settings
 ifeq ($(arch),)
 
-$(error Architecture not specified; use, e.g., arch=knc|knl|skx)
+$(error Architecture not specified; use arch=knc|knl|skx|hsw|bdw|ivb|snb|host)
 
 else ifeq ($(arch),knc)
 
 CPPFLAGS		+= -mmic
 CPPFLAGS	+= 	-DINTRIN512
-FB_TARGET  	=       knc
+FB_TARGET  	=       vknc
 crew		=	1
 
 else ifeq ($(arch),knl)
 
 CPPFLAGS	+=	-xMIC-AVX512
 CPPFLAGS	+= 	-DINTRIN512
-FB_TARGET  	=       512
+FB_TARGET  	=       v512
 crew		=	1
 
 else ifeq ($(arch),skx)
 
 CPPFLAGS	+=	-xCORE_AVX512
 CPPFLAGS	+= 	-DINTRIN512
-FB_TARGET  	=       512
+FB_TARGET  	=       v512
 
-else ifeq ($(arch),hsw)
-
-CPPFLAGS	+=	-xCORE-AVX2
-FB_TARGET  	=       cpp
-
-# any other arch.
+# any non-512-bit arch.
 else
 
+ifeq ($(arch),hsw)
+CPPFLAGS	+=	-xCORE-AVX2
+else ifeq ($(arch),bdw)
+CPPFLAGS	+=	-xCORE-AVX2
+else ifeq ($(arch),ivb)
+CPPFLAGS	+=	-xCORE-AVX-I
+else ifeq ($(arch),snb)
+CPPFLAGS	+=	-xAVX
+else
 CPPFLAGS	+=	-xHOST
-FB_TARGET  	=       cpp
+endif
+
+FB_TARGET  	=       vcpp
 
 endif # arch-specific.
 
@@ -170,6 +163,21 @@ CPPFLAGS	+=      $(OPT_CREW)
 endif
 
 endif # compiler-specific
+
+# gen-loops args for outer 3 sets of loops:
+
+# Outer loops break up the whole problem into smaller regions.
+OUTER_LOOP_ARGS		=	-dims 'dv,dx,dy,dz' 
+OUTER_LOOP_ARGS		+=	'loop(dv,dz,dy,dx) { calc(region); }'
+
+# Region loops break up a region using OpenMP threading into blocks.
+REGION_LOOP_ARGS	=     	-dims 'rv,rx,ry,rz' -ompSchedule $(omp_schedule)
+REGION_LOOP_ARGS	+=	'serpentine omp loop(rv,rz,ry,rx) { calc(block); }'
+
+# Block loops break up a block into vector clusters.
+BLOCK_LOOP_ARGS		=     	-dims 'bv,bx,by,bz'
+BLOCK_LOOP_ARGS		+=	'loop(bv) { crew loop(bz) { loop(by) {' $(INNER_LOOP) 'loop(bx) { calc(cluster); } } } }'
+
 
 # compile with model_cache=1 or 2 to check prefetching.
 ifeq ($(model_cache),1)
@@ -232,7 +240,7 @@ src/stencil_macros.hpp: foldBuilder
 	./$< $(FB_FLAGS) -pm $(fold) > $@
 
 src/stencil_vector_code.hpp: foldBuilder
-	./$< $(FB_FLAGS) -pv$(FB_TARGET) $(fold) > $@
+	./$< $(FB_FLAGS) -p$(FB_TARGET) $(fold) > $@
 	gindent $@ || indent $@
 	@grep -m1 -A3 Calculate $@
 

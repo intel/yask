@@ -62,7 +62,8 @@ typedef short unsigned int __mmask16;
 #define __assume_aligned(p,n)
 #endif
 
-#ifdef USE_SEP
+// VTune and stub macros.
+#ifdef USE_VTUNE
 #include "sampling_MIC.h"
 #define SEP_PAUSE  VTPauseSampling()
 #define SEP_RESUME VTResumeSampling()
@@ -71,6 +72,7 @@ typedef short unsigned int __mmask16;
 #define SEP_RESUME
 #endif
 
+// OpenMP and stub functions.
 #ifdef _OPENMP
 #include <omp.h>
 #else

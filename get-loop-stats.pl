@@ -116,7 +116,10 @@ for my $fname (@ARGV) {
         else {
 
           # arg stats. (dest is last arg.)
-          my $type = ($instr =~ /^v/ || $args =~ /[xyz]mm/) ? 'SIMD' : 'non-SIMD';
+          my $type = ($args =~ /zmm/) ? '512-bit SIMD' :
+            ($args =~ /ymm/) ? '128-bit SIMD' :
+            ($args =~ /xmm/) ? '64-bit SIMD' :
+            ($instr =~ /^v/) ? 'SIMD' : 'non-SIMD';
           $type .= ' "spill"' if $comment =~ /spill/;
           if ($args =~ /\(.*r[bs]p.*\).*,/) {
             $astats{"$type stack load"}++;
