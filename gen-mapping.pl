@@ -28,7 +28,8 @@
 sub usage {
   die "usage: $0 <option>\n".
     " -p    generate perl lists of permutes\n".
-    " -c    generate C++ class definitions\n".
+    " -d    generate C++ class definitions\n".
+    " -c    generate macro-based C++ class definitions (deprecated)\n".
     " -m    generate CPP map/unmap macros\n";
 }
 
@@ -46,6 +47,46 @@ use lib dirname($0)."/../lib";
 use Algorithm::Loops qw(NextPermuteNum);
 
 print "// Automatically generated; do not edit.\n";
+print "#include <stddef.h>\n" if ($opt eq '-d');
+
+# generate nd->1d map code.
+sub makeMap($$$) {
+  my $a = shift;                # ref to list.
+  my $jvars = shift;
+  my $dvars = shift;
+
+  my $code = '';
+  for my $i (0..$#$a) {
+    $code .= " + " if $i > 0;
+    $code .= "$jvars->[$i]";
+    
+    # multiply by product of higher dimensions.
+    map { $code .= " * $_" } @$dvars[$i+1..$#$a];
+  }
+  return $code;
+}
+
+# generate 1d->nd unmap code.
+sub makeUnmap($$$$) {
+  my $a = shift;                # ref to list.
+  my $jvars = shift;
+  my $dvars = shift;
+  my $sep = shift;              # separator.
+
+  my $code = '';
+  for my $i (0..$#$a) {
+    $code .= $sep if $i > 0;
+    $code .= "$jvars->[$i] = (ai)";
+
+    # divide by product of higher dimensions.
+    $code .= "/(" . join(' * ', @$dvars[$i+1..$#$a]) . ")" if $i < $#$a;
+
+    # modulo by current dimension.
+    $code .= " % $dvars->[$i]" if $i > 0;
+  }
+  return $code;
+}
+
 
 # loop through number of dimensions.
 for my $n (@sizes) {
@@ -53,7 +94,7 @@ for my $n (@sizes) {
   # argument for permute().
   my @a = (1..$n);
 
-  # print out matrix classes.
+  # print out old matrix classes.
   if ($opt eq '-c') {
 
     # RealMatrix only defined for 4D.
@@ -76,45 +117,71 @@ for my $n (@sizes) {
     print "// 'MAP' macros return 1-D offset from $n-D 'j' indices.\n".
       "// 'UNMAP' macros set $n 'j' indices based on 1-D 'ai' input.\n";
 
+    my $args = join(', ', (map { "j$_" } sort @a), (map { "d$_" } @a));
+
     do {
+      my $n = join('', @a);
       my @jvars = map { "j$_" } @a;
-      my @dvars = map { "d$_" } @a;
       my @pjvars = map { "(j$_)" } @a;
       my @pdvars = map { "(d$_)" } @a;
-      my $n = join('', @a);
-      my $args = join(', ', (map { "j$_" } sort @a), (map { "d$_" } sort @a));
 
       # n->1
-      print "#define MAP$n($args) ";
-
-      # calculation.
-      print "(";
-      for my $i (0..$#a) {
-        print " + " if $i > 0;
-        print "$pjvars[$i]";
-
-        # multiply by product of higher dimensions.
-        print map { "*$_" } @pdvars[$i+1..$#a];
-      }
-      print ")\n";
+      print "#define MAP$n($args) (", makeMap(\@a, \@pjvars, \@pdvars), ")\n";
 
       # 1->n
-      print "#define UNMAP$n(ai, $args) ";
+      print "#define UNMAP$n(ai, $args) (", makeUnmap(\@a, \@jvars, \@pdvars, ', '), ")\n";
 
-      # calculation.
-      print "(";
-      for my $i (0..$#a) {
-        print ", " if $i > 0;
-        print "$jvars[$i] = (ai)";
+    } while (NextPermuteNum @a);
+  }
 
-        # divide by product of higher dimensions.
-        print "/(", join('*', @pdvars[$i+1..$#a]), ")" if $i < $#a;
+  # class decls.
+  elsif ($opt eq '-d') {
 
-        # modulo.
-        print "%$pdvars[$i]" if $i > 0;
-      }
-      print ")\n";
+    my $vars = join(', ', map { "_d$_" } @a);
+    my $cargs = join(', ', map { "size_t d$_" } @a);
+    my $cvars = join(', ', map { "d$_" } @a);
+    my $cinit = join(', ', map { "_d$_(d$_)" } @a);
+    my $margs = join(', ', map { "size_t j$_" } @a);
+    my $uargs = join(', ', map { "size_t& j$_" } @a);
+    my $sz = join(' * ', map { "_d$_" } @a);
+    my $basename = "Map${n}d";
 
+    print "\n// $n-D <-> 1-D mapping base class.\n",
+      "class ${basename} {\n",
+      "protected:\n",
+      "  size_t $vars;\n\n",
+      "public:\n\n",
+      "  ${basename}($cargs) : $cinit { }\n\n";
+    for my $a (@a) {
+      print "  // Return dimension $a.\n",
+        "  virtual size_t get_d$a() const { return _d$a; };\n\n";
+    }
+    print "  // Return overall number of elements.\n",
+      "  virtual size_t get_size() const { return $sz; };\n\n",
+      "  // Return 1-D offset from $n-D 'j' indices.\n",
+      "  virtual size_t map($margs) const =0;\n\n",
+      "  // Set $n 'j' indices based on 1-D 'ai' input.\n",
+      "  virtual void unmap(size_t ai, $uargs) const =0;\n",
+      "};\n";
+
+    do {
+      my $name = join('', @a);
+      my @jvars = map { "j$_" } @a;
+      my @dvars = map { "_d$_" } @a;
+      my $dims = join(', ', map { "d$_" } @a);
+
+      print "\n// $n-D <-> 1-D mapping class with dimensions in $dims order,\n",
+        "// meaning d$a[$#a] is stored with unit stride.\n",
+        "class Map$name : public ${basename} {\n",
+        "public:\n\n",
+        "  Map$name($cargs) : ${basename}($cvars) { }\n\n",
+        "  // Return 1-D offset from $n-D 'j' indices.\n",
+        "  virtual size_t map($margs) const\n",
+        "    { return ", makeMap(\@a, \@jvars, \@dvars), "; }\n\n",
+        "  // set $n 'j' indices based on 1-D 'ai' input.\n",
+        "  virtual void unmap(size_t ai, $uargs) const\n",
+        "    { ", makeUnmap(\@a, \@jvars, \@dvars, "; "), "; }\n",
+        "};\n";
 
     } while (NextPermuteNum @a);
   }
