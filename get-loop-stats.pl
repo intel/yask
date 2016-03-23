@@ -27,7 +27,7 @@
 # report some stats on them.
 
 use strict;
-my $minInstrs = 25;
+my $minInstrs = 2;
 my $printAsm = 0;
 
 for my $fname (@ARGV) {
@@ -129,10 +129,14 @@ for my $fname (@ARGV) {
             $astats{"$type non-stack load"}++;
           } elsif ($args =~ /,.*\(.*\)/) {
             $astats{"$type non-stack store"}++;
+          } else {
+            $astats{"$type reg only"}++;
           }
 
           # instr stats.
-          if ($instr =~ /valign/) {
+          if ($instr =~ /vbroadcast/) {
+            $istats{'SIMD vbroadcast'}++;
+          } elsif ($instr =~ /valign/) {
             $istats{'SIMD valign'}++;
           } elsif ($instr =~ /vperm\w*2/) {
             $istats{'SIMD vperm2'}++;
