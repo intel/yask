@@ -83,8 +83,10 @@ public:
     }
 };
 
-// A 5D (time, var, x, y, z) collection of GridValues.
-// Currently only allows read from t and write to t+TIME_STEPS.
+// A 5D (time, var, x, y, z) collection of GridValues.  It can be considered
+// a wrapper around a 4D grid; the time and var dimensions are mapped onto
+// its highest dimension in a restricted way which only allows read from t
+// and write to t+TIME_STEPS.
 class Grid5d {
     
 protected:

@@ -64,13 +64,13 @@ void usage() {
            " -es <expr-size>    set heuristic for expression-size threshold (default=%d).\n", exprSize);
     printf("\n"
            " -ps <vec-len>      print stats for all folding options for vec-len.\n"
-           " -ph                print human-readable scalar pseudo-code.\n"
+           " -ph                print human-readable scalar pseudo-code for one point.\n"
            " -pp                print POV-Ray code.\n"
            " -pscpp             print C++ stencil function for scalar value.\n"
            " -pm <x> <y> <z>    print pre-processor macros for x*y*z vector block.\n"
-           " -pvcpp <x> <y> <z> print C++ stencil function for x*y*z vector block.\n"
-           " -pvknc <x> <y> <z> print KNC C++ stencil function for x*y*z vector block.\n"
-           " -pv512 <x> <y> <z> print CORE/MIC AVX-512 C++ stencil function for x*y*z vector block.\n");
+           " -pvcpp <x> <y> <z> print C++ stencil and prefetch functions for x*y*z vector block.\n"
+           " -pvknc <x> <y> <z> print KNC C++ stencil and prefetch functions for x*y*z vector block.\n"
+           " -pv512 <x> <y> <z> print CORE/MIC AVX-512 C++ stencil and prefetch functions for x*y*z vector block.\n");
     exit(1);
 }
 
@@ -234,14 +234,16 @@ void parseOpts(int argc, const char* argv[])
 }
 
 // Print an expression as a one-line C++ comment.
-void addComment(ostream& os, ExprPtr ep) {
+void addComment(ostream& os, ExprPtr ep, string descrip) {
 
     // Use a simple human-readable visitor to create a comment.
     PrintHelper ph;
     PrintVisitorTopDown commenter(os, ph);
     ep->accept(&commenter);
-    os << endl << " // Evaluate the expression '" <<
-        commenter.getExprStr() << "'..." << endl;
+    os << endl <<
+        " // Example: the following code calculates '" <<
+        commenter.getExprStr() <<
+        "' " << descrip << "." << endl;
 }
 
 // Main program.
@@ -250,7 +252,8 @@ int main(int argc, const char* argv[]) {
     // parse options.
     parseOpts(argc, argv);
 
-    // Construct AST at the 0,0,0 corner of each cluster.
+    // Construct AST at the 0,0,0 corner of each vector
+    // in the cluster.
     // TODO: handle stencils that behave differently
     // at various locations, e.g., boundaries.
     Grid5d u("grid");
@@ -303,12 +306,12 @@ int main(int argc, const char* argv[]) {
         PrintHelper ph;
         PrintVisitorTopDown pv1(cout, ph);
         asts[0]->accept(&pv1);
-        cout << "u(1, 0, 0, 0, 0) = " << pv1.getExprStr() << ";" << endl;
+        cout << u.name() << "(1, 0, 0, 0, 0) = " << pv1.getExprStr() << ";" << endl;
 
         cout << endl << "// Bottom-up stencil calculation:" << endl;
         PrintVisitorBottomUp pv2(cout, ph, exprSize);
         asts[0]->accept(&pv2);
-        cout << "u(1, 0, 0, 0, 0) = " << pv2.getExprStr() << ";" << endl;
+        cout << u.name() << "(1, 0, 0, 0, 0) = " << pv2.getExprStr() << ";" << endl;
     }
 
     // POV-Ray output.
@@ -370,7 +373,7 @@ int main(int argc, const char* argv[]) {
             " work variable v0, and scalar location i, j, k." << endl;
         cout << "void calc_stencil_scalar(StencilContext& context, "
             "int t0, int v0, int i, int j, int k) {" << endl;
-        addComment(cout, asts[0]);
+        addComment(cout, asts[0], "when t0=0, v0=0, i=0, j=0, and k=0");
 
         // C++ code generator.
         // The visitor is accepted at all nodes in the AST;
@@ -429,7 +432,8 @@ int main(int argc, const char* argv[]) {
             " aligned vector-blocks." << endl;
         cout << "ALWAYS_INLINE void calc_stencil_vector(StencilContext& context, "
             "int t0, int v0, long veci, long vecj, long veck) {" << endl;
-        addComment(cout, asts[0]);
+        addComment(cout, asts[0],
+                   "for the first scalar element when t0=0, v0=0, veci=0, vecj=0, and veck=0");
 
         // Loop through all ASTs.
         for (int k = 0; k < clen.getZLen(); k++) {
