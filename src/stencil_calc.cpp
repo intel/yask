@@ -99,12 +99,11 @@ void calc_cluster (StencilContext& context, int t0,
 // The begin/end_b* vars are the start/stop_r* vars from the region loops.
 ALWAYS_INLINE static
 void calc_block(StencilContext& context, int t0,
-                   int begin_bv, int begin_bx, int begin_by, int begin_bz,
-                   int end_bv, int end_bx, int end_by, int end_bz)
+                int begin_bv, int begin_bx, int begin_by, int begin_bz,
+                int end_bv, int end_bx, int end_by, int end_bz)
 {
     TRACE_MSG("calc_block(%d, %d, %d, %d, %d)", 
               t0, begin_bv, begin_bx, begin_by, begin_bz);
-    const MATRIX_TYPE& data = context.grid->getData();
 
     // Steps in vector lengths based on cluster lengths.
     const int step_bv = 1;
@@ -120,12 +119,11 @@ void calc_block(StencilContext& context, int t0,
 // Each region is typically computed in a separate OpenMP 'for' region.
 // The begin/end_r* vars are the start/stop_d* vars from the outer loops.
 void calc_region(StencilContext& context, int t0,
-                   int begin_rv, int begin_rx, int begin_ry, int begin_rz,
-                   int end_rv, int end_rx, int end_ry, int end_rz)
+                 int begin_rv, int begin_rx, int begin_ry, int begin_rz,
+                 int end_rv, int end_rx, int end_ry, int end_rz)
 {
     TRACE_MSG("calc_region(%d, %d, %d, %d, %d)", 
               t0, begin_rv, begin_rx, begin_ry, begin_rz);
-    const MATRIX_TYPE& data = context.grid->getData();
 
     // Steps in vector lengths based on block sizes.
     const int step_rv = 1;
@@ -150,7 +148,6 @@ void calc_steps_opt(StencilContext& context, const int nreps)
 {
     TRACE_MSG("calc_steps_opt(%d)", nreps);
     assert(context.grid);
-    const MATRIX_TYPE& data = context.grid->getData();
 
     // problem begin points.
     const int begin_dv = 0, begin_dx = 0, begin_dy = 0, begin_dz = 0;

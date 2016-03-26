@@ -29,37 +29,7 @@ IN THE SOFTWARE.
 
 class ExampleStencil : public StencilBase {
 
-    bool _doAxes;               // calculate values on x, y, and z axes.
-    bool _doDiags;              // calculate values on x-y, x-z, and y-z diagonals.
-    bool _doPlanes;             // calculate values in x-y, x-z, and y-z planes.
-    bool _doCubes;              // calculate values in each octant.
-
-public:
-
-    enum StencilShape { SS_NULL, SS_3AXIS, SS_9AXIS, SS_3PLANE, SS_CUBE };
-
-    ExampleStencil(StencilShape ss, int order=2) :
-        StencilBase(order),
-        _doAxes(false), _doDiags(false), _doPlanes(false), _doCubes(false)
-    {
-
-        // set requisite parts correctly.
-        // (fall-through is intentional in this switch statement
-        // because parts are cumulative.)
-        switch(ss) {
-        case SS_CUBE:
-            _doCubes = true;
-        case SS_3PLANE:
-            _doPlanes = true;
-        case SS_9AXIS:
-            _doDiags = true;
-        case SS_3AXIS:
-            _doAxes = true;
-        default:
-            assert("invalid stencil shape");
-        }
-    }
-
+protected:
     // Return a coefficient.
     // Input values are relative to the current time t=0 and center of stencil i=0, j=0, k=0.
     virtual double coeff(int dt, int di, int dj, int dk) const {
@@ -76,125 +46,185 @@ public:
         return num / double(sumSq);
     }
 
-    // Calculate and return the value of stencil at u(t2, v0, i, j, k)
-    // based on u(t0, v0, ...);
-    virtual GridValue value(Grid5d& u, int tW, int t0, int v0, int i, int j, int k) const {
+    // Add additional contributions to v based on u(tm1, ...).
+    virtual void valueAdd(GridValue& v, TemporalGrid& u,
+                          int tm1, int t0, int i, int j, int k) const =0;
+    
+public:
+    ExampleStencil(int order=2) : StencilBase(order) { }
+
+    // Calculate and return the value of stencil at u(tW, i, j, k)
+    // based on u(t0, ...);
+    virtual GridValue value(TemporalGrid& u, int tW, int t0, int i, int j, int k) const {
 
         // if the wanted time (tW) is <= the last known time (t0),
         // we are done--just return the known value from the grid.
         if (tW <= t0)
-            return u(t0, v0, i, j, k);
+            return u(tW, i, j, k);
 
-        // not known; calc using values at tW-1 recursively.
+        // not known; calc using values at tW-1 and tW-2 recursively.
         int tm1 = tW - 1;  // one timestep ago.
-
+        
         // start with center value.
-        GridValue v = coeff(0, 0, 0, 0) * value(u, tm1, t0, v0, i, j, k);
+        GridValue v = coeff(0, 0, 0, 0) * value(u, tm1, t0, i, j, k);
 
-        // Add values from x, y, and z axes.
-        if (_doAxes) {
-            for (int r = 1; r <= _order/2; r++) {
-
-                // On the axes, assume values are isotropic, i.e., the same
-                // for all points the same distance from the origin.
-                double c = coeff(0, +r, 0, 0);
-                v += c * 
-                    (
-                     // x-axis.
-                     value(u, tm1, t0, v0, i-r, j, k) +
-                     value(u, tm1, t0, v0, i+r, j, k) +
-            
-                     // y-axis.
-                     value(u, tm1, t0, v0, i, j-r, k) +
-                     value(u, tm1, t0, v0, i, j+r, k) +
-            
-                     // z-axis.
-                     value(u, tm1, t0, v0, i, j, k-r) +
-                     value(u, tm1, t0, v0, i, j, k+r)
-                     );
-            }
-        }
-
-        // add values from x-y, x-z, and y-z diagonals.
-        if (_doDiags) {
-            for (int r = 1; r <= _order/2; r++) {
-
-                // x-y diagonal.
-                v += coeff(0, -r, -r, 0) * value(u, tm1, t0, v0, i-r, j-r, k);
-                v += coeff(0, +r, -r, 0) * value(u, tm1, t0, v0, i+r, j-r, k);
-                v -= coeff(0, -r, +r, 0) * value(u, tm1, t0, v0, i-r, j+r, k);
-                v -= coeff(0, +r, +r, 0) * value(u, tm1, t0, v0, i+r, j+r, k);
-
-                // x-z diagonal.
-                v += coeff(0, -r, 0, -r) * value(u, tm1, t0, v0, i-r, j, k-r);
-                v += coeff(0, +r, 0, +r) * value(u, tm1, t0, v0, i+r, j, k+r);
-                v -= coeff(0, -r, 0, +r) * value(u, tm1, t0, v0, i-r, j, k+r);
-                v -= coeff(0, +r, 0, -r) * value(u, tm1, t0, v0, i+r, j, k-r);
-
-                // y-z diagonal.
-                v += coeff(0, 0, -r, -r) * value(u, tm1, t0, v0, i, j-r, k-r);
-                v += coeff(0, 0, +r, +r) * value(u, tm1, t0, v0, i, j+r, k+r);
-                v -= coeff(0, 0, -r, +r) * value(u, tm1, t0, v0, i, j-r, k+r);
-                v -= coeff(0, 0, +r, -r) * value(u, tm1, t0, v0, i, j+r, k-r);
-            }
-        }
-
-        // add values from x-y, x-z, and y-z planes not covered by axes or diagonals.
-        if (_doPlanes) {
-            for (int r = 1; r <= _order/2; r++) {
-                for (int m = r+1; m <= _order/2; m++) {
-
-                    // x-y plane.
-                    v += coeff(0, -r, -m, 0) * value(u, tm1, t0, v0, i-r, j-m, k);
-                    v += coeff(0, -m, -r, 0) * value(u, tm1, t0, v0, i-m, j-r, k);
-                    v += coeff(0, +r, +m, 0) * value(u, tm1, t0, v0, i+r, j+m, k);
-                    v += coeff(0, +m, +r, 0) * value(u, tm1, t0, v0, i+m, j+r, k);
-                    v -= coeff(0, -r, +m, 0) * value(u, tm1, t0, v0, i-r, j+m, k);
-                    v -= coeff(0, -m, +r, 0) * value(u, tm1, t0, v0, i-m, j+r, k);
-                    v -= coeff(0, +r, -m, 0) * value(u, tm1, t0, v0, i+r, j-m, k);
-                    v -= coeff(0, +m, -r, 0) * value(u, tm1, t0, v0, i+m, j-r, k);
-
-                    // x-z plane.
-                    v += coeff(0, -r, 0, -m) * value(u, tm1, t0, v0, i-r, j, k-m);
-                    v += coeff(0, -m, 0, -r) * value(u, tm1, t0, v0, i-m, j, k-r);
-                    v += coeff(0, +r, 0, +m) * value(u, tm1, t0, v0, i+r, j, k+m);
-                    v += coeff(0, +m, 0, +r) * value(u, tm1, t0, v0, i+m, j, k+r);
-                    v -= coeff(0, -r, 0, +m) * value(u, tm1, t0, v0, i-r, j, k+m);
-                    v -= coeff(0, -m, 0, +r) * value(u, tm1, t0, v0, i-m, j, k+r);
-                    v -= coeff(0, +r, 0, -m) * value(u, tm1, t0, v0, i+r, j, k-m);
-                    v -= coeff(0, +m, 0, -r) * value(u, tm1, t0, v0, i+m, j, k-r);
-
-                    // y-z plane.
-                    v += coeff(0, 0, -r, -m) * value(u, tm1, t0, v0, i, j-r, k-m);
-                    v += coeff(0, 0, -m, -r) * value(u, tm1, t0, v0, i, j-m, k-r);
-                    v += coeff(0, 0, +r, +m) * value(u, tm1, t0, v0, i, j+r, k+m);
-                    v += coeff(0, 0, +m, +r) * value(u, tm1, t0, v0, i, j+m, k+r);
-                    v -= coeff(0, 0, -r, +m) * value(u, tm1, t0, v0, i, j-r, k+m);
-                    v -= coeff(0, 0, -m, +r) * value(u, tm1, t0, v0, i, j-m, k+r);
-                    v -= coeff(0, 0, +r, -m) * value(u, tm1, t0, v0, i, j+r, k-m);
-                    v -= coeff(0, 0, +m, -r) * value(u, tm1, t0, v0, i, j+m, k-r);
-                }
-            }
-        }
-
-        // add values outside of planes.
-        if (_doCubes) {
-            for (int rx = 1; rx <= _order/2; rx++)
-                for (int ry = 1; ry <= _order/2; ry++)
-                    for (int rz = 1; rz <= _order/2; rz++) {
-
-                        // Each quadrant.
-                        v += coeff(rx, ry, rz, 0) * value(u, tm1, t0, v0, i+rx, j+ry, k+rz);
-                        v += coeff(rx, -ry, -rz, 0) * value(u, tm1, t0, v0, i+rx, j-ry, k-rz);
-                        v -= coeff(rx, ry, -rz, 0) * value(u, tm1, t0, v0, i+rx, j+ry, k-rz);
-                        v -= coeff(rx, -ry, rz, 0) * value(u, tm1, t0, v0, i+rx, j-ry, k+rz);
-                        v += coeff(-rx, ry, rz, 0) * value(u, tm1, t0, v0, i-rx, j+ry, k+rz);
-                        v += coeff(-rx, -ry, -rz, 0) * value(u, tm1, t0, v0, i-rx, j-ry, k-rz);
-                        v -= coeff(-rx, ry, -rz, 0) * value(u, tm1, t0, v0, i-rx, j+ry, k-rz);
-                        v -= coeff(-rx, -ry, rz, 0) * value(u, tm1, t0, v0, i-rx, j-ry, k+rz);
-                    }
-        }
+        // Add additional values.
+        valueAdd(v, u, tm1, t0, i, j, k);
 
         return v;
     }
+};
+
+// Add values from x, y, and z axes.
+class AxisStencil : public ExampleStencil {
+protected:
+
+    // Add additional contributions to v based on u(tm1, ...).
+    virtual void valueAdd(GridValue& v, TemporalGrid& u,
+                          int tm1, int t0, int i, int j, int k) const
+    {
+        for (int r = 1; r <= _order/2; r++) {
+
+            // On the axes, assume values are isotropic, i.e., the same
+            // for all points the same distance from the origin.
+            double c = coeff(0, +r, 0, 0);
+            v += c * 
+                (
+                 // x-axis.
+                 value(u, tm1, t0, i-r, j, k) +
+                 value(u, tm1, t0, i+r, j, k) +
+                 
+                 // y-axis.
+                 value(u, tm1, t0, i, j-r, k) +
+                 value(u, tm1, t0, i, j+r, k) +
+                 
+                 // z-axis.
+                 value(u, tm1, t0, i, j, k-r) +
+                 value(u, tm1, t0, i, j, k+r)
+                 );
+        }
+    }
+
+public:
+    AxisStencil(int order=2) : ExampleStencil(order) { }
+
+};
+
+// Add values from x-y, x-z, and y-z diagonals.
+class DiagStencil : public AxisStencil {
+protected:
+
+    // Add additional contributions to v based on u(tm1, ...).
+    virtual void valueAdd(GridValue& v, TemporalGrid& u,
+                          int tm1, int t0, int i, int j, int k) const
+    {
+        AxisStencil::valueAdd(v, u, tm1, t0, i, j, k);
+        
+        for (int r = 1; r <= _order/2; r++) {
+
+            // x-y diagonal.
+            v += coeff(0, -r, -r, 0) * value(u, tm1, t0, i-r, j-r, k);
+            v += coeff(0, +r, -r, 0) * value(u, tm1, t0, i+r, j-r, k);
+            v -= coeff(0, -r, +r, 0) * value(u, tm1, t0, i-r, j+r, k);
+            v -= coeff(0, +r, +r, 0) * value(u, tm1, t0, i+r, j+r, k);
+
+            // x-z diagonal.
+            v += coeff(0, -r, 0, -r) * value(u, tm1, t0, i-r, j, k-r);
+            v += coeff(0, +r, 0, +r) * value(u, tm1, t0, i+r, j, k+r);
+            v -= coeff(0, -r, 0, +r) * value(u, tm1, t0, i-r, j, k+r);
+            v -= coeff(0, +r, 0, -r) * value(u, tm1, t0, i+r, j, k-r);
+
+            // y-z diagonal.
+            v += coeff(0, 0, -r, -r) * value(u, tm1, t0, i, j-r, k-r);
+            v += coeff(0, 0, +r, +r) * value(u, tm1, t0, i, j+r, k+r);
+            v -= coeff(0, 0, -r, +r) * value(u, tm1, t0, i, j-r, k+r);
+            v -= coeff(0, 0, +r, -r) * value(u, tm1, t0, i, j+r, k-r);
+        }
+    }
+
+public:
+    DiagStencil(int order=2) : AxisStencil(order) { }
+
+};
+
+// Add values from x-y, x-z, and y-z planes not covered by axes or diagonals.
+class PlaneStencil : public DiagStencil {
+protected:
+    
+    // Add additional contributions to v based on u(tm1, ...).
+    virtual void valueAdd(GridValue& v, TemporalGrid& u,
+                          int tm1, int t0, int i, int j, int k) const
+    {
+        DiagStencil::valueAdd(v, u, tm1, t0, i, j, k);
+        
+        for (int r = 1; r <= _order/2; r++) {
+            for (int m = r+1; m <= _order/2; m++) {
+
+                // x-y plane.
+                v += coeff(0, -r, -m, 0) * value(u, tm1, t0, i-r, j-m, k);
+                v += coeff(0, -m, -r, 0) * value(u, tm1, t0, i-m, j-r, k);
+                v += coeff(0, +r, +m, 0) * value(u, tm1, t0, i+r, j+m, k);
+                v += coeff(0, +m, +r, 0) * value(u, tm1, t0, i+m, j+r, k);
+                v -= coeff(0, -r, +m, 0) * value(u, tm1, t0, i-r, j+m, k);
+                v -= coeff(0, -m, +r, 0) * value(u, tm1, t0, i-m, j+r, k);
+                v -= coeff(0, +r, -m, 0) * value(u, tm1, t0, i+r, j-m, k);
+                v -= coeff(0, +m, -r, 0) * value(u, tm1, t0, i+m, j-r, k);
+
+                // x-z plane.
+                v += coeff(0, -r, 0, -m) * value(u, tm1, t0, i-r, j, k-m);
+                v += coeff(0, -m, 0, -r) * value(u, tm1, t0, i-m, j, k-r);
+                v += coeff(0, +r, 0, +m) * value(u, tm1, t0, i+r, j, k+m);
+                v += coeff(0, +m, 0, +r) * value(u, tm1, t0, i+m, j, k+r);
+                v -= coeff(0, -r, 0, +m) * value(u, tm1, t0, i-r, j, k+m);
+                v -= coeff(0, -m, 0, +r) * value(u, tm1, t0, i-m, j, k+r);
+                v -= coeff(0, +r, 0, -m) * value(u, tm1, t0, i+r, j, k-m);
+                v -= coeff(0, +m, 0, -r) * value(u, tm1, t0, i+m, j, k-r);
+
+                // y-z plane.
+                v += coeff(0, 0, -r, -m) * value(u, tm1, t0, i, j-r, k-m);
+                v += coeff(0, 0, -m, -r) * value(u, tm1, t0, i, j-m, k-r);
+                v += coeff(0, 0, +r, +m) * value(u, tm1, t0, i, j+r, k+m);
+                v += coeff(0, 0, +m, +r) * value(u, tm1, t0, i, j+m, k+r);
+                v -= coeff(0, 0, -r, +m) * value(u, tm1, t0, i, j-r, k+m);
+                v -= coeff(0, 0, -m, +r) * value(u, tm1, t0, i, j-m, k+r);
+                v -= coeff(0, 0, +r, -m) * value(u, tm1, t0, i, j+r, k-m);
+                v -= coeff(0, 0, +m, -r) * value(u, tm1, t0, i, j+m, k-r);
+            }
+        }
+    }
+
+public:
+    PlaneStencil(int order=2) : DiagStencil(order) { }
+
+};
+
+// Add values from rest of cube.
+class CubeStencil : public PlaneStencil {
+protected:
+
+    // Add additional contributions to v based on u(tm1, ...).
+    virtual void valueAdd(GridValue& v, TemporalGrid& u,
+                          int tm1, int t0, int i, int j, int k) const
+    {
+        PlaneStencil::valueAdd(v, u, tm1, t0, i, j, k);
+        
+        for (int rx = 1; rx <= _order/2; rx++)
+            for (int ry = 1; ry <= _order/2; ry++)
+                for (int rz = 1; rz <= _order/2; rz++) {
+
+                    // Each quadrant.
+                    v += coeff(rx, ry, rz, 0) * value(u, tm1, t0, i+rx, j+ry, k+rz);
+                    v += coeff(rx, -ry, -rz, 0) * value(u, tm1, t0, i+rx, j-ry, k-rz);
+                    v -= coeff(rx, ry, -rz, 0) * value(u, tm1, t0, i+rx, j+ry, k-rz);
+                    v -= coeff(rx, -ry, rz, 0) * value(u, tm1, t0, i+rx, j-ry, k+rz);
+                    v += coeff(-rx, ry, rz, 0) * value(u, tm1, t0, i-rx, j+ry, k+rz);
+                    v += coeff(-rx, -ry, -rz, 0) * value(u, tm1, t0, i-rx, j-ry, k-rz);
+                    v -= coeff(-rx, ry, -rz, 0) * value(u, tm1, t0, i-rx, j+ry, k-rz);
+                    v -= coeff(-rx, -ry, rz, 0) * value(u, tm1, t0, i-rx, j-ry, k+rz);
+                }
+    }
+
+public:
+    CubeStencil(int order=2) : PlaneStencil(order) { }
+
 };

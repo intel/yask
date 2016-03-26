@@ -34,18 +34,17 @@ public:
     AveStencil(int order=2) :
         StencilBase(order) { }
 
-    // Calculate and return the value of stencil at u(t2, v0, i, j, k)
-    // based on u(t0, v0, ...);
-    virtual GridValue value(Grid5d& u, int t2, int t0, int v0, int i, int j, int k) const {
-        assert(t2 >= t0);
-        assert(v0 >= 0);
+    // Calculate and return the value of stencil at u(tW, i, j, k)
+    // based on u(t0, ...);
+    virtual GridValue value(TemporalGrid& u, int tW, int t0, int i, int j, int k) const {
+        assert(tW >= t0);
 
         // just the current value?
-        if (t2 == t0)
-            return u(t0, v0, i, j, k);
+        if (tW == t0)
+            return u(t0, i, j, k);
 
-        // not the current value; calc t2-1 based on t0.
-        int t1 = t2 - 1;
+        // not the current value; calc tW-1 based on t0.
+        int t1 = tW - 1;
 
         // calc requested parts.
         int rBegin = -_order/2;
@@ -54,7 +53,7 @@ public:
         for (int rx = rBegin; rx <= rEnd; rx++)
             for (int ry = rBegin; ry <= rEnd; ry++)
                 for (int rz = rBegin; rz <= rEnd; rz++)
-                    v += value(u, t1, t0, v0, i+rx, j+ry, k+rz);
+                    v += value(u, t1, t0, i+rx, j+ry, k+rz);
 
         // divide by number of points to find average.
         double n = double(_order + 1);

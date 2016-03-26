@@ -32,12 +32,8 @@ IN THE SOFTWARE.
 void calc_steps_ref(StencilContext& context, const int nreps)
 {
     // get problem sizes (in points, not vector lengths).
-    Grid5d* grid = context.grid;
+    MainGrid* grid = context.grid;
     assert(grid);
-    MATRIX_TYPE& data = grid->getData();
-    const long d1 = data.getDimX();
-    const long d2 = data.getDimY();
-    const long d3 = data.getDimZ();
 
     // time steps.
     printf("running %i reference time step(s)...\n", nreps);
@@ -47,12 +43,12 @@ void calc_steps_ref(StencilContext& context, const int nreps)
         for (int v0 = 0; v0 < NUM_VARS; v0++) {
 
 #pragma omp parallel for
-            for(int iz=0; iz<d3; iz++) {
+            for(int iz = 0; iz < context.dz * VLEN_Z; iz++) {
 
                 CREW_FOR_LOOP
-                    for(int iy=0; iy<d2; iy++) {
+                    for(int iy = 0; iy < context.dy * VLEN_Y; iy++) {
 
-                        for(int ix=0; ix<d1; ix++) {
+                        for(int ix = 0; ix < context.dx * VLEN_X; ix++) {
 
                             TRACE_MSG("calc_scalar(%d, %d, %d, %d, %d)", 
                                       t0, v0, ix, iy, iz);

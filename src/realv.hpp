@@ -105,13 +105,20 @@ union realv {
     }
 
     // access a REAL by x,y,z vector-block indices.
-    inline REAL& operator()(unsigned i, unsigned j, unsigned k) {
-        unsigned l = MAP321(i, j, k, VLEN_X, VLEN_Y, VLEN_Z);
+    inline const REAL& operator()(int i, int j, int k) const {
+        assert(i >= 0);
+        assert(i < VLEN_X);
+        assert(j >= 0);
+        assert(j < VLEN_Y);
+        assert(k >= 0);
+        assert(k < VLEN_Z);
+        int l = MAP321(i, j, k, VLEN_X, VLEN_Y, VLEN_Z);
         return r[l];
     }
-    inline const REAL& operator()(unsigned i, unsigned j, unsigned k) const {
-        unsigned l = MAP321(i, j, k, VLEN_X, VLEN_Y, VLEN_Z);
-        return r[l];
+    inline REAL& operator()(int i, int j, int k) {
+        const realv* ct = const_cast<const realv*>(this);
+        const REAL& cr = (*ct)(i, j, k);
+        return const_cast<REAL&>(cr);
     }
 
     // copy whole vector.
@@ -134,6 +141,20 @@ union realv {
 #endif
     }
 
+    // broadcast with conversions.
+    inline void operator=(int val) {
+        operator=(REAL(val));
+    }
+#if REAL_BYTES == 4
+    inline void operator=(double val) {
+        operator=(REAL(val));
+    }
+#else
+    inline void operator=(float val) {
+        operator=(REAL(val));
+    }
+#endif
+    
     // negate.
     inline realv operator-() const {
         realv res;
@@ -199,6 +220,33 @@ union realv {
         return res;
     }
 
+    // less-than comparator for validation.
+    bool operator<(const realv& rhs) const {
+        for (int j = 0; j < VLEN; j++) {
+            if (r[j] < rhs.r[j])
+                return true;
+        }
+        return false;
+    }
+
+    // greater-than comparator for validation.
+    bool operator>(const realv& rhs) const {
+        for (int j = 0; j < VLEN; j++) {
+            if (r[j] > rhs.r[j])
+                return true;
+        }
+        return false;
+    }
+    
+    // equal-to comparator for validation.
+    bool operator==(const realv& rhs) const {
+        for (int j = 0; j < VLEN; j++) {
+            if (r[j] != rhs.r[j])
+                return false;
+        }
+        return true;
+    }
+    
     // load.
     inline void loadFrom(const realv* from) {
 #ifdef EMU_INTRINSICS
@@ -233,23 +281,31 @@ union realv {
     }
 
     // Output.
-    inline void print_ctrls(ostream& os) const {
+    inline void print_ctrls(ostream& os, bool doEnd=true) const {
         for (int j = 0; j < VLEN; j++) {
-            if (j) os << ",";
+            if (j) os << ", ";
             os << "[" << j << "]=" << ci[j];
         }
-        os << endl;
+        if (doEnd)
+            os << endl;
     }
 
-    inline void print_reals(ostream& os) const {
+    inline void print_reals(ostream& os, bool doEnd=true) const {
         for (int j = 0; j < VLEN; j++) {
-            if (j) os << ",";
-            os << " [" << j << "]=" << r[j];
+            if (j) os << ", ";
+            os << "[" << j << "]=" << r[j];
         }
-        os << endl;
+        if (doEnd)
+            os << endl;
     }
-    
+
 }; // realv.
+
+// Output using <<.
+inline ostream& operator<<(ostream& os, const realv& rv) {
+    rv.print_reals(os, false);
+    return os;
+}
 
 #ifdef __INTEL_COMPILER
 #define ALIGNED_REALV __declspec(align(sizeof(realv))) realv

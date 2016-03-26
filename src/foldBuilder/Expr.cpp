@@ -28,6 +28,9 @@ IN THE SOFTWARE.
 #include "Visitor.hpp"
 
 // Unary.
+ExprPtr constGridValue(double rhs) {
+    return make_shared<ConstExpr>(rhs);
+}
 ExprPtr operator-(const ExprPtr& rhs) {
     return make_shared<NegExpr>(rhs);
 }

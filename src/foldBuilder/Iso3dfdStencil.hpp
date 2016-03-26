@@ -35,7 +35,7 @@ class Iso3dfdStencil : public StencilBase {
 protected:
     double* _coeff;             // stencil coefficients.
     double _dxyz;               // dx, dy, dz factor.
-    const Grid3d _vel;   // const velocity grid.
+    const StaticGrid _vel;          // const velocity grid.
     bool _deferCoeff;           // look up coefficients later.
     
 public:
@@ -52,7 +52,7 @@ public:
     }
 
     // Get access to velocity grid.
-    virtual const Grid3d& getVel() {
+    virtual const StaticGrid& getVel() {
         return _vel;
     }
 
@@ -108,60 +108,59 @@ public:
         return true;
     }
 
-    // Calculate and return the value of stencil at u(t2, v0, i, j, k)
-    // based on u(t0, v0, ...);
-    virtual GridValue value(Grid5d& u, int tW, int t0, int v0, int i, int j, int k) const {
+    // Get an expression for coefficient at radius r.
+    virtual GridValue coeff(int r) const {
+        GridValue v;
+        
+        // See Expr.hpp for documentation on SET_VALUE_FROM_EXPR macro.
+        if (_deferCoeff)
+            SET_VALUE_FROM_EXPR(v =, "context.coeff[" << r << "]");
+        else
+            SET_VALUE_FROM_EXPR(v =, _coeff[r]);
+
+        return v;
+    }
+
+    // Calculate and return the value of stencil at u(t2, i, j, k)
+    // based on u(t0, ...);
+    virtual GridValue value(TemporalGrid& u, int tW, int t0, int i, int j, int k) const {
 
         // if the wanted time (tW) is <= the last known time (t0),
         // we are done--just return the known value from the grid.
         if (tW <= t0)
-            return u(tW, v0, i, j, k);
+            return u(tW, i, j, k);
 
         // not known; calc using values at tW-1 and tW-2 recursively.
         int tm1 = tW - 1;  // one timestep ago.
         int tm2 = tW - 2;  // two timesteps ago.
 
         // start with center value multiplied by coeff 0.
-        GridValue v = value(u, tm1, t0, v0, i, j, k);
-        if (_deferCoeff) {
-
-            // See StencilBase.hpp for documentation on SET_VALUE_FROM_EXPR macro.
-            SET_VALUE_FROM_EXPR(v *=, "context.coeff[0]");
-        } else
-            v *= _coeff[0];
+        GridValue v = value(u, tm1, t0, i, j, k) * coeff(0);
 
         // add values from x, y, and z axes multiplied by the
         // coeff for the given radius.
         for (int r = 1; r <= _order/2; r++) {
 
             // Add values from axes at radius r.
-            GridValue vr = 
-
-                // x-axis.
-                value(u, tm1, t0, v0, i-r, j, k) +
-                value(u, tm1, t0, v0, i+r, j, k) +
+            v += (
+                  // x-axis.
+                  value(u, tm1, t0, i-r, j, k) +
+                  value(u, tm1, t0, i+r, j, k) +
                 
-                // y-axis.
-                value(u, tm1, t0, v0, i, j-r, k) +
-                value(u, tm1, t0, v0, i, j+r, k) +
+                  // y-axis.
+                  value(u, tm1, t0, i, j-r, k) +
+                  value(u, tm1, t0, i, j+r, k) +
                 
-                // z-axis.
-                value(u, tm1, t0, v0, i, j, k-r) +
-                value(u, tm1, t0, v0, i, j, k+r);
-
-            // Multiply by coefficient r.
-            if (_deferCoeff) {
-                SET_VALUE_FROM_EXPR(vr *=, "context.coeff[" << r << "]");
-            } else
-                vr *= _coeff[0];
-
-            // Add product to running sum.
-            v += vr;
+                  // z-axis.
+                  value(u, tm1, t0, i, j, k-r) +
+                  value(u, tm1, t0, i, j, k+r)
+                  )
+                * coeff(r);
         }
 
         // temporal and velocity components.
-        v = (2.0 * value(u, tm1, t0, v0, i, j, k)) // twice value from tW-1.
-            - value(u, tm2, t0, v0, i, j, k) // subtract value from tW-2.
+        v = (2.0 * value(u, tm1, t0, i, j, k)) // twice value from tW-1.
+            - value(u, tm2, t0, i, j, k) // subtract value from tW-2.
             + (v * _vel(i, j, k));       // add v * velocity.
 
         return v;

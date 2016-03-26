@@ -21,12 +21,12 @@
 ## IN THE SOFTWARE.
 ##############################################################################
 
-# typical invocations:
+# Example usage:
 # make -j8 arch=knc
-# make -j8 arch=knl order=8
-# make -j8 arch=skx shape=ave fold='2 1 4' cluster='2 1 1'
+# make -j8 arch=knl shape=3axis order=8
+# make -j8 arch=skx shape=ave fold='1 2 4' cluster='2 1 1'
 
-# example debug builds:
+# Example debug usage:
 # make arch=knl  OMPFLAGS='-qopenmp-stubs'
 # make arch=host OMPFLAGS='-qopenmp-stubs' model_cache=2 EXTRA_CPPFLAGS='-O1' MACROS='DEBUG'
 # make arch=host OMPFLAGS='-qopenmp-stubs' order=0 shape=3axis fold='1 1 1' MACROS='DEBUG EMU_INTRINSICS TRACE TRACE_MEM TRACE_INTRINSICS' EXTRA_CPPFLAGS='-O0'
@@ -49,11 +49,20 @@ order		=	16
 # FP precision: 4=float, 8=double.
 real_bytes	=	4
 
-# defaults for miniGhost-like 27-point stencil.
+# default overrides for various stencils.
 ifeq ($(shape),ave)
 vars		=	40
 order		=	2
 real_bytes	=	8
+endif
+ifeq ($(shape),9axis)
+order		=	8
+endif
+ifeq ($(shape),3plane)
+order		=	6
+endif
+ifeq ($(shape),cube)
+order		=	4
 endif
 
 # how to fold vectors (x*y*z)
@@ -93,7 +102,7 @@ OMPFLAGS	=	-fopenmp
 LFLAGS          =       $(CPPFLAGS) -lrt -g
 GEN_HEADERS     =	$(addprefix src/,stencil_outer_loops.hpp \
 				stencil_region_loops.hpp stencil_block_loops.hpp \
-				mapping.hpp real_matrices.hpp stencil_macros.hpp \
+				map_macros.hpp maps.hpp stencil_macros.hpp \
 				stencil_vector_code.hpp stencil_scalar_code.hpp)
 
 # real (FP) size.
@@ -153,7 +162,7 @@ endif # arch-specific.
 # compiler-specific settings
 ifeq ($(notdir $(CC)),icpc)
 
-CPPFLAGS        +=      -debug -restrict -ansi-alias -fno-alias -fimf-precision=low -fast-transcendentals -no-prec-sqrt -no-prec-div -fp-model fast=2 -fno-protect-parens -opt-assume-safe-padding -Fa
+CPPFLAGS        +=      -debug -restrict -ansi-alias -fno-alias -fimf-precision=low -fast-transcendentals -no-prec-sqrt -no-prec-div -fp-model fast=2 -fno-protect-parens -qopt-assume-safe-padding -Fa
 CPPFLAGS	+=      -qopt-report=5 -qopt-report-phase=VEC,PAR,OPENMP,IPO,LOOP
 CPPFLAGS	+=	-no-diag-message-catalog
 
@@ -211,7 +220,7 @@ all:	$(STENCIL_EXEC_NAME) $(TAGS) $(CODE_STATS)
 code_stats: $(STENCIL_EXEC_NAME)
 	@echo
 	@echo "Code stats for stencil computation:"
-	@./get-loop-stats.pl stencil_calc.s
+	./get-loop-stats.pl stencil_calc.s
 	@echo "Speedup estimates:"
 	@grep speedup src/stencil_calc.$(arch).optrpt | sort | uniq -c
 
@@ -227,11 +236,11 @@ src/stencil_region_loops.hpp: gen-loops.pl Makefile
 src/stencil_block_loops.hpp: gen-loops.pl Makefile
 	./$< -output $@ $(BLOCK_LOOP_ARGS) $(EXTRA_LOOP_ARGS) $(EXTRA_BLOCK_LOOP_ARGS) 
 
-src/mapping.hpp: gen-mapping.pl
+src/map_macros.hpp: gen-mapping.pl
 	./$< -m > $@
 
-src/real_matrices.hpp: gen-mapping.pl
-	./$< -c > $@
+src/maps.hpp: gen-mapping.pl
+	./$< -d > $@
 
 foldBuilder: src/foldBuilder/*.cpp src/foldBuilder/*.hpp
 	$(FB_CC) $(FB_CCFLAGS) -o $@ src/foldBuilder/*.cpp
@@ -242,13 +251,16 @@ src/stencil_macros.hpp: foldBuilder
 src/stencil_vector_code.hpp: foldBuilder
 	./$< $(FB_FLAGS) -p$(FB_TARGET) $(fold) > $@
 	gindent $@ || indent $@
-	@grep -m1 -A3 Calculate $@
+	grep -m1 -A3 Calculate $@
 
 src/stencil_scalar_code.hpp: foldBuilder
 	./$< $(FB_FLAGS) -es 10 -pscpp > $@
 	gindent $@ || indent $@
 
-%.$(arch).o: %.cpp src/*.hpp src/foldBuilder/*.hpp $(GEN_HEADERS)
+headers: $(GEN_HEADERS)
+	@ echo 'Header files generated.'
+
+%.$(arch).o: %.cpp src/*.hpp src/foldBuilder/*.hpp headers
 	$(CC) $(CPPFLAGS) -Isrc/foldBuilder -c -o $@ $<
 
 TAGS: src/*.hpp src/*.cpp

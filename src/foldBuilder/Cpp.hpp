@@ -58,7 +58,7 @@ public:
     // need to write intermediate code to a stream.
     virtual string constructPoint(ostream& os, const GridPoint& gp) {
         ostringstream oss;
-        oss << "context." << gp.name() << "->readVal(";
+        oss << "context." << gp.name() << "->readElem(";
             if (gp._tOk) oss << "t0 + " << gp._t;
             if (gp._vOk) oss << ", v0";
             if (gp._tOk || gp._vOk) oss << ", ";
@@ -117,9 +117,9 @@ protected:
             int vlen = _vv.getVecLen();
 
             // A comment.
-            os << " // Create a vector with all values set to same value." << endl;
-            os << " const " << getVarType() << " " << _codes[code] << " = " <<
-                code << ";" << endl;
+            os << " // Create a vector with all values set to same value." << endl <<
+                getVarType() << " " << _codes[code] << ";" << endl <<
+                _codes[code] << " = " << code << ";" << endl;
         }
         return _codes[code];
     }

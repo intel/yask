@@ -289,23 +289,23 @@ int main(int argc, char** argv)
     float best_elapsed_time=0.0f, best_throughput_mpoints=0.0f;
 
     printf("\nallocating matrices...\n"); fflush(NULL);
-    Grid5d mainGrid(VLEN_X, VLEN_Y, VLEN_Z,
-                    dx, dy, dz,
-                    h1_pad, h2_pad, h3_pad, "main");
-    Grid3d* velGrid = NULL;
+    MainGrid mainGrid(dx, dy, dz,
+                      h1_pad, h2_pad, h3_pad,
+                      "main");
+    VelGrid* velGrid = NULL;
 
 #ifdef STENCIL_USES_VEL
-    velGrid = new Grid3d(VLEN_X, VLEN_Y, VLEN_Z,
-                         dx, dy, dz,
-                         0, 0, 0, "vel");
+    velGrid = new VelGrid(dx, dy, dz,
+                          0, 0, 0,
+                          "vel");
 #endif 
     context.grid = &mainGrid;
     context.vel = velGrid;
 
     printf("initializing matrices...\n"); fflush(NULL);
-    mainGrid.getData().set_data();
+    mainGrid.set_same(0.1);
     if (velGrid)
-        velGrid->getData().set_data();
+        velGrid->set_same(0.2);
 
     // warmup caches, threading, etc.
     int tmp_nreps = min(TIME_STEPS, nreps);
@@ -361,17 +361,17 @@ int main(int argc, char** argv)
 
     if (vreps) {
 
-        // check the correctness of one iteration
+        // check the correctness of one iteration.
         printf("\n-------------------------------\n");
         printf("validation...\n");
 
-        // make a ref matrix and init both to same values.
-        Grid5d refGrid(VLEN_X, VLEN_Y, VLEN_Z,
-                       dx, dy, dz,
-                       h1_pad, h2_pad, h3_pad, "ref");
-        refGrid.getData().init_data(55);
-        mainGrid.getData().init_data(55);
-        if( mainGrid.getData().within_epsilon(refGrid.getData()) ) {
+        // make a ref matrix and init both.
+        // TODO: init matrices w/different values at each element.
+        MainGrid refGrid(dx, dy, dz,
+                         h1_pad, h2_pad, h3_pad, "ref");
+        refGrid.set_same(5.0);
+        mainGrid.set_same(5.0);
+        if( mainGrid.compare(refGrid) == 0 ) {
             printf("init check passed; continuting with validation...\n");
         } else {
             printf("INIT CHECK FAILED!\n");
@@ -388,7 +388,7 @@ int main(int argc, char** argv)
         calc_steps_ref(context, vreps);
 
         // check for equality.
-        if( mainGrid.getData().within_epsilon(refGrid.getData()) ) {
+        if( mainGrid.compare(refGrid) == 0 ) {
             printf("\nTEST PASSED!\n");
         } else {
             printf("\nTEST FAILED!\n");

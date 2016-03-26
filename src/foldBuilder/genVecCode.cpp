@@ -197,21 +197,18 @@ void parseOpts(int argc, const char* argv[])
         usesVel = true;
     }
 
-    // average-value cube stencil.
-    else if (shapeName == "ave") {
-        stencilFunc = new AveStencil(order);
-    }
-
     // other symmetric stencils.
     else {
         if (shapeName == "3axis")
-            stencilFunc = new ExampleStencil(ExampleStencil::SS_3AXIS, order);
+            stencilFunc = new AxisStencil(order);
         else if (shapeName == "9axis")
-            stencilFunc = new ExampleStencil(ExampleStencil::SS_9AXIS, order);
+            stencilFunc = new DiagStencil(order);
         else if (shapeName == "3plane")
-            stencilFunc = new ExampleStencil(ExampleStencil::SS_3PLANE, order);
+            stencilFunc = new PlaneStencil(order);
         else if (shapeName == "cube")
-            stencilFunc = new ExampleStencil(ExampleStencil::SS_CUBE, order);
+            stencilFunc = new CubeStencil(order);
+        else if (shapeName == "ave")
+            stencilFunc = new AveStencil(order);
         else {
             cerr << "error: unknown stencil shape '" << shapeName << "'." << endl;
             usage();
@@ -253,10 +250,10 @@ int main(int argc, const char* argv[]) {
     parseOpts(argc, argv);
 
     // Construct AST at the 0,0,0 corner of each vector
-    // in the cluster.
+    // in the cluster by evaluating the stencil value function.
     // TODO: handle stencils that behave differently
     // at various locations, e.g., boundaries.
-    Grid5d u("grid");
+    TemporalGrid u("grid");
     typedef vector<GridValue> GridValueList;
     GridValueList asts;
     for (int k = 0; k < clen.getZLen(); k++) {
@@ -267,7 +264,8 @@ int main(int argc, const char* argv[]) {
                 int ip = i * vlen.getXLen();
 
                 // ip,jp,kp is the 0,0,0 corner of the vector cluster i,j,k.
-                GridValue ast = stencilFunc->value(u, timeSteps, 0, 0, ip, jp, kp);
+                // We want the value at timeSteps based on the value at 0.
+                GridValue ast = stencilFunc->value(u, timeSteps, 0, ip, jp, kp);
                 assert(ast);
                 asts.push_back(ast);
 
@@ -385,7 +383,7 @@ int main(int argc, const char* argv[]) {
         // Result.
         string result = pcv.getExprStr();
         cout << endl << " // Set final result." << endl <<
-            "context." << u.name() << "->writeVal(" << result <<
+            "context." << u.name() << "->writeElem(" << result <<
             ", t0 + TIME_STEPS, v0, i, j, k);" << endl;
 
         // End of function.
@@ -431,7 +429,7 @@ int main(int argc, const char* argv[]) {
             " vector blocks created from " << vv.getNumAlignedVecs() <<
             " aligned vector-blocks." << endl;
         cout << "ALWAYS_INLINE void calc_stencil_vector(StencilContext& context, "
-            "int t0, int v0, long veci, long vecj, long veck) {" << endl;
+            "int t0, int v0, int veci, int vecj, int veck) {" << endl;
         addComment(cout, asts[0],
                    "for the first scalar element when t0=0, v0=0, veci=0, vecj=0, and veck=0");
 
@@ -516,7 +514,7 @@ int main(int argc, const char* argv[]) {
                 if (!dir->isNone())
                     cout << "_" << dir->getBaseName();
                 cout << "(StencilContext& context, "
-                    "int t0, int v0, long veci, long vecj, long veck) {" << endl;
+                    "int t0, int v0, int veci, int vecj, int veck) {" << endl;
 
                 // C++ prefetch code.
                 vp->printPrefetches(cout, *dir, hint);

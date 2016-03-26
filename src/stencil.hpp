@@ -38,7 +38,7 @@ IN THE SOFTWARE.
 #include <stdlib.h>
 #include <stdexcept>
 
-#include "mapping.hpp"
+#include "map_macros.hpp"
 
 #ifndef WIN32
 #include <unistd.h>
@@ -137,27 +137,28 @@ extern "C" {
 #define ROUND_UP(n, mult) (((n) + (mult) - 1) / (mult) * (mult))
 
 // Memory-accessing code.
-#include "mem_wrappers.hpp"
+#include "mem_macros.hpp"
+#include "realv_grids.hpp"
 
-// Matrix implementations.
-// Vars are 1=x, 2=y, 3=z, 4=(v&t).
-// Last number is consecutive in memory, e.g.,
-// RealMatrix4321 is C-like with consecutive x indices,
-// RealMatrix4123 is Fortran-like with consecutive z indices.
-#ifndef MATRIX_BASE
-#define MATRIX_BASE RealMatrix4321
+// Matrix layouts.
+// Vars are 1=x, 2=y, 3=z, 4=(v&t, opt).
+// Last number in layout is consecutive in memory, e.g.,
+// Map4321 is C-like with consecutive x indices,
+// Map4123 is Fortran-like with consecutive z indices.
+#ifndef MAIN_MAP
+#define MAIN_MAP Map4321
 #endif
-#define MATRIX_TYPE MATRIX_BASE<NUM_GRIDS>
-#define VEL_MAT_TYPE MATRIX_BASE<1>
-
-// A grid using the MATRIX_TYPE
-#include "Grid.hpp"
+#ifndef VEL_MAP
+#define VEL_MAP Map321
+#endif
+typedef RealvGridPseudo5d<MAIN_MAP> MainGrid;
+typedef RealvGrid3d<VEL_MAP> VelGrid;
 
 // Context for calculating values.
 class StencilContext {
 public:
-    Grid5d* grid;               // main grid for current and previous values.
-    const Grid3d* vel;          // velocity constants.
+    MainGrid* grid;            // main grid for current and previous values.
+    const VelGrid* vel;        // velocity constants.
 
     // all sizes in vector-lengths.
     int dx, dy, dz;                   // problem size.

@@ -37,7 +37,6 @@ for my $fname (@ARGV) {
     next;
   }
 
-  my %labels;
   my %loopLabels;
   my %astats;
   my %istats;
@@ -45,6 +44,7 @@ for my $fname (@ARGV) {
 
   for my $pass (0..1) {
 
+    my %labels;
     my $asmLine = 0;
     my $getData = 0;
 
@@ -82,6 +82,7 @@ for my $fname (@ARGV) {
           $istats{'jump'}++;
 
           # end of a loop?
+          # this assumes loops jump backward.
           if (exists $labels{$lab}) {
             my $dist = $asmLine - $labels{$lab};
             $loopLabels{$lab} = 1;
@@ -103,13 +104,13 @@ for my $fname (@ARGV) {
                 printf "%4i  $key\n", $value;
               }
             }
-          }
 
-          # we only want inner loops,
-          # so we can delete all label info now.
-          undef %labels;
-          undef %istats;
-          undef %astats;
+            # we only want inner loops,
+            # so we can delete all label info now.
+            undef %labels;
+            undef %istats;
+            undef %astats;
+          }
         }
 
         # non-jump instr: collect stats.

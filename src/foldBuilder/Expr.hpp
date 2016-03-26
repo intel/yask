@@ -25,6 +25,9 @@ IN THE SOFTWARE.
 
 ///////// Stencil AST Expressions. ////////////
 
+#ifndef EXPR_HPP
+#define EXPR_HPP
+
 #include <map>
 #include <set>
 #include <vector>
@@ -59,6 +62,7 @@ typedef vector<ExprPtr> ExprPtrVec;
 typedef ExprPtr GridValue;
 
 // Various unary operators.
+ExprPtr constGridValue(double rhs);
 ExprPtr operator-(const ExprPtr& rhs);
 
 // Various binary operators.
@@ -272,10 +276,11 @@ public:
     int _t, _v;
     bool _tOk, _vOk;            // whether t and v are meaningful.
 
-    // Construct a 5D point.
-    GridPoint(const string& name, int t, int v, int i, int j, int k) :
+    // Construct a 4D point.
+    GridPoint(const string& name, int t, int i, int j, int k) :
         Triple(i, j, k), _name(name), 
-        _t(t), _v(v), _tOk(true), _vOk(true) {}
+        _t(t), _v(0),
+        _tOk(true), _vOk(true) {}
 
     // Construct a 3D point.
     GridPoint(const string& name, int i, int j, int k) :
@@ -335,7 +340,7 @@ typedef shared_ptr<GridPoint> GridPointPtr;
 typedef set<GridPoint> GridPointSet;
 typedef vector<GridPoint> GridPointVec;
 
-// A collection of GridPoints.
+// A base class for a collection of GridPoints.
 class Grid {
 protected:
     string _name;
@@ -350,26 +355,54 @@ public:
     }
 };
 
-// A 5D collection of GridPoints.
-// Instead of returning a specific value from a matrix,
-// the access operator returns an object that contains the indices.
-class Grid5d : public Grid {
+// A 4D collection of GridPoints (3D spatial plus time).
+class TemporalGrid : public Grid {
 public:
-    Grid5d(const string& name) : Grid(name) { }
+    TemporalGrid(const string& name) : Grid(name) { }
 
-    virtual GridPointPtr operator()(int t, int v, int i, int j, int k) const {
-        return make_shared<GridPoint>(_name, t, v, i, j, k);
+    // Create an expression to a specific point in the grid.
+    virtual GridPointPtr operator()(int t, int i, int j, int k) const {
+        return make_shared<GridPoint>(_name, t, i, j, k);
     }
 
 };
 
-// A 3D collection of GridPoints.
-// no time or var.
-class Grid3d : public Grid {
+// A 3D collection of GridPoints (no time dimension).
+class StaticGrid : public Grid {
 public:
-    Grid3d(const string& name) : Grid(name) { }
+    StaticGrid(const string& name) : Grid(name) { }
 
+    // Create an expression to a specific point in the grid.
     virtual GridPointPtr operator()(int i, int j, int k) const {
         return make_shared<GridPoint>(_name, i, j, k);
     }
 };
+
+// Use SET_VALUE_FROM_EXPR for creating a string to insert any C++ code
+// that evaluates to a REAL.
+// The 1st arg must be the LHS of an assignment statement.
+// The 2nd arg must evaluate to a REAL (float or double) expression,
+// but it must NOT include access to a grid.
+// The code string is constructed as if writing to an ostream,
+// so '<<' operators may be used to evaluate local variables.
+// Floating-point variables will be printed w/o loss of precision.
+// The code may access the following:
+// - Any parameter to the 'calc_stencil_{vector,scalar}' generated functions,
+//   including fields of the user-defined 'context' object.
+// - A variable within the global or current namespace where it will be used.
+// - A local variable in the 'value' method; in this case, the value
+//   of the local var must be evaluated and inserted in the expr.
+// Example code:
+//   GridValue v;
+//   SET_VALUE_FROM_EXPR(v =, "context.temp * " << 0.2);
+//   SET_VALUE_FROM_EXPR(v +=, "context.coeff[" << r << "]");
+// This example would generate the following partial expression (when r=9):
+//   (context.temp * 2.00000000000000000e-01) + (context.coeff[9])
+#define SET_VALUE_FROM_EXPR(lhs, rhs) do {              \
+        ostringstream oss;                              \
+        oss << setprecision(17) << scientific;          \
+        oss << "(" << rhs << ")";                   \
+        lhs  make_shared<CodeExpr>(oss.str());          \
+    } while(0)
+
+#endif
