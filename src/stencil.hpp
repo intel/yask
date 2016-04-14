@@ -23,21 +23,31 @@ IN THE SOFTWARE.
 
 *****************************************************************************/
 
-#ifndef _STENCIL_INCLUDE
-#define _STENCIL_INCLUDE
+#ifndef _STENCIL_HPP
+#define _STENCIL_HPP
 
 // control assert() with DEBUG instead of NDEBUG.
 #ifndef DEBUG
 #define NDEBUG
 #endif
 
+#include <math.h>
 #include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <malloc.h>
 #include <stdlib.h>
+#include <iostream>
 #include <stdexcept>
+#include <map>
+#include <vector>
 
+using namespace std;
+
+// type to use for indexing grids.
+typedef long int idx_t;
+
+#include "idiv.hpp"
 #include "map_macros.hpp"
 
 #ifndef WIN32
@@ -45,7 +55,6 @@ IN THE SOFTWARE.
 #include <stdint.h>
 #include <immintrin.h>
 #else
-#include <map>
 #define _mm_clevict(p,h) true
 #define _Pragma(x)
 #endif
@@ -110,75 +119,175 @@ extern "C" {
 #define TRACE_MSG(fmt,...) true
 #endif
 
-// define a vector of reals.
+// auto-generated macros from foldBuilder.
 #include "stencil_macros.hpp"
-#include "realv.hpp"
 
-// number of var grids to be calculated.
-#ifndef NUM_VARS
-#define NUM_VARS (1)
+// max abs difference in validation.
+#ifndef EPSILON
+#define EPSILON (1e-3)
 #endif
 
-// number of work grids.
-#ifndef NUM_WORKS
-#define NUM_WORKS (1)
+// check whether two reals are close enough.
+template<typename T>
+inline bool within_tolerance(T val, T ref, T epsilon) {
+    bool ok;
+    double adiff = fabs(val - ref);
+    if (fabs(ref) > 1.0)
+        epsilon = fabs(ref * epsilon);
+    ok = adiff < epsilon;
+#ifdef DEBUG_TOLERANCE
+    if (!ok)
+        cerr << "outside tolerance of " << epsilon << ": " << val << " != " << ref <<
+            " because " << adiff << " >= " << epsilon << endl;
+#endif
+    return ok;
+}
+
+// rounding macros.
+#define DIV_AND_ROUND_UP(n, denom) (((n) + (denom) - 1) / (denom))
+#define ROUND_UP(n, mult) (DIV_AND_ROUND_UP(n, mult) * (mult))
+
+// number of time steps calculated in each stencil-function call.
+#ifndef TIME_STEPS
+#define TIME_STEPS (1)
 #endif
 
-// total grids.
-#define NUM_GRIDS (NUM_VARS + NUM_WORKS)
+// Size of time dimension required in allocated memory.
+// TODO: calculate this per-grid based on dependency tree and
+// traversal order.
+#ifndef TIME_DIM
+#define TIME_DIM (2)
+#endif
 
-// cluster size in points.
+// vector sizes.
+#ifndef VLEN_N
+#define VLEN_N (1)
+#endif
+#ifndef VLEN_X
+#define VLEN_X (1)
+#endif
+#ifndef VLEN_Y
+#define VLEN_Y (1)
+#endif
+#ifndef VLEN_Z
+#define VLEN_Z (1)
+#endif
+
+// cluster sizes in vectors.
+#ifndef CLEN_N
+#define CLEN_N (1)
+#endif
+#ifndef CLEN_X
+#define CLEN_X (1)
+#endif
+#ifndef CLEN_Y
+#define CLEN_Y (1)
+#endif
+#ifndef CLEN_Z
+#define CLEN_Z (1)
+#endif
+
+// cluster sizes in points.
+#define CPTS_N (CLEN_N * VLEN_N)
 #define CPTS_X (CLEN_X * VLEN_X)
 #define CPTS_Y (CLEN_Y * VLEN_Y)
 #define CPTS_Z (CLEN_Z * VLEN_Z)
-#define CPTS (CPTS_X * CPTS_Y * CPTS_Z)
+#define CPTS (CPTS_N * CPTS_X * CPTS_Y * CPTS_Z)
 
-// rounding macro.
-#define ROUND_UP(n, mult) (((n) + (mult) - 1) / (mult) * (mult))
+// default problem size.
+#ifndef DEF_PROB_SIZE
+#define DEF_PROB_SIZE (768)
+#endif
+
+// define a vector of reals.
+#include "realv.hpp"
 
 // Memory-accessing code.
 #include "mem_macros.hpp"
 #include "realv_grids.hpp"
 
-// Matrix layouts.
-// Vars are 1=x, 2=y, 3=z, 4=(v&t, opt).
-// Last number in layout is consecutive in memory, e.g.,
-// Map4321 is C-like with consecutive x indices,
-// Map4123 is Fortran-like with consecutive z indices.
-#ifndef MAIN_MAP
-#define MAIN_MAP Map4321
+// Default grid layouts.
+// 3-d dims are 1=x, 2=y, 3=z.
+// 4-d dims are 1=n/t, 2=x, 3=y, 4=z.
+// Last number in 'Map' layout has unit stride, e.g.,
+// Map321 & Map1432 have unit-stride in x.
+// Map123 & Map4123 have unit-stride in z.
+#ifndef MAP_4D
+#define MAP_4D Map1432
 #endif
-#ifndef VEL_MAP
-#define VEL_MAP Map321
+#ifndef MAP_3D
+#define MAP_3D Map321
 #endif
-typedef RealvGridPseudo5d<MAIN_MAP> MainGrid;
-typedef RealvGrid3d<VEL_MAP> VelGrid;
+typedef RealvGrid_XYZ<MAP_3D> Grid_XYZ;
+typedef RealvGrid_NXYZ<MAP_4D> Grid_NXYZ;
+typedef RealvGrid_TXYZ<MAP_4D> Grid_TXYZ;
+typedef RealvGrid_TNXYZ<MAP_4D> Grid_TNXYZ; // T and N mapped to 1st dim.
 
 // Context for calculating values.
 class StencilContext {
 public:
-    MainGrid* grid;            // main grid for current and previous values.
-    const VelGrid* vel;        // velocity constants.
 
-    // all sizes in vector-lengths.
-    int dx, dy, dz;                   // problem size.
-    int rx, ry, rz;                   // region size.
-    int bx, by, bz;                   // block size.
+    GRID_PTR_DEFNS;
+    vector<RealvGridBase*> gridPtrs;
 
-    StencilContext() {
-        grid = NULL;
-        vel = NULL;
+    idx_t dn, dx, dy, dz;                   // problem size.
+    idx_t rn, rx, ry, rz;                   // region size.
+    idx_t bn, bx, by, bz;                   // block size.
+    idx_t padn, padx, pady, padz; // padding, including halos.
+
+    StencilContext() { }
+
+    // Allocate grid memory and set gridPtrs.
+    void allocGrids() {
+        cout << "allocating matrices..." << endl;
+        GRID_ALLOCS;
+        idx_t nbytes = 0;
+        for (auto gp : gridPtrs)
+            nbytes += gp->get_num_bytes();
+        cout << "total allocation: " << (float(nbytes)/1e9) << "G byte(s)." << endl;
+    }
+
+    // Init all grids w/same value within each grid,
+    // but different values between grids.
+    void initSame() {
+        REAL v = 0.1;
+        cout << "initializing matrices..." << endl;
+        for (auto gp : gridPtrs) {
+            gp->set_same(v);
+            v += 0.01;
+        }
+    }
+
+    // Init all grids w/different values.
+    // Better for validation, but slower.
+    void initDiff() {
+        REAL v = 0.01;
+        for (auto gp : gridPtrs) {
+            gp->set_inc(v);
+            v += 0.001;
+        }
+    }
+
+    // Compare contexts.
+    idx_t compare(const StencilContext& ref) const {
+        return GRID_COMPARES;
     }
 };
 
+// Base classes for auto-generated stencil code.
+#include "stencil_calc.hpp"
+
+// Include auto-generated stencil code.
+#include "stencil_code.hpp"
+
 // Some utility functions.
 extern double getTimeInSecs();
-extern int roundUp(int dim, int mult, string name);
+extern idx_t roundUp(idx_t dim, idx_t mult, string name);
 
 // Reference stencil calculations.
-void calc_steps_ref(StencilContext& context, const int nreps);
+void calc_steps_ref(StencilContext& context, Stencils& stencils, const int nreps);
 
 // Vectorized and blocked stencil calculations.
-void calc_steps_opt(StencilContext& context, const int nreps);
+void calc_steps_opt(StencilContext& context, Stencils& stencils, const int nreps);
 
 #endif

@@ -25,38 +25,35 @@ IN THE SOFTWARE.
 
 #include "stencil.hpp"
 
-// Include auto-generated scalar stencil code.
-#include "stencil_scalar_code.hpp"
-
 // Calculate nreps time steps of stencil over grid using scalar code.
-void calc_steps_ref(StencilContext& context, const int nreps)
+void calc_steps_ref(StencilContext& context, Stencils& stencils, const int nreps)
 {
-    // get problem sizes (in points, not vector lengths).
-    MainGrid* grid = context.grid;
-    assert(grid);
-
     // time steps.
     printf("running %i reference time step(s)...\n", nreps);
-    for(int t0 = 1; t0 <= nreps; t0 += TIME_STEPS) {
+    for(int t = 1; t <= nreps; t += TIME_STEPS) {
 
-        // variables.
-        for (int v0 = 0; v0 < NUM_VARS; v0++) {
+        // calculations to make.
+        for (auto stencil : stencils) {
+        
+            // grid index (not used in most stencils).
+            for (idx_t n = 0; n < context.dn; n++) {
 
 #pragma omp parallel for
-            for(int iz = 0; iz < context.dz * VLEN_Z; iz++) {
+                for(idx_t iz = 0; iz < context.dz; iz++) {
 
-                CREW_FOR_LOOP
-                    for(int iy = 0; iy < context.dy * VLEN_Y; iy++) {
+                    CREW_FOR_LOOP
+                        for(idx_t iy = 0; iy < context.dy; iy++) {
 
-                        for(int ix = 0; ix < context.dx * VLEN_X; ix++) {
+                            for(idx_t ix = 0; ix < context.dx; ix++) {
 
-                            TRACE_MSG("calc_scalar(%d, %d, %d, %d, %d)", 
-                                      t0, v0, ix, iy, iz);
+                                TRACE_MSG("%s.calc_scalar(%d, %d, %d, %d, %d)", 
+                                          stencil->get_name().c_str(), t, n, ix, iy, iz);
                             
-                            // Evaluate the reference scalar code.
-                            calc_stencil_scalar(context, t0, v0, ix, iy, iz);
+                                // Evaluate the reference scalar code.
+                                stencil->calc_scalar(context, t, n, ix, iy, iz);
+                            }
                         }
-                    }
+                }
             }
         }
     } // iterations.

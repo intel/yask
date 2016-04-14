@@ -35,13 +35,17 @@ class Iso3dfdStencil : public StencilBase {
 protected:
     double* _coeff;             // stencil coefficients.
     double _dxyz;               // dx, dy, dz factor.
-    const StaticGrid _vel;          // const velocity grid.
     bool _deferCoeff;           // look up coefficients later.
+
+    Grid_4d pressure;          // time-varying 3D pressure grid.
+    Grid_3d vel;               // constant 3D vel grid.
     
 public:
 
     Iso3dfdStencil(int order=8, double dxyz=50.0) :
-        StencilBase(order), _coeff(0), _dxyz(dxyz), _vel("vel"), _deferCoeff(false)
+        StencilBase(order), _coeff(0), _dxyz(dxyz), _deferCoeff(false),
+        INIT_GRID_4D(pressure, t, x, y, z),
+        INIT_GRID_3D(vel, x, y, z)
     {
         setOrder(order);
     }
@@ -49,11 +53,6 @@ public:
     virtual ~Iso3dfdStencil() {
         if (_coeff)
             delete[] _coeff;
-    }
-
-    // Get access to velocity grid.
-    virtual const StaticGrid& getVel() {
-        return _vel;
     }
 
     // Set coefficient deferral policy.
@@ -121,21 +120,15 @@ public:
         return v;
     }
 
-    // Calculate and return the value of stencil at u(t2, i, j, k)
-    // based on u(t0, ...);
-    virtual GridValue value(TemporalGrid& u, int tW, int t0, int i, int j, int k) const {
-
-        // if the wanted time (tW) is <= the last known time (t0),
-        // we are done--just return the known value from the grid.
-        if (tW <= t0)
-            return u(tW, i, j, k);
-
-        // not known; calc using values at tW-1 and tW-2 recursively.
-        int tm1 = tW - 1;  // one timestep ago.
-        int tm2 = tW - 2;  // two timesteps ago.
+    // Define equation for pressure at t+1 based on values from vel and pressure at t.
+    virtual void define(const IntTuple& offsets) {
+        GET_OFFSET(t);
+        GET_OFFSET(x);
+        GET_OFFSET(y);
+        GET_OFFSET(z);
 
         // start with center value multiplied by coeff 0.
-        GridValue v = value(u, tm1, t0, i, j, k) * coeff(0);
+        GridValue v = pressure(t, x, y, z) * coeff(0);
 
         // add values from x, y, and z axes multiplied by the
         // coeff for the given radius.
@@ -144,25 +137,26 @@ public:
             // Add values from axes at radius r.
             v += (
                   // x-axis.
-                  value(u, tm1, t0, i-r, j, k) +
-                  value(u, tm1, t0, i+r, j, k) +
+                  pressure(t, x-r, y, z) +
+                  pressure(t, x+r, y, z) +
                 
                   // y-axis.
-                  value(u, tm1, t0, i, j-r, k) +
-                  value(u, tm1, t0, i, j+r, k) +
+                  pressure(t, x, y-r, z) +
+                  pressure(t, x, y+r, z) +
                 
                   // z-axis.
-                  value(u, tm1, t0, i, j, k-r) +
-                  value(u, tm1, t0, i, j, k+r)
-                  )
-                * coeff(r);
+                  pressure(t, x, y, z-r) +
+                  pressure(t, x, y, z+r)
+
+                  ) * coeff(r);
         }
 
-        // temporal and velocity components.
-        v = (2.0 * value(u, tm1, t0, i, j, k)) // twice value from tW-1.
-            - value(u, tm2, t0, i, j, k) // subtract value from tW-2.
-            + (v * _vel(i, j, k));       // add v * velocity.
+        // finish equation, including t-1 and velocity components.
+        v = (2.0 * pressure(t, x, y, z))
+            - pressure(t-1, x, y, z) // subtract pressure from t-1.
+            + (v * vel(x, y, z));       // add v * velocity.
 
-        return v;
+        // define the value at t+1 to be equivalent to v.
+        pressure(t+1, x, y, z) == v;
     }
 };

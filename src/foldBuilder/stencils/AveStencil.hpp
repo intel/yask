@@ -30,35 +30,39 @@ IN THE SOFTWARE.
 
 class AveStencil : public StencilBase {
 
+protected:
+    Grid_5d multi_grid;            // N time-varying 3D grids.
+    
 public:
     AveStencil(int order=2) :
-        StencilBase(order) { }
+        StencilBase(order),
+        INIT_GRID_5D(multi_grid, t, n, x, y, z) { }
 
-    // Calculate and return the value of stencil at u(tW, i, j, k)
-    // based on u(t0, ...);
-    virtual GridValue value(TemporalGrid& u, int tW, int t0, int i, int j, int k) const {
-        assert(tW >= t0);
-
-        // just the current value?
-        if (tW == t0)
-            return u(t0, i, j, k);
-
-        // not the current value; calc tW-1 based on t0.
-        int t1 = tW - 1;
-
-        // calc requested parts.
+    // Define equation for grid n at t as average of
+    // (order+1)^3 cube of values from grid n at t-1.
+    virtual void define(const IntTuple& offsets) {
+        GET_OFFSET(t);
+        GET_OFFSET(n);
+        GET_OFFSET(x);
+        GET_OFFSET(y);
+        GET_OFFSET(z);
+        
+        // add values in cube of desired size.
         int rBegin = -_order/2;
         int rEnd = _order/2;
+        int nPts = 0;
         GridValue v;
         for (int rx = rBegin; rx <= rEnd; rx++)
             for (int ry = rBegin; ry <= rEnd; ry++)
-                for (int rz = rBegin; rz <= rEnd; rz++)
-                    v += value(u, t1, t0, i+rx, j+ry, k+rz);
+                for (int rz = rBegin; rz <= rEnd; rz++) {
+                    v += multi_grid(t-1, n, x+rx, y+ry, z+rz);
+                    nPts++;
+                }
 
         // divide by number of points to find average.
-        double n = double(_order + 1);
-        v *= 1.f / (n*n*n);
+        v *= 1.0 / double(nPts);
 
-        return v;
+        // define the grid value at t+1 to be equivalent to v.
+        multi_grid(t, n, x, y, z) == v;
     }
 };

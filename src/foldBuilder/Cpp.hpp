@@ -33,7 +33,11 @@ IN THE SOFTWARE.
 class CppPrintHelper : public PrintHelper {
 
 public:
-    CppPrintHelper() { }
+    CppPrintHelper(const string& varPrefix,
+                   const string& varType,
+                   const string& linePrefix,
+                   const string& lineSuffix) :
+        PrintHelper(varPrefix, varType, linePrefix, lineSuffix) { }
     virtual ~CppPrintHelper() { }
 
     // Format a real, preserving precision.
@@ -53,20 +57,24 @@ public:
         return formatReal(v);
     }
 
+    // Make call for a point.
+    virtual string makePointCall(const GridPoint& gp,
+                                 const string& fname, string optArg = "") const {
+        ostringstream os;
+        os << "context." << gp.getName() << "->" << fname << "(";
+        if (optArg.length()) os << optArg << ", ";
+        os << gp.makeDimValOffsetStr() << ", __LINE__)";
+        return os.str();
+    }        
+    
     // Return a grid reference.
-    // The 'os' parameter is provided for derived types that
-    // need to write intermediate code to a stream.
-    virtual string constructPoint(ostream& os, const GridPoint& gp) {
-        ostringstream oss;
-        oss << "context." << gp.name() << "->readElem(";
-            if (gp._tOk) oss << "t0 + " << gp._t;
-            if (gp._vOk) oss << ", v0";
-            if (gp._tOk || gp._vOk) oss << ", ";
-            oss << "i + " << gp._i <<
-                ", j + " << gp._j <<
-                ", k + " << gp._k <<
-                ", __LINE__)" << endl;
-        return oss.str();
+    virtual string readFromPoint(ostream& os, const GridPoint& gp) {
+        return makePointCall(gp, "readElem");
+    }
+
+    // Update a grid point.
+    virtual string writeToPoint(ostream& os, const GridPoint& gp, const string& val) {
+        return makePointCall(gp, "writeElem", val);
     }
 };
 
@@ -76,8 +84,12 @@ public:
 class CppVecPrintHelper : public VecPrintHelper {
 
 public:
-    CppVecPrintHelper(VecInfoVisitor& vv) :
-        VecPrintHelper(vv) { }
+    CppVecPrintHelper(VecInfoVisitor& vv,
+                      const string& varPrefix,
+                      const string& varType,
+                      const string& linePrefix,
+                      const string& lineSuffix) :
+        VecPrintHelper(vv, varPrefix, varType, linePrefix, lineSuffix) { }
 
 protected:
     map<string,string> _codes; // code expressions defined.
@@ -91,17 +103,18 @@ protected:
 
             // Create new var.
             _consts[v] = makeVarName();
-            int vlen = _vv.getVecLen();
+            int vlen = _vv.getFold().product();
 
             // A comment.
-            os << " // Create a const vector with all values set to " << v << "." << endl;
+            os << endl << " // Create a const vector with all values set to " << v << "." << endl;
 
             string vstr = CppPrintHelper::formatReal(v);
-            os << setprecision(17) << scientific << " static const " <<
+            os << setprecision(17) << scientific <<
+                _linePrefix << "static const " <<
                 getVarType() << " " << _consts[v] << " = { .r = { " << vstr;
             for (int i = 1; i < vlen; i++)
                 os << ", " << vstr;
-            os << " } };" << endl;
+            os << " } }" << _lineSuffix;
         }
         return _consts[v];
     }
@@ -114,64 +127,88 @@ protected:
 
             // Create new var.
             _codes[code] = makeVarName();
-            int vlen = _vv.getVecLen();
+            int vlen = _vv.getFold().product();
 
             // A comment.
-            os << " // Create a vector with all values set to same value." << endl <<
-                getVarType() << " " << _codes[code] << ";" << endl <<
-                _codes[code] << " = " << code << ";" << endl;
+            os << endl << " // Create a vector with all values set to same value." << endl <<
+                _linePrefix << getVarType() << " " << _codes[code] << _lineSuffix <<
+                _linePrefix << _codes[code] << " = " << code << _lineSuffix;
         }
         return _codes[code];
     }
 
-    // Print required memory reads.
-    virtual string printAlignedVec(ostream& os, const GridPoint& gp) {
+    // Print a comment about a point.
+    virtual void printPointComment(ostream& os, const GridPoint& gp, const string& verb) const {
 
-        os << endl << " // Aligned vector block from " << gp.name();
-        if (gp._tOk) os << " at t=t0+" << gp._t;
-        os << " at point " << gp._i << ", " << gp._j << ", " << gp._k << "." << endl;
-        string mvName = makeVarName();
+        os << endl << " // " << verb << " " << gp.getName() << " at " <<
+            gp.makeDimValOffsetStr() << "." << endl;
+    }
+
+    // Print call for a point.
+    virtual void printPointCall(ostream& os, const GridPoint& gp,
+                                const string& fname, string optArg = "") const {
+        os << "context." << gp.getName() << "->" << fname << "(";
+        if (optArg.length()) os << optArg << ", ";
+        os << gp.makeDimValNormOffsetStr(getFold()) << ", __LINE__)";
+    }
+    
+    // Print required memory read.
+    virtual string printAlignedVecRead(ostream& os, const GridPoint& gp) {
+        printPointComment(os, gp, "Read aligned vector block from");
 
         // Read memory.
-        os << getVarType() << " " << mvName << " = context." << gp.name() << "->readVec(";
-        if (gp._tOk) os << "t0 + " << gp._t;
-        if (gp._vOk) os << ", v0";
-        if (gp._tOk || gp._vOk) os << ", ";
-        os << "veci + " << (gp._i / _vv.getXLen()) <<
-            ", vecj + " << (gp._j / _vv.getYLen()) <<
-            ", veck + " << (gp._k / _vv.getZLen()) <<
-            ", __LINE__);" << endl;
+        string mvName = makeVarName();
+        os << _linePrefix << getVarType() << " " << mvName << " = ";
+        printPointCall(os, gp, "readVecNorm");
+        os << _lineSuffix;
         return mvName;
     }
 
+    // Print memory write.
+    virtual string printAlignedVecWrite(ostream& os, const GridPoint& gp,
+                                        const string& val) {
+        printPointComment(os, gp, "Write aligned vector block to");
+
+        // Write temp var to memory.
+        printPointCall(os, gp, "writeVecNorm", val);
+        os << ";" << endl;
+        return val;
+    }
+    
     // Print conversion from memory vars to point var gp if needed.
     virtual string printUnalignedVec(ostream& os, const GridPoint& gp) {
+        printPointComment(os, gp, "Construct unaligned vector block from");
 
-        os << endl << " // Unaligned vector block from " << gp.name();
-        if (gp._tOk) os << " at t=t0+" << gp._t;
-        os << " at point " << gp._i << ", " << gp._j << ", " << gp._k << "." << endl;
+        // Declare var.
         string pvName = makeVarName();
-        os << getVarType() << " " << pvName << ";" << endl;
+        os << _linePrefix << getVarType() << " " << pvName << _lineSuffix;
 
+        // Contruct it.
         printUnalignedVecCtor(os, gp, pvName);
         return pvName;
     }
 
     // Print per-element construction for one point var pvName from elems.
-    virtual void printUnalignedVecSimple(ostream& os, const GridPoint& gp, const string& pvName, string prefix) {
+    virtual void printUnalignedVecSimple(ostream& os, const GridPoint& gp,
+                                         const string& pvName, string linePrefix) {
 
-        // just copy each element separately.
+        // just assign each element in vector separately.
         auto& elems = _vv._vblk2elemLists[gp];
+        assert(elems.size() > 0);
         for (size_t pelem = 0; pelem < elems.size(); pelem++) {
-            auto ve = elems[pelem];
+            auto& ve = elems[pelem]; // one vector element from gp.
 
             // Look up existing input var.
             assert(_readyPoints.count(ve._vec));
             string mvName = _readyPoints[ve._vec];
 
-            int alignedElem = ve._offset; // which element?
+            // which element?
+            int alignedElem = ve._offset;
+            string elemStr = ve._offsets.makeDimValOffsetStr();
 
-            os << prefix << pvName << "[" << pelem << "] = " << mvName << "[" << alignedElem << "];" << endl;
+            os << linePrefix << pvName << "[" << pelem << "] = " <<
+                mvName << "[" << alignedElem << "];  // for " <<
+                elemStr << _lineSuffix;
         }
     }
 
@@ -179,45 +216,48 @@ protected:
     // This version prints inefficient element-by-element assignment.
     // Override this in derived classes for more efficient implementations.
     virtual void printUnalignedVecCtor(ostream& os, const GridPoint& gp, const string& pvName) {
-        printUnalignedVecSimple(os, gp, pvName, "");
+        printUnalignedVecSimple(os, gp, pvName, _linePrefix);
     }
 
 public:
 
+    // print init of normalized indices.
+    virtual void printNorm(ostream& os, const IntTuple& dims) {
+        const IntTuple& vlen = getFold();
+        os << endl << " // Normalize indices by vector fold lengths." << endl;
+        for (auto dim : dims.getDims()) {
+            const int* p = vlen.lookup(dim);
+            os << " const idx_t " << dim << "v = " << dim;
+            if (p) os << " / " << *p;
+            os << ";" << endl;
+        }
+    }
+
     // Print body of prefetch function.
-    virtual void printPrefetches(ostream& os, const Dir& dir, string hint) const {
+    virtual void printPrefetches(ostream& os, const IntTuple& dir, string hint) const {
 
         // Points to prefetch.
         GridPointSet* pfPts = NULL;
 
         // Leading points only if dir is set.
         GridPointSet edge;
-        if (!dir.isNone()) {
+        if (dir.size() > 0) {
             _vv.getLeadingEdge(edge, dir);
             pfPts = &edge;
         }
 
-        // Otherwise, all points.
+        // if dir is not set, prefetch all points.
         else
             pfPts = &_vv._alignedVecs;
 
         os << " const char* p = 0;" << endl;
-        for (auto ei = pfPts->begin(); ei != pfPts->end(); ei++) {
-            auto gp = *ei;
-
-            os << endl << " // Aligned vector block from " << gp.name();
-            if (gp._tOk) os << " at t=t0+" << gp._t;
-            os << " at point " << gp._i << ", " << gp._j << ", " << gp._k << "." << endl;
+        for (auto gp : *pfPts) {
+            printPointComment(os, gp, "Aligned");
             
             // Prefetch memory.
-            os << " p = (const char*)context." << gp.name() << "->getVecPtr(";
-            if (gp._tOk) os << "t0 + " << gp._t;
-            if (gp._vOk) os << ", v0";
-            if (gp._tOk || gp._vOk) os << ", ";
-            os << "veci + " << (gp._i / _vv.getXLen()) <<
-                ", vecj + " << (gp._j / _vv.getYLen()) <<
-                ", veck + " << (gp._k / _vv.getZLen()) <<
-                ", __LINE__);" << endl;
+            os << " p = (const char*)";
+            printPointCall(os, gp, "getVecPtrNorm");
+            os << ";" << endl;
             os << " MCP(p, " << hint << ", __LINE__);" << endl;
             os << " _mm_prefetch(p, " << hint << ");" << endl;
         }

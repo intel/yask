@@ -23,7 +23,7 @@ IN THE SOFTWARE.
 
 *****************************************************************************/
 
-///////// Stencil AST Expressions. ////////////
+///////// AST Expressions ////////////
 
 #ifndef EXPR_HPP
 #define EXPR_HPP
@@ -33,15 +33,21 @@ IN THE SOFTWARE.
 #include <vector>
 #include <assert.h>
 
-#include "Dir.hpp"
+#include "Tuple.hpp"
 
 using namespace std;
 
 // Forward-declare expression visitor.
 class ExprVisitor;
 
+// Forward-declaration of an expression.
 class Expr;
 typedef shared_ptr<Expr> ExprPtr;
+
+// Forward-declaration of a grid and a grid point.
+class Grid;
+class GridPoint;
+typedef shared_ptr<GridPoint> GridPointPtr;
 
 // The base class for all expression nodes.
 class Expr {
@@ -59,6 +65,11 @@ public:
     virtual int getNumPoints() const { return 0; }
 };
 typedef vector<ExprPtr> ExprPtrVec;
+
+// A 'GridValue' is simply a pointer to an expression.
+// This means that calling an update() function will
+// not actually evaluate the expression in the function.
+// Rather, it will create an AST.
 typedef ExprPtr GridValue;
 
 // Various unary operators.
@@ -83,6 +94,21 @@ ExprPtr operator*(double lhs, const ExprPtr& rhs);
 ExprPtr operator*(const ExprPtr& lhs, double rhs);
 void operator*=(GridValue& lhs, const ExprPtr& rhs);
 void operator*=(GridValue& lhs, double rhs);
+
+ExprPtr operator/(const ExprPtr& lhs, const ExprPtr& rhs);
+ExprPtr operator/(double lhs, const ExprPtr& rhs);
+ExprPtr operator/(const ExprPtr& lhs, double rhs);
+void operator/=(GridValue& lhs, const ExprPtr& rhs);
+void operator/=(GridValue& lhs, double rhs);
+
+// Use the '==' operator to define a grid value.  Difficult to use '='
+// operator because it cannot be declared as a standalone operator.  Also,
+// the '=' operator implies replacement semantics in C++, and we want to
+// represent a mathematical equality. Of course, the '==' is actually a
+// *test* for equality instead of an assertion; perhaps one could think of
+// this as similar to the argument to assert().  In theory, we could allow
+// any expression on LHS, but we don't want to solve equations.
+void operator==(GridPointPtr gpp, ExprPtr rhs);
 
 // A simple constant value.
 class ConstExpr : public Expr {
@@ -119,7 +145,7 @@ public:
 
 // Base class for any unary operator.
 class UnaryExpr : public Expr {
-public:
+protected:
     ExprPtr _rhs;
     string _opStr;
 
@@ -128,10 +154,10 @@ public:
         _rhs(rhs), _opStr(opStr) { }
     virtual ~UnaryExpr() { }
 
-    ExprPtr getRhs() {
-        return _rhs;
-    }
-
+    ExprPtr getRhs() { return _rhs; }
+    const ExprPtr getRhs() const { return _rhs; }
+    const string& getOpStr() const { return _opStr; }
+    
     virtual void accept(ExprVisitor* ev);
 
     virtual int getNumPoints() const {
@@ -143,17 +169,17 @@ public:
 class NegExpr : public UnaryExpr {
 public:
     NegExpr(ExprPtr rhs) :
-        UnaryExpr(getOpStr(), rhs) { }
+        UnaryExpr(opStr(), rhs) { }
     virtual ~NegExpr() { }
 
-    static string getOpStr() {
+    static string opStr() {
         return "-";
     }
 };
 
 // Base class for any binary operator.
 class BinaryExpr : public UnaryExpr {
-public:
+protected:
     ExprPtr _lhs;
 
 public:
@@ -161,9 +187,8 @@ public:
         UnaryExpr(opStr, rhs), _lhs(lhs) { }
     virtual ~BinaryExpr() { }
 
-    ExprPtr getLhs() {
-        return _lhs;
-    }
+    ExprPtr getLhs() { return _lhs; }
+    const ExprPtr getLhs() const { return _lhs; }
 
     virtual void accept(ExprVisitor* ev);
 
@@ -176,10 +201,10 @@ public:
 class SubExpr : public BinaryExpr {
 public:
     SubExpr(ExprPtr lhs, ExprPtr rhs) :
-        BinaryExpr(lhs, getOpStr(), rhs) { }
+        BinaryExpr(lhs, opStr(), rhs) { }
     virtual ~SubExpr() { }
 
-    static string getOpStr() {
+    static string opStr() {
         return "-";
     }
 };
@@ -188,12 +213,33 @@ public:
 class DivExpr : public BinaryExpr {
 public:
     DivExpr(ExprPtr lhs, ExprPtr rhs) :
-        BinaryExpr(lhs, getOpStr(), rhs) { }
+        BinaryExpr(lhs, opStr(), rhs) { }
     virtual ~DivExpr() { }
 
-    static string getOpStr() {
+    static string opStr() {
         return "/";
     }
+};
+
+// Equality operator.
+// (Not inherited from BinaryExpr because LHS is special.)
+class EqualsExpr : public UnaryExpr {
+protected:
+    GridPointPtr _lhs;
+
+public:
+    EqualsExpr(GridPointPtr lhs, ExprPtr rhs) :
+        UnaryExpr(opStr(), rhs), _lhs(lhs) { }
+    virtual ~EqualsExpr() { }
+
+    GridPointPtr getLhs() { return _lhs; }
+    const GridPointPtr getLhs() const { return _lhs; }
+
+    static string opStr() {
+        return "=="; 
+    }
+
+    virtual void accept(ExprVisitor* ev);
 };
 
 // A list of exprs with a common operator that can be rearranged,
@@ -216,9 +262,9 @@ public:
 
     virtual ~CommutativeExpr() { }
 
-    ExprPtrVec& getOps() {
-        return _ops;
-    }
+    ExprPtrVec& getOps() { return _ops; }
+    const ExprPtrVec& getOps() const { return _ops; }
+    const string& getOpStr() const { return _opStr; }
 
     // Try to add a compatible operand.
     // Return true if successful.
@@ -246,10 +292,10 @@ public:
 class AddExpr : public CommutativeExpr {
 public:
     AddExpr(ExprPtr lhs, ExprPtr rhs) :
-        CommutativeExpr(lhs, getOpStr(), rhs) { }
+        CommutativeExpr(lhs, opStr(), rhs) { }
     virtual ~AddExpr() { }
 
-    static string getOpStr() {
+    static string opStr() {
         return "+";
     }
 };
@@ -258,126 +304,275 @@ public:
 class MultExpr : public CommutativeExpr {
 public:
     MultExpr(ExprPtr lhs, ExprPtr rhs) :
-        CommutativeExpr(lhs, getOpStr(), rhs) { }
+        CommutativeExpr(lhs, opStr(), rhs) { }
     virtual ~MultExpr() { }
     
-    static string getOpStr() {
+    static string opStr() {
         return "*";
     }
 };
 
-// One specific point in a grid.
-class GridPoint : public Triple, public Expr {
+///////// Grids ////////////
+
+typedef Tuple<int> IntTuple;
+
+// One specific point in a grid, which can appear in an expression.
+class GridPoint : public IntTuple, public Expr {
 
 protected:
-    string _name;
+    Grid* _grid;          // the grid this point is from.
 
 public:
-    int _t, _v;
-    bool _tOk, _vOk;            // whether t and v are meaningful.
 
-    // Construct a 4D point.
-    GridPoint(const string& name, int t, int i, int j, int k) :
-        Triple(i, j, k), _name(name), 
-        _t(t), _v(0),
-        _tOk(true), _vOk(true) {}
+    // Construct an n-D point.
+    GridPoint(Grid* grid, const IntTuple& offsets) :
+        IntTuple(offsets),
+        _grid(grid)
+    {
+        assert(areDimsSame(offsets));
+    }
 
-    // Construct a 3D point.
-    GridPoint(const string& name, int i, int j, int k) :
-        Triple(i, j, k), _name(name),
-        _t(-1), _v(-1), _tOk(false), _vOk(false) {}
+    // Construct from another point, but change location.
+    GridPoint(GridPoint* gp, const IntTuple& offsets) :
+            IntTuple(offsets), _grid(gp->_grid)
+    {
+        assert(areDimsSame(offsets));
+    }
 
-    GridPoint(const GridPoint* gp, int i, int j, int k) :
-        Triple(i, j, k), _name(gp->_name),
-        _t(gp->_t), _v(gp->_v),
-        _tOk(gp->_tOk), _vOk(gp->_vOk) {}
-    
+    // Dtor.
     virtual ~GridPoint() {}
 
-    virtual const string& name() const {
-        return _name;
-    }
-    
-    // Some comparison operators needed for containers.
-    virtual bool operator==(const GridPoint& rhs) const {
-        return (_name == rhs._name) &&
-            (_t == rhs._t) && (_v == rhs._v) &&
-            Triple::operator==(rhs);
-    }
-    virtual bool operator<(const GridPoint& rhs) const {
-        return (_name < rhs._name) ? true : (_name > rhs._name) ? false :
-            (_t < rhs._t) ? true : (_t > rhs._t) ? false :
-            (_v < rhs._v) ? true : (_v > rhs._v) ? false :
-            Triple::operator<(rhs);
-    }
+    // Get parent grid.
+    const Grid* getGrid() const { return _grid; }
+    Grid* getGrid() { return _grid; }
 
+    // Name of parent grid.
+    virtual const string& getName() const;
+
+    // Some comparisons.
+    bool operator==(const GridPoint& rhs) const;
+    bool operator<(const GridPoint& rhs) const;
+
+    // Take ev to each value.
     virtual void accept(ExprVisitor* ev);
 
+    // Just one point here.
+    // Used for couting points in an AST.
     virtual int getNumPoints() const { return 1; }
 
-    // Determine whether this is ahead rhs in given dir.
-    virtual bool isAheadOf(const GridPoint& rhs, const Dir& dir) const {
-        return name() == rhs.name() && // must be same var.
-            _t == rhs._t &&         // same time.
-            _v == rhs._v &&         // same var.
-            isInline(rhs, dir) &&   // must be in aligned in given direction.
-            ((dir.isPos() && getVal(dir) > rhs.getVal(dir)) || // in front going forward.
-             (dir.isNeg() && getVal(dir) < rhs.getVal(dir))); // behind going backward.
-    }
+    // Determine whether this is 'ahead of' rhs in given direction.
+    virtual bool isAheadOfInDir(const GridPoint& rhs, const IntTuple& dir) const;
 
     // Return a description based on this position.
-    virtual string makeStr() const {
-        ostringstream oss;
-        oss << name() << "(";
-        if (_tOk) oss << _t << ", ";
-        if (_vOk) oss << _v << ", ";
-        oss << _i << ", " << _j << ", " << _k << ")";
-        return oss.str();
-    }
-
+    virtual string makeStr() const;
 };
-typedef shared_ptr<GridPoint> GridPointPtr;
 typedef set<GridPoint> GridPointSet;
+typedef set<GridPointPtr> GridPointPtrSet;
 typedef vector<GridPoint> GridPointVec;
+typedef map<GridPoint, ExprPtr> Point2Exprs;
+
+// An index into a grid.
+// TODO: this typedef is just a placeholder; replace it
+// with a class to limit use--we don't want
+// to allow modification or conditional testing, etc.
+typedef int GridIndex;
+
+// A list of grids.
+class Grids : public vector<Grid*> {
+public:
+
+    // Visit all expressions in all grids.
+    virtual void acceptToAll(ExprVisitor* ev);
+};
 
 // A base class for a collection of GridPoints.
-class Grid {
+// Dims in the IntTuple describe the grid, but values
+// in the IntTuple are ignored.
+class Grid : public IntTuple {
 protected:
-    string _name;
-    
+    string _name;               // name of the grid.
+
+    // specific points that have been created in this grid.
+    GridPointPtrSet _points;
+
+    // equation(s) describing how values in this grid are computed.
+    Point2Exprs _exprs;
+
+    // Add a new point if needed and return pointer to it.
+    // If it already exists, just return pointer.
+    virtual GridPointPtr addPoint(GridPointPtr gpp) {
+        auto i = _points.insert(gpp); // add if not found.
+        return *i.first;
+    }
+
 public:
-    Grid(const string& name) : _name(name) { }
+    // Construct a grid with a given name and
+    // register it in the given collection, if provided.
+    Grid(const string& name,
+         Grids* grids = NULL) : _name(name)
+    {
+        if (grids)
+            (*grids).push_back(this);
+    }
 
     virtual ~Grid() { }
 
-    const string& name() const {
+    const string& getName() const {
         return _name;
     }
-};
-
-// A 4D collection of GridPoints (3D spatial plus time).
-class TemporalGrid : public Grid {
-public:
-    TemporalGrid(const string& name) : Grid(name) { }
 
     // Create an expression to a specific point in the grid.
-    virtual GridPointPtr operator()(int t, int i, int j, int k) const {
-        return make_shared<GridPoint>(_name, t, i, j, k);
+    virtual GridPointPtr operator()(const vector<int>& points) {
+        IntTuple pt = *this;       // to copy names.
+        pt.setVals(points);
+        GridPointPtr gpp = make_shared<GridPoint>(this, pt);
+        return addPoint(gpp);
     }
+    
+    // Point accessors.
+    const GridPointPtrSet& getPoints() const { return _points; }
+    GridPointPtrSet& getPoints() { return _points; }
 
+    // Expression accessors.
+    // gpp points to LHS grid point.
+    // ep points to EqualsExpr.
+    virtual void addExpr(GridPointPtr gpp, ExprPtr ep) {
+        _exprs[*gpp] = ep;
+    }
+    virtual const Point2Exprs& getExprs() const {
+        return _exprs;
+    }
+    virtual Point2Exprs& getExprs() {
+        return _exprs;
+    }
+    
+    // Visit all expressions, if any are defined.
+    virtual void acceptToAll(ExprVisitor* ev) {
+        for (auto i : _exprs) {
+            auto ep = i.second;
+            ep->accept(ev);
+        }
+    }
+    
+    // Visit only first expression, if it is defined.
+    virtual void acceptToFirst(ExprVisitor* ev) {
+        for (auto i : _exprs) {
+            auto ep = i.second;
+            ep->accept(ev);
+            break;
+        }
+    }
 };
 
-// A 3D collection of GridPoints (no time dimension).
-class StaticGrid : public Grid {
+// A 1D Grid.
+class Grid_1d : public Grid {
 public:
-    StaticGrid(const string& name) : Grid(name) { }
+    Grid_1d(const string& name,
+            const string& d1name,
+            Grids* grids = NULL) :
+        Grid(name, grids) {
+        addDim(d1name, 1);
+    }
 
     // Create an expression to a specific point in the grid.
-    virtual GridPointPtr operator()(int i, int j, int k) const {
-        return make_shared<GridPoint>(_name, i, j, k);
+    virtual GridPointPtr operator()(int i1) {
+        vector<int> vals = { i1 };
+        return Grid::operator()(vals);
     }
 };
+ 
+// A 2D Grid.
+class Grid_2d : public Grid_1d {
+public:
+    Grid_2d(const string& name,
+            const string& d1name,
+            const string& d2name,
+            Grids* grids = NULL) :
+        Grid_1d(name, d1name, grids) {
+        addDim(d2name, 1);
+    }
 
+    // Create an expression to a specific point in the grid.
+    virtual GridPointPtr operator()(int i1, int i2) {
+        vector<int> vals = { i1, i2 };
+        return Grid::operator()(vals);
+    }
+};
+ 
+// A 3D Grid.
+class Grid_3d : public Grid_2d {
+public:
+    Grid_3d(const string& name,
+            const string& d1name,
+            const string& d2name,
+            const string& d3name,
+            Grids* grids = NULL) :
+        Grid_2d(name, d1name, d2name, grids) {
+        addDim(d3name, 1);
+    }
+
+    // Create an expression to a specific point in the grid.
+    virtual GridPointPtr operator()(int i1, int i2, int i3) {
+        vector<int> vals = { i1, i2, i3 };
+        return Grid::operator()(vals);
+    }
+};
+ 
+// A 4D Grid.
+class Grid_4d : public Grid_3d {
+public:
+    Grid_4d(const string& name,
+            const string& d1name,
+            const string& d2name,
+            const string& d3name,
+            const string& d4name,
+            Grids* grids = NULL) :
+        Grid_3d(name, d1name, d2name, d3name, grids) {
+        addDim(d4name, 1);
+    }
+
+    // Create an expression to a specific point in the grid.
+    virtual GridPointPtr operator()(int i1, int i2, int i3, int i4) {
+        vector<int> vals = { i1, i2, i3, i4 };
+        return Grid::operator()(vals);
+    }
+};
+ 
+// A 5D Grid.
+class Grid_5d : public Grid_4d {
+public:
+    Grid_5d(const string& name,
+            const string& d1name,
+            const string& d2name,
+            const string& d3name,
+            const string& d4name,
+            const string& d5name,
+            Grids* grids = NULL) :
+        Grid_4d(name, d1name, d2name, d3name, d4name, grids) {
+        addDim(d5name, 1);
+    }
+
+    // Create an expression to a specific point in the grid.
+    virtual GridPointPtr operator()(int i1, int i2, int i3, int i4, int i5) {
+        vector<int> vals = { i1, i2, i3, i4, i5 };
+        return Grid::operator()(vals);
+    }
+};
+ 
+// Convenience macros for initializing grids in stencil ctors.
+// Each names the grid according to the variable name and adds it
+// to the default '_grids' collection.
+#define INIT_GRID_1D(gvar, d1) gvar(#gvar, #d1, &_grids)
+#define INIT_GRID_2D(gvar, d1, d2) gvar(#gvar, #d1, #d2, &_grids)
+#define INIT_GRID_3D(gvar, d1, d2, d3) gvar(#gvar, #d1, #d2, #d3, &_grids)
+#define INIT_GRID_4D(gvar, d1, d2, d3, d4) gvar(#gvar, #d1, #d2, #d3, #d4, &_grids)
+#define INIT_GRID_5D(gvar, d1, d2, d3, d4, d5) gvar(#gvar, #d1, #d2, #d3, #d4, #d5, &_grids)
+
+// Convenience macro for getting one offset from the 'offsets' tuple.
+#define GET_OFFSET(ovar)                         \
+    GridIndex ovar = offsets.getVal(#ovar)
+ 
+ 
 // Use SET_VALUE_FROM_EXPR for creating a string to insert any C++ code
 // that evaluates to a REAL.
 // The 1st arg must be the LHS of an assignment statement.

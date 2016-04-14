@@ -88,29 +88,51 @@ public:
     virtual bool isZ() const { return true; }
 };
 
-// Collection of 3 ints (e.g., x, y, z or i, j, k).
-class Triple {
+typedef map<string, int> TupleMap;
+
+// Collection of named ints.
+class Tuple : public TupleMap {
 public:
-    int _i, _j, _k;
 
-    Triple(int i=0, int j=0, int k=0) :
-        _i(i), _j(j), _k(k) {
-    }
-    virtual ~Triple() {}
+    Tuple() { }
+    
+    // Assume XYZ.
+    Tuple(int x, int y, int z) {
+        (*this)["x"] = x;
+        (*this)["y"] = y;
+        (*this)["z"] = z;
+        _t(0), _n(0), _x(x), _y(y), _z(z),
+        _tOk(false), _nOk(false), _xOk(true), _yOk(true), _zOk(true) { }
+    Tuple(int t, int n, int x, int y, int z) :
+        _t(t), _n(n), _x(x), _y(y), _z(z),
+        _tOk(true), _nOk(true), _xOk(true), _yOk(true), _zOk(true) { }
+    virtual ~Tuple() {}
 
-    // Individual lengths, assuming values are sizes.
-    virtual int getXLen() const { return _i; }
-    virtual int getYLen() const { return _j; }
-    virtual int getZLen() const { return _k; }
+    // Individual values.
+    virtual int getT() const { return _t; }
+    virtual int getN() const { return _n; }
+    virtual int getX() const { return _x; }
+    virtual int getY() const { return _y; }
+    virtual int getZ() const { return _z; }
+    virtual bool isTOk() const { return _tOk; }
+    virtual bool isNOk() const { return _nOk; }
+    virtual bool isZOk() const { return _xOk; }
+    virtual bool isYOk() const { return _yOk; }
+    virtual bool isZOk() const { return _zOk; }
+    virtual void setT(int val) { _t = val; }
+    virtual void setN(int val) { _n = val; }
+    virtual void setX(int val) { _x = val; }
+    virtual void setY(int val) { _y = val; }
+    virtual void setZ(int val) { _z = val; }
 
-    // Get overall length, assuming values are sizes.
-    virtual int getLen() const {
-        return product();
-    }
-
-    // Convert 3D offsets to 1D using C-style mapping,
+    // Convert offsets to 1D using C-style mapping,
     // assuming values are sizes.
-    virtual int map321(int i, int j, int k) {
+    virtual int map54321(int i, int j, int k) {
+        int t = _tOk ? _t : 1;
+        int n = _nOk ? _t : 1;
+        int x = _xOk ? _x : 1;
+        int y = _yOk ? _y : 1;
+        int z = _zOk ? _z : 1;
         return (k * getYLen() * getXLen()) +
             (j * getXLen()) + i;
     }

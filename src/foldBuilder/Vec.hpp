@@ -25,36 +25,25 @@ IN THE SOFTWARE.
 
 //////////// Basic vector classes /////////////
 
-#include "Visitor.hpp"
+#ifndef VEC_HPP
+#define VEC_HPP
+
+#include "Print.hpp"
 
 using namespace std;
 
 //#define DEBUG_VV   // debug VecInfoVisitor.
 //#define DEBUG_SORT
 
-// Dimensions of a vector.
-class VecDims : public Triple {
-public:
-    VecDims(const Triple& triple) :
-        Triple(triple) {}
-    VecDims(int xlen, int ylen, int zlen) :
-        Triple(xlen, ylen, zlen) {}
-    virtual ~VecDims() {}
-
-    // Get overall vector length.
-    virtual int getVecLen() const {
-        return getLen();
-    }
-};
-
 // One element in a vector.
 class VecElem {
 public:
-    GridPoint _vec;
-    size_t _offset;
+    const GridPoint _vec;      // first index of vector containing this element.
+    size_t _offset;            // 1-D offset in _vec.
+    IntTuple _offsets;         // n-D offsets 
 
-    VecElem(const GridPoint& vec, int offset) :
-        _vec(vec), _offset(offset) { }
+    VecElem(const GridPoint& vec, int offset, const IntTuple& offsets) :
+        _vec(vec), _offset(offset), _offsets(offsets) { }
 
     bool operator==(const VecElem& rhs) const {
         return _vec == rhs._vec && _offset == rhs._offset;
@@ -76,11 +65,16 @@ typedef map<GridPoint, VecElemList> Point2VecElemLists;
 // Map of vector blocks to aligned blocks.
 typedef map<GridPoint, GridPointSet> Point2Vecs;
 
-// Determines vector blocks needed to calculate the stencil.
-// This doesn't actually generate code, it just collects info from the AST.
+// This visitor determines the vector blocks needed to calculate the stencil.
+// It doesn't actually generate code; it just collects info from the AST.
 // After the AST has been visited, the object can be used to print statistics
 // or used to provide data to a print visitor.
-class VecInfoVisitor : public VecDims, public ExprVisitor {
+class VecInfoVisitor : public ExprVisitor {
+protected:
+
+    const IntTuple& _fold;       // shape of vector fold.
+    int _vlen;                   // size of vector.
+    
 public:
 
     // Data on vector blocks.
@@ -94,10 +88,12 @@ public:
     // _vblk2elemLists is used to find exactly where each element comes from.
     // The keys are the same for both maps.
 
-    VecInfoVisitor(const Triple& triple) :
-        VecDims(triple) {}
-    VecInfoVisitor(int xlen, int ylen, int zlen) :
-        VecDims(xlen, ylen, zlen) {}
+    VecInfoVisitor(const IntTuple& fold) :
+        _fold(fold) {
+        _vlen = fold.product();
+    }
+
+    const IntTuple& getFold() { return _fold; }
 
     size_t getNumPoints() const {
         return _vblk2elemLists.size();
@@ -109,12 +105,12 @@ public:
 
     // Make an index and offset canonical, i.e.,
     // find indexOut and offsetOut such that
-    // (indexOut * vecLen) + offsetOut = (indexIn * vecLen) + offsetIn
+    // (indexOut * vecLen) + offsetOut == (indexIn * vecLen) + offsetIn
     // and offsetOut is in [0..vecLen-1].
     // Makes proper adjustments for negative inputs.
-    static void fixIndexOffset(int indexIn, int offsetIn,
-                               int& indexOut, int& offsetOut,
-                               int vecLen) {
+    virtual void fixIndexOffset(int indexIn, int offsetIn,
+                                int& indexOut, int& offsetOut,
+                                int vecLen) {
         const int ofs = (indexIn * vecLen) + offsetIn;
         indexOut = ofs / vecLen;
         offsetOut = ofs % vecLen;
@@ -125,33 +121,20 @@ public:
     }
 
     // Print stats header.
-    static void printStatsHeader(ostream& os, string separator) {
-        os << "num vector elems" <<
+    virtual void printStatsHeader(ostream& os, string separator) const {
+        os << "destination grid" <<
+            separator << "num vector elems" <<
             separator << "fold" <<
             separator << "num points in stencil" <<
             separator << "num aligned vectors to read from memory" <<
             separator << "num blends needed" <<
-            separator << "footprint in x" <<
-            separator << "footprint in y" <<
-            separator << "footprint in z" <<
-#ifdef NORM_STATS
-            separator << "reads per elem" <<
-            separator << "blends per elem" <<
-            separator << "footprint in x per elem" <<
-            separator << "footprint in y per elem" <<
-            separator << "footprint in z per elem" <<
-            separator << "reads per point" <<
-            separator << "blends per point" <<
-            separator << "footprint in x per point" <<
-            separator << "footprint in y per point" <<
-            separator << "footprint in z per point" <<
-#endif
+            separator << _fold.makeDimStr(separator, "footprint in ") <<
             endl;
     }
 
     // Print some stats for the current values.
     // Pre-requisite: visitor has been accepted.
-    void printStats(ostream& os, string separator) const {
+    virtual void printStats(ostream& os, const string& destGrid, const string& separator) const {
 
         // calc num blends needed.
         int numBlends = 0;
@@ -165,60 +148,53 @@ public:
                 numBlends += mems.size();
         }
 
-        // calc footprints.
-        typedef pair<int, int> Proj; // projection onto one plane, e.g., x-y.
-        set<Proj> xs, ys, zs;
-        for (auto i = _alignedVecs.begin(); i != _alignedVecs.end(); i++) {
-            auto vb = *i;
-            xs.insert(Proj(vb._j, vb._k)); // x footprint in y-z plane.
-            ys.insert(Proj(vb._i, vb._k)); // y footprint in x-z plane.
-            zs.insert(Proj(vb._i, vb._j)); // z footprint in x-y plane.
+        // calc footprint in each dim.
+        map<string, int> footprints;
+        for (auto dim : _fold.getDims()) {
+
+            // Create direction vector in this dim.
+            IntTuple dir;
+            dir.addDim(dim, 1);
+
+            // Make set of aligned vecs projected in this dir.
+            set<IntTuple> footprint;
+            for (auto vb : _alignedVecs) {
+                IntTuple proj = vb.removeDimInDir(dir);
+                footprint.insert(proj);
+            }
+            footprints[dim] = footprint.size();
         }
-
-        float readsPerElem = float(getNumAlignedVecs()) / getVecLen();
-        float blendsPerElem = float(numBlends) / getVecLen();
-
-        float readsPerPoint = float(getNumAlignedVecs()) / getNumPoints();
-        float blendsPerPoint = float(numBlends) / getNumPoints();
-
-        os << getVecLen() <<
-            separator << getXLen() << 'x' << getYLen() << 'x' << getZLen() <<
+            
+        os << destGrid <<
+            separator << _vlen <<
+            separator << _fold.makeValStr("x") <<
             separator << getNumPoints() <<
             separator << getNumAlignedVecs() <<
-            separator << numBlends <<
-            separator << xs.size() <<
-            separator << ys.size() <<
-            separator << zs.size() << 
-#ifdef NORM_STATS
-            separator << readsPerElem  <<
-            separator << blendsPerElem <<
-            separator << (float(xs.size()) / getVecLen()) <<
-            separator << (float(ys.size()) / getVecLen()) <<
-            separator << (float(zs.size()) / getVecLen()) <<
-            separator << readsPerPoint <<
-            separator << blendsPerPoint <<
-            separator << (float(xs.size()) / getNumPoints()) <<
-            separator << (float(ys.size()) / getNumPoints()) <<
-            separator << (float(zs.size()) / getNumPoints()) <<
-#endif
-            endl;
+            separator << numBlends;
+        for (auto dim : _fold.getDims())
+            os << separator << footprints[dim];
+        os << endl;
     }
 
     // Get the set of aligned vectors on the leading edge
     // in the given direction.
     // Pre-requisite: visitor has been accepted.
-    virtual void getLeadingEdge(GridPointSet& edge, const Dir& dir) const {
+    virtual void getLeadingEdge(GridPointSet& edge, const IntTuple& dir) const {
         edge.clear();
 
         // loop over aligned vectors.
         for (auto avi : _alignedVecs) {
+
+            // ignore if this vector doesn't have a dimension in dir.
+            if (!avi.lookup(dir.getDirName()))
+                continue;
 
             // compare to all others.
             bool best = true;
             for (auto avj : _alignedVecs) {
                 
                 // determine if avj is ahead of avi in given direction.
-                if (avj.isAheadOf(avi, dir))
+                if (avj.isAheadOfInDir(avi, dir))
                     best = false;
             }
 
@@ -228,7 +204,14 @@ public:
         }
     }
 
-    // Most work done where a grid point is read.
+    // Only want to visit the RHS of an equation.
+    // Assumes LHS is aligned.
+    // TODO: validate this.
+    virtual void visit(EqualsExpr* ee) {
+        ee->getRhs()->accept(this);      
+    }
+    
+    // Called when a grid point is read in a stencil function.
     virtual void visit(GridPoint* gp) {
 
         // Already seen this point?
@@ -237,55 +220,69 @@ public:
 
         // Vec of points to calculate.
 #ifdef DEBUG_VV
-        cout << "vec @ u(" << gp->_t << ", " <<
-            gp->_i << ", " << gp->_j << ", " << gp->_k << ") => " << endl;
+        cout << "vec @ " << gp->makeDimValStr() << " => " << endl;
 #endif
 
-        // loop through one vector-block's extent starting at gp's location.
+        // Loop through each point in a vector fold.
+        // This process is based on the assumption that a block of the same
+        // size should be accessed from every point in every source grid.
+        // TODO: validate this assumption.
         size_t pelem = 0;
-        for (int k = 0; k < getZLen(); k++) {
-            int kp = k + gp->_k;
-            for (int j = 0; j < getYLen(); j++) {
-                int jp = j + gp->_j;
-                for (int i = 0; i < getXLen(); i++) {
-                    int ip = i + gp->_i;
+        _fold.visitAllPoints([&](const IntTuple& vecPoint){
 
-                    // Find individual source mem vectors and offsets.
-                    int xvec, yvec, zvec;
-                    int xpos, ypos, zpos;
-                    fixIndexOffset(0, ip, xvec, xpos, getXLen());
-                    fixIndexOffset(0, jp, yvec, ypos, getYLen());
-                    fixIndexOffset(0, kp, zvec, zpos, getZLen());
+                // Offset in each dim is starting point of grid point plus
+                // offset in this vector.
+                // Note: there may be more or fewer dims in vecPoint than in grid point.
+                auto offsets = gp->addElements(vecPoint, false);
 
-                    // Flatten 3D mini-vectors into one aligned vector block w/offset.
-                    GridPoint alignedVec(gp, xvec * getXLen(), yvec * getYLen(), zvec * getZLen());
-                    int alignedElem = map321(xpos, ypos, zpos);
+                // Find aligned vector indices and offsets
+                // for this one point.
+                IntTuple vecOffsets, vecLocation;
+                for (auto dim : offsets.getDims()) {
 
-                    // Update set of all aligned vec-blocks.
-                    _alignedVecs.insert(alignedVec);
+                    // length of this dimension in fold, if it exists.
+                    const int* p = _fold.lookup(dim);
+                    int len = p ? *p : 1;
 
-                    // Update set of aligned vec-blocks and elements needed for this vec-block element.
-                    _vblk2avblks[*gp].insert(alignedVec);
-
-                    // Save which aligned vec-block's element is needed for this vec-block element.
-                    VecElem ve(alignedVec, alignedElem);
-                    _vblk2elemLists[*gp].push_back(ve); // should be at pelem index.
-                    assert(_vblk2elemLists[*gp].size() == pelem+1); // verify at pelem index.
-
-#ifdef DEBUG_VV
-                    cout << " element u(" << gp->_t << ", " <<
-                        ip << ", " << jp << ", " << kp << ") => " <<
-                        "x[" << xvec << "," << xpos << "], " << 
-                        "y[" << yvec << "," << ypos << "], " <<
-                        "z[" << zvec << "," << zpos << "] => " << 
-                        gp->makeStr("unaligned_vec") << "[" << pelem << "] = " <<
-                        alignedVec.makeStr("aligned_vec") << "[" << alignedElem << "]" << endl;
-#endif
-                    pelem++;
+                    // convert this offset to vector index and vector offset.
+                    int vecIndex, vecOffset;
+                    fixIndexOffset(0, offsets.getVal(dim), vecIndex, vecOffset, len);
+                    vecOffsets.addDim(dim, vecOffset);
+                    vecLocation.addDim(dim, vecIndex * len);
                 }
-            }
-        }
-    }
+#ifdef DEBUG_VV
+                cout << " element @ " << offsets.makeDimValStr() << " => " <<
+                    " vec-location @ " << vecLocation.makeDimValStr() <<
+                    " & vec-offsets @ " << vecOffsets.makeDimValStr() <<
+                    " => " << endl;
+#endif
+                    
+                // Create aligned vector block that contains this point.
+                GridPoint alignedVec(gp, vecLocation);
+
+                // Find linear offset within this aligned vector block.
+                int alignedElem = _fold.mapTo1d(vecOffsets, false);
+                assert(alignedElem >= 0);
+                assert(alignedElem < _vlen);
+#ifdef DEBUG_VV
+                cout << "  general-" << gp->makeStr() << "[" << pelem << "] = aligned-" <<
+                    alignedVec.makeStr() << "[" << alignedElem << "]" << endl;
+#endif
+
+                // Update set of all aligned vec-blocks.
+                _alignedVecs.insert(alignedVec);
+
+                // Update set of aligned vec-blocks and elements needed for this vec-block element.
+                _vblk2avblks[*gp].insert(alignedVec);
+
+                // Save which aligned vec-block's element is needed for this vec-block element.
+                VecElem ve(alignedVec, alignedElem, offsets);
+                _vblk2elemLists[*gp].push_back(ve); // should be at pelem index.
+                assert(_vblk2elemLists[*gp].size() == pelem+1); // verify at pelem index.
+
+                pelem++;
+            });                  // end of lambda-function.
+    }                   // end of visit() method.
 };
 
 // Define methods for printing a vectorized version of the stencil.
@@ -298,30 +295,47 @@ protected:
 
     // Print access to an aligned vector block.
     // Return var name.
-    virtual string printAlignedVec(ostream& os, const GridPoint& gp) =0;
+    virtual string printAlignedVecRead(ostream& os, const GridPoint& gp) =0;
+
+    // Print write to an aligned vector block.
+    // Return expression written.
+    virtual string printAlignedVecWrite(ostream& os, const GridPoint& gp,
+                                        const string& val) =0;
 
     // Print conversion from existing vars to make an unaligned vector block.
     // Return var name.
     virtual string printUnalignedVec(ostream& os, const GridPoint& gp) =0;
 
     // Print construction for one point var pvName from elems.
-    virtual void printUnalignedVecCtor(ostream& os, const GridPoint& gp, const string& pvName) =0;
+    virtual void printUnalignedVecCtor(ostream& os, const GridPoint& gp,
+                                       const string& pvName) =0;
 
 public:
-    VecPrintHelper(VecInfoVisitor& vv, bool reuseVars = true) :
-        PrintHelper("vec"), _vv(vv), _reuseVars(reuseVars), _definedNA(false) { }
+    VecPrintHelper(VecInfoVisitor& vv,
+                   const string& varPrefix,
+                   const string& varType,
+                   const string& linePrefix,
+                   const string& lineSuffix,
+                   bool reuseVars = true) :
+        PrintHelper(varPrefix, varType, linePrefix, lineSuffix),
+        _vv(vv), _reuseVars(reuseVars), _definedNA(false) { }
+
+    // get fold info.
+    virtual const IntTuple& getFold() const {
+        return _vv.getFold();
+    }
 
     // Add a N/A var, just for readability.
     virtual void makeNA(ostream& os) {
         if (!_definedNA) {
-            os << "const int NA = 0; // indicates element not used." << endl;
+            os << _linePrefix << "const int NA = 0; // indicates element not used." << endl;
             _definedNA = true;
         }
     }
     
     // Print any needed memory reads and/or constructions.
     // Return var name.
-    virtual string constructPoint(ostream& os, const GridPoint& gp) {
+    virtual string readFromPoint(ostream& os, const GridPoint& gp) {
 
         string varName;
 
@@ -331,7 +345,7 @@ public:
 
         // An aligned vector block?
         else if (_vv._alignedVecs.count(gp))
-            varName = printAlignedVec(os, gp);
+            varName = printAlignedVecRead(os, gp);
 
         // An unaligned vector block?
         else if (_vv._vblk2elemLists.count(gp)) {
@@ -340,7 +354,7 @@ public:
             auto avbs = _vv._vblk2avblks[gp];
             for (auto pi = avbs.begin(); pi != avbs.end(); pi++) {
                 auto& p = *pi;
-                constructPoint(os, p);
+                readFromPoint(os, p);
             }
 
             // output this construction.
@@ -355,6 +369,14 @@ public:
         // Remember this point and return its name.
         _readyPoints[gp] = varName;
         return varName;
+    }
+
+    // Update a grid point.
+    // The 'os' parameter is provided for derived types that
+    // need to write intermediate code to a stream.
+    virtual string writeToPoint(ostream& os, const GridPoint& gp, const string& val) {
+        printAlignedVecWrite(os, gp, val);
+        return "";
     }
 
     // Sort commutative expr to a more optimized order.
@@ -437,3 +459,4 @@ public:
     }
 };
 
+#endif

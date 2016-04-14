@@ -206,7 +206,7 @@ sub specifyCache($$) {
 # return type of var needed for loop index.
 # args: dimension(s).
 sub indexType {
-    return (@_ == 1) ? 'int' : 'long int';
+    return 'idx_t';
 }
 
 # create and init vars *before* beginning of simple or collapsed loop.
@@ -225,7 +225,7 @@ sub addIndexVars($$) {
         my $svar = stepVar($dim);
         push @$code, 
         " // Number of iterations to get from $bvar to (but not including) $evar, stepping by $svar.",
-        " const int $nvar = (($evar - $bvar) + ($svar - 1)) / $svar;";
+        " const idx_t $nvar = (($evar - $bvar) + ($svar - 1)) / $svar;";
         push @nvars, "($itype)$nvar";
     }
 
@@ -302,9 +302,9 @@ sub addIndexVars2($$$$$) {
 
             # mod by size of this dimension (not needed for outer-most dim).
             if ($i > 0) {
-                push @$code, " int $divar = ($num) % $nvar;";
+                push @$code, " idx_t $divar = ($num) % $nvar;";
             } else {
-                push @$code, " int $divar = $num;";
+                push @$code, " idx_t $divar = $num;";
             }
 
             # apply square-wave to inner 2 dimensions if requested.
@@ -317,13 +317,13 @@ sub addIndexVars2($$$$$) {
                 " // Modify $prevDivar and $divar for 'square_wave' path.",
                 " if (($innerNvar > 1) && ($prevDivar/2 < $prevNvar/2)) {",
                 "  // Compute extended $dim index over 2 iterations of $prevDivar.",
-                "  int $divar2 = $divar + ($nvar * ($prevDivar & 1));",
+                "  idx_t $divar2 = $divar + ($nvar * ($prevDivar & 1));",
                 "  // Select $divar from 0,0,1,1,2,2,... sequence",
                 "  $divar = $divar2 / 2;",
                 "  // Select $prevDivar adjustment value from 0,1,1,0,0,1,1, ... sequence.",
-                "  int $avar = ($divar2 & 1) ^ (($divar2 & 2) >> 1);",
+                "  idx_t $avar = ($divar2 & 1) ^ (($divar2 & 2) >> 1);",
                 "  // Adjust $prevDivar +/-1 by replacing bit 0.",
-                "  $prevDivar = ($prevDivar & (int)-2) | $avar;",
+                "  $prevDivar = ($prevDivar & (idx_t)-2) | $avar;",
                 " } // square-wave.";
             }
 
@@ -356,8 +356,8 @@ sub addIndexVars2($$$$$) {
         my $svar = stepVar($dim);
         push @$code,
         " // This value of $divar covers $dim from $stvar to $spvar-1.",
-        " const int $stvar = $bvar + ($divar * $svar);",
-        " const int $spvar = min($stvar + $svar, $evar);";
+        " const idx_t $stvar = $bvar + ($divar * $svar);",
+        " const idx_t $spvar = min($stvar + $svar, $evar);";
     }
 }
 
@@ -785,7 +785,7 @@ sub main() {
     ( # knob,        description,   optional default
      [ "dims=s", "Comma-separated names of dimensions (in order passed via calls).", 'v,x,y,z'],
      [ "comArgs=s", "Common arguments to all calls (after L1/L2 for prefetch).", 
-       'context, t0'],
+       'context, t'],
      [ "resultBlks=s", "Comma-separated name of block-sized buffers that hold inter-loop values and/or final result at 'save' command.", 'result'],
      [ "calcPrefix=s", "Prefix for calculation call.", 'calc_'],
      [ "primePrefix=s", "Prefix for pipeline-priming call.", 'prime_'],
@@ -814,7 +814,7 @@ sub main() {
       "  omp:         generate an OpenMP for loop (distribute work across SW threads).\n",
       "  crew:        generate an Intel crew loop (distribute work across HW threads).\n",
       "  prefetch:    generate calls to SW prefetch functions in addition to calculation functions.\n",
-      "  pipe:        generate calls to pipeline versions of calculation functions (deprecated).\n",
+      #"  pipe:        generate calls to pipeline versions of calculation functions (deprecated).\n",
       "  serpentine:  generate reverse path when enclosing loop dimension is odd.\n",
       "  square_wave: generate 2D square-wave path for two innermost dimensions of a collapsed loop.\n",
       "For each dim D in dims, loops are generated from begin_D to end_D-1 by step_D;\n",

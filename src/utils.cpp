@@ -44,9 +44,9 @@ double getTimeInSecs()
 
 // Round up val to a multiple of mult.
 // Print a message is rounding is done.
-int roundUp(int val, int mult, string name)
+idx_t roundUp(idx_t val, idx_t mult, string name)
 {
-    int res = val;
+    idx_t res = val;
     if (val % mult != 0) {
         res = ROUND_UP(res, mult);
         cout << "Adjusting " << name << " from " << val << " to " <<

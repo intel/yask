@@ -28,83 +28,188 @@ IN THE SOFTWARE.
 
 #include "generic_grids.hpp"
 
-// A 3D (x, y, z) collection of realv elements.
-template <typename Mapfn> class RealvGrid3d {
-    
+// Base class for realv grids.
+// Provides generic-grid support.
+class RealvGridBase {
 protected:
-    GenericGrid3d<realv, Mapfn> _data;
     string _name;
+    GenericGridBase<realv>* _gp;
 
+public:
+    RealvGridBase(string name, GenericGridBase<realv>* gp) :
+        _name(name), _gp(gp) { }
+    
+    // Initialize memory to a given value.
+    virtual void set_same(REAL val) {
+        realv rn;
+        rn = val;               // broadcast.
+        _gp->set_same(rn);
+    }
+
+    // Initialize memory to incrementing values based on val.
+    virtual void set_inc(REAL val) {
+
+        // make a realv pattern
+        realv rn;
+        for (int i = 0; i < VLEN; i++)
+            rn.r[i] = REAL(i * VLEN + 1) * val / VLEN;
+        
+        _gp->set_inc(rn);
+    }
+
+    // Get number of elements with padding.
+    inline idx_t get_num_elems() const {
+        return _gp->get_num_elems();
+    }
+
+    // Get size in bytes.
+    inline idx_t get_num_bytes() const {
+        return _gp->get_num_bytes();
+    }
+};
+
+// A 3D (x, y, z) collection of realv elements.
+// Supports symmetric padding in each dimension.
+template <typename Mapfn> class RealvGrid_XYZ : public RealvGridBase {
+protected:
+
+    // real sizes.
+    idx_t _dx, _dy, _dz;
+    idx_t _px, _py, _pz;
+
+    // realv sizes.
+    idx_t _dxv, _dyv, _dzv;
+    idx_t _pxv, _pyv, _pzv;
+    
+    GenericGrid3d<realv, Mapfn> _data;
+    
 public:
 
     // Ctor.
     // Dimensions are REAL elements, not realvs.
-    RealvGrid3d(int d1, int d2, int d3,
-                int p1, int p2, int p3,
-                const string& name) :
-        _data(d1 / VLEN_X, d2 / VLEN_Y, d3 / VLEN_Z,
-              p1 / VLEN_X, p2 / VLEN_Y, p3 / VLEN_Z,
+    RealvGrid_XYZ(idx_t dx, idx_t dy, idx_t dz,
+                  idx_t px, idx_t py, idx_t pz,
+                  const string& name) :
+
+        // Round up each dim to size of realv.
+        _dx(ROUND_UP(dx, VLEN_X)),
+        _dy(ROUND_UP(dy, VLEN_Y)),
+        _dz(ROUND_UP(dz, VLEN_Z)),
+        _px(ROUND_UP(px, VLEN_X)),
+        _py(ROUND_UP(py, VLEN_Y)),
+        _pz(ROUND_UP(pz, VLEN_Z)),
+                                
+        // Determine number of realv's.
+        _dxv(_dx / VLEN_X),
+        _dyv(_dy / VLEN_Y),
+        _dzv(_dz / VLEN_Z),
+        _pxv(_px / VLEN_X),
+        _pyv(_py / VLEN_Y),
+        _pzv(_pz / VLEN_Z),
+
+        // Alloc space for required number of realv's.
+        _data(_dxv + 2*_pxv,
+              _dyv + 2*_pyv,
+              _dzv + 2*_pzv,
               ALLOC_ALIGNMENT),
-        _name(name)
+        RealvGridBase(name, &_data)
     {
         _data.print_info(name);
+
+        // Should not be using grid w/o N dimension with folding in N.
+        assert(VLEN_N == 1);
     }
 
-    // Get pointer to a realv.
-    ALWAYS_INLINE const realv* getVecPtr(int veci, int vecj, int veck,
-                                         bool safe=true) const {
+    // Get parameters after round-up.
+    inline idx_t get_dx() { return _dx; }
+    inline idx_t get_dy() { return _dy; }
+    inline idx_t get_dz() { return _dz; }
+    inline idx_t get_px() { return _px; }
+    inline idx_t get_py() { return _py; }
+    inline idx_t get_pz() { return _pz; }
+
+    // Get pointer to the realv at vector offset iv, jv, kv.
+    // Indices must be normalized, i.e., already divided by VLEN_*.
+    ALWAYS_INLINE const realv* getVecPtrNorm(idx_t iv, idx_t jv, idx_t kv,
+                                             bool checkBounds=true) const {
 
 #ifdef TRACE_MEM
-        cout << _name << "." << "getVecPtr-3D(" <<
-            veci << "," << vecj << "," << veck << ", " <<
-            (safe ? "safe": "unsafe") << ")";
-        if (safe)
-            cout << " => " << _data.get_index(veci, vecj, veck);
+        cout << _name << "." << "RealvGrid_XYZ::getVecPtrNorm(" <<
+            << iv << "," << jv << "," << kv << ")";
+#endif
+        
+        // adjust for padding.
+        iv += _pxv;
+        jv += _pyv;
+        kv += _pzv;
+
+#ifdef TRACE_MEM
+        if (checkBounds)
+            cout << " => " << _data.get_index(iv, jv, kv);
         cout << endl << flush;
 #endif
-        return &_data(veci, vecj, veck, safe);
+        return &_data(iv, jv, kv, checkBounds);
     }
 
     // Non-const version.
-    ALWAYS_INLINE realv* getVecPtr(int veci, int vecj, int veck,
-                                   bool safe=true) {
+    ALWAYS_INLINE realv* getVecPtrNorm(idx_t iv, idx_t jv, idx_t kv,
+                                       bool checkBounds=true) {
+
         const realv* vp =
-            const_cast<const RealvGrid3d*>(this)->getVecPtr(veci, vecj, veck, safe);
+            const_cast<const RealvGrid_XYZ*>(this)->getVecPtrNorm(iv, jv, kv,
+                                                                   checkBounds);
         return const_cast<realv*>(vp);
     }
     
     // Get a pointer to one REAL.
-    ALWAYS_INLINE const REAL* getElemPtr(int i, int j, int k,
-                                        bool safe=true) const {
-        const realv* vp = getVecPtr(i / VLEN_X, j / VLEN_Y, k / VLEN_Z, safe);
-        return &(*vp)(abs(i % VLEN_X), abs(j % VLEN_Y), abs(k % VLEN_Z));
+    ALWAYS_INLINE const REAL* getElemPtr(idx_t i, idx_t j, idx_t k,
+                                         bool checkBounds=true) const {
+
+        // normalize.
+        idx_t iv = idiv<idx_t>(i, VLEN_X);
+        idx_t jv = idiv<idx_t>(j, VLEN_Y);
+        idx_t kv = idiv<idx_t>(k, VLEN_Z);
+        
+        // Get vector.
+        const realv* vp = getVecPtrNorm(iv, jv, kv, checkBounds);
+
+        // intra-vector element indices.
+        idx_t ip = imod<idx_t>(i, VLEN_X);
+        idx_t jp = imod<idx_t>(j, VLEN_Y);
+        idx_t kp = imod<idx_t>(k, VLEN_Z);
+
+        // Extract point from vector.
+        return &(*vp)(0, ip, jp, kp);
     }
 
     // non-const version.
-    ALWAYS_INLINE REAL* getElemPtr(int i, int j, int k,
-                                  bool safe=true) {
-        const REAL* p = const_cast<const RealvGrid3d*>(this)->getElemPtr(i, j, k, safe);
+    ALWAYS_INLINE REAL* getElemPtr(idx_t i, idx_t j, idx_t k,
+                                  bool checkBounds=true) {
+        const REAL* p = const_cast<const RealvGrid_XYZ*>(this)->getElemPtr(i, j, k,
+                                                                         checkBounds);
         return const_cast<REAL*>(p);
     }
 
     // Print one vector.
-    void printVec(const string& m, int veci, int vecj, int veck, const realv& v,
-                  int line=0) const {
-        int x1 = veci * VLEN_X;
-        int y1 = vecj * VLEN_Y;
-        int z1 = veck * VLEN_Z;
-        cout << m << ": " << _name << "[" <<
-            x1 << ".." << x1+VLEN_X-1 << " x " <<
-            y1 << ".." << y1+VLEN_Y-1 << " x " <<
-            z1 << ".." << z1+VLEN_Z-1 << "] = " << v;
-        if (line)
-            cout << " at line " << line;
-        cout << endl << flush;
+    void printVec(const string& m, idx_t i, idx_t j, idx_t k, const realv& v,
+                  int line) const {
+        for (int k2 = 0; k2 < VLEN_Z; k2++) {
+            for (int j2 = 0; j2 < VLEN_Y; j2++) {
+                for (int i2 = 0; i2 < VLEN_X; i2++) {
+                    REAL e = v(0, i2, j2, k2);
+                    cout << m << ": " << _name << "[" <<
+                        (i+i2) << ", " << (j+j2) << ", " << (k+k2) << "] = " << e;
+                    if (line)
+                        cout << " at line " << line;
+                    cout << endl << flush;
+                }
+            }
+        }
     }
 
     // Print one element.
-    void printElem(const string& m, int i, int j, int k, REAL e,
-                   int line=0) const {
+    void printElem(const string& m, idx_t i, idx_t j, idx_t k, REAL e,
+                   int line) const {
         cout << m << ": " << _name << "[" <<
             i << ", " << j << ", " << k << "] = " << e;
         if (line)
@@ -113,8 +218,8 @@ public:
     }
 
     // Read one element.
-    ALWAYS_INLINE REAL readElem(int i, int j, int k,
-                               int line=0) const {
+    ALWAYS_INLINE REAL readElem(idx_t i, idx_t j, idx_t k,
+                               int line) const {
         const REAL* ep = getElemPtr(i, j, k);
         REAL e = *ep;
 #ifdef TRACE_MEM
@@ -124,8 +229,8 @@ public:
     }
 
     // Write one element.
-    ALWAYS_INLINE void writeElem(REAL val, int i, int j, int k,
-                                int line=0) {
+    ALWAYS_INLINE void writeElem(REAL val, idx_t i, idx_t j, idx_t k,
+                                int line) {
         REAL* ep = getElemPtr(i, j, k);
         *ep = val;
 #ifdef TRACE_MEM
@@ -133,15 +238,16 @@ public:
 #endif
     }
 
-    // Read one vector at veci, vecj, veck.
-    ALWAYS_INLINE const realv readVec(int veci, int vecj, int veck,
-                                      int line=0) const {
-        const realv* p = getVecPtr(veci, vecj, veck);
+    // Read one vector at vector offset nv, iv, jv, kv.
+    // Indices must be normalized, i.e., already divided by VLEN_*.
+    ALWAYS_INLINE const realv readVecNorm(idx_t iv, idx_t jv, idx_t kv,
+                                          int line) const {
+        const realv* p = getVecPtrNorm(iv, jv, kv);
         __assume_aligned(p, CACHELINE_BYTES);
         realv v;
         v.loadFrom(p);
 #ifdef TRACE_MEM
-        printVec("readVec", veci, vecj, veck, v, line);
+        printVec("readVec", iv, jv, kv, v, line);
 #endif
 #ifdef MODEL_CACHE
         cache.read(p, line);
@@ -149,14 +255,15 @@ public:
         return v;
     }
 
-    // Write one vector at veci, vecj, veck.
-    ALWAYS_INLINE void writeVec(const realv& v, int veci, int vecj, int veck,
-                                int line=0) {
-        realv* p = getVecPtr(veci, vecj, veck);
+    // Write one vector at vector offset nv, iv, jv, kv.
+    // Indices must be normalized, i.e., already divided by VLEN_*.
+    ALWAYS_INLINE void writeVecNorm(const realv& v, idx_t iv, idx_t jv, idx_t kv,
+                                    int line) {
+        realv* p = getVecPtrNorm(iv, jv, kv);
         __assume_aligned(p, CACHELINE_BYTES);
         v.storeTo(p);
 #ifdef TRACE_MEM
-        printVec("writeVec", veci, vecj, veck, v, line);
+        printVec("writeVec", iv, jv, kv, v, line);
 #endif
 #ifdef MODEL_CACHE
         cache.write(p, line);
@@ -165,142 +272,197 @@ public:
 
     // Check for equality.
     // Return number of mismatches greater than epsilon.
-    size_t compare(const RealvGrid3d<Mapfn>& ref,
-                           REAL epsilon = 1e-3,
-                           int maxPrint = 20,
-                           std::ostream& os = std::cerr) const {
+    idx_t compare(const RealvGrid_XYZ<Mapfn>& ref,
+                   REAL epsilon = EPSILON,
+                   int maxPrint = 20,
+                   std::ostream& os = std::cerr) const {
         realv ev;
-        ev = epsilon;
+        ev = epsilon;           // broadcast.
         return _data.compare(ref._data, ev, maxPrint, os);
-    }
-
-    // Initialize memory to a given value.
-    void set_same(REAL val) {
-        realv rv;
-        rv = val;
-        _data.set_same(rv);
     }    
 };
 
 // A 4D (n, x, y, z) collection of realv elements.
-template <typename Mapfn> class RealvGrid4d {
+// Supports symmetric padding in each dimension.
+template <typename Mapfn> class RealvGrid_NXYZ : public RealvGridBase {
     
 protected:
+
+    // real sizes.
+    idx_t _dn, _dx, _dy, _dz;
+    idx_t _pn, _px, _py, _pz;
+
+    // realv sizes.
+    idx_t _dnv, _dxv, _dyv, _dzv;
+    idx_t _pnv, _pxv, _pyv, _pzv;
+    
     GenericGrid4d<realv, Mapfn> _data;
-    string _name;
 
 public:
 
     // Ctor.
-    // Note that 'num' is stored as the 4th dimension in _data,
-    // even though the accessors below list it first.
-    RealvGrid4d(int num,
-                int d1, int d2, int d3,
-                int p1, int p2, int p3,
-                const string& name) :
-        _data(d1 / VLEN_X, d2 / VLEN_Y, d3 / VLEN_Z, num,
-              p1 / VLEN_X, p2 / VLEN_Y, p3 / VLEN_Z, 0,
+    // Dimensions are REAL elements, not realvs.
+    RealvGrid_NXYZ(idx_t dn, idx_t dx, idx_t dy, idx_t dz,
+                   idx_t pn, idx_t px, idx_t py, idx_t pz,
+                   const string& name) :
+
+        // Round up each dim to multiple of realv.
+        _dn(ROUND_UP(dn, VLEN_N)),
+        _dx(ROUND_UP(dx, VLEN_X)),
+        _dy(ROUND_UP(dy, VLEN_Y)),
+        _dz(ROUND_UP(dz, VLEN_Z)),
+        _pn(ROUND_UP(pn, VLEN_N)),
+        _px(ROUND_UP(px, VLEN_X)),
+        _py(ROUND_UP(py, VLEN_Y)),
+        _pz(ROUND_UP(pz, VLEN_Z)),
+
+        // Determine number of realv's.
+        _dnv(_dn / VLEN_N),
+        _dxv(_dx / VLEN_X),
+        _dyv(_dy / VLEN_Y),
+        _dzv(_dz / VLEN_Z),
+        _pnv(_pn / VLEN_N),
+        _pxv(_px / VLEN_X),
+        _pyv(_py / VLEN_Y),
+        _pzv(_pz / VLEN_Z),
+
+        // Alloc space for required number of realv's.
+        _data(_dnv + 2*_pnv,
+              _dxv + 2*_pxv,
+              _dyv + 2*_pyv,
+              _dzv + 2*_pzv,
               ALLOC_ALIGNMENT),
-        _name(name)
+        RealvGridBase(name, &_data)
     {
         _data.print_info(name);
     }
 
-    // Get pointer to a realv.
-    ALWAYS_INLINE const realv* getVecPtr(int num, int veci, int vecj, int veck,
-                                         bool safe=true) const {
+    // Get pointer to the realv at vector offset nv, iv, jv, kv.
+    // Indices must be normalized, i.e., already divided by VLEN_*.
+    ALWAYS_INLINE const realv* getVecPtrNorm(idx_t nv, idx_t iv, idx_t jv, idx_t kv,
+                                             bool checkBounds=true) const {
 
 #ifdef TRACE_MEM
-        cout << _name << "." << "getVecPtr.4D(" <<
-            num << "," <<
-            veci << "," << vecj << "," << veck << ", " <<
-            (safe ? "safe": "unsafe") << ")";
-        if (safe)
-            cout << " => " << _data.get_index(veci, vecj, veck, num);
+        cout << _name << "." << "RealvGrid_NXYZ::getVecPtrNorm(" <<
+            nv << "," << iv << "," << jv << "," << kv << ")";
+#endif
+        
+        // adjust for padding.
+        nv += _pnv;
+        iv += _pxv;
+        jv += _pyv;
+        kv += _pzv;
+
+#ifdef TRACE_MEM
+        if (checkBounds)
+            cout << " => " << _data.get_index(nv, iv, jv, kv);
         cout << endl << flush;
 #endif
-        return &_data(veci, vecj, veck, num, safe);
+        return &_data(nv, iv, jv, kv, checkBounds);
     }
 
     // Non-const version.
-    ALWAYS_INLINE realv* getVecPtr(int num, int veci, int vecj, int veck,
-                                   bool safe=true) {
+    ALWAYS_INLINE realv* getVecPtrNorm(idx_t nv, idx_t iv, idx_t jv, idx_t kv,
+                                       bool checkBounds=true) {
+
         const realv* vp =
-            const_cast<const RealvGrid4d*>(this)->getVecPtr(num, veci, vecj, veck, safe);
+            const_cast<const RealvGrid_NXYZ*>(this)->getVecPtrNorm(nv, iv, jv, kv,
+                                                                   checkBounds);
         return const_cast<realv*>(vp);
     }
     
     // Get a pointer to one REAL.
-    ALWAYS_INLINE const REAL* getElemPtr(int num, int i, int j, int k,
-                                        bool safe=true) const {
-        const realv* vp = getVecPtr(num, i / VLEN_X, j / VLEN_Y, k / VLEN_Z, safe);
-        return &(*vp)(abs(i % VLEN_X), abs(j % VLEN_Y), abs(k % VLEN_Z));
+    ALWAYS_INLINE const REAL* getElemPtr(idx_t n, idx_t i, idx_t j, idx_t k,
+                                        bool checkBounds=true) const {
+
+        // normalize.
+        idx_t nv = idiv<idx_t>(n, VLEN_N);
+        idx_t iv = idiv<idx_t>(i, VLEN_X);
+        idx_t jv = idiv<idx_t>(j, VLEN_Y);
+        idx_t kv = idiv<idx_t>(k, VLEN_Z);
+        
+        // Get vector.
+        const realv* vp = getVecPtrNorm(nv, iv, jv, kv, checkBounds);
+
+        // intra-vector element indices.
+        idx_t np = imod<idx_t>(n, VLEN_N);
+        idx_t ip = imod<idx_t>(i, VLEN_X);
+        idx_t jp = imod<idx_t>(j, VLEN_Y);
+        idx_t kp = imod<idx_t>(k, VLEN_Z);
+
+        // Extract point from vector.
+        return &(*vp)(np, ip, jp, kp);
     }
 
     // non-const version.
-    ALWAYS_INLINE REAL* getElemPtr(int num, int i, int j, int k,
-                                  bool safe=true) {
-        const REAL* p = const_cast<const RealvGrid4d*>(this)->getElemPtr(num, i, j, k, safe);
+    ALWAYS_INLINE REAL* getElemPtr(idx_t n, idx_t i, idx_t j, idx_t k,
+                                  bool checkBounds=true) {
+        const REAL* p = const_cast<const RealvGrid_NXYZ*>(this)->getElemPtr(n, i, j, k,
+                                                                         checkBounds);
         return const_cast<REAL*>(p);
     }
 
     // Print one vector.
-    void printVec(const string& m, int num, int veci, int vecj, int veck, const realv& v,
-                  int line=0) const {
-        int x1 = veci * VLEN_X;
-        int y1 = vecj * VLEN_Y;
-        int z1 = veck * VLEN_Z;
-        cout << m << ": " << _name << "[" <<
-            num << ", " <<
-            x1 << ".." << x1+VLEN_X-1 << " x " <<
-            y1 << ".." << y1+VLEN_Y-1 << " x " <<
-            z1 << ".." << z1+VLEN_Z-1 << "] = " << v;
-        if (line)
-            cout << " at line " << line;
-        cout << endl << flush;
+    void printVec(const string& m, idx_t n, idx_t i, idx_t j, idx_t k, const realv& v,
+                  int line) const {
+        for (int k2 = 0; k2 < VLEN_Z; k2++) {
+            for (int j2 = 0; j2 < VLEN_Y; j2++) {
+                for (int i2 = 0; i2 < VLEN_X; i2++) {
+                    for (int n2 = 0; n2 < VLEN_N; n2++) {
+                    
+                        REAL e = v(n2, i2, j2, k2);
+                        cout << m << ": " << _name << "[" << (n+n2) << ", " <<
+                            (i+i2) << ", " << (j+j2) << ", " << (k+k2) << "] = " << e;
+                        if (line)
+                            cout << " at line " << line;
+                        cout << endl << flush;
+                    }
+                }
+            }
+        }
     }
 
     // Print one element.
-    void printElem(const string& m, int num, int i, int j, int k, REAL e,
-                   int line=0) const {
+    void printElem(const string& m, idx_t n, idx_t i, idx_t j, idx_t k, REAL e,
+                   int line) const {
         cout << m << ": " << _name << "[" <<
-            num << ", " <<
-            i << ", " << j << ", " << k << "] = " << e;
+            n << ", " << i << ", " << j << ", " << k << "] = " << e;
         if (line)
             cout << " at line " << line;
         cout << endl << flush;
     }
 
     // Read one element.
-    ALWAYS_INLINE REAL readElem(int num, int i, int j, int k,
-                               int line=0) const {
-        const REAL* ep = getElemPtr(num, i, j, k);
+    ALWAYS_INLINE REAL readElem(idx_t n, idx_t i, idx_t j, idx_t k,
+                               int line) const {
+        const REAL* ep = getElemPtr(n, i, j, k);
         REAL e = *ep;
 #ifdef TRACE_MEM
-        printElem("readElem", num, i, j, k, e, line);
+        printElem("readElem", n, i, j, k, e, line);
 #endif
         return e;
     }
 
     // Write one element.
-    ALWAYS_INLINE void writeElem(REAL val, int num, int i, int j, int k,
-                               int line=0) {
-        REAL* ep = getElemPtr(num, i, j, k);
+    ALWAYS_INLINE void writeElem(REAL val, idx_t n, idx_t i, idx_t j, idx_t k,
+                               int line) {
+        REAL* ep = getElemPtr(n, i, j, k);
         *ep = val;
 #ifdef TRACE_MEM
-        printElem("writeElem", num, i, j, k, val, line);
+        printElem("writeElem", n, i, j, k, val, line);
 #endif
     }
 
-    // Read one vector at veci, vecj, veck.
-    ALWAYS_INLINE const realv readVec(int num, int veci, int vecj, int veck,
-                                      int line=0) const {
-        const realv* p = getVecPtr(num, veci, vecj, veck);
+    // Read one vector at vector offset nv, iv, jv, kv.
+    // Indices must be normalized, i.e., already divided by VLEN_*.
+    ALWAYS_INLINE const realv readVecNorm(idx_t nv, idx_t iv, idx_t jv, idx_t kv,
+                                          int line) const {
+        const realv* p = getVecPtrNorm(nv, iv, jv, kv);
         __assume_aligned(p, CACHELINE_BYTES);
         realv v;
         v.loadFrom(p);
 #ifdef TRACE_MEM
-        printVec("readVec", num, veci, vecj, veck, v, line);
+        printVec("readVec", nv, iv, jv, kv, v, line);
 #endif
 #ifdef MODEL_CACHE
         cache.read(p, line);
@@ -308,143 +470,221 @@ public:
         return v;
     }
 
-    // Write one vector at veci, vecj, veck.
-    ALWAYS_INLINE void writeVec(const realv& v, int num, int veci, int vecj, int veck,
-                                int line=0) {
-        realv* p = getVecPtr(num, veci, vecj, veck);
+    // Write one vector at vector offset nv, iv, jv, kv.
+    // Indices must be normalized, i.e., already divided by VLEN_*.
+    ALWAYS_INLINE void writeVecNorm(const realv& v, idx_t nv, idx_t iv, idx_t jv, idx_t kv,
+                                    int line) {
+        realv* p = getVecPtrNorm(nv, iv, jv, kv);
         __assume_aligned(p, CACHELINE_BYTES);
         v.storeTo(p);
 #ifdef TRACE_MEM
-        printVec("writeVec", num, veci, vecj, veck, v, line);
+        printVec("writeVec", nv, iv, jv, kv, v, line);
 #endif
 #ifdef MODEL_CACHE
         cache.write(p, line);
 #endif
     }
 
-
     // Check for equality.
     // Return number of mismatches greater than epsilon.
-    size_t compare(const RealvGrid4d<Mapfn>& ref,
-                           REAL epsilon = 1e-3,
-                           int maxPrint = 20,
-                           std::ostream& os = std::cerr) const {
+    idx_t compare(const RealvGrid_NXYZ<Mapfn>& ref,
+                   REAL epsilon = EPSILON,
+                   int maxPrint = 20,
+                   std::ostream& os = std::cerr) const {
         realv ev;
-        ev = epsilon;
+        ev = epsilon;           // broadcast.
         return _data.compare(ref._data, ev, maxPrint, os);
-    }    
-
-    // Initialize memory to a given value.
-    void set_same(REAL val) {
-        realv rv;
-        rv = val;
-        _data.set_same(rv);
     }    
 };
 
-// A pseudo-5D (time, var, x, y, z) collection of realv elements.  It is
-// really a 4D grid; the time and var 'dimensions' are mapped onto the 4th
-// dimension in a restricted way which only allows read from t and write to
-// t+TIME_STEPS.
-template <typename Mapfn> class RealvGridPseudo5d {
+// A 4D (t, x, y, z) collection of realv elements, but any value of 't'
+// is divided by TIME_STEPS and mapped to TIME_DIM indices.
+// Supports symmetric padding in each spatial dimension.
+template <typename Mapfn> class RealvGrid_TXYZ : public RealvGrid_NXYZ<Mapfn>  {
+    
+public:
+
+    // Ctor.
+    RealvGrid_TXYZ(idx_t dx, idx_t dy, idx_t dz,
+                   idx_t px, idx_t py, idx_t pz,
+                   const string& name) :
+        RealvGrid_NXYZ<Mapfn>(TIME_DIM, dx, dy, dz,
+                              0, px, py, pz,
+                              name)
+    {
+        if (VLEN_N > 1) {
+            cerr << "Sorry, vectorizing in N dimension not yet supported." << endl;
+            exit(1);
+        }
+    }
+
+    // Get correct index based on time t.
+    ALWAYS_INLINE idx_t getMatIndex(idx_t t) const {
+
+#if 1
+        // Time t must be multiple of TIME_STEPS.
+        // Use imod & idiv to allow t to be negative.
+        assert(imod<idx_t>(t, TIME_STEPS) == 0);
+        idx_t t_idx = idiv<idx_t>(t, TIME_STEPS);
+
+        // Index wraps in TIME_DIM.
+        // Examples if TIME_DIM == 2:
+        // t_idx => return value.
+        // -2 => 0.
+        // -1 => 1.
+        //  0 => 0.
+        //  1 => 1.
+
+        // Use imod to allow t to be negative.
+        return imod<idx_t>(t_idx, TIME_DIM);
+#else
+        // version that doesn't allow negative time.
+        assert(t >= 0);
+        assert(t % TIME_STEPS == 0);
+        idx_t t_idx = t / idx_t(TIME_STEPS);
+        return t_idx % idx_t(TIME_DIM);
+#endif
+    }
+
+    // Read one element.
+    ALWAYS_INLINE REAL readElem(idx_t t, idx_t i, idx_t j, idx_t k,
+                               int line) const {
+        idx_t n = getMatIndex(t);
+        return RealvGrid_NXYZ<Mapfn>::readElem(n, i, j, k, line);
+    }
+
+    // Write one element of the grid.
+    ALWAYS_INLINE void writeElem(REAL val, idx_t t, idx_t i, idx_t j, idx_t k,
+                                int line) {
+        idx_t n = getMatIndex(t);
+        RealvGrid_NXYZ<Mapfn>::writeElem(val, n, i, j, k, line);
+    }
+
+    // Read one vector at t and vector offset iv, jv, kv.
+    // Indices must be normalized, i.e., already divided by VLEN_*.
+    ALWAYS_INLINE const realv readVecNorm(idx_t t, idx_t iv, idx_t jv, idx_t kv,
+                                          int line) const {
+        idx_t n = getMatIndex(t);
+        return RealvGrid_NXYZ<Mapfn>::readVecNorm(n, iv, jv, kv, line);
+    }
+
+    // Write one vector at t and vector offset iv, jv, kv.
+    // Indices must be normalized, i.e., already divided by VLEN_*.
+    ALWAYS_INLINE void writeVecNorm(const realv& v, idx_t t, idx_t iv, idx_t jv, idx_t kv,
+                                    int line) {
+        idx_t n = getMatIndex(t);
+        RealvGrid_NXYZ<Mapfn>::writeVecNorm(v, n, iv, jv, kv, line);
+    }
+
+    // Get pointer to the realv at t and vector offset iv, jv, kv.
+    // Indices must be normalized, i.e., already divided by VLEN_*.
+    ALWAYS_INLINE const realv* getVecPtrNorm(idx_t t, idx_t iv, idx_t jv, idx_t kv,
+                                             int line) const {
+        idx_t n = getMatIndex(t);
+        return RealvGrid_NXYZ<Mapfn>::getVecPtrNorm(n, iv, jv, kv, false);
+    }
+    ALWAYS_INLINE realv* getVecPtrNorm(idx_t t, idx_t iv, idx_t jv, idx_t kv,
+                                       int line) {
+        idx_t n = getMatIndex(t);
+        return RealvGrid_NXYZ<Mapfn>::getVecPtrNorm(n, iv, jv, kv, false);
+    }
+};
+
+// A 5D (t, n, x, y, z) collection of realv elements, but any value of 't'
+// is divided by TIME_STEPS and mapped to TIME_DIM indices.
+// Supports symmetric padding in each spatial dimension.
+template <typename Mapfn> class RealvGrid_TNXYZ : public RealvGrid_NXYZ<Mapfn> {
     
 protected:
-    RealvGrid4d<Mapfn> _data;
+    idx_t _dn;
 
 public:
 
     // Ctor.
-    RealvGridPseudo5d(int d1, int d2, int d3,
-                      int p1, int p2, int p3,
-                      const string& name) :
-        _data(NUM_GRIDS,
-              d1, d2, d3,
-              p1, p2, p3,
-              name) { }
+    RealvGrid_TNXYZ(idx_t dn, idx_t dx, idx_t dy, idx_t dz,
+                    idx_t pn, idx_t px, idx_t py, idx_t pz,
+                    const string& name) :
+        RealvGrid_NXYZ<Mapfn(TIME_DIM * dn, dx, dy, dz,
+                             pn, px, py, pz,
+                             name),
+        _dn(dn)
+    {
+        if (VLEN_N > 1) {
+            cerr << "Sorry, vectorizing in N dimension not yet supported." << endl;
+            exit(1);
+        }
+    }
 
-    // Get correct index based on time & variable number.
-    // There will be overlap between indices if NUM_WORKS < NUM_VARS.
-    ALWAYS_INLINE int getMatIndex(int t, int var) const {
-        assert(t % TIME_STEPS == 0);
+    // Get correct index based on t & n.
+    ALWAYS_INLINE idx_t getMatIndex(idx_t t, idx_t n) const {
 
-        /* Example with NUM_VARS=5 & NUM_WORKS=2:
-           t=0...
-           var 0: mat 0 => mat 5
-           var 1: mat 1 => mat 6
-           var 2: mat 2 => mat 0
-           var 3: mat 3 => mat 1
-           var 4: mat 4 => mat 2
-           t=1...
-           var 0: mat 5 => mat 3
-           var 1: mat 6 => mat 4
-           var 2: mat 0 => mat 5
-           var 3: mat 1 => mat 6
-           var 4: mat 2 => mat 0
-        */
+        // Time t must be multiple of TIME_STEPS.
+        // Use imod & idiv to allow t to be negative.
+        assert(imod<idx_t>(t, TIME_STEPS) == 0);
+        idx_t t_idx = idiv<idx_t>(t, TIME_STEPS);
 
-        return ((t / TIME_STEPS) * NUM_VARS + var) % NUM_GRIDS;
+        // Index wraps in TIME_DIM.
+        // Examples if TIME_DIM == 2:
+        // t_idx => t_idx2.
+        // -2 => 0.
+        // -1 => 1.
+        //  0 => 0.
+        //  1 => 1.
+        // Use imod to allow t to be negative.
+        idx_t t_idx2 = imod<idx_t>(t_idx, TIME_DIM);
+
+        // Map t_idx2 and n onto one dimension.
+        return MAP21(n, t_idx2, _dn, TIME_DIM);
     }
 
     // Read one element.
-    ALWAYS_INLINE REAL readElem(int t, int var,
-                               int i, int j, int k,
-                               int line=0) const {
-        int n = getMatIndex(t, var);
-        return _data.readElem(n, i, j, k, line);
+    ALWAYS_INLINE REAL readElem(idx_t t, idx_t n,
+                               idx_t i, idx_t j, idx_t k,
+                               int line) const {
+        idx_t n2 = getMatIndex(t, n);
+        return RealvGrid_NXYZ<Mapfn>::readElem(n2, i, j, k, line);
     }
 
     // Write one element of the grid.
-    ALWAYS_INLINE void writeElem(REAL val, int t, int var,
-                                int i, int j, int k,
-                                int line=0) {
-        int n = getMatIndex(t, var);
-        _data.writeElem(val, n, i, j, k, line);
+    ALWAYS_INLINE void writeElem(REAL val, idx_t t, idx_t n,
+                                idx_t i, idx_t j, idx_t k,
+                                int line) {
+        idx_t n2 = getMatIndex(t, n);
+        RealvGrid_NXYZ<Mapfn>::writeElem(val, n2, i, j, k, line);
     }
 
-    // Read one vector at veci, vecj, veck.
-    ALWAYS_INLINE const realv& readVec(int t, int var,
-                                      int veci, int vecj, int veck,
-                                      int line=0) const {
-        int n = getMatIndex(t, var);
-        return _data.readVec(n, veci, vecj, veck, line);
+    // Read one vector at t and vector offset nv, iv, jv, kv.
+    // Indices must be normalized, i.e., already divided by VLEN_*.
+    ALWAYS_INLINE const realv& readVecNorm(idx_t t, idx_t nv,
+                                           idx_t iv, idx_t jv, idx_t kv,
+                                           int line) const {
+        idx_t n2 = getMatIndex(t, nv);
+        return RealvGrid_NXYZ<Mapfn>::readVecNorm(n2, iv, jv, kv, line);
     }
 
-    // Write one vector at veci, vecj, veck.
-    ALWAYS_INLINE void writeVec(const realv& v, int t, int var,
-                                      int veci, int vecj, int veck,
-                                      int line=0) {
-        int n = getMatIndex(t, var);
-        _data.writeVec(v, n, veci, vecj, veck, line);
+    // Write one vector at t and vector offset nv, iv, jv, kv.
+    // Indices must be normalized, i.e., already divided by VLEN_*.
+    ALWAYS_INLINE void writeVecNorm(const realv& v, idx_t t, idx_t nv,
+                                    idx_t iv, idx_t jv, idx_t kv,
+                                      int line) {
+        idx_t n2 = getMatIndex(t, nv);
+        RealvGrid_NXYZ<Mapfn>::writeVecNorm(v, n2, iv, jv, kv, line);
     }
 
-    // Get a pointer to vector at veci, vecj, veck.
-    ALWAYS_INLINE const realv* getVecPtr(int t, int var,
-                                         int veci, int vecj, int veck,
-                                         int line=0) const {
-        int n = getMatIndex(t, var);
-        return _data.getVecPtr(n, veci, vecj, veck, false);
+    // Get pointer to the realv at t and vector offset nv, iv, jv, kv.
+    // Indices must be normalized, i.e., already divided by VLEN_*.
+    ALWAYS_INLINE const realv* getVecPtrNorm(idx_t t, idx_t nv,
+                                             idx_t iv, idx_t jv, idx_t kv,
+                                             int line) const {
+        idx_t n2 = getMatIndex(t, nv);
+        return RealvGrid_NXYZ<Mapfn>::getVecPtrNorm(n2, iv, jv, kv, false);
     }
-    ALWAYS_INLINE realv* getVecPtr(int t, int var,
-                                         int veci, int vecj, int veck,
-                                         int line=0) {
-        int n = getMatIndex(t, var);
-        return _data.getVecPtr(n, veci, vecj, veck, false);
+    ALWAYS_INLINE realv* getVecPtrNorm(idx_t t, idx_t nv,
+                                       idx_t iv, idx_t jv, idx_t kv,
+                                       int line) {
+        idx_t n2 = getMatIndex(t, nv);
+        return RealvGrid_NXYZ<Mapfn>::getVecPtrNorm(n2, iv, jv, kv, false);
     }
-
-
-    // Check for equality.
-    // Return number of mismatches greater than epsilon.
-    size_t compare(const RealvGridPseudo5d<Mapfn>& ref,
-                           REAL epsilon = 1e-3,
-                           int maxPrint = 20,
-                           std::ostream& os = std::cerr) const {
-        return _data.compare(ref._data, epsilon, maxPrint, os);
-    }
-
-    // Initialize memory to a given value.
-    void set_same(REAL val) {
-        _data.set_same(val);
-    }    
 };
 
 #endif

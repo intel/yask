@@ -97,27 +97,31 @@ union realv {
 #endif
 
     // access a REAL linearly.
-    inline REAL& operator[](int l) {
+    inline REAL& operator[](idx_t l) {
         return r[l];
     }
-    inline const REAL& operator[](int l) const {
+    inline const REAL& operator[](idx_t l) const {
         return r[l];
     }
 
-    // access a REAL by x,y,z vector-block indices.
-    inline const REAL& operator()(int i, int j, int k) const {
+    // access a REAL by n,x,y,z vector-block indices.
+    inline const REAL& operator()(idx_t n, idx_t i, idx_t j, idx_t k) const {
+        assert(n >= 0);
+        assert(n < VLEN_N);
         assert(i >= 0);
         assert(i < VLEN_X);
         assert(j >= 0);
         assert(j < VLEN_Y);
         assert(k >= 0);
         assert(k < VLEN_Z);
-        int l = MAP321(i, j, k, VLEN_X, VLEN_Y, VLEN_Z);
+
+        // n dim is unit stride, followed by x, y, z.
+        idx_t l = MAP4321(n, i, j, k, VLEN_N, VLEN_X, VLEN_Y, VLEN_Z);
         return r[l];
     }
-    inline REAL& operator()(int i, int j, int k) {
+    inline REAL& operator()(idx_t n, idx_t i, idx_t j, idx_t k) {
         const realv* ct = const_cast<const realv*>(this);
-        const REAL& cr = (*ct)(i, j, k);
+        const REAL& cr = (*ct)(n, i, j, k);
         return const_cast<REAL&>(cr);
     }
 
@@ -180,6 +184,11 @@ union realv {
 #endif
         return res;
     }
+    inline realv operator+(REAL rhs) const {
+        realv rn;
+        rn = rhs;               // broadcast.
+        return (*this) + rn;
+    }
 
     // sub.
     inline realv operator-(realv rhs) const {
@@ -192,6 +201,11 @@ union realv {
         res.m512r = _mm512_sub_pd(this->m512r, rhs.m512r);
 #endif
         return res;
+    }
+    inline realv operator-(REAL rhs) const {
+        realv rn;
+        rn = rhs;               // broadcast.
+        return (*this) - rn;
     }
 
     // mul.
@@ -206,7 +220,12 @@ union realv {
 #endif
         return res;
     }
-
+    inline realv operator*(REAL rhs) const {
+        realv rn;
+        rn = rhs;               // broadcast.
+        return (*this) * rn;
+    }
+    
     // div.
     inline realv operator/(realv rhs) const {
         realv res;
@@ -219,21 +238,30 @@ union realv {
 #endif
         return res;
     }
+    inline realv operator/(REAL rhs) const {
+        realv rn;
+        rn = rhs;               // broadcast.
+        return (*this) / rn;
+    }
 
-    // less-than comparator for validation.
+    // less-than comparator.
     bool operator<(const realv& rhs) const {
         for (int j = 0; j < VLEN; j++) {
             if (r[j] < rhs.r[j])
                 return true;
+            else if (r[j] > rhs.r[j])
+                return false;
         }
         return false;
     }
 
-    // greater-than comparator for validation.
+    // greater-than comparator.
     bool operator>(const realv& rhs) const {
         for (int j = 0; j < VLEN; j++) {
             if (r[j] > rhs.r[j])
                 return true;
+            else if (r[j] < rhs.r[j])
+                return false;
         }
         return false;
     }
@@ -301,10 +329,20 @@ union realv {
 
 }; // realv.
 
-// Output using <<.
-inline ostream& operator<<(ostream& os, const realv& rv) {
-    rv.print_reals(os, false);
+// Output using '<<'.
+inline ostream& operator<<(ostream& os, const realv& rn) {
+    rn.print_reals(os, false);
     return os;
+}
+
+// Compare two realv's.
+inline bool within_tolerance(const realv& val, const realv& ref,
+                             const realv& epsilon) {
+        for (int j = 0; j < VLEN; j++) {
+            if (!within_tolerance(val.r[j], ref.r[j], epsilon.r[j]))
+                return false;
+        }
+        return true;
 }
 
 #ifdef __INTEL_COMPILER
@@ -360,7 +398,7 @@ ALWAYS_INLINE void realv_align(realv& res, const realv& v2, const realv& v3,
 
 // get consecutive elements from two vectors w/masking.
 ALWAYS_INLINE void realv_align(realv& res, const realv& v2, const realv& v3,
-                               const int count, MMASK k1) {
+                               const int count, unsigned int k1) {
 #ifdef TRACE_INTRINSICS
     cout << "realv_align w/count=" << count << " w/mask:" << endl;
     cout << " v2: ";
@@ -381,12 +419,12 @@ ALWAYS_INLINE void realv_align(realv& res, const realv& v2, const realv& v3,
         if ((k1 >> i) & 1)
             res.r[i] = v2.r[i + count - VLEN];
 #elif REAL_BYTES == 4
-    res.m512i = _mm512_mask_alignr_epi32(res.m512i, k1, v2.m512i, v3.m512i, count);
+    res.m512i = _mm512_mask_alignr_epi32(res.m512i, MMASK(k1), v2.m512i, v3.m512i, count);
 #elif defined(ARCH_KNC)
     cerr << "error: 64-bit align w/mask not supported on KNC" << endl;
     exit(1);
 #else
-    res.m512i = _mm512_mask_alignr_epi64(res.m512i, k1, v2.m512i, v3.m512i, count);
+    res.m512i = _mm512_mask_alignr_epi64(res.m512i, MMASK(k1), v2.m512i, v3.m512i, count);
 #endif
 
 #ifdef TRACE_INTRINSICS
@@ -428,7 +466,7 @@ ALWAYS_INLINE void realv_permute(realv& res, const realv& ctrl, const realv& v3)
 
 // rearrange elements in a vector w/masking.
 ALWAYS_INLINE void realv_permute(realv& res, const realv& ctrl, const realv& v3,
-                                 __mmask16 k1) {
+                                 unsigned int k1) {
 #ifdef TRACE_INTRINSICS
     cout << "realv_permute w/mask:" << endl;
     cout << " ctrl: ";
@@ -448,12 +486,12 @@ ALWAYS_INLINE void realv_permute(realv& res, const realv& ctrl, const realv& v3,
             res.r[i] = tmp.r[ctrl.ci[i]];
     }
 #elif REAL_BYTES == 4
-    res.m512i = _mm512_mask_permutevar_epi32(res.m512i, k1, ctrl.m512i, v3.m512i);
+    res.m512i = _mm512_mask_permutevar_epi32(res.m512i, MMASK(k1), ctrl.m512i, v3.m512i);
 #elif defined(ARCH_KNC)
     cerr << "error: 64-bit permute w/mask not supported on KNC" << endl;
     exit(1);
 #else
-    res.m512i = _mm512_mask_permutexvar_epi64(res.m512i, k1, ctrl.m512i, v3.m512i);
+    res.m512i = _mm512_mask_permutexvar_epi64(res.m512i, MMASK(k1), ctrl.m512i, v3.m512i);
 #endif
 
 #ifdef TRACE_INTRINSICS

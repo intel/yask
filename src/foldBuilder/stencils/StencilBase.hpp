@@ -32,7 +32,8 @@ using namespace std;
 
 class StencilBase {
 protected:
-    int _order;         // stencil order (width not including center point).
+    int _order;         // stencil order (for convenience; optional).
+    Grids _grids;       // keep track of all registered grids.
 
 public:
     StencilBase(int order=2) : _order(order) { }
@@ -45,11 +46,15 @@ public:
         _order = order;
         return order % 2 == 0;  // support only even orders by default.
     }
+
+    // Get order.
+    virtual int getOrder() { return _order; }
+
+    // Get the registered grids.
+    virtual Grids& getGrids() { return _grids; }
     
-    // Calculate and return the value of stencil at u(timeWanted, i, j, k)
-    // based on values at timeLastKnown or earlier.
-    virtual GridValue value(TemporalGrid& u, int timeWanted, int timeLastKnown,
-                            int i, int j, int k) const =0;
+    // Define grid values relative to given offsets in each dimension.
+    virtual void define(const IntTuple& offsets) = 0;
 };
 
 #endif

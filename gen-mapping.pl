@@ -138,30 +138,30 @@ for my $n (@sizes) {
   elsif ($opt eq '-d') {
 
     my $vars = join(', ', map { "_d$_" } @a);
-    my $cargs = join(', ', map { "size_t d$_" } @a);
+    my $cargs = join(', ', map { "idx_t d$_" } @a);
     my $cvars = join(', ', map { "d$_" } @a);
     my $cinit = join(', ', map { "_d$_(d$_)" } @a);
-    my $margs = join(', ', map { "size_t j$_" } @a);
-    my $uargs = join(', ', map { "size_t& j$_" } @a);
+    my $margs = join(', ', map { "idx_t j$_" } @a);
+    my $uargs = join(', ', map { "idx_t& j$_" } @a);
     my $sz = join(' * ', map { "_d$_" } @a);
     my $basename = "Map${n}d";
 
     print "\n// $n-D <-> 1-D mapping base class.\n",
       "class ${basename} {\n",
       "protected:\n",
-      "  size_t $vars;\n\n",
+      "  idx_t $vars;\n\n",
       "public:\n\n",
       "  ${basename}($cargs) : $cinit { }\n\n";
     for my $a (@a) {
       print "  // Return dimension $a.\n",
-        "  virtual size_t get_d$a() const { return _d$a; };\n\n";
+        "  virtual idx_t get_d$a() const { return _d$a; };\n\n";
     }
     print "  // Return overall number of elements.\n",
-      "  virtual size_t get_size() const { return $sz; };\n\n",
+      "  virtual idx_t get_size() const { return $sz; };\n\n",
       "  // Return 1-D offset from $n-D 'j' indices.\n",
-      "  virtual size_t map($margs) const =0;\n\n",
+      "  virtual idx_t map($margs) const =0;\n\n",
       "  // Set $n 'j' indices based on 1-D 'ai' input.\n",
-      "  virtual void unmap(size_t ai, $uargs) const =0;\n",
+      "  virtual void unmap(idx_t ai, $uargs) const =0;\n",
       "};\n";
 
     do {
@@ -176,10 +176,10 @@ for my $n (@sizes) {
         "public:\n\n",
         "  Map$name($cargs) : ${basename}($cvars) { }\n\n",
         "  // Return 1-D offset from $n-D 'j' indices.\n",
-        "  virtual size_t map($margs) const\n",
+        "  virtual idx_t map($margs) const\n",
         "    { return ", makeMap(\@a, \@jvars, \@dvars), "; }\n\n",
         "  // set $n 'j' indices based on 1-D 'ai' input.\n",
-        "  virtual void unmap(size_t ai, $uargs) const\n",
+        "  virtual void unmap(idx_t ai, $uargs) const\n",
         "    { ", makeUnmap(\@a, \@jvars, \@dvars, "; "), "; }\n",
         "};\n";
 

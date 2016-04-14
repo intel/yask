@@ -57,7 +57,7 @@ extern Cache cache;
 // Makes proper adjustments for negative inputs.
 #define FIX_INDEX_OFFSET(indexIn, offsetIn, indexOut, offsetOut, vecLen) \
     do {                                                                \
-        const int ofs = ((indexIn) * (vecLen)) + (offsetIn);            \
+        const idx_t ofs = ((indexIn) * (vecLen)) + (offsetIn);     \
         indexOut = ofs / (vecLen);                                      \
         offsetOut = ofs % (vecLen);                                     \
         while(offsetOut < 0) {                                          \

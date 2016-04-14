@@ -35,19 +35,21 @@ ExprPtr operator-(const ExprPtr& rhs) {
     return make_shared<NegExpr>(rhs);
 }
 
-// Binary.
+// Commutative.
 ExprPtr operator+(const ExprPtr& lhs, const ExprPtr& rhs) {
 
-    // If one side is nothing, return other side.
+    // If one side is nothing, return other side;
+    // This allows us to add to an uninitialized GridValue
+    // and do the right thing.
     if (lhs == NULL)
         return rhs;
     else if (rhs == NULL)
         return lhs;
 
     // If adding to another add result, just append an operand.
-    if (lhs->appendOp(rhs, AddExpr::getOpStr()))
+    if (lhs->appendOp(rhs, AddExpr::opStr()))
         return lhs;
-    if (rhs->appendOp(lhs, AddExpr::getOpStr()))
+    if (rhs->appendOp(lhs, AddExpr::opStr()))
         return rhs;
 
     // Otherwise, make a new expression.
@@ -70,6 +72,41 @@ void operator+=(GridValue& lhs, double rhs) {
     lhs = lhs + rhs;
 }
 
+ExprPtr operator*(const ExprPtr& lhs, const ExprPtr& rhs) {
+
+    // If one side is nothing, return other side.
+    if (lhs == NULL)
+        return rhs;
+    else if (rhs == NULL)
+        return lhs;
+
+    // If multiplying by another mul result, just append an operand.
+    if (lhs->appendOp(rhs, MultExpr::opStr()))
+        return lhs;
+    if (rhs->appendOp(lhs, MultExpr::opStr()))
+        return rhs;
+
+    // Otherwise, make a new expression.
+    else
+        return make_shared<MultExpr>(lhs, rhs);
+}
+ExprPtr operator*(double lhs, const ExprPtr& rhs) {
+    ExprPtr p = make_shared<ConstExpr>(lhs);
+    return p * rhs;
+}
+ExprPtr operator*(const ExprPtr& lhs, double rhs) {
+    ExprPtr p = make_shared<ConstExpr>(rhs);
+    return lhs * p;
+}
+
+void operator*=(GridValue& lhs, const ExprPtr& rhs) {
+    lhs = lhs * rhs;
+}
+void operator*=(GridValue& lhs, double rhs) {
+    lhs = lhs * rhs;
+}
+
+// Binary.
 ExprPtr operator-(const ExprPtr& lhs, const ExprPtr& rhs) {
 
 #ifdef USE_ADD_NEG
@@ -96,38 +133,37 @@ void operator-=(GridValue& lhs, double rhs) {
     lhs = lhs - rhs;
 }
 
-ExprPtr operator*(const ExprPtr& lhs, const ExprPtr& rhs) {
+ExprPtr operator/(const ExprPtr& lhs, const ExprPtr& rhs) {
 
-    // If one side is nothing, return other side.
-    if (lhs == NULL)
-        return rhs;
-    else if (rhs == NULL)
-        return lhs;
-
-    // If multiplying by another mul result, just append an operand.
-    if (lhs->appendOp(rhs, MultExpr::getOpStr()))
-        return lhs;
-    if (rhs->appendOp(lhs, MultExpr::getOpStr()))
-        return rhs;
-
-    // Otherwise, make a new expression.
-    else
-        return make_shared<MultExpr>(lhs, rhs);
+    return make_shared<DivExpr>(lhs, rhs);
 }
-ExprPtr operator*(double lhs, const ExprPtr& rhs) {
+ExprPtr operator/(double lhs, const ExprPtr& rhs) {
     ExprPtr p = make_shared<ConstExpr>(lhs);
-    return p * rhs;
+    return p / rhs;
 }
-ExprPtr operator*(const ExprPtr& lhs, double rhs) {
+ExprPtr operator/(const ExprPtr& lhs, double rhs) {
     ExprPtr p = make_shared<ConstExpr>(rhs);
-    return lhs * p;
+    return lhs / p;
 }
 
-void operator*=(GridValue& lhs, const ExprPtr& rhs) {
-    lhs = lhs * rhs;
+void operator/=(GridValue& lhs, const ExprPtr& rhs) {
+    lhs = lhs / rhs;
 }
-void operator*=(GridValue& lhs, double rhs) {
-    lhs = lhs * rhs;
+void operator/=(GridValue& lhs, double rhs) {
+    lhs = lhs / rhs;
+}
+
+// Define the value of a grid point.
+// Note that the semantics are different than the 'normal'
+// '==' operator, which tests for equality.
+void operator==(GridPointPtr gpp, ExprPtr rhs) {
+    assert(gpp != NULL);
+    Grid* gp = gpp->getGrid();
+    assert(gp);
+
+    // Make expression node.
+    ExprPtr p = make_shared<EqualsExpr>(gpp, rhs);
+    gp->addExpr(gpp, p);
 }
 
 // Visitor acceptors.
@@ -148,5 +184,37 @@ void CommutativeExpr::accept(ExprVisitor* ev) {
 }
 void GridPoint::accept(ExprVisitor* ev) {
     ev->visit(this);
+}
+void EqualsExpr::accept(ExprVisitor* ev) {
+    ev->visit(this);
+}
+
+// GridPoint methods.
+const string& GridPoint::getName() const {
+    return _grid->getName();
+}
+bool GridPoint::operator==(const GridPoint& rhs) const {
+    return (_grid->getName() == rhs._grid->getName()) &&
+        IntTuple::operator==(rhs);
+}
+bool GridPoint::operator<(const GridPoint& rhs) const {
+    return (_grid->getName() < rhs._grid->getName()) ? true :
+        (_grid->getName() > rhs._grid->getName()) ? false :
+        IntTuple::operator<(rhs);
+}
+bool GridPoint::isAheadOfInDir(const GridPoint& rhs, const IntTuple& dir) const {
+    return _grid->getName() == rhs._grid->getName() && // must be same var.
+        IntTuple::isAheadOfInDir(rhs, dir);
+}
+string GridPoint::makeStr() const {
+    return _grid->getName() + "(" +
+        makeDimValOffsetStr() + ")";
+}
+
+// Visit all expressions in all grids.
+void Grids::acceptToAll(ExprVisitor* ev) {
+    for (auto gp : *this) {
+        gp->acceptToAll(ev);
+    }
 }
 

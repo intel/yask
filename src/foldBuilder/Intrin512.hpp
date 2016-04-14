@@ -36,8 +36,12 @@ protected:
     set<string> definedCtrls; // control vars already defined.
 
     // Ctor.
-    Intrin512CppVecPrintHelper(VecInfoVisitor& vv) :
-        CppVecPrintHelper(vv) { }
+    Intrin512CppVecPrintHelper(VecInfoVisitor& vv,
+                               const string& varPrefix,
+                               const string& varType,
+                               const string& linePrefix,
+                               const string& lineSuffix) :
+        CppVecPrintHelper(vv, varPrefix, varType, linePrefix, lineSuffix) { }
 
     // Dtor.
     virtual ~Intrin512CppVecPrintHelper() { }
@@ -206,32 +210,32 @@ protected:
                         if (nused1 && nused2) {
                             os << " // Get " << nused1 << " element(s) from " << mv1Name <<
                                 " and " << nused2 << " from " << mv2Name << "." << endl;
-                            os << "realv_align(" << pvName << ", " << mv1Name <<
+                            os << _linePrefix << "realv_align(" << pvName << ", " << mv1Name <<
                                 ", " << mv2Name << ", " << count;
                             if (needMask)
                                 printMask(os, mask);
-                            os << ");" << endl;
+                            os << ")" << _lineSuffix;
                         }
 
                         // 1-var shift (rotate).
                         else if (nused1) {
                             os << " // Get " << nused1 << " element(s) from " << mv1Name <<
                                 "." << endl;
-                            os << "realv_align(" << pvName << ", " << mv1Name <<
+                            os << _linePrefix << "realv_align(" << pvName << ", " << mv1Name <<
                                 ", " << mv1Name << ", " << count;
                             if (needMask)
                                 printMask(os, mask);
-                            os << ");" << endl;
+                            os << ")" << _lineSuffix;
                         }
                         else {
                             assert(nused2);
                             os << " // Get " << nused2 << " element(s) from " << mv2Name <<
                                 "." << endl;
-                            os << "realv_align(" << pvName << ", " << mv2Name <<
+                            os << _linePrefix << "realv_align(" << pvName << ", " << mv2Name <<
                                 ", " << mv2Name << ", " << count;
                             if (needMask)
                                 printMask(os, mask);
-                            os << ");" << endl;
+                            os << ")" << _lineSuffix;
                         }
 
                         // Done w/the found elems.
@@ -316,15 +320,15 @@ protected:
                 // Create control if needed.
                 if (definedCtrls.count(nameStr) == 0) {
                     definedCtrls.insert(nameStr);
-                    os << "static const " << getVarType() <<
-                        " ctrl_" << nameStr << " = " << ctrlStr << ";" << endl;
+                    os << _linePrefix << "static const " << getVarType() <<
+                        " ctrl_" << nameStr << " = " << ctrlStr << _lineSuffix;
                 }
                 
                 // Permute command.
-                os << "realv_permute(" << pvName << ", ctrl_" << nameStr << ", " << mvName;
+                os << _linePrefix << "realv_permute(" << pvName << ", ctrl_" << nameStr << ", " << mvName;
                 if (needMask)
                     printMask(os, mask);
-                os << ");" << endl;
+                os << ")" << _lineSuffix;
 
                 // Done w/the found elems.
                 for (auto fei = foundElems.begin(); fei != foundElems.end(); fei++) {
@@ -347,8 +351,12 @@ protected:
     }
     
 public:
-    KncCppVecPrintHelper(VecInfoVisitor& vv) :
-        Intrin512CppVecPrintHelper(vv) { }
+    KncCppVecPrintHelper(VecInfoVisitor& vv,
+                         const string& varPrefix,
+                         const string& varType,
+                         const string& linePrefix,
+                         const string& lineSuffix) :
+        Intrin512CppVecPrintHelper(vv, varPrefix, varType, linePrefix, lineSuffix) { }
 };
 
 // Specialization for KNL, SKX, etc.
@@ -441,13 +449,13 @@ protected:
                     // Create control if needed.
                     if (definedCtrls.count(nameStr) == 0) {
                         definedCtrls.insert(nameStr);
-                        os << "static const " << getVarType() <<
-                            " ctrl_" << nameStr << " = " << ctrlStr << ";" << endl;
+                        os << _linePrefix << "static const " << getVarType() <<
+                            " ctrl_" << nameStr << " = " << ctrlStr << _lineSuffix;
                     }
                 
                     // Permute command.
-                    os << "realv_permute2(" << pvName << ", ctrl_" << nameStr << ", " <<
-                        mv1Name << ", " << mv2Name << ");" << endl;
+                    os << _linePrefix << "realv_permute2(" << pvName << ", ctrl_" << nameStr << ", " <<
+                        mv1Name << ", " << mv2Name << ")" << _lineSuffix;
 
                     // Done w/the found elems.
                     for (auto fei = foundElems.begin(); fei != foundElems.end(); fei++) {
@@ -477,6 +485,10 @@ protected:
     }
     
 public:
-    Avx512CppVecPrintHelper(VecInfoVisitor& vv) :
-        KncCppVecPrintHelper(vv) { }
+    Avx512CppVecPrintHelper(VecInfoVisitor& vv,
+                            const string& varPrefix,
+                            const string& varType,
+                            const string& linePrefix,
+                            const string& lineSuffix) :
+        KncCppVecPrintHelper(vv, varPrefix, varType, linePrefix, lineSuffix) { }
 };
