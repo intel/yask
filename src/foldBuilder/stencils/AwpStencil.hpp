@@ -240,7 +240,6 @@ public:
     }
     void define_stress_yz(GridIndex t, GridIndex x, GridIndex y, GridIndex z) {
 
-        // TODO: should the second value be mu(x-1, y, z)?
         GridValue mu_val = 2.0 /
             (mu(x,   y,   z  ) + mu(x+1, y,   z  ));
 
@@ -259,8 +258,6 @@ public:
         // define the value at t+1.
         stress_yz(t+1, x, y, z) == next_stress_yz;
     }
-
-    // TODO: other define_stress_* functions.
 
     // Call all the define_* functions.
     virtual void define(const IntTuple& offsets) {
