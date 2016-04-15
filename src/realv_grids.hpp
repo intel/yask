@@ -47,14 +47,14 @@ public:
     }
 
     // Initialize memory to incrementing values based on val.
-    virtual void set_inc(REAL val) {
+    virtual void set_diff(REAL val) {
 
         // make a realv pattern
         realv rn;
         for (int i = 0; i < VLEN; i++)
             rn.r[i] = REAL(i * VLEN + 1) * val / VLEN;
         
-        _gp->set_inc(rn);
+        _gp->set_diff(rn);
     }
 
     // Get number of elements with padding.

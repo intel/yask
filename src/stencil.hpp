@@ -263,7 +263,7 @@ public:
     void initDiff() {
         REAL v = 0.01;
         for (auto gp : gridPtrs) {
-            gp->set_inc(v);
+            gp->set_diff(v);
             v += 0.001;
         }
     }

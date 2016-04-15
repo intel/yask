@@ -107,12 +107,14 @@ public:
     }
 
     // Initialize memory: first element to value,
-    // second to 2*value, etc.
-    virtual void set_inc(T val) {
+    // second to 2*value, etc.; wrap around
+    // occasionally to avoid large numbers.
+    virtual void set_diff(T val) {
+        const idx_t wrap = 71; // prime number is good to use.
 
 #pragma omp parallel for
         for (idx_t ai = 0; ai < get_num_elems(); ai++)
-            _elems[ai] = val * (ai+1);
+            _elems[ai] = val * (ai % wrap + 1);
     }
 
     // Check for equality.

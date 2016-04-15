@@ -99,7 +99,13 @@ int main(int argc, char** argv)
     printf("*** WARNING: binary compiled with TRACE_INTRINSICS; ignore performance results.\n");
 #endif
 
-    printf("\nStencil name: " STENCIL_NAME "\n");
+    printf("\n"
+           "/------------------------------------------\\\n"
+           "|  Y.A.S.K. -- Yet Another Stencil Kernel  |\n"
+           "|            https://01.org/yask           |\n"
+           "|    Intel Corporation, copyright 2016     |\n"
+           "\\------------------------------------------/\n"
+           "\nStencil name: " STENCIL_NAME "\n");
 
 #ifdef __INTEL_CREW
     kmp_crew_create();

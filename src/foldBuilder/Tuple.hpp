@@ -424,28 +424,32 @@ public:
     }
 
     // Call the visitor lambda function at every point in the space defined by this.
-    // Visitation order is with first dimension varying first, i.e., a conceptual
+    // Visitation order is with first dimension in unit stride, i.e., a conceptual
     // "outer loop" iterates through last dimension, and an "inner loop" iterates
-    // through first dimension.
-    virtual void visitAllPoints(function<void (const Tuple&)> visitor) const {
+    // through first dimension. If 'firstInner' is false, it is done the opposite way.
+    virtual void visitAllPoints(function<void (const Tuple&)> visitor,
+                                bool firstInner = true) const {
 
         // Init lambda fn arg with *this.
         Tuple tp = *this;
 
         // Call recursive version.
-        visitAllPoints(visitor, size()-1, tp);
+        if (firstInner)
+            visitAllPoints(visitor, size()-1, tp, firstInner);
+        else
+            visitAllPoints(visitor, 0, tp, firstInner);
     }
     
 protected:
 
     // Handle recursion for public visitAllPoints(visitor).
     virtual void visitAllPoints(function<void (const Tuple&)> visitor,
-                                int curDimNum, Tuple& tp) const {
+                                int curDimNum, Tuple& tp,
+                                bool firstInner) const {
 
-        // Ready to call visitor, i.e., beyond first dimension?
-        if (curDimNum < 0) {
+        // Ready to call visitor, i.e., have we recursed beyond a dimension?
+        if (curDimNum < 0 || curDimNum >= size())
             visitor(tp);
-        }
         
         // Iterate along current dimension, and recurse to prev dimension.
         else {
@@ -453,11 +457,13 @@ protected:
             T dsize = getVal(dim);
             for (T i = 0; i < dsize; i++) {
                 tp.setVal(dim, i);
-                visitAllPoints(visitor, curDimNum - 1, tp);
+                if (firstInner)
+                    visitAllPoints(visitor, curDimNum - 1, tp, firstInner);
+                else
+                    visitAllPoints(visitor, curDimNum + 1, tp, firstInner);
             }
         }
     }
 };
 
-
-#endif // DIR_H
+#endif
