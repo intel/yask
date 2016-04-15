@@ -207,16 +207,16 @@ inline bool within_tolerance(T val, T ref, T epsilon) {
 #include "realv_grids.hpp"
 
 // Default grid layouts.
-// 3-d dims are 1=x, 2=y, 3=z.
-// 4-d dims are 1=n/t, 2=x, 3=y, 4=z.
+// 3D dims are 1=x, 2=y, 3=z.
+// 4D dims are 1=n/t, 2=x, 3=y, 4=z.
 // Last number in 'Map' layout has unit stride, e.g.,
 // Map321 & Map1432 have unit-stride in x.
-// Map123 & Map4123 have unit-stride in z.
+// Map123 & Map1234 have unit-stride in z.
 #ifndef MAP_4D
-#define MAP_4D Map1432
+#define MAP_4D Map1234
 #endif
 #ifndef MAP_3D
-#define MAP_3D Map321
+#define MAP_3D Map123
 #endif
 typedef RealvGrid_XYZ<MAP_3D> Grid_XYZ;
 typedef RealvGrid_NXYZ<MAP_4D> Grid_NXYZ;

@@ -68,17 +68,20 @@ order		=	4
 time_dim	=	1
 endif
 
-# how to fold vectors (x*y*z)
+# How to fold vectors (x*y*z).
+# Vectorization in dimensions perpendicular to the inner loop
+# (defined by BLOCK_LOOP_ARGS below) often works well.
 ifeq ($(real_bytes),4)
-fold		=	x=1,y=4,z=4
+fold		=	x=4,y=4,z=1
 else
-fold		=	x=1,y=2,z=4
+fold		=	x=4,y=2,z=1
 endif
 
-# how many vectors to compute at once.
+# How many vectors to compute at once (unrolling factor in
+# each dimension).
 cluster		=	x=1,y=1,z=1
 
-# heuristic for expression-size threshold in foldBuilder.
+# Heuristic for expression-size threshold in foldBuilder.
 expr_size	=	50
 
 # OMP schedule policy.
@@ -179,16 +182,16 @@ endif # compiler-specific
 
 # Outer loops break up the whole problem into smaller regions.
 OUTER_LOOP_ARGS		=	-dims 'dn,dx,dy,dz' -calcPrefix 'stencil->calc_'
-OUTER_LOOP_ARGS		+=	'loop(dn,dz,dy,dx) { calc(region); }'
+OUTER_LOOP_ARGS		+=	'loop(dn,dx,dy,dz) { calc(region); }'
 
 # Region loops break up a region using OpenMP threading into blocks.
 REGION_LOOP_ARGS	=     	-dims 'rn,rx,ry,rz' -ompSchedule $(omp_schedule)
-REGION_LOOP_ARGS	+=	'serpentine omp loop(rn,rz,ry,rx) { calc(block); }'
+REGION_LOOP_ARGS	+=	'serpentine omp loop(rn,rx,ry,rz) { calc(block); }'
 
 # Block loops break up a block into vector clusters.
 # Note: the indices at this level are by vector instead of element.
 BLOCK_LOOP_ARGS		=     	-dims 'bnv,bxv,byv,bzv'
-BLOCK_LOOP_ARGS		+=	'loop(bnv) { crew loop(bzv) { loop(byv) {' $(CLUSTER_LOOP_OPTS) 'loop(bxv) { calc(cluster); } } } }'
+BLOCK_LOOP_ARGS		+=	'loop(bnv) { crew loop(bxv) { loop(byv) {' $(CLUSTER_LOOP_OPTS) 'loop(bzv) { calc(cluster); } } } }'
 
 
 # compile with model_cache=1 or 2 to check prefetching.

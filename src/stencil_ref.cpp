@@ -39,12 +39,12 @@ void calc_steps_ref(StencilContext& context, Stencils& stencils, const int nreps
             for (idx_t n = 0; n < context.dn; n++) {
 
 #pragma omp parallel for
-                for(idx_t iz = 0; iz < context.dz; iz++) {
+                for(idx_t ix = 0; ix < context.dx; ix++) {
 
                     CREW_FOR_LOOP
                         for(idx_t iy = 0; iy < context.dy; iy++) {
 
-                            for(idx_t ix = 0; ix < context.dx; ix++) {
+                            for(idx_t iz = 0; iz < context.dz; iz++) {
 
                                 TRACE_MSG("%s.calc_scalar(%d, %d, %d, %d, %d)", 
                                           stencil->get_name().c_str(), t, n, ix, iy, iz);
