@@ -100,11 +100,11 @@ int main(int argc, char** argv)
 #endif
 
     printf("\n"
-           "/------------------------------------------\\\n"
-           "|  Y.A.S.K. -- Yet Another Stencil Kernel  |\n"
-           "|            https://01.org/yask           |\n"
-           "|    Intel Corporation, copyright 2016     |\n"
-           "\\------------------------------------------/\n"
+           "┌──────────────────────────────────────────┐\n"
+           "│  Y.A.S.K. -- Yet Another Stencil Kernel  │\n"
+           "│            https://01.org/yask           │\n"
+           "│    Intel Corporation, copyright 2016     │\n"
+           "└──────────────────────────────────────────┘\n"
            "\nStencil name: " STENCIL_NAME "\n");
 
 #ifdef __INTEL_CREW

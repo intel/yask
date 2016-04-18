@@ -37,17 +37,16 @@ protected:
     double _dxyz;               // dx, dy, dz factor.
     bool _deferCoeff;           // look up coefficients later.
 
-    Grid_4d pressure;          // time-varying 3D pressure grid.
-    Grid_3d vel;               // constant 3D vel grid.
+    Grid pressure;          // time-varying 3D pressure grid.
+    Grid vel;               // constant 3D vel grid.
     
 public:
 
     Iso3dfdStencil(int order=8, double dxyz=50.0) :
-        StencilBase(order), _coeff(0), _dxyz(dxyz), _deferCoeff(false),
-        INIT_GRID_4D(pressure, t, x, y, z),
-        INIT_GRID_3D(vel, x, y, z)
+        StencilBase(order), _coeff(0), _dxyz(dxyz), _deferCoeff(false)
     {
-        setOrder(order);
+        INIT_GRID_4D(pressure, t, x, y, z);
+        INIT_GRID_3D(vel, x, y, z);
     }
 
     virtual ~Iso3dfdStencil() {

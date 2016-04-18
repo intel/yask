@@ -34,18 +34,18 @@ class AwpStencil : public StencilBase {
 protected:
 
     // Time-varying 3D-spatial velocity grids.
-    Grid_4d vel_x, vel_y, vel_z;
+    Grid vel_x, vel_y, vel_z;
 
     // Time-varying 3D-spatial Stress grids.
-    Grid_4d stress_xx, stress_yy, stress_zz;
-    Grid_4d stress_xy, stress_xz, stress_yz;
+    Grid stress_xx, stress_yy, stress_zz;
+    Grid stress_xy, stress_xz, stress_yz;
 
     // 3D-spatial Lame' coefficients.
-    Grid_3d lambda, rho, mu;
+    Grid lambda, rho, mu;
 
     // Sponge coefficients.
     // (Most of these will be 1.0.)
-    Grid_3d sponge;
+    Grid sponge;
 
     // Spatial FD coefficients.
     const double c1 = 9.0/8.0;
@@ -59,24 +59,24 @@ protected:
 public:
 
     AwpStencil() :
-        StencilBase(4), // min halo diameter needed.
-
+        StencilBase(4) // min halo diameter needed.
+    {
         // Specify the dimensions of each grid.
         // (This names the dimensions; it does not specify their sizes.)
-        INIT_GRID_4D(vel_x, t, x, y, z),
-        INIT_GRID_4D(vel_y, t, x, y, z),
-        INIT_GRID_4D(vel_z, t, x, y, z),
-        INIT_GRID_4D(stress_xx, t, x, y, z),
-        INIT_GRID_4D(stress_yy, t, x, y, z),
-        INIT_GRID_4D(stress_zz, t, x, y, z),
-        INIT_GRID_4D(stress_xy, t, x, y, z),
-        INIT_GRID_4D(stress_xz, t, x, y, z),
-        INIT_GRID_4D(stress_yz, t, x, y, z),
-        INIT_GRID_3D(lambda, x, y, z),
-        INIT_GRID_3D(rho, x, y, z),
-        INIT_GRID_3D(mu, x, y, z),
-        INIT_GRID_3D(sponge, x, y, z)
-    { }
+        INIT_GRID_4D(vel_x, t, x, y, z);
+        INIT_GRID_4D(vel_y, t, x, y, z);
+        INIT_GRID_4D(vel_z, t, x, y, z);
+        INIT_GRID_4D(stress_xx, t, x, y, z);
+        INIT_GRID_4D(stress_yy, t, x, y, z);
+        INIT_GRID_4D(stress_zz, t, x, y, z);
+        INIT_GRID_4D(stress_xy, t, x, y, z);
+        INIT_GRID_4D(stress_xz, t, x, y, z);
+        INIT_GRID_4D(stress_yz, t, x, y, z);
+        INIT_GRID_3D(lambda, x, y, z);
+        INIT_GRID_3D(rho, x, y, z);
+        INIT_GRID_3D(mu, x, y, z);
+        INIT_GRID_3D(sponge, x, y, z);
+    }
 
     // Adjustment for sponge layer.
     void adjust_for_sponge(GridValue& next_vel_x, GridIndex x, GridIndex y, GridIndex z) {

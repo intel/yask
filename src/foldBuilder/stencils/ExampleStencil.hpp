@@ -32,7 +32,7 @@ class ExampleStencil : public StencilBase {
 protected:
 
     // Generic time-varying spatial-3D grid.
-    Grid_4d grid;
+    Grid grid;
     
     // Return a coefficient.  Note: This returns completely fabricated
     // values only for illustrative purposes; they have no mathematical
@@ -51,8 +51,10 @@ protected:
     
 public:
     ExampleStencil(int order=2) :
-        StencilBase(order),
-        INIT_GRID_4D(grid, t, x, y, z) { }
+        StencilBase(order)
+    {
+        INIT_GRID_4D(grid, t, x, y, z);
+    }
 
     // Define equation at t+1 based on values at t.
     virtual void define(const IntTuple& offsets) {

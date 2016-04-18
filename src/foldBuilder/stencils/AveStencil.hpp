@@ -31,12 +31,14 @@ IN THE SOFTWARE.
 class AveStencil : public StencilBase {
 
 protected:
-    Grid_5d multi_grid;            // N time-varying 3D grids.
+    Grid multi_grid;            // N time-varying 3D grids.
     
 public:
     AveStencil(int order=2) :
-        StencilBase(order),
-        INIT_GRID_5D(multi_grid, t, n, x, y, z) { }
+        StencilBase(order)
+    {
+        INIT_GRID_5D(multi_grid, t, n, x, y, z);
+    }
 
     // Define equation for grid n at t as average of
     // (order+1)^3 cube of values from grid n at t-1.

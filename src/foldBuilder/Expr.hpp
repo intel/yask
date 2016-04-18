@@ -377,14 +377,6 @@ typedef map<GridPoint, ExprPtr> Point2Exprs;
 // to allow modification or conditional testing, etc.
 typedef int GridIndex;
 
-// A list of grids.
-class Grids : public vector<Grid*> {
-public:
-
-    // Visit all expressions in all grids.
-    virtual void acceptToAll(ExprVisitor* ev);
-};
-
 // A base class for a collection of GridPoints.
 // Dims in the IntTuple describe the grid, but values
 // in the IntTuple are ignored.
@@ -406,29 +398,13 @@ protected:
     }
 
 public:
-    // Construct a grid with a given name and
-    // register it in the given collection, if provided.
-    Grid(const string& name,
-         Grids* grids = NULL) : _name(name)
-    {
-        if (grids)
-            (*grids).push_back(this);
-    }
-
+    Grid() { }
     virtual ~Grid() { }
 
-    const string& getName() const {
-        return _name;
-    }
+    // Name accessors.
+    const string& getName() const { return _name; }
+    void setName(const string& name) { _name = name; }
 
-    // Create an expression to a specific point in the grid.
-    virtual GridPointPtr operator()(const vector<int>& points) {
-        IntTuple pt = *this;       // to copy names.
-        pt.setVals(points);
-        GridPointPtr gpp = make_shared<GridPoint>(this, pt);
-        return addPoint(gpp);
-    }
-    
     // Point accessors.
     const GridPointPtrSet& getPoints() const { return _points; }
     GridPointPtrSet& getPoints() { return _points; }
@@ -462,111 +438,73 @@ public:
             break;
         }
     }
-};
-
-// A 1D Grid.
-class Grid_1d : public Grid {
-public:
-    Grid_1d(const string& name,
-            const string& d1name,
-            Grids* grids = NULL) :
-        Grid(name, grids) {
-        addDim(d1name, 1);
-    }
 
     // Create an expression to a specific point in the grid.
+    // Note that this doesn't actually 'read' a value; it's just an expression.
+    virtual GridPointPtr operator()(const vector<int>& points) {
+
+        // check for correct number of indices.
+        size_t n = points.size();
+        if (n != size()) {
+            cerr << "Error: attempt to access " << size() <<
+                "-D grid '" << _name << "' with " << n << " indices.\n";
+            exit(1);
+        }
+
+        IntTuple pt = *this;       // to copy names.
+        pt.setVals(points);
+        GridPointPtr gpp = make_shared<GridPoint>(this, pt);
+        return addPoint(gpp);
+    }
+    
+    // Create an expression to a specific point in a 1D grid.
     virtual GridPointPtr operator()(int i1) {
         vector<int> vals = { i1 };
-        return Grid::operator()(vals);
-    }
-};
- 
-// A 2D Grid.
-class Grid_2d : public Grid_1d {
-public:
-    Grid_2d(const string& name,
-            const string& d1name,
-            const string& d2name,
-            Grids* grids = NULL) :
-        Grid_1d(name, d1name, grids) {
-        addDim(d2name, 1);
+        return operator()(vals);
     }
 
-    // Create an expression to a specific point in the grid.
+    // Create an expression to a specific point in a 2D grid.
     virtual GridPointPtr operator()(int i1, int i2) {
         vector<int> vals = { i1, i2 };
-        return Grid::operator()(vals);
-    }
-};
- 
-// A 3D Grid.
-class Grid_3d : public Grid_2d {
-public:
-    Grid_3d(const string& name,
-            const string& d1name,
-            const string& d2name,
-            const string& d3name,
-            Grids* grids = NULL) :
-        Grid_2d(name, d1name, d2name, grids) {
-        addDim(d3name, 1);
+        return operator()(vals);
     }
 
-    // Create an expression to a specific point in the grid.
+    // Create an expression to a specific point in a 3D grid.
     virtual GridPointPtr operator()(int i1, int i2, int i3) {
         vector<int> vals = { i1, i2, i3 };
         return Grid::operator()(vals);
     }
-};
- 
-// A 4D Grid.
-class Grid_4d : public Grid_3d {
-public:
-    Grid_4d(const string& name,
-            const string& d1name,
-            const string& d2name,
-            const string& d3name,
-            const string& d4name,
-            Grids* grids = NULL) :
-        Grid_3d(name, d1name, d2name, d3name, grids) {
-        addDim(d4name, 1);
-    }
 
-    // Create an expression to a specific point in the grid.
+    // Create an expression to a specific point in a 4D grid.
     virtual GridPointPtr operator()(int i1, int i2, int i3, int i4) {
         vector<int> vals = { i1, i2, i3, i4 };
         return Grid::operator()(vals);
     }
-};
- 
-// A 5D Grid.
-class Grid_5d : public Grid_4d {
-public:
-    Grid_5d(const string& name,
-            const string& d1name,
-            const string& d2name,
-            const string& d3name,
-            const string& d4name,
-            const string& d5name,
-            Grids* grids = NULL) :
-        Grid_4d(name, d1name, d2name, d3name, d4name, grids) {
-        addDim(d5name, 1);
-    }
 
-    // Create an expression to a specific point in the grid.
+    // Create an expression to a specific point in a 5D grid.
     virtual GridPointPtr operator()(int i1, int i2, int i3, int i4, int i5) {
         vector<int> vals = { i1, i2, i3, i4, i5 };
         return Grid::operator()(vals);
     }
 };
- 
+
+// A list of grids.
+class Grids : public vector<Grid*> {
+public:
+
+    // Visit all expressions in all grids.
+    virtual void acceptToAll(ExprVisitor* ev);
+};
+
 // Convenience macros for initializing grids in stencil ctors.
 // Each names the grid according to the variable name and adds it
 // to the default '_grids' collection.
-#define INIT_GRID_1D(gvar, d1) gvar(#gvar, #d1, &_grids)
-#define INIT_GRID_2D(gvar, d1, d2) gvar(#gvar, #d1, #d2, &_grids)
-#define INIT_GRID_3D(gvar, d1, d2, d3) gvar(#gvar, #d1, #d2, #d3, &_grids)
-#define INIT_GRID_4D(gvar, d1, d2, d3, d4) gvar(#gvar, #d1, #d2, #d3, #d4, &_grids)
-#define INIT_GRID_5D(gvar, d1, d2, d3, d4, d5) gvar(#gvar, #d1, #d2, #d3, #d4, #d5, &_grids)
+#define INIT_GRID(gvar) _grids.push_back(&gvar); gvar.setName(#gvar)
+#define INIT_GRID_1D(gvar, d1) INIT_GRID(gvar); gvar.addDim(#d1, 1)
+#define INIT_GRID_2D(gvar, d1, d2) INIT_GRID_1D(gvar, d1); gvar.addDim(#d2, 1)
+#define INIT_GRID_3D(gvar, d1, d2, d3) INIT_GRID_2D(gvar, d1, d2); gvar.addDim(#d3, 1)
+#define INIT_GRID_4D(gvar, d1, d2, d3, d4) INIT_GRID_3D(gvar, d1, d2, d3); gvar.addDim(#d4, 1)
+#define INIT_GRID_5D(gvar, d1, d2, d3, d4, d5) INIT_GRID_4D(gvar, d1, d2, d3, d4); gvar.addDim(#d5, 1)
 
 // Convenience macro for getting one offset from the 'offsets' tuple.
 #define GET_OFFSET(ovar)                         \
