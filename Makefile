@@ -264,7 +264,7 @@ src/stencil_macros.hpp: foldBuilder
 
 src/stencil_code.hpp: foldBuilder
 	./$< $(FB_FLAGS1) $(FB_FLAGS2) -p$(FB_TARGET) > $@
-	gindent $@ || indent $@
+	- gindent $@ || indent $@ || echo "note: no indent program found"
 
 headers: $(GEN_HEADERS)
 	@ echo 'Header files generated.'

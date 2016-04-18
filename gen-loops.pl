@@ -746,12 +746,14 @@ sub processCode($) {
     if (system("which $indent &> /dev/null")) {
         $indent = 'gindent';
         if (system("which $indent &> /dev/null")) {
-            die "cannot find an indent utility\n";
+            warn "note: cannot find an indent utility--output will be unformatted.\n";
+            undef $indent;
         }
     }
 
     # open output stream.
-    my $cmd = "$indent -fca -o $OPT{output} -";
+    my $cmd = defined $indent ? "$indent -fca -o $OPT{output} -" :
+        "cat > $OPT{output}";
     open OUT, "| $cmd" or die "error: cannot run '$cmd'.\n";
 
     # header.
@@ -760,11 +762,13 @@ sub processCode($) {
     " * Generated automatically from the following pseudo-code:\n *\n";
 
     # format input.
-    my $cmd2 = "echo '$codeString' | $indent -";
+    my $cmd2 = "echo '$codeString'";
+    $cmd2 .= " | $indent -" if (defined $indent);
     open IN, "$cmd2 |" or die "error: cannot run '$cmd2'.\n";
     while (<IN>) {
         print OUT " * $_";
     }
+    close IN;
     print OUT " *\n */\n";
 
     # print out code.
