@@ -25,6 +25,9 @@ IN THE SOFTWARE.
 
 ////////// Support for C++ scalar and vector-code generation //////////////
 
+#ifndef CPP_HPP
+#define CPP_HPP
+
 #include "Vec.hpp"
 
 /////////// Scalar code /////////////
@@ -33,11 +36,13 @@ IN THE SOFTWARE.
 class CppPrintHelper : public PrintHelper {
 
 public:
-    CppPrintHelper(const string& varPrefix,
+    CppPrintHelper(const CounterVisitor* cv,
+                   const string& varPrefix,
                    const string& varType,
                    const string& linePrefix,
                    const string& lineSuffix) :
-        PrintHelper(varPrefix, varType, linePrefix, lineSuffix) { }
+        PrintHelper(cv, varPrefix, varType,
+                    linePrefix, lineSuffix) { }
     virtual ~CppPrintHelper() { }
 
     // Format a real, preserving precision.
@@ -85,11 +90,14 @@ class CppVecPrintHelper : public VecPrintHelper {
 
 public:
     CppVecPrintHelper(VecInfoVisitor& vv,
+                      bool allowUnalignedLoads,
+                      const CounterVisitor* cv,
                       const string& varPrefix,
                       const string& varType,
                       const string& linePrefix,
                       const string& lineSuffix) :
-        VecPrintHelper(vv, varPrefix, varType, linePrefix, lineSuffix) { }
+        VecPrintHelper(vv, allowUnalignedLoads, cv,
+                       varPrefix, varType, linePrefix, lineSuffix) { }
 
 protected:
     map<string,string> _codes; // code expressions defined.
@@ -146,13 +154,18 @@ protected:
 
     // Print call for a point.
     virtual void printPointCall(ostream& os, const GridPoint& gp,
-                                const string& fname, string optArg = "") const {
+                                const string& fname, string opt1stArg = "",
+                                bool isNorm = true) const {
         os << "context." << gp.getName() << "->" << fname << "(";
-        if (optArg.length()) os << optArg << ", ";
-        os << gp.makeDimValNormOffsetStr(getFold()) << ", __LINE__)";
+        if (opt1stArg.length()) os << opt1stArg << ", ";
+        if (isNorm)
+            os << gp.makeDimValNormOffsetStr(getFold());
+        else
+            os << gp.makeDimValOffsetStr();
+        os << ", __LINE__)";
     }
     
-    // Print required memory read.
+    // Print aligned memory read.
     virtual string printAlignedVecRead(ostream& os, const GridPoint& gp) {
         printPointComment(os, gp, "Read aligned vector block from");
 
@@ -164,7 +177,24 @@ protected:
         return mvName;
     }
 
-    // Print memory write.
+    // Print unaliged memory read.
+    // Assumes this results in same values as printUnalignedVec().
+    virtual string printUnalignedVecRead(ostream& os, const GridPoint& gp) {
+        printPointComment(os, gp, "Read unaligned vector block from");
+        os << " // NOTICE: Assumes constituent vectors are consecutive in memory!" << endl;
+            
+        // Make a var.
+        string mvName = makeVarName();
+        os << _linePrefix << getVarType() << " " << mvName << _lineSuffix;
+        
+        // Read memory.
+        os << _linePrefix << mvName << ".loadUnalignedFrom((const " << getVarType() << "*)";
+        printPointCall(os, gp, "getElemPtr", "", false);
+        os << ")" << _lineSuffix;
+        return mvName;
+    }
+
+    // Print aligned memory write.
     virtual string printAlignedVecWrite(ostream& os, const GridPoint& gp,
                                         const string& val) {
         printPointComment(os, gp, "Write aligned vector block to");
@@ -176,6 +206,8 @@ protected:
     }
     
     // Print conversion from memory vars to point var gp if needed.
+    // This calls printUnalignedVecCtor(), which can be overloaded
+    // by derived classes.
     virtual string printUnalignedVec(ostream& os, const GridPoint& gp) {
         printPointComment(os, gp, "Construct unaligned vector block from");
 
@@ -190,13 +222,20 @@ protected:
 
     // Print per-element construction for one point var pvName from elems.
     virtual void printUnalignedVecSimple(ostream& os, const GridPoint& gp,
-                                         const string& pvName, string linePrefix) {
+                                         const string& pvName, string linePrefix,
+                                         const set<size_t>* doneElems = 0) {
 
         // just assign each element in vector separately.
         auto& elems = _vv._vblk2elemLists[gp];
         assert(elems.size() > 0);
         for (size_t pelem = 0; pelem < elems.size(); pelem++) {
-            auto& ve = elems[pelem]; // one vector element from gp.
+
+            // skip if done.
+            if (doneElems && doneElems->count(pelem))
+                continue;
+
+            // one vector element from gp.
+            auto& ve = elems[pelem];
 
             // Look up existing input var.
             assert(_readyPoints.count(ve._vec));
@@ -263,3 +302,5 @@ public:
         }
     }
 };
+
+#endif

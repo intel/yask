@@ -26,7 +26,8 @@ IN THE SOFTWARE.
 /////////////// Main vector-folding code-generation code. /////////////
 
 // Generation code.
-#include "Intrin512.hpp"
+#include "ExprUtils.hpp"
+#include "CppIntrin.hpp"
 
 // Stencils.
 #include "ExampleStencil.hpp"
@@ -41,6 +42,7 @@ bool printMacros = false;
 bool printCpp = false;
 bool printKncCpp = false;
 bool print512Cpp = false;
+bool print256Cpp = false;
 int vlenForStats = 0;
 StencilBase* stencilFunc = NULL;
 string shapeName;
@@ -49,6 +51,8 @@ IntTuple clusterOptions;                  // cluster sizes.
 int exprSize = 50;
 bool deferCoeff = false;
 int order = 2;
+bool firstInner = true;
+bool allowUnalignedLoads = false;
 
 void usage(const string& cmd) {
     cout << "Options:\n"
@@ -61,6 +65,8 @@ void usage(const string& cmd) {
         " -es <expr-size>       set heuristic for expression-size threshold (default=" << exprSize << ").\n"
         " -fold <dim>=<size>,...  set number of elements in each dimension in a vector block.\n"
         " -cluster <dim>=<size>,... set number of values to evaluate in each dimension.\n"
+        " -lus                  make last dimension of fold unit stride (instead of first).\n"
+        " -aul                  allow simple unaligned loads (memory layout MUST be compatible).\n"
         "\n"
         //" -ps <vec-len>      print stats for all folding options for given vector length.\n"
         " -ph                print human-readable scalar pseudo-code for one point.\n"
@@ -69,6 +75,7 @@ void usage(const string& cmd) {
         " -pcpp              print C++ stencil functions.\n"
         " -pknc              print C++ stencil functions for KNC ISA.\n"
         " -p512              print C++ stencil functions for CORE AVX-512 & MIC AVX-512 ISAs.\n"
+        " -p256              print C++ stencil functions for CORE AVX & AVX2 ISAs.\n"
         "\n"
         "Examples:\n"
         " " << cmd << " -st iso3dfd -or 8 -fold x=4,y=4 -pscpp\n"
@@ -98,6 +105,11 @@ void parseOpts(int argc, const char* argv[])
                 printPOVRay = true;
             else if (opt == "-dc")
                 deferCoeff = true;
+            else if (opt == "-lus")
+                firstInner = false;
+            else if (opt == "-aul")
+                allowUnalignedLoads = true;
+            
             else if (opt == "-pm")
                 printMacros = true;
             else if (opt == "-pcpp")
@@ -109,6 +121,10 @@ void parseOpts(int argc, const char* argv[])
             else if (opt == "-p512") {
                 printCpp = true;
                 print512Cpp = true;
+            }
+            else if (opt == "-p256") {
+                printCpp = true;
+                print256Cpp = true;
             }
             
             // add any more options w/o values above.
@@ -247,7 +263,7 @@ void parseOpts(int argc, const char* argv[])
 void addComment(ostream& os, Grid* gp) {
 
     // Use a simple human-readable visitor to create a comment.
-    PrintHelper ph("temp", "", " // ", ".\n");
+    PrintHelper ph(0, "temp", "", " // ", ".\n");
     PrintVisitorTopDown commenter(os, ph);
     gp->acceptToFirst(&commenter);
 }
@@ -264,6 +280,9 @@ int main(int argc, const char* argv[]) {
     // parse options.
     parseOpts(argc, argv);
 
+    // Set default fold ordering.
+    IntTuple::setDefaultFirstInner(firstInner);
+    
     // Reference to the grids in the stencil.
     Grids& grids = stencilFunc->getGrids();
 
@@ -297,6 +316,7 @@ int main(int argc, const char* argv[]) {
     }
 
     // Create final fold lengths based on cmd-line options.
+    IntTuple foldLengthsGT1;    // fold dimensions > 1.
     for (auto dim : foldOptions.getDims()) {
         int sz = foldOptions.getVal(dim);
         int* p = foldLengths.lookup(dim);
@@ -307,8 +327,23 @@ int main(int argc, const char* argv[]) {
             exit(1);
         }
         *p = sz;
+        if (sz > 1)
+            foldLengthsGT1.addDim(dim, sz);
+            
     }
     cerr << "Vector-fold dimensions: " << foldLengths.makeDimValStr(" * ") << endl;
+
+    // Checks for unaligned loads.
+    if (allowUnalignedLoads) {
+        if (foldLengthsGT1.size() > 1) {
+            cerr << "Error: attempt to allow unaligned loads when there are " <<
+                foldLengthsGT1.size() << " dimensions in the vector-fold that are > 1." << endl;
+            exit(1);
+        }
+        else if (foldLengthsGT1.size() > 0)
+            cerr << "Notice: memory layout MUST be with unit-stride in " <<
+                foldLengthsGT1.makeDimStr() << " dimension!" << endl;
+    }
 
     // Create final cluster lengths based on cmd-line options.
     for (auto dim : clusterOptions.getDims()) {
@@ -347,14 +382,50 @@ int main(int argc, const char* argv[]) {
             stencilFunc->define(offsets);
         });
 
-    // Determine number of FP ops.
-    // Visit only first expression in each, since we don't want clustering.
-    FpOpCounterVisitor fpops;
-    for (auto gp : grids)
-        gp->acceptToFirst(&fpops);
-    int numFpOps = fpops.getNumOps();
-    cerr << numFpOps << " FP op(s) required per point (as written)." << endl;
+    // Get some stats and eliminate common sub-expressions.
+    int numFpOps = 0;
+    for (int j = 0; j < 2; j++) {
+        bool doCseElim = j > 0;
+        string step = doCseElim ? "after CSE elimination" : "as written";
+        
+        for (int i = 0; i < 2; i++) {
+            bool doCluster = i > 0;
+            if (doCluster && clusterLengths.product() == 1)
+                continue;
+            string descr = doCluster ? "cluster" : "fold";
+        
+            // Eliminate the CSEs.
+            if (doCseElim) {
+                CseElimVisitor csee;
+                for (auto gp : grids) {
+                    if (doCluster)
+                        gp->acceptToAll(&csee);
+                    else
+                        gp->acceptToFirst(&csee);
+                }
+                cerr << csee.getNumReplaced() << " CSE(s) eliminated in " << descr << "." << endl;
+            }
 
+            // Determine number of FP ops.
+            CounterVisitor cv;
+            for (auto gp : grids) {
+                if (doCluster)
+                    gp->acceptToAll(&cv);
+                else
+                    gp->acceptToFirst(&cv);
+            }
+            cerr << "Expression stats per " << descr << " " << step << ":" << endl <<
+                "  " << cv.getNumNodes() << " nodes." << endl <<
+                "  " << cv.getNumReads() << " grid reads." << endl <<
+                "  " << cv.getNumWrites() << " grid writes." << endl <<
+                "  " << cv.getNumOps() << " math operations." << endl;
+
+            // Save final number of FP ops per point.
+            if (!doCluster)
+                numFpOps = cv.getNumOps();
+        }
+    }
+    
     // Human-readable output.
     if (printPseudo) {
 
@@ -371,8 +442,10 @@ int main(int argc, const char* argv[]) {
 
             cout << endl << "////// Grid '" << gp->getName() <<
                 "' //////" << endl;
-            
-            PrintHelper ph("temp", "real", " ", ".\n");
+
+            CounterVisitor cv;
+            gp->acceptToFirst(&cv);
+            PrintHelper ph(&cv, "temp", "real", " ", ".\n");
 
             cout << "// Top-down stencil calculation:" << endl;
             PrintVisitorTopDown pv1(cout, ph);
@@ -430,7 +503,7 @@ int main(int argc, const char* argv[]) {
             cout << endl << "class Stencil_" << gname << " {" << endl;
 
             // Ops for just this grid.
-            FpOpCounterVisitor fpops;
+            CounterVisitor fpops;
             gp->acceptToFirst(&fpops);
             
             // Example computation.
@@ -442,7 +515,9 @@ int main(int argc, const char* argv[]) {
             // Scalar code.
             {
                 // C++ scalar print assistant.
-                CppPrintHelper* sp = new CppPrintHelper("temp", "REAL", " ", ";\n");
+                CounterVisitor cv;
+                gp->acceptToFirst(&cv);
+                CppPrintHelper* sp = new CppPrintHelper(&cv, "temp", "REAL", " ", ";\n");
             
                 // Stencil-calculation code.
                 // Function header.
@@ -472,17 +547,30 @@ int main(int argc, const char* argv[]) {
             // for each grid access node in the AST, the vectors
             // needed are determined and saved in the visitor.
             {
+                // Create vector info.
                 VecInfoVisitor vv(foldLengths);
                 gp->acceptToAll(&vv);
+
+                // Reorder based on vector info.
+                ExprReorderVisitor erv(vv);
+                gp->acceptToAll(&erv);
             
                 // C++ vector print assistant.
+                CounterVisitor cv;
+                gp->acceptToFirst(&cv);
                 CppVecPrintHelper* vp = NULL;
                 if (print512Cpp)
-                    vp = new Avx512CppVecPrintHelper(vv, "temp_vec", "realv", " ", ";\n");
+                    vp = new CppAvx512PrintHelper(vv, allowUnalignedLoads, &cv,
+                                                  "temp_vec", "realv", " ", ";\n");
+                else if (print256Cpp)
+                    vp = new CppAvx256PrintHelper(vv, allowUnalignedLoads, &cv,
+                                                  "temp_vec", "realv", " ", ";\n");
                 else if (printKncCpp)
-                    vp = new KncCppVecPrintHelper(vv, "temp_vec", "realv", " ", ";\n");
+                    vp = new CppKncPrintHelper(vv, allowUnalignedLoads, &cv,
+                                               "temp_vec", "realv", " ", ";\n");
                 else
-                    vp = new CppVecPrintHelper(vv, "temp_vec", "realv", " ", ";\n");
+                    vp = new CppVecPrintHelper(vv, allowUnalignedLoads, &cv,
+                                               "temp_vec", "realv", " ", ";\n");
             
                 // Stencil-calculation code.
                 // Function header.
@@ -501,6 +589,15 @@ int main(int argc, const char* argv[]) {
                 cout << fnType << " calc_vector(StencilContext& context, " <<
                     gp->makeDimStr(", ", "idx_t ", "v") << ") {" << endl;
 
+                // Element indices.
+                cout << endl << " // Un-normalized indices." << endl;
+                for (auto dim : gp->getDims()) {
+                    auto p = foldLengths.lookup(dim);
+                    cout << " idx_t " << dim << " = " << dim << "v";
+                    if (p) cout << " * " << *p;
+                    cout << ";" << endl;
+                }
+                
                 // Code generator visitor.
                 // The visitor is accepted at all nodes in the AST;
                 // for each node in the AST, code is generated and
@@ -654,6 +751,10 @@ int main(int argc, const char* argv[]) {
             cout << "#define VLEN_" << ucDim << " (" << foldLengths.getVal(dim) << ")" << endl;
         }
         cout << "#define VLEN (" << foldLengths.product() << ")" << endl;
+        cout << "#define VLEN_FIRST_DIM_IS_UNIT_STRIDE (" <<
+            (IntTuple::getDefaultFirstInner() ? 1 : 0) << ")" << endl;
+        cout << "#define USING_UNALIGNED_LOADS (" <<
+            (allowUnalignedLoads ? 1 : 0) << ")" << endl;
 
         cout << endl;
         cout << "// Cluster of vector folds: " << clusterLengths.makeDimValStr(" * ") << endl;

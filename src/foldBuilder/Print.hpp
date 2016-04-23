@@ -23,9 +23,12 @@ IN THE SOFTWARE.
 
 *****************************************************************************/
 
-//////////// Generic Printer classes /////////////
+//////////// Generic expression-printer classes /////////////
 
-#include "Visitor.hpp"
+#ifndef PRINT_HPP
+#define PRINT_HPP
+
+#include "ExprUtils.hpp"
 
 using namespace std;
 
@@ -34,17 +37,20 @@ class PrintHelper {
     int _varNum;                // current var number.
 
 protected:
+    const CounterVisitor* _cv;  // counter info.
     string _varPrefix;          // first part of var name.
     string _varType;            // type, if any, of var.
     string _linePrefix;         // prefix for each line.
     string _lineSuffix;         // suffix for each line.
 
 public:
-    PrintHelper(const string& varPrefix,
+    PrintHelper(const CounterVisitor* cv,
+                const string& varPrefix,
                 const string& varType,
                 const string& linePrefix,
                 const string& lineSuffix) :
-        _varNum(1), _varPrefix(varPrefix), _varType(varType),
+        _varNum(1), _cv(cv),
+        _varPrefix(varPrefix), _varType(varType),
         _linePrefix(linePrefix), _lineSuffix(lineSuffix) { }
 
     virtual ~PrintHelper() { }
@@ -53,6 +59,22 @@ public:
     virtual void setVarType(const string& varType) { _varType = varType; }
     virtual const string& getLinePrefix() const { return _linePrefix; }
     virtual const string& getLineSuffix() const { return _lineSuffix; }
+    const CounterVisitor* getCounters() const { return _cv; }
+
+    // Return count from counter visitor.
+    int getCount(Expr* ep) {
+        if (!_cv)
+            return 0;
+        return _cv->getCount(ep);
+    }
+
+    // Return amount of count over 1.
+    int getNumCommon(Expr* ep) {
+        if (!_cv)
+            return 0;
+        int c = _cv->getCount(ep);
+        return (c <= 1) ? 0 : c-1;
+    }
     
     // Make and return next var name.
     virtual string makeVarName() {
@@ -88,7 +110,7 @@ public:
     // The 'os' parameter is provided for derived types that
     // need to write intermediate code to a stream.
     virtual string writeToPoint(ostream& os, const GridPoint& gp, const string& val) {
-        return gp.makeStr() + " = " + val;
+        return gp.makeStr() + " == " + val;
     }
 };
 
@@ -100,7 +122,7 @@ protected:
     PrintHelper& _ph;           // used to format items for printing.
 
     // After visiting an expression, the part of the result not written to _os
-    // is stored in _exprStr. This is needed because a visitor doesn't return a value.
+    // is stored in _exprStr.
     string _exprStr;
 
 public:
@@ -125,32 +147,40 @@ public:
 };
 
 // Outputs a simple, human-readable version of the AST
-// in a top-down fashion on one line.
+// in a top-down fashion. Expressions will be written to 'os',
+// and anything 'left over' will be left in '_exprStr'.
 class PrintVisitorTopDown : public PrintVisitorBase {
-
+    int _numCommon;
+    
 public:
     PrintVisitorTopDown(ostream& os, PrintHelper& ph) :
-        PrintVisitorBase(os, ph) { }
+        PrintVisitorBase(os, ph), _numCommon(0) { }
 
+    int getNumCommon() const { return _numCommon; }
+    
     // A point read.
     virtual void visit(GridPoint* gp) {
         _exprStr += _ph.readFromPoint(_os, *gp);
+        _numCommon += _ph.getNumCommon(gp);
     }
 
     // A constant.
     virtual void visit(ConstExpr* ce) {
         _exprStr += _ph.addConstExpr(_os, ce->getVal());
+        _numCommon += _ph.getNumCommon(ce);
     }
 
     // Some code.
     virtual void visit(CodeExpr* ce) {
         _exprStr += _ph.addCodeExpr(_os, ce->getCode());
+        _numCommon += _ph.getNumCommon(ce);
     }
 
     // A generic unary operator.
     virtual void visit(UnaryExpr* ue) {
         _exprStr += ue->getOpStr();
         ue->getRhs()->accept(this);
+        _numCommon += _ph.getNumCommon(ue);
     }
 
     // A generic binary operator.
@@ -160,6 +190,7 @@ public:
         _exprStr += " " + be->getOpStr() + " ";
         be->getRhs()->accept(this); // adds RHS to _exprStr.
         _exprStr += ")";
+        _numCommon += _ph.getNumCommon(be);
     }
 
     // A commutative operator.
@@ -174,6 +205,7 @@ public:
             opNum++;
         }
         _exprStr += ")";
+        _numCommon += _ph.getNumCommon(ce);
     }
 
     // An equals operator.
@@ -188,6 +220,7 @@ public:
         _os << _ph.getLinePrefix() << _ph.writeToPoint(_os, *gpp, rhs) << _ph.getLineSuffix();
 
         // note: _exprStr is now empty.
+        // note: no need to update num-common.
     }
 };
 
@@ -198,15 +231,21 @@ public:
 class PrintVisitorBottomUp : public PrintVisitorBase {
 
 protected:
-    int _maxPoints;  // max points to print top-down before printing bottom-up.
+    // max points to print top-down before printing bottom-up.
+    int _maxPoints;  
+
+    // map sub-expressions to var names.
+    map<Expr*, string> _tempVars;
 
     // Declare a new temp var.
     // Set _exprStr to it.
     // Print LHS of assignment to it.
     // Return stream to continue w/RHS.
-    virtual ostream& makeNextTempVar() {
+    virtual ostream& makeNextTempVar(Expr* ex) {
         _exprStr = _ph.makeVarName();
-        _os << endl << " // Store a partial result in " << _exprStr << ":" << endl;
+        _tempVars[ex] = _exprStr;
+        //_os << endl << " // Store a partial result in " << _exprStr << ":" << endl;
+        _os << endl << " // " << _exprStr << " = " << ex->makeStr() << ":" << endl;
         _os << _ph.getLinePrefix() << _ph.getVarType() << " " << _exprStr << " = ";
         return _os;
     }
@@ -221,18 +260,46 @@ public:
     virtual PrintVisitorTopDown* newPrintVisitorTopDown() {
         return new PrintVisitorTopDown(_os, _ph);
     }
-    
-    // Use top-down method for simple exprs.
-    // Return true if successful.
-    virtual bool tryTopDown(Expr* ex, bool force=false) {
 
+    // Look for existing var.
+    // Then, use top-down method for simple exprs.
+    // Return true if successful.
+    // FIXME: this causes all nodes in an expr above a certain
+    // point to fail top-down because it looks at the original expr,
+    // not the one with temp vars.
+    virtual bool tryTopDown(Expr* ex, bool leaf = false) {
+
+        // First, determine whether this expr has already been evaluated.
+        auto p = _tempVars.find(ex);
+        if (p != _tempVars.end()) {
+
+            // if so, just use the existing var.
+            _exprStr = p->second;
+            return true;
+        }
+        
         // Use top down if <= maxPoints points in ex.
-        if (force || ex->getNumPoints() <= _maxPoints) {
+        if (leaf || ex->getNumNodes() <= _maxPoints) {
+
+            // use a top-down printer to render the expr.
             PrintVisitorTopDown* topDown = newPrintVisitorTopDown();
             ex->accept(topDown);
-            _exprStr = topDown->getExprStr();
+
+            // were there any common sub-exprs found?
+            bool ok = topDown->getNumCommon() == 0;
+
+            // if no CSEs, use the resulting expression.
+            if (ok)
+                _exprStr = topDown->getExprStr();
+            
+            // if a leaf node is common, make a var for it.
+            else if (leaf) {
+                makeNextTempVar(ex) << topDown->getExprStr() << _ph.getLineSuffix();
+                ok = true;
+            }
+
             delete topDown;
-            return true;
+            return ok;
         }
 
         return false;
@@ -254,19 +321,18 @@ public:
     }
 
     // A unary operator.
-    // Use top-down if expr small enough;
-    // otherwise, get RHS; print statement; make new var for result.
+    // Try top-down on RHS.
     virtual void visit(UnaryExpr* ue) {
         if (tryTopDown(ue))
             return;
 
         ue->getRhs()->accept(this); // sets _exprStr.
         string rhs = getExprStrAndClear();
-        makeNextTempVar() << ue->getOpStr() << rhs << _ph.getLineSuffix();
+        makeNextTempVar(ue) << ue->getOpStr() << ' ' << rhs << _ph.getLineSuffix();
     }
 
     // A binary operator.
-    // Use top-down if expr small enough;
+    // Use top-down if whole expr small enough;
     // otherwise, get LHS and RHS; print statement; make new var for result.
     virtual void visit(BinaryExpr* be) {
         if (tryTopDown(be))
@@ -276,7 +342,7 @@ public:
         string lhs = getExprStrAndClear();
         be->getRhs()->accept(this); // sets _exprStr.
         string rhs = getExprStrAndClear();
-        makeNextTempVar() << lhs << ' ' << be->getOpStr() << ' ' << rhs << _ph.getLineSuffix();
+        makeNextTempVar(be) << lhs << ' ' << be->getOpStr() << ' ' << rhs << _ph.getLineSuffix();
     }
 
     // A commutative operator.
@@ -303,7 +369,7 @@ public:
             // makes separate assignment for each one.
             // result is kept as LHS of next one.
             else {
-                makeNextTempVar() << lhs << ' ' << ce->getOpStr() << ' ' <<
+                makeNextTempVar(ce) << lhs << ' ' << ce->getOpStr() << ' ' <<
                     opStr << _ph.getLineSuffix();
                 lhs = getExprStr(); // result used in next iteration, if any.
             }
@@ -317,11 +383,12 @@ public:
     virtual void visit(EqualsExpr* ee) {
 
         // Eval RHS.
-        ee->getRhs()->accept(this); // sets _exprStr.
+        Expr* rp = ee->getRhs().get();
+        rp->accept(this); // sets _exprStr.
         string rhs = _exprStr;
 
         // Assign RHS to a temp var.
-        makeNextTempVar() << rhs << _ph.getLineSuffix(); // sets _exprStr.
+        makeNextTempVar(rp) << rhs << _ph.getLineSuffix(); // sets _exprStr.
         string tmp = getExprStrAndClear();
 
         // Write temp var to grid.
@@ -377,3 +444,4 @@ public:
     }
 };
 
+#endif

@@ -33,22 +33,27 @@ IN THE SOFTWARE.
 using namespace std;
 
 //#define DEBUG_VV   // debug VecInfoVisitor.
-//#define DEBUG_SORT
 
 // One element in a vector.
 class VecElem {
 public:
-    const GridPoint _vec;      // first index of vector containing this element.
+    GridPoint _vec;      // starting index of vector containing this element.
     size_t _offset;            // 1-D offset in _vec.
     IntTuple _offsets;         // n-D offsets 
 
     VecElem(const GridPoint& vec, int offset, const IntTuple& offsets) :
         _vec(vec), _offset(offset), _offsets(offsets) { }
 
-    bool operator==(const VecElem& rhs) const {
+    virtual VecElem& operator=(const VecElem& rhs) {
+        _vec = rhs._vec;
+        _offset = rhs._offset;
+        _offsets = rhs._offsets;
+        return *this;
+    }
+    virtual bool operator==(const VecElem& rhs) const {
         return _vec == rhs._vec && _offset == rhs._offset;
     }
-    bool operator!=(const VecElem& rhs) const {
+    virtual bool operator!=(const VecElem& rhs) const {
         return !operator==(rhs);
     }
 };
@@ -289,14 +294,19 @@ public:
 class VecPrintHelper : public PrintHelper {
 protected:
     VecInfoVisitor& _vv;
-    map<GridPoint, string> _readyPoints; // points that are already constructed.
+    bool _allowUnalignedLoads;
     bool _reuseVars; // if true, load to a local var; else, reload on every access.
     bool _definedNA;           // NA var defined.
+    map<GridPoint, string> _readyPoints; // points that are already constructed.
 
     // Print access to an aligned vector block.
     // Return var name.
     virtual string printAlignedVecRead(ostream& os, const GridPoint& gp) =0;
 
+    // Print unaliged memory read.
+    // Assumes this results in same values as printUnalignedVec().
+    virtual string printUnalignedVecRead(ostream& os, const GridPoint& gp) =0;
+    
     // Print write to an aligned vector block.
     // Return expression written.
     virtual string printAlignedVecWrite(ostream& os, const GridPoint& gp,
@@ -312,13 +322,17 @@ protected:
 
 public:
     VecPrintHelper(VecInfoVisitor& vv,
+                   bool allowUnalignedLoads,
+                   const CounterVisitor* cv,
                    const string& varPrefix,
                    const string& varType,
                    const string& linePrefix,
                    const string& lineSuffix,
                    bool reuseVars = true) :
-        PrintHelper(varPrefix, varType, linePrefix, lineSuffix),
-        _vv(vv), _reuseVars(reuseVars), _definedNA(false) { }
+        PrintHelper(cv, varPrefix, varType, linePrefix, lineSuffix),
+        _vv(vv), _allowUnalignedLoads(allowUnalignedLoads),
+        _reuseVars(reuseVars), _definedNA(false) { }
+    virtual ~VecPrintHelper() {}
 
     // get fold info.
     virtual const IntTuple& getFold() const {
@@ -347,7 +361,11 @@ public:
         else if (_vv._alignedVecs.count(gp))
             varName = printAlignedVecRead(os, gp);
 
-        // An unaligned vector block?
+        // Unaligned loads allowed?
+        else if (_allowUnalignedLoads)
+            varName = printUnalignedVecRead(os, gp);
+
+        // Need to construct an unaligned vector block?
         else if (_vv._vblk2elemLists.count(gp)) {
 
             // make sure prerequisites exist by recursing.
@@ -378,11 +396,22 @@ public:
         printAlignedVecWrite(os, gp, val);
         return "";
     }
+};
 
-    // Sort commutative expr to a more optimized order.
-    virtual void sortCommutativeExpr(CommutativeExpr& oce) const {
+// A visitor that reorders exprs.
+class ExprReorderVisitor : public ExprVisitor {
+protected:
+    VecInfoVisitor& _vv;
 
-        ExprPtrVec& oev = oce._ops; // old exprs.
+public:
+    ExprReorderVisitor(VecInfoVisitor& vv) :
+        _vv(vv) { }
+    virtual ~ExprReorderVisitor() {}
+                       
+    // Sort a commutative expression.
+    virtual void visit(CommutativeExpr* ce) {
+
+        ExprPtrVec& oev = ce->_ops; // old exprs.
         ExprPtrVec nev; // new exprs.
 
         // Simple, greedy algorithm:

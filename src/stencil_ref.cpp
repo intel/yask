@@ -28,9 +28,13 @@ IN THE SOFTWARE.
 // Calculate nreps time steps of stencil over grid using scalar code.
 void calc_steps_ref(StencilContext& context, Stencils& stencils, const int nreps)
 {
-    // time steps.
     printf("running %i reference time step(s)...\n", nreps);
-    for(int t = 1; t <= nreps; t += TIME_STEPS) {
+
+    // time steps.
+    // Start at a positive point to avoid any calculation referring
+    // to negative time.
+    idx_t t0 = TIME_DIM_SIZE * 2;
+    for(idx_t t = t0; t < t0 + nreps; t += TIME_STEPS_PER_ITER) {
 
         // calculations to make.
         for (auto stencil : stencils) {
@@ -46,7 +50,7 @@ void calc_steps_ref(StencilContext& context, Stencils& stencils, const int nreps
 
                             for(idx_t iz = 0; iz < context.dz; iz++) {
 
-                                TRACE_MSG("%s.calc_scalar(%d, %d, %d, %d, %d)", 
+                                TRACE_MSG("%s.calc_scalar(%ld, %ld, %ld, %ld, %ld)", 
                                           stencil->get_name().c_str(), t, n, ix, iy, iz);
                             
                                 // Evaluate the reference scalar code.

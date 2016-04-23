@@ -33,11 +33,11 @@ IN THE SOFTWARE.
 
 // Prefetch a cluser starting at vector indices i, j, k.
 // Generic macro to handle different cache levels and directions.
-#define PREFETCH_CLUSTER(fn, t, n, i, j, k)                    \
+#define PREFETCH_CLUSTER(fn, t, n, i, j, k)                             \
     do {                                                                \
-        TRACE_MSG("%s.%s(%d, %d, %d, %d, %d)",  \
-                  _name.c_str(), #fn, t, n, i, j, k);                    \
-        _stencil.fn(context, t, ARG_N(n) i, j, k);                     \
+        TRACE_MSG("%s.%s(%ld, %ld, %ld, %ld, %ld)",                     \
+                  _name.c_str(), #fn, t, n, i, j, k);                   \
+        _stencil.fn(context, t, ARG_N(n) i, j, k);                      \
     } while(0)
 
 //////////////// Main stencil class /////////////////
@@ -92,7 +92,7 @@ public:
                                      idx_t begin_cnv, idx_t begin_cxv, idx_t begin_cyv, idx_t begin_czv,
                                      idx_t end_cnv, idx_t end_cxv, idx_t end_cyv, idx_t end_czv)
     {
-        TRACE_MSG("%s.calc_cluster(%d, %d, %d, %d, %d)",
+        TRACE_MSG("%s.calc_cluster(%ld, %ld, %ld, %ld, %ld)",
                   _name.c_str(), t, begin_cnv, begin_cxv, begin_cyv, begin_czv);
 
         // The step vars are hard-coded in calc_block below, and there should
@@ -133,10 +133,10 @@ public:
                     idx_t begin_bn, idx_t begin_bx, idx_t begin_by, idx_t begin_bz,
                     idx_t end_bn, idx_t end_bx, idx_t end_by, idx_t end_bz)
     {
-        TRACE_MSG("%s.calc_block(%d, %d, %d, %d, %d)", 
+        TRACE_MSG("%s.calc_block(%ld, %ld, %ld, %ld, %ld)", 
                   _name.c_str(), t, begin_bn, begin_bx, begin_by, begin_bz);
 
-        // Adjust indices by vector lengths.
+        // Divide indices by vector lengths.
         const idx_t begin_bnv = idiv<idx_t>(begin_bn, VLEN_N);
         const idx_t begin_bxv = idiv<idx_t>(begin_bx, VLEN_X);
         const idx_t begin_byv = idiv<idx_t>(begin_by, VLEN_Y);
@@ -171,7 +171,7 @@ public:
                              idx_t begin_rn, idx_t begin_rx, idx_t begin_ry, idx_t begin_rz,
                              idx_t end_rn, idx_t end_rx, idx_t end_ry, idx_t end_rz)
     {
-        TRACE_MSG("%s.calc_region(%d, %d, %d, %d, %d)", 
+        TRACE_MSG("%s.calc_region(%ld, %ld, %ld, %ld, %ld)", 
                   _name.c_str(), t, begin_rn, begin_rx, begin_ry, begin_rz);
 
         // Steps based on block sizes.

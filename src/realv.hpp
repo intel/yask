@@ -23,7 +23,7 @@ IN THE SOFTWARE.
 
 *****************************************************************************/
 
-// This file defines a union to use for vectors of floats or doubles.
+// This file defines a union to use for folded vectors of floats or doubles.
 
 #ifndef _REALV_H
 #define _REALV_H
@@ -42,8 +42,18 @@ using namespace std;
 #define CTRL_INT unsigned __int32
 #define CTRL_IDX_MASK 0xf
 #define CTRL_SEL_BIT 0x10
-#define V512_ELEMS 16
 #define MMASK __mmask16
+#ifdef USE_INTRIN256
+#define VEC_ELEMS 8
+#define INAME(op) _mm256_ ## op ## _ps
+#define INAMEI(op) _mm256_ ## op ## _epi32
+#define IMEM_TYPE float
+#elif defined(USE_INTRIN512)
+#define VEC_ELEMS 16
+#define INAME(op) _mm512_ ## op ## _ps
+#define INAMEI(op) _mm512_ ## op ## _epi32
+#define IMEM_TYPE void
+#endif
 
 // values for 64-bit, double-precision reals.
 #elif REAL_BYTES == 8
@@ -51,31 +61,51 @@ using namespace std;
 #define CTRL_INT unsigned __int64
 #define CTRL_IDX_MASK 0x7
 #define CTRL_SEL_BIT 0x8
-#define V512_ELEMS 8
 #define MMASK __mmask8
+#ifdef USE_INTRIN256
+#define VEC_ELEMS 4
+#define INAME(op) _mm256_ ## op ## _pd
+#define INAMEI(op) _mm256_ ## op ## _epi64
+#define IMEM_TYPE double
+#elif defined(USE_INTRIN512)
+#define VEC_ELEMS 8
+#define INAME(op) _mm512_ ## op ## _pd
+#define INAMEI(op) _mm512_ ## op ## _epi64
+#define IMEM_TYPE void
+#endif
+
 #else
 #error "REAL_BYTES not set to 4 or 8"
 #endif
 
 // Emulate instrinsics for unsupported VLEN.
-// Only 512-bit vectors supported.
+// Only 256 and 512-bit vectors supported.
+// VLEN == 1 also supported as scalar.
 #if VLEN == 1
-#define EMU_INTRINSICS
-#elif VLEN != V512_ELEMS
-#warning "Emulating intrinsics because VLEN elements != 512 bits"
-#define EMU_INTRINSICS
-#elif !defined(INTRIN512)
-#warning "Emulating 512-bit intrinsics because INTRIN512 is not defined"
-#define EMU_INTRINSICS
+#define NO_INTRINSICS
+// note: no warning here because intrinsics aren't wanted in this case.
+
+#elif !defined(VEC_ELEMS)
+#warning "Emulating intrinsics because HW vector length not defined; set USE_INTRIN256 or USE_INTRIN512"
+#define NO_INTRINSICS
+
+#elif VLEN != VEC_ELEMS
+#warning "Emulating intrinsics because VLEN != HW vector length"
+#define NO_INTRINSICS
 #endif
 
 // Macro for looping through an aligned realv.
 #if defined(DEBUG) || (VLEN==1)
 #define SIMD_LOOP(i)                            \
     for (int i=0; i<VLEN; i++)
+#define SIMD_LOOP_UNALIGNED(i)                  \
+    for (int i=0; i<VLEN; i++)
 #else
 #define SIMD_LOOP(i)                            \
     _Pragma("vector aligned") _Pragma("simd")   \
+    for (int i=0; i<VLEN; i++)
+#define SIMD_LOOP_UNALIGNED(i)                  \
+    _Pragma("simd")                             \
     for (int i=0; i<VLEN; i++)
 #endif
 
@@ -87,20 +117,37 @@ union realv {
     REAL r[VLEN];
     CTRL_INT ci[VLEN];
 
-#ifndef EMU_INTRINSICS
-    __m512i m512i;
-#if REAL_BYTES == 4
-    __m512  m512r;
-#else
-    __m512d m512r;
-#endif
+#ifndef NO_INTRINSICS
+    
+    // 32-bit integer vector overlay.
+#if defined(USE_INTRIN256)
+    __m256i mi;
+#elif defined(USE_INTRIN512)
+    __m512i mi;
 #endif
 
+    // real vector.
+#if REAL_BYTES == 4 && defined(USE_INTRIN256)
+    __m256  mr;
+#elif REAL_BYTES == 4 && defined(USE_INTRIN512)
+    __m512  mr;
+#elif REAL_BYTES == 8 && defined(USE_INTRIN256)
+    __m256d mr;
+#elif REAL_BYTES == 8 && defined(USE_INTRIN512)
+    __m512d mr;
+#endif
+
+#endif
+    
     // access a REAL linearly.
     inline REAL& operator[](idx_t l) {
+        assert(l >= 0);
+        assert(l < VLEN);
         return r[l];
     }
     inline const REAL& operator[](idx_t l) const {
+        assert(l >= 0);
+        assert(l < VLEN);
         return r[l];
     }
 
@@ -115,8 +162,16 @@ union realv {
         assert(k >= 0);
         assert(k < VLEN_Z);
 
+#if VLEN_FIRST_DIM_IS_UNIT_STRIDE
+
         // n dim is unit stride, followed by x, y, z.
         idx_t l = MAP4321(n, i, j, k, VLEN_N, VLEN_X, VLEN_Y, VLEN_Z);
+#else
+
+        // z dim is unit stride, followed by y, x, n.
+        idx_t l = MAP1234(n, i, j, k, VLEN_N, VLEN_X, VLEN_Y, VLEN_Z);
+#endif
+        
         return r[l];
     }
     inline REAL& operator()(idx_t n, idx_t i, idx_t j, idx_t k) {
@@ -127,26 +182,27 @@ union realv {
 
     // copy whole vector.
     inline void copy(const realv& rhs) {
-#ifdef EMU_INTRINSICS
+#ifdef NO_INTRINSICS
         SIMD_LOOP(i) r[i] = rhs[i];
 #else
-        m512r = rhs.m512r;
+        mr = rhs.mr;
 #endif
     }
 
     // assignment: single value broadcast.
     inline void operator=(REAL val) {
-#ifdef EMU_INTRINSICS
+#ifdef NO_INTRINSICS
         SIMD_LOOP(i) r[i] = val;
-#elif REAL_BYTES == 4
-        m512r = _mm512_set1_ps(val);
 #else
-        m512r = _mm512_set1_pd(val);
+        mr = INAME(set1)(val);
 #endif
     }
 
     // broadcast with conversions.
     inline void operator=(int val) {
+        operator=(REAL(val));
+    }
+    inline void operator=(long val) {
         operator=(REAL(val));
     }
 #if REAL_BYTES == 4
@@ -159,15 +215,13 @@ union realv {
     }
 #endif
     
-    // negate.
+    // unary negate.
     inline realv operator-() const {
         realv res;
-#ifdef EMU_INTRINSICS
+#ifdef NO_INTRINSICS
         SIMD_LOOP(i) res[i] = -r[i];
-#elif REAL_BYTES == 4
-        res.m512r = _mm512_sub_ps(_mm512_setzero_ps(), this->m512r);
 #else
-        res.m512r = _mm512_sub_pd(_mm512_setzero_pd(), this->m512r);
+        res.mr = INAME(sub)(INAME(setzero)(), mr);
 #endif
         return res;
     }
@@ -175,12 +229,10 @@ union realv {
     // add.
     inline realv operator+(realv rhs) const {
         realv res;
-#ifdef EMU_INTRINSICS
+#ifdef NO_INTRINSICS
         SIMD_LOOP(i) res[i] = r[i] + rhs[i];
-#elif REAL_BYTES == 4
-        res.m512r = _mm512_add_ps(this->m512r, rhs.m512r);
 #else
-        res.m512r = _mm512_add_pd(this->m512r, rhs.m512r);
+        res.mr = INAME(add)(mr, rhs.mr);
 #endif
         return res;
     }
@@ -193,12 +245,10 @@ union realv {
     // sub.
     inline realv operator-(realv rhs) const {
         realv res;
-#ifdef EMU_INTRINSICS
+#ifdef NO_INTRINSICS
         SIMD_LOOP(i) res[i] = r[i] - rhs[i];
-#elif REAL_BYTES == 4
-        res.m512r = _mm512_sub_ps(this->m512r, rhs.m512r);
 #else
-        res.m512r = _mm512_sub_pd(this->m512r, rhs.m512r);
+        res.mr = INAME(sub)(mr, rhs.mr);
 #endif
         return res;
     }
@@ -211,12 +261,10 @@ union realv {
     // mul.
     inline realv operator*(realv rhs) const {
         realv res;
-#ifdef EMU_INTRINSICS
+#ifdef NO_INTRINSICS
         SIMD_LOOP(i) res[i] = r[i] * rhs[i];
-#elif REAL_BYTES == 4
-        res.m512r = _mm512_mul_ps(this->m512r, rhs.m512r);
 #else
-        res.m512r = _mm512_mul_pd(this->m512r, rhs.m512r);
+        res.mr = INAME(mul)(mr, rhs.mr);
 #endif
         return res;
     }
@@ -229,12 +277,10 @@ union realv {
     // div.
     inline realv operator/(realv rhs) const {
         realv res;
-#ifdef EMU_INTRINSICS
+#ifdef NO_INTRINSICS
         SIMD_LOOP(i) res[i] = r[i] / rhs[i];
-#elif REAL_BYTES == 4
-        res.m512r = _mm512_div_ps(this->m512r, rhs.m512r);
 #else
-        res.m512r = _mm512_div_pd(this->m512r, rhs.m512r);
+        res.mr = INAME(div)(mr, rhs.mr);
 #endif
         return res;
     }
@@ -275,36 +321,38 @@ union realv {
         return true;
     }
     
-    // load.
-    inline void loadFrom(const realv* from) {
-#ifdef EMU_INTRINSICS
+    // aligned load.
+    inline void loadFrom(const realv* restrict from) {
+#if defined(NO_INTRINSICS) || defined(NO_LOAD_INTRINSICS)
         SIMD_LOOP(i) r[i] = (*from)[i];
-#elif REAL_BYTES == 4
-        m512r = _mm512_load_ps((void*)from);
 #else
-        m512r = _mm512_load_pd((void*)from);
+        mr = INAME(load)((IMEM_TYPE const*)from);
 #endif
     }
 
-    // store.
-    inline void storeTo(realv* to) const {
-#if defined(__INTEL_COMPILER) && (VLEN > 1)
-        _Pragma("vector nontemporal")
+    // unaligned load.
+    inline void loadUnalignedFrom(const realv* restrict from) {
+#if defined(NO_INTRINSICS) || defined(NO_LOAD_INTRINSICS)
+        SIMD_LOOP_UNALIGNED(i) r[i] = (*from)[i];
+#else
+        mr = INAME(loadu)((IMEM_TYPE const*)from);
+#endif
+    }
+
+    // aligned store.
+    inline void storeTo(realv* restrict to) const {
             SIMD_LOOP(i) (*to)[i] = r[i];
-#elif defined(EMU_INTRINSICS)
+#if defined(NO_INTRINSICS) || defined(NO_STORE_INTRINSICS)
+#if defined(__INTEL_COMPILER) && (VLEN > 1) && defined(USE_STREAMING_STORE)
+        _Pragma("vector nontemporal")
+#endif
         SIMD_LOOP(i) (*to)[i] = r[i];
-#elif REAL_BYTES == 4
-#if defined(ARCH_KNC)
-        _mm512_storenrngo_ps((void*)to, m512r);
+#elif !defined(USE_STREAMING_STORE)
+        INAME(store)((IMEM_TYPE*)to, mr);
+#elif defined(ARCH_KNC)
+        INAME(storenrngo)((IMEM_TYPE*)to, mr);
 #else
-        _mm512_stream_ps((void*)to, m512r);
-#endif
-#else
-#if defined(ARCH_KNC)
-        _mm512_storenrngo_pd((void*)to, m512r);
-#else
-        _mm512_stream_pd((void*)to, m512r);
-#endif
+        INAME(stream)((IMEM_TYPE*)to, mr);
 #endif
     }
 
@@ -345,6 +393,183 @@ inline bool within_tolerance(const realv& val, const realv& ref,
         return true;
 }
 
+// wrappers around some intrinsics w/non-intrinsic equivalents.
+// TODO: make these methods in the realv union.
+
+// Get consecutive elements from two vectors.
+// Concat a and b, shift right by count elements, keep rightmost elements.
+// Thus, shift of 0 returns b; shift of VLEN returns a.
+ALWAYS_INLINE void realv_align(realv& res, const realv& a, const realv& b,
+                                  const int count) {
+#ifdef TRACE_INTRINSICS
+    cout << "realv_align w/count=" << count << ":" << endl;
+    cout << " a: ";
+    a.print_reals(cout);
+    cout << " b: ";
+    b.print_reals(cout);
+#endif
+
+#if defined(NO_INTRINSICS)
+    // must make temp copies in case &res == &a or &b.
+    realv tmpa = a, tmpb = b;
+    for (int i = 0; i < VLEN-count; i++)
+        res.r[i] = tmpb.r[i + count];
+    for (int i = VLEN-count; i < VLEN; i++)
+        res.r[i] = tmpa.r[i + count - VLEN];
+    
+#elif defined(USE_INTRIN256)
+    // Not really an intrinsic, but not element-wise, either.
+    // Put the 2 parts in a local array, then extract the desired part
+    // using an unaligned load.
+    REAL r2[VLEN * 2];
+    *((realv*)(&r2[0])) = b;
+    *((realv*)(&r2[VLEN])) = a;
+    res = *((realv*)(&r2[count]));
+    
+#elif REAL_BYTES == 8 && defined(ARCH_KNC) && defined(USE_INTRIN512)
+    // For KNC, for 64-bit align, use the 32-bit op w/2x count.
+    res.mi = _mm512_alignr_epi32(a.mi, b.mi, count*2);
+
+#else
+    res.mi = INAMEI(alignr)(a.mi, b.mi, count);
+#endif
+
+#ifdef TRACE_INTRINSICS
+    cout << " res: ";
+    res.print_reals(cout);
+#endif
+}
+
+// Get consecutive elements from two vectors w/masking.
+// Concat a and b, shift right by count elements, keep rightmost elements.
+// Elements in res corresponding to 0 bits in k1 are unchanged.
+ALWAYS_INLINE void realv_align(realv& res, const realv& a, const realv& b,
+                               const int count, unsigned int k1) {
+#ifdef TRACE_INTRINSICS
+    cout << "realv_align w/count=" << count << " w/mask:" << endl;
+    cout << " a: ";
+    a.print_reals(cout);
+    cout << " b: ";
+    b.print_reals(cout);
+    cout << " res(before): ";
+    res.print_reals(cout);
+    cout << " mask: 0x" << hex << k1 << endl;
+#endif
+
+#ifdef NO_INTRINSICS
+    // must make temp copies in case &res == &a or &b.
+    realv tmpa = a, tmpb = b;
+    for (int i = 0; i < VLEN-count; i++)
+        if ((k1 >> i) & 1)
+            res.r[i] = tmpb.r[i + count];
+    for (int i = VLEN-count; i < VLEN; i++)
+        if ((k1 >> i) & 1)
+            res.r[i] = tmpa.r[i + count - VLEN];
+#else
+    res.mi = INAMEI(mask_alignr)(res.mi, MMASK(k1), a.mi, b.mi, count);
+#endif
+
+#ifdef TRACE_INTRINSICS
+    cout << " res(after): ";
+    res.print_reals(cout);
+#endif
+}
+
+// Rearrange elements in a vector.
+ALWAYS_INLINE void realv_permute(realv& res, const realv& ctrl, const realv& a) {
+
+#ifdef TRACE_INTRINSICS
+    cout << "realv_permute:" << endl;
+    cout << " ctrl: ";
+    ctrl.print_ctrls(cout);
+    cout << " a: ";
+    a.print_reals(cout);
+#endif
+
+#ifdef NO_INTRINSICS
+    // must make a temp copy in case &res == &a.
+    realv tmp = a;
+    for (int i = 0; i < VLEN; i++)
+        res.r[i] = tmp.r[ctrl.ci[i]];
+#else
+    res.mi = INAMEI(permutexvar)(ctrl.mi, a.mi);
+#endif
+
+#ifdef TRACE_INTRINSICS
+    cout << " res: ";
+    res.print_reals(cout);
+#endif
+}
+
+// Rearrange elements in a vector w/masking.
+// Elements in res corresponding to 0 bits in k1 are unchanged.
+ALWAYS_INLINE void realv_permute(realv& res, const realv& ctrl, const realv& a,
+                                 unsigned int k1) {
+#ifdef TRACE_INTRINSICS
+    cout << "realv_permute w/mask:" << endl;
+    cout << " ctrl: ";
+    ctrl.print_ctrls(cout);
+    cout << " a: ";
+    a.print_reals(cout);
+    cout << " mask: 0x" << hex << k1 << endl;
+    cout << " res(before): ";
+    res.print_reals(cout);
+#endif
+
+#ifdef NO_INTRINSICS
+    // must make a temp copy in case &res == &a.
+    realv tmp = a;
+    for (int i = 0; i < VLEN; i++) {
+        if ((k1 >> i) & 1)
+            res.r[i] = tmp.r[ctrl.ci[i]];
+    }
+#else
+    res.mi = INAMEI(mask_permutexvar)(res.mi, MMASK(k1), ctrl.mi, a.mi);
+#endif
+
+#ifdef TRACE_INTRINSICS
+    cout << " res(after): ";
+    res.print_reals(cout);
+#endif
+}
+
+// Rearrange elements in 2 vectors.
+// (The masking versions of these instrs do not preserve the source,
+// so we don't have a masking version of this function.)
+ALWAYS_INLINE void realv_permute2(realv& res, const realv& ctrl,
+                                  const realv& a, const realv& b) {
+#ifdef TRACE_INTRINSICS
+    cout << "realv_permute2:" << endl;
+    cout << " ctrl: ";
+    ctrl.print_ctrls(cout);
+    cout << " a: ";
+    a.print_reals(cout);
+    cout << " b: ";
+    b.print_reals(cout);
+#endif
+
+#ifdef NO_INTRINSICS
+    // must make temp copies in case &res == &a or &b.
+    realv tmpa = a, tmpb = b;
+    for (int i = 0; i < VLEN; i++) {
+        int sel = ctrl.ci[i] & CTRL_SEL_BIT; // 0 => a, 1 => b.
+        int idx = ctrl.ci[i] & CTRL_IDX_MASK; // index.
+        res.r[i] = sel ? tmpb.r[idx] : tmpa.r[idx];
+    }
+
+#elif defined(ARCH_KNC)
+    cerr << "error: 2-input permute not supported on KNC" << endl;
+    exit(1);
+#else
+    res.mi = INAMEI(permutex2var)(a.mi, ctrl.mi, b.mi);
+#endif
+
+#ifdef TRACE_INTRINSICS
+    cout << " res: ";
+    res.print_reals(cout);
+#endif
+}
+
 #ifdef __INTEL_COMPILER
 #define ALIGNED_REALV __declspec(align(sizeof(realv))) realv
 #else
@@ -361,182 +586,5 @@ inline bool within_tolerance(const realv& val, const realv& ref,
 #define MAKE_VEC(v)                             \
     ALIGNED_REALV v(0.0)
 
-// wrappers around some intrinsics w/non-intrinsic equivalents.
-// TODO: move these into the realv union.
-
-// get consecutive elements from two vectors.
-ALWAYS_INLINE void realv_align(realv& res, const realv& v2, const realv& v3,
-                                  const int count) {
-#ifdef TRACE_INTRINSICS
-    cout << "realv_align w/count=" << count << ":" << endl;
-    cout << " v2: ";
-    v2.print_reals(cout);
-    cout << " v3: ";
-    v3.print_reals(cout);
-#endif
-
-#ifdef EMU_INTRINSICS
-    // (v2[VLEN-1], ..., v2[0], v3[VLEN-1], ..., v3[0]) >> count*32b.
-    for (int i = 0; i < VLEN-count; i++)
-        res.r[i] = v3.r[i + count];
-    for (int i = VLEN-count; i < VLEN; i++)
-        res.r[i] = v2.r[i + count - VLEN];
-#elif REAL_BYTES == 4
-    res.m512i = _mm512_alignr_epi32(v2.m512i, v3.m512i, count);
-#elif defined(ARCH_KNC)
-    // For KNC, for 64-bit align, have to use the 32-bit w/2x count.
-    res.m512i = _mm512_alignr_epi32(v2.m512i, v3.m512i, count*2);
-#else
-    res.m512i = _mm512_alignr_epi64(v2.m512i, v3.m512i, count);
-#endif
-
-#ifdef TRACE_INTRINSICS
-    cout << " res: ";
-    res.print_reals(cout);
-#endif
-}
-
-// get consecutive elements from two vectors w/masking.
-ALWAYS_INLINE void realv_align(realv& res, const realv& v2, const realv& v3,
-                               const int count, unsigned int k1) {
-#ifdef TRACE_INTRINSICS
-    cout << "realv_align w/count=" << count << " w/mask:" << endl;
-    cout << " v2: ";
-    v2.print_reals(cout);
-    cout << " v3: ";
-    v3.print_reals(cout);
-    cout << " res(before): ";
-    res.print_reals(cout);
-    cout << " mask: 0x" << hex << k1 << endl;
-#endif
-
-#ifdef EMU_INTRINSICS
-    // (v2[VLEN-1], ..., v2[0], v3[VLEN-1], ..., v3[0]) >> count*32b.
-    for (int i = 0; i < VLEN-count; i++)
-        if ((k1 >> i) & 1)
-            res.r[i] = v3.r[i + count];
-    for (int i = VLEN-count; i < VLEN; i++)
-        if ((k1 >> i) & 1)
-            res.r[i] = v2.r[i + count - VLEN];
-#elif REAL_BYTES == 4
-    res.m512i = _mm512_mask_alignr_epi32(res.m512i, MMASK(k1), v2.m512i, v3.m512i, count);
-#elif defined(ARCH_KNC)
-    cerr << "error: 64-bit align w/mask not supported on KNC" << endl;
-    exit(1);
-#else
-    res.m512i = _mm512_mask_alignr_epi64(res.m512i, MMASK(k1), v2.m512i, v3.m512i, count);
-#endif
-
-#ifdef TRACE_INTRINSICS
-    cout << " res(after): ";
-    res.print_reals(cout);
-#endif
-}
-
-// rearrange elements in a vector.
-ALWAYS_INLINE void realv_permute(realv& res, const realv& ctrl, const realv& v3) {
-
-#ifdef TRACE_INTRINSICS
-    cout << "realv_permute:" << endl;
-    cout << " ctrl: ";
-    ctrl.print_ctrls(cout);
-    cout << " v3: ";
-    v3.print_reals(cout);
-#endif
-
-#ifdef EMU_INTRINSICS
-    // must make a temp copy in case &res == &v3.
-    realv tmp = v3;
-    for (int i = 0; i < VLEN; i++)
-        res.r[i] = tmp.r[ctrl.ci[i]];
-#elif REAL_BYTES == 4
-    res.m512i = _mm512_permutevar_epi32(ctrl.m512i, v3.m512i);
-#elif defined(ARCH_KNC)
-    cerr << "error: 64-bit permute not supported on KNC" << endl;
-    exit(1);
-#else
-    res.m512i = _mm512_permutexvar_epi64(ctrl.m512i, v3.m512i);
-#endif
-
-#ifdef TRACE_INTRINSICS
-    cout << " res: ";
-    res.print_reals(cout);
-#endif
-}
-
-// rearrange elements in a vector w/masking.
-ALWAYS_INLINE void realv_permute(realv& res, const realv& ctrl, const realv& v3,
-                                 unsigned int k1) {
-#ifdef TRACE_INTRINSICS
-    cout << "realv_permute w/mask:" << endl;
-    cout << " ctrl: ";
-    ctrl.print_ctrls(cout);
-    cout << " v3: ";
-    v3.print_reals(cout);
-    cout << " mask: 0x" << hex << k1 << endl;
-    cout << " res(before): ";
-    res.print_reals(cout);
-#endif
-
-#ifdef EMU_INTRINSICS
-    // must make a temp copy in case &res == &v3.
-    realv tmp = v3;
-    for (int i = 0; i < VLEN; i++) {
-        if ((k1 >> i) & 1)
-            res.r[i] = tmp.r[ctrl.ci[i]];
-    }
-#elif REAL_BYTES == 4
-    res.m512i = _mm512_mask_permutevar_epi32(res.m512i, MMASK(k1), ctrl.m512i, v3.m512i);
-#elif defined(ARCH_KNC)
-    cerr << "error: 64-bit permute w/mask not supported on KNC" << endl;
-    exit(1);
-#else
-    res.m512i = _mm512_mask_permutexvar_epi64(res.m512i, MMASK(k1), ctrl.m512i, v3.m512i);
-#endif
-
-#ifdef TRACE_INTRINSICS
-    cout << " res(after): ";
-    res.print_reals(cout);
-#endif
-}
-
-// rearrange elements in 2 vectors.
-// (the masking versions of these instrs do not preserve the source,
-// so we don't have a masking version of this function.)
-ALWAYS_INLINE void realv_permute2(realv& res, const realv& ctrl,
-                                  const realv& a, const realv& b) {
-#ifdef TRACE_INTRINSICS
-    cout << "realv_permute2:" << endl;
-    cout << " ctrl: ";
-    ctrl.print_ctrls(cout);
-    cout << " a: ";
-    a.print_reals(cout);
-    cout << " b: ";
-    b.print_reals(cout);
-#endif
-
-#ifdef EMU_INTRINSICS
-    // must make temp copies in case &res == &a or &b.
-    realv tmpa = a, tmpb = b;
-    for (int i = 0; i < VLEN; i++) {
-        int sel = ctrl.ci[i] & CTRL_SEL_BIT; // 0 => a, 1 => b.
-        int idx = ctrl.ci[i] & CTRL_IDX_MASK; // index.
-        res.r[i] = sel ? tmpb.r[idx] : tmpa.r[idx];
-    }
-
-#elif defined(ARCH_KNC)
-    cerr << "error: 2-input permute not supported on KNC" << endl;
-    exit(1);
-#elif REAL_BYTES == 4
-    res.m512i = _mm512_permutex2var_epi32(a.m512i, ctrl.m512i, b.m512i);
-#else
-    res.m512i = _mm512_permutex2var_epi64(a.m512i, ctrl.m512i, b.m512i);
-#endif
-
-#ifdef TRACE_INTRINSICS
-    cout << " res: ";
-    res.print_reals(cout);
-#endif
-}
 
 #endif

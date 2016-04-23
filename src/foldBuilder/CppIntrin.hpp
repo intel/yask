@@ -25,26 +25,32 @@ IN THE SOFTWARE.
 
 // Support for vector code generation using 512-bit instrinsics.
 
+#ifndef CPPINTRIN_HPP
+#define CPPINTRIN_HPP
+
 #include "Cpp.hpp"
 
 //#define DEBUG_SHIFT
 
-// Add specialization for 512-bit intrinsics.
-class Intrin512CppVecPrintHelper : public CppVecPrintHelper {
+// Add specialization for 256 and 512-bit intrinsics.
+class CppIntrinPrintHelper : public CppVecPrintHelper {
 
 protected:
     set<string> definedCtrls; // control vars already defined.
 
     // Ctor.
-    Intrin512CppVecPrintHelper(VecInfoVisitor& vv,
-                               const string& varPrefix,
-                               const string& varType,
-                               const string& linePrefix,
-                               const string& lineSuffix) :
-        CppVecPrintHelper(vv, varPrefix, varType, linePrefix, lineSuffix) { }
+    CppIntrinPrintHelper(VecInfoVisitor& vv,
+                         bool allowUnalignedLoads,
+                         const CounterVisitor* cv,
+                         const string& varPrefix,
+                         const string& varType,
+                         const string& linePrefix,
+                         const string& lineSuffix) :
+        CppVecPrintHelper(vv, allowUnalignedLoads, cv,
+                          varPrefix, varType, linePrefix, lineSuffix) { }
 
     // Dtor.
-    virtual ~Intrin512CppVecPrintHelper() { }
+    virtual ~CppIntrinPrintHelper() { }
 
     // Print mask when needed for multi-step construction.
     virtual void printMask(ostream& os, unsigned mask) {
@@ -61,54 +67,6 @@ protected:
                                const VecElemList& elems, 
                                set<size_t>& doneElems,
                                const GridPointSet& alignedVecs) =0;
-    
-public:
-    // Print construction for one unaligned vector pvName at gp.
-    virtual void printUnalignedVecCtor(ostream& os,
-                                       const GridPoint& gp,
-                                       const string& pvName) {
-
-        // Create an explanatory comment by printing the straightforward
-        // code in a comment.
-        printUnalignedVecSimple(os, gp, pvName, " // ");
-
-        // List of elements for this vec block.
-        auto& elems = _vv._vblk2elemLists[gp];
-        size_t nelems = elems.size();
-
-        // Set of elements in gp that have been constructed.
-        set<size_t> doneElems;
-
-        // Set of aligned vec blocks that overlap with this unaligned vec block.
-        const auto& alignedVecs = _vv._vblk2avblks[gp];
-
-        // Brute-force, greedy algorithm:
-        // Want to construct this vector as efficiently as possible.
-        // Try to get as many elements at once as possible.
-        // For each target number of elements (most to least), try various strategies.
-
-        // Loop through decreasing numbers of elements.
-        for (size_t nelemsTarget = nelems;
-             doneElems.size() < nelems && nelemsTarget > 0; 
-             nelemsTarget--) {
-
-            tryStrategies(os, pvName,
-                          nelemsTarget, elems, doneElems, alignedVecs);
-
-        } // decreasing number of target elements for next attempt.
-
-        // Check that all elements are done.
-        if (doneElems.size() != nelems) {
-            cerr << "error: could not create " << nelems <<
-                " elements for unaligned vector." << endl;
-            exit(1);
-        }
-    }
-};
-
-// Specialization for KNC.
-class KncCppVecPrintHelper : public Intrin512CppVecPrintHelper {
-protected:
 
     // Try to use align instruction(s) to construct nelemsTarget elements
     // per instruction.
@@ -117,7 +75,8 @@ protected:
                           size_t nelemsTarget, 
                           const VecElemList& elems, 
                           set<size_t>& doneElems,
-                          const GridPointSet& alignedVecs) {
+                          const GridPointSet& alignedVecs,
+                          bool maskAllowed) {
         size_t nelems = elems.size();
 
         // Find case(s) that can use valignd.
@@ -205,6 +164,10 @@ protected:
 
                         // We don't need to use the mask if no elements are already done.
                         bool needMask = doneElems.size() > 0;
+
+                        // If we can't use masking, must stop here.
+                        if (needMask && !maskAllowed)
+                            return;
                             
                         // 2-var shift.
                         if (nused1 && nused2) {
@@ -243,6 +206,7 @@ protected:
                             size_t fe = *fei;
                             doneElems.insert(fe);
                         }
+
                     } // found.
                 }
             }
@@ -338,30 +302,6 @@ protected:
             } // found.
         } // aligned vectors.
     }
-
-    // Try all applicable strategies.
-    virtual void tryStrategies(ostream& os,
-                               const string& pvName,
-                               size_t nelemsTarget, 
-                               const VecElemList& elems, 
-                               set<size_t>& doneElems,
-                               const GridPointSet& alignedVecs) {
-        tryAlign(os, pvName, nelemsTarget, elems, doneElems, alignedVecs);
-        tryPerm1(os, pvName, nelemsTarget, elems, doneElems, alignedVecs);
-    }
-    
-public:
-    KncCppVecPrintHelper(VecInfoVisitor& vv,
-                         const string& varPrefix,
-                         const string& varType,
-                         const string& linePrefix,
-                         const string& lineSuffix) :
-        Intrin512CppVecPrintHelper(vv, varPrefix, varType, linePrefix, lineSuffix) { }
-};
-
-// Specialization for KNL, SKX, etc.
-class Avx512CppVecPrintHelper : public KncCppVecPrintHelper {
-protected:
 
     // Try to use 2-var permute instruction(s) to construct nelemsTarget elements
     // per instruction.
@@ -472,6 +412,57 @@ protected:
         } // mi.
     }
     
+    
+public:
+    // Print construction for one unaligned vector pvName at gp.
+    virtual void printUnalignedVecCtor(ostream& os,
+                                       const GridPoint& gp,
+                                       const string& pvName) {
+
+        // Create an explanatory comment by printing the straightforward
+        // code in a comment.
+        printUnalignedVecSimple(os, gp, pvName, " // ");
+
+        // List of elements for this vec block.
+        auto& elems = _vv._vblk2elemLists[gp];
+        size_t nelems = elems.size();
+
+        // Set of elements in gp that have been constructed.
+        set<size_t> doneElems;
+
+        // Set of aligned vec blocks that overlap with this unaligned vec block.
+        const auto& alignedVecs = _vv._vblk2avblks[gp];
+
+        // Brute-force, greedy algorithm:
+        // Want to construct this vector as efficiently as possible.
+        // Try to get as many elements at once as possible.
+        // For each target number of elements (most to least), try various strategies.
+
+        // Loop through decreasing numbers of elements.
+        for (size_t nelemsTarget = nelems;
+             doneElems.size() < nelems && nelemsTarget > 0; 
+             nelemsTarget--) {
+
+            tryStrategies(os, pvName,
+                          nelemsTarget, elems, doneElems, alignedVecs);
+
+        } // decreasing number of target elements for next attempt.
+
+        // Check that all elements are done.
+        size_t ndone = doneElems.size();
+        if (ndone != nelems) {
+            os << " // Note: could not create the following " << (nelems-ndone) <<
+                " out of " << nelems <<
+                " elements for unaligned vector with intrinsics." << endl;
+            printUnalignedVecSimple(os, gp, pvName, _linePrefix, &doneElems);
+        }
+    }
+};
+
+// Specialization for KNC.
+class CppKncPrintHelper : public CppIntrinPrintHelper {
+protected:
+
     // Try all applicable strategies.
     virtual void tryStrategies(ostream& os,
                                const string& pvName,
@@ -479,16 +470,74 @@ protected:
                                const VecElemList& elems, 
                                set<size_t>& doneElems,
                                const GridPointSet& alignedVecs) {
-        tryAlign(os, pvName, nelemsTarget, elems, doneElems, alignedVecs);
+        tryAlign(os, pvName, nelemsTarget, elems, doneElems, alignedVecs, true);
+        tryPerm1(os, pvName, nelemsTarget, elems, doneElems, alignedVecs);
+    }
+    
+public:
+    CppKncPrintHelper(VecInfoVisitor& vv,
+                      bool allowUnalignedLoads,
+                      const CounterVisitor* cv,
+                      const string& varPrefix,
+                      const string& varType,
+                      const string& linePrefix,
+                      const string& lineSuffix) :
+        CppIntrinPrintHelper(vv, allowUnalignedLoads, cv,
+                             varPrefix, varType, linePrefix, lineSuffix) { }
+};
+
+// Specialization for KNL, SKX, etc.
+class CppAvx512PrintHelper : public CppIntrinPrintHelper {
+protected:
+
+    // Try all applicable strategies.
+    virtual void tryStrategies(ostream& os,
+                               const string& pvName,
+                               size_t nelemsTarget, 
+                               const VecElemList& elems, 
+                               set<size_t>& doneElems,
+                               const GridPointSet& alignedVecs) {
+        tryAlign(os, pvName, nelemsTarget, elems, doneElems, alignedVecs, true);
         tryPerm2(os, pvName, nelemsTarget, elems, doneElems, alignedVecs);
         tryPerm1(os, pvName, nelemsTarget, elems, doneElems, alignedVecs);
     }
     
 public:
-    Avx512CppVecPrintHelper(VecInfoVisitor& vv,
-                            const string& varPrefix,
-                            const string& varType,
-                            const string& linePrefix,
-                            const string& lineSuffix) :
-        KncCppVecPrintHelper(vv, varPrefix, varType, linePrefix, lineSuffix) { }
+    CppAvx512PrintHelper(VecInfoVisitor& vv,
+                         bool allowUnalignedLoads,
+                         const CounterVisitor* cv,
+                         const string& varPrefix,
+                         const string& varType,
+                         const string& linePrefix,
+                         const string& lineSuffix) :
+        CppIntrinPrintHelper(vv, allowUnalignedLoads, cv,
+                             varPrefix, varType, linePrefix, lineSuffix) { }
 };
+
+// Specialization for AVX, AVX2.
+class CppAvx256PrintHelper : public CppIntrinPrintHelper {
+protected:
+
+    // Try all applicable strategies.
+    virtual void tryStrategies(ostream& os,
+                               const string& pvName,
+                               size_t nelemsTarget, 
+                               const VecElemList& elems, 
+                               set<size_t>& doneElems,
+                               const GridPointSet& alignedVecs) {
+        tryAlign(os, pvName, nelemsTarget, elems, doneElems, alignedVecs, false);
+    }
+    
+public:
+    CppAvx256PrintHelper(VecInfoVisitor& vv,
+                         bool allowUnalignedLoads,
+                         const CounterVisitor* cv,
+                         const string& varPrefix,
+                         const string& varType,
+                         const string& linePrefix,
+                         const string& lineSuffix) :
+        CppIntrinPrintHelper(vv, allowUnalignedLoads, cv,
+                             varPrefix, varType, linePrefix, lineSuffix) { }
+};
+
+#endif

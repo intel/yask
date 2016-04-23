@@ -53,9 +53,16 @@ protected:
     map<string, T> _map;        // contents.
     vector<string> _dims;       // dirs in specified order.
 
+    // First-inner vars control ordering. Example: dims x, y, z.
+    // If _firstInner == true, x is unit stride.
+    // If _firstInner == false, z is unit stride.
+    // This setting affects mapTo1d() and visitAllPoints().
+    bool _firstInner;           // whether first dim is used for inner loop.
+    static bool _defaultFirstInner; // default for _firstInner.
+    
 public:
 
-    Tuple() { }
+    Tuple() : _firstInner(_defaultFirstInner) { }
     virtual ~Tuple() {}
 
     // Copy.
@@ -63,6 +70,12 @@ public:
         _map = rhs._map;
         _dims = rhs._dims;
     }
+
+    // first-inner (first dim is unit stride) accessors.
+    virtual bool getFirstInner() const { return _firstInner; }
+    virtual void setFirstInner(bool fi) { _firstInner = fi; }
+    static bool getDefaultFirstInner() { return _defaultFirstInner; }
+    static void setDefaultFirstInner(bool fi) { _defaultFirstInner = fi; }
     
     // Return pointer to value or null if it doesn't exist.
     virtual const T* lookup(const string& dim) const {
@@ -174,7 +187,11 @@ public:
         int prevSize = 1;
 
         // Loop thru dims.
-        for (auto dim : _dims) {
+        int startDim = _firstInner ? 0 : size()-1;
+        int beyondLastDim = _firstInner ? size() : -1;
+        int stepDim = _firstInner ? 1 : -1;
+        for (int di = startDim; di != beyondLastDim; di += stepDim) {
+            auto dim = _dims[di];
 
             // size of this dim.
             int size = getVal(dim);
@@ -398,6 +415,7 @@ public:
     }
 
     // make name like "xv+(4/2), yv, zv-(2/2)".
+    // this object has numerators; norm object has denominators.
     virtual string makeDimValNormOffsetStr(const Tuple& norm,
                                            string separator=", ",
                                            string prefix="", string suffix="") const {
@@ -426,26 +444,24 @@ public:
     // Call the visitor lambda function at every point in the space defined by this.
     // Visitation order is with first dimension in unit stride, i.e., a conceptual
     // "outer loop" iterates through last dimension, and an "inner loop" iterates
-    // through first dimension. If 'firstInner' is false, it is done the opposite way.
-    virtual void visitAllPoints(function<void (const Tuple&)> visitor,
-                                bool firstInner = true) const {
+    // through first dimension. If '_firstInner' is false, it is done the opposite way.
+    virtual void visitAllPoints(function<void (const Tuple&)> visitor) const {
 
         // Init lambda fn arg with *this.
         Tuple tp = *this;
 
         // Call recursive version.
-        if (firstInner)
-            visitAllPoints(visitor, size()-1, tp, firstInner);
+        if (_firstInner)
+            visitAllPoints(visitor, size()-1, -1, tp);
         else
-            visitAllPoints(visitor, 0, tp, firstInner);
+            visitAllPoints(visitor, 0, 1, tp);
     }
     
 protected:
 
     // Handle recursion for public visitAllPoints(visitor).
     virtual void visitAllPoints(function<void (const Tuple&)> visitor,
-                                int curDimNum, Tuple& tp,
-                                bool firstInner) const {
+                                int curDimNum, int step, Tuple& tp) const {
 
         // Ready to call visitor, i.e., have we recursed beyond a dimension?
         if (curDimNum < 0 || curDimNum >= size())
@@ -457,10 +473,7 @@ protected:
             T dsize = getVal(dim);
             for (T i = 0; i < dsize; i++) {
                 tp.setVal(dim, i);
-                if (firstInner)
-                    visitAllPoints(visitor, curDimNum - 1, tp, firstInner);
-                else
-                    visitAllPoints(visitor, curDimNum + 1, tp, firstInner);
+                visitAllPoints(visitor, curDimNum + step, step, tp);
             }
         }
     }

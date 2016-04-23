@@ -86,8 +86,8 @@ int main(int argc, char** argv)
 #ifdef DEBUG
     printf("*** WARNING: binary compiled with DEBUG; ignore performance results.\n");
 #endif
-#if defined(EMU_INTRINSICS) && (VLEN > 1)
-    printf("*** WARNING: binary compiled with EMU_INTRINSICS; ignore performance results.\n");
+#if defined(NO_INTRINSICS) && (VLEN > 1)
+    printf("*** WARNING: binary compiled with NO_INTRINSICS; ignore performance results.\n");
 #endif
 #ifdef MODEL_CACHE
     printf("*** WARNING: binary compiled with MODEL_CACHE; ignore performance results.\n");
@@ -128,7 +128,7 @@ int main(int argc, char** argv)
     int vreps = 0;      // number of verification steps.
     idx_t dn = 1, dx = DEF_PROB_SIZE, dy = DEF_PROB_SIZE, dz = DEF_PROB_SIZE; // problem dimensions.
     idx_t nrn = 1, nrx = 1, nry = 1, nrz = 1;  // number of regions.
-    idx_t bn = 1, bx = 64, by = 48, bz = 48;  // size of cache blocks.
+    idx_t bn = 1, bx = 64, by = 64, bz = 64;  // size of cache blocks.
     idx_t pn = 0, px = 0, py = 0, pz = 0; // padding.
 
     // parse options.
@@ -222,8 +222,8 @@ int main(int argc, char** argv)
 #endif
 
     // Round up vars as needed.
-    nreps = roundUp(nreps, TIME_STEPS, "number of iterations");
-    vreps = roundUp(vreps, TIME_STEPS, "number of validation iterations");
+    nreps = roundUp(nreps, TIME_STEPS_PER_ITER, "number of iterations");
+    vreps = roundUp(vreps, TIME_STEPS_PER_ITER, "number of validation iterations");
     dn = roundUp(dn, CPTS_N, "problem size in n");
     dx = roundUp(dx, CPTS_X, "problem size in x");
     dy = roundUp(dy, CPTS_Y, "problem size in y");
@@ -258,7 +258,7 @@ int main(int argc, char** argv)
         cerr << "error: stencil-order not even." << endl;
         exit(1);
     }
-    idx_t halo_size = STENCIL_ORDER/2 * TIME_STEPS;
+    idx_t halo_size = STENCIL_ORDER/2 * TIME_STEPS_PER_ITER;
     idx_t padn = ROUND_UP(halo_size, VLEN_N) + pn;
     idx_t padx = ROUND_UP(halo_size, VLEN_X) + px;
     idx_t pady = ROUND_UP(halo_size, VLEN_Y) + py;
@@ -273,18 +273,18 @@ int main(int argc, char** argv)
     cout << "\nOther settings:\n";
     printf(" stencil-order = %d\n", STENCIL_ORDER); // really just used for halo size.
     printf(" stencil-shape = " STENCIL_NAME "\n");
-    printf(" time-dim = %d\n", TIME_DIM);
+    printf(" time-dim = %d\n", TIME_DIM_SIZE);
     printf(" vector-len = %d\n", VLEN);
     printf(" padding = %ld+%ld+%ld+%ld\n", pn, px, py, pz);
     printf(" padding-with-halos = %ld+%ld+%ld+%ld\n", padn, padx, pady, padz);
     printf(" num-trials = %d\n", num_trials);
     printf(" num-iterations = %d\n", nreps);
-    printf(" time-step-granularity = %d\n", TIME_STEPS);
+    printf(" time-step-granularity = %d\n", TIME_STEPS_PER_ITER);
     printf(" manual-L1-prefetch-distance = %d\n", PFDL1);
     printf(" manual-L2-prefetch-distance = %d\n", PFDL2);
 
     const idx_t numpts = dn*dx*dy*dz;
-    printf("\nPoints to calculate: %.3fM (%ld * %ld * %ld * %ld / 1e6)\n",
+    printf("\nPoints to calculate: %.3fM (%ld * %ld * %ld * %ld)\n",
            (float)numpts/1e6, dn, dx, dy, dz);
     const idx_t numFpOps = numpts * STENCIL_NUM_FP_OPS_SCALAR;
     printf("FP ops: %i per point, %.3fG total\n", STENCIL_NUM_FP_OPS_SCALAR,
@@ -335,7 +335,7 @@ int main(int argc, char** argv)
 
     // warmup caches, threading, etc.
     if (num_trials && nreps) {
-        int tmp_nreps = min(TIME_STEPS, nreps);
+        int tmp_nreps = min(TIME_STEPS_PER_ITER, nreps);
 #ifdef MODEL_CACHE
         if (cache.isEnabled())
             printf("modeling cache...\n");

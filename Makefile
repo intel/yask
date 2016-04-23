@@ -21,162 +21,175 @@
 ## IN THE SOFTWARE.
 ##############################################################################
 
-# Example usage:
-# make -j8 arch=knc
-# make -j8 arch=knl stencil=3axis order=8
-# make -j8 arch=skx stencil=ave fold='x=1,y=2,z=4' cluster='x=2'
-
-# Example debug usage:
-# make arch=knl  OMPFLAGS='-qopenmp-stubs' EXTRA_CPPFLAGS='-O0' MACROS='DEBUG'
-# make arch=host OMPFLAGS='-qopenmp-stubs' EXTRA_CPPFLAGS='-O0' MACROS='DEBUG' model_cache=2
-# make arch=host OMPFLAGS='-qopenmp-stubs' order=0 stencil=3axis fold='x=1,y=1,z=1' MACROS='DEBUG DEBUG_TOLERANCE EMU_INTRINSICS TRACE TRACE_MEM TRACE_INTRINSICS' EXTRA_CPPFLAGS='-O0'
-
-# target architecture: see options below.
-arch            =	host
+# Type 'make help' for some examples.
 
 # stencil name: iso3dfd, 3axis, 9axis, 3plane, cube, ave, awp
-stencil		= 	3axis
+stencil		?= 	iso3dfd
 
-# stencil "order":
+# arch: target architecture: see options below.
+arch		?=	host
+
+# defaults for various stencils:
+#
+# order:
 # - historical term, not strictly order of PDE.
 # - for most stencils, is width of spatial extent - 1.
 # - for awp, only affects halo.
-order		=	16
-
-# FP precision: 4=float, 8=double.
-real_bytes	=	4
-
-# allocated size of time dimension in grids.
-time_dim	=	2
-
-# default overrides for various stencils.
+#
+# real_bytes: FP precision: 4=float, 8=double.
+#
+# time_dim: allocated size of time dimension in grids.
 ifeq ($(stencil),ave)
 order		=	2
 real_bytes	=	8
-endif
-ifeq ($(stencil),9axis)
+else ifeq ($(stencil),9axis)
 order		=	8
-endif
-ifeq ($(stencil),3plane)
+else ifeq ($(stencil),3plane)
 order		=	6
-endif
-ifeq ($(stencil),cube)
+else ifeq ($(stencil),cube)
 order		=	4
-endif
-ifeq ($(stencil),awp)
+else ifeq ($(stencil),awp)
 order		=	4
 time_dim	=	1
 endif
 
+# general defaults for these vars if not set above.
+order			?=	16
+real_bytes		?=	4
+time_dim		?=	2
+
+# arch-specific settings:
+#
+# streaming_stores: Whether to use streaming stores.
+#
+# crew: whether to use Intel Crew threading feature.
+# If you get linker errors about missing 'kmp*' symbols, your
+# compiler does not support crew for the specified architecture,
+# and you should specify 'crew=0' as a make argument.
+#
+# omp_schedule: OMP schedule policy.
+ifeq ($(arch),)
+
+$(error Architecture not specified; use arch=knc|knl|skx|hsw|ivb|snb|host)
+
+else ifeq ($(arch),knc)
+
+ISA		= 	-mmic
+MACROS		+=	USE_INTRIN512
+FB_TARGET  	=       knc
+crew		=	1
+streaming_stores=	1
+
+else ifeq ($(arch),knl)
+
+ISA		=	-xMIC-AVX512
+MACROS		+=	USE_INTRIN512
+FB_TARGET  	=       512
+crew		=	1
+streaming_stores=	1
+
+else ifeq ($(arch),skx)
+
+ISA		=	-xCORE-AVX512
+MACROS		+=	USE_INTRIN512
+FB_TARGET  	=       512
+
+else ifeq ($(arch),hsw)
+
+ISA		=	-xCORE-AVX2
+MACROS		+=	USE_INTRIN256
+FB_TARGET  	=       256
+
+else ifeq ($(arch),ivb)
+
+ISA		=	-xCORE-AVX-I
+MACROS		+=	USE_INTRIN256
+FB_TARGET  	=       256
+
+else ifeq ($(arch),snb)
+
+ISA		=	-xAVX
+MACROS		+= 	USE_INTRIN256
+FB_TARGET  	=       256
+
+endif # arch-specific.
+
+# general defaults for these vars if not set above.
+crew			?= 	0
+streaming_stores	?= 	1
+omp_schedule		?=	dynamic
+ISA			?=	-xHOST
+FB_TARGET  		?=	cpp
+
 # How to fold vectors (x*y*z).
 # Vectorization in dimensions perpendicular to the inner loop
 # (defined by BLOCK_LOOP_ARGS below) often works well.
+
+ifneq ($(findstring INTRIN512,$(MACROS)),)  # 512 bits.
 ifeq ($(real_bytes),4)
 fold		=	x=4,y=4,z=1
 else
 fold		=	x=4,y=2,z=1
 endif
 
+else  # not 512 bits.
+ifeq ($(real_bytes),4)
+fold		=	x=8
+else
+fold		=	x=4
+endif
+
+endif
+
 # How many vectors to compute at once (unrolling factor in
 # each dimension).
 cluster		=	x=1,y=1,z=1
 
-# Heuristic for expression-size threshold in foldBuilder.
-expr_size	=	50
-
-# OMP schedule policy.
-omp_schedule	=	dynamic
-
-# Whether to use Intel CREW.
-# Off by default, but turned on by default below for
-# certain architectures.
-# If you get linker errors about missing 'kmp*' symbols, your
-# compiler does not support crew for the specified architecture,
-# and you should specify 'crew=0' as a make argument.
-crew		= 	0
-
+# More build flags.
 FB_CC    	=       $(CC)
-FB_CCFLAGS 	=	-g -O0 -std=c++11 -Wall  # no opt to reduce compile time.
-FB_FLAGS1   	=	-or $(order) -st $(stencil)
-FB_FLAGS2   	=	-cluster $(cluster) -fold $(fold) -es $(expr_size)
+FB_CCFLAGS 	+=	-g -O1 -std=c++11 -Wall  # low opt to reduce compile time.
+FB_FLAGS   	+=	-or $(order) -st $(stencil) -cluster $(cluster) -fold $(fold)
 CC		=	icpc
 FC		=	ifort
 LD		=	$(CC)
 MAKE		=	make
-LFLAGS          =    	-lpthread
-CPPFLAGS        =   	-g -O3 -std=c++11 -Wall
-OMPFLAGS	=	-fopenmp 
-LFLAGS          =       $(CPPFLAGS) -lrt -g
+LFLAGS          +=    	-lpthread
+CPPFLAGS        +=   	-g -O3 -std=c++11 -Wall $(ISA)
+OMPFLAGS	+=	-fopenmp 
+LFLAGS          +=       $(CPPFLAGS) -lrt -g
 GEN_HEADERS     =	$(addprefix src/,stencil_outer_loops.hpp \
 				stencil_region_loops.hpp stencil_block_loops.hpp \
 				map_macros.hpp maps.hpp \
 				stencil_macros.hpp stencil_code.hpp)
 
 # settings passed as macros.
-CPPFLAGS	+=	-DREAL_BYTES=$(real_bytes)
-CPPFLAGS	+=	-DTIME_DIM=$(time_dim)
+MACROS		+=	REAL_BYTES=$(real_bytes)
+MACROS		+=	TIME_DIM=$(time_dim)
 
 # arch.
 ARCH		:=	$(shell echo $(arch) | tr '[:lower:]' '[:upper:]')
-CPPFLAGS	+= 	-DARCH_$(ARCH)
-
-# arch-specific settings
-ifeq ($(arch),)
-
-$(error Architecture not specified; use arch=knc|knl|skx|hsw|bdw|ivb|snb|host)
-
-else ifeq ($(arch),knc)
-
-CPPFLAGS		+= -mmic
-CPPFLAGS	+= 	-DINTRIN512
-FB_TARGET  	=       knc
-crew		=	1
-
-else ifeq ($(arch),knl)
-
-CPPFLAGS	+=	-xMIC-AVX512
-CPPFLAGS	+= 	-DINTRIN512
-FB_TARGET  	=       512
-crew		=	1
-
-else ifeq ($(arch),skx)
-
-CPPFLAGS	+=	-xCORE_AVX512
-CPPFLAGS	+= 	-DINTRIN512
-FB_TARGET  	=       512
-
-# any non-512-bit arch.
-else
-
-ifeq ($(arch),hsw)
-CPPFLAGS	+=	-xCORE-AVX2
-else ifeq ($(arch),bdw)
-CPPFLAGS	+=	-xCORE-AVX2
-else ifeq ($(arch),ivb)
-CPPFLAGS	+=	-xCORE-AVX-I
-else ifeq ($(arch),snb)
-CPPFLAGS	+=	-xAVX
-else
-CPPFLAGS	+=	-xHOST
-endif
-
-FB_TARGET  	=       cpp
-
-endif # arch-specific.
+MACROS		+= 	ARCH_$(ARCH)
 
 # compiler-specific settings
 ifeq ($(notdir $(CC)),icpc)
 
-CPPFLAGS        +=      -debug -restrict -ansi-alias -fno-alias -fimf-precision=low -fast-transcendentals -no-prec-sqrt -no-prec-div -fp-model fast=2 -fno-protect-parens -qopt-assume-safe-padding -Fa
+CPPFLAGS        +=      -debug extended -restrict -ansi-alias -fno-alias -fimf-precision=low -fast-transcendentals -no-prec-sqrt -no-prec-div -fp-model fast=2 -fno-protect-parens -qopt-assume-safe-padding -Fa
 CPPFLAGS	+=      -qopt-report=5 -qopt-report-phase=VEC,PAR,OPENMP,IPO,LOOP
 CPPFLAGS	+=	-no-diag-message-catalog
 
+# work around an optimization bug.
+MACROS		+=	NO_STORE_INTRINSICS
+
 ifeq ($(crew),1)
-OPT_CREW	=	-D__INTEL_CREW -mP2OPT_hpo_par_crew_codegen=T
-CPPFLAGS	+=      $(OPT_CREW)
+CPPFLAGS	+=      -mP2OPT_hpo_par_crew_codegen=T
+MACROS		+=	__INTEL_CREW
 endif
 
 endif # compiler-specific
+
+ifeq ($(streaming_stores),1)
+MACROS		+=	USE_STREAMING_STORE
+endif
 
 # gen-loops args for outer 3 sets of loops:
 
@@ -191,19 +204,19 @@ REGION_LOOP_ARGS	+=	'serpentine omp loop(rn,rx,ry,rz) { calc(block); }'
 # Block loops break up a block into vector clusters.
 # Note: the indices at this level are by vector instead of element.
 BLOCK_LOOP_ARGS		=     	-dims 'bnv,bxv,byv,bzv'
-BLOCK_LOOP_ARGS		+=	'loop(bnv) { crew loop(bxv) { loop(byv) {' $(CLUSTER_LOOP_OPTS) 'loop(bzv) { calc(cluster); } } } }'
+BLOCK_LOOP_ARGS		+=	'loop(bnv) { crew loop(bxv) { loop(byv) {' $(INNER_LOOP_OPTS) 'loop(bzv) { calc(cluster); } } } }'
 
 
 # compile with model_cache=1 or 2 to check prefetching.
 ifeq ($(model_cache),1)
-CPPFLAGS       	+=      -DMODEL_CACHE=1
+MACROS       	+=      MODEL_CACHE=1
 OMPFLAGS	=	-qopenmp-stubs
 else ifeq ($(model_cache),2)
-CPPFLAGS       	+=      -DMODEL_CACHE=2
+MACROS       	+=      MODEL_CACHE=2
 OMPFLAGS	=	-qopenmp-stubs
 endif
 
-CPPFLAGS	+=	$(addprefix -D,$(MACROS)) $(OMPFLAGS) $(EXTRA_CPPFLAGS)
+CPPFLAGS	+=	$(addprefix -D,$(MACROS)) $(addprefix -D,$(EXTRA_MACROS)) $(OMPFLAGS) $(EXTRA_CPPFLAGS)
 LFLAGS          +=      $(OMPFLAGS) $(EXTRA_CPPFLAGS)
 
 STENCIL_OBJ_BASES	:=	stencil_main stencil_calc stencil_ref utils
@@ -226,15 +239,24 @@ all:	$(STENCIL_EXEC_NAME) $(CODE_STATS)
 	@echo order=$(order)
 	@echo real_bytes=$(real_bytes)
 	@echo time_dim=$(time_dim)
+	@echo streaming_stores=$(streaming_stores)
+	@echo FB_TARGET="'"$(FB_TARGET)"'"
+	@echo FB_FLAGS="'"$(FB_FLAGS)"'"
+	@echo EXTRA_FB_FLAGS="'"$(EXTRA_FB_FLAGS)"'"
 	@echo MACROS="'"$(MACROS)"'"
+	@echo EXTRA_MACROS="'"$(EXTRA_MACROS)"'"
+	@echo ISA=$(ISA)
 	@echo OMPFLAGS="'"$(OMPFLAGS)"'"
 	@echo EXTRA_CPPFLAGS="'"$(EXTRA_CPPFLAGS)"'"
 	@echo CPPFLAGS="'"$(CPPFLAGS)"'"
+	@echo OUTER_LOOP_ARGS="'"$(OUTER_LOOP_ARGS)"'"
+	@echo REGION_LOOP_ARGS="'"$(REGION_LOOP_ARGS)"'"
+	@echo BLOCK_LOOP_ARGS="'"$(BLOCK_LOOP_ARGS)"'"
 
 code_stats: $(STENCIL_EXEC_NAME)
 	@echo
 	@echo "Code stats for stencil computation:"
-	./get-loop-stats.pl *.s
+	./get-loop-stats.pl -t='block_loops' *.s
 	@echo "Speedup estimates:"
 	@grep speedup src/stencil_*.$(arch).optrpt | sort | uniq -c
 
@@ -260,10 +282,10 @@ foldBuilder: src/foldBuilder/*.*pp src/foldBuilder/stencils/*.*pp
 	$(FB_CC) $(FB_CCFLAGS) -Isrc/foldBuilder/stencils -o $@ src/foldBuilder/*.cpp
 
 src/stencil_macros.hpp: foldBuilder
-	./$< $(FB_FLAGS1) $(FB_FLAGS2) -pm > $@
+	./$< $(FB_FLAGS) $(EXTRA_FB_FLAGS) -pm > $@
 
 src/stencil_code.hpp: foldBuilder
-	./$< $(FB_FLAGS1) $(FB_FLAGS2) -p$(FB_TARGET) > $@
+	./$< $(FB_FLAGS) $(EXTRA_FB_FLAGS) -p$(FB_TARGET) > $@
 	- gindent $@ || indent $@ || echo "note: no indent program found"
 
 headers: $(GEN_HEADERS)
@@ -281,3 +303,14 @@ clean:
 realclean: clean
 	rm -fv stencil*.exe foldBuilder TAGS
 	find . -name '*~' | xargs -r rm -v
+
+help:
+	@echo "Example usage:"
+	@echo "make clean; make -j8 arch=knc"
+	@echo "make clean; make -j8 arch=knl stencil=3axis order=8"
+	@echo "make clean; make -j8 arch=skx stencil=ave fold='x=1,y=2,z=4' cluster='x=2' EXTRA_FB_FLAGS=-lus"
+	@echo " "
+	@echo "Example debug usage:"
+	@echo "make arch=knl  OMPFLAGS='-qopenmp-stubs' crew=0 EXTRA_CPPFLAGS='-O0' EXTRA_MACROS='DEBUG'"
+	@echo "make arch=host OMPFLAGS='-qopenmp-stubs' EXTRA_CPPFLAGS='-O0' EXTRA_MACROS='DEBUG' model_cache=2"
+	@echo "make arch=host OMPFLAGS='-qopenmp-stubs' order=0 stencil=3axis fold='x=1,y=1,z=1' EXTRA_MACROS='DEBUG DEBUG_TOLERANCE EMU_INTRINSICS TRACE TRACE_MEM TRACE_INTRINSICS' EXTRA_CPPFLAGS='-O0'"

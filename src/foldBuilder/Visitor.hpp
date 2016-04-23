@@ -23,7 +23,7 @@ IN THE SOFTWARE.
 
 *****************************************************************************/
 
-//////////// Generic Visitor class /////////////
+//////////// Generic expression-visitor class /////////////
 
 #ifndef VISITOR_HPP
 #define VISITOR_HPP
@@ -53,12 +53,6 @@ public:
         be->getRhs()->accept(this);
     }
 
-    // By default, an equality visitor just visits its operands.
-    virtual void visit(EqualsExpr* be) {
-        be->getLhs()->accept(this);
-        be->getRhs()->accept(this);
-    }
-
     // By default, a commutative visitor just visits its operands.
     virtual void visit(CommutativeExpr* ce) {
         ExprPtrVec& ops = ce->getOps();
@@ -66,39 +60,11 @@ public:
             ep->accept(this);
         }
     }
-};
 
-// A visitor that counts FP ops.
-// TODO: count the type of each.
-class FpOpCounterVisitor : public ExprVisitor {
-
-    int _numOps;
-    
-public:
-    FpOpCounterVisitor() : _numOps(0) { }
-
-    int getNumOps() const { return _numOps; }
-
-    // Count as one op and visit operand.
-    virtual void visit(UnaryExpr* ue) {
-        _numOps++;
-        ue->getRhs()->accept(this);
-    }
-
-    // Count as one op and visit operands.
-    virtual void visit(BinaryExpr* be) {
-        _numOps++;
-        be->getLhs()->accept(this);
-        be->getRhs()->accept(this);
-    }
-
-    // Count as one op between each operand and visit operands.
-    virtual void visit(CommutativeExpr* ce) {
-        ExprPtrVec& ops = ce->getOps();
-        _numOps += ops.size() - 1;
-        for (auto ep : ops) {
-            ep->accept(this);
-        }
+    // By default, an equality visitor just visits its operands.
+    virtual void visit(EqualsExpr* ee) {
+        ee->getLhs()->accept(this);
+        ee->getRhs()->accept(this);
     }
 };
 

@@ -25,7 +25,11 @@ IN THE SOFTWARE.
 
 ///////// Stencil AST Expressions. ////////////
 
-#include "Visitor.hpp"
+#include "Print.hpp"
+#include "ExprUtils.hpp"
+
+// Define static value in Tuple.
+bool IntTuple::_defaultFirstInner = true;
 
 // Unary.
 ExprPtr constGridValue(double rhs) {
@@ -189,6 +193,14 @@ void EqualsExpr::accept(ExprVisitor* ev) {
     ev->visit(this);
 }
 
+// EqualsExpr methods.
+bool EqualsExpr::isSame(const Expr* other) {
+        auto p = dynamic_cast<const EqualsExpr*>(other);
+        return p && _opStr == p->_opStr &&
+            _lhs->isSame(p->_lhs.get()) &&
+            _rhs->isSame(p->_rhs.get());
+    }
+
 // GridPoint methods.
 const string& GridPoint::getName() const {
     return _grid->getName();
@@ -218,3 +230,29 @@ void Grids::acceptToAll(ExprVisitor* ev) {
     }
 }
 
+// Make a readable string from an expression.
+string Expr::makeStr() const {
+    ostringstream oss;
+    
+    // Use a print visitor to make a string.
+    PrintHelper ph(NULL, "temp", "", "", "");
+    PrintVisitorTopDown pv(oss, ph);
+    accept(&pv);
+
+    return oss.str() + pv.getExprStr();
+}
+
+// Return number of nodes.
+int Expr::getNumNodes() const {
+
+    // Use a counter visitor.
+    CounterVisitor cv;
+    accept(&cv);
+
+    return cv.getNumNodes();
+}
+
+// Const version of accept.
+void Expr::accept(ExprVisitor* ev) const {
+    const_cast<Expr*>(this)->accept(ev);
+}

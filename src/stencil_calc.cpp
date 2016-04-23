@@ -44,13 +44,13 @@ void calc_steps_opt(StencilContext& context, Stencils& stencils, const int nreps
     const idx_t step_dx = context.rx;
     const idx_t step_dy = context.ry;
     const idx_t step_dz = context.rz;
+    printf("running %i optimized time step(s)...\n", nreps);
     
-    printf("running %i optimized time steps(s)...\n", nreps);
-
-    // For each iteration, calculate output for t+TIME_STEPS based on t.
-    // Start at t=1 so t-1 will be >= 0.
-    // FIXME: make this less fragile.
-    for(int t = 1; t <= nreps; t += TIME_STEPS) {
+    // time steps.
+    // Start at a positive point to avoid any calculation referring
+    // to negative time.
+    idx_t t0 = TIME_DIM_SIZE * 2;
+    for(idx_t t = t0; t < t0 + nreps; t += TIME_STEPS_PER_ITER) {
 
         // calculations to make.
         for (auto stencil : stencils) {

@@ -148,15 +148,15 @@ inline bool within_tolerance(T val, T ref, T epsilon) {
 #define ROUND_UP(n, mult) (DIV_AND_ROUND_UP(n, mult) * (mult))
 
 // number of time steps calculated in each stencil-function call.
-#ifndef TIME_STEPS
-#define TIME_STEPS (1)
+#ifndef TIME_STEPS_PER_ITER
+#define TIME_STEPS_PER_ITER (1)
 #endif
 
 // Size of time dimension required in allocated memory.
 // TODO: calculate this per-grid based on dependency tree and
 // traversal order.
-#ifndef TIME_DIM
-#define TIME_DIM (2)
+#ifndef TIME_DIM_SIZE
+#define TIME_DIM_SIZE (2)
 #endif
 
 // vector sizes.

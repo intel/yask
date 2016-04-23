@@ -30,14 +30,17 @@ use strict;
 my $minInstrs = 2;
 my $printAsm = 0;
 my $targetLabel = "";
+my $targetText = "";
 
 sub usage {
   my $msg = shift;
 
   warn "$msg\n" if defined $msg;
-  die "usage: [-p] [-l=label] file...\n".
-    " -p       print instrs\n".
-    " -l       print only for given label\n";
+  die "usage: [options] file...\n".
+    "options:\n".
+    " -p           print instrs\n".
+    " -l=<regex>   print only loops at matching label\n".
+    " -t=<regex>   print only loops with an matching text\n";
 }
 
 for my $arg (@ARGV) {
@@ -49,8 +52,11 @@ for my $arg (@ARGV) {
     $printAsm = 1;
     next;
   }
-  elsif ($arg =~ /^-l=(.*)$/) {
-    $targetLabel = $1;
+  elsif ($arg =~ /^-(\w+)=(.*)$/) {
+    my ($key, $val) = ($1, $2);
+    if ($key eq "l") { $targetLabel = $val; }
+    elsif ($key eq "t") { $targetText = $val; }
+    else { usage("error: unknown option '$key'"); }
     next;
   }
 
@@ -59,15 +65,15 @@ for my $arg (@ARGV) {
   my %loopLabels;
   my %astats;                   # arg stats.
   my %istats;                   # instr stats.
-  my %lstats;                   # loc stats.
+  my %fstats;                   # src-file stats.
 
   for my $pass (0..1) {
 
     my %labels;
     my $asmLine = 0;
     my $getData = 0;
-    my $locInfo;                # string describing current location.
-    my @lines;                    # lines to print.
+    my ($locInfo, $srcFile);      # strings describing current location.
+    my @lines;                  # lines to print.
 
     open F, "<$fname" or usage("error: cannot open '$fname'");
     print "\n'$fname'...\n" if !$pass;
@@ -86,8 +92,10 @@ for my $arg (@ARGV) {
       elsif (/^\s*\.loc\s+(\d+)\s+(.*)/) {
         my ($fi, $info) = ($1, $2);
         if (exists $files{$fi}) {
-          $locInfo = "$files{$fi}:$info";
+          $srcFile = $files{$fi};
+          $locInfo = "$srcFile:$info";
         } else {
+          $srcFile = "";
           $locInfo = "";
         }
       }
@@ -105,7 +113,7 @@ for my $arg (@ARGV) {
           # clear loop data.
           undef %istats;
           undef %astats;
-          undef %lstats;
+          undef %fstats;
           undef @lines;
         }
       }
@@ -117,59 +125,10 @@ for my $arg (@ARGV) {
         $asmLine++;
         push @lines, "$_\t$locInfo\n";
 
-        # jump, e.g.,
-        #  jb        ..B1.39       # Prob 82%                      #40.2
-        if ($instr =~ /^j\w+$/ && $args =~ /^(\S+)/) {
-          my $lab = $1;
-          $istats{'jump'}++;
-
-          # end of a loop?
-          # this assumes loops jump backward.
-          if (exists $labels{$lab}) {
-
-            my $dist = $asmLine - $labels{$lab};
-            $loopLabels{$lab} = 1;
-            #warn "$lab: $dist instrs\n";
-
-            # 2nd pass: print results under certain conditions.
-            if ($pass &&
-                $dist > $minInstrs &&
-                $istats{'SIMD FLOP'} &&
-                (!$targetLabel || $targetLabel eq $lab)) {
-              print "\nSIMD loop $lab:\n";
-              print @lines if $printAsm;
-              print "$dist total instrs\n";
-              print "Instr counts per instr type (FLOP count is a subtotal):\n";
-              for my $key (sort keys %istats) {
-                my $value = $istats{$key};
-                printf "%4i  $key\n", $value;
-              }
-              print "Instr counts per operand type:\n";
-              for my $key (sort keys %astats) {
-                my $value = $astats{$key};
-                printf "%4i  $key\n", $value;
-              }
-              print "Location counts per location:\n";
-              for my $key (sort keys %lstats) {
-                my $value = $lstats{$key};
-                printf "%4i  $key\n", $value;
-              }
-            }
-
-            # we only want inner loops,
-            # so we can delete all label info now.
-            undef %labels;
-            undef %istats;
-            undef %astats;
-            undef %lstats;
-          }
-        }
-
-        # non-jump instr: collect stats.
-        else {
-
-          # loc stats.
-          $lstats{$locInfo}++;
+        # collect stats in this instr.
+        {
+          # src stats.
+          $fstats{$srcFile}++;
           
           # arg stats. (dest is last arg.)
           my $type = ($args =~ /zmm/) ? '512-bit SIMD' :
@@ -192,7 +151,7 @@ for my $arg (@ARGV) {
           # instr stats.
           if ($instr =~ /vbroadcast/) {
             $istats{'SIMD vbroadcast'}++;
-          } elsif ($instr =~ /valign/) {
+          } elsif ($instr =~ /vp?align/) {
             $istats{'SIMD valign'}++;
           } elsif ($instr =~ /vperm\w*2/) {
             $istats{'SIMD vperm2'}++;
@@ -223,8 +182,60 @@ for my $arg (@ARGV) {
             $istats{'prefetch'}++;
           } elsif ($instr =~ /^v/) {
             $istats{'SIMD other'}++;
+          } elsif ($instr =~ /^j/) {
+            $istats{'jump'}++;
+          } elsif ($instr =~ /^cmp/) {
+            $istats{'compare'}++;
           } else {
             $istats{'other instr'}++;
+          }
+        }
+
+        # jump instr, e.g.,
+        #  jb        ..B1.39       # Prob 82%                      #40.2
+        if ($instr =~ /^j\w+$/ && $args =~ /^(\S+)/) {
+          my $lab = $1;
+
+          # end of a loop?
+          # this assumes loops jump backward.
+          if (exists $labels{$lab}) {
+
+            my $dist = $asmLine - $labels{$lab};
+            $loopLabels{$lab} = 1;
+            #warn "$lab: $dist instrs\n";
+
+            # 2nd pass: print results under certain conditions.
+            if ($pass &&
+                $dist > $minInstrs &&
+                $istats{'SIMD FLOP'} &&
+                (!$targetLabel || $lab =~ /$targetLabel/) &&
+                (!$targetText || grep(/$targetText/, @lines))) {
+              print "\nSIMD loop $lab:\n";
+              print @lines if $printAsm;
+              print "$dist total instrs\n";
+              print "Instr counts per instr type (FLOP count is a subtotal):\n";
+              for my $key (sort keys %istats) {
+                my $value = $istats{$key};
+                printf "%4i  $key\n", $value;
+              }
+              print "Instr counts per operand type:\n";
+              for my $key (sort keys %astats) {
+                my $value = $astats{$key};
+                printf "%4i  $key\n", $value;
+              }
+              print "Instr counts per source file:\n";
+              for my $key (sort keys %fstats) {
+                my $value = $fstats{$key};
+                printf "%4i  $key\n", $value;
+              }
+            }
+
+            # we only want inner loops,
+            # so we can delete all label info now.
+            undef %labels;
+            undef %istats;
+            undef %astats;
+            undef %fstats;
           }
         }
       }
@@ -232,3 +243,5 @@ for my $arg (@ARGV) {
   }
 }
 
+print "To see the asm code for the above loop(s), run '$0 -p @ARGV'.\n"
+  if !$printAsm;

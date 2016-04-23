@@ -56,13 +56,20 @@ public:
 
     // For visitors.
     virtual void accept(ExprVisitor* ev) =0;
+    virtual void accept(ExprVisitor* ev) const;
+
+    // Check for equivalency.
+    virtual bool isSame(const Expr* other) =0;
 
     // Try to add a compatible operand.
     // Return true if successful.
     virtual bool appendOp(ExprPtr rhs, const string& opStr) { return false; }
 
-    // Count number of grid points in this expr.
-    virtual int getNumPoints() const { return 0; }
+    // Return a simple string expr.
+    virtual string makeStr() const;
+
+    // Return number of nodes.
+    virtual int getNumNodes() const;
 };
 typedef vector<ExprPtr> ExprPtrVec;
 
@@ -124,6 +131,12 @@ public:
     }
 
     virtual void accept(ExprVisitor* ev);
+
+    // Check for equivalency.
+    virtual bool isSame(const Expr* other) {
+        auto p = dynamic_cast<const ConstExpr*>(other);
+        return p && _f == p->_f;
+    }
 };
 
 // Any expression that returns a real (not from a grid).
@@ -141,6 +154,12 @@ public:
     }
 
     virtual void accept(ExprVisitor* ev);
+
+    // Check for equivalency.
+    virtual bool isSame(const Expr* other) {
+        auto p = dynamic_cast<const CodeExpr*>(other);
+        return p && _code == p->_code;
+    }
 };
 
 // Base class for any unary operator.
@@ -154,14 +173,17 @@ public:
         _rhs(rhs), _opStr(opStr) { }
     virtual ~UnaryExpr() { }
 
-    ExprPtr getRhs() { return _rhs; }
-    const ExprPtr getRhs() const { return _rhs; }
+    ExprPtr& getRhs() { return _rhs; }
+    const ExprPtr& getRhs() const { return _rhs; }
     const string& getOpStr() const { return _opStr; }
     
     virtual void accept(ExprVisitor* ev);
 
-    virtual int getNumPoints() const {
-        return _rhs->getNumPoints();
+    // Check for equivalency.
+    virtual bool isSame(const Expr* other) {
+        auto p = dynamic_cast<const UnaryExpr*>(other);
+        return p && _opStr == p->_opStr &&
+            _rhs->isSame(p->_rhs.get());
     }
 };
 
@@ -187,13 +209,17 @@ public:
         UnaryExpr(opStr, rhs), _lhs(lhs) { }
     virtual ~BinaryExpr() { }
 
-    ExprPtr getLhs() { return _lhs; }
-    const ExprPtr getLhs() const { return _lhs; }
+    ExprPtr& getLhs() { return _lhs; }
+    const ExprPtr& getLhs() const { return _lhs; }
 
     virtual void accept(ExprVisitor* ev);
 
-    virtual int getNumPoints() const {
-        return _lhs->getNumPoints() + _rhs->getNumPoints();
+    // Check for equivalency.
+    virtual bool isSame(const Expr* other) {
+        auto p = dynamic_cast<const BinaryExpr*>(other);
+        return p && _opStr == p->_opStr &&
+            _lhs->isSame(p->_lhs.get()) &&
+            _rhs->isSame(p->_rhs.get());
     }
 };
 
@@ -232,14 +258,17 @@ public:
         UnaryExpr(opStr(), rhs), _lhs(lhs) { }
     virtual ~EqualsExpr() { }
 
-    GridPointPtr getLhs() { return _lhs; }
-    const GridPointPtr getLhs() const { return _lhs; }
+    GridPointPtr& getLhs() { return _lhs; }
+    const GridPointPtr& getLhs() const { return _lhs; }
 
     static string opStr() {
         return "=="; 
     }
 
     virtual void accept(ExprVisitor* ev);
+
+    // Check for equivalency.
+    virtual bool isSame(const Expr* other);
 };
 
 // A list of exprs with a common operator that can be rearranged,
@@ -278,13 +307,31 @@ public:
 
     virtual void accept(ExprVisitor* ev);
 
-    virtual int getNumPoints() const {
-        int numPoints = 0;
-        for (auto i = _ops.begin(); i != _ops.end(); i++) {
-            auto ep = *i;
-            numPoints += ep->getNumPoints();
+    // Check for equivalency.
+    virtual bool isSame(const Expr* other) {
+        auto p = dynamic_cast<const CommutativeExpr*>(other);
+        if (!p || _opStr != p->_opStr)
+            return false;
+        
+        // Operands must be the same, but not in same order.
+        set<ExprPtr> matches;
+
+        // Loop through this set of ops.
+        for (auto op : _ops) {
+
+            // Loop through other set of ops, looking for match.
+            for (auto oop : p->_ops) {
+
+                // check unless already matched.
+                if (matches.count(oop) == 0 && op->isSame(oop.get())) {
+                    matches.insert(oop);
+                    break;
+                }
+            }
         }
-        return numPoints;
+
+        // Do all match?
+        return matches.size() == _ops.size();
     }
 };
 
@@ -356,10 +403,12 @@ public:
     // Take ev to each value.
     virtual void accept(ExprVisitor* ev);
 
-    // Just one point here.
-    // Used for couting points in an AST.
-    virtual int getNumPoints() const { return 1; }
-
+    // Check for equivalency.
+    virtual bool isSame(const Expr* other) {
+        auto p = dynamic_cast<const GridPoint*>(other);
+        return p && *this == *p;
+    }
+    
     // Determine whether this is 'ahead of' rhs in given direction.
     virtual bool isAheadOfInDir(const GridPoint& rhs, const IntTuple& dir) const;
 
