@@ -27,6 +27,7 @@ IN THE SOFTWARE.
 
 #include "Print.hpp"
 #include "ExprUtils.hpp"
+#include "Parse.hpp"
 
 // Define static value in Tuple.
 bool IntTuple::_defaultFirstInner = true;
@@ -162,11 +163,13 @@ void operator/=(GridValue& lhs, double rhs) {
 // '==' operator, which tests for equality.
 void operator==(GridPointPtr gpp, ExprPtr rhs) {
     assert(gpp != NULL);
-    Grid* gp = gpp->getGrid();
-    assert(gp);
 
     // Make expression node.
     ExprPtr p = make_shared<EqualsExpr>(gpp, rhs);
+
+    // Save it in the grid.
+    Grid* gp = gpp->getGrid();
+    assert(gp);
     gp->addExpr(gpp, p);
 }
 
@@ -230,6 +233,13 @@ void Grids::acceptToAll(ExprVisitor* ev) {
     }
 }
 
+// Visit first expression in each grid.
+void Grids::acceptToFirst(ExprVisitor* ev) {
+    for (auto gp : *this) {
+        gp->acceptToFirst(ev);
+    }
+}
+
 // Make a readable string from an expression.
 string Expr::makeStr() const {
     ostringstream oss;
@@ -256,3 +266,77 @@ int Expr::getNumNodes() const {
 void Expr::accept(ExprVisitor* ev) const {
     const_cast<Expr*>(this)->accept(ev);
 }
+
+// Separate grids into equations.
+void Equations::findEquations(Grids& allGrids, const string& targets) {
+
+    set<Grid*> added;
+
+    // Handle each key-value pair in targets string.
+    ArgParser ap;
+    ap.parseKeyValuePairs
+        (targets, [&](const string& key, const string& value) {
+
+            // Search allGrids for matches.
+            for (auto gp : allGrids) {
+
+                // does the value appear in the grid name?
+                string gname = gp->getName();
+                size_t np = gname.find(value);
+                if (np != string::npos) {
+
+                    // Grid already added?
+                    if (added.count(gp))
+                        continue;
+
+                    // Grid has an equation?
+                    if (gp->getExprs().size() == 0)
+                        continue;
+
+                    // Find existing equation named key.
+                    Equation* ep = 0;
+                    for (auto& eq : *this) {
+                        if (eq.name == key) {
+                            ep = &eq;
+                            break;
+                        }
+                    }
+
+                    // Add equation if needed.
+                    if (!ep) {
+                        Equation ne;
+                        push_back(ne);
+                        ep = &back();
+                        ep->name = key;
+                    }
+
+                    // Add grid to equation.
+                    assert(ep);
+                    ep->grids.push_back(gp);
+                    added.insert(gp);
+                }
+            }
+        });
+
+    // Add all grids not already added.
+    for (auto gp : allGrids) {
+
+        // Grid already added?
+        if (added.count(gp))
+            continue;
+        
+        // Grid has an equation?
+        if (gp->getExprs().size() == 0)
+            continue;
+        
+        // Make a new equation.
+        Equation ne;
+        push_back(ne);
+        Equation& eq = back();
+        
+        // It has the name of the grid and just one grid.
+        eq.name = gp->getName();
+        eq.grids.push_back(gp);
+    }
+}
+

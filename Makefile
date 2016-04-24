@@ -24,10 +24,10 @@
 # Type 'make help' for some examples.
 
 # stencil name: iso3dfd, 3axis, 9axis, 3plane, cube, ave, awp
-stencil		?= 	iso3dfd
+stencil		= 	iso3dfd
 
 # arch: target architecture: see options below.
-arch		?=	host
+arch		=	host
 
 # defaults for various stencils:
 #
@@ -39,6 +39,10 @@ arch		?=	host
 # real_bytes: FP precision: 4=float, 8=double.
 #
 # time_dim: allocated size of time dimension in grids.
+#
+# eqs: comma-separated name=substr pairs used to group
+# grid update equations into stencil functions.
+#
 ifeq ($(stencil),ave)
 order		=	2
 real_bytes	=	8
@@ -51,6 +55,7 @@ order		=	4
 else ifeq ($(stencil),awp)
 order		=	4
 time_dim	=	1
+eqs		=	velocity=vel_,stress=stress_
 endif
 
 # general defaults for these vars if not set above.
@@ -161,6 +166,9 @@ GEN_HEADERS     =	$(addprefix src/,stencil_outer_loops.hpp \
 				stencil_region_loops.hpp stencil_block_loops.hpp \
 				map_macros.hpp maps.hpp \
 				stencil_macros.hpp stencil_code.hpp)
+ifneq ($(eqs),)
+  FB_FLAGS   	+=	-eq $(eqs)
+endif
 
 # settings passed as macros.
 MACROS		+=	REAL_BYTES=$(real_bytes)

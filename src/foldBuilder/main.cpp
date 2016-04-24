@@ -28,6 +28,7 @@ IN THE SOFTWARE.
 // Generation code.
 #include "ExprUtils.hpp"
 #include "CppIntrin.hpp"
+#include "Parse.hpp"
 
 // Stencils.
 #include "ExampleStencil.hpp"
@@ -53,6 +54,7 @@ bool deferCoeff = false;
 int order = 2;
 bool firstInner = true;
 bool allowUnalignedLoads = false;
+string equationTargets;
 
 void usage(const string& cmd) {
     cout << "Options:\n"
@@ -63,10 +65,11 @@ void usage(const string& cmd) {
         " -or <order>           set stencil order (ignored for awp; default=" << order << ").\n"
         " -dc                   defer coefficient lookup to runtime (for iso3dfd stencil only).\n"
         " -es <expr-size>       set heuristic for expression-size threshold (default=" << exprSize << ").\n"
-        " -fold <dim>=<size>,...  set number of elements in each dimension in a vector block.\n"
-        " -cluster <dim>=<size>,... set number of values to evaluate in each dimension.\n"
         " -lus                  make last dimension of fold unit stride (instead of first).\n"
         " -aul                  allow simple unaligned loads (memory layout MUST be compatible).\n"
+        " -fold <dim>=<size>,...    set number of elements in each dimension in a vector block.\n"
+        " -cluster <dim>=<size>,... set number of values to evaluate in each dimension.\n"
+        " -eq <name>=<substr>,...   put updates to grids containing substring in equation name.\n"
         "\n"
         //" -ps <vec-len>      print stats for all folding options for given vector length.\n"
         " -ph                print human-readable scalar pseudo-code for one point.\n"
@@ -137,52 +140,33 @@ void parseOpts(int argc, const char* argv[])
                     cerr << "error: value missing or bad option '" << opt << "'." << endl;
                     usage(argv[0]);
                 }
+                string argop = argv[++argi];
 
                 // options w/a string value.
+                
                 // stencil type.
-                if (opt == "-st") {
-                    shapeName = argv[++argi];
-                }
+                if (opt == "-st")
+                    shapeName = argop;
+
+                // equations.
+                else if (opt == "-eq")
+                    equationTargets = argop;
 
                 // fold or cluster
                 else if (opt == "-fold" || opt == "-cluster") {
 
                     // example: x=4,y=2
-                    string argStr = argv[++argi];
-
-                    // split by commas.
-                    vector<string> args;
-                    string arg;
-                    for (char c1 : argStr) {
-                        if (c1 == ',') {
-                            args.push_back(arg);
-                            arg = "";
-                        } else
-                            arg += c1;
-                    }
-                    args.push_back(arg);
-
-                    // process each dim.
-                    for (auto dimStr : args) {
-                        
-                        // split by equal sign.
-                        size_t ep = dimStr.find("=");
-                        if (ep == string::npos) {
-                            cerr << "Error: no equal sign in '" << dimStr << "'." << endl;
-                            usage(argv[0]);
-                        }
-                        string dim = dimStr.substr(0, ep);
-                        string sizeStr = dimStr.substr(ep+1);
-                        int size = atoi(sizeStr.c_str());
-                        //cerr << dimStr << ": " << dim << "=" << size << endl;
-
-                        // set dim in tuple.
-                        if (opt == "-fold")
-                            foldOptions.addDim(dim, size);
-                        else
-                            clusterOptions.addDim(dim, size);
-                    }
-
+                    ArgParser ap;
+                    ap.parseKeyValuePairs
+                        (argop, [&](const string& key, const string& value) {
+                            int size = atoi(value.c_str());
+                            
+                            // set dim in tuple.
+                            if (opt == "-fold")
+                                foldOptions.addDim(key, size);
+                            else
+                                clusterOptions.addDim(key, size);
+                        });
                 }
                 
                 // add any more options w/a string value above.
@@ -190,7 +174,7 @@ void parseOpts(int argc, const char* argv[])
                 else {
 
                     // options w/an int value.
-                    int val = atoi(argv[++argi]);
+                    int val = atoi(argop.c_str());
 
                     if (opt == "-es")
                         exprSize = val;
@@ -260,12 +244,12 @@ void parseOpts(int argc, const char* argv[])
 }
 
 // Print an expression as a one-line C++ comment.
-void addComment(ostream& os, Grid* gp) {
+void addComment(ostream& os, Grids& grids) {
 
     // Use a simple human-readable visitor to create a comment.
     PrintHelper ph(0, "temp", "", " // ", ".\n");
     PrintVisitorTopDown commenter(os, ph);
-    gp->acceptToFirst(&commenter);
+    grids.acceptToFirst(&commenter);
 }
 
 // Return an upper-case string.
@@ -382,6 +366,11 @@ int main(int argc, const char* argv[]) {
             stencilFunc->define(offsets);
         });
 
+    // Extract equations from grids.
+    Equations equations;
+    equations.findEquations(grids, equationTargets);
+    equations.printInfo(cerr);
+    
     // Get some stats and eliminate common sub-expressions.
     int numFpOps = 0;
     for (int j = 0; j < 2; j++) {
@@ -391,29 +380,25 @@ int main(int argc, const char* argv[]) {
         for (int i = 0; i < 2; i++) {
             bool doCluster = i > 0;
             if (doCluster && clusterLengths.product() == 1)
-                continue;
+                continue; // don't need cluster pass if size 1.
             string descr = doCluster ? "cluster" : "fold";
         
             // Eliminate the CSEs.
             if (doCseElim) {
                 CseElimVisitor csee;
-                for (auto gp : grids) {
-                    if (doCluster)
-                        gp->acceptToAll(&csee);
-                    else
-                        gp->acceptToFirst(&csee);
-                }
+                if (doCluster)
+                    grids.acceptToAll(&csee);
+                else
+                    grids.acceptToFirst(&csee);
                 cerr << csee.getNumReplaced() << " CSE(s) eliminated in " << descr << "." << endl;
             }
 
             // Determine number of FP ops.
             CounterVisitor cv;
-            for (auto gp : grids) {
-                if (doCluster)
-                    gp->acceptToAll(&cv);
-                else
-                    gp->acceptToFirst(&cv);
-            }
+            if (doCluster)
+                grids.acceptToAll(&cv);
+            else
+                grids.acceptToFirst(&cv);
             cerr << "Expression stats per " << descr << " " << step << ":" << endl <<
                 "  " << cv.getNumNodes() << " nodes." << endl <<
                 "  " << cv.getNumReads() << " grid reads." << endl <<
@@ -429,31 +414,23 @@ int main(int argc, const char* argv[]) {
     // Human-readable output.
     if (printPseudo) {
 
-        // Loop through all grids.
-        // Visit only first expression in each, since we don't want clustering.
-        for (auto gp : grids) {
-
-            // Skip if no expressions.
-            if (gp->getExprs().size() == 0) {
-                cout << endl << "////// No equation defined for grid '" << gp->getName() <<
-                    "' //////" << endl;
-                continue;
-            }
-
-            cout << endl << "////// Grid '" << gp->getName() <<
+        // Loop through all equations.
+        for (auto& eq : equations) {
+            
+            cout << endl << "////// Equation '" << eq.name <<
                 "' //////" << endl;
 
             CounterVisitor cv;
-            gp->acceptToFirst(&cv);
+            eq.grids.acceptToAll(&cv);
             PrintHelper ph(&cv, "temp", "real", " ", ".\n");
 
             cout << "// Top-down stencil calculation:" << endl;
             PrintVisitorTopDown pv1(cout, ph);
-            gp->acceptToFirst(&pv1);
+            eq.grids.acceptToAll(&pv1);
             
             cout << endl << "// Bottom-up stencil calculation:" << endl;
             PrintVisitorBottomUp pv2(cout, ph, exprSize);
-            gp->acceptToFirst(&pv2);
+            eq.grids.acceptToAll(&pv2);
         }
     }
 
@@ -467,13 +444,12 @@ int main(int argc, const char* argv[]) {
             "  look_at  <0, 0, 0>" << endl <<
             "}" << endl;
 
-        // Loop through all grids.
-        // Visit only first expression in each, since we don't want clustering.
-        // TODO: separate different equations in space.
-        for (auto gp : grids) {
+        // Loop through all equations.
+        for (auto& eq : equations) {
 
+            // TODO: separate mutiple grids.
             POVRayPrintVisitor pv(cout);
-            gp->acceptToFirst(&pv);
+            eq.grids.acceptToFirst(&pv);
             cout << "// " << pv.getNumPoints() << " stencil points" << endl;
         }
     }
@@ -484,31 +460,24 @@ int main(int argc, const char* argv[]) {
         cout << "// Automatically generated code; do not edit." << endl;
         cout << endl <<
             "// The following classes define equations for a total of " <<
-            numFpOps << " FP operation(s) per point (as written)." << endl;
+            numFpOps << " FP operation(s) per point." << endl;
         string fnType = "void";
 
-        // Loop through all grids.
-        for (auto gp : grids) {
-            string gname = gp->getName();
+        // Loop through all equations.
+        for (auto& eq : equations) {
 
-            // Skip if no expressions.
-            if (gp->getExprs().size() == 0) {
-                cout << endl << "////// No equation defined for grid '" << gp->getName() <<
-                    "' //////" << endl;
-                continue;
-            }
-            cout << endl << "////// Grid '" << gname <<
+            cout << endl << "////// Equation '" << eq.name <<
                 "' //////" << endl;
 
-            cout << endl << "class Stencil_" << gname << " {" << endl;
+            cout << endl << "class Stencil_" << eq.name << " {" << endl;
 
             // Ops for just this grid.
             CounterVisitor fpops;
-            gp->acceptToFirst(&fpops);
+            eq.grids.acceptToFirst(&fpops);
             
             // Example computation.
             cout << " // " << fpops.getNumOps() << " FP operation(s) per point:" << endl;
-            addComment(cout, gp);
+            addComment(cout, eq.grids);
 
             cout << endl << "public:" << endl;
 
@@ -516,15 +485,15 @@ int main(int argc, const char* argv[]) {
             {
                 // C++ scalar print assistant.
                 CounterVisitor cv;
-                gp->acceptToFirst(&cv);
+                eq.grids.acceptToFirst(&cv);
                 CppPrintHelper* sp = new CppPrintHelper(&cv, "temp", "REAL", " ", ";\n");
             
                 // Stencil-calculation code.
                 // Function header.
                 cout << endl << " // Calculate one scalar result relative to indices " <<
-                    gp->makeDimStr(", ") << "." << endl;
+                    dimCounts.makeDimStr(", ") << "." << endl;
                 cout << fnType << " calc_scalar(StencilContext& context, " <<
-                    gp->makeDimStr(", ", "idx_t ") << ") {" << endl;
+                    dimCounts.makeDimStr(", ", "idx_t ") << ") {" << endl;
 
                 // C++ code generator.
                 // The visitor is accepted at all nodes in the AST;
@@ -532,7 +501,7 @@ int main(int argc, const char* argv[]) {
                 // stored in the expression-string in the visitor.
                 // Visit only first expression in each, since we don't want clustering.
                 PrintVisitorBottomUp pcv(cout, *sp, exprSize);
-                gp->acceptToFirst(&pcv);
+                eq.grids.acceptToFirst(&pcv);
 
                 // End of function.
                 cout << "} // scalar calculation." << endl;
@@ -549,15 +518,15 @@ int main(int argc, const char* argv[]) {
             {
                 // Create vector info.
                 VecInfoVisitor vv(foldLengths);
-                gp->acceptToAll(&vv);
+                eq.grids.acceptToAll(&vv);
 
                 // Reorder based on vector info.
                 ExprReorderVisitor erv(vv);
-                gp->acceptToAll(&erv);
+                eq.grids.acceptToAll(&erv);
             
                 // C++ vector print assistant.
                 CounterVisitor cv;
-                gp->acceptToFirst(&cv);
+                eq.grids.acceptToFirst(&cv);
                 CppVecPrintHelper* vp = NULL;
                 if (print512Cpp)
                     vp = new CppAvx512PrintHelper(vv, allowUnalignedLoads, &cv,
@@ -576,7 +545,7 @@ int main(int argc, const char* argv[]) {
                 // Function header.
                 int numResults = foldLengths.product() * clusterLengths.product();
                 cout << endl << " // Calculate " << numResults <<
-                    " result(s) relative to indices " << gp->makeDimStr(", ") <<
+                    " result(s) relative to indices " << dimCounts.makeDimStr(", ") <<
                     " in a '" << clusterLengths.makeDimValStr(" * ") << "' cluster of '" <<
                     foldLengths.makeDimValStr(" * ") << "' vector(s)." << endl;
                 cout << " // Indices must be normalized, i.e., already divided by VLEN_*." << endl;
@@ -584,14 +553,14 @@ int main(int argc, const char* argv[]) {
                     " vector block(s) created from " << vv.getNumAlignedVecs() <<
                     " aligned vector-block(s)." << endl;
                 cout << " // There are " << (fpops.getNumOps() * numResults) <<
-                    " FP operation(s) per cluster (as written)." << endl;
+                    " FP operation(s) per cluster." << endl;
 
                 cout << fnType << " calc_vector(StencilContext& context, " <<
-                    gp->makeDimStr(", ", "idx_t ", "v") << ") {" << endl;
+                    dimCounts.makeDimStr(", ", "idx_t ", "v") << ") {" << endl;
 
                 // Element indices.
                 cout << endl << " // Un-normalized indices." << endl;
-                for (auto dim : gp->getDims()) {
+                for (auto dim : dimCounts.getDims()) {
                     auto p = foldLengths.lookup(dim);
                     cout << " idx_t " << dim << " = " << dim << "v";
                     if (p) cout << " * " << *p;
@@ -603,7 +572,7 @@ int main(int argc, const char* argv[]) {
                 // for each node in the AST, code is generated and
                 // stored in the expression-string in the visitor.
                 PrintVisitorBottomUp pcv(cout, *vp, exprSize);
-                gp->acceptToAll(&pcv);
+                eq.grids.acceptToAll(&pcv);
 
                 // End of function.
                 cout << "} // vector calculation." << endl;
@@ -637,7 +606,7 @@ int main(int argc, const char* argv[]) {
                         else
                             cout << "for entire stencil ";
                         cout << "to " << hint << " cache" <<
-                            " relative to indices " << gp->makeDimStr(", ") <<
+                            " relative to indices " << dimCounts.makeDimStr(", ") <<
                             " in a '" << clusterLengths.makeDimValStr(" * ") << "' cluster of '" <<
                             foldLengths.makeDimValStr(" * ") << "' vector(s)." << endl;
                         cout << "// Indices must be normalized, i.e., already divided by VLEN_*." << endl;
@@ -646,7 +615,7 @@ int main(int argc, const char* argv[]) {
                         if (dir.size())
                             cout << "_" << dir.getDirName();
                         cout << "(StencilContext& context, " <<
-                            gp->makeDimStr(", ", "idx_t ", "v") << ") {" << endl;
+                            dimCounts.makeDimStr(", ", "idx_t ", "v") << ") {" << endl;
 
                         // C++ prefetch code.
                         vp->printPrefetches(cout, dir, hint);
@@ -684,28 +653,31 @@ int main(int argc, const char* argv[]) {
         for (auto dim : dimCounts.getDims()) {
             cout << "#define USING_DIM_" << allCaps(dim) << " (1)" << endl;
         }
+
+        // Loop through all equations.
+        cout << endl;
+        cout << "// Stencil equations:" << endl;
+        string newStencils;
+        int m = 0;
+        for (auto& eq : equations) {
+
+            // add code to create a new object.
+            string stencilClass = "Stencil_" + eq.name;
+            if (m) newStencils += ", ";
+            newStencils += "new StencilTemplate<" + stencilClass + ">(\"" + eq.name + "\")";
+            m++;
+        }
+        cout << "#define NEW_STENCIL_OBJECTS " << newStencils << endl;
         
         cout << endl;
         cout << "// Grids:" << endl;
         string ptrDefns;
         string gridAllocs;
         string gridCompares;
-        string newStencils;
-        int n = 0, m = 0;
+        int n = 0;
         for (auto gp : grids) {
             string grid = gp->getName();
             string ucGrid = allCaps(grid);
-
-            // Calculations that need to be made.
-            if (gp->getExprs().size()) {
-
-                // add code to create a new object.
-                string stencilClass = "Stencil_" + grid;
-                if (m) newStencils += ", ";
-                newStencils += "new StencilTemplate<" + stencilClass + ">(\"" + grid + "\")";
-
-                m++;
-            }
 
             // Type name.
             // FIXME: make this MUCH more generic.
@@ -741,7 +713,6 @@ int main(int argc, const char* argv[]) {
         cout << "#define GRID_PTR_DEFNS " << ptrDefns << endl;
         cout << "#define GRID_ALLOCS " << gridAllocs << endl;
         cout << "#define GRID_COMPARES " << gridCompares << endl;
-        cout << "#define NEW_STENCIL_OBJECTS " << newStencils << endl;
         
         // Vec/cluster lengths.
         cout << endl;
@@ -782,7 +753,7 @@ int main(int argc, const char* argv[]) {
                         
                         // Create vectors needed to implement RHS.
                         VecInfoVisitor vv(xlen, ylen, zlen);
-                        gp->acceptToFirst(&vv);
+                        gp->acceptToAll(&vv);
                         
                         // Print stats.
                         vv.printStats(cout, gp->getName(), separator);

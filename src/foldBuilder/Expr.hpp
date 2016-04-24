@@ -424,9 +424,9 @@ typedef map<GridPoint, ExprPtr> Point2Exprs;
 // TODO: this typedef is just a placeholder; replace it
 // with a class to limit use--we don't want
 // to allow modification or conditional testing, etc.
-typedef int GridIndex;
+typedef const int GridIndex;
 
-// A base class for a collection of GridPoints.
+// A class for a collection of GridPoints.
 // Dims in the IntTuple describe the grid, but values
 // in the IntTuple are ignored.
 class Grid : public IntTuple {
@@ -489,7 +489,8 @@ public:
     }
 
     // Create an expression to a specific point in the grid.
-    // Note that this doesn't actually 'read' a value; it's just an expression.
+    // Note that this doesn't actually 'read' or 'write' a value;
+    // it's just a node in an expression.
     virtual GridPointPtr operator()(const vector<int>& points) {
 
         // check for correct number of indices.
@@ -539,11 +540,52 @@ public:
 
 // A list of grids.
 class Grids : public vector<Grid*> {
+    
 public:
 
     // Visit all expressions in all grids.
     virtual void acceptToAll(ExprVisitor* ev);
+
+    // Visit first expression in each grid.
+    virtual void acceptToFirst(ExprVisitor* ev);
+
 };
+
+// A named equation and the grids updated by it.
+struct Equation {
+    string name;
+    Grids grids;
+};
+
+// Equations:
+class Equations : public vector<Equation> {
+
+public:
+    Equations() {}
+    virtual ~Equations() {}
+
+    // Separate a set of grids into equations based
+    // on the target string.
+    // Target string is a comma-separated list of key-value pairs, e.g.,
+    // "equation1=foo,equation2=bar".
+    // In this example, all grids with names containing 'foo' go in equation1,
+    // all grids with names containing 'bar' go in equation2, and
+    // each remaining grid goes in a equation named after the grid.
+    // Only grids with equations are put in equations.
+    void findEquations(Grids& allGrids, const string& targets);
+
+    void printInfo(ostream& os) const {
+        os << "Identified stencil equations:" << endl;
+        for (auto& eq : *this) {
+            for (auto gp : eq.grids) {
+                os << "  Equation '" << eq.name << "' updates grid '" <<
+                    gp->getName() << "'." << endl;
+            }
+        }
+    }
+
+};
+
 
 // Convenience macros for initializing grids in stencil ctors.
 // Each names the grid according to the variable name and adds it
