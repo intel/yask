@@ -38,6 +38,8 @@ protected:
 public:
     RealvGridBase(string name, GenericGridBase<realv>* gp) :
         _name(name), _gp(gp) { }
+
+    const string& get_name() { return _name; }
     
     // Initialize memory to a given value.
     virtual void set_same(REAL val) {
@@ -66,7 +68,20 @@ public:
     inline idx_t get_num_bytes() const {
         return _gp->get_num_bytes();
     }
+
+    
+    // Check for equality.
+    // Return number of mismatches greater than epsilon.
+    idx_t compare(const RealvGridBase& ref,
+                   REAL epsilon = EPSILON,
+                   int maxPrint = 20,
+                   std::ostream& os = std::cerr) const {
+        realv ev;
+        ev = epsilon;           // broadcast to realv elements.
+        return _gp->compare(ref._gp, ev, maxPrint, os);
+    }
 };
+
 
 // A 3D (x, y, z) collection of realv elements.
 // Supports symmetric padding in each dimension.
@@ -303,16 +318,6 @@ public:
 #endif
     }
 
-    // Check for equality.
-    // Return number of mismatches greater than epsilon.
-    idx_t compare(const RealvGrid_XYZ<Mapfn>& ref,
-                   REAL epsilon = EPSILON,
-                   int maxPrint = 20,
-                   std::ostream& os = std::cerr) const {
-        realv ev;
-        ev = epsilon;           // broadcast.
-        return _data.compare(ref._data, ev, maxPrint, os);
-    }    
 };
 
 // A 4D (n, x, y, z) collection of realv elements.
@@ -555,16 +560,6 @@ public:
 #endif
     }
 
-    // Check for equality.
-    // Return number of mismatches greater than epsilon.
-    idx_t compare(const RealvGrid_NXYZ<Mapfn>& ref,
-                   REAL epsilon = EPSILON,
-                   int maxPrint = 20,
-                   std::ostream& os = std::cerr) const {
-        realv ev;
-        ev = epsilon;           // broadcast.
-        return _data.compare(ref._data, ev, maxPrint, os);
-    }    
 };
 
 // A 4D (t, x, y, z) collection of realv elements, but any value of 't'

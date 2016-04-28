@@ -264,6 +264,9 @@ int main(int argc, const char* argv[]) {
     // parse options.
     parseOpts(argc, argv);
 
+    // name of C++ struct.
+    string context = "StencilContext_" + shapeName;
+    
     // Set default fold ordering.
     IntTuple::setDefaultFirstInner(firstInner);
     
@@ -372,7 +375,6 @@ int main(int argc, const char* argv[]) {
     equations.printInfo(cerr);
     
     // Get some stats and eliminate common sub-expressions.
-    int numFpOps = 0;
     for (int j = 0; j < 2; j++) {
         bool doCseElim = j > 0;
         string step = doCseElim ? "after CSE elimination" : "as written";
@@ -404,10 +406,6 @@ int main(int argc, const char* argv[]) {
                 "  " << cv.getNumReads() << " grid reads." << endl <<
                 "  " << cv.getNumWrites() << " grid writes." << endl <<
                 "  " << cv.getNumOps() << " math operations." << endl;
-
-            // Save final number of FP ops per point.
-            if (!doCluster)
-                numFpOps = cv.getNumOps();
         }
     }
     
@@ -458,28 +456,80 @@ int main(int argc, const char* argv[]) {
     if (printCpp) {
 
         cout << "// Automatically generated code; do not edit." << endl;
-        cout << endl <<
-            "// The following classes define equations for a total of " <<
-            numFpOps << " FP operation(s) per point." << endl;
-        string fnType = "void";
 
+        cout << endl << "////// Implementation of the '" << shapeName <<
+            "' stencil //////" << endl;
+
+        // Create the overall context class.
+        cout << endl << "////// Overall stencil-context class //////" << endl <<
+            "struct " << context << " : public StencilContext {" << endl;
+
+        // Grids.
+        cout << endl << " // Grids." << endl;
+        map<Grid*, string> typeNames, dimArgs, padArgs;
+        for (auto gp : grids) {
+            string grid = gp->getName();
+
+            // Type name.
+            // Name in kernel is 'Grid_' followed by dimensions.
+            string typeName = "Grid_";
+            string dimArg, padArg;
+            for (auto dim : gp->getDims()) {
+                string ucDim = allCaps(dim);
+                typeName += ucDim;
+
+                // don't want the time dimension during construction.
+                if (dim != "t") {
+                    dimArg += "d" + dim + ", ";
+                    padArg += "pad" + dim + ", ";
+                }
+            }
+            typeNames[gp] = typeName;
+            dimArgs[gp] = dimArg;
+            padArgs[gp] = padArg;
+            cout << " " << typeName << "* " << grid << ";" << endl;
+        }
+
+        // Ctor.
+        cout << endl << " " << context << "() {" << endl <<
+            "  name = \"" << shapeName << "\";" << endl;
+
+        // Init grid ptrs.
+        for (auto gp : grids) {
+            string grid = gp->getName();
+            cout << "  " << grid << " = 0;" << endl;
+        }
+        cout << " }" << endl;
+
+        // Allocate grids.
+        cout << endl << " void allocGrids() {" << endl;
+        for (auto gp : grids) {
+            string grid = gp->getName();
+            cout << "  " << grid << " = new " << typeNames[gp] <<
+                "(" << dimArgs[gp] << padArgs[gp] << "\"" << grid << "\");" << endl <<
+                "  gridPtrs.push_back(" << grid << ");" << endl;
+        }
+        cout << " }" << endl;
+
+        cout << "};" << endl;
+        
         // Loop through all equations.
         for (auto& eq : equations) {
 
-            cout << endl << "////// Equation '" << eq.name <<
+            cout << endl << "////// Stencil equation '" << eq.name <<
                 "' //////" << endl;
 
-            cout << endl << "class Stencil_" << eq.name << " {" << endl;
+            cout << endl << "struct Stencil_" << eq.name << " {" << endl <<
+                " string name = \"" << eq.name << "\";" << endl;
 
-            // Ops for just this grid.
+            // Ops for this equation.
             CounterVisitor fpops;
             eq.grids.acceptToFirst(&fpops);
             
             // Example computation.
-            cout << " // " << fpops.getNumOps() << " FP operation(s) per point:" << endl;
+            cout << endl << " // " << fpops.getNumOps() << " FP operation(s) per point:" << endl;
             addComment(cout, eq.grids);
-
-            cout << endl << "public:" << endl;
+            cout << " const int scalar_fp_ops = " << fpops.getNumOps() << ";" << endl;
 
             // Scalar code.
             {
@@ -492,7 +542,7 @@ int main(int argc, const char* argv[]) {
                 // Function header.
                 cout << endl << " // Calculate one scalar result relative to indices " <<
                     dimCounts.makeDimStr(", ") << "." << endl;
-                cout << fnType << " calc_scalar(StencilContext& context, " <<
+                cout << " void calc_scalar(" << context << "& context, " <<
                     dimCounts.makeDimStr(", ", "idx_t ") << ") {" << endl;
 
                 // C++ code generator.
@@ -552,10 +602,10 @@ int main(int argc, const char* argv[]) {
                 cout << " // SIMD calculations use " << vv.getNumPoints() <<
                     " vector block(s) created from " << vv.getNumAlignedVecs() <<
                     " aligned vector-block(s)." << endl;
-                cout << " // There are " << (fpops.getNumOps() * numResults) <<
+                 cout << " // There are " << (fpops.getNumOps() * numResults) <<
                     " FP operation(s) per cluster." << endl;
 
-                cout << fnType << " calc_vector(StencilContext& context, " <<
+                cout << " void calc_vector(" << context << "& context, " <<
                     dimCounts.makeDimStr(", ", "idx_t ", "v") << ") {" << endl;
 
                 // Element indices.
@@ -611,10 +661,10 @@ int main(int argc, const char* argv[]) {
                             foldLengths.makeDimValStr(" * ") << "' vector(s)." << endl;
                         cout << "// Indices must be normalized, i.e., already divided by VLEN_*." << endl;
 
-                        cout << fnType << " prefetch_" << hint << "_vector";
+                        cout << " void prefetch_" << hint << "_vector";
                         if (dir.size())
                             cout << "_" << dir.getDirName();
-                        cout << "(StencilContext& context, " <<
+                        cout << "(" << context << "& context, " <<
                             dimCounts.makeDimStr(", ", "idx_t ", "v") << ") {" << endl;
 
                         // C++ prefetch code.
@@ -631,11 +681,35 @@ int main(int argc, const char* argv[]) {
 
             cout << "};" << endl; // end of class.
             
-        } // grids.
+        } // stencil equations.
+
+        // Create a class for all equations.
+        cout << endl << "////// Overall stencil-equations class //////" << endl <<
+            "template <typename ContextClass>" << endl <<
+            "struct StencilEquations_" << shapeName <<
+            " : public StencilEquations {" << endl;
+
+        // Stencil equations.
+        cout << endl << " // Stencils." << endl;
+        for (auto& eq : equations)
+            cout << " StencilTemplate<Stencil_" << eq.name << "," <<
+                context << "> stencil_" << eq.name << ";" << endl;
+
+        // Ctor.
+        cout << endl << " StencilEquations_" << shapeName << "() {" << endl <<
+            "name = \"" << shapeName << "\";" << endl;
+
+        // Push stencils to list.
+        for (auto& eq : equations)
+            cout << "  stencils.push_back(&stencil_" << eq.name << ");" << endl;
+        cout << " }" << endl;
+
+        cout << "};" << endl;
+        
     } // Any C++ code.
 
     // Print CPP macros.
-    // FIXME: many hacks below assume certain dimensions and usage model
+    // TODO: many hacks below assume certain dimensions and usage model
     // by the kernel. Need to improve kernel to make it more flexible
     // and then communicate info more generically.
     if (printMacros) {
@@ -645,74 +719,17 @@ int main(int argc, const char* argv[]) {
         cout << endl;
         cout << "// Stencil:" << endl;
         cout << "#define STENCIL_NAME \"" << shapeName << "\"" << endl;
-        cout << "#define STENCIL_ORDER " << stencilFunc->getOrder() << endl; // FIXME: calculate actual halo sizes.
-        cout << "#define STENCIL_NUM_FP_OPS_SCALAR (" << numFpOps << ")" << endl;
+        cout << "#define STENCIL_IS_" << allCaps(shapeName) << " (1)" << endl;
+        cout << "#define STENCIL_CONTEXT " << context << endl;
+        cout << "#define STENCIL_EQUATIONS StencilEquations_" << shapeName <<
+            "<" << context << ">" << endl;
+        cout << "#define STENCIL_ORDER " << stencilFunc->getOrder() << endl; // TODO: calculate actual halo sizes.
 
         cout << endl;
         cout << "// Dimensions:" << endl;
         for (auto dim : dimCounts.getDims()) {
             cout << "#define USING_DIM_" << allCaps(dim) << " (1)" << endl;
         }
-
-        // Loop through all equations.
-        cout << endl;
-        cout << "// Stencil equations:" << endl;
-        string newStencils;
-        int m = 0;
-        for (auto& eq : equations) {
-
-            // add code to create a new object.
-            string stencilClass = "Stencil_" + eq.name;
-            if (m) newStencils += ", ";
-            newStencils += "new StencilTemplate<" + stencilClass + ">(\"" + eq.name + "\")";
-            m++;
-        }
-        cout << "#define NEW_STENCIL_OBJECTS " << newStencils << endl;
-        
-        cout << endl;
-        cout << "// Grids:" << endl;
-        string ptrDefns;
-        string gridAllocs;
-        string gridCompares;
-        int n = 0;
-        for (auto gp : grids) {
-            string grid = gp->getName();
-            string ucGrid = allCaps(grid);
-
-            // Type name.
-            // FIXME: make this MUCH more generic.
-            string typeName = "Grid_";
-            string dimArgs, padArgs;
-            for (auto dim : gp->getDims()) {
-                string ucDim = allCaps(dim);
-                typeName += ucDim;
-
-                // don't want the time dimension during construction.
-                if (dim != "t") {
-                    dimArgs += "d" + dim + ", ";
-                    padArgs += "pad" + dim + ", ";
-                }
-            }
-
-            // Define pointers.
-            if (n) ptrDefns += "; ";
-            ptrDefns += typeName + "* " + grid;
-
-            // Allocate grids and set vector.
-            if (!n) gridAllocs = "gridPtrs.clear()";
-            gridAllocs += "; " + grid + " = new " + typeName +
-                "(" + dimArgs + padArgs + "\"" + grid + "\");"
-                " gridPtrs.push_back(" + grid + ")";
-
-            // Compare grids.
-            if (n) gridCompares += " + ";
-            gridCompares += grid + "->compare(*(ref." + grid + "))";
-            
-            n++;
-        }
-        cout << "#define GRID_PTR_DEFNS " << ptrDefns << endl;
-        cout << "#define GRID_ALLOCS " << gridAllocs << endl;
-        cout << "#define GRID_COMPARES " << gridCompares << endl;
         
         // Vec/cluster lengths.
         cout << endl;

@@ -132,6 +132,12 @@ public:
         return errs;
     }
 
+    // Compare for equality within epsilon.
+    // Return number of miscompares.
+    virtual idx_t compare(const GenericGridBase* ref, T epsilon,
+                          int maxPrint = 0,
+                          std::ostream& os = std::cerr) const =0;
+
     // Direct access to data (dangerous!).
     T* getRawData() {
         return _elems;
@@ -192,19 +198,25 @@ public:
 
     // Check for equality.
     // Return number of mismatches greater than epsilon.
-    virtual idx_t compare(const GenericGrid1d<T,Mapfn>& ref, T epsilon,
+    virtual idx_t compare(const GenericGridBase<T>* ref, T epsilon,
                            int maxPrint = 0,
                            std::ostream& os = std::cerr) const {
 
+        auto ref1 = dynamic_cast<const GenericGrid1d*>(ref);
+        if (!ref1) {
+            os << "** type mismatch against GenericGrid1d." << endl;
+            return 1;
+        }
+
         // Quick check for errors.
-        idx_t errs = count_diffs(ref, epsilon);
+        idx_t errs = count_diffs(*ref, epsilon);
 
         // Run detailed comparison if any errors found.
         if (errs > 0 && maxPrint) {
             int p = 0;
             for (idx_t i1 = 0; i1 < get_d1(); i1++) {
                 T te = (*this)(i1);
-                T re = ref(i1);
+                T re = (*ref1)(i1);
                 if (!within_tolerance(te, re, epsilon)) {
                     p++;
                     if (p < maxPrint)
@@ -277,13 +289,19 @@ public:
 
     // Check for equality.
     // Return number of mismatches greater than epsilon.
-    virtual idx_t compare(const GenericGrid2d<T,Mapfn>& ref,
+    virtual idx_t compare(const GenericGridBase<T>* ref,
                            T epsilon,
                            int maxPrint = 0,
                            std::ostream& os = std::cerr) const {
 
+        auto ref1 = dynamic_cast<const GenericGrid2d*>(ref);
+        if (!ref1) {
+            os << "** type mismatch against GenericGrid2d." << endl;
+            return 1;
+        }
+
         // Quick check for errors.
-        idx_t errs = count_diffs(ref, epsilon);
+        idx_t errs = count_diffs(*ref, epsilon);
 
         // Run detailed comparison if any errors found.
         if (errs > 0 && maxPrint) {
@@ -291,7 +309,7 @@ public:
             for (idx_t i1 = 0; i1 < get_d1(); i1++) {
                 for (idx_t i2 = 0; i2 < get_d2(); i2++) {
                     T te = (*this)(i1, i2);
-                    T re = ref(i1, i2);
+                    T re = (*ref1)(i1, i2);
                     if (!within_tolerance(te, re, epsilon)) {
                         p++;
                         if (p < maxPrint)
@@ -368,13 +386,19 @@ public:
 
     // Check for equality.
     // Return number of mismatches greater than epsilon.
-    virtual idx_t compare(const GenericGrid3d<T,Mapfn>& ref,
+    virtual idx_t compare(const GenericGridBase<T>* ref,
                            T epsilon,
                            int maxPrint = 0,
                            std::ostream& os = std::cerr) const {
 
+        auto ref1 = dynamic_cast<const GenericGrid3d*>(ref);
+        if (!ref1) {
+            os << "** type mismatch against GenericGrid3d." << endl;
+            return 1;
+        }
+
         // Quick check for errors.
-        idx_t errs = count_diffs(ref, epsilon);
+        idx_t errs = count_diffs(*ref, epsilon);
 
         // Run detailed comparison if any errors found.
         if (errs > 0 && maxPrint) {
@@ -383,7 +407,7 @@ public:
                 for (idx_t i2 = 0; i2 < get_d2(); i2++) {
                     for (idx_t i3 = 0; i3 < get_d3(); i3++) {
                         T te = (*this)(i1, i2, i3);
-                        T re = ref(i1, i2, i3);
+                        T re = (*ref1)(i1, i2, i3);
                         if (!within_tolerance(te, re, epsilon)) {
                             p++;
                             if (p < maxPrint)
@@ -464,13 +488,19 @@ public:
 
     // Check for equality.
     // Return number of mismatches greater than epsilon.
-    virtual idx_t compare(const GenericGrid4d<T,Mapfn>& ref,
+    virtual idx_t compare(const GenericGridBase<T>* ref,
                            T epsilon,
                            int maxPrint = 0,
                            std::ostream& os = std::cerr) const {
 
+        auto ref1 = dynamic_cast<const GenericGrid4d*>(ref);
+        if (!ref1) {
+            os << "** type mismatch against GenericGrid4d." << endl;
+            return 1;
+        }
+
         // Quick check for errors.
-        idx_t errs = count_diffs(ref, epsilon);
+        idx_t errs = count_diffs(*ref, epsilon);
 
         // Run detailed comparison if any errors found.
         if (errs > 0 && maxPrint) {
@@ -480,7 +510,7 @@ public:
                     for (idx_t i3 = 0; i3 < get_d3(); i3++) {
                         for (idx_t i4 = 0; i4 < get_d4(); i4++) {
                             T te = (*this)(i1, i2, i3, i4);
-                            T re = ref(i1, i2, i3, i4);
+                            T re = (*ref1)(i1, i2, i3, i4);
                             if (!within_tolerance(te, re, epsilon)) {
                                 p++;
                                 if (p < maxPrint)

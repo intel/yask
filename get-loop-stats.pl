@@ -135,7 +135,7 @@ for my $arg (@ARGV) {
             ($args =~ /ymm/) ? '128-bit SIMD' :
             ($args =~ /xmm/) ? '64-bit SIMD' :
             ($instr =~ /^v/) ? 'SIMD' : 'non-SIMD';
-          $type .= ' "spill"' if $comment =~ /spill/;
+          #$type .= ' "spill"' if $comment =~ /spill/;
           if ($args =~ /\(.*r[bs]p.*\).*,/) {
             $astats{"$type stack load"}++;
           } elsif ($args =~ /,.*\(.*r[bs]p.*\)/) {

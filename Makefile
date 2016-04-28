@@ -69,8 +69,10 @@ time_dim		?=	2
 #
 # crew: whether to use Intel Crew threading feature.
 # If you get linker errors about missing 'kmp*' symbols, your
-# compiler does not support crew for the specified architecture,
-# and you should specify 'crew=0' as a make argument.
+# compiler does not support crew for the specified architecture.
+# If you get a warning about 'num crews != num OpenMP threads',
+# crew is not working properly. In either case, you should turn
+# off crew by using 'crew=0' as a make argument.
 #
 # omp_schedule: OMP schedule policy.
 ifeq ($(arch),)
@@ -83,15 +85,13 @@ ISA		= 	-mmic
 MACROS		+=	USE_INTRIN512
 FB_TARGET  	=       knc
 crew		=	1
-streaming_stores=	1
 
 else ifeq ($(arch),knl)
 
 ISA		=	-xMIC-AVX512
 MACROS		+=	USE_INTRIN512
 FB_TARGET  	=       512
-crew		=	1
-streaming_stores=	1
+#crew		=	1
 
 else ifeq ($(arch),skx)
 
@@ -128,7 +128,7 @@ FB_TARGET  		?=	cpp
 
 # How to fold vectors (x*y*z).
 # Vectorization in dimensions perpendicular to the inner loop
-# (defined by BLOCK_LOOP_ARGS below) often works well.
+# (defined by BLOCK_LOOP_CODE below) often works well.
 
 ifneq ($(findstring INTRIN512,$(MACROS)),)  # 512 bits.
 ifeq ($(real_bytes),4)
@@ -181,7 +181,8 @@ MACROS		+= 	ARCH_$(ARCH)
 # compiler-specific settings
 ifeq ($(notdir $(CC)),icpc)
 
-CPPFLAGS        +=      -debug extended -restrict -ansi-alias -fno-alias -fimf-precision=low -fast-transcendentals -no-prec-sqrt -no-prec-div -fp-model fast=2 -fno-protect-parens -qopt-assume-safe-padding -Fa
+CPPFLAGS        +=      -debug extended -Fa -restrict -ansi-alias -fno-alias
+CPPFLAGS	+=	-fimf-precision=low -fast-transcendentals -no-prec-sqrt -no-prec-div -fp-model fast=2 -fno-protect-parens -rcd -ftz -fma -fimf-domain-exclusion=none -qopt-assume-safe-padding
 CPPFLAGS	+=      -qopt-report=5 -qopt-report-phase=VEC,PAR,OPENMP,IPO,LOOP
 CPPFLAGS	+=	-no-diag-message-catalog
 
@@ -199,20 +200,21 @@ ifeq ($(streaming_stores),1)
 MACROS		+=	USE_STREAMING_STORE
 endif
 
-# gen-loops args for outer 3 sets of loops:
+# gen-loops.pl args for outer 3 sets of loops:
 
 # Outer loops break up the whole problem into smaller regions.
-OUTER_LOOP_ARGS		=	-dims 'dn,dx,dy,dz' -calcPrefix 'stencil->calc_'
-OUTER_LOOP_ARGS		+=	'loop(dn,dx,dy,dz) { calc(region); }'
+OUTER_LOOP_OPTS		=	-dims 'dn,dx,dy,dz' -calcPrefix 'stencil->calc_'
+OUTER_LOOP_CODE		=	loop(dn,dx,dy,dz) { calc(region); }
 
 # Region loops break up a region using OpenMP threading into blocks.
-REGION_LOOP_ARGS	=     	-dims 'rn,rx,ry,rz' -ompSchedule $(omp_schedule)
-REGION_LOOP_ARGS	+=	'serpentine omp loop(rn,rx,ry,rz) { calc(block); }'
+REGION_LOOP_OPTS	=     	-dims 'rn,rx,ry,rz' -ompSchedule $(omp_schedule)
+REGION_LOOP_CODE	=	serpentine omp loop(rn,rx,ry,rz) { calc(block); }
 
 # Block loops break up a block into vector clusters.
-# Note: the indices at this level are by vector instead of element.
-BLOCK_LOOP_ARGS		=     	-dims 'bnv,bxv,byv,bzv'
-BLOCK_LOOP_ARGS		+=	'loop(bnv) { crew loop(bxv) { loop(byv) {' $(INNER_LOOP_OPTS) 'loop(bzv) { calc(cluster); } } } }'
+# Note: the indices at this level are by vector instead of element;
+# this is indicated by the 'v' suffix.
+BLOCK_LOOP_OPTS		=     	-dims 'bnv,bxv,byv,bzv'
+BLOCK_LOOP_CODE		=	loop(bnv) { crew loop(bxv) { loop(byv) { $(INNER_BLOCK_LOOP_OPTS) loop(bzv) { calc(cluster); } } } }
 
 
 # compile with model_cache=1 or 2 to check prefetching.
@@ -227,15 +229,18 @@ endif
 CPPFLAGS	+=	$(addprefix -D,$(MACROS)) $(addprefix -D,$(EXTRA_MACROS)) $(OMPFLAGS) $(EXTRA_CPPFLAGS)
 LFLAGS          +=      $(OMPFLAGS) $(EXTRA_CPPFLAGS)
 
-STENCIL_OBJ_BASES	:=	stencil_main stencil_calc stencil_ref utils
-STENCIL_OBJS		:=	$(addprefix src/,$(addsuffix .$(arch).o,$(STENCIL_OBJ_BASES)))
+STENCIL_BASES		:=	stencil_main stencil_calc utils
+STENCIL_OBJS		:=	$(addprefix src/,$(addsuffix .$(arch).o,$(STENCIL_BASES)))
+STENCIL_CPP		:=	$(addprefix src/,$(addsuffix .$(arch).i,$(STENCIL_BASES)))
 STENCIL_EXEC_NAME	:=	stencil.$(arch).exe
 
 ifeq ($(notdir $(CC)),icpc)
 CODE_STATS      =   code_stats
 endif
 
-all:	$(STENCIL_EXEC_NAME) $(CODE_STATS)
+all:	$(STENCIL_EXEC_NAME) $(CODE_STATS) settings
+
+settings:
 	@echo
 	@echo $(STENCIL_EXEC_NAME) "has been built."
 	@echo
@@ -248,18 +253,21 @@ all:	$(STENCIL_EXEC_NAME) $(CODE_STATS)
 	@echo real_bytes=$(real_bytes)
 	@echo time_dim=$(time_dim)
 	@echo streaming_stores=$(streaming_stores)
-	@echo FB_TARGET="'"$(FB_TARGET)"'"
-	@echo FB_FLAGS="'"$(FB_FLAGS)"'"
-	@echo EXTRA_FB_FLAGS="'"$(EXTRA_FB_FLAGS)"'"
-	@echo MACROS="'"$(MACROS)"'"
-	@echo EXTRA_MACROS="'"$(EXTRA_MACROS)"'"
+	@echo FB_TARGET="\"$(FB_TARGET)\""
+	@echo FB_FLAGS="\"$(FB_FLAGS)\""
+	@echo EXTRA_FB_FLAGS="\"$(EXTRA_FB_FLAGS)\""
+	@echo MACROS="\"$(MACROS)\""
+	@echo EXTRA_MACROS="\"$(EXTRA_MACROS)\""
 	@echo ISA=$(ISA)
-	@echo OMPFLAGS="'"$(OMPFLAGS)"'"
-	@echo EXTRA_CPPFLAGS="'"$(EXTRA_CPPFLAGS)"'"
-	@echo CPPFLAGS="'"$(CPPFLAGS)"'"
-	@echo OUTER_LOOP_ARGS="'"$(OUTER_LOOP_ARGS)"'"
-	@echo REGION_LOOP_ARGS="'"$(REGION_LOOP_ARGS)"'"
-	@echo BLOCK_LOOP_ARGS="'"$(BLOCK_LOOP_ARGS)"'"
+	@echo OMPFLAGS="\"$(OMPFLAGS)\""
+	@echo EXTRA_CPPFLAGS="\"$(EXTRA_CPPFLAGS)\""
+	@echo CPPFLAGS="\"$(CPPFLAGS)\""
+	@echo OUTER_LOOP_OPTS="\"$(OUTER_LOOP_OPTS)\""
+	@echo OUTER_LOOP_CODE="\"$(OUTER_LOOP_CODE)\""
+	@echo REGION_LOOP_OPTS="\"$(REGION_LOOP_OPTS)\""
+	@echo REGION_LOOP_CODE="\"$(REGION_LOOP_CODE)\""
+	@echo BLOCK_LOOP_OPTS="\"$(BLOCK_LOOP_OPTS)\""
+	@echo BLOCK_LOOP_CODE="\"$(BLOCK_LOOP_CODE)\""
 
 code_stats: $(STENCIL_EXEC_NAME)
 	@echo
@@ -271,14 +279,16 @@ code_stats: $(STENCIL_EXEC_NAME)
 $(STENCIL_EXEC_NAME): $(STENCIL_OBJS)
 	$(LD) $(LFLAGS) -o $@ $(STENCIL_OBJS)
 
+preprocess: $(STENCIL_CPP)
+
 src/stencil_outer_loops.hpp: gen-loops.pl Makefile
-	./$< -output $@ $(OUTER_LOOP_ARGS) $(EXTRA_LOOP_ARGS) $(EXTRA_OUTER_LOOP_ARGS) 
+	./$< -output $@ $(OUTER_LOOP_OPTS) $(EXTRA_LOOP_OPTS) $(EXTRA_OUTER_LOOP_OPTS) "$(OUTER_LOOP_CODE)"
 
 src/stencil_region_loops.hpp: gen-loops.pl Makefile
-	./$< -output $@ $(REGION_LOOP_ARGS) $(EXTRA_LOOP_ARGS) $(EXTRA_REGION_LOOP_ARGS) 
+	./$< -output $@ $(REGION_LOOP_OPTS) $(EXTRA_LOOP_OPTS) $(EXTRA_REGION_LOOP_OPTS) "$(REGION_LOOP_CODE)"
 
 src/stencil_block_loops.hpp: gen-loops.pl Makefile
-	./$< -output $@ $(BLOCK_LOOP_ARGS) $(EXTRA_LOOP_ARGS) $(EXTRA_BLOCK_LOOP_ARGS) 
+	./$< -output $@ $(BLOCK_LOOP_OPTS) $(EXTRA_LOOP_OPTS) $(EXTRA_BLOCK_LOOP_OPTS) "$(BLOCK_LOOP_CODE)"
 
 src/map_macros.hpp: gen-mapping.pl
 	./$< -m > $@
@@ -302,11 +312,14 @@ headers: $(GEN_HEADERS)
 %.$(arch).o: %.cpp src/*.hpp src/foldBuilder/*.hpp headers
 	$(CC) $(CPPFLAGS) -c -o $@ $<
 
+%.$(arch).i: %.cpp src/*.hpp src/foldBuilder/*.hpp headers
+	$(CC) $(CPPFLAGS) -E $< > $@
+
 tags:
 	rm -f TAGS ; find . -name '*.[ch]pp' | xargs etags -C -a
 
 clean:
-	rm -fv src/*.o *.optrpt src/*.optrpt *.s $(GEN_HEADERS) 
+	rm -fv src/*.[io] *.optrpt src/*.optrpt *.s $(GEN_HEADERS) 
 
 realclean: clean
 	rm -fv stencil*.exe foldBuilder TAGS

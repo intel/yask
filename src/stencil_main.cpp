@@ -107,21 +107,35 @@ int main(int argc, char** argv)
            "└──────────────────────────────────────────┘\n"
            "\nStencil name: " STENCIL_NAME "\n");
 
+    // report threads.
+    {
+        cout << endl;
+#if defined(_OPENMP)
+        int numOrigThreads = omp_get_max_threads();
+        cout << "Num OpenMP threads: " << numOrigThreads << endl;
+        int numWorkers = numOrigThreads;
 #ifdef __INTEL_CREW
-    kmp_crew_create();
-    int numThreads = omp_get_max_threads();
-    int crewSize = kmp_crew_get_max_size();
-    printf("num threads with crew: %d\n", numThreads * crewSize);
-    printf("  num crew-leader threads: %d\n", numThreads);
-    printf("  num threads per crew: %d\n", crewSize);
-#elif defined(_OPENMP)
-    int numThreads = omp_get_max_threads();
-    printf("num OpenMP threads: %d\n", numThreads);
-#else
-    int numThreads = 1;
-    printf("\nnum threads: %d\n", numThreads);
+        cout << "Creating crews..." << endl;
+        kmp_crew_create();
+        int numThreads = omp_get_max_threads();
+        cout << "Num OpenMP threads after crew creation: " << numThreads << endl;
+        int crewSize = kmp_crew_get_max_size();
+        numWorkers = numThreads * crewSize;
+        cout << "Total num crews: " << numWorkers << endl <<
+            "  num crew-leader threads: " << numThreads << endl <<
+            "  num threads per crew: " << crewSize << endl;
+        if (numWorkers == numOrigThreads)
+            cout << "Note: num crews == num OpenMP threads before creating crews" << endl;
+        else
+            cout << "Warning: num crews != num OpenMP threads before creating crews" << endl;
 #endif
-
+#else
+        int numThreads = 1;
+        cout << "Num threads: " << numThreads << endl;
+#endif
+        cout << endl;
+    }
+    
     // options and their defaults.
     int num_trials = 3; // number of trials.
     int nreps = 50;     // number of time-steps per trial, over which performance is averaged.
@@ -283,21 +297,13 @@ int main(int argc, char** argv)
     printf(" manual-L1-prefetch-distance = %d\n", PFDL1);
     printf(" manual-L2-prefetch-distance = %d\n", PFDL2);
 
-    const idx_t numpts = dn*dx*dy*dz;
-    printf("\nPoints to calculate: %.3fM (%ld * %ld * %ld * %ld)\n",
-           (float)numpts/1e6, dn, dx, dy, dz);
-    const idx_t numFpOps = numpts * STENCIL_NUM_FP_OPS_SCALAR;
-    printf("FP ops: %i per point, %.3fG total\n", STENCIL_NUM_FP_OPS_SCALAR,
-           (float)numFpOps/1e9);
-    printf("\n");
-
     if (help) {
         cout << "Exiting due to help option." << endl;
         exit(1);
     }
 
     // Context for evaluating results.
-    StencilContext context;
+    STENCIL_CONTEXT context;
     
     // Save sizes.
     context.dn = dn;
@@ -320,15 +326,32 @@ int main(int argc, char** argv)
     context.pady = pady;
     context.padz = padz;
 
-    // Alloc and init grids.
-    context.allocGrids();
-    context.initSame();
-
     // Stencil functions.
-    Stencils stencils{ NEW_STENCIL_OBJECTS };
-    for (auto stencil : stencils)
-        cout << "evaluating stencil function '" << stencil->get_name() << "'." << endl;
+    int scalar_fp_ops = 0;
+    STENCIL_EQUATIONS stencils;
+    cout << endl << "Stencil equations:" << endl;
+    for (auto stencil : stencils.stencils) {
+        int fpos = stencil->get_scalar_fp_ops();
+        cout << "  '" << stencil->get_name() << "': " <<
+            fpos << " FP ops per point." << endl;
+        scalar_fp_ops += fpos;
+    }
 
+    const idx_t numpts = dn*dx*dy*dz;
+    printf("\nPoints to calculate: %.3fM (%ld * %ld * %ld * %ld)\n",
+           (float)numpts/1e6, dn, dx, dy, dz);
+    const idx_t numFpOps = numpts * scalar_fp_ops;
+    printf("FP ops: %i per point, %.3fG total\n", scalar_fp_ops,
+           (float)numFpOps/1e9);
+    printf("\n");
+
+    // Alloc and init grids.
+    cout << "allocating matrices..." << endl;
+    context.allocGrids();
+    idx_t nbytes = context.get_num_bytes();
+    cout << "total allocation: " << (float(nbytes)/1e9) << "G byte(s)." << endl;
+    context.initSame();
+    
     // variables for measuring performance
     double wstart, wstop;
     float best_elapsed_time=0.0f, best_throughput_mpoints=0.0f, best_gflops=0.0f;
@@ -341,7 +364,7 @@ int main(int argc, char** argv)
             printf("modeling cache...\n");
 #endif
         printf("warmup...\n");  fflush(NULL);
-        calc_steps_opt(context, stencils, tmp_nreps);
+        stencils.calc_steps_opt(context, tmp_nreps);
 
 #ifdef MODEL_CACHE
         // print cache stats, then disable.
@@ -361,7 +384,7 @@ int main(int argc, char** argv)
         SEP_RESUME;
         wstart = getTimeInSecs();
 
-        calc_steps_opt(context, stencils, nreps);
+        stencils.calc_steps_opt(context, nreps);
 
         wstop =  getTimeInSecs();
         SEP_PAUSE;
@@ -399,7 +422,7 @@ int main(int argc, char** argv)
 
         // make a ref context for comparisons w/new grids:
         // copy the settings from context, then re-alloc grids.
-        StencilContext ref = context;
+        STENCIL_CONTEXT ref = context;
         ref.allocGrids();
 
         // init both to same values.
@@ -415,11 +438,11 @@ int main(int argc, char** argv)
 
         // one vector iteration.
         printf("vector iteration(s)...\n");
-        calc_steps_opt(context, stencils, vreps);
+        stencils.calc_steps_opt(context, vreps);
 
         // one ref iteration.
         printf("reference iteration(s)...\n");
-        calc_steps_ref(ref, stencils, vreps);
+        stencils.calc_steps_ref(ref, vreps);
 
         // check for equality.
         errs =  context.compare(ref);

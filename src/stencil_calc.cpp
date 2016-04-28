@@ -25,8 +25,48 @@ IN THE SOFTWARE.
 
 #include "stencil.hpp"
 
+///// Top-level methods for evaluating reference and optimized stencils.
+
+// Calculate nreps time steps of stencil over grid using scalar code.
+void StencilEquations::calc_steps_ref(StencilContext& context, const int nreps)
+{
+    printf("running %i reference time step(s)...\n", nreps);
+
+    // time steps.
+    // Start at a positive point to avoid any calculation referring
+    // to negative time.
+    idx_t t0 = TIME_DIM_SIZE * 2;
+    for(idx_t t = t0; t < t0 + nreps; t += TIME_STEPS_PER_ITER) {
+
+        // equations to evaluate.
+        for (auto stencil : stencils) {
+        
+            // grid index (not used in most stencils).
+            for (idx_t n = 0; n < context.dn; n++) {
+
+#pragma omp parallel for
+                for(idx_t ix = 0; ix < context.dx; ix++) {
+
+                    CREW_FOR_LOOP
+                        for(idx_t iy = 0; iy < context.dy; iy++) {
+
+                            for(idx_t iz = 0; iz < context.dz; iz++) {
+
+                                TRACE_MSG("%s.calc_scalar(%ld, %ld, %ld, %ld, %ld)", 
+                                          stencil->get_name().c_str(), t, n, ix, iy, iz);
+                            
+                                // Evaluate the reference scalar code.
+                                stencil->calc_scalar(context, t, n, ix, iy, iz);
+                            }
+                        }
+                }
+            }
+        }
+    } // iterations.
+}
+
 // Calculate nreps time steps of stencil over grid using optimized code.
-void calc_steps_opt(StencilContext& context, Stencils& stencils, const int nreps)
+void StencilEquations::calc_steps_opt(StencilContext& context, const int nreps)
 {
     TRACE_MSG("calc_steps_opt(%d)", nreps);
 
@@ -52,7 +92,7 @@ void calc_steps_opt(StencilContext& context, Stencils& stencils, const int nreps
     idx_t t0 = TIME_DIM_SIZE * 2;
     for(idx_t t = t0; t < t0 + nreps; t += TIME_STEPS_PER_ITER) {
 
-        // calculations to make.
+        // equations to evaluate.
         for (auto stencil : stencils) {
         
             // Include automatically-generated loop code that calls calc_region().
@@ -61,3 +101,4 @@ void calc_steps_opt(StencilContext& context, Stencils& stencils, const int nreps
         } // calcs.
     } // iterations
 }
+

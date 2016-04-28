@@ -137,6 +137,8 @@ extern Cache cache;
 #endif
 
 ////// Default prefetch distances.
+// These are only used if and when prefetch code is generated
+// by gen-loops.pl.
 
 // how far to prefetch ahead for L1.
 #ifndef PFDL1
@@ -150,8 +152,7 @@ extern Cache cache;
 
 // make sure PFDL2 > PFDL1.
 #if PFDL2 <= PFDL1
-#undef PFDL2
-#define PFDL2 (PFDL1+1)
+#error "PFDL2 <= PFDL1"
 #endif
 
 #endif

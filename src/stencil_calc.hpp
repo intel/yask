@@ -23,6 +23,99 @@ IN THE SOFTWARE.
 
 *****************************************************************************/
 
+// Data and sizes for overall problem.
+// This is a pure-virtual class that must be implemented
+// for a specific problem.
+struct StencilContext {
+
+    // Name.
+    string name;
+
+    // A list of all grids.
+    vector<RealvGridBase*> gridPtrs;
+
+    // Sizes--all in elements (not vectors).
+    idx_t dn, dx, dy, dz;                   // problem size.
+    idx_t rn, rx, ry, rz;                   // region size.
+    idx_t bn, bx, by, bz;                   // block size.
+    idx_t padn, padx, pady, padz;           // padding, including halos.
+
+    StencilContext() { }
+    virtual ~StencilContext() { }
+
+    // Allocate grid memory and set gridPtrs.
+    virtual void allocGrids() =0;
+
+    // Get total size.
+    virtual idx_t get_num_bytes() {
+        idx_t nbytes = 0;
+        for (auto gp : gridPtrs)
+            nbytes += gp->get_num_bytes();
+        return nbytes;
+    }
+
+    // Init all grids w/same value within each grid,
+    // but different values between grids.
+    virtual void initSame() {
+        REAL v = 0.1;
+        cout << "initializing matrices..." << endl;
+        for (auto gp : gridPtrs) {
+            gp->set_same(v);
+            v += 0.01;
+        }
+    }
+
+    // Init all grids w/different values.
+    // Better for validation, but slower.
+    virtual void initDiff() {
+        REAL v = 0.01;
+        for (auto gp : gridPtrs) {
+            gp->set_diff(v);
+            v += 0.001;
+        }
+    }
+
+    // Compare contexts.
+    // Return number of mis-compares.
+    virtual idx_t compare(const StencilContext& ref) const {
+
+        idx_t errs = 0;
+        for (size_t gi = 0; gi < gridPtrs.size(); gi++) {
+            if (gi >= ref.gridPtrs.size()) {
+                cerr << "** grid '" << gridPtrs[gi]->get_name() <<
+                    "' not in stencil '" << ref.name << endl;
+                errs++;
+            }
+            else {
+                errs += gridPtrs[gi]->compare(*ref.gridPtrs[gi]);
+            }
+        }
+        return errs;
+    }
+};
+
+/// Classes that support evaluation of one stencil equation.
+
+// A pure-virtual class base for a stencil equation.
+class StencilBase {
+
+public:
+    StencilBase() { }
+    virtual ~StencilBase() { }
+
+    // Get info from implementation.
+    virtual const string& get_name() =0;
+    virtual int get_scalar_fp_ops() =0;
+    
+    // Calculate one scalar result at time t.
+    virtual void calc_scalar(StencilContext& generic_context, idx_t t, idx_t n, idx_t x, idx_t y, idx_t z) =0;
+
+    // Calculate a region of results at time t from begin to end-1 on each dimension.
+    virtual void calc_region(StencilContext& generic_context, idx_t t,
+                             idx_t begin_rn, idx_t begin_rx, idx_t begin_ry, idx_t begin_rz,
+                             idx_t end_rn, idx_t end_rx, idx_t end_ry, idx_t end_rz) =0;
+};
+
 // Macro for automatically adding N dimension.
 // TODO: make all args programmatic.
 #if USING_DIM_N
@@ -32,54 +125,48 @@ IN THE SOFTWARE.
 #endif
 
 // Prefetch a cluser starting at vector indices i, j, k.
-// Generic macro to handle different cache levels and directions.
+// Generic macro to handle different cache levels.
 #define PREFETCH_CLUSTER(fn, t, n, i, j, k)                             \
     do {                                                                \
         TRACE_MSG("%s.%s(%ld, %ld, %ld, %ld, %ld)",                     \
                   _name.c_str(), #fn, t, n, i, j, k);                   \
-        _stencil.fn(context, t, ARG_N(n) i, j, k);                      \
+        _stencil.fn(context, t, ARG_N(n) i, j, k);                           \
     } while(0)
 
-//////////////// Main stencil class /////////////////
-
-class StencilBase {
-
-protected:
-    string _name;
-
-public:
-    StencilBase() { }
-    StencilBase(const string& name) :
-        _name(name) { }
-
-    virtual const string& get_name() { return _name; }
-    
-    // Calculate one scalar result.
-    virtual void calc_scalar(StencilContext& context, idx_t t, idx_t n, idx_t x, idx_t y, idx_t z) =0;
-
-    // Calculate results within a region.
-    virtual void calc_region(StencilContext& context, 
-                             idx_t t,
-                             idx_t begin_rn, idx_t begin_rx, idx_t begin_ry, idx_t begin_rz,
-                             idx_t end_rn, idx_t end_rx, idx_t end_ry, idx_t end_rz) =0;
-};
-
-// A template that provides wrappers around a stencil class created
-// by the foldBuilder.
-template <typename StencilClass>
+// A template that provides wrappers around a stencil-equation class created
+// by the foldBuilder. A template is used instead of inheritance for performance.
+// By using templates, the compiler can inline stencil code into loops and
+// avoid indirect calls.
+template <typename StencilEquationClass, typename ContextClass>
 class StencilTemplate : public StencilBase {
 
 protected:
 
-    // _stencil must implement calc_scalar, calc_vector.
-    StencilClass _stencil;
+    // _stencil must implement calc_scalar, calc_vector,
+    // prefetch_L1_vector, prefetch_L2_vector, name.
+    StencilEquationClass _stencil;
 
 public:
+    StencilTemplate() {}
     StencilTemplate(const string& name) :
         StencilBase(name) { }
+    virtual ~StencilTemplate() {}
+
+    // Get values from _stencil.
+    virtual const string& get_name() {
+        return _stencil.name;
+    }
+    virtual int get_scalar_fp_ops() {
+        return _stencil.scalar_fp_ops;
+    }
     
     // Calculate one scalar result.
-    virtual void calc_scalar(StencilContext& context, idx_t t, idx_t n, idx_t x, idx_t y, idx_t z) {
+    virtual void calc_scalar(StencilContext& generic_context, idx_t t, idx_t n, idx_t x, idx_t y, idx_t z) {
+
+        // Convert to a problem-specific context.
+        auto context = dynamic_cast<ContextClass&>(generic_context);
+
+        // Call the generated code.
         _stencil.calc_scalar(context, t, ARG_N(n) x, y, z);
     }
 
@@ -88,7 +175,7 @@ public:
     // The begin/end_c* vars are the start/stop_b* vars from the block loops.
     // This function doesn't contain any loops; it's just a wrapper around 
     // calc_vector.
-    ALWAYS_INLINE void calc_cluster (StencilContext& context, idx_t t,
+    ALWAYS_INLINE void calc_cluster (ContextClass& context, idx_t t,
                                      idx_t begin_cnv, idx_t begin_cxv, idx_t begin_cyv, idx_t begin_czv,
                                      idx_t end_cnv, idx_t end_cxv, idx_t end_cyv, idx_t end_czv)
     {
@@ -110,7 +197,7 @@ public:
 
     // Prefetch a cluster into L1.
     // Called from calc_block().
-    ALWAYS_INLINE void prefetch_L1_cluster (StencilContext& context, idx_t t,
+    ALWAYS_INLINE void prefetch_L1_cluster (ContextClass& context, idx_t t,
                                             idx_t begin_cnv, idx_t begin_cxv, idx_t begin_cyv, idx_t begin_czv,
                                             idx_t end_cnv, idx_t end_cxv, idx_t end_cyv, idx_t end_czv)
     {
@@ -119,7 +206,7 @@ public:
     
     // Prefetch a cluster into L2.
     // Called from calc_block().
-    ALWAYS_INLINE void prefetch_L2_cluster (StencilContext& context, idx_t t,
+    ALWAYS_INLINE void prefetch_L2_cluster (ContextClass& context, idx_t t,
                                             idx_t begin_cnv, idx_t begin_cxv, idx_t begin_cyv, idx_t begin_czv,
                                             idx_t end_cnv, idx_t end_cxv, idx_t end_cyv, idx_t end_czv)
     {
@@ -129,7 +216,7 @@ public:
     // Calculate results within a [cache] block.
     // Each block is typically computed in a separate OpenMP task.
     // The begin/end_b* vars are the start/stop_r* vars from the region loops.
-    void calc_block(StencilContext& context, idx_t t,
+    void calc_block(ContextClass& context, idx_t t,
                     idx_t begin_bn, idx_t begin_bx, idx_t begin_by, idx_t begin_bz,
                     idx_t end_bn, idx_t end_bx, idx_t end_by, idx_t end_bz)
     {
@@ -166,7 +253,7 @@ public:
     // Calculate results within a region.
     // Each region is typically computed in a separate OpenMP 'for' region.
     // The begin/end_r* vars are the start/stop_d* vars from the outer loops.
-    virtual void calc_region(StencilContext& context, 
+    virtual void calc_region(StencilContext& generic_context, 
                              idx_t t,
                              idx_t begin_rn, idx_t begin_rx, idx_t begin_ry, idx_t begin_rz,
                              idx_t end_rn, idx_t end_rx, idx_t end_ry, idx_t end_rz)
@@ -174,12 +261,15 @@ public:
         TRACE_MSG("%s.calc_region(%ld, %ld, %ld, %ld, %ld)", 
                   _name.c_str(), t, begin_rn, begin_rx, begin_ry, begin_rz);
 
+        // Convert to a problem-specific context.
+        auto context = dynamic_cast<ContextClass&>(generic_context);
+
         // Steps based on block sizes.
         const idx_t step_rn = context.bn;
         const idx_t step_rx = context.bx;
         const idx_t step_ry = context.by;
         const idx_t step_rz = context.bz;
-        
+
         // Start an OpenMP parallel region.
 #pragma omp parallel
         {
@@ -191,5 +281,21 @@ public:
     
 };
 
-// List of stencils.
-typedef vector<StencilBase*> Stencils;
+// Collection of all stencil equations to be evaluated.
+struct StencilEquations {
+
+    string name;
+
+    // List of stencils.
+    vector<StencilBase*> stencils;
+
+    StencilEquations() {}
+    virtual ~StencilEquations() {}
+
+    // Reference stencil calculations.
+    virtual void calc_steps_ref(StencilContext& context, const int nreps);
+
+    // Vectorized and blocked stencil calculations.
+    virtual void calc_steps_opt(StencilContext& context, const int nreps);
+
+};
