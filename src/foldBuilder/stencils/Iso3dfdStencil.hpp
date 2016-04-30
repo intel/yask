@@ -37,8 +37,10 @@ protected:
     double _dxyz;               // dx, dy, dz factor.
     bool _deferCoeff;           // look up coefficients later.
 
-    Grid pressure;          // time-varying 3D pressure grid.
-    Grid vel;               // constant 3D vel grid.
+    Grid pressure;              // time-varying 3D pressure grid.
+    Grid vel;                   // constant 3D vel grid.
+
+    Param coefficients;             // coefficients if they are not hard-coded.
     
 public:
 
@@ -47,6 +49,7 @@ public:
     {
         INIT_GRID_4D(pressure, t, x, y, z);
         INIT_GRID_3D(vel, x, y, z);
+        INIT_PARAM_1D(coefficients, r, order / 2 + 1);
     }
 
     virtual ~Iso3dfdStencil() {
@@ -97,7 +100,7 @@ public:
 
         double *coeffN = (order == 8) ? coeff8 : coeff16;
 
-        // copy the coefficients and adjust using dx, dy, dz.
+        // copy the coefficients and adjust using dxyz factor.
         double dxyz2 = _dxyz * _dxyz;
         for (int i = 0; i < n; i++)
             _coeff[i] = coeffN[i] / dxyz2;
@@ -107,14 +110,16 @@ public:
     }
 
     // Get an expression for coefficient at radius r.
-    virtual GridValue coeff(int r) const {
+    virtual GridValue coeff(int r) {
         GridValue v;
         
-        // See Expr.hpp for documentation on SET_VALUE_FROM_EXPR macro.
+        // if coefficients are deferred, load from parameter.
         if (_deferCoeff)
-            SET_VALUE_FROM_EXPR(v =, "context.coeff[" << r << "]");
+            v = coefficients(r);
+
+        // if coefficients are not deferred, set from constant.
         else
-            SET_VALUE_FROM_EXPR(v =, _coeff[r]);
+            v = constGridValue(_coeff[r]);
 
         return v;
     }

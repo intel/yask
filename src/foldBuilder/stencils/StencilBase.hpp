@@ -33,7 +33,16 @@ using namespace std;
 class StencilBase {
 protected:
     int _order;         // stencil order (for convenience; optional).
+
+    // A grid is an n-dimensional space that is indexed by grid indices.
+    // Vectorization will be applied to grid accesses.
     Grids _grids;       // keep track of all registered grids.
+
+    // A parameter is an n-dimensional space that is NOT index by grid indices.
+    // It is used to pass some sort of index-invarant setting to a stencil function.
+    // Its indices must be resolved when define() is called.
+    // At this time, this is not checked, so be careful!!
+    Params _params;     // keep track of all registered non-grid vars.
 
 public:
     StencilBase(int order=2) : _order(order) { }
@@ -50,8 +59,9 @@ public:
     // Get order.
     virtual int getOrder() { return _order; }
 
-    // Get the registered grids.
+    // Get the registered grids and params.
     virtual Grids& getGrids() { return _grids; }
+    virtual Grids& getParams() { return _params; }
     
     // Define grid values relative to given offsets in each dimension.
     virtual void define(const IntTuple& offsets) = 0;

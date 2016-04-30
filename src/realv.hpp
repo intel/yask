@@ -157,11 +157,10 @@ typedef long int idx_t;
 #define ALWAYS_INLINE __attribute__((always_inline)) inline
 #endif
 
-// Type for a vector block.
-// This must be an aggregate type to allow aggregate initialization,
+    
+// The following must be an aggregate type to allow aggregate initialization,
 // so no user-provided ctors, copy operator, virtual member functions, etc.
-union realv {
-
+union realv_data {
     REAL r[VLEN];
     CTRL_INT ci[VLEN];
 
@@ -184,19 +183,55 @@ union realv {
 #elif REAL_BYTES == 8 && defined(USE_INTRIN512)
     __m512d mr;
 #endif
-
 #endif
+};
+  
+
+// Type for a vector block.
+struct realv {
+
+    // union of data types.
+    realv_data u;
+
+    // default ctor does not init data!
+    realv() {}
+
+    // broadcast scalar.
+    realv(float val) {
+        operator=(val);
+    }
+    realv(double val) {
+        operator=(val);
+    }
+    realv(int val) {
+        operator=(val);
+    }
+    realv(long val) {
+        operator=(val);
+    }
     
+    // copy whole vector.
+    ALWAYS_INLINE realv(const realv& rhs) {
+#ifdef NO_INTRINSICS
+        REALV_LOOP(i) u.r[i] = rhs[i];
+#else
+        u.mr = rhs.u.mr;
+#endif
+    }
+    ALWAYS_INLINE realv(const realv_data& rhs) {
+        u = rhs;
+    }
+
     // access a REAL linearly.
     ALWAYS_INLINE REAL& operator[](idx_t l) {
         assert(l >= 0);
         assert(l < VLEN);
-        return r[l];
+        return u.r[l];
     }
     ALWAYS_INLINE const REAL& operator[](idx_t l) const {
         assert(l >= 0);
         assert(l < VLEN);
-        return r[l];
+        return u.r[l];
     }
 
     // access a REAL by n,x,y,z vector-block indices.
@@ -220,7 +255,7 @@ union realv {
         idx_t l = MAP1234(n, i, j, k, VLEN_N, VLEN_X, VLEN_Y, VLEN_Z);
 #endif
         
-        return r[l];
+        return u.r[l];
     }
     ALWAYS_INLINE REAL& operator()(idx_t n, idx_t i, idx_t j, idx_t k) {
         const realv* ct = const_cast<const realv*>(this);
@@ -228,21 +263,19 @@ union realv {
         return const_cast<REAL&>(cr);
     }
 
-    // copy whole vector.
-    ALWAYS_INLINE void copy(const realv& rhs) {
+    // assignment: single value broadcast.
+    ALWAYS_INLINE void operator=(double val) {
 #ifdef NO_INTRINSICS
-        REALV_LOOP(i) r[i] = rhs[i];
+        REALV_LOOP(i) u.r[i] = REAL(val);
 #else
-        mr = rhs.mr;
+        u.mr = INAME(set1)(REAL(val));
 #endif
     }
-
-    // assignment: single value broadcast.
-    ALWAYS_INLINE void operator=(REAL val) {
+    ALWAYS_INLINE void operator=(float val) {
 #ifdef NO_INTRINSICS
-        REALV_LOOP(i) r[i] = val;
+        REALV_LOOP(i) u.r[i] = REAL(val);
 #else
-        mr = INAME(set1)(val);
+        u.mr = INAME(set1)(REAL(val));
 #endif
     }
 
@@ -254,25 +287,14 @@ union realv {
         operator=(REAL(val));
     }
 
-    // real conversions are only needed for float<->double.
-#if REAL_BYTES == 4
-    ALWAYS_INLINE void operator=(double val) {
-        operator=(REAL(val));
-    }
-#else
-    ALWAYS_INLINE void operator=(float val) {
-        operator=(REAL(val));
-    }
-#endif
-    
     // unary negate.
     ALWAYS_INLINE realv operator-() const {
         realv res;
 #ifdef NO_INTRINSICS
-        REALV_LOOP(i) res[i] = -r[i];
+        REALV_LOOP(i) res[i] = -u.r[i];
 #else
         // subtract from zero.
-        res.mr = INAME(sub)(INAME(setzero)(), mr);
+        res.u.mr = INAME(sub)(INAME(setzero)(), u.mr);
 #endif
         return res;
     }
@@ -281,9 +303,9 @@ union realv {
     ALWAYS_INLINE realv operator+(realv rhs) const {
         realv res;
 #ifdef NO_INTRINSICS
-        REALV_LOOP(i) res[i] = r[i] + rhs[i];
+        REALV_LOOP(i) res[i] = u.r[i] + rhs[i];
 #else
-        res.mr = INAME(add)(mr, rhs.mr);
+        res.u.mr = INAME(add)(u.mr, rhs.u.mr);
 #endif
         return res;
     }
@@ -297,9 +319,9 @@ union realv {
     ALWAYS_INLINE realv operator-(realv rhs) const {
         realv res;
 #ifdef NO_INTRINSICS
-        REALV_LOOP(i) res[i] = r[i] - rhs[i];
+        REALV_LOOP(i) res[i] = u.r[i] - rhs[i];
 #else
-        res.mr = INAME(sub)(mr, rhs.mr);
+        res.u.mr = INAME(sub)(u.mr, rhs.u.mr);
 #endif
         return res;
     }
@@ -313,9 +335,9 @@ union realv {
     ALWAYS_INLINE realv operator*(realv rhs) const {
         realv res;
 #ifdef NO_INTRINSICS
-        REALV_LOOP(i) res[i] = r[i] * rhs[i];
+        REALV_LOOP(i) res[i] = u.r[i] * rhs[i];
 #else
-        res.mr = INAME(mul)(mr, rhs.mr);
+        res.u.mr = INAME(mul)(u.mr, rhs.u.mr);
 #endif
         return res;
     }
@@ -329,9 +351,9 @@ union realv {
     ALWAYS_INLINE realv operator/(realv rhs) const {
         realv res;
 #ifdef NO_INTRINSICS
-        REALV_LOOP(i) res[i] = r[i] / rhs[i];
+        REALV_LOOP(i) res[i] = u.r[i] / rhs[i];
 #else
-        res.mr = INAME(div)(mr, rhs.mr);
+        res.u.mr = INAME(div)(u.mr, rhs.u.mr);
 #endif
         return res;
     }
@@ -344,9 +366,9 @@ union realv {
     // less-than comparator.
     bool operator<(const realv& rhs) const {
         for (int j = 0; j < VLEN; j++) {
-            if (r[j] < rhs.r[j])
+            if (u.r[j] < rhs.u.r[j])
                 return true;
-            else if (r[j] > rhs.r[j])
+            else if (u.r[j] > rhs.u.r[j])
                 return false;
         }
         return false;
@@ -355,9 +377,9 @@ union realv {
     // greater-than comparator.
     bool operator>(const realv& rhs) const {
         for (int j = 0; j < VLEN; j++) {
-            if (r[j] > rhs.r[j])
+            if (u.r[j] > rhs.u.r[j])
                 return true;
-            else if (r[j] < rhs.r[j])
+            else if (u.r[j] < rhs.u.r[j])
                 return false;
         }
         return false;
@@ -366,7 +388,7 @@ union realv {
     // equal-to comparator for validation.
     bool operator==(const realv& rhs) const {
         for (int j = 0; j < VLEN; j++) {
-            if (r[j] != rhs.r[j])
+            if (u.r[j] != rhs.u.r[j])
                 return false;
         }
         return true;
@@ -375,18 +397,18 @@ union realv {
     // aligned load.
     ALWAYS_INLINE void loadFrom(const realv* restrict from) {
 #if defined(NO_INTRINSICS) || defined(NO_LOAD_INTRINSICS)
-        REALV_LOOP(i) r[i] = (*from)[i];
+        REALV_LOOP(i) u.r[i] = (*from)[i];
 #else
-        mr = INAME(load)((IMEM_TYPE const*)from);
+        u.mr = INAME(load)((IMEM_TYPE const*)from);
 #endif
     }
 
     // unaligned load.
     ALWAYS_INLINE void loadUnalignedFrom(const realv* restrict from) {
 #if defined(NO_INTRINSICS) || defined(NO_LOAD_INTRINSICS)
-        REALV_LOOP_UNALIGNED(i) r[i] = (*from)[i];
+        REALV_LOOP_UNALIGNED(i) u.r[i] = (*from)[i];
 #else
-        mr = INAME(loadu)((IMEM_TYPE const*)from);
+        u.mr = INAME(loadu)((IMEM_TYPE const*)from);
 #endif
     }
 
@@ -403,13 +425,13 @@ union realv {
 #if defined(__INTEL_COMPILER) && (VLEN > 1) && defined(USE_STREAMING_STORE)
         _Pragma("vector nontemporal")
 #endif
-            REALV_LOOP(i) (*to)[i] = r[i];
+            REALV_LOOP(i) (*to)[i] = u.r[i];
 #elif !defined(USE_STREAMING_STORE)
-        INAME(store)((IMEM_TYPE*)to, mr);
+        INAME(store)((IMEM_TYPE*)to, u.mr);
 #elif defined(ARCH_KNC)
-        INAME(storenrngo)((IMEM_TYPE*)to, mr);
+        INAME(storenrngo)((IMEM_TYPE*)to, u.mr);
 #else
-        INAME(stream)((IMEM_TYPE*)to, mr);
+        INAME(stream)((IMEM_TYPE*)to, u.mr);
 #endif
     }
 
@@ -417,7 +439,7 @@ union realv {
     void print_ctrls(ostream& os, bool doEnd=true) const {
         for (int j = 0; j < VLEN; j++) {
             if (j) os << ", ";
-            os << "[" << j << "]=" << ci[j];
+            os << "[" << j << "]=" << u.ci[j];
         }
         if (doEnd)
             os << endl;
@@ -426,7 +448,7 @@ union realv {
     void print_reals(ostream& os, bool doEnd=true) const {
         for (int j = 0; j < VLEN; j++) {
             if (j) os << ", ";
-            os << "[" << j << "]=" << r[j];
+            os << "[" << j << "]=" << u.r[j];
         }
         if (doEnd)
             os << endl;
@@ -438,6 +460,20 @@ union realv {
 inline ostream& operator<<(ostream& os, const realv& rn) {
     rn.print_reals(os, false);
     return os;
+}
+
+// More operator overloading.
+ALWAYS_INLINE realv operator+(REAL lhs, const realv& rhs) {
+    return realv(lhs) + rhs;
+}
+ALWAYS_INLINE realv operator-(REAL lhs, const realv& rhs) {
+    return realv(lhs) - rhs;
+}
+ALWAYS_INLINE realv operator*(REAL lhs, const realv& rhs) {
+    return realv(lhs) * rhs;
+}
+ALWAYS_INLINE realv operator/(REAL lhs, const realv& rhs) {
+    return realv(lhs) / rhs;
 }
 
 // wrappers around some intrinsics w/non-intrinsic equivalents.
@@ -460,9 +496,9 @@ ALWAYS_INLINE void realv_align(realv& res, const realv& a, const realv& b,
     // must make temp copies in case &res == &a or &b.
     realv tmpa = a, tmpb = b;
     for (int i = 0; i < VLEN-count; i++)
-        res.r[i] = tmpb.r[i + count];
+        res.u.r[i] = tmpb.u.r[i + count];
     for (int i = VLEN-count; i < VLEN; i++)
-        res.r[i] = tmpa.r[i + count - VLEN];
+        res.u.r[i] = tmpa.u.r[i + count - VLEN];
     
 #elif defined(USE_INTRIN256)
     // Not really an intrinsic, but not element-wise, either.
@@ -475,10 +511,10 @@ ALWAYS_INLINE void realv_align(realv& res, const realv& a, const realv& b,
     
 #elif REAL_BYTES == 8 && defined(ARCH_KNC) && defined(USE_INTRIN512)
     // For KNC, for 64-bit align, use the 32-bit op w/2x count.
-    res.mi = _mm512_alignr_epi32(a.mi, b.mi, count*2);
+    res.u.mi = _mm512_alignr_epi32(a.u.mi, b.u.mi, count*2);
 
 #else
-    res.mi = INAMEI(alignr)(a.mi, b.mi, count);
+    res.u.mi = INAMEI(alignr)(a.u.mi, b.u.mi, count);
 #endif
 
 #ifdef TRACE_INTRINSICS
@@ -508,12 +544,12 @@ ALWAYS_INLINE void realv_align(realv& res, const realv& a, const realv& b,
     realv tmpa = a, tmpb = b;
     for (int i = 0; i < VLEN-count; i++)
         if ((k1 >> i) & 1)
-            res.r[i] = tmpb.r[i + count];
+            res.u.r[i] = tmpb.u.r[i + count];
     for (int i = VLEN-count; i < VLEN; i++)
         if ((k1 >> i) & 1)
-            res.r[i] = tmpa.r[i + count - VLEN];
+            res.u.r[i] = tmpa.u.r[i + count - VLEN];
 #else
-    res.mi = INAMEI(mask_alignr)(res.mi, MMASK(k1), a.mi, b.mi, count);
+    res.u.mi = INAMEI(mask_alignr)(res.u.mi, MMASK(k1), a.u.mi, b.u.mi, count);
 #endif
 
 #ifdef TRACE_INTRINSICS
@@ -537,9 +573,9 @@ ALWAYS_INLINE void realv_permute(realv& res, const realv& ctrl, const realv& a) 
     // must make a temp copy in case &res == &a.
     realv tmp = a;
     for (int i = 0; i < VLEN; i++)
-        res.r[i] = tmp.r[ctrl.ci[i]];
+        res.u.r[i] = tmp.u.r[ctrl.u.ci[i]];
 #else
-    res.mi = INAMEI(permutexvar)(ctrl.mi, a.mi);
+    res.u.mi = INAMEI(permutexvar)(ctrl.u.mi, a.u.mi);
 #endif
 
 #ifdef TRACE_INTRINSICS
@@ -568,10 +604,10 @@ ALWAYS_INLINE void realv_permute(realv& res, const realv& ctrl, const realv& a,
     realv tmp = a;
     for (int i = 0; i < VLEN; i++) {
         if ((k1 >> i) & 1)
-            res.r[i] = tmp.r[ctrl.ci[i]];
+            res.u.r[i] = tmp.u.r[ctrl.u.ci[i]];
     }
 #else
-    res.mi = INAMEI(mask_permutexvar)(res.mi, MMASK(k1), ctrl.mi, a.mi);
+    res.u.mi = INAMEI(mask_permutexvar)(res.u.mi, MMASK(k1), ctrl.u.mi, a.u.mi);
 #endif
 
 #ifdef TRACE_INTRINSICS
@@ -599,16 +635,16 @@ ALWAYS_INLINE void realv_permute2(realv& res, const realv& ctrl,
     // must make temp copies in case &res == &a or &b.
     realv tmpa = a, tmpb = b;
     for (int i = 0; i < VLEN; i++) {
-        int sel = ctrl.ci[i] & CTRL_SEL_BIT; // 0 => a, 1 => b.
-        int idx = ctrl.ci[i] & CTRL_IDX_MASK; // index.
-        res.r[i] = sel ? tmpb.r[idx] : tmpa.r[idx];
+        int sel = ctrl.u.ci[i] & CTRL_SEL_BIT; // 0 => a, 1 => b.
+        int idx = ctrl.u.ci[i] & CTRL_IDX_MASK; // index.
+        res.u.r[i] = sel ? tmpb.u.r[idx] : tmpa.u.r[idx];
     }
 
 #elif defined(ARCH_KNC)
     cerr << "error: 2-input permute not supported on KNC" << endl;
     exit(1);
 #else
-    res.mi = INAMEI(permutex2var)(a.mi, ctrl.mi, b.mi);
+    res.u.mi = INAMEI(permutex2var)(a.u.mi, ctrl.u.mi, b.u.mi);
 #endif
 
 #ifdef TRACE_INTRINSICS
@@ -642,7 +678,7 @@ inline bool within_tolerance(T val, T ref, T epsilon) {
 inline bool within_tolerance(const realv& val, const realv& ref,
                              const realv& epsilon) {
         for (int j = 0; j < VLEN; j++) {
-            if (!within_tolerance(val.r[j], ref.r[j], epsilon.r[j]))
+            if (!within_tolerance(val.u.r[j], ref.u.r[j], epsilon.u.r[j]))
                 return false;
         }
         return true;

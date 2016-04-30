@@ -38,6 +38,7 @@ IN THE SOFTWARE.
 #include <map>
 #include <set>
 #include <vector>
+#include <cstdarg>
 
 using namespace std;
 
@@ -115,6 +116,9 @@ public:
         assert(p);
         *p = val;
     }
+
+    // Set multiple values.
+    // Assumes values are in same order as keys.
     virtual void setVals(int numVals, const T vals[]) {
         assert(size() == numVals);
         for (size_t i = 0; i < size(); i++)
@@ -124,6 +128,26 @@ public:
         assert(size() == vals.size());
         for (size_t i = 0; i < size(); i++)
             _map[_dims.at(i)] = vals.at(i);
+    }
+
+    // This version is similar to vprintf.
+    // 'args' must have been initialized with va_start.
+    virtual void setVals(int numVals, va_list args) {
+        assert(size() == numVals);
+        
+        // process the var args.
+        for (int i = 0; i < numVals; i++) {
+            int n = va_arg(args, int);
+            _map[_dims.at(i)] = n;
+        }
+    }
+    virtual void setVals(int numVals, ...) {
+        
+        // pass the var args.
+        va_list args;
+        va_start(args, numVals);
+        setVals(numVals, args);
+        va_end(args);
     }
 
     // Check whether dims are the same.

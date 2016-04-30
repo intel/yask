@@ -68,7 +68,7 @@ public:
         return _cv->getCount(ep);
     }
 
-    // Return amount of count over 1.
+    // Return number of times this node is shared.
     int getNumCommon(Expr* ep) {
         if (!_cv)
             return 0;
@@ -99,6 +99,14 @@ public:
         return oss.str();
     }
 
+    // Return a parameter reference.
+    virtual string readFromParam(ostream& os, const GridPoint& pp) {
+        string str = pp.getName();
+        if (pp.size())
+            str += "(" + pp.makeValStr() + ")";
+        return str;
+    }
+    
     // Return a grid reference.
     // The 'os' parameter is provided for derived types that
     // need to write intermediate code to a stream.
@@ -156,11 +164,16 @@ public:
     PrintVisitorTopDown(ostream& os, PrintHelper& ph) :
         PrintVisitorBase(os, ph), _numCommon(0) { }
 
+    // Get the number of shared nodes found after this visitor
+    // has been accepted.
     int getNumCommon() const { return _numCommon; }
     
-    // A point read.
+    // A grid or parameter read.
     virtual void visit(GridPoint* gp) {
-        _exprStr += _ph.readFromPoint(_os, *gp);
+        if (gp->isParam())
+            _exprStr += _ph.readFromParam(_os, *gp);
+        else
+            _exprStr += _ph.readFromPoint(_os, *gp);
         _numCommon += _ph.getNumCommon(gp);
     }
 
@@ -244,8 +257,7 @@ protected:
     virtual ostream& makeNextTempVar(Expr* ex) {
         _exprStr = _ph.makeVarName();
         _tempVars[ex] = _exprStr;
-        //_os << endl << " // Store a partial result in " << _exprStr << ":" << endl;
-        _os << endl << " // " << _exprStr << " = " << ex->makeStr() << ":" << endl;
+        _os << endl << " // " << _exprStr << " = " << ex->makeStr() << "." << endl;
         _os << _ph.getLinePrefix() << _ph.getVarType() << " " << _exprStr << " = ";
         return _os;
     }
@@ -305,7 +317,7 @@ public:
         return false;
     }
 
-    // A point: just set expr.
+    // A grid or param point: just set expr.
     virtual void visit(GridPoint* gp) {
         tryTopDown(gp, true);
     }

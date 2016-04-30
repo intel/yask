@@ -51,10 +51,8 @@ protected:
     const double c1 = 9.0/8.0;
     const double c2 = -1.0/24.0;
 
-    // The following are placeholders.
-    // FIXME: make these run-time parameters.
-    const double delta_t = 1.0;
-    const double h = 1.0;
+    // Physical dimensions in time and space.
+    Param delta_t, h;
 
 public:
 
@@ -76,6 +74,8 @@ public:
         INIT_GRID_3D(rho, x, y, z);
         INIT_GRID_3D(mu, x, y, z);
         INIT_GRID_3D(sponge, x, y, z);
+        INIT_PARAM(delta_t);
+        INIT_PARAM(h);
     }
 
     // Adjustment for sponge layer.

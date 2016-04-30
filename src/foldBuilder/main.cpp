@@ -270,8 +270,9 @@ int main(int argc, const char* argv[]) {
     // Set default fold ordering.
     IntTuple::setDefaultFirstInner(firstInner);
     
-    // Reference to the grids in the stencil.
+    // Reference to the grids and params in the stencil.
     Grids& grids = stencilFunc->getGrids();
+    Params& params = stencilFunc->getParams();
 
     // Create a union of all dimensions in all grids.
     // Also keep count of how many grids have each dim.
@@ -405,6 +406,7 @@ int main(int argc, const char* argv[]) {
                 "  " << cv.getNumNodes() << " nodes." << endl <<
                 "  " << cv.getNumReads() << " grid reads." << endl <<
                 "  " << cv.getNumWrites() << " grid writes." << endl <<
+                "  " << cv.getNumParamReads() << " parameter reads." << endl <<
                 "  " << cv.getNumOps() << " math operations." << endl;
         }
     }
@@ -468,9 +470,10 @@ int main(int argc, const char* argv[]) {
         cout << endl << " // Grids." << endl;
         map<Grid*, string> typeNames, dimArgs, padArgs;
         for (auto gp : grids) {
+            assert (!gp->isParam());
             string grid = gp->getName();
 
-            // Type name.
+            // Type name & ctor params.
             // Name in kernel is 'Grid_' followed by dimensions.
             string typeName = "Grid_";
             string dimArg, padArg;
@@ -490,6 +493,33 @@ int main(int argc, const char* argv[]) {
             cout << " " << typeName << "* " << grid << ";" << endl;
         }
 
+        // Parameters.
+        map<Param*, string> paramTypeNames, paramDimArgs;
+        cout << endl << " // Parameters." << endl;
+        for (auto pp : params) {
+            assert(pp->isParam());
+            string param = pp->getName();
+
+            // Type name.
+            // Name in kernel is 'GenericGridNd<REAL>'.
+            ostringstream oss;
+            oss << "GenericGrid" << pp->size() << "d<REAL";
+            if (pp->size()) {
+                oss << ",Map";
+                for (int dn = pp->size(); dn > 0; dn--)
+                    oss << dn;
+            }
+            oss << ">";
+            string typeName = oss.str();
+
+            // Ctor params.
+            string dimArg = pp->makeValStr();
+            
+            paramTypeNames[pp] = typeName;
+            paramDimArgs[pp] = dimArg;
+            cout << " " << typeName << "* " << param << ";" << endl;
+        }
+
         // Ctor.
         cout << endl << " " << context << "() {" << endl <<
             "  name = \"" << shapeName << "\";" << endl;
@@ -499,6 +529,14 @@ int main(int argc, const char* argv[]) {
             string grid = gp->getName();
             cout << "  " << grid << " = 0;" << endl;
         }
+
+        // Init param ptrs.
+        for (auto pp : params) {
+            string param = pp->getName();
+            cout << "  " << param << " = 0;" << endl;
+        }
+
+        // end of ctor.
         cout << " }" << endl;
 
         // Allocate grids.
@@ -511,6 +549,17 @@ int main(int argc, const char* argv[]) {
         }
         cout << " }" << endl;
 
+        // Allocate params.
+        cout << endl << " void allocParams() {" << endl;
+        for (auto pp : params) {
+            string param = pp->getName();
+            cout << "  " << param << " = new " << paramTypeNames[pp] <<
+                "(" << paramDimArgs[pp] << ");" << endl <<
+                "  paramPtrs.push_back(" << param << ");" << endl;
+        }
+        cout << " }" << endl;
+
+        // end of context.
         cout << "};" << endl;
         
         // Loop through all equations.

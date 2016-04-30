@@ -175,17 +175,18 @@ public:
 // Doesn't count those in CSEs.
 class CounterVisitor : public TrackingVisitor {
 protected:
-    int _numOps, _numNodes, _numReads, _numWrites;
+    int _numOps, _numNodes, _numReads, _numWrites, _numParamReads;
     
 public:
     CounterVisitor() :
-        _numOps(0), _numNodes(0), _numReads(0), _numWrites(0) { }
+        _numOps(0), _numNodes(0), _numReads(0), _numWrites(0), _numParamReads(0) { }
 
     virtual ~CounterVisitor() {}
     
     int getNumNodes() const { return _numNodes; }
     int getNumReads() const { return _numReads; }
     int getNumWrites() const { return _numWrites; }
+    int getNumParamReads() const { return _numParamReads; }
     int getNumOps() const { return _numOps; }
 
     // Leaf nodes.
@@ -196,11 +197,14 @@ public:
     virtual void visit(CodeExpr* ce) {
         if (isSeen(ce)) return;
         _numNodes++;
-    }        
+    }
     virtual void visit(GridPoint* gp) {
         if (isSeen(gp)) return;
         _numNodes++;
-        _numReads++;
+        if (gp->isParam())
+            _numParamReads++;
+        else
+            _numReads++;
     }
     
     // Unary: Count as one op and visit operand.

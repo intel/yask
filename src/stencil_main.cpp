@@ -346,8 +346,10 @@ int main(int argc, char** argv)
     printf("\n");
 
     // Alloc and init grids.
-    cout << "allocating matrices..." << endl;
+    cout << "allocating grids..." << endl;
     context.allocGrids();
+    cout << "allocating parameters (if any)..." << endl;
+    context.allocParams();
     idx_t nbytes = context.get_num_bytes();
     cout << "total allocation: " << (float(nbytes)/1e9) << "G byte(s)." << endl;
     context.initSame();
@@ -420,10 +422,11 @@ int main(int argc, char** argv)
         printf("\n-------------------------------\n");
         printf("validation...\n");
 
-        // make a ref context for comparisons w/new grids:
-        // copy the settings from context, then re-alloc grids.
+        // Make a ref context for comparisons w/new grids:
+        // Copy the settings from context, then re-alloc grids.
         STENCIL_CONTEXT ref = context;
         ref.allocGrids();
+        ref.allocParams();      // shallow copy is probably ok, but just to be safe.
 
         // init both to same values.
         context.initDiff();

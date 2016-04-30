@@ -70,10 +70,10 @@ ExprPtr operator+(const ExprPtr& lhs, double rhs) {
     return lhs + p;
 }
 
-void operator+=(GridValue& lhs, const ExprPtr& rhs) {
+void operator+=(ExprPtr& lhs, const ExprPtr& rhs) {
     lhs = lhs + rhs;
 }
-void operator+=(GridValue& lhs, double rhs) {
+void operator+=(ExprPtr& lhs, double rhs) {
     lhs = lhs + rhs;
 }
 
@@ -104,10 +104,10 @@ ExprPtr operator*(const ExprPtr& lhs, double rhs) {
     return lhs * p;
 }
 
-void operator*=(GridValue& lhs, const ExprPtr& rhs) {
+void operator*=(ExprPtr& lhs, const ExprPtr& rhs) {
     lhs = lhs * rhs;
 }
-void operator*=(GridValue& lhs, double rhs) {
+void operator*=(ExprPtr& lhs, double rhs) {
     lhs = lhs * rhs;
 }
 
@@ -131,10 +131,10 @@ ExprPtr operator-(const ExprPtr& lhs, double rhs) {
     return lhs - p;
 }
 
-void operator-=(GridValue& lhs, const ExprPtr& rhs) {
+void operator-=(ExprPtr& lhs, const ExprPtr& rhs) {
     lhs = lhs - rhs;
 }
-void operator-=(GridValue& lhs, double rhs) {
+void operator-=(ExprPtr& lhs, double rhs) {
     lhs = lhs - rhs;
 }
 
@@ -151,10 +151,10 @@ ExprPtr operator/(const ExprPtr& lhs, double rhs) {
     return lhs / p;
 }
 
-void operator/=(GridValue& lhs, const ExprPtr& rhs) {
+void operator/=(ExprPtr& lhs, const ExprPtr& rhs) {
     lhs = lhs / rhs;
 }
-void operator/=(GridValue& lhs, double rhs) {
+void operator/=(ExprPtr& lhs, double rhs) {
     lhs = lhs / rhs;
 }
 
@@ -164,6 +164,13 @@ void operator/=(GridValue& lhs, double rhs) {
 void operator==(GridPointPtr gpp, ExprPtr rhs) {
     assert(gpp != NULL);
 
+    // Make sure this is a grid.
+    if (gpp->isParam()) {
+        cerr << "Error: parameter '" << gpp->getName() <<
+            "' cannot appear on LHS of a grid-value equation." << endl;
+        exit(1);
+    }
+    
     // Make expression node.
     ExprPtr p = make_shared<EqualsExpr>(gpp, rhs);
 
@@ -207,6 +214,9 @@ bool EqualsExpr::isSame(const Expr* other) {
 // GridPoint methods.
 const string& GridPoint::getName() const {
     return _grid->getName();
+}
+bool GridPoint::isParam() const {
+    return _grid->isParam();
 }
 bool GridPoint::operator==(const GridPoint& rhs) const {
     return (_grid->getName() == rhs._grid->getName()) &&

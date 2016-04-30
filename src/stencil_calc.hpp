@@ -34,6 +34,9 @@ struct StencilContext {
     // A list of all grids.
     vector<RealvGridBase*> gridPtrs;
 
+    // A list of all non-grid parameters.
+    vector<GenericGridBase<REAL>*> paramPtrs;
+
     // Sizes--all in elements (not vectors).
     idx_t dn, dx, dy, dz;                   // problem size.
     idx_t rn, rx, ry, rz;                   // region size.
@@ -46,26 +49,36 @@ struct StencilContext {
     // Allocate grid memory and set gridPtrs.
     virtual void allocGrids() =0;
 
+    // Allocate param memory and set paramPtrs.
+    virtual void allocParams() =0;
+
     // Get total size.
     virtual idx_t get_num_bytes() {
         idx_t nbytes = 0;
         for (auto gp : gridPtrs)
             nbytes += gp->get_num_bytes();
+        for (auto pp : paramPtrs)
+            nbytes += pp->get_num_bytes();
         return nbytes;
     }
 
-    // Init all grids w/same value within each grid,
-    // but different values between grids.
+    // Init all grids & params w/same value within each,
+    // but different values between them.
     virtual void initSame() {
         REAL v = 0.1;
-        cout << "initializing matrices..." << endl;
+        cout << "initializing grids..." << endl;
         for (auto gp : gridPtrs) {
             gp->set_same(v);
             v += 0.01;
         }
+        cout << "initializing parameters (if any)..." << endl;
+        for (auto pp : paramPtrs) {
+            pp->set_same(v);
+            v += 0.01;
+        }
     }
 
-    // Init all grids w/different values.
+    // Init all grids & params w/different values.
     // Better for validation, but slower.
     virtual void initDiff() {
         REAL v = 0.01;
@@ -73,9 +86,14 @@ struct StencilContext {
             gp->set_diff(v);
             v += 0.001;
         }
+        for (auto pp : paramPtrs) {
+            pp->set_diff(v);
+            v += 0.001;
+        }
     }
 
-    // Compare contexts.
+    // Compare grids in contexts.
+    // Params should not be written to, so they are not compared.
     // Return number of mis-compares.
     virtual idx_t compare(const StencilContext& ref) const {
 

@@ -54,7 +54,7 @@ public:
         // make a realv pattern
         realv rn;
         for (int i = 0; i < VLEN; i++)
-            rn.r[i] = REAL(i * VLEN + 1) * val / VLEN;
+            rn[i] = REAL(i * VLEN + 1) * val / VLEN;
         
         _gp->set_diff(rn);
     }

@@ -148,6 +148,63 @@ public:
     
 };
 
+// A generic 0D grid (scalar) of elements of type T.
+// No mapping function needed, because there is only 1 element.
+template <typename T> class GenericGrid0d :
+    public GenericGridBase<T> {
+    
+public:
+
+    // Construct.
+    GenericGrid0d(size_t alignment=GenericGridBase<T>::_def_alignment) :
+        GenericGridBase<T>(1, alignment) {}
+
+    // Print some info.
+    virtual void print_info(const std::string& name, std::ostream& os = std::cout) {
+        os << "scalar ";
+        GenericGridBase<T>::print_info(name, os);
+    }
+
+    // Access element.
+    inline const T& operator()(bool check=true) const {
+        return this->_elems[0];
+    }
+
+    // Non-const version.
+    inline T& operator()(bool check=true) {
+        return this->_elems[0];
+    }
+
+    // Check for equality.
+    // Return number of mismatches greater than epsilon.
+    virtual idx_t compare(const GenericGridBase<T>* ref, T epsilon,
+                           int maxPrint = 0,
+                           std::ostream& os = std::cerr) const {
+
+        auto ref1 = dynamic_cast<const GenericGrid0d*>(ref);
+        if (!ref1) {
+            os << "** type mismatch against GenericGrid1d." << endl;
+            return 1;
+        }
+
+        // Quick check for errors.
+        idx_t errs = count_diffs(*ref, epsilon);
+
+        // Run detailed comparison if any errors found.
+        if (errs > 0 && maxPrint) {
+            T te = (*this)();
+            T re = (*ref1)();
+            if (!within_tolerance(te, re, epsilon)) {
+                os << "** scalar mismatch: " <<
+                    te << " != " << re << std::endl;
+            }
+        }
+
+        return errs;
+    }
+    
+};
+
 // A generic 1D grid (array) of elements of type T.
 // The Mapfn class must provide a 1:1 mapping between
 // 1D and 1D indices (usually trivial).
@@ -174,7 +231,6 @@ public:
     }
 
     // Get 1D index.
-    // Thus, -p1 <= i < d1+p1.
     inline idx_t get_index(idx_t i, bool check=true) const {
         if (check) {
             assert(i >= 0);
@@ -358,7 +414,6 @@ public:
     }
 
     // Get 1D index.
-    // Thus, -p1 <= i < d1+p1, etc.
     inline idx_t get_index(idx_t i, idx_t j, idx_t k, bool check=true) const {
         if (check) {
             assert(i >= 0);

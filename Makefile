@@ -91,7 +91,7 @@ else ifeq ($(arch),knl)
 ISA		=	-xMIC-AVX512
 MACROS		+=	USE_INTRIN512
 FB_TARGET  	=       512
-#crew		=	1
+#crew		=	1  # enable for icc 2016 u3.
 
 else ifeq ($(arch),skx)
 

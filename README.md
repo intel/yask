@@ -11,9 +11,10 @@ YASK contains a specialized source-to-source translator to convert scalar
 C++ stencil code to SIMD-optimized code for Intel(R) Xeon Phi(TM)
 processors.
 
-Supported Platform
+Supported Platforms
 * 64-bit Linux
-* Intel(R) Xeon Phi(TM) coprocessor (for performance), or any Intel Architecture platform (for functional testing)
+* Intel(R) Xeon(R) processor supporting AVX, AVX2, or CORE_AVX512 instruction sets
+* Intel(R) Xeon Phi(TM) coprocessor supporting Knights-Corner or MIC_AVX512 instruction sets
 
 Pre-requisites:
 * Intel(R) C++ compiler,

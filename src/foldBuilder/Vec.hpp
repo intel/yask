@@ -219,6 +219,10 @@ public:
     // Called when a grid point is read in a stencil function.
     virtual void visit(GridPoint* gp) {
 
+        // Don't vectorize parameters.
+        if (gp->isParam())
+            return;
+
         // Already seen this point?
         if (_vblk2elemLists.count(*gp) > 0)
             return;
@@ -417,6 +421,7 @@ public:
         // Simple, greedy algorithm:
         // Select first element that needs the fewest new aligned vecs.
         // Repeat until done.
+        // TODO: sort based on all reused exprs, not just grid reads.
 
         GridPointSet alignedVecs; // aligned vecs needed so far.
         set<size_t> usedExprs; // expressions used.

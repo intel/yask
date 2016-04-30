@@ -31,11 +31,15 @@ IN THE SOFTWARE.
 #include <map>
 #include <set>
 #include <vector>
+#include <cstdarg>
 #include <assert.h>
 
 #include "Tuple.hpp"
 
 using namespace std;
+
+// A tuple of integers, used for dimensions and points.
+typedef Tuple<int> IntTuple;
 
 // Forward-declare expression visitor.
 class ExprVisitor;
@@ -62,6 +66,7 @@ public:
     virtual bool isSame(const Expr* other) =0;
 
     // Try to add a compatible operand.
+    // Only overloaded for nodes that can have multiple operands.
     // Return true if successful.
     virtual bool appendOp(ExprPtr rhs, const string& opStr) { return false; }
 
@@ -73,40 +78,37 @@ public:
 };
 typedef vector<ExprPtr> ExprPtrVec;
 
-// A 'GridValue' is simply a pointer to an expression.
-// This means that calling an update() function will
-// not actually evaluate the expression in the function.
-// Rather, it will create an AST.
-typedef ExprPtr GridValue;
+// A function to create a scalar double.
+// Usually not needed due to operator overloading.
+ExprPtr constGridValue(double rhs);
 
 // Various unary operators.
-ExprPtr constGridValue(double rhs);
 ExprPtr operator-(const ExprPtr& rhs);
 
 // Various binary operators.
 ExprPtr operator+(const ExprPtr& lhs, const ExprPtr& rhs);
 ExprPtr operator+(double lhs, const ExprPtr& rhs);
 ExprPtr operator+(const ExprPtr& lhs, double rhs);
-void operator+=(GridValue& lhs, const ExprPtr& rhs);
-void operator+=(GridValue& lhs, double rhs);
+void operator+=(ExprPtr& lhs, const ExprPtr& rhs);
+void operator+=(ExprPtr& lhs, double rhs);
 
 ExprPtr operator-(const ExprPtr& lhs, const ExprPtr& rhs);
 ExprPtr operator-(double lhs, const ExprPtr& rhs);
 ExprPtr operator-(const ExprPtr& lhs, double rhs);
-void operator-=(GridValue& lhs, const ExprPtr& rhs);
-void operator-=(GridValue& lhs, double rhs);
+void operator-=(ExprPtr& lhs, const ExprPtr& rhs);
+void operator-=(ExprPtr& lhs, double rhs);
 
 ExprPtr operator*(const ExprPtr& lhs, const ExprPtr& rhs);
 ExprPtr operator*(double lhs, const ExprPtr& rhs);
 ExprPtr operator*(const ExprPtr& lhs, double rhs);
-void operator*=(GridValue& lhs, const ExprPtr& rhs);
-void operator*=(GridValue& lhs, double rhs);
+void operator*=(ExprPtr& lhs, const ExprPtr& rhs);
+void operator*=(ExprPtr& lhs, double rhs);
 
 ExprPtr operator/(const ExprPtr& lhs, const ExprPtr& rhs);
 ExprPtr operator/(double lhs, const ExprPtr& rhs);
 ExprPtr operator/(const ExprPtr& lhs, double rhs);
-void operator/=(GridValue& lhs, const ExprPtr& rhs);
-void operator/=(GridValue& lhs, double rhs);
+void operator/=(ExprPtr& lhs, const ExprPtr& rhs);
+void operator/=(ExprPtr& lhs, double rhs);
 
 // Use the '==' operator to define a grid value.  Difficult to use '='
 // operator because it cannot be declared as a standalone operator.  Also,
@@ -118,6 +120,7 @@ void operator/=(GridValue& lhs, double rhs);
 void operator==(GridPointPtr gpp, ExprPtr rhs);
 
 // A simple constant value.
+// This is an expression leaf-node.
 class ConstExpr : public Expr {
 protected:
     double _f;
@@ -140,6 +143,7 @@ public:
 };
 
 // Any expression that returns a real (not from a grid).
+// This is an expression leaf-node.
 class CodeExpr : public Expr {
 protected:
     string _code;
@@ -361,9 +365,8 @@ public:
 
 ///////// Grids ////////////
 
-typedef Tuple<int> IntTuple;
-
-// One specific point in a grid, which can appear in an expression.
+// One specific point in a grid.
+// This is an expression leaf-node.
 class GridPoint : public IntTuple, public Expr {
 
 protected:
@@ -389,12 +392,11 @@ public:
     // Dtor.
     virtual ~GridPoint() {}
 
-    // Get parent grid.
+    // Get parent grid info.
     const Grid* getGrid() const { return _grid; }
     Grid* getGrid() { return _grid; }
-
-    // Name of parent grid.
     virtual const string& getName() const;
+    virtual bool isParam() const;
 
     // Some comparisons.
     bool operator==(const GridPoint& rhs) const;
@@ -427,11 +429,19 @@ typedef map<GridPoint, ExprPtr> Point2Exprs;
 typedef const int GridIndex;
 
 // A class for a collection of GridPoints.
-// Dims in the IntTuple describe the grid, but values
-// in the IntTuple are ignored.
+// Dims in the IntTuple describe the grid or param.
+// For grids, values in the IntTuple are ignored.
+// For params, values in the IntTuple define the sizes.
 class Grid : public IntTuple {
 protected:
     string _name;               // name of the grid.
+
+    // Note: at this time, a Grid is either indexed only by stencil indices,
+    // and a 'parameter' is indexed only by non-stencil indices. So, scalar
+    // parameter values will be broadcast to all elements of a grid
+    // vector. TODO: generalize this so that grids may be projected between
+    // different dimensionalities.
+    bool _isParam;              // is a parameter.
 
     // specific points that have been created in this grid.
     GridPointPtrSet _points;
@@ -454,6 +464,10 @@ public:
     const string& getName() const { return _name; }
     void setName(const string& name) { _name = name; }
 
+    // Param-type accessors.
+    bool isParam() const { return _isParam; }
+    void setParam(bool isParam) { _isParam = isParam; }
+    
     // Point accessors.
     const GridPointPtrSet& getPoints() const { return _points; }
     GridPointPtrSet& getPoints() { return _points; }
@@ -491,50 +505,63 @@ public:
     // Create an expression to a specific point in the grid.
     // Note that this doesn't actually 'read' or 'write' a value;
     // it's just a node in an expression.
-    virtual GridPointPtr operator()(const vector<int>& points) {
+    virtual GridPointPtr makePoint(int count, ...) {
 
         // check for correct number of indices.
-        size_t n = points.size();
-        if (n != size()) {
+        if (count != size()) {
             cerr << "Error: attempt to access " << size() <<
-                "-D grid '" << _name << "' with " << n << " indices.\n";
+                "-D grid '" << _name << "' with " << count << " indices.\n";
             exit(1);
         }
 
-        IntTuple pt = *this;       // to copy names.
-        pt.setVals(points);
+        // Copy the names from the grid to a new tuple.
+        IntTuple pt = *this;
+
+        // set the values in the tuple using the var args.
+        va_list args;
+        va_start(args, count);
+        pt.setVals(count, args);
+        va_end(args);
+
+        // Create a point from the tuple.
         GridPointPtr gpp = make_shared<GridPoint>(this, pt);
         return addPoint(gpp);
     }
-    
-    // Create an expression to a specific point in a 1D grid.
+
+    // Convenience functions for zero dimensions (scalar).
+    virtual operator ExprPtr() { // implicit conversion.
+        return makePoint(0);
+    }
+    virtual operator GridPointPtr() { // implicit conversion.
+        return makePoint(0);
+    }
+    virtual GridPointPtr operator()() {
+        return makePoint(0);
+    }
+
+    // Convenience functions for one dimension (array).
+    virtual GridPointPtr operator[](int i1) {
+        return makePoint(1, i1);
+    }
     virtual GridPointPtr operator()(int i1) {
-        vector<int> vals = { i1 };
-        return operator()(vals);
+        return makePoint(1, i1);
     }
 
-    // Create an expression to a specific point in a 2D grid.
+    // Convenience functions for more dimensions.
     virtual GridPointPtr operator()(int i1, int i2) {
-        vector<int> vals = { i1, i2 };
-        return operator()(vals);
+        return makePoint(2, i1, i2);
     }
-
-    // Create an expression to a specific point in a 3D grid.
     virtual GridPointPtr operator()(int i1, int i2, int i3) {
-        vector<int> vals = { i1, i2, i3 };
-        return Grid::operator()(vals);
+        return makePoint(3, i1, i2, i3);
     }
-
-    // Create an expression to a specific point in a 4D grid.
     virtual GridPointPtr operator()(int i1, int i2, int i3, int i4) {
-        vector<int> vals = { i1, i2, i3, i4 };
-        return Grid::operator()(vals);
+        return makePoint(4, i1, i2, i3, i4);
     }
-
-    // Create an expression to a specific point in a 5D grid.
     virtual GridPointPtr operator()(int i1, int i2, int i3, int i4, int i5) {
-        vector<int> vals = { i1, i2, i3, i4, i5 };
-        return Grid::operator()(vals);
+        return makePoint(5, i1, i2, i3, i4, i5);
+    }
+    virtual GridPointPtr operator()(int i1, int i2, int i3, int i4, int i5, int i6) {
+        return makePoint(6, i1, i2, i3, i4, i5, i6);
     }
 };
 
@@ -550,6 +577,12 @@ public:
     virtual void acceptToFirst(ExprVisitor* ev);
 
 };
+
+// Aliases for parameters.
+// Even though these are just typedefs for now, don't interchange them.
+// TODO: enforce the difference between grids and parameters.
+typedef Grid Param;
+typedef Grids Params;
 
 // A named equation and the grids updated by it.
 struct Equation {
@@ -586,16 +619,48 @@ public:
 
 };
 
+// A 'GridValue' is simply a pointer to an expression.
+// So, operations on a GridValue will create an AST, i.e.,
+// it will not evaluate the value.
+typedef ExprPtr GridValue;
 
 // Convenience macros for initializing grids in stencil ctors.
-// Each names the grid according to the variable name and adds it
+// Each names the grid according to the 'gvar' parameter and adds it
 // to the default '_grids' collection.
-#define INIT_GRID(gvar) _grids.push_back(&gvar); gvar.setName(#gvar)
-#define INIT_GRID_1D(gvar, d1) INIT_GRID(gvar); gvar.addDim(#d1, 1)
-#define INIT_GRID_2D(gvar, d1, d2) INIT_GRID_1D(gvar, d1); gvar.addDim(#d2, 1)
-#define INIT_GRID_3D(gvar, d1, d2, d3) INIT_GRID_2D(gvar, d1, d2); gvar.addDim(#d3, 1)
-#define INIT_GRID_4D(gvar, d1, d2, d3, d4) INIT_GRID_3D(gvar, d1, d2, d3); gvar.addDim(#d4, 1)
-#define INIT_GRID_5D(gvar, d1, d2, d3, d4, d5) INIT_GRID_4D(gvar, d1, d2, d3, d4); gvar.addDim(#d5, 1)
+// The dimensions are named according to the remaining parameters.
+#define INIT_GRID_0D(gvar) \
+    _grids.push_back(&gvar); gvar.setName(#gvar)
+#define INIT_GRID_1D(gvar, d1) \
+    INIT_GRID_0D(gvar); gvar.addDim(#d1, 1)
+#define INIT_GRID_2D(gvar, d1, d2) \
+    INIT_GRID_1D(gvar, d1); gvar.addDim(#d2, 1)
+#define INIT_GRID_3D(gvar, d1, d2, d3) \
+    INIT_GRID_2D(gvar, d1, d2); gvar.addDim(#d3, 1)
+#define INIT_GRID_4D(gvar, d1, d2, d3, d4) \
+    INIT_GRID_3D(gvar, d1, d2, d3); gvar.addDim(#d4, 1)
+#define INIT_GRID_5D(gvar, d1, d2, d3, d4, d5) \
+    INIT_GRID_4D(gvar, d1, d2, d3, d4); gvar.addDim(#d5, 1)
+#define INIT_GRID_6D(gvar, d1, d2, d3, d4, d5, d6) \
+    INIT_GRID_5D(gvar, d1, d2, d3, d4, d5); gvar.addDim(#d6, 1)
+
+// Convenience macros for initializing parameters in stencil ctors.
+// Each names the param according to the 'pvar' parameter and adds it
+// to the default '_params' collection.
+// The dimensions are named and sized according to the remaining parameters.
+#define INIT_PARAM(pvar) \
+    _params.push_back(&pvar); pvar.setName(#pvar); pvar.setParam(true)
+#define INIT_PARAM_1D(pvar, d1, s1) \
+    INIT_PARAM(pvar); pvar.addDim(#d1, s1)
+#define INIT_PARAM_2D(pvar, d1, s1, d2, s2) \
+    INIT_PARAM_1D(pvar, d1, s1); pvar.addDim(#d2, s2)
+#define INIT_PARAM_3D(pvar, d1, s1, d2, s2, d3, s3) \
+    INIT_PARAM_2D(pvar, d1, s1, d2, s2); pvar.addDim(#d3, s3)
+#define INIT_PARAM_4D(pvar, d1, s1, d2, s2, d3, s3, d4, s4)             \
+    INIT_PARAM_3D(pvar, d1, s1, d2, s2, d3, s3); pvar.addDim(#d4, d4)
+#define INIT_PARAM_5D(pvar, d1, s1, d2, s2, d3, s3, d4, s4, d5, s5)     \
+    INIT_PARAM_4D(pvar, d1, s1, d2, s2, d3, s3, d4, s4); pvar.addDim(#d5, d5)
+#define INIT_PARAM_6D(pvar, d1, s1, d2, s2, d3, s3, d4, s4, d5, s5, d6, s6) \
+    INIT_PARAM_4D(pvar, d1, s1, d2, s2, d3, s3, d4, s4, d5, s5); pvar.addDim(#d6, d6)
 
 // Convenience macro for getting one offset from the 'offsets' tuple.
 #define GET_OFFSET(ovar)                         \

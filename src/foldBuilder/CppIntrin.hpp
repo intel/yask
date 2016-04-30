@@ -380,7 +380,7 @@ protected:
                     bool needMask = doneElems.size() > 0;
 
                     string nameStr = nameSS.str();
-                    string ctrlStr = "{ .ci = { " + ctrlSS.str() + " } }"; // assignment to 'i' array.
+                    string ctrlStr = "{ .ci = { " + ctrlSS.str() + " } }";
                 
                     // Create NA var if needed (this is just for clarity).
                     if (needNA)
@@ -389,8 +389,15 @@ protected:
                     // Create control if needed.
                     if (definedCtrls.count(nameStr) == 0) {
                         definedCtrls.insert(nameStr);
-                        os << _linePrefix << "static const " << getVarType() <<
-                            " ctrl_" << nameStr << " = " << ctrlStr << _lineSuffix;
+#if 1
+                        os << _linePrefix << "const " << getVarType() <<
+                            "_data ctrl_data_" << nameStr << " = " << ctrlStr << _lineSuffix;
+                        os << _linePrefix << "const " << getVarType() <<
+                            " ctrl_" << nameStr << "(ctrl_data_" << nameStr << ")" << _lineSuffix;
+#else
+                        os << _linePrefix << "const " << getVarType() <<
+                            "_data ctrl_" << nameStr << " = " << ctrlStr << _lineSuffix;
+#endif
                     }
                 
                     // Permute command.

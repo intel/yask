@@ -62,14 +62,20 @@ public:
         return formatReal(v);
     }
 
+    // Return a parameter reference.
+    virtual string readFromParam(ostream& os, const GridPoint& pp) {
+        string str = "(*context." + pp.getName() + ")(" + pp.makeValStr() + ")";
+        return str;
+    }
+    
     // Make call for a point.
     virtual string makePointCall(const GridPoint& gp,
                                  const string& fname, string optArg = "") const {
-        ostringstream os;
-        os << "context." << gp.getName() << "->" << fname << "(";
-        if (optArg.length()) os << optArg << ", ";
-        os << gp.makeDimValOffsetStr() << ", __LINE__)";
-        return os.str();
+        ostringstream oss;
+        oss << "context." << gp.getName() << "->" << fname << "(";
+        if (optArg.length()) oss << optArg << ", ";
+        oss << gp.makeDimValOffsetStr() << ", __LINE__)";
+        return oss.str();
     }        
     
     // Return a grid reference.
@@ -100,51 +106,23 @@ public:
                        varPrefix, varType, linePrefix, lineSuffix) { }
 
 protected:
-    map<string,string> _codes; // code expressions defined.
-    map<double,string> _consts; // const expressions defined.
 
-    // Define a constant if not already defined, writing definition
-    // statement to os.  Creates a vector with all elements set to v.  If
-    // not needed, do not write to os.  Either way, return var name.
+    // A simple constant.
     virtual string addConstExpr(ostream& os, double v) {
-        if (_consts.count(v) == 0) {
-
-            // Create new var.
-            _consts[v] = makeVarName();
-            int vlen = _vv.getFold().product();
-
-            // A comment.
-            os << endl << " // Create a const vector with all values set to " << v << "." << endl;
-
-            string vstr = CppPrintHelper::formatReal(v);
-            os << setprecision(17) << scientific <<
-                _linePrefix << "static const " <<
-                getVarType() << " " << _consts[v] << " = { .r = { " << vstr;
-            for (int i = 1; i < vlen; i++)
-                os << ", " << vstr;
-            os << " } }" << _lineSuffix;
-        }
-        return _consts[v];
+        return CppPrintHelper::formatReal(v);
     }
 
-    // Define a var if not already defined, writing definition statement to
-    // os.  Creates a vector with all elements set to code.  If not needed,
-    // do not write to os.  Either way, return var name.
+    // Any code.
     virtual string addCodeExpr(ostream& os, const string& code) {
-        if (_codes.count(code) == 0) {
-
-            // Create new var.
-            _codes[code] = makeVarName();
-            int vlen = _vv.getFold().product();
-
-            // A comment.
-            os << endl << " // Create a vector with all values set to same value." << endl <<
-                _linePrefix << getVarType() << " " << _codes[code] << _lineSuffix <<
-                _linePrefix << _codes[code] << " = " << code << _lineSuffix;
-        }
-        return _codes[code];
+        return code;
     }
 
+    // Return a parameter reference.
+    virtual string readFromParam(ostream& os, const GridPoint& pp) {
+        string str = "(*context." + pp.getName() + ")(" + pp.makeValStr() + ")";
+        return str;
+    }
+    
     // Print a comment about a point.
     virtual void printPointComment(ostream& os, const GridPoint& gp, const string& verb) const {
 
