@@ -541,6 +541,7 @@ int main(int argc, const char* argv[]) {
 
         // Allocate grids.
         cout << endl << " void allocGrids() {" << endl;
+        cout << "  gridPtrs.clear();" << endl;
         for (auto gp : grids) {
             string grid = gp->getName();
             cout << "  " << grid << " = new " << typeNames[gp] <<
@@ -551,6 +552,7 @@ int main(int argc, const char* argv[]) {
 
         // Allocate params.
         cout << endl << " void allocParams() {" << endl;
+        cout << "  paramPtrs.clear();" << endl;
         for (auto pp : params) {
             string param = pp->getName();
             cout << "  " << param << " = new " << paramTypeNames[pp] <<
@@ -619,9 +621,11 @@ int main(int argc, const char* argv[]) {
                 VecInfoVisitor vv(foldLengths);
                 eq.grids.acceptToAll(&vv);
 
+#if 1
                 // Reorder based on vector info.
                 ExprReorderVisitor erv(vv);
                 eq.grids.acceptToAll(&erv);
+#endif
             
                 // C++ vector print assistant.
                 CounterVisitor cv;

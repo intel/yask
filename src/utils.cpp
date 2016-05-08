@@ -29,6 +29,8 @@ IN THE SOFTWARE.
 #include "stencil.hpp"
 
 #ifdef WIN32
+
+// FIXME.
 double getTimeInSecs() { return 0.0; }
 
 #else
@@ -43,7 +45,7 @@ double getTimeInSecs()
 #endif
 
 // Round up val to a multiple of mult.
-// Print a message is rounding is done.
+// Print a message if rounding is done.
 idx_t roundUp(idx_t val, idx_t mult, string name)
 {
     idx_t res = val;

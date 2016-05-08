@@ -38,7 +38,7 @@ arch		=	host
 #
 # real_bytes: FP precision: 4=float, 8=double.
 #
-# time_dim: allocated size of time dimension in grids.
+# time_dim_size: allocated size of time dimension in grids.
 #
 # eqs: comma-separated name=substr pairs used to group
 # grid update equations into stencil functions.
@@ -54,14 +54,17 @@ else ifeq ($(stencil),cube)
 order		=	4
 else ifeq ($(stencil),awp)
 order		=	4
-time_dim	=	1
+time_dim_size	=	1
 eqs		=	velocity=vel_,stress=stress_
+MACROS		+=	DEF_PROBLEM_SIZE=640
+MACROS		+=	DEF_WAVEFRONT_REGION_SIZE=256
+MACROS		+=	DEF_BLOCK_SIZE=12
 endif
 
 # general defaults for these vars if not set above.
 order			?=	16
 real_bytes		?=	4
-time_dim		?=	2
+time_dim_size		?=	2
 
 # arch-specific settings:
 #
@@ -172,7 +175,7 @@ endif
 
 # settings passed as macros.
 MACROS		+=	REAL_BYTES=$(real_bytes)
-MACROS		+=	TIME_DIM=$(time_dim)
+MACROS		+=	TIME_DIM_SIZE=$(time_dim_size)
 
 # arch.
 ARCH		:=	$(shell echo $(arch) | tr '[:lower:]' '[:upper:]')
@@ -203,18 +206,27 @@ endif
 # gen-loops.pl args for outer 3 sets of loops:
 
 # Outer loops break up the whole problem into smaller regions.
-OUTER_LOOP_OPTS		=	-dims 'dn,dx,dy,dz' -calcPrefix 'stencil->calc_'
-OUTER_LOOP_CODE		=	loop(dn,dx,dy,dz) { calc(region); }
+# The outer time loop is included here.
+# In order for tempral wavefronts to operate properly, the
+# order of spatial dimensions may be changed, but traversal
+# paths that do not simply increment the indices (such as
+# serpentine or square) may not be used here.
+OUTER_LOOP_OPTS		=	-dims 'dt,dn,dx,dy,dz'
+OUTER_LOOP_CODE		=	loop(dt) { loop(dn,dx,dy,dz) { calc(region); } }
 
 # Region loops break up a region using OpenMP threading into blocks.
-REGION_LOOP_OPTS	=     	-dims 'rn,rx,ry,rz' -ompSchedule $(omp_schedule)
-REGION_LOOP_CODE	=	serpentine omp loop(rn,rx,ry,rz) { calc(block); }
+# The region time loops are not coded here to allow for proper
+# spatial skewing for temporal wavefronts. The time loop may be found
+# in StencilEquations::calc_region().
+REGION_LOOP_OPTS	=     	-dims 'rn,rx,ry,rz' -ompSchedule $(omp_schedule) -calcPrefix 'stencil->calc_'
+REGION_LOOP_CODE	=	serpentine omp loop(rn,rx,ry,rz) { calc(block(rt)); }
 
 # Block loops break up a block into vector clusters.
-# Note: the indices at this level are by vector instead of element;
+# The indices at this level are by vector instead of element;
 # this is indicated by the 'v' suffix.
+# There is no time loop here because temporal blocking is not yet supported.
 BLOCK_LOOP_OPTS		=     	-dims 'bnv,bxv,byv,bzv'
-BLOCK_LOOP_CODE		=	loop(bnv) { crew loop(bxv) { loop(byv) { $(INNER_BLOCK_LOOP_OPTS) loop(bzv) { calc(cluster); } } } }
+BLOCK_LOOP_CODE		=	loop(bnv) { crew loop(bxv) { loop(byv) { $(INNER_BLOCK_LOOP_OPTS) loop(bzv) { calc(cluster(bt)); } } } }
 
 
 # compile with model_cache=1 or 2 to check prefetching.
@@ -251,7 +263,7 @@ settings:
 	@echo cluster=$(cluster)
 	@echo order=$(order)
 	@echo real_bytes=$(real_bytes)
-	@echo time_dim=$(time_dim)
+	@echo time_dim_size=$(time_dim_size)
 	@echo streaming_stores=$(streaming_stores)
 	@echo FB_TARGET="\"$(FB_TARGET)\""
 	@echo FB_FLAGS="\"$(FB_FLAGS)\""
@@ -334,4 +346,4 @@ help:
 	@echo "Example debug usage:"
 	@echo "make arch=knl  OMPFLAGS='-qopenmp-stubs' crew=0 EXTRA_CPPFLAGS='-O0' EXTRA_MACROS='DEBUG'"
 	@echo "make arch=host OMPFLAGS='-qopenmp-stubs' EXTRA_CPPFLAGS='-O0' EXTRA_MACROS='DEBUG' model_cache=2"
-	@echo "make arch=host OMPFLAGS='-qopenmp-stubs' order=0 stencil=3axis fold='x=1,y=1,z=1' EXTRA_MACROS='DEBUG DEBUG_TOLERANCE EMU_INTRINSICS TRACE TRACE_MEM TRACE_INTRINSICS' EXTRA_CPPFLAGS='-O0'"
+	@echo "make arch=host OMPFLAGS='-qopenmp-stubs' order=0 stencil=3axis fold='x=1,y=1,z=1' EXTRA_MACROS='DEBUG DEBUG_TOLERANCE NO_INTRINSICS TRACE TRACE_MEM TRACE_INTRINSICS' EXTRA_CPPFLAGS='-O0'"

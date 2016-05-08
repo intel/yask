@@ -35,42 +35,30 @@ IN THE SOFTWARE.
 Cache cache(MODEL_CACHE);
 #endif
 
-// Fix number of regions, if needed.
-// Return region size.
-idx_t findRegionSize(idx_t& nregs, idx_t dsize, idx_t mult, string dim) {
-
-    // fix nblks if needed.
-    if (nregs < 1) nregs = 1;
-    if (nregs > dsize) nregs = dsize;
-    
-    // divide and round up (ceiling).
-    idx_t rsize = (dsize + nregs - 1) / nregs;
-
-    // round up to required multiple.
-    rsize = ROUND_UP(rsize, mult);
-
-    // recalc number of regions based on steps.
-    nregs = (dsize + rsize - 1) / rsize;
-
-    cout << "  dividing problem size " << dsize << " into " << nregs <<
-        " region(s) in the " << dim << " dimension, each of size " <<
-        rsize << " (or less)" << endl;
-
-    return rsize;
-}
-
-// Fix block size, if needed.
+// Fix bsize, if needed, to fit into rsize and be a multiple of mult.
 // Return number of blocks.
-idx_t findNumBlocks(idx_t& bsize, idx_t rsize, idx_t mult, string dim) {
-    if (bsize < 1) bsize = 1;
+idx_t findNumSubsets(idx_t& bsize, const string& bname,
+                    idx_t rsize, const string& rname,
+                    idx_t mult, string dim) {
+    if (bsize < 1) bsize = rsize; // 0 => use full size.
     if (bsize > rsize) bsize = rsize;
     bsize = ROUND_UP(bsize, mult);
     idx_t nblks = (rsize + bsize - 1) / bsize;
+    idx_t rem = rsize % bsize;
+    idx_t nfull_blks = rem ? (nblks - 1) : nblks;
 
-    cout << "  dividing region size " << rsize << " into " << nblks <<
-        " block(s) in the " << dim << " dimension, each of size " <<
-        bsize << " (or less)" << endl;
+    cout << "  '" << dim << "' dimension: dividing " << rname << " of size " <<
+        rsize << " into " << nfull_blks << " " << bname << "(s) of size " << bsize;
+    if (rem)
+        cout << " plus 1 remainder " << bname << " of size " << rem;
+    cout << "." << endl;
     return nblks;
+}
+idx_t findNumBlocks(idx_t& bsize, idx_t rsize, idx_t mult, string dim) {
+    return findNumSubsets(bsize, "block", rsize, "region", mult, dim);
+}
+idx_t findNumRegions(idx_t& rsize, idx_t dsize, idx_t mult, string dim) {
+    return findNumSubsets(rsize, "region", dsize, "problem", mult, dim);
 }
 
 // Parse command-line args, run kernel, run validation if requested.
@@ -137,13 +125,15 @@ int main(int argc, char** argv)
     }
     
     // options and their defaults.
-    int num_trials = 3; // number of trials.
-    int nreps = 50;     // number of time-steps per trial, over which performance is averaged.
-    int vreps = 0;      // number of verification steps.
-    idx_t dn = 1, dx = DEF_PROB_SIZE, dy = DEF_PROB_SIZE, dz = DEF_PROB_SIZE; // problem dimensions.
-    idx_t nrn = 1, nrx = 1, nry = 1, nrz = 1;  // number of regions.
-    idx_t bn = 1, bx = 64, by = 64, bz = 64;  // size of cache blocks.
+    idx_t num_trials = 3; // number of trials.
+    idx_t dt = 50;     // number of time-steps per trial, over which performance is averaged.
+    idx_t dn = 1, dx = DEF_PROBLEM_SIZE, dy = DEF_PROBLEM_SIZE, dz = DEF_PROBLEM_SIZE;
+    idx_t rt = 1;                         // wavefront time steps.
+    idx_t rn = 1, rx = 0, ry = 0, rz = 0;  // region sizes (0 => use problem size).
+    idx_t bt = 1;                          // temporal block size.
+    idx_t bn = 1, bx = DEF_BLOCK_SIZE, by = DEF_BLOCK_SIZE, bz = DEF_BLOCK_SIZE;  // size of cache blocks.
     idx_t pn = 0, px = 0, py = 0, pz = 0; // padding.
+    bool validate = false;
 
     // parse options.
     bool help = false;
@@ -154,32 +144,50 @@ int main(int argc, char** argv)
             // options w/o values.
             if (opt == "-h" || opt == "-help" || opt == "--help") {
                 cout << 
-                    "usage: [options]\n"
-                    "options:\n"
-                    " -h:          print this help and the current settings, then exit\n"
-                    " -t           <number of trials>, default=" << num_trials << endl <<
-                    " -i           <number of performance iterations (time steps) per trial>, default=" <<
-                    nreps << endl <<
-                    " -v           <number of validation iterations>, default=" << vreps << endl <<
-                    " -d           <problem size in all 3 {x,y,z} dimensions>\n" <<
-                    " -d{n,x,y,z}  <problem size in one {x,y,z} dimension>, defaults=" <<
+                    "Usage: [options]\n"
+                    "Options:\n"
+                    " -h:             print this help and the current settings, then exit\n"
+                    " -t <n>          number of trials, default=" << num_trials << endl <<
+                    " -dt <n>         problem size in temporal dimension (number of time steps), default=" << dt << endl <<
+                    " -d{n,x,y,z} <n> problem size in specified spatial dimension, defaults=" <<
                     dn << '*' << dx << '*' << dy << '*' << dz << endl <<
-                    " -nregions          <number of OpenMP regions in all 3 {x,y,z} dimensions>\n"
-                    " -nregions{n,x,y,z} <number of OpenMP regions in one {n,x,y,z} dimension>, defaults=" <<
-                    nrn << '*' << nrx << '*' << nry << '*' << nrz << endl <<
-                    " -b                <size of a computation block in all 3 {x,y,z} dimensions>\n" <<
-                    " -b{n,x,y,z}       <size of a computation block in one {n,x,y,z} dimension>, defaults=" <<
+                    " -d <n>          set same problem size in 3 {x,y,z} spatial dimensions\n" <<
+                    " -rt <n>         OpenMP region time steps (for wavefront tiling), default=" << rt << endl <<
+                    " -r{n,x,y,z} <n> OpenMP region size in specified spatial dimension, defaults=" <<
+                    rn << '*' << rx << '*' << ry << '*' << rz << endl <<
+                    " -r <n>          set same OpenMP region size in 3 {x,y,z} spatial dimensions\n"
+                    " -b{n,x,y,z} <n> cache block size in specified spatial dimension, defaults=" <<
                     bn << '*' << bx << '*' << by << '*' << bz << endl <<
-                    " -p                <extra padding in all 3 {x,y,z} dimensions (in addition to halos)>\n" <<
-                    " -p{n,x,y,z}       <extra padding in one {n,x,y,z} dimension>, defaults=" <<
+                    " -b <n>          set same cache block size in 3 {x,y,z} spatial dimensions\n" <<
+                    " -p{n,x,y,z} <n> extra padding in specified spatial dimension, defaults=" <<
                     pn << '*' << px << '*' << py << '*' << pz << endl <<
-                    "examples:\n" <<
+                    " -p <n>          set same padding in 3 {x,y,z} spatial dimensions\n" <<
+                    " -i <n>          equivalent to -dt, for backward compatibility\n" <<
+                    " -v              validate by comparing to a scalar run, default=" << validate << endl <<
+                    "Notes:\n"
+                    " A block size of 0 => block size == region size in that dimension.\n"
+                    " A region size of 0 => region size == problem size in that dimension.\n"
+                    " Control the time steps in each temporal wavefront with -rt:\n"
+                    "  1 effectively disables wavefront tiling.\n"
+                    "  0 enables wavefront tiling across all time steps in one pass.\n"
+                    "  Any value other than 1 also changes the region spatial-size defaults.\n"
+                    " Temporal cache blocking is not yet supported => bt == 1.\n"
+                    " Validation is very slow and uses 2x memory, so run with very small sizes.\n"
+                    " If validation fails, it may be due to rounding error; try building with 8-byte reals.\n"
+                    " Validation disables the warmup iteration and sets the default number of trials to 1.\n"
+                    "Examples:\n" <<
                     " " << argv[0] << " -d 64 -t 1 -i 2 -v 2\n" <<
                     " " << argv[0] << " -d 768 -dn 4\n" <<
                     " " << argv[0] << " -dx 512 -dy 256 -dz 128\n" <<
-                    " " << argv[0] << " -d 768 -b 16 -nregionsz 2\n" <<
+                    " " << argv[0] << " -d 2048 -r 512 -b 16\n" <<
                     "note: 'n' dimension only applies to stencils that use that variable.\n";
                 help = true;
+            }
+
+            // validation.
+            else if (opt == "-v") {
+                validate = true;
+                num_trials = 1;
             }
 
             // options w/int values.
@@ -191,28 +199,29 @@ int main(int argc, char** argv)
                 }
                 int val = atoi(argv[++argi]);
                 if (opt == "-t") num_trials = val;
-                else if (opt == "-i") nreps = val;
-                else if (opt == "-v") vreps = val;
-                else if (opt == "-d") dx = dy = dz = val;
+                else if (opt == "-i") dt = val;
+                else if (opt == "-dt") dt = val;
                 else if (opt == "-dn") dn = val;
                 else if (opt == "-dx") dx = val;
                 else if (opt == "-dy") dy = val;
                 else if (opt == "-dz") dz = val;
-                else if (opt == "-nregions") nrx = nry = nrz = val;
-                else if (opt == "-nregionsn") nrn = val;
-                else if (opt == "-nregionsx") nrx = val;
-                else if (opt == "-nregionsy") nry = val;
-                else if (opt == "-nregionsz") nrz = val;
-                else if (opt == "-b") bx = by = bz = val;
+                else if (opt == "-d") dx = dy = dz = val;
+                else if (opt == "-rt") rt = val;
+                else if (opt == "-rn") rn = val;
+                else if (opt == "-rx") rx = val;
+                else if (opt == "-ry") ry = val;
+                else if (opt == "-rz") rz = val;
+                else if (opt == "-r") rx = ry = rz = val;
                 else if (opt == "-bn") bn = val;
                 else if (opt == "-bx") bx = val;
                 else if (opt == "-by") by = val;
                 else if (opt == "-bz") bz = val;
-                else if (opt == "-p") px = py = pz = val;
+                else if (opt == "-b") bx = by = bz = val;
                 else if (opt == "-pn") pn = val;
                 else if (opt == "-px") px = val;
                 else if (opt == "-py") py = val;
                 else if (opt == "-pz") pz = val;
+                else if (opt == "-p") px = py = pz = val;
                 else {
                     cerr << "error: option '" << opt << "' not recognized." << endl;
                     exit(1);
@@ -235,30 +244,40 @@ int main(int argc, char** argv)
     }
 #endif
 
+    // Adjust defaults.
+    if (rt != 1) {
+        if (!rx) rx = DEF_WAVEFRONT_REGION_SIZE;
+        if (!ry) ry = DEF_WAVEFRONT_REGION_SIZE;
+        if (!rz) rz = DEF_WAVEFRONT_REGION_SIZE;
+    }
+    
     // Round up vars as needed.
-    nreps = roundUp(nreps, TIME_STEPS_PER_ITER, "number of iterations");
-    vreps = roundUp(vreps, TIME_STEPS_PER_ITER, "number of validation iterations");
+    dt = roundUp(dt, CPTS_T, "problem size in t (time steps)");
     dn = roundUp(dn, CPTS_N, "problem size in n");
     dx = roundUp(dx, CPTS_X, "problem size in x");
     dy = roundUp(dy, CPTS_Y, "problem size in y");
     dz = roundUp(dz, CPTS_Z, "problem size in z");
 
-    // Determine step sizes based on number of regions.
+    // Determine num regions based on region sizes.
+    // Also fix up region sizes as needed.
     cout << "\nRegions:" << endl;
-    idx_t rn = findRegionSize(nrn, dn, CPTS_N, "n");
-    idx_t rx = findRegionSize(nrx, dx, CPTS_X, "x");
-    idx_t ry = findRegionSize(nry, dy, CPTS_Y, "y");
-    idx_t rz = findRegionSize(nrz, dz, CPTS_Z, "z");
-    idx_t nr = idx_t(nrn) * nrx * nry * nrz;
+    idx_t nrt = findNumRegions(rt, dt, CPTS_T, "t");
+    idx_t nrn = findNumRegions(rn, dn, CPTS_N, "n");
+    idx_t nrx = findNumRegions(rx, dx, CPTS_X, "x");
+    idx_t nry = findNumRegions(ry, dy, CPTS_Y, "y");
+    idx_t nrz = findNumRegions(rz, dz, CPTS_Z, "z");
+    idx_t nr = nrn * nrx * nry * nrz;
     cout << " num-regions = " << nr << endl;
 
     // Determine num blocks based on block sizes.
+    // Also fix up block sizes as needed.
     cout << "\nBlocks:" << endl;
+    idx_t nbt = findNumBlocks(bt, rt, CPTS_T, "t");
     idx_t nbn = findNumBlocks(bn, rn, CPTS_N, "n");
     idx_t nbx = findNumBlocks(bx, rx, CPTS_X, "x");
     idx_t nby = findNumBlocks(by, ry, CPTS_Y, "y");
     idx_t nbz = findNumBlocks(bz, rz, CPTS_Z, "z");
-    idx_t nb = idx_t(nbn) * nbx * nby * nbz;
+    idx_t nb = nbn * nbx * nby * nbz;
     cout << " num-blocks-per-region = " << nb << endl;
 
     // Round up padding as needed.
@@ -272,18 +291,18 @@ int main(int argc, char** argv)
         cerr << "error: stencil-order not even." << endl;
         exit(1);
     }
-    idx_t halo_size = STENCIL_ORDER/2 * TIME_STEPS_PER_ITER;
+    idx_t halo_size = STENCIL_ORDER/2 * CPTS_T;
     idx_t padn = ROUND_UP(halo_size, VLEN_N) + pn;
     idx_t padx = ROUND_UP(halo_size, VLEN_X) + px;
     idx_t pady = ROUND_UP(halo_size, VLEN_Y) + py;
     idx_t padz = ROUND_UP(halo_size, VLEN_Z) + pz;
     
-    printf("\nSizes in points (n*x*y*z):\n");
-    printf(" vector-size = %d*%d*%d*%d\n", VLEN_N, VLEN_X, VLEN_Y, VLEN_Z);
-    printf(" cluster-size = %d*%d*%d*%d\n", CPTS_N, CPTS_X, CPTS_Y, CPTS_Z);
-    printf(" block-size = %ld*%ld*%ld*%ld\n", bn, bx, by, bz);
-    printf(" region-size = %ld*%ld*%ld*%ld\n", rn, rx, ry, rz);
-    printf(" problem-size = %ld*%ld*%ld*%ld\n", dn, dx, dy, dz);
+    printf("\nSizes in points per grid (t*n*x*y*z):\n");
+    printf(" vector-size = %d*%d*%d*%d*%d\n", VLEN_T, VLEN_N, VLEN_X, VLEN_Y, VLEN_Z);
+    printf(" cluster-size = %d*%d*%d*%d*%d\n", CPTS_T, CPTS_N, CPTS_X, CPTS_Y, CPTS_Z);
+    printf(" block-size = %ld*%ld*%ld*%ld*%ld\n", bt, bn, bx, by, bz);
+    printf(" region-size = %ld*%ld*%ld*%ld*%ld\n", rt, rn, rx, ry, rz);
+    printf(" problem-size = %ld*%ld*%ld*%ld*%ld\n", dt, dn, dx, dy, dz);
     cout << "\nOther settings:\n";
     printf(" stencil-order = %d\n", STENCIL_ORDER); // really just used for halo size.
     printf(" stencil-shape = " STENCIL_NAME "\n");
@@ -291,31 +310,56 @@ int main(int argc, char** argv)
     printf(" vector-len = %d\n", VLEN);
     printf(" padding = %ld+%ld+%ld+%ld\n", pn, px, py, pz);
     printf(" padding-with-halos = %ld+%ld+%ld+%ld\n", padn, padx, pady, padz);
-    printf(" num-trials = %d\n", num_trials);
-    printf(" num-iterations = %d\n", nreps);
-    printf(" time-step-granularity = %d\n", TIME_STEPS_PER_ITER);
     printf(" manual-L1-prefetch-distance = %d\n", PFDL1);
     printf(" manual-L2-prefetch-distance = %d\n", PFDL2);
+
+    // Stencil functions.
+    idx_t scalar_fp_ops = 0;
+    STENCIL_EQUATIONS stencils;
+    idx_t num_stencils = stencils.stencils.size();
+    cout << endl << "Num stencil equations = " << num_stencils << ":" << endl;
+    for (auto stencil : stencils.stencils) {
+        idx_t fpos = stencil->get_scalar_fp_ops();
+        cout << "  '" << stencil->get_name() << "': " <<
+            fpos << " FP ops per point." << endl;
+        scalar_fp_ops += fpos;
+    }
 
     if (help) {
         cout << "Exiting due to help option." << endl;
         exit(1);
     }
 
+    const idx_t numpts = dn*dx*dy*dz;
+    printf("\nPoints to calculate per time step: %.3fM (%ld * %ld * %ld * %ld)\n",
+           (float)numpts/1e6, dn, dx, dy, dz);
+    const idx_t tot_numpts = dt*dn*dx*dy*dz;
+    printf("\nTotal points to calculate: %.3fM (%ld * %ld * %ld * %ld * %ld)\n",
+           (float)tot_numpts/1e6, dt, dn, dx, dy, dz);
+    const idx_t numFpOps = numpts * scalar_fp_ops;
+    const idx_t tot_numFpOps = dt * numpts * scalar_fp_ops;
+    printf("FP ops: %ld per point, %.3fG per time step, %.3fG total\n",
+           scalar_fp_ops, (float)numFpOps/1e9, (float)tot_numFpOps/1e9);
+    printf("\n");
+
     // Context for evaluating results.
     STENCIL_CONTEXT context;
     
-    // Save sizes.
+    // Save sizes in context struct.
+    // - dt not used for allocation; set later.
+    // - *s vars set below.
     context.dn = dn;
     context.dx = dx;
     context.dy = dy;
     context.dz = dz;
     
+    context.rt = rt;
     context.rn = rn;
     context.rx = rx;
     context.ry = ry;
     context.rz = rz;
 
+    context.bt = bt;
     context.bn = bn;
     context.bx = bx;
     context.by = by;
@@ -326,47 +370,37 @@ int main(int argc, char** argv)
     context.pady = pady;
     context.padz = padz;
 
-    // Stencil functions.
-    int scalar_fp_ops = 0;
-    STENCIL_EQUATIONS stencils;
-    cout << endl << "Stencil equations:" << endl;
-    for (auto stencil : stencils.stencils) {
-        int fpos = stencil->get_scalar_fp_ops();
-        cout << "  '" << stencil->get_name() << "': " <<
-            fpos << " FP ops per point." << endl;
-        scalar_fp_ops += fpos;
-    }
-
-    const idx_t numpts = dn*dx*dy*dz;
-    printf("\nPoints to calculate: %.3fM (%ld * %ld * %ld * %ld)\n",
-           (float)numpts/1e6, dn, dx, dy, dz);
-    const idx_t numFpOps = numpts * scalar_fp_ops;
-    printf("FP ops: %i per point, %.3fG total\n", scalar_fp_ops,
-           (float)numFpOps/1e9);
-    printf("\n");
-
     // Alloc and init grids.
     cout << "allocating grids..." << endl;
     context.allocGrids();
     cout << "allocating parameters (if any)..." << endl;
     context.allocParams();
     idx_t nbytes = context.get_num_bytes();
-    cout << "total allocation: " << (float(nbytes)/1e9) << "G byte(s)." << endl;
+    cout << "total allocation: " << (float(nbytes)/1e9) <<
+        "G byte(s) in " << context.gridPtrs.size() << " grid(s)." << endl;
     context.initSame();
-    
-    // variables for measuring performance
-    double wstart, wstop;
-    float best_elapsed_time=0.0f, best_throughput_mpoints=0.0f, best_gflops=0.0f;
+
+    // Exit if nothing to do.
+    if (num_trials < 1) {
+        cerr << "Exiting because no trials are specified." << endl;
+        exit(1);
+    }
+    if (tot_numpts < 1) {
+        cerr << "Exiting because there are zero points to evaluate." << endl;
+        exit(1);
+    }
 
     // warmup caches, threading, etc.
-    if (num_trials && nreps) {
-        int tmp_nreps = min(TIME_STEPS_PER_ITER, nreps);
+    if (!validate) {
+
+        idx_t tmp_dt = min<idx_t>(CPTS_T, dt);
+        context.dt = tmp_dt;
 #ifdef MODEL_CACHE
         if (cache.isEnabled())
             printf("modeling cache...\n");
 #endif
         printf("warmup...\n");  fflush(NULL);
-        stencils.calc_steps_opt(context, tmp_nreps);
+        stencils.calc_problem_opt(context);
 
 #ifdef MODEL_CACHE
         // print cache stats, then disable.
@@ -378,29 +412,38 @@ int main(int argc, char** argv)
 #endif
     }
 
-    printf("running %i trial(s)...\n", num_trials); fflush(NULL);
-    
-    for (int tr = 0; tr < num_trials; tr++) {
+    // variables for measuring performance.
+    double wstart, wstop;
+    float best_elapsed_time=0.0f, best_throughput_mpoints=0.0f, best_gflops=0.0f;
+
+    // Performance runs.
+    printf("Running %li performance trial(s)...\n", num_trials); fflush(NULL);
+    context.dt = dt;
+    for (idx_t tr = 0; tr < num_trials; tr++) {
         printf("-------------------------------\n");
 
+        // init data for comparison if validating.
+        if (validate)
+            context.initDiff();
+        
         SEP_RESUME;
         wstart = getTimeInSecs();
 
-        stencils.calc_steps_opt(context, nreps);
+        // Actual work.
+        stencils.calc_problem_opt(context);
 
         wstop =  getTimeInSecs();
         SEP_PAUSE;
             
         // report time
         float elapsed_time = (float)(wstop - wstart);
-        float normalized_time = elapsed_time/nreps;
-        float throughput_mpoints = float(numpts)/(normalized_time*1e6f);
-        float gflops = float(numFpOps)/(normalized_time*1e9f);
+        float throughput_mpoints = float(tot_numpts)/(elapsed_time*1e6f);
+        float gflops = float(tot_numFpOps)/(elapsed_time*1e9f);
 
         printf("-------------------------------\n");
         printf("time:       %8.3f sec\n", elapsed_time );
         printf("throughput: %8.3f MPoints/s\n", throughput_mpoints );
-        printf("FP-rate:    %8.3f GFLOPS\n", gflops);
+        printf("FP-rate:    %8.3f GFLOPS (est.)\n", gflops);
 
         if (throughput_mpoints > best_throughput_mpoints) {
             best_throughput_mpoints = throughput_mpoints;
@@ -409,46 +452,46 @@ int main(int argc, char** argv)
         }
     }
 
-    if (num_trials) {
-        printf("-------------------------------\n");
-        printf("best-time:       %8.3f sec\n", best_elapsed_time );
-        printf("best-throughput: %8.3f MPoints/s\n", best_throughput_mpoints );
-        printf("best-FP-rate:    %8.3f GFLOPS\n", best_gflops);
-    }
+    printf("-------------------------------\n");
+    printf("best-time:       %8.3f sec\n", best_elapsed_time );
+    printf("best-throughput: %8.3f MPoints/s\n", best_throughput_mpoints );
+    printf("best-FP-rate:    %8.3f GFLOPS (est.)\n", best_gflops);
 
-    if (vreps) {
+    if (validate) {
 
         // check the correctness of one iteration.
         printf("\n-------------------------------\n");
-        printf("validation...\n");
+        printf("Running validation trial...\n");
 
         // Make a ref context for comparisons w/new grids:
         // Copy the settings from context, then re-alloc grids.
         STENCIL_CONTEXT ref = context;
+        ref.name += "-reference";
         ref.allocGrids();
-        ref.allocParams();      // shallow copy is probably ok, but just to be safe.
+        ref.allocParams();
 
-        // init both to same values.
-        context.initDiff();
+        // init to same value used in context.
         ref.initDiff();
-        idx_t errs = context.compare(ref);
-        if( errs == 0 ) {
-            cout << "init check passed; continuting with validation..." << endl;
-        } else {
-            cerr << "INIT CHECK FAILED: " << errs << " mismatches." << endl;
-            exit(1);
+
+#if CHECK_INIT
+        {
+            context.initDiff();
+            idx_t errs = context.compare(ref);
+            if( errs == 0 ) {
+                cout << "INIT CHECK PASSED." << endl;
+                exit(0);
+            } else {
+                cerr << "INIT CHECK FAILED: " << errs << " mismatches." << endl;
+                exit(1);
+            }
         }
+#endif
 
-        // one vector iteration.
-        printf("vector iteration(s)...\n");
-        stencils.calc_steps_opt(context, vreps);
-
-        // one ref iteration.
-        printf("reference iteration(s)...\n");
-        stencils.calc_steps_ref(ref, vreps);
+        // Ref trial.
+        stencils.calc_problem_ref(ref);
 
         // check for equality.
-        errs =  context.compare(ref);
+        idx_t errs = context.compare(ref);
         if( errs == 0 ) {
             cout << "TEST PASSED" << endl;
         } else {

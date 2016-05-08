@@ -28,6 +28,10 @@ IN THE SOFTWARE.
 
 #include "generic_grids.hpp"
 
+// rounding macros.
+#define CEIL_DIV(numer, denom) (((numer) + (denom) - 1) / (denom))
+#define ROUND_UP(n, mult) (CEIL_DIV(n, mult) * (mult))
+
 // Base class for realv grids.
 // Provides generic-grid support.
 class RealvGridBase {
@@ -51,7 +55,7 @@ public:
     // Initialize memory to incrementing values based on val.
     virtual void set_diff(REAL val) {
 
-        // make a realv pattern
+        // make a realv pattern.
         realv rn;
         for (int i = 0; i < VLEN; i++)
             rn[i] = REAL(i * VLEN + 1) * val / VLEN;
@@ -475,18 +479,22 @@ public:
                 for (int i2 = 0; i2 < VLEN_X; i2++) {
                     for (int n2 = 0; n2 < VLEN_N; n2++) {
                         REAL e = v(n2, i2, j2, k2);
+#ifdef CHECK_VEC_ELEMS
                         REAL e2 = readElem(n+n2, i+i2, j+j2, k+k2, line);
+#endif
 
                         cout << m << ": " << _name << "[" << (n+n2) << ", " <<
                             (i+i2) << ", " << (j+j2) << ", " << (k+k2) << "] = " << e;
                         if (line)
                             cout << " at line " << line;
 
+#ifdef CHECK_VEC_ELEMS
                         // compare to per-element read.
                         if (e == e2)
                             cout << " (same as readElem())";
                         else
                             cout << " != " << e2 << " from readElem() <<<< ERROR";
+#endif
                         cout << endl << flush;
                     }
                 }
@@ -563,7 +571,7 @@ public:
 };
 
 // A 4D (t, x, y, z) collection of realv elements, but any value of 't'
-// is divided by TIME_STEPS_PER_ITER and mapped to TIME_DIM_SIZE indices.
+// is divided by CPTS_T and mapped to TIME_DIM_SIZE indices.
 // Supports symmetric padding in each spatial dimension.
 template <typename Mapfn> class RealvGrid_TXYZ : public RealvGrid_NXYZ<Mapfn>  {
     
@@ -587,10 +595,10 @@ public:
     ALWAYS_INLINE idx_t getMatIndex(idx_t t) const {
 
 #if ALLOW_NEG_TIME
-        // Time t must be multiple of TIME_STEPS_PER_ITER.
+        // Time t must be multiple of CPTS_T.
         // Use imod & idiv to allow t to be negative.
-        assert(imod<idx_t>(t, TIME_STEPS_PER_ITER) == 0);
-        idx_t t_idx = idiv<idx_t>(t, TIME_STEPS_PER_ITER);
+        assert(imod<idx_t>(t, CPTS_T) == 0);
+        idx_t t_idx = idiv<idx_t>(t, CPTS_T);
 
         // Index wraps in TIME_DIM_SIZE.
         // Examples if TIME_DIM_SIZE == 2:
@@ -605,8 +613,8 @@ public:
 #else
         // version that doesn't allow negative time.
         assert(t >= 0);
-        assert(t % TIME_STEPS_PER_ITER == 0);
-        idx_t t_idx = t / idx_t(TIME_STEPS_PER_ITER);
+        assert(t % CPTS_T == 0);
+        idx_t t_idx = t / idx_t(CPTS_T);
         return t_idx % idx_t(TIME_DIM_SIZE);
 #endif
     }
@@ -668,7 +676,7 @@ public:
 };
 
 // A 5D (t, n, x, y, z) collection of realv elements, but any value of 't'
-// is divided by TIME_STEPS_PER_ITER and mapped to TIME_DIM_SIZE indices.
+// is divided by CPTS_T and mapped to TIME_DIM_SIZE indices.
 // Supports symmetric padding in each spatial dimension.
 template <typename Mapfn> class RealvGrid_TNXYZ : public RealvGrid_NXYZ<Mapfn> {
     
@@ -696,10 +704,10 @@ public:
     ALWAYS_INLINE idx_t getMatIndex(idx_t t, idx_t n) const {
 
 #if ALLOW_NEG_TIME
-        // Time t must be multiple of TIME_STEPS_PER_ITER.
+        // Time t must be multiple of CPTS_T.
         // Use imod & idiv to allow t to be negative.
-        assert(imod<idx_t>(t, TIME_STEPS_PER_ITER) == 0);
-        idx_t t_idx = idiv<idx_t>(t, TIME_STEPS_PER_ITER);
+        assert(imod<idx_t>(t, CPTS_T) == 0);
+        idx_t t_idx = idiv<idx_t>(t, CPTS_T);
 
         // Index wraps in TIME_DIM_SIZE.
         // Examples if TIME_DIM_SIZE == 2:
@@ -714,8 +722,8 @@ public:
 #else
         // version that doesn't allow negative time.
         assert(t >= 0);
-        assert(t % TIME_STEPS_PER_ITER == 0);
-        idx_t t_idx = t / idx_t(TIME_STEPS_PER_ITER);
+        assert(t % CPTS_T == 0);
+        idx_t t_idx = t / idx_t(CPTS_T);
         idx_t t_idx2 = t_idx % idx_t(TIME_DIM_SIZE);
 #endif        
 

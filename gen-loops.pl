@@ -788,7 +788,7 @@ sub main() {
   my(@KNOBS) =
     ( # knob,        description,   optional default
      [ "dims=s", "Comma-separated names of dimensions (in order passed via calls).", 'v,x,y,z'],
-     [ "comArgs=s", "Common arguments to all calls (after L1/L2 for prefetch).", 'context, t'],
+     [ "comArgs=s", "Common arguments to all calls (after L1/L2 for prefetch).", 'context'],
      [ "resultBlks=s", "Comma-separated name of block-sized buffers that hold inter-loop values and/or final result at 'save' command.", 'result'],
      [ "calcPrefix=s", "Prefix for calculation call.", 'calc_'],
      [ "primePrefix=s", "Prefix for pipeline-priming call.", 'prime_'],

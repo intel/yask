@@ -112,9 +112,13 @@ public:
     virtual void set_diff(T val) {
         const idx_t wrap = 71; // prime number is good to use.
 
+        //cout << "set_diff(" << val << "): ";
+        
 #pragma omp parallel for
         for (idx_t ai = 0; ai < get_num_elems(); ai++)
-            _elems[ai] = val * (ai % wrap + 1);
+            _elems[ai] = val * T(ai % wrap + 1);
+
+        //cout << "_elems[0] = " << _elems[0] << endl;
     }
 
     // Check for equality.
@@ -183,7 +187,7 @@ public:
 
         auto ref1 = dynamic_cast<const GenericGrid0d*>(ref);
         if (!ref1) {
-            os << "** type mismatch against GenericGrid1d." << endl;
+            os << "** type mismatch against GenericGrid0d." << endl;
             return 1;
         }
 

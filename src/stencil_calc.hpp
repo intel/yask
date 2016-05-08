@@ -37,11 +37,15 @@ struct StencilContext {
     // A list of all non-grid parameters.
     vector<GenericGridBase<REAL>*> paramPtrs;
 
-    // Sizes--all in elements (not vectors).
-    idx_t dn, dx, dy, dz;                   // problem size.
-    idx_t rn, rx, ry, rz;                   // region size.
-    idx_t bn, bx, by, bz;                   // block size.
-    idx_t padn, padx, pady, padz;           // padding, including halos.
+    // Sizes.
+    // - time size in steps to be done (not grid allocation).
+    // - stencil size in equations to eval (not number of grids).
+    // - spatial sizes in elements (not vectors).
+    idx_t dt, ds, dn, dx, dy, dz;     // problem size.
+    idx_t rt, rs, rn, rx, ry, rz;     // region size.
+    idx_t bt, bs, bn, bx, by, bz;     // block size.
+    idx_t padn, padx, pady, padz;     // spatial padding, including halos.
+    idx_t angle_n, angle_x, angle_y, angle_z; // temporal skewing angles.
 
     StencilContext() { }
     virtual ~StencilContext() { }
@@ -53,63 +57,20 @@ struct StencilContext {
     virtual void allocParams() =0;
 
     // Get total size.
-    virtual idx_t get_num_bytes() {
-        idx_t nbytes = 0;
-        for (auto gp : gridPtrs)
-            nbytes += gp->get_num_bytes();
-        for (auto pp : paramPtrs)
-            nbytes += pp->get_num_bytes();
-        return nbytes;
-    }
+    virtual idx_t get_num_bytes();
 
     // Init all grids & params w/same value within each,
     // but different values between them.
-    virtual void initSame() {
-        REAL v = 0.1;
-        cout << "initializing grids..." << endl;
-        for (auto gp : gridPtrs) {
-            gp->set_same(v);
-            v += 0.01;
-        }
-        cout << "initializing parameters (if any)..." << endl;
-        for (auto pp : paramPtrs) {
-            pp->set_same(v);
-            v += 0.01;
-        }
-    }
+    virtual void initSame();
 
     // Init all grids & params w/different values.
     // Better for validation, but slower.
-    virtual void initDiff() {
-        REAL v = 0.01;
-        for (auto gp : gridPtrs) {
-            gp->set_diff(v);
-            v += 0.001;
-        }
-        for (auto pp : paramPtrs) {
-            pp->set_diff(v);
-            v += 0.001;
-        }
-    }
+    virtual void initDiff();
 
     // Compare grids in contexts.
     // Params should not be written to, so they are not compared.
     // Return number of mis-compares.
-    virtual idx_t compare(const StencilContext& ref) const {
-
-        idx_t errs = 0;
-        for (size_t gi = 0; gi < gridPtrs.size(); gi++) {
-            if (gi >= ref.gridPtrs.size()) {
-                cerr << "** grid '" << gridPtrs[gi]->get_name() <<
-                    "' not in stencil '" << ref.name << endl;
-                errs++;
-            }
-            else {
-                errs += gridPtrs[gi]->compare(*ref.gridPtrs[gi]);
-            }
-        }
-        return errs;
-    }
+    virtual idx_t compare(const StencilContext& ref) const;
 };
 
 /// Classes that support evaluation of one stencil equation.
@@ -126,12 +87,15 @@ public:
     virtual int get_scalar_fp_ops() =0;
     
     // Calculate one scalar result at time t.
-    virtual void calc_scalar(StencilContext& generic_context, idx_t t, idx_t n, idx_t x, idx_t y, idx_t z) =0;
+    virtual void calc_scalar(StencilContext& generic_context,
+                             idx_t t, idx_t n, idx_t x, idx_t y, idx_t z) =0;
 
-    // Calculate a region of results at time t from begin to end-1 on each dimension.
-    virtual void calc_region(StencilContext& generic_context, idx_t t,
-                             idx_t begin_rn, idx_t begin_rx, idx_t begin_ry, idx_t begin_rz,
-                             idx_t end_rn, idx_t end_rx, idx_t end_ry, idx_t end_rz) =0;
+    // Calculate one block of results from begin to end-1 on each dimension.
+    // Note: this interface cannot support temporal blocking with >1 stencil because
+    // it only operates on one stencil.
+    virtual void calc_block(StencilContext& generic_context, idx_t bt,
+                            idx_t begin_bn, idx_t begin_bx, idx_t begin_by, idx_t begin_bz,
+                            idx_t end_bn, idx_t end_bx, idx_t end_by, idx_t end_bz) =0;
 };
 
 // Macro for automatically adding N dimension.
@@ -147,8 +111,8 @@ public:
 #define PREFETCH_CLUSTER(fn, t, n, i, j, k)                             \
     do {                                                                \
         TRACE_MSG("%s.%s(%ld, %ld, %ld, %ld, %ld)",                     \
-                  _name.c_str(), #fn, t, n, i, j, k);                   \
-        _stencil.fn(context, t, ARG_N(n) i, j, k);                           \
+                  get_name().c_str(), #fn, t, n, i, j, k);              \
+        _stencil.fn(context, t, ARG_N(n) i, j, k);                      \
     } while(0)
 
 // A template that provides wrappers around a stencil-equation class created
@@ -179,6 +143,7 @@ public:
     }
     
     // Calculate one scalar result.
+    // This function implements the interface in the base class.
     virtual void calc_scalar(StencilContext& generic_context, idx_t t, idx_t n, idx_t x, idx_t y, idx_t z) {
 
         // Convert to a problem-specific context.
@@ -193,12 +158,13 @@ public:
     // The begin/end_c* vars are the start/stop_b* vars from the block loops.
     // This function doesn't contain any loops; it's just a wrapper around 
     // calc_vector.
-    ALWAYS_INLINE void calc_cluster (ContextClass& context, idx_t t,
-                                     idx_t begin_cnv, idx_t begin_cxv, idx_t begin_cyv, idx_t begin_czv,
-                                     idx_t end_cnv, idx_t end_cxv, idx_t end_cyv, idx_t end_czv)
+    ALWAYS_INLINE void
+    calc_cluster (ContextClass& context, idx_t ct,
+                  idx_t begin_cnv, idx_t begin_cxv, idx_t begin_cyv, idx_t begin_czv,
+                  idx_t end_cnv, idx_t end_cxv, idx_t end_cyv, idx_t end_czv)
     {
         TRACE_MSG("%s.calc_cluster(%ld, %ld, %ld, %ld, %ld)",
-                  _name.c_str(), t, begin_cnv, begin_cxv, begin_cyv, begin_czv);
+                  get_name().c_str(), ct, begin_cnv, begin_cxv, begin_cyv, begin_czv);
 
         // The step vars are hard-coded in calc_block below, and there should
         // never be a partial step at this level. So, we can assume one var and
@@ -210,36 +176,47 @@ public:
         assert(end_czv == begin_czv + CLEN_Z);
         
         // Calculate results.
-        _stencil.calc_vector(context, t, ARG_N(begin_cnv) begin_cxv, begin_cyv, begin_czv);
+        _stencil.calc_vector(context, ct, ARG_N(begin_cnv) begin_cxv, begin_cyv, begin_czv);
     }
 
     // Prefetch a cluster into L1.
     // Called from calc_block().
-    ALWAYS_INLINE void prefetch_L1_cluster (ContextClass& context, idx_t t,
-                                            idx_t begin_cnv, idx_t begin_cxv, idx_t begin_cyv, idx_t begin_czv,
-                                            idx_t end_cnv, idx_t end_cxv, idx_t end_cyv, idx_t end_czv)
+    ALWAYS_INLINE void
+    prefetch_L1_cluster (ContextClass& context, idx_t ct,
+                         idx_t begin_cnv, idx_t begin_cxv, idx_t begin_cyv, idx_t begin_czv,
+                         idx_t end_cnv, idx_t end_cxv, idx_t end_cyv, idx_t end_czv)
     {
-        PREFETCH_CLUSTER(prefetch_L1_vector, t, begin_cnv, begin_cxv, begin_cyv, begin_czv);
+        PREFETCH_CLUSTER(prefetch_L1_vector, ct, begin_cnv, begin_cxv, begin_cyv, begin_czv);
     }
     
     // Prefetch a cluster into L2.
     // Called from calc_block().
-    ALWAYS_INLINE void prefetch_L2_cluster (ContextClass& context, idx_t t,
-                                            idx_t begin_cnv, idx_t begin_cxv, idx_t begin_cyv, idx_t begin_czv,
-                                            idx_t end_cnv, idx_t end_cxv, idx_t end_cyv, idx_t end_czv)
+    ALWAYS_INLINE void
+    prefetch_L2_cluster (ContextClass& context, idx_t ct,
+                         idx_t begin_cnv, idx_t begin_cxv, idx_t begin_cyv, idx_t begin_czv,
+                         idx_t end_cnv, idx_t end_cxv, idx_t end_cyv, idx_t end_czv)
     {
-        PREFETCH_CLUSTER(prefetch_L2_vector, t, begin_cnv, begin_cxv, begin_cyv, begin_czv);
+        PREFETCH_CLUSTER(prefetch_L2_vector, ct, begin_cnv, begin_cxv, begin_cyv, begin_czv);
     }
     
-    // Calculate results within a [cache] block.
+    // Calculate results within a cache block.
+    // This function implements the interface in the base class.
     // Each block is typically computed in a separate OpenMP task.
     // The begin/end_b* vars are the start/stop_r* vars from the region loops.
-    void calc_block(ContextClass& context, idx_t t,
-                    idx_t begin_bn, idx_t begin_bx, idx_t begin_by, idx_t begin_bz,
-                    idx_t end_bn, idx_t end_bx, idx_t end_by, idx_t end_bz)
+    virtual void
+    calc_block(StencilContext& generic_context, idx_t bt,
+               idx_t begin_bn, idx_t begin_bx, idx_t begin_by, idx_t begin_bz,
+               idx_t end_bn, idx_t end_bx, idx_t end_by, idx_t end_bz)
     {
-        TRACE_MSG("%s.calc_block(%ld, %ld, %ld, %ld, %ld)", 
-                  _name.c_str(), t, begin_bn, begin_bx, begin_by, begin_bz);
+        TRACE_MSG("%s.calc_block(%ld, %ld..%ld, %ld..%ld, %ld..%ld, %ld..%ld)", 
+                  get_name().c_str(), bt,
+                  begin_bn, end_bn-1,
+                  begin_bx, end_bx-1,
+                  begin_by, end_by-1,
+                  begin_bz, end_bz-1);
+
+        // Convert to a problem-specific context.
+        auto context = dynamic_cast<ContextClass&>(generic_context);
 
         // Divide indices by vector lengths.
         const idx_t begin_bnv = idiv<idx_t>(begin_bn, VLEN_N);
@@ -268,35 +245,6 @@ public:
         }
     }
 
-    // Calculate results within a region.
-    // Each region is typically computed in a separate OpenMP 'for' region.
-    // The begin/end_r* vars are the start/stop_d* vars from the outer loops.
-    virtual void calc_region(StencilContext& generic_context, 
-                             idx_t t,
-                             idx_t begin_rn, idx_t begin_rx, idx_t begin_ry, idx_t begin_rz,
-                             idx_t end_rn, idx_t end_rx, idx_t end_ry, idx_t end_rz)
-    {
-        TRACE_MSG("%s.calc_region(%ld, %ld, %ld, %ld, %ld)", 
-                  _name.c_str(), t, begin_rn, begin_rx, begin_ry, begin_rz);
-
-        // Convert to a problem-specific context.
-        auto context = dynamic_cast<ContextClass&>(generic_context);
-
-        // Steps based on block sizes.
-        const idx_t step_rn = context.bn;
-        const idx_t step_rx = context.bx;
-        const idx_t step_ry = context.by;
-        const idx_t step_rz = context.bz;
-
-        // Start an OpenMP parallel region.
-#pragma omp parallel
-        {
-            // Include automatically-generated loop code that calls calc_block().
-            // This code typically contains OMP for loops.
-#include "stencil_region_loops.hpp"
-        }
-    }
-    
 };
 
 // Collection of all stencil equations to be evaluated.
@@ -311,9 +259,15 @@ struct StencilEquations {
     virtual ~StencilEquations() {}
 
     // Reference stencil calculations.
-    virtual void calc_steps_ref(StencilContext& context, const int nreps);
+    virtual void calc_problem_ref(StencilContext& context);
 
     // Vectorized and blocked stencil calculations.
-    virtual void calc_steps_opt(StencilContext& context, const int nreps);
+    virtual void calc_problem_opt(StencilContext& context);
 
+protected:
+    
+    // Calculate results within a region.
+    void calc_region(StencilContext& context, 
+                     idx_t begin_rt, idx_t begin_rn, idx_t begin_rx, idx_t begin_ry, idx_t begin_rz,
+                     idx_t end_rt, idx_t end_rn, idx_t end_rx, idx_t end_ry, idx_t end_rz);
 };
