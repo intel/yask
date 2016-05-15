@@ -147,7 +147,7 @@ else
 fi
 
 # command sequence.
-cmds="cd $dir; export KMP_VERSION=1; export PATH=$PATH; export LD_LIBRARY_PATH=$LD_LIBRARY_PATH$libpath; $corestr export KMP_AFFINITY=$affinity; numactl -H; ldd ./$exe; $exe_prefix ./$exe $*"
+cmds="cd $dir; export KMP_VERSION=1; export I_MPI_PRINT_VERSION=1; export I_MPI_DEBUG=3; export PATH=$PATH; export LD_LIBRARY_PATH=$LD_LIBRARY_PATH$libpath; $corestr export KMP_AFFINITY=$affinity; lscpu; numactl -H; ldd ./$exe; $exe_prefix ./$exe $*"
 
 date
 echo "==================="

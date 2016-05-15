@@ -66,7 +66,7 @@ void usage(const string& cmd) {
         " -dc                   defer coefficient lookup to runtime (for iso3dfd stencil only).\n"
         " -es <expr-size>       set heuristic for expression-size threshold (default=" << exprSize << ").\n"
         " -lus                  make last dimension of fold unit stride (instead of first).\n"
-        " -aul                  allow simple unaligned loads (memory layout MUST be compatible).\n"
+        " -aul                  allow simple unaligned loads (memory map MUST be compatible).\n"
         " -fold <dim>=<size>,...    set number of elements in each dimension in a vector block.\n"
         " -cluster <dim>=<size>,... set number of values to evaluate in each dimension.\n"
         " -eq <name>=<substr>,...   put updates to grids containing substring in equation name.\n"
@@ -329,7 +329,7 @@ int main(int argc, const char* argv[]) {
             exit(1);
         }
         else if (foldLengthsGT1.size() > 0)
-            cerr << "Notice: memory layout MUST be with unit-stride in " <<
+            cerr << "Notice: memory map MUST be with unit-stride in " <<
                 foldLengthsGT1.makeDimStr() << " dimension!" << endl;
     }
 
@@ -374,7 +374,7 @@ int main(int argc, const char* argv[]) {
     Equations equations;
     equations.findEquations(grids, equationTargets);
     equations.printInfo(cerr);
-    
+
     // Get some stats and eliminate common sub-expressions.
     for (int j = 0; j < 2; j++) {
         bool doCseElim = j > 0;
@@ -482,9 +482,16 @@ int main(int argc, const char* argv[]) {
                 typeName += ucDim;
 
                 // don't want the time dimension during construction.
+                // TODO: make this more generic.
                 if (dim != "t") {
                     dimArg += "d" + dim + ", ";
-                    padArg += "pad" + dim + ", ";
+
+                    // Halo needed?
+                    if (equations.getEqGrids().count(gp))
+                        padArg += "h" + dim + " + ";
+
+                    // Extra padding.
+                    padArg += "p" + dim + ", ";
                 }
             }
             typeNames[gp] = typeName;
@@ -501,11 +508,11 @@ int main(int argc, const char* argv[]) {
             string param = pp->getName();
 
             // Type name.
-            // Name in kernel is 'GenericGridNd<REAL>'.
+            // Name in kernel is 'GenericGridNd<Real>'.
             ostringstream oss;
-            oss << "GenericGrid" << pp->size() << "d<REAL";
+            oss << "GenericGrid" << pp->size() << "d<Real";
             if (pp->size()) {
-                oss << ",Map";
+                oss << ",Layout_";
                 for (int dn = pp->size(); dn > 0; dn--)
                     oss << dn;
             }
@@ -542,11 +549,16 @@ int main(int argc, const char* argv[]) {
         // Allocate grids.
         cout << endl << " void allocGrids() {" << endl;
         cout << "  gridPtrs.clear();" << endl;
+        cout << "  eqGridPtrs.clear();" << endl;
         for (auto gp : grids) {
             string grid = gp->getName();
             cout << "  " << grid << " = new " << typeNames[gp] <<
                 "(" << dimArgs[gp] << padArgs[gp] << "\"" << grid << "\");" << endl <<
                 "  gridPtrs.push_back(" << grid << ");" << endl;
+
+            // Grids w/equations.
+            if (equations.getEqGrids().count(gp))
+                cout << "  eqGridPtrs.push_back(" << grid  << ");" << endl;
         }
         cout << " }" << endl;
 
@@ -582,12 +594,27 @@ int main(int argc, const char* argv[]) {
             addComment(cout, eq.grids);
             cout << " const int scalar_fp_ops = " << fpops.getNumOps() << ";" << endl;
 
+            // Init code.
+            {
+                cout << " // All grids updated by this equation." << endl <<
+                     " vector<RealvGridBase*> eqGridPtrs;" << endl;
+
+                cout << " void init(" << context << "& context) {" << endl;
+
+                // Grids w/equations.
+                cout << "  eqGridPtrs.clear();" << endl;
+                for (auto gp : eq.grids) {
+                    cout << "  eqGridPtrs.push_back(context." << gp->getName() << ");" << endl;
+                }
+                cout << " }" << endl;
+            }
+            
             // Scalar code.
             {
                 // C++ scalar print assistant.
                 CounterVisitor cv;
                 eq.grids.acceptToFirst(&cv);
-                CppPrintHelper* sp = new CppPrintHelper(&cv, "temp", "REAL", " ", ";\n");
+                CppPrintHelper* sp = new CppPrintHelper(&cv, "temp", "Real", " ", ";\n");
             
                 // Stencil-calculation code.
                 // Function header.
@@ -742,7 +769,7 @@ int main(int argc, const char* argv[]) {
             "struct StencilEquations_" << shapeName <<
             " : public StencilEquations {" << endl;
 
-        // Stencil equations.
+        // Stencil equation objects.
         cout << endl << " // Stencils." << endl;
         for (auto& eq : equations)
             cout << " StencilTemplate<Stencil_" << eq.name << "," <<

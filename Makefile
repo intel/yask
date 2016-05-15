@@ -26,8 +26,12 @@
 # stencil name: iso3dfd, 3axis, 9axis, 3plane, cube, ave, awp
 stencil		= 	iso3dfd
 
-# arch: target architecture: see options below.
+# target architecture: see options below.
 arch		=	host
+
+# whether to use MPI.
+# currently, MPI is only used in X dimension.
+mpi		=	0
 
 # defaults for various stencils:
 #
@@ -46,25 +50,24 @@ arch		=	host
 ifeq ($(stencil),ave)
 order		=	2
 real_bytes	=	8
+
 else ifeq ($(stencil),9axis)
 order		=	8
+
 else ifeq ($(stencil),3plane)
 order		=	6
+
 else ifeq ($(stencil),cube)
 order		=	4
+
 else ifeq ($(stencil),awp)
 order		=	4
 time_dim_size	=	1
 eqs		=	velocity=vel_,stress=stress_
-MACROS		+=	DEF_PROBLEM_SIZE=640
-MACROS		+=	DEF_WAVEFRONT_REGION_SIZE=256
-MACROS		+=	DEF_BLOCK_SIZE=12
+def_rank_size	=	640
+def_block_size		=	32
+def_wavefront_region_size	=	256
 endif
-
-# general defaults for these vars if not set above.
-order			?=	16
-real_bytes		?=	4
-time_dim_size		?=	2
 
 # arch-specific settings:
 #
@@ -94,7 +97,8 @@ else ifeq ($(arch),knl)
 ISA		=	-xMIC-AVX512
 MACROS		+=	USE_INTRIN512
 FB_TARGET  	=       512
-#crew		=	1  # enable for icc 2016 u3.
+def_block_size	=	64
+crew		=	1
 
 else ifeq ($(arch),skx)
 
@@ -122,12 +126,20 @@ FB_TARGET  	=       256
 
 endif # arch-specific.
 
-# general defaults for these vars if not set above.
-crew			?= 	0
-streaming_stores	?= 	1
-omp_schedule		?=	dynamic
-ISA			?=	-xHOST
-FB_TARGET  		?=	cpp
+# general defaults for vars if not set above.
+crew				?= 	0
+streaming_stores		?= 	1
+omp_schedule			?=	dynamic
+ISA				?=	-xHOST
+FB_TARGET  			?=	cpp
+order				?=	16
+real_bytes			?=	4
+time_dim_size			?=	2
+layout_3d			?=	Layout_123
+layout_4d			?=	Layout_1234
+def_rank_size		?=	1024
+def_block_size			?=	32
+def_wavefront_region_size	?=	512
 
 # How to fold vectors (x*y*z).
 # Vectorization in dimensions perpendicular to the inner loop
@@ -154,10 +166,11 @@ endif
 cluster		=	x=1,y=1,z=1
 
 # More build flags.
-FB_CC    	=       $(CC)
-FB_CCFLAGS 	+=	-g -O1 -std=c++11 -Wall  # low opt to reduce compile time.
-FB_FLAGS   	+=	-or $(order) -st $(stencil) -cluster $(cluster) -fold $(fold)
+ifeq ($(mpi),1)
+CC		=	mpiicpc
+else
 CC		=	icpc
+endif
 FC		=	ifort
 LD		=	$(CC)
 MAKE		=	make
@@ -165,25 +178,36 @@ LFLAGS          +=    	-lpthread
 CPPFLAGS        +=   	-g -O3 -std=c++11 -Wall $(ISA)
 OMPFLAGS	+=	-fopenmp 
 LFLAGS          +=       $(CPPFLAGS) -lrt -g
+FB_CC    	=       icpc
+FB_CCFLAGS 	+=	-g -O1 -std=c++11 -Wall  # low opt to reduce compile time.
+FB_FLAGS   	+=	-or $(order) -st $(stencil) -cluster $(cluster) -fold $(fold)
 GEN_HEADERS     =	$(addprefix src/,stencil_outer_loops.hpp \
-				stencil_region_loops.hpp stencil_block_loops.hpp \
-				map_macros.hpp maps.hpp \
+				stencil_region_loops.hpp \
+				stencil_halo_loops.hpp \
+				stencil_block_loops.hpp \
+				layout_macros.hpp layouts.hpp \
 				stencil_macros.hpp stencil_code.hpp)
 ifneq ($(eqs),)
   FB_FLAGS   	+=	-eq $(eqs)
 endif
 
-# settings passed as macros.
+# set macros based on vars.
 MACROS		+=	REAL_BYTES=$(real_bytes)
+MACROS		+=	LAYOUT_3D=$(layout_3d)
+MACROS		+=	LAYOUT_4D=$(layout_4d)
 MACROS		+=	TIME_DIM_SIZE=$(time_dim_size)
+MACROS		+=	DEF_RANK_SIZE=$(def_rank_size)
+MACROS		+=	DEF_BLOCK_SIZE=$(def_block_size)
+MACROS		+=	DEF_WAVEFRONT_REGION_SIZE=$(def_wavefront_region_size)
 
 # arch.
 ARCH		:=	$(shell echo $(arch) | tr '[:lower:]' '[:upper:]')
 MACROS		+= 	ARCH_$(ARCH)
 
 # compiler-specific settings
-ifeq ($(notdir $(CC)),icpc)
+ifneq ($(findstring ic,$(notdir $(CC))),)
 
+CODE_STATS      =   	code_stats
 CPPFLAGS        +=      -debug extended -Fa -restrict -ansi-alias -fno-alias
 CPPFLAGS	+=	-fimf-precision=low -fast-transcendentals -no-prec-sqrt -no-prec-div -fp-model fast=2 -fno-protect-parens -rcd -ftz -fma -fimf-domain-exclusion=none -qopt-assume-safe-padding
 CPPFLAGS	+=      -qopt-report=5 -qopt-report-phase=VEC,PAR,OPENMP,IPO,LOOP
@@ -197,7 +221,11 @@ CPPFLAGS	+=      -mP2OPT_hpo_par_crew_codegen=T
 MACROS		+=	__INTEL_CREW
 endif
 
-endif # compiler-specific
+endif # icpc
+
+ifeq ($(mpi),1)
+MACROS		+=	USE_MPI
+endif
 
 ifeq ($(streaming_stores),1)
 MACROS		+=	USE_STREAMING_STORE
@@ -205,8 +233,7 @@ endif
 
 # gen-loops.pl args for outer 3 sets of loops:
 
-# Outer loops break up the whole problem into smaller regions.
-# The outer time loop is included here.
+# Outer loops break up the whole rank into smaller regions.
 # In order for tempral wavefronts to operate properly, the
 # order of spatial dimensions may be changed, but traversal
 # paths that do not simply increment the indices (such as
@@ -228,6 +255,9 @@ REGION_LOOP_CODE	=	serpentine omp loop(rn,rx,ry,rz) { calc(block(rt)); }
 BLOCK_LOOP_OPTS		=     	-dims 'bnv,bxv,byv,bzv'
 BLOCK_LOOP_CODE		=	loop(bnv) { crew loop(bxv) { loop(byv) { $(INNER_BLOCK_LOOP_OPTS) loop(bzv) { calc(cluster(bt)); } } } }
 
+# Halo loops break up a region slice into vectors.
+HALO_LOOP_OPTS		=     	-dims 'rnv,rxv,ryv,rzv' -ompSchedule $(omp_schedule) 
+HALO_LOOP_CODE		=	serpentine omp loop(rnv, rxv, ryv) { loop(rzv) { calc(halo(rt)); } }
 
 # compile with model_cache=1 or 2 to check prefetching.
 ifeq ($(model_cache),1)
@@ -238,7 +268,8 @@ MACROS       	+=      MODEL_CACHE=2
 OMPFLAGS	=	-qopenmp-stubs
 endif
 
-CPPFLAGS	+=	$(addprefix -D,$(MACROS)) $(addprefix -D,$(EXTRA_MACROS)) $(OMPFLAGS) $(EXTRA_CPPFLAGS)
+CPPFLAGS	+=	$(addprefix -D,$(MACROS)) $(addprefix -D,$(EXTRA_MACROS))
+CPPFLAGS	+=	$(OMPFLAGS) $(EXTRA_CPPFLAGS)
 LFLAGS          +=      $(OMPFLAGS) $(EXTRA_CPPFLAGS)
 
 STENCIL_BASES		:=	stencil_main stencil_calc utils
@@ -246,15 +277,11 @@ STENCIL_OBJS		:=	$(addprefix src/,$(addsuffix .$(arch).o,$(STENCIL_BASES)))
 STENCIL_CPP		:=	$(addprefix src/,$(addsuffix .$(arch).i,$(STENCIL_BASES)))
 STENCIL_EXEC_NAME	:=	stencil.$(arch).exe
 
-ifeq ($(notdir $(CC)),icpc)
-CODE_STATS      =   code_stats
-endif
-
 all:	$(STENCIL_EXEC_NAME) $(CODE_STATS) settings
-
-settings:
 	@echo
 	@echo $(STENCIL_EXEC_NAME) "has been built."
+
+settings: $(STENCIL_EXEC_NAME)
 	@echo
 	@echo "Make settings used:"
 	@echo arch=$(arch)
@@ -263,6 +290,8 @@ settings:
 	@echo cluster=$(cluster)
 	@echo order=$(order)
 	@echo real_bytes=$(real_bytes)
+	@echo layout_3d=$(layout_3d)
+	@echo layout_4d=$(layout_4d)
 	@echo time_dim_size=$(time_dim_size)
 	@echo streaming_stores=$(streaming_stores)
 	@echo FB_TARGET="\"$(FB_TARGET)\""
@@ -280,6 +309,8 @@ settings:
 	@echo REGION_LOOP_CODE="\"$(REGION_LOOP_CODE)\""
 	@echo BLOCK_LOOP_OPTS="\"$(BLOCK_LOOP_OPTS)\""
 	@echo BLOCK_LOOP_CODE="\"$(BLOCK_LOOP_CODE)\""
+	@echo HALO_LOOP_OPTS="\"$(HALO_LOOP_OPTS)\""
+	@echo HALO_LOOP_CODE="\"$(HALO_LOOP_CODE)\""
 
 code_stats: $(STENCIL_EXEC_NAME)
 	@echo
@@ -299,13 +330,16 @@ src/stencil_outer_loops.hpp: gen-loops.pl Makefile
 src/stencil_region_loops.hpp: gen-loops.pl Makefile
 	./$< -output $@ $(REGION_LOOP_OPTS) $(EXTRA_LOOP_OPTS) $(EXTRA_REGION_LOOP_OPTS) "$(REGION_LOOP_CODE)"
 
+src/stencil_halo_loops.hpp: gen-loops.pl Makefile
+	./$< -output $@ $(HALO_LOOP_OPTS) $(EXTRA_LOOP_OPTS) $(EXTRA_HALO_LOOP_OPTS) "$(HALO_LOOP_CODE)"
+
 src/stencil_block_loops.hpp: gen-loops.pl Makefile
 	./$< -output $@ $(BLOCK_LOOP_OPTS) $(EXTRA_LOOP_OPTS) $(EXTRA_BLOCK_LOOP_OPTS) "$(BLOCK_LOOP_CODE)"
 
-src/map_macros.hpp: gen-mapping.pl
+src/layout_macros.hpp: gen-layouts.pl
 	./$< -m > $@
 
-src/maps.hpp: gen-mapping.pl
+src/layouts.hpp: gen-layouts.pl
 	./$< -d > $@
 
 foldBuilder: src/foldBuilder/*.*pp src/foldBuilder/stencils/*.*pp

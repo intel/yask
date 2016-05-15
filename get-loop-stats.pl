@@ -40,7 +40,7 @@ sub usage {
     "options:\n".
     " -p           print instrs\n".
     " -l=<regex>   print only loops at matching label\n".
-    " -t=<regex>   print only loops with an matching text\n";
+    " -t=<regex>   print only loops with matching text\n";
 }
 
 for my $arg (@ARGV) {

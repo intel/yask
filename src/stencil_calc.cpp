@@ -27,9 +27,11 @@ IN THE SOFTWARE.
 
 ///// Top-level methods for evaluating reference and optimized stencils.
 
-// Eval stencil over grid using scalar code.
-void StencilEquations::calc_problem_ref(StencilContext& context)
+// Eval stencil(s) over grid(s) using scalar code.
+void StencilEquations::calc_rank_ref(StencilContext& context)
 {
+    init(context);
+    
     // Start at a positive point to avoid any calculation referring
     // to negative time.
     idx_t t0 = TIME_DIM_SIZE * 2;
@@ -48,7 +50,9 @@ void StencilEquations::calc_problem_ref(StencilContext& context)
 
         // equations to evaluate (only one in most stencils).
         for (auto stencil : stencils) {
-        
+
+            // TODO: add halo exchange.
+            
             // grid index (only one in most stencils).
             for (idx_t n = 0; n < context.dn; n++) {
 
@@ -71,6 +75,75 @@ void StencilEquations::calc_problem_ref(StencilContext& context)
             }
         }
     } // iterations.
+}
+
+
+// Eval stencil(s) over grid(s) using optimized code.
+void StencilEquations::calc_rank_opt(StencilContext& context)
+{
+    init(context);
+
+    // Problem begin points.
+    // Start at a positive time point to avoid any calculation referring
+    // to negative time.
+    idx_t begin_dt = TIME_DIM_SIZE * 2;
+    idx_t begin_dn = 0, begin_dx = 0, begin_dy = 0, begin_dz = 0;
+    
+    // Problem end-points.
+    idx_t end_dt = begin_dt + context.dt;
+    idx_t end_dn = context.dn;
+    idx_t end_dx = context.dx;
+    idx_t end_dy = context.dy;
+    idx_t end_dz = context.dz;
+
+    TRACE_MSG("calc_problem_opt(%ld..%ld, %ld..%ld, %ld..%ld, %ld..%ld, %ld..%ld)", 
+              begin_dt, end_dt-1,
+              begin_dn, end_dn-1,
+              begin_dx, end_dx-1,
+              begin_dy, end_dy-1,
+              begin_dz, end_dz-1);
+    
+    // Steps are based on region sizes.
+    idx_t step_dt = context.rt;
+    idx_t step_dn = context.rn;
+    idx_t step_dx = context.rx;
+    idx_t step_dy = context.ry;
+    idx_t step_dz = context.rz;
+
+    // Determine spatial skewing angles for temporal wavefronts.  This
+    // assumes the smallest granularity of calculation is CPTS_* in each dim.
+    // The halos (h*) are only rounded up to VLEN_*, so we have to round
+    // up to CPTS_* here.
+    context.angle_n = (context.rn < context.dn) ? ROUND_UP(context.hn, CPTS_N) : 0;
+    context.angle_x = (context.rx < context.dx) ? ROUND_UP(context.hx, CPTS_X) : 0;
+    context.angle_y = (context.ry < context.dy) ? ROUND_UP(context.hy, CPTS_Y) : 0;
+    context.angle_z = (context.rz < context.dz) ? ROUND_UP(context.hz, CPTS_Z) : 0;
+    TRACE_MSG("wavefront angles: %ld, %ld, %ld, %ld",
+              context.angle_n, context.angle_x, context.angle_y, context.angle_z);
+    
+    // Extend end points for overlapping regions due to wavefront angle.
+    // For each subsequent time step in a region, the spatial location of
+    // each block evaluation is shifted by the angle for each stencil. So,
+    // the total shift in a region is the angle * num stencils * num
+    // timesteps. Thus, the number of overlapping regions is ceil(total
+    // shift / region size).  This assumes stencils are inter-dependent.
+    // TODO: calculate stencil inter-dependency in the foldBuilder for each
+    // dimension.
+    idx_t nshifts = (idx_t(stencils.size()) * context.rt) - 1;
+    end_dn += context.angle_n * nshifts;
+    end_dx += context.angle_x * nshifts;
+    end_dy += context.angle_y * nshifts;
+    end_dz += context.angle_z * nshifts;
+    TRACE_MSG("virtual domain after wavefront adjustment: %ld..%ld, %ld..%ld, %ld..%ld, %ld..%ld, %ld..%ld", 
+              begin_dt, end_dt-1,
+              begin_dn, end_dn-1,
+              begin_dx, end_dx-1,
+              begin_dy, end_dy-1,
+              begin_dz, end_dz-1);
+
+    // Include automatically-generated loop code that calls calc_region() for each region.
+#include "stencil_outer_loops.hpp"
+
 }
 
 // Calculate results within a region.
@@ -117,11 +190,11 @@ calc_region(StencilContext& context,
         // TODO: remove this when temporal blocking is implemented.
         assert(stop_rt == start_rt + 1);
         const idx_t rt = start_rt; // only one time value needed for block.
-    
+
         // equations to evaluate at this time step.
         for (auto stencil : stencils) {
 
-            // Actual region boundaries must stay within problem domain.
+            // Actual region boundaries must stay within rank domain.
             idx_t begin_rn = max<idx_t>(start_dn, 0);
             idx_t end_rn = min<idx_t>(stop_dn, context.dn);
             idx_t begin_rx = max<idx_t>(start_dx, 0);
@@ -135,21 +208,22 @@ calc_region(StencilContext& context,
             // at least partly inside the domain. For overlapping regions,
             // they may start outside the domain but enter the domain as
             // time progresses and their boundaries shift. So, we don't want
-            // to exit if this condition isn't met.
+            // to return if this condition isn't met.
             if (end_rn > begin_rn &&
                 end_rx > begin_rx &&
                 end_ry > begin_ry &&
                 end_rz > begin_rz) {
 
-            // Start an OpenMP parallel region.
-#pragma omp parallel
-                {
-                    // Include automatically-generated loop code that calls
-                    // calc_block() for each block in this region.  Loops
-                    // through n from begin_rn to end_rn-1; similar for x, y,
-                    // and z.  This code typically contains OpenMP loop(s).
+                // Halo exchange for grid(s) updated by this stencil.
+                stencil->exchange_halos(context, rt,
+                                        begin_rn, begin_rx, begin_ry, begin_rz,
+                                        end_rn, end_rx, end_ry, end_rz);
+        
+                // Include automatically-generated loop code that calls
+                // calc_block() for each block in this region.  Loops
+                // through n from begin_rn to end_rn-1; similar for x, y,
+                // and z.  This code typically contains OpenMP loop(s).
 #include "stencil_region_loops.hpp"
-                }
             }
             
             // Shift spatial region boundaries for next iteration to
@@ -163,92 +237,210 @@ calc_region(StencilContext& context,
             stop_dy -= context.angle_y;
             start_dz -= context.angle_z;
             stop_dz -= context.angle_z;
-        }
-    }
+            
+        } // stencil equations.
+    } // time.
 }
 
-// Eval stencil over grid using optimized code.
-void StencilEquations::calc_problem_opt(StencilContext& context)
+// Exchange halo data for the given time.
+void StencilBase::exchange_halos(StencilContext& context, idx_t rt,
+                                 idx_t begin_rn, idx_t begin_rx, idx_t begin_ry, idx_t begin_rz,
+                                 idx_t end_rn, idx_t end_rx, idx_t end_ry, idx_t end_rz)
 {
-    // Problem begin points.
-    // Start at a positive time point to avoid any calculation referring
-    // to negative time.
-    idx_t begin_dt = TIME_DIM_SIZE * 2;
-    idx_t begin_dn = 0, begin_dx = 0, begin_dy = 0, begin_dz = 0;
-    
-    // Problem end-points.
-    idx_t end_dt = begin_dt + context.dt;
-    idx_t end_dn = context.dn;
-    idx_t end_dx = context.dx;
-    idx_t end_dy = context.dy;
-    idx_t end_dz = context.dz;
+#ifdef USE_MPI
 
-    TRACE_MSG("calc_problem_opt(%ld..%ld, %ld..%ld, %ld..%ld, %ld..%ld, %ld..%ld)", 
-              begin_dt, end_dt-1,
-              begin_dn, end_dn-1,
-              begin_dx, end_dx-1,
-              begin_dy, end_dy-1,
-              begin_dz, end_dz-1);
+    // For now, width of region must be across entire rank to use MPI.
+    // TODO: generalize directions.
+    if (context.num_ranks > 1 && (begin_rx != 0 || end_rx != context.dx)) {
+        cerr << "MPI + wavefront tiling in X-direction is not allowed." << endl;
+        exit(1);
+    }
     
-    // Steps are based on region sizes.
-    idx_t step_dt = context.rt;
-    idx_t step_dn = context.rn;
-    idx_t step_dx = context.rx;
-    idx_t step_dy = context.ry;
-    idx_t step_dz = context.rz;
+    // Divide indices by vector lengths.
+    // Begin/end vars shouldn't be negative, so '/' is ok.
+    const idx_t begin_rnv = begin_rn / VLEN_N;
+    //const idx_t begin_rxv = begin_rx / VLEN_X;
+    const idx_t begin_ryv = begin_ry / VLEN_Y;
+    const idx_t begin_rzv = begin_rz / VLEN_Z;
+    const idx_t end_rnv = end_rn / VLEN_N;
+    //const idx_t end_rxv = end_rx / VLEN_X;
+    const idx_t end_ryv = end_ry / VLEN_Y;
+    const idx_t end_rzv = end_rz / VLEN_Z;
+    
+    // Step 1 vector.
+    const idx_t step_rnv = 1;
+    const idx_t step_rxv = 1;
+    const idx_t step_ryv = 1;
+    const idx_t step_rzv = 1;
+    
+    auto eqGridPtrs = getEqGridPtrs();
 
-    // Determine spatial skewing angles for temporal wavefronts.  This
-    // assumes all spatial dimensions have the same halo and the 'n'
-    // dimension has a zero halo.  TODO: calculate halos in the foldBuilder
-    // for each dimension separately, including 'n'.
-    context.angle_n = 0;
-    context.angle_x = max<idx_t>(CPTS_X, STENCIL_ORDER/2);
-    context.angle_y = max<idx_t>(CPTS_Y, STENCIL_ORDER/2);
-    context.angle_z = max<idx_t>(CPTS_Z, STENCIL_ORDER/2);
-    TRACE_MSG("wavefront angles: %ld, %ld, %ld, %ld",
-              context.angle_n, context.angle_x, context.angle_y, context.angle_z);
-    
-    // Extend end points for overlapping regions due to wavefront angle.
-    // For each subsequent time step in a region, the spatial location of
-    // each block evaluation is shifted by the angle for each stencil. So,
-    // the total shift in a region is the angle * num stencils * num
-    // timesteps. Thus, the number of overlapping regions is ceil(total
-    // shift / region size).  This assumes stencils are inter-dependent.
-    // TODO: calculate stencil inter-dependency in the foldBuilder for each
-    // dimension.
-    idx_t nshifts = (idx_t(stencils.size()) * context.rt) - 1;
-    end_dn += context.angle_n * nshifts;
-    end_dx += context.angle_x * nshifts;
-    end_dy += context.angle_y * nshifts;
-    end_dz += context.angle_z * nshifts;
-    TRACE_MSG("domain after wavefront adjustment: %ld..%ld, %ld..%ld, %ld..%ld, %ld..%ld, %ld..%ld", 
-              begin_dt, end_dt-1,
-              begin_dn, end_dn-1,
-              begin_dx, end_dx-1,
-              begin_dy, end_dy-1,
-              begin_dz, end_dz-1);
-    
-    // Include automatically-generated loop code that calls calc_region() for each region.
-#include "stencil_outer_loops.hpp"
+    for (size_t gi = 0; gi < eqGridPtrs.size(); gi++) {
 
+        // Get pointer to generic grid and derived type.
+        // TODO: Make this more general.
+        auto gp = eqGridPtrs[gi];
+#if USING_DIM_N
+        auto gpd = dynamic_cast<Grid_TNXYZ*>(gp);
+#else
+        auto gpd = dynamic_cast<Grid_TXYZ*>(gp);
+#endif
+        assert(gpd);
+
+        // Request handles.
+        MPI_Request reqs[context.nBufPos * context.nBufDir];
+        int nreqs = 0;
+
+        // Define calc_halo() to copy from main grid.
+#define calc_halo(context, rt,                                          \
+                  start_rnv, start_rxv, start_ryv, start_rzv,           \
+                  stop_rnv, stop_rxv, stop_ryv, stop_rzv)               \
+        realv hval = gpd->readVecNorm(rt, ARG_N(start_rnv)              \
+                                      start_rxv, start_ryv, start_rzv, __LINE__); \
+        haloGrid->writeVecNorm(hval, index_rnv,                         \
+                               index_rxv, index_ryv, index_rzv, __LINE__)
+        
+        // Send to left.
+        if (context.left_rank != MPI_PROC_NULL) {
+            auto haloGrid = context.bufs[gp](context.bufLeft, context.bufSend);
+
+            // Pack left-edge data from main grid.
+            idx_t begin_rxv = 0;
+            idx_t end_rxv = context.hx / VLEN_X;
+#include "stencil_halo_loops.hpp"
+
+            // Send data to left rank.
+            const void* buf = (const void*)(haloGrid->getRawData());
+            MPI_Isend(buf, haloGrid->get_num_bytes(), MPI_BYTE,
+                      context.left_rank, int(gi), context.comm, &reqs[nreqs++]);
+        }
+
+        // Receive from right.
+        if (context.right_rank != MPI_PROC_NULL) {
+            auto haloGrid = context.bufs[gp](context.bufRight, context.bufRec);
+
+            // Get data from right rank.
+            void* buf = (void*)(haloGrid->getRawData());
+            MPI_Irecv(buf, haloGrid->get_num_bytes(), MPI_BYTE,
+                      context.right_rank, int(gi), context.comm, &reqs[nreqs++]);
+        }
+
+        // Send to right.
+        if (context.right_rank != MPI_PROC_NULL) {
+            auto haloGrid = context.bufs[gp](context.bufRight, context.bufSend);
+
+            // Pack right-edge data from main grid.
+            idx_t begin_rxv = (context.dx - context.hx) / VLEN_X;
+            idx_t end_rxv = context.dx / VLEN_X;
+#include "stencil_halo_loops.hpp"
+
+            // Send data to right rank.
+            const void* buf = (const void*)(haloGrid->getRawData());
+            MPI_Isend(buf, haloGrid->get_num_bytes(), MPI_BYTE,
+                      context.right_rank, int(gi), context.comm, &reqs[nreqs++]);
+        }
+
+        // Receive from left.
+        if (context.left_rank != MPI_PROC_NULL) {
+            auto haloGrid = context.bufs[gp](context.bufLeft, context.bufRec);
+
+            // Get data from left rank.
+            void* buf = (void*)(haloGrid->getRawData());
+            MPI_Irecv(buf, haloGrid->get_num_bytes(), MPI_BYTE,
+                      context.left_rank, int(gi), context.comm, &reqs[nreqs++]);
+
+        }
+#undef calc_halo
+
+        // Wait for all to complete.
+        // TODO: unpack immediately after each read finishes.
+        TRACE_MSG("exchange_halos: waiting for %i MPI request(s)", nreqs);
+        MPI_Waitall(nreqs, reqs, MPI_STATUS_IGNORE);
+
+        // Define calc_halo to copy data into main grid.
+#define calc_halo(context, rt,                                          \
+                  start_rnv, start_rxv, start_ryv, start_rzv,           \
+                  stop_rnv, stop_rxv, stop_ryv, stop_rzv)               \
+        realv hval = haloGrid->readVecNorm(index_rnv,                   \
+                                           index_rxv, index_ryv, index_rzv, __LINE__); \
+        gpd->writeVecNorm(hval, rt, ARG_N(start_rnv)                    \
+                          start_rxv, start_ryv, start_rzv, __LINE__)
+        
+        // Unpack right-halo data into main grid.
+        if (context.right_rank != MPI_PROC_NULL) {
+            auto haloGrid = context.bufs[gp](context.bufRight, context.bufRec);
+
+            idx_t begin_rxv = context.dx / VLEN_X;
+            idx_t end_rxv = (context.dx + context.hx) / VLEN_X;
+#include "stencil_halo_loops.hpp"
+        }
+        
+        // Unpack left-halo data into main grid.
+        if (context.left_rank != MPI_PROC_NULL) {
+            auto haloGrid = context.bufs[gp](context.bufLeft, context.bufRec);
+
+            idx_t begin_rxv = -(context.hx / VLEN_X);
+            idx_t end_rxv = 0;
+#include "stencil_halo_loops.hpp"
+        }
+
+    } // grids.
+
+#undef calc_halo
+#endif
+            
 }
 
-// StencilContext functions:
+            
+///// StencilContext functions:
 
-    // Get total size.
+// Init MPI-related vars.
+void StencilContext::setupMPI() {
+
+    // something to left?
+    if (my_rank > 0)
+        left_rank = my_rank - 1;
+    else
+        left_rank = MPI_PROC_NULL;
+
+    // something to right?
+    if (my_rank + 1 < num_ranks)
+        right_rank = my_rank + 1;
+    else
+        right_rank = MPI_PROC_NULL;
+
+    // alloc: width is halo size; rest are same as region.
+    for (auto gp : eqGridPtrs)
+        for (int bd = 0; bd < nBufDir; bd++) {
+            string bds = (bd == bufSend) ? "_send" : "_receive";
+            if (left_rank != MPI_PROC_NULL)
+                bufs[gp].newGrid(bufLeft, bd, rn, hx, ry, rz,
+                                 gp->get_name() + bds + "_left");
+            if (right_rank != MPI_PROC_NULL)
+                bufs[gp].newGrid(bufRight, bd, rn, hx, ry, rz, 
+                                 gp->get_name() + bds + "_right");
+        }
+}
+
+// Get total size.
 idx_t StencilContext::get_num_bytes() {
     idx_t nbytes = 0;
     for (auto gp : gridPtrs)
         nbytes += gp->get_num_bytes();
     for (auto pp : paramPtrs)
         nbytes += pp->get_num_bytes();
+    for (auto gp : eqGridPtrs)
+        for (int bp = 0; bp < nBufPos; bp++)
+            for (int bd = 0; bd < nBufDir; bd++)
+                if (bufs[gp](bp, bd))
+                    nbytes += bufs[gp](bp, bd)->get_num_bytes();
     return nbytes;
 }
 
 // Init all grids & params w/same value within each,
 // but different values between them.
 void StencilContext::initSame() {
-    REAL v = 0.1;
+    Real v = 0.1;
     cout << "initializing grids..." << endl;
     for (auto gp : gridPtrs) {
         gp->set_same(v);
@@ -264,7 +456,7 @@ void StencilContext::initSame() {
 // Init all grids & params w/different values.
 // Better for validation, but slower.
 void StencilContext::initDiff() {
-    REAL v = 0.01;
+    Real v = 0.01;
     for (auto gp : gridPtrs) {
         gp->set_diff(v);
         v += 0.001;

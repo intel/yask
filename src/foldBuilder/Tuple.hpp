@@ -200,7 +200,7 @@ public:
         return !(((*this) < rhs) || ((*this) == rhs));
     }
 
-    // Convert offsets to 1D offset using C-style mapping (last index is
+    // Convert offsets to 1D offset using C-style map (last index is
     // unit stride) assuming values in this are sizes.
     // if strictRhs==true, RHS elements must be same as this;
     // else, only matching ones are considered.

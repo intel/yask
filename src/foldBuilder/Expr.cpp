@@ -280,8 +280,6 @@ void Expr::accept(ExprVisitor* ev) const {
 // Separate grids into equations.
 void Equations::findEquations(Grids& allGrids, const string& targets) {
 
-    set<Grid*> added;
-
     // Handle each key-value pair in targets string.
     ArgParser ap;
     ap.parseKeyValuePairs
@@ -296,7 +294,7 @@ void Equations::findEquations(Grids& allGrids, const string& targets) {
                 if (np != string::npos) {
 
                     // Grid already added?
-                    if (added.count(gp))
+                    if (_eqGrids.count(gp))
                         continue;
 
                     // Grid has an equation?
@@ -323,7 +321,7 @@ void Equations::findEquations(Grids& allGrids, const string& targets) {
                     // Add grid to equation.
                     assert(ep);
                     ep->grids.push_back(gp);
-                    added.insert(gp);
+                    _eqGrids.insert(gp);
                 }
             }
         });
@@ -332,7 +330,7 @@ void Equations::findEquations(Grids& allGrids, const string& targets) {
     for (auto gp : allGrids) {
 
         // Grid already added?
-        if (added.count(gp))
+        if (_eqGrids.count(gp))
             continue;
         
         // Grid has an equation?
@@ -347,6 +345,7 @@ void Equations::findEquations(Grids& allGrids, const string& targets) {
         // It has the name of the grid and just one grid.
         eq.name = gp->getName();
         eq.grids.push_back(gp);
+        _eqGrids.insert(gp);
     }
 }
 

@@ -432,8 +432,8 @@ sub processCode($) {
 
         # use OpenMP on next loop.
         elsif (lc $tok eq 'omp') {
-            my $loopPragma = '_Pragma("omp ';
-            $loopPragma .= "for schedule($OPT{ompSchedule})";
+            my $loopPragma = '_Pragma("omp parallel for ';
+            $loopPragma .= "schedule($OPT{ompSchedule})";
             $loopPragma .= '")';
             push @loopPrefix, " // Distribute iterations among OpenMP threads.", 
             $loopPragma;

@@ -103,7 +103,7 @@ extern Cache cache;
 
 #define PREFETCH(hint, base, matNum, xv, yv, zv, line)    \
     do {                                        \
-        const REAL *p = base.getPtr(matNum, xv, yv, zv, false);        \
+        const Real *p = base.getPtr(matNum, xv, yv, zv, false);        \
         TP(p, hint, base, matNum, xv, yv, zv, line); MCP(p, hint, line);  \
         _mm_prefetch((const char*)(p), hint);   \
     } while(0)
@@ -130,7 +130,7 @@ extern Cache cache;
 
 #define EVICT(hint, base, matNum, xv, yv, zv, line)    \
     do {                                        \
-        const REAL *p = base.getPtr(matNum, xv, yv, zv, false);        \
+        const Real *p = base.getPtr(matNum, xv, yv, zv, false);        \
         TE(p, hint, line); MCE(p, hint, line);  \
         _mm_clevict((const char*)(p), hint);    \
     } while(0)

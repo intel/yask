@@ -25,8 +25,8 @@ IN THE SOFTWARE.
 
 // This file defines a union to use for folded vectors of floats or doubles.
 
-#ifndef _REALV_H
-#define _REALV_H
+#ifndef _RealV_H
+#define _RealV_H
 
 // Control assert() by turning on with DEBUG instead of turning off with
 // NDEBUG. This makes it off by default.
@@ -53,14 +53,14 @@ IN THE SOFTWARE.
 // safe integer divide and mod.
 #include "idiv.hpp"
 
-// layout macros.
-#include "map_macros.hpp"
+// macros for 1D<->nD transforms.
+#include "layout_macros.hpp"
 
 using namespace std;
 
 // values for 32-bit, single-precision reals.
 #if REAL_BYTES == 4
-#define REAL float
+typedef float Real;
 #define CTRL_INT unsigned __int32
 #define CTRL_IDX_MASK 0xf
 #define CTRL_SEL_BIT 0x10
@@ -79,7 +79,7 @@ using namespace std;
 
 // values for 64-bit, double-precision reals.
 #elif REAL_BYTES == 8
-#define REAL double
+typedef double Real;
 #define CTRL_INT unsigned __int64
 #define CTRL_IDX_MASK 0x7
 #define CTRL_SEL_BIT 0x8
@@ -147,15 +147,15 @@ typedef long int idx_t;
 
 // Macro for looping through an aligned realv.
 #if defined(DEBUG) || (VLEN==1)
-#define REALV_LOOP(i)                            \
+#define RealV_LOOP(i)                            \
     for (int i=0; i<VLEN; i++)
-#define REALV_LOOP_UNALIGNED(i)                  \
+#define RealV_LOOP_UNALIGNED(i)                  \
     for (int i=0; i<VLEN; i++)
 #else
-#define REALV_LOOP(i)                            \
+#define RealV_LOOP(i)                            \
     _Pragma("vector aligned") _Pragma("simd")   \
     for (int i=0; i<VLEN; i++)
-#define REALV_LOOP_UNALIGNED(i)                  \
+#define RealV_LOOP_UNALIGNED(i)                  \
     _Pragma("simd")                             \
     for (int i=0; i<VLEN; i++)
 #endif
@@ -171,7 +171,7 @@ typedef long int idx_t;
 // The following must be an aggregate type to allow aggregate initialization,
 // so no user-provided ctors, copy operator, virtual member functions, etc.
 union realv_data {
-    REAL r[VLEN];
+    Real r[VLEN];
     CTRL_INT ci[VLEN];
 
 #ifndef NO_INTRINSICS
@@ -231,7 +231,7 @@ struct realv {
     // copy whole vector.
     ALWAYS_INLINE realv& operator=(const realv& rhs) {
 #ifdef NO_INTRINSICS
-        REALV_LOOP(i) u.r[i] = rhs[i];
+        RealV_LOOP(i) u.r[i] = rhs[i];
 #else
         u.mr = rhs.u.mr;
 #endif
@@ -245,42 +245,42 @@ struct realv {
     // assignment: single value broadcast.
     ALWAYS_INLINE void operator=(double val) {
 #ifdef NO_INTRINSICS
-        REALV_LOOP(i) u.r[i] = REAL(val);
+        RealV_LOOP(i) u.r[i] = Real(val);
 #else
-        u.mr = INAME(set1)(REAL(val));
+        u.mr = INAME(set1)(Real(val));
 #endif
     }
     ALWAYS_INLINE void operator=(float val) {
 #ifdef NO_INTRINSICS
-        REALV_LOOP(i) u.r[i] = REAL(val);
+        RealV_LOOP(i) u.r[i] = Real(val);
 #else
-        u.mr = INAME(set1)(REAL(val));
+        u.mr = INAME(set1)(Real(val));
 #endif
     }
 
     // broadcast with conversions.
     ALWAYS_INLINE void operator=(int val) {
-        operator=(REAL(val));
+        operator=(Real(val));
     }
     ALWAYS_INLINE void operator=(long val) {
-        operator=(REAL(val));
+        operator=(Real(val));
     }
 
     
-    // access a REAL linearly.
-    ALWAYS_INLINE REAL& operator[](idx_t l) {
+    // access a Real linearly.
+    ALWAYS_INLINE Real& operator[](idx_t l) {
         assert(l >= 0);
         assert(l < VLEN);
         return u.r[l];
     }
-    ALWAYS_INLINE const REAL& operator[](idx_t l) const {
+    ALWAYS_INLINE const Real& operator[](idx_t l) const {
         assert(l >= 0);
         assert(l < VLEN);
         return u.r[l];
     }
 
-    // access a REAL by n,x,y,z vector-block indices.
-    ALWAYS_INLINE const REAL& operator()(idx_t n, idx_t i, idx_t j, idx_t k) const {
+    // access a Real by n,x,y,z vector-block indices.
+    ALWAYS_INLINE const Real& operator()(idx_t n, idx_t i, idx_t j, idx_t k) const {
         assert(n >= 0);
         assert(n < VLEN_N);
         assert(i >= 0);
@@ -293,26 +293,26 @@ struct realv {
 #if VLEN_FIRST_DIM_IS_UNIT_STRIDE
 
         // n dim is unit stride, followed by x, y, z.
-        idx_t l = MAP4321(n, i, j, k, VLEN_N, VLEN_X, VLEN_Y, VLEN_Z);
+        idx_t l = LAYOUT_4321(n, i, j, k, VLEN_N, VLEN_X, VLEN_Y, VLEN_Z);
 #else
 
         // z dim is unit stride, followed by y, x, n.
-        idx_t l = MAP1234(n, i, j, k, VLEN_N, VLEN_X, VLEN_Y, VLEN_Z);
+        idx_t l = LAYOUT_1234(n, i, j, k, VLEN_N, VLEN_X, VLEN_Y, VLEN_Z);
 #endif
         
         return u.r[l];
     }
-    ALWAYS_INLINE REAL& operator()(idx_t n, idx_t i, idx_t j, idx_t k) {
+    ALWAYS_INLINE Real& operator()(idx_t n, idx_t i, idx_t j, idx_t k) {
         const realv* ct = const_cast<const realv*>(this);
-        const REAL& cr = (*ct)(n, i, j, k);
-        return const_cast<REAL&>(cr);
+        const Real& cr = (*ct)(n, i, j, k);
+        return const_cast<Real&>(cr);
     }
 
     // unary negate.
     ALWAYS_INLINE realv operator-() const {
         realv res;
 #ifdef NO_INTRINSICS
-        REALV_LOOP(i) res[i] = -u.r[i];
+        RealV_LOOP(i) res[i] = -u.r[i];
 #else
         // subtract from zero.
         res.u.mr = INAME(sub)(INAME(setzero)(), u.mr);
@@ -324,13 +324,13 @@ struct realv {
     ALWAYS_INLINE realv operator+(realv rhs) const {
         realv res;
 #ifdef NO_INTRINSICS
-        REALV_LOOP(i) res[i] = u.r[i] + rhs[i];
+        RealV_LOOP(i) res[i] = u.r[i] + rhs[i];
 #else
         res.u.mr = INAME(add)(u.mr, rhs.u.mr);
 #endif
         return res;
     }
-    ALWAYS_INLINE realv operator+(REAL rhs) const {
+    ALWAYS_INLINE realv operator+(Real rhs) const {
         realv rn;
         rn = rhs;               // broadcast.
         return (*this) + rn;
@@ -340,13 +340,13 @@ struct realv {
     ALWAYS_INLINE realv operator-(realv rhs) const {
         realv res;
 #ifdef NO_INTRINSICS
-        REALV_LOOP(i) res[i] = u.r[i] - rhs[i];
+        RealV_LOOP(i) res[i] = u.r[i] - rhs[i];
 #else
         res.u.mr = INAME(sub)(u.mr, rhs.u.mr);
 #endif
         return res;
     }
-    ALWAYS_INLINE realv operator-(REAL rhs) const {
+    ALWAYS_INLINE realv operator-(Real rhs) const {
         realv rn;
         rn = rhs;               // broadcast.
         return (*this) - rn;
@@ -356,13 +356,13 @@ struct realv {
     ALWAYS_INLINE realv operator*(realv rhs) const {
         realv res;
 #ifdef NO_INTRINSICS
-        REALV_LOOP(i) res[i] = u.r[i] * rhs[i];
+        RealV_LOOP(i) res[i] = u.r[i] * rhs[i];
 #else
         res.u.mr = INAME(mul)(u.mr, rhs.u.mr);
 #endif
         return res;
     }
-    ALWAYS_INLINE realv operator*(REAL rhs) const {
+    ALWAYS_INLINE realv operator*(Real rhs) const {
         realv rn;
         rn = rhs;               // broadcast.
         return (*this) * rn;
@@ -372,13 +372,13 @@ struct realv {
     ALWAYS_INLINE realv operator/(realv rhs) const {
         realv res;
 #ifdef NO_INTRINSICS
-        REALV_LOOP(i) res[i] = u.r[i] / rhs[i];
+        RealV_LOOP(i) res[i] = u.r[i] / rhs[i];
 #else
         res.u.mr = INAME(div)(u.mr, rhs.u.mr);
 #endif
         return res;
     }
-    ALWAYS_INLINE realv operator/(REAL rhs) const {
+    ALWAYS_INLINE realv operator/(Real rhs) const {
         realv rn;
         rn = rhs;               // broadcast.
         return (*this) / rn;
@@ -418,7 +418,7 @@ struct realv {
     // aligned load.
     ALWAYS_INLINE void loadFrom(const realv* restrict from) {
 #if defined(NO_INTRINSICS) || defined(NO_LOAD_INTRINSICS)
-        REALV_LOOP(i) u.r[i] = (*from)[i];
+        RealV_LOOP(i) u.r[i] = (*from)[i];
 #else
         u.mr = INAME(load)((IMEM_TYPE const*)from);
 #endif
@@ -427,7 +427,7 @@ struct realv {
     // unaligned load.
     ALWAYS_INLINE void loadUnalignedFrom(const realv* restrict from) {
 #if defined(NO_INTRINSICS) || defined(NO_LOAD_INTRINSICS)
-        REALV_LOOP_UNALIGNED(i) u.r[i] = (*from)[i];
+        RealV_LOOP_UNALIGNED(i) u.r[i] = (*from)[i];
 #else
         u.mr = INAME(loadu)((IMEM_TYPE const*)from);
 #endif
@@ -446,7 +446,7 @@ struct realv {
 #if defined(__INTEL_COMPILER) && (VLEN > 1) && defined(USE_STREAMING_STORE)
         _Pragma("vector nontemporal")
 #endif
-            REALV_LOOP(i) (*to)[i] = u.r[i];
+            RealV_LOOP(i) (*to)[i] = u.r[i];
 #elif !defined(USE_STREAMING_STORE)
         INAME(store)((IMEM_TYPE*)to, u.mr);
 #elif defined(ARCH_KNC)
@@ -484,16 +484,16 @@ inline ostream& operator<<(ostream& os, const realv& rn) {
 }
 
 // More operator overloading.
-ALWAYS_INLINE realv operator+(REAL lhs, const realv& rhs) {
+ALWAYS_INLINE realv operator+(Real lhs, const realv& rhs) {
     return realv(lhs) + rhs;
 }
-ALWAYS_INLINE realv operator-(REAL lhs, const realv& rhs) {
+ALWAYS_INLINE realv operator-(Real lhs, const realv& rhs) {
     return realv(lhs) - rhs;
 }
-ALWAYS_INLINE realv operator*(REAL lhs, const realv& rhs) {
+ALWAYS_INLINE realv operator*(Real lhs, const realv& rhs) {
     return realv(lhs) * rhs;
 }
-ALWAYS_INLINE realv operator/(REAL lhs, const realv& rhs) {
+ALWAYS_INLINE realv operator/(Real lhs, const realv& rhs) {
     return realv(lhs) / rhs;
 }
 
@@ -525,7 +525,7 @@ ALWAYS_INLINE void realv_align(realv& res, const realv& a, const realv& b,
     // Not really an intrinsic, but not element-wise, either.
     // Put the 2 parts in a local array, then extract the desired part
     // using an unaligned load.
-    REAL r2[VLEN * 2];
+    Real r2[VLEN * 2];
     *((realv*)(&r2[0])) = b;
     *((realv*)(&r2[VLEN])) = a;
     res = *((realv*)(&r2[count]));
@@ -707,20 +707,20 @@ inline bool within_tolerance(const realv& val, const realv& ref,
 
 // aligned declarations.
 #ifdef __INTEL_COMPILER
-#define ALIGNED_REALV __declspec(align(sizeof(realv))) realv
+#define ALIGNED_RealV __declspec(align(sizeof(realv))) realv
 #else
-#define ALIGNED_REALV realv __attribute__((aligned(sizeof(realv)))) 
+#define ALIGNED_RealV realv __attribute__((aligned(sizeof(realv)))) 
 #endif
 
 // zero a VLEN-sized array.
 #define ZERO_VEC(v) do {                        \
-        REALV_LOOP(i)                            \
-            v[i] = (REAL)0.0;                   \
+        RealV_LOOP(i)                            \
+            v[i] = (Real)0.0;                   \
     } while(0)
 
 // declare and zero a VLEN-sized array.
 #define MAKE_VEC(v)                             \
-    ALIGNED_REALV v(0.0)
+    ALIGNED_RealV v(0.0)
 
 
 #endif

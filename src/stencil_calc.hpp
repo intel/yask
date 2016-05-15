@@ -23,7 +23,7 @@ IN THE SOFTWARE.
 
 *****************************************************************************/
 
-// Data and sizes for overall problem.
+// Data and hierarchical sizes.
 // This is a pure-virtual class that must be implemented
 // for a specific problem.
 struct StencilContext {
@@ -34,20 +34,60 @@ struct StencilContext {
     // A list of all grids.
     vector<RealvGridBase*> gridPtrs;
 
+    // All grids updated by all equations.
+    vector<RealvGridBase*> eqGridPtrs;
+
     // A list of all non-grid parameters.
-    vector<GenericGridBase<REAL>*> paramPtrs;
+    vector<GenericGridBase<Real>*> paramPtrs;
 
     // Sizes.
     // - time size in steps to be done (not grid allocation).
     // - stencil size in equations to eval (not number of grids).
     // - spatial sizes in elements (not vectors).
-    idx_t dt, ds, dn, dx, dy, dz;     // problem size.
+    idx_t dt, ds, dn, dx, dy, dz;     // rank size.
     idx_t rt, rs, rn, rx, ry, rz;     // region size.
     idx_t bt, bs, bn, bx, by, bz;     // block size.
-    idx_t padn, padx, pady, padz;     // spatial padding, including halos.
+    idx_t hn, hx, hy, hz;             // spatial halos (used for grids in eqGridPtrs).
+    idx_t pn, px, py, pz;             // spatial padding (used for all grids).
     idx_t angle_n, angle_x, angle_y, angle_z; // temporal skewing angles.
 
-    StencilContext() { }
+    // MPI.
+    // TODO: add buffers in other dims.
+    int num_ranks, my_rank, left_rank, right_rank;
+    MPI_Comm comm;
+
+    // MPI buffers for one grid.
+    enum bufPos { bufLeft, bufRight, nBufPos };
+    enum bufDir { bufSend, bufRec, nBufDir };
+    struct Bufs {
+
+        Grid_NXYZ* buf[nBufPos][nBufDir];
+
+        Bufs() {
+            for (int bp = 0; bp < nBufPos; bp++)
+                for (int bd = 0; bd < nBufDir; bd++)
+                    buf[bp][bd] = 0;
+        }
+
+        Grid_NXYZ* operator()(int bp, int bd) {
+            assert(bp < nBufPos);
+            assert(bd < nBufDir);
+            return buf[bp][bd];
+        }
+        void newGrid(int bp, int bd,
+                     idx_t dn, idx_t dx, idx_t dy, idx_t dz,
+                     const string& name) {
+            assert(bp < nBufPos);
+            assert(bd < nBufDir);
+            buf[bp][bd] = new Grid_NXYZ(dn, dx, dy, dz, 0, 0, 0, 0, name);
+        }
+    };
+
+    // MPI buffers are tagged by their grids.
+    // Only grids in eqGridPtrs will have buffers.
+    map<RealvGridBase*, Bufs> bufs;
+
+    StencilContext() : num_ranks(1), my_rank(0) {}
     virtual ~StencilContext() { }
 
     // Allocate grid memory and set gridPtrs.
@@ -56,6 +96,9 @@ struct StencilContext {
     // Allocate param memory and set paramPtrs.
     virtual void allocParams() =0;
 
+    // Allocate MPI buffers, etc.
+    virtual void setupMPI();
+    
     // Get total size.
     virtual idx_t get_num_bytes();
 
@@ -71,20 +114,25 @@ struct StencilContext {
     // Params should not be written to, so they are not compared.
     // Return number of mis-compares.
     virtual idx_t compare(const StencilContext& ref) const;
+
 };
 
 /// Classes that support evaluation of one stencil equation.
 
 // A pure-virtual class base for a stencil equation.
-class StencilBase {
+struct StencilBase {
 
-public:
+    // ctor, dtor.
     StencilBase() { }
     virtual ~StencilBase() { }
 
     // Get info from implementation.
     virtual const string& get_name() =0;
     virtual int get_scalar_fp_ops() =0;
+    virtual vector<RealvGridBase*>& getEqGridPtrs() = 0;
+
+    // Set eqGridPtrs.
+    virtual void init(StencilContext& generic_context) =0;
     
     // Calculate one scalar result at time t.
     virtual void calc_scalar(StencilContext& generic_context,
@@ -96,6 +144,11 @@ public:
     virtual void calc_block(StencilContext& generic_context, idx_t bt,
                             idx_t begin_bn, idx_t begin_bx, idx_t begin_by, idx_t begin_bz,
                             idx_t end_bn, idx_t end_bx, idx_t end_by, idx_t end_bz) =0;
+
+    // Exchange halo data for the grids updated by this stencil at the given time.
+    virtual void exchange_halos(StencilContext& generic_context, idx_t rt,
+                                idx_t begin_rn, idx_t begin_rx, idx_t begin_ry, idx_t begin_rz,
+                                idx_t end_rn, idx_t end_rx, idx_t end_ry, idx_t end_rz);
 };
 
 // Macro for automatically adding N dimension.
@@ -140,6 +193,20 @@ public:
     }
     virtual int get_scalar_fp_ops() {
         return _stencil.scalar_fp_ops;
+    }
+    virtual vector<RealvGridBase*>& getEqGridPtrs() {
+        return _stencil.eqGridPtrs;
+    }
+    
+    // Init data.
+    // This function implements the interface in the base class.
+    virtual void init(StencilContext& generic_context) {
+
+        // Convert to a problem-specific context.
+        auto context = dynamic_cast<ContextClass&>(generic_context);
+
+        // Call the generated code.
+        _stencil.init(context);
     }
     
     // Calculate one scalar result.
@@ -219,23 +286,24 @@ public:
         auto context = dynamic_cast<ContextClass&>(generic_context);
 
         // Divide indices by vector lengths.
-        const idx_t begin_bnv = idiv<idx_t>(begin_bn, VLEN_N);
-        const idx_t begin_bxv = idiv<idx_t>(begin_bx, VLEN_X);
-        const idx_t begin_byv = idiv<idx_t>(begin_by, VLEN_Y);
-        const idx_t begin_bzv = idiv<idx_t>(begin_bz, VLEN_Z);
-        const idx_t end_bnv = idiv<idx_t>(end_bn, VLEN_N);
-        const idx_t end_bxv = idiv<idx_t>(end_bx, VLEN_X);
-        const idx_t end_byv = idiv<idx_t>(end_by, VLEN_Y);
-        const idx_t end_bzv = idiv<idx_t>(end_bz, VLEN_Z);
+        // Begin/end vars shouldn't be negative, so '/' is ok.
+        const idx_t begin_bnv = begin_bn / VLEN_N;
+        const idx_t begin_bxv = begin_bx / VLEN_X;
+        const idx_t begin_byv = begin_by / VLEN_Y;
+        const idx_t begin_bzv = begin_bz / VLEN_Z;
+        const idx_t end_bnv = end_bn / VLEN_N;
+        const idx_t end_bxv = end_bx / VLEN_X;
+        const idx_t end_byv = end_by / VLEN_Y;
+        const idx_t end_bzv = end_bz / VLEN_Z;
 
-        // Vector-size steps based on cluster lengths.
+        // Vector-size steps are based on cluster lengths.
+        // Using CLEN_* instead of CPTS_* because we want vector lengths.
         const idx_t step_bnv = CLEN_N;
         const idx_t step_bxv = CLEN_X;
         const idx_t step_byv = CLEN_Y;
         const idx_t step_bzv = CLEN_Z;
         
 #if !defined(DEBUG) && defined(__INTEL_COMPILER)
-        // Force loop body to be inline.
 #pragma forceinline recursive
 #endif
         {
@@ -258,11 +326,16 @@ struct StencilEquations {
     StencilEquations() {}
     virtual ~StencilEquations() {}
 
+    virtual void init(StencilContext& context) {
+        for (auto stencil : stencils)
+            stencil->init(context);
+    }
+    
     // Reference stencil calculations.
-    virtual void calc_problem_ref(StencilContext& context);
+    virtual void calc_rank_ref(StencilContext& context);
 
     // Vectorized and blocked stencil calculations.
-    virtual void calc_problem_opt(StencilContext& context);
+    virtual void calc_rank_opt(StencilContext& context);
 
 protected:
     
@@ -270,4 +343,5 @@ protected:
     void calc_region(StencilContext& context, 
                      idx_t begin_rt, idx_t begin_rn, idx_t begin_rx, idx_t begin_ry, idx_t begin_rz,
                      idx_t end_rt, idx_t end_rn, idx_t end_rx, idx_t end_ry, idx_t end_rz);
+    
 };

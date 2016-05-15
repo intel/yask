@@ -26,6 +26,7 @@ IN THE SOFTWARE.
 #include <stddef.h>
 #include <time.h>
 #include <math.h>
+#include <sstream>
 #include "stencil.hpp"
 
 #ifdef WIN32
@@ -57,4 +58,21 @@ idx_t roundUp(idx_t val, idx_t mult, string name)
     return res;
 }
 
+// Return num with SI multiplier.
+string printWithMultiplier(double num)
+{
+    ostringstream os;
+    const double oneK = 1024.;
+    const double oneM = oneK * oneK;
+    const double oneG = oneK * oneM;
+    if (num > oneG)
+        os << (num / oneG) << "G";
+    else if (num > oneM)
+        os << (num / oneM) << "M";
+    else if (num > oneK)
+        os << (num / oneK) << "K";
+    else
+        os << num;
+    return os.str();
+}
 

@@ -38,6 +38,7 @@ IN THE SOFTWARE.
 #include "realv.hpp"
 
 #include <map>
+#include <set>
 #include <vector>
 
 using namespace std;
@@ -66,6 +67,19 @@ using namespace std;
 #define SEP_PAUSE
 #define SEP_RESUME
 #endif
+
+// MPI.
+#if !defined(USE_MPI) && defined(MPI_VERSION)
+#define USE_MPI
+#endif
+#ifdef USE_MPI
+#include "mpi.h"
+#else
+#define MPI_PROC_NULL (-1)
+#define MPI_Barrier(comm)
+#define MPI_Comm int
+#endif
+
 
 // OpenMP and stub functions.
 #ifdef _OPENMP
@@ -156,19 +170,19 @@ extern "C" {
 // Default grid layouts.
 // 3D dims are 1=x, 2=y, 3=z.
 // 4D dims are 1=n/t, 2=x, 3=y, 4=z.
-// Last number in 'Map' layout has unit stride, e.g.,
-// Map321 & Map1432 have unit-stride in x.
-// Map123 & Map1234 have unit-stride in z.
-#ifndef MAP_4D
-#define MAP_4D Map1234
+// Last number in 'Layout' name has unit stride, e.g.,
+// Layout321 & Layout1432 have unit-stride in x.
+// Layout123 & Layout1234 have unit-stride in z.
+#ifndef LAYOUT_4D
+#define LAYOUT_4D Layout_1234
 #endif
-#ifndef MAP_3D
-#define MAP_3D Map123
+#ifndef LAYOUT_3D
+#define LAYOUT_3D Layout_123
 #endif
-typedef RealvGrid_XYZ<MAP_3D> Grid_XYZ;
-typedef RealvGrid_NXYZ<MAP_4D> Grid_NXYZ;
-typedef RealvGrid_TXYZ<MAP_4D> Grid_TXYZ;
-typedef RealvGrid_TNXYZ<MAP_4D> Grid_TNXYZ; // T and N mapped to 1st dim.
+typedef RealvGrid_XYZ<LAYOUT_3D> Grid_XYZ;
+typedef RealvGrid_NXYZ<LAYOUT_4D> Grid_NXYZ;
+typedef RealvGrid_TXYZ<LAYOUT_4D> Grid_TXYZ;
+typedef RealvGrid_TNXYZ<LAYOUT_4D> Grid_TNXYZ; // T and N reduced to 1st dim.
 
 // Base classes for stencil code.
 #include "stencil_calc.hpp"
@@ -179,5 +193,6 @@ typedef RealvGrid_TNXYZ<MAP_4D> Grid_TNXYZ; // T and N mapped to 1st dim.
 // Some utility functions.
 extern double getTimeInSecs();
 extern idx_t roundUp(idx_t dim, idx_t mult, string name);
+extern string printWithMultiplier(double num);
 
 #endif

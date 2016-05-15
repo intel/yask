@@ -592,7 +592,9 @@ struct Equation {
 
 // Equations:
 class Equations : public vector<Equation> {
-
+protected:
+    set<Grid*> _eqGrids;        // all grids with equations.
+    
 public:
     Equations() {}
     virtual ~Equations() {}
@@ -607,6 +609,8 @@ public:
     // Only grids with equations are put in equations.
     void findEquations(Grids& allGrids, const string& targets);
 
+    const set<Grid*>& getEqGrids() const { return _eqGrids; }
+    
     void printInfo(ostream& os) const {
         os << "Identified stencil equations:" << endl;
         for (auto& eq : *this) {
@@ -668,9 +672,9 @@ typedef ExprPtr GridValue;
  
  
 // Use SET_VALUE_FROM_EXPR for creating a string to insert any C++ code
-// that evaluates to a REAL.
+// that evaluates to a Real.
 // The 1st arg must be the LHS of an assignment statement.
-// The 2nd arg must evaluate to a REAL (float or double) expression,
+// The 2nd arg must evaluate to a Real (float or double) expression,
 // but it must NOT include access to a grid.
 // The code string is constructed as if writing to an ostream,
 // so '<<' operators may be used to evaluate local variables.

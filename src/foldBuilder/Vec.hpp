@@ -64,10 +64,10 @@ public:
 // the element can be found.
 typedef vector<VecElem> VecElemList;
 
-// Map of vector blocks to VecElemVecs.
+// Layout of vector blocks to VecElemVecs.
 typedef map<GridPoint, VecElemList> Point2VecElemLists;
 
-// Map of vector blocks to aligned blocks.
+// Layout of vector blocks to aligned blocks.
 typedef map<GridPoint, GridPointSet> Point2Vecs;
 
 // This visitor determines the vector blocks needed to calculate the stencil.

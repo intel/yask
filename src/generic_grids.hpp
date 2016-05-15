@@ -25,7 +25,7 @@ IN THE SOFTWARE.
 
 // Generic grids:
 // T: type stored in grid.
-// Mapfn: class that maps N dimensions to 1.
+// LayoutFn: class that transforms N dimensions to 1.
 
 #ifndef GENERIC_GRIDS
 #define GENERIC_GRIDS
@@ -40,7 +40,7 @@ IN THE SOFTWARE.
 #include <string>
 #include <iostream>
 
-#include "maps.hpp"
+#include "layouts.hpp"
 
 // A base class for a generic grid of elements of type T.
 // This class provides linear-access support, i.e., no layout.
@@ -81,20 +81,9 @@ public:
 
     // Print some info.
     virtual void print_info(const std::string& name, std::ostream& os = std::cout) {
-        const double oneK = 1024.;
-        const double oneM = oneK * oneK;
-        const double oneG = oneK * oneM;
-        double nb = double(get_num_bytes());
-        os << "grid '" << name << "' allocated at " << _elems << " in ";
-        if (nb > oneG)
-            os << (nb / oneG) << "G";
-        else if (nb > oneM)
-            os << (nb / oneM) << "M";
-        else if (nb > oneK)
-            os << (nb / oneK) << "K";
-        else
-            os << nb;
-        os << " byte(s): " << get_num_elems() << " element(s) * " <<
+        os << "grid '" << name << "' allocated at " << _elems << " in " <<
+            printWithMultiplier(get_num_bytes()) << " byte(s): " <<
+            printWithMultiplier(get_num_elems()) << " element(s) * " <<
             sizeof(T) << " byte(s)." << std::endl;
     }
 
@@ -153,7 +142,7 @@ public:
 };
 
 // A generic 0D grid (scalar) of elements of type T.
-// No mapping function needed, because there is only 1 element.
+// No layout function needed, because there is only 1 element.
 template <typename T> class GenericGrid0d :
     public GenericGridBase<T> {
     
@@ -210,12 +199,12 @@ public:
 };
 
 // A generic 1D grid (array) of elements of type T.
-// The Mapfn class must provide a 1:1 mapping between
+// The LayoutFn class must provide a 1:1 transform between
 // 1D and 1D indices (usually trivial).
-template <typename T, typename Mapfn> class GenericGrid1d :
+template <typename T, typename LayoutFn> class GenericGrid1d :
     public GenericGridBase<T> {
 protected:
-    const Mapfn _mapfn;
+    const LayoutFn _layout;
     
 public:
 
@@ -223,10 +212,10 @@ public:
     GenericGrid1d(idx_t d1,
                   size_t alignment=GenericGridBase<T>::_def_alignment) :
         GenericGridBase<T>(d1, alignment),
-        _mapfn(d1) { }
+        _layout(d1) { }
 
     // Get original parameters.
-    inline idx_t get_d1() const { return _mapfn.get_d1(); }
+    inline idx_t get_d1() const { return _layout.get_d1(); }
 
     // Print some info.
     virtual void print_info(const std::string& name, std::ostream& os = std::cout) {
@@ -240,9 +229,9 @@ public:
             assert(i >= 0);
             assert(i < get_d1());
         }
-        idx_t ai = _mapfn.map(i);
+        idx_t ai = _layout.layout(i);
         if (check)
-            assert(ai < _mapfn.get_size());
+            assert(ai < _layout.get_size());
         return ai;
     }
 
@@ -297,12 +286,12 @@ public:
 };
 
 // A generic 2D grid of elements of type T.
-// The Mapfn class must provide a 1:1 mapping between
+// The LayoutFn class must provide a 1:1 transform between
 // 2D and 1D indices.
-template <typename T, typename Mapfn> class GenericGrid2d :
+template <typename T, typename LayoutFn> class GenericGrid2d :
     public GenericGridBase<T> {
 protected:
-    const Mapfn _mapfn;
+    const LayoutFn _layout;
     
 public:
 
@@ -311,11 +300,11 @@ public:
     GenericGrid2d(idx_t d1, idx_t d2,
                   size_t alignment=GenericGridBase<T>::_def_alignment) :
         GenericGridBase<T>(d1 * d2, alignment),
-        _mapfn(d1, d2) { }
+        _layout(d1, d2) { }
 
     // Get original parameters.
-    inline idx_t get_d1() const { return _mapfn.get_d1(); }
-    inline idx_t get_d2() const { return _mapfn.get_d2(); }
+    inline idx_t get_d1() const { return _layout.get_d1(); }
+    inline idx_t get_d2() const { return _layout.get_d2(); }
 
     // Print some info.
     virtual void print_info(const std::string& name, std::ostream& os = std::cout) {
@@ -331,9 +320,9 @@ public:
             assert(j >= 0);
             assert(j < get_d2());
         }
-        idx_t ai = _mapfn.map(i, j);
+        idx_t ai = _layout.layout(i, j);
         if (check)
-            assert(ai < _mapfn.get_size());
+            assert(ai < _layout.get_size());
         return ai;
     }
 
@@ -391,12 +380,12 @@ public:
 };
 
 // A generic 3D grid of elements of type T.
-// The Mapfn class must provide a 1:1 mapping between
+// The LayoutFn class must provide a 1:1 transform between
 // 3D and 1D indices.
-template <typename T, typename Mapfn> class GenericGrid3d :
+template <typename T, typename LayoutFn> class GenericGrid3d :
     public GenericGridBase<T> {
 protected:
-    Mapfn _mapfn;
+    LayoutFn _layout;
     
 public:
 
@@ -404,12 +393,12 @@ public:
     GenericGrid3d(idx_t d1, idx_t d2, idx_t d3,
                   size_t alignment=GenericGridBase<T>::_def_alignment) :
         GenericGridBase<T>(d1 * d2 * d3, alignment),
-        _mapfn(d1, d2, d3) { }
+        _layout(d1, d2, d3) { }
     
     // Get original parameters.
-    inline idx_t get_d1() const { return _mapfn.get_d1(); }
-    inline idx_t get_d2() const { return _mapfn.get_d2(); }
-    inline idx_t get_d3() const { return _mapfn.get_d3(); }
+    inline idx_t get_d1() const { return _layout.get_d1(); }
+    inline idx_t get_d2() const { return _layout.get_d2(); }
+    inline idx_t get_d3() const { return _layout.get_d3(); }
 
     // Print some info.
     virtual void print_info(const std::string& name, std::ostream& os = std::cout) {
@@ -427,9 +416,9 @@ public:
             assert(k >= 0);
             assert(k < get_d3());
         }
-        idx_t ai = _mapfn.map(i, j, k);
+        idx_t ai = _layout.layout(i, j, k);
         if (check)
-            assert(ai < _mapfn.get_size());
+            assert(ai < _layout.get_size());
         return ai;
     }
 
@@ -490,12 +479,12 @@ public:
 };
 
 // A generic 4D grid of elements of type T.
-// The Mapfn class must provide a 1:1 mapping between
+// The LayoutFn class must provide a 1:1 transform between
 // 4D and 1D indices.
-template <typename T, typename Mapfn> class GenericGrid4d :
+template <typename T, typename LayoutFn> class GenericGrid4d :
     public GenericGridBase<T> {
 protected:
-    const Mapfn _mapfn;
+    const LayoutFn _layout;
     
 public:
 
@@ -503,13 +492,13 @@ public:
     GenericGrid4d(idx_t d1, idx_t d2, idx_t d3, idx_t d4,
                   size_t alignment=GenericGridBase<T>::_def_alignment) :
         GenericGridBase<T>(d1 * d2 * d3 * d4, alignment),
-        _mapfn(d1, d2, d3, d4) { }
+        _layout(d1, d2, d3, d4) { }
 
     // Get original parameters.
-    inline idx_t get_d1() const { return _mapfn.get_d1(); }
-    inline idx_t get_d2() const { return _mapfn.get_d2(); }
-    inline idx_t get_d3() const { return _mapfn.get_d3(); }
-    inline idx_t get_d4() const { return _mapfn.get_d4(); }
+    inline idx_t get_d1() const { return _layout.get_d1(); }
+    inline idx_t get_d2() const { return _layout.get_d2(); }
+    inline idx_t get_d3() const { return _layout.get_d3(); }
+    inline idx_t get_d4() const { return _layout.get_d4(); }
 
     // Print some info.
     virtual void print_info(const std::string& name, std::ostream& os = std::cout) {
@@ -529,9 +518,9 @@ public:
             assert(l >= 0);
             assert(l < get_d4());
         }
-        idx_t ai = _mapfn.map(i, j, k, l);
+        idx_t ai = _layout.layout(i, j, k, l);
         if (check)
-            assert(ai < _mapfn.get_size());
+            assert(ai < _layout.get_size());
         return ai;
     }
 

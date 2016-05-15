@@ -23,8 +23,8 @@ IN THE SOFTWARE.
 
 *****************************************************************************/
 
-#ifndef REALV_GRIDS
-#define REALV_GRIDS
+#ifndef RealV_GRIDS
+#define RealV_GRIDS
 
 #include "generic_grids.hpp"
 
@@ -46,19 +46,19 @@ public:
     const string& get_name() { return _name; }
     
     // Initialize memory to a given value.
-    virtual void set_same(REAL val) {
+    virtual void set_same(Real val) {
         realv rn;
         rn = val;               // broadcast.
         _gp->set_same(rn);
     }
 
     // Initialize memory to incrementing values based on val.
-    virtual void set_diff(REAL val) {
+    virtual void set_diff(Real val) {
 
         // make a realv pattern.
         realv rn;
         for (int i = 0; i < VLEN; i++)
-            rn[i] = REAL(i * VLEN + 1) * val / VLEN;
+            rn[i] = Real(i * VLEN + 1) * val / VLEN;
         
         _gp->set_diff(rn);
     }
@@ -77,19 +77,27 @@ public:
     // Check for equality.
     // Return number of mismatches greater than epsilon.
     idx_t compare(const RealvGridBase& ref,
-                   REAL epsilon = EPSILON,
+                   Real epsilon = EPSILON,
                    int maxPrint = 20,
                    std::ostream& os = std::cerr) const {
         realv ev;
         ev = epsilon;           // broadcast to realv elements.
         return _gp->compare(ref._gp, ev, maxPrint, os);
     }
+
+    // Direct access to data (dangerous!).
+    realv* getRawData() {
+        return _gp->getRawData();
+    }
+    const realv* getRawData() const {
+        return _gp->getRawData();
+    }
 };
 
 
 // A 3D (x, y, z) collection of realv elements.
 // Supports symmetric padding in each dimension.
-template <typename Mapfn> class RealvGrid_XYZ : public RealvGridBase {
+template <typename LayoutFn> class RealvGrid_XYZ : public RealvGridBase {
 protected:
 
     // real sizes.
@@ -100,12 +108,12 @@ protected:
     idx_t _dxv, _dyv, _dzv;
     idx_t _pxv, _pyv, _pzv;
     
-    GenericGrid3d<realv, Mapfn> _data;
+    GenericGrid3d<realv, LayoutFn> _data;
     
 public:
 
     // Ctor.
-    // Dimensions are REAL elements, not realvs.
+    // Dimensions are Real elements, not realvs.
     RealvGrid_XYZ(idx_t dx, idx_t dy, idx_t dz,
                   idx_t px, idx_t py, idx_t pz,
                   const string& name) :
@@ -180,8 +188,8 @@ public:
         return const_cast<realv*>(vp);
     }
     
-    // Get a pointer to one REAL.
-    ALWAYS_INLINE const REAL* getElemPtr(idx_t i, idx_t j, idx_t k,
+    // Get a pointer to one Real.
+    ALWAYS_INLINE const Real* getElemPtr(idx_t i, idx_t j, idx_t k,
                                          bool checkBounds=true) const {
 #if 1
         // add padding before division to ensure negative indices work.
@@ -221,11 +229,11 @@ public:
     }
 
     // non-const version.
-    ALWAYS_INLINE REAL* getElemPtr(idx_t i, idx_t j, idx_t k,
+    ALWAYS_INLINE Real* getElemPtr(idx_t i, idx_t j, idx_t k,
                                   bool checkBounds=true) {
-        const REAL* p = const_cast<const RealvGrid_XYZ*>(this)->getElemPtr(i, j, k,
+        const Real* p = const_cast<const RealvGrid_XYZ*>(this)->getElemPtr(i, j, k,
                                                                          checkBounds);
-        return const_cast<REAL*>(p);
+        return const_cast<Real*>(p);
     }
 
     // Print one vector.
@@ -237,8 +245,8 @@ public:
         for (int k2 = 0; k2 < VLEN_Z; k2++) {
             for (int j2 = 0; j2 < VLEN_Y; j2++) {
                 for (int i2 = 0; i2 < VLEN_X; i2++) {
-                    REAL e = v(0, i2, j2, k2);
-                    REAL e2 = readElem(i+i2, j+j2, k+k2, line);
+                    Real e = v(0, i2, j2, k2);
+                    Real e2 = readElem(i+i2, j+j2, k+k2, line);
 
                     cout << m << ": " << _name << "[" <<
                         (i+i2) << ", " << (j+j2) << ", " << (k+k2) << "] = " << e;
@@ -257,7 +265,7 @@ public:
     }
 
     // Print one element.
-    void printElem(const string& m, idx_t i, idx_t j, idx_t k, REAL e,
+    void printElem(const string& m, idx_t i, idx_t j, idx_t k, Real e,
                    int line) const {
         cout << m << ": " << _name << "[" <<
             i << ", " << j << ", " << k << "] = " << e;
@@ -267,10 +275,10 @@ public:
     }
 
     // Read one element.
-    ALWAYS_INLINE REAL readElem(idx_t i, idx_t j, idx_t k,
+    ALWAYS_INLINE Real readElem(idx_t i, idx_t j, idx_t k,
                                int line) const {
-        const REAL* ep = getElemPtr(i, j, k);
-        REAL e = *ep;
+        const Real* ep = getElemPtr(i, j, k);
+        Real e = *ep;
 #ifdef TRACE_MEM
         printElem("readElem", i, j, k, e, line);
 #endif
@@ -278,9 +286,9 @@ public:
     }
 
     // Write one element.
-    ALWAYS_INLINE void writeElem(REAL val, idx_t i, idx_t j, idx_t k,
+    ALWAYS_INLINE void writeElem(Real val, idx_t i, idx_t j, idx_t k,
                                 int line) {
-        REAL* ep = getElemPtr(i, j, k);
+        Real* ep = getElemPtr(i, j, k);
         *ep = val;
 #ifdef TRACE_MEM
         printElem("writeElem", i, j, k, val, line);
@@ -326,7 +334,7 @@ public:
 
 // A 4D (n, x, y, z) collection of realv elements.
 // Supports symmetric padding in each dimension.
-template <typename Mapfn> class RealvGrid_NXYZ : public RealvGridBase {
+template <typename LayoutFn> class RealvGrid_NXYZ : public RealvGridBase {
     
 protected:
 
@@ -338,12 +346,12 @@ protected:
     idx_t _dnv, _dxv, _dyv, _dzv;
     idx_t _pnv, _pxv, _pyv, _pzv;
     
-    GenericGrid4d<realv, Mapfn> _data;
+    GenericGrid4d<realv, LayoutFn> _data;
 
 public:
 
     // Ctor.
-    // Dimensions are REAL elements, not realvs.
+    // Dimensions are Real elements, not realvs.
     RealvGrid_NXYZ(idx_t dn, idx_t dx, idx_t dy, idx_t dz,
                    idx_t pn, idx_t px, idx_t py, idx_t pz,
                    const string& name) :
@@ -413,8 +421,8 @@ public:
         return const_cast<realv*>(vp);
     }
     
-    // Get a pointer to one REAL.
-    ALWAYS_INLINE const REAL* getElemPtr(idx_t n, idx_t i, idx_t j, idx_t k,
+    // Get a pointer to one Real.
+    ALWAYS_INLINE const Real* getElemPtr(idx_t n, idx_t i, idx_t j, idx_t k,
                                         bool checkBounds=true) const {
 #if 1
         // add padding before division to ensure negative indices work.
@@ -460,11 +468,11 @@ public:
     }
 
     // non-const version.
-    ALWAYS_INLINE REAL* getElemPtr(idx_t n, idx_t i, idx_t j, idx_t k,
+    ALWAYS_INLINE Real* getElemPtr(idx_t n, idx_t i, idx_t j, idx_t k,
                                   bool checkBounds=true) {
-        const REAL* p = const_cast<const RealvGrid_NXYZ*>(this)->getElemPtr(n, i, j, k,
+        const Real* p = const_cast<const RealvGrid_NXYZ*>(this)->getElemPtr(n, i, j, k,
                                                                          checkBounds);
-        return const_cast<REAL*>(p);
+        return const_cast<Real*>(p);
     }
 
     // Print one vector.
@@ -478,9 +486,9 @@ public:
             for (int j2 = 0; j2 < VLEN_Y; j2++) {
                 for (int i2 = 0; i2 < VLEN_X; i2++) {
                     for (int n2 = 0; n2 < VLEN_N; n2++) {
-                        REAL e = v(n2, i2, j2, k2);
+                        Real e = v(n2, i2, j2, k2);
 #ifdef CHECK_VEC_ELEMS
-                        REAL e2 = readElem(n+n2, i+i2, j+j2, k+k2, line);
+                        Real e2 = readElem(n+n2, i+i2, j+j2, k+k2, line);
 #endif
 
                         cout << m << ": " << _name << "[" << (n+n2) << ", " <<
@@ -503,7 +511,7 @@ public:
     }
 
     // Print one element.
-    void printElem(const string& m, idx_t n, idx_t i, idx_t j, idx_t k, REAL e,
+    void printElem(const string& m, idx_t n, idx_t i, idx_t j, idx_t k, Real e,
                    int line) const {
         cout << m << ": " << _name << "[" <<
             n << ", " << i << ", " << j << ", " << k << "] = " << e;
@@ -513,10 +521,10 @@ public:
     }
 
     // Read one element.
-    ALWAYS_INLINE REAL readElem(idx_t n, idx_t i, idx_t j, idx_t k,
+    ALWAYS_INLINE Real readElem(idx_t n, idx_t i, idx_t j, idx_t k,
                                int line) const {
-        const REAL* ep = getElemPtr(n, i, j, k);
-        REAL e = *ep;
+        const Real* ep = getElemPtr(n, i, j, k);
+        Real e = *ep;
 #ifdef TRACE_MEM
         printElem("readElem", n, i, j, k, e, line);
 #endif
@@ -524,9 +532,9 @@ public:
     }
 
     // Write one element.
-    ALWAYS_INLINE void writeElem(REAL val, idx_t n, idx_t i, idx_t j, idx_t k,
+    ALWAYS_INLINE void writeElem(Real val, idx_t n, idx_t i, idx_t j, idx_t k,
                                int line) {
-        REAL* ep = getElemPtr(n, i, j, k);
+        Real* ep = getElemPtr(n, i, j, k);
         *ep = val;
 #ifdef TRACE_MEM
         printElem("writeElem", n, i, j, k, val, line);
@@ -571,9 +579,9 @@ public:
 };
 
 // A 4D (t, x, y, z) collection of realv elements, but any value of 't'
-// is divided by CPTS_T and mapped to TIME_DIM_SIZE indices.
+// is divided by CPTS_T and wrapped to TIME_DIM_SIZE indices.
 // Supports symmetric padding in each spatial dimension.
-template <typename Mapfn> class RealvGrid_TXYZ : public RealvGrid_NXYZ<Mapfn>  {
+template <typename LayoutFn> class RealvGrid_TXYZ : public RealvGrid_NXYZ<LayoutFn>  {
     
 public:
 
@@ -581,7 +589,7 @@ public:
     RealvGrid_TXYZ(idx_t dx, idx_t dy, idx_t dz,
                    idx_t px, idx_t py, idx_t pz,
                    const string& name) :
-        RealvGrid_NXYZ<Mapfn>(TIME_DIM_SIZE, dx, dy, dz,
+        RealvGrid_NXYZ<LayoutFn>(TIME_DIM_SIZE, dx, dy, dz,
                               0, px, py, pz,
                               name)
     {
@@ -620,17 +628,17 @@ public:
     }
 
     // Read one element.
-    ALWAYS_INLINE REAL readElem(idx_t t, idx_t i, idx_t j, idx_t k,
+    ALWAYS_INLINE Real readElem(idx_t t, idx_t i, idx_t j, idx_t k,
                                int line) const {
         idx_t n = getMatIndex(t);
-        return RealvGrid_NXYZ<Mapfn>::readElem(n, i, j, k, line);
+        return RealvGrid_NXYZ<LayoutFn>::readElem(n, i, j, k, line);
     }
 
     // Write one element of the grid.
-    ALWAYS_INLINE void writeElem(REAL val, idx_t t, idx_t i, idx_t j, idx_t k,
+    ALWAYS_INLINE void writeElem(Real val, idx_t t, idx_t i, idx_t j, idx_t k,
                                 int line) {
         idx_t n = getMatIndex(t);
-        RealvGrid_NXYZ<Mapfn>::writeElem(val, n, i, j, k, line);
+        RealvGrid_NXYZ<LayoutFn>::writeElem(val, n, i, j, k, line);
     }
 
     // Read one vector at t and vector offset iv, jv, kv.
@@ -638,7 +646,7 @@ public:
     ALWAYS_INLINE const realv readVecNorm(idx_t t, idx_t iv, idx_t jv, idx_t kv,
                                           int line) const {
         idx_t n = getMatIndex(t);
-        return RealvGrid_NXYZ<Mapfn>::readVecNorm(n, iv, jv, kv, line);
+        return RealvGrid_NXYZ<LayoutFn>::readVecNorm(n, iv, jv, kv, line);
     }
 
     // Write one vector at t and vector offset iv, jv, kv.
@@ -646,19 +654,19 @@ public:
     ALWAYS_INLINE void writeVecNorm(const realv& v, idx_t t, idx_t iv, idx_t jv, idx_t kv,
                                     int line) {
         idx_t n = getMatIndex(t);
-        RealvGrid_NXYZ<Mapfn>::writeVecNorm(v, n, iv, jv, kv, line);
+        RealvGrid_NXYZ<LayoutFn>::writeVecNorm(v, n, iv, jv, kv, line);
     }
 
     // Get pointer to the real at t and offset i, j, k.
-    ALWAYS_INLINE const REAL* getElemPtr(idx_t t, idx_t i, idx_t j, idx_t k,
+    ALWAYS_INLINE const Real* getElemPtr(idx_t t, idx_t i, idx_t j, idx_t k,
                                           int line) const {
         idx_t n = getMatIndex(t);
-        return RealvGrid_NXYZ<Mapfn>::getElemPtr(n, i, j, k, false);
+        return RealvGrid_NXYZ<LayoutFn>::getElemPtr(n, i, j, k, false);
     }
-    ALWAYS_INLINE REAL* getElemPtr(idx_t t, idx_t i, idx_t j, idx_t k,
+    ALWAYS_INLINE Real* getElemPtr(idx_t t, idx_t i, idx_t j, idx_t k,
                                        int line) {
         idx_t n = getMatIndex(t);
-        return RealvGrid_NXYZ<Mapfn>::getElemPtr(n, i, j, k, false);
+        return RealvGrid_NXYZ<LayoutFn>::getElemPtr(n, i, j, k, false);
     }
 
     // Get pointer to the realv at t and vector offset iv, jv, kv.
@@ -666,19 +674,19 @@ public:
     ALWAYS_INLINE const realv* getVecPtrNorm(idx_t t, idx_t iv, idx_t jv, idx_t kv,
                                              int line) const {
         idx_t n = getMatIndex(t);
-        return RealvGrid_NXYZ<Mapfn>::getVecPtrNorm(n, iv, jv, kv, false);
+        return RealvGrid_NXYZ<LayoutFn>::getVecPtrNorm(n, iv, jv, kv, false);
     }
     ALWAYS_INLINE realv* getVecPtrNorm(idx_t t, idx_t iv, idx_t jv, idx_t kv,
                                        int line) {
         idx_t n = getMatIndex(t);
-        return RealvGrid_NXYZ<Mapfn>::getVecPtrNorm(n, iv, jv, kv, false);
+        return RealvGrid_NXYZ<LayoutFn>::getVecPtrNorm(n, iv, jv, kv, false);
     }
 };
 
 // A 5D (t, n, x, y, z) collection of realv elements, but any value of 't'
-// is divided by CPTS_T and mapped to TIME_DIM_SIZE indices.
+// is divided by CPTS_T and wrapped to TIME_DIM_SIZE indices.
 // Supports symmetric padding in each spatial dimension.
-template <typename Mapfn> class RealvGrid_TNXYZ : public RealvGrid_NXYZ<Mapfn> {
+template <typename LayoutFn> class RealvGrid_TNXYZ : public RealvGrid_NXYZ<LayoutFn> {
     
 protected:
     idx_t _dn;
@@ -689,7 +697,7 @@ public:
     RealvGrid_TNXYZ(idx_t dn, idx_t dx, idx_t dy, idx_t dz,
                     idx_t pn, idx_t px, idx_t py, idx_t pz,
                     const string& name) :
-        RealvGrid_NXYZ<Mapfn(TIME_DIM_SIZE * dn, dx, dy, dz,
+        RealvGrid_NXYZ<LayoutFn(TIME_DIM_SIZE * dn, dx, dy, dz,
                              pn, px, py, pz,
                              name),
         _dn(dn)
@@ -727,33 +735,33 @@ public:
         idx_t t_idx2 = t_idx % idx_t(TIME_DIM_SIZE);
 #endif        
 
-        // Map t_idx2 and n onto one dimension.
-        return MAP21(n, t_idx2, _dn, TIME_DIM_SIZE);
+        // Layout t_idx2 and n onto one dimension.
+        return LAYOUT_21(n, t_idx2, _dn, TIME_DIM_SIZE);
     }
 
     // Read one element.
-    ALWAYS_INLINE REAL readElem(idx_t t, idx_t n,
+    ALWAYS_INLINE Real readElem(idx_t t, idx_t n,
                                idx_t i, idx_t j, idx_t k,
                                int line) const {
         idx_t n2 = getMatIndex(t, n);
-        return RealvGrid_NXYZ<Mapfn>::readElem(n2, i, j, k, line);
+        return RealvGrid_NXYZ<LayoutFn>::readElem(n2, i, j, k, line);
     }
 
     // Write one element of the grid.
-    ALWAYS_INLINE void writeElem(REAL val, idx_t t, idx_t n,
+    ALWAYS_INLINE void writeElem(Real val, idx_t t, idx_t n,
                                 idx_t i, idx_t j, idx_t k,
                                 int line) {
         idx_t n2 = getMatIndex(t, n);
-        RealvGrid_NXYZ<Mapfn>::writeElem(val, n2, i, j, k, line);
+        RealvGrid_NXYZ<LayoutFn>::writeElem(val, n2, i, j, k, line);
     }
 
     // Read one vector at t and vector offset nv, iv, jv, kv.
     // Indices must be normalized, i.e., already divided by VLEN_*.
-    ALWAYS_INLINE const realv& readVecNorm(idx_t t, idx_t nv,
+    ALWAYS_INLINE const realv readVecNorm(idx_t t, idx_t nv,
                                            idx_t iv, idx_t jv, idx_t kv,
                                            int line) const {
         idx_t n2 = getMatIndex(t, nv);
-        return RealvGrid_NXYZ<Mapfn>::readVecNorm(n2, iv, jv, kv, line);
+        return RealvGrid_NXYZ<LayoutFn>::readVecNorm(n2, iv, jv, kv, line);
     }
 
     // Write one vector at t and vector offset nv, iv, jv, kv.
@@ -762,19 +770,19 @@ public:
                                     idx_t iv, idx_t jv, idx_t kv,
                                       int line) {
         idx_t n2 = getMatIndex(t, nv);
-        RealvGrid_NXYZ<Mapfn>::writeVecNorm(v, n2, iv, jv, kv, line);
+        RealvGrid_NXYZ<LayoutFn>::writeVecNorm(v, n2, iv, jv, kv, line);
     }
 
     // Get pointer to the real at t and offset n, i, j, k.
-    ALWAYS_INLINE const REAL* getElemPtr(idx_t t, idx_t n, idx_t i, idx_t j, idx_t k,
+    ALWAYS_INLINE const Real* getElemPtr(idx_t t, idx_t n, idx_t i, idx_t j, idx_t k,
                                           int line) const {
         idx_t n2 = getMatIndex(t, n);
-        return RealvGrid_NXYZ<Mapfn>::getElemPtr(n2, i, j, k, false);
+        return RealvGrid_NXYZ<LayoutFn>::getElemPtr(n2, i, j, k, false);
     }
-    ALWAYS_INLINE REAL* getElemPtr(idx_t t, idx_t n, idx_t i, idx_t j, idx_t k,
+    ALWAYS_INLINE Real* getElemPtr(idx_t t, idx_t n, idx_t i, idx_t j, idx_t k,
                                        int line) {
         idx_t n2 = getMatIndex(t, n);
-        return RealvGrid_NXYZ<Mapfn>::getElemPtr(n2, i, j, k, false);
+        return RealvGrid_NXYZ<LayoutFn>::getElemPtr(n2, i, j, k, false);
     }
 
     // Get pointer to the realv at t and vector offset nv, iv, jv, kv.
@@ -783,13 +791,13 @@ public:
                                              idx_t iv, idx_t jv, idx_t kv,
                                              int line) const {
         idx_t n2 = getMatIndex(t, nv);
-        return RealvGrid_NXYZ<Mapfn>::getVecPtrNorm(n2, iv, jv, kv, false);
+        return RealvGrid_NXYZ<LayoutFn>::getVecPtrNorm(n2, iv, jv, kv, false);
     }
     ALWAYS_INLINE realv* getVecPtrNorm(idx_t t, idx_t nv,
                                        idx_t iv, idx_t jv, idx_t kv,
                                        int line) {
         idx_t n2 = getMatIndex(t, nv);
-        return RealvGrid_NXYZ<Mapfn>::getVecPtrNorm(n2, iv, jv, kv, false);
+        return RealvGrid_NXYZ<LayoutFn>::getVecPtrNorm(n2, iv, jv, kv, false);
     }
 };
 

@@ -23,14 +23,14 @@
 ## IN THE SOFTWARE.
 ##############################################################################
 
-# Purpose: Generate 1D<->nD mapping macros.
+# Purpose: Generate 1D<->nD layout macros.
 
 sub usage {
   die "usage: $0 <option>\n".
     " -p    generate perl lists of permutes\n".
     " -d    generate C++ class definitions\n".
     " -c    generate macro-based C++ class definitions (deprecated)\n".
-    " -m    generate CPP map/unmap macros\n";
+    " -m    generate CPP layout/unlayout macros\n";
 }
 
 usage() if !defined $ARGV[0];
@@ -49,8 +49,8 @@ use Algorithm::Loops qw(NextPermuteNum);
 print "// Automatically generated; do not edit.\n";
 print "#include <stddef.h>\n" if ($opt eq '-d');
 
-# generate nd->1d map code.
-sub makeMap($$$) {
+# generate nd->1d layout code.
+sub makeLayout($$$) {
   my $a = shift;                # ref to list.
   my $jvars = shift;
   my $dvars = shift;
@@ -66,8 +66,8 @@ sub makeMap($$$) {
   return $code;
 }
 
-# generate 1d->nd unmap code.
-sub makeUnmap($$$$) {
+# generate 1d->nd unlayout code.
+sub makeUnlayout($$$$) {
   my $a = shift;                # ref to list.
   my $jvars = shift;
   my $dvars = shift;
@@ -105,7 +105,7 @@ for my $n (@sizes) {
     do {
       my $ns = join('', @a);
       print "#define RMAT_CLASS RealMatrix$ns\n",
-        "#define RMAT_MAP MAP$ns\n",
+        "#define RMAT_LAYOUT LAYOUT$ns\n",
         "#include \"real_matrix.hpp\"\n"; }
       while (NextPermuteNum @a);
   }
@@ -113,9 +113,9 @@ for my $n (@sizes) {
   # macros.
   elsif ($opt eq '-m') {
 
-    print "\n// $n-D <-> 1-D mapping macros.\n";
-    print "// 'MAP' macros return 1-D offset from $n-D 'j' indices.\n".
-      "// 'UNMAP' macros set $n 'j' indices based on 1-D 'ai' input.\n";
+    print "\n// $n-D <-> 1-D layout macros.\n";
+    print "// 'LAYOUT' macros return 1-D offset from $n-D 'j' indices.\n".
+      "// 'UNLAYOUT' macros set $n 'j' indices based on 1-D 'ai' input.\n";
 
     my $args = join(', ', (map { "j$_" } sort @a), (map { "d$_" } @a));
 
@@ -126,10 +126,10 @@ for my $n (@sizes) {
       my @pdvars = map { "(d$_)" } @a;
 
       # n->1
-      print "#define MAP$n($args) (", makeMap(\@a, \@pjvars, \@pdvars), ")\n";
+      print "#define LAYOUT_$n($args) (", makeLayout(\@a, \@pjvars, \@pdvars), ")\n";
 
       # 1->n
-      print "#define UNMAP$n(ai, $args) (", makeUnmap(\@a, \@jvars, \@pdvars, ', '), ")\n";
+      print "#define UNLAYOUT_$n(ai, $args) (", makeUnlayout(\@a, \@jvars, \@pdvars, ', '), ")\n";
 
     } while (NextPermuteNum @a);
   }
@@ -144,9 +144,9 @@ for my $n (@sizes) {
     my $margs = join(', ', map { "idx_t j$_" } @a);
     my $uargs = join(', ', map { "idx_t& j$_" } @a);
     my $sz = join(' * ', map { "_d$_" } @a);
-    my $basename = "Map${n}d";
+    my $basename = "Layout_${n}d";
 
-    print "\n// $n-D <-> 1-D mapping base class.\n",
+    print "\n// $n-D <-> 1-D layout base class.\n",
       "class ${basename} {\n",
       "protected:\n",
       "  idx_t $vars;\n\n",
@@ -159,9 +159,9 @@ for my $n (@sizes) {
     print "  // Return overall number of elements.\n",
       "  virtual idx_t get_size() const { return $sz; };\n\n",
       "  // Return 1-D offset from $n-D 'j' indices.\n",
-      "  virtual idx_t map($margs) const =0;\n\n",
+      "  virtual idx_t layout($margs) const =0;\n\n",
       "  // Set $n 'j' indices based on 1-D 'ai' input.\n",
-      "  virtual void unmap(idx_t ai, $uargs) const =0;\n",
+      "  virtual void unlayout(idx_t ai, $uargs) const =0;\n",
       "};\n";
 
     do {
@@ -170,17 +170,17 @@ for my $n (@sizes) {
       my @dvars = map { "_d$_" } @a;
       my $dims = join(', ', map { "d$_" } @a);
 
-      print "\n// $n-D <-> 1-D mapping class with dimensions in $dims order,\n",
+      print "\n// $n-D <-> 1-D layout class with dimensions in $dims order,\n",
         "// meaning d$a[$#a] is stored with unit stride.\n",
-        "class Map$name : public ${basename} {\n",
+        "class Layout_$name : public ${basename} {\n",
         "public:\n\n",
-        "  Map$name($cargs) : ${basename}($cvars) { }\n\n",
+        "  Layout_$name($cargs) : ${basename}($cvars) { }\n\n",
         "  // Return 1-D offset from $n-D 'j' indices.\n",
-        "  virtual idx_t map($margs) const\n",
-        "    { return ", makeMap(\@a, \@jvars, \@dvars), "; }\n\n",
+        "  virtual idx_t layout($margs) const\n",
+        "    { return ", makeLayout(\@a, \@jvars, \@dvars), "; }\n\n",
         "  // set $n 'j' indices based on 1-D 'ai' input.\n",
-        "  virtual void unmap(idx_t ai, $uargs) const\n",
-        "    { ", makeUnmap(\@a, \@jvars, \@dvars, "; "), "; }\n",
+        "  virtual void unlayout(idx_t ai, $uargs) const\n",
+        "    { ", makeUnlayout(\@a, \@jvars, \@dvars, "; "), "; }\n",
         "};\n";
 
     } while (NextPermuteNum @a);
