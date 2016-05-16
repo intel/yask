@@ -373,11 +373,11 @@ realclean: clean
 
 help:
 	@echo "Example usage:"
-	@echo "make clean; make -j8 arch=knc"
-	@echo "make clean; make -j8 arch=knl stencil=3axis order=8"
-	@echo "make clean; make -j8 arch=skx stencil=ave fold='x=1,y=2,z=4' cluster='x=2' EXTRA_FB_FLAGS=-lus"
+	@echo "make clean; make arch=knc stencil=iso3dfd"
+	@echo "make clean; make arch=knl stencil=3axis order=8"
+	@echo "make clean; make arch=skx stencil=ave fold='x=1,y=2,z=4' cluster='x=2'"
 	@echo " "
 	@echo "Example debug usage:"
-	@echo "make arch=knl  OMPFLAGS='-qopenmp-stubs' crew=0 EXTRA_CPPFLAGS='-O0' EXTRA_MACROS='DEBUG'"
-	@echo "make arch=host OMPFLAGS='-qopenmp-stubs' EXTRA_CPPFLAGS='-O0' EXTRA_MACROS='DEBUG' model_cache=2"
-	@echo "make arch=host OMPFLAGS='-qopenmp-stubs' order=0 stencil=3axis fold='x=1,y=1,z=1' EXTRA_MACROS='DEBUG DEBUG_TOLERANCE NO_INTRINSICS TRACE TRACE_MEM TRACE_INTRINSICS' EXTRA_CPPFLAGS='-O0'"
+	@echo "make arch=knl  stencil=iso3dfd OMPFLAGS='-qopenmp-stubs' crew=0 EXTRA_CPPFLAGS='-O0' EXTRA_MACROS='DEBUG'"
+	@echo "make arch=host stencil=ave OMPFLAGS='-qopenmp-stubs' EXTRA_CPPFLAGS='-O0' EXTRA_MACROS='DEBUG' model_cache=2"
+	@echo "make arch=host stencil=3axis order=0 fold='x=1,y=1,z=1' OMPFLAGS='-qopenmp-stubs' EXTRA_MACROS='DEBUG DEBUG_TOLERANCE NO_INTRINSICS TRACE TRACE_MEM TRACE_INTRINSICS' EXTRA_CPPFLAGS='-O0'"

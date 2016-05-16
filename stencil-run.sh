@@ -25,25 +25,28 @@
 
 # Purpose: run stencil kernel in specified environment.
 
-# defaults.
-arch=host
-affinity=balanced
-exe_prefix=" "
-
-if [ "$1" == "-h" -o "$1" == "-help" ]; then
-  echo "usage: $0 [-sh_prefix <command>] [-exe_prefix <command>] [-mic <N>|-host <hostname>] [-arch <arch>] [-cores <N>] [-threads <N> (per core)] [-affinity <scatter|compact|balanced>] [executable options as shown below]"
-  echo "Non-null defaults: arch='$arch', affinity='$affinity'."
-  echo "Options to be passed to the executable must follow the ones above."
-  echo "The sh_prefix command used to prefix the sub-shell."
-  echo "The exe_prefix command is used to prefix the executable."
-  echo "If -host <hostname> is given, 'ssh <hostname>' will be pre-pended to the sh_prefix command."
-  echo "If -arch 'knl' is given, the default exe_prefix command will be 'numactl --preferred=1'."
-  echo "If -mic <N> is given, the default arch will be 'knc', and the hostname will be set to the current hostname plus '-mic<N>."
-fi
-
+unset arch
 while true; do
 
-if [ "$1" == "-sh_prefix" -a "$2" != "" ]; then
+if [[ "$1" == "-h" || "$1" == "-help" ]]; then
+    shift
+    echo "usage: $0 -arch <arch> [-sh_prefix <command>] [-exe_prefix <command>] [-mic <N>|-host <hostname>] [-ranks <N>] [-cores <N (per rank)> -threads <N (per core)>] [-affinity <scatter|compact|balanced>] [[--] executable options as shown below]"
+    echo " "
+    echo "Options to be passed to the executable must follow '--' or the ones listed above in the command line."
+    echo "The sh_prefix command used to prefix a sub-shell."
+    echo "The exe_prefix command is used to prefix the executable (set to 'true' to avoid actual run)."
+    echo "If -host <hostname> is given, 'ssh <hostname>' will be pre-pended to the sh_prefix command."
+    echo "If -ranks <N> is given, 'mpirun -n <N>' is pre-pended to the exe_prefix command;"
+    echo " use -exe_prefix <command> explicitly if a different MPI command is needed."
+    echo "If -arch 'knl' is given, it implies the following options (which can be overridden):"
+    echo " -exe_prefix 'numactl --preferred=1'"
+    echo " -affinity 'balanced'"
+    echo "If -mic <N> is given, it implies the following options (which can be overridden):"
+    echo " -arch 'knc'"
+    echo " -host <current-hostname>-mic<N>"
+    exit 1
+
+elif [ "$1" == "-sh_prefix" -a "$2" != "" ]; then
   sh_prefix=$2
   shift
   shift
@@ -69,6 +72,11 @@ elif [ "$1" == "-arch" -a "$2" != "" ]; then
   shift
   shift
 
+elif [ "$1" == "-ranks" -a "$2" != "" ]; then
+  ranks=$2
+  shift
+  shift
+
 elif [ "$1" == "-cores" -a "$2" != "" ]; then
   ncores=$2
   shift
@@ -84,48 +92,80 @@ elif [ "$1" == "-affinity" -a "$2" != "" ]; then
   shift
   shift
 
+elif [ "$1" == "--" ]; then
+    shift
+    
+    # will pass remaining options to executable.
+    break
+
 else
-  break
+    # will pass remaining options to executable.
+    break
 fi
 
 done                            # parsing options.
 
-# set default exe_prefix for KNL.
-if [ "$arch" == "knl" ] && [ "$exe_prefix" == " " ]; then
-    exe_prefix='numactl --preferred=1'
-fi
-
-
-# set OMP thread vars if cores and/or threads were set.
-if [[ -n "$ncores$nthreads" ]]; then
-
-  if [ "$arch" == "knc" ]; then
-    ncores=${ncores-61}
-  else
-    ncores=${ncores-68}
-  fi
-  nthreads=${nthreads-4}
-
-  # set vars for both with and without crew.
-  corestr="export OMP_NUM_THREADS=$(($ncores*$nthreads)); export KMP_PLACE_THREADS=${ncores}c,${nthreads}t; export INTEL_CREW_NUM_LEADERS=$ncores; export INTEL_CREW_SIZE=$nthreads;"
-  echo "running with $ncores cores and $nthreads threads per core..."
-else
-  corestr=""
-  echo "running with the default number of cores and threads..."
-fi
-
-set -e                          # bail on error.
-icc=`which icc`
-iccdir=`dirname $icc`/../..
-
-exe="stencil.$arch.exe"
-if [[ ! -x $exe ]]; then
-    echo "error: '$exe' not found"
+# check arch.
+if [[ -z ${arch:+ok} ]]; then
+    echo "error: must use -arch <arch>"
     exit 1
 fi
 
-if [[ ! -z $host ]]; then
+# set defaults for KNL.
+if [[ "$arch" == "knl" ]]; then
+    true ${exe_prefix='numactl --preferred=1'}
+    true ${affinity='balanced'}
+fi
+
+# environment vars to be set.
+envs="KMP_VERSION=1 I_MPI_PRINT_VERSION=1 I_MPI_DEBUG=3"
+if [[ -n "$affinity" ]]; then
+    envs="$envs KMP_AFFINITY=$affinity"
+fi
+
+# set OMP thread vars if cores and/or threads were set.
+if [[ -n "$ncores$nthreads" ]]; then
+    if [[ -z "$ncores" || -z "$threads" ]]; then
+        echo "error: must set both cores and threads."
+        exit 1
+    fi
+
+    # set vars for both with and without crew.
+    envs="$envs OMP_NUM_THREADS=$(($ncores*$nthreads)) KMP_PLACE_THREADS=${ncores}c,${nthreads}t INTEL_CREW_NUM_LEADERS=$ncores INTEL_CREW_SIZE=$nthreads"
+fi
+
+# MPI
+if [[ -n "$ranks" ]]; then
+    exe_prefix="mpirun -n $ranks $exe_prefix"
+fi
+
+# bail on errors past this point.
+set -e
+
+exe="stencil.$arch.exe"
+if [[ ! -x $exe ]]; then
+    echo "error: '$exe' not found or not executable."
+    exit 1
+fi
+
+# additional settings w/special cases for KNC when no host specified.
+if [[ $arch == "knc" && -z ${host+ok} ]]; then
+    dir=/tmp/$USER
+    icc=`which icc`
+    iccdir=`dirname $icc`/../..
+    libpath=":$iccdir/compiler/lib/mic"
+    ssh $host "rm -rf $dir; mkdir -p $dir"
+    scp $exe $host:$dir
+else
+    dir=`pwd`
+    libpath=":$HOME/lib"
+fi
+
+# run on specified host
+if [[ -n "$host" ]]; then
     sh_prefix="ssh $host $sh_prefix"
+    envs="$envs PATH=$PATH LD_LIBRARY_PATH=$LD_LIBRARY_PATH$libpath"
+
     nm=1
     while true; do
         echo "Verifying access to '$host'..."
@@ -135,24 +175,13 @@ if [[ ! -z $host ]]; then
     done
 fi
 
-if [[ $arch == "knc" && "$host" != "" ]]; then
-    dir=/tmp/$USER
-    libpath=":$iccdir/compiler/lib/mic"
-    ssh $host "rm -rf $dir; mkdir -p $dir"
-    scp $exe $host:$dir
-else
-    dir=`pwd`
-    libpath=":$HOME/lib"
-    #libpath=":$HOME/lib:/opt/intel/knl/knl-a0-compiler_20150515/lib.f2i"
-fi
-
 # command sequence.
-cmds="cd $dir; export KMP_VERSION=1; export I_MPI_PRINT_VERSION=1; export I_MPI_DEBUG=3; export PATH=$PATH; export LD_LIBRARY_PATH=$LD_LIBRARY_PATH$libpath; $corestr export KMP_AFFINITY=$affinity; lscpu; numactl -H; ldd ./$exe; $exe_prefix ./$exe $*"
+cmds="cd $dir; lscpu; numactl -H; ldd ./$exe; env $envs $exe_prefix ./$exe $*"
 
 date
 echo "==================="
 
-if [[ -z $sh_prefix ]]; then
+if [[ -z "$sh_prefix" ]]; then
     sh -c -x "$cmds"
 else
     echo "Running shell under '$sh_prefix'..."
