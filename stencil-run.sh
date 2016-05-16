@@ -46,48 +46,48 @@ if [[ "$1" == "-h" || "$1" == "-help" ]]; then
     echo " -host <current-hostname>-mic<N>"
     exit 1
 
-elif [ "$1" == "-sh_prefix" -a "$2" != "" ]; then
+elif [[ "$1" == "-sh_prefix" && -n ${2+set} ]]; then
   sh_prefix=$2
   shift
   shift
 
-elif [ "$1" == "-exe_prefix" -a "$2" != "" ]; then
+elif [[ "$1" == "-exe_prefix" && -n ${2+set} ]]; then
   exe_prefix=$2
   shift
   shift
 
-elif [ "$1" == "-host" -a "$2" != "" ]; then
+elif [[ "$1" == "-host" && -n ${2+set} ]]; then
   host=$2
   shift
   shift
 
-elif [ "$1" == "-mic" -a "$2" != "" ]; then
+elif [[ "$1" == "-mic" && -n ${2+set} ]]; then
   arch="knc"
   host=`hostname`-mic$2
   shift
   shift
 
-elif [ "$1" == "-arch" -a "$2" != "" ]; then
+elif [[ "$1" == "-arch" && -n ${2+set} ]]; then
   arch=$2
   shift
   shift
 
-elif [ "$1" == "-ranks" -a "$2" != "" ]; then
-  ranks=$2
+elif [[ "$1" == "-ranks" && -n ${2+set} ]]; then
+  nranks=$2
   shift
   shift
 
-elif [ "$1" == "-cores" -a "$2" != "" ]; then
+elif [[ "$1" == "-cores" && -n ${2+set} ]]; then
   ncores=$2
   shift
   shift
 
-elif [ "$1" == "-threads" -a "$2" != "" ]; then
+elif [[ "$1" == "-threads" && -n ${2+set} ]]; then
   nthreads=$2
   shift
   shift
 
-elif [ "$1" == "-affinity" -a "$2" != "" ]; then
+elif [[ "$1" == "-affinity" && -n ${2+set} ]]; then
   affinity=$2
   shift
   shift
@@ -125,7 +125,7 @@ fi
 
 # set OMP thread vars if cores and/or threads were set.
 if [[ -n "$ncores$nthreads" ]]; then
-    if [[ -z "$ncores" || -z "$threads" ]]; then
+    if [[ -z "$ncores" || -z "$nthreads" ]]; then
         echo "error: must set both cores and threads."
         exit 1
     fi
@@ -135,8 +135,8 @@ if [[ -n "$ncores$nthreads" ]]; then
 fi
 
 # MPI
-if [[ -n "$ranks" ]]; then
-    exe_prefix="mpirun -n $ranks $exe_prefix"
+if [[ -n "$nranks" ]]; then
+    exe_prefix="mpirun -n $nranks $exe_prefix"
 fi
 
 # bail on errors past this point.
