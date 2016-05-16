@@ -204,6 +204,12 @@ MACROS		+=	DEF_WAVEFRONT_REGION_SIZE=$(def_wavefront_region_size)
 ARCH		:=	$(shell echo $(arch) | tr '[:lower:]' '[:upper:]')
 MACROS		+= 	ARCH_$(ARCH)
 
+# MPI settings.
+ifeq ($(mpi),1)
+MACROS		+=	USE_MPI
+crew		=	0
+endif
+
 # compiler-specific settings
 ifneq ($(findstring ic,$(notdir $(CC))),)
 
@@ -222,10 +228,6 @@ MACROS		+=	__INTEL_CREW
 endif
 
 endif # icpc
-
-ifeq ($(mpi),1)
-MACROS		+=	USE_MPI
-endif
 
 ifeq ($(streaming_stores),1)
 MACROS		+=	USE_STREAMING_STORE
@@ -256,8 +258,9 @@ BLOCK_LOOP_OPTS		=     	-dims 'bnv,bxv,byv,bzv'
 BLOCK_LOOP_CODE		=	loop(bnv) { crew loop(bxv) { loop(byv) { $(INNER_BLOCK_LOOP_OPTS) loop(bzv) { calc(cluster(bt)); } } } }
 
 # Halo loops break up a region slice into vectors.
+# TODO: add efficient crew loops using blocking.
 HALO_LOOP_OPTS		=     	-dims 'rnv,rxv,ryv,rzv' -ompSchedule $(omp_schedule) 
-HALO_LOOP_CODE		=	serpentine omp loop(rnv, rxv, ryv) { loop(rzv) { calc(halo(rt)); } }
+HALO_LOOP_CODE		=	serpentine omp loop(rnv,rxv,ryv) { loop(rzv) { calc(halo(rt)); } }
 
 # compile with model_cache=1 or 2 to check prefetching.
 ifeq ($(model_cache),1)

@@ -118,7 +118,7 @@ if [[ "$arch" == "knl" ]]; then
 fi
 
 # environment vars to be set.
-envs="KMP_VERSION=1 I_MPI_PRINT_VERSION=1 I_MPI_DEBUG=3"
+envs="KMP_VERSION=1"
 if [[ -n "$affinity" ]]; then
     envs="$envs KMP_AFFINITY=$affinity"
 fi
@@ -137,6 +137,7 @@ fi
 # MPI
 if [[ -n "$nranks" ]]; then
     exe_prefix="mpirun -n $nranks $exe_prefix"
+    envs="$envs I_MPI_PRINT_VERSION=1 I_MPI_DEBUG=5"
 fi
 
 # bail on errors past this point.
