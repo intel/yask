@@ -257,7 +257,9 @@ REGION_LOOP_CODE	=	serpentine omp loop(rn,rx,ry,rz) { calc(block(rt)); }
 BLOCK_LOOP_OPTS		=     	-dims 'bnv,bxv,byv,bzv'
 BLOCK_LOOP_CODE		=	loop(bnv) { crew loop(bxv) { loop(byv) { $(INNER_BLOCK_LOOP_OPTS) loop(bzv) { calc(cluster(bt)); } } } }
 
-# Halo loops break up a region slice into vectors.
+# Halo pack/unpack loops break up a region slice into vectors.
+# The indices at this level are by vector instead of element;
+# this is indicated by the 'v' suffix.
 # TODO: add efficient crew loops using blocking.
 HALO_LOOP_OPTS		=     	-dims 'rnv,rxv,ryv,rzv' -ompSchedule $(omp_schedule) 
 HALO_LOOP_CODE		=	serpentine omp loop(rnv,rxv,ryv) { loop(rzv) { calc(halo(rt)); } }

@@ -140,9 +140,13 @@ int main(int argc, char** argv)
             "  num crew-leader threads: " << numThreads << endl <<
             "  num threads per crew: " << crewSize << endl;
         if (numWorkers == numOrigThreads)
-            cout << "Note: num crews == num OpenMP threads before creating crews" << endl;
-        else
-            cout << "Warning: num crews != num OpenMP threads before creating crews" << endl;
+            cout << "Note: sanity check passed: num crews == num OpenMP threads before creating crews." << endl;
+        else {
+            cout << "Error: sanity check failed: num crews != num OpenMP threads before creating crews.\n"
+                "This usually indicates your OpenMP library has a crew-initialization issue.\n"
+                "Please update your OpenMP library or rebuild with crew disabled (make crew=0 ...).\n";
+            exit(1);
+        }
 #endif
 #else
         int numThreads = 1;
@@ -375,7 +379,7 @@ int main(int argc, char** argv)
     cout << "Points to calculate per time step: " << printWithMultiplier(numpts) <<
         " (" << dn << " * " << dx << " * " << dy << " * " << dz << ")" << endl;
     cout << "Points to calculate per rank: " << printWithMultiplier(rank_numpts) << endl;
-    cout << "Points to calculate overall: " << printWithMultiplier(rank_numpts) << endl;
+    cout << "Points to calculate overall: " << printWithMultiplier(tot_numpts) << endl;
     const idx_t numFpOps = numpts * scalar_fp_ops;
     const idx_t rank_numFpOps = dt * numpts * scalar_fp_ops;
     const idx_t tot_numFpOps = rank_numFpOps * num_ranks;
@@ -435,6 +439,7 @@ int main(int argc, char** argv)
     cout << "Total rank-" << my_rank << " allocation: " << printWithMultiplier(nbytes) <<
         " byte(s) in " << context.gridPtrs.size() << " grid(s)." << endl;
 
+    // Wait for all ranks to finish initializing.
     MPI_Barrier(comm);
     if (is_leader)
         cout << "\nTotal overall allocation: " << printWithMultiplier(nbytes * num_ranks) <<
@@ -458,7 +463,7 @@ int main(int argc, char** argv)
 
     // warmup caches, threading, etc.
     if (!validate) {
-        cout << endl;
+        if (is_leader) cout << endl;
 
         idx_t tmp_dt = min<idx_t>(CPTS_T, dt);
         tmp_dt = max<idx_t>(tmp_dt, TIME_DIM_SIZE);
@@ -490,9 +495,9 @@ int main(int argc, char** argv)
     float best_elapsed_time=0.0f, best_throughput_mpoints=0.0f, best_gflops=0.0f;
 
     // Performance runs.
-    cout << endl;
     context.dt = dt;
     if (is_leader) {
+        cout << endl;
         printf("Running %li performance trial(s) of %ld time step(s)...\n",
                num_trials, context.dt);
         fflush(NULL);
