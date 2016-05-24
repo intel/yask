@@ -39,14 +39,10 @@ use 5.010;                      # for smart compare.
 use strict;
 use warnings;
 no warnings qw(portable); # allow 64-bit hex ints.
+no if $] >= 5.017011, warnings => 'experimental::smartmatch';
 
 use File::Basename;
 use Text::ParseWords;
-
-# If this module does not exist, download from
-# http://search.cpan.org/~stevan/String-Tokenizer-0.05/lib/String/Tokenizer.pm
-use String::Tokenizer;
-
 use FileHandle;
 use CmdLine;
 
@@ -386,16 +382,35 @@ sub endLoop($) {
     push @$code, " }";
 }
 
+# Split a string into tokens, ignoring whitespace.
+sub tokenize($) {
+    my $str = shift;
+    my @toks;
+
+    while (length($str)) {
+        my $len = 1;
+        
+        # A series of chars and/or digits.
+        if ($str =~ /^\w+/) {
+            $len = length($&);
+        }
+            
+        # get a token.
+        my $tok = substr($str, 0, $len, '');
+
+        # keep unless WS.
+        push @toks, $tok unless $tok =~ /\s/;
+    }
+    return @toks;
+}
+
 # Process the loop-code string.
 # This is where most of the work is done.
 sub processCode($) {
     my $codeString = shift;
 
-    my $delims = ':;,()[]{}+-*/';
-    my $tokenizer = String::Tokenizer->new($codeString, $delims,
-                                           String::Tokenizer->IGNORE_WHITESPACE);
-    my @toks = $tokenizer->getTokens();
-    #print join "\n", @toks;
+    my @toks = tokenize($codeString);
+    ##print join "\n", @toks;
 
     # vars to track loops.
     # set at beginning of loop() statements.
@@ -494,7 +509,7 @@ sub processCode($) {
                 my @dimVars = sort @dims;
                 die "error: loop dimensions ".join(', ', @loopStack).
                     " do not match expected dimensions ".join(', ', @dims).".\n"
-                    unless @loopVars ~~ @dimVars;
+                    unless @loopVars ~~ @dimVars; # smartmatch!
             }
 
             # check for piping legality.

@@ -29,7 +29,6 @@ sub usage {
   die "usage: $0 <option>\n".
     " -p    generate perl lists of permutes\n".
     " -d    generate C++ class definitions\n".
-    " -c    generate macro-based C++ class definitions (deprecated)\n".
     " -m    generate CPP layout/unlayout macros\n";
 }
 
@@ -42,12 +41,24 @@ use File::Basename;
 use lib dirname($0)."/lib";
 use lib dirname($0)."/../lib";
 
-# If this module is not installed, download from
-# http://search.cpan.org/~tyemq/Algorithm-Loops-1.031/lib/Algorithm/Loops.pm
-use Algorithm::Loops qw(NextPermuteNum);
-
 print "// Automatically generated; do not edit.\n";
 print "#include <stddef.h>\n" if ($opt eq '-d');
+
+# permute items in a list.
+# args: block of code and a list.
+sub permute(&@) {
+  my $code = shift;
+
+  my @idx = 0..$#_;
+  while ( $code->(@_[@idx]) ) {
+    my $p = $#idx;
+    --$p while $idx[$p-1] > $idx[$p];
+    my $q = $p or return;
+    push @idx, reverse splice @idx, $p;
+    ++$q while $idx[$p-1] > $idx[$q];
+    @idx[$p-1,$q] = @idx[$q,$p-1];
+  }
+}
 
 # generate nd->1d layout code.
 sub makeLayout($$$) {
@@ -59,7 +70,7 @@ sub makeLayout($$$) {
   for my $i (0..$#$a) {
     $code .= " + " if $i > 0;
     $code .= "$jvars->[$i]";
-    
+
     # multiply by product of higher dimensions.
     map { $code .= " * $_" } @$dvars[$i+1..$#$a];
   }
@@ -94,24 +105,8 @@ for my $n (@sizes) {
   # argument for permute().
   my @a = (1..$n);
 
-  # print out old matrix classes.
-  if ($opt eq '-c') {
-
-    # RealMatrix only defined for 4D.
-    next if $n != 4;
-
-    print "\n// Matrix declarations for $n dimensions.\n";
-
-    do {
-      my $ns = join('', @a);
-      print "#define RMAT_CLASS RealMatrix$ns\n",
-        "#define RMAT_LAYOUT LAYOUT$ns\n",
-        "#include \"real_matrix.hpp\"\n"; }
-      while (NextPermuteNum @a);
-  }
-
   # macros.
-  elsif ($opt eq '-m') {
+  if ($opt eq '-m') {
 
     print "\n// $n-D <-> 1-D layout macros.\n";
     print "// 'LAYOUT' macros return 1-D offset from $n-D 'j' indices.\n".
@@ -119,19 +114,20 @@ for my $n (@sizes) {
 
     my $args = join(', ', (map { "j$_" } sort @a), (map { "d$_" } @a));
 
-    do {
-      my $n = join('', @a);
-      my @jvars = map { "j$_" } @a;
-      my @pjvars = map { "(j$_)" } @a;
-      my @pdvars = map { "(d$_)" } @a;
+    permute {
+      my @p = @_;
+      my $n = join('', @p);
+      my @jvars = map { "j$_" } @p;
+      my @pjvars = map { "(j$_)" } @p;
+      my @pdvars = map { "(d$_)" } @p;
 
       # n->1
-      print "#define LAYOUT_$n($args) (", makeLayout(\@a, \@pjvars, \@pdvars), ")\n";
+      print "#define LAYOUT_$n($args) (", makeLayout(\@p, \@pjvars, \@pdvars), ")\n";
 
       # 1->n
-      print "#define UNLAYOUT_$n(ai, $args) (", makeUnlayout(\@a, \@jvars, \@pdvars, ', '), ")\n";
+      print "#define UNLAYOUT_$n(ai, $args) (", makeUnlayout(\@p, \@jvars, \@pdvars, ', '), ")\n";
 
-    } while (NextPermuteNum @a);
+    } @a;
   }
 
   # class decls.
@@ -164,26 +160,27 @@ for my $n (@sizes) {
       "  virtual void unlayout(idx_t ai, $uargs) const =0;\n",
       "};\n";
 
-    do {
-      my $name = join('', @a);
-      my @jvars = map { "j$_" } @a;
-      my @dvars = map { "_d$_" } @a;
-      my $dims = join(', ', map { "d$_" } @a);
+    permute {
+      my @p = @_;
+      my $name = join('', @p);
+      my @jvars = map { "j$_" } @p;
+      my @dvars = map { "_d$_" } @p;
+      my $dims = join(', ', map { "d$_" } @p);
 
       print "\n// $n-D <-> 1-D layout class with dimensions in $dims order,\n",
-        "// meaning d$a[$#a] is stored with unit stride.\n",
+        "// meaning d$p[$#p] is stored with unit stride.\n",
         "class Layout_$name : public ${basename} {\n",
         "public:\n\n",
         "  Layout_$name($cargs) : ${basename}($cvars) { }\n\n",
         "  // Return 1-D offset from $n-D 'j' indices.\n",
         "  virtual idx_t layout($margs) const\n",
-        "    { return ", makeLayout(\@a, \@jvars, \@dvars), "; }\n\n",
+        "    { return ", makeLayout(\@p, \@jvars, \@dvars), "; }\n\n",
         "  // set $n 'j' indices based on 1-D 'ai' input.\n",
         "  virtual void unlayout(idx_t ai, $uargs) const\n",
-        "    { ", makeUnlayout(\@a, \@jvars, \@dvars, "; "), "; }\n",
+        "    { ", makeUnlayout(\@p, \@jvars, \@dvars, "; "), "; }\n",
         "};\n";
 
-    } while (NextPermuteNum @a);
+    } @a;
   }
 
   # just list permutes.
@@ -192,10 +189,11 @@ for my $n (@sizes) {
     print "# Permutations for $n dimensions.\n";
     print "(";
 
-    do {
-      my $ns = join('', @a);
+    permute {
+      my @p = @_;
+      my $ns = join('', @p);
       print "'$ns', ";
-    } while (NextPermuteNum @a);
+    } @a;
 
     print ");\n";
   }
