@@ -82,8 +82,8 @@ public:
     // Print some info.
     virtual void print_info(const std::string& name, std::ostream& os = std::cout) {
         os << "grid '" << name << "' allocated at " << _elems << " in " <<
-            printWithMultiplier(get_num_bytes()) << " byte(s): " <<
-            printWithMultiplier(get_num_elems()) << " element(s) * " <<
+            printWithPow2Multiplier(get_num_bytes()) << " byte(s): " <<
+            printWithPow2Multiplier(get_num_elems()) << " element(s) * " <<
             sizeof(T) << " byte(s)." << std::endl;
     }
 

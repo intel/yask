@@ -177,7 +177,7 @@ if [[ -n "$host" ]]; then
 fi
 
 # command sequence.
-cmds="cd $dir; lscpu; numactl -H; ldd ./$exe; env $envs $exe_prefix ./$exe $*"
+cmds="cd $dir; uname -a; lscpu; numactl -H; ldd ./$exe; env $envs $exe_prefix ./$exe $*"
 
 date
 echo "==================="

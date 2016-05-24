@@ -360,33 +360,6 @@ int main(int argc, char** argv)
     printf(" manual-L1-prefetch-distance = %d\n", PFDL1);
     printf(" manual-L2-prefetch-distance = %d\n", PFDL2);
 
-    // Stencil functions.
-    idx_t scalar_fp_ops = 0;
-    STENCIL_EQUATIONS stencils;
-    idx_t num_stencils = stencils.stencils.size();
-    cout << endl << "Num stencil equations = " << num_stencils << ":" << endl;
-    for (auto stencil : stencils.stencils) {
-        idx_t fpos = stencil->get_scalar_fp_ops();
-        cout << "  '" << stencil->get_name() << "': " <<
-            fpos << " FP ops per point." << endl;
-        scalar_fp_ops += fpos;
-    }
-
-    cout << endl;
-    const idx_t numpts = dn*dx*dy*dz;
-    const idx_t rank_numpts = dt * numpts;
-    const idx_t tot_numpts = rank_numpts * num_ranks;
-    cout << "Points to calculate per time step: " << printWithMultiplier(numpts) <<
-        " (" << dn << " * " << dx << " * " << dy << " * " << dz << ")" << endl;
-    cout << "Points to calculate per rank: " << printWithMultiplier(rank_numpts) << endl;
-    cout << "Points to calculate overall: " << printWithMultiplier(tot_numpts) << endl;
-    const idx_t numFpOps = numpts * scalar_fp_ops;
-    const idx_t rank_numFpOps = dt * numpts * scalar_fp_ops;
-    const idx_t tot_numFpOps = rank_numFpOps * num_ranks;
-    cout << "FP ops (est) per point: " << scalar_fp_ops << endl;
-    cout << "FP ops (est) per rank: " << printWithMultiplier(rank_numFpOps) << endl;
-    cout << "FP ops (est) overall: " << printWithMultiplier(tot_numFpOps) << endl;
-
     if (help) {
         cout << "Exiting due to help option." << endl;
         exit(1);
@@ -427,7 +400,7 @@ int main(int argc, char** argv)
     context.hy = hy;
     context.hz = hz;
 
-    // Alloc mem.
+    // Alloc memory, create lists of grids, etc.
     cout << endl;
     cout << "Allocating grids..." << endl;
     context.allocGrids();
@@ -436,14 +409,62 @@ int main(int argc, char** argv)
     cout << "Allocating buffers..." << endl;
     context.setupMPI();
     idx_t nbytes = context.get_num_bytes();
-    cout << "Total rank-" << my_rank << " allocation: " << printWithMultiplier(nbytes) <<
+    cout << "Total rank-" << my_rank << " allocation: " << printWithPow2Multiplier(nbytes) <<
         " byte(s) in " << context.gridPtrs.size() << " grid(s)." << endl;
+    const idx_t num_eqGrids = context.eqGridPtrs.size();
+    cout << "Num grids = " << context.gridPtrs.size() << endl;
+    cout << "Num grids to be updated = " << num_eqGrids << endl;
 
+    // Stencil functions.
+    idx_t scalar_fp_ops = 0;
+    STENCIL_EQUATIONS stencils;
+    idx_t num_stencils = stencils.stencils.size();
+    cout << endl;
+    cout << "Num stencil equations = " << num_stencils << endl;
+    for (auto stencil : stencils.stencils) {
+        idx_t fpos = stencil->get_scalar_fp_ops();
+        cout << "  '" << stencil->get_name() << "': " <<
+            fpos << " FP ops per point." << endl;
+        scalar_fp_ops += fpos;
+    }
+
+    // Amount of work.
+    const idx_t grid_numpts = dn*dx*dy*dz;
+    const idx_t grids_numpts = grid_numpts * num_eqGrids;
+    const idx_t grids_rank_numpts = dt * grids_numpts;
+    const idx_t tot_numpts = grids_rank_numpts * num_ranks;
+    const idx_t numFpOps = grid_numpts * scalar_fp_ops;
+    const idx_t rank_numFpOps = dt * numFpOps;
+    const idx_t tot_numFpOps = rank_numFpOps * num_ranks;
+    
     // Wait for all ranks to finish initializing.
     MPI_Barrier(comm);
-    if (is_leader)
-        cout << "\nTotal overall allocation: " << printWithMultiplier(nbytes * num_ranks) <<
-            " byte(s) in " << num_ranks << " rank(s)." << endl;
+    if (is_leader) {
+        cout << endl;
+        cout << "Points to calculate per rank, time step, and grid: " <<
+            printWithPow10Multiplier(grid_numpts) << endl;
+        cout << "Points to calculate per rank and time step for all grids: " <<
+            printWithPow10Multiplier(grids_numpts) << endl;
+        cout << "Points to calculate per rank for all time steps and grids: " <<
+            printWithPow10Multiplier(grids_rank_numpts) << endl;
+        cout << "Points to calculate per time step for all ranks and grids: " <<
+            printWithPow10Multiplier(grids_numpts * num_ranks) << endl;
+        cout << "Points to calculate overall: " <<
+            printWithPow10Multiplier(tot_numpts) << endl;
+        cout << "FP ops (est) per point and time step for all grids: " << scalar_fp_ops << endl;
+        cout << "FP ops (est) per rank and time step for all grids and points: " <<
+            printWithPow10Multiplier(numFpOps) << endl;
+        cout << "FP ops (est) per time step for all grids, points, and ranks: " <<
+            printWithPow10Multiplier(numFpOps * num_ranks) << endl;
+        cout << "FP ops (est) per rank for all grids, points, and time steps: " <<
+            printWithPow10Multiplier(rank_numFpOps) << endl;
+        cout << "FP ops (est) overall: " <<
+            printWithPow10Multiplier(tot_numFpOps) << endl;
+
+        cout << "\nTotal overall allocation: " <<
+            printWithPow2Multiplier(nbytes * num_ranks) <<
+            " bytes in " << num_ranks << " rank(s)." << endl;
+    }
     
 #ifdef FORCE_INIT
     // This will initialize the grids before running the warmup.
@@ -456,7 +477,7 @@ int main(int argc, char** argv)
         cerr << "Exiting because no trials are specified." << endl;
         exit(1);
     }
-    if (rank_numpts < 1) {
+    if (tot_numpts < 1) {
         cerr << "Exiting because there are zero points to evaluate." << endl;
         exit(1);
     }

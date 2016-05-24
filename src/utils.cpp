@@ -59,12 +59,33 @@ idx_t roundUp(idx_t val, idx_t mult, string name)
 }
 
 // Return num with SI multiplier.
-string printWithMultiplier(double num)
+// Use this one for bytes, etc.
+string printWithPow2Multiplier(double num)
 {
     ostringstream os;
     const double oneK = 1024.;
     const double oneM = oneK * oneK;
     const double oneG = oneK * oneM;
+    if (num > oneG)
+        os << (num / oneG) << "Gi";
+    else if (num > oneM)
+        os << (num / oneM) << "Mi";
+    else if (num > oneK)
+        os << (num / oneK) << "Ki";
+    else
+        os << num;
+    return os.str();
+}
+
+
+// Return num with SI multiplier.
+// Use this one for rates, etc.
+string printWithPow10Multiplier(double num)
+{
+    ostringstream os;
+    const double oneK = 1e3;
+    const double oneM = 1e6;
+    const double oneG = 1e9;
     if (num > oneG)
         os << (num / oneG) << "G";
     else if (num > oneM)

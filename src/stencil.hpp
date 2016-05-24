@@ -193,6 +193,7 @@ typedef RealvGrid_TNXYZ<LAYOUT_4D> Grid_TNXYZ; // T and N reduced to 1st dim.
 // Some utility functions.
 extern double getTimeInSecs();
 extern idx_t roundUp(idx_t dim, idx_t mult, string name);
-extern string printWithMultiplier(double num);
+extern string printWithPow2Multiplier(double num);
+extern string printWithPow10Multiplier(double num);
 
 #endif
