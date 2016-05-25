@@ -50,6 +50,7 @@ mpi		=	0
 ifeq ($(stencil),ave)
 order		=	2
 real_bytes	=	8
+def_rank_size	=	256
 
 else ifeq ($(stencil),9axis)
 order		=	8
@@ -65,7 +66,7 @@ order		=	4
 time_dim_size	=	1
 eqs		=	velocity=vel_,stress=stress_
 def_rank_size	=	640
-def_block_size		=	32
+def_block_size	=	32
 def_wavefront_region_size	=	256
 endif
 

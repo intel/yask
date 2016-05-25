@@ -697,7 +697,7 @@ public:
     RealvGrid_TNXYZ(idx_t dn, idx_t dx, idx_t dy, idx_t dz,
                     idx_t pn, idx_t px, idx_t py, idx_t pz,
                     const string& name) :
-        RealvGrid_NXYZ<LayoutFn(TIME_DIM_SIZE * dn, dx, dy, dz,
+        RealvGrid_NXYZ<LayoutFn>(TIME_DIM_SIZE * dn, dx, dy, dz,
                              pn, px, py, pz,
                              name),
         _dn(dn)
