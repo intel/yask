@@ -5,6 +5,7 @@ stencil-performance design space, including
 * Cache blocking,
 * Memory layout,
 * Loop construction,
+* Temporal wave-front blocking,
 * And many others.
 
 YASK contains a specialized source-to-source translator to convert scalar
@@ -14,18 +15,17 @@ processors.
 Supported Platforms
 * 64-bit Linux
 * Intel(R) Xeon(R) processor supporting AVX, AVX2, or CORE_AVX512 instruction sets
-* Intel(R) Xeon Phi(TM) coprocessor supporting Knights-Corner or MIC_AVX512 instruction sets
+* Intel(R) Xeon Phi(TM) (co)processor supporting Knights-Corner or MIC_AVX512 instruction sets
 
 Pre-requisites:
 * Intel(R) C++ compiler,
   https://software.intel.com/en-us/intel-parallel-studio-xe.
-* Intel(R) Software Development Emulator (optional, for functional testing),
-  https://software.intel.com/en-us/articles/intel-software-development-emulator.
-* Perl 5.010 or later with the following modules installed
-  * String::Tokenizer,
-    http://search.cpan.org/~stevan/String-Tokenizer-0.05/lib/String/Tokenizer.pm
-  * Algorithm::Loops,
-    http://search.cpan.org/~tyemq/Algorithm-Loops-1.031/lib/Algorithm/Loops.pm
+* Intel(R) Software Development Emulator,
+  https://software.intel.com/en-us/articles/intel-software-development-emulator
+  (optional: for functional testing if you don't have native ISA support).
+* Intel(R) MPI Library, https://software.intel.com/en-us/intel-mpi-library,
+  or equivalent.
+* Perl 5.010 or later.
 * Install all these pre-requisites and ensure that all
   tool and library paths are included in the proper environment variables.
 * Git-clone or download the YASK source code.
