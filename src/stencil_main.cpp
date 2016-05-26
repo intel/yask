@@ -285,6 +285,12 @@ int main(int argc, char** argv)
     }
 #endif
 
+    // Context for evaluating results.
+    STENCIL_CONTEXT context;
+    context.num_ranks = num_ranks;
+    context.my_rank = my_rank;
+    context.comm = comm;
+    
     // Adjust defaults for wavefronts.
     if (rt != 1) {
         if (!rn) rn = 1;
@@ -333,15 +339,16 @@ int main(int argc, char** argv)
     pz = roundUp(pz, VLEN_Z, "extra padding in z");
 
     // Round up halos as needed.
-    if (STENCIL_ORDER % 2) {
-        cerr << "error: stencil-order not even." << endl;
-        exit(1);
-    }
-    idx_t halo_size = STENCIL_ORDER/2; // TODO: make dim-specific.
-    idx_t hn = 0;                      // TODO: support N halo.
-    idx_t hx = ROUND_UP(halo_size, VLEN_X);
-    idx_t hy = ROUND_UP(halo_size, VLEN_Y);
-    idx_t hz = ROUND_UP(halo_size, VLEN_Z);
+    // TODO: get rid of this when grid-specific halos
+    // are used throughout.
+#ifdef USING_DIM_N
+    idx_t hn = ROUND_UP(context.max_halo_n, VLEN_N);
+#else
+    idx_t hn = 0;
+#endif
+    idx_t hx = ROUND_UP(context.max_halo_x, VLEN_X);
+    idx_t hy = ROUND_UP(context.max_halo_y, VLEN_Y);
+    idx_t hz = ROUND_UP(context.max_halo_z, VLEN_Z);
     
     printf("\nSizes in points per grid (t*n*x*y*z):\n");
     printf(" vector-size = %d*%d*%d*%d*%d\n", VLEN_T, VLEN_N, VLEN_X, VLEN_Y, VLEN_Z);
@@ -351,12 +358,11 @@ int main(int argc, char** argv)
     printf(" rank-size = %ld*%ld*%ld*%ld*%ld\n", dt, dn, dx, dy, dz);
     printf(" overall-size = %ld*%ld*%ld*%ld*%ld\n", dt, dn, dx * num_ranks, dy, dz);
     cout << "\nOther settings:\n";
-    printf(" stencil-order = %d\n", STENCIL_ORDER); // really just used for halo size.
     printf(" stencil-shape = " STENCIL_NAME "\n");
     printf(" time-dim-size = %d\n", TIME_DIM_SIZE);
     printf(" vector-len = %d\n", VLEN);
     printf(" padding = %ld+%ld+%ld+%ld\n", pn, px, py, pz);
-    printf(" halos = %ld+%ld+%ld+%ld\n", hn, hx, hy, hz);
+    printf(" max-halos = %ld+%ld+%ld+%ld\n", hn, hx, hy, hz);
     printf(" manual-L1-prefetch-distance = %d\n", PFDL1);
     printf(" manual-L2-prefetch-distance = %d\n", PFDL2);
 
@@ -365,12 +371,6 @@ int main(int argc, char** argv)
         exit(1);
     }
 
-    // Context for evaluating results.
-    STENCIL_CONTEXT context;
-    context.num_ranks = num_ranks;
-    context.my_rank = my_rank;
-    context.comm = comm;
-    
     // Save sizes in context struct.
     // - dt not used for allocation; set later.
     context.dn = dn;

@@ -110,10 +110,11 @@ void StencilEquations::calc_rank_opt(StencilContext& context)
     idx_t step_dy = context.ry;
     idx_t step_dz = context.rz;
 
-    // Determine spatial skewing angles for temporal wavefronts.  This
-    // assumes the smallest granularity of calculation is CPTS_* in each dim.
-    // The halos (h*) are only rounded up to VLEN_*, so we have to round
-    // up to CPTS_* here.
+    // Determine spatial skewing angles for temporal wavefronts based on the
+    // halos.  This assumes the smallest granularity of calculation is
+    // CPTS_* in each dim.
+    // We only need non-zero angles if the region size is less than the rank size.
+    // TODO: make this grid-specific.
     context.angle_n = (context.rn < context.dn) ? ROUND_UP(context.hn, CPTS_N) : 0;
     context.angle_x = (context.rx < context.dx) ? ROUND_UP(context.hx, CPTS_X) : 0;
     context.angle_y = (context.ry < context.dy) ? ROUND_UP(context.hy, CPTS_Y) : 0;
@@ -142,7 +143,7 @@ void StencilEquations::calc_rank_opt(StencilContext& context)
               begin_dz, end_dz-1);
 
     // Include automatically-generated loop code that calls calc_region() for each region.
-#include "stencil_outer_loops.hpp"
+#include "stencil_rank_loops.hpp"
 
 }
 
@@ -306,7 +307,7 @@ void StencilBase::exchange_halos(StencilContext& context, idx_t rt,
 
             // Pack left-edge data from main grid.
             idx_t begin_rxv = 0;
-            idx_t end_rxv = context.hx / VLEN_X;
+            idx_t end_rxv = CEIL_DIV(context.hx, VLEN_X);
 #include "stencil_halo_loops.hpp"
 
             // Send data to left rank.
@@ -331,7 +332,7 @@ void StencilBase::exchange_halos(StencilContext& context, idx_t rt,
 
             // Pack right-edge data from main grid.
             idx_t begin_rxv = (context.dx - context.hx) / VLEN_X;
-            idx_t end_rxv = context.dx / VLEN_X;
+            idx_t end_rxv = CEIL_DIV(context.dx, VLEN_X);
 #include "stencil_halo_loops.hpp"
 
             // Send data to right rank.

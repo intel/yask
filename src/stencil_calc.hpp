@@ -47,8 +47,8 @@ struct StencilContext {
     idx_t dt, ds, dn, dx, dy, dz;     // rank size.
     idx_t rt, rs, rn, rx, ry, rz;     // region size.
     idx_t bt, bs, bn, bx, by, bz;     // block size.
-    idx_t hn, hx, hy, hz;             // spatial halos (used for grids in eqGridPtrs).
-    idx_t pn, px, py, pz;             // spatial padding (used for all grids).
+    idx_t hn, hx, hy, hz;             // spatial halos (required by stencil).
+    idx_t pn, px, py, pz;             // spatial padding (extra to avoid alignment).
     idx_t angle_n, angle_x, angle_y, angle_z; // temporal skewing angles.
 
     // MPI.

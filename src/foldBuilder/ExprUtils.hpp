@@ -176,6 +176,15 @@ public:
 class CounterVisitor : public TrackingVisitor {
 protected:
     int _numOps, _numNodes, _numReads, _numWrites, _numParamReads;
+    map<const Grid*, IntTuple> _maxPoints, _minPoints;
+
+    const IntTuple* getPoints(const Grid* gp,
+                              const map<const Grid*, IntTuple>& mp) const {
+        auto i = mp.find(gp);
+        if (i != mp.end())
+            return &(i->second);
+        return 0;
+    }
     
 public:
     CounterVisitor() :
@@ -188,6 +197,28 @@ public:
     int getNumWrites() const { return _numWrites; }
     int getNumParamReads() const { return _numParamReads; }
     int getNumOps() const { return _numOps; }
+    const IntTuple* getMaxPoints(const Grid* gp) const {
+        return getPoints(gp, _maxPoints);
+    }
+    const IntTuple* getMinPoints(const Grid* gp) const {
+        return getPoints(gp, _minPoints);
+    }
+
+    // Return halo needed for given grid in given dimension.
+    // TODO: allow separate halos for beginning and end.
+    int getHalo(const Grid* gp, const string& dim) const {
+        auto maxps = getMaxPoints(gp);
+        auto minps = getMinPoints(gp);
+        const int* maxp = maxps ? maxps->lookup(dim) : 0;
+        const int* minp = minps ? minps->lookup(dim) : 0;
+        if (!maxp && !minp)
+            return 0;
+        if (!maxp)
+            return abs(*minp);
+        if (!minp)
+            return abs(*maxp);
+        return max(abs(*minp), abs(*maxp));
+    }
 
     // Leaf nodes.
     virtual void visit(ConstExpr* ce) {
@@ -205,6 +236,13 @@ public:
             _numParamReads++;
         else
             _numReads++;
+
+        // Track max and min points accessed for this grid.
+        const Grid* g = gp->getGrid();
+        auto& maxp = _maxPoints[g];
+        maxp = gp->maxElements(maxp, false);
+        auto& minp = _minPoints[g];
+        minp = gp->minElements(minp, false);
     }
     
     // Unary: Count as one op and visit operand.

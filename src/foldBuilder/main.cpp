@@ -463,118 +463,143 @@ int main(int argc, const char* argv[]) {
             "' stencil //////" << endl;
 
         // Create the overall context class.
-        cout << endl << "////// Overall stencil-context class //////" << endl <<
-            "struct " << context << " : public StencilContext {" << endl;
+        {
+            // get stats for just one element (not cluster).
+            CounterVisitor cve;
+            grids.acceptToFirst(&cve);
+            IntTuple maxHalos;
 
-        // Grids.
-        cout << endl << " // Grids." << endl;
-        map<Grid*, string> typeNames, dimArgs, padArgs;
-        for (auto gp : grids) {
-            assert (!gp->isParam());
-            string grid = gp->getName();
+            cout << endl << "////// Overall stencil-context class //////" << endl <<
+                "struct " << context << " : public StencilContext {" << endl;
 
-            // Type name & ctor params.
-            // Name in kernel is 'Grid_' followed by dimensions.
-            string typeName = "Grid_";
-            string dimArg, padArg;
-            for (auto dim : gp->getDims()) {
-                string ucDim = allCaps(dim);
-                typeName += ucDim;
+            // Grids.
+            cout << endl << " // Grids." << endl;
+            map<Grid*, string> typeNames, dimArgs, padArgs;
+            for (auto gp : grids) {
+                assert (!gp->isParam());
+                string grid = gp->getName();
 
-                // don't want the time dimension during construction.
-                // TODO: make this more generic.
-                if (dim != "t") {
-                    dimArg += "d" + dim + ", ";
+                // Type name & ctor params.
+                // Name in kernel is 'Grid_' followed by dimensions.
+                string typeName = "Grid_";
+                string dimArg, padArg;
+                for (auto dim : gp->getDims()) {
+                    string ucDim = allCaps(dim);
+                    typeName += ucDim;
 
-                    // Halo needed?
-                    if (equations.getEqGrids().count(gp))
-                        padArg += "h" + dim + " + ";
+                    // don't want the time dimension during construction.
+                    // TODO: make this more generic.
+                    if (dim != "t") {
+                        dimArg += "d" + dim + ", ";
 
-                    // Extra padding.
-                    padArg += "p" + dim + ", ";
+                        // Halo for this dimension.
+                        int halo = cve.getHalo(gp, dim);
+                        string hvar = grid + "_halo_" + dim;
+                        cout << " const idx_t " << hvar << " = " << halo << ";" << endl;
+                        padArg += hvar + " + ";
+
+                        // Update max halo.
+                        int* mh = maxHalos.lookup(dim);
+                        if (mh)
+                            *mh = max(*mh, halo);
+                        else
+                            maxHalos.addDim(dim, halo);
+
+                        // Extra padding.
+                        padArg += "p" + dim + ", ";
+                    }
                 }
+                typeNames[gp] = typeName;
+                dimArgs[gp] = dimArg;
+                padArgs[gp] = padArg;
+                cout << " " << typeName << "* " << grid << "; // ";
+                if (equations.getEqGrids().count(gp) == 0)
+                    cout << "not ";
+                cout << "updated by stencil." << endl;
             }
-            typeNames[gp] = typeName;
-            dimArgs[gp] = dimArg;
-            padArgs[gp] = padArg;
-            cout << " " << typeName << "* " << grid << ";" << endl;
-        }
 
-        // Parameters.
-        map<Param*, string> paramTypeNames, paramDimArgs;
-        cout << endl << " // Parameters." << endl;
-        for (auto pp : params) {
-            assert(pp->isParam());
-            string param = pp->getName();
+            // Max halos.
+            cout << endl << " // Max halos across all grids." << endl;
+            for (auto dim : maxHalos.getDims())
+                cout << " const idx_t max_halo_" << dim << " = " <<
+                    maxHalos.getVal(dim) << ";" << endl;
 
-            // Type name.
-            // Name in kernel is 'GenericGridNd<Real>'.
-            ostringstream oss;
-            oss << "GenericGrid" << pp->size() << "d<Real";
-            if (pp->size()) {
-                oss << ",Layout_";
-                for (int dn = pp->size(); dn > 0; dn--)
-                    oss << dn;
-            }
-            oss << ">";
-            string typeName = oss.str();
+            // Parameters.
+            map<Param*, string> paramTypeNames, paramDimArgs;
+            cout << endl << " // Parameters." << endl;
+            for (auto pp : params) {
+                assert(pp->isParam());
+                string param = pp->getName();
 
-            // Ctor params.
-            string dimArg = pp->makeValStr();
+                // Type name.
+                // Name in kernel is 'GenericGridNd<Real>'.
+                ostringstream oss;
+                oss << "GenericGrid" << pp->size() << "d<Real";
+                if (pp->size()) {
+                    oss << ",Layout_";
+                    for (int dn = pp->size(); dn > 0; dn--)
+                        oss << dn;
+                }
+                oss << ">";
+                string typeName = oss.str();
+
+                // Ctor params.
+                string dimArg = pp->makeValStr();
             
-            paramTypeNames[pp] = typeName;
-            paramDimArgs[pp] = dimArg;
-            cout << " " << typeName << "* " << param << ";" << endl;
+                paramTypeNames[pp] = typeName;
+                paramDimArgs[pp] = dimArg;
+                cout << " " << typeName << "* " << param << ";" << endl;
+            }
+
+            // Ctor.
+            cout << endl << " " << context << "() {" << endl <<
+                "  name = \"" << shapeName << "\";" << endl;
+
+            // Init grid ptrs.
+            for (auto gp : grids) {
+                string grid = gp->getName();
+                cout << "  " << grid << " = 0;" << endl;
+            }
+
+            // Init param ptrs.
+            for (auto pp : params) {
+                string param = pp->getName();
+                cout << "  " << param << " = 0;" << endl;
+            }
+
+            // end of ctor.
+            cout << " }" << endl;
+
+            // Allocate grids.
+            cout << endl << " void allocGrids() {" << endl;
+            cout << "  gridPtrs.clear();" << endl;
+            cout << "  eqGridPtrs.clear();" << endl;
+            for (auto gp : grids) {
+                string grid = gp->getName();
+                cout << "  " << grid << " = new " << typeNames[gp] <<
+                    "(" << dimArgs[gp] << padArgs[gp] << "\"" << grid << "\");" << endl <<
+                    "  gridPtrs.push_back(" << grid << ");" << endl;
+
+                // Grids w/equations.
+                if (equations.getEqGrids().count(gp))
+                    cout << "  eqGridPtrs.push_back(" << grid  << ");" << endl;
+            }
+            cout << " }" << endl;
+
+            // Allocate params.
+            cout << endl << " void allocParams() {" << endl;
+            cout << "  paramPtrs.clear();" << endl;
+            for (auto pp : params) {
+                string param = pp->getName();
+                cout << "  " << param << " = new " << paramTypeNames[pp] <<
+                    "(" << paramDimArgs[pp] << ");" << endl <<
+                    "  paramPtrs.push_back(" << param << ");" << endl;
+            }
+            cout << " }" << endl;
+
+            // end of context.
+            cout << "};" << endl;
         }
-
-        // Ctor.
-        cout << endl << " " << context << "() {" << endl <<
-            "  name = \"" << shapeName << "\";" << endl;
-
-        // Init grid ptrs.
-        for (auto gp : grids) {
-            string grid = gp->getName();
-            cout << "  " << grid << " = 0;" << endl;
-        }
-
-        // Init param ptrs.
-        for (auto pp : params) {
-            string param = pp->getName();
-            cout << "  " << param << " = 0;" << endl;
-        }
-
-        // end of ctor.
-        cout << " }" << endl;
-
-        // Allocate grids.
-        cout << endl << " void allocGrids() {" << endl;
-        cout << "  gridPtrs.clear();" << endl;
-        cout << "  eqGridPtrs.clear();" << endl;
-        for (auto gp : grids) {
-            string grid = gp->getName();
-            cout << "  " << grid << " = new " << typeNames[gp] <<
-                "(" << dimArgs[gp] << padArgs[gp] << "\"" << grid << "\");" << endl <<
-                "  gridPtrs.push_back(" << grid << ");" << endl;
-
-            // Grids w/equations.
-            if (equations.getEqGrids().count(gp))
-                cout << "  eqGridPtrs.push_back(" << grid  << ");" << endl;
-        }
-        cout << " }" << endl;
-
-        // Allocate params.
-        cout << endl << " void allocParams() {" << endl;
-        cout << "  paramPtrs.clear();" << endl;
-        for (auto pp : params) {
-            string param = pp->getName();
-            cout << "  " << param << " = new " << paramTypeNames[pp] <<
-                "(" << paramDimArgs[pp] << ");" << endl <<
-                "  paramPtrs.push_back(" << param << ");" << endl;
-        }
-        cout << " }" << endl;
-
-        // end of context.
-        cout << "};" << endl;
         
         // Loop through all equations.
         for (auto& eq : equations) {
@@ -803,7 +828,6 @@ int main(int argc, const char* argv[]) {
         cout << "#define STENCIL_CONTEXT " << context << endl;
         cout << "#define STENCIL_EQUATIONS StencilEquations_" << shapeName <<
             "<" << context << ">" << endl;
-        cout << "#define STENCIL_ORDER " << stencilFunc->getOrder() << endl; // TODO: calculate actual halo sizes.
 
         cout << endl;
         cout << "// Dimensions:" << endl;

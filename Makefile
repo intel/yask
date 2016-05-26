@@ -24,7 +24,7 @@
 # Type 'make help' for some examples.
 
 # stencil name: iso3dfd, 3axis, 9axis, 3plane, cube, ave, awp
-stencil		= 	iso3dfd
+stencil		= 	unspecified
 
 # target architecture: see options below.
 arch		=	host
@@ -182,12 +182,13 @@ LFLAGS          +=       $(CPPFLAGS) -lrt -g
 FB_CC    	=       icpc
 FB_CCFLAGS 	+=	-g -O1 -std=c++11 -Wall  # low opt to reduce compile time.
 FB_FLAGS   	+=	-or $(order) -st $(stencil) -cluster $(cluster) -fold $(fold)
-GEN_HEADERS     =	$(addprefix src/,stencil_outer_loops.hpp \
+GEN_HEADERS     =	$(addprefix src/, \
+				stencil_macros.hpp stencil_code.hpp \
+				stencil_rank_loops.hpp \
 				stencil_region_loops.hpp \
 				stencil_halo_loops.hpp \
 				stencil_block_loops.hpp \
-				layout_macros.hpp layouts.hpp \
-				stencil_macros.hpp stencil_code.hpp)
+				layout_macros.hpp layouts.hpp )
 ifneq ($(eqs),)
   FB_FLAGS   	+=	-eq $(eqs)
 endif
@@ -236,13 +237,13 @@ endif
 
 # gen-loops.pl args for outer 3 sets of loops:
 
-# Outer loops break up the whole rank into smaller regions.
+# Rank loops break up the whole rank into smaller regions.
 # In order for tempral wavefronts to operate properly, the
 # order of spatial dimensions may be changed, but traversal
 # paths that do not simply increment the indices (such as
 # serpentine or square) may not be used here.
-OUTER_LOOP_OPTS		=	-dims 'dt,dn,dx,dy,dz'
-OUTER_LOOP_CODE		=	loop(dt) { loop(dn,dx,dy,dz) { calc(region); } }
+RANK_LOOP_OPTS		=	-dims 'dt,dn,dx,dy,dz'
+RANK_LOOP_CODE		=	loop(dt) { loop(dn,dx,dy,dz) { calc(region); } }
 
 # Region loops break up a region using OpenMP threading into blocks.
 # The region time loops are not coded here to allow for proper
@@ -300,6 +301,7 @@ settings: $(STENCIL_EXEC_NAME)
 	@echo layout_4d=$(layout_4d)
 	@echo time_dim_size=$(time_dim_size)
 	@echo streaming_stores=$(streaming_stores)
+	@echo omp_schedule=$(omp_schedule)
 	@echo FB_TARGET="\"$(FB_TARGET)\""
 	@echo FB_FLAGS="\"$(FB_FLAGS)\""
 	@echo EXTRA_FB_FLAGS="\"$(EXTRA_FB_FLAGS)\""
@@ -309,8 +311,8 @@ settings: $(STENCIL_EXEC_NAME)
 	@echo OMPFLAGS="\"$(OMPFLAGS)\""
 	@echo EXTRA_CPPFLAGS="\"$(EXTRA_CPPFLAGS)\""
 	@echo CPPFLAGS="\"$(CPPFLAGS)\""
-	@echo OUTER_LOOP_OPTS="\"$(OUTER_LOOP_OPTS)\""
-	@echo OUTER_LOOP_CODE="\"$(OUTER_LOOP_CODE)\""
+	@echo RANK_LOOP_OPTS="\"$(RANK_LOOP_OPTS)\""
+	@echo RANK_LOOP_CODE="\"$(RANK_LOOP_CODE)\""
 	@echo REGION_LOOP_OPTS="\"$(REGION_LOOP_OPTS)\""
 	@echo REGION_LOOP_CODE="\"$(REGION_LOOP_CODE)\""
 	@echo BLOCK_LOOP_OPTS="\"$(BLOCK_LOOP_OPTS)\""
@@ -330,8 +332,8 @@ $(STENCIL_EXEC_NAME): $(STENCIL_OBJS)
 
 preprocess: $(STENCIL_CPP)
 
-src/stencil_outer_loops.hpp: gen-loops.pl Makefile
-	./$< -output $@ $(OUTER_LOOP_OPTS) $(EXTRA_LOOP_OPTS) $(EXTRA_OUTER_LOOP_OPTS) "$(OUTER_LOOP_CODE)"
+src/stencil_rank_loops.hpp: gen-loops.pl Makefile
+	./$< -output $@ $(RANK_LOOP_OPTS) $(EXTRA_LOOP_OPTS) $(EXTRA_RANK_LOOP_OPTS) "$(RANK_LOOP_CODE)"
 
 src/stencil_region_loops.hpp: gen-loops.pl Makefile
 	./$< -output $@ $(REGION_LOOP_OPTS) $(EXTRA_LOOP_OPTS) $(EXTRA_REGION_LOOP_OPTS) "$(REGION_LOOP_CODE)"
