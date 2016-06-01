@@ -382,7 +382,7 @@ realclean: clean
 help:
 	@echo "Example usage:"
 	@echo "make clean; make arch=knc stencil=iso3dfd"
-	@echo "make clean; make arch=knl stencil=3axis order=8"
+	@echo "make clean; make arch=knl stencil=3axis order=8 INNER_BLOCK_LOOP_OPTS='prefetch(L1)'"
 	@echo "make clean; make arch=skx stencil=ave fold='x=1,y=2,z=4' cluster='x=2'"
 	@echo " "
 	@echo "Example debug usage:"

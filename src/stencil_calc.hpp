@@ -159,14 +159,18 @@ struct StencilBase {
 #define ARG_N(n)
 #endif
 
-// Prefetch a cluser starting at vector indices i, j, k.
-// Generic macro to handle different cache levels.
-#define PREFETCH_CLUSTER(fn, t, n, i, j, k)                             \
-    do {                                                                \
+// Define a method named cfn to prefetch a cluster by calling vfn.
+#define PREFETCH_CLUSTER_METHOD(cfn, vfn)                               \
+    ALWAYS_INLINE void                                                  \
+    cfn (ContextClass& context, idx_t ct,                               \
+         idx_t begin_cnv, idx_t begin_cxv, idx_t begin_cyv, idx_t begin_czv, \
+         idx_t end_cnv, idx_t end_cxv, idx_t end_cyv, idx_t end_czv) {  \
         TRACE_MSG("%s.%s(%ld, %ld, %ld, %ld, %ld)",                     \
-                  get_name().c_str(), #fn, t, n, i, j, k);              \
-        _stencil.fn(context, t, ARG_N(n) i, j, k);                      \
-    } while(0)
+                  get_name().c_str(), #cfn, ct,                         \
+                  begin_cnv, begin_cxv, begin_cyv, begin_czv);          \
+        _stencil.vfn(context, ct,                                       \
+                     ARG_N(begin_cnv) begin_cxv, begin_cyv, begin_czv); \
+    }
 
 // A template that provides wrappers around a stencil-equation class created
 // by the foldBuilder. A template is used instead of inheritance for performance.
@@ -246,25 +250,19 @@ public:
         _stencil.calc_vector(context, ct, ARG_N(begin_cnv) begin_cxv, begin_cyv, begin_czv);
     }
 
-    // Prefetch a cluster into L1.
-    // Called from calc_block().
-    ALWAYS_INLINE void
-    prefetch_L1_cluster (ContextClass& context, idx_t ct,
-                         idx_t begin_cnv, idx_t begin_cxv, idx_t begin_cyv, idx_t begin_czv,
-                         idx_t end_cnv, idx_t end_cxv, idx_t end_cyv, idx_t end_czv)
-    {
-        PREFETCH_CLUSTER(prefetch_L1_vector, ct, begin_cnv, begin_cxv, begin_cyv, begin_czv);
-    }
-    
-    // Prefetch a cluster into L2.
-    // Called from calc_block().
-    ALWAYS_INLINE void
-    prefetch_L2_cluster (ContextClass& context, idx_t ct,
-                         idx_t begin_cnv, idx_t begin_cxv, idx_t begin_cyv, idx_t begin_czv,
-                         idx_t end_cnv, idx_t end_cxv, idx_t end_cyv, idx_t end_czv)
-    {
-        PREFETCH_CLUSTER(prefetch_L2_vector, ct, begin_cnv, begin_cxv, begin_cyv, begin_czv);
-    }
+    // Prefetch a cluster.
+    PREFETCH_CLUSTER_METHOD(prefetch_L1_cluster, prefetch_L1_vector)
+    PREFETCH_CLUSTER_METHOD(prefetch_L2_cluster, prefetch_L2_vector)
+#if USING_DIM_N
+    PREFETCH_CLUSTER_METHOD(prefetch_L1_cluster_bnv, prefetch_L1_vector_n)
+    PREFETCH_CLUSTER_METHOD(prefetch_L2_cluster_bnv, prefetch_L2_vector_n)
+#endif
+    PREFETCH_CLUSTER_METHOD(prefetch_L1_cluster_bxv, prefetch_L1_vector_x)
+    PREFETCH_CLUSTER_METHOD(prefetch_L2_cluster_bxv, prefetch_L2_vector_x)
+    PREFETCH_CLUSTER_METHOD(prefetch_L1_cluster_byv, prefetch_L1_vector_y)
+    PREFETCH_CLUSTER_METHOD(prefetch_L2_cluster_byv, prefetch_L2_vector_y)
+    PREFETCH_CLUSTER_METHOD(prefetch_L1_cluster_bzv, prefetch_L1_vector_z)
+    PREFETCH_CLUSTER_METHOD(prefetch_L2_cluster_bzv, prefetch_L2_vector_z)
     
     // Calculate results within a cache block.
     // This function implements the interface in the base class.

@@ -147,12 +147,7 @@ extern Cache cache;
 
 // how far to prefetch ahead for L2.
 #ifndef PFDL2
-#define PFDL2 8
-#endif
-
-// make sure PFDL2 > PFDL1.
-#if PFDL2 <= PFDL1
-#error "PFDL2 <= PFDL1"
+#define PFDL2 10
 #endif
 
 #endif

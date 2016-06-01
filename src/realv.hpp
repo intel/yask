@@ -504,8 +504,9 @@ ALWAYS_INLINE realv operator/(Real lhs, const realv& rhs) {
 // Get consecutive elements from two vectors.
 // Concat a and b, shift right by count elements, keep rightmost elements.
 // Thus, shift of 0 returns b; shift of VLEN returns a.
-ALWAYS_INLINE void realv_align(realv& res, const realv& a, const realv& b,
-                                  const int count) {
+// Must be a template because count has to be known at compile-time.
+template<int count>
+ALWAYS_INLINE void realv_align(realv& res, const realv& a, const realv& b) {
 #ifdef TRACE_INTRINSICS
     cout << "realv_align w/count=" << count << ":" << endl;
     cout << " a: ";
@@ -548,8 +549,9 @@ ALWAYS_INLINE void realv_align(realv& res, const realv& a, const realv& b,
 // Get consecutive elements from two vectors w/masking.
 // Concat a and b, shift right by count elements, keep rightmost elements.
 // Elements in res corresponding to 0 bits in k1 are unchanged.
-ALWAYS_INLINE void realv_align(realv& res, const realv& a, const realv& b,
-                               const int count, unsigned int k1) {
+template<int count>
+ALWAYS_INLINE void realv_align_masked(realv& res, const realv& a, const realv& b,
+                                      unsigned int k1) {
 #ifdef TRACE_INTRINSICS
     cout << "realv_align w/count=" << count << " w/mask:" << endl;
     cout << " a: ";
@@ -608,8 +610,8 @@ ALWAYS_INLINE void realv_permute(realv& res, const realv& ctrl, const realv& a) 
 
 // Rearrange elements in a vector w/masking.
 // Elements in res corresponding to 0 bits in k1 are unchanged.
-ALWAYS_INLINE void realv_permute(realv& res, const realv& ctrl, const realv& a,
-                                 unsigned int k1) {
+ALWAYS_INLINE void realv_permute_masked(realv& res, const realv& ctrl, const realv& a,
+                                        unsigned int k1) {
 #ifdef TRACE_INTRINSICS
     cout << "realv_permute w/mask:" << endl;
     cout << " ctrl: ";

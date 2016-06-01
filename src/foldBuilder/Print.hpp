@@ -297,10 +297,10 @@ public:
             PrintVisitorTopDown* topDown = newPrintVisitorTopDown();
             ex->accept(topDown);
 
-            // were there any common sub-exprs found?
+            // were there any common subexprs found?
             bool ok = topDown->getNumCommon() == 0;
 
-            // if no CSEs, use the resulting expression.
+            // if no common subexprs, use the resulting expression.
             if (ok)
                 _exprStr = topDown->getExprStr();
             

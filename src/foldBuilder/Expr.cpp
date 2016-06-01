@@ -211,6 +211,40 @@ bool EqualsExpr::isSame(const Expr* other) {
             _rhs->isSame(p->_rhs.get());
     }
 
+// Commutative methods.
+bool CommutativeExpr::isSame(const Expr* other) {
+    auto p = dynamic_cast<const CommutativeExpr*>(other);
+    if (!p || _opStr != p->_opStr)
+        return false;
+    if (_ops.size() != p->_ops.size())
+        return false;
+        
+    // Operands must be the same, but not in same order.
+    set<ExprPtr> matches;
+
+    // Loop through this set of ops.
+    for (auto op : _ops) {
+
+        // Loop through other set of ops, looking for match.
+        bool found = false;
+        for (auto oop : p->_ops) {
+
+            // check unless already matched.
+            if (matches.count(oop) == 0 && op->isSame(oop.get())) {
+                matches.insert(oop);
+                found = true;
+                break;
+            }
+        }
+        if (!found)
+            return false;
+    }
+
+    // Do all match?
+    return matches.size() == _ops.size();
+}
+
+
 // GridPoint methods.
 const string& GridPoint::getName() const {
     return _grid->getName();

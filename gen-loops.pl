@@ -58,72 +58,12 @@ my $genericCache = "L#";        # a string placeholder for L1 or L2.
 my $bSerp = 0x1;                # serpentine path
 my $bSquare = 0x2;              # square_wave path
 my $bPipe = 0x4;                # pipeline
-my $bPrefetch = 0x8;            # prefetch code
-my $bSimd = 0x10;               # simd prefix
+my $bSimd = 0x8;                # simd prefix
+my $bPrefetchL1 = 0x10;         # prefetch L1
+my $bPrefetchL2 = 0x20;         # prefetch L2
 
-# Returns next token.
-sub checkToken($$$) {
-  my $tok = shift;      # token.
-  my $allowed = shift;  # regex.
-  my $dieIfNotAllowed = shift;
-
-  if (!defined $tok) {
-    die "error: unexpected end of input.\n";
-  }
-  if ($tok !~ /^$allowed$/) {
-    if ($dieIfNotAllowed) {
-      die "error: illegal token '$tok': expected '$allowed'.\n";
-    } else {
-      return undef;
-    }
-  }
-
-  return $tok;
-}
-
-# Get next arg (opening paren must already be consumed).
-# Return undef if none (closing paren is consumed).
-sub getNextArg($$) {
-  my $toks = shift;             # ref to token array.
-  my $ti = shift;               # ref to token index (starting at paren).
-
-  while (1) {
-    my $tok = checkToken($toks->[$$ti++], '\w+|\)|,', 1);
-
-    # comma (ignore).
-    if ($tok eq ',') {
-    }
-
-    # end.
-    elsif ($tok eq ')') {
-      return undef;
-    }
-
-    # actual token.
-    else {
-      return $tok;
-    }
-  }
-}
-
-# get a list of simple args.
-sub getArgs($$) {
-  my $toks = shift;             # ref to token array.
-  my $ti = shift;               # ref to token index (starting at paren).
-
-  my @args;
-  while (1) {
-    my $arg = getNextArg($toks, $ti);
-    if ($arg) {
-      push @args, $arg;
-    } else {
-      last;
-    }
-  }
-  return @args;
-}
-
-# names of variables based on dimension string(s).
+##########
+# Function to make names of variables based on dimension string(s).
 
 # these must already be defined.
 sub beginVar {
@@ -199,8 +139,11 @@ sub specifyCache($$) {
     map { s/$genericCache/L$cache/g; } @$strs;
 }
 
+###########
+# Loop-constructing functions.
+
 # return type of var needed for loop index.
-# args: dimension(s).
+# args: dimension(s) -- currently ignored.
 sub indexType {
     return 'idx_t';
 }
@@ -242,16 +185,16 @@ sub addIndexVars($$) {
 # add index variables *inside* the loop.
 sub addIndexVars2($$$$$) {
     my $code = shift;           # ref to list of code lines.
-    my $loopDims = shift;           # ref to list of dimensions.
+    my $loopDims = shift;       # ref to list of dimensions in loop.
     my $isPrefetch = shift;     # true if for prefetch vars.
-    my $features = shift;           # bits for path types.
+    my $features = shift;       # bits for path types.
     my $loopStack = shift;      # whole stack, including enclosing dims.
 
     my $itype = indexType(@$loopDims);
-    my $civar = loopIndexVar(@$loopDims); # collapsed index var.
+    my $civar = loopIndexVar(@$loopDims);     # collapsed index var.
     my $pfcivar = pfLoopIndexVar(@$loopDims); # collapsed prefetch index var.
-    my $outerDim = $loopDims->[0];
-    my $innerDim = $loopDims->[$#$loopDims];
+    my $outerDim = $loopDims->[0];            # outer dim of these loops.
+    my $innerDim = $loopDims->[$#$loopDims];  # inner dim of these loops.
 
     # prefetch is offset from main index.
     if ($isPrefetch) {
@@ -259,88 +202,88 @@ sub addIndexVars2($$$$$) {
         push @$code, " $itype $pfcivar = $civar + PFD$genericCache;";
     }
 
-    # find enclosing dim if avail.
+    # find enclosing dim outside of these loops if avail.
     my $encDim;
     map { $encDim = $loopStack->[$_]
               if $loopStack->[$_ + 1] eq $outerDim; } 0..($#$loopStack-1);
     my $prevDivar;
-    $prevDivar = $isPrefetch ? pfIndexVar($encDim) : indexVar($encDim)
+    $prevDivar = indexVar($encDim)
         if defined $encDim;
-    
+
     # computed 0-based index var value for each dim.
-        my $prevDim = $encDim;
-        my $prevNvar;
-        my $innerDivar = $isPrefetch ? pfIndexVar($innerDim) : indexVar($innerDim);
-        my $innerNvar = numVar($innerDim);
+    my $prevDim = $encDim;
+    my $prevNvar;
+    my $innerDivar = $isPrefetch ? pfIndexVar($innerDim) : indexVar($innerDim);
+    my $innerNvar = numVar($innerDim);
 
-        # loop through each dim, outer to inner.
-        for my $i (0..$#$loopDims) {
-            my $dim = $loopDims->[$i];
-            my $nvar = numVar($dim);
-            my $isInner = ($i == $#$loopDims);
+    # loop through each dim, outer to inner.
+    for my $i (0..$#$loopDims) {
+        my $dim = $loopDims->[$i];
+        my $nvar = numVar($dim);
+        my $isInner = ($i == $#$loopDims);
 
-            # need to map $ivar to $divar.
-            # note that $pfcivar might be >= numVar(@$loopDims).
-            my $ivar = $isPrefetch ? $pfcivar : $civar;
-            my $divar = $isPrefetch ? pfIndexVar($dim) : indexVar($dim);
+        # need to map $ivar to $divar.
+        # note that $pfcivar might be >= numVar(@$loopDims).
+        my $ivar = $isPrefetch ? $pfcivar : $civar;
+        my $divar = $isPrefetch ? pfIndexVar($dim) : indexVar($dim);
 
-            push @$code,
-            " // Zero-based, unit-stride ".($isPrefetch ? 'prefetch ' : '')."index var for $dim.";
+        push @$code,
+        " // Zero-based, unit-stride ".($isPrefetch ? 'prefetch ' : '')."index var for $dim.";
 
-            # numerator of mod.
-            my $num = "$ivar";
+        # numerator of mod.
+        my $num = "$ivar";
 
-            # divisor of index is product of sizes of remaining nested dimensions.
-            if (!$isInner) {
-                my $div = join('*', map { numVar($loopDims->[$_]) } $i+1 .. $#$loopDims);
-                $num .= " / ($div)";
-            }
-
-            # mod by size of this dimension (not needed for outer-most dim).
-            if ($i > 0) {
-                push @$code, " idx_t $divar = ($num) % $nvar;";
-            } else {
-                push @$code, " idx_t $divar = $num;";
-            }
-
-            # apply square-wave to inner 2 dimensions if requested.
-            my $isInnerSquare = @$loopDims >=2 && $isInner && ($features & $bSquare);
-            if ($isInnerSquare) {
-
-                my $divar2 = "${divar}_x2";
-                my $avar = "${prevDivar}_lsb";
-                push @$code, 
-                " // Modify $prevDivar and $divar for 'square_wave' path.",
-                " if (($innerNvar > 1) && ($prevDivar/2 < $prevNvar/2)) {",
-                "  // Compute extended $dim index over 2 iterations of $prevDivar.",
-                "  idx_t $divar2 = $divar + ($nvar * ($prevDivar & 1));",
-                "  // Select $divar from 0,0,1,1,2,2,... sequence",
-                "  $divar = $divar2 / 2;",
-                "  // Select $prevDivar adjustment value from 0,1,1,0,0,1,1, ... sequence.",
-                "  idx_t $avar = ($divar2 & 1) ^ (($divar2 & 2) >> 1);",
-                "  // Adjust $prevDivar +/-1 by replacing bit 0.",
-                "  $prevDivar = ($prevDivar & (idx_t)-2) | $avar;",
-                " } // square-wave.";
-            }
-
-            # reverse order of every-other traversal if requested.
-            # for inner dim with square-wave, do every 2.
-            if (($features & $bSerp) && defined $prevDivar) {
-                if ($isInnerSquare) {
-                    push @$code,
-                    " // Reverse direction of $divar after every-other iteration of $prevDivar for 'square_wave serpentine' path.",
-                    " if (($prevDivar & 2) == 2) $divar = $nvar - $divar - 1;";
-                } else {
-                    push @$code,
-                    " // Reverse direction of $divar after every iteration of $prevDivar for  'serpentine' path.",
-                    " if (($prevDivar & 1) == 1) $divar = $nvar - $divar - 1;";
-                }
-            }
-            
-            $prevDim = $dim;
-            $prevDivar = $divar;
-            $prevNvar = $nvar;
+        # divisor of index is product of sizes of remaining nested dimensions.
+        if (!$isInner) {
+            my $div = join('*', map { numVar($loopDims->[$_]) } $i+1 .. $#$loopDims);
+            $num .= " / ($div)";
         }
+
+        # mod by size of this dimension (not needed for outer-most dim).
+        if ($i > 0) {
+            push @$code, " idx_t $divar = ($num) % $nvar;";
+        } else {
+            push @$code, " idx_t $divar = $num;";
+        }
+
+        # apply square-wave to inner 2 dimensions if requested.
+        my $isInnerSquare = @$loopDims >=2 && $isInner && ($features & $bSquare);
+        if ($isInnerSquare) {
+
+            my $divar2 = "${divar}_x2";
+            my $avar = "${prevDivar}_lsb";
+            push @$code, 
+            " // Modify $prevDivar and $divar for 'square_wave' path.",
+            " if (($innerNvar > 1) && ($prevDivar/2 < $prevNvar/2)) {",
+            "  // Compute extended $dim index over 2 iterations of $prevDivar.",
+            "  idx_t $divar2 = $divar + ($nvar * ($prevDivar & 1));",
+            "  // Select $divar from 0,0,1,1,2,2,... sequence",
+            "  $divar = $divar2 / 2;",
+            "  // Select $prevDivar adjustment value from 0,1,1,0,0,1,1, ... sequence.",
+            "  idx_t $avar = ($divar2 & 1) ^ (($divar2 & 2) >> 1);",
+            "  // Adjust $prevDivar +/-1 by replacing bit 0.",
+            "  $prevDivar = ($prevDivar & (idx_t)-2) | $avar;",
+            " } // square-wave.";
+        }
+
+        # reverse order of every-other traversal if requested.
+        # for inner dim with square-wave, do every 2.
+        if (($features & $bSerp) && defined $prevDivar) {
+            if ($isInnerSquare) {
+                push @$code,
+                " // Reverse direction of $divar after every-other iteration of $prevDivar for 'square_wave serpentine' path.",
+                " if (($prevDivar & 2) == 2) $divar = $nvar - $divar - 1;";
+            } else {
+                push @$code,
+                " // Reverse direction of $divar after every iteration of $prevDivar for  'serpentine' path.",
+                " if (($prevDivar & 1) == 1) $divar = $nvar - $divar - 1;";
+            }
+        }
+
+        $prevDim = $dim;
+        $prevDivar = $divar;
+        $prevNvar = $nvar;
+    }
 
     # start and stop vars based on individual begin, end, step, and index vars.
     for my $dim (@$loopDims) {
@@ -382,6 +325,9 @@ sub endLoop($) {
     push @$code, " }";
 }
 
+##########
+# Parsing functions.
+
 # Split a string into tokens, ignoring whitespace.
 sub tokenize($) {
     my $str = shift;
@@ -402,6 +348,72 @@ sub tokenize($) {
         push @toks, $tok unless $tok =~ /\s/;
     }
     return @toks;
+}
+
+# Returns next token if match to allowed.
+# If not match, return undef or die.
+sub checkToken($$$) {
+  my $tok = shift;      # token to look at.
+  my $allowed = shift;  # regex to match.
+  my $dieIfNotAllowed = shift;
+
+  # die if at end.
+  if (!defined $tok) {
+    die "error: unexpected end of input.\n";
+  }
+
+  # check match.
+  if ($tok !~ /^$allowed$/) {
+    if ($dieIfNotAllowed) {
+      die "error: illegal token '$tok': expected '$allowed'.\n";
+    } else {
+      return undef;
+    }
+  }
+
+  return $tok;
+}
+
+# Get next arg (opening paren must already be consumed).
+# Return undef if none (closing paren is consumed).
+sub getNextArg($$) {
+  my $toks = shift;             # ref to token array.
+  my $ti = shift;               # ref to token index (starting at paren).
+
+  while (1) {
+    my $tok = checkToken($toks->[$$ti++], '\w+|\)|,', 1);
+
+    # comma (ignore).
+    if ($tok eq ',') {
+    }
+
+    # end.
+    elsif ($tok eq ')') {
+      return undef;
+    }
+
+    # actual token.
+    else {
+      return $tok;
+    }
+  }
+}
+
+# get a list of simple args.
+sub getArgs($$) {
+  my $toks = shift;             # ref to token array.
+  my $ti = shift;               # ref to token index (starting at paren).
+
+  my @args;
+  while (1) {
+    my $arg = getNextArg($toks, $ti);
+    if ($arg) {
+      push @args, $arg;
+    } else {
+      last;
+    }
+  }
+  return @args;
 }
 
 # Process the loop-code string.
@@ -458,9 +470,28 @@ sub processCode($) {
         # generate prefetch in next loop.
         elsif (lc $tok eq 'prefetch') {
 
+            # get optional args from input.
+            my @pfargs;
+            if (checkToken($toks[$ti], '\(', 0)) {
+                $ti++;
+                @pfargs = getArgs(\@toks, \$ti);
+                for my $i (0..$#pfargs) {
+                    if ($pfargs[$i] =~ /^l([12])$/i) {
+                        $features |= ($1 == 1) ? $bPrefetchL1 : $bPrefetchL2;
+                    } else {
+                        die "error: argument to 'prefetch' must be 'L1' or 'L2'\n";
+                    }
+                }
+            }
+
+            # if no args, prefetch L1 and L2.
+            if (@pfargs == 0) {
+                $features |= $bPrefetchL1;
+                $features |= $bPrefetchL2;
+            }
+            
             # turn off compiler prefetch if we are generating prefetch.
             push @loopPrefix, '_Pragma("noprefetch")';
-            $features |= $bPrefetch;
             warn "info: generating prefetching in following loop.\n";
         }
 
@@ -473,7 +504,7 @@ sub processCode($) {
         }
 
         # use pipelining in next loop if possible.
-        elsif (lc $tok eq 'pipe') {
+        elsif (lc $tok eq 'pipeline') {
             $features |= $bPipe;
         }
         
@@ -557,8 +588,9 @@ sub processCode($) {
                 my $arg = getNextArg(\@toks, \$ti);
                 last if !defined($arg);
 
-                # name of function w/a direction.
-                my $fnDir = $arg.'_'.$innerDim; # e.g., fn_z.
+                # Edge suffix for simple (non-collapsed) loops.
+                my $edgeSuf = '';
+                $edgeSuf = '_'.$innerDim if @loopDims == 1;
 
                 # standard args to functions.
                 my $calcArgs = $OPT{comArgs};
@@ -570,16 +602,16 @@ sub processCode($) {
                     $calcArgs .= join(', ', '', @oargs) if (@oargs);
                 }
                 
-                # code for prefetches.
-                # e.g., prefetch_L1_fn(...); prefetch_L2_fn_z(...);
-                if ($features & $bPrefetch) {
+                # generic code for prefetches.
+                # e.g., prefetch_L#_fn(...); prefetch_L#_fn_z(...);
+                if ($features & ($bPrefetchL1 | $bPrefetchL2)) {
                     push @pfStmtsFullHere, "  $OPT{pfPrefix}${genericCache}_$arg($calcArgs, ".
                         startStopArgs(). ");";
                     push @pfStmtsFullAhead, "  $OPT{pfPrefix}${genericCache}_$arg($calcArgs, ".
                         pfStartStopArgs(@loopDims). ");";
-                    push @pfStmtsEdgeHere, "  $OPT{pfPrefix}${genericCache}_$fnDir($calcArgs, ".
+                    push @pfStmtsEdgeHere, "  $OPT{pfPrefix}${genericCache}_$arg$edgeSuf($calcArgs, ".
                         startStopArgs(). ");";
-                    push @pfStmtsEdgeAhead, "  $OPT{pfPrefix}${genericCache}_$fnDir($calcArgs, ".
+                    push @pfStmtsEdgeAhead, "  $OPT{pfPrefix}${genericCache}_$arg$edgeSuf($calcArgs, ".
                         pfStartStopArgs(@loopDims). ");";
                     warn "info: generating prefetch instructions.\n";
                 } else {
@@ -627,10 +659,20 @@ sub processCode($) {
                 push @code, " // Pipeline accumulators.", " MAKE_PIPE_$ucDir;"
                     if ($features & $bPipe);
 
-                # prefetch-starting code.
-                if ($features & $bPrefetch) {
-                    for my $i (0..1) {
-                        my $cache = ($i==0) ? 2 : 1; # fetch to L2 first.
+                # check prefetch settings.
+                if ($features & ($bPrefetchL1 | $bPrefetchL2)) {
+                    push @code, " // Check prefetch settings.",
+                    "#if PFDL2 <= PFDL1",
+                    '#error "PFDL2 <= PFDL1"',
+                    "#endif";
+                }
+                
+                # prefetch-starting loop(s).
+                # TODO: generate full prefetch once, then edge ones.
+                for my $i (0..1) {
+                    my $cache = ($i==0) ? 2 : 1; # fetch to L2 first.
+                    if (($cache == 1 && ($features & $bPrefetchL1)) ||
+                        ($cache == 2 && ($features & $bPrefetchL2))) {
 
                         my @pfCode;
                         push @pfCode, " // Prime prefetch to $genericCache.";
@@ -639,7 +681,7 @@ sub processCode($) {
                         beginLoop(\@pfCode, \@loopDims, \@loopPrefix, $pfd, $features, \@loopStack);
                         push @pfCode, " // Prefetch to $genericCache.", @pfStmtsFullHere;
                         endLoop(\@pfCode);
-
+                        
                         # convert to specific cache.
                         specifyCache(\@pfCode, $cache);
                         push @code, @pfCode;
@@ -667,21 +709,23 @@ sub processCode($) {
                     endLoop(\@code);
                 }
 
-                # midpoint calculation.
-                if ($features & $bPrefetch) {
-                    push @code, " // Point where L2-prefetch policy changes.",
-                    " // This covers all L1 fetches, even unneeded one(s) beyond end.",
-                    " const ".indexType(@loopDims)." ".midVar(@loopDims).
-                        " = max($nVar-(PFDL2-PFDL1), $nVar);";
+                # midpoint calculation for L2 prefetch only.
+                if ($features & $bPrefetchL2) {
+                    my $ofs = ($features & $bPrefetchL1) ? "(PFDL2-PFDL1)" : "PFDL2";
+                    push @code, " // Point where L2-prefetch policy changes.";
+                    push @code, " // This covers all L1 fetches, even unneeded one(s) beyond end."
+                        if ($features & $bPrefetchL1);
+                    push @code, " const ".indexType(@loopDims)." ".midVar(@loopDims).
+                        " = max($nVar-$ofs, $nVar);";
                 }
 
-                # computation loop(s):
-                # if prefetch:
-                # 0: w/L2 prefetch from start to midpoint.
-                # 1: w/o L2 prefetch from midpoint to end.
-                # if no prefetch:
-                # 0: no prefetch from start to end.
-                my $lastLoop = ($features & $bPrefetch) ? 1 : 0;
+                # 1 or 2 computation loop(s):
+                # if L2 prefetch:
+                #  loop 0: w/L2 prefetch from start to midpoint.
+                #  loop 1: w/o L2 prefetch from midpoint to end.
+                # if no L2 prefetch:
+                #  loop 0: no L2 prefetch from start to end.
+                my $lastLoop = ($features & $bPrefetchL2) ? 1 : 0;
                 for my $loop (0 .. $lastLoop) {
 
                     my $name = "Computation";
@@ -697,16 +741,18 @@ sub processCode($) {
                     push @code, " // $name.", @calcStmts;
 
                     # prefetch for future iterations.
-                    if ($features & $bPrefetch) {
-                        for my $i (0..1) {
-                            my $cache = ($i==0) ? 2 : 1; # fetch to L2 first.
+                    for my $i (0..1) {
+                        my $cache = ($i==0) ? 2 : 1; # fetch to L2 first.
+                        if (($cache == 1 && ($features & $bPrefetchL1)) ||
+                            ($cache == 2 && ($features & $bPrefetchL2))) {
+                            
                             my @pfCode;
 
                             if ($cache == 2 && $loop == 1) {
                                 push @pfCode, " // Not prefetching to $genericCache in this loop.";
                             } else {
                                 addIndexVars2(\@pfCode, \@loopDims, 1, $features, \@loopStack);
-                                push @pfCode, " // Prefetch to $genericCache.", @pfStmtsFullAhead;
+                                push @pfCode, " // Prefetch to $genericCache.", @pfStmtsEdgeAhead;
                             }
 
                             # convert to specific cache.
@@ -823,18 +869,21 @@ sub main() {
       "  $script -dims x,y 'loop(x,y) { calc(f); }'\n",
       "  $script -dims x,y,z 'omp loop(x,y) { loop(z) { calc(f); } }'\n",
       "  $script -dims x,y,z 'omp loop(x,y) { prefetch loop(z) { calc(f); } }'\n",
-      "  $script -dims x,y,z 'omp loop(x,y) { pipeline loop(z) { calc(f); } }'\n",
+      #"  $script -dims x,y,z 'omp loop(x,y) { pipeline loop(z) { calc(f); } }'\n",
       "  $script -dims x,y,z 'omp loop(x) { serpentine loop(y,z) { calc(f); } }'\n",
       "  $script -dims x,y,z 'omp loop(x) { crew loop(y) { loop(z) { calc(f); } } }'\n",
       "Inner loops should contain calc statements that generate calls to calculation functions.\n",
       "A loop statement with more than one argument will generate a single collapsed loop.\n",
       "Optional loop modifiers:\n",
-      "  omp:         generate an OpenMP for loop (distribute work across SW threads).\n",
-      "  crew:        generate an Intel crew loop (distribute work across HW threads).\n",
-      "  prefetch:    generate calls to SW prefetch functions in addition to calculation functions.\n",
-      #"  pipe:        generate calls to pipeline versions of calculation functions (deprecated).\n",
-      "  serpentine:  generate reverse path when enclosing loop dimension is odd.\n",
-      "  square_wave: generate 2D square-wave path for two innermost dimensions of a collapsed loop.\n",
+      "  omp:             generate an OpenMP for loop (distribute work across SW threads).\n",
+      "  crew:            generate an Intel crew loop (distribute work across HW threads).\n",
+      "  prefetch:        generate calls to SW L1 & L2 prefetch functions in addition to calc functions.\n",
+      "  prefetch(L1,L2): generate calls to SW L1 & L2 prefetch functions in addition to calc functions.\n",
+      "  prefetch(L1):    generate calls to SW L1 prefetch functions in addition to calc functions.\n",
+      "  prefetch(L2):    generate calls to SW L2 prefetch functions in addition to calc functions.\n",
+      "  serpentine:      generate reverse path when enclosing loop dimension is odd.\n",
+      "  square_wave:     generate 2D square-wave path for two innermost dimensions of a collapsed loop.\n",
+      #"  pipeline:        generate calls to pipeline versions of calculation functions (deprecated).\n",
       "For each dim D in dims, loops are generated from begin_D to end_D-1 by step_D;\n",
       "  these vars must be defined outside of the generated code.\n",
       "Each iteration will cover values from start_D to stop_D-1;\n",

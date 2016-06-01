@@ -165,6 +165,7 @@ int main(int argc, char** argv)
     idx_t bn = 1, bx = DEF_BLOCK_SIZE, by = DEF_BLOCK_SIZE, bz = DEF_BLOCK_SIZE;  // size of cache blocks.
     idx_t pn = 0, px = 0, py = 0, pz = 0; // padding.
     bool validate = false;
+    bool doWarmup = true;
 
     // parse options.
     bool help = false;
@@ -194,7 +195,8 @@ int main(int argc, char** argv)
                     pn << '*' << px << '*' << py << '*' << pz << endl <<
                     " -p <n>          set same padding in 3 {x,y,z} spatial dimensions\n" <<
                     " -i <n>          equivalent to -dt, for backward compatibility\n" <<
-                    " -v              validate by comparing to a scalar run, default=" << validate << endl <<
+                    " -v              validate by comparing to a scalar run\n" <<
+                    " -nw             skip warmup\n" <<
                     "Notes:\n"
 #ifdef USE_MPI
                     " Current MPI support is minimal and is only applied in the x-dimension.\n"
@@ -219,6 +221,9 @@ int main(int argc, char** argv)
                     " " << argv[0] << " -d 64 -dt 2 -t 1 -v 2\n";
                 help = true;
             }
+
+            else if (opt == "-nw")
+                doWarmup = false;
 
             // validation.
             else if (opt == "-v") {
@@ -466,12 +471,6 @@ int main(int argc, char** argv)
             " bytes in " << num_ranks << " rank(s)." << endl;
     }
     
-#ifdef FORCE_INIT
-    // This will initialize the grids before running the warmup.
-    // This may reduce performance on NUMA systems.
-    context.initSame();
-#endif
-    
     // Exit if nothing to do.
     if (num_trials < 1) {
         cerr << "Exiting because no trials are specified." << endl;
@@ -482,12 +481,17 @@ int main(int argc, char** argv)
         exit(1);
     }
 
+#ifndef NO_INIT
+    // This will initialize the grids before running the warmup.
+    // This may reduce performance on NUMA systems.
+    context.initSame();
+#endif
+    
     // warmup caches, threading, etc.
-    if (!validate) {
+    if (doWarmup) {
         if (is_leader) cout << endl;
 
-        idx_t tmp_dt = min<idx_t>(CPTS_T, dt);
-        tmp_dt = max<idx_t>(tmp_dt, TIME_DIM_SIZE);
+        idx_t tmp_dt = max<idx_t>(dt, TIME_DIM_SIZE);
         context.dt = tmp_dt;
 #ifdef MODEL_CACHE
         if (!is_leader)
@@ -589,7 +593,7 @@ int main(int argc, char** argv)
                 cout << "INIT CHECK PASSED." << endl;
                 exit(0);
             } else {
-                cerr << "INIT CHECK FAILED: " << errs << " mismatches." << endl;
+                cerr << "INIT CHECK FAILED: " << errs << " mismatch(es)." << endl;
                 exit(1);
             }
         }
@@ -603,7 +607,7 @@ int main(int argc, char** argv)
         if( errs == 0 ) {
             cout << "TEST PASSED." << endl;
         } else {
-            cerr << "TEST FAILED: " << errs << " mismatches." << endl;
+            cerr << "TEST FAILED: " << errs << " mismatch(es)." << endl;
             exit(1);
         }
     }

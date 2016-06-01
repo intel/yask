@@ -55,6 +55,9 @@ int order = 2;
 bool firstInner = true;
 bool allowUnalignedLoads = false;
 string equationTargets;
+bool doFma = false;
+bool doComb = true;
+bool doCse = true;
 
 void usage(const string& cmd) {
     cout << "Options:\n"
@@ -62,14 +65,17 @@ void usage(const string& cmd) {
         "\n"
         " -st <iso3dfd|3axis|9axis|3plane|cube|ave|awp>   set stencil type (required).\n"
         "\n"
-        " -or <order>           set stencil order (ignored for awp; default=" << order << ").\n"
-        " -dc                   defer coefficient lookup to runtime (for iso3dfd stencil only).\n"
-        " -es <expr-size>       set heuristic for expression-size threshold (default=" << exprSize << ").\n"
-        " -lus                  make last dimension of fold unit stride (instead of first).\n"
-        " -aul                  allow simple unaligned loads (memory map MUST be compatible).\n"
         " -fold <dim>=<size>,...    set number of elements in each dimension in a vector block.\n"
         " -cluster <dim>=<size>,... set number of values to evaluate in each dimension.\n"
         " -eq <name>=<substr>,...   put updates to grids containing substring in equation name.\n"
+        " -or <order>        set stencil order (ignored for awp; default=" << order << ").\n"
+        " -dc                defer coefficient lookup to runtime (for iso3dfd stencil only).\n"
+        " -lus               make last dimension of fold unit stride (instead of first).\n"
+        " -aul               allow simple unaligned loads (memory map MUST be compatible).\n"
+        " -es <expr-size>    set heuristic for expression-size threshold (default=" << exprSize << ").\n"
+        " -[no]fma           [do not] distribute multiplies across adds to increase FMAs (default=" << doFma << ").\n"
+        " -[no]comb          [do not] combine commutative operations (default=" << doComb << ").\n"
+        " -[no]cse           [do not] eliminate common subexpressions (default=" << doCse << ").\n"
         "\n"
         //" -ps <vec-len>      print stats for all folding options for given vector length.\n"
         " -ph                print human-readable scalar pseudo-code for one point.\n"
@@ -112,6 +118,18 @@ void parseOpts(int argc, const char* argv[])
                 firstInner = false;
             else if (opt == "-aul")
                 allowUnalignedLoads = true;
+            else if (opt == "-fma")
+                doFma = true;
+            else if (opt == "-nofma")
+                doFma = false;
+            else if (opt == "-comb")
+                doComb = true;
+            else if (opt == "-nocomb")
+                doComb = false;
+            else if (opt == "-cse")
+                doCse = true;
+            else if (opt == "-nocse")
+                doCse = false;
             
             else if (opt == "-pm")
                 printMacros = true;
@@ -375,40 +393,49 @@ int main(int argc, const char* argv[]) {
     equations.findEquations(grids, equationTargets);
     equations.printInfo(cerr);
 
-    // Get some stats and eliminate common sub-expressions.
-    for (int j = 0; j < 2; j++) {
-        bool doCseElim = j > 0;
-        string step = doCseElim ? "after CSE elimination" : "as written";
-        
-        for (int i = 0; i < 2; i++) {
-            bool doCluster = i > 0;
-            if (doCluster && clusterLengths.product() == 1)
-                continue; // don't need cluster pass if size 1.
-            string descr = doCluster ? "cluster" : "fold";
-        
-            // Eliminate the CSEs.
-            if (doCseElim) {
-                CseElimVisitor csee;
-                if (doCluster)
-                    grids.acceptToAll(&csee);
-                else
-                    grids.acceptToFirst(&csee);
-                cerr << csee.getNumReplaced() << " CSE(s) eliminated in " << descr << "." << endl;
-            }
+    // Get stats.
+    {
+        CounterVisitor cv;
+        grids.acceptToFirst(&cv);
+        cv.printStats(cerr, "for one vector");
+    }
+    if (clusterLengths.product() > 1) {
+        CounterVisitor cv;
+        grids.acceptToAll(&cv);
+        cv.printStats(cerr, "for one cluster");
+    }
+    
+    // Make a list of optimizations to apply.
+    vector<OptVisitor*> opts;
+    if (doCse)
+        opts.push_back(new CseVisitor);
+    if (doFma) {
+        opts.push_back(new FmaVisitor);
+        if (doCse)
+            opts.push_back(new CseVisitor);
+    }
+    if (doComb) {
+        opts.push_back(new CombineVisitor);
+        if (doCse)
+            opts.push_back(new CseVisitor);
+    }
+    
+    // Apply opts.
+    for (auto optimizer : opts) {
 
-            // Determine number of FP ops.
+        grids.acceptToAll(optimizer);
+        int numChanges = optimizer->getNumChanges();
+        string descr = "after applying " + optimizer->getName();
+
+        // Get new stats.
+        if (numChanges) {
             CounterVisitor cv;
-            if (doCluster)
-                grids.acceptToAll(&cv);
-            else
-                grids.acceptToFirst(&cv);
-            cerr << "Expression stats per " << descr << " " << step << ":" << endl <<
-                "  " << cv.getNumNodes() << " nodes." << endl <<
-                "  " << cv.getNumReads() << " grid reads." << endl <<
-                "  " << cv.getNumWrites() << " grid writes." << endl <<
-                "  " << cv.getNumParamReads() << " parameter reads." << endl <<
-                "  " << cv.getNumOps() << " math operations." << endl;
+            grids.acceptToAll(&cv);
+            cv.printStats(cerr, descr);
+            //addComment(cerr, grids);
         }
+        else
+            cerr << "No changes " << descr << '.' << endl;
     }
     
     // Human-readable output.
@@ -741,10 +768,6 @@ int main(int argc, const char* argv[]) {
                     // If diri >= 0, add a direction.
                     IntTuple dir;
                     if (diri >= 0) {
-
-                        // skip for now--not yet enabled.
-                        continue;
-                        
                         string dim = dimCounts.getDims()[diri];
                         dir.addDim(dim, 1);
                     }

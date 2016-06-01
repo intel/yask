@@ -173,8 +173,11 @@ protected:
                         if (nused1 && nused2) {
                             os << " // Get " << nused1 << " element(s) from " << mv1Name <<
                                 " and " << nused2 << " from " << mv2Name << "." << endl;
-                            os << _linePrefix << "realv_align(" << pvName << ", " << mv1Name <<
-                                ", " << mv2Name << ", " << count;
+                            os << _linePrefix << "realv_align";
+                            if (needMask)
+                                os << "_masked";
+                            os << "<" << count << ">(" << pvName <<
+                                ", " << mv1Name << ", " << mv2Name;
                             if (needMask)
                                 printMask(os, mask);
                             os << ")" << _lineSuffix;
@@ -184,8 +187,10 @@ protected:
                         else if (nused1) {
                             os << " // Get " << nused1 << " element(s) from " << mv1Name <<
                                 "." << endl;
-                            os << _linePrefix << "realv_align(" << pvName << ", " << mv1Name <<
-                                ", " << mv1Name << ", " << count;
+                            os << _linePrefix << "realv_align";
+                            if (needMask)
+                                os << "_masked";
+                            os << "<" << count << ">(" << pvName << ", " << mv1Name << ", " << mv1Name;
                             if (needMask)
                                 printMask(os, mask);
                             os << ")" << _lineSuffix;
@@ -194,8 +199,10 @@ protected:
                             assert(nused2);
                             os << " // Get " << nused2 << " element(s) from " << mv2Name <<
                                 "." << endl;
-                            os << _linePrefix << "realv_align(" << pvName << ", " << mv2Name <<
-                                ", " << mv2Name << ", " << count;
+                            os << _linePrefix << "realv_align";
+                            if (needMask)
+                                os << "_masked";
+                            os << "<" << count << ">(" << pvName << ", " << mv2Name << ", " << mv2Name;
                             if (needMask)
                                 printMask(os, mask);
                             os << ")" << _lineSuffix;
@@ -289,7 +296,10 @@ protected:
                 }
                 
                 // Permute command.
-                os << _linePrefix << "realv_permute(" << pvName << ", ctrl_" << nameStr << ", " << mvName;
+                os << _linePrefix << "realv_permute";
+                if (needMask)
+                    os << "_masked";
+                os << "(" << pvName << ", ctrl_" << nameStr << ", " << mvName;
                 if (needMask)
                     printMask(os, mask);
                 os << ")" << _lineSuffix;

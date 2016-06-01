@@ -415,7 +415,7 @@ public:
     // Sort a commutative expression.
     virtual void visit(CommutativeExpr* ce) {
 
-        ExprPtrVec& oev = ce->_ops; // old exprs.
+        ExprPtrVec& oev = ce->getOps(); // old exprs.
         ExprPtrVec nev; // new exprs.
 
         // Simple, greedy algorithm:

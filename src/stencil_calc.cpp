@@ -480,6 +480,7 @@ idx_t StencilContext::compare(const StencilContext& ref) const {
     }
     idx_t errs = 0;
     for (size_t gi = 0; gi < gridPtrs.size(); gi++) {
+        cout << "Grid '" << ref.gridPtrs[gi]->get_name() << "'..." << endl;
         errs += gridPtrs[gi]->compare(*ref.gridPtrs[gi]);
     }
 

@@ -278,7 +278,7 @@ public:
 // A list of exprs with a common operator that can be rearranged,
 // e.g., 'a * b * c' or 'a + b + c'.
 class CommutativeExpr : public Expr {
-public:
+protected:
     ExprPtrVec _ops;
     string _opStr;
 
@@ -309,34 +309,16 @@ public:
         return false;
     }
 
+    // Swap the contents w/another.
+    virtual void swap(CommutativeExpr* ce) {
+        _ops.swap(ce->_ops);
+        _opStr.swap(ce->_opStr);
+    }
+
     virtual void accept(ExprVisitor* ev);
 
     // Check for equivalency.
-    virtual bool isSame(const Expr* other) {
-        auto p = dynamic_cast<const CommutativeExpr*>(other);
-        if (!p || _opStr != p->_opStr)
-            return false;
-        
-        // Operands must be the same, but not in same order.
-        set<ExprPtr> matches;
-
-        // Loop through this set of ops.
-        for (auto op : _ops) {
-
-            // Loop through other set of ops, looking for match.
-            for (auto oop : p->_ops) {
-
-                // check unless already matched.
-                if (matches.count(oop) == 0 && op->isSame(oop.get())) {
-                    matches.insert(oop);
-                    break;
-                }
-            }
-        }
-
-        // Do all match?
-        return matches.size() == _ops.size();
-    }
+    virtual bool isSame(const Expr* other);
 };
 
 // One or more addition operators.

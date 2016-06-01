@@ -131,16 +131,22 @@ protected:
     }
 
     // Print call for a point.
-    virtual void printPointCall(ostream& os, const GridPoint& gp,
-                                const string& fname, string opt1stArg = "",
-                                bool isNorm = true) const {
-        os << "context." << gp.getName() << "->" << fname << "(";
-        if (opt1stArg.length()) os << opt1stArg << ", ";
+    virtual void printPointCall(ostream& os,
+                                const GridPoint& gp,
+                                const string& funcName,
+                                const string& firstArg,
+                                const string& lastArg,
+                                bool isNorm) const {
+        os << "context." << gp.getName() << "->" << funcName << "(";
+        if (firstArg.length())
+            os << firstArg << ", ";
         if (isNorm)
             os << gp.makeDimValNormOffsetStr(getFold());
         else
             os << gp.makeDimValOffsetStr();
-        os << ", __LINE__)";
+        if (lastArg.length()) 
+            os << ", " << lastArg;
+        os << ")";
     }
     
     // Print aligned memory read.
@@ -150,7 +156,7 @@ protected:
         // Read memory.
         string mvName = makeVarName();
         os << _linePrefix << getVarType() << " " << mvName << " = ";
-        printPointCall(os, gp, "readVecNorm");
+        printPointCall(os, gp, "readVecNorm", "", "__LINE__", true);
         os << _lineSuffix;
         return mvName;
     }
@@ -167,7 +173,7 @@ protected:
         
         // Read memory.
         os << _linePrefix << mvName << ".loadUnalignedFrom((const " << getVarType() << "*)";
-        printPointCall(os, gp, "getElemPtr", "", false);
+        printPointCall(os, gp, "getElemPtr", "", "true", false);
         os << ")" << _lineSuffix;
         return mvName;
     }
@@ -178,7 +184,7 @@ protected:
         printPointComment(os, gp, "Write aligned vector block to");
 
         // Write temp var to memory.
-        printPointCall(os, gp, "writeVecNorm", val);
+        printPointCall(os, gp, "writeVecNorm", val, "__LINE__", true);
         os << ";" << endl;
         return val;
     }
@@ -256,7 +262,7 @@ public:
         // Points to prefetch.
         GridPointSet* pfPts = NULL;
 
-        // Leading points only if dir is set.
+        // Prefetch leading points only if dir is set.
         GridPointSet edge;
         if (dir.size() > 0) {
             _vv.getLeadingEdge(edge, dir);
@@ -273,7 +279,7 @@ public:
             
             // Prefetch memory.
             os << " p = (const char*)";
-            printPointCall(os, gp, "getVecPtrNorm");
+            printPointCall(os, gp, "getVecPtrNorm", "", "false", true);
             os << ";" << endl;
             os << " MCP(p, " << hint << ", __LINE__);" << endl;
             os << " _mm_prefetch(p, " << hint << ");" << endl;
