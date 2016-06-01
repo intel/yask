@@ -491,7 +491,7 @@ int main(int argc, char** argv)
     if (doWarmup) {
         if (is_leader) cout << endl;
 
-        idx_t tmp_dt = max<idx_t>(dt, TIME_DIM_SIZE);
+        idx_t tmp_dt = min<idx_t>(dt, TIME_DIM_SIZE);
         context.dt = tmp_dt;
 #ifdef MODEL_CACHE
         if (!is_leader)
