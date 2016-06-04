@@ -291,12 +291,12 @@ all:	$(STENCIL_EXEC_NAME) $(MAKE_VAR_FILE)
 	@echo $(STENCIL_EXEC_NAME) "has been built."
 
 $(MAKE_VAR_FILE): $(STENCIL_EXEC_NAME)
-	$(MAKE) echo-settings > $@ 2>&1
+	@echo MAKEFLAGS="\"$(MAKEFLAGS)"\" > $@ 2>&1
+	$(MAKE) -j1 $(CODE_STATS) echo-settings >> $@ 2>&1
 
-echo-settings: $(CODE_STATS)
+echo-settings:
 	@echo
 	@echo "Build environment for" $(STENCIL_EXEC_NAME) on `date`
-	@echo MAKEFLAGS=$(MAKEFLAGS)
 	@echo arch=$(arch)
 	@echo stencil=$(stencil)
 	@echo fold=$(fold)
