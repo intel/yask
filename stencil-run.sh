@@ -159,13 +159,13 @@ if [[ $arch == "knc" && -z ${host+ok} ]]; then
     scp $exe $host:$dir
 else
     dir=`pwd`
-    libpath=":$HOME/lib:./lib"
+    libpath=":$HOME/lib"
 fi
 
 # run on specified host
 if [[ -n "$host" ]]; then
     sh_prefix="ssh $host $sh_prefix"
-    envs="$envs PATH=$PATH LD_LIBRARY_PATH=$LD_LIBRARY_PATH$libpath"
+    envs="$envs PATH=$PATH LD_LIBRARY_PATH=./lib:$LD_LIBRARY_PATH$libpath"
 
     nm=1
     while true; do
