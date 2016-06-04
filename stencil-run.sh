@@ -159,7 +159,7 @@ if [[ $arch == "knc" && -z ${host+ok} ]]; then
     scp $exe $host:$dir
 else
     dir=`pwd`
-    libpath=":$HOME/lib"
+    libpath=":$HOME/lib:./lib"
 fi
 
 # run on specified host
@@ -174,6 +174,11 @@ if [[ -n "$host" ]]; then
         echo "Waiting $nm min before trying again..."
         sleep $(( nm++ * 60 ))
     done
+fi
+
+# echo make results if they exist
+if [[ -e make-vars.txt ]]; then
+    cat make-vars.txt
 fi
 
 # command sequence.

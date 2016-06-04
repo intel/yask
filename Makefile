@@ -220,6 +220,7 @@ CPPFLAGS        +=      -debug extended -Fa -restrict -ansi-alias -fno-alias
 CPPFLAGS	+=	-fimf-precision=low -fast-transcendentals -no-prec-sqrt -no-prec-div -fp-model fast=2 -fno-protect-parens -rcd -ftz -fma -fimf-domain-exclusion=none -qopt-assume-safe-padding
 CPPFLAGS	+=      -qopt-report=5 -qopt-report-phase=VEC,PAR,OPENMP,IPO,LOOP
 CPPFLAGS	+=	-no-diag-message-catalog
+CC_VER_CMD	=	$(CC) -V
 
 # work around an optimization bug.
 MACROS		+=	NO_STORE_INTRINSICS
@@ -283,14 +284,19 @@ STENCIL_BASES		:=	stencil_main stencil_calc utils
 STENCIL_OBJS		:=	$(addprefix src/,$(addsuffix .$(arch).o,$(STENCIL_BASES)))
 STENCIL_CPP		:=	$(addprefix src/,$(addsuffix .$(arch).i,$(STENCIL_BASES)))
 STENCIL_EXEC_NAME	:=	stencil.$(arch).exe
+MAKE_VAR_FILE		:=	make-vars.txt
 
-all:	$(STENCIL_EXEC_NAME) $(CODE_STATS) settings
-	@echo
+all:	$(STENCIL_EXEC_NAME) $(MAKE_VAR_FILE)
+	@cat $(MAKE_VAR_FILE)
 	@echo $(STENCIL_EXEC_NAME) "has been built."
 
-settings: $(STENCIL_EXEC_NAME)
+$(MAKE_VAR_FILE): $(STENCIL_EXEC_NAME)
+	$(MAKE) echo-settings > $@ 2>&1
+
+echo-settings: $(CODE_STATS)
 	@echo
-	@echo "Make settings used:"
+	@echo "Build environment for" $(STENCIL_EXEC_NAME) on `date`
+	@echo MAKEFLAGS=$(MAKEFLAGS)
 	@echo arch=$(arch)
 	@echo stencil=$(stencil)
 	@echo fold=$(fold)
@@ -319,13 +325,12 @@ settings: $(STENCIL_EXEC_NAME)
 	@echo BLOCK_LOOP_CODE="\"$(BLOCK_LOOP_CODE)\""
 	@echo HALO_LOOP_OPTS="\"$(HALO_LOOP_OPTS)\""
 	@echo HALO_LOOP_CODE="\"$(HALO_LOOP_CODE)\""
+	@$(CC) -v; $(CC_VER_CMD)
 
-code_stats: $(STENCIL_EXEC_NAME)
+code_stats:
 	@echo
 	@echo "Code stats for stencil computation:"
 	./get-loop-stats.pl -t='block_loops' *.s
-	@echo "Speedup estimates:"
-	@grep speedup src/stencil_*.$(arch).optrpt | sort | uniq -c
 
 $(STENCIL_EXEC_NAME): $(STENCIL_OBJS)
 	$(LD) $(LFLAGS) -o $@ $(STENCIL_OBJS)
@@ -373,7 +378,7 @@ tags:
 	rm -f TAGS ; find . -name '*.[ch]pp' | xargs etags -C -a
 
 clean:
-	rm -fv src/*.[io] *.optrpt src/*.optrpt *.s $(GEN_HEADERS) 
+	rm -fv src/*.[io] *.optrpt src/*.optrpt *.s $(GEN_HEADERS) $(MAKE_VAR_FILE)
 
 realclean: clean
 	rm -fv stencil*.exe foldBuilder TAGS

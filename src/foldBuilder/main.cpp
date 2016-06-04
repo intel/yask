@@ -523,7 +523,6 @@ int main(int argc, const char* argv[]) {
                         int halo = cve.getHalo(gp, dim);
                         string hvar = grid + "_halo_" + dim;
                         cout << " const idx_t " << hvar << " = " << halo << ";" << endl;
-                        padArg += hvar + " + ";
 
                         // Update max halo.
                         int* mh = maxHalos.lookup(dim);
@@ -532,8 +531,8 @@ int main(int argc, const char* argv[]) {
                         else
                             maxHalos.addDim(dim, halo);
 
-                        // Extra padding.
-                        padArg += "p" + dim + ", ";
+                        // Total padding = halo + extra.
+                        padArg += hvar + " + p" + dim + ", ";
                     }
                 }
                 typeNames[gp] = typeName;

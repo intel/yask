@@ -481,11 +481,11 @@ int main(int argc, char** argv)
         exit(1);
     }
 
-#ifndef NO_INIT
     // This will initialize the grids before running the warmup.
-    // This may reduce performance on NUMA systems.
+    // If this is not done, operations will most likely be done
+    // on zero pages, leading to misleading performance or
+    // arithmetic exceptions.
     context.initSame();
-#endif
     
     // warmup caches, threading, etc.
     if (doWarmup) {
