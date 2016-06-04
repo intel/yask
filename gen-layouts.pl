@@ -102,7 +102,7 @@ sub makeUnlayout($$$$) {
 # loop through number of dimensions.
 for my $n (@sizes) {
 
-  # argument for permute().
+  # List to be permuted.
   my @a = (1..$n);
 
   # macros.
@@ -187,15 +187,33 @@ for my $n (@sizes) {
   elsif ($opt eq '-p') {
 
     print "# Permutations for $n dimensions.\n";
-    print "(";
 
-    permute {
-      my @p = @_;
-      my $ns = join('', @p);
-      print "'$ns', ";
-    } @a;
-
-    print ");\n";
+    for my $i (0..1) {
+      my @b;
+      if ($i == 0) {
+        @b = @a;
+      } else {
+        @b = map { my $b = $_;
+                   if (@a == 4) {
+                     $b =~ tr/1234/nxyz/;
+                   } elsif (@a == 3) {
+                     $b =~ tr/123/xyz/;
+                   } elsif (@a == 2) {
+                     $b =~ tr/12/xy/;
+                   } else {
+                     $b =~ tr/1/x/;
+                   }
+                   $b } @a;
+      }
+      
+      print "(";
+      permute {
+        my @p = @_;
+        my $ns = join('', @p);
+        print "'$ns', ";
+      } @b;
+      print ")\n";
+    }
   }
 
   # bad option.
