@@ -179,7 +179,7 @@ public:
                     // put ce2's operands into ce.
                     ExprPtrVec& ops2 = ce2->getOps();
                     bool isFirst = true;
-                    for (ExprPtr& ep2 : ops2) {
+                    for (ExprPtr ep2 : ops2) {
 
                         // First operand of ce2 *replaces* ce2 in ce.
                         if (isFirst) {

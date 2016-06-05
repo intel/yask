@@ -174,6 +174,8 @@ if [[ -n "$host" ]]; then
         echo "Waiting $nm min before trying again..."
         sleep $(( nm++ * 60 ))
     done
+else
+    export LD_LIBRARY_PATH=./lib:$LD_LIBRARY_PATH$libpath
 fi
 
 # echo make results if they exist

@@ -257,6 +257,7 @@ REGION_LOOP_CODE	=	serpentine omp loop(rn,rx,ry,rz) { calc(block(rt)); }
 # The indices at this level are by vector instead of element;
 # this is indicated by the 'v' suffix.
 # There is no time loop here because temporal blocking is not yet supported.
+INNER_BLOCK_LOOP_OPTS	=	prefetch(L1)
 BLOCK_LOOP_OPTS		=     	-dims 'bnv,bxv,byv,bzv'
 BLOCK_LOOP_CODE		=	loop(bnv) { crew loop(bxv) { loop(byv) { $(INNER_BLOCK_LOOP_OPTS) loop(bzv) { calc(cluster(bt)); } } } }
 
@@ -321,6 +322,7 @@ echo-settings:
 	@echo RANK_LOOP_CODE="\"$(RANK_LOOP_CODE)\""
 	@echo REGION_LOOP_OPTS="\"$(REGION_LOOP_OPTS)\""
 	@echo REGION_LOOP_CODE="\"$(REGION_LOOP_CODE)\""
+	@echo INNER_BLOCK_LOOP_OPTS="\"$(INNER_BLOCK_LOOP_OPTS)\""
 	@echo BLOCK_LOOP_OPTS="\"$(BLOCK_LOOP_OPTS)\""
 	@echo BLOCK_LOOP_CODE="\"$(BLOCK_LOOP_CODE)\""
 	@echo HALO_LOOP_OPTS="\"$(HALO_LOOP_OPTS)\""
@@ -387,7 +389,7 @@ realclean: clean
 help:
 	@echo "Example usage:"
 	@echo "make clean; make arch=knc stencil=iso3dfd"
-	@echo "make clean; make arch=knl stencil=3axis order=8 INNER_BLOCK_LOOP_OPTS='prefetch(L1)'"
+	@echo "make clean; make arch=knl stencil=3axis order=8 INNER_BLOCK_LOOP_OPTS='prefetch(L1,L2)'"
 	@echo "make clean; make arch=skx stencil=ave fold='x=1,y=2,z=4' cluster='x=2'"
 	@echo " "
 	@echo "Example debug usage:"

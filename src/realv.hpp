@@ -154,10 +154,10 @@ typedef int64_t idx_t;
     for (int i=0; i<VLEN; i++)
 #else
 #define RealV_LOOP(i)                            \
-    _Pragma("vector aligned") _Pragma("simd")   \
+    _Pragma("vector aligned") _Pragma("vector always") _Pragma("simd")  \
     for (int i=0; i<VLEN; i++)
 #define RealV_LOOP_UNALIGNED(i)                  \
-    _Pragma("simd")                             \
+    _Pragma("vector always") _Pragma("simd")     \
     for (int i=0; i<VLEN; i++)
 #endif
 

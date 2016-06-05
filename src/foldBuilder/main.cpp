@@ -56,7 +56,7 @@ bool firstInner = true;
 bool allowUnalignedLoads = false;
 string equationTargets;
 bool doFma = false;
-bool doComb = true;
+bool doComb = false;
 bool doCse = true;
 
 void usage(const string& cmd) {

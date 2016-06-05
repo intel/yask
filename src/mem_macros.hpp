@@ -147,7 +147,7 @@ extern Cache cache;
 
 // how far to prefetch ahead for L2.
 #ifndef PFDL2
-#define PFDL2 10
+#define PFDL2 2
 #endif
 
 #endif
