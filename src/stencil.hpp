@@ -92,6 +92,7 @@ using namespace std;
 
 // Enable hardware thread work crew if requested.
 #if (__INTEL_CREW) && (defined(__MIC__) || (defined(__linux) && defined(__x86_64)))
+#define USE_CREW 1
 extern "C" {
     extern void kmp_crew_create();
     extern void kmp_crew_destroy();
@@ -99,6 +100,7 @@ extern "C" {
 }
 #define CREW_FOR_LOOP _Pragma("intel_crew parallel for")
 #else
+#define USE_CREW 0
 #define kmp_crew_create()  ((void)0)
 #define kmp_crew_destroy() ((void)0)
 #define kmp_crew_get_max_size() (1)

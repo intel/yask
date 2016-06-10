@@ -23,31 +23,48 @@
 
 # Type 'make help' for some examples.
 
-# stencil name: iso3dfd, 3axis, 9axis, 3plane, cube, ave, awp
-stencil		= 	unspecified
-
-# target architecture: see options below.
-arch		=	host
-
-# whether to use MPI.
-# currently, MPI is only used in X dimension.
-mpi		=	0
-
-# defaults for various stencils:
+# Some of the make vars available:
+#
+# stencil: iso3dfd, 3axis, 9axis, 3plane, cube, ave, awp.
+#
+# arch: knc, knl, skx, hsw, ivb, snb, host (host = generic intel64).
+#
+# mpi: 0, 1: whether to use MPI. 
+#   Currently, MPI is only used in X dimension.
 #
 # order:
 # - historical term, not strictly order of PDE.
 # - for most stencils, is width of spatial extent - 1.
-# - for awp, only affects halo.
 #
 # real_bytes: FP precision: 4=float, 8=double.
 #
 # time_dim_size: allocated size of time dimension in grids.
 #
 # eqs: comma-separated name=substr pairs used to group
-# grid update equations into stencil functions.
+#   grid update equations into stencil functions.
 #
-ifeq ($(stencil),ave)
+# streaming_stores: 0, 1: Whether to use streaming stores.
+#
+# crew: 0, 1: whether to use Intel Crew threading instead of nested OpenMP (deprecated).
+#
+# omp_schedule: OMP schedule policy for region loop.
+#
+# omp_block_schedule: OMP schedule policy for nested OpenMP block loop.
+#
+# def_block_threads: Number of threads to use in nested OpenMP block loop by default.
+#
+# def_*_size: Default sizes used in executable.
+
+# Initial defaults.
+stencil		=	unspecified
+arch		=	host
+mpi		=	0
+
+# Defaults based on stencil type.
+ifeq ($(stencil),)
+$(error Stencil not specified; use stencil=iso3dfd, 3axis, 9axis, 3plane, cube, ave, or awp)
+
+else ifeq ($(stencil),ave)
 order		=	2
 real_bytes	=	8
 def_rank_size	=	256
@@ -67,39 +84,27 @@ time_dim_size	=	1
 eqs		=	velocity=vel_,stress=stress_
 def_rank_size	=	640
 def_block_size	=	32
-def_wavefront_region_size	=	256
+def_wavefront_region_size =	256
 endif
 
-# arch-specific settings:
-#
-# streaming_stores: Whether to use streaming stores.
-#
-# crew: whether to use Intel Crew threading feature.
-# If you get linker errors about missing 'kmp*' symbols, your
-# compiler does not support crew for the specified architecture.
-# If you get a warning about 'num crews != num OpenMP threads',
-# crew is not working properly. In either case, you should turn
-# off crew by using 'crew=0' as a make argument.
-#
-# omp_schedule: OMP schedule policy.
+# Defaut settings based on architecture.
 ifeq ($(arch),)
-
-$(error Architecture not specified; use arch=knc|knl|skx|hsw|ivb|snb|host)
+$(error Architecture not specified; use arch=knl, knc, skx, hsw, ivb, snb, or host (host = generic intel64))
 
 else ifeq ($(arch),knc)
 
 ISA		= 	-mmic
 MACROS		+=	USE_INTRIN512
 FB_TARGET  	=       knc
-crew		=	1
+def_block_threads =	4
 
 else ifeq ($(arch),knl)
 
 ISA		=	-xMIC-AVX512
 MACROS		+=	USE_INTRIN512
 FB_TARGET  	=       512
-def_block_size	=	64
-crew		=	1
+def_block_size	=	96
+def_block_threads =	8
 
 else ifeq ($(arch),skx)
 
@@ -131,6 +136,9 @@ endif # arch-specific.
 crew				?= 	0
 streaming_stores		?= 	1
 omp_schedule			?=	dynamic
+omp_block_schedule		?=	static,1
+def_block_threads		?=	2
+omp_par_for			?=	omp parallel for
 ISA				?=	-xHOST
 FB_TARGET  			?=	cpp
 order				?=	16
@@ -138,7 +146,7 @@ real_bytes			?=	4
 time_dim_size			?=	2
 layout_3d			?=	Layout_123
 layout_4d			?=	Layout_1234
-def_rank_size		?=	1024
+def_rank_size			?=	1024
 def_block_size			?=	32
 def_wavefront_region_size	?=	512
 
@@ -201,6 +209,7 @@ MACROS		+=	TIME_DIM_SIZE=$(time_dim_size)
 MACROS		+=	DEF_RANK_SIZE=$(def_rank_size)
 MACROS		+=	DEF_BLOCK_SIZE=$(def_block_size)
 MACROS		+=	DEF_WAVEFRONT_REGION_SIZE=$(def_wavefront_region_size)
+MACROS		+=	DEF_BLOCK_THREADS=$(def_block_threads)
 
 # arch.
 ARCH		:=	$(shell echo $(arch) | tr '[:lower:]' '[:upper:]')
@@ -228,6 +237,7 @@ MACROS		+=	NO_STORE_INTRINSICS
 ifeq ($(crew),1)
 CPPFLAGS	+=      -mP2OPT_hpo_par_crew_codegen=T
 MACROS		+=	__INTEL_CREW
+def_block_threads =	1
 endif
 
 endif # icpc
@@ -241,8 +251,9 @@ endif
 # Rank loops break up the whole rank into smaller regions.
 # In order for tempral wavefronts to operate properly, the
 # order of spatial dimensions may be changed, but traversal
-# paths that do not simply increment the indices (such as
-# serpentine or square) may not be used here.
+# paths that do not have strictly incrementing indices (such as
+# serpentine and/or square-wave) may not be used here when
+# using temporal wavefronts.
 RANK_LOOP_OPTS		=	-dims 'dt,dn,dx,dy,dz'
 RANK_LOOP_CODE		=	loop(dt) { loop(dn,dx,dy,dz) { calc(region); } }
 
@@ -250,22 +261,33 @@ RANK_LOOP_CODE		=	loop(dt) { loop(dn,dx,dy,dz) { calc(region); } }
 # The region time loops are not coded here to allow for proper
 # spatial skewing for temporal wavefronts. The time loop may be found
 # in StencilEquations::calc_region().
-REGION_LOOP_OPTS	=     	-dims 'rn,rx,ry,rz' -ompSchedule $(omp_schedule) -calcPrefix 'stencil->calc_'
+REGION_LOOP_OPTS	=     	-dims 'rn,rx,ry,rz' \
+				-ompConstruct '$(omp_par_for) schedule($(omp_schedule)) proc_bind(spread)' \
+				-calcPrefix 'stencil->calc_'
 REGION_LOOP_CODE	=	serpentine omp loop(rn,rx,ry,rz) { calc(block(rt)); }
 
 # Block loops break up a block into vector clusters.
 # The indices at this level are by vector instead of element;
 # this is indicated by the 'v' suffix.
 # There is no time loop here because temporal blocking is not yet supported.
-INNER_BLOCK_LOOP_OPTS	=	prefetch(L1)
+# The 'omp' modifier creates a nested OpenMP loop.
 BLOCK_LOOP_OPTS		=     	-dims 'bnv,bxv,byv,bzv'
-BLOCK_LOOP_CODE		=	loop(bnv) { crew loop(bxv) { loop(byv) { $(INNER_BLOCK_LOOP_OPTS) loop(bzv) { calc(cluster(bt)); } } } }
+BLOCK_LOOP_INNER_MODS	=	prefetch(L1)
+ifeq ($(crew),1)
+BLOCK_LOOP_OUTER_MODS	=	crew
+else
+BLOCK_LOOP_OUTER_MODS	=	omp
+BLOCK_LOOP_OPTS		+=	-ompConstruct '$(omp_par_for) schedule($(omp_block_schedule)) proc_bind(close)'
+endif
+BLOCK_LOOP_CODE		=	$(BLOCK_LOOP_OUTER_MODS) loop(bnv,bxv) { loop(byv) { \
+				$(BLOCK_LOOP_INNER_MODS) loop(bzv) { calc(cluster(bt)); } } }
 
 # Halo pack/unpack loops break up a region slice into vectors.
 # The indices at this level are by vector instead of element;
 # this is indicated by the 'v' suffix.
-# TODO: add efficient crew loops using blocking.
-HALO_LOOP_OPTS		=     	-dims 'rnv,rxv,ryv,rzv' -ompSchedule $(omp_schedule) 
+# Note that there are no nested OpenMP loops here.
+HALO_LOOP_OPTS		=     	-dims 'rnv,rxv,ryv,rzv' \
+				-ompConstruct '$(omp_par_for) schedule($(omp_schedule))'
 HALO_LOOP_CODE		=	serpentine omp loop(rnv,rxv,ryv) { loop(rzv) { calc(halo(rt)); } }
 
 # compile with model_cache=1 or 2 to check prefetching.
@@ -309,6 +331,8 @@ echo-settings:
 	@echo time_dim_size=$(time_dim_size)
 	@echo streaming_stores=$(streaming_stores)
 	@echo omp_schedule=$(omp_schedule)
+	@echo def_block_threads=$(def_block_threads)
+	@echo omp_block_schedule=$(omp_block_schedule)
 	@echo FB_TARGET="\"$(FB_TARGET)\""
 	@echo FB_FLAGS="\"$(FB_FLAGS)\""
 	@echo EXTRA_FB_FLAGS="\"$(EXTRA_FB_FLAGS)\""
@@ -393,6 +417,6 @@ help:
 	@echo "make clean; make arch=skx stencil=ave fold='x=1,y=2,z=4' cluster='x=2'"
 	@echo " "
 	@echo "Example debug usage:"
-	@echo "make arch=knl  stencil=iso3dfd OMPFLAGS='-qopenmp-stubs' crew=0 EXTRA_CPPFLAGS='-O0' EXTRA_MACROS='DEBUG'"
+	@echo "make arch=knl  stencil=iso3dfd OMPFLAGS='-qopenmp-stubs' EXTRA_CPPFLAGS='-O0' EXTRA_MACROS='DEBUG'"
 	@echo "make arch=host stencil=ave OMPFLAGS='-qopenmp-stubs' EXTRA_CPPFLAGS='-O0' EXTRA_MACROS='DEBUG' model_cache=2"
 	@echo "make arch=host stencil=3axis order=0 fold='x=1,y=1,z=1' OMPFLAGS='-qopenmp-stubs' EXTRA_MACROS='DEBUG DEBUG_TOLERANCE NO_INTRINSICS TRACE TRACE_MEM TRACE_INTRINSICS' EXTRA_CPPFLAGS='-O0'"

@@ -121,40 +121,6 @@ int main(int argc, char** argv)
     cout << "MPI not enabled." << endl;
 #endif
     
-    
-    // report threads.
-    {
-        cout << endl;
-#if defined(_OPENMP)
-        int numOrigThreads = omp_get_max_threads();
-        cout << "Num OpenMP threads: " << numOrigThreads << endl;
-        int numWorkers = numOrigThreads;
-#ifdef __INTEL_CREW
-        cout << "Creating crews..." << endl;
-        kmp_crew_create();
-        int numThreads = omp_get_max_threads();
-        cout << "Num OpenMP threads after crew creation: " << numThreads << endl;
-        int crewSize = kmp_crew_get_max_size();
-        numWorkers = numThreads * crewSize;
-        cout << "Total num crews: " << numWorkers << endl <<
-            "  num crew-leader threads: " << numThreads << endl <<
-            "  num threads per crew: " << crewSize << endl;
-        if (numWorkers == numOrigThreads)
-            cout << "Note: sanity check passed: num crews == num OpenMP threads before creating crews." << endl;
-        else {
-            cout << "Error: sanity check failed: num crews != num OpenMP threads before creating crews.\n"
-                "This usually indicates your OpenMP library has a crew-initialization issue.\n"
-                "Please update your OpenMP library or rebuild with crew disabled (make crew=0 ...).\n";
-            exit(1);
-        }
-#endif
-#else
-        int numThreads = 1;
-        cout << "Num threads: " << numThreads << endl;
-#endif
-        cout << endl;
-    }
-
     // options and their defaults.
     idx_t num_trials = 3; // number of trials.
     idx_t dt = 50;     // number of time-steps per trial, over which performance is averaged.
@@ -165,6 +131,7 @@ int main(int argc, char** argv)
     idx_t bn = 1, bx = DEF_BLOCK_SIZE, by = DEF_BLOCK_SIZE, bz = DEF_BLOCK_SIZE;  // size of cache blocks.
     idx_t pn = 0, px = 0, py = 0, pz = 0; // padding.
     bool validate = false;
+    int  block_threads = DEF_BLOCK_THREADS; // number of threads for a block.
     bool doWarmup = true;
 
     // parse options.
@@ -179,12 +146,15 @@ int main(int argc, char** argv)
                     "Usage: [options]\n"
                     "Options:\n"
                     " -h:             print this help and the current settings, then exit\n"
-                    " -t <n>          number of trials, default=" << num_trials << endl <<
-                    " -dt <n>         rank domain size in temporal dimension (number of time steps), default=" << dt << endl <<
+                    " -t <n>          number of trials, default=" <<
+                    num_trials << endl <<
+                    " -dt <n>         rank domain size in temporal dimension (number of time steps), default=" <<
+                    dt << endl <<
                     " -d{n,x,y,z} <n> rank domain size in specified spatial dimension, defaults=" <<
                     dn << '*' << dx << '*' << dy << '*' << dz << endl <<
                     " -d <n>          set same rank size in 3 {x,y,z} spatial dimensions\n" <<
-                    " -rt <n>         OpenMP region time steps (for wavefront tiling), default=" << rt << endl <<
+                    " -rt <n>         OpenMP region time steps (for wavefront tiling), default=" <<
+                    rt << endl <<
                     " -r{n,x,y,z} <n> OpenMP region size in specified spatial dimension, defaults=" <<
                     rn << '*' << rx << '*' << ry << '*' << rz << endl <<
                     " -r <n>          set same OpenMP region size in 3 {x,y,z} spatial dimensions\n"
@@ -195,6 +165,8 @@ int main(int argc, char** argv)
                     pn << '*' << px << '*' << py << '*' << pz << endl <<
                     " -p <n>          set same padding in 3 {x,y,z} spatial dimensions\n" <<
                     " -i <n>          equivalent to -dt, for backward compatibility\n" <<
+                    " -bthreads <n>   set number of threads to use for a block, default=" <<
+                    block_threads << endl <<
                     " -v              validate by comparing to a scalar run\n" <<
                     " -nw             skip warmup\n" <<
                     "Notes:\n"
@@ -268,6 +240,7 @@ int main(int argc, char** argv)
                 else if (opt == "-py") py = val;
                 else if (opt == "-pz") pz = val;
                 else if (opt == "-p") px = py = pz = val;
+                else if (opt == "-bthreads") block_threads = val;
                 else {
                     cerr << "error: option '" << opt << "' not recognized." << endl;
                     exit(1);
@@ -295,7 +268,53 @@ int main(int argc, char** argv)
     context.num_ranks = num_ranks;
     context.my_rank = my_rank;
     context.comm = comm;
-    
+
+    // report threads.
+    {
+        cout << endl;
+#if defined(_OPENMP)
+        cout << "Num OpenMP procs: " << omp_get_num_procs() << endl;
+        context.orig_max_threads = omp_get_max_threads();
+        cout << "Num OpenMP threads: " << context.orig_max_threads << endl;
+
+#if USE_CREW
+        // Init Crew.
+        cout << "Creating crews..." << endl;
+        kmp_crew_create();
+        int numThreads = omp_get_max_threads();
+        cout << "Num OpenMP threads after crew creation: " << numThreads << endl;
+        int crewSize = kmp_crew_get_max_size();
+        int numWorkers = numThreads * crewSize;
+        cout << "Total num crews: " << numWorkers << endl <<
+            "  Num crew-leader threads: " << numThreads << endl <<
+            "  Num threads per crew: " << crewSize << endl;
+        if (numWorkers == context.orig_max_threads)
+            cout << "Note: sanity check passed: num crews == num OpenMP threads before creating crews." << endl;
+        else {
+            cout << "Error: sanity check failed: num crews != num OpenMP threads before creating crews.\n"
+                "This usually indicates your OpenMP library has a crew-initialization issue.\n"
+                "Please update your OpenMP library or rebuild with crew disabled (make crew=0 ...).\n";
+            exit(1);
+        }
+#else
+
+        // Enable nesting and report nesting threads.
+        assert(block_threads > 0);
+        if (block_threads > 1)
+            omp_set_nested(1);
+        context.num_block_threads = block_threads;
+        int rt = context.set_region_threads(); // Temporary; just for reporting.
+        cout << "  Num threads per region: " << omp_get_max_threads() << endl;
+        cout << "  Num threads per block: " << block_threads << endl;
+        context.set_max_threads(); // Back to normal.
+#endif
+#else
+        int numThreads = 1;
+        cout << "Num threads: " << numThreads << endl;
+#endif
+        cout << endl;
+    }
+
     // Adjust defaults for wavefronts.
     if (rt != 1) {
         if (!rn) rn = 1;

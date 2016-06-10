@@ -29,7 +29,12 @@ IN THE SOFTWARE.
 #include <sstream>
 #include "stencil.hpp"
 
-#ifdef WIN32
+#if defined(_OPENMP)
+double getTimeInSecs() {
+    return omp_get_wtime();
+}
+
+#elif defined(WIN32)
 
 // FIXME.
 double getTimeInSecs() { return 0.0; }

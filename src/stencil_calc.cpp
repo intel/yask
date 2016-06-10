@@ -219,12 +219,19 @@ calc_region(StencilContext& context,
                 stencil->exchange_halos(context, rt,
                                         begin_rn, begin_rx, begin_ry, begin_rz,
                                         end_rn, end_rx, end_ry, end_rz);
-        
+
+                // Set number of threads for a region.
+                context.set_region_threads();
+
                 // Include automatically-generated loop code that calls
                 // calc_block() for each block in this region.  Loops
                 // through n from begin_rn to end_rn-1; similar for x, y,
                 // and z.  This code typically contains OpenMP loop(s).
+
 #include "stencil_region_loops.hpp"
+
+                // Reset threads back to max.
+                context.set_max_threads();
             }
             
             // Shift spatial region boundaries for next iteration to

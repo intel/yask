@@ -459,9 +459,7 @@ sub processCode($) {
 
         # use OpenMP on next loop.
         elsif (lc $tok eq 'omp') {
-            my $loopPragma = '_Pragma("omp parallel for ';
-            $loopPragma .= "schedule($OPT{ompSchedule})";
-            $loopPragma .= '")';
+            my $loopPragma = "_Pragma(\"$OPT{ompConstruct}\")";
             push @loopPrefix, " // Distribute iterations among OpenMP threads.", 
             $loopPragma;
             warn "info: using OpenMP on following loop.\n";
@@ -855,7 +853,7 @@ sub main() {
      [ "primePrefix=s", "Prefix for pipeline-priming call.", 'prime_'],
      [ "pipePrefix=s", "Additional prefix for pipeline call.", 'pipe_'],
      [ "pfPrefix=s", "Prefix for prefetch call.", 'prefetch_'],
-     [ "ompSchedule=s", "OpenMP scheduling policy.", "dynamic"],
+     [ "ompConstruct=s", "Pragma to use before 'omp' loop(s).", "omp parallel for"],
      [ "output=s", "Name of output file.", 'loops.h'],
     );
   my($command_line) = process_command_line(\%OPT, \@KNOBS);

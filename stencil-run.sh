@@ -25,83 +25,81 @@
 
 # Purpose: run stencil kernel in specified environment.
 
+# Env vars to set.
+envs="OMP_DISPLAY_ENV=VERBOSE OMP_PLACES=threads"
+envs="$envs KMP_VERSION=1 KMP_HOT_TEAMS_MODE=1 KMP_HOT_TEAMS_MAX_LEVEL=4"
+
+# Extra options for exe.
+opts=""
+
 unset arch
 while true; do
 
-if [[ "$1" == "-h" || "$1" == "-help" ]]; then
-    shift
-    echo "usage: $0 -arch <arch> [-sh_prefix <command>] [-exe_prefix <command>] [-mic <N>|-host <hostname>] [-ranks <N>] [-cores <N (per rank)> -threads <N (per core)>] [-affinity <scatter|compact|balanced>] [[--] executable options as shown below]"
-    echo " "
-    echo "Options to be passed to the executable must follow '--' or the ones listed above in the command line."
-    echo "The sh_prefix command used to prefix a sub-shell."
-    echo "The exe_prefix command is used to prefix the executable (set to 'true' to avoid actual run)."
-    echo "If -host <hostname> is given, 'ssh <hostname>' will be pre-pended to the sh_prefix command."
-    echo "If -ranks <N> is given, 'mpirun -n <N>' is pre-pended to the exe_prefix command;"
-    echo " use -exe_prefix <command> explicitly if a different MPI command is needed."
-    echo "If -arch 'knl' is given, it implies the following options (which can be overridden):"
-    echo " -exe_prefix 'numactl --preferred=1'"
-    echo " -affinity 'balanced'"
-    echo "If -mic <N> is given, it implies the following options (which can be overridden):"
-    echo " -arch 'knc'"
-    echo " -host <current-hostname>-mic<N>"
-    exit 1
+    if [[ ! -n ${1+set} ]]; then
+        break
 
-elif [[ "$1" == "-sh_prefix" && -n ${2+set} ]]; then
-  sh_prefix=$2
-  shift
-  shift
+    elif [[ "$1" == "-h" || "$1" == "-help" ]]; then
+        opts="$opts -h"
+        shift
+        echo "usage: $0 -arch <arch> [-mic <N>|-host <hostname>] [-sh_prefix <command>] [-exe_prefix <command>] [-ranks <N>] [<env-var=value>...] [[--] executable options as shown below]"
+        echo " "
+        echo "Options to be passed to the executable must follow '--' or the ones listed above in the command line."
+        echo "The sh_prefix command is used to prefix a sub-shell."
+        echo "The exe_prefix command is used to prefix the executable (set to 'true' to avoid actual run)."
+        echo "If -host <hostname> is given, 'ssh <hostname>' will be pre-pended to the sh_prefix command."
+        echo "If -ranks <N> is given, 'mpirun -n <N>' is pre-pended to the exe_prefix command;"
+        echo " use -exe_prefix <command> explicitly if a different MPI command is needed."
+        echo "If -arch 'knl' is given, it implies the following (which can be overridden):"
+        echo " -exe_prefix 'numactl --preferred=1'"
+        echo "If -mic <N> is given, it implies the following (which can be overridden):"
+        echo " -arch 'knc'"
+        echo " -host <current-hostname>-mic<N>"
 
-elif [[ "$1" == "-exe_prefix" && -n ${2+set} ]]; then
-  exe_prefix=$2
-  shift
-  shift
+    elif [[ "$1" == "-sh_prefix" && -n ${2+set} ]]; then
+        sh_prefix=$2
+        shift
+        shift
 
-elif [[ "$1" == "-host" && -n ${2+set} ]]; then
-  host=$2
-  shift
-  shift
+    elif [[ "$1" == "-exe_prefix" && -n ${2+set} ]]; then
+        exe_prefix=$2
+        shift
+        shift
 
-elif [[ "$1" == "-mic" && -n ${2+set} ]]; then
-  arch="knc"
-  host=`hostname`-mic$2
-  shift
-  shift
+    elif [[ "$1" == "-host" && -n ${2+set} ]]; then
+        host=$2
+        shift
+        shift
 
-elif [[ "$1" == "-arch" && -n ${2+set} ]]; then
-  arch=$2
-  shift
-  shift
+    elif [[ "$1" == "-mic" && -n ${2+set} ]]; then
+        arch="knc"
+        host=`hostname`-mic$2
+        shift
+        shift
 
-elif [[ "$1" == "-ranks" && -n ${2+set} ]]; then
-  nranks=$2
-  shift
-  shift
+    elif [[ "$1" == "-arch" && -n ${2+set} ]]; then
+        arch=$2
+        shift
+        shift
 
-elif [[ "$1" == "-cores" && -n ${2+set} ]]; then
-  ncores=$2
-  shift
-  shift
+    elif [[ "$1" == "-ranks" && -n ${2+set} ]]; then
+        nranks=$2
+        shift
+        shift
 
-elif [[ "$1" == "-threads" && -n ${2+set} ]]; then
-  nthreads=$2
-  shift
-  shift
+    elif [[ "$1" =~ ^[A-Za-z0-9_]+= ]]; then
+        envs="$envs $1"
+        shift
 
-elif [[ "$1" == "-affinity" && -n ${2+set} ]]; then
-  affinity=$2
-  shift
-  shift
+    elif [[ "$1" == "--" ]]; then
+        shift
+        
+        # will pass remaining options to executable.
+        break
 
-elif [ "$1" == "--" ]; then
-    shift
-    
-    # will pass remaining options to executable.
-    break
-
-else
-    # will pass remaining options to executable.
-    break
-fi
+    else
+        # will pass remaining options to executable.
+        break
+    fi
 
 done                            # parsing options.
 
@@ -114,24 +112,6 @@ fi
 # set defaults for KNL.
 if [[ "$arch" == "knl" ]]; then
     true ${exe_prefix='numactl --preferred=1'}
-    true ${affinity='balanced'}
-fi
-
-# environment vars to be set.
-envs="KMP_VERSION=1"
-if [[ -n "$affinity" ]]; then
-    envs="$envs KMP_AFFINITY=$affinity"
-fi
-
-# set OMP thread vars if cores and/or threads were set.
-if [[ -n "$ncores$nthreads" ]]; then
-    if [[ -z "$ncores" || -z "$nthreads" ]]; then
-        echo "error: must set both cores and threads."
-        exit 1
-    fi
-
-    # set vars for both with and without crew.
-    envs="$envs OMP_NUM_THREADS=$(($ncores*$nthreads)) KMP_PLACE_THREADS=${ncores}c,${nthreads}t INTEL_CREW_NUM_LEADERS=$ncores INTEL_CREW_SIZE=$nthreads"
 fi
 
 # MPI
@@ -175,7 +155,7 @@ if [[ -n "$host" ]]; then
         sleep $(( nm++ * 60 ))
     done
 else
-    export LD_LIBRARY_PATH=./lib:$LD_LIBRARY_PATH$libpath
+    envs="$envs LD_LIBRARY_PATH=./lib:$LD_LIBRARY_PATH$libpath"
 fi
 
 # echo make results if they exist
@@ -184,7 +164,7 @@ if [[ -e make-vars.txt ]]; then
 fi
 
 # command sequence.
-cmds="cd $dir; uname -a; lscpu; numactl -H; ldd ./$exe; env $envs $exe_prefix ./$exe $*"
+cmds="cd $dir; uname -a; lscpu; numactl -H; ldd ./$exe; env $envs $exe_prefix ./$exe $opts $*"
 
 date
 echo "==================="

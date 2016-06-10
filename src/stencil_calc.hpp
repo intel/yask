@@ -87,7 +87,51 @@ struct StencilContext {
     // Only grids in eqGridPtrs will have buffers.
     map<RealvGridBase*, Bufs> bufs;
 
-    StencilContext() : num_ranks(1), my_rank(0) {}
+    // Threading.
+    // Remember original number of threads avail.
+    // We use this instead of omp_get_num_procs() so the user
+    // can limit threads via OMP_NUM_THREADS env var.
+    int orig_max_threads;
+
+    // Number of threads to use in a nested OMP region.
+    int num_block_threads;
+
+    // Set number of threads to use for something other than a region.
+    inline int set_max_threads() {
+
+        // Reset number of OMP threads back to max allowed.
+        int nt = orig_max_threads;
+        omp_set_num_threads(nt);
+        return nt;
+    }
+
+    // Set number of threads to use for a region.
+    // Return that number.
+    inline int set_region_threads() {
+
+        int nt = orig_max_threads;
+
+#if !USE_CREW
+        // If not using crew, limit outer nesting to allow
+        // num_block_threads per nested block loop.
+        nt /= num_block_threads;
+#endif
+
+        omp_set_num_threads(nt);
+        return nt;
+    }
+
+    // Set number of threads for a block.
+    inline int set_block_threads() {
+
+        // This should be a nested OMP region.
+        omp_set_num_threads(num_block_threads);
+        return num_block_threads;
+    }
+
+    // Ctor, dtor.
+    StencilContext() : num_ranks(1), my_rank(0),
+                       orig_max_threads(1), num_block_threads(1) {}
     virtual ~StencilContext() { }
 
     // Allocate grid memory and set gridPtrs.
@@ -305,6 +349,9 @@ public:
 #pragma forceinline recursive
 #endif
         {
+            // Set threads for a block.
+            context.set_block_threads();
+
             // Include automatically-generated loop code that calls calc_cluster()
             // and optionally, the prefetch functions().
 #include "stencil_block_loops.hpp"
