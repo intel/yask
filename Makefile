@@ -53,7 +53,7 @@
 #
 # def_block_threads: Number of threads to use in nested OpenMP block loop by default.
 #
-# def_*_size: Default sizes used in executable.
+# def_*_size, def_pad: Default sizes used in executable.
 
 # Initial defaults.
 stencil		=	unspecified
@@ -103,7 +103,7 @@ else ifeq ($(arch),knl)
 ISA		=	-xMIC-AVX512
 MACROS		+=	USE_INTRIN512
 FB_TARGET  	=       512
-def_block_size	=	96
+def_block_size	?=	96
 def_block_threads =	8
 
 else ifeq ($(arch),skx)
@@ -135,7 +135,7 @@ endif # arch-specific.
 # general defaults for vars if not set above.
 crew				?= 	0
 streaming_stores		?= 	1
-omp_schedule			?=	dynamic
+omp_schedule			?=	guided
 omp_block_schedule		?=	static,1
 def_block_threads		?=	2
 omp_par_for			?=	omp parallel for
@@ -144,11 +144,12 @@ FB_TARGET  			?=	cpp
 order				?=	16
 real_bytes			?=	4
 time_dim_size			?=	2
-layout_3d			?=	Layout_123
-layout_4d			?=	Layout_1234
+layout_3d			?=	Layout_213
+layout_4d			?=	Layout_3124
 def_rank_size			?=	1024
 def_block_size			?=	32
 def_wavefront_region_size	?=	512
+def_pad				?=	1
 
 # How to fold vectors (x*y*z).
 # Vectorization in dimensions perpendicular to the inner loop
@@ -210,6 +211,7 @@ MACROS		+=	DEF_RANK_SIZE=$(def_rank_size)
 MACROS		+=	DEF_BLOCK_SIZE=$(def_block_size)
 MACROS		+=	DEF_WAVEFRONT_REGION_SIZE=$(def_wavefront_region_size)
 MACROS		+=	DEF_BLOCK_THREADS=$(def_block_threads)
+MACROS		+=	DEF_PAD=$(def_pad)
 
 # arch.
 ARCH		:=	$(shell echo $(arch) | tr '[:lower:]' '[:upper:]')
@@ -264,7 +266,7 @@ RANK_LOOP_CODE		=	loop(dt) { loop(dn,dx,dy,dz) { calc(region); } }
 REGION_LOOP_OPTS	=     	-dims 'rn,rx,ry,rz' \
 				-ompConstruct '$(omp_par_for) schedule($(omp_schedule)) proc_bind(spread)' \
 				-calcPrefix 'stencil->calc_'
-REGION_LOOP_CODE	=	serpentine omp loop(rn,rx,ry,rz) { calc(block(rt)); }
+REGION_LOOP_CODE	=	square_wave serpentine omp loop(rn,rx,ry,rz) { calc(block(rt)); }
 
 # Block loops break up a block into vector clusters.
 # The indices at this level are by vector instead of element;

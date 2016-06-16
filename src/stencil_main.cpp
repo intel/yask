@@ -129,7 +129,7 @@ int main(int argc, char** argv)
     idx_t rn = 0, rx = 0, ry = 0, rz = 0;  // region sizes (0 => use rank size).
     idx_t bt = 1;                          // temporal block size.
     idx_t bn = 1, bx = DEF_BLOCK_SIZE, by = DEF_BLOCK_SIZE, bz = DEF_BLOCK_SIZE;  // size of cache blocks.
-    idx_t pn = 0, px = 0, py = 0, pz = 0; // padding.
+    idx_t pn = 0, px = DEF_PAD, py = DEF_PAD, pz = DEF_PAD; // padding.
     bool validate = false;
     int  block_threads = DEF_BLOCK_THREADS; // number of threads for a block.
     bool doWarmup = true;
