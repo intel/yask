@@ -117,6 +117,7 @@ public:
     RealvGrid_XYZ(idx_t dx, idx_t dy, idx_t dz,
                   idx_t px, idx_t py, idx_t pz,
                   const string& name) :
+        RealvGridBase(name, &_data),
 
         // Round up each dim to size of realv.
         _dx(ROUND_UP(dx, VLEN_X)),
@@ -138,8 +139,7 @@ public:
         _data(_dxv + 2*_pxv,
               _dyv + 2*_pyv,
               _dzv + 2*_pzv,
-              ALLOC_ALIGNMENT),
-        RealvGridBase(name, &_data)
+              ALLOC_ALIGNMENT)
     {
         _data.print_info(name);
 
@@ -355,6 +355,7 @@ public:
     RealvGrid_NXYZ(idx_t dn, idx_t dx, idx_t dy, idx_t dz,
                    idx_t pn, idx_t px, idx_t py, idx_t pz,
                    const string& name) :
+        RealvGridBase(name, &_data),
 
         // Round up each dim to multiple of realv.
         _dn(ROUND_UP(dn, VLEN_N)),
@@ -381,8 +382,7 @@ public:
               _dxv + 2*_pxv,
               _dyv + 2*_pyv,
               _dzv + 2*_pzv,
-              ALLOC_ALIGNMENT),
-        RealvGridBase(name, &_data)
+              ALLOC_ALIGNMENT)
     {
         _data.print_info(name);
     }

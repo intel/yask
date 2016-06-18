@@ -46,6 +46,7 @@ IN THE SOFTWARE.
 #include <immintrin.h>
 #endif
 
+#include <cstdint>
 #include <iostream>
 #include <string>
 #include <stdexcept>
@@ -61,7 +62,7 @@ using namespace std;
 // values for 32-bit, single-precision reals.
 #if REAL_BYTES == 4
 typedef float Real;
-#define CTRL_INT unsigned __int32
+#define CTRL_INT ::uint32_t
 #define CTRL_IDX_MASK 0xf
 #define CTRL_SEL_BIT 0x10
 #define MMASK __mmask16
@@ -80,7 +81,7 @@ typedef float Real;
 // values for 64-bit, double-precision reals.
 #elif REAL_BYTES == 8
 typedef double Real;
-#define CTRL_INT unsigned __int64
+#define CTRL_INT ::uint64_t
 #define CTRL_IDX_MASK 0x7
 #define CTRL_SEL_BIT 0x8
 #define MMASK __mmask8
@@ -147,7 +148,7 @@ typedef int64_t idx_t;
 #endif
 
 // Macro for looping through an aligned realv.
-#if defined(DEBUG) || (VLEN==1)
+#if defined(DEBUG) || (VLEN==1) || !defined(__INTEL_COMPILER) 
 #define RealV_LOOP(i)                            \
     for (int i=0; i<VLEN; i++)
 #define RealV_LOOP_UNALIGNED(i)                  \
@@ -371,9 +372,15 @@ struct realv {
     
     // div.
     ALWAYS_INLINE realv operator/(realv rhs) const {
-        realv res;
+        realv res, rcp;
 #ifdef NO_INTRINSICS
         RealV_LOOP(i) res[i] = u.r[i] / rhs[i];
+#elif USE_RCP14
+        rcp.u.mr = INAME(rcp14)(rhs.u.mr);
+        res.u.mr = INAME(mul)(u.mr, rcp.u.mr);
+#elif USE_RCP28
+        rcp.u.mr = INAME(rcp28)(rhs.u.mr);
+        res.u.mr = INAME(mul)(u.mr, rcp.u.mr);
 #else
         res.u.mr = INAME(div)(u.mr, rhs.u.mr);
 #endif
@@ -417,7 +424,7 @@ struct realv {
     }
     
     // aligned load.
-    ALWAYS_INLINE void loadFrom(const realv* restrict from) {
+    ALWAYS_INLINE void loadFrom(const realv* __restrict__ from) {
 #if defined(NO_INTRINSICS) || defined(NO_LOAD_INTRINSICS)
         RealV_LOOP(i) u.r[i] = (*from)[i];
 #else
@@ -426,7 +433,7 @@ struct realv {
     }
 
     // unaligned load.
-    ALWAYS_INLINE void loadUnalignedFrom(const realv* restrict from) {
+    ALWAYS_INLINE void loadUnalignedFrom(const realv* __restrict__ from) {
 #if defined(NO_INTRINSICS) || defined(NO_LOAD_INTRINSICS)
         RealV_LOOP_UNALIGNED(i) u.r[i] = (*from)[i];
 #else
@@ -435,7 +442,7 @@ struct realv {
     }
 
     // aligned store.
-    ALWAYS_INLINE void storeTo(realv* restrict to) const {
+    ALWAYS_INLINE void storeTo(realv* __restrict__ to) const {
 
         // Using an explicit loop here instead of a store intrinsic may
         // allow the compiler to do more optimizations.  This is true
@@ -593,7 +600,7 @@ ALWAYS_INLINE void realv_permute(realv& res, const realv& ctrl, const realv& a) 
     a.print_reals(cout);
 #endif
 
-#ifdef NO_INTRINSICS
+#if defined(NO_INTRINSICS) || !defined(USE_INTRIN512)
     // must make a temp copy in case &res == &a.
     realv tmp = a;
     for (int i = 0; i < VLEN; i++)
@@ -623,7 +630,7 @@ ALWAYS_INLINE void realv_permute_masked(realv& res, const realv& ctrl, const rea
     res.print_reals(cout);
 #endif
 
-#ifdef NO_INTRINSICS
+#if defined(NO_INTRINSICS) || !defined(USE_INTRIN512)
     // must make a temp copy in case &res == &a.
     realv tmp = a;
     for (int i = 0; i < VLEN; i++) {
@@ -655,7 +662,7 @@ ALWAYS_INLINE void realv_permute2(realv& res, const realv& ctrl,
     b.print_reals(cout);
 #endif
 
-#ifdef NO_INTRINSICS
+#if defined(NO_INTRINSICS) || !defined(USE_INTRIN512)
     // must make temp copies in case &res == &a or &b.
     realv tmpa = a, tmpb = b;
     for (int i = 0; i < VLEN; i++) {

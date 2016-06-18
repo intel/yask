@@ -65,26 +65,30 @@ ifeq ($(stencil),)
 $(error Stencil not specified; use stencil=iso3dfd, 3axis, 9axis, 3plane, cube, ave, or awp)
 
 else ifeq ($(stencil),ave)
-order		=	2
-real_bytes	=	8
-def_rank_size	=	256
+order		?=	2
+real_bytes	?=	8
+def_rank_size	?=	256
 
 else ifeq ($(stencil),9axis)
-order		=	8
+order		?=	8
 
 else ifeq ($(stencil),3plane)
-order		=	6
+order		?=	6
 
 else ifeq ($(stencil),cube)
-order		=	4
+order		?=	4
+
+else ifeq ($(stencil),iso3dfd)
+layout_3d	?=	Layout_213
+layout_4d	?=	Layout_3124
 
 else ifeq ($(stencil),awp)
-order		=	4
-time_dim_size	=	1
-eqs		=	velocity=vel_,stress=stress_
-def_rank_size	=	640
-def_block_size	=	32
-def_wavefront_region_size =	256
+order		?=	4
+time_dim_size	?=	1
+eqs		?=	velocity=vel_,stress=stress_
+def_rank_size	?=	640
+def_block_size	?=	32
+def_wavefront_region_size ?=	256
 endif
 
 # Defaut settings based on architecture.
@@ -93,43 +97,48 @@ $(error Architecture not specified; use arch=knl, knc, skx, hsw, ivb, snb, or ho
 
 else ifeq ($(arch),knc)
 
-ISA		= 	-mmic
+ISA		?= 	-mmic
 MACROS		+=	USE_INTRIN512
-FB_TARGET  	=       knc
-def_block_threads =	4
+FB_TARGET  	?=       knc
+def_block_threads ?=	4
 
 else ifeq ($(arch),knl)
 
-ISA		=	-xMIC-AVX512
+ISA		?=	-xMIC-AVX512
+GCC_ISA		?=	-march=knl
 MACROS		+=	USE_INTRIN512
-FB_TARGET  	=       512
+FB_TARGET  	?=       512
 def_block_size	?=	96
-def_block_threads =	8
-streaming_stores  = 	0
+def_block_threads ?=	8
+streaming_stores  ?= 	0
 
 else ifeq ($(arch),skx)
 
-ISA		=	-xCORE-AVX512
+ISA		?=	-xCORE-AVX512
+GCC_ISA		?=	-march=knl -mno-avx512er -mno-avx512pf
 MACROS		+=	USE_INTRIN512
-FB_TARGET  	=       512
+FB_TARGET  	?=       512
 
 else ifeq ($(arch),hsw)
 
-ISA		=	-xCORE-AVX2
+ISA		?=	-xCORE-AVX2
+GCC_ISA		?=	-march=haswell
 MACROS		+=	USE_INTRIN256
-FB_TARGET  	=       256
+FB_TARGET  	?=       256
 
 else ifeq ($(arch),ivb)
 
-ISA		=	-xCORE-AVX-I
+ISA		?=	-xCORE-AVX-I
+GCC_ISA		?=	-march=ivybridge
 MACROS		+=	USE_INTRIN256
-FB_TARGET  	=       256
+FB_TARGET  	?=       256
 
 else ifeq ($(arch),snb)
 
-ISA		=	-xAVX
+ISA		?=	-xAVX
+GCC_ISA		?=	-march=sandybridge
 MACROS		+= 	USE_INTRIN256
-FB_TARGET  	=       256
+FB_TARGET  	?=       256
 
 endif # arch-specific.
 
@@ -145,8 +154,8 @@ FB_TARGET  			?=	cpp
 order				?=	16
 real_bytes			?=	4
 time_dim_size			?=	2
-layout_3d			?=	Layout_213
-layout_4d			?=	Layout_3124
+layout_3d			?=	Layout_123
+layout_4d			?=	Layout_1234
 def_rank_size			?=	1024
 def_block_size			?=	32
 def_wavefront_region_size	?=	512
@@ -158,23 +167,23 @@ def_pad				?=	1
 
 ifneq ($(findstring INTRIN512,$(MACROS)),)  # 512 bits.
 ifeq ($(real_bytes),4)
-fold		=	x=4,y=4,z=1
+fold		?=	x=4,y=4,z=1
 else
-fold		=	x=4,y=2,z=1
+fold		?=	x=4,y=2,z=1
 endif
 
 else  # not 512 bits.
 ifeq ($(real_bytes),4)
-fold		=	x=8
+fold		?=	x=8
 else
-fold		=	x=4
+fold		?=	x=4
 endif
 
 endif
 
 # How many vectors to compute at once (unrolling factor in
 # each dimension).
-cluster		=	x=1,y=1,z=1
+cluster		?=	x=1,y=1,z=1
 
 # More build flags.
 ifeq ($(mpi),1)
@@ -186,10 +195,10 @@ FC		=	ifort
 LD		=	$(CC)
 MAKE		=	make
 LFLAGS          +=    	-lpthread
-CPPFLAGS        +=   	-g -O3 -std=c++11 -Wall $(ISA)
+CPPFLAGS        +=   	-g -O3 -std=c++11 -Wall
 OMPFLAGS	+=	-fopenmp 
-LFLAGS          +=       $(CPPFLAGS) -lrt -g
-FB_CC    	=       icpc
+LFLAGS          +=      $(CPPFLAGS) -lrt -g
+FB_CC    	=      icpc
 FB_CCFLAGS 	+=	-g -O1 -std=c++11 -Wall  # low opt to reduce compile time.
 FB_FLAGS   	+=	-or $(order) -st $(stencil) -cluster $(cluster) -fold $(fold)
 GEN_HEADERS     =	$(addprefix src/, \
@@ -225,10 +234,10 @@ crew		=	0
 endif
 
 # compiler-specific settings
-ifneq ($(findstring ic,$(notdir $(CC))),)
+ifneq ($(findstring ic,$(notdir $(CC))),)  # Intel compiler
 
 CODE_STATS      =   	code_stats
-CPPFLAGS        +=      -debug extended -Fa -restrict -ansi-alias -fno-alias
+CPPFLAGS        +=      $(ISA) -debug extended -Fa -restrict -ansi-alias -fno-alias
 CPPFLAGS	+=	-fimf-precision=low -fast-transcendentals -no-prec-sqrt -no-prec-div -fp-model fast=2 -fno-protect-parens -rcd -ftz -fma -fimf-domain-exclusion=none -qopt-assume-safe-padding
 CPPFLAGS	+=      -qopt-report=5 -qopt-report-phase=VEC,PAR,OPENMP,IPO,LOOP
 CPPFLAGS	+=	-no-diag-message-catalog
@@ -243,7 +252,10 @@ MACROS		+=	__INTEL_CREW
 def_block_threads =	1
 endif
 
-endif # icpc
+else # not Intel compiler
+CPPFLAGS	+=	$(GCC_ISA) -Wno-unknown-pragmas -Wno-unused-variable
+
+endif # compiler.
 
 ifeq ($(streaming_stores),1)
 MACROS		+=	USE_STREAMING_STORE

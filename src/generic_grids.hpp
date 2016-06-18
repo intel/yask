@@ -42,6 +42,12 @@ IN THE SOFTWARE.
 
 #include "layouts.hpp"
 
+// Some utility functions.
+extern double getTimeInSecs();
+extern idx_t roundUp(idx_t dim, idx_t mult, string name);
+extern string printWithPow2Multiplier(double num);
+extern string printWithPow10Multiplier(double num);
+
 // A base class for a generic grid of elements of type T.
 // This class provides linear-access support, i.e., no layout.
 template <typename T> class GenericGridBase {
@@ -181,7 +187,7 @@ public:
         }
 
         // Quick check for errors.
-        idx_t errs = count_diffs(*ref, epsilon);
+        idx_t errs = GenericGridBase<T>::count_diffs(*ref, epsilon);
 
         // Run detailed comparison if any errors found.
         if (errs > 0 && maxPrint) {
@@ -258,7 +264,7 @@ public:
         }
 
         // Quick check for errors.
-        idx_t errs = count_diffs(*ref, epsilon);
+        idx_t errs = GenericGridBase<T>::count_diffs(*ref, epsilon);
 
         // Run detailed comparison if any errors found.
         if (errs > 0 && maxPrint) {
@@ -350,7 +356,7 @@ public:
         }
 
         // Quick check for errors.
-        idx_t errs = count_diffs(*ref, epsilon);
+        idx_t errs = GenericGridBase<T>::count_diffs(*ref, epsilon);
 
         // Run detailed comparison if any errors found.
         if (errs > 0 && maxPrint) {
@@ -446,7 +452,7 @@ public:
         }
 
         // Quick check for errors.
-        idx_t errs = count_diffs(*ref, epsilon);
+        idx_t errs = GenericGridBase<T>::count_diffs(*ref, epsilon);
 
         // Run detailed comparison if any errors found.
         if (errs > 0 && maxPrint) {
@@ -548,7 +554,7 @@ public:
         }
 
         // Quick check for errors.
-        idx_t errs = count_diffs(*ref, epsilon);
+        idx_t errs = GenericGridBase<T>::count_diffs(*ref, epsilon);
 
         // Run detailed comparison if any errors found.
         if (errs > 0 && maxPrint) {

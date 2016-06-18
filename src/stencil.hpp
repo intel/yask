@@ -111,7 +111,7 @@ extern "C" {
 #ifdef TRACE
 #define TRACE_MSG(fmt,...) (printf("YASK trace: " fmt "\n",__VA_ARGS__), fflush(0))
 #else
-#define TRACE_MSG(fmt,...) true
+#define TRACE_MSG(fmt,...) ((void)0)
 #endif
 
 // Size of time dimension required in allocated memory.
@@ -191,11 +191,5 @@ typedef RealvGrid_TNXYZ<LAYOUT_4D> Grid_TNXYZ; // T and N reduced to 1st dim.
 
 // Include auto-generated stencil code.
 #include "stencil_code.hpp"
-
-// Some utility functions.
-extern double getTimeInSecs();
-extern idx_t roundUp(idx_t dim, idx_t mult, string name);
-extern string printWithPow2Multiplier(double num);
-extern string printWithPow10Multiplier(double num);
 
 #endif

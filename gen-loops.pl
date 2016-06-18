@@ -175,11 +175,6 @@ sub addIndexVars($$) {
         " // Number of iterations in loop collapsed across ".(join ', ',@$loopDims)." dimensions.",
         " const $itype $nvar = ".join(' * ', @nvars).";";
     }
-
-    # index var.
-    push @$code, " // Loop index var.";
-    my $ivar = loopIndexVar(@$loopDims);
-    push @$code, " $itype $ivar = 0;";
 }
 
 # add index variables *inside* the loop.
@@ -301,18 +296,20 @@ sub addIndexVars2($$$$$) {
 }
 
 # start simple or collapsed loop body.
-sub beginLoop($$$$$$) {
+sub beginLoop($$$$$$$) {
     my $code = shift;           # ref to list of code lines.
-    my $loopDims = shift;           # ref to list of dimensions.
+    my $loopDims = shift;       # ref to list of dimensions.
     my $prefix = shift;         # ref to list of prefix code. May be undef.
-    my $endVal = shift;         # value of end-point (start point is already set). May be undef.
-    my $features = shift;           # bits for path types.
+    my $beginVal = shift;       # beginning of loop.
+    my $endVal = shift;         # end of loop (undef to use default).
+    my $features = shift;       # bits for path types.
     my $loopStack = shift;      # whole stack, including enclosing dims.
 
     $endVal = numVar(@$loopDims) if !defined $endVal;
+    my $itype = indexType(@$loopDims);
     my $ivar = loopIndexVar(@$loopDims);
     push @$code, @$prefix if defined $prefix;
-    push @$code, " for ( ; $ivar < $endVal; $ivar++) {";
+    push @$code, " for ($itype $ivar = $beginVal; $ivar < $endVal; $ivar++) {";
 
     # add inner index vars.
     addIndexVars2($code, $loopDims, 0, $features, $loopStack);
@@ -564,7 +561,7 @@ sub processCode($) {
             # if it is the inner loop, we might need more than one loop body, so
             # it will be generated when the '}' is seen.
             if (!defined $innerDim) {
-                beginLoop(\@code, \@loopDims, \@loopPrefix, undef, $features, \@loopStack);
+                beginLoop(\@code, \@loopDims, \@loopPrefix, 0, undef, $features, \@loopStack);
 
                 # clear data for this loop.
                 undef @loopDims;
@@ -650,7 +647,6 @@ sub processCode($) {
                 
                 my $ucDir = uc($innerDim);
                 my $pfd = "PFD$genericCache";
-                my $iVar = loopIndexVar(@loopDims);
                 my $nVar = numVar(@loopDims);
 
                 # declare pipeline vars.
@@ -676,17 +672,13 @@ sub processCode($) {
                         push @pfCode, " // Prime prefetch to $genericCache.";
                         
                         # prefetch loop.
-                        beginLoop(\@pfCode, \@loopDims, \@loopPrefix, $pfd, $features, \@loopStack);
+                        beginLoop(\@pfCode, \@loopDims, \@loopPrefix, 0, $pfd, $features, \@loopStack);
                         push @pfCode, " // Prefetch to $genericCache.", @pfStmtsFullHere;
                         endLoop(\@pfCode);
                         
                         # convert to specific cache.
                         specifyCache(\@pfCode, $cache);
                         push @code, @pfCode;
-                        
-                        # reset index to beginning for next loop.
-                        push @code, " // Reset index to beginning for next loop.",
-                        " $iVar = 0;";
                     }
                 }           # PF.
 
@@ -695,9 +687,8 @@ sub processCode($) {
 
                     # start the loop STENCIL_ORDER before 0.
                     # TODO: make this more general.
-                    push @code, " // Prime the calculation pipeline.",
-                    " $iVar = -STENCIL_ORDER;";
-                    beginLoop(\@code, \@loopDims, \@loopPrefix, 0, $features, \@loopStack);
+                    push @code, " // Prime the calculation pipeline.";
+                    beginLoop(\@code, \@loopDims, \@loopPrefix, "-STENCIL_ORDER", 0, $features, \@loopStack);
 
                     # select only pipe instructions, change calc to prime prefix.
                     my @primeStmts = grep(m=//|$OPT{pipePrefix}=, @calcStmts);
@@ -729,11 +720,14 @@ sub processCode($) {
                     my $name = "Computation";
                     my $endVal = ($loop == $lastLoop) ?
                         numVar(@loopDims) : midVar(@loopDims);
+                    my $beginVal = ($lastLoop > 0 && $loop == $lastLoop) ?
+                        midVar(@loopDims) : 0;
 
                     my $comment = " // $name loop.";
                     $comment .= " Same as previous loop, except no L2 prefetch." if $loop==1;
                     push @code, $comment;
-                    beginLoop(\@code, \@loopDims, \@loopPrefix, $endVal, $features, \@loopStack);
+                    beginLoop(\@code, \@loopDims, \@loopPrefix, 
+                              $beginVal, $endVal, $features, \@loopStack);
 
                     # loop body.
                     push @code, " // $name.", @calcStmts;
