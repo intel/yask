@@ -40,24 +40,22 @@ IN THE SOFTWARE.
 #include <math.h>
 #include <iostream>
 #include <string>
-using namespace std;
 
 #define CACHELINE_BYTES   64
 
-// Set MODEL_CACHE to 1 or 2 to model L1 or L2.
+    // Set MODEL_CACHE to 1 or 2 to model L1 or L2.
 #ifdef MODEL_CACHE
 #include "cache_model.hpp"
-extern Cache cache;
 #endif
 
     //#define ALLOC_ALIGNMENT CACHELINE_BYTES
 #define ALLOC_ALIGNMENT 4096 // 4k-page
 
-// Make an index and offset canonical, i.e., offset in [0..vecLen-1].
-// Makes proper adjustments for negative inputs.
+    // Make an index and offset canonical, i.e., offset in [0..vecLen-1].
+    // Makes proper adjustments for negative inputs.
 #define FIX_INDEX_OFFSET(indexIn, offsetIn, indexOut, offsetOut, vecLen) \
     do {                                                                \
-        const idx_t ofs = ((indexIn) * (vecLen)) + (offsetIn);     \
+        const idx_t ofs = ((indexIn) * (vecLen)) + (offsetIn);          \
         indexOut = ofs / (vecLen);                                      \
         offsetOut = ofs % (vecLen);                                     \
         while(offsetOut < 0) {                                          \
@@ -66,7 +64,7 @@ extern Cache cache;
         }                                                               \
     } while(0)
 
-// L1 and L2 hints
+    // L1 and L2 hints
 #define L1 _MM_HINT_T0
 #define L2 _MM_HINT_T1
 
@@ -80,8 +78,8 @@ extern Cache cache;
 #endif
 #endif
 
-// prefetch cannot be a function because the hint cannot be a var.
-// define some optional prefix macros for cache modeling and tracing.
+    // prefetch cannot be a function because the hint cannot be a var.
+    // define some optional prefix macros for cache modeling and tracing.
 #ifdef NOPREFETCH
 #define PREFETCH(hint, base, matNum, xv, yv, zv, line) true
 #else
@@ -93,24 +91,24 @@ extern Cache cache;
 #endif
 
 #ifdef TRACE_MEM
-#define TP(p, hint, base, matNum, xv, yv, zv, line) \
-    printf("prefetch %s[%i][%i,%i,%i](%p) to L%i at line %i.\n", \
+#define TP(p, hint, base, matNum, xv, yv, zv, line)                     \
+    printf("prefetch %s[%i][%i,%i,%i](%p) to L%i at line %i.\n",        \
            base.getNameCStr(), matNum, (int)xv (int)yv, (int)zv, p, hint, line); \
-        fflush(stdout)
+    fflush(stdout)
 #else 
 #define TP(p, hint, base, matNum, xv, y, z, line)
 #endif
 
-#define PREFETCH(hint, base, matNum, xv, yv, zv, line)    \
-    do {                                        \
-        const Real *p = base.getPtr(matNum, xv, yv, zv, false);        \
-        TP(p, hint, base, matNum, xv, yv, zv, line); MCP(p, hint, line);  \
-        _mm_prefetch((const char*)(p), hint);   \
+#define PREFETCH(hint, base, matNum, xv, yv, zv, line)                  \
+    do {                                                                \
+        const Real *p = base.getPtr(matNum, xv, yv, zv, false);         \
+        TP(p, hint, base, matNum, xv, yv, zv, line); MCP(p, hint, line); \
+        _mm_prefetch((const char*)(p), hint);                           \
     } while(0)
 #endif
 
-// evict cannot be a function because the hint cannot be a var.
-// define some optional prefix macros for cache modeling and tracing.
+        // evict cannot be a function because the hint cannot be a var.
+        // define some optional prefix macros for cache modeling and tracing.
 #ifdef NOEVICT
 #define EVICT(hint, base, matNum, xv, y, z, line) true
 #else
@@ -128,24 +126,24 @@ extern Cache cache;
 #define TE(p, hint, line)
 #endif
 
-#define EVICT(hint, base, matNum, xv, yv, zv, line)    \
-    do {                                        \
-        const Real *p = base.getPtr(matNum, xv, yv, zv, false);        \
-        TE(p, hint, line); MCE(p, hint, line);  \
-        _mm_clevict((const char*)(p), hint);    \
-    } while(0)
+#define EVICT(hint, base, matNum, xv, yv, zv, line)                     \
+        do {                                                            \
+            const Real *p = base.getPtr(matNum, xv, yv, zv, false);     \
+            TE(p, hint, line); MCE(p, hint, line);                      \
+            _mm_clevict((const char*)(p), hint);                        \
+        } while(0)
 #endif
 
-////// Default prefetch distances.
-// These are only used if and when prefetch code is generated
-// by gen-loops.pl.
+        ////// Default prefetch distances.
+        // These are only used if and when prefetch code is generated
+        // by gen-loops.pl.
 
-// how far to prefetch ahead for L1.
+        // how far to prefetch ahead for L1.
 #ifndef PFDL1
 #define PFDL1 1
 #endif
 
-// how far to prefetch ahead for L2.
+        // how far to prefetch ahead for L2.
 #ifndef PFDL2
 #define PFDL2 2
 #endif

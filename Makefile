@@ -105,7 +105,7 @@ def_block_threads ?=	4
 else ifeq ($(arch),knl)
 
 ISA		?=	-xMIC-AVX512
-GCC_ISA		?=	-march=knl
+GCXX_ISA		?=	-march=knl
 MACROS		+=	USE_INTRIN512
 FB_TARGET  	?=       512
 def_block_size	?=	96
@@ -115,28 +115,28 @@ streaming_stores  ?= 	0
 else ifeq ($(arch),skx)
 
 ISA		?=	-xCORE-AVX512
-GCC_ISA		?=	-march=knl -mno-avx512er -mno-avx512pf
+GCXX_ISA		?=	-march=knl -mno-avx512er -mno-avx512pf
 MACROS		+=	USE_INTRIN512
 FB_TARGET  	?=       512
 
 else ifeq ($(arch),hsw)
 
 ISA		?=	-xCORE-AVX2
-GCC_ISA		?=	-march=haswell
+GCXX_ISA		?=	-march=haswell
 MACROS		+=	USE_INTRIN256
 FB_TARGET  	?=       256
 
 else ifeq ($(arch),ivb)
 
 ISA		?=	-xCORE-AVX-I
-GCC_ISA		?=	-march=ivybridge
+GCXX_ISA		?=	-march=ivybridge
 MACROS		+=	USE_INTRIN256
 FB_TARGET  	?=       256
 
 else ifeq ($(arch),snb)
 
 ISA		?=	-xAVX
-GCC_ISA		?=	-march=sandybridge
+GCXX_ISA		?=	-march=sandybridge
 MACROS		+= 	USE_INTRIN256
 FB_TARGET  	?=       256
 
@@ -187,19 +187,18 @@ cluster		?=	x=1,y=1,z=1
 
 # More build flags.
 ifeq ($(mpi),1)
-CC		=	mpiicpc
+CXX		=	mpiicpc
 else
-CC		=	icpc
+CXX		=	icpc
 endif
-FC		=	ifort
-LD		=	$(CC)
+LD		=	$(CXX)
 MAKE		=	make
 LFLAGS          +=    	-lpthread
-CPPFLAGS        +=   	-g -O3 -std=c++11 -Wall
+CXXFLAGS        +=   	-g -O3 -std=c++11 -Wall
 OMPFLAGS	+=	-fopenmp 
-LFLAGS          +=      $(CPPFLAGS) -lrt -g
-FB_CC    	=      icpc
-FB_CCFLAGS 	+=	-g -O1 -std=c++11 -Wall  # low opt to reduce compile time.
+LFLAGS          +=      $(CXXFLAGS) -lrt -g
+FB_CXX    	=       $(CXX)
+FB_CXXFLAGS 	+=	-g -O1 -std=c++11 -Wall  # low opt to reduce compile time.
 FB_FLAGS   	+=	-or $(order) -st $(stencil) -cluster $(cluster) -fold $(fold)
 GEN_HEADERS     =	$(addprefix src/, \
 				stencil_macros.hpp stencil_code.hpp \
@@ -234,26 +233,26 @@ crew		=	0
 endif
 
 # compiler-specific settings
-ifneq ($(findstring ic,$(notdir $(CC))),)  # Intel compiler
+ifneq ($(findstring ic,$(notdir $(CXX))),)  # Intel compiler
 
 CODE_STATS      =   	code_stats
-CPPFLAGS        +=      $(ISA) -debug extended -Fa -restrict -ansi-alias -fno-alias
-CPPFLAGS	+=	-fimf-precision=low -fast-transcendentals -no-prec-sqrt -no-prec-div -fp-model fast=2 -fno-protect-parens -rcd -ftz -fma -fimf-domain-exclusion=none -qopt-assume-safe-padding
-CPPFLAGS	+=      -qopt-report=5 -qopt-report-phase=VEC,PAR,OPENMP,IPO,LOOP
-CPPFLAGS	+=	-no-diag-message-catalog
-CC_VER_CMD	=	$(CC) -V
+CXXFLAGS        +=      $(ISA) -debug extended -Fa -restrict -ansi-alias -fno-alias
+CXXFLAGS	+=	-fimf-precision=low -fast-transcendentals -no-prec-sqrt -no-prec-div -fp-model fast=2 -fno-protect-parens -rcd -ftz -fma -fimf-domain-exclusion=none -qopt-assume-safe-padding
+CXXFLAGS	+=      -qopt-report=5 -qopt-report-phase=VEC,PAR,OPENMP,IPO,LOOP
+CXXFLAGS	+=	-no-diag-message-catalog
+CXX_VER_CMD	=	$(CXX) -V
 
 # work around an optimization bug.
 MACROS		+=	NO_STORE_INTRINSICS
 
 ifeq ($(crew),1)
-CPPFLAGS	+=      -mP2OPT_hpo_par_crew_codegen=T
+CXXFLAGS	+=      -mP2OPT_hpo_par_crew_codegen=T
 MACROS		+=	__INTEL_CREW
 def_block_threads =	1
 endif
 
 else # not Intel compiler
-CPPFLAGS	+=	$(GCC_ISA) -Wno-unknown-pragmas -Wno-unused-variable
+CXXFLAGS	+=	$(GCXX_ISA) -Wno-unknown-pragmas -Wno-unused-variable
 
 endif # compiler.
 
@@ -314,13 +313,13 @@ MACROS       	+=      MODEL_CACHE=2
 OMPFLAGS	=	-qopenmp-stubs
 endif
 
-CPPFLAGS	+=	$(addprefix -D,$(MACROS)) $(addprefix -D,$(EXTRA_MACROS))
-CPPFLAGS	+=	$(OMPFLAGS) $(EXTRA_CPPFLAGS)
-LFLAGS          +=      $(OMPFLAGS) $(EXTRA_CPPFLAGS)
+CXXFLAGS	+=	$(addprefix -D,$(MACROS)) $(addprefix -D,$(EXTRA_MACROS))
+CXXFLAGS	+=	$(OMPFLAGS) $(EXTRA_CXXFLAGS)
+LFLAGS          +=      $(OMPFLAGS) $(EXTRA_CXXFLAGS)
 
 STENCIL_BASES		:=	stencil_main stencil_calc utils
 STENCIL_OBJS		:=	$(addprefix src/,$(addsuffix .$(arch).o,$(STENCIL_BASES)))
-STENCIL_CPP		:=	$(addprefix src/,$(addsuffix .$(arch).i,$(STENCIL_BASES)))
+STENCIL_CXX		:=	$(addprefix src/,$(addsuffix .$(arch).i,$(STENCIL_BASES)))
 STENCIL_EXEC_NAME	:=	stencil.$(arch).exe
 MAKE_VAR_FILE		:=	make-vars.txt
 
@@ -355,8 +354,8 @@ echo-settings:
 	@echo EXTRA_MACROS="\"$(EXTRA_MACROS)\""
 	@echo ISA=$(ISA)
 	@echo OMPFLAGS="\"$(OMPFLAGS)\""
-	@echo EXTRA_CPPFLAGS="\"$(EXTRA_CPPFLAGS)\""
-	@echo CPPFLAGS="\"$(CPPFLAGS)\""
+	@echo EXTRA_CXXFLAGS="\"$(EXTRA_CXXFLAGS)\""
+	@echo CXXFLAGS="\"$(CXXFLAGS)\""
 	@echo RANK_LOOP_OPTS="\"$(RANK_LOOP_OPTS)\""
 	@echo RANK_LOOP_CODE="\"$(RANK_LOOP_CODE)\""
 	@echo REGION_LOOP_OPTS="\"$(REGION_LOOP_OPTS)\""
@@ -366,7 +365,8 @@ echo-settings:
 	@echo BLOCK_LOOP_CODE="\"$(BLOCK_LOOP_CODE)\""
 	@echo HALO_LOOP_OPTS="\"$(HALO_LOOP_OPTS)\""
 	@echo HALO_LOOP_CODE="\"$(HALO_LOOP_CODE)\""
-	@$(CC) -v; $(CC_VER_CMD)
+	@echo CXX=$(CXX)
+	@$(CXX) -v; $(CXX_VER_CMD)
 
 code_stats:
 	@echo
@@ -376,7 +376,7 @@ code_stats:
 $(STENCIL_EXEC_NAME): $(STENCIL_OBJS)
 	$(LD) $(LFLAGS) -o $@ $(STENCIL_OBJS)
 
-preprocess: $(STENCIL_CPP)
+preprocess: $(STENCIL_CXX)
 
 src/stencil_rank_loops.hpp: gen-loops.pl Makefile
 	./$< -output $@ $(RANK_LOOP_OPTS) $(EXTRA_LOOP_OPTS) $(EXTRA_RANK_LOOP_OPTS) "$(RANK_LOOP_CODE)"
@@ -397,7 +397,7 @@ src/layouts.hpp: gen-layouts.pl
 	./$< -d > $@
 
 foldBuilder: src/foldBuilder/*.*pp src/foldBuilder/stencils/*.*pp
-	$(FB_CC) $(FB_CCFLAGS) -Isrc/foldBuilder/stencils -o $@ src/foldBuilder/*.cpp
+	$(FB_CXX) $(FB_CXXFLAGS) -Isrc/foldBuilder/stencils -o $@ src/foldBuilder/*.cpp
 
 src/stencil_macros.hpp: foldBuilder
 	./$< $(FB_FLAGS) $(EXTRA_FB_FLAGS) -pm > $@
@@ -410,10 +410,10 @@ headers: $(GEN_HEADERS)
 	@ echo 'Header files generated.'
 
 %.$(arch).o: %.cpp src/*.hpp src/foldBuilder/*.hpp headers
-	$(CC) $(CPPFLAGS) -c -o $@ $<
+	$(CXX) $(CXXFLAGS) -c -o $@ $<
 
 %.$(arch).i: %.cpp src/*.hpp src/foldBuilder/*.hpp headers
-	$(CC) $(CPPFLAGS) -E $< > $@
+	$(CXX) $(CXXFLAGS) -E $< > $@
 
 tags:
 	rm -f TAGS ; find . -name '*.[ch]pp' | xargs etags -C -a
@@ -432,6 +432,6 @@ help:
 	@echo "make clean; make arch=skx stencil=ave fold='x=1,y=2,z=4' cluster='x=2'"
 	@echo " "
 	@echo "Example debug usage:"
-	@echo "make arch=knl  stencil=iso3dfd OMPFLAGS='-qopenmp-stubs' EXTRA_CPPFLAGS='-O0' EXTRA_MACROS='DEBUG'"
-	@echo "make arch=host stencil=ave OMPFLAGS='-qopenmp-stubs' EXTRA_CPPFLAGS='-O0' EXTRA_MACROS='DEBUG' model_cache=2"
-	@echo "make arch=host stencil=3axis order=0 fold='x=1,y=1,z=1' OMPFLAGS='-qopenmp-stubs' EXTRA_MACROS='DEBUG DEBUG_TOLERANCE NO_INTRINSICS TRACE TRACE_MEM TRACE_INTRINSICS' EXTRA_CPPFLAGS='-O0'"
+	@echo "make arch=knl  stencil=iso3dfd OMPFLAGS='-qopenmp-stubs' EXTRA_CXXFLAGS='-O0' EXTRA_MACROS='DEBUG'"
+	@echo "make arch=host stencil=ave OMPFLAGS='-qopenmp-stubs' EXTRA_CXXFLAGS='-O0' EXTRA_MACROS='DEBUG' model_cache=2"
+	@echo "make arch=host stencil=3axis order=0 fold='x=1,y=1,z=1' OMPFLAGS='-qopenmp-stubs' EXTRA_MACROS='DEBUG DEBUG_TOLERANCE NO_INTRINSICS TRACE TRACE_MEM TRACE_INTRINSICS' EXTRA_CXXFLAGS='-O0'"

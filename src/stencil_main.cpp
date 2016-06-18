@@ -29,6 +29,9 @@ IN THE SOFTWARE.
 #include <math.h>
 #include "stencil.hpp"
 
+using namespace std;
+using namespace yask;
+
 // Set MODEL_CACHE to 1 or 2 to model that cache level
 // and create a global cache object here.
 #ifdef MODEL_CACHE
@@ -38,8 +41,8 @@ Cache cache(MODEL_CACHE);
 // Fix bsize, if needed, to fit into rsize and be a multiple of mult.
 // Return number of blocks.
 idx_t findNumSubsets(idx_t& bsize, const string& bname,
-                    idx_t rsize, const string& rname,
-                    idx_t mult, string dim) {
+                     idx_t rsize, const string& rname,
+                     idx_t mult, string dim) {
     if (bsize < 1) bsize = rsize; // 0 => use full size.
     if (bsize > rsize) bsize = rsize;
     bsize = ROUND_UP(bsize, mult);

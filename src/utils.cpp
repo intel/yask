@@ -29,76 +29,80 @@ IN THE SOFTWARE.
 #include <sstream>
 #include "stencil.hpp"
 
+using namespace std;
+namespace yask {
+
 #if defined(_OPENMP)
-double getTimeInSecs() {
-    return omp_get_wtime();
-}
+    double getTimeInSecs() {
+        return omp_get_wtime();
+    }
 
 #elif defined(WIN32)
 
-// FIXME.
-double getTimeInSecs() { return 0.0; }
+    // FIXME.
+    double getTimeInSecs() { return 0.0; }
 
 #else
-double getTimeInSecs()
-{
-    struct timespec ts;
-    clock_gettime(CLOCK_REALTIME, &ts);
+    double getTimeInSecs()
+    {
+        struct timespec ts;
+        clock_gettime(CLOCK_REALTIME, &ts);
 
-    return ((double)(ts.tv_sec) + 
-            1e-09 * (double)(ts.tv_nsec));
-}
+        return ((double)(ts.tv_sec) + 
+                1e-09 * (double)(ts.tv_nsec));
+    }
 #endif
 
-// Round up val to a multiple of mult.
-// Print a message if rounding is done.
-idx_t roundUp(idx_t val, idx_t mult, string name)
-{
-    idx_t res = val;
-    if (val % mult != 0) {
-        res = ROUND_UP(res, mult);
-        cout << "Adjusting " << name << " from " << val << " to " <<
-            res << " to be a multiple of " << mult << endl;
+    // Round up val to a multiple of mult.
+    // Print a message if rounding is done.
+    idx_t roundUp(idx_t val, idx_t mult, string name)
+    {
+        idx_t res = val;
+        if (val % mult != 0) {
+            res = ROUND_UP(res, mult);
+            cout << "Adjusting " << name << " from " << val << " to " <<
+                res << " to be a multiple of " << mult << endl;
+        }
+        return res;
     }
-    return res;
+
+    // Return num with SI multiplier.
+    // Use this one for bytes, etc.
+    string printWithPow2Multiplier(double num)
+    {
+        ostringstream os;
+        const double oneK = 1024.;
+        const double oneM = oneK * oneK;
+        const double oneG = oneK * oneM;
+        if (num > oneG)
+            os << (num / oneG) << "Gi";
+        else if (num > oneM)
+            os << (num / oneM) << "Mi";
+        else if (num > oneK)
+            os << (num / oneK) << "Ki";
+        else
+            os << num;
+        return os.str();
+    }
+
+
+    // Return num with SI multiplier.
+    // Use this one for rates, etc.
+    string printWithPow10Multiplier(double num)
+    {
+        ostringstream os;
+        const double oneK = 1e3;
+        const double oneM = 1e6;
+        const double oneG = 1e9;
+        if (num > oneG)
+            os << (num / oneG) << "G";
+        else if (num > oneM)
+            os << (num / oneM) << "M";
+        else if (num > oneK)
+            os << (num / oneK) << "K";
+        else
+            os << num;
+        return os.str();
+    }
+
 }
-
-// Return num with SI multiplier.
-// Use this one for bytes, etc.
-string printWithPow2Multiplier(double num)
-{
-    ostringstream os;
-    const double oneK = 1024.;
-    const double oneM = oneK * oneK;
-    const double oneG = oneK * oneM;
-    if (num > oneG)
-        os << (num / oneG) << "Gi";
-    else if (num > oneM)
-        os << (num / oneM) << "Mi";
-    else if (num > oneK)
-        os << (num / oneK) << "Ki";
-    else
-        os << num;
-    return os.str();
-}
-
-
-// Return num with SI multiplier.
-// Use this one for rates, etc.
-string printWithPow10Multiplier(double num)
-{
-    ostringstream os;
-    const double oneK = 1e3;
-    const double oneM = 1e6;
-    const double oneG = 1e9;
-    if (num > oneG)
-        os << (num / oneG) << "G";
-    else if (num > oneM)
-        os << (num / oneM) << "M";
-    else if (num > oneK)
-        os << (num / oneK) << "K";
-    else
-        os << num;
-    return os.str();
-}
-

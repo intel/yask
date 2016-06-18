@@ -488,6 +488,7 @@ int main(int argc, const char* argv[]) {
 
         cout << endl << "////// Implementation of the '" << shapeName <<
             "' stencil //////" << endl;
+        cout << endl << "namespace yask {" << endl;
 
         // Create the overall context class.
         {
@@ -634,7 +635,7 @@ int main(int argc, const char* argv[]) {
                 "' //////" << endl;
 
             cout << endl << "struct Stencil_" << eq.name << " {" << endl <<
-                " string name = \"" << eq.name << "\";" << endl;
+                " std::string name = \"" << eq.name << "\";" << endl;
 
             // Ops for this equation.
             CounterVisitor fpops;
@@ -648,7 +649,7 @@ int main(int argc, const char* argv[]) {
             // Init code.
             {
                 cout << " // All grids updated by this equation." << endl <<
-                     " vector<RealvGridBase*> eqGridPtrs;" << endl;
+                     " std::vector<RealvGridBase*> eqGridPtrs;" << endl;
 
                 cout << " void init(" << context << "& context) {" << endl;
 
@@ -832,6 +833,7 @@ int main(int argc, const char* argv[]) {
         cout << " }" << endl;
 
         cout << "};" << endl;
+        cout << "} // namespace yask." << endl;
         
     } // Any C++ code.
 

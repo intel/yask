@@ -291,7 +291,7 @@ sub addIndexVars2($$$$$) {
         push @$code,
         " // This value of $divar covers $dim from $stvar to $spvar-1.",
         " const idx_t $stvar = $bvar + ($divar * $svar);",
-        " const idx_t $spvar = min($stvar + $svar, $evar);";
+        " const idx_t $spvar = std::min($stvar + $svar, $evar);";
     }
 }
 
@@ -705,7 +705,7 @@ sub processCode($) {
                     push @code, " // This covers all L1 fetches, even unneeded one(s) beyond end."
                         if ($features & $bPrefetchL1);
                     push @code, " const ".indexType(@loopDims)." ".midVar(@loopDims).
-                        " = max($nVar-$ofs, $nVar);";
+                        " = std::max($nVar-$ofs, $nVar);";
                 }
 
                 # 1 or 2 computation loop(s):

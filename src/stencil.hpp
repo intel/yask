@@ -41,8 +41,6 @@ IN THE SOFTWARE.
 #include <set>
 #include <vector>
 
-using namespace std;
-
 #ifdef WIN32
 #define _mm_clevict(p,h) true
 #define _Pragma(x)
@@ -164,27 +162,33 @@ extern "C" {
 #define DEF_BLOCK_SIZE (64)
 #endif
 
-
 // Memory-accessing code.
 #include "mem_macros.hpp"
 #include "realv_grids.hpp"
 
-// Default grid layouts.
-// 3D dims are 1=x, 2=y, 3=z.
-// 4D dims are 1=n/t, 2=x, 3=y, 4=z.
-// Last number in 'Layout' name has unit stride, e.g.,
-// Layout321 & Layout1432 have unit-stride in x.
-// Layout123 & Layout1234 have unit-stride in z.
+namespace yask {
+
+#ifdef MODEL_CACHE
+    extern Cache cache;
+#endif
+
+    // Default grid layouts.
+    // 3D dims are 1=x, 2=y, 3=z.
+    // 4D dims are 1=n/t, 2=x, 3=y, 4=z.
+    // Last number in 'Layout' name has unit stride, e.g.,
+    // Layout321 & Layout1432 have unit-stride in x.
+    // Layout123 & Layout1234 have unit-stride in z.
 #ifndef LAYOUT_4D
 #define LAYOUT_4D Layout_1234
 #endif
 #ifndef LAYOUT_3D
 #define LAYOUT_3D Layout_123
 #endif
-typedef RealvGrid_XYZ<LAYOUT_3D> Grid_XYZ;
-typedef RealvGrid_NXYZ<LAYOUT_4D> Grid_NXYZ;
-typedef RealvGrid_TXYZ<LAYOUT_4D> Grid_TXYZ;
-typedef RealvGrid_TNXYZ<LAYOUT_4D> Grid_TNXYZ; // T and N reduced to 1st dim.
+    typedef RealvGrid_XYZ<LAYOUT_3D> Grid_XYZ;
+    typedef RealvGrid_NXYZ<LAYOUT_4D> Grid_NXYZ;
+    typedef RealvGrid_TXYZ<LAYOUT_4D> Grid_TXYZ;
+    typedef RealvGrid_TNXYZ<LAYOUT_4D> Grid_TNXYZ; // T and N reduced to 1st dim.
+}
 
 // Base classes for stencil code.
 #include "stencil_calc.hpp"
