@@ -79,8 +79,7 @@ else ifeq ($(stencil),cube)
 order		?=	4
 
 else ifeq ($(stencil),iso3dfd)
-layout_3d	?=	Layout_213
-layout_4d	?=	Layout_3124
+layout_4d	?=	Layout_2314
 
 else ifeq ($(stencil),awp)
 order		?=	4
@@ -101,6 +100,7 @@ ISA		?= 	-mmic
 MACROS		+=	USE_INTRIN512
 FB_TARGET  	?=       knc
 def_block_threads ?=	4
+BLOCK_LOOP_INNER_MODS	?=	prefetch(L1,L2)
 
 else ifeq ($(arch),knl)
 
@@ -111,6 +111,7 @@ FB_TARGET  	?=       512
 def_block_size	?=	96
 def_block_threads ?=	8
 streaming_stores  ?= 	0
+BLOCK_LOOP_INNER_MODS	?=	prefetch(L1)
 
 else ifeq ($(arch),skx)
 
@@ -145,7 +146,7 @@ endif # arch-specific.
 # general defaults for vars if not set above.
 crew				?= 	0
 streaming_stores		?= 	1
-omp_schedule			?=	guided
+omp_schedule			?=	dynamic,1
 omp_block_schedule		?=	static,1
 def_block_threads		?=	2
 omp_par_for			?=	omp parallel for
@@ -157,7 +158,7 @@ time_dim_size			?=	2
 layout_3d			?=	Layout_123
 layout_4d			?=	Layout_1234
 def_rank_size			?=	1024
-def_block_size			?=	32
+def_block_size			?=	64
 def_wavefront_region_size	?=	512
 def_pad				?=	1
 
@@ -178,6 +179,7 @@ fold		?=	x=8
 else
 fold		?=	x=4
 endif
+cluster		?=	x=1,y=1,z=2
 
 endif
 
@@ -286,7 +288,6 @@ REGION_LOOP_CODE	=	square_wave serpentine omp loop(rn,rx,ry,rz) { calc(block(rt)
 # There is no time loop here because temporal blocking is not yet supported.
 # The 'omp' modifier creates a nested OpenMP loop.
 BLOCK_LOOP_OPTS		=     	-dims 'bnv,bxv,byv,bzv'
-BLOCK_LOOP_INNER_MODS	=	prefetch(L1)
 ifeq ($(crew),1)
 BLOCK_LOOP_OUTER_MODS	=	crew
 else
