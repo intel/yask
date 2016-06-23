@@ -14,8 +14,9 @@ processors.
 
 Supported Platforms
 * 64-bit Linux
-* Intel(R) Xeon(R) processor supporting AVX, AVX2, or CORE_AVX512 instruction sets
-* Intel(R) Xeon Phi(TM) (co)processor supporting Knights-Corner or MIC_AVX512 instruction sets
+* Intel(R) Xeon Phi(TM) processor supporting the MIC_AVX512 instruction set.
+* Intel(R) Xeon(R) processor supporting the AVX, AVX2, or CORE_AVX512 instruction sets
+* Intel(R) Xeon Phi(TM) coprocessor supporting the Knights-Corner instruction set.
 
 Pre-requisites:
 * Intel(R) C++ compiler,
@@ -24,7 +25,7 @@ Pre-requisites:
   https://software.intel.com/en-us/articles/intel-software-development-emulator
   (optional: for functional testing if you don't have native ISA support).
 * Intel(R) MPI Library, https://software.intel.com/en-us/intel-mpi-library,
-  or equivalent.
+  or equivalent (optional: for multi-core and multi-node operation).
 * Perl 5.010 or later.
 * Install all these pre-requisites and ensure that all
   tool and library paths are included in the proper environment variables.
