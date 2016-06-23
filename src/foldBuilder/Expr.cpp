@@ -29,9 +29,6 @@ IN THE SOFTWARE.
 #include "ExprUtils.hpp"
 #include "Parse.hpp"
 
-// Define static value in Tuple.
-bool IntTuple::_defaultFirstInner = true;
-
 // Unary.
 ExprPtr constGridValue(double rhs) {
     return make_shared<ConstExpr>(rhs);

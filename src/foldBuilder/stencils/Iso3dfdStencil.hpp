@@ -28,14 +28,14 @@ IN THE SOFTWARE.
 
 #include "StencilBase.hpp"
 
-class Iso3dfdStencil : public StencilBase {
+class Iso3dfdStencil : public StencilOrderBase {
 
     const int maxOrder = 16;
     
 protected:
     double* _coeff;             // stencil coefficients.
     double _dxyz;               // dx, dy, dz factor.
-    bool _deferCoeff;           // look up coefficients later.
+    bool _deferCoeff;           // coefficients provided at run-time.
 
     Grid pressure;              // time-varying 3D pressure grid.
     Grid vel;                   // constant 3D vel grid.
@@ -44,8 +44,9 @@ protected:
     
 public:
 
-    Iso3dfdStencil(int order=8, double dxyz=50.0) :
-        StencilBase(order), _coeff(0), _dxyz(dxyz), _deferCoeff(false)
+    Iso3dfdStencil(StencilList& stencils, int order=8, double dxyz=50.0) :
+        StencilOrderBase("iso3dfd", stencils, order),
+        _coeff(0), _dxyz(dxyz), _deferCoeff(false)
     {
         INIT_GRID_4D(pressure, t, x, y, z);
         INIT_GRID_3D(vel, x, y, z);
@@ -164,3 +165,5 @@ public:
         pressure(t+1, x, y, z) == v;
     }
 };
+
+REGISTER_STENCIL(Iso3dfdStencil);

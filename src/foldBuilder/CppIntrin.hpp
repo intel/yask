@@ -388,6 +388,7 @@ protected:
                 // Have we found the target number of bits?
                 if (foundElems.size() == nelemsTarget) {
                     bool needMask = doneElems.size() > 0;
+                    assert(!needMask);
 
                     string nameStr = nameSS.str();
                     string ctrlStr = "{ .ci = { " + ctrlSS.str() + " } }";

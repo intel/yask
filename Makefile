@@ -27,7 +27,7 @@
 #
 # stencil: iso3dfd, 3axis, 9axis, 3plane, cube, ave, awp.
 #
-# arch: knc, knl, skx, hsw, ivb, snb, host (host = generic intel64).
+# arch: see list below.
 #
 # mpi: 0, 1: whether to use MPI. 
 #   Currently, MPI is only used in X dimension.
@@ -57,7 +57,7 @@
 
 # Initial defaults.
 stencil		=	unspecified
-arch		=	host
+arch		=	knl
 mpi		=	0
 
 # Defaults based on stencil type.
@@ -91,10 +91,7 @@ def_wavefront_region_size ?=	256
 endif
 
 # Defaut settings based on architecture.
-ifeq ($(arch),)
-$(error Architecture not specified; use arch=knl, knc, skx, hsw, ivb, snb, or host (host = generic intel64))
-
-else ifeq ($(arch),knc)
+ifeq ($(arch),knc)
 
 ISA		?= 	-mmic
 MACROS		+=	USE_INTRIN512
@@ -141,6 +138,15 @@ GCXX_ISA		?=	-march=sandybridge
 MACROS		+= 	USE_INTRIN256
 FB_TARGET  	?=       256
 
+else ifeq ($(arch),intel64)
+
+ISA		?=	-xHOST
+FB_TARGET	?=	cpp
+
+else
+
+$(error Architecture not recognized; use arch=knl, knc, skx, hsw, ivb, snb, or intel64 (no explicit vectorization))
+
 endif # arch-specific.
 
 # general defaults for vars if not set above.
@@ -150,8 +156,6 @@ omp_schedule			?=	dynamic,1
 omp_block_schedule		?=	static,1
 def_block_threads		?=	2
 omp_par_for			?=	omp parallel for
-ISA				?=	-xHOST
-FB_TARGET  			?=	cpp
 order				?=	16
 real_bytes			?=	4
 time_dim_size			?=	2
@@ -434,5 +438,5 @@ help:
 	@echo " "
 	@echo "Example debug usage:"
 	@echo "make arch=knl  stencil=iso3dfd OMPFLAGS='-qopenmp-stubs' EXTRA_CXXFLAGS='-O0' EXTRA_MACROS='DEBUG'"
-	@echo "make arch=host stencil=ave OMPFLAGS='-qopenmp-stubs' EXTRA_CXXFLAGS='-O0' EXTRA_MACROS='DEBUG' model_cache=2"
-	@echo "make arch=host stencil=3axis order=0 fold='x=1,y=1,z=1' OMPFLAGS='-qopenmp-stubs' EXTRA_MACROS='DEBUG DEBUG_TOLERANCE NO_INTRINSICS TRACE TRACE_MEM TRACE_INTRINSICS' EXTRA_CXXFLAGS='-O0'"
+	@echo "make arch=intel64 stencil=ave OMPFLAGS='-qopenmp-stubs' EXTRA_CXXFLAGS='-O0' EXTRA_MACROS='DEBUG' model_cache=2"
+	@echo "make arch=intel64 stencil=3axis order=0 fold='x=1,y=1,z=1' OMPFLAGS='-qopenmp-stubs' EXTRA_MACROS='DEBUG DEBUG_TOLERANCE NO_INTRINSICS TRACE TRACE_MEM TRACE_INTRINSICS' EXTRA_CXXFLAGS='-O0'"

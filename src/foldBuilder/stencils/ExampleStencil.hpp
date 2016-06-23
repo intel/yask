@@ -27,7 +27,7 @@ IN THE SOFTWARE.
 
 #include "StencilBase.hpp"
 
-class ExampleStencil : public StencilBase {
+class ExampleStencil : public StencilOrderBase {
 
 protected:
 
@@ -50,8 +50,8 @@ protected:
     virtual void valueAdd(GridValue& v, int t, int x, int y, int z) =0;
     
 public:
-    ExampleStencil(int order=2) :
-        StencilBase(order)
+    ExampleStencil(const string& name, StencilList& stencils, int order=2) :
+        StencilOrderBase(name, stencils, order)
     {
         INIT_GRID_4D(grid, t, x, y, z);
     }
@@ -104,9 +104,13 @@ protected:
     }
 
 public:
-    AxisStencil(int order=2) : ExampleStencil(order) { }
-
+    AxisStencil(StencilList& stencils, int order=2) :
+        ExampleStencil("3axis", stencils, order) { }
+    AxisStencil(const string& name, StencilList& stencils, int order=2) :
+        ExampleStencil(name, stencils, order) { }
 };
+
+REGISTER_STENCIL(AxisStencil);
 
 // Add values from x-y, x-z, and y-z diagonals.
 class DiagStencil : public AxisStencil {
@@ -142,9 +146,13 @@ protected:
     }
 
 public:
-    DiagStencil(int order=2) : AxisStencil(order) { }
-
+    DiagStencil(StencilList& stencils, int order=2) :
+        AxisStencil("6axis", stencils, order) { }
+    DiagStencil(const string& name, StencilList& stencils, int order=2) :
+        AxisStencil(name, stencils, order) { }
 };
+
+REGISTER_STENCIL(DiagStencil);
 
 // Add values from x-y, x-z, and y-z planes not covered by axes or diagonals.
 class PlaneStencil : public DiagStencil {
@@ -194,9 +202,13 @@ protected:
     }
 
 public:
-    PlaneStencil(int order=2) : DiagStencil(order) { }
-
+    PlaneStencil(StencilList& stencils, int order=2) :
+        DiagStencil("3plane", stencils, order) { }
+    PlaneStencil(const string& name, StencilList& stencils, int order=2) :
+        DiagStencil(name, stencils, order) { }
 };
+
+REGISTER_STENCIL(PlaneStencil);
 
 // Add values from rest of cube.
 class CubeStencil : public PlaneStencil {
@@ -226,6 +238,10 @@ protected:
     }
 
 public:
-    CubeStencil(int order=2) : PlaneStencil(order) { }
-
+    CubeStencil(StencilList& stencils, int order=2) :
+        PlaneStencil("cube", stencils, order) { }
+    CubeStencil(const string& name, StencilList& stencils, int order=2) :
+        PlaneStencil(name, stencils, order) { }
 };
+
+REGISTER_STENCIL(CubeStencil);

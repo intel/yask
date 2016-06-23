@@ -56,8 +56,8 @@ protected:
 
 public:
 
-    AwpStencil() :
-        StencilBase(4) // min halo diameter needed.
+    AwpStencil(StencilList& stencils) :
+        StencilBase("awp", stencils)
     {
         // Specify the dimensions of each grid.
         // (This names the dimensions; it does not specify their sizes.)
@@ -303,3 +303,5 @@ public:
         define_stress_yz(t, x, y, z);
     }
 };
+
+REGISTER_STENCIL(AwpStencil);

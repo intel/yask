@@ -24,18 +24,18 @@ IN THE SOFTWARE.
 *****************************************************************************/
 
 // Simple stencil that calculates an average of the points in a cube.
-// Similar to MG_STENCIL_3D27PT from miniGhost benchmark.
+// Similar to MG_STENCIL_3D27PT heat-transfer stencil from miniGhost benchmark.
 
 #include "StencilBase.hpp"
 
-class AveStencil : public StencilBase {
+class AveStencil : public StencilOrderBase {
 
 protected:
     Grid multi_grid;            // N time-varying 3D grids.
     
 public:
-    AveStencil(int order=2) :
-        StencilBase(order)
+    AveStencil(StencilList& stencils, int order=2) :
+        StencilOrderBase("ave", stencils, order)
     {
         INIT_GRID_5D(multi_grid, t, n, x, y, z);
     }
@@ -68,3 +68,5 @@ public:
         multi_grid(t, n, x, y, z) == v;
     }
 };
+
+REGISTER_STENCIL(AveStencil);

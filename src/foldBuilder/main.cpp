@@ -30,6 +30,11 @@ IN THE SOFTWARE.
 #include "CppIntrin.hpp"
 #include "Parse.hpp"
 
+// A register of stencils.
+#define STENCIL_REGISTRY stencils
+#include "StencilBase.hpp"
+StencilList STENCIL_REGISTRY;
+
 // Stencils.
 #include "ExampleStencil.hpp"
 #include "Iso3dfdStencil.hpp"
@@ -60,16 +65,22 @@ bool doComb = false;
 bool doCse = true;
 
 void usage(const string& cmd) {
-    cout << "Options:\n"
+
+    cerr << "Options:\n"
         " -h                print this help message.\n"
         "\n"
-        " -st <iso3dfd|3axis|9axis|3plane|cube|ave|awp>   set stencil type (required).\n"
+        " -st <name>        set stencil type (required); supported stencils:\n";
+    for (auto si :  STENCIL_REGISTRY) {
+        auto name = si.first;
+        cerr << "                     " << name << endl;
+    }
+    cerr <<
         "\n"
         " -fold <dim>=<size>,...    set number of elements in each dimension in a vector block.\n"
         " -cluster <dim>=<size>,... set number of values to evaluate in each dimension.\n"
         " -eq <name>=<substr>,...   put updates to grids containing substring in equation name.\n"
-        " -or <order>        set stencil order (ignored for awp; default=" << order << ").\n"
-        " -dc                defer coefficient lookup to runtime (for iso3dfd stencil only).\n"
+        " -or <order>        set stencil order (ignored for some stencils; default=" << order << ").\n"
+        //" -dc                defer coefficient lookup to runtime (for iso3dfd stencil only).\n"
         " -lus               make last dimension of fold unit stride (instead of first).\n"
         " -aul               allow simple unaligned loads (memory map MUST be compatible).\n"
         " -es <expr-size>    set heuristic for expression-size threshold (default=" << exprSize << ").\n"
@@ -87,8 +98,8 @@ void usage(const string& cmd) {
         " -p256              print C++ stencil functions for CORE AVX & AVX2 ISAs.\n"
         "\n"
         "Examples:\n"
-        " " << cmd << " -st iso3dfd -or 8 -fold x=4,y=4 -pscpp\n"
-        " " << cmd << " -st awp -fold y=4,z=2 -pv512\n";
+        " " << cmd << " -st iso3dfd -or 8 -fold x=4,y=4 -p256\n"
+        " " << cmd << " -st awp -fold y=4,z=2 -p512\n";
     exit(1);
 }
 
@@ -223,42 +234,26 @@ void parseOpts(int argc, const char* argv[])
         usage(argv[0]);
     }
 
-    // construct the stencil object based on the name and other options.
-    if (shapeName == "iso3dfd") {
-        Iso3dfdStencil* iso3dfd = new Iso3dfdStencil(order);
-        iso3dfd->setDeferCoeff(deferCoeff);
-        stencilFunc = iso3dfd;
-    }
-    else if (shapeName == "ave")
-        stencilFunc = new AveStencil(order);
-    else if (shapeName == "awp")
-        stencilFunc = new AwpStencil();
-    else if (shapeName == "3axis")
-        stencilFunc = new AxisStencil(order);
-    else if (shapeName == "9axis")
-            stencilFunc = new DiagStencil(order);
-    else if (shapeName == "3plane")
-        stencilFunc = new PlaneStencil(order);
-    else if (shapeName == "cube")
-        stencilFunc = new CubeStencil(order);
-    else {
+    // Find the stencil in the registry.
+    auto stencilIter = STENCIL_REGISTRY.find(shapeName);
+    if (stencilIter == STENCIL_REGISTRY.end()) {
         cerr << "error: unknown stencil shape '" << shapeName << "'." << endl;
         usage(argv[0]);
     }
+    stencilFunc = stencilIter->second;
     assert(stencilFunc);
     
-    cerr << "Stencil type: " << shapeName << endl;
-    cerr << "Stencil order: " << order << endl;
-    cerr << "Expression-size threshold: " << exprSize << endl;
-
-    // Make sure order is ok by resetting it.
-    bool orderOk = stencilFunc->setOrder(stencilFunc->getOrder());
-      
-    if (!orderOk) {
-        cerr << "error: invalid order=" << order << " for stencil type '" <<
-            shapeName << "'." << endl;
-        usage(argv[0]);
+    cerr << "Stencil name: " << shapeName << endl;
+    if (stencilFunc->usesOrder()) {
+        bool orderOk = stencilFunc->setOrder(order);
+        if (!orderOk) {
+            cerr << "error: invalid order=" << order << " for stencil type '" <<
+                shapeName << "'." << endl;
+            usage(argv[0]);
+        }
+        cerr << "Stencil order: " << order << endl;
     }
+    cerr << "Expression-size threshold: " << exprSize << endl;
 }
 
 // Print an expression as a one-line C++ comment.
@@ -315,7 +310,7 @@ int main(int argc, const char* argv[]) {
     // TODO: relax this restriction.
     IntTuple foldLengths, clusterLengths;
     for (auto dim : dimCounts.getDims()) {
-        if (dimCounts.getVal(dim) == grids.size()) {
+        if (dimCounts.getVal(dim) == (int)grids.size()) {
             foldLengths.addDim(dim, 1);
             clusterLengths.addDim(dim, 1);
         }
@@ -909,6 +904,5 @@ int main(int argc, const char* argv[]) {
     }
 #endif
     
-    delete stencilFunc;
     return 0;
 }

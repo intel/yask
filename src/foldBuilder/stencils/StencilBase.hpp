@@ -28,12 +28,18 @@ IN THE SOFTWARE.
 #ifndef STENCIL_BASE
 #define STENCIL_BASE
 
+#include <map>
 using namespace std;
+
+class StencilBase;
+typedef map<string, StencilBase*> StencilList;
 
 class StencilBase {
 protected:
-    int _order;         // stencil order (for convenience; optional).
 
+    // Simple name for the stencil.
+    string _name;
+    
     // A grid is an n-dimensional space that is indexed by grid indices.
     // Vectorization will be applied to grid accesses.
     Grids _grids;       // keep track of all registered grids.
@@ -45,10 +51,43 @@ protected:
     Params _params;     // keep track of all registered non-grid vars.
 
 public:
-    StencilBase(int order=2) : _order(order) { }
-    
     virtual ~StencilBase() {}
 
+    // Register new object in a list.
+    StencilBase(const string name, StencilList& stencils) :
+        _name(name)
+    {
+        stencils[_name] = this;
+    }
+
+    // Identification.
+    virtual const string& getName() const { return _name; }
+    
+    // Get the registered grids and params.
+    virtual Grids& getGrids() { return _grids; }
+    virtual Grids& getParams() { return _params; }
+
+    // Order stub methods.
+    virtual bool usesOrder() const { return false; }
+    virtual bool setOrder(int order) { return false; }
+    virtual int getOrder() const { return 0; }
+
+    // Define grid values relative to given offsets in each dimension.
+    virtual void define(const IntTuple& offsets) = 0;
+};
+
+// A base class for stencils that have an 'order'.
+class StencilOrderBase : public StencilBase {
+protected:
+    int _order;         // stencil order (for convenience; optional).
+
+public:
+    StencilOrderBase(const string name, StencilList& stencils, int order) :
+        StencilBase(name, stencils), _order(order) {}
+
+    // Does use order.
+    virtual bool usesOrder() const { return true; }
+    
     // Set order.
     // Return true if successful.
     virtual bool setOrder(int order) {
@@ -58,14 +97,14 @@ public:
 
     // Get order.
     virtual int getOrder() { return _order; }
-
-    // Get the registered grids and params.
-    virtual Grids& getGrids() { return _grids; }
-    virtual Grids& getParams() { return _params; }
-    
-    // Define grid values relative to given offsets in each dimension.
-    virtual void define(const IntTuple& offsets) = 0;
 };
 
+// Register a concrete stencil object.
+#ifdef STENCIL_REGISTRY
+#define REGISTER_STENCIL(Class) static Class reg_ ## Class(STENCIL_REGISTRY)
+
+#else
+#define REGISTER_STENCIL(Class)
 #endif
 
+#endif

@@ -121,12 +121,12 @@ public:
     // Assumes values are in same order as keys.
     virtual void setVals(int numVals, const T vals[]) {
         assert(size() == numVals);
-        for (size_t i = 0; i < size(); i++)
+        for (int i = 0; i < size(); i++)
             _map[_dims.at(i)] = vals[i];
     }
     virtual void setVals(const vector<T>& vals) {
-        assert(size() == vals.size());
-        for (size_t i = 0; i < size(); i++)
+        assert(size() == (int)vals.size());
+        for (int i = 0; i < size(); i++)
             _map[_dims.at(i)] = vals.at(i);
     }
 
@@ -207,7 +207,7 @@ public:
     virtual size_t mapTo1d(const Tuple& offsets, bool strictRhs=true) const {
         if (strictRhs)
             assert(areDimsSame(offsets));
-        size_t idx = 0;
+        int idx = 0;
         int prevSize = 1;
 
         // Loop thru dims.
@@ -318,7 +318,7 @@ public:
 
     // reductions.
     virtual T reduce(function<T (T lhs, T rhs)> reducer) const {
-        T result;
+        T result = 0;
         int n = 0;
         for (auto i : _map) {
             T val = i.second;
@@ -502,5 +502,9 @@ protected:
         }
     }
 };
+
+// Default value.
+template <typename T>
+bool Tuple<T>::_defaultFirstInner = true;
 
 #endif
