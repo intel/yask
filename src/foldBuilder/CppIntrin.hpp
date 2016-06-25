@@ -173,7 +173,7 @@ protected:
                         if (nused1 && nused2) {
                             os << " // Get " << nused1 << " element(s) from " << mv1Name <<
                                 " and " << nused2 << " from " << mv2Name << "." << endl;
-                            os << _linePrefix << "realv_align";
+                            os << _linePrefix << "real_vec_align";
                             if (needMask)
                                 os << "_masked";
                             os << "<" << count << ">(" << pvName <<
@@ -187,7 +187,7 @@ protected:
                         else if (nused1) {
                             os << " // Get " << nused1 << " element(s) from " << mv1Name <<
                                 "." << endl;
-                            os << _linePrefix << "realv_align";
+                            os << _linePrefix << "real_vec_align";
                             if (needMask)
                                 os << "_masked";
                             os << "<" << count << ">(" << pvName << ", " << mv1Name << ", " << mv1Name;
@@ -199,7 +199,7 @@ protected:
                             assert(nused2);
                             os << " // Get " << nused2 << " element(s) from " << mv2Name <<
                                 "." << endl;
-                            os << _linePrefix << "realv_align";
+                            os << _linePrefix << "real_vec_align";
                             if (needMask)
                                 os << "_masked";
                             os << "<" << count << ">(" << pvName << ", " << mv2Name << ", " << mv2Name;
@@ -296,7 +296,7 @@ protected:
                 }
                 
                 // Permute command.
-                os << _linePrefix << "realv_permute";
+                os << _linePrefix << "real_vec_permute";
                 if (needMask)
                     os << "_masked";
                 os << "(" << pvName << ", ctrl_" << nameStr << ", " << mvName;
@@ -372,7 +372,7 @@ protected:
                         
                         nameSS << alignedVec << alignedElem;
                         if (!useA)
-                            ctrlSS << "CTRL_SEL_BIT |"; // set selector bit for vec B.
+                            ctrlSS << "ctrl_sel_bit |"; // set selector bit for vec B.
                         ctrlSS << alignedElem;
                         foundElems.insert(i); // remember element index.
                     }
@@ -412,7 +412,7 @@ protected:
                     }
                 
                     // Permute command.
-                    os << _linePrefix << "realv_permute2(" << pvName << ", ctrl_" << nameStr << ", " <<
+                    os << _linePrefix << "real_vec_permute2(" << pvName << ", ctrl_" << nameStr << ", " <<
                         mv1Name << ", " << mv2Name << ")" << _lineSuffix;
 
                     // Done w/the found elems.

@@ -23,7 +23,11 @@ IN THE SOFTWARE.
 
 *****************************************************************************/
 
+// Stencil types.
 #include "stencil.hpp"
+
+// Base classes for stencil code.
+#include "stencil_calc.hpp"
 
 using namespace std;
 
@@ -307,7 +311,7 @@ namespace yask {
 #define calc_halo(context, rt,                                          \
                   start_rnv, start_rxv, start_ryv, start_rzv,           \
                   stop_rnv, stop_rxv, stop_ryv, stop_rzv)               \
-            realv hval = gpd->readVecNorm(rt, ARG_N(start_rnv)          \
+            real_vec_t hval = gpd->readVecNorm(rt, ARG_N(start_rnv)          \
                                           start_rxv, start_ryv, start_rzv, __LINE__); \
             haloGrid->writeVecNorm(hval, index_rnv,                     \
                                    index_rxv, index_ryv, index_rzv, __LINE__)
@@ -373,7 +377,7 @@ namespace yask {
 #define calc_halo(context, rt,                                          \
                   start_rnv, start_rxv, start_ryv, start_rzv,           \
                   stop_rnv, stop_rxv, stop_ryv, stop_rzv)               \
-            realv hval = haloGrid->readVecNorm(index_rnv,               \
+            real_vec_t hval = haloGrid->readVecNorm(index_rnv,               \
                                                index_rxv, index_ryv, index_rzv, __LINE__); \
             gpd->writeVecNorm(hval, rt, ARG_N(start_rnv)                \
                               start_rxv, start_ryv, start_rzv, __LINE__)
@@ -452,7 +456,7 @@ namespace yask {
     // Init all grids & params w/same value within each,
     // but different values between them.
     void StencilContext::initSame() {
-        Real v = 0.1;
+        real_t v = 0.1;
         cout << "initializing grids..." << endl;
         for (auto gp : gridPtrs) {
             gp->set_same(v);
@@ -468,7 +472,7 @@ namespace yask {
     // Init all grids & params w/different values.
     // Better for validation, but slower.
     void StencilContext::initDiff() {
-        Real v = 0.01;
+        real_t v = 0.01;
         for (auto gp : gridPtrs) {
             gp->set_diff(v);
             v += 0.001;

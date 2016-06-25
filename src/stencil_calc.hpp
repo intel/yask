@@ -37,13 +37,13 @@ namespace yask {
         std::string name;
 
         // A list of all grids.
-        std::vector<RealvGridBase*> gridPtrs;
+        std::vector<RealVecGridBase*> gridPtrs;
 
         // All grids updated by all equations.
-        std::vector<RealvGridBase*> eqGridPtrs;
+        std::vector<RealVecGridBase*> eqGridPtrs;
 
         // A list of all non-grid parameters.
-        std::vector<GenericGridBase<Real>*> paramPtrs;
+        std::vector<GenericGridBase<real_t>*> paramPtrs;
 
         // Sizes.
         // - time size in steps to be done (not grid allocation).
@@ -90,7 +90,7 @@ namespace yask {
 
         // MPI buffers are tagged by their grids.
         // Only grids in eqGridPtrs will have buffers.
-        std::map<RealvGridBase*, Bufs> bufs;
+        std::map<RealVecGridBase*, Bufs> bufs;
 
         // Threading.
         // Remember original number of threads avail.
@@ -178,7 +178,7 @@ namespace yask {
         // Get info from implementation.
         virtual const std::string& get_name() =0;
         virtual int get_scalar_fp_ops() =0;
-        virtual std::vector<RealvGridBase*>& getEqGridPtrs() = 0;
+        virtual std::vector<RealVecGridBase*>& getEqGridPtrs() = 0;
 
         // Set eqGridPtrs.
         virtual void init(StencilContext& generic_context) =0;
@@ -247,7 +247,7 @@ namespace yask {
         virtual int get_scalar_fp_ops() {
             return _stencil.scalar_fp_ops;
         }
-        virtual std::vector<RealvGridBase*>& getEqGridPtrs() {
+        virtual std::vector<RealVecGridBase*>& getEqGridPtrs() {
             return _stencil.eqGridPtrs;
         }
     

@@ -654,9 +654,9 @@ typedef ExprPtr GridValue;
  
  
 // Use SET_VALUE_FROM_EXPR for creating a string to insert any C++ code
-// that evaluates to a Real.
+// that evaluates to a real_t.
 // The 1st arg must be the LHS of an assignment statement.
-// The 2nd arg must evaluate to a Real (float or double) expression,
+// The 2nd arg must evaluate to a real_t (float or double) expression,
 // but it must NOT include access to a grid.
 // The code string is constructed as if writing to an ostream,
 // so '<<' operators may be used to evaluate local variables.

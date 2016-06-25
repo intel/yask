@@ -30,11 +30,11 @@ IN THE SOFTWARE.
 #define STENCIL_HPP
 
 // Auto-generated macros from foldBuilder.
-// It's important that this be included before realv.hpp
+// It's important that this be included before real_vec_t.hpp
 // to properly set the vector lengths.
 #include "stencil_macros.hpp"
 
-// Define a vector of reals.
+// Define a folded vector of reals.
 #include "realv.hpp"
 
 #include <map>
@@ -78,7 +78,6 @@ IN THE SOFTWARE.
 #define MPI_Comm int
 #endif
 
-
 // OpenMP and stub functions.
 #ifdef _OPENMP
 #include <omp.h>
@@ -88,7 +87,7 @@ IN THE SOFTWARE.
 #define omp_get_thread_num()  (0)
 #endif
 
-// Enable hardware thread work crew if requested.
+// Enable hardware-thread work crew if requested.
 #if (__INTEL_CREW) && (defined(__MIC__) || (defined(__linux) && defined(__x86_64)))
 #define USE_CREW 1
 extern "C" {
@@ -184,16 +183,10 @@ namespace yask {
 #ifndef LAYOUT_3D
 #define LAYOUT_3D Layout_123
 #endif
-    typedef RealvGrid_XYZ<LAYOUT_3D> Grid_XYZ;
-    typedef RealvGrid_NXYZ<LAYOUT_4D> Grid_NXYZ;
-    typedef RealvGrid_TXYZ<LAYOUT_4D> Grid_TXYZ;
-    typedef RealvGrid_TNXYZ<LAYOUT_4D> Grid_TNXYZ; // T and N reduced to 1st dim.
+    typedef RealVecGrid_XYZ<LAYOUT_3D> Grid_XYZ;
+    typedef RealVecGrid_NXYZ<LAYOUT_4D> Grid_NXYZ;
+    typedef RealVecGrid_TXYZ<LAYOUT_4D> Grid_TXYZ;
+    typedef RealVecGrid_TNXYZ<LAYOUT_4D> Grid_TNXYZ; // T and N reduced to 1st dim.
 }
-
-// Base classes for stencil code.
-#include "stencil_calc.hpp"
-
-// Include auto-generated stencil code.
-#include "stencil_code.hpp"
 
 #endif

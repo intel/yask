@@ -57,7 +57,7 @@ public:
         for (int rx = rBegin; rx <= rEnd; rx++)
             for (int ry = rBegin; ry <= rEnd; ry++)
                 for (int rz = rBegin; rz <= rEnd; rz++) {
-                    v += multi_grid(t-1, n, x+rx, y+ry, z+rz);
+                    v += multi_grid(t, n, x+rx, y+ry, z+rz);
                     nPts++;
                 }
 
@@ -65,7 +65,7 @@ public:
         v *= 1.0 / double(nPts);
 
         // define the grid value at t+1 to be equivalent to v.
-        multi_grid(t, n, x, y, z) == v;
+        multi_grid(t+1, n, x, y, z) == v;
     }
 };
 

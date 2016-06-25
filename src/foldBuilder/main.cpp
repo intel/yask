@@ -554,9 +554,9 @@ int main(int argc, const char* argv[]) {
                 string param = pp->getName();
 
                 // Type name.
-                // Name in kernel is 'GenericGridNd<Real>'.
+                // Name in kernel is 'GenericGridNd<real_t>'.
                 ostringstream oss;
-                oss << "GenericGrid" << pp->size() << "d<Real";
+                oss << "GenericGrid" << pp->size() << "d<real_t";
                 if (pp->size()) {
                     oss << ",Layout_";
                     for (int dn = pp->size(); dn > 0; dn--)
@@ -644,7 +644,7 @@ int main(int argc, const char* argv[]) {
             // Init code.
             {
                 cout << " // All grids updated by this equation." << endl <<
-                     " std::vector<RealvGridBase*> eqGridPtrs;" << endl;
+                     " std::vector<RealVecGridBase*> eqGridPtrs;" << endl;
 
                 cout << " void init(" << context << "& context) {" << endl;
 
@@ -661,7 +661,7 @@ int main(int argc, const char* argv[]) {
                 // C++ scalar print assistant.
                 CounterVisitor cv;
                 eq.grids.acceptToFirst(&cv);
-                CppPrintHelper* sp = new CppPrintHelper(&cv, "temp", "Real", " ", ";\n");
+                CppPrintHelper* sp = new CppPrintHelper(&cv, "temp", "real_t", " ", ";\n");
             
                 // Stencil-calculation code.
                 // Function header.
@@ -707,16 +707,16 @@ int main(int argc, const char* argv[]) {
                 CppVecPrintHelper* vp = NULL;
                 if (print512Cpp)
                     vp = new CppAvx512PrintHelper(vv, allowUnalignedLoads, &cv,
-                                                  "temp_vec", "realv", " ", ";\n");
+                                                  "temp_vec", "real_vec_t", " ", ";\n");
                 else if (print256Cpp)
                     vp = new CppAvx256PrintHelper(vv, allowUnalignedLoads, &cv,
-                                                  "temp_vec", "realv", " ", ";\n");
+                                                  "temp_vec", "real_vec_t", " ", ";\n");
                 else if (printKncCpp)
                     vp = new CppKncPrintHelper(vv, allowUnalignedLoads, &cv,
-                                               "temp_vec", "realv", " ", ";\n");
+                                               "temp_vec", "real_vec_t", " ", ";\n");
                 else
                     vp = new CppVecPrintHelper(vv, allowUnalignedLoads, &cv,
-                                               "temp_vec", "realv", " ", ";\n");
+                                               "temp_vec", "real_vec_t", " ", ";\n");
             
                 // Stencil-calculation code.
                 // Function header.

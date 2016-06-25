@@ -328,8 +328,9 @@ public:
 class CounterVisitor : public TrackingVisitor {
 protected:
     int _numOps, _numNodes, _numReads, _numWrites, _numParamReads;
-    map<const Grid*, IntTuple> _maxPoints, _minPoints;
 
+    // Vars to track min and max points seen for every grid.
+    map<const Grid*, IntTuple> _maxPoints, _minPoints;
     const IntTuple* getPoints(const Grid* gp,
                               const map<const Grid*, IntTuple>& mp) const {
         auto i = mp.find(gp);

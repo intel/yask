@@ -27,7 +27,15 @@ IN THE SOFTWARE.
 #include <stdio.h>
 #include <string.h>
 #include <math.h>
+
+// Stencil types.
 #include "stencil.hpp"
+
+// Base classes for stencil code.
+#include "stencil_calc.hpp"
+
+// Include auto-generated stencil code.
+#include "stencil_code.hpp"
 
 using namespace std;
 using namespace yask;
