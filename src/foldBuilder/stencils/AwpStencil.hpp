@@ -249,7 +249,7 @@ public:
             c2 * (vel_y(t+1, x,   y,   z+2) - vel_y(t+1, x,   y,   z-1));
         GridValue d_zy_val =
             c1 * (vel_z(t+1, x,   y+1, z  ) - vel_z(t+1, x,   y,   z  )) +
-            c2 * (vel_z(t+1, x,   y+1, z  ) - vel_z(t+1, x,   y-1, z  ));
+            c2 * (vel_z(t+1, x,   y+2, z  ) - vel_z(t+1, x,   y-1, z  ));
 
         GridValue next_stress_yz = stress_yz(t, x, y, z) +
             ((mu_val * delta_t / h) * (d_yz_val + d_zy_val));
