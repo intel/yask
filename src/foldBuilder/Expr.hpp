@@ -75,6 +75,8 @@ public:
 
     // Return number of nodes.
     virtual int getNumNodes() const;
+
+    virtual ExprPtr clone() =0;
 };
 typedef vector<ExprPtr> ExprPtrVec;
 
@@ -140,6 +142,8 @@ public:
         auto p = dynamic_cast<const ConstExpr*>(other);
         return p && _f == p->_f;
     }
+   
+    virtual ExprPtr clone() { return make_shared<ConstExpr>(*this); }
 };
 
 // Any expression that returns a real (not from a grid).
@@ -164,6 +168,8 @@ public:
         auto p = dynamic_cast<const CodeExpr*>(other);
         return p && _code == p->_code;
     }
+
+    virtual ExprPtr clone() { return make_shared<CodeExpr>(*this); }
 };
 
 // Base class for any unary operator.
@@ -175,6 +181,8 @@ protected:
 public:
     UnaryExpr(const string& opStr, ExprPtr rhs) :
         _rhs(rhs), _opStr(opStr) { }
+    UnaryExpr(const UnaryExpr& rhs) :
+        _rhs(rhs._rhs->clone()), _opStr(rhs._opStr) { }
     virtual ~UnaryExpr() { }
 
     ExprPtr& getRhs() { return _rhs; }
@@ -189,6 +197,8 @@ public:
         return p && _opStr == p->_opStr &&
             _rhs->isSame(p->_rhs.get());
     }
+
+    virtual ExprPtr clone() { return make_shared<UnaryExpr>(*this); }
 };
 
 // A negation.
@@ -201,6 +211,7 @@ public:
     static string opStr() {
         return "-";
     }
+    virtual ExprPtr clone() { return make_shared<NegExpr>(*this); }
 };
 
 // Base class for any binary operator.
@@ -211,6 +222,8 @@ protected:
 public:
     BinaryExpr(ExprPtr lhs, const string& opStr, ExprPtr rhs) :
         UnaryExpr(opStr, rhs), _lhs(lhs) { }
+    BinaryExpr(const BinaryExpr& rhs) :
+        UnaryExpr(rhs._opStr, rhs._rhs->clone()), _lhs(rhs._lhs->clone()) { }  
     virtual ~BinaryExpr() { }
 
     ExprPtr& getLhs() { return _lhs; }
@@ -225,6 +238,8 @@ public:
             _lhs->isSame(p->_lhs.get()) &&
             _rhs->isSame(p->_rhs.get());
     }
+
+    virtual ExprPtr clone() { return make_shared<BinaryExpr>(*this); }
 };
 
 // Subtraction operator.
@@ -237,6 +252,8 @@ public:
     static string opStr() {
         return "-";
     }
+
+    virtual ExprPtr clone() { return make_shared<SubExpr>(*this); }
 };
 
 // Division operator.
@@ -249,6 +266,8 @@ public:
     static string opStr() {
         return "/";
     }
+
+    virtual ExprPtr clone() { return make_shared<DivExpr>(*this); }
 };
 
 // Equality operator.
@@ -260,6 +279,7 @@ protected:
 public:
     EqualsExpr(GridPointPtr lhs, ExprPtr rhs) :
         UnaryExpr(opStr(), rhs), _lhs(lhs) { }
+  
     virtual ~EqualsExpr() { }
 
     GridPointPtr& getLhs() { return _lhs; }
@@ -273,6 +293,8 @@ public:
 
     // Check for equivalency.
     virtual bool isSame(const Expr* other);
+
+    virtual ExprPtr clone() { return make_shared<EqualsExpr>(*this); }
 };
 
 // A list of exprs with a common operator that can be rearranged,
@@ -291,6 +313,14 @@ public:
         _opStr(opStr) {
         _ops.push_back(lhs);
         _ops.push_back(rhs);
+    }
+
+    CommutativeExpr(const CommutativeExpr& rhs) :
+        _opStr(rhs._opStr) {
+        for(auto op : rhs._ops)
+        {
+            _ops.push_back(op->clone());
+        }
     }
 
     virtual ~CommutativeExpr() { }
@@ -319,6 +349,8 @@ public:
 
     // Check for equivalency.
     virtual bool isSame(const Expr* other);
+
+    virtual ExprPtr clone() { return make_shared<CommutativeExpr>(*this); }
 };
 
 // One or more addition operators.
@@ -331,6 +363,8 @@ public:
     static string opStr() {
         return "+";
     }
+  
+    virtual ExprPtr clone() { return make_shared<AddExpr>(*this); } 
 };
 
 // One or more multiplication operators.
@@ -343,6 +377,8 @@ public:
     static string opStr() {
         return "*";
     }
+
+    virtual ExprPtr clone() { return make_shared<MultExpr>(*this); } 
 };
 
 ///////// Grids ////////////
@@ -398,6 +434,8 @@ public:
 
     // Return a description based on this position.
     virtual string makeStr() const;
+
+    virtual ExprPtr clone() { return make_shared<GridPoint>(*this); }   
 };
 typedef set<GridPoint> GridPointSet;
 typedef set<GridPointPtr> GridPointPtrSet;
