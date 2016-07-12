@@ -64,6 +64,9 @@ protected:
 public:
 
     Tuple() : _firstInner(_defaultFirstInner) { }
+    Tuple(const Tuple& rhs) :
+        _map(rhs._map), _dims(rhs._dims),
+        _firstInner(rhs._firstInner) { }
     virtual ~Tuple() {}
 
     // Copy.

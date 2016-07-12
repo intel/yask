@@ -60,7 +60,6 @@ int order = 2;
 bool firstInner = true;
 bool allowUnalignedLoads = false;
 string equationTargets;
-bool doFma = false;
 bool doComb = false;
 bool doCse = true;
 
@@ -84,7 +83,6 @@ void usage(const string& cmd) {
         " -lus               make last dimension of fold unit stride (instead of first).\n"
         " -aul               allow simple unaligned loads (memory map MUST be compatible).\n"
         " -es <expr-size>    set heuristic for expression-size threshold (default=" << exprSize << ").\n"
-        " -[no]fma           [do not] distribute multiplies across adds to increase FMAs (default=" << doFma << ").\n"
         " -[no]comb          [do not] combine commutative operations (default=" << doComb << ").\n"
         " -[no]cse           [do not] eliminate common subexpressions (default=" << doCse << ").\n"
         "\n"
@@ -129,10 +127,6 @@ void parseOpts(int argc, const char* argv[])
                 firstInner = false;
             else if (opt == "-aul")
                 allowUnalignedLoads = true;
-            else if (opt == "-fma")
-                doFma = true;
-            else if (opt == "-nofma")
-                doFma = false;
             else if (opt == "-comb")
                 doComb = true;
             else if (opt == "-nocomb")
@@ -404,11 +398,6 @@ int main(int argc, const char* argv[]) {
     vector<OptVisitor*> opts;
     if (doCse)
         opts.push_back(new CseVisitor);
-    if (doFma) {
-        opts.push_back(new FmaVisitor);
-        if (doCse)
-            opts.push_back(new CseVisitor);
-    }
     if (doComb) {
         opts.push_back(new CombineVisitor);
         if (doCse)
@@ -593,7 +582,7 @@ int main(int argc, const char* argv[]) {
             cout << " }" << endl;
 
             // Allocate grids.
-            cout << endl << " void allocGrids() {" << endl;
+            cout << endl << " virtual void allocGrids() {" << endl;
             cout << "  gridPtrs.clear();" << endl;
             cout << "  eqGridPtrs.clear();" << endl;
             for (auto gp : grids) {
@@ -609,7 +598,7 @@ int main(int argc, const char* argv[]) {
             cout << " }" << endl;
 
             // Allocate params.
-            cout << endl << " void allocParams() {" << endl;
+            cout << endl << " virtual void allocParams() {" << endl;
             cout << "  paramPtrs.clear();" << endl;
             for (auto pp : params) {
                 string param = pp->getName();
@@ -643,7 +632,7 @@ int main(int argc, const char* argv[]) {
 
             // Init code.
             {
-                cout << " // All grids updated by this equation." << endl <<
+                cout << endl << " // All grids updated by this equation." << endl <<
                      " std::vector<RealVecGridBase*> eqGridPtrs;" << endl;
 
                 cout << " void init(" << context << "& context) {" << endl;

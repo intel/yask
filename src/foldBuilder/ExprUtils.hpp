@@ -55,93 +55,6 @@ public:
     }
 };
 
-// A visitor that distributes multiplication over
-// addition, thereby potentially increasing FMAs.
-// Examples:
-//  a * (b + c)     => (a * b) + (a * c).
-//  a * (b + c + d) => (a * b) + (a * c) + (a * d).
-//  (a + b) * (c + d) => (a * (c + d)) + (b * (c + d)).
-//  ((a - b) + (c - d)) * e => ((a - b) * e) + ((c - d) * e).
-//  ((a * b) + (c * d)) * e => (a * b * e) + (c * d * e); bad?
-//  TODO: a * (b + c) * d => ((a * b) + (a * c)) * d; only do one.
-class FmaVisitor : public OptVisitor {
-public:
-    FmaVisitor() :
-        OptVisitor("distribution for FMA") {}
-    virtual ~FmaVisitor() {}
-
-    virtual void visit(CommutativeExpr* ce) {
-        ExprPtrVec& ops = ce->getOps();
-
-        // Visit ops first (depth-first).
-        int initChanges = _numChanges;
-        for (auto ep : ops) {
-            ep->accept(this);
-        }
-
-        // Don't apply recursively.
-        if (_numChanges > initChanges)
-            return;
-
-        // Is this a multiply of exactly 2 items?
-        auto opstr = ce->getOpStr();
-        if (opstr == MultExpr::opStr() && ops.size() == 2) {
-
-            // Repeat until no changes.
-            bool done = false;
-            while (!done) {
-                done = true;        // assume done until change is made.
-
-                // Look through ops.
-                for (size_t i = 0; i < ops.size(); i++) {
-                    ExprPtr& ep = ops[i];
-                    auto ae = dynamic_pointer_cast<CommutativeExpr>(ep);
-
-                    // Is this an add?
-                    if (ae && ae->getOpStr() == AddExpr::opStr()) {
-                        ExprPtrVec& oldAdd = ae->getOps();
-
-                        // We will change ce to be an add and
-                        // change its operands to be mults.
-                        auto newAdd = make_shared<CommutativeExpr>(AddExpr::opStr());
-
-                        // Make a new mult expr for each
-                        // operand of the original add.
-                        for (size_t j = 0; j < oldAdd.size(); j++) {
-                            ExprPtr& aep = oldAdd[j];
-
-                            // Keep all the old multiplicands from the original
-                            // mult except the add being replaced (which is at i).
-                            auto newMult = make_shared<CommutativeExpr>(opstr);
-                            for (size_t k = 0; k < ops.size(); k++) {
-                                if (k != i) {
-                                    ExprPtr& ep = ops[k];
-                                    bool ok = newMult->appendOp(ep, opstr);
-                                    assert(ok);
-                                }
-                            }
-
-                            // Append the current addend as a new multiplicand.
-                            bool ok = newMult->appendOp(aep, opstr);
-                            assert(ok);
-
-                            // Add the new multiplication.
-                            ok = newAdd->appendOp(newMult, AddExpr::opStr());
-                            assert(ok);
-                        }
-
-                        // Finally, we can change ce from a mult of adds to an add of mults.
-                        ce->swap(newAdd.get());
-                        _numChanges++;
-                        done = false;
-                    }
-                }
-            } // while !done.
-        } // if a mult.
-    }
-};
-
-
 // A visitor that combines commutative exprs.
 // Example: (a + b) + c => a + b + c;
 class CombineVisitor : public OptVisitor {
@@ -176,23 +89,11 @@ public:
                 // Is ep also a commutative expr with same operator?
                 if (ce2 && ce2->getOpStr() == opstr) {
 
-                    // put ce2's operands into ce.
-                    ExprPtrVec& ops2 = ce2->getOps();
-                    bool isFirst = true;
-                    for (ExprPtr ep2 : ops2) {
+                    // Delete the existing operand.
+                    ops.erase(ops.begin() + i);
 
-                        // First operand of ce2 *replaces* ce2 in ce.
-                        if (isFirst) {
-                            ops[i] = ep2;
-                            isFirst = false;
-                        }
-
-                        // Remaining operands added to end.
-                        else {
-                            bool ok = ce->appendOp(ep2, opstr);
-                            assert(ok);
-                        }
-                    }
+                    // Put ce2's operands into ce.
+                    ce->mergeExpr(ce2);
 
                     // Bail out of for loop because we have modified ops.
                     _numChanges++;
@@ -207,6 +108,8 @@ public:
 
 
 // A visitor that eliminates common subexprs.
+// TODO: find matches to subsets of commutative operations;
+// example: a+b+c * b+d+a => c+(a+b) * d+(a+b) w/expr a+b combined.
 class CseVisitor : public OptVisitor {
 protected:
     set<ExprPtr> _seen;
@@ -220,8 +123,6 @@ protected:
 #endif
         
         // Already visited this node?
-        // This can happen when code is written with
-        // shared expressions.
         if (_seen.count(ep)) {
 #ifdef DEBUG_MATCHING
             cerr << " - already seen " << ep->makeStr() << endl;

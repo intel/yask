@@ -253,11 +253,19 @@ protected:
     // Declare a new temp var.
     // Set _exprStr to it.
     // Print LHS of assignment to it.
+    // If 'ex' is non-null, it is used as key to save name of temp var and
+    // to write a comment.
+    // If 'comment' is set, use it for the comment.
     // Return stream to continue w/RHS.
-    virtual ostream& makeNextTempVar(Expr* ex) {
+    virtual ostream& makeNextTempVar(Expr* ex, string comment = "") {
         _exprStr = _ph.makeVarName();
-        _tempVars[ex] = _exprStr;
-        _os << endl << " // " << _exprStr << " = " << ex->makeStr() << "." << endl;
+        if (ex) {
+            _tempVars[ex] = _exprStr;
+            if (comment.length() == 0)
+                _os << endl << " // " << _exprStr << " = " << ex->makeStr() << "." << endl;
+        }
+        if (comment.length())
+            _os << endl << " // " << _exprStr << " = " << comment << "." << endl;
         _os << _ph.getLinePrefix() << _ph.getVarType() << " " << _exprStr << " = ";
         return _os;
     }
@@ -290,7 +298,7 @@ public:
             return true;
         }
         
-        // Use top down if <= maxPoints points in ex.
+        // Use top down if leaf node or <= maxPoints points in ex.
         if (leaf || ex->getNumNodes() <= _maxPoints) {
 
             // use a top-down printer to render the expr.
@@ -300,7 +308,7 @@ public:
             // were there any common subexprs found?
             bool ok = topDown->getNumCommon() == 0;
 
-            // if no common subexprs, use the resulting expression.
+            // if no common subexprs, use the rendered expression.
             if (ok)
                 _exprStr = topDown->getExprStr();
             
@@ -333,23 +341,39 @@ public:
     }
 
     // A unary operator.
-    // Try top-down on RHS.
     virtual void visit(UnaryExpr* ue) {
+
+        // Try top-down on whole expression.
+        // Example: '-a' creates no immediate output,
+        // and '-a' is saved in _exprStr.
         if (tryTopDown(ue))
             return;
 
+        // Expand the RHS, then apply operator to result.
+        // Example: '-(a * b)' might output the following:
+        // temp1 = a * b;
+        // temp2 = -temp1;
+        // with 'temp2' saved in _exprStr.
         ue->getRhs()->accept(this); // sets _exprStr.
         string rhs = getExprStrAndClear();
         makeNextTempVar(ue) << ue->getOpStr() << ' ' << rhs << _ph.getLineSuffix();
     }
 
     // A binary operator.
-    // Use top-down if whole expr small enough;
-    // otherwise, get LHS and RHS; print statement; make new var for result.
     virtual void visit(BinaryExpr* be) {
+
+        // Try top-down on whole expression.
+        // Example: 'a/b' creates no immediate output,
+        // and 'a/b' is saved in _exprStr.
         if (tryTopDown(be))
             return;
 
+        // Expand both sides, then apply operator to result.
+        // Example: '(a * b) / (c * d)' might output the following:
+        // temp1 = a * b;
+        // temp2 = b * c;
+        // temp3 = temp1 / temp2;
+        // with 'temp3' saved in _exprStr.
         be->getLhs()->accept(this); // sets _exprStr.
         string lhs = getExprStrAndClear();
         be->getRhs()->accept(this); // sets _exprStr.
@@ -358,34 +382,53 @@ public:
     }
 
     // A commutative operator.
-    // Use top-down if expr small enough;
-    // otherwise, get ops; print statement(s); make new var(s) for result.
     virtual void visit(CommutativeExpr* ce) {
+
+        // Try top-down on whole expression.
+        // Example: 'a*b' creates no immediate output,
+        // and 'a*b' is saved in _exprStr.
         if (tryTopDown(ce))
             return;
 
+        // Make separate assignment for N-1 operands.
+        // Example: 'a + b + c + d' might output the following:
+        // temp1 = a + b;
+        // temp2 = temp1 + c;
+        // temp3 = temp2 = d;
+        // with 'temp3' left in _exprStr;
         ExprPtrVec& ops = ce->getOps();
-        string lhs;
+        assert(ops.size() > 1);
+        string lhs, exStr;
         int opNum = 0;
         for (auto ep : ops) {
+            opNum++;
 
             // eval the operand; sets _exprStr.            
             ep->accept(this);
             string opStr = getExprStrAndClear();
 
-            // first operand.
-            if (opNum == 0)
-                lhs = opStr;    // just save for next iteration.
+            // first operand; just save as LHS for next iteration.
+            if (opNum == 1) {
+                lhs = opStr;
+                exStr = ep->makeStr();
+            }
 
             // subsequent operands.
             // makes separate assignment for each one.
             // result is kept as LHS of next one.
             else {
-                makeNextTempVar(ce) << lhs << ' ' << ce->getOpStr() << ' ' <<
+
+                // Use whole expression only for the last step.
+                Expr* ex = (opNum == (int)ops.size()) ? ce : NULL;
+
+                // Add RHS to partial-result comment.
+                exStr += ' ' + ce->getOpStr() + ' ' + ep->makeStr();
+
+                // Output this step.
+                makeNextTempVar(ex, exStr) << lhs << ' ' << ce->getOpStr() << ' ' <<
                     opStr << _ph.getLineSuffix();
                 lhs = getExprStr(); // result used in next iteration, if any.
             }
-            opNum++;
         }
 
         // note: _exprStr contains result of last operation.

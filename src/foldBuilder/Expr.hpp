@@ -65,18 +65,14 @@ public:
     // Check for equivalency.
     virtual bool isSame(const Expr* other) =0;
 
-    // Try to add a compatible operand.
-    // Only overloaded for nodes that can have multiple operands.
-    // Return true if successful.
-    virtual bool appendOp(ExprPtr rhs, const string& opStr) { return false; }
-
     // Return a simple string expr.
     virtual string makeStr() const;
 
     // Return number of nodes.
     virtual int getNumNodes() const;
 
-    virtual ExprPtr clone() =0;
+    // Create a deep copy of this expression.
+    virtual ExprPtr clone() const =0;
 };
 typedef vector<ExprPtr> ExprPtrVec;
 
@@ -129,6 +125,7 @@ protected:
 
 public:
     ConstExpr(double f) : _f(f) { }
+    ConstExpr(const ConstExpr& rhs) : _f(rhs._f) { }
     virtual ~ConstExpr() { }
 
     double getVal() const {
@@ -143,7 +140,8 @@ public:
         return p && _f == p->_f;
     }
    
-    virtual ExprPtr clone() { return make_shared<ConstExpr>(*this); }
+    // Create a deep copy of this expression.
+    virtual ExprPtr clone() const { return make_shared<ConstExpr>(*this); }
 };
 
 // Any expression that returns a real (not from a grid).
@@ -155,6 +153,7 @@ protected:
 public:
     CodeExpr(const string& code) :
         _code(code) { }
+    CodeExpr(const CodeExpr& rhs) : _code(rhs._code) { }
     virtual ~CodeExpr() { }
 
     const string& getCode() const {
@@ -169,7 +168,8 @@ public:
         return p && _code == p->_code;
     }
 
-    virtual ExprPtr clone() { return make_shared<CodeExpr>(*this); }
+    // Create a deep copy of this expression.
+    virtual ExprPtr clone() const { return make_shared<CodeExpr>(*this); }
 };
 
 // Base class for any unary operator.
@@ -198,7 +198,8 @@ public:
             _rhs->isSame(p->_rhs.get());
     }
 
-    virtual ExprPtr clone() { return make_shared<UnaryExpr>(*this); }
+    // Create a deep copy of this expression.
+    virtual ExprPtr clone() const { return make_shared<UnaryExpr>(*this); }
 };
 
 // A negation.
@@ -206,12 +207,16 @@ class NegExpr : public UnaryExpr {
 public:
     NegExpr(ExprPtr rhs) :
         UnaryExpr(opStr(), rhs) { }
+    NegExpr(const NegExpr& rhs) :
+        UnaryExpr(rhs) { }
     virtual ~NegExpr() { }
 
     static string opStr() {
         return "-";
     }
-    virtual ExprPtr clone() { return make_shared<NegExpr>(*this); }
+
+    // Create a deep copy of this expression.
+    virtual ExprPtr clone() const { return make_shared<NegExpr>(*this); }
 };
 
 // Base class for any binary operator.
@@ -239,7 +244,8 @@ public:
             _rhs->isSame(p->_rhs.get());
     }
 
-    virtual ExprPtr clone() { return make_shared<BinaryExpr>(*this); }
+    // Create a deep copy of this expression.
+    virtual ExprPtr clone() const { return make_shared<BinaryExpr>(*this); }
 };
 
 // Subtraction operator.
@@ -247,13 +253,16 @@ class SubExpr : public BinaryExpr {
 public:
     SubExpr(ExprPtr lhs, ExprPtr rhs) :
         BinaryExpr(lhs, opStr(), rhs) { }
+    SubExpr(const SubExpr& rhs) :
+        BinaryExpr(rhs) { }
     virtual ~SubExpr() { }
 
     static string opStr() {
         return "-";
     }
 
-    virtual ExprPtr clone() { return make_shared<SubExpr>(*this); }
+    // Create a deep copy of this expression.
+    virtual ExprPtr clone() const { return make_shared<SubExpr>(*this); }
 };
 
 // Division operator.
@@ -261,40 +270,16 @@ class DivExpr : public BinaryExpr {
 public:
     DivExpr(ExprPtr lhs, ExprPtr rhs) :
         BinaryExpr(lhs, opStr(), rhs) { }
+    DivExpr(const DivExpr& rhs) :
+        BinaryExpr(rhs) { }
     virtual ~DivExpr() { }
 
     static string opStr() {
         return "/";
     }
 
-    virtual ExprPtr clone() { return make_shared<DivExpr>(*this); }
-};
-
-// Equality operator.
-// (Not inherited from BinaryExpr because LHS is special.)
-class EqualsExpr : public UnaryExpr {
-protected:
-    GridPointPtr _lhs;
-
-public:
-    EqualsExpr(GridPointPtr lhs, ExprPtr rhs) :
-        UnaryExpr(opStr(), rhs), _lhs(lhs) { }
-  
-    virtual ~EqualsExpr() { }
-
-    GridPointPtr& getLhs() { return _lhs; }
-    const GridPointPtr& getLhs() const { return _lhs; }
-
-    static string opStr() {
-        return "=="; 
-    }
-
-    virtual void accept(ExprVisitor* ev);
-
-    // Check for equivalency.
-    virtual bool isSame(const Expr* other);
-
-    virtual ExprPtr clone() { return make_shared<EqualsExpr>(*this); }
+    // Create a deep copy of this expression.
+    virtual ExprPtr clone() const { return make_shared<DivExpr>(*this); }
 };
 
 // A list of exprs with a common operator that can be rearranged,
@@ -308,35 +293,39 @@ public:
     CommutativeExpr(const string& opStr) :
         _opStr(opStr) {
     }
-
     CommutativeExpr(ExprPtr lhs, const string& opStr, ExprPtr rhs) :
         _opStr(opStr) {
-        _ops.push_back(lhs);
-        _ops.push_back(rhs);
+        _ops.push_back(lhs->clone());
+        _ops.push_back(rhs->clone());
     }
-
     CommutativeExpr(const CommutativeExpr& rhs) :
         _opStr(rhs._opStr) {
         for(auto op : rhs._ops)
-        {
             _ops.push_back(op->clone());
-        }
     }
-
     virtual ~CommutativeExpr() { }
 
+    // Accessors.
     ExprPtrVec& getOps() { return _ops; }
     const ExprPtrVec& getOps() const { return _ops; }
     const string& getOpStr() const { return _opStr; }
 
-    // Try to add a compatible operand.
-    // Return true if successful.
-    virtual bool appendOp(ExprPtr rhs, const string& opStr) {
-        if (opStr == _opStr) {
-            _ops.push_back(rhs);
-            return true;
+    // Clone and add an operand.
+    virtual void appendOp(ExprPtr op) {
+        _ops.push_back(op->clone());
+    }
+
+    // If op is another CommutativeExpr with the
+    // same operator, add its operands to this.
+    // Otherwise, just clone and add the whole op.
+    virtual void mergeExpr(ExprPtr op) {
+        auto opp = dynamic_pointer_cast<CommutativeExpr>(op);
+        if (opp && opp->getOpStr() == _opStr) {
+            for(auto op2 : opp->_ops)
+                appendOp(op2);
         }
-        return false;
+        else
+            appendOp(op);
     }
 
     // Swap the contents w/another.
@@ -350,38 +339,45 @@ public:
     // Check for equivalency.
     virtual bool isSame(const Expr* other);
 
-    virtual ExprPtr clone() { return make_shared<CommutativeExpr>(*this); }
+    // Create a deep copy of this expression.
+    virtual ExprPtr clone() const { return make_shared<CommutativeExpr>(*this); }
 };
 
 // One or more addition operators.
 class AddExpr : public CommutativeExpr {
 public:
+    AddExpr()  :
+        CommutativeExpr(opStr()) { }
     AddExpr(ExprPtr lhs, ExprPtr rhs) :
         CommutativeExpr(lhs, opStr(), rhs) { }
+    AddExpr(const AddExpr& rhs) : CommutativeExpr(rhs) { }
     virtual ~AddExpr() { }
 
     static string opStr() {
         return "+";
     }
   
-    virtual ExprPtr clone() { return make_shared<AddExpr>(*this); } 
+    // Create a deep copy of this expression.
+    virtual ExprPtr clone() const { return make_shared<AddExpr>(*this); } 
 };
 
 // One or more multiplication operators.
 class MultExpr : public CommutativeExpr {
 public:
+    MultExpr()  :
+        CommutativeExpr(opStr()) { }
     MultExpr(ExprPtr lhs, ExprPtr rhs) :
         CommutativeExpr(lhs, opStr(), rhs) { }
+    MultExpr(const MultExpr& rhs) : CommutativeExpr(rhs) { }
     virtual ~MultExpr() { }
     
     static string opStr() {
         return "*";
     }
 
-    virtual ExprPtr clone() { return make_shared<MultExpr>(*this); } 
+    // Create a deep copy of this expression.
+    virtual ExprPtr clone() const { return make_shared<MultExpr>(*this); } 
 };
-
-///////// Grids ////////////
 
 // One specific point in a grid.
 // This is an expression leaf-node.
@@ -399,6 +395,13 @@ public:
     {
         assert(areDimsSame(offsets));
     }
+
+    // Copy ctor.
+    // Note that _grid is a shallow copy!
+    GridPoint(const GridPoint& rhs) :
+        IntTuple(rhs), _grid(rhs._grid) { }
+    GridPoint(const GridPointPtr& rhs) :
+        GridPoint(*rhs) { }
 
     // Construct from another point, but change location.
     GridPoint(GridPoint* gp, const IntTuple& offsets) :
@@ -435,8 +438,44 @@ public:
     // Return a description based on this position.
     virtual string makeStr() const;
 
-    virtual ExprPtr clone() { return make_shared<GridPoint>(*this); }   
+    // Create a deep copy of this expression,
+    // except pointed-to grid is not copied.
+    virtual ExprPtr clone() const { return make_shared<GridPoint>(*this); }   
 };
+
+// Equality operator.
+// (Not inherited from BinaryExpr because LHS is special.)
+class EqualsExpr : public UnaryExpr {
+protected:
+    GridPointPtr _lhs;
+
+public:
+    EqualsExpr(GridPointPtr lhs, ExprPtr rhs) :
+        UnaryExpr(opStr(), rhs), _lhs(lhs) { }
+    EqualsExpr(const EqualsExpr& rhs) :
+        UnaryExpr(rhs) {
+        _lhs = make_shared<GridPoint>(rhs._lhs);
+    }
+    virtual ~EqualsExpr() { }
+
+    GridPointPtr& getLhs() { return _lhs; }
+    const GridPointPtr& getLhs() const { return _lhs; }
+
+    static string opStr() {
+        return "=="; 
+    }
+
+    virtual void accept(ExprVisitor* ev);
+
+    // Check for equivalency.
+    virtual bool isSame(const Expr* other);
+
+    // Create a deep copy of this expression.
+    virtual ExprPtr clone() const { return make_shared<EqualsExpr>(*this); }
+};
+
+///////// Grids ////////////
+
 typedef set<GridPoint> GridPointSet;
 typedef set<GridPointPtr> GridPointPtrSet;
 typedef vector<GridPoint> GridPointVec;
