@@ -49,10 +49,13 @@ ExprPtr operator+(const ExprPtr& lhs, const ExprPtr& rhs) {
         return lhs;
 
     // If adding to another add result, just append an operand.
-    if (lhs->appendOp(rhs, AddExpr::opStr()))
-        return lhs;
-    if (rhs->appendOp(lhs, AddExpr::opStr()))
-        return rhs;
+    ExprPtr tmp_lhs = lhs->clone();
+    ExprPtr tmp_rhs = rhs->clone();
+    
+    if (tmp_lhs->appendOp(rhs, AddExpr::opStr()))
+        return tmp_lhs;
+    if (tmp_rhs->appendOp(lhs, AddExpr::opStr()))
+        return tmp_rhs;
 
     // Otherwise, make a new expression.
     else
@@ -83,10 +86,13 @@ ExprPtr operator*(const ExprPtr& lhs, const ExprPtr& rhs) {
         return lhs;
 
     // If multiplying by another mul result, just append an operand.
-    if (lhs->appendOp(rhs, MultExpr::opStr()))
-        return lhs;
-    if (rhs->appendOp(lhs, MultExpr::opStr()))
-        return rhs;
+    ExprPtr tmp_lhs = lhs->clone();
+    ExprPtr tmp_rhs = rhs->clone();
+    
+    if (tmp_lhs->appendOp(rhs, MultExpr::opStr()))
+        return tmp_lhs;
+    if (tmp_rhs->appendOp(lhs, MultExpr::opStr()))
+        return tmp_rhs;
 
     // Otherwise, make a new expression.
     else
