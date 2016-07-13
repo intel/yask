@@ -89,10 +89,10 @@ namespace yask {
 
         // Print some info.
         virtual void print_info(const std::string& name, std::ostream& os = std::cout) {
-            os << "grid '" << name << "' allocated at " << _elems << " in " <<
-                printWithPow2Multiplier(get_num_bytes()) << " byte(s): " <<
-                printWithPow2Multiplier(get_num_elems()) << " element(s) * " <<
-                sizeof(T) << " byte(s)." << std::endl;
+            os << "grid '" << name << "' allocation at " << _elems << " for " <<
+                printWithPow2Multiplier(get_num_elems()) << " element(s) of " <<
+                sizeof(T) << " byte(s) each (bytes): " <<
+                printWithPow2Multiplier(get_num_bytes()) << std::endl;
         }
 
         // Initialize memory to a given value.
@@ -162,7 +162,7 @@ namespace yask {
 
         // Print some info.
         virtual void print_info(const std::string& name, std::ostream& os = std::cout) {
-            os << "scalar ";
+            os << "Scalar ";
             GenericGridBase<T>::print_info(name, os);
         }
 

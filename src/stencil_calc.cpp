@@ -457,12 +457,12 @@ namespace yask {
     // but different values between them.
     void StencilContext::initSame() {
         real_t v = 0.1;
-        cout << "initializing grids..." << endl;
+        cout << "Initializing grids..." << endl;
         for (auto gp : gridPtrs) {
             gp->set_same(v);
             v += 0.01;
         }
-        cout << "initializing parameters (if any)..." << endl;
+        cout << "Initializing parameters (if any)..." << endl;
         for (auto pp : paramPtrs) {
             pp->set_same(v);
             v += 0.01;
@@ -473,10 +473,12 @@ namespace yask {
     // Better for validation, but slower.
     void StencilContext::initDiff() {
         real_t v = 0.01;
+        cout << "Initializing grids..." << endl;
         for (auto gp : gridPtrs) {
             gp->set_diff(v);
             v += 0.001;
         }
+        cout << "Initializing parameters (if any)..." << endl;
         for (auto pp : paramPtrs) {
             pp->set_diff(v);
             v += 0.001;

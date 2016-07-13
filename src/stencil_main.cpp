@@ -58,8 +58,8 @@ idx_t findNumSubsets(idx_t& bsize, const string& bname,
     idx_t rem = rsize % bsize;
     idx_t nfull_blks = rem ? (nblks - 1) : nblks;
 
-    cout << "  '" << dim << "' dimension: dividing " << rname << " of size " <<
-        rsize << " into " << nfull_blks << " " << bname << "(s) of size " << bsize;
+    cout << " In '" << dim << "' dimension, " << rname << " of size " <<
+        rsize << " is divided into " << nfull_blks << " " << bname << "(s) of size " << bsize;
     if (rem)
         cout << " plus 1 remainder " << bname << " of size " << rem;
     cout << "." << endl;
@@ -91,34 +91,34 @@ int main(int argc, char** argv)
     bool is_leader = my_rank == 0;
 
     if (is_leader) {
-        printf("Invocation:");
+        cout << "Invocation:";
         for (int i = 0; i < argc; i++)
-            printf(" %s", argv[i]);
-        printf("\n");
+            cout << " " << argv[i];
+        cout << endl;
 
 #ifdef DEBUG
-        printf("*** WARNING: binary compiled with DEBUG; ignore performance results.\n");
+        cout << "*** WARNING: binary compiled with DEBUG; ignore performance results.\n";
 #endif
 #if defined(NO_INTRINSICS) && (VLEN > 1)
-        printf("*** WARNING: binary compiled with NO_INTRINSICS; ignore performance results.\n");
+        cout << "*** WARNING: binary compiled with NO_INTRINSICS; ignore performance results.\n";
 #endif
 #ifdef MODEL_CACHE
-        printf("*** WARNING: binary compiled with MODEL_CACHE; ignore performance results.\n");
+        cout << "*** WARNING: binary compiled with MODEL_CACHE; ignore performance results.\n";
 #endif
 #ifdef TRACE_MEM
-        printf("*** WARNING: binary compiled with TRACE_MEM; ignore performance results.\n");
+        cout << "*** WARNING: binary compiled with TRACE_MEM; ignore performance results.\n";
 #endif
 #ifdef TRACE_INTRINSICS
-        printf("*** WARNING: binary compiled with TRACE_INTRINSICS; ignore performance results.\n");
+        cout << "*** WARNING: binary compiled with TRACE_INTRINSICS; ignore performance results.\n";
 #endif
 
-        printf("\n"
-               "┌──────────────────────────────────────────┐\n"
-               "│  Y.A.S.K. -- Yet Another Stencil Kernel  │\n"
-               "│            https://01.org/yask           │\n"
-               "│    Intel Corporation, copyright 2016     │\n"
-               "└──────────────────────────────────────────┘\n"
-               "\nStencil name: " STENCIL_NAME "\n");
+        cout << endl <<
+            "┌──────────────────────────────────────────┐\n"
+            "│  Y.A.S.K. ── Yet Another Stencil Kernel  │\n"
+            "│            https://01.org/yask           │\n"
+            "│    Intel Corporation, copyright 2016     │\n"
+            "└──────────────────────────────────────────┘\n"
+            "\nStencil name: " STENCIL_NAME << endl;
 
     }
 
@@ -323,7 +323,6 @@ int main(int argc, char** argv)
         int numThreads = 1;
         cout << "Num threads: " << numThreads << endl;
 #endif
-        cout << endl;
     }
 
     // Adjust defaults for wavefronts.
@@ -354,7 +353,7 @@ int main(int argc, char** argv)
     idx_t nry = findNumRegions(ry, dy, CPTS_Y, "y");
     idx_t nrz = findNumRegions(rz, dz, CPTS_Z, "z");
     idx_t nr = nrn * nrx * nry * nrz;
-    cout << " num-regions = " << nr << endl;
+    cout << " num-regions: " << nr << endl;
 
     // Determine num blocks based on block sizes.
     // Also fix up block sizes as needed.
@@ -365,7 +364,7 @@ int main(int argc, char** argv)
     idx_t nby = findNumBlocks(by, ry, CPTS_Y, "y");
     idx_t nbz = findNumBlocks(bz, rz, CPTS_Z, "z");
     idx_t nb = nbn * nbx * nby * nbz;
-    cout << " num-blocks-per-region = " << nb << endl;
+    cout << " num-blocks-per-region: " << nb << endl;
 
     // Round up padding as needed.
     pn = roundUp(pn, VLEN_N, "extra padding in n");
@@ -385,21 +384,21 @@ int main(int argc, char** argv)
     idx_t hy = ROUND_UP(context.max_halo_y, VLEN_Y);
     idx_t hz = ROUND_UP(context.max_halo_z, VLEN_Z);
     
-    printf("\nSizes in points per grid (t*n*x*y*z):\n");
-    printf(" vector-size = %d*%d*%d*%d*%d\n", VLEN_T, VLEN_N, VLEN_X, VLEN_Y, VLEN_Z);
-    printf(" cluster-size = %d*%d*%d*%d*%d\n", CPTS_T, CPTS_N, CPTS_X, CPTS_Y, CPTS_Z);
-    printf(" block-size = %ld*%ld*%ld*%ld*%ld\n", bt, bn, bx, by, bz);
-    printf(" region-size = %ld*%ld*%ld*%ld*%ld\n", rt, rn, rx, ry, rz);
-    printf(" rank-size = %ld*%ld*%ld*%ld*%ld\n", dt, dn, dx, dy, dz);
-    printf(" overall-size = %ld*%ld*%ld*%ld*%ld\n", dt, dn, dx * num_ranks, dy, dz);
-    cout << "\nOther settings:\n";
-    printf(" stencil-shape = " STENCIL_NAME "\n");
-    printf(" time-dim-size = %d\n", TIME_DIM_SIZE);
-    printf(" vector-len = %d\n", VLEN);
-    printf(" padding = %ld+%ld+%ld+%ld\n", pn, px, py, pz);
-    printf(" max-halos = %ld+%ld+%ld+%ld\n", hn, hx, hy, hz);
-    printf(" manual-L1-prefetch-distance = %d\n", PFDL1);
-    printf(" manual-L2-prefetch-distance = %d\n", PFDL2);
+    cout << "\nSizes in points per grid (t*n*x*y*z):\n"
+        " vector-size: " << VLEN_T << '*' << VLEN_N << '*' << VLEN_X << '*' << VLEN_Y << '*' << VLEN_Z << endl <<
+        " cluster-size: " << CPTS_T << '*' << CPTS_N << '*' << CPTS_X << '*' << CPTS_Y << '*' << CPTS_Z << endl <<
+        " block-size: " << bt << '*' << bn << '*' << bx << '*' << by << '*' << bz << endl <<
+        " region-size: " << rt << '*' << rn << '*' << rx << '*' << ry << '*' << rz << endl <<
+        " rank-size: " << dt << '*' << dn << '*' << dx << '*' << dy << '*' << dz << endl <<
+        " overall-size: " << dt << '*' << dn << '*' << (dx * num_ranks) << '*' << dy << '*' << dz << endl;
+    cout << "\nOther settings:\n"
+        " stencil-shape: " STENCIL_NAME << endl << 
+        " time-dim-size: " << TIME_DIM_SIZE << endl <<
+        " vector-len: " << VLEN << endl <<
+        " padding: " << pn << '+' << px << '+' << py << '+' << pz << endl <<
+        " max-halos: " << hn << '+' << hx << '+' << hy << '+' << hz << endl <<
+        " manual-L1-prefetch-distance: " << PFDL1 << endl <<
+        " manual-L2-prefetch-distance: " << PFDL2 << endl;
 
     if (help) {
         cout << "Exiting due to help option." << endl;
@@ -441,25 +440,27 @@ int main(int argc, char** argv)
     context.allocGrids();
     cout << "Allocating parameters..." << endl;
     context.allocParams();
-    cout << "Allocating buffers..." << endl;
+#ifdef USE_MPI
+    cout << "Allocating MPI buffers..." << endl;
+#endif
     context.setupMPI();
     idx_t nbytes = context.get_num_bytes();
-    cout << "Total rank-" << my_rank << " allocation: " << printWithPow2Multiplier(nbytes) <<
-        " byte(s) in " << context.gridPtrs.size() << " grid(s)." << endl;
+    cout << "Total rank-" << my_rank << " allocation in " <<
+        context.gridPtrs.size() << " grid(s) (bytes): " << printWithPow2Multiplier(nbytes) << endl;
     const idx_t num_eqGrids = context.eqGridPtrs.size();
-    cout << "Num grids = " << context.gridPtrs.size() << endl;
-    cout << "Num grids to be updated = " << num_eqGrids << endl;
+    cout << "Num grids: " << context.gridPtrs.size() << endl;
+    cout << "Num grids to be updated: " << num_eqGrids << endl;
 
     // Stencil functions.
     idx_t scalar_fp_ops = 0;
     STENCIL_EQUATIONS stencils;
     idx_t num_stencils = stencils.stencils.size();
     cout << endl;
-    cout << "Num stencil equations = " << num_stencils << endl;
+    cout << "Num stencil equations: " << num_stencils << endl <<
+        "Est FP ops per point for each equation:" << endl;
     for (auto stencil : stencils.stencils) {
         idx_t fpos = stencil->get_scalar_fp_ops();
-        cout << "  '" << stencil->get_name() << "': " <<
-            fpos << " FP ops per point." << endl;
+        cout << "  '" << stencil->get_name() << "': " << fpos << endl;
         scalar_fp_ops += fpos;
     }
 
@@ -486,19 +487,18 @@ int main(int argc, char** argv)
             printWithPow10Multiplier(grids_numpts * num_ranks) << endl;
         cout << "Points to calculate overall: " <<
             printWithPow10Multiplier(tot_numpts) << endl;
-        cout << "FP ops (est) per point and time step for all grids: " << scalar_fp_ops << endl;
-        cout << "FP ops (est) per rank and time step for all grids and points: " <<
+        cout << "Est FP ops per point and time step for all grids: " << scalar_fp_ops << endl;
+        cout << "Est FP ops per rank and time step for all grids and points: " <<
             printWithPow10Multiplier(numFpOps) << endl;
-        cout << "FP ops (est) per time step for all grids, points, and ranks: " <<
+        cout << "Est FP ops per time step for all grids, points, and ranks: " <<
             printWithPow10Multiplier(numFpOps * num_ranks) << endl;
-        cout << "FP ops (est) per rank for all grids, points, and time steps: " <<
+        cout << "Est FP ops per rank for all grids, points, and time steps: " <<
             printWithPow10Multiplier(rank_numFpOps) << endl;
-        cout << "FP ops (est) overall: " <<
+        cout << "Est FP ops overall: " <<
             printWithPow10Multiplier(tot_numFpOps) << endl;
 
-        cout << "\nTotal overall allocation: " <<
-            printWithPow2Multiplier(nbytes * num_ranks) <<
-            " bytes in " << num_ranks << " rank(s)." << endl;
+        cout << "\nTotal overall allocation in " << num_ranks << " rank(s) (bytes): " <<
+            printWithPow2Multiplier(nbytes * num_ranks) << endl;
     }
     
     // Exit if nothing to do.
@@ -527,18 +527,16 @@ int main(int argc, char** argv)
         if (!is_leader)
             cache.disable();
         if (cache.isEnabled())
-            printf("Modeling cache...\n");
+            cout << "Modeling cache...\n";
 #endif
-        if (is_leader) {
-            printf("Warmup of %ld time step(s)...\n", context.dt);
-            fflush(NULL);
-        }
+        if (is_leader)
+            cout << "Warmup of " << context.dt << " time step(s)...\n" << flush;
         stencils.calc_rank_opt(context);
 
 #ifdef MODEL_CACHE
         // print cache stats, then disable.
         if (cache.isEnabled()) {
-            printf("Done modeling cache...\n");
+            cout << "Done modeling cache...\n";
             cache.dumpStats();
             cache.disable();
         }
@@ -547,15 +545,13 @@ int main(int argc, char** argv)
 
     // variables for measuring performance.
     double wstart, wstop;
-    float best_elapsed_time=0.0f, best_throughput_mpoints=0.0f, best_gflops=0.0f;
+    float best_elapsed_time=0.0f, best_pps=0.0f, best_flops=0.0f;
 
     // Performance runs.
     context.dt = dt;
     if (is_leader) {
-        cout << endl;
-        printf("Running %li performance trial(s) of %ld time step(s)...\n",
-               num_trials, context.dt);
-        fflush(NULL);
+        cout << "\nRunning " << num_trials << " performance trial(s) of " <<
+            context.dt << " time step(s) each...\n" << flush;
     }
     for (idx_t tr = 0; tr < num_trials; tr++) {
 
@@ -576,34 +572,34 @@ int main(int argc, char** argv)
             
         // calc and report perf.
         float elapsed_time = (float)(wstop - wstart);
-        float throughput_mpoints = float(tot_numpts)/(elapsed_time*1e6f);
-        float gflops = float(tot_numFpOps)/(elapsed_time*1e9f);
+        float pps = float(tot_numpts)/elapsed_time;
+        float flops = float(tot_numFpOps)/elapsed_time;
         if (is_leader) {
-            printf("-------------------------------\n");
-            printf("time:       %8.3f sec\n", elapsed_time );
-            printf("throughput: %8.3f MPoints/s\n", throughput_mpoints );
-            printf("FP-rate:    %8.3f GFLOPS (est.)\n", gflops);
+            cout << "-----------------------------------------\n" <<
+                "time (sec):              " << printWithPow10Multiplier(elapsed_time) << endl <<
+                "throughput (points/sec): " << printWithPow10Multiplier(pps) << endl <<
+                "throughput (est FLOPS):  " << printWithPow10Multiplier(flops) << endl;
         }
 
-        if (throughput_mpoints > best_throughput_mpoints) {
-            best_throughput_mpoints = throughput_mpoints;
+        if (pps > best_pps) {
+            best_pps = pps;
             best_elapsed_time = elapsed_time;
-            best_gflops = gflops;
+            best_flops = flops;
         }
     }
 
     if (is_leader) {
-        printf("-------------------------------\n");
-        printf("best-time:       %8.3f sec\n", best_elapsed_time );
-        printf("best-throughput: %8.3f MPoints/s\n", best_throughput_mpoints );
-        printf("best-FP-rate:    %8.3f GFLOPS (est.)\n", best_gflops);
+        cout << "-----------------------------------------\n" <<
+            "best-time (sec):              " << printWithPow10Multiplier(best_elapsed_time) << endl <<
+            "best-throughput (points/sec): " << printWithPow10Multiplier(best_pps) << endl <<
+            "best-throughput (est FLOPS):  " << printWithPow10Multiplier(best_flops) << endl <<
+            "-----------------------------------------\n";
     }
     
     if (validate) {
 
         // check the correctness of one iteration.
-        printf("\n-------------------------------\n");
-        printf("Running validation trial...\n");
+        cout << "Running validation trial...\n";
 
         // Make a ref context for comparisons w/new grids:
         // Copy the settings from context, then re-alloc grids.
@@ -642,7 +638,7 @@ int main(int argc, char** argv)
         }
     }
     else if (is_leader)
-        printf("\nRESULTS NOT VERIFIED.\n");
+        cout << "\nRESULTS NOT VERIFIED.\n";
 
 #ifdef USE_MPI
     MPI_Barrier(comm);

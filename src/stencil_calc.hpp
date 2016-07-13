@@ -39,21 +39,21 @@ namespace yask {
         // A list of all grids.
         std::vector<RealVecGridBase*> gridPtrs;
 
-        // All grids updated by all equations.
+        // Only grids that are updated.
         std::vector<RealVecGridBase*> eqGridPtrs;
 
         // A list of all non-grid parameters.
         std::vector<GenericGridBase<real_t>*> paramPtrs;
 
         // Sizes.
-        // - time size in steps to be done (not grid allocation).
-        // - stencil size in equations to eval (not number of grids).
-        // - spatial sizes in elements (not vectors).
-        idx_t dt, ds, dn, dx, dy, dz;     // rank size.
-        idx_t rt, rs, rn, rx, ry, rz;     // region size.
-        idx_t bt, bs, bn, bx, by, bz;     // block size.
-        idx_t hn, hx, hy, hz;             // spatial halos (required by stencil).
-        idx_t pn, px, py, pz;             // spatial padding (extra to avoid alignment).
+        // - rank sizes are in points to eval.
+        // - time sizes (t) are in steps to be done (not grid allocation).
+        // - spatial sizes (x, y, z) are in elements (not vectors).
+        idx_t dt, dn, dx, dy, dz; // rank size.
+        idx_t rt, rn, rx, ry, rz; // region size.
+        idx_t bt, bn, bx, by, bz; // block size.
+        idx_t hn, hx, hy, hz;     // spatial halos (required by stencil).
+        idx_t pn, px, py, pz;     // spatial padding (extra to avoid alignment).
         idx_t angle_n, angle_x, angle_y, angle_z; // temporal skewing angles.
 
         // MPI.
