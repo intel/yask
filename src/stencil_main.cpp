@@ -123,7 +123,7 @@ int main(int argc, char** argv)
     }
 
     // Stagger init messages in time.
-    // TODO: use explicit locks.
+    // TODO: create an MPI-safe I/O handler.
     sleep(my_rank);
     cout << endl;
 #ifdef USE_MPI
@@ -134,16 +134,18 @@ int main(int argc, char** argv)
     
     // options and their defaults.
     idx_t num_trials = 3; // number of trials.
-    idx_t dt = 50;     // number of time-steps per trial, over which performance is averaged.
+    idx_t dt = 50;     // number of time-steps per trial.
     idx_t dn = 1, dx = DEF_RANK_SIZE, dy = DEF_RANK_SIZE, dz = DEF_RANK_SIZE;
     idx_t rt = 1;                         // wavefront time steps.
     idx_t rn = 0, rx = 0, ry = 0, rz = 0;  // region sizes (0 => use rank size).
     idx_t bt = 1;                          // temporal block size.
     idx_t bn = 1, bx = DEF_BLOCK_SIZE, by = DEF_BLOCK_SIZE, bz = DEF_BLOCK_SIZE;  // size of cache blocks.
     idx_t pn = 0, px = DEF_PAD, py = DEF_PAD, pz = DEF_PAD; // padding.
+    idx_t nrn = 1, nrx = num_ranks, nry = 1, nrz = 1; // num ranks in each dim.
     bool validate = false;
     int  block_threads = DEF_BLOCK_THREADS; // number of threads for a block.
     bool doWarmup = true;
+    int pre_trial_sleep_time = 1;   // sec to sleep before each trial.
 
     // parse options.
     bool help = false;
@@ -156,52 +158,56 @@ int main(int argc, char** argv)
                 cout << 
                     "Usage: [options]\n"
                     "Options:\n"
-                    " -h:             print this help and the current settings, then exit\n"
-                    " -t <n>          number of trials, default=" <<
+                    " -h:              print this help and the current settings, then exit\n"
+                    " -t <n>           number of trials, default=" <<
                     num_trials << endl <<
-                    " -dt <n>         rank domain size in temporal dimension (number of time steps), default=" <<
+                    " -dt <n>          rank domain size in temporal dimension (number of time steps), default=" <<
                     dt << endl <<
-                    " -d{n,x,y,z} <n> rank domain size in specified spatial dimension, defaults=" <<
+                    " -d{n,x,y,z} <n>  rank domain size in specified spatial dimension, defaults=" <<
                     dn << '*' << dx << '*' << dy << '*' << dz << endl <<
-                    " -d <n>          set same rank size in 3 {x,y,z} spatial dimensions\n" <<
-                    " -rt <n>         OpenMP region time steps (for wavefront tiling), default=" <<
+                    " -d <n>           set same rank size in 3 {x,y,z} spatial dimensions\n" <<
+                    " -rt <n>          OpenMP region time steps (for wave-front tiling), default=" <<
                     rt << endl <<
-                    " -r{n,x,y,z} <n> OpenMP region size in specified spatial dimension, defaults=" <<
+                    " -r{n,x,y,z} <n>  OpenMP region size in specified spatial dimension, defaults=" <<
                     rn << '*' << rx << '*' << ry << '*' << rz << endl <<
-                    " -r <n>          set same OpenMP region size in 3 {x,y,z} spatial dimensions\n"
-                    " -b{n,x,y,z} <n> cache block size in specified spatial dimension, defaults=" <<
+                    " -r <n>           set same OpenMP region size in 3 {x,y,z} spatial dimensions\n"
+                    " -b{n,x,y,z} <n>  cache block size in specified spatial dimension, defaults=" <<
                     bn << '*' << bx << '*' << by << '*' << bz << endl <<
-                    " -b <n>          set same cache block size in 3 {x,y,z} spatial dimensions\n" <<
-                    " -p{n,x,y,z} <n> extra padding in specified spatial dimension, defaults=" <<
+                    " -b <n>           set same cache block size in 3 {x,y,z} spatial dimensions\n" <<
+                    " -p{n,x,y,z} <n>  extra padding in specified spatial dimension, defaults=" <<
                     pn << '*' << px << '*' << py << '*' << pz << endl <<
-                    " -p <n>          set same padding in 3 {x,y,z} spatial dimensions\n" <<
-                    " -i <n>          equivalent to -dt, for backward compatibility\n" <<
-                    " -bthreads <n>   set number of threads to use for a block, default=" <<
-                    block_threads << endl <<
-                    " -v              validate by comparing to a scalar run\n" <<
-                    " -nw             skip warmup\n" <<
-                    "Notes:\n"
+                    " -p <n>           set same padding in 3 {x,y,z} spatial dimensions\n" <<
 #ifdef USE_MPI
-                    " Current MPI support is minimal and is only applied in the x-dimension.\n"
-#else
+                    " -nr{n,x,y,z} <n> num ranks in specified spatial dimension, defaults=" <<
+                    nrn << '*' << nrx << '*' << nry << '*' << nrz << endl <<
+                    " -nr <n>          set same num ranks in 3 {x,y,z} spatial dimensions\n" <<
+#endif
+                    " -i <n>           equivalent to -dt, for backward compatibility\n" <<
+                    " -bthreads <n>    set number of threads to use for a block, default=" <<
+                    block_threads << endl <<
+                    " -v               validate by comparing to a scalar run\n" <<
+                    " -nw              skip warmup\n" <<
+                    "Notes:\n"
+#ifndef USE_MPI
                     " This binary has not been built with MPI support.\n"
 #endif
                     " A block size of 0 => block size == region size in that dimension.\n"
                     " A region size of 0 => region size == rank size in that dimension.\n"
-                    " Control the time steps in each temporal wavefront with -rt:\n"
-                    "  1 effectively disables wavefront tiling.\n"
-                    "  0 enables wavefront tiling across all time steps in one pass.\n"
+                    " Control the time steps in each temporal wave-front with -rt:\n"
+                    "  1 effectively disables wave-front tiling.\n"
+                    "  0 enables wave-front tiling across all time steps in one pass.\n"
                     "  Any value other than 1 also changes the region spatial-size defaults.\n"
                     " Temporal cache blocking is not yet supported => bt == 1.\n"
                     " Validation is very slow and uses 2x memory, so run with very small sizes.\n"
                     " If validation fails, it may be due to rounding error; try building with 8-byte reals.\n"
-                    " Validation disables the warmup iteration and sets the default number of trials to 1.\n"
+                    " Validation disables warmup and sets the default number of trials to 1.\n"
                     " The 'n' dimension only applies to stencils that use that variable.\n"
                     "Examples:\n" <<
                     " " << argv[0] << " -d 768 -dt 4\n" <<
                     " " << argv[0] << " -dx 512 -dy 256 -dz 128\n" <<
-                    " " << argv[0] << " -d 2048 -rt 0 -b 16\n" <<
-                    " " << argv[0] << " -d 64 -dt 2 -t 1 -v 2\n";
+                    " " << argv[0] << " -d 2048 -dt 20 -r 512 -rt 10  # temporal tiling.\n" <<
+                    " " << argv[0] << " -d 512 -npx 2 -npy 1 -npz 2   # multi-rank.\n" <<
+                    " " << argv[0] << " -d 64 -v                      # validation.\n";
                 help = true;
             }
 
@@ -212,11 +218,6 @@ int main(int argc, char** argv)
             else if (opt == "-v") {
                 validate = true;
                 num_trials = 1;
-
-                if (num_ranks > 1) {
-                    cerr << "Validation across MPI ranks not yet supported." << endl;
-                    exit(1);
-                }
             }
 
             // options w/int values.
@@ -251,6 +252,13 @@ int main(int argc, char** argv)
                 else if (opt == "-py") py = val;
                 else if (opt == "-pz") pz = val;
                 else if (opt == "-p") px = py = pz = val;
+#ifdef USE_MPI
+                else if (opt == "-nrn") nrn = val;
+                else if (opt == "-nrx") nrx = val;
+                else if (opt == "-nry") nry = val;
+                else if (opt == "-nrz") nrz = val;
+                else if (opt == "-nr") nrx = nry = nrz = val;
+#endif
                 else if (opt == "-bthreads") block_threads = val;
                 else {
                     cerr << "error: option '" << opt << "' not recognized." << endl;
@@ -264,8 +272,9 @@ int main(int argc, char** argv)
             exit(1);
         }
     }
-
     // done reading args.
+
+    // TODO: check all dims.
 #ifndef USING_DIM_N
     if (dn > 1) {
         cerr << "error: dn = " << dn << ", but stencil '"
@@ -274,6 +283,14 @@ int main(int argc, char** argv)
     }
 #endif
 
+    // Check ranks.
+    idx_t req_ranks = nrn * nrx * nry * nrz;
+    if (req_ranks != num_ranks) {
+        cerr << "error: " << req_ranks << " rank(s) requested, but MPI reports " <<
+            num_ranks << " rank(s) are active." << endl;
+        exit(1);
+    }
+    
     // Context for evaluating results.
     STENCIL_CONTEXT context;
     context.num_ranks = num_ranks;
@@ -284,7 +301,8 @@ int main(int argc, char** argv)
     {
         cout << endl;
 #if defined(_OPENMP)
-        cout << "Num OpenMP procs: " << omp_get_num_procs() << endl;
+        int omp_num_procs = omp_get_num_procs();
+        cout << "Num OpenMP procs: " << omp_num_procs << endl;
         context.orig_max_threads = omp_get_max_threads();
         cout << "Num OpenMP threads: " << context.orig_max_threads << endl;
 
@@ -331,12 +349,13 @@ int main(int argc, char** argv)
         if (!rx) rx = DEF_WAVEFRONT_REGION_SIZE;
         if (!ry) ry = DEF_WAVEFRONT_REGION_SIZE;
         if (!rz) rz = DEF_WAVEFRONT_REGION_SIZE;
+
+        // TODO: enable this.
+        if (num_ranks > 1) {
+            cerr << "Sorry, MPI communication is not currently enabled with wave-front tiling." << endl;
+        }
     }
 
-    // Adjust X region for MPI.
-    if (num_ranks > 1)
-        rx = dx;
-    
     // Round up vars as needed.
     dt = roundUp(dt, CPTS_T, "rank size in t (time steps)");
     dn = roundUp(dn, CPTS_N, "rank size in n");
@@ -347,13 +366,13 @@ int main(int argc, char** argv)
     // Determine num regions based on region sizes.
     // Also fix up region sizes as needed.
     cout << "\nRegions:" << endl;
-    idx_t nrt = findNumRegions(rt, dt, CPTS_T, "t");
-    idx_t nrn = findNumRegions(rn, dn, CPTS_N, "n");
-    idx_t nrx = findNumRegions(rx, dx, CPTS_X, "x");
-    idx_t nry = findNumRegions(ry, dy, CPTS_Y, "y");
-    idx_t nrz = findNumRegions(rz, dz, CPTS_Z, "z");
-    idx_t nr = nrn * nrx * nry * nrz;
-    cout << " num-regions: " << nr << endl;
+    idx_t nrgt = findNumRegions(rt, dt, CPTS_T, "t");
+    idx_t nrgn = findNumRegions(rn, dn, CPTS_N, "n");
+    idx_t nrgx = findNumRegions(rx, dx, CPTS_X, "x");
+    idx_t nrgy = findNumRegions(ry, dy, CPTS_Y, "y");
+    idx_t nrgz = findNumRegions(rz, dz, CPTS_Z, "z");
+    idx_t nrg = nrgt * nrgn * nrgx * nrgy * nrgz;
+    cout << " num-regions-per-rank: " << nrg << endl;
 
     // Determine num blocks based on block sizes.
     // Also fix up block sizes as needed.
@@ -363,7 +382,7 @@ int main(int argc, char** argv)
     idx_t nbx = findNumBlocks(bx, rx, CPTS_X, "x");
     idx_t nby = findNumBlocks(by, ry, CPTS_Y, "y");
     idx_t nbz = findNumBlocks(bz, rz, CPTS_Z, "z");
-    idx_t nb = nbn * nbx * nby * nbz;
+    idx_t nb = nbt * nbn * nbx * nby * nbz;
     cout << " num-blocks-per-region: " << nb << endl;
 
     // Round up padding as needed.
@@ -392,6 +411,7 @@ int main(int argc, char** argv)
         " rank-size: " << dt << '*' << dn << '*' << dx << '*' << dy << '*' << dz << endl <<
         " overall-size: " << dt << '*' << dn << '*' << (dx * num_ranks) << '*' << dy << '*' << dz << endl;
     cout << "\nOther settings:\n"
+        " num-ranks: " << nrn << '*' << nrx << '*' << nry << '*' << nrz << endl <<
         " stencil-shape: " STENCIL_NAME << endl << 
         " time-dim-size: " << TIME_DIM_SIZE << endl <<
         " vector-len: " << VLEN << endl <<
@@ -406,7 +426,7 @@ int main(int argc, char** argv)
     }
 
     // Save sizes in context struct.
-    // - dt not used for allocation; set later.
+    context.dt = dt;
     context.dn = dn;
     context.dx = dx;
     context.dy = dy;
@@ -434,6 +454,11 @@ int main(int argc, char** argv)
     context.hy = hy;
     context.hz = hz;
 
+    context.nrn = nrn;
+    context.nrx = nrx;
+    context.nry = nry;
+    context.nrz = nrz;
+
     // Alloc memory, create lists of grids, etc.
     cout << endl;
     cout << "Allocating grids..." << endl;
@@ -442,8 +467,8 @@ int main(int argc, char** argv)
     context.allocParams();
 #ifdef USE_MPI
     cout << "Allocating MPI buffers..." << endl;
-#endif
     context.setupMPI();
+#endif
     idx_t nbytes = context.get_num_bytes();
     cout << "Total rank-" << my_rank << " allocation in " <<
         context.gridPtrs.size() << " grid(s) (bytes): " << printWithPow2Multiplier(nbytes) << endl;
@@ -473,8 +498,12 @@ int main(int argc, char** argv)
     const idx_t rank_numFpOps = dt * numFpOps;
     const idx_t tot_numFpOps = rank_numFpOps * num_ranks;
     
-    // Wait for all ranks to finish initializing.
+    // Print some stats from leader rank.
+#ifdef USE_MPI
+    cout << flush;
+    sleep(1);
     MPI_Barrier(comm);
+#endif
     if (is_leader) {
         cout << endl;
         cout << "Points to calculate per rank, time step, and grid: " <<
@@ -510,19 +539,24 @@ int main(int argc, char** argv)
         cerr << "Exiting because there are zero points to evaluate." << endl;
         exit(1);
     }
+    cout << flush;
+    MPI_Barrier(comm);
 
-    // This will initialize the grids before running the warmup.
-    // If this is not done, operations will most likely be done
-    // on zero pages, leading to misleading performance or
-    // arithmetic exceptions.
+    // This will initialize the grids before running the warmup.  If this is
+    // not done, some operations may be done on zero pages, leading to
+    // misleading performance or arithmetic exceptions.
     context.initSame();
+    cout << flush;
+    MPI_Barrier(comm);
     
     // warmup caches, threading, etc.
     if (doWarmup) {
         if (is_leader) cout << endl;
 
+        // Temporarily set dt to a temp value.
         idx_t tmp_dt = min<idx_t>(dt, TIME_DIM_SIZE);
         context.dt = tmp_dt;
+
 #ifdef MODEL_CACHE
         if (!is_leader)
             cache.disable();
@@ -541,6 +575,11 @@ int main(int argc, char** argv)
             cache.disable();
         }
 #endif
+
+        // Replace temp setting with correct value.
+        context.dt = dt;
+        cout << flush;
+        MPI_Barrier(comm);
     }
 
     // variables for measuring performance.
@@ -548,7 +587,6 @@ int main(int argc, char** argv)
     float best_elapsed_time=0.0f, best_pps=0.0f, best_flops=0.0f;
 
     // Performance runs.
-    context.dt = dt;
     if (is_leader) {
         cout << "\nRunning " << num_trials << " performance trial(s) of " <<
             context.dt << " time step(s) each...\n" << flush;
@@ -559,6 +597,7 @@ int main(int argc, char** argv)
         if (validate)
             context.initDiff();
 
+        sleep(pre_trial_sleep_time);
         MPI_Barrier(comm);
         SEP_RESUME;
         wstart = getTimeInSecs();
@@ -597,9 +636,11 @@ int main(int argc, char** argv)
     }
     
     if (validate) {
+        MPI_Barrier(comm);
 
         // check the correctness of one iteration.
-        cout << "Running validation trial...\n";
+        if (is_leader)
+            cout << "Running validation trial...\n";
 
         // Make a ref context for comparisons w/new grids:
         // Copy the settings from context, then re-alloc grids.
@@ -607,6 +648,7 @@ int main(int argc, char** argv)
         ref.name += "-reference";
         ref.allocGrids();
         ref.allocParams();
+        ref.setupMPI();
 
         // init to same value used in context.
         ref.initDiff();
@@ -629,6 +671,11 @@ int main(int argc, char** argv)
         stencils.calc_rank_ref(ref);
 
         // check for equality.
+#ifdef USE_MPI
+        MPI_Barrier(comm);
+        sleep(my_rank);
+#endif
+        cout << "Checking results on rank " << my_rank << "..." << endl;
         idx_t errs = context.compare(ref);
         if( errs == 0 ) {
             cout << "TEST PASSED." << endl;

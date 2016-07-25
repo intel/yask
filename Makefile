@@ -205,6 +205,7 @@ OMPFLAGS	+=	-fopenmp
 LFLAGS          +=      $(CXXFLAGS) -lrt -g
 FB_CXX    	=       $(CXX)
 FB_CXXFLAGS 	+=	-g -O1 -std=c++11 -Wall  # low opt to reduce compile time.
+EXTRA_FB_CXXFLAGS =
 FB_FLAGS   	+=	-or $(order) -st $(stencil) -cluster $(cluster) -fold $(fold)
 GEN_HEADERS     =	$(addprefix src/, \
 				stencil_macros.hpp stencil_code.hpp \
@@ -273,9 +274,10 @@ endif
 # order of spatial dimensions may be changed, but traversal
 # paths that do not have strictly incrementing indices (such as
 # serpentine and/or square-wave) may not be used here when
-# using temporal wavefronts.
-RANK_LOOP_OPTS		=	-dims 'dt,dn,dx,dy,dz'
-RANK_LOOP_CODE		=	loop(dt) { loop(dn,dx,dy,dz) { calc(region); } }
+# using temporal wavefronts. The time loop may be found
+# in StencilEquations::calc_rank().
+RANK_LOOP_OPTS		=	-dims 'dn,dx,dy,dz'
+RANK_LOOP_CODE		=	loop(dn,dx,dy,dz) { calc(region(start_dt, stop_dt, stencil_set)); }
 
 # Region loops break up a region using OpenMP threading into blocks.
 # The region time loops are not coded here to allow for proper
@@ -301,13 +303,13 @@ endif
 BLOCK_LOOP_CODE		=	$(BLOCK_LOOP_OUTER_MODS) loop(bnv,bxv) { loop(byv) { \
 				$(BLOCK_LOOP_INNER_MODS) loop(bzv) { calc(cluster(bt)); } } }
 
-# Halo pack/unpack loops break up a region slice into vectors.
+# Halo pack/unpack loops break up a region face, edge, or corner into vectors.
 # The indices at this level are by vector instead of element;
 # this is indicated by the 'v' suffix.
 # Note that there are no nested OpenMP loops here.
-HALO_LOOP_OPTS		=     	-dims 'rnv,rxv,ryv,rzv' \
+HALO_LOOP_OPTS		=     	-dims 'nv,xv,yv,zv' \
 				-ompConstruct '$(omp_par_for) schedule($(omp_schedule))'
-HALO_LOOP_CODE		=	serpentine omp loop(rnv,rxv,ryv) { loop(rzv) { calc(halo(rt)); } }
+HALO_LOOP_CODE		=	omp loop(nv,xv,yv,zv) { calc(halo(t)); }
 
 # compile with model_cache=1 or 2 to check prefetching.
 ifeq ($(model_cache),1)
@@ -402,7 +404,7 @@ src/layouts.hpp: gen-layouts.pl
 	./$< -d > $@
 
 foldBuilder: src/foldBuilder/*.*pp src/foldBuilder/stencils/*.*pp
-	$(FB_CXX) $(FB_CXXFLAGS) -Isrc/foldBuilder/stencils -o $@ src/foldBuilder/*.cpp
+	$(FB_CXX) $(FB_CXXFLAGS) -Isrc/foldBuilder/stencils -o $@ src/foldBuilder/*.cpp $(EXTRA_FB_CXXFLAGS)
 
 src/stencil_macros.hpp: foldBuilder
 	./$< $(FB_FLAGS) $(EXTRA_FB_FLAGS) -pm > $@
@@ -432,9 +434,10 @@ realclean: clean
 
 help:
 	@echo "Example usage:"
-	@echo "make clean; make arch=knc stencil=iso3dfd"
-	@echo "make clean; make arch=knl stencil=3axis order=8 INNER_BLOCK_LOOP_OPTS='prefetch(L1,L2)'"
+	@echo "make clean; make arch=knl stencil=iso3dfd"
+	@echo "make clean; make arch=knl stencil=awp mpi=1"
 	@echo "make clean; make arch=skx stencil=ave fold='x=1,y=2,z=4' cluster='x=2'"
+	@echo "make clean; make arch=knc stencil=3axis order=8 INNER_BLOCK_LOOP_OPTS='prefetch(L1,L2)'"
 	@echo " "
 	@echo "Example debug usage:"
 	@echo "make arch=knl  stencil=iso3dfd OMPFLAGS='-qopenmp-stubs' EXTRA_CXXFLAGS='-O0' EXTRA_MACROS='DEBUG'"

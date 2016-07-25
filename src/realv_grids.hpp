@@ -393,6 +393,16 @@ namespace yask {
             _data.print_info(name, msg_stream);
         }
 
+        // Get parameters after round-up.
+        inline idx_t get_dn() { return _dn; }
+        inline idx_t get_dx() { return _dx; }
+        inline idx_t get_dy() { return _dy; }
+        inline idx_t get_dz() { return _dz; }
+        inline idx_t get_pn() { return _pn; }
+        inline idx_t get_px() { return _px; }
+        inline idx_t get_py() { return _py; }
+        inline idx_t get_pz() { return _pz; }
+
         // Get pointer to the real_vec_t at vector offset nv, iv, jv, kv.
         // Indices must be normalized, i.e., already divided by VLEN_*.
         ALWAYS_INLINE const real_vec_t* getVecPtrNorm(idx_t nv, idx_t iv, idx_t jv, idx_t kv,

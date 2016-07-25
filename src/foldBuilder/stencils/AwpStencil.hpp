@@ -272,11 +272,17 @@ public:
         define_vel_z(t, x, y, z);
 
         // Define some values common to the diagonal stress equations.
+#ifdef PRECOMPUTED_LAMBDA
+        // This assumes the lambda stencil is computed once before
+        // all time-steps.
+        GridValue lambda_val = lambda(x, y, z);
+#else
         GridValue lambda_val = 8.0 /
             (lambda(x,   y,   z  ) + lambda(x+1, y,   z  ) +
              lambda(x,   y-1, z  ) + lambda(x+1, y-1, z  ) +
              lambda(x,   y,   z-1) + lambda(x+1, y,   z-1) +
              lambda(x,   y-1, z-1) + lambda(x+1, y-1, z-1));
+#endif
         GridValue mu_val = 8.0 /
             (mu(x,   y,   z  ) + mu(x+1, y,   z  ) +
              mu(x,   y-1, z  ) + mu(x+1, y-1, z  ) +

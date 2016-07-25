@@ -721,7 +721,7 @@ int main(int argc, const char* argv[]) {
                  cout << " // There are " << (fpops.getNumOps() * numResults) <<
                     " FP operation(s) per cluster." << endl;
 
-                cout << " void calc_vector(" << context << "& context, " <<
+                cout << " void calc_cluster(" << context << "& context, " <<
                     dimCounts.makeDimStr(", ", "idx_t ", "v") << ") {" << endl;
 
                 // Element indices.

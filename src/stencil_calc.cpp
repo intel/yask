@@ -29,6 +29,7 @@ IN THE SOFTWARE.
 // Base classes for stencil code.
 #include "stencil_calc.hpp"
 
+#include <sstream>
 using namespace std;
 
 namespace yask {
@@ -59,7 +60,8 @@ namespace yask {
             // equations to evaluate (only one in most stencils).
             for (auto stencil : stencils) {
 
-                // TODO: add halo exchange.
+                // Halo exchange for grid(s) updated by this equation.
+                stencil->exchange_halos(context, t, t + CPTS_T);
             
                 // grid index (only one in most stencils).
                 for (idx_t n = 0; n < context.dn; n++) {
@@ -104,7 +106,7 @@ namespace yask {
         idx_t end_dy = context.dy;
         idx_t end_dz = context.dz;
 
-        TRACE_MSG("calc_problem_opt(%ld..%ld, %ld..%ld, %ld..%ld, %ld..%ld, %ld..%ld)", 
+        TRACE_MSG("calc_rank_opt(%ld..%ld, %ld..%ld, %ld..%ld, %ld..%ld, %ld..%ld)", 
                   begin_dt, end_dt-1,
                   begin_dn, end_dn-1,
                   begin_dx, end_dx-1,
@@ -121,7 +123,9 @@ namespace yask {
         // Determine spatial skewing angles for temporal wavefronts based on the
         // halos.  This assumes the smallest granularity of calculation is
         // CPTS_* in each dim.
-        // We only need non-zero angles if the region size is less than the rank size.
+        // We only need non-zero angles if the region size is less than the rank size,
+        // i.e., if the region covers the whole rank in a given dimension, no wave-front
+        // is needed in thar dim.
         // TODO: make this grid-specific.
         context.angle_n = (context.rn < context.dn) ? ROUND_UP(context.hn, CPTS_N) : 0;
         context.angle_x = (context.rx < context.dx) ? ROUND_UP(context.hx, CPTS_X) : 0;
@@ -150,9 +154,53 @@ namespace yask {
                   begin_dy, end_dy-1,
                   begin_dz, end_dz-1);
 
-        // Include automatically-generated loop code that calls calc_region() for each region.
-#include "stencil_rank_loops.hpp"
+        // Number of iterations to get from begin_dt to (but not including) end_dt,
+        // stepping by step_dt.
+        const idx_t num_dt = ((end_dt - begin_dt) + (step_dt - 1)) / step_dt;
+        for (idx_t index_dt = 0; index_dt < num_dt; index_dt++)
+        {
+            // This value of index_dt covers dt from start_dt to stop_dt-1.
+            const idx_t start_dt = begin_dt + (index_dt * step_dt);
+            const idx_t stop_dt = min(start_dt + step_dt, end_dt);
 
+            // If doing only one time step in a region (default), loop through equations here,
+            // and do only one equation at a time in calc_region().
+            if (step_dt == 1) {
+
+                for (auto stencil : stencils) {
+
+                    // Halo exchange for grid(s) updated by this equation.
+                    stencil->exchange_halos(context, start_dt, stop_dt);
+
+                    // Eval this stencil in calc_region().
+                    StencilSet stencil_set;
+                    stencil_set.insert(stencil);
+
+                    // Include automatically-generated loop code that calls calc_region() for each region.
+#include "stencil_rank_loops.hpp"
+                }
+            }
+
+            // If doing more than one time step in a region (temporal wave-front),
+            // must do all equations in calc_region().
+            // TODO: allow doing all equations in region even with one time step for testing.
+            else {
+
+                StencilSet stencil_set;
+                for (auto stencil : stencils) {
+
+                    // Halo exchange for grid(s) updated by this equation.
+                    stencil->exchange_halos(context, start_dt, stop_dt);
+                    
+                    // Make set of all equations.
+                    stencil_set.insert(stencil);
+                }
+            
+                // Include automatically-generated loop code that calls calc_region() for each region.
+#include "stencil_rank_loops.hpp"
+            }
+
+        }
     }
 
     // Calculate results within a region.
@@ -160,9 +208,10 @@ namespace yask {
     // In it, we loop over the time steps and the stencil
     // equations and evaluate the blocks in the region.
     void StencilEquations::
-    calc_region(StencilContext& context, 
-                idx_t start_dt, idx_t start_dn, idx_t start_dx, idx_t start_dy, idx_t start_dz,
-                idx_t stop_dt, idx_t stop_dn, idx_t stop_dx, idx_t stop_dy, idx_t stop_dz)
+    calc_region(StencilContext& context, idx_t start_dt, idx_t stop_dt,
+                StencilSet& stencil_set,
+                idx_t start_dn, idx_t start_dx, idx_t start_dy, idx_t start_dz,
+                idx_t stop_dn, idx_t stop_dx, idx_t stop_dy, idx_t stop_dz)
     {
         TRACE_MSG("calc_region(%ld..%ld, %ld..%ld, %ld..%ld, %ld..%ld, %ld..%ld)", 
                   start_dt, stop_dt-1,
@@ -202,95 +251,75 @@ namespace yask {
 
             // equations to evaluate at this time step.
             for (auto stencil : stencils) {
+                if (stencil_set.count(stencil)) {
 
-                // Actual region boundaries must stay within rank domain.
-                idx_t begin_rn = max<idx_t>(start_dn, 0);
-                idx_t end_rn = min<idx_t>(stop_dn, context.dn);
-                idx_t begin_rx = max<idx_t>(start_dx, 0);
-                idx_t end_rx = min<idx_t>(stop_dx, context.dx);
-                idx_t begin_ry = max<idx_t>(start_dy, 0);
-                idx_t end_ry = min<idx_t>(stop_dy, context.dy);
-                idx_t begin_rz = max<idx_t>(start_dz, 0);
-                idx_t end_rz = min<idx_t>(stop_dz, context.dz);
+                    // Actual region boundaries must stay within rank domain.
+                    idx_t begin_rn = max<idx_t>(start_dn, 0);
+                    idx_t end_rn = min<idx_t>(stop_dn, context.dn);
+                    idx_t begin_rx = max<idx_t>(start_dx, 0);
+                    idx_t end_rx = min<idx_t>(stop_dx, context.dx);
+                    idx_t begin_ry = max<idx_t>(start_dy, 0);
+                    idx_t end_ry = min<idx_t>(stop_dy, context.dy);
+                    idx_t begin_rz = max<idx_t>(start_dz, 0);
+                    idx_t end_rz = min<idx_t>(stop_dz, context.dz);
 
-                // Only need to loop through the region if any of its blocks are
-                // at least partly inside the domain. For overlapping regions,
-                // they may start outside the domain but enter the domain as
-                // time progresses and their boundaries shift. So, we don't want
-                // to return if this condition isn't met.
-                if (end_rn > begin_rn &&
-                    end_rx > begin_rx &&
-                    end_ry > begin_ry &&
-                    end_rz > begin_rz) {
+                    // Only need to loop through the region if any of its blocks are
+                    // at least partly inside the domain. For overlapping regions,
+                    // they may start outside the domain but enter the domain as
+                    // time progresses and their boundaries shift. So, we don't want
+                    // to return if this condition isn't met.
+                    if (end_rn > begin_rn &&
+                        end_rx > begin_rx &&
+                        end_ry > begin_ry &&
+                        end_rz > begin_rz) {
 
-                    // Halo exchange for grid(s) updated by this stencil.
-                    stencil->exchange_halos(context, rt,
-                                            begin_rn, begin_rx, begin_ry, begin_rz,
-                                            end_rn, end_rx, end_ry, end_rz);
+                        // Set number of threads for a region.
+                        context.set_region_threads();
 
-                    // Set number of threads for a region.
-                    context.set_region_threads();
-
-                    // Include automatically-generated loop code that calls
-                    // calc_block() for each block in this region.  Loops
-                    // through n from begin_rn to end_rn-1; similar for x, y,
-                    // and z.  This code typically contains OpenMP loop(s).
-
+                        // Include automatically-generated loop code that calls
+                        // calc_block() for each block in this region.  Loops
+                        // through n from begin_rn to end_rn-1; similar for x, y,
+                        // and z.  This code typically contains OpenMP loop(s).
 #include "stencil_region_loops.hpp"
 
-                    // Reset threads back to max.
-                    context.set_max_threads();
-                }
+                        // Reset threads back to max.
+                        context.set_max_threads();
+                    }
             
-                // Shift spatial region boundaries for next iteration to
-                // implement temporal wavefront.  We only shift backward, so
-                // region loops must increment. They may do so in any order.
-                start_dn -= context.angle_n;
-                stop_dn -= context.angle_n;
-                start_dx -= context.angle_x;
-                stop_dx -= context.angle_x;
-                start_dy -= context.angle_y;
-                stop_dy -= context.angle_y;
-                start_dz -= context.angle_z;
-                stop_dz -= context.angle_z;
-            
+                    // Shift spatial region boundaries for next iteration to
+                    // implement temporal wavefront.  We only shift backward, so
+                    // region loops must increment. They may do so in any order.
+                    start_dn -= context.angle_n;
+                    stop_dn -= context.angle_n;
+                    start_dx -= context.angle_x;
+                    stop_dx -= context.angle_x;
+                    start_dy -= context.angle_y;
+                    stop_dy -= context.angle_y;
+                    start_dz -= context.angle_z;
+                    stop_dz -= context.angle_z;
+
+                }            
             } // stencil equations.
         } // time.
     }
 
     // Exchange halo data for the given time.
-    void StencilBase::exchange_halos(StencilContext& context, idx_t rt,
-                                     idx_t begin_rn, idx_t begin_rx, idx_t begin_ry, idx_t begin_rz,
-                                     idx_t end_rn, idx_t end_rx, idx_t end_ry, idx_t end_rz)
+    void StencilBase::exchange_halos(StencilContext& context, idx_t start_dt, idx_t stop_dt)
     {
 #ifdef USE_MPI
+        TRACE_MSG("exchange_halos(%ld..%ld)", start_dt, stop_dt);
 
-        // For now, width of region must be across entire rank to use MPI.
-        // TODO: generalize directions.
-        if (context.num_ranks > 1 && (begin_rx != 0 || end_rx != context.dx)) {
-            cerr << "MPI + wavefront tiling in X-direction is not allowed." << endl;
-            exit(1);
-        }
-    
-        // Divide indices by vector lengths.
-        // Begin/end vars shouldn't be negative, so '/' is ok.
-        const idx_t begin_rnv = begin_rn / VLEN_N;
-        //const idx_t begin_rxv = begin_rx / VLEN_X;
-        const idx_t begin_ryv = begin_ry / VLEN_Y;
-        const idx_t begin_rzv = begin_rz / VLEN_Z;
-        const idx_t end_rnv = end_rn / VLEN_N;
-        //const idx_t end_rxv = end_rx / VLEN_X;
-        const idx_t end_ryv = end_ry / VLEN_Y;
-        const idx_t end_rzv = end_rz / VLEN_Z;
-    
-        // Step 1 vector.
-        const idx_t step_rnv = 1;
-        const idx_t step_rxv = 1;
-        const idx_t step_ryv = 1;
-        const idx_t step_rzv = 1;
-    
+        // For loops, set vars to step 1 vector always.
+        const idx_t step_nv = 1;
+        const idx_t step_xv = 1;
+        const idx_t step_yv = 1;
+        const idx_t step_zv = 1;
+
+        // List of grids updated by this equation.
+        // These are the grids that need their halos exchanged.
         auto eqGridPtrs = getEqGridPtrs();
 
+        // TODO: put this loop inside visitNeighbors.
         for (size_t gi = 0; gi < eqGridPtrs.size(); gi++) {
 
             // Get pointer to generic grid and derived type.
@@ -303,139 +332,291 @@ namespace yask {
 #endif
             assert(gpd);
 
-            // Request handles.
-            MPI_Request reqs[context.nBufPos * context.nBufDir];
+            // Determine halo sizes to be exchanged for this grid;
+            // context.h* contains the max value across all grids.  The grid
+            // contains the halo+pad size actually allocated.
+            // Since neither of these is exactly what we want, we use
+            // the minimum of these values as a conservative value. TODO:
+            // Store the actual halo needed in each grid and use this.
+#if USING_DIM_N
+            idx_t hn = min(context.hn, gpd->get_pn());
+#else
+            idx_t hn = 0;
+#endif
+            idx_t hx = min(context.hx, gpd->get_px());
+            idx_t hy = min(context.hy, gpd->get_py());
+            idx_t hz = min(context.hz, gpd->get_pz());
+            
+            // Array to store max number of request handles.
+            MPI_Request reqs[StencilContext::Bufs::nBufDirs * context.neighborhood_size];
             int nreqs = 0;
 
-            // Define calc_halo() to copy from main grid.
-#define calc_halo(context, rt,                                          \
-                  start_rnv, start_rxv, start_ryv, start_rzv,           \
-                  stop_rnv, stop_rxv, stop_ryv, stop_rzv)               \
-            real_vec_t hval = gpd->readVecNorm(rt, ARG_N(start_rnv)          \
-                                          start_rxv, start_ryv, start_rzv, __LINE__); \
-            haloGrid->writeVecNorm(hval, index_rnv,                     \
-                                   index_rxv, index_ryv, index_rzv, __LINE__)
-        
-            // Send to left.
-            if (context.left_rank != MPI_PROC_NULL) {
-                auto haloGrid = context.bufs[gp](context.bufLeft, context.bufSend);
+            // Pack data and initiate non-blocking send/receive to/from all neighbors.
+            TRACE_MSG("rank %i: exchange_halos: packing data for grid '%s'...",
+                      context.my_rank, gp->get_name().c_str());
+            context.bufs[gp].visitNeighbors
+                (context,
+                 [&](idx_t nn, idx_t nx, idx_t ny, idx_t nz,
+                     int neighbor_rank,
+                     Grid_NXYZ* sendBuf,
+                     Grid_NXYZ* rcvBuf)
+                 {
+                     // Pack and send data if buffer exists.
+                     if (sendBuf) {
 
-                // Pack left-edge data from main grid.
-                idx_t begin_rxv = 0;
-                idx_t end_rxv = CEIL_DIV(context.hx, VLEN_X);
+                         // Set begin/end vars to indicate what part
+                         // of main grid to read from.
+                         // Init range to whole rank size (inside halos).
+                         idx_t begin_n = 0;
+                         idx_t begin_x = 0;
+                         idx_t begin_y = 0;
+                         idx_t begin_z = 0;
+                         idx_t end_n = context.dn;
+                         idx_t end_x = context.dx;
+                         idx_t end_y = context.dy;
+                         idx_t end_z = context.dz;
+
+                         // Modify begin and/or end based on direction.
+                         if (nn == idx_t(context.rank_prev)) // neighbor is prev N.
+                             end_n = hn; // read first halo-width only.
+                         if (nn == idx_t(context.rank_next)) // neighbor is next N.
+                             begin_n = context.dn - hn; // read last halo-width only.
+                         if (nx == idx_t(context.rank_prev)) // neighbor is on left.
+                             end_x = hx;
+                         if (nx == idx_t(context.rank_next)) // neighbor is on right.
+                             begin_x = context.dx - hx;
+                         if (ny == idx_t(context.rank_prev)) // neighbor is in front.
+                             end_y = hy;
+                         if (ny == idx_t(context.rank_next)) // neighbor is in back.
+                             begin_y = context.dy - hy;
+                         if (nz == idx_t(context.rank_prev)) // neighbor is above.
+                             end_z = hz;
+                         if (nz == idx_t(context.rank_next)) // neighbor is below.
+                             begin_z = context.dz - hz;
+
+                         // Divide indices by vector lengths.
+                         // Begin/end vars shouldn't be negative, so '/' is ok.
+                         idx_t begin_nv = begin_n / VLEN_N;
+                         idx_t begin_xv = begin_x / VLEN_X;
+                         idx_t begin_yv = begin_y / VLEN_Y;
+                         idx_t begin_zv = begin_z / VLEN_Z;
+                         idx_t end_nv = end_n / VLEN_N;
+                         idx_t end_xv = end_x / VLEN_X;
+                         idx_t end_yv = end_y / VLEN_Y;
+                         idx_t end_zv = end_z / VLEN_Z;
+
+                         // TODO: fix this when MPI + wave-front is enabled.
+                         idx_t t = start_dt;
+                         
+                         // Define calc_halo() to copy a vector from main grid to sendBuf.
+                         // Index sendBuf using index_* vars because they are zero-based.
+#define calc_halo(context, t,                                           \
+                  start_nv, start_xv, start_yv, start_zv,               \
+                  stop_nv, stop_xv, stop_yv, stop_zv)                   \
+                         real_vec_t hval = gpd->readVecNorm(t, ARG_N(start_nv) \
+                                                            start_xv, start_yv, start_zv, __LINE__); \
+                         sendBuf->writeVecNorm(hval, index_nv,        \
+                                               index_xv, index_yv, index_zv, __LINE__)
+                         
+                         // Include auto-generated loops to invoke calc_halo() from
+                         // begin_*v to end_*v;
 #include "stencil_halo_loops.hpp"
-
-                // Send data to left rank.
-                const void* buf = (const void*)(haloGrid->getRawData());
-                MPI_Isend(buf, haloGrid->get_num_bytes(), MPI_BYTE,
-                          context.left_rank, int(gi), context.comm, &reqs[nreqs++]);
-            }
-
-            // Receive from right.
-            if (context.right_rank != MPI_PROC_NULL) {
-                auto haloGrid = context.bufs[gp](context.bufRight, context.bufRec);
-
-                // Get data from right rank.
-                void* buf = (void*)(haloGrid->getRawData());
-                MPI_Irecv(buf, haloGrid->get_num_bytes(), MPI_BYTE,
-                          context.right_rank, int(gi), context.comm, &reqs[nreqs++]);
-            }
-
-            // Send to right.
-            if (context.right_rank != MPI_PROC_NULL) {
-                auto haloGrid = context.bufs[gp](context.bufRight, context.bufSend);
-
-                // Pack right-edge data from main grid.
-                idx_t begin_rxv = (context.dx - context.hx) / VLEN_X;
-                idx_t end_rxv = CEIL_DIV(context.dx, VLEN_X);
-#include "stencil_halo_loops.hpp"
-
-                // Send data to right rank.
-                const void* buf = (const void*)(haloGrid->getRawData());
-                MPI_Isend(buf, haloGrid->get_num_bytes(), MPI_BYTE,
-                          context.right_rank, int(gi), context.comm, &reqs[nreqs++]);
-            }
-
-            // Receive from left.
-            if (context.left_rank != MPI_PROC_NULL) {
-                auto haloGrid = context.bufs[gp](context.bufLeft, context.bufRec);
-
-                // Get data from left rank.
-                void* buf = (void*)(haloGrid->getRawData());
-                MPI_Irecv(buf, haloGrid->get_num_bytes(), MPI_BYTE,
-                          context.left_rank, int(gi), context.comm, &reqs[nreqs++]);
-
-            }
 #undef calc_halo
+
+                         // Send filled buffer to neighbor.
+                         const void* buf = (const void*)(sendBuf->getRawData());
+                         MPI_Isend(buf, sendBuf->get_num_bytes(), MPI_BYTE,
+                                   neighbor_rank, int(gi), context.comm, &reqs[nreqs++]);
+                         
+                     }
+
+                     // Receive data from same neighbor if buffer exists.
+                     if (rcvBuf) {
+                         void* buf = (void*)(rcvBuf->getRawData());
+                         MPI_Irecv(buf, rcvBuf->get_num_bytes(), MPI_BYTE,
+                                   neighbor_rank, int(gi), context.comm, &reqs[nreqs++]);
+                     }
+                     
+                 } );
 
             // Wait for all to complete.
-            // TODO: unpack immediately after each read finishes.
-            TRACE_MSG("exchange_halos: waiting for %i MPI request(s)", nreqs);
+            // TODO: process each buffer asynchronously immediately upon completion.
+            TRACE_MSG("rank %i: exchange_halos: waiting for %i MPI request(s)...",
+                      context.my_rank, nreqs);
             MPI_Waitall(nreqs, reqs, MPI_STATUS_IGNORE);
+            TRACE_MSG("rank %i: exchange_halos: done waiting for %i MPI request(s).",
+                      context.my_rank, nreqs);
 
-            // Define calc_halo to copy data into main grid.
-#define calc_halo(context, rt,                                          \
-                  start_rnv, start_rxv, start_ryv, start_rzv,           \
-                  stop_rnv, stop_rxv, stop_ryv, stop_rzv)               \
-            real_vec_t hval = haloGrid->readVecNorm(index_rnv,               \
-                                               index_rxv, index_ryv, index_rzv, __LINE__); \
-            gpd->writeVecNorm(hval, rt, ARG_N(start_rnv)                \
-                              start_rxv, start_ryv, start_rzv, __LINE__)
-        
-            // Unpack right-halo data into main grid.
-            if (context.right_rank != MPI_PROC_NULL) {
-                auto haloGrid = context.bufs[gp](context.bufRight, context.bufRec);
+            // Unpack received data from all neighbors.
+            context.bufs[gp].visitNeighbors
+                (context,
+                 [&](idx_t nn, idx_t nx, idx_t ny, idx_t nz,
+                     int neighbor_rank,
+                     Grid_NXYZ* sendBuf,
+                     Grid_NXYZ* rcvBuf)
+                 {
+                     // Unpack data if buffer exists.
+                     if (rcvBuf) {
 
-                idx_t begin_rxv = context.dx / VLEN_X;
-                idx_t end_rxv = (context.dx + context.hx) / VLEN_X;
+                         // Set begin/end vars to indicate what part
+                         // of main grid's halo to write to.
+                         // Init range to whole rank size (inside halos).
+                         idx_t begin_n = 0;
+                         idx_t begin_x = 0;
+                         idx_t begin_y = 0;
+                         idx_t begin_z = 0;
+                         idx_t end_n = context.dn;
+                         idx_t end_x = context.dx;
+                         idx_t end_y = context.dy;
+                         idx_t end_z = context.dz;
+                         
+                         // Modify begin and/or end based on direction.
+                         if (nn == idx_t(context.rank_prev)) { // neighbor is prev N.
+                             begin_n = -hn; // begin at outside of halo.
+                             end_n = 0;     // end at inside of halo.
+                         }
+                         if (nn == idx_t(context.rank_next)) { // neighbor is next N.
+                             begin_n = context.dn; // begin at inside of halo.
+                             end_n = context.dn + hn; // end of outside of halo.
+                         }
+                         if (nx == idx_t(context.rank_prev)) { // neighbor is on left.
+                             begin_x = -hx;
+                             end_x = 0;
+                         }
+                         if (nx == idx_t(context.rank_next)) { // neighbor is on right.
+                             begin_x = context.dx;
+                             end_x = context.dx + hx;
+                         }
+                         if (ny == idx_t(context.rank_prev)) { // neighbor is in front.
+                             begin_y = -hy;
+                             end_y = 0;
+                         }
+                         if (ny == idx_t(context.rank_next)) { // neighbor is in back.
+                             begin_y = context.dy;
+                             end_y = context.dy + hy;
+                         }
+                         if (nz == idx_t(context.rank_prev)) { // neighbor is above.
+                             begin_z = -hz;
+                             end_z = 0;
+                         }
+                         if (nz == idx_t(context.rank_next)) { // neighbor is below.
+                             begin_z = context.dz;
+                             end_z = context.dz + hz;
+                         }
+
+                         // Divide indices by vector lengths.
+                         // Begin/end vars shouldn't be negative, so '/' is ok.
+                         idx_t begin_nv = begin_n / VLEN_N;
+                         idx_t begin_xv = begin_x / VLEN_X;
+                         idx_t begin_yv = begin_y / VLEN_Y;
+                         idx_t begin_zv = begin_z / VLEN_Z;
+                         idx_t end_nv = end_n / VLEN_N;
+                         idx_t end_xv = end_x / VLEN_X;
+                         idx_t end_yv = end_y / VLEN_Y;
+                         idx_t end_zv = end_z / VLEN_Z;
+
+                         // TODO: fix this when MPI + wave-front is enabled.
+                         idx_t t = start_dt;
+                         
+                         // Define calc_halo to copy data from rcvBuf into main grid.
+#define calc_halo(context, t,                                           \
+                  start_nv, start_xv, start_yv, start_zv,               \
+                  stop_nv, stop_xv, stop_yv, stop_zv)                   \
+            real_vec_t hval = rcvBuf->readVecNorm(index_nv,             \
+                                                  index_xv, index_yv, index_zv, __LINE__); \
+            gpd->writeVecNorm(hval, t, ARG_N(start_nv)                  \
+                              start_xv, start_yv, start_zv, __LINE__)
+
+                         // Include auto-generated loops to invoke calc_halo() from
+                         // begin_*v to end_*v;
 #include "stencil_halo_loops.hpp"
-            }
-        
-            // Unpack left-halo data into main grid.
-            if (context.left_rank != MPI_PROC_NULL) {
-                auto haloGrid = context.bufs[gp](context.bufLeft, context.bufRec);
-
-                idx_t begin_rxv = -(context.hx / VLEN_X);
-                idx_t end_rxv = 0;
-#include "stencil_halo_loops.hpp"
-            }
+#undef calc_halo
+                     }
+                 } );
 
         } // grids.
-
-#undef calc_halo
 #endif
-            
     }
-
+                         
             
     ///// StencilContext functions:
 
     // Init MPI-related vars.
     void StencilContext::setupMPI() {
 
-        // something to left?
-        if (my_rank > 0)
-            left_rank = my_rank - 1;
-        else
-            left_rank = MPI_PROC_NULL;
+        // Determine my position in 4D.
+        Layout_4321 rank_layout(nrn, nrx, nry, nrz);
+        idx_t mrnn, mrnx, mrny, mrnz;
+        rank_layout.unlayout((idx_t)my_rank, mrnn, mrnx, mrny, mrnz);
+        cout << "Logical coordinates of rank " << my_rank << ": " <<
+            mrnn << ", " << mrnx << ", " << mrny << ", " << mrnz << endl;
 
-        // something to right?
-        if (my_rank + 1 < num_ranks)
-            right_rank = my_rank + 1;
-        else
-            right_rank = MPI_PROC_NULL;
+        // Determine who my neighbors are.
+        int num_neighbors = 0;
+        for (int rn = 0; rn < num_ranks; rn++) {
+            if (rn != my_rank) {
+                idx_t rnn, rnx, rny, rnz;
+                rank_layout.unlayout((idx_t)rn, rnn, rnx, rny, rnz);
 
-        // alloc: width is halo size; rest are same as region.
-        for (auto gp : eqGridPtrs)
-            for (int bd = 0; bd < nBufDir; bd++) {
-                string bds = (bd == bufSend) ? "_send" : "_receive";
-                if (left_rank != MPI_PROC_NULL)
-                    bufs[gp].newGrid(bufLeft, bd, rn, hx, ry, rz,
-                                     gp->get_name() + bds + "_left");
-                if (right_rank != MPI_PROC_NULL)
-                    bufs[gp].newGrid(bufRight, bd, rn, hx, ry, rz, 
-                                     gp->get_name() + bds + "_right");
+                // Distance from me: prev => -1, self => 0, next => +1.
+                idx_t rdn = rnn - mrnn;
+                idx_t rdx = rnx - mrnx;
+                idx_t rdy = rny - mrny;
+                idx_t rdz = rnz - mrnz;
+
+                // Rank rn is my neighbor if its distance <= 1 in every dim.
+                if (abs(rdn) <= 1 && abs(rdx) <= 1 && abs(rdy) <= 1 && abs(rdz) <= 1) {
+
+                    num_neighbors++;
+                    cout << "Neighbor #" << num_neighbors << " at " <<
+                        rnn << ", " << rnx << ", " << rny << ", " << rnz <<
+                        " is rank " << rn << endl;
+                    
+                    // Size of buffer in each direction:
+                    // if dist to neighbor is zero (i.e., is self), use full size,
+                    // otherwise, use halo size.
+                    idx_t rsn = (rdn == 0) ? dn : hn;
+                    idx_t rsx = (rdx == 0) ? dx : hx;
+                    idx_t rsy = (rdy == 0) ? dy : hy;
+                    idx_t rsz = (rdz == 0) ? dz : hz;
+
+                    // FIXME: only alloc buffers in directions actually needed, e.g.,
+                    // many simple stencils don't need diagonals.
+                    
+                    // Is buffer needed?
+                    if (rsn * rsx * rsy * rsz == 0) {
+                        cout << "No halo exchange needed between ranks " << my_rank <<
+                            " and " << rn << '.' << endl;
+                    }
+
+                    else {
+
+                        // Add one to -1..+1 dist to get 0..2 range for my_neighbors indices.
+                        rdn++; rdx++; rdy++; rdz++;
+
+                        // Save rank of this neighbor.
+                        my_neighbors[rdn][rdx][rdy][rdz] = rn;
+                    
+                        // Alloc MPI buffers between rn and me.
+                        // Need send and receive for each updated grid.
+                        for (auto gp : eqGridPtrs) {
+                            for (int bd = 0; bd < Bufs::nBufDirs; bd++) {
+                                ostringstream oss;
+                                oss << gp->get_name();
+                                if (bd == Bufs::bufSend)
+                                    oss << "_send_halo_from_" << my_rank << "_to_" << rn;
+                                else
+                                    oss << "_get_halo_by_" << my_rank << "_from_" << rn;
+
+                                bufs[gp].allocBuf(bd, rdn, rdx, rdy, rdz,
+                                                  rsn, rsx, rsy, rsz,
+                                                  oss.str());
+                            }
+                        }
+                    }
+                }
             }
+        }
     }
 
     // Get total size.
@@ -445,11 +626,20 @@ namespace yask {
             nbytes += gp->get_num_bytes();
         for (auto pp : paramPtrs)
             nbytes += pp->get_num_bytes();
-        for (auto gp : eqGridPtrs)
-            for (int bp = 0; bp < nBufPos; bp++)
-                for (int bd = 0; bd < nBufDir; bd++)
-                    if (bufs[gp](bp, bd))
-                        nbytes += bufs[gp](bp, bd)->get_num_bytes();
+        for (auto gp : eqGridPtrs) {
+            bufs[gp].visitNeighbors
+                (*this,
+                 [&](idx_t nn, idx_t nx, idx_t ny, idx_t nz,
+                     int rank,
+                     Grid_NXYZ* sendBuf,
+                     Grid_NXYZ* rcvBuf)
+                 {
+                     if (sendBuf)
+                         nbytes += sendBuf->get_num_bytes();
+                     if (rcvBuf)
+                         nbytes += rcvBuf->get_num_bytes();
+                 } );
+        }
         return nbytes;
     }
 
@@ -462,10 +652,12 @@ namespace yask {
             gp->set_same(v);
             v += 0.01;
         }
-        cout << "Initializing parameters (if any)..." << endl;
-        for (auto pp : paramPtrs) {
-            pp->set_same(v);
-            v += 0.01;
+        if (paramPtrs.size()) {
+            cout << "Initializing parameters..." << endl;
+            for (auto pp : paramPtrs) {
+                pp->set_same(v);
+                v += 0.01;
+            }
         }
     }
 
@@ -478,10 +670,12 @@ namespace yask {
             gp->set_diff(v);
             v += 0.001;
         }
-        cout << "Initializing parameters (if any)..." << endl;
-        for (auto pp : paramPtrs) {
-            pp->set_diff(v);
-            v += 0.001;
+        if (paramPtrs.size()) {
+            cout << "Initializing parameters..." << endl;
+            for (auto pp : paramPtrs) {
+                pp->set_diff(v);
+                v += 0.001;
+            }
         }
     }
 

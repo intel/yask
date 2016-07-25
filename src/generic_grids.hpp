@@ -50,7 +50,7 @@ namespace yask {
     extern std::string printWithPow2Multiplier(double num);
     extern std::string printWithPow10Multiplier(double num);
 
-    // A base class for a generic grid of elements of type T.
+    // A base class for a generic grid of elements of arithmetic type T.
     // This class provides linear-access support, i.e., no layout.
     template <typename T> class GenericGridBase {
     protected:
@@ -90,7 +90,7 @@ namespace yask {
         // Print some info.
         virtual void print_info(const std::string& name, std::ostream& os = std::cout) {
             os << "grid '" << name << "' allocation at " << _elems << " for " <<
-                printWithPow2Multiplier(get_num_elems()) << " element(s) of " <<
+                printWithPow10Multiplier(get_num_elems()) << " element(s) of " <<
                 sizeof(T) << " byte(s) each (bytes): " <<
                 printWithPow2Multiplier(get_num_bytes()) << std::endl;
         }
