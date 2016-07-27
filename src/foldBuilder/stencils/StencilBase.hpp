@@ -99,12 +99,4 @@ public:
     virtual int getOrder() { return _order; }
 };
 
-// Register a concrete stencil object.
-#ifdef STENCIL_REGISTRY
-#define REGISTER_STENCIL(Class) static Class reg_ ## Class(STENCIL_REGISTRY)
-
-#else
-#define REGISTER_STENCIL(Class)
-#endif
-
 #endif

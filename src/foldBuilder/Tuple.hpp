@@ -49,7 +49,8 @@ using namespace std;
 // - a vector from (0,...,0) in n-D space.
 // - values at a point in n-D space.
 // - etc.
-template <typename T> class Tuple {
+template <typename T>
+class Tuple {
 protected:
     map<string, T> _map;        // contents.
     vector<string> _dims;       // dirs in specified order.

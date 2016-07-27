@@ -598,15 +598,15 @@ sub processCode($) {
                 }
                 
                 # generic code for prefetches.
-                # e.g., prefetch_L#_fn(...); prefetch_L#_fn_z(...);
+                # e.g., prefetch_fn<L#>(...); prefetch_fn_z<L#>(...);
                 if ($features & ($bPrefetchL1 | $bPrefetchL2)) {
-                    push @pfStmtsFullHere, "  $OPT{pfPrefix}${genericCache}_$arg($calcArgs, ".
+                    push @pfStmtsFullHere, "  $OPT{pfPrefix}$arg<$genericCache>($calcArgs, ".
                         startStopArgs(). ");";
-                    push @pfStmtsFullAhead, "  $OPT{pfPrefix}${genericCache}_$arg($calcArgs, ".
+                    push @pfStmtsFullAhead, "  $OPT{pfPrefix}$arg<$genericCache>($calcArgs, ".
                         pfStartStopArgs(@loopDims). ");";
-                    push @pfStmtsEdgeHere, "  $OPT{pfPrefix}${genericCache}_$arg$edgeSuf($calcArgs, ".
+                    push @pfStmtsEdgeHere, "  $OPT{pfPrefix}$arg$edgeSuf<$genericCache>($calcArgs, ".
                         startStopArgs(). ");";
-                    push @pfStmtsEdgeAhead, "  $OPT{pfPrefix}${genericCache}_$arg$edgeSuf($calcArgs, ".
+                    push @pfStmtsEdgeAhead, "  $OPT{pfPrefix}$arg$edgeSuf<$genericCache>($calcArgs, ".
                         pfStartStopArgs(@loopDims). ");";
                     warn "info: generating prefetch instructions.\n";
                 } else {
@@ -654,7 +654,7 @@ sub processCode($) {
                     if ($features & $bPipe);
 
                 # check prefetch settings.
-                if ($features & ($bPrefetchL1 | $bPrefetchL2)) {
+                if (($features & $bPrefetchL1) && ($features & $bPrefetchL2)) {
                     push @code, " // Check prefetch settings.",
                     "#if PFDL2 <= PFDL1",
                     '#error "PFDL2 <= PFDL1"',

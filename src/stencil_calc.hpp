@@ -269,14 +269,15 @@ namespace yask {
 
     // Define a method named cfn to prefetch a cluster by calling vfn.
 #define PREFETCH_CLUSTER_METHOD(cfn, vfn)                               \
+    template<int level>                                                 \
     ALWAYS_INLINE void                                                  \
     cfn (ContextClass& context, idx_t ct,                               \
          idx_t begin_cnv, idx_t begin_cxv, idx_t begin_cyv, idx_t begin_czv, \
          idx_t end_cnv, idx_t end_cxv, idx_t end_cyv, idx_t end_czv) {  \
-        TRACE_MSG("%s.%s(%ld, %ld, %ld, %ld, %ld)",                     \
-                  get_name().c_str(), #cfn, ct,                         \
+        TRACE_MSG("%s.%s<%d>(%ld, %ld, %ld, %ld, %ld)",                 \
+                  get_name().c_str(), #cfn, level, ct,                  \
                   begin_cnv, begin_cxv, begin_cyv, begin_czv);          \
-        _stencil.vfn(context, ct,                                       \
+        _stencil.vfn<level>(context, ct,                                \
                      ARG_N(begin_cnv) begin_cxv, begin_cyv, begin_czv); \
     }
 
@@ -289,8 +290,8 @@ namespace yask {
 
     protected:
 
-        // _stencil must implement calc_scalar, calc_vector,
-        // prefetch_L1_vector, prefetch_L2_vector, name.
+        // _stencil must implement calc_scalar, calc_cluster,
+        // prefetch_cluster, name.
         StencilEquationClass _stencil;
 
     public:
@@ -357,18 +358,13 @@ namespace yask {
         }
 
         // Prefetch a cluster.
-        PREFETCH_CLUSTER_METHOD(prefetch_L1_cluster, prefetch_L1_vector)
-        PREFETCH_CLUSTER_METHOD(prefetch_L2_cluster, prefetch_L2_vector)
+        PREFETCH_CLUSTER_METHOD(prefetch_cluster, prefetch_cluster)
 #if USING_DIM_N
-        PREFETCH_CLUSTER_METHOD(prefetch_L1_cluster_bnv, prefetch_L1_vector_n)
-        PREFETCH_CLUSTER_METHOD(prefetch_L2_cluster_bnv, prefetch_L2_vector_n)
+        PREFETCH_CLUSTER_METHOD(prefetch_cluster_bnv, prefetch_cluster_n)
 #endif
-        PREFETCH_CLUSTER_METHOD(prefetch_L1_cluster_bxv, prefetch_L1_vector_x)
-        PREFETCH_CLUSTER_METHOD(prefetch_L2_cluster_bxv, prefetch_L2_vector_x)
-        PREFETCH_CLUSTER_METHOD(prefetch_L1_cluster_byv, prefetch_L1_vector_y)
-        PREFETCH_CLUSTER_METHOD(prefetch_L2_cluster_byv, prefetch_L2_vector_y)
-        PREFETCH_CLUSTER_METHOD(prefetch_L1_cluster_bzv, prefetch_L1_vector_z)
-        PREFETCH_CLUSTER_METHOD(prefetch_L2_cluster_bzv, prefetch_L2_vector_z)
+        PREFETCH_CLUSTER_METHOD(prefetch_cluster_bxv, prefetch_cluster_x)
+        PREFETCH_CLUSTER_METHOD(prefetch_cluster_byv, prefetch_cluster_y)
+        PREFETCH_CLUSTER_METHOD(prefetch_cluster_bzv, prefetch_cluster_z)
     
         // Calculate results within a cache block.
         // This function implements the interface in the base class.

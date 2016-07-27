@@ -231,6 +231,8 @@ protected:
     int _numOps, _numNodes, _numReads, _numWrites, _numParamReads;
 
     // Vars to track min and max points seen for every grid.
+    // TODO: track all points to enable queries for halo, temporal
+    // extent, and required exchanges.
     map<const Grid*, IntTuple> _maxPoints, _minPoints;
     const IntTuple* getPoints(const Grid* gp,
                               const map<const Grid*, IntTuple>& mp) const {

@@ -29,10 +29,12 @@ IN THE SOFTWARE.
 #define PRINT_HPP
 
 #include "ExprUtils.hpp"
+#include "StencilBase.hpp"
 
 using namespace std;
 
-// Base class to define methods for printing.
+// A PrintHelper is used by a PrintVisitor to format certain
+// common items like variables and lines.
 class PrintHelper {
     int _varNum;                // current var number.
 
@@ -169,72 +171,25 @@ public:
     int getNumCommon() const { return _numCommon; }
     
     // A grid or parameter read.
-    virtual void visit(GridPoint* gp) {
-        if (gp->isParam())
-            _exprStr += _ph.readFromParam(_os, *gp);
-        else
-            _exprStr += _ph.readFromPoint(_os, *gp);
-        _numCommon += _ph.getNumCommon(gp);
-    }
+    virtual void visit(GridPoint* gp);
 
     // A constant.
-    virtual void visit(ConstExpr* ce) {
-        _exprStr += _ph.addConstExpr(_os, ce->getVal());
-        _numCommon += _ph.getNumCommon(ce);
-    }
+    virtual void visit(ConstExpr* ce);
 
     // Some code.
-    virtual void visit(CodeExpr* ce) {
-        _exprStr += _ph.addCodeExpr(_os, ce->getCode());
-        _numCommon += _ph.getNumCommon(ce);
-    }
+    virtual void visit(CodeExpr* ce);
 
     // A generic unary operator.
-    virtual void visit(UnaryExpr* ue) {
-        _exprStr += ue->getOpStr();
-        ue->getRhs()->accept(this);
-        _numCommon += _ph.getNumCommon(ue);
-    }
+    virtual void visit(UnaryExpr* ue);
 
     // A generic binary operator.
-    virtual void visit(BinaryExpr* be) {
-        _exprStr += "(";
-        be->getLhs()->accept(this); // adds LHS to _exprStr.
-        _exprStr += " " + be->getOpStr() + " ";
-        be->getRhs()->accept(this); // adds RHS to _exprStr.
-        _exprStr += ")";
-        _numCommon += _ph.getNumCommon(be);
-    }
+    virtual void visit(BinaryExpr* be);
 
     // A commutative operator.
-    virtual void visit(CommutativeExpr* ce) {
-        _exprStr += "(";
-        ExprPtrVec& ops = ce->getOps();
-        int opNum = 0;
-        for (auto ep : ops) {
-            if (opNum > 0)
-                _exprStr += " " + ce->getOpStr() + " ";
-            ep->accept(this);   // adds operand to _exprStr;
-            opNum++;
-        }
-        _exprStr += ")";
-        _numCommon += _ph.getNumCommon(ce);
-    }
+    virtual void visit(CommutativeExpr* ce);
 
     // An equals operator.
-    virtual void visit(EqualsExpr* ee) {
-
-        // Get RHS and clear expr.
-        ee->getRhs()->accept(this); // writes to _exprStr;
-        string rhs = getExprStrAndClear();
-
-        // Write statement with embedded rhs.
-        GridPointPtr gpp = ee->getLhs();
-        _os << _ph.getLinePrefix() << _ph.writeToPoint(_os, *gpp, rhs) << _ph.getLineSuffix();
-
-        // note: _exprStr is now empty.
-        // note: no need to update num-common.
-    }
+    virtual void visit(EqualsExpr* ee);
 };
 
 // Outputs a simple, human-readable version of the AST in a bottom-up
@@ -257,18 +212,7 @@ protected:
     // to write a comment.
     // If 'comment' is set, use it for the comment.
     // Return stream to continue w/RHS.
-    virtual ostream& makeNextTempVar(Expr* ex, string comment = "") {
-        _exprStr = _ph.makeVarName();
-        if (ex) {
-            _tempVars[ex] = _exprStr;
-            if (comment.length() == 0)
-                _os << endl << " // " << _exprStr << " = " << ex->makeStr() << "." << endl;
-        }
-        if (comment.length())
-            _os << endl << " // " << _exprStr << " = " << comment << "." << endl;
-        _os << _ph.getLinePrefix() << _ph.getVarType() << " " << _exprStr << " = ";
-        return _os;
-    }
+    virtual ostream& makeNextTempVar(Expr* ex, string comment = "");
 
 public:
     // os is used for printing intermediate results as needed.
@@ -284,176 +228,28 @@ public:
     // Look for existing var.
     // Then, use top-down method for simple exprs.
     // Return true if successful.
-    // FIXME: this causes all nodes in an expr above a certain
-    // point to fail top-down because it looks at the original expr,
-    // not the one with temp vars.
-    virtual bool tryTopDown(Expr* ex, bool leaf = false) {
+    virtual bool tryTopDown(Expr* ex, bool leaf);
 
-        // First, determine whether this expr has already been evaluated.
-        auto p = _tempVars.find(ex);
-        if (p != _tempVars.end()) {
+    // A grid or param point.
+    virtual void visit(GridPoint* gp);
 
-            // if so, just use the existing var.
-            _exprStr = p->second;
-            return true;
-        }
-        
-        // Use top down if leaf node or <= maxPoints points in ex.
-        if (leaf || ex->getNumNodes() <= _maxPoints) {
+    // A constant.
+    virtual void visit(ConstExpr* ce);
 
-            // use a top-down printer to render the expr.
-            PrintVisitorTopDown* topDown = newPrintVisitorTopDown();
-            ex->accept(topDown);
-
-            // were there any common subexprs found?
-            bool ok = topDown->getNumCommon() == 0;
-
-            // if no common subexprs, use the rendered expression.
-            if (ok)
-                _exprStr = topDown->getExprStr();
-            
-            // if a leaf node is common, make a var for it.
-            else if (leaf) {
-                makeNextTempVar(ex) << topDown->getExprStr() << _ph.getLineSuffix();
-                ok = true;
-            }
-
-            delete topDown;
-            return ok;
-        }
-
-        return false;
-    }
-
-    // A grid or param point: just set expr.
-    virtual void visit(GridPoint* gp) {
-        tryTopDown(gp, true);
-    }
-
-    // A constant: just set expr.
-    virtual void visit(ConstExpr* ce) {
-        tryTopDown(ce, true);
-    }
-
-    // Code: just set expr.
-    virtual void visit(CodeExpr* ce) {
-        tryTopDown(ce, true);
-    }
+    // Code.
+    virtual void visit(CodeExpr* ce);
 
     // A unary operator.
-    virtual void visit(UnaryExpr* ue) {
-
-        // Try top-down on whole expression.
-        // Example: '-a' creates no immediate output,
-        // and '-a' is saved in _exprStr.
-        if (tryTopDown(ue))
-            return;
-
-        // Expand the RHS, then apply operator to result.
-        // Example: '-(a * b)' might output the following:
-        // temp1 = a * b;
-        // temp2 = -temp1;
-        // with 'temp2' saved in _exprStr.
-        ue->getRhs()->accept(this); // sets _exprStr.
-        string rhs = getExprStrAndClear();
-        makeNextTempVar(ue) << ue->getOpStr() << ' ' << rhs << _ph.getLineSuffix();
-    }
+    virtual void visit(UnaryExpr* ue);
 
     // A binary operator.
-    virtual void visit(BinaryExpr* be) {
-
-        // Try top-down on whole expression.
-        // Example: 'a/b' creates no immediate output,
-        // and 'a/b' is saved in _exprStr.
-        if (tryTopDown(be))
-            return;
-
-        // Expand both sides, then apply operator to result.
-        // Example: '(a * b) / (c * d)' might output the following:
-        // temp1 = a * b;
-        // temp2 = b * c;
-        // temp3 = temp1 / temp2;
-        // with 'temp3' saved in _exprStr.
-        be->getLhs()->accept(this); // sets _exprStr.
-        string lhs = getExprStrAndClear();
-        be->getRhs()->accept(this); // sets _exprStr.
-        string rhs = getExprStrAndClear();
-        makeNextTempVar(be) << lhs << ' ' << be->getOpStr() << ' ' << rhs << _ph.getLineSuffix();
-    }
+    virtual void visit(BinaryExpr* be);
 
     // A commutative operator.
-    virtual void visit(CommutativeExpr* ce) {
-
-        // Try top-down on whole expression.
-        // Example: 'a*b' creates no immediate output,
-        // and 'a*b' is saved in _exprStr.
-        if (tryTopDown(ce))
-            return;
-
-        // Make separate assignment for N-1 operands.
-        // Example: 'a + b + c + d' might output the following:
-        // temp1 = a + b;
-        // temp2 = temp1 + c;
-        // temp3 = temp2 = d;
-        // with 'temp3' left in _exprStr;
-        ExprPtrVec& ops = ce->getOps();
-        assert(ops.size() > 1);
-        string lhs, exStr;
-        int opNum = 0;
-        for (auto ep : ops) {
-            opNum++;
-
-            // eval the operand; sets _exprStr.            
-            ep->accept(this);
-            string opStr = getExprStrAndClear();
-
-            // first operand; just save as LHS for next iteration.
-            if (opNum == 1) {
-                lhs = opStr;
-                exStr = ep->makeStr();
-            }
-
-            // subsequent operands.
-            // makes separate assignment for each one.
-            // result is kept as LHS of next one.
-            else {
-
-                // Use whole expression only for the last step.
-                Expr* ex = (opNum == (int)ops.size()) ? ce : NULL;
-
-                // Add RHS to partial-result comment.
-                exStr += ' ' + ce->getOpStr() + ' ' + ep->makeStr();
-
-                // Output this step.
-                makeNextTempVar(ex, exStr) << lhs << ' ' << ce->getOpStr() << ' ' <<
-                    opStr << _ph.getLineSuffix();
-                lhs = getExprStr(); // result used in next iteration, if any.
-            }
-        }
-
-        // note: _exprStr contains result of last operation.
-    }
+    virtual void visit(CommutativeExpr* ce);
 
     // An equality.
-    virtual void visit(EqualsExpr* ee) {
-
-        // Eval RHS.
-        Expr* rp = ee->getRhs().get();
-        rp->accept(this); // sets _exprStr.
-        string rhs = _exprStr;
-
-        // Assign RHS to a temp var.
-        makeNextTempVar(rp) << rhs << _ph.getLineSuffix(); // sets _exprStr.
-        string tmp = getExprStrAndClear();
-
-        // Write temp var to grid.
-        GridPointPtr gpp = ee->getLhs();
-        _os << endl << " // Save result to " << gpp->makeStr() << ":" << endl;
-        _os << _ph.getLinePrefix() << _ph.writeToPoint(_os, *gpp, tmp) << _ph.getLineSuffix();
-
-        // note: _exprStr is now empty.
-    }
-    
+    virtual void visit(EqualsExpr* ee);
 };
 
 
@@ -482,21 +278,65 @@ public:
         return _numPts;
     }
 
-    // Only want to visit the RHS of an equation.
-    virtual void visit(EqualsExpr* ee) {
-        ee->getRhs()->accept(this);      
+    // Equals op.
+    virtual void visit(EqualsExpr* ee);
+    
+    // A point.
+    virtual void visit(GridPoint* gp);
+};
+
+// PrinterBase is the main class for defining how to print
+// a stencil.
+class PrinterBase {
+protected:
+    StencilBase& _stencil;
+    Grids& _grids;
+    Params& _params;
+    Equations& _equations;
+    int _exprSize;
+
+    // Return an upper-case string.
+    string allCaps(string str) {
+        transform(str.begin(), str.end(), str.begin(), ::toupper);
+        return str;
     }
     
-    // A point: output it.
-    virtual void visit(GridPoint* gp) {
-        _numPts++;
+public:
+    PrinterBase(StencilBase& stencil, Equations& equations,
+                int exprSize) :
+        _stencil(stencil), 
+        _grids(stencil.getGrids()),
+        _params(stencil.getParams()),
+        _equations(equations),
+        _exprSize(exprSize)
+    { }
+    virtual ~PrinterBase() { }
+    
+};
 
-        // Pick a color based on its distance.
-        size_t ci = gp->max();
-        ci %= _colors.size();
+
+// Print out a stencil in human-readable form, for debug or documentation.
+class PseudoPrinter : public PrinterBase {
         
-        _os << "point(" + _colors[ci] + ", " << gp->makeValStr() << ")" << endl;
-    }
+public:
+    PseudoPrinter(StencilBase& stencil, Equations& equations,
+                  int exprSize) :
+        PrinterBase(stencil, equations, exprSize) { }
+    virtual ~PseudoPrinter() { }
+
+    virtual void print(ostream& os);
+};
+
+// Print out a stencil in POVRay form.
+class POVRayPrinter : public PrinterBase {
+        
+public:
+    POVRayPrinter(StencilBase& stencil, Equations& equations,
+                  int exprSize) :
+        PrinterBase(stencil, equations, exprSize) { }
+    virtual ~POVRayPrinter() { }
+
+    virtual void print(ostream& os);
 };
 
 #endif
