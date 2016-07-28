@@ -25,7 +25,7 @@
 
 # Some of the make vars available:
 #
-# stencil: iso3dfd, 3axis, 9axis, 3plane, cube, ave, awp.
+# stencil: iso3dfd, 3axis, 9axis, 3plane, cube, ave, awp, awp_elastic.
 #
 # arch: see list below.
 #
@@ -62,7 +62,7 @@ mpi		=	0
 
 # Defaults based on stencil type.
 ifeq ($(stencil),)
-$(error Stencil not specified; use stencil=iso3dfd, 3axis, 9axis, 3plane, cube, ave, or awp)
+$(error Stencil not specified; use stencil=iso3dfd, 3axis, 9axis, 3plane, cube, ave, awp or awp_elastic)
 
 else ifeq ($(stencil),ave)
 order		?=	2
@@ -82,6 +82,14 @@ else ifeq ($(stencil),iso3dfd)
 layout_4d	?=	Layout_2314
 
 else ifeq ($(stencil),awp)
+order		?=	4
+time_dim_size	?=	1
+eqs		?=	velocity=vel_,stress=stress_
+def_rank_size	?=	640
+def_block_size	?=	32
+def_wavefront_region_size ?=	256
+
+else ifeq ($(stencil),awp_elastic)
 order		?=	4
 time_dim_size	?=	1
 eqs		?=	velocity=vel_,stress=stress_
