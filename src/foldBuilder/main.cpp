@@ -39,6 +39,7 @@ StencilList stencils;
 #include "Iso3dfdStencil.hpp"
 #include "AveStencil.hpp"
 #include "AwpStencil.hpp"
+#include "AwpElasticStencil.hpp"
 
 // vars set via cmd-line options.
 bool printPseudo = false;
