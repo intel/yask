@@ -558,4 +558,73 @@ public:
                              varPrefix, varType, linePrefix, lineSuffix) { }
 };
 
+// Print KNC intrinsic code.
+class YASKKncPrinter : public YASKCppPrinter {
+protected:
+    virtual CppVecPrintHelper* newPrintHelper(VecInfoVisitor& vv,
+                                              CounterVisitor& cv) {
+        return new CppKncPrintHelper(vv, _allowUnalignedLoads, &cv,
+                                    "temp_vec", "real_vec_t", " ", ";\n");
+    }
+
+public:
+    YASKKncPrinter(StencilBase& stencil,
+                Equations& equations,
+                int exprSize,
+                bool allowUnalignedLoads,
+                IntTuple& dimCounts,
+                IntTuple& foldLengths,
+                IntTuple& clusterLengths) :
+        YASKCppPrinter(stencil, equations,
+                       exprSize, allowUnalignedLoads,
+                       dimCounts, foldLengths, clusterLengths) { }
+                      
+};
+
+// Print 256-bit AVX intrinsic code.
+class YASKAvx256Printer : public YASKCppPrinter {
+protected:
+    virtual CppVecPrintHelper* newPrintHelper(VecInfoVisitor& vv,
+                                              CounterVisitor& cv) {
+        return new CppAvx256PrintHelper(vv, _allowUnalignedLoads, &cv,
+                                        "temp_vec", "real_vec_t", " ", ";\n");
+    }
+
+public:
+    YASKAvx256Printer(StencilBase& stencil,
+                      Equations& equations,
+                      int exprSize,
+                      bool allowUnalignedLoads,
+                      IntTuple& dimCounts,
+                      IntTuple& foldLengths,
+                      IntTuple& clusterLengths) :
+        YASKCppPrinter(stencil, equations,
+                       exprSize, allowUnalignedLoads,
+                       dimCounts, foldLengths, clusterLengths) { }
+                      
+};
+
+// Print 512-bit AVX intrinsic code.
+class YASKAvx512Printer : public YASKCppPrinter {
+protected:
+    virtual CppVecPrintHelper* newPrintHelper(VecInfoVisitor& vv,
+                                              CounterVisitor& cv) {
+        return new CppAvx512PrintHelper(vv, _allowUnalignedLoads, &cv,
+                                        "temp_vec", "real_vec_t", " ", ";\n");
+    }
+
+public:
+    YASKAvx512Printer(StencilBase& stencil,
+                      Equations& equations,
+                      int exprSize,
+                      bool allowUnalignedLoads,
+                      IntTuple& dimCounts,
+                      IntTuple& foldLengths,
+                      IntTuple& clusterLengths) :
+        YASKCppPrinter(stencil, equations,
+                       exprSize, allowUnalignedLoads,
+                       dimCounts, foldLengths, clusterLengths) { }
+                      
+};
+
 #endif

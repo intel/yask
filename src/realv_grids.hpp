@@ -99,7 +99,8 @@ namespace yask {
 
     // A 3D (x, y, z) collection of real_vec_t elements.
     // Supports symmetric padding in each dimension.
-    template <typename LayoutFn> class RealVecGrid_XYZ : public RealVecGridBase {
+    template <typename LayoutFn> class RealVecGrid_XYZ :
+        public RealVecGridBase {
     protected:
 
         // real sizes.
@@ -118,7 +119,8 @@ namespace yask {
         // Dimensions are real_t elements, not real_vecs.
         RealVecGrid_XYZ(idx_t dx, idx_t dy, idx_t dz,
                       idx_t px, idx_t py, idx_t pz,
-                      const std::string& name) :
+                        const std::string& name,
+                        std::ostream& msg_stream = std::cout) :
             RealVecGridBase(name, &_data),
 
             // Round up each dim to multiple of dim in real_vec_t.
@@ -143,7 +145,7 @@ namespace yask {
                   _dzv + 2*_pzv,
                   ALLOC_ALIGNMENT)
         {
-            _data.print_info(name);
+            _data.print_info(name, msg_stream);
 
             // Should not be using grid w/o N dimension with folding in N.
             assert(VLEN_N == 1);
@@ -336,7 +338,8 @@ namespace yask {
 
     // A 4D (n, x, y, z) collection of real_vec_t elements.
     // Supports symmetric padding in each dimension.
-    template <typename LayoutFn> class RealVecGrid_NXYZ : public RealVecGridBase {
+    template <typename LayoutFn> class RealVecGrid_NXYZ :
+        public RealVecGridBase {
     
     protected:
 
@@ -355,8 +358,9 @@ namespace yask {
         // Ctor.
         // Dimensions are real_t elements, not real_vecs.
         RealVecGrid_NXYZ(idx_t dn, idx_t dx, idx_t dy, idx_t dz,
-                       idx_t pn, idx_t px, idx_t py, idx_t pz,
-                       const std::string& name) :
+                         idx_t pn, idx_t px, idx_t py, idx_t pz,
+                         const std::string& name,
+                         std::ostream& msg_stream = std::cout) :
             RealVecGridBase(name, &_data),
 
             // Round up each dim to multiple of dim in real_vec_t.
@@ -386,8 +390,18 @@ namespace yask {
                   _dzv + 2*_pzv,
                   ALLOC_ALIGNMENT)
         {
-            _data.print_info(name);
+            _data.print_info(name, msg_stream);
         }
+
+        // Get parameters after round-up.
+        inline idx_t get_dn() { return _dn; }
+        inline idx_t get_dx() { return _dx; }
+        inline idx_t get_dy() { return _dy; }
+        inline idx_t get_dz() { return _dz; }
+        inline idx_t get_pn() { return _pn; }
+        inline idx_t get_px() { return _px; }
+        inline idx_t get_py() { return _py; }
+        inline idx_t get_pz() { return _pz; }
 
         // Get pointer to the real_vec_t at vector offset nv, iv, jv, kv.
         // Indices must be normalized, i.e., already divided by VLEN_*.
@@ -583,17 +597,19 @@ namespace yask {
     // A 4D (t, x, y, z) collection of real_vec_t elements, but any value of 't'
     // is divided by CPTS_T and wrapped to TIME_DIM_SIZE indices.
     // Supports symmetric padding in each spatial dimension.
-    template <typename LayoutFn> class RealVecGrid_TXYZ : public RealVecGrid_NXYZ<LayoutFn>  {
+    template <typename LayoutFn> class RealVecGrid_TXYZ :
+        public RealVecGrid_NXYZ<LayoutFn>  {
     
     public:
 
         // Ctor.
         RealVecGrid_TXYZ(idx_t dx, idx_t dy, idx_t dz,
-                       idx_t px, idx_t py, idx_t pz,
-                       const std::string& name) :
+                         idx_t px, idx_t py, idx_t pz,
+                         const std::string& name,
+                         std::ostream& msg_stream = std::cout) :
             RealVecGrid_NXYZ<LayoutFn>(TIME_DIM_SIZE, dx, dy, dz,
-                                     0, px, py, pz,
-                                     name)
+                                       0, px, py, pz,
+                                       name, msg_stream)
         {
             if (VLEN_N > 1) {
                 std::cerr << "Sorry, vectorizing in N dimension not yet supported." << std::endl;
@@ -688,7 +704,8 @@ namespace yask {
     // A 5D (t, n, x, y, z) collection of real_vec_t elements, but any value of 't'
     // is divided by CPTS_T and wrapped to TIME_DIM_SIZE indices.
     // Supports symmetric padding in each spatial dimension.
-    template <typename LayoutFn> class RealVecGrid_TNXYZ : public RealVecGrid_NXYZ<LayoutFn> {
+    template <typename LayoutFn> class RealVecGrid_TNXYZ :
+        public RealVecGrid_NXYZ<LayoutFn> {
     
     protected:
         idx_t _dn;
@@ -697,11 +714,12 @@ namespace yask {
 
         // Ctor.
         RealVecGrid_TNXYZ(idx_t dn, idx_t dx, idx_t dy, idx_t dz,
-                        idx_t pn, idx_t px, idx_t py, idx_t pz,
-                        const std::string& name) :
+                          idx_t pn, idx_t px, idx_t py, idx_t pz,
+                          const std::string& name,
+                          std::ostream& msg_stream = std::cout) :
             RealVecGrid_NXYZ<LayoutFn>(TIME_DIM_SIZE * dn, dx, dy, dz,
-                                     pn, px, py, pz,
-                                     name),
+                                       pn, px, py, pz,
+                                       name, msg_stream),
             _dn(dn)
         {
             if (VLEN_N > 1) {

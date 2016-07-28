@@ -26,6 +26,10 @@ IN THE SOFTWARE.
 #ifndef STENCIL_CALC
 #define STENCIL_CALC
 
+#include <string.h>
+#include <algorithm>
+#include <functional>
+
 namespace yask {
 
     // Data and hierarchical sizes.
@@ -39,56 +43,99 @@ namespace yask {
         // A list of all grids.
         std::vector<RealVecGridBase*> gridPtrs;
 
-        // All grids updated by all equations.
+        // Only grids that are updated by the stencil equations.
         std::vector<RealVecGridBase*> eqGridPtrs;
 
         // A list of all non-grid parameters.
         std::vector<GenericGridBase<real_t>*> paramPtrs;
 
-        // Sizes.
-        // - time size in steps to be done (not grid allocation).
-        // - stencil size in equations to eval (not number of grids).
-        // - spatial sizes in elements (not vectors).
-        idx_t dt, ds, dn, dx, dy, dz;     // rank size.
-        idx_t rt, rs, rn, rx, ry, rz;     // region size.
-        idx_t bt, bs, bn, bx, by, bz;     // block size.
-        idx_t hn, hx, hy, hz;             // spatial halos (required by stencil).
-        idx_t pn, px, py, pz;             // spatial padding (extra to avoid alignment).
+        // Sizes in elements (points).
+        // - time sizes (t) are in steps to be done (not grid allocation).
+        // - spatial sizes (x, y, z) are in elements (not vectors).
+        // Sizes are the same for all grids and all stencil equations.
+        // TODO: relax this restriction.
+        idx_t dt, dn, dx, dy, dz; // rank size.
+        idx_t rt, rn, rx, ry, rz; // region size.
+        idx_t bt, bn, bx, by, bz; // block size.
+        idx_t hn, hx, hy, hz;     // spatial halos (max over grids as required by stencil).
+        idx_t pn, px, py, pz;     // spatial padding (extra to avoid aliasing).
         idx_t angle_n, angle_x, angle_y, angle_z; // temporal skewing angles.
 
         // MPI.
-        // TODO: add buffers in other dims.
-        int num_ranks, my_rank, left_rank, right_rank;
         MPI_Comm comm;
+        int num_ranks, my_rank;   // MPI-assigned index.
+        idx_t nrn, nrx, nry, nrz; // number of ranks in each dim.
+
+        // A type to store ranks of all possible neighbors in all
+        // directions, including diagonals.
+        enum NeighborOffset { rank_prev, rank_self, rank_next, num_neighbors };
+        typedef int Neighbors[num_neighbors][num_neighbors][num_neighbors][num_neighbors];
+        Neighbors my_neighbors;
+
+        // Neighborhood size includes self.
+        const int neighborhood_size = num_neighbors * num_neighbors * num_neighbors * num_neighbors;
 
         // MPI buffers for one grid.
-        enum bufPos { bufLeft, bufRight, nBufPos };
-        enum bufDir { bufSend, bufRec, nBufDir };
         struct Bufs {
 
-            Grid_NXYZ* buf[nBufPos][nBufDir];
+            // Need one buf for send and one for receive for each neighbor.
+            enum BufDir { bufSend, bufRec, nBufDirs };
+
+            // A type to store buffers for all possible neighbors.
+            typedef Grid_NXYZ* NeighborBufs[nBufDirs][num_neighbors][num_neighbors][num_neighbors][num_neighbors];
+            NeighborBufs bufs;
 
             Bufs() {
-                for (int bp = 0; bp < nBufPos; bp++)
-                    for (int bd = 0; bd < nBufDir; bd++)
-                        buf[bp][bd] = 0;
+                memset(bufs, 0, sizeof(bufs));
             }
 
-            Grid_NXYZ* operator()(int bp, int bd) {
-                assert(bp < nBufPos);
-                assert(bd < nBufDir);
-                return buf[bp][bd];
+            // Access a buffer by direction and 4D neighbor indices.
+            Grid_NXYZ* operator()(int bd,
+                                  idx_t nn, idx_t nx, idx_t ny, idx_t nz) {
+                assert(bd >= 0);
+                assert(bd < nBufDirs);
+                assert(nn >= 0);
+                assert(nn < num_neighbors);
+                assert(nx >= 0);
+                assert(nx < num_neighbors);
+                assert(ny >= 0);
+                assert(ny < num_neighbors);
+                assert(nz >= 0);
+                assert(nn < num_neighbors);
+                return bufs[bd][nn][nx][ny][nz];
             }
-            void newGrid(int bp, int bd,
-                         idx_t dn, idx_t dx, idx_t dy, idx_t dz,
-                         const std::string& name) {
-                assert(bp < nBufPos);
-                assert(bd < nBufDir);
-                buf[bp][bd] = new Grid_NXYZ(dn, dx, dy, dz, 0, 0, 0, 0, name);
+
+            // Apply a function to each neighbor rank and/or buffer.
+            virtual void visitNeighbors(StencilContext& context,
+                                        std::function<void (idx_t nn, idx_t nx, idx_t ny, idx_t nz,
+                                                            int rank,
+                                                            Grid_NXYZ* sendBuf,
+                                                            Grid_NXYZ* rcvBuf)> visitor) {
+                for (idx_t nn = 0; nn < num_neighbors; nn++)
+                    for (idx_t nx = 0; nx < num_neighbors; nx++)
+                        for (idx_t ny = 0; ny < num_neighbors; ny++)
+                            for (idx_t nz = 0; nz < num_neighbors; nz++)
+                                visitor(nn, nx, ny, nz,
+                                        context.my_neighbors[nn][nx][ny][nz],
+                                        bufs[0][nn][nx][ny][nz],
+                                        bufs[1][nn][nx][ny][nz]);
+            }
+            
+            // Allocate new buffer in given direction and size.
+            Grid_NXYZ* allocBuf(int bd,
+                                idx_t nn, idx_t nx, idx_t ny, idx_t nz,
+                                idx_t dn, idx_t dx, idx_t dy, idx_t dz,
+                                const std::string& name) {
+                auto gp = (*this)(bd, nn, nx, ny, nz);
+                assert(gp == NULL); // not already allocated.
+                gp = new Grid_NXYZ(dn, dx, dy, dz, 0, 0, 0, 0, name);
+                assert(gp);
+                bufs[bd][nn][nx][ny][nz] = gp;
+                return gp;
             }
         };
 
-        // MPI buffers are tagged by their grids.
+        // MPI buffers are tagged by their grid pointers.
         // Only grids in eqGridPtrs will have buffers.
         std::map<RealVecGridBase*, Bufs> bufs;
 
@@ -136,7 +183,13 @@ namespace yask {
 
         // Ctor, dtor.
         StencilContext() : num_ranks(1), my_rank(0),
-                           orig_max_threads(1), num_block_threads(1) {}
+                           orig_max_threads(1), num_block_threads(1)
+        {
+            // Init my_neighbors to indicate no neighbor.
+            int *p = (int *)my_neighbors;
+            for (int i = 0; i < neighborhood_size; i++)
+                p[i] = MPI_PROC_NULL;
+        }
         virtual ~StencilContext() { }
 
         // Allocate grid memory and set gridPtrs.
@@ -175,9 +228,13 @@ namespace yask {
         StencilBase() { }
         virtual ~StencilBase() { }
 
-        // Get info from implementation.
+        // Get name of this equation.
         virtual const std::string& get_name() =0;
+
+        // Get estimated number of FP ops done for one scalar eval.
         virtual int get_scalar_fp_ops() =0;
+
+        // Get list of grids updated by this equation.
         virtual std::vector<RealVecGridBase*>& getEqGridPtrs() = 0;
 
         // Set eqGridPtrs.
@@ -194,11 +251,13 @@ namespace yask {
                                 idx_t begin_bn, idx_t begin_bx, idx_t begin_by, idx_t begin_bz,
                                 idx_t end_bn, idx_t end_bx, idx_t end_by, idx_t end_bz) =0;
 
-        // Exchange halo data for the grids updated by this stencil at the given time.
-        virtual void exchange_halos(StencilContext& generic_context, idx_t rt,
-                                    idx_t begin_rn, idx_t begin_rx, idx_t begin_ry, idx_t begin_rz,
-                                    idx_t end_rn, idx_t end_rx, idx_t end_ry, idx_t end_rz);
+        // Exchange halo data for the updated grids at the given time.
+        virtual void exchange_halos(StencilContext& generic_context, idx_t start_dt, idx_t stop_dt);
     };
+
+    // Collections of stencils.
+    typedef std::vector<StencilBase*> StencilList;
+    typedef std::set<StencilBase*> StencilSet;
 
     // Macro for automatically adding N dimension.
     // TODO: make all args programmatic.
@@ -210,14 +269,15 @@ namespace yask {
 
     // Define a method named cfn to prefetch a cluster by calling vfn.
 #define PREFETCH_CLUSTER_METHOD(cfn, vfn)                               \
+    template<int level>                                                 \
     ALWAYS_INLINE void                                                  \
     cfn (ContextClass& context, idx_t ct,                               \
          idx_t begin_cnv, idx_t begin_cxv, idx_t begin_cyv, idx_t begin_czv, \
          idx_t end_cnv, idx_t end_cxv, idx_t end_cyv, idx_t end_czv) {  \
-        TRACE_MSG("%s.%s(%ld, %ld, %ld, %ld, %ld)",                     \
-                  get_name().c_str(), #cfn, ct,                         \
+        TRACE_MSG("%s.%s<%d>(%ld, %ld, %ld, %ld, %ld)",                 \
+                  get_name().c_str(), #cfn, level, ct,                  \
                   begin_cnv, begin_cxv, begin_cyv, begin_czv);          \
-        _stencil.vfn(context, ct,                                       \
+        _stencil.vfn<level>(context, ct,                                \
                      ARG_N(begin_cnv) begin_cxv, begin_cyv, begin_czv); \
     }
 
@@ -230,8 +290,8 @@ namespace yask {
 
     protected:
 
-        // _stencil must implement calc_scalar, calc_vector,
-        // prefetch_L1_vector, prefetch_L2_vector, name.
+        // _stencil must implement calc_scalar, calc_cluster,
+        // prefetch_cluster, name.
         StencilEquationClass _stencil;
 
     public:
@@ -273,11 +333,9 @@ namespace yask {
             _stencil.calc_scalar(context, t, ARG_N(n) x, y, z);
         }
 
-        // Calculate results within a vector cluster.
+        // Calculate results within a cluster of vectors.
         // Called from calc_block().
         // The begin/end_c* vars are the start/stop_b* vars from the block loops.
-        // This function doesn't contain any loops; it's just a wrapper around 
-        // calc_vector.
         ALWAYS_INLINE void
         calc_cluster (ContextClass& context, idx_t ct,
                       idx_t begin_cnv, idx_t begin_cxv, idx_t begin_cyv, idx_t begin_czv,
@@ -296,22 +354,17 @@ namespace yask {
             assert(end_czv == begin_czv + CLEN_Z);
         
             // Calculate results.
-            _stencil.calc_vector(context, ct, ARG_N(begin_cnv) begin_cxv, begin_cyv, begin_czv);
+            _stencil.calc_cluster(context, ct, ARG_N(begin_cnv) begin_cxv, begin_cyv, begin_czv);
         }
 
         // Prefetch a cluster.
-        PREFETCH_CLUSTER_METHOD(prefetch_L1_cluster, prefetch_L1_vector)
-        PREFETCH_CLUSTER_METHOD(prefetch_L2_cluster, prefetch_L2_vector)
+        PREFETCH_CLUSTER_METHOD(prefetch_cluster, prefetch_cluster)
 #if USING_DIM_N
-        PREFETCH_CLUSTER_METHOD(prefetch_L1_cluster_bnv, prefetch_L1_vector_n)
-        PREFETCH_CLUSTER_METHOD(prefetch_L2_cluster_bnv, prefetch_L2_vector_n)
+        PREFETCH_CLUSTER_METHOD(prefetch_cluster_bnv, prefetch_cluster_n)
 #endif
-        PREFETCH_CLUSTER_METHOD(prefetch_L1_cluster_bxv, prefetch_L1_vector_x)
-        PREFETCH_CLUSTER_METHOD(prefetch_L2_cluster_bxv, prefetch_L2_vector_x)
-        PREFETCH_CLUSTER_METHOD(prefetch_L1_cluster_byv, prefetch_L1_vector_y)
-        PREFETCH_CLUSTER_METHOD(prefetch_L2_cluster_byv, prefetch_L2_vector_y)
-        PREFETCH_CLUSTER_METHOD(prefetch_L1_cluster_bzv, prefetch_L1_vector_z)
-        PREFETCH_CLUSTER_METHOD(prefetch_L2_cluster_bzv, prefetch_L2_vector_z)
+        PREFETCH_CLUSTER_METHOD(prefetch_cluster_bxv, prefetch_cluster_x)
+        PREFETCH_CLUSTER_METHOD(prefetch_cluster_byv, prefetch_cluster_y)
+        PREFETCH_CLUSTER_METHOD(prefetch_cluster_bzv, prefetch_cluster_z)
     
         // Calculate results within a cache block.
         // This function implements the interface in the base class.
@@ -365,13 +418,17 @@ namespace yask {
 
     };
 
-    // Collection of all stencil equations to be evaluated.
+    // Collection of all stencil equations to be evaluated.  This is also
+    // called the 'problem' being solved.  Unfortunately, this is also
+    // called the 'stencil' in the Makefile and foldBuilder for historical
+    // reasons (there used to be only one stencil equation allowed).
     struct StencilEquations {
 
+        // Name of the problem.
         std::string name;
 
-        // List of stencils.
-        std::vector<StencilBase*> stencils;
+        // List of all stencil equations.
+        StencilList stencils;
 
         StencilEquations() {}
         virtual ~StencilEquations() {}
@@ -390,9 +447,10 @@ namespace yask {
     protected:
     
         // Calculate results within a region.
-        void calc_region(StencilContext& context, 
-                         idx_t begin_rt, idx_t begin_rn, idx_t begin_rx, idx_t begin_ry, idx_t begin_rz,
-                         idx_t end_rt, idx_t end_rn, idx_t end_rx, idx_t end_ry, idx_t end_rz);
+        void calc_region(StencilContext& context, idx_t start_dt, idx_t stop_dt,
+                         StencilSet& stencil_set,
+                         idx_t start_dn, idx_t start_dx, idx_t start_dy, idx_t start_dz,
+                         idx_t stop_dn, idx_t stop_dx, idx_t stop_dy, idx_t stop_dz);
     
     };
 }

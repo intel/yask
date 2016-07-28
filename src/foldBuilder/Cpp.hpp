@@ -257,7 +257,7 @@ public:
     }
 
     // Print body of prefetch function.
-    virtual void printPrefetches(ostream& os, const IntTuple& dir, string hint) const {
+    virtual void printPrefetches(ostream& os, const IntTuple& dir) const {
 
         // Points to prefetch.
         GridPointSet* pfPts = NULL;
@@ -281,10 +281,57 @@ public:
             os << " p = (const char*)";
             printPointCall(os, gp, "getVecPtrNorm", "", "false", true);
             os << ";" << endl;
-            os << " MCP(p, " << hint << ", __LINE__);" << endl;
-            os << " _mm_prefetch(p, " << hint << ");" << endl;
+            os << " MCP(p, level, __LINE__);" << endl;
+            os << " _mm_prefetch(p, level);" << endl;
         }
     }
+};
+
+// Print out a stencil in C++ form for YASK.
+class YASKCppPrinter : public PrinterBase {
+protected:
+    bool _allowUnalignedLoads;
+    IntTuple& _dimCounts;
+    IntTuple& _foldLengths;
+    IntTuple& _clusterLengths;
+    string _context;
+
+    // Print an expression as a one-line C++ comment.
+    void addComment(ostream& os, Grids& grids) {
+        
+        // Use a simple human-readable visitor to create a comment.
+        PrintHelper ph(0, "temp", "", " // ", ".\n");
+        PrintVisitorTopDown commenter(os, ph);
+        grids.acceptToFirst(&commenter);
+    }
+
+    virtual CppVecPrintHelper* newPrintHelper(VecInfoVisitor& vv,
+                                              CounterVisitor& cv) {
+        return new CppVecPrintHelper(vv, _allowUnalignedLoads, &cv,
+                                    "temp_vec", "real_vec_t", " ", ";\n");
+    }
+
+public:
+    YASKCppPrinter(StencilBase& stencil,
+                Equations& equations,
+                int exprSize,
+                bool allowUnalignedLoads,
+                IntTuple& dimCounts,
+                IntTuple& foldLengths,
+                IntTuple& clusterLengths) :
+        PrinterBase(stencil, equations, exprSize),
+        _allowUnalignedLoads(allowUnalignedLoads),
+        _dimCounts(dimCounts),
+        _foldLengths(foldLengths),
+        _clusterLengths(clusterLengths)
+    {
+        // name of C++ struct.
+        _context = "StencilContext_" + _stencil.getName();
+    }
+    virtual ~YASKCppPrinter() { }
+
+    virtual void printMacros(ostream& os);
+    virtual void printCode(ostream& os);
 };
 
 #endif

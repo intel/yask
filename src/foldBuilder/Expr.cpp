@@ -48,18 +48,18 @@ ExprPtr operator+(const ExprPtr& lhs, const ExprPtr& rhs) {
     else if (rhs == NULL)
         return lhs;
 
-    // If adding to another add result, just append an operand.
-    ExprPtr tmp_lhs = lhs->clone();
-    ExprPtr tmp_rhs = rhs->clone();
-    
-    if (tmp_lhs->appendOp(rhs, AddExpr::opStr()))
-        return tmp_lhs;
-    if (tmp_rhs->appendOp(lhs, AddExpr::opStr()))
-        return tmp_rhs;
+    // Start with an empty expression.
+    auto ex = make_shared<AddExpr>();
 
-    // Otherwise, make a new expression.
-    else
-        return make_shared<AddExpr>(lhs, rhs);
+    // If LHS is also an AddExpr, add its operands.
+    // Othewise, add the whole expr.
+    ex->mergeExpr(lhs);
+
+    // If RHS is also an AddExpr, add its operands.
+    // Othewise, add the whole expr.
+    ex->mergeExpr(rhs);
+
+    return ex;
 }
 ExprPtr operator+(double lhs, const ExprPtr& rhs) {
     ExprPtr p = make_shared<ConstExpr>(lhs);
@@ -85,18 +85,19 @@ ExprPtr operator*(const ExprPtr& lhs, const ExprPtr& rhs) {
     else if (rhs == NULL)
         return lhs;
 
-    // If multiplying by another mul result, just append an operand.
-    ExprPtr tmp_lhs = lhs->clone();
-    ExprPtr tmp_rhs = rhs->clone();
-    
-    if (tmp_lhs->appendOp(rhs, MultExpr::opStr()))
-        return tmp_lhs;
-    if (tmp_rhs->appendOp(lhs, MultExpr::opStr()))
-        return tmp_rhs;
 
-    // Otherwise, make a new expression.
-    else
-        return make_shared<MultExpr>(lhs, rhs);
+    // Start with an empty expression.
+    auto ex = make_shared<MultExpr>();
+
+    // If LHS is also an MultExpr, add its operands.
+    // Othewise, add the whole expr.
+    ex->mergeExpr(lhs);
+
+    // If RHS is also an MultExpr, add its operands.
+    // Othewise, add the whole expr.
+    ex->mergeExpr(rhs);
+
+    return ex;
 }
 ExprPtr operator*(double lhs, const ExprPtr& rhs) {
     ExprPtr p = make_shared<ConstExpr>(lhs);
@@ -223,18 +224,21 @@ bool CommutativeExpr::isSame(const Expr* other) {
         return false;
         
     // Operands must be the same, but not in same order.
-    set<ExprPtr> matches;
+    // This tracks the indices in 'other' that have already
+    // been matched.
+    set<size_t> matches;
 
     // Loop through this set of ops.
     for (auto op : _ops) {
 
         // Loop through other set of ops, looking for match.
         bool found = false;
-        for (auto oop : p->_ops) {
+        for (size_t i = 0; i < p->_ops.size(); i++) {
+            auto oop = p->_ops[i];
 
             // check unless already matched.
-            if (matches.count(oop) == 0 && op->isSame(oop.get())) {
-                matches.insert(oop);
+            if (matches.count(i) == 0 && op->isSame(oop.get())) {
+                matches.insert(i);
                 found = true;
                 break;
             }
