@@ -42,28 +42,28 @@ IN THE SOFTWARE.
 #include <vector>
 
 #ifdef WIN32
-#define _mm_clevict(p,h) true
+#define _mm_clevict(p,h) ((void)0)
 #define _Pragma(x)
 #endif
 
 #if defined(__GNUC__) && !defined(__ICC)
-#define __assume(x) true
+#define __assume(x) ((void)0)
 #define __declspec(x)
 #endif
 
 #if (defined(__GNUC__) && !defined(__ICC)) || defined(WIN32)
 #define restrict
-#define __assume_aligned(p,n)
+#define __assume_aligned(p,n) ((void)0)
 #endif
 
 // VTune and stub macros.
 #ifdef USE_VTUNE
-#include "sampling_MIC.h"
-#define SEP_PAUSE  VTPauseSampling()
-#define SEP_RESUME VTResumeSampling()
+#include "ittnotify.h"
+#define VTUNE_PAUSE  __itt_pause()
+#define VTUNE_RESUME __itt_resume()
 #else
-#define SEP_PAUSE
-#define SEP_RESUME
+#define VTUNE_PAUSE ((void)0)
+#define VTUNE_RESUME ((void)0)
 #endif
 
 // MPI.
@@ -74,7 +74,7 @@ IN THE SOFTWARE.
 #include "mpi.h"
 #else
 #define MPI_PROC_NULL (-1)
-#define MPI_Barrier(comm)
+#define MPI_Barrier(comm) ((void)0)
 #define MPI_Comm int
 #endif
 

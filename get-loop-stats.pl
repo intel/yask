@@ -150,13 +150,13 @@ for my $arg (@ARGV) {
 
           # instr stats.
           if ($instr =~ /vbroadcast/) {
-            $istats{'SIMD vbroadcast'}++;
+            $istats{'SIMD broadcast'}++;
           } elsif ($instr =~ /vp?align/) {
-            $istats{'SIMD valign'}++;
+            $istats{'SIMD align'}++;
           } elsif ($instr =~ /vperm\w*2/) {
-            $istats{'SIMD vperm2'}++;
+            $istats{'SIMD perm2'}++;
           } elsif ($instr =~ /vperm/) {
-            $istats{'SIMD vperm'}++;
+            $istats{'SIMD perm'}++;
           } elsif ($instr =~ /vfn?m[as]/) {
             $istats{'SIMD FMA'}++;
             $istats{'SIMD FLOP'} += 2;
@@ -171,6 +171,9 @@ for my $arg (@ARGV) {
             $istats{'SIMD FLOP'}++;
           } elsif ($instr =~ /vdiv/) {
             $istats{'SIMD div'}++;
+            $istats{'SIMD FLOP'}++;
+          } elsif ($instr =~ /vrcp/) {
+            $istats{'SIMD rcp'}++;
             $istats{'SIMD FLOP'}++;
           } elsif ($instr =~ /gather/) {
             $istats{'SIMD gather'}++;

@@ -52,6 +52,7 @@
 # omp_block_schedule: OMP schedule policy for nested OpenMP block loop.
 #
 # def_block_threads: Number of threads to use in nested OpenMP block loop by default.
+# def_thread_factor: Divide number of OpenMP threads by this factor by default.
 #
 # def_*_size, def_pad: Default sizes used in executable.
 
@@ -81,7 +82,7 @@ order		?=	4
 else ifeq ($(stencil),iso3dfd)
 layout_4d	?=	Layout_2314
 
-else ifeq ($(stencil),awp)
+else ifeq ($(findstring awp,$(stencil)),awp)
 order		?=	4
 time_dim_size	?=	1
 eqs		?=	velocity=vel_,stress=stress_
@@ -89,13 +90,11 @@ def_rank_size	?=	640
 def_block_size	?=	32
 def_wavefront_region_size ?=	256
 
-else ifeq ($(stencil),awp_elastic)
-order		?=	4
-time_dim_size	?=	1
-eqs		?=	velocity=vel_,stress=stress_
-def_rank_size	?=	640
-def_block_size	?=	32
-def_wavefront_region_size ?=	256
+ifeq ($(arch),knl)
+def_block_threads	?=	4
+def_thread_factor	?=	2
+endif
+
 endif
 
 # Defaut settings based on architecture.
@@ -111,7 +110,7 @@ else ifeq ($(arch),knl)
 
 ISA		?=	-xMIC-AVX512
 GCXX_ISA		?=	-march=knl
-MACROS		+=	USE_INTRIN512
+MACROS		+=	USE_INTRIN512 USE_RCP28
 FB_TARGET  	?=       512
 def_block_size	?=	96
 def_block_threads ?=	8
@@ -163,6 +162,7 @@ streaming_stores		?= 	1
 omp_schedule			?=	dynamic,1
 omp_block_schedule		?=	static,1
 def_block_threads		?=	2
+def_thread_factor		?=	1
 omp_par_for			?=	omp parallel for
 order				?=	16
 real_bytes			?=	4
@@ -235,6 +235,7 @@ MACROS		+=	DEF_RANK_SIZE=$(def_rank_size)
 MACROS		+=	DEF_BLOCK_SIZE=$(def_block_size)
 MACROS		+=	DEF_WAVEFRONT_REGION_SIZE=$(def_wavefront_region_size)
 MACROS		+=	DEF_BLOCK_THREADS=$(def_block_threads)
+MACROS		+=	DEF_THREAD_FACTOR=$(def_thread_factor)
 MACROS		+=	DEF_PAD=$(def_pad)
 
 # arch.
@@ -245,6 +246,14 @@ MACROS		+= 	ARCH_$(ARCH)
 ifeq ($(mpi),1)
 MACROS		+=	USE_MPI
 crew		=	0
+endif
+
+# VTUNE settings.
+ifeq ($(vtune),1)
+VTUNE_DIR	=	$(VTUNE_AMPLIFIER_XE_2016_DIR)
+MACROS		+=	USE_VTUNE
+CXXFLAGS	+=	-I$(VTUNE_DIR)/include
+LFLAGS		+=	$(VTUNE_DIR)/lib64/libittnotify.a
 endif
 
 # compiler-specific settings
@@ -389,7 +398,7 @@ code_stats:
 	./get-loop-stats.pl -t='block_loops' *.s
 
 $(STENCIL_EXEC_NAME): $(STENCIL_OBJS)
-	$(LD) $(LFLAGS) -o $@ $(STENCIL_OBJS)
+	$(LD) -o $@ $(STENCIL_OBJS) $(LFLAGS)
 
 preprocess: $(STENCIL_CXX)
 

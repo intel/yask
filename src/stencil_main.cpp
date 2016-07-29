@@ -75,7 +75,7 @@ idx_t findNumRegions(idx_t& rsize, idx_t dsize, idx_t mult, string dim) {
 // Parse command-line args, run kernel, run validation if requested.
 int main(int argc, char** argv)
 {
-    SEP_PAUSE;
+    VTUNE_PAUSE;
 
     // MPI init.
     int my_rank = 0;
@@ -143,7 +143,8 @@ int main(int argc, char** argv)
     idx_t pn = 0, px = DEF_PAD, py = DEF_PAD, pz = DEF_PAD; // padding.
     idx_t nrn = 1, nrx = num_ranks, nry = 1, nrz = 1; // num ranks in each dim.
     bool validate = false;
-    int  block_threads = DEF_BLOCK_THREADS; // number of threads for a block.
+    int block_threads = DEF_BLOCK_THREADS; // number of threads for a block.
+    int thread_factor = DEF_THREAD_FACTOR; // divide num threads by this factor.
     bool doWarmup = true;
     int pre_trial_sleep_time = 1;   // sec to sleep before each trial.
 
@@ -183,6 +184,8 @@ int main(int argc, char** argv)
                     " -nr <n>          set same num ranks in 3 {x,y,z} spatial dimensions\n" <<
 #endif
                     " -i <n>           equivalent to -dt, for backward compatibility\n" <<
+                    " -thread_factor <n>  divide the original number of available threads by n, default=" <<
+                    thread_factor << endl <<
                     " -bthreads <n>    set number of threads to use for a block, default=" <<
                     block_threads << endl <<
                     " -v               validate by comparing to a scalar run\n" <<
@@ -260,6 +263,7 @@ int main(int argc, char** argv)
                 else if (opt == "-nr") nrx = nry = nrz = val;
 #endif
                 else if (opt == "-bthreads") block_threads = val;
+                else if (opt == "-thread_factor") thread_factor = val;
                 else {
                     cerr << "error: option '" << opt << "' not recognized." << endl;
                     exit(1);
@@ -303,7 +307,7 @@ int main(int argc, char** argv)
 #if defined(_OPENMP)
         int omp_num_procs = omp_get_num_procs();
         cout << "Num OpenMP procs: " << omp_num_procs << endl;
-        context.orig_max_threads = omp_get_max_threads();
+        context.orig_max_threads = omp_get_max_threads() / thread_factor;
         cout << "Num OpenMP threads: " << context.orig_max_threads << endl;
 
 #if USE_CREW
@@ -597,17 +601,21 @@ int main(int argc, char** argv)
         if (validate)
             context.initDiff();
 
+        // Stabilize.
         sleep(pre_trial_sleep_time);
         MPI_Barrier(comm);
-        SEP_RESUME;
+
+        // Start timing.
+        VTUNE_RESUME;
         wstart = getTimeInSecs();
 
-        // Actual work.
+        // Actual work (must wait until all ranks are done).
         stencils.calc_rank_opt(context);
-        
         MPI_Barrier(comm);
-        SEP_PAUSE;
+
+        // Stop timing.
         wstop =  getTimeInSecs();
+        VTUNE_PAUSE;
             
         // calc and report perf.
         float elapsed_time = (float)(wstop - wstart);
