@@ -308,12 +308,16 @@ namespace yask {
     {
 #ifdef USE_MPI
         TRACE_MSG("exchange_halos(%ld..%ld)", start_dt, stop_dt);
+        double start_time = getTimeInSecs();
 
-        // For loops, set vars to step 1 vector always.
+        // These vars control blocking within halo packing.
+        // Currently, only zv has a loop in the calc_halo macros below.
+        // Thus, step_{n,x,y}v must be 1.
+        // TODO: make step_zv a parameter.
         const idx_t step_nv = 1;
         const idx_t step_xv = 1;
         const idx_t step_yv = 1;
-        const idx_t step_zv = 1;
+        const idx_t step_zv = 4;
 
         // List of grids updated by this equation.
         // These are the grids that need their halos exchanged.
@@ -412,11 +416,17 @@ namespace yask {
                          // Index sendBuf using index_* vars because they are zero-based.
 #define calc_halo(context, t,                                           \
                   start_nv, start_xv, start_yv, start_zv,               \
-                  stop_nv, stop_xv, stop_yv, stop_zv)                   \
-                         real_vec_t hval = gpd->readVecNorm(t, ARG_N(start_nv) \
-                                                            start_xv, start_yv, start_zv, __LINE__); \
-                         sendBuf->writeVecNorm(hval, index_nv,        \
-                                               index_xv, index_yv, index_zv, __LINE__)
+                  stop_nv, stop_xv, stop_yv, stop_zv)  do {             \
+                         idx_t nv = start_nv;                           \
+                         idx_t xv = start_xv;                           \
+                         idx_t yv = start_yv;                           \
+                         idx_t izv = index_zv * step_zv;                \
+                         for (idx_t zv = start_zv; zv < stop_zv; zv++) { \
+                             real_vec_t hval = gpd->readVecNorm(t, ARG_N(nv) \
+                                                                xv, yv, zv, __LINE__); \
+                             sendBuf->writeVecNorm(hval, index_nv,      \
+                                                   index_xv, index_yv, izv++, __LINE__); \
+                         } } while(0)
                          
                          // Include auto-generated loops to invoke calc_halo() from
                          // begin_*v to end_*v;
@@ -521,11 +531,18 @@ namespace yask {
                          // Define calc_halo to copy data from rcvBuf into main grid.
 #define calc_halo(context, t,                                           \
                   start_nv, start_xv, start_yv, start_zv,               \
-                  stop_nv, stop_xv, stop_yv, stop_zv)                   \
-            real_vec_t hval = rcvBuf->readVecNorm(index_nv,             \
-                                                  index_xv, index_yv, index_zv, __LINE__); \
-            gpd->writeVecNorm(hval, t, ARG_N(start_nv)                  \
-                              start_xv, start_yv, start_zv, __LINE__)
+                  stop_nv, stop_xv, stop_yv, stop_zv)  do {             \
+                             idx_t nv = start_nv;                       \
+                             idx_t xv = start_xv;                       \
+                             idx_t yv = start_yv;                       \
+                             idx_t izv = index_zv * step_zv;            \
+                             for (idx_t zv = start_zv; zv < stop_zv; zv++) { \
+                                 real_vec_t hval =                      \
+                                     rcvBuf->readVecNorm(index_nv,      \
+                                                         index_xv, index_yv, izv++, __LINE__); \
+                                 gpd->writeVecNorm(hval, t, ARG_N(nv)   \
+                                                   xv, yv, zv, __LINE__); \
+                     } } while(0)
 
                          // Include auto-generated loops to invoke calc_halo() from
                          // begin_*v to end_*v;
@@ -535,6 +552,9 @@ namespace yask {
                  } );
 
         } // grids.
+
+        double end_time = getTimeInSecs();
+        context.mpi_time += end_time - start_time;
 #endif
     }
                          

@@ -423,13 +423,18 @@ namespace yask {
             return false;
         }
     
-        // equal-to comparator for validation.
+        // equal-to comparator.
         bool operator==(const real_vec_t& rhs) const {
             for (int j = 0; j < VLEN; j++) {
                 if (u.r[j] != rhs.u.r[j])
                     return false;
             }
             return true;
+        }
+    
+        // not-equal-to comparator.
+        bool operator!=(const real_vec_t& rhs) const {
+            return !operator==(rhs);
         }
     
         // aligned load.

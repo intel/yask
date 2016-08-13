@@ -65,6 +65,7 @@ namespace yask {
         MPI_Comm comm;
         int num_ranks, my_rank;   // MPI-assigned index.
         idx_t nrn, nrx, nry, nrz; // number of ranks in each dim.
+        double mpi_time;          // time spent doing MPI.
 
         // A type to store ranks of all possible neighbors in all
         // directions, including diagonals.
@@ -182,7 +183,7 @@ namespace yask {
         }
 
         // Ctor, dtor.
-        StencilContext() : num_ranks(1), my_rank(0),
+        StencilContext() : num_ranks(1), my_rank(0), mpi_time(0),
                            orig_max_threads(1), num_block_threads(1)
         {
             // Init my_neighbors to indicate no neighbor.

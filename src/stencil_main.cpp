@@ -607,6 +607,7 @@ int main(int argc, char** argv)
 
         // Start timing.
         VTUNE_RESUME;
+        context.mpi_time = 0.0;
         wstart = getTimeInSecs();
 
         // Actual work (must wait until all ranks are done).
@@ -626,6 +627,10 @@ int main(int argc, char** argv)
                 "time (sec):              " << printWithPow10Multiplier(elapsed_time) << endl <<
                 "throughput (points/sec): " << printWithPow10Multiplier(pps) << endl <<
                 "throughput (est FLOPS):  " << printWithPow10Multiplier(flops) << endl;
+#ifdef USE_MPI
+            cout <<
+                "time in halo exch (sec): " << printWithPow10Multiplier(context.mpi_time) << endl;
+#endif            
         }
 
         if (pps > best_pps) {

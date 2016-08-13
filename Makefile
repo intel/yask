@@ -48,8 +48,8 @@
 # crew: 0, 1: whether to use Intel Crew threading instead of nested OpenMP (deprecated).
 #
 # omp_schedule: OMP schedule policy for region loop.
-#
 # omp_block_schedule: OMP schedule policy for nested OpenMP block loop.
+# omp_halo_schedule: OMP schedule policy for OpenMP halo loop.
 #
 # def_block_threads: Number of threads to use in nested OpenMP block loop by default.
 # def_thread_factor: Divide number of OpenMP threads by this factor by default.
@@ -159,11 +159,12 @@ endif # arch-specific.
 # general defaults for vars if not set above.
 crew				?= 	0
 streaming_stores		?= 	1
+omp_par_for			?=	omp parallel for
 omp_schedule			?=	dynamic,1
 omp_block_schedule		?=	static,1
+omp_halo_schedule		?=	static
 def_block_threads		?=	2
 def_thread_factor		?=	1
-omp_par_for			?=	omp parallel for
 order				?=	16
 real_bytes			?=	4
 time_dim_size			?=	2
@@ -325,7 +326,7 @@ BLOCK_LOOP_CODE		=	$(BLOCK_LOOP_OUTER_MODS) loop(bnv,bxv) { loop(byv) { \
 # this is indicated by the 'v' suffix.
 # Note that there are no nested OpenMP loops here.
 HALO_LOOP_OPTS		=     	-dims 'nv,xv,yv,zv' \
-				-ompConstruct '$(omp_par_for) schedule($(omp_schedule))'
+				-ompConstruct '$(omp_par_for) schedule($(omp_halo_schedule))'
 HALO_LOOP_CODE		=	omp loop(nv,xv,yv,zv) { calc(halo(t)); }
 
 # compile with model_cache=1 or 2 to check prefetching.
@@ -368,9 +369,10 @@ echo-settings:
 	@echo layout_4d=$(layout_4d)
 	@echo time_dim_size=$(time_dim_size)
 	@echo streaming_stores=$(streaming_stores)
-	@echo omp_schedule=$(omp_schedule)
 	@echo def_block_threads=$(def_block_threads)
+	@echo omp_schedule=$(omp_schedule)
 	@echo omp_block_schedule=$(omp_block_schedule)
+	@echo omp_halo_schedule=$(omp_halo_schedule)
 	@echo FB_TARGET="\"$(FB_TARGET)\""
 	@echo FB_FLAGS="\"$(FB_FLAGS)\""
 	@echo EXTRA_FB_FLAGS="\"$(EXTRA_FB_FLAGS)\""
