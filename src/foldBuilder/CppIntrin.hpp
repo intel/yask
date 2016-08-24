@@ -563,22 +563,17 @@ class YASKKncPrinter : public YASKCppPrinter {
 protected:
     virtual CppVecPrintHelper* newPrintHelper(VecInfoVisitor& vv,
                                               CounterVisitor& cv) {
-        return new CppKncPrintHelper(vv, _allowUnalignedLoads, &cv,
+        return new CppKncPrintHelper(vv, _settings._allowUnalignedLoads, &cv,
                                     "temp_vec", "real_vec_t", " ", ";\n");
     }
 
 public:
     YASKKncPrinter(StencilBase& stencil,
-                Equations& equations,
-                int exprSize,
-                bool allowUnalignedLoads,
-                IntTuple& dimCounts,
-                IntTuple& foldLengths,
-                IntTuple& clusterLengths) :
+                   Equations& equations,
+                   int exprSize,
+                   YASKCppSettings& settings) :
         YASKCppPrinter(stencil, equations,
-                       exprSize, allowUnalignedLoads,
-                       dimCounts, foldLengths, clusterLengths) { }
-                      
+                       exprSize, settings) { }
 };
 
 // Print 256-bit AVX intrinsic code.
@@ -586,7 +581,7 @@ class YASKAvx256Printer : public YASKCppPrinter {
 protected:
     virtual CppVecPrintHelper* newPrintHelper(VecInfoVisitor& vv,
                                               CounterVisitor& cv) {
-        return new CppAvx256PrintHelper(vv, _allowUnalignedLoads, &cv,
+        return new CppAvx256PrintHelper(vv, _settings._allowUnalignedLoads, &cv,
                                         "temp_vec", "real_vec_t", " ", ";\n");
     }
 
@@ -594,14 +589,9 @@ public:
     YASKAvx256Printer(StencilBase& stencil,
                       Equations& equations,
                       int exprSize,
-                      bool allowUnalignedLoads,
-                      IntTuple& dimCounts,
-                      IntTuple& foldLengths,
-                      IntTuple& clusterLengths) :
+                      YASKCppSettings& settings) :
         YASKCppPrinter(stencil, equations,
-                       exprSize, allowUnalignedLoads,
-                       dimCounts, foldLengths, clusterLengths) { }
-                      
+                       exprSize, settings) { }
 };
 
 // Print 512-bit AVX intrinsic code.
@@ -609,7 +599,7 @@ class YASKAvx512Printer : public YASKCppPrinter {
 protected:
     virtual CppVecPrintHelper* newPrintHelper(VecInfoVisitor& vv,
                                               CounterVisitor& cv) {
-        return new CppAvx512PrintHelper(vv, _allowUnalignedLoads, &cv,
+        return new CppAvx512PrintHelper(vv, _settings._allowUnalignedLoads, &cv,
                                         "temp_vec", "real_vec_t", " ", ";\n");
     }
 
@@ -617,14 +607,9 @@ public:
     YASKAvx512Printer(StencilBase& stencil,
                       Equations& equations,
                       int exprSize,
-                      bool allowUnalignedLoads,
-                      IntTuple& dimCounts,
-                      IntTuple& foldLengths,
-                      IntTuple& clusterLengths) :
+                      YASKCppSettings& settings) :
         YASKCppPrinter(stencil, equations,
-                       exprSize, allowUnalignedLoads,
-                       dimCounts, foldLengths, clusterLengths) { }
-                      
+                       exprSize, settings) { }
 };
 
 #endif

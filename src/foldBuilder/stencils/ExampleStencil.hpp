@@ -27,7 +27,7 @@ IN THE SOFTWARE.
 
 #include "StencilBase.hpp"
 
-class ExampleStencil : public StencilOrderBase {
+class ExampleStencil : public StencilRadiusBase {
 
 protected:
 
@@ -50,8 +50,8 @@ protected:
     virtual void valueAdd(GridValue& v, int t, int x, int y, int z) =0;
     
 public:
-    ExampleStencil(const string& name, StencilList& stencils, int order=2) :
-        StencilOrderBase(name, stencils, order)
+    ExampleStencil(const string& name, StencilList& stencils, int radius=2) :
+        StencilRadiusBase(name, stencils, radius)
     {
         INIT_GRID_4D(grid, t, x, y, z);
     }
@@ -81,7 +81,7 @@ protected:
     // Add additional contributions to v based on u(tm1, ...).
     virtual void valueAdd(GridValue& v, int t, int x, int y, int z)
     {
-        for (int r = 1; r <= _order/2; r++) {
+        for (int r = 1; r <= _radius; r++) {
 
             // On the axes, assume values are isotropic, i.e., the same
             // for all points the same distance from the origin.
@@ -104,10 +104,10 @@ protected:
     }
 
 public:
-    AxisStencil(StencilList& stencils, int order=2) :
-        ExampleStencil("3axis", stencils, order) { }
-    AxisStencil(const string& name, StencilList& stencils, int order=2) :
-        ExampleStencil(name, stencils, order) { }
+    AxisStencil(StencilList& stencils, int radius=2) :
+        ExampleStencil("3axis", stencils, radius) { }
+    AxisStencil(const string& name, StencilList& stencils, int radius=2) :
+        ExampleStencil(name, stencils, radius) { }
 };
 
 REGISTER_STENCIL(AxisStencil);
@@ -123,7 +123,7 @@ protected:
         AxisStencil::valueAdd(v, t, x, y, z);
 
         // Add values from diagonals.
-        for (int r = 1; r <= _order/2; r++) {
+        for (int r = 1; r <= _radius; r++) {
 
             // x-y diagonal.
             v += coeff(-r, -r, 0) * grid(t, x-r, y-r, z);
@@ -146,10 +146,10 @@ protected:
     }
 
 public:
-    DiagStencil(StencilList& stencils, int order=2) :
-        AxisStencil("6axis", stencils, order) { }
-    DiagStencil(const string& name, StencilList& stencils, int order=2) :
-        AxisStencil(name, stencils, order) { }
+    DiagStencil(StencilList& stencils, int radius=2) :
+        AxisStencil("9axis", stencils, radius) { }
+    DiagStencil(const string& name, StencilList& stencils, int radius=2) :
+        AxisStencil(name, stencils, radius) { }
 };
 
 REGISTER_STENCIL(DiagStencil);
@@ -165,8 +165,8 @@ protected:
         DiagStencil::valueAdd(v, t, x, y, z);
 
         // Add remaining values on planes.
-        for (int r = 1; r <= _order/2; r++) {
-            for (int m = r+1; m <= _order/2; m++) {
+        for (int r = 1; r <= _radius; r++) {
+            for (int m = r+1; m <= _radius; m++) {
 
                 // x-y plane.
                 v += coeff(-r, -m, 0) * grid(t, x-r, y-m, z);
@@ -202,10 +202,10 @@ protected:
     }
 
 public:
-    PlaneStencil(StencilList& stencils, int order=2) :
-        DiagStencil("3plane", stencils, order) { }
-    PlaneStencil(const string& name, StencilList& stencils, int order=2) :
-        DiagStencil(name, stencils, order) { }
+    PlaneStencil(StencilList& stencils, int radius=2) :
+        DiagStencil("3plane", stencils, radius) { }
+    PlaneStencil(const string& name, StencilList& stencils, int radius=2) :
+        DiagStencil(name, stencils, radius) { }
 };
 
 REGISTER_STENCIL(PlaneStencil);
@@ -221,9 +221,9 @@ protected:
         PlaneStencil::valueAdd(v, t, x, y, z);
 
         // Add values from rest of cube.
-        for (int rx = 1; rx <= _order/2; rx++)
-            for (int ry = 1; ry <= _order/2; ry++)
-                for (int rz = 1; rz <= _order/2; rz++) {
+        for (int rx = 1; rx <= _radius; rx++)
+            for (int ry = 1; ry <= _radius; ry++)
+                for (int rz = 1; rz <= _radius; rz++) {
 
                     // Each quadrant.
                     v += coeff(rx, ry, rz) * grid(t, x+rx, y+ry, z+rz);
@@ -238,10 +238,10 @@ protected:
     }
 
 public:
-    CubeStencil(StencilList& stencils, int order=2) :
-        PlaneStencil("cube", stencils, order) { }
-    CubeStencil(const string& name, StencilList& stencils, int order=2) :
-        PlaneStencil(name, stencils, order) { }
+    CubeStencil(StencilList& stencils, int radius=1) :
+        PlaneStencil("cube", stencils, radius) { }
+    CubeStencil(const string& name, StencilList& stencils, int radius=1) :
+        PlaneStencil(name, stencils, radius) { }
 };
 
 REGISTER_STENCIL(CubeStencil);

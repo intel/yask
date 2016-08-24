@@ -287,13 +287,18 @@ public:
     }
 };
 
+// Settings for C++ printing.
+struct YASKCppSettings {
+    bool _allowUnalignedLoads;
+    string _stepDim;
+    IntTuple _dimCounts, _foldLengths, _clusterLengths, _miscDims;
+    bool _hbwRW, _hbwRO;
+};
+
 // Print out a stencil in C++ form for YASK.
 class YASKCppPrinter : public PrinterBase {
 protected:
-    bool _allowUnalignedLoads;
-    IntTuple& _dimCounts;
-    IntTuple& _foldLengths;
-    IntTuple& _clusterLengths;
+    YASKCppSettings& _settings;
     string _context;
 
     // Print an expression as a one-line C++ comment.
@@ -307,23 +312,17 @@ protected:
 
     virtual CppVecPrintHelper* newPrintHelper(VecInfoVisitor& vv,
                                               CounterVisitor& cv) {
-        return new CppVecPrintHelper(vv, _allowUnalignedLoads, &cv,
+        return new CppVecPrintHelper(vv, _settings._allowUnalignedLoads, &cv,
                                     "temp_vec", "real_vec_t", " ", ";\n");
     }
 
 public:
     YASKCppPrinter(StencilBase& stencil,
-                Equations& equations,
-                int exprSize,
-                bool allowUnalignedLoads,
-                IntTuple& dimCounts,
-                IntTuple& foldLengths,
-                IntTuple& clusterLengths) :
+                   Equations& equations,
+                   int exprSize,
+                   YASKCppSettings& settings) :
         PrinterBase(stencil, equations, exprSize),
-        _allowUnalignedLoads(allowUnalignedLoads),
-        _dimCounts(dimCounts),
-        _foldLengths(foldLengths),
-        _clusterLengths(clusterLengths)
+        _settings(settings)
     {
         // name of C++ struct.
         _context = "StencilContext_" + _stencil.getName();
@@ -331,6 +330,7 @@ public:
     virtual ~YASKCppPrinter() { }
 
     virtual void printMacros(ostream& os);
+    virtual void printGrids(ostream& os);
     virtual void printCode(ostream& os);
 };
 

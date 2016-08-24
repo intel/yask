@@ -129,7 +129,7 @@ namespace yask {
                                 const std::string& name) {
                 auto gp = (*this)(bd, nn, nx, ny, nz);
                 assert(gp == NULL); // not already allocated.
-                gp = new Grid_NXYZ(dn, dx, dy, dz, 0, 0, 0, 0, name);
+                gp = new Grid_NXYZ(dn, dx, dy, dz, 0, 0, 0, 0, name, true);
                 assert(gp);
                 bufs[bd][nn][nx][ny][nz] = gp;
                 return gp;

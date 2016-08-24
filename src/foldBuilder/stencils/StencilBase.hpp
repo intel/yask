@@ -67,36 +67,36 @@ public:
     virtual Grids& getGrids() { return _grids; }
     virtual Grids& getParams() { return _params; }
 
-    // Order stub methods.
-    virtual bool usesOrder() const { return false; }
-    virtual bool setOrder(int order) { return false; }
-    virtual int getOrder() const { return 0; }
+    // Radius stub methods.
+    virtual bool usesRadius() const { return false; }
+    virtual bool setRadius(int radius) { return false; }
+    virtual int getRadius() const { return 0; }
 
     // Define grid values relative to given offsets in each dimension.
     virtual void define(const IntTuple& offsets) = 0;
 };
 
-// A base class for stencils that have an 'order'.
-class StencilOrderBase : public StencilBase {
+// A base class for stencils that have an 'radius'.
+class StencilRadiusBase : public StencilBase {
 protected:
-    int _order;         // stencil order (for convenience; optional).
+    int _radius;         // stencil radius (for convenience; optional).
 
 public:
-    StencilOrderBase(const string name, StencilList& stencils, int order) :
-        StencilBase(name, stencils), _order(order) {}
+    StencilRadiusBase(const string name, StencilList& stencils, int radius) :
+        StencilBase(name, stencils), _radius(radius) {}
 
-    // Does use order.
-    virtual bool usesOrder() const { return true; }
+    // Does use radius.
+    virtual bool usesRadius() const { return true; }
     
-    // Set order.
+    // Set radius.
     // Return true if successful.
-    virtual bool setOrder(int order) {
-        _order = order;
-        return order % 2 == 0;  // support only even orders by default.
+    virtual bool setRadius(int radius) {
+        _radius = radius;
+        return radius >= 0;  // support only non-neg. radius.
     }
 
-    // Get order.
-    virtual int getOrder() { return _order; }
+    // Get radius.
+    virtual int getRadius() { return _radius; }
 };
 
 #endif

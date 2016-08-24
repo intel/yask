@@ -48,8 +48,8 @@ IN THE SOFTWARE.
 #include "cache_model.hpp"
 #endif
 
-    //#define ALLOC_ALIGNMENT CACHELINE_BYTES
-#define ALLOC_ALIGNMENT 4096 // 4k-page
+    //#define GRID_ALIGNMENT CACHELINE_BYTES
+#define GRID_ALIGNMENT 4096 // 4k-page
 
     // Make an index and offset canonical, i.e., offset in [0..vecLen-1].
     // Makes proper adjustments for negative inputs.

@@ -39,16 +39,15 @@ IN THE SOFTWARE.
 
 #include <string>
 #include <iostream>
+#include "utils.hpp"
+
+#ifdef USE_HBW
+#include "hbwmalloc.h"
+#endif
 
 namespace yask {
 
 #include "layouts.hpp"
-
-    // Some utility functions.
-    extern double getTimeInSecs();
-    extern idx_t roundUp(idx_t dim, idx_t mult, std::string name);
-    extern std::string printWithPow2Multiplier(double num);
-    extern std::string printWithPow10Multiplier(double num);
 
     // A base class for a generic grid of elements of arithmetic type T.
     // This class provides linear-access support, i.e., no layout.
@@ -56,14 +55,25 @@ namespace yask {
     protected:
         T* _elems;
         const idx_t _num_elems;
+        bool _used_hbw;
         const static size_t _def_alignment = 64;
 
     public:
-        GenericGridBase(idx_t num_elems, size_t alignment=_def_alignment) :
-            _num_elems(num_elems)
+        GenericGridBase(idx_t num_elems,
+                        size_t alignment,
+                        bool use_hbw) :
+            _num_elems(num_elems), _used_hbw(false)
         {
             size_t sz = sizeof(T) * num_elems;
-            int ret = posix_memalign((void **)&_elems, alignment, sz);
+            int ret;
+#ifdef USE_HBW
+            if (use_hbw) {
+                ret = hbw_posix_memalign((void **)&_elems, alignment, sz);
+                _used_hbw = true;
+            }
+            else
+#endif
+                ret = posix_memalign((void **)&_elems, alignment, sz);
             if (ret) {
 
                 // TODO: provide option to throw an exception.
@@ -74,7 +84,12 @@ namespace yask {
 
         // Dealloc memory.
         virtual ~GenericGridBase() {
-            free(_elems);
+#ifdef USE_HBW
+            if (_used_hbw)
+                hbw_free(_elems);
+            else
+#endif
+                free(_elems);
         }
 
         // Get number of elements with padding.
@@ -156,9 +171,10 @@ namespace yask {
     
     public:
 
-        // Construct.
-        GenericGrid0d(size_t alignment=GenericGridBase<T>::_def_alignment) :
-            GenericGridBase<T>(1, alignment) {}
+        // Construct a scalar.
+        GenericGrid0d(size_t alignment=GenericGridBase<T>::_def_alignment,
+                      bool use_hbw=true) :
+            GenericGridBase<T>(1, alignment, use_hbw) {}
 
         // Print some info.
         virtual void print_info(const std::string& name, std::ostream& os = std::cout) {
@@ -218,8 +234,9 @@ namespace yask {
 
         // Construct an array of length d1.
         GenericGrid1d(idx_t d1,
-                      size_t alignment=GenericGridBase<T>::_def_alignment) :
-            GenericGridBase<T>(d1, alignment),
+                      size_t alignment=GenericGridBase<T>::_def_alignment,
+                      bool use_hbw=true) :
+            GenericGridBase<T>(d1, alignment, use_hbw),
             _layout(d1) { }
 
         // Get original parameters.
@@ -306,8 +323,9 @@ namespace yask {
 
         // Construct a grid of dimensions d1 x d2.
         GenericGrid2d(idx_t d1, idx_t d2,
-                      size_t alignment=GenericGridBase<T>::_def_alignment) :
-            GenericGridBase<T>(d1 * d2, alignment),
+                      size_t alignment=GenericGridBase<T>::_def_alignment,
+                      bool use_hbw=true) :
+            GenericGridBase<T>(d1 * d2, alignment, use_hbw),
             _layout(d1, d2) { }
 
         // Get original parameters.
@@ -399,8 +417,9 @@ namespace yask {
 
         // Construct a grid of dimensions d1*d2*d3.
         GenericGrid3d(idx_t d1, idx_t d2, idx_t d3,
-                      size_t alignment=GenericGridBase<T>::_def_alignment) :
-            GenericGridBase<T>(d1 * d2 * d3, alignment),
+                      size_t alignment=GenericGridBase<T>::_def_alignment,
+                      bool use_hbw=true) :
+            GenericGridBase<T>(d1 * d2 * d3, alignment, use_hbw),
             _layout(d1, d2, d3) { }
     
         // Get original parameters.
@@ -483,7 +502,6 @@ namespace yask {
         done:
             return errs;
         }
-    
     };
 
     // A generic 4D grid of elements of type T.
@@ -498,8 +516,9 @@ namespace yask {
 
         // Construct a grid of dimensions d1 * d2 * d3 * d4.
         GenericGrid4d(idx_t d1, idx_t d2, idx_t d3, idx_t d4,
-                      size_t alignment=GenericGridBase<T>::_def_alignment) :
-            GenericGridBase<T>(d1 * d2 * d3 * d4, alignment),
+                      size_t alignment=GenericGridBase<T>::_def_alignment,
+                      bool use_hbw=true) :
+            GenericGridBase<T>(d1 * d2 * d3 * d4, alignment, use_hbw),
             _layout(d1, d2, d3, d4) { }
 
         // Get original parameters.
@@ -588,6 +607,118 @@ namespace yask {
             return errs;
         }
     
+    };
+
+    // A generic 5D grid of elements of type T.
+    // The LayoutFn class must provide a 1:1 transform between
+    // 5D and 1D indices.
+    template <typename T, typename LayoutFn> class GenericGrid5d :
+        public GenericGridBase<T> {
+    protected:
+        const LayoutFn _layout;
+    
+    public:
+
+        // Construct a grid of dimensions d1 * d2 * d3 * d4 * d5.
+        GenericGrid5d(idx_t d1, idx_t d2, idx_t d3, idx_t d4, idx_t d5,
+                      size_t alignment=GenericGridBase<T>::_def_alignment) :
+            GenericGridBase<T>(d1 * d2 * d3 * d4 * d5, alignment),
+            _layout(d1, d2, d3, d4, d5) { }
+
+        // Get original parameters.
+        inline idx_t get_d1() const { return _layout.get_d1(); }
+        inline idx_t get_d2() const { return _layout.get_d2(); }
+        inline idx_t get_d3() const { return _layout.get_d3(); }
+        inline idx_t get_d4() const { return _layout.get_d4(); }
+        inline idx_t get_d5() const { return _layout.get_d5(); }
+
+        // Print some info.
+        virtual void print_info(const std::string& name, std::ostream& os = std::cout) {
+            os << "5D (" << get_d1() << " * " << get_d2() << " * " <<
+                get_d3() << " * " << get_d4() <<  " * " << get_d5() << ") ";
+            GenericGridBase<T>::print_info(name, os);
+        }
+
+        // Get 1D index.
+        inline idx_t get_index(idx_t i, idx_t j, idx_t k, idx_t l, idx_t m,
+                               bool check=true) const {
+            if (check) {
+                assert(i >= 0);
+                assert(i < get_d1());
+                assert(j >= 0);
+                assert(j < get_d2());
+                assert(k >= 0);
+                assert(k < get_d3());
+                assert(l >= 0);
+                assert(l < get_d4());
+                assert(m >= 0);
+                assert(m < get_d5());
+            }
+            idx_t ai = _layout.layout(i, j, k, l, m);
+            if (check)
+                assert(ai < _layout.get_size());
+            return ai;
+        }
+
+        // Access element given 5D indices.
+        inline const T& operator()(idx_t i, idx_t j, idx_t k, idx_t l, idx_t m,
+                                   bool check=true) const {
+            return this->_elems[get_index(i, j, k, l, m, check)];
+        }
+
+        // Non-const version.
+        inline T& operator()(idx_t i, idx_t j, idx_t k, idx_t l, idx_t m,
+                             bool check=true) {
+            return this->_elems[get_index(i, j, k, l, m, check)];
+        }
+
+        // Check for equality.
+        // Return number of mismatches greater than epsilon.
+        virtual idx_t compare(const GenericGridBase<T>* ref,
+                              T epsilon,
+                              int maxPrint = 0,
+                              std::ostream& os = std::cerr) const {
+
+            auto ref1 = dynamic_cast<const GenericGrid5d*>(ref);
+            if (!ref1) {
+                os << "** type mismatch against GenericGrid5d." << std::endl;
+                return 1;
+            }
+
+            // Quick check for errors.
+            idx_t errs = GenericGridBase<T>::count_diffs(*ref, epsilon);
+
+            // Run detailed comparison if any errors found.
+            if (errs > 0 && maxPrint) {
+                int p = 0;
+                for (idx_t i1 = 0; i1 < get_d1(); i1++) {
+                    for (idx_t i2 = 0; i2 < get_d2(); i2++) {
+                        for (idx_t i3 = 0; i3 < get_d3(); i3++) {
+                            for (idx_t i4 = 0; i4 < get_d4(); i4++) {
+                                for (idx_t i5 = 0; i5 < get_d5(); i5++) {
+                                    T te = (*this)(i1, i2, i3, i4, i5);
+                                    T re = (*ref1)(i1, i2, i3, i4, i5);
+                                    if (!within_tolerance(te, re, epsilon)) {
+                                        p++;
+                                        if (p < maxPrint)
+                                            os << "** mismatch at (" << i1 << ", " << i2 <<
+                                                ", " << i3 << ", " << i4 <<  ", " << i5 << "): " <<
+                                                te << " != " << re << std::endl;
+                                        else if (p == maxPrint)
+                                            os << "** Additional errors not printed." << std::endl;
+                                        else
+                                            goto done;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+        done:
+            return errs;
+        }
     };
 
 }

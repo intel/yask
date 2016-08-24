@@ -38,6 +38,7 @@ IN THE SOFTWARE.
 #include <map>
 #include <set>
 #include <vector>
+#include <deque>
 #include <cstdarg>
 
 using namespace std;
@@ -53,7 +54,7 @@ template <typename T>
 class Tuple {
 protected:
     map<string, T> _map;        // contents.
-    vector<string> _dims;       // dirs in specified order.
+    deque<string> _dims;        // dirs in specified order.
 
     // First-inner vars control ordering. Example: dims x, y, z.
     // If _firstInner == true, x is unit stride.
@@ -100,7 +101,7 @@ public:
     }
 
     // Get dimensions.
-    const vector<string>& getDims() const {
+    const deque<string>& getDims() const {
         return _dims;
     }
     int size() const {
@@ -108,10 +109,15 @@ public:
     }
 
     // Add dimension to tuple (must NOT already exist).
-    void addDim(const string& dim, T val) {
+    void addDimBack(const string& dim, T val) {
         assert(_map.count(dim) == 0);
         _map[dim] = val;
         _dims.push_back(dim);
+    }
+    void addDimFront(const string& dim, T val) {
+        assert(_map.count(dim) == 0);
+        _map[dim] = val;
+        _dims.push_front(dim);
     }
     
     // Set value (key(s) must already exist).
@@ -129,6 +135,11 @@ public:
             _map[_dims.at(i)] = vals[i];
     }
     virtual void setVals(const vector<T>& vals) {
+        assert(size() == (int)vals.size());
+        for (int i = 0; i < size(); i++)
+            _map[_dims.at(i)] = vals.at(i);
+    }
+    virtual void setVals(const deque<T>& vals) {
         assert(size() == (int)vals.size());
         for (int i = 0; i < size(); i++)
             _map[_dims.at(i)] = vals.at(i);
@@ -284,7 +295,7 @@ public:
         string dname  = dir.getDirName();
         for (auto dim : _dims) {
             if (dim != dname)
-                newt.addDim(dim, getVal(dim));
+                newt.addDimBack(dim, getVal(dim));
         }
         return newt;
     }

@@ -74,6 +74,8 @@ public:
         INIT_GRID_3D(rho, x, y, z);
         INIT_GRID_3D(mu, x, y, z);
         INIT_GRID_3D(sponge, x, y, z);
+
+        // Initialize the parameters (both are scalars).
         INIT_PARAM(delta_t);
         INIT_PARAM(h);
     }
@@ -94,8 +96,6 @@ public:
     // x, y, z parameters are integer grid indices, not actual offsets in
     // time or space, so half-steps due to staggered grids are adjusted
     // appropriately.
-
-    // TODO: handle free-surface velocity.
 
     void define_vel_x(GridIndex t, GridIndex x, GridIndex y, GridIndex z) {
         GridValue rho_val = (rho(x, y,   z  ) +
@@ -160,8 +160,6 @@ public:
     // space, so half-steps due to staggered grids are adjusted
     // appropriately.
 
-    // TODO: handle free-surface stress.
-    
     void define_stress_xx(GridIndex t, GridIndex x, GridIndex y, GridIndex z,
                           GridValue lambda_val, GridValue mu_val,
                           GridValue d_x_val, GridValue d_y_val, GridValue d_z_val) {

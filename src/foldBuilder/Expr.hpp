@@ -635,6 +635,21 @@ public:
     // Visit first expression in each grid.
     virtual void acceptToFirst(ExprVisitor* ev);
 
+    // Add a grid.
+    virtual void add(Grid* ngp) {
+
+        // Delete any matching old one.
+        for (size_t i = 0; i < size(); i++) {
+            auto ogp = at(i);
+            if (ogp->getName() == ngp->getName()) {
+                erase(begin() + i);
+                break;
+            }
+        }
+
+        // Add new one.
+        push_back(ngp);
+    }
 };
 
 // Aliases for parameters.
@@ -692,38 +707,38 @@ typedef ExprPtr GridValue;
 // to the default '_grids' collection.
 // The dimensions are named according to the remaining parameters.
 #define INIT_GRID_0D(gvar) \
-    _grids.push_back(&gvar); gvar.setName(#gvar)
+    _grids.add(&gvar); gvar.setName(#gvar)
 #define INIT_GRID_1D(gvar, d1) \
-    INIT_GRID_0D(gvar); gvar.addDim(#d1, 1)
+    INIT_GRID_0D(gvar); gvar.addDimBack(#d1, 1)
 #define INIT_GRID_2D(gvar, d1, d2) \
-    INIT_GRID_1D(gvar, d1); gvar.addDim(#d2, 1)
+    INIT_GRID_1D(gvar, d1); gvar.addDimBack(#d2, 1)
 #define INIT_GRID_3D(gvar, d1, d2, d3) \
-    INIT_GRID_2D(gvar, d1, d2); gvar.addDim(#d3, 1)
+    INIT_GRID_2D(gvar, d1, d2); gvar.addDimBack(#d3, 1)
 #define INIT_GRID_4D(gvar, d1, d2, d3, d4) \
-    INIT_GRID_3D(gvar, d1, d2, d3); gvar.addDim(#d4, 1)
+    INIT_GRID_3D(gvar, d1, d2, d3); gvar.addDimBack(#d4, 1)
 #define INIT_GRID_5D(gvar, d1, d2, d3, d4, d5) \
-    INIT_GRID_4D(gvar, d1, d2, d3, d4); gvar.addDim(#d5, 1)
+    INIT_GRID_4D(gvar, d1, d2, d3, d4); gvar.addDimBack(#d5, 1)
 #define INIT_GRID_6D(gvar, d1, d2, d3, d4, d5, d6) \
-    INIT_GRID_5D(gvar, d1, d2, d3, d4, d5); gvar.addDim(#d6, 1)
+    INIT_GRID_5D(gvar, d1, d2, d3, d4, d5); gvar.addDimBack(#d6, 1)
 
 // Convenience macros for initializing parameters in stencil ctors.
 // Each names the param according to the 'pvar' parameter and adds it
 // to the default '_params' collection.
 // The dimensions are named and sized according to the remaining parameters.
 #define INIT_PARAM(pvar) \
-    _params.push_back(&pvar); pvar.setName(#pvar); pvar.setParam(true)
+    _params.add(&pvar); pvar.setName(#pvar); pvar.setParam(true)
 #define INIT_PARAM_1D(pvar, d1, s1) \
-    INIT_PARAM(pvar); pvar.addDim(#d1, s1)
+    INIT_PARAM(pvar); pvar.addDimBack(#d1, s1)
 #define INIT_PARAM_2D(pvar, d1, s1, d2, s2) \
-    INIT_PARAM_1D(pvar, d1, s1); pvar.addDim(#d2, s2)
+    INIT_PARAM_1D(pvar, d1, s1); pvar.addDimBack(#d2, s2)
 #define INIT_PARAM_3D(pvar, d1, s1, d2, s2, d3, s3) \
-    INIT_PARAM_2D(pvar, d1, s1, d2, s2); pvar.addDim(#d3, s3)
+    INIT_PARAM_2D(pvar, d1, s1, d2, s2); pvar.addDimBack(#d3, s3)
 #define INIT_PARAM_4D(pvar, d1, s1, d2, s2, d3, s3, d4, s4)             \
-    INIT_PARAM_3D(pvar, d1, s1, d2, s2, d3, s3); pvar.addDim(#d4, d4)
+    INIT_PARAM_3D(pvar, d1, s1, d2, s2, d3, s3); pvar.addDimBack(#d4, d4)
 #define INIT_PARAM_5D(pvar, d1, s1, d2, s2, d3, s3, d4, s4, d5, s5)     \
-    INIT_PARAM_4D(pvar, d1, s1, d2, s2, d3, s3, d4, s4); pvar.addDim(#d5, d5)
+    INIT_PARAM_4D(pvar, d1, s1, d2, s2, d3, s3, d4, s4); pvar.addDimBack(#d5, d5)
 #define INIT_PARAM_6D(pvar, d1, s1, d2, s2, d3, s3, d4, s4, d5, s5, d6, s6) \
-    INIT_PARAM_4D(pvar, d1, s1, d2, s2, d3, s3, d4, s4, d5, s5); pvar.addDim(#d6, d6)
+    INIT_PARAM_4D(pvar, d1, s1, d2, s2, d3, s3, d4, s4, d5, s5); pvar.addDimBack(#d6, d6)
 
 // Convenience macro for getting one offset from the 'offsets' tuple.
 #define GET_OFFSET(ovar)                         \

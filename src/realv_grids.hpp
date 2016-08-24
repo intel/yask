@@ -28,10 +28,6 @@ IN THE SOFTWARE.
 
 #include "generic_grids.hpp"
 
-// rounding macros for integer types.
-#define CEIL_DIV(numer, denom) (((numer) + (denom) - 1) / (denom))
-#define ROUND_UP(n, mult) (CEIL_DIV(n, mult) * (mult))
-
 namespace yask {
 
     // Base class for real_vec_t grids.
@@ -42,7 +38,8 @@ namespace yask {
         GenericGridBase<real_vec_t>* _gp;
 
     public:
-        RealVecGridBase(std::string name, GenericGridBase<real_vec_t>* gp) :
+        RealVecGridBase(std::string name,
+                        GenericGridBase<real_vec_t>* gp) :
             _name(name), _gp(gp) { }
 
         const std::string& get_name() { return _name; }
@@ -96,7 +93,6 @@ namespace yask {
         }
     };
 
-
     // A 3D (x, y, z) collection of real_vec_t elements.
     // Supports symmetric padding in each dimension.
     template <typename LayoutFn> class RealVecGrid_XYZ :
@@ -118,8 +114,9 @@ namespace yask {
         // Ctor.
         // Dimensions are real_t elements, not real_vecs.
         RealVecGrid_XYZ(idx_t dx, idx_t dy, idx_t dz,
-                      idx_t px, idx_t py, idx_t pz,
+                        idx_t px, idx_t py, idx_t pz,
                         const std::string& name,
+                        bool use_hbw,
                         std::ostream& msg_stream = std::cout) :
             RealVecGridBase(name, &_data),
 
@@ -143,7 +140,8 @@ namespace yask {
             _data(_dxv + 2*_pxv,
                   _dyv + 2*_pyv,
                   _dzv + 2*_pzv,
-                  ALLOC_ALIGNMENT)
+                  GRID_ALIGNMENT,
+                  use_hbw)
         {
             _data.print_info(name, msg_stream);
 
@@ -162,7 +160,7 @@ namespace yask {
         // Get pointer to the real_vec_t at vector offset iv, jv, kv.
         // Indices must be normalized, i.e., already divided by VLEN_*.
         ALWAYS_INLINE const real_vec_t* getVecPtrNorm(idx_t iv, idx_t jv, idx_t kv,
-                                                 bool checkBounds=true) const {
+                                                      bool checkBounds=true) const {
 
 #ifdef TRACE_MEM
             std::cout << _name << "." << "RealVecGrid_XYZ::getVecPtrNorm(" <<
@@ -302,7 +300,7 @@ namespace yask {
         // Read one vector at vector offset iv, jv, kv.
         // Indices must be normalized, i.e., already divided by VLEN_*.
         ALWAYS_INLINE const real_vec_t readVecNorm(idx_t iv, idx_t jv, idx_t kv,
-                                              int line) const {
+                                                   int line) const {
 #ifdef TRACE_MEM
             std::cout << "readVecNorm(" << iv << "," << jv << "," << kv << ")..." << std::endl;
 #endif        
@@ -360,6 +358,7 @@ namespace yask {
         RealVecGrid_NXYZ(idx_t dn, idx_t dx, idx_t dy, idx_t dz,
                          idx_t pn, idx_t px, idx_t py, idx_t pz,
                          const std::string& name,
+                         bool use_hbw,
                          std::ostream& msg_stream = std::cout) :
             RealVecGridBase(name, &_data),
 
@@ -388,7 +387,8 @@ namespace yask {
                   _dxv + 2*_pxv,
                   _dyv + 2*_pyv,
                   _dzv + 2*_pzv,
-                  ALLOC_ALIGNMENT)
+                  GRID_ALIGNMENT,
+                  use_hbw)
         {
             _data.print_info(name, msg_stream);
         }
@@ -606,10 +606,11 @@ namespace yask {
         RealVecGrid_TXYZ(idx_t dx, idx_t dy, idx_t dz,
                          idx_t px, idx_t py, idx_t pz,
                          const std::string& name,
+                         bool use_hbw,
                          std::ostream& msg_stream = std::cout) :
             RealVecGrid_NXYZ<LayoutFn>(TIME_DIM_SIZE, dx, dy, dz,
                                        0, px, py, pz,
-                                       name, msg_stream)
+                                       name, use_hbw, msg_stream)
         {
             if (VLEN_N > 1) {
                 std::cerr << "Sorry, vectorizing in N dimension not yet supported." << std::endl;
@@ -716,10 +717,11 @@ namespace yask {
         RealVecGrid_TNXYZ(idx_t dn, idx_t dx, idx_t dy, idx_t dz,
                           idx_t pn, idx_t px, idx_t py, idx_t pz,
                           const std::string& name,
+                          bool use_hbw,
                           std::ostream& msg_stream = std::cout) :
             RealVecGrid_NXYZ<LayoutFn>(TIME_DIM_SIZE * dn, dx, dy, dz,
                                        pn, px, py, pz,
-                                       name, msg_stream),
+                                       name, use_hbw, msg_stream),
             _dn(dn)
         {
             if (VLEN_N > 1) {

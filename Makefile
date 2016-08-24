@@ -32,9 +32,8 @@
 # mpi: 0, 1: whether to use MPI. 
 #   Currently, MPI is only used in X dimension.
 #
-# order:
-# - historical term, not strictly order of PDE.
-# - for most stencils, is width of spatial extent - 1.
+# radius: sets spatial extent of stencil.
+#   Ignored for awp*.
 #
 # real_bytes: FP precision: 4=float, 8=double.
 #
@@ -46,6 +45,8 @@
 # streaming_stores: 0, 1: Whether to use streaming stores.
 #
 # crew: 0, 1: whether to use Intel Crew threading instead of nested OpenMP (deprecated).
+#
+# hbw: 0, 1: whether to use hbwmalloc package.
 #
 # omp_schedule: OMP schedule policy for region loop.
 # omp_block_schedule: OMP schedule policy for nested OpenMP block loop.
@@ -66,24 +67,24 @@ ifeq ($(stencil),)
 $(error Stencil not specified; use stencil=iso3dfd, 3axis, 9axis, 3plane, cube, ave, awp or awp_elastic)
 
 else ifeq ($(stencil),ave)
-order		?=	2
+radius		?=	1
 real_bytes	?=	8
 def_rank_size	?=	256
 
 else ifeq ($(stencil),9axis)
-order		?=	8
+radius		?=	4
 
 else ifeq ($(stencil),3plane)
-order		?=	6
+radius		?=	3
 
 else ifeq ($(stencil),cube)
-order		?=	4
+radius		?=	2
 
 else ifeq ($(stencil),iso3dfd)
 layout_4d	?=	Layout_2314
 
 else ifeq ($(findstring awp,$(stencil)),awp)
-order		?=	4
+radius		?=	2
 time_dim_size	?=	1
 eqs		?=	velocity=vel_,stress=stress_
 def_rank_size	?=	640
@@ -165,7 +166,7 @@ omp_block_schedule		?=	static,1
 omp_halo_schedule		?=	static
 def_block_threads		?=	2
 def_thread_factor		?=	1
-order				?=	16
+radius				?=	8
 real_bytes			?=	4
 time_dim_size			?=	2
 layout_3d			?=	Layout_123
@@ -215,7 +216,7 @@ LFLAGS          +=      $(CXXFLAGS) -lrt -g
 FB_CXX    	=       $(CXX)
 FB_CXXFLAGS 	+=	-g -O1 -std=c++11 -Wall  # low opt to reduce compile time.
 EXTRA_FB_CXXFLAGS =
-FB_FLAGS   	+=	-or $(order) -st $(stencil) -cluster $(cluster) -fold $(fold)
+FB_FLAGS   	+=	-st $(stencil) -r $(radius) -cluster $(cluster) -fold $(fold)
 GEN_HEADERS     =	$(addprefix src/, \
 				stencil_macros.hpp stencil_code.hpp \
 				stencil_rank_loops.hpp \
@@ -249,10 +250,18 @@ MACROS		+=	USE_MPI
 crew		=	0
 endif
 
+# HBW settings
+ifeq ($(hbw),1)
+MACROS		+=	USE_HBW
+HBW_DIR 	=	$(HOME)/memkind_build
+CXXFLAGS	+=	-I$(HBW_DIR)/include
+LFLAGS		+= 	-lnuma $(HBW_DIR)/lib/libmemkind.a
+endif
+
 # VTUNE settings.
 ifeq ($(vtune),1)
-VTUNE_DIR	=	$(VTUNE_AMPLIFIER_XE_2016_DIR)
 MACROS		+=	USE_VTUNE
+VTUNE_DIR	=	$(VTUNE_AMPLIFIER_XE_2016_DIR)
 CXXFLAGS	+=	-I$(VTUNE_DIR)/include
 LFLAGS		+=	$(VTUNE_DIR)/lib64/libittnotify.a
 endif
@@ -274,6 +283,7 @@ ifeq ($(crew),1)
 CXXFLAGS	+=      -mP2OPT_hpo_par_crew_codegen=T
 MACROS		+=	__INTEL_CREW
 def_block_threads =	1
+BLOCK_LOOP_OUTER_MODS	=	crew
 endif
 
 else # not Intel compiler
@@ -285,7 +295,7 @@ ifeq ($(streaming_stores),1)
 MACROS		+=	USE_STREAMING_STORE
 endif
 
-# gen-loops.pl args for outer 3 sets of loops:
+# gen-loops.pl args:
 
 # Rank loops break up the whole rank into smaller regions.
 # In order for tempral wavefronts to operate properly, the
@@ -295,7 +305,8 @@ endif
 # using temporal wavefronts. The time loop may be found
 # in StencilEquations::calc_rank().
 RANK_LOOP_OPTS		=	-dims 'dn,dx,dy,dz'
-RANK_LOOP_CODE		=	loop(dn,dx,dy,dz) { calc(region(start_dt, stop_dt, stencil_set)); }
+RANK_LOOP_CODE		=	$(RANK_LOOP_OUTER_MODS) loop(dn,dx,dy,dz) \
+				{ $(RANK_LOOP_INNER_MODS) calc(region(start_dt, stop_dt, stencil_set)); }
 
 # Region loops break up a region using OpenMP threading into blocks.
 # The region time loops are not coded here to allow for proper
@@ -304,30 +315,30 @@ RANK_LOOP_CODE		=	loop(dn,dx,dy,dz) { calc(region(start_dt, stop_dt, stencil_set
 REGION_LOOP_OPTS	=     	-dims 'rn,rx,ry,rz' \
 				-ompConstruct '$(omp_par_for) schedule($(omp_schedule)) proc_bind(spread)' \
 				-calcPrefix 'stencil->calc_'
-REGION_LOOP_CODE	=	square_wave serpentine omp loop(rn,rx,ry,rz) { calc(block(rt)); }
+REGION_LOOP_OUTER_MODS	?=	square_wave serpentine omp
+REGION_LOOP_CODE	=	$(REGION_LOOP_OUTER_MODS) loop(rn,rx,ry,rz) \
+				{ $(REGION_LOOP_INNER_MODS) calc(block(rt)); }
 
 # Block loops break up a block into vector clusters.
 # The indices at this level are by vector instead of element;
 # this is indicated by the 'v' suffix.
-# There is no time loop here because temporal blocking is not yet supported.
 # The 'omp' modifier creates a nested OpenMP loop.
-BLOCK_LOOP_OPTS		=     	-dims 'bnv,bxv,byv,bzv'
-ifeq ($(crew),1)
-BLOCK_LOOP_OUTER_MODS	=	crew
-else
-BLOCK_LOOP_OUTER_MODS	=	omp
-BLOCK_LOOP_OPTS		+=	-ompConstruct '$(omp_par_for) schedule($(omp_block_schedule)) proc_bind(close)'
-endif
-BLOCK_LOOP_CODE		=	$(BLOCK_LOOP_OUTER_MODS) loop(bnv,bxv) { loop(byv) { \
-				$(BLOCK_LOOP_INNER_MODS) loop(bzv) { calc(cluster(bt)); } } }
+# There is no time loop here because threaded temporal blocking is not yet supported.
+BLOCK_LOOP_OPTS		=     	-dims 'bnv,bxv,byv,bzv' \
+				-ompConstruct '$(omp_par_for) schedule($(omp_block_schedule)) proc_bind(close)'
+BLOCK_LOOP_OUTER_MODS	?=	omp
+BLOCK_LOOP_CODE		=	$(BLOCK_LOOP_OUTER_MODS) loop(bnv,bxv) { loop(byv) \
+				{ $(BLOCK_LOOP_INNER_MODS) loop(bzv) { calc(cluster(bt)); } } }
 
 # Halo pack/unpack loops break up a region face, edge, or corner into vectors.
 # The indices at this level are by vector instead of element;
 # this is indicated by the 'v' suffix.
-# Note that there are no nested OpenMP loops here.
+# Nested OpenMP is not used here because there is no sharing between threads.
 HALO_LOOP_OPTS		=     	-dims 'nv,xv,yv,zv' \
-				-ompConstruct '$(omp_par_for) schedule($(omp_halo_schedule))'
-HALO_LOOP_CODE		=	omp loop(nv,xv,yv,zv) { calc(halo(t)); }
+				-ompConstruct '$(omp_par_for) schedule($(omp_halo_schedule)) proc_bind(spread)'
+HALO_LOOP_OUTER_MODS	?=	omp
+HALO_LOOP_CODE		=	$(HALO_LOOP_OUTER_MODS) loop(nv,xv,yv,zv) \
+				$(HALO_LOOP_INNER_MODS) { calc(halo(t)); }
 
 # compile with model_cache=1 or 2 to check prefetching.
 ifeq ($(model_cache),1)
@@ -363,7 +374,7 @@ echo-settings:
 	@echo stencil=$(stencil)
 	@echo fold=$(fold)
 	@echo cluster=$(cluster)
-	@echo order=$(order)
+	@echo radius=$(radius)
 	@echo real_bytes=$(real_bytes)
 	@echo layout_3d=$(layout_3d)
 	@echo layout_4d=$(layout_4d)
@@ -383,13 +394,20 @@ echo-settings:
 	@echo EXTRA_CXXFLAGS="\"$(EXTRA_CXXFLAGS)\""
 	@echo CXXFLAGS="\"$(CXXFLAGS)\""
 	@echo RANK_LOOP_OPTS="\"$(RANK_LOOP_OPTS)\""
+	@echo RANK_LOOP_OUTER_MODS="\"$(RANK_LOOP_OUTER_MODS)\""
+	@echo RANK_LOOP_INNER_MODS="\"$(RANK_LOOP_INNER_MODS)\""
 	@echo RANK_LOOP_CODE="\"$(RANK_LOOP_CODE)\""
 	@echo REGION_LOOP_OPTS="\"$(REGION_LOOP_OPTS)\""
+	@echo REGION_LOOP_OUTER_MODS="\"$(REGION_LOOP_OUTER_MODS)\""
+	@echo REGION_LOOP_INNER_MODS="\"$(REGION_LOOP_INNER_MODS)\""
 	@echo REGION_LOOP_CODE="\"$(REGION_LOOP_CODE)\""
-	@echo INNER_BLOCK_LOOP_OPTS="\"$(INNER_BLOCK_LOOP_OPTS)\""
 	@echo BLOCK_LOOP_OPTS="\"$(BLOCK_LOOP_OPTS)\""
+	@echo BLOCK_LOOP_OUTER_MODS="\"$(BLOCK_LOOP_OUTER_MODS)\""
+	@echo BLOCK_LOOP_INNER_MODS="\"$(BLOCK_LOOP_INNER_MODS)\""
 	@echo BLOCK_LOOP_CODE="\"$(BLOCK_LOOP_CODE)\""
 	@echo HALO_LOOP_OPTS="\"$(HALO_LOOP_OPTS)\""
+	@echo HALO_LOOP_OUTER_MODS="\"$(RANK_LOOP_OUTER_MODS)\""
+	@echo HALO_LOOP_INNER_MODS="\"$(RANK_LOOP_INNER_MODS)\""
 	@echo HALO_LOOP_CODE="\"$(HALO_LOOP_CODE)\""
 	@echo CXX=$(CXX)
 	@$(CXX) -v; $(CXX_VER_CMD)
@@ -456,9 +474,9 @@ help:
 	@echo "make clean; make arch=knl stencil=iso3dfd"
 	@echo "make clean; make arch=knl stencil=awp mpi=1"
 	@echo "make clean; make arch=skx stencil=ave fold='x=1,y=2,z=4' cluster='x=2'"
-	@echo "make clean; make arch=knc stencil=3axis order=8 INNER_BLOCK_LOOP_OPTS='prefetch(L1,L2)'"
+	@echo "make clean; make arch=knc stencil=3axis radius=4 INNER_BLOCK_LOOP_OPTS='prefetch(L1,L2)'"
 	@echo " "
 	@echo "Example debug usage:"
 	@echo "make arch=knl  stencil=iso3dfd OMPFLAGS='-qopenmp-stubs' EXTRA_CXXFLAGS='-O0' EXTRA_MACROS='DEBUG'"
 	@echo "make arch=intel64 stencil=ave OMPFLAGS='-qopenmp-stubs' EXTRA_CXXFLAGS='-O0' EXTRA_MACROS='DEBUG' model_cache=2"
-	@echo "make arch=intel64 stencil=3axis order=0 fold='x=1,y=1,z=1' OMPFLAGS='-qopenmp-stubs' EXTRA_MACROS='DEBUG DEBUG_TOLERANCE NO_INTRINSICS TRACE TRACE_MEM TRACE_INTRINSICS' EXTRA_CXXFLAGS='-O0'"
+	@echo "make arch=intel64 stencil=3axis radius=0 fold='x=1,y=1,z=1' OMPFLAGS='-qopenmp-stubs' EXTRA_MACROS='DEBUG DEBUG_TOLERANCE NO_INTRINSICS TRACE TRACE_MEM TRACE_INTRINSICS' EXTRA_CXXFLAGS='-O0'"

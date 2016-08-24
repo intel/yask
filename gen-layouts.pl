@@ -34,7 +34,7 @@ sub usage {
 
 usage() if !defined $ARGV[0];
 my $opt = $ARGV[0];
-my @sizes = (1..4);
+my @sizes = (1..5);
 
 use strict;
 use File::Basename;

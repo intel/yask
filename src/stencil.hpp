@@ -30,7 +30,7 @@ IN THE SOFTWARE.
 #define STENCIL_HPP
 
 // Auto-generated macros from foldBuilder.
-// It's important that this be included before real_vec_t.hpp
+// It's important that this be included before realv.hpp
 // to properly set the vector lengths.
 #include "stencil_macros.hpp"
 

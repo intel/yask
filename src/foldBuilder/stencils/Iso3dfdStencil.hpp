@@ -28,101 +28,31 @@ IN THE SOFTWARE.
 
 #include "StencilBase.hpp"
 
-class Iso3dfdStencil : public StencilOrderBase {
+class Iso3dfdStencil : public StencilRadiusBase {
 
-    const int maxOrder = 16;
-    
 protected:
-    double* _coeff;             // stencil coefficients.
-    double _dxyz;               // dx, dy, dz factor.
-    bool _deferCoeff;           // coefficients provided at run-time.
-
     Grid pressure;              // time-varying 3D pressure grid.
     Grid vel;                   // constant 3D vel grid.
-
-    Param coefficients;             // coefficients if they are not hard-coded.
+    Param coeff;                // coefficients.
     
 public:
 
-    Iso3dfdStencil(StencilList& stencils, int order=8, double dxyz=50.0) :
-        StencilOrderBase("iso3dfd", stencils, order),
-        _coeff(0), _dxyz(dxyz), _deferCoeff(false)
+    Iso3dfdStencil(StencilList& stencils, int radius=8) :
+        StencilRadiusBase("iso3dfd", stencils, radius)
     {
         INIT_GRID_4D(pressure, t, x, y, z);
         INIT_GRID_3D(vel, x, y, z);
-        INIT_PARAM_1D(coefficients, r, order / 2 + 1);
+        INIT_PARAM_1D(coeff, r, radius + 1); // c0, c1 .. c<radius>.
     }
+    virtual ~Iso3dfdStencil() { }
 
-    virtual ~Iso3dfdStencil() {
-        if (_coeff)
-            delete[] _coeff;
-    }
-
-    // Set coefficient deferral policy.
-    // false: calculate const coefficients during code generation.
-    // true: generate code to calculate coefficicents at runtine.
-    virtual void setDeferCoeff(bool defer) {
-        _deferCoeff = defer;
-    }
-
-    // Set order.
+    // Set radius.
     // Return true if successful.
-    virtual bool setOrder(int order) {
-        _order = order;
-
-        // support only certain orders.
-        // Only order 8 and 16 use accurate coefficients; others are for debug.
-        if (order % 2 == 1 || order > maxOrder)
+    virtual bool setRadius(int radius) {
+        if (!StencilRadiusBase::setRadius(radius))
             return false;
-
-        // set the coefficients.
-        if (_coeff)
-            delete[] _coeff;
-        int n = order / 2 + 1;
-        _coeff = new double[n];
-
-        double coeff8[] = {
-            -2.847222222,
-            +1.6,
-            -0.2,
-            +2.53968e-2,
-            -1.785714e-3};
-
-        double coeff16[] = {
-            -3.0548446,
-            +1.7777778,
-            -3.1111111e-1,
-            +7.572087e-2,
-            -1.76767677e-2,
-            +3.480962e-3,
-            -5.180005e-4,
-            +5.074287e-5,
-            -2.42812e-6};
-
-        double *coeffN = (order == 8) ? coeff8 : coeff16;
-
-        // copy the coefficients and adjust using dxyz factor.
-        double dxyz2 = _dxyz * _dxyz;
-        for (int i = 0; i < n; i++)
-            _coeff[i] = coeffN[i] / dxyz2;
-        _coeff[0] *= 3.0;
-
+        coeff.setVal("r", radius + 1); // change dimension of coeff.
         return true;
-    }
-
-    // Get an expression for coefficient at radius r.
-    virtual GridValue coeff(int r) {
-        GridValue v;
-        
-        // if coefficients are deferred, load from parameter.
-        if (_deferCoeff)
-            v = coefficients(r);
-
-        // if coefficients are not deferred, set from constant.
-        else
-            v = constGridValue(_coeff[r]);
-
-        return v;
     }
 
     // Define equation for pressure at t+1 based on values from vel and pressure at t.
@@ -137,7 +67,7 @@ public:
 
         // add values from x, y, and z axes multiplied by the
         // coeff for the given radius.
-        for (int r = 1; r <= _order/2; r++) {
+        for (int r = 1; r <= _radius; r++) {
 
             // Add values from axes at radius r.
             v += (

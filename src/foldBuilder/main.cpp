@@ -45,6 +45,7 @@ StencilList stencils;
 bool printPseudo = false;
 bool printPOVRay = false;
 bool printMacros = false;
+bool printGrids = false;
 bool printCpp = false;
 bool printKncCpp = false;
 bool print512Cpp = false;
@@ -55,45 +56,52 @@ string shapeName;
 IntTuple foldOptions;                     // vector fold.
 IntTuple clusterOptions;                  // cluster sizes.
 int exprSize = 50;
-bool deferCoeff = false;
-int order = 2;
+int radius = 1;
 bool firstInner = true;
 bool allowUnalignedLoads = false;
 string equationTargets;
+bool doFuse = false;
+bool hbwRW = true;
+bool hbwRO = true;
 bool doComb = false;
 bool doCse = true;
+string stepDim = "t";
 
 void usage(const string& cmd) {
 
     cerr << "Options:\n"
-        " -h                print this help message.\n"
+        " -h                 print this help message.\n"
         "\n"
-        " -st <name>        set stencil type (required); supported stencils:\n";
+        " -st <name>         set stencil type (required); supported stencils:\n";
     for (auto si : stencils) {
         auto name = si.first;
         cerr << "                     " << name << endl;
     }
     cerr <<
+        " -r <radius>        set stencil radius (ignored for some stencils; default=" << radius << ").\n"
         "\n"
         " -fold <dim>=<size>,...    set number of elements in each dimension in a vector block.\n"
         " -cluster <dim>=<size>,... set number of values to evaluate in each dimension.\n"
         " -eq <name>=<substr>,...   put updates to grids containing substring in equation name.\n"
-        " -or <order>        set stencil order (ignored for some stencils; default=" << order << ").\n"
-        //" -dc                defer coefficient lookup to runtime (for iso3dfd stencil only).\n"
+        //" [-no]-fuse        do [not] pack grids together in meta container(s) (default=" << doFuse << ").\n"
+        " -step <dim>        solution progresses in given dimension (default='" << stepDim << "').\n"
         " -lus               make last dimension of fold unit stride (instead of first).\n"
         " -aul               allow simple unaligned loads (memory map MUST be compatible).\n"
         " -es <expr-size>    set heuristic for expression-size threshold (default=" << exprSize << ").\n"
-        " -[no]comb          [do not] combine commutative operations (default=" << doComb << ").\n"
-        " -[no]cse           [do not] eliminate common subexpressions (default=" << doCse << ").\n"
+        " [-no]-comb         do [not] combine commutative operations (default=" << doComb << ").\n"
+        " [-no]-cse          do [not] eliminate common subexpressions (default=" << doCse << ").\n"
+        " [-no]-hbw-rw       do [not] allocate read/write grids in high-BW mem ((default=" << hbwRW << ").\n"
+        " [-no]-hbw-ro       do [not] allocate read-only grids in high-BW mem ((default=" << hbwRO << ").\n"
         "\n"
         //" -ps <vec-len>      print stats for all folding options for given vector length.\n"
         " -ph                print human-readable scalar pseudo-code for one point.\n"
         " -pp                print POV-Ray code for one fold.\n"
         " -pm                print YASK pre-processor macros.\n"
-        " -pcpp              print YASK stencil functions for generic C++.\n"
-        " -pknc              print YASK stencil functions for KNC ISA.\n"
-        " -p512              print YASK stencil functions for CORE AVX-512 & MIC AVX-512 ISAs.\n"
-        " -p256              print YASK stencil functions for CORE AVX & AVX2 ISAs.\n"
+        //" -pg                print YASK grid classes.\n"
+        " -pcpp              print YASK stencil classes for generic C++.\n"
+        " -p256              print YASK stencil classes for CORE AVX & AVX2 ISAs.\n"
+        " -p512              print YASK stencil classes for CORE AVX-512 & MIC AVX-512 ISAs.\n"
+        " -pknc              print YASK stencil classes for KNC ISA.\n"
         "\n"
         "Examples:\n"
         " " << cmd << " -st iso3dfd -or 8 -fold x=4,y=4 -p256\n"
@@ -103,7 +111,7 @@ void usage(const string& cmd) {
 
 // Parse command-line and set global cmd-line option vars.
 // Exits on error.
-void parseOpts(int argc, const char* argv[]) 
+void parseOpts(int argc, const char* argv[])
 {
     if (argc <= 1)
         usage(argv[0]);
@@ -117,27 +125,40 @@ void parseOpts(int argc, const char* argv[])
             if (opt == "-h" || opt == "-help" || opt == "--help")
                 usage(argv[0]);
 
-            else if (opt == "-ph")
-                printPseudo = true;
-            else if (opt == "-pp")
-                printPOVRay = true;
-            else if (opt == "-dc")
-                deferCoeff = true;
             else if (opt == "-lus")
                 firstInner = false;
             else if (opt == "-aul")
                 allowUnalignedLoads = true;
             else if (opt == "-comb")
                 doComb = true;
-            else if (opt == "-nocomb")
+            else if (opt == "-no-comb")
                 doComb = false;
             else if (opt == "-cse")
                 doCse = true;
-            else if (opt == "-nocse")
+            else if (opt == "-no-cse")
                 doCse = false;
+            else if (opt == "-fuse")
+                doFuse = true;
+            else if (opt == "-no-fuse")
+                doFuse = false;
+
+            else if (opt == "-hbw-rw")
+                hbwRW = true;
+            else if (opt == "-no-hbw-rw")
+                hbwRW = false;
+            else if (opt == "-hbw-rw")
+                hbwRO = true;
+            else if (opt == "-no-hbw-rw")
+                hbwRO = false;
             
+            else if (opt == "-ph")
+                printPseudo = true;
+            else if (opt == "-pp")
+                printPOVRay = true;
             else if (opt == "-pm")
                 printMacros = true;
+            else if (opt == "-pg")
+                printGrids = true;
             else if (opt == "-pcpp")
                 printCpp = true;
             else if (opt == "-pknc")
@@ -160,16 +181,12 @@ void parseOpts(int argc, const char* argv[])
                 string argop = argv[++argi];
 
                 // options w/a string value.
-                
-                // stencil type.
                 if (opt == "-st")
                     shapeName = argop;
-
-                // equations.
+                else if (opt == "-step")
+                    stepDim = argop;
                 else if (opt == "-eq")
                     equationTargets = argop;
-
-                // fold or cluster
                 else if (opt == "-fold" || opt == "-cluster") {
 
                     // example: x=4,y=2
@@ -180,9 +197,9 @@ void parseOpts(int argc, const char* argv[])
                             
                             // set dim in tuple.
                             if (opt == "-fold")
-                                foldOptions.addDim(key, size);
+                                foldOptions.addDimBack(key, size);
                             else
-                                clusterOptions.addDim(key, size);
+                                clusterOptions.addDimBack(key, size);
                         });
                 }
                 
@@ -196,8 +213,8 @@ void parseOpts(int argc, const char* argv[])
                     if (opt == "-es")
                         exprSize = val;
 
-                    else if (opt == "-or")
-                        order = val;
+                    else if (opt == "-r")
+                        radius = val;
 
                     else if (opt == "-ps")
                         vlenForStats = val;
@@ -232,14 +249,14 @@ void parseOpts(int argc, const char* argv[])
     assert(stencilFunc);
     
     cerr << "Stencil name: " << shapeName << endl;
-    if (stencilFunc->usesOrder()) {
-        bool orderOk = stencilFunc->setOrder(order);
-        if (!orderOk) {
-            cerr << "error: invalid order=" << order << " for stencil type '" <<
+    if (stencilFunc->usesRadius()) {
+        bool rOk = stencilFunc->setRadius(radius);
+        if (!rOk) {
+            cerr << "error: invalid radius=" << radius << " for stencil type '" <<
                 shapeName << "'." << endl;
             usage(argv[0]);
         }
-        cerr << "Stencil order: " << order << endl;
+        cerr << "Stencil radius: " << radius << endl;
     }
     cerr << "Expression-size threshold: " << exprSize << endl;
 }
@@ -268,10 +285,10 @@ int main(int argc, const char* argv[]) {
             if (dimCounts.lookup(dim))
                 dimCounts.setVal(dim, dimCounts.getVal(dim) + 1);
             else
-                dimCounts.addDim(dim, 1);
+                dimCounts.addDimBack(dim, 1);
         }
     }
-
+    
     // For now, there are only global specifications for vector and cluster
     // sizes. Also, vector folding and clustering is done identially for
     // every grid access. Thus, sizes > 1 must exist in all grids.  So, init
@@ -279,13 +296,23 @@ int main(int argc, const char* argv[]) {
     // grids.
     // TODO: relax this restriction.
     IntTuple foldLengths, clusterLengths;
+    IntTuple miscDims; // dimension(s) not in fold, cluster, or step.
     for (auto dim : dimCounts.getDims()) {
-        if (dimCounts.getVal(dim) == (int)grids.size()) {
-            foldLengths.addDim(dim, 1);
-            clusterLengths.addDim(dim, 1);
-        }
-    }
 
+        // Step dim cannot be folded.
+        if (dim == stepDim) {
+        }
+        
+        // Add this dimension to fold/cluster only if it was found in all grids.
+        else if (dimCounts.getVal(dim) == (int)grids.size()) {
+            foldLengths.addDimBack(dim, 1);
+            clusterLengths.addDimBack(dim, 1);
+        }
+        else
+            miscDims.addDimBack(dim, 1);
+    }
+    cerr << "Step dimension: " << stepDim << endl;
+    
     // Create final fold lengths based on cmd-line options.
     IntTuple foldLengthsGT1;    // fold dimensions > 1.
     for (auto dim : foldOptions.getDims()) {
@@ -293,16 +320,19 @@ int main(int argc, const char* argv[]) {
         int* p = foldLengths.lookup(dim);
         if (!p) {
             cerr << "Error: fold-length of " << sz << " in '" << dim <<
-                "' dimension not allowed because '" <<
-                dim << "' doesn't exist in all grids." << endl;
+                "' dimension not allowed because '" << dim << "' ";
+            if (dim == stepDim)
+                cerr << "is the step dimension." << endl;
+            else
+                cerr << "doesn't exist in all grids." << endl;
             exit(1);
         }
         *p = sz;
         if (sz > 1)
-            foldLengthsGT1.addDim(dim, sz);
+            foldLengthsGT1.addDimBack(dim, sz);
             
     }
-    cerr << "Vector-fold dimensions: " << foldLengths.makeDimValStr(" * ") << endl;
+    cerr << "Vector-fold dimension(s): " << foldLengths.makeDimValStr(" * ") << endl;
 
     // Checks for unaligned loads.
     if (allowUnalignedLoads) {
@@ -322,13 +352,17 @@ int main(int argc, const char* argv[]) {
         int* p = clusterLengths.lookup(dim);
         if (!p) {
             cerr << "Error: cluster-length of " << sz << " in '" << dim <<
-                "' dimension not allowed because '" <<
-                dim << "' doesn't exist in all grids." << endl;
+                "' dimension not allowed because '" << dim << "' ";
+            if (dim == stepDim)
+                cerr << "is the step dimension." << endl;
+            else
+                cerr << "doesn't exist in all grids." << endl;
             exit(1);
         }
         *p = sz;
     }
-    cerr << "Cluster dimensions: " << clusterLengths.makeDimValStr(" * ") << endl;
+    cerr << "Cluster dimension(s): " << clusterLengths.makeDimValStr(" * ") << endl;
+    cerr << "Other dimension(s): " << miscDims.makeDimStr(", ") << endl;
     
     // Loop through all points in a cluster.
     // For each point, determine the offset from 0,..,0 based
@@ -343,11 +377,10 @@ int main(int argc, const char* argv[]) {
             // multipled by corresponding vector size.
             auto offsets = clusterPoint.multElements(foldLengths);
 
-            // Add in any dims not in the cluster.
-            for (auto dim : dimCounts.getDims()) {
-                if (!offsets.lookup(dim))
-                    offsets.addDim(dim, 0);
-            }
+            // Add any dims not in the cluster with offset 0.
+            offsets.addDimBack(stepDim, 0);
+            for (auto dim : miscDims.getDims())
+                offsets.addDimBack(dim, 0);
             
             // Construct AST in grids for this cluster point.
             stencilFunc->define(offsets);
@@ -413,36 +446,47 @@ int main(int argc, const char* argv[]) {
     }
 
     // Print YASK classes to update grids and/or prefetch.
+    YASKCppSettings yaskSettings;
+    yaskSettings._allowUnalignedLoads = allowUnalignedLoads;
+    yaskSettings._stepDim = stepDim;
+    yaskSettings._dimCounts = dimCounts;
+    yaskSettings._foldLengths = foldLengths;
+    yaskSettings._clusterLengths = clusterLengths;
+    yaskSettings._miscDims = miscDims;
+    yaskSettings._hbwRW = hbwRW;
+    yaskSettings._hbwRO = hbwRO;
     if (printCpp) {
-        YASKCppPrinter printer(*stencilFunc, equations, exprSize,
-                               allowUnalignedLoads, dimCounts,
-                               foldLengths, clusterLengths);
+        YASKCppPrinter printer(*stencilFunc, equations,
+                               exprSize, yaskSettings);
         printer.printCode(cout);
     }
     if (printKncCpp) {
-        YASKKncPrinter printer(*stencilFunc, equations, exprSize,
-                               allowUnalignedLoads, dimCounts,
-                               foldLengths, clusterLengths);
+        YASKKncPrinter printer(*stencilFunc, equations,
+                               exprSize, yaskSettings);
         printer.printCode(cout);
     }
     if (print512Cpp) {
-        YASKAvx512Printer printer(*stencilFunc, equations, exprSize,
-                                  allowUnalignedLoads, dimCounts,
-                                  foldLengths, clusterLengths);
+        YASKAvx512Printer printer(*stencilFunc, equations,
+                                  exprSize, yaskSettings);
         printer.printCode(cout);
     }
     if (print256Cpp) {
-        YASKAvx256Printer printer(*stencilFunc, equations, exprSize,
-                                  allowUnalignedLoads, dimCounts,
-                                  foldLengths, clusterLengths);
+        YASKAvx256Printer printer(*stencilFunc, equations,
+                                  exprSize, yaskSettings);
         printer.printCode(cout);
+    }
+
+    // Print YASK classes for grids.
+    if (printGrids) {
+        YASKCppPrinter printer(*stencilFunc, equations,
+                               exprSize, yaskSettings);
+        printer.printGrids(cout);
     }
 
     // Print CPP macros.
     if (printMacros) {
-        YASKCppPrinter printer(*stencilFunc, equations, exprSize,
-                               allowUnalignedLoads, dimCounts,
-                               foldLengths, clusterLengths);
+        YASKCppPrinter printer(*stencilFunc, equations,
+                               exprSize, yaskSettings);
         printer.printMacros(cout);
     }
     

@@ -28,20 +28,20 @@ IN THE SOFTWARE.
 
 #include "StencilBase.hpp"
 
-class AveStencil : public StencilOrderBase {
+class AveStencil : public StencilRadiusBase {
 
 protected:
     Grid multi_grid;            // N time-varying 3D grids.
     
 public:
-    AveStencil(StencilList& stencils, int order=2) :
-        StencilOrderBase("ave", stencils, order)
+    AveStencil(StencilList& stencils, int radius=2) :
+        StencilRadiusBase("ave", stencils, radius)
     {
         INIT_GRID_5D(multi_grid, t, n, x, y, z);
     }
 
     // Define equation for grid n at t as average of
-    // (order+1)^3 cube of values from grid n at t-1.
+    // (2*radius+1)^3 cube of values from grid n at t-1.
     virtual void define(const IntTuple& offsets) {
         GET_OFFSET(t);
         GET_OFFSET(n);
@@ -50,8 +50,8 @@ public:
         GET_OFFSET(z);
         
         // add values in cube of desired size.
-        int rBegin = -_order/2;
-        int rEnd = _order/2;
+        int rBegin = -_radius;
+        int rEnd = _radius;
         int nPts = 0;
         GridValue v;
         for (int rx = rBegin; rx <= rEnd; rx++)

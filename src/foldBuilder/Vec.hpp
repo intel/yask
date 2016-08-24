@@ -159,7 +159,7 @@ public:
 
             // Create direction vector in this dim.
             IntTuple dir;
-            dir.addDim(dim, 1);
+            dir.addDimBack(dim, 1);
 
             // Make set of aligned vecs projected in this dir.
             set<IntTuple> footprint;
@@ -256,8 +256,8 @@ public:
                     // convert this offset to vector index and vector offset.
                     int vecIndex, vecOffset;
                     fixIndexOffset(0, offsets.getVal(dim), vecIndex, vecOffset, len);
-                    vecOffsets.addDim(dim, vecOffset);
-                    vecLocation.addDim(dim, vecIndex * len);
+                    vecOffsets.addDimBack(dim, vecOffset);
+                    vecLocation.addDimBack(dim, vecIndex * len);
                 }
 #ifdef DEBUG_VV
                 cout << " element @ " << offsets.makeDimValStr() << " => " <<
