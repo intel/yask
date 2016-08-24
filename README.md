@@ -1,16 +1,14 @@
-Yet Another Stencil Kernel: A framework to facilitate exploration of the HPC
-stencil-performance design space, including
+Yet Another Stencil Kernel: A framework to facilitate exploration of the HPC stencil-performance design space, including
 
 * Vector folding,
 * Cache blocking,
 * Memory layout,
 * Loop construction,
 * Temporal wave-front blocking,
+* MPI halo exchange,
 * And many others.
 
-YASK contains a specialized source-to-source translator to convert scalar
-C++ stencil code to SIMD-optimized code for Intel(R) Xeon Phi(TM)
-processors.
+YASK contains a specialized source-to-source translator to convert scalar C++ stencil code to SIMD-optimized code for Intel(R) Xeon Phi(TM) and Intel(R) Xeon(R) processors.
 
 Supported Platforms
 * 64-bit Linux
@@ -29,6 +27,9 @@ Pre-requisites:
 * Perl 5.010 or later.
 * Install all these pre-requisites and ensure that all
   tool and library paths are included in the proper environment variables.
-* Git-clone or download the YASK source code.
+* Git-clone or download the YASK source code from https://github.com/01org/yask.
 
 To continue with building and running, see YASK-intro.pdf in the docs directory.
+
+Notice: If you are attempting to reproduce the example results from the "Intel Software Momentum Guide of July 26" marketing document, you will need the archived source from https://01.org/sites/default/files/downloads/yask/yask-20160526.tar_0.gz. This source package is not recommended for any other purpose because it does not contain many improvements and features in the current release.
+
