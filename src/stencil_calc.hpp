@@ -57,6 +57,7 @@ namespace yask {
         idx_t dt, dn, dx, dy, dz; // rank size.
         idx_t rt, rn, rx, ry, rz; // region size.
         idx_t bt, bn, bx, by, bz; // block size.
+        idx_t gn, gx, gy, gz;     // group-of-blocks size.
         idx_t hn, hx, hy, hz;     // spatial halos (max over grids as required by stencil).
         idx_t pn, px, py, pz;     // spatial padding (extra to avoid aliasing).
         idx_t angle_n, angle_x, angle_y, angle_z; // temporal skewing angles.
@@ -403,7 +404,13 @@ namespace yask {
             const idx_t step_bxv = CLEN_X;
             const idx_t step_byv = CLEN_Y;
             const idx_t step_bzv = CLEN_Z;
-        
+
+            // Groups in block loops are set to smallest size.
+            const idx_t group_size_bnv = 1;
+            const idx_t group_size_bxv = 1;
+            const idx_t group_size_byv = 1;
+            const idx_t group_size_bzv = 1;
+            
 #if !defined(DEBUG) && defined(__INTEL_COMPILER)
 #pragma forceinline recursive
 #endif

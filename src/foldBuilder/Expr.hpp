@@ -489,7 +489,7 @@ typedef const int GridIndex;
 
 // A class for a collection of GridPoints.
 // Dims in the IntTuple describe the grid or param.
-// For grids, values in the IntTuple are ignored.
+// For grids, values in the IntTuple are ignored (grids are sized at run-time).
 // For params, values in the IntTuple define the sizes.
 class Grid : public IntTuple {
 protected:
@@ -624,7 +624,8 @@ public:
     }
 };
 
-// A list of grids.
+// A list of grids.  This holds pointers to grids defined by the stencil
+// class in the order in which they are added via the INIT_GRID_* macros.
 class Grids : public vector<Grid*> {
     
 public:
@@ -650,6 +651,8 @@ public:
         // Add new one.
         push_back(ngp);
     }
+
+    
 };
 
 // Aliases for parameters.
@@ -695,6 +698,22 @@ public:
         }
     }
 
+};
+
+// Stencil dimensions.
+struct Dimensions {
+    IntTuple _dimCounts;        // all dimensions.
+    string _stepDim;            // step dim.
+    IntTuple _foldLengths, _clusterLengths; // dims in folds/clusters.
+    IntTuple _miscDims;                     // all other dims.
+
+    // Find the dimensions to be used.
+    void setDims(Grids& grids,
+                 string stepDim,
+                 IntTuple& foldOptions,
+                 IntTuple& clusterOptions,
+                 bool allowUnalignedLoads,
+                 ostream& os);
 };
 
 // A 'GridValue' is simply a pointer to an expression.

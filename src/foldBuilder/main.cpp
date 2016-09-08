@@ -40,6 +40,7 @@ StencilList stencils;
 #include "AveStencil.hpp"
 #include "AwpStencil.hpp"
 #include "AwpElasticStencil.hpp"
+#include "StreamStencil.hpp"
 
 // vars set via cmd-line options.
 bool printPseudo = false;
@@ -274,95 +275,12 @@ int main(int argc, const char* argv[]) {
     Grids& grids = stencilFunc->getGrids();
     Params& params = stencilFunc->getParams();
 
-    // Create a union of all dimensions in all grids.
-    // Also keep count of how many grids have each dim.
-    // Note that dimensions won't be in any particular order!
-    IntTuple dimCounts;
-    for (auto gp : grids) {
-
-        // Count dimensions from this grid.
-        for (auto dim : gp->getDims()) {
-            if (dimCounts.lookup(dim))
-                dimCounts.setVal(dim, dimCounts.getVal(dim) + 1);
-            else
-                dimCounts.addDimBack(dim, 1);
-        }
-    }
-    
-    // For now, there are only global specifications for vector and cluster
-    // sizes. Also, vector folding and clustering is done identially for
-    // every grid access. Thus, sizes > 1 must exist in all grids.  So, init
-    // vector and cluster sizes based on dimensions that appear in ALL
-    // grids.
-    // TODO: relax this restriction.
-    IntTuple foldLengths, clusterLengths;
-    IntTuple miscDims; // dimension(s) not in fold, cluster, or step.
-    for (auto dim : dimCounts.getDims()) {
-
-        // Step dim cannot be folded.
-        if (dim == stepDim) {
-        }
-        
-        // Add this dimension to fold/cluster only if it was found in all grids.
-        else if (dimCounts.getVal(dim) == (int)grids.size()) {
-            foldLengths.addDimBack(dim, 1);
-            clusterLengths.addDimBack(dim, 1);
-        }
-        else
-            miscDims.addDimBack(dim, 1);
-    }
-    cerr << "Step dimension: " << stepDim << endl;
-    
-    // Create final fold lengths based on cmd-line options.
-    IntTuple foldLengthsGT1;    // fold dimensions > 1.
-    for (auto dim : foldOptions.getDims()) {
-        int sz = foldOptions.getVal(dim);
-        int* p = foldLengths.lookup(dim);
-        if (!p) {
-            cerr << "Error: fold-length of " << sz << " in '" << dim <<
-                "' dimension not allowed because '" << dim << "' ";
-            if (dim == stepDim)
-                cerr << "is the step dimension." << endl;
-            else
-                cerr << "doesn't exist in all grids." << endl;
-            exit(1);
-        }
-        *p = sz;
-        if (sz > 1)
-            foldLengthsGT1.addDimBack(dim, sz);
-            
-    }
-    cerr << "Vector-fold dimension(s): " << foldLengths.makeDimValStr(" * ") << endl;
-
-    // Checks for unaligned loads.
-    if (allowUnalignedLoads) {
-        if (foldLengthsGT1.size() > 1) {
-            cerr << "Error: attempt to allow unaligned loads when there are " <<
-                foldLengthsGT1.size() << " dimensions in the vector-fold that are > 1." << endl;
-            exit(1);
-        }
-        else if (foldLengthsGT1.size() > 0)
-            cerr << "Notice: memory map MUST be with unit-stride in " <<
-                foldLengthsGT1.makeDimStr() << " dimension!" << endl;
-    }
-
-    // Create final cluster lengths based on cmd-line options.
-    for (auto dim : clusterOptions.getDims()) {
-        int sz = clusterOptions.getVal(dim);
-        int* p = clusterLengths.lookup(dim);
-        if (!p) {
-            cerr << "Error: cluster-length of " << sz << " in '" << dim <<
-                "' dimension not allowed because '" << dim << "' ";
-            if (dim == stepDim)
-                cerr << "is the step dimension." << endl;
-            else
-                cerr << "doesn't exist in all grids." << endl;
-            exit(1);
-        }
-        *p = sz;
-    }
-    cerr << "Cluster dimension(s): " << clusterLengths.makeDimValStr(" * ") << endl;
-    cerr << "Other dimension(s): " << miscDims.makeDimStr(", ") << endl;
+    // Find all the stencil dimensions from the grids.
+    // Create the final folds and clusters from the cmd-line options.
+    Dimensions dims;
+    dims.setDims(grids, stepDim,
+                 foldOptions, clusterOptions,
+                 allowUnalignedLoads, cerr);
     
     // Loop through all points in a cluster.
     // For each point, determine the offset from 0,..,0 based
@@ -371,18 +289,19 @@ int main(int argc, const char* argv[]) {
     // When done, for each equation, we will have an AST for each
     // cluster point stored in its respective grid.
     // TODO: check for illegal dependences between cluster points.
-    clusterLengths.visitAllPoints([&](const IntTuple& clusterPoint){
+    dims._clusterLengths.visitAllPoints([&](const IntTuple& clusterPoint){
             
             // Get starting offset of cluster, which is each cluster index
             // multipled by corresponding vector size.
-            auto offsets = clusterPoint.multElements(foldLengths);
+            auto offsets = clusterPoint.multElements(dims._foldLengths);
 
             // Add any dims not in the cluster with offset 0.
             offsets.addDimBack(stepDim, 0);
-            for (auto dim : miscDims.getDims())
+            for (auto dim : dims._miscDims.getDims())
                 offsets.addDimBack(dim, 0);
             
-            // Construct AST in grids for this cluster point.
+            // Construct AST in grids for this cluster point by calling
+            // the 'define' method in the stencil.
             stencilFunc->define(offsets);
         });
 
@@ -397,13 +316,13 @@ int main(int argc, const char* argv[]) {
         grids.acceptToFirst(&cv);
         cv.printStats(cerr, "for one vector");
     }
-    if (clusterLengths.product() > 1) {
+    if (dims._clusterLengths.product() > 1) {
         CounterVisitor cv;
         grids.acceptToAll(&cv);
         cv.printStats(cerr, "for one cluster");
     }
     
-    // Make a list of optimizations to apply.
+    // Make a list of optimizations to apply to equations.
     vector<OptVisitor*> opts;
     if (doCse)
         opts.push_back(new CseVisitor);
@@ -448,45 +367,40 @@ int main(int argc, const char* argv[]) {
     // Print YASK classes to update grids and/or prefetch.
     YASKCppSettings yaskSettings;
     yaskSettings._allowUnalignedLoads = allowUnalignedLoads;
-    yaskSettings._stepDim = stepDim;
-    yaskSettings._dimCounts = dimCounts;
-    yaskSettings._foldLengths = foldLengths;
-    yaskSettings._clusterLengths = clusterLengths;
-    yaskSettings._miscDims = miscDims;
     yaskSettings._hbwRW = hbwRW;
     yaskSettings._hbwRO = hbwRO;
     if (printCpp) {
         YASKCppPrinter printer(*stencilFunc, equations,
-                               exprSize, yaskSettings);
+                               exprSize, dims, yaskSettings);
         printer.printCode(cout);
     }
     if (printKncCpp) {
         YASKKncPrinter printer(*stencilFunc, equations,
-                               exprSize, yaskSettings);
+                               exprSize, dims, yaskSettings);
         printer.printCode(cout);
     }
     if (print512Cpp) {
         YASKAvx512Printer printer(*stencilFunc, equations,
-                                  exprSize, yaskSettings);
+                                  exprSize, dims, yaskSettings);
         printer.printCode(cout);
     }
     if (print256Cpp) {
         YASKAvx256Printer printer(*stencilFunc, equations,
-                                  exprSize, yaskSettings);
+                                  exprSize, dims, yaskSettings);
         printer.printCode(cout);
     }
 
     // Print YASK classes for grids.
     if (printGrids) {
         YASKCppPrinter printer(*stencilFunc, equations,
-                               exprSize, yaskSettings);
+                               exprSize, dims, yaskSettings);
         printer.printGrids(cout);
     }
 
     // Print CPP macros.
     if (printMacros) {
         YASKCppPrinter printer(*stencilFunc, equations,
-                               exprSize, yaskSettings);
+                               exprSize, dims, yaskSettings);
         printer.printMacros(cout);
     }
     

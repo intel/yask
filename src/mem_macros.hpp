@@ -85,7 +85,7 @@ IN THE SOFTWARE.
 #else
 
 #ifdef MODEL_CACHE
-#define MCP(p, hint, line) cache.prefetch(p, hint, line)
+#define MCP(p, hint, line) cache_model.prefetch(p, hint, line)
 #else
 #define MCP(p, hint, line)
 #endif
@@ -114,7 +114,7 @@ IN THE SOFTWARE.
 #else
 
 #ifdef MODEL_CACHE
-#define MCE(p, hint, line) cache.evict(p, hint, line),
+#define MCE(p, hint, line) cache_model.evict(p, hint, line),
 #else
 #define MCE(p, hint, line)
 #endif

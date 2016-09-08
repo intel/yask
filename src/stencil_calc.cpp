@@ -120,6 +120,12 @@ namespace yask {
         idx_t step_dy = context.ry;
         idx_t step_dz = context.rz;
 
+        // Groups in rank loops are set to smallest size.
+        const idx_t group_size_dn = 1;
+        const idx_t group_size_dx = 1;
+        const idx_t group_size_dy = 1;
+        const idx_t group_size_dz = 1;
+
         // Determine spatial skewing angles for temporal wavefronts based on the
         // halos.  This assumes the smallest granularity of calculation is
         // CPTS_* in each dim.
@@ -227,6 +233,12 @@ namespace yask {
         const idx_t step_ry = context.by;
         const idx_t step_rz = context.bz;
 
+        // Groups in region loops are based on group sizes.
+        const idx_t group_size_rn = context.gn;
+        const idx_t group_size_rx = context.gx;
+        const idx_t group_size_ry = context.gy;
+        const idx_t group_size_rz = context.gz;
+
         // Not yet supporting temporal blocking.
         if (step_rt != 1) {
             cerr << "Error: temporal blocking not yet supported." << endl;
@@ -318,6 +330,12 @@ namespace yask {
         const idx_t step_xv = 1;
         const idx_t step_yv = 1;
         const idx_t step_zv = 4;
+
+        // Groups in halo loops are set to smallest size.
+        const idx_t group_size_nv = 1;
+        const idx_t group_size_xv = 1;
+        const idx_t group_size_yv = 1;
+        const idx_t group_size_zv = 1;
 
         // List of grids updated by this equation.
         // These are the grids that need their halos exchanged.

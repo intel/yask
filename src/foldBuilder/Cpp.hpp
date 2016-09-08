@@ -290,14 +290,13 @@ public:
 // Settings for C++ printing.
 struct YASKCppSettings {
     bool _allowUnalignedLoads;
-    string _stepDim;
-    IntTuple _dimCounts, _foldLengths, _clusterLengths, _miscDims;
     bool _hbwRW, _hbwRO;
 };
 
 // Print out a stencil in C++ form for YASK.
 class YASKCppPrinter : public PrinterBase {
 protected:
+    Dimensions& _dims;
     YASKCppSettings& _settings;
     string _context;
 
@@ -320,9 +319,10 @@ public:
     YASKCppPrinter(StencilBase& stencil,
                    Equations& equations,
                    int exprSize,
+                   Dimensions& dims,
                    YASKCppSettings& settings) :
         PrinterBase(stencil, equations, exprSize),
-        _settings(settings)
+        _dims(dims), _settings(settings)
     {
         // name of C++ struct.
         _context = "StencilContext_" + _stencil.getName();

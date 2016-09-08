@@ -280,7 +280,6 @@ public:
     }
 
     // get value of a direction, which must be 1D.
-    // value should be 1 or -1.
     virtual T getDirVal() const {
         assert(size() == 1);
         T dv = getVal(_dims[0]);  // first and only value.
@@ -321,7 +320,7 @@ public:
     }
 
     // Determine whether this is 'ahead of' t2 along
-    // given direction.
+    // given direction in dir.
     virtual bool isAheadOfInDir(const Tuple& t2, const Tuple& dir) const {
         string dn = dir.getDirName();
         T dv = dir.getDirVal();

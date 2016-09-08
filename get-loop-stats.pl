@@ -66,6 +66,7 @@ for my $arg (@ARGV) {
   my %astats;                   # arg stats.
   my %istats;                   # instr stats.
   my %fstats;                   # src-file stats.
+  my %rstats;                   # SIMD reg stats.
 
   for my $pass (0..1) {
 
@@ -114,6 +115,7 @@ for my $arg (@ARGV) {
           undef %istats;
           undef %astats;
           undef %fstats;
+          undef %rstats;
           undef @lines;
         }
       }
@@ -129,6 +131,11 @@ for my $arg (@ARGV) {
         {
           # src stats.
           $fstats{$srcFile}++;
+
+          # reg stats.
+          if ($args =~ /[xyz]mm(\d+)/) {
+            $rstats{$1}++;
+          }
           
           # arg stats. (dest is last arg.)
           my $type = ($args =~ /zmm/) ? '512-bit SIMD' :
@@ -231,6 +238,7 @@ for my $arg (@ARGV) {
                 my $value = $fstats{$key};
                 printf "%4i  $key\n", $value;
               }
+              print "Num SIMD regs used: ".(scalar keys %rstats)."\n";
             }
 
             # we only want inner loops,
@@ -239,6 +247,7 @@ for my $arg (@ARGV) {
             undef %istats;
             undef %astats;
             undef %fstats;
+            undef %rstats;
           }
         }
       }

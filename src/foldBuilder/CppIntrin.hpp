@@ -571,9 +571,10 @@ public:
     YASKKncPrinter(StencilBase& stencil,
                    Equations& equations,
                    int exprSize,
+                   Dimensions& dims,
                    YASKCppSettings& settings) :
         YASKCppPrinter(stencil, equations,
-                       exprSize, settings) { }
+                       exprSize, dims, settings) { }
 };
 
 // Print 256-bit AVX intrinsic code.
@@ -589,9 +590,10 @@ public:
     YASKAvx256Printer(StencilBase& stencil,
                       Equations& equations,
                       int exprSize,
+                      Dimensions& dims,
                       YASKCppSettings& settings) :
         YASKCppPrinter(stencil, equations,
-                       exprSize, settings) { }
+                       exprSize, dims, settings) { }
 };
 
 // Print 512-bit AVX intrinsic code.
@@ -607,9 +609,10 @@ public:
     YASKAvx512Printer(StencilBase& stencil,
                       Equations& equations,
                       int exprSize,
+                      Dimensions& dims,
                       YASKCppSettings& settings) :
         YASKCppPrinter(stencil, equations,
-                       exprSize, settings) { }
+                       exprSize, dims, settings) { }
 };
 
 #endif

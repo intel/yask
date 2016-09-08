@@ -383,7 +383,7 @@ void YASKCppPrinter::printCode(ostream& os) {
 
                 // don't want the step dimension during construction.
                 // TODO: calculate proper size for memory reuse.
-                if (dim != _settings._stepDim) {
+                if (dim != _dims._stepDim) {
                     dimArg += "d" + dim + ", ";
 
                     // Halo for this dimension.
@@ -542,20 +542,22 @@ void YASKCppPrinter::printCode(ostream& os) {
             // Stencil-calculation code.
             // Function header.
             os << endl << " // Calculate one scalar result relative to indices " <<
-                _settings._dimCounts.makeDimStr(", ") << "." << endl;
+                _dims._dimCounts.makeDimStr(", ") << "." << endl;
             os << " void calc_scalar(" << _context << "& context, " <<
-                _settings._dimCounts.makeDimStr(", ", "idx_t ") << ") {" << endl;
+                _dims._dimCounts.makeDimStr(", ", "idx_t ") << ") {" << endl;
 
             // C++ code generator.
             // The visitor is accepted at all nodes in the AST;
             // for each node in the AST, code is generated and
             // stored in the expression-string in the visitor.
-            // Visit only first expression in each, since we don't want clustering.
             PrintVisitorBottomUp pcv(os, *sp, _exprSize);
+
+            // Generate the code.
+            // Visit only first expression in each, since we don't want clustering.
             eq.grids.acceptToFirst(&pcv);
 
             // End of function.
-            os << "} // scalar calculation." << endl;
+            os << "} // calc_scalar." << endl;
 
             delete sp;
         }
@@ -568,7 +570,7 @@ void YASKCppPrinter::printCode(ostream& os) {
         // needed are determined and saved in the visitor.
         {
             // Create vector info for this equation.
-            VecInfoVisitor vv(_settings._foldLengths);
+            VecInfoVisitor vv(_dims._foldLengths);
             eq.grids.acceptToAll(&vv);
 
 #if 1
@@ -584,11 +586,11 @@ void YASKCppPrinter::printCode(ostream& os) {
             
             // Stencil-calculation code.
             // Function header.
-            int numResults = _settings._foldLengths.product() * _settings._clusterLengths.product();
+            int numResults = _dims._foldLengths.product() * _dims._clusterLengths.product();
             os << endl << " // Calculate " << numResults <<
-                " result(s) relative to indices " << _settings._dimCounts.makeDimStr(", ") <<
-                " in a '" << _settings._clusterLengths.makeDimValStr(" * ") << "' cluster of '" <<
-                _settings._foldLengths.makeDimValStr(" * ") << "' vector(s)." << endl;
+                " result(s) relative to indices " << _dims._dimCounts.makeDimStr(", ") <<
+                " in a '" << _dims._clusterLengths.makeDimValStr(" * ") << "' cluster of '" <<
+                _dims._foldLengths.makeDimValStr(" * ") << "' vector(s)." << endl;
             os << " // Indices must be normalized, i.e., already divided by VLEN_*." << endl;
             os << " // SIMD calculations use " << vv.getNumPoints() <<
                 " vector block(s) created from " << vv.getNumAlignedVecs() <<
@@ -597,12 +599,12 @@ void YASKCppPrinter::printCode(ostream& os) {
                 " FP operation(s) per cluster." << endl;
 
             os << " void calc_cluster(" << _context << "& context, " <<
-                _settings._dimCounts.makeDimStr(", ", "idx_t ", "v") << ") {" << endl;
+                _dims._dimCounts.makeDimStr(", ", "idx_t ", "v") << ") {" << endl;
 
             // Element indices.
             os << endl << " // Un-normalized indices." << endl;
-            for (auto dim : _settings._dimCounts.getDims()) {
-                auto p = _settings._foldLengths.lookup(dim);
+            for (auto dim : _dims._dimCounts.getDims()) {
+                auto p = _dims._foldLengths.lookup(dim);
                 os << " idx_t " << dim << " = " << dim << "v";
                 if (p) os << " * " << *p;
                 os << ";" << endl;
@@ -613,51 +615,60 @@ void YASKCppPrinter::printCode(ostream& os) {
             // for each node in the AST, code is generated and
             // stored in the expression-string in the visitor.
             PrintVisitorBottomUp pcv(os, *vp, _exprSize);
+
+            // Generate the code.
+            // Visit all expressions to cover the whole cluster.
             eq.grids.acceptToAll(&pcv);
 
             // End of function.
-            os << "} // vector calculation." << endl;
+            os << "} // calc_cluster." << endl;
 
             // Generate prefetch code for no specific direction and then each
             // orthogonal direction.
-            for (int diri = -1; diri < _settings._dimCounts.size(); diri++) {
+            for (int diri = -1; diri < _dims._dimCounts.size(); diri++) {
 
                 // Create a direction object.
                 // If diri < 0, there is no direction.
                 // If diri >= 0, add a direction.
                 IntTuple dir;
                 if (diri >= 0) {
-                    string dim = _settings._dimCounts.getDims()[diri];
-                    dir.addDimBack(dim, 1);
+                    string dim = _dims._dimCounts.getDims()[diri];
+
+                    // Magnitude of dimension is based on cluster.
+                    const int* p = _dims._clusterLengths.lookup(dim);
+                    int m = p ? *p : 1;
+                    dir.addDimBack(dim, m);
 
                     // Don't need prefetch in step dimension.
-                    if (dim == _settings._stepDim)
+                    if (dim == _dims._stepDim)
                         continue;
                 }
 
                 // Function header.
                 os << endl << " // Prefetches cache line(s) ";
                 if (dir.size())
-                    os << "for leading edge of stencil in '+" <<
+                    os << "for leading edge of stencil advancing by " <<
+                        dir.getDirVal() << " vector(s) in '+" <<
                         dir.getDirName() << "' direction ";
                 else
                     os << "for entire stencil ";
-                os << " relative to indices " << _settings._dimCounts.makeDimStr(", ") <<
-                    " in a '" << _settings._clusterLengths.makeDimValStr(" * ") << "' cluster of '" <<
-                    _settings._foldLengths.makeDimValStr(" * ") << "' vector(s)." << endl;
+                os << "relative to indices " << _dims._dimCounts.makeDimStr(", ") <<
+                    " in a '" << _dims._clusterLengths.makeDimValStr(" * ") << "' cluster of '" <<
+                    _dims._foldLengths.makeDimValStr(" * ") << "' vector(s)." << endl;
                 os << " // Indices must be normalized, i.e., already divided by VLEN_*." << endl;
 
-                os << " template<int level> void prefetch_cluster";
+                string fname = "prefetch_cluster";
                 if (dir.size())
-                    os << "_" << dir.getDirName();
-                os << "(" << _context << "& context, " <<
-                    _settings._dimCounts.makeDimStr(", ", "idx_t ", "v") << ") {" << endl;
+                    fname += "_" + dir.getDirName();
+                os << " template<int level> void " << fname <<
+                    "(" << _context << "& context, " <<
+                    _dims._dimCounts.makeDimStr(", ", "idx_t ", "v") << ") {" << endl;
 
                 // C++ prefetch code.
                 vp->printPrefetches(os, dir);
 
                 // End of function.
-                os << "}" << endl;
+                os << "} // " << fname << "." << endl;
 
             } // direction.
 
@@ -772,28 +783,28 @@ void YASKCppPrinter::printMacros(ostream& os) {
 
     os << endl;
     os << "// Dimensions:" << endl;
-    for (auto dim : _settings._dimCounts.getDims()) {
+    for (auto dim : _dims._dimCounts.getDims()) {
         os << "#define USING_DIM_" << allCaps(dim) << " (1)" << endl;
     }
         
     // Vec/cluster lengths.
     os << endl;
-    os << "// One vector fold: " << _settings._foldLengths.makeDimValStr(" * ") << endl;
-    for (auto dim : _settings._foldLengths.getDims()) {
+    os << "// One vector fold: " << _dims._foldLengths.makeDimValStr(" * ") << endl;
+    for (auto dim : _dims._foldLengths.getDims()) {
         string ucDim = allCaps(dim);
-        os << "#define VLEN_" << ucDim << " (" << _settings._foldLengths.getVal(dim) << ")" << endl;
+        os << "#define VLEN_" << ucDim << " (" << _dims._foldLengths.getVal(dim) << ")" << endl;
     }
-    os << "#define VLEN (" << _settings._foldLengths.product() << ")" << endl;
+    os << "#define VLEN (" << _dims._foldLengths.product() << ")" << endl;
     os << "#define VLEN_FIRST_DIM_IS_UNIT_STRIDE (" <<
         (IntTuple::getDefaultFirstInner() ? 1 : 0) << ")" << endl;
     os << "#define USING_UNALIGNED_LOADS (" <<
         (_settings._allowUnalignedLoads ? 1 : 0) << ")" << endl;
 
     os << endl;
-    os << "// Cluster of vector folds: " << _settings._clusterLengths.makeDimValStr(" * ") << endl;
-    for (auto dim : _settings._clusterLengths.getDims()) {
+    os << "// Cluster of vector folds: " << _dims._clusterLengths.makeDimValStr(" * ") << endl;
+    for (auto dim : _dims._clusterLengths.getDims()) {
         string ucDim = allCaps(dim);
-        os << "#define CLEN_" << ucDim << " (" << _settings._clusterLengths.getVal(dim) << ")" << endl;
+        os << "#define CLEN_" << ucDim << " (" << _dims._clusterLengths.getVal(dim) << ")" << endl;
     }
-    os << "#define CLEN (" << _settings._clusterLengths.product() << ")" << endl;
+    os << "#define CLEN (" << _dims._clusterLengths.product() << ")" << endl;
 }

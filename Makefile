@@ -25,7 +25,7 @@
 
 # Some of the make vars available:
 #
-# stencil: iso3dfd, 3axis, 9axis, 3plane, cube, ave, awp, awp_elastic.
+# stencil: iso3dfd, 3axis, 9axis, 3plane, cube, ave, awp, awp_elastic, stream.
 #
 # arch: see list below.
 #
@@ -82,6 +82,16 @@ radius		?=	2
 
 else ifeq ($(stencil),iso3dfd)
 layout_4d	?=	Layout_2314
+cluster		?=	x=2
+
+else ifeq ($(stencil),stream)
+radius		?=	2
+ifeq ($(radius),0)
+time_dim_size	=	1
+else
+time_dim_size	=	$(radius)
+endif
+cluster		?=	x=2
 
 else ifeq ($(findstring awp,$(stencil)),awp)
 radius		?=	2
@@ -90,7 +100,6 @@ eqs		?=	velocity=vel_,stress=stress_
 def_rank_size	?=	640
 def_block_size	?=	32
 def_wavefront_region_size ?=	256
-
 ifeq ($(arch),knl)
 def_block_threads	?=	4
 def_thread_factor	?=	2
@@ -193,13 +202,13 @@ fold		?=	x=8
 else
 fold		?=	x=4
 endif
-cluster		?=	x=1,y=1,z=2
+cluster		?=	z=2
 
 endif
 
 # How many vectors to compute at once (unrolling factor in
 # each dimension).
-cluster		?=	x=1,y=1,z=1
+cluster		?=	x=1
 
 # More build flags.
 ifeq ($(mpi),1)
@@ -300,8 +309,8 @@ endif
 # Rank loops break up the whole rank into smaller regions.
 # In order for tempral wavefronts to operate properly, the
 # order of spatial dimensions may be changed, but traversal
-# paths that do not have strictly incrementing indices (such as
-# serpentine and/or square-wave) may not be used here when
+# paths that do not have strictly incrementing indices (e.g.,
+# grouped, serpentine, square-wave) may not be used here when
 # using temporal wavefronts. The time loop may be found
 # in StencilEquations::calc_rank().
 RANK_LOOP_OPTS		=	-dims 'dn,dx,dy,dz'
@@ -315,7 +324,7 @@ RANK_LOOP_CODE		=	$(RANK_LOOP_OUTER_MODS) loop(dn,dx,dy,dz) \
 REGION_LOOP_OPTS	=     	-dims 'rn,rx,ry,rz' \
 				-ompConstruct '$(omp_par_for) schedule($(omp_schedule)) proc_bind(spread)' \
 				-calcPrefix 'stencil->calc_'
-REGION_LOOP_OUTER_MODS	?=	square_wave serpentine omp
+REGION_LOOP_OUTER_MODS	?=	grouped omp
 REGION_LOOP_CODE	=	$(REGION_LOOP_OUTER_MODS) loop(rn,rx,ry,rz) \
 				{ $(REGION_LOOP_INNER_MODS) calc(block(rt)); }
 
@@ -448,7 +457,7 @@ src/stencil_macros.hpp: foldBuilder
 
 src/stencil_code.hpp: foldBuilder
 	./$< $(FB_FLAGS) $(EXTRA_FB_FLAGS) -p$(FB_TARGET) > $@
-	- gindent $@ || indent $@ || echo "note: no indent program found"
+	- gindent -fca $@ || indent -fca $@ || echo "note: no indent program found"
 
 headers: $(GEN_HEADERS)
 	@ echo 'Header files generated.'
@@ -474,7 +483,7 @@ help:
 	@echo "make clean; make arch=knl stencil=iso3dfd"
 	@echo "make clean; make arch=knl stencil=awp mpi=1"
 	@echo "make clean; make arch=skx stencil=ave fold='x=1,y=2,z=4' cluster='x=2'"
-	@echo "make clean; make arch=knc stencil=3axis radius=4 INNER_BLOCK_LOOP_OPTS='prefetch(L1,L2)'"
+	@echo "make clean; make arch=knc stencil=3axis radius=4 BLOCK_LOOP_INNER_MODS='prefetch(L1,L2)' EXTRA_MACROS='PFDL1=2 PFDL2=4'"
 	@echo " "
 	@echo "Example debug usage:"
 	@echo "make arch=knl  stencil=iso3dfd OMPFLAGS='-qopenmp-stubs' EXTRA_CXXFLAGS='-O0' EXTRA_MACROS='DEBUG'"

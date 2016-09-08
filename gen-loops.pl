@@ -57,10 +57,11 @@ my $genericCache = "L#";        # a string placeholder for L1 or L2.
 # loop-feature bit fields.
 my $bSerp = 0x1;                # serpentine path
 my $bSquare = 0x2;              # square_wave path
-my $bPipe = 0x4;                # pipeline
+my $bGroup = 0x4;                # group path
 my $bSimd = 0x8;                # simd prefix
 my $bPrefetchL1 = 0x10;         # prefetch L1
 my $bPrefetchL2 = 0x20;         # prefetch L2
+my $bPipe = 0x40;                # pipeline
 
 ##########
 # Function to make names of variables based on dimension string(s).
@@ -75,13 +76,39 @@ sub endVar {
 sub stepVar {
     return join('_', 'step', @_);
 }
+sub groupSizeVar {
+    return join('_', 'group_size', @_);
+}
 
 # these are generated.
-sub numVar {
-    return join('_', 'num', @_);
+sub numItersVar {
+    return join('_', 'num_iters', @_);
+}
+sub numGroupsVar {
+    return join('_', 'num_full_groups', @_);
+}
+sub numFullGroupItersVar {
+    return join('_', 'num_iters_in_full_group', @_);
+}
+sub numGroupSetItersVar {
+    return scalar @_ ? join('_', 'num_iters_in_group_set', @_) :
+        'num_iters_in_full_group';
 }
 sub indexVar {
     return join('_', 'index', @_);
+}
+sub groupIndexVar {
+    return join('_', 'index_of_group', @_);
+}
+sub groupSetOffsetVar {
+    return scalar @_ ? join('_', 'index_offset_within_group_set', @_) :
+        'index_offset_within_this_group';
+}
+sub groupOffsetVar {
+    return join('_', 'index_offset_within_this_group', @_);
+}
+sub numLocalGroupItersVar {
+    return join('_', 'num_iters_in_group', @_);
 }
 sub loopIndexVar {
     return join('_', 'loop_index', @_);
@@ -105,7 +132,7 @@ sub pfStopVar {
   return stopVar(@_)."_pf$genericCache";
 }
 
-# this is generated between 0 and numVar when prefetching.
+# this is generated between 0 and numItersVar when prefetching.
 sub midVar {
     return join('_', 'midpoint', @_);
 }
@@ -115,6 +142,14 @@ sub startStopArgs {
     return join(', ', 
                 (map { startVar($_) } @dims),
                 (map { stopVar($_) } @dims) );
+}
+
+# dimension comment string.
+sub dimStr {
+    return '0 dimensions' if @_ == 0;
+    my $s = join(', ', @_)." dimension";
+    $s .= 's' if @_ > 1;
+    return $s;
 }
 
 # list of start & stop args for all dims for prefetch.
@@ -148,36 +183,72 @@ sub indexType {
     return 'idx_t';
 }
 
-# create and init vars *before* beginning of simple or collapsed loop.
-sub addIndexVars($$) {
+# Create and init vars *before* beginning of simple or collapsed loop.
+sub addIndexVars($$$) {
     my $code = shift;           # ref to list of code lines.
     my $loopDims = shift;           # ref to list of dimensions.
+    my $features = shift;       # bits for path types.
 
+    push @$code,
+    " // ** Begin loop in ".(join ', ',@$loopDims)." dimension(s). **";
+    
     my $itype = indexType(@$loopDims);
 
-    # number of iterations.
-    my @nvars;
-    for my $dim (@$loopDims) {
-        my $nvar = numVar($dim);
-        my $bvar = beginVar($dim);
-        my $evar = endVar($dim);
-        my $svar = stepVar($dim);
-        push @$code, 
-        " // Number of iterations to get from $bvar to (but not including) $evar, stepping by $svar.",
-        " const idx_t $nvar = (($evar - $bvar) + ($svar - 1)) / $svar;";
-        push @nvars, "($itype)$nvar";
-    }
+    for my $pass (0..1) {
+        for my $i (0..$#$loopDims) {
+            my $dim = $loopDims->[$i];
+            my $isInner = ($i == $#$loopDims);
 
-    # for collapsed loop, there is not a begin, end, or step for the index.
-    if (@$loopDims > 1) {
-        my $nvar = numVar(@$loopDims);
-        push @$code,
-        " // Number of iterations in loop collapsed across ".(join ', ',@$loopDims)." dimensions.",
-        " const $itype $nvar = ".join(' * ', @nvars).";";
+            # Pass 0: iterations.
+            if ($pass == 0) {
+                my $nvar = numItersVar($dim);
+                my $bvar = beginVar($dim);
+                my $evar = endVar($dim);
+                my $svar = stepVar($dim);
+                my $ntvar = numGroupsVar($dim);
+                my $tsvar = groupSizeVar($dim);
+                my $ntivar = numFullGroupItersVar($dim);
+
+                push @$code, 
+                " // Number of iterations to get from $bvar to (but not including) $evar, stepping by $svar.".
+                " This value is rounded up because the last iteration may cover fewer than $svar steps.",
+                " const $itype $nvar = (($evar - $bvar) + ($svar - 1)) / $svar;";
+
+                # For grouped loops.
+                if ($features & $bGroup) {
+
+                    # loop iterations within one group.
+                    push @$code,
+                    " // Number of iterations in one full group in $dim dimension.".
+                    " This value is rounded up, effectively increasing the group size if needed".
+                        " to a multiple of $svar.",
+                    " const $itype $ntivar = std::min(($tsvar + ($svar - 1)) / $svar, $nvar);";
+
+                    # number of full groups.
+                    push @$code, 
+                    " // Number of *full* groups in $dim dimension.",
+                    " const $itype $ntvar = $nvar / $ntivar;";
+                }
+            }
+
+            # Pass 1: Product of sizes of this and remaining nested dimensions.
+            elsif (!$isInner) {
+                my @subDims = @$loopDims[$i .. $#$loopDims];
+                my $loopStr = dimStr(@subDims);
+
+                # Product of iterations.
+                my $snvar = numItersVar(@subDims);
+                my $snval = join(' * ', map { numItersVar($_) } @subDims);
+                push @$code,
+                " // Number of iterations in $loopStr",
+                " const $itype $snvar = $snval;";
+            }
+        }
     }
 }
 
-# add index variables *inside* the loop.
+# Add index variables *inside* the loop.
+# TODO: add prefetch for grouping.
 sub addIndexVars2($$$$$) {
     my $code = shift;           # ref to list of code lines.
     my $loopDims = shift;       # ref to list of dimensions in loop.
@@ -186,100 +257,222 @@ sub addIndexVars2($$$$$) {
     my $loopStack = shift;      # whole stack, including enclosing dims.
 
     my $itype = indexType(@$loopDims);
-    my $civar = loopIndexVar(@$loopDims);     # collapsed index var.
+    my $civar = loopIndexVar(@$loopDims);     # collapsed index var; everything based on this.
     my $pfcivar = pfLoopIndexVar(@$loopDims); # collapsed prefetch index var.
     my $outerDim = $loopDims->[0];            # outer dim of these loops.
     my $innerDim = $loopDims->[$#$loopDims];  # inner dim of these loops.
 
-    # prefetch is offset from main index.
-    if ($isPrefetch) {
-        push @$code, " // Prefetch loop index var.";
-        push @$code, " $itype $pfcivar = $civar + PFD$genericCache;";
-    }
+    # Grouping.
+    if ($features & $bGroup) {
 
-    # find enclosing dim outside of these loops if avail.
-    my $encDim;
-    map { $encDim = $loopStack->[$_]
-              if $loopStack->[$_ + 1] eq $outerDim; } 0..($#$loopStack-1);
-    my $prevDivar;
-    $prevDivar = indexVar($encDim)
-        if defined $encDim;
+        die "error: prefetching not compatible with grouping.\n"
+            if $isPrefetch;
+        die "error: serpentine not compatible with grouping.\n"
+            if $features & $bSerp;
+        die "error: square-wave not compatible with grouping.\n"
+            if $features & $bSquare;
 
-    # computed 0-based index var value for each dim.
-    my $prevDim = $encDim;
-    my $prevNvar;
-    my $innerDivar = $isPrefetch ? pfIndexVar($innerDim) : indexVar($innerDim);
-    my $innerNvar = numVar($innerDim);
+        my $ndims = scalar @$loopDims;
 
-    # loop through each dim, outer to inner.
-    for my $i (0..$#$loopDims) {
-        my $dim = $loopDims->[$i];
-        my $nvar = numVar($dim);
-        my $isInner = ($i == $#$loopDims);
-
-        # need to map $ivar to $divar.
-        # note that $pfcivar might be >= numVar(@$loopDims).
-        my $ivar = $isPrefetch ? $pfcivar : $civar;
-        my $divar = $isPrefetch ? pfIndexVar($dim) : indexVar($dim);
-
-        push @$code,
-        " // Zero-based, unit-stride ".($isPrefetch ? 'prefetch ' : '')."index var for $dim.";
-
-        # numerator of mod.
-        my $num = "$ivar";
-
-        # divisor of index is product of sizes of remaining nested dimensions.
-        if (!$isInner) {
-            my $div = join('*', map { numVar($loopDims->[$_]) } $i+1 .. $#$loopDims);
-            $num .= " / ($div)";
+        # declare local size vars.
+        push @$code, " // Working vars for iterations in groups.".
+            " These are initialized to full-group counts and then".
+            " reduced if we are in a partial group.";
+        for my $i (0 .. $ndims-1) {
+            my $dim = $loopDims->[$i];
+            my $ltvar = numLocalGroupItersVar($dim);
+            my $ltval = numFullGroupItersVar($dim);
+            push @$code, " $itype $ltvar = $ltval;";
         }
 
-        # mod by size of this dimension (not needed for outer-most dim).
-        if ($i > 0) {
-            push @$code, " idx_t $divar = ($num) % $nvar;";
-        } else {
-            push @$code, " idx_t $divar = $num;";
+        # calculate group indices and sizes and 1D offsets within groups.
+        my $prevOvar = $civar;  # previous offset.
+        for my $i (0 .. $ndims-1) {
+
+            # dim at $i.
+            my $dim = $loopDims->[$i];
+
+            # dims up to (outside of) $i (empty for outer dim)
+            my @outDims = @$loopDims[0 .. $i - 1];
+            
+            # dims up to (outside of) and including $i.
+            my @dims = @$loopDims[0 .. $i];
+            
+            # dims after (inside of) $i (empty for inner dim)
+            my @inDims = @$loopDims[$i + 1 .. $ndims - 1];
+            my $inStr = dimStr(@inDims);
+
+            # Size of group set.
+            my $tgvar = numGroupSetItersVar(@inDims);
+            my $tgval = join(' * ', 
+                             (map { numLocalGroupItersVar($_) } @dims),
+                             (map { numItersVar($_) } @inDims));
+            my $tgStr = @inDims ?
+                "the set of groups across $inStr" : "this group";
+            push @$code,
+            " // Number of iterations in $tgStr.",
+            " $itype $tgvar = $tgval;";
+
+            # Index of this group in this dim.
+            my $tivar = groupIndexVar($dim);
+            my $tival = "$prevOvar / $tgvar";
+            push @$code,
+            " // Index of this group in $dim dimension.",
+            " $itype $tivar = $tival;";
+            
+            # 1D offset within group set.
+            my $ovar = groupSetOffsetVar(@inDims);
+            my $oval = "$prevOvar % $tgvar";
+            push @$code,
+            " // Linear offset within $tgStr.",
+            " $itype $ovar = $oval;";
+            
+            # Size of this group in this dim.
+            my $ltvar = numLocalGroupItersVar($dim);
+            my $ltval = numItersVar($dim).
+                " - (".numGroupsVar($dim)." * ".numFullGroupItersVar($dim).")";
+            push @$code,
+            " // Adjust number of iterations in this group in $dim dimension.",
+            " if ($tivar >= ".numGroupsVar($dim).")".
+                "  $ltvar = $ltval;";
+
+            # for next dim.
+            $prevOvar = $ovar;
         }
 
-        # apply square-wave to inner 2 dimensions if requested.
-        my $isInnerSquare = @$loopDims >=2 && $isInner && ($features & $bSquare);
-        if ($isInnerSquare) {
+        # Calculate nD indices within group and overall.
+        # TODO: allow different paths *within* group.
+        for my $i (0 .. $ndims-1) {
+            my $dim = $loopDims->[$i];
+            my $tivar = groupIndexVar($dim);
+            my $ovar = groupSetOffsetVar(); # last one calculated above.
 
-            my $divar2 = "${divar}_x2";
-            my $avar = "${prevDivar}_lsb";
-            push @$code, 
-            " // Modify $prevDivar and $divar for 'square_wave' path.",
-            " if (($innerNvar > 1) && ($prevDivar/2 < $prevNvar/2)) {",
-            "  // Compute extended $dim index over 2 iterations of $prevDivar.",
-            "  idx_t $divar2 = $divar + ($nvar * ($prevDivar & 1));",
-            "  // Select $divar from 0,0,1,1,2,2,... sequence",
-            "  $divar = $divar2 / 2;",
-            "  // Select $prevDivar adjustment value from 0,1,1,0,0,1,1, ... sequence.",
-            "  idx_t $avar = ($divar2 & 1) ^ (($divar2 & 2) >> 1);",
-            "  // Adjust $prevDivar +/-1 by replacing bit 0.",
-            "  $prevDivar = ($prevDivar & (idx_t)-2) | $avar;",
-            " } // square-wave.";
-        }
+            # dims after (inside of) $i (empty for inner dim)
+            my @inDims = @$loopDims[$i + 1 .. $ndims - 1];
+            
+            # Determine offset within this group.
+            my $dovar = groupOffsetVar($dim);
+            my $doval = $ovar;
 
-        # reverse order of every-other traversal if requested.
-        # for inner dim with square-wave, do every 2.
-        if (($features & $bSerp) && defined $prevDivar) {
-            if ($isInnerSquare) {
-                push @$code,
-                " // Reverse direction of $divar after every-other iteration of $prevDivar for 'square_wave serpentine' path.",
-                " if (($prevDivar & 2) == 2) $divar = $nvar - $divar - 1;";
-            } else {
-                push @$code,
-                " // Reverse direction of $divar after every iteration of $prevDivar for  'serpentine' path.",
-                " if (($prevDivar & 1) == 1) $divar = $nvar - $divar - 1;";
+            # divisor of index is product of sizes of remaining nested dimensions.
+            if (@inDims) {
+                my $subVal = join(' * ', map { numLocalGroupItersVar($_) } @inDims);
+                $doval .= " / ($subVal)";
             }
-        }
 
-        $prevDim = $dim;
-        $prevDivar = $divar;
-        $prevNvar = $nvar;
+            # mod by size of this dimension (not needed for outer-most dim).
+            if ($i > 0) {
+                $doval = "($doval) % ".numLocalGroupItersVar($dim);
+            }
+
+            # output offset in this dim.
+            push @$code,
+            " // Offset within this group in $dim dimension.",
+            " $itype $dovar = $doval;";
+
+            # final index in this dim.
+            my $divar = indexVar($dim);
+            my $dival = numFullGroupItersVar($dim)." * $tivar + $dovar";
+            push @$code,
+            " // Zero-based, unit-stride index for $dim.",
+            " $itype $divar = $dival;";
+        }
     }
 
+    # No grouping.
+    else {
+
+        # prefetch is offset from main index.
+        if ($isPrefetch) {
+            push @$code, " // Prefetch loop index var.",
+            " $itype $pfcivar = $civar + PFD$genericCache;";
+        }
+
+        # find enclosing dim outside of these loops if avail.
+        my $encDim;
+        map { $encDim = $loopStack->[$_]
+                  if $loopStack->[$_ + 1] eq $outerDim; } 0..($#$loopStack-1);
+        my $prevDivar;
+        $prevDivar = indexVar($encDim)
+            if defined $encDim;
+
+        # computed 0-based index var value for each dim.
+        my $prevDim = $encDim;
+        my $prevNvar;
+        my $innerDivar = $isPrefetch ? pfIndexVar($innerDim) : indexVar($innerDim);
+        my $innerNvar = numItersVar($innerDim);
+
+        # loop through each dim, outer to inner.
+        for my $i (0..$#$loopDims) {
+            my $dim = $loopDims->[$i];
+            my $nvar = numItersVar($dim);
+            my $isInner = ($i == $#$loopDims);
+
+            # Goal is to compute $divar from 1D $ivar.
+            # note that $pfcivar might be >= numItersVar(@$loopDims).
+            my $ivar = $isPrefetch ? $pfcivar : $civar;
+            my $divar = $isPrefetch ? pfIndexVar($dim) : indexVar($dim);
+
+            # Determine $divar value: actual index in this dimension.
+            my $dival = $ivar;
+
+            # divisor of index is product of sizes of remaining nested dimensions.
+            if (!$isInner) {
+                my @subDims = @$loopDims[$i+1 .. $#$loopDims];
+                my $snvar = numItersVar(@subDims);
+                $dival .= " / $snvar";
+            }
+
+            # mod by size of this dimension (not needed for outer-most dim).
+            if ($i > 0) {
+                $dival = "($dival) % $nvar";
+            }
+
+            # output $divar.
+            push @$code,
+            " // Zero-based, unit-stride ".($isPrefetch ? 'prefetch ' : '')."index for $dim.",
+            " idx_t $divar = $dival;";
+
+            # apply square-wave to inner 2 dimensions if requested.
+            my $isInnerSquare = @$loopDims >=2 && $isInner && ($features & $bSquare);
+            if ($isInnerSquare) {
+
+                my $divar2 = "${divar}_x2";
+                my $avar = "${prevDivar}_lsb";
+                push @$code, 
+                " // Modify $prevDivar and $divar for 'square_wave' path.",
+                " if (($innerNvar > 1) && ($prevDivar/2 < $prevNvar/2)) {",
+                "  // Compute extended $dim index over 2 iterations of $prevDivar.",
+                "  idx_t $divar2 = $divar + ($nvar * ($prevDivar & 1));",
+                "  // Select $divar from 0,0,1,1,2,2,... sequence",
+                "  $divar = $divar2 / 2;",
+                "  // Select $prevDivar adjustment value from 0,1,1,0,0,1,1, ... sequence.",
+                "  idx_t $avar = ($divar2 & 1) ^ (($divar2 & 2) >> 1);",
+                "  // Adjust $prevDivar +/-1 by replacing bit 0.",
+                "  $prevDivar = ($prevDivar & (idx_t)-2) | $avar;",
+                " } // square-wave.";
+            }
+
+            # reverse order of every-other traversal if requested.
+            # for inner dim with square-wave, do every 2.
+            if (($features & $bSerp) && defined $prevDivar) {
+                if ($isInnerSquare) {
+                    push @$code,
+                    " // Reverse direction of $divar after every-other iteration of $prevDivar for 'square_wave serpentine' path.",
+                    " if (($prevDivar & 2) == 2) $divar = $nvar - $divar - 1;";
+                } else {
+                    push @$code,
+                    " // Reverse direction of $divar after every iteration of $prevDivar for  'serpentine' path.",
+                    " if (($prevDivar & 1) == 1) $divar = $nvar - $divar - 1;";
+                }
+            }
+
+            $prevDim = $dim;
+            $prevDivar = $divar;
+            $prevNvar = $nvar;
+        }
+    }
+    
     # start and stop vars based on individual begin, end, step, and index vars.
     for my $dim (@$loopDims) {
         my $divar = $isPrefetch ? pfIndexVar($dim) : indexVar($dim);
@@ -305,7 +498,7 @@ sub beginLoop($$$$$$$) {
     my $features = shift;       # bits for path types.
     my $loopStack = shift;      # whole stack, including enclosing dims.
 
-    $endVal = numVar(@$loopDims) if !defined $endVal;
+    $endVal = numItersVar(@$loopDims) if !defined $endVal;
     my $itype = indexType(@$loopDims);
     my $ivar = loopIndexVar(@$loopDims);
     push @$code, @$prefix if defined $prefix;
@@ -503,6 +696,11 @@ sub processCode($) {
             $features |= $bPipe;
         }
         
+        # use grouped path in next loop if possible.
+        elsif (lc $tok eq 'grouped') {
+            $features |= $bGroup;
+        }
+        
         # use serpentine path in next loop if possible.
         elsif (lc $tok eq 'serpentine') {
             $features |= $bSerp;
@@ -555,7 +753,7 @@ sub processCode($) {
             warn "info: generating ".join(', ', @loopDims)." loop...\n";
 
             # add initial code for index vars, but don't start loop body yet.
-            addIndexVars(\@code, \@loopDims);
+            addIndexVars(\@code, \@loopDims, $features);
             
             # if not the inner loop, start the loop body.
             # if it is the inner loop, we might need more than one loop body, so
@@ -647,7 +845,7 @@ sub processCode($) {
                 
                 my $ucDir = uc($innerDim);
                 my $pfd = "PFD$genericCache";
-                my $nVar = numVar(@loopDims);
+                my $nVar = numItersVar(@loopDims);
 
                 # declare pipeline vars.
                 push @code, " // Pipeline accumulators.", " MAKE_PIPE_$ucDir;"
@@ -719,7 +917,7 @@ sub processCode($) {
 
                     my $name = "Computation";
                     my $endVal = ($loop == $lastLoop) ?
-                        numVar(@loopDims) : midVar(@loopDims);
+                        numItersVar(@loopDims) : midVar(@loopDims);
                     my $beginVal = ($lastLoop > 0 && $loop == $lastLoop) ?
                         midVar(@loopDims) : 0;
 
@@ -862,6 +1060,7 @@ sub main() {
       "  $script -dims x,y,z 'omp loop(x,y) { loop(z) { calc(f); } }'\n",
       "  $script -dims x,y,z 'omp loop(x,y) { prefetch loop(z) { calc(f); } }'\n",
       #"  $script -dims x,y,z 'omp loop(x,y) { pipeline loop(z) { calc(f); } }'\n",
+      "  $script -dims x,y,z 'grouped omp loop(x,y,z) { calc(f); }'\n",
       "  $script -dims x,y,z 'omp loop(x) { serpentine loop(y,z) { calc(f); } }'\n",
       "  $script -dims x,y,z 'omp loop(x) { crew loop(y) { loop(z) { calc(f); } } }'\n",
       "Inner loops should contain calc statements that generate calls to calculation functions.\n",
@@ -873,11 +1072,13 @@ sub main() {
       "  prefetch(L1,L2): generate calls to SW L1 & L2 prefetch functions in addition to calc functions.\n",
       "  prefetch(L1):    generate calls to SW L1 prefetch functions in addition to calc functions.\n",
       "  prefetch(L2):    generate calls to SW L2 prefetch functions in addition to calc functions.\n",
+      "  grouped:         generate grouped path within a collapsed loop.\n",
       "  serpentine:      generate reverse path when enclosing loop dimension is odd.\n",
       "  square_wave:     generate 2D square-wave path for two innermost dimensions of a collapsed loop.\n",
       #"  pipeline:        generate calls to pipeline versions of calculation functions (deprecated).\n",
       "For each dim D in dims, loops are generated from begin_D to end_D-1 by step_D;\n",
-      "  these vars must be defined outside of the generated code.\n",
+      "  if grouping is used, groups are of size group_size_D;\n",
+      "  these vars must be defined *outside* of the generated code.\n",
       "Each iteration will cover values from start_D to stop_D-1;\n",
       "  these vars will be defined in the generated code.\n",
       "Options:\n";

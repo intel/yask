@@ -390,3 +390,103 @@ void Equations::findEquations(Grids& allGrids, const string& targets) {
     }
 }
 
+// Find the dimensions to be used.
+void Dimensions::setDims(Grids& grids,
+                         string stepDim,
+                         IntTuple& foldOptions,
+                         IntTuple& clusterOptions,
+                         bool allowUnalignedLoads,
+                         ostream& os)
+{
+    _stepDim = stepDim;
+                     
+    // Create a union of all dimensions in all grids.
+    // Also keep count of how many grids have each dim.
+    // Note that dimensions won't be in any particular order!
+    for (auto gp : grids) {
+
+        // Count dimensions from this grid.
+        for (auto dim : gp->getDims()) {
+            if (_dimCounts.lookup(dim))
+                _dimCounts.setVal(dim, _dimCounts.getVal(dim) + 1);
+            else
+                _dimCounts.addDimBack(dim, 1);
+        }
+    }
+    
+    // For now, there are only global specifications for vector and cluster
+    // sizes. Also, vector folding and clustering is done identially for
+    // every grid access. Thus, sizes > 1 must exist in all grids.  So, init
+    // vector and cluster sizes based on dimensions that appear in ALL
+    // grids.
+    // TODO: relax this restriction.
+    for (auto dim : _dimCounts.getDims()) {
+
+        // Step dim cannot be folded.
+        if (dim == stepDim) {
+        }
+        
+        // Add this dimension to fold/cluster only if it was found in all grids.
+        else if (_dimCounts.getVal(dim) == (int)grids.size()) {
+            _foldLengths.addDimBack(dim, 1);
+            _clusterLengths.addDimBack(dim, 1);
+        }
+        else
+            _miscDims.addDimBack(dim, 1);
+    }
+    os << "Step dimension: " << stepDim << endl;
+    
+    // Create final fold lengths based on cmd-line options.
+    IntTuple foldLengthsGT1;    // fold dimensions > 1.
+    for (auto dim : foldOptions.getDims()) {
+        int sz = foldOptions.getVal(dim);
+        int* p = _foldLengths.lookup(dim);
+        if (!p) {
+            os << "Error: fold-length of " << sz << " in '" << dim <<
+                "' dimension not allowed because '" << dim << "' ";
+            if (dim == stepDim)
+                os << "is the step dimension." << endl;
+            else
+                os << "doesn't exist in all grids." << endl;
+            exit(1);
+        }
+        *p = sz;
+        if (sz > 1)
+            foldLengthsGT1.addDimBack(dim, sz);
+            
+    }
+    os << "Vector-fold dimension(s) and size(s): " <<
+        _foldLengths.makeDimValStr(" * ") << endl;
+
+
+    // Checks for unaligned loads.
+    if (allowUnalignedLoads) {
+        if (foldLengthsGT1.size() > 1) {
+            os << "Error: attempt to allow unaligned loads when there are " <<
+                foldLengthsGT1.size() << " dimensions in the vector-fold that are > 1." << endl;
+            exit(1);
+        }
+        else if (foldLengthsGT1.size() > 0)
+            os << "Notice: memory map MUST be with unit-stride in " <<
+                foldLengthsGT1.makeDimStr() << " dimension!" << endl;
+    }
+
+    // Create final cluster lengths based on cmd-line options.
+    for (auto dim : clusterOptions.getDims()) {
+        int sz = clusterOptions.getVal(dim);
+        int* p = _clusterLengths.lookup(dim);
+        if (!p) {
+            os << "Error: cluster-length of " << sz << " in '" << dim <<
+                "' dimension not allowed because '" << dim << "' ";
+            if (dim == stepDim)
+                os << "is the step dimension." << endl;
+            else
+                os << "doesn't exist in all grids." << endl;
+            exit(1);
+        }
+        *p = sz;
+    }
+    os << "Cluster dimension(s) and size(s): " <<
+        _clusterLengths.makeDimValStr(" * ") << endl;
+    os << "Other dimension(s): " << _miscDims.makeDimStr(", ") << endl;
+}    

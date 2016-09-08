@@ -43,7 +43,7 @@ using namespace yask;
 // Set MODEL_CACHE to 1 or 2 to model that cache level
 // and create a global cache object here.
 #ifdef MODEL_CACHE
-Cache cache(MODEL_CACHE);
+Cache cache_model(MODEL_CACHE);
 #endif
 
 // Fix bsize, if needed, to fit into rsize and be a multiple of mult.
@@ -52,8 +52,8 @@ idx_t findNumSubsets(idx_t& bsize, const string& bname,
                      idx_t rsize, const string& rname,
                      idx_t mult, string dim) {
     if (bsize < 1) bsize = rsize; // 0 => use full size.
-    if (bsize > rsize) bsize = rsize;
     bsize = ROUND_UP(bsize, mult);
+    if (bsize > rsize) bsize = rsize;
     idx_t nblks = (rsize + bsize - 1) / bsize;
     idx_t rem = rsize % bsize;
     idx_t nfull_blks = rem ? (nblks - 1) : nblks;
@@ -67,6 +67,9 @@ idx_t findNumSubsets(idx_t& bsize, const string& bname,
 }
 idx_t findNumBlocks(idx_t& bsize, idx_t rsize, idx_t mult, string dim) {
     return findNumSubsets(bsize, "block", rsize, "region", mult, dim);
+}
+idx_t findNumGroups(idx_t& ssize, idx_t rsize, idx_t mult, string dim) {
+    return findNumSubsets(ssize, "group", rsize, "region", mult, dim);
 }
 idx_t findNumRegions(idx_t& rsize, idx_t dsize, idx_t mult, string dim) {
     return findNumSubsets(rsize, "region", dsize, "rank", mult, dim);
@@ -138,6 +141,7 @@ int main(int argc, char** argv)
     idx_t dn = 1, dx = DEF_RANK_SIZE, dy = DEF_RANK_SIZE, dz = DEF_RANK_SIZE;
     idx_t rt = 1;                         // wavefront time steps.
     idx_t rn = 0, rx = 0, ry = 0, rz = 0;  // region sizes (0 => use rank size).
+    idx_t gn = 0, gx = 0, gy = 0, gz = 0;  // group sizes (0 => calculate).
     idx_t bt = 1;                          // temporal block size.
     idx_t bn = 1, bx = DEF_BLOCK_SIZE, by = DEF_BLOCK_SIZE, bz = DEF_BLOCK_SIZE;  // size of cache blocks.
     idx_t pn = 0, px = DEF_PAD, py = DEF_PAD, pz = DEF_PAD; // padding.
@@ -166,24 +170,24 @@ int main(int argc, char** argv)
                     dt << endl <<
                     " -d{n,x,y,z} <n>  rank domain size in specified spatial dimension, defaults=" <<
                     dn << '*' << dx << '*' << dy << '*' << dz << endl <<
-                    " -d <n>           set same rank size in 3 {x,y,z} spatial dimensions\n" <<
+                    " -d <n>           shorthand for '-dx <n> -dy <n> -dz <n>\n" <<
                     " -rt <n>          OpenMP region time steps (for wave-front tiling), default=" <<
                     rt << endl <<
-                    " -r{n,x,y,z} <n>  OpenMP region size in specified spatial dimension, defaults=" <<
-                    rn << '*' << rx << '*' << ry << '*' << rz << endl <<
-                    " -r <n>           set same OpenMP region size in 3 {x,y,z} spatial dimensions\n"
+                    " -r{n,x,y,z} <n>  OpenMP region size in specified spatial dimension, defaults to rank size\n" <<
+                    " -r <n>           shorthand for '-rx <n> -ry <n> -rz <n>\n" <<
+                    " -s{n,x,y,z} <n>  group size in specified spatial dimension, defaults set automatically\n" <<
+                    " -s <n>           shorthand for '-sx <n> -sy <n> -sz <n>\n" <<
                     " -b{n,x,y,z} <n>  cache block size in specified spatial dimension, defaults=" <<
                     bn << '*' << bx << '*' << by << '*' << bz << endl <<
-                    " -b <n>           set same cache block size in 3 {x,y,z} spatial dimensions\n" <<
+                    " -b <n>           shorthand for '-bx <n> -by <n> -bz <n>\n" <<
                     " -p{n,x,y,z} <n>  extra padding in specified spatial dimension, defaults=" <<
                     pn << '*' << px << '*' << py << '*' << pz << endl <<
-                    " -p <n>           set same padding in 3 {x,y,z} spatial dimensions\n" <<
+                    " -p <n>           shorthand for '-px <n> -py <n> -pz <n>\n" <<
 #ifdef USE_MPI
                     " -nr{n,x,y,z} <n> num ranks in specified spatial dimension, defaults=" <<
                     nrn << '*' << nrx << '*' << nry << '*' << nrz << endl <<
-                    " -nr <n>          set same num ranks in 3 {x,y,z} spatial dimensions\n" <<
+                    " -nr <n>          shorthand for '-nrx <n> -nry <n> -nrz <n>\n" <<
 #endif
-                    " -i <n>           equivalent to -dt, for backward compatibility\n" <<
                     " -thread_factor <n>  divide the original number of available threads by n, default=" <<
                     thread_factor << endl <<
                     " -bthreads <n>    set number of threads to use for a block, default=" <<
@@ -195,22 +199,25 @@ int main(int argc, char** argv)
                     " This binary has not been built with MPI support.\n"
 #endif
                     " A block size of 0 => block size == region size in that dimension.\n"
+                    " A group size of 0 => group size is calculated based on a heuristic.\n"
                     " A region size of 0 => region size == rank size in that dimension.\n"
                     " Control the time steps in each temporal wave-front with -rt:\n"
                     "  1 effectively disables wave-front tiling.\n"
                     "  0 enables wave-front tiling across all time steps in one pass.\n"
                     "  Any value other than 1 also changes the region spatial-size defaults.\n"
                     " Temporal cache blocking is not yet supported => bt == 1.\n"
-                    " Validation is very slow and uses 2x memory, so run with very small sizes.\n"
-                    " If validation fails, it may be due to rounding error; try building with 8-byte reals.\n"
-                    " Validation disables warmup and sets the default number of trials to 1.\n"
+                    " Validation is very slow and uses 2x memory,\n"
+                    "  so run with very small sizes and number of time-steps.\n"
+                    "  Using '-v' is shorthand for these settings: '-nw -d 64 -dt 2 -t 1',\n"
+                    "  which may be overridden by options *after* '-v'.\n"
+                    "  If validation fails, it may be due to rounding error; try building with 8-byte reals.\n"
                     " The 'n' dimension only applies to stencils that use that variable.\n"
                     "Examples:\n" <<
                     " " << argv[0] << " -d 768 -dt 4\n" <<
                     " " << argv[0] << " -dx 512 -dy 256 -dz 128\n" <<
                     " " << argv[0] << " -d 2048 -dt 20 -r 512 -rt 10  # temporal tiling.\n" <<
                     " " << argv[0] << " -d 512 -npx 2 -npy 1 -npz 2   # multi-rank.\n" <<
-                    " " << argv[0] << " -d 64 -v                      # validation.\n";
+                    " " << argv[0] << " -v                            # validation.\n";
                 help = true;
             }
 
@@ -220,6 +227,9 @@ int main(int argc, char** argv)
             // validation.
             else if (opt == "-v") {
                 validate = true;
+                doWarmup = false;
+                dx = dy = dz = 64;
+                dt = 2;
                 num_trials = 1;
             }
 
@@ -232,7 +242,6 @@ int main(int argc, char** argv)
                 }
                 int val = atoi(argv[++argi]);
                 if (opt == "-t") num_trials = val;
-                else if (opt == "-i") dt = val;
                 else if (opt == "-dt") dt = val;
                 else if (opt == "-dn") dn = val;
                 else if (opt == "-dx") dx = val;
@@ -245,6 +254,11 @@ int main(int argc, char** argv)
                 else if (opt == "-ry") ry = val;
                 else if (opt == "-rz") rz = val;
                 else if (opt == "-r") rx = ry = rz = val;
+                else if (opt == "-gn") gn = val;
+                else if (opt == "-gx") gx = val;
+                else if (opt == "-gy") gy = val;
+                else if (opt == "-gz") gz = val;
+                else if (opt == "-g") gx = gy = gz = val;
                 else if (opt == "-bn") bn = val;
                 else if (opt == "-bx") bx = val;
                 else if (opt == "-by") by = val;
@@ -302,6 +316,7 @@ int main(int argc, char** argv)
     context.comm = comm;
 
     // report threads.
+    int region_threads = 1;
     {
         cout << endl;
 #if defined(_OPENMP)
@@ -337,7 +352,8 @@ int main(int argc, char** argv)
             omp_set_nested(1);
         context.num_block_threads = block_threads;
         int rt = context.set_region_threads(); // Temporary; just for reporting.
-        cout << "  Num threads per region: " << omp_get_max_threads() << endl;
+        region_threads = omp_get_max_threads();
+        cout << "  Num threads per region: " << region_threads << endl;
         cout << "  Num threads per block: " << block_threads << endl;
         context.set_max_threads(); // Back to normal.
 #endif
@@ -367,7 +383,7 @@ int main(int argc, char** argv)
     dy = roundUp(dy, CPTS_Y, "rank size in y");
     dz = roundUp(dz, CPTS_Z, "rank size in z");
 
-    // Determine num regions based on region sizes.
+    // Determine num regions.
     // Also fix up region sizes as needed.
     cout << "\nRegions:" << endl;
     idx_t nrgt = findNumRegions(rt, dt, CPTS_T, "t");
@@ -378,7 +394,7 @@ int main(int argc, char** argv)
     idx_t nrg = nrgt * nrgn * nrgx * nrgy * nrgz;
     cout << " num-regions-per-rank: " << nrg << endl;
 
-    // Determine num blocks based on block sizes.
+    // Determine num blocks.
     // Also fix up block sizes as needed.
     cout << "\nBlocks:" << endl;
     idx_t nbt = findNumBlocks(bt, rt, CPTS_T, "t");
@@ -388,6 +404,25 @@ int main(int argc, char** argv)
     idx_t nbz = findNumBlocks(bz, rz, CPTS_Z, "z");
     idx_t nb = nbt * nbn * nbx * nby * nbz;
     cout << " num-blocks-per-region: " << nb << endl;
+
+    // Adjust defaults for groups.
+    // Assumes inner block loop in z dimension and
+    // layout in n,x,y,z order.
+    // TODO: check and adjust this accordingly.
+    if (!gn) gn = bn;
+    if (!gx) gx = bx;
+    if (!gy) gy = 2 * by;
+    if (!gz) gz = bz;
+
+    // Determine num groups.
+    // Also fix up group sizes as needed.
+    cout << "\nGroups:" << endl;
+    idx_t ngn = findNumGroups(gn, rn, bn, "n");
+    idx_t ngx = findNumGroups(gx, rx, bx, "x");
+    idx_t ngy = findNumGroups(gy, ry, by, "y");
+    idx_t ngz = findNumGroups(gz, rz, bz, "z");
+    idx_t ng = ngn * ngx * ngy * ngz;
+    cout << " num-groups-per-region: " << ng << endl;
 
     // Round up padding as needed.
     pn = roundUp(pn, VLEN_N, "extra padding in n");
@@ -408,11 +443,12 @@ int main(int argc, char** argv)
     idx_t hz = ROUND_UP(context.max_halo_z, VLEN_Z);
     
     cout << "\nSizes in points per grid (t*n*x*y*z):\n"
-        " vector-size: " << VLEN_T << '*' << VLEN_N << '*' << VLEN_X << '*' << VLEN_Y << '*' << VLEN_Z << endl <<
+        " vector-size:  " << VLEN_T << '*' << VLEN_N << '*' << VLEN_X << '*' << VLEN_Y << '*' << VLEN_Z << endl <<
         " cluster-size: " << CPTS_T << '*' << CPTS_N << '*' << CPTS_X << '*' << CPTS_Y << '*' << CPTS_Z << endl <<
-        " block-size: " << bt << '*' << bn << '*' << bx << '*' << by << '*' << bz << endl <<
-        " region-size: " << rt << '*' << rn << '*' << rx << '*' << ry << '*' << rz << endl <<
-        " rank-size: " << dt << '*' << dn << '*' << dx << '*' << dy << '*' << dz << endl <<
+        " block-size:   " << bt << '*' << bn << '*' << bx << '*' << by << '*' << bz << endl <<
+        " group-size:   " << 1 << '*' << gn << '*' << gx << '*' << gy << '*' << gz << endl <<
+        " region-size:  " << rt << '*' << rn << '*' << rx << '*' << ry << '*' << rz << endl <<
+        " rank-size:    " << dt << '*' << dn << '*' << dx << '*' << dy << '*' << dz << endl <<
         " overall-size: " << dt << '*' << dn << '*' << (dx * num_ranks) << '*' << dy << '*' << dz << endl;
     cout << "\nOther settings:\n"
         " num-ranks: " << nrn << '*' << nrx << '*' << nry << '*' << nrz << endl <<
@@ -441,6 +477,11 @@ int main(int argc, char** argv)
     context.rx = rx;
     context.ry = ry;
     context.rz = rz;
+
+    context.gn = gn;
+    context.gx = gx;
+    context.gy = gy;
+    context.gz = gz;
 
     context.bt = bt;
     context.bn = bn;
@@ -563,8 +604,8 @@ int main(int argc, char** argv)
 
 #ifdef MODEL_CACHE
         if (!is_leader)
-            cache.disable();
-        if (cache.isEnabled())
+            cache_model.disable();
+        if (cache_model.isEnabled())
             cout << "Modeling cache...\n";
 #endif
         if (is_leader)
@@ -573,10 +614,10 @@ int main(int argc, char** argv)
 
 #ifdef MODEL_CACHE
         // print cache stats, then disable.
-        if (cache.isEnabled()) {
+        if (cache_model.isEnabled()) {
             cout << "Done modeling cache...\n";
-            cache.dumpStats();
-            cache.disable();
+            cache_model.dumpStats();
+            cache_model.disable();
         }
 #endif
 

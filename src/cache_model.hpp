@@ -31,7 +31,7 @@ IN THE SOFTWARE.
 namespace yask {
 
     // key is CL addr; value is line num.
-    class Cache : public map<uintptr_t, int> {
+    class Cache : public std::map<uintptr_t, int> {
         int myLevel;
         size_t numReads, numPFs, numEvicts, numLowPFs;
         size_t numReadsNotPFed, numExtraPFs, numBadEvicts, numLowPFsNotPFed;
@@ -39,7 +39,7 @@ namespace yask {
         static const int maxMsgs = 20;
         bool enabled;
         uintptr_t prevReadLine;
-        map<intptr_t, size_t> strideCounts;
+        std::map<intptr_t, size_t> strideCounts;
         static const float minStridePct = 0.1f;
 
     public:
@@ -62,9 +62,9 @@ namespace yask {
 
         void dumpStats() const {
             int np = 0, nr = 0;
-            for (const_iterator i = begin(); i != end(); i++) {
-                void *p = (void*)(i->first * CACHELINE_BYTES);
-                int line = i->second;
+            for (auto const& i : *this) {
+                void *p = (void*)(i.first * CACHELINE_BYTES);
+                int line = i.second;
                 if (line >= 0 && ++np < maxMsgs)
                     printf("cache L%i: prefetch of %p from line %i without any read.\n", myLevel,
                            p, line);

@@ -182,30 +182,43 @@ public:
     }
 
     // Get the set of aligned vectors on the leading edge
-    // in the given direction.
+    // in the given direction and magnitude in dir.
     // Pre-requisite: visitor has been accepted.
     virtual void getLeadingEdge(GridPointSet& edge, const IntTuple& dir) const {
         edge.clear();
 
-        // loop over aligned vectors.
-        for (auto avi : _alignedVecs) {
+        // Repeat based on magnitude (cluster step in given dir).
+        for (int i = 0; i < dir.getDirVal(); i++) {
+        
+            // loop over aligned vectors.
+            for (auto avi : _alignedVecs) {
 
-            // ignore if this vector doesn't have a dimension in dir.
-            if (!avi.lookup(dir.getDirName()))
-                continue;
+                // ignore values already found.
+                if (edge.count(avi))
+                    continue;
 
-            // compare to all others.
-            bool best = true;
-            for (auto avj : _alignedVecs) {
-                
-                // determine if avj is ahead of avi in given direction.
-                if (avj.isAheadOfInDir(avi, dir))
-                    best = false;
+                // ignore if this vector doesn't have a dimension in dir.
+                if (!avi.lookup(dir.getDirName()))
+                    continue;
+
+                // compare to all points.
+                bool best = true;
+                for (auto avj : _alignedVecs) {
+
+                    // ignore values already found.
+                    if (edge.count(avj))
+                        continue;
+
+                    // Determine if avj is ahead of avi in given direction.
+                    // (A point won't be ahead of itself.)
+                    if (avj.isAheadOfInDir(avi, dir))
+                        best = false;
+                }
+
+                // keep only if farthest.
+                if (best)
+                    edge.insert(avi);
             }
-
-            // keep only if farthest.
-            if (best)
-                edge.insert(avi);
         }
     }
 

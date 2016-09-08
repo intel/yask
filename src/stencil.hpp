@@ -168,10 +168,6 @@ extern "C" {
 
 namespace yask {
 
-#ifdef MODEL_CACHE
-    extern Cache cache;
-#endif
-
     // Default grid layouts.
     // 3D dims are 1=x, 2=y, 3=z.
     // 4D dims are 1=n/t, 2=x, 3=y, 4=z.

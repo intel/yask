@@ -74,7 +74,10 @@ namespace yask {
         const double oneK = 1024.;
         const double oneM = oneK * oneK;
         const double oneG = oneK * oneM;
-        if (num > oneG)
+        const double oneT = oneK * oneG;
+        if (num > oneT)
+            os << (num / oneT) << "Ti";
+        else if (num > oneG)
             os << (num / oneG) << "Gi";
         else if (num > oneM)
             os << (num / oneM) << "Mi";
@@ -85,7 +88,6 @@ namespace yask {
         return os.str();
     }
 
-
     // Return num with SI multiplier.
     // Use this one for rates, etc.
     string printWithPow10Multiplier(double num)
@@ -94,7 +96,10 @@ namespace yask {
         const double oneK = 1e3;
         const double oneM = 1e6;
         const double oneG = 1e9;
-        if (num > oneG)
+        const double oneT = 1e12;
+        if (num > oneT)
+            os << (num / oneT) << "T";
+        else if (num > oneG)
             os << (num / oneG) << "G";
         else if (num > oneM)
             os << (num / oneM) << "M";

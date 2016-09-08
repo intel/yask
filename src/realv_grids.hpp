@@ -28,6 +28,10 @@ IN THE SOFTWARE.
 
 #include "generic_grids.hpp"
 
+#ifdef MODEL_CACHE
+extern yask::Cache cache_model;
+#endif
+
 namespace yask {
 
     // Base class for real_vec_t grids.
@@ -312,7 +316,7 @@ namespace yask {
             printVec("readVec", iv, jv, kv, v, line);
 #endif
 #ifdef MODEL_CACHE
-            cache.read(p, line);
+            cache_model.read(p, line);
 #endif
             return v;
         }
@@ -328,7 +332,7 @@ namespace yask {
             printVec("writeVec", iv, jv, kv, v, line);
 #endif
 #ifdef MODEL_CACHE
-            cache.write(p, line);
+            cache_model.write(p, line);
 #endif
         }
 
@@ -572,7 +576,7 @@ namespace yask {
             printVec("readVec", nv, iv, jv, kv, v, line);
 #endif
 #ifdef MODEL_CACHE
-            cache.read(p, line);
+            cache_model.read(p, line);
 #endif
             return v;
         }
@@ -588,7 +592,7 @@ namespace yask {
             printVec("writeVec", nv, iv, jv, kv, v, line);
 #endif
 #ifdef MODEL_CACHE
-            cache.write(p, line);
+            cache_model.write(p, line);
 #endif
         }
 
