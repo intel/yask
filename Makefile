@@ -64,7 +64,7 @@ mpi		=	0
 
 # Defaults based on stencil type.
 ifeq ($(stencil),)
-$(error Stencil not specified; use stencil=iso3dfd, 3axis, 9axis, 3plane, cube, ave, awp or awp_elastic)
+$(error Stencil not specified; use stencil=iso3dfd, 3axis, 9axis, 3plane, cube, ave, stream, awp or awp_elastic)
 
 else ifeq ($(stencil),ave)
 radius		?=	1
@@ -81,8 +81,16 @@ else ifeq ($(stencil),cube)
 radius		?=	2
 
 else ifeq ($(stencil),iso3dfd)
+real_bytes	?=	4
 layout_4d	?=	Layout_2314
+ifeq ($(arch),knl)
+ifeq ($(real_bytes),4)
+fold		?=	x=2,y=8,z=1
+else
+fold		?=	x=2,y=4,z=1
+endif
 cluster		?=	x=2
+endif
 
 else ifeq ($(stencil),stream)
 radius		?=	2
@@ -97,9 +105,8 @@ else ifeq ($(findstring awp,$(stencil)),awp)
 radius		?=	2
 time_dim_size	?=	1
 eqs		?=	velocity=vel_,stress=stress_
-def_rank_size	?=	640
+def_rank_size	?=	512
 def_block_size	?=	32
-def_wavefront_region_size ?=	256
 ifeq ($(arch),knl)
 def_block_threads	?=	4
 def_thread_factor	?=	2
@@ -182,7 +189,6 @@ layout_3d			?=	Layout_123
 layout_4d			?=	Layout_1234
 def_rank_size			?=	1024
 def_block_size			?=	64
-def_wavefront_region_size	?=	512
 def_pad				?=	1
 
 # How to fold vectors (x*y*z).
@@ -244,7 +250,6 @@ MACROS		+=	LAYOUT_4D=$(layout_4d)
 MACROS		+=	TIME_DIM_SIZE=$(time_dim_size)
 MACROS		+=	DEF_RANK_SIZE=$(def_rank_size)
 MACROS		+=	DEF_BLOCK_SIZE=$(def_block_size)
-MACROS		+=	DEF_WAVEFRONT_REGION_SIZE=$(def_wavefront_region_size)
 MACROS		+=	DEF_BLOCK_THREADS=$(def_block_threads)
 MACROS		+=	DEF_THREAD_FACTOR=$(def_thread_factor)
 MACROS		+=	DEF_PAD=$(def_pad)

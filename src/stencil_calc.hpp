@@ -32,6 +32,62 @@ IN THE SOFTWARE.
 
 namespace yask {
 
+    // Forward defn.
+    struct StencilContext;
+
+    // MPI buffers for *one* grid.
+    struct MPIBufs {
+
+        // A type to store ranks of all possible neighbors in all
+        // directions, including diagonals.
+        enum NeighborOffset { rank_prev, rank_self, rank_next, num_neighbors };
+        typedef int Neighbors[num_neighbors][num_neighbors][num_neighbors][num_neighbors];
+
+        // Neighborhood size includes self.
+        static const int neighborhood_size = num_neighbors * num_neighbors * num_neighbors * num_neighbors;
+        
+        // Need one buf for send and one for receive for each neighbor.
+        enum BufDir { bufSend, bufRec, nBufDirs };
+
+        // A type to store buffers for all possible neighbors.
+        typedef Grid_NXYZ* NeighborBufs[nBufDirs][num_neighbors][num_neighbors][num_neighbors][num_neighbors];
+        NeighborBufs bufs;
+
+        MPIBufs() {
+            memset(bufs, 0, sizeof(bufs));
+        }
+
+        // Access a buffer by direction and 4D neighbor indices.
+        Grid_NXYZ* operator()(int bd,
+                              idx_t nn, idx_t nx, idx_t ny, idx_t nz) {
+            assert(bd >= 0);
+            assert(bd < nBufDirs);
+            assert(nn >= 0);
+            assert(nn < num_neighbors);
+            assert(nx >= 0);
+            assert(nx < num_neighbors);
+            assert(ny >= 0);
+            assert(ny < num_neighbors);
+            assert(nz >= 0);
+            assert(nn < num_neighbors);
+            return bufs[bd][nn][nx][ny][nz];
+        }
+
+        // Apply a function to each neighbor rank and/or buffer.
+        virtual void visitNeighbors(StencilContext& context,
+                                    std::function<void (idx_t nn, idx_t nx, idx_t ny, idx_t nz,
+                                                        int rank,
+                                                        Grid_NXYZ* sendBuf,
+                                                        Grid_NXYZ* rcvBuf)> visitor);
+            
+        // Allocate new buffer in given direction and size.
+        virtual Grid_NXYZ* allocBuf(int bd,
+                                    idx_t nn, idx_t nx, idx_t ny, idx_t nz,
+                                    idx_t dn, idx_t dx, idx_t dy, idx_t dz,
+                                    const std::string& name);
+    };
+
+    
     // Data and hierarchical sizes.
     // This is a pure-virtual class that must be implemented
     // for a specific problem.
@@ -47,13 +103,14 @@ namespace yask {
         std::vector<RealVecGridBase*> eqGridPtrs;
 
         // A list of all non-grid parameters.
-        std::vector<GenericGridBase<real_t>*> paramPtrs;
+        std::vector<RealGrid*> paramPtrs;
 
         // Sizes in elements (points).
         // - time sizes (t) are in steps to be done (not grid allocation).
         // - spatial sizes (x, y, z) are in elements (not vectors).
         // Sizes are the same for all grids and all stencil equations.
         // TODO: relax this restriction.
+        idx_t begin_dt;           // begin time (end is begin_dt + dt);
         idx_t dt, dn, dx, dy, dz; // rank size.
         idx_t rt, rn, rx, ry, rz; // region size.
         idx_t bt, bn, bx, by, bz; // block size.
@@ -62,85 +119,28 @@ namespace yask {
         idx_t pn, px, py, pz;     // spatial padding (extra to avoid aliasing).
         idx_t angle_n, angle_x, angle_y, angle_z; // temporal skewing angles.
 
-        // MPI.
+        // MPI meta-data.
         MPI_Comm comm;
         int num_ranks, my_rank;   // MPI-assigned index.
         idx_t nrn, nrx, nry, nrz; // number of ranks in each dim.
         double mpi_time;          // time spent doing MPI.
+        MPIBufs::Neighbors my_neighbors;   // neighbor ranks.
 
-        // A type to store ranks of all possible neighbors in all
-        // directions, including diagonals.
-        enum NeighborOffset { rank_prev, rank_self, rank_next, num_neighbors };
-        typedef int Neighbors[num_neighbors][num_neighbors][num_neighbors][num_neighbors];
-        Neighbors my_neighbors;
-
-        // Neighborhood size includes self.
-        const int neighborhood_size = num_neighbors * num_neighbors * num_neighbors * num_neighbors;
-
-        // MPI buffers for one grid.
-        struct Bufs {
-
-            // Need one buf for send and one for receive for each neighbor.
-            enum BufDir { bufSend, bufRec, nBufDirs };
-
-            // A type to store buffers for all possible neighbors.
-            typedef Grid_NXYZ* NeighborBufs[nBufDirs][num_neighbors][num_neighbors][num_neighbors][num_neighbors];
-            NeighborBufs bufs;
-
-            Bufs() {
-                memset(bufs, 0, sizeof(bufs));
-            }
-
-            // Access a buffer by direction and 4D neighbor indices.
-            Grid_NXYZ* operator()(int bd,
-                                  idx_t nn, idx_t nx, idx_t ny, idx_t nz) {
-                assert(bd >= 0);
-                assert(bd < nBufDirs);
-                assert(nn >= 0);
-                assert(nn < num_neighbors);
-                assert(nx >= 0);
-                assert(nx < num_neighbors);
-                assert(ny >= 0);
-                assert(ny < num_neighbors);
-                assert(nz >= 0);
-                assert(nn < num_neighbors);
-                return bufs[bd][nn][nx][ny][nz];
-            }
-
-            // Apply a function to each neighbor rank and/or buffer.
-            virtual void visitNeighbors(StencilContext& context,
-                                        std::function<void (idx_t nn, idx_t nx, idx_t ny, idx_t nz,
-                                                            int rank,
-                                                            Grid_NXYZ* sendBuf,
-                                                            Grid_NXYZ* rcvBuf)> visitor) {
-                for (idx_t nn = 0; nn < num_neighbors; nn++)
-                    for (idx_t nx = 0; nx < num_neighbors; nx++)
-                        for (idx_t ny = 0; ny < num_neighbors; ny++)
-                            for (idx_t nz = 0; nz < num_neighbors; nz++)
-                                visitor(nn, nx, ny, nz,
-                                        context.my_neighbors[nn][nx][ny][nz],
-                                        bufs[0][nn][nx][ny][nz],
-                                        bufs[1][nn][nx][ny][nz]);
-            }
-            
-            // Allocate new buffer in given direction and size.
-            Grid_NXYZ* allocBuf(int bd,
-                                idx_t nn, idx_t nx, idx_t ny, idx_t nz,
-                                idx_t dn, idx_t dx, idx_t dy, idx_t dz,
-                                const std::string& name) {
-                auto gp = (*this)(bd, nn, nx, ny, nz);
-                assert(gp == NULL); // not already allocated.
-                gp = new Grid_NXYZ(dn, dx, dy, dz, 0, 0, 0, 0, name, true);
-                assert(gp);
-                bufs[bd][nn][nx][ny][nz] = gp;
-                return gp;
-            }
-        };
-
+        // Actual MPI buffers.
         // MPI buffers are tagged by their grid pointers.
         // Only grids in eqGridPtrs will have buffers.
-        std::map<RealVecGridBase*, Bufs> bufs;
+        std::map<RealVecGridBase*, MPIBufs> mpiBufs;
 
+        // Shadow grids.
+        // These are used to time copies back and forth between buffers used
+        // by YASK for computation and those that might be needed by
+        // traditional C or FORTRAN functions.  Only grids in eqGridPtrs
+        // will have shadows; it is assumed that other grids will only need
+        // to be copied once.
+        std::map<RealVecGridBase*, RealGrid_NXYZ*> shadowGrids;
+        idx_t shadow_in_freq, shadow_out_freq; // copy frequencies;
+        double shadow_time;          // time spent doing shadow copies.
+        
         // Threading.
         // Remember original number of threads avail.
         // We use this instead of omp_get_num_procs() so the user
@@ -184,12 +184,22 @@ namespace yask {
         }
 
         // Ctor, dtor.
-        StencilContext() : num_ranks(1), my_rank(0), mpi_time(0),
-                           orig_max_threads(1), num_block_threads(1)
+        StencilContext() :
+            begin_dt(TIME_DIM_SIZE),
+            dt(0), dn(0), dx(0), dy(0), dz(0),
+            rt(0), rn(0), rx(0), ry(0), rz(0),
+            bt(0), bn(0), bx(0), by(0), bz(0),
+            gn(0), gx(0), gy(0), gz(0),
+            hn(0), hx(0), hy(0), hz(0),
+            pn(0), px(0), py(0), pz(0),
+            angle_n(0), angle_x(0), angle_y(0), angle_z(0),
+            comm(0), num_ranks(1), my_rank(0), mpi_time(0.0),
+            shadow_in_freq(0), shadow_out_freq(0), shadow_time(0.0),
+            orig_max_threads(1), num_block_threads(1)
         {
             // Init my_neighbors to indicate no neighbor.
             int *p = (int *)my_neighbors;
-            for (int i = 0; i < neighborhood_size; i++)
+            for (int i = 0; i < MPIBufs::neighborhood_size; i++)
                 p[i] = MPI_PROC_NULL;
         }
         virtual ~StencilContext() { }
@@ -200,19 +210,38 @@ namespace yask {
         // Allocate param memory and set paramPtrs.
         virtual void allocParams() =0;
 
-        // Allocate MPI buffers, etc.
+        // Allocate MPI buffers, etc. if enabled.
         virtual void setupMPI();
-    
+
+        // Alloc shadow grids.
+        virtual void allocShadowGrids(std::ostream& os);
+        
+        // Allocate grids, params, MPI bufs, and shadow grids.
+        // Prints and returns num bytes.
+        virtual idx_t allocAll(std::ostream& os);
+        
         // Get total size.
         virtual idx_t get_num_bytes();
 
-        // Init all grids & params w/same value within each,
-        // but different values between them.
-        virtual void initSame();
+        // Init all grids & params by calling initFn.
+        virtual void initValues(std::function<void (RealVecGridBase* gp, 
+                                                    real_t seed)> realVecInitFn,
+                                std::function<void (RealGrid* gp,
+                                                    real_t seed)> realInitFn);
 
-        // Init all grids & params w/different values.
-        // Better for validation, but slower.
-        virtual void initDiff();
+        // Init all grids & params to same value within grids,
+        // but different for each grid.
+        virtual void initSame() {
+            initValues([&](RealVecGridBase* gp, real_t seed){ gp->set_same(seed); },
+                       [&](RealGrid* gp, real_t seed){ gp->set_same(seed); });
+        }
+
+        // Init all grids & params to different values within grids,
+        // and different for each grid.
+        virtual void initDiff() {
+            initValues([&](RealVecGridBase* gp, real_t seed){ gp->set_diff(seed); },
+                       [&](RealGrid* gp, real_t seed){ gp->set_diff(seed); });
+        }
 
         // Compare grids in contexts.
         // Params should not be written to, so they are not compared.
@@ -253,7 +282,7 @@ namespace yask {
                                 idx_t begin_bn, idx_t begin_bx, idx_t begin_by, idx_t begin_bz,
                                 idx_t end_bn, idx_t end_bx, idx_t end_by, idx_t end_bz) =0;
 
-        // Exchange halo data for the updated grids at the given time.
+        // Exchange halo and shadow data for the updated grids at the given time.
         virtual void exchange_halos(StencilContext& generic_context, idx_t start_dt, idx_t stop_dt);
     };
 

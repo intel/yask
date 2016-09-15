@@ -34,16 +34,19 @@ extern yask::Cache cache_model;
 
 namespace yask {
 
+    typedef GenericGridBase<real_t> RealGrid;
+    typedef GenericGridBase<real_vec_t> RealVecGrid;
+
     // Base class for real_vec_t grids.
     // Provides generic-grid support.
     class RealVecGridBase {
     protected:
         std::string _name;
-        GenericGridBase<real_vec_t>* _gp;
+        RealVecGrid* _gp;
 
     public:
         RealVecGridBase(std::string name,
-                        GenericGridBase<real_vec_t>* gp) :
+                        RealVecGrid* gp) :
             _name(name), _gp(gp) { }
 
         const std::string& get_name() { return _name; }
@@ -95,6 +98,13 @@ namespace yask {
         const real_vec_t* getRawData() const {
             return _gp->getRawData();
         }
+        RealVecGrid* getGenericGrid() {
+            return _gp;
+        }
+        const RealVecGrid* getGenericGrid() const {
+            return _gp;
+        }
+
     };
 
     // A 3D (x, y, z) collection of real_vec_t elements.

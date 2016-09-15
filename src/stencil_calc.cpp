@@ -41,12 +41,8 @@ namespace yask {
     {
         init(context);
     
-        // Start at a positive point to avoid any calculation referring
-        // to negative time.
-        idx_t t0 = TIME_DIM_SIZE * 2;
-
         TRACE_MSG("calc_problem_ref(%ld..%ld, 0..%ld, 0..%ld, 0..%ld, 0..%ld)", 
-                  t0, t0 + context.dt - 1,
+                  begin_dt, begin_dt + context.dt - 1,
                   context.dn - 1,
                   context.dx - 1,
                   context.dy - 1,
@@ -55,12 +51,12 @@ namespace yask {
         // Time steps.
         // TODO: check that scalar version actually does CPTS_T time steps.
         // (At this point, CPTS_T == 1 for all existing stencil examples.)
-        for(idx_t t = t0; t < t0 + context.dt; t += CPTS_T) {
+        for(idx_t t = context.begin_dt; t < context.begin_dt + context.dt; t += CPTS_T) {
 
             // equations to evaluate (only one in most stencils).
             for (auto stencil : stencils) {
 
-                // Halo exchange for grid(s) updated by this equation.
+                // Halo+shadow exchange for grid(s) updated by this equation.
                 stencil->exchange_halos(context, t, t + CPTS_T);
             
                 // grid index (only one in most stencils).
@@ -72,6 +68,7 @@ namespace yask {
                         CREW_FOR_LOOP
                             for(idx_t iy = 0; iy < context.dy; iy++) {
 
+#pragma simd
                                 for(idx_t iz = 0; iz < context.dz; iz++) {
 
                                     TRACE_MSG("%s.calc_scalar(%ld, %ld, %ld, %ld, %ld)", 
@@ -94,9 +91,7 @@ namespace yask {
         init(context);
 
         // Problem begin points.
-        // Start at a positive time point to avoid any calculation referring
-        // to negative time.
-        idx_t begin_dt = TIME_DIM_SIZE * 2;
+        idx_t begin_dt = context.begin_dt;
         idx_t begin_dn = 0, begin_dx = 0, begin_dy = 0, begin_dz = 0;
     
         // Problem end-points.
@@ -175,7 +170,7 @@ namespace yask {
 
                 for (auto stencil : stencils) {
 
-                    // Halo exchange for grid(s) updated by this equation.
+                    // Halo+shadow exchange for grid(s) updated by this equation.
                     stencil->exchange_halos(context, start_dt, stop_dt);
 
                     // Eval this stencil in calc_region().
@@ -195,7 +190,7 @@ namespace yask {
                 StencilSet stencil_set;
                 for (auto stencil : stencils) {
 
-                    // Halo exchange for grid(s) updated by this equation.
+                    // Halo+shadow exchange for grid(s) updated by this equation.
                     stencil->exchange_halos(context, start_dt, stop_dt);
                     
                     // Make set of all equations.
@@ -315,11 +310,118 @@ namespace yask {
         } // time.
     }
 
-    // Exchange halo data for the given time.
+    // Exchange halo and shadow data for the given time.
     void StencilBase::exchange_halos(StencilContext& context, idx_t start_dt, idx_t stop_dt)
     {
-#ifdef USE_MPI
         TRACE_MSG("exchange_halos(%ld..%ld)", start_dt, stop_dt);
+
+        // List of grids updated by this equation.
+        // These are the grids that need exchanges.
+        auto eqGridPtrs = getEqGridPtrs();
+
+        // Time to copy shadow out?
+        if (context.shadow_out_freq && abs(start_dt - context.begin_dt) % context.shadow_out_freq == 0) {
+            TRACE_MSG("copying to shadows at time %ld", start_dt);
+
+            double start_time = getTimeInSecs();
+            idx_t t = start_dt;
+
+            for (size_t gi = 0; gi < eqGridPtrs.size(); gi++) {
+
+                // Get pointer to generic grid and derived type.
+                // TODO: Make this more general.
+                auto gp = eqGridPtrs[gi];
+#if USING_DIM_N
+                auto gpd = dynamic_cast<Grid_TNXYZ*>(gp);
+#else
+                auto gpd = dynamic_cast<Grid_TXYZ*>(gp);
+#endif
+                assert(gpd);
+
+                // Get pointer to shadow.
+                auto sp = context.shadowGrids[gp];
+                assert(sp);
+
+                // Copy from grid to shadow.
+                // Shadows are *inside* the halo regions, e.g., indices 0..dx for dimension x.
+                for (idx_t n = 0; n < context.dn; n++) {
+
+#pragma omp parallel for
+                    for(idx_t x = 0; x < context.dx; x++) {
+
+                        CREW_FOR_LOOP
+                            for(idx_t y = 0; y < context.dy; y++) {
+
+#pragma simd
+#pragma vector nontemporal
+                                for(idx_t z = 0; z < context.dz; z++) {
+
+                                    // Copy one element.
+                                    real_t val = gpd->readElem(t, ARG_N(nv)
+                                                               x, y, z, __LINE__);
+                                    (*sp)(n, x, y, z) = val;
+                                }
+                            }
+                    }
+                }
+            }            
+
+            // In a real application, some processing on the shadow
+            // grid would be done here.
+            double end_time = getTimeInSecs();
+            context.shadow_time += end_time - start_time;
+        }
+
+        // Time to copy shadow in?
+        if (context.shadow_in_freq && abs(start_dt - context.begin_dt) % context.shadow_in_freq == 0) {
+            TRACE_MSG("copying from shadows at time %ld", start_dt);
+
+            double start_time = getTimeInSecs();
+            idx_t t = start_dt;
+
+            for (size_t gi = 0; gi < eqGridPtrs.size(); gi++) {
+
+                // Get pointer to generic grid and derived type.
+                // TODO: Make this more general.
+                auto gp = eqGridPtrs[gi];
+#if USING_DIM_N
+                auto gpd = dynamic_cast<Grid_TNXYZ*>(gp);
+#else
+                auto gpd = dynamic_cast<Grid_TXYZ*>(gp);
+#endif
+                assert(gpd);
+
+                // Get pointer to shadow.
+                auto sp = context.shadowGrids[gp];
+                assert(sp);
+
+                // Copy from shadow to grid.
+                for (idx_t n = 0; n < context.dn; n++) {
+
+#pragma omp parallel for
+                    for(idx_t x = 0; x < context.dx; x++) {
+
+                        CREW_FOR_LOOP
+                            for(idx_t y = 0; y < context.dy; y++) {
+                            
+#pragma simd
+#pragma vector nontemporal
+                                for(idx_t z = 0; z < context.dz; z++) {
+
+                                    // Copy one element.
+                                    real_t val = (*sp)(n, x, y, z);
+                                    gpd->writeElem(val, t, ARG_N(nv)
+                                                   x, y, z, __LINE__);
+                                }
+                            }
+                    }
+                }
+            }            
+            double end_time = getTimeInSecs();
+            context.shadow_time += end_time - start_time;
+        }
+
+#ifdef USE_MPI
         double start_time = getTimeInSecs();
 
         // These vars control blocking within halo packing.
@@ -336,10 +438,6 @@ namespace yask {
         const idx_t group_size_xv = 1;
         const idx_t group_size_yv = 1;
         const idx_t group_size_zv = 1;
-
-        // List of grids updated by this equation.
-        // These are the grids that need their halos exchanged.
-        auto eqGridPtrs = getEqGridPtrs();
 
         // TODO: put this loop inside visitNeighbors.
         for (size_t gi = 0; gi < eqGridPtrs.size(); gi++) {
@@ -370,13 +468,13 @@ namespace yask {
             idx_t hz = min(context.hz, gpd->get_pz());
             
             // Array to store max number of request handles.
-            MPI_Request reqs[StencilContext::Bufs::nBufDirs * context.neighborhood_size];
+            MPI_Request reqs[MPIBufs::nBufDirs * MPIBufs::neighborhood_size];
             int nreqs = 0;
 
             // Pack data and initiate non-blocking send/receive to/from all neighbors.
             TRACE_MSG("rank %i: exchange_halos: packing data for grid '%s'...",
                       context.my_rank, gp->get_name().c_str());
-            context.bufs[gp].visitNeighbors
+            context.mpiBufs[gp].visitNeighbors
                 (context,
                  [&](idx_t nn, idx_t nx, idx_t ny, idx_t nz,
                      int neighbor_rank,
@@ -399,21 +497,21 @@ namespace yask {
                          idx_t end_z = context.dz;
 
                          // Modify begin and/or end based on direction.
-                         if (nn == idx_t(context.rank_prev)) // neighbor is prev N.
+                         if (nn == idx_t(MPIBufs::rank_prev)) // neighbor is prev N.
                              end_n = hn; // read first halo-width only.
-                         if (nn == idx_t(context.rank_next)) // neighbor is next N.
+                         if (nn == idx_t(MPIBufs::rank_next)) // neighbor is next N.
                              begin_n = context.dn - hn; // read last halo-width only.
-                         if (nx == idx_t(context.rank_prev)) // neighbor is on left.
+                         if (nx == idx_t(MPIBufs::rank_prev)) // neighbor is on left.
                              end_x = hx;
-                         if (nx == idx_t(context.rank_next)) // neighbor is on right.
+                         if (nx == idx_t(MPIBufs::rank_next)) // neighbor is on right.
                              begin_x = context.dx - hx;
-                         if (ny == idx_t(context.rank_prev)) // neighbor is in front.
+                         if (ny == idx_t(MPIBufs::rank_prev)) // neighbor is in front.
                              end_y = hy;
-                         if (ny == idx_t(context.rank_next)) // neighbor is in back.
+                         if (ny == idx_t(MPIBufs::rank_next)) // neighbor is in back.
                              begin_y = context.dy - hy;
-                         if (nz == idx_t(context.rank_prev)) // neighbor is above.
+                         if (nz == idx_t(MPIBufs::rank_prev)) // neighbor is above.
                              end_z = hz;
-                         if (nz == idx_t(context.rank_next)) // neighbor is below.
+                         if (nz == idx_t(MPIBufs::rank_next)) // neighbor is below.
                              begin_z = context.dz - hz;
 
                          // Divide indices by vector lengths.
@@ -476,7 +574,7 @@ namespace yask {
                       context.my_rank, nreqs);
 
             // Unpack received data from all neighbors.
-            context.bufs[gp].visitNeighbors
+            context.mpiBufs[gp].visitNeighbors
                 (context,
                  [&](idx_t nn, idx_t nx, idx_t ny, idx_t nz,
                      int neighbor_rank,
@@ -499,35 +597,35 @@ namespace yask {
                          idx_t end_z = context.dz;
                          
                          // Modify begin and/or end based on direction.
-                         if (nn == idx_t(context.rank_prev)) { // neighbor is prev N.
+                         if (nn == idx_t(MPIBufs::rank_prev)) { // neighbor is prev N.
                              begin_n = -hn; // begin at outside of halo.
                              end_n = 0;     // end at inside of halo.
                          }
-                         if (nn == idx_t(context.rank_next)) { // neighbor is next N.
+                         if (nn == idx_t(MPIBufs::rank_next)) { // neighbor is next N.
                              begin_n = context.dn; // begin at inside of halo.
                              end_n = context.dn + hn; // end of outside of halo.
                          }
-                         if (nx == idx_t(context.rank_prev)) { // neighbor is on left.
+                         if (nx == idx_t(MPIBufs::rank_prev)) { // neighbor is on left.
                              begin_x = -hx;
                              end_x = 0;
                          }
-                         if (nx == idx_t(context.rank_next)) { // neighbor is on right.
+                         if (nx == idx_t(MPIBufs::rank_next)) { // neighbor is on right.
                              begin_x = context.dx;
                              end_x = context.dx + hx;
                          }
-                         if (ny == idx_t(context.rank_prev)) { // neighbor is in front.
+                         if (ny == idx_t(MPIBufs::rank_prev)) { // neighbor is in front.
                              begin_y = -hy;
                              end_y = 0;
                          }
-                         if (ny == idx_t(context.rank_next)) { // neighbor is in back.
+                         if (ny == idx_t(MPIBufs::rank_next)) { // neighbor is in back.
                              begin_y = context.dy;
                              end_y = context.dy + hy;
                          }
-                         if (nz == idx_t(context.rank_prev)) { // neighbor is above.
+                         if (nz == idx_t(MPIBufs::rank_prev)) { // neighbor is above.
                              begin_z = -hz;
                              end_z = 0;
                          }
-                         if (nz == idx_t(context.rank_next)) { // neighbor is below.
+                         if (nz == idx_t(MPIBufs::rank_next)) { // neighbor is below.
                              begin_z = context.dz;
                              end_z = context.dz + hz;
                          }
@@ -638,17 +736,17 @@ namespace yask {
                         // Alloc MPI buffers between rn and me.
                         // Need send and receive for each updated grid.
                         for (auto gp : eqGridPtrs) {
-                            for (int bd = 0; bd < Bufs::nBufDirs; bd++) {
+                            for (int bd = 0; bd < MPIBufs::nBufDirs; bd++) {
                                 ostringstream oss;
                                 oss << gp->get_name();
-                                if (bd == Bufs::bufSend)
+                                if (bd == MPIBufs::bufSend)
                                     oss << "_send_halo_from_" << my_rank << "_to_" << rn;
                                 else
                                     oss << "_get_halo_by_" << my_rank << "_from_" << rn;
 
-                                bufs[gp].allocBuf(bd, rdn, rdx, rdy, rdz,
-                                                  rsn, rsx, rsy, rsz,
-                                                  oss.str());
+                                mpiBufs[gp].allocBuf(bd, rdn, rdx, rdy, rdz,
+                                                     rsn, rsx, rsy, rsz,
+                                                     oss.str());
                             }
                         }
                     }
@@ -660,12 +758,18 @@ namespace yask {
     // Get total size.
     idx_t StencilContext::get_num_bytes() {
         idx_t nbytes = 0;
+
+        // Grids.
         for (auto gp : gridPtrs)
             nbytes += gp->get_num_bytes();
+
+        // Params.
         for (auto pp : paramPtrs)
             nbytes += pp->get_num_bytes();
+
+        // MPI buffers.
         for (auto gp : eqGridPtrs) {
-            bufs[gp].visitNeighbors
+            mpiBufs[gp].visitNeighbors
                 (*this,
                  [&](idx_t nn, idx_t nx, idx_t ny, idx_t nz,
                      int rank,
@@ -678,41 +782,80 @@ namespace yask {
                          nbytes += rcvBuf->get_num_bytes();
                  } );
         }
+
+        // Shadow buffers.
+        for (auto gp : eqGridPtrs) {
+            if (shadowGrids.count(gp) && shadowGrids[gp])
+                nbytes += shadowGrids[gp]->get_num_bytes();
+        }
+        
         return nbytes;
     }
 
-    // Init all grids & params w/same value within each,
-    // but different values between them.
-    void StencilContext::initSame() {
+    // Alloc shadow grids.
+    void StencilContext::allocShadowGrids(ostream& os) {
+        for (auto gp : eqGridPtrs) {
+            if (shadowGrids[gp])
+                delete shadowGrids[gp];
+            shadowGrids[gp] = new RealGrid_NXYZ(dn, dx, dy, dz,
+                                                GRID_ALIGNMENT);
+            shadowGrids[gp]->print_info(string("shadow-") + gp->get_name(), os);
+        }        
+    }
+
+    // Allocate grids, params, and MPI bufs.
+    // Returns num bytes.
+    idx_t StencilContext::allocAll(ostream& os)
+    {
+        os << "Allocating grids..." << endl;
+        allocGrids();
+        os << "Allocating parameters..." << endl;
+        allocParams();
+#ifdef USE_MPI
+        os << "Allocating MPI buffers..." << endl;
+        setupMPI();
+#endif
+        if (shadow_in_freq || shadow_out_freq) {
+            os << "Allocating shadow grids..." << endl;
+            allocShadowGrids(os);
+        }
+
+        const idx_t num_eqGrids = eqGridPtrs.size();
+        os << "Num grids: " << gridPtrs.size() << endl;
+        os << "Num grids to be updated: " << num_eqGrids << endl;
+
+        idx_t nbytes = get_num_bytes();
+        os << "Total rank-" << my_rank << " allocation (bytes): " <<
+            printWithPow2Multiplier(nbytes) << endl;
+        return nbytes;
+    }
+
+    // Init all grids & params by calling initFn.
+    void StencilContext::initValues(function<void (RealVecGridBase* gp, 
+                                                   real_t seed)> realVecInitFn,
+                                    function<void (RealGrid* gp,
+                                                   real_t seed)> realInitFn)
+    {
         real_t v = 0.1;
         cout << "Initializing grids..." << endl;
         for (auto gp : gridPtrs) {
-            gp->set_same(v);
+            realVecInitFn(gp, v);
             v += 0.01;
         }
-        if (paramPtrs.size()) {
-            cout << "Initializing parameters..." << endl;
-            for (auto pp : paramPtrs) {
-                pp->set_same(v);
-                v += 0.01;
+        if (shadowGrids.size()) {
+            cout << "Initializing shadow grids..." << endl;
+            for (auto gp : eqGridPtrs) {
+                if (shadowGrids.count(gp) && shadowGrids[gp]) {
+                    realInitFn(shadowGrids[gp], v);
+                    v += 0.01;
+                }
             }
         }
-    }
-
-    // Init all grids & params w/different values.
-    // Better for validation, but slower.
-    void StencilContext::initDiff() {
-        real_t v = 0.01;
-        cout << "Initializing grids..." << endl;
-        for (auto gp : gridPtrs) {
-            gp->set_diff(v);
-            v += 0.001;
-        }
         if (paramPtrs.size()) {
             cout << "Initializing parameters..." << endl;
             for (auto pp : paramPtrs) {
-                pp->set_diff(v);
-                v += 0.001;
+                realInitFn(pp, v);
+                v += 0.01;
             }
         }
     }
@@ -744,4 +887,36 @@ namespace yask {
 
         return errs;
     }
+    
+    // Apply a function to each neighbor rank and/or buffer.
+    void MPIBufs::visitNeighbors(StencilContext& context,
+                                 std::function<void (idx_t nn, idx_t nx, idx_t ny, idx_t nz,
+                                                     int rank,
+                                                     Grid_NXYZ* sendBuf,
+                                                     Grid_NXYZ* rcvBuf)> visitor)
+    {
+        for (idx_t nn = 0; nn < num_neighbors; nn++)
+            for (idx_t nx = 0; nx < num_neighbors; nx++)
+                for (idx_t ny = 0; ny < num_neighbors; ny++)
+                    for (idx_t nz = 0; nz < num_neighbors; nz++)
+                        visitor(nn, nx, ny, nz,
+                                context.my_neighbors[nn][nx][ny][nz],
+                                bufs[0][nn][nx][ny][nz],
+                                bufs[1][nn][nx][ny][nz]);
+    }
+
+    // Allocate new buffer in given direction and size.
+    Grid_NXYZ* MPIBufs::allocBuf(int bd,
+                            idx_t nn, idx_t nx, idx_t ny, idx_t nz,
+                            idx_t dn, idx_t dx, idx_t dy, idx_t dz,
+                            const std::string& name)
+    {
+        auto gp = (*this)(bd, nn, nx, ny, nz);
+        assert(gp == NULL); // not already allocated.
+        gp = new Grid_NXYZ(dn, dx, dy, dz, 0, 0, 0, 0, name, true);
+        assert(gp);
+        bufs[bd][nn][nx][ny][nz] = gp;
+        return gp;
+    }
+    
 }

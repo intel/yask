@@ -150,6 +150,7 @@ int main(int argc, char** argv)
     int block_threads = DEF_BLOCK_THREADS; // number of threads for a block.
     int thread_factor = DEF_THREAD_FACTOR; // divide num threads by this factor.
     bool doWarmup = true;
+    idx_t copy_in = 0, copy_out = 0;     // how often to copy to shadow grids.
     int pre_trial_sleep_time = 1;   // sec to sleep before each trial.
 
     // parse options.
@@ -164,6 +165,7 @@ int main(int argc, char** argv)
                     "Usage: [options]\n"
                     "Options:\n"
                     " -h:              print this help and the current settings, then exit\n"
+                    " -v               validate by comparing to a scalar run (see notes below)\n" <<
                     " -t <n>           number of trials, default=" <<
                     num_trials << endl <<
                     " -dt <n>          rank domain size in temporal dimension (number of time steps), default=" <<
@@ -192,7 +194,10 @@ int main(int argc, char** argv)
                     thread_factor << endl <<
                     " -bthreads <n>    set number of threads to use for a block, default=" <<
                     block_threads << endl <<
-                    " -v               validate by comparing to a scalar run\n" <<
+                    " -copy_in <n>     copy from traditional-layout grids every n time-steps, default=" <<
+                    copy_in << endl <<
+                    " -copy_out <n>    copy to traditional-layout grids every n time-steps, default=" <<
+                    copy_out << endl <<
                     " -nw              skip warmup\n" <<
                     "Notes:\n"
 #ifndef USE_MPI
@@ -224,7 +229,6 @@ int main(int argc, char** argv)
             else if (opt == "-nw")
                 doWarmup = false;
 
-            // validation.
             else if (opt == "-v") {
                 validate = true;
                 doWarmup = false;
@@ -278,6 +282,9 @@ int main(int argc, char** argv)
 #endif
                 else if (opt == "-bthreads") block_threads = val;
                 else if (opt == "-thread_factor") thread_factor = val;
+                else if (opt == "-copy_in") copy_in = val;
+                else if (opt == "-copy_out") copy_out = val;
+            
                 else {
                     cerr << "error: option '" << opt << "' not recognized." << endl;
                     exit(1);
@@ -314,6 +321,8 @@ int main(int argc, char** argv)
     context.num_ranks = num_ranks;
     context.my_rank = my_rank;
     context.comm = comm;
+    context.shadow_in_freq = copy_in;
+    context.shadow_out_freq = copy_out;
 
     // report threads.
     int region_threads = 1;
@@ -363,25 +372,25 @@ int main(int argc, char** argv)
 #endif
     }
 
-    // Adjust defaults for wavefronts.
-    if (rt != 1) {
-        if (!rn) rn = 1;
-        if (!rx) rx = DEF_WAVEFRONT_REGION_SIZE;
-        if (!ry) ry = DEF_WAVEFRONT_REGION_SIZE;
-        if (!rz) rz = DEF_WAVEFRONT_REGION_SIZE;
-
-        // TODO: enable this.
-        if (num_ranks > 1) {
-            cerr << "Sorry, MPI communication is not currently enabled with wave-front tiling." << endl;
-        }
-    }
-
     // Round up vars as needed.
     dt = roundUp(dt, CPTS_T, "rank size in t (time steps)");
     dn = roundUp(dn, CPTS_N, "rank size in n");
     dx = roundUp(dx, CPTS_X, "rank size in x");
     dy = roundUp(dy, CPTS_Y, "rank size in y");
     dz = roundUp(dz, CPTS_Z, "rank size in z");
+
+    // Adjust defaults for wavefronts.
+    if (rt > 1) {
+        if (!rn) rn = 1;
+        if (!rx) rx = dx / 2;
+        if (!ry) ry = dy / 2;
+        if (!rz) rz = dz / 2;
+
+        // TODO: enable this.
+        if (num_ranks > 1) {
+            cerr << "Sorry, MPI communication is not currently enabled with wave-front tiling." << endl;
+        }
+    }
 
     // Determine num regions.
     // Also fix up region sizes as needed.
@@ -457,6 +466,8 @@ int main(int argc, char** argv)
         " vector-len: " << VLEN << endl <<
         " padding: " << pn << '+' << px << '+' << py << '+' << pz << endl <<
         " max-halos: " << hn << '+' << hx << '+' << hy << '+' << hz << endl <<
+        " shadow-copy-in-frequency: " << copy_in << endl <<
+        " shadow-copy-out-frequency: " << copy_out << endl <<
         " manual-L1-prefetch-distance: " << PFDL1 << endl <<
         " manual-L2-prefetch-distance: " << PFDL2 << endl;
 
@@ -506,20 +517,7 @@ int main(int argc, char** argv)
 
     // Alloc memory, create lists of grids, etc.
     cout << endl;
-    cout << "Allocating grids..." << endl;
-    context.allocGrids();
-    cout << "Allocating parameters..." << endl;
-    context.allocParams();
-#ifdef USE_MPI
-    cout << "Allocating MPI buffers..." << endl;
-    context.setupMPI();
-#endif
-    idx_t nbytes = context.get_num_bytes();
-    cout << "Total rank-" << my_rank << " allocation in " <<
-        context.gridPtrs.size() << " grid(s) (bytes): " << printWithPow2Multiplier(nbytes) << endl;
-    const idx_t num_eqGrids = context.eqGridPtrs.size();
-    cout << "Num grids: " << context.gridPtrs.size() << endl;
-    cout << "Num grids to be updated: " << num_eqGrids << endl;
+    idx_t nbytes = context.allocAll(cout);
 
     // Stencil functions.
     idx_t scalar_fp_ops = 0;
@@ -535,6 +533,7 @@ int main(int argc, char** argv)
     }
 
     // Amount of work.
+    idx_t num_eqGrids = context.eqGridPtrs.size();
     const idx_t grid_numpts = dn*dx*dy*dz;
     const idx_t grids_numpts = grid_numpts * num_eqGrids;
     const idx_t grids_rank_numpts = dt * grids_numpts;
@@ -649,6 +648,7 @@ int main(int argc, char** argv)
         // Start timing.
         VTUNE_RESUME;
         context.mpi_time = 0.0;
+        context.shadow_time = 0.0;
         wstart = getTimeInSecs();
 
         // Actual work (must wait until all ranks are done).
@@ -665,13 +665,16 @@ int main(int argc, char** argv)
         float flops = float(tot_numFpOps)/elapsed_time;
         if (is_leader) {
             cout << "-----------------------------------------\n" <<
-                "time (sec):              " << printWithPow10Multiplier(elapsed_time) << endl <<
-                "throughput (points/sec): " << printWithPow10Multiplier(pps) << endl <<
-                "throughput (est FLOPS):  " << printWithPow10Multiplier(flops) << endl;
+                "time (sec):                " << printWithPow10Multiplier(elapsed_time) << endl <<
+                "throughput (points/sec):   " << printWithPow10Multiplier(pps) << endl <<
+                "throughput (est FLOPS):    " << printWithPow10Multiplier(flops) << endl;
 #ifdef USE_MPI
             cout <<
-                "time in halo exch (sec): " << printWithPow10Multiplier(context.mpi_time) << endl;
-#endif            
+                "time in halo exch (sec):   " << printWithPow10Multiplier(context.mpi_time) << endl;
+#endif
+            if (copy_in || copy_out)
+            cout <<
+                "time in shadow copy (sec): " << printWithPow10Multiplier(context.shadow_time) << endl;
         }
 
         if (pps > best_pps) {
@@ -683,9 +686,9 @@ int main(int argc, char** argv)
 
     if (is_leader) {
         cout << "-----------------------------------------\n" <<
-            "best-time (sec):              " << printWithPow10Multiplier(best_elapsed_time) << endl <<
-            "best-throughput (points/sec): " << printWithPow10Multiplier(best_pps) << endl <<
-            "best-throughput (est FLOPS):  " << printWithPow10Multiplier(best_flops) << endl <<
+            "best-time (sec):                " << printWithPow10Multiplier(best_elapsed_time) << endl <<
+            "best-throughput (points/sec):   " << printWithPow10Multiplier(best_pps) << endl <<
+            "best-throughput (est FLOPS):    " << printWithPow10Multiplier(best_flops) << endl <<
             "-----------------------------------------\n";
     }
     

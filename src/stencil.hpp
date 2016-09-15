@@ -184,6 +184,8 @@ namespace yask {
     typedef RealVecGrid_NXYZ<LAYOUT_4D> Grid_NXYZ;
     typedef RealVecGrid_TXYZ<LAYOUT_4D> Grid_TXYZ;
     typedef RealVecGrid_TNXYZ<LAYOUT_4D> Grid_TNXYZ; // T and N reduced to 1st dim.
+
+    typedef GenericGrid4d<real_t, Layout_1234> RealGrid_NXYZ; // traditional layout.
 }
 
 #endif
