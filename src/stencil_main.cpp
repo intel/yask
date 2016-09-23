@@ -84,7 +84,10 @@ int main(int argc, char** argv)
     int my_rank = 0;
     int num_ranks = 1;
 #ifdef USE_MPI
-    MPI_Init(&argc, &argv);
+    int provided = 0;
+    MPI_Init_thread(&argc, &argv, MPI_THREAD_SERIALIZED, &provided);
+    if (provided < MPI_THREAD_SERIALIZED)
+        MPI_Abort(MPI_COMM_WORLD, 1);
     MPI_Comm comm = MPI_COMM_WORLD;
     MPI_Comm_rank(comm, &my_rank);
     MPI_Comm_size(comm, &num_ranks);
@@ -198,13 +201,15 @@ int main(int argc, char** argv)
                     copy_in << endl <<
                     " -copy_out <n>    copy to traditional-layout grids every n time-steps, default=" <<
                     copy_out << endl <<
+                    " -sleep <n>       seconds to sleep before each trial, default=" <<
+                    pre_trial_sleep_time << endl <<
                     " -nw              skip warmup\n" <<
                     "Notes:\n"
 #ifndef USE_MPI
                     " This binary has not been built with MPI support.\n"
 #endif
                     " A block size of 0 => block size == region size in that dimension.\n"
-                    " A group size of 0 => group size is calculated based on a heuristic.\n"
+                    " A group size of 0 => group size == block size in that dimension.\n"
                     " A region size of 0 => region size == rank size in that dimension.\n"
                     " Control the time steps in each temporal wave-front with -rt:\n"
                     "  1 effectively disables wave-front tiling.\n"
@@ -284,6 +289,7 @@ int main(int argc, char** argv)
                 else if (opt == "-thread_factor") thread_factor = val;
                 else if (opt == "-copy_in") copy_in = val;
                 else if (opt == "-copy_out") copy_out = val;
+                else if (opt == "-sleep") pre_trial_sleep_time = val;
             
                 else {
                     cerr << "error: option '" << opt << "' not recognized." << endl;
@@ -420,7 +426,7 @@ int main(int argc, char** argv)
     // TODO: check and adjust this accordingly.
     if (!gn) gn = bn;
     if (!gx) gx = bx;
-    if (!gy) gy = 2 * by;
+    if (!gy) gy = by;
     if (!gz) gz = bz;
 
     // Determine num groups.
@@ -642,7 +648,8 @@ int main(int argc, char** argv)
             context.initDiff();
 
         // Stabilize.
-        sleep(pre_trial_sleep_time);
+        if (pre_trial_sleep_time)
+            sleep(pre_trial_sleep_time);
         MPI_Barrier(comm);
 
         // Start timing.
