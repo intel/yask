@@ -91,8 +91,8 @@ void usage(const string& cmd) {
         " -es <expr-size>    set heuristic for expression-size threshold (default=" << exprSize << ").\n"
         " [-no]-comb         do [not] combine commutative operations (default=" << doComb << ").\n"
         " [-no]-cse          do [not] eliminate common subexpressions (default=" << doCse << ").\n"
-        " [-no]-hbw-rw       do [not] allocate read/write grids in high-BW mem ((default=" << hbwRW << ").\n"
-        " [-no]-hbw-ro       do [not] allocate read-only grids in high-BW mem ((default=" << hbwRO << ").\n"
+        " [-no]-hbw-rw       do [not] allocate read/write grids in high-BW mem (default=" << hbwRW << ").\n"
+        " [-no]-hbw-ro       do [not] allocate read-only grids in high-BW mem (default=" << hbwRO << ").\n"
         "\n"
         //" -ps <vec-len>      print stats for all folding options for given vector length.\n"
         " -ph                print human-readable scalar pseudo-code for one point.\n"
@@ -147,9 +147,9 @@ void parseOpts(int argc, const char* argv[])
                 hbwRW = true;
             else if (opt == "-no-hbw-rw")
                 hbwRW = false;
-            else if (opt == "-hbw-rw")
+            else if (opt == "-hbw-ro")
                 hbwRO = true;
-            else if (opt == "-no-hbw-rw")
+            else if (opt == "-no-hbw-ro")
                 hbwRO = false;
             
             else if (opt == "-ph")
