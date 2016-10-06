@@ -390,6 +390,20 @@ void Equations::findEquations(Grids& allGrids, const string& targets) {
     }
 }
 
+// Print stats from equations.
+void Equations::printStats(ostream& os, const string& msg, bool visitAll) {
+    CounterVisitor cv;
+    for (auto& eq : *this) {
+        CounterVisitor ecv;
+        if (visitAll)
+            eq.grids.acceptToAll(&ecv);
+        else
+            eq.grids.acceptToFirst(&ecv);
+        cv += ecv;
+    }
+    cv.printStats(os, msg);
+}
+
 // Find the dimensions to be used.
 void Dimensions::setDims(Grids& grids,
                          string stepDim,

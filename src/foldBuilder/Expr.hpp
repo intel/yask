@@ -688,7 +688,7 @@ public:
 
     const set<Grid*>& getEqGrids() const { return _eqGrids; }
     
-    void printInfo(ostream& os) const {
+    virtual void printInfo(ostream& os) const {
         os << "Identified stencil equations:" << endl;
         for (auto& eq : *this) {
             for (auto gp : eq.grids) {
@@ -698,6 +698,7 @@ public:
         }
     }
 
+    virtual void printStats(ostream& os, const string& msg, bool visitAll);
 };
 
 // Stencil dimensions.

@@ -311,16 +311,9 @@ int main(int argc, const char* argv[]) {
     equations.printInfo(cerr);
 
     // Get stats.
-    {
-        CounterVisitor cv;
-        grids.acceptToFirst(&cv);
-        cv.printStats(cerr, "for one vector");
-    }
-    if (dims._clusterLengths.product() > 1) {
-        CounterVisitor cv;
-        grids.acceptToAll(&cv);
-        cv.printStats(cerr, "for one cluster");
-    }
+    equations.printStats(cerr, "for one vector", false);
+    if (dims._clusterLengths.product() > 1)
+        equations.printStats(cerr, "for one cluster", true);
     
     // Make a list of optimizations to apply to equations.
     vector<OptVisitor*> opts;
@@ -341,9 +334,7 @@ int main(int argc, const char* argv[]) {
 
         // Get new stats.
         if (numChanges) {
-            CounterVisitor cv;
-            grids.acceptToAll(&cv);
-            cv.printStats(cerr, descr);
+            equations.printStats(cerr, descr, true);
             //addComment(cerr, grids);
         }
         else

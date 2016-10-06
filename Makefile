@@ -71,7 +71,11 @@ radius		?=	1
 real_bytes	?=	8
 def_rank_size	?=	256
 
+else ifeq ($(stencil),3axis)
+MACROS		+=	MAX_EXCH_DIST=1
+
 else ifeq ($(stencil),9axis)
+MACROS		+=	MAX_EXCH_DIST=2
 radius		?=	4
 
 else ifeq ($(stencil),3plane)
@@ -81,6 +85,7 @@ else ifeq ($(stencil),cube)
 radius		?=	2
 
 else ifeq ($(stencil),iso3dfd)
+MACROS		+=	MAX_EXCH_DIST=1
 real_bytes	?=	4
 layout_4d	?=	Layout_2314
 ifeq ($(arch),knl)
@@ -275,7 +280,7 @@ endif
 # VTUNE settings.
 ifeq ($(vtune),1)
 MACROS		+=	USE_VTUNE
-VTUNE_DIR	=	$(VTUNE_AMPLIFIER_XE_2016_DIR)
+VTUNE_DIR	=	$(VTUNE_AMPLIFIER_XE_2017_DIR)
 CXXFLAGS	+=	-I$(VTUNE_DIR)/include
 LFLAGS		+=	$(VTUNE_DIR)/lib64/libittnotify.a
 endif

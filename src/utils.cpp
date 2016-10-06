@@ -53,19 +53,6 @@ namespace yask {
     }
 #endif
 
-    // Round up val to a multiple of mult.
-    // Print a message if rounding is done.
-    idx_t roundUp(idx_t val, idx_t mult, string name)
-    {
-        idx_t res = val;
-        if (val % mult != 0) {
-            res = ROUND_UP(res, mult);
-            cout << "Adjusting " << name << " from " << val << " to " <<
-                res << " to be a multiple of " << mult << endl;
-        }
-        return res;
-    }
-
     // Return num with SI multiplier.
     // Use this one for bytes, etc.
     string printWithPow2Multiplier(double num)

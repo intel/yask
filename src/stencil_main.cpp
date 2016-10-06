@@ -27,6 +27,7 @@ IN THE SOFTWARE.
 #include <stdio.h>
 #include <string.h>
 #include <math.h>
+#include <fstream>
 
 // Stencil types.
 #include "stencil.hpp"
@@ -46,99 +47,9 @@ using namespace yask;
 Cache cache_model(MODEL_CACHE);
 #endif
 
-// Fix bsize, if needed, to fit into rsize and be a multiple of mult.
-// Return number of blocks.
-idx_t findNumSubsets(idx_t& bsize, const string& bname,
-                     idx_t rsize, const string& rname,
-                     idx_t mult, string dim) {
-    if (bsize < 1) bsize = rsize; // 0 => use full size.
-    bsize = ROUND_UP(bsize, mult);
-    if (bsize > rsize) bsize = rsize;
-    idx_t nblks = (rsize + bsize - 1) / bsize;
-    idx_t rem = rsize % bsize;
-    idx_t nfull_blks = rem ? (nblks - 1) : nblks;
+namespace yask {
 
-    cout << " In '" << dim << "' dimension, " << rname << " of size " <<
-        rsize << " is divided into " << nfull_blks << " " << bname << "(s) of size " << bsize;
-    if (rem)
-        cout << " plus 1 remainder " << bname << " of size " << rem;
-    cout << "." << endl;
-    return nblks;
-}
-idx_t findNumBlocks(idx_t& bsize, idx_t rsize, idx_t mult, string dim) {
-    return findNumSubsets(bsize, "block", rsize, "region", mult, dim);
-}
-idx_t findNumGroups(idx_t& ssize, idx_t rsize, idx_t mult, string dim) {
-    return findNumSubsets(ssize, "group", rsize, "region", mult, dim);
-}
-idx_t findNumRegions(idx_t& rsize, idx_t dsize, idx_t mult, string dim) {
-    return findNumSubsets(rsize, "region", dsize, "rank", mult, dim);
-}
-
-// Parse command-line args, run kernel, run validation if requested.
-int main(int argc, char** argv)
-{
-    VTUNE_PAUSE;
-
-    // MPI init.
-    int my_rank = 0;
-    int num_ranks = 1;
-#ifdef USE_MPI
-    int provided = 0;
-    MPI_Init_thread(&argc, &argv, MPI_THREAD_SERIALIZED, &provided);
-    if (provided < MPI_THREAD_SERIALIZED)
-        MPI_Abort(MPI_COMM_WORLD, 1);
-    MPI_Comm comm = MPI_COMM_WORLD;
-    MPI_Comm_rank(comm, &my_rank);
-    MPI_Comm_size(comm, &num_ranks);
-#else
-    MPI_Comm comm = 0;
-#endif
-    bool is_leader = my_rank == 0;
-
-    if (is_leader) {
-        cout << "Invocation:";
-        for (int i = 0; i < argc; i++)
-            cout << " " << argv[i];
-        cout << endl;
-
-#ifdef DEBUG
-        cout << "*** WARNING: binary compiled with DEBUG; ignore performance results.\n";
-#endif
-#if defined(NO_INTRINSICS) && (VLEN > 1)
-        cout << "*** WARNING: binary compiled with NO_INTRINSICS; ignore performance results.\n";
-#endif
-#ifdef MODEL_CACHE
-        cout << "*** WARNING: binary compiled with MODEL_CACHE; ignore performance results.\n";
-#endif
-#ifdef TRACE_MEM
-        cout << "*** WARNING: binary compiled with TRACE_MEM; ignore performance results.\n";
-#endif
-#ifdef TRACE_INTRINSICS
-        cout << "*** WARNING: binary compiled with TRACE_INTRINSICS; ignore performance results.\n";
-#endif
-
-        cout << endl <<
-            "┌──────────────────────────────────────────┐\n"
-            "│  Y.A.S.K. ── Yet Another Stencil Kernel  │\n"
-            "│            https://01.org/yask           │\n"
-            "│    Intel Corporation, copyright 2016     │\n"
-            "└──────────────────────────────────────────┘\n"
-            "\nStencil name: " STENCIL_NAME << endl;
-
-    }
-
-    // Stagger init messages in time.
-    // TODO: create an MPI-safe I/O handler.
-    sleep(my_rank);
-    cout << endl;
-#ifdef USE_MPI
-    cout << "MPI rank " << my_rank << " of " << num_ranks << endl;
-#else
-    cout << "MPI not enabled." << endl;
-#endif
-    
-    // options and their defaults.
+    // cmd-line options and their defaults.
     idx_t num_trials = 3; // number of trials.
     idx_t dt = 50;     // number of time-steps per trial.
     idx_t dn = 1, dx = DEF_RANK_SIZE, dy = DEF_RANK_SIZE, dz = DEF_RANK_SIZE;
@@ -148,182 +59,360 @@ int main(int argc, char** argv)
     idx_t bt = 1;                          // temporal block size.
     idx_t bn = 1, bx = DEF_BLOCK_SIZE, by = DEF_BLOCK_SIZE, bz = DEF_BLOCK_SIZE;  // size of cache blocks.
     idx_t pn = 0, px = DEF_PAD, py = DEF_PAD, pz = DEF_PAD; // padding.
-    idx_t nrn = 1, nrx = num_ranks, nry = 1, nrz = 1; // num ranks in each dim.
     bool validate = false;
     int block_threads = DEF_BLOCK_THREADS; // number of threads for a block.
     int thread_factor = DEF_THREAD_FACTOR; // divide num threads by this factor.
     bool doWarmup = true;
     idx_t copy_in = 0, copy_out = 0;     // how often to copy to shadow grids.
     int pre_trial_sleep_time = 1;   // sec to sleep before each trial.
+    idx_t nrn = 1, nrx = 1, nry = 1, nrz = 1; // num ranks in each dim.
+    idx_t rin = 0, rix = 0, riy = 0, riz = 0; // my rank's index in each dim.
+    idx_t msg_rank = 0;                       // rank to print messages.
+    bool findLoc = true;                      // whether to calculate my rank's index.
+    bool help = false;                        // user asked for help.
 
-    // parse options.
-    bool help = false;
-    for (int argi = 1; argi < argc; argi++) {
-        if ( argv[argi][0] == '-' && argv[argi][1] ) {
-            string opt = argv[argi];
+    // Output stream for messages.
+    static ostream* ostr = &cout;
+    static ofstream nulostr;    // null stream (unopened ofstream).
 
-            // options w/o values.
-            if (opt == "-h" || opt == "-help" || opt == "--help") {
-                cout << 
-                    "Usage: [options]\n"
-                    "Options:\n"
-                    " -h:              print this help and the current settings, then exit\n"
-                    " -v               validate by comparing to a scalar run (see notes below)\n" <<
-                    " -t <n>           number of trials, default=" <<
-                    num_trials << endl <<
-                    " -dt <n>          rank domain size in temporal dimension (number of time steps), default=" <<
-                    dt << endl <<
-                    " -d{n,x,y,z} <n>  rank domain size in specified spatial dimension, defaults=" <<
-                    dn << '*' << dx << '*' << dy << '*' << dz << endl <<
-                    " -d <n>           shorthand for '-dx <n> -dy <n> -dz <n>\n" <<
-                    " -rt <n>          OpenMP region time steps (for wave-front tiling), default=" <<
-                    rt << endl <<
-                    " -r{n,x,y,z} <n>  OpenMP region size in specified spatial dimension, defaults to rank size\n" <<
-                    " -r <n>           shorthand for '-rx <n> -ry <n> -rz <n>\n" <<
-                    " -s{n,x,y,z} <n>  group size in specified spatial dimension, defaults set automatically\n" <<
-                    " -s <n>           shorthand for '-sx <n> -sy <n> -sz <n>\n" <<
-                    " -b{n,x,y,z} <n>  cache block size in specified spatial dimension, defaults=" <<
-                    bn << '*' << bx << '*' << by << '*' << bz << endl <<
-                    " -b <n>           shorthand for '-bx <n> -by <n> -bz <n>\n" <<
-                    " -p{n,x,y,z} <n>  extra padding in specified spatial dimension, defaults=" <<
-                    pn << '*' << px << '*' << py << '*' << pz << endl <<
-                    " -p <n>           shorthand for '-px <n> -py <n> -pz <n>\n" <<
-#ifdef USE_MPI
-                    " -nr{n,x,y,z} <n> num ranks in specified spatial dimension, defaults=" <<
-                    nrn << '*' << nrx << '*' << nry << '*' << nrz << endl <<
-                    " -nr <n>          shorthand for '-nrx <n> -nry <n> -nrz <n>\n" <<
-#endif
-                    " -thread_factor <n>  divide the original number of available threads by n, default=" <<
-                    thread_factor << endl <<
-                    " -bthreads <n>    set number of threads to use for a block, default=" <<
-                    block_threads << endl <<
-                    " -copy_in <n>     copy from traditional-layout grids every n time-steps, default=" <<
-                    copy_in << endl <<
-                    " -copy_out <n>    copy to traditional-layout grids every n time-steps, default=" <<
-                    copy_out << endl <<
-                    " -sleep <n>       seconds to sleep before each trial, default=" <<
-                    pre_trial_sleep_time << endl <<
-                    " -nw              skip warmup\n" <<
-                    "Notes:\n"
-#ifndef USE_MPI
-                    " This binary has not been built with MPI support.\n"
-#endif
-                    " A block size of 0 => block size == region size in that dimension.\n"
-                    " A group size of 0 => group size == block size in that dimension.\n"
-                    " A region size of 0 => region size == rank size in that dimension.\n"
-                    " Control the time steps in each temporal wave-front with -rt:\n"
-                    "  1 effectively disables wave-front tiling.\n"
-                    "  0 enables wave-front tiling across all time steps in one pass.\n"
-                    "  Any value other than 1 also changes the region spatial-size defaults.\n"
-                    " Temporal cache blocking is not yet supported => bt == 1.\n"
-                    " Validation is very slow and uses 2x memory,\n"
-                    "  so run with very small sizes and number of time-steps.\n"
-                    "  Using '-v' is shorthand for these settings: '-nw -d 64 -dt 2 -t 1',\n"
-                    "  which may be overridden by options *after* '-v'.\n"
-                    "  If validation fails, it may be due to rounding error; try building with 8-byte reals.\n"
-                    " The 'n' dimension only applies to stencils that use that variable.\n"
-                    "Examples:\n" <<
-                    " " << argv[0] << " -d 768 -dt 4\n" <<
-                    " " << argv[0] << " -dx 512 -dy 256 -dz 128\n" <<
-                    " " << argv[0] << " -d 2048 -dt 20 -r 512 -rt 10  # temporal tiling.\n" <<
-                    " " << argv[0] << " -d 512 -npx 2 -npy 1 -npz 2   # multi-rank.\n" <<
-                    " " << argv[0] << " -v                            # validation.\n";
-                help = true;
-            }
-
-            else if (opt == "-nw")
-                doWarmup = false;
-
-            else if (opt == "-v") {
-                validate = true;
-                doWarmup = false;
-                dx = dy = dz = 64;
-                dt = 2;
-                num_trials = 1;
-            }
-
-            // options w/int values.
-            else {
-
-                if (argi >= argc) {
-                    cerr << "error: no value for option '" << opt << "'." << endl;
-                    exit(1);
-                }
-                int val = atoi(argv[++argi]);
-                if (opt == "-t") num_trials = val;
-                else if (opt == "-dt") dt = val;
-                else if (opt == "-dn") dn = val;
-                else if (opt == "-dx") dx = val;
-                else if (opt == "-dy") dy = val;
-                else if (opt == "-dz") dz = val;
-                else if (opt == "-d") dx = dy = dz = val;
-                else if (opt == "-rt") rt = val;
-                else if (opt == "-rn") rn = val;
-                else if (opt == "-rx") rx = val;
-                else if (opt == "-ry") ry = val;
-                else if (opt == "-rz") rz = val;
-                else if (opt == "-r") rx = ry = rz = val;
-                else if (opt == "-gn") gn = val;
-                else if (opt == "-gx") gx = val;
-                else if (opt == "-gy") gy = val;
-                else if (opt == "-gz") gz = val;
-                else if (opt == "-g") gx = gy = gz = val;
-                else if (opt == "-bn") bn = val;
-                else if (opt == "-bx") bx = val;
-                else if (opt == "-by") by = val;
-                else if (opt == "-bz") bz = val;
-                else if (opt == "-b") bx = by = bz = val;
-                else if (opt == "-pn") pn = val;
-                else if (opt == "-px") px = val;
-                else if (opt == "-py") py = val;
-                else if (opt == "-pz") pz = val;
-                else if (opt == "-p") px = py = pz = val;
-#ifdef USE_MPI
-                else if (opt == "-nrn") nrn = val;
-                else if (opt == "-nrx") nrx = val;
-                else if (opt == "-nry") nry = val;
-                else if (opt == "-nrz") nrz = val;
-                else if (opt == "-nr") nrx = nry = nrz = val;
-#endif
-                else if (opt == "-bthreads") block_threads = val;
-                else if (opt == "-thread_factor") thread_factor = val;
-                else if (opt == "-copy_in") copy_in = val;
-                else if (opt == "-copy_out") copy_out = val;
-                else if (opt == "-sleep") pre_trial_sleep_time = val;
-            
-                else {
-                    cerr << "error: option '" << opt << "' not recognized." << endl;
-                    exit(1);
-                }
-            }
+    // Round up val to a multiple of mult.
+    // Print a message if rounding is done.
+    idx_t roundUp(idx_t val, idx_t mult, string name)
+    {
+        idx_t res = val;
+        if (val % mult != 0) {
+            res = ROUND_UP(res, mult);
+            *ostr << "Adjusting " << name << " from " << val << " to " <<
+                res << " to be a multiple of " << mult << endl;
         }
-        else {
-            cerr << "error: extraneous parameter '" <<
-                argv[argi] << "'." << endl;
-            exit(1);
-        }
+        return res;
     }
-    // done reading args.
+    
+    // Fix bsize, if needed, to fit into rsize and be a multiple of mult.
+    // Return number of blocks.
+    idx_t findNumSubsets(idx_t& bsize, const string& bname,
+                         idx_t rsize, const string& rname,
+                         idx_t mult, string dim) {
+        if (bsize < 1) bsize = rsize; // 0 => use full size.
+        bsize = ROUND_UP(bsize, mult);
+        if (bsize > rsize) bsize = rsize;
+        idx_t nblks = (rsize + bsize - 1) / bsize;
+        idx_t rem = rsize % bsize;
+        idx_t nfull_blks = rem ? (nblks - 1) : nblks;
+
+        *ostr << " In '" << dim << "' dimension, " << rname << " of size " <<
+            rsize << " is divided into " << nfull_blks << " " << bname << "(s) of size " << bsize;
+        if (rem)
+            *ostr << " plus 1 remainder " << bname << " of size " << rem;
+        *ostr << "." << endl;
+        return nblks;
+    }
+    idx_t findNumBlocks(idx_t& bsize, idx_t rsize, idx_t mult, string dim) {
+        return findNumSubsets(bsize, "block", rsize, "region", mult, dim);
+    }
+    idx_t findNumGroups(idx_t& ssize, idx_t rsize, idx_t mult, string dim) {
+        return findNumSubsets(ssize, "group", rsize, "region", mult, dim);
+    }
+    idx_t findNumRegions(idx_t& rsize, idx_t dsize, idx_t mult, string dim) {
+        return findNumSubsets(rsize, "region", dsize, "rank", mult, dim);
+    }
+
+    // Print usage.
+    void usage(const char* pgmName)
+    {
+        *ostr << 
+            "Usage: " << pgmName << " [options]\n"
+            "Options:\n"
+            " -h:              print this help and the current settings, then exit\n"
+            " -v               validate by comparing to a scalar run (see notes below)\n" <<
+            " -t <n>           number of trials, default=" <<
+            num_trials << endl <<
+            " -dt <n>          rank domain size in temporal dimension (number of time steps), default=" <<
+            dt << endl <<
+            " -d{n,x,y,z} <n>  rank domain size in specified spatial dimension, defaults=" <<
+            dn << '*' << dx << '*' << dy << '*' << dz << endl <<
+            " -d <n>           shorthand for '-dx <n> -dy <n> -dz <n>\n" <<
+            " -rt <n>          OpenMP region time steps (for wave-front tiling), default=" <<
+            rt << endl <<
+            " -r{n,x,y,z} <n>  OpenMP region size in specified spatial dimension, defaults to rank size\n" <<
+            " -r <n>           shorthand for '-rx <n> -ry <n> -rz <n>\n" <<
+            " -s{n,x,y,z} <n>  group size in specified spatial dimension, defaults set automatically\n" <<
+            " -s <n>           shorthand for '-sx <n> -sy <n> -sz <n>\n" <<
+            " -b{n,x,y,z} <n>  cache block size in specified spatial dimension, defaults=" <<
+            bn << '*' << bx << '*' << by << '*' << bz << endl <<
+            " -b <n>           shorthand for '-bx <n> -by <n> -bz <n>\n" <<
+            " -p{n,x,y,z} <n>  extra padding in specified spatial dimension, defaults=" <<
+            pn << '*' << px << '*' << py << '*' << pz << endl <<
+            " -p <n>           shorthand for '-px <n> -py <n> -pz <n>\n" <<
+#ifdef USE_MPI
+            " -nr{n,x,y,z} <n> num ranks in specified dimension, defaults=" <<
+            nrn << '*' << nrx << '*' << nry << '*' << nrz << endl <<
+            " -nr <n>          shorthand for '-nrx <n> -nry <n> -nrz <n>\n" <<
+            " -ri{n,x,y,z} <n> this rank's index in specified dimension, defaults set automatically\n" <<
+            " -msg_rank <n>    rank that will print informational messages, default=" << msg_rank << endl <<
+#endif
+            " -thread_factor <n>  divide the original number of available threads by n, default=" <<
+            thread_factor << endl <<
+            " -bthreads <n>    set number of threads to use for a block, default=" <<
+            block_threads << endl <<
+            " -copy_in <n>     copy from traditional-layout grids every n time-steps, default=" <<
+            copy_in << endl <<
+            " -copy_out <n>    copy to traditional-layout grids every n time-steps, default=" <<
+            copy_out << endl <<
+            " -sleep <n>       seconds to sleep before each trial, default=" <<
+            pre_trial_sleep_time << endl <<
+            " -nw              skip warmup\n" <<
+            "Notes:\n"
+#ifndef USE_MPI
+            " This binary has not been built with MPI support.\n"
+#endif
+            " A block size of 0 => block size == region size in that dimension.\n"
+            " A group size of 0 => group size == block size in that dimension.\n"
+            " A region size of 0 => region size == rank size in that dimension.\n"
+            " Control the time steps in each temporal wave-front with -rt:\n"
+            "  1 effectively disables wave-front tiling.\n"
+            "  0 enables wave-front tiling across all time steps in one pass.\n"
+            "  Any value other than 1 also changes the region spatial-size defaults.\n"
+            " Temporal cache blocking is not yet supported => bt == 1.\n"
+            " Validation is very slow and uses 2x memory,\n"
+            "  so run with very small sizes and number of time-steps.\n"
+            "  Using '-v' is shorthand for these settings: '-nw -d 64 -dt 2 -t 1',\n"
+            "  which may be overridden by options *after* '-v'.\n"
+            "  If validation fails, it may be due to rounding error; try building with 8-byte reals.\n"
+            " The 'n' dimension only applies to stencils that use that variable.\n"
+            "Examples:\n" <<
+            " " << pgmName << " -d 768 -dt 4\n" <<
+            " " << pgmName << " -dx 512 -dy 256 -dz 128\n" <<
+            " " << pgmName << " -d 2048 -dt 20 -r 512 -rt 10  # temporal tiling.\n" <<
+            " " << pgmName << " -d 512 -npx 2 -npy 1 -npz 2   # multi-rank.\n" <<
+            " " << pgmName << " -v                            # validation.\n" <<
+            flush;
+    }
+
+    // Parse options.
+    void parseOpts(int argc, char** argv)
+    {
+        // parse options.
+        for (int argi = 1; argi < argc; argi++) {
+            if ( argv[argi][0] == '-' && argv[argi][1] ) {
+                string opt = argv[argi];
+
+                // options w/o values.
+                if (opt == "-h" || opt == "-help" || opt == "--help") {
+                    help = true;
+                }
+
+                else if (opt == "-nw")
+                    doWarmup = false;
+
+                else if (opt == "-v") {
+                    validate = true;
+                    doWarmup = false;
+                    dx = dy = dz = 64;
+                    dt = 2;
+                    num_trials = 1;
+                }
+
+                // options w/int values.
+                else {
+
+                    if (argi >= argc) {
+                        cerr << "error: no value for option '" << opt << "'." << endl;
+                        exit_yask(1);
+                    }
+                    int val = atoi(argv[++argi]);
+                    if (opt == "-t") num_trials = val;
+                    else if (opt == "-dt") dt = val;
+                    else if (opt == "-dn") dn = val;
+                    else if (opt == "-dx") dx = val;
+                    else if (opt == "-dy") dy = val;
+                    else if (opt == "-dz") dz = val;
+                    else if (opt == "-d") dx = dy = dz = val;
+                    else if (opt == "-rt") rt = val;
+                    else if (opt == "-rn") rn = val;
+                    else if (opt == "-rx") rx = val;
+                    else if (opt == "-ry") ry = val;
+                    else if (opt == "-rz") rz = val;
+                    else if (opt == "-r") rx = ry = rz = val;
+                    else if (opt == "-gn") gn = val;
+                    else if (opt == "-gx") gx = val;
+                    else if (opt == "-gy") gy = val;
+                    else if (opt == "-gz") gz = val;
+                    else if (opt == "-g") gx = gy = gz = val;
+                    else if (opt == "-bn") bn = val;
+                    else if (opt == "-bx") bx = val;
+                    else if (opt == "-by") by = val;
+                    else if (opt == "-bz") bz = val;
+                    else if (opt == "-b") bx = by = bz = val;
+                    else if (opt == "-pn") pn = val;
+                    else if (opt == "-px") px = val;
+                    else if (opt == "-py") py = val;
+                    else if (opt == "-pz") pz = val;
+                    else if (opt == "-p") px = py = pz = val;
+#ifdef USE_MPI
+                    else if (opt == "-nrn") nrn = val;
+                    else if (opt == "-nrx") nrx = val;
+                    else if (opt == "-nry") nry = val;
+                    else if (opt == "-nrz") nrz = val;
+                    else if (opt == "-nr") nrx = nry = nrz = val;
+                    else if (opt == "-rin") { rin = val; findLoc = false; }
+                    else if (opt == "-rix") { rix = val; findLoc = false; }
+                    else if (opt == "-riy") { riy = val; findLoc = false; }
+                    else if (opt == "-riz") { riz = val; findLoc = false; }
+                    else if (opt == "-msg_rank") msg_rank = val;
+#endif
+                    else if (opt == "-bthreads") block_threads = val;
+                    else if (opt == "-thread_factor") thread_factor = val;
+                    else if (opt == "-copy_in") copy_in = val;
+                    else if (opt == "-copy_out") copy_out = val;
+                    else if (opt == "-sleep") pre_trial_sleep_time = val;
+            
+                    else {
+                        cerr << "error: option '" << opt << "' not recognized." << endl;
+                        exit_yask(1);
+                    }
+                }
+            }
+            else {
+                cerr << "error: extraneous parameter '" <<
+                    argv[argi] << "'." << endl;
+                exit_yask(1);
+            }
+        }
+
+    }
+}
+
+// Parse command-line args, run kernel, run validation if requested.
+int main(int argc, char** argv)
+{
+    // Stop collecting VTune data.
+    // Even better to use -start-paused option.
+    VTUNE_PAUSE;
+
+    // MPI init.
+    int my_rank = 0;
+    int num_ranks = 1;
+#ifdef USE_MPI
+    int provided = 0;
+    MPI_Init_thread(&argc, &argv, MPI_THREAD_SERIALIZED, &provided);
+    if (provided < MPI_THREAD_SERIALIZED) {
+        cerr << "error: MPI_THREAD_SERIALIZED not provided.\n";
+        exit_yask(1);
+    }
+    MPI_Comm comm = MPI_COMM_WORLD;
+    MPI_Comm_rank(comm, &my_rank);
+    MPI_Comm_size(comm, &num_ranks);
+#else
+    MPI_Comm comm = 0;
+#endif
+    bool is_leader = my_rank == 0;
+
+    // OpenMP init.
+#if defined(_OPENMP)
+    int omp_num_procs = omp_get_num_procs();
+#endif    
+
+    // Make sure all init data is dumped before continuing.
+    MPI_Barrier(comm);
+    
+    // Parse options.
+    parseOpts(argc, argv);
+
+    // Enable output?
+    if (my_rank != msg_rank)
+        ostr = &nulostr;
+
+    // Splash banner.
+    *ostr <<
+        "┌──────────────────────────────────────────┐\n"
+        "│  Y.A.S.K. ── Yet Another Stencil Kernel  │\n"
+        "│            https://01.org/yask           │\n"
+        "│    Intel Corporation, copyright 2016     │\n"
+        "└──────────────────────────────────────────┘\n"
+        "\nStencil name: " STENCIL_NAME << endl;
+    *ostr << "Invocation:";
+    for (int i = 0; i < argc; i++)
+        *ostr << " " << argv[i];
+    *ostr << endl;
+
+    // Help msg.
+    if (help) {
+        usage(argv[0]);
+        cerr << "\nExiting due to help option." << endl;
+        exit_yask(1);
+    }
+
+
+#ifdef DEBUG
+    *ostr << "*** WARNING: binary compiled with DEBUG; ignore performance results.\n";
+#endif
+#if defined(NO_INTRINSICS) && (VLEN > 1)
+    *ostr << "*** WARNING: binary compiled with NO_INTRINSICS; ignore performance results.\n";
+#endif
+#ifdef MODEL_CACHE
+    *ostr << "*** WARNING: binary compiled with MODEL_CACHE; ignore performance results.\n";
+#endif
+#ifdef TRACE_MEM
+    *ostr << "*** WARNING: binary compiled with TRACE_MEM; ignore performance results.\n";
+#endif
+#ifdef TRACE_INTRINSICS
+    *ostr << "*** WARNING: binary compiled with TRACE_INTRINSICS; ignore performance results.\n";
+#endif
 
     // TODO: check all dims.
 #ifndef USING_DIM_N
     if (dn > 1) {
         cerr << "error: dn = " << dn << ", but stencil '"
             STENCIL_NAME "' doesn't use dimension 'n'." << endl;
-        exit(1);
+        exit_yask(1);
     }
 #endif
 
+    // Round up domain size as needed.
+    dt = roundUp(dt, CPTS_T, "rank size in t (time steps)");
+    dn = roundUp(dn, CPTS_N, "rank size in n");
+    dx = roundUp(dx, CPTS_X, "rank size in x");
+    dy = roundUp(dy, CPTS_Y, "rank size in y");
+    dz = roundUp(dz, CPTS_Z, "rank size in z");
+
+    // Find size across all ranks.
+    idx_t min_dt = dt;
+    idx_t tot_dn = dn;
+    idx_t tot_dx = dx;
+    idx_t tot_dy = dy;
+    idx_t tot_dz = dz;
+#ifdef USE_MPI
+    MPI_Allreduce(&dt, &min_dt, 1, MPI_INTEGER8, MPI_MIN, comm);
+    MPI_Allreduce(&dn, &tot_dn, 1, MPI_INTEGER8, MPI_SUM, comm);
+    MPI_Allreduce(&dx, &tot_dx, 1, MPI_INTEGER8, MPI_SUM, comm);
+    MPI_Allreduce(&dy, &tot_dy, 1, MPI_INTEGER8, MPI_SUM, comm);
+    MPI_Allreduce(&dz, &tot_dz, 1, MPI_INTEGER8, MPI_SUM, comm);
+#endif
+        
+    // Report ranks.
+#ifdef USE_MPI
+    *ostr << "Num MPI ranks: " << num_ranks << endl;
+    *ostr << "This MPI rank: " << my_rank << endl;
+#else
+    *ostr << "MPI not enabled." << endl;
+#endif
+    
     // Check ranks.
     idx_t req_ranks = nrn * nrx * nry * nrz;
     if (req_ranks != num_ranks) {
         cerr << "error: " << req_ranks << " rank(s) requested, but MPI reports " <<
             num_ranks << " rank(s) are active." << endl;
-        exit(1);
+        exit_yask(1);
+    }
+    if (dt != min_dt) {
+        cerr << "error: number of time-steps is not the same across all ranks." << endl;
+        exit_yask(1);
     }
     
     // Context for evaluating results.
     STENCIL_CONTEXT context;
+    context.ostr = ostr;
     context.num_ranks = num_ranks;
     context.my_rank = my_rank;
     context.comm = comm;
@@ -333,31 +422,29 @@ int main(int argc, char** argv)
     // report threads.
     int region_threads = 1;
     {
-        cout << endl;
 #if defined(_OPENMP)
-        int omp_num_procs = omp_get_num_procs();
-        cout << "Num OpenMP procs: " << omp_num_procs << endl;
+        *ostr << "Num OpenMP procs: " << omp_num_procs << endl;
         context.orig_max_threads = omp_get_max_threads() / thread_factor;
-        cout << "Num OpenMP threads: " << context.orig_max_threads << endl;
+        *ostr << "Num OpenMP threads: " << context.orig_max_threads << endl;
 
 #if USE_CREW
         // Init Crew.
-        cout << "Creating crews..." << endl;
+        *ostr << "Creating crews..." << endl;
         kmp_crew_create();
         int numThreads = omp_get_max_threads();
-        cout << "Num OpenMP threads after crew creation: " << numThreads << endl;
+        *ostr << "Num OpenMP threads after crew creation: " << numThreads << endl;
         int crewSize = kmp_crew_get_max_size();
         int numWorkers = numThreads * crewSize;
-        cout << "Total num crews: " << numWorkers << endl <<
+        *ostr << "Total num crews: " << numWorkers << endl <<
             "  Num crew-leader threads: " << numThreads << endl <<
             "  Num threads per crew: " << crewSize << endl;
         if (numWorkers == context.orig_max_threads)
-            cout << "Note: sanity check passed: num crews == num OpenMP threads before creating crews." << endl;
+            *ostr << "Note: sanity check passed: num crews == num OpenMP threads before creating crews." << endl;
         else {
-            cout << "Error: sanity check failed: num crews != num OpenMP threads before creating crews.\n"
+            cerr << "Error: sanity check failed: num crews != num OpenMP threads before creating crews.\n"
                 "This usually indicates your OpenMP library has a crew-initialization issue.\n"
                 "Please update your OpenMP library or rebuild with crew disabled (make crew=0 ...).\n";
-            exit(1);
+            exit_yask(1);
         }
 #else
 
@@ -368,22 +455,15 @@ int main(int argc, char** argv)
         context.num_block_threads = block_threads;
         int rt = context.set_region_threads(); // Temporary; just for reporting.
         region_threads = omp_get_max_threads();
-        cout << "  Num threads per region: " << region_threads << endl;
-        cout << "  Num threads per block: " << block_threads << endl;
+        *ostr << "  Num threads per region: " << region_threads << endl;
+        *ostr << "  Num threads per block: " << block_threads << endl;
         context.set_max_threads(); // Back to normal.
 #endif
 #else
         int numThreads = 1;
-        cout << "Num threads: " << numThreads << endl;
+        *ostr << "Num threads: " << numThreads << endl;
 #endif
     }
-
-    // Round up vars as needed.
-    dt = roundUp(dt, CPTS_T, "rank size in t (time steps)");
-    dn = roundUp(dn, CPTS_N, "rank size in n");
-    dx = roundUp(dx, CPTS_X, "rank size in x");
-    dy = roundUp(dy, CPTS_Y, "rank size in y");
-    dz = roundUp(dz, CPTS_Z, "rank size in z");
 
     // Adjust defaults for wavefronts.
     if (rt > 1) {
@@ -400,25 +480,25 @@ int main(int argc, char** argv)
 
     // Determine num regions.
     // Also fix up region sizes as needed.
-    cout << "\nRegions:" << endl;
+    *ostr << "\nRegions:" << endl;
     idx_t nrgt = findNumRegions(rt, dt, CPTS_T, "t");
     idx_t nrgn = findNumRegions(rn, dn, CPTS_N, "n");
     idx_t nrgx = findNumRegions(rx, dx, CPTS_X, "x");
     idx_t nrgy = findNumRegions(ry, dy, CPTS_Y, "y");
     idx_t nrgz = findNumRegions(rz, dz, CPTS_Z, "z");
     idx_t nrg = nrgt * nrgn * nrgx * nrgy * nrgz;
-    cout << " num-regions-per-rank: " << nrg << endl;
+    *ostr << " num-regions-per-rank: " << nrg << endl;
 
     // Determine num blocks.
     // Also fix up block sizes as needed.
-    cout << "\nBlocks:" << endl;
+    *ostr << "\nBlocks:" << endl;
     idx_t nbt = findNumBlocks(bt, rt, CPTS_T, "t");
     idx_t nbn = findNumBlocks(bn, rn, CPTS_N, "n");
     idx_t nbx = findNumBlocks(bx, rx, CPTS_X, "x");
     idx_t nby = findNumBlocks(by, ry, CPTS_Y, "y");
     idx_t nbz = findNumBlocks(bz, rz, CPTS_Z, "z");
     idx_t nb = nbt * nbn * nbx * nby * nbz;
-    cout << " num-blocks-per-region: " << nb << endl;
+    *ostr << " num-blocks-per-region: " << nb << endl;
 
     // Adjust defaults for groups.
     // Assumes inner block loop in z dimension and
@@ -431,13 +511,13 @@ int main(int argc, char** argv)
 
     // Determine num groups.
     // Also fix up group sizes as needed.
-    cout << "\nGroups:" << endl;
+    *ostr << "\nGroups:" << endl;
     idx_t ngn = findNumGroups(gn, rn, bn, "n");
     idx_t ngx = findNumGroups(gx, rx, bx, "x");
     idx_t ngy = findNumGroups(gy, ry, by, "y");
     idx_t ngz = findNumGroups(gz, rz, bz, "z");
     idx_t ng = ngn * ngx * ngy * ngz;
-    cout << " num-groups-per-region: " << ng << endl;
+    *ostr << " num-groups-per-region: " << ng << endl;
 
     // Round up padding as needed.
     pn = roundUp(pn, VLEN_N, "extra padding in n");
@@ -457,15 +537,15 @@ int main(int argc, char** argv)
     idx_t hy = ROUND_UP(context.max_halo_y, VLEN_Y);
     idx_t hz = ROUND_UP(context.max_halo_z, VLEN_Z);
     
-    cout << "\nSizes in points per grid (t*n*x*y*z):\n"
+    *ostr << "\nSizes in points per grid (t*n*x*y*z):\n"
         " vector-size:  " << VLEN_T << '*' << VLEN_N << '*' << VLEN_X << '*' << VLEN_Y << '*' << VLEN_Z << endl <<
         " cluster-size: " << CPTS_T << '*' << CPTS_N << '*' << CPTS_X << '*' << CPTS_Y << '*' << CPTS_Z << endl <<
         " block-size:   " << bt << '*' << bn << '*' << bx << '*' << by << '*' << bz << endl <<
         " group-size:   " << 1 << '*' << gn << '*' << gx << '*' << gy << '*' << gz << endl <<
         " region-size:  " << rt << '*' << rn << '*' << rx << '*' << ry << '*' << rz << endl <<
         " rank-size:    " << dt << '*' << dn << '*' << dx << '*' << dy << '*' << dz << endl <<
-        " overall-size: " << dt << '*' << dn << '*' << (dx * num_ranks) << '*' << dy << '*' << dz << endl;
-    cout << "\nOther settings:\n"
+        " overall-size: " << dt << '*' << tot_dn << '*' << tot_dx << '*' << tot_dy << '*' << tot_dz << endl;
+    *ostr << "\nOther settings:\n"
         " num-ranks: " << nrn << '*' << nrx << '*' << nry << '*' << nrz << endl <<
         " stencil-shape: " STENCIL_NAME << endl << 
         " time-dim-size: " << TIME_DIM_SIZE << endl <<
@@ -476,11 +556,6 @@ int main(int argc, char** argv)
         " shadow-copy-out-frequency: " << copy_out << endl <<
         " manual-L1-prefetch-distance: " << PFDL1 << endl <<
         " manual-L2-prefetch-distance: " << PFDL2 << endl;
-
-    if (help) {
-        cout << "Exiting due to help option." << endl;
-        exit(1);
-    }
 
     // Save sizes in context struct.
     context.dt = dt;
@@ -521,87 +596,94 @@ int main(int argc, char** argv)
     context.nry = nry;
     context.nrz = nrz;
 
-    // Alloc memory, create lists of grids, etc.
-    cout << endl;
-    idx_t nbytes = context.allocAll(cout);
+    context.rin = rin;
+    context.rix = rix;
+    context.riy = riy;
+    context.riz = riz;
 
+    // Alloc memory, create lists of grids, etc.
+    // NB: this contains MPI exchanges of rank indices.
+    idx_t nbytes = context.allocAll(findLoc);
+
+    // Report total allocation.
+    idx_t tot_nbytes = nbytes;
+#ifdef USE_MPI
+    MPI_Allreduce(&nbytes, &tot_nbytes, 1, MPI_INTEGER8, MPI_SUM, comm);
+#endif
+    *ostr << "Total overall allocation in " << num_ranks << " rank(s) (bytes): " <<
+        printWithPow2Multiplier(tot_nbytes) << endl;
+    
     // Stencil functions.
     idx_t scalar_fp_ops = 0;
     STENCIL_EQUATIONS stencils;
     idx_t num_stencils = stencils.stencils.size();
-    cout << endl;
-    cout << "Num stencil equations: " << num_stencils << endl <<
+    *ostr << endl;
+    *ostr << "Num stencil equations: " << num_stencils << endl <<
         "Est FP ops per point for each equation:" << endl;
     for (auto stencil : stencils.stencils) {
         idx_t fpos = stencil->get_scalar_fp_ops();
-        cout << "  '" << stencil->get_name() << "': " << fpos << endl;
+        *ostr << "  '" << stencil->get_name() << "': " << fpos << endl;
         scalar_fp_ops += fpos;
     }
 
     // Amount of work.
     idx_t num_eqGrids = context.eqGridPtrs.size();
+
     const idx_t grid_numpts = dn*dx*dy*dz;
     const idx_t grids_numpts = grid_numpts * num_eqGrids;
     const idx_t grids_rank_numpts = dt * grids_numpts;
-    const idx_t tot_numpts = grids_rank_numpts * num_ranks;
-    const idx_t numFpOps = grid_numpts * scalar_fp_ops;
-    const idx_t rank_numFpOps = dt * numFpOps;
-    const idx_t tot_numFpOps = rank_numFpOps * num_ranks;
-    
-    // Print some stats from leader rank.
-#ifdef USE_MPI
-    cout << flush;
-    sleep(1);
-    MPI_Barrier(comm);
-#endif
-    if (is_leader) {
-        cout << endl;
-        cout << "Points to calculate per rank, time step, and grid: " <<
-            printWithPow10Multiplier(grid_numpts) << endl;
-        cout << "Points to calculate per rank and time step for all grids: " <<
-            printWithPow10Multiplier(grids_numpts) << endl;
-        cout << "Points to calculate per rank for all time steps and grids: " <<
-            printWithPow10Multiplier(grids_rank_numpts) << endl;
-        cout << "Points to calculate per time step for all ranks and grids: " <<
-            printWithPow10Multiplier(grids_numpts * num_ranks) << endl;
-        cout << "Points to calculate overall: " <<
-            printWithPow10Multiplier(tot_numpts) << endl;
-        cout << "Est FP ops per point and time step for all grids: " << scalar_fp_ops << endl;
-        cout << "Est FP ops per rank and time step for all grids and points: " <<
-            printWithPow10Multiplier(numFpOps) << endl;
-        cout << "Est FP ops per time step for all grids, points, and ranks: " <<
-            printWithPow10Multiplier(numFpOps * num_ranks) << endl;
-        cout << "Est FP ops per rank for all grids, points, and time steps: " <<
-            printWithPow10Multiplier(rank_numFpOps) << endl;
-        cout << "Est FP ops overall: " <<
-            printWithPow10Multiplier(tot_numFpOps) << endl;
 
-        cout << "\nTotal overall allocation in " << num_ranks << " rank(s) (bytes): " <<
-            printWithPow2Multiplier(nbytes * num_ranks) << endl;
-    }
+    const idx_t tot_grid_numpts = tot_dn * tot_dx * tot_dy * tot_dz;
+    const idx_t tot_grids_numpts = tot_grid_numpts * num_eqGrids;
+    const idx_t tot_numpts = dt * tot_grids_numpts;
     
+    const idx_t rank_numFpOps_1t = grid_numpts * scalar_fp_ops;
+    const idx_t rank_numFpOps = dt * rank_numFpOps_1t;
+    const idx_t tot_numFpOps_1t = tot_grid_numpts * scalar_fp_ops;
+    const idx_t tot_numFpOps = dt * tot_numFpOps_1t;
+    
+    // Print some more stats.
+    *ostr << endl <<
+        "Points to calculate in rank, per time-step and grid: " <<
+        printWithPow10Multiplier(grid_numpts) << endl <<
+        "Points to calculate in rank, per time-step, for all grids: " <<
+        printWithPow10Multiplier(grids_numpts) << endl <<
+        "Points to calculate in rank, for all time-steps and grids: " <<
+        printWithPow10Multiplier(grids_rank_numpts) << endl <<
+        "Points to calculate for all ranks and grids, per time-step: " <<
+        printWithPow10Multiplier(tot_grids_numpts) << endl <<
+        "Points to calculate overall: " <<
+        printWithPow10Multiplier(tot_numpts) << endl <<
+        endl << 
+        "Est FP ops per point, for all grids, per time-step: " << scalar_fp_ops << endl <<
+        "Est FP ops in rank, for all grids, per time-step: " <<
+        printWithPow10Multiplier(rank_numFpOps_1t) << endl <<
+        "Est FP ops for all ranks and grids, per time-step: " <<
+        printWithPow10Multiplier(tot_numFpOps_1t) << endl <<
+        "Est FP ops in rank, for all grids and time-steps: " <<
+        printWithPow10Multiplier(rank_numFpOps) << endl <<
+        "Est FP ops overall: " <<
+        printWithPow10Multiplier(tot_numFpOps) << endl;
+
     // Exit if nothing to do.
     if (num_trials < 1) {
         cerr << "Exiting because no trials are specified." << endl;
-        exit(1);
+        exit_yask(1);
     }
     if (tot_numpts < 1) {
         cerr << "Exiting because there are zero points to evaluate." << endl;
-        exit(1);
+        exit_yask(1);
     }
-    cout << flush;
-    MPI_Barrier(comm);
 
     // This will initialize the grids before running the warmup.  If this is
     // not done, some operations may be done on zero pages, leading to
     // misleading performance or arithmetic exceptions.
     context.initSame();
-    cout << flush;
-    MPI_Barrier(comm);
-    
+    *ostr << flush;
+
     // warmup caches, threading, etc.
     if (doWarmup) {
-        if (is_leader) cout << endl;
+        *ostr << endl;
 
         // Temporarily set dt to a temp value.
         idx_t tmp_dt = min<idx_t>(dt, TIME_DIM_SIZE);
@@ -611,16 +693,15 @@ int main(int argc, char** argv)
         if (!is_leader)
             cache_model.disable();
         if (cache_model.isEnabled())
-            cout << "Modeling cache...\n";
+            *ostr << "Modeling cache...\n";
 #endif
-        if (is_leader)
-            cout << "Warmup of " << context.dt << " time step(s)...\n" << flush;
+        *ostr << "Warmup of " << context.dt << " time step(s)...\n" << flush;
         stencils.calc_rank_opt(context);
 
 #ifdef MODEL_CACHE
         // print cache stats, then disable.
         if (cache_model.isEnabled()) {
-            cout << "Done modeling cache...\n";
+            *ostr << "Done modeling cache...\n";
             cache_model.dumpStats();
             cache_model.disable();
         }
@@ -628,7 +709,7 @@ int main(int argc, char** argv)
 
         // Replace temp setting with correct value.
         context.dt = dt;
-        cout << flush;
+        *ostr << flush;
         MPI_Barrier(comm);
     }
 
@@ -637,10 +718,8 @@ int main(int argc, char** argv)
     float best_elapsed_time=0.0f, best_pps=0.0f, best_flops=0.0f;
 
     // Performance runs.
-    if (is_leader) {
-        cout << "\nRunning " << num_trials << " performance trial(s) of " <<
-            context.dt << " time step(s) each...\n" << flush;
-    }
+    *ostr << "\nRunning " << num_trials << " performance trial(s) of " <<
+        context.dt << " time step(s) each...\n" << flush;
     for (idx_t tr = 0; tr < num_trials; tr++) {
 
         // init data for comparison if validating.
@@ -670,19 +749,17 @@ int main(int argc, char** argv)
         float elapsed_time = (float)(wstop - wstart);
         float pps = float(tot_numpts)/elapsed_time;
         float flops = float(tot_numFpOps)/elapsed_time;
-        if (is_leader) {
-            cout << "-----------------------------------------\n" <<
-                "time (sec):                " << printWithPow10Multiplier(elapsed_time) << endl <<
-                "throughput (points/sec):   " << printWithPow10Multiplier(pps) << endl <<
-                "throughput (est FLOPS):    " << printWithPow10Multiplier(flops) << endl;
+        *ostr << "-----------------------------------------\n" <<
+            "time (sec):                " << printWithPow10Multiplier(elapsed_time) << endl <<
+            "throughput (points/sec):   " << printWithPow10Multiplier(pps) << endl <<
+            "throughput (est FLOPS):    " << printWithPow10Multiplier(flops) << endl;
 #ifdef USE_MPI
-            cout <<
-                "time in halo exch (sec):   " << printWithPow10Multiplier(context.mpi_time) << endl;
+        *ostr <<
+            "time in halo exch (sec):   " << printWithPow10Multiplier(context.mpi_time) << endl;
 #endif
-            if (copy_in || copy_out)
-            cout <<
+        if (copy_in || copy_out)
+            *ostr <<
                 "time in shadow copy (sec): " << printWithPow10Multiplier(context.shadow_time) << endl;
-        }
 
         if (pps > best_pps) {
             best_pps = pps;
@@ -691,28 +768,23 @@ int main(int argc, char** argv)
         }
     }
 
-    if (is_leader) {
-        cout << "-----------------------------------------\n" <<
-            "best-time (sec):                " << printWithPow10Multiplier(best_elapsed_time) << endl <<
-            "best-throughput (points/sec):   " << printWithPow10Multiplier(best_pps) << endl <<
-            "best-throughput (est FLOPS):    " << printWithPow10Multiplier(best_flops) << endl <<
-            "-----------------------------------------\n";
-    }
+    *ostr << "-----------------------------------------\n" <<
+        "best-time (sec):                " << printWithPow10Multiplier(best_elapsed_time) << endl <<
+        "best-throughput (points/sec):   " << printWithPow10Multiplier(best_pps) << endl <<
+        "best-throughput (est FLOPS):    " << printWithPow10Multiplier(best_flops) << endl <<
+        "-----------------------------------------\n";
     
     if (validate) {
         MPI_Barrier(comm);
 
         // check the correctness of one iteration.
-        if (is_leader)
-            cout << "Running validation trial...\n";
+        *ostr << "Running validation trial...\n";
 
         // Make a ref context for comparisons w/new grids:
         // Copy the settings from context, then re-alloc grids.
         STENCIL_CONTEXT ref = context;
         ref.name += "-reference";
-        ref.allocGrids();
-        ref.allocParams();
-        ref.setupMPI();
+        ref.allocAll(false); // do not need to re-calc locations.
 
         // init to same value used in context.
         ref.initDiff();
@@ -722,11 +794,11 @@ int main(int argc, char** argv)
             context.initDiff();
             idx_t errs = context.compare(ref);
             if( errs == 0 ) {
-                cout << "INIT CHECK PASSED." << endl;
-                exit(0);
+                *ostr << "INIT CHECK PASSED." << endl;
+                exit_yask(0);
             } else {
                 cerr << "INIT CHECK FAILED: " << errs << " mismatch(es)." << endl;
-                exit(1);
+                exit_yask(1);
             }
         }
 #endif
@@ -737,26 +809,24 @@ int main(int argc, char** argv)
         // check for equality.
 #ifdef USE_MPI
         MPI_Barrier(comm);
-        sleep(my_rank);
 #endif
-        cout << "Checking results on rank " << my_rank << "..." << endl;
+        *ostr << "Checking results on rank " << my_rank << "..." << endl;
         idx_t errs = context.compare(ref);
         if( errs == 0 ) {
-            cout << "TEST PASSED." << endl;
+            *ostr << "TEST PASSED." << endl;
         } else {
             cerr << "TEST FAILED: " << errs << " mismatch(es)." << endl;
-            exit(1);
+            exit_yask(1);
         }
     }
-    else if (is_leader)
-        cout << "\nRESULTS NOT VERIFIED.\n";
+    else
+        *ostr << "\nRESULTS NOT VERIFIED.\n";
 
 #ifdef USE_MPI
     MPI_Barrier(comm);
     MPI_Finalize();
 #endif
-    if (is_leader)
-        cout << "YASK DONE." << endl;
+    *ostr << "YASK DONE." << endl;
     
     return 0;
 }

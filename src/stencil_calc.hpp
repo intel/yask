@@ -84,7 +84,8 @@ namespace yask {
         virtual Grid_NXYZ* allocBuf(int bd,
                                     idx_t nn, idx_t nx, idx_t ny, idx_t nz,
                                     idx_t dn, idx_t dx, idx_t dy, idx_t dz,
-                                    const std::string& name);
+                                    const std::string& name,
+                                    std::ostream& os);
     };
 
     
@@ -95,6 +96,9 @@ namespace yask {
 
         // Name.
         std::string name;
+
+        // Default output stream for messages.
+        std::ostream* ostr;
 
         // A list of all grids.
         std::vector<RealVecGridBase*> gridPtrs;
@@ -123,6 +127,7 @@ namespace yask {
         MPI_Comm comm;
         int num_ranks, my_rank;   // MPI-assigned index.
         idx_t nrn, nrx, nry, nrz; // number of ranks in each dim.
+        idx_t rin, rix, riy, riz;    // my rank index in each dim.
         double mpi_time;          // time spent doing MPI.
         MPIBufs::Neighbors my_neighbors;   // neighbor ranks.
 
@@ -149,6 +154,72 @@ namespace yask {
 
         // Number of threads to use in a nested OMP region.
         int num_block_threads;
+
+        // Ctor, dtor.
+        StencilContext() :
+            ostr(&std::cout),
+            begin_dt(TIME_DIM_SIZE),
+            dt(0), dn(0), dx(0), dy(0), dz(0),
+            rt(0), rn(0), rx(0), ry(0), rz(0),
+            bt(0), bn(0), bx(0), by(0), bz(0),
+            gn(0), gx(0), gy(0), gz(0),
+            hn(0), hx(0), hy(0), hz(0),
+            pn(0), px(0), py(0), pz(0),
+            angle_n(0), angle_x(0), angle_y(0), angle_z(0),
+            comm(0), num_ranks(1), my_rank(0), mpi_time(0.0),
+            shadow_in_freq(0), shadow_out_freq(0), shadow_time(0.0),
+            orig_max_threads(1), num_block_threads(1)
+        {
+            // Init my_neighbors to indicate no neighbor.
+            int *p = (int *)my_neighbors;
+            for (int i = 0; i < MPIBufs::neighborhood_size; i++)
+                p[i] = MPI_PROC_NULL;
+        }
+        virtual ~StencilContext() { }
+
+        // Allocate grid memory and set gridPtrs.
+        virtual void allocGrids() =0;
+
+        // Allocate param memory and set paramPtrs.
+        virtual void allocParams() =0;
+
+        // Allocate MPI buffers, etc. if enabled.
+        virtual void setupMPI(bool findLocation);
+
+        // Alloc shadow grids.
+        virtual void allocShadowGrids();
+        
+        // Allocate grids, params, MPI bufs, and shadow grids.
+        // Prints and returns num bytes.
+        virtual idx_t allocAll(bool findRankLocation = true);
+        
+        // Get total size.
+        virtual idx_t get_num_bytes();
+
+        // Init all grids & params by calling initFn.
+        virtual void initValues(std::function<void (RealVecGridBase* gp, 
+                                                    real_t seed)> realVecInitFn,
+                                std::function<void (RealGrid* gp,
+                                                    real_t seed)> realInitFn);
+
+        // Init all grids & params to same value within grids,
+        // but different for each grid.
+        virtual void initSame() {
+            initValues([&](RealVecGridBase* gp, real_t seed){ gp->set_same(seed); },
+                       [&](RealGrid* gp, real_t seed){ gp->set_same(seed); });
+        }
+
+        // Init all grids & params to different values within grids,
+        // and different for each grid.
+        virtual void initDiff() {
+            initValues([&](RealVecGridBase* gp, real_t seed){ gp->set_diff(seed); },
+                       [&](RealGrid* gp, real_t seed){ gp->set_diff(seed); });
+        }
+
+        // Compare grids in contexts.
+        // Params should not be written to, so they are not compared.
+        // Return number of mis-compares.
+        virtual idx_t compare(const StencilContext& ref) const;
 
         // Set number of threads to use for something other than a region.
         inline int set_max_threads() {
@@ -182,71 +253,6 @@ namespace yask {
             omp_set_num_threads(num_block_threads);
             return num_block_threads;
         }
-
-        // Ctor, dtor.
-        StencilContext() :
-            begin_dt(TIME_DIM_SIZE),
-            dt(0), dn(0), dx(0), dy(0), dz(0),
-            rt(0), rn(0), rx(0), ry(0), rz(0),
-            bt(0), bn(0), bx(0), by(0), bz(0),
-            gn(0), gx(0), gy(0), gz(0),
-            hn(0), hx(0), hy(0), hz(0),
-            pn(0), px(0), py(0), pz(0),
-            angle_n(0), angle_x(0), angle_y(0), angle_z(0),
-            comm(0), num_ranks(1), my_rank(0), mpi_time(0.0),
-            shadow_in_freq(0), shadow_out_freq(0), shadow_time(0.0),
-            orig_max_threads(1), num_block_threads(1)
-        {
-            // Init my_neighbors to indicate no neighbor.
-            int *p = (int *)my_neighbors;
-            for (int i = 0; i < MPIBufs::neighborhood_size; i++)
-                p[i] = MPI_PROC_NULL;
-        }
-        virtual ~StencilContext() { }
-
-        // Allocate grid memory and set gridPtrs.
-        virtual void allocGrids() =0;
-
-        // Allocate param memory and set paramPtrs.
-        virtual void allocParams() =0;
-
-        // Allocate MPI buffers, etc. if enabled.
-        virtual void setupMPI();
-
-        // Alloc shadow grids.
-        virtual void allocShadowGrids(std::ostream& os);
-        
-        // Allocate grids, params, MPI bufs, and shadow grids.
-        // Prints and returns num bytes.
-        virtual idx_t allocAll(std::ostream& os);
-        
-        // Get total size.
-        virtual idx_t get_num_bytes();
-
-        // Init all grids & params by calling initFn.
-        virtual void initValues(std::function<void (RealVecGridBase* gp, 
-                                                    real_t seed)> realVecInitFn,
-                                std::function<void (RealGrid* gp,
-                                                    real_t seed)> realInitFn);
-
-        // Init all grids & params to same value within grids,
-        // but different for each grid.
-        virtual void initSame() {
-            initValues([&](RealVecGridBase* gp, real_t seed){ gp->set_same(seed); },
-                       [&](RealGrid* gp, real_t seed){ gp->set_same(seed); });
-        }
-
-        // Init all grids & params to different values within grids,
-        // and different for each grid.
-        virtual void initDiff() {
-            initValues([&](RealVecGridBase* gp, real_t seed){ gp->set_diff(seed); },
-                       [&](RealGrid* gp, real_t seed){ gp->set_diff(seed); });
-        }
-
-        // Compare grids in contexts.
-        // Params should not be written to, so they are not compared.
-        // Return number of mis-compares.
-        virtual idx_t compare(const StencilContext& ref) const;
 
     };
 

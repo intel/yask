@@ -103,7 +103,7 @@ namespace yask {
         }
 
         // Print some info.
-        virtual void print_info(const std::string& name, std::ostream& os = std::cout) {
+        virtual void print_info(const std::string& name, std::ostream& os) {
             os << "grid '" << name << "' allocation at " << _elems << " for " <<
                 printWithPow10Multiplier(get_num_elems()) << " element(s) of " <<
                 sizeof(T) << " byte(s) each (bytes): " <<
@@ -177,7 +177,7 @@ namespace yask {
             GenericGridBase<T>(1, alignment, use_hbw) {}
 
         // Print some info.
-        virtual void print_info(const std::string& name, std::ostream& os = std::cout) {
+        virtual void print_info(const std::string& name, std::ostream& os) {
             os << "Scalar ";
             GenericGridBase<T>::print_info(name, os);
         }
@@ -243,7 +243,7 @@ namespace yask {
         inline idx_t get_d1() const { return _layout.get_d1(); }
 
         // Print some info.
-        virtual void print_info(const std::string& name, std::ostream& os = std::cout) {
+        virtual void print_info(const std::string& name, std::ostream& os) {
             os << "1D (" << get_d1() << ") ";
             GenericGridBase<T>::print_info(name, os);
         }
@@ -333,7 +333,7 @@ namespace yask {
         inline idx_t get_d2() const { return _layout.get_d2(); }
 
         // Print some info.
-        virtual void print_info(const std::string& name, std::ostream& os = std::cout) {
+        virtual void print_info(const std::string& name, std::ostream& os) {
             os << "2D (" << get_d1() << " * " << get_d2() << ") ";
             GenericGridBase<T>::print_info(name, os);
         }
@@ -428,7 +428,7 @@ namespace yask {
         inline idx_t get_d3() const { return _layout.get_d3(); }
 
         // Print some info.
-        virtual void print_info(const std::string& name, std::ostream& os = std::cout) {
+        virtual void print_info(const std::string& name, std::ostream& os) {
             os << "3D (" << get_d1() << " * " << get_d2() << " * " << get_d3() << ") ";
             GenericGridBase<T>::print_info(name, os);
         }
@@ -528,7 +528,7 @@ namespace yask {
         inline idx_t get_d4() const { return _layout.get_d4(); }
 
         // Print some info.
-        virtual void print_info(const std::string& name, std::ostream& os = std::cout) {
+        virtual void print_info(const std::string& name, std::ostream& os) {
             os << "4D (" << get_d1() << " * " << get_d2() << " * " << get_d3() << " * " << get_d4() << ") ";
             GenericGridBase<T>::print_info(name, os);
         }
@@ -633,7 +633,7 @@ namespace yask {
         inline idx_t get_d5() const { return _layout.get_d5(); }
 
         // Print some info.
-        virtual void print_info(const std::string& name, std::ostream& os = std::cout) {
+        virtual void print_info(const std::string& name, std::ostream& os) {
             os << "5D (" << get_d1() << " * " << get_d2() << " * " <<
                 get_d3() << " * " << get_d4() <<  " * " << get_d5() << ") ";
             GenericGridBase<T>::print_info(name, os);

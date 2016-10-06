@@ -475,7 +475,7 @@ void YASKCppPrinter::printCode(ostream& os) {
                 hbwArg = "true";
             os << "  " << grid << " = new " << typeNames[gp] <<
                 "(" << dimArgs[gp] << padArgs[gp] << "\"" << grid << "\", " <<
-                hbwArg << ");" << endl <<
+                hbwArg << ", *ostr);" << endl <<
                 "  gridPtrs.push_back(" << grid << ");" << endl;
 
             // Grids w/equations.

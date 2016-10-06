@@ -41,19 +41,29 @@ while true; do
     elif [[ "$1" == "-h" || "$1" == "-help" ]]; then
         opts="$opts -h"
         shift
-        echo "usage: $0 -arch <arch> [-mic <N>|-host <hostname>] [-sh_prefix <command>] [-exe_prefix <command>] [-ranks <N>] [<env-var=value>...] [[--] executable options as shown below]"
+        echo "$0 is a wrapper around the stencil executable to facilitate setting up the proper environment."
+        echo "usage: $0 -arch <arch> [-mic <N>|-host <hostname>] [-sh_prefix <command>] [-exe_prefix <command>] [-ranks <N>] [<env-var=value>...] [[--] <executable options>]"
         echo " "
-        echo "Options to be passed to the executable must follow '--' or the ones listed above in the command line."
+        if [[ -z ${arch:+ok} ]]; then
+            echo "To see executable options, run '$0 -arch <arch> -- -help'."
+        else
+            echo "To see executable options, run '$0 -arch $arch -- -help'."
+        fi
+        echo " "
+        echo "All options to be passed to the executable must be at the end of the command line."
         echo "The sh_prefix command is used to prefix a sub-shell."
         echo "The exe_prefix command is used to prefix the executable (set to 'true' to avoid actual run)."
         echo "If -host <hostname> is given, 'ssh <hostname>' will be pre-pended to the sh_prefix command."
-        echo "If -ranks <N> is given, 'mpirun -n <N>' is pre-pended to the exe_prefix command;"
-        echo " use -exe_prefix <command> explicitly if a different MPI command is needed."
+        echo "If -ranks <N> is given, 'mpirun -n <N>' is pre-pended to the exe_prefix command,"
+        echo " and -nrx <N> is passed to the executable;"
+        echo " use -exe_prefix <command> explicitly if a different MPI command is needed,"
+        echo " and/or override -nrx as needed."
         echo "If -arch 'knl' is given, it implies the following (which can be overridden):"
         echo " -exe_prefix 'numactl --preferred=1'"
         echo "If -mic <N> is given, it implies the following (which can be overridden):"
         echo " -arch 'knc'"
-        echo " -host <current-hostname>-mic<N>"
+        echo " -host "`hostname`"-mic<N>"
+        exit 1
 
     elif [[ "$1" == "-sh_prefix" && -n ${2+set} ]]; then
         sh_prefix=$2
@@ -83,6 +93,7 @@ while true; do
 
     elif [[ "$1" == "-ranks" && -n ${2+set} ]]; then
         nranks=$2
+        opts="$opts -nrx $nranks"
         shift
         shift
 

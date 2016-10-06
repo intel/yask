@@ -247,6 +247,15 @@ public:
         _numOps(0), _numNodes(0), _numReads(0), _numWrites(0), _numParamReads(0) { }
     virtual ~CounterVisitor() {}
 
+    virtual CounterVisitor& operator+=(const CounterVisitor& rhs) {
+        _numOps += rhs._numOps;
+        _numNodes += rhs._numNodes;
+        _numReads += rhs._numReads;
+        _numWrites += rhs._numWrites;
+        _numParamReads += rhs._numParamReads;
+        return *this;
+    }
+    
     virtual void printStats(ostream& os, const string& descr = "") const {
         os << "Expression stats";
         if (descr.length())

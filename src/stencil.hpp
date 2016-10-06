@@ -72,10 +72,12 @@ IN THE SOFTWARE.
 #endif
 #ifdef USE_MPI
 #include "mpi.h"
+inline void exit_yask(int code) { MPI_Abort(MPI_COMM_WORLD, code); }
 #else
 #define MPI_PROC_NULL (-1)
 #define MPI_Barrier(comm) ((void)0)
 #define MPI_Comm int
+inline void exit_yask(int code) { exit(code); }
 #endif
 
 // OpenMP and stub functions.

@@ -238,7 +238,7 @@ namespace yask {
         if (step_rt != 1) {
             cerr << "Error: temporal blocking not yet supported." << endl;
             assert(step_rt == 1);
-            exit(1);                // in case assert() is not active.
+            exit_yask(1);                // in case assert() is not active.
         }
 
         // Number of iterations to get from start_dt to (but not including) stop_dt,
@@ -678,78 +678,122 @@ namespace yask {
     ///// StencilContext functions:
 
     // Init MPI-related vars.
-    void StencilContext::setupMPI() {
+    void StencilContext::setupMPI(bool findLocation) {
 
         // Determine my position in 4D.
-        Layout_4321 rank_layout(nrn, nrx, nry, nrz);
-        idx_t mrnn, mrnx, mrny, mrnz;
-        rank_layout.unlayout((idx_t)my_rank, mrnn, mrnx, mrny, mrnz);
-        cout << "Logical coordinates of rank " << my_rank << ": " <<
-            mrnn << ", " << mrnx << ", " << mrny << ", " << mrnz << endl;
+        if (findLocation) {
+            Layout_4321 rank_layout(nrn, nrx, nry, nrz);
+            rank_layout.unlayout((idx_t)my_rank, rin, rix, riy, riz);
+        }
+        *ostr << "Logical coordinates of rank " << my_rank << ": " <<
+            rin << ", " << rix << ", " << riy << ", " << riz << endl;
 
+        // A table of coordinates for everyone.
+        const int num_dims = 4;
+        idx_t coords[num_ranks][num_dims];
+        coords[my_rank][0] = rin;
+        coords[my_rank][1] = rix;
+        coords[my_rank][2] = riy;
+        coords[my_rank][3] = riz;
+
+        // Exchange coordinate info between all ranks.
+        for (int rn = 0; rn < num_ranks; rn++) {
+            MPI_Bcast(&coords[rn][0], num_dims, MPI_INTEGER8,
+                      rn, comm);
+        }
+        
         // Determine who my neighbors are.
         int num_neighbors = 0;
         for (int rn = 0; rn < num_ranks; rn++) {
-            if (rn != my_rank) {
-                idx_t rnn, rnx, rny, rnz;
-                rank_layout.unlayout((idx_t)rn, rnn, rnx, rny, rnz);
 
-                // Distance from me: prev => -1, self => 0, next => +1.
-                idx_t rdn = rnn - mrnn;
-                idx_t rdx = rnx - mrnx;
-                idx_t rdy = rny - mrny;
-                idx_t rdz = rnz - mrnz;
+            // Get coordinates of rn.
+            idx_t rnn = coords[rn][0];
+            idx_t rnx = coords[rn][1];
+            idx_t rny = coords[rn][2];
+            idx_t rnz = coords[rn][3];
 
-                // Rank rn is my neighbor if its distance <= 1 in every dim.
-                if (abs(rdn) <= 1 && abs(rdx) <= 1 && abs(rdy) <= 1 && abs(rdz) <= 1) {
+            // Distance from me: prev => -1, self => 0, next => +1.
+            idx_t rdn = rnn - rin;
+            idx_t rdx = rnx - rix;
+            idx_t rdy = rny - riy;
+            idx_t rdz = rnz - riz;
 
-                    num_neighbors++;
-                    cout << "Neighbor #" << num_neighbors << " at " <<
-                        rnn << ", " << rnx << ", " << rny << ", " << rnz <<
-                        " is rank " << rn << endl;
+            // Manhattan distance.
+            int mdist = abs(rdn) + abs(rdx) + abs(rdy) + abs(rdz);
+            
+            // Myself.
+            if (rn == my_rank) {
+                if (mdist != 0) {
+                    cerr << "internal error: distance to own rank == " << mdist << endl;
+                    exit_yask(1);
+                }
+                continue; // nothing else to do for self.
+            }
+
+            // Someone else.
+            else {
+                if (mdist == 0) {
+                    cerr << "error: distance to rank " << rn << " == " << mdist << endl;
+                    exit_yask(1);
+                }
+            }
+            
+            // Rank rn is my neighbor if its distance <= 1 in every dim.
+            if (abs(rdn) > 1 || abs(rdx) > 1 || abs(rdy) > 1 || abs(rdz) > 1)
+                continue;
+
+            // Check against max dist needed.
+            // TODO: determine max dist automatically from stencil equations.
+#ifndef MAX_EXCH_DIST
+#define MAX_EXCH_DIST 4
+#endif
+            if (mdist > MAX_EXCH_DIST)
+                continue;
+
+            num_neighbors++;
+            *ostr << "Neighbor #" << num_neighbors << " at " <<
+                rnn << ", " << rnx << ", " << rny << ", " << rnz <<
+                " is rank " << rn << endl;
                     
-                    // Size of buffer in each direction:
-                    // if dist to neighbor is zero (i.e., is self), use full size,
-                    // otherwise, use halo size.
-                    idx_t rsn = (rdn == 0) ? dn : hn;
-                    idx_t rsx = (rdx == 0) ? dx : hx;
-                    idx_t rsy = (rdy == 0) ? dy : hy;
-                    idx_t rsz = (rdz == 0) ? dz : hz;
+            // Size of buffer in each direction:
+            // if dist to neighbor is zero (i.e., is self), use full size,
+            // otherwise, use halo size.
+            // TODO: use per-grid halo size instead of global max.
+            idx_t rsn = (rdn == 0) ? dn : hn;
+            idx_t rsx = (rdx == 0) ? dx : hx;
+            idx_t rsy = (rdy == 0) ? dy : hy;
+            idx_t rsz = (rdz == 0) ? dz : hz;
 
-                    // FIXME: only alloc buffers in directions actually needed, e.g.,
-                    // many simple stencils don't need diagonals.
+            // TODO: only alloc buffers in directions actually needed, e.g.,
+            // many simple stencils don't need diagonals.
                     
-                    // Is buffer needed?
-                    if (rsn * rsx * rsy * rsz == 0) {
-                        cout << "No halo exchange needed between ranks " << my_rank <<
-                            " and " << rn << '.' << endl;
-                    }
+            // Is buffer needed?
+            if (rsn * rsx * rsy * rsz == 0) {
+                *ostr << "No halo exchange needed between ranks " << my_rank <<
+                    " and " << rn << '.' << endl;
+                continue;
+            }
 
-                    else {
+            // Add one to -1..+1 dist to get 0..2 range for my_neighbors indices.
+            rdn++; rdx++; rdy++; rdz++;
 
-                        // Add one to -1..+1 dist to get 0..2 range for my_neighbors indices.
-                        rdn++; rdx++; rdy++; rdz++;
-
-                        // Save rank of this neighbor.
-                        my_neighbors[rdn][rdx][rdy][rdz] = rn;
+            // Save rank of this neighbor.
+            my_neighbors[rdn][rdx][rdy][rdz] = rn;
                     
-                        // Alloc MPI buffers between rn and me.
-                        // Need send and receive for each updated grid.
-                        for (auto gp : eqGridPtrs) {
-                            for (int bd = 0; bd < MPIBufs::nBufDirs; bd++) {
-                                ostringstream oss;
-                                oss << gp->get_name();
-                                if (bd == MPIBufs::bufSend)
-                                    oss << "_send_halo_from_" << my_rank << "_to_" << rn;
-                                else
-                                    oss << "_get_halo_by_" << my_rank << "_from_" << rn;
+            // Alloc MPI buffers between rn and me.
+            // Need send and receive for each updated grid.
+            for (auto gp : eqGridPtrs) {
+                for (int bd = 0; bd < MPIBufs::nBufDirs; bd++) {
+                    ostringstream oss;
+                    oss << gp->get_name();
+                    if (bd == MPIBufs::bufSend)
+                        oss << "_send_halo_from_" << my_rank << "_to_" << rn;
+                    else
+                        oss << "_get_halo_by_" << my_rank << "_from_" << rn;
 
-                                mpiBufs[gp].allocBuf(bd, rdn, rdx, rdy, rdz,
-                                                     rsn, rsx, rsy, rsz,
-                                                     oss.str());
-                            }
-                        }
-                    }
+                    mpiBufs[gp].allocBuf(bd, rdn, rdx, rdy, rdz,
+                                         rsn, rsx, rsy, rsz,
+                                         oss.str(), *ostr);
                 }
             }
         }
@@ -793,39 +837,39 @@ namespace yask {
     }
 
     // Alloc shadow grids.
-    void StencilContext::allocShadowGrids(ostream& os) {
+    void StencilContext::allocShadowGrids() {
         for (auto gp : eqGridPtrs) {
             if (shadowGrids[gp])
                 delete shadowGrids[gp];
             shadowGrids[gp] = new RealGrid_NXYZ(dn, dx, dy, dz,
                                                 GRID_ALIGNMENT);
-            shadowGrids[gp]->print_info(string("shadow-") + gp->get_name(), os);
+            shadowGrids[gp]->print_info(string("shadow-") + gp->get_name(), *ostr);
         }        
     }
 
     // Allocate grids, params, and MPI bufs.
     // Returns num bytes.
-    idx_t StencilContext::allocAll(ostream& os)
+    idx_t StencilContext::allocAll(bool findRankLocation)
     {
-        os << "Allocating grids..." << endl;
+        *ostr << "Allocating grids..." << endl;
         allocGrids();
-        os << "Allocating parameters..." << endl;
+        *ostr << "Allocating parameters..." << endl;
         allocParams();
 #ifdef USE_MPI
-        os << "Allocating MPI buffers..." << endl;
-        setupMPI();
+        *ostr << "Allocating MPI buffers..." << endl;
+        setupMPI(findRankLocation);
 #endif
         if (shadow_in_freq || shadow_out_freq) {
-            os << "Allocating shadow grids..." << endl;
-            allocShadowGrids(os);
+            *ostr << "Allocating shadow grids..." << endl;
+            allocShadowGrids();
         }
 
         const idx_t num_eqGrids = eqGridPtrs.size();
-        os << "Num grids: " << gridPtrs.size() << endl;
-        os << "Num grids to be updated: " << num_eqGrids << endl;
+        *ostr << "Num grids: " << gridPtrs.size() << endl;
+        *ostr << "Num grids to be updated: " << num_eqGrids << endl;
 
         idx_t nbytes = get_num_bytes();
-        os << "Total rank-" << my_rank << " allocation (bytes): " <<
+        *ostr << "Total rank-" << my_rank << " allocation (bytes): " <<
             printWithPow2Multiplier(nbytes) << endl;
         return nbytes;
     }
@@ -837,13 +881,13 @@ namespace yask {
                                                    real_t seed)> realInitFn)
     {
         real_t v = 0.1;
-        cout << "Initializing grids..." << endl;
+        *ostr << "Initializing grids..." << endl;
         for (auto gp : gridPtrs) {
             realVecInitFn(gp, v);
             v += 0.01;
         }
         if (shadowGrids.size()) {
-            cout << "Initializing shadow grids..." << endl;
+            *ostr << "Initializing shadow grids..." << endl;
             for (auto gp : eqGridPtrs) {
                 if (shadowGrids.count(gp) && shadowGrids[gp]) {
                     realInitFn(shadowGrids[gp], v);
@@ -852,7 +896,7 @@ namespace yask {
             }
         }
         if (paramPtrs.size()) {
-            cout << "Initializing parameters..." << endl;
+            *ostr << "Initializing parameters..." << endl;
             for (auto pp : paramPtrs) {
                 realInitFn(pp, v);
                 v += 0.01;
@@ -861,22 +905,21 @@ namespace yask {
     }
 
     // Compare grids in contexts.
-    // Params should not be written to, so they are not compared.
     // Return number of mis-compares.
     idx_t StencilContext::compare(const StencilContext& ref) const {
 
-        cout << "Comparing grid(s) in '" << name << "' to '" << ref.name << "'..." << endl;
+        *ostr << "Comparing grid(s) in '" << name << "' to '" << ref.name << "'..." << endl;
         if (gridPtrs.size() != ref.gridPtrs.size()) {
             cerr << "** number of grids not equal." << endl;
             return 1;
         }
         idx_t errs = 0;
         for (size_t gi = 0; gi < gridPtrs.size(); gi++) {
-            cout << "Grid '" << ref.gridPtrs[gi]->get_name() << "'..." << endl;
+            *ostr << "Grid '" << ref.gridPtrs[gi]->get_name() << "'..." << endl;
             errs += gridPtrs[gi]->compare(*ref.gridPtrs[gi]);
         }
 
-        cout << "Comparing parameter(s) in '" << name << "' to '" << ref.name << "'..." << endl;
+        *ostr << "Comparing parameter(s) in '" << name << "' to '" << ref.name << "'..." << endl;
         if (paramPtrs.size() != ref.paramPtrs.size()) {
             cerr << "** number of params not equal." << endl;
             return 1;
@@ -907,13 +950,14 @@ namespace yask {
 
     // Allocate new buffer in given direction and size.
     Grid_NXYZ* MPIBufs::allocBuf(int bd,
-                            idx_t nn, idx_t nx, idx_t ny, idx_t nz,
-                            idx_t dn, idx_t dx, idx_t dy, idx_t dz,
-                            const std::string& name)
+                                 idx_t nn, idx_t nx, idx_t ny, idx_t nz,
+                                 idx_t dn, idx_t dx, idx_t dy, idx_t dz,
+                                 const std::string& name,
+                                 std::ostream& os)
     {
         auto gp = (*this)(bd, nn, nx, ny, nz);
         assert(gp == NULL); // not already allocated.
-        gp = new Grid_NXYZ(dn, dx, dy, dz, 0, 0, 0, 0, name, true);
+        gp = new Grid_NXYZ(dn, dx, dy, dz, 0, 0, 0, 0, name, true, os);
         assert(gp);
         bufs[bd][nn][nx][ny][nz] = gp;
         return gp;

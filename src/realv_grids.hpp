@@ -131,7 +131,7 @@ namespace yask {
                         idx_t px, idx_t py, idx_t pz,
                         const std::string& name,
                         bool use_hbw,
-                        std::ostream& msg_stream = std::cout) :
+                        std::ostream& msg_stream) :
             RealVecGridBase(name, &_data),
 
             // Round up each dim to multiple of dim in real_vec_t.
@@ -253,7 +253,8 @@ namespace yask {
         }
 
         // Print one vector.
-        void printVec(const std::string& m, idx_t iv, idx_t jv, idx_t kv, const real_vec_t& v,
+        void printVec(std::ostream& os, const std::string& m,
+                      idx_t iv, idx_t jv, idx_t kv, const real_vec_t& v,
                       int line) const {
             idx_t i = iv * VLEN_X;
             idx_t j = jv * VLEN_Y;
@@ -264,30 +265,31 @@ namespace yask {
                         real_t e = v(0, i2, j2, k2);
                         real_t e2 = readElem(i+i2, j+j2, k+k2, line);
 
-                        std::cout << m << ": " << _name << "[" <<
+                        os << m << ": " << _name << "[" <<
                             (i+i2) << ", " << (j+j2) << ", " << (k+k2) << "] = " << e;
                         if (line)
-                            std::cout << " at line " << line;
+                            os << " at line " << line;
 
                         // compare to per-element read.
                         if (e == e2)
-                            std::cout << " (same as readElem())";
+                            os << " (same as readElem())";
                         else
-                            std::cout << " != " << e2 << " from readElem() <<<< ERROR";
-                        std::cout << std::endl << std::flush;
+                            os << " != " << e2 << " from readElem() <<<< ERROR";
+                        os << std::endl << std::flush;
                     }
                 }
             }
         }
 
         // Print one element.
-        void printElem(const std::string& m, idx_t i, idx_t j, idx_t k, real_t e,
+        void printElem(std::ostream& os, const std::string& m,
+                       idx_t i, idx_t j, idx_t k, real_t e,
                        int line) const {
-            std::cout << m << ": " << _name << "[" <<
+            os << m << ": " << _name << "[" <<
                 i << ", " << j << ", " << k << "] = " << e;
             if (line)
-                std::cout << " at line " << line;
-            std::cout << std::endl << std::flush;
+                os << " at line " << line;
+            os << std::endl << std::flush;
         }
 
         // Read one element.
@@ -296,7 +298,7 @@ namespace yask {
             const real_t* ep = getElemPtr(i, j, k);
             real_t e = *ep;
 #ifdef TRACE_MEM
-            printElem("readElem", i, j, k, e, line);
+            printElem(std::cout, "readElem", i, j, k, e, line);
 #endif
             return e;
         }
@@ -307,7 +309,7 @@ namespace yask {
             real_t* ep = getElemPtr(i, j, k);
             *ep = val;
 #ifdef TRACE_MEM
-            printElem("writeElem", i, j, k, val, line);
+            printElem(std::cout, "writeElem", i, j, k, val, line);
 #endif
         }
 
@@ -323,7 +325,7 @@ namespace yask {
             real_vec_t v;
             v.loadFrom(p);
 #ifdef TRACE_MEM
-            printVec("readVec", iv, jv, kv, v, line);
+            printVec(std::cout, "readVec", iv, jv, kv, v, line);
 #endif
 #ifdef MODEL_CACHE
             cache_model.read(p, line);
@@ -339,7 +341,7 @@ namespace yask {
             __assume_aligned(p, CACHELINE_BYTES);
             v.storeTo(p);
 #ifdef TRACE_MEM
-            printVec("writeVec", iv, jv, kv, v, line);
+            printVec(std::cout, "writeVec", iv, jv, kv, v, line);
 #endif
 #ifdef MODEL_CACHE
             cache_model.write(p, line);
@@ -373,7 +375,7 @@ namespace yask {
                          idx_t pn, idx_t px, idx_t py, idx_t pz,
                          const std::string& name,
                          bool use_hbw,
-                         std::ostream& msg_stream = std::cout) :
+                         std::ostream& msg_stream) :
             RealVecGridBase(name, &_data),
 
             // Round up each dim to multiple of dim in real_vec_t.
@@ -506,7 +508,8 @@ namespace yask {
         }
 
         // Print one vector.
-        void printVec(const std::string& m, idx_t nv, idx_t iv, idx_t jv, idx_t kv, const real_vec_t& v,
+        void printVec(std::ostream& os, const std::string& m,
+                      idx_t nv, idx_t iv, idx_t jv, idx_t kv, const real_vec_t& v,
                       int line) const {
             idx_t n = nv * VLEN_N;
             idx_t i = iv * VLEN_X;
@@ -521,19 +524,19 @@ namespace yask {
                             real_t e2 = readElem(n+n2, i+i2, j+j2, k+k2, line);
 #endif
 
-                            std::cout << m << ": " << _name << "[" << (n+n2) << ", " <<
+                            os << m << ": " << _name << "[" << (n+n2) << ", " <<
                                 (i+i2) << ", " << (j+j2) << ", " << (k+k2) << "] = " << e;
                             if (line)
-                                std::cout << " at line " << line;
+                                os << " at line " << line;
 
 #ifdef CHECK_VEC_ELEMS
                             // compare to per-element read.
                             if (e == e2)
-                                std::cout << " (same as readElem())";
+                                os << " (same as readElem())";
                             else
-                                std::cout << " != " << e2 << " from readElem() <<<< ERROR";
+                                os << " != " << e2 << " from readElem() <<<< ERROR";
 #endif
-                            std::cout << std::endl << std::flush;
+                            os << std::endl << std::flush;
                         }
                     }
                 }
@@ -541,13 +544,14 @@ namespace yask {
         }
 
         // Print one element.
-        void printElem(const std::string& m, idx_t n, idx_t i, idx_t j, idx_t k, real_t e,
+        void printElem(std::ostream& os, const std::string& m,
+                       idx_t n, idx_t i, idx_t j, idx_t k, real_t e,
                        int line) const {
-            std::cout << m << ": " << _name << "[" <<
+            os << m << ": " << _name << "[" <<
                 n << ", " << i << ", " << j << ", " << k << "] = " << e;
             if (line)
-                std::cout << " at line " << line;
-            std::cout << std::endl << std::flush;
+                os << " at line " << line;
+            os << std::endl << std::flush;
         }
 
         // Read one element.
@@ -556,7 +560,7 @@ namespace yask {
             const real_t* ep = getElemPtr(n, i, j, k);
             real_t e = *ep;
 #ifdef TRACE_MEM
-            printElem("readElem", n, i, j, k, e, line);
+            printElem(std::cout, "readElem", n, i, j, k, e, line);
 #endif
             return e;
         }
@@ -567,14 +571,14 @@ namespace yask {
             real_t* ep = getElemPtr(n, i, j, k);
             *ep = val;
 #ifdef TRACE_MEM
-            printElem("writeElem", n, i, j, k, val, line);
+            printElem(std::cout, "writeElem", n, i, j, k, val, line);
 #endif
         }
 
         // Read one vector at vector offset nv, iv, jv, kv.
         // Indices must be normalized, i.e., already divided by VLEN_*.
         ALWAYS_INLINE const real_vec_t readVecNorm(idx_t nv, idx_t iv, idx_t jv, idx_t kv,
-                                              int line) const {
+                                                   int line) const {
 #ifdef TRACE_MEM
             std::cout << "readVecNorm(" << nv << "," << iv << "," << jv << "," << kv << ")..." << std::endl;
 #endif        
@@ -583,7 +587,7 @@ namespace yask {
             real_vec_t v;
             v.loadFrom(p);
 #ifdef TRACE_MEM
-            printVec("readVec", nv, iv, jv, kv, v, line);
+            printVec(std::cout, "readVec", nv, iv, jv, kv, v, line);
 #endif
 #ifdef MODEL_CACHE
             cache_model.read(p, line);
@@ -599,7 +603,7 @@ namespace yask {
             __assume_aligned(p, CACHELINE_BYTES);
             v.storeTo(p);
 #ifdef TRACE_MEM
-            printVec("writeVec", nv, iv, jv, kv, v, line);
+            printVec(std::cout, "writeVec", nv, iv, jv, kv, v, line);
 #endif
 #ifdef MODEL_CACHE
             cache_model.write(p, line);
@@ -621,7 +625,7 @@ namespace yask {
                          idx_t px, idx_t py, idx_t pz,
                          const std::string& name,
                          bool use_hbw,
-                         std::ostream& msg_stream = std::cout) :
+                         std::ostream& msg_stream) :
             RealVecGrid_NXYZ<LayoutFn>(TIME_DIM_SIZE, dx, dy, dz,
                                        0, px, py, pz,
                                        name, use_hbw, msg_stream)
@@ -732,7 +736,7 @@ namespace yask {
                           idx_t pn, idx_t px, idx_t py, idx_t pz,
                           const std::string& name,
                           bool use_hbw,
-                          std::ostream& msg_stream = std::cout) :
+                          std::ostream& msg_stream) :
             RealVecGrid_NXYZ<LayoutFn>(TIME_DIM_SIZE * dn, dx, dy, dz,
                                        pn, px, py, pz,
                                        name, use_hbw, msg_stream),

@@ -44,7 +44,6 @@ namespace yask {
 
     // Some utility functions.
     extern double getTimeInSecs();
-    extern idx_t roundUp(idx_t dim, idx_t mult, std::string name);
     extern std::string printWithPow2Multiplier(double num);
     extern std::string printWithPow10Multiplier(double num);
 }
