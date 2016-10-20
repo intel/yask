@@ -696,11 +696,13 @@ namespace yask {
         coords[my_rank][2] = riy;
         coords[my_rank][3] = riz;
 
+#ifdef USE_MPI
         // Exchange coordinate info between all ranks.
         for (int rn = 0; rn < num_ranks; rn++) {
             MPI_Bcast(&coords[rn][0], num_dims, MPI_INTEGER8,
                       rn, comm);
         }
+#endif
         
         // Determine who my neighbors are.
         int num_neighbors = 0;
