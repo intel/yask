@@ -77,8 +77,8 @@ typedef map<GridPoint, GridPointSet> Point2Vecs;
 class VecInfoVisitor : public ExprVisitor {
 protected:
 
-    const IntTuple& _fold;       // shape of vector fold.
-    int _vlen;                   // size of vector.
+    const Dimensions& _dims;
+    int _vlen;                   // size of one vector.
     
 public:
 
@@ -93,13 +93,15 @@ public:
     // _vblk2elemLists is used to find exactly where each element comes from.
     // The keys are the same for both maps.
 
-    VecInfoVisitor(const IntTuple& fold) :
-        _fold(fold) {
-        _vlen = fold.product();
+    VecInfoVisitor(const Dimensions& dims) :
+        _dims(dims) {
+        _vlen = dims._foldLengths.product();
     }
 
-    const IntTuple& getFold() { return _fold; }
-
+    const IntTuple& getFold() const {
+        return _dims._foldLengths;
+    }
+    
     size_t getNumPoints() const {
         return _vblk2elemLists.size();
     }
@@ -133,7 +135,7 @@ public:
             separator << "num points in stencil" <<
             separator << "num aligned vectors to read from memory" <<
             separator << "num blends needed" <<
-            separator << _fold.makeDimStr(separator, "footprint in ") <<
+            separator << _dims._foldLengths.makeDimStr(separator, "footprint in ") <<
             endl;
     }
 
@@ -155,7 +157,7 @@ public:
 
         // calc footprint in each dim.
         map<string, int> footprints;
-        for (auto dim : _fold.getDims()) {
+        for (auto dim : _dims._foldLengths.getDims()) {
 
             // Create direction vector in this dim.
             IntTuple dir;
@@ -172,11 +174,11 @@ public:
             
         os << destGrid <<
             separator << _vlen <<
-            separator << _fold.makeValStr("x") <<
+            separator << _dims._foldLengths.makeValStr("x") <<
             separator << getNumPoints() <<
             separator << getNumAlignedVecs() <<
             separator << numBlends;
-        for (auto dim : _fold.getDims())
+        for (auto dim : _dims._foldLengths.getDims())
             os << separator << footprints[dim];
         os << endl;
     }
@@ -222,7 +224,7 @@ public:
         }
     }
 
-    // Only want to visit the RHS of an equation.
+    // Only want to visit the RHS of an eqGroup.
     // Assumes LHS is aligned.
     // TODO: validate this.
     virtual void visit(EqualsExpr* ee) {
@@ -245,12 +247,9 @@ public:
         cout << "vec @ " << gp->makeDimValStr() << " => " << endl;
 #endif
 
-        // Loop through each point in a vector fold.
-        // This process is based on the assumption that a block of the same
-        // size should be accessed from every point in every source grid.
-        // TODO: validate this assumption.
+        // Loop through all points in the vector at this cluster point.
         size_t pelem = 0;
-        _fold.visitAllPoints([&](const IntTuple& vecPoint){
+        _dims._foldLengths.visitAllPoints([&](const IntTuple& vecPoint){
 
                 // Offset in each dim is starting point of grid point plus
                 // offset in this vector.
@@ -263,7 +262,7 @@ public:
                 for (auto dim : offsets.getDims()) {
 
                     // length of this dimension in fold, if it exists.
-                    const int* p = _fold.lookup(dim);
+                    const int* p = _dims._foldLengths.lookup(dim);
                     int len = p ? *p : 1;
 
                     // convert this offset to vector index and vector offset.
@@ -283,7 +282,7 @@ public:
                 GridPoint alignedVec(gp, vecLocation);
 
                 // Find linear offset within this aligned vector block.
-                int alignedElem = _fold.mapTo1d(vecOffsets, false);
+                int alignedElem = _dims._foldLengths.mapTo1d(vecOffsets, false);
                 assert(alignedElem >= 0);
                 assert(alignedElem < _vlen);
 #ifdef DEBUG_VV
@@ -303,7 +302,7 @@ public:
                 assert(_vblk2elemLists[*gp].size() == pelem+1); // verify at pelem index.
 
                 pelem++;
-            });                  // end of lambda-function.
+            });                  // end of vector lambda-function.
     }                   // end of visit() method.
 };
 
@@ -428,8 +427,8 @@ public:
     // Sort a commutative expression.
     virtual void visit(CommutativeExpr* ce) {
 
-        ExprPtrVec& oev = ce->getOps(); // old exprs.
-        ExprPtrVec nev; // new exprs.
+        auto& oev = ce->getOps(); // old exprs.
+        NumExprPtrVec nev; // new exprs.
 
         // Simple, greedy algorithm:
         // Select first element that needs the fewest new aligned vecs.

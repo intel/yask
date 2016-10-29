@@ -27,7 +27,7 @@
 
 # Env vars to set.
 envs="OMP_DISPLAY_ENV=VERBOSE OMP_PLACES=cores"
-envs="$envs KMP_VERSION=1 KMP_HOT_TEAMS_MODE=1 KMP_HOT_TEAMS_MAX_LEVEL=4"
+envs="$envs KMP_VERSION=1 KMP_HOT_TEAMS_MODE=1 KMP_HOT_TEAMS_MAX_LEVEL=2"
 
 # Extra options for exe.
 opts=""

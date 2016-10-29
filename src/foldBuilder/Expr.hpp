@@ -38,122 +38,291 @@ IN THE SOFTWARE.
 
 using namespace std;
 
-// A tuple of integers, used for dimensions and points.
+// A tuple of integers, used for dimensions, indices, etc.
 typedef Tuple<int> IntTuple;
+
+// Forward-declarations of expressions.
+class Expr;
+typedef shared_ptr<Expr> ExprPtr;
+class NumExpr;
+typedef shared_ptr<NumExpr> NumExprPtr;
+class BoolExpr;
+typedef shared_ptr<BoolExpr> BoolExprPtr;
+class EqualsExpr;
+typedef shared_ptr<EqualsExpr> EqualsExprPtr;
+class IfExpr;
+typedef shared_ptr<IfExpr> IfExprPtr;
+class IntTupleExpr;
+typedef shared_ptr<IntTupleExpr> IntTupleExprPtr;
+typedef vector<NumExprPtr> NumExprPtrVec;
 
 // Forward-declare expression visitor.
 class ExprVisitor;
 
-// Forward-declaration of an expression.
-class Expr;
-typedef shared_ptr<Expr> ExprPtr;
-
-// Forward-declaration of a grid and a grid point.
+// Forward-declaration of a grid and a grid point expression.
 class Grid;
 class GridPoint;
 typedef shared_ptr<GridPoint> GridPointPtr;
 
+///// The following are operators and functions used in stencil expressions.
+
+// Various unary operators.
+NumExprPtr operator-(const NumExprPtr rhs);
+
+// Various binary operators.
+NumExprPtr operator+(const NumExprPtr lhs, const NumExprPtr rhs);
+NumExprPtr operator+(double lhs, const NumExprPtr rhs);
+NumExprPtr operator+(const NumExprPtr lhs, double rhs);
+void operator+=(NumExprPtr& lhs, const NumExprPtr rhs);
+void operator+=(NumExprPtr& lhs, double rhs);
+
+NumExprPtr operator-(const NumExprPtr lhs, const NumExprPtr rhs);
+NumExprPtr operator-(double lhs, const NumExprPtr rhs);
+NumExprPtr operator-(const NumExprPtr lhs, double rhs);
+void operator-=(NumExprPtr& lhs, const NumExprPtr rhs);
+void operator-=(NumExprPtr& lhs, double rhs);
+
+NumExprPtr operator*(const NumExprPtr lhs, const NumExprPtr rhs);
+NumExprPtr operator*(double lhs, const NumExprPtr rhs);
+NumExprPtr operator*(const NumExprPtr lhs, double rhs);
+void operator*=(NumExprPtr& lhs, const NumExprPtr rhs);
+void operator*=(NumExprPtr& lhs, double rhs);
+
+NumExprPtr operator/(const NumExprPtr lhs, const NumExprPtr rhs);
+NumExprPtr operator/(double lhs, const NumExprPtr rhs);
+NumExprPtr operator/(const NumExprPtr lhs, double rhs);
+void operator/=(NumExprPtr& lhs, const NumExprPtr rhs);
+void operator/=(NumExprPtr& lhs, double rhs);
+
+// The '==' operator can define a grid value or be used for
+// comparing values, depending on what the lhs is.
+EqualsExprPtr operator==(GridPointPtr gpp, const NumExprPtr rhs);
+BoolExprPtr operator==(const NumExprPtr lhs, const NumExprPtr rhs);
+
+// Other comparison operators can only be used for comparing.
+BoolExprPtr operator!=(const NumExprPtr lhs, const NumExprPtr rhs);
+BoolExprPtr operator<(const NumExprPtr lhs, const NumExprPtr rhs);
+BoolExprPtr operator>(const NumExprPtr lhs, const NumExprPtr rhs);
+BoolExprPtr operator<=(const NumExprPtr lhs, const NumExprPtr rhs);
+BoolExprPtr operator>=(const NumExprPtr lhs, const NumExprPtr rhs);
+
+// Logical operators.
+BoolExprPtr operator&&(const BoolExprPtr lhs, const BoolExprPtr rhs);
+//BoolExprPtr operator&&(bool lhs, const BoolExprPtr rhs);
+//BoolExprPtr operator&&(const BoolExprPtr lhs, bool rhs);
+BoolExprPtr operator||(const BoolExprPtr lhs, const BoolExprPtr rhs);
+//BoolExprPtr operator||(bool lhs, const BoolExprPtr rhs);
+//BoolExprPtr operator||(const BoolExprPtr lhs, bool rhs);
+BoolExprPtr operator!(const BoolExprPtr rhs);
+
+// Boundary indices.
+NumExprPtr first_index(const NumExprPtr dim);
+NumExprPtr last_index(const NumExprPtr dim);
+
+// A function to create a constant double expression.
+// Usually not needed due to operator overloading.
+NumExprPtr constNum(double rhs);
+
+//// Classes to implement parts of expressions.
+// The expressions are constructed at run-time when the
+// StencilBase::define() method is called.
+
 // The base class for all expression nodes.
 class Expr {
+
 public:
+    Expr() { }
     virtual ~Expr() { }
 
     // For visitors.
     virtual void accept(ExprVisitor* ev) =0;
     virtual void accept(ExprVisitor* ev) const;
 
-    // Check for equivalency.
-    virtual bool isSame(const Expr* other) =0;
+    // Check for expression equivalency.
+    // Does *not* check value equivalency except for
+    // constants.
+    virtual bool isSame(const Expr* other) const =0;
 
     // Return a simple string expr.
     virtual string makeStr() const;
+    virtual string makeQuotedStr() const {
+        ostringstream oss;
+        oss << "\"" << makeStr() << "\"";
+        return oss.str();
+    }
 
-    // Return number of nodes.
+    // Count and return number of nodes at and below this.
     virtual int getNumNodes() const;
 
-    // Create a deep copy of this expression.
-    virtual ExprPtr clone() const =0;
+    // Use addr of this as a unique ID for this object.
+    virtual size_t getId() const {
+        return size_t(this);
+    }
+    virtual string getIdStr() const {
+        ostringstream oss;
+        oss << this;
+        return oss.str();
+    }
+    virtual string getQuotedId() const {
+        ostringstream oss;
+        oss << "\"" << this << "\"";
+        return oss.str();
+    }
 };
-typedef vector<ExprPtr> ExprPtrVec;
 
-// A function to create a scalar double.
-// Usually not needed due to operator overloading.
-ExprPtr constGridValue(double rhs);
+// Convert pointer to the given ptr type or die w/an error.
+template<typename T> shared_ptr<T> castExpr(ExprPtr ep, const string& descrip) {
+    auto tp = dynamic_pointer_cast<T>(ep);
+    if (!tp) {
+        cerr << "error: expression '" << ep->makeStr() << "' is not a " <<
+            descrip << "." << endl;
+        exit(1);
+    }
+    return tp;
+}
 
-// Various unary operators.
-ExprPtr operator-(const ExprPtr& rhs);
+// Compare 2 expr pointers and return whether the expressions are
+// equivalent.
+bool areExprsSame(const Expr* e1, const Expr* e2);
+inline bool areExprsSame(const ExprPtr e1, const Expr* e2) {
+    return areExprsSame(e1.get(), e2);
+}
+inline bool areExprsSame(const Expr* e1, const ExprPtr e2) {
+    return areExprsSame(e1, e2.get());
+}
+inline bool areExprsSame(const ExprPtr e1, const ExprPtr e2) {
+    return areExprsSame(e1.get(), e2.get());
+}
 
-// Various binary operators.
-ExprPtr operator+(const ExprPtr& lhs, const ExprPtr& rhs);
-ExprPtr operator+(double lhs, const ExprPtr& rhs);
-ExprPtr operator+(const ExprPtr& lhs, double rhs);
-void operator+=(ExprPtr& lhs, const ExprPtr& rhs);
-void operator+=(ExprPtr& lhs, double rhs);
+// Real or int values.
+class NumExpr : public virtual Expr {
+public:
+    
+    // Get the current value.
+    // Exit with error if not known.
+    virtual double getNumVal() const {
+        cerr << "error: cannot evaluate '" << makeStr() <<
+            "' for a known numerical value.\n";
+        exit(1);
+    }
 
-ExprPtr operator-(const ExprPtr& lhs, const ExprPtr& rhs);
-ExprPtr operator-(double lhs, const ExprPtr& rhs);
-ExprPtr operator-(const ExprPtr& lhs, double rhs);
-void operator-=(ExprPtr& lhs, const ExprPtr& rhs);
-void operator-=(ExprPtr& lhs, double rhs);
+    // Get the value as an integer.
+    // Exits with error if not an integer.
+    virtual int getIntVal() const {
+        double val = getNumVal();
+        int ival = int(val);
+        if (val != double(ival)) {
+            cerr << "error: '" << makeStr() <<
+                "' does not evaluate to an integer.\n";
+            exit(1);
+        }
+        return ival;
+    }
+    
+    // Create a deep copy of this expression.
+    // For this to work properly, each derived type
+    // should also implement a deep-copy copy ctor.
+    virtual NumExprPtr clone() const =0;
+};
 
-ExprPtr operator*(const ExprPtr& lhs, const ExprPtr& rhs);
-ExprPtr operator*(double lhs, const ExprPtr& rhs);
-ExprPtr operator*(const ExprPtr& lhs, double rhs);
-void operator*=(ExprPtr& lhs, const ExprPtr& rhs);
-void operator*=(ExprPtr& lhs, double rhs);
+// Boolean values.
+class BoolExpr : public virtual Expr {
+public:
 
-ExprPtr operator/(const ExprPtr& lhs, const ExprPtr& rhs);
-ExprPtr operator/(double lhs, const ExprPtr& rhs);
-ExprPtr operator/(const ExprPtr& lhs, double rhs);
-void operator/=(ExprPtr& lhs, const ExprPtr& rhs);
-void operator/=(ExprPtr& lhs, double rhs);
+    // Get the current value.
+    // Exit with error if not known.
+    virtual bool getBoolVal() const {
+        cerr << "error: cannot evaluate '" << makeStr() <<
+            "' for a known boolean value.\n";
+        exit(1);
+    }
 
-// Use the '==' operator to define a grid value.  Difficult to use '='
-// operator because it cannot be declared as a standalone operator.  Also,
-// the '=' operator implies replacement semantics in C++, and we want to
-// represent a mathematical equality. Of course, the '==' is actually a
-// *test* for equality instead of an assertion; perhaps one could think of
-// this as similar to the argument to assert().  In theory, we could allow
-// any expression on LHS, but we don't want to solve equations.
-void operator==(GridPointPtr gpp, ExprPtr rhs);
+    // Create a deep copy of this expression.
+    // For this to work properly, each derived type
+    // should also implement a copy ctor.
+    virtual BoolExprPtr clone() const =0;
+};
 
 // A simple constant value.
 // This is an expression leaf-node.
-class ConstExpr : public Expr {
+class ConstExpr : public NumExpr {
 protected:
     double _f;
 
 public:
     ConstExpr(double f) : _f(f) { }
-    ConstExpr(const ConstExpr& rhs) : _f(rhs._f) { }
+    ConstExpr(const ConstExpr& src) : _f(src._f) { }
     virtual ~ConstExpr() { }
 
-    double getVal() const {
-        return _f;
-    }
+    double getNumVal() const { return _f; }
 
     virtual void accept(ExprVisitor* ev);
 
     // Check for equivalency.
-    virtual bool isSame(const Expr* other) {
+    virtual bool isSame(const Expr* other) const {
         auto p = dynamic_cast<const ConstExpr*>(other);
         return p && _f == p->_f;
     }
    
     // Create a deep copy of this expression.
-    virtual ExprPtr clone() const { return make_shared<ConstExpr>(*this); }
+    virtual NumExprPtr clone() const { return make_shared<ConstExpr>(*this); }
+};
+
+// Types of indices.
+enum IndexType {
+    FIRST_INDEX,
+    LAST_INDEX
+};
+
+// Begin/end of problem domain.
+// This is an expression leaf-node.
+class IndexExpr : public NumExpr {
+protected:
+    string _dirName;
+    IndexType _type;
+
+public:
+    IndexExpr(NumExprPtr dim, IndexType type);
+    IndexExpr(const IndexExpr& src) :
+        _dirName(src._dirName),
+        _type(src._type) { }
+    virtual ~IndexExpr() { }
+
+    const string& getDirName() const { return _dirName; }
+    IndexType getType() const { return _type; }
+    string getFnName() const {
+        if (_type == FIRST_INDEX)
+            return "first_index";
+        else if (_type == LAST_INDEX)
+            return "last_index";
+        else {
+            cerr << "error: internal error in IndexExpr\n";
+            exit(1);
+        }
+    }
+    virtual void accept(ExprVisitor* ev);
+
+    // Check for equivalency.
+    virtual bool isSame(const Expr* other) const {
+        auto p = dynamic_cast<const IndexExpr*>(other);
+        return p && _dirName == p->_dirName && _type == p->_type;
+    }
+   
+    // Create a deep copy of this expression.
+    virtual NumExprPtr clone() const { return make_shared<IndexExpr>(*this); }
 };
 
 // Any expression that returns a real (not from a grid).
 // This is an expression leaf-node.
-class CodeExpr : public Expr {
+class CodeExpr : public NumExpr {
 protected:
     string _code;
 
 public:
     CodeExpr(const string& code) :
         _code(code) { }
-    CodeExpr(const CodeExpr& rhs) : _code(rhs._code) { }
+    CodeExpr(const CodeExpr& src) :
+        _code(src._code) { }
     virtual ~CodeExpr() { }
 
     const string& getCode() const {
@@ -163,162 +332,230 @@ public:
     virtual void accept(ExprVisitor* ev);
 
     // Check for equivalency.
-    virtual bool isSame(const Expr* other) {
+    virtual bool isSame(const Expr* other) const {
         auto p = dynamic_cast<const CodeExpr*>(other);
         return p && _code == p->_code;
     }
 
     // Create a deep copy of this expression.
-    virtual ExprPtr clone() const { return make_shared<CodeExpr>(*this); }
+    virtual NumExprPtr clone() const { return make_shared<CodeExpr>(*this); }
 };
 
-// Base class for any unary operator.
-class UnaryExpr : public Expr {
+// Base class for any generic unary operator.
+// Still pure virtual because clone() not implemented.
+template <typename BaseT, typename ArgT>
+class UnaryExpr : public BaseT {
 protected:
-    ExprPtr _rhs;
+    ArgT _rhs;
     string _opStr;
 
 public:
-    UnaryExpr(const string& opStr, ExprPtr rhs) :
-        _rhs(rhs), _opStr(opStr) { }
-    UnaryExpr(const UnaryExpr& rhs) :
-        _rhs(rhs._rhs->clone()), _opStr(rhs._opStr) { }
-    virtual ~UnaryExpr() { }
+    UnaryExpr(const string& opStr, ArgT rhs) :
+        _rhs(rhs),
+        _opStr(opStr) { }
+    UnaryExpr(const UnaryExpr& src) :
+        _rhs(src._rhs->clone()),
+        _opStr(src._opStr) { }
 
-    ExprPtr& getRhs() { return _rhs; }
-    const ExprPtr& getRhs() const { return _rhs; }
+    ArgT& getRhs() { return _rhs; }
+    const ArgT& getRhs() const { return _rhs; }
     const string& getOpStr() const { return _opStr; }
-    
+
     virtual void accept(ExprVisitor* ev);
 
     // Check for equivalency.
-    virtual bool isSame(const Expr* other) {
+    virtual bool isSame(const Expr* other) const {
         auto p = dynamic_cast<const UnaryExpr*>(other);
         return p && _opStr == p->_opStr &&
             _rhs->isSame(p->_rhs.get());
     }
-
-    // Create a deep copy of this expression.
-    virtual ExprPtr clone() const { return make_shared<UnaryExpr>(*this); }
 };
 
-// A negation.
-class NegExpr : public UnaryExpr {
-public:
-    NegExpr(ExprPtr rhs) :
-        UnaryExpr(opStr(), rhs) { }
-    NegExpr(const NegExpr& rhs) :
-        UnaryExpr(rhs) { }
-    virtual ~NegExpr() { }
+// Various types of unary operators depending on input and output types.
+typedef UnaryExpr<NumExpr, NumExprPtr> UnaryNumExpr;
+typedef UnaryExpr<BoolExpr, BoolExprPtr> UnaryBoolExpr;
+typedef UnaryExpr<BoolExpr, NumExprPtr> UnaryNum2BoolExpr;
 
-    static string opStr() {
-        return "-";
+// Negate operator.
+class NegExpr : public UnaryNumExpr {
+    public:
+    NegExpr(NumExprPtr rhs) :
+        UnaryNumExpr(opStr(), rhs) { }
+    NegExpr(const NegExpr& src) :
+        UnaryExpr(src) { }
+
+    static string opStr() { return "-"; }
+    virtual double getNumVal() const {
+        double rhs = _rhs->getNumVal();
+        return -rhs;
     }
-
-    // Create a deep copy of this expression.
-    virtual ExprPtr clone() const { return make_shared<NegExpr>(*this); }
+    virtual NumExprPtr clone() const {
+        return make_shared<NegExpr>(*this);
+    }
 };
 
-// Base class for any binary operator.
-class BinaryExpr : public UnaryExpr {
+// Boolean inverse operator.
+class NotExpr : public UnaryBoolExpr {
+    public:
+    NotExpr(BoolExprPtr rhs) :
+        UnaryBoolExpr(opStr(), rhs) { }
+    NotExpr(const NotExpr& src) :
+        UnaryBoolExpr(src) { }
+
+    static string opStr() { return "!"; }
+    virtual bool getBoolVal() const {
+        bool rhs = _rhs->getBoolVal();
+        return !rhs;
+    }
+    virtual BoolExprPtr clone() const {
+        return make_shared<NotExpr>(*this);
+    }
+};
+
+// Base class for any generic binary operator.
+// Still pure virtual because clone() not implemented.
+template <typename BaseT, typename ArgT>
+class BinaryExpr : public BaseT {
 protected:
-    ExprPtr _lhs;
+    ArgT _lhs;
 
 public:
-    BinaryExpr(ExprPtr lhs, const string& opStr, ExprPtr rhs) :
-        UnaryExpr(opStr, rhs), _lhs(lhs) { }
-    BinaryExpr(const BinaryExpr& rhs) :
-        UnaryExpr(rhs._opStr, rhs._rhs->clone()), _lhs(rhs._lhs->clone()) { }  
-    virtual ~BinaryExpr() { }
+    BinaryExpr(ArgT lhs, const string& opStr, ArgT rhs) :
+        BaseT(opStr, rhs),
+        _lhs(lhs) { }
+    BinaryExpr(const BinaryExpr& src) :
+        BaseT(src._opStr, src._rhs->clone()),
+        _lhs(src._lhs->clone()) { }  
 
-    ExprPtr& getLhs() { return _lhs; }
-    const ExprPtr& getLhs() const { return _lhs; }
-
+    ArgT& getLhs() { return _lhs; }
+    const ArgT& getLhs() const { return _lhs; }
     virtual void accept(ExprVisitor* ev);
 
     // Check for equivalency.
-    virtual bool isSame(const Expr* other) {
+    virtual bool isSame(const Expr* other) const {
         auto p = dynamic_cast<const BinaryExpr*>(other);
-        return p && _opStr == p->_opStr &&
+        return p && BaseT::_opStr == p->_opStr &&
             _lhs->isSame(p->_lhs.get()) &&
-            _rhs->isSame(p->_rhs.get());
+            BaseT::_rhs->isSame(p->_rhs.get());
     }
-
-    // Create a deep copy of this expression.
-    virtual ExprPtr clone() const { return make_shared<BinaryExpr>(*this); }
 };
 
-// Subtraction operator.
-class SubExpr : public BinaryExpr {
-public:
-    SubExpr(ExprPtr lhs, ExprPtr rhs) :
-        BinaryExpr(lhs, opStr(), rhs) { }
-    SubExpr(const SubExpr& rhs) :
-        BinaryExpr(rhs) { }
-    virtual ~SubExpr() { }
+// Various types of binary operators depending on input and output types.
+typedef BinaryExpr<UnaryNumExpr, NumExprPtr> BinaryNumExpr; // fn(num, num) -> num.
+typedef BinaryExpr<UnaryNum2BoolExpr, NumExprPtr> BinaryNum2BoolExpr; // fn(num, num) -> bool.
+typedef BinaryExpr<UnaryBoolExpr, BoolExprPtr> BinaryBoolExpr; // fn(bool, bool) -> bool.
 
-    static string opStr() {
-        return "-";
+// Numerical binary operators.
+// TODO: redo this with a template.
+#define BIN_NUM_EXPR(type, opstr, oper)                                 \
+    class type : public BinaryNumExpr {                                 \
+    public:                                                             \
+    type(NumExprPtr lhs, NumExprPtr rhs) :                              \
+        BinaryNumExpr(lhs, opStr(), rhs) { }                            \
+    type(const type& src) :                                             \
+        BinaryNumExpr(src) { }                                          \
+    static string opStr() { return opstr; }                             \
+    virtual double getNumVal() const {                                  \
+        double lhs = _lhs->getNumVal();                                 \
+        double rhs = _rhs->getNumVal();                                 \
+        return oper;                                                    \
+    }                                                                   \
+    virtual NumExprPtr clone() const {                                  \
+        return make_shared<type>(*this);                                \
+    }                                                                   \
     }
+BIN_NUM_EXPR(SubExpr, "-", lhs - rhs);
+BIN_NUM_EXPR(DivExpr, "/", lhs / rhs); // TODO: add check for div-by-0.
+#undef BIN_NUM_EXPR
 
-    // Create a deep copy of this expression.
-    virtual ExprPtr clone() const { return make_shared<SubExpr>(*this); }
-};
-
-// Division operator.
-class DivExpr : public BinaryExpr {
-public:
-    DivExpr(ExprPtr lhs, ExprPtr rhs) :
-        BinaryExpr(lhs, opStr(), rhs) { }
-    DivExpr(const DivExpr& rhs) :
-        BinaryExpr(rhs) { }
-    virtual ~DivExpr() { }
-
-    static string opStr() {
-        return "/";
+// Boolean binary operators with numerical inputs.
+// TODO: redo this with a template.
+#define BIN_NUM2BOOL_EXPR(type, opstr, oper)                            \
+    class type : public BinaryNum2BoolExpr {                            \
+    public:                                                             \
+    type(NumExprPtr lhs, NumExprPtr rhs) :                              \
+        BinaryNum2BoolExpr(lhs, opStr(), rhs) { }                       \
+    type(const type& src) :                                             \
+        BinaryNum2BoolExpr(src) { }                                     \
+    static string opStr() { return opstr; }                             \
+    virtual bool getBoolVal() const {                                   \
+        double lhs = _lhs->getNumVal();                                 \
+        double rhs = _rhs->getNumVal();                                 \
+        return oper;                                                    \
+    }                                                                   \
+    virtual BoolExprPtr clone() const {                                 \
+        return make_shared<type>(*this);                                \
+    }                                                                   \
     }
+BIN_NUM2BOOL_EXPR(IsEqualExpr, "==", lhs == rhs);
+BIN_NUM2BOOL_EXPR(NotEqualExpr, "!=", lhs != rhs);
+BIN_NUM2BOOL_EXPR(IsLessExpr, "<", lhs < rhs);
+BIN_NUM2BOOL_EXPR(NotLessExpr, ">=", lhs >= rhs);
+BIN_NUM2BOOL_EXPR(IsGreaterExpr, ">", lhs > rhs);
+BIN_NUM2BOOL_EXPR(NotGreaterExpr, "<=", lhs <= rhs);
+#undef BIN_NUM2BOOL_EXPR
 
-    // Create a deep copy of this expression.
-    virtual ExprPtr clone() const { return make_shared<DivExpr>(*this); }
-};
+// Boolean binary operators with boolean inputs.
+// TODO: redo this with a template.
+#define BIN_BOOL_EXPR(type, opstr, oper)                           \
+    class type : public BinaryBoolExpr {                           \
+    public:                                                             \
+    type(BoolExprPtr lhs, BoolExprPtr rhs) :                            \
+        BinaryBoolExpr(lhs, opStr(), rhs) { }                           \
+    type(const type& src) :                                             \
+        BinaryBoolExpr(src) { }                                         \
+    static string opStr() { return opstr; }                             \
+    virtual bool getBoolVal() const {                                   \
+        bool lhs = _lhs->getBoolVal();                                  \
+        bool rhs = _rhs->getBoolVal();                                  \
+        return oper;                                                    \
+    }                                                                   \
+    virtual BoolExprPtr clone() const {                                 \
+        return make_shared<type>(*this);                                \
+    }                                                                   \
+    }
+BIN_BOOL_EXPR(AndExpr, "&&", lhs && rhs);
+BIN_BOOL_EXPR(OrExpr, "||", lhs || rhs);
+#undef BIN_BOOL_EXPR
 
 // A list of exprs with a common operator that can be rearranged,
 // e.g., 'a * b * c' or 'a + b + c'.
-class CommutativeExpr : public Expr {
+// Still pure virtual because clone() not implemented.
+class CommutativeExpr : public NumExpr {
 protected:
-    ExprPtrVec _ops;
+    NumExprPtrVec _ops;
     string _opStr;
 
 public:
     CommutativeExpr(const string& opStr) :
         _opStr(opStr) {
     }
-    CommutativeExpr(ExprPtr lhs, const string& opStr, ExprPtr rhs) :
+    CommutativeExpr(NumExprPtr lhs, const string& opStr, NumExprPtr rhs) :
         _opStr(opStr) {
         _ops.push_back(lhs->clone());
         _ops.push_back(rhs->clone());
     }
-    CommutativeExpr(const CommutativeExpr& rhs) :
-        _opStr(rhs._opStr) {
-        for(auto op : rhs._ops)
+    CommutativeExpr(const CommutativeExpr& src) :
+        _opStr(src._opStr) {
+        for(auto op : src._ops)
             _ops.push_back(op->clone());
     }
     virtual ~CommutativeExpr() { }
 
     // Accessors.
-    ExprPtrVec& getOps() { return _ops; }
-    const ExprPtrVec& getOps() const { return _ops; }
+    NumExprPtrVec& getOps() { return _ops; }
+    const NumExprPtrVec& getOps() const { return _ops; }
     const string& getOpStr() const { return _opStr; }
 
     // Clone and add an operand.
-    virtual void appendOp(ExprPtr op) {
+    virtual void appendOp(NumExprPtr op) {
         _ops.push_back(op->clone());
     }
 
     // If op is another CommutativeExpr with the
     // same operator, add its operands to this.
     // Otherwise, just clone and add the whole op.
-    virtual void mergeExpr(ExprPtr op) {
+    virtual void mergeExpr(NumExprPtr op) {
         auto opp = dynamic_pointer_cast<CommutativeExpr>(op);
         if (opp && opp->getOpStr() == _opStr) {
             for(auto op2 : opp->_ops)
@@ -337,51 +574,84 @@ public:
     virtual void accept(ExprVisitor* ev);
 
     // Check for equivalency.
-    virtual bool isSame(const Expr* other);
-
-    // Create a deep copy of this expression.
-    virtual ExprPtr clone() const { return make_shared<CommutativeExpr>(*this); }
+    virtual bool isSame(const Expr* other) const;
 };
 
-// One or more addition operators.
-class AddExpr : public CommutativeExpr {
-public:
-    AddExpr()  :
-        CommutativeExpr(opStr()) { }
-    AddExpr(ExprPtr lhs, ExprPtr rhs) :
-        CommutativeExpr(lhs, opStr(), rhs) { }
-    AddExpr(const AddExpr& rhs) : CommutativeExpr(rhs) { }
-    virtual ~AddExpr() { }
+// Commutative operators.
+// TODO: redo this with a template.
+#define COMM_EXPR(type, opstr, baseVal, oper)                           \
+    class type : public CommutativeExpr {                               \
+    public:                                                             \
+    type()  :                                                           \
+        CommutativeExpr(opStr()) { }                                    \
+    type(NumExprPtr lhs, NumExprPtr rhs) :                              \
+        CommutativeExpr(lhs, opStr(), rhs) { }                          \
+    type(const type& src) :                                             \
+        CommutativeExpr(src) { }                                        \
+    virtual ~type() { }                                                 \
+    static string opStr() { return opstr; }                             \
+    virtual double getNumVal() const {                                  \
+        double val = baseVal;                                           \
+        for(auto op : _ops) {                                           \
+            double lhs = val;                                           \
+            double rhs = op->getNumVal();                               \
+            val = oper;                                                 \
+        }                                                               \
+        return val;                                                     \
+    }                                                                   \
+    virtual NumExprPtr clone() const { return make_shared<type>(*this); }  \
+}
+COMM_EXPR(MultExpr, "*", 1.0, lhs * rhs);
+COMM_EXPR(AddExpr, "+", 0.0, lhs + rhs);
+#undef COMM_EXPR
 
-    static string opStr() {
-        return "+";
-    }
-  
-    // Create a deep copy of this expression.
-    virtual ExprPtr clone() const { return make_shared<AddExpr>(*this); } 
-};
+// A tuple expression.
+// This is an expression leaf-node.
+class IntTupleExpr : public NumExpr, public IntTuple {
 
-// One or more multiplication operators.
-class MultExpr : public CommutativeExpr {
 public:
-    MultExpr()  :
-        CommutativeExpr(opStr()) { }
-    MultExpr(ExprPtr lhs, ExprPtr rhs) :
-        CommutativeExpr(lhs, opStr(), rhs) { }
-    MultExpr(const MultExpr& rhs) : CommutativeExpr(rhs) { }
-    virtual ~MultExpr() { }
+    IntTupleExpr(const IntTuple& tuple) :
+        IntTuple(tuple) { }
+    IntTupleExpr(const IntTupleExpr& src) :
+        IntTuple(src) { }
+    IntTupleExpr(const IntTupleExprPtr src) :
+        IntTuple(*src) { }
     
-    static string opStr() {
-        return "*";
+    virtual ~IntTupleExpr() { }
+
+    virtual double getNumVal() const {
+        return double(getDirVal());
+    }
+    virtual int getIntVal() const {
+        return getDirVal();
     }
 
+    // Some comparisons.
+    bool operator==(const IntTupleExpr& rhs) const {
+        return IntTuple::operator==(rhs);
+    }
+    bool operator<(const IntTupleExpr& rhs) const {
+        return IntTuple::operator<(rhs);
+    }
+
+    // Take ev to each value.
+    virtual void accept(ExprVisitor* ev);
+
+    // Check for equivalency.
+    virtual bool isSame(const Expr* other) const {
+        auto p = dynamic_cast<const IntTupleExpr*>(other);
+
+        // Only compare dimensions, not values.
+        return p && areDimsSame(*p);
+    }
+    
     // Create a deep copy of this expression.
-    virtual ExprPtr clone() const { return make_shared<MultExpr>(*this); } 
+    virtual NumExprPtr clone() const { return make_shared<IntTupleExpr>(*this); }
 };
 
 // One specific point in a grid.
 // This is an expression leaf-node.
-class GridPoint : public IntTuple, public Expr {
+class GridPoint : public NumExpr, public IntTuple {
 
 protected:
     Grid* _grid;          // the grid this point is from.
@@ -398,10 +668,10 @@ public:
 
     // Copy ctor.
     // Note that _grid is a shallow copy!
-    GridPoint(const GridPoint& rhs) :
-        IntTuple(rhs), _grid(rhs._grid) { }
-    GridPoint(const GridPointPtr& rhs) :
-        GridPoint(*rhs) { }
+    GridPoint(const GridPoint& src) :
+        IntTuple(src), _grid(src._grid) { }
+    GridPoint(const GridPointPtr src) :
+        GridPoint(*src) { }
 
     // Construct from another point, but change location.
     GridPoint(GridPoint* gp, const IntTuple& offsets) :
@@ -427,65 +697,108 @@ public:
     virtual void accept(ExprVisitor* ev);
 
     // Check for equivalency.
-    virtual bool isSame(const Expr* other) {
+    virtual bool isSame(const Expr* other) const {
         auto p = dynamic_cast<const GridPoint*>(other);
         return p && *this == *p;
     }
     
-    // Determine whether this is 'ahead of' rhs in given direction.
-    virtual bool isAheadOfInDir(const GridPoint& rhs, const IntTuple& dir) const;
-
     // Return a description based on this position.
+    // TODO: check whether this overload is actually needed.
     virtual string makeStr() const;
 
     // Create a deep copy of this expression,
     // except pointed-to grid is not copied.
-    virtual ExprPtr clone() const { return make_shared<GridPoint>(*this); }   
+    virtual NumExprPtr clone() const { return make_shared<GridPoint>(*this); }
+    virtual GridPointPtr cloneGridPoint() const { return make_shared<GridPoint>(*this); }
+    
+    // Determine whether this is 'ahead of' rhs in given direction.
+    virtual bool isAheadOfInDir(const GridPoint& rhs, const IntTuple& dir) const;
 };
 
-// Equality operator.
+// Equality operator for a grid point.
 // (Not inherited from BinaryExpr because LHS is special.)
-class EqualsExpr : public UnaryExpr {
+class EqualsExpr : public UnaryNumExpr {
 protected:
     GridPointPtr _lhs;
 
 public:
-    EqualsExpr(GridPointPtr lhs, ExprPtr rhs) :
-        UnaryExpr(opStr(), rhs), _lhs(lhs) { }
-    EqualsExpr(const EqualsExpr& rhs) :
-        UnaryExpr(rhs) {
-        _lhs = make_shared<GridPoint>(rhs._lhs);
-    }
-    virtual ~EqualsExpr() { }
+    EqualsExpr(GridPointPtr lhs, NumExprPtr rhs) :
+        UnaryNumExpr(opStr(), rhs),
+        _lhs(lhs) { }
+    EqualsExpr(const EqualsExpr& src) :
+        UnaryNumExpr(src),
+        _lhs(src._lhs->cloneGridPoint()) { }
 
     GridPointPtr& getLhs() { return _lhs; }
     const GridPointPtr& getLhs() const { return _lhs; }
-
-    static string opStr() {
-        return "=="; 
-    }
-
+    static string opStr() { return "=="; }
     virtual void accept(ExprVisitor* ev);
 
     // Check for equivalency.
-    virtual bool isSame(const Expr* other);
+    virtual bool isSame(const Expr* other) const;
 
     // Create a deep copy of this expression.
-    virtual ExprPtr clone() const { return make_shared<EqualsExpr>(*this); }
+    virtual NumExprPtr clone() const { return make_shared<EqualsExpr>(*this); }
+    virtual EqualsExprPtr cloneEquals() const { return make_shared<EqualsExpr>(*this); }
 };
+
+// Conditional operator.
+// (Not inherited from BinaryExpr because LHS is special.)
+// Condition (RHS) will be NULL if there is no condition.
+class IfExpr : public UnaryBoolExpr {
+protected:
+    EqualsExprPtr _expr;
+
+public:
+    IfExpr(EqualsExprPtr expr, const BoolExprPtr cond) :
+        UnaryBoolExpr(opStr(), cond),
+        _expr(expr) { }
+    IfExpr(const IfExpr& src) :
+        UnaryBoolExpr(src),
+        _expr(src._expr->cloneEquals()) { }
+
+    EqualsExprPtr& getExpr() { return _expr; }
+    const EqualsExprPtr& getExpr() const { return _expr; }
+    BoolExprPtr& getCond() { return getRhs(); }
+    const BoolExprPtr& getCond() const { return getRhs(); }
+    static string opStr() { return "IF"; }
+    virtual void accept(ExprVisitor* ev);
+
+    // Check for equivalency.
+    virtual bool isSame(const Expr* other) const;
+
+    // Create a deep copy of this expression.
+    virtual BoolExprPtr clone() const { return make_shared<IfExpr>(*this); }
+};
+
+// A conditional evaluation.
+// We use an otherwise unneeded binary operator that has a low priority.
+// See http://en.cppreference.com/w/cpp/language/operator_precedence.
+#define IF_OPER ^=
+IfExprPtr operator IF_OPER(EqualsExprPtr expr, const BoolExprPtr cond);
+#define IF IF_OPER
 
 ///////// Grids ////////////
 
 typedef set<GridPoint> GridPointSet;
 typedef set<GridPointPtr> GridPointPtrSet;
 typedef vector<GridPoint> GridPointVec;
-typedef map<GridPoint, ExprPtr> Point2Exprs;
 
-// An index into a grid.
-// TODO: this typedef is just a placeholder; replace it
-// with a class to limit use--we don't want
-// to allow modification or conditional testing, etc.
-typedef const int GridIndex;
+// Map of expressions: key = expression, value = if-statement.
+// We use this to simplify the process of handling equations
+// that either do or do not have if-conditions.
+// NB: both key and value will contain the equality.
+// Example if there is an if-condition:
+// key: grid(t,x)==grid(t,x+1); value: grid(t,x)==grid(t,x+1) if (x>5);
+// Example if there is not an if-condition:
+// key: grid(t,x)==grid(t,x+1); value: grid(t,x)==grid(t,x+1) if NULL;
+typedef map<EqualsExprPtr, IfExprPtr> ExprMap;
+
+// A 'GridIndex' is simply a pointer to an expression.
+typedef NumExprPtr GridIndex;
+
+// A 'Condition' is simply a pointer to a binary expression.
+typedef BoolExprPtr Condition;
 
 // A class for a collection of GridPoints.
 // Dims in the IntTuple describe the grid or param.
@@ -505,8 +818,8 @@ protected:
     // specific points that have been created in this grid.
     GridPointPtrSet _points;
 
-    // equation(s) describing how values in this grid are computed.
-    Point2Exprs _exprs;
+    // eqGroup(s) describing how values in this grid are computed.
+    ExprMap _exprs;
 
     // Add a new point if needed and return pointer to it.
     // If it already exists, just return pointer.
@@ -532,36 +845,32 @@ public:
     GridPointPtrSet& getPoints() { return _points; }
 
     // Expression accessors.
-    // gpp points to LHS grid point.
-    // ep points to EqualsExpr.
-    virtual void addExpr(GridPointPtr gpp, ExprPtr ep) {
-        _exprs[*gpp] = ep;
+    virtual void addExpr(EqualsExprPtr ep, IfExprPtr cond) {
+        _exprs[ep] = cond;
     }
-    virtual const Point2Exprs& getExprs() const {
+    virtual const ExprMap& getExprs() const {
         return _exprs;
     }
-    virtual Point2Exprs& getExprs() {
+    virtual ExprMap& getExprs() {
         return _exprs;
-    }
-    
-    // Visit all expressions, if any are defined.
-    virtual void acceptToAll(ExprVisitor* ev) {
-        for (auto i : _exprs) {
-            auto ep = i.second;
-            ep->accept(ev);
-        }
-    }
-    
-    // Visit only first expression, if it is defined.
-    virtual void acceptToFirst(ExprVisitor* ev) {
-        for (auto i : _exprs) {
-            auto ep = i.second;
-            ep->accept(ev);
-            break;
-        }
     }
 
-    // Create an expression to a specific point in the grid.
+    // Remove expressions and points.
+    virtual void clearTemp() {
+        _points.clear();
+        _exprs.clear();
+    }
+
+#if 0
+    // Visit all if-statements, if any are defined.
+    virtual void visitExprs(ExprVisitor* ev) {
+        for (auto i : _exprs) {
+            i.second->accept(ev);
+        }
+    }
+#endif
+    
+    // Create an expression to a specific point in this grid.
     // Note that this doesn't actually 'read' or 'write' a value;
     // it's just a node in an expression.
     virtual GridPointPtr makePoint(int count, ...) {
@@ -588,7 +897,7 @@ public:
     }
 
     // Convenience functions for zero dimensions (scalar).
-    virtual operator ExprPtr() { // implicit conversion.
+    virtual operator NumExprPtr() { // implicit conversion.
         return makePoint(0);
     }
     virtual operator GridPointPtr() { // implicit conversion.
@@ -599,11 +908,19 @@ public:
     }
 
     // Convenience functions for one dimension (array).
+    // TODO: separate out ExprPtr varieties for Grid
+    // and int varieties for Param.
     virtual GridPointPtr operator[](int i1) {
         return makePoint(1, i1);
     }
     virtual GridPointPtr operator()(int i1) {
         return makePoint(1, i1);
+    }
+    virtual GridPointPtr operator[](const NumExprPtr i1) {
+        return makePoint(1, i1->getIntVal());
+    }
+    virtual GridPointPtr operator()(const NumExprPtr i1) {
+        return makePoint(1, i1->getIntVal());
     }
 
     // Convenience functions for more dimensions.
@@ -622,6 +939,33 @@ public:
     virtual GridPointPtr operator()(int i1, int i2, int i3, int i4, int i5, int i6) {
         return makePoint(6, i1, i2, i3, i4, i5, i6);
     }
+    virtual GridPointPtr operator()(const NumExprPtr i1, const NumExprPtr i2) {
+        return makePoint(2, i1->getIntVal(), i2->getIntVal());
+    }
+    virtual GridPointPtr operator()(const NumExprPtr i1, const NumExprPtr i2,
+                                    const NumExprPtr i3) {
+        return makePoint(3, i1->getIntVal(), i2->getIntVal(),
+                         i3->getIntVal());
+    }
+    virtual GridPointPtr operator()(const NumExprPtr i1, const NumExprPtr i2,
+                                    const NumExprPtr i3, const NumExprPtr i4) {
+        return makePoint(4, i1->getIntVal(), i2->getIntVal(),
+                         i3->getIntVal(), i4->getIntVal());
+    }
+    virtual GridPointPtr operator()(const NumExprPtr i1, const NumExprPtr i2,
+                                    const NumExprPtr i3, const NumExprPtr i4,
+                                    const NumExprPtr i5) {
+        return makePoint(5, i1->getIntVal(), i2->getIntVal(),
+                         i3->getIntVal(), i4->getIntVal(),
+                         i5->getIntVal());
+    }
+    virtual GridPointPtr operator()(const NumExprPtr i1, const NumExprPtr i2,
+                                    const NumExprPtr i3, const NumExprPtr i4,
+                                    const NumExprPtr i5, const NumExprPtr i6) {
+        return makePoint(6, i1->getIntVal(), i2->getIntVal(),
+                         i3->getIntVal(), i4->getIntVal(),
+                         i5->getIntVal(), i6->getIntVal());
+    }
 };
 
 // A list of grids.  This holds pointers to grids defined by the stencil
@@ -630,11 +974,10 @@ class Grids : public vector<Grid*> {
     
 public:
 
+#if 0
     // Visit all expressions in all grids.
-    virtual void acceptToAll(ExprVisitor* ev);
-
-    // Visit first expression in each grid.
-    virtual void acceptToFirst(ExprVisitor* ev);
+    virtual void visitExprs(ExprVisitor* ev);
+#endif
 
     // Add a grid.
     virtual void add(Grid* ngp) {
@@ -652,7 +995,11 @@ public:
         push_back(ngp);
     }
 
-    
+    // Remove expressions and points in grids.
+    virtual void clearTemp() {
+        for (auto gp : *this)
+            gp->clearTemp();
+    }    
 };
 
 // Aliases for parameters.
@@ -661,50 +1008,95 @@ public:
 typedef Grid Param;
 typedef Grids Params;
 
-// A named equation and the grids updated by it.
-struct Equation {
-    string name;
-    Grids grids;
+// A named equation group, which contains one or more grid-update equations.
+// Equations should not have inter-dependencies because they will be
+// combined into a single expression.  TODO: make this a proper class, e.g.,
+// encapsulate the fields.
+typedef set<EqualsExprPtr> ExprSet;
+struct EqGroup {
+    string baseName;            // base name of this eqGroup.
+    int index;                  // index to distinguish repeated names.
+    BoolExprPtr cond;           // condition (default is null).
+    ExprSet exprs;              // expressions in this eqGroup.
+    set<Grid*> grids;           // grids updated by this eqGroup.
+
+    // Visit all the expressions.
+    virtual void visitExprs(ExprVisitor* ev) {
+        for (auto& ep : exprs)
+            ep->accept(ev);
+    }
+
+    // Visit the condition.
+    // Return true if there was one to visit.
+    virtual bool visitCond(ExprVisitor* ev) {
+        if (cond.get()) {
+            cond->accept(ev);
+            return true;
+        }
+        return false;
+    }
+
+    // Get the full name.
+    virtual string getName() const;
+
+    // Print stats for the equation(s) in this group.
+    virtual void printStats(ostream& os, const string& msg);
 };
 
-// Equations:
-class Equations : public vector<Equation> {
+// Container for equation groups.
+class EqGroups : public vector<EqGroup> {
 protected:
-    set<Grid*> _eqGrids;        // all grids with equations.
-    
-public:
-    Equations() {}
-    virtual ~Equations() {}
+    set<Grid*> _eqGrids;        // all grids updated.
 
-    // Separate a set of grids into equations based
+    // Add expressions from a grid to group(s) named groupName.
+    // Returns whether a new group was created.
+    virtual bool addExprsFromGrid(const string& groupName,
+                                  map<string, int>& indices,
+                                  Grid* gp);
+
+public:
+    EqGroups() {}
+    virtual ~EqGroups() {}
+
+    // Separate a set of grids into eqGroups based
     // on the target string.
     // Target string is a comma-separated list of key-value pairs, e.g.,
-    // "equation1=foo,equation2=bar".
-    // In this example, all grids with names containing 'foo' go in equation1,
-    // all grids with names containing 'bar' go in equation2, and
-    // each remaining grid goes in a equation named after the grid.
-    // Only grids with equations are put in equations.
-    void findEquations(Grids& allGrids, const string& targets);
+    // "eqGroup1=foo,eqGroup2=bar".
+    // In this example, all grids with names containing 'foo' go in eqGroup1,
+    // all grids with names containing 'bar' go in eqGroup2, and
+    // each remaining grid goes in a eqGroup named after the grid.
+    // Only grids with eqGroups are put in eqGroups.
+    void findEqGroups(Grids& allGrids, const string& targets);
 
     const set<Grid*>& getEqGrids() const { return _eqGrids; }
+
+    // Visit all the expressions in all eqGroups.
+    virtual void visitExprs(ExprVisitor* ev) {
+        for (auto& ep : *this)
+            ep.visitExprs(ev);
+    }
     
+    // Print a list of eqGroups.
     virtual void printInfo(ostream& os) const {
-        os << "Identified stencil equations:" << endl;
+        os << "Identified stencil eqGroups:" << endl;
         for (auto& eq : *this) {
             for (auto gp : eq.grids) {
-                os << "  Equation '" << eq.name << "' updates grid '" <<
+                string eqName = eq.getName();
+                os << "  Equation group '" << eqName << "' updates grid '" <<
                     gp->getName() << "'." << endl;
             }
         }
     }
 
-    virtual void printStats(ostream& os, const string& msg, bool visitAll);
+    // Print stats for the equation(s) in all groups.
+    virtual void printStats(ostream& os, const string& msg);
 };
 
 // Stencil dimensions.
 struct Dimensions {
-    IntTuple _dimCounts;        // all dimensions.
-    string _stepDim;            // step dim.
+    IntTuple _allDims;                      // all dims with zero value.
+    IntTuple _dimCounts;                    // how many grids use each dim.
+    string _stepDim;                        // step dim.
     IntTuple _foldLengths, _clusterLengths; // dims in folds/clusters.
     IntTuple _miscDims;                     // all other dims.
 
@@ -718,9 +1110,7 @@ struct Dimensions {
 };
 
 // A 'GridValue' is simply a pointer to an expression.
-// So, operations on a GridValue will create an AST, i.e.,
-// it will not evaluate the value.
-typedef ExprPtr GridValue;
+typedef NumExprPtr GridValue;
 
 // Convenience macros for initializing grids in stencil ctors.
 // Each names the grid according to the 'gvar' parameter and adds it
@@ -762,7 +1152,7 @@ typedef ExprPtr GridValue;
 
 // Convenience macro for getting one offset from the 'offsets' tuple.
 #define GET_OFFSET(ovar)                         \
-    GridIndex ovar = offsets.getVal(#ovar)
+    NumExprPtr ovar = make_shared<IntTupleExpr>(offsets.getDirInDim(#ovar))
  
  
 // Use SET_VALUE_FROM_EXPR for creating a string to insert any C++ code

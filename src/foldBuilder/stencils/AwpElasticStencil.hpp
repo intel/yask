@@ -81,14 +81,14 @@ public:
     }
 
     // Adjustment for sponge layer.
-    void adjust_for_sponge(GridValue& next_vel_x, GridIndex x, GridIndex y, GridIndex z) {
+    void adjust_for_sponge(GridValue& val, GridIndex x, GridIndex y, GridIndex z) {
 
         // TODO: It may be more efficient to skip processing interior nodes
         // because their sponge coefficients are 1.0.  But this would
         // necessitate handling conditionals. The branch mispredictions may
         // cost more than the overhead of the extra loads and multiplies.
 
-        next_vel_x *= sponge(x, y, z);
+        val *= sponge(x, y, z);
     }
 
     // Velocity-grid define functions.  For each D in x, y, z, define vel_D
@@ -152,6 +152,42 @@ public:
         vel_z(t+1, x, y, z) == next_vel_z;
     }
 
+    // Free-surface boundary equations.
+    void define_free_surface_vel(GridIndex t, GridIndex x, GridIndex y, GridIndex z) {
+
+        // When z is first value beyond last z index (in halo).
+        Condition at_lastz_plus1 = 
+            x >= first_index(x) && x <= last_index(x) &&
+            y >= first_index(y) && y <= last_index(y) &&
+            z == last_index(z) + 1;
+
+        // Z indices when z == lastz+1;
+        GridIndex lastz_plus1 = z;
+        GridIndex lastz = z-1;
+
+        GridValue d_x_val = vel_x(t+1, x+1, y, lastz) -
+            (vel_z(t+1, x+1, y, lastz) - vel_z(t+1, x, y, lastz));
+        GridValue d_y_val = vel_y(t+1, x, y-1, lastz) -
+            (vel_z(t+1, x, y, lastz) - vel_z(t+1, x, y-1, lastz));
+        
+        GridValue plus1_vel_x = vel_x(t+1, x, y, lastz) -
+            (vel_z(t+1, x, y, lastz) - vel_z(t+1, x-1, y, lastz));
+        GridValue plus1_vel_y = vel_y(t+1, x, y, lastz) -
+            (vel_z(t+1, x, y+1, lastz) - vel_z(t+1, x, y, lastz));
+        GridValue plus1_vel_z = vel_z(t+1, x, y, lastz) -
+            ((d_x_val - plus1_vel_x) +
+             (vel_x(t+1, x+1, y, lastz) - vel_x(t+1, x, y, lastz)) +
+             (plus1_vel_y - d_y_val) +
+             (vel_y(t+1, x, y, lastz) - vel_y(t+1, x, y-1, lastz))) /
+            ((mu(x, y, lastz) *
+              (2.0 / mu(x, y, lastz) + 1.0 / lambda(x, y, lastz))));
+
+        // Define equivalencies to be valid only when z == lastz+1;
+        vel_x(t+1, x, y, lastz_plus1) == plus1_vel_x IF at_lastz_plus1;
+        vel_y(t+1, x, y, lastz_plus1) == plus1_vel_y IF at_lastz_plus1;
+        vel_z(t+1, x, y, lastz_plus1) == plus1_vel_z IF at_lastz_plus1;
+    }
+    
     // Stress-grid define functions.  For each D in xx, yy, zz, xy, xz, yz,
     // define stress_D at t+1 based on stress_D at t and vel grids at t+1.
     // This implies that the velocity-grid define functions must be called
@@ -257,6 +293,69 @@ public:
         stress_yz(t+1, x, y, z) == next_stress_yz;
     }
 
+    // Free-surface boundary equations.
+    void define_free_surface_stress(GridIndex t, GridIndex x, GridIndex y, GridIndex z) {
+
+        // When z is at surface (not in halo).
+        {
+            Condition at_lastz = 
+                x >= first_index(x) && x <= last_index(x) &&
+                y >= first_index(y) && y <= last_index(y) &&
+                z == last_index(z);
+
+            // Z indices when z == lastz;
+            GridIndex lastz = z;
+
+            // Define equivalencies to be valid only when z == lastz;
+            stress_xz(t+1, x, y, lastz) == constNum(0.0) IF at_lastz;
+            stress_yz(t+1, x, y, lastz) == constNum(0.0) IF at_lastz;
+        }
+
+        // When z is 1st value beyond last z index (in halo).
+        {
+            Condition at_lastz_plus1 = 
+                x >= first_index(x) && x <= last_index(x) &&
+                y >= first_index(y) && y <= last_index(y) &&
+                z == last_index(z) + 1;
+
+            // Z indices when z == lastz+1;
+            GridIndex lastz_plus1 = z;
+            GridIndex lastz = z-1;
+            GridIndex lastz_minus1 = z-2;
+
+            // Define equivalencies to be valid only when z == lastz+1;
+            stress_zz(t+1, x, y, lastz_plus1) == -stress_zz(t+1, x, y, lastz)
+                IF at_lastz_plus1;
+            stress_xz(t+1, x, y, lastz_plus1) == -stress_xz(t+1, x, y, lastz_minus1)
+                IF at_lastz_plus1;
+            stress_yz(t+1, x, y, lastz_plus1) == -stress_yz(t+1, x, y, lastz_minus1)
+                IF at_lastz_plus1;
+        }
+        
+        // When z is 2nd value beyond last z index (in halo).
+        {
+            Condition at_lastz_plus2 = 
+                x >= first_index(x) && x <= last_index(x) &&
+                y >= first_index(y) && y <= last_index(y) &&
+                z == last_index(z) + 2;
+
+            // Z indices when z == lastz+2;
+            GridIndex lastz_plus2 = z;
+            GridIndex lastz_plus1 = z-1;
+            GridIndex lastz = z-2;
+            GridIndex lastz_minus1 = z-3;
+            GridIndex lastz_minus2 = z-4;
+
+            // Define equivalencies to be valid only when z == lastz+2;
+            stress_zz(t+1, x, y, lastz_plus2) == -stress_zz(t+1, x, y, lastz_minus1)
+                IF at_lastz_plus2;
+            stress_xz(t+1, x, y, lastz_plus2) == -stress_zz(t+1, x, y, lastz_minus2)
+                IF at_lastz_plus2;
+            stress_yz(t+1, x, y, lastz_plus2) == -stress_yz(t+1, x, y, lastz_minus2)
+                IF at_lastz_plus2;
+        }
+    }
+    
     // Call all the define_* functions.
     virtual void define(const IntTuple& offsets) {
         GET_OFFSET(t);
@@ -305,6 +404,10 @@ public:
         define_stress_xy(t, x, y, z);
         define_stress_xz(t, x, y, z);
         define_stress_yz(t, x, y, z);
+
+        // Boundary conditions.
+        define_free_surface_vel(t, x, y, z);
+        define_free_surface_stress(t, x, y, z);
     }
 };
 

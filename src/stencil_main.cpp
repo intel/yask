@@ -176,7 +176,7 @@ namespace yask {
             " Temporal cache blocking is not yet supported => bt == 1.\n"
             " Validation is very slow and uses 2x memory,\n"
             "  so run with very small sizes and number of time-steps.\n"
-            "  Using '-v' is shorthand for these settings: '-nw -d 64 -dt 2 -t 1',\n"
+            "  Using '-v' is shorthand for these settings: '-nw -d 64 -dt 1 -t 1',\n"
             "  which may be overridden by options *after* '-v'.\n"
             "  If validation fails, it may be due to rounding error; try building with 8-byte reals.\n"
             " The 'n' dimension only applies to stencils that use that variable.\n"
@@ -209,7 +209,7 @@ namespace yask {
                     validate = true;
                     doWarmup = false;
                     dx = dy = dz = 64;
-                    dt = 2;
+                    dt = 1;
                     num_trials = 1;
                 }
 
@@ -547,7 +547,7 @@ int main(int argc, char** argv)
         " overall-size: " << dt << '*' << tot_dn << '*' << tot_dx << '*' << tot_dy << '*' << tot_dz << endl;
     *ostr << "\nOther settings:\n"
         " num-ranks: " << nrn << '*' << nrx << '*' << nry << '*' << nrz << endl <<
-        " stencil-shape: " STENCIL_NAME << endl << 
+        " stencil-name: " STENCIL_NAME << endl << 
         " time-dim-size: " << TIME_DIM_SIZE << endl <<
         " vector-len: " << VLEN << endl <<
         " padding: " << pn << '+' << px << '+' << py << '+' << pz << endl <<
@@ -613,16 +613,19 @@ int main(int argc, char** argv)
     *ostr << "Total overall allocation in " << num_ranks << " rank(s) (bytes): " <<
         printWithPow2Multiplier(tot_nbytes) << endl;
     
-    // Stencil functions.
+    // Create stencil equations.
     idx_t scalar_fp_ops = 0;
-    STENCIL_EQUATIONS stencils;
-    idx_t num_stencils = stencils.stencils.size();
+    STENCIL_EQS stencilEqs;
+    stencilEqs.init(context);
+
+    // Equations stats.
+    idx_t num_eqGroups = stencilEqs.eqGroups.size();
     *ostr << endl;
-    *ostr << "Num stencil equations: " << num_stencils << endl <<
-        "Est FP ops per point for each equation:" << endl;
-    for (auto stencil : stencils.stencils) {
-        idx_t fpos = stencil->get_scalar_fp_ops();
-        *ostr << "  '" << stencil->get_name() << "': " << fpos << endl;
+    *ostr << "Num stencil equation-groups: " << num_eqGroups << endl <<
+        "Est FP ops per point for each equation-group:" << endl;
+    for (auto eqGroup : stencilEqs.eqGroups) {
+        idx_t fpos = eqGroup->get_scalar_fp_ops();
+        *ostr << "  '" << eqGroup->get_name() << "': " << fpos << endl;
         scalar_fp_ops += fpos;
     }
 
@@ -644,21 +647,22 @@ int main(int argc, char** argv)
     
     // Print some more stats.
     *ostr << endl <<
-        "Points to calculate in rank, per time-step and grid: " <<
+        "Points to calculate in rank, for one time-step and grid: " <<
         printWithPow10Multiplier(grid_numpts) << endl <<
-        "Points to calculate in rank, per time-step, for all grids: " <<
+        "Points to calculate in rank, for one time-step, for all grids: " <<
         printWithPow10Multiplier(grids_numpts) << endl <<
         "Points to calculate in rank, for all time-steps and grids: " <<
         printWithPow10Multiplier(grids_rank_numpts) << endl <<
-        "Points to calculate for all ranks and grids, per time-step: " <<
+        "Points to calculate for all ranks and grids, for one time-step: " <<
         printWithPow10Multiplier(tot_grids_numpts) << endl <<
         "Points to calculate overall: " <<
         printWithPow10Multiplier(tot_numpts) << endl <<
         endl << 
-        "Est FP ops per point, for all grids, per time-step: " << scalar_fp_ops << endl <<
-        "Est FP ops in rank, for all grids, per time-step: " <<
+        "Est FP ops per point, for one time-step, for all grids: " <<
+        printWithPow10Multiplier(scalar_fp_ops) << endl <<
+        "Est FP ops in rank, for one time-step, for all grids: " <<
         printWithPow10Multiplier(rank_numFpOps_1t) << endl <<
-        "Est FP ops for all ranks and grids, per time-step: " <<
+        "Est FP ops for all ranks and grids, for one time-step: " <<
         printWithPow10Multiplier(tot_numFpOps_1t) << endl <<
         "Est FP ops in rank, for all grids and time-steps: " <<
         printWithPow10Multiplier(rank_numFpOps) << endl <<
@@ -696,7 +700,7 @@ int main(int argc, char** argv)
             *ostr << "Modeling cache...\n";
 #endif
         *ostr << "Warmup of " << context.dt << " time step(s)...\n" << flush;
-        stencils.calc_rank_opt(context);
+        stencilEqs.calc_rank_opt(context);
 
 #ifdef MODEL_CACHE
         // print cache stats, then disable.
@@ -718,6 +722,7 @@ int main(int argc, char** argv)
     float best_elapsed_time=0.0f, best_pps=0.0f, best_flops=0.0f;
 
     // Performance runs.
+    string divLine = "─────────────────────────────────────";
     *ostr << "\nRunning " << num_trials << " performance trial(s) of " <<
         context.dt << " time step(s) each...\n" << flush;
     for (idx_t tr = 0; tr < num_trials; tr++) {
@@ -738,7 +743,7 @@ int main(int argc, char** argv)
         wstart = getTimeInSecs();
 
         // Actual work (must wait until all ranks are done).
-        stencils.calc_rank_opt(context);
+        stencilEqs.calc_rank_opt(context);
         MPI_Barrier(comm);
 
         // Stop timing.
@@ -749,17 +754,21 @@ int main(int argc, char** argv)
         float elapsed_time = (float)(wstop - wstart);
         float pps = float(tot_numpts)/elapsed_time;
         float flops = float(tot_numFpOps)/elapsed_time;
-        *ostr << "-----------------------------------------\n" <<
-            "time (sec):                " << printWithPow10Multiplier(elapsed_time) << endl <<
-            "throughput (points/sec):   " << printWithPow10Multiplier(pps) << endl <<
-            "throughput (est FLOPS):    " << printWithPow10Multiplier(flops) << endl;
+        *ostr << divLine << endl <<
+            "time (sec):                       " << printWithPow10Multiplier(elapsed_time) << endl <<
+            "throughput (points/sec):          " << printWithPow10Multiplier(pps) << endl;
+        if (num_eqGrids > 1)
+            *ostr <<
+                "throughput (combined-points/sec): " << printWithPow10Multiplier(pps/num_eqGrids) << endl;
+        *ostr <<
+            "throughput (est FLOPS):           " << printWithPow10Multiplier(flops) << endl;
 #ifdef USE_MPI
         *ostr <<
-            "time in halo exch (sec):   " << printWithPow10Multiplier(context.mpi_time) << endl;
+            "time in halo exch (sec):          " << printWithPow10Multiplier(context.mpi_time) << endl;
 #endif
         if (copy_in || copy_out)
             *ostr <<
-                "time in shadow copy (sec): " << printWithPow10Multiplier(context.shadow_time) << endl;
+                "time in shadow copy (sec):        " << printWithPow10Multiplier(context.shadow_time) << endl;
 
         if (pps > best_pps) {
             best_pps = pps;
@@ -768,11 +777,22 @@ int main(int argc, char** argv)
         }
     }
 
-    *ostr << "-----------------------------------------\n" <<
-        "best-time (sec):                " << printWithPow10Multiplier(best_elapsed_time) << endl <<
-        "best-throughput (points/sec):   " << printWithPow10Multiplier(best_pps) << endl <<
-        "best-throughput (est FLOPS):    " << printWithPow10Multiplier(best_flops) << endl <<
-        "-----------------------------------------\n";
+    *ostr << divLine << endl <<
+        "best-time (sec):                       " << printWithPow10Multiplier(best_elapsed_time) << endl <<
+        "best-throughput (points/sec):          " << printWithPow10Multiplier(best_pps) << endl;
+    if (num_eqGrids > 1)
+        *ostr <<
+            "best-throughput (combined-points/sec): " << printWithPow10Multiplier(best_pps/num_eqGrids) << endl;
+    *ostr <<
+        "best-throughput (est FLOPS):           " << printWithPow10Multiplier(best_flops) << endl <<
+        divLine << endl;
+    if (num_eqGrids > 1)
+        *ostr << "Note:" << endl <<
+            " The points/sec results count the updates to all " <<
+            num_eqGrids << " grids as " << num_eqGrids << " separate updates." << endl <<
+            " The combined-points/sec results count the updates to all " <<
+            num_eqGrids << " grids as one (1) update." << endl;
+    *ostr << endl;
     
     if (validate) {
         MPI_Barrier(comm);
@@ -804,7 +824,7 @@ int main(int argc, char** argv)
 #endif
 
         // Ref trial.
-        stencils.calc_rank_ref(ref);
+        stencilEqs.calc_rank_ref(ref);
 
         // check for equality.
 #ifdef USE_MPI
@@ -816,6 +836,8 @@ int main(int argc, char** argv)
             *ostr << "TEST PASSED." << endl;
         } else {
             cerr << "TEST FAILED: " << errs << " mismatch(es)." << endl;
+            if (REAL_BYTES < 8)
+                cerr << "This is not uncommon for low-precision FP; try with 8-byte reals." << endl;
             exit_yask(1);
         }
     }

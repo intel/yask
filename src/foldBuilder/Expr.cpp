@@ -29,159 +29,194 @@ IN THE SOFTWARE.
 #include "ExprUtils.hpp"
 #include "Parse.hpp"
 
-// Unary.
-ExprPtr constGridValue(double rhs) {
+// Compare 2 expr pointers and return whether the expressions are
+// equivalent.
+bool areExprsSame(const Expr* e1, const Expr* e2) {
+
+    // Handle null pointers.
+    if (e1 == NULL && e2 == NULL)
+        return true;
+    if (e1 == NULL || e2 == NULL)
+        return false;
+
+    // Neither are null, so compare contents.
+    return e1->isSame(e2);
+}
+
+// Expr functions.
+NumExprPtr constNum(double rhs) {
     return make_shared<ConstExpr>(rhs);
 }
-ExprPtr operator-(const ExprPtr& rhs) {
+NumExprPtr first_index(const NumExprPtr dim) {
+    return make_shared<IndexExpr>(dim, FIRST_INDEX);
+}
+NumExprPtr last_index(const NumExprPtr dim) {
+    return make_shared<IndexExpr>(dim, LAST_INDEX);
+}
+
+// Unary.
+NumExprPtr operator-(const NumExprPtr rhs) {
     return make_shared<NegExpr>(rhs);
+}
+BoolExprPtr operator!(const BoolExprPtr rhs) {
+    return make_shared<NotExpr>(rhs);
 }
 
 // Commutative.
-ExprPtr operator+(const ExprPtr& lhs, const ExprPtr& rhs) {
+// If one side is nothing, return other side;
+// This allows us to start with an uninitialized GridValue
+// and do the right thing.
+// Start with an empty expression.
+// If LHS is the same expr type, add its operands.
+// Othewise, add the whole expr.
+// Repeat for RHS.
+#define COMM_OPER(oper, exprtype)                          \
+    NumExprPtr operator oper(const NumExprPtr lhs,            \
+                          const NumExprPtr rhs) {          \
+        if (lhs.get() == NULL)                             \
+            return rhs;                                 \
+        else if (rhs.get() == NULL)                     \
+            return lhs;                                 \
+        auto ex = make_shared<exprtype>();              \
+        ex->mergeExpr(lhs);                             \
+        ex->mergeExpr(rhs);                             \
+        return ex;                                      \
+    }                                                   \
+    NumExprPtr operator oper(double lhs,                   \
+                          const NumExprPtr rhs) {       \
+        NumExprPtr p = make_shared<ConstExpr>(lhs);        \
+        return p oper rhs;                              \
+    }                                                   \
+    NumExprPtr operator oper(const NumExprPtr lhs,         \
+                          double rhs) {                 \
+        NumExprPtr p = make_shared<ConstExpr>(rhs);        \
+        return lhs oper p;                              \
+    }
+COMM_OPER(+, AddExpr)
+COMM_OPER(*, MultExpr)
 
-    // If one side is nothing, return other side;
-    // This allows us to add to an uninitialized GridValue
-    // and do the right thing.
-    if (lhs == NULL)
-        return rhs;
-    else if (rhs == NULL)
-        return lhs;
-
-    // Start with an empty expression.
-    auto ex = make_shared<AddExpr>();
-
-    // If LHS is also an AddExpr, add its operands.
-    // Othewise, add the whole expr.
-    ex->mergeExpr(lhs);
-
-    // If RHS is also an AddExpr, add its operands.
-    // Othewise, add the whole expr.
-    ex->mergeExpr(rhs);
-
-    return ex;
-}
-ExprPtr operator+(double lhs, const ExprPtr& rhs) {
-    ExprPtr p = make_shared<ConstExpr>(lhs);
-    return p + rhs;
-}
-ExprPtr operator+(const ExprPtr& lhs, double rhs) {
-    ExprPtr p = make_shared<ConstExpr>(rhs);
-    return lhs + p;
-}
-
-void operator+=(ExprPtr& lhs, const ExprPtr& rhs) {
+// Self-modifying versions.
+void operator+=(NumExprPtr& lhs, const NumExprPtr rhs) {
     lhs = lhs + rhs;
 }
-void operator+=(ExprPtr& lhs, double rhs) {
+void operator+=(NumExprPtr& lhs, double rhs) {
     lhs = lhs + rhs;
 }
-
-ExprPtr operator*(const ExprPtr& lhs, const ExprPtr& rhs) {
-
-    // If one side is nothing, return other side.
-    if (lhs == NULL)
-        return rhs;
-    else if (rhs == NULL)
-        return lhs;
-
-
-    // Start with an empty expression.
-    auto ex = make_shared<MultExpr>();
-
-    // If LHS is also an MultExpr, add its operands.
-    // Othewise, add the whole expr.
-    ex->mergeExpr(lhs);
-
-    // If RHS is also an MultExpr, add its operands.
-    // Othewise, add the whole expr.
-    ex->mergeExpr(rhs);
-
-    return ex;
-}
-ExprPtr operator*(double lhs, const ExprPtr& rhs) {
-    ExprPtr p = make_shared<ConstExpr>(lhs);
-    return p * rhs;
-}
-ExprPtr operator*(const ExprPtr& lhs, double rhs) {
-    ExprPtr p = make_shared<ConstExpr>(rhs);
-    return lhs * p;
-}
-
-void operator*=(ExprPtr& lhs, const ExprPtr& rhs) {
+void operator*=(NumExprPtr& lhs, const NumExprPtr rhs) {
     lhs = lhs * rhs;
 }
-void operator*=(ExprPtr& lhs, double rhs) {
+void operator*=(NumExprPtr& lhs, double rhs) {
     lhs = lhs * rhs;
 }
 
 // Binary.
-ExprPtr operator-(const ExprPtr& lhs, const ExprPtr& rhs) {
-
+NumExprPtr operator-(const NumExprPtr lhs, const NumExprPtr rhs) {
 #ifdef USE_ADD_NEG
     // Generate A + -B instead of A - B to allow easy reordering.
-    ExprPtr nrhs = make_shared<NegExpr>(rhs);
+    NumExprPtr nrhs = make_shared<NegExpr>(rhs);
     return lhs + nrhs;
 #else
     return make_shared<SubExpr>(lhs, rhs);
 #endif    
 }
-ExprPtr operator-(double lhs, const ExprPtr& rhs) {
-    ExprPtr p = make_shared<ConstExpr>(lhs);
+NumExprPtr operator-(double lhs, const NumExprPtr rhs) {
+    NumExprPtr p = make_shared<ConstExpr>(lhs);
     return p - rhs;
 }
-ExprPtr operator-(const ExprPtr& lhs, double rhs) {
-    ExprPtr p = make_shared<ConstExpr>(rhs);
+NumExprPtr operator-(const NumExprPtr lhs, double rhs) {
+    NumExprPtr p = make_shared<ConstExpr>(rhs);
     return lhs - p;
 }
 
-void operator-=(ExprPtr& lhs, const ExprPtr& rhs) {
+void operator-=(NumExprPtr& lhs, const NumExprPtr rhs) {
     lhs = lhs - rhs;
 }
-void operator-=(ExprPtr& lhs, double rhs) {
+void operator-=(NumExprPtr& lhs, double rhs) {
     lhs = lhs - rhs;
 }
 
-ExprPtr operator/(const ExprPtr& lhs, const ExprPtr& rhs) {
-
+NumExprPtr operator/(const NumExprPtr lhs, const NumExprPtr rhs) {
     return make_shared<DivExpr>(lhs, rhs);
 }
-ExprPtr operator/(double lhs, const ExprPtr& rhs) {
-    ExprPtr p = make_shared<ConstExpr>(lhs);
+NumExprPtr operator/(double lhs, const NumExprPtr rhs) {
+    NumExprPtr p = make_shared<ConstExpr>(lhs);
     return p / rhs;
 }
-ExprPtr operator/(const ExprPtr& lhs, double rhs) {
-    ExprPtr p = make_shared<ConstExpr>(rhs);
+NumExprPtr operator/(const NumExprPtr lhs, double rhs) {
+    NumExprPtr p = make_shared<ConstExpr>(rhs);
     return lhs / p;
 }
 
-void operator/=(ExprPtr& lhs, const ExprPtr& rhs) {
+void operator/=(NumExprPtr& lhs, const NumExprPtr rhs) {
     lhs = lhs / rhs;
 }
-void operator/=(ExprPtr& lhs, double rhs) {
+void operator/=(NumExprPtr& lhs, double rhs) {
     lhs = lhs / rhs;
+}
+
+BoolExprPtr operator==(const NumExprPtr lhs, const NumExprPtr rhs) {
+    return make_shared<IsEqualExpr>(lhs, rhs);
+}
+BoolExprPtr operator!=(const NumExprPtr lhs, const NumExprPtr rhs) {
+    return make_shared<NotEqualExpr>(lhs, rhs);
+}
+BoolExprPtr operator<(const NumExprPtr lhs, const NumExprPtr rhs) {
+    return make_shared<IsLessExpr>(lhs, rhs);
+}
+BoolExprPtr operator>(const NumExprPtr lhs, const NumExprPtr rhs) {
+    return make_shared<IsGreaterExpr>(lhs, rhs);
+}
+BoolExprPtr operator<=(const NumExprPtr lhs, const NumExprPtr rhs) {
+    return make_shared<NotGreaterExpr>(lhs, rhs);
+}
+BoolExprPtr operator>=(const NumExprPtr lhs, const NumExprPtr rhs) {
+    return make_shared<NotLessExpr>(lhs, rhs);
+}
+BoolExprPtr operator&&(const BoolExprPtr lhs, const BoolExprPtr rhs) {
+    return make_shared<AndExpr>(lhs, rhs);
+}
+BoolExprPtr operator||(const BoolExprPtr lhs, const BoolExprPtr rhs) {
+    return make_shared<OrExpr>(lhs, rhs);
+}
+
+// Define a conditional.
+IfExprPtr operator IF_OPER(EqualsExprPtr expr, const BoolExprPtr cond) {
+
+    // Get grid referenced by the expr.
+    auto gpp = expr->getLhs();
+    assert(gpp);
+    Grid* gp = gpp->getGrid();
+    assert(gp);
+    
+    // Make expression node.
+    auto ip = make_shared<IfExpr>(expr, cond);
+
+    // Save expr and if-statement.
+    gp->addExpr(expr, ip);
+
+    return ip;
 }
 
 // Define the value of a grid point.
 // Note that the semantics are different than the 'normal'
 // '==' operator, which tests for equality.
-void operator==(GridPointPtr gpp, ExprPtr rhs) {
-    assert(gpp != NULL);
+EqualsExprPtr operator==(GridPointPtr gpp, const NumExprPtr rhs) {
+    assert(gpp.get() != NULL);
 
     // Make sure this is a grid.
     if (gpp->isParam()) {
-        cerr << "Error: parameter '" << gpp->getName() <<
-            "' cannot appear on LHS of a grid-value equation." << endl;
+        cerr << "error: parameter '" << gpp->getName() <<
+            "' cannot appear on LHS of a grid-value eqGroup." << endl;
         exit(1);
     }
     
     // Make expression node.
-    ExprPtr p = make_shared<EqualsExpr>(gpp, rhs);
+    auto expr = make_shared<EqualsExpr>(gpp, rhs);
 
-    // Save it in the grid.
-    Grid* gp = gpp->getGrid();
-    assert(gp);
-    gp->addExpr(gpp, p);
+    // Save it with a default null condition.
+    operator IF_OPER(expr, NULL);
+
+    return expr;
 }
 
 // Visitor acceptors.
@@ -191,10 +226,28 @@ void ConstExpr::accept(ExprVisitor* ev) {
 void CodeExpr::accept(ExprVisitor* ev) {
     ev->visit(this);
 }
-void UnaryExpr::accept(ExprVisitor* ev) {
+template<>
+void UnaryNumExpr::accept(ExprVisitor* ev) {
     ev->visit(this);
 }
-void BinaryExpr::accept(ExprVisitor* ev) {
+template<>
+void UnaryBoolExpr::accept(ExprVisitor* ev) {
+    ev->visit(this);
+}
+template<>
+void UnaryNum2BoolExpr::accept(ExprVisitor* ev) {
+    ev->visit(this);
+}
+template<>
+void BinaryNumExpr::accept(ExprVisitor* ev) {
+    ev->visit(this);
+}
+template<>
+void BinaryBoolExpr::accept(ExprVisitor* ev) {
+    ev->visit(this);
+}
+template<>
+void BinaryNum2BoolExpr::accept(ExprVisitor* ev) {
     ev->visit(this);
 }
 void CommutativeExpr::accept(ExprVisitor* ev) {
@@ -203,20 +256,50 @@ void CommutativeExpr::accept(ExprVisitor* ev) {
 void GridPoint::accept(ExprVisitor* ev) {
     ev->visit(this);
 }
+void IntTupleExpr::accept(ExprVisitor* ev) {
+    ev->visit(this);
+}
 void EqualsExpr::accept(ExprVisitor* ev) {
     ev->visit(this);
 }
+void IfExpr::accept(ExprVisitor* ev) {
+    ev->visit(this);
+}
+void IndexExpr::accept(ExprVisitor* ev) {
+    ev->visit(this);
+}
+
+// Index methods.
+IndexExpr::IndexExpr(NumExprPtr dim, IndexType type) :
+    _type(type) {
+    auto dp = castExpr<IntTupleExpr>(dim, "dimension");
+    if (dp->size() != 1) {
+        cerr << "error: '" << dp->makeStr() <<
+            "'argument to '" << getFnName() <<
+            "' is not a dimension" << endl;
+        exit(1);
+    }
+    _dirName = dp->getDirName();
+}
 
 // EqualsExpr methods.
-bool EqualsExpr::isSame(const Expr* other) {
+bool EqualsExpr::isSame(const Expr* other) const {
         auto p = dynamic_cast<const EqualsExpr*>(other);
         return p && _opStr == p->_opStr &&
             _lhs->isSame(p->_lhs.get()) &&
             _rhs->isSame(p->_rhs.get());
     }
 
+// IfExpr methods.
+bool IfExpr::isSame(const Expr* other) const {
+    auto p = dynamic_cast<const IfExpr*>(other);
+    return p &&
+        areExprsSame(_expr, p->_expr) &&
+        areExprsSame(_rhs, p->_rhs);
+}
+
 // Commutative methods.
-bool CommutativeExpr::isSame(const Expr* other) {
+bool CommutativeExpr::isSame(const Expr* other) const {
     auto p = dynamic_cast<const CommutativeExpr*>(other);
     if (!p || _opStr != p->_opStr)
         return false;
@@ -251,7 +334,6 @@ bool CommutativeExpr::isSame(const Expr* other) {
     return matches.size() == _ops.size();
 }
 
-
 // GridPoint methods.
 const string& GridPoint::getName() const {
     return _grid->getName();
@@ -273,23 +355,20 @@ bool GridPoint::isAheadOfInDir(const GridPoint& rhs, const IntTuple& dir) const 
         IntTuple::isAheadOfInDir(rhs, dir);
 }
 string GridPoint::makeStr() const {
-    return _grid->getName() + "(" +
-        makeDimValOffsetStr() + ")";
+    string str = _grid->getName() + "(";
+    str += isParam() ? makeValStr() : makeDimValOffsetStr();
+    str += ")";
+    return str;
 }
 
+#if 0
 // Visit all expressions in all grids.
-void Grids::acceptToAll(ExprVisitor* ev) {
+void Grids::visitExprs(ExprVisitor* ev) {
     for (auto gp : *this) {
-        gp->acceptToAll(ev);
+        gp->visitExprs(ev);
     }
 }
-
-// Visit first expression in each grid.
-void Grids::acceptToFirst(ExprVisitor* ev) {
-    for (auto gp : *this) {
-        gp->acceptToFirst(ev);
-    }
-}
+#endif
 
 // Make a readable string from an expression.
 string Expr::makeStr() const {
@@ -300,6 +379,9 @@ string Expr::makeStr() const {
     PrintVisitorTopDown pv(oss, ph);
     accept(&pv);
 
+    // Return anything written to the stream
+    // concatenated with anything left in the
+    // PrintVisitor.
     return oss.str() + pv.getExprStr();
 }
 
@@ -318,87 +400,156 @@ void Expr::accept(ExprVisitor* ev) const {
     const_cast<Expr*>(this)->accept(ev);
 }
 
-// Separate grids into equations.
-void Equations::findEquations(Grids& allGrids, const string& targets) {
+// Get the full name.
+// Must be unique.
+string EqGroup::getName() const {
 
+    // Just use base name if no condition and zero index.
+    if (!index && !cond.get())
+        return baseName;
+
+    // Otherwise, add index to base name.
+    ostringstream oss;
+    oss << baseName << "_cond" << index;
+    return oss.str();
+}
+
+// Print stats from eqGroup.
+void EqGroup::printStats(ostream& os, const string& msg) {
+    CounterVisitor cv;
+    visitExprs(&cv);
+    cv.printStats(os, msg);
+}
+
+// Add expressions from a grid to group(s) named groupName.
+// Returns whether a new group was created.
+bool EqGroups::addExprsFromGrid(const string& groupName,
+                                map<string, int>& indices,
+                                Grid* gp) {
+
+    bool newGroup = false;
+
+    // Grid already added?
+    if (_eqGrids.count(gp))
+        return false;
+
+    // Grid has no exprs?
+    if (gp->getExprs().size() == 0)
+        return false;
+
+    // Expressions must be added in a consistent order.
+    // To do this, use a map to sort the expressions by their
+    // string representations.
+    map<string, IfExprPtr> sortedExprs;
+    for (auto& eq : gp->getExprs()) {
+        auto& ifExpr = eq.second;          // if expression.
+
+        // Key is string, which includes if-condition if not null.
+        string key = ifExpr->makeStr();
+
+        // If condition is null, add a space to beginning to make
+        // sure it sorts first.
+        if (ifExpr->getCond().get() == NULL)
+            key = ' ' + key;
+
+        // Store expression as value.
+        sortedExprs[key] = ifExpr;
+    }
+
+    // Loop through all equations in grid.
+    for (auto& i : sortedExprs) {
+        auto& ifExpr = i.second;
+        auto& expr = ifExpr->getExpr(); // expression.
+        auto& cond = ifExpr->getCond(); // condition; might be NULL.
+
+        // Look for existing group matching base-name and condition.
+        EqGroup* ep = 0;
+        for (auto& eqg : *this) {
+
+            if (eqg.baseName == groupName &&
+                areExprsSame(eqg.cond, cond)) {
+                ep = &eqg;
+                break;
+            }
+        }
+        
+        // Make new group if needed.
+        if (!ep) {
+            EqGroup ne;
+            push_back(ne);
+            ep = &back();
+            ep->baseName = groupName;
+            ep->index = indices[groupName]++;
+            ep->cond = cond;
+            newGroup = true;
+
+#if DEBUG_ADD_EXPRS
+            cerr << "Adding equation-group " << groupName <<
+                " with condition #" << ep->index << ": " <<
+                (cond.get() ? cond->makeQuotedStr() : "NULL") << endl;
+#endif
+        }
+        assert(ep);
+
+        // Add expr.
+        ep->exprs.insert(expr);
+
+        // Remember grids updated in this group.
+        ep->grids.insert(gp);
+    }
+    
+    // Remember all grids updated.
+    _eqGrids.insert(gp);
+
+    return newGroup;
+}
+
+
+// Separate expressions from grids into eqGroups.
+// TODO: do this automatically based on inter-equation dependencies.
+void EqGroups::findEqGroups(Grids& allGrids, const string& targets) {
+
+    // Map to track indices per eq-group name.
+    map<string, int> indices;
+    
     // Handle each key-value pair in targets string.
     ArgParser ap;
     ap.parseKeyValuePairs
         (targets, [&](const string& key, const string& value) {
 
-            // Search allGrids for matches.
+            // Search allGrids for matches to current value.
             for (auto gp : allGrids) {
-
-                // does the value appear in the grid name?
                 string gname = gp->getName();
+
+                // value doesn't appear in the grid name?
                 size_t np = gname.find(value);
-                if (np != string::npos) {
+                if (np == string::npos)
+                    continue;
 
-                    // Grid already added?
-                    if (_eqGrids.count(gp))
-                        continue;
-
-                    // Grid has an equation?
-                    if (gp->getExprs().size() == 0)
-                        continue;
-
-                    // Find existing equation named key.
-                    Equation* ep = 0;
-                    for (auto& eq : *this) {
-                        if (eq.name == key) {
-                            ep = &eq;
-                            break;
-                        }
-                    }
-
-                    // Add equation if needed.
-                    if (!ep) {
-                        Equation ne;
-                        push_back(ne);
-                        ep = &back();
-                        ep->name = key;
-                    }
-
-                    // Add grid to equation.
-                    assert(ep);
-                    ep->grids.push_back(gp);
-                    _eqGrids.insert(gp);
-                }
+                // Add equations.
+                addExprsFromGrid(key, indices, gp);
             }
         });
 
-    // Add all grids not already added.
+    // Add all grids not matching any values.
     for (auto gp : allGrids) {
 
-        // Grid already added?
-        if (_eqGrids.count(gp))
-            continue;
-        
-        // Grid has an equation?
-        if (gp->getExprs().size() == 0)
-            continue;
-        
-        // Make a new equation.
-        Equation ne;
-        push_back(ne);
-        Equation& eq = back();
-        
-        // It has the name of the grid and just one grid.
-        eq.name = gp->getName();
-        eq.grids.push_back(gp);
-        _eqGrids.insert(gp);
+        // Add equations.
+        string key = gp->getName();
+        addExprsFromGrid(key, indices, gp);
     }
+
+    // Now, all equations should be added to this object.
+    // Can remove them from temp storage in grids.
+    allGrids.clearTemp();
 }
 
-// Print stats from equations.
-void Equations::printStats(ostream& os, const string& msg, bool visitAll) {
+// Print stats from eqGroups.
+void EqGroups::printStats(ostream& os, const string& msg) {
     CounterVisitor cv;
     for (auto& eq : *this) {
         CounterVisitor ecv;
-        if (visitAll)
-            eq.grids.acceptToAll(&ecv);
-        else
-            eq.grids.acceptToFirst(&ecv);
+        eq.visitExprs(&ecv);
         cv += ecv;
     }
     cv.printStats(os, msg);
@@ -414,7 +565,7 @@ void Dimensions::setDims(Grids& grids,
 {
     _stepDim = stepDim;
                      
-    // Create a union of all dimensions in all grids.
+    // Create a tuple of all dimensions in all grids.
     // Also keep count of how many grids have each dim.
     // Note that dimensions won't be in any particular order!
     for (auto gp : grids) {
@@ -423,8 +574,10 @@ void Dimensions::setDims(Grids& grids,
         for (auto dim : gp->getDims()) {
             if (_dimCounts.lookup(dim))
                 _dimCounts.setVal(dim, _dimCounts.getVal(dim) + 1);
-            else
+            else {
                 _dimCounts.addDimBack(dim, 1);
+                _allDims.addDimBack(dim, 0);
+            }
         }
     }
     
@@ -503,4 +656,4 @@ void Dimensions::setDims(Grids& grids,
     os << "Cluster dimension(s) and size(s): " <<
         _clusterLengths.makeDimValStr(" * ") << endl;
     os << "Other dimension(s): " << _miscDims.makeDimStr(", ") << endl;
-}    
+}

@@ -23,7 +23,7 @@ IN THE SOFTWARE.
 
 *****************************************************************************/
 
-////////// Support for C++ scalar and vector-code generation //////////////
+////////// Support for YASK C++ scalar and vector-code generation //////////////
 
 #ifndef CPP_HPP
 #define CPP_HPP
@@ -32,7 +32,7 @@ IN THE SOFTWARE.
 
 /////////// Scalar code /////////////
 
-// Outputs a C++ compilable scalar code.
+// Outputs C++ scalar code for YASK.
 class CppPrintHelper : public PrintHelper {
 
 public:
@@ -69,6 +69,7 @@ public:
     }
     
     // Make call for a point.
+    // This is a utility function used for both reads and writes.
     virtual string makePointCall(const GridPoint& gp,
                                  const string& fname, string optArg = "") const {
         ostringstream oss;
@@ -76,7 +77,7 @@ public:
         if (optArg.length()) oss << optArg << ", ";
         oss << gp.makeDimValOffsetStr() << ", __LINE__)";
         return oss.str();
-    }        
+    }
     
     // Return a grid reference.
     virtual string readFromPoint(ostream& os, const GridPoint& gp) {
@@ -91,7 +92,7 @@ public:
 
 /////////// Vector code /////////////
 
-// Output simple C++ vector code.
+// Output generic C++ vector code for YASK.
 class CppVecPrintHelper : public VecPrintHelper {
 
 public:
@@ -124,6 +125,7 @@ protected:
     }
     
     // Print a comment about a point.
+    // This is a utility function used for both reads and writes.
     virtual void printPointComment(ostream& os, const GridPoint& gp, const string& verb) const {
 
         os << endl << " // " << verb << " " << gp.getName() << " at " <<
@@ -131,6 +133,7 @@ protected:
     }
 
     // Print call for a point.
+    // This is a utility function used for both reads and writes.
     virtual void printPointCall(ostream& os,
                                 const GridPoint& gp,
                                 const string& funcName,
@@ -291,24 +294,29 @@ public:
 struct YASKCppSettings {
     bool _allowUnalignedLoads;
     bool _hbwRW, _hbwRO;
+    int _maxExprSize, _minExprSize;
 };
 
 // Print out a stencil in C++ form for YASK.
 class YASKCppPrinter : public PrinterBase {
 protected:
+    EqGroups& _clusterEqGroups;
     Dimensions& _dims;
     YASKCppSettings& _settings;
     string _context;
 
     // Print an expression as a one-line C++ comment.
-    void addComment(ostream& os, Grids& grids) {
+    void addComment(ostream& os, EqGroup& eq) {
         
         // Use a simple human-readable visitor to create a comment.
         PrintHelper ph(0, "temp", "", " // ", ".\n");
         PrintVisitorTopDown commenter(os, ph);
-        grids.acceptToFirst(&commenter);
+        eq.visitExprs(&commenter);
     }
 
+    // A factory method to create a new PrintHelper.
+    // This can be overridden in derived classes to provide
+    // alternative PrintHelpers.
     virtual CppVecPrintHelper* newPrintHelper(VecInfoVisitor& vv,
                                               CounterVisitor& cv) {
         return new CppVecPrintHelper(vv, _settings._allowUnalignedLoads, &cv,
@@ -317,11 +325,13 @@ protected:
 
 public:
     YASKCppPrinter(StencilBase& stencil,
-                   Equations& equations,
-                   int exprSize,
+                   EqGroups& eqGroups,
+                   EqGroups& clusterEqGroups,
                    Dimensions& dims,
                    YASKCppSettings& settings) :
-        PrinterBase(stencil, equations, exprSize),
+        PrinterBase(stencil, eqGroups,
+                    settings._maxExprSize, settings._minExprSize),
+        _clusterEqGroups(clusterEqGroups),
         _dims(dims), _settings(settings)
     {
         // name of C++ struct.
