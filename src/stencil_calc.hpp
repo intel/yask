@@ -541,11 +541,9 @@ namespace yask {
 
         // Initialize some data structures.
         // Must be called after the context grids are allocated.
-        virtual void init(StencilContext& context) {
-            for (auto eqGroup : eqGroups)
-                eqGroup->init(context);
-            find_bounding_boxes(context);
-        }
+        virtual void init(StencilContext& context,
+                          idx_t* sum_points = NULL,
+                          idx_t* sum_fpops = NULL);
     
     protected:
     

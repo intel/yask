@@ -303,8 +303,41 @@ namespace yask {
         } // time.
     }
 
+    // Initialize some data structures.
+    // Must be called after the context grids are allocated.
+    void StencilEqs::init(StencilContext& context,
+                          idx_t* sum_points,
+                          idx_t* sum_fpops) {
+        for (auto eg : eqGroups)
+            eg->init(context);
+
+        if (context.bb_valid == true) return;
+        find_bounding_boxes(context);
+
+        idx_t npoints = 0, nfpops = 0;
+        ostream& os = *(context.ostr);
+        os << "Num stencil equation-groups: " << eqGroups.size() << endl;
+        for (auto eg : eqGroups) {
+            idx_t fpops1 = eg->get_scalar_fp_ops();
+            idx_t fpops_domain = fpops1 * eg->bb_size;
+            npoints += eg->bb_size;
+            nfpops += fpops_domain;
+            os << "Stats for equation-group '" << eg->get_name() << "':\n" <<
+                " sub-domain-size:          " <<
+                eg->len_bbn << '*' << eg->len_bbx << '*' << eg->len_bby << '*' << eg->len_bbz << endl <<
+                " num-points-in-sub-domain: " << printWithPow10Multiplier(eg->bb_size) << endl <<
+                " est-FP-ops-per-point:     " << fpops1 << endl <<
+                " est-FP-ops-in-sub-domain: " << printWithPow10Multiplier(fpops_domain) << endl;
+        }
+        if (sum_points)
+            *sum_points = npoints;
+        if (sum_fpops)
+            *sum_fpops = nfpops;
+    }
+    
     // Set the bounding-box vars for all eq groups.
     void StencilEqs::find_bounding_boxes(StencilContext& context) {
+        if (context.bb_valid == true) return;
 
         // Init overall BB.
         // Init min vars w/max val and vice-versa.
@@ -406,10 +439,6 @@ namespace yask {
         len_bbz = end_bbz - begin_bbz;
         bb_size = npts;
 
-        *(context.ostr) << "Domain for equation-group '" << get_name() << "':\n" <<
-            " bounding-box-size:  " << len_bbn << '*' << len_bbx << '*' << len_bby << '*' << len_bbz << endl <<
-            " num-points:  " << printWithPow10Multiplier(bb_size) << endl;
-        
         // Only supporting solid rectangles at this time.
         idx_t r_size = len_bbn * len_bbx * len_bby * len_bbz;
         if (r_size != bb_size) {
@@ -996,7 +1025,7 @@ namespace yask {
         *ostr << "Num grids to be updated: " << num_eqGrids << endl;
 
         idx_t nbytes = get_num_bytes();
-        *ostr << "Total rank-" << my_rank << " allocation (bytes): " <<
+        *ostr << "Total allocation in this rank (bytes): " <<
             printWithPow2Multiplier(nbytes) << endl;
         return nbytes;
     }
