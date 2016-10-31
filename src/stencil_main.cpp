@@ -378,16 +378,8 @@ int main(int argc, char** argv)
 
     // Find size across all ranks.
     idx_t min_dt = dt;
-    idx_t tot_dn = dn;
-    idx_t tot_dx = dx;
-    idx_t tot_dy = dy;
-    idx_t tot_dz = dz;
 #ifdef USE_MPI
     MPI_Allreduce(&dt, &min_dt, 1, MPI_INTEGER8, MPI_MIN, comm);
-    MPI_Allreduce(&dn, &tot_dn, 1, MPI_INTEGER8, MPI_SUM, comm);
-    MPI_Allreduce(&dx, &tot_dx, 1, MPI_INTEGER8, MPI_SUM, comm);
-    MPI_Allreduce(&dy, &tot_dy, 1, MPI_INTEGER8, MPI_SUM, comm);
-    MPI_Allreduce(&dz, &tot_dz, 1, MPI_INTEGER8, MPI_SUM, comm);
 #endif
         
     // Report ranks.
@@ -544,7 +536,6 @@ int main(int argc, char** argv)
         " group-size:   " << 1 << '*' << gn << '*' << gx << '*' << gy << '*' << gz << endl <<
         " region-size:  " << rt << '*' << rn << '*' << rx << '*' << ry << '*' << rz << endl <<
         " rank-size:    " << dt << '*' << dn << '*' << dx << '*' << dy << '*' << dz << endl <<
-        " overall-size: " << dt << '*' << tot_dn << '*' << tot_dx << '*' << tot_dy << '*' << tot_dz << endl;
     *ostr << "\nOther settings:\n"
         " num-ranks: " << nrn << '*' << nrx << '*' << nry << '*' << nrz << endl <<
         " stencil-shape: " STENCIL_NAME << endl << 
@@ -606,8 +597,11 @@ int main(int argc, char** argv)
     idx_t nbytes = context.allocAll(findLoc);
 
     // Report total allocation.
+    idx_t grid_numpts = dn*dx*dy*dz;
+    idx_t tot_grid_numpts = grid_numpts;
     idx_t tot_nbytes = nbytes;
 #ifdef USE_MPI
+    MPI_Allreduce(&grid_numpts, &tot_grid_numpts, 1, MPI_INTEGER8, MPI_SUM, comm);
     MPI_Allreduce(&nbytes, &tot_nbytes, 1, MPI_INTEGER8, MPI_SUM, comm);
 #endif
     *ostr << "Total overall allocation in " << num_ranks << " rank(s) (bytes): " <<
@@ -629,11 +623,9 @@ int main(int argc, char** argv)
     // Amount of work.
     idx_t num_eqGrids = context.eqGridPtrs.size();
 
-    const idx_t grid_numpts = dn*dx*dy*dz;
     const idx_t grids_numpts = grid_numpts * num_eqGrids;
     const idx_t grids_rank_numpts = dt * grids_numpts;
 
-    const idx_t tot_grid_numpts = tot_dn * tot_dx * tot_dy * tot_dz;
     const idx_t tot_grids_numpts = tot_grid_numpts * num_eqGrids;
     const idx_t tot_numpts = dt * tot_grids_numpts;
     
