@@ -155,37 +155,35 @@ public:
     // Free-surface boundary equations.
     void define_free_surface_vel(GridIndex t, GridIndex x, GridIndex y, GridIndex z) {
 
-        // When z is first value beyond last z index (in halo).
-        Condition at_lastz_plus1 = 
+        // Following expressions are valid only when z == last value in domain.
+        
+        // A couple intermediate values.
+        GridValue d_x_val = vel_x(t+1, x+1, y, z) -
+            (vel_z(t+1, x+1, y, z) - vel_z(t+1, x, y, z));
+        GridValue d_y_val = vel_y(t+1, x, y-1, z) -
+            (vel_z(t+1, x, y, z) - vel_z(t+1, x, y-1, z));
+        
+        // Following values are valid at the free surface.
+        GridValue plus1_vel_x = vel_x(t+1, x, y, z) -
+            (vel_z(t+1, x, y, z) - vel_z(t+1, x-1, y, z));
+        GridValue plus1_vel_y = vel_y(t+1, x, y, z) -
+            (vel_z(t+1, x, y+1, z) - vel_z(t+1, x, y, z));
+        GridValue plus1_vel_z = vel_z(t+1, x, y, z) -
+            ((d_x_val - plus1_vel_x) +
+             (vel_x(t+1, x+1, y, z) - vel_x(t+1, x, y, z)) +
+             (plus1_vel_y - d_y_val) +
+             (vel_y(t+1, x, y, z) - vel_y(t+1, x, y-1, z))) /
+            ((mu(x, y, z) *
+              (2.0 / mu(x, y, z) + 1.0 / lambda(x, y, z))));
+
+        // Define equivalencies to be valid only when z == last value in domain.
+        Condition at_lastz = 
             x >= first_index(x) && x <= last_index(x) &&
             y >= first_index(y) && y <= last_index(y) &&
-            z == last_index(z) + 1;
-
-        // Z indices when z == lastz+1;
-        GridIndex lastz_plus1 = z;
-        GridIndex lastz = z-1;
-
-        GridValue d_x_val = vel_x(t+1, x+1, y, lastz) -
-            (vel_z(t+1, x+1, y, lastz) - vel_z(t+1, x, y, lastz));
-        GridValue d_y_val = vel_y(t+1, x, y-1, lastz) -
-            (vel_z(t+1, x, y, lastz) - vel_z(t+1, x, y-1, lastz));
-        
-        GridValue plus1_vel_x = vel_x(t+1, x, y, lastz) -
-            (vel_z(t+1, x, y, lastz) - vel_z(t+1, x-1, y, lastz));
-        GridValue plus1_vel_y = vel_y(t+1, x, y, lastz) -
-            (vel_z(t+1, x, y+1, lastz) - vel_z(t+1, x, y, lastz));
-        GridValue plus1_vel_z = vel_z(t+1, x, y, lastz) -
-            ((d_x_val - plus1_vel_x) +
-             (vel_x(t+1, x+1, y, lastz) - vel_x(t+1, x, y, lastz)) +
-             (plus1_vel_y - d_y_val) +
-             (vel_y(t+1, x, y, lastz) - vel_y(t+1, x, y-1, lastz))) /
-            ((mu(x, y, lastz) *
-              (2.0 / mu(x, y, lastz) + 1.0 / lambda(x, y, lastz))));
-
-        // Define equivalencies to be valid only when z == lastz+1;
-        vel_x(t+1, x, y, lastz_plus1) == plus1_vel_x IF at_lastz_plus1;
-        vel_y(t+1, x, y, lastz_plus1) == plus1_vel_y IF at_lastz_plus1;
-        vel_z(t+1, x, y, lastz_plus1) == plus1_vel_z IF at_lastz_plus1;
+            z == last_index(z);
+        vel_x(t+1, x, y, z+1) == plus1_vel_x IF at_lastz;
+        vel_y(t+1, x, y, z+1) == plus1_vel_y IF at_lastz;
+        vel_z(t+1, x, y, z+1) == plus1_vel_z IF at_lastz;
     }
     
     // Stress-grid define functions.  For each D in xx, yy, zz, xy, xz, yz,
@@ -296,64 +294,28 @@ public:
     // Free-surface boundary equations.
     void define_free_surface_stress(GridIndex t, GridIndex x, GridIndex y, GridIndex z) {
 
-        // When z is at surface (not in halo).
-        {
-            Condition at_lastz = 
-                x >= first_index(x) && x <= last_index(x) &&
-                y >= first_index(y) && y <= last_index(y) &&
-                z == last_index(z);
+        // Define equivalencies to be valid only when z == last value in domain.
+        Condition at_lastz = 
+            x >= first_index(x) && x <= last_index(x) &&
+            y >= first_index(y) && y <= last_index(y) &&
+            z == last_index(z);
 
-            // Z indices when z == lastz;
-            GridIndex lastz = z;
+        stress_zz(t+1, x, y, z+1) == -stress_zz(t+1, x, y, z)
+            IF at_lastz;
+        stress_zz(t+1, x, y, z+2) == -stress_zz(t+1, x, y, z-1)
+            IF at_lastz;
 
-            // Define equivalencies to be valid only when z == lastz;
-            stress_xz(t+1, x, y, lastz) == constNum(0.0) IF at_lastz;
-            stress_yz(t+1, x, y, lastz) == constNum(0.0) IF at_lastz;
-        }
+        stress_xz(t+1, x, y, z) == constNum(0.0) IF at_lastz;
+        stress_xz(t+1, x, y, z+1) == -stress_xz(t+1, x, y, z-1)
+            IF at_lastz;
+        stress_xz(t+1, x, y, z+2) == -stress_zz(t+1, x, y, z-2)
+            IF at_lastz;
 
-        // When z is 1st value beyond last z index (in halo).
-        {
-            Condition at_lastz_plus1 = 
-                x >= first_index(x) && x <= last_index(x) &&
-                y >= first_index(y) && y <= last_index(y) &&
-                z == last_index(z) + 1;
-
-            // Z indices when z == lastz+1;
-            GridIndex lastz_plus1 = z;
-            GridIndex lastz = z-1;
-            GridIndex lastz_minus1 = z-2;
-
-            // Define equivalencies to be valid only when z == lastz+1;
-            stress_zz(t+1, x, y, lastz_plus1) == -stress_zz(t+1, x, y, lastz)
-                IF at_lastz_plus1;
-            stress_xz(t+1, x, y, lastz_plus1) == -stress_xz(t+1, x, y, lastz_minus1)
-                IF at_lastz_plus1;
-            stress_yz(t+1, x, y, lastz_plus1) == -stress_yz(t+1, x, y, lastz_minus1)
-                IF at_lastz_plus1;
-        }
-        
-        // When z is 2nd value beyond last z index (in halo).
-        {
-            Condition at_lastz_plus2 = 
-                x >= first_index(x) && x <= last_index(x) &&
-                y >= first_index(y) && y <= last_index(y) &&
-                z == last_index(z) + 2;
-
-            // Z indices when z == lastz+2;
-            GridIndex lastz_plus2 = z;
-            GridIndex lastz_plus1 = z-1;
-            GridIndex lastz = z-2;
-            GridIndex lastz_minus1 = z-3;
-            GridIndex lastz_minus2 = z-4;
-
-            // Define equivalencies to be valid only when z == lastz+2;
-            stress_zz(t+1, x, y, lastz_plus2) == -stress_zz(t+1, x, y, lastz_minus1)
-                IF at_lastz_plus2;
-            stress_xz(t+1, x, y, lastz_plus2) == -stress_zz(t+1, x, y, lastz_minus2)
-                IF at_lastz_plus2;
-            stress_yz(t+1, x, y, lastz_plus2) == -stress_yz(t+1, x, y, lastz_minus2)
-                IF at_lastz_plus2;
-        }
+        stress_yz(t+1, x, y, z) == constNum(0.0) IF at_lastz;
+        stress_yz(t+1, x, y, z+1) == -stress_yz(t+1, x, y, z-1)
+            IF at_lastz;
+        stress_yz(t+1, x, y, z+2) == -stress_yz(t+1, x, y, z-2)
+            IF at_lastz;
     }
     
     // Call all the define_* functions.
