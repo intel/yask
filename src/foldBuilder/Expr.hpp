@@ -97,6 +97,7 @@ void operator/=(NumExprPtr& lhs, double rhs);
 // The '==' operator can define a grid value or be used for
 // comparing values, depending on what the lhs is.
 EqualsExprPtr operator==(GridPointPtr gpp, const NumExprPtr rhs);
+EqualsExprPtr operator==(GridPointPtr gpp, double rhs);
 BoolExprPtr operator==(const NumExprPtr lhs, const NumExprPtr rhs);
 
 // Other comparison operators can only be used for comparing.
@@ -1038,6 +1039,11 @@ struct EqGroup {
 
     // Get the full name.
     virtual string getName() const;
+
+    // Get number of points updated by the equations.
+    virtual int getNumExprs() const {
+        return exprs.size();
+    }
 
     // Print stats for the equation(s) in this group.
     virtual void printStats(ostream& os, const string& msg);

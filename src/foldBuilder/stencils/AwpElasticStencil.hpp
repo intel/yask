@@ -84,9 +84,11 @@ public:
     void adjust_for_sponge(GridValue& val, GridIndex x, GridIndex y, GridIndex z) {
 
         // TODO: It may be more efficient to skip processing interior nodes
-        // because their sponge coefficients are 1.0.  But this would
-        // necessitate handling conditionals. The branch mispredictions may
-        // cost more than the overhead of the extra loads and multiplies.
+        // because their sponge coefficients are 1.0. This would require
+        // setting up sub-domains inside of and outside of the sponge area.
+        // It may not be worth the added complexity, though: the cache
+        // blocks at the sub-domain intervals would likely be broken into
+        // smaller pieces, affecting performance.
 
         val *= sponge(x, y, z);
     }
@@ -152,7 +154,7 @@ public:
         vel_z(t+1, x, y, z) == next_vel_z;
     }
 
-    // Free-surface boundary equations.
+    // Free-surface boundary equations for velocity.
     void define_free_surface_vel(GridIndex t, GridIndex x, GridIndex y, GridIndex z) {
 
         // Following expressions are valid only when z == last value in domain.
@@ -291,7 +293,7 @@ public:
         stress_yz(t+1, x, y, z) == next_stress_yz;
     }
 
-    // Free-surface boundary equations.
+    // Free-surface boundary equations for stress.
     void define_free_surface_stress(GridIndex t, GridIndex x, GridIndex y, GridIndex z) {
 
         // Define equivalencies to be valid only when z == last value in domain.
@@ -305,13 +307,13 @@ public:
         stress_zz(t+1, x, y, z+2) == -stress_zz(t+1, x, y, z-1)
             IF at_lastz;
 
-        stress_xz(t+1, x, y, z) == constNum(0.0) IF at_lastz;
+        stress_xz(t+1, x, y, z) == 0.0 IF at_lastz;
         stress_xz(t+1, x, y, z+1) == -stress_xz(t+1, x, y, z-1)
             IF at_lastz;
         stress_xz(t+1, x, y, z+2) == -stress_zz(t+1, x, y, z-2)
             IF at_lastz;
 
-        stress_yz(t+1, x, y, z) == constNum(0.0) IF at_lastz;
+        stress_yz(t+1, x, y, z) == 0.0 IF at_lastz;
         stress_yz(t+1, x, y, z+1) == -stress_yz(t+1, x, y, z-1)
             IF at_lastz;
         stress_yz(t+1, x, y, z+2) == -stress_yz(t+1, x, y, z-2)

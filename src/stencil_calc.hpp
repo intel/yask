@@ -306,10 +306,13 @@ namespace yask {
         virtual ~EqGroupBase() { }
 
         // Get name of this equation set.
-        virtual const std::string& get_name() =0;
+        virtual const std::string& get_name() const =0;
 
         // Get estimated number of FP ops done for one scalar eval.
-        virtual int get_scalar_fp_ops() =0;
+        virtual int get_scalar_fp_ops() const =0;
+
+        // Get number of points updated for one scalar eval.
+        virtual int get_scalar_points_updated() const =0;
 
         // Get list of grids updated by this equation.
         virtual std::vector<RealVecGridBase*>& get_eq_grid_ptrs() =0;
@@ -381,11 +384,14 @@ namespace yask {
         virtual ~EqGroupTemplate() {}
 
         // Get values from _eqGroup.
-        virtual const std::string& get_name() {
+        virtual const std::string& get_name() const {
             return _eqGroup.name;
         }
-        virtual int get_scalar_fp_ops() {
+        virtual int get_scalar_fp_ops() const {
             return _eqGroup.scalar_fp_ops;
+        }
+        virtual int get_scalar_points_updated() const {
+            return _eqGroup.scalar_points_updated;
         }
         virtual std::vector<RealVecGridBase*>& get_eq_grid_ptrs() {
             return _eqGroup.eqGridPtrs;

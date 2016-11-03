@@ -797,7 +797,8 @@ void YASKCppPrinter::printCode(ostream& os) {
         // Example computation.
         os << endl << " // " << fpops.getNumOps() << " FP operation(s) per point:" << endl;
         addComment(os, eq);
-        os << " const int scalar_fp_ops = " << fpops.getNumOps() << ";" << endl;
+        os << " const int scalar_fp_ops = " << fpops.getNumOps() << ";" << endl <<
+            " const int scalar_points_updated = " << eq.getNumExprs() << ";" << endl;
 
         // Init code.
         {

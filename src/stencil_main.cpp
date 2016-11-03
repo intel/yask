@@ -659,13 +659,13 @@ int main(int argc, char** argv)
         " problem-size in all ranks, for all time-steps: " <<
         printWithPow10Multiplier(tot_domain_dt) << endl <<
         endl <<
-        " actual-points-to-calculate in this rank, for one time-step: " <<
+        " grid-points-updated in this rank, for one time-step: " <<
         printWithPow10Multiplier(rank_numpts_1t) << endl <<
-        " actual-points-to-calculate in all ranks, for one time-step: " <<
+        " grid-points-updated in all ranks, for one time-step: " <<
         printWithPow10Multiplier(tot_numpts_1t) << endl <<
-        " actual-points-to-calculate in this rank, for all time-steps: " <<
+        " grid-points-updated in this rank, for all time-steps: " <<
         printWithPow10Multiplier(rank_numpts_dt) << endl <<
-        " actual-points-to-calculate in all ranks, for all time-steps: " <<
+        " grid-points-updated in all ranks, for all time-steps: " <<
         printWithPow10Multiplier(tot_numpts_dt) << endl <<
         endl <<
         " est-FP-ops in this rank, for one time-step: " <<
@@ -679,7 +679,7 @@ int main(int argc, char** argv)
         endl << 
         "Notes:\n" <<
         " problem-size is based on rank-domain sizes specified in command-line (dn * dx * dy * dz).\n" <<
-        " actual-points-to-calculate is based sum of sub-domain sizes across equation-group(s).\n" <<
+        " grid-points-updated is based sum of grid-updates-in-sub-domain across equation-group(s).\n" <<
         " est-FP-ops is based on sum of est-FP-ops-in-sub-domain across equation-group(s).\n" <<
         endl;
 
@@ -772,7 +772,7 @@ int main(int argc, char** argv)
         *ostr << divLine << endl <<
             "time (sec):                             " << printWithPow10Multiplier(elapsed_time) << endl <<
             "throughput (prob-size-points/sec):      " << printWithPow10Multiplier(dpps) << endl <<
-            "throughput (actual-points/sec):         " << printWithPow10Multiplier(apps) << endl <<
+            "throughput (points-updated/sec):        " << printWithPow10Multiplier(apps) << endl <<
             "throughput (est-FLOPS):                 " << printWithPow10Multiplier(flops) << endl;
 #ifdef USE_MPI
         *ostr <<
@@ -793,12 +793,12 @@ int main(int argc, char** argv)
     *ostr << divLine << endl <<
         "best-time (sec):                        " << printWithPow10Multiplier(best_elapsed_time) << endl <<
         "best-throughput (prob-size-points/sec): " << printWithPow10Multiplier(best_dpps) << endl <<
-        "best-throughput (actual-points/sec):    " << printWithPow10Multiplier(best_apps) << endl <<
+        "best-throughput (points-updated/sec):   " << printWithPow10Multiplier(best_apps) << endl <<
         "best-throughput (est-FLOPS):            " << printWithPow10Multiplier(best_flops) << endl <<
         divLine << endl <<
         "Notes:\n" <<
         " prob-size-points/sec is based on problem-size as described above.\n" <<
-        " actual-points/sec is based on actual-points-to-calculate as described above.\n" <<
+        " points-updated/sec is based on grid-points-updated as described above.\n" <<
         " est-FLOPS is based on est-FP-ops as described above.\n" <<
         endl;
     

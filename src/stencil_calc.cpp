@@ -318,16 +318,20 @@ namespace yask {
         ostream& os = *(context.ostr);
         os << "Num stencil equation-groups: " << eqGroups.size() << endl;
         for (auto eg : eqGroups) {
+            idx_t updates1 = eg->get_scalar_points_updated();
+            idx_t updates_domain = updates1 * eg->bb_size;
             idx_t fpops1 = eg->get_scalar_fp_ops();
             idx_t fpops_domain = fpops1 * eg->bb_size;
-            npoints += eg->bb_size;
+            npoints += updates_domain;
             nfpops += fpops_domain;
             os << "Stats for equation-group '" << eg->get_name() << "':\n" <<
-                " sub-domain-size:          " <<
+                " sub-domain-size:            " <<
                 eg->len_bbn << '*' << eg->len_bbx << '*' << eg->len_bby << '*' << eg->len_bbz << endl <<
-                " num-points-in-sub-domain: " << printWithPow10Multiplier(eg->bb_size) << endl <<
-                " est-FP-ops-per-point:     " << fpops1 << endl <<
-                " est-FP-ops-in-sub-domain: " << printWithPow10Multiplier(fpops_domain) << endl;
+                " points-in-sub-domain:       " << printWithPow10Multiplier(eg->bb_size) << endl <<
+                " grid-updates-per-point:     " << updates1 << endl <<
+                " grid-updates-in-sub-domain: " << printWithPow10Multiplier(updates_domain) << endl <<
+                " est-FP-ops-per-point:       " << fpops1 << endl <<
+                " est-FP-ops-in-sub-domain:   " << printWithPow10Multiplier(fpops_domain) << endl;
         }
         if (sum_points)
             *sum_points = npoints;

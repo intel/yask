@@ -218,6 +218,9 @@ EqualsExprPtr operator==(GridPointPtr gpp, const NumExprPtr rhs) {
 
     return expr;
 }
+EqualsExprPtr operator==(GridPointPtr gpp, double rhs) {
+    return gpp == constNum(rhs);
+}
 
 // Visitor acceptors.
 void ConstExpr::accept(ExprVisitor* ev) {
@@ -404,13 +407,13 @@ void Expr::accept(ExprVisitor* ev) const {
 // Must be unique.
 string EqGroup::getName() const {
 
-    // Just use base name if no condition and zero index.
-    if (!index && !cond.get())
+    // Just use base name if zero index.
+    if (!index)
         return baseName;
 
     // Otherwise, add index to base name.
     ostringstream oss;
-    oss << baseName << "_cond" << index;
+    oss << baseName << "_" << index;
     return oss.str();
 }
 
