@@ -402,10 +402,10 @@ namespace yask {
     reduction(min:minn,minx,miny,minz)          \
     reduction(max:maxn,maxx,maxy,maxz)          \
     reduction(+:npts)
-        for (idx_t n = -context.hn; n < context.dn + context.hn; n++)
-            for(idx_t x = -context.hx; x < context.dx + context.hx; x++)
-                for(idx_t y = -context.hy; y < context.dy + context.hy; y++)
-                    for(idx_t z = -context.hz; z < context.dz + context.hz; z++) {
+        for (idx_t n = 0; n < context.dn; n++)
+            for(idx_t x = 0; x < context.dx; x++)
+                for(idx_t y = 0; y < context.dy; y++)
+                    for(idx_t z = 0; z < context.dz; z++) {
 
                         // Update only if point in domain for this eq group.
                         if (is_in_valid_domain(context, t, n, x, y, z)) {

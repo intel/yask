@@ -818,14 +818,13 @@ void YASKCppPrinter::printCode(ostream& os) {
         // Condition.
         {
             os << endl << " // Determine whether equation group is valid at the given indices. " <<
-                "Return true if indices are within the valid domain or false otherwise." << endl <<
+                "Return true if indices are within the valid sub-domain or false otherwise." << endl <<
                 " bool is_in_valid_domain(StencilContext& context, " <<
                 _dims._allDims.makeDimStr(", ", "idx_t ") << ") {" << endl;
             if (eq.cond.get())
                 os << " return " << eq.cond->makeStr() << ";" << endl;
             else
-                os << " return context.is_in_default_domain(" <<
-                    _dims._allDims.makeDimStr() << ");" << endl;
+                os << " return true; // full domain." << endl;
             os << " }" << endl;
         }
         

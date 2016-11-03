@@ -158,6 +158,7 @@ public:
     void define_free_surface_vel(GridIndex t, GridIndex x, GridIndex y, GridIndex z) {
 
         // Following expressions are valid only when z == last value in domain.
+        // Note that values beyond the last value are updated, i.e., in the halo.
         
         // A couple intermediate values.
         GridValue d_x_val = vel_x(t+1, x+1, y, z) -
@@ -179,10 +180,7 @@ public:
               (2.0 / mu(x, y, z) + 1.0 / lambda(x, y, z))));
 
         // Define equivalencies to be valid only when z == last value in domain.
-        Condition at_lastz = 
-            x >= first_index(x) && x <= last_index(x) &&
-            y >= first_index(y) && y <= last_index(y) &&
-            z == last_index(z);
+        Condition at_lastz = z == last_index(z);
         vel_x(t+1, x, y, z+1) == plus1_vel_x IF at_lastz;
         vel_y(t+1, x, y, z+1) == plus1_vel_y IF at_lastz;
         vel_z(t+1, x, y, z+1) == plus1_vel_z IF at_lastz;
@@ -297,10 +295,9 @@ public:
     void define_free_surface_stress(GridIndex t, GridIndex x, GridIndex y, GridIndex z) {
 
         // Define equivalencies to be valid only when z == last value in domain.
-        Condition at_lastz = 
-            x >= first_index(x) && x <= last_index(x) &&
-            y >= first_index(y) && y <= last_index(y) &&
-            z == last_index(z);
+        // Note that values beyond the last value are updated, i.e., in the halo.
+
+        Condition at_lastz = z == last_index(z);
 
         stress_zz(t+1, x, y, z+1) == -stress_zz(t+1, x, y, z)
             IF at_lastz;
@@ -318,6 +315,12 @@ public:
             IF at_lastz;
         stress_yz(t+1, x, y, z+2) == -stress_yz(t+1, x, y, z-2)
             IF at_lastz;
+
+        // TODO: these equations for stress_xz(t+1, x, y, z) and
+        // stress_yz(t+1, x, y, z) conflict with those in define_stress_xz()
+        // and define_stress_yz() when z == last_index(z). It works ok
+        // because these are applied last, but they should actaully be in
+        // distinct sub-domains.
     }
     
     // Call all the define_* functions.

@@ -220,21 +220,6 @@ namespace yask {
         // Get total size.
         virtual idx_t get_num_bytes();
 
-        // Determine whether indices are within the default domain.
-        // FIXME: not correct if >1 rank is used!! Need to use
-        // global indices.
-        virtual bool is_in_default_domain(idx_t t, ARG_N(idx_t n)
-                                          idx_t x, idx_t y, idx_t z) {
-            bool ok =
-                (x >= 0) && (x < dx) &&
-                (y >= 0) && (y < dy) &&
-                (z >= 0) && (z < dz);
-#if USING_DIM_N
-            ok &&= (n >= 0) && (n < dn);
-#endif
-            return ok;
-        }
-        
         // Init all grids & params by calling initFn.
         virtual void initValues(std::function<void (RealVecGridBase* gp, 
                                                     real_t seed)> realVecInitFn,
