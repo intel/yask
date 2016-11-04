@@ -294,6 +294,7 @@ public:
 struct YASKCppSettings {
     bool _allowUnalignedLoads;
     bool _hbwRW, _hbwRO;
+    int  _haloSize;
     int _maxExprSize, _minExprSize;
 };
 

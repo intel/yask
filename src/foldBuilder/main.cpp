@@ -70,6 +70,7 @@ bool hbwRO = true;
 bool doComb = false;
 bool doCse = true;
 string stepDim = "t";
+int  haloSize = 0;                     // 0 means auto
 
 void usage(const string& cmd) {
 
@@ -88,7 +89,8 @@ void usage(const string& cmd) {
         " -cluster <dim>=<size>,... set number of values to evaluate in each dimension.\n"
         " -eq <name>=<substr>,...   put updates to grids containing <substr> in equation-group <name>.\n"
         //" [-no]-fuse        do [not] pack grids together in meta container(s) (default=" << doFuse << ").\n"
-        " -step <dim>        memory will be reused in dimension <dim> (default='" << stepDim << "').\n"
+        " -step <dim>        reuse memory in primary stepping dimension <dim> (default='" << stepDim << "').\n"
+        " -halo <size>       specify the sizes of the halos (default=auto).\n"
         " -lus               make last dimension of fold unit stride (instead of first).\n"
         " -aul               allow simple unaligned loads (memory map MUST be compatible).\n"
         " [-no]-comb         do [not] combine commutative operations (default=" << doComb << ").\n"
@@ -231,6 +233,9 @@ void parseOpts(int argc, const char* argv[])
 
                     else if (opt == "-ps")
                         vlenForStats = val;
+
+                    else if (opt == "-halo")
+                        haloSize = val;
 
                     // add any more options w/int values here.
 
@@ -408,6 +413,7 @@ int main(int argc, const char* argv[]) {
     yaskSettings._allowUnalignedLoads = allowUnalignedLoads;
     yaskSettings._hbwRW = hbwRW;
     yaskSettings._hbwRO = hbwRO;
+    yaskSettings._haloSize = haloSize;
     yaskSettings._maxExprSize = maxExprSize;
     yaskSettings._minExprSize = minExprSize;
     
