@@ -40,22 +40,45 @@ public:
     // By default, leaf-node visitors do nothing.
     virtual void visit(ConstExpr* ce) { }
     virtual void visit(CodeExpr* ce) { }
+    virtual void visit(IndexExpr* ie) { }
+    virtual void visit(IntTupleExpr* ite) { }
     virtual void visit(GridPoint* gp) { }
 
     // By default, a unary visitor just visits its operand.
-    virtual void visit(UnaryExpr* ue) {
+    virtual void visit(UnaryNumExpr* ue) {
+        ue->getRhs()->accept(this);
+    }
+    virtual void visit(UnaryNum2BoolExpr* ue) {
+        ue->getRhs()->accept(this);
+    }
+    virtual void visit(UnaryBoolExpr* ue) {
         ue->getRhs()->accept(this);
     }
 
     // By default, a binary visitor just visits its operands.
-    virtual void visit(BinaryExpr* be) {
+    virtual void visit(BinaryNumExpr* be) {
+        be->getLhs()->accept(this);
+        be->getRhs()->accept(this);
+    }
+    virtual void visit(BinaryNum2BoolExpr* be) {
+        be->getLhs()->accept(this);
+        be->getRhs()->accept(this);
+    }
+    virtual void visit(BinaryBoolExpr* be) {
         be->getLhs()->accept(this);
         be->getRhs()->accept(this);
     }
 
+    // By default, a conditional visitor just visits its operands.
+    virtual void visit(IfExpr* be) {
+        be->getExpr()->accept(this);
+        if (be->getCond())
+            be->getCond()->accept(this);
+    }
+
     // By default, a commutative visitor just visits its operands.
     virtual void visit(CommutativeExpr* ce) {
-        ExprPtrVec& ops = ce->getOps();
+        auto& ops = ce->getOps();
         for (auto ep : ops) {
             ep->accept(this);
         }

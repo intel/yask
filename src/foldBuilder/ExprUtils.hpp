@@ -32,7 +32,7 @@ IN THE SOFTWARE.
 
 using namespace std;
 
-// A visitor that applies an optimization.
+// Base class for a visitor that applies an optimization.
 class OptVisitor : public ExprVisitor {
 protected:
     int _numChanges;
@@ -68,7 +68,7 @@ public:
     }
     
     virtual void visit(CommutativeExpr* ce) {
-        ExprPtrVec& ops = ce->getOps();
+        auto& ops = ce->getOps();
 
         // Visit ops first (depth-first).
         for (auto ep : ops) {
@@ -83,7 +83,7 @@ public:
         
             // Scan elements of expr for more exprs of same type.
             for (size_t i = 0; i < ops.size(); i++) {
-                ExprPtr& ep = ops[i];
+                auto& ep = ops[i];
                 auto ce2 = dynamic_pointer_cast<CommutativeExpr>(ep);
 
                 // Is ep also a commutative expr with same operator?
@@ -103,43 +103,44 @@ public:
             }
         }
     }
-    
 };
 
 
-// A visitor that eliminates common subexprs.
+// A visitor that eliminates common numerical subexprs.
 // TODO: find matches to subsets of commutative operations;
 // example: a+b+c * b+d+a => c+(a+b) * d+(a+b) w/expr a+b combined.
 class CseVisitor : public OptVisitor {
 protected:
-    set<ExprPtr> _seen;
+    set<NumExprPtr> _seen;
     
     // If 'ep' has already been seen, just return true.
     // Else if 'ep' has a match, change pointer to that match, return true.
     // Else, return false.
-    virtual bool findMatchTo(ExprPtr& ep) {
-#ifdef DEBUG_MATCHING
-        cerr << "- checking " << ep->makeStr() << endl;
+    virtual bool findMatchTo(NumExprPtr& ep) {
+#if DEBUG_CSE >= 1
+        cerr << "- checking '" << ep->makeStr() << "'@" << ep << endl;
 #endif
         
         // Already visited this node?
         if (_seen.count(ep)) {
-#ifdef DEBUG_MATCHING
-            cerr << " - already seen " << ep->makeStr() << endl;
+#if DEBUG_CSE >= 2
+            cerr << " - already seen '" << ep->makeStr() << "'@" << ep << endl;
 #endif
             return true;
         }
         
         // Loop through nodes already seen.
-        for (auto oep : _seen) {
-#ifdef DEBUG_MATCHING
-            cerr << " - comparing " << ep->makeStr() << " to " << oep->makeStr() << endl;
+        for (auto& oep : _seen) {
+#if DEBUG_CSE >= 3
+            cerr << " - comparing '" << ep->makeStr() << "'@" << ep <<
+                " to '" << oep->makeStr() << "'@" << oep << endl;
 #endif
             
             // Match?
             if (ep->isSame(oep.get())) {
-#ifdef DEBUG_MATCHING
-                cerr << "  - found match: " << ep->makeStr() << " to " << oep->makeStr() << endl;
+#if DEBUG_CSE >= 1
+                cerr << "  - found match: '" << ep->makeStr() << "'@" << ep <<
+                    " to '" << oep->makeStr() << "'@" << oep << endl;
 #endif
                 
                 // Redirect pointer to the matching expr.
@@ -150,7 +151,7 @@ protected:
         }
 
         // Mark as seen.
-#ifdef DEBUG_MATCHING
+#if DEBUG_CSE >= 2
         cerr << " - no match to " << ep->makeStr() << endl;
 #endif
         _seen.insert(ep);
@@ -166,30 +167,39 @@ public:
     // - For each child,
     //   - Redirect child pointer to matching node if one exists,
     //     otherwise, visit child.
-    virtual void visit(UnaryExpr* ue) {
-        ExprPtr& rhs = ue->getRhs();
+    virtual void visit(UnaryNumExpr* ue) {
+        auto& rhs = ue->getRhs();
         if (!findMatchTo(rhs))
             rhs->accept(this);
     }
-    virtual void visit(BinaryExpr* be) {
-        ExprPtr& lhs = be->getLhs();
+    virtual void visit(BinaryNumExpr* be) {
+        auto& lhs = be->getLhs();
         if (!findMatchTo(lhs))
             lhs->accept(this);
-        ExprPtr& rhs = be->getRhs();
+        auto& rhs = be->getRhs();
         if (!findMatchTo(rhs))
             rhs->accept(this);
     }
     virtual void visit(CommutativeExpr* ce) {
-        ExprPtrVec& ops = ce->getOps();
-        for (ExprPtr& ep : ops) {
+        auto& ops = ce->getOps();
+        for (auto& ep : ops) {
             if (!findMatchTo(ep))
                 ep->accept(this);
         }
+        //cerr << "ce " << ce << " after:"; for (auto& ep : ops) cerr << ' ' << ep; cerr << endl;
+    }
+    virtual void visit(IfExpr* ie) {
+
+        // Only process RHS of expression.
+        // TODO: consider processing condition.
+        auto& ee = ie->getExpr();
+        visit(ee.get());        // compile-time binding ok for expr.
     }
     virtual void visit(EqualsExpr* ee) {
-        // Don't do LHS.
-        // TODO: check this--there should never be a match.
-        ExprPtr& rhs = ee->getRhs();
+
+        // Only process RHS.
+        // TODO: process LHS to find dependencies.
+        auto& rhs = ee->getRhs();
         if (!findMatchTo(rhs))
             rhs->accept(this);
     }
@@ -198,34 +208,54 @@ public:
 // A visitor that can keep track of what's been visted.
 class TrackingVisitor : public ExprVisitor {
 protected:
-    set<Expr*> _seen;
     map<Expr*, int> _counts;
+    int _visits;
 
-    virtual bool isSeen(Expr* ep) {
+    virtual bool alreadyVisited(Expr* ep) {
+#if DEBUG_TRACKING >= 1
+        cerr << "- tracking '" << ep->makeStr() << "'@" << ep << endl;
+#endif
+        bool seen = _counts.count(ep) > 0;
         _counts[ep]++;
-
-        // Already visited this node?
-        if (_seen.count(ep))
-            return true;
-
-        // Mark as seen now.
-        _seen.insert(ep);
-        return false;
+        _visits++;
+        return seen;
     }
 
 public:
-    TrackingVisitor() {}
+    TrackingVisitor() : _visits(0) {}
     virtual ~TrackingVisitor() {}
+
+    virtual int getNumVisits() const {
+        return _visits;
+    }
     
     virtual int getCount(Expr* ep) const {
         auto it = _counts.find(ep);
         if (it == _counts.end()) return 0;
         return it->second;
     }
+
+    virtual TrackingVisitor& operator+=(const TrackingVisitor& rhs) {
+        for (auto i : rhs._counts)
+            _counts[i.first] += i.second;
+        _visits += rhs._visits;
+        return *this;
+    }
+    
+    virtual void printStats(ostream& os, const string& descr = "") const {
+        os << "Expression stats";
+        if (descr.length())
+            os << " " << descr;
+        os << ":" << endl <<
+            "  " << _counts.size() << " node(s)." << endl <<
+            "  " << (_visits - _counts.size()) << " shared node(s)." << endl;
+    }
 };
 
-// A visitor that counts things.
-// Doesn't count those in common subexprs.
+// A visitor that counts things and collects some other
+// data on expressions.
+// Doesn't count things in common subexprs.
+// Doesn't count things in condition exprs.
 class CounterVisitor : public TrackingVisitor {
 protected:
     int _numOps, _numNodes, _numReads, _numWrites, _numParamReads;
@@ -248,6 +278,7 @@ public:
     virtual ~CounterVisitor() {}
 
     virtual CounterVisitor& operator+=(const CounterVisitor& rhs) {
+        TrackingVisitor::operator+=(rhs);
         _numOps += rhs._numOps;
         _numNodes += rhs._numNodes;
         _numReads += rhs._numReads;
@@ -257,15 +288,12 @@ public:
     }
     
     virtual void printStats(ostream& os, const string& descr = "") const {
-        os << "Expression stats";
-        if (descr.length())
-            os << " " << descr;
-        os << ":" << endl <<
-            "  " << getNumNodes() << " nodes." << endl <<
-            "  " << getNumReads() << " grid reads." << endl <<
-            "  " << getNumWrites() << " grid writes." << endl <<
-            "  " << getNumParamReads() << " parameter reads." << endl <<
-            "  " << getNumOps() << " math operations." << endl;
+        TrackingVisitor::printStats(os, descr);
+        os << 
+            "  " << getNumReads() << " grid read(s)." << endl <<
+            "  " << getNumWrites() << " grid write(s)." << endl <<
+            "  " << getNumParamReads() << " parameter read(s)." << endl <<
+            "  " << getNumOps() << " FP math operation(s)." << endl;
     }
     
     int getNumNodes() const { return _numNodes; }
@@ -284,9 +312,9 @@ public:
 
     // Return halo needed for given grid in given dimension.
     // TODO: allow separate halos for beginning and end.
-    int getHalo(const Grid* gp, const string& dim) const { 
-        auto maxps = getMaxPoints(gp);
-        auto minps = getMinPoints(gp);
+    int getHalo(const Grid* gp, const string& dim) const {
+        auto* maxps = getMaxPoints(gp);
+        auto* minps = getMinPoints(gp);
         const int* maxp = maxps ? maxps->lookup(dim) : 0;
         const int* minp = minps ? minps->lookup(dim) : 0;
         if (!maxp && !minp)
@@ -300,61 +328,93 @@ public:
 
     // Leaf nodes.
     virtual void visit(ConstExpr* ce) {
-        if (isSeen(ce)) return;
+        if (alreadyVisited(ce)) return;
         _numNodes++;
     }
     virtual void visit(CodeExpr* ce) {
-        if (isSeen(ce)) return;
+        if (alreadyVisited(ce)) return;
         _numNodes++;
     }
     virtual void visit(GridPoint* gp) {
-        if (isSeen(gp)) return;
+        if (alreadyVisited(gp)) return;
         _numNodes++;
         if (gp->isParam())
             _numParamReads++;
-        else
+        else {
             _numReads++;
 
-        // Track max and min points accessed for this grid.
-        const Grid* g = gp->getGrid();
-        auto& maxp = _maxPoints[g];
-        maxp = gp->maxElements(maxp, false);
-        auto& minp = _minPoints[g];
-        minp = gp->minElements(minp, false);
+            // Track max and min points accessed for this grid.
+            const Grid* g = gp->getGrid();
+            auto& maxp = _maxPoints[g];
+            maxp = gp->maxElements(maxp, false);
+            auto& minp = _minPoints[g];
+            minp = gp->minElements(minp, false);
+        }
     }
     
-    // Unary: Count as one op and visit operand.
+    // Unary: Count as one op if num type and visit operand.
     // TODO: simplify exprs like a + -b.
-    virtual void visit(UnaryExpr* ue) {
-        if (isSeen(ue)) return;
+    virtual void visit(UnaryNumExpr* ue) {
+        if (alreadyVisited(ue)) return;
         _numNodes++;
         _numOps++;
         ue->getRhs()->accept(this);
     }
+    virtual void visit(UnaryBoolExpr* ue) {
+        if (alreadyVisited(ue)) return;
+        _numNodes++;
+        ue->getRhs()->accept(this);
+    }
+    virtual void visit(UnaryNum2BoolExpr* ue) {
+        if (alreadyVisited(ue)) return;
+        _numNodes++;
+        ue->getRhs()->accept(this);
+    }
 
-    // Binary: Count as one op and visit operands.
-    virtual void visit(BinaryExpr* be) {
-        if (isSeen(be)) return;
+    // Binary: Count as one op if numerical and visit operands.
+    virtual void visit(BinaryNumExpr* be) {
+        if (alreadyVisited(be)) return;
         _numNodes++;
         _numOps++;
+        be->getLhs()->accept(this);
+        be->getRhs()->accept(this);
+    }
+    virtual void visit(BinaryBoolExpr* be) {
+        if (alreadyVisited(be)) return;
+        _numNodes++;
+        be->getLhs()->accept(this);
+        be->getRhs()->accept(this);
+    }
+    virtual void visit(BinaryNum2BoolExpr* be) {
+        if (alreadyVisited(be)) return;
+        _numNodes++;
         be->getLhs()->accept(this);
         be->getRhs()->accept(this);
     }
 
     // Count as one op between each operand and visit operands.
     virtual void visit(CommutativeExpr* ce) {
-        if (isSeen(ce)) return;
+        if (alreadyVisited(ce)) return;
         _numNodes++;
-        ExprPtrVec& ops = ce->getOps();
+        auto& ops = ce->getOps();
+        //cerr << "counting ce " << ce << ":"; for (auto& ep : ops) cerr << ' ' << ep; cerr << endl;
         _numOps += ops.size() - 1;
-        for (auto ep : ops) {
+        for (auto& ep : ops) {
             ep->accept(this);
         }
     }
 
+    // Conditional: don't visit condition.
+    // TODO: add separate stats for conditions.
+    virtual void visit(IfExpr* ie) {
+        if (alreadyVisited(ie)) return;
+        //_numNodes++;
+        ie->getExpr()->accept(this);
+    }
+
     // Equality: assume LHS is a write; don't visit it.
     virtual void visit(EqualsExpr* ee) {
-        if (isSeen(ee)) return;
+        if (alreadyVisited(ee)) return;
         _numNodes++;
         _numWrites++;
         ee->getRhs()->accept(this);

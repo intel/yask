@@ -23,7 +23,7 @@ IN THE SOFTWARE.
 
 *****************************************************************************/
 
-// Base class for calculating a future stencil value.
+// Base class for defining stencil equations.
 
 #ifndef STENCIL_BASE
 #define STENCIL_BASE
@@ -53,7 +53,7 @@ protected:
 public:
     virtual ~StencilBase() {}
 
-    // Register new object in a list.
+    // Initialize name and register this new object in a list.
     StencilBase(const string name, StencilList& stencils) :
         _name(name)
     {

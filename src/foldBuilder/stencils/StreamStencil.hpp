@@ -50,7 +50,7 @@ public:
         GET_OFFSET(y);
         GET_OFFSET(z);
 
-        GridValue v = constGridValue(1.0);
+        GridValue v = constNum(1.0);
 
         // Add radius values.
         for (int r = 0; r < _radius; r++) {

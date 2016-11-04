@@ -107,6 +107,9 @@ public:
     int size() const {
         return int(_dims.size());
     }
+    int getNumDims() const {
+        return int(_dims.size());
+    }
 
     // Add dimension to tuple (must NOT already exist).
     void addDimBack(const string& dim, T val) {
@@ -145,6 +148,20 @@ public:
             _map[_dims.at(i)] = vals.at(i);
     }
 
+    // Set values from another Tuple, leaving non-matching
+    // ones in this unchanged. Add dimensions in src that
+    // are not in this if addMissing==true.
+    virtual void setVals(const Tuple& src, bool addMissing) {
+        for (auto dim : src.getDims()) {
+            auto v = src.getVal(dim);
+            auto p = lookup(dim);
+            if (p)
+                *p = v;
+            else if (addMissing)
+                addDimBack(dim, v);
+        }
+    }
+    
     // This version is similar to vprintf.
     // 'args' must have been initialized with va_start.
     virtual void setVals(int numVals, va_list args) {
@@ -177,7 +194,7 @@ public:
         return true;
     }
     
-    // Comparisons.
+    // Equality is true only if all dimensions and values are same.
     virtual bool operator==(const Tuple& rhs) const {
         if (!areDimsSame(rhs))
             return false;
@@ -190,9 +207,9 @@ public:
         }
         return true;
     }
-    virtual bool operator!=(const Tuple& rhs) const {
-        return !operator==(rhs);
-    }
+
+    // Less-than is true if first value that is different
+    // from corresponding value in rhs is less than it.
     virtual bool operator<(const Tuple& rhs) const {
         if (size() < rhs.size()) return true;
         else if (size() > rhs.size()) return false;
@@ -209,10 +226,19 @@ public:
         }
         return false;
     }
-    virtual bool operator>(const Tuple& rhs) const {
 
-        // not (less-than or equal).
-        return !(((*this) < rhs) || ((*this) == rhs));
+    // Other comparisons derived from above.
+    virtual bool operator!=(const Tuple& rhs) const {
+        return !((*this) == rhs);
+    }
+    virtual bool operator <=(const Tuple& rhs) const {
+        return ((*this) == rhs) || ((*this) < rhs);
+    }
+    virtual bool operator>(const Tuple& rhs) const {
+        return !((*this) <= rhs);
+    }
+    virtual bool operator >=(const Tuple& rhs) const {
+        return !((*this) < rhs);
     }
 
     // Convert offsets to 1D offset using C-style map (last index is
@@ -254,7 +280,7 @@ public:
         //makeDimValStr() << " => " << idx << endl;
         return idx;
     }
-    
+
     // Get value from this in given direction (ignoring sign of dir).
     // Dir must have only one dimension.
     virtual T getValInDir(const Tuple& dir) const {
@@ -279,24 +305,38 @@ public:
         return _dims[0];  // first and only key.
     }
 
-    // get value of a direction, which must be 1D.
+    // get value of this direction, which must be 1D.
     virtual T getDirVal() const {
         assert(size() == 1);
         T dv = getVal(_dims[0]);  // first and only value.
-        assert(dv != 0);
         return dv;
     }
 
-    // Create a new Tuple with the dimension in dir removed.
-    // Thus, retured Tuple will have one fewer dim than this.
-    virtual Tuple removeDimInDir(const Tuple& dir) const {
+    // Create new Tuple containing only value in given direction.
+    virtual Tuple getDirInDim(const string& dname) const {
+        const T* p = lookup(dname);
+        assert(p);
         Tuple newt;
-        string dname  = dir.getDirName();
+        newt.addDimBack(dname, *p);
+        return newt;
+    }
+    virtual Tuple getDirInDir(const Tuple& dir) const {
+        return getDirInDim(dir.getDirName());
+    }
+
+    // Create a new Tuple with the given dimension removed.
+    // if dim is found, new Tuple will have one fewer dim than this.
+    // If dim is not found, it will be a copy of this.
+    virtual Tuple removeDimInDim(const string& dname) const {
+        Tuple newt;
         for (auto dim : _dims) {
             if (dim != dname)
                 newt.addDimBack(dim, getVal(dim));
         }
         return newt;
+    }
+    virtual Tuple removeDimInDir(const Tuple& dir) const {
+        return removeDimInDim(dir.getDirName());
     }
     
     // Determine whether this is inline with t2 along
@@ -406,7 +446,7 @@ public:
         return oss.str();
     }
 
-    // make name like "int x, int y, int z".
+    // make name like "x, y, z" or "int x, int y, int z".
     virtual string makeDimStr(string separator=", ",
                                string prefix="", string suffix="") const {
         ostringstream oss;
