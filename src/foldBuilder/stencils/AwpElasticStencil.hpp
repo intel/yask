@@ -158,9 +158,9 @@ public:
     void define_free_surface_vel(GridIndex t, GridIndex x, GridIndex y, GridIndex z) {
 
         // Following expressions are valid only when z == last value in domain.
-        // Note that values beyond the last value are updated, i.e., in the halo.
+        // Note that values beyond the last index are updated, i.e., in the halo.
         
-        // A couple intermediate values.
+        // A couple of intermediate values.
         GridValue d_x_val = vel_x(t+1, x+1, y, z) -
             (vel_z(t+1, x+1, y, z) - vel_z(t+1, x, y, z));
         GridValue d_y_val = vel_y(t+1, x, y-1, z) -
@@ -295,7 +295,7 @@ public:
     void define_free_surface_stress(GridIndex t, GridIndex x, GridIndex y, GridIndex z) {
 
         // Define equivalencies to be valid only when z == last value in domain.
-        // Note that values beyond the last value are updated, i.e., in the halo.
+        // Note that values beyond the last index are updated, i.e., in the halo.
 
         Condition at_lastz = z == last_index(z);
 
