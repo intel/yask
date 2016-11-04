@@ -284,7 +284,7 @@ public:
 
     // Return halo needed for given grid in given dimension.
     // TODO: allow separate halos for beginning and end.
-    int getHalo(const Grid* gp, const string& dim) const {
+    int getHalo(const Grid* gp, const string& dim) const { 
         auto maxps = getMaxPoints(gp);
         auto minps = getMinPoints(gp);
         const int* maxp = maxps ? maxps->lookup(dim) : 0;

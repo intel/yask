@@ -291,6 +291,7 @@ public:
 struct YASKCppSettings {
     bool _allowUnalignedLoads;
     bool _hbwRW, _hbwRO;
+    int  _haloSize;
 };
 
 // Print out a stencil in C++ form for YASK.

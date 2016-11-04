@@ -387,7 +387,7 @@ void YASKCppPrinter::printCode(ostream& os) {
                     dimArg += "d" + dim + ", ";
 
                     // Halo for this dimension.
-                    int halo = cve.getHalo(gp, dim);
+                    int halo = _settings._haloSize > 0 ? _settings._haloSize : cve.getHalo(gp, dim);
                     string hvar = grid + "_halo_" + dim;
                     os << " const idx_t " << hvar << " = " << halo << ";" << endl;
 

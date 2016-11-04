@@ -67,6 +67,7 @@ bool hbwRO = true;
 bool doComb = false;
 bool doCse = true;
 string stepDim = "t";
+int  haloSize = 0;                     // 0 means auto
 
 void usage(const string& cmd) {
 
@@ -86,6 +87,7 @@ void usage(const string& cmd) {
         " -eq <name>=<substr>,...   put updates to grids containing substring in equation name.\n"
         //" [-no]-fuse        do [not] pack grids together in meta container(s) (default=" << doFuse << ").\n"
         " -step <dim>        solution progresses in given dimension (default='" << stepDim << "').\n"
+        " -halo <size>       specify the sizes of the halos (default=auto).\n"
         " -lus               make last dimension of fold unit stride (instead of first).\n"
         " -aul               allow simple unaligned loads (memory map MUST be compatible).\n"
         " -es <expr-size>    set heuristic for expression-size threshold (default=" << exprSize << ").\n"
@@ -219,6 +221,9 @@ void parseOpts(int argc, const char* argv[])
 
                     else if (opt == "-ps")
                         vlenForStats = val;
+
+                    else if (opt == "-halo")
+                        haloSize = val;
 
                     // add any more options w/int values here.
 
@@ -360,6 +365,7 @@ int main(int argc, const char* argv[]) {
     yaskSettings._allowUnalignedLoads = allowUnalignedLoads;
     yaskSettings._hbwRW = hbwRW;
     yaskSettings._hbwRO = hbwRO;
+    yaskSettings._haloSize = haloSize;
     if (printCpp) {
         YASKCppPrinter printer(*stencilFunc, equations,
                                exprSize, dims, yaskSettings);
