@@ -240,6 +240,12 @@ namespace yask {
                        [&](RealGrid* gp, real_t seed){ gp->set_diff(seed); });
         }
 
+        // Init all grids & params 
+        // By default it uses the initSame initialization routine
+        virtual void init() {
+            initSame();
+        }
+
         // Compare grids in contexts for validation.
         // Params should not be written to, so they are not compared.
         // Return number of mis-compares.
