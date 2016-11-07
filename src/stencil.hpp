@@ -168,6 +168,12 @@ extern "C" {
 #include "mem_macros.hpp"
 #include "realv_grids.hpp"
 
+// First/last index macros.
+// TODO: replace with real functions; requires change to foldBuilder.
+// FIXME: not correct if >1 rank is used!!
+#define first_index(dim) (0)
+#define last_index(dim) (context.d ## dim - 1)
+
 namespace yask {
 
     // Default grid layouts.
