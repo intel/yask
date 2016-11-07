@@ -670,7 +670,7 @@ int main(int argc, char** argv)
     // This will initialize the grids before running the warmup.  If this is
     // not done, some operations may be done on zero pages, leading to
     // misleading performance or arithmetic exceptions.
-    context.initSame();
+    context.init();
     *ostr << flush;
 
     // warmup caches, threading, etc.
