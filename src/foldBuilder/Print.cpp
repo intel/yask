@@ -495,6 +495,15 @@ void YASKCppPrinter::printCode(ostream& os) {
         }
         os << " }" << endl;
 
+        // Stencil provided code for StencilContext
+        CodeList *extraCode;
+        if ( (extraCode = _stencil.getExtensionCode(STENCIL_CONTEXT)) != NULL )
+        {
+            os << endl << "  // Functions provided by user" << endl;
+            for ( auto code : *extraCode )
+                os << code << endl;
+        }
+        
         // end of context.
         os << "};" << endl;
     }

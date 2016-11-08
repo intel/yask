@@ -31,6 +31,13 @@ IN THE SOFTWARE.
 #include <map>
 using namespace std;
 
+typedef enum { STENCIL_CONTEXT } YASKSection;
+typedef vector<string> CodeList;
+typedef map<YASKSection, CodeList > ExtensionsList;
+
+#define REGISTER_CODE_EXTENSION(section,code) _extensions[section].push_back(code);
+#define REGISTER_STENCIL_CONTEXT_EXTENSION(...) REGISTER_CODE_EXTENSION(STENCIL_CONTEXT,#__VA_ARGS__)
+
 class StencilBase;
 typedef map<string, StencilBase*> StencilList;
 
@@ -50,6 +57,10 @@ protected:
     // At this time, this is not checked, so be careful!!
     Params _params;     // keep track of all registered non-grid vars.
 
+    // Code extensions that overload default functions from YASK in the generated code for this 
+    // Stencil code
+    ExtensionsList _extensions;
+    
 public:
     virtual ~StencilBase() {}
 
@@ -74,6 +85,15 @@ public:
 
     // Define grid values relative to given offsets in each dimension.
     virtual void define(const IntTuple& offsets) = 0;
+    
+    CodeList * getExtensionCode ( YASKSection section ) 
+    { 
+        auto elem = _extensions.find(section);
+        if ( elem != _extensions.end() ) {
+            return &elem->second;
+        }
+        return NULL;
+    }
 };
 
 // A base class for stencils that have an 'radius'.
