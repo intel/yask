@@ -357,7 +357,7 @@ namespace yask {
                                 for(idx_t z = 0; z < context.dz; z++) {
 
                                     // Copy one element.
-                                    real_t val = gpd->readElem(t, ARG_N(nv)
+                                    real_t val = gpd->readElem(t, ARG_N(n)
                                                                x, y, z, __LINE__);
                                     (*sp)(n, x, y, z) = val;
                                 }
@@ -410,7 +410,7 @@ namespace yask {
 
                                     // Copy one element.
                                     real_t val = (*sp)(n, x, y, z);
-                                    gpd->writeElem(val, t, ARG_N(nv)
+                                    gpd->writeElem(val, t, ARG_N(n)
                                                    x, y, z, __LINE__);
                                 }
                             }
