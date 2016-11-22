@@ -42,7 +42,7 @@ namespace yask {
         init(context);
     
         TRACE_MSG("calc_problem_ref(%ld..%ld, 0..%ld, 0..%ld, 0..%ld, 0..%ld)", 
-                  begin_dt, begin_dt + context.dt - 1,
+                  context.begin_dt, context.begin_dt + context.dt - 1,
                   context.dn - 1,
                   context.dx - 1,
                   context.dy - 1,
@@ -176,6 +176,7 @@ namespace yask {
                     // Eval this stencil in calc_region().
                     StencilSet stencil_set;
                     stencil_set.insert(stencil);
+                    StencilSet* stencils_ptr = &stencil_set;
 
                     // Include automatically-generated loop code that calls calc_region() for each region.
 #include "stencil_rank_loops.hpp"
@@ -184,17 +185,15 @@ namespace yask {
 
             // If doing more than one time step in a region (temporal wave-front),
             // must do all equations in calc_region().
-            // TODO: allow doing all equations in region even with one time step for testing.
             else {
 
-                StencilSet stencil_set;
+                // Eval all equations.
+                StencilSet* stencils_ptr = NULL;
+                
                 for (auto stencil : stencils) {
 
                     // Halo+shadow exchange for grid(s) updated by this equation.
                     stencil->exchange_halos(context, start_dt, stop_dt);
-                    
-                    // Make set of all equations.
-                    stencil_set.insert(stencil);
                 }
             
                 // Include automatically-generated loop code that calls calc_region() for each region.
@@ -210,7 +209,7 @@ namespace yask {
     // equations and evaluate the blocks in the region.
     void StencilEquations::
     calc_region(StencilContext& context, idx_t start_dt, idx_t stop_dt,
-                StencilSet& stencil_set,
+                StencilSet* stencil_set,
                 idx_t start_dn, idx_t start_dx, idx_t start_dy, idx_t start_dz,
                 idx_t stop_dn, idx_t stop_dx, idx_t stop_dy, idx_t stop_dz)
     {
@@ -258,7 +257,7 @@ namespace yask {
 
             // equations to evaluate at this time step.
             for (auto stencil : stencils) {
-                if (stencil_set.count(stencil)) {
+                if (!stencil_set || stencil_set->count(stencil)) {
 
                     // Actual region boundaries must stay within rank domain.
                     idx_t begin_rn = max<idx_t>(start_dn, 0);

@@ -158,11 +158,11 @@ namespace yask {
         // Ctor, dtor.
         StencilContext() :
             ostr(&std::cout),
-            begin_dt(TIME_DIM_SIZE),
-            dt(0), dn(0), dx(0), dy(0), dz(0),
-            rt(0), rn(0), rx(0), ry(0), rz(0),
-            bt(0), bn(0), bx(0), by(0), bz(0),
-            gn(0), gx(0), gy(0), gz(0),
+            begin_dt(0),
+            dt(1), dn(1), dx(1), dy(1), dz(1),
+            rt(1), rn(1), rx(1), ry(1), rz(1),
+            bt(1), bn(1), bx(1), by(1), bz(1),
+            gn(1), gx(1), gy(1), gz(1),
             hn(0), hx(0), hy(0), hz(0),
             pn(0), px(0), py(0), pz(0),
             angle_n(0), angle_x(0), angle_y(0), angle_z(0),
@@ -228,17 +228,19 @@ namespace yask {
         virtual idx_t compare(const StencilContext& ref) const;
 
         // Set number of threads to use for something other than a region.
-        inline int set_max_threads() {
+        virtual int set_max_threads() {
 
-            // Reset number of OMP threads back to max allowed.
+            // Reset number of OMP threads to max allowed.
             int nt = orig_max_threads;
+            nt = std::max(nt, 1);
+            TRACE_MSG("set_max_threads: omp_set_num_threads(%d)", nt);
             omp_set_num_threads(nt);
             return nt;
         }
 
         // Set number of threads to use for a region.
         // Return that number.
-        inline int set_region_threads() {
+        virtual int set_region_threads() {
 
             int nt = orig_max_threads;
 
@@ -248,15 +250,20 @@ namespace yask {
             nt /= num_block_threads;
 #endif
 
+            nt = std::max(nt, 1);
+            TRACE_MSG("set_region_threads: omp_set_num_threads(%d)", nt);
             omp_set_num_threads(nt);
             return nt;
         }
 
         // Set number of threads for a block.
-        inline int set_block_threads() {
+        virtual int set_block_threads() {
 
             // This should be a nested OMP region.
-            omp_set_num_threads(num_block_threads);
+            int nt = num_block_threads;
+            nt = std::max(nt, 1);
+            TRACE_MSG("set_block_threads: omp_set_num_threads(%d)", nt);
+            omp_set_num_threads(nt);
             return num_block_threads;
         }
 
@@ -493,14 +500,19 @@ namespace yask {
         // Vectorized and blocked stencil calculations.
         virtual void calc_rank_opt(StencilContext& context);
 
-    protected:
-    
         // Calculate results within a region.
-        void calc_region(StencilContext& context, idx_t start_dt, idx_t stop_dt,
-                         StencilSet& stencil_set,
-                         idx_t start_dn, idx_t start_dx, idx_t start_dy, idx_t start_dz,
-                         idx_t stop_dn, idx_t stop_dx, idx_t stop_dy, idx_t stop_dz);
-    
+        virtual void calc_region(StencilContext& context, idx_t start_dt, idx_t stop_dt,
+                                 StencilSet* stencil_set,
+                                 idx_t start_dn, idx_t start_dx, idx_t start_dy, idx_t start_dz,
+                                 idx_t stop_dn, idx_t stop_dx, idx_t stop_dy, idx_t stop_dz);
+        virtual void calc_region(StencilContext& context, idx_t start_dt, idx_t stop_dt,
+                                 idx_t start_dn, idx_t start_dx, idx_t start_dy, idx_t start_dz,
+                                 idx_t stop_dn, idx_t stop_dx, idx_t stop_dy, idx_t stop_dz) {
+            calc_region(context, start_dt, stop_dt,
+                        NULL,
+                        start_dn, start_dx, start_dy, start_dz,
+                        stop_dn, stop_dx, stop_dy, stop_dz);
+        }
     };
 }
 

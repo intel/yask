@@ -326,7 +326,7 @@ endif
 # in StencilEquations::calc_rank().
 RANK_LOOP_OPTS		=	-dims 'dn,dx,dy,dz'
 RANK_LOOP_CODE		=	$(RANK_LOOP_OUTER_MODS) loop(dn,dx,dy,dz) \
-				{ $(RANK_LOOP_INNER_MODS) calc(region(start_dt, stop_dt, stencil_set)); }
+				{ $(RANK_LOOP_INNER_MODS) calc(region(start_dt, stop_dt, stencils_ptr)); }
 
 # Region loops break up a region using OpenMP threading into blocks.
 # The region time loops are not coded here to allow for proper
@@ -369,7 +369,6 @@ MACROS       	+=      MODEL_CACHE=2
 OMPFLAGS	=	-qopenmp-stubs
 endif
 
-CXXFLAGS	+=	$(addprefix -D,$(MACROS)) $(addprefix -D,$(EXTRA_MACROS))
 CXXFLAGS	+=	$(OMPFLAGS) $(EXTRA_CXXFLAGS)
 LFLAGS          +=      $(OMPFLAGS) $(EXTRA_CXXFLAGS)
 
@@ -465,6 +464,11 @@ foldBuilder: src/foldBuilder/*.*pp src/foldBuilder/stencils/*.*pp
 
 src/stencil_macros.hpp: foldBuilder
 	./$< $(FB_FLAGS) $(EXTRA_FB_FLAGS) -pm > $@
+	echo >> $@
+	echo '// Settings from YASK Makefile' >> $@
+	for macro in $(MACROS) $(EXTRA_MACROS); do \
+	  echo '#define' $$macro | sed 's/=/ /' >> $@; \
+	done
 
 src/stencil_code.hpp: foldBuilder
 	./$< $(FB_FLAGS) $(EXTRA_FB_FLAGS) -p$(FB_TARGET) > $@
@@ -473,10 +477,10 @@ src/stencil_code.hpp: foldBuilder
 headers: $(GEN_HEADERS)
 	@ echo 'Header files generated.'
 
-%.$(arch).o: %.cpp src/*.hpp src/foldBuilder/*.hpp headers
+%.$(arch).o: %.cpp src/*.hpp src/foldBuilder/*.hpp $(GEN_HEADERS)
 	$(CXX) $(CXXFLAGS) -c -o $@ $<
 
-%.$(arch).i: %.cpp src/*.hpp src/foldBuilder/*.hpp headers
+%.$(arch).i: %.cpp src/*.hpp src/foldBuilder/*.hpp $(GEN_HEADERS)
 	$(CXX) $(CXXFLAGS) -E $< > $@
 
 tags:

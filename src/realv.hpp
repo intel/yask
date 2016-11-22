@@ -384,10 +384,10 @@ namespace yask {
             real_vec_t res, rcp;
 #ifdef NO_INTRINSICS
             REAL_VEC_LOOP(i) res[i] = u.r[i] / rhs[i];
-#elif USE_RCP14
+#elif defined(USE_RCP14)
             rcp.u.mr = INAME(rcp14)(rhs.u.mr);
             res.u.mr = INAME(mul)(u.mr, rcp.u.mr);
-#elif USE_RCP28
+#elif defined(USE_RCP28)
             rcp.u.mr = INAME(rcp28)(rhs.u.mr);
             res.u.mr = INAME(mul)(u.mr, rcp.u.mr);
 #else
