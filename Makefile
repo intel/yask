@@ -46,7 +46,10 @@
 #
 # crew: 0, 1: whether to use Intel Crew threading instead of nested OpenMP (deprecated).
 #
-# hbw: 0, 1: whether to use hbwmalloc package.
+# hbw: 0, 1: whether to use memkind lib.
+#   If hbw=1, the memkind lib will be used to allocate grids;
+#   this can provide the ability to fine-tune which grids use
+#   HBW and which use default memory.
 #
 # omp_schedule: OMP schedule policy for region loop.
 # omp_block_schedule: OMP schedule policy for nested OpenMP block loop.
@@ -230,10 +233,9 @@ CXX		=	icpc
 endif
 LD		=	$(CXX)
 MAKE		=	make
-LFLAGS          +=    	-lpthread
 CXXFLAGS        +=   	-g -O3 -std=c++11 -Wall
 OMPFLAGS	+=	-fopenmp 
-LFLAGS          +=      $(CXXFLAGS) -lrt -g
+LFLAGS          +=      -lrt
 FB_CXX    	=       $(CXX)
 FB_CXXFLAGS 	+=	-g -O1 -std=c++11 -Wall  # low opt to reduce compile time.
 EXTRA_FB_CXXFLAGS =
@@ -249,7 +251,8 @@ ifneq ($(eqs),)
   FB_FLAGS   	+=	-eq $(eqs)
 endif
 
-# set macros based on vars.
+# Set more MACROS based on individual makefile vars.
+# MACROS and EXTRA_MACROS will be written to a header file.
 MACROS		+=	REAL_BYTES=$(real_bytes)
 MACROS		+=	LAYOUT_3D=$(layout_3d)
 MACROS		+=	LAYOUT_4D=$(layout_4d)
@@ -270,7 +273,7 @@ MACROS		+=	USE_MPI
 crew		=	0
 endif
 
-# HBW settings
+# HBW settings.
 ifeq ($(hbw),1)
 MACROS		+=	USE_HBW
 HBW_DIR 	=	$(HOME)/memkind_build
@@ -370,19 +373,22 @@ OMPFLAGS	=	-qopenmp-stubs
 endif
 
 CXXFLAGS	+=	$(OMPFLAGS) $(EXTRA_CXXFLAGS)
-LFLAGS          +=      $(OMPFLAGS) $(EXTRA_CXXFLAGS)
 
 STENCIL_BASES		:=	stencil_main stencil_calc utils
 STENCIL_OBJS		:=	$(addprefix src/,$(addsuffix .$(arch).o,$(STENCIL_BASES)))
 STENCIL_CXX		:=	$(addprefix src/,$(addsuffix .$(arch).i,$(STENCIL_BASES)))
 STENCIL_EXEC_NAME	:=	stencil.$(arch).exe
-MAKE_VAR_FILE		:=	make-vars.txt
+MAKE_REPORT_FILE	:=	make-report.txt
+CXXFLAGS_FILE		:=	cxx-flags.txt
+LFLAGS_FILE		:=	ld-flags.txt
 
-all:	$(STENCIL_EXEC_NAME) $(MAKE_VAR_FILE)
-	@cat $(MAKE_VAR_FILE)
+all:	$(STENCIL_EXEC_NAME) $(MAKE_REPORT_FILE)
+	echo $(CXXFLAGS) > $(CXXFLAGS_FILE)
+	echo $(LFLAGS) > $(LFLAGS_FILE)
+	@cat $(MAKE_REPORT_FILE)
 	@echo $(STENCIL_EXEC_NAME) "has been built."
 
-$(MAKE_VAR_FILE): $(STENCIL_EXEC_NAME)
+$(MAKE_REPORT_FILE): $(STENCIL_EXEC_NAME)
 	@echo MAKEFLAGS="\"$(MAKEFLAGS)"\" > $@ 2>&1
 	$(MAKE) -j1 $(CODE_STATS) echo-settings >> $@ 2>&1
 
@@ -437,7 +443,7 @@ code_stats:
 	./get-loop-stats.pl -t='block_loops' *.s
 
 $(STENCIL_EXEC_NAME): $(STENCIL_OBJS)
-	$(LD) -o $@ $(STENCIL_OBJS) $(LFLAGS)
+	$(LD) -o $@ $(STENCIL_OBJS) $(CXXFLAGS) $(LFLAGS)
 
 preprocess: $(STENCIL_CXX)
 
@@ -487,7 +493,7 @@ tags:
 	rm -f TAGS ; find . -name '*.[ch]pp' | xargs etags -C -a
 
 clean:
-	rm -fv src/*.[io] *.optrpt src/*.optrpt *.s $(GEN_HEADERS) $(MAKE_VAR_FILE)
+	rm -fv src/*.[io] *.optrpt src/*.optrpt *.s $(GEN_HEADERS) $(MAKE_REPORT_FILE)
 
 realclean: clean
 	rm -fv stencil*.exe foldBuilder TAGS

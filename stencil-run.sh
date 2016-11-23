@@ -169,9 +169,9 @@ else
     envs="$envs LD_LIBRARY_PATH=./lib:$LD_LIBRARY_PATH$libpath"
 fi
 
-# echo make results if they exist
-if [[ -e make-vars.txt ]]; then
-    cat make-vars.txt
+# echo make report if it exists.
+if [[ -e make-report.txt ]]; then
+    cat make-report.txt
 fi
 
 # command sequence.
