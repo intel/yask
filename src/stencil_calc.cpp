@@ -343,27 +343,18 @@ namespace yask {
 
                 // Copy from grid to shadow.
                 // Shadows are *inside* the halo regions, e.g., indices 0..dx for dimension x.
-                for (idx_t n = 0; n < context.dn; n++) {
+#pragma omp parallel for collapse(4)
+                for (idx_t n = 0; n < context.dn; n++)
+                    for(idx_t x = 0; x < context.dx; x++)
+                        for(idx_t y = 0; y < context.dy; y++)
+                            for(idx_t z = 0; z < context.dz; z++) {
 
-#pragma omp parallel for
-                    for(idx_t x = 0; x < context.dx; x++) {
-
-                        CREW_FOR_LOOP
-                            for(idx_t y = 0; y < context.dy; y++) {
-
-#pragma simd
-#pragma vector nontemporal
-                                for(idx_t z = 0; z < context.dz; z++) {
-
-                                    // Copy one element.
-                                    real_t val = gpd->readElem(t, ARG_N(n)
-                                                               x, y, z, __LINE__);
-                                    (*sp)(n, x, y, z) = val;
-                                }
+                                // Copy one element.
+                                real_t val = gpd->readElem(t, ARG_N(n)
+                                                           x, y, z, __LINE__);
+                                (*sp)(n, x, y, z) = val;
                             }
-                    }
-                }
-            }            
+            }
 
             // In a real application, some processing on the shadow
             // grid would be done here.
@@ -395,26 +386,17 @@ namespace yask {
                 assert(sp);
 
                 // Copy from shadow to grid.
-                for (idx_t n = 0; n < context.dn; n++) {
+#pragma omp parallel for collapse(4)
+                for (idx_t n = 0; n < context.dn; n++)
+                    for(idx_t x = 0; x < context.dx; x++)
+                        for(idx_t y = 0; y < context.dy; y++)
+                            for(idx_t z = 0; z < context.dz; z++) {
 
-#pragma omp parallel for
-                    for(idx_t x = 0; x < context.dx; x++) {
-
-                        CREW_FOR_LOOP
-                            for(idx_t y = 0; y < context.dy; y++) {
-                            
-#pragma simd
-#pragma vector nontemporal
-                                for(idx_t z = 0; z < context.dz; z++) {
-
-                                    // Copy one element.
-                                    real_t val = (*sp)(n, x, y, z);
-                                    gpd->writeElem(val, t, ARG_N(n)
-                                                   x, y, z, __LINE__);
-                                }
+                                // Copy one element.
+                                real_t val = (*sp)(n, x, y, z);
+                                gpd->writeElem(val, t, ARG_N(n)
+                                               x, y, z, __LINE__);
                             }
-                    }
-                }
             }            
             double end_time = getTimeInSecs();
             context.shadow_time += end_time - start_time;
