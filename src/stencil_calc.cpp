@@ -169,6 +169,7 @@ namespace yask {
                     // Eval this stencil in calc_region().
                     EqGroupSet eqGroup_set;
                     eqGroup_set.insert(eqGroup);
+                    EqGroupSet* eqGroup_ptr = &eqGroup_set;
 
                     // Include automatically-generated loop code that calls calc_region() for each region.
 #include "stencil_rank_loops.hpp"
@@ -177,17 +178,15 @@ namespace yask {
 
             // If doing more than one time step in a region (temporal wave-front),
             // must do all equations in calc_region().
-            // TODO: allow doing all equations in region even with one time step for testing.
             else {
 
-                EqGroupSet eqGroup_set;
+                // Eval all equation groups.
+                EqGroupSet* eqGroup_ptr = NULL;
+                
                 for (auto eqGroup : eqGroups) {
 
                     // Halo+shadow exchange for grid(s) updated by this equation.
                     eqGroup->exchange_halos(context, start_dt, stop_dt);
-                    
-                    // Make set of all equations.
-                    eqGroup_set.insert(eqGroup);
                 }
             
                 // Include automatically-generated loop code that calls calc_region() for each region.
@@ -203,7 +202,7 @@ namespace yask {
     // equations and evaluate the blocks in the region.
     void StencilEqs::
     calc_region(StencilContext& context, idx_t start_dt, idx_t stop_dt,
-                EqGroupSet& eqGroup_set,
+                EqGroupSet* eqGroup_set,
                 idx_t start_dn, idx_t start_dx, idx_t start_dy, idx_t start_dz,
                 idx_t stop_dn, idx_t stop_dx, idx_t stop_dy, idx_t stop_dz)
     {
@@ -251,7 +250,7 @@ namespace yask {
 
             // equations to evaluate at this time step.
             for (auto eg : eqGroups) {
-                if (eqGroup_set.count(eg)) {
+                if (!eqGroup_set || eqGroup_set->count(eg)) {
 
                     // Actual region boundaries must stay within BB for this eq group.
                     idx_t begin_rn = max<idx_t>(start_dn, eg->begin_bbn);
@@ -502,27 +501,18 @@ namespace yask {
 
                 // Copy from grid to shadow.
                 // Shadows are *inside* the halo regions, e.g., indices 0..dx for dimension x.
-                for (idx_t n = 0; n < context.dn; n++) {
+#pragma omp parallel for collapse(4)
+                for (idx_t n = 0; n < context.dn; n++)
+                    for(idx_t x = 0; x < context.dx; x++)
+                        for(idx_t y = 0; y < context.dy; y++)
+                            for(idx_t z = 0; z < context.dz; z++) {
 
-#pragma omp parallel for
-                    for(idx_t x = 0; x < context.dx; x++) {
-
-                        CREW_FOR_LOOP
-                            for(idx_t y = 0; y < context.dy; y++) {
-
-#pragma simd
-#pragma vector nontemporal
-                                for(idx_t z = 0; z < context.dz; z++) {
-
-                                    // Copy one element.
-                                    real_t val = gpd->readElem(t, ARG_N(nv)
-                                                               x, y, z, __LINE__);
-                                    (*sp)(n, x, y, z) = val;
-                                }
+                                // Copy one element.
+                                real_t val = gpd->readElem(t, ARG_N(n)
+                                                           x, y, z, __LINE__);
+                                (*sp)(n, x, y, z) = val;
                             }
-                    }
-                }
-            }            
+            }
 
             // In a real application, some processing on the shadow
             // grid would be done here.
@@ -554,26 +544,17 @@ namespace yask {
                 assert(sp);
 
                 // Copy from shadow to grid.
-                for (idx_t n = 0; n < context.dn; n++) {
+#pragma omp parallel for collapse(4)
+                for (idx_t n = 0; n < context.dn; n++)
+                    for(idx_t x = 0; x < context.dx; x++)
+                        for(idx_t y = 0; y < context.dy; y++)
+                            for(idx_t z = 0; z < context.dz; z++) {
 
-#pragma omp parallel for
-                    for(idx_t x = 0; x < context.dx; x++) {
-
-                        CREW_FOR_LOOP
-                            for(idx_t y = 0; y < context.dy; y++) {
-                            
-#pragma simd
-#pragma vector nontemporal
-                                for(idx_t z = 0; z < context.dz; z++) {
-
-                                    // Copy one element.
-                                    real_t val = (*sp)(n, x, y, z);
-                                    gpd->writeElem(val, t, ARG_N(nv)
-                                                   x, y, z, __LINE__);
-                                }
+                                // Copy one element.
+                                real_t val = (*sp)(n, x, y, z);
+                                gpd->writeElem(val, t, ARG_N(n)
+                                               x, y, z, __LINE__);
                             }
-                    }
-                }
             }            
             double end_time = getTimeInSecs();
             context.shadow_time += end_time - start_time;

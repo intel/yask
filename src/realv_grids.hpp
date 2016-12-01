@@ -657,6 +657,7 @@ namespace yask {
             return imod<idx_t>(t_idx, TIME_DIM_SIZE);
 #else
             // version that doesn't allow negative time.
+            t += TIME_DIM_SIZE;
             assert(t >= 0);
             assert(t % CPTS_T == 0);
             idx_t t_idx = t / idx_t(CPTS_T);

@@ -1,0 +1,29 @@
+Revision history for Perl extension AI::Genetic.
+
+0.01  Tue Nov 18 18:04:12 2003
+	- original version; created by h2xs 1.21 with options
+		-AX -n AI::Genetic
+
+0.02  Fri Apr 16 14:15:17 2004
+	- Packaged v0.02 for CPAN.
+	- This is a complete re-write from scratch.
+
+0.03  Thu Mar  3 16:13:35 2005
+	- Fixed bug where range vector genes were not always
+	  integers.
+	- Implemented a work-around to a sort bug in Perl. The
+	  bug is discussed here:
+	  http://rt.perl.org/rt3/Ticket/Display.html?id=7063
+
+0.04  Mon Jul 18 16:51:47 PDT 2005
+	- Fixed bugs reported by crenz@web42.com regarding
+	  rangevectors. Turns out that the last element
+	  in the range was never reached. Fixed.
+
+0.05  Fri May 11 10:46:09 PDT 2007
+	- Fixed bug reported by yraber@mailup.net regarding
+	  listvectors. If a single option is given for a
+	  listvector genome, then mutation would run in an
+	  infinite loop. Fixed.
+	- updated docs a bit to better show how to specify
+	  the fitness and termination functions.

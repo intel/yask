@@ -1,0 +1,389 @@
+NAME
+    AI::Genetic - A pure Perl genetic algorithm implementation.
+
+SYNOPSIS
+        use AI::Genetic;
+        my $ga = new AI::Genetic(
+            -fitness    => \&fitnessFunc,
+            -type       => 'bitvector',
+            -population => 500,
+            -crossover  => 0.9,
+            -mutation   => 0.01,
+            -terminate  => \&terminateFunc,
+           );
+
+         $ga->init(10);
+         $ga->evolve('rouletteTwoPoint', 100);
+         print "Best score = ", $ga->getFittest->score, ".\n";
+
+         sub fitnessFunc {
+             my $genes = shift;
+
+             my $fitness;
+             # assign a number to $fitness based on the @$genes
+             # ...
+
+             return $fitness;
+          }
+
+          sub terminateFunc {
+             my $ga = shift;
+
+             # terminate if reached some threshold.
+             return 1 if $ga->getFittest->score > $THRESHOLD;
+             return 0;
+          }
+
+DESCRIPTION
+    This module implements a Genetic Algorithm (GA) in pure Perl. Other Perl
+    modules that achieve the same thing (perhaps better, perhaps worse) do
+    exist. Please check CPAN. I mainly wrote this module to satisfy my own
+    needs, and to learn something about GAs along the way.
+
+    PLEASE NOTE: As of v0.02, AI::Genetic has been re-written from scratch
+    to be more modular and expandable. To achieve this, I had to modify the
+    API, so it is not backward-compatible with v0.01. As a result, I do not
+    plan on supporting v0.01.
+
+    I will not go into the details of GAs here, but here are the bare
+    basics. Plenty of information can be found on the web.
+
+    In a GA, a population of individuals compete for survival. Each
+    individual is designated by a set of genes that define its behaviour.
+    Individuals that perform better (as defined by the fitness function)
+    have a higher chance of mating with other individuals. When two
+    individuals mate, they swap some of their genes, resulting in an
+    individual that has properties from both of its "parents". Every now and
+    then, a mutation occurs where some gene randomly changes value,
+    resulting in a different individual. If all is well defined, after a few
+    generations, the population should converge on a "good-enough" solution
+    to the problem being tackled.
+
+    A GA implementation runs for a discrete number of time steps called
+    *generations*. What happens during each generation can vary greatly
+    depending on the strategy being used (See the section on "STRATEGIES"
+    for more info). Typically, a variation of the following happens at each
+    generation:
+
+    1. Selection
+        Here the performance of all the individuals is evaluated based on
+        the fitness function, and each is given a specific fitness value.
+        The higher the value, the bigger the chance of an individual passing
+        its genes on in future generations through mating (crossover).
+
+    2. Crossover
+        Here, individuals selected are randomly paired up for crossover (aka
+        *sexual reproduction*). This is further controlled by the crossover
+        rate specified and may result in a new offspring individual that
+        contains genes common to both parents. New individuals are injected
+        into the current population.
+
+    3. Mutation
+        In this step, each individual is given the chance to mutate based on
+        the mutation probability specified. If an individual is to mutate,
+        each of its genes is given the chance to randomly switch its value
+        to some other state.
+
+CLASS METHODS
+    Here are the public methods.
+
+    *$ga*->new(*options*)
+        This is the constructor. It accepts options in the form of
+        hash-value pairs. These are:
+
+        -population
+                This defines the size of the population, i.e. how many
+                individuals to simultaneously exist at each generation.
+                Defaults to 100.
+
+        -crossover
+                This defines the crossover rate. Defaults to 0.95.
+
+        -mutation
+                This defines the mutation rate. Defaults to 0.05.
+
+        *-fitness*
+                This defines a fitness function. It expects a reference to a
+                subroutine. More details are given in the section on
+                "FITNESS FUNCTION".
+
+        *-type* This defines the type of the genome. Currently, AI::Genetic
+                supports only three types:
+
+                *bitvector*
+                    Individuals of this type have genes that are bits. Each
+                    gene can be in one of two possible states, on or off.
+
+                *listvector*
+                    Each gene of a listvector individual can assume one
+                    string value from a specified list of possible string
+                    values.
+
+                *rangevector*
+                    Each gene of a rangevector individual can assume one
+                    integer value from a range of possible integer values.
+                    Note that only integers are supported. The user can
+                    always transform any desired fractional values by
+                    multiplying and dividing by an appropriate power of 10.
+
+                Defaults to *bitvector*.
+
+        *-terminate*
+                This option allows the definition of a termination
+                subroutine. It expects a subroutine reference. This sub will
+                be called at the end of each generation with one argument:
+                the AI::Genetic object. Evolution terminates if the sub
+                returns a true value.
+
+    *$ga*->createStrategy(*strategy_name*, *sub_ref*)
+        This method allows the creation of a custom-made strategy to be used
+        during evolution. It expects a unique strategy name, and a
+        subroutine reference as arguments. The subroutine will be called
+        with one argument: the AI::Genetic object. It is expected to alter
+        the population at each generation. See the section on "STRATEGIES"
+        for more information.
+
+    *$ga*->init(*initArgs*)
+        This method initializes the population with random individuals. It
+        MUST be called before any call to *evolve()* or *inject()*. As a
+        side effect, any already existing individuals in the population are
+        deleted. It expects one argument, which depends on the type of
+        individuals:
+
+        o   For bitvectors, the argument is simply the length of the
+            bitvector.
+
+                $ga->init(10);
+
+            this initializes a population where each individual has 10
+            genes.
+
+        o   For listvectors, the argument is an anonymous list of lists. The
+            number of sub-lists is equal to the number of genes of each
+            individual. Each sub-list defines the possible string values
+            that the corresponding gene can assume.
+
+                $ga->init([
+                           [qw/red blue green/],
+                           [qw/big medium small/],
+                           [qw/very_fat fat fit thin very_thin/],
+                          ]);
+
+            this initializes a population where each individual has 3 genes,
+            and each gene can assume one of the given values.
+
+        o   For rangevectors, the argument is an anonymous list of lists.
+            The number of sub-lists is equal to the number of genes of each
+            individual. Each sub-list defines the minimum and maximum
+            integer values that the corresponding gene can assume.
+
+                $ga->init([
+                           [1, 5],
+                           [0, 20],
+                           [4, 9],
+                          ]);
+
+            this initializes a population where each individual has 3 genes,
+            and each gene can assume an integer within the corresponding
+            range.
+
+    *$ga*->inject(*N*, ?*args*?)
+        This method can be used to add more individuals to the population.
+        New individuals can be randomly generated, or be explicitly
+        specified. The first argument specifies the number, *N*, of new
+        individuals to add. This can be followed by at most *N* arguments,
+        each of which is an anonymous list that specifies the genome of a
+        single individual to add. If the number of genomes given, *n*, is
+        less than *N*, then *N* - *n* random individuals are added for a
+        total of *N* new individuals. Random individuals are generated using
+        the same arguments passed to the *init()* method. For example:
+
+          $ga->inject(5,
+                      [qw/red big thin/],
+                      [qw/blue small fat/],
+                     );
+
+        this adds 5 new individuals, 2 with the specified genetic coding,
+        and 3 randomly generated.
+
+    *$ga*->evolve(*strategy*, ?*num_generations*?)
+        This method causes the GA to evolve the population using the
+        specified strategy. A strategy name has to be specified as the first
+        argument. The second argument is optional and specifies the number
+        of generations to evolve. It defaults to 1. See the section on
+        "STRATEGIES" for more information on the default strategies.
+
+        Each generation consists of the following steps:
+
+        o   The population is sorted according to the individuals'
+            fitnesses.
+
+        o   The subroutine corresponding to the named strategy is called
+            with one argument, the AI::Genetic object. This subroutine is
+            expected to alter the object itself.
+
+        o   If a termination subroutine is given, it is executed and the
+            return value is checked. Evolution terminates if this sub
+            returns a true value.
+
+    *$ga*->getFittest(?*N*?)
+        This returns the *N* fittest individuals. If not specified, *N*
+        defaults to 1. As a side effect, it sorts the population by fitness
+        score. The actual AI::Genetic::Individual objects are returned. You
+        can use the "genes()" and "score()" methods to get the genes and the
+        scores of the individuals. Please check the AI::Genetic::Individual
+        manpage for details.
+
+    *$ga*->sortPopulation
+        This method sorts the population according to fitness function. The
+        results are cached for speed.
+
+    *$ga*->sortIndividuals(?[*ListOfIndividuals*]?)
+        Given an anonymous list of individuals, this method sorts them
+        according to fitness, returning an anonymous list of the sorted
+        individuals.
+
+    *$ga*->people()
+        Returns an anonymous list of individuals of the current population.
+        IMPORTANT: the actual array reference used by the AI::Genetic object
+        is returned, so any changes to it will be reflected in *$ga*.
+
+    *$ga*->size(?*newSize*?)
+        This method is used to query and set the population size.
+
+    *$ga*->crossProb(?*newProb*?)
+        This method is used to query and set the crossover rate.
+
+    *$ga*->mutProb(?*newProb*?)
+        This method is used to query and set the mutation rate.
+
+    *$ga*->indType()
+        This method returns the type of individual: *bitvector*,
+        *listvector*, or *rangevector*.
+
+    *$ga*->generation()
+        This method returns the current generation.
+
+FITNESS FUNCTION
+    Very quickly you will realize that properly defining the fitness
+    function is the most important aspect of a GA. Most of the time that a
+    genetic algorithm takes to run is spent in running the fitness function
+    for each separate individual to get its fitness. AI::Genetic tries to
+    minimize this time by caching the fitness result for each individual.
+    But, you should spend a lot of time optimizing your fitness function to
+    achieve decent run times.
+
+    The fitness function should expect only one argument, an anonymous list
+    of genes, corresponding to the individual being analyzed. It is expected
+    to return a number which defines the fitness score of the said
+    individual. The higher the score, the more fit the individual, the more
+    the chance it has to be chosen for crossover.
+
+STRATEGIES
+    AI::Genetic comes with 9 predefined strategies. These are:
+
+    rouletteSinglePoint
+        This strategy implements roulette-wheel selection and single-point
+        crossover.
+
+    rouletteTwoPoint
+        This strategy implements roulette-wheel selection and two-point
+        crossover.
+
+    rouletteUniform
+        This strategy implements roulette-wheel selection and uniform
+        crossover.
+
+    tournamentSinglePoint
+        This strategy implements tournament selection and single-point
+        crossover.
+
+    tournamentTwoPoint
+        This strategy implements tournament selection and two-point
+        crossover.
+
+    tournamentUniform
+        This strategy implements tournament selection and uniform crossover.
+
+    randomSinglePoint
+        This strategy implements random selection and single-point
+        crossover.
+
+    randomTwoPoint
+        This strategy implements random selection and two-point crossover.
+
+    randomUniform
+        This strategy implements random selection and uniform crossover.
+
+    More detail on these strategies and how to call them in your own custom
+    strategies can be found in the AI::Genetic::OpSelection manpage, the
+    AI::Genetic::OpCrossover manpage and the AI::Genetic::OpMutation
+    manpage.
+
+    You can use the functions defined in the above modules in your own
+    custom-made strategy. Consult their manpages for more info. A
+    custom-made strategy can be defined using the *strategy()* method and is
+    called at the beginning of each generation. The only argument to it is
+    the AI::Genetic object itself. Note that the population at this point is
+    sorted accoring to each individual's fitness score. It is expected that
+    the strategy sub will modify the population stored in the AI::Genetic
+    object. Here's the pseudo-code of events:
+
+        for (1 .. num_generations) {
+          sort population;
+          call strategy_sub;
+          if (termination_sub exists) {
+            call termination_sub;
+            last if returned true value;
+          }
+        }
+
+A NOTE ON SPEED/EFFICIENCY
+    Genetic algorithms are inherently slow. Perl can be pretty fast, but
+    will never reach the speed of optimized C code (at least my Perl coding
+    will not). I wrote AI::Genetic mainly for my own learning experience,
+    but still tried to optimize it as much as I can while trying to keep it
+    as flexible as possible.
+
+    To do that, I resorted to some well-known tricks like passing a
+    reference of a long list instead of the list itself (for example, when
+    calling the fitness function, a reference of the gene list is passed),
+    and caching fitness scores (if you try to evaluate the fitness of the
+    same individual more than once, then the fitness function will not be
+    called, and the cached result is returned).
+
+    To help speed up your run times, you should pay special attention to the
+    design of your fitness function since this will be called once for each
+    unique individual in each generation. If you can shave off a few clock
+    cycles here and there, then it will be greatly magnified in the total
+    run time.
+
+BUGS
+    I have tested this module quite a bit, and even used it to solve a
+    work-related problem successfully. But, if you think you found a bug
+    then please let me know, and I promise to look at it.
+
+    Also, if you have any requests, comments or suggestions, then feel free
+    to email me.
+
+INSTALLATION
+    Either the usual:
+
+        perl Makefile.PL
+        make
+        make install
+
+    or just stick it somewhere in @INC where perl can find it. It is in pure
+    Perl.
+
+AUTHOR & CREDITS
+    Written by Ala Qumsieh *aqumsieh@cpan.org*.
+
+    Special thanks go to John D. Porter and Oliver Smith for stimulating
+    discussions and great suggestions. Daniel Martin and Ivan Tubert-Brohman
+    uncovered various bugs and for this I'm grateful.
+
+COPYRIGHTS
+    (c) 2003-2005 Ala Qumsieh. All rights reserved. This module is
+    distributed under the same terms as Perl itself.
+

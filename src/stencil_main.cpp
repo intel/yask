@@ -55,7 +55,7 @@ namespace yask {
     idx_t dn = 1, dx = DEF_RANK_SIZE, dy = DEF_RANK_SIZE, dz = DEF_RANK_SIZE;
     idx_t rt = 1;                         // wavefront time steps.
     idx_t rn = 0, rx = 0, ry = 0, rz = 0;  // region sizes (0 => use rank-domain size).
-    idx_t gn = 0, gx = 0, gy = 0, gz = 0;  // group sizes (0 => calculate).
+    idx_t gn = 0, gx = 0, gy = 0, gz = 0;  // block-group sizes (0 => calculate).
     idx_t bt = 1;                          // temporal block size.
     idx_t bn = 1, bx = DEF_BLOCK_SIZE, by = DEF_BLOCK_SIZE, bz = DEF_BLOCK_SIZE;  // size of cache blocks.
     idx_t pn = 0, px = DEF_PAD, py = DEF_PAD, pz = DEF_PAD; // padding.
@@ -166,6 +166,9 @@ namespace yask {
             " -b{n,x,y,z} <n>  cache block size in specified spatial dimension, defaults=" <<
             bn << '*' << bx << '*' << by << '*' << bz << endl <<
             " -b <n>           shorthand for '-bx <n> -by <n> -bz <n>\n" <<
+            " -g{n,x,y,z} <n>  block-group size in specified spatial dimension, defaults=" <<
+            gn << '*' << gx << '*' << gy << '*' << gz << endl <<
+            " -g <n>           shorthand for '-gx <n> -gy <n> -gz <n>\n" <<
             " -p{n,x,y,z} <n>  extra padding in specified spatial dimension, defaults=" <<
             pn << '*' << px << '*' << py << '*' << pz << endl <<
             " -p <n>           shorthand for '-px <n> -py <n> -pz <n>\n" <<
@@ -550,7 +553,7 @@ int main(int argc, char** argv)
         " vector-size:      " << VLEN_T << '*' << VLEN_N << '*' << VLEN_X << '*' << VLEN_Y << '*' << VLEN_Z << endl <<
         " cluster-size:     " << CPTS_T << '*' << CPTS_N << '*' << CPTS_X << '*' << CPTS_Y << '*' << CPTS_Z << endl <<
         " block-size:       " << bt << '*' << bn << '*' << bx << '*' << by << '*' << bz << endl <<
-        " block-group-size: " << 1 << '*' << gn << '*' << gx << '*' << gy << '*' << gz << endl <<
+        " block-group-size: 1*" << gn << '*' << gx << '*' << gy << '*' << gz << endl <<
         " region-size:      " << rt << '*' << rn << '*' << rx << '*' << ry << '*' << rz << endl <<
         " rank-domain-size: " << dt << '*' << dn << '*' << dx << '*' << dy << '*' << dz << endl <<
         endl <<
