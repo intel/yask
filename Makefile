@@ -40,7 +40,7 @@
 # time_dim_size: allocated size of time dimension in grids.
 #
 # eqs: comma-separated name=substr pairs used to group
-#   grid update equations into stencil functions.
+#   grid update equations into sets.
 #
 # streaming_stores: 0, 1: Whether to use streaming stores.
 #
@@ -119,6 +119,7 @@ ifeq ($(arch),knl)
 def_block_threads	?=	4
 def_thread_factor	?=	2
 endif
+FB_FLAGS	+=	-min-es 1
 
 endif
 
@@ -195,7 +196,7 @@ real_bytes			?=	4
 time_dim_size			?=	2
 layout_3d			?=	Layout_123
 layout_4d			?=	Layout_1234
-def_rank_size			?=	1024
+def_rank_size			?=	128
 def_block_size			?=	64
 def_pad				?=	1
 halo				?=      0
@@ -217,13 +218,13 @@ fold		?=	x=8
 else
 fold		?=	x=4
 endif
-cluster		?=	z=2
+cluster		?=	y=2
 
 endif
 
 # How many vectors to compute at once (unrolling factor in
 # each dimension).
-cluster		?=	x=1
+cluster		?=	x=1,y=1,z=1
 
 # More build flags.
 ifeq ($(mpi),1)
@@ -237,7 +238,7 @@ CXXFLAGS        +=   	-g -O3 -std=c++11 -Wall
 OMPFLAGS	+=	-fopenmp 
 LFLAGS          +=      -lrt
 FB_CXX    	=       $(CXX)
-FB_CXXFLAGS 	+=	-g -O1 -std=c++11 -Wall  # low opt to reduce compile time.
+FB_CXXFLAGS 	+=	-g -O0 -std=c++11 -Wall  # low opt to reduce compile time.
 EXTRA_FB_CXXFLAGS =
 FB_FLAGS   	+=	-st $(stencil) -r $(radius) -cluster $(cluster) -fold $(fold) -halo $(halo)
 GEN_HEADERS     =	$(addprefix src/, \
@@ -329,7 +330,7 @@ endif
 # in StencilEquations::calc_rank().
 RANK_LOOP_OPTS		=	-dims 'dn,dx,dy,dz'
 RANK_LOOP_CODE		=	$(RANK_LOOP_OUTER_MODS) loop(dn,dx,dy,dz) \
-				{ $(RANK_LOOP_INNER_MODS) calc(region(start_dt, stop_dt, stencils_ptr)); }
+				{ $(RANK_LOOP_INNER_MODS) calc(region(start_dt, stop_dt, eqGroup_ptr)); }
 
 # Region loops break up a region using OpenMP threading into blocks.
 # The region time loops are not coded here to allow for proper
@@ -337,7 +338,7 @@ RANK_LOOP_CODE		=	$(RANK_LOOP_OUTER_MODS) loop(dn,dx,dy,dz) \
 # in StencilEquations::calc_region().
 REGION_LOOP_OPTS	=     	-dims 'rn,rx,ry,rz' \
 				-ompConstruct '$(omp_par_for) schedule($(omp_schedule)) proc_bind(spread)' \
-				-calcPrefix 'stencil->calc_'
+				-calcPrefix 'eg->calc_'
 REGION_LOOP_OUTER_MODS	?=	grouped omp
 REGION_LOOP_CODE	=	$(REGION_LOOP_OUTER_MODS) loop(rn,rx,ry,rz) \
 				{ $(REGION_LOOP_INNER_MODS) calc(block(rt)); }

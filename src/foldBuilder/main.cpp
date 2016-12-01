@@ -45,6 +45,8 @@ StencilList stencils;
 // vars set via cmd-line options.
 bool printPseudo = false;
 bool printPOVRay = false;
+bool printDOT = false;
+bool printSimpleDOT = false;
 bool printMacros = false;
 bool printGrids = false;
 bool printCpp = false;
@@ -56,11 +58,12 @@ StencilBase* stencilFunc = NULL;
 string shapeName;
 IntTuple foldOptions;                     // vector fold.
 IntTuple clusterOptions;                  // cluster sizes.
-int exprSize = 50;
+int maxExprSize = 50;
+int minExprSize = 2;
 int radius = 1;
 bool firstInner = true;
 bool allowUnalignedLoads = false;
-string equationTargets;
+string eqGroupTargets;
 bool doFuse = false;
 bool hbwRW = true;
 bool hbwRO = true;
@@ -84,21 +87,24 @@ void usage(const string& cmd) {
         "\n"
         " -fold <dim>=<size>,...    set number of elements in each dimension in a vector block.\n"
         " -cluster <dim>=<size>,... set number of values to evaluate in each dimension.\n"
-        " -eq <name>=<substr>,...   put updates to grids containing substring in equation name.\n"
+        " -eq <name>=<substr>,...   put updates to grids containing <substr> in equation-group <name>.\n"
         //" [-no]-fuse        do [not] pack grids together in meta container(s) (default=" << doFuse << ").\n"
-        " -step <dim>        solution progresses in given dimension (default='" << stepDim << "').\n"
+        " -step <dim>        reuse memory in primary stepping dimension <dim> (default='" << stepDim << "').\n"
         " -halo <size>       specify the sizes of the halos (default=auto).\n"
         " -lus               make last dimension of fold unit stride (instead of first).\n"
         " -aul               allow simple unaligned loads (memory map MUST be compatible).\n"
-        " -es <expr-size>    set heuristic for expression-size threshold (default=" << exprSize << ").\n"
         " [-no]-comb         do [not] combine commutative operations (default=" << doComb << ").\n"
         " [-no]-cse          do [not] eliminate common subexpressions (default=" << doCse << ").\n"
         " [-no]-hbw-rw       do [not] allocate read/write grids in high-BW mem (default=" << hbwRW << ").\n"
         " [-no]-hbw-ro       do [not] allocate read-only grids in high-BW mem (default=" << hbwRO << ").\n"
+        " -max-es <num-nodes>  set heuristic for max single expression-size (default=" << maxExprSize << ").\n"
+        " -min-es <num-nodes>  set heuristic for min expression-size for reuse (default=" << minExprSize << ").\n"
         "\n"
         //" -ps <vec-len>      print stats for all folding options for given vector length.\n"
         " -ph                print human-readable scalar pseudo-code for one point.\n"
-        " -pp                print POV-Ray code for one fold.\n"
+        " -pdot-full         print DOT-language description of stencil equation(s).\n"
+        " -pdot-lite         print DOT-language description of grid dependencies.\n"
+        //" -pp                print POV-Ray code.\n"
         " -pm                print YASK pre-processor macros.\n"
         //" -pg                print YASK grid classes.\n"
         " -pcpp              print YASK stencil classes for generic C++.\n"
@@ -156,6 +162,10 @@ void parseOpts(int argc, const char* argv[])
             
             else if (opt == "-ph")
                 printPseudo = true;
+            else if (opt == "-pdot-full")
+                printDOT = true;
+            else if (opt == "-pdot-lite")
+                printSimpleDOT = true;
             else if (opt == "-pp")
                 printPOVRay = true;
             else if (opt == "-pm")
@@ -189,7 +199,7 @@ void parseOpts(int argc, const char* argv[])
                 else if (opt == "-step")
                     stepDim = argop;
                 else if (opt == "-eq")
-                    equationTargets = argop;
+                    eqGroupTargets = argop;
                 else if (opt == "-fold" || opt == "-cluster") {
 
                     // example: x=4,y=2
@@ -213,8 +223,10 @@ void parseOpts(int argc, const char* argv[])
                     // options w/an int value.
                     int val = atoi(argop.c_str());
 
-                    if (opt == "-es")
-                        exprSize = val;
+                    if (opt == "-max-es")
+                        maxExprSize = val;
+                    if (opt == "-min-es")
+                        minExprSize = val;
 
                     else if (opt == "-r")
                         radius = val;
@@ -264,7 +276,50 @@ void parseOpts(int argc, const char* argv[])
         }
         cerr << "Stencil radius: " << radius << endl;
     }
-    cerr << "Expression-size threshold: " << exprSize << endl;
+    cerr << "Max expression-size threshold: " << maxExprSize << endl;
+}
+
+// Apply optimizations to eqGroups.
+void optimizeEqGroups(EqGroups& eqGroups,
+                      const string& descr,
+                      bool printSets,
+                      ostream& os) {
+
+    // print stats.
+    string edescr = "for " + descr + " eqGroup(s)";
+    eqGroups.printStats(os, edescr);
+    
+    // Make a list of optimizations to apply to eqGroups.
+    vector<OptVisitor*> opts;
+    if (doCse)
+        opts.push_back(new CseVisitor);
+    if (doComb) {
+        opts.push_back(new CombineVisitor);
+        if (doCse)
+            opts.push_back(new CseVisitor);
+    }
+
+    // Apply opts.
+    for (auto optimizer : opts) {
+
+        eqGroups.visitExprs(optimizer);
+        int numChanges = optimizer->getNumChanges();
+        string odescr = "after applying " + optimizer->getName() + " to " +
+            descr + " eqGroup(s)";
+
+        // Get new stats.
+        if (numChanges)
+            eqGroups.printStats(os, odescr);
+        else
+            os << "No changes " << odescr << '.' << endl;
+    }
+
+    // Final stats per equation set.
+    if (printSets && eqGroups.size() > 1) {
+        os << "Stats per equation set:\n";
+        for (auto eq : eqGroups)
+            eq.printStats(os, "for equation set '" + eq.getName() + "'");
+    }
 }
 
 // Main program.
@@ -286,121 +341,119 @@ int main(int argc, const char* argv[]) {
     dims.setDims(grids, stepDim,
                  foldOptions, clusterOptions,
                  allowUnalignedLoads, cerr);
-    
+
+    // Construct scalar ASTs in grids by calling the 'define' method in the stencil.
+    // All grid points will be relative to origin (0,0,...,0).
+    stencilFunc->define(dims._allDims);
+
+    // Create a set of eqGroups for scalar and vector (non-cluster).
+    EqGroups eqGroups;
+    eqGroups.findEqGroups(grids, eqGroupTargets);
+    eqGroups.printInfo(cerr);
+    optimizeEqGroups(eqGroups, "scalar", false, cerr);
+
+    // Construct cluster of ASTs in grids by calling the 'define' method in the stencil
+    // at the origin of each point in the cluster.
     // Loop through all points in a cluster.
-    // For each point, determine the offset from 0,..,0 based
-    // on the cluster point and fold lengths.
-    // Then, construct an AST for all equations at this offset.
-    // When done, for each equation, we will have an AST for each
-    // cluster point stored in its respective grid.
-    // TODO: check for illegal dependences between cluster points.
-    dims._clusterLengths.visitAllPoints([&](const IntTuple& clusterPoint){
-            
+    dims._clusterLengths.visitAllPoints([&](const IntTuple& clusterPoint) {
+
             // Get starting offset of cluster, which is each cluster index
             // multipled by corresponding vector size.
-            auto offsets = clusterPoint.multElements(dims._foldLengths);
+            // Example: for a 4x4 fold in a 2x2 cluster, the 2nd cluster point
+            // will be (0,1) and the corresponding cluster offset will be (0,4).
+            auto clusterOffset = clusterPoint.multElements(dims._foldLengths);
 
-            // Add any dims not in the cluster with offset 0.
-            offsets.addDimBack(stepDim, 0);
-            for (auto dim : dims._miscDims.getDims())
-                offsets.addDimBack(dim, 0);
-            
-            // Construct AST in grids for this cluster point by calling
-            // the 'define' method in the stencil.
+            // Create a set of offsets with all dims.
+            // This will be a union of clusterOffset and allDims.
+            IntTuple offsets = dims._allDims;
+            offsets.setVals(clusterOffset, false);
+
+            // Construct ASTs in grids by calling the 'define' method in the stencil.
+            // All grid points will be relative to offsets.
             stencilFunc->define(offsets);
-        });
-
-    // Extract equations from grids.
-    Equations equations;
-    equations.findEquations(grids, equationTargets);
-    equations.printInfo(cerr);
-
-    // Get stats.
-    equations.printStats(cerr, "for one vector", false);
-    if (dims._clusterLengths.product() > 1)
-        equations.printStats(cerr, "for one cluster", true);
+                        
+        });             // end of cluster lambda-function.
     
-    // Make a list of optimizations to apply to equations.
-    vector<OptVisitor*> opts;
-    if (doCse)
-        opts.push_back(new CseVisitor);
-    if (doComb) {
-        opts.push_back(new CombineVisitor);
-        if (doCse)
-            opts.push_back(new CseVisitor);
-    }
-    
-    // Apply opts.
-    for (auto optimizer : opts) {
-
-        grids.acceptToAll(optimizer);
-        int numChanges = optimizer->getNumChanges();
-        string descr = "after applying " + optimizer->getName();
-
-        // Get new stats.
-        if (numChanges) {
-            equations.printStats(cerr, descr, true);
-            //addComment(cerr, grids);
-        }
-        else
-            cerr << "No changes " << descr << '.' << endl;
-    }
+    // Create a set of cluster eqGroups.
+    EqGroups clusterEqGroups;
+    clusterEqGroups.findEqGroups(grids, eqGroupTargets);
+    optimizeEqGroups(clusterEqGroups, "cluster", true, cerr);
+    assert(clusterEqGroups.size() == eqGroups.size());
 
     ///// Print out above data based on -p* option(s).
     
     // Human-readable output.
     if (printPseudo) {
-        PseudoPrinter printer(*stencilFunc, equations, exprSize);
+        PseudoPrinter printer(*stencilFunc, clusterEqGroups,
+                              maxExprSize, minExprSize);
+        printer.print(cout);
+    }
+
+    // DOT output.
+    if (printDOT) {
+        DOTPrinter printer(*stencilFunc, clusterEqGroups,
+                           maxExprSize, minExprSize, false);
+        printer.print(cout);
+    }
+    if (printSimpleDOT) {
+        DOTPrinter printer(*stencilFunc, clusterEqGroups,
+                           maxExprSize, minExprSize, true);
         printer.print(cout);
     }
 
     // POV-Ray output.
     if (printPOVRay) {
-        POVRayPrinter printer(*stencilFunc, equations, exprSize);
+        POVRayPrinter printer(*stencilFunc, clusterEqGroups,
+                              maxExprSize, minExprSize);
         printer.print(cout);
     }
 
-    // Print YASK classes to update grids and/or prefetch.
+    // Settings for YASK.
     YASKCppSettings yaskSettings;
     yaskSettings._allowUnalignedLoads = allowUnalignedLoads;
     yaskSettings._hbwRW = hbwRW;
     yaskSettings._hbwRO = hbwRO;
     yaskSettings._haloSize = haloSize;
-    if (printCpp) {
-        YASKCppPrinter printer(*stencilFunc, equations,
-                               exprSize, dims, yaskSettings);
-        printer.printCode(cout);
-    }
-    if (printKncCpp) {
-        YASKKncPrinter printer(*stencilFunc, equations,
-                               exprSize, dims, yaskSettings);
-        printer.printCode(cout);
-    }
-    if (print512Cpp) {
-        YASKAvx512Printer printer(*stencilFunc, equations,
-                                  exprSize, dims, yaskSettings);
-        printer.printCode(cout);
-    }
-    if (print256Cpp) {
-        YASKAvx256Printer printer(*stencilFunc, equations,
-                                  exprSize, dims, yaskSettings);
-        printer.printCode(cout);
-    }
-
+    yaskSettings._maxExprSize = maxExprSize;
+    yaskSettings._minExprSize = minExprSize;
+    
     // Print YASK classes for grids.
+    // NB: not currently used.
     if (printGrids) {
-        YASKCppPrinter printer(*stencilFunc, equations,
-                               exprSize, dims, yaskSettings);
+        YASKCppPrinter printer(*stencilFunc, eqGroups, clusterEqGroups,
+                               dims, yaskSettings);
         printer.printGrids(cout);
     }
 
     // Print CPP macros.
     if (printMacros) {
-        YASKCppPrinter printer(*stencilFunc, equations,
-                               exprSize, dims, yaskSettings);
+        YASKCppPrinter printer(*stencilFunc, eqGroups, clusterEqGroups,
+                               dims, yaskSettings);
         printer.printMacros(cout);
     }
     
+    // Print YASK classes to update grids and/or prefetch.
+    if (printCpp) {
+        YASKCppPrinter printer(*stencilFunc, eqGroups, clusterEqGroups,
+                               dims, yaskSettings);
+        printer.printCode(cout);
+    }
+    if (printKncCpp) {
+        YASKKncPrinter printer(*stencilFunc, eqGroups, clusterEqGroups,
+                               dims, yaskSettings);
+        printer.printCode(cout);
+    }
+    if (print512Cpp) {
+        YASKAvx512Printer printer(*stencilFunc, eqGroups, clusterEqGroups,
+                                  dims, yaskSettings);
+        printer.printCode(cout);
+    }
+    if (print256Cpp) {
+        YASKAvx256Printer printer(*stencilFunc, eqGroups, clusterEqGroups,
+                                  dims, yaskSettings);
+        printer.printCode(cout);
+    }
+
 #if 0
     // Print stats for various folding options.
     if (vlenForStats) {
@@ -418,7 +471,7 @@ int main(int argc, const char* argv[]) {
                         
                         // Create vectors needed to implement RHS.
                         VecInfoVisitor vv(xlen, ylen, zlen);
-                        gp->acceptToAll(&vv);
+                        gp->visitExprs(&vv);
                         
                         // Print stats.
                         vv.printStats(cout, gp->getName(), separator);

@@ -54,8 +54,8 @@ namespace yask {
     idx_t dt = 50;     // number of time-steps per trial.
     idx_t dn = 1, dx = DEF_RANK_SIZE, dy = DEF_RANK_SIZE, dz = DEF_RANK_SIZE;
     idx_t rt = 1;                         // wavefront time steps.
-    idx_t rn = 0, rx = 0, ry = 0, rz = 0;  // region sizes (0 => use rank size).
-    idx_t gn = 0, gx = 0, gy = 0, gz = 0;  // group sizes (0 => calculate).
+    idx_t rn = 0, rx = 0, ry = 0, rz = 0;  // region sizes (0 => use rank-domain size).
+    idx_t gn = 0, gx = 0, gy = 0, gz = 0;  // block-group sizes (0 => calculate).
     idx_t bt = 1;                          // temporal block size.
     idx_t bn = 1, bx = DEF_BLOCK_SIZE, by = DEF_BLOCK_SIZE, bz = DEF_BLOCK_SIZE;  // size of cache blocks.
     idx_t pn = 0, px = DEF_PAD, py = DEF_PAD, pz = DEF_PAD; // padding.
@@ -114,9 +114,34 @@ namespace yask {
         return findNumSubsets(ssize, "group", rsize, "region", mult, dim);
     }
     idx_t findNumRegions(idx_t& rsize, idx_t dsize, idx_t mult, string dim) {
-        return findNumSubsets(rsize, "region", dsize, "rank", mult, dim);
+        return findNumSubsets(rsize, "region", dsize, "rank-domain", mult, dim);
     }
 
+    // Find sum of rank_vals over all ranks.
+    idx_t sumOverRanks(idx_t rank_val, MPI_Comm comm) {
+        idx_t sum_val = rank_val;
+#ifdef USE_MPI
+        MPI_Allreduce(&rank_val, &sum_val, 1, MPI_INTEGER8, MPI_SUM, comm);
+#endif
+        return sum_val;
+    }
+
+    // Make sure rank_val is same over all ranks.
+    void checkOverRanks(idx_t rank_val, MPI_Comm comm, const string& descr) {
+        idx_t min_val = rank_val;
+        idx_t max_val = rank_val;
+#ifdef USE_MPI
+        MPI_Allreduce(&rank_val, &min_val, 1, MPI_INTEGER8, MPI_MIN, comm);
+        MPI_Allreduce(&rank_val, &max_val, 1, MPI_INTEGER8, MPI_MAX, comm);
+#endif
+
+        if (min_val != rank_val || max_val != rank_val) {
+            cerr << "error: " << descr << " values range from " << min_val << " to " <<
+                max_val << " across the ranks. They should all be identical." << endl;
+            exit_yask(1);
+        }
+    }
+    
     // Print usage.
     void usage(const char* pgmName)
     {
@@ -127,20 +152,23 @@ namespace yask {
             " -v               validate by comparing to a scalar run (see notes below)\n" <<
             " -t <n>           number of trials, default=" <<
             num_trials << endl <<
-            " -dt <n>          rank domain size in temporal dimension (number of time steps), default=" <<
+            " -dt <n>          domain size for this rank in temporal dimension (number of time steps), default=" <<
             dt << endl <<
-            " -d{n,x,y,z} <n>  rank domain size in specified spatial dimension, defaults=" <<
+            " -d{n,x,y,z} <n>  domain size for this rank in specified spatial dimension, defaults=" <<
             dn << '*' << dx << '*' << dy << '*' << dz << endl <<
             " -d <n>           shorthand for '-dx <n> -dy <n> -dz <n>\n" <<
             " -rt <n>          OpenMP region time steps (for wave-front tiling), default=" <<
             rt << endl <<
-            " -r{n,x,y,z} <n>  OpenMP region size in specified spatial dimension, defaults to rank size\n" <<
+            " -r{n,x,y,z} <n>  OpenMP region size in specified spatial dimension, defaults to rank-domain size\n" <<
             " -r <n>           shorthand for '-rx <n> -ry <n> -rz <n>\n" <<
             " -s{n,x,y,z} <n>  group size in specified spatial dimension, defaults set automatically\n" <<
             " -s <n>           shorthand for '-sx <n> -sy <n> -sz <n>\n" <<
             " -b{n,x,y,z} <n>  cache block size in specified spatial dimension, defaults=" <<
             bn << '*' << bx << '*' << by << '*' << bz << endl <<
             " -b <n>           shorthand for '-bx <n> -by <n> -bz <n>\n" <<
+            " -g{n,x,y,z} <n>  block-group size in specified spatial dimension, defaults=" <<
+            gn << '*' << gx << '*' << gy << '*' << gz << endl <<
+            " -g <n>           shorthand for '-gx <n> -gy <n> -gz <n>\n" <<
             " -p{n,x,y,z} <n>  extra padding in specified spatial dimension, defaults=" <<
             pn << '*' << px << '*' << py << '*' << pz << endl <<
             " -p <n>           shorthand for '-px <n> -py <n> -pz <n>\n" <<
@@ -168,7 +196,7 @@ namespace yask {
 #endif
             " A block size of 0 => block size == region size in that dimension.\n"
             " A group size of 0 => group size == block size in that dimension.\n"
-            " A region size of 0 => region size == rank size in that dimension.\n"
+            " A region size of 0 => region size == rank-domain size in that dimension.\n"
             " Control the time steps in each temporal wave-front with -rt:\n"
             "  1 effectively disables wave-front tiling.\n"
             "  0 enables wave-front tiling across all time steps in one pass.\n"
@@ -176,7 +204,7 @@ namespace yask {
             " Temporal cache blocking is not yet supported => bt == 1.\n"
             " Validation is very slow and uses 2x memory,\n"
             "  so run with very small sizes and number of time-steps.\n"
-            "  Using '-v' is shorthand for these settings: '-nw -d 64 -dt 2 -t 1',\n"
+            "  Using '-v' is shorthand for these settings: '-nw -d 64 -dt 1 -t 1',\n"
             "  which may be overridden by options *after* '-v'.\n"
             "  If validation fails, it may be due to rounding error; try building with 8-byte reals.\n"
             " The 'n' dimension only applies to stencils that use that variable.\n"
@@ -209,7 +237,7 @@ namespace yask {
                     validate = true;
                     doWarmup = false;
                     dx = dy = dz = 64;
-                    dt = 2;
+                    dt = 1;
                     num_trials = 1;
                 }
 
@@ -370,18 +398,12 @@ int main(int argc, char** argv)
 #endif
 
     // Round up domain size as needed.
-    dt = roundUp(dt, CPTS_T, "rank size in t (time steps)");
-    dn = roundUp(dn, CPTS_N, "rank size in n");
-    dx = roundUp(dx, CPTS_X, "rank size in x");
-    dy = roundUp(dy, CPTS_Y, "rank size in y");
-    dz = roundUp(dz, CPTS_Z, "rank size in z");
+    dt = roundUp(dt, CPTS_T, "rank domain size in t (time steps)");
+    dn = roundUp(dn, CPTS_N, "rank domain size in n");
+    dx = roundUp(dx, CPTS_X, "rank domain size in x");
+    dy = roundUp(dy, CPTS_Y, "rank domain size in y");
+    dz = roundUp(dz, CPTS_Z, "rank domain size in z");
 
-    // Find size across all ranks.
-    idx_t min_dt = dt;
-#ifdef USE_MPI
-    MPI_Allreduce(&dt, &min_dt, 1, MPI_INTEGER8, MPI_MIN, comm);
-#endif
-        
     // Report ranks.
 #ifdef USE_MPI
     *ostr << "Num MPI ranks: " << num_ranks << endl;
@@ -389,7 +411,7 @@ int main(int argc, char** argv)
 #else
     *ostr << "MPI not enabled." << endl;
 #endif
-    
+
     // Check ranks.
     idx_t req_ranks = nrn * nrx * nry * nrz;
     if (req_ranks != num_ranks) {
@@ -397,11 +419,8 @@ int main(int argc, char** argv)
             num_ranks << " rank(s) are active." << endl;
         exit_yask(1);
     }
-    if (dt != min_dt) {
-        cerr << "error: number of time-steps is not the same across all ranks." << endl;
-        exit_yask(1);
-    }
-    
+    checkOverRanks(dt, comm, "time-step");
+            
     // Context for evaluating results.
     STENCIL_CONTEXT context;
     context.ostr = ostr;
@@ -466,7 +485,8 @@ int main(int argc, char** argv)
 
         // TODO: enable this.
         if (num_ranks > 1) {
-            cerr << "Sorry, MPI communication is not currently enabled with wave-front tiling." << endl;
+            cerr << "MPI communication is not currently enabled with wave-front tiling." << endl;
+            exit_yask(1);
         }
     }
 
@@ -492,7 +512,7 @@ int main(int argc, char** argv)
     idx_t nb = nbt * nbn * nbx * nby * nbz;
     *ostr << " num-blocks-per-region: " << nb << endl;
 
-    // Adjust defaults for groups.
+    // Adjust defaults for block-groups.
     // Assumes inner block loop in z dimension and
     // layout in n,x,y,z order.
     // TODO: check and adjust this accordingly.
@@ -503,13 +523,13 @@ int main(int argc, char** argv)
 
     // Determine num groups.
     // Also fix up group sizes as needed.
-    *ostr << "\nGroups:" << endl;
+    *ostr << "\nBlock-groups:" << endl;
     idx_t ngn = findNumGroups(gn, rn, bn, "n");
     idx_t ngx = findNumGroups(gx, rx, bx, "x");
     idx_t ngy = findNumGroups(gy, ry, by, "y");
     idx_t ngz = findNumGroups(gz, rz, bz, "z");
     idx_t ng = ngn * ngx * ngy * ngz;
-    *ostr << " num-groups-per-region: " << ng << endl;
+    *ostr << " num-block-groups-per-region: " << ng << endl;
 
     // Round up padding as needed.
     pn = roundUp(pn, VLEN_N, "extra padding in n");
@@ -530,15 +550,16 @@ int main(int argc, char** argv)
     idx_t hz = ROUND_UP(context.max_halo_z, VLEN_Z);
     
     *ostr << "\nSizes in points per grid (t*n*x*y*z):\n"
-        " vector-size:  " << VLEN_T << '*' << VLEN_N << '*' << VLEN_X << '*' << VLEN_Y << '*' << VLEN_Z << endl <<
-        " cluster-size: " << CPTS_T << '*' << CPTS_N << '*' << CPTS_X << '*' << CPTS_Y << '*' << CPTS_Z << endl <<
-        " block-size:   " << bt << '*' << bn << '*' << bx << '*' << by << '*' << bz << endl <<
-        " group-size:   " << 1 << '*' << gn << '*' << gx << '*' << gy << '*' << gz << endl <<
-        " region-size:  " << rt << '*' << rn << '*' << rx << '*' << ry << '*' << rz << endl <<
-        " rank-size:    " << dt << '*' << dn << '*' << dx << '*' << dy << '*' << dz << endl <<
-    *ostr << "\nOther settings:\n"
+        " vector-size:      " << VLEN_T << '*' << VLEN_N << '*' << VLEN_X << '*' << VLEN_Y << '*' << VLEN_Z << endl <<
+        " cluster-size:     " << CPTS_T << '*' << CPTS_N << '*' << CPTS_X << '*' << CPTS_Y << '*' << CPTS_Z << endl <<
+        " block-size:       " << bt << '*' << bn << '*' << bx << '*' << by << '*' << bz << endl <<
+        " block-group-size: 1*" << gn << '*' << gx << '*' << gy << '*' << gz << endl <<
+        " region-size:      " << rt << '*' << rn << '*' << rx << '*' << ry << '*' << rz << endl <<
+        " rank-domain-size: " << dt << '*' << dn << '*' << dx << '*' << dy << '*' << dz << endl <<
+        endl <<
+        "Other settings:\n"
         " num-ranks: " << nrn << '*' << nrx << '*' << nry << '*' << nrz << endl <<
-        " stencil-shape: " STENCIL_NAME << endl << 
+        " stencil-name: " STENCIL_NAME << endl << 
         " time-dim-size: " << TIME_DIM_SIZE << endl <<
         " vector-len: " << VLEN << endl <<
         " padding: " << pn << '+' << px << '+' << py << '+' << pz << endl <<
@@ -546,7 +567,8 @@ int main(int argc, char** argv)
         " shadow-copy-in-frequency: " << copy_in << endl <<
         " shadow-copy-out-frequency: " << copy_out << endl <<
         " manual-L1-prefetch-distance: " << PFDL1 << endl <<
-        " manual-L2-prefetch-distance: " << PFDL2 << endl;
+        " manual-L2-prefetch-distance: " << PFDL2 << endl <<
+        endl;
 
     // Save sizes in context struct.
     context.dt = dt;
@@ -594,75 +616,82 @@ int main(int argc, char** argv)
 
     // Alloc memory, create lists of grids, etc.
     // NB: this contains MPI exchanges of rank indices.
-    idx_t nbytes = context.allocAll(findLoc);
+    idx_t rank_nbytes = context.allocAll(findLoc);
 
     // Report total allocation.
-    idx_t grid_numpts = dn*dx*dy*dz;
-    idx_t tot_grid_numpts = grid_numpts;
-    idx_t tot_nbytes = nbytes;
-#ifdef USE_MPI
-    MPI_Allreduce(&grid_numpts, &tot_grid_numpts, 1, MPI_INTEGER8, MPI_SUM, comm);
-    MPI_Allreduce(&nbytes, &tot_nbytes, 1, MPI_INTEGER8, MPI_SUM, comm);
-#endif
+    idx_t tot_nbytes = sumOverRanks(rank_nbytes, comm);
     *ostr << "Total overall allocation in " << num_ranks << " rank(s) (bytes): " <<
         printWithPow2Multiplier(tot_nbytes) << endl;
     
-    // Stencil functions.
-    idx_t scalar_fp_ops = 0;
-    STENCIL_EQUATIONS stencils;
-    idx_t num_stencils = stencils.stencils.size();
-    *ostr << endl;
-    *ostr << "Num stencil equations: " << num_stencils << endl <<
-        "Est FP ops per point for each equation:" << endl;
-    for (auto stencil : stencils.stencils) {
-        idx_t fpos = stencil->get_scalar_fp_ops();
-        *ostr << "  '" << stencil->get_name() << "': " << fpos << endl;
-        scalar_fp_ops += fpos;
-    }
+    // Init stencil equations.
+    STENCIL_EQS stencilEqs;
+    idx_t rank_numpts_1t, rank_numFpOps_1t; // sums across eqs for this rank.
+    stencilEqs.init(context, &rank_numpts_1t, &rank_numFpOps_1t);
 
-    // Amount of work.
-    idx_t num_eqGrids = context.eqGridPtrs.size();
+    // Various metrics for amount of work.
+    // 'rank_' prefix indicates for this rank.
+    // 'tot_' prefix indicates over all ranks.
+    // 'numpts' indicates points actually calculated in sub-domains.
+    // 'domain' indicates points in domain-size specified on cmd-line.
+    // 'numFpOps' indicates est. number of FP ops.
+    // '_1t' suffix indicates one time-step.
+    // '_dt' suffix indicates all time-steps.
 
-    const idx_t grids_numpts = grid_numpts * num_eqGrids;
-    const idx_t grids_rank_numpts = dt * grids_numpts;
+    idx_t rank_numpts_dt = rank_numpts_1t * dt;
+    idx_t tot_numpts_1t = sumOverRanks(rank_numpts_1t, comm);
+    idx_t tot_numpts_dt = tot_numpts_1t * dt;
 
-    const idx_t tot_grids_numpts = tot_grid_numpts * num_eqGrids;
-    const idx_t tot_numpts = dt * tot_grids_numpts;
-    
-    const idx_t rank_numFpOps_1t = grid_numpts * scalar_fp_ops;
-    const idx_t rank_numFpOps = dt * rank_numFpOps_1t;
-    const idx_t tot_numFpOps_1t = tot_grid_numpts * scalar_fp_ops;
-    const idx_t tot_numFpOps = dt * tot_numFpOps_1t;
+    idx_t rank_numFpOps_dt = rank_numFpOps_1t * dt;
+    idx_t tot_numFpOps_1t = sumOverRanks(rank_numFpOps_1t, comm);
+    idx_t tot_numFpOps_dt = tot_numFpOps_1t * dt;
+
+    idx_t rank_domain_1t = dn * dx * dy * dz;
+    idx_t rank_domain_dt = rank_domain_1t * dt;
+    idx_t tot_domain_1t = sumOverRanks(rank_domain_1t, comm);
+    idx_t tot_domain_dt = tot_domain_1t * dt;
     
     // Print some more stats.
     *ostr << endl <<
-        "Points to calculate in rank, per time-step and grid: " <<
-        printWithPow10Multiplier(grid_numpts) << endl <<
-        "Points to calculate in rank, per time-step, for all grids: " <<
-        printWithPow10Multiplier(grids_numpts) << endl <<
-        "Points to calculate in rank, for all time-steps and grids: " <<
-        printWithPow10Multiplier(grids_rank_numpts) << endl <<
-        "Points to calculate for all ranks and grids, per time-step: " <<
-        printWithPow10Multiplier(tot_grids_numpts) << endl <<
-        "Points to calculate overall: " <<
-        printWithPow10Multiplier(tot_numpts) << endl <<
-        endl << 
-        "Est FP ops per point, for all grids, per time-step: " << scalar_fp_ops << endl <<
-        "Est FP ops in rank, for all grids, per time-step: " <<
+        "Amount-of-work stats:\n" <<
+        " problem-size in this rank, for one time-step: " <<
+        printWithPow10Multiplier(rank_domain_1t) << endl <<
+        " problem-size in all ranks, for one time-step: " <<
+        printWithPow10Multiplier(tot_domain_1t) << endl <<
+        " problem-size in this rank, for all time-steps: " <<
+        printWithPow10Multiplier(rank_domain_dt) << endl <<
+        " problem-size in all ranks, for all time-steps: " <<
+        printWithPow10Multiplier(tot_domain_dt) << endl <<
+        endl <<
+        " grid-points-updated in this rank, for one time-step: " <<
+        printWithPow10Multiplier(rank_numpts_1t) << endl <<
+        " grid-points-updated in all ranks, for one time-step: " <<
+        printWithPow10Multiplier(tot_numpts_1t) << endl <<
+        " grid-points-updated in this rank, for all time-steps: " <<
+        printWithPow10Multiplier(rank_numpts_dt) << endl <<
+        " grid-points-updated in all ranks, for all time-steps: " <<
+        printWithPow10Multiplier(tot_numpts_dt) << endl <<
+        endl <<
+        " est-FP-ops in this rank, for one time-step: " <<
         printWithPow10Multiplier(rank_numFpOps_1t) << endl <<
-        "Est FP ops for all ranks and grids, per time-step: " <<
+        " est-FP-ops in all ranks, for one time-step: " <<
         printWithPow10Multiplier(tot_numFpOps_1t) << endl <<
-        "Est FP ops in rank, for all grids and time-steps: " <<
-        printWithPow10Multiplier(rank_numFpOps) << endl <<
-        "Est FP ops overall: " <<
-        printWithPow10Multiplier(tot_numFpOps) << endl;
+        " est-FP-ops in this rank, for all time-steps: " <<
+        printWithPow10Multiplier(rank_numFpOps_dt) << endl <<
+        " est-FP-ops in all ranks, for all time-steps: " <<
+        printWithPow10Multiplier(tot_numFpOps_dt) << endl <<
+        endl << 
+        "Notes:\n" <<
+        " problem-size is based on rank-domain sizes specified in command-line (dn * dx * dy * dz).\n" <<
+        " grid-points-updated is based sum of grid-updates-in-sub-domain across equation-group(s).\n" <<
+        " est-FP-ops is based on sum of est-FP-ops-in-sub-domain across equation-group(s).\n" <<
+        endl;
 
     // Exit if nothing to do.
     if (num_trials < 1) {
         cerr << "Exiting because no trials are specified." << endl;
         exit_yask(1);
     }
-    if (tot_numpts < 1) {
+    if (tot_numpts_dt < 1) {
         cerr << "Exiting because there are zero points to evaluate." << endl;
         exit_yask(1);
     }
@@ -677,7 +706,7 @@ int main(int argc, char** argv)
     if (doWarmup) {
         *ostr << endl;
 
-        // Temporarily set dt to a temp value.
+        // Temporarily set dt to a temp value for warmup.
         idx_t tmp_dt = min<idx_t>(dt, TIME_DIM_SIZE);
         context.dt = tmp_dt;
 
@@ -688,7 +717,7 @@ int main(int argc, char** argv)
             *ostr << "Modeling cache...\n";
 #endif
         *ostr << "Warmup of " << context.dt << " time step(s)...\n" << flush;
-        stencils.calc_rank_opt(context);
+        stencilEqs.calc_rank_opt(context);
 
 #ifdef MODEL_CACHE
         // print cache stats, then disable.
@@ -707,9 +736,10 @@ int main(int argc, char** argv)
 
     // variables for measuring performance.
     double wstart, wstop;
-    float best_elapsed_time=0.0f, best_pps=0.0f, best_flops=0.0f;
+    float best_elapsed_time=0.0f, best_apps=0.0f, best_dpps=0.0f, best_flops=0.0f;
 
     // Performance runs.
+    string divLine = "───────────────────────────────────────────────────────";
     *ostr << "\nRunning " << num_trials << " performance trial(s) of " <<
         context.dt << " time step(s) each...\n" << flush;
     for (idx_t tr = 0; tr < num_trials; tr++) {
@@ -730,7 +760,7 @@ int main(int argc, char** argv)
         wstart = getTimeInSecs();
 
         // Actual work (must wait until all ranks are done).
-        stencils.calc_rank_opt(context);
+        stencilEqs.calc_rank_opt(context);
         MPI_Barrier(comm);
 
         // Stop timing.
@@ -739,32 +769,41 @@ int main(int argc, char** argv)
             
         // calc and report perf.
         float elapsed_time = (float)(wstop - wstart);
-        float pps = float(tot_numpts)/elapsed_time;
-        float flops = float(tot_numFpOps)/elapsed_time;
-        *ostr << "-----------------------------------------\n" <<
-            "time (sec):                " << printWithPow10Multiplier(elapsed_time) << endl <<
-            "throughput (points/sec):   " << printWithPow10Multiplier(pps) << endl <<
-            "throughput (est FLOPS):    " << printWithPow10Multiplier(flops) << endl;
+        float apps = float(tot_numpts_dt)/elapsed_time;
+        float dpps = float(tot_domain_dt)/elapsed_time;
+        float flops = float(tot_numFpOps_dt)/elapsed_time;
+        *ostr << divLine << endl <<
+            "time (sec):                             " << printWithPow10Multiplier(elapsed_time) << endl <<
+            "throughput (prob-size-points/sec):      " << printWithPow10Multiplier(dpps) << endl <<
+            "throughput (points-updated/sec):        " << printWithPow10Multiplier(apps) << endl <<
+            "throughput (est-FLOPS):                 " << printWithPow10Multiplier(flops) << endl;
 #ifdef USE_MPI
         *ostr <<
-            "time in halo exch (sec):   " << printWithPow10Multiplier(context.mpi_time) << endl;
+            "time in halo exch (sec):                " << printWithPow10Multiplier(context.mpi_time) << endl;
 #endif
         if (copy_in || copy_out)
             *ostr <<
-                "time in shadow copy (sec): " << printWithPow10Multiplier(context.shadow_time) << endl;
+                "time in shadow copy (sec):              " << printWithPow10Multiplier(context.shadow_time) << endl;
 
-        if (pps > best_pps) {
-            best_pps = pps;
+        if (apps > best_apps) {
+            best_apps = apps;
+            best_dpps = dpps;
             best_elapsed_time = elapsed_time;
             best_flops = flops;
         }
     }
 
-    *ostr << "-----------------------------------------\n" <<
-        "best-time (sec):                " << printWithPow10Multiplier(best_elapsed_time) << endl <<
-        "best-throughput (points/sec):   " << printWithPow10Multiplier(best_pps) << endl <<
-        "best-throughput (est FLOPS):    " << printWithPow10Multiplier(best_flops) << endl <<
-        "-----------------------------------------\n";
+    *ostr << divLine << endl <<
+        "best-time (sec):                        " << printWithPow10Multiplier(best_elapsed_time) << endl <<
+        "best-throughput (prob-size-points/sec): " << printWithPow10Multiplier(best_dpps) << endl <<
+        "best-throughput (points-updated/sec):   " << printWithPow10Multiplier(best_apps) << endl <<
+        "best-throughput (est-FLOPS):            " << printWithPow10Multiplier(best_flops) << endl <<
+        divLine << endl <<
+        "Notes:\n" <<
+        " prob-size-points/sec is based on problem-size as described above.\n" <<
+        " points-updated/sec is based on grid-points-updated as described above.\n" <<
+        " est-FLOPS is based on est-FP-ops as described above.\n" <<
+        endl;
     
     if (validate) {
         MPI_Barrier(comm);
@@ -796,7 +835,7 @@ int main(int argc, char** argv)
 #endif
 
         // Ref trial.
-        stencils.calc_rank_ref(ref);
+        stencilEqs.calc_rank_ref(ref);
 
         // check for equality.
 #ifdef USE_MPI
@@ -808,6 +847,8 @@ int main(int argc, char** argv)
             *ostr << "TEST PASSED." << endl;
         } else {
             cerr << "TEST FAILED: " << errs << " mismatch(es)." << endl;
+            if (REAL_BYTES < 8)
+                cerr << "This is not uncommon for low-precision FP; try with 8-byte reals." << endl;
             exit_yask(1);
         }
     }

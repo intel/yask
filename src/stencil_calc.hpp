@@ -30,6 +30,14 @@ IN THE SOFTWARE.
 #include <algorithm>
 #include <functional>
 
+// Macro for automatically adding N dimension's arg.
+// TODO: make all args programmatic.
+#if USING_DIM_N
+#define ARG_N(n) n,
+#else
+#define ARG_N(n)
+#endif
+
 namespace yask {
 
     // Forward defn.
@@ -88,11 +96,27 @@ namespace yask {
                                     std::ostream& os);
     };
 
+    // A 4D bounding-box.
+    struct BoundingBox {
+        idx_t begin_bbn, begin_bbx, begin_bby, begin_bbz;
+        idx_t end_bbn, end_bbx, end_bby, end_bbz;
+        idx_t len_bbn, len_bbx, len_bby, len_bbz;
+        idx_t bb_size;
+        bool bb_valid;
+
+        BoundingBox() :
+            begin_bbn(0), begin_bbx(0), begin_bby(0), begin_bbz(0),
+            end_bbn(0), end_bbx(0), end_bby(0), end_bbz(0),
+            len_bbn(0), len_bbx(0), len_bby(0), len_bbz(0),
+            bb_size(0), bb_valid(false) { }
+    };
     
     // Data and hierarchical sizes.
     // This is a pure-virtual class that must be implemented
     // for a specific problem.
-    struct StencilContext {
+    // Each eq group is valid within its bounding box (BB).
+    // The context's BB encompasses all eq-group BBs.
+    struct StencilContext : public BoundingBox {
 
         // Name.
         std::string name;
@@ -115,7 +139,7 @@ namespace yask {
         // Sizes are the same for all grids and all stencil equations.
         // TODO: relax this restriction.
         idx_t begin_dt;           // begin time (end is begin_dt + dt);
-        idx_t dt, dn, dx, dy, dz; // rank size.
+        idx_t dt, dn, dx, dy, dz; // rank size (without halos).
         idx_t rt, rn, rx, ry, rz; // region size.
         idx_t bt, bn, bx, by, bz; // block size.
         idx_t gn, gx, gy, gz;     // group-of-blocks size.
@@ -222,7 +246,7 @@ namespace yask {
             initSame();
         }
 
-        // Compare grids in contexts.
+        // Compare grids in contexts for validation.
         // Params should not be written to, so they are not compared.
         // Return number of mis-compares.
         virtual idx_t compare(const StencilContext& ref) const;
@@ -269,27 +293,38 @@ namespace yask {
 
     };
 
-    /// Classes that support evaluation of one stencil equation.
+    /// Classes that support evaluation of one stencil equation-set.
 
-    // A pure-virtual class base for a stencil equation.
-    struct StencilBase {
+    // A pure-virtual class base for a stencil equation-set.
+    class EqGroupBase : public BoundingBox {
+    public:
 
         // ctor, dtor.
-        StencilBase() { }
-        virtual ~StencilBase() { }
+        EqGroupBase() { }
+        virtual ~EqGroupBase() { }
 
-        // Get name of this equation.
-        virtual const std::string& get_name() =0;
+        // Get name of this equation set.
+        virtual const std::string& get_name() const =0;
 
         // Get estimated number of FP ops done for one scalar eval.
-        virtual int get_scalar_fp_ops() =0;
+        virtual int get_scalar_fp_ops() const =0;
+
+        // Get number of points updated for one scalar eval.
+        virtual int get_scalar_points_updated() const =0;
 
         // Get list of grids updated by this equation.
-        virtual std::vector<RealVecGridBase*>& getEqGridPtrs() = 0;
+        virtual std::vector<RealVecGridBase*>& get_eq_grid_ptrs() =0;
 
         // Set eqGridPtrs.
         virtual void init(StencilContext& generic_context) =0;
     
+        // Set the bounding-box vars for this eq group.
+        virtual void find_bounding_box(StencilContext& context);
+
+        // Determine whether indices are in [sub-]domain.
+        virtual bool is_in_valid_domain(StencilContext& generic_context,
+                                        idx_t t, idx_t n, idx_t x, idx_t y, idx_t z) =0;
+
         // Calculate one scalar result at time t.
         virtual void calc_scalar(StencilContext& generic_context,
                                  idx_t t, idx_t n, idx_t x, idx_t y, idx_t z) =0;
@@ -305,17 +340,9 @@ namespace yask {
         virtual void exchange_halos(StencilContext& generic_context, idx_t start_dt, idx_t stop_dt);
     };
 
-    // Collections of stencils.
-    typedef std::vector<StencilBase*> StencilList;
-    typedef std::set<StencilBase*> StencilSet;
-
-    // Macro for automatically adding N dimension.
-    // TODO: make all args programmatic.
-#if USING_DIM_N
-#define ARG_N(n) n,
-#else
-#define ARG_N(n)
-#endif
+    // Collections of equation sets.
+    typedef std::vector<EqGroupBase*> EqGroupList;
+    typedef std::set<EqGroupBase*> EqGroupSet;
 
     // Define a method named cfn to prefetch a cluster by calling vfn.
 #define PREFETCH_CLUSTER_METHOD(cfn, vfn)                               \
@@ -327,40 +354,47 @@ namespace yask {
         TRACE_MSG("%s.%s<%d>(%ld, %ld, %ld, %ld, %ld)",                 \
                   get_name().c_str(), #cfn, level, ct,                  \
                   begin_cnv, begin_cxv, begin_cyv, begin_czv);          \
-        _stencil.vfn<level>(context, ct,                                \
+        _eqGroup.vfn<level>(context, ct,                                \
                      ARG_N(begin_cnv) begin_cxv, begin_cyv, begin_czv); \
     }
 
-    // A template that provides wrappers around a stencil-equation class created
-    // by the foldBuilder. A template is used instead of inheritance for performance.
-    // By using templates, the compiler can inline stencil code into loops and
-    // avoid indirect calls.
-    template <typename StencilEquationClass, typename ContextClass>
-    class StencilTemplate : public StencilBase {
+    // A template that provides wrappers around a stencil-equation class
+    // created by the foldBuilder. A template is used instead of inheritance
+    // for performance.  By using templates, the compiler can inline stencil
+    // code into loops and avoid indirect calls. TODO: maybe templating
+    // isn't really necessary: optimization through a known concrete derived
+    // class may be just as good and much simpler. Need to try this.
+    template <typename EqGroupClass, typename ContextClass>
+    class EqGroupTemplate : public EqGroupBase {
 
     protected:
 
-        // _stencil must implement calc_scalar, calc_cluster,
-        // prefetch_cluster, name.
-        StencilEquationClass _stencil;
+        // EqGroupClass must implement calc_scalar(), calc_cluster(),
+        // etc., that are used below.
+        // This class is generated by the foldBuilder.
+        EqGroupClass _eqGroup;
 
     public:
-        StencilTemplate() {}
-        StencilTemplate(const std::string& name) :
-            StencilBase(name) { }
-        virtual ~StencilTemplate() {}
 
-        // Get values from _stencil.
-        virtual const std::string& get_name() {
-            return _stencil.name;
+        EqGroupTemplate() {}
+        EqGroupTemplate(const std::string& name) :
+            EqGroupBase(name) { }
+        virtual ~EqGroupTemplate() {}
+
+        // Get values from _eqGroup.
+        virtual const std::string& get_name() const {
+            return _eqGroup.name;
         }
-        virtual int get_scalar_fp_ops() {
-            return _stencil.scalar_fp_ops;
+        virtual int get_scalar_fp_ops() const {
+            return _eqGroup.scalar_fp_ops;
         }
-        virtual std::vector<RealVecGridBase*>& getEqGridPtrs() {
-            return _stencil.eqGridPtrs;
+        virtual int get_scalar_points_updated() const {
+            return _eqGroup.scalar_points_updated;
         }
-    
+        virtual std::vector<RealVecGridBase*>& get_eq_grid_ptrs() {
+            return _eqGroup.eqGridPtrs;
+        }
+
         // Init data.
         // This function implements the interface in the base class.
         virtual void init(StencilContext& generic_context) {
@@ -369,27 +403,35 @@ namespace yask {
             auto context = dynamic_cast<ContextClass&>(generic_context);
 
             // Call the generated code.
-            _stencil.init(context);
+            _eqGroup.init(context);
         }
     
+        // Determine whether indices are in [sub-]domain for this eq group.
+        virtual bool is_in_valid_domain(StencilContext& generic_context,
+                                        idx_t t, idx_t n, idx_t x, idx_t y, idx_t z) {
+            return _eqGroup.is_in_valid_domain(generic_context, t,
+                                               ARG_N(n) x, y, z);
+        }
+
         // Calculate one scalar result.
         // This function implements the interface in the base class.
-        virtual void calc_scalar(StencilContext& generic_context, idx_t t, idx_t n, idx_t x, idx_t y, idx_t z) {
+        virtual void calc_scalar(StencilContext& generic_context,
+                                 idx_t t, idx_t n, idx_t x, idx_t y, idx_t z) {
 
             // Convert to a problem-specific context.
             auto context = dynamic_cast<ContextClass&>(generic_context);
 
             // Call the generated code.
-            _stencil.calc_scalar(context, t, ARG_N(n) x, y, z);
+            _eqGroup.calc_scalar(context, t, ARG_N(n) x, y, z);
         }
 
         // Calculate results within a cluster of vectors.
         // Called from calc_block().
         // The begin/end_c* vars are the start/stop_b* vars from the block loops.
         ALWAYS_INLINE void
-        calc_cluster (ContextClass& context, idx_t ct,
-                      idx_t begin_cnv, idx_t begin_cxv, idx_t begin_cyv, idx_t begin_czv,
-                      idx_t end_cnv, idx_t end_cxv, idx_t end_cyv, idx_t end_czv)
+        calc_cluster(ContextClass& context, idx_t ct,
+                     idx_t begin_cnv, idx_t begin_cxv, idx_t begin_cyv, idx_t begin_czv,
+                     idx_t end_cnv, idx_t end_cxv, idx_t end_cyv, idx_t end_czv)
         {
             TRACE_MSG("%s.calc_cluster(%ld, %ld, %ld, %ld, %ld)",
                       get_name().c_str(), ct, begin_cnv, begin_cxv, begin_cyv, begin_czv);
@@ -404,10 +446,11 @@ namespace yask {
             assert(end_czv == begin_czv + CLEN_Z);
         
             // Calculate results.
-            _stencil.calc_cluster(context, ct, ARG_N(begin_cnv) begin_cxv, begin_cyv, begin_czv);
+            _eqGroup.calc_cluster(context, ct, ARG_N(begin_cnv) begin_cxv, begin_cyv, begin_czv);
         }
 
         // Prefetch a cluster.
+        // Separate methods for full cluster and each direction.
         PREFETCH_CLUSTER_METHOD(prefetch_cluster, prefetch_cluster)
 #if USING_DIM_N
         PREFETCH_CLUSTER_METHOD(prefetch_cluster_bnv, prefetch_cluster_n)
@@ -435,16 +478,16 @@ namespace yask {
             // Convert to a problem-specific context.
             auto context = dynamic_cast<ContextClass&>(generic_context);
 
-            // Divide indices by vector lengths.
-            // Begin/end vars shouldn't be negative, so '/' is ok.
-            const idx_t begin_bnv = begin_bn / VLEN_N;
-            const idx_t begin_bxv = begin_bx / VLEN_X;
-            const idx_t begin_byv = begin_by / VLEN_Y;
-            const idx_t begin_bzv = begin_bz / VLEN_Z;
-            const idx_t end_bnv = end_bn / VLEN_N;
-            const idx_t end_bxv = end_bx / VLEN_X;
-            const idx_t end_byv = end_by / VLEN_Y;
-            const idx_t end_bzv = end_bz / VLEN_Z;
+            // Divide indices by vector lengths.  Use idiv() instead of '/'
+            // because begin/end vars may be negative (if in halo).
+            const idx_t begin_bnv = idiv<idx_t>(begin_bn, VLEN_N);
+            const idx_t begin_bxv = idiv<idx_t>(begin_bx, VLEN_X);
+            const idx_t begin_byv = idiv<idx_t>(begin_by, VLEN_Y);
+            const idx_t begin_bzv = idiv<idx_t>(begin_bz, VLEN_Z);
+            const idx_t end_bnv = idiv<idx_t>(end_bn, VLEN_N);
+            const idx_t end_bxv = idiv<idx_t>(end_bx, VLEN_X);
+            const idx_t end_byv = idiv<idx_t>(end_by, VLEN_Y);
+            const idx_t end_bzv = idiv<idx_t>(end_bz, VLEN_Z);
 
             // Vector-size steps are based on cluster lengths.
             // Using CLEN_* instead of CPTS_* because we want vector lengths.
@@ -471,29 +514,26 @@ namespace yask {
 #include "stencil_block_loops.hpp"
             }
         }
-
     };
 
-    // Collection of all stencil equations to be evaluated.  This is also
-    // called the 'problem' being solved.  Unfortunately, this is also
-    // called the 'stencil' in the Makefile and foldBuilder for historical
-    // reasons (there used to be only one stencil equation allowed).
-    struct StencilEquations {
+    // Collection of all stencil equations to be evaluated.
+    struct StencilEqs {
 
         // Name of the problem.
         std::string name;
 
-        // List of all stencil equations.
-        StencilList stencils;
+        // List of all stencil equations in the order in which
+        // they should be evaluated. Current assumption is that
+        // later ones are dependent on their predecessors.
+        // TODO: relax this assumption, determining which eqGroups
+        // are actually dependent on which others, allowing
+        // more parallelism.
+        EqGroupList eqGroups;
 
-        StencilEquations() {}
-        virtual ~StencilEquations() {}
+        // ctor, dtor.
+        StencilEqs() {}
+        virtual ~StencilEqs() {}
 
-        virtual void init(StencilContext& context) {
-            for (auto stencil : stencils)
-                stencil->init(context);
-        }
-    
         // Reference stencil calculations.
         virtual void calc_rank_ref(StencilContext& context);
 
@@ -501,8 +541,9 @@ namespace yask {
         virtual void calc_rank_opt(StencilContext& context);
 
         // Calculate results within a region.
+        // TODO: create a public interface w/a more logical index ordering.
         virtual void calc_region(StencilContext& context, idx_t start_dt, idx_t stop_dt,
-                                 StencilSet* stencil_set,
+                                 EqGroupSet* eqGroup_set,
                                  idx_t start_dn, idx_t start_dx, idx_t start_dy, idx_t start_dz,
                                  idx_t stop_dn, idx_t stop_dx, idx_t stop_dy, idx_t stop_dz);
         virtual void calc_region(StencilContext& context, idx_t start_dt, idx_t stop_dt,
@@ -513,6 +554,16 @@ namespace yask {
                         start_dn, start_dx, start_dy, start_dz,
                         stop_dn, stop_dx, stop_dy, stop_dz);
         }
+
+        // Set the bounding-box vars for all eq groups.
+        virtual void find_bounding_boxes(StencilContext& context);
+
+        // Initialize some data structures.
+        // Must be called after the context grids are allocated.
+        virtual void init(StencilContext& context,
+                          idx_t* sum_points = NULL,
+                          idx_t* sum_fpops = NULL);
+    
     };
 }
 

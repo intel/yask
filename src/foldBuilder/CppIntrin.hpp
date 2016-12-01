@@ -569,12 +569,12 @@ protected:
 
 public:
     YASKKncPrinter(StencilBase& stencil,
-                   Equations& equations,
-                   int exprSize,
+                   EqGroups& eqGroups,
+                   EqGroups& clusterEqGroups,
                    Dimensions& dims,
                    YASKCppSettings& settings) :
-        YASKCppPrinter(stencil, equations,
-                       exprSize, dims, settings) { }
+        YASKCppPrinter(stencil, eqGroups, clusterEqGroups,
+                       dims, settings) { }
 };
 
 // Print 256-bit AVX intrinsic code.
@@ -588,12 +588,12 @@ protected:
 
 public:
     YASKAvx256Printer(StencilBase& stencil,
-                      Equations& equations,
-                      int exprSize,
+                      EqGroups& eqGroups,
+                      EqGroups& clusterEqGroups,
                       Dimensions& dims,
                       YASKCppSettings& settings) :
-        YASKCppPrinter(stencil, equations,
-                       exprSize, dims, settings) { }
+        YASKCppPrinter(stencil, eqGroups, clusterEqGroups,
+                       dims, settings) { }
 };
 
 // Print 512-bit AVX intrinsic code.
@@ -607,12 +607,12 @@ protected:
 
 public:
     YASKAvx512Printer(StencilBase& stencil,
-                      Equations& equations,
-                      int exprSize,
+                      EqGroups& eqGroups,
+                      EqGroups& clusterEqGroups,
                       Dimensions& dims,
                       YASKCppSettings& settings) :
-        YASKCppPrinter(stencil, equations,
-                       exprSize, dims, settings) { }
+        YASKCppPrinter(stencil, eqGroups, clusterEqGroups,
+                       dims, settings) { }
 };
 
 #endif

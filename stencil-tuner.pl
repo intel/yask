@@ -305,23 +305,21 @@ $outFile = '/dev/null' if $checking;
 open OUTFILE, ">$outFile" or die "error: cannot write to '$outFile'\n";
 
 # things to get from the run.
-my $fitnessMetric = 'best-throughput (points/sec)';
+my $fitnessMetric = 'best-throughput (points-updated/sec)';
 my $timeMetric = 'best-time (sec)';
-my $dimsMetric = 'overall-size';
+my $dimsMetric = 'rank-domain-size';
 my @metrics = ( $fitnessMetric,
                 $timeMetric,
                 $dimsMetric,
-                'best-throughput (est FLOPS)',
-                'overall-size',
-                'rank-size',
+                'best-throughput (est-FLOPS)',
                 'region-size',
-                'group-size',
+                'block-group-size',
                 'block-size',
                 'cluster-size',
                 'vector-size',
                 'num-regions',
                 'num-groups-per-region',
-                'num-blocks-per-region',
+                'num-block-groups-per-region',
                 'padding',
                 'max-halos',
                 'manual-L1-prefetch-distance',
@@ -443,7 +441,7 @@ my @regionLoops =
 # TODO: add other options.
 my @rankLoops =
   (
-   "PATH3 loop(D0,D1,D2,D3) { calc(region(start_dt, stop_dt, stencil_set)); }",
+   "PATH3 loop(D0,D1,D2,D3) { calc(region(start_dt, stop_dt, eqGroup_ptr)); }",
   );
 
 # list of folds.

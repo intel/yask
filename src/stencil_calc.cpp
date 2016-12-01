@@ -36,80 +36,71 @@ namespace yask {
 
     ///// Top-level methods for evaluating reference and optimized stencils.
 
-    // Eval stencil(s) over grid(s) using scalar code.
-    void StencilEquations::calc_rank_ref(StencilContext& context)
+    // Eval stencil equation group(s) over grid(s) using scalar code.
+    void StencilEqs::calc_rank_ref(StencilContext& context)
     {
         init(context);
-    
-        TRACE_MSG("calc_problem_ref(%ld..%ld, 0..%ld, 0..%ld, 0..%ld, 0..%ld)", 
-                  context.begin_dt, context.begin_dt + context.dt - 1,
-                  context.dn - 1,
-                  context.dx - 1,
-                  context.dy - 1,
-                  context.dz - 1);
-    
+        idx_t begin_dt = context.begin_dt;
+        idx_t end_dt = begin_dt + context.dt;
+        TRACE_MSG("calc_rank_ref(%ld..%ld)", begin_dt, end_dt-1);
+        
         // Time steps.
         // TODO: check that scalar version actually does CPTS_T time steps.
         // (At this point, CPTS_T == 1 for all existing stencil examples.)
         for(idx_t t = context.begin_dt; t < context.begin_dt + context.dt; t += CPTS_T) {
 
             // equations to evaluate (only one in most stencils).
-            for (auto stencil : stencils) {
+            for (auto eg : eqGroups) {
 
                 // Halo+shadow exchange for grid(s) updated by this equation.
-                stencil->exchange_halos(context, t, t + CPTS_T);
-            
-                // grid index (only one in most stencils).
-                for (idx_t n = 0; n < context.dn; n++) {
+                eg->exchange_halos(context, t, t + CPTS_T);
 
-#pragma omp parallel for
-                    for(idx_t ix = 0; ix < context.dx; ix++) {
+                // Loop through 4D space within the bounding-box of this
+                // equation set.
+#pragma omp parallel for collapse(4)
+                for (idx_t n = eg->begin_bbn; n < eg->end_bbn; n++)
+                    for (idx_t x = eg->begin_bbx; x < eg->end_bbx; x++)
+                        for (idx_t y = eg->begin_bby; y < eg->end_bby; y++)
+                            for (idx_t z = eg->begin_bbz; z < eg->end_bbz; z++) {
 
-                        CREW_FOR_LOOP
-                            for(idx_t iy = 0; iy < context.dy; iy++) {
-
-#pragma simd
-                                for(idx_t iz = 0; iz < context.dz; iz++) {
-
+                                // Update only if point in domain for this eq group.
+                                // NB: this isn't actually needed for rectangular BBs.
+                                if (eg->is_in_valid_domain(context, t, n, x, y, z)) {
+                                    
                                     TRACE_MSG("%s.calc_scalar(%ld, %ld, %ld, %ld, %ld)", 
-                                              stencil->get_name().c_str(), t, n, ix, iy, iz);
-                            
+                                              eg->get_name().c_str(), t, n, x, y, z);
+                                        
                                     // Evaluate the reference scalar code.
-                                    stencil->calc_scalar(context, t, n, ix, iy, iz);
+                                    eg->calc_scalar(context, t, n, x, y, z);
                                 }
                             }
-                    }
-                }
             }
         } // iterations.
     }
 
 
-    // Eval stencil(s) over grid(s) using optimized code.
-    void StencilEquations::calc_rank_opt(StencilContext& context)
+    // Eval equation group(s) over grid(s) using optimized code.
+    void StencilEqs::calc_rank_opt(StencilContext& context)
     {
         init(context);
+        idx_t begin_dt = context.begin_dt;
+        idx_t end_dt = begin_dt + context.dt;
+        idx_t step_dt = context.rt;
+        TRACE_MSG("calc_rank_opt(%ld..%ld by %ld)", begin_dt, end_dt-1, step_dt);
 
         // Problem begin points.
-        idx_t begin_dt = context.begin_dt;
-        idx_t begin_dn = 0, begin_dx = 0, begin_dy = 0, begin_dz = 0;
+        idx_t begin_dn = context.begin_bbn;
+        idx_t begin_dx = context.begin_bbx;
+        idx_t begin_dy = context.begin_bby;
+        idx_t begin_dz = context.begin_bbz;
     
         // Problem end-points.
-        idx_t end_dt = begin_dt + context.dt;
-        idx_t end_dn = context.dn;
-        idx_t end_dx = context.dx;
-        idx_t end_dy = context.dy;
-        idx_t end_dz = context.dz;
+        idx_t end_dn = context.end_bbn;
+        idx_t end_dx = context.end_bbx;
+        idx_t end_dy = context.end_bby;
+        idx_t end_dz = context.end_bbz;
 
-        TRACE_MSG("calc_rank_opt(%ld..%ld, %ld..%ld, %ld..%ld, %ld..%ld, %ld..%ld)", 
-                  begin_dt, end_dt-1,
-                  begin_dn, end_dn-1,
-                  begin_dx, end_dx-1,
-                  begin_dy, end_dy-1,
-                  begin_dz, end_dz-1);
-    
         // Steps are based on region sizes.
-        idx_t step_dt = context.rt;
         idx_t step_dn = context.rn;
         idx_t step_dx = context.rx;
         idx_t step_dy = context.ry;
@@ -128,10 +119,10 @@ namespace yask {
         // i.e., if the region covers the whole rank in a given dimension, no wave-front
         // is needed in thar dim.
         // TODO: make this grid-specific.
-        context.angle_n = (context.rn < context.dn) ? ROUND_UP(context.hn, CPTS_N) : 0;
-        context.angle_x = (context.rx < context.dx) ? ROUND_UP(context.hx, CPTS_X) : 0;
-        context.angle_y = (context.ry < context.dy) ? ROUND_UP(context.hy, CPTS_Y) : 0;
-        context.angle_z = (context.rz < context.dz) ? ROUND_UP(context.hz, CPTS_Z) : 0;
+        context.angle_n = (context.rn < context.len_bbn) ? ROUND_UP(context.hn, CPTS_N) : 0;
+        context.angle_x = (context.rx < context.len_bbx) ? ROUND_UP(context.hx, CPTS_X) : 0;
+        context.angle_y = (context.ry < context.len_bby) ? ROUND_UP(context.hy, CPTS_Y) : 0;
+        context.angle_z = (context.rz < context.len_bbz) ? ROUND_UP(context.hz, CPTS_Z) : 0;
         TRACE_MSG("wavefront angles: %ld, %ld, %ld, %ld",
                   context.angle_n, context.angle_x, context.angle_y, context.angle_z);
     
@@ -143,12 +134,12 @@ namespace yask {
         // shift / region size).  This assumes stencils are inter-dependent.
         // TODO: calculate stencil inter-dependency in the foldBuilder for each
         // dimension.
-        idx_t nshifts = (idx_t(stencils.size()) * context.rt) - 1;
+        idx_t nshifts = (idx_t(eqGroups.size()) * context.rt) - 1;
         end_dn += context.angle_n * nshifts;
         end_dx += context.angle_x * nshifts;
         end_dy += context.angle_y * nshifts;
         end_dz += context.angle_z * nshifts;
-        TRACE_MSG("virtual domain after wavefront adjustment: %ld..%ld, %ld..%ld, %ld..%ld, %ld..%ld, %ld..%ld", 
+        TRACE_MSG("extended domain after wavefront adjustment: %ld..%ld, %ld..%ld, %ld..%ld, %ld..%ld, %ld..%ld", 
                   begin_dt, end_dt-1,
                   begin_dn, end_dn-1,
                   begin_dx, end_dx-1,
@@ -164,19 +155,21 @@ namespace yask {
             const idx_t start_dt = begin_dt + (index_dt * step_dt);
             const idx_t stop_dt = min(start_dt + step_dt, end_dt);
 
+            // FIXME: halo exchange with conditional equations is broken.
+            
             // If doing only one time step in a region (default), loop through equations here,
-            // and do only one equation at a time in calc_region().
+            // and do only one equation group at a time in calc_region().
             if (step_dt == 1) {
 
-                for (auto stencil : stencils) {
+                for (auto eqGroup : eqGroups) {
 
                     // Halo+shadow exchange for grid(s) updated by this equation.
-                    stencil->exchange_halos(context, start_dt, stop_dt);
+                    eqGroup->exchange_halos(context, start_dt, stop_dt);
 
                     // Eval this stencil in calc_region().
-                    StencilSet stencil_set;
-                    stencil_set.insert(stencil);
-                    StencilSet* stencils_ptr = &stencil_set;
+                    EqGroupSet eqGroup_set;
+                    eqGroup_set.insert(eqGroup);
+                    EqGroupSet* eqGroup_ptr = &eqGroup_set;
 
                     // Include automatically-generated loop code that calls calc_region() for each region.
 #include "stencil_rank_loops.hpp"
@@ -187,13 +180,13 @@ namespace yask {
             // must do all equations in calc_region().
             else {
 
-                // Eval all equations.
-                StencilSet* stencils_ptr = NULL;
+                // Eval all equation groups.
+                EqGroupSet* eqGroup_ptr = NULL;
                 
-                for (auto stencil : stencils) {
+                for (auto eqGroup : eqGroups) {
 
                     // Halo+shadow exchange for grid(s) updated by this equation.
-                    stencil->exchange_halos(context, start_dt, stop_dt);
+                    eqGroup->exchange_halos(context, start_dt, stop_dt);
                 }
             
                 // Include automatically-generated loop code that calls calc_region() for each region.
@@ -207,9 +200,9 @@ namespace yask {
     // Each region is typically computed in a separate OpenMP 'for' region.
     // In it, we loop over the time steps and the stencil
     // equations and evaluate the blocks in the region.
-    void StencilEquations::
+    void StencilEqs::
     calc_region(StencilContext& context, idx_t start_dt, idx_t stop_dt,
-                StencilSet* stencil_set,
+                EqGroupSet* eqGroup_set,
                 idx_t start_dn, idx_t start_dx, idx_t start_dy, idx_t start_dz,
                 idx_t stop_dn, idx_t stop_dx, idx_t stop_dy, idx_t stop_dz)
     {
@@ -256,18 +249,18 @@ namespace yask {
             const idx_t rt = start_rt; // only one time value needed for block.
 
             // equations to evaluate at this time step.
-            for (auto stencil : stencils) {
-                if (!stencil_set || stencil_set->count(stencil)) {
+            for (auto eg : eqGroups) {
+                if (!eqGroup_set || eqGroup_set->count(eg)) {
 
-                    // Actual region boundaries must stay within rank domain.
-                    idx_t begin_rn = max<idx_t>(start_dn, 0);
-                    idx_t end_rn = min<idx_t>(stop_dn, context.dn);
-                    idx_t begin_rx = max<idx_t>(start_dx, 0);
-                    idx_t end_rx = min<idx_t>(stop_dx, context.dx);
-                    idx_t begin_ry = max<idx_t>(start_dy, 0);
-                    idx_t end_ry = min<idx_t>(stop_dy, context.dy);
-                    idx_t begin_rz = max<idx_t>(start_dz, 0);
-                    idx_t end_rz = min<idx_t>(stop_dz, context.dz);
+                    // Actual region boundaries must stay within BB for this eq group.
+                    idx_t begin_rn = max<idx_t>(start_dn, eg->begin_bbn);
+                    idx_t end_rn = min<idx_t>(stop_dn, eg->end_bbn);
+                    idx_t begin_rx = max<idx_t>(start_dx, eg->begin_bbx);
+                    idx_t end_rx = min<idx_t>(stop_dx, eg->end_bbx);
+                    idx_t begin_ry = max<idx_t>(start_dy, eg->begin_bby);
+                    idx_t end_ry = min<idx_t>(stop_dy, eg->end_bby);
+                    idx_t begin_rz = max<idx_t>(start_dz, eg->begin_bbz);
+                    idx_t end_rz = min<idx_t>(stop_dz, eg->end_bbz);
 
                     // Only need to loop through the region if any of its blocks are
                     // at least partly inside the domain. For overlapping regions,
@@ -309,16 +302,181 @@ namespace yask {
         } // time.
     }
 
+    // Initialize some data structures.
+    // Must be called after the context grids are allocated.
+    void StencilEqs::init(StencilContext& context,
+                          idx_t* sum_points,
+                          idx_t* sum_fpops) {
+        for (auto eg : eqGroups)
+            eg->init(context);
+
+        if (context.bb_valid == true) return;
+        find_bounding_boxes(context);
+
+        idx_t npoints = 0, nfpops = 0;
+        ostream& os = *(context.ostr);
+        os << "Num stencil equation-groups: " << eqGroups.size() << endl;
+        for (auto eg : eqGroups) {
+            idx_t updates1 = eg->get_scalar_points_updated();
+            idx_t updates_domain = updates1 * eg->bb_size;
+            idx_t fpops1 = eg->get_scalar_fp_ops();
+            idx_t fpops_domain = fpops1 * eg->bb_size;
+            npoints += updates_domain;
+            nfpops += fpops_domain;
+            os << "Stats for equation-group '" << eg->get_name() << "':\n" <<
+                " sub-domain-size:            " <<
+                eg->len_bbn << '*' << eg->len_bbx << '*' << eg->len_bby << '*' << eg->len_bbz << endl <<
+                " points-in-sub-domain:       " << printWithPow10Multiplier(eg->bb_size) << endl <<
+                " grid-updates-per-point:     " << updates1 << endl <<
+                " grid-updates-in-sub-domain: " << printWithPow10Multiplier(updates_domain) << endl <<
+                " est-FP-ops-per-point:       " << fpops1 << endl <<
+                " est-FP-ops-in-sub-domain:   " << printWithPow10Multiplier(fpops_domain) << endl;
+        }
+        if (sum_points)
+            *sum_points = npoints;
+        if (sum_fpops)
+            *sum_fpops = nfpops;
+    }
+    
+    // Set the bounding-box vars for all eq groups.
+    void StencilEqs::find_bounding_boxes(StencilContext& context) {
+        if (context.bb_valid == true) return;
+
+        // Init overall BB.
+        // Init min vars w/max val and vice-versa.
+        context.begin_bbn = idx_max; context.end_bbn = idx_min;
+        context.begin_bbx = idx_max; context.end_bbx = idx_min;
+        context.begin_bby = idx_max; context.end_bby = idx_min;
+        context.begin_bbz = idx_max; context.end_bbz = idx_min;
+        context.bb_size = 0;
+        
+        // Find BB for each eq group and update context.
+        for (auto eg : eqGroups) {
+            eg->find_bounding_box(context);
+
+            context.begin_bbn = min(context.begin_bbn, eg->begin_bbn);
+            context.begin_bbx = min(context.begin_bbx, eg->begin_bbx);
+            context.begin_bby = min(context.begin_bby, eg->begin_bby);
+            context.begin_bbz = min(context.begin_bbz, eg->begin_bbz);
+            context.end_bbn = max(context.end_bbn, eg->end_bbn);
+            context.end_bbx = max(context.end_bbx, eg->end_bbx);
+            context.end_bby = max(context.end_bby, eg->end_bby);
+            context.end_bbz = max(context.end_bbz, eg->end_bbz);
+            context.bb_size += eg->bb_size;
+        }
+
+        context.len_bbn = context.end_bbn - context.begin_bbn;
+        context.len_bbx = context.end_bbx - context.begin_bbx;
+        context.len_bby = context.end_bby - context.begin_bby;
+        context.len_bbz = context.end_bbz - context.begin_bbz;
+        context.bb_valid = true;
+
+        // Special case: if region sizes are equal to domain size (defaul
+        // setting), change them to the BB size.
+        if (context.rn == context.dn) context.rn = context.len_bbn;
+        if (context.rx == context.dx) context.rx = context.len_bbx;
+        if (context.ry == context.dy) context.ry = context.len_bby;
+        if (context.rz == context.dz) context.rz = context.len_bbz;
+    }
+
+    // Set the bounding-box vars for this eq group.
+    void EqGroupBase::find_bounding_box(StencilContext& context) {
+        if (bb_valid) return;
+
+        // Init min vars w/max val and vice-versa.
+        idx_t minn = idx_max, maxn = idx_min;
+        idx_t minx = idx_max, maxx = idx_min;
+        idx_t miny = idx_max, maxy = idx_min;
+        idx_t minz = idx_max, maxz = idx_min;
+        idx_t npts = 0;
+        
+        // Assume bounding-box is same for all time steps.
+        // TODO: consider adding time to domain.
+        idx_t t = 0;
+
+        // Loop through 4D space.
+        // Find the min and max valid points in this space.
+        // FIXME: use global indices for >1 rank.
+#pragma omp parallel for collapse(4)            \
+    reduction(min:minn,minx,miny,minz)          \
+    reduction(max:maxn,maxx,maxy,maxz)          \
+    reduction(+:npts)
+        for (idx_t n = 0; n < context.dn; n++)
+            for(idx_t x = 0; x < context.dx; x++)
+                for(idx_t y = 0; y < context.dy; y++)
+                    for(idx_t z = 0; z < context.dz; z++) {
+
+                        // Update only if point in domain for this eq group.
+                        if (is_in_valid_domain(context, t, n, x, y, z)) {
+                            minn = min(minn, n);
+                            maxn = max(maxn, n);
+                            minx = min(minx, x);
+                            maxx = max(maxx, x);
+                            miny = min(miny, y);
+                            maxy = max(maxy, y);
+                            minz = min(minz, z);
+                            maxz = max(maxz, z);
+                            npts++;
+                        }
+                    }
+
+        // Set begin vars to min indices and end vars to one beyond max indices.
+        if (npts) {
+            begin_bbn = minn;
+            end_bbn = maxn + 1;
+            begin_bbx = minx;
+            end_bbx = maxx + 1;
+            begin_bby = miny;
+            end_bby = maxy + 1;
+            begin_bbz = minz;
+            end_bbz = maxz + 1;
+        } else {
+            begin_bbn = end_bbn = len_bbn = 0;
+            begin_bbx = end_bbx = len_bbx = 0;
+            begin_bby = end_bby = len_bby = 0;
+            begin_bbz = end_bbz = len_bbz = 0;
+        }
+        len_bbn = end_bbn - begin_bbn;
+        len_bbx = end_bbx - begin_bbx;
+        len_bby = end_bby - begin_bby;
+        len_bbz = end_bbz - begin_bbz;
+        bb_size = npts;
+
+        // Only supporting solid rectangles at this time.
+        idx_t r_size = len_bbn * len_bbx * len_bby * len_bbz;
+        if (r_size != bb_size) {
+            cerr << "error: domain for equation-group '" << get_name() << "' contains " <<
+                bb_size << " points, but " << r_size << " were expected for a rectangular solid. " <<
+                "Non-rectangular domains are not supported at this time." << endl;
+            exit_yask(1);
+        }
+
+        // Only supporting full-cluster BBs at this time.
+        // TODO: handle partial clusters.
+        if (len_bbn % CLEN_N ||
+            len_bbx % CLEN_X ||
+            len_bby % CLEN_Y ||
+            len_bbz % CLEN_Z) {
+            cerr << "error: each domain length must be a multiple of the cluster size." << endl;
+            exit_yask(1);
+        }
+
+        bb_valid = true;
+    }
+    
     // Exchange halo and shadow data for the given time.
-    void StencilBase::exchange_halos(StencilContext& context, idx_t start_dt, idx_t stop_dt)
+    void EqGroupBase::exchange_halos(StencilContext& context, idx_t start_dt, idx_t stop_dt)
     {
         TRACE_MSG("exchange_halos(%ld..%ld)", start_dt, stop_dt);
 
         // List of grids updated by this equation.
         // These are the grids that need exchanges.
-        auto eqGridPtrs = getEqGridPtrs();
+        // FIXME: does not work w/conditions.
+        auto eqGridPtrs = get_eq_grid_ptrs();
 
-        // Time to copy shadow out?
+        // TODO: clean up all the shadow code. Either do something useful with it, or get rid of it.
+        
+        // Time to copy to shadow?
         if (context.shadow_out_freq && abs(start_dt - context.begin_dt) % context.shadow_out_freq == 0) {
             TRACE_MSG("copying to shadows at time %ld", start_dt);
 
@@ -362,7 +520,7 @@ namespace yask {
             context.shadow_time += end_time - start_time;
         }
 
-        // Time to copy shadow in?
+        // Time to copy from shadow?
         if (context.shadow_in_freq && abs(start_dt - context.begin_dt) % context.shadow_in_freq == 0) {
             TRACE_MSG("copying from shadows at time %ld", start_dt);
 
@@ -852,7 +1010,7 @@ namespace yask {
         *ostr << "Num grids to be updated: " << num_eqGrids << endl;
 
         idx_t nbytes = get_num_bytes();
-        *ostr << "Total rank-" << my_rank << " allocation (bytes): " <<
+        *ostr << "Total allocation in this rank (bytes): " <<
             printWithPow2Multiplier(nbytes) << endl;
         return nbytes;
     }
