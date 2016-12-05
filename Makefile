@@ -67,7 +67,7 @@ mpi		=	0
 
 # Defaults based on stencil type.
 ifeq ($(stencil),)
-$(error Stencil not specified; use stencil=iso3dfd, 3axis, 9axis, 3plane, cube, ave, stream, awp or awp_elastic)
+$(error Stencil not specified; use stencil=iso3dfd, 3axis, 9axis, 3plane, cube, ave, stream, awp, awp_elastic or fsg)
 
 else ifeq ($(stencil),ave)
 radius		?=	1
@@ -120,6 +120,27 @@ def_block_threads	?=	4
 def_thread_factor	?=	2
 endif
 FB_FLAGS	+=	-min-es 1
+
+else ifeq ($(stencil),fsg)
+#stencil is too complex for the compiler without this
+CXXFLAGS        +=      -qoverride-limits
+
+time_dim_size   ?=      1
+fold            ?=      x=1,y=4,z=4
+cluster         ?=      x=1,y=1,z=1 
+layout_3d       ?=      Layout_321
+layout_4d       ?=      Layout_4312
+omp_schedule    ?=      dynamic
+crew            ?=      0
+expr_size       ?=      76
+eqs             ?=      v_br=v_br,v_bl=v_bl,v_tr=v_tr,v_tl=v_tl,s_br=s_br,s_bl=s_bl,s_tr=s_tr,s_tl=s_tl
+RANK_LOOP_CODE  ?=      square_wave serpentine loop(dn,dx,dy,dz) { calc(region(start_dt, stop_dt, eqGroup_ptr)); }
+REGION_LOOP_CODE ?=     omp square_wave serpentine loop(rn,rx,rz,ry) { calc(block(rt)); }
+BLOCK_LOOP_CODE ?=      loop(bnv) { omp serpentine loop(byv,bzv) {  prefetch(L1) loop(bxv) { calc(cluster(bt)); } } }
+def_block_size  ?=      32
+def_thread_factor ?=    2
+def_block_threads ?= 	2
+def_pad         ?=      2
 
 endif
 
@@ -329,7 +350,7 @@ endif
 # using temporal wavefronts. The time loop may be found
 # in StencilEquations::calc_rank().
 RANK_LOOP_OPTS		=	-dims 'dn,dx,dy,dz'
-RANK_LOOP_CODE		=	$(RANK_LOOP_OUTER_MODS) loop(dn,dx,dy,dz) \
+RANK_LOOP_CODE		?=	$(RANK_LOOP_OUTER_MODS) loop(dn,dx,dy,dz) \
 				{ $(RANK_LOOP_INNER_MODS) calc(region(start_dt, stop_dt, eqGroup_ptr)); }
 
 # Region loops break up a region using OpenMP threading into blocks.
@@ -340,7 +361,7 @@ REGION_LOOP_OPTS	=     	-dims 'rn,rx,ry,rz' \
 				-ompConstruct '$(omp_par_for) schedule($(omp_schedule)) proc_bind(spread)' \
 				-calcPrefix 'eg->calc_'
 REGION_LOOP_OUTER_MODS	?=	grouped omp
-REGION_LOOP_CODE	=	$(REGION_LOOP_OUTER_MODS) loop(rn,rx,ry,rz) \
+REGION_LOOP_CODE	?=	$(REGION_LOOP_OUTER_MODS) loop(rn,rx,ry,rz) \
 				{ $(REGION_LOOP_INNER_MODS) calc(block(rt)); }
 
 # Block loops break up a block into vector clusters.
@@ -351,7 +372,7 @@ REGION_LOOP_CODE	=	$(REGION_LOOP_OUTER_MODS) loop(rn,rx,ry,rz) \
 BLOCK_LOOP_OPTS		=     	-dims 'bnv,bxv,byv,bzv' \
 				-ompConstruct '$(omp_par_for) schedule($(omp_block_schedule)) proc_bind(close)'
 BLOCK_LOOP_OUTER_MODS	?=	omp
-BLOCK_LOOP_CODE		=	$(BLOCK_LOOP_OUTER_MODS) loop(bnv,bxv) { loop(byv) \
+BLOCK_LOOP_CODE		?=	$(BLOCK_LOOP_OUTER_MODS) loop(bnv,bxv) { loop(byv) \
 				{ $(BLOCK_LOOP_INNER_MODS) loop(bzv) { calc(cluster(bt)); } } }
 
 # Halo pack/unpack loops break up a region face, edge, or corner into vectors.
@@ -361,7 +382,7 @@ BLOCK_LOOP_CODE		=	$(BLOCK_LOOP_OUTER_MODS) loop(bnv,bxv) { loop(byv) \
 HALO_LOOP_OPTS		=     	-dims 'nv,xv,yv,zv' \
 				-ompConstruct '$(omp_par_for) schedule($(omp_halo_schedule)) proc_bind(spread)'
 HALO_LOOP_OUTER_MODS	?=	omp
-HALO_LOOP_CODE		=	$(HALO_LOOP_OUTER_MODS) loop(nv,xv,yv,zv) \
+HALO_LOOP_CODE		?=	$(HALO_LOOP_OUTER_MODS) loop(nv,xv,yv,zv) \
 				$(HALO_LOOP_INNER_MODS) { calc(halo(t)); }
 
 # compile with model_cache=1 or 2 to check prefetching.
