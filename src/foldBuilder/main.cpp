@@ -41,6 +41,7 @@ StencilList stencils;
 #include "AwpStencil.hpp"
 #include "AwpElasticStencil.hpp"
 #include "StreamStencil.hpp"
+#include "FSGElasticStencil.hpp"
 
 // vars set via cmd-line options.
 bool printPseudo = false;
