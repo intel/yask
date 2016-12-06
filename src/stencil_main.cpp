@@ -535,7 +535,7 @@ int main(int argc, char** argv)
         " block-size:   " << bt << '*' << bn << '*' << bx << '*' << by << '*' << bz << endl <<
         " group-size:   " << 1 << '*' << gn << '*' << gx << '*' << gy << '*' << gz << endl <<
         " region-size:  " << rt << '*' << rn << '*' << rx << '*' << ry << '*' << rz << endl <<
-        " rank-size:    " << dt << '*' << dn << '*' << dx << '*' << dy << '*' << dz << endl <<
+        " rank-size:    " << dt << '*' << dn << '*' << dx << '*' << dy << '*' << dz << endl;
     *ostr << "\nOther settings:\n"
         " num-ranks: " << nrn << '*' << nrx << '*' << nry << '*' << nrz << endl <<
         " stencil-shape: " STENCIL_NAME << endl << 
