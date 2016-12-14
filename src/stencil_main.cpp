@@ -821,23 +821,21 @@ int main(int argc, char** argv)
     
     if (validate) {
         MPI_Barrier(comm);
-
-        // check the correctness of one iteration.
         *ostr << "Running validation trial...\n";
 
-        // Make a ref context for comparisons w/new grids:
+        // Make a reference context for comparisons w/new grids:
         // Copy the settings from context, then re-alloc grids.
-        STENCIL_CONTEXT ref = context;
-        ref.name += "-reference";
-        ref.allocAll(false); // do not need to re-calc locations.
+        STENCIL_CONTEXT ref_context = context;
+        ref_context.name += "-reference";
+        ref_context.allocAll(false); // do not need to re-calc locations.
 
         // init to same value used in context.
-        ref.initDiff();
+        ref_context.initDiff();
 
 #if CHECK_INIT
         {
             context.initDiff();
-            idx_t errs = context.compare(ref);
+            idx_t errs = context.compare(ref_context);
             if( errs == 0 ) {
                 *ostr << "INIT CHECK PASSED." << endl;
                 exit_yask(0);
@@ -849,14 +847,14 @@ int main(int argc, char** argv)
 #endif
 
         // Ref trial.
-        ref.calc_rank_ref();
+        ref_context.calc_rank_ref();
 
         // check for equality.
 #ifdef USE_MPI
         MPI_Barrier(comm);
 #endif
         *ostr << "Checking results on rank " << my_rank << "..." << endl;
-        idx_t errs = context.compare(ref);
+        idx_t errs = context.compare(ref_context);
         if( errs == 0 ) {
             *ostr << "TEST PASSED." << endl;
         } else {

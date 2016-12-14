@@ -89,8 +89,8 @@ radius		?=	2
 
 else ifeq ($(stencil),iso3dfd)
 MACROS		+=	MAX_EXCH_DIST=1
+layout_4d	?=	Layout_2314
 real_bytes	?=	4
-layout_4d	?=	Layout_2314  # x, y, t, z (unit stride)
 ifeq ($(arch),knl)
 ifeq ($(real_bytes),4)
 fold		?=	x=2,y=8,z=1
@@ -115,6 +115,7 @@ time_dim_size	?=	1
 eqs		?=	velocity=vel_,stress=stress_
 def_rank_size	?=	512
 def_block_size	?=	32
+cluster		?=	x=1
 ifeq ($(arch),knl)
 def_block_threads	?=	4
 def_thread_divisor	?=	2
@@ -123,21 +124,19 @@ FB_FLAGS	+=	-min-es 1
 
 else ifeq ($(stencil),fsg)
 time_dim_size   ?=      1
-fold            ?=      x=1,y=4,z=4
-cluster         ?=      x=1,y=1,z=1 
-layout_3d       ?=      Layout_321
-layout_4d       ?=      Layout_4312
-omp_schedule    ?=      dynamic
+layout_4d	?=	Layout_2314
 eqs             ?=      v_br=v_br,v_bl=v_bl,v_tr=v_tr,v_tl=v_tl,s_br=s_br,s_bl=s_bl,s_tr=s_tr,s_tl=s_tl
-RANK_LOOP_CODE  ?=      square_wave serpentine loop(dn,dx,dy,dz) { calc(region(start_dt, stop_dt, eqGroup_ptr)); }
-REGION_LOOP_CODE ?=     omp square_wave serpentine loop(rn,rx,rz,ry) { calc(block(rt)); }
-BLOCK_LOOP_CODE ?=      loop(bnv) { omp serpentine loop(byv,bzv) {  prefetch(L1) loop(bxv) { calc(cluster(bt)); } } }
+cluster		?=	x=1
+ifeq ($(arch),knl)
+REGION_LOOP_CODE ?=     omp square_wave serpentine loop(rn,rz,rx,ry) { calc(block(rt)); }
+BLOCK_LOOP_CODE ?=      omp square_wave serpentine loop(bnv,bxv,byv) { prefetch(L1) loop(bzv) { calc(cluster(bt)); } }
 def_block_size  ?=      32
-def_thread_divisor ?=    2
-def_block_threads ?= 	2
-def_pad         ?=      2
-
+def_thread_divisor ?=	4
+def_block_threads ?= 	1
+def_pad		?=	2
 endif
+
+endif # stencil-specific.
 
 # Defaut settings based on architecture.
 ifeq ($(arch),knc)
@@ -210,8 +209,8 @@ def_thread_divisor		?=	1
 radius				?=	8
 real_bytes			?=	4
 time_dim_size			?=	2
-layout_3d			?=	Layout_123  # x, y, z (unit stride)
-layout_4d			?=	Layout_1234 # t, x, y, z (unit stride)
+layout_3d			?=	Layout_123
+layout_4d			?=	Layout_1234
 def_rank_size			?=	128
 def_block_size			?=	64
 def_pad				?=	1
@@ -222,6 +221,7 @@ halo				?=      0
 # (defined by BLOCK_LOOP_CODE below) often works well.
 
 ifneq ($(findstring INTRIN512,$(MACROS)),)  # 512 bits.
+
 ifeq ($(real_bytes),4)
 fold		?=	x=4,y=4,z=1
 else
@@ -229,14 +229,16 @@ fold		?=	x=4,y=2,z=1
 endif
 
 else  # not 512 bits.
+
 ifeq ($(real_bytes),4)
 fold		?=	x=8
 else
 fold		?=	x=4
 endif
+
 cluster		?=	y=2
 
-endif
+endif # 512 bits.
 
 # How many vectors to compute at once (unrolling factor in
 # each dimension).
