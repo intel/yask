@@ -311,6 +311,7 @@ my $dimsMetric = 'rank-domain-size';
 my @metrics = ( $fitnessMetric,
                 $timeMetric,
                 $dimsMetric,
+                'best-throughput (prob-size-points/sec)',
                 'best-throughput (est-FLOPS)',
                 'region-size',
                 'block-group-size',
@@ -324,7 +325,8 @@ my @metrics = ( $fitnessMetric,
                 'max-halos',
                 'manual-L1-prefetch-distance',
                 'manual-L2-prefetch-distance',
-                'Points to calculate overall',
+                'problem-size in all ranks, for all time-steps',
+                'grid-points-updated in all ranks, for all time-steps',
                 'Total overall allocation',
               );
 
@@ -353,8 +355,8 @@ my $minClustersInBlock = 10;
 my $minBlocksInRegion = 10;
 
 # 'Exp' means exponent of 2.
-my $minThreadFactorExp = 0; # 2^0 = 1.
-my $maxThreadFactorExp = 2; # 2^2 = 4.
+my $minThreadDivisorExp = 0; # 2^0 = 1.
+my $maxThreadDivisorExp = 2; # 2^2 = 4.
 my $minBlockThreadsExp = 0; # 2^0 = 1.
 my $maxBlockThreadsExp = 6; # 2^6 = 64.
 
@@ -504,7 +506,7 @@ my @rangesAll =
    [ 0, $maxPad, 1, 'pz' ],
 
    # threads.
-   [ $minThreadFactorExp, $maxThreadFactorExp, 1, 'thread_factor_exp' ],
+   [ $minThreadDivisorExp, $maxThreadDivisorExp, 1, 'thread_divisor_exp' ],
    [ $minBlockThreadsExp, $maxBlockThreadsExp, 1, 'bthreads_exp' ],
   );
 
@@ -882,7 +884,7 @@ sub setResults($$) {
     $mre =~ s/\)/\\)/g;
 
     # look for metric at beginning of line followed by ':' or '='.
-    if ($line =~ /^\s*$mre[^:=]*[:=]\s*(\S+)/) {
+    if ($line =~ /^\s*$mre[^:=]*[:=]\s*(\S+)/i) {
       my $val = $1;
 
       # adjust for suffixes.
@@ -1212,7 +1214,7 @@ sub fitness {
   my $fold = readHash($h, 'fold', 1);
   my $crew = readHash($h, 'crew', 1);
   my $exprSize = readHash($h, 'exprSize', 1);
-  my $thread_factor_exp = readHash($h, 'thread_factor_exp', 0);
+  my $thread_divisor_exp = readHash($h, 'thread_divisor_exp', 0);
   my $bthreads_exp = readHash($h, 'bthreads_exp', 0);
   my $pipe = 0; # readHash($h, 'pipe', 1);
   my @paths = ( readHash($h, 'path0', 1),
@@ -1409,7 +1411,7 @@ sub fitness {
 
   # how to run.
   my $runCmd = getRunCmd();
-  $runCmd .= " -thread_factor ".(1 << $thread_factor_exp)." -bthreads ".(1 << $bthreads_exp);
+  $runCmd .= " -thread_divisor ".(1 << $thread_divisor_exp)." -block_threads ".(1 << $bthreads_exp);
 
   # sizes.
   my $args = "-dn $vars";

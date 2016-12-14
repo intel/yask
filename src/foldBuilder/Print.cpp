@@ -620,6 +620,8 @@ void POVRayPrinter::print(ostream& os) {
 // Print YASK code in new stencil context class.
 // TODO: split this into smaller methods.
 void YASKCppPrinter::printCode(ostream& os) {
+    map<Grid*, string> typeNames, dimArgs, padArgs;
+    map<Param*, string> paramTypeNames, paramDimArgs;
 
     os << "// Automatically generated code; do not edit." << endl;
 
@@ -627,19 +629,18 @@ void YASKCppPrinter::printCode(ostream& os) {
         "' stencil //////" << endl;
     os << endl << "namespace yask {" << endl;
 
-    // Create the overall context class.
+    // Create the overall context base.
     {
         // get stats.
         CounterVisitor cve;
         _eqGroups.visitExprs(&cve);
         IntTuple maxHalos;
 
-        os << endl << " ////// Overall stencil-context class //////" << endl <<
-            "struct " << _context << " : public StencilContext {" << endl;
+        os << endl << " ////// Stencil-specific data //////" << endl <<
+            "struct " << _context_base << " : public StencilContext {" << endl;
 
         // Grids.
         os << endl << " // Grids." << endl;
-        map<Grid*, string> typeNames, dimArgs, padArgs;
         for (auto gp : _grids) {
             assert (!gp->isParam());
             string grid = gp->getName();
@@ -689,8 +690,8 @@ void YASKCppPrinter::printCode(ostream& os) {
                 maxHalos.getVal(dim) << ";" << endl;
 
         // Parameters.
-        map<Param*, string> paramTypeNames, paramDimArgs;
-        os << endl << " // Parameters." << endl;
+        if (_params.size())
+            os << endl << " // Parameters." << endl;
         for (auto pp : _params) {
             assert(pp->isParam());
             string param = pp->getName();
@@ -716,70 +717,29 @@ void YASKCppPrinter::printCode(ostream& os) {
         }
 
         // Ctor.
-        os << endl << " " << _context << "() {" << endl <<
-            "  name = \"" << _stencil.getName() << "\";" << endl;
-
-        // Init grid ptrs.
-        for (auto gp : _grids) {
-            string grid = gp->getName();
-            os << "  " << grid << " = 0;" << endl;
-        }
-
-        // Init param ptrs.
-        for (auto pp : _params) {
-            string param = pp->getName();
-            os << "  " << param << " = 0;" << endl;
-        }
-
-        // end of ctor.
-        os << " }" << endl;
-
-        // Allocate grids.
-        os << endl << " virtual void allocGrids() {" << endl;
-        os << "  gridPtrs.clear();" << endl;
-        os << "  eqGridPtrs.clear();" << endl;
-        for (auto gp : _grids) {
-            string grid = gp->getName();
-            string hbwArg = "false";
-            if ((_eqGroups.getEqGrids().count(gp) && _settings._hbwRW) ||
-                (_eqGroups.getEqGrids().count(gp) == 0 && _settings._hbwRO))
-                hbwArg = "true";
-            os << "  " << grid << " = new " << typeNames[gp] <<
-                "(" << dimArgs[gp] << padArgs[gp] << "\"" << grid << "\", " <<
-                hbwArg << ", *ostr);" << endl <<
-                "  gridPtrs.push_back(" << grid << ");" << endl;
-
-            // Grids w/eqGroups.
-            if (_eqGroups.getEqGrids().count(gp))
-                os << "  eqGridPtrs.push_back(" << grid  << ");" << endl;
-        }
-        os << " }" << endl;
-
-        // Allocate params.
-        os << endl << " virtual void allocParams() {" << endl;
-        os << "  paramPtrs.clear();" << endl;
-        for (auto pp : _params) {
-            string param = pp->getName();
-            os << "  " << param << " = new " << paramTypeNames[pp] <<
-                "(" << paramDimArgs[pp] << ");" << endl <<
-                "  paramPtrs.push_back(" << param << ");" << endl;
-        }
-        os << " }" << endl;
-
-        // Stencil provided code for StencilContext
-        CodeList *extraCode;
-        if ( (extraCode = _stencil.getExtensionCode(STENCIL_CONTEXT)) != NULL )
         {
-            os << endl << "  // Functions provided by user" << endl;
-            for ( auto code : *extraCode )
-                os << code << endl;
+            os << endl << " " << _context_base << "() {" << endl <<
+                "  name = \"" << _stencil.getName() << "\";" << endl;
+            
+            // Init grid ptrs.
+            for (auto gp : _grids) {
+                string grid = gp->getName();
+                os << "  " << grid << " = 0;" << endl;
+            }
+            
+            // Init param ptrs.
+            for (auto pp : _params) {
+                string param = pp->getName();
+                os << "  " << param << " = 0;" << endl;
+            }
+            
+            // end of ctor.
+            os << " }" << endl;
         }
-        
-        // end of context.
-        os << "};" << endl;
+        os << "}; // " << _context_base << endl;
     }
         
-    // Loop through all eqGroups.
+    // A struct for each eqGroup.
     for (size_t ei = 0; ei < _eqGroups.size(); ei++) {
 
         // Scalar eqGroup.
@@ -811,15 +771,11 @@ void YASKCppPrinter::printCode(ostream& os) {
 
         // Init code.
         {
-            os << endl << " // All grids updated by this eqGroup." << endl <<
-                " std::vector<RealVecGridBase*> eqGridPtrs;" << endl;
-
-            os << " void init(" << _context << "& context) {" << endl;
+            os << " void setPtrs(" << _context_base << "& context, GridPtrs& outputGridPtrs) {" << endl;
 
             // Grids w/eqGroups.
-            os << "  eqGridPtrs.clear();" << endl;
             for (auto gp : eq.grids) {
-                os << "  eqGridPtrs.push_back(context." << gp->getName() << ");" << endl;
+                os << "  outputGridPtrs.push_back(context." << gp->getName() << ");" << endl;
             }
             os << " }" << endl;
         }
@@ -828,7 +784,7 @@ void YASKCppPrinter::printCode(ostream& os) {
         {
             os << endl << " // Determine whether equation group is valid at the given indices. " <<
                 "Return true if indices are within the valid sub-domain or false otherwise." << endl <<
-                " bool is_in_valid_domain(StencilContext& context, " <<
+                    " bool is_in_valid_domain(" << _context_base << "& context, " <<
                 _dims._allDims.makeDimStr(", ", "idx_t ") << ") {" << endl;
             if (eq.cond.get())
                 os << " return " << eq.cond->makeStr() << ";" << endl;
@@ -848,7 +804,7 @@ void YASKCppPrinter::printCode(ostream& os) {
             // Function header.
             os << endl << " // Calculate one scalar result relative to indices " <<
                 _dims._allDims.makeDimStr(", ") << "." << endl;
-            os << " void calc_scalar(" << _context << "& context, " <<
+            os << " void calc_scalar(" << _context_base << "& context, " <<
                 _dims._allDims.makeDimStr(", ", "idx_t ") << ") {" << endl;
 
             // C++ code generator.
@@ -902,7 +858,7 @@ void YASKCppPrinter::printCode(ostream& os) {
             os << " // There are " << (fpops.getNumOps() * numResults) <<
                 " FP operation(s) per cluster." << endl;
 
-            os << " void calc_cluster(" << _context << "& context, " <<
+            os << " void calc_cluster(" << _context_base << "& context, " <<
                 _dims._allDims.makeDimStr(", ", "idx_t ", "v") << ") {" << endl;
 
             // Element indices.
@@ -965,7 +921,7 @@ void YASKCppPrinter::printCode(ostream& os) {
                 if (dir.size())
                     fname += "_" + dir.getDirName();
                 os << " template<int level> void " << fname <<
-                    "(" << _context << "& context, " <<
+                    "(" << _context_base << "& context, " <<
                     _dims._allDims.makeDimStr(", ", "idx_t ", "v") << ") {" << endl;
 
                 // C++ prefetch code.
@@ -983,32 +939,93 @@ void YASKCppPrinter::printCode(ostream& os) {
             
     } // stencil eqGroups.
 
-    // Create a class for all eqGroups.
-    os << endl << " ////// Overall stencil equation-groups class //////" << endl <<
-        "template <typename ContextClass>" << endl <<
-        "struct StencilEqs_" << _stencil.getName() <<
-        " : public StencilEqs {" << endl;
+    // Finish the context.
+    {
+        os << endl << " ////// Overall stencil-specific context //////" << endl <<
+            "struct " << _context << " : public " << _context_base << " {" << endl;
 
-    // Stencil eqGroup objects.
-    os << endl << " // Stencils." << endl;
-    for (auto& eq : _eqGroups) {
-        string eqName = eq.getName();
-        os << " EqGroupTemplate<EqGroup_" << eqName << "," <<
-            _context << "> eqGroup_" << eqName << ";" << endl;
+        // Stencil eqGroup objects.
+        os << endl << " // Stencil equation-groups." << endl;
+        for (auto& eq : _eqGroups) {
+            string eqName = eq.getName();
+            os << " EqGroupTemplate<EqGroup_" << eqName << "," <<
+                _context << "> eqGroup_" << eqName << ";" << endl;
+        }
+
+        // Ctor.
+        os << endl << " " << _context << "() { setPtrs(); }" << endl;
+        
+        // Init code.
+        {
+            os << endl << " virtual void setPtrs() {\n"
+                "  eqGroups.clear();\n"
+                "  gridPtrs.clear();\n"
+                "  outputGridPtrs.clear();\n"
+                "  paramPtrs.clear();\n";
+            
+            // Push eq-group pointers to list.
+            for (auto& eq : _eqGroups) {
+                string eqName = eq.getName();
+                os << "  eqGroups.push_back(&eqGroup_" << eqName << ");" << endl;
+            }
+
+            // Push grid pointers to list.
+            for (auto gp : _grids) {
+                string grid = gp->getName();
+                os << "  gridPtrs.push_back(" << grid << ");" << endl;
+                
+                // Grids w/eqGroups.
+                if (_eqGroups.getEqGrids().count(gp))
+                    os << "  outputGridPtrs.push_back(" << grid  << ");" << endl;
+            }
+
+            // Push param pointers to list.
+            for (auto pp : _params) {
+                string param = pp->getName();
+                os << "  paramPtrs.push_back(" << param << ");" << endl;
+            }
+            
+            os << " }" << endl;
+        }
+        
+        // Allocate grids.
+        {
+            os << endl << " virtual void allocGrids() {" << endl;
+            for (auto gp : _grids) {
+                string grid = gp->getName();
+                string hbwArg = "false";
+                if ((_eqGroups.getEqGrids().count(gp) && _settings._hbwRW) ||
+                    (_eqGroups.getEqGrids().count(gp) == 0 && _settings._hbwRO))
+                    hbwArg = "true";
+                os << "  " << grid << " = new " << typeNames[gp] <<
+                    "(" << dimArgs[gp] << padArgs[gp] << "\"" << grid << "\", " <<
+                    hbwArg << ", *ostr);\n";
+            }
+            os << " }" << endl;
+        }
+        
+        // Allocate params.
+        {
+            os << endl << " virtual void allocParams() {" << endl;
+            for (auto pp : _params) {
+                string param = pp->getName();
+                os << "  " << param << " = new " << paramTypeNames[pp] <<
+                    "(" << paramDimArgs[pp] << ");\n";
+            }
+            os << " }" << endl;
+        }
+        
+        // Stencil provided code for StencilContext
+        CodeList *extraCode;
+        if ( (extraCode = _stencil.getExtensionCode(STENCIL_CONTEXT)) != NULL )
+        {
+            os << endl << "  // Functions provided by user" << endl;
+            for ( auto code : *extraCode )
+                os << code << endl;
+        }
+        
+        os << "}; // " << _context << endl;
     }
-
-    // Ctor.
-    os << endl << " StencilEqs_" << _stencil.getName() << "() {" << endl <<
-        "name = \"" << _stencil.getName() << "\";" << endl;
-
-    // Push stencils to list.
-    for (auto& eq : _eqGroups) {
-        string eqName = eq.getName();
-        os << "  eqGroups.push_back(&eqGroup_" << eqName << ");" << endl;
-    }
-    os << " }" << endl;
-
-    os << "};" << endl;
     os << "} // namespace yask." << endl;
         
 }
@@ -1087,8 +1104,6 @@ void YASKCppPrinter::printMacros(ostream& os) {
     os << "#define STENCIL_NAME \"" << _stencil.getName() << "\"" << endl;
     os << "#define STENCIL_IS_" << allCaps(_stencil.getName()) << " (1)" << endl;
     os << "#define STENCIL_CONTEXT " << _context << endl;
-    os << "#define STENCIL_EQS StencilEqs_" << _stencil.getName() <<
-        "<" << _context << ">" << endl;
 
     os << endl;
     os << "// Dimensions:" << endl;

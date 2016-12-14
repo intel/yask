@@ -25,7 +25,7 @@
 
 # Some of the make vars available:
 #
-# stencil: iso3dfd, 3axis, 9axis, 3plane, cube, ave, awp, awp_elastic, stream.
+# stencil: see list below.
 #
 # arch: see list below.
 #
@@ -56,7 +56,7 @@
 # omp_halo_schedule: OMP schedule policy for OpenMP halo loop.
 #
 # def_block_threads: Number of threads to use in nested OpenMP block loop by default.
-# def_thread_factor: Divide number of OpenMP threads by this factor by default.
+# def_thread_divisor: Divide number of OpenMP threads by this factor by default.
 #
 # def_*_size, def_pad: Default sizes used in executable.
 
@@ -67,7 +67,7 @@ mpi		=	0
 
 # Defaults based on stencil type.
 ifeq ($(stencil),)
-$(error Stencil not specified; use stencil=iso3dfd, 3axis, 9axis, 3plane, cube, ave, stream, awp, awp_elastic or fsg)
+$(error Stencil not specified; use stencil=iso3dfd, 3axis, 9axis, 3plane, cube, ave, stream, awp, awp_elastic, or fsg)
 
 else ifeq ($(stencil),ave)
 radius		?=	1
@@ -90,7 +90,7 @@ radius		?=	2
 else ifeq ($(stencil),iso3dfd)
 MACROS		+=	MAX_EXCH_DIST=1
 real_bytes	?=	4
-layout_4d	?=	Layout_2314
+layout_4d	?=	Layout_2314  # x, y, t, z (unit stride)
 ifeq ($(arch),knl)
 ifeq ($(real_bytes),4)
 fold		?=	x=2,y=8,z=1
@@ -117,28 +117,23 @@ def_rank_size	?=	512
 def_block_size	?=	32
 ifeq ($(arch),knl)
 def_block_threads	?=	4
-def_thread_factor	?=	2
+def_thread_divisor	?=	2
 endif
 FB_FLAGS	+=	-min-es 1
 
 else ifeq ($(stencil),fsg)
-#stencil is too complex for the compiler without this
-CXXFLAGS        +=      -qoverride-limits
-
 time_dim_size   ?=      1
 fold            ?=      x=1,y=4,z=4
 cluster         ?=      x=1,y=1,z=1 
 layout_3d       ?=      Layout_321
 layout_4d       ?=      Layout_4312
 omp_schedule    ?=      dynamic
-crew            ?=      0
-expr_size       ?=      76
 eqs             ?=      v_br=v_br,v_bl=v_bl,v_tr=v_tr,v_tl=v_tl,s_br=s_br,s_bl=s_bl,s_tr=s_tr,s_tl=s_tl
 RANK_LOOP_CODE  ?=      square_wave serpentine loop(dn,dx,dy,dz) { calc(region(start_dt, stop_dt, eqGroup_ptr)); }
 REGION_LOOP_CODE ?=     omp square_wave serpentine loop(rn,rx,rz,ry) { calc(block(rt)); }
 BLOCK_LOOP_CODE ?=      loop(bnv) { omp serpentine loop(byv,bzv) {  prefetch(L1) loop(bxv) { calc(cluster(bt)); } } }
 def_block_size  ?=      32
-def_thread_factor ?=    2
+def_thread_divisor ?=    2
 def_block_threads ?= 	2
 def_pad         ?=      2
 
@@ -211,12 +206,12 @@ omp_schedule			?=	dynamic,1
 omp_block_schedule		?=	static,1
 omp_halo_schedule		?=	static
 def_block_threads		?=	2
-def_thread_factor		?=	1
+def_thread_divisor		?=	1
 radius				?=	8
 real_bytes			?=	4
 time_dim_size			?=	2
-layout_3d			?=	Layout_123
-layout_4d			?=	Layout_1234
+layout_3d			?=	Layout_123  # x, y, z (unit stride)
+layout_4d			?=	Layout_1234 # t, x, y, z (unit stride)
 def_rank_size			?=	128
 def_block_size			?=	64
 def_pad				?=	1
@@ -282,7 +277,7 @@ MACROS		+=	TIME_DIM_SIZE=$(time_dim_size)
 MACROS		+=	DEF_RANK_SIZE=$(def_rank_size)
 MACROS		+=	DEF_BLOCK_SIZE=$(def_block_size)
 MACROS		+=	DEF_BLOCK_THREADS=$(def_block_threads)
-MACROS		+=	DEF_THREAD_FACTOR=$(def_thread_factor)
+MACROS		+=	DEF_THREAD_DIVISOR=$(def_thread_divisor)
 MACROS		+=	DEF_PAD=$(def_pad)
 
 # arch.
@@ -306,7 +301,11 @@ endif
 # VTUNE settings.
 ifeq ($(vtune),1)
 MACROS		+=	USE_VTUNE
+ifneq ($(VTUNE_AMPLIFIER_XE_2017_DIR),)
 VTUNE_DIR	=	$(VTUNE_AMPLIFIER_XE_2017_DIR)
+else
+VTUNE_DIR	=	$(VTUNE_AMPLIFIER_XE_2016_DIR)
+endif
 CXXFLAGS	+=	-I$(VTUNE_DIR)/include
 LFLAGS		+=	$(VTUNE_DIR)/lib64/libittnotify.a
 endif
@@ -316,7 +315,7 @@ ifneq ($(findstring ic,$(notdir $(CXX))),)  # Intel compiler
 
 CODE_STATS      =   	code_stats
 CXXFLAGS        +=      $(ISA) -debug extended -Fa -restrict -ansi-alias -fno-alias
-CXXFLAGS	+=	-fimf-precision=low -fast-transcendentals -no-prec-sqrt -no-prec-div -fp-model fast=2 -fno-protect-parens -rcd -ftz -fma -fimf-domain-exclusion=none -qopt-assume-safe-padding
+CXXFLAGS	+=	-fimf-precision=low -fast-transcendentals -no-prec-sqrt -no-prec-div -fp-model fast=2 -fno-protect-parens -rcd -ftz -fma -fimf-domain-exclusion=none -qopt-assume-safe-padding -qoverride-limits
 CXXFLAGS	+=      -qopt-report=5 -qopt-report-phase=VEC,PAR,OPENMP,IPO,LOOP
 CXXFLAGS	+=	-no-diag-message-catalog
 CXX_VER_CMD	=	$(CXX) -V

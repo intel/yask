@@ -304,7 +304,7 @@ protected:
     EqGroups& _clusterEqGroups;
     Dimensions& _dims;
     YASKCppSettings& _settings;
-    string _context;
+    string _context, _context_base;
 
     // Print an expression as a one-line C++ comment.
     void addComment(ostream& os, EqGroup& eq) {
@@ -337,6 +337,7 @@ public:
     {
         // name of C++ struct.
         _context = "StencilContext_" + _stencil.getName();
+        _context_base = _context + "_data";
     }
     virtual ~YASKCppPrinter() { }
 

@@ -34,26 +34,25 @@ using namespace std;
 
 namespace yask {
 
+    ///// StencilContext functions:
     ///// Top-level methods for evaluating reference and optimized stencils.
 
     // Eval stencil equation group(s) over grid(s) using scalar code.
-    void StencilEqs::calc_rank_ref(StencilContext& context)
+    void StencilContext::calc_rank_ref()
     {
-        init(context);
-        idx_t begin_dt = context.begin_dt;
-        idx_t end_dt = begin_dt + context.dt;
+        idx_t end_dt = begin_dt + dt;
         TRACE_MSG("calc_rank_ref(%ld..%ld)", begin_dt, end_dt-1);
         
         // Time steps.
         // TODO: check that scalar version actually does CPTS_T time steps.
         // (At this point, CPTS_T == 1 for all existing stencil examples.)
-        for(idx_t t = context.begin_dt; t < context.begin_dt + context.dt; t += CPTS_T) {
+        for(idx_t t = begin_dt; t < begin_dt + dt; t += CPTS_T) {
 
             // equations to evaluate (only one in most stencils).
             for (auto eg : eqGroups) {
 
                 // Halo+shadow exchange for grid(s) updated by this equation.
-                eg->exchange_halos(context, t, t + CPTS_T);
+                eg->exchange_halos(t, t + CPTS_T);
 
                 // Loop through 4D space within the bounding-box of this
                 // equation set.
@@ -65,13 +64,13 @@ namespace yask {
 
                                 // Update only if point in domain for this eq group.
                                 // NB: this isn't actually needed for rectangular BBs.
-                                if (eg->is_in_valid_domain(context, t, n, x, y, z)) {
+                                if (eg->is_in_valid_domain(t, n, x, y, z)) {
                                     
                                     TRACE_MSG("%s.calc_scalar(%ld, %ld, %ld, %ld, %ld)", 
                                               eg->get_name().c_str(), t, n, x, y, z);
                                         
                                     // Evaluate the reference scalar code.
-                                    eg->calc_scalar(context, t, n, x, y, z);
+                                    eg->calc_scalar(t, n, x, y, z);
                                 }
                             }
             }
@@ -80,31 +79,29 @@ namespace yask {
 
 
     // Eval equation group(s) over grid(s) using optimized code.
-    void StencilEqs::calc_rank_opt(StencilContext& context)
+    void StencilContext::calc_rank_opt()
     {
-        init(context);
-        idx_t begin_dt = context.begin_dt;
-        idx_t end_dt = begin_dt + context.dt;
-        idx_t step_dt = context.rt;
+        idx_t end_dt = begin_dt + dt;
+        idx_t step_dt = rt;
         TRACE_MSG("calc_rank_opt(%ld..%ld by %ld)", begin_dt, end_dt-1, step_dt);
 
         // Problem begin points.
-        idx_t begin_dn = context.begin_bbn;
-        idx_t begin_dx = context.begin_bbx;
-        idx_t begin_dy = context.begin_bby;
-        idx_t begin_dz = context.begin_bbz;
+        idx_t begin_dn = begin_bbn;
+        idx_t begin_dx = begin_bbx;
+        idx_t begin_dy = begin_bby;
+        idx_t begin_dz = begin_bbz;
     
         // Problem end-points.
-        idx_t end_dn = context.end_bbn;
-        idx_t end_dx = context.end_bbx;
-        idx_t end_dy = context.end_bby;
-        idx_t end_dz = context.end_bbz;
+        idx_t end_dn = end_bbn;
+        idx_t end_dx = end_bbx;
+        idx_t end_dy = end_bby;
+        idx_t end_dz = end_bbz;
 
         // Steps are based on region sizes.
-        idx_t step_dn = context.rn;
-        idx_t step_dx = context.rx;
-        idx_t step_dy = context.ry;
-        idx_t step_dz = context.rz;
+        idx_t step_dn = rn;
+        idx_t step_dx = rx;
+        idx_t step_dy = ry;
+        idx_t step_dz = rz;
 
         // Groups in rank loops are set to smallest size.
         const idx_t group_size_dn = 1;
@@ -119,12 +116,12 @@ namespace yask {
         // i.e., if the region covers the whole rank in a given dimension, no wave-front
         // is needed in thar dim.
         // TODO: make this grid-specific.
-        context.angle_n = (context.rn < context.len_bbn) ? ROUND_UP(context.hn, CPTS_N) : 0;
-        context.angle_x = (context.rx < context.len_bbx) ? ROUND_UP(context.hx, CPTS_X) : 0;
-        context.angle_y = (context.ry < context.len_bby) ? ROUND_UP(context.hy, CPTS_Y) : 0;
-        context.angle_z = (context.rz < context.len_bbz) ? ROUND_UP(context.hz, CPTS_Z) : 0;
+        angle_n = (rn < len_bbn) ? ROUND_UP(hn, CPTS_N) : 0;
+        angle_x = (rx < len_bbx) ? ROUND_UP(hx, CPTS_X) : 0;
+        angle_y = (ry < len_bby) ? ROUND_UP(hy, CPTS_Y) : 0;
+        angle_z = (rz < len_bbz) ? ROUND_UP(hz, CPTS_Z) : 0;
         TRACE_MSG("wavefront angles: %ld, %ld, %ld, %ld",
-                  context.angle_n, context.angle_x, context.angle_y, context.angle_z);
+                  angle_n, angle_x, angle_y, angle_z);
     
         // Extend end points for overlapping regions due to wavefront angle.
         // For each subsequent time step in a region, the spatial location of
@@ -134,11 +131,11 @@ namespace yask {
         // shift / region size).  This assumes stencils are inter-dependent.
         // TODO: calculate stencil inter-dependency in the foldBuilder for each
         // dimension.
-        idx_t nshifts = (idx_t(eqGroups.size()) * context.rt) - 1;
-        end_dn += context.angle_n * nshifts;
-        end_dx += context.angle_x * nshifts;
-        end_dy += context.angle_y * nshifts;
-        end_dz += context.angle_z * nshifts;
+        idx_t nshifts = (idx_t(eqGroups.size()) * rt) - 1;
+        end_dn += angle_n * nshifts;
+        end_dx += angle_x * nshifts;
+        end_dy += angle_y * nshifts;
+        end_dz += angle_z * nshifts;
         TRACE_MSG("extended domain after wavefront adjustment: %ld..%ld, %ld..%ld, %ld..%ld, %ld..%ld, %ld..%ld", 
                   begin_dt, end_dt-1,
                   begin_dn, end_dn-1,
@@ -164,7 +161,7 @@ namespace yask {
                 for (auto eqGroup : eqGroups) {
 
                     // Halo+shadow exchange for grid(s) updated by this equation.
-                    eqGroup->exchange_halos(context, start_dt, stop_dt);
+                    eqGroup->exchange_halos(start_dt, stop_dt);
 
                     // Eval this stencil in calc_region().
                     EqGroupSet eqGroup_set;
@@ -186,7 +183,7 @@ namespace yask {
                 for (auto eqGroup : eqGroups) {
 
                     // Halo+shadow exchange for grid(s) updated by this equation.
-                    eqGroup->exchange_halos(context, start_dt, stop_dt);
+                    eqGroup->exchange_halos(start_dt, stop_dt);
                 }
             
                 // Include automatically-generated loop code that calls calc_region() for each region.
@@ -200,11 +197,10 @@ namespace yask {
     // Each region is typically computed in a separate OpenMP 'for' region.
     // In it, we loop over the time steps and the stencil
     // equations and evaluate the blocks in the region.
-    void StencilEqs::
-    calc_region(StencilContext& context, idx_t start_dt, idx_t stop_dt,
-                EqGroupSet* eqGroup_set,
-                idx_t start_dn, idx_t start_dx, idx_t start_dy, idx_t start_dz,
-                idx_t stop_dn, idx_t stop_dx, idx_t stop_dy, idx_t stop_dz)
+    void StencilContext::calc_region(idx_t start_dt, idx_t stop_dt,
+                                     EqGroupSet* eqGroup_set,
+                                     idx_t start_dn, idx_t start_dx, idx_t start_dy, idx_t start_dz,
+                                     idx_t stop_dn, idx_t stop_dx, idx_t stop_dy, idx_t stop_dz)
     {
         TRACE_MSG("calc_region(%ld..%ld, %ld..%ld, %ld..%ld, %ld..%ld, %ld..%ld)", 
                   start_dt, stop_dt-1,
@@ -214,17 +210,17 @@ namespace yask {
                   start_dz, stop_dz-1);
 
         // Steps within a region are based on block sizes.
-        const idx_t step_rt = context.bt;
-        const idx_t step_rn = context.bn;
-        const idx_t step_rx = context.bx;
-        const idx_t step_ry = context.by;
-        const idx_t step_rz = context.bz;
+        const idx_t step_rt = bt;
+        const idx_t step_rn = bn;
+        const idx_t step_rx = bx;
+        const idx_t step_ry = by;
+        const idx_t step_rz = bz;
 
         // Groups in region loops are based on group sizes.
-        const idx_t group_size_rn = context.gn;
-        const idx_t group_size_rx = context.gx;
-        const idx_t group_size_ry = context.gy;
-        const idx_t group_size_rz = context.gz;
+        const idx_t group_size_rn = gn;
+        const idx_t group_size_rx = gx;
+        const idx_t group_size_ry = gy;
+        const idx_t group_size_rz = gz;
 
         // Not yet supporting temporal blocking.
         if (step_rt != 1) {
@@ -273,7 +269,7 @@ namespace yask {
                         end_rz > begin_rz) {
 
                         // Set number of threads for a region.
-                        context.set_region_threads();
+                        set_region_threads();
 
                         // Include automatically-generated loop code that calls
                         // calc_block() for each block in this region.  Loops
@@ -282,40 +278,235 @@ namespace yask {
 #include "stencil_region_loops.hpp"
 
                         // Reset threads back to max.
-                        context.set_max_threads();
+                        set_max_threads();
                     }
             
                     // Shift spatial region boundaries for next iteration to
                     // implement temporal wavefront.  We only shift backward, so
                     // region loops must increment. They may do so in any order.
-                    start_dn -= context.angle_n;
-                    stop_dn -= context.angle_n;
-                    start_dx -= context.angle_x;
-                    stop_dx -= context.angle_x;
-                    start_dy -= context.angle_y;
-                    stop_dy -= context.angle_y;
-                    start_dz -= context.angle_z;
-                    stop_dz -= context.angle_z;
+                    start_dn -= angle_n;
+                    stop_dn -= angle_n;
+                    start_dx -= angle_x;
+                    stop_dx -= angle_x;
+                    start_dy -= angle_y;
+                    stop_dy -= angle_y;
+                    start_dz -= angle_z;
+                    stop_dz -= angle_z;
 
                 }            
             } // stencil equations.
         } // time.
     }
 
-    // Initialize some data structures.
-    // Must be called after the context grids are allocated.
-    void StencilEqs::init(StencilContext& context,
-                          idx_t* sum_points,
-                          idx_t* sum_fpops) {
-        for (auto eg : eqGroups)
-            eg->init(context);
+    // Init MPI-related vars.
+    void StencilContext::setupMPI(bool findLocation) {
 
-        if (context.bb_valid == true) return;
-        find_bounding_boxes(context);
+        // Determine my position in 4D.
+        if (findLocation) {
+            Layout_4321 rank_layout(nrn, nrx, nry, nrz);
+            rank_layout.unlayout((idx_t)my_rank, rin, rix, riy, riz);
+        }
+        *ostr << "Logical coordinates of rank " << my_rank << ": " <<
+            rin << ", " << rix << ", " << riy << ", " << riz << endl;
+
+        // A table of coordinates for everyone.
+        const int num_dims = 4;
+        idx_t coords[num_ranks][num_dims];
+        coords[my_rank][0] = rin;
+        coords[my_rank][1] = rix;
+        coords[my_rank][2] = riy;
+        coords[my_rank][3] = riz;
+
+#ifdef USE_MPI
+        // Exchange coordinate info between all ranks.
+        for (int rn = 0; rn < num_ranks; rn++) {
+            MPI_Bcast(&coords[rn][0], num_dims, MPI_INTEGER8,
+                      rn, comm);
+        }
+#endif
+        
+        // Determine who my neighbors are.
+        int num_neighbors = 0;
+        for (int rn = 0; rn < num_ranks; rn++) {
+
+            // Get coordinates of rn.
+            idx_t rnn = coords[rn][0];
+            idx_t rnx = coords[rn][1];
+            idx_t rny = coords[rn][2];
+            idx_t rnz = coords[rn][3];
+
+            // Distance from me: prev => -1, self => 0, next => +1.
+            idx_t rdn = rnn - rin;
+            idx_t rdx = rnx - rix;
+            idx_t rdy = rny - riy;
+            idx_t rdz = rnz - riz;
+
+            // Manhattan distance.
+            int mdist = abs(rdn) + abs(rdx) + abs(rdy) + abs(rdz);
+            
+            // Myself.
+            if (rn == my_rank) {
+                if (mdist != 0) {
+                    cerr << "internal error: distance to own rank == " << mdist << endl;
+                    exit_yask(1);
+                }
+                continue; // nothing else to do for self.
+            }
+
+            // Someone else.
+            else {
+                if (mdist == 0) {
+                    cerr << "error: distance to rank " << rn << " == " << mdist << endl;
+                    exit_yask(1);
+                }
+            }
+            
+            // Rank rn is my neighbor if its distance <= 1 in every dim.
+            if (abs(rdn) > 1 || abs(rdx) > 1 || abs(rdy) > 1 || abs(rdz) > 1)
+                continue;
+
+            // Check against max dist needed.
+            // TODO: determine max dist automatically from stencil equations.
+#ifndef MAX_EXCH_DIST
+#define MAX_EXCH_DIST 4
+#endif
+            if (mdist > MAX_EXCH_DIST)
+                continue;
+
+            num_neighbors++;
+            *ostr << "Neighbor #" << num_neighbors << " at " <<
+                rnn << ", " << rnx << ", " << rny << ", " << rnz <<
+                " is rank " << rn << endl;
+                    
+            // Size of buffer in each direction:
+            // if dist to neighbor is zero (i.e., is self), use full size,
+            // otherwise, use halo size.
+            // TODO: use per-grid halo size instead of global max.
+            idx_t rsn = (rdn == 0) ? dn : hn;
+            idx_t rsx = (rdx == 0) ? dx : hx;
+            idx_t rsy = (rdy == 0) ? dy : hy;
+            idx_t rsz = (rdz == 0) ? dz : hz;
+
+            // TODO: only alloc buffers in directions actually needed, e.g.,
+            // many simple stencils don't need diagonals.
+                    
+            // Is buffer needed?
+            if (rsn * rsx * rsy * rsz == 0) {
+                *ostr << "No halo exchange needed between ranks " << my_rank <<
+                    " and " << rn << '.' << endl;
+                continue;
+            }
+
+            // Add one to -1..+1 dist to get 0..2 range for my_neighbors indices.
+            rdn++; rdx++; rdy++; rdz++;
+
+            // Save rank of this neighbor.
+            my_neighbors[rdn][rdx][rdy][rdz] = rn;
+                    
+            // Alloc MPI buffers between rn and me.
+            // Need send and receive for each updated grid.
+            for (auto gp : outputGridPtrs) {
+                for (int bd = 0; bd < MPIBufs::nBufDirs; bd++) {
+                    ostringstream oss;
+                    oss << gp->get_name();
+                    if (bd == MPIBufs::bufSend)
+                        oss << "_send_halo_from_" << my_rank << "_to_" << rn;
+                    else
+                        oss << "_get_halo_by_" << my_rank << "_from_" << rn;
+
+                    mpiBufs[gp].allocBuf(bd, rdn, rdx, rdy, rdz,
+                                         rsn, rsx, rsy, rsz,
+                                         oss.str(), *ostr);
+                }
+            }
+        }
+    }
+
+    // Get total size.
+    idx_t StencilContext::get_num_bytes() {
+        idx_t nbytes = 0;
+
+        // Grids.
+        for (auto gp : gridPtrs)
+            nbytes += gp->get_num_bytes();
+
+        // Params.
+        for (auto pp : paramPtrs)
+            nbytes += pp->get_num_bytes();
+
+        // MPI buffers.
+        for (auto gp : outputGridPtrs) {
+            mpiBufs[gp].visitNeighbors
+                (*this,
+                 [&](idx_t nn, idx_t nx, idx_t ny, idx_t nz,
+                     int rank,
+                     Grid_NXYZ* sendBuf,
+                     Grid_NXYZ* rcvBuf)
+                 {
+                     if (sendBuf)
+                         nbytes += sendBuf->get_num_bytes();
+                     if (rcvBuf)
+                         nbytes += rcvBuf->get_num_bytes();
+                 } );
+        }
+
+#ifdef ENABLE_SHADOW_COPY
+        // Shadow buffers.
+        for (auto gp : outputGridPtrs) {
+            if (shadowGrids.count(gp) && shadowGrids[gp])
+                nbytes += shadowGrids[gp]->get_num_bytes();
+        }
+#endif
+        
+        return nbytes;
+    }
+
+#ifdef ENABLE_SHADOW_COPY
+    // Alloc shadow grids.
+    void StencilContext::allocShadowGrids() {
+        for (auto gp : outputGridPtrs) {
+            if (shadowGrids[gp])
+                delete shadowGrids[gp];
+            shadowGrids[gp] = new RealGrid_NXYZ(dn, dx, dy, dz,
+                                                GRID_ALIGNMENT);
+            shadowGrids[gp]->print_info(string("shadow-") + gp->get_name(), *ostr);
+        }        
+    }
+#endif
+    
+    // Allocate grids, params, and MPI bufs.
+    // Initialize some data structures.
+    void StencilContext::allocAll(bool findRankLocation,
+                                  idx_t* sum_points,
+                                  idx_t* sum_fpops)
+    {
+        ostream& os = *ostr;
+        os << "Allocating grids..." << endl;
+        allocGrids();
+        os << "Allocating parameters..." << endl;
+        allocParams();
+#ifdef USE_MPI
+        os << "Allocating MPI buffers..." << endl;
+        setupMPI(findRankLocation);
+#endif
+#ifdef ENABLE_SHADOW_COPY
+        if (shadow_in_freq || shadow_out_freq) {
+            os << "Allocating shadow grids..." << endl;
+            allocShadowGrids();
+        }
+#endif
+        setPtrs();
+        
+        const idx_t num_eqGrids = outputGridPtrs.size();
+        os << "Num grids: " << gridPtrs.size() << endl;
+        os << "Num grids to be updated: " << num_eqGrids << endl;
+
+        os << "Num stencil equation-groups: " << eqGroups.size() << endl;
+        for (auto eg : eqGroups)
+            eg->setPtrs(*this);
+        find_bounding_boxes();
 
         idx_t npoints = 0, nfpops = 0;
-        ostream& os = *(context.ostr);
-        os << "Num stencil equation-groups: " << eqGroups.size() << endl;
         for (auto eg : eqGroups) {
             idx_t updates1 = eg->get_scalar_points_updated();
             idx_t updates_domain = updates1 * eg->bb_size;
@@ -337,51 +528,115 @@ namespace yask {
         if (sum_fpops)
             *sum_fpops = nfpops;
     }
+
+    // Init all grids & params by calling initFn.
+    void StencilContext::initValues(function<void (RealVecGridBase* gp, 
+                                                   real_t seed)> realVecInitFn,
+                                    function<void (RealGrid* gp,
+                                                   real_t seed)> realInitFn)
+    {
+        ostream& os = *ostr;
+        real_t v = 0.1;
+        os << "Initializing grids..." << endl;
+        for (auto gp : gridPtrs) {
+            realVecInitFn(gp, v);
+            v += 0.01;
+        }
+#ifdef ENABLE_SHADOW_COPY
+        if (shadowGrids.size()) {
+            os << "Initializing shadow grids..." << endl;
+            for (auto gp : outputGridPtrs) {
+                if (shadowGrids.count(gp) && shadowGrids[gp]) {
+                    realInitFn(shadowGrids[gp], v);
+                    v += 0.01;
+                }
+            }
+        }
+#endif
+        if (paramPtrs.size()) {
+            os << "Initializing parameters..." << endl;
+            for (auto pp : paramPtrs) {
+                realInitFn(pp, v);
+                v += 0.01;
+            }
+        }
+    }
+
+    // Compare grids in contexts.
+    // Return number of mis-compares.
+    idx_t StencilContext::compare(const StencilContext& ref) const {
+        ostream& os = *ostr;
+
+        os << "Comparing grid(s) in '" << name << "' to '" << ref.name << "'..." << endl;
+        if (gridPtrs.size() != ref.gridPtrs.size()) {
+            cerr << "** number of grids not equal." << endl;
+            return 1;
+        }
+        idx_t errs = 0;
+        for (size_t gi = 0; gi < gridPtrs.size(); gi++) {
+            os << "Grid '" << ref.gridPtrs[gi]->get_name() << "'..." << endl;
+            errs += gridPtrs[gi]->compare(*ref.gridPtrs[gi]);
+        }
+
+        os << "Comparing parameter(s) in '" << name << "' to '" << ref.name << "'..." << endl;
+        if (paramPtrs.size() != ref.paramPtrs.size()) {
+            cerr << "** number of params not equal." << endl;
+            return 1;
+        }
+        for (size_t pi = 0; pi < paramPtrs.size(); pi++) {
+            errs += paramPtrs[pi]->compare(ref.paramPtrs[pi], EPSILON);
+        }
+
+        return errs;
+    }
+    
     
     // Set the bounding-box vars for all eq groups.
-    void StencilEqs::find_bounding_boxes(StencilContext& context) {
-        if (context.bb_valid == true) return;
+    void StencilContext::find_bounding_boxes()
+    {
+        if (bb_valid == true) return;
 
         // Init overall BB.
         // Init min vars w/max val and vice-versa.
-        context.begin_bbn = idx_max; context.end_bbn = idx_min;
-        context.begin_bbx = idx_max; context.end_bbx = idx_min;
-        context.begin_bby = idx_max; context.end_bby = idx_min;
-        context.begin_bbz = idx_max; context.end_bbz = idx_min;
-        context.bb_size = 0;
+        begin_bbn = idx_max; end_bbn = idx_min;
+        begin_bbx = idx_max; end_bbx = idx_min;
+        begin_bby = idx_max; end_bby = idx_min;
+        begin_bbz = idx_max; end_bbz = idx_min;
+        bb_size = 0;
         
         // Find BB for each eq group and update context.
         for (auto eg : eqGroups) {
-            eg->find_bounding_box(context);
+            eg->find_bounding_box();
 
-            context.begin_bbn = min(context.begin_bbn, eg->begin_bbn);
-            context.begin_bbx = min(context.begin_bbx, eg->begin_bbx);
-            context.begin_bby = min(context.begin_bby, eg->begin_bby);
-            context.begin_bbz = min(context.begin_bbz, eg->begin_bbz);
-            context.end_bbn = max(context.end_bbn, eg->end_bbn);
-            context.end_bbx = max(context.end_bbx, eg->end_bbx);
-            context.end_bby = max(context.end_bby, eg->end_bby);
-            context.end_bbz = max(context.end_bbz, eg->end_bbz);
-            context.bb_size += eg->bb_size;
+            begin_bbn = min(begin_bbn, eg->begin_bbn);
+            begin_bbx = min(begin_bbx, eg->begin_bbx);
+            begin_bby = min(begin_bby, eg->begin_bby);
+            begin_bbz = min(begin_bbz, eg->begin_bbz);
+            end_bbn = max(end_bbn, eg->end_bbn);
+            end_bbx = max(end_bbx, eg->end_bbx);
+            end_bby = max(end_bby, eg->end_bby);
+            end_bbz = max(end_bbz, eg->end_bbz);
+            bb_size += eg->bb_size;
         }
 
-        context.len_bbn = context.end_bbn - context.begin_bbn;
-        context.len_bbx = context.end_bbx - context.begin_bbx;
-        context.len_bby = context.end_bby - context.begin_bby;
-        context.len_bbz = context.end_bbz - context.begin_bbz;
-        context.bb_valid = true;
+        len_bbn = end_bbn - begin_bbn;
+        len_bbx = end_bbx - begin_bbx;
+        len_bby = end_bby - begin_bby;
+        len_bbz = end_bbz - begin_bbz;
+        bb_valid = true;
 
         // Special case: if region sizes are equal to domain size (defaul
         // setting), change them to the BB size.
-        if (context.rn == context.dn) context.rn = context.len_bbn;
-        if (context.rx == context.dx) context.rx = context.len_bbx;
-        if (context.ry == context.dy) context.ry = context.len_bby;
-        if (context.rz == context.dz) context.rz = context.len_bbz;
+        if (rn == dn) rn = len_bbn;
+        if (rx == dx) rx = len_bbx;
+        if (ry == dy) ry = len_bby;
+        if (rz == dz) rz = len_bbz;
     }
 
     // Set the bounding-box vars for this eq group.
-    void EqGroupBase::find_bounding_box(StencilContext& context) {
+    void EqGroupBase::find_bounding_box() {
         if (bb_valid) return;
+        StencilContext& context = *_generic_context;
 
         // Init min vars w/max val and vice-versa.
         idx_t minn = idx_max, maxn = idx_min;
@@ -407,7 +662,7 @@ namespace yask {
                     for(idx_t z = 0; z < context.dz; z++) {
 
                         // Update only if point in domain for this eq group.
-                        if (is_in_valid_domain(context, t, n, x, y, z)) {
+                        if (is_in_valid_domain(t, n, x, y, z)) {
                             minn = min(minn, n);
                             maxn = max(maxn, n);
                             minx = min(minx, x);
@@ -465,15 +720,17 @@ namespace yask {
     }
     
     // Exchange halo and shadow data for the given time.
-    void EqGroupBase::exchange_halos(StencilContext& context, idx_t start_dt, idx_t stop_dt)
+    void EqGroupBase::exchange_halos(idx_t start_dt, idx_t stop_dt)
     {
+        StencilContext& context = *_generic_context;
         TRACE_MSG("exchange_halos(%ld..%ld)", start_dt, stop_dt);
 
         // List of grids updated by this equation.
         // These are the grids that need exchanges.
         // FIXME: does not work w/conditions.
-        auto eqGridPtrs = get_eq_grid_ptrs();
+        auto outputGridPtrs = context.outputGridPtrs;
 
+#ifdef ENABLE_SHADOW_COPY
         // TODO: clean up all the shadow code. Either do something useful with it, or get rid of it.
         
         // Time to copy to shadow?
@@ -483,11 +740,11 @@ namespace yask {
             double start_time = getTimeInSecs();
             idx_t t = start_dt;
 
-            for (size_t gi = 0; gi < eqGridPtrs.size(); gi++) {
+            for (size_t gi = 0; gi < outputGridPtrs.size(); gi++) {
 
                 // Get pointer to generic grid and derived type.
                 // TODO: Make this more general.
-                auto gp = eqGridPtrs[gi];
+                auto gp = outputGridPtrs[gi];
 #if USING_DIM_N
                 auto gpd = dynamic_cast<Grid_TNXYZ*>(gp);
 #else
@@ -527,11 +784,11 @@ namespace yask {
             double start_time = getTimeInSecs();
             idx_t t = start_dt;
 
-            for (size_t gi = 0; gi < eqGridPtrs.size(); gi++) {
+            for (size_t gi = 0; gi < outputGridPtrs.size(); gi++) {
 
                 // Get pointer to generic grid and derived type.
                 // TODO: Make this more general.
-                auto gp = eqGridPtrs[gi];
+                auto gp = outputGridPtrs[gi];
 #if USING_DIM_N
                 auto gpd = dynamic_cast<Grid_TNXYZ*>(gp);
 #else
@@ -559,7 +816,8 @@ namespace yask {
             double end_time = getTimeInSecs();
             context.shadow_time += end_time - start_time;
         }
-
+#endif
+        
 #ifdef USE_MPI
         double start_time = getTimeInSecs();
 
@@ -579,11 +837,11 @@ namespace yask {
         const idx_t group_size_zv = 1;
 
         // TODO: put this loop inside visitNeighbors.
-        for (size_t gi = 0; gi < eqGridPtrs.size(); gi++) {
+        for (size_t gi = 0; gi < outputGridPtrs.size(); gi++) {
 
             // Get pointer to generic grid and derived type.
             // TODO: Make this more general.
-            auto gp = eqGridPtrs[gi];
+            auto gp = outputGridPtrs[gi];
 #if USING_DIM_N
             auto gpd = dynamic_cast<Grid_TNXYZ*>(gp);
 #else
@@ -669,7 +927,7 @@ namespace yask {
                          
                          // Define calc_halo() to copy a vector from main grid to sendBuf.
                          // Index sendBuf using index_* vars because they are zero-based.
-#define calc_halo(context, t,                                           \
+#define calc_halo(t,                                                    \
                   start_nv, start_xv, start_yv, start_zv,               \
                   stop_nv, stop_xv, stop_yv, stop_zv)  do {             \
                          idx_t nv = start_nv;                           \
@@ -784,7 +1042,7 @@ namespace yask {
                          idx_t t = start_dt;
                          
                          // Define calc_halo to copy data from rcvBuf into main grid.
-#define calc_halo(context, t,                                           \
+#define calc_halo(t,                                                    \
                   start_nv, start_xv, start_yv, start_zv,               \
                   stop_nv, stop_xv, stop_yv, stop_zv)  do {             \
                              idx_t nv = start_nv;                       \
@@ -812,266 +1070,7 @@ namespace yask {
         context.mpi_time += end_time - start_time;
 #endif
     }
-                         
-            
-    ///// StencilContext functions:
 
-    // Init MPI-related vars.
-    void StencilContext::setupMPI(bool findLocation) {
-
-        // Determine my position in 4D.
-        if (findLocation) {
-            Layout_4321 rank_layout(nrn, nrx, nry, nrz);
-            rank_layout.unlayout((idx_t)my_rank, rin, rix, riy, riz);
-        }
-        *ostr << "Logical coordinates of rank " << my_rank << ": " <<
-            rin << ", " << rix << ", " << riy << ", " << riz << endl;
-
-        // A table of coordinates for everyone.
-        const int num_dims = 4;
-        idx_t coords[num_ranks][num_dims];
-        coords[my_rank][0] = rin;
-        coords[my_rank][1] = rix;
-        coords[my_rank][2] = riy;
-        coords[my_rank][3] = riz;
-
-#ifdef USE_MPI
-        // Exchange coordinate info between all ranks.
-        for (int rn = 0; rn < num_ranks; rn++) {
-            MPI_Bcast(&coords[rn][0], num_dims, MPI_INTEGER8,
-                      rn, comm);
-        }
-#endif
-        
-        // Determine who my neighbors are.
-        int num_neighbors = 0;
-        for (int rn = 0; rn < num_ranks; rn++) {
-
-            // Get coordinates of rn.
-            idx_t rnn = coords[rn][0];
-            idx_t rnx = coords[rn][1];
-            idx_t rny = coords[rn][2];
-            idx_t rnz = coords[rn][3];
-
-            // Distance from me: prev => -1, self => 0, next => +1.
-            idx_t rdn = rnn - rin;
-            idx_t rdx = rnx - rix;
-            idx_t rdy = rny - riy;
-            idx_t rdz = rnz - riz;
-
-            // Manhattan distance.
-            int mdist = abs(rdn) + abs(rdx) + abs(rdy) + abs(rdz);
-            
-            // Myself.
-            if (rn == my_rank) {
-                if (mdist != 0) {
-                    cerr << "internal error: distance to own rank == " << mdist << endl;
-                    exit_yask(1);
-                }
-                continue; // nothing else to do for self.
-            }
-
-            // Someone else.
-            else {
-                if (mdist == 0) {
-                    cerr << "error: distance to rank " << rn << " == " << mdist << endl;
-                    exit_yask(1);
-                }
-            }
-            
-            // Rank rn is my neighbor if its distance <= 1 in every dim.
-            if (abs(rdn) > 1 || abs(rdx) > 1 || abs(rdy) > 1 || abs(rdz) > 1)
-                continue;
-
-            // Check against max dist needed.
-            // TODO: determine max dist automatically from stencil equations.
-#ifndef MAX_EXCH_DIST
-#define MAX_EXCH_DIST 4
-#endif
-            if (mdist > MAX_EXCH_DIST)
-                continue;
-
-            num_neighbors++;
-            *ostr << "Neighbor #" << num_neighbors << " at " <<
-                rnn << ", " << rnx << ", " << rny << ", " << rnz <<
-                " is rank " << rn << endl;
-                    
-            // Size of buffer in each direction:
-            // if dist to neighbor is zero (i.e., is self), use full size,
-            // otherwise, use halo size.
-            // TODO: use per-grid halo size instead of global max.
-            idx_t rsn = (rdn == 0) ? dn : hn;
-            idx_t rsx = (rdx == 0) ? dx : hx;
-            idx_t rsy = (rdy == 0) ? dy : hy;
-            idx_t rsz = (rdz == 0) ? dz : hz;
-
-            // TODO: only alloc buffers in directions actually needed, e.g.,
-            // many simple stencils don't need diagonals.
-                    
-            // Is buffer needed?
-            if (rsn * rsx * rsy * rsz == 0) {
-                *ostr << "No halo exchange needed between ranks " << my_rank <<
-                    " and " << rn << '.' << endl;
-                continue;
-            }
-
-            // Add one to -1..+1 dist to get 0..2 range for my_neighbors indices.
-            rdn++; rdx++; rdy++; rdz++;
-
-            // Save rank of this neighbor.
-            my_neighbors[rdn][rdx][rdy][rdz] = rn;
-                    
-            // Alloc MPI buffers between rn and me.
-            // Need send and receive for each updated grid.
-            for (auto gp : eqGridPtrs) {
-                for (int bd = 0; bd < MPIBufs::nBufDirs; bd++) {
-                    ostringstream oss;
-                    oss << gp->get_name();
-                    if (bd == MPIBufs::bufSend)
-                        oss << "_send_halo_from_" << my_rank << "_to_" << rn;
-                    else
-                        oss << "_get_halo_by_" << my_rank << "_from_" << rn;
-
-                    mpiBufs[gp].allocBuf(bd, rdn, rdx, rdy, rdz,
-                                         rsn, rsx, rsy, rsz,
-                                         oss.str(), *ostr);
-                }
-            }
-        }
-    }
-
-    // Get total size.
-    idx_t StencilContext::get_num_bytes() {
-        idx_t nbytes = 0;
-
-        // Grids.
-        for (auto gp : gridPtrs)
-            nbytes += gp->get_num_bytes();
-
-        // Params.
-        for (auto pp : paramPtrs)
-            nbytes += pp->get_num_bytes();
-
-        // MPI buffers.
-        for (auto gp : eqGridPtrs) {
-            mpiBufs[gp].visitNeighbors
-                (*this,
-                 [&](idx_t nn, idx_t nx, idx_t ny, idx_t nz,
-                     int rank,
-                     Grid_NXYZ* sendBuf,
-                     Grid_NXYZ* rcvBuf)
-                 {
-                     if (sendBuf)
-                         nbytes += sendBuf->get_num_bytes();
-                     if (rcvBuf)
-                         nbytes += rcvBuf->get_num_bytes();
-                 } );
-        }
-
-        // Shadow buffers.
-        for (auto gp : eqGridPtrs) {
-            if (shadowGrids.count(gp) && shadowGrids[gp])
-                nbytes += shadowGrids[gp]->get_num_bytes();
-        }
-        
-        return nbytes;
-    }
-
-    // Alloc shadow grids.
-    void StencilContext::allocShadowGrids() {
-        for (auto gp : eqGridPtrs) {
-            if (shadowGrids[gp])
-                delete shadowGrids[gp];
-            shadowGrids[gp] = new RealGrid_NXYZ(dn, dx, dy, dz,
-                                                GRID_ALIGNMENT);
-            shadowGrids[gp]->print_info(string("shadow-") + gp->get_name(), *ostr);
-        }        
-    }
-
-    // Allocate grids, params, and MPI bufs.
-    // Returns num bytes.
-    idx_t StencilContext::allocAll(bool findRankLocation)
-    {
-        *ostr << "Allocating grids..." << endl;
-        allocGrids();
-        *ostr << "Allocating parameters..." << endl;
-        allocParams();
-#ifdef USE_MPI
-        *ostr << "Allocating MPI buffers..." << endl;
-        setupMPI(findRankLocation);
-#endif
-        if (shadow_in_freq || shadow_out_freq) {
-            *ostr << "Allocating shadow grids..." << endl;
-            allocShadowGrids();
-        }
-
-        const idx_t num_eqGrids = eqGridPtrs.size();
-        *ostr << "Num grids: " << gridPtrs.size() << endl;
-        *ostr << "Num grids to be updated: " << num_eqGrids << endl;
-
-        idx_t nbytes = get_num_bytes();
-        *ostr << "Total allocation in this rank (bytes): " <<
-            printWithPow2Multiplier(nbytes) << endl;
-        return nbytes;
-    }
-
-    // Init all grids & params by calling initFn.
-    void StencilContext::initValues(function<void (RealVecGridBase* gp, 
-                                                   real_t seed)> realVecInitFn,
-                                    function<void (RealGrid* gp,
-                                                   real_t seed)> realInitFn)
-    {
-        real_t v = 0.1;
-        *ostr << "Initializing grids..." << endl;
-        for (auto gp : gridPtrs) {
-            realVecInitFn(gp, v);
-            v += 0.01;
-        }
-        if (shadowGrids.size()) {
-            *ostr << "Initializing shadow grids..." << endl;
-            for (auto gp : eqGridPtrs) {
-                if (shadowGrids.count(gp) && shadowGrids[gp]) {
-                    realInitFn(shadowGrids[gp], v);
-                    v += 0.01;
-                }
-            }
-        }
-        if (paramPtrs.size()) {
-            *ostr << "Initializing parameters..." << endl;
-            for (auto pp : paramPtrs) {
-                realInitFn(pp, v);
-                v += 0.01;
-            }
-        }
-    }
-
-    // Compare grids in contexts.
-    // Return number of mis-compares.
-    idx_t StencilContext::compare(const StencilContext& ref) const {
-
-        *ostr << "Comparing grid(s) in '" << name << "' to '" << ref.name << "'..." << endl;
-        if (gridPtrs.size() != ref.gridPtrs.size()) {
-            cerr << "** number of grids not equal." << endl;
-            return 1;
-        }
-        idx_t errs = 0;
-        for (size_t gi = 0; gi < gridPtrs.size(); gi++) {
-            *ostr << "Grid '" << ref.gridPtrs[gi]->get_name() << "'..." << endl;
-            errs += gridPtrs[gi]->compare(*ref.gridPtrs[gi]);
-        }
-
-        *ostr << "Comparing parameter(s) in '" << name << "' to '" << ref.name << "'..." << endl;
-        if (paramPtrs.size() != ref.paramPtrs.size()) {
-            cerr << "** number of params not equal." << endl;
-            return 1;
-        }
-        for (size_t pi = 0; pi < paramPtrs.size(); pi++) {
-            errs += paramPtrs[pi]->compare(ref.paramPtrs[pi], EPSILON);
-        }
-
-        return errs;
-    }
-    
     // Apply a function to each neighbor rank and/or buffer.
     void MPIBufs::visitNeighbors(StencilContext& context,
                                  std::function<void (idx_t nn, idx_t nx, idx_t ny, idx_t nz,

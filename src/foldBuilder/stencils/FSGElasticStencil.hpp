@@ -159,17 +159,11 @@ public:
         INIT_GRID_3D(c66, x, y, z);
         INIT_GRID_3D(sponge, x, y, z);
 
-        // Initialize the parameters (both are scalars).
-        //INIT_PARAM(delta_t);
-        //INIT_PARAM(dxi);
-        //INIT_PARAM(dyi);
-        //INIT_PARAM(dzi);
-
         // StencilContex specific code
         REGISTER_STENCIL_CONTEXT_EXTENSION(
-            void init ( )
+            void initData()
             {
-                  initDiff();
+                initDiff();
             }
         );
     }
@@ -393,7 +387,11 @@ public:
       return cell_coeff_artm( x, y, z, c, N() );
     }
 
-    GridValue stress_update( GridValue c1, GridValue c2, GridValue c3, GridValue c4, GridValue c5, GridValue c6, GridValue u_z, GridValue u_y, GridValue u_x, GridValue v_z, GridValue v_y, GridValue v_x, GridValue w_z, GridValue w_y, GridValue w_x )
+    GridValue stress_update( GridValue c1, GridValue c2, GridValue c3,
+                             GridValue c4, GridValue c5, GridValue c6, 
+                             GridValue u_z, GridValue u_y, GridValue u_x,
+                             GridValue v_z, GridValue v_y, GridValue v_x,
+                             GridValue w_z, GridValue w_y, GridValue w_x )
     {
       return delta_t * c1 * u_x
            + delta_t * c2 * v_y
@@ -454,12 +452,18 @@ public:
         GridValue w_y = stencil_O8_Y<SY>( t+1, x, y, z, vyw );
 
         // Compute next stress value
-        GridValue next_sxx = sxx(t, x, y, z) + stress_update(ic11,ic12,ic13,ic14,ic15,ic16,u_z,u_x,u_y,v_z,v_x,v_y,w_z,w_x,w_y);
-        GridValue next_syy = syy(t, x, y, z) + stress_update(ic12,ic22,ic23,ic24,ic25,ic26,u_z,u_x,u_y,v_z,v_x,v_y,w_z,w_x,w_y);
-        GridValue next_szz = szz(t, x, y, z) + stress_update(ic13,ic23,ic33,ic34,ic35,ic36,u_z,u_x,u_y,v_z,v_x,v_y,w_z,w_x,w_y);
-        GridValue next_syz = syz(t, x, y, z) + stress_update(ic14,ic24,ic34,ic44,ic45,ic46,u_z,u_x,u_y,v_z,v_x,v_y,w_z,w_x,w_y);
-        GridValue next_sxz = sxz(t, x, y, z) + stress_update(ic15,ic25,ic35,ic45,ic55,ic56,u_z,u_x,u_y,v_z,v_x,v_y,w_z,w_x,w_y);
-        GridValue next_sxy = sxy(t, x, y, z) + stress_update(ic16,ic26,ic36,ic46,ic56,ic66,u_z,u_x,u_y,v_z,v_x,v_y,w_z,w_x,w_y);
+        GridValue next_sxx = sxx(t, x, y, z) +
+            stress_update(ic11,ic12,ic13,ic14,ic15,ic16,u_z,u_x,u_y,v_z,v_x,v_y,w_z,w_x,w_y);
+        GridValue next_syy = syy(t, x, y, z) +
+            stress_update(ic12,ic22,ic23,ic24,ic25,ic26,u_z,u_x,u_y,v_z,v_x,v_y,w_z,w_x,w_y);
+        GridValue next_szz = szz(t, x, y, z) +
+            stress_update(ic13,ic23,ic33,ic34,ic35,ic36,u_z,u_x,u_y,v_z,v_x,v_y,w_z,w_x,w_y);
+        GridValue next_syz = syz(t, x, y, z) +
+            stress_update(ic14,ic24,ic34,ic44,ic45,ic46,u_z,u_x,u_y,v_z,v_x,v_y,w_z,w_x,w_y);
+        GridValue next_sxz = sxz(t, x, y, z) +
+            stress_update(ic15,ic25,ic35,ic45,ic55,ic56,u_z,u_x,u_y,v_z,v_x,v_y,w_z,w_x,w_y);
+        GridValue next_sxy = sxy(t, x, y, z) +
+            stress_update(ic16,ic26,ic36,ic46,ic56,ic66,u_z,u_x,u_y,v_z,v_x,v_y,w_z,w_x,w_y);
 
         // TODO: adjust_for_sponge(next_stress_xx, x, y, z);
 
@@ -494,10 +498,14 @@ public:
         define_vel<BR, F, F, F>(t, x, y, z, v_br_v, s_br_yy, s_bl_xy, s_tr_yz);
 
         //// Define stresses components.
-        define_str<BR, F, B, F>(t, x, y, z, s_br_xx, s_br_yy, s_br_zz, s_br_xy, s_br_xz, s_br_yz, v_br_u, v_br_v, v_br_w, v_bl_u, v_bl_v, v_bl_w, v_tr_u, v_tr_v, v_tr_w);
-        define_str<BL, F, F, B>(t, x, y, z, s_bl_xx, s_bl_yy, s_bl_zz, s_bl_xy, s_bl_xz, s_bl_yz, v_bl_u, v_bl_v, v_bl_w, v_br_u, v_br_v, v_br_w, v_tl_u, v_tl_v, v_tl_w);
-        define_str<TR, B, F, F>(t, x, y, z, s_tr_xx, s_tr_yy, s_tr_zz, s_tr_xy, s_tr_xz, s_tr_yz, v_tr_u, v_tr_v, v_tr_w, v_tl_u, v_tl_v, v_tl_w, v_br_u, v_br_v, v_br_w);
-        define_str<TL, B, B, B>(t, x, y, z, s_tl_xx, s_tl_yy, s_tl_zz, s_tl_xy, s_tl_xz, s_tl_yz, v_tl_u, v_tl_v, v_tl_w, v_tr_u, v_tr_v, v_tr_w, v_bl_u, v_bl_v, v_bl_w);
+        define_str<BR, F, B, F>(t, x, y, z, s_br_xx, s_br_yy, s_br_zz, s_br_xy, s_br_xz, s_br_yz,
+                                v_br_u, v_br_v, v_br_w, v_bl_u, v_bl_v, v_bl_w, v_tr_u, v_tr_v, v_tr_w);
+        define_str<BL, F, F, B>(t, x, y, z, s_bl_xx, s_bl_yy, s_bl_zz, s_bl_xy, s_bl_xz, s_bl_yz,
+                                v_bl_u, v_bl_v, v_bl_w, v_br_u, v_br_v, v_br_w, v_tl_u, v_tl_v, v_tl_w);
+        define_str<TR, B, F, F>(t, x, y, z, s_tr_xx, s_tr_yy, s_tr_zz, s_tr_xy, s_tr_xz, s_tr_yz,
+                                v_tr_u, v_tr_v, v_tr_w, v_tl_u, v_tl_v, v_tl_w, v_br_u, v_br_v, v_br_w);
+        define_str<TL, B, B, B>(t, x, y, z, s_tl_xx, s_tl_yy, s_tl_zz, s_tl_xy, s_tl_xz, s_tl_yz,
+                                v_tl_u, v_tl_v, v_tl_w, v_tr_u, v_tr_v, v_tr_w, v_bl_u, v_bl_v, v_bl_w);
 
     }
 };

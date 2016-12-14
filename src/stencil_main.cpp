@@ -61,7 +61,8 @@ namespace yask {
     idx_t pn = 0, px = DEF_PAD, py = DEF_PAD, pz = DEF_PAD; // padding.
     bool validate = false;
     int block_threads = DEF_BLOCK_THREADS; // number of threads for a block.
-    int thread_factor = DEF_THREAD_FACTOR; // divide num threads by this factor.
+    int max_threads = 0;                   // max number of threads to use (0 => use OMP default).
+    int thread_divisor = DEF_THREAD_DIVISOR; // divide max threads by this factor.
     bool doWarmup = true;
     idx_t copy_in = 0, copy_out = 0;     // how often to copy to shadow grids.
     int pre_trial_sleep_time = 1;   // sec to sleep before each trial.
@@ -169,8 +170,8 @@ namespace yask {
             " -g{n,x,y,z} <n>  block-group size in specified spatial dimension, defaults=" <<
             gn << '*' << gx << '*' << gy << '*' << gz << endl <<
             " -g <n>           shorthand for '-gx <n> -gy <n> -gz <n>\n" <<
-            " -p{n,x,y,z} <n>  extra padding in specified spatial dimension, defaults=" <<
-            pn << '*' << px << '*' << py << '*' << pz << endl <<
+            " -p{n,x,y,z} <n>  extra memory-padding in specified spatial dimension, defaults=" <<
+            pn << '+' << px << '+' << py << '+' << pz << endl <<
             " -p <n>           shorthand for '-px <n> -py <n> -pz <n>\n" <<
 #ifdef USE_MPI
             " -nr{n,x,y,z} <n> num ranks in specified dimension, defaults=" <<
@@ -179,32 +180,38 @@ namespace yask {
             " -ri{n,x,y,z} <n> this rank's index in specified dimension, defaults set automatically\n" <<
             " -msg_rank <n>    rank that will print informational messages, default=" << msg_rank << endl <<
 #endif
-            " -thread_factor <n>  divide the original number of available threads by n, default=" <<
-            thread_factor << endl <<
-            " -bthreads <n>    set number of threads to use for a block, default=" <<
-            block_threads << endl <<
+#ifdef ENABLE_SHADOW_COPY
             " -copy_in <n>     copy from traditional-layout grids every n time-steps, default=" <<
             copy_in << endl <<
             " -copy_out <n>    copy to traditional-layout grids every n time-steps, default=" <<
             copy_out << endl <<
+#endif
             " -sleep <n>       seconds to sleep before each trial, default=" <<
             pre_trial_sleep_time << endl <<
-            " -nw              skip warmup\n" <<
+            " -no_warmup       skip warmup iterations\n" <<
+            " -max_threads <n>     set max threads to use to <n>, default=" << max_threads << endl <<
+            " -thread_divisor <n>  divide max_threads by <n>, default=" <<
+            thread_divisor << endl <<
+            " -block_threads <n>   set number of threads to use for each block, default=" <<
+            block_threads << endl <<
             "Notes:\n"
 #ifndef USE_MPI
             " This binary has not been built with MPI support.\n"
 #endif
+            " Using '-max_threads 0' => max_threads = OpenMP default number of threads.\n"
+            " For stencil evaluation, threads are allocated using nested OpenMP:\n"
+            "  Num threads across blocks: max_threads / thread_divisor / block_threads.\n"
+            "  Num threads per block: block_threads.\n"
             " A block size of 0 => block size == region size in that dimension.\n"
             " A group size of 0 => group size == block size in that dimension.\n"
             " A region size of 0 => region size == rank-domain size in that dimension.\n"
             " Control the time steps in each temporal wave-front with -rt:\n"
-            "  1 effectively disables wave-front tiling.\n"
-            "  0 enables wave-front tiling across all time steps in one pass.\n"
-            "  Any value other than 1 also changes the region spatial-size defaults.\n"
-            " Temporal cache blocking is not yet supported => bt == 1.\n"
+            "  Using '-rt 1' effectively disables wave-front tiling.\n"
+            "  Any value other than 1 changes the region spatial-size defaults.\n"
+            " Temporal cache blocking is not yet supported, so bt == 1.\n"
             " Validation is very slow and uses 2x memory,\n"
             "  so run with very small sizes and number of time-steps.\n"
-            "  Using '-v' is shorthand for these settings: '-nw -d 64 -dt 1 -t 1',\n"
+            "  Using '-v' is shorthand for these settings: '-no_warmup -d 64 -dt 1 -t 1',\n"
             "  which may be overridden by options *after* '-v'.\n"
             "  If validation fails, it may be due to rounding error; try building with 8-byte reals.\n"
             " The 'n' dimension only applies to stencils that use that variable.\n"
@@ -230,7 +237,7 @@ namespace yask {
                     help = true;
                 }
 
-                else if (opt == "-nw")
+                else if (opt == "-no_warmup")
                     doWarmup = false;
 
                 else if (opt == "-v") {
@@ -289,10 +296,13 @@ namespace yask {
                     else if (opt == "-riz") { riz = val; findLoc = false; }
                     else if (opt == "-msg_rank") msg_rank = val;
 #endif
-                    else if (opt == "-bthreads") block_threads = val;
-                    else if (opt == "-thread_factor") thread_factor = val;
+                    else if (opt == "-block_threads") block_threads = val;
+                    else if (opt == "-max_threads") max_threads = val;
+                    else if (opt == "-thread_divisor") thread_divisor = val;
+#ifdef ENABLE_SHADOW_COPY
                     else if (opt == "-copy_in") copy_in = val;
                     else if (opt == "-copy_out") copy_out = val;
+#endif
                     else if (opt == "-sleep") pre_trial_sleep_time = val;
             
                     else {
@@ -427,15 +437,19 @@ int main(int argc, char** argv)
     context.num_ranks = num_ranks;
     context.my_rank = my_rank;
     context.comm = comm;
+#ifdef ENABLE_SHADOW_COPY
     context.shadow_in_freq = copy_in;
     context.shadow_out_freq = copy_out;
+#endif
 
     // report threads.
     int region_threads = 1;
     {
 #if defined(_OPENMP)
         *ostr << "Num OpenMP procs: " << omp_num_procs << endl;
-        context.orig_max_threads = omp_get_max_threads() / thread_factor;
+        if (max_threads == 0)
+            max_threads = omp_get_max_threads();
+        context.orig_max_threads = max_threads / thread_divisor;
         *ostr << "Num OpenMP threads: " << context.orig_max_threads << endl;
 
 #if USE_CREW
@@ -564,8 +578,10 @@ int main(int argc, char** argv)
         " vector-len: " << VLEN << endl <<
         " padding: " << pn << '+' << px << '+' << py << '+' << pz << endl <<
         " max-halos: " << hn << '+' << hx << '+' << hy << '+' << hz << endl <<
+#ifdef ENABLE_SHADOW_COPY
         " shadow-copy-in-frequency: " << copy_in << endl <<
         " shadow-copy-out-frequency: " << copy_out << endl <<
+#endif
         " manual-L1-prefetch-distance: " << PFDL1 << endl <<
         " manual-L2-prefetch-distance: " << PFDL2 << endl <<
         endl;
@@ -616,18 +632,17 @@ int main(int argc, char** argv)
 
     // Alloc memory, create lists of grids, etc.
     // NB: this contains MPI exchanges of rank indices.
-    idx_t rank_nbytes = context.allocAll(findLoc);
+    idx_t rank_numpts_1t, rank_numFpOps_1t; // sums across eqs for this rank.
+    context.allocAll(findLoc, &rank_numpts_1t, &rank_numFpOps_1t);
 
     // Report total allocation.
+    idx_t rank_nbytes = context.get_num_bytes();
+    *ostr << "Total allocation in this rank (bytes): " <<
+        printWithPow2Multiplier(rank_nbytes) << endl;
     idx_t tot_nbytes = sumOverRanks(rank_nbytes, comm);
     *ostr << "Total overall allocation in " << num_ranks << " rank(s) (bytes): " <<
         printWithPow2Multiplier(tot_nbytes) << endl;
     
-    // Init stencil equations.
-    STENCIL_EQS stencilEqs;
-    idx_t rank_numpts_1t, rank_numFpOps_1t; // sums across eqs for this rank.
-    stencilEqs.init(context, &rank_numpts_1t, &rank_numFpOps_1t);
-
     // Various metrics for amount of work.
     // 'rank_' prefix indicates for this rank.
     // 'tot_' prefix indicates over all ranks.
@@ -695,11 +710,6 @@ int main(int argc, char** argv)
         cerr << "Exiting because there are zero points to evaluate." << endl;
         exit_yask(1);
     }
-
-    // This will initialize the grids before running the warmup.  If this is
-    // not done, some operations may be done on zero pages, leading to
-    // misleading performance or arithmetic exceptions.
-    context.init();
     *ostr << flush;
 
     // warmup caches, threading, etc.
@@ -717,7 +727,7 @@ int main(int argc, char** argv)
             *ostr << "Modeling cache...\n";
 #endif
         *ostr << "Warmup of " << context.dt << " time step(s)...\n" << flush;
-        stencilEqs.calc_rank_opt(context);
+        context.calc_rank_opt();
 
 #ifdef MODEL_CACHE
         // print cache stats, then disable.
@@ -756,11 +766,13 @@ int main(int argc, char** argv)
         // Start timing.
         VTUNE_RESUME;
         context.mpi_time = 0.0;
+#ifdef ENABLE_SHADOW_COPY
         context.shadow_time = 0.0;
+#endif
         wstart = getTimeInSecs();
 
         // Actual work (must wait until all ranks are done).
-        stencilEqs.calc_rank_opt(context);
+        context.calc_rank_opt();
         MPI_Barrier(comm);
 
         // Stop timing.
@@ -781,9 +793,11 @@ int main(int argc, char** argv)
         *ostr <<
             "time in halo exch (sec):                " << printWithPow10Multiplier(context.mpi_time) << endl;
 #endif
+#ifdef ENABLE_SHADOW_COPY
         if (copy_in || copy_out)
             *ostr <<
                 "time in shadow copy (sec):              " << printWithPow10Multiplier(context.shadow_time) << endl;
+#endif
 
         if (apps > best_apps) {
             best_apps = apps;
@@ -835,7 +849,7 @@ int main(int argc, char** argv)
 #endif
 
         // Ref trial.
-        stencilEqs.calc_rank_ref(ref);
+        ref.calc_rank_ref();
 
         // check for equality.
 #ifdef USE_MPI
