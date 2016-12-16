@@ -712,6 +712,9 @@ int main(int argc, char** argv)
     }
     *ostr << flush;
 
+    // init data in grids and params.
+    context.initData();
+
     // warmup caches, threading, etc.
     if (doWarmup) {
         *ostr << endl;
