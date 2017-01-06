@@ -44,8 +44,6 @@
 #
 # streaming_stores: 0, 1: Whether to use streaming stores.
 #
-# crew: 0, 1: whether to use Intel Crew threading instead of nested OpenMP (deprecated).
-#
 # hbw: 0, 1: whether to use memkind lib.
 #   If hbw=1, the memkind lib will be used to allocate grids;
 #   this can provide the ability to fine-tune which grids use
@@ -82,9 +80,11 @@ MACROS		+=	MAX_EXCH_DIST=2
 radius		?=	4
 
 else ifeq ($(stencil),3plane)
+MACROS		+=	MAX_EXCH_DIST=2
 radius		?=	3
 
 else ifeq ($(stencil),cube)
+MACROS		+=	MAX_EXCH_DIST=3
 radius		?=	2
 
 else ifeq ($(stencil),iso3dfd)
@@ -101,6 +101,7 @@ cluster		?=	x=2
 endif
 
 else ifeq ($(stencil),stream)
+MACROS		+=	MAX_EXCH_DIST=0
 radius		?=	2
 ifeq ($(radius),0)
 time_dim_size	=	1
@@ -198,7 +199,6 @@ $(error Architecture not recognized; use arch=knl, knc, skx, hsw, ivb, snb, or i
 endif # arch-specific.
 
 # general defaults for vars if not set above.
-crew				?= 	0
 streaming_stores		?= 	1
 omp_par_for			?=	omp parallel for
 omp_schedule			?=	dynamic,1
@@ -289,7 +289,6 @@ MACROS		+= 	ARCH_$(ARCH)
 # MPI settings.
 ifeq ($(mpi),1)
 MACROS		+=	USE_MPI
-crew		=	0
 endif
 
 # HBW settings.
@@ -324,13 +323,6 @@ CXX_VER_CMD	=	$(CXX) -V
 
 # work around an optimization bug.
 MACROS		+=	NO_STORE_INTRINSICS
-
-ifeq ($(crew),1)
-CXXFLAGS	+=      -mP2OPT_hpo_par_crew_codegen=T
-MACROS		+=	__INTEL_CREW
-def_block_threads =	1
-BLOCK_LOOP_OUTER_MODS	=	crew
-endif
 
 else # not Intel compiler
 CXXFLAGS	+=	$(GCXX_ISA) -Wno-unknown-pragmas -Wno-unused-variable

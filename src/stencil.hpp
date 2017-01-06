@@ -1,7 +1,7 @@
 /*****************************************************************************
 
 YASK: Yet Another Stencil Kernel
-Copyright (c) 2014-2016, Intel Corporation
+Copyright (c) 2014-2017, Intel Corporation
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to
@@ -37,6 +37,11 @@ IN THE SOFTWARE.
 // Define a folded vector of reals.
 #include "realv.hpp"
 
+#include <stdlib.h>
+#include <stdio.h>
+#include <string.h>
+#include <math.h>
+#include <fstream>
 #include <map>
 #include <set>
 #include <vector>
@@ -77,6 +82,7 @@ inline void exit_yask(int code) { MPI_Abort(MPI_COMM_WORLD, code); }
 #define MPI_PROC_NULL (-1)
 #define MPI_Barrier(comm) ((void)0)
 #define MPI_Comm int
+#define MPI_Finalize() ((void)0)
 inline void exit_yask(int code) { exit(code); }
 #endif
 
@@ -84,6 +90,7 @@ inline void exit_yask(int code) { exit(code); }
 #ifdef _OPENMP
 #include <omp.h>
 #else
+#define omp_get_num_procs() (1)
 #define omp_get_num_threads() (1)
 #define omp_get_max_threads() (1)
 #define omp_get_thread_num()  (0)
@@ -169,10 +176,10 @@ extern "C" {
 #include "realv_grids.hpp"
 
 // First/last index macros.
+// These are relative to global problem, not rank.
 // TODO: replace with real functions; requires change to foldBuilder.
-// FIXME: not correct if >1 rank is used!!
-#define first_index(dim) (0)
-#define last_index(dim) (context.d ## dim - 1)
+#define FIRST_INDEX(dim) (0)
+#define LAST_INDEX(dim) (context.tot_ ## dim - 1)
 
 namespace yask {
 

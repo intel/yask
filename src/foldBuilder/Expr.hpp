@@ -1,7 +1,7 @@
 /*****************************************************************************
 
 YASK: Yet Another Stencil Kernel
-Copyright (c) 2014-2016, Intel Corporation
+Copyright (c) 2014-2017, Intel Corporation
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to
@@ -293,9 +293,9 @@ public:
     IndexType getType() const { return _type; }
     string getFnName() const {
         if (_type == FIRST_INDEX)
-            return "first_index";
+            return "FIRST_INDEX";
         else if (_type == LAST_INDEX)
-            return "last_index";
+            return "LAST_INDEX";
         else {
             cerr << "error: internal error in IndexExpr\n";
             exit(1);

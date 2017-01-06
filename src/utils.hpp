@@ -1,7 +1,7 @@
 /*****************************************************************************
 
 YASK: Yet Another Stencil Kernel
-Copyright (c) 2014-2016, Intel Corporation
+Copyright (c) 2014-2017, Intel Corporation
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to
@@ -46,6 +46,37 @@ namespace yask {
     extern double getTimeInSecs();
     extern std::string printWithPow2Multiplier(double num);
     extern std::string printWithPow10Multiplier(double num);
+
+    // Find sum of rank_vals over all ranks.
+    extern idx_t sumOverRanks(idx_t rank_val, MPI_Comm comm);
+
+    // Make sure rank_val is same over all ranks.
+    void assertEqualityOverRanks(idx_t rank_val, MPI_Comm comm,
+                                 const std::string& descr);
+    
+    // Round up val to a multiple of mult.
+    // Print a message if rounding is done.
+    extern idx_t roundUp(std::ostream& os,
+                         idx_t val, idx_t mult, const std::string& name);
+
+    // Fix bsize, if needed, to fit into rsize and be a multiple of mult.
+    // Return number of blocks.
+    extern idx_t findNumSubsets(std::ostream& os,
+                                idx_t& bsize, const std::string& bname,
+                                idx_t rsize, const std::string& rname,
+                                idx_t mult, const std::string& dim);
+    inline idx_t findNumBlocks(std::ostream& os, idx_t& bsize, idx_t rsize,
+                               idx_t mult, const std::string& dim) {
+        return findNumSubsets(os, bsize, "block", rsize, "region", mult, dim);
+    }
+    inline idx_t findNumGroups(std::ostream& os, idx_t& ssize, idx_t rsize,
+                               idx_t mult, const std::string& dim) {
+        return findNumSubsets(os, ssize, "group", rsize, "region", mult, dim);
+    }
+    inline idx_t findNumRegions(std::ostream& os, idx_t& rsize, idx_t dsize,
+                                idx_t mult, const std::string& dim) {
+        return findNumSubsets(os, rsize, "region", dsize, "rank-domain", mult, dim);
+    }
 }
 
 #endif

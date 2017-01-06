@@ -1,7 +1,7 @@
 /*****************************************************************************
 
 YASK: Yet Another Stencil Kernel
-Copyright (c) 2014-2016, Intel Corporation
+Copyright (c) 2014-2017, Intel Corporation
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to
@@ -29,29 +29,31 @@ IN THE SOFTWARE.
 #include <sstream>
 #include "stencil.hpp"
 
+// Set MODEL_CACHE to 1 or 2 to model that cache level
+// and create a global cache object here.
+#ifdef MODEL_CACHE
+Cache cache_model(MODEL_CACHE);
+#endif
+
 using namespace std;
 namespace yask {
 
-#if defined(_OPENMP)
     double getTimeInSecs() {
+
+#if defined(_OPENMP)
         return omp_get_wtime();
-    }
 
 #elif defined(WIN32)
-
-    // FIXME.
-    double getTimeInSecs() { return 0.0; }
+        return 1e-3 * (double)GetTickCount64();
 
 #else
-    double getTimeInSecs()
-    {
         struct timespec ts;
         clock_gettime(CLOCK_REALTIME, &ts);
 
         return ((double)(ts.tv_sec) + 
-                1e-09 * (double)(ts.tv_nsec));
-    }
+                1e-9 * (double)(ts.tv_nsec));
 #endif
+    }
 
     // Return num with SI multiplier.
     // Use this one for bytes, etc.
@@ -95,6 +97,66 @@ namespace yask {
         else
             os << num;
         return os.str();
+    }
+
+    // Round up val to a multiple of mult.
+    // Print a message if rounding is done.
+    idx_t roundUp(ostream& os, idx_t val, idx_t mult, const string& name)
+    {
+        assert(mult > 0);
+        idx_t res = val;
+        if (val % mult != 0) {
+            res = ROUND_UP(res, mult);
+            os << "Adjusting " << name << " from " << val << " to " <<
+                res << " to be a multiple of " << mult << endl;
+        }
+        return res;
+    }
+    
+    // Fix bsize, if needed, to fit into rsize and be a multiple of mult.
+    // Return number of blocks.
+    idx_t findNumSubsets(ostream& os,
+                         idx_t& bsize, const string& bname,
+                         idx_t rsize, const string& rname,
+                         idx_t mult, const string& dim) {
+        if (bsize < 1) bsize = rsize; // 0 => use full size.
+        bsize = ROUND_UP(bsize, mult);
+        if (bsize > rsize) bsize = rsize;
+        idx_t nblks = (rsize + bsize - 1) / bsize;
+        idx_t rem = rsize % bsize;
+        idx_t nfull_blks = rem ? (nblks - 1) : nblks;
+
+        os << " In '" << dim << "' dimension, " << rname << " of size " <<
+            rsize << " is divided into " << nfull_blks << " " << bname << "(s) of size " << bsize;
+        if (rem)
+            os << " plus 1 remainder " << bname << " of size " << rem;
+        os << "." << endl;
+        return nblks;
+    }
+
+    // Find sum of rank_vals over all ranks.
+    idx_t sumOverRanks(idx_t rank_val, MPI_Comm comm) {
+        idx_t sum_val = rank_val;
+#ifdef USE_MPI
+        MPI_Allreduce(&rank_val, &sum_val, 1, MPI_INTEGER8, MPI_SUM, comm);
+#endif
+        return sum_val;
+    }
+
+    // Make sure rank_val is same over all ranks.
+    void assertEqualityOverRanks(idx_t rank_val, MPI_Comm comm, const string& descr) {
+        idx_t min_val = rank_val;
+        idx_t max_val = rank_val;
+#ifdef USE_MPI
+        MPI_Allreduce(&rank_val, &min_val, 1, MPI_INTEGER8, MPI_MIN, comm);
+        MPI_Allreduce(&rank_val, &max_val, 1, MPI_INTEGER8, MPI_MAX, comm);
+#endif
+
+        if (min_val != rank_val || max_val != rank_val) {
+            cerr << "error: " << descr << " values range from " << min_val << " to " <<
+                max_val << " across the ranks. They should all be identical." << endl;
+            exit_yask(1);
+        }
     }
 
 }

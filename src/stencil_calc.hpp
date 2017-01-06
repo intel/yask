@@ -1,7 +1,7 @@
 /*****************************************************************************
 
 YASK: Yet Another Stencil Kernel
-Copyright (c) 2014-2016, Intel Corporation
+Copyright (c) 2014-2017, Intel Corporation
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to
@@ -30,6 +30,9 @@ IN THE SOFTWARE.
 #include <algorithm>
 #include <functional>
 
+// Stencil types.
+#include "stencil.hpp"
+
 // Macro for automatically adding N dimension's arg.
 // TODO: make all args programmatic.
 #if USING_DIM_N
@@ -42,7 +45,7 @@ namespace yask {
 
     // Forward defn.
     struct StencilContext;
-
+    
     // MPI buffers for *one* grid.
     struct MPIBufs {
 
@@ -66,8 +69,8 @@ namespace yask {
         }
 
         // Access a buffer by direction and 4D neighbor indices.
-        Grid_NXYZ* operator()(int bd,
-                              idx_t nn, idx_t nx, idx_t ny, idx_t nz) {
+        Grid_NXYZ** getBuf(int bd,
+                          idx_t nn, idx_t nx, idx_t ny, idx_t nz) {
             assert(bd >= 0);
             assert(bd < nBufDirs);
             assert(nn >= 0);
@@ -78,10 +81,12 @@ namespace yask {
             assert(ny < num_neighbors);
             assert(nz >= 0);
             assert(nn < num_neighbors);
-            return bufs[bd][nn][nx][ny][nz];
+            return &bufs[bd][nn][nx][ny][nz];
         }
 
-        // Apply a function to each neighbor rank and/or buffer.
+        // Apply a function to each neighbor rank.
+        // Called visitor function will contain the rank index of the neighbor.
+        // The send and receive buffer pointers may be null.
         virtual void visitNeighbors(StencilContext& context,
                                     std::function<void (idx_t nn, idx_t nx, idx_t ny, idx_t nz,
                                                         int rank,
@@ -96,6 +101,85 @@ namespace yask {
                                     std::ostream& os);
     };
 
+    // Application settings to control size and perf of stencil code.
+    struct Settings {
+
+        // Sizes in elements (points).
+        // - time sizes (t) are in steps to be done.
+        // - spatial sizes (n, x, y, z) are in elements (not vectors).
+        // Sizes are the same for all grids. TODO: relax this restriction.
+        idx_t dt, dn, dx, dy, dz; // rank size (without halos).
+        idx_t rt, rn, rx, ry, rz; // region size (used for wave-front tiling).
+        idx_t bt, bn, bx, by, bz; // block size (used for cache locality).
+        idx_t gn, gx, gy, gz;     // group-of-blocks size (only used for 'grouped' loop paths).
+        idx_t pn, px, py, pz;     // spatial padding (in addition to halos, to avoid aliasing).
+
+        // MPI settings.
+        idx_t nrn, nrx, nry, nrz; // number of ranks in each dim.
+        idx_t rin, rix, riy, riz; // my rank index in each dim.
+        bool find_loc;            // whether my rank index needs to be calculated.
+        int msg_rank;             // rank that prints informational messages.
+
+        // OpenMP settings.
+        int max_threads;       // Initial number of threads to use overall.
+        int thread_divisor;    // Reduce number of threads by this amount.
+        int num_block_threads; // Number of threads to use for a block.
+
+        // Ctor.
+        Settings() :
+            dt(50), dn(1), dx(DEF_RANK_SIZE), dy(DEF_RANK_SIZE), dz(DEF_RANK_SIZE),
+            rt(1), rn(0), rx(0), ry(0), rz(0),
+            bt(1), bn(1), bx(DEF_BLOCK_SIZE), by(DEF_BLOCK_SIZE), bz(DEF_BLOCK_SIZE),
+            gn(0), gx(0), gy(0), gz(0),
+            pn(0), px(DEF_PAD), py(DEF_PAD), pz(DEF_PAD),
+            nrn(1), nrx(1), nry(1), nrz(1),
+            rin(0), rix(0), riy(0), riz(0),
+            find_loc(true),
+            msg_rank(0),
+            max_threads(1),
+            thread_divisor(DEF_THREAD_DIVISOR),
+            num_block_threads(DEF_BLOCK_THREADS)
+        {
+            max_threads = omp_get_max_threads();
+        }
+        
+        // Print help message for options.
+        void print_usage(std::ostream& os, const std::string& pgmName,
+                         const std::string& appOptions, const std::string& appNotes);
+        
+        // Parse options from the command-line and set corresponding vars.
+        // Recognized strings from args are consumed, and unused ones
+        // remain for further processing by the application.
+        // App programmer can bypass this by setting vars directly.
+        virtual void parseArgs(const std::string& pgmName,
+                               std::vector<std::string>& args);
+
+        // Same as above, but pgmName is populated from argv[0]
+        // and args is appended from remainder of argv array.
+        // Unused strings are returned in args vector.
+        virtual void parseArgs(int argc, char** argv,
+                               std::vector<std::string>& args) {
+            std::string pgmName = argv[0];
+            for (int i = 1; i < argc; i++)
+                args.push_back(argv[i]);
+            parseArgs(pgmName, args);
+        }
+
+        // Make sure all user-provided settings are valid.
+        // Called from allocAll(), so it doesn't normally need to be called from user code.
+        virtual void finalizeSettings(std::ostream& os);
+        
+        // Get one idx_t value from args[argi++].
+        // Exit on failure.
+        virtual idx_t idx_val(std::vector<std::string>& args, int& argi);
+
+        // Get one int value from args[argi++].
+        // Exit on failure.
+        virtual int int_val(std::vector<std::string>& args, int& argi) {
+            return (int)idx_val(args, argi);
+        }
+    };
+    
     // A 4D bounding-box.
     struct BoundingBox {
         idx_t begin_bbn, begin_bbx, begin_bby, begin_bbz;
@@ -117,19 +201,26 @@ namespace yask {
     typedef std::set<EqGroupBase*> EqGroupSet;
     typedef std::vector<RealVecGridBase*> GridPtrs;
     typedef std::vector<RealGrid*> ParamPtrs;
+    typedef std::set<std::string> NameSet;
     
     // Data and hierarchical sizes.
     // This is a pure-virtual class that must be implemented
     // for a specific problem.
     // Each eq group is valid within its bounding box (BB).
     // The context's BB encompasses all eq-group BBs.
-    struct StencilContext : public BoundingBox {
+    class StencilContext : public BoundingBox, public Settings {
 
-        // Name.
-        std::string name;
-
+    protected:
+        
         // Output stream for messages.
         std::ostream* ostr;
+
+        // TODO: move vars into private or protected sections and
+        // add accessor methods.
+    public:
+        
+        // Name.
+        std::string name;
 
         // List of all stencil equations in the order in which
         // they should be evaluated. Current assumption is that
@@ -141,107 +232,100 @@ namespace yask {
 
         // A list of all grids.
         GridPtrs gridPtrs;
+        NameSet gridNames;
 
         // Only grids that are updated by the stencil equations.
         GridPtrs outputGridPtrs;
+        NameSet outputGridNames;
 
         // A list of all non-grid parameters.
         ParamPtrs paramPtrs;
+        NameSet paramNames;
 
-        // Sizes in elements (points).
-        // - time sizes (t) are in steps to be done (not grid allocation).
-        // - spatial sizes (x, y, z) are in elements (not vectors).
-        // Sizes are the same for all grids and all stencil equations.
-        // TODO: relax this restriction.
-        idx_t begin_dt;           // begin time (end is begin_dt + dt);
-        idx_t dt, dn, dx, dy, dz; // rank size (without halos).
-        idx_t rt, rn, rx, ry, rz; // region size.
-        idx_t bt, bn, bx, by, bz; // block size.
-        idx_t gn, gx, gy, gz;     // group-of-blocks size.
+        // Some calculated sizes.
+        idx_t ofs_t, ofs_n, ofs_x, ofs_y, ofs_z; // Index offsets for this rank.
+        idx_t tot_n, tot_x, tot_y, tot_z; // Total of rank domains over all ranks.
         idx_t hn, hx, hy, hz;     // spatial halos (max over grids as required by stencil).
-        idx_t pn, px, py, pz;     // spatial padding (extra to avoid aliasing).
         idx_t angle_n, angle_x, angle_y, angle_z; // temporal skewing angles.
 
-        // MPI meta-data.
+        // Various metrics calculated in allocAll().
+        // 'rank_' prefix indicates for this rank.
+        // 'tot_' prefix indicates over all ranks.
+        // 'numpts' indicates points actually calculated in sub-domains.
+        // 'domain' indicates points in domain-size specified on cmd-line.
+        // 'numFpOps' indicates est. number of FP ops.
+        // 'nbytes' indicates number of bytes allocated.
+        // '_1t' suffix indicates work for one time-step.
+        // '_dt' suffix indicates work for all time-steps.
+        idx_t rank_numpts_1t, rank_numpts_dt, tot_numpts_1t, tot_numpts_dt;
+        idx_t rank_domain_1t, rank_domain_dt, tot_domain_1t, tot_domain_dt;
+        idx_t rank_numFpOps_1t, rank_numFpOps_dt, tot_numFpOps_1t, tot_numFpOps_dt;
+        idx_t rank_nbytes, tot_nbytes;
+        
+        // MPI environment.
         MPI_Comm comm;
         int num_ranks, my_rank;   // MPI-assigned index.
-        idx_t nrn, nrx, nry, nrz; // number of ranks in each dim.
-        idx_t rin, rix, riy, riz;    // my rank index in each dim.
         double mpi_time;          // time spent doing MPI.
         MPIBufs::Neighbors my_neighbors;   // neighbor ranks.
 
         // Actual MPI buffers.
-        // MPI buffers are tagged by their grid pointers.
+        // MPI buffers are tagged by their grid names.
         // Only grids in outputGridPtrs will have buffers.
-        std::map<RealVecGridBase*, MPIBufs> mpiBufs;
-
-#ifdef ENABLE_SHADOW_COPY
-        // Shadow grids.
-        // These are used to time copies back and forth between buffers used
-        // by YASK for computation and those that might be needed by
-        // traditional C or FORTRAN functions.  Only grids in outputGridPtrs
-        // will have shadows; it is assumed that other grids will only need
-        // to be copied once.
-        std::map<RealVecGridBase*, RealGrid_NXYZ*> shadowGrids;
-        idx_t shadow_in_freq, shadow_out_freq; // copy frequencies;
-        double shadow_time;          // time spent doing shadow copies.
-#endif
+        std::map<std::string, MPIBufs> mpiBufs;
         
-        // Threading.
-        // Remember original number of threads avail.
-        // We use this instead of omp_get_num_procs() so the user
-        // can limit threads via OMP_NUM_THREADS env var.
-        int orig_max_threads;
-
-        // Number of threads to use in a nested OMP region.
-        int num_block_threads;
-
-        // Ctor, dtor.
+        // Constructor.
         StencilContext() :
             ostr(&std::cout),
-            begin_dt(0),
-            dt(1), dn(1), dx(1), dy(1), dz(1),
-            rt(1), rn(1), rx(1), ry(1), rz(1),
-            bt(1), bn(1), bx(1), by(1), bz(1),
-            gn(1), gx(1), gy(1), gz(1),
+            ofs_t(0), ofs_n(0), ofs_x(0), ofs_y(0), ofs_z(0),
             hn(0), hx(0), hy(0), hz(0),
-            pn(0), px(0), py(0), pz(0),
             angle_n(0), angle_x(0), angle_y(0), angle_z(0),
-            comm(0), num_ranks(1), my_rank(0), mpi_time(0.0),
-#ifdef ENABLE_SHADOW_COPY
-            shadow_in_freq(0), shadow_out_freq(0), shadow_time(0.0),
-#endif
-            orig_max_threads(1), num_block_threads(1)
+            comm(0), num_ranks(1), my_rank(0),
+            mpi_time(0.0)
         {
             // Init my_neighbors to indicate no neighbor.
             int *p = (int *)my_neighbors;
             for (int i = 0; i < MPIBufs::neighborhood_size; i++)
                 p[i] = MPI_PROC_NULL;
         }
+
+        // Destructor.
         virtual ~StencilContext() { }
 
-        // Allocate grid memory and set gridPtrs.
+        // Init MPI, OMP, etc.
+        // This is normally called very early in the program.
+        virtual void initEnv(int* argc, char*** argv);
+
+        // Set ostr to given stream if provided.
+        // If not provided, set to cout if my_rank == msg_rank
+        // or a null stream otherwise.
+        virtual std::ostream& set_ostr(std::ostream* os = NULL);
+
+        // Get the default output stream.
+        virtual std::ostream& get_ostr() const {
+            assert(ostr);
+            return *ostr;
+        }
+        
+        // Set vars related to this rank's role in global problem.
+        // Allocate MPI buffers as needed.
+        // Called from allocAll(), so it doesn't normally need to be called from user code.
+        virtual void setupRank();
+
+        // Allocate grid memory.
+        // Called from allocAll(), so it doesn't normally need to be called from user code.
         virtual void allocGrids() =0;
 
-        // Allocate param memory and set paramPtrs.
+        // Allocate param memory.
+        // Called from allocAll(), so it doesn't normally need to be called from user code.
         virtual void allocParams() =0;
 
-        // Allocate MPI buffers, etc. if enabled.
-        virtual void setupMPI(bool findLocation);
-
-#ifdef ENABLE_SHADOW_COPY
-        // Alloc shadow grids.
-        virtual void allocShadowGrids();
-#endif
-
         // Set pointers to allocated grids.
+        // Called from allocAll(), so it doesn't normally need to be called from user code.
         virtual void setPtrs() =0;
         
-        // Allocate grids, params, MPI bufs, and shadow grids.
+        // Allocate grids, params, MPI bufs, etc.
         // Initialize some other data structures.
-        virtual void allocAll(bool findRankLocation = true,
-                              idx_t* sum_points = NULL,
-                              idx_t* sum_fpops = NULL);
+        virtual void allocAll();
         
         // Get total size.
         virtual idx_t get_num_bytes();
@@ -275,15 +359,15 @@ namespace yask {
         // Compare grids in contexts for validation.
         // Params should not be written to, so they are not compared.
         // Return number of mis-compares.
-        virtual idx_t compare(const StencilContext& ref) const;
+        virtual idx_t compareData(const StencilContext& ref) const;
         
         // Set number of threads to use for something other than a region.
-        virtual int set_max_threads() {
+        virtual int set_all_threads() {
 
             // Reset number of OMP threads to max allowed.
-            int nt = orig_max_threads;
+            int nt = max_threads / thread_divisor;
             nt = std::max(nt, 1);
-            TRACE_MSG("set_max_threads: omp_set_num_threads(%d)", nt);
+            TRACE_MSG("set_all_threads: omp_set_num_threads(%d)", nt);
             omp_set_num_threads(nt);
             return nt;
         }
@@ -292,13 +376,13 @@ namespace yask {
         // Return that number.
         virtual int set_region_threads() {
 
-            int nt = orig_max_threads;
+            int nt = max_threads / thread_divisor;
 
-#if !USE_CREW
-            // If not using crew, limit outer nesting to allow
+            // Limit outer nesting to allow
             // num_block_threads per nested block loop.
             nt /= num_block_threads;
-#endif
+            if (num_block_threads > 1)
+                omp_set_nested(1);
 
             nt = std::max(nt, 1);
             TRACE_MSG("set_region_threads: omp_set_num_threads(%d)", nt);
@@ -317,6 +401,11 @@ namespace yask {
             return num_block_threads;
         }
 
+        // Wait for a global barrier.
+        virtual void global_barrier() {
+            MPI_Barrier(comm);
+        }
+        
         // Reference stencil calculations.
         virtual void calc_rank_ref();
 
@@ -330,7 +419,7 @@ namespace yask {
                                  idx_t start_dn, idx_t start_dx, idx_t start_dy, idx_t start_dz,
                                  idx_t stop_dn, idx_t stop_dx, idx_t stop_dy, idx_t stop_dz);
 
-        // Set the bounding-box vars for all eq groups.
+        // Set the bounding-box around all eq groups.
         virtual void find_bounding_boxes();
 
     };
@@ -364,7 +453,7 @@ namespace yask {
         // Set various pointers.
         virtual void setPtrs(StencilContext& context) =0;
         
-        // Set the bounding-box vars for this eq group.
+        // Set the bounding-box vars for this eq group in this rank.
         virtual void find_bounding_box();
 
         // Determine whether indices are in [sub-]domain.
@@ -378,7 +467,7 @@ namespace yask {
                                 idx_t begin_bn, idx_t begin_bx, idx_t begin_by, idx_t begin_bz,
                                 idx_t end_bn, idx_t end_bx, idx_t end_by, idx_t end_bz) =0;
 
-        // Exchange halo and shadow data for the updated grids at the given time.
+        // Exchange halo data for the updated grids at the given time.
         virtual void exchange_halos(idx_t start_dt, idx_t stop_dt);
     };
 
@@ -542,5 +631,8 @@ namespace yask {
     };
 
 }
+
+// Include auto-generated stencil code.
+#include "stencil_code.hpp"
 
 #endif

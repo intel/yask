@@ -1,7 +1,7 @@
 /*****************************************************************************
 
 YASK: Yet Another Stencil Kernel
-Copyright (c) 2014-2016, Intel Corporation
+Copyright (c) 2014-2017, Intel Corporation
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to
@@ -620,7 +620,7 @@ void POVRayPrinter::print(ostream& os) {
 // Print YASK code in new stencil context class.
 // TODO: split this into smaller methods.
 void YASKCppPrinter::printCode(ostream& os) {
-    map<Grid*, string> typeNames, dimArgs, padArgs;
+    map<Grid*, string> typeNames, dimArgs, padArgs, ofsArgs;
     map<Param*, string> paramTypeNames, paramDimArgs;
 
     os << "// Automatically generated code; do not edit." << endl;
@@ -648,7 +648,7 @@ void YASKCppPrinter::printCode(ostream& os) {
             // Type name & ctor params.
             // Name in kernel is 'Grid_' followed by dimensions.
             string typeName = "Grid_";
-            string dimArg, padArg;
+            string dimArg, padArg, ofsArg;
             for (auto dim : gp->getDims()) {
                 string ucDim = allCaps(dim);
                 typeName += ucDim;
@@ -672,11 +672,15 @@ void YASKCppPrinter::printCode(ostream& os) {
 
                     // Total padding = halo + extra.
                     padArg += hvar + " + p" + dim + ", ";
+
+                    // Offset for this rank.
+                    ofsArg += "ofs_" + dim + ", ";
                 }
             }
             typeNames[gp] = typeName;
             dimArgs[gp] = dimArg;
             padArgs[gp] = padArg;
+            ofsArgs[gp] = ofsArg;
             os << " " << typeName << "* " << grid << "; // ";
             if (_eqGroups.getEqGrids().count(gp) == 0)
                 os << "not ";
@@ -724,14 +728,25 @@ void YASKCppPrinter::printCode(ostream& os) {
             // Init grid ptrs.
             for (auto gp : _grids) {
                 string grid = gp->getName();
-                os << "  " << grid << " = 0;" << endl;
+                os << " " << grid << " = 0;" << endl;
+                os << " gridNames.insert(\"" << grid << "\");" << endl;
+
+                // Output grids.
+                if (_eqGroups.getEqGrids().count(gp))
+                    os << " outputGridNames.insert(\"" << grid << "\");" << endl;
             }
             
             // Init param ptrs.
             for (auto pp : _params) {
                 string param = pp->getName();
-                os << "  " << param << " = 0;" << endl;
+                os << " " << param << " = 0;" << endl;
+                os << " paramNames.insert(\"" << param << "\");" << endl;
             }
+
+            // Init halo sizes.
+            for (auto dim : maxHalos.getDims())
+                os << " h" << dim << " = ROUND_UP(max_halo_" << dim <<
+                    ", VLEN_" << allCaps(dim) << ");" << endl;
             
             // end of ctor.
             os << " }" << endl;
@@ -773,7 +788,7 @@ void YASKCppPrinter::printCode(ostream& os) {
         {
             os << " void setPtrs(" << _context_base << "& context, GridPtrs& outputGridPtrs) {" << endl;
 
-            // Grids w/eqGroups.
+            // Output grids.
             for (auto gp : eq.grids) {
                 os << "  outputGridPtrs.push_back(context." << gp->getName() << ");" << endl;
             }
@@ -974,7 +989,7 @@ void YASKCppPrinter::printCode(ostream& os) {
                 string grid = gp->getName();
                 os << "  gridPtrs.push_back(" << grid << ");" << endl;
                 
-                // Grids w/eqGroups.
+                // Output grids.
                 if (_eqGroups.getEqGrids().count(gp))
                     os << "  outputGridPtrs.push_back(" << grid  << ");" << endl;
             }
@@ -998,7 +1013,8 @@ void YASKCppPrinter::printCode(ostream& os) {
                     (_eqGroups.getEqGrids().count(gp) == 0 && _settings._hbwRO))
                     hbwArg = "true";
                 os << "  " << grid << " = new " << typeNames[gp] <<
-                    "(" << dimArgs[gp] << padArgs[gp] << "\"" << grid << "\", " <<
+                    "(" << dimArgs[gp] << padArgs[gp] << ofsArgs[gp] <<
+                    "\"" << grid << "\", " <<
                     hbwArg << ", *ostr);\n";
             }
             os << " }" << endl;
@@ -1101,9 +1117,9 @@ void YASKCppPrinter::printMacros(ostream& os) {
 
     os << endl;
     os << "// Stencil:" << endl;
-    os << "#define STENCIL_NAME \"" << _stencil.getName() << "\"" << endl;
-    os << "#define STENCIL_IS_" << allCaps(_stencil.getName()) << " (1)" << endl;
-    os << "#define STENCIL_CONTEXT " << _context << endl;
+    os << "#define YASK_STENCIL_NAME \"" << _stencil.getName() << "\"" << endl;
+    os << "#define YASK_STENCIL_IS_" << allCaps(_stencil.getName()) << " (1)" << endl;
+    os << "#define YASK_STENCIL_CONTEXT " << _context << endl;
 
     os << endl;
     os << "// Dimensions:" << endl;

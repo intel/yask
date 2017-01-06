@@ -1,7 +1,7 @@
 /*****************************************************************************
 
 YASK: Yet Another Stencil Kernel
-Copyright (c) 2014-2016, Intel Corporation
+Copyright (c) 2014-2017, Intel Corporation
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to
@@ -113,22 +113,25 @@ namespace yask {
         public RealVecGridBase {
     protected:
 
-        // real sizes.
-        idx_t _dx, _dy, _dz;
-        idx_t _px, _py, _pz;
+        // real_t sizes.
+        idx_t _dx, _dy, _dz;    // domain.
+        idx_t _px, _py, _pz;    // padding.
+        idx_t _ox, _oy, _oz;    // offset.
 
         // real_vec_t sizes.
         idx_t _dxv, _dyv, _dzv;
         idx_t _pxv, _pyv, _pzv;
+        idx_t _oxv, _oyv, _ozv;
     
         GenericGrid3d<real_vec_t, LayoutFn> _data;
     
     public:
 
         // Ctor.
-        // Dimensions are real_t elements, not real_vecs.
+        // Dimensions are real_t elements, not real_vec_t.
         RealVecGrid_XYZ(idx_t dx, idx_t dy, idx_t dz,
                         idx_t px, idx_t py, idx_t pz,
+                        idx_t ox, idx_t oy, idx_t oz,
                         const std::string& name,
                         bool use_hbw,
                         std::ostream& msg_stream) :
@@ -141,6 +144,9 @@ namespace yask {
             _px(ROUND_UP(px, VLEN_X)),
             _py(ROUND_UP(py, VLEN_Y)),
             _pz(ROUND_UP(pz, VLEN_Z)),
+            _ox(ROUND_UP(ox, VLEN_X)),
+            _oy(ROUND_UP(oy, VLEN_Y)),
+            _oz(ROUND_UP(oz, VLEN_Z)),
                                 
             // Determine number of real_vec_t's.
             _dxv(_dx / VLEN_X),
@@ -149,6 +155,9 @@ namespace yask {
             _pxv(_px / VLEN_X),
             _pyv(_py / VLEN_Y),
             _pzv(_pz / VLEN_Z),
+            _oxv(_ox / VLEN_X),
+            _oyv(_oy / VLEN_Y),
+            _ozv(_oz / VLEN_Z),
 
             // Alloc space for required number of real_vec_t's.
             _data(_dxv + 2*_pxv,
@@ -170,6 +179,9 @@ namespace yask {
         inline idx_t get_px() { return _px; }
         inline idx_t get_py() { return _py; }
         inline idx_t get_pz() { return _pz; }
+        inline idx_t get_ox() { return _ox; }
+        inline idx_t get_oy() { return _oy; }
+        inline idx_t get_oz() { return _oz; }
 
         // Get pointer to the real_vec_t at vector offset iv, jv, kv.
         // Indices must be normalized, i.e., already divided by VLEN_*.
@@ -181,10 +193,10 @@ namespace yask {
                 iv << "," << jv << "," << kv << ")";
 #endif
         
-            // adjust for padding.
-            iv += _pxv;
-            jv += _pyv;
-            kv += _pzv;
+            // adjust for padding and offset.
+            iv += _pxv - _oxv;
+            jv += _pyv - _oyv;
+            kv += _pzv - _ozv;
 
 #ifdef TRACE_MEM
             if (checkBounds)
@@ -196,24 +208,24 @@ namespace yask {
 
         // Non-const version.
         ALWAYS_INLINE real_vec_t* getVecPtrNorm(idx_t iv, idx_t jv, idx_t kv,
-                                           bool checkBounds=true) {
+                                                bool checkBounds=true) {
 
             const real_vec_t* vp =
                 const_cast<const RealVecGrid_XYZ*>(this)->getVecPtrNorm(iv, jv, kv,
-                                                                      checkBounds);
+                                                                        checkBounds);
             return const_cast<real_vec_t*>(vp);
         }
     
         // Get a pointer to one real_t.
         ALWAYS_INLINE const real_t* getElemPtr(idx_t i, idx_t j, idx_t k,
                                              bool checkBounds=true) const {
-#if 1
+
             // add padding before division to ensure negative indices work.
             idx_t ip = i + _px;
             idx_t jp = j + _py;
             idx_t kp = k + _pz;
 
-            // normalize and remove padding.
+            // normalize and remove added padding.
             idx_t iv = ip / VLEN_X - _pxv;
             idx_t jv = jp / VLEN_Y - _pyv;
             idx_t kv = kp / VLEN_Z - _pzv;
@@ -225,20 +237,6 @@ namespace yask {
             idx_t ie = ip % VLEN_X;
             idx_t je = jp % VLEN_Y;
             idx_t ke = kp % VLEN_Z;
-#else
-            // normalize.
-            idx_t iv = idiv<idx_t>(i, VLEN_X);
-            idx_t jv = idiv<idx_t>(j, VLEN_Y);
-            idx_t kv = idiv<idx_t>(k, VLEN_Z);
-        
-            // Get vector.
-            const real_vec_t* vp = getVecPtrNorm(iv, jv, kv, checkBounds);
-
-            // intra-vector element indices.
-            idx_t ie = imod<idx_t>(i, VLEN_X);
-            idx_t je = imod<idx_t>(j, VLEN_Y);
-            idx_t ke = imod<idx_t>(k, VLEN_Z);
-#endif
 
             // Extract point from vector.
             return &(*vp)(0, ie, je, ke);
@@ -357,22 +355,25 @@ namespace yask {
     
     protected:
 
-        // real sizes.
+        // real_t sizes.
         idx_t _dn, _dx, _dy, _dz;
         idx_t _pn, _px, _py, _pz;
+        idx_t _on, _ox, _oy, _oz;    // offset.
 
         // real_vec_t sizes.
         idx_t _dnv, _dxv, _dyv, _dzv;
         idx_t _pnv, _pxv, _pyv, _pzv;
+        idx_t _onv, _oxv, _oyv, _ozv;
     
         GenericGrid4d<real_vec_t, LayoutFn> _data;
 
     public:
 
         // Ctor.
-        // Dimensions are real_t elements, not real_vecs.
+        // Dimensions are real_t elements, not real_vec_t.
         RealVecGrid_NXYZ(idx_t dn, idx_t dx, idx_t dy, idx_t dz,
                          idx_t pn, idx_t px, idx_t py, idx_t pz,
+                         idx_t on, idx_t ox, idx_t oy, idx_t oz,
                          const std::string& name,
                          bool use_hbw,
                          std::ostream& msg_stream) :
@@ -387,6 +388,10 @@ namespace yask {
             _px(ROUND_UP(px, VLEN_X)),
             _py(ROUND_UP(py, VLEN_Y)),
             _pz(ROUND_UP(pz, VLEN_Z)),
+            _on(ROUND_UP(on, VLEN_N)),
+            _ox(ROUND_UP(ox, VLEN_X)),
+            _oy(ROUND_UP(oy, VLEN_Y)),
+            _oz(ROUND_UP(oz, VLEN_Z)),
 
             // Determine number of real_vec_t's.
             _dnv(_dn / VLEN_N),
@@ -397,6 +402,10 @@ namespace yask {
             _pxv(_px / VLEN_X),
             _pyv(_py / VLEN_Y),
             _pzv(_pz / VLEN_Z),
+            _onv(_on / VLEN_N),
+            _oxv(_ox / VLEN_X),
+            _oyv(_oy / VLEN_Y),
+            _ozv(_oz / VLEN_Z),
 
             // Alloc space for required number of real_vec_t's.
             _data(_dnv + 2*_pnv,
@@ -418,6 +427,10 @@ namespace yask {
         inline idx_t get_px() { return _px; }
         inline idx_t get_py() { return _py; }
         inline idx_t get_pz() { return _pz; }
+        inline idx_t get_on() { return _on; }
+        inline idx_t get_ox() { return _ox; }
+        inline idx_t get_oy() { return _oy; }
+        inline idx_t get_oz() { return _oz; }
 
         // Get pointer to the real_vec_t at vector offset nv, iv, jv, kv.
         // Indices must be normalized, i.e., already divided by VLEN_*.
@@ -429,11 +442,11 @@ namespace yask {
                 nv << "," << iv << "," << jv << "," << kv << ")";
 #endif
         
-            // adjust for padding.
-            nv += _pnv;
-            iv += _pxv;
-            jv += _pyv;
-            kv += _pzv;
+            // adjust for padding and offset.
+            nv += _pnv - _onv;
+            iv += _pxv - _oxv;
+            jv += _pyv - _oyv;
+            kv += _pzv - _ozv;
 
 #ifdef TRACE_MEM
             if (checkBounds)
@@ -456,14 +469,14 @@ namespace yask {
         // Get a pointer to one real_t.
         ALWAYS_INLINE const real_t* getElemPtr(idx_t n, idx_t i, idx_t j, idx_t k,
                                              bool checkBounds=true) const {
-#if 1
+
             // add padding before division to ensure negative indices work.
             idx_t np = n + _pn;
             idx_t ip = i + _px;
             idx_t jp = j + _py;
             idx_t kp = k + _pz;
 
-            // normalize and remove padding.
+            // normalize and remove added padding.
             idx_t nv = np / VLEN_N - _pnv;
             idx_t iv = ip / VLEN_X - _pxv;
             idx_t jv = jp / VLEN_Y - _pyv;
@@ -478,22 +491,6 @@ namespace yask {
             idx_t ie = ip % VLEN_X;
             idx_t je = jp % VLEN_Y;
             idx_t ke = kp % VLEN_Z;
-#else
-            // normalize.
-            idx_t nv = idiv<idx_t>(n, VLEN_N);
-            idx_t iv = idiv<idx_t>(i, VLEN_X);
-            idx_t jv = idiv<idx_t>(j, VLEN_Y);
-            idx_t kv = idiv<idx_t>(k, VLEN_Z);
-        
-            // Get vector.
-            const real_vec_t* vp = getVecPtrNorm(nv, iv, jv, kv, checkBounds);
-
-            // intra-vector element indices.
-            idx_t ne = imod<idx_t>(n, VLEN_N);
-            idx_t ie = imod<idx_t>(i, VLEN_X);
-            idx_t je = imod<idx_t>(j, VLEN_Y);
-            idx_t ke = imod<idx_t>(k, VLEN_Z);
-#endif
         
             // Extract point from vector.
             return &(*vp)(ne, ie, je, ke);
@@ -501,9 +498,9 @@ namespace yask {
 
         // non-const version.
         ALWAYS_INLINE real_t* getElemPtr(idx_t n, idx_t i, idx_t j, idx_t k,
-                                       bool checkBounds=true) {
+                                         bool checkBounds=true) {
             const real_t* p = const_cast<const RealVecGrid_NXYZ*>(this)->getElemPtr(n, i, j, k,
-                                                                                checkBounds);
+                                                                                    checkBounds);
             return const_cast<real_t*>(p);
         }
 
@@ -616,6 +613,8 @@ namespace yask {
     // is divided by CPTS_T and wrapped to TIME_DIM_SIZE indices.
     // Supports symmetric padding in each spatial dimension.
     template <typename LayoutFn> class RealVecGrid_TXYZ :
+
+        // The T dim is mapped onto the N dim of the base class.
         public RealVecGrid_NXYZ<LayoutFn>  {
     
     public:
@@ -623,11 +622,13 @@ namespace yask {
         // Ctor.
         RealVecGrid_TXYZ(idx_t dx, idx_t dy, idx_t dz,
                          idx_t px, idx_t py, idx_t pz,
+                         idx_t ox, idx_t oy, idx_t oz,
                          const std::string& name,
                          bool use_hbw,
                          std::ostream& msg_stream) :
             RealVecGrid_NXYZ<LayoutFn>(TIME_DIM_SIZE, dx, dy, dz,
                                        0, px, py, pz,
+                                       0, ox, oy, oz,
                                        name, use_hbw, msg_stream)
         {
             if (VLEN_N > 1) {
@@ -656,8 +657,9 @@ namespace yask {
             // Use imod to allow t to be negative.
             return imod<idx_t>(t_idx, TIME_DIM_SIZE);
 #else
-            // version that doesn't allow negative time.
-            t += TIME_DIM_SIZE;
+            // version that avoids handling negative time by adding
+            // an offset to the t index.
+            t += 2 * TIME_DIM_SIZE;
             assert(t >= 0);
             assert(t % CPTS_T == 0);
             idx_t t_idx = t / idx_t(CPTS_T);
@@ -725,6 +727,8 @@ namespace yask {
     // is divided by CPTS_T and wrapped to TIME_DIM_SIZE indices.
     // Supports symmetric padding in each spatial dimension.
     template <typename LayoutFn> class RealVecGrid_TNXYZ :
+
+        // The T and N dims are mapped onto the N dim of the base class.
         public RealVecGrid_NXYZ<LayoutFn> {
     
     protected:
@@ -735,11 +739,13 @@ namespace yask {
         // Ctor.
         RealVecGrid_TNXYZ(idx_t dn, idx_t dx, idx_t dy, idx_t dz,
                           idx_t pn, idx_t px, idx_t py, idx_t pz,
+                          idx_t on, idx_t ox, idx_t oy, idx_t oz,
                           const std::string& name,
                           bool use_hbw,
                           std::ostream& msg_stream) :
             RealVecGrid_NXYZ<LayoutFn>(TIME_DIM_SIZE * dn, dx, dy, dz,
                                        pn, px, py, pz,
+                                       on, ox, oy, oz,
                                        name, use_hbw, msg_stream),
             _dn(dn)
         {
@@ -769,7 +775,9 @@ namespace yask {
             // Use imod to allow t to be negative.
             idx_t t_idx2 = imod<idx_t>(t_idx, TIME_DIM_SIZE);
 #else
-            // version that doesn't allow negative time.
+            // version that avoids handling negative time by adding
+            // an offset to the t index.
+            t += 2 * TIME_DIM_SIZE;
             assert(t >= 0);
             assert(t % CPTS_T == 0);
             idx_t t_idx = t / idx_t(CPTS_T);

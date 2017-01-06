@@ -1,7 +1,7 @@
 /*****************************************************************************
 
 YASK: Yet Another Stencil Kernel
-Copyright (c) 2014-2016, Intel Corporation
+Copyright (c) 2014-2017, Intel Corporation
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to
@@ -29,17 +29,71 @@ IN THE SOFTWARE.
 // Base classes for stencil code.
 #include "stencil_calc.hpp"
 
+#include <stdlib.h>
+#include <limits.h>
 #include <sstream>
 using namespace std;
 
 namespace yask {
 
     ///// StencilContext functions:
+
+    // Init MPI, OMP, etc.
+    void StencilContext::initEnv(int* argc, char*** argv)
+    {
+        // Stop collecting VTune data.
+        // Even better to use -start-paused option.
+        VTUNE_PAUSE;
+
+        // MPI init.
+        my_rank = 0;
+        num_ranks = 1;
+#ifdef USE_MPI
+        int provided = 0;
+        MPI_Init_thread(argc, argv, MPI_THREAD_SERIALIZED, &provided);
+        if (provided < MPI_THREAD_SERIALIZED) {
+            cerr << "error: MPI_THREAD_SERIALIZED not provided.\n";
+            exit_yask(1);
+        }
+        comm = MPI_COMM_WORLD;
+        MPI_Comm_rank(comm, &my_rank);
+        MPI_Comm_size(comm, &num_ranks);
+#else
+        comm = 0;
+#endif
+
+        // Enable the default output stream on the msg-rank only.
+        set_ostr();
+
+        // There is no specific call to init OMP, but we make a gratuitous
+        // OMP call to trigger any debug output.
+        omp_get_num_procs();
+        
+        // Make sure any MPI/OMP debug data is dumped before continuing.
+        global_barrier();
+    }
+
+    // Set ostr to given stream if provided.
+    // If not provided, set to cout if my_rank == msg_rank
+    // or a null stream otherwise.
+    ostream& StencilContext::set_ostr(std::ostream* os) {
+        if (os)
+            ostr = os;
+        else if (my_rank == msg_rank)
+            ostr = &cout;
+        else
+            ostr = new ofstream;    // null stream (unopened ofstream).
+        assert(ostr);
+        return *ostr;
+    }
+    
+    
     ///// Top-level methods for evaluating reference and optimized stencils.
 
     // Eval stencil equation group(s) over grid(s) using scalar code.
     void StencilContext::calc_rank_ref()
     {
+        idx_t begin_dt = ofs_t;
         idx_t end_dt = begin_dt + dt;
         TRACE_MSG("calc_rank_ref(%ld..%ld)", begin_dt, end_dt-1);
         
@@ -51,7 +105,7 @@ namespace yask {
             // equations to evaluate (only one in most stencils).
             for (auto eg : eqGroups) {
 
-                // Halo+shadow exchange for grid(s) updated by this equation.
+                // Halo exchange for grid(s) updated by this equation.
                 eg->exchange_halos(t, t + CPTS_T);
 
                 // Loop through 4D space within the bounding-box of this
@@ -63,7 +117,6 @@ namespace yask {
                             for (idx_t z = eg->begin_bbz; z < eg->end_bbz; z++) {
 
                                 // Update only if point in domain for this eq group.
-                                // NB: this isn't actually needed for rectangular BBs.
                                 if (eg->is_in_valid_domain(t, n, x, y, z)) {
                                     
                                     TRACE_MSG("%s.calc_scalar(%ld, %ld, %ld, %ld, %ld)", 
@@ -77,14 +130,22 @@ namespace yask {
         } // iterations.
     }
 
-
     // Eval equation group(s) over grid(s) using optimized code.
     void StencilContext::calc_rank_opt()
     {
+        idx_t begin_dt = ofs_t;
         idx_t end_dt = begin_dt + dt;
         idx_t step_dt = rt;
         TRACE_MSG("calc_rank_opt(%ld..%ld by %ld)", begin_dt, end_dt-1, step_dt);
+        ostream& os = get_ostr();
 
+#ifdef MODEL_CACHE
+        if (context.my_rank != context.msg_rank)
+            cache_model.disable();
+        if (cache_model.isEnabled())
+            os << "Modeling cache...\n";
+#endif
+        
         // Problem begin points.
         idx_t begin_dn = begin_bbn;
         idx_t begin_dx = begin_bbx;
@@ -109,20 +170,6 @@ namespace yask {
         const idx_t group_size_dy = 1;
         const idx_t group_size_dz = 1;
 
-        // Determine spatial skewing angles for temporal wavefronts based on the
-        // halos.  This assumes the smallest granularity of calculation is
-        // CPTS_* in each dim.
-        // We only need non-zero angles if the region size is less than the rank size,
-        // i.e., if the region covers the whole rank in a given dimension, no wave-front
-        // is needed in thar dim.
-        // TODO: make this grid-specific.
-        angle_n = (rn < len_bbn) ? ROUND_UP(hn, CPTS_N) : 0;
-        angle_x = (rx < len_bbx) ? ROUND_UP(hx, CPTS_X) : 0;
-        angle_y = (ry < len_bby) ? ROUND_UP(hy, CPTS_Y) : 0;
-        angle_z = (rz < len_bbz) ? ROUND_UP(hz, CPTS_Z) : 0;
-        TRACE_MSG("wavefront angles: %ld, %ld, %ld, %ld",
-                  angle_n, angle_x, angle_y, angle_z);
-    
         // Extend end points for overlapping regions due to wavefront angle.
         // For each subsequent time step in a region, the spatial location of
         // each block evaluation is shifted by the angle for each stencil. So,
@@ -136,7 +183,8 @@ namespace yask {
         end_dx += angle_x * nshifts;
         end_dy += angle_y * nshifts;
         end_dz += angle_z * nshifts;
-        TRACE_MSG("extended domain after wavefront adjustment: %ld..%ld, %ld..%ld, %ld..%ld, %ld..%ld, %ld..%ld", 
+        TRACE_MSG("extended domain after wave-front adjustment:"
+                  " %ld..%ld, %ld..%ld, %ld..%ld, %ld..%ld, %ld..%ld", 
                   begin_dt, end_dt-1,
                   begin_dn, end_dn-1,
                   begin_dx, end_dx-1,
@@ -160,7 +208,7 @@ namespace yask {
 
                 for (auto eqGroup : eqGroups) {
 
-                    // Halo+shadow exchange for grid(s) updated by this equation.
+                    // Halo exchange for grid(s) updated by this equation.
                     eqGroup->exchange_halos(start_dt, stop_dt);
 
                     // Eval this stencil in calc_region().
@@ -182,7 +230,7 @@ namespace yask {
                 
                 for (auto eqGroup : eqGroups) {
 
-                    // Halo+shadow exchange for grid(s) updated by this equation.
+                    // Halo exchange for grid(s) updated by this equation.
                     eqGroup->exchange_halos(start_dt, stop_dt);
                 }
             
@@ -191,6 +239,17 @@ namespace yask {
             }
 
         }
+
+#ifdef MODEL_CACHE
+        // Print cache stats, then disable.
+        // Thus, cache is only modeled for first call.
+        if (cache_model.isEnabled()) {
+            os << "Done modeling cache...\n";
+            cache_model.dumpStats();
+            cache_model.disable();
+        }
+#endif
+
     }
 
     // Calculate results within a region.
@@ -278,7 +337,7 @@ namespace yask {
 #include "stencil_region_loops.hpp"
 
                         // Reset threads back to max.
-                        set_max_threads();
+                        set_all_threads();
                     }
             
                     // Shift spatial region boundaries for next iteration to
@@ -298,35 +357,66 @@ namespace yask {
         } // time.
     }
 
-    // Init MPI-related vars.
-    void StencilContext::setupMPI(bool findLocation) {
+    // Init MPI-related vars and other vars related to my rank's place in
+    // the global problem.  Need to call this even if not using MPI to
+    // properly init some vars.  Called from allocAll(), so it doesn't
+    // normally need to be called from user code.
+    void StencilContext::setupRank() {
+        ostream& os = get_ostr();
 
-        // Determine my position in 4D.
-        if (findLocation) {
+        // Report ranks.
+        os << "Num ranks: " << num_ranks << endl;
+        os << "This rank index: " << my_rank << endl;
+
+        // Check ranks.
+        idx_t req_ranks = nrn * nrx * nry * nrz;
+        if (req_ranks != num_ranks) {
+            cerr << "error: " << req_ranks << " rank(s) requested, but " <<
+                num_ranks << " rank(s) are active." << endl;
+            exit_yask(1);
+        }
+        assertEqualityOverRanks(dt, comm, "time-step");
+
+        // Determine my coordinates if not provided already.
+        if (find_loc) {
             Layout_4321 rank_layout(nrn, nrx, nry, nrz);
             rank_layout.unlayout((idx_t)my_rank, rin, rix, riy, riz);
         }
-        *ostr << "Logical coordinates of rank " << my_rank << ": " <<
+        os << "Logical coordinates of this rank: " <<
             rin << ", " << rix << ", " << riy << ", " << riz << endl;
 
-        // A table of coordinates for everyone.
+        // A table of rank-coordinates for everyone.
         const int num_dims = 4;
         idx_t coords[num_ranks][num_dims];
+
+        // Init coords for this rank.
         coords[my_rank][0] = rin;
         coords[my_rank][1] = rix;
         coords[my_rank][2] = riy;
         coords[my_rank][3] = riz;
 
+        // A table of rank-sizes for everyone.
+        idx_t rsizes[num_ranks][num_dims];
+
+        // Init sizes for this rank.
+        rsizes[my_rank][0] = dn;
+        rsizes[my_rank][1] = dx;
+        rsizes[my_rank][2] = dy;
+        rsizes[my_rank][3] = dz;
+
 #ifdef USE_MPI
-        // Exchange coordinate info between all ranks.
+        // Exchange coord and size info between all ranks.
         for (int rn = 0; rn < num_ranks; rn++) {
             MPI_Bcast(&coords[rn][0], num_dims, MPI_INTEGER8,
+                      rn, comm);
+            MPI_Bcast(&rsizes[rn][0], num_dims, MPI_INTEGER8,
                       rn, comm);
         }
 #endif
         
-        // Determine who my neighbors are.
-        int num_neighbors = 0;
+        ofs_n = ofs_x = ofs_y = ofs_z = 0;
+        tot_n = tot_x = tot_y = tot_z = 0;
+        int num_neighbors = 0, num_exchanges = 0;
         for (int rn = 0; rn < num_ranks; rn++) {
 
             // Get coordinates of rn.
@@ -335,12 +425,43 @@ namespace yask {
             idx_t rny = coords[rn][2];
             idx_t rnz = coords[rn][3];
 
-            // Distance from me: prev => -1, self => 0, next => +1.
+            // Coord offset of rn from me: prev => negative, self => 0, next => positive.
             idx_t rdn = rnn - rin;
             idx_t rdx = rnx - rix;
             idx_t rdy = rny - riy;
             idx_t rdz = rnz - riz;
 
+            // Get sizes of rn;
+            idx_t rsn = rsizes[rn][0];
+            idx_t rsx = rsizes[rn][1];
+            idx_t rsy = rsizes[rn][2];
+            idx_t rsz = rsizes[rn][3];
+        
+            // Accumulate total problem size in each dim for ranks that
+            // intersect with this rank, including myself.
+            // Adjust my offset in the global problem by adding all domain
+            // sizes from prev ranks only.
+            if (rdx == 0 && rdy == 0 && rdz == 0) {
+                tot_n += rsn;
+                if (rdn < 0)
+                    ofs_n += rsn;
+            }
+            if (rdn == 0 && rdy == 0 && rdz == 0) {
+                tot_x += rsx;
+                if (rdx < 0)
+                    ofs_x += rsx;
+            }
+            if (rdn == 0 && rdx == 0 && rdz == 0) {
+                tot_y += rsy;
+                if (rdy < 0)
+                    ofs_y += rsy;
+            }
+            if (rdn == 0 && rdx == 0 && rdy == 0) {
+                tot_z += rsz;
+                if (rdz < 0)
+                    ofs_z += rsz;
+            }
+            
             // Manhattan distance.
             int mdist = abs(rdn) + abs(rdx) + abs(rdy) + abs(rdz);
             
@@ -356,70 +477,74 @@ namespace yask {
             // Someone else.
             else {
                 if (mdist == 0) {
-                    cerr << "error: distance to rank " << rn << " == " << mdist << endl;
+                    cerr << "error: ranks " << my_rank <<
+                        " and " << rn << " at same coordinates." << endl;
                     exit_yask(1);
                 }
             }
             
-            // Rank rn is my neighbor if its distance <= 1 in every dim.
+            // Rank rn is my immediate neighbor if its distance <= 1 in
+            // every dim.  Assume we do not need to exchange halos except
+            // with immediate neighbor. TODO: validate domain size is larger
+            // than halo.
             if (abs(rdn) > 1 || abs(rdx) > 1 || abs(rdy) > 1 || abs(rdz) > 1)
                 continue;
 
-            // Check against max dist needed.
-            // TODO: determine max dist automatically from stencil equations.
-#ifndef MAX_EXCH_DIST
-#define MAX_EXCH_DIST 4
-#endif
-            if (mdist > MAX_EXCH_DIST)
-                continue;
-
-            num_neighbors++;
-            *ostr << "Neighbor #" << num_neighbors << " at " <<
-                rnn << ", " << rnx << ", " << rny << ", " << rnz <<
-                " is rank " << rn << endl;
-                    
-            // Size of buffer in each direction:
-            // if dist to neighbor is zero (i.e., is self), use full size,
-            // otherwise, use halo size.
-            // TODO: use per-grid halo size instead of global max.
-            idx_t rsn = (rdn == 0) ? dn : hn;
-            idx_t rsx = (rdx == 0) ? dx : hx;
-            idx_t rsy = (rdy == 0) ? dy : hy;
-            idx_t rsz = (rdz == 0) ? dz : hz;
-
-            // TODO: only alloc buffers in directions actually needed, e.g.,
-            // many simple stencils don't need diagonals.
-                    
-            // Is buffer needed?
-            if (rsn * rsx * rsy * rsz == 0) {
-                *ostr << "No halo exchange needed between ranks " << my_rank <<
-                    " and " << rn << '.' << endl;
-                continue;
-            }
+            // Size of buffer in each direction: if dist to neighbor is zero
+            // (i.e., is perpendicular to this rank), use full size;
+            // otherwise, use halo size.  TODO: use per-grid actual halo
+            // size determined by stencil compiler instead of global max.
+            idx_t bsn = (rdn == 0) ? dn : hn;
+            idx_t bsx = (rdx == 0) ? dx : hx;
+            idx_t bsy = (rdy == 0) ? dy : hy;
+            idx_t bsz = (rdz == 0) ? dz : hz;
 
             // Add one to -1..+1 dist to get 0..2 range for my_neighbors indices.
             rdn++; rdx++; rdy++; rdz++;
 
             // Save rank of this neighbor.
             my_neighbors[rdn][rdx][rdy][rdz] = rn;
+            num_neighbors++;
+            os << "Neighbor #" << num_neighbors << " at " <<
+                rnn << ", " << rnx << ", " << rny << ", " << rnz <<
+                " is rank " << rn << endl;
                     
-            // Alloc MPI buffers between rn and me.
-            // Need send and receive for each updated grid.
-            for (auto gp : outputGridPtrs) {
-                for (int bd = 0; bd < MPIBufs::nBufDirs; bd++) {
-                    ostringstream oss;
-                    oss << gp->get_name();
-                    if (bd == MPIBufs::bufSend)
-                        oss << "_send_halo_from_" << my_rank << "_to_" << rn;
-                    else
-                        oss << "_get_halo_by_" << my_rank << "_from_" << rn;
+            // Check against max dist needed.  TODO: determine max dist
+            // automatically from stencil equations; may not be same for all
+            // grids.
+#ifndef MAX_EXCH_DIST
+#define MAX_EXCH_DIST 4
+#endif
 
-                    mpiBufs[gp].allocBuf(bd, rdn, rdx, rdy, rdz,
-                                         rsn, rsx, rsy, rsz,
-                                         oss.str(), *ostr);
+            // Is buffer needed?
+            if (mdist > MAX_EXCH_DIST || bsn * bsx * bsy * bsz == 0) {
+                os << " No halo exchange with rank " << rn << '.' << endl;
+            }
+            else {
+                
+                // Alloc MPI buffers between rn and my rank.
+                // Need send and receive for each updated grid.
+                for (auto gname : outputGridNames) {
+                    for (int bd = 0; bd < MPIBufs::nBufDirs; bd++) {
+                        ostringstream oss;
+                        oss << gname;
+                        if (bd == MPIBufs::bufSend)
+                            oss << "_send_halo_from_" << my_rank << "_to_" << rn;
+                        else
+                            oss << "_get_halo_to_" << my_rank << "_from_" << rn;
+                        
+                        mpiBufs[gname].allocBuf(bd,
+                                                rdn, rdx, rdy, rdz,
+                                                bsn, bsx, bsy, bsz,
+                                                oss.str(), os);
+                        num_exchanges++;
+                    }
                 }
             }
         }
+        os << "Problem-domain offsets of this rank: " <<
+            ofs_n << ", " << ofs_x << ", " << ofs_y << ", " << ofs_z << endl;
+        os << "Number of halo exchanges from this rank: " << num_exchanges << endl;
     }
 
     // Get total size.
@@ -435,8 +560,8 @@ namespace yask {
             nbytes += pp->get_num_bytes();
 
         // MPI buffers.
-        for (auto gp : outputGridPtrs) {
-            mpiBufs[gp].visitNeighbors
+        for (auto gname : outputGridNames) {
+            mpiBufs[gname].visitNeighbors
                 (*this,
                  [&](idx_t nn, idx_t nx, idx_t ny, idx_t nz,
                      int rank,
@@ -450,70 +575,115 @@ namespace yask {
                  } );
         }
 
-#ifdef ENABLE_SHADOW_COPY
-        // Shadow buffers.
-        for (auto gp : outputGridPtrs) {
-            if (shadowGrids.count(gp) && shadowGrids[gp])
-                nbytes += shadowGrids[gp]->get_num_bytes();
-        }
-#endif
-        
         return nbytes;
     }
 
-#ifdef ENABLE_SHADOW_COPY
-    // Alloc shadow grids.
-    void StencilContext::allocShadowGrids() {
-        for (auto gp : outputGridPtrs) {
-            if (shadowGrids[gp])
-                delete shadowGrids[gp];
-            shadowGrids[gp] = new RealGrid_NXYZ(dn, dx, dy, dz,
-                                                GRID_ALIGNMENT);
-            shadowGrids[gp]->print_info(string("shadow-") + gp->get_name(), *ostr);
-        }        
-    }
-#endif
-    
     // Allocate grids, params, and MPI bufs.
     // Initialize some data structures.
-    void StencilContext::allocAll(bool findRankLocation,
-                                  idx_t* sum_points,
-                                  idx_t* sum_fpops)
+    void StencilContext::allocAll()
     {
-        ostream& os = *ostr;
+        // Don't continue until all ranks are this far.
+        global_barrier();
+
+        ostream& os = get_ostr();
+#ifdef DEBUG
+        os << "*** WARNING: YASK compiled with DEBUG; ignore performance results.\n";
+#endif
+#if defined(NO_INTRINSICS) && (VLEN > 1)
+        os << "*** WARNING: YASK compiled with NO_INTRINSICS; ignore performance results.\n";
+#endif
+#ifdef MODEL_CACHE
+        os << "*** WARNING: YASK compiled with MODEL_CACHE; ignore performance results.\n";
+#endif
+#ifdef TRACE_MEM
+        os << "*** WARNING: YASK compiled with TRACE_MEM; ignore performance results.\n";
+#endif
+#ifdef TRACE_INTRINSICS
+        os << "*** WARNING: YASK compiled with TRACE_INTRINSICS; ignore performance results.\n";
+#endif
+        
+        // Adjust all settings needed before allocating data.
+        finalizeSettings(os);
+        
+        // report threads.
+        os << endl;
+        os << "Num OpenMP procs: " << omp_get_num_procs() << endl;
+        set_all_threads();
+        os << "Num OpenMP threads: " << max_threads << endl;
+        set_region_threads(); // Temporary; just for reporting.
+        int region_threads = omp_get_max_threads(); // Check w/OMP for actual value.
+        os << "  Num threads per region: " << region_threads << endl;
+        os << "  Num threads per block: " << num_block_threads << endl;
+        set_all_threads(); // Back to normal.
+
+        // TODO: enable multi-rank wave-front tiling.
+        if (rt > 1 && num_ranks > 1) {
+            cerr << "MPI communication is not currently enabled with wave-front tiling." << endl;
+            exit_yask(1);
+        }
+
+        // TODO: check all dims.
+#ifndef USING_DIM_N
+        if (dn > 1) {
+            cerr << "error: dn = " << dn << ", but stencil '"
+                YASK_STENCIL_NAME "' doesn't use dimension 'n'." << endl;
+            exit_yask(1);
+        }
+#endif
+
+        os << endl;
+        os << "Num grids: " << gridNames.size() << endl;
+        os << "Num grids to be updated: " << outputGridNames.size() << endl;
+        os << "Num stencil equation-groups: " << eqGroups.size() << endl;
+        
+        // Set up MPI data.  Must do this before allocating grids so that
+        // global offsets are calculated properly.
+        if (num_ranks > 1)
+            os << "Allocating MPI buffers..." << endl;
+        setupRank();
+
+        // Alloc grids and params.
         os << "Allocating grids..." << endl;
         allocGrids();
         os << "Allocating parameters..." << endl;
         allocParams();
-#ifdef USE_MPI
-        os << "Allocating MPI buffers..." << endl;
-        setupMPI(findRankLocation);
-#endif
-#ifdef ENABLE_SHADOW_COPY
-        if (shadow_in_freq || shadow_out_freq) {
-            os << "Allocating shadow grids..." << endl;
-            allocShadowGrids();
-        }
-#endif
-        setPtrs();
-        
-        const idx_t num_eqGrids = outputGridPtrs.size();
-        os << "Num grids: " << gridPtrs.size() << endl;
-        os << "Num grids to be updated: " << num_eqGrids << endl;
 
-        os << "Num stencil equation-groups: " << eqGroups.size() << endl;
+        // Set pointers to the allocated data.
+        setPtrs();
         for (auto eg : eqGroups)
             eg->setPtrs(*this);
         find_bounding_boxes();
 
-        idx_t npoints = 0, nfpops = 0;
+        // Report some stats.
+        os << "\nSizes in points per grid (t*n*x*y*z):\n"
+            " vector-size:      " << VLEN_T << '*' << VLEN_N << '*' << VLEN_X << '*' << VLEN_Y << '*' << VLEN_Z << endl <<
+            " cluster-size:     " << CPTS_T << '*' << CPTS_N << '*' << CPTS_X << '*' << CPTS_Y << '*' << CPTS_Z << endl <<
+            " block-size:       " << bt << '*' << bn << '*' << bx << '*' << by << '*' << bz << endl <<
+            " block-group-size: 1*" << gn << '*' << gx << '*' << gy << '*' << gz << endl <<
+            " region-size:      " << rt << '*' << rn << '*' << rx << '*' << ry << '*' << rz << endl <<
+            " rank-domain-size: " << dt << '*' << dn << '*' << dx << '*' << dy << '*' << dz << endl <<
+            " problem-size:     " << dt << '*' << tot_n << '*' << tot_x << '*' << tot_y << '*' << tot_z << endl <<
+            endl <<
+            "Other settings:\n"
+            " num-ranks: " << nrn << '*' << nrx << '*' << nry << '*' << nrz << endl <<
+            " stencil-name: " YASK_STENCIL_NAME << endl << 
+            " time-dim-size: " << TIME_DIM_SIZE << endl <<
+            " vector-len: " << VLEN << endl <<
+            " padding: " << pn << '+' << px << '+' << py << '+' << pz << endl <<
+            " wave-front-angles: " << angle_n << '+' << angle_x << '+' << angle_y << '+' << angle_z << endl <<
+            " max-halos: " << hn << '+' << hx << '+' << hy << '+' << hz << endl <<
+            " manual-L1-prefetch-distance: " << PFDL1 << endl <<
+            " manual-L2-prefetch-distance: " << PFDL2 << endl <<
+            endl;
+        
+        rank_numpts_1t = 0; rank_numFpOps_1t = 0; // sums across eqs for this rank.
         for (auto eg : eqGroups) {
             idx_t updates1 = eg->get_scalar_points_updated();
             idx_t updates_domain = updates1 * eg->bb_size;
             idx_t fpops1 = eg->get_scalar_fp_ops();
             idx_t fpops_domain = fpops1 * eg->bb_size;
-            npoints += updates_domain;
-            nfpops += fpops_domain;
+            rank_numpts_1t += updates_domain;
+            rank_numFpOps_1t += fpops_domain;
             os << "Stats for equation-group '" << eg->get_name() << "':\n" <<
                 " sub-domain-size:            " <<
                 eg->len_bbn << '*' << eg->len_bbx << '*' << eg->len_bby << '*' << eg->len_bbz << endl <<
@@ -523,10 +693,65 @@ namespace yask {
                 " est-FP-ops-per-point:       " << fpops1 << endl <<
                 " est-FP-ops-in-sub-domain:   " << printWithPow10Multiplier(fpops_domain) << endl;
         }
-        if (sum_points)
-            *sum_points = npoints;
-        if (sum_fpops)
-            *sum_fpops = nfpops;
+
+        // Report total allocation.
+        rank_nbytes = get_num_bytes();
+        os << "Total allocation in this rank (bytes): " <<
+            printWithPow2Multiplier(rank_nbytes) << endl;
+        tot_nbytes = sumOverRanks(rank_nbytes, comm);
+        os << "Total overall allocation in " << num_ranks << " rank(s) (bytes): " <<
+            printWithPow2Multiplier(tot_nbytes) << endl;
+    
+        // Various metrics for amount of work.
+        rank_numpts_dt = rank_numpts_1t * dt;
+        tot_numpts_1t = sumOverRanks(rank_numpts_1t, comm);
+        tot_numpts_dt = tot_numpts_1t * dt;
+
+        rank_numFpOps_dt = rank_numFpOps_1t * dt;
+        tot_numFpOps_1t = sumOverRanks(rank_numFpOps_1t, comm);
+        tot_numFpOps_dt = tot_numFpOps_1t * dt;
+
+        rank_domain_1t = dn * dx * dy * dz;
+        rank_domain_dt = rank_domain_1t * dt;
+        tot_domain_1t = sumOverRanks(rank_domain_1t, comm);
+        tot_domain_dt = tot_domain_1t * dt;
+    
+        // Print some more stats.
+        os << endl <<
+            "Amount-of-work stats:\n" <<
+            " problem-size in this rank, for one time-step: " <<
+            printWithPow10Multiplier(rank_domain_1t) << endl <<
+            " problem-size in all ranks, for one time-step: " <<
+            printWithPow10Multiplier(tot_domain_1t) << endl <<
+            " problem-size in this rank, for all time-steps: " <<
+            printWithPow10Multiplier(rank_domain_dt) << endl <<
+            " problem-size in all ranks, for all time-steps: " <<
+            printWithPow10Multiplier(tot_domain_dt) << endl <<
+            endl <<
+            " grid-points-updated in this rank, for one time-step: " <<
+            printWithPow10Multiplier(rank_numpts_1t) << endl <<
+            " grid-points-updated in all ranks, for one time-step: " <<
+            printWithPow10Multiplier(tot_numpts_1t) << endl <<
+            " grid-points-updated in this rank, for all time-steps: " <<
+            printWithPow10Multiplier(rank_numpts_dt) << endl <<
+            " grid-points-updated in all ranks, for all time-steps: " <<
+            printWithPow10Multiplier(tot_numpts_dt) << endl <<
+            endl <<
+            " est-FP-ops in this rank, for one time-step: " <<
+            printWithPow10Multiplier(rank_numFpOps_1t) << endl <<
+            " est-FP-ops in all ranks, for one time-step: " <<
+            printWithPow10Multiplier(tot_numFpOps_1t) << endl <<
+            " est-FP-ops in this rank, for all time-steps: " <<
+            printWithPow10Multiplier(rank_numFpOps_dt) << endl <<
+            " est-FP-ops in all ranks, for all time-steps: " <<
+            printWithPow10Multiplier(tot_numFpOps_dt) << endl <<
+            endl << 
+            "Notes:\n" <<
+            " problem-size is based on rank-domain sizes specified in command-line (dn * dx * dy * dz).\n" <<
+            " grid-points-updated is based sum of grid-updates-in-sub-domain across equation-group(s).\n" <<
+            " est-FP-ops is based on sum of est-FP-ops-in-sub-domain across equation-group(s).\n" <<
+            endl;
+
     }
 
     // Init all grids & params by calling initFn.
@@ -535,24 +760,13 @@ namespace yask {
                                     function<void (RealGrid* gp,
                                                    real_t seed)> realInitFn)
     {
-        ostream& os = *ostr;
+        ostream& os = get_ostr();
         real_t v = 0.1;
         os << "Initializing grids..." << endl;
         for (auto gp : gridPtrs) {
             realVecInitFn(gp, v);
             v += 0.01;
         }
-#ifdef ENABLE_SHADOW_COPY
-        if (shadowGrids.size()) {
-            os << "Initializing shadow grids..." << endl;
-            for (auto gp : outputGridPtrs) {
-                if (shadowGrids.count(gp) && shadowGrids[gp]) {
-                    realInitFn(shadowGrids[gp], v);
-                    v += 0.01;
-                }
-            }
-        }
-#endif
         if (paramPtrs.size()) {
             os << "Initializing parameters..." << endl;
             for (auto pp : paramPtrs) {
@@ -564,8 +778,8 @@ namespace yask {
 
     // Compare grids in contexts.
     // Return number of mis-compares.
-    idx_t StencilContext::compare(const StencilContext& ref) const {
-        ostream& os = *ostr;
+    idx_t StencilContext::compareData(const StencilContext& ref) const {
+        ostream& os = get_ostr();
 
         os << "Comparing grid(s) in '" << name << "' to '" << ref.name << "'..." << endl;
         if (gridPtrs.size() != ref.gridPtrs.size()) {
@@ -591,7 +805,7 @@ namespace yask {
     }
     
     
-    // Set the bounding-box vars for all eq groups.
+    // Set the bounding-box around all eq groups.
     void StencilContext::find_bounding_boxes()
     {
         if (bb_valid == true) return;
@@ -625,15 +839,31 @@ namespace yask {
         len_bbz = end_bbz - begin_bbz;
         bb_valid = true;
 
-        // Special case: if region sizes are equal to domain size (defaul
-        // setting), change them to the BB size.
-        if (rn == dn) rn = len_bbn;
-        if (rx == dx) rx = len_bbx;
-        if (ry == dy) ry = len_bby;
-        if (rz == dz) rz = len_bbz;
+        // Adjust region size to be within BB.
+        rn = min(rn, len_bbn);
+        rx = min(rx, len_bbx);
+        ry = min(ry, len_bby);
+        rz = min(rz, len_bbz);
+
+        // Adjust block size to be within region.
+        bn = min(bn, rn);
+        bx = min(bx, rx);
+        by = min(by, ry);
+        bz = min(bz, rz);
+
+        // Determine spatial skewing angles for temporal wavefronts based on
+        // the halos.  This assumes the smallest granularity of calculation
+        // is CPTS_* in each dim.  We only need non-zero angles if the
+        // region size is less than the rank size, i.e., if the region
+        // covers the whole rank in a given dimension, no wave-front is
+        // needed in thar dim.  TODO: make this grid-specific.
+        angle_n = (rn < len_bbn) ? ROUND_UP(hn, CPTS_N) : 0;
+        angle_x = (rx < len_bbx) ? ROUND_UP(hx, CPTS_X) : 0;
+        angle_y = (ry < len_bby) ? ROUND_UP(hy, CPTS_Y) : 0;
+        angle_z = (rz < len_bbz) ? ROUND_UP(hz, CPTS_Z) : 0;
     }
 
-    // Set the bounding-box vars for this eq group.
+    // Set the bounding-box vars for this eq group in this rank.
     void EqGroupBase::find_bounding_box() {
         if (bb_valid) return;
         StencilContext& context = *_generic_context;
@@ -651,15 +881,14 @@ namespace yask {
 
         // Loop through 4D space.
         // Find the min and max valid points in this space.
-        // FIXME: use global indices for >1 rank.
 #pragma omp parallel for collapse(4)            \
     reduction(min:minn,minx,miny,minz)          \
     reduction(max:maxn,maxx,maxy,maxz)          \
     reduction(+:npts)
-        for (idx_t n = 0; n < context.dn; n++)
-            for(idx_t x = 0; x < context.dx; x++)
-                for(idx_t y = 0; y < context.dy; y++)
-                    for(idx_t z = 0; z < context.dz; z++) {
+        for (idx_t n = context.ofs_n; n < context.ofs_n + context.dn; n++)
+            for(idx_t x = context.ofs_x; x < context.ofs_x + context.dx; x++)
+                for(idx_t y = context.ofs_y; y < context.ofs_y + context.dy; y++)
+                    for(idx_t z = context.ofs_z; z < context.ofs_z + context.dz; z++) {
 
                         // Update only if point in domain for this eq group.
                         if (is_in_valid_domain(t, n, x, y, z)) {
@@ -719,7 +948,7 @@ namespace yask {
         bb_valid = true;
     }
     
-    // Exchange halo and shadow data for the given time.
+    // Exchange halo data for the given time.
     void EqGroupBase::exchange_halos(idx_t start_dt, idx_t stop_dt)
     {
         StencilContext& context = *_generic_context;
@@ -730,94 +959,6 @@ namespace yask {
         // FIXME: does not work w/conditions.
         auto outputGridPtrs = context.outputGridPtrs;
 
-#ifdef ENABLE_SHADOW_COPY
-        // TODO: clean up all the shadow code. Either do something useful with it, or get rid of it.
-        
-        // Time to copy to shadow?
-        if (context.shadow_out_freq && abs(start_dt - context.begin_dt) % context.shadow_out_freq == 0) {
-            TRACE_MSG("copying to shadows at time %ld", start_dt);
-
-            double start_time = getTimeInSecs();
-            idx_t t = start_dt;
-
-            for (size_t gi = 0; gi < outputGridPtrs.size(); gi++) {
-
-                // Get pointer to generic grid and derived type.
-                // TODO: Make this more general.
-                auto gp = outputGridPtrs[gi];
-#if USING_DIM_N
-                auto gpd = dynamic_cast<Grid_TNXYZ*>(gp);
-#else
-                auto gpd = dynamic_cast<Grid_TXYZ*>(gp);
-#endif
-                assert(gpd);
-
-                // Get pointer to shadow.
-                auto sp = context.shadowGrids[gp];
-                assert(sp);
-
-                // Copy from grid to shadow.
-                // Shadows are *inside* the halo regions, e.g., indices 0..dx for dimension x.
-#pragma omp parallel for collapse(4)
-                for (idx_t n = 0; n < context.dn; n++)
-                    for(idx_t x = 0; x < context.dx; x++)
-                        for(idx_t y = 0; y < context.dy; y++)
-                            for(idx_t z = 0; z < context.dz; z++) {
-
-                                // Copy one element.
-                                real_t val = gpd->readElem(t, ARG_N(n)
-                                                           x, y, z, __LINE__);
-                                (*sp)(n, x, y, z) = val;
-                            }
-            }
-
-            // In a real application, some processing on the shadow
-            // grid would be done here.
-            double end_time = getTimeInSecs();
-            context.shadow_time += end_time - start_time;
-        }
-
-        // Time to copy from shadow?
-        if (context.shadow_in_freq && abs(start_dt - context.begin_dt) % context.shadow_in_freq == 0) {
-            TRACE_MSG("copying from shadows at time %ld", start_dt);
-
-            double start_time = getTimeInSecs();
-            idx_t t = start_dt;
-
-            for (size_t gi = 0; gi < outputGridPtrs.size(); gi++) {
-
-                // Get pointer to generic grid and derived type.
-                // TODO: Make this more general.
-                auto gp = outputGridPtrs[gi];
-#if USING_DIM_N
-                auto gpd = dynamic_cast<Grid_TNXYZ*>(gp);
-#else
-                auto gpd = dynamic_cast<Grid_TXYZ*>(gp);
-#endif
-                assert(gpd);
-
-                // Get pointer to shadow.
-                auto sp = context.shadowGrids[gp];
-                assert(sp);
-
-                // Copy from shadow to grid.
-#pragma omp parallel for collapse(4)
-                for (idx_t n = 0; n < context.dn; n++)
-                    for(idx_t x = 0; x < context.dx; x++)
-                        for(idx_t y = 0; y < context.dy; y++)
-                            for(idx_t z = 0; z < context.dz; z++) {
-
-                                // Copy one element.
-                                real_t val = (*sp)(n, x, y, z);
-                                gpd->writeElem(val, t, ARG_N(n)
-                                               x, y, z, __LINE__);
-                            }
-            }            
-            double end_time = getTimeInSecs();
-            context.shadow_time += end_time - start_time;
-        }
-#endif
-        
 #ifdef USE_MPI
         double start_time = getTimeInSecs();
 
@@ -848,6 +989,7 @@ namespace yask {
             auto gpd = dynamic_cast<Grid_TXYZ*>(gp);
 #endif
             assert(gpd);
+            auto gname = gp->get_name();
 
             // Determine halo sizes to be exchanged for this grid;
             // context.h* contains the max value across all grids.  The grid
@@ -870,8 +1012,9 @@ namespace yask {
 
             // Pack data and initiate non-blocking send/receive to/from all neighbors.
             TRACE_MSG("rank %i: exchange_halos: packing data for grid '%s'...",
-                      context.my_rank, gp->get_name().c_str());
-            context.mpiBufs[gp].visitNeighbors
+                      context.my_rank, gname.c_str());
+            assert(context.mpiBufs.count(gname) != 0);
+            context.mpiBufs[gname].visitNeighbors
                 (context,
                  [&](idx_t nn, idx_t nx, idx_t ny, idx_t nz,
                      int neighbor_rank,
@@ -883,7 +1026,7 @@ namespace yask {
 
                          // Set begin/end vars to indicate what part
                          // of main grid to read from.
-                         // Init range to whole rank size (inside halos).
+                         // Init range to whole rank domain (inside halos).
                          idx_t begin_n = 0;
                          idx_t begin_x = 0;
                          idx_t begin_y = 0;
@@ -911,16 +1054,18 @@ namespace yask {
                          if (nz == idx_t(MPIBufs::rank_next)) // neighbor is below.
                              begin_z = context.dz - hz;
 
-                         // Divide indices by vector lengths.
-                         // Begin/end vars shouldn't be negative, so '/' is ok.
-                         idx_t begin_nv = begin_n / VLEN_N;
-                         idx_t begin_xv = begin_x / VLEN_X;
-                         idx_t begin_yv = begin_y / VLEN_Y;
-                         idx_t begin_zv = begin_z / VLEN_Z;
-                         idx_t end_nv = end_n / VLEN_N;
-                         idx_t end_xv = end_x / VLEN_X;
-                         idx_t end_yv = end_y / VLEN_Y;
-                         idx_t end_zv = end_z / VLEN_Z;
+                         // Add offsets and divide indices by vector
+                         // lengths.  Begin/end vars shouldn't be negative
+                         // (because we're always inside the halo), so '/'
+                         // is ok.
+                         idx_t begin_nv = (context.ofs_n + begin_n) / VLEN_N;
+                         idx_t begin_xv = (context.ofs_x + begin_x) / VLEN_X;
+                         idx_t begin_yv = (context.ofs_y + begin_y) / VLEN_Y;
+                         idx_t begin_zv = (context.ofs_z + begin_z) / VLEN_Z;
+                         idx_t end_nv = (context.ofs_n + end_n) / VLEN_N;
+                         idx_t end_xv = (context.ofs_x + end_x) / VLEN_X;
+                         idx_t end_yv = (context.ofs_y + end_y) / VLEN_Y;
+                         idx_t end_zv = (context.ofs_z + end_z) / VLEN_Z;
 
                          // TODO: fix this when MPI + wave-front is enabled.
                          idx_t t = start_dt;
@@ -971,7 +1116,8 @@ namespace yask {
                       context.my_rank, nreqs);
 
             // Unpack received data from all neighbors.
-            context.mpiBufs[gp].visitNeighbors
+            assert(context.mpiBufs.count(gname) != 0);
+            context.mpiBufs[gname].visitNeighbors
                 (context,
                  [&](idx_t nn, idx_t nx, idx_t ny, idx_t nz,
                      int neighbor_rank,
@@ -1027,16 +1173,18 @@ namespace yask {
                              end_z = context.dz + hz;
                          }
 
-                         // Divide indices by vector lengths.
-                         // Begin/end vars shouldn't be negative, so '/' is ok.
-                         idx_t begin_nv = begin_n / VLEN_N;
-                         idx_t begin_xv = begin_x / VLEN_X;
-                         idx_t begin_yv = begin_y / VLEN_Y;
-                         idx_t begin_zv = begin_z / VLEN_Z;
-                         idx_t end_nv = end_n / VLEN_N;
-                         idx_t end_xv = end_x / VLEN_X;
-                         idx_t end_yv = end_y / VLEN_Y;
-                         idx_t end_zv = end_z / VLEN_Z;
+                         // Add offsets and divide indices by vector
+                         // lengths.  Begin/end vars shouldn't be negative
+                         // (because we're always inside the halo), so '/'
+                         // is ok.
+                         idx_t begin_nv = (context.ofs_n + begin_n) / VLEN_N;
+                         idx_t begin_xv = (context.ofs_x + begin_x) / VLEN_X;
+                         idx_t begin_yv = (context.ofs_y + begin_y) / VLEN_Y;
+                         idx_t begin_zv = (context.ofs_z + begin_z) / VLEN_Z;
+                         idx_t end_nv = (context.ofs_n + end_n) / VLEN_N;
+                         idx_t end_xv = (context.ofs_x + end_x) / VLEN_X;
+                         idx_t end_yv = (context.ofs_y + end_y) / VLEN_Y;
+                         idx_t end_zv = (context.ofs_z + end_z) / VLEN_Z;
 
                          // TODO: fix this when MPI + wave-front is enabled.
                          idx_t t = start_dt;
@@ -1071,7 +1219,9 @@ namespace yask {
 #endif
     }
 
-    // Apply a function to each neighbor rank and/or buffer.
+    // Apply a function to each neighbor rank.
+    // Called visitor function will contain the rank index of the neighbor.
+    // The send and receive buffer pointers may be null.
     void MPIBufs::visitNeighbors(StencilContext& context,
                                  std::function<void (idx_t nn, idx_t nx, idx_t ny, idx_t nz,
                                                      int rank,
@@ -1082,10 +1232,12 @@ namespace yask {
             for (idx_t nx = 0; nx < num_neighbors; nx++)
                 for (idx_t ny = 0; ny < num_neighbors; ny++)
                     for (idx_t nz = 0; nz < num_neighbors; nz++)
-                        visitor(nn, nx, ny, nz,
-                                context.my_neighbors[nn][nx][ny][nz],
-                                bufs[0][nn][nx][ny][nz],
-                                bufs[1][nn][nx][ny][nz]);
+                        if (context.my_neighbors[nn][nx][ny][nz] != MPI_PROC_NULL) {
+                            visitor(nn, nx, ny, nz,
+                                    context.my_neighbors[nn][nx][ny][nz],
+                                    bufs[0][nn][nx][ny][nz],
+                                    bufs[1][nn][nx][ny][nz]);
+                        }
     }
 
     // Allocate new buffer in given direction and size.
@@ -1095,12 +1247,229 @@ namespace yask {
                                  const std::string& name,
                                  std::ostream& os)
     {
-        auto gp = (*this)(bd, nn, nx, ny, nz);
-        assert(gp == NULL); // not already allocated.
-        gp = new Grid_NXYZ(dn, dx, dy, dz, 0, 0, 0, 0, name, true, os);
-        assert(gp);
-        bufs[bd][nn][nx][ny][nz] = gp;
-        return gp;
+        // NB: there may be an existing buffer allocated here left
+        // over from a shallow copy. Just ignore it and realloc.
+        auto gp = getBuf(bd, nn, nx, ny, nz);
+        *gp = new Grid_NXYZ(dn, dx, dy, dz,
+                           0, 0, 0, 0,
+                           0, 0, 0, 0,
+                           name, true, os);
+        assert(*gp);
+        return *gp;
+    }
+
+    // Print usage message.
+    void Settings::print_usage(ostream& os, const string& pgmName,
+                               const string& appOptions, const string& appNotes)
+    {
+        os << 
+            "Usage: " << pgmName << " [options]\n"
+            "Options:\n"
+            " -dt <n>          domain size for this rank in temporal dimension (number of time steps), default=" <<
+            dt << endl <<
+            " -d{n,x,y,z} <n>  domain size for this rank in specified spatial dimension, defaults=" <<
+            dn << '*' << dx << '*' << dy << '*' << dz << endl <<
+            " -d <n>           shorthand for '-dx <n> -dy <n> -dz <n>\n" <<
+            " -rt <n>          OpenMP region time steps (for wave-front tiling), default=" <<
+            rt << endl <<
+            " -r{n,x,y,z} <n>  OpenMP region size in specified spatial dimension, defaults to rank-domain size\n" <<
+            " -r <n>           shorthand for '-rx <n> -ry <n> -rz <n>\n" <<
+            " -s{n,x,y,z} <n>  group size in specified spatial dimension, defaults set automatically\n" <<
+            " -s <n>           shorthand for '-sx <n> -sy <n> -sz <n>\n" <<
+            " -b{n,x,y,z} <n>  cache block size in specified spatial dimension, defaults=" <<
+            bn << '*' << bx << '*' << by << '*' << bz << endl <<
+            " -b <n>           shorthand for '-bx <n> -by <n> -bz <n>\n" <<
+            " -g{n,x,y,z} <n>  block-group size in specified spatial dimension, defaults to block size\n" <<
+            " -g <n>           shorthand for '-gx <n> -gy <n> -gz <n>\n" <<
+            " -p{n,x,y,z} <n>  extra memory-padding in specified spatial dimension, defaults=" <<
+            pn << '+' << px << '+' << py << '+' << pz << endl <<
+            " -p <n>           shorthand for '-px <n> -py <n> -pz <n>\n" <<
+#ifdef USE_MPI
+            " -nr{n,x,y,z} <n> num ranks in specified dimension, defaults=" <<
+            nrn << '*' << nrx << '*' << nry << '*' << nrz << endl <<
+            " -nr <n>          shorthand for '-nrx <n> -nry <n> -nrz <n>\n" <<
+            " -ri{n,x,y,z} <n> this rank's index in specified dimension, defaults set automatically\n" <<
+            " -msg_rank <n>    rank that will print informational messages, default=" << msg_rank << endl <<
+#endif
+            " -max_threads <n>     set max OpenMP threads to use to <n>, default=" << max_threads << endl <<
+            " -thread_divisor <n>  further divide max threads by <n>, default=" << thread_divisor << endl <<
+            " -block_threads <n>   set number of threads to use for each block, default=" <<
+            num_block_threads << endl <<
+            appOptions <<
+            "Notes:\n"
+#ifndef USE_MPI
+            " This binary has not been built with MPI support.\n"
+#endif
+            " Using '-max_threads 0' => max_threads = OpenMP default number of threads.\n"
+            " For stencil evaluation, threads are allocated using nested OpenMP:\n"
+            "  Num threads across blocks: max_threads / thread_divisor / block_threads.\n"
+            "  Num threads per block: block_threads.\n"
+            " A block size of 0 => block size == region size in that dimension.\n"
+            " A group size of 0 => group size == block size in that dimension.\n"
+            " A region size of 0 => region size == rank-domain size in that dimension.\n"
+            " Control the time-steps in each temporal wave-front with -rt:\n"
+            "  Using '-rt 1' => disables wave-front tiling.\n"
+            "  Using '-rt 0' => max time-steps in wave-front.\n"
+            " Temporal cache blocking is not yet supported, so bt == 1.\n"
+            " Validation is very slow and uses 2x memory,\n"
+            "  so run with very small sizes and number of time-steps.\n"
+            "  Using '-v' is shorthand for these settings: '-no_warmup -d 64 -dt 1 -t 1',\n"
+            "  which may be overridden by options *after* '-v'.\n"
+            "  If validation fails, it may be due to rounding error; try building with 8-byte reals.\n"
+            " The 'n' dimension only applies to stencils that use that variable.\n" <<
+            appNotes <<
+            "Examples:\n" <<
+            " " << pgmName << " -d 768 -dt 4\n" <<
+            " " << pgmName << " -dx 512 -dy 256 -dz 128\n" <<
+            " " << pgmName << " -d 2048 -dt 20 -r 512 -rt 10  # temporal tiling.\n" <<
+            " " << pgmName << " -d 512 -npx 2 -npy 1 -npz 2   # multi-rank.\n" <<
+            flush;
     }
     
-}
+    // Parse options from the command-line and set corresponding class vars.
+    // Leave unused strings in args.
+    void Settings::parseArgs(const string& pgmName,
+                             vector<string>& args)
+    {
+        vector<string> non_args;
+        
+        for (int argi = 0; argi < args.size(); argi++) {
+            string& opt = args[argi];
+
+            if (opt == "-dt") dt = idx_val(args, argi);
+            else if (opt == "-dn") dn = idx_val(args, argi);
+            else if (opt == "-dx") dx = idx_val(args, argi);
+            else if (opt == "-dy") dy = idx_val(args, argi);
+            else if (opt == "-dz") dz = idx_val(args, argi);
+            else if (opt == "-d") dx = dy = dz = idx_val(args, argi);
+            else if (opt == "-rt") rt = idx_val(args, argi);
+            else if (opt == "-rn") rn = idx_val(args, argi);
+            else if (opt == "-rx") rx = idx_val(args, argi);
+            else if (opt == "-ry") ry = idx_val(args, argi);
+            else if (opt == "-rz") rz = idx_val(args, argi);
+            else if (opt == "-r") rx = ry = rz = idx_val(args, argi);
+            else if (opt == "-gn") gn = idx_val(args, argi);
+            else if (opt == "-gx") gx = idx_val(args, argi);
+            else if (opt == "-gy") gy = idx_val(args, argi);
+            else if (opt == "-gz") gz = idx_val(args, argi);
+            else if (opt == "-g") gx = gy = gz = idx_val(args, argi);
+            else if (opt == "-bn") bn = idx_val(args, argi);
+            else if (opt == "-bx") bx = idx_val(args, argi);
+            else if (opt == "-by") by = idx_val(args, argi);
+            else if (opt == "-bz") bz = idx_val(args, argi);
+            else if (opt == "-b") bx = by = bz = idx_val(args, argi);
+            else if (opt == "-pn") pn = idx_val(args, argi);
+            else if (opt == "-px") px = idx_val(args, argi);
+            else if (opt == "-py") py = idx_val(args, argi);
+            else if (opt == "-pz") pz = idx_val(args, argi);
+            else if (opt == "-p") px = py = pz = idx_val(args, argi);
+#ifdef USE_MPI
+            else if (opt == "-nrn") nrn = int_val(args, argi);
+            else if (opt == "-nrx") nrx = int_val(args, argi);
+            else if (opt == "-nry") nry = int_val(args, argi);
+            else if (opt == "-nrz") nrz = int_val(args, argi);
+            else if (opt == "-nr") nrx = nry = nrz = int_val(args, argi);
+            else if (opt == "-rin") { rin = int_val(args, argi); find_loc = false; }
+            else if (opt == "-rix") { rix = int_val(args, argi); find_loc = false; }
+            else if (opt == "-riy") { riy = int_val(args, argi); find_loc = false; }
+            else if (opt == "-riz") { riz = int_val(args, argi); find_loc = false; }
+            else if (opt == "-msg_rank") msg_rank = int_val(args, argi);
+#endif
+            else if (opt == "-block_threads") num_block_threads = int_val(args, argi);
+            else if (opt == "-max_threads") max_threads = int_val(args, argi);
+            else if (opt == "-thread_divisor") thread_divisor = int_val(args, argi);
+
+            // Save unused args.
+            else
+                non_args.push_back(opt);
+        }
+
+        // Return unused args in args var.
+        args.swap(non_args);
+    }
+
+    // Make sure all user-provided settings are valid and finish setting up some
+    // other vars before allocating memory.
+    // Called from allocAll(), so it doesn't normally need to be called from user code.
+    void Settings::finalizeSettings(std::ostream& os) {
+
+        // Round up domain size as needed.
+        dt = roundUp(os, dt, CPTS_T, "rank domain size in t (time steps)");
+        dn = roundUp(os, dn, CPTS_N, "rank domain size in n");
+        dx = roundUp(os, dx, CPTS_X, "rank domain size in x");
+        dy = roundUp(os, dy, CPTS_Y, "rank domain size in y");
+        dz = roundUp(os, dz, CPTS_Z, "rank domain size in z");
+
+        // Determine num regions.
+        // Also fix up region sizes as needed.
+        os << "\nRegions:" << endl;
+        idx_t nrgt = findNumRegions(os, rt, dt, CPTS_T, "t");
+        idx_t nrgn = findNumRegions(os, rn, dn, CPTS_N, "n");
+        idx_t nrgx = findNumRegions(os, rx, dx, CPTS_X, "x");
+        idx_t nrgy = findNumRegions(os, ry, dy, CPTS_Y, "y");
+        idx_t nrgz = findNumRegions(os, rz, dz, CPTS_Z, "z");
+        idx_t nrg = nrgt * nrgn * nrgx * nrgy * nrgz;
+        os << " num-regions-per-rank: " << nrg << endl;
+
+        // Determine num blocks.
+        // Also fix up block sizes as needed.
+        os << "\nBlocks:" << endl;
+        idx_t nbt = findNumBlocks(os, bt, rt, CPTS_T, "t");
+        idx_t nbn = findNumBlocks(os, bn, rn, CPTS_N, "n");
+        idx_t nbx = findNumBlocks(os, bx, rx, CPTS_X, "x");
+        idx_t nby = findNumBlocks(os, by, ry, CPTS_Y, "y");
+        idx_t nbz = findNumBlocks(os, bz, rz, CPTS_Z, "z");
+        idx_t nb = nbt * nbn * nbx * nby * nbz;
+        os << " num-blocks-per-region: " << nb << endl;
+
+        // Adjust defaults for block-groups.
+        // Assumes inner block loop in z dimension and
+        // layout in n,x,y,z order.
+        // TODO: check and adjust this accordingly.
+        if (!gn) gn = bn;
+        if (!gx) gx = bx;
+        if (!gy) gy = by;
+        if (!gz) gz = bz;
+
+        // Determine num groups.
+        // Also fix up group sizes as needed.
+        os << "\nBlock-groups:" << endl;
+        idx_t ngn = findNumGroups(os, gn, rn, bn, "n");
+        idx_t ngx = findNumGroups(os, gx, rx, bx, "x");
+        idx_t ngy = findNumGroups(os, gy, ry, by, "y");
+        idx_t ngz = findNumGroups(os, gz, rz, bz, "z");
+        idx_t ng = ngn * ngx * ngy * ngz;
+        os << " num-block-groups-per-region: " << ng << endl;
+
+        // Round up padding as needed.
+        pn = roundUp(os, pn, VLEN_N, "extra padding in n");
+        px = roundUp(os, px, VLEN_X, "extra padding in x");
+        py = roundUp(os, py, VLEN_Y, "extra padding in y");
+        pz = roundUp(os, pz, VLEN_Z, "extra padding in z");
+
+    }
+
+    // Get one idx_t value from args[argi + 1].
+    // On failure, print msg using string from args[argi] and exit.
+    // On success, increment argi and return value.
+    idx_t Settings::idx_val(vector<string>& args, int& argi)
+    {
+        argi++;
+        if (argi >= args.size() || args[argi].length() == 0) {
+            cerr << "Error: no argument for option '" << args[argi - 1] << "'." << endl;
+            exit(1);
+        }
+
+        const char* nptr = args[argi].c_str();
+        char* endptr = 0;
+        long long int val = strtoll(nptr, &endptr, 0);
+        if (val == LLONG_MIN || val == LLONG_MAX || *endptr != '\0') {
+            cerr << "Error: argument for option '" << args[argi - 1] << "' is not an integer." << endl;
+            exit(1);
+        }
+
+        return idx_t(val);
+    }
+
+
+} // namespace yask.

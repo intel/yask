@@ -1,7 +1,7 @@
 /*****************************************************************************
 
 YASK: Yet Another Stencil Kernel
-Copyright (c) 2014-2016, Intel Corporation
+Copyright (c) 2014-2017, Intel Corporation
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to
@@ -81,10 +81,14 @@ void usage(const string& cmd) {
         " -st <name>         set stencil type (required); supported stencils:\n";
     for (auto si : stencils) {
         auto name = si.first;
-        cerr << "                     " << name << endl;
+        auto sp = si.second;
+        cerr << "                     " << name;
+        if (sp->usesRadius())
+            cerr << " *";
+        cerr << endl;
     }
     cerr <<
-        " -r <radius>        set stencil radius (ignored for some stencils; default=" << radius << ").\n"
+        " -r <radius>        set radius for stencils marked with '*' above (default=" << radius << ").\n"
         "\n"
         " -fold <dim>=<size>,...    set number of elements in each dimension in a vector block.\n"
         " -cluster <dim>=<size>,... set number of values to evaluate in each dimension.\n"
