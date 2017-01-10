@@ -143,7 +143,7 @@ struct AppOptions {
             "┌──────────────────────────────────────────┐\n"
             "│  Y.A.S.K. ── Yet Another Stencil Kernel  │\n"
             "│            https://01.org/yask           │\n"
-            "│    Intel Corporation, copyright 2016     │\n"
+            "│    Intel Corporation, copyright 2017     │\n"
             "└──────────────────────────────────────────┘\n"
             "\nStencil name: " YASK_STENCIL_NAME << endl;
 
