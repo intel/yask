@@ -148,9 +148,10 @@ namespace yask {
 
         // Print usage message.
         void print_usage(std::ostream& os,
-                         const std::string& pgmName,
                          CommandLineParser& parser,
-                         const std::string& appNotes) const;
+                         const std::string& pgmName,
+                         const std::string& appNotes,
+                         const std::vector<std::string>& appExamples) const;
         
         // Make sure all user-provided settings are valid.
         // Called from allocAll(), so it doesn't normally need to be called from user code.

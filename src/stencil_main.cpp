@@ -116,7 +116,10 @@ struct AppSettings : public StencilSettings {
                 "  so run with very small sizes and number of time-steps.\n"
                 "  If validation fails, it may be due to rounding error;\n"
                 "   try building with 8-byte reals.\n";
-            print_usage(cout, argv[0], parser, appNotes);
+            vector<string> appExamples;
+            appExamples.push_back("-t 2");
+            appExamples.push_back("-v");
+            print_usage(cout, parser, argv[0], appNotes, appExamples);
             exit_yask(1);
         }
         

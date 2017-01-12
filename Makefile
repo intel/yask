@@ -212,7 +212,6 @@ layout_4d			?=	Layout_1234
 def_rank_size			?=	128
 def_block_size			?=	64
 def_pad				?=	1
-halo				?=      0
 
 # How to fold vectors (x*y*z).
 # Vectorization in dimensions perpendicular to the inner loop
@@ -256,7 +255,7 @@ LFLAGS          +=      -lrt
 FB_CXX    	=       $(CXX)
 FB_CXXFLAGS 	+=	-g -O0 -std=c++11 -Wall  # low opt to reduce compile time.
 EXTRA_FB_CXXFLAGS =
-FB_FLAGS   	+=	-st $(stencil) -cluster $(cluster) -fold $(fold) -halo $(halo)
+FB_FLAGS   	+=	-st $(stencil) -cluster $(cluster) -fold $(fold)
 GEN_HEADERS     =	$(addprefix src/, \
 				stencil_macros.hpp stencil_code.hpp \
 				stencil_rank_loops.hpp \
@@ -269,6 +268,9 @@ ifneq ($(eqs),)
 endif
 ifneq ($(radius),)
   FB_FLAGS   	+=	-r $(radius)
+endif
+ifneq ($(halo),)
+  FB_FLAGS   	+=	-halo $(halo)
 endif
 
 

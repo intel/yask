@@ -1330,9 +1330,10 @@ namespace yask {
     
     // Print usage message.
     void StencilSettings::print_usage(ostream& os,
-                                      const string& pgmName,
                                       CommandLineParser& parser,
-                                      const string& appNotes) const
+                                      const string& pgmName,
+                                      const string& appNotes,
+                                      const vector<string>& appExamples) const
     {
         os << "Usage: " << pgmName << " [options]\n"
             "Options:\n";
@@ -1379,8 +1380,10 @@ namespace yask {
             " " << pgmName << " -d 768 -dt 25\n" <<
             " " << pgmName << " -dx 512 -dy 256 -dz 128\n" <<
             " " << pgmName << " -d 2048 -dt 20 -r 512 -rt 10  # temporal tiling.\n" <<
-            " " << pgmName << " -d 512 -npx 2 -npy 1 -npz 2   # multi-rank.\n" <<
-            flush;
+            " " << pgmName << " -d 512 -npx 2 -npy 1 -npz 2   # multi-rank.\n";
+        for (auto ae : appExamples)
+            os << " " << pgmName << " " << ae << endl;
+        os << flush;
     }
     
     // Make sure all user-provided settings are valid and finish setting up some
