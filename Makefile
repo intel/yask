@@ -32,8 +32,7 @@
 # mpi: 0, 1: whether to use MPI. 
 #   Currently, MPI is only used in X dimension.
 #
-# radius: sets spatial extent of stencil.
-#   Ignored for awp*.
+# radius: sets size of certain stencils.
 #
 # real_bytes: FP precision: 4=float, 8=double.
 #
@@ -70,10 +69,10 @@ $(error Stencil not specified; use stencil=iso3dfd, 3axis, 9axis, 3plane, cube, 
 else ifeq ($(stencil),ave)
 radius		?=	1
 real_bytes	?=	8
-def_rank_size	?=	256
 
 else ifeq ($(stencil),3axis)
 MACROS		+=	MAX_EXCH_DIST=1
+radius		?=	6
 
 else ifeq ($(stencil),9axis)
 MACROS		+=	MAX_EXCH_DIST=2
@@ -89,6 +88,7 @@ radius		?=	2
 
 else ifeq ($(stencil),iso3dfd)
 MACROS		+=	MAX_EXCH_DIST=1
+radius		?=	8
 layout_4d	?=	Layout_2314
 real_bytes	?=	4
 ifeq ($(arch),knl)
@@ -111,7 +111,6 @@ endif
 cluster		?=	x=2
 
 else ifeq ($(findstring awp,$(stencil)),awp)
-radius		?=	2
 time_dim_size	?=	1
 eqs		?=	velocity=vel_,stress=stress_
 def_rank_size	?=	512
@@ -206,7 +205,6 @@ omp_block_schedule		?=	static,1
 omp_halo_schedule		?=	static
 def_block_threads		?=	2
 def_thread_divisor		?=	1
-radius				?=	8
 real_bytes			?=	4
 time_dim_size			?=	2
 layout_3d			?=	Layout_123
@@ -258,7 +256,7 @@ LFLAGS          +=      -lrt
 FB_CXX    	=       $(CXX)
 FB_CXXFLAGS 	+=	-g -O0 -std=c++11 -Wall  # low opt to reduce compile time.
 EXTRA_FB_CXXFLAGS =
-FB_FLAGS   	+=	-st $(stencil) -r $(radius) -cluster $(cluster) -fold $(fold) -halo $(halo)
+FB_FLAGS   	+=	-st $(stencil) -cluster $(cluster) -fold $(fold) -halo $(halo)
 GEN_HEADERS     =	$(addprefix src/, \
 				stencil_macros.hpp stencil_code.hpp \
 				stencil_rank_loops.hpp \
@@ -269,6 +267,10 @@ GEN_HEADERS     =	$(addprefix src/, \
 ifneq ($(eqs),)
   FB_FLAGS   	+=	-eq $(eqs)
 endif
+ifneq ($(radius),)
+  FB_FLAGS   	+=	-r $(radius)
+endif
+
 
 # Set more MACROS based on individual makefile vars.
 # MACROS and EXTRA_MACROS will be written to a header file.

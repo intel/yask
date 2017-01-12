@@ -673,12 +673,6 @@ namespace yask {
         // Get correct index based on time t.
         ALWAYS_INLINE idx_t getMatIndex(idx_t t) const {
 
-#if ALLOW_NEG_TIME
-            // Time t must be multiple of CPTS_T.
-            // Use imod & idiv to allow t to be negative.
-            assert(imod<idx_t>(t, CPTS_T) == 0);
-            idx_t t_idx = idiv<idx_t>(t, CPTS_T);
-
             // Index wraps in TIME_DIM_SIZE.
             // Examples if TIME_DIM_SIZE == 2:
             // t_idx => return value.
@@ -687,11 +681,19 @@ namespace yask {
             //  0 => 0.
             //  1 => 1.
 
+#if ALLOW_NEG_TIME
+            // Time t must be multiple of CPTS_T.
+            // Use imod & idiv to allow t to be any negative number.
+            assert(imod<idx_t>(t, CPTS_T) == 0);
+            idx_t t_idx = idiv<idx_t>(t, CPTS_T);
+
             // Use imod to allow t to be negative.
             return imod<idx_t>(t_idx, TIME_DIM_SIZE);
 #else
-            // version that avoids handling negative time by adding
-            // an offset to the t index.
+            // Version that avoids handling negative time by adding an
+            // offset to the t index.  So, t can be negative, but not so
+            // much that it would still be negaive after adding the offset.
+            // This should not be a practical restriction.
             t += 2 * TIME_DIM_SIZE;
             assert(t >= 0);
             assert(t % CPTS_T == 0);
@@ -791,6 +793,7 @@ namespace yask {
                                        name, use_hbw, msg_stream),
             _dn(dn)
         {
+            // TODO: remove the following restriction by using a real 5D grid.
             if (VLEN_N > 1) {
                 std::cerr << "Sorry, vectorizing in N dimension not yet supported." << std::endl;
                 exit(1);
@@ -800,12 +803,6 @@ namespace yask {
         // Get correct index based on t & n.
         ALWAYS_INLINE idx_t getMatIndex(idx_t t, idx_t n) const {
 
-#if ALLOW_NEG_TIME
-            // Time t must be multiple of CPTS_T.
-            // Use imod & idiv to allow t to be negative.
-            assert(imod<idx_t>(t, CPTS_T) == 0);
-            idx_t t_idx = idiv<idx_t>(t, CPTS_T);
-
             // Index wraps in TIME_DIM_SIZE.
             // Examples if TIME_DIM_SIZE == 2:
             // t_idx => t_idx2.
@@ -814,11 +811,19 @@ namespace yask {
             //  0 => 0.
             //  1 => 1.
 
+#if ALLOW_NEG_TIME
+            // Time t must be multiple of CPTS_T.
+            // Use imod & idiv to allow t to be any negative number.
+            assert(imod<idx_t>(t, CPTS_T) == 0);
+            idx_t t_idx = idiv<idx_t>(t, CPTS_T);
+
             // Use imod to allow t to be negative.
             idx_t t_idx2 = imod<idx_t>(t_idx, TIME_DIM_SIZE);
 #else
-            // version that avoids handling negative time by adding
-            // an offset to the t index.
+            // Version that avoids handling negative time by adding an
+            // offset to the t index.  So, t can be negative, but not so
+            // much that it would still be negaive after adding the offset.
+            // This should not be a practical restriction.
             t += 2 * TIME_DIM_SIZE;
             assert(t >= 0);
             assert(t % CPTS_T == 0);

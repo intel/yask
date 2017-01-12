@@ -1281,10 +1281,11 @@ namespace yask {
     ADD_1_OPTION(name, help, " (number of time steps)", var, t)
 #define ADD_NXYZ_OPTION(name, help, var)                         \
     ADD_XYZ_OPTION(name, help, var);                             \
-    ADD_OPTION_1(name, help, "", var, n)
+    ADD_1_OPTION(name, help, "", var, n)
 #define ADD_TNXYZ_OPTION(name, help, var) \
-    ADD_OPTION_TXYZ(name, help, var); \
-    ADD_OPTION_1(name, help, "", var, n)
+    ADD_TXYZ_OPTION(name, help, var); \
+    ADD_1_OPTION(name, help, "", var, n)
+
 #ifdef USING_DIM_N
 #define ADD_T_DIM_OPTION(name, help, var) \
     ADD_TNXYZ_OPTION(name, help, var)
