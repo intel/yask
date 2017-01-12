@@ -30,115 +30,109 @@ IN THE SOFTWARE.
 // Base classes for stencil code.
 #include "stencil_calc.hpp"
 
-// Additional header(s) needed by this app.
-#include <sstream>
-
 using namespace std;
 using namespace yask;
 
-// Some command-line options for this application, i.e., settings not stored
-// in the YASK stencil context.
-struct AppOptions {
+// Add some command-line options for this application to the
+// default ones provided by YASK.
+struct AppSettings : public StencilSettings {
     bool help;                  // help requested.
     bool doWarmup;              // whether to do warmup run.
-    idx_t num_trials;           // number of trials.
+    int num_trials;             // number of trials.
     bool validate;              // whether to do validation run.
     int pre_trial_sleep_time;   // sec to sleep before each trial.
-    string error_msg;
-    bool parse_ok;
-    
-    AppOptions() :
+
+    AppSettings() :
         help(false),
         doWarmup(true),
         num_trials(3),
         validate(false),
-        pre_trial_sleep_time(1),
-        parse_ok(true)
+        pre_trial_sleep_time(1)
     { }
 
-    // Parse options from the command-line and set corresponding vars.
-    // On error, return false and set error_msg;
-    bool parse(int argc, char** argv,
-               StencilContext& context) {
+    // A custom option handler for validation.
+    class ValOption : public CommandLineParser::OptionBase {
+        AppSettings& _as;
 
-        // First, parse cmd-line options provided by the Settings class.
+    public:
+        ValOption(AppSettings& as) :
+                OptionBase("v",
+                           "Shortcut for -validate -no-warmup -t 1 -dt 1 -d 64 -b 24."),
+                _as(as) { }
+
+        // Set multiple vars.
+        virtual bool check_arg(std::vector<std::string>& args,
+                               int& argi) {
+            if (_check_arg(args, argi, _name)) {
+                _as.validate = true;
+                _as.doWarmup = false;
+                _as.num_trials = 1;
+                _as.dt = 1;
+                _as.dx = _as.dy = _as.dz = 64;
+                _as.bx = _as.by = _as.bz = 24;
+                return true;
+            }
+            return false;
+        }
+    };
+
+    // Parse options from the command-line and set corresponding vars.
+    // Exit with message on error or request for help.
+    void parse(int argc, char** argv) {
+
+        // Create a parser and add base options to it.
+        CommandLineParser parser;
+        add_options(parser);
+
+        // Add options for this app.
+        parser.add_option(new CommandLineParser::BoolOption("h",
+                                         "Print help message.",
+                                         help));
+        parser.add_option(new CommandLineParser::BoolOption("help",
+                                         "Print help message.",
+                                         help));
+        parser.add_option(new CommandLineParser::BoolOption("warmup",
+                                         "Run warmup iteration(s) before performance trial(s).",
+                                         doWarmup));
+        parser.add_option(new CommandLineParser::IntOption("t",
+                                        "Number of performance trials.",
+                                        num_trials));
+        parser.add_option(new CommandLineParser::IntOption("sleep",
+                                        "Number of seconds to sleep before each performance trial.",
+                                        pre_trial_sleep_time));
+        parser.add_option(new CommandLineParser::BoolOption("validate",
+                                         "Run validation iteration(s) after performance trial(s).",
+                                         validate));
+        parser.add_option(new ValOption(*this));
+        
+        // Parse cmd-line options.
         // Any remaining strings will be left in args.
         vector<string> args;
-        context.parseArgs(argc, argv, args);
+        parser.parse_args(argc, argv, args);
 
-        // Process remaining args added for this app.
-        for (int argi = 0; argi < args.size(); argi++) {
-            string& opt = args[argi];
-            if (opt.length() >= 2 && opt[0] == '-') {
-
-                if (opt == "-h" || opt == "-help" || opt == "--help")
-                    help = true;
-                
-                else if (opt == "-no_warmup")
-                    doWarmup = false;
-
-                else if (opt == "-validate") {
-                    validate = true;
-                }
-
-                else if (opt == "-v") {
-                    validate = true;
-                    doWarmup = false;
-                    context.dx = context.dy = context.dz = 64;
-                    context.dt = 1;
-                    num_trials = 1;
-                }
-
-                else if (opt == "-t")
-                    num_trials = context.int_val(args, argi);
-                
-                else if (opt == "-sleep")
-                    pre_trial_sleep_time = context.int_val(args, argi);
-            
-                else {
-                    error_msg = "option '" + opt + "' not recognized";
-                    parse_ok = false;
-                    break;
-                }
-            }
-            else {
-                error_msg = "extraneous parameter '" + args[argi] + "'";
-                parse_ok = false;
-                break;
-            }
+        if (help) {
+            string appNotes =
+                " Validation is very slow and uses 2x memory,\n"
+                "  so run with very small sizes and number of time-steps.\n"
+                "  If validation fails, it may be due to rounding error;\n"
+                "   try building with 8-byte reals.\n";
+            print_usage(cout, argv[0], parser, appNotes);
+            exit_yask(1);
         }
-        return parse_ok;
+        
+        if (args.size()) {
+            cerr << "Error: extraneous parameter(s):";
+            for (auto arg : args)
+                cerr << " '" << arg << "'";
+            cerr << ".\nRun with '-help' option for usage.\n" << flush;
+            exit_yask(1);
+        }
     }
     
-    // Print usage.
-    void usage(ostream& os, const string& pgmName, StencilContext& context)
-    {
-        ostringstream oss;
-        oss <<
-            " -t <n>           number of trials, default=" <<
-            num_trials << endl <<
-            " -validate        validate by comparing to a scalar run (see notes below)\n" <<
-            " -v               shorthand for '-validate -no_warmup -d 64 -dt 1 -t 1\n" <<
-            " -sleep <n>       seconds to sleep before each trial, default=" <<
-            pre_trial_sleep_time << endl <<
-            " -no_warmup       skip warmup iterations\n"
-            " -h               print usage and exit\n";
-        string appOptions = oss.str();
-        string appNotes =
-            " Validation is very slow and uses 2x memory,\n"
-            "  so run with very small sizes and number of time-steps.\n"
-            "  If validation fails, it may be due to rounding error;\n"
-            "  try building with 8-byte reals.\n";
-
-        context.print_usage(os, pgmName, appOptions, appNotes);
-    }
-
     // Print splash banner and invocation string.
     // Exit with help message if requested.
-    void splash(int argc, char** argv,
-                StencilContext& context)
+    void splash(ostream& os, int argc, char** argv)
     {
-        ostream& os = context.get_ostr();
         os <<
             "┌──────────────────────────────────────────┐\n"
             "│  Y.A.S.K. ── Yet Another Stencil Kernel  │\n"
@@ -152,44 +146,25 @@ struct AppOptions {
         for (int argi = 0; argi < argc; argi++)
             os << " " << argv[argi];
         os << endl;
-        
-        // Exit due to help request or error msg.
-        if (help || !parse_ok) {
-
-            // It's possible help was requested or error appeard on some rank
-            // that is not the msg-rank. So, we print on all ranks to make sure
-            // some message is printed, but we delay output on non-msg ranks to
-            // reduce clutter in the normal case.
-            if (context.my_rank != context.msg_rank)
-                sleep(1);
-
-            if (!parse_ok)
-                cerr << "\nError on command-line: " << error_msg << endl;
-            if (help) {
-                usage(cerr, argv[0], context);
-                cerr << "\nExiting due to help request." << endl;
-            }
-            exit(1);
-        }
     }
 };
 
 // Parse command-line args, run kernel, run validation if requested.
 int main(int argc, char** argv)
 {
-    // Object containing data and parameters for stencil eval.
-    YASK_STENCIL_CONTEXT context;
-
     // Parse cmd-line options.
-    AppOptions opts;
-    opts.parse(argc, argv, context);
+    AppSettings opts;
+    opts.parse(argc, argv);
+
+    // Object containing data and parameters for stencil eval.
+    YASK_STENCIL_CONTEXT context(opts);
 
     // Init MPI, OMP, etc.
     context.initEnv(&argc, &argv);
-    ostream& os = context.get_ostr();
 
-    // Splash banner, etc.
-    opts.splash(argc, argv, context);
+    // Print splash banner and related info.
+    ostream& os = context.get_ostr();
+    opts.splash(os, argc, argv);
 
     // Alloc memory, create lists of grids, etc.
     context.allocAll();
@@ -217,16 +192,16 @@ int main(int argc, char** argv)
     if (opts.doWarmup) {
 
         // Temporarily set dt to a temp value for warmup.
-        idx_t dt = context.dt;
-        idx_t tmp_dt = min<idx_t>(context.dt, TIME_DIM_SIZE);
-        context.dt = tmp_dt;
+        idx_t dt = opts.dt;
+        idx_t tmp_dt = min<idx_t>(opts.dt, TIME_DIM_SIZE);
+        opts.dt = tmp_dt;
 
         os << endl << divLine <<
-            "Running " << context.dt << " time step(s) for warm-up...\n" << flush;
+            "Running " << opts.dt << " time step(s) for warm-up...\n" << flush;
         context.calc_rank_opt();
 
         // Replace temp setting with correct value.
-        context.dt = dt;
+        opts.dt = dt;
         context.global_barrier();
     }
 
@@ -237,7 +212,7 @@ int main(int argc, char** argv)
     // Performance runs.
     os << endl << divLine <<
         "Running " << opts.num_trials << " performance trial(s) of " <<
-        context.dt << " time step(s) each...\n";
+        opts.dt << " time step(s) each...\n";
     for (idx_t tr = 0; tr < opts.num_trials; tr++) {
         os << divLine;
 
@@ -264,7 +239,7 @@ int main(int argc, char** argv)
         wstop =  getTimeInSecs();
         VTUNE_PAUSE;
             
-        // calc and report perf.
+        // Calc and report perf.
         float elapsed_time = (float)(wstop - wstart);
         float apps = float(context.tot_numpts_dt) / elapsed_time;
         float dpps = float(context.tot_domain_dt) / elapsed_time;
@@ -330,7 +305,7 @@ int main(int argc, char** argv)
 
         // Ref trial.
         os << endl << divLine <<
-            "Running " << context.dt << " time step(s) for validation...\n" << flush;
+            "Running " << opts.dt << " time step(s) for validation...\n" << flush;
         ref_context.calc_rank_ref();
 
         // check for equality.

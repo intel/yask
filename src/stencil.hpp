@@ -37,82 +37,8 @@ IN THE SOFTWARE.
 // Define a folded vector of reals.
 #include "realv.hpp"
 
-#include <stdlib.h>
-#include <stdio.h>
-#include <string.h>
-#include <math.h>
-#include <fstream>
-#include <map>
-#include <set>
-#include <vector>
-
-#ifdef WIN32
-#define _mm_clevict(p,h) ((void)0)
-#define _Pragma(x)
-#endif
-
-#if defined(__GNUC__) && !defined(__ICC)
-#define __assume(x) ((void)0)
-#define __declspec(x)
-#endif
-
-#if (defined(__GNUC__) && !defined(__ICC)) || defined(WIN32)
-#define restrict
-#define __assume_aligned(p,n) ((void)0)
-#endif
-
-// VTune and stub macros.
-#ifdef USE_VTUNE
-#include "ittnotify.h"
-#define VTUNE_PAUSE  __itt_pause()
-#define VTUNE_RESUME __itt_resume()
-#else
-#define VTUNE_PAUSE ((void)0)
-#define VTUNE_RESUME ((void)0)
-#endif
-
-// MPI.
-#if !defined(USE_MPI) && defined(MPI_VERSION)
-#define USE_MPI
-#endif
-#ifdef USE_MPI
-#include "mpi.h"
-inline void exit_yask(int code) { MPI_Abort(MPI_COMM_WORLD, code); }
-#else
-#define MPI_PROC_NULL (-1)
-#define MPI_Barrier(comm) ((void)0)
-#define MPI_Comm int
-#define MPI_Finalize() ((void)0)
-inline void exit_yask(int code) { exit(code); }
-#endif
-
-// OpenMP and stub functions.
-#ifdef _OPENMP
-#include <omp.h>
-#else
-#define omp_get_num_procs() (1)
-#define omp_get_num_threads() (1)
-#define omp_get_max_threads() (1)
-#define omp_get_thread_num()  (0)
-#define omp_set_num_threads(n) (void(0))
-#endif
-
-// Enable hardware-thread work crew if requested.
-#if (__INTEL_CREW) && (defined(__MIC__) || (defined(__linux) && defined(__x86_64)))
-#define USE_CREW 1
-extern "C" {
-    extern void kmp_crew_create();
-    extern void kmp_crew_destroy();
-    extern int kmp_crew_get_max_size();
-}
-#define CREW_FOR_LOOP _Pragma("intel_crew parallel for")
-#else
-#define USE_CREW 0
-#define kmp_crew_create()  ((void)0)
-#define kmp_crew_destroy() ((void)0)
-#define kmp_crew_get_max_size() (1)
-#define CREW_FOR_LOOP
-#endif
+// Other utilities.
+#include "utils.hpp"
 
 // macro for debug message.
 #ifdef TRACE

@@ -102,7 +102,7 @@ namespace yask {
     };
 
     // Application settings to control size and perf of stencil code.
-    struct Settings {
+    struct StencilSettings {
 
         // Sizes in elements (points).
         // - time sizes (t) are in steps to be done.
@@ -126,7 +126,7 @@ namespace yask {
         int num_block_threads; // Number of threads to use for a block.
 
         // Ctor.
-        Settings() :
+        StencilSettings() :
             dt(50), dn(1), dx(DEF_RANK_SIZE), dy(DEF_RANK_SIZE), dz(DEF_RANK_SIZE),
             rt(1), rn(0), rx(0), ry(0), rz(0),
             bt(1), bn(1), bx(DEF_BLOCK_SIZE), by(DEF_BLOCK_SIZE), bz(DEF_BLOCK_SIZE),
@@ -142,42 +142,19 @@ namespace yask {
         {
             max_threads = omp_get_max_threads();
         }
-        
-        // Print help message for options.
-        void print_usage(std::ostream& os, const std::string& pgmName,
-                         const std::string& appOptions, const std::string& appNotes);
-        
-        // Parse options from the command-line and set corresponding vars.
-        // Recognized strings from args are consumed, and unused ones
-        // remain for further processing by the application.
-        // App programmer can bypass this by setting vars directly.
-        virtual void parseArgs(const std::string& pgmName,
-                               std::vector<std::string>& args);
 
-        // Same as above, but pgmName is populated from argv[0]
-        // and args is appended from remainder of argv array.
-        // Unused strings are returned in args vector.
-        virtual void parseArgs(int argc, char** argv,
-                               std::vector<std::string>& args) {
-            std::string pgmName = argv[0];
-            for (int i = 1; i < argc; i++)
-                args.push_back(argv[i]);
-            parseArgs(pgmName, args);
-        }
+        // Add these settigns to a cmd-line parser.
+        virtual void add_options(CommandLineParser& parser);
 
+        // Print usage message.
+        void print_usage(std::ostream& os,
+                         const std::string& pgmName,
+                         CommandLineParser& parser,
+                         const std::string& appNotes) const;
+        
         // Make sure all user-provided settings are valid.
         // Called from allocAll(), so it doesn't normally need to be called from user code.
         virtual void finalizeSettings(std::ostream& os);
-        
-        // Get one idx_t value from args[argi++].
-        // Exit on failure.
-        virtual idx_t idx_val(std::vector<std::string>& args, int& argi);
-
-        // Get one int value from args[argi++].
-        // Exit on failure.
-        virtual int int_val(std::vector<std::string>& args, int& argi) {
-            return (int)idx_val(args, argi);
-        }
     };
     
     // A 4D bounding-box.
@@ -208,17 +185,20 @@ namespace yask {
     // for a specific problem.
     // Each eq group is valid within its bounding box (BB).
     // The context's BB encompasses all eq-group BBs.
-    class StencilContext : public BoundingBox, public Settings {
+    class StencilContext : public BoundingBox {
 
     protected:
         
         // Output stream for messages.
-        std::ostream* ostr;
+        std::ostream* _ostr;
 
+        // Command-line and env parameters.
+        StencilSettings* _opts;
+        
         // TODO: move vars into private or protected sections and
         // add accessor methods.
     public:
-        
+
         // Name.
         std::string name;
 
@@ -274,8 +254,9 @@ namespace yask {
         std::map<std::string, MPIBufs> mpiBufs;
         
         // Constructor.
-        StencilContext() :
-            ostr(&std::cout),
+        StencilContext(StencilSettings& settings) :
+            _ostr(&std::cout),
+            _opts(&settings),
             ofs_t(0), ofs_n(0), ofs_x(0), ofs_y(0), ofs_z(0),
             hn(0), hx(0), hy(0), hz(0),
             angle_n(0), angle_x(0), angle_y(0), angle_z(0),
@@ -302,8 +283,14 @@ namespace yask {
 
         // Get the default output stream.
         virtual std::ostream& get_ostr() const {
-            assert(ostr);
-            return *ostr;
+            assert(_ostr);
+            return *_ostr;
+        }
+
+        // Get access to settings.
+        virtual StencilSettings& get_settings() {
+            assert(_opts);
+            return *_opts;
         }
         
         // Set vars related to this rank's role in global problem.
@@ -365,7 +352,7 @@ namespace yask {
         virtual int set_all_threads() {
 
             // Reset number of OMP threads to max allowed.
-            int nt = max_threads / thread_divisor;
+            int nt = _opts->max_threads / _opts->thread_divisor;
             nt = std::max(nt, 1);
             TRACE_MSG("set_all_threads: omp_set_num_threads(%d)", nt);
             omp_set_num_threads(nt);
@@ -376,15 +363,16 @@ namespace yask {
         // Return that number.
         virtual int set_region_threads() {
 
-            int nt = max_threads / thread_divisor;
+            // Start with "all" threads.
+            int nt = _opts->max_threads / _opts->thread_divisor;
 
-            // Limit outer nesting to allow
-            // num_block_threads per nested block loop.
-            nt /= num_block_threads;
-            if (num_block_threads > 1)
+            // Limit outer nesting to allow num_block_threads per nested
+            // block loop.
+            nt /= _opts->num_block_threads;
+            nt = std::max(nt, 1);
+            if (_opts->num_block_threads > 1)
                 omp_set_nested(1);
 
-            nt = std::max(nt, 1);
             TRACE_MSG("set_region_threads: omp_set_num_threads(%d)", nt);
             omp_set_num_threads(nt);
             return nt;
@@ -394,11 +382,11 @@ namespace yask {
         virtual int set_block_threads() {
 
             // This should be a nested OMP region.
-            int nt = num_block_threads;
+            int nt = _opts->num_block_threads;
             nt = std::max(nt, 1);
             TRACE_MSG("set_block_threads: omp_set_num_threads(%d)", nt);
             omp_set_num_threads(nt);
-            return num_block_threads;
+            return nt;
         }
 
         // Wait for a global barrier.

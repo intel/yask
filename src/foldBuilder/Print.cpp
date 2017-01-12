@@ -656,7 +656,7 @@ void YASKCppPrinter::printCode(ostream& os) {
                 // don't want the step dimension during construction.
                 // TODO: calculate proper size for memory reuse.
                 if (dim != _dims._stepDim) {
-                    dimArg += "d" + dim + ", ";
+                    dimArg += "_opts->d" + dim + ", ";
 
                     // Halo for this dimension.
                     int halo = _settings._haloSize > 0 ? _settings._haloSize : cve.getHalo(gp, dim);
@@ -671,7 +671,7 @@ void YASKCppPrinter::printCode(ostream& os) {
                         maxHalos.addDimBack(dim, halo);
 
                     // Total padding = halo + extra.
-                    padArg += hvar + " + p" + dim + ", ";
+                    padArg += hvar + " + _opts->p" + dim + ", ";
 
                     // Offset for this rank.
                     ofsArg += "ofs_" + dim + ", ";
@@ -722,8 +722,11 @@ void YASKCppPrinter::printCode(ostream& os) {
 
         // Ctor.
         {
-            os << endl << " " << _context_base << "() {" << endl <<
-                "  name = \"" << _stencil.getName() << "\";" << endl;
+            os << endl <<
+                " // Constructor.\n" <<
+                " " << _context_base << "(StencilSettings& settings) :"
+                " StencilContext(settings) {\n" <<
+                "  name = \"" << _stencil.getName() << "\";\n";
             
             // Init grid ptrs.
             for (auto gp : _grids) {
@@ -968,23 +971,29 @@ void YASKCppPrinter::printCode(ostream& os) {
         }
 
         // Ctor.
-        os << endl << " " << _context << "() { setPtrs(); }" << endl;
+        os << endl <<
+            " // Constructor.\n" <<
+            " " << _context << "(StencilSettings& settings) : " <<
+            _context_base << "(settings) { setPtrs(); }" << endl;
         
         // Init code.
         {
-            os << endl << " virtual void setPtrs() {\n"
-                "  eqGroups.clear();\n"
-                "  gridPtrs.clear();\n"
-                "  outputGridPtrs.clear();\n"
-                "  paramPtrs.clear();\n";
+            os << endl <<
+                " // Set generic pointers to stencil-specific objects.\n"
+                " virtual void setPtrs() {\n";
             
             // Push eq-group pointers to list.
+            os << " // Equation groups.\n"
+                "  eqGroups.clear();\n";
             for (auto& eq : _eqGroups) {
                 string eqName = eq.getName();
                 os << "  eqGroups.push_back(&eqGroup_" << eqName << ");" << endl;
             }
 
             // Push grid pointers to list.
+            os << " // Grids.\n"
+                "  gridPtrs.clear();\n"
+                "  outputGridPtrs.clear();\n";
             for (auto gp : _grids) {
                 string grid = gp->getName();
                 os << "  gridPtrs.push_back(" << grid << ");" << endl;
@@ -995,6 +1004,8 @@ void YASKCppPrinter::printCode(ostream& os) {
             }
 
             // Push param pointers to list.
+            os << " // Parameters.\n"
+                "  paramPtrs.clear();\n";
             for (auto pp : _params) {
                 string param = pp->getName();
                 os << "  paramPtrs.push_back(" << param << ");" << endl;
@@ -1015,7 +1026,7 @@ void YASKCppPrinter::printCode(ostream& os) {
                 os << "  " << grid << " = new " << typeNames[gp] <<
                     "(" << dimArgs[gp] << padArgs[gp] << ofsArgs[gp] <<
                     "\"" << grid << "\", " <<
-                    hbwArg << ", *ostr);\n";
+                    hbwArg << ", get_ostr());\n";
             }
             os << " }" << endl;
         }

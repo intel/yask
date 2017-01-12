@@ -29,9 +29,6 @@ IN THE SOFTWARE.
 // Base classes for stencil code.
 #include "stencil_calc.hpp"
 
-#include <stdlib.h>
-#include <limits.h>
-#include <sstream>
 using namespace std;
 
 namespace yask {
@@ -78,13 +75,13 @@ namespace yask {
     // or a null stream otherwise.
     ostream& StencilContext::set_ostr(std::ostream* os) {
         if (os)
-            ostr = os;
-        else if (my_rank == msg_rank)
-            ostr = &cout;
+            _ostr = os;
+        else if (my_rank == _opts->msg_rank)
+            _ostr = &cout;
         else
-            ostr = new ofstream;    // null stream (unopened ofstream).
-        assert(ostr);
-        return *ostr;
+            _ostr = new ofstream;    // null stream (unopened ofstream).
+        assert(_ostr);
+        return *_ostr;
     }
     
     
@@ -94,13 +91,13 @@ namespace yask {
     void StencilContext::calc_rank_ref()
     {
         idx_t begin_dt = ofs_t;
-        idx_t end_dt = begin_dt + dt;
+        idx_t end_dt = begin_dt + _opts->dt;
         TRACE_MSG("calc_rank_ref(%ld..%ld)", begin_dt, end_dt-1);
         
         // Time steps.
         // TODO: check that scalar version actually does CPTS_T time steps.
         // (At this point, CPTS_T == 1 for all existing stencil examples.)
-        for(idx_t t = begin_dt; t < begin_dt + dt; t += CPTS_T) {
+        for(idx_t t = begin_dt; t < end_dt; t += CPTS_T) {
 
             // equations to evaluate (only one in most stencils).
             for (auto eg : eqGroups) {
@@ -134,8 +131,8 @@ namespace yask {
     void StencilContext::calc_rank_opt()
     {
         idx_t begin_dt = ofs_t;
-        idx_t end_dt = begin_dt + dt;
-        idx_t step_dt = rt;
+        idx_t end_dt = begin_dt + _opts->dt;
+        idx_t step_dt = _opts->rt;
         TRACE_MSG("calc_rank_opt(%ld..%ld by %ld)", begin_dt, end_dt-1, step_dt);
         ostream& os = get_ostr();
 
@@ -159,10 +156,10 @@ namespace yask {
         idx_t end_dz = end_bbz;
 
         // Steps are based on region sizes.
-        idx_t step_dn = rn;
-        idx_t step_dx = rx;
-        idx_t step_dy = ry;
-        idx_t step_dz = rz;
+        idx_t step_dn = _opts->rn;
+        idx_t step_dx = _opts->rx;
+        idx_t step_dy = _opts->ry;
+        idx_t step_dz = _opts->rz;
 
         // Groups in rank loops are set to smallest size.
         const idx_t group_size_dn = 1;
@@ -178,7 +175,7 @@ namespace yask {
         // shift / region size).  This assumes stencils are inter-dependent.
         // TODO: calculate stencil inter-dependency in the foldBuilder for each
         // dimension.
-        idx_t nshifts = (idx_t(eqGroups.size()) * rt) - 1;
+        idx_t nshifts = (idx_t(eqGroups.size()) * _opts->rt) - 1;
         end_dn += angle_n * nshifts;
         end_dx += angle_x * nshifts;
         end_dy += angle_y * nshifts;
@@ -269,17 +266,17 @@ namespace yask {
                   start_dz, stop_dz-1);
 
         // Steps within a region are based on block sizes.
-        const idx_t step_rt = bt;
-        const idx_t step_rn = bn;
-        const idx_t step_rx = bx;
-        const idx_t step_ry = by;
-        const idx_t step_rz = bz;
+        const idx_t step_rt = _opts->bt;
+        const idx_t step_rn = _opts->bn;
+        const idx_t step_rx = _opts->bx;
+        const idx_t step_ry = _opts->by;
+        const idx_t step_rz = _opts->bz;
 
         // Groups in region loops are based on group sizes.
-        const idx_t group_size_rn = gn;
-        const idx_t group_size_rx = gx;
-        const idx_t group_size_ry = gy;
-        const idx_t group_size_rz = gz;
+        const idx_t group_size_rn = _opts->gn;
+        const idx_t group_size_rx = _opts->gx;
+        const idx_t group_size_ry = _opts->gy;
+        const idx_t group_size_rz = _opts->gz;
 
         // Not yet supporting temporal blocking.
         if (step_rt != 1) {
@@ -369,40 +366,45 @@ namespace yask {
         os << "This rank index: " << my_rank << endl;
 
         // Check ranks.
-        idx_t req_ranks = nrn * nrx * nry * nrz;
+        idx_t req_ranks = _opts->nrn * _opts->nrx * _opts->nry * _opts->nrz;
         if (req_ranks != num_ranks) {
             cerr << "error: " << req_ranks << " rank(s) requested, but " <<
                 num_ranks << " rank(s) are active." << endl;
             exit_yask(1);
         }
-        assertEqualityOverRanks(dt, comm, "time-step");
+        assertEqualityOverRanks(_opts->dt, comm, "time-step");
 
         // Determine my coordinates if not provided already.
-        if (find_loc) {
-            Layout_4321 rank_layout(nrn, nrx, nry, nrz);
-            rank_layout.unlayout((idx_t)my_rank, rin, rix, riy, riz);
+        // TODO: do this more intelligently based on proximity.
+        if (_opts->find_loc) {
+            Layout_4321 rank_layout(_opts->nrn, _opts->nrx, _opts->nry, _opts->nrz);
+            rank_layout.unlayout((idx_t)my_rank,
+                                 _opts->rin, _opts->rix, _opts->riy, _opts->riz);
         }
         os << "Logical coordinates of this rank: " <<
-            rin << ", " << rix << ", " << riy << ", " << riz << endl;
+            _opts->rin << ", " <<
+            _opts->rix << ", " <<
+            _opts->riy << ", " <<
+            _opts->riz << endl;
 
         // A table of rank-coordinates for everyone.
         const int num_dims = 4;
         idx_t coords[num_ranks][num_dims];
 
         // Init coords for this rank.
-        coords[my_rank][0] = rin;
-        coords[my_rank][1] = rix;
-        coords[my_rank][2] = riy;
-        coords[my_rank][3] = riz;
+        coords[my_rank][0] = _opts->rin;
+        coords[my_rank][1] = _opts->rix;
+        coords[my_rank][2] = _opts->riy;
+        coords[my_rank][3] = _opts->riz;
 
         // A table of rank-sizes for everyone.
         idx_t rsizes[num_ranks][num_dims];
 
         // Init sizes for this rank.
-        rsizes[my_rank][0] = dn;
-        rsizes[my_rank][1] = dx;
-        rsizes[my_rank][2] = dy;
-        rsizes[my_rank][3] = dz;
+        rsizes[my_rank][0] = _opts->dn;
+        rsizes[my_rank][1] = _opts->dx;
+        rsizes[my_rank][2] = _opts->dy;
+        rsizes[my_rank][3] = _opts->dz;
 
 #ifdef USE_MPI
         // Exchange coord and size info between all ranks.
@@ -426,10 +428,10 @@ namespace yask {
             idx_t rnz = coords[rn][3];
 
             // Coord offset of rn from me: prev => negative, self => 0, next => positive.
-            idx_t rdn = rnn - rin;
-            idx_t rdx = rnx - rix;
-            idx_t rdy = rny - riy;
-            idx_t rdz = rnz - riz;
+            idx_t rdn = rnn - _opts->rin;
+            idx_t rdx = rnx - _opts->rix;
+            idx_t rdy = rny - _opts->riy;
+            idx_t rdz = rnz - _opts->riz;
 
             // Get sizes of rn;
             idx_t rsn = rsizes[rn][0];
@@ -494,10 +496,10 @@ namespace yask {
             // (i.e., is perpendicular to this rank), use full size;
             // otherwise, use halo size.  TODO: use per-grid actual halo
             // size determined by stencil compiler instead of global max.
-            idx_t bsn = (rdn == 0) ? dn : hn;
-            idx_t bsx = (rdx == 0) ? dx : hx;
-            idx_t bsy = (rdy == 0) ? dy : hy;
-            idx_t bsz = (rdz == 0) ? dz : hz;
+            idx_t bsn = (rdn == 0) ? _opts->dn : hn;
+            idx_t bsx = (rdx == 0) ? _opts->dx : hx;
+            idx_t bsy = (rdy == 0) ? _opts->dy : hy;
+            idx_t bsz = (rdz == 0) ? _opts->dz : hz;
 
             // Add one to -1..+1 dist to get 0..2 range for my_neighbors indices.
             rdn++; rdx++; rdy++; rdz++;
@@ -603,29 +605,29 @@ namespace yask {
 #endif
         
         // Adjust all settings needed before allocating data.
-        finalizeSettings(os);
+        _opts->finalizeSettings(os);
         
         // report threads.
         os << endl;
         os << "Num OpenMP procs: " << omp_get_num_procs() << endl;
         set_all_threads();
-        os << "Num OpenMP threads: " << max_threads << endl;
+        os << "Num OpenMP threads: " << omp_get_max_threads() << endl;
         set_region_threads(); // Temporary; just for reporting.
-        int region_threads = omp_get_max_threads(); // Check w/OMP for actual value.
-        os << "  Num threads per region: " << region_threads << endl;
-        os << "  Num threads per block: " << num_block_threads << endl;
+        os << "  Num threads per region: " << omp_get_max_threads() << endl;
+        set_block_threads(); // Temporary; just for reporting.
+        os << "  Num threads per block: " << omp_get_max_threads() << endl;
         set_all_threads(); // Back to normal.
 
         // TODO: enable multi-rank wave-front tiling.
-        if (rt > 1 && num_ranks > 1) {
+        if (_opts->rt > 1 && num_ranks > 1) {
             cerr << "MPI communication is not currently enabled with wave-front tiling." << endl;
             exit_yask(1);
         }
 
         // TODO: check all dims.
 #ifndef USING_DIM_N
-        if (dn > 1) {
-            cerr << "error: dn = " << dn << ", but stencil '"
+        if (_opts->dn > 1) {
+            cerr << "error: dn = " << _opts->dn << ", but stencil '"
                 YASK_STENCIL_NAME "' doesn't use dimension 'n'." << endl;
             exit_yask(1);
         }
@@ -655,21 +657,22 @@ namespace yask {
         find_bounding_boxes();
 
         // Report some stats.
+        idx_t dt = _opts->dt;
         os << "\nSizes in points per grid (t*n*x*y*z):\n"
             " vector-size:      " << VLEN_T << '*' << VLEN_N << '*' << VLEN_X << '*' << VLEN_Y << '*' << VLEN_Z << endl <<
             " cluster-size:     " << CPTS_T << '*' << CPTS_N << '*' << CPTS_X << '*' << CPTS_Y << '*' << CPTS_Z << endl <<
-            " block-size:       " << bt << '*' << bn << '*' << bx << '*' << by << '*' << bz << endl <<
-            " block-group-size: 1*" << gn << '*' << gx << '*' << gy << '*' << gz << endl <<
-            " region-size:      " << rt << '*' << rn << '*' << rx << '*' << ry << '*' << rz << endl <<
-            " rank-domain-size: " << dt << '*' << dn << '*' << dx << '*' << dy << '*' << dz << endl <<
+            " block-size:       " << _opts->bt << '*' << _opts->bn << '*' << _opts->bx << '*' << _opts->by << '*' << _opts->bz << endl <<
+            " block-group-size: 1*" << _opts->gn << '*' << _opts->gx << '*' << _opts->gy << '*' << _opts->gz << endl <<
+            " region-size:      " << _opts->rt << '*' << _opts->rn << '*' << _opts->rx << '*' << _opts->ry << '*' << _opts->rz << endl <<
+            " rank-domain-size: " << dt << '*' << _opts->dn << '*' << _opts->dx << '*' << _opts->dy << '*' << _opts->dz << endl <<
             " problem-size:     " << dt << '*' << tot_n << '*' << tot_x << '*' << tot_y << '*' << tot_z << endl <<
             endl <<
             "Other settings:\n"
-            " num-ranks: " << nrn << '*' << nrx << '*' << nry << '*' << nrz << endl <<
+            " num-ranks: " << _opts->nrn << '*' << _opts->nrx << '*' << _opts->nry << '*' << _opts->nrz << endl <<
             " stencil-name: " YASK_STENCIL_NAME << endl << 
             " time-dim-size: " << TIME_DIM_SIZE << endl <<
             " vector-len: " << VLEN << endl <<
-            " padding: " << pn << '+' << px << '+' << py << '+' << pz << endl <<
+            " padding: " << _opts->pn << '+' << _opts->px << '+' << _opts->py << '+' << _opts->pz << endl <<
             " wave-front-angles: " << angle_n << '+' << angle_x << '+' << angle_y << '+' << angle_z << endl <<
             " max-halos: " << hn << '+' << hx << '+' << hy << '+' << hz << endl <<
             " manual-L1-prefetch-distance: " << PFDL1 << endl <<
@@ -711,7 +714,7 @@ namespace yask {
         tot_numFpOps_1t = sumOverRanks(rank_numFpOps_1t, comm);
         tot_numFpOps_dt = tot_numFpOps_1t * dt;
 
-        rank_domain_1t = dn * dx * dy * dz;
+        rank_domain_1t = _opts->dn * _opts->dx * _opts->dy * _opts->dz;
         rank_domain_dt = rank_domain_1t * dt;
         tot_domain_1t = sumOverRanks(rank_domain_1t, comm);
         tot_domain_dt = tot_domain_1t * dt;
@@ -840,16 +843,16 @@ namespace yask {
         bb_valid = true;
 
         // Adjust region size to be within BB.
-        rn = min(rn, len_bbn);
-        rx = min(rx, len_bbx);
-        ry = min(ry, len_bby);
-        rz = min(rz, len_bbz);
+        _opts->rn = min(_opts->rn, len_bbn);
+        _opts->rx = min(_opts->rx, len_bbx);
+        _opts->ry = min(_opts->ry, len_bby);
+        _opts->rz = min(_opts->rz, len_bbz);
 
         // Adjust block size to be within region.
-        bn = min(bn, rn);
-        bx = min(bx, rx);
-        by = min(by, ry);
-        bz = min(bz, rz);
+        _opts->bn = min(_opts->bn, _opts->rn);
+        _opts->bx = min(_opts->bx, _opts->rx);
+        _opts->by = min(_opts->by, _opts->ry);
+        _opts->bz = min(_opts->bz, _opts->rz);
 
         // Determine spatial skewing angles for temporal wavefronts based on
         // the halos.  This assumes the smallest granularity of calculation
@@ -857,16 +860,17 @@ namespace yask {
         // region size is less than the rank size, i.e., if the region
         // covers the whole rank in a given dimension, no wave-front is
         // needed in thar dim.  TODO: make this grid-specific.
-        angle_n = (rn < len_bbn) ? ROUND_UP(hn, CPTS_N) : 0;
-        angle_x = (rx < len_bbx) ? ROUND_UP(hx, CPTS_X) : 0;
-        angle_y = (ry < len_bby) ? ROUND_UP(hy, CPTS_Y) : 0;
-        angle_z = (rz < len_bbz) ? ROUND_UP(hz, CPTS_Z) : 0;
+        angle_n = (_opts->rn < len_bbn) ? ROUND_UP(hn, CPTS_N) : 0;
+        angle_x = (_opts->rx < len_bbx) ? ROUND_UP(hx, CPTS_X) : 0;
+        angle_y = (_opts->ry < len_bby) ? ROUND_UP(hy, CPTS_Y) : 0;
+        angle_z = (_opts->rz < len_bbz) ? ROUND_UP(hz, CPTS_Z) : 0;
     }
 
     // Set the bounding-box vars for this eq group in this rank.
     void EqGroupBase::find_bounding_box() {
         if (bb_valid) return;
         StencilContext& context = *_generic_context;
+        StencilSettings& opts = context.get_settings();
 
         // Init min vars w/max val and vice-versa.
         idx_t minn = idx_max, maxn = idx_min;
@@ -885,10 +889,10 @@ namespace yask {
     reduction(min:minn,minx,miny,minz)          \
     reduction(max:maxn,maxx,maxy,maxz)          \
     reduction(+:npts)
-        for (idx_t n = context.ofs_n; n < context.ofs_n + context.dn; n++)
-            for(idx_t x = context.ofs_x; x < context.ofs_x + context.dx; x++)
-                for(idx_t y = context.ofs_y; y < context.ofs_y + context.dy; y++)
-                    for(idx_t z = context.ofs_z; z < context.ofs_z + context.dz; z++) {
+        for (idx_t n = context.ofs_n; n < context.ofs_n + opts.dn; n++)
+            for(idx_t x = context.ofs_x; x < context.ofs_x + opts.dx; x++)
+                for(idx_t y = context.ofs_y; y < context.ofs_y + opts.dy; y++)
+                    for(idx_t z = context.ofs_z; z < context.ofs_z + opts.dz; z++) {
 
                         // Update only if point in domain for this eq group.
                         if (is_in_valid_domain(t, n, x, y, z)) {
@@ -952,6 +956,7 @@ namespace yask {
     void EqGroupBase::exchange_halos(idx_t start_dt, idx_t stop_dt)
     {
         StencilContext& context = *_generic_context;
+        StencilSettings& opts = context.get_settings();
         TRACE_MSG("exchange_halos(%ld..%ld)", start_dt, stop_dt);
 
         // List of grids updated by this equation.
@@ -1031,28 +1036,28 @@ namespace yask {
                          idx_t begin_x = 0;
                          idx_t begin_y = 0;
                          idx_t begin_z = 0;
-                         idx_t end_n = context.dn;
-                         idx_t end_x = context.dx;
-                         idx_t end_y = context.dy;
-                         idx_t end_z = context.dz;
+                         idx_t end_n = opts.dn;
+                         idx_t end_x = opts.dx;
+                         idx_t end_y = opts.dy;
+                         idx_t end_z = opts.dz;
 
                          // Modify begin and/or end based on direction.
                          if (nn == idx_t(MPIBufs::rank_prev)) // neighbor is prev N.
                              end_n = hn; // read first halo-width only.
                          if (nn == idx_t(MPIBufs::rank_next)) // neighbor is next N.
-                             begin_n = context.dn - hn; // read last halo-width only.
+                             begin_n = opts.dn - hn; // read last halo-width only.
                          if (nx == idx_t(MPIBufs::rank_prev)) // neighbor is on left.
                              end_x = hx;
                          if (nx == idx_t(MPIBufs::rank_next)) // neighbor is on right.
-                             begin_x = context.dx - hx;
+                             begin_x = opts.dx - hx;
                          if (ny == idx_t(MPIBufs::rank_prev)) // neighbor is in front.
                              end_y = hy;
                          if (ny == idx_t(MPIBufs::rank_next)) // neighbor is in back.
-                             begin_y = context.dy - hy;
+                             begin_y = opts.dy - hy;
                          if (nz == idx_t(MPIBufs::rank_prev)) // neighbor is above.
                              end_z = hz;
                          if (nz == idx_t(MPIBufs::rank_next)) // neighbor is below.
-                             begin_z = context.dz - hz;
+                             begin_z = opts.dz - hz;
 
                          // Add offsets and divide indices by vector
                          // lengths.  Begin/end vars shouldn't be negative
@@ -1095,7 +1100,6 @@ namespace yask {
                          const void* buf = (const void*)(sendBuf->getRawData());
                          MPI_Isend(buf, sendBuf->get_num_bytes(), MPI_BYTE,
                                    neighbor_rank, int(gi), context.comm, &reqs[nreqs++]);
-                         
                      }
 
                      // Receive data from same neighbor if buffer exists.
@@ -1134,10 +1138,10 @@ namespace yask {
                          idx_t begin_x = 0;
                          idx_t begin_y = 0;
                          idx_t begin_z = 0;
-                         idx_t end_n = context.dn;
-                         idx_t end_x = context.dx;
-                         idx_t end_y = context.dy;
-                         idx_t end_z = context.dz;
+                         idx_t end_n = opts.dn;
+                         idx_t end_x = opts.dx;
+                         idx_t end_y = opts.dy;
+                         idx_t end_z = opts.dz;
                          
                          // Modify begin and/or end based on direction.
                          if (nn == idx_t(MPIBufs::rank_prev)) { // neighbor is prev N.
@@ -1145,32 +1149,32 @@ namespace yask {
                              end_n = 0;     // end at inside of halo.
                          }
                          if (nn == idx_t(MPIBufs::rank_next)) { // neighbor is next N.
-                             begin_n = context.dn; // begin at inside of halo.
-                             end_n = context.dn + hn; // end of outside of halo.
+                             begin_n = opts.dn; // begin at inside of halo.
+                             end_n = opts.dn + hn; // end of outside of halo.
                          }
                          if (nx == idx_t(MPIBufs::rank_prev)) { // neighbor is on left.
                              begin_x = -hx;
                              end_x = 0;
                          }
                          if (nx == idx_t(MPIBufs::rank_next)) { // neighbor is on right.
-                             begin_x = context.dx;
-                             end_x = context.dx + hx;
+                             begin_x = opts.dx;
+                             end_x = opts.dx + hx;
                          }
                          if (ny == idx_t(MPIBufs::rank_prev)) { // neighbor is in front.
                              begin_y = -hy;
                              end_y = 0;
                          }
                          if (ny == idx_t(MPIBufs::rank_next)) { // neighbor is in back.
-                             begin_y = context.dy;
-                             end_y = context.dy + hy;
+                             begin_y = opts.dy;
+                             end_y = opts.dy + hy;
                          }
                          if (nz == idx_t(MPIBufs::rank_prev)) { // neighbor is above.
                              begin_z = -hz;
                              end_z = 0;
                          }
                          if (nz == idx_t(MPIBufs::rank_next)) { // neighbor is below.
-                             begin_z = context.dz;
-                             end_z = context.dz + hz;
+                             begin_z = opts.dz;
+                             end_z = opts.dz + hz;
                          }
 
                          // Add offsets and divide indices by vector
@@ -1258,140 +1262,130 @@ namespace yask {
         return *gp;
     }
 
-    // Print usage message.
-    void Settings::print_usage(ostream& os, const string& pgmName,
-                               const string& appOptions, const string& appNotes)
+#define ADD_1_OPTION(name, help1, help2, var, dim)                      \
+    parser.add_option(new CommandLineParser::IdxOption                  \
+                      (name #dim,                                       \
+                       help1 " in '" #dim "' dimension" help2 ".",      \
+                       var ## dim))
+#define ADD_XYZ_OPTION(name, help, var) \
+    ADD_1_OPTION(name, help, "", var, x); \
+    ADD_1_OPTION(name, help, "", var, y);                               \
+    ADD_1_OPTION(name, help, "", var, z);                               \
+    parser.add_option(new CommandLineParser::MultiIdxOption             \
+                      (name,                                            \
+                       "Shorthand for -" name "x <integer> -" name      \
+                       "y <integer> -" name "z <integer>.",             \
+                       var ## x, var ## y, var ## z))
+#define ADD_TXYZ_OPTION(name, help, var)                         \
+    ADD_XYZ_OPTION(name, help, var);                             \
+    ADD_1_OPTION(name, help, " (number of time steps)", var, t)
+#define ADD_NXYZ_OPTION(name, help, var)                         \
+    ADD_XYZ_OPTION(name, help, var);                             \
+    ADD_OPTION_1(name, help, "", var, n)
+#define ADD_TNXYZ_OPTION(name, help, var) \
+    ADD_OPTION_TXYZ(name, help, var); \
+    ADD_OPTION_1(name, help, "", var, n)
+#ifdef USING_DIM_N
+#define ADD_T_DIM_OPTION(name, help, var) \
+    ADD_TNXYZ_OPTION(name, help, var)
+#define ADD_DIM_OPTION(name, help, var) \
+    ADD_NXYZ_OPTION(name, help, var)
+#else
+#define ADD_T_DIM_OPTION(name, help, var) \
+    ADD_TXYZ_OPTION(name, help, var)
+#define ADD_DIM_OPTION(name, help, var) \
+    ADD_XYZ_OPTION(name, help, var)
+#endif
+    
+    // Add these settigns to a cmd-line parser.
+    void StencilSettings::add_options(CommandLineParser& parser)
     {
-        os << 
-            "Usage: " << pgmName << " [options]\n"
-            "Options:\n"
-            " -dt <n>          domain size for this rank in temporal dimension (number of time steps), default=" <<
-            dt << endl <<
-            " -d{n,x,y,z} <n>  domain size for this rank in specified spatial dimension, defaults=" <<
-            dn << '*' << dx << '*' << dy << '*' << dz << endl <<
-            " -d <n>           shorthand for '-dx <n> -dy <n> -dz <n>\n" <<
-            " -rt <n>          OpenMP region time steps (for wave-front tiling), default=" <<
-            rt << endl <<
-            " -r{n,x,y,z} <n>  OpenMP region size in specified spatial dimension, defaults to rank-domain size\n" <<
-            " -r <n>           shorthand for '-rx <n> -ry <n> -rz <n>\n" <<
-            " -s{n,x,y,z} <n>  group size in specified spatial dimension, defaults set automatically\n" <<
-            " -s <n>           shorthand for '-sx <n> -sy <n> -sz <n>\n" <<
-            " -b{n,x,y,z} <n>  cache block size in specified spatial dimension, defaults=" <<
-            bn << '*' << bx << '*' << by << '*' << bz << endl <<
-            " -b <n>           shorthand for '-bx <n> -by <n> -bz <n>\n" <<
-            " -g{n,x,y,z} <n>  block-group size in specified spatial dimension, defaults to block size\n" <<
-            " -g <n>           shorthand for '-gx <n> -gy <n> -gz <n>\n" <<
-            " -p{n,x,y,z} <n>  extra memory-padding in specified spatial dimension, defaults=" <<
-            pn << '+' << px << '+' << py << '+' << pz << endl <<
-            " -p <n>           shorthand for '-px <n> -py <n> -pz <n>\n" <<
+        ADD_T_DIM_OPTION("d", "Domain size for this rank", d);
+        ADD_T_DIM_OPTION("r", "Region size", r);
+        ADD_DIM_OPTION("b", "Block size", b);
+        ADD_DIM_OPTION("g", "Block-group size", g);
+        ADD_DIM_OPTION("p", "Extra memory-padding size", p);
 #ifdef USE_MPI
-            " -nr{n,x,y,z} <n> num ranks in specified dimension, defaults=" <<
-            nrn << '*' << nrx << '*' << nry << '*' << nrz << endl <<
-            " -nr <n>          shorthand for '-nrx <n> -nry <n> -nrz <n>\n" <<
-            " -ri{n,x,y,z} <n> this rank's index in specified dimension, defaults set automatically\n" <<
-            " -msg_rank <n>    rank that will print informational messages, default=" << msg_rank << endl <<
+        ADD_DIM_OPTION("nr", "Num ranks", nr);
+        ADD_DIM_OPTION("ri", "This rank's logical index", ri);
+        parser.add_option(new CommandLineParser::IntOption
+                          ("msg_rank",
+                           "Rank that will print informational messages.",
+                           msg_rank));
 #endif
-            " -max_threads <n>     set max OpenMP threads to use to <n>, default=" << max_threads << endl <<
-            " -thread_divisor <n>  further divide max threads by <n>, default=" << thread_divisor << endl <<
-            " -block_threads <n>   set number of threads to use for each block, default=" <<
-            num_block_threads << endl <<
-            appOptions <<
-            "Notes:\n"
+        parser.add_option(new CommandLineParser::IntOption
+                          ("max_threads",
+                           "Max OpenMP threads to use.",
+                           max_threads));
+        parser.add_option(new CommandLineParser::IntOption
+                          ("thread_divisor",
+                           "Divide max OpenMP threads by <integer>.",
+                           thread_divisor));
+        parser.add_option(new CommandLineParser::IntOption
+                          ("block_threads",
+                           "Number of threads to use within each block.",
+                           num_block_threads));
+    }
+    
+    // Print usage message.
+    void StencilSettings::print_usage(ostream& os,
+                                      const string& pgmName,
+                                      CommandLineParser& parser,
+                                      const string& appNotes) const
+    {
+        os << "Usage: " << pgmName << " [options]\n"
+            "Options:\n";
+        parser.print_help(os);
+        os << "Guidelines:\n"
+            " Set block sizes to specify the amount of work done in each block.\n"
+            "  A block size of 0 in a given dimension =>\n"
+            "   block size is set to region size in that dimension.\n"
+            "  Temporal cache-blocking is not yet supported, so effectively, bt = 1.\n"
+            " Set block-group sizes to control in what order blocks are evaluated.\n"
+            "  All blocks that fit within a block-group are evaluated before blocks\n"
+            "   in the next block-group.\n"
+            "  A block-group size of 0 in a given dimension =>\n"
+            "   block-group size is set to block size in that dimension.\n"
+            " Set region sizes to control temporal wave-front tile sizes.\n"
+            "  The tempral region size should be larger than one, and\n"
+            "   the spatial region sizes should be less than the rank-domain sizes\n"
+            "   in at least one dimension to enable temporal wave-front tiling.\n"
+            "  The spatial region sizes should be greater than block sizes\n"
+            "   to enable threading withing each wave-front tile.\n"
+            "  Control the time-steps in each temporal wave-front with -rt.\n"
+            "   Special cases:\n"
+            "    Using '-rt 1' disables wave-front tiling.\n"
+            "    Using '-rt 0' => all time-steps in one wave-front.\n"
+            "  A region size of 0 in a given dimension =>\n"
+            "   region size is set to rank-domain size in that dimension.\n"
+            " Set rank-domain sizes to specify the problem size done on this rank.\n"
+            "  To 'weak-scale' this to a larger overall problem size, use multiple MPI ranks.\n"
 #ifndef USE_MPI
-            " This binary has not been built with MPI support.\n"
+            "  This binary has NOT been built with MPI support.\n"
 #endif
-            " Using '-max_threads 0' => max_threads = OpenMP default number of threads.\n"
-            " For stencil evaluation, threads are allocated using nested OpenMP:\n"
-            "  Num threads across blocks: max_threads / thread_divisor / block_threads.\n"
-            "  Num threads per block: block_threads.\n"
-            " A block size of 0 => block size == region size in that dimension.\n"
-            " A group size of 0 => group size == block size in that dimension.\n"
-            " A region size of 0 => region size == rank-domain size in that dimension.\n"
-            " Control the time-steps in each temporal wave-front with -rt:\n"
-            "  Using '-rt 1' => disables wave-front tiling.\n"
-            "  Using '-rt 0' => max time-steps in wave-front.\n"
-            " Temporal cache blocking is not yet supported, so bt == 1.\n"
-            " Validation is very slow and uses 2x memory,\n"
-            "  so run with very small sizes and number of time-steps.\n"
-            "  Using '-v' is shorthand for these settings: '-no_warmup -d 64 -dt 1 -t 1',\n"
-            "  which may be overridden by options *after* '-v'.\n"
-            "  If validation fails, it may be due to rounding error; try building with 8-byte reals.\n"
-            " The 'n' dimension only applies to stencils that use that variable.\n" <<
+            " So, rank-domain size >= region size >= block-group size >= block size.\n"
+            " Controlling OpenMP threading:\n"
+            "  Using '-max_threads 0' =>\n"
+            "   max_threads is set to OpenMP's default number of threads.\n"
+            "  The -thread_divisor option is a convenience to control the number of\n"
+            "   hyper-threads used without having to know the number of cores,\n"
+            "   e.g., using '-thread_divisor 2' will halve the number of OpenMP threads.\n"
+            "  For stencil evaluation, threads are allocated using nested OpenMP:\n"
+            "   Num blocks evaluated in parallel = max_threads / thread_divisor / block_threads.\n"
+            "   Num threads per block = block_threads.\n" <<
             appNotes <<
             "Examples:\n" <<
-            " " << pgmName << " -d 768 -dt 4\n" <<
+            " " << pgmName << " -d 768 -dt 25\n" <<
             " " << pgmName << " -dx 512 -dy 256 -dz 128\n" <<
             " " << pgmName << " -d 2048 -dt 20 -r 512 -rt 10  # temporal tiling.\n" <<
             " " << pgmName << " -d 512 -npx 2 -npy 1 -npz 2   # multi-rank.\n" <<
             flush;
     }
     
-    // Parse options from the command-line and set corresponding class vars.
-    // Leave unused strings in args.
-    void Settings::parseArgs(const string& pgmName,
-                             vector<string>& args)
-    {
-        vector<string> non_args;
-        
-        for (int argi = 0; argi < args.size(); argi++) {
-            string& opt = args[argi];
-
-            if (opt == "-dt") dt = idx_val(args, argi);
-            else if (opt == "-dn") dn = idx_val(args, argi);
-            else if (opt == "-dx") dx = idx_val(args, argi);
-            else if (opt == "-dy") dy = idx_val(args, argi);
-            else if (opt == "-dz") dz = idx_val(args, argi);
-            else if (opt == "-d") dx = dy = dz = idx_val(args, argi);
-            else if (opt == "-rt") rt = idx_val(args, argi);
-            else if (opt == "-rn") rn = idx_val(args, argi);
-            else if (opt == "-rx") rx = idx_val(args, argi);
-            else if (opt == "-ry") ry = idx_val(args, argi);
-            else if (opt == "-rz") rz = idx_val(args, argi);
-            else if (opt == "-r") rx = ry = rz = idx_val(args, argi);
-            else if (opt == "-gn") gn = idx_val(args, argi);
-            else if (opt == "-gx") gx = idx_val(args, argi);
-            else if (opt == "-gy") gy = idx_val(args, argi);
-            else if (opt == "-gz") gz = idx_val(args, argi);
-            else if (opt == "-g") gx = gy = gz = idx_val(args, argi);
-            else if (opt == "-bn") bn = idx_val(args, argi);
-            else if (opt == "-bx") bx = idx_val(args, argi);
-            else if (opt == "-by") by = idx_val(args, argi);
-            else if (opt == "-bz") bz = idx_val(args, argi);
-            else if (opt == "-b") bx = by = bz = idx_val(args, argi);
-            else if (opt == "-pn") pn = idx_val(args, argi);
-            else if (opt == "-px") px = idx_val(args, argi);
-            else if (opt == "-py") py = idx_val(args, argi);
-            else if (opt == "-pz") pz = idx_val(args, argi);
-            else if (opt == "-p") px = py = pz = idx_val(args, argi);
-#ifdef USE_MPI
-            else if (opt == "-nrn") nrn = int_val(args, argi);
-            else if (opt == "-nrx") nrx = int_val(args, argi);
-            else if (opt == "-nry") nry = int_val(args, argi);
-            else if (opt == "-nrz") nrz = int_val(args, argi);
-            else if (opt == "-nr") nrx = nry = nrz = int_val(args, argi);
-            else if (opt == "-rin") { rin = int_val(args, argi); find_loc = false; }
-            else if (opt == "-rix") { rix = int_val(args, argi); find_loc = false; }
-            else if (opt == "-riy") { riy = int_val(args, argi); find_loc = false; }
-            else if (opt == "-riz") { riz = int_val(args, argi); find_loc = false; }
-            else if (opt == "-msg_rank") msg_rank = int_val(args, argi);
-#endif
-            else if (opt == "-block_threads") num_block_threads = int_val(args, argi);
-            else if (opt == "-max_threads") max_threads = int_val(args, argi);
-            else if (opt == "-thread_divisor") thread_divisor = int_val(args, argi);
-
-            // Save unused args.
-            else
-                non_args.push_back(opt);
-        }
-
-        // Return unused args in args var.
-        args.swap(non_args);
-    }
-
     // Make sure all user-provided settings are valid and finish setting up some
     // other vars before allocating memory.
     // Called from allocAll(), so it doesn't normally need to be called from user code.
-    void Settings::finalizeSettings(std::ostream& os) {
+    void StencilSettings::finalizeSettings(std::ostream& os) {
 
         // Round up domain size as needed.
         dt = roundUp(os, dt, CPTS_T, "rank domain size in t (time steps)");
@@ -1423,9 +1417,6 @@ namespace yask {
         os << " num-blocks-per-region: " << nb << endl;
 
         // Adjust defaults for block-groups.
-        // Assumes inner block loop in z dimension and
-        // layout in n,x,y,z order.
-        // TODO: check and adjust this accordingly.
         if (!gn) gn = bn;
         if (!gx) gx = bx;
         if (!gy) gy = by;
@@ -1449,27 +1440,6 @@ namespace yask {
 
     }
 
-    // Get one idx_t value from args[argi + 1].
-    // On failure, print msg using string from args[argi] and exit.
-    // On success, increment argi and return value.
-    idx_t Settings::idx_val(vector<string>& args, int& argi)
-    {
-        argi++;
-        if (argi >= args.size() || args[argi].length() == 0) {
-            cerr << "Error: no argument for option '" << args[argi - 1] << "'." << endl;
-            exit(1);
-        }
-
-        const char* nptr = args[argi].c_str();
-        char* endptr = 0;
-        long long int val = strtoll(nptr, &endptr, 0);
-        if (val == LLONG_MIN || val == LLONG_MAX || *endptr != '\0') {
-            cerr << "Error: argument for option '" << args[argi - 1] << "' is not an integer." << endl;
-            exit(1);
-        }
-
-        return idx_t(val);
-    }
 
 
 } // namespace yask.

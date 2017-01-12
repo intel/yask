@@ -23,10 +23,6 @@ IN THE SOFTWARE.
 
 *****************************************************************************/
 
-#include <stddef.h>
-#include <time.h>
-#include <math.h>
-#include <sstream>
 #include "stencil.hpp"
 
 // Set MODEL_CACHE to 1 or 2 to model that cache level
@@ -144,7 +140,9 @@ namespace yask {
     }
 
     // Make sure rank_val is same over all ranks.
-    void assertEqualityOverRanks(idx_t rank_val, MPI_Comm comm, const string& descr) {
+    void assertEqualityOverRanks(idx_t rank_val,
+                                 MPI_Comm comm,
+                                 const string& descr) {
         idx_t min_val = rank_val;
         idx_t max_val = rank_val;
 #ifdef USE_MPI
@@ -159,4 +157,209 @@ namespace yask {
         }
     }
 
+    ///////////// Command-line parsing methods. /////////////
+    
+    // Internal function to print help for one option.
+    void CommandLineParser::OptionBase::_print_help(ostream& os,
+                                                    const string& str,
+                                                    int width) const
+    {
+        os << "  -" << str;
+
+        // Split help into words.
+        vector<string> words;
+        size_t pos = 0, prev = 0;
+        while (pos != string::npos) {
+            pos = _help.find(' ', prev);
+            if (pos != string::npos) {
+                string word = _help.substr(prev, pos - prev);
+                if (word.length())
+                    words.push_back(word);
+                prev = pos + 1;
+            }
+        }
+        if (prev < _help.length())
+            words.push_back(_help.substr(prev)); // last word.
+        
+        // Format help message to fit in width.
+        pos = 0;
+        for (size_t i = 0; i < words.size(); i++) {
+            if (i == 0 || pos + words[i].length() > width) {
+                os << endl << _help_leader;
+                pos = _help_leader.length();
+            }
+            else {
+                os << ' ';
+                pos += 1;
+            }
+            os << words[i];
+            pos += words[i].length();
+        }
+        os << endl;
+    }
+
+    // Check for matching option to "-"str at args[argi].
+    // Return true and increment argi if match.
+    bool CommandLineParser::OptionBase::_check_arg(std::vector<std::string>& args,
+                                                   int& argi,
+                                                   const std::string& str) const
+    {
+        string opt_str = string("-") + str;
+        if (args.at(argi) == opt_str) {
+            argi++;
+            return true;
+        }
+        return false;
+    }
+
+    // Get one idx_t value from args[argi].
+    // On failure, print msg using string from args[argi-1] and exit.
+    // On success, increment argi and return value.
+    idx_t CommandLineParser::OptionBase::_idx_val(vector<string>& args,
+                                                 int& argi)
+    {
+        if (argi >= args.size() || args[argi].length() == 0) {
+            cerr << "Error: no argument for option '" << args[argi - 1] << "'." << endl;
+            exit(1);
+        }
+
+        const char* nptr = args[argi].c_str();
+        char* endptr = 0;
+        long long int val = strtoll(nptr, &endptr, 0);
+        if (val == LLONG_MIN || val == LLONG_MAX || *endptr != '\0') {
+            cerr << "Error: argument for option '" << args[argi - 1] << "' is not an integer." << endl;
+            exit(1);
+        }
+
+        argi++;
+        return idx_t(val);
+    }
+
+    // Check for a boolean option.
+    bool CommandLineParser::BoolOption::check_arg(std::vector<std::string>& args,
+                                                  int& argi) {
+        if (_check_arg(args, argi, _name)) {
+            _val = true;
+            return true;
+        }
+        string false_name = string("no-") + _name;
+        if (_check_arg(args, argi, false_name)) {
+            _val = false;
+            return true;
+        }
+        return false;
+    }
+
+    // Print help on a boolean option.
+    void CommandLineParser::BoolOption::print_help(ostream& os,
+                                                   int width) const {
+        _print_help(os, string("[no-]" + _name), width);
+        os << _help_leader << _current_value_str <<
+            (_val ? "true" : "false") << "." << endl;
+    }
+    
+    // Check for an int option.
+    bool CommandLineParser::IntOption::check_arg(std::vector<std::string>& args,
+                                                 int& argi) {
+        if (_check_arg(args, argi, _name)) {
+            _val = (int)_idx_val(args, argi); // TODO: check for under/overflow.
+            return true;
+        }
+        return false;
+    }
+
+    // Print help on an int option.
+    void CommandLineParser::IntOption::print_help(ostream& os,
+                                                  int width) const {
+        _print_help(os, _name + " <integer>", width);
+        os << _help_leader << _current_value_str <<
+            _val << "." << endl;
+    }
+    
+    // Check for an idx_t option.
+    bool CommandLineParser::IdxOption::check_arg(std::vector<std::string>& args,
+                                                 int& argi) {
+        if (_check_arg(args, argi, _name)) {
+            _val = _idx_val(args, argi);
+            return true;
+        }
+        return false;
+    }
+
+    // Print help on an idx_t option.
+    void CommandLineParser::IdxOption::print_help(ostream& os,
+                                                  int width) const {
+        _print_help(os, _name + " <integer>", width);
+        os << _help_leader << _current_value_str <<
+            _val << "." << endl;
+    }
+    
+    // Print help on an multi-idx_t option.
+    void CommandLineParser::MultiIdxOption::print_help(ostream& os,
+                                                  int width) const {
+        _print_help(os, _name + " <integer>", width);
+        os << _help_leader << _current_value_str;
+        for (size_t i = 0; i < _vals.size(); i++) {
+            if (i > 0)
+                os << ", ";
+            os << *_vals[i];
+        }
+        os << "." << endl;
+    }
+    
+    // Check for an multi-idx_t option.
+    bool CommandLineParser::MultiIdxOption::check_arg(std::vector<std::string>& args,
+                                                      int& argi) {
+        if (_check_arg(args, argi, _name)) {
+            idx_t val = _idx_val(args, argi);
+            for (size_t i = 0; i < _vals.size(); i++)
+                *_vals[i] = val;
+            return true;
+        }
+        return false;
+    }
+
+    // Print help on all options.
+    void CommandLineParser::print_help(ostream& os) const {
+        for (auto oi : _opts) {
+            const auto* opt = oi.second;
+            opt->print_help(os, _width);
+        }
+    }
+
+    // Parse options from the command-line and set corresponding vars.
+    // Recognized strings from args are consumed, and unused ones
+    // remain for further processing by the application.
+    void CommandLineParser::parse_args(const std::string& pgmName,
+                                       std::vector<std::string>& args) {
+        vector<string> non_args;
+
+        // Loop through strings in args.
+        for (int argi = 0; argi < args.size(); ) {
+
+            // Compare against all registered options.
+            bool matched = false;
+            for (auto oi : _opts) {
+                auto* opt = oi.second;
+
+                // If a match is found, argi will be incremeted
+                // as needed beyond option and/or its arg.
+                if (opt->check_arg(args, argi)) {
+                    matched = true;
+                    break;
+                }
+            }                
+
+            // Save unused args.
+            if (!matched) {
+                string& opt = args[argi];
+                non_args.push_back(opt);
+                argi++;
+            }
+        }        
+
+        // Return unused args in args var.
+        args.swap(non_args);
+    }
+    
 }
