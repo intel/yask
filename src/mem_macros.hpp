@@ -34,13 +34,6 @@ IN THE SOFTWARE.
 #ifndef MEM_MACROS
 #define MEM_MACROS
 
-#include <assert.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <math.h>
-#include <iostream>
-#include <string>
-
 #define CACHELINE_BYTES   64
 
     // Set MODEL_CACHE to 1 or 2 to model L1 or L2.
@@ -50,19 +43,6 @@ IN THE SOFTWARE.
 
     //#define GRID_ALIGNMENT CACHELINE_BYTES
 #define GRID_ALIGNMENT 4096 // 4k-page
-
-    // Make an index and offset canonical, i.e., offset in [0..vecLen-1].
-    // Makes proper adjustments for negative inputs.
-#define FIX_INDEX_OFFSET(indexIn, offsetIn, indexOut, offsetOut, vecLen) \
-    do {                                                                \
-        const idx_t ofs = ((indexIn) * (vecLen)) + (offsetIn);          \
-        indexOut = ofs / (vecLen);                                      \
-        offsetOut = ofs % (vecLen);                                     \
-        while(offsetOut < 0) {                                          \
-            offsetOut += (vecLen);                                      \
-            indexOut--;                                                 \
-        }                                                               \
-    } while(0)
 
     // L1 and L2 hints
 #define L1 _MM_HINT_T0
@@ -76,62 +56,6 @@ IN THE SOFTWARE.
 #else
 #warning Modeling UNKNOWN cache
 #endif
-#endif
-
-    // prefetch cannot be a function because the hint cannot be a var.
-    // define some optional prefix macros for cache modeling and tracing.
-#ifdef NOPREFETCH
-#define PREFETCH(hint, base, matNum, xv, yv, zv, line) true
-#else
-
-#ifdef MODEL_CACHE
-#define MCP(p, hint, line) cache_model.prefetch(p, hint, line)
-#else
-#define MCP(p, hint, line)
-#endif
-
-#ifdef TRACE_MEM
-#define TP(p, hint, base, matNum, xv, yv, zv, line)                     \
-    printf("prefetch %s[%i][%i,%i,%i](%p) to L%i at line %i.\n",        \
-           base.getNameCStr(), matNum, (int)xv (int)yv, (int)zv, p, hint, line); \
-    fflush(stdout)
-#else 
-#define TP(p, hint, base, matNum, xv, y, z, line)
-#endif
-
-#define PREFETCH(hint, base, matNum, xv, yv, zv, line)                  \
-    do {                                                                \
-        const real_t *p = base.getPtr(matNum, xv, yv, zv, false);         \
-        TP(p, hint, base, matNum, xv, yv, zv, line); MCP(p, hint, line); \
-        _mm_prefetch((const char*)(p), hint);                           \
-    } while(0)
-#endif
-
-        // evict cannot be a function because the hint cannot be a var.
-        // define some optional prefix macros for cache modeling and tracing.
-#ifdef NOEVICT
-#define EVICT(hint, base, matNum, xv, y, z, line) true
-#else
-
-#ifdef MODEL_CACHE
-#define MCE(p, hint, line) cache_model.evict(p, hint, line),
-#else
-#define MCE(p, hint, line)
-#endif
-
-#ifdef TRACE_MEM
-#define TE(p, hint, line) printf("evict %p from L%i at line %i.\n", p, hint, line); \
-        fflush(stdout)
-#else
-#define TE(p, hint, line)
-#endif
-
-#define EVICT(hint, base, matNum, xv, yv, zv, line)                     \
-        do {                                                            \
-            const real_t *p = base.getPtr(matNum, xv, yv, zv, false);     \
-            TE(p, hint, line); MCE(p, hint, line);                      \
-            _mm_clevict((const char*)(p), hint);                        \
-        } while(0)
 #endif
 
         ////// Default prefetch distances.

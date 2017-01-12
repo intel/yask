@@ -276,16 +276,12 @@ public:
         else
             pfPts = &_vv._alignedVecs;
 
-        os << " const char* p = 0;" << endl;
         for (auto gp : *pfPts) {
             printPointComment(os, gp, "Aligned");
             
             // Prefetch memory.
-            os << " p = (const char*)";
-            printPointCall(os, gp, "getVecPtrNorm", "", "false", true);
+            printPointCall(os, gp, "prefetchVecNorm<level>", "", "__LINE__", true);
             os << ";" << endl;
-            os << " MCP(p, level, __LINE__);" << endl;
-            os << " _mm_prefetch(p, level);" << endl;
         }
     }
 };

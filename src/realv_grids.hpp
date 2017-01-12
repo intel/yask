@@ -331,7 +331,7 @@ namespace yask {
             return v;
         }
 
-        // Write one vector at vector offset nv, iv, jv, kv.
+        // Write one vector at vector offset iv, jv, kv.
         // Indices must be normalized, i.e., already divided by VLEN_*.
         ALWAYS_INLINE void writeVecNorm(const real_vec_t& v, idx_t iv, idx_t jv, idx_t kv,
                                         int line) {
@@ -343,6 +343,23 @@ namespace yask {
 #endif
 #ifdef MODEL_CACHE
             cache_model.write(p, line);
+#endif
+        }
+
+        // Prefetch one vector at vector offset iv, jv, kv.
+        // Indices must be normalized, i.e., already divided by VLEN_*.
+        template <int level>
+        ALWAYS_INLINE void prefetchVecNorm(idx_t iv, idx_t jv, idx_t kv,
+                                           int line) {
+#ifdef TRACE_MEM
+            std::cout << "prefetchVecNorm<" << level << ">(" <<
+                iv << "," << jv << "," << kv << ")..." << std::endl;
+#endif        
+            const char* p = (const char*)getVecPtrNorm(iv, jv, kv, false);
+            __assume_aligned(p, CACHELINE_BYTES);
+            _mm_prefetch (p, level);
+#ifdef MODEL_CACHE
+            cache_model.prefetch(p, level, line);
 #endif
         }
 
@@ -607,6 +624,22 @@ namespace yask {
 #endif
         }
 
+        // Prefetch one vector at vector offset nv, iv, jv, kv.
+        // Indices must be normalized, i.e., already divided by VLEN_*.
+        template <int level>
+        ALWAYS_INLINE void prefetchVecNorm(idx_t nv, idx_t iv, idx_t jv, idx_t kv,
+                                           int line) {
+#ifdef TRACE_MEM
+            std::cout << "prefetchVecNorm<" << level << ">(" <<
+                nv << "," << iv << "," << jv << "," << kv << ")..." << std::endl;
+#endif        
+            const char* p = (const char*)getVecPtrNorm(nv, iv, jv, kv, false);
+            __assume_aligned(p, CACHELINE_BYTES);
+            _mm_prefetch (p, level);
+#ifdef MODEL_CACHE
+            cache_model.prefetch(p, level, line);
+#endif
+        }
     };
 
     // A 4D (t, x, y, z) collection of real_vec_t elements, but any value of 't'
@@ -697,6 +730,15 @@ namespace yask {
             RealVecGrid_NXYZ<LayoutFn>::writeVecNorm(v, n, iv, jv, kv, line);
         }
 
+        // Prefetch one vector at t and vector offset iv, jv, kv.
+        // Indices must be normalized, i.e., already divided by VLEN_*.
+        template <int level>
+        ALWAYS_INLINE void prefetchVecNorm(idx_t t, idx_t iv, idx_t jv, idx_t kv,
+                                           int line) {
+            idx_t n = getMatIndex(t);
+            RealVecGrid_NXYZ<LayoutFn>::prefetchVecNorm<level>(n, iv, jv, kv, line);
+        }
+        
         // Get pointer to the real at t and offset i, j, k.
         ALWAYS_INLINE const real_t* getElemPtr(idx_t t, idx_t i, idx_t j, idx_t k,
                                              int line) const {
@@ -822,6 +864,16 @@ namespace yask {
             RealVecGrid_NXYZ<LayoutFn>::writeVecNorm(v, n2, iv, jv, kv, line);
         }
 
+        // Prefetch one vector at t and vector offset nv, iv, jv, kv.
+        // Indices must be normalized, i.e., already divided by VLEN_*.
+        template <int level>
+        ALWAYS_INLINE void prefetchVecNorm(idx_t t, idx_t nv,
+                                           idx_t iv, idx_t jv, idx_t kv,
+                                           int line) {
+            idx_t n2 = getMatIndex(t, nv);
+            RealVecGrid_NXYZ<LayoutFn>::prefetchVecNorm<level>(n2, iv, jv, kv, line);
+        }
+        
         // Get pointer to the real at t and offset n, i, j, k.
         ALWAYS_INLINE const real_t* getElemPtr(idx_t t, idx_t n, idx_t i, idx_t j, idx_t k,
                                              int line) const {
