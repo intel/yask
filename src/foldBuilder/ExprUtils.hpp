@@ -67,42 +67,7 @@ public:
         return _numChanges;
     }
     
-    virtual void visit(CommutativeExpr* ce) {
-        auto& ops = ce->getOps();
-
-        // Visit ops first (depth-first).
-        for (auto ep : ops) {
-            ep->accept(this);
-        }
-
-        // Repeat until no changes.
-        auto opstr = ce->getOpStr();
-        bool done = false;
-        while (!done) {
-            done = true;        // assume done until change is made.
-        
-            // Scan elements of expr for more exprs of same type.
-            for (size_t i = 0; i < ops.size(); i++) {
-                auto& ep = ops[i];
-                auto ce2 = dynamic_pointer_cast<CommutativeExpr>(ep);
-
-                // Is ep also a commutative expr with same operator?
-                if (ce2 && ce2->getOpStr() == opstr) {
-
-                    // Delete the existing operand.
-                    ops.erase(ops.begin() + i);
-
-                    // Put ce2's operands into ce.
-                    ce->mergeExpr(ce2);
-
-                    // Bail out of for loop because we have modified ops.
-                    _numChanges++;
-                    done = false;
-                    break;
-                }
-            }
-        }
-    }
+    virtual void visit(CommutativeExpr* ce);
 };
 
 
@@ -116,47 +81,7 @@ protected:
     // If 'ep' has already been seen, just return true.
     // Else if 'ep' has a match, change pointer to that match, return true.
     // Else, return false.
-    virtual bool findMatchTo(NumExprPtr& ep) {
-#if DEBUG_CSE >= 1
-        cerr << "- checking '" << ep->makeStr() << "'@" << ep << endl;
-#endif
-        
-        // Already visited this node?
-        if (_seen.count(ep)) {
-#if DEBUG_CSE >= 2
-            cerr << " - already seen '" << ep->makeStr() << "'@" << ep << endl;
-#endif
-            return true;
-        }
-        
-        // Loop through nodes already seen.
-        for (auto& oep : _seen) {
-#if DEBUG_CSE >= 3
-            cerr << " - comparing '" << ep->makeStr() << "'@" << ep <<
-                " to '" << oep->makeStr() << "'@" << oep << endl;
-#endif
-            
-            // Match?
-            if (ep->isSame(oep.get())) {
-#if DEBUG_CSE >= 1
-                cerr << "  - found match: '" << ep->makeStr() << "'@" << ep <<
-                    " to '" << oep->makeStr() << "'@" << oep << endl;
-#endif
-                
-                // Redirect pointer to the matching expr.
-                ep = oep;
-                _numChanges++;
-                return true;
-            }
-        }
-
-        // Mark as seen.
-#if DEBUG_CSE >= 2
-        cerr << " - no match to " << ep->makeStr() << endl;
-#endif
-        _seen.insert(ep);
-        return false;
-    }
+    virtual bool findMatchTo(NumExprPtr& ep);
     
 public:
     CseVisitor()  :

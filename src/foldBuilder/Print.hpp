@@ -34,7 +34,7 @@ IN THE SOFTWARE.
 using namespace std;
 
 // A PrintHelper is used by a PrintVisitor to format certain
-// common items like variables and lines.
+// common items like variables, reads, and writes.
 class PrintHelper {
     int _varNum;                // current var number.
 
@@ -120,7 +120,7 @@ public:
     // The 'os' parameter is provided for derived types that
     // need to write intermediate code to a stream.
     virtual string writeToPoint(ostream& os, const GridPoint& gp, const string& val) {
-        return gp.makeStr() + " = " + val;
+        return gp.makeStr() + " IS_EQUIV_TO " + val;
     }
 };
 

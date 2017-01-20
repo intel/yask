@@ -934,8 +934,8 @@ namespace yask {
         idx_t r_size = len_bbn * len_bbx * len_bby * len_bbz;
         if (r_size != bb_size) {
             cerr << "error: domain for equation-group '" << get_name() << "' contains " <<
-                bb_size << " points, but " << r_size << " were expected for a rectangular solid. " <<
-                "Non-rectangular domains are not supported at this time." << endl;
+                bb_size << " points, but " << r_size << " were expected for a hyper-rectangular polytope. " <<
+                "Non-hyper-rectangular domains are not supported at this time." << endl;
             exit_yask(1);
         }
 

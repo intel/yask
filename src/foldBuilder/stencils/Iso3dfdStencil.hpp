@@ -92,7 +92,7 @@ public:
             + (v * vel(x, y, z));       // add v * velocity.
 
         // define the value at t+1 to be equivalent to v.
-        pressure(t+1, x, y, z) == v;
+        pressure(t+1, x, y, z) IS_EQUIV_TO v;
     }
 };
 

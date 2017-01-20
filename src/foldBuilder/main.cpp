@@ -91,7 +91,7 @@ void usage(const string& cmd) {
         " -r <radius>        set radius for stencils marked with '*' above (default=" << radius << ").\n"
         "\n"
         " -fold <dim>=<size>,...    set number of elements in each dimension in a vector block.\n"
-        " -cluster <dim>=<size>,... set number of values to evaluate in each dimension.\n"
+        " -cluster <dim>=<size>,... set number of vectors to evaluate in each dimension.\n"
         " -eq <name>=<substr>,...   put updates to grids containing <substr> in equation-group <name>.\n"
         //" [-no]-fuse        do [not] pack grids together in meta container(s) (default=" << doFuse << ").\n"
         " -step <dim>        reuse memory in primary stepping dimension <dim> (default='" << stepDim << "').\n"
@@ -118,8 +118,10 @@ void usage(const string& cmd) {
         " -pknc              print YASK stencil classes for KNC ISA.\n"
         "\n"
         "Examples:\n"
-        " " << cmd << " -st iso3dfd -or 8 -fold x=4,y=4 -p256\n"
-        " " << cmd << " -st awp -fold y=4,z=2 -p512\n";
+        " " << cmd << " -st iso3dfd -or 8 -fold x=4,y=4 -p512\n"
+        " " << cmd << " -st awp -fold y=4,y=2 -cluster y=2 -p256\n"
+        "\n"
+        "All 'print' options write to stdout; other output is written to stderr.\n";
     exit(1);
 }
 
@@ -291,7 +293,7 @@ void optimizeEqGroups(EqGroups& eqGroups,
                       ostream& os) {
 
     // print stats.
-    string edescr = "for " + descr + " eqGroup(s)";
+    string edescr = "for " + descr + " equation-group(s)";
     eqGroups.printStats(os, edescr);
     
     // Make a list of optimizations to apply to eqGroups.
@@ -307,7 +309,7 @@ void optimizeEqGroups(EqGroups& eqGroups,
     // Apply opts.
     for (auto optimizer : opts) {
 
-        eqGroups.visitExprs(optimizer);
+        eqGroups.visitEqs(optimizer);
         int numChanges = optimizer->getNumChanges();
         string odescr = "after applying " + optimizer->getName() + " to " +
             descr + " eqGroup(s)";
@@ -319,11 +321,11 @@ void optimizeEqGroups(EqGroups& eqGroups,
             os << "No changes " << odescr << '.' << endl;
     }
 
-    // Final stats per equation set.
+    // Final stats per equation group.
     if (printSets && eqGroups.size() > 1) {
-        os << "Stats per equation set:\n";
-        for (auto eq : eqGroups)
-            eq.printStats(os, "for equation set '" + eq.getName() + "'");
+        os << "Stats per equation-group:\n";
+        for (auto eg : eqGroups)
+            eg.printStats(os, "for " + eg.getDescription());
     }
 }
 
@@ -349,29 +351,48 @@ int main(int argc, const char* argv[]) {
 
     // Construct scalar ASTs in grids by calling the 'define' method in the stencil.
     // All grid points will be relative to origin (0,0,...,0).
+    // This will check for simple illegal dependencies.
+    cerr << "Checking equation(s) in a scalar context...\n"
+        " If this fails, review stencil equation(s) for illegal dependencies.\n";
     stencilFunc->define(dims._allDims);
-
-    // Create a set of eqGroups for scalar and vector (non-cluster).
     EqGroups eqGroups;
-    eqGroups.findEqGroups(grids, eqGroupTargets);
-    eqGroups.printInfo(cerr);
+    eqGroups.findEqGroups(grids, eqGroupTargets, dims._scalar);
     optimizeEqGroups(eqGroups, "scalar", false, cerr);
+
+    // Use fold lengths to check for illegal dependencies within folds.
+    {
+        cerr << "Checking equation(s) in a single folded-vector context...\n"
+            " If this fails, the fold dimensions are not compatible with all equations.\n";
+        stencilFunc->define(dims._allDims);
+        EqGroups foldEqGroups;
+        foldEqGroups.findEqGroups(grids, eqGroupTargets, dims._fold);
+    }
+
+    // Use cluster sizes to check for illegal dependencies within clusters.
+    {
+        cerr << "Checking equation(s) in a cluster-of-vectors context...\n"
+            " If this fails, the cluster dimensions are not compatible with all equations.\n";
+        stencilFunc->define(dims._allDims);
+        EqGroups clusterEqGroups;
+        clusterEqGroups.findEqGroups(grids, eqGroupTargets, dims._clusterPts);
+    }
 
     // Construct cluster of ASTs in grids by calling the 'define' method in the stencil
     // at the origin of each point in the cluster.
     // Loop through all points in a cluster.
-    dims._clusterLengths.visitAllPoints([&](const IntTuple& clusterPoint) {
+    cerr << "Constructing cluster of equations containing " <<
+        dims._clusterMults.product() << " vector(s)...\n";
+    dims._clusterMults.visitAllPoints([&](const IntTuple& clusterIndex) {
 
             // Get starting offset of cluster, which is each cluster index
             // multipled by corresponding vector size.
-            // Example: for a 4x4 fold in a 2x2 cluster, the 2nd cluster point
+            // Example: for a 4x4 fold in a 2x2 cluster, the 2nd cluster index
             // will be (0,1) and the corresponding cluster offset will be (0,4).
-            auto clusterOffset = clusterPoint.multElements(dims._foldLengths);
+            auto clusterOffset = clusterIndex.multElements(dims._fold);
 
             // Create a set of offsets with all dims.
             // This will be a union of clusterOffset and allDims.
-            IntTuple offsets = dims._allDims;
-            offsets.setVals(clusterOffset, false);
+            IntTuple offsets = clusterOffset.makeUnionWith(dims._allDims);
 
             // Construct ASTs in grids by calling the 'define' method in the stencil.
             // All grid points will be relative to offsets.
@@ -381,10 +402,11 @@ int main(int argc, const char* argv[]) {
     
     // Create a set of cluster eqGroups.
     EqGroups clusterEqGroups;
-    clusterEqGroups.findEqGroups(grids, eqGroupTargets);
-    optimizeEqGroups(clusterEqGroups, "cluster", true, cerr);
+    clusterEqGroups.findEqGroups(grids, eqGroupTargets, dims._fold);
     assert(clusterEqGroups.size() == eqGroups.size());
+    optimizeEqGroups(clusterEqGroups, "cluster", true, cerr);
 
+    
     ///// Print out above data based on -p* option(s).
     
     // Human-readable output.

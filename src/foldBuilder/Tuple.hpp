@@ -61,13 +61,17 @@ protected:
     // If _firstInner == false, z is unit stride.
     // This setting affects mapTo1d() and visitAllPoints().
     bool _firstInner;           // whether first dim is used for inner loop.
-    static bool _defaultFirstInner; // default for _firstInner.
+    static bool _defaultFirstInner; // global default for _firstInner.
     
 public:
 
+    // Default ctor.
     Tuple() : _firstInner(_defaultFirstInner) { }
+
+    // Copy ctor.
     Tuple(const Tuple& rhs) :
-        _map(rhs._map), _dims(rhs._dims),
+        _map(rhs._map),
+        _dims(rhs._dims),
         _firstInner(rhs._firstInner) { }
     virtual ~Tuple() {}
 
@@ -75,6 +79,7 @@ public:
     virtual void operator=(const Tuple& rhs) {
         _map = rhs._map;
         _dims = rhs._dims;
+        _firstInner = rhs._firstInner;
     }
 
     // first-inner (first dim is unit stride) accessors.
@@ -148,6 +153,12 @@ public:
             _map[_dims.at(i)] = vals.at(i);
     }
 
+    // Set all values to the same value.
+    virtual void setValsSame(T val) {
+        for (auto i : _map)
+            i.second = val;
+    }
+    
     // Set values from another Tuple, leaving non-matching
     // ones in this unchanged. Add dimensions in src that
     // are not in this if addMissing==true.
@@ -182,6 +193,20 @@ public:
         va_end(args);
     }
 
+    // Add dims and values from another Tuple that are not
+    // in this one. Return resulting union.
+    virtual Tuple makeUnionWith(const Tuple& rhs) const {
+        Tuple u = *this;
+        for (auto dim : rhs.getDims()) {
+            auto p = u.lookup(dim);
+            if (!p) {
+                auto v = rhs.getVal(dim);
+                u.addDimBack(dim, v);
+            }
+        }
+        return u;
+    }
+    
     // Check whether dims are the same.
     // (Don't have to be in same order.)
     virtual bool areDimsSame(const Tuple& rhs) const {
@@ -213,18 +238,24 @@ public:
     virtual bool operator<(const Tuple& rhs) const {
         if (size() < rhs.size()) return true;
         else if (size() > rhs.size()) return false;
-        
-        assert(areDimsSame(rhs));
-        for (auto i : _map) {
-            auto dim = i.first;
-            T lv = i.second;
-            T rv = rhs.getVal(dim);
-            if (lv < rv)
-                return true;
-            else if (lv > rv)
-                return false;
+
+        // if dims are same, compare values.
+        if (areDimsSame(rhs)) {
+            for (auto i : _map) {
+                auto dim = i.first;
+                T lv = i.second;
+                T rv = rhs.getVal(dim);
+                if (lv < rv)
+                    return true;
+                else if (lv > rv)
+                    return false;
+            }
+            return false;
         }
-        return false;
+
+        // if dims are not same, compare dims.
+        else
+            return makeDimStr() < rhs.makeDimStr();
     }
 
     // Other comparisons derived from above.

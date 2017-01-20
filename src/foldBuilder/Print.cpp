@@ -399,7 +399,7 @@ void PrintVisitorBottomUp::visit(EqualsExpr* ee) {
 
     // Write temp var to grid.
     GridPointPtr gpp = ee->getLhs();
-    _os << endl << " // Save result to " << gpp->makeStr() << ":" << endl;
+    _os << "\n // Define value at " << gpp->makeStr() << ".\n";
     _os << _ph.getLinePrefix() << _ph.writeToPoint(_os, *gpp, tmp) << _ph.getLineSuffix();
 
     // note: _exprStr is now empty.
@@ -550,7 +550,7 @@ void PseudoPrinter::print(ostream& os) {
             "' //////" << endl;
 
         CounterVisitor cv;
-        eq.visitExprs(&cv);
+        eq.visitEqs(&cv);
         PrintHelper ph(&cv, "temp", "real", " ", ".\n");
 
         if (eq.cond.get()) {
@@ -563,11 +563,11 @@ void PseudoPrinter::print(ostream& os) {
 
         os << endl << " // Top-down stencil calculation:" << endl;
         PrintVisitorTopDown pv1(os, ph);
-        eq.visitExprs(&pv1);
+        eq.visitEqs(&pv1);
             
         os << endl << " // Bottom-up stencil calculation:" << endl;
         PrintVisitorBottomUp pv2(os, ph, _maxExprSize, _minExprSize);
-        eq.visitExprs(&pv2);
+        eq.visitEqs(&pv2);
     }
 }
 
@@ -585,7 +585,7 @@ void DOTPrinter::print(ostream& os) {
     // Loop through all eqGroups.
     for (auto& eq : _eqGroups) {
         //os << "subgraph \"Equation-group " << eq.getName() << "\" {" << endl;
-        eq.visitExprs(pv);
+        eq.visitEqs(pv);
         //os << "}" << endl;
     }
     os << "}" << endl;
@@ -610,7 +610,7 @@ void POVRayPrinter::print(ostream& os) {
 
         // TODO: separate mutiple grids.
         POVRayPrintVisitor pv(os);
-        eq.visitExprs(&pv);
+        eq.visitEqs(&pv);
         os << " // " << pv.getNumPoints() << " stencil points" << endl;
     }
 }
@@ -633,7 +633,7 @@ void YASKCppPrinter::printCode(ostream& os) {
     {
         // get stats.
         CounterVisitor cve;
-        _eqGroups.visitExprs(&cve);
+        _eqGroups.visitEqs(&cve);
         IntTuple maxHalos;
 
         os << endl << " ////// Stencil-specific data //////" << endl <<
@@ -682,7 +682,7 @@ void YASKCppPrinter::printCode(ostream& os) {
             padArgs[gp] = padArg;
             ofsArgs[gp] = ofsArg;
             os << " " << typeName << "* " << grid << "; // ";
-            if (_eqGroups.getEqGrids().count(gp) == 0)
+            if (_eqGroups.getOutputGrids().count(gp) == 0)
                 os << "not ";
             os << "updated by stencil." << endl;
         }
@@ -735,7 +735,7 @@ void YASKCppPrinter::printCode(ostream& os) {
                 os << " gridNames.insert(\"" << grid << "\");" << endl;
 
                 // Output grids.
-                if (_eqGroups.getEqGrids().count(gp))
+                if (_eqGroups.getOutputGrids().count(gp))
                     os << " outputGridNames.insert(\"" << grid << "\");" << endl;
             }
             
@@ -763,36 +763,30 @@ void YASKCppPrinter::printCode(ostream& os) {
         // Scalar eqGroup.
         auto& eq = _eqGroups.at(ei);
         string eqName = eq.getName();
+        string eqDesc = eq.getDescription();
 
-        os << endl << " ////// Stencil equation-group '" << eqName <<
-            "' //////" << endl;
+        os << endl << " ////// Stencil " << eqDesc <<
+            " //////" << endl;
 
         os << endl << "struct EqGroup_" << eqName << " {" << endl <<
             " std::string name = \"" << eqName << "\";" << endl;
 
-        // Condition comment.
-        os << endl << " // This equation-group is valid within ";
-        if (eq.cond.get())
-            os << "a custom domain as defined below." << endl;
-        else
-            os << "the default problem domain." << endl;
-    
         // Ops for this eqGroup.
         CounterVisitor fpops;
-        eq.visitExprs(&fpops);
+        eq.visitEqs(&fpops);
             
         // Example computation.
         os << endl << " // " << fpops.getNumOps() << " FP operation(s) per point:" << endl;
         addComment(os, eq);
         os << " const int scalar_fp_ops = " << fpops.getNumOps() << ";" << endl <<
-            " const int scalar_points_updated = " << eq.getNumExprs() << ";" << endl;
+            " const int scalar_points_updated = " << eq.getNumEqs() << ";" << endl;
 
         // Init code.
         {
             os << " void setPtrs(" << _context_base << "& context, GridPtrs& outputGridPtrs) {" << endl;
 
             // Output grids.
-            for (auto gp : eq.grids) {
+            for (auto gp : eq.getOutputGrids()) {
                 os << "  outputGridPtrs.push_back(context." << gp->getName() << ");" << endl;
             }
             os << " }" << endl;
@@ -815,7 +809,7 @@ void YASKCppPrinter::printCode(ostream& os) {
         {
             // C++ scalar print assistant.
             CounterVisitor cv;
-            eq.visitExprs(&cv);
+            eq.visitEqs(&cv);
             CppPrintHelper* sp = new CppPrintHelper(&cv, "temp", "real_t", " ", ";\n");
             
             // Stencil-calculation code.
@@ -832,7 +826,7 @@ void YASKCppPrinter::printCode(ostream& os) {
             PrintVisitorBottomUp pcv(os, *sp, _maxExprSize, _minExprSize);
 
             // Generate the code.
-            eq.visitExprs(&pcv);
+            eq.visitEqs(&pcv);
 
             // End of function.
             os << "} // calc_scalar." << endl;
@@ -843,32 +837,35 @@ void YASKCppPrinter::printCode(ostream& os) {
         // Cluster/Vector code.
         {
             // Cluster eqGroup at same index.
+            // This assumes cluster groups are formed identically to scalar ones.
+            // TODO: fix this!!
             auto& ceq = _clusterEqGroups.at(ei);
-            assert(eqName == ceq.getName());
+            assert(eqDesc == ceq.getDescription());
 
             // Create vector info for this eqGroup.
             // The visitor is accepted at all nodes in the cluster AST;
             // for each grid access node in the AST, the vectors
             // needed are determined and saved in the visitor.
             VecInfoVisitor vv(_dims);
-            ceq.visitExprs(&vv);
+            ceq.visitEqs(&vv);
 
             // Reorder based on vector info.
             ExprReorderVisitor erv(vv);
-            ceq.visitExprs(&erv);
+            ceq.visitEqs(&erv);
             
             // C++ vector print assistant.
             CounterVisitor cv;
-            ceq.visitExprs(&cv);
+            ceq.visitEqs(&cv);
             CppVecPrintHelper* vp = newPrintHelper(vv, cv);
             
             // Stencil-calculation code.
             // Function header.
-            int numResults = _dims._foldLengths.product() * _dims._clusterLengths.product();
+            int numResults = _dims._clusterPts.product();
             os << endl << " // Calculate " << numResults <<
                 " result(s) relative to indices " << _dims._allDims.makeDimStr(", ") <<
-                " in a '" << _dims._clusterLengths.makeDimValStr(" * ") << "' cluster of '" <<
-                _dims._foldLengths.makeDimValStr(" * ") << "' vector(s)." << endl;
+                " in a '" << _dims._clusterPts.makeDimValStr(" * ") <<
+                "' cluster containing " << _dims._clusterMults.product() << " '" <<
+                _dims._fold.makeDimValStr(" * ") << "' vector(s)." << endl;
             os << " // Indices must be normalized, i.e., already divided by VLEN_*." << endl;
             os << " // SIMD calculations use " << vv.getNumPoints() <<
                 " vector block(s) created from " << vv.getNumAlignedVecs() <<
@@ -882,7 +879,7 @@ void YASKCppPrinter::printCode(ostream& os) {
             // Element indices.
             os << endl << " // Un-normalized indices." << endl;
             for (auto dim : _dims._allDims.getDims()) {
-                auto p = _dims._foldLengths.lookup(dim);
+                auto p = _dims._fold.lookup(dim);
                 os << " idx_t " << dim << " = " << dim << "v";
                 if (p) os << " * " << *p;
                 os << ";" << endl;
@@ -896,7 +893,7 @@ void YASKCppPrinter::printCode(ostream& os) {
 
             // Generate the code.
             // Visit all expressions to cover the whole cluster.
-            ceq.visitExprs(&pcv);
+            ceq.visitEqs(&pcv);
 
             // End of function.
             os << "} // calc_cluster." << endl;
@@ -913,7 +910,7 @@ void YASKCppPrinter::printCode(ostream& os) {
                     string dim = _dims._allDims.getDims()[diri];
 
                     // Magnitude of dimension is based on cluster.
-                    const int* p = _dims._clusterLengths.lookup(dim);
+                    const int* p = _dims._clusterMults.lookup(dim);
                     int m = p ? *p : 1;
                     dir.addDimBack(dim, m);
 
@@ -931,8 +928,9 @@ void YASKCppPrinter::printCode(ostream& os) {
                 else
                     os << "for entire stencil ";
                 os << "relative to indices " << _dims._allDims.makeDimStr(", ") <<
-                    " in a '" << _dims._clusterLengths.makeDimValStr(" * ") << "' cluster of '" <<
-                    _dims._foldLengths.makeDimValStr(" * ") << "' vector(s)." << endl;
+                    " in a '" << _dims._clusterPts.makeDimValStr(" * ") <<
+                    "' cluster containing " << _dims._clusterMults.product() << " '" <<
+                    _dims._fold.makeDimValStr(" * ") << "' vector(s)." << endl;
                 os << " // Indices must be normalized, i.e., already divided by VLEN_*." << endl;
 
                 string fname = "prefetch_cluster";
@@ -964,10 +962,10 @@ void YASKCppPrinter::printCode(ostream& os) {
 
         // Stencil eqGroup objects.
         os << endl << " // Stencil equation-groups." << endl;
-        for (auto& eq : _eqGroups) {
-            string eqName = eq.getName();
-            os << " EqGroupTemplate<EqGroup_" << eqName << "," <<
-                _context << "> eqGroup_" << eqName << ";" << endl;
+        for (auto& eg : _eqGroups) {
+            string egName = eg.getName();
+            os << " EqGroupTemplate<EqGroup_" << egName << "," <<
+                _context << "> eqGroup_" << egName << ";" << endl;
         }
 
         // Ctor.
@@ -983,15 +981,22 @@ void YASKCppPrinter::printCode(ostream& os) {
                 " virtual void setPtrs() {\n";
             
             // Push eq-group pointers to list.
-            os << " // Equation groups.\n"
+            os << "\n // Equation groups.\n"
                 "  eqGroups.clear();\n";
-            for (auto& eq : _eqGroups) {
-                string eqName = eq.getName();
-                os << "  eqGroups.push_back(&eqGroup_" << eqName << ");" << endl;
+            for (auto& eg : _eqGroups) {
+                string egName = eg.getName();
+                os << "  eqGroups.push_back(&eqGroup_" << egName << ");\n";
+
+                // Add dependencies.
+                for (auto* dep : eg.depends_on) {
+                    string egName2 = dep->getName();
+                    os << "  eqGroup_" << egName <<
+                        ".add_dep(&eqGroup_" << egName2 << ");\n";
+                }
             }
 
             // Push grid pointers to list.
-            os << " // Grids.\n"
+            os << "\n // Grids.\n"
                 "  gridPtrs.clear();\n"
                 "  outputGridPtrs.clear();\n";
             for (auto gp : _grids) {
@@ -999,12 +1004,12 @@ void YASKCppPrinter::printCode(ostream& os) {
                 os << "  gridPtrs.push_back(" << grid << ");" << endl;
                 
                 // Output grids.
-                if (_eqGroups.getEqGrids().count(gp))
+                if (_eqGroups.getOutputGrids().count(gp))
                     os << "  outputGridPtrs.push_back(" << grid  << ");" << endl;
             }
 
             // Push param pointers to list.
-            os << " // Parameters.\n"
+            os << "\n // Parameters.\n"
                 "  paramPtrs.clear();\n";
             for (auto pp : _params) {
                 string param = pp->getName();
@@ -1020,8 +1025,8 @@ void YASKCppPrinter::printCode(ostream& os) {
             for (auto gp : _grids) {
                 string grid = gp->getName();
                 string hbwArg = "false";
-                if ((_eqGroups.getEqGrids().count(gp) && _settings._hbwRW) ||
-                    (_eqGroups.getEqGrids().count(gp) == 0 && _settings._hbwRO))
+                if ((_eqGroups.getOutputGrids().count(gp) && _settings._hbwRW) ||
+                    (_eqGroups.getOutputGrids().count(gp) == 0 && _settings._hbwRO))
                     hbwArg = "true";
                 os << "  " << grid << " = new " << typeNames[gp] <<
                     "(" << dimArgs[gp] << padArgs[gp] << ofsArgs[gp] <<
@@ -1140,22 +1145,24 @@ void YASKCppPrinter::printMacros(ostream& os) {
         
     // Vec/cluster lengths.
     os << endl;
-    os << "// One vector fold: " << _dims._foldLengths.makeDimValStr(" * ") << endl;
-    for (auto dim : _dims._foldLengths.getDims()) {
+    os << "// One vector fold: " << _dims._fold.makeDimValStr(" * ") << endl;
+    for (auto dim : _dims._fold.getDims()) {
         string ucDim = allCaps(dim);
-        os << "#define VLEN_" << ucDim << " (" << _dims._foldLengths.getVal(dim) << ")" << endl;
+        os << "#define VLEN_" << ucDim << " (" << _dims._fold.getVal(dim) << ")" << endl;
     }
-    os << "#define VLEN (" << _dims._foldLengths.product() << ")" << endl;
+    os << "#define VLEN (" << _dims._fold.product() << ")" << endl;
     os << "#define VLEN_FIRST_DIM_IS_UNIT_STRIDE (" <<
         (IntTuple::getDefaultFirstInner() ? 1 : 0) << ")" << endl;
     os << "#define USING_UNALIGNED_LOADS (" <<
         (_settings._allowUnalignedLoads ? 1 : 0) << ")" << endl;
 
     os << endl;
-    os << "// Cluster of vector folds: " << _dims._clusterLengths.makeDimValStr(" * ") << endl;
-    for (auto dim : _dims._clusterLengths.getDims()) {
+    os << "// Cluster multipliers of vector folds: " <<
+        _dims._clusterMults.makeDimValStr(" * ") << endl;
+    for (auto dim : _dims._clusterMults.getDims()) {
         string ucDim = allCaps(dim);
-        os << "#define CLEN_" << ucDim << " (" << _dims._clusterLengths.getVal(dim) << ")" << endl;
+        os << "#define CLEN_" << ucDim << " (" <<
+            _dims._clusterMults.getVal(dim) << ")" << endl;
     }
-    os << "#define CLEN (" << _dims._clusterLengths.product() << ")" << endl;
+    os << "#define CLEN (" << _dims._clusterMults.product() << ")" << endl;
 }

@@ -95,11 +95,11 @@ public:
 
     VecInfoVisitor(const Dimensions& dims) :
         _dims(dims) {
-        _vlen = dims._foldLengths.product();
+        _vlen = dims._fold.product();
     }
 
     const IntTuple& getFold() const {
-        return _dims._foldLengths;
+        return _dims._fold;
     }
     
     size_t getNumPoints() const {
@@ -135,7 +135,7 @@ public:
             separator << "num points in stencil" <<
             separator << "num aligned vectors to read from memory" <<
             separator << "num blends needed" <<
-            separator << _dims._foldLengths.makeDimStr(separator, "footprint in ") <<
+            separator << _dims._fold.makeDimStr(separator, "footprint in ") <<
             endl;
     }
 
@@ -157,7 +157,7 @@ public:
 
         // calc footprint in each dim.
         map<string, int> footprints;
-        for (auto dim : _dims._foldLengths.getDims()) {
+        for (auto dim : _dims._fold.getDims()) {
 
             // Create direction vector in this dim.
             IntTuple dir;
@@ -174,11 +174,11 @@ public:
             
         os << destGrid <<
             separator << _vlen <<
-            separator << _dims._foldLengths.makeValStr("x") <<
+            separator << _dims._fold.makeValStr("x") <<
             separator << getNumPoints() <<
             separator << getNumAlignedVecs() <<
             separator << numBlends;
-        for (auto dim : _dims._foldLengths.getDims())
+        for (auto dim : _dims._fold.getDims())
             os << separator << footprints[dim];
         os << endl;
     }
@@ -249,7 +249,7 @@ public:
 
         // Loop through all points in the vector at this cluster point.
         size_t pelem = 0;
-        _dims._foldLengths.visitAllPoints([&](const IntTuple& vecPoint){
+        _dims._fold.visitAllPoints([&](const IntTuple& vecPoint){
 
                 // Offset in each dim is starting point of grid point plus
                 // offset in this vector.
@@ -262,7 +262,7 @@ public:
                 for (auto dim : offsets.getDims()) {
 
                     // length of this dimension in fold, if it exists.
-                    const int* p = _dims._foldLengths.lookup(dim);
+                    const int* p = _dims._fold.lookup(dim);
                     int len = p ? *p : 1;
 
                     // convert this offset to vector index and vector offset.
@@ -282,7 +282,7 @@ public:
                 GridPoint alignedVec(gp, vecLocation);
 
                 // Find linear offset within this aligned vector block.
-                int alignedElem = _dims._foldLengths.mapTo1d(vecOffsets, false);
+                int alignedElem = _dims._fold.mapTo1d(vecOffsets, false);
                 assert(alignedElem >= 0);
                 assert(alignedElem < _vlen);
 #ifdef DEBUG_VV

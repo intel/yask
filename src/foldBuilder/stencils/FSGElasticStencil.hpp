@@ -322,7 +322,7 @@ public:
         //TODO: adjust_for_sponge(next_v, x, y, z);
 
         // define the value at t+1.
-        v(t+1, x, y, z) == next_v;
+        v(t+1, x, y, z) IS_EQUIV_TO next_v;
     }
 
     GridValue cell_coeff( const GridIndex x, const GridIndex y, const GridIndex z, Grid &c, const BR )
@@ -468,12 +468,12 @@ public:
         // TODO: adjust_for_sponge(next_stress_xx, x, y, z);
 
         // define the value at t+1.
-        sxx(t+1, x, y, z) == next_sxx;
-        syy(t+1, x, y, z) == next_syy;
-        szz(t+1, x, y, z) == next_szz;
-        syz(t+1, x, y, z) == next_syz;
-        sxz(t+1, x, y, z) == next_sxz;
-        sxy(t+1, x, y, z) == next_sxy;
+        sxx(t+1, x, y, z) IS_EQUIV_TO next_sxx;
+        syy(t+1, x, y, z) IS_EQUIV_TO next_syy;
+        szz(t+1, x, y, z) IS_EQUIV_TO next_szz;
+        syz(t+1, x, y, z) IS_EQUIV_TO next_syz;
+        sxz(t+1, x, y, z) IS_EQUIV_TO next_sxz;
+        sxy(t+1, x, y, z) IS_EQUIV_TO next_sxy;
     }
 
     // Call all the define_* functions.

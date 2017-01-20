@@ -140,7 +140,7 @@ protected:
                                 const string& firstArg,
                                 const string& lastArg,
                                 bool isNorm) const {
-        os << "context." << gp.getName() << "->" << funcName << "(";
+        os << " context." << gp.getName() << "->" << funcName << "(";
         if (firstArg.length())
             os << firstArg << ", ";
         if (isNorm)
@@ -188,7 +188,6 @@ protected:
 
         // Write temp var to memory.
         printPointCall(os, gp, "writeVecNorm", val, "__LINE__", true);
-        os << ";" << endl;
         return val;
     }
     
@@ -308,7 +307,7 @@ protected:
         // Use a simple human-readable visitor to create a comment.
         PrintHelper ph(0, "temp", "", " // ", ".\n");
         PrintVisitorTopDown commenter(os, ph);
-        eq.visitExprs(&commenter);
+        eq.visitEqs(&commenter);
     }
 
     // A factory method to create a new PrintHelper.

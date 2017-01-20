@@ -94,10 +94,14 @@ NumExprPtr operator/(const NumExprPtr lhs, double rhs);
 void operator/=(NumExprPtr& lhs, const NumExprPtr rhs);
 void operator/=(NumExprPtr& lhs, double rhs);
 
-// The '==' operator can define a grid value or be used for
-// comparing values, depending on what the lhs is.
-EqualsExprPtr operator==(GridPointPtr gpp, const NumExprPtr rhs);
-EqualsExprPtr operator==(GridPointPtr gpp, double rhs);
+// The '==' operator used for defining a grid value.
+#define EQUIV_OPER ==
+EqualsExprPtr operator EQUIV_OPER(GridPointPtr gpp, const NumExprPtr rhs);
+EqualsExprPtr operator EQUIV_OPER(GridPointPtr gpp, double rhs);
+#define IS_EQUIV_TO EQUIV_OPER
+#define IS_EQUIVALENT_TO EQUIV_OPER
+
+// The '==' operator for comparing values.
 BoolExprPtr operator==(const NumExprPtr lhs, const NumExprPtr rhs);
 
 // Other comparison operators can only be used for comparing.
@@ -659,7 +663,7 @@ protected:
 
 public:
 
-    // Construct an n-D point.
+    // Construct an n-D point given a grid and offset.
     GridPoint(Grid* grid, const IntTuple& offsets) :
         IntTuple(offsets),
         _grid(grid)
@@ -715,6 +719,17 @@ public:
     // Determine whether this is 'ahead of' rhs in given direction.
     virtual bool isAheadOfInDir(const GridPoint& rhs, const IntTuple& dir) const;
 };
+
+// Define hash function for GridPoint for unordered_{set,map}.
+namespace std {
+    template <> struct hash<GridPoint> {
+        size_t operator()(const GridPoint& k) const {
+            size_t h1 = hash<string>{}(k.getName());
+            size_t h2 = hash<string>{}(k.makeDimValStr());
+            return h1 ^ (h2 << 1);
+        }
+    };
+}
 
 // Equality operator for a grid point.
 // (Not inherited from BinaryExpr because LHS is special.)
@@ -779,23 +794,63 @@ public:
 IfExprPtr operator IF_OPER(EqualsExprPtr expr, const BoolExprPtr cond);
 #define IF IF_OPER
 
+// Set that retains order of things added.
+// Or, vector that allows insertion if element doesn't exist.
+// Keeps two copies of everything, so don't put large things in it.
+// TODO: hide vector inside class and provide proper accessor methods.
+template <typename T>
+class vector_set : public vector<T> {
+    map<T, size_t> _posn;
+
+public:
+    virtual size_t count(const T& val) const {
+        return _posn.count(val);
+    }
+    virtual void insert(const T& val) {
+        if (_posn.count(val) == 0) {
+            vector<T>::push_back(val);
+            _posn[val] = vector<T>::size() - 1;
+        }
+    }
+    virtual void erase(const T& val) {
+        if (_posn.count(val) > 0) {
+            size_t op = _posn.at(val);
+            vector<T>::erase(vector<T>::begin() + op);
+            for (auto pi : _posn) {
+                auto& p = pi.second;
+                if (p > op)
+                    p--;
+            }
+        }
+    }
+    virtual void clear() {
+        vector<T>::clear();
+        _posn.clear();
+    }
+};
+
+// Dependencies between equations.
+// eq_deps[A].count(B) > 0 => A depends on B.
+class EqDeps : public map<EqualsExprPtr, set<EqualsExprPtr>> {
+public:
+        
+    // Checks for dependencies in either direction.
+    virtual bool is_dep(EqualsExprPtr a, EqualsExprPtr b) {
+        return (count(a) && at(a).count(b)) ||
+            (count(b) && at(b).count(a));
+    }
+};
+
 ///////// Grids ////////////
 
 typedef set<GridPoint> GridPointSet;
 typedef set<GridPointPtr> GridPointPtrSet;
 typedef vector<GridPoint> GridPointVec;
 
-// Map of expressions: key = expression, value = if-statement.
-// We use this to simplify the process of handling equations
-// that either do or do not have if-conditions.
-// NB: both key and value will contain the equality.
-// Example if there is an if-condition:
-// key: grid(t,x)==grid(t,x+1); value: grid(t,x)==grid(t,x+1) if (x>5);
-// Example if there is not an if-condition:
-// key: grid(t,x)==grid(t,x+1); value: grid(t,x)==grid(t,x+1) if NULL;
-typedef map<EqualsExprPtr, IfExprPtr> ExprMap;
+// A list of unique equation ptrs.
+typedef vector_set<EqualsExprPtr> EqList;
 
-// A 'GridIndex' is simply a pointer to an expression.
+// A 'GridIndex' is simply a pointer to a numerical expression.
 typedef NumExprPtr GridIndex;
 
 // A 'Condition' is simply a pointer to a binary expression.
@@ -819,11 +874,20 @@ protected:
     // specific points that have been created in this grid.
     GridPointPtrSet _points;
 
-    // eqGroup(s) describing how values in this grid are computed.
-    ExprMap _exprs;
+    // Map of expressions: key = expression ptr, value = if-condition ptr.
+    // We use this to simplify the process of replacing statements
+    //  when an if-condition is encountered.
+    // key: grid(t,x)==grid(t,x+1); value: x>5;
+    typedef map<EqualsExprPtr, BoolExprPtr> CondMap;
+
+    // equations(s) describing how values in this grid are computed.
+    EqList _eqs;          // just equations w/o conditions.
+    CondMap _conds;       // map from equations to their conditions, if any.
 
     // Add a new point if needed and return pointer to it.
     // If it already exists, just return pointer.
+    // NB: the set is indexed by ptr, so it's possible to have
+    // >1 point to the same coords.
     virtual GridPointPtr addPoint(GridPointPtr gpp) {
         auto i = _points.insert(gpp); // add if not found.
         return *i.first;
@@ -845,57 +909,46 @@ public:
     const GridPointPtrSet& getPoints() const { return _points; }
     GridPointPtrSet& getPoints() { return _points; }
 
-    // Expression accessors.
-    virtual void addExpr(EqualsExprPtr ep, IfExprPtr cond) {
-        _exprs[ep] = cond;
+    // Equation accessors.
+    virtual void addEq(EqualsExprPtr ep) {
+        _eqs.insert(ep);
     }
-    virtual const ExprMap& getExprs() const {
-        return _exprs;
+    virtual void addCondEq(EqualsExprPtr ep, BoolExprPtr cond) {
+        _eqs.insert(ep);
+        _conds[ep] = cond;
     }
-    virtual ExprMap& getExprs() {
-        return _exprs;
+    virtual const EqList& getEqs() const {
+        return _eqs;
+    }
+    virtual const BoolExprPtr getCond(EqualsExprPtr ep) {
+        if (_conds.count(ep))
+            return _conds.at(ep);
+        else
+            return nullptr;
+    }
+    virtual int getNumEqs() const {
+        return _eqs.size();
+    }
+
+    // Visit all equations.
+    // Will NOT visit conditions.
+    virtual void visitEqs(ExprVisitor* ev) {
+        for (auto& ep : _eqs) {
+            ep->accept(ev);
+        }
     }
 
     // Remove expressions and points.
     virtual void clearTemp() {
         _points.clear();
-        _exprs.clear();
+        _eqs.clear();
+        _conds.clear();
     }
 
-#if 0
-    // Visit all if-statements, if any are defined.
-    virtual void visitExprs(ExprVisitor* ev) {
-        for (auto i : _exprs) {
-            i.second->accept(ev);
-        }
-    }
-#endif
-    
     // Create an expression to a specific point in this grid.
     // Note that this doesn't actually 'read' or 'write' a value;
     // it's just a node in an expression.
-    virtual GridPointPtr makePoint(int count, ...) {
-
-        // check for correct number of indices.
-        if (count != size()) {
-            cerr << "Error: attempt to access " << size() <<
-                "-D grid '" << _name << "' with " << count << " indices.\n";
-            exit(1);
-        }
-
-        // Copy the names from the grid to a new tuple.
-        IntTuple pt = *this;
-
-        // set the values in the tuple using the var args.
-        va_list args;
-        va_start(args, count);
-        pt.setVals(count, args);
-        va_end(args);
-
-        // Create a point from the tuple.
-        GridPointPtr gpp = make_shared<GridPoint>(this, pt);
-        return addPoint(gpp);
-    }
+    virtual GridPointPtr makePoint(int count, ...);
 
     // Convenience functions for zero dimensions (scalar).
     virtual operator NumExprPtr() { // implicit conversion.
@@ -971,34 +1024,24 @@ public:
 
 // A list of grids.  This holds pointers to grids defined by the stencil
 // class in the order in which they are added via the INIT_GRID_* macros.
-class Grids : public vector<Grid*> {
+class Grids : public vector_set<Grid*> {
     
 public:
 
-#if 0
-    // Visit all expressions in all grids.
-    virtual void visitExprs(ExprVisitor* ev);
-#endif
-
-    // Add a grid.
-    virtual void add(Grid* ngp) {
-
-        // Delete any matching old one.
-        for (size_t i = 0; i < size(); i++) {
-            auto ogp = at(i);
-            if (ogp->getName() == ngp->getName()) {
-                erase(begin() + i);
-                break;
-            }
-        }
-
-        // Add new one.
-        push_back(ngp);
+    // Visit all equations in all grids.
+    // Will NOT visit conditions.
+    virtual void visitEqs(ExprVisitor* ev) {
+        for (auto* gp : *this)
+            gp->visitEqs(ev);
     }
-
+    
+    // Find dependencies based on all eqs in all grids.
+    // If 'eq_deps' is set, check dependencies between eqs.
+    virtual void findDeps(IntTuple& pts, EqDeps* eq_deps);
+    
     // Remove expressions and points in grids.
     virtual void clearTemp() {
-        for (auto gp : *this)
+        for (auto* gp : *this)
             gp->clearTemp();
     }    
 };
@@ -1013,18 +1056,44 @@ typedef Grids Params;
 // Equations should not have inter-dependencies because they will be
 // combined into a single expression.  TODO: make this a proper class, e.g.,
 // encapsulate the fields.
-typedef set<EqualsExprPtr> ExprSet;
-struct EqGroup {
+class EqGroup {
+protected:
+    EqList _eqs; // expressions in this eqGroup (not including conditions).
+    Grids _eqGrids;          // grids updated by this eqGroup.
+
+public:
     string baseName;            // base name of this eqGroup.
     int index;                  // index to distinguish repeated names.
     BoolExprPtr cond;           // condition (default is null).
-    ExprSet exprs;              // expressions in this eqGroup.
-    set<Grid*> grids;           // grids updated by this eqGroup.
 
-    // Visit all the expressions.
-    virtual void visitExprs(ExprVisitor* ev) {
-        for (auto& ep : exprs)
+    // Other eq-groups that this group depends on. This means that an
+    // equation in this group has a grid value on the RHS that appears in
+    // the LHS of the dependency.
+    set<EqGroup*> depends_on;
+
+    // Add an equation
+    virtual void addEq(EqualsExprPtr ee) {
+#ifdef DEBUG_EQ_GROUP
+        cerr << "EqGroup: adding " << ee->makeQuotedStr() << endl;
+#endif
+        _eqs.insert(ee);
+        _eqGrids.insert(ee->getLhs()->getGrid());
+    }
+    
+    // Visit all the equations.
+    virtual void visitEqs(ExprVisitor* ev) {
+        for (auto& ep : _eqs) {
+#ifdef DEBUG_EQ_GROUP
+            cerr << "EqGroup: visiting " << ep->makeQuotedStr() << endl;
+#endif
             ep->accept(ev);
+        }
+    }
+
+    // Get the list of all equations.
+    // Does NOT return condition.
+    virtual const EqList& getEqs() const {
+        return _eqs;
     }
 
     // Visit the condition.
@@ -1040,9 +1109,17 @@ struct EqGroup {
     // Get the full name.
     virtual string getName() const;
 
-    // Get number of points updated by the equations.
-    virtual int getNumExprs() const {
-        return exprs.size();
+    // Get a string description.
+    virtual string getDescription() const;
+
+    // Get number of equations.
+    virtual int getNumEqs() const {
+        return _eqs.size();
+    }
+
+    // Get grids updated.
+    virtual const Grids& getOutputGrids() const {
+        return _eqGrids;
     }
 
     // Print stats for the equation(s) in this group.
@@ -1052,13 +1129,14 @@ struct EqGroup {
 // Container for equation groups.
 class EqGroups : public vector<EqGroup> {
 protected:
-    set<Grid*> _eqGrids;        // all grids updated.
+    Grids _eqGrids;        // all grids updated.
 
     // Add expressions from a grid to group(s) named groupName.
     // Returns whether a new group was created.
     virtual bool addExprsFromGrid(const string& groupName,
                                   map<string, int>& indices,
-                                  Grid* gp);
+                                  Grid* gp,
+                                  EqDeps& eq_deps);
 
 public:
     EqGroups() {}
@@ -1072,21 +1150,34 @@ public:
     // all grids with names containing 'bar' go in eqGroup2, and
     // each remaining grid goes in a eqGroup named after the grid.
     // Only grids with eqGroups are put in eqGroups.
-    void findEqGroups(Grids& allGrids, const string& targets);
+    void findEqGroups(Grids& grids,
+                      const string& targets,
+                      IntTuple& pts,
+                      EqDeps& eq_deps);
+    void findEqGroups(Grids& grids,
+                      const string& targets,
+                      IntTuple& pts) {
+        EqDeps eqDeps;
+        grids.findDeps(pts, &eqDeps);
+        findEqGroups(grids, targets, pts, eqDeps);
+    }
 
-    const set<Grid*>& getEqGrids() const { return _eqGrids; }
+    const Grids& getOutputGrids() const {
+        return _eqGrids;
+    }
 
-    // Visit all the expressions in all eqGroups.
-    virtual void visitExprs(ExprVisitor* ev) {
-        for (auto& ep : *this)
-            ep.visitExprs(ev);
+    // Visit all the equations in all eqGroups.
+    // This will not visit the conditions.
+    virtual void visitEqs(ExprVisitor* ev) {
+        for (auto& eg : *this)
+            eg.visitEqs(ev);
     }
     
     // Print a list of eqGroups.
     virtual void printInfo(ostream& os) const {
-        os << "Identified stencil eqGroups:" << endl;
+        os << "Identified stencil equation-groups:" << endl;
         for (auto& eq : *this) {
-            for (auto gp : eq.grids) {
+            for (auto gp : eq.getOutputGrids()) {
                 string eqName = eq.getName();
                 os << "  Equation group '" << eqName << "' updates grid '" <<
                     gp->getName() << "'." << endl;
@@ -1100,12 +1191,17 @@ public:
 
 // Stencil dimensions.
 struct Dimensions {
-    IntTuple _allDims;                      // all dims with zero value.
-    IntTuple _dimCounts;                    // how many grids use each dim.
-    string _stepDim;                        // step dim.
-    IntTuple _foldLengths, _clusterLengths; // dims in folds/clusters.
-    IntTuple _miscDims;                     // all other dims.
+    IntTuple _allDims;          // all dims with zero value.
+    IntTuple _dimCounts;        // how many grids use each dim.
+    string _stepDim;            // step dimension.
+    IntTuple _scalar, _fold;    // points in scalar and fold.
+    IntTuple _clusterPts;       // cluster size in points.
+    IntTuple _clusterMults;     // cluster size in vectors.
+    IntTuple _miscDims;         // all other dims.
 
+    Dimensions() {}
+    virtual ~Dimensions() {}
+    
     // Find the dimensions to be used.
     void setDims(Grids& grids,
                  string stepDim,
@@ -1123,7 +1219,7 @@ typedef NumExprPtr GridValue;
 // to the default '_grids' collection.
 // The dimensions are named according to the remaining parameters.
 #define INIT_GRID_0D(gvar) \
-    _grids.add(&gvar); gvar.setName(#gvar)
+    _grids.insert(&gvar); gvar.setName(#gvar)
 #define INIT_GRID_1D(gvar, d1) \
     INIT_GRID_0D(gvar); gvar.addDimBack(#d1, 1)
 #define INIT_GRID_2D(gvar, d1, d2) \
@@ -1142,7 +1238,7 @@ typedef NumExprPtr GridValue;
 // to the default '_params' collection.
 // The dimensions are named and sized according to the remaining parameters.
 #define INIT_PARAM(pvar) \
-    _params.add(&pvar); pvar.setName(#pvar); pvar.setParam(true)
+    _params.insert(&pvar); pvar.setName(#pvar); pvar.setParam(true)
 #define INIT_PARAM_1D(pvar, d1, s1) \
     INIT_PARAM(pvar); pvar.addDimBack(#d1, s1)
 #define INIT_PARAM_2D(pvar, d1, s1, d2, s2) \
