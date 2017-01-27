@@ -282,7 +282,7 @@ public:
                 GridPoint alignedVec(gp, vecLocation);
 
                 // Find linear offset within this aligned vector block.
-                int alignedElem = _dims._fold.mapTo1d(vecOffsets, false);
+                int alignedElem = _dims._fold.layout(vecOffsets, false);
                 assert(alignedElem >= 0);
                 assert(alignedElem < _vlen);
 #ifdef DEBUG_VV
@@ -396,7 +396,7 @@ public:
         }
 
         else {
-            cerr << "error: on point " << gp.makeStr() << endl;
+            cerr << "Error: on point " << gp.makeStr() << endl;
             assert("point type unknown");
         }
 
@@ -440,7 +440,7 @@ public:
         for (size_t i = 0; i < oev.size(); i++) {
 
 #ifdef DEBUG_SORT
-            cerr << "  Looking for expr #" << i << "..." << endl;
+            cout << "  Looking for expr #" << i << "..." << endl;
 #endif
 
             // Scan unused exprs.
@@ -466,13 +466,13 @@ public:
                         // new vector needed?
                         if (alignedVecs.count(av) == 0) {
 #ifdef DEBUG_SORT
-                            cerr << " Vec " << av.makeStr("tmp") << " is new" << endl;
+                            cout << " Vec " << av.makeStr("tmp") << " is new" << endl;
 #endif
                             cost++; 
                         }
                     }
 #ifdef DEBUG_SORT
-                    cerr << " Cost of expr " << j << " = " << cost << endl;
+                    cout << " Cost of expr " << j << " = " << cost << endl;
 #endif
                     // Best so far?
                     if (cost < jBestCost) {
@@ -480,7 +480,7 @@ public:
                         jBest = j;
                         jBestAlignedVecs = tmpAlignedVecs;
 #ifdef DEBUG_SORT
-                        cerr << "  Best so far has " << jBestAlignedVecs.size() << " aligned vecs" << endl;
+                        cout << "  Best so far has " << jBestAlignedVecs.size() << " aligned vecs" << endl;
 #endif
                     }
                 }

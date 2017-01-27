@@ -783,12 +783,15 @@ void YASKCppPrinter::printCode(ostream& os) {
 
         // Init code.
         {
-            os << " void setPtrs(" << _context_base << "& context, GridPtrs& outputGridPtrs) {" << endl;
+            os << " void setPtrs(" << _context_base << "& context, "
+                "GridPtrs& outputGridPtrs, GridPtrs& inputGridPtrs) {" << endl;
 
-            // Output grids.
-            for (auto gp : eq.getOutputGrids()) {
+            // I/O grids.
+            for (auto gp : eq.getOutputGrids())
                 os << "  outputGridPtrs.push_back(context." << gp->getName() << ");" << endl;
-            }
+            for (auto gp : eq.getInputGrids())
+                if (!gp->isParam())
+                    os << "  inputGridPtrs.push_back(context." << gp->getName() << ");" << endl;
             os << " }" << endl;
         }
 
@@ -988,10 +991,15 @@ void YASKCppPrinter::printCode(ostream& os) {
                 os << "  eqGroups.push_back(&eqGroup_" << egName << ");\n";
 
                 // Add dependencies.
-                for (auto* dep : eg.depends_on) {
-                    string egName2 = dep->getName();
-                    os << "  eqGroup_" << egName <<
-                        ".add_dep(&eqGroup_" << egName2 << ");\n";
+                for (DepType dt = certain_dep; dt < num_deps; dt = DepType(dt+1)) {
+                    for (auto dep : eg.getDeps(dt)) {
+                        string dtName = (dt == certain_dep) ? "certain_dep" :
+                            (dt == possible_dep) ? "possible_dep" :
+                            "internal_error";
+                        os << "  eqGroup_" << egName <<
+                            ".add_dep(yask::" << dtName <<
+                            ", &eqGroup_" << dep << ");\n";
+                    }
                 }
             }
 
@@ -1003,7 +1011,7 @@ void YASKCppPrinter::printCode(ostream& os) {
                 string grid = gp->getName();
                 os << "  gridPtrs.push_back(" << grid << ");" << endl;
                 
-                // Output grids.
+                // I/O grids.
                 if (_eqGroups.getOutputGrids().count(gp))
                     os << "  outputGridPtrs.push_back(" << grid  << ");" << endl;
             }

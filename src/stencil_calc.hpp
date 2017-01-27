@@ -109,34 +109,27 @@ namespace yask {
         // - spatial sizes (n, x, y, z) are in elements (not vectors).
         // Sizes are the same for all grids. TODO: relax this restriction.
         idx_t dt, dn, dx, dy, dz; // rank size (without halos).
-        idx_t rt, rn, rx, ry, rz; // region size (used for wave-front tiling).
+        idx_t rt=1, rn=0, rx=0, ry=0, rz=0; // region size (used for wave-front tiling).
         idx_t bt, bn, bx, by, bz; // block size (used for cache locality).
-        idx_t gn, gx, gy, gz;     // group-of-blocks size (only used for 'grouped' loop paths).
+        idx_t gn=0, gx=0, gy=0, gz=0;     // group-of-blocks size (only used for 'grouped' loop paths).
         idx_t pn, px, py, pz;     // spatial padding (in addition to halos, to avoid aliasing).
 
         // MPI settings.
-        idx_t nrn, nrx, nry, nrz; // number of ranks in each dim.
-        idx_t rin, rix, riy, riz; // my rank index in each dim.
-        bool find_loc;            // whether my rank index needs to be calculated.
-        int msg_rank;             // rank that prints informational messages.
+        idx_t nrn=1, nrx=1, nry=1, nrz=1; // number of ranks in each dim.
+        idx_t rin=0, rix=0, riy=0, riz=0; // my rank index in each dim.
+        bool find_loc=true;            // whether my rank index needs to be calculated.
+        int msg_rank=0;             // rank that prints informational messages.
 
         // OpenMP settings.
-        int max_threads;       // Initial number of threads to use overall.
+        int max_threads=1;       // Initial number of threads to use overall.
         int thread_divisor;    // Reduce number of threads by this amount.
         int num_block_threads; // Number of threads to use for a block.
 
         // Ctor.
         StencilSettings() :
             dt(50), dn(1), dx(DEF_RANK_SIZE), dy(DEF_RANK_SIZE), dz(DEF_RANK_SIZE),
-            rt(1), rn(0), rx(0), ry(0), rz(0),
             bt(1), bn(1), bx(DEF_BLOCK_SIZE), by(DEF_BLOCK_SIZE), bz(DEF_BLOCK_SIZE),
-            gn(0), gx(0), gy(0), gz(0),
             pn(0), px(DEF_PAD), py(DEF_PAD), pz(DEF_PAD),
-            nrn(1), nrx(1), nry(1), nrz(1),
-            rin(0), rix(0), riy(0), riz(0),
-            find_loc(true),
-            msg_rank(0),
-            max_threads(1),
             thread_divisor(DEF_THREAD_DIVISOR),
             num_block_threads(DEF_BLOCK_THREADS)
         {
@@ -160,17 +153,13 @@ namespace yask {
     
     // A 4D bounding-box.
     struct BoundingBox {
-        idx_t begin_bbn, begin_bbx, begin_bby, begin_bbz;
-        idx_t end_bbn, end_bbx, end_bby, end_bbz;
-        idx_t len_bbn, len_bbx, len_bby, len_bbz;
-        idx_t bb_size;
-        bool bb_valid;
+        idx_t begin_bbn=0, begin_bbx=0, begin_bby=0, begin_bbz=0;
+        idx_t end_bbn=0, end_bbx=0, end_bby=0, end_bbz=0;
+        idx_t len_bbn=0, len_bbx=0, len_bby=0, len_bbz=0;
+        idx_t bb_size=0;
+        bool bb_valid=false;
 
-        BoundingBox() :
-            begin_bbn(0), begin_bbx(0), begin_bby(0), begin_bbz(0),
-            end_bbn(0), end_bbx(0), end_bby(0), end_bbz(0),
-            len_bbn(0), len_bbx(0), len_bby(0), len_bbz(0),
-            bb_size(0), bb_valid(false) { }
+        BoundingBox() {}
     };
 
     // Collections of things in a context.
@@ -178,6 +167,7 @@ namespace yask {
     typedef std::vector<EqGroupBase*> EqGroupList;
     typedef std::set<EqGroupBase*> EqGroupSet;
     typedef std::vector<RealVecGridBase*> GridPtrs;
+    typedef std::set<RealVecGridBase*> GridPtrSet;
     typedef std::vector<RealGrid*> ParamPtrs;
     typedef std::set<std::string> NameSet;
     
@@ -219,15 +209,19 @@ namespace yask {
         GridPtrs outputGridPtrs;
         NameSet outputGridNames;
 
+        // Grids whose halos are up-to-date.
+        // Grids are marked when MPI-exchanged and unmarked when written to.
+        GridPtrSet updatedGridPtrs;
+        
         // A list of all non-grid parameters.
         ParamPtrs paramPtrs;
         NameSet paramNames;
 
         // Some calculated sizes.
-        idx_t ofs_t, ofs_n, ofs_x, ofs_y, ofs_z; // Index offsets for this rank.
-        idx_t tot_n, tot_x, tot_y, tot_z; // Total of rank domains over all ranks.
-        idx_t hn, hx, hy, hz;     // spatial halos (max over grids as required by stencil).
-        idx_t angle_n, angle_x, angle_y, angle_z; // temporal skewing angles.
+        idx_t ofs_t=0, ofs_n=0, ofs_x=0, ofs_y=0, ofs_z=0; // Index offsets for this rank.
+        idx_t tot_n=0, tot_x=0, tot_y=0, tot_z=0; // Total of rank domains over all ranks.
+        idx_t hn=0, hx=0, hy=0, hz=0;     // spatial halos (max over grids as required by stencil).
+        idx_t angle_n=0, angle_x=0, angle_y=0, angle_z=0; // temporal skewing angles.
 
         // Various metrics calculated in allocAll().
         // 'rank_' prefix indicates for this rank.
@@ -244,9 +238,9 @@ namespace yask {
         idx_t rank_nbytes, tot_nbytes;
         
         // MPI environment.
-        MPI_Comm comm;
-        int num_ranks, my_rank;   // MPI-assigned index.
-        double mpi_time;          // time spent doing MPI.
+        MPI_Comm comm=0;
+        int num_ranks=1, my_rank=0;   // MPI-assigned index.
+        double mpi_time=0.0;          // time spent doing MPI.
         MPIBufs::Neighbors my_neighbors;   // neighbor ranks.
 
         // Actual MPI buffers.
@@ -257,12 +251,7 @@ namespace yask {
         // Constructor.
         StencilContext(StencilSettings& settings) :
             _ostr(&std::cout),
-            _opts(&settings),
-            ofs_t(0), ofs_n(0), ofs_x(0), ofs_y(0), ofs_z(0),
-            hn(0), hx(0), hy(0), hz(0),
-            angle_n(0), angle_x(0), angle_y(0), angle_z(0),
-            comm(0), num_ranks(1), my_rank(0),
-            mpi_time(0.0)
+            _opts(&settings)
         {
             // Init my_neighbors to indicate no neighbor.
             int *p = (int *)my_neighbors;
@@ -355,7 +344,7 @@ namespace yask {
             // Reset number of OMP threads to max allowed.
             int nt = _opts->max_threads / _opts->thread_divisor;
             nt = std::max(nt, 1);
-            TRACE_MSG("set_all_threads: omp_set_num_threads(%d)", nt);
+            TRACE_MSG("set_all_threads: omp_set_num_threads=" << nt);
             omp_set_num_threads(nt);
             return nt;
         }
@@ -374,7 +363,7 @@ namespace yask {
             if (_opts->num_block_threads > 1)
                 omp_set_nested(1);
 
-            TRACE_MSG("set_region_threads: omp_set_num_threads(%d)", nt);
+            TRACE_MSG("set_region_threads: omp_set_num_threads=" << nt);
             omp_set_num_threads(nt);
             return nt;
         }
@@ -385,7 +374,7 @@ namespace yask {
             // This should be a nested OMP region.
             int nt = _opts->num_block_threads;
             nt = std::max(nt, 1);
-            TRACE_MSG("set_block_threads: omp_set_num_threads(%d)", nt);
+            TRACE_MSG("set_block_threads: omp_set_num_threads=" << nt);
             omp_set_num_threads(nt);
             return nt;
         }
@@ -394,7 +383,7 @@ namespace yask {
         virtual void global_barrier() {
             MPI_Barrier(comm);
         }
-        
+
         // Reference stencil calculations.
         virtual void calc_rank_ref();
 
@@ -408,13 +397,26 @@ namespace yask {
                                  idx_t start_dn, idx_t start_dx, idx_t start_dy, idx_t start_dz,
                                  idx_t stop_dn, idx_t stop_dx, idx_t stop_dy, idx_t stop_dz);
 
+        // Exchange halo data needed by eq-group 'eg' at the given time.
+        virtual void exchange_halos(idx_t start_dt, idx_t stop_dt, EqGroupBase& eg);
+
+        // Mark grids that have been written to by eq-group 'eg'.
+        virtual void mark_grids_dirty(EqGroupBase& eg);
+        
         // Set the bounding-box around all eq groups.
         virtual void find_bounding_boxes();
 
     };
-
+    
     /// Classes that support evaluation of one stencil equation-group.
     /// A context contains of one or more equation-groups.
+
+    // Types of dependencies.
+    enum DepType {
+        certain_dep,
+        possible_dep,
+        num_deps
+    };
 
     // A pure-virtual class base for a stencil equation-set.
     class EqGroupBase : public BoundingBox {
@@ -423,8 +425,11 @@ namespace yask {
         
     public:
 
-        // Grids that are updated by these stencil equations.
+        // Grids that are written to by these stencil equations.
         GridPtrs outputGridPtrs;
+
+        // Grids that are read by these stencil equations.
+        GridPtrs inputGridPtrs;
 
         // ctor, dtor.
         EqGroupBase() { }
@@ -455,9 +460,6 @@ namespace yask {
         virtual void calc_block(idx_t bt,
                                 idx_t begin_bn, idx_t begin_bx, idx_t begin_by, idx_t begin_bz,
                                 idx_t end_bn, idx_t end_bx, idx_t end_by, idx_t end_bz) =0;
-
-        // Exchange halo data for the updated grids at the given time.
-        virtual void exchange_halos(idx_t start_dt, idx_t stop_dt);
     };
 
     // Define a method named cfn to prefetch a cluster by calling vfn.
@@ -467,10 +469,13 @@ namespace yask {
     cfn (idx_t ct,                                                      \
          idx_t begin_cnv, idx_t begin_cxv, idx_t begin_cyv, idx_t begin_czv, \
          idx_t end_cnv, idx_t end_cxv, idx_t end_cyv, idx_t end_czv) {  \
-        TRACE_MSG("%s.%s<%d>(%ld, %ld, %ld, %ld, %ld)",                 \
-                  get_name().c_str(), #cfn, level, ct,                  \
-                  begin_cnv, begin_cxv, begin_cyv, begin_czv);          \
-        _eqGroup.vfn<level>(*_context, ct,                               \
+        TRACE_MSG(get_name() << "." #cfn "<" << level << ">("           \
+                  "t=" << ct <<                                         \
+                  ", nv=" << begin_cnv <<                               \
+                  ", xv=" << begin_cxv <<                               \
+                  ", yv=" << begin_cyv <<                               \
+                  ", zv=" << begin_czv << ")");                         \
+        _eqGroup.vfn<level>(*_context, ct,                              \
                      ARG_N(begin_cnv) begin_cxv, begin_cyv, begin_czv); \
     }
 
@@ -490,13 +495,17 @@ namespace yask {
         EqGroupClass _eqGroup;
 
         // Eq-groups that this one depends on.
-        EqGroupSet _depends_on;
+        std::map<DepType, EqGroupSet> _depends_on;
         
     public:
 
-        EqGroupTemplate() {}
-        EqGroupTemplate(const std::string& name) :
-            EqGroupBase(name) { }
+        EqGroupTemplate() {
+
+            // Make sure map entries exist.
+            for (DepType dt = certain_dep; dt < num_deps; dt = DepType(dt+1)) {
+                _depends_on[dt];
+            }
+        }
         virtual ~EqGroupTemplate() {}
 
         // Get values from _eqGroup.
@@ -519,17 +528,18 @@ namespace yask {
             assert(_context);
 
             outputGridPtrs.clear();
-            _eqGroup.setPtrs(*_context, outputGridPtrs);
+            inputGridPtrs.clear();
+            _eqGroup.setPtrs(*_context, outputGridPtrs, inputGridPtrs);
         }
 
         // Add dependency.
-        virtual void add_dep(EqGroupBase* eg) {
-            _depends_on.insert(eg);
+        virtual void add_dep(DepType dt, EqGroupBase* eg) {
+            _depends_on.at(dt).insert(eg);
         }
 
         // Get dependencies.
-        virtual const EqGroupSet& get_deps() const {
-            return _depends_on;
+        virtual const EqGroupSet& get_deps(DepType dt) const {
+            return _depends_on.at(dt);
         }
     
         // Determine whether indices are in [sub-]domain for this eq group.
@@ -552,8 +562,12 @@ namespace yask {
                      idx_t begin_cnv, idx_t begin_cxv, idx_t begin_cyv, idx_t begin_czv,
                      idx_t end_cnv, idx_t end_cxv, idx_t end_cyv, idx_t end_czv)
         {
-            TRACE_MSG("%s.calc_cluster(%ld, %ld, %ld, %ld, %ld)",
-                      get_name().c_str(), ct, begin_cnv, begin_cxv, begin_cyv, begin_czv);
+            TRACE_MSG2("calc_cluster(t=" << ct <<
+                      ", nv=" << begin_cnv << ".." << (end_cnv-1) <<
+                      ", xv=" << begin_cxv << ".." << (end_cxv-1) <<
+                      ", yv=" << begin_cyv << ".." << (end_cyv-1) <<
+                      ", zv=" << begin_czv << ".." << (end_czv-1) <<
+                      ")");
 
             // The step vars are hard-coded in calc_block below, and there should
             // never be a partial step at this level. So, we can assume one var and
@@ -587,12 +601,12 @@ namespace yask {
                    idx_t begin_bn, idx_t begin_bx, idx_t begin_by, idx_t begin_bz,
                    idx_t end_bn, idx_t end_bx, idx_t end_by, idx_t end_bz)
         {
-            TRACE_MSG("%s.calc_block(%ld, %ld..%ld, %ld..%ld, %ld..%ld, %ld..%ld)", 
-                      get_name().c_str(), bt,
-                      begin_bn, end_bn-1,
-                      begin_bx, end_bx-1,
-                      begin_by, end_by-1,
-                      begin_bz, end_bz-1);
+            TRACE_MSG2(get_name() << ".calc_block(t=" << bt <<
+                       ", n=" << begin_bn << ".." << (end_bn-1) <<
+                       ", x=" << begin_bx << ".." << (end_bx-1) <<
+                       ", y=" << begin_by << ".." << (end_by-1) <<
+                       ", z=" << begin_bz << ".." << (end_bz-1) <<
+                       ")");
 
             // Divide indices by vector lengths.  Use idiv() instead of '/'
             // because begin/end vars may be negative (if in halo).

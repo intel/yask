@@ -72,13 +72,13 @@ void CombineVisitor::visit(CommutativeExpr* ce) {
 // Else, return false.
 bool CseVisitor::findMatchTo(NumExprPtr& ep) {
 #if DEBUG_CSE >= 1
-    cerr << "- checking '" << ep->makeStr() << "'@" << ep << endl;
+    cout << "- checking '" << ep->makeStr() << "'@" << ep << endl;
 #endif
         
     // Already visited this node?
     if (_seen.count(ep)) {
 #if DEBUG_CSE >= 2
-        cerr << " - already seen '" << ep->makeStr() << "'@" << ep << endl;
+        cout << " - already seen '" << ep->makeStr() << "'@" << ep << endl;
 #endif
         return true;
     }
@@ -86,14 +86,14 @@ bool CseVisitor::findMatchTo(NumExprPtr& ep) {
     // Loop through nodes already seen.
     for (auto& oep : _seen) {
 #if DEBUG_CSE >= 3
-        cerr << " - comparing '" << ep->makeStr() << "'@" << ep <<
+        cout << " - comparing '" << ep->makeStr() << "'@" << ep <<
             " to '" << oep->makeStr() << "'@" << oep << endl;
 #endif
             
         // Match?
         if (ep->isSame(oep.get())) {
 #if DEBUG_CSE >= 1
-            cerr << "  - found match: '" << ep->makeStr() << "'@" << ep <<
+            cout << "  - found match: '" << ep->makeStr() << "'@" << ep <<
                 " to '" << oep->makeStr() << "'@" << oep << endl;
 #endif
                 
@@ -106,7 +106,7 @@ bool CseVisitor::findMatchTo(NumExprPtr& ep) {
 
     // Mark as seen.
 #if DEBUG_CSE >= 2
-    cerr << " - no match to " << ep->makeStr() << endl;
+    cout << " - no match to " << ep->makeStr() << endl;
 #endif
     _seen.insert(ep);
     return false;

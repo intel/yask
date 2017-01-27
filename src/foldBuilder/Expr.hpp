@@ -28,8 +28,10 @@ IN THE SOFTWARE.
 #ifndef EXPR_HPP
 #define EXPR_HPP
 
-#include <map>
 #include <set>
+#include <map>
+#include <unordered_set>
+#include <unordered_map>
 #include <vector>
 #include <cstdarg>
 #include <assert.h>
@@ -150,9 +152,9 @@ public:
 
     // Return a simple string expr.
     virtual string makeStr() const;
-    virtual string makeQuotedStr() const {
+    virtual string makeQuotedStr(string quote = "'") const {
         ostringstream oss;
-        oss << "\"" << makeStr() << "\"";
+        oss << quote << makeStr() << quote;
         return oss.str();
     }
 
@@ -179,7 +181,7 @@ public:
 template<typename T> shared_ptr<T> castExpr(ExprPtr ep, const string& descrip) {
     auto tp = dynamic_pointer_cast<T>(ep);
     if (!tp) {
-        cerr << "error: expression '" << ep->makeStr() << "' is not a " <<
+        cerr << "Error: expression '" << ep->makeStr() << "' is not a " <<
             descrip << "." << endl;
         exit(1);
     }
@@ -206,7 +208,7 @@ public:
     // Get the current value.
     // Exit with error if not known.
     virtual double getNumVal() const {
-        cerr << "error: cannot evaluate '" << makeStr() <<
+        cerr << "Error: cannot evaluate '" << makeStr() <<
             "' for a known numerical value.\n";
         exit(1);
     }
@@ -217,7 +219,7 @@ public:
         double val = getNumVal();
         int ival = int(val);
         if (val != double(ival)) {
-            cerr << "error: '" << makeStr() <<
+            cerr << "Error: '" << makeStr() <<
                 "' does not evaluate to an integer.\n";
             exit(1);
         }
@@ -237,7 +239,7 @@ public:
     // Get the current value.
     // Exit with error if not known.
     virtual bool getBoolVal() const {
-        cerr << "error: cannot evaluate '" << makeStr() <<
+        cerr << "Error: cannot evaluate '" << makeStr() <<
             "' for a known boolean value.\n";
         exit(1);
     }
@@ -301,7 +303,7 @@ public:
         else if (_type == LAST_INDEX)
             return "LAST_INDEX";
         else {
-            cerr << "error: internal error in IndexExpr\n";
+            cerr << "Error: internal error in IndexExpr\n";
             exit(1);
         }
     }
@@ -803,6 +805,13 @@ class vector_set : public vector<T> {
     map<T, size_t> _posn;
 
 public:
+    vector_set() {}
+    virtual ~vector_set() {}
+
+    // Copy ctor.
+    vector_set(const vector_set& src) :
+        vector<T>(src), _posn(src._posn) {}
+    
     virtual size_t count(const T& val) const {
         return _posn.count(val);
     }
@@ -829,17 +838,67 @@ public:
     }
 };
 
+// Types of dependencies.
+// Must keep this consistent with list in stencil_calc.hpp.
+// TODO: make this common code.
+enum DepType {
+    certain_dep,
+    possible_dep,
+    num_deps
+};
+
 // Dependencies between equations.
 // eq_deps[A].count(B) > 0 => A depends on B.
-class EqDeps : public map<EqualsExprPtr, set<EqualsExprPtr>> {
+class EqDeps {
+protected:
+    typedef unordered_map<EqualsExprPtr, unordered_set<EqualsExprPtr>> DepMap;
+    typedef set<EqualsExprPtr> SeenSet;
+
+    DepMap _deps;               // direct dependencies.
+    DepMap _full_deps;          // direct and indirect dependencies.
+    SeenSet _all;               // all expressions.
+    bool _done;                 // indirect dependencies added?
+    
+    // Recursive search starting at 'a'.
+    // Fill in _full_deps.
+    virtual bool _analyze(EqualsExprPtr a, SeenSet* seen);
+    
 public:
-        
+
+    EqDeps() : _done(false) {}
+    virtual ~EqDeps() {}
+    
+    // Declare that eq a depends on b.
+    virtual void set_dep_on(EqualsExprPtr a, EqualsExprPtr b) {
+        _deps[a].insert(b);
+        _all.insert(a);
+        _all.insert(b);
+    }
+    
+    // Check whether eq a depends on b.
+    virtual bool is_dep_on(EqualsExprPtr a, EqualsExprPtr b) const {
+        assert(_done);
+        return _full_deps.count(a) && _full_deps.at(a).count(b) > 0;
+    }
+    
     // Checks for dependencies in either direction.
-    virtual bool is_dep(EqualsExprPtr a, EqualsExprPtr b) {
-        return (count(a) && at(a).count(b)) ||
-            (count(b) && at(b).count(a));
+    virtual bool is_dep(EqualsExprPtr a, EqualsExprPtr b) const {
+        return is_dep_on(a, b) || is_dep_on(b, a);
+    }
+
+    // Does recursive analysis to turn all indirect dependencies to direct
+    // ones.
+    virtual void analyze() {
+        if (_done)
+            return;
+        for (auto a : _all)
+            if (_full_deps.count(a) == 0)
+                _analyze(a, NULL);
+        _done = true;
     }
 };
+
+typedef map<DepType, EqDeps> EqDepMap;
 
 ///////// Grids ////////////
 
@@ -861,6 +920,10 @@ typedef BoolExprPtr Condition;
 // For grids, values in the IntTuple are ignored (grids are sized at run-time).
 // For params, values in the IntTuple define the sizes.
 class Grid : public IntTuple {
+
+    // Should not be copying grids.
+    Grid(const Grid& src) { assert(0); }
+    
 protected:
     string _name;               // name of the grid.
 
@@ -878,7 +941,7 @@ protected:
     // We use this to simplify the process of replacing statements
     //  when an if-condition is encountered.
     // key: grid(t,x)==grid(t,x+1); value: x>5;
-    typedef map<EqualsExprPtr, BoolExprPtr> CondMap;
+    typedef map<EqualsExpr*, BoolExprPtr> CondMap;
 
     // equations(s) describing how values in this grid are computed.
     EqList _eqs;          // just equations w/o conditions.
@@ -915,21 +978,27 @@ public:
     }
     virtual void addCondEq(EqualsExprPtr ep, BoolExprPtr cond) {
         _eqs.insert(ep);
-        _conds[ep] = cond;
+        _conds[ep.get()] = cond;
     }
     virtual const EqList& getEqs() const {
         return _eqs;
-    }
-    virtual const BoolExprPtr getCond(EqualsExprPtr ep) {
-        if (_conds.count(ep))
-            return _conds.at(ep);
-        else
-            return nullptr;
     }
     virtual int getNumEqs() const {
         return _eqs.size();
     }
 
+    // Get the condition associated with an expression.
+    // If there is no condition, a null pointer is returned.
+    virtual const BoolExprPtr getCond(EqualsExprPtr ep) {
+        return getCond(ep.get());
+    }
+    virtual const BoolExprPtr getCond(EqualsExpr* ep) {
+        if (_conds.count(ep))
+            return _conds.at(ep);
+        else
+            return nullptr;
+    }
+    
     // Visit all equations.
     // Will NOT visit conditions.
     virtual void visitEqs(ExprVisitor* ev) {
@@ -1028,6 +1097,13 @@ class Grids : public vector_set<Grid*> {
     
 public:
 
+    Grids() {}
+    virtual ~Grids() {}
+
+    // Copy ctor.
+    // Copies list of grid pointers, but not grids.
+    Grids(const Grids& src) : vector_set<Grid*>(src) {}
+    
     // Visit all equations in all grids.
     // Will NOT visit conditions.
     virtual void visitEqs(ExprVisitor* ev) {
@@ -1037,7 +1113,16 @@ public:
     
     // Find dependencies based on all eqs in all grids.
     // If 'eq_deps' is set, check dependencies between eqs.
-    virtual void findDeps(IntTuple& pts, EqDeps* eq_deps);
+    virtual void findDeps(IntTuple& pts,
+                          const string& stepDim,
+                          EqDepMap* eq_deps);
+
+    // Check for illegal dependencies in all equations.
+    // Exit with error if any found.
+    virtual void checkDeps(IntTuple& pts,
+                           const string& stepDim) {
+        findDeps(pts, stepDim, NULL);
+    }
     
     // Remove expressions and points in grids.
     virtual void clearTemp() {
@@ -1052,6 +1137,28 @@ public:
 typedef Grid Param;
 typedef Grids Params;
 
+// Stencil dimensions.
+struct Dimensions {
+    IntTuple _allDims;          // all dims with zero value.
+    IntTuple _dimCounts;        // how many grids use each dim.
+    string _stepDim;            // step dimension.
+    IntTuple _scalar, _fold;    // points in scalar and fold.
+    IntTuple _clusterPts;       // cluster size in points.
+    IntTuple _clusterMults;     // cluster size in vectors.
+    IntTuple _miscDims;         // all other dims.
+
+    Dimensions() {}
+    virtual ~Dimensions() {}
+    
+    // Find the dimensions to be used.
+    void setDims(Grids& grids,
+                 string stepDim,
+                 IntTuple& foldOptions,
+                 IntTuple& clusterOptions,
+                 bool allowUnalignedLoads,
+                 ostream& os);
+};
+
 // A named equation group, which contains one or more grid-update equations.
 // Equations should not have inter-dependencies because they will be
 // combined into a single expression.  TODO: make this a proper class, e.g.,
@@ -1059,32 +1166,47 @@ typedef Grids Params;
 class EqGroup {
 protected:
     EqList _eqs; // expressions in this eqGroup (not including conditions).
-    Grids _eqGrids;          // grids updated by this eqGroup.
+    Grids _outGrids;          // grids updated by this eqGroup.
+    Grids _inGrids;          // grids read from by this eqGroup.
+
+    // Other eq-groups that this group depends on. This means that an
+    // equation in this group has a grid value on the RHS that appears in
+    // the LHS of the dependency.
+    map<DepType, set<string>> _dep_on;
 
 public:
     string baseName;            // base name of this eqGroup.
     int index;                  // index to distinguish repeated names.
     BoolExprPtr cond;           // condition (default is null).
 
-    // Other eq-groups that this group depends on. This means that an
-    // equation in this group has a grid value on the RHS that appears in
-    // the LHS of the dependency.
-    set<EqGroup*> depends_on;
+    // Ctor.
+    EqGroup() {
 
-    // Add an equation
-    virtual void addEq(EqualsExprPtr ee) {
-#ifdef DEBUG_EQ_GROUP
-        cerr << "EqGroup: adding " << ee->makeQuotedStr() << endl;
-#endif
-        _eqs.insert(ee);
-        _eqGrids.insert(ee->getLhs()->getGrid());
+        // Create empty map entries.
+        for (DepType dt = certain_dep; dt < num_deps; dt = DepType(dt+1)) {
+            _dep_on[dt];
+        }
     }
+    virtual ~EqGroup() {}
+
+    // Copy ctor.
+    EqGroup(const EqGroup& src) :
+        _eqs(src._eqs),
+        _outGrids(src._outGrids),
+        _inGrids(src._inGrids),
+        _dep_on(src._dep_on),
+        baseName(src.baseName),
+        index(src.index),
+        cond(src.cond) {}
+    
+    // Add an equation
+    virtual void addEq(EqualsExprPtr ee);
     
     // Visit all the equations.
     virtual void visitEqs(ExprVisitor* ev) {
         for (auto& ep : _eqs) {
 #ifdef DEBUG_EQ_GROUP
-            cerr << "EqGroup: visiting " << ep->makeQuotedStr() << endl;
+            cout << "EqGroup: visiting " << ep->makeQuotedStr() << endl;
 #endif
             ep->accept(ev);
         }
@@ -1110,18 +1232,41 @@ public:
     virtual string getName() const;
 
     // Get a string description.
-    virtual string getDescription() const;
+    virtual string getDescription(bool show_cond = true,
+                                  string quote = "'") const;
 
     // Get number of equations.
     virtual int getNumEqs() const {
         return _eqs.size();
     }
 
-    // Get grids updated.
+    // Get grids output and input.
     virtual const Grids& getOutputGrids() const {
-        return _eqGrids;
+        return _outGrids;
+    }
+    virtual const Grids& getInputGrids() const {
+        return _inGrids;
     }
 
+    // Get whether this eq-group depends on eg2.
+    // Must have already been set via setDepOn().
+    virtual bool isDepOn(DepType dt, const EqGroup& eq2) const {
+        return _dep_on.at(dt).count(eq2.getName()) > 0;
+    }
+
+    // Get dependencies on this eq-group.
+    virtual const set<string>& getDeps(DepType dt) const {
+        return _dep_on.at(dt);
+    }
+    
+    // Set dependency on eg2 if this eq-group is dependent on it.
+    // Return whether dependent.
+    virtual bool setDepOn(DepType dt, EqDepMap& eq_deps, const EqGroup& eg2);
+
+    // Replicate each equation at the non-zero offsets for
+    // each vector in a cluster.
+    virtual void replicateEqsInCluster(Dimensions& dims);
+        
     // Print stats for the equation(s) in this group.
     virtual void printStats(ostream& os, const string& msg);
 };
@@ -1129,19 +1274,26 @@ public:
 // Container for equation groups.
 class EqGroups : public vector<EqGroup> {
 protected:
-    Grids _eqGrids;        // all grids updated.
+    Grids _outGrids;        // all grids updated.
+    string _basename_default;
 
     // Add expressions from a grid to group(s) named groupName.
     // Returns whether a new group was created.
     virtual bool addExprsFromGrid(const string& groupName,
                                   map<string, int>& indices,
                                   Grid* gp,
-                                  EqDeps& eq_deps);
+                                  EqDepMap& eq_deps);
 
 public:
-    EqGroups() {}
+    EqGroups(const string& basename_default) :
+        _basename_default(basename_default) {}
     virtual ~EqGroups() {}
 
+    // Copy ctor.
+    EqGroups(const EqGroups& src) :
+        vector<EqGroup>(src),
+        _outGrids(src._outGrids) {}
+    
     // Separate a set of grids into eqGroups based
     // on the target string.
     // Target string is a comma-separated list of key-value pairs, e.g.,
@@ -1153,17 +1305,19 @@ public:
     void findEqGroups(Grids& grids,
                       const string& targets,
                       IntTuple& pts,
-                      EqDeps& eq_deps);
+                      const string& stepDim,
+                      EqDepMap& eq_deps);
     void findEqGroups(Grids& grids,
                       const string& targets,
-                      IntTuple& pts) {
-        EqDeps eqDeps;
-        grids.findDeps(pts, &eqDeps);
-        findEqGroups(grids, targets, pts, eqDeps);
+                      IntTuple& pts,
+                      const string& stepDim) {
+        EqDepMap eq_deps;
+        grids.findDeps(pts, stepDim, &eq_deps);
+        findEqGroups(grids, targets, pts, stepDim, eq_deps);
     }
 
-    const Grids& getOutputGrids() const {
-        return _eqGrids;
+    virtual const Grids& getOutputGrids() const {
+        return _outGrids;
     }
 
     // Visit all the equations in all eqGroups.
@@ -1172,6 +1326,16 @@ public:
         for (auto& eg : *this)
             eg.visitEqs(ev);
     }
+
+    // Replicate each equation at the non-zero offsets for
+    // each vector in a cluster.
+    virtual void replicateEqsInCluster(Dimensions& dims) {
+        for (auto& eg : *this)
+            eg.replicateEqsInCluster(dims);
+    }
+
+    // Reorder groups based on dependencies.
+    virtual void sort();
     
     // Print a list of eqGroups.
     virtual void printInfo(ostream& os) const {
@@ -1187,28 +1351,6 @@ public:
 
     // Print stats for the equation(s) in all groups.
     virtual void printStats(ostream& os, const string& msg);
-};
-
-// Stencil dimensions.
-struct Dimensions {
-    IntTuple _allDims;          // all dims with zero value.
-    IntTuple _dimCounts;        // how many grids use each dim.
-    string _stepDim;            // step dimension.
-    IntTuple _scalar, _fold;    // points in scalar and fold.
-    IntTuple _clusterPts;       // cluster size in points.
-    IntTuple _clusterMults;     // cluster size in vectors.
-    IntTuple _miscDims;         // all other dims.
-
-    Dimensions() {}
-    virtual ~Dimensions() {}
-    
-    // Find the dimensions to be used.
-    void setDims(Grids& grids,
-                 string stepDim,
-                 IntTuple& foldOptions,
-                 IntTuple& clusterOptions,
-                 bool allowUnalignedLoads,
-                 ostream& os);
 };
 
 // A 'GridValue' is simply a pointer to an expression.

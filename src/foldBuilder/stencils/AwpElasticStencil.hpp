@@ -99,7 +99,8 @@ public:
     // time or space, so half-steps due to staggered grids are adjusted
     // appropriately.
 
-    void define_vel_x(GridIndex t, GridIndex x, GridIndex y, GridIndex z) {
+    void define_vel_x(GridIndex t, GridIndex x, GridIndex y, GridIndex z,
+                                 Condition at_last_z) {
         GridValue rho_val = (rho(x, y,   z  ) +
                              rho(x, y-1, z  ) +
                              rho(x, y,   z-1) +
@@ -115,9 +116,16 @@ public:
         adjust_for_sponge(next_vel_x, x, y, z);
 
         // define the value at t+1.
-        vel_x(t+1, x, y, z) IS_EQUIV_TO next_vel_x;
+        // This equation does NOT have a special case at surface, but the
+        // formula is replicated to unify the sub-domains. Eventually,
+        // YASK should be able to do this automatically.
+        vel_x(t+1, x, y, z) IS_EQUIV_TO next_vel_x
+            IF !at_last_z;
+        vel_x(t+1, x, y, z) IS_EQUIV_TO next_vel_x
+            IF at_last_z;
     }
-    void define_vel_y(GridIndex t, GridIndex x, GridIndex y, GridIndex z) {
+    void define_vel_y(GridIndex t, GridIndex x, GridIndex y, GridIndex z,
+                                 Condition at_last_z) {
         GridValue rho_val = (rho(x,   y, z  ) +
                              rho(x+1, y, z  ) +
                              rho(x,   y, z-1) +
@@ -133,9 +141,16 @@ public:
         adjust_for_sponge(next_vel_y, x, y, z);
 
         // define the value at t+1.
-        vel_y(t+1, x, y, z) IS_EQUIV_TO next_vel_y;
+        // This equation does NOT have a special case at surface, but the
+        // formula is replicated to unify the sub-domains. Eventually,
+        // YASK should be able to do this automatically.
+        vel_y(t+1, x, y, z) IS_EQUIV_TO next_vel_y
+            IF !at_last_z;
+        vel_y(t+1, x, y, z) IS_EQUIV_TO next_vel_y
+            IF at_last_z;
     }
-    void define_vel_z(GridIndex t, GridIndex x, GridIndex y, GridIndex z) {
+    void define_vel_z(GridIndex t, GridIndex x, GridIndex y, GridIndex z,
+                                 Condition at_last_z) {
         GridValue rho_val = (rho(x,   y,   z) +
                              rho(x+1, y,   z) +
                              rho(x,   y-1, z) +
@@ -151,7 +166,13 @@ public:
         adjust_for_sponge(next_vel_z, x, y, z);
 
         // define the value at t+1.
-        vel_z(t+1, x, y, z) IS_EQUIV_TO next_vel_z;
+        // This equation does NOT have a special case at surface, but the
+        // formula is replicated to unify the sub-domains. Eventually,
+        // YASK should be able to do this automatically.
+        vel_z(t+1, x, y, z) IS_EQUIV_TO next_vel_z
+            IF !at_last_z;
+        vel_z(t+1, x, y, z) IS_EQUIV_TO next_vel_z
+            IF at_last_z;
     }
 
     // Free-surface boundary equations for velocity.
@@ -344,7 +365,7 @@ public:
 
         stress_xz(t+1, x, y, z+1) IS_EQUIV_TO -stress_xz(t+1, x, y, z-1)
             IF at_last_z;
-        stress_xz(t+1, x, y, z+2) IS_EQUIV_TO -stress_zz(t+1, x, y, z-2)
+        stress_xz(t+1, x, y, z+2) IS_EQUIV_TO -stress_xz(t+1, x, y, z-2)
             IF at_last_z;
 
         stress_yz(t+1, x, y, z+1) IS_EQUIV_TO -stress_yz(t+1, x, y, z-1)
@@ -360,14 +381,20 @@ public:
         GET_OFFSET(y);
         GET_OFFSET(z);
 
+        // A condition that is true when index 'z' is at the free-surface boundary.
+        Condition at_last_z = (z == last_index(z));
+        
         // Define velocity components.
-        define_vel_x(t, x, y, z);
-        define_vel_y(t, x, y, z);
-        define_vel_z(t, x, y, z);
+        define_vel_x(t, x, y, z, at_last_z);
+        define_vel_y(t, x, y, z, at_last_z);
+        define_vel_z(t, x, y, z, at_last_z);
+
+        // Boundary conditions.
+        define_free_surface_vel(t, x, y, z, at_last_z);
 
         // Define some values common to the diagonal stress equations.
 #ifdef PRECOMPUTED_LAMBDA
-        // This assumes the lambda stencil is computed once before
+        // Use this the lambda values are pre-computed once before
         // all time-steps.
         GridValue lambda_val = lambda(x, y, z);
 #else
@@ -394,9 +421,6 @@ public:
             c1 * (vel_z(t+1, x,   y,   z  ) - vel_z(t+1, x,   y,   z-1)) +
             c2 * (vel_z(t+1, x,   y,   z+1) - vel_z(t+1, x,   y,   z-2));
 
-        // A condition that is true when index 'z' is at the free-surface boundary.
-        Condition at_last_z = (z == last_index(z));
-        
         // Define stress components.
         define_stress_xx(t, x, y, z, at_last_z,
                          lambda_val, mu_val, d_x_val, d_y_val, d_z_val);
@@ -409,7 +433,6 @@ public:
         define_stress_yz(t, x, y, z, at_last_z);
 
         // Boundary conditions.
-        define_free_surface_vel(t, x, y, z, at_last_z);
         define_free_surface_stress(t, x, y, z, at_last_z);
     }
 };

@@ -59,7 +59,7 @@ protected:
     // First-inner vars control ordering. Example: dims x, y, z.
     // If _firstInner == true, x is unit stride.
     // If _firstInner == false, z is unit stride.
-    // This setting affects mapTo1d() and visitAllPoints().
+    // This setting affects layout() and visitAllPoints().
     bool _firstInner;           // whether first dim is used for inner loop.
     static bool _defaultFirstInner; // global default for _firstInner.
     
@@ -155,7 +155,7 @@ public:
 
     // Set all values to the same value.
     virtual void setValsSame(T val) {
-        for (auto i : _map)
+        for (auto& i : _map)
             i.second = val;
     }
     
@@ -276,7 +276,7 @@ public:
     // unit stride) assuming values in this are sizes.
     // if strictRhs==true, RHS elements must be same as this;
     // else, only matching ones are considered.
-    virtual size_t mapTo1d(const Tuple& offsets, bool strictRhs=true) const {
+    virtual size_t layout(const Tuple& offsets, bool strictRhs=true) const {
         if (strictRhs)
             assert(areDimsSame(offsets));
         int idx = 0;
@@ -307,8 +307,6 @@ public:
             prevSize *= size;
             assert(prevSize <= product());
         }
-        //cerr << "** offsets " << offsets.makeDimValStr() << " in " <<
-        //makeDimValStr() << " => " << idx << endl;
         return idx;
     }
 
@@ -462,6 +460,33 @@ public:
     virtual Tuple minElements(const Tuple& rhs, bool strictRhs=true) const {
         return combineElements([&](T lhs, T rhs){ return std::min(lhs, rhs); },
                                rhs, strictRhs);
+    }
+
+    // Apply func to each element, creating a new Tuple.
+    virtual Tuple mapElements(function<T (T lhs, T rhs)> func,
+                              T rhs) const {
+        Tuple newt = *this;
+        for (auto& i : newt._map) {
+            T& val = i.second;
+            val = func(val, rhs);
+        }
+        return newt;
+    }
+    virtual Tuple addElements(T rhs) const {
+        return mapElements([&](T lhs, T rhs){ return lhs + rhs; },
+                               rhs);
+    }
+    virtual Tuple multElements(T rhs) const {
+        return mapElements([&](T lhs, T rhs){ return lhs * rhs; },
+                               rhs);
+    }
+    virtual Tuple maxElements(T rhs) const {
+        return mapElements([&](T lhs, T rhs){ return std::max(lhs, rhs); },
+                               rhs);
+    }
+    virtual Tuple minElements(T rhs) const {
+        return mapElements([&](T lhs, T rhs){ return std::min(lhs, rhs); },
+                               rhs);
     }
 
     // make name like "4x3x2" or "4, 3, 2".

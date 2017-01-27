@@ -42,11 +42,18 @@ IN THE SOFTWARE.
 
 // macro for debug message.
 #ifdef TRACE
-#define TRACE_MSG(fmt,...) (printf("YASK trace: " fmt "\n",__VA_ARGS__), fflush(0))
+#define TRACE_MSG0(os, msg) ((os) << "YASK: " << msg << std::endl << std::flush)
 #else
-#define TRACE_MSG(fmt,...) ((void)0)
+#define TRACE_MSG0(os, msg) ((void)0)
 #endif
 
+// macro for debug message from a StencilContext method.
+#define TRACE_MSG1(msg) TRACE_MSG0(get_ostr(), msg)
+#define TRACE_MSG(msg) TRACE_MSG1(msg)
+ 
+// macro for debug message when _context ptr is defined.
+#define TRACE_MSG2(msg) TRACE_MSG0(_context->get_ostr(), msg)
+ 
 // Size of time dimension required in allocated memory.
 // TODO: calculate this per-grid based on dependency tree and
 // traversal order.

@@ -112,7 +112,7 @@ cluster		?=	x=2
 
 else ifeq ($(findstring awp,$(stencil)),awp)
 time_dim_size	?=	1
-eqs		?=	velocity=vel_,stress=stress_
+eqs		?=	velocity=vel,stress=str
 def_rank_size	?=	512
 def_block_size	?=	32
 cluster		?=	x=1
@@ -124,8 +124,8 @@ FB_FLAGS	+=	-min-es 1
 
 else ifeq ($(stencil),fsg)
 time_dim_size   ?=      1
-layout_4d	?=	Layout_2314
 eqs             ?=      v_br=v_br,v_bl=v_bl,v_tr=v_tr,v_tl=v_tl,s_br=s_br,s_bl=s_bl,s_tr=s_tr,s_tl=s_tl
+layout_4d	?=	Layout_2314
 cluster		?=	x=1
 ifeq ($(arch),knl)
 REGION_LOOP_CODE ?=     omp square_wave serpentine loop(rn,rz,rx,ry) { calc(block(rt)); }
@@ -256,13 +256,15 @@ FB_CXX    	=       $(CXX)
 FB_CXXFLAGS 	+=	-g -O0 -std=c++11 -Wall  # low opt to reduce compile time.
 EXTRA_FB_CXXFLAGS =
 FB_FLAGS   	+=	-st $(stencil) -cluster $(cluster) -fold $(fold)
+ST_MACRO_FILE	:=	stencil_macros.hpp
+ST_CODE_FILE	:=	stencil_code.hpp
 GEN_HEADERS     =	$(addprefix src/, \
-				stencil_macros.hpp stencil_code.hpp \
 				stencil_rank_loops.hpp \
 				stencil_region_loops.hpp \
 				stencil_halo_loops.hpp \
 				stencil_block_loops.hpp \
-				layout_macros.hpp layouts.hpp )
+				layout_macros.hpp layouts.hpp \
+				$(ST_MACRO_FILE) $(ST_CODE_FILE) )
 ifneq ($(eqs),)
   FB_FLAGS   	+=	-eq $(eqs)
 endif
@@ -320,7 +322,7 @@ ifneq ($(findstring ic,$(notdir $(CXX))),)  # Intel compiler
 
 CODE_STATS      =   	code_stats
 CXXFLAGS        +=      $(ISA) -debug extended -Fa -restrict -ansi-alias -fno-alias
-CXXFLAGS	+=	-fimf-precision=low -fast-transcendentals -no-prec-sqrt -no-prec-div -fp-model fast=2 -fno-protect-parens -rcd -ftz -fma -fimf-domain-exclusion=none -qopt-assume-safe-padding -qoverride-limits
+CXXFLAGS	+=	-fimf-precision=low -fast-transcendentals -no-prec-sqrt -no-prec-div -fp-model fast=2 -fno-protect-parens -rcd -ftz -fma -fimf-domain-exclusion=none -qopt-assume-safe-padding -qoverride-limits -vec-threshold0
 CXXFLAGS	+=      -qopt-report=5 -qopt-report-phase=VEC,PAR,OPENMP,IPO,LOOP
 CXXFLAGS	+=	-no-diag-message-catalog
 CXX_VER_CMD	=	$(CXX) -V
@@ -484,20 +486,24 @@ src/layout_macros.hpp: gen-layouts.pl
 src/layouts.hpp: gen-layouts.pl
 	./$< -d > $@
 
+# Compile the stencil compiler.
+# TODO: move this to its own makefile.
 foldBuilder: src/foldBuilder/*.*pp src/foldBuilder/stencils/*.*pp
 	$(FB_CXX) $(FB_CXXFLAGS) -Isrc/foldBuilder/stencils -o $@ src/foldBuilder/*.cpp $(EXTRA_FB_CXXFLAGS)
 
-src/stencil_macros.hpp: foldBuilder
-	./$< $(FB_FLAGS) $(EXTRA_FB_FLAGS) -pm > $@
-	echo >> $@
-	echo '// Settings from YASK Makefile' >> $@
+# Run the stencil compiler and post-process its output files.
+# Use the gmake pattern-rule trick to specify simultaneous targets.
+%/$(ST_MACRO_FILE) %/$(ST_CODE_FILE): foldBuilder
+	./$< $(FB_FLAGS) $(EXTRA_FB_FLAGS) \
+	  -pm $*/$(ST_MACRO_FILE) -p$(FB_TARGET) $*/$(ST_CODE_FILE)
+	echo >> $*/$(ST_MACRO_FILE)
+	echo '// Settings from YASK Makefile' >> $*/$(ST_MACRO_FILE)
 	for macro in $(MACROS) $(EXTRA_MACROS); do \
-	  echo '#define' $$macro | sed 's/=/ /' >> $@; \
+	  echo '#define' $$macro | sed 's/=/ /' >> $*/$(ST_MACRO_FILE); \
 	done
-
-src/stencil_code.hpp: foldBuilder
-	./$< $(FB_FLAGS) $(EXTRA_FB_FLAGS) -p$(FB_TARGET) > $@
-	- gindent -fca $@ || indent -fca $@ || echo "note: no indent program found"
+	@- gindent -fca $*/$(ST_CODE_FILE) || \
+	  indent -fca $*/$(ST_CODE_FILE) || \
+	  echo "note:" $*/$(ST_CODE_FILE) "not formatted."
 
 headers: $(GEN_HEADERS)
 	@ echo 'Header files generated.'

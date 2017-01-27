@@ -111,7 +111,6 @@ public:
             if (!findMatchTo(ep))
                 ep->accept(this);
         }
-        //cerr << "ce " << ce << " after:"; for (auto& ep : ops) cerr << ' ' << ep; cerr << endl;
     }
     virtual void visit(IfExpr* ie) {
 
@@ -138,7 +137,7 @@ protected:
 
     virtual bool alreadyVisited(Expr* ep) {
 #if DEBUG_TRACKING >= 1
-        cerr << "- tracking '" << ep->makeStr() << "'@" << ep << endl;
+        cout << "- tracking '" << ep->makeStr() << "'@" << ep << endl;
 #endif
         bool seen = _counts.count(ep) > 0;
         _counts[ep]++;
@@ -168,7 +167,7 @@ public:
     }
     
     virtual void printStats(ostream& os, const string& descr = "") const {
-        os << "Expression stats";
+        os << " Expression stats";
         if (descr.length())
             os << " " << descr;
         os << ":" << endl <<
@@ -322,7 +321,7 @@ public:
         if (alreadyVisited(ce)) return;
         _numNodes++;
         auto& ops = ce->getOps();
-        //cerr << "counting ce " << ce << ":"; for (auto& ep : ops) cerr << ' ' << ep; cerr << endl;
+        //cout << "counting ce " << ce << ":"; for (auto& ep : ops) cout << ' ' << ep; cout << endl;
         _numOps += ops.size() - 1;
         for (auto& ep : ops) {
             ep->accept(this);
