@@ -764,12 +764,11 @@ void YASKCppPrinter::printCode(ostream& os) {
         auto& eq = _eqGroups.at(ei);
         string eqName = eq.getName();
         string eqDesc = eq.getDescription();
+        string egsName = "EqGroup_" + eqName;
 
-        os << endl << " ////// Stencil " << eqDesc <<
-            " //////" << endl;
-
-        os << endl << "struct EqGroup_" << eqName << " {" << endl <<
-            " std::string name = \"" << eqName << "\";" << endl;
+        os << endl << " ////// Stencil " << eqDesc << " //////\n" <<
+            "\n struct " << egsName << " {\n" <<
+            " std::string name = \"" << eqName << "\";\n";
 
         // Ops for this eqGroup.
         CounterVisitor fpops;
@@ -787,17 +786,23 @@ void YASKCppPrinter::printCode(ostream& os) {
                 "GridPtrs& outputGridPtrs, GridPtrs& inputGridPtrs) {" << endl;
 
             // I/O grids.
-            for (auto gp : eq.getOutputGrids())
-                os << "  outputGridPtrs.push_back(context." << gp->getName() << ");" << endl;
-            for (auto gp : eq.getInputGrids())
-                if (!gp->isParam())
-                    os << "  inputGridPtrs.push_back(context." << gp->getName() << ");" << endl;
-            os << " }" << endl;
+            if (eq.getOutputGrids().size()) {
+                os << "\n // The following grids are written by " << egsName << endl;
+                for (auto gp : eq.getOutputGrids())
+                    os << "  outputGridPtrs.push_back(context." << gp->getName() << ");" << endl;
+            }
+            if (eq.getInputGrids().size()) {
+                os << "\n // The following grids are read by " << egsName << endl;
+                for (auto gp : eq.getInputGrids())
+                    if (!gp->isParam())
+                        os << "  inputGridPtrs.push_back(context." << gp->getName() << ");" << endl;
+            }
+            os << " } // setPtrs." << endl;
         }
 
         // Condition.
         {
-            os << endl << " // Determine whether equation group is valid at the given indices. " <<
+            os << endl << " // Determine whether " << egsName << " is valid at the given indices. " <<
                 "Return true if indices are within the valid sub-domain or false otherwise." << endl <<
                     " bool is_in_valid_domain(" << _context_base << "& context, " <<
                 _dims._allDims.makeDimStr(", ", "idx_t ") << ") {" << endl;
@@ -840,8 +845,8 @@ void YASKCppPrinter::printCode(ostream& os) {
         // Cluster/Vector code.
         {
             // Cluster eqGroup at same index.
-            // This assumes cluster groups are formed identically to scalar ones.
-            // TODO: fix this!!
+            // This should be the same eq-group because it was copied from the
+            // scalar one.
             auto& ceq = _clusterEqGroups.at(ei);
             assert(eqDesc == ceq.getDescription());
 
@@ -873,14 +878,13 @@ void YASKCppPrinter::printCode(ostream& os) {
             os << " // SIMD calculations use " << vv.getNumPoints() <<
                 " vector block(s) created from " << vv.getNumAlignedVecs() <<
                 " aligned vector-block(s)." << endl;
-            os << " // There are " << (fpops.getNumOps() * numResults) <<
-                " FP operation(s) per cluster." << endl;
-
+            os << " // There are approximately " << (fpops.getNumOps() * numResults) <<
+                " FP operation(s) per invocation." << endl;
             os << " void calc_cluster(" << _context_base << "& context, " <<
                 _dims._allDims.makeDimStr(", ", "idx_t ", "v") << ") {" << endl;
 
             // Element indices.
-            os << endl << " // Un-normalized indices." << endl;
+            os << endl << " // Element (un-normalized) indices." << endl;
             for (auto dim : _dims._allDims.getDims()) {
                 auto p = _dims._fold.lookup(dim);
                 os << " idx_t " << dim << " = " << dim << "v";
@@ -1075,67 +1079,17 @@ void YASKCppPrinter::printCode(ostream& os) {
 void YASKCppPrinter::printGrids(ostream& os) {
     os << "// Automatically generated code; do not edit." << endl;
 
-    os << endl << "////// Grid classes needed to implement of the '" << _stencil.getName() <<
+    os << endl << "////// Grid classes needed to implement the '" << _stencil.getName() <<
         "' stencil //////" << endl;
     os << endl << "namespace yask {" << endl;
-
-    // Generic reav_vec_t grids for each dimensionality.
-    map<string, string> grid2cname;
-    set<string> cnames;
-    for (auto gp : _grids) {
-        assert (!gp->isParam());
-        string gname = gp->getName();
-        int ndims = gp->size();
-        assert (ndims > 0);
-
-        // Name of class.
-        ostringstream ndims_ss;
-        ndims_ss << ndims << "d"; // e.g., '3d'
-        string nd = ndims_ss.str();
-        string cname = "RealVecGrid" + nd; // e.g., 'RealVecGrid3d'.
-
-        // Done?
-        if (cnames.count(cname))
-            continue;
-        grid2cname[gname] = cname;
-        cnames.insert(cname);
-
-        // Base class.
-        string bname = "GenericGrid" + nd; // e.g., 'GenericGrid3d'.
-
-        // Start delcaration.
-        os << endl << " // A " << ndims << "D collection of real_vec_t elements." << endl <<
-            " template <typename LayoutFn> class " << cname << " :" << endl <<
-            "  public RealVecGridBase {" << endl <<
-            " protected:" << endl;
-
-        os << endl << "  // Sizes of various parts of the grid." << endl <<
-            "  // Each size is stored in real_t elements and real_vec_t elements for efficiency." << endl;
-        for (int i = 0; i < ndims; i++) {
-            int dn = i + 1;
-            os << "  idx_t _d" << dn << ", _d" << dn << "v; // Main (inner) size in dim " << dn << ".\n" <<
-                "  idx_t _hn" << dn << ", _hn" << dn << "v; // Neg-side halo in dim " << dn << ".\n" <<
-                "  idx_t _hp" << dn << ", _hp" << dn << "v; // Pos-side halo in dim " << dn << ".\n" <<
-                "  idx_t _pn" << dn << ", _pn" << dn << "v; // Neg-side padding in dim " << dn << ".\n" <<
-                "  idx_t _pp" << dn << ", _pp" << dn << "v; // Pos-side padding in dim " << dn << ".\n";
-        }
-
-        os << endl << "  // Underlying data.\n" <<
-            "  " << bname << "<real_vec_t, LayoutFn> _data;\n";
-        os << endl << " public:\n";
-
-        // TODO: lots more code here.
-        
-        os << " }; // " << cname << "." << endl;
-    }
     
     os << "} // namespace yask." << endl;
 }
 
-// Print YASK macros.
-// TODO: many hacks below assume certain dimensions and usage model
-// by the kernel. Need to improve kernel to make it more flexible
-// and then communicate info more generically.
+// Print YASK macros.  TODO: many hacks below assume certain dimensions and
+// usage model by the kernel. Need to improve kernel to make it more
+// flexible and then communicate info more generically. Goal is to get rid
+// of all these macros.
 void YASKCppPrinter::printMacros(ostream& os) {
     os << "// Automatically generated code; do not edit." << endl;
 

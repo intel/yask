@@ -683,12 +683,12 @@ namespace yask {
 
 #if ALLOW_NEG_TIME
             // Time t must be multiple of CPTS_T.
-            // Use imod & idiv to allow t to be any negative number.
-            assert(imod<idx_t>(t, CPTS_T) == 0);
-            idx_t t_idx = idiv<idx_t>(t, CPTS_T);
+            // Use imod_flr & idiv_flr to allow t to be any negative number.
+            assert(imod_flr<idx_t>(t, CPTS_T) == 0);
+            idx_t t_idx = idiv_flr<idx_t>(t, CPTS_T);
 
-            // Use imod to allow t to be negative.
-            return imod<idx_t>(t_idx, TIME_DIM_SIZE);
+            // Use imod_flr to allow t to be negative.
+            return imod_flr<idx_t>(t_idx, TIME_DIM_SIZE);
 #else
             // Version that avoids handling negative time by adding an
             // offset to the t index.  So, t can be negative, but not so
@@ -813,12 +813,12 @@ namespace yask {
 
 #if ALLOW_NEG_TIME
             // Time t must be multiple of CPTS_T.
-            // Use imod & idiv to allow t to be any negative number.
-            assert(imod<idx_t>(t, CPTS_T) == 0);
-            idx_t t_idx = idiv<idx_t>(t, CPTS_T);
+            // Use imod_flr & idiv_flr to allow t to be any negative number.
+            assert(imod_flr<idx_t>(t, CPTS_T) == 0);
+            idx_t t_idx = idiv_flr<idx_t>(t, CPTS_T);
 
-            // Use imod to allow t to be negative.
-            idx_t t_idx2 = imod<idx_t>(t_idx, TIME_DIM_SIZE);
+            // Use imod_flr to allow t to be negative.
+            idx_t t_idx2 = imod_flr<idx_t>(t_idx, TIME_DIM_SIZE);
 #else
             // Version that avoids handling negative time by adding an
             // offset to the t index.  So, t can be negative, but not so

@@ -608,16 +608,16 @@ namespace yask {
                        ", z=" << begin_bz << ".." << (end_bz-1) <<
                        ")");
 
-            // Divide indices by vector lengths.  Use idiv() instead of '/'
+            // Divide indices by vector lengths.  Use idiv_flr() instead of '/'
             // because begin/end vars may be negative (if in halo).
-            const idx_t begin_bnv = idiv<idx_t>(begin_bn, VLEN_N);
-            const idx_t begin_bxv = idiv<idx_t>(begin_bx, VLEN_X);
-            const idx_t begin_byv = idiv<idx_t>(begin_by, VLEN_Y);
-            const idx_t begin_bzv = idiv<idx_t>(begin_bz, VLEN_Z);
-            const idx_t end_bnv = idiv<idx_t>(end_bn, VLEN_N);
-            const idx_t end_bxv = idiv<idx_t>(end_bx, VLEN_X);
-            const idx_t end_byv = idiv<idx_t>(end_by, VLEN_Y);
-            const idx_t end_bzv = idiv<idx_t>(end_bz, VLEN_Z);
+            const idx_t begin_bnv = idiv_flr<idx_t>(begin_bn, VLEN_N);
+            const idx_t begin_bxv = idiv_flr<idx_t>(begin_bx, VLEN_X);
+            const idx_t begin_byv = idiv_flr<idx_t>(begin_by, VLEN_Y);
+            const idx_t begin_bzv = idiv_flr<idx_t>(begin_bz, VLEN_Z);
+            const idx_t end_bnv = idiv_flr<idx_t>(end_bn, VLEN_N);
+            const idx_t end_bxv = idiv_flr<idx_t>(end_bx, VLEN_X);
+            const idx_t end_byv = idiv_flr<idx_t>(end_by, VLEN_Y);
+            const idx_t end_bzv = idiv_flr<idx_t>(end_bz, VLEN_Z);
 
             // Vector-size steps are based on cluster lengths.
             // Using CLEN_* instead of CPTS_* because we want multiples of vector lengths.
