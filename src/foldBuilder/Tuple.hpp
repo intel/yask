@@ -53,6 +53,8 @@ using namespace std;
 template <typename T>
 class Tuple {
 protected:
+
+    // TODO: put dim names in a shared global pool.
     map<string, T> _map;        // contents.
     deque<string> _dims;        // dirs in specified order.
 
@@ -114,6 +116,12 @@ public:
     }
     int getNumDims() const {
         return int(_dims.size());
+    }
+
+    // Clear data.
+    void clear() {
+        _map.clear();
+        _dims.clear();
     }
 
     // Add dimension to tuple (must NOT already exist).
@@ -579,7 +587,7 @@ public:
     // Visitation order is with first dimension in unit stride, i.e., a conceptual
     // "outer loop" iterates through last dimension, and an "inner loop" iterates
     // through first dimension. If '_firstInner' is false, it is done the opposite way.
-    virtual void visitAllPoints(function<void (const Tuple&)> visitor) const {
+    virtual void visitAllPoints(function<void (Tuple&)> visitor) const {
 
         // Init lambda fn arg with *this.
         Tuple tp = *this;
@@ -594,7 +602,7 @@ public:
 protected:
 
     // Handle recursion for public visitAllPoints(visitor).
-    virtual void visitAllPoints(function<void (const Tuple&)> visitor,
+    virtual void visitAllPoints(function<void (Tuple&)> visitor,
                                 int curDimNum, int step, Tuple& tp) const {
 
         // Ready to call visitor, i.e., have we recursed beyond a dimension?

@@ -57,6 +57,7 @@ public:
 
 // A visitor that combines commutative exprs.
 // Example: (a + b) + c => a + b + c;
+// TODO: simplify exprs like a + -b.
 class CombineVisitor : public OptVisitor {
 public:
     CombineVisitor()  :
@@ -184,18 +185,6 @@ class CounterVisitor : public TrackingVisitor {
 protected:
     int _numOps, _numNodes, _numReads, _numWrites, _numParamReads;
 
-    // Vars to track min and max points seen for every grid.
-    // TODO: track all points to enable queries for halo, temporal
-    // extent, and required exchanges.
-    map<const Grid*, IntTuple> _maxPoints, _minPoints;
-    const IntTuple* getPoints(const Grid* gp,
-                              const map<const Grid*, IntTuple>& mp) const {
-        auto i = mp.find(gp);
-        if (i != mp.end())
-            return &(i->second);
-        return 0;
-    }
-    
 public:
     CounterVisitor() :
         _numOps(0), _numNodes(0), _numReads(0), _numWrites(0), _numParamReads(0) { }
@@ -226,30 +215,6 @@ public:
     int getNumParamReads() const { return _numParamReads; }
     int getNumOps() const { return _numOps; }
 
-    // Get max/min points accessed in each direction for given grid.
-    const IntTuple* getMaxPoints(const Grid* gp) const {
-        return getPoints(gp, _maxPoints);
-    }
-    const IntTuple* getMinPoints(const Grid* gp) const {
-        return getPoints(gp, _minPoints);
-    }
-
-    // Return halo needed for given grid in given dimension.
-    // TODO: allow separate halos for beginning and end.
-    int getHalo(const Grid* gp, const string& dim) const {
-        auto* maxps = getMaxPoints(gp);
-        auto* minps = getMinPoints(gp);
-        const int* maxp = maxps ? maxps->lookup(dim) : 0;
-        const int* minp = minps ? minps->lookup(dim) : 0;
-        if (!maxp && !minp)
-            return 0;
-        if (!maxp)
-            return abs(*minp);
-        if (!minp)
-            return abs(*maxp);
-        return max(abs(*minp), abs(*maxp));
-    }
-
     // Leaf nodes.
     virtual void visit(ConstExpr* ce) {
         if (alreadyVisited(ce)) return;
@@ -264,20 +229,11 @@ public:
         _numNodes++;
         if (gp->isParam())
             _numParamReads++;
-        else {
+        else
             _numReads++;
-
-            // Track max and min points accessed for this grid.
-            const Grid* g = gp->getGrid();
-            auto& maxp = _maxPoints[g];
-            maxp = gp->maxElements(maxp, false);
-            auto& minp = _minPoints[g];
-            minp = gp->minElements(minp, false);
-        }
     }
     
     // Unary: Count as one op if num type and visit operand.
-    // TODO: simplify exprs like a + -b.
     virtual void visit(UnaryNumExpr* ue) {
         if (alreadyVisited(ue)) return;
         _numNodes++;
@@ -316,7 +272,7 @@ public:
         be->getRhs()->accept(this);
     }
 
-    // Count as one op between each operand and visit operands.
+    // Commutative: count as one op between each operand and visit operands.
     virtual void visit(CommutativeExpr* ce) {
         if (alreadyVisited(ce)) return;
         _numNodes++;
@@ -328,18 +284,17 @@ public:
         }
     }
 
-    // Conditional: don't visit condition.
+    // Conditional: don't visit condition, and don't count as a node.
     // TODO: add separate stats for conditions.
     virtual void visit(IfExpr* ie) {
         if (alreadyVisited(ie)) return;
-        //_numNodes++;
         ie->getExpr()->accept(this);
     }
 
-    // Equality: assume LHS is a write; don't visit it.
+    // Equality: assume LHS is a write; don't visit it, and don't count
+    // equality as a node.
     virtual void visit(EqualsExpr* ee) {
         if (alreadyVisited(ee)) return;
-        _numNodes++;
         _numWrites++;
         ee->getRhs()->accept(this);
     }

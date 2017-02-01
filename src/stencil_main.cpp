@@ -50,7 +50,7 @@ struct AppSettings : public StencilSettings {
         pre_trial_sleep_time(1)
     { }
 
-    // A custom option handler for validation.
+    // A custom option-handler for validation.
     class ValOption : public CommandLineParser::OptionBase {
         AppSettings& _as;
 
@@ -84,7 +84,7 @@ struct AppSettings : public StencilSettings {
         CommandLineParser parser;
         add_options(parser);
 
-        // Add options for this app.
+        // Add more options for this app.
         parser.add_option(new CommandLineParser::BoolOption("h",
                                          "Print help message.",
                                          help));
@@ -196,7 +196,7 @@ int main(int argc, char** argv)
 
         // Temporarily set dt to a temp value for warmup.
         idx_t dt = opts.dt;
-        idx_t tmp_dt = min<idx_t>(opts.dt, TIME_DIM_SIZE);
+        idx_t tmp_dt = min<idx_t>(opts.dt, 1);
         opts.dt = tmp_dt;
 
         os << endl << divLine <<

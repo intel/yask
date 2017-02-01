@@ -620,7 +620,7 @@ void POVRayPrinter::print(ostream& os) {
 // Print YASK code in new stencil context class.
 // TODO: split this into smaller methods.
 void YASKCppPrinter::printCode(ostream& os) {
-    map<Grid*, string> typeNames, dimArgs, padArgs, ofsArgs;
+    map<Grid*, string> typeNames, dimArgs, haloArgs, padArgs, ofsArgs;
     map<Param*, string> paramTypeNames, paramDimArgs;
 
     os << "// Automatically generated code; do not edit." << endl;
@@ -634,7 +634,9 @@ void YASKCppPrinter::printCode(ostream& os) {
         // get stats.
         CounterVisitor cve;
         _eqGroups.visitEqs(&cve);
-        IntTuple maxHalos;
+
+        // TODO: get rid of global max-halo concept by using grid-specific halos.
+        IntTuple maxHalos;      
 
         os << endl << " ////// Stencil-specific data //////" << endl <<
             "struct " << _context_base << " : public StencilContext {" << endl;
@@ -648,37 +650,46 @@ void YASKCppPrinter::printCode(ostream& os) {
             // Type name & ctor params.
             // Name in kernel is 'Grid_' followed by dimensions.
             string typeName = "Grid_";
-            string dimArg, padArg, ofsArg;
+            string templStr, dimArg, haloArg, padArg, ofsArg;
             for (auto dim : gp->getDims()) {
                 string ucDim = allCaps(dim);
                 typeName += ucDim;
 
-                // don't want the step dimension during construction.
-                // TODO: calculate proper size for memory reuse.
-                if (dim != _dims._stepDim) {
-                    dimArg += "_opts->d" + dim + ", ";
+                // step dimension.
+                if (dim == _dims._stepDim) {
+                    string sdvar = grid + "_alloc_" + dim;
+                    os << " static const idx_t " << sdvar << " = " <<
+                        gp->getStepDimSize() << ";\n";
+                    templStr = "<" + sdvar + ">";
+                }
+                
+                // non-step dimension.
+                else {
 
                     // Halo for this dimension.
-                    int halo = _settings._haloSize > 0 ? _settings._haloSize : cve.getHalo(gp, dim);
+                    int halo = _settings._haloSize > 0 ?
+                        _settings._haloSize : gp->getHaloSize(dim);
                     string hvar = grid + "_halo_" + dim;
-                    os << " const idx_t " << hvar << " = " << halo << ";" << endl;
+                    os << " const idx_t " << hvar << " = " << halo << ";\n";
 
-                    // Update max halo.
+                    // Update max halo across grids.
                     int* mh = maxHalos.lookup(dim);
                     if (mh)
                         *mh = max(*mh, halo);
                     else
                         maxHalos.addDimBack(dim, halo);
 
-                    // Total padding = halo + extra.
-                    padArg += hvar + " + _opts->p" + dim + ", ";
-
-                    // Offset for this rank.
+                    // Ctor args.
+                    dimArg += "_opts->d" + dim + ", ";
+                    haloArg += hvar + ", ";
+                    padArg += "_opts->p" + dim + ", ";
                     ofsArg += "ofs_" + dim + ", ";
                 }
             }
+            typeName += templStr;
             typeNames[gp] = typeName;
             dimArgs[gp] = dimArg;
+            haloArgs[gp] = haloArg;
             padArgs[gp] = padArg;
             ofsArgs[gp] = ofsArg;
             os << " " << typeName << "* " << grid << "; // ";
@@ -1041,7 +1052,7 @@ void YASKCppPrinter::printCode(ostream& os) {
                     (_eqGroups.getOutputGrids().count(gp) == 0 && _settings._hbwRO))
                     hbwArg = "true";
                 os << "  " << grid << " = new " << typeNames[gp] <<
-                    "(" << dimArgs[gp] << padArgs[gp] << ofsArgs[gp] <<
+                    "(" << dimArgs[gp] << haloArgs[gp] << padArgs[gp] << ofsArgs[gp] <<
                     "\"" << grid << "\", " <<
                     hbwArg << ", get_ostr());\n";
             }

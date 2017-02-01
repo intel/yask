@@ -145,7 +145,7 @@ public:
     virtual void accept(ExprVisitor* ev) =0;
     virtual void accept(ExprVisitor* ev) const;
 
-    // Check for expression equivalency.
+    // check for expression equivalency.
     // Does *not* check value equivalency except for
     // constants.
     virtual bool isSame(const Expr* other) const =0;
@@ -934,27 +934,21 @@ protected:
     // different dimensionalities.
     bool _isParam;              // is a parameter.
 
-    // specific points that have been created in this grid.
-    GridPointPtrSet _points;
-
     // Map of expressions: key = expression ptr, value = if-condition ptr.
     // We use this to simplify the process of replacing statements
     //  when an if-condition is encountered.
     // key: grid(t,x)==grid(t,x+1); value: x>5;
     typedef map<EqualsExpr*, BoolExprPtr> CondMap;
 
-    // equations(s) describing how values in this grid are computed.
+    // Equations(s) describing how values in this grid are computed.
     EqList _eqs;          // just equations w/o conditions.
     CondMap _conds;       // map from equations to their conditions, if any.
 
-    // Add a new point if needed and return pointer to it.
-    // If it already exists, just return pointer.
-    // NB: the set is indexed by ptr, so it's possible to have
-    // >1 point to the same coords.
-    virtual GridPointPtr addPoint(GridPointPtr gpp) {
-        auto i = _points.insert(gpp); // add if not found.
-        return *i.first;
-    }
+    // Max abs-value of non-step-index halos required by all eqs at
+    // various step-index values.
+    // TODO: have separate pos and neg halos.
+    string _stepDim;            // Assumes all eqs use same step-dim.
+    map<int, IntTuple> _halos;  // key: step-dim offset.
 
 public:
     Grid() { }
@@ -968,10 +962,6 @@ public:
     bool isParam() const { return _isParam; }
     void setParam(bool isParam) { _isParam = isParam; }
     
-    // Point accessors.
-    const GridPointPtrSet& getPoints() const { return _points; }
-    GridPointPtrSet& getPoints() { return _points; }
-
     // Equation accessors.
     virtual void addEq(EqualsExprPtr ep) {
         _eqs.insert(ep);
@@ -998,6 +988,24 @@ public:
         else
             return nullptr;
     }
+
+    // Get the max size in 'dim' of halo across all step dims.
+    virtual int getHaloSize(const string& dim) const {
+        int h = 0;
+        for (auto i : _halos) {
+            auto& hi = i.second; // halo at step-val 'i'.
+            auto* p = hi.lookup(dim);
+            if (p)
+                h = std::max(h, *p);
+        }
+        return h;
+    }
+
+    // Determine how many values in step-dim are needed.
+    virtual int getStepDimSize() const;
+
+    // Update halos based on each value in 'vals' given the step-dim 'stepDim'.
+    virtual void updateHalo(const string& stepDim, const IntTuple& vals);
     
     // Visit all equations.
     // Will NOT visit conditions.
@@ -1007,11 +1015,11 @@ public:
         }
     }
 
-    // Remove expressions and points.
+    // Remove data related to attached eqs.
     virtual void clearTemp() {
-        _points.clear();
         _eqs.clear();
         _conds.clear();
+        _halos.clear();
     }
 
     // Create an expression to a specific point in this grid.
@@ -1111,8 +1119,8 @@ public:
             gp->visitEqs(ev);
     }
     
-    // Find dependencies based on all eqs in all grids.
-    // If 'eq_deps' is set, check dependencies between eqs.
+    // Find dependencies based on all eqs in all grids.  If 'eq_deps' is
+    // set, save dependencies between eqs.
     virtual void findDeps(IntTuple& pts,
                           const string& stepDim,
                           EqDepMap* eq_deps);
@@ -1168,6 +1176,7 @@ protected:
     EqList _eqs; // expressions in this eqGroup (not including conditions).
     Grids _outGrids;          // grids updated by this eqGroup.
     Grids _inGrids;          // grids read from by this eqGroup.
+    const Dimensions* _dims = 0;
 
     // Other eq-groups that this group depends on. This means that an
     // equation in this group has a grid value on the RHS that appears in
@@ -1180,7 +1189,7 @@ public:
     BoolExprPtr cond;           // condition (default is null).
 
     // Ctor.
-    EqGroup() {
+    EqGroup(const Dimensions& dims) : _dims(&dims) {
 
         // Create empty map entries.
         for (DepType dt = certain_dep; dt < num_deps; dt = DepType(dt+1)) {
@@ -1194,13 +1203,15 @@ public:
         _eqs(src._eqs),
         _outGrids(src._outGrids),
         _inGrids(src._inGrids),
+        _dims(src._dims),
         _dep_on(src._dep_on),
         baseName(src.baseName),
         index(src.index),
         cond(src.cond) {}
-    
-    // Add an equation
-    virtual void addEq(EqualsExprPtr ee);
+
+    // Add an equation.
+    // If 'update_stats', update grid and halo data.
+    virtual void addEq(EqualsExprPtr ee, bool update_stats = true);
     
     // Visit all the equations.
     virtual void visitEqs(ExprVisitor* ev) {
@@ -1276,6 +1287,7 @@ class EqGroups : public vector<EqGroup> {
 protected:
     Grids _outGrids;        // all grids updated.
     string _basename_default;
+    const Dimensions* _dims = 0;
 
     // Add expressions from a grid to group(s) named groupName.
     // Returns whether a new group was created.
@@ -1285,14 +1297,17 @@ protected:
                                   EqDepMap& eq_deps);
 
 public:
-    EqGroups(const string& basename_default) :
-        _basename_default(basename_default) {}
+    EqGroups(const string& basename_default, const Dimensions& dims) :
+        _basename_default(basename_default),
+        _dims(&dims) {}
     virtual ~EqGroups() {}
 
     // Copy ctor.
     EqGroups(const EqGroups& src) :
         vector<EqGroup>(src),
-        _outGrids(src._outGrids) {}
+        _outGrids(src._outGrids),
+        _dims(src._dims)
+    {}
     
     // Separate a set of grids into eqGroups based
     // on the target string.
@@ -1305,15 +1320,13 @@ public:
     void findEqGroups(Grids& grids,
                       const string& targets,
                       IntTuple& pts,
-                      const string& stepDim,
                       EqDepMap& eq_deps);
     void findEqGroups(Grids& grids,
                       const string& targets,
-                      IntTuple& pts,
-                      const string& stepDim) {
+                      IntTuple& pts) {
         EqDepMap eq_deps;
-        grids.findDeps(pts, stepDim, &eq_deps);
-        findEqGroups(grids, targets, pts, stepDim, eq_deps);
+        grids.findDeps(pts, _dims->_stepDim, &eq_deps);
+        findEqGroups(grids, targets, pts, eq_deps);
     }
 
     virtual const Grids& getOutputGrids() const {

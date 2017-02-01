@@ -412,10 +412,12 @@ int main(int argc, const char* argv[]) {
     // All grid points will be relative to origin (0,0,...,0).
     stencilFunc->define(dims._allDims);
 
-    // Check for illegal dependencies within equations for scalar & vector sizes.
+    // Check for illegal dependencies within equations for scalar size.
     cout << "Checking equation(s) in a scalar context...\n"
         " If this fails, review stencil equation(s) for illegal dependencies.\n";
     grids.checkDeps(dims._scalar, dims._stepDim);
+
+    // Check for illegal dependencies within equations for vector size.
     cout << "Checking equation(s) in a single folded-vector context...\n"
         " If this fails, the fold dimensions are not compatible with all equations.\n";
     grids.checkDeps(dims._fold, dims._stepDim);
@@ -424,8 +426,8 @@ int main(int argc, const char* argv[]) {
     // also create equation groups based on legal dependencies.
     cout << "Checking equation(s) in a cluster-of-vectors context...\n"
         " If this fails, the cluster dimensions are not compatible with all equations.\n";
-    EqGroups eqGroups(eq_group_basename_default);
-    eqGroups.findEqGroups(grids, eqGroupTargets, dims._clusterPts, dims._stepDim);
+    EqGroups eqGroups(eq_group_basename_default, dims);
+    eqGroups.findEqGroups(grids, eqGroupTargets, dims._clusterPts);
     optimizeEqGroups(eqGroups, "scalar & vector", false, cout);
 
     // Make copies of all the equations at each cluster offset.

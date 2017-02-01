@@ -212,7 +212,7 @@ namespace yask {
                 T te = (*this)();
                 T re = (*ref1)();
                 if (!within_tolerance(te, re, epsilon)) {
-                    os << "** scalar mismatch: " <<
+                    os << "** mismatch: " <<
                         te << " != " << re << std::endl;
                 }
             }
@@ -621,8 +621,9 @@ namespace yask {
 
         // Construct a grid of dimensions d1 * d2 * d3 * d4 * d5.
         GenericGrid5d(idx_t d1, idx_t d2, idx_t d3, idx_t d4, idx_t d5,
-                      size_t alignment=GenericGridBase<T>::_def_alignment) :
-            GenericGridBase<T>(d1 * d2 * d3 * d4 * d5, alignment),
+                      size_t alignment=GenericGridBase<T>::_def_alignment,
+                      bool use_hbw=true) :
+            GenericGridBase<T>(d1 * d2 * d3 * d4 * d5, alignment, use_hbw),
             _layout(d1, d2, d3, d4, d5) { }
 
         // Get original parameters.

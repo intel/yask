@@ -418,14 +418,78 @@ GridPointPtr Grid::makePoint(int count, ...) {
 
     // Create a point from the tuple.
     GridPointPtr gpp = make_shared<GridPoint>(this, pt);
-    return addPoint(gpp);
+    return gpp;
+}
+
+// Update halos based on each value in 'vals' given the step-dim 'stepDim'.
+void Grid::updateHalo(const string& stepDim, const IntTuple& vals)
+{
+    // set and/or check step dim.
+    if (_stepDim.length() == 0)
+        _stepDim = stepDim;
+    else assert(_stepDim == stepDim);
+    
+    // Find step value or use 0 if none.
+    int stepVal = 0;
+    auto* p = vals.lookup(stepDim);
+    if (p)
+        stepVal = *p;
+    auto& halos = _halos[stepVal];
+
+    // Update halo vals.
+    for (auto& dim : vals.getDims()) {
+        if (dim == stepDim)
+            continue;
+
+        auto* p = halos.lookup(dim);
+        int val = abs(vals.getVal(dim));
+        if (!p)
+            halos.addDimBack(dim, val);
+        else if (*p < val)
+            *p = val;
+            // else, current value is larger than val, so don't update.
+    }
+}
+
+// Determine how many values in step-dim are needed.
+int Grid::getStepDimSize() const
+{
+    // Only need one value if no step-dim index used.
+    if (_stepDim.length() == 0)
+        return 1;
+
+    // Nothing stored?
+    if (_halos.size() == 0)
+        return 1;
+
+    // Find halos at min and max step-dim points.
+    // These should correspond to the read and write points.
+    auto first_i = _halos.cbegin(); // begin == first.
+    auto last_i = _halos.crbegin(); // reverse-begin == last.
+    int first_ofs = first_i->first;
+    int last_ofs = last_i->first;
+    auto& first_halo = first_i->second;
+    auto& last_halo = last_i->second;
+
+    // Default step-dim size is range of offsets.
+    assert(last_ofs >= first_ofs);
+    int sz = last_ofs - first_ofs + 1;
+    
+    // If first and last halos are zero, we can further optimize storage by
+    // immediately reusing memory location.
+    if (sz > 1 &&
+        first_halo.max() == 0 &&
+        last_halo.max() == 0)
+        sz--;
+
+    return sz;
 }
 
 // A visitor to collect grids and points visited in a set of eqs.
 class PointVisitor : public ExprVisitor {
 
     // A set of all points to ensure pointers to each
-    // have same value.
+    // unique point have same value.
     set<GridPoint> _all_pts;
 
     // A type to hold a mapping of equations to a set of grids in each.
@@ -450,7 +514,8 @@ class PointVisitor : public ExprVisitor {
     const GridPoint* _add_pt(Grid* g, IntTuple& offsets) {
         GridPoint gp(g, offsets);
         auto i = _all_pts.insert(gp);
-        return &(*i.first);
+        auto& gp2 = *i.first;
+        return &gp2;
     }
 
     // Add all points with _pts offsets from pt0 to 'pt_map'.
@@ -463,7 +528,7 @@ class PointVisitor : public ExprVisitor {
 
         // Visit each point in pts.
         if (_pts) {
-            _pts->visitAllPoints([&](const IntTuple& pt){
+            _pts->visitAllPoints([&](IntTuple& pt){
 
                     // Add offset to pt0.
                     auto pt1 = pt0->addElements(pt, false);
@@ -579,9 +644,10 @@ bool EqDeps::_analyze(EqualsExprPtr a, SeenSet* seen)
     return false;
 }
 
-// Find dependencies based on all eqs in all grids.  If 'eq_deps' is set,
-// save dependencies between eqs.
-// TODO: replace with integration of a polyhedral library.
+// Find dependencies based on all eqs in all grids.
+// If 'eq_deps' is set, save dependencies between eqs.
+// TODO: replace dependency algorithms with integration of a polyhedral
+// library.
 void Grids::findDeps(IntTuple& pts,
                      const string& stepDim,
                      EqDepMap* eq_deps) {
@@ -620,16 +686,16 @@ void Grids::findDeps(IntTuple& pts,
             auto& ip1 = inPts.at(eq1p);
             auto cond1 = g1->getCond(eq1p);
 
-            // An equation must update its grid.
+            // An equation must update its grid only.
             assert(og1.size() == 1);
             assert(og1.count(g1) == 1);
 
-            // Check LHS points.
-            int si1 = 0;        // step index for eq1.
+            // Scan output (LHS) points.
+            int si1 = 0;        // step index for LHS of eq1.
             for (auto i1 : op1) {
-                auto* si1p = i1->lookup(stepDim);
             
                 // LHS of an equation must use step index.
+                auto* si1p = i1->lookup(stepDim);
                 if (!si1p) {
                     cerr << "Error: equation " << eq1->makeQuotedStr() <<
                         " does not reference step-dimension index '" << stepDim <<
@@ -638,6 +704,27 @@ void Grids::findDeps(IntTuple& pts,
                 }
                 assert(si1p);
                 si1 = *si1p;
+            }
+
+            // Scan input (RHS) points.
+            for (auto i1 : ip1) {
+
+                // Check RHS of an equation that uses step index.
+                auto* rsi1p = i1->lookup(stepDim);
+                if (rsi1p) {
+                    int rsi1 = *rsi1p;
+
+                    // Cannot depend on future value in this dim.
+                    if (rsi1 > si1) {
+                        cerr << "Error: equation " << eq1->makeQuotedStr() <<
+                            " contains an illegal dependence from offset " << rsi1 <<
+                            " to " << si1 << " relative to step-dimension index '" <<
+                            stepDim << "'.\n";
+                        exit(1);
+                    }
+
+                    // TODO: should make some dependency checks when rsi1 == si1.
+                }
             }
 
             // TODO: check to make sure cond1 doesn't depend on stepDim.
@@ -786,22 +873,47 @@ string EqGroup::getDescription(bool show_cond,
 }
 
 // Add an equation to an EqGroup
-void EqGroup::addEq(EqualsExprPtr ee)
+// If 'update_stats', update grid and halo data.
+void EqGroup::addEq(EqualsExprPtr ee, bool update_stats)
 {
 #ifdef DEBUG_EQ_GROUP
     cout << "EqGroup: adding " << ee->makeQuotedStr() << endl;
 #endif
     _eqs.insert(ee);
+
+    if (update_stats) {
     
-    // update input and output grids.
-    PointVisitor pv;
-    ee->accept(&pv);
-    auto& outGrids = pv.getOutputGrids();
-    for (auto* g : outGrids.at(ee.get()))
-        _outGrids.insert(g);
-    auto& inGrids = pv.getInputGrids();
-    for (auto* g : inGrids.at(ee.get()))
-        _inGrids.insert(g);
+        // Get I/O point data.
+        PointVisitor pv;
+        ee->accept(&pv);
+
+        // update list of input and output grids.
+        auto& outGrids = pv.getOutputGrids().at(ee.get());
+        for (auto* g : outGrids)
+            _outGrids.insert(g);
+        auto& inGrids = pv.getInputGrids().at(ee.get());
+        for (auto* g : inGrids)
+            _inGrids.insert(g);
+
+        // update halo info in grids.
+        auto& outPts = pv.getOutputPts().at(ee.get());
+        auto& inPts = pv.getInputPts().at(ee.get());
+        auto& stepDim = _dims->_stepDim;
+
+        // Output points.
+        for (auto* op : outPts) {
+            auto* g = op->getGrid();
+            auto* g2 = const_cast<Grid*>(g); // need to update grid.
+            g2->updateHalo(stepDim, *op);
+        }
+    
+        // Input points.
+        for (auto* ip : inPts) {
+            auto* g = ip->getGrid();
+            auto* g2 = const_cast<Grid*>(g); // need to update grid.
+            g2->updateHalo(stepDim, *ip);
+        }
+    }
 }
 
 // Set dependency on eg2 if this eq-group is dependent on it.
@@ -886,7 +998,7 @@ void EqGroup::replicateEqsInCluster(Dimensions& dims)
                     eq2->accept(&ov);
 
                     // Put new equation into group.
-                    addEq(eq2);
+                    addEq(eq2, false);
                 }
             }
         });
@@ -1016,7 +1128,7 @@ bool EqGroups::addExprsFromGrid(const string& baseName,
         
         // Make new group if needed.
         if (!target) {
-            EqGroup ne;
+            EqGroup ne(*_dims);
             push_back(ne);
             target = &back();
             target->baseName = baseName;
@@ -1051,9 +1163,10 @@ bool EqGroups::addExprsFromGrid(const string& baseName,
 void EqGroups::findEqGroups(Grids& allGrids,
                             const string& targets,
                             IntTuple& pts,
-                            const string& stepDim,
                             EqDepMap& eq_deps)
 {
+    auto& stepDim = _dims->_stepDim;
+    
     // Map to track indices per eq-group name.
     map<string, int> indices;
     

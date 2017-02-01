@@ -36,8 +36,6 @@
 #
 # real_bytes: FP precision: 4=float, 8=double.
 #
-# time_dim_size: allocated size of time dimension in grids.
-#
 # eqs: comma-separated name=substr pairs used to group
 #   grid update equations into sets.
 #
@@ -103,15 +101,9 @@ endif
 else ifeq ($(stencil),stream)
 MACROS		+=	MAX_EXCH_DIST=0
 radius		?=	2
-ifeq ($(radius),0)
-time_dim_size	=	1
-else
-time_dim_size	=	$(radius)
-endif
 cluster		?=	x=2
 
 else ifeq ($(findstring awp,$(stencil)),awp)
-time_dim_size	?=	1
 eqs		?=	velocity=vel,stress=str
 def_rank_size	?=	512
 def_block_size	?=	32
@@ -123,7 +115,6 @@ endif
 FB_FLAGS	+=	-min-es 1
 
 else ifeq ($(stencil),fsg)
-time_dim_size   ?=      1
 eqs             ?=      v_br=v_br,v_bl=v_bl,v_tr=v_tr,v_tl=v_tl,s_br=s_br,s_bl=s_bl,s_tr=s_tr,s_tl=s_tl
 layout_4d	?=	Layout_2314
 cluster		?=	x=1
@@ -206,9 +197,9 @@ omp_halo_schedule		?=	static
 def_block_threads		?=	2
 def_thread_divisor		?=	1
 real_bytes			?=	4
-time_dim_size			?=	2
 layout_3d			?=	Layout_123
 layout_4d			?=	Layout_1234
+layout_5d			?=	Layout_12345
 def_rank_size			?=	128
 def_block_size			?=	64
 def_pad				?=	1
@@ -281,7 +272,6 @@ endif
 MACROS		+=	REAL_BYTES=$(real_bytes)
 MACROS		+=	LAYOUT_3D=$(layout_3d)
 MACROS		+=	LAYOUT_4D=$(layout_4d)
-MACROS		+=	TIME_DIM_SIZE=$(time_dim_size)
 MACROS		+=	DEF_RANK_SIZE=$(def_rank_size)
 MACROS		+=	DEF_BLOCK_SIZE=$(def_block_size)
 MACROS		+=	DEF_BLOCK_THREADS=$(def_block_threads)
@@ -395,7 +385,7 @@ endif
 
 CXXFLAGS	+=	$(OMPFLAGS) $(EXTRA_CXXFLAGS)
 
-STENCIL_BASES		:=	stencil_main stencil_calc utils
+STENCIL_BASES		:=	stencil_main stencil_calc realv_grids utils
 STENCIL_OBJS		:=	$(addprefix src/,$(addsuffix .$(arch).o,$(STENCIL_BASES)))
 STENCIL_CXX		:=	$(addprefix src/,$(addsuffix .$(arch).i,$(STENCIL_BASES)))
 STENCIL_EXEC_NAME	:=	stencil.$(arch).exe
@@ -424,7 +414,6 @@ echo-settings:
 	@echo real_bytes=$(real_bytes)
 	@echo layout_3d=$(layout_3d)
 	@echo layout_4d=$(layout_4d)
-	@echo time_dim_size=$(time_dim_size)
 	@echo streaming_stores=$(streaming_stores)
 	@echo def_block_threads=$(def_block_threads)
 	@echo omp_schedule=$(omp_schedule)

@@ -499,20 +499,9 @@ namespace yask {
             if (abs(rdn) > 1 || abs(rdx) > 1 || abs(rdy) > 1 || abs(rdz) > 1)
                 continue;
 
-            // Size of buffer in each direction: if dist to neighbor is zero
-            // (i.e., is perpendicular to this rank), use full size;
-            // otherwise, use halo size.  TODO: use per-grid actual halo
-            // size determined by stencil compiler instead of global max.
-            idx_t bsn = (rdn == 0) ? _opts->dn : hn;
-            idx_t bsx = (rdx == 0) ? _opts->dx : hx;
-            idx_t bsy = (rdy == 0) ? _opts->dy : hy;
-            idx_t bsz = (rdz == 0) ? _opts->dz : hz;
-
-            // Add one to -1..+1 dist to get 0..2 range for my_neighbors indices.
-            rdn++; rdx++; rdy++; rdz++;
-
             // Save rank of this neighbor.
-            my_neighbors[rdn][rdx][rdy][rdz] = rn;
+            // Add one to -1..+1 dist to get 0..2 range for my_neighbors indices.
+            my_neighbors[rdn+1][rdx+1][rdy+1][rdz+1] = rn;
             num_neighbors++;
             os << "Neighbor #" << num_neighbors << " at " <<
                 rnn << ", " << rnx << ", " << rny << ", " << rnz <<
@@ -526,14 +515,30 @@ namespace yask {
 #endif
 
             // Is buffer needed?
-            if (mdist > MAX_EXCH_DIST || bsn * bsx * bsy * bsz == 0) {
+            if (mdist > MAX_EXCH_DIST) {
                 os << " No halo exchange with rank " << rn << '.' << endl;
+                continue;
             }
-            else {
                 
-                // Alloc MPI buffers between rn and my rank.
-                // Need send and receive for each updated grid.
-                for (auto gname : outputGridNames) {
+            // Alloc MPI buffers between rn and my rank.
+            // Need send and receive for each updated grid.
+            for (auto gname : outputGridNames) {
+                
+                // Size of buffer in each direction: if dist to neighbor is zero
+                // (i.e., is perpendicular to this rank), use full size;
+                // otherwise, use halo size.  TODO: use per-grid actual halo
+                // size determined by stencil compiler instead of global max to
+                // save memory. NB: halo exchange uses actual sizes.
+                idx_t bsn = (rdn == 0) ? _opts->dn : hn;
+                idx_t bsx = (rdx == 0) ? _opts->dx : hx;
+                idx_t bsy = (rdy == 0) ? _opts->dy : hy;
+                idx_t bsz = (rdz == 0) ? _opts->dz : hz;
+
+                if (bsn * bsx * bsy * bsz == 0) {
+                    os << " No halo exchange for grid '" << gname <<
+                        "' with rank " << rn << '.' << endl;
+                }
+                else {
                     for (int bd = 0; bd < MPIBufs::nBufDirs; bd++) {
                         ostringstream oss;
                         oss << gname;
@@ -543,7 +548,7 @@ namespace yask {
                             oss << "_get_halo_to_" << my_rank << "_from_" << rn;
                         
                         mpiBufs[gname].allocBuf(bd,
-                                                rdn, rdx, rdy, rdz,
+                                                rdn+1, rdx+1, rdy+1, rdz+1,
                                                 bsn, bsx, bsy, bsz,
                                                 oss.str(), os);
                         num_exchanges++;
@@ -666,21 +671,30 @@ namespace yask {
         // Report some stats.
         idx_t dt = _opts->dt;
         os << "\nSizes in points per grid (t*n*x*y*z):\n"
-            " vector-size:      " << VLEN_T << '*' << VLEN_N << '*' << VLEN_X << '*' << VLEN_Y << '*' << VLEN_Z << endl <<
-            " cluster-size:     " << CPTS_T << '*' << CPTS_N << '*' << CPTS_X << '*' << CPTS_Y << '*' << CPTS_Z << endl <<
-            " block-size:       " << _opts->bt << '*' << _opts->bn << '*' << _opts->bx << '*' << _opts->by << '*' << _opts->bz << endl <<
-            " block-group-size: 1*" << _opts->gn << '*' << _opts->gx << '*' << _opts->gy << '*' << _opts->gz << endl <<
-            " region-size:      " << _opts->rt << '*' << _opts->rn << '*' << _opts->rx << '*' << _opts->ry << '*' << _opts->rz << endl <<
-            " rank-domain-size: " << dt << '*' << _opts->dn << '*' << _opts->dx << '*' << _opts->dy << '*' << _opts->dz << endl <<
-            " problem-size:     " << dt << '*' << tot_n << '*' << tot_x << '*' << tot_y << '*' << tot_z << endl <<
+            " vector-size:      " <<
+            VLEN_T << '*' << VLEN_N << '*' << VLEN_X << '*' << VLEN_Y << '*' << VLEN_Z << endl <<
+            " cluster-size:     " <<
+            CPTS_T << '*' << CPTS_N << '*' << CPTS_X << '*' << CPTS_Y << '*' << CPTS_Z << endl <<
+            " block-size:       " <<
+            _opts->bt << '*' << _opts->bn << '*' << _opts->bx << '*' << _opts->by << '*' << _opts->bz << endl <<
+            " block-group-size: 1*" <<
+            _opts->gn << '*' << _opts->gx << '*' << _opts->gy << '*' << _opts->gz << endl <<
+            " region-size:      " <<
+            _opts->rt << '*' << _opts->rn << '*' << _opts->rx << '*' << _opts->ry << '*' << _opts->rz << endl <<
+            " rank-domain-size: " <<
+            dt << '*' << _opts->dn << '*' << _opts->dx << '*' << _opts->dy << '*' << _opts->dz << endl <<
+            " problem-size:     " <<
+            dt << '*' << tot_n << '*' << tot_x << '*' << tot_y << '*' << tot_z << endl <<
             endl <<
             "Other settings:\n"
-            " num-ranks: " << _opts->nrn << '*' << _opts->nrx << '*' << _opts->nry << '*' << _opts->nrz << endl <<
+            " num-ranks: " <<
+            _opts->nrn << '*' << _opts->nrx << '*' << _opts->nry << '*' << _opts->nrz << endl <<
             " stencil-name: " YASK_STENCIL_NAME << endl << 
-            " time-dim-size: " << TIME_DIM_SIZE << endl <<
             " vector-len: " << VLEN << endl <<
-            " padding: " << _opts->pn << '+' << _opts->px << '+' << _opts->py << '+' << _opts->pz << endl <<
-            " wave-front-angles: " << angle_n << '+' << angle_x << '+' << angle_y << '+' << angle_z << endl <<
+            " extra-padding: " <<
+            _opts->pn << '+' << _opts->px << '+' << _opts->py << '+' << _opts->pz << endl <<
+            " wave-front-angles: " <<
+            angle_n << '+' << angle_x << '+' << angle_y << '+' << angle_z << endl <<
             " max-halos: " << hn << '+' << hx << '+' << hy << '+' << hz << endl <<
             " manual-L1-prefetch-distance: " << PFDL1 << endl <<
             " manual-L2-prefetch-distance: " << PFDL2 << endl <<
@@ -989,38 +1003,24 @@ namespace yask {
         for (size_t gi = 0; gi < eg.inputGridPtrs.size(); gi++) {
             auto gp = eg.inputGridPtrs[gi];
 
-            // Only need to swap grids whose halos are not up-to-date.
-            if (updatedGridPtrs.count(gp))
+            // Only need to swap grids with temporal dims.
+            if (!gp->got_t())
                 continue;
 
-            // Get pointer to derived type.
-            // TODO: This is a hack. Make this more general.
-#if USING_DIM_N
-            auto gpd = dynamic_cast<Grid_TNXYZ*>(gp);
-#else
-            auto gpd = dynamic_cast<Grid_TXYZ*>(gp);
-#endif
-            // Skip this grid if it's not one of these types.
-            if (!gpd)
+            // Only need to swap grids whose halos are not up-to-date.
+            if (updatedGridPtrs.count(gp))
                 continue;
 
             // Basic grid info.
             auto gname = gp->get_name();
 
-            // Determine halo sizes to be exchanged for this grid;
-            // context.h* contains the max value across all grids.  The grid
-            // contains the halo+pad size actually allocated.  Since neither
-            // of these is exactly what we want, we use the minimum of these
-            // value. TODO: Store the actual halo needed in each grid and
-            // use this.
-#if USING_DIM_N
-            idx_t ghn = min(hn, gpd->get_pn());
-#else
-            idx_t ghn = 0;
-#endif
-            idx_t ghx = min(hx, gpd->get_px());
-            idx_t ghy = min(hy, gpd->get_py());
-            idx_t ghz = min(hz, gpd->get_pz());
+            // Determine halo sizes to be exchanged for this grid.
+            // Round up to vector lengths because the halo exchange only
+            // works with whole vectors. TODO: make this more efficient.
+            idx_t ghn = ROUND_UP(gp->get_halo_n(), VLEN_N);
+            idx_t ghx = ROUND_UP(gp->get_halo_x(), VLEN_X);
+            idx_t ghy = ROUND_UP(gp->get_halo_y(), VLEN_Y);
+            idx_t ghz = ROUND_UP(gp->get_halo_z(), VLEN_Z);
 
             // No halo?
             if (ghn + ghx + ghy + ghz == 0)
@@ -1094,16 +1094,16 @@ namespace yask {
 #define calc_halo(t,                                                    \
                   start_nv, start_xv, start_yv, start_zv,               \
                   stop_nv, stop_xv, stop_yv, stop_zv)  do {             \
-                         idx_t nv = start_nv;                           \
-                         idx_t xv = start_xv;                           \
-                         idx_t yv = start_yv;                           \
-                         idx_t izv = index_zv * step_zv;                \
-                         for (idx_t zv = start_zv; zv < stop_zv; zv++) { \
-                             real_vec_t hval = gpd->readVecNorm(t, ARG_N(nv) \
-                                                                xv, yv, zv, __LINE__); \
-                             sendBuf->writeVecNorm(hval, index_nv,      \
-                                                   index_xv, index_yv, izv++, __LINE__); \
-                         } } while(0)
+                             idx_t nv = start_nv;                       \
+                             idx_t xv = start_xv;                       \
+                             idx_t yv = start_yv;                       \
+                             idx_t izv = index_zv * step_zv;            \
+                             for (idx_t zv = start_zv; zv < stop_zv; zv++) { \
+                                 real_vec_t hval = gp->readVecNorm_TNXYZ(t, nv, xv, yv, zv, \
+                                                                         __LINE__); \
+                                 sendBuf->writeVecNorm(hval, index_nv, index_xv, index_yv, izv++, \
+                                                       __LINE__);       \
+                             } } while(0)
                          
                          // Include auto-generated loops to invoke calc_halo() from
                          // begin_*v to end_*v;
@@ -1215,10 +1215,10 @@ namespace yask {
                              idx_t izv = index_zv * step_zv;            \
                              for (idx_t zv = start_zv; zv < stop_zv; zv++) { \
                                  real_vec_t hval =                      \
-                                     rcvBuf->readVecNorm(index_nv,      \
-                                                         index_xv, index_yv, izv++, __LINE__); \
-                                 gpd->writeVecNorm(hval, t, ARG_N(nv)   \
-                                                   xv, yv, zv, __LINE__); \
+                                     rcvBuf->readVecNorm(index_nv, index_xv, index_yv, izv++, \
+                                                         __LINE__);     \
+                                 gp->writeVecNorm_TNXYZ(hval, t, nv, xv, yv, zv, \
+                                                        __LINE__);      \
                      } } while(0)
 
                          // Include auto-generated loops to invoke calc_halo() from
@@ -1281,9 +1281,10 @@ namespace yask {
         // over from a shallow copy. Just ignore it and realloc.
         auto gp = getBuf(bd, nn, nx, ny, nz);
         *gp = new Grid_NXYZ(dn, dx, dy, dz,
-                           0, 0, 0, 0,
-                           0, 0, 0, 0,
-                           name, true, os);
+                            0, 0, 0, 0,
+                            0, 0, 0, 0,
+                            0, 0, 0, 0,
+                            name, true, os);
         assert(*gp);
         return *gp;
     }
@@ -1463,13 +1464,6 @@ namespace yask {
         idx_t ngz = findNumGroups(os, gz, rz, bz, "z");
         idx_t ng = ngn * ngx * ngy * ngz;
         os << " num-block-groups-per-region: " << ng << endl;
-
-        // Round up padding as needed.
-        pn = roundUp(os, pn, VLEN_N, "extra padding in n");
-        px = roundUp(os, px, VLEN_X, "extra padding in x");
-        py = roundUp(os, py, VLEN_Y, "extra padding in y");
-        pz = roundUp(os, pz, VLEN_Z, "extra padding in z");
-
     }
 
 
