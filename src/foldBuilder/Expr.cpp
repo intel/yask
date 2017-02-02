@@ -284,7 +284,7 @@ IndexExpr::IndexExpr(NumExprPtr dim, IndexType type) :
             "' is not a dimension" << endl;
         exit(1);
     }
-    _dirName = dp->getDirName();
+    _dirName = *dp->getDirName();
 }
 
 // EqualsExpr methods.
@@ -437,14 +437,14 @@ void Grid::updateHalo(const string& stepDim, const IntTuple& vals)
     auto& halos = _halos[stepVal];
 
     // Update halo vals.
-    for (auto& dim : vals.getDims()) {
-        if (dim == stepDim)
+    for (auto* dim : vals.getDims()) {
+        if (*dim == stepDim)
             continue;
 
-        auto* p = halos.lookup(dim);
-        int val = abs(vals.getVal(dim));
+        auto* p = halos.lookup(*dim);
+        int val = abs(vals.getVal(*dim));
         if (!p)
-            halos.addDimBack(dim, val);
+            halos.addDimBack(*dim, val);
         else if (*p < val)
             *p = val;
             // else, current value is larger than val, so don't update.
@@ -1267,10 +1267,10 @@ void Dimensions::setDims(Grids& grids,
     // vector and cluster sizes based on dimensions that appear in ALL
     // grids. 
     // TODO: relax this restriction.
-    for (auto dim : _dimCounts.getDims()) {
+    for (auto* dim : _dimCounts.getDims()) {
 
         // Step dim cannot be folded.
-        if (dim == stepDim) {
+        if (*dim == stepDim) {
             continue;
         }
         
@@ -1288,13 +1288,13 @@ void Dimensions::setDims(Grids& grids,
     
     // Create final fold lengths based on cmd-line options.
     IntTuple foldGT1;    // fold dimensions > 1.
-    for (auto dim : foldOptions.getDims()) {
+    for (auto* dim : foldOptions.getDims()) {
         int sz = foldOptions.getVal(dim);
         int* p = _fold.lookup(dim);
         if (!p) {
             os << "Error: fold-length of " << sz << " in '" << dim <<
                 "' dimension not allowed because '" << dim << "' ";
-            if (dim == stepDim)
+            if (*dim == stepDim)
                 os << "is the step dimension." << endl;
             else
                 os << "doesn't exist in all grids." << endl;
@@ -1324,13 +1324,13 @@ void Dimensions::setDims(Grids& grids,
     }
 
     // Create final cluster lengths based on cmd-line options.
-    for (auto dim : clusterOptions.getDims()) {
+    for (auto* dim : clusterOptions.getDims()) {
         int mult = clusterOptions.getVal(dim);
         int* p = _clusterMults.lookup(dim);
         if (!p) {
             os << "Error: cluster-multiplier of " << mult << " in '" << dim <<
                 "' dimension not allowed because '" << dim << "' ";
-            if (dim == stepDim)
+            if (*dim == stepDim)
                 os << "is the step dimension." << endl;
             else
                 os << "doesn't exist in all grids." << endl;

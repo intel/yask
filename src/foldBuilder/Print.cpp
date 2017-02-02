@@ -651,13 +651,13 @@ void YASKCppPrinter::printCode(ostream& os) {
             // Name in kernel is 'Grid_' followed by dimensions.
             string typeName = "Grid_";
             string templStr, dimArg, haloArg, padArg, ofsArg;
-            for (auto dim : gp->getDims()) {
-                string ucDim = allCaps(dim);
+            for (auto* dim : gp->getDims()) {
+                string ucDim = allCaps(*dim);
                 typeName += ucDim;
 
                 // step dimension.
-                if (dim == _dims._stepDim) {
-                    string sdvar = grid + "_alloc_" + dim;
+                if (*dim == _dims._stepDim) {
+                    string sdvar = grid + "_alloc_" + *dim;
                     os << " static const idx_t " << sdvar << " = " <<
                         gp->getStepDimSize() << ";\n";
                     templStr = "<" + sdvar + ">";
@@ -668,8 +668,8 @@ void YASKCppPrinter::printCode(ostream& os) {
 
                     // Halo for this dimension.
                     int halo = _settings._haloSize > 0 ?
-                        _settings._haloSize : gp->getHaloSize(dim);
-                    string hvar = grid + "_halo_" + dim;
+                        _settings._haloSize : gp->getHaloSize(*dim);
+                    string hvar = grid + "_halo_" + *dim;
                     os << " const idx_t " << hvar << " = " << halo << ";\n";
 
                     // Update max halo across grids.
@@ -680,10 +680,10 @@ void YASKCppPrinter::printCode(ostream& os) {
                         maxHalos.addDimBack(dim, halo);
 
                     // Ctor args.
-                    dimArg += "_opts->d" + dim + ", ";
+                    dimArg += "_opts->d" + *dim + ", ";
                     haloArg += hvar + ", ";
-                    padArg += "_opts->p" + dim + ", ";
-                    ofsArg += "ofs_" + dim + ", ";
+                    padArg += "_opts->p" + *dim + ", ";
+                    ofsArg += "ofs_" + *dim + ", ";
                 }
             }
             typeName += templStr;
@@ -701,7 +701,7 @@ void YASKCppPrinter::printCode(ostream& os) {
         // Max halos.
         os << endl << " // Max halos across all grids." << endl;
         for (auto dim : maxHalos.getDims())
-            os << " const idx_t max_halo_" << dim << " = " <<
+            os << " const idx_t max_halo_" << *dim << " = " <<
                 maxHalos.getVal(dim) << ";" << endl;
 
         // Parameters.
@@ -759,8 +759,8 @@ void YASKCppPrinter::printCode(ostream& os) {
 
             // Init halo sizes.
             for (auto dim : maxHalos.getDims())
-                os << " h" << dim << " = ROUND_UP(max_halo_" << dim <<
-                    ", VLEN_" << allCaps(dim) << ");" << endl;
+                os << " h" << *dim << " = ROUND_UP(max_halo_" << *dim <<
+                    ", VLEN_" << allCaps(*dim) << ");" << endl;
             
             // end of ctor.
             os << " }" << endl;
@@ -896,10 +896,10 @@ void YASKCppPrinter::printCode(ostream& os) {
 
             // Element indices.
             os << endl << " // Element (un-normalized) indices." << endl;
-            for (auto dim : _dims._allDims.getDims()) {
+            for (auto* dim : _dims._allDims.getDims()) {
                 auto p = _dims._fold.lookup(dim);
-                os << " idx_t " << dim << " = " << dim << "v";
-                if (p) os << " * " << *p;
+                os << " idx_t " << *dim << " = " << *dim << "v";
+                if (p) os << " * VLEN_" << allCaps(*dim);
                 os << ";" << endl;
             }
                 
@@ -925,7 +925,7 @@ void YASKCppPrinter::printCode(ostream& os) {
                 // If diri >= 0, add a direction.
                 IntTuple dir;
                 if (diri >= 0) {
-                    string dim = _dims._allDims.getDims()[diri];
+                    auto* dim = _dims._allDims.getDims()[diri];
 
                     // Magnitude of dimension is based on cluster.
                     const int* p = _dims._clusterMults.lookup(dim);
@@ -933,7 +933,7 @@ void YASKCppPrinter::printCode(ostream& os) {
                     dir.addDimBack(dim, m);
 
                     // Don't need prefetch in step dimension.
-                    if (dim == _dims._stepDim)
+                    if (*dim == _dims._stepDim)
                         continue;
                 }
 
@@ -942,7 +942,7 @@ void YASKCppPrinter::printCode(ostream& os) {
                 if (dir.size())
                     os << "for leading edge of stencil advancing by " <<
                         dir.getDirVal() << " vector(s) in '+" <<
-                        dir.getDirName() << "' direction ";
+                        *dir.getDirName() << "' direction ";
                 else
                     os << "for entire stencil ";
                 os << "relative to indices " << _dims._allDims.makeDimStr(", ") <<
@@ -953,7 +953,7 @@ void YASKCppPrinter::printCode(ostream& os) {
 
                 string fname = "prefetch_cluster";
                 if (dir.size())
-                    fname += "_" + dir.getDirName();
+                    fname += "_" + *dir.getDirName();
                 os << " template<int level> void " << fname <<
                     "(" << _context_base << "& context, " <<
                     _dims._allDims.makeDimStr(", ", "idx_t ", "v") << ") {" << endl;
@@ -1113,14 +1113,14 @@ void YASKCppPrinter::printMacros(ostream& os) {
     os << endl;
     os << "// Dimensions:" << endl;
     for (auto dim : _dims._allDims.getDims()) {
-        os << "#define USING_DIM_" << allCaps(dim) << " (1)" << endl;
+        os << "#define USING_DIM_" << allCaps(*dim) << " (1)" << endl;
     }
         
     // Vec/cluster lengths.
     os << endl;
     os << "// One vector fold: " << _dims._fold.makeDimValStr(" * ") << endl;
     for (auto dim : _dims._fold.getDims()) {
-        string ucDim = allCaps(dim);
+        string ucDim = allCaps(*dim);
         os << "#define VLEN_" << ucDim << " (" << _dims._fold.getVal(dim) << ")" << endl;
     }
     os << "#define VLEN (" << _dims._fold.product() << ")" << endl;
@@ -1133,7 +1133,7 @@ void YASKCppPrinter::printMacros(ostream& os) {
     os << "// Cluster multipliers of vector folds: " <<
         _dims._clusterMults.makeDimValStr(" * ") << endl;
     for (auto dim : _dims._clusterMults.getDims()) {
-        string ucDim = allCaps(dim);
+        string ucDim = allCaps(*dim);
         os << "#define CLEN_" << ucDim << " (" <<
             _dims._clusterMults.getVal(dim) << ")" << endl;
     }

@@ -156,8 +156,8 @@ public:
         }
 
         // calc footprint in each dim.
-        map<string, int> footprints;
-        for (auto dim : _dims._fold.getDims()) {
+        map<const string*, int> footprints;
+        for (auto* dim : _dims._fold.getDims()) {
 
             // Create direction vector in this dim.
             IntTuple dir;

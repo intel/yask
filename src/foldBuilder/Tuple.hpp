@@ -54,9 +54,22 @@ template <typename T>
 class Tuple {
 protected:
 
-    // TODO: put dim names in a shared global pool.
-    map<string, T> _map;        // contents.
-    deque<string> _dims;        // dirs in specified order.
+    // A shared global pool for dim names.
+    // This saves space and allows us to compare pointers
+    // instead of strings.
+    static set<string> _allDims;
+    const string* _getDimPtr(const string& dim) const {
+        auto i = _allDims.insert(dim);
+        auto& i2 = *i.first;
+        return &i2;
+    }
+    const string* _getDimPtr(const string* dim) const {
+        return _getDimPtr(*dim);
+    }
+    
+    // Dimensions and values for this Tuple.
+    map<const string*, T> _map;        // contents.
+    deque<const string*> _dims;        // dirs in specified order.
 
     // First-inner vars control ordering. Example: dims x, y, z.
     // If _firstInner == true, x is unit stride.
@@ -64,7 +77,7 @@ protected:
     // This setting affects layout() and visitAllPoints().
     bool _firstInner;           // whether first dim is used for inner loop.
     static bool _defaultFirstInner; // global default for _firstInner.
-    
+
 public:
 
     // Default ctor.
@@ -92,12 +105,20 @@ public:
     
     // Return pointer to value or null if it doesn't exist.
     virtual const T* lookup(const string& dim) const {
-        auto i = _map.find(dim);
+        auto* sp = _getDimPtr(dim);
+        auto i = _map.find(sp);
         return (i == _map.end()) ? NULL : &(i->second);
     }
+    virtual const T* lookup(const string* dim) const {
+        return lookup(*dim);
+    }
     virtual T* lookup(const string& dim) {
-        auto i = _map.find(dim);
+        auto* sp = _getDimPtr(dim);
+        auto i = _map.find(sp);
         return (i == _map.end()) ? NULL : &(i->second);
+    }
+    virtual T* lookup(const string* dim) {
+        return lookup(*dim);
     }
 
     // Lookup and return value (must exist).
@@ -106,9 +127,12 @@ public:
         assert(p);
         return *p;
     }
+    virtual T getVal(const string* dim) const {
+        return getVal(*dim);
+    }
 
     // Get dimensions.
-    const deque<string>& getDims() const {
+    const deque<const string*>& getDims() const {
         return _dims;
     }
     int size() const {
@@ -126,14 +150,22 @@ public:
 
     // Add dimension to tuple (must NOT already exist).
     void addDimBack(const string& dim, T val) {
-        assert(_map.count(dim) == 0);
-        _map[dim] = val;
-        _dims.push_back(dim);
+        auto* sp = _getDimPtr(dim);
+        assert(_map.count(sp) == 0);
+        _map[sp] = val;
+        _dims.push_back(sp);
+    }
+    void addDimBack(const string* dim, T val) {
+        addDimBack(*dim, val);
     }
     void addDimFront(const string& dim, T val) {
-        assert(_map.count(dim) == 0);
-        _map[dim] = val;
-        _dims.push_front(dim);
+        auto* sp = _getDimPtr(dim);
+        assert(_map.count(sp) == 0);
+        _map[sp] = val;
+        _dims.push_front(sp);
+    }
+    void addDimFront(const string* dim, T val) {
+        addDimFront(*dim, val);
     }
     
     // Set value (key(s) must already exist).
@@ -141,6 +173,9 @@ public:
         T* p = lookup(dim);
         assert(p);
         *p = val;
+    }
+    virtual void setVal(const string* dim, T val) {
+        setVal(*dim, val);
     }
 
     // Set multiple values.
@@ -205,11 +240,11 @@ public:
     // in this one. Return resulting union.
     virtual Tuple makeUnionWith(const Tuple& rhs) const {
         Tuple u = *this;
-        for (auto dim : rhs.getDims()) {
-            auto p = u.lookup(dim);
+        for (auto* dim : rhs.getDims()) {
+            auto p = u.lookup(*dim);
             if (!p) {
-                auto v = rhs.getVal(dim);
-                u.addDimBack(dim, v);
+                auto v = rhs.getVal(*dim);
+                u.addDimBack(*dim, v);
             }
         }
         return u;
@@ -220,8 +255,8 @@ public:
     virtual bool areDimsSame(const Tuple& rhs) const {
         if (size() != rhs.size())
             return false;
-        for (auto dim : _dims) {
-            if (!rhs.lookup(dim))
+        for (auto* dim : _dims) {
+            if (!rhs.lookup(*dim))
                 return false;
         }
         return true;
@@ -232,9 +267,9 @@ public:
         if (!areDimsSame(rhs))
             return false;
         for (auto i : _map) {
-            auto dim = i.first;
+            auto* dim = i.first;
             T lv = i.second;
-            T rv = rhs.getVal(dim);
+            T rv = rhs.getVal(*dim);
             if (lv != rv)
                 return false;
         }
@@ -250,9 +285,9 @@ public:
         // if dims are same, compare values.
         if (areDimsSame(rhs)) {
             for (auto i : _map) {
-                auto dim = i.first;
+                auto* dim = i.first;
                 T lv = i.second;
-                T rv = rhs.getVal(dim);
+                T rv = rhs.getVal(*dim);
                 if (lv < rv)
                     return true;
                 else if (lv > rv)
@@ -295,14 +330,14 @@ public:
         int beyondLastDim = _firstInner ? size() : -1;
         int stepDim = _firstInner ? 1 : -1;
         for (int di = startDim; di != beyondLastDim; di += stepDim) {
-            auto dim = _dims[di];
+            auto* dim = _dims[di];
 
             // size of this dim.
-            int size = getVal(dim);
+            int size = getVal(*dim);
             assert (size >= 0);
 
             // offset into this dim.
-            auto op = offsets.lookup(dim);
+            auto op = offsets.lookup(*dim);
             int offset = op ? *op : 0; // 0 offset default.
             assert(offset >= 0);
             assert(offset < size);
@@ -323,9 +358,9 @@ public:
     virtual T getValInDir(const Tuple& dir) const {
         assert(dir.size() == 1);
         for (auto i : _map) {
-            auto dim = i.first;
+            auto* dim = i.first;
             T val = i.second;
-            const T* p = dir.lookup(dim);
+            const T* p = dir.lookup(*dim);
             if (p)
                 return val;
         }
@@ -335,17 +370,19 @@ public:
 
     // get name of a direction, which must be
     // 0D or 1D.
-    virtual string getDirName() const {
+    virtual const string* getDirName() const {
         assert(size() <= 1);
-        if (!size())
-            return "none";
-        return _dims[0];  // first and only key.
+        if (!size()) {
+            auto* sp = _getDimPtr("none");
+            return sp;
+        }
+        return _dims.at(0);  // first and only key.
     }
 
     // get value of this direction, which must be 1D.
     virtual T getDirVal() const {
         assert(size() == 1);
-        T dv = getVal(_dims[0]);  // first and only value.
+        T dv = _map.cbegin()->second;  // first and only value.
         return dv;
     }
 
@@ -358,22 +395,23 @@ public:
         return newt;
     }
     virtual Tuple getDirInDir(const Tuple& dir) const {
-        return getDirInDim(dir.getDirName());
+        return getDirInDim(*dir.getDirName());
     }
 
     // Create a new Tuple with the given dimension removed.
     // if dim is found, new Tuple will have one fewer dim than this.
     // If dim is not found, it will be a copy of this.
     virtual Tuple removeDimInDim(const string& dname) const {
+        auto* sp = _getDimPtr(dname);
         Tuple newt;
-        for (auto dim : _dims) {
-            if (dim != dname)
-                newt.addDimBack(dim, getVal(dim));
+        for (auto* dim : _dims) {
+            if (dim != sp)
+                newt.addDimBack(*dim, getVal(*dim));
         }
         return newt;
     }
     virtual Tuple removeDimInDir(const Tuple& dir) const {
-        return removeDimInDim(dir.getDirName());
+        return removeDimInDim(*dir.getDirName());
     }
     
     // Determine whether this is inline with t2 along
@@ -383,11 +421,11 @@ public:
         assert(areDimsSame(t2));
         if (dir.size() == 0)
             return false;       // never inline with no direction.
-        string dname = dir.getDirName();
-        for (auto i : _map) {
-            auto dim = i.first;
+        auto* dname = dir.getDirName();
+        for (auto& i : _map) {
+            auto* dim = i.first;
             T val = i.second;
-            T val2 = t2.getVal(dim);
+            T val2 = t2.getVal(*dim);
 
             // if not in given direction, values must be equal.
             if (dim != dname && val != val2)
@@ -399,7 +437,7 @@ public:
     // Determine whether this is 'ahead of' t2 along
     // given direction in dir.
     virtual bool isAheadOfInDir(const Tuple& t2, const Tuple& dir) const {
-        string dn = dir.getDirName();
+        auto* dn = dir.getDirName();
         T dv = dir.getDirVal();
         assert(areDimsSame(t2));
         return isInlineInDir(t2, dir) &&
@@ -515,9 +553,9 @@ public:
                                string prefix="", string suffix="") const {
         ostringstream oss;
         int n = 0;
-        for (auto dim : _dims) {
+        for (auto* dim : _dims) {
             if (n) oss << separator;
-            oss << prefix << dim << suffix;
+            oss << prefix << *dim << suffix;
             n++;
         }
         return oss.str();
@@ -528,9 +566,9 @@ public:
                                  string prefix="", string suffix="") const {
         ostringstream oss;
         int n = 0;
-        for (auto dim : _dims) {
+        for (auto* dim : _dims) {
             if (n) oss << separator;
-            oss << prefix << dim << infix << getVal(dim) << suffix;
+            oss << prefix << *dim << infix << getVal(dim) << suffix;
             n++;
         }
         return oss.str();
@@ -541,12 +579,12 @@ public:
                                        string prefix="", string suffix="") const {
         ostringstream oss;
         int n = 0;
-        for (auto dim : _dims) {
+        for (auto *dim : _dims) {
 
             T val = getVal(dim);
 
             if (n) oss << separator;
-            oss << prefix << dim;
+            oss << prefix << *dim;
             if (val > 0) oss << "+" << val;
             else if (val < 0) oss << val; // includes '-';
             oss << suffix;
@@ -563,7 +601,7 @@ public:
                                            string prefix="", string suffix="") const {
         ostringstream oss;
         int n = 0;
-        for (auto dim : _dims) {
+        for (auto* dim : _dims) {
 
             // index value.
             T val = getVal(dim);
@@ -573,7 +611,7 @@ public:
             T d = p ? *p : 1;
 
             if (n) oss << separator;
-            oss << prefix << dim << "v";
+            oss << prefix << *dim << "v";
             if (val > 0) oss << "+(" << val << "/" << d << ")";
             else if (val < 0) oss << "-(" << -val << "/" << d << ")";
             oss << suffix;
@@ -611,7 +649,7 @@ protected:
         
         // Iterate along current dimension, and recurse to prev dimension.
         else {
-            auto dim = _dims.at(curDimNum);
+            auto* dim = _dims.at(curDimNum);
             T dsize = getVal(dim);
             for (T i = 0; i < dsize; i++) {
                 tp.setVal(dim, i);
@@ -621,8 +659,10 @@ protected:
     }
 };
 
-// Default value.
+// Static members.
 template <typename T>
 bool Tuple<T>::_defaultFirstInner = true;
+template <typename T>
+set<string> Tuple<T>::_allDims;
 
 #endif
