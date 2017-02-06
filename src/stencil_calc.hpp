@@ -93,12 +93,11 @@ namespace yask {
                                                         Grid_NXYZ* sendBuf,
                                                         Grid_NXYZ* rcvBuf)> visitor);
             
-        // Allocate new buffer in given direction and size.
-        virtual Grid_NXYZ* allocBuf(int bd,
-                                    idx_t nn, idx_t nx, idx_t ny, idx_t nz,
-                                    idx_t dn, idx_t dx, idx_t dy, idx_t dz,
-                                    const std::string& name,
-                                    std::ostream& os);
+        // Create new buffer in given direction and size.
+        virtual Grid_NXYZ* makeBuf(int bd,
+                                   idx_t nn, idx_t nx, idx_t ny, idx_t nz,
+                                   idx_t dn, idx_t dx, idx_t dy, idx_t dz,
+                                   const std::string& name);
     };
 
     // Application settings to control size and perf of stencil code.
@@ -108,11 +107,11 @@ namespace yask {
         // - time sizes (t) are in steps to be done.
         // - spatial sizes (n, x, y, z) are in elements (not vectors).
         // Sizes are the same for all grids. TODO: relax this restriction.
-        idx_t dt, dn, dx, dy, dz; // rank size (without halos).
+        idx_t dt=1, dn=0, dx=0, dy=0, dz=0; // rank size (without halos).
         idx_t rt=1, rn=0, rx=0, ry=0, rz=0; // region size (used for wave-front tiling).
-        idx_t bt, bn, bx, by, bz; // block size (used for cache locality).
+        idx_t bt=1, bn=0, bx=0, by=0, bz=0; // block size (used for cache locality).
         idx_t gn=0, gx=0, gy=0, gz=0;     // group-of-blocks size (only used for 'grouped' loop paths).
-        idx_t pn, px, py, pz;     // spatial padding (in addition to halos, to avoid aliasing).
+        idx_t pn=0, px=0, py=0, pz=0;     // spatial padding (in addition to halos, to avoid aliasing).
 
         // MPI settings.
         idx_t nrn=1, nrx=1, nry=1, nrz=1; // number of ranks in each dim.
@@ -185,6 +184,18 @@ namespace yask {
 
         // Command-line and env parameters.
         StencilSettings* _opts;
+
+        // Underlying data allocation.
+        // TODO: create different types of memory, e.g., HBM.
+        void* _data_buf = 0;
+        size_t _data_buf_size = 0;
+
+        // Byes between each buffer to help avoid aliasing
+        // in the HW.
+        size_t _data_buf_pad = (YASK_PAD * CACHELINE_BYTES);
+
+        // Alignment for _data_buf;
+        size_t _data_buf_alignment = YASK_ALIGNMENT;
         
         // TODO: move vars into private or protected sections and
         // add accessor methods.
@@ -288,24 +299,20 @@ namespace yask {
         // Called from allocAll(), so it doesn't normally need to be called from user code.
         virtual void setupRank();
 
-        // Allocate grid memory.
+        // Allocate grid, param, and MPI memory.
+        // If '_distrib' is true, distribute already-allocated memory.
         // Called from allocAll(), so it doesn't normally need to be called from user code.
-        virtual void allocGrids() =0;
+        virtual void allocData(bool _distrib = false);
 
-        // Allocate param memory.
-        // Called from allocAll(), so it doesn't normally need to be called from user code.
-        virtual void allocParams() =0;
-
-        // Set pointers to allocated grids.
-        // Called from allocAll(), so it doesn't normally need to be called from user code.
-        virtual void setPtrs() =0;
-        
         // Allocate grids, params, MPI bufs, etc.
         // Initialize some other data structures.
+        // Print lots of stats.
         virtual void allocAll();
         
-        // Get total size.
-        virtual idx_t get_num_bytes();
+        // Get total memory allocation.
+        virtual size_t get_num_bytes() {
+            return _data_buf_size;
+        }
 
         // Init all grids & params by calling initFn.
         virtual void initValues(std::function<void (RealVecGridBase* gp, 
@@ -432,7 +439,8 @@ namespace yask {
         GridPtrs inputGridPtrs;
 
         // ctor, dtor.
-        EqGroupBase() { }
+        EqGroupBase(StencilContext* context) :
+            _generic_context(context) { }
         virtual ~EqGroupBase() { }
 
         // Get name of this equation set.
@@ -444,9 +452,6 @@ namespace yask {
         // Get number of points updated for one scalar eval.
         virtual int get_scalar_points_updated() const =0;
 
-        // Set various pointers.
-        virtual void setPtrs(StencilContext& context) =0;
-        
         // Set the bounding-box vars for this eq group in this rank.
         virtual void find_bounding_box();
 
@@ -487,6 +492,8 @@ namespace yask {
     class EqGroupTemplate : public EqGroupBase {
 
     protected:
+
+        // Pointer to a more specific context.
         ContextClass* _context;
         
         // EqGroupClass must implement calc_scalar(), calc_cluster(),
@@ -499,7 +506,14 @@ namespace yask {
         
     public:
 
-        EqGroupTemplate() {
+        // Ctor.
+        EqGroupTemplate(ContextClass* context) :
+            EqGroupBase(context),
+            _context(context),
+            _eqGroup(*_context, outputGridPtrs, inputGridPtrs)
+        {
+            assert(_generic_context);
+            assert(_context);
 
             // Make sure map entries exist.
             for (DepType dt = certain_dep; dt < num_deps; dt = DepType(dt+1)) {
@@ -517,19 +531,6 @@ namespace yask {
         }
         virtual int get_scalar_points_updated() const {
             return _eqGroup.scalar_points_updated;
-        }
-
-        // Set some pointers to allocated data.
-        virtual void setPtrs(StencilContext& generic_context) {
-            _generic_context = &generic_context;
-
-            // Convert to a problem-specific context.
-            _context = dynamic_cast<ContextClass*>(_generic_context);
-            assert(_context);
-
-            outputGridPtrs.clear();
-            inputGridPtrs.clear();
-            _eqGroup.setPtrs(*_context, outputGridPtrs, inputGridPtrs);
         }
 
         // Add dependency.

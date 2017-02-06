@@ -70,13 +70,12 @@ bool firstInner = true;
 bool allowUnalignedLoads = false;
 string eqGroupTargets;
 bool doFuse = false;
-bool hbwRW = true;
-bool hbwRO = true;
 bool doComb = false;
 bool doCse = true;
 string stepDim = "t";
-int  haloSize = 0;                     // 0 means auto
-string eq_group_basename_default = "eq_group";
+int haloSize = 0;                     // 0 means auto.
+int stepAlloc = 0;                    // 0 means auto.
+string eq_group_basename_default = "stencil";
 
 ostream* open_file(const string& name) {
     
@@ -129,9 +128,12 @@ void usage(const string& cmd) {
         " -step <dim>\n"
         "    Specify stepping dimension <dim> (default='" << stepDim << "').\n"
         "      This is used for dependence calculation and memory allocation.\n"
+        " -step-alloc <size>\n"
+        "    Specify the size of the step-dimension memory allocation.\n"
+        "      By default, allocations are calculated automatically for each grid.\n"
         " -halo <size>\n"
         "    Specify the sizes of the halos.\n"
-        "      By default, halos sizes are calculated automatically for each grid.\n"
+        "      By default, halos are calculated automatically for each grid.\n"
         " -lus\n"
         "    Make last dimension of fold unit stride (instead of first).\n"
         "      This controls the intra-vector memory layout.\n"
@@ -143,10 +145,6 @@ void usage(const string& cmd) {
         "    Do [not] combine commutative operations (default=" << doComb << ").\n"
         " [-no]-cse\n"
         "    Do [not] eliminate common subexpressions (default=" << doCse << ").\n"
-        " [-no]-hbw-rw\n"
-        "    Do [not] allocate read/write grids in high-BW mem (default=" << hbwRW << ").\n"
-        " [-no]-hbw-ro\n"
-        "    Do [not] allocate read-only grids in high-BW mem (default=" << hbwRO << ").\n"
         " -max-es <num-nodes>\n"
         "    Set heuristic for max single expression-size (default=" << maxExprSize << ").\n"
         " -min-es <num-nodes>\n"
@@ -212,15 +210,6 @@ void parseOpts(int argc, const char* argv[])
             else if (opt == "-no-fuse")
                 doFuse = false;
 
-            else if (opt == "-hbw-rw")
-                hbwRW = true;
-            else if (opt == "-no-hbw-rw")
-                hbwRW = false;
-            else if (opt == "-hbw-ro")
-                hbwRO = true;
-            else if (opt == "-no-hbw-ro")
-                hbwRO = false;
-            
             // add any more options w/o values above.
 
             // options w/a value.
@@ -298,6 +287,8 @@ void parseOpts(int argc, const char* argv[])
 
                     else if (opt == "-halo")
                         haloSize = val;
+                    else if (opt == "-step-alloc")
+                        stepAlloc = val;
 
                     // add any more options w/int values here.
 
@@ -470,9 +461,8 @@ int main(int argc, const char* argv[]) {
     // Settings for YASK.
     YASKCppSettings yaskSettings;
     yaskSettings._allowUnalignedLoads = allowUnalignedLoads;
-    yaskSettings._hbwRW = hbwRW;
-    yaskSettings._hbwRO = hbwRO;
     yaskSettings._haloSize = haloSize;
+    yaskSettings._stepAlloc = stepAlloc;
     yaskSettings._maxExprSize = maxExprSize;
     yaskSettings._minExprSize = minExprSize;
     

@@ -64,7 +64,7 @@ public:
 
     // Return a parameter reference.
     virtual string readFromParam(ostream& os, const GridPoint& pp) {
-        string str = "(*context." + pp.getName() + ")(" + pp.makeValStr() + ")";
+        string str = "context." + pp.getName() + "(" + pp.makeValStr() + ")";
         return str;
     }
     
@@ -73,7 +73,7 @@ public:
     virtual string makePointCall(const GridPoint& gp,
                                  const string& fname, string optArg = "") const {
         ostringstream oss;
-        oss << "context." << gp.getName() << "->" << fname << "(";
+        oss << "context." << gp.getName() << "." << fname << "(";
         if (optArg.length()) oss << optArg << ", ";
         oss << gp.makeDimValOffsetStr() << ", __LINE__)";
         return oss.str();
@@ -120,7 +120,7 @@ protected:
 
     // Return a parameter reference.
     virtual string readFromParam(ostream& os, const GridPoint& pp) {
-        string str = "(*context." + pp.getName() + ")(" + pp.makeValStr() + ")";
+        string str = "context." + pp.getName() + "(" + pp.makeValStr() + ")";
         return str;
     }
     
@@ -140,7 +140,7 @@ protected:
                                 const string& firstArg,
                                 const string& lastArg,
                                 bool isNorm) const {
-        os << " context." << gp.getName() << "->" << funcName << "(";
+        os << " context." << gp.getName() << "." << funcName << "(";
         if (firstArg.length())
             os << firstArg << ", ";
         if (isNorm)
@@ -287,10 +287,10 @@ public:
 
 // Settings for C++ printing.
 struct YASKCppSettings {
-    bool _allowUnalignedLoads;
-    bool _hbwRW, _hbwRO;
-    int  _haloSize;
-    int _maxExprSize, _minExprSize;
+    bool _allowUnalignedLoads = false;
+    int _haloSize = 0;
+    int _stepAlloc = 2; 
+    int _maxExprSize = 50, _minExprSize = 0;
 };
 
 // Print out a stencil in C++ form for YASK.

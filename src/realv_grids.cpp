@@ -29,54 +29,6 @@ IN THE SOFTWARE.
 
 namespace yask {
 
-    // Ctor.
-    RealVecGridBase::RealVecGridBase(idx_t dn, idx_t dx, idx_t dy, idx_t dz,
-                                     idx_t hn, idx_t hx, idx_t hy, idx_t hz,
-                                     idx_t pn, idx_t px, idx_t py, idx_t pz,
-                                     idx_t on, idx_t ox, idx_t oy, idx_t oz,
-                                     const std::string& name,
-                                     RealVecGrid* gp) :
-        _name(name), _gp(gp),
-
-        // Round up each dim to multiple of dim in real_vec_t.
-        _dn(ROUND_UP(dn, VLEN_N)),
-        _dx(ROUND_UP(dx, VLEN_X)),
-        _dy(ROUND_UP(dy, VLEN_Y)),
-        _dz(ROUND_UP(dz, VLEN_Z)),
-
-        // Halos are not rounded up.
-        _hn(hn),
-        _hx(hx),
-        _hy(hy),
-        _hz(hz),
-        
-        // Padding is rounded up after adding halo size.
-        _pn(ROUND_UP(pn + hn, VLEN_N)),
-        _px(ROUND_UP(px + hx, VLEN_X)),
-        _py(ROUND_UP(py + hy, VLEN_Y)),
-        _pz(ROUND_UP(pz + hz, VLEN_Z)),
-
-        // Offsets in global (multi-rank) domain.
-        _on(ROUND_UP(on, VLEN_N)),
-        _ox(ROUND_UP(ox, VLEN_X)),
-        _oy(ROUND_UP(oy, VLEN_Y)),
-        _oz(ROUND_UP(oz, VLEN_Z)),
-
-        // Determine number of real_vec_t's.
-        _dnv(_dn / VLEN_N),
-        _dxv(_dx / VLEN_X),
-        _dyv(_dy / VLEN_Y),
-        _dzv(_dz / VLEN_Z),
-        _pnv(_pn / VLEN_N),
-        _pxv(_px / VLEN_X),
-        _pyv(_py / VLEN_Y),
-        _pzv(_pz / VLEN_Z),
-        _onv(_on / VLEN_N),
-        _oxv(_ox / VLEN_X),
-        _oyv(_oy / VLEN_Y),
-        _ozv(_oz / VLEN_Z)
-    { }
-    
     // Initialize memory to incrementing values based on val.
     void RealVecGridBase::set_diff(real_t val) {
 
@@ -88,6 +40,23 @@ namespace yask {
         _gp->set_diff(rn);
     }
 
+    // Print some info.
+    void RealVecGridBase::print_info(std::ostream& os) {
+
+        // TODO: fix '*'s w/o z dim.
+        os << get_num_dims() << "D (";
+        if (got_t()) os << "t=" << get_tdim() << " * ";
+        if (got_n()) os << "n=" << get_dn() << " * ";
+        if (got_x()) os << "x=" << get_dx() << " * ";
+        if (got_y()) os << "y=" << get_dy() << " * ";
+        if (got_z()) os << "z=" << get_dz();
+        os << ") '" << get_name() << "' data is at " << get_storage() << ": " <<
+                printWithPow10Multiplier(get_num_elems()) << " element(s) of " <<
+                sizeof(real_t) << " byte(s) each, " <<
+                printWithPow10Multiplier(get_num_real_vecs()) << " vector(s), " <<
+                printWithPow2Multiplier(get_num_bytes()) << "B.\n";
+        }
+    
     // Check for equality.
     // Return number of mismatches greater than epsilon.
     idx_t RealVecGridBase::compare(const RealVecGridBase& ref,

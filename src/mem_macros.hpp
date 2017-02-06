@@ -34,15 +34,14 @@ IN THE SOFTWARE.
 #ifndef MEM_MACROS
 #define MEM_MACROS
 
-#define CACHELINE_BYTES   64
+#define CACHELINE_BYTES  (64)
+#define YASK_PAD (17) // cache-lines between data buffers.
+#define YASK_ALIGNMENT (2 * 1024 * 1024) // 2MiB-page
 
     // Set MODEL_CACHE to 1 or 2 to model L1 or L2.
 #ifdef MODEL_CACHE
 #include "cache_model.hpp"
 #endif
-
-    //#define GRID_ALIGNMENT CACHELINE_BYTES
-#define GRID_ALIGNMENT 4096 // 4k-page
 
     // L1 and L2 hints
 #define L1 _MM_HINT_T0

@@ -362,9 +362,9 @@ namespace yask {
     }
 
     // Init MPI-related vars and other vars related to my rank's place in
-    // the global problem.  Need to call this even if not using MPI to
-    // properly init some vars.  Called from allocAll(), so it doesn't
-    // normally need to be called from user code.
+    // the global problem: rank index, offset, etc.  Need to call this even
+    // if not using MPI to properly init these vars.  Called from
+    // allocAll(), so it doesn't normally need to be called from user code.
     void StencilContext::setupRank() {
         ostream& os = get_ostr();
 
@@ -515,30 +515,32 @@ namespace yask {
 #endif
 
             // Is buffer needed?
+            // TODO: calculate and use exch dist for each grid.
             if (mdist > MAX_EXCH_DIST) {
                 os << " No halo exchange with rank " << rn << '.' << endl;
                 continue;
             }
-                
-            // Alloc MPI buffers between rn and my rank.
+
+            // Determine size of MPI buffers between rn and my rank.
             // Need send and receive for each updated grid.
-            for (auto gname : outputGridNames) {
+            for (auto* gp : outputGridPtrs) {
+                auto& gname = gp->get_name();
                 
                 // Size of buffer in each direction: if dist to neighbor is zero
                 // (i.e., is perpendicular to this rank), use full size;
-                // otherwise, use halo size.  TODO: use per-grid actual halo
-                // size determined by stencil compiler instead of global max to
-                // save memory. NB: halo exchange uses actual sizes.
-                idx_t bsn = (rdn == 0) ? _opts->dn : hn;
-                idx_t bsx = (rdx == 0) ? _opts->dx : hx;
-                idx_t bsy = (rdy == 0) ? _opts->dy : hy;
-                idx_t bsz = (rdz == 0) ? _opts->dz : hz;
+                // otherwise, use halo size.
+                idx_t bsn = ROUND_UP((rdn == 0) ? _opts->dn : gp->get_halo_n(), VLEN_N);
+                idx_t bsx = ROUND_UP((rdx == 0) ? _opts->dx : gp->get_halo_x(), VLEN_X);
+                idx_t bsy = ROUND_UP((rdy == 0) ? _opts->dy : gp->get_halo_y(), VLEN_Y);
+                idx_t bsz = ROUND_UP((rdz == 0) ? _opts->dz : gp->get_halo_z(), VLEN_Z);
 
                 if (bsn * bsx * bsy * bsz == 0) {
                     os << " No halo exchange for grid '" << gname <<
                         "' with rank " << rn << '.' << endl;
                 }
                 else {
+
+                    // Make a buffer in each direction (send & receive).
                     for (int bd = 0; bd < MPIBufs::nBufDirs; bd++) {
                         ostringstream oss;
                         oss << gname;
@@ -547,10 +549,10 @@ namespace yask {
                         else
                             oss << "_get_halo_to_" << my_rank << "_from_" << rn;
                         
-                        mpiBufs[gname].allocBuf(bd,
-                                                rdn+1, rdx+1, rdy+1, rdz+1,
-                                                bsn, bsx, bsy, bsz,
-                                                oss.str(), os);
+                        mpiBufs[gname].makeBuf(bd,
+                                               rdn+1, rdx+1, rdy+1, rdz+1,
+                                               bsn, bsx, bsy, bsz,
+                                               oss.str());
                         num_exchanges++;
                     }
                 }
@@ -561,17 +563,54 @@ namespace yask {
         os << "Number of halo exchanges from this rank: " << num_exchanges << endl;
     }
 
-    // Get total size.
-    idx_t StencilContext::get_num_bytes() {
-        idx_t nbytes = 0;
+    // Allocate memory for grids, params, and MPI bufs.
+    // If 'do_distrib' is true, distribute already-allocated memory.
+    // TODO: allow different types of memory for different grids, MPI bufs, etc.
+    void StencilContext::allocData(bool do_distrib) {
+        ostream& os = get_ostr();
 
+        // Determine how many bytes are needed.
+        size_t nbytes = 0, gbytes = 0, pbytes = 0, bbytes = 0;
+        
         // Grids.
-        for (auto gp : gridPtrs)
-            nbytes += gp->get_num_bytes();
+        for (auto gp : gridPtrs) {
+
+            // set grid sizes from settings.
+            gp->set_dn(_opts->dn);
+            gp->set_dx(_opts->dx);
+            gp->set_dy(_opts->dy);
+            gp->set_dz(_opts->dz);
+            gp->set_pad_n(_opts->pn);
+            gp->set_pad_x(_opts->px);
+            gp->set_pad_y(_opts->py);
+            gp->set_pad_z(_opts->pz);
+            gp->set_ofs_n(ofs_n);
+            gp->set_ofs_x(ofs_x);
+            gp->set_ofs_y(ofs_y);
+            gp->set_ofs_z(ofs_z);
+
+            // set storage if requested.
+            if (do_distrib) {
+                gp->set_storage(_data_buf, nbytes);
+                gp->print_info(os);
+            }
+
+            // determine size used (also offset to next location).
+            gbytes += gp->get_num_bytes();
+            nbytes += gp->get_num_bytes() + _data_buf_pad;
+        }
 
         // Params.
-        for (auto pp : paramPtrs)
-            nbytes += pp->get_num_bytes();
+        for (auto pp : paramPtrs) {
+
+            // set storage if requested.
+            if (do_distrib)
+                pp->set_storage(_data_buf, nbytes);
+
+            // determine size used (also offset to next location).
+            pbytes += pp->get_num_bytes();
+            nbytes += pp->get_num_bytes() + _data_buf_pad;
+        }
 
         // MPI buffers.
         for (auto gname : outputGridNames) {
@@ -582,14 +621,46 @@ namespace yask {
                      Grid_NXYZ* sendBuf,
                      Grid_NXYZ* rcvBuf)
                  {
-                     if (sendBuf)
-                         nbytes += sendBuf->get_num_bytes();
-                     if (rcvBuf)
-                         nbytes += rcvBuf->get_num_bytes();
+                     if (sendBuf) {
+                         if (do_distrib)
+                             sendBuf->set_storage(_data_buf, nbytes);
+                         bbytes += sendBuf->get_num_bytes();
+                         nbytes += sendBuf->get_num_bytes() + _data_buf_pad;
+                     }
+                     if (rcvBuf) {
+                         if (do_distrib)
+                             rcvBuf->set_storage(_data_buf, nbytes);
+                         bbytes += rcvBuf->get_num_bytes();
+                         nbytes += rcvBuf->get_num_bytes() + _data_buf_pad;
+                     }
                  } );
         }
 
-        return nbytes;
+        // Don't need pad after last one.
+        if (nbytes)
+            nbytes -= _data_buf_pad;
+
+        // Allocate and distribute data.
+        if (!do_distrib) {
+            os << "Allocating " << printWithPow2Multiplier(nbytes) <<
+                "B for all grids, parameters, and other buffers with a " <<
+                printWithPow2Multiplier(_data_buf_alignment) << "B alignment...\n" << flush;
+            int ret = posix_memalign(&_data_buf, _data_buf_alignment, nbytes);
+            if (ret) {
+                cerr << "Error: unable to allocate memory.\n";
+                exit_yask(1);
+            }
+            _data_buf_size = nbytes;
+
+            os << "  " << printWithPow2Multiplier(gbytes) << "B for grid(s).\n" <<
+                "  " << printWithPow2Multiplier(pbytes) << "B for parameters(s).\n" <<
+                "  " << printWithPow2Multiplier(bbytes) << "B for MPI buffers(s).\n" <<
+                "  " << printWithPow2Multiplier(nbytes - gbytes - pbytes - bbytes) <<
+                "B for inter-data padding.\n";
+                
+            // Distribute this allocation w/a recursive call.
+            allocData(true);
+        }
     }
 
     // Allocate grids, params, and MPI bufs.
@@ -616,7 +687,7 @@ namespace yask {
         os << "*** WARNING: YASK compiled with TRACE_INTRINSICS; ignore performance results.\n";
 #endif
         
-        // Adjust all settings needed before allocating data.
+        // Adjust all settings before setting MPI buffers or sizing grids.
         _opts->finalizeSettings(os);
         
         // report threads.
@@ -650,23 +721,17 @@ namespace yask {
         os << "Num grids to be updated: " << outputGridNames.size() << endl;
         os << "Num stencil equation-groups: " << eqGroups.size() << endl;
         
-        // Set up MPI data.  Must do this before allocating grids so that
+        // Set up MPI data.  Must do this before sizing grids so that
         // global offsets are calculated properly.
         if (num_ranks > 1)
-            os << "Allocating MPI buffers..." << endl;
+            os << "Creating MPI buffers..." << endl;
         setupRank();
 
-        // Alloc grids and params.
-        os << "Allocating grids..." << endl;
-        allocGrids();
-        os << "Allocating parameters..." << endl;
-        allocParams();
-
-        // Set pointers to the allocated data.
-        setPtrs();
-        for (auto eg : eqGroups)
-            eg->setPtrs(*this);
+        // Determine bounding-boxes for all eq-groups.
         find_bounding_boxes();
+
+        // Alloc grids, params, and MPI bufs.
+        allocData();
 
         // Report some stats.
         idx_t dt = _opts->dt;
@@ -880,7 +945,7 @@ namespace yask {
         // is CPTS_* in each dim.  We only need non-zero angles if the
         // region size is less than the rank size, i.e., if the region
         // covers the whole rank in a given dimension, no wave-front is
-        // needed in thar dim.  TODO: make this grid-specific.
+        // needed in thar dim.  TODO: make this grid-specific and eq-specific.
         angle_n = (_opts->rn < len_bbn) ? ROUND_UP(hn, CPTS_N) : 0;
         angle_x = (_opts->rx < len_bbx) ? ROUND_UP(hx, CPTS_X) : 0;
         angle_y = (_opts->ry < len_bby) ? ROUND_UP(hy, CPTS_Y) : 0;
@@ -1111,14 +1176,14 @@ namespace yask {
 #undef calc_halo
 
                          // Send filled buffer to neighbor.
-                         const void* buf = (const void*)(sendBuf->getRawData());
+                         const void* buf = (const void*)(sendBuf->get_storage());
                          MPI_Isend(buf, sendBuf->get_num_bytes(), MPI_BYTE,
                                    neighbor_rank, int(gi), comm, &reqs[nreqs++]);
                      }
 
                      // Receive data from same neighbor if buffer exists.
                      if (rcvBuf) {
-                         void* buf = (void*)(rcvBuf->getRawData());
+                         void* buf = (void*)(rcvBuf->get_storage());
                          MPI_Irecv(buf, rcvBuf->get_num_bytes(), MPI_BYTE,
                                    neighbor_rank, int(gi), comm, &reqs[nreqs++]);
                      }
@@ -1270,22 +1335,22 @@ namespace yask {
                         }
     }
 
-    // Allocate new buffer in given direction and size.
-    Grid_NXYZ* MPIBufs::allocBuf(int bd,
-                                 idx_t nn, idx_t nx, idx_t ny, idx_t nz,
-                                 idx_t dn, idx_t dx, idx_t dy, idx_t dz,
-                                 const std::string& name,
-                                 std::ostream& os)
+    // Create new buffer in given direction and size.
+    // Does not yet allocate space in it.
+    Grid_NXYZ* MPIBufs::makeBuf(int bd,
+                                idx_t nn, idx_t nx, idx_t ny, idx_t nz,
+                                idx_t dn, idx_t dx, idx_t dy, idx_t dz,
+                                const std::string& name)
     {
-        // NB: there may be an existing buffer allocated here left
-        // over from a shallow copy. Just ignore it and realloc.
+        // NB: there may be an existing buffer here left
+        // over from a shallow copy. Just ignore it and make a new one.
         auto gp = getBuf(bd, nn, nx, ny, nz);
-        *gp = new Grid_NXYZ(dn, dx, dy, dz,
-                            0, 0, 0, 0,
-                            0, 0, 0, 0,
-                            0, 0, 0, 0,
-                            name, true, os);
+        *gp = new Grid_NXYZ(name);
         assert(*gp);
+        (*gp)->set_dn(dn);
+        (*gp)->set_dx(dx);
+        (*gp)->set_dy(dy);
+        (*gp)->set_dz(dz);
         return *gp;
     }
 

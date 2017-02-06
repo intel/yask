@@ -105,7 +105,7 @@ cluster		?=	x=2
 
 else ifeq ($(findstring awp,$(stencil)),awp)
 eqs		?=	velocity=vel,stress=str
-def_rank_size	?=	512
+time_alloc	?=	1
 def_block_size	?=	32
 cluster		?=	x=1
 ifeq ($(arch),knl)
@@ -116,6 +116,7 @@ FB_FLAGS	+=	-min-es 1
 
 else ifeq ($(stencil),fsg)
 eqs             ?=      v_br=v_br,v_bl=v_bl,v_tr=v_tr,v_tl=v_tl,s_br=s_br,s_bl=s_bl,s_tr=s_tr,s_tl=s_tl
+time_alloc	?=	1
 layout_4d	?=	Layout_2314
 cluster		?=	x=1
 ifeq ($(arch),knl)
@@ -264,6 +265,9 @@ ifneq ($(radius),)
 endif
 ifneq ($(halo),)
   FB_FLAGS   	+=	-halo $(halo)
+endif
+ifneq ($(time_alloc),)
+  FB_FLAGS   	+=	-step-alloc $(time_alloc)
 endif
 
 

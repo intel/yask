@@ -133,7 +133,7 @@ for my $n (@sizes) {
   # class decls.
   elsif ($opt eq '-d') {
 
-    my $vars = join(', ', map { "_d$_" } @a);
+    my $dvars = join(', ', map { "_d$_ = 1" } @a);
     my $cargs = join(', ', map { "idx_t d$_" } @a);
     my $cvars = join(', ', map { "d$_" } @a);
     my $cinit = join(', ', map { "_d$_(d$_)" } @a);
@@ -145,12 +145,14 @@ for my $n (@sizes) {
     print "\n// $n-D <-> 1-D layout base class.\n",
       "class ${basename} {\n",
       "protected:\n",
-      "  idx_t $vars;\n\n",
+      "  idx_t $dvars;\n\n",
       "public:\n\n",
+      "  ${basename}() { }\n",
       "  ${basename}($cargs) : $cinit { }\n\n";
     for my $a (@a) {
-      print "  // Return dimension $a.\n",
-        "  virtual idx_t get_d$a() const { return _d$a; };\n\n";
+      print "  // Dimension $a.\n",
+        "  virtual idx_t get_d$a() const { return _d$a; };\n",
+        "  virtual void set_d$a(idx_t d$a) { _d$a = d$a; };\n\n";
     }
     print "  // Return overall number of elements.\n",
       "  virtual idx_t get_size() const { return $sz; };\n\n",
@@ -171,6 +173,7 @@ for my $n (@sizes) {
         "// meaning d$p[$#p] is stored with unit stride.\n",
         "class Layout_$name : public ${basename} {\n",
         "public:\n\n",
+        "  Layout_$name() { }\n\n",
         "  Layout_$name($cargs) : ${basename}($cvars) { }\n\n",
         "  // Return 1-D offset from $n-D 'j' indices.\n",
         "  virtual idx_t layout($margs) const\n",

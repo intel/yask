@@ -78,6 +78,12 @@ protected:
     bool _firstInner;           // whether first dim is used for inner loop.
     static bool _defaultFirstInner; // global default for _firstInner.
 
+    // Return an upper-case string.
+    static string _allCaps(string str) {
+        transform(str.begin(), str.end(), str.begin(), ::toupper);
+        return str;
+    }
+    
 public:
 
     // Default ctor.
@@ -603,17 +609,35 @@ public:
         int n = 0;
         for (auto* dim : _dims) {
 
-            // index value.
-            T val = getVal(dim);
-
-            // normalizer.
-            const T* p = norm.lookup(dim);
-            T d = p ? *p : 1;
-
             if (n) oss << separator;
-            oss << prefix << *dim << "v";
-            if (val > 0) oss << "+(" << val << "/" << d << ")";
-            else if (val < 0) oss << "-(" << -val << "/" << d << ")";
+            oss << prefix << *dim << "v"; // e.g., 'xv'.
+
+            // offset value.
+            T val = getVal(dim);
+            if (val != 0) {
+
+                // Is there a divisor?
+                const T* p = norm.lookup(dim);
+                if (p) {
+
+                    // Positive offset, e.g., 'xv + (4 / VLEN_X)'.
+                    if (val > 0) oss << " + (" << val;
+
+                    // Neg offset, e.g., 'xv - (4 / VLEN_X)'.
+                    // Put '-' sign outside division to fix truncated division problem.
+                    else if (val < 0) oss << " - (" << -val;
+                    
+                    // add divisor.
+                    oss << " / VLEN_" << _allCaps(*dim) << ")";
+                }
+                else {
+
+                    // No divisior, e.g., 'tv + 2';
+                    if (val > 0)
+                        oss << "+";
+                    oss << val;
+                }
+            }
             oss << suffix;
 
             n++;

@@ -620,8 +620,6 @@ void POVRayPrinter::print(ostream& os) {
 // Print YASK code in new stencil context class.
 // TODO: split this into smaller methods.
 void YASKCppPrinter::printCode(ostream& os) {
-    map<Grid*, string> typeNames, dimArgs, haloArgs, padArgs, ofsArgs;
-    map<Param*, string> paramTypeNames, paramDimArgs;
 
     os << "// Automatically generated code; do not edit." << endl;
 
@@ -629,73 +627,84 @@ void YASKCppPrinter::printCode(ostream& os) {
         "' stencil //////" << endl;
     os << endl << "namespace yask {" << endl;
 
-    // Create the overall context base.
+    // First, create a class to hold the data (grids and params).
     {
         // get stats.
         CounterVisitor cve;
         _eqGroups.visitEqs(&cve);
 
         // TODO: get rid of global max-halo concept by using grid-specific halos.
-        IntTuple maxHalos;      
+        IntTuple maxHalos;
 
         os << endl << " ////// Stencil-specific data //////" << endl <<
             "struct " << _context_base << " : public StencilContext {" << endl;
 
         // Grids.
-        os << endl << " // Grids." << endl;
+        string ctorCode, ctorList;
+        os << "\n ///// Grid(s)." << endl;
         for (auto gp : _grids) {
             assert (!gp->isParam());
             string grid = gp->getName();
 
-            // Type name & ctor params.
+            os << "\n // The " << gp->getNumDims() <<
+                "D '" << grid << "' grid, which is ";
+            if (_eqGroups.getOutputGrids().count(gp))
+                os << "updated by one or more equations.\n";
+            else
+                os << "not updated by any equation (read-only).\n";
+            
+            // Type name.
             // Name in kernel is 'Grid_' followed by dimensions.
             string typeName = "Grid_";
-            string templStr, dimArg, haloArg, padArg, ofsArg;
+            string templStr;
             for (auto* dim : gp->getDims()) {
+
+                // Add dim suffix.
                 string ucDim = allCaps(*dim);
                 typeName += ucDim;
 
                 // step dimension.
                 if (*dim == _dims._stepDim) {
                     string sdvar = grid + "_alloc_" + *dim;
-                    os << " static const idx_t " << sdvar << " = " <<
-                        gp->getStepDimSize() << ";\n";
+                    int sdval = _settings._stepAlloc > 0 ?
+                        _settings._stepAlloc : gp->getStepDimSize();
+                    os << " static const idx_t " << sdvar << " = " << sdval <<
+                        "; // total allocation required in '" << *dim << "' dimension.\n";
                     templStr = "<" + sdvar + ">";
                 }
-                
+            }
+            typeName += templStr;
+
+            // Actual grid declaration.
+            os << " " << typeName << " " << grid << ";\n";
+
+            // Ctor list.
+            if (ctorList.length()) ctorList += ", ";
+            ctorList += grid + "(\"" + grid + "\")\n";
+            
+            // Init code.
+            for (auto* dim : gp->getDims()) {
+
                 // non-step dimension.
-                else {
+                if (*dim != _dims._stepDim) {
 
                     // Halo for this dimension.
-                    int halo = _settings._haloSize > 0 ?
-                        _settings._haloSize : gp->getHaloSize(*dim);
                     string hvar = grid + "_halo_" + *dim;
-                    os << " const idx_t " << hvar << " = " << halo << ";\n";
+                    int hval = _settings._haloSize > 0 ?
+                        _settings._haloSize : gp->getHaloSize(*dim);
+                    os << " const idx_t " << hvar << " = " << hval <<
+                        "; // halo allocation required in '" << *dim << "' dimension.\n";
+                    ctorCode += " " + grid + ".set_halo_" + *dim +
+                        "(" + hvar + ");\n";
 
                     // Update max halo across grids.
                     int* mh = maxHalos.lookup(dim);
                     if (mh)
-                        *mh = max(*mh, halo);
+                        *mh = max(*mh, hval);
                     else
-                        maxHalos.addDimBack(dim, halo);
-
-                    // Ctor args.
-                    dimArg += "_opts->d" + *dim + ", ";
-                    haloArg += hvar + ", ";
-                    padArg += "_opts->p" + *dim + ", ";
-                    ofsArg += "ofs_" + *dim + ", ";
+                        maxHalos.addDimBack(dim, hval);
                 }
             }
-            typeName += templStr;
-            typeNames[gp] = typeName;
-            dimArgs[gp] = dimArg;
-            haloArgs[gp] = haloArg;
-            padArgs[gp] = padArg;
-            ofsArgs[gp] = ofsArg;
-            os << " " << typeName << "* " << grid << "; // ";
-            if (_eqGroups.getOutputGrids().count(gp) == 0)
-                os << "not ";
-            os << "updated by stencil." << endl;
         }
 
         // Max halos.
@@ -706,29 +715,29 @@ void YASKCppPrinter::printCode(ostream& os) {
 
         // Parameters.
         if (_params.size())
-            os << endl << " // Parameters." << endl;
+            os << "\n ///// Parameter(s)." << endl;
         for (auto pp : _params) {
             assert(pp->isParam());
             string param = pp->getName();
-
-            // Type name.
-            // Name in kernel is 'GenericGridNd<real_t>'.
-            ostringstream oss;
-            oss << "GenericGrid" << pp->size() << "d<real_t";
-            if (pp->size()) {
-                oss << ",Layout_";
-                for (int dn = pp->size(); dn > 0; dn--)
-                    oss << dn;
-            }
-            oss << ">";
-            string typeName = oss.str();
-
-            // Ctor params.
-            string dimArg = pp->makeValStr();
+            os << "\n // The " << pp->getNumDims() <<
+                "D '" << param << "' parameter.\n";
             
-            paramTypeNames[pp] = typeName;
-            paramDimArgs[pp] = dimArg;
-            os << " " << typeName << "* " << param << ";" << endl;
+            // Actual declaration.
+            // Type-name in kernel is 'GenericGridNd<real_t, LAYOUT>'.
+            os << " GenericGrid" << pp->size() << "d<real_t";
+            if (pp->size()) {
+                os << ", Layout_";
+
+                // Traditional C layout, e.g., 321.
+                for (int dn = pp->size(); dn > 0; dn--)
+                    os << dn;
+            }
+            os << ">" << param << ";\n";
+            
+            // Ctor list.
+            string dimArg = pp->makeValStr();
+            if (ctorList.length()) ctorList += ", ";
+            ctorList += param + "(" + dimArg + ")\n";
         }
 
         // Ctor.
@@ -736,30 +745,35 @@ void YASKCppPrinter::printCode(ostream& os) {
             os << endl <<
                 " // Constructor.\n" <<
                 " " << _context_base << "(StencilSettings& settings) :"
-                " StencilContext(settings) {\n" <<
-                "  name = \"" << _stencil.getName() << "\";\n";
+                " StencilContext(settings), " << ctorList <<
+                " {\n  name = \"" << _stencil.getName() << "\";\n";
             
             // Init grid ptrs.
             for (auto gp : _grids) {
                 string grid = gp->getName();
-                os << " " << grid << " = 0;" << endl;
-                os << " gridNames.insert(\"" << grid << "\");" << endl;
-
-                // Output grids.
-                if (_eqGroups.getOutputGrids().count(gp))
-                    os << " outputGridNames.insert(\"" << grid << "\");" << endl;
+                os << "\n  // '" << grid << "' grid.\n" <<
+                    "  gridPtrs.push_back(&" << grid << ");\n" <<
+                    "  gridNames.insert(\"" << grid << "\");\n";
+                
+                // I/O grids.
+                if (_eqGroups.getOutputGrids().count(gp)) {
+                    os << "  outputGridPtrs.push_back(&" << grid  << ");" << endl;
+                    os << "  outputGridNames.insert(\"" << grid  << "\");" << endl;
+                }
             }
             
             // Init param ptrs.
             for (auto pp : _params) {
                 string param = pp->getName();
-                os << " " << param << " = 0;" << endl;
-                os << " paramNames.insert(\"" << param << "\");" << endl;
+                os << "\n  // '" << param << "' parameter.\n" <<
+                    "  paramPtrs.push_back(&" << param << ");\n" <<
+                    "  paramNames.insert(\"" << param << "\");\n";
             }
 
             // Init halo sizes.
+            os << "\n  // Halo sizes.\n" << ctorCode;
             for (auto dim : maxHalos.getDims())
-                os << " h" << *dim << " = ROUND_UP(max_halo_" << *dim <<
+                os << "  h" << *dim << " = ROUND_UP(max_halo_" << *dim <<
                     ", VLEN_" << allCaps(*dim) << ");" << endl;
             
             // end of ctor.
@@ -791,24 +805,24 @@ void YASKCppPrinter::printCode(ostream& os) {
         os << " const int scalar_fp_ops = " << fpops.getNumOps() << ";" << endl <<
             " const int scalar_points_updated = " << eq.getNumEqs() << ";" << endl;
 
-        // Init code.
+        // Eq-group ctor.
         {
-            os << " void setPtrs(" << _context_base << "& context, "
+            os << " " << egsName << "(" << _context_base << "& context, "
                 "GridPtrs& outputGridPtrs, GridPtrs& inputGridPtrs) {" << endl;
 
             // I/O grids.
             if (eq.getOutputGrids().size()) {
                 os << "\n // The following grids are written by " << egsName << endl;
                 for (auto gp : eq.getOutputGrids())
-                    os << "  outputGridPtrs.push_back(context." << gp->getName() << ");" << endl;
+                    os << "  outputGridPtrs.push_back(&context." << gp->getName() << ");" << endl;
             }
             if (eq.getInputGrids().size()) {
                 os << "\n // The following grids are read by " << egsName << endl;
                 for (auto gp : eq.getInputGrids())
                     if (!gp->isParam())
-                        os << "  inputGridPtrs.push_back(context." << gp->getName() << ");" << endl;
+                        os << "  inputGridPtrs.push_back(&context." << gp->getName() << ");" << endl;
             }
-            os << " } // setPtrs." << endl;
+            os << " } // Ctor." << endl;
         }
 
         // Condition.
@@ -987,88 +1001,34 @@ void YASKCppPrinter::printCode(ostream& os) {
         }
 
         // Ctor.
-        os << endl <<
-            " // Constructor.\n" <<
+        os << "\n // Constructor.\n" <<
             " " << _context << "(StencilSettings& settings) : " <<
-            _context_base << "(settings) { setPtrs(); }" << endl;
+            _context_base << "(settings)";
+        for (auto& eg : _eqGroups) {
+            string egName = eg.getName();
+            os << ",\n  eqGroup_" << egName << "(this)";
+        }
+        os << " {\n";
         
-        // Init code.
-        {
-            os << endl <<
-                " // Set generic pointers to stencil-specific objects.\n"
-                " virtual void setPtrs() {\n";
-            
-            // Push eq-group pointers to list.
-            os << "\n // Equation groups.\n"
-                "  eqGroups.clear();\n";
-            for (auto& eg : _eqGroups) {
-                string egName = eg.getName();
-                os << "  eqGroups.push_back(&eqGroup_" << egName << ");\n";
+        // Push eq-group pointers to list.
+        os << "\n // Equation groups.\n";
+        for (auto& eg : _eqGroups) {
+            string egName = eg.getName();
+            os << "  eqGroups.push_back(&eqGroup_" << egName << ");\n";
 
-                // Add dependencies.
-                for (DepType dt = certain_dep; dt < num_deps; dt = DepType(dt+1)) {
-                    for (auto dep : eg.getDeps(dt)) {
-                        string dtName = (dt == certain_dep) ? "certain_dep" :
-                            (dt == possible_dep) ? "possible_dep" :
-                            "internal_error";
-                        os << "  eqGroup_" << egName <<
-                            ".add_dep(yask::" << dtName <<
-                            ", &eqGroup_" << dep << ");\n";
-                    }
+            // Add dependencies.
+            for (DepType dt = certain_dep; dt < num_deps; dt = DepType(dt+1)) {
+                for (auto dep : eg.getDeps(dt)) {
+                    string dtName = (dt == certain_dep) ? "certain_dep" :
+                        (dt == possible_dep) ? "possible_dep" :
+                        "internal_error";
+                    os << "  eqGroup_" << egName <<
+                        ".add_dep(yask::" << dtName <<
+                        ", &eqGroup_" << dep << ");\n";
                 }
             }
-
-            // Push grid pointers to list.
-            os << "\n // Grids.\n"
-                "  gridPtrs.clear();\n"
-                "  outputGridPtrs.clear();\n";
-            for (auto gp : _grids) {
-                string grid = gp->getName();
-                os << "  gridPtrs.push_back(" << grid << ");" << endl;
-                
-                // I/O grids.
-                if (_eqGroups.getOutputGrids().count(gp))
-                    os << "  outputGridPtrs.push_back(" << grid  << ");" << endl;
-            }
-
-            // Push param pointers to list.
-            os << "\n // Parameters.\n"
-                "  paramPtrs.clear();\n";
-            for (auto pp : _params) {
-                string param = pp->getName();
-                os << "  paramPtrs.push_back(" << param << ");" << endl;
-            }
-            
-            os << " }" << endl;
         }
-        
-        // Allocate grids.
-        {
-            os << endl << " virtual void allocGrids() {" << endl;
-            for (auto gp : _grids) {
-                string grid = gp->getName();
-                string hbwArg = "false";
-                if ((_eqGroups.getOutputGrids().count(gp) && _settings._hbwRW) ||
-                    (_eqGroups.getOutputGrids().count(gp) == 0 && _settings._hbwRO))
-                    hbwArg = "true";
-                os << "  " << grid << " = new " << typeNames[gp] <<
-                    "(" << dimArgs[gp] << haloArgs[gp] << padArgs[gp] << ofsArgs[gp] <<
-                    "\"" << grid << "\", " <<
-                    hbwArg << ", get_ostr());\n";
-            }
-            os << " }" << endl;
-        }
-        
-        // Allocate params.
-        {
-            os << endl << " virtual void allocParams() {" << endl;
-            for (auto pp : _params) {
-                string param = pp->getName();
-                os << "  " << param << " = new " << paramTypeNames[pp] <<
-                    "(" << paramDimArgs[pp] << ");\n";
-            }
-            os << " }" << endl;
-        }
+        os << " } // Ctor.\n";
         
         // Stencil provided code for StencilContext
         CodeList *extraCode;

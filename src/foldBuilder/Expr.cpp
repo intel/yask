@@ -482,6 +482,9 @@ int Grid::getStepDimSize() const
         last_halo.max() == 0)
         sz--;
 
+    // TODO: recognize that reading in one equation and then writing in
+    // another can also reuse storage.
+
     return sz;
 }
 

@@ -37,12 +37,13 @@ namespace yask {
     typedef GenericGridBase<real_t> RealGrid;
     typedef GenericGridBase<real_vec_t> RealVecGrid;
 
-    // Base class for real_vec_t grids.  Supports up to 4 spatial dims and
-    // optional temporal dim.  Indices used to access points are global and
-    // logical.  Example: if there are two ranks in the x-dim, each of which
-    // has domain-size of 100 and a pad-size of 10, the 1st rank's x indices
-    // will be -10..110, and the 2nd rank's x indices will be 90..210.
-    // TODO: allow different pos and neg-side halos and/or padding.
+    // Pure-virtual base class for real_vec_t grids.  Supports up to 4
+    // spatial dims and optional temporal dim.  Indices used to access
+    // points are global and logical.  Example: if there are two ranks in
+    // the x-dim, each of which has domain-size of 100 and a pad-size of 10,
+    // the 1st rank's x indices will be -10..110, and the 2nd rank's x
+    // indices will be 90..210.  TODO: allow different pos and neg-side
+    // halos and/or padding.
     class RealVecGridBase {
 
     protected:
@@ -80,35 +81,49 @@ namespace yask {
             // Divide values with padding in numerator to avoid negative indices to get offsets.
             elem_ofs = padded_index % vec_len;
         }
+
+        // Resize the underlying grid based on the current settings.
+        virtual void resize_g() =0;
         
     public:
-        RealVecGridBase(idx_t dn, idx_t dx, idx_t dy, idx_t dz, // rank domain sizes.
-                        idx_t hn, idx_t hx, idx_t hy, idx_t hz, // halo sizes.
-                        idx_t pn, idx_t px, idx_t py, idx_t pz, // extra-pad sizes.
-                        idx_t on, idx_t ox, idx_t oy, idx_t oz, // offsets within global problem.
-                        const std::string& name,
-                        RealVecGrid* gp);
+        RealVecGridBase(const std::string& name,
+                        RealVecGrid* gp) :
+            _name(name), _gp(gp) { }
         virtual ~RealVecGridBase() { }
 
         // Get name.
         const std::string& get_name() { return _name; }
 
+        // Determine what dims are actually used for derived type.
+        virtual bool got_t() const { return false; }
+        virtual bool got_n() const { return false; }
+        virtual bool got_x() const { return false; }
+        virtual bool got_y() const { return false; }
+        virtual bool got_z() const { return false; }
+        virtual int get_num_dims() const {
+            return (got_t() ? 1 : 0) +
+                (got_n() ? 1 : 0) +
+                (got_x() ? 1 : 0) +
+                (got_y() ? 1 : 0) +
+                (got_z() ? 1 : 0);
+        }
+
         // Get temporal allocation.
         virtual inline idx_t get_tdim() const =0;
         
-        // Get domain-size parameters after round-up.
+        // Get domain-size for this rank after round-up.
         inline idx_t get_dn() const { return _dn; }
         inline idx_t get_dx() const { return _dx; }
         inline idx_t get_dy() const { return _dy; }
         inline idx_t get_dz() const { return _dz; }
 
-        // Get halo-size parameters (NOT rounded up).
+        // Get halo-size (NOT rounded up).
         inline idx_t get_halo_n() const { return _hn; }
         inline idx_t get_halo_x() const { return _hx; }
         inline idx_t get_halo_y() const { return _hy; }
         inline idx_t get_halo_z() const { return _hz; }
 
-        // Get extra-padding-size parameters after round-up.
+        // Get extra-padding-size after round-up.
         // Since the extra pad is in addition to the halo, these
         // values may not be multiples of the vector lengths.
         inline idx_t get_pad_n() const { return _pn - _hn; }
@@ -127,14 +142,49 @@ namespace yask {
         inline idx_t get_last_x() const { return _ox + _dx - 1; }
         inline idx_t get_last_y() const { return _oy + _dy - 1; }
         inline idx_t get_last_z() const { return _oz + _dz - 1; }
-        
-        // Determine what dims are defined.
-        virtual bool got_t() const { return false; }
-        virtual bool got_n() const { return false; }
-        virtual bool got_x() const { return false; }
-        virtual bool got_y() const { return false; }
-        virtual bool got_z() const { return false; }
 
+        // Set domain-size for this rank and round-up.
+        inline void set_dn(idx_t dn) {
+            _dn = ROUND_UP(dn, VLEN_N); _dnv = _dn / VLEN_N; resize_g(); }
+        inline void set_dx(idx_t dx) {
+            _dx = ROUND_UP(dx, VLEN_X); _dxv = _dx / VLEN_X; resize_g(); }
+        inline void set_dy(idx_t dy) {
+            _dy = ROUND_UP(dy, VLEN_Y); _dyv = _dy / VLEN_Y; resize_g(); }
+        inline void set_dz(idx_t dz) {
+            _dz = ROUND_UP(dz, VLEN_Z); _dzv = _dz / VLEN_Z; resize_g(); }
+
+        // Set halo sizes.
+        // Increase padding if needed.
+        inline void set_halo_n(idx_t hn) {
+            _hn = hn; _pn = ROUND_UP(std::max(_pn, hn), VLEN_N); resize_g(); }
+        inline void set_halo_x(idx_t hx) {
+            _hx = hx; _px = ROUND_UP(std::max(_px, hx), VLEN_X); resize_g(); }
+        inline void set_halo_y(idx_t hy) {
+            _hy = hy; _py = ROUND_UP(std::max(_py, hy), VLEN_Y); resize_g(); }
+        inline void set_halo_z(idx_t hz) {
+            _hz = hz; _pz = ROUND_UP(std::max(_pz, hz), VLEN_Z); resize_g(); }
+
+        // Set padding and round-up to encompass halo.
+        // To get minimum padding, set halo first.
+        inline void set_pad_n(idx_t pn) {
+            _pn = ROUND_UP(pn + _hn, VLEN_N); _pnv = _pn / VLEN_N; resize_g(); }
+        inline void set_pad_x(idx_t px) {
+            _px = ROUND_UP(px + _hx, VLEN_X); _pxv = _px / VLEN_X; resize_g(); }
+        inline void set_pad_y(idx_t py) {
+            _py = ROUND_UP(py + _hy, VLEN_Y); _pyv = _py / VLEN_Y; resize_g(); }
+        inline void set_pad_z(idx_t pz) {
+            _pz = ROUND_UP(pz + _hz, VLEN_Z); _pzv = _pz / VLEN_Z; resize_g(); }
+
+        // Set offset and round-up.
+        inline void set_ofs_n(idx_t on) {
+            _on = ROUND_UP(on, VLEN_N); _onv = _on / VLEN_N; }
+        inline void set_ofs_x(idx_t ox) {
+            _ox = ROUND_UP(ox, VLEN_X); _oxv = _ox / VLEN_X; }
+        inline void set_ofs_y(idx_t oy) {
+            _oy = ROUND_UP(oy, VLEN_Y); _oyv = _oy / VLEN_Y; }
+        inline void set_ofs_z(idx_t oz) {
+            _oz = ROUND_UP(oz, VLEN_Z); _ozv = _oz / VLEN_Z; }
+        
         // Initialize memory to a given value.
         virtual void set_same(real_t val) {
             real_vec_t rn;
@@ -150,11 +200,18 @@ namespace yask {
             return _gp->get_num_elems();
         }
 
+        // Get number of elements.
+        inline idx_t get_num_elems() {
+            return _gp->get_num_bytes() / sizeof(real_t);
+        }
+
         // Get size in bytes.
-        inline idx_t get_num_bytes() const {
+        inline size_t get_num_bytes() const {
             return _gp->get_num_bytes();
         }
 
+        // Print some info
+        virtual void print_info(std::ostream& os);
   
         // Check for equality.
         // Return number of mismatches greater than epsilon.
@@ -213,12 +270,15 @@ namespace yask {
                                         const real_vec_t& v,
                                         int line) const;
 
-        // Direct access to data (dangerous!).
-        real_vec_t* getRawData() {
-            return _gp->getRawData();
+        // Direct access to data.
+        real_vec_t* get_storage() {
+            return _gp->get_storage();
         }
-        const real_vec_t* getRawData() const {
-            return _gp->getRawData();
+        const real_vec_t* get_storage() const {
+            return _gp->get_storage();
+        }
+        void set_storage(void* buf, size_t offset) {
+            _gp->set_storage(buf, offset);
         }
         RealVecGrid* getGenericGrid() {
             return _gp;
@@ -265,8 +325,8 @@ namespace yask {
         // adding padding and removing offset.  TODO: currently, the
         // compiler isn't able to eliminate some common sub-expressions in
         // addr calculation when these functions are used. Until this is
-        // resolved, alternative code is used below if the macro
-        // USE_GET_INDEX is not set.
+        // resolved, alternative code is used in derived classes if the
+        // macro USE_GET_INDEX is not set.
         ALWAYS_INLINE idx_t get_index(idx_t vec_index,
                                       idx_t vec_pad,
                                       idx_t vec_ofs) const {
@@ -287,17 +347,9 @@ namespace yask {
 
     public:
 
-        RealVecGridTemplate(idx_t dn, idx_t dx, idx_t dy, idx_t dz,
-                            idx_t hn, idx_t hx, idx_t hy, idx_t hz,
-                            idx_t pn, idx_t px, idx_t py, idx_t pz,
-                            idx_t on, idx_t ox, idx_t oy, idx_t oz,
-                            const std::string& name,
+        RealVecGridTemplate(const std::string& name,
                             RealVecGrid* gp) :
-            RealVecGridBase(dn, dx, dy, dz,
-                            hn, hx, hy, hz,
-                            pn, px, py, pz,
-                            on, ox, oy, oz,
-                            name, gp) { }
+            RealVecGridBase(name, gp) { }
 
         // Get temporal allocation.
         virtual inline idx_t get_tdim() const final {
@@ -314,33 +366,18 @@ namespace yask {
     protected:
 
         GenericGrid3d<real_vec_t, LayoutFn> _data;
-    
+
+        virtual void resize_g() {
+            _data.set_d1(_dxv + 2 * _pxv);
+            _data.set_d2(_dyv + 2 * _pyv);
+            _data.set_d3(_dzv + 2 * _pzv);
+        }
+        
     public:
 
         // Ctor.
-        // Dimensions are real_t elements, not real_vec_t.
-        RealVecGrid_XYZ(idx_t dx, idx_t dy, idx_t dz,
-                        idx_t hx, idx_t hy, idx_t hz,
-                        idx_t px, idx_t py, idx_t pz,
-                        idx_t ox, idx_t oy, idx_t oz,
-                        const std::string& name,
-                        bool use_hbw,
-                        std::ostream& msg_stream) :
-            RealVecGridTemplate(1, dx, dy, dz,
-                                0, hx, hy, hz,
-                                0, px, py, pz,
-                                0, ox, oy, oz,
-                                name, &_data),
-
-            // Alloc space for required number of real_vec_t's.
-            _data(_dxv + 2*_pxv,
-                  _dyv + 2*_pyv,
-                  _dzv + 2*_pzv,
-                  GRID_ALIGNMENT,
-                  use_hbw)
-        {
-            _data.print_info(name, msg_stream);
-        }
+        RealVecGrid_XYZ(const std::string& name) :
+            RealVecGridTemplate(name, &_data) { }
 
         // Determine what dims are defined.
         virtual bool got_x() const { return true; }
@@ -554,33 +591,18 @@ namespace yask {
 
         GenericGrid4d<real_vec_t, LayoutFn> _data;
 
+        virtual void resize_g() {
+            _data.set_d1(_dnv + 2 * _pnv);
+            _data.set_d2(_dxv + 2 * _pxv);
+            _data.set_d3(_dyv + 2 * _pyv);
+            _data.set_d4(_dzv + 2 * _pzv);
+        }
+        
     public:
 
         // Ctor.
-        // Dimensions are real_t elements, not real_vec_t.
-        RealVecGrid_NXYZ(idx_t dn, idx_t dx, idx_t dy, idx_t dz,
-                         idx_t hn, idx_t hx, idx_t hy, idx_t hz,
-                         idx_t pn, idx_t px, idx_t py, idx_t pz,
-                         idx_t on, idx_t ox, idx_t oy, idx_t oz,
-                         const std::string& name,
-                         bool use_hbw,
-                         std::ostream& msg_stream) :
-            RealVecGridTemplate(dn, dx, dy, dz,
-                                hn, hx, hy, hz,
-                                pn, px, py, pz,
-                                on, ox, oy, oz,
-                                name, &_data),
-
-            // Alloc space for required number of real_vec_t's.
-            _data(_dnv + 2*_pnv,
-                  _dxv + 2*_pxv,
-                  _dyv + 2*_pyv,
-                  _dzv + 2*_pzv,
-                  GRID_ALIGNMENT,
-                  use_hbw)
-        {
-            _data.print_info(name, msg_stream);
-        }
+        RealVecGrid_NXYZ(const std::string& name) :
+            RealVecGridTemplate(name, &_data) { }
 
         // Determine what dims are defined.
         virtual bool got_n() const { return true; }
@@ -791,33 +813,21 @@ namespace yask {
 
         GenericGrid4d<real_vec_t, LayoutFn> _data;
 
+        virtual void resize_g() {
+            _data.set_d1(_tdim);
+            _data.set_d2(RealVecGridTemplate<_tdim>::_dxv +
+                         2 * RealVecGridTemplate<_tdim>::_pxv);
+            _data.set_d3(RealVecGridTemplate<_tdim>::_dyv +
+                         2 * RealVecGridTemplate<_tdim>::_pyv);
+            _data.set_d4(RealVecGridTemplate<_tdim>::_dzv +
+                         2 * RealVecGridTemplate<_tdim>::_pzv);
+        }
+        
     public:
 
         // Ctor.
-        // Dimensions are real_t elements, not real_vec_t.
-        RealVecGrid_TXYZ(idx_t dx, idx_t dy, idx_t dz,
-                         idx_t hx, idx_t hy, idx_t hz,
-                         idx_t px, idx_t py, idx_t pz,                         
-                         idx_t ox, idx_t oy, idx_t oz,
-                         const std::string& name,
-                         bool use_hbw,
-                         std::ostream& msg_stream) :
-            RealVecGridTemplate<_tdim>(1, dx, dy, dz,
-                                       0, hx, hy, hz,
-                                       0, px, py, pz,
-                                       0, ox, oy, oz,
-                                       name, &_data),
-
-            // Alloc space for required number of real_vec_t's.
-            _data(_tdim,
-                  RealVecGridTemplate<_tdim>::_dxv + 2*RealVecGridTemplate<_tdim>::_pxv,
-                  RealVecGridTemplate<_tdim>::_dyv + 2*RealVecGridTemplate<_tdim>::_pyv,
-                  RealVecGridTemplate<_tdim>::_dzv + 2*RealVecGridTemplate<_tdim>::_pzv,
-                  GRID_ALIGNMENT,
-                  use_hbw)
-        {
-            _data.print_info(name, msg_stream);
-        }
+        RealVecGrid_TXYZ(const std::string& name) :
+            RealVecGridTemplate<_tdim>(name, &_data) { }
 
         // Determine what dims are defined.
         virtual bool got_t() const { return true; }
@@ -1032,34 +1042,23 @@ namespace yask {
 
         GenericGrid5d<real_vec_t, LayoutFn> _data;
 
+        virtual void resize_g() {
+            _data.set_d1(_tdim);
+            _data.set_d2(RealVecGridTemplate<_tdim>::_dnv +
+                         2 * RealVecGridTemplate<_tdim>::_pnv);
+            _data.set_d3(RealVecGridTemplate<_tdim>::_dxv +
+                         2 * RealVecGridTemplate<_tdim>::_pxv);
+            _data.set_d4(RealVecGridTemplate<_tdim>::_dyv +
+                         2 * RealVecGridTemplate<_tdim>::_pyv);
+            _data.set_d5(RealVecGridTemplate<_tdim>::_dzv +
+                         2 * _RealVecGridTemplate<_tdim>::pzv);
+        }
+        
     public:
 
         // Ctor.
-        // Dimensions are real_t elements, not real_vec_t.
-        RealVecGrid_TNXYZ(idx_t dn, idx_t dx, idx_t dy, idx_t dz,
-                          idx_t hn, idx_t hx, idx_t hy, idx_t hz,
-                          idx_t pn, idx_t px, idx_t py, idx_t pz,
-                          idx_t on, idx_t ox, idx_t oy, idx_t oz,
-                          const std::string& name,
-                          bool use_hbw,
-                          std::ostream& msg_stream) :
-            RealVecGridTemplate<_tdim>(dn, dx, dy, dz,
-                                       hn, hx, hy, hz,
-                                       pn, px, py, pz,
-                                       on, ox, oy, oz,
-                                       name, &_data),
-
-            // Alloc space for required number of real_vec_t's.
-            _data(_tdim,
-                  RealVecGridTemplate<_tdim>::_dnv + 2*RealVecGridTemplate<_tdim>::_pnv,
-                  RealVecGridTemplate<_tdim>::_dxv + 2*RealVecGridTemplate<_tdim>::_pxv,
-                  RealVecGridTemplate<_tdim>::_dyv + 2*RealVecGridTemplate<_tdim>::_pyv,
-                  RealVecGridTemplate<_tdim>::_dzv + 2*RealVecGridTemplate<_tdim>::_pzv,
-                  GRID_ALIGNMENT,
-                  use_hbw)
-        {
-            _data.print_info(name, msg_stream);
-        }
+        RealVecGrid_TNXYZ(const std::string& name) :
+            RealVecGridTemplate<_tdim>(name, &_data) { }
 
         // Determine what dims are defined.
         virtual bool got_t() const { return true; }

@@ -873,6 +873,7 @@ public:
         _deps[a].insert(b);
         _all.insert(a);
         _all.insert(b);
+        _done = false;
     }
     
     // Check whether eq a depends on b.
@@ -1421,7 +1422,7 @@ typedef NumExprPtr GridValue;
 // so '<<' operators may be used to evaluate local variables.
 // Floating-point variables will be printed w/o loss of precision.
 // The code may access the following:
-// - Any parameter to the 'calc_stencil_{vector,scalar}' generated functions,
+// - Any parameter to the 'calc_stencil_{cluster,scalar}' generated functions,
 //   including fields of the user-defined 'context' object.
 // - A variable within the global or current namespace where it will be used.
 // - A local variable in the 'value' method; in this case, the value
