@@ -656,7 +656,6 @@ void YASKCppPrinter::printCode(ostream& os) {
             // Type name.
             // Name in kernel is 'Grid_' followed by dimensions.
             string typeName = "Grid_";
-            string templStr;
             for (auto* dim : gp->getDims()) {
 
                 // Add dim suffix.
@@ -668,12 +667,11 @@ void YASKCppPrinter::printCode(ostream& os) {
                     string sdvar = grid + "_alloc_" + *dim;
                     int sdval = _settings._stepAlloc > 0 ?
                         _settings._stepAlloc : gp->getStepDimSize();
-                    os << " static const idx_t " << sdvar << " = " << sdval <<
+                    os << " const idx_t " << sdvar << " = " << sdval <<
                         "; // total allocation required in '" << *dim << "' dimension.\n";
-                    templStr = "<" + sdvar + ">";
+                    ctorCode += " " + grid + ".set_tdim(" + sdvar + ");\n";
                 }
             }
-            typeName += templStr;
 
             // Actual grid declaration.
             os << " " << typeName << " " << grid << ";\n";
