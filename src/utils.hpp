@@ -85,11 +85,12 @@ IN THE SOFTWARE.
 #ifdef _OPENMP
 #include <omp.h>
 #else
-#define omp_get_num_procs() (1)
-#define omp_get_num_threads() (1)
-#define omp_get_max_threads() (1)
-#define omp_get_thread_num()  (0)
-#define omp_set_num_threads(n) (void(0))
+inline int omp_get_num_procs() { return 1; }
+inline int omp_get_num_threads() { return 1; }
+inline int omp_get_max_threads() { return 1; }
+inline int omp_get_thread_num() { return 0; }
+inline void omp_set_num_threads(int n) { }
+inline void omp_set_nested(int n) { }
 #endif
 
 // rounding macros for integer types.

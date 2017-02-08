@@ -404,18 +404,18 @@ int main(int argc, const char* argv[]) {
     stencilFunc->define(dims._allDims);
 
     // Check for illegal dependencies within equations for scalar size.
-    cout << "Checking equation(s) in a scalar context...\n"
+    cout << "Checking equation(s) with scalar operations...\n"
         " If this fails, review stencil equation(s) for illegal dependencies.\n";
     grids.checkDeps(dims._scalar, dims._stepDim);
 
     // Check for illegal dependencies within equations for vector size.
-    cout << "Checking equation(s) in a single folded-vector context...\n"
+    cout << "Checking equation(s) with folded-vector  operations...\n"
         " If this fails, the fold dimensions are not compatible with all equations.\n";
     grids.checkDeps(dims._fold, dims._stepDim);
 
     // Check for illegal dependencies within equations for cluster sizes and
     // also create equation groups based on legal dependencies.
-    cout << "Checking equation(s) in a cluster-of-vectors context...\n"
+    cout << "Checking equation(s) with clusters of vectors...\n"
         " If this fails, the cluster dimensions are not compatible with all equations.\n";
     EqGroups eqGroups(eq_group_basename_default, dims);
     eqGroups.findEqGroups(grids, eqGroupTargets, dims._clusterPts);

@@ -184,7 +184,7 @@ namespace yask {
         // Format help message to fit in width.
         pos = 0;
         for (size_t i = 0; i < words.size(); i++) {
-            if (i == 0 || pos + words[i].length() > width) {
+            if (i == 0 || pos + words[i].length() > size_t(width)) {
                 os << endl << _help_leader;
                 pos = _help_leader.length();
             }
@@ -216,9 +216,9 @@ namespace yask {
     // On failure, print msg using string from args[argi-1] and exit.
     // On success, increment argi and return value.
     idx_t CommandLineParser::OptionBase::_idx_val(vector<string>& args,
-                                                 int& argi)
+                                                  int& argi)
     {
-        if (argi >= args.size() || args[argi].length() == 0) {
+        if (size_t(argi) >= args.size() || args[argi].length() == 0) {
             cerr << "Error: no argument for option '" << args[argi - 1] << "'." << endl;
             exit(1);
         }
@@ -335,7 +335,7 @@ namespace yask {
         vector<string> non_args;
 
         // Loop through strings in args.
-        for (int argi = 0; argi < args.size(); ) {
+        for (int argi = 0; argi < int(args.size()); ) {
 
             // Compare against all registered options.
             bool matched = false;

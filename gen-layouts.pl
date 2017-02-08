@@ -176,10 +176,10 @@ for my $n (@sizes) {
         "  Layout_$name() { }\n\n",
         "  Layout_$name($cargs) : ${basename}($cvars) { }\n\n",
         "  // Return 1-D offset from $n-D 'j' indices.\n",
-        "  virtual idx_t layout($margs) const\n",
+        "  virtual idx_t layout($margs) const final\n",
         "    { return ", makeLayout(\@p, \@jvars, \@dvars), "; }\n\n",
         "  // set $n 'j' indices based on 1-D 'ai' input.\n",
-        "  virtual void unlayout(idx_t ai, $uargs) const\n",
+        "  virtual void unlayout(idx_t ai, $uargs) const final\n",
         "    { ", makeUnlayout(\@p, \@jvars, \@dvars, "; "), "; }\n",
         "};\n";
 
