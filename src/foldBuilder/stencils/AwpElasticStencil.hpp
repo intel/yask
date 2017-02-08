@@ -1,7 +1,7 @@
 /*****************************************************************************
 
 YASK: Yet Another Stencil Kernel
-Copyright (c) 2014-2016, Intel Corporation
+Copyright (c) 2014-2017, Intel Corporation
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to
@@ -81,14 +81,16 @@ public:
     }
 
     // Adjustment for sponge layer.
-    void adjust_for_sponge(GridValue& next_vel_x, GridIndex x, GridIndex y, GridIndex z) {
+    void adjust_for_sponge(GridValue& val, GridIndex x, GridIndex y, GridIndex z) {
 
         // TODO: It may be more efficient to skip processing interior nodes
-        // because their sponge coefficients are 1.0.  But this would
-        // necessitate handling conditionals. The branch mispredictions may
-        // cost more than the overhead of the extra loads and multiplies.
+        // because their sponge coefficients are 1.0. This would require
+        // setting up sub-domains inside of and outside of the sponge area.
+        // It may not be worth the added complexity, though: the cache
+        // blocks at the sub-domain intervals would likely be broken into
+        // smaller pieces, affecting performance.
 
-        next_vel_x *= sponge(x, y, z);
+        val *= sponge(x, y, z);
     }
 
     // Velocity-grid define functions.  For each D in x, y, z, define vel_D
@@ -97,7 +99,8 @@ public:
     // time or space, so half-steps due to staggered grids are adjusted
     // appropriately.
 
-    void define_vel_x(GridIndex t, GridIndex x, GridIndex y, GridIndex z) {
+    void define_vel_x(GridIndex t, GridIndex x, GridIndex y, GridIndex z,
+                                 Condition at_last_z) {
         GridValue rho_val = (rho(x, y,   z  ) +
                              rho(x, y-1, z  ) +
                              rho(x, y,   z-1) +
@@ -113,9 +116,16 @@ public:
         adjust_for_sponge(next_vel_x, x, y, z);
 
         // define the value at t+1.
-        vel_x(t+1, x, y, z) == next_vel_x;
+        // This equation does NOT have a special case at surface, but the
+        // formula is replicated to unify the sub-domains. Eventually,
+        // YASK should be able to do this automatically.
+        vel_x(t+1, x, y, z) IS_EQUIV_TO next_vel_x
+            IF !at_last_z;
+        vel_x(t+1, x, y, z) IS_EQUIV_TO next_vel_x
+            IF at_last_z;
     }
-    void define_vel_y(GridIndex t, GridIndex x, GridIndex y, GridIndex z) {
+    void define_vel_y(GridIndex t, GridIndex x, GridIndex y, GridIndex z,
+                                 Condition at_last_z) {
         GridValue rho_val = (rho(x,   y, z  ) +
                              rho(x+1, y, z  ) +
                              rho(x,   y, z-1) +
@@ -131,9 +141,16 @@ public:
         adjust_for_sponge(next_vel_y, x, y, z);
 
         // define the value at t+1.
-        vel_y(t+1, x, y, z) == next_vel_y;
+        // This equation does NOT have a special case at surface, but the
+        // formula is replicated to unify the sub-domains. Eventually,
+        // YASK should be able to do this automatically.
+        vel_y(t+1, x, y, z) IS_EQUIV_TO next_vel_y
+            IF !at_last_z;
+        vel_y(t+1, x, y, z) IS_EQUIV_TO next_vel_y
+            IF at_last_z;
     }
-    void define_vel_z(GridIndex t, GridIndex x, GridIndex y, GridIndex z) {
+    void define_vel_z(GridIndex t, GridIndex x, GridIndex y, GridIndex z,
+                                 Condition at_last_z) {
         GridValue rho_val = (rho(x,   y,   z) +
                              rho(x+1, y,   z) +
                              rho(x,   y-1, z) +
@@ -149,9 +166,50 @@ public:
         adjust_for_sponge(next_vel_z, x, y, z);
 
         // define the value at t+1.
-        vel_z(t+1, x, y, z) == next_vel_z;
+        // This equation does NOT have a special case at surface, but the
+        // formula is replicated to unify the sub-domains. Eventually,
+        // YASK should be able to do this automatically.
+        vel_z(t+1, x, y, z) IS_EQUIV_TO next_vel_z
+            IF !at_last_z;
+        vel_z(t+1, x, y, z) IS_EQUIV_TO next_vel_z
+            IF at_last_z;
     }
 
+    // Free-surface boundary equations for velocity.
+    void define_free_surface_vel(GridIndex t, GridIndex x, GridIndex y, GridIndex z,
+                                 Condition at_last_z) {
+
+        // Following expressions are valid only when z == last value in domain.
+        // Note that values beyond the last index are updated, i.e., in the halo.
+        
+        // A couple of intermediate values.
+        GridValue d_x_val = vel_x(t+1, x+1, y, z) -
+            (vel_z(t+1, x+1, y, z) - vel_z(t+1, x, y, z));
+        GridValue d_y_val = vel_y(t+1, x, y-1, z) -
+            (vel_z(t+1, x, y, z) - vel_z(t+1, x, y-1, z));
+        
+        // Following values are valid at the free surface.
+        GridValue plus1_vel_x = vel_x(t+1, x, y, z) -
+            (vel_z(t+1, x, y, z) - vel_z(t+1, x-1, y, z));
+        GridValue plus1_vel_y = vel_y(t+1, x, y, z) -
+            (vel_z(t+1, x, y+1, z) - vel_z(t+1, x, y, z));
+        GridValue plus1_vel_z = vel_z(t+1, x, y, z) -
+            ((d_x_val - plus1_vel_x) +
+             (vel_x(t+1, x+1, y, z) - vel_x(t+1, x, y, z)) +
+             (plus1_vel_y - d_y_val) +
+             (vel_y(t+1, x, y, z) - vel_y(t+1, x, y-1, z))) /
+            ((mu(x, y, z) *
+              (2.0 / mu(x, y, z) + 1.0 / lambda(x, y, z))));
+
+        // Define equivalencies to be valid only when z == last value in domain.
+        vel_x(t+1, x, y, z+1) IS_EQUIV_TO plus1_vel_x
+            IF at_last_z;
+        vel_y(t+1, x, y, z+1) IS_EQUIV_TO plus1_vel_y
+            IF at_last_z;
+        vel_z(t+1, x, y, z+1) IS_EQUIV_TO plus1_vel_z
+            IF at_last_z;
+    }
+    
     // Stress-grid define functions.  For each D in xx, yy, zz, xy, xz, yz,
     // define stress_D at t+1 based on stress_D at t and vel grids at t+1.
     // This implies that the velocity-grid define functions must be called
@@ -161,6 +219,7 @@ public:
     // appropriately.
 
     void define_stress_xx(GridIndex t, GridIndex x, GridIndex y, GridIndex z,
+                          Condition at_last_z,
                           GridValue lambda_val, GridValue mu_val,
                           GridValue d_x_val, GridValue d_y_val, GridValue d_z_val) {
 
@@ -170,9 +229,16 @@ public:
         adjust_for_sponge(next_stress_xx, x, y, z);
 
         // define the value at t+1.
-        stress_xx(t+1, x, y, z) == next_stress_xx;
+        // This equation does NOT have a special case at surface, but the
+        // formula is replicated to unify the sub-domains. Eventually,
+        // YASK should be able to do this automatically.
+        stress_xx(t+1, x, y, z) IS_EQUIV_TO next_stress_xx
+            IF !at_last_z;
+        stress_xx(t+1, x, y, z) IS_EQUIV_TO next_stress_xx
+            IF at_last_z;
     }
     void define_stress_yy(GridIndex t, GridIndex x, GridIndex y, GridIndex z,
+                          Condition at_last_z,
                           GridValue lambda_val, GridValue mu_val,
                           GridValue d_x_val, GridValue d_y_val, GridValue d_z_val) {
 
@@ -182,9 +248,16 @@ public:
         adjust_for_sponge(next_stress_yy, x, y, z);
 
         // define the value at t+1.
-        stress_yy(t+1, x, y, z) == next_stress_yy;
+        // This equation does NOT have a special case at surface, but the
+        // formula is replicated to unify the sub-domains. Eventually,
+        // YASK should be able to do this automatically.
+        stress_yy(t+1, x, y, z) IS_EQUIV_TO next_stress_yy
+            IF !at_last_z;
+        stress_yy(t+1, x, y, z) IS_EQUIV_TO next_stress_yy
+            IF at_last_z;
     }
     void define_stress_zz(GridIndex t, GridIndex x, GridIndex y, GridIndex z,
+                          Condition at_last_z,
                           GridValue lambda_val, GridValue mu_val,
                           GridValue d_x_val, GridValue d_y_val, GridValue d_z_val) {
 
@@ -194,9 +267,16 @@ public:
         adjust_for_sponge(next_stress_zz, x, y, z);
 
         // define the value at t+1.
-        stress_zz(t+1, x, y, z) == next_stress_zz;
+        // This equation does NOT have a special case at surface, but the
+        // formula is replicated to unify the sub-domains. Eventually,
+        // YASK should be able to do this automatically.
+        stress_zz(t+1, x, y, z) IS_EQUIV_TO next_stress_zz
+            IF !at_last_z;
+        stress_zz(t+1, x, y, z) IS_EQUIV_TO next_stress_zz
+            IF at_last_z;
     }
-    void define_stress_xy(GridIndex t, GridIndex x, GridIndex y, GridIndex z) {
+    void define_stress_xy(GridIndex t, GridIndex x, GridIndex y, GridIndex z,
+                          Condition at_last_z) {
 
         GridValue mu_val = 2.0 /
             (mu(x,   y,   z  ) + mu(x,   y,   z-1));
@@ -214,9 +294,16 @@ public:
         adjust_for_sponge(next_stress_xy, x, y, z);
 
         // define the value at t+1.
-        stress_xy(t+1, x, y, z) == next_stress_xy;
+        // This equation does NOT have a special case at surface, but the
+        // formula is replicated to unify the sub-domains. Eventually,
+        // YASK should be able to do this automatically.
+        stress_xy(t+1, x, y, z) IS_EQUIV_TO next_stress_xy
+            IF !at_last_z;
+        stress_xy(t+1, x, y, z) IS_EQUIV_TO next_stress_xy
+            IF at_last_z;
     }
-    void define_stress_xz(GridIndex t, GridIndex x, GridIndex y, GridIndex z) {
+    void define_stress_xz(GridIndex t, GridIndex x, GridIndex y, GridIndex z,
+                          Condition at_last_z) {
 
         GridValue mu_val = 2.0 /
             (mu(x,   y,   z  ) + mu(x,   y-1, z  ));
@@ -233,10 +320,14 @@ public:
             ((mu_val * delta_t / h) * (d_xz_val + d_zx_val));
         adjust_for_sponge(next_stress_xz, x, y, z);
 
-        // define the value at t+1.
-        stress_xz(t+1, x, y, z) == next_stress_xz;
+        // define the value at t+1 (special case: zero at surface).
+        stress_xz(t+1, x, y, z) IS_EQUIV_TO next_stress_xz
+            IF !at_last_z;
+        stress_xz(t+1, x, y, z) IS_EQUIV_TO 0.0
+            IF at_last_z;
     }
-    void define_stress_yz(GridIndex t, GridIndex x, GridIndex y, GridIndex z) {
+    void define_stress_yz(GridIndex t, GridIndex x, GridIndex y, GridIndex z,
+                          Condition at_last_z) {
 
         GridValue mu_val = 2.0 /
             (mu(x,   y,   z  ) + mu(x+1, y,   z  ));
@@ -253,10 +344,36 @@ public:
             ((mu_val * delta_t / h) * (d_yz_val + d_zy_val));
         adjust_for_sponge(next_stress_yz, x, y, z);
 
-        // define the value at t+1.
-        stress_yz(t+1, x, y, z) == next_stress_yz;
+        // define the value at t+1 (special case: zero at surface).
+        stress_yz(t+1, x, y, z) IS_EQUIV_TO next_stress_yz
+            IF !at_last_z;
+        stress_yz(t+1, x, y, z) IS_EQUIV_TO 0.0
+            IF at_last_z;
     }
 
+    // Free-surface boundary equations for stress.
+    void define_free_surface_stress(GridIndex t, GridIndex x, GridIndex y, GridIndex z,
+                                    Condition at_last_z) {
+
+        // Define equivalencies to be valid only when z == last value in domain.
+        // Note that values beyond the last index are updated, i.e., in the halo.
+
+        stress_zz(t+1, x, y, z+1) IS_EQUIV_TO -stress_zz(t+1, x, y, z)
+            IF at_last_z;
+        stress_zz(t+1, x, y, z+2) IS_EQUIV_TO -stress_zz(t+1, x, y, z-1)
+            IF at_last_z;
+
+        stress_xz(t+1, x, y, z+1) IS_EQUIV_TO -stress_xz(t+1, x, y, z-1)
+            IF at_last_z;
+        stress_xz(t+1, x, y, z+2) IS_EQUIV_TO -stress_xz(t+1, x, y, z-2)
+            IF at_last_z;
+
+        stress_yz(t+1, x, y, z+1) IS_EQUIV_TO -stress_yz(t+1, x, y, z-1)
+            IF at_last_z;
+        stress_yz(t+1, x, y, z+2) IS_EQUIV_TO -stress_yz(t+1, x, y, z-2)
+            IF at_last_z;
+    }
+    
     // Call all the define_* functions.
     virtual void define(const IntTuple& offsets) {
         GET_OFFSET(t);
@@ -264,14 +381,20 @@ public:
         GET_OFFSET(y);
         GET_OFFSET(z);
 
+        // A condition that is true when index 'z' is at the free-surface boundary.
+        Condition at_last_z = (z == last_index(z));
+        
         // Define velocity components.
-        define_vel_x(t, x, y, z);
-        define_vel_y(t, x, y, z);
-        define_vel_z(t, x, y, z);
+        define_vel_x(t, x, y, z, at_last_z);
+        define_vel_y(t, x, y, z, at_last_z);
+        define_vel_z(t, x, y, z, at_last_z);
+
+        // Boundary conditions.
+        define_free_surface_vel(t, x, y, z, at_last_z);
 
         // Define some values common to the diagonal stress equations.
 #ifdef PRECOMPUTED_LAMBDA
-        // This assumes the lambda stencil is computed once before
+        // Use this the lambda values are pre-computed once before
         // all time-steps.
         GridValue lambda_val = lambda(x, y, z);
 #else
@@ -299,12 +422,18 @@ public:
             c2 * (vel_z(t+1, x,   y,   z+1) - vel_z(t+1, x,   y,   z-2));
 
         // Define stress components.
-        define_stress_xx(t, x, y, z, lambda_val, mu_val, d_x_val, d_y_val, d_z_val);
-        define_stress_yy(t, x, y, z, lambda_val, mu_val, d_x_val, d_y_val, d_z_val);
-        define_stress_zz(t, x, y, z, lambda_val, mu_val, d_x_val, d_y_val, d_z_val);
-        define_stress_xy(t, x, y, z);
-        define_stress_xz(t, x, y, z);
-        define_stress_yz(t, x, y, z);
+        define_stress_xx(t, x, y, z, at_last_z,
+                         lambda_val, mu_val, d_x_val, d_y_val, d_z_val);
+        define_stress_yy(t, x, y, z, at_last_z,
+                         lambda_val, mu_val, d_x_val, d_y_val, d_z_val);
+        define_stress_zz(t, x, y, z, at_last_z,
+                         lambda_val, mu_val, d_x_val, d_y_val, d_z_val);
+        define_stress_xy(t, x, y, z, at_last_z);
+        define_stress_xz(t, x, y, z, at_last_z);
+        define_stress_yz(t, x, y, z, at_last_z);
+
+        // Boundary conditions.
+        define_free_surface_stress(t, x, y, z, at_last_z);
     }
 };
 

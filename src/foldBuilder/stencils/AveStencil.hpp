@@ -1,7 +1,7 @@
 /*****************************************************************************
 
 YASK: Yet Another Stencil Kernel
-Copyright (c) 2014-2016, Intel Corporation
+Copyright (c) 2014-2017, Intel Corporation
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to
@@ -65,7 +65,7 @@ public:
         v *= 1.0 / double(nPts);
 
         // define the grid value at t+1 to be equivalent to v.
-        multi_grid(t+1, n, x, y, z) == v;
+        multi_grid(t+1, n, x, y, z) IS_EQUIV_TO v;
     }
 };
 

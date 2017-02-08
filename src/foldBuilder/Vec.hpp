@@ -1,7 +1,7 @@
 /*****************************************************************************
 
 YASK: Yet Another Stencil Kernel
-Copyright (c) 2014-2016, Intel Corporation
+Copyright (c) 2014-2017, Intel Corporation
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to
@@ -77,8 +77,8 @@ typedef map<GridPoint, GridPointSet> Point2Vecs;
 class VecInfoVisitor : public ExprVisitor {
 protected:
 
-    const IntTuple& _fold;       // shape of vector fold.
-    int _vlen;                   // size of vector.
+    const Dimensions& _dims;
+    int _vlen;                   // size of one vector.
     
 public:
 
@@ -93,13 +93,15 @@ public:
     // _vblk2elemLists is used to find exactly where each element comes from.
     // The keys are the same for both maps.
 
-    VecInfoVisitor(const IntTuple& fold) :
-        _fold(fold) {
-        _vlen = fold.product();
+    VecInfoVisitor(const Dimensions& dims) :
+        _dims(dims) {
+        _vlen = dims._fold.product();
     }
 
-    const IntTuple& getFold() { return _fold; }
-
+    const IntTuple& getFold() const {
+        return _dims._fold;
+    }
+    
     size_t getNumPoints() const {
         return _vblk2elemLists.size();
     }
@@ -133,7 +135,7 @@ public:
             separator << "num points in stencil" <<
             separator << "num aligned vectors to read from memory" <<
             separator << "num blends needed" <<
-            separator << _fold.makeDimStr(separator, "footprint in ") <<
+            separator << _dims._fold.makeDimStr(separator, "footprint in ") <<
             endl;
     }
 
@@ -154,8 +156,8 @@ public:
         }
 
         // calc footprint in each dim.
-        map<string, int> footprints;
-        for (auto dim : _fold.getDims()) {
+        map<const string*, int> footprints;
+        for (auto* dim : _dims._fold.getDims()) {
 
             // Create direction vector in this dim.
             IntTuple dir;
@@ -172,11 +174,11 @@ public:
             
         os << destGrid <<
             separator << _vlen <<
-            separator << _fold.makeValStr("x") <<
+            separator << _dims._fold.makeValStr("x") <<
             separator << getNumPoints() <<
             separator << getNumAlignedVecs() <<
             separator << numBlends;
-        for (auto dim : _fold.getDims())
+        for (auto dim : _dims._fold.getDims())
             os << separator << footprints[dim];
         os << endl;
     }
@@ -222,7 +224,7 @@ public:
         }
     }
 
-    // Only want to visit the RHS of an equation.
+    // Only want to visit the RHS of an eqGroup.
     // Assumes LHS is aligned.
     // TODO: validate this.
     virtual void visit(EqualsExpr* ee) {
@@ -245,12 +247,9 @@ public:
         cout << "vec @ " << gp->makeDimValStr() << " => " << endl;
 #endif
 
-        // Loop through each point in a vector fold.
-        // This process is based on the assumption that a block of the same
-        // size should be accessed from every point in every source grid.
-        // TODO: validate this assumption.
+        // Loop through all points in the vector at this cluster point.
         size_t pelem = 0;
-        _fold.visitAllPoints([&](const IntTuple& vecPoint){
+        _dims._fold.visitAllPoints([&](const IntTuple& vecPoint){
 
                 // Offset in each dim is starting point of grid point plus
                 // offset in this vector.
@@ -263,7 +262,7 @@ public:
                 for (auto dim : offsets.getDims()) {
 
                     // length of this dimension in fold, if it exists.
-                    const int* p = _fold.lookup(dim);
+                    const int* p = _dims._fold.lookup(dim);
                     int len = p ? *p : 1;
 
                     // convert this offset to vector index and vector offset.
@@ -283,7 +282,7 @@ public:
                 GridPoint alignedVec(gp, vecLocation);
 
                 // Find linear offset within this aligned vector block.
-                int alignedElem = _fold.mapTo1d(vecOffsets, false);
+                int alignedElem = _dims._fold.layout(vecOffsets, false);
                 assert(alignedElem >= 0);
                 assert(alignedElem < _vlen);
 #ifdef DEBUG_VV
@@ -303,7 +302,7 @@ public:
                 assert(_vblk2elemLists[*gp].size() == pelem+1); // verify at pelem index.
 
                 pelem++;
-            });                  // end of lambda-function.
+            });                  // end of vector lambda-function.
     }                   // end of visit() method.
 };
 
@@ -397,7 +396,7 @@ public:
         }
 
         else {
-            cerr << "error: on point " << gp.makeStr() << endl;
+            cerr << "Error: on point " << gp.makeStr() << endl;
             assert("point type unknown");
         }
 
@@ -428,8 +427,8 @@ public:
     // Sort a commutative expression.
     virtual void visit(CommutativeExpr* ce) {
 
-        ExprPtrVec& oev = ce->getOps(); // old exprs.
-        ExprPtrVec nev; // new exprs.
+        auto& oev = ce->getOps(); // old exprs.
+        NumExprPtrVec nev; // new exprs.
 
         // Simple, greedy algorithm:
         // Select first element that needs the fewest new aligned vecs.
@@ -441,7 +440,7 @@ public:
         for (size_t i = 0; i < oev.size(); i++) {
 
 #ifdef DEBUG_SORT
-            cerr << "  Looking for expr #" << i << "..." << endl;
+            cout << "  Looking for expr #" << i << "..." << endl;
 #endif
 
             // Scan unused exprs.
@@ -467,13 +466,13 @@ public:
                         // new vector needed?
                         if (alignedVecs.count(av) == 0) {
 #ifdef DEBUG_SORT
-                            cerr << " Vec " << av.makeStr("tmp") << " is new" << endl;
+                            cout << " Vec " << av.makeStr("tmp") << " is new" << endl;
 #endif
                             cost++; 
                         }
                     }
 #ifdef DEBUG_SORT
-                    cerr << " Cost of expr " << j << " = " << cost << endl;
+                    cout << " Cost of expr " << j << " = " << cost << endl;
 #endif
                     // Best so far?
                     if (cost < jBestCost) {
@@ -481,7 +480,7 @@ public:
                         jBest = j;
                         jBestAlignedVecs = tmpAlignedVecs;
 #ifdef DEBUG_SORT
-                        cerr << "  Best so far has " << jBestAlignedVecs.size() << " aligned vecs" << endl;
+                        cout << "  Best so far has " << jBestAlignedVecs.size() << " aligned vecs" << endl;
 #endif
                     }
                 }

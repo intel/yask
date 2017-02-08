@@ -1,7 +1,7 @@
 /*****************************************************************************
 
 YASK: Yet Another Stencil Kernel
-Copyright (c) 2014-2016, Intel Corporation
+Copyright (c) 2014-2017, Intel Corporation
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to
@@ -62,6 +62,8 @@ namespace yask {
     // Type to use for indexing grids and real_vec_t elements.
     // Must be signed to allow negative indices in halos.
     typedef int64_t idx_t;
+    const idx_t idx_max = INT64_MAX;
+    const idx_t idx_min = INT64_MIN;
 
     // values for 32-bit, single-precision reals.
 #if REAL_BYTES == 4

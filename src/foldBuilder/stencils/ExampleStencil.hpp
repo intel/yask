@@ -1,7 +1,7 @@
 /*****************************************************************************
 
 YASK: Yet Another Stencil Kernel
-Copyright (c) 2014-2016, Intel Corporation
+Copyright (c) 2014-2017, Intel Corporation
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to
@@ -32,7 +32,7 @@ class ExampleStencil : public StencilRadiusBase {
 protected:
 
     // Generic time-varying spatial-3D grid.
-    Grid grid;
+    Grid data;
     
     // Return a coefficient.  Note: This returns completely fabricated
     // values only for illustrative purposes; they have no mathematical
@@ -46,14 +46,14 @@ protected:
         return num / sumSq;
     }
 
-    // Add additional contributions to v.
-    virtual void valueAdd(GridValue& v, int t, int x, int y, int z) =0;
+    // Add additional points to expression v.
+    virtual void addPoints(GridValue& v, GridIndex t, GridIndex x, GridIndex y, GridIndex z) =0;
     
 public:
     ExampleStencil(const string& name, StencilList& stencils, int radius=2) :
         StencilRadiusBase(name, stencils, radius)
     {
-        INIT_GRID_4D(grid, t, x, y, z);
+        INIT_GRID_4D(data, t, x, y, z);
     }
 
     // Define equation at t+1 based on values at t.
@@ -63,23 +63,23 @@ public:
         GET_OFFSET(y);
         GET_OFFSET(z);
 
-        // start with center value.
-        GridValue v = coeff(0, 0, 0) * grid(t, x, y, z);
+        // start with center point.
+        GridValue v = coeff(0, 0, 0) * data(t, x, y, z);
 
-        // Add additional values.
-        valueAdd(v, t, x, y, z);
+        // Add additional points from derived class.
+        addPoints(v, t, x, y, z);
 
         // define the value at t+1 to be equivalent to v.
-        grid(t+1, x, y, z) == v;
+        data(t+1, x, y, z) IS_EQUIV_TO v;
     }
 };
 
-// Add values from x, y, and z axes.
+// Add points from x, y, and z axes.
 class AxisStencil : public ExampleStencil {
 protected:
 
-    // Add additional contributions to v based on u(tm1, ...).
-    virtual void valueAdd(GridValue& v, int t, int x, int y, int z)
+    // Add additional points to v.
+    virtual void addPoints(GridValue& v, GridIndex t, GridIndex x, GridIndex y, GridIndex z)
     {
         for (int r = 1; r <= _radius; r++) {
 
@@ -89,16 +89,16 @@ protected:
             v += c * 
                 (
                  // x-axis.
-                 grid(t, x-r, y, z) +
-                 grid(t, x+r, y, z) +
+                 data(t, x-r, y, z) +
+                 data(t, x+r, y, z) +
                  
                  // y-axis.
-                 grid(t, x, y-r, z) +
-                 grid(t, x, y+r, z) +
+                 data(t, x, y-r, z) +
+                 data(t, x, y+r, z) +
                  
                  // z-axis.
-                 grid(t, x, y, z-r) +
-                 grid(t, x, y, z+r)
+                 data(t, x, y, z-r) +
+                 data(t, x, y, z+r)
                  );
         }
     }
@@ -112,36 +112,36 @@ public:
 
 REGISTER_STENCIL(AxisStencil);
 
-// Add values from x-y, x-z, and y-z diagonals.
+// Add points from x-y, x-z, and y-z diagonals.
 class DiagStencil : public AxisStencil {
 protected:
 
-    // Add additional contributions to v based on u(tm1, ...).
-    virtual void valueAdd(GridValue& v, int t, int x, int y, int z)
+    // Add additional points to v.
+    virtual void addPoints(GridValue& v, GridIndex t, GridIndex x, GridIndex y, GridIndex z)
     {
-        // Get values from axes.
-        AxisStencil::valueAdd(v, t, x, y, z);
+        // Get points from axes.
+        AxisStencil::addPoints(v, t, x, y, z);
 
-        // Add values from diagonals.
+        // Add points from diagonals.
         for (int r = 1; r <= _radius; r++) {
 
             // x-y diagonal.
-            v += coeff(-r, -r, 0) * grid(t, x-r, y-r, z);
-            v += coeff(+r, -r, 0) * grid(t, x+r, y-r, z);
-            v -= coeff(-r, +r, 0) * grid(t, x-r, y+r, z);
-            v -= coeff(+r, +r, 0) * grid(t, x+r, y+r, z);
+            v += coeff(-r, -r, 0) * data(t, x-r, y-r, z);
+            v += coeff(+r, -r, 0) * data(t, x+r, y-r, z);
+            v -= coeff(-r, +r, 0) * data(t, x-r, y+r, z);
+            v -= coeff(+r, +r, 0) * data(t, x+r, y+r, z);
 
             // x-z diagonal.
-            v += coeff(-r, 0, -r) * grid(t, x-r, y, z-r);
-            v += coeff(+r, 0, +r) * grid(t, x+r, y, z+r);
-            v -= coeff(-r, 0, +r) * grid(t, x-r, y, z+r);
-            v -= coeff(+r, 0, -r) * grid(t, x+r, y, z-r);
+            v += coeff(-r, 0, -r) * data(t, x-r, y, z-r);
+            v += coeff(+r, 0, +r) * data(t, x+r, y, z+r);
+            v -= coeff(-r, 0, +r) * data(t, x-r, y, z+r);
+            v -= coeff(+r, 0, -r) * data(t, x+r, y, z-r);
 
             // y-z diagonal.
-            v += coeff(0, -r, -r) * grid(t, x, y-r, z-r);
-            v += coeff(0, +r, +r) * grid(t, x, y+r, z+r);
-            v -= coeff(0, -r, +r) * grid(t, x, y-r, z+r);
-            v -= coeff(0, +r, -r) * grid(t, x, y+r, z-r);
+            v += coeff(0, -r, -r) * data(t, x, y-r, z-r);
+            v += coeff(0, +r, +r) * data(t, x, y+r, z+r);
+            v -= coeff(0, -r, +r) * data(t, x, y-r, z+r);
+            v -= coeff(0, +r, -r) * data(t, x, y+r, z-r);
         }
     }
 
@@ -154,49 +154,49 @@ public:
 
 REGISTER_STENCIL(DiagStencil);
 
-// Add values from x-y, x-z, and y-z planes not covered by axes or diagonals.
+// Add points from x-y, x-z, and y-z planes not covered by axes or diagonals.
 class PlaneStencil : public DiagStencil {
 protected:
     
-    // Add additional contributions to v based on u(tm1, ...).
-    virtual void valueAdd(GridValue& v, int t, int x, int y, int z)
+    // Add additional points to v.
+    virtual void addPoints(GridValue& v, GridIndex t, GridIndex x, GridIndex y, GridIndex z)
     {
-        // Get values from axes and diagonals.
-        DiagStencil::valueAdd(v, t, x, y, z);
+        // Get points from axes and diagonals.
+        DiagStencil::addPoints(v, t, x, y, z);
 
-        // Add remaining values on planes.
+        // Add remaining points on planes.
         for (int r = 1; r <= _radius; r++) {
             for (int m = r+1; m <= _radius; m++) {
 
                 // x-y plane.
-                v += coeff(-r, -m, 0) * grid(t, x-r, y-m, z);
-                v += coeff(-m, -r, 0) * grid(t, x-m, y-r, z);
-                v += coeff(+r, +m, 0) * grid(t, x+r, y+m, z);
-                v += coeff(+m, +r, 0) * grid(t, x+m, y+r, z);
-                v -= coeff(-r, +m, 0) * grid(t, x-r, y+m, z);
-                v -= coeff(-m, +r, 0) * grid(t, x-m, y+r, z);
-                v -= coeff(+r, -m, 0) * grid(t, x+r, y-m, z);
-                v -= coeff(+m, -r, 0) * grid(t, x+m, y-r, z);
+                v += coeff(-r, -m, 0) * data(t, x-r, y-m, z);
+                v += coeff(-m, -r, 0) * data(t, x-m, y-r, z);
+                v += coeff(+r, +m, 0) * data(t, x+r, y+m, z);
+                v += coeff(+m, +r, 0) * data(t, x+m, y+r, z);
+                v -= coeff(-r, +m, 0) * data(t, x-r, y+m, z);
+                v -= coeff(-m, +r, 0) * data(t, x-m, y+r, z);
+                v -= coeff(+r, -m, 0) * data(t, x+r, y-m, z);
+                v -= coeff(+m, -r, 0) * data(t, x+m, y-r, z);
 
                 // x-z plane.
-                v += coeff(-r, 0, -m) * grid(t, x-r, y, z-m);
-                v += coeff(-m, 0, -r) * grid(t, x-m, y, z-r);
-                v += coeff(+r, 0, +m) * grid(t, x+r, y, z+m);
-                v += coeff(+m, 0, +r) * grid(t, x+m, y, z+r);
-                v -= coeff(-r, 0, +m) * grid(t, x-r, y, z+m);
-                v -= coeff(-m, 0, +r) * grid(t, x-m, y, z+r);
-                v -= coeff(+r, 0, -m) * grid(t, x+r, y, z-m);
-                v -= coeff(+m, 0, -r) * grid(t, x+m, y, z-r);
+                v += coeff(-r, 0, -m) * data(t, x-r, y, z-m);
+                v += coeff(-m, 0, -r) * data(t, x-m, y, z-r);
+                v += coeff(+r, 0, +m) * data(t, x+r, y, z+m);
+                v += coeff(+m, 0, +r) * data(t, x+m, y, z+r);
+                v -= coeff(-r, 0, +m) * data(t, x-r, y, z+m);
+                v -= coeff(-m, 0, +r) * data(t, x-m, y, z+r);
+                v -= coeff(+r, 0, -m) * data(t, x+r, y, z-m);
+                v -= coeff(+m, 0, -r) * data(t, x+m, y, z-r);
 
                 // y-z plane.
-                v += coeff(0, -r, -m) * grid(t, x, y-r, z-m);
-                v += coeff(0, -m, -r) * grid(t, x, y-m, z-r);
-                v += coeff(0, +r, +m) * grid(t, x, y+r, z+m);
-                v += coeff(0, +m, +r) * grid(t, x, y+m, z+r);
-                v -= coeff(0, -r, +m) * grid(t, x, y-r, z+m);
-                v -= coeff(0, -m, +r) * grid(t, x, y-m, z+r);
-                v -= coeff(0, +r, -m) * grid(t, x, y+r, z-m);
-                v -= coeff(0, +m, -r) * grid(t, x, y+m, z-r);
+                v += coeff(0, -r, -m) * data(t, x, y-r, z-m);
+                v += coeff(0, -m, -r) * data(t, x, y-m, z-r);
+                v += coeff(0, +r, +m) * data(t, x, y+r, z+m);
+                v += coeff(0, +m, +r) * data(t, x, y+m, z+r);
+                v -= coeff(0, -r, +m) * data(t, x, y-r, z+m);
+                v -= coeff(0, -m, +r) * data(t, x, y-m, z+r);
+                v -= coeff(0, +r, -m) * data(t, x, y+r, z-m);
+                v -= coeff(0, +m, -r) * data(t, x, y+m, z-r);
             }
         }
     }
@@ -210,30 +210,30 @@ public:
 
 REGISTER_STENCIL(PlaneStencil);
 
-// Add values from rest of cube.
+// Add points from rest of cube.
 class CubeStencil : public PlaneStencil {
 protected:
 
-    // Add additional contributions to v based on u(tm1, ...).
-    virtual void valueAdd(GridValue& v, int t, int x, int y, int z)
+    // Add additional points to v.
+    virtual void addPoints(GridValue& v, GridIndex t, GridIndex x, GridIndex y, GridIndex z)
     {
-        // Get values from planes.
-        PlaneStencil::valueAdd(v, t, x, y, z);
+        // Get points from planes.
+        PlaneStencil::addPoints(v, t, x, y, z);
 
-        // Add values from rest of cube.
+        // Add points from rest of cube.
         for (int rx = 1; rx <= _radius; rx++)
             for (int ry = 1; ry <= _radius; ry++)
                 for (int rz = 1; rz <= _radius; rz++) {
 
                     // Each quadrant.
-                    v += coeff(rx, ry, rz) * grid(t, x+rx, y+ry, z+rz);
-                    v += coeff(rx, -ry, -rz) * grid(t, x+rx, y-ry, z-rz);
-                    v -= coeff(rx, ry, -rz) * grid(t, x+rx, y+ry, z-rz);
-                    v -= coeff(rx, -ry, rz) * grid(t, x+rx, y-ry, z+rz);
-                    v += coeff(-rx, ry, rz) * grid(t, x-rx, y+ry, z+rz);
-                    v += coeff(-rx, -ry, -rz) * grid(t, x-rx, y-ry, z-rz);
-                    v -= coeff(-rx, ry, -rz) * grid(t, x-rx, y+ry, z-rz);
-                    v -= coeff(-rx, -ry, rz) * grid(t, x-rx, y-ry, z+rz);
+                    v += coeff(rx, ry, rz) * data(t, x+rx, y+ry, z+rz);
+                    v += coeff(rx, -ry, -rz) * data(t, x+rx, y-ry, z-rz);
+                    v -= coeff(rx, ry, -rz) * data(t, x+rx, y+ry, z-rz);
+                    v -= coeff(rx, -ry, rz) * data(t, x+rx, y-ry, z+rz);
+                    v += coeff(-rx, ry, rz) * data(t, x-rx, y+ry, z+rz);
+                    v += coeff(-rx, -ry, -rz) * data(t, x-rx, y-ry, z-rz);
+                    v -= coeff(-rx, ry, -rz) * data(t, x-rx, y+ry, z-rz);
+                    v -= coeff(-rx, -ry, rz) * data(t, x-rx, y-ry, z+rz);
                 }
     }
 

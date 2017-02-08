@@ -1,7 +1,7 @@
 /*****************************************************************************
 
 YASK: Yet Another Stencil Kernel
-Copyright (c) 2014-2016, Intel Corporation
+Copyright (c) 2014-2017, Intel Corporation
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to
@@ -41,10 +41,6 @@ IN THE SOFTWARE.
 #include <iostream>
 #include "utils.hpp"
 
-#ifdef USE_HBW
-#include "hbwmalloc.h"
-#endif
-
 namespace yask {
 
 #include "layouts.hpp"
@@ -53,61 +49,49 @@ namespace yask {
     // This class provides linear-access support, i.e., no layout.
     template <typename T> class GenericGridBase {
     protected:
-        T* _elems;
-        const idx_t _num_elems;
-        bool _used_hbw;
-        const static size_t _def_alignment = 64;
+        T* _elems = 0;
+        bool _do_free = false;
+        const static size_t _def_alignment = CACHELINE_BYTES;
 
     public:
-        GenericGridBase(idx_t num_elems,
-                        size_t alignment,
-                        bool use_hbw) :
-            _num_elems(num_elems), _used_hbw(false)
-        {
-            size_t sz = sizeof(T) * num_elems;
-            int ret;
-#ifdef USE_HBW
-            if (use_hbw) {
-                ret = hbw_posix_memalign((void **)&_elems, alignment, sz);
-                _used_hbw = true;
-            }
-            else
-#endif
-                ret = posix_memalign((void **)&_elems, alignment, sz);
-            if (ret) {
 
-                // TODO: provide option to throw an exception.
-                std::cerr << "error: cannot allocate " << sz << " bytes." << std::endl;
-                exit(1);
-            }
-        }
+        // Ctor. No allocation is done. See notes on default_alloc().
+        GenericGridBase() { }
 
-        // Dealloc memory.
+        // Dealloc memory only if allocated via default_alloc().
         virtual ~GenericGridBase() {
-#ifdef USE_HBW
-            if (_used_hbw)
-                hbw_free(_elems);
-            else
-#endif
+            if (_elems && _do_free)
                 free(_elems);
         }
 
-        // Get number of elements with padding.
-        inline idx_t get_num_elems() const {
-            return _num_elems;
+        // Perform default allocation. Will be free'd upon destruction.
+        // For other options,
+        // programmer should call get_num_elems() or get_num_bytes() and
+        // then provide allocated memory via set_storage().
+        virtual void default_alloc() {
+            size_t sz = get_num_bytes();
+            int ret = posix_memalign((void **)&_elems, _def_alignment, sz);
+            if (ret) {
+                std::cerr << "error: cannot allocate " << sz << " bytes." << std::endl;
+                exit_yask(1);
+            }
+            _do_free = true;
         }
+        
+        // Get number of elements.
+        virtual idx_t get_num_elems() const =0;
 
         // Get size in bytes.
-        inline idx_t get_num_bytes() const {
-            return sizeof(T) * _num_elems;
+        inline size_t get_num_bytes() const {
+            return sizeof(T) * get_num_elems();
         }
 
         // Print some info.
         virtual void print_info(const std::string& name, std::ostream& os) {
-            os << "grid '" << name << "' allocation at " << _elems << " for " <<
+            os << "'" << name << "' data is at " << _elems << ", containing " <<
                 printWithPow10Multiplier(get_num_elems()) << " element(s) of " <<
-                sizeof(T) << " byte(s) each (bytes): " <<
-                printWithPow2Multiplier(get_num_bytes()) << std::endl;
+                sizeof(T) << " byte(s) each = " <<
+                printWithPow2Multiplier(get_num_bytes()) << " bytes.\n";
         }
 
         // Initialize memory to a given value.
@@ -154,14 +138,26 @@ namespace yask {
                               int maxPrint = 0,
                               std::ostream& os = std::cerr) const =0;
 
-        // Direct access to data (dangerous!).
-        T* getRawData() {
+        // Direct access to data.
+        T* get_storage() {
             return _elems;
         }
-        const T* getRawData() const {
+        const T* get_storage() const {
             return _elems;
         }
-    
+
+        // Set pointer to storage.
+        // Free old storage if it was allocated in ctor.
+        // 'buf' should provide get_num_bytes() bytes at offset bytes.
+        void set_storage(void* buf, size_t offset) {
+            if (_elems && _do_free) {
+                free(_elems);
+                _elems = 0;
+            }
+            _do_free = false;
+            char* p = static_cast<char*>(buf) + offset;
+            _elems = (T*)(p);
+        }
     };
 
     // A generic 0D grid (scalar) of elements of type T.
@@ -171,15 +167,18 @@ namespace yask {
     
     public:
 
-        // Construct a scalar.
-        GenericGrid0d(size_t alignment=GenericGridBase<T>::_def_alignment,
-                      bool use_hbw=true) :
-            GenericGridBase<T>(1, alignment, use_hbw) {}
+        // Construct an unallocated scalar.
+        GenericGrid0d() {}
 
         // Print some info.
         virtual void print_info(const std::string& name, std::ostream& os) {
-            os << "Scalar ";
+            os << "scalar ";
             GenericGridBase<T>::print_info(name, os);
+        }
+
+        // Get number of elements.
+        virtual idx_t get_num_elems() const {
+            return 1;
         }
 
         // Access element.
@@ -212,7 +211,7 @@ namespace yask {
                 T te = (*this)();
                 T re = (*ref1)();
                 if (!within_tolerance(te, re, epsilon)) {
-                    os << "** scalar mismatch: " <<
+                    os << "** mismatch: " <<
                         te << " != " << re << std::endl;
                 }
             }
@@ -228,19 +227,25 @@ namespace yask {
     template <typename T, typename LayoutFn> class GenericGrid1d :
         public GenericGridBase<T> {
     protected:
-        const LayoutFn _layout;
+        LayoutFn _layout;
     
     public:
 
+        // Construct an unallocated array of length 1.
+        GenericGrid1d() { }
+
         // Construct an array of length d1.
-        GenericGrid1d(idx_t d1,
-                      size_t alignment=GenericGridBase<T>::_def_alignment,
-                      bool use_hbw=true) :
-            GenericGridBase<T>(d1, alignment, use_hbw),
+        GenericGrid1d(idx_t d1) :
             _layout(d1) { }
 
-        // Get original parameters.
+        // Get/set size.
         inline idx_t get_d1() const { return _layout.get_d1(); }
+        inline void set_d1(idx_t d1) { _layout.set_d1(d1); }
+
+        // Get number of elements.
+        virtual idx_t get_num_elems() const {
+            return _layout.get_size();
+        }
 
         // Print some info.
         virtual void print_info(const std::string& name, std::ostream& os) {
@@ -316,21 +321,27 @@ namespace yask {
     template <typename T, typename LayoutFn> class GenericGrid2d :
         public GenericGridBase<T> {
     protected:
-        const LayoutFn _layout;
+        LayoutFn _layout;
     
     public:
 
+        // Construct an unallocated grid of dimensions 1*1.
+        GenericGrid2d() { }
 
-        // Construct a grid of dimensions d1 x d2.
-        GenericGrid2d(idx_t d1, idx_t d2,
-                      size_t alignment=GenericGridBase<T>::_def_alignment,
-                      bool use_hbw=true) :
-            GenericGridBase<T>(d1 * d2, alignment, use_hbw),
+        // Construct a grid of dimensions d1*d2.
+        GenericGrid2d(idx_t d1, idx_t d2) :
             _layout(d1, d2) { }
 
-        // Get original parameters.
+        // Get/set sizes.
         inline idx_t get_d1() const { return _layout.get_d1(); }
         inline idx_t get_d2() const { return _layout.get_d2(); }
+        inline void set_d1(idx_t d1) { _layout.set_d1(d1); }
+        inline void set_d2(idx_t d2) { _layout.set_d2(d2); }
+
+        // Get number of elements.
+        virtual idx_t get_num_elems() const {
+            return _layout.get_size();
+        }
 
         // Print some info.
         virtual void print_info(const std::string& name, std::ostream& os) {
@@ -415,17 +426,25 @@ namespace yask {
     
     public:
 
+        // Construct an unallocated grid of dimensions 1*1*1.
+        GenericGrid3d() { }
+
         // Construct a grid of dimensions d1*d2*d3.
-        GenericGrid3d(idx_t d1, idx_t d2, idx_t d3,
-                      size_t alignment=GenericGridBase<T>::_def_alignment,
-                      bool use_hbw=true) :
-            GenericGridBase<T>(d1 * d2 * d3, alignment, use_hbw),
+        GenericGrid3d(idx_t d1, idx_t d2, idx_t d3) :
             _layout(d1, d2, d3) { }
     
-        // Get original parameters.
+        // Get/set sizes.
         inline idx_t get_d1() const { return _layout.get_d1(); }
         inline idx_t get_d2() const { return _layout.get_d2(); }
         inline idx_t get_d3() const { return _layout.get_d3(); }
+        inline void set_d1(idx_t d1) { _layout.set_d1(d1); }
+        inline void set_d2(idx_t d2) { _layout.set_d2(d2); }
+        inline void set_d3(idx_t d3) { _layout.set_d3(d3); }
+
+        // Get number of elements.
+        virtual idx_t get_num_elems() const {
+            return _layout.get_size();
+        }
 
         // Print some info.
         virtual void print_info(const std::string& name, std::ostream& os) {
@@ -510,22 +529,31 @@ namespace yask {
     template <typename T, typename LayoutFn> class GenericGrid4d :
         public GenericGridBase<T> {
     protected:
-        const LayoutFn _layout;
+        LayoutFn _layout;
     
     public:
 
+        // Construct an unallocated grid of dimensions 1*1*1*1.
+        GenericGrid4d() { }
+
         // Construct a grid of dimensions d1 * d2 * d3 * d4.
-        GenericGrid4d(idx_t d1, idx_t d2, idx_t d3, idx_t d4,
-                      size_t alignment=GenericGridBase<T>::_def_alignment,
-                      bool use_hbw=true) :
-            GenericGridBase<T>(d1 * d2 * d3 * d4, alignment, use_hbw),
+        GenericGrid4d(idx_t d1, idx_t d2, idx_t d3, idx_t d4) :
             _layout(d1, d2, d3, d4) { }
 
-        // Get original parameters.
+        // Get/set sizes.
         inline idx_t get_d1() const { return _layout.get_d1(); }
         inline idx_t get_d2() const { return _layout.get_d2(); }
         inline idx_t get_d3() const { return _layout.get_d3(); }
         inline idx_t get_d4() const { return _layout.get_d4(); }
+        inline void set_d1(idx_t d1) { _layout.set_d1(d1); }
+        inline void set_d2(idx_t d2) { _layout.set_d2(d2); }
+        inline void set_d3(idx_t d3) { _layout.set_d3(d3); }
+        inline void set_d4(idx_t d4) { _layout.set_d4(d4); }
+
+        // Get number of elements.
+        virtual idx_t get_num_elems() const {
+            return _layout.get_size();
+        }
 
         // Print some info.
         virtual void print_info(const std::string& name, std::ostream& os) {
@@ -615,22 +643,33 @@ namespace yask {
     template <typename T, typename LayoutFn> class GenericGrid5d :
         public GenericGridBase<T> {
     protected:
-        const LayoutFn _layout;
+        LayoutFn _layout;
     
     public:
 
+        // Construct an unallocated grid of dimensions 1*1*1*1*1.
+        GenericGrid5d() { }
+
         // Construct a grid of dimensions d1 * d2 * d3 * d4 * d5.
-        GenericGrid5d(idx_t d1, idx_t d2, idx_t d3, idx_t d4, idx_t d5,
-                      size_t alignment=GenericGridBase<T>::_def_alignment) :
-            GenericGridBase<T>(d1 * d2 * d3 * d4 * d5, alignment),
+        GenericGrid5d(idx_t d1, idx_t d2, idx_t d3, idx_t d4, idx_t d5) :
             _layout(d1, d2, d3, d4, d5) { }
 
-        // Get original parameters.
+        // Get/set sizes.
         inline idx_t get_d1() const { return _layout.get_d1(); }
         inline idx_t get_d2() const { return _layout.get_d2(); }
         inline idx_t get_d3() const { return _layout.get_d3(); }
         inline idx_t get_d4() const { return _layout.get_d4(); }
         inline idx_t get_d5() const { return _layout.get_d5(); }
+        inline void set_d1(idx_t d1) { _layout.set_d1(d1); }
+        inline void set_d2(idx_t d2) { _layout.set_d2(d2); }
+        inline void set_d3(idx_t d3) { _layout.set_d3(d3); }
+        inline void set_d4(idx_t d4) { _layout.set_d4(d4); }
+        inline void set_d5(idx_t d5) { _layout.set_d5(d5); }
+
+        // Get number of elements.
+        virtual idx_t get_num_elems() const {
+            return _layout.get_size();
+        }
 
         // Print some info.
         virtual void print_info(const std::string& name, std::ostream& os) {

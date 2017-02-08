@@ -1,7 +1,7 @@
 /*****************************************************************************
 
 YASK: Yet Another Stencil Kernel
-Copyright (c) 2014-2016, Intel Corporation
+Copyright (c) 2014-2017, Intel Corporation
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to
@@ -53,21 +53,46 @@ using namespace std;
 template <typename T>
 class Tuple {
 protected:
-    map<string, T> _map;        // contents.
-    deque<string> _dims;        // dirs in specified order.
+
+    // A shared global pool for dim names.
+    // This saves space and allows us to compare pointers
+    // instead of strings.
+    static set<string> _allDims;
+    const string* _getDimPtr(const string& dim) const {
+        auto i = _allDims.insert(dim);
+        auto& i2 = *i.first;
+        return &i2;
+    }
+    const string* _getDimPtr(const string* dim) const {
+        return _getDimPtr(*dim);
+    }
+    
+    // Dimensions and values for this Tuple.
+    map<const string*, T> _map;        // contents.
+    deque<const string*> _dims;        // dirs in specified order.
 
     // First-inner vars control ordering. Example: dims x, y, z.
     // If _firstInner == true, x is unit stride.
     // If _firstInner == false, z is unit stride.
-    // This setting affects mapTo1d() and visitAllPoints().
+    // This setting affects layout() and visitAllPoints().
     bool _firstInner;           // whether first dim is used for inner loop.
-    static bool _defaultFirstInner; // default for _firstInner.
+    static bool _defaultFirstInner; // global default for _firstInner.
+
+    // Return an upper-case string.
+    static string _allCaps(string str) {
+        transform(str.begin(), str.end(), str.begin(), ::toupper);
+        return str;
+    }
     
 public:
 
+    // Default ctor.
     Tuple() : _firstInner(_defaultFirstInner) { }
+
+    // Copy ctor.
     Tuple(const Tuple& rhs) :
-        _map(rhs._map), _dims(rhs._dims),
+        _map(rhs._map),
+        _dims(rhs._dims),
         _firstInner(rhs._firstInner) { }
     virtual ~Tuple() {}
 
@@ -75,6 +100,7 @@ public:
     virtual void operator=(const Tuple& rhs) {
         _map = rhs._map;
         _dims = rhs._dims;
+        _firstInner = rhs._firstInner;
     }
 
     // first-inner (first dim is unit stride) accessors.
@@ -85,12 +111,20 @@ public:
     
     // Return pointer to value or null if it doesn't exist.
     virtual const T* lookup(const string& dim) const {
-        auto i = _map.find(dim);
+        auto* sp = _getDimPtr(dim);
+        auto i = _map.find(sp);
         return (i == _map.end()) ? NULL : &(i->second);
     }
+    virtual const T* lookup(const string* dim) const {
+        return lookup(*dim);
+    }
     virtual T* lookup(const string& dim) {
-        auto i = _map.find(dim);
+        auto* sp = _getDimPtr(dim);
+        auto i = _map.find(sp);
         return (i == _map.end()) ? NULL : &(i->second);
+    }
+    virtual T* lookup(const string* dim) {
+        return lookup(*dim);
     }
 
     // Lookup and return value (must exist).
@@ -99,25 +133,45 @@ public:
         assert(p);
         return *p;
     }
+    virtual T getVal(const string* dim) const {
+        return getVal(*dim);
+    }
 
     // Get dimensions.
-    const deque<string>& getDims() const {
+    const deque<const string*>& getDims() const {
         return _dims;
     }
     int size() const {
         return int(_dims.size());
     }
+    int getNumDims() const {
+        return int(_dims.size());
+    }
+
+    // Clear data.
+    void clear() {
+        _map.clear();
+        _dims.clear();
+    }
 
     // Add dimension to tuple (must NOT already exist).
     void addDimBack(const string& dim, T val) {
-        assert(_map.count(dim) == 0);
-        _map[dim] = val;
-        _dims.push_back(dim);
+        auto* sp = _getDimPtr(dim);
+        assert(_map.count(sp) == 0);
+        _map[sp] = val;
+        _dims.push_back(sp);
+    }
+    void addDimBack(const string* dim, T val) {
+        addDimBack(*dim, val);
     }
     void addDimFront(const string& dim, T val) {
-        assert(_map.count(dim) == 0);
-        _map[dim] = val;
-        _dims.push_front(dim);
+        auto* sp = _getDimPtr(dim);
+        assert(_map.count(sp) == 0);
+        _map[sp] = val;
+        _dims.push_front(sp);
+    }
+    void addDimFront(const string* dim, T val) {
+        addDimFront(*dim, val);
     }
     
     // Set value (key(s) must already exist).
@@ -125,6 +179,9 @@ public:
         T* p = lookup(dim);
         assert(p);
         *p = val;
+    }
+    virtual void setVal(const string* dim, T val) {
+        setVal(*dim, val);
     }
 
     // Set multiple values.
@@ -145,6 +202,26 @@ public:
             _map[_dims.at(i)] = vals.at(i);
     }
 
+    // Set all values to the same value.
+    virtual void setValsSame(T val) {
+        for (auto& i : _map)
+            i.second = val;
+    }
+    
+    // Set values from another Tuple, leaving non-matching
+    // ones in this unchanged. Add dimensions in src that
+    // are not in this if addMissing==true.
+    virtual void setVals(const Tuple& src, bool addMissing) {
+        for (auto dim : src.getDims()) {
+            auto v = src.getVal(dim);
+            auto p = lookup(dim);
+            if (p)
+                *p = v;
+            else if (addMissing)
+                addDimBack(dim, v);
+        }
+    }
+    
     // This version is similar to vprintf.
     // 'args' must have been initialized with va_start.
     virtual void setVals(int numVals, va_list args) {
@@ -165,61 +242,90 @@ public:
         va_end(args);
     }
 
+    // Add dims and values from another Tuple that are not
+    // in this one. Return resulting union.
+    virtual Tuple makeUnionWith(const Tuple& rhs) const {
+        Tuple u = *this;
+        for (auto* dim : rhs.getDims()) {
+            auto p = u.lookup(*dim);
+            if (!p) {
+                auto v = rhs.getVal(*dim);
+                u.addDimBack(*dim, v);
+            }
+        }
+        return u;
+    }
+    
     // Check whether dims are the same.
     // (Don't have to be in same order.)
     virtual bool areDimsSame(const Tuple& rhs) const {
         if (size() != rhs.size())
             return false;
-        for (auto dim : _dims) {
-            if (!rhs.lookup(dim))
+        for (auto* dim : _dims) {
+            if (!rhs.lookup(*dim))
                 return false;
         }
         return true;
     }
     
-    // Comparisons.
+    // Equality is true only if all dimensions and values are same.
     virtual bool operator==(const Tuple& rhs) const {
         if (!areDimsSame(rhs))
             return false;
         for (auto i : _map) {
-            auto dim = i.first;
+            auto* dim = i.first;
             T lv = i.second;
-            T rv = rhs.getVal(dim);
+            T rv = rhs.getVal(*dim);
             if (lv != rv)
                 return false;
         }
         return true;
     }
-    virtual bool operator!=(const Tuple& rhs) const {
-        return !operator==(rhs);
-    }
+
+    // Less-than is true if first value that is different
+    // from corresponding value in rhs is less than it.
     virtual bool operator<(const Tuple& rhs) const {
         if (size() < rhs.size()) return true;
         else if (size() > rhs.size()) return false;
-        
-        assert(areDimsSame(rhs));
-        for (auto i : _map) {
-            auto dim = i.first;
-            T lv = i.second;
-            T rv = rhs.getVal(dim);
-            if (lv < rv)
-                return true;
-            else if (lv > rv)
-                return false;
+
+        // if dims are same, compare values.
+        if (areDimsSame(rhs)) {
+            for (auto i : _map) {
+                auto* dim = i.first;
+                T lv = i.second;
+                T rv = rhs.getVal(*dim);
+                if (lv < rv)
+                    return true;
+                else if (lv > rv)
+                    return false;
+            }
+            return false;
         }
-        return false;
+
+        // if dims are not same, compare dims.
+        else
+            return makeDimStr() < rhs.makeDimStr();
+    }
+
+    // Other comparisons derived from above.
+    virtual bool operator!=(const Tuple& rhs) const {
+        return !((*this) == rhs);
+    }
+    virtual bool operator <=(const Tuple& rhs) const {
+        return ((*this) == rhs) || ((*this) < rhs);
     }
     virtual bool operator>(const Tuple& rhs) const {
-
-        // not (less-than or equal).
-        return !(((*this) < rhs) || ((*this) == rhs));
+        return !((*this) <= rhs);
+    }
+    virtual bool operator >=(const Tuple& rhs) const {
+        return !((*this) < rhs);
     }
 
     // Convert offsets to 1D offset using C-style map (last index is
     // unit stride) assuming values in this are sizes.
     // if strictRhs==true, RHS elements must be same as this;
     // else, only matching ones are considered.
-    virtual size_t mapTo1d(const Tuple& offsets, bool strictRhs=true) const {
+    virtual size_t layout(const Tuple& offsets, bool strictRhs=true) const {
         if (strictRhs)
             assert(areDimsSame(offsets));
         int idx = 0;
@@ -230,14 +336,14 @@ public:
         int beyondLastDim = _firstInner ? size() : -1;
         int stepDim = _firstInner ? 1 : -1;
         for (int di = startDim; di != beyondLastDim; di += stepDim) {
-            auto dim = _dims[di];
+            auto* dim = _dims[di];
 
             // size of this dim.
-            int size = getVal(dim);
+            int size = getVal(*dim);
             assert (size >= 0);
 
             // offset into this dim.
-            auto op = offsets.lookup(dim);
+            auto op = offsets.lookup(*dim);
             int offset = op ? *op : 0; // 0 offset default.
             assert(offset >= 0);
             assert(offset < size);
@@ -250,19 +356,17 @@ public:
             prevSize *= size;
             assert(prevSize <= product());
         }
-        //cerr << "** offsets " << offsets.makeDimValStr() << " in " <<
-        //makeDimValStr() << " => " << idx << endl;
         return idx;
     }
-    
+
     // Get value from this in given direction (ignoring sign of dir).
     // Dir must have only one dimension.
     virtual T getValInDir(const Tuple& dir) const {
         assert(dir.size() == 1);
         for (auto i : _map) {
-            auto dim = i.first;
+            auto* dim = i.first;
             T val = i.second;
-            const T* p = dir.lookup(dim);
+            const T* p = dir.lookup(*dim);
             if (p)
                 return val;
         }
@@ -272,31 +376,48 @@ public:
 
     // get name of a direction, which must be
     // 0D or 1D.
-    virtual string getDirName() const {
+    virtual const string* getDirName() const {
         assert(size() <= 1);
-        if (!size())
-            return "none";
-        return _dims[0];  // first and only key.
+        if (!size()) {
+            auto* sp = _getDimPtr("none");
+            return sp;
+        }
+        return _dims.at(0);  // first and only key.
     }
 
-    // get value of a direction, which must be 1D.
+    // get value of this direction, which must be 1D.
     virtual T getDirVal() const {
         assert(size() == 1);
-        T dv = getVal(_dims[0]);  // first and only value.
-        assert(dv != 0);
+        T dv = _map.cbegin()->second;  // first and only value.
         return dv;
     }
 
-    // Create a new Tuple with the dimension in dir removed.
-    // Thus, retured Tuple will have one fewer dim than this.
-    virtual Tuple removeDimInDir(const Tuple& dir) const {
+    // Create new Tuple containing only value in given direction.
+    virtual Tuple getDirInDim(const string& dname) const {
+        const T* p = lookup(dname);
+        assert(p);
         Tuple newt;
-        string dname  = dir.getDirName();
-        for (auto dim : _dims) {
-            if (dim != dname)
-                newt.addDimBack(dim, getVal(dim));
+        newt.addDimBack(dname, *p);
+        return newt;
+    }
+    virtual Tuple getDirInDir(const Tuple& dir) const {
+        return getDirInDim(*dir.getDirName());
+    }
+
+    // Create a new Tuple with the given dimension removed.
+    // if dim is found, new Tuple will have one fewer dim than this.
+    // If dim is not found, it will be a copy of this.
+    virtual Tuple removeDimInDim(const string& dname) const {
+        auto* sp = _getDimPtr(dname);
+        Tuple newt;
+        for (auto* dim : _dims) {
+            if (dim != sp)
+                newt.addDimBack(*dim, getVal(*dim));
         }
         return newt;
+    }
+    virtual Tuple removeDimInDir(const Tuple& dir) const {
+        return removeDimInDim(*dir.getDirName());
     }
     
     // Determine whether this is inline with t2 along
@@ -306,11 +427,11 @@ public:
         assert(areDimsSame(t2));
         if (dir.size() == 0)
             return false;       // never inline with no direction.
-        string dname = dir.getDirName();
-        for (auto i : _map) {
-            auto dim = i.first;
+        auto* dname = dir.getDirName();
+        for (auto& i : _map) {
+            auto* dim = i.first;
             T val = i.second;
-            T val2 = t2.getVal(dim);
+            T val2 = t2.getVal(*dim);
 
             // if not in given direction, values must be equal.
             if (dim != dname && val != val2)
@@ -322,7 +443,7 @@ public:
     // Determine whether this is 'ahead of' t2 along
     // given direction in dir.
     virtual bool isAheadOfInDir(const Tuple& t2, const Tuple& dir) const {
-        string dn = dir.getDirName();
+        auto* dn = dir.getDirName();
         T dv = dir.getDirVal();
         assert(areDimsSame(t2));
         return isInlineInDir(t2, dir) &&
@@ -393,6 +514,33 @@ public:
                                rhs, strictRhs);
     }
 
+    // Apply func to each element, creating a new Tuple.
+    virtual Tuple mapElements(function<T (T lhs, T rhs)> func,
+                              T rhs) const {
+        Tuple newt = *this;
+        for (auto& i : newt._map) {
+            T& val = i.second;
+            val = func(val, rhs);
+        }
+        return newt;
+    }
+    virtual Tuple addElements(T rhs) const {
+        return mapElements([&](T lhs, T rhs){ return lhs + rhs; },
+                               rhs);
+    }
+    virtual Tuple multElements(T rhs) const {
+        return mapElements([&](T lhs, T rhs){ return lhs * rhs; },
+                               rhs);
+    }
+    virtual Tuple maxElements(T rhs) const {
+        return mapElements([&](T lhs, T rhs){ return std::max(lhs, rhs); },
+                               rhs);
+    }
+    virtual Tuple minElements(T rhs) const {
+        return mapElements([&](T lhs, T rhs){ return std::min(lhs, rhs); },
+                               rhs);
+    }
+
     // make name like "4x3x2" or "4, 3, 2".
     virtual string makeValStr(string separator=", ",
                                string prefix="", string suffix="") const {
@@ -406,14 +554,14 @@ public:
         return oss.str();
     }
 
-    // make name like "int x, int y, int z".
+    // make name like "x, y, z" or "int x, int y, int z".
     virtual string makeDimStr(string separator=", ",
                                string prefix="", string suffix="") const {
         ostringstream oss;
         int n = 0;
-        for (auto dim : _dims) {
+        for (auto* dim : _dims) {
             if (n) oss << separator;
-            oss << prefix << dim << suffix;
+            oss << prefix << *dim << suffix;
             n++;
         }
         return oss.str();
@@ -424,9 +572,9 @@ public:
                                  string prefix="", string suffix="") const {
         ostringstream oss;
         int n = 0;
-        for (auto dim : _dims) {
+        for (auto* dim : _dims) {
             if (n) oss << separator;
-            oss << prefix << dim << infix << getVal(dim) << suffix;
+            oss << prefix << *dim << infix << getVal(dim) << suffix;
             n++;
         }
         return oss.str();
@@ -437,12 +585,12 @@ public:
                                        string prefix="", string suffix="") const {
         ostringstream oss;
         int n = 0;
-        for (auto dim : _dims) {
+        for (auto *dim : _dims) {
 
             T val = getVal(dim);
 
             if (n) oss << separator;
-            oss << prefix << dim;
+            oss << prefix << *dim;
             if (val > 0) oss << "+" << val;
             else if (val < 0) oss << val; // includes '-';
             oss << suffix;
@@ -459,19 +607,37 @@ public:
                                            string prefix="", string suffix="") const {
         ostringstream oss;
         int n = 0;
-        for (auto dim : _dims) {
-
-            // index value.
-            T val = getVal(dim);
-
-            // normalizer.
-            const T* p = norm.lookup(dim);
-            T d = p ? *p : 1;
+        for (auto* dim : _dims) {
 
             if (n) oss << separator;
-            oss << prefix << dim << "v";
-            if (val > 0) oss << "+(" << val << "/" << d << ")";
-            else if (val < 0) oss << "-(" << -val << "/" << d << ")";
+            oss << prefix << *dim << "v"; // e.g., 'xv'.
+
+            // offset value.
+            T val = getVal(dim);
+            if (val != 0) {
+
+                // Is there a divisor?
+                const T* p = norm.lookup(dim);
+                if (p) {
+
+                    // Positive offset, e.g., 'xv + (4 / VLEN_X)'.
+                    if (val > 0) oss << " + (" << val;
+
+                    // Neg offset, e.g., 'xv - (4 / VLEN_X)'.
+                    // Put '-' sign outside division to fix truncated division problem.
+                    else if (val < 0) oss << " - (" << -val;
+                    
+                    // add divisor.
+                    oss << " / VLEN_" << _allCaps(*dim) << ")";
+                }
+                else {
+
+                    // No divisior, e.g., 'tv + 2';
+                    if (val > 0)
+                        oss << "+";
+                    oss << val;
+                }
+            }
             oss << suffix;
 
             n++;
@@ -483,7 +649,7 @@ public:
     // Visitation order is with first dimension in unit stride, i.e., a conceptual
     // "outer loop" iterates through last dimension, and an "inner loop" iterates
     // through first dimension. If '_firstInner' is false, it is done the opposite way.
-    virtual void visitAllPoints(function<void (const Tuple&)> visitor) const {
+    virtual void visitAllPoints(function<void (Tuple&)> visitor) const {
 
         // Init lambda fn arg with *this.
         Tuple tp = *this;
@@ -498,7 +664,7 @@ public:
 protected:
 
     // Handle recursion for public visitAllPoints(visitor).
-    virtual void visitAllPoints(function<void (const Tuple&)> visitor,
+    virtual void visitAllPoints(function<void (Tuple&)> visitor,
                                 int curDimNum, int step, Tuple& tp) const {
 
         // Ready to call visitor, i.e., have we recursed beyond a dimension?
@@ -507,7 +673,7 @@ protected:
         
         // Iterate along current dimension, and recurse to prev dimension.
         else {
-            auto dim = _dims.at(curDimNum);
+            auto* dim = _dims.at(curDimNum);
             T dsize = getVal(dim);
             for (T i = 0; i < dsize; i++) {
                 tp.setVal(dim, i);
@@ -517,8 +683,10 @@ protected:
     }
 };
 
-// Default value.
+// Static members.
 template <typename T>
 bool Tuple<T>::_defaultFirstInner = true;
+template <typename T>
+set<string> Tuple<T>::_allDims;
 
 #endif

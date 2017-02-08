@@ -1,7 +1,7 @@
 /*****************************************************************************
 
 YASK: Yet Another Stencil Kernel
-Copyright (c) 2014-2016, Intel Corporation
+Copyright (c) 2014-2017, Intel Corporation
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to
@@ -105,14 +105,14 @@ public:
     }
 
     // Adjustment for sponge layer.
-    void adjust_for_sponge(GridValue& next_vel_x, GridIndex x, GridIndex y, GridIndex z) {
+    void adjust_for_sponge(GridValue& val, GridIndex x, GridIndex y, GridIndex z) {
 
         // TODO: It may be more efficient to skip processing interior nodes
         // because their sponge coefficients are 1.0.  But this would
         // necessitate handling conditionals. The branch mispredictions may
         // cost more than the overhead of the extra loads and multiplies.
 
-        next_vel_x *= sponge(x, y, z);
+        val *= sponge(x, y, z);
     }
 
     // Velocity-grid define functions.  For each D in x, y, z, define vel_D
@@ -137,7 +137,7 @@ public:
         adjust_for_sponge(next_vel_x, x, y, z);
 
         // define the value at t+1.
-        vel_x(t+1, x, y, z) == next_vel_x;
+        vel_x(t+1, x, y, z) IS_EQUIV_TO next_vel_x;
     }
     void define_vel_y(GridIndex t, GridIndex x, GridIndex y, GridIndex z) {
         GridValue rho_val = (rho(x,   y, z  ) +
@@ -155,7 +155,7 @@ public:
         adjust_for_sponge(next_vel_y, x, y, z);
 
         // define the value at t+1.
-        vel_y(t+1, x, y, z) == next_vel_y;
+        vel_y(t+1, x, y, z) IS_EQUIV_TO next_vel_y;
     }
     void define_vel_z(GridIndex t, GridIndex x, GridIndex y, GridIndex z) {
         GridValue rho_val = (rho(x,   y,   z) +
@@ -173,7 +173,7 @@ public:
         adjust_for_sponge(next_vel_z, x, y, z);
 
         // define the value at t+1.
-        vel_z(t+1, x, y, z) == next_vel_z;
+        vel_z(t+1, x, y, z) IS_EQUIV_TO next_vel_z;
     }
 
     // Stress-grid define functions.  For each D in xx, yy, zz, xy, xz, yz,
@@ -191,8 +191,8 @@ public:
 
         GridValue stress_mem_xx_old = stress_mem_xx(t, x, y, z);
 
-        GridValue next_stress_mem_xx = tau2(x, y, z) * stress_mem_xx(t, x, y, z) +
-            (1 / h) * tau1 * weight(x, y, z) *
+        GridValue next_stress_mem_xx = tau2(x, y, z) * stress_mem_xx_old +
+            (1.0 / h) * tau1 * weight(x, y, z) *
             (mu_val * anelastic_as_diag(x, y, z) * (d_y_val + d_z_val) -
              (mu_val + 0.5 * lambda_val) * anelastic_ap(x, y, z) * (d_x_val + d_y_val + d_z_val));
         
@@ -201,12 +201,11 @@ public:
                               (lambda_val * (d_x_val + d_y_val + d_z_val)))) +
             delta_t * (next_stress_mem_xx + stress_mem_xx_old);
         
-        stress_mem_xx(t+1, x, y, z) == next_stress_mem_xx;
-        
         adjust_for_sponge(next_stress_xx, x, y, z);
 
         // define the value at t+1.
-        stress_xx(t+1, x, y, z) == next_stress_xx;
+        stress_mem_xx(t+1, x, y, z) IS_EQUIV_TO next_stress_mem_xx;
+        stress_xx(t+1, x, y, z) IS_EQUIV_TO next_stress_xx;
     }
     void define_stress_yy(GridIndex t, GridIndex x, GridIndex y, GridIndex z,
                           GridValue lambda_val, GridValue mu_val,
@@ -215,7 +214,7 @@ public:
 
         GridValue stress_mem_yy_old = stress_mem_yy(t, x, y, z);
 
-        GridValue next_stress_mem_yy = tau2(x, y, z) * stress_mem_yy(t, x, y, z) +
+        GridValue next_stress_mem_yy = tau2(x, y, z) * stress_mem_yy_old +
             (1 / h) * tau1 * weight(x, y, z) *
             (mu_val * anelastic_as_diag(x, y, z) * (d_x_val + d_z_val) -
              (mu_val + 0.5 * lambda_val) * anelastic_ap(x, y, z) * (d_x_val + d_y_val + d_z_val));
@@ -225,12 +224,11 @@ public:
                               (lambda_val * (d_x_val + d_y_val + d_z_val)))) +
             delta_t * (next_stress_mem_yy + stress_mem_yy_old);
 
-        stress_mem_yy(t+1, x, y, z) == next_stress_mem_yy;
-        
         adjust_for_sponge(next_stress_yy, x, y, z);
 
         // define the value at t+1.
-        stress_yy(t+1, x, y, z) == next_stress_yy;
+        stress_mem_yy(t+1, x, y, z) IS_EQUIV_TO next_stress_mem_yy;
+        stress_yy(t+1, x, y, z) IS_EQUIV_TO next_stress_yy;
     }
     void define_stress_zz(GridIndex t, GridIndex x, GridIndex y, GridIndex z,
                           GridValue lambda_val, GridValue mu_val,
@@ -239,7 +237,7 @@ public:
 
         GridValue stress_mem_zz_old = stress_mem_zz(t, x, y, z);
 
-        GridValue next_stress_mem_zz = tau2(x, y, z) * stress_mem_zz(t, x, y, z) +
+        GridValue next_stress_mem_zz = tau2(x, y, z) * stress_mem_zz_old +
             (1 / h) * tau1 * weight(x, y, z) *
             (mu_val * anelastic_as_diag(x, y, z) * (d_x_val + d_y_val) -
              (mu_val + 0.5 * lambda_val) * anelastic_ap(x, y, z) * (d_x_val + d_y_val + d_z_val));
@@ -249,14 +247,14 @@ public:
                               (lambda_val * (d_x_val + d_y_val + d_z_val)))) +
             delta_t * (next_stress_mem_zz + stress_mem_zz_old);
 
-        stress_mem_zz(t+1, x, y, z) == next_stress_mem_zz;
-        
         adjust_for_sponge(next_stress_zz, x, y, z);
 
         // define the value at t+1.
-        stress_zz(t+1, x, y, z) == next_stress_zz;
+        stress_mem_zz(t+1, x, y, z) IS_EQUIV_TO next_stress_mem_zz;
+        stress_zz(t+1, x, y, z) IS_EQUIV_TO next_stress_zz;
     }
-    void define_stress_xy(GridIndex t, GridIndex x, GridIndex y, GridIndex z, GridValue tau1) {
+    void define_stress_xy(GridIndex t, GridIndex x, GridIndex y, GridIndex z,
+                          GridValue tau1) {
 
         GridValue mu_val = 2.0 /
             (mu(x,   y,   z  ) + mu(x,   y,   z-1));
@@ -271,7 +269,7 @@ public:
 
         GridValue stress_mem_xy_old = stress_mem_xy(t, x, y, z);
 
-        GridValue next_stress_mem_xy = tau2(x, y, z) * stress_mem_xy(t, x, y, z) -
+        GridValue next_stress_mem_xy = tau2(x, y, z) * stress_mem_xy_old -
             (0.5 / h) * tau1 * weight(x, y, z) *
             (mu_val * anelastic_xy(x, y, z) * (d_xy_val + d_yx_val));
       
@@ -279,14 +277,14 @@ public:
             ((mu_val * delta_t / h) * (d_xy_val + d_yx_val)) +
             delta_t * (next_stress_mem_xy + stress_mem_xy_old);
 
-        stress_mem_xy(t+1, x, y, z) == next_stress_mem_xy;
-        
         adjust_for_sponge(next_stress_xy, x, y, z);
 
         // define the value at t+1.
-        stress_xy(t+1, x, y, z) == next_stress_xy;
+        stress_mem_xy(t+1, x, y, z) IS_EQUIV_TO next_stress_mem_xy;
+        stress_xy(t+1, x, y, z) IS_EQUIV_TO next_stress_xy;
     }
-    void define_stress_xz(GridIndex t, GridIndex x, GridIndex y, GridIndex z, GridValue tau1) {
+    void define_stress_xz(GridIndex t, GridIndex x, GridIndex y, GridIndex z,
+                          GridValue tau1) {
 
         GridValue mu_val = 2.0 /
             (mu(x,   y,   z  ) + mu(x,   y-1, z  ));
@@ -301,7 +299,7 @@ public:
 
         GridValue stress_mem_xz_old = stress_mem_xz(t, x, y, z);
 
-        GridValue next_stress_mem_xz = tau2(x, y, z) * stress_mem_xz(t, x, y, z) -
+        GridValue next_stress_mem_xz = tau2(x, y, z) * stress_mem_xz_old -
             (0.5 / h) * tau1 * weight(x, y, z) *
             (mu_val * anelastic_xz(x, y, z) * (d_xz_val + d_zx_val));
 
@@ -309,14 +307,14 @@ public:
             ((mu_val * delta_t / h) * (d_xz_val + d_zx_val)) +
             delta_t * (next_stress_mem_xz + stress_mem_xz_old);
 
-        stress_mem_xz(t+1, x, y, z) == next_stress_mem_xz;
-            
         adjust_for_sponge(next_stress_xz, x, y, z);
 
         // define the value at t+1.
-        stress_xz(t+1, x, y, z) == next_stress_xz;
+        stress_mem_xz(t+1, x, y, z) IS_EQUIV_TO next_stress_mem_xz;
+        stress_xz(t+1, x, y, z) IS_EQUIV_TO next_stress_xz;
     }
-    void define_stress_yz(GridIndex t, GridIndex x, GridIndex y, GridIndex z, GridValue tau1) {
+    void define_stress_yz(GridIndex t, GridIndex x, GridIndex y, GridIndex z,
+                          GridValue tau1) {
 
         GridValue mu_val = 2.0 /
             (mu(x,   y,   z  ) + mu(x+1, y,   z  ));
@@ -331,7 +329,7 @@ public:
 
         GridValue stress_mem_yz_old = stress_mem_yz(t, x, y, z);
 
-        GridValue next_stress_mem_yz = tau2(x, y, z) * stress_mem_yz(t, x, y, z) -
+        GridValue next_stress_mem_yz = tau2(x, y, z) * stress_mem_yz_old -
             (0.5 / h) * tau1 * weight(x, y, z) *
             (mu_val * anelastic_yz(x, y, z) * (d_yz_val + d_zy_val));
 
@@ -339,12 +337,11 @@ public:
             ((mu_val * delta_t / h) * (d_yz_val + d_zy_val)) +
             delta_t * (next_stress_mem_yz + stress_mem_yz_old);
 
-        stress_mem_yz(t+1, x, y, z) == next_stress_mem_yz;
-        
         adjust_for_sponge(next_stress_yz, x, y, z);
 
         // define the value at t+1.
-        stress_yz(t+1, x, y, z) == next_stress_yz;
+        stress_mem_yz(t+1, x, y, z) IS_EQUIV_TO next_stress_mem_yz;
+        stress_yz(t+1, x, y, z) IS_EQUIV_TO next_stress_yz;
     }
 
     // Call all the define_* functions.
@@ -382,7 +379,7 @@ public:
             c1 * (vel_z(t+1, x,   y,   z  ) - vel_z(t+1, x,   y,   z-1)) +
             c2 * (vel_z(t+1, x,   y,   z+1) - vel_z(t+1, x,   y,   z-2));
 
-        GridValue tau1 = 1. - tau2(x, y, z);
+        GridValue tau1 = 1.0 - tau2(x, y, z);
 
         // Define stress components.
         define_stress_xx(t, x, y, z, lambda_val, mu_val, d_x_val, d_y_val, d_z_val, tau1);

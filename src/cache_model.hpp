@@ -1,7 +1,7 @@
 /*****************************************************************************
 
 YASK: Yet Another Stencil Kernel
-Copyright (c) 2014-2016, Intel Corporation
+Copyright (c) 2014-2017, Intel Corporation
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to
@@ -118,7 +118,7 @@ namespace yask {
             if (!enabled) return;
 
             // eviction from lower caches ignored. 
-            // FIXME: this code assumes hint corresponds 1:1 to level.
+            // NB: this code assumes hint corresponds 1:1 to level.
             if (hint < myLevel) return;
             uintptr_t k = (uintptr_t)p / CACHELINE_BYTES;
 
@@ -146,7 +146,7 @@ namespace yask {
 #pragma omp critical
             {
                 // prefetch this cache.
-                // FIXME: this code assumes hint corresponds 1:1 to level.
+                // NB: this code assumes hint corresponds 1:1 to level.
                 if (hint == myLevel) {
                     if (count(k) > 0) {
                         if (++numExtraPFs < maxMsgs) {

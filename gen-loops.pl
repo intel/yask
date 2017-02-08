@@ -3,7 +3,7 @@
 
 ##############################################################################
 ## YASK: Yet Another Stencil Kernel
-## Copyright (c) 2014-2016, Intel Corporation
+## Copyright (c) 2014-2017, Intel Corporation
 ## 
 ## Permission is hereby granted, free of charge, to any person obtaining a copy
 ## of this software and associated documentation files (the "Software"), to
@@ -137,17 +137,21 @@ sub midVar {
     return join('_', 'midpoint', @_);
 }
 
+# return string of all non-empty args separated by commas.
+sub joinArgs {
+    return join(', ', grep(/./, @_));
+}
+
 # list of start & stop args for all dims.
 sub startStopArgs {
-    return join(', ', 
-                (map { startVar($_) } @dims),
-                (map { stopVar($_) } @dims) );
+    return joinArgs((map { startVar($_) } @dims),
+                    (map { stopVar($_) } @dims) );
 }
 
 # dimension comment string.
 sub dimStr {
     return '0 dimensions' if @_ == 0;
-    my $s = join(', ', @_)." dimension";
+    my $s = joinArgs(@_)." dimension";
     $s .= 's' if @_ > 1;
     return $s;
 }
@@ -731,8 +735,8 @@ sub processCode($) {
                 # check for existence of all vars.
                 my @loopVars = sort @loopStack;
                 my @dimVars = sort @dims;
-                die "error: loop dimensions ".join(', ', @loopStack).
-                    " do not match expected dimensions ".join(', ', @dims).".\n"
+                die "error: loop dimensions ".joinArgs(@loopStack).
+                    " do not match expected dimensions ".joinArgs(@dims).".\n"
                     unless @loopVars ~~ @dimVars; # smartmatch!
             }
 
@@ -750,7 +754,7 @@ sub processCode($) {
             # print more info.
             warn "info: collapsing ".scalar(@loopDims). " dimensions in following loop.\n"
                 if @loopDims > 1;
-            warn "info: generating ".join(', ', @loopDims)." loop...\n";
+            warn "info: generating ".joinArgs(@loopDims)." loop...\n";
 
             # add initial code for index vars, but don't start loop body yet.
             addIndexVars(\@code, \@loopDims, $features);
@@ -792,20 +796,20 @@ sub processCode($) {
                 if (checkToken($toks[$ti], '\(', 0)) {
                     $ti++;
                     my @oargs = getArgs(\@toks, \$ti);
-                    $calcArgs .= join(', ', '', @oargs) if (@oargs);
+                    $calcArgs = joinArgs($calcArgs, @oargs) if (@oargs);
                 }
                 
                 # generic code for prefetches.
                 # e.g., prefetch_fn<L#>(...); prefetch_fn_z<L#>(...);
                 if ($features & ($bPrefetchL1 | $bPrefetchL2)) {
-                    push @pfStmtsFullHere, "  $OPT{pfPrefix}$arg<$genericCache>($calcArgs, ".
-                        startStopArgs(). ");";
-                    push @pfStmtsFullAhead, "  $OPT{pfPrefix}$arg<$genericCache>($calcArgs, ".
-                        pfStartStopArgs(@loopDims). ");";
-                    push @pfStmtsEdgeHere, "  $OPT{pfPrefix}$arg$edgeSuf<$genericCache>($calcArgs, ".
-                        startStopArgs(). ");";
-                    push @pfStmtsEdgeAhead, "  $OPT{pfPrefix}$arg$edgeSuf<$genericCache>($calcArgs, ".
-                        pfStartStopArgs(@loopDims). ");";
+                    push @pfStmtsFullHere, "  $OPT{pfPrefix}$arg<$genericCache>(".
+                        joinArgs($calcArgs, startStopArgs()). ");";
+                    push @pfStmtsFullAhead, "  $OPT{pfPrefix}$arg<$genericCache>(".
+                        joinArgs($calcArgs, pfStartStopArgs(@loopDims)). ");";
+                    push @pfStmtsEdgeHere, "  $OPT{pfPrefix}$arg$edgeSuf<$genericCache>(".
+                        joinArgs($calcArgs, startStopArgs()). ");";
+                    push @pfStmtsEdgeAhead, "  $OPT{pfPrefix}$arg$edgeSuf<$genericCache>(".
+                        joinArgs($calcArgs, pfStartStopArgs(@loopDims)). ");";
                     warn "info: generating prefetch instructions.\n";
                 } else {
                     warn "info: not generating prefetch instructions.\n";
@@ -819,7 +823,8 @@ sub processCode($) {
 
                 # code for calculations.
                 # e.g., calc_fn(...); calc_pipe_fn_z();
-                push @calcStmts, "  $OPT{calcPrefix}$arg($calcArgs, ".startStopArgs(). ");";
+                push @calcStmts, "  $OPT{calcPrefix}$arg(".
+                    joinArgs($calcArgs, startStopArgs()). ");";
 
             }                   # args
         }                       # calc
@@ -1039,7 +1044,7 @@ sub main() {
   my(@KNOBS) =
     ( # knob,        description,   optional default
      [ "dims=s", "Comma-separated names of dimensions (in order passed via calls).", 'v,x,y,z'],
-     [ "comArgs=s", "Common arguments to all calls (after L1/L2 for prefetch).", 'context'],
+     [ "comArgs=s", "Common arguments to all calls (after L1/L2 for prefetch).", ''],
      [ "resultBlks=s", "Comma-separated name of block-sized buffers that hold inter-loop values and/or final result at 'save' command.", 'result'],
      [ "calcPrefix=s", "Prefix for calculation call.", 'calc_'],
      [ "primePrefix=s", "Prefix for pipeline-priming call.", 'prime_'],

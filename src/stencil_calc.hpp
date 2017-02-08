@@ -1,7 +1,7 @@
 /*****************************************************************************
 
 YASK: Yet Another Stencil Kernel
-Copyright (c) 2014-2016, Intel Corporation
+Copyright (c) 2014-2017, Intel Corporation
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to
@@ -30,11 +30,22 @@ IN THE SOFTWARE.
 #include <algorithm>
 #include <functional>
 
+// Stencil types.
+#include "stencil.hpp"
+
+// Macro for automatically adding N dimension's arg.
+// TODO: make all args programmatic.
+#if USING_DIM_N
+#define ARG_N(n) n,
+#else
+#define ARG_N(n)
+#endif
+
 namespace yask {
 
     // Forward defn.
     struct StencilContext;
-
+    
     // MPI buffers for *one* grid.
     struct MPIBufs {
 
@@ -58,8 +69,8 @@ namespace yask {
         }
 
         // Access a buffer by direction and 4D neighbor indices.
-        Grid_NXYZ* operator()(int bd,
-                              idx_t nn, idx_t nx, idx_t ny, idx_t nz) {
+        Grid_NXYZ** getBuf(int bd,
+                          idx_t nn, idx_t nx, idx_t ny, idx_t nz) {
             assert(bd >= 0);
             assert(bd < nBufDirs);
             assert(nn >= 0);
@@ -70,131 +81,249 @@ namespace yask {
             assert(ny < num_neighbors);
             assert(nz >= 0);
             assert(nn < num_neighbors);
-            return bufs[bd][nn][nx][ny][nz];
+            return &bufs[bd][nn][nx][ny][nz];
         }
 
-        // Apply a function to each neighbor rank and/or buffer.
+        // Apply a function to each neighbor rank.
+        // Called visitor function will contain the rank index of the neighbor.
+        // The send and receive buffer pointers may be null.
         virtual void visitNeighbors(StencilContext& context,
                                     std::function<void (idx_t nn, idx_t nx, idx_t ny, idx_t nz,
                                                         int rank,
                                                         Grid_NXYZ* sendBuf,
                                                         Grid_NXYZ* rcvBuf)> visitor);
             
-        // Allocate new buffer in given direction and size.
-        virtual Grid_NXYZ* allocBuf(int bd,
-                                    idx_t nn, idx_t nx, idx_t ny, idx_t nz,
-                                    idx_t dn, idx_t dx, idx_t dy, idx_t dz,
-                                    const std::string& name,
-                                    std::ostream& os);
+        // Create new buffer in given direction and size.
+        virtual Grid_NXYZ* makeBuf(int bd,
+                                   idx_t nn, idx_t nx, idx_t ny, idx_t nz,
+                                   idx_t dn, idx_t dx, idx_t dy, idx_t dz,
+                                   const std::string& name);
     };
 
+    // Application settings to control size and perf of stencil code.
+    struct StencilSettings {
+
+        // Sizes in elements (points).
+        // - time sizes (t) are in steps to be done.
+        // - spatial sizes (n, x, y, z) are in elements (not vectors).
+        // Sizes are the same for all grids. TODO: relax this restriction.
+        idx_t dt=1, dn=0, dx=0, dy=0, dz=0; // rank size (without halos).
+        idx_t rt=1, rn=0, rx=0, ry=0, rz=0; // region size (used for wave-front tiling).
+        idx_t bt=1, bn=0, bx=0, by=0, bz=0; // block size (used for cache locality).
+        idx_t gn=0, gx=0, gy=0, gz=0;     // group-of-blocks size (only used for 'grouped' loop paths).
+        idx_t pn=0, px=0, py=0, pz=0;     // spatial padding (in addition to halos, to avoid aliasing).
+
+        // MPI settings.
+        idx_t nrn=1, nrx=1, nry=1, nrz=1; // number of ranks in each dim.
+        idx_t rin=0, rix=0, riy=0, riz=0; // my rank index in each dim.
+        bool find_loc=true;            // whether my rank index needs to be calculated.
+        int msg_rank=0;             // rank that prints informational messages.
+
+        // OpenMP settings.
+        int max_threads=1;       // Initial number of threads to use overall.
+        int thread_divisor;    // Reduce number of threads by this amount.
+        int num_block_threads; // Number of threads to use for a block.
+
+        // Ctor.
+        StencilSettings() :
+            dt(50), dn(1), dx(DEF_RANK_SIZE), dy(DEF_RANK_SIZE), dz(DEF_RANK_SIZE),
+            bt(1), bn(1), bx(DEF_BLOCK_SIZE), by(DEF_BLOCK_SIZE), bz(DEF_BLOCK_SIZE),
+            pn(0), px(DEF_PAD), py(DEF_PAD), pz(DEF_PAD),
+            thread_divisor(DEF_THREAD_DIVISOR),
+            num_block_threads(DEF_BLOCK_THREADS)
+        {
+            max_threads = omp_get_max_threads();
+        }
+
+        // Add these settigns to a cmd-line parser.
+        virtual void add_options(CommandLineParser& parser);
+
+        // Print usage message.
+        void print_usage(std::ostream& os,
+                         CommandLineParser& parser,
+                         const std::string& pgmName,
+                         const std::string& appNotes,
+                         const std::vector<std::string>& appExamples) const;
+        
+        // Make sure all user-provided settings are valid.
+        // Called from allocAll(), so it doesn't normally need to be called from user code.
+        virtual void finalizeSettings(std::ostream& os);
+    };
+    
+    // A 4D bounding-box.
+    struct BoundingBox {
+        idx_t begin_bbn=0, begin_bbx=0, begin_bby=0, begin_bbz=0;
+        idx_t end_bbn=0, end_bbx=0, end_bby=0, end_bbz=0;
+        idx_t len_bbn=0, len_bbx=0, len_bby=0, len_bbz=0;
+        idx_t bb_size=0;
+        bool bb_valid=false;
+
+        BoundingBox() {}
+    };
+
+    // Collections of things in a context.
+    class EqGroupBase;
+    typedef std::vector<EqGroupBase*> EqGroupList;
+    typedef std::set<EqGroupBase*> EqGroupSet;
+    typedef std::vector<RealVecGridBase*> GridPtrs;
+    typedef std::set<RealVecGridBase*> GridPtrSet;
+    typedef std::vector<RealGrid*> ParamPtrs;
+    typedef std::set<std::string> NameSet;
     
     // Data and hierarchical sizes.
     // This is a pure-virtual class that must be implemented
     // for a specific problem.
-    struct StencilContext {
+    // Each eq group is valid within its bounding box (BB).
+    // The context's BB encompasses all eq-group BBs.
+    class StencilContext : public BoundingBox {
+
+    private:
+        // Disallow copying.
+        StencilContext(const StencilContext& src) {
+            exit_yask(1);
+        }
+        void operator=(const StencilContext& src) {
+            exit_yask(1);
+        }
+        
+    protected:
+        
+        // Output stream for messages.
+        std::ostream* _ostr;
+
+        // Command-line and env parameters.
+        StencilSettings* _opts;
+
+        // Underlying data allocation.
+        // TODO: create different types of memory, e.g., HBM.
+        void* _data_buf = 0;
+        size_t _data_buf_size = 0;
+
+        // Byes between each buffer to help avoid aliasing
+        // in the HW.
+        size_t _data_buf_pad = (YASK_PAD * CACHELINE_BYTES);
+
+        // Alignment for _data_buf;
+        size_t _data_buf_alignment = YASK_ALIGNMENT;
+        
+        // TODO: move vars into private or protected sections and
+        // add accessor methods.
+    public:
 
         // Name.
         std::string name;
 
-        // Default output stream for messages.
-        std::ostream* ostr;
+        // List of all stencil equations in the order in which
+        // they should be evaluated. Current assumption is that
+        // later ones are dependent on their predecessors.
+        // TODO: relax this assumption, determining which eqGroups
+        // are actually dependent on which others, allowing
+        // more parallelism.
+        EqGroupList eqGroups;
 
         // A list of all grids.
-        std::vector<RealVecGridBase*> gridPtrs;
+        GridPtrs gridPtrs;
+        NameSet gridNames;
 
         // Only grids that are updated by the stencil equations.
-        std::vector<RealVecGridBase*> eqGridPtrs;
+        GridPtrs outputGridPtrs;
+        NameSet outputGridNames;
 
+        // Grids whose halos are up-to-date.
+        // Grids are marked when MPI-exchanged and unmarked when written to.
+        GridPtrSet updatedGridPtrs;
+        
         // A list of all non-grid parameters.
-        std::vector<RealGrid*> paramPtrs;
+        ParamPtrs paramPtrs;
+        NameSet paramNames;
 
-        // Sizes in elements (points).
-        // - time sizes (t) are in steps to be done (not grid allocation).
-        // - spatial sizes (x, y, z) are in elements (not vectors).
-        // Sizes are the same for all grids and all stencil equations.
-        // TODO: relax this restriction.
-        idx_t begin_dt;           // begin time (end is begin_dt + dt);
-        idx_t dt, dn, dx, dy, dz; // rank size.
-        idx_t rt, rn, rx, ry, rz; // region size.
-        idx_t bt, bn, bx, by, bz; // block size.
-        idx_t gn, gx, gy, gz;     // group-of-blocks size.
-        idx_t hn, hx, hy, hz;     // spatial halos (max over grids as required by stencil).
-        idx_t pn, px, py, pz;     // spatial padding (extra to avoid aliasing).
-        idx_t angle_n, angle_x, angle_y, angle_z; // temporal skewing angles.
+        // Some calculated sizes.
+        idx_t ofs_t=0, ofs_n=0, ofs_x=0, ofs_y=0, ofs_z=0; // Index offsets for this rank.
+        idx_t tot_n=0, tot_x=0, tot_y=0, tot_z=0; // Total of rank domains over all ranks.
+        idx_t hn=0, hx=0, hy=0, hz=0;     // spatial halos (max over grids as required by stencil).
+        idx_t angle_n=0, angle_x=0, angle_y=0, angle_z=0; // temporal skewing angles.
 
-        // MPI meta-data.
-        MPI_Comm comm;
-        int num_ranks, my_rank;   // MPI-assigned index.
-        idx_t nrn, nrx, nry, nrz; // number of ranks in each dim.
-        idx_t rin, rix, riy, riz;    // my rank index in each dim.
-        double mpi_time;          // time spent doing MPI.
+        // Various metrics calculated in allocAll().
+        // 'rank_' prefix indicates for this rank.
+        // 'tot_' prefix indicates over all ranks.
+        // 'numpts' indicates points actually calculated in sub-domains.
+        // 'domain' indicates points in domain-size specified on cmd-line.
+        // 'numFpOps' indicates est. number of FP ops.
+        // 'nbytes' indicates number of bytes allocated.
+        // '_1t' suffix indicates work for one time-step.
+        // '_dt' suffix indicates work for all time-steps.
+        idx_t rank_numpts_1t, rank_numpts_dt, tot_numpts_1t, tot_numpts_dt;
+        idx_t rank_domain_1t, rank_domain_dt, tot_domain_1t, tot_domain_dt;
+        idx_t rank_numFpOps_1t, rank_numFpOps_dt, tot_numFpOps_1t, tot_numFpOps_dt;
+        idx_t rank_nbytes, tot_nbytes;
+        
+        // MPI environment.
+        MPI_Comm comm=0;
+        int num_ranks=1, my_rank=0;   // MPI-assigned index.
+        double mpi_time=0.0;          // time spent doing MPI.
         MPIBufs::Neighbors my_neighbors;   // neighbor ranks.
 
         // Actual MPI buffers.
-        // MPI buffers are tagged by their grid pointers.
-        // Only grids in eqGridPtrs will have buffers.
-        std::map<RealVecGridBase*, MPIBufs> mpiBufs;
-
-        // Shadow grids.
-        // These are used to time copies back and forth between buffers used
-        // by YASK for computation and those that might be needed by
-        // traditional C or FORTRAN functions.  Only grids in eqGridPtrs
-        // will have shadows; it is assumed that other grids will only need
-        // to be copied once.
-        std::map<RealVecGridBase*, RealGrid_NXYZ*> shadowGrids;
-        idx_t shadow_in_freq, shadow_out_freq; // copy frequencies;
-        double shadow_time;          // time spent doing shadow copies.
+        // MPI buffers are tagged by their grid names.
+        // Only grids in outputGridPtrs will have buffers.
+        std::map<std::string, MPIBufs> mpiBufs;
         
-        // Threading.
-        // Remember original number of threads avail.
-        // We use this instead of omp_get_num_procs() so the user
-        // can limit threads via OMP_NUM_THREADS env var.
-        int orig_max_threads;
-
-        // Number of threads to use in a nested OMP region.
-        int num_block_threads;
-
-        // Ctor, dtor.
-        StencilContext() :
-            ostr(&std::cout),
-            begin_dt(0),
-            dt(1), dn(1), dx(1), dy(1), dz(1),
-            rt(1), rn(1), rx(1), ry(1), rz(1),
-            bt(1), bn(1), bx(1), by(1), bz(1),
-            gn(1), gx(1), gy(1), gz(1),
-            hn(0), hx(0), hy(0), hz(0),
-            pn(0), px(0), py(0), pz(0),
-            angle_n(0), angle_x(0), angle_y(0), angle_z(0),
-            comm(0), num_ranks(1), my_rank(0), mpi_time(0.0),
-            shadow_in_freq(0), shadow_out_freq(0), shadow_time(0.0),
-            orig_max_threads(1), num_block_threads(1)
+        // Constructor.
+        StencilContext(StencilSettings& settings) :
+            _ostr(&std::cout),
+            _opts(&settings)
         {
             // Init my_neighbors to indicate no neighbor.
             int *p = (int *)my_neighbors;
             for (int i = 0; i < MPIBufs::neighborhood_size; i++)
                 p[i] = MPI_PROC_NULL;
         }
+
+        // Destructor.
         virtual ~StencilContext() { }
 
-        // Allocate grid memory and set gridPtrs.
-        virtual void allocGrids() =0;
+        // Init MPI, OMP, etc.
+        // This is normally called very early in the program.
+        virtual void initEnv(int* argc, char*** argv);
 
-        // Allocate param memory and set paramPtrs.
-        virtual void allocParams() =0;
+        // Copy env settings from another context.
+        virtual void copyEnv(const StencilContext& src);
 
-        // Allocate MPI buffers, etc. if enabled.
-        virtual void setupMPI(bool findLocation);
+        // Set ostr to given stream if provided.
+        // If not provided, set to cout if my_rank == msg_rank
+        // or a null stream otherwise.
+        virtual std::ostream& set_ostr(std::ostream* os = NULL);
 
-        // Alloc shadow grids.
-        virtual void allocShadowGrids();
+        // Get the default output stream.
+        virtual std::ostream& get_ostr() const {
+            assert(_ostr);
+            return *_ostr;
+        }
+
+        // Get access to settings.
+        virtual StencilSettings& get_settings() {
+            assert(_opts);
+            return *_opts;
+        }
         
-        // Allocate grids, params, MPI bufs, and shadow grids.
-        // Prints and returns num bytes.
-        virtual idx_t allocAll(bool findRankLocation = true);
+        // Set vars related to this rank's role in global problem.
+        // Allocate MPI buffers as needed.
+        // Called from allocAll(), so it doesn't normally need to be called from user code.
+        virtual void setupRank();
+
+        // Allocate grid, param, and MPI memory.
+        // Called from allocAll(), so it doesn't normally need to be called from user code.
+        virtual void allocData();
+
+        // Allocate grids, params, MPI bufs, etc.
+        // Initialize some other data structures.
+        // Print lots of stats.
+        virtual void allocAll();
         
-        // Get total size.
-        virtual idx_t get_num_bytes();
+        // Get total memory allocation.
+        virtual size_t get_num_bytes() {
+            return _data_buf_size;
+        }
 
         // Init all grids & params by calling initFn.
         virtual void initValues(std::function<void (RealVecGridBase* gp, 
@@ -216,24 +345,24 @@ namespace yask {
                        [&](RealGrid* gp, real_t seed){ gp->set_diff(seed); });
         }
 
-        // Init all grids & params 
-        // By default it uses the initSame initialization routine
-        virtual void init() {
+        // Init all grids & params.
+        // By default it uses the initSame initialization routine.
+        virtual void initData() {
             initSame();
         }
 
-        // Compare grids in contexts.
+        // Compare grids in contexts for validation.
         // Params should not be written to, so they are not compared.
         // Return number of mis-compares.
-        virtual idx_t compare(const StencilContext& ref) const;
-
+        virtual idx_t compareData(const StencilContext& ref) const;
+        
         // Set number of threads to use for something other than a region.
-        virtual int set_max_threads() {
+        virtual int set_all_threads() {
 
             // Reset number of OMP threads to max allowed.
-            int nt = orig_max_threads;
+            int nt = _opts->max_threads / _opts->thread_divisor;
             nt = std::max(nt, 1);
-            TRACE_MSG("set_max_threads: omp_set_num_threads(%d)", nt);
+            TRACE_MSG("set_all_threads: omp_set_num_threads=" << nt);
             omp_set_num_threads(nt);
             return nt;
         }
@@ -242,16 +371,17 @@ namespace yask {
         // Return that number.
         virtual int set_region_threads() {
 
-            int nt = orig_max_threads;
+            // Start with "all" threads.
+            int nt = _opts->max_threads / _opts->thread_divisor;
 
-#if !USE_CREW
-            // If not using crew, limit outer nesting to allow
-            // num_block_threads per nested block loop.
-            nt /= num_block_threads;
-#endif
-
+            // Limit outer nesting to allow num_block_threads per nested
+            // block loop.
+            nt /= _opts->num_block_threads;
             nt = std::max(nt, 1);
-            TRACE_MSG("set_region_threads: omp_set_num_threads(%d)", nt);
+            if (_opts->num_block_threads > 1)
+                omp_set_nested(1);
+
+            TRACE_MSG("set_region_threads: omp_set_num_threads=" << nt);
             omp_set_num_threads(nt);
             return nt;
         }
@@ -260,139 +390,196 @@ namespace yask {
         virtual int set_block_threads() {
 
             // This should be a nested OMP region.
-            int nt = num_block_threads;
+            int nt = _opts->num_block_threads;
             nt = std::max(nt, 1);
-            TRACE_MSG("set_block_threads: omp_set_num_threads(%d)", nt);
+            TRACE_MSG("set_block_threads: omp_set_num_threads=" << nt);
             omp_set_num_threads(nt);
-            return num_block_threads;
+            return nt;
         }
 
+        // Wait for a global barrier.
+        virtual void global_barrier() {
+            MPI_Barrier(comm);
+        }
+
+        // Reference stencil calculations.
+        virtual void calc_rank_ref();
+
+        // Vectorized and blocked stencil calculations.
+        virtual void calc_rank_opt();
+
+        // Calculate results within a region.
+        // TODO: create a public interface w/a more logical index ordering.
+        virtual void calc_region(idx_t start_dt, idx_t stop_dt,
+                                 EqGroupSet* eqGroup_set,
+                                 idx_t start_dn, idx_t start_dx, idx_t start_dy, idx_t start_dz,
+                                 idx_t stop_dn, idx_t stop_dx, idx_t stop_dy, idx_t stop_dz);
+
+        // Exchange halo data needed by eq-group 'eg' at the given time.
+        virtual void exchange_halos(idx_t start_dt, idx_t stop_dt, EqGroupBase& eg);
+
+        // Mark grids that have been written to by eq-group 'eg'.
+        virtual void mark_grids_dirty(EqGroupBase& eg);
+        
+        // Set the bounding-box around all eq groups.
+        virtual void find_bounding_boxes();
+
+    };
+    
+    /// Classes that support evaluation of one stencil equation-group.
+    /// A context contains of one or more equation-groups.
+
+    // Types of dependencies.
+    enum DepType {
+        certain_dep,
+        possible_dep,
+        num_deps
     };
 
-    /// Classes that support evaluation of one stencil equation.
+    // A pure-virtual class base for a stencil equation-set.
+    class EqGroupBase : public BoundingBox {
+    protected:
+        StencilContext* _generic_context;
+        
+    public:
 
-    // A pure-virtual class base for a stencil equation.
-    struct StencilBase {
+        // Grids that are written to by these stencil equations.
+        GridPtrs outputGridPtrs;
+
+        // Grids that are read by these stencil equations.
+        GridPtrs inputGridPtrs;
 
         // ctor, dtor.
-        StencilBase() { }
-        virtual ~StencilBase() { }
+        EqGroupBase(StencilContext* context) :
+            _generic_context(context) { }
+        virtual ~EqGroupBase() { }
 
-        // Get name of this equation.
-        virtual const std::string& get_name() =0;
+        // Get name of this equation set.
+        virtual const std::string& get_name() const =0;
 
         // Get estimated number of FP ops done for one scalar eval.
-        virtual int get_scalar_fp_ops() =0;
+        virtual int get_scalar_fp_ops() const =0;
 
-        // Get list of grids updated by this equation.
-        virtual std::vector<RealVecGridBase*>& getEqGridPtrs() = 0;
+        // Get number of points updated for one scalar eval.
+        virtual int get_scalar_points_updated() const =0;
 
-        // Set eqGridPtrs.
-        virtual void init(StencilContext& generic_context) =0;
-    
+        // Set the bounding-box vars for this eq group in this rank.
+        virtual void find_bounding_box();
+
+        // Determine whether indices are in [sub-]domain.
+        virtual bool is_in_valid_domain(idx_t t, idx_t n, idx_t x, idx_t y, idx_t z) =0;
+
         // Calculate one scalar result at time t.
-        virtual void calc_scalar(StencilContext& generic_context,
-                                 idx_t t, idx_t n, idx_t x, idx_t y, idx_t z) =0;
+        virtual void calc_scalar(idx_t t, idx_t n, idx_t x, idx_t y, idx_t z) =0;
 
         // Calculate one block of results from begin to end-1 on each dimension.
-        // Note: this interface cannot support temporal blocking with >1 stencil because
-        // it only operates on one stencil.
-        virtual void calc_block(StencilContext& generic_context, idx_t bt,
+        virtual void calc_block(idx_t bt,
                                 idx_t begin_bn, idx_t begin_bx, idx_t begin_by, idx_t begin_bz,
                                 idx_t end_bn, idx_t end_bx, idx_t end_by, idx_t end_bz) =0;
-
-        // Exchange halo and shadow data for the updated grids at the given time.
-        virtual void exchange_halos(StencilContext& generic_context, idx_t start_dt, idx_t stop_dt);
     };
-
-    // Collections of stencils.
-    typedef std::vector<StencilBase*> StencilList;
-    typedef std::set<StencilBase*> StencilSet;
-
-    // Macro for automatically adding N dimension.
-    // TODO: make all args programmatic.
-#if USING_DIM_N
-#define ARG_N(n) n,
-#else
-#define ARG_N(n)
-#endif
 
     // Define a method named cfn to prefetch a cluster by calling vfn.
 #define PREFETCH_CLUSTER_METHOD(cfn, vfn)                               \
     template<int level>                                                 \
     ALWAYS_INLINE void                                                  \
-    cfn (ContextClass& context, idx_t ct,                               \
+    cfn (idx_t ct,                                                      \
          idx_t begin_cnv, idx_t begin_cxv, idx_t begin_cyv, idx_t begin_czv, \
          idx_t end_cnv, idx_t end_cxv, idx_t end_cyv, idx_t end_czv) {  \
-        TRACE_MSG("%s.%s<%d>(%ld, %ld, %ld, %ld, %ld)",                 \
-                  get_name().c_str(), #cfn, level, ct,                  \
-                  begin_cnv, begin_cxv, begin_cyv, begin_czv);          \
-        _stencil.vfn<level>(context, ct,                                \
+        TRACE_MSG(get_name() << "." #cfn "<" << level << ">("           \
+                  "t=" << ct <<                                         \
+                  ", nv=" << begin_cnv <<                               \
+                  ", xv=" << begin_cxv <<                               \
+                  ", yv=" << begin_cyv <<                               \
+                  ", zv=" << begin_czv << ")");                         \
+        _eqGroup.vfn<level>(*_context, ct,                              \
                      ARG_N(begin_cnv) begin_cxv, begin_cyv, begin_czv); \
     }
 
-    // A template that provides wrappers around a stencil-equation class created
-    // by the foldBuilder. A template is used instead of inheritance for performance.
-    // By using templates, the compiler can inline stencil code into loops and
-    // avoid indirect calls.
-    template <typename StencilEquationClass, typename ContextClass>
-    class StencilTemplate : public StencilBase {
+    // A template that provides wrappers around a stencil-equation class
+    // created by the foldBuilder. A template is used instead of inheritance
+    // for performance.  By using templates, the compiler can inline stencil
+    // code into loops and avoid indirect calls.
+    template <typename EqGroupClass, typename ContextClass>
+    class EqGroupTemplate : public EqGroupBase {
 
     protected:
 
-        // _stencil must implement calc_scalar, calc_cluster,
-        // prefetch_cluster, name.
-        StencilEquationClass _stencil;
+        // Pointer to a more specific context.
+        ContextClass* _context;
+        
+        // EqGroupClass must implement calc_scalar(), calc_cluster(),
+        // etc., that are used below.
+        // This class is generated by the foldBuilder.
+        EqGroupClass _eqGroup;
 
+        // Eq-groups that this one depends on.
+        std::map<DepType, EqGroupSet> _depends_on;
+        
     public:
-        StencilTemplate() {}
-        StencilTemplate(const std::string& name) :
-            StencilBase(name) { }
-        virtual ~StencilTemplate() {}
 
-        // Get values from _stencil.
-        virtual const std::string& get_name() {
-            return _stencil.name;
+        // Ctor.
+        EqGroupTemplate(ContextClass* context) :
+            EqGroupBase(context),
+            _context(context),
+            _eqGroup(*_context, outputGridPtrs, inputGridPtrs)
+        {
+            assert(_generic_context);
+            assert(_context);
+
+            // Make sure map entries exist.
+            for (DepType dt = certain_dep; dt < num_deps; dt = DepType(dt+1)) {
+                _depends_on[dt];
+            }
         }
-        virtual int get_scalar_fp_ops() {
-            return _stencil.scalar_fp_ops;
+        virtual ~EqGroupTemplate() {}
+
+        // Get values from _eqGroup.
+        virtual const std::string& get_name() const {
+            return _eqGroup.name;
         }
-        virtual std::vector<RealVecGridBase*>& getEqGridPtrs() {
-            return _stencil.eqGridPtrs;
+        virtual int get_scalar_fp_ops() const {
+            return _eqGroup.scalar_fp_ops;
+        }
+        virtual int get_scalar_points_updated() const {
+            return _eqGroup.scalar_points_updated;
+        }
+
+        // Add dependency.
+        virtual void add_dep(DepType dt, EqGroupBase* eg) {
+            _depends_on.at(dt).insert(eg);
+        }
+
+        // Get dependencies.
+        virtual const EqGroupSet& get_deps(DepType dt) const {
+            return _depends_on.at(dt);
         }
     
-        // Init data.
-        // This function implements the interface in the base class.
-        virtual void init(StencilContext& generic_context) {
-
-            // Convert to a problem-specific context.
-            auto context = dynamic_cast<ContextClass&>(generic_context);
-
-            // Call the generated code.
-            _stencil.init(context);
+        // Determine whether indices are in [sub-]domain for this eq group.
+        virtual bool is_in_valid_domain(idx_t t, idx_t n, idx_t x, idx_t y, idx_t z) {
+            return _eqGroup.is_in_valid_domain(*_context, t,
+                                               ARG_N(n) x, y, z);
         }
-    
+
         // Calculate one scalar result.
         // This function implements the interface in the base class.
-        virtual void calc_scalar(StencilContext& generic_context, idx_t t, idx_t n, idx_t x, idx_t y, idx_t z) {
-
-            // Convert to a problem-specific context.
-            auto context = dynamic_cast<ContextClass&>(generic_context);
-
-            // Call the generated code.
-            _stencil.calc_scalar(context, t, ARG_N(n) x, y, z);
+        virtual void calc_scalar(idx_t t, idx_t n, idx_t x, idx_t y, idx_t z) {
+            _eqGroup.calc_scalar(*_context, t, ARG_N(n) x, y, z);
         }
 
         // Calculate results within a cluster of vectors.
         // Called from calc_block().
         // The begin/end_c* vars are the start/stop_b* vars from the block loops.
         ALWAYS_INLINE void
-        calc_cluster (ContextClass& context, idx_t ct,
-                      idx_t begin_cnv, idx_t begin_cxv, idx_t begin_cyv, idx_t begin_czv,
-                      idx_t end_cnv, idx_t end_cxv, idx_t end_cyv, idx_t end_czv)
+        calc_cluster(idx_t ct,
+                     idx_t begin_cnv, idx_t begin_cxv, idx_t begin_cyv, idx_t begin_czv,
+                     idx_t end_cnv, idx_t end_cxv, idx_t end_cyv, idx_t end_czv)
         {
-            TRACE_MSG("%s.calc_cluster(%ld, %ld, %ld, %ld, %ld)",
-                      get_name().c_str(), ct, begin_cnv, begin_cxv, begin_cyv, begin_czv);
+            TRACE_MSG2("calc_cluster(t=" << ct <<
+                      ", nv=" << begin_cnv << ".." << (end_cnv-1) <<
+                      ", xv=" << begin_cxv << ".." << (end_cxv-1) <<
+                      ", yv=" << begin_cyv << ".." << (end_cyv-1) <<
+                      ", zv=" << begin_czv << ".." << (end_czv-1) <<
+                      ")");
 
             // The step vars are hard-coded in calc_block below, and there should
             // never be a partial step at this level. So, we can assume one var and
@@ -404,10 +591,11 @@ namespace yask {
             assert(end_czv == begin_czv + CLEN_Z);
         
             // Calculate results.
-            _stencil.calc_cluster(context, ct, ARG_N(begin_cnv) begin_cxv, begin_cyv, begin_czv);
+            _eqGroup.calc_cluster(*_context, ct, ARG_N(begin_cnv) begin_cxv, begin_cyv, begin_czv);
         }
 
         // Prefetch a cluster.
+        // Separate methods for full cluster and each direction.
         PREFETCH_CLUSTER_METHOD(prefetch_cluster, prefetch_cluster)
 #if USING_DIM_N
         PREFETCH_CLUSTER_METHOD(prefetch_cluster_bnv, prefetch_cluster_n)
@@ -421,33 +609,30 @@ namespace yask {
         // Each block is typically computed in a separate OpenMP task.
         // The begin/end_b* vars are the start/stop_r* vars from the region loops.
         virtual void
-        calc_block(StencilContext& generic_context, idx_t bt,
+        calc_block(idx_t bt,
                    idx_t begin_bn, idx_t begin_bx, idx_t begin_by, idx_t begin_bz,
                    idx_t end_bn, idx_t end_bx, idx_t end_by, idx_t end_bz)
         {
-            TRACE_MSG("%s.calc_block(%ld, %ld..%ld, %ld..%ld, %ld..%ld, %ld..%ld)", 
-                      get_name().c_str(), bt,
-                      begin_bn, end_bn-1,
-                      begin_bx, end_bx-1,
-                      begin_by, end_by-1,
-                      begin_bz, end_bz-1);
+            TRACE_MSG2(get_name() << ".calc_block(t=" << bt <<
+                       ", n=" << begin_bn << ".." << (end_bn-1) <<
+                       ", x=" << begin_bx << ".." << (end_bx-1) <<
+                       ", y=" << begin_by << ".." << (end_by-1) <<
+                       ", z=" << begin_bz << ".." << (end_bz-1) <<
+                       ")");
 
-            // Convert to a problem-specific context.
-            auto context = dynamic_cast<ContextClass&>(generic_context);
-
-            // Divide indices by vector lengths.
-            // Begin/end vars shouldn't be negative, so '/' is ok.
-            const idx_t begin_bnv = begin_bn / VLEN_N;
-            const idx_t begin_bxv = begin_bx / VLEN_X;
-            const idx_t begin_byv = begin_by / VLEN_Y;
-            const idx_t begin_bzv = begin_bz / VLEN_Z;
-            const idx_t end_bnv = end_bn / VLEN_N;
-            const idx_t end_bxv = end_bx / VLEN_X;
-            const idx_t end_byv = end_by / VLEN_Y;
-            const idx_t end_bzv = end_bz / VLEN_Z;
+            // Divide indices by vector lengths.  Use idiv_flr() instead of '/'
+            // because begin/end vars may be negative (if in halo).
+            const idx_t begin_bnv = idiv_flr<idx_t>(begin_bn, VLEN_N);
+            const idx_t begin_bxv = idiv_flr<idx_t>(begin_bx, VLEN_X);
+            const idx_t begin_byv = idiv_flr<idx_t>(begin_by, VLEN_Y);
+            const idx_t begin_bzv = idiv_flr<idx_t>(begin_bz, VLEN_Z);
+            const idx_t end_bnv = idiv_flr<idx_t>(end_bn, VLEN_N);
+            const idx_t end_bxv = idiv_flr<idx_t>(end_bx, VLEN_X);
+            const idx_t end_byv = idiv_flr<idx_t>(end_by, VLEN_Y);
+            const idx_t end_bzv = idiv_flr<idx_t>(end_bz, VLEN_Z);
 
             // Vector-size steps are based on cluster lengths.
-            // Using CLEN_* instead of CPTS_* because we want vector lengths.
+            // Using CLEN_* instead of CPTS_* because we want multiples of vector lengths.
             const idx_t step_bnv = CLEN_N;
             const idx_t step_bxv = CLEN_X;
             const idx_t step_byv = CLEN_Y;
@@ -464,56 +649,18 @@ namespace yask {
 #endif
             {
                 // Set threads for a block.
-                context.set_block_threads();
+                _context->set_block_threads();
 
                 // Include automatically-generated loop code that calls calc_cluster()
                 // and optionally, the prefetch functions().
 #include "stencil_block_loops.hpp"
             }
         }
-
     };
 
-    // Collection of all stencil equations to be evaluated.  This is also
-    // called the 'problem' being solved.  Unfortunately, this is also
-    // called the 'stencil' in the Makefile and foldBuilder for historical
-    // reasons (there used to be only one stencil equation allowed).
-    struct StencilEquations {
-
-        // Name of the problem.
-        std::string name;
-
-        // List of all stencil equations.
-        StencilList stencils;
-
-        StencilEquations() {}
-        virtual ~StencilEquations() {}
-
-        virtual void init(StencilContext& context) {
-            for (auto stencil : stencils)
-                stencil->init(context);
-        }
-    
-        // Reference stencil calculations.
-        virtual void calc_rank_ref(StencilContext& context);
-
-        // Vectorized and blocked stencil calculations.
-        virtual void calc_rank_opt(StencilContext& context);
-
-        // Calculate results within a region.
-        virtual void calc_region(StencilContext& context, idx_t start_dt, idx_t stop_dt,
-                                 StencilSet* stencil_set,
-                                 idx_t start_dn, idx_t start_dx, idx_t start_dy, idx_t start_dz,
-                                 idx_t stop_dn, idx_t stop_dx, idx_t stop_dy, idx_t stop_dz);
-        virtual void calc_region(StencilContext& context, idx_t start_dt, idx_t stop_dt,
-                                 idx_t start_dn, idx_t start_dx, idx_t start_dy, idx_t start_dz,
-                                 idx_t stop_dn, idx_t stop_dx, idx_t stop_dy, idx_t stop_dz) {
-            calc_region(context, start_dt, stop_dt,
-                        NULL,
-                        start_dn, start_dx, start_dy, start_dz,
-                        stop_dn, stop_dx, stop_dy, stop_dz);
-        }
-    };
 }
+
+// Include auto-generated stencil code.
+#include "stencil_code.hpp"
 
 #endif

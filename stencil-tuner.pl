@@ -2,7 +2,7 @@
 
 ##############################################################################
 ## YASK: Yet Another Stencil Kernel
-## Copyright (c) 2014-2016, Intel Corporation
+## Copyright (c) 2014-2017, Intel Corporation
 ## 
 ## Permission is hereby granted, free of charge, to any person obtaining a copy
 ## of this software and associated documentation files (the "Software"), to
@@ -305,28 +305,29 @@ $outFile = '/dev/null' if $checking;
 open OUTFILE, ">$outFile" or die "error: cannot write to '$outFile'\n";
 
 # things to get from the run.
-my $fitnessMetric = 'best-throughput (points/sec)';
+my $fitnessMetric = 'best-throughput (points-updated/sec)';
 my $timeMetric = 'best-time (sec)';
-my $dimsMetric = 'overall-size';
+my $dimsMetric = 'rank-domain-size';
 my @metrics = ( $fitnessMetric,
                 $timeMetric,
                 $dimsMetric,
-                'best-throughput (est FLOPS)',
-                'overall-size',
-                'rank-size',
+                'best-throughput (prob-size-points/sec)',
+                'best-throughput (est-FLOPS)',
+                'Num OpenMP threads',
                 'region-size',
-                'group-size',
+                'block-group-size',
                 'block-size',
                 'cluster-size',
                 'vector-size',
                 'num-regions',
                 'num-groups-per-region',
-                'num-blocks-per-region',
+                'num-block-groups-per-region',
                 'padding',
                 'max-halos',
                 'manual-L1-prefetch-distance',
                 'manual-L2-prefetch-distance',
-                'Points to calculate overall',
+                'problem-size in all ranks, for all time-steps',
+                'grid-points-updated in all ranks, for all time-steps',
                 'Total overall allocation',
               );
 
@@ -355,8 +356,8 @@ my $minClustersInBlock = 10;
 my $minBlocksInRegion = 10;
 
 # 'Exp' means exponent of 2.
-my $minThreadFactorExp = 0; # 2^0 = 1.
-my $maxThreadFactorExp = 2; # 2^2 = 4.
+my $minThreadDivisorExp = 0; # 2^0 = 1.
+my $maxThreadDivisorExp = 2; # 2^2 = 4.
 my $minBlockThreadsExp = 0; # 2^0 = 1.
 my $maxBlockThreadsExp = 6; # 2^6 = 64.
 
@@ -443,7 +444,7 @@ my @regionLoops =
 # TODO: add other options.
 my @rankLoops =
   (
-   "PATH3 loop(D0,D1,D2,D3) { calc(region(start_dt, stop_dt, stencil_set)); }",
+   "PATH3 loop(D0,D1,D2,D3) { calc(region(start_dt, stop_dt, eqGroup_ptr)); }",
   );
 
 # list of folds.
@@ -506,7 +507,7 @@ my @rangesAll =
    [ 0, $maxPad, 1, 'pz' ],
 
    # threads.
-   [ $minThreadFactorExp, $maxThreadFactorExp, 1, 'thread_factor_exp' ],
+   [ $minThreadDivisorExp, $maxThreadDivisorExp, 1, 'thread_divisor_exp' ],
    [ $minBlockThreadsExp, $maxBlockThreadsExp, 1, 'bthreads_exp' ],
   );
 
@@ -884,7 +885,7 @@ sub setResults($$) {
     $mre =~ s/\)/\\)/g;
 
     # look for metric at beginning of line followed by ':' or '='.
-    if ($line =~ /^\s*$mre[^:=]*[:=]\s*(\S+)/) {
+    if ($line =~ /^\s*$mre[^:=]*[:=]\s*(\S+)/i) {
       my $val = $1;
 
       # adjust for suffixes.
@@ -1214,7 +1215,7 @@ sub fitness {
   my $fold = readHash($h, 'fold', 1);
   my $crew = readHash($h, 'crew', 1);
   my $exprSize = readHash($h, 'exprSize', 1);
-  my $thread_factor_exp = readHash($h, 'thread_factor_exp', 0);
+  my $thread_divisor_exp = readHash($h, 'thread_divisor_exp', 0);
   my $bthreads_exp = readHash($h, 'bthreads_exp', 0);
   my $pipe = 0; # readHash($h, 'pipe', 1);
   my @paths = ( readHash($h, 'path0', 1),
@@ -1411,7 +1412,7 @@ sub fitness {
 
   # how to run.
   my $runCmd = getRunCmd();
-  $runCmd .= " -thread_factor ".(1 << $thread_factor_exp)." -bthreads ".(1 << $bthreads_exp);
+  $runCmd .= " -thread_divisor ".(1 << $thread_divisor_exp)." -block_threads ".(1 << $bthreads_exp);
 
   # sizes.
   my $args = "-dn $vars";

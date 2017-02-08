@@ -1,7 +1,7 @@
 /*****************************************************************************
 
 YASK: Yet Another Stencil Kernel
-Copyright (c) 2014-2016, Intel Corporation
+Copyright (c) 2014-2017, Intel Corporation
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to
@@ -34,7 +34,7 @@ IN THE SOFTWARE.
 using namespace std;
 
 // A PrintHelper is used by a PrintVisitor to format certain
-// common items like variables and lines.
+// common items like variables, reads, and writes.
 class PrintHelper {
     int _varNum;                // current var number.
 
@@ -120,7 +120,7 @@ public:
     // The 'os' parameter is provided for derived types that
     // need to write intermediate code to a stream.
     virtual string writeToPoint(ostream& os, const GridPoint& gp, const string& val) {
-        return gp.makeStr() + " = " + val;
+        return gp.makeStr() + " IS_EQUIV_TO " + val;
     }
 };
 
@@ -173,34 +173,48 @@ public:
     // A grid or parameter read.
     virtual void visit(GridPoint* gp);
 
+    // An index.
+    virtual void visit(IntTupleExpr* ite);
+    virtual void visit(IndexExpr* ie);
+    
     // A constant.
     virtual void visit(ConstExpr* ce);
 
-    // Some code.
+    // Some hand-written code.
     virtual void visit(CodeExpr* ce);
 
-    // A generic unary operator.
-    virtual void visit(UnaryExpr* ue);
+    // Generic unary operators.
+    virtual void visit(UnaryNumExpr* ue);
+    virtual void visit(UnaryBoolExpr* ue);
+    virtual void visit(UnaryNum2BoolExpr* ue);
 
-    // A generic binary operator.
-    virtual void visit(BinaryExpr* be);
+    // Generic binary operators.
+    virtual void visit(BinaryNumExpr* be);
+    virtual void visit(BinaryBoolExpr* be);
+    virtual void visit(BinaryNum2BoolExpr* be);
 
     // A commutative operator.
     virtual void visit(CommutativeExpr* ce);
+
+    // A conditional operator.
+    virtual void visit(IfExpr* ie);
 
     // An equals operator.
     virtual void visit(EqualsExpr* ee);
 };
 
 // Outputs a simple, human-readable version of the AST in a bottom-up
-// fashion with multiple expressions, each assigned to a temp var.  The
-// maxPoints parameter controls the size of each separate expression. Within
-// each expression, a top-down visitor is used.
+// fashion with multiple sub-expressions, each assigned to a temp var.  The
+// min/maxExprSize parameters control when and where expressions are
+// sub-divided. Within each sub-expression, a top-down visitor is used.
 class PrintVisitorBottomUp : public PrintVisitorBase {
 
 protected:
-    // max points to print top-down before printing bottom-up.
-    int _maxPoints;  
+    // max size of a single expression.
+    int _maxExprSize;
+
+    // min size to use sharing.
+    int _minExprSize;
 
     // map sub-expressions to var names.
     map<Expr*, string> _tempVars;
@@ -213,25 +227,30 @@ protected:
     // If 'comment' is set, use it for the comment.
     // Return stream to continue w/RHS.
     virtual ostream& makeNextTempVar(Expr* ex, string comment = "");
-
+    
 public:
     // os is used for printing intermediate results as needed.
     PrintVisitorBottomUp(ostream& os, PrintHelper& ph,
-                         int maxPoints) :
-        PrintVisitorBase(os, ph), _maxPoints(maxPoints) { }
+                         int maxExprSize, int minExprSize) :
+        PrintVisitorBase(os, ph),
+        _maxExprSize(maxExprSize),
+        _minExprSize(minExprSize) { }
 
     // make a new top-down visitor with the same print helper.
     virtual PrintVisitorTopDown* newPrintVisitorTopDown() {
         return new PrintVisitorTopDown(_os, _ph);
     }
 
-    // Look for existing var.
-    // Then, use top-down method for simple exprs.
-    // Return true if successful.
-    virtual bool tryTopDown(Expr* ex, bool leaf);
+    // Try some simple printing techniques.
+    // Return true if printing is done.
+    // Return false if more complex method should be used.
+    virtual bool trySimplePrint(Expr* ex, bool force);
 
     // A grid or param point.
     virtual void visit(GridPoint* gp);
+
+    // An index.
+    virtual void visit(IntTupleExpr* ite);
 
     // A constant.
     virtual void visit(ConstExpr* ce);
@@ -239,14 +258,20 @@ public:
     // Code.
     virtual void visit(CodeExpr* ce);
 
-    // A unary operator.
-    virtual void visit(UnaryExpr* ue);
+    // Unary operators.
+    virtual void visit(UnaryNumExpr* ue);
+    virtual void visit(UnaryBoolExpr* ue);
 
-    // A binary operator.
-    virtual void visit(BinaryExpr* be);
+    // Binary operators.
+    virtual void visit(BinaryNumExpr* be);
+    virtual void visit(BinaryBoolExpr* be);
+    virtual void visit(BinaryNum2BoolExpr* be);
 
     // A commutative operator.
     virtual void visit(CommutativeExpr* ce);
+
+    // A conditional operator.
+    virtual void visit(IfExpr* ie);
 
     // An equality.
     virtual void visit(EqualsExpr* ee);
@@ -283,17 +308,109 @@ public:
     
     // A point.
     virtual void visit(GridPoint* gp);
+
+    // A conditional operator.
+    // Only visit expression.
+    virtual void visit(IfExpr* ie) {
+        ie->getExpr()->accept(this);
+    }
 };
 
-// PrinterBase is the main class for defining how to print
-// a stencil.
+// Outputs a full GraphViz input file.
+class DOTPrintVisitor : public ExprVisitor {
+protected:
+    ostream& _os;
+    set<string> _done;
+
+    // Get label to use.
+    // Return empty string if already done.
+    virtual string getLabel(Expr* ep) {
+        string key = ep->makeQuotedStr();
+        if (_done.count(key))
+            return "";
+        _done.insert(key);
+        return key;
+    }
+    
+public:
+    DOTPrintVisitor(ostream& os) : _os(os) { }
+
+    // A grid or parameter read.
+    virtual void visit(GridPoint* gp);
+
+    // A constant.
+    virtual void visit(ConstExpr* ce);
+
+    // Some hand-written code.
+    virtual void visit(CodeExpr* ce);
+
+    // Generic numeric unary operators.
+    virtual void visit(UnaryNumExpr* ue);
+
+    // Generic numeric binary operators.
+    virtual void visit(BinaryNumExpr* be);
+
+    // A commutative operator.
+    virtual void visit(CommutativeExpr* ce);
+
+    // A conditional operator.
+    // Only visit expression.
+    virtual void visit(IfExpr* ie) {
+        ie->getExpr()->accept(this);
+    }
+
+    // An equals operator.
+    virtual void visit(EqualsExpr* ee);
+};
+
+// Outputs a simple GraphViz input file.
+class SimpleDOTPrintVisitor : public DOTPrintVisitor {
+protected:
+    set<string> _gridsSeen;
+    
+public:
+    SimpleDOTPrintVisitor(ostream& os) :
+        DOTPrintVisitor(os) { }
+
+    // A grid or parameter read.
+    virtual void visit(GridPoint* gp);
+
+    // A constant.
+    virtual void visit(ConstExpr* ce) {}
+
+    // Some hand-written code.
+    virtual void visit(CodeExpr* ce) {}
+
+    // Generic numeric unary operators.
+    virtual void visit(UnaryNumExpr* ue);
+    
+    // Generic numeric binary operators.
+    virtual void visit(BinaryNumExpr* be);
+
+    // A commutative operator.
+    virtual void visit(CommutativeExpr* ce);
+
+    // A conditional operator.
+    // Only visit expression.
+    virtual void visit(IfExpr* ie) {
+        ie->getExpr()->accept(this);
+    }
+
+    // An equals operator.
+    virtual void visit(EqualsExpr* ee);
+};
+
+// PrinterBase is the main class for defining how to print a stencil.
+// A PrinterBase uses one or more PrintHelpers and ExprVisitors to
+// do this.
 class PrinterBase {
 protected:
     StencilBase& _stencil;
     Grids& _grids;
     Params& _params;
-    Equations& _equations;
-    int _exprSize;
+    EqGroups& _eqGroups;
+    int _maxExprSize;
+    int _minExprSize;
 
     // Return an upper-case string.
     string allCaps(string str) {
@@ -302,13 +419,14 @@ protected:
     }
     
 public:
-    PrinterBase(StencilBase& stencil, Equations& equations,
-                int exprSize) :
+    PrinterBase(StencilBase& stencil, EqGroups& eqGroups,
+                int maxExprSize, int minExprSize) :
         _stencil(stencil), 
         _grids(stencil.getGrids()),
         _params(stencil.getParams()),
-        _equations(equations),
-        _exprSize(exprSize)
+        _eqGroups(eqGroups),
+        _maxExprSize(maxExprSize),
+        _minExprSize(minExprSize)
     { }
     virtual ~PrinterBase() { }
     
@@ -319,10 +437,25 @@ public:
 class PseudoPrinter : public PrinterBase {
         
 public:
-    PseudoPrinter(StencilBase& stencil, Equations& equations,
-                  int exprSize) :
-        PrinterBase(stencil, equations, exprSize) { }
+    PseudoPrinter(StencilBase& stencil, EqGroups& eqGroups,
+                  int maxExprSize, int minExprSize) :
+        PrinterBase(stencil, eqGroups, maxExprSize, minExprSize) { }
     virtual ~PseudoPrinter() { }
+
+    virtual void print(ostream& os);
+};
+
+// Print out a stencil in DOT-language form.
+class DOTPrinter : public PrinterBase {
+protected:
+    bool _isSimple;
+        
+public:
+    DOTPrinter(StencilBase& stencil, EqGroups& eqGroups,
+               int maxExprSize, int minExprSize, bool isSimple) :
+        PrinterBase(stencil, eqGroups, maxExprSize, minExprSize),
+        _isSimple(isSimple) { }
+    virtual ~DOTPrinter() { }
 
     virtual void print(ostream& os);
 };
@@ -331,9 +464,9 @@ public:
 class POVRayPrinter : public PrinterBase {
         
 public:
-    POVRayPrinter(StencilBase& stencil, Equations& equations,
-                  int exprSize) :
-        PrinterBase(stencil, equations, exprSize) { }
+    POVRayPrinter(StencilBase& stencil, EqGroups& eqGroups,
+                  int maxExprSize, int minExprSize) :
+        PrinterBase(stencil, eqGroups, maxExprSize, minExprSize) { }
     virtual ~POVRayPrinter() { }
 
     virtual void print(ostream& os);

@@ -1,7 +1,7 @@
 /*****************************************************************************
 
 YASK: Yet Another Stencil Kernel
-Copyright (c) 2014-2016, Intel Corporation
+Copyright (c) 2014-2017, Intel Corporation
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to
@@ -23,7 +23,7 @@ IN THE SOFTWARE.
 
 *****************************************************************************/
 
-// Base class for calculating a future stencil value.
+// Base class for defining stencil equations.
 
 #ifndef STENCIL_BASE
 #define STENCIL_BASE
@@ -64,7 +64,7 @@ protected:
 public:
     virtual ~StencilBase() {}
 
-    // Register new object in a list.
+    // Initialize name and register this new object in a list.
     StencilBase(const string name, StencilList& stencils) :
         _name(name)
     {

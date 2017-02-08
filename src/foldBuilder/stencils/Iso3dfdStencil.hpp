@@ -1,7 +1,7 @@
 /*****************************************************************************
 
 YASK: Yet Another Stencil Kernel
-Copyright (c) 2014-2016, Intel Corporation
+Copyright (c) 2014-2017, Intel Corporation
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to
@@ -92,7 +92,7 @@ public:
             + (v * vel(x, y, z));       // add v * velocity.
 
         // define the value at t+1 to be equivalent to v.
-        pressure(t+1, x, y, z) == v;
+        pressure(t+1, x, y, z) IS_EQUIV_TO v;
     }
 };
 

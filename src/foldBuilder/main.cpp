@@ -1,7 +1,7 @@
 /*****************************************************************************
 
 YASK: Yet Another Stencil Kernel
-Copyright (c) 2014-2016, Intel Corporation
+Copyright (c) 2014-2017, Intel Corporation
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to
@@ -41,74 +41,139 @@ StencilList stencils;
 #include "AwpStencil.hpp"
 #include "AwpElasticStencil.hpp"
 #include "StreamStencil.hpp"
+#include "FSGElasticStencil.hpp"
 
-// vars set via cmd-line options.
-bool printPseudo = false;
-bool printPOVRay = false;
-bool printMacros = false;
-bool printGrids = false;
-bool printCpp = false;
-bool printKncCpp = false;
-bool print512Cpp = false;
-bool print256Cpp = false;
+#include <fstream>
+
+// output streams.
+ostream* printPseudo = NULL;
+ostream* printPOVRay = NULL;
+ostream* printDOT = NULL;
+ostream* printSimpleDOT = NULL;
+ostream* printMacros = NULL;
+ostream* printGrids = NULL;
+ostream* printCpp = NULL;
+ostream* printKncCpp = NULL;
+ostream* print512Cpp = NULL;
+ostream* print256Cpp = NULL;
+
+// other vars set via cmd-line options.
 int vlenForStats = 0;
 StencilBase* stencilFunc = NULL;
 string shapeName;
 IntTuple foldOptions;                     // vector fold.
 IntTuple clusterOptions;                  // cluster sizes.
-int exprSize = 50;
+int maxExprSize = 50;
+int minExprSize = 2;
 int radius = 1;
 bool firstInner = true;
 bool allowUnalignedLoads = false;
-string equationTargets;
+string eqGroupTargets;
 bool doFuse = false;
-bool hbwRW = true;
-bool hbwRO = true;
 bool doComb = false;
 bool doCse = true;
 string stepDim = "t";
-int  haloSize = 0;                     // 0 means auto
+int haloSize = 0;                     // 0 means auto.
+int stepAlloc = 0;                    // 0 means auto.
+string eq_group_basename_default = "stencil";
+
+ostream* open_file(const string& name) {
+    
+    // Use '-' for stdout.
+    if (name == "-")
+        return &cout;
+
+    ofstream* ofs = new ofstream(name, ofstream::out | ofstream::trunc);
+    if (!ofs || !ofs->is_open()) {
+        cerr << "Error: cannot open '" << name <<
+            "' for output.\n";
+        exit(1);
+    }
+    return ofs;
+}
 
 void usage(const string& cmd) {
 
-    cerr << "Options:\n"
+    cout << "Options:\n"
         " -h                 print this help message.\n"
         "\n"
         " -st <name>         set stencil type (required); supported stencils:\n";
     for (auto si : stencils) {
         auto name = si.first;
-        cerr << "                     " << name << endl;
+        auto sp = si.second;
+        cout << "                     " << name;
+        if (sp->usesRadius())
+            cout << " *";
+        cout << endl;
     }
-    cerr <<
-        " -r <radius>        set stencil radius (ignored for some stencils; default=" << radius << ").\n"
+    cout <<
+        " -r <radius>\n"
+        "     Set radius for stencils marked with '*' above (default=" << radius << ").\n"
         "\n"
-        " -fold <dim>=<size>,...    set number of elements in each dimension in a vector block.\n"
-        " -cluster <dim>=<size>,... set number of values to evaluate in each dimension.\n"
-        " -eq <name>=<substr>,...   put updates to grids containing substring in equation name.\n"
-        //" [-no]-fuse        do [not] pack grids together in meta container(s) (default=" << doFuse << ").\n"
-        " -step <dim>        solution progresses in given dimension (default='" << stepDim << "').\n"
-        " -halo <size>       specify the sizes of the halos (default=auto).\n"
-        " -lus               make last dimension of fold unit stride (instead of first).\n"
-        " -aul               allow simple unaligned loads (memory map MUST be compatible).\n"
-        " -es <expr-size>    set heuristic for expression-size threshold (default=" << exprSize << ").\n"
-        " [-no]-comb         do [not] combine commutative operations (default=" << doComb << ").\n"
-        " [-no]-cse          do [not] eliminate common subexpressions (default=" << doCse << ").\n"
-        " [-no]-hbw-rw       do [not] allocate read/write grids in high-BW mem (default=" << hbwRW << ").\n"
-        " [-no]-hbw-ro       do [not] allocate read-only grids in high-BW mem (default=" << hbwRO << ").\n"
+        " -fold <dim>=<size>,...\n"
+        "    Set number of elements in each dimension in a vector block.\n"
+        " -cluster <dim>=<size>,...\n"
+        "    Set number of vectors to evaluate in each dimension.\n"
+        " -eq <name>=<substr>,...\n"
+        "    Put updates to grids containing <substr> in equation-groups with base-name <name>.\n"
+        "      By default, eq-groups are defined as needed based on dependencies with\n"
+        "        base-name '" << eq_group_basename_default << "'.\n"
+        "      Eq-groups are created in the order in which they are specified.\n"
+        "        By default, they are created based on the order in which the grids are initialized.\n"
+        "      Each eq-group base-name is appended with a unique index number.\n"
+        "      Example: '-eq a=foo,b=bar' creates one or more eq-groups with base-name 'a'\n"
+        "        containing updates to grids whose name contains 'foo' and one or more eq-groups\n"
+        "        with base-name 'b' containing updates to grids whose name contains 'bar'.\n"
+        //" [-no]-fuse         Do [not] pack grids together in meta container(s) (default=" << doFuse << ").\n"
+        " -step <dim>\n"
+        "    Specify stepping dimension <dim> (default='" << stepDim << "').\n"
+        "      This is used for dependence calculation and memory allocation.\n"
+        " -step-alloc <size>\n"
+        "    Specify the size of the step-dimension memory allocation.\n"
+        "      By default, allocations are calculated automatically for each grid.\n"
+        " -halo <size>\n"
+        "    Specify the sizes of the halos.\n"
+        "      By default, halos are calculated automatically for each grid.\n"
+        " -lus\n"
+        "    Make last dimension of fold unit stride (instead of first).\n"
+        "      This controls the intra-vector memory layout.\n"
+        " -aul\n"
+        "    Allow simple unaligned loads.\n"
+        "      To use this correctly, only 1D folds are allowed, and\n"
+        "        the memory layout used by YASK must have that same dimension in unit stride.\n"
+        " [-no]-comb\n"
+        "    Do [not] combine commutative operations (default=" << doComb << ").\n"
+        " [-no]-cse\n"
+        "    Do [not] eliminate common subexpressions (default=" << doCse << ").\n"
+        " -max-es <num-nodes>\n"
+        "    Set heuristic for max single expression-size (default=" << maxExprSize << ").\n"
+        " -min-es <num-nodes>\n"
+        "    Set heuristic for min expression-size for reuse (default=" << minExprSize << ").\n"
         "\n"
-        //" -ps <vec-len>      print stats for all folding options for given vector length.\n"
-        " -ph                print human-readable scalar pseudo-code for one point.\n"
-        " -pp                print POV-Ray code for one fold.\n"
-        " -pm                print YASK pre-processor macros.\n"
-        //" -pg                print YASK grid classes.\n"
-        " -pcpp              print YASK stencil classes for generic C++.\n"
-        " -p256              print YASK stencil classes for CORE AVX & AVX2 ISAs.\n"
-        " -p512              print YASK stencil classes for CORE AVX-512 & MIC AVX-512 ISAs.\n"
-        " -pknc              print YASK stencil classes for KNC ISA.\n"
+        //" -ps <vec-len>         Print stats for all folding options for given vector length.\n"
+        " -pm <filename>\n"
+        "    Print YASK pre-processor macros.\n"
+        //" -pg <filename>        Print YASK grid classes.\n"
+        " -pcpp <filename>\n"
+        "    Print YASK stencil classes for generic C++.\n"
+        " -p256 <filename>\n"
+        "    Print YASK stencil classes for CORE AVX & AVX2 ISAs.\n"
+        " -p512 <filename>\n"
+        "    Print YASK stencil classes for CORE AVX-512 & MIC AVX-512 ISAs.\n"
+        " -pknc <filename>\n"
+        "    Print YASK stencil classes for KNC ISA.\n"
+        " -ph <filename>\n"
+        "    Print human-readable scalar pseudo-code for one point.\n"
+        " -pdot-full <filename>\n"
+        "    Print DOT-language description of stencil equation(s).\n"
+        " -pdot-lite <filename>\n"
+        "    Print DOT-language description of grid dependencies.\n"
+        //" -pp <filename>        Print POV-Ray code.\n"
         "\n"
         "Examples:\n"
-        " " << cmd << " -st iso3dfd -or 8 -fold x=4,y=4 -p256\n"
-        " " << cmd << " -st awp -fold y=4,z=2 -p512\n";
+        " " << cmd << " -st 3axis -or 2 -fold x=4,y=4 -ph -\n"
+        " " << cmd << " -st awp -fold y=4,y=2 -p256 stencil_code.hpp\n"
+        " " << cmd << " -st iso3dfd -or 8 -fold x=4,y=4 -cluster y=2 -p512 stencil_code.hpp\n";
     exit(1);
 }
 
@@ -145,32 +210,6 @@ void parseOpts(int argc, const char* argv[])
             else if (opt == "-no-fuse")
                 doFuse = false;
 
-            else if (opt == "-hbw-rw")
-                hbwRW = true;
-            else if (opt == "-no-hbw-rw")
-                hbwRW = false;
-            else if (opt == "-hbw-ro")
-                hbwRO = true;
-            else if (opt == "-no-hbw-ro")
-                hbwRO = false;
-            
-            else if (opt == "-ph")
-                printPseudo = true;
-            else if (opt == "-pp")
-                printPOVRay = true;
-            else if (opt == "-pm")
-                printMacros = true;
-            else if (opt == "-pg")
-                printGrids = true;
-            else if (opt == "-pcpp")
-                printCpp = true;
-            else if (opt == "-pknc")
-                printKncCpp = true;
-            else if (opt == "-p512")
-                print512Cpp = true;
-            else if (opt == "-p256")
-                print256Cpp = true;
-            
             // add any more options w/o values above.
 
             // options w/a value.
@@ -178,7 +217,7 @@ void parseOpts(int argc, const char* argv[])
 
                 // at least one value needed.
                 if (argi + 1 >= argc) {
-                    cerr << "error: value missing or bad option '" << opt << "'." << endl;
+                    cerr << "Error: value missing or bad option '" << opt << "'." << endl;
                     usage(argv[0]);
                 }
                 string argop = argv[++argi];
@@ -189,7 +228,7 @@ void parseOpts(int argc, const char* argv[])
                 else if (opt == "-step")
                     stepDim = argop;
                 else if (opt == "-eq")
-                    equationTargets = argop;
+                    eqGroupTargets = argop;
                 else if (opt == "-fold" || opt == "-cluster") {
 
                     // example: x=4,y=2
@@ -205,7 +244,29 @@ void parseOpts(int argc, const char* argv[])
                                 clusterOptions.addDimBack(key, size);
                         });
                 }
-                
+
+                // Print options w/filename arg.
+                else if (opt == "-ph")
+                    printPseudo = open_file(argop);
+                else if (opt == "-pdot-full")
+                    printDOT = open_file(argop);
+                else if (opt == "-pdot-lite")
+                    printSimpleDOT = open_file(argop);
+                else if (opt == "-pp")
+                    printPOVRay = open_file(argop);
+                else if (opt == "-pm")
+                    printMacros = open_file(argop);
+                else if (opt == "-pg")
+                    printGrids = open_file(argop);
+                else if (opt == "-pcpp")
+                    printCpp = open_file(argop);
+                else if (opt == "-pknc")
+                    printKncCpp = open_file(argop);
+                else if (opt == "-p512")
+                    print512Cpp = open_file(argop);
+                else if (opt == "-p256")
+                    print256Cpp = open_file(argop);
+            
                 // add any more options w/a string value above.
                 
                 else {
@@ -213,8 +274,10 @@ void parseOpts(int argc, const char* argv[])
                     // options w/an int value.
                     int val = atoi(argop.c_str());
 
-                    if (opt == "-es")
-                        exprSize = val;
+                    if (opt == "-max-es")
+                        maxExprSize = val;
+                    if (opt == "-min-es")
+                        minExprSize = val;
 
                     else if (opt == "-r")
                         radius = val;
@@ -224,11 +287,13 @@ void parseOpts(int argc, const char* argv[])
 
                     else if (opt == "-halo")
                         haloSize = val;
+                    else if (opt == "-step-alloc")
+                        stepAlloc = val;
 
                     // add any more options w/int values here.
 
                     else {
-                        cerr << "error: option '" << opt << "' not recognized." << endl;
+                        cerr << "Error: option '" << opt << "' not recognized." << endl;
                         usage(argv[0]);
                     }
                 }
@@ -237,39 +302,86 @@ void parseOpts(int argc, const char* argv[])
         else break;
     }
     if (argi < argc) {
-        cerr << "error: unrecognized parameter '" << argv[argi] << "'." << endl;
+        cerr << "Error: unrecognized parameter '" << argv[argi] << "'." << endl;
         usage(argv[0]);
     }
     if (shapeName.length() == 0) {
-        cerr << "error: shape not specified." << endl;
+        cerr << "Error: shape not specified." << endl;
         usage(argv[0]);
     }
 
     // Find the stencil in the registry.
     auto stencilIter = stencils.find(shapeName);
     if (stencilIter == stencils.end()) {
-        cerr << "error: unknown stencil shape '" << shapeName << "'." << endl;
+        cerr << "Error: unknown stencil shape '" << shapeName << "'." << endl;
         usage(argv[0]);
     }
     stencilFunc = stencilIter->second;
     assert(stencilFunc);
     
-    cerr << "Stencil name: " << shapeName << endl;
+    cout << "Stencil name: " << shapeName << endl;
     if (stencilFunc->usesRadius()) {
         bool rOk = stencilFunc->setRadius(radius);
         if (!rOk) {
-            cerr << "error: invalid radius=" << radius << " for stencil type '" <<
+            cerr << "Error: invalid radius=" << radius << " for stencil type '" <<
                 shapeName << "'." << endl;
             usage(argv[0]);
         }
-        cerr << "Stencil radius: " << radius << endl;
+        cout << "Stencil radius: " << radius << endl;
     }
-    cerr << "Expression-size threshold: " << exprSize << endl;
+    cout << "Max expression-size threshold: " << maxExprSize << endl;
+}
+
+// Apply optimizations to eqGroups.
+void optimizeEqGroups(EqGroups& eqGroups,
+                      const string& descr,
+                      bool printSets,
+                      ostream& os) {
+
+    // print stats.
+    string edescr = "for " + descr + " equation-group(s)";
+    eqGroups.printStats(os, edescr);
+    
+    // Make a list of optimizations to apply to eqGroups.
+    vector<OptVisitor*> opts;
+    if (doCse)
+        opts.push_back(new CseVisitor);
+    if (doComb) {
+        opts.push_back(new CombineVisitor);
+        if (doCse)
+            opts.push_back(new CseVisitor);
+    }
+
+    // Apply opts.
+    for (auto optimizer : opts) {
+
+        eqGroups.visitEqs(optimizer);
+        int numChanges = optimizer->getNumChanges();
+        string odescr = "after applying " + optimizer->getName() + " to " +
+            descr + " equation-group(s)";
+
+        // Get new stats.
+        if (numChanges)
+            eqGroups.printStats(os, odescr);
+        else
+            os << "No changes " << odescr << '.' << endl;
+    }
+
+    // Final stats per equation group.
+    if (printSets && eqGroups.size() > 1) {
+        os << "Stats per equation-group:\n";
+        for (auto eg : eqGroups)
+            eg.printStats(os, "for " + eg.getDescription());
+    }
 }
 
 // Main program.
 int main(int argc, const char* argv[]) {
 
+    cout << "YASK -- Yet Another Stencil Kernel\n"
+        "YASK Stencil Compiler\n"
+        "Copyright 2017, Intel Corporation.\n";
+    
     // parse options.
     parseOpts(argc, argv);
 
@@ -285,122 +397,113 @@ int main(int argc, const char* argv[]) {
     Dimensions dims;
     dims.setDims(grids, stepDim,
                  foldOptions, clusterOptions,
-                 allowUnalignedLoads, cerr);
-    
-    // Loop through all points in a cluster.
-    // For each point, determine the offset from 0,..,0 based
-    // on the cluster point and fold lengths.
-    // Then, construct an AST for all equations at this offset.
-    // When done, for each equation, we will have an AST for each
-    // cluster point stored in its respective grid.
-    // TODO: check for illegal dependences between cluster points.
-    dims._clusterLengths.visitAllPoints([&](const IntTuple& clusterPoint){
-            
-            // Get starting offset of cluster, which is each cluster index
-            // multipled by corresponding vector size.
-            auto offsets = clusterPoint.multElements(dims._foldLengths);
+                 allowUnalignedLoads, cout);
 
-            // Add any dims not in the cluster with offset 0.
-            offsets.addDimBack(stepDim, 0);
-            for (auto dim : dims._miscDims.getDims())
-                offsets.addDimBack(dim, 0);
-            
-            // Construct AST in grids for this cluster point by calling
-            // the 'define' method in the stencil.
-            stencilFunc->define(offsets);
-        });
+    // Call the stencil 'define' method to create ASTs in grids.
+    // All grid points will be relative to origin (0,0,...,0).
+    stencilFunc->define(dims._allDims);
 
-    // Extract equations from grids.
-    Equations equations;
-    equations.findEquations(grids, equationTargets);
-    equations.printInfo(cerr);
+    // Check for illegal dependencies within equations for scalar size.
+    cout << "Checking equation(s) with scalar operations...\n"
+        " If this fails, review stencil equation(s) for illegal dependencies.\n";
+    grids.checkDeps(dims._scalar, dims._stepDim);
 
-    // Get stats.
-    equations.printStats(cerr, "for one vector", false);
-    if (dims._clusterLengths.product() > 1)
-        equations.printStats(cerr, "for one cluster", true);
-    
-    // Make a list of optimizations to apply to equations.
-    vector<OptVisitor*> opts;
-    if (doCse)
-        opts.push_back(new CseVisitor);
-    if (doComb) {
-        opts.push_back(new CombineVisitor);
-        if (doCse)
-            opts.push_back(new CseVisitor);
-    }
-    
-    // Apply opts.
-    for (auto optimizer : opts) {
+    // Check for illegal dependencies within equations for vector size.
+    cout << "Checking equation(s) with folded-vector  operations...\n"
+        " If this fails, the fold dimensions are not compatible with all equations.\n";
+    grids.checkDeps(dims._fold, dims._stepDim);
 
-        grids.acceptToAll(optimizer);
-        int numChanges = optimizer->getNumChanges();
-        string descr = "after applying " + optimizer->getName();
+    // Check for illegal dependencies within equations for cluster sizes and
+    // also create equation groups based on legal dependencies.
+    cout << "Checking equation(s) with clusters of vectors...\n"
+        " If this fails, the cluster dimensions are not compatible with all equations.\n";
+    EqGroups eqGroups(eq_group_basename_default, dims);
+    eqGroups.findEqGroups(grids, eqGroupTargets, dims._clusterPts);
+    optimizeEqGroups(eqGroups, "scalar & vector", false, cout);
 
-        // Get new stats.
-        if (numChanges) {
-            equations.printStats(cerr, descr, true);
-            //addComment(cerr, grids);
-        }
-        else
-            cerr << "No changes " << descr << '.' << endl;
-    }
+    // Make copies of all the equations at each cluster offset.
+    // We will use these for inter-cluster optimizations and code generation.
+    cout << "Constructing cluster of equations containing " <<
+        dims._clusterMults.product() << " vector(s)...\n";
+    EqGroups clusterEqGroups(eqGroups);
+    clusterEqGroups.replicateEqsInCluster(dims);
+    optimizeEqGroups(clusterEqGroups, "cluster", true, cout);
 
     ///// Print out above data based on -p* option(s).
+    cout << "Generating requested output...\n";
     
     // Human-readable output.
     if (printPseudo) {
-        PseudoPrinter printer(*stencilFunc, equations, exprSize);
-        printer.print(cout);
+        PseudoPrinter printer(*stencilFunc, clusterEqGroups,
+                              maxExprSize, minExprSize);
+        printer.print(*printPseudo);
+    }
+
+    // DOT output.
+    if (printDOT) {
+        DOTPrinter printer(*stencilFunc, clusterEqGroups,
+                           maxExprSize, minExprSize, false);
+        printer.print(*printDOT);
+    }
+    if (printSimpleDOT) {
+        DOTPrinter printer(*stencilFunc, clusterEqGroups,
+                           maxExprSize, minExprSize, true);
+        printer.print(*printSimpleDOT);
     }
 
     // POV-Ray output.
     if (printPOVRay) {
-        POVRayPrinter printer(*stencilFunc, equations, exprSize);
-        printer.print(cout);
+        POVRayPrinter printer(*stencilFunc, clusterEqGroups,
+                              maxExprSize, minExprSize);
+        printer.print(*printPOVRay);
     }
 
-    // Print YASK classes to update grids and/or prefetch.
+    // Settings for YASK.
     YASKCppSettings yaskSettings;
     yaskSettings._allowUnalignedLoads = allowUnalignedLoads;
-    yaskSettings._hbwRW = hbwRW;
-    yaskSettings._hbwRO = hbwRO;
     yaskSettings._haloSize = haloSize;
-    if (printCpp) {
-        YASKCppPrinter printer(*stencilFunc, equations,
-                               exprSize, dims, yaskSettings);
-        printer.printCode(cout);
-    }
-    if (printKncCpp) {
-        YASKKncPrinter printer(*stencilFunc, equations,
-                               exprSize, dims, yaskSettings);
-        printer.printCode(cout);
-    }
-    if (print512Cpp) {
-        YASKAvx512Printer printer(*stencilFunc, equations,
-                                  exprSize, dims, yaskSettings);
-        printer.printCode(cout);
-    }
-    if (print256Cpp) {
-        YASKAvx256Printer printer(*stencilFunc, equations,
-                                  exprSize, dims, yaskSettings);
-        printer.printCode(cout);
-    }
-
+    yaskSettings._stepAlloc = stepAlloc;
+    yaskSettings._maxExprSize = maxExprSize;
+    yaskSettings._minExprSize = minExprSize;
+    
     // Print YASK classes for grids.
+    // NB: not currently used.
     if (printGrids) {
-        YASKCppPrinter printer(*stencilFunc, equations,
-                               exprSize, dims, yaskSettings);
-        printer.printGrids(cout);
+        YASKCppPrinter printer(*stencilFunc, eqGroups, clusterEqGroups,
+                               dims, yaskSettings);
+        printer.printGrids(*printGrids);
     }
 
     // Print CPP macros.
     if (printMacros) {
-        YASKCppPrinter printer(*stencilFunc, equations,
-                               exprSize, dims, yaskSettings);
-        printer.printMacros(cout);
+        YASKCppPrinter printer(*stencilFunc, eqGroups, clusterEqGroups,
+                               dims, yaskSettings);
+        printer.printMacros(*printMacros);
     }
     
+    // Print YASK classes to update grids and/or prefetch.
+    if (printCpp) {
+        YASKCppPrinter printer(*stencilFunc, eqGroups, clusterEqGroups,
+                               dims, yaskSettings);
+        printer.printCode(*printCpp);
+    }
+    if (printKncCpp) {
+        YASKKncPrinter printer(*stencilFunc, eqGroups, clusterEqGroups,
+                               dims, yaskSettings);
+        printer.printCode(*printKncCpp);
+    }
+    if (print512Cpp) {
+        YASKAvx512Printer printer(*stencilFunc, eqGroups, clusterEqGroups,
+                                  dims, yaskSettings);
+        printer.printCode(*print512Cpp);
+    }
+    if (print256Cpp) {
+        YASKAvx256Printer printer(*stencilFunc, eqGroups, clusterEqGroups,
+                                  dims, yaskSettings);
+        printer.printCode(*print256Cpp);
+    }
+
+    // TODO: re-enable this.
 #if 0
     // Print stats for various folding options.
     if (vlenForStats) {
@@ -418,7 +521,7 @@ int main(int argc, const char* argv[]) {
                         
                         // Create vectors needed to implement RHS.
                         VecInfoVisitor vv(xlen, ylen, zlen);
-                        gp->acceptToAll(&vv);
+                        gp->visitExprs(&vv);
                         
                         // Print stats.
                         vv.printStats(cout, gp->getName(), separator);
@@ -428,6 +531,7 @@ int main(int argc, const char* argv[]) {
         }
     }
 #endif
-    
+
+    cout << "YASK Stencil Compiler done.\n";
     return 0;
 }

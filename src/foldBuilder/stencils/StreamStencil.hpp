@@ -1,7 +1,7 @@
 /*****************************************************************************
 
 YASK: Yet Another Stencil Kernel
-Copyright (c) 2014-2016, Intel Corporation
+Copyright (c) 2014-2017, Intel Corporation
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to
@@ -50,7 +50,7 @@ public:
         GET_OFFSET(y);
         GET_OFFSET(z);
 
-        GridValue v = constGridValue(1.0);
+        GridValue v = constNum(1.0);
 
         // Add radius values.
         for (int r = 0; r < _radius; r++) {
@@ -58,7 +58,7 @@ public:
         }
 
         // define the value at t+1 to be equivalent to v.
-        grid(t+1, x, y, z) == v;
+        grid(t+1, x, y, z) IS_EQUIV_TO v;
     }
 };
 

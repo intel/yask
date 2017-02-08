@@ -1,6 +1,6 @@
 ##############################################################################
 ## YASK: Yet Another Stencil Kernel
-## Copyright (c) 2014-2016, Intel Corporation
+## Copyright (c) 2014-2017, Intel Corporation
 ## 
 ## Permission is hereby granted, free of charge, to any person obtaining a copy
 ## of this software and associated documentation files (the "Software"), to
@@ -25,26 +25,21 @@
 
 # Some of the make vars available:
 #
-# stencil: iso3dfd, 3axis, 9axis, 3plane, cube, ave, awp, awp_elastic, stream.
+# stencil: see list below.
 #
 # arch: see list below.
 #
 # mpi: 0, 1: whether to use MPI. 
 #   Currently, MPI is only used in X dimension.
 #
-# radius: sets spatial extent of stencil.
-#   Ignored for awp*.
+# radius: sets size of certain stencils.
 #
 # real_bytes: FP precision: 4=float, 8=double.
 #
-# time_dim_size: allocated size of time dimension in grids.
-#
 # eqs: comma-separated name=substr pairs used to group
-#   grid update equations into stencil functions.
+#   grid update equations into sets.
 #
 # streaming_stores: 0, 1: Whether to use streaming stores.
-#
-# crew: 0, 1: whether to use Intel Crew threading instead of nested OpenMP (deprecated).
 #
 # hbw: 0, 1: whether to use memkind lib.
 #   If hbw=1, the memkind lib will be used to allocate grids;
@@ -56,7 +51,7 @@
 # omp_halo_schedule: OMP schedule policy for OpenMP halo loop.
 #
 # def_block_threads: Number of threads to use in nested OpenMP block loop by default.
-# def_thread_factor: Divide number of OpenMP threads by this factor by default.
+# def_thread_divisor: Divide number of OpenMP threads by this factor by default.
 #
 # def_*_size, def_pad: Default sizes used in executable.
 
@@ -67,30 +62,33 @@ mpi		=	0
 
 # Defaults based on stencil type.
 ifeq ($(stencil),)
-$(error Stencil not specified; use stencil=iso3dfd, 3axis, 9axis, 3plane, cube, ave, stream, awp or awp_elastic)
+$(error Stencil not specified; use stencil=iso3dfd, 3axis, 9axis, 3plane, cube, ave, stream, awp, awp_elastic, or fsg)
 
 else ifeq ($(stencil),ave)
 radius		?=	1
 real_bytes	?=	8
-def_rank_size	?=	256
 
 else ifeq ($(stencil),3axis)
 MACROS		+=	MAX_EXCH_DIST=1
+radius		?=	6
 
 else ifeq ($(stencil),9axis)
 MACROS		+=	MAX_EXCH_DIST=2
 radius		?=	4
 
 else ifeq ($(stencil),3plane)
+MACROS		+=	MAX_EXCH_DIST=2
 radius		?=	3
 
 else ifeq ($(stencil),cube)
+MACROS		+=	MAX_EXCH_DIST=3
 radius		?=	2
 
 else ifeq ($(stencil),iso3dfd)
 MACROS		+=	MAX_EXCH_DIST=1
-real_bytes	?=	4
+radius		?=	8
 layout_4d	?=	Layout_2314
+real_bytes	?=	4
 ifeq ($(arch),knl)
 ifeq ($(real_bytes),4)
 fold		?=	x=2,y=8,z=1
@@ -101,26 +99,36 @@ cluster		?=	x=2
 endif
 
 else ifeq ($(stencil),stream)
+MACROS		+=	MAX_EXCH_DIST=0
 radius		?=	2
-ifeq ($(radius),0)
-time_dim_size	=	1
-else
-time_dim_size	=	$(radius)
-endif
 cluster		?=	x=2
 
 else ifeq ($(findstring awp,$(stencil)),awp)
-radius		?=	2
-time_dim_size	?=	1
-eqs		?=	velocity=vel_,stress=stress_
-def_rank_size	?=	512
+eqs		?=	velocity=vel,stress=str
+time_alloc	?=	1
 def_block_size	?=	32
+cluster		?=	x=1
 ifeq ($(arch),knl)
 def_block_threads	?=	4
-def_thread_factor	?=	2
+def_thread_divisor	?=	2
+endif
+FB_FLAGS	+=	-min-es 1
+
+else ifeq ($(stencil),fsg)
+eqs             ?=      v_br=v_br,v_bl=v_bl,v_tr=v_tr,v_tl=v_tl,s_br=s_br,s_bl=s_bl,s_tr=s_tr,s_tl=s_tl
+time_alloc	?=	1
+layout_4d	?=	Layout_2314
+cluster		?=	x=1
+ifeq ($(arch),knl)
+REGION_LOOP_CODE ?=     omp square_wave serpentine loop(rn,rz,rx,ry) { calc(block(rt)); }
+BLOCK_LOOP_CODE ?=      omp square_wave serpentine loop(bnv,bxv,byv) { prefetch(L1) loop(bzv) { calc(cluster(bt)); } }
+def_block_size  ?=      32
+def_thread_divisor ?=	4
+def_block_threads ?= 	1
+def_pad		?=	2
 endif
 
-endif
+endif # stencil-specific.
 
 # Defaut settings based on architecture.
 ifeq ($(arch),knc)
@@ -182,29 +190,27 @@ $(error Architecture not recognized; use arch=knl, knc, skx, hsw, ivb, snb, or i
 endif # arch-specific.
 
 # general defaults for vars if not set above.
-crew				?= 	0
 streaming_stores		?= 	1
 omp_par_for			?=	omp parallel for
 omp_schedule			?=	dynamic,1
 omp_block_schedule		?=	static,1
 omp_halo_schedule		?=	static
 def_block_threads		?=	2
-def_thread_factor		?=	1
-radius				?=	8
+def_thread_divisor		?=	1
 real_bytes			?=	4
-time_dim_size			?=	2
 layout_3d			?=	Layout_123
 layout_4d			?=	Layout_1234
-def_rank_size			?=	1024
+layout_5d			?=	Layout_12345
+def_rank_size			?=	128
 def_block_size			?=	64
 def_pad				?=	1
-halo				?=      0
 
 # How to fold vectors (x*y*z).
 # Vectorization in dimensions perpendicular to the inner loop
 # (defined by BLOCK_LOOP_CODE below) often works well.
 
 ifneq ($(findstring INTRIN512,$(MACROS)),)  # 512 bits.
+
 ifeq ($(real_bytes),4)
 fold		?=	x=4,y=4,z=1
 else
@@ -212,18 +218,20 @@ fold		?=	x=4,y=2,z=1
 endif
 
 else  # not 512 bits.
+
 ifeq ($(real_bytes),4)
 fold		?=	x=8
 else
 fold		?=	x=4
 endif
-cluster		?=	z=2
 
-endif
+cluster		?=	y=2
+
+endif # 512 bits.
 
 # How many vectors to compute at once (unrolling factor in
 # each dimension).
-cluster		?=	x=1
+cluster		?=	x=1,y=1,z=1
 
 # More build flags.
 ifeq ($(mpi),1)
@@ -237,30 +245,41 @@ CXXFLAGS        +=   	-g -O3 -std=c++11 -Wall
 OMPFLAGS	+=	-fopenmp 
 LFLAGS          +=      -lrt
 FB_CXX    	=       $(CXX)
-FB_CXXFLAGS 	+=	-g -O1 -std=c++11 -Wall  # low opt to reduce compile time.
+FB_CXXFLAGS 	+=	-g -O0 -std=c++11 -Wall  # low opt to reduce compile time.
 EXTRA_FB_CXXFLAGS =
-FB_FLAGS   	+=	-st $(stencil) -r $(radius) -cluster $(cluster) -fold $(fold) -halo $(halo)
+FB_FLAGS   	+=	-st $(stencil) -cluster $(cluster) -fold $(fold)
+ST_MACRO_FILE	:=	stencil_macros.hpp
+ST_CODE_FILE	:=	stencil_code.hpp
 GEN_HEADERS     =	$(addprefix src/, \
-				stencil_macros.hpp stencil_code.hpp \
 				stencil_rank_loops.hpp \
 				stencil_region_loops.hpp \
 				stencil_halo_loops.hpp \
 				stencil_block_loops.hpp \
-				layout_macros.hpp layouts.hpp )
+				layout_macros.hpp layouts.hpp \
+				$(ST_MACRO_FILE) $(ST_CODE_FILE) )
 ifneq ($(eqs),)
   FB_FLAGS   	+=	-eq $(eqs)
 endif
+ifneq ($(radius),)
+  FB_FLAGS   	+=	-r $(radius)
+endif
+ifneq ($(halo),)
+  FB_FLAGS   	+=	-halo $(halo)
+endif
+ifneq ($(time_alloc),)
+  FB_FLAGS   	+=	-step-alloc $(time_alloc)
+endif
+
 
 # Set more MACROS based on individual makefile vars.
 # MACROS and EXTRA_MACROS will be written to a header file.
 MACROS		+=	REAL_BYTES=$(real_bytes)
 MACROS		+=	LAYOUT_3D=$(layout_3d)
 MACROS		+=	LAYOUT_4D=$(layout_4d)
-MACROS		+=	TIME_DIM_SIZE=$(time_dim_size)
 MACROS		+=	DEF_RANK_SIZE=$(def_rank_size)
 MACROS		+=	DEF_BLOCK_SIZE=$(def_block_size)
 MACROS		+=	DEF_BLOCK_THREADS=$(def_block_threads)
-MACROS		+=	DEF_THREAD_FACTOR=$(def_thread_factor)
+MACROS		+=	DEF_THREAD_DIVISOR=$(def_thread_divisor)
 MACROS		+=	DEF_PAD=$(def_pad)
 
 # arch.
@@ -270,7 +289,6 @@ MACROS		+= 	ARCH_$(ARCH)
 # MPI settings.
 ifeq ($(mpi),1)
 MACROS		+=	USE_MPI
-crew		=	0
 endif
 
 # HBW settings.
@@ -284,7 +302,11 @@ endif
 # VTUNE settings.
 ifeq ($(vtune),1)
 MACROS		+=	USE_VTUNE
+ifneq ($(VTUNE_AMPLIFIER_XE_2017_DIR),)
 VTUNE_DIR	=	$(VTUNE_AMPLIFIER_XE_2017_DIR)
+else
+VTUNE_DIR	=	$(VTUNE_AMPLIFIER_XE_2016_DIR)
+endif
 CXXFLAGS	+=	-I$(VTUNE_DIR)/include
 LFLAGS		+=	$(VTUNE_DIR)/lib64/libittnotify.a
 endif
@@ -294,20 +316,13 @@ ifneq ($(findstring ic,$(notdir $(CXX))),)  # Intel compiler
 
 CODE_STATS      =   	code_stats
 CXXFLAGS        +=      $(ISA) -debug extended -Fa -restrict -ansi-alias -fno-alias
-CXXFLAGS	+=	-fimf-precision=low -fast-transcendentals -no-prec-sqrt -no-prec-div -fp-model fast=2 -fno-protect-parens -rcd -ftz -fma -fimf-domain-exclusion=none -qopt-assume-safe-padding
+CXXFLAGS	+=	-fimf-precision=low -fast-transcendentals -no-prec-sqrt -no-prec-div -fp-model fast=2 -fno-protect-parens -rcd -ftz -fma -fimf-domain-exclusion=none -qopt-assume-safe-padding -qoverride-limits -vec-threshold0
 CXXFLAGS	+=      -qopt-report=5 -qopt-report-phase=VEC,PAR,OPENMP,IPO,LOOP
 CXXFLAGS	+=	-no-diag-message-catalog
 CXX_VER_CMD	=	$(CXX) -V
 
 # work around an optimization bug.
 MACROS		+=	NO_STORE_INTRINSICS
-
-ifeq ($(crew),1)
-CXXFLAGS	+=      -mP2OPT_hpo_par_crew_codegen=T
-MACROS		+=	__INTEL_CREW
-def_block_threads =	1
-BLOCK_LOOP_OUTER_MODS	=	crew
-endif
 
 else # not Intel compiler
 CXXFLAGS	+=	$(GCXX_ISA) -Wno-unknown-pragmas -Wno-unused-variable
@@ -321,15 +336,15 @@ endif
 # gen-loops.pl args:
 
 # Rank loops break up the whole rank into smaller regions.
-# In order for tempral wavefronts to operate properly, the
+# In order for temporal wavefronts to operate properly, the
 # order of spatial dimensions may be changed, but traversal
 # paths that do not have strictly incrementing indices (e.g.,
 # grouped, serpentine, square-wave) may not be used here when
 # using temporal wavefronts. The time loop may be found
 # in StencilEquations::calc_rank().
 RANK_LOOP_OPTS		=	-dims 'dn,dx,dy,dz'
-RANK_LOOP_CODE		=	$(RANK_LOOP_OUTER_MODS) loop(dn,dx,dy,dz) \
-				{ $(RANK_LOOP_INNER_MODS) calc(region(start_dt, stop_dt, stencils_ptr)); }
+RANK_LOOP_CODE		?=	$(RANK_LOOP_OUTER_MODS) loop(dn,dx,dy,dz) \
+				{ $(RANK_LOOP_INNER_MODS) calc(region(start_dt, stop_dt, eqGroup_ptr)); }
 
 # Region loops break up a region using OpenMP threading into blocks.
 # The region time loops are not coded here to allow for proper
@@ -337,9 +352,9 @@ RANK_LOOP_CODE		=	$(RANK_LOOP_OUTER_MODS) loop(dn,dx,dy,dz) \
 # in StencilEquations::calc_region().
 REGION_LOOP_OPTS	=     	-dims 'rn,rx,ry,rz' \
 				-ompConstruct '$(omp_par_for) schedule($(omp_schedule)) proc_bind(spread)' \
-				-calcPrefix 'stencil->calc_'
+				-calcPrefix 'eg->calc_'
 REGION_LOOP_OUTER_MODS	?=	grouped omp
-REGION_LOOP_CODE	=	$(REGION_LOOP_OUTER_MODS) loop(rn,rx,ry,rz) \
+REGION_LOOP_CODE	?=	$(REGION_LOOP_OUTER_MODS) loop(rn,rx,ry,rz) \
 				{ $(REGION_LOOP_INNER_MODS) calc(block(rt)); }
 
 # Block loops break up a block into vector clusters.
@@ -350,7 +365,7 @@ REGION_LOOP_CODE	=	$(REGION_LOOP_OUTER_MODS) loop(rn,rx,ry,rz) \
 BLOCK_LOOP_OPTS		=     	-dims 'bnv,bxv,byv,bzv' \
 				-ompConstruct '$(omp_par_for) schedule($(omp_block_schedule)) proc_bind(close)'
 BLOCK_LOOP_OUTER_MODS	?=	omp
-BLOCK_LOOP_CODE		=	$(BLOCK_LOOP_OUTER_MODS) loop(bnv,bxv) { loop(byv) \
+BLOCK_LOOP_CODE		?=	$(BLOCK_LOOP_OUTER_MODS) loop(bnv,bxv) { loop(byv) \
 				{ $(BLOCK_LOOP_INNER_MODS) loop(bzv) { calc(cluster(bt)); } } }
 
 # Halo pack/unpack loops break up a region face, edge, or corner into vectors.
@@ -360,7 +375,7 @@ BLOCK_LOOP_CODE		=	$(BLOCK_LOOP_OUTER_MODS) loop(bnv,bxv) { loop(byv) \
 HALO_LOOP_OPTS		=     	-dims 'nv,xv,yv,zv' \
 				-ompConstruct '$(omp_par_for) schedule($(omp_halo_schedule)) proc_bind(spread)'
 HALO_LOOP_OUTER_MODS	?=	omp
-HALO_LOOP_CODE		=	$(HALO_LOOP_OUTER_MODS) loop(nv,xv,yv,zv) \
+HALO_LOOP_CODE		?=	$(HALO_LOOP_OUTER_MODS) loop(nv,xv,yv,zv) \
 				$(HALO_LOOP_INNER_MODS) { calc(halo(t)); }
 
 # compile with model_cache=1 or 2 to check prefetching.
@@ -374,7 +389,7 @@ endif
 
 CXXFLAGS	+=	$(OMPFLAGS) $(EXTRA_CXXFLAGS)
 
-STENCIL_BASES		:=	stencil_main stencil_calc utils
+STENCIL_BASES		:=	stencil_main stencil_calc realv_grids utils
 STENCIL_OBJS		:=	$(addprefix src/,$(addsuffix .$(arch).o,$(STENCIL_BASES)))
 STENCIL_CXX		:=	$(addprefix src/,$(addsuffix .$(arch).i,$(STENCIL_BASES)))
 STENCIL_EXEC_NAME	:=	stencil.$(arch).exe
@@ -403,7 +418,6 @@ echo-settings:
 	@echo real_bytes=$(real_bytes)
 	@echo layout_3d=$(layout_3d)
 	@echo layout_4d=$(layout_4d)
-	@echo time_dim_size=$(time_dim_size)
 	@echo streaming_stores=$(streaming_stores)
 	@echo def_block_threads=$(def_block_threads)
 	@echo omp_schedule=$(omp_schedule)
@@ -465,20 +479,24 @@ src/layout_macros.hpp: gen-layouts.pl
 src/layouts.hpp: gen-layouts.pl
 	./$< -d > $@
 
+# Compile the stencil compiler.
+# TODO: move this to its own makefile.
 foldBuilder: src/foldBuilder/*.*pp src/foldBuilder/stencils/*.*pp
 	$(FB_CXX) $(FB_CXXFLAGS) -Isrc/foldBuilder/stencils -o $@ src/foldBuilder/*.cpp $(EXTRA_FB_CXXFLAGS)
 
-src/stencil_macros.hpp: foldBuilder
-	./$< $(FB_FLAGS) $(EXTRA_FB_FLAGS) -pm > $@
-	echo >> $@
-	echo '// Settings from YASK Makefile' >> $@
+# Run the stencil compiler and post-process its output files.
+# Use the gmake pattern-rule trick to specify simultaneous targets.
+%/$(ST_MACRO_FILE) %/$(ST_CODE_FILE): foldBuilder
+	./$< $(FB_FLAGS) $(EXTRA_FB_FLAGS) \
+	  -pm $*/$(ST_MACRO_FILE) -p$(FB_TARGET) $*/$(ST_CODE_FILE)
+	echo >> $*/$(ST_MACRO_FILE)
+	echo '// Settings from YASK Makefile' >> $*/$(ST_MACRO_FILE)
 	for macro in $(MACROS) $(EXTRA_MACROS); do \
-	  echo '#define' $$macro | sed 's/=/ /' >> $@; \
+	  echo '#define' $$macro | sed 's/=/ /' >> $*/$(ST_MACRO_FILE); \
 	done
-
-src/stencil_code.hpp: foldBuilder
-	./$< $(FB_FLAGS) $(EXTRA_FB_FLAGS) -p$(FB_TARGET) > $@
-	- gindent -fca $@ || indent -fca $@ || echo "note: no indent program found"
+	@- gindent -fca $*/$(ST_CODE_FILE) || \
+	  indent -fca $*/$(ST_CODE_FILE) || \
+	  echo "note:" $*/$(ST_CODE_FILE) "not formatted."
 
 headers: $(GEN_HEADERS)
 	@ echo 'Header files generated.'

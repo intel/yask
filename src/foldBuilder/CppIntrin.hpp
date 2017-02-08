@@ -1,7 +1,7 @@
 /*****************************************************************************
 
 YASK: Yet Another Stencil Kernel
-Copyright (c) 2014-2016, Intel Corporation
+Copyright (c) 2014-2017, Intel Corporation
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to
@@ -569,12 +569,12 @@ protected:
 
 public:
     YASKKncPrinter(StencilBase& stencil,
-                   Equations& equations,
-                   int exprSize,
+                   EqGroups& eqGroups,
+                   EqGroups& clusterEqGroups,
                    Dimensions& dims,
                    YASKCppSettings& settings) :
-        YASKCppPrinter(stencil, equations,
-                       exprSize, dims, settings) { }
+        YASKCppPrinter(stencil, eqGroups, clusterEqGroups,
+                       dims, settings) { }
 };
 
 // Print 256-bit AVX intrinsic code.
@@ -588,12 +588,12 @@ protected:
 
 public:
     YASKAvx256Printer(StencilBase& stencil,
-                      Equations& equations,
-                      int exprSize,
+                      EqGroups& eqGroups,
+                      EqGroups& clusterEqGroups,
                       Dimensions& dims,
                       YASKCppSettings& settings) :
-        YASKCppPrinter(stencil, equations,
-                       exprSize, dims, settings) { }
+        YASKCppPrinter(stencil, eqGroups, clusterEqGroups,
+                       dims, settings) { }
 };
 
 // Print 512-bit AVX intrinsic code.
@@ -607,12 +607,12 @@ protected:
 
 public:
     YASKAvx512Printer(StencilBase& stencil,
-                      Equations& equations,
-                      int exprSize,
+                      EqGroups& eqGroups,
+                      EqGroups& clusterEqGroups,
                       Dimensions& dims,
                       YASKCppSettings& settings) :
-        YASKCppPrinter(stencil, equations,
-                       exprSize, dims, settings) { }
+        YASKCppPrinter(stencil, eqGroups, clusterEqGroups,
+                       dims, settings) { }
 };
 
 #endif
