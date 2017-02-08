@@ -177,6 +177,15 @@ namespace yask {
     // The context's BB encompasses all eq-group BBs.
     class StencilContext : public BoundingBox {
 
+    private:
+        // Disallow copying.
+        StencilContext(const StencilContext& src) {
+            exit_yask(1);
+        }
+        void operator=(const StencilContext& src) {
+            exit_yask(1);
+        }
+        
     protected:
         
         // Output stream for messages.
@@ -277,6 +286,9 @@ namespace yask {
         // This is normally called very early in the program.
         virtual void initEnv(int* argc, char*** argv);
 
+        // Copy env settings from another context.
+        virtual void copyEnv(const StencilContext& src);
+
         // Set ostr to given stream if provided.
         // If not provided, set to cout if my_rank == msg_rank
         // or a null stream otherwise.
@@ -300,9 +312,8 @@ namespace yask {
         virtual void setupRank();
 
         // Allocate grid, param, and MPI memory.
-        // If '_distrib' is true, distribute already-allocated memory.
         // Called from allocAll(), so it doesn't normally need to be called from user code.
-        virtual void allocData(bool _distrib = false);
+        virtual void allocData();
 
         // Allocate grids, params, MPI bufs, etc.
         // Initialize some other data structures.

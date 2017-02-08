@@ -70,6 +70,14 @@ namespace yask {
         global_barrier();
     }
 
+    // Copy env settings from another context.
+    void StencilContext::copyEnv(const StencilContext& src) {
+        comm = src.comm;
+        my_rank = src.my_rank;
+        num_ranks = src.num_ranks;
+        _ostr = src._ostr;
+    }
+
     // Set ostr to given stream if provided.
     // If not provided, set to cout if my_rank == msg_rank
     // or a null stream otherwise.
@@ -527,7 +535,7 @@ namespace yask {
                 auto& gname = gp->get_name();
                 
                 // Size of buffer in each direction: if dist to neighbor is zero
-                // (i.e., is perpendicular to this rank), use full size;
+                // (i.e., is perpendicular to this rank), use domain size;
                 // otherwise, use halo size.
                 idx_t bsn = ROUND_UP((rdn == 0) ? _opts->dn : gp->get_halo_n(), VLEN_N);
                 idx_t bsx = ROUND_UP((rdx == 0) ? _opts->dx : gp->get_halo_x(), VLEN_X);
@@ -535,7 +543,7 @@ namespace yask {
                 idx_t bsz = ROUND_UP((rdz == 0) ? _opts->dz : gp->get_halo_z(), VLEN_Z);
 
                 if (bsn * bsx * bsy * bsz == 0) {
-                    os << " No halo exchange for grid '" << gname <<
+                    os << " No halo exchange needed for grid '" << gname <<
                         "' with rank " << rn << '.' << endl;
                 }
                 else {
@@ -564,11 +572,13 @@ namespace yask {
     }
 
     // Allocate memory for grids, params, and MPI bufs.
-    // If 'do_distrib' is true, distribute already-allocated memory.
     // TODO: allow different types of memory for different grids, MPI bufs, etc.
-    void StencilContext::allocData(bool do_distrib) {
+    void StencilContext::allocData() {
         ostream& os = get_ostr();
 
+        // if '_data_buf' is null, allocate memory and call recursively to distribute.
+        // If '_data_buf' is not null, distribute already-allocated memory.
+        
         // Determine how many bytes are needed.
         size_t nbytes = 0, gbytes = 0, pbytes = 0, bbytes = 0;
         
@@ -590,26 +600,32 @@ namespace yask {
             gp->set_ofs_z(ofs_z);
 
             // set storage if requested.
-            if (do_distrib) {
+            if (_data_buf) {
                 gp->set_storage(_data_buf, nbytes);
                 gp->print_info(os);
             }
 
             // determine size used (also offset to next location).
             gbytes += gp->get_num_bytes();
-            nbytes += gp->get_num_bytes() + _data_buf_pad;
+            nbytes += ROUND_UP(gp->get_num_bytes() + _data_buf_pad,
+                               CACHELINE_BYTES);
+            TRACE_MSG("grid '" << gp->get_name() << "' needs " <<
+                      gp->get_num_bytes() << " bytes");
         }
 
         // Params.
         for (auto pp : paramPtrs) {
 
             // set storage if requested.
-            if (do_distrib)
+            if (_data_buf)
                 pp->set_storage(_data_buf, nbytes);
 
             // determine size used (also offset to next location).
             pbytes += pp->get_num_bytes();
-            nbytes += pp->get_num_bytes() + _data_buf_pad;
+            nbytes += ROUND_UP(pp->get_num_bytes() + _data_buf_pad,
+                               CACHELINE_BYTES);
+            TRACE_MSG("param needs " <<
+                      pp->get_num_bytes() << " bytes");
         }
 
         // MPI buffers.
@@ -622,16 +638,22 @@ namespace yask {
                      Grid_NXYZ* rcvBuf)
                  {
                      if (sendBuf) {
-                         if (do_distrib)
+                         if (_data_buf)
                              sendBuf->set_storage(_data_buf, nbytes);
                          bbytes += sendBuf->get_num_bytes();
-                         nbytes += sendBuf->get_num_bytes() + _data_buf_pad;
+                         nbytes += ROUND_UP(sendBuf->get_num_bytes() + _data_buf_pad,
+                                            CACHELINE_BYTES);
+                         TRACE_MSG("send buf '" << sendBuf->get_name() << "' needs " <<
+                                   sendBuf->get_num_bytes() << " bytes");
                      }
                      if (rcvBuf) {
-                         if (do_distrib)
+                         if (_data_buf)
                              rcvBuf->set_storage(_data_buf, nbytes);
                          bbytes += rcvBuf->get_num_bytes();
-                         nbytes += rcvBuf->get_num_bytes() + _data_buf_pad;
+                         nbytes += ROUND_UP(rcvBuf->get_num_bytes() + _data_buf_pad,
+                                            CACHELINE_BYTES);
+                         TRACE_MSG("rcv buf '" << rcvBuf->get_name() << "' needs " <<
+                                   rcvBuf->get_num_bytes() << " bytes");
                      }
                  } );
         }
@@ -641,12 +663,12 @@ namespace yask {
             nbytes -= _data_buf_pad;
 
         // Allocate and distribute data.
-        if (!do_distrib) {
+        if (!_data_buf) {
             os << "Allocating " << printWithPow2Multiplier(nbytes) <<
                 "B for all grids, parameters, and other buffers with a " <<
                 printWithPow2Multiplier(_data_buf_alignment) << "B alignment...\n" << flush;
             int ret = posix_memalign(&_data_buf, _data_buf_alignment, nbytes);
-            if (ret) {
+            if (ret || !_data_buf) {
                 cerr << "Error: unable to allocate memory.\n";
                 exit_yask(1);
             }
@@ -659,7 +681,7 @@ namespace yask {
                 "B for inter-data padding.\n";
                 
             // Distribute this allocation w/a recursive call.
-            allocData(true);
+            allocData();
         }
     }
 
@@ -1342,15 +1364,18 @@ namespace yask {
                                 idx_t dn, idx_t dx, idx_t dy, idx_t dz,
                                 const std::string& name)
     {
-        // NB: there may be an existing buffer here left
-        // over from a shallow copy. Just ignore it and make a new one.
-        auto gp = getBuf(bd, nn, nx, ny, nz);
+        TRACE_MSG0(cout, "making MPI buffer '" << name << "' at " <<
+                   nn << ", " << nx << ", " << ny << ", " << nz << " with size " <<
+                   dn << " * " << dx << " * " << dy << " * " << dz);
+        auto** gp = getBuf(bd, nn, nx, ny, nz);
         *gp = new Grid_NXYZ(name);
         assert(*gp);
         (*gp)->set_dn(dn);
         (*gp)->set_dx(dx);
         (*gp)->set_dy(dy);
         (*gp)->set_dz(dz);
+        TRACE_MSG0(cout, "MPI buffer '" << name << "' size: " <<
+                   (*gp)->get_num_bytes());
         return *gp;
     }
 

@@ -50,20 +50,17 @@ namespace yask {
         std::string _name;
         RealVecGrid* _gp;
 
-        // time allocation.
-        idx_t _tdim=1;
-        
         // real_t sizes for up to 4 spatial dims.
-        idx_t _dn=1, _dx=1, _dy=1, _dz=1; // domain sizes.
+        idx_t _dn=VLEN_N, _dx=VLEN_X, _dy=VLEN_Y, _dz=VLEN_Z; // domain sizes.
         idx_t _hn=0, _hx=0, _hy=0, _hz=0; // halo sizes.
         idx_t _pn=0, _px=0, _py=0, _pz=0; // halo + extra-pad sizes.
         idx_t _on=0, _ox=0, _oy=0, _oz=0; // offsets into global problem domain.
 
         // real_vec_t sizes for up to 4 spatial dims.
         // halo vector-sizes are not given here, because they are not rounded up.
-        idx_t _dnv, _dxv, _dyv, _dzv;
-        idx_t _pnv, _pxv, _pyv, _pzv;
-        idx_t _onv, _oxv, _oyv, _ozv;
+        idx_t _dnv=1, _dxv=1, _dyv=1, _dzv=1;
+        idx_t _pnv=0, _pxv=0, _pyv=0, _pzv=0;
+        idx_t _onv=0, _oxv=0, _oyv=0, _ozv=0;
 
         // Normalize element indices to vector indices and element offsets.
         ALWAYS_INLINE
@@ -83,6 +80,30 @@ namespace yask {
 
             // Divide values with padding in numerator to avoid negative indices to get offsets.
             elem_ofs = padded_index % vec_len;
+        }
+
+        // Adjust logical spatial vector index to 0-based internal index by
+        // adding padding and removing offset.  TODO: currently, the
+        // compiler isn't able to eliminate some common sub-expressions in
+        // addr calculation when these functions are used. Until this is
+        // resolved, alternative code is used in derived classes if the
+        // macro USE_GET_INDEX is not set.
+        ALWAYS_INLINE idx_t get_index(idx_t vec_index,
+                                      idx_t vec_pad,
+                                      idx_t vec_ofs) const {
+            return vec_index + vec_pad - vec_ofs;
+        }
+        ALWAYS_INLINE idx_t get_index_n(idx_t vec_index) const {
+            return get_index(vec_index, _pnv, _onv);
+        }
+        ALWAYS_INLINE idx_t get_index_x(idx_t vec_index) const {
+            return get_index(vec_index, _pxv, _oxv);
+        }
+        ALWAYS_INLINE idx_t get_index_y(idx_t vec_index) const {
+            return get_index(vec_index, _pyv, _oyv);
+        }
+        ALWAYS_INLINE idx_t get_index_z(idx_t vec_index) const {
+            return get_index(vec_index, _pzv, _ozv);
         }
 
         // Resize the underlying grid based on the current settings.
@@ -112,7 +133,7 @@ namespace yask {
         }
 
         // Get temporal allocation.
-        virtual inline idx_t get_tdim() const { return _tdim; }
+        virtual inline idx_t get_tdim() const { return 1; }
         
         // Get domain-size for this rank after round-up.
         inline idx_t get_dn() const { return _dn; }
@@ -147,7 +168,6 @@ namespace yask {
         inline idx_t get_last_z() const { return _oz + _dz - 1; }
 
         // Set domain-size for this rank and round-up.
-        inline void set_tdim(idx_t tdim) { _tdim = tdim; resize_g(); }
         inline void set_dn(idx_t dn) {
             _dn = ROUND_UP(dn, VLEN_N); _dnv = _dn / VLEN_N; resize_g(); }
         inline void set_dx(idx_t dx) {
@@ -291,55 +311,7 @@ namespace yask {
             return _gp;
         }
 
-    protected:
-
-        // Adjust logical time index to 0-based index
-        // using temporal allocation size.
-        ALWAYS_INLINE
-        idx_t get_index_t(idx_t t) const {
-
-            // Index wraps in tdim.
-            // Examples based on tdim == 2:
-            // t_idx => return value.
-            // -2 => 0.
-            // -1 => 1.
-            //  0 => 0.
-            //  1 => 1.
-            //  2 => 0.
-
-            // Avoid discontinuity caused by negative time by adding a large
-            // offset to the t index.  So, t can be negative, but not so
-            // much that it would still be negaive after adding the offset.
-            // This should not be a practical restriction.
-            t += 0x100 * _tdim;
-            assert(t >= 0);
-            assert(t % CPTS_T == 0);
-            idx_t t_idx = t / idx_t(CPTS_T);
-            return t_idx % _tdim;
-        }
-
-        // Adjust logical spatial vector index to 0-based internal index by
-        // adding padding and removing offset.
-        ALWAYS_INLINE idx_t get_index(idx_t vec_index,
-                                      idx_t vec_pad,
-                                      idx_t vec_ofs) const {
-            return vec_index + vec_pad - vec_ofs;
-        }
-        ALWAYS_INLINE idx_t get_index_n(idx_t vec_index) const {
-            return get_index(vec_index, _pnv, _onv);
-        }
-        ALWAYS_INLINE idx_t get_index_x(idx_t vec_index) const {
-            return get_index(vec_index, _pxv, _oxv);
-        }
-        ALWAYS_INLINE idx_t get_index_y(idx_t vec_index) const {
-            return get_index(vec_index, _pyv, _oyv);
-        }
-        ALWAYS_INLINE idx_t get_index_z(idx_t vec_index) const {
-            return get_index(vec_index, _pzv, _ozv);
-        }
-
     };
-
     
     // A 3D (x, y, z) collection of real_vec_t elements.
     // Supports symmetric padding in each dimension.
@@ -379,9 +351,15 @@ namespace yask {
 #endif
         
             // adjust for padding and offset.
+#if USE_GET_INDEX
             xv = get_index_x(xv);
             yv = get_index_y(yv);
             zv = get_index_z(zv);
+#else
+            xv += _pxv - _oxv;
+            yv += _pyv - _oyv;
+            zv += _pzv - _ozv;
+#endif
 
 #ifdef TRACE_MEM
             if (checkBounds)
@@ -554,9 +532,8 @@ namespace yask {
         void printElem(std::ostream& os, const std::string& m,
                        idx_t x, idx_t y, idx_t z, real_t e,
                        int line) const {
-            printElem_TNXYZ(0, 0, xv, yv, zv, e, line);
+            printElem_TNXYZ(0, 0, x, y, z, e, line);
         }
-
     };
 
     // A 4D (n, x, y, z) collection of real_vec_t elements.
@@ -599,10 +576,17 @@ namespace yask {
 #endif
         
             // adjust for padding and offset.
+#if USE_GET_INDEX
             nv = get_index_n(nv);
             xv = get_index_x(xv);
             yv = get_index_y(yv);
             zv = get_index_z(zv);
+#else
+            nv += _pnv - _onv;
+            xv += _pxv - _oxv;
+            yv += _pyv - _oyv;
+            zv += _pzv - _ozv;
+#endif
 
 #ifdef TRACE_MEM
             if (checkBounds)
@@ -770,14 +754,58 @@ namespace yask {
         void printElem(std::ostream& os, const std::string& m,
                        idx_t n, idx_t x, idx_t y, idx_t z, real_t e,
                        int line) const {
-            printElem_TNXYZ(0, n, xv, yv, zv, e, line);
+            printElem_TNXYZ(0, n, x, y, z, e, line);
+        }
+    };
+
+    // Base class that adds a templated temporal size for
+    // index-calculation efficiency.
+    template <idx_t _tdim>
+    class RealVecGridTemplate : public RealVecGridBase {
+
+    protected:
+
+        // Adjust logical time index to 0-based index
+        // using temporal allocation size.
+        ALWAYS_INLINE
+        idx_t get_index_t(idx_t t) const {
+
+            // Index wraps in tdim.
+            // Examples based on tdim == 2:
+            // t_idx => return value.
+            // -2 => 0.
+            // -1 => 1.
+            //  0 => 0.
+            //  1 => 1.
+            //  2 => 0.
+
+            // Avoid discontinuity caused by negative time by adding a large
+            // offset to the t index.  So, t can be negative, but not so
+            // much that it would still be negaive after adding the offset.
+            // This should not be a practical restriction.
+            t += 256 * _tdim;
+            assert(t >= 0);
+            assert(t % CPTS_T == 0);
+            idx_t t_idx = t / idx_t(CPTS_T);
+            return t_idx % _tdim;
+        }
+
+    public:
+
+        RealVecGridTemplate(const std::string& name,
+                            RealVecGrid* gp) :
+            RealVecGridBase(name, gp) { }
+
+        // Get temporal allocation.
+        virtual inline idx_t get_tdim() const final {
+            return _tdim;
         }
     };
 
     // A 4D (t, x, y, z) collection of real_vec_t elements.
     // Supports symmetric padding in each dimension.
-    template <typename LayoutFn> class RealVecGrid_TXYZ :
-        public RealVecGridBase {
+    template <typename LayoutFn, idx_t _tdim> class RealVecGrid_TXYZ :
+        public RealVecGridTemplate<_tdim> {
     
     protected:
 
@@ -785,19 +813,19 @@ namespace yask {
 
         virtual void resize_g() {
             _data.set_d1(_tdim);
-            _data.set_d2(_dxv +
-                         2 * _pxv);
-            _data.set_d3(_dyv +
-                         2 * _pyv);
-            _data.set_d4(_dzv +
-                         2 * _pzv);
+            _data.set_d2(this->_dxv +
+                         2 * this->_pxv);
+            _data.set_d3(this->_dyv +
+                         2 * this->_pyv);
+            _data.set_d4(this->_dzv +
+                         2 * this->_pzv);
         }
         
     public:
 
         // Ctor.
         RealVecGrid_TXYZ(const std::string& name) :
-            RealVecGridBase(name, &_data) { }
+            RealVecGridTemplate<_tdim>(name, &_data) { }
 
         // Determine what dims are defined.
         virtual bool got_t() const { return true; }
@@ -817,10 +845,16 @@ namespace yask {
 #endif
         
             // adjust for padding and offset.
-            t = get_index_t(t);
-            xv = get_index_x(xv);
-            yv = get_index_y(yv);
-            zv = get_index_z(zv);
+            t = this->get_index_t(t);
+#if USE_GET_INDEX
+            xv = this->get_index_x(xv);
+            yv = this->get_index_y(yv);
+            zv = this->get_index_z(zv);
+#else
+            xv += this->_pxv - this->_oxv;
+            yv += this->_pyv - this->_oyv;
+            zv += this->_pzv - this->_ozv;
+#endif
 
 #ifdef TRACE_MEM
             if (checkBounds)
@@ -846,9 +880,9 @@ namespace yask {
         const real_t* getElemPtr(idx_t t, idx_t x, idx_t y, idx_t z,
                                  bool checkBounds=true) const {
             idx_t xv, ie, yv, je, zv, ke;
-            normalize_x(x, xv, ie);
-            normalize_y(y, yv, je);
-            normalize_z(z, zv, ke);
+            this->normalize_x(x, xv, ie);
+            this->normalize_y(y, yv, je);
+            this->normalize_z(z, zv, ke);
 
             // Get vector.
             const real_vec_t* vp = getVecPtrNorm(t, xv, yv, zv, checkBounds);
@@ -993,14 +1027,14 @@ namespace yask {
                        idx_t t, idx_t x, idx_t y, idx_t z,
                        real_t e,
                        int line) const {
-            printElem_TNXYZ(t, 0, xv, yv, zv, e, line);
+            printElem_TNXYZ(t, 0, x, y, z, e, line);
         }
     };
 
     // A 5D (t, n, x, y, z) collection of real_vec_t elements.
     // Supports symmetric padding in each dimension.
-    template <typename LayoutFn> class RealVecGrid_TNXYZ :
-        public RealVecGridBase {
+    template <typename LayoutFn, idx_t _tdim> class RealVecGrid_TNXYZ :
+        public RealVecGridTemplate<_tdim> {
     
     protected:
 
@@ -1008,21 +1042,21 @@ namespace yask {
 
         virtual void resize_g() {
             _data.set_d1(_tdim);
-            _data.set_d2(_dnv +
-                         2 * _pnv);
-            _data.set_d3(_dxv +
-                         2 * _pxv);
-            _data.set_d4(_dyv +
-                         2 * _pyv);
-            _data.set_d5(_dzv +
-                         2 * _pzv);
+            _data.set_d2(this->_dnv +
+                         2 * this->_pnv);
+            _data.set_d3(this->_dxv +
+                         2 * this->_pxv);
+            _data.set_d4(this->_dyv +
+                         2 * this->_pyv);
+            _data.set_d5(this->_dzv +
+                         2 * _this->pzv);
         }
         
     public:
 
         // Ctor.
         RealVecGrid_TNXYZ(const std::string& name) :
-            RealVecGridBase(name, &_data) { }
+            RealVecGridTemplate<_tdim>(name, &_data) { }
 
         // Determine what dims are defined.
         virtual bool got_t() const { return true; }
@@ -1043,11 +1077,18 @@ namespace yask {
 #endif
         
             // adjust for padding and offset.
-            t = get_index_t(t);
-            nv = get_index_n(nv);
-            xv = get_index_x(xv);
-            yv = get_index_y(yv);
-            zv = get_index_z(zv);
+            t = this->get_index_t(t);
+#if USE_GET_INDEX
+            nv = this->get_index_n(nv);
+            xv = this->get_index_x(xv);
+            yv = this->get_index_y(yv);
+            zv = this->get_index_z(zv);
+#else
+            nv += this->_pnv - this->_onv;
+            xv += this->_pxv - this->_oxv;
+            yv += this->_pyv - this->_oyv;
+            zv += this->_pzv - this->_ozv;
+#endif
 
 #ifdef TRACE_MEM
             if (checkBounds)
@@ -1073,10 +1114,10 @@ namespace yask {
         const real_t* getElemPtr(idx_t t, idx_t n, idx_t x, idx_t y, idx_t z,
                                  bool checkBounds=true) const {
             idx_t nv, ne, xv, ie, yv, je, zv, ke;
-            normalize_n(n, nv, ne);
-            normalize_x(x, xv, ie);
-            normalize_y(y, yv, je);
-            normalize_z(z, zv, ke);
+            this->normalize_n(n, nv, ne);
+            this->normalize_x(x, xv, ie);
+            this->normalize_y(y, yv, je);
+            this->normalize_z(z, zv, ke);
 
             // Get vector.
             const real_vec_t* vp = getVecPtrNorm(t, nv, xv, yv, zv, checkBounds);
@@ -1217,7 +1258,7 @@ namespace yask {
                        idx_t t, idx_t n, idx_t x, idx_t y, idx_t z,
                        real_t e,
                        int line) const {
-            printElem_TNXYZ(t, n, xv, yv, zv, e, line);
+            printElem_TNXYZ(t, n, x, y, z, e, line);
         }
     };
 

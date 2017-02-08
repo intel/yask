@@ -282,10 +282,10 @@ int main(int argc, char** argv)
         os << endl << divLine <<
             "Setup for validation...\n";
 
-        // Make a reference context for comparisons w/new grids:
-        // Copy the settings from context, then re-alloc grids.
-        YASK_STENCIL_CONTEXT ref_context = context;
+        // Make a reference context for comparisons w/new grids.
+        YASK_STENCIL_CONTEXT ref_context(opts);
         ref_context.name += "-reference";
+        ref_context.copyEnv(context);
         ref_context.allocAll();
 
         // init to same value used in context.

@@ -336,7 +336,7 @@ endif
 # gen-loops.pl args:
 
 # Rank loops break up the whole rank into smaller regions.
-# In order for tempral wavefronts to operate properly, the
+# In order for temporal wavefronts to operate properly, the
 # order of spatial dimensions may be changed, but traversal
 # paths that do not have strictly incrementing indices (e.g.,
 # grouped, serpentine, square-wave) may not be used here when
