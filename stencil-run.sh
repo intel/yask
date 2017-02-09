@@ -54,7 +54,7 @@ while true; do
         echo "The sh_prefix command is used to prefix a sub-shell."
         echo "The exe_prefix command is used to prefix the executable (set to 'true' to avoid actual run)."
         echo "If -host <hostname> is given, 'ssh <hostname>' will be pre-pended to the sh_prefix command."
-        echo "If -ranks <N> is given, 'mpirun -n <N>' is pre-pended to the exe_prefix command,"
+        echo "If -ranks <N> is given, 'mpirun -n <N> -ppn <N>' is pre-pended to the exe_prefix command,"
         echo " and -nrx <N> is passed to the executable;"
         echo " use -exe_prefix <command> explicitly if a different MPI command is needed,"
         echo " and/or override -nrx as needed."
@@ -127,7 +127,7 @@ fi
 
 # MPI
 if [[ -n "$nranks" ]]; then
-    exe_prefix="mpirun -n $nranks $exe_prefix"
+    exe_prefix="mpirun -n $nranks -ppn $nranks $exe_prefix"
     envs="$envs I_MPI_PRINT_VERSION=1 I_MPI_DEBUG=5"
 fi
 
