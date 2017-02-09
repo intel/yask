@@ -36,6 +36,12 @@
 #
 # real_bytes: FP precision: 4=float, 8=double.
 #
+# fold: How to fold vectors (x*y*z).
+#   Vectorization in dimensions perpendicular to the inner loop
+#   (defined by BLOCK_LOOP_CODE below) often works well.
+#
+# cluster: How many folded vectors to evaluate simultaneously.
+#
 # eqs: comma-separated name=substr pairs used to group
 #   grid update equations into sets.
 #
@@ -103,7 +109,7 @@ MACROS		+=	MAX_EXCH_DIST=0
 radius		?=	2
 cluster		?=	x=2
 
-else ifeq ($(findstring awp,$(stencil)),awp)
+else ifneq ($(findstring awp,$(stencil)),)
 eqs		?=	velocity=vel,stress=str
 time_alloc	?=	1
 def_block_size	?=	32
@@ -205,10 +211,6 @@ def_rank_size			?=	128
 def_block_size			?=	64
 def_pad				?=	1
 
-# How to fold vectors (x*y*z).
-# Vectorization in dimensions perpendicular to the inner loop
-# (defined by BLOCK_LOOP_CODE below) often works well.
-
 ifneq ($(findstring INTRIN512,$(MACROS)),)  # 512 bits.
 
 ifeq ($(real_bytes),4)
@@ -216,6 +218,7 @@ fold		?=	x=4,y=4,z=1
 else
 fold		?=	x=4,y=2,z=1
 endif
+cluster		?=	x=1
 
 else  # not 512 bits.
 
@@ -224,14 +227,9 @@ fold		?=	x=8
 else
 fold		?=	x=4
 endif
+cluster		?=	z=2
 
-cluster		?=	y=2
-
-endif # 512 bits.
-
-# How many vectors to compute at once (unrolling factor in
-# each dimension).
-cluster		?=	x=1,y=1,z=1
+endif # not 512 bits.
 
 # More build flags.
 ifeq ($(mpi),1)

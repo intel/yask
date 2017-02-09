@@ -96,7 +96,7 @@ sub usage {
       " -makePrefix=<CMD>  Prefix make command with <CMD>.\n".
       " -makeArgs=<ARGS>   Pass additional <ARGS> to make command.\n".
       " -runArgs=<ARGS>    Pass additional <ARGS> to stencil-run command.\n".
-      " -ranks=<N>         Number of ranks to use on host.\n".
+      " -ranks=<N>         Number of ranks to use on host (x-dimension only).\n".
       "\nstencil options:\n".
       " -stencil=<NAME>    Specify stencil: iso3dfd, 3axis, 9axis, 3plane, cube, ave, awp, ... (required).\n".
       " -dp|-sp            Specify FP precision (default is DP for 'ave' stencil, SP for others).\n".
@@ -396,7 +396,6 @@ my @pathNames =
 # list of possible block-loop templates.
 # D0..D3 will get replaced by bv..bz, but not necessarily in that order.
 # modifiers 'pipeline' & 'prefetch' will be removed if not enabled.
-# modifier 'omp' will be replaced w/'crew' if crew is used.
 # modifier placeholder 'PATH' will be removed or changed as selected.
 # this is the loop taken by each OpenMP task.
 my @blockLoops =
@@ -551,7 +550,6 @@ if ($doBuild) {
      [ -$maxPfdl2, $maxPfdl2, 1, 'pfdl2' ],
 
      # other build options.
-     [ 0, 0, 1, 'crew' ],                # crew enabled?
      [ 0, 100, 1, 'exprSize' ],          # expression-size threshold.
      [ 0, $#schedules, 1, 'ompSchedule' ], # OMP for schedule.
 
@@ -807,30 +805,21 @@ sub calcSize($$$) {
     while (<CMD>) {
       push @cmdOut, $_;
 
-      if (/time-dim-size:\s*(\d+)/i) {
-        $timeDim = $1;
+      # E.g.,
+      # 4D (t=1 * x=8 * y=1 * z=1) 'vel_x' data is at 0x7fce08200000: 1.176K element(s) of 4 byte(s) each, 147 vector(s), 4.59375KiB.
+      # 3D (x=8 * y=1 * z=1) 'lambda' data is at 0x7fce0820f880: 600 element(s) of 4 byte(s) each, 75 vector(s), 2.34375KiB.
+      if (/^\s*4D.*t=(\d+)/) {
+        $numSpatialGrids += $1;
       }
-      elsif (/num grids:\s*(\d+)/i) {
-        $numGrids = $1;
-      }
-      elsif (/num grids to be updated:\s*(\d+)/i) {
-        $numUpdatedGrids = $1;
+      elsif (/^\s*3D.*x=/) {
+        $numSpatialGrids += 1;
       }
     }
     close CMD;
-    if (!$timeDim || !$numGrids || !$numUpdatedGrids) {
+    if (!$numSpatialGrids) {
       map { print ">> $_"; } @cmdOut;
-      
-      die "error: could not determine time-dimension size from '$cmd'.\n"
-        if !$timeDim;
-      die "error: could not determine number of grids from '$cmd'.\n"
-        if !$numGrids;
-      die "error: could not determine number of updated grids from '$cmd'.\n"
-        if !$numUpdatedGrids;
+      die "error: no grids defined in '$cmd'.\n";
     }
-
-    # calculate number of spatial grids.
-    $numSpatialGrids = ($numGrids - $numUpdatedGrids) + ($numUpdatedGrids * $timeDim);
     print "Determined that $numSpatialGrids spatial grids are allocated.\n";
   }
 
@@ -1060,7 +1049,7 @@ sub evalIndiv($$$$$$$) {
       if ($N == 1) {
 
         # keep best rate.
-        if (defined $secs) {
+        if (defined $secs && $secs > 0) {
           my $rate = $pts / $secs;
           if (!defined $bestRate || $rate > $bestRate) {
             print "new best rate is $rate pts/sec.\n";
@@ -1213,7 +1202,6 @@ sub fitness {
   my @cvs = readHashes($h, 'c', 1); # in vectors, not in points!
   my @ps = readHashes($h, 'p', 0);
   my $fold = readHash($h, 'fold', 1);
-  my $crew = readHash($h, 'crew', 1);
   my $exprSize = readHash($h, 'exprSize', 1);
   my $thread_divisor_exp = readHash($h, 'thread_divisor_exp', 0);
   my $bthreads_exp = readHash($h, 'bthreads_exp', 0);
@@ -1234,10 +1222,6 @@ sub fitness {
   # block loops.
   my $blockCode = makeLoopCode($h, 'block', 'b', 'v', \@blockLoops);
   $blockCode =~ s/\bpipeline\b//g if !$pipe;
-  if ($crew) {
-    $blockCode =~ s/\bomp\b/crew/g;            # replace omp w/crew.
-    $crew = 0 unless $blockCode =~ /\bcrew\b/; # disable crew if not found.
-  }
   if ($pfdl1 > 0 && $pfdl2 > 0) {
     $blockCode =~ s/\bprefetch\b/prefetch(L1,L2)/g;
   } elsif ($pfdl1 > 0) {
@@ -1404,18 +1388,21 @@ sub fitness {
   }
 
   # other vars.
-  $mvars .= " omp_schedule=$scheduleStr crew=$crew expr_size=$exprSize";
+  $mvars .= " omp_schedule=$scheduleStr expr_size=$exprSize";
   $mvars .= " mpi=1" if $nranks > 1;
 
   # how to make.
   my $makeCmd = getMakeCmd($macros, $mvars);
 
   # how to run.
-  my $runCmd = getRunCmd();
-  $runCmd .= " -thread_divisor ".(1 << $thread_divisor_exp)." -block_threads ".(1 << $bthreads_exp);
+  my $runCmd = getRunCmd();     # shell command plus any extra args.
+  $runCmd .= " -ranks $nranks" if $nranks > 1;
+  my $args = "";             # exe args.
+  $args .= " -thread_divisor ".(1 << $thread_divisor_exp);
+  $args .= " -block_threads ".(1 << $bthreads_exp);
 
   # sizes.
-  my $args = "-dn $vars";
+  $args .= " -dn $vars" if $vars > 1;
   $args .= " -dx $ds[0] -dy $ds[1] -dz $ds[2]";
   $args .= " -rx $rs[0] -ry $rs[1] -rz $rs[2]";
   $args .= " -bx $bs[0] -by $bs[1] -bz $bs[2]";
@@ -1429,10 +1416,9 @@ sub fitness {
 
   # various commands.
   my $testCmd = "$runCmd -v"; # validation on a small problem size.
-  my $simCmd = "$runCmd -t 1 -dt 1 $args";  # simulation w/1 trial & 1 step.
-  $runCmd .= " -ranks $nranks" if $nranks > 1;     # add MPI args for short and long runs.
-  my $shortRunCmd = "$runCmd -t 1 -dt $shortIters $args"; # fast run for 'upper-bound' time.
-  my $longRunCmd = "$runCmd -t $longTrials -dt $longIters $args";  # normal run w/more trials.
+  my $simCmd = "$runCmd $args -t 1 -dt 1";  # simulation w/1 trial & 1 step.
+  my $shortRunCmd = "$runCmd $args -t 1 -dt $shortIters"; # fast run for 'upper-bound' time.
+  my $longRunCmd = "$runCmd $args -t $longTrials -dt $longIters";  # normal run w/more trials.
   my $cleanCmd = "make clean";
 
   # add kill command to prevent runaway code.
