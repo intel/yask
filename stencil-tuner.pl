@@ -73,7 +73,7 @@ my $nranks = 1;          # num ranks.
 my $debugCheck = 0;      # print each initial check result.
 my $doBuild = 1;         # do compiles.
 my $doVal = 0;           # do validation runs.
-my $maxVecsInCluster = 8;       # max vectors in a cluster.
+my $maxVecsInCluster = 4;       # max vectors in a cluster.
 
 sub usage {
   my $msg = shift;              # error message or undef.
@@ -1356,14 +1356,17 @@ sub fitness {
   my $macros = '';
   my $mvars = '';
 
-  # layouts.
+  # layouts. 4D layout is selected by GA; then the corresponding 3D layout is
+  # created from it by removing 't' and shifting the other 3 dims.
   my $g4d = $layouts[$layout];
   my $g3d = $g4d;
   $g3d =~ s/1//;                # remove 1st ('t') dim.
   $g3d =~ s/2/1/;               # move 'x' from posn 2 to 1.
   $g3d =~ s/3/2/;               # move 'y' from posn 3 to 2.
   $g3d =~ s/4/3/;               # move 'z' from posn 4 to 3.
-  $mvars .= " layout_3d=Layout_$g3d layout_4d=Layout_$layouts[$layout]";
+  $mvars .= " layout_xyz=Layout_$g3d layout_txyz=Layout_$g4d";
+  if ($vars > 1)
+    $mvars .= " layout_nxyz=Layout_4$g3d layout_tnxyz=Layout_5$g4d";
 
   # prefetch distances.
   if ($pfdl1 > 0 && $pfdl2 > 0) {

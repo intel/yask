@@ -93,7 +93,6 @@ radius		?=	2
 else ifeq ($(stencil),iso3dfd)
 MACROS		+=	MAX_EXCH_DIST=1
 radius		?=	8
-layout_4d	?=	Layout_2314
 real_bytes	?=	4
 ifeq ($(arch),knl)
 ifeq ($(real_bytes),4)
@@ -102,6 +101,8 @@ else
 fold		?=	x=2,y=4,z=1
 endif
 cluster		?=	x=2
+else
+cluster		?=	z=2
 endif
 
 else ifeq ($(stencil),stream)
@@ -113,18 +114,15 @@ else ifneq ($(findstring awp,$(stencil)),)
 eqs		?=	velocity=vel,stress=str
 time_alloc	?=	1
 def_block_size	?=	32
-cluster		?=	x=1
 ifeq ($(arch),knl)
-def_block_threads	?=	4
 def_thread_divisor	?=	2
+def_block_threads	?=	4
 endif
 FB_FLAGS	+=	-min-es 1
 
 else ifeq ($(stencil),fsg)
 eqs             ?=      v_br=v_br,v_bl=v_bl,v_tr=v_tr,v_tl=v_tl,s_br=s_br,s_bl=s_bl,s_tr=s_tr,s_tl=s_tl
 time_alloc	?=	1
-layout_4d	?=	Layout_2314
-cluster		?=	x=1
 ifeq ($(arch),knl)
 REGION_LOOP_CODE ?=     omp square_wave serpentine loop(rn,rz,rx,ry) { calc(block(rt)); }
 BLOCK_LOOP_CODE ?=      omp square_wave serpentine loop(bnv,bxv,byv) { prefetch(L1) loop(bzv) { calc(cluster(bt)); } }
@@ -196,21 +194,24 @@ $(error Architecture not recognized; use arch=knl, knc, skx, hsw, ivb, snb, or i
 endif # arch-specific.
 
 # general defaults for vars if not set above.
-streaming_stores		?= 	1
-omp_par_for			?=	omp parallel for
-omp_schedule			?=	dynamic,1
-omp_block_schedule		?=	static,1
-omp_halo_schedule		?=	static
-def_block_threads		?=	2
-def_thread_divisor		?=	1
-real_bytes			?=	4
-layout_3d			?=	Layout_123
-layout_4d			?=	Layout_1234
-layout_5d			?=	Layout_12345
-def_rank_size			?=	128
-def_block_size			?=	64
-def_pad				?=	1
+streaming_stores	?= 	1
+omp_par_for		?=	omp parallel for
+omp_schedule		?=	dynamic,1
+omp_block_schedule	?=	static,1
+omp_halo_schedule	?=	static
+def_block_threads	?=	2
+def_thread_divisor	?=	1
+real_bytes		?=	4
+layout_xyz		?=	Layout_123
+layout_txyz		?=	Layout_2314
+layout_nxyz		?=	Layout_1234
+layout_tnxyz		?=	Layout_23415
+def_rank_size	?=	128
+def_block_size		?=	64
+def_pad			?=	1
+cluster			?=	x=1
 
+# default folding depends on HW vector size.
 ifneq ($(findstring INTRIN512,$(MACROS)),)  # 512 bits.
 
 ifeq ($(real_bytes),4)
@@ -218,7 +219,6 @@ fold		?=	x=4,y=4,z=1
 else
 fold		?=	x=4,y=2,z=1
 endif
-cluster		?=	x=1
 
 else  # not 512 bits.
 
@@ -227,7 +227,6 @@ fold		?=	x=8
 else
 fold		?=	x=4
 endif
-cluster		?=	z=2
 
 endif # not 512 bits.
 
@@ -272,8 +271,10 @@ endif
 # Set more MACROS based on individual makefile vars.
 # MACROS and EXTRA_MACROS will be written to a header file.
 MACROS		+=	REAL_BYTES=$(real_bytes)
-MACROS		+=	LAYOUT_3D=$(layout_3d)
-MACROS		+=	LAYOUT_4D=$(layout_4d)
+MACROS		+=	LAYOUT_XYZ=$(layout_xyz)
+MACROS		+=	LAYOUT_TXYZ=$(layout_txyz)
+MACROS		+=	LAYOUT_NXYZ=$(layout_nxyz)
+MACROS		+=	LAYOUT_TNXYZ=$(layout_tnxyz)
 MACROS		+=	DEF_RANK_SIZE=$(def_rank_size)
 MACROS		+=	DEF_BLOCK_SIZE=$(def_block_size)
 MACROS		+=	DEF_BLOCK_THREADS=$(def_block_threads)
@@ -362,6 +363,7 @@ REGION_LOOP_CODE	?=	$(REGION_LOOP_OUTER_MODS) loop(rn,rx,ry,rz) \
 # There is no time loop here because threaded temporal blocking is not yet supported.
 BLOCK_LOOP_OPTS		=     	-dims 'bnv,bxv,byv,bzv' \
 				-ompConstruct '$(omp_par_for) schedule($(omp_block_schedule)) proc_bind(close)'
+BLOCK_LOOP_INNER_MODS	?=	prefetch(L2)
 BLOCK_LOOP_OUTER_MODS	?=	omp
 BLOCK_LOOP_CODE		?=	$(BLOCK_LOOP_OUTER_MODS) loop(bnv,bxv) { loop(byv) \
 				{ $(BLOCK_LOOP_INNER_MODS) loop(bzv) { calc(cluster(bt)); } } }
@@ -414,8 +416,10 @@ echo-settings:
 	@echo cluster=$(cluster)
 	@echo radius=$(radius)
 	@echo real_bytes=$(real_bytes)
-	@echo layout_3d=$(layout_3d)
-	@echo layout_4d=$(layout_4d)
+	@echo layout_xyz=$(layout_xyz)
+	@echo layout_txyz=$(layout_txyz)
+	@echo layout_nxyz=$(layout_nxyz)
+	@echo layout_tnxyz=$(layout_tnxyz)
 	@echo streaming_stores=$(streaming_stores)
 	@echo def_block_threads=$(def_block_threads)
 	@echo omp_schedule=$(omp_schedule)

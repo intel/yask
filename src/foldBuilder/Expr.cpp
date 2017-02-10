@@ -758,7 +758,7 @@ void Grids::findDeps(IntTuple& pts,
                     if (!same_eq && same_cond && same_grid &&
                         pt_vis.do_sets_intersect(op1, op2)) {
                         cerr << "Error: two equations with condition " <<
-                            cond1->makeQuotedStr() << " update the same point: '" <<
+                            cond1->makeQuotedStr() << " update the same point: " <<
                             eq1->makeQuotedStr() << " and " <<
                             eq2->makeQuotedStr() << endl;
                         exit(1);
