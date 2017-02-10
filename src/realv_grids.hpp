@@ -813,12 +813,9 @@ namespace yask {
 
         virtual void resize_g() {
             _data.set_d1(_tdim);
-            _data.set_d2(this->_dxv +
-                         2 * this->_pxv);
-            _data.set_d3(this->_dyv +
-                         2 * this->_pyv);
-            _data.set_d4(this->_dzv +
-                         2 * this->_pzv);
+            _data.set_d2(this->_dxv + 2 * this->_pxv);
+            _data.set_d3(this->_dyv + 2 * this->_pyv);
+            _data.set_d4(this->_dzv + 2 * this->_pzv);
         }
         
     public:
@@ -1042,14 +1039,10 @@ namespace yask {
 
         virtual void resize_g() {
             _data.set_d1(_tdim);
-            _data.set_d2(this->_dnv +
-                         2 * this->_pnv);
-            _data.set_d3(this->_dxv +
-                         2 * this->_pxv);
-            _data.set_d4(this->_dyv +
-                         2 * this->_pyv);
-            _data.set_d5(this->_dzv +
-                         2 * _this->pzv);
+            _data.set_d2(this->_dnv + 2 * this->_pnv);
+            _data.set_d3(this->_dxv + 2 * this->_pxv);
+            _data.set_d4(this->_dyv + 2 * this->_pyv);
+            _data.set_d5(this->_dzv + 2 * this->_pzv);
         }
         
     public:

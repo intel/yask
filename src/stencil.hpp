@@ -107,32 +107,33 @@ IN THE SOFTWARE.
 namespace yask {
 
     // Default grid layouts.
-    // 3D dims are 1=x, 2=y, 3=z.
-    // 4D dims are 1=n/t, 2=x, 3=y, 4=z.
     // Last number in 'Layout' name has unit stride, e.g.,
-    // Layout321 & Layout1432 have unit-stride in x.
-    // Layout123 & Layout1234 have unit-stride in z.
-#ifndef LAYOUT_3D
-#define LAYOUT_3D Layout_123
+    // LAYOUT_NXYZ Layout_1234 => unit-stride in z.
+    // LAYOUT_NXYZ Layout_1243 => unit-stride in y.
+#ifndef LAYOUT_XYZ
+#define LAYOUT_XYZ Layout_123
 #endif
-#ifndef LAYOUT_4D
-#define LAYOUT_4D Layout_1234
+#ifndef LAYOUT_NXYZ
+#define LAYOUT_NXYZ Layout_1234
 #endif
-#ifndef LAYOUT_5D
-#define LAYOUT_5D Layout_12345
+#ifndef LAYOUT_TXYZ
+#define LAYOUT_TXYZ Layout_1234
+#endif
+#ifndef LAYOUT_TNXYZ
+#define LAYOUT_TNXYZ Layout_12345
 #endif
 
     // RealVecGrids using layouts defined above.
-    using Grid_XYZ = RealVecGrid_XYZ<LAYOUT_3D>;
-    using Grid_NXYZ = RealVecGrid_NXYZ<LAYOUT_4D>;
+    using Grid_XYZ = RealVecGrid_XYZ<LAYOUT_XYZ>;
+    using Grid_NXYZ = RealVecGrid_NXYZ<LAYOUT_NXYZ>;
     template <idx_t tdim>
-    using Grid_TXYZ = RealVecGrid_TXYZ<LAYOUT_4D, tdim>;
+    using Grid_TXYZ = RealVecGrid_TXYZ<LAYOUT_TXYZ, tdim>;
     template <idx_t tdim>
-    using Grid_TNXYZ = RealVecGrid_TNXYZ<LAYOUT_5D, tdim>;
+    using Grid_TNXYZ = RealVecGrid_TNXYZ<LAYOUT_TNXYZ, tdim>;
 
     // RealGrids using traditional C layout.
-    typedef GenericGrid3d<real_t, Layout_123> RealGrid_XYZ;
-    typedef GenericGrid4d<real_t, Layout_1234> RealGrid_NXYZ;
+    typedef GenericGrid3d<real_t, LAYOUT_XYZ> RealGrid_XYZ;
+    typedef GenericGrid4d<real_t, LAYOUT_NXYZ> RealGrid_NXYZ;
 }
 
 #endif
