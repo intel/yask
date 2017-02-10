@@ -181,13 +181,14 @@ namespace yask {
         const idx_t group_size_dz = 1;
 
         // Extend end points for overlapping regions due to wavefront angle.
-        // For each subsequent time step in a region, the spatial location of
-        // each block evaluation is shifted by the angle for each stencil. So,
-        // the total shift in a region is the angle * num stencils * num
-        // timesteps. Thus, the number of overlapping regions is ceil(total
-        // shift / region size).  This assumes stencils are inter-dependent.
-        // TODO: calculate stencil inter-dependency in the foldBuilder for each
-        // dimension.
+        // For each subsequent time step in a region, the spatial location
+        // of each block evaluation is shifted by the angle for each
+        // eq-group. So, the total shift in a region is the angle * num
+        // stencils * num timesteps. Thus, the number of overlapping regions
+        // is ceil(total shift / region size). This assumes all eq-groups
+        // are inter-dependent to find minimum extension. Actual required
+        // extension may be less, but this will just results in calls to
+        // calc_region() that do nothing.
         idx_t nshifts = (idx_t(eqGroups.size()) * _opts->rt) - 1;
         end_dn += angle_n * nshifts;
         end_dx += angle_x * nshifts;
@@ -213,7 +214,7 @@ namespace yask {
             // If doing only one time step in a region (default), loop
             // through equations here, and do only one equation group at a
             // time in calc_region(). This is similar to loop in
-            // calc_rank_ref()
+            // calc_rank_ref().
             if (step_dt == 1) {
 
                 for (auto* eg : eqGroups) {
@@ -240,7 +241,10 @@ namespace yask {
             else {
 
                 // TODO: enable halo exchange for wave-fronts.
-                exit_yask(1);
+                if (num_ranks > 1) {
+                    cerr << "Error: halo exchange with wave-fronts not yet supported.\n";
+                    exit_yask(1);
+                }
                 
                 // Eval all equation groups.
                 EqGroupSet* eqGroup_ptr = NULL;
@@ -295,15 +299,15 @@ namespace yask {
         // Not yet supporting temporal blocking.
         if (step_rt != 1) {
             cerr << "Error: temporal blocking not yet supported." << endl;
-            assert(step_rt == 1);
-            exit_yask(1);                // in case assert() is not active.
+            exit_yask(1);
         }
 
         // Number of iterations to get from start_dt to (but not including) stop_dt,
         // stepping by step_rt.
         const idx_t num_rt = ((stop_dt - start_dt) + (step_rt - 1)) / step_rt;
     
-        // Step through time steps in this region.
+        // Step through time steps in this region. This is the temporal size
+        // of a wave-front tile.
         for (idx_t index_rt = 0; index_rt < num_rt; index_rt++) {
         
             // This value of index_rt covers rt from start_rt to stop_rt-1.
@@ -329,11 +333,12 @@ namespace yask {
                     idx_t begin_rz = max<idx_t>(start_dz, eg->begin_bbz);
                     idx_t end_rz = min<idx_t>(stop_dz, eg->end_bbz);
 
-                    // Only need to loop through the region if any of its blocks are
-                    // at least partly inside the domain. For overlapping regions,
-                    // they may start outside the domain but enter the domain as
-                    // time progresses and their boundaries shift. So, we don't want
-                    // to return if this condition isn't met.
+                    // Only need to loop through the spatial extent of the
+                    // region if any of its blocks are at least partly
+                    // inside the domain. For overlapping regions, they may
+                    // start outside the domain but enter the domain as time
+                    // progresses and their boundaries shift. So, we don't
+                    // want to return if this condition isn't met.
                     if (end_rn > begin_rn &&
                         end_rx > begin_rx &&
                         end_ry > begin_ry &&
@@ -353,8 +358,10 @@ namespace yask {
                     }
             
                     // Shift spatial region boundaries for next iteration to
-                    // implement temporal wavefront.  We only shift backward, so
-                    // region loops must increment. They may do so in any order.
+                    // implement temporal wavefront.  We only shift
+                    // backward, so region loops must increment. They may do
+                    // so in any order.  TODO: shift only what is needed by
+                    // this eq-group, not the global max.
                     start_dn -= angle_n;
                     stop_dn -= angle_n;
                     start_dx -= angle_x;
@@ -774,13 +781,13 @@ namespace yask {
             dt << '*' << tot_n << '*' << tot_x << '*' << tot_y << '*' << tot_z << endl <<
             endl <<
             "Other settings:\n"
+            " stencil-name: " YASK_STENCIL_NAME << endl << 
             " num-ranks: " <<
             _opts->nrn << '*' << _opts->nrx << '*' << _opts->nry << '*' << _opts->nrz << endl <<
-            " stencil-name: " YASK_STENCIL_NAME << endl << 
             " vector-len: " << VLEN << endl <<
             " extra-padding: " <<
             _opts->pn << '+' << _opts->px << '+' << _opts->py << '+' << _opts->pz << endl <<
-            " wave-front-angles: " <<
+            " max-wave-front-angles: " <<
             angle_n << '+' << angle_x << '+' << angle_y << '+' << angle_z << endl <<
             " max-halos: " << hn << '+' << hx << '+' << hy << '+' << hz << endl <<
             " manual-L1-prefetch-distance: " << PFDL1 << endl <<
@@ -927,7 +934,6 @@ namespace yask {
         begin_bbx = idx_max; end_bbx = idx_min;
         begin_bby = idx_max; end_bby = idx_min;
         begin_bbz = idx_max; end_bbz = idx_min;
-        bb_size = 0;
         
         // Find BB for each eq group and update context.
         for (auto eg : eqGroups) {
@@ -941,14 +947,9 @@ namespace yask {
             end_bbx = max(end_bbx, eg->end_bbx);
             end_bby = max(end_bby, eg->end_bby);
             end_bbz = max(end_bbz, eg->end_bbz);
-            bb_size += eg->bb_size;
         }
 
-        len_bbn = end_bbn - begin_bbn;
-        len_bbx = end_bbx - begin_bbx;
-        len_bby = end_bby - begin_bby;
-        len_bbz = end_bbz - begin_bbz;
-        bb_valid = true;
+        update_lengths();
 
         // Adjust region size to be within BB.
         _opts->rn = min(_opts->rn, len_bbn);
@@ -962,12 +963,12 @@ namespace yask {
         _opts->by = min(_opts->by, _opts->ry);
         _opts->bz = min(_opts->bz, _opts->rz);
 
-        // Determine spatial skewing angles for temporal wavefronts based on
-        // the halos.  This assumes the smallest granularity of calculation
-        // is CPTS_* in each dim.  We only need non-zero angles if the
-        // region size is less than the rank size, i.e., if the region
-        // covers the whole rank in a given dimension, no wave-front is
-        // needed in thar dim.  TODO: make this grid-specific and eq-specific.
+        // Determine the max spatial skewing angles for temporal wavefronts
+        // based on the max halos.  This assumes the smallest granularity of
+        // calculation is CPTS_* in each dim.  We only need non-zero angles
+        // if the region size is less than the rank size, i.e., if the
+        // region covers the whole rank in a given dimension, no wave-front
+        // is needed in thar dim.
         angle_n = (_opts->rn < len_bbn) ? ROUND_UP(hn, CPTS_N) : 0;
         angle_x = (_opts->rx < len_bbx) ? ROUND_UP(hx, CPTS_X) : 0;
         angle_y = (_opts->ry < len_bby) ? ROUND_UP(hy, CPTS_Y) : 0;
@@ -1027,22 +1028,17 @@ namespace yask {
             begin_bbz = minz;
             end_bbz = maxz + 1;
         } else {
-            begin_bbn = end_bbn = len_bbn = 0;
-            begin_bbx = end_bbx = len_bbx = 0;
-            begin_bby = end_bby = len_bby = 0;
-            begin_bbz = end_bbz = len_bbz = 0;
+            begin_bbn = end_bbn = 0;
+            begin_bbx = end_bbx = 0;
+            begin_bby = end_bby = 0;
+            begin_bbz = end_bbz = 0;
         }
-        len_bbn = end_bbn - begin_bbn;
-        len_bbx = end_bbx - begin_bbx;
-        len_bby = end_bby - begin_bby;
-        len_bbz = end_bbz - begin_bbz;
-        bb_size = npts;
+        update_lengths();
 
         // Only supporting solid rectangles at this time.
-        idx_t r_size = len_bbn * len_bbx * len_bby * len_bbz;
-        if (r_size != bb_size) {
-            cerr << "error: domain for equation-group '" << get_name() << "' contains " <<
-                bb_size << " points, but " << r_size << " were expected for a hyper-rectangular polytope. " <<
+        if (npts != bb_size) {
+            cerr << "Error: domain for equation-group '" << get_name() << "' contains " <<
+                npts << " points, but " << bb_size << " were expected for a hyper-rectangular polytope. " <<
                 "Non-hyper-rectangular domains are not supported at this time." << endl;
             exit_yask(1);
         }
@@ -1053,7 +1049,7 @@ namespace yask {
             len_bbx % CLEN_X ||
             len_bby % CLEN_Y ||
             len_bbz % CLEN_Z) {
-            cerr << "error: each domain length must be a multiple of the cluster size." << endl;
+            cerr << "Error: each domain length must be a multiple of the cluster size." << endl;
             exit_yask(1);
         }
 

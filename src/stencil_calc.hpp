@@ -153,12 +153,22 @@ namespace yask {
     // A 4D bounding-box.
     struct BoundingBox {
         idx_t begin_bbn=0, begin_bbx=0, begin_bby=0, begin_bbz=0;
-        idx_t end_bbn=0, end_bbx=0, end_bby=0, end_bbz=0;
-        idx_t len_bbn=0, len_bbx=0, len_bby=0, len_bbz=0;
-        idx_t bb_size=0;
+        idx_t end_bbn=1, end_bbx=1, end_bby=1, end_bbz=1; // one past last value.
+        idx_t len_bbn=1, len_bbx=1, len_bby=1, len_bbz=1;
+        idx_t bb_size=1;
         bool bb_valid=false;
-
+        
         BoundingBox() {}
+
+        // Find lengths and set valid to true.
+        virtual void update_lengths() {
+            len_bbn = end_bbn - begin_bbn;
+            len_bbx = end_bbx - begin_bbx;
+            len_bby = end_bby - begin_bby;
+            len_bbz = end_bbz - begin_bbz;
+            bb_size = len_bbn * len_bbx * len_bby * len_bbz;
+            bb_valid = true;
+        }
     };
 
     // Collections of things in a context.
@@ -240,7 +250,10 @@ namespace yask {
         // Some calculated sizes.
         idx_t ofs_t=0, ofs_n=0, ofs_x=0, ofs_y=0, ofs_z=0; // Index offsets for this rank.
         idx_t tot_n=0, tot_x=0, tot_y=0, tot_z=0; // Total of rank domains over all ranks.
-        idx_t hn=0, hx=0, hy=0, hz=0;     // spatial halos (max over grids as required by stencil).
+
+        // Maximum halos and skewing angles over all grids and
+        // equations. Used for calculating worst-case minimum regions.
+        idx_t hn=0, hx=0, hy=0, hz=0;                     // spatial halos.
         idx_t angle_n=0, angle_x=0, angle_y=0, angle_z=0; // temporal skewing angles.
 
         // Various metrics calculated in allocAll().
