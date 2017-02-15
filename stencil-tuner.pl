@@ -1365,8 +1365,9 @@ sub fitness {
   $g3d =~ s/3/2/;               # move 'y' from posn 3 to 2.
   $g3d =~ s/4/3/;               # move 'z' from posn 4 to 3.
   $mvars .= " layout_xyz=Layout_$g3d layout_txyz=Layout_$g4d";
-  if ($vars > 1)
+  if ($vars > 1) {
     $mvars .= " layout_nxyz=Layout_4$g3d layout_tnxyz=Layout_5$g4d";
+  }
 
   # prefetch distances.
   if ($pfdl1 > 0 && $pfdl2 > 0) {
