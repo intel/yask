@@ -27,6 +27,9 @@ IN THE SOFTWARE.
 
 #pragma once
 
+// NOTE: uncomment for Absorbing Boundary Conditions computation
+//#define ELASCTIC_ABC
+
 #include "StencilBase.hpp"
 
 struct Node {};
@@ -200,7 +203,107 @@ public:
         GridValue next_v = v(t, x, y, z) + ((stx + sty + stz) * delta_t * lrho);
 
         // define the value at t+1.
-        v(t+1, x, y, z) == next_v;
+#ifdef ELASCTIC_ABC
+        // TODO: set proper condition
+        Condition not_at_abc = !(z == last_index(z));
+        v(t+1, x, y, z) IS_EQUIV_TO next_v IF not_at_abc;
+#else
+        v(t+1, x, y, z) IS_EQUIV_TO next_v;
+#endif
+    }
+
+#ifdef ELASCTIC_ABC
+    template<typename N, typename SZ, typename SX, typename SY>
+    void define_vel_abc(GridIndex t, GridIndex x, GridIndex y, GridIndex z, 
+            Grid &v, Grid &sx, Grid &sy, Grid &sz, 
+            Grid &abc_x, Grid &abc_y, Grid &abc_z, Grid &abc_sq_x, Grid &abc_sq_y, Grid &abc_sq_z) {
+
+        // TODO: set proper condition
+        Condition at_abc = (z == last_index(z));
+
+        GridValue next_v = v(t, x, y, z) * abc_x(x,y,z) * abc_y(x,y,z) * abc_z(x,y,z);
+
+        GridValue lrho   = interp_rho<N>( x, y, z );
+
+        GridValue stx    = stencil_O2_X<SX>( t, x, y, z, sx );
+        GridValue sty    = stencil_O2_Y<SY>( t, x, y, z, sy );
+        GridValue stz    = stencil_O2_Z<SZ>( t, x, y, z, sz );
+
+        next_v += ((stx + sty + stz) * delta_t * lrho);
+        next_v *= abc_sq_x(x,y,z) * abc_sq_y(x,y,z) * abc_sq_z(x,y,z);
+
+        // define the value at t+1.
+        v(t+1, x, y, z) IS_EQUIV_TO next_v IF at_abc;
+    }
+#endif
+
+    GridValue stencil_O2_Z( GridIndex t, GridIndex x, GridIndex y, GridIndex z, Grid &g, const int offset )
+    {
+        return
+            (g(t,x,y,z       )  -
+             g(t,x,y,z+offset))*dzi;
+    }
+
+    GridValue stencil_O2_Z( GridIndex t, GridIndex x, GridIndex y, GridIndex z, Grid &g, const B )
+    {
+        return stencil_O2_Z( t, x, y, z, g,-1 );
+    }
+
+    GridValue stencil_O2_Z( GridIndex t, GridIndex x, GridIndex y, GridIndex z, Grid &g, const F )
+    {
+        return stencil_O2_Z( t, x, y, z, g, 1 );
+    }
+
+    template<typename D>
+    GridValue stencil_O2_Z( GridIndex t, GridIndex x, GridIndex y, GridIndex z, Grid &g )
+    {
+        return stencil_O2_Z( t, x, y, z, g, D() );
+    }
+
+    GridValue stencil_O2_Y( GridIndex t, GridIndex x, GridIndex y, GridIndex z, Grid &g, const int offset )
+    {
+        return
+            (g(t,x,y       ,z)  -
+             g(t,x,y+offset,z))*dyi;
+    }
+
+    GridValue stencil_O2_Y( GridIndex t, GridIndex x, GridIndex y, GridIndex z, Grid &g, const B )
+    {
+        return stencil_O2_Y( t, x, y, z, g,-1 );
+    }
+
+    GridValue stencil_O2_Y( GridIndex t, GridIndex x, GridIndex y, GridIndex z, Grid &g, const F )
+    {
+        return stencil_O2_Y( t, x, y, z, g, 1 );
+    }
+
+    template<typename D>
+    GridValue stencil_O2_Y( GridIndex t, GridIndex x, GridIndex y, GridIndex z, Grid &g )
+    {
+        return stencil_O2_Y( t, x, y, z, g, D() );
+    }
+
+    GridValue stencil_O2_X( GridIndex t, GridIndex x, GridIndex y, GridIndex z, Grid &g, const int offset )
+    {
+        return
+            (g(t,x       ,y,z)  -
+             g(t,x+offset,y,z))*dxi;
+    }
+
+    GridValue stencil_O2_X( GridIndex t, GridIndex x, GridIndex y, GridIndex z, Grid &g, const B )
+    {
+        return stencil_O2_X( t, x, y, z, g,-1 );
+    }
+
+    GridValue stencil_O2_X( GridIndex t, GridIndex x, GridIndex y, GridIndex z, Grid &g, const F )
+    {
+        return stencil_O2_X( t, x, y, z, g, 1 );
+    }
+
+    template<typename D>
+    GridValue stencil_O2_X( GridIndex t, GridIndex x, GridIndex y, GridIndex z, Grid &g )
+    {
+        return stencil_O2_X( t, x, y, z, g, D() );
     }
 };
 
