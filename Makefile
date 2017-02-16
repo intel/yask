@@ -68,7 +68,7 @@ mpi		=	0
 
 # Defaults based on stencil type.
 ifeq ($(stencil),)
-$(error Stencil not specified; use stencil=iso3dfd, 3axis, 9axis, 3plane, cube, ave, stream, awp, awp_elastic, or fsg)
+$(error Stencil not specified; use stencil=iso3dfd, 3axis, 9axis, 3plane, cube, ave, stream, awp, awp_elastic, ssg or fsg)
 
 else ifeq ($(stencil),ave)
 radius		?=	1
@@ -119,6 +119,9 @@ def_thread_divisor	?=	2
 def_block_threads	?=	4
 endif
 FB_FLAGS	+=	-min-es 1
+
+else ifeq ($(stencil)),ssg)
+eqs		?=	v_bl=v_bl,v_tr=v_tr,v_tl=v_tl,s_br=s_br,s_bl=s_bl,s_tr=s_tr,s_tl=s_tl
 
 else ifeq ($(stencil),fsg)
 eqs             ?=      v_br=v_br,v_bl=v_bl,v_tr=v_tr,v_tl=v_tl,s_br=s_br,s_bl=s_bl,s_tr=s_tr,s_tl=s_tl

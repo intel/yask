@@ -28,17 +28,9 @@ IN THE SOFTWARE.
 
 #include "StencilBase.hpp"
 
-struct Node {};
-struct TL: public Node {};
-struct TR: public Node {};
-struct BL: public Node {};
-struct BR: public Node {};
+#include "ElasticStencil/ElasticStencil.hpp"
 
-struct StenciDirection {};
-struct F: public StenciDirection {};
-struct B: public StenciDirection {};
-
-class FSGElasticStencil : public StencilBase {
+class FSGElasticStencil : public ElasticStencil{
 
 protected:
 
@@ -65,7 +57,6 @@ protected:
     Grid s_tr_xx, s_tr_yy, s_tr_zz, s_tr_xy, s_tr_xz, s_tr_yz;
 
     // 3D-spatial coefficients.
-    Grid rho;
     Grid c11,c12,c13,c14,c15,c16;
     Grid     c22,c23,c24,c25,c26;
     Grid         c33,c34,c35,c36;
@@ -77,25 +68,10 @@ protected:
     // (Most of these will be 1.0.)
     Grid sponge;
 
-    // Spatial FD coefficients.
-    const float c0_8 = 1.2f;
-    const float c1_8 = 1.4f;
-    const float c2_8 = 1.6f;
-    const float c3_8 = 1.8f;
-
-
-    // Physical dimensions in time and space.
-    const float delta_t = 0.002452f;
-
-    // Inverse of discretization.
-    const float dxi = 36.057693f;
-    const float dyi = 36.057693f;
-    const float dzi = 36.057693f;
-
 public:
 
     FSGElasticStencil(StencilList& stencils) :
-        StencilBase("fsg", stencils)
+        ElasticStencil("fsg", stencils)
     {
         // Specify the dimensions of each grid.
         // (This names the dimensions; it does not specify their sizes.)
@@ -177,152 +153,6 @@ public:
         // cost more than the overhead of the extra loads and multiplies.
 
         next_vel_x *= sponge(x, y, z);
-    }
-
-    GridValue interp_rho( GridIndex x, GridIndex y, GridIndex z, const TL )
-    {
-        return ( 2.0f/ (rho(x  , y  , z  ) +
-                        rho(x+1, y  , z  )) );
-    }
-
-    GridValue interp_rho( GridIndex x, GridIndex y, GridIndex z, const TR )
-    {
-        return ( 2.0f/ (rho(x  , y  , z  ) +
-                        rho(x  , y+1, z  )) );
-    }
-
-    GridValue interp_rho( GridIndex x, GridIndex y, GridIndex z, const BL )
-    {
-        return ( 2.0f/ (rho(x  , y  , z  ) +
-                        rho(x  , y  , z+1)) );
-    }
-
-    GridValue interp_rho( GridIndex x, GridIndex y, GridIndex z, const BR )
-    {
-        return ( 8.0f/ (rho(x  , y  , z  ) +
-                        rho(x  , y  , z+1) +
-                        rho(x  , y+1, z  ) +
-                        rho(x+1, y  , z  ) +
-                        rho(x+1, y+1, z  ) +
-                        rho(x  , y+1, z+1) +
-                        rho(x+1, y  , z+1) +
-                        rho(x+1, y+1, z+1)) );
-    }
-
-    template<typename N>
-    GridValue interp_rho( GridIndex x, GridIndex y, GridIndex z )
-    {
-        return interp_rho( x, y, z, N() );
-    }
-
-    GridValue stencil_O8_Z( GridIndex t, GridIndex x, GridIndex y, GridIndex z, Grid &g, const int offset )
-    {
-        return
-            (c0_8 * (g(t,x,y,z  +offset)  -
-                     g(t,x,y,z-1+offset)) +
-             c1_8 * (g(t,x,y,z+1+offset)  -
-                     g(t,x,y,z-2+offset)) +
-             c2_8 * (g(t,x,y,z+2+offset)  -
-                     g(t,x,y,z-3+offset)) +
-             c3_8 * (g(t,x,y,z+3+offset)  -
-                     g(t,x,y,z-4+offset)))*dzi;
-    }
-
-    GridValue stencil_O8_Z( GridIndex t, GridIndex x, GridIndex y, GridIndex z, Grid &g, const B )
-    {
-        return stencil_O8_Z( t, x, y, z, g, 0 );
-    }
-
-    GridValue stencil_O8_Z( GridIndex t, GridIndex x, GridIndex y, GridIndex z, Grid &g, const F )
-    {
-        return stencil_O8_Z( t, x, y, z, g, 1 );
-    }
-
-    template<typename D>
-    GridValue stencil_O8_Z( GridIndex t, GridIndex x, GridIndex y, GridIndex z, Grid &g )
-    {
-        return stencil_O8_Z( t, x, y, z, g, D() );
-    }
-
-    GridValue stencil_O8_Y( GridIndex t, GridIndex x, GridIndex y, GridIndex z, Grid &g, const int offset )
-    {
-        return
-            (c0_8 * (g(t,x,y  +offset,z)  -
-                     g(t,x,y-1+offset,z)) +
-             c1_8 * (g(t,x,y+1+offset,z)  -
-                     g(t,x,y-2+offset,z)) +
-             c2_8 * (g(t,x,y+2+offset,z)  -
-                     g(t,x,y-3+offset,z)) +
-             c3_8 * (g(t,x,y+3+offset,z)  -
-                     g(t,x,y-4+offset,z)))*dyi;
-    }
-
-    GridValue stencil_O8_Y( GridIndex t, GridIndex x, GridIndex y, GridIndex z, Grid &g, const B )
-    {
-        return stencil_O8_Y( t, x, y, z, g, 0 );
-    }
-
-    GridValue stencil_O8_Y( GridIndex t, GridIndex x, GridIndex y, GridIndex z, Grid &g, const F )
-    {
-        return stencil_O8_Y( t, x, y, z, g, 1 );
-    }
-
-    template<typename D>
-    GridValue stencil_O8_Y( GridIndex t, GridIndex x, GridIndex y, GridIndex z, Grid &g )
-    {
-        return stencil_O8_Y( t, x, y, z, g, D() );
-    }
-
-    GridValue stencil_O8_X( GridIndex t, GridIndex x, GridIndex y, GridIndex z, Grid &g, const int offset )
-    {
-        return
-            (c0_8 * (g(t,x  +offset,y,z)  -
-                     g(t,x-1+offset,y,z)) +
-             c1_8 * (g(t,x+1+offset,y,z)  -
-                     g(t,x-2+offset,y,z)) +
-             c2_8 * (g(t,x+2+offset,y,z)  -
-                     g(t,x-3+offset,y,z)) +
-             c3_8 * (g(t,x+3+offset,y,z)  -
-                     g(t,x-4+offset,y,z)))*dxi;
-    }
-
-    GridValue stencil_O8_X( GridIndex t, GridIndex x, GridIndex y, GridIndex z, Grid &g, const B )
-    {
-        return stencil_O8_X( t, x, y, z, g, 0 );
-    }
-
-    GridValue stencil_O8_X( GridIndex t, GridIndex x, GridIndex y, GridIndex z, Grid &g, const F )
-    {
-        return stencil_O8_X( t, x, y, z, g, 1 );
-    }
-
-    template<typename D>
-    GridValue stencil_O8_X( GridIndex t, GridIndex x, GridIndex y, GridIndex z, Grid &g )
-    {
-        return stencil_O8_X( t, x, y, z, g, D() );
-    }
-
-    // Velocity-grid define functions.  For each D in x, y, z, define vel_D
-    // at t+1 based on vel_x at t and stress grids at t.  Note that the t,
-    // x, y, z parameters are integer grid indices, not actual offsets in
-    // time or space, so half-steps due to staggered grids are adjusted
-    // appropriately.
-
-    template<typename N, typename SZ, typename SX, typename SY>
-    void define_vel(GridIndex t, GridIndex x, GridIndex y, GridIndex z, 
-            Grid &v, Grid &sx, Grid &sy, Grid &sz) {
-
-        GridValue lrho   = interp_rho<N>( x, y, z );
-
-        GridValue stx    = stencil_O8_X<SX>( t, x, y, z, sx );
-        GridValue sty    = stencil_O8_Y<SY>( t, x, y, z, sy );
-        GridValue stz    = stencil_O8_Z<SZ>( t, x, y, z, sz );
-
-        GridValue next_v = v(t, x, y, z) + ((stx + sty + stz) * delta_t * lrho);
-        //TODO: adjust_for_sponge(next_v, x, y, z);
-
-        // define the value at t+1.
-        v(t+1, x, y, z) IS_EQUIV_TO next_v;
     }
 
     GridValue cell_coeff( const GridIndex x, const GridIndex y, const GridIndex z, Grid &c, const BR )
@@ -439,17 +269,17 @@ public:
         GridValue ic66 = cell_coeff     <N>(x, y, z, c66);
 
         // Compute stencils. Note that we are using the velocity values at t+1.
-        GridValue u_z = stencil_O8_Z<SZ>( t+1, x, y, z, vzu );
-        GridValue v_z = stencil_O8_Z<SZ>( t+1, x, y, z, vzv );
-        GridValue w_z = stencil_O8_Z<SZ>( t+1, x, y, z, vzw );
+        GridValue u_z = stencil_O8<Z,SZ>( t+1, x, y, z, vzu );
+        GridValue v_z = stencil_O8<Z,SZ>( t+1, x, y, z, vzv );
+        GridValue w_z = stencil_O8<Z,SZ>( t+1, x, y, z, vzw );
 
-        GridValue u_x = stencil_O8_X<SX>( t+1, x, y, z, vxu );
-        GridValue v_x = stencil_O8_X<SX>( t+1, x, y, z, vxv );
-        GridValue w_x = stencil_O8_X<SX>( t+1, x, y, z, vxw );
+        GridValue u_x = stencil_O8<X,SX>( t+1, x, y, z, vxu );
+        GridValue v_x = stencil_O8<X,SX>( t+1, x, y, z, vxv );
+        GridValue w_x = stencil_O8<X,SX>( t+1, x, y, z, vxw );
 
-        GridValue u_y = stencil_O8_Y<SY>( t+1, x, y, z, vyu );
-        GridValue v_y = stencil_O8_Y<SY>( t+1, x, y, z, vyv );
-        GridValue w_y = stencil_O8_Y<SY>( t+1, x, y, z, vyw );
+        GridValue u_y = stencil_O8<Y,SY>( t+1, x, y, z, vyu );
+        GridValue v_y = stencil_O8<Y,SY>( t+1, x, y, z, vyv );
+        GridValue w_y = stencil_O8<Y,SY>( t+1, x, y, z, vyw );
 
         // Compute next stress value
         GridValue next_sxx = sxx(t, x, y, z) +
