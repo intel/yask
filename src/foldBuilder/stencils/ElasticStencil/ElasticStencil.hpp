@@ -28,7 +28,7 @@ IN THE SOFTWARE.
 #pragma once
 
 // NOTE: uncomment for Absorbing Boundary Conditions computation
-//#define ELASCTIC_ABC
+//#define ELASTIC_ABC
 
 #include "StencilBase.hpp"
 
@@ -203,7 +203,7 @@ public:
         GridValue next_v = v(t, x, y, z) + ((stx + sty + stz) * delta_t * lrho);
 
         // define the value at t+1.
-#ifdef ELASCTIC_ABC
+#ifdef ELASTIC_ABC
         // TODO: set proper condition
         Condition not_at_abc = !(z == last_index(z));
         v(t+1, x, y, z) IS_EQUIV_TO next_v IF not_at_abc;
@@ -212,7 +212,7 @@ public:
 #endif
     }
 
-#ifdef ELASCTIC_ABC
+#ifdef ELASTIC_ABC
     template<typename N, typename SZ, typename SX, typename SY>
     void define_vel_abc(GridIndex t, GridIndex x, GridIndex y, GridIndex z, 
             Grid &v, Grid &sx, Grid &sy, Grid &sz, 

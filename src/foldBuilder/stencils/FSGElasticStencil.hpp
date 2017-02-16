@@ -317,7 +317,7 @@ public:
             stress_update(ic16,ic26,ic36,ic46,ic56,ic66,u_z,u_x,u_y,v_z,v_x,v_y,w_z,w_x,w_y);
 
         // define the value at t+1.
-#ifdef ELASCTIC_ABC
+#ifdef ELASTIC_ABC
         // TODO: set proper condition
         Condition not_at_abc = !(z == last_index(z));
         sxx(t+1, x, y, z) IS_EQUIV_TO next_sxx IF not_at_abc;
@@ -396,7 +396,7 @@ public:
         next_sxy += stress_update(ic16,ic26,ic36,ic46,ic56,ic66,u_z,u_x,u_y,v_z,v_x,v_y,w_z,w_x,w_y) * abc_sq;
 
         // define the value at t+1.
-#ifdef ELASCTIC_ABC
+#ifdef ELASTIC_ABC
         Condition at_abc = (z == last_index(z));
         sxx(t+1, x, y, z) IS_EQUIV_TO next_sxx IF at_abc;
         syy(t+1, x, y, z) IS_EQUIV_TO next_syy IF at_abc;
@@ -437,7 +437,7 @@ public:
         define_vel<BL, F, B, B>(t, x, y, z, v_bl_v, s_bl_yy, s_br_xy, s_tl_yz);
         define_vel<BR, F, F, F>(t, x, y, z, v_br_v, s_br_yy, s_bl_xy, s_tr_yz);
 
-#ifdef ELASCTIC_ABC
+#ifdef ELASTIC_ABC
         define_vel_abc<TL, B, F, B>(t, x, y, z, v_tl_w, s_tl_yz, s_tr_xz, s_bl_zz, sponge_lx, sponge_by, sponge_tz, sponge_sq_lx, sponge_sq_by, sponge_sq_tz);
         define_vel_abc<TR, B, B, F>(t, x, y, z, v_tr_w, s_tr_yz, s_tl_xz, s_br_zz, sponge_rx, sponge_fy, sponge_tz, sponge_sq_rx, sponge_sq_fy, sponge_sq_tz);
         define_vel_abc<BL, F, B, B>(t, x, y, z, v_bl_w, s_bl_yz, s_br_xz, s_tl_zz, sponge_lx, sponge_fy, sponge_bz, sponge_sq_lx, sponge_sq_fy, sponge_sq_bz);
@@ -462,7 +462,7 @@ public:
         define_str<TL, B, B, B>(t, x, y, z, s_tl_xx, s_tl_yy, s_tl_zz, s_tl_xy, s_tl_xz, s_tl_yz,
                                 v_tl_u, v_tl_v, v_tl_w, v_tr_u, v_tr_v, v_tr_w, v_bl_u, v_bl_v, v_bl_w);
 
-#ifdef ELASCTIC_ABC
+#ifdef ELASTIC_ABC
         define_str_abc<BR, F, B, F>(t, x, y, z, s_br_xx, s_br_yy, s_br_zz, s_br_xy, s_br_xz, s_br_yz, v_br_u, v_br_v, v_br_w, v_bl_u, v_bl_v, v_bl_w, v_tr_u, v_tr_v, v_tr_w, sponge_rx, sponge_by, sponge_bz, sponge_sq_rx, sponge_sq_by, sponge_sq_bz);
         define_str_abc<BL, F, F, B>(t, x, y, z, s_bl_xx, s_bl_yy, s_bl_zz, s_bl_xy, s_bl_xz, s_bl_yz, v_bl_u, v_bl_v, v_bl_w, v_br_u, v_br_v, v_br_w, v_tl_u, v_tl_v, v_tl_w, sponge_lx, sponge_fy, sponge_bz, sponge_sq_lx, sponge_sq_fy, sponge_sq_bz);
         define_str_abc<TR, B, F, F>(t, x, y, z, s_tr_xx, s_tr_yy, s_tr_zz, s_tr_xy, s_tr_xz, s_tr_yz, v_tr_u, v_tr_v, v_tr_w, v_tl_u, v_tl_v, v_tl_w, v_br_u, v_br_v, v_br_w, sponge_rx, sponge_fy, sponge_tz, sponge_sq_rx, sponge_sq_fy, sponge_sq_tz);
