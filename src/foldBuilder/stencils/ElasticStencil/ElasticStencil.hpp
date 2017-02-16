@@ -38,9 +38,9 @@ struct TR: public Node {};
 struct BL: public Node {};
 struct BR: public Node {};
 
-struct StenciDirection {};
-struct F: public StenciDirection {};
-struct B: public StenciDirection {};
+struct StencilDirection {};
+struct F: public StencilDirection {};
+struct B: public StencilDirection {};
 
 struct StencilDimension{};
 struct X: public StencilDimension{};

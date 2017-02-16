@@ -28,6 +28,8 @@ IN THE SOFTWARE.
 
 #include "StencilBase.hpp"
 
+//#define ELASTIC_ABC 
+
 #include "ElasticStencil/ElasticStencil.hpp"
 
 class FSGElasticStencil : public ElasticStencil{
@@ -64,6 +66,7 @@ protected:
     Grid                 c55,c56;
     Grid                     c66;
 
+#ifdef ELASTIC_ABC
     // Sponge coefficients.
     Grid sponge_lx;
     Grid sponge_rx;
@@ -77,6 +80,7 @@ protected:
     Grid sponge_sq_tz;
     Grid sponge_sq_fy;
     Grid sponge_sq_by;
+#endif
 
 public:
 
@@ -143,6 +147,7 @@ public:
         INIT_GRID_3D(c55, x, y, z);
         INIT_GRID_3D(c56, x, y, z);
         INIT_GRID_3D(c66, x, y, z);
+#ifdef ELASTIC_ABC
         INIT_GRID_3D(sponge_lx, x, y, z);
         INIT_GRID_3D(sponge_rx, x, y, z);
         INIT_GRID_3D(sponge_bz, x, y, z);
@@ -155,6 +160,7 @@ public:
         INIT_GRID_3D(sponge_sq_tz, x, y, z);
         INIT_GRID_3D(sponge_sq_fy, x, y, z);
         INIT_GRID_3D(sponge_sq_by, x, y, z);
+#endif
 
         // StencilContex specific code
         REGISTER_STENCIL_CONTEXT_EXTENSION(
