@@ -113,7 +113,8 @@ sub usage {
       "                              '-r=0'        Allow only one OpenMP region (region size=0 => rank size).\n".
       " -<gene_name>=<N>-<M>   Restrict <gene_name> between <N> and <M>.\n".
       "                        See the notes above on <gene_name> specification.\n".
-      " -folds=list            Comma separated list of folds to use.\n".
+      " -folds=<list>      Comma separated list of folds to use.\n".
+      "                    Examples: '-folds=4 4 1', '-folds=1 1 16, 4 4 1, 1 4 4'.\n".
       " -mem=<N>-<M>           Set allowable est. memory usage between <N> and <M> GiB (default is $minGB-$maxGB).\n".
       " -maxVecsInCluster=<N>  Maximum vectors allowed in cluster (default is $maxVecsInCluster).\n".
       " -noPrefetch        Disable any prefetching (shortcut for '-pfdl1=0 -pfdl2=0').\n".
