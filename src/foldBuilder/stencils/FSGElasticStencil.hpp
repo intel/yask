@@ -64,6 +64,7 @@ protected:
     Grid                 c55,c56;
     Grid                     c66;
 
+#ifdef ELASCTIC_ABC
     // Sponge coefficients.
     Grid sponge_lx;
     Grid sponge_rx;
@@ -77,6 +78,7 @@ protected:
     Grid sponge_sq_tz;
     Grid sponge_sq_fy;
     Grid sponge_sq_by;
+#endif
 
 public:
 
@@ -143,6 +145,7 @@ public:
         INIT_GRID_3D(c55, x, y, z);
         INIT_GRID_3D(c56, x, y, z);
         INIT_GRID_3D(c66, x, y, z);
+#ifdef ELASCTIC_ABC
         INIT_GRID_3D(sponge_lx, x, y, z);
         INIT_GRID_3D(sponge_rx, x, y, z);
         INIT_GRID_3D(sponge_bz, x, y, z);
@@ -155,6 +158,7 @@ public:
         INIT_GRID_3D(sponge_sq_tz, x, y, z);
         INIT_GRID_3D(sponge_sq_fy, x, y, z);
         INIT_GRID_3D(sponge_sq_by, x, y, z);
+#endif
 
         // StencilContex specific code
         REGISTER_STENCIL_CONTEXT_EXTENSION(
@@ -420,8 +424,6 @@ public:
         GET_OFFSET(x);
         GET_OFFSET(y);
         GET_OFFSET(z);
-
-        //define_vel_tmp<TL, B, F, B>(t, x, y, z, v_tl_w, s_tl_yz, s_tr_xz, s_bl_zz, sponge_lx, sponge_by, sponge_tz, sponge_sq_lx, sponge_sq_by, sponge_sq_tz);
 
         // Define velocity components.
         define_vel<TL, B, F, B>(t, x, y, z, v_tl_w, s_tl_yz, s_tr_xz, s_bl_zz);
