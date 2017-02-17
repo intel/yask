@@ -74,6 +74,7 @@ my $debugCheck = 0;      # print each initial check result.
 my $doBuild = 1;         # do compiles.
 my $doVal = 0;           # do validation runs.
 my $maxVecsInCluster = 4;       # max vectors in a cluster.
+my @folds = ();     # folding variations to explore
 
 sub usage {
   my $msg = shift;              # error message or undef.
@@ -112,6 +113,8 @@ sub usage {
       "                              '-r=0'        Allow only one OpenMP region (region size=0 => rank size).\n".
       " -<gene_name>=<N>-<M>   Restrict <gene_name> between <N> and <M>.\n".
       "                        See the notes above on <gene_name> specification.\n".
+      " -folds=<list>      Comma separated list of folds to use.\n".
+      "                    Examples: '-folds=4 4 1', '-folds=1 1 16, 4 4 1, 1 4 4'.\n".
       " -mem=<N>-<M>           Set allowable est. memory usage between <N> and <M> GiB (default is $minGB-$maxGB).\n".
       " -maxVecsInCluster=<N>  Maximum vectors allowed in cluster (default is $maxVecsInCluster).\n".
       " -noPrefetch        Disable any prefetching (shortcut for '-pfdl1=0 -pfdl2=0').\n".
@@ -233,6 +236,14 @@ for my $origOpt (@ARGV) {
   elsif ($opt eq '-sweep') {
     $sweep = 1;
     print "Sweeping all values instead of searching with GA.\n";
+  }
+  elsif ($opt =~ 'folds=(\s*\d+\s+\d+\s+\d+\s*(,\s*\d+\s+\d+\s+\d+\s*)*)$') {
+    my $val = $1; 
+    $val =~ tr/ //s;
+    $val =~ s/^\s+|\s+$//g;
+    $val =~ s/,\s+/,/g;
+    $val =~ s/\s+,/,/g;
+    @folds = split(',',$val);
   }
   elsif ($opt =~ /^-?(.+)=(\d+)(-(\d+))?$/) {
     my ($key, $min, $max) = ($1, $2, $4);
@@ -448,25 +459,27 @@ my @rankLoops =
 
 # list of folds.
 # start with inline in z only.
-my @folds = "1 1 $velems";
+if ( !@folds ) {
+  @folds = "1 1 $velems";
 
 # add more 1D options if not z-vec.
-push @folds, ("1 $velems 1", "$velems 1 1") if !$zVec;
+  push @folds, ("1 $velems 1", "$velems 1 1") if !$zVec;
 
 # add remaining options if folding.
 # TODO: add n-dim folding.
-push @folds, ($velems == 8) ?
-  ("4 2 1", "4 1 2",
-   "2 4 1", "2 1 4",
-   "1 4 2", "1 2 4") :
-  ($velems == 16) ?
-  ("8 2 1", "8 1 2",
-   "4 4 1", "4 2 2", "4 1 4",
-   "2 8 1", "2 4 2", "2 2 4", "2 1 8",
-   "1 8 2", "1 4 4", "1 2 8") :
-  # velems == 4
-  ("2 2 1", "2 1 2", "1 2 2")
-  if $folding;
+  push @folds, ($velems == 8) ?
+    ("4 2 1", "4 1 2",
+     "2 4 1", "2 1 4",
+     "1 4 2", "1 2 4") :
+    ($velems == 16) ?
+    ("8 2 1", "8 1 2",
+     "4 4 1", "4 2 2", "4 1 4",
+     "2 8 1", "2 4 2", "2 2 4", "2 1 8",
+     "1 8 2", "1 4 4", "1 2 8") :
+    # velems == 4
+    ("2 2 1", "2 1 2", "1 2 2")
+    if $folding;
+}
 
 # OMP.
 my @schedules =
@@ -1365,8 +1378,9 @@ sub fitness {
   $g3d =~ s/3/2/;               # move 'y' from posn 3 to 2.
   $g3d =~ s/4/3/;               # move 'z' from posn 4 to 3.
   $mvars .= " layout_xyz=Layout_$g3d layout_txyz=Layout_$g4d";
-  if ($vars > 1)
+  if ($vars > 1) {
     $mvars .= " layout_nxyz=Layout_4$g3d layout_tnxyz=Layout_5$g4d";
+  }
 
   # prefetch distances.
   if ($pfdl1 > 0 && $pfdl2 > 0) {
