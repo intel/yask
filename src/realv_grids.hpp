@@ -208,9 +208,16 @@ namespace yask {
             _oy = ROUND_UP(oy, VLEN_Y); _oyv = _oy / VLEN_Y; }
         inline void set_ofs_z(idx_t oz) {
             _oz = ROUND_UP(oz, VLEN_Z); _ozv = _oz / VLEN_Z; }
-        
+
+        // Dump grid to binary file
+        virtual void dump( const std::string & dir )
+        {
+          _gp->dump( dir+"/"+get_name()+".bin" );
+        }
+
         // Initialize memory to a given value.
         virtual void set_same(real_t val) {
+            std::cout << "Initializing grid '" << _name << "' with value '"<< val << "'" << std::endl;
             real_vec_t rn;
             rn = val;               // broadcast.
             _gp->set_same(rn);

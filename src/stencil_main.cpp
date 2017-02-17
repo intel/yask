@@ -40,6 +40,7 @@ struct AppSettings : public StencilSettings {
     bool doWarmup;              // whether to do warmup run.
     int num_trials;             // number of trials.
     bool validate;              // whether to do validation run.
+    bool dump;                  // whether to dump grids to disk.
     int pre_trial_sleep_time;   // sec to sleep before each trial.
 
     AppSettings() :
@@ -47,6 +48,7 @@ struct AppSettings : public StencilSettings {
         doWarmup(true),
         num_trials(3),
         validate(false),
+        dump(false),
         pre_trial_sleep_time(1)
     { }
 
@@ -65,6 +67,7 @@ struct AppSettings : public StencilSettings {
                                int& argi) {
             if (_check_arg(args, argi, _name)) {
                 _as.validate = true;
+                _as.dump     = false;
                 _as.doWarmup = false;
                 _as.num_trials = 1;
                 _as.dt = 1;
@@ -103,6 +106,9 @@ struct AppSettings : public StencilSettings {
         parser.add_option(new CommandLineParser::BoolOption("validate",
                                          "Run validation iteration(s) after performance trial(s).",
                                          validate));
+        parser.add_option(new CommandLineParser::BoolOption("dump",
+                                         "Dump grids to disk.",
+                                         dump));
         parser.add_option(new ValOption(*this));
         
         // Parse cmd-line options.
@@ -185,6 +191,9 @@ int main(int argc, char** argv)
     // init data in grids and params.
     context.initData();
 
+    if (opts.dump)
+      context.dump_grids( std::string( "dump_ini" ) );
+
     // just a line.
     string divLine;
     for (int i = 0; i < 60; i++)
@@ -241,7 +250,11 @@ int main(int argc, char** argv)
         // Stop timing.
         wstop =  getTimeInSecs();
         VTUNE_PAUSE;
-            
+
+        // Dump grids to disk
+        if (opts.dump)
+            context.dump_grids( std::string( "dump_fin" ) );
+
         // Calc and report perf.
         float elapsed_time = (float)(wstop - wstart);
         float apps = float(context.tot_numpts_dt) / elapsed_time;
@@ -310,6 +323,10 @@ int main(int argc, char** argv)
         os << endl << divLine <<
             "Running " << opts.dt << " time step(s) for validation...\n" << flush;
         ref_context.calc_rank_ref();
+
+        // Dump grids to disk
+        if (opts.dump)
+            ref_context.dump_grids( std::string( "dump_fin" ) );
 
         // check for equality.
         context.global_barrier();
