@@ -32,8 +32,6 @@ namespace yask {
     // Initialize memory to incrementing values based on val.
     void RealVecGridBase::set_diff(real_t val) {
 
-        std::cout << "Initializing grid '" << _name << "' with different values" << std::endl;
-
         // make a real_vec_t pattern.
         real_vec_t rn;
         for (int i = 0; i < VLEN; i++)

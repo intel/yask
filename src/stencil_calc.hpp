@@ -437,8 +437,6 @@ namespace yask {
         // Set the bounding-box around all eq groups.
         virtual void find_bounding_boxes();
 
-        // Dump grid data to a binary file.
-        virtual void dump_grids( const std::string & dir );
     };
     
     /// Classes that support evaluation of one stencil equation-group.

@@ -39,7 +39,6 @@ IN THE SOFTWARE.
 
 #include <string>
 #include <iostream>
-#include <fstream>
 #include "utils.hpp"
 
 namespace yask {
@@ -101,18 +100,6 @@ namespace yask {
 #pragma omp parallel for
             for (idx_t ai = 0; ai < get_num_elems(); ai++)
                 _elems[ai] = val;
-        }
-
-        virtual void dump( const std::string &filename ) const {
-          std::cout << "Dump grid to file: '" << filename << "'" << std::endl;
-          try {
-            std::fstream file( filename.c_str(), std::ios::out | std::ios::binary );
-            file.exceptions( std::fstream::failbit );
-            file.write( (const char*)_elems, get_num_elems() * sizeof( T ) );
-          } catch( std::ios_base::failure &e ) {
-            std::cerr << "error: cannot write file '" << filename << "': " << e.what() << std::endl;
-            exit(1);
-          }
         }
 
         // Initialize memory: first element to value,
