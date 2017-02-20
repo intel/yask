@@ -27,7 +27,7 @@ IN THE SOFTWARE.
 
 #include "ElasticStencil/ElasticStencil.hpp"
 
-class SSGElasticStencil : public ElasticStencil {
+class SSGElasticStencil : public ElasticStencilBase {
 
 protected:
 
@@ -49,8 +49,8 @@ protected:
 
 public:
 
-    SSGElasticStencil(StencilList& stencils) :
-        ElasticStencil("ssg", stencils)
+    SSGElasticStencil( StencilList& stencils) :
+        ElasticStencilBase("ssg", stencils)
     {
         // Specify the dimensions of each grid.
         // (This names the dimensions; it does not specify their sizes.)

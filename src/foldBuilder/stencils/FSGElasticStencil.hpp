@@ -27,12 +27,21 @@ IN THE SOFTWARE.
 // Contributed by Albert Farres from the Barcelona Supercomputing Center
 
 #include "StencilBase.hpp"
-
-//#define ELASTIC_ABC 
-
 #include "ElasticStencil/ElasticStencil.hpp"
 
-class FSGElasticStencil : public ElasticStencil{
+namespace fsg {
+
+class FSG_ABC;
+
+class FSGBoundaryCondition : public ElasticBoundaryCondition
+{
+public:
+    virtual void velocity (GridIndex t, GridIndex x, GridIndex y, GridIndex z ) {}
+    virtual void stress (GridIndex t, GridIndex x, GridIndex y, GridIndex z ) {}
+};
+
+class FSGElasticStencilBase : public ElasticStencilBase {
+    friend FSG_ABC;
 
 protected:
 
@@ -66,26 +75,21 @@ protected:
     Grid                 c55,c56;
     Grid                     c66;
 
-#ifdef ELASTIC_ABC
-    // Sponge coefficients.
-    Grid sponge_lx;
-    Grid sponge_rx;
-    Grid sponge_bz;
-    Grid sponge_tz;
-    Grid sponge_fy;
-    Grid sponge_by;
-    Grid sponge_sq_lx;
-    Grid sponge_sq_rx;
-    Grid sponge_sq_bz;
-    Grid sponge_sq_tz;
-    Grid sponge_sq_fy;
-    Grid sponge_sq_by;
-#endif
-
 public:
 
-    FSGElasticStencil(StencilList& stencils) :
-        ElasticStencil("fsg", stencils)
+    FSGElasticStencilBase( const string &name, StencilList& stencils ) :
+        ElasticStencilBase ( name, stencils )
+    {
+            initGrids();
+    }
+    
+    FSGElasticStencilBase( const string &name, FSGBoundaryCondition *bc, StencilList& stencils ) :
+        ElasticStencilBase ( name, bc, stencils )
+    {
+            initGrids();
+    }
+
+    void initGrids ()
     {
         // Specify the dimensions of each grid.
         // (This names the dimensions; it does not specify their sizes.)
@@ -147,20 +151,6 @@ public:
         INIT_GRID_3D(c55, x, y, z);
         INIT_GRID_3D(c56, x, y, z);
         INIT_GRID_3D(c66, x, y, z);
-#ifdef ELASTIC_ABC
-        INIT_GRID_3D(sponge_lx, x, y, z);
-        INIT_GRID_3D(sponge_rx, x, y, z);
-        INIT_GRID_3D(sponge_bz, x, y, z);
-        INIT_GRID_3D(sponge_tz, x, y, z);
-        INIT_GRID_3D(sponge_fy, x, y, z);
-        INIT_GRID_3D(sponge_by, x, y, z);
-        INIT_GRID_3D(sponge_sq_lx, x, y, z);
-        INIT_GRID_3D(sponge_sq_rx, x, y, z);
-        INIT_GRID_3D(sponge_sq_bz, x, y, z);
-        INIT_GRID_3D(sponge_sq_tz, x, y, z);
-        INIT_GRID_3D(sponge_sq_fy, x, y, z);
-        INIT_GRID_3D(sponge_sq_by, x, y, z);
-#endif
 
         // StencilContex specific code
         REGISTER_STENCIL_CONTEXT_EXTENSION(
@@ -426,6 +416,8 @@ public:
         GET_OFFSET(x);
         GET_OFFSET(y);
         GET_OFFSET(z);
+        
+        FSGBoundaryCondition &fsg_bc = *static_cast<FSGBoundaryCondition *>(bc);
 
         //define_vel_tmp<TL, B, F, B>(t, x, y, z, v_tl_w, s_tl_yz, s_tr_xz, s_bl_zz, sponge_lx, sponge_by, sponge_tz, sponge_sq_lx, sponge_sq_by, sponge_sq_tz);
 
@@ -442,8 +434,93 @@ public:
         define_vel<TR, B, B, F>(t, x, y, z, v_tr_v, s_tr_yy, s_tl_xy, s_br_yz);
         define_vel<BL, F, B, B>(t, x, y, z, v_bl_v, s_bl_yy, s_br_xy, s_tl_yz);
         define_vel<BR, F, F, F>(t, x, y, z, v_br_v, s_br_yy, s_bl_xy, s_tr_yz);
+        
+        if ( hasBoundaryCondition )
+            fsg_bc.velocity(t,x,y,z);
 
-#ifdef ELASTIC_ABC
+        //// Define stresses components.
+        define_str<BR, F, B, F>(t, x, y, z, s_br_xx, s_br_yy, s_br_zz, s_br_xy, s_br_xz, s_br_yz,
+                                v_br_u, v_br_v, v_br_w, v_bl_u, v_bl_v, v_bl_w, v_tr_u, v_tr_v, v_tr_w);
+        define_str<BL, F, F, B>(t, x, y, z, s_bl_xx, s_bl_yy, s_bl_zz, s_bl_xy, s_bl_xz, s_bl_yz,
+                                v_bl_u, v_bl_v, v_bl_w, v_br_u, v_br_v, v_br_w, v_tl_u, v_tl_v, v_tl_w);
+        define_str<TR, B, F, F>(t, x, y, z, s_tr_xx, s_tr_yy, s_tr_zz, s_tr_xy, s_tr_xz, s_tr_yz,
+                                v_tr_u, v_tr_v, v_tr_w, v_tl_u, v_tl_v, v_tl_w, v_br_u, v_br_v, v_br_w);
+        define_str<TL, B, B, B>(t, x, y, z, s_tl_xx, s_tl_yy, s_tl_zz, s_tl_xy, s_tl_xz, s_tl_yz,
+                                v_tl_u, v_tl_v, v_tl_w, v_tr_u, v_tr_v, v_tr_w, v_bl_u, v_bl_v, v_bl_w);
+                               
+        if ( hasBoundaryCondition )
+          fsg_bc.stress(t,x,y,z);
+    }
+};
+
+class FSG_ABC : public FSGBoundaryCondition
+{
+    // Sponge coefficients.
+    Grid sponge_lx;
+    Grid sponge_rx;
+    Grid sponge_bz;
+    Grid sponge_tz;
+    Grid sponge_fy;
+    Grid sponge_by;
+    Grid sponge_sq_lx;
+    Grid sponge_sq_rx;
+    Grid sponge_sq_bz;
+    Grid sponge_sq_tz;
+    Grid sponge_sq_fy;
+    Grid sponge_sq_by;
+    
+    FSGElasticStencilBase &fsg;
+
+public:
+
+    FSG_ABC (FSGElasticStencilBase &_fsg) : fsg(_fsg)
+    {
+        // fsg.INIT_GRID_3D is a hack on how the macro works. It can break at anytime
+        fsg.INIT_GRID_3D(sponge_lx, x, y, z);
+        fsg.INIT_GRID_3D(sponge_rx, x, y, z);
+        fsg.INIT_GRID_3D(sponge_bz, x, y, z);
+        fsg.INIT_GRID_3D(sponge_tz, x, y, z);
+        fsg.INIT_GRID_3D(sponge_fy, x, y, z);
+        fsg.INIT_GRID_3D(sponge_by, x, y, z);
+        fsg.INIT_GRID_3D(sponge_sq_lx, x, y, z);
+        fsg.INIT_GRID_3D(sponge_sq_rx, x, y, z);
+        fsg.INIT_GRID_3D(sponge_sq_bz, x, y, z);
+        fsg.INIT_GRID_3D(sponge_sq_tz, x, y, z);
+        fsg.INIT_GRID_3D(sponge_sq_fy, x, y, z);
+        fsg.INIT_GRID_3D(sponge_sq_by, x, y, z);        
+    }
+
+    // TODO: set proper conditions    
+    Condition is_at_boundary( GridIndex t, GridIndex x, GridIndex y, GridIndex z ) { Condition bc = (z == last_index(z)); return bc; }
+    Condition is_not_at_boundary( GridIndex t, GridIndex x, GridIndex y, GridIndex z ) { Condition bc = (z != last_index(z)); return bc; }
+
+/*
+    template<typename N, typename SZ, typename SX, typename SY>
+    void define_vel_abc(GridIndex t, GridIndex x, GridIndex y, GridIndex z, 
+            Grid &v, Grid &sx, Grid &sy, Grid &sz, 
+            Grid &abc_x, Grid &abc_y, Grid &abc_z, Grid &abc_sq_x, Grid &abc_sq_y, Grid &abc_sq_z) {
+
+        Condition at_abc = is_at_boundary(t,x,y,z);
+
+        GridValue next_v = v(t, x, y, z) * abc_x(x,y,z) * abc_y(x,y,z) * abc_z(x,y,z);
+
+        GridValue lrho   = interp_rho<N>( x, y, z );
+
+        GridValue stx    = stencil_O2_X<SX>( t, x, y, z, sx );
+        GridValue sty    = stencil_O2_Y<SY>( t, x, y, z, sy );
+        GridValue stz    = stencil_O2_Z<SZ>( t, x, y, z, sz );
+
+        next_v += ((stx + sty + stz) * delta_t * lrho);
+        next_v *= abc_sq_x(x,y,z) * abc_sq_y(x,y,z) * abc_sq_z(x,y,z);
+
+        // define the value at t+1.
+        v(t+1, x, y, z) IS_EQUIV_TO next_v IF at_abc;
+    }    
+*/
+    
+    void velocity (GridIndex t, GridIndex x, GridIndex y, GridIndex z )
+    {
+#if 0
         define_vel_abc<TL, B, F, B>(t, x, y, z, v_tl_w, s_tl_yz, s_tr_xz, s_bl_zz, sponge_lx, sponge_by, sponge_tz, sponge_sq_lx, sponge_sq_by, sponge_sq_tz);
         define_vel_abc<TR, B, B, F>(t, x, y, z, v_tr_w, s_tr_yz, s_tl_xz, s_br_zz, sponge_rx, sponge_fy, sponge_tz, sponge_sq_rx, sponge_sq_fy, sponge_sq_tz);
         define_vel_abc<BL, F, B, B>(t, x, y, z, v_bl_w, s_bl_yz, s_br_xz, s_tl_zz, sponge_lx, sponge_fy, sponge_bz, sponge_sq_lx, sponge_sq_fy, sponge_sq_bz);
@@ -456,26 +533,33 @@ public:
         define_vel_abc<TR, B, B, F>(t, x, y, z, v_tr_v, s_tr_yy, s_tl_xy, s_br_yz, sponge_rx, sponge_fy, sponge_tz, sponge_sq_rx, sponge_sq_fy, sponge_sq_tz);
         define_vel_abc<BL, F, B, B>(t, x, y, z, v_bl_v, s_bl_yy, s_br_xy, s_tl_yz, sponge_lx, sponge_fy, sponge_bz, sponge_sq_lx, sponge_sq_fy, sponge_sq_bz);
         define_vel_abc<BR, F, F, F>(t, x, y, z, v_br_v, s_br_yy, s_bl_xy, s_tr_yz, sponge_rx, sponge_by, sponge_bz, sponge_sq_rx, sponge_sq_by, sponge_sq_bz);
-#endif
-
-        //// Define stresses components.
-        define_str<BR, F, B, F>(t, x, y, z, s_br_xx, s_br_yy, s_br_zz, s_br_xy, s_br_xz, s_br_yz,
-                                v_br_u, v_br_v, v_br_w, v_bl_u, v_bl_v, v_bl_w, v_tr_u, v_tr_v, v_tr_w);
-        define_str<BL, F, F, B>(t, x, y, z, s_bl_xx, s_bl_yy, s_bl_zz, s_bl_xy, s_bl_xz, s_bl_yz,
-                                v_bl_u, v_bl_v, v_bl_w, v_br_u, v_br_v, v_br_w, v_tl_u, v_tl_v, v_tl_w);
-        define_str<TR, B, F, F>(t, x, y, z, s_tr_xx, s_tr_yy, s_tr_zz, s_tr_xy, s_tr_xz, s_tr_yz,
-                                v_tr_u, v_tr_v, v_tr_w, v_tl_u, v_tl_v, v_tl_w, v_br_u, v_br_v, v_br_w);
-        define_str<TL, B, B, B>(t, x, y, z, s_tl_xx, s_tl_yy, s_tl_zz, s_tl_xy, s_tl_xz, s_tl_yz,
-                                v_tl_u, v_tl_v, v_tl_w, v_tr_u, v_tr_v, v_tr_w, v_bl_u, v_bl_v, v_bl_w);
-
-#ifdef ELASTIC_ABC
-        define_str_abc<BR, F, B, F>(t, x, y, z, s_br_xx, s_br_yy, s_br_zz, s_br_xy, s_br_xz, s_br_yz, v_br_u, v_br_v, v_br_w, v_bl_u, v_bl_v, v_bl_w, v_tr_u, v_tr_v, v_tr_w, sponge_rx, sponge_by, sponge_bz, sponge_sq_rx, sponge_sq_by, sponge_sq_bz);
+#endif        
+    }
+    
+    void stress (GridIndex t, GridIndex x, GridIndex y, GridIndex z )
+    {
+#if 0        
+fsg.define_str_abc<BR, F, B, F>(t, x, y, z, fsg.s_br_xx, fsg.s_br_yy, fsg.s_br_zz, fsg.s_br_xy, fsg.s_br_xz, fsg.s_br_yz, fsg.v_br_u, fsg.v_br_v, fsg.v_br_w, fsg.v_bl_u, fsg.v_bl_v, fsg.v_bl_w, fsg.v_tr_u, fsg.v_tr_v, fsg.v_tr_w, sponge_rx, sponge_by, sponge_bz, sponge_sq_rx, sponge_sq_by, sponge_sq_bz);        
         define_str_abc<BL, F, F, B>(t, x, y, z, s_bl_xx, s_bl_yy, s_bl_zz, s_bl_xy, s_bl_xz, s_bl_yz, v_bl_u, v_bl_v, v_bl_w, v_br_u, v_br_v, v_br_w, v_tl_u, v_tl_v, v_tl_w, sponge_lx, sponge_fy, sponge_bz, sponge_sq_lx, sponge_sq_fy, sponge_sq_bz);
         define_str_abc<TR, B, F, F>(t, x, y, z, s_tr_xx, s_tr_yy, s_tr_zz, s_tr_xy, s_tr_xz, s_tr_yz, v_tr_u, v_tr_v, v_tr_w, v_tl_u, v_tl_v, v_tl_w, v_br_u, v_br_v, v_br_w, sponge_rx, sponge_fy, sponge_tz, sponge_sq_rx, sponge_sq_fy, sponge_sq_tz);
         define_str_abc<TL, B, B, B>(t, x, y, z, s_tl_xx, s_tl_yy, s_tl_zz, s_tl_xy, s_tl_xz, s_tl_yz, v_tl_u, v_tl_v, v_tl_w, v_tr_u, v_tr_v, v_tr_w, v_bl_u, v_bl_v, v_bl_w, sponge_lx, sponge_by, sponge_tz, sponge_sq_lx, sponge_sq_by, sponge_sq_tz);
 #endif
-
     }
+    
+};
+
+
+struct FSGElasticStencil : public FSGElasticStencilBase {
+    FSGElasticStencil(StencilList& stencils) : FSGElasticStencilBase("fsg", stencils) {}
+};
+
+struct FSGABCElasticStencil : public FSGElasticStencilBase {
+    FSG_ABC abc; // Absorbing Boundary Condition
+    
+    FSGABCElasticStencil(StencilList& stencils) : abc(*this), FSGElasticStencilBase("fsg-abc", &abc, stencils) {}
 };
 
 REGISTER_STENCIL(FSGElasticStencil);
+REGISTER_STENCIL(FSGABCElasticStencil);
+
+}
