@@ -899,7 +899,7 @@ namespace yask {
     // Dump grids to file
     void StencilContext::dump_grids( const std::string & dir ) {
         if( int err = mkdir( dir.c_str(), S_IRWXU ) ) {
-            std::cerr << "error: cannot create dirctory '" << dir << "': " << strerror( errno ) << std::endl;
+            std::cerr << "error: cannot create dirctory '" << dir << "': " << strerror( err ) << std::endl;
             exit(1);
         }
         for (auto gp : gridPtrs) {
