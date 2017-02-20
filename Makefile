@@ -126,6 +126,7 @@ eqs		?=	v_bl=v_bl,v_tr=v_tr,v_tl=v_tl,s_br=s_br,s_bl=s_bl,s_tr=s_tr,s_tl=s_tl
 else ifeq ($(stencil),fsg)
 eqs             ?=      v_br=v_br,v_bl=v_bl,v_tr=v_tr,v_tl=v_tl,s_br=s_br,s_bl=s_bl,s_tr=s_tr,s_tl=s_tl
 time_alloc	?=	1
+fold            ?=      x=1,y=1,z=1
 ifeq ($(arch),knl)
 REGION_LOOP_CODE ?=     omp square_wave serpentine loop(rn,rz,rx,ry) { calc(block(rt)); }
 BLOCK_LOOP_CODE ?=      omp square_wave serpentine loop(bnv,bxv,byv) { prefetch(L1) loop(bzv) { calc(cluster(bt)); } }

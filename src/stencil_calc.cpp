@@ -31,6 +31,8 @@ IN THE SOFTWARE.
 
 using namespace std;
 
+#include <sys/stat.h> // mkdir()
+
 namespace yask {
 
     ///// StencilContext functions:
@@ -890,6 +892,23 @@ namespace yask {
             for (auto pp : paramPtrs) {
                 realInitFn(pp, v);
                 v += 0.01;
+            }
+        }
+    }
+
+    // Dump grids to file
+    void StencilContext::dump_grids( const std::string & dir ) {
+        if( int err = mkdir( dir.c_str(), S_IRWXU ) ) {
+            std::cerr << "error: cannot create dirctory '" << dir << "': " << strerror( errno ) << std::endl;
+            exit(1);
+        }
+        for (auto gp : gridPtrs) {
+            gp->dump( dir );
+        }
+        if (paramPtrs.size()) {
+            int i = 0;
+            for (auto pp : paramPtrs) {
+                pp->dump( dir+"/param"+std::to_string(++i)+".bin" );
             }
         }
     }

@@ -341,8 +341,6 @@ public:
         
         FSGBoundaryCondition &fsg_bc = *static_cast<FSGBoundaryCondition *>(bc);
 
-        //define_vel_tmp<TL, B, F, B>(t, x, y, z, v_tl_w, s_tl_yz, s_tr_xz, s_bl_zz, sponge_lx, sponge_by, sponge_tz, sponge_sq_lx, sponge_sq_by, sponge_sq_tz);
-
         // Define velocity components.
         define_vel<TL, B, F, B>(t, x, y, z, v_tl_w, s_tl_yz, s_tr_xz, s_bl_zz);
         define_vel<TR, B, B, F>(t, x, y, z, v_tr_w, s_tr_yz, s_tl_xz, s_br_zz);
