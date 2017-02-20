@@ -47,42 +47,6 @@ struct X: public StencilDimension{};
 struct Y: public StencilDimension{};
 struct Z: public StencilDimension{};
 
-struct ElasticNoBoundary {
-    // YASK doesn't allow to assign false or true to Conditions
-    // so we are using z != z and z == z as replacements
-    static Condition is_at_boundary( GridIndex t, GridIndex x, GridIndex y, GridIndex z ) { Condition bc = ( z != z ); return bc; }
-    static Condition is_not_at_boundary( GridIndex t, GridIndex x, GridIndex y, GridIndex z ) { Condition bc = ( z == z ); return bc; }
-};
-
-/*
-struct ElasticABC {
-    // TODO: set proper condition
-    static Condition is_at_boundary( GridIndex t, GridIndex x, GridIndex y, GridIndex z ) { Condition bc = (z == last_index(z)); return bc; }
-    static Condition is_not_at_boundary( GridIndex t, GridIndex x, GridIndex y, GridIndex z ) { Condition bc = (z != last_index(z)); return bc; }
-    
-    template<typename N, typename SZ, typename SX, typename SY>
-    void define_vel_abc(GridIndex t, GridIndex x, GridIndex y, GridIndex z, 
-            Grid &v, Grid &sx, Grid &sy, Grid &sz, 
-            Grid &abc_x, Grid &abc_y, Grid &abc_z, Grid &abc_sq_x, Grid &abc_sq_y, Grid &abc_sq_z) {
-
-        Condition at_abc = is_at_boundary(t,x,y,z);
-
-        GridValue next_v = v(t, x, y, z) * abc_x(x,y,z) * abc_y(x,y,z) * abc_z(x,y,z);
-
-        GridValue lrho   = interp_rho<N>( x, y, z );
-
-        GridValue stx    = stencil_O2_X<SX>( t, x, y, z, sx );
-        GridValue sty    = stencil_O2_Y<SY>( t, x, y, z, sy );
-        GridValue stz    = stencil_O2_Z<SZ>( t, x, y, z, sz );
-
-        next_v += ((stx + sty + stz) * delta_t * lrho);
-        next_v *= abc_sq_x(x,y,z) * abc_sq_y(x,y,z) * abc_sq_z(x,y,z);
-
-        // define the value at t+1.
-        v(t+1, x, y, z) IS_EQUIV_TO next_v IF at_abc;
-    }    
-};*/
-
 class ElasticBoundaryCondition
 {
     public:
