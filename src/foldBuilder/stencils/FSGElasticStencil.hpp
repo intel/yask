@@ -161,17 +161,6 @@ public:
         );
     }
 
-    // Adjustment for sponge layer.
-    void adjust_for_sponge(GridValue& next_vel_x, GridIndex x, GridIndex y, GridIndex z) {
-
-        // TODO: It may be more efficient to skip processing interior nodes
-        // because their sponge coefficients are 1.0.  But this would
-        // necessitate handling conditionals. The branch mispredictions may
-        // cost more than the overhead of the extra loads and multiplies.
-
-        //next_vel_x *= sponge(x, y, z);
-    }
-
     GridValue cell_coeff( const GridIndex x, const GridIndex y, const GridIndex z, Grid &c, const BR )
     {
         return  1.0f / (0.25f*(c(x  , y  , z  ) +
@@ -414,6 +403,17 @@ public:
     Condition is_at_boundary( GridIndex t, GridIndex x, GridIndex y, GridIndex z ) { Condition bc = (z == last_index(z)); return bc; }
     Condition is_not_at_boundary( GridIndex t, GridIndex x, GridIndex y, GridIndex z ) { Condition bc = (z != last_index(z)); return bc; }
 
+    // Adjustment for sponge layer.
+    void adjust_for_sponge(GridValue& next_vel_x, GridIndex x, GridIndex y, GridIndex z) {
+
+        // TODO: It may be more efficient to skip processing interior nodes
+        // because their sponge coefficients are 1.0.  But this would
+        // necessitate handling conditionals. The branch mispredictions may
+        // cost more than the overhead of the extra loads and multiplies.
+
+        //next_vel_x *= sponge(x, y, z);
+    }    
+
     template<typename N, typename SZ, typename SX, typename SY>
     void define_vel_abc(GridIndex t, GridIndex x, GridIndex y, GridIndex z, 
             Grid &v, Grid &sx, Grid &sy, Grid &sz, 
@@ -523,13 +523,22 @@ public:
         
     void stress (GridIndex t, GridIndex x, GridIndex y, GridIndex z )
     {
-        define_str_abc<BR, F, B, F>(t, x, y, z, fsg.s_br_xx, fsg.s_br_yy, fsg.s_br_zz, fsg.s_br_xy, fsg.s_br_xz, fsg.s_br_yz, fsg.v_br_u, fsg.v_br_v, fsg.v_br_w, fsg.v_bl_u, fsg.v_bl_v, fsg.v_bl_w, fsg.v_tr_u, fsg.v_tr_v, fsg.v_tr_w, sponge_rx, sponge_by, sponge_bz, sponge_sq_rx, sponge_sq_by, sponge_sq_bz);        
-
-#if 0        
-        define_str_abc<BL, F, F, B>(t, x, y, z, s_bl_xx, s_bl_yy, s_bl_zz, s_bl_xy, s_bl_xz, s_bl_yz, v_bl_u, v_bl_v, v_bl_w, v_br_u, v_br_v, v_br_w, v_tl_u, v_tl_v, v_tl_w, sponge_lx, sponge_fy, sponge_bz, sponge_sq_lx, sponge_sq_fy, sponge_sq_bz);
-        define_str_abc<TR, B, F, F>(t, x, y, z, s_tr_xx, s_tr_yy, s_tr_zz, s_tr_xy, s_tr_xz, s_tr_yz, v_tr_u, v_tr_v, v_tr_w, v_tl_u, v_tl_v, v_tl_w, v_br_u, v_br_v, v_br_w, sponge_rx, sponge_fy, sponge_tz, sponge_sq_rx, sponge_sq_fy, sponge_sq_tz);
-        define_str_abc<TL, B, B, B>(t, x, y, z, s_tl_xx, s_tl_yy, s_tl_zz, s_tl_xy, s_tl_xz, s_tl_yz, v_tl_u, v_tl_v, v_tl_w, v_tr_u, v_tr_v, v_tr_w, v_bl_u, v_bl_v, v_bl_w, sponge_lx, sponge_by, sponge_tz, sponge_sq_lx, sponge_sq_by, sponge_sq_tz);
-#endif
+        define_str_abc<BR, F, B, F>(t, x, y, z, fsg.s_br_xx, fsg.s_br_yy, fsg.s_br_zz, fsg.s_br_xy, fsg.s_br_xz, 
+                                                fsg.s_br_yz, fsg.v_br_u,  fsg.v_br_v,  fsg.v_br_w,  fsg.v_bl_u, 
+                                                fsg.v_bl_v,  fsg.v_bl_w,  fsg.v_tr_u,  fsg.v_tr_v,  fsg.v_tr_w, 
+                                                sponge_rx, sponge_by, sponge_bz, sponge_sq_rx, sponge_sq_by, sponge_sq_bz);        
+        define_str_abc<BL, F, F, B>(t, x, y, z, fsg.s_bl_xx, fsg.s_bl_yy, fsg.s_bl_zz, fsg.s_bl_xy, fsg.s_bl_xz, 
+                                                fsg.s_bl_yz, fsg.v_bl_u,  fsg.v_bl_v,  fsg.v_bl_w,  fsg.v_br_u, 
+                                                fsg.v_br_v,  fsg.v_br_w,  fsg.v_tl_u,  fsg.v_tl_v,  fsg.v_tl_w, 
+                                                sponge_lx, sponge_fy, sponge_bz, sponge_sq_lx, sponge_sq_fy, sponge_sq_bz);
+        define_str_abc<TR, B, F, F>(t, x, y, z, fsg.s_tr_xx, fsg.s_tr_yy, fsg.s_tr_zz, fsg.s_tr_xy, fsg.s_tr_xz, 
+                                                fsg.s_tr_yz, fsg.v_tr_u,  fsg.v_tr_v,  fsg.v_tr_w,  fsg.v_tl_u, 
+                                                fsg.v_tl_v,  fsg.v_tl_w,  fsg.v_br_u,  fsg.v_br_v,  fsg.v_br_w, 
+                                                sponge_rx, sponge_fy, sponge_tz, sponge_sq_rx, sponge_sq_fy, sponge_sq_tz);
+        define_str_abc<TL, B, B, B>(t, x, y, z, fsg.s_tl_xx, fsg.s_tl_yy, fsg.s_tl_zz, fsg.s_tl_xy, fsg.s_tl_xz, 
+                                                fsg.s_tl_yz, fsg.v_tl_u,  fsg.v_tl_v,  fsg.v_tl_w,  fsg.v_tr_u, 
+                                                fsg.v_tr_v,  fsg.v_tr_w,  fsg.v_bl_u,  fsg.v_bl_v,  fsg.v_bl_w, 
+                                                sponge_lx, sponge_by, sponge_tz, sponge_sq_lx, sponge_sq_by, sponge_sq_tz);
     }
     
 };
