@@ -544,7 +544,7 @@ struct FSGElasticStencil : public FSGElasticStencilBase {
 struct FSGABCElasticStencil : public FSGElasticStencilBase {
     FSG_ABC abc; // Absorbing Boundary Condition
     
-    FSGABCElasticStencil(StencilList& stencils) : abc(*this), FSGElasticStencilBase("fsg-abc", &abc, stencils) {}
+    FSGABCElasticStencil(StencilList& stencils) : abc(*this), FSGElasticStencilBase("fsg_abc", &abc, stencils) {}
 };
 
 REGISTER_STENCIL(FSGElasticStencil);

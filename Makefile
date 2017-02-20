@@ -68,7 +68,7 @@ mpi		=	0
 
 # Defaults based on stencil type.
 ifeq ($(stencil),)
-$(error Stencil not specified; use stencil=iso3dfd, 3axis, 9axis, 3plane, cube, ave, stream, awp, awp_elastic, ssg or fsg)
+$(error Stencil not specified; use stencil=iso3dfd, 3axis, 9axis, 3plane, cube, ave, stream, awp, awp_elastic, ssg , fsg or fsg_abc)
 
 else ifeq ($(stencil),ave)
 radius		?=	1
