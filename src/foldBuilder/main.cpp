@@ -41,6 +41,7 @@ StencilList stencils;
 #include "AwpStencil.hpp"
 #include "AwpElasticStencil.hpp"
 #include "StreamStencil.hpp"
+#include "SSGElasticStencil.hpp"
 #include "FSGElasticStencil.hpp"
 
 #include <fstream>
