@@ -364,6 +364,8 @@ public:
 
 class FSG_ABC : public FSGBoundaryCondition
 {
+    const int abc_width = 20;
+    
     // Sponge coefficients.
     Grid sponge_lx;
     Grid sponge_rx;
@@ -399,20 +401,17 @@ public:
         fsg.INIT_GRID_3D(sponge_sq_by, x, y, z);        
     }
 
-    // TODO: set proper conditions    
-    Condition is_at_boundary( GridIndex t, GridIndex x, GridIndex y, GridIndex z ) { Condition bc = (z == last_index(z)); return bc; }
-    Condition is_not_at_boundary( GridIndex t, GridIndex x, GridIndex y, GridIndex z ) { Condition bc = (z != last_index(z)); return bc; }
-
-    // Adjustment for sponge layer.
-    void adjust_for_sponge(GridValue& next_vel_x, GridIndex x, GridIndex y, GridIndex z) {
-
-        // TODO: It may be more efficient to skip processing interior nodes
-        // because their sponge coefficients are 1.0.  But this would
-        // necessitate handling conditionals. The branch mispredictions may
-        // cost more than the overhead of the extra loads and multiplies.
-
-        //next_vel_x *= sponge(x, y, z);
-    }    
+    Condition is_at_boundary( GridIndex t, GridIndex x, GridIndex y, GridIndex z ) 
+    { 
+        Condition bc = ( z < first_index(z)+abc_width || z > last_index(z)-abc_width ) ||
+                       ( y < first_index(y)+abc_width || y > last_index(y)-abc_width ) ||
+                       ( x < first_index(x)+abc_width || x > last_index(x)-abc_width ); 
+        return bc; 
+    }
+    Condition is_not_at_boundary( GridIndex t, GridIndex x, GridIndex y, GridIndex z ) 
+    { 
+        return !is_at_boundary(t,x,y,z); 
+    }
 
     template<typename N, typename SZ, typename SX, typename SY>
     void define_vel_abc(GridIndex t, GridIndex x, GridIndex y, GridIndex z, 
@@ -512,7 +511,7 @@ public:
         next_sxy += fsg.stress_update(ic16,ic26,ic36,ic46,ic56,ic66,u_z,u_x,u_y,v_z,v_x,v_y,w_z,w_x,w_y) * abc_sq;
 
         // define the value at t+1.
-        Condition at_abc = (z == last_index(z));
+        Condition at_abc = is_at_boundary(t,x,y,z);
         sxx(t+1, x, y, z) IS_EQUIV_TO next_sxx IF at_abc;
         syy(t+1, x, y, z) IS_EQUIV_TO next_syy IF at_abc;
         szz(t+1, x, y, z) IS_EQUIV_TO next_szz IF at_abc;
