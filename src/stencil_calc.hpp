@@ -178,7 +178,8 @@ namespace yask {
     typedef std::vector<RealVecGridBase*> GridPtrs;
     typedef std::set<RealVecGridBase*> GridPtrSet;
     typedef std::vector<RealGrid*> ParamPtrs;
-    typedef std::set<std::string> NameSet;
+    typedef std::map<std::string, RealVecGridBase*> GridPtrMap;
+    typedef std::map<std::string, RealGrid*> ParamPtrMap;
     
     // Data and hierarchical sizes.
     // This is a pure-virtual class that must be implemented
@@ -231,21 +232,17 @@ namespace yask {
         // more parallelism.
         EqGroupList eqGroups;
 
-        // A list of all grids.
+        // All grids.
         GridPtrs gridPtrs;
-        NameSet gridNames;
+        GridPtrMap gridMap;
 
         // Only grids that are updated by the stencil equations.
         GridPtrs outputGridPtrs;
-        NameSet outputGridNames;
+        GridPtrMap outputGridMap;
 
-        // Grids whose halos are up-to-date.
-        // Grids are marked when MPI-exchanged and unmarked when written to.
-        GridPtrSet updatedGridPtrs;
-        
-        // A list of all non-grid parameters.
+        // Non-grid parameters.
         ParamPtrs paramPtrs;
-        NameSet paramNames;
+        ParamPtrMap paramMap;
 
         // Some calculated sizes.
         idx_t ofs_t=0, ofs_n=0, ofs_x=0, ofs_y=0, ofs_z=0; // Index offsets for this rank.
@@ -278,7 +275,6 @@ namespace yask {
 
         // Actual MPI buffers.
         // MPI buffers are tagged by their grid names.
-        // Only grids in outputGridPtrs will have buffers.
         std::map<std::string, MPIBufs> mpiBufs;
         
         // Constructor.

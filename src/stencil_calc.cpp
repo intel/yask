@@ -538,12 +538,12 @@ namespace yask {
 
             // Determine size of MPI buffers between rn and my rank.
             // Need send and receive for each updated grid.
-            for (auto* gp : outputGridPtrs) {
+            for (auto* gp : gridPtrs) {
                 auto& gname = gp->get_name();
                 
-                // Size of buffer in each direction: if dist to neighbor is zero
-                // (i.e., is perpendicular to this rank), use domain size;
-                // otherwise, use halo size.
+                // Size of buffer in each direction: if dist to neighbor is
+                // zero in given direction (i.e., is perpendicular to this
+                // rank), use domain size; otherwise, use halo size.
                 idx_t bsn = ROUND_UP((rdn == 0) ? _opts->dn : gp->get_halo_n(), VLEN_N);
                 idx_t bsx = ROUND_UP((rdx == 0) ? _opts->dx : gp->get_halo_x(), VLEN_X);
                 idx_t bsy = ROUND_UP((rdy == 0) ? _opts->dy : gp->get_halo_y(), VLEN_Y);
@@ -556,6 +556,7 @@ namespace yask {
                 else {
 
                     // Make a buffer in each direction (send & receive).
+                    size_t num_bytes = 0;
                     for (int bd = 0; bd < MPIBufs::nBufDirs; bd++) {
                         ostringstream oss;
                         oss << gname;
@@ -564,18 +565,22 @@ namespace yask {
                         else
                             oss << "_get_halo_to_" << my_rank << "_from_" << rn;
                         
-                        mpiBufs[gname].makeBuf(bd,
-                                               rdn+1, rdx+1, rdy+1, rdz+1,
-                                               bsn, bsx, bsy, bsz,
-                                               oss.str());
+                        Grid_NXYZ* bp = mpiBufs[gname].makeBuf(bd,
+                                                               rdn+1, rdx+1, rdy+1, rdz+1,
+                                                               bsn, bsx, bsy, bsz,
+                                                               oss.str());
+                        num_bytes += bp->get_num_bytes();
                         num_exchanges++;
                     }
+
+                    os << " Halo exchange of " << printWithPow2Multiplier(num_bytes) <<
+                        "B enabled for grid '" << gname << "' with rank " << rn << '.' << endl;
                 }
             }
         }
+        os << "Number of halo exchanges from this rank: " << num_exchanges << endl;
         os << "Problem-domain offsets of this rank: " <<
             ofs_n << ", " << ofs_x << ", " << ofs_y << ", " << ofs_z << endl;
-        os << "Number of halo exchanges from this rank: " << num_exchanges << endl;
     }
 
     // Allocate memory for grids, params, and MPI bufs.
@@ -636,7 +641,12 @@ namespace yask {
         }
 
         // MPI buffers.
-        for (auto gname : outputGridNames) {
+        for (auto* gp : gridPtrs) {
+            auto& gname = gp->get_name();
+            if (mpiBufs.count(gname) == 0)
+                continue;
+
+            // Visit buffers for each neighbor for this grid.
             mpiBufs[gname].visitNeighbors
                 (*this,
                  [&](idx_t nn, idx_t nx, idx_t ny, idx_t nz,
@@ -746,8 +756,8 @@ namespace yask {
 #endif
 
         os << endl;
-        os << "Num grids: " << gridNames.size() << endl;
-        os << "Num grids to be updated: " << outputGridNames.size() << endl;
+        os << "Num grids: " << gridPtrs.size() << endl;
+        os << "Num grids to be updated: " << outputGridPtrs.size() << endl;
         os << "Num stencil equation-groups: " << eqGroups.size() << endl;
         
         // Set up MPI data.  Must do this before sizing grids so that
@@ -1086,36 +1096,30 @@ namespace yask {
         for (size_t gi = 0; gi < eg.inputGridPtrs.size(); gi++) {
             auto gp = eg.inputGridPtrs[gi];
 
-            // Only need to swap grids with temporal dims.
-            if (!gp->got_t())
-                continue;
-
             // Only need to swap grids whose halos are not up-to-date.
-            if (updatedGridPtrs.count(gp))
+            if (gp->is_updated())
                 continue;
 
-            // Basic grid info.
-            auto gname = gp->get_name();
+            // Only need to swap grids with MPI buffers.
+            auto& gname = gp->get_name();
+            if (mpiBufs.count(gname) == 0)
+                continue;
 
-            // Determine halo sizes to be exchanged for this grid.
-            // Round up to vector lengths because the halo exchange only
-            // works with whole vectors. TODO: make this more efficient.
+            // Determine halo sizes to be exchanged for this grid.  Round up
+            // to vector lengths because the halo exchange only works with
+            // whole vectors. TODO: make this more efficient for halos that
+            // are not vector-length multiples.
             idx_t ghn = ROUND_UP(gp->get_halo_n(), VLEN_N);
             idx_t ghx = ROUND_UP(gp->get_halo_x(), VLEN_X);
             idx_t ghy = ROUND_UP(gp->get_halo_y(), VLEN_Y);
             idx_t ghz = ROUND_UP(gp->get_halo_z(), VLEN_Z);
 
-            // No halo?
-            if (ghn + ghx + ghy + ghz == 0)
-                continue;
-            
-            // Array to store max number of request handles.
+            // Array to store max number of request handles for this grid.
             MPI_Request reqs[MPIBufs::nBufDirs * MPIBufs::neighborhood_size];
             int nreqs = 0;
 
-            // Pack data and initiate non-blocking send/receive to/from all neighbors.
-            TRACE_MSG("exchange_halos: packing data for grid '" << gname << "'...");
-            assert(mpiBufs.count(gname) != 0);
+            // Submit non-blocking receive from all neighbors.
+            TRACE_MSG("exchange_halos: requesting data for grid '" << gname << "'...");
             mpiBufs[gname].visitNeighbors
                 (*this,
                  [&](idx_t nn, idx_t nx, idx_t ny, idx_t nz,
@@ -1123,6 +1127,25 @@ namespace yask {
                      Grid_NXYZ* sendBuf,
                      Grid_NXYZ* rcvBuf)
                  {
+
+                     // Submit request to receive data from neighbor if buffer exists.
+                     if (rcvBuf) {
+                         void* buf = (void*)(rcvBuf->get_storage());
+                         MPI_Irecv(buf, rcvBuf->get_num_bytes(), MPI_BYTE,
+                                   neighbor_rank, int(gi), comm, &reqs[nreqs++]);
+                     }
+                 });
+
+            // Pack data and initiate non-blocking send to all neighbors.
+            TRACE_MSG("exchange_halos: packing data for grid '" << gname << "'...");
+            mpiBufs[gname].visitNeighbors
+                (*this,
+                 [&](idx_t nn, idx_t nx, idx_t ny, idx_t nz,
+                     int neighbor_rank,
+                     Grid_NXYZ* sendBuf,
+                     Grid_NXYZ* rcvBuf)
+                 {
+
                      // Pack and send data if buffer exists.
                      if (sendBuf) {
 
@@ -1171,7 +1194,11 @@ namespace yask {
 
                          // TODO: fix this when MPI + wave-front is enabled.
                          idx_t t = start_dt;
-                         
+
+                         // Force dummy time value for grids w/o time dim.
+                         if (!gp->got_t())
+                             t = 0;
+
                          // Define calc_halo() to copy a vector from main grid to sendBuf.
                          // Index sendBuf using index_* vars because they are zero-based.
 #define calc_halo(t,                                                    \
@@ -1198,14 +1225,6 @@ namespace yask {
                          MPI_Isend(buf, sendBuf->get_num_bytes(), MPI_BYTE,
                                    neighbor_rank, int(gi), comm, &reqs[nreqs++]);
                      }
-
-                     // Receive data from same neighbor if buffer exists.
-                     if (rcvBuf) {
-                         void* buf = (void*)(rcvBuf->get_storage());
-                         MPI_Irecv(buf, rcvBuf->get_num_bytes(), MPI_BYTE,
-                                   neighbor_rank, int(gi), comm, &reqs[nreqs++]);
-                     }
-                     
                  } );
 
             // Wait for all to complete.
@@ -1215,7 +1234,6 @@ namespace yask {
             TRACE_MSG("exchange_halos: done waiting for " << nreqs << " MPI request(s)"),
 
             // Unpack received data from all neighbors.
-            assert(mpiBufs.count(gname) != 0);
             mpiBufs[gname].visitNeighbors
                 (*this,
                  [&](idx_t nn, idx_t nx, idx_t ny, idx_t nz,
@@ -1287,6 +1305,10 @@ namespace yask {
 
                          // TODO: fix this when MPI + wave-front is enabled.
                          idx_t t = start_dt;
+
+                         // Force dummy time value for grids w/o time dim.
+                         if (!gp->got_t())
+                             t = 0;
                          
                          // Define calc_halo to copy data from rcvBuf into main grid.
 #define calc_halo(t,                                                    \
@@ -1312,7 +1334,7 @@ namespace yask {
                  } );
 
             // Mark this grid as up-to-date.
-            updatedGridPtrs.insert(gp);
+            gp->set_updated(true);
             TRACE_MSG("exchange_halos: grid '" << gp->get_name() << "' is updated");
             
         } // grids.
@@ -1323,12 +1345,12 @@ namespace yask {
     }
 
     // Mark grids that have been written to by eq-group 'eg'.
-    // TODO: only update grids that are written to in their halo-read area.
+    // TODO: only mark grids that are written to in their halo-read area.
     void StencilContext::mark_grids_dirty(EqGroupBase& eg)
     {
-        for (auto ig : eg.outputGridPtrs) {
-            updatedGridPtrs.erase(ig);
-            TRACE_MSG("grid '" << ig->get_name() << "' is modified");
+        for (auto* gp : eg.outputGridPtrs) {
+            gp->set_updated(false);
+            TRACE_MSG("grid '" << gp->get_name() << "' is modified");
         }
     }
     

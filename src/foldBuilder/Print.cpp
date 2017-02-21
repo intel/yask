@@ -682,10 +682,10 @@ void YASKCppPrinter::printCode(ostream& os) {
             ctorCode += "\n  // Init grid '" + grid + "'.\n" +
                 " " + grid + " = new " + typeName + "(\"" + grid + "\");\n" +
                 " gridPtrs.push_back(" + grid + ");\n" +
-                " gridNames.insert(\"" + grid + "\");\n";
+                " gridMap[\"" + grid + "\"] = " + grid + ";\n";
             if (_eqGroups.getOutputGrids().count(gp)) {
                 ctorCode += " outputGridPtrs.push_back(" + grid  + ");\n" +
-                    " outputGridNames.insert(\"" + grid  + "\");\n";
+                    " outputGridMap[\"" + grid  + "\"] = " + grid + ";\n";
             }
             
             // Halo-setting code.
@@ -749,7 +749,7 @@ void YASKCppPrinter::printCode(ostream& os) {
             ctorCode += "\n  // Init parameter '" + param + "'.\n" +
                 " " + param + " = new " + ptype + "(" + dimArg + ");\n" +
                 " paramPtrs.push_back(" + param + ");\n" +
-                " paramNames.insert(\"" + param + "\");\n";
+                " paramMap[\"" + param + "\"] = " + param + ";\n";
         }
 
         // Ctor.

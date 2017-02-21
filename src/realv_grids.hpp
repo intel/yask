@@ -62,6 +62,9 @@ namespace yask {
         idx_t _pnv=0, _pxv=0, _pyv=0, _pzv=0;
         idx_t _onv=0, _oxv=0, _oyv=0, _ozv=0;
 
+        // Dynamic data.
+        bool _is_updated = false; // data has been received from neighbors' halos.
+        
         // Normalize element indices to vector indices and element offsets.
         ALWAYS_INLINE
         void normalize(idx_t elem_index,
@@ -208,11 +211,15 @@ namespace yask {
             _oy = ROUND_UP(oy, VLEN_Y); _oyv = _oy / VLEN_Y; }
         inline void set_ofs_z(idx_t oz) {
             _oz = ROUND_UP(oz, VLEN_Z); _ozv = _oz / VLEN_Z; }
+
+        // Dynamic data accessors.
+        bool is_updated() { return _is_updated; }
+        void set_updated(bool is_updated) { _is_updated = is_updated; }
         
         // Initialize memory to a given value.
         virtual void set_same(real_t val) {
             real_vec_t rn;
-            rn = val;               // broadcast.
+            rn = val;               // broadcast thru vector.
             _gp->set_same(rn);
         }
 
