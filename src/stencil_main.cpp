@@ -183,7 +183,8 @@ int main(int argc, char** argv)
     }
 
     // init data in grids and params.
-    context.initData();
+    if (opts.doWarmup || !opts.validate)
+        context.initData();
 
     // just a line.
     string divLine;

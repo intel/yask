@@ -51,7 +51,7 @@ protected:
     // Vectorization will be applied to grid accesses.
     Grids _grids;       // keep track of all registered grids.
 
-    // A parameter is an n-dimensional tensor that is NOT index by grid indices.
+    // A parameter is an n-dimensional tensor that is NOT indexed by grid indices.
     // It is used to pass some sort of index-invarant setting to a stencil function.
     // Its indices must be resolved when define() is called.
     // At this time, this is not checked, so be careful!!

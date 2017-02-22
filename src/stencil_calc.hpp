@@ -86,8 +86,9 @@ namespace yask {
 
         // Apply a function to each neighbor rank.
         // Called visitor function will contain the rank index of the neighbor.
-        // The send and receive buffer pointers may be null.
+        // The send and receive buffer pointers may be null if 'null_ok' is true.
         virtual void visitNeighbors(StencilContext& context,
+                                    bool null_ok,
                                     std::function<void (idx_t nn, idx_t nx, idx_t ny, idx_t nz,
                                                         int rank,
                                                         Grid_NXYZ* sendBuf,
@@ -494,7 +495,7 @@ namespace yask {
     cfn (idx_t ct,                                                      \
          idx_t begin_cnv, idx_t begin_cxv, idx_t begin_cyv, idx_t begin_czv, \
          idx_t end_cnv, idx_t end_cxv, idx_t end_cyv, idx_t end_czv) {  \
-        TRACE_MSG(get_name() << "." #cfn "<" << level << ">("           \
+        TRACE_MSG2(get_name() << "." #cfn "<" << level << ">("          \
                   "t=" << ct <<                                         \
                   ", nv=" << begin_cnv <<                               \
                   ", xv=" << begin_cxv <<                               \
