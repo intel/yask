@@ -47,11 +47,11 @@ protected:
     // Simple name for the stencil.
     string _name;
     
-    // A grid is an n-dimensional space that is indexed by grid indices.
+    // A grid is an n-dimensional tensor that is indexed by grid indices.
     // Vectorization will be applied to grid accesses.
     Grids _grids;       // keep track of all registered grids.
 
-    // A parameter is an n-dimensional space that is NOT index by grid indices.
+    // A parameter is an n-dimensional tensor that is NOT indexed by grid indices.
     // It is used to pass some sort of index-invarant setting to a stencil function.
     // Its indices must be resolved when define() is called.
     // At this time, this is not checked, so be careful!!
@@ -96,7 +96,7 @@ public:
     }
 };
 
-// A base class for stencils that have an 'radius'.
+// A base class for stencils that have a 'radius'.
 class StencilRadiusBase : public StencilBase {
 protected:
     int _radius;         // stencil radius (for convenience; optional).

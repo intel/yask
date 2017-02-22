@@ -121,13 +121,10 @@ namespace yask {
                         for (idx_t y = eg->begin_bby; y < eg->end_bby; y++)
                             for (idx_t z = eg->begin_bbz; z < eg->end_bbz; z++) {
 
-                                // Update only if point in domain for this eq group.
+                                // Update only if point is in sub-domain for this eq group.
                                 if (eg->is_in_valid_domain(t, n, x, y, z)) {
                                     
                                     // Evaluate the reference scalar code.
-                                    TRACE_MSG(eg->get_name() << ".calc_scalar(t=" << t <<
-                                              ", n=" << n << ", x=" << x <<
-                                              ", y=" << y << ", z=" << z << ")");
                                     eg->calc_scalar(t, n, x, y, z);
                                 }
                             }
@@ -187,8 +184,20 @@ namespace yask {
         // stencils * num timesteps. Thus, the number of overlapping regions
         // is ceil(total shift / region size). This assumes all eq-groups
         // are inter-dependent to find minimum extension. Actual required
-        // extension may be less, but this will just results in calls to
+        // extension may be less, but this will just result in some calls to
         // calc_region() that do nothing.
+        //
+        // Conceptually (4 regions in t and x dims):
+        // -----------------------------  t = rt
+        //  \    |\     \     \ |   \
+        //   \   | \     \     \|    \
+        //    \  |  \     \     |     \
+        //     \ |   \     \    |\     \
+        //      \|    \     \   | \     \
+        //  ----------------------------- t = 0
+        // x = begin_dx       end_dx   end_dx
+        //                    (orig)   (after extension)
+        //
         idx_t nshifts = (idx_t(eqGroups.size()) * _opts->rt) - 1;
         end_dn += angle_n * nshifts;
         end_dx += angle_x * nshifts;
@@ -323,6 +332,12 @@ namespace yask {
                 if (!eqGroup_set || eqGroup_set->count(eg)) {
                     TRACE_MSG("calc_region: eq-group '" << eg->get_name() << "'");
 
+                    // For wavefnot adjustments, see conceptual diagram in
+                    // calc_rank_opt().  In this function, 1 of the 4
+                    // parallelogram-shaped regions is being evaluated.  At
+                    // each time-step, the parallelogram may be trimmed
+                    // based on the BB.
+                    
                     // Actual region boundaries must stay within BB for this eq group.
                     idx_t begin_rn = max<idx_t>(start_dn, eg->begin_bbn);
                     idx_t end_rn = min<idx_t>(stop_dn, eg->end_bbn);
@@ -538,12 +553,12 @@ namespace yask {
 
             // Determine size of MPI buffers between rn and my rank.
             // Need send and receive for each updated grid.
-            for (auto* gp : outputGridPtrs) {
+            for (auto* gp : gridPtrs) {
                 auto& gname = gp->get_name();
                 
-                // Size of buffer in each direction: if dist to neighbor is zero
-                // (i.e., is perpendicular to this rank), use domain size;
-                // otherwise, use halo size.
+                // Size of buffer in each direction: if dist to neighbor is
+                // zero in given direction (i.e., is perpendicular to this
+                // rank), use domain size; otherwise, use halo size.
                 idx_t bsn = ROUND_UP((rdn == 0) ? _opts->dn : gp->get_halo_n(), VLEN_N);
                 idx_t bsx = ROUND_UP((rdx == 0) ? _opts->dx : gp->get_halo_x(), VLEN_X);
                 idx_t bsy = ROUND_UP((rdy == 0) ? _opts->dy : gp->get_halo_y(), VLEN_Y);
@@ -556,6 +571,7 @@ namespace yask {
                 else {
 
                     // Make a buffer in each direction (send & receive).
+                    size_t num_bytes = 0;
                     for (int bd = 0; bd < MPIBufs::nBufDirs; bd++) {
                         ostringstream oss;
                         oss << gname;
@@ -564,18 +580,22 @@ namespace yask {
                         else
                             oss << "_get_halo_to_" << my_rank << "_from_" << rn;
                         
-                        mpiBufs[gname].makeBuf(bd,
-                                               rdn+1, rdx+1, rdy+1, rdz+1,
-                                               bsn, bsx, bsy, bsz,
-                                               oss.str());
+                        Grid_NXYZ* bp = mpiBufs[gname].makeBuf(bd,
+                                                               rdn+1, rdx+1, rdy+1, rdz+1,
+                                                               bsn, bsx, bsy, bsz,
+                                                               oss.str());
+                        num_bytes += bp->get_num_bytes();
                         num_exchanges++;
                     }
+
+                    os << " Halo exchange of " << printWithPow2Multiplier(num_bytes) <<
+                        "B enabled for grid '" << gname << "' with rank " << rn << '.' << endl;
                 }
             }
         }
+        os << "Number of halo exchanges from this rank: " << num_exchanges << endl;
         os << "Problem-domain offsets of this rank: " <<
             ofs_n << ", " << ofs_x << ", " << ofs_y << ", " << ofs_z << endl;
-        os << "Number of halo exchanges from this rank: " << num_exchanges << endl;
     }
 
     // Allocate memory for grids, params, and MPI bufs.
@@ -636,32 +656,36 @@ namespace yask {
         }
 
         // MPI buffers.
-        for (auto gname : outputGridNames) {
+        for (auto* gp : gridPtrs) {
+            auto& gname = gp->get_name();
+            if (mpiBufs.count(gname) == 0)
+                continue;
+
+            // Visit buffers for each neighbor for this grid.
             mpiBufs[gname].visitNeighbors
-                (*this,
+                (*this, false,
                  [&](idx_t nn, idx_t nx, idx_t ny, idx_t nz,
                      int rank,
                      Grid_NXYZ* sendBuf,
                      Grid_NXYZ* rcvBuf)
                  {
-                     if (sendBuf) {
-                         if (_data_buf)
-                             sendBuf->set_storage(_data_buf, nbytes);
-                         bbytes += sendBuf->get_num_bytes();
-                         nbytes += ROUND_UP(sendBuf->get_num_bytes() + _data_buf_pad,
-                                            CACHELINE_BYTES);
-                         TRACE_MSG("send buf '" << sendBuf->get_name() << "' needs " <<
-                                   sendBuf->get_num_bytes() << " bytes");
-                     }
-                     if (rcvBuf) {
-                         if (_data_buf)
-                             rcvBuf->set_storage(_data_buf, nbytes);
-                         bbytes += rcvBuf->get_num_bytes();
-                         nbytes += ROUND_UP(rcvBuf->get_num_bytes() + _data_buf_pad,
-                                            CACHELINE_BYTES);
-                         TRACE_MSG("rcv buf '" << rcvBuf->get_name() << "' needs " <<
-                                   rcvBuf->get_num_bytes() << " bytes");
-                     }
+                     // Send.
+                     if (_data_buf)
+                         sendBuf->set_storage(_data_buf, nbytes);
+                     bbytes += sendBuf->get_num_bytes();
+                     nbytes += ROUND_UP(sendBuf->get_num_bytes() + _data_buf_pad,
+                                        CACHELINE_BYTES);
+                     TRACE_MSG("send buf '" << sendBuf->get_name() << "' needs " <<
+                               sendBuf->get_num_bytes() << " bytes");
+
+                     // Recv.
+                     if (_data_buf)
+                         rcvBuf->set_storage(_data_buf, nbytes);
+                     bbytes += rcvBuf->get_num_bytes();
+                     nbytes += ROUND_UP(rcvBuf->get_num_bytes() + _data_buf_pad,
+                                        CACHELINE_BYTES);
+                     TRACE_MSG("rcv buf '" << rcvBuf->get_name() << "' needs " <<
+                               rcvBuf->get_num_bytes() << " bytes");
                  } );
         }
 
@@ -746,8 +770,8 @@ namespace yask {
 #endif
 
         os << endl;
-        os << "Num grids: " << gridNames.size() << endl;
-        os << "Num grids to be updated: " << outputGridNames.size() << endl;
+        os << "Num grids: " << gridPtrs.size() << endl;
+        os << "Num grids to be updated: " << outputGridPtrs.size() << endl;
         os << "Num stencil equation-groups: " << eqGroups.size() << endl;
         
         // Set up MPI data.  Must do this before sizing grids so that
@@ -797,19 +821,19 @@ namespace yask {
         rank_numpts_1t = 0; rank_numFpOps_1t = 0; // sums across eqs for this rank.
         for (auto eg : eqGroups) {
             idx_t updates1 = eg->get_scalar_points_updated();
-            idx_t updates_domain = updates1 * eg->bb_size;
+            idx_t updates_domain = updates1 * eg->bb_num_points;
             idx_t fpops1 = eg->get_scalar_fp_ops();
-            idx_t fpops_domain = fpops1 * eg->bb_size;
+            idx_t fpops_domain = fpops1 * eg->bb_num_points;
             rank_numpts_1t += updates_domain;
             rank_numFpOps_1t += fpops_domain;
             os << "Stats for equation-group '" << eg->get_name() << "':\n" <<
-                " sub-domain-size:            " <<
+                " sub-domain size:            " <<
                 eg->len_bbn << '*' << eg->len_bbx << '*' << eg->len_bby << '*' << eg->len_bbz << endl <<
-                " points-in-sub-domain:       " << printWithPow10Multiplier(eg->bb_size) << endl <<
-                " grid-updates-per-point:     " << updates1 << endl <<
-                " grid-updates-in-sub-domain: " << printWithPow10Multiplier(updates_domain) << endl <<
-                " est-FP-ops-per-point:       " << fpops1 << endl <<
-                " est-FP-ops-in-sub-domain:   " << printWithPow10Multiplier(fpops_domain) << endl;
+                " valid points in sub domain: " << printWithPow10Multiplier(eg->bb_num_points) << endl <<
+                " grid-updates per point:     " << updates1 << endl <<
+                " grid-updates in sub-domain: " << printWithPow10Multiplier(updates_domain) << endl <<
+                " est FP-ops per point:       " << fpops1 << endl <<
+                " est FP-ops in sub-domain:   " << printWithPow10Multiplier(fpops_domain) << endl;
         }
 
         // Report total allocation.
@@ -934,7 +958,7 @@ namespace yask {
         begin_bbx = idx_max; end_bbx = idx_min;
         begin_bby = idx_max; end_bby = idx_min;
         begin_bbz = idx_max; end_bbz = idx_min;
-        
+
         // Find BB for each eq group and update context.
         for (auto eg : eqGroups) {
             eg->find_bounding_box();
@@ -948,9 +972,12 @@ namespace yask {
             end_bby = max(end_bby, eg->end_bby);
             end_bbz = max(end_bbz, eg->end_bbz);
         }
-
         update_lengths();
 
+        // These vars are N/A for the overall BB.
+        bb_num_points = 0;
+        bb_simple = false;
+        
         // Adjust region size to be within BB.
         _opts->rn = min(_opts->rn, len_bbn);
         _opts->rx = min(_opts->rx, len_bbx);
@@ -980,6 +1007,7 @@ namespace yask {
         if (bb_valid) return;
         StencilContext& context = *_generic_context;
         StencilSettings& opts = context.get_settings();
+        ostream& os = context.get_ostr();
 
         // Init min vars w/max val and vice-versa.
         idx_t minn = idx_max, maxn = idx_min;
@@ -1034,29 +1062,44 @@ namespace yask {
             begin_bbz = end_bbz = 0;
         }
         update_lengths();
+        bb_num_points = npts;
 
-        // Only supporting solid rectangles at this time.
-        if (npts != bb_size) {
-            cerr << "Error: domain for equation-group '" << get_name() << "' contains " <<
-                npts << " points, but " << bb_size << " were expected for a hyper-rectangular polytope. " <<
-                "Non-hyper-rectangular domains are not supported at this time." << endl;
-            exit_yask(1);
+        // Solid rectangle?
+        if (bb_num_points != bb_size) {
+            os << "Warning: domain for equation-group '" << get_name() << "' has only " <<
+                printWithPow10Multiplier(bb_num_points) <<
+                " valid point(s) inside its bounding-box of " <<
+                printWithPow10Multiplier(bb_size) <<
+                " point(s); slower scalar calculations will be used.\n";
+            bb_simple = false;
         }
 
-        // Only supporting full-cluster BBs at this time.
-        // TODO: handle partial clusters.
-        if (len_bbn % CLEN_N ||
-            len_bbx % CLEN_X ||
-            len_bby % CLEN_Y ||
-            len_bbz % CLEN_Z) {
-            cerr << "Error: each domain length must be a multiple of the cluster size." << endl;
-            exit_yask(1);
+        // Lengths are cluster-length multiples?
+        else if (len_bbn % CLEN_N ||
+                 len_bbx % CLEN_X ||
+                 len_bby % CLEN_Y ||
+                 len_bbz % CLEN_Z) {
+            os << "Warning: domain for equation-group '" << get_name() <<
+                "' has one or more sizes that are not vector-cluster multiples;"
+                " slower scalar calculations will be used.\n";
+            bb_simple = false;
         }
 
-        bb_valid = true;
+        // Edges are cluster-length multiples?
+        else if (begin_bbn % CLEN_N ||
+                 begin_bbx % CLEN_X ||
+                 begin_bby % CLEN_Y ||
+                 begin_bbz % CLEN_Z) {
+            os << "Warning: domain for equation-group '" << get_name() <<
+                "' has one or more edges that do not start on vector-cluster boundaries;"
+                " slower scalar calculations will be used.\n";
+            bb_simple = false;
+        }
     }
     
     // Exchange halo data needed by eq-group 'eg' at the given time.
+    // Data is needed for input grids that have not already been updated.
+    // TODO: overlap halo exchange with computation.
     void StencilContext::exchange_halos(idx_t start_dt, idx_t stop_dt, EqGroupBase& eg)
     {
         StencilSettings& opts = get_settings();
@@ -1069,11 +1112,13 @@ namespace yask {
         // These vars control blocking within halo packing.
         // Currently, only zv has a loop in the calc_halo macros below.
         // Thus, step_{n,x,y}v must be 1.
-        // TODO: make step_zv a parameter.
         const idx_t step_nv = 1;
         const idx_t step_xv = 1;
         const idx_t step_yv = 1;
-        const idx_t step_zv = 4;
+#ifndef HALO_STEP_ZV
+#define HALO_STEP_ZV (4)
+#endif
+        const idx_t step_zv = HALO_STEP_ZV;
 
         // Groups in halo loops are set to smallest size.
         const idx_t group_size_nv = 1;
@@ -1081,261 +1126,248 @@ namespace yask {
         const idx_t group_size_yv = 1;
         const idx_t group_size_zv = 1;
 
-        // TODO: put this loop inside visitNeighbors to enable simultaneous
-        // exchange of all grids.
-        for (size_t gi = 0; gi < eg.inputGridPtrs.size(); gi++) {
-            auto gp = eg.inputGridPtrs[gi];
+        // 1D array to store send request handles.
+        // We use a 1D array so we can call MPI_Waitall().
+        MPI_Request send_reqs[eg.inputGridPtrs.size() * MPIBufs::neighborhood_size];
+        int num_send_reqs = 0;
 
-            // Only need to swap grids with temporal dims.
-            if (!gp->got_t())
-                continue;
+        // 2D array for receive request handles.
+        // We use a 2D array to simplify individual indexing.
+        MPI_Request recv_reqs[eg.inputGridPtrs.size()][MPIBufs::neighborhood_size];
 
-            // Only need to swap grids whose halos are not up-to-date.
-            if (updatedGridPtrs.count(gp))
-                continue;
+        // Sequence of things to do for each grid's neighbors.
+        enum halo_steps { halo_irecv, halo_isend, halo_unpack, halo_nsteps };
+        for (int hi = 0; hi < halo_nsteps; hi++) {
 
-            // Basic grid info.
-            auto gname = gp->get_name();
-
-            // Determine halo sizes to be exchanged for this grid.
-            // Round up to vector lengths because the halo exchange only
-            // works with whole vectors. TODO: make this more efficient.
-            idx_t ghn = ROUND_UP(gp->get_halo_n(), VLEN_N);
-            idx_t ghx = ROUND_UP(gp->get_halo_x(), VLEN_X);
-            idx_t ghy = ROUND_UP(gp->get_halo_y(), VLEN_Y);
-            idx_t ghz = ROUND_UP(gp->get_halo_z(), VLEN_Z);
-
-            // No halo?
-            if (ghn + ghx + ghy + ghz == 0)
-                continue;
+            if (hi == halo_irecv)
+                TRACE_MSG("exchange_halos: requesting data...");
+            else if (hi == halo_isend)
+                TRACE_MSG("exchange_halos: sending data...");
+            else if (hi == halo_unpack)
+                TRACE_MSG("exchange_halos: unpacking data...");
             
-            // Array to store max number of request handles.
-            MPI_Request reqs[MPIBufs::nBufDirs * MPIBufs::neighborhood_size];
-            int nreqs = 0;
+            // Loop thru all grids.
+            for (size_t gi = 0; gi < eg.inputGridPtrs.size(); gi++) {
+                auto gp = eg.inputGridPtrs[gi];
 
-            // Pack data and initiate non-blocking send/receive to/from all neighbors.
-            TRACE_MSG("exchange_halos: packing data for grid '" << gname << "'...");
-            assert(mpiBufs.count(gname) != 0);
-            mpiBufs[gname].visitNeighbors
-                (*this,
-                 [&](idx_t nn, idx_t nx, idx_t ny, idx_t nz,
-                     int neighbor_rank,
-                     Grid_NXYZ* sendBuf,
-                     Grid_NXYZ* rcvBuf)
-                 {
-                     // Pack and send data if buffer exists.
-                     if (sendBuf) {
+                // Only need to swap grids whose halos are not up-to-date.
+                if (gp->is_updated())
+                    continue;
 
-                         // Set begin/end vars to indicate what part
-                         // of main grid to read from.
-                         // Init range to whole rank domain (inside halos).
-                         idx_t begin_n = 0;
-                         idx_t begin_x = 0;
-                         idx_t begin_y = 0;
-                         idx_t begin_z = 0;
-                         idx_t end_n = opts.dn;
-                         idx_t end_x = opts.dx;
-                         idx_t end_y = opts.dy;
-                         idx_t end_z = opts.dz;
+                // Only need to swap grids that have MPI buffers.
+                auto& gname = gp->get_name();
+                if (mpiBufs.count(gname) == 0)
+                    continue;
+            
+                // Determine halo sizes to be exchanged for this grid.  Round up
+                // to vector lengths because the halo exchange only works with
+                // whole vectors. TODO: make this more efficient for halos that
+                // are not vector-length multiples.
+                idx_t ghn = ROUND_UP(gp->get_halo_n(), VLEN_N);
+                idx_t ghx = ROUND_UP(gp->get_halo_x(), VLEN_X);
+                idx_t ghy = ROUND_UP(gp->get_halo_y(), VLEN_Y);
+                idx_t ghz = ROUND_UP(gp->get_halo_z(), VLEN_Z);
 
-                         // Modify begin and/or end based on direction.
-                         if (nn == idx_t(MPIBufs::rank_prev)) // neighbor is prev N.
-                             end_n = ghn; // read first halo-width only.
-                         if (nn == idx_t(MPIBufs::rank_next)) // neighbor is next N.
-                             begin_n = opts.dn - ghn; // read last halo-width only.
-                         if (nx == idx_t(MPIBufs::rank_prev)) // neighbor is on left.
-                             end_x = ghx;
-                         if (nx == idx_t(MPIBufs::rank_next)) // neighbor is on right.
-                             begin_x = opts.dx - ghx;
-                         if (ny == idx_t(MPIBufs::rank_prev)) // neighbor is in front.
-                             end_y = ghy;
-                         if (ny == idx_t(MPIBufs::rank_next)) // neighbor is in back.
-                             begin_y = opts.dy - ghy;
-                         if (nz == idx_t(MPIBufs::rank_prev)) // neighbor is above.
-                             end_z = ghz;
-                         if (nz == idx_t(MPIBufs::rank_next)) // neighbor is below.
-                             begin_z = opts.dz - ghz;
+                // Visit all this rank's neighbors.
+                int ni = 0;
+                mpiBufs[gname].visitNeighbors
+                    (*this, false,
+                     [&](idx_t nn, idx_t nx, idx_t ny, idx_t nz,
+                         int neighbor_rank,
+                         Grid_NXYZ* sendBuf,
+                         Grid_NXYZ* rcvBuf)
+                     {
+                         ni++;
 
-                         // Add offsets and divide indices by vector
-                         // lengths.  Begin/end vars shouldn't be negative
-                         // (because we're always inside the halo), so '/'
-                         // is ok.
-                         idx_t begin_nv = (ofs_n + begin_n) / VLEN_N;
-                         idx_t begin_xv = (ofs_x + begin_x) / VLEN_X;
-                         idx_t begin_yv = (ofs_y + begin_y) / VLEN_Y;
-                         idx_t begin_zv = (ofs_z + begin_z) / VLEN_Z;
-                         idx_t end_nv = (ofs_n + end_n) / VLEN_N;
-                         idx_t end_xv = (ofs_x + end_x) / VLEN_X;
-                         idx_t end_yv = (ofs_y + end_y) / VLEN_Y;
-                         idx_t end_zv = (ofs_z + end_z) / VLEN_Z;
+                         // Submit request to receive data from neighbor.
+                         if (hi == halo_irecv) {
+                             TRACE_MSG("exchange_halos: requesting data from rank " <<
+                                       neighbor_rank << " for grid '" << gname << "'...");
+                             void* buf = (void*)(rcvBuf->get_storage());
+                             MPI_Irecv(buf, rcvBuf->get_num_bytes(), MPI_BYTE,
+                                       neighbor_rank, int(gi), comm, &recv_reqs[gi][ni]);
+                         }
 
-                         // TODO: fix this when MPI + wave-front is enabled.
-                         idx_t t = start_dt;
-                         
-                         // Define calc_halo() to copy a vector from main grid to sendBuf.
-                         // Index sendBuf using index_* vars because they are zero-based.
+                         // Common code for pack (and send) and unpack.
+                         else {
+
+                             // Set begin/end vars to indicate what part
+                             // of main grid to read from or write to.
+                             // Init range to whole rank domain (inside halos).
+                             idx_t begin_n = 0;
+                             idx_t begin_x = 0;
+                             idx_t begin_y = 0;
+                             idx_t begin_z = 0;
+                             idx_t end_n = opts.dn;
+                             idx_t end_x = opts.dx;
+                             idx_t end_y = opts.dy;
+                             idx_t end_z = opts.dz;
+
+                             // Region to read from, i.e., data to be put into receiver's halo.
+                             if (hi == halo_isend) {
+
+                                 // Modify begin and/or end based on direction.
+                                 if (nn == idx_t(MPIBufs::rank_prev)) // neighbor is prev N.
+                                     end_n = ghn; // read first halo-width only.
+                                 if (nn == idx_t(MPIBufs::rank_next)) // neighbor is next N.
+                                     begin_n = opts.dn - ghn; // read last halo-width only.
+                                 if (nx == idx_t(MPIBufs::rank_prev)) // neighbor is on left.
+                                     end_x = ghx;
+                                 if (nx == idx_t(MPIBufs::rank_next)) // neighbor is on right.
+                                     begin_x = opts.dx - ghx;
+                                 if (ny == idx_t(MPIBufs::rank_prev)) // neighbor is in front.
+                                     end_y = ghy;
+                                 if (ny == idx_t(MPIBufs::rank_next)) // neighbor is in back.
+                                     begin_y = opts.dy - ghy;
+                                 if (nz == idx_t(MPIBufs::rank_prev)) // neighbor is above.
+                                     end_z = ghz;
+                                 if (nz == idx_t(MPIBufs::rank_next)) // neighbor is below.
+                                     begin_z = opts.dz - ghz;
+                             }
+
+                             // Region to write to, i.e., this rank's halo.
+                             else if (hi == halo_unpack) {
+
+                                 // Modify begin and/or end based on direction.
+                                 if (nn == idx_t(MPIBufs::rank_prev)) { // neighbor is prev N.
+                                     begin_n = -ghn; // begin at outside of halo.
+                                     end_n = 0;     // end at inside of halo.
+                                 }
+                                 if (nn == idx_t(MPIBufs::rank_next)) { // neighbor is next N.
+                                     begin_n = opts.dn; // begin at inside of halo.
+                                     end_n = opts.dn + ghn; // end of outside of halo.
+                                 }
+                                 if (nx == idx_t(MPIBufs::rank_prev)) { // neighbor is on left.
+                                     begin_x = -ghx;
+                                     end_x = 0;
+                                 }
+                                 if (nx == idx_t(MPIBufs::rank_next)) { // neighbor is on right.
+                                     begin_x = opts.dx;
+                                     end_x = opts.dx + ghx;
+                                 }
+                                 if (ny == idx_t(MPIBufs::rank_prev)) { // neighbor is in front.
+                                     begin_y = -ghy;
+                                     end_y = 0;
+                                 }
+                                 if (ny == idx_t(MPIBufs::rank_next)) { // neighbor is in back.
+                                     begin_y = opts.dy;
+                                     end_y = opts.dy + ghy;
+                                 }
+                                 if (nz == idx_t(MPIBufs::rank_prev)) { // neighbor is above.
+                                     begin_z = -ghz;
+                                     end_z = 0;
+                                 }
+                                 if (nz == idx_t(MPIBufs::rank_next)) { // neighbor is below.
+                                     begin_z = opts.dz;
+                                     end_z = opts.dz + ghz;
+                                 }
+                             }
+
+                             // Add offsets and divide indices by vector
+                             // lengths. Use idiv_flr() because indices may be neg (in halo).
+                             idx_t begin_nv = idiv_flr<idx_t>(ofs_n + begin_n, VLEN_N);
+                             idx_t begin_xv = idiv_flr<idx_t>(ofs_x + begin_x, VLEN_X);
+                             idx_t begin_yv = idiv_flr<idx_t>(ofs_y + begin_y, VLEN_Y);
+                             idx_t begin_zv = idiv_flr<idx_t>(ofs_z + begin_z, VLEN_Z);
+                             idx_t end_nv = idiv_flr<idx_t>(ofs_n + end_n, VLEN_N);
+                             idx_t end_xv = idiv_flr<idx_t>(ofs_x + end_x, VLEN_X);
+                             idx_t end_yv = idiv_flr<idx_t>(ofs_y + end_y, VLEN_Y);
+                             idx_t end_zv = idiv_flr<idx_t>(ofs_z + end_z, VLEN_Z);
+
+                             // Assume only one time-step to exchange.
+                             // TODO: fix this when MPI + wave-front is enabled.
+                             assert(stop_dt = start_dt + 1);
+                             idx_t t = start_dt;
+
+                             // Force dummy time value for grids w/o time dim.
+                             if (!gp->got_t())
+                                 t = 0;
+
+                             // Wait for data.
+                             if (hi == halo_unpack) {
+                                 TRACE_MSG("exchange_halos: waiting for data from rank " <<
+                                           neighbor_rank << " for grid '" << gname << "'...");
+                                 MPI_Wait(&recv_reqs[gi][ni], MPI_STATUS_IGNORE);
+                                 TRACE_MSG("exchange_halos: done waiting for data.");
+                             }
+
+                             // Define calc_halo to copy data between main grid and MPI buffer.
+                             // Add a short loop in z-dim to increase work done in halo loop.
 #define calc_halo(t,                                                    \
                   start_nv, start_xv, start_yv, start_zv,               \
                   stop_nv, stop_xv, stop_yv, stop_zv)  do {             \
-                             idx_t nv = start_nv;                       \
-                             idx_t xv = start_xv;                       \
-                             idx_t yv = start_yv;                       \
-                             idx_t izv = index_zv * step_zv;            \
-                             for (idx_t zv = start_zv; zv < stop_zv; zv++) { \
-                                 real_vec_t hval = gp->readVecNorm_TNXYZ(t, nv, xv, yv, zv, \
-                                                                         __LINE__); \
-                                 sendBuf->writeVecNorm(hval, index_nv, index_xv, index_yv, izv++, \
-                                                       __LINE__);       \
-                             } } while(0)
-                         
-                         // Include auto-generated loops to invoke calc_halo() from
-                         // begin_*v to end_*v;
+                                 idx_t nv = start_nv;                   \
+                                 idx_t xv = start_xv;                   \
+                                 idx_t yv = start_yv;                   \
+                                 idx_t izv = index_zv * step_zv;        \
+                                 if (hi == halo_isend) {                \
+                                     for (idx_t zv = start_zv; zv < stop_zv; zv++) { \
+                                         real_vec_t hval = gp->readVecNorm_TNXYZ(t, nv, xv, yv, zv, \
+                                                                                 __LINE__); \
+                                         sendBuf->writeVecNorm(hval, index_nv, index_xv, index_yv, izv++, \
+                                                               __LINE__); \
+                                     }                                  \
+                                 } else if (hi == halo_unpack) {        \
+                                     for (idx_t zv = start_zv; zv < stop_zv; zv++) { \
+                                         real_vec_t hval =              \
+                                             rcvBuf->readVecNorm(index_nv, index_xv, index_yv, izv++, \
+                                                                 __LINE__); \
+                                         gp->writeVecNorm_TNXYZ(hval, t, nv, xv, yv, zv, \
+                                                                __LINE__); \
+                                     } } } while(0)
+
+                             // Include auto-generated loops to invoke calc_halo() from
+                             // begin_*v to end_*v by step_*v.
 #include "stencil_halo_loops.hpp"
 #undef calc_halo
 
-                         // Send filled buffer to neighbor.
-                         const void* buf = (const void*)(sendBuf->get_storage());
-                         MPI_Isend(buf, sendBuf->get_num_bytes(), MPI_BYTE,
-                                   neighbor_rank, int(gi), comm, &reqs[nreqs++]);
-                     }
+                             // Send filled buffer to neighbor.
+                             if (hi == halo_isend) {
+                                 TRACE_MSG("exchange_halos: sending data to rank " <<
+                                           neighbor_rank << " for grid '" << gname << "'...");
+                                 const void* buf = (const void*)(sendBuf->get_storage());
+                                 MPI_Isend(buf, sendBuf->get_num_bytes(), MPI_BYTE,
+                                           neighbor_rank, int(gi), comm, &send_reqs[num_send_reqs++]);
+                             }
+                         } // not receive.
+                     } ); // visit neighbors.
+                
+                // Mark this grid as up-to-date.
+                if (hi == halo_unpack) {
+                    gp->set_updated(true);
+                    TRACE_MSG("exchange_halos: grid '" << gp->get_name() << "' is updated");
+                }
+                
+            } // grids.
 
-                     // Receive data from same neighbor if buffer exists.
-                     if (rcvBuf) {
-                         void* buf = (void*)(rcvBuf->get_storage());
-                         MPI_Irecv(buf, rcvBuf->get_num_bytes(), MPI_BYTE,
-                                   neighbor_rank, int(gi), comm, &reqs[nreqs++]);
-                     }
-                     
-                 } );
+        } // halo sequence.
 
-            // Wait for all to complete.
-            // TODO: process each buffer asynchronously immediately upon completion.
-            TRACE_MSG("exchange_halos: waiting for " << nreqs << " MPI request(s)...");
-            MPI_Waitall(nreqs, reqs, MPI_STATUS_IGNORE);
-            TRACE_MSG("exchange_halos: done waiting for " << nreqs << " MPI request(s)"),
-
-            // Unpack received data from all neighbors.
-            assert(mpiBufs.count(gname) != 0);
-            mpiBufs[gname].visitNeighbors
-                (*this,
-                 [&](idx_t nn, idx_t nx, idx_t ny, idx_t nz,
-                     int neighbor_rank,
-                     Grid_NXYZ* sendBuf,
-                     Grid_NXYZ* rcvBuf)
-                 {
-                     // Unpack data if buffer exists.
-                     if (rcvBuf) {
-
-                         // Set begin/end vars to indicate what part
-                         // of main grid's halo to write to.
-                         // Init range to whole rank size (inside halos).
-                         idx_t begin_n = 0;
-                         idx_t begin_x = 0;
-                         idx_t begin_y = 0;
-                         idx_t begin_z = 0;
-                         idx_t end_n = opts.dn;
-                         idx_t end_x = opts.dx;
-                         idx_t end_y = opts.dy;
-                         idx_t end_z = opts.dz;
-                         
-                         // Modify begin and/or end based on direction.
-                         if (nn == idx_t(MPIBufs::rank_prev)) { // neighbor is prev N.
-                             begin_n = -ghn; // begin at outside of halo.
-                             end_n = 0;     // end at inside of halo.
-                         }
-                         if (nn == idx_t(MPIBufs::rank_next)) { // neighbor is next N.
-                             begin_n = opts.dn; // begin at inside of halo.
-                             end_n = opts.dn + ghn; // end of outside of halo.
-                         }
-                         if (nx == idx_t(MPIBufs::rank_prev)) { // neighbor is on left.
-                             begin_x = -ghx;
-                             end_x = 0;
-                         }
-                         if (nx == idx_t(MPIBufs::rank_next)) { // neighbor is on right.
-                             begin_x = opts.dx;
-                             end_x = opts.dx + ghx;
-                         }
-                         if (ny == idx_t(MPIBufs::rank_prev)) { // neighbor is in front.
-                             begin_y = -ghy;
-                             end_y = 0;
-                         }
-                         if (ny == idx_t(MPIBufs::rank_next)) { // neighbor is in back.
-                             begin_y = opts.dy;
-                             end_y = opts.dy + ghy;
-                         }
-                         if (nz == idx_t(MPIBufs::rank_prev)) { // neighbor is above.
-                             begin_z = -ghz;
-                             end_z = 0;
-                         }
-                         if (nz == idx_t(MPIBufs::rank_next)) { // neighbor is below.
-                             begin_z = opts.dz;
-                             end_z = opts.dz + ghz;
-                         }
-
-                         // Add offsets and divide indices by vector
-                         // lengths.  Begin/end vars shouldn't be negative
-                         // (because we're always inside the halo), so '/'
-                         // is ok.
-                         idx_t begin_nv = (ofs_n + begin_n) / VLEN_N;
-                         idx_t begin_xv = (ofs_x + begin_x) / VLEN_X;
-                         idx_t begin_yv = (ofs_y + begin_y) / VLEN_Y;
-                         idx_t begin_zv = (ofs_z + begin_z) / VLEN_Z;
-                         idx_t end_nv = (ofs_n + end_n) / VLEN_N;
-                         idx_t end_xv = (ofs_x + end_x) / VLEN_X;
-                         idx_t end_yv = (ofs_y + end_y) / VLEN_Y;
-                         idx_t end_zv = (ofs_z + end_z) / VLEN_Z;
-
-                         // TODO: fix this when MPI + wave-front is enabled.
-                         idx_t t = start_dt;
-                         
-                         // Define calc_halo to copy data from rcvBuf into main grid.
-#define calc_halo(t,                                                    \
-                  start_nv, start_xv, start_yv, start_zv,               \
-                  stop_nv, stop_xv, stop_yv, stop_zv)  do {             \
-                             idx_t nv = start_nv;                       \
-                             idx_t xv = start_xv;                       \
-                             idx_t yv = start_yv;                       \
-                             idx_t izv = index_zv * step_zv;            \
-                             for (idx_t zv = start_zv; zv < stop_zv; zv++) { \
-                                 real_vec_t hval =                      \
-                                     rcvBuf->readVecNorm(index_nv, index_xv, index_yv, izv++, \
-                                                         __LINE__);     \
-                                 gp->writeVecNorm_TNXYZ(hval, t, nv, xv, yv, zv, \
-                                                        __LINE__);      \
-                     } } while(0)
-
-                         // Include auto-generated loops to invoke calc_halo() from
-                         // begin_*v to end_*v;
-#include "stencil_halo_loops.hpp"
-#undef calc_halo
-                     }
-                 } );
-
-            // Mark this grid as up-to-date.
-            updatedGridPtrs.insert(gp);
-            TRACE_MSG("exchange_halos: grid '" << gp->get_name() << "' is updated");
-            
-        } // grids.
-
+        // Wait for all send requests to complete.
+        // TODO: delay this until next attempted halo exchange.
+        TRACE_MSG("exchange_halos: waiting for " << num_send_reqs << " MPI send request(s)...");
+        MPI_Waitall(num_send_reqs, send_reqs, MPI_STATUS_IGNORE);
+        TRACE_MSG("exchange_halos: done waiting for MPI send request(s).");
+        
         double end_time = getTimeInSecs();
         mpi_time += end_time - start_time;
 #endif
     }
 
     // Mark grids that have been written to by eq-group 'eg'.
-    // TODO: only update grids that are written to in their halo-read area.
+    // TODO: only mark grids that are written to in their halo-read area.
     void StencilContext::mark_grids_dirty(EqGroupBase& eg)
     {
-        for (auto ig : eg.outputGridPtrs) {
-            updatedGridPtrs.erase(ig);
-            TRACE_MSG("grid '" << ig->get_name() << "' is modified");
+        for (auto* gp : eg.outputGridPtrs) {
+            gp->set_updated(false);
+            TRACE_MSG("grid '" << gp->get_name() << "' is modified");
         }
     }
     
     // Apply a function to each neighbor rank.
     // Called visitor function will contain the rank index of the neighbor.
-    // The send and receive buffer pointers may be null.
+    // The send and receive buffer pointers may be null if 'null_ok' is true.
     void MPIBufs::visitNeighbors(StencilContext& context,
+                                 bool null_ok,
                                  std::function<void (idx_t nn, idx_t nx, idx_t ny, idx_t nz,
                                                      int rank,
                                                      Grid_NXYZ* sendBuf,
@@ -1346,10 +1378,13 @@ namespace yask {
                 for (idx_t ny = 0; ny < num_neighbors; ny++)
                     for (idx_t nz = 0; nz < num_neighbors; nz++)
                         if (context.my_neighbors[nn][nx][ny][nz] != MPI_PROC_NULL) {
-                            visitor(nn, nx, ny, nz,
-                                    context.my_neighbors[nn][nx][ny][nz],
-                                    bufs[0][nn][nx][ny][nz],
-                                    bufs[1][nn][nx][ny][nz]);
+                            Grid_NXYZ* sendBuf = bufs[bufSend][nn][nx][ny][nz];
+                            Grid_NXYZ* rcvBuf = bufs[bufRec][nn][nx][ny][nz];
+                            if (null_ok || (sendBuf && rcvBuf)) {
+                                visitor(nn, nx, ny, nz,
+                                        context.my_neighbors[nn][nx][ny][nz],
+                                        sendBuf, rcvBuf);
+                            }
                         }
     }
 
