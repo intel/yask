@@ -121,13 +121,10 @@ namespace yask {
                         for (idx_t y = eg->begin_bby; y < eg->end_bby; y++)
                             for (idx_t z = eg->begin_bbz; z < eg->end_bbz; z++) {
 
-                                // Update only if point in domain for this eq group.
+                                // Update only if point is in sub-domain for this eq group.
                                 if (eg->is_in_valid_domain(t, n, x, y, z)) {
                                     
                                     // Evaluate the reference scalar code.
-                                    TRACE_MSG(eg->get_name() << ".calc_scalar(t=" << t <<
-                                              ", n=" << n << ", x=" << x <<
-                                              ", y=" << y << ", z=" << z << ")");
                                     eg->calc_scalar(t, n, x, y, z);
                                 }
                             }
@@ -187,8 +184,20 @@ namespace yask {
         // stencils * num timesteps. Thus, the number of overlapping regions
         // is ceil(total shift / region size). This assumes all eq-groups
         // are inter-dependent to find minimum extension. Actual required
-        // extension may be less, but this will just results in calls to
+        // extension may be less, but this will just result in some calls to
         // calc_region() that do nothing.
+        //
+        // Conceptually (4 regions in t and x dims):
+        // -----------------------------  t = rt
+        //  \    |\     \     \ |   \
+        //   \   | \     \     \|    \
+        //    \  |  \     \     |     \
+        //     \ |   \     \    |\     \
+        //      \|    \     \   | \     \
+        //  ----------------------------- t = 0
+        // x = begin_dx       end_dx   end_dx
+        //                    (orig)   (after extension)
+        //
         idx_t nshifts = (idx_t(eqGroups.size()) * _opts->rt) - 1;
         end_dn += angle_n * nshifts;
         end_dx += angle_x * nshifts;
@@ -323,6 +332,12 @@ namespace yask {
                 if (!eqGroup_set || eqGroup_set->count(eg)) {
                     TRACE_MSG("calc_region: eq-group '" << eg->get_name() << "'");
 
+                    // For wavefnot adjustments, see conceptual diagram in
+                    // calc_rank_opt().  In this function, 1 of the 4
+                    // parallelogram-shaped regions is being evaluated.  At
+                    // each time-step, the parallelogram may be trimmed
+                    // based on the BB.
+                    
                     // Actual region boundaries must stay within BB for this eq group.
                     idx_t begin_rn = max<idx_t>(start_dn, eg->begin_bbn);
                     idx_t end_rn = min<idx_t>(stop_dn, eg->end_bbn);
@@ -806,19 +821,19 @@ namespace yask {
         rank_numpts_1t = 0; rank_numFpOps_1t = 0; // sums across eqs for this rank.
         for (auto eg : eqGroups) {
             idx_t updates1 = eg->get_scalar_points_updated();
-            idx_t updates_domain = updates1 * eg->bb_size;
+            idx_t updates_domain = updates1 * eg->bb_num_points;
             idx_t fpops1 = eg->get_scalar_fp_ops();
-            idx_t fpops_domain = fpops1 * eg->bb_size;
+            idx_t fpops_domain = fpops1 * eg->bb_num_points;
             rank_numpts_1t += updates_domain;
             rank_numFpOps_1t += fpops_domain;
             os << "Stats for equation-group '" << eg->get_name() << "':\n" <<
-                " sub-domain-size:            " <<
+                " sub-domain size:            " <<
                 eg->len_bbn << '*' << eg->len_bbx << '*' << eg->len_bby << '*' << eg->len_bbz << endl <<
-                " points-in-sub-domain:       " << printWithPow10Multiplier(eg->bb_size) << endl <<
-                " grid-updates-per-point:     " << updates1 << endl <<
-                " grid-updates-in-sub-domain: " << printWithPow10Multiplier(updates_domain) << endl <<
-                " est-FP-ops-per-point:       " << fpops1 << endl <<
-                " est-FP-ops-in-sub-domain:   " << printWithPow10Multiplier(fpops_domain) << endl;
+                " valid points in sub domain: " << printWithPow10Multiplier(eg->bb_num_points) << endl <<
+                " grid-updates per point:     " << updates1 << endl <<
+                " grid-updates in sub-domain: " << printWithPow10Multiplier(updates_domain) << endl <<
+                " est FP-ops per point:       " << fpops1 << endl <<
+                " est FP-ops in sub-domain:   " << printWithPow10Multiplier(fpops_domain) << endl;
         }
 
         // Report total allocation.
@@ -943,7 +958,7 @@ namespace yask {
         begin_bbx = idx_max; end_bbx = idx_min;
         begin_bby = idx_max; end_bby = idx_min;
         begin_bbz = idx_max; end_bbz = idx_min;
-        
+
         // Find BB for each eq group and update context.
         for (auto eg : eqGroups) {
             eg->find_bounding_box();
@@ -957,9 +972,12 @@ namespace yask {
             end_bby = max(end_bby, eg->end_bby);
             end_bbz = max(end_bbz, eg->end_bbz);
         }
-
         update_lengths();
 
+        // These vars are N/A for the overall BB.
+        bb_num_points = 0;
+        bb_simple = false;
+        
         // Adjust region size to be within BB.
         _opts->rn = min(_opts->rn, len_bbn);
         _opts->rx = min(_opts->rx, len_bbx);
@@ -989,6 +1007,7 @@ namespace yask {
         if (bb_valid) return;
         StencilContext& context = *_generic_context;
         StencilSettings& opts = context.get_settings();
+        ostream& os = context.get_ostr();
 
         // Init min vars w/max val and vice-versa.
         idx_t minn = idx_max, maxn = idx_min;
@@ -1043,26 +1062,39 @@ namespace yask {
             begin_bbz = end_bbz = 0;
         }
         update_lengths();
+        bb_num_points = npts;
 
-        // Only supporting solid rectangles at this time.
-        if (npts != bb_size) {
-            cerr << "Error: domain for equation-group '" << get_name() << "' contains " <<
-                npts << " points, but " << bb_size << " were expected for a hyper-rectangular polytope. " <<
-                "Non-hyper-rectangular domains are not supported at this time." << endl;
-            exit_yask(1);
+        // Solid rectangle?
+        if (bb_num_points != bb_size) {
+            os << "Warning: domain for equation-group '" << get_name() << "' has only " <<
+                printWithPow10Multiplier(bb_num_points) <<
+                " valid point(s) inside its bounding-box of " <<
+                printWithPow10Multiplier(bb_size) <<
+                " point(s); slower scalar calculations will be used.\n";
+            bb_simple = false;
         }
 
-        // Only supporting full-cluster BBs at this time.
-        // TODO: handle partial clusters.
-        if (len_bbn % CLEN_N ||
-            len_bbx % CLEN_X ||
-            len_bby % CLEN_Y ||
-            len_bbz % CLEN_Z) {
-            cerr << "Error: each domain length must be a multiple of the cluster size." << endl;
-            exit_yask(1);
+        // Lengths are cluster-length multiples?
+        else if (len_bbn % CLEN_N ||
+                 len_bbx % CLEN_X ||
+                 len_bby % CLEN_Y ||
+                 len_bbz % CLEN_Z) {
+            os << "Warning: domain for equation-group '" << get_name() <<
+                "' has one or more sizes that are not vector-cluster multiples;"
+                " slower scalar calculations will be used.\n";
+            bb_simple = false;
         }
 
-        bb_valid = true;
+        // Edges are cluster-length multiples?
+        else if (begin_bbn % CLEN_N ||
+                 begin_bbx % CLEN_X ||
+                 begin_bby % CLEN_Y ||
+                 begin_bbz % CLEN_Z) {
+            os << "Warning: domain for equation-group '" << get_name() <<
+                "' has one or more edges that do not start on vector-cluster boundaries;"
+                " slower scalar calculations will be used.\n";
+            bb_simple = false;
+        }
     }
     
     // Exchange halo data needed by eq-group 'eg' at the given time.

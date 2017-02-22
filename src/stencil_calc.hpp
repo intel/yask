@@ -156,8 +156,10 @@ namespace yask {
         idx_t begin_bbn=0, begin_bbx=0, begin_bby=0, begin_bbz=0;
         idx_t end_bbn=1, end_bbx=1, end_bby=1, end_bbz=1; // one past last value.
         idx_t len_bbn=1, len_bbx=1, len_bby=1, len_bbz=1;
-        idx_t bb_size=1;
-        bool bb_valid=false;
+        idx_t bb_size=1;        // points in the entire box.
+        idx_t bb_num_points=1;  // valid points within the box.
+        bool bb_simple=true;    // full box with vector-length sizes.
+        bool bb_valid=false;    // lengths and sizes have been calculated.
         
         BoundingBox() {}
 
@@ -573,6 +575,9 @@ namespace yask {
         // Calculate one scalar result.
         // This function implements the interface in the base class.
         virtual void calc_scalar(idx_t t, idx_t n, idx_t x, idx_t y, idx_t z) {
+            TRACE_MSG2(get_name() << ".calc_scalar(t=" << t <<
+                       ", n=" << n << ", x=" << x <<
+                       ", y=" << y << ", z=" << z << ")");
             _eqGroup.calc_scalar(*_context, t, ARG_N(n) x, y, z);
         }
 
@@ -606,6 +611,7 @@ namespace yask {
 
         // Prefetch a cluster.
         // Separate methods for full cluster and each direction.
+        // TODO: handle pre-fetching correctly for non-simple BBs.
         PREFETCH_CLUSTER_METHOD(prefetch_cluster, prefetch_cluster)
 #if USING_DIM_N
         PREFETCH_CLUSTER_METHOD(prefetch_cluster_bnv, prefetch_cluster_n)
@@ -628,7 +634,37 @@ namespace yask {
                        ", x=" << begin_bx << ".." << (end_bx-1) <<
                        ", y=" << begin_by << ".." << (end_by-1) <<
                        ", z=" << begin_bz << ".." << (end_bz-1) <<
-                       ")");
+                       ").");
+
+            // If not a 'simple' domain, must use scalar code.  TODO: this
+            // is very inefficient--need to vectorize as much as possible.
+            if (!bb_simple) {
+
+                TRACE_MSG2("...using scalar code.");
+                for (idx_t n = begin_bn; n < end_bn; n++)
+                    for (idx_t x = begin_bx; x < end_bx; x++)
+                        for (idx_t y = begin_by; y < end_by; y++) {
+
+                            // Are there holes in the BB?
+                            if (bb_num_points != bb_size) {
+                                for (idx_t z = begin_bz; z < end_bz; z++) {
+
+                                    // Update only if point is in sub-domain for this eq group.
+                                    if (is_in_valid_domain(bt, n, x, y, z))
+                                        calc_scalar(bt, n, x, y, z);
+                                }
+                            }
+
+                            // If no holes, don't need to check domain.
+                            else {
+                                for (idx_t z = begin_bz; z < end_bz; z++) {
+                                    calc_scalar(bt, n, x, y, z);
+                                }
+                            }
+                }
+                
+                return;
+            }
 
             // Divide indices by vector lengths.  Use idiv_flr() instead of '/'
             // because begin/end vars may be negative (if in halo).
