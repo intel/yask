@@ -46,7 +46,7 @@ namespace yask {
         // TODO: fix '*'s w/o z dim.
         os << get_num_dims() << "D (";
         if (got_t()) os << "t=" << get_tdim() << " * ";
-        if (got_n()) os << "n=" << get_dn() << " * ";
+        if (got_w()) os << "w=" << get_dw() << " * ";
         if (got_x()) os << "x=" << get_dx() << " * ";
         if (got_y()) os << "y=" << get_dy() << " * ";
         if (got_z()) os << "z=" << get_dz();
@@ -76,22 +76,22 @@ namespace yask {
             errs = 0;
             
             for (int ti = 0; ti <= get_tdim(); ti++) {
-                for (int ni = get_first_n(); ni <= get_last_n(); ni++) {
+                for (int wi = get_first_w(); wi <= get_last_w(); wi++) {
                     for (int xi = get_first_x(); xi <= get_last_x(); xi++) {
                         for (int yi = get_first_y(); yi <= get_last_y(); yi++) {
                             for (int zi = get_first_z(); zi <= get_last_z(); zi++) {
 
-                                real_t te = readElem_TNXYZ(ti, ni, xi, yi, zi, __LINE__);
-                                real_t re = ref.readElem_TNXYZ(ti, ni, xi, yi, zi, __LINE__);
+                                real_t te = readElem_TWXYZ(ti, wi, xi, yi, zi, __LINE__);
+                                real_t re = ref.readElem_TWXYZ(ti, wi, xi, yi, zi, __LINE__);
 
                                 if (!within_tolerance(te, re, epsilon)) {
                                     errs++;
                                     if (errs < maxPrint) {
-                                        printElem_TNXYZ(os, "** mismatch",
-                                                        ti, ni, xi, yi, zi,
+                                        printElem_TWXYZ(os, "** mismatch",
+                                                        ti, wi, xi, yi, zi,
                                                         te, 0, false);
-                                        printElem_TNXYZ(os, " != reference",
-                                                        ti, ni, xi, yi, zi,
+                                        printElem_TWXYZ(os, " != reference",
+                                                        ti, wi, xi, yi, zi,
                                                         re, 0, true);
                                     }
                                     else if (errs == maxPrint)
@@ -107,8 +107,8 @@ namespace yask {
     }
 
     // Print one element.
-    void  RealVecGridBase::printElem_TNXYZ(std::ostream& os, const std::string& m,
-                                           idx_t t, idx_t n, idx_t x, idx_t y, idx_t z,
+    void  RealVecGridBase::printElem_TWXYZ(std::ostream& os, const std::string& m,
+                                           idx_t t, idx_t w, idx_t x, idx_t y, idx_t z,
                                            real_t e,
                                            int line,
                                            bool newline) const {
@@ -118,7 +118,7 @@ namespace yask {
             os << m << ": ";
         os << _name << "[";
         if (got_t()) os << "t=" << t << ", ";
-        if (got_n()) os << "n=" << n << ", ";
+        if (got_w()) os << "w=" << w << ", ";
         if (got_x()) os << "x=" << x << ", ";
         if (got_y()) os << "y=" << y << ", ";
         if (got_z()) os << "z=" << z;
@@ -131,11 +131,11 @@ namespace yask {
 
     // Print one vector at *vector* offset.
     // Indices must be normalized, i.e., already divided by VLEN_*.
-    void RealVecGridBase::printVecNorm_TNXYZ(std::ostream& os, const std::string& m,
-                                             idx_t t, idx_t nv, idx_t xv, idx_t yv, idx_t zv,
+    void RealVecGridBase::printVecNorm_TWXYZ(std::ostream& os, const std::string& m,
+                                             idx_t t, idx_t wv, idx_t xv, idx_t yv, idx_t zv,
                                              const real_vec_t& v,
                                              int line) const {
-        idx_t n = nv * VLEN_N;
+        idx_t w = wv * VLEN_W;
         idx_t x = xv * VLEN_X;
         idx_t y = yv * VLEN_Y;
         idx_t z = zv * VLEN_Z;
@@ -144,12 +144,12 @@ namespace yask {
         for (int zi = 0; zi < VLEN_Z; zi++) {
             for (int yi = 0; yi < VLEN_Y; yi++) {
                 for (int xi = 0; xi < VLEN_X; xi++) {
-                    for (int ni = 0; ni < VLEN_N; ni++) {
-                        real_t e = v(ni, xi, yi, zi);
+                    for (int wi = 0; wi < VLEN_W; wi++) {
+                        real_t e = v(wi, xi, yi, zi);
 #ifdef CHECK_VEC_ELEMS
-                        real_t e2 = readElem_TNXYZ(t, n+ni, x+xi, y+yi, z+zi, line);
+                        real_t e2 = readElem_TWXYZ(t, w+wi, x+xi, y+yi, z+zi, line);
 #endif
-                        printElem_TNXYZ(os, m, t, n+ni, x+xi, y+yi, z+zi, e, line);
+                        printElem_TWXYZ(os, m, t, w+wi, x+xi, y+yi, z+zi, e, line);
 #ifdef CHECK_VEC_ELEMS
                         // compare to per-element read.
                         if (e == e2)

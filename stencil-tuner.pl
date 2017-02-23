@@ -63,6 +63,7 @@ my $zLayout = 0;         # Force inner memory layout in 'z' direction.
 my $zVec = 0;            # Force 1D vectorization in 'z' direction.
 my $folding = 1;         # 2D & 3D folding allowed.
 my $dp;                  # double precision.
+my $dw = 1;              # 'w' dimension (fixed).
 my $makeArgs = '';       # extra make arguments.
 my $makePrefix = '';     # prefix for make.
 my $runArgs = '';        # extra run arguments.
@@ -115,6 +116,8 @@ sub usage {
       "                        See the notes above on <gene_name> specification.\n".
       " -folds=<list>      Comma separated list of folds to use.\n".
       "                    Examples: '-folds=4 4 1', '-folds=1 1 16, 4 4 1, 1 4 4'.\n".
+      "                    Can only specify 3D folds.\n".
+      " -dw=<N>            Set size of 'w' dim to <N> (only for 4D problems).\n".
       " -mem=<N>-<M>           Set allowable est. memory usage between <N> and <M> GiB (default is $minGB-$maxGB).\n".
       " -maxVecsInCluster=<N>  Maximum vectors allowed in cluster (default is $maxVecsInCluster).\n".
       " -noPrefetch        Disable any prefetching (shortcut for '-pfdl1=0 -pfdl2=0').\n".
@@ -194,6 +197,9 @@ for my $origOpt (@ARGV) {
   elsif ($opt =~ '^-mem=([.\d]+)-([.\d]+)$') {
     $minGB = $1;
     $maxGB = $2;
+  }
+  elsif ($opt =~ '^-dw=(\d+)$') {
+    $dw = $1;
   }
   elsif ($opt =~ '^-radius=(\d+)$') {
     $radius = $1;
@@ -286,8 +292,8 @@ my $velems = $vbits / 8 / $realBytes;
 # radius.
 $radius = $isAve ? 1 : 8 if !defined $radius;
 
-# n dimension.
-my $vars = $isAve ? 40 : 1;
+# w dimension.
+$dw = $isAve ? 40 : 1 if !defined $dw;     # 40 grids in miniGhost.
 
 # disable folding for DP MIC (no valignq).
 $folding = 0 if (defined $mic && $dp);
@@ -384,17 +390,17 @@ my @layouts =
 @layouts = grep /4$/, @layouts if $zLayout;
 
 # list of possible loop orders.
-# start with n on outer loop only.
+# start with w on outer loop only.
 my @loopOrders =
-  ('nxyz', 'nxzy', 'nyxz', 'nyzx', 'nzxy', 'nzyx');
+  ('wxyz', 'wxzy', 'wyxz', 'wyzx', 'wzxy', 'wzyx');
 
-# add more options if there are >1 var, i.e., 'n'
+# add more options if there are >1 var, i.e., 'w'
 # is meaningful.
 push  @loopOrders,
-  ('xnyz', 'xnzy', 'xynz', 'xyzn', 'xzny', 'xzyn',
-   'ynxz', 'ynzx', 'yxnz', 'yxzn', 'yznx', 'yzxn',
-   'znxy', 'znyx', 'zxny', 'zxyn', 'zynx', 'zyxn', )
-  if $vars > 1;
+  ('xwyz', 'xwzy', 'xywz', 'xyzw', 'xzwy', 'xzyw',
+   'ywxz', 'ywzx', 'yxwz', 'yxzw', 'yzwx', 'yzxw',
+   'zwxy', 'zwyx', 'zxwy', 'zxyw', 'zywx', 'zyxw', )
+  if $dw > 1;
 
 # only allow z in inner loop if requested.
 @loopOrders = grep /z$/, @loopOrders if $zLoop;
@@ -466,7 +472,7 @@ if ( !@folds ) {
   push @folds, ("1 $velems 1", "$velems 1 1") if !$zVec;
 
 # add remaining options if folding.
-# TODO: add n-dim folding.
+# TODO: add w-dim folding.
   push @folds, ($velems == 8) ?
     ("4 2 1", "4 1 2",
      "2 4 1", "2 1 4",
@@ -801,12 +807,13 @@ sub calcSize($$$) {
   my $pads = shift;             # ref to pad array.
   my $mults = shift;            # ref to array of multiples.
 
-  # need to determine how many grids will be allocated for this stencil.
+  # need to determine how many XYZ grids will be allocated for this stencil.
   if (!$numSpatialGrids) {
 
     my $makeCmd = getMakeCmd('', 'EXTRA_CXXFLAGS=-O0');
     my $runCmd = getRunCmd();
     $runCmd .= ' -t 0 -d 1';
+    $runCmd .= " -dw $dw" if $dw > 1;
     my $cmd = "$makeCmd 2>&1 && $runCmd";
 
     my $timeDim = 0;
@@ -821,11 +828,17 @@ sub calcSize($$$) {
       # E.g.,
       # 4D (t=1 * x=8 * y=1 * z=1) 'vel_x' data is at 0x7fce08200000: 1.176K element(s) of 4 byte(s) each, 147 vector(s), 4.59375KiB.
       # 3D (x=8 * y=1 * z=1) 'lambda' data is at 0x7fce0820f880: 600 element(s) of 4 byte(s) each, 75 vector(s), 2.34375KiB.
-      if (/^\s*4D.*t=(\d+)/) {
-        $numSpatialGrids += $1;
+      if (/^\s*5D.*t=(\d+).*w=(\d+)/) {
+        $numSpatialGrids += $1 * $2;  # twxyz
+      }
+      elsif (/^\s*4D.*w=(\d+)/) {
+        $numSpatialGrids += $1;  # wxyz
+      }
+      elsif (/^\s*4D.*t=(\d+)/) {
+        $numSpatialGrids += $1; # txyz.
       }
       elsif (/^\s*3D.*x=/) {
-        $numSpatialGrids += 1;
+        $numSpatialGrids += 1;  # xyz.
       }
     }
     close CMD;
@@ -833,11 +846,10 @@ sub calcSize($$$) {
       map { print ">> $_"; } @cmdOut;
       die "error: no grids defined in '$cmd'.\n";
     }
-    print "Determined that $numSpatialGrids spatial grids are allocated.\n";
+    print "Determined that $numSpatialGrids XYZ grids are allocated.\n";
   }
 
-  # actual dimensions of allocated memory.
-  # TODO: fix over-estimate due to assumption of max halo size.
+  # estimate each dim of allocated memory as size + 2 * (halo + pad).
   my @sizes = map { roundUp($sizes->[$_], $mults->[$_]) +
                       2 * roundUp($radius + $pads->[$_], $mults->[$_]) } 0..$#dirs;
 
@@ -891,13 +903,13 @@ sub setResults($$) {
       my $val = $1;
 
       # adjust for suffixes.
-      if ($val =~ /^([0-9.e+-]+)Ki$/) {
+      if ($val =~ /^([0-9.e+-]+)KiB?$/) {
         $val = $1 * $oneKi;
-      } elsif ($val =~ /^([0-9.e+-]+)Mi$/) {
+      } elsif ($val =~ /^([0-9.e+-]+)MiB?$/) {
         $val = $1 * $oneMi;
-      } elsif ($val =~ /^([0-9.e+-]+)Gi$/) {
+      } elsif ($val =~ /^([0-9.e+-]+)GiB?$/) {
         $val = $1 * $oneGi;
-      } elsif ($val =~ /^([0-9.e+-]+)Ti$/) {
+      } elsif ($val =~ /^([0-9.e+-]+)TiB?$/) {
         $val = $1 * $oneTi;
       } elsif ($val =~ /^([0-9.e+-]+)K$/) {
         $val = $1 * $oneK;
@@ -1104,8 +1116,8 @@ sub makeLoopCode($$$$$) {
   my $order = readHash($h, $nameLong."LoopOrder", 1);
   my $type = readHash($h, $nameLong."Loop", 1);
 
-  my $dims = $loopOrders[$order]; # e.g., 'nyxz' (outer-to-inner).
-  my @dims = split '',$dims;      # e.g., ('n', 'y', 'x', 'z');
+  my $dims = $loopOrders[$order]; # e.g., 'wyxz' (outer-to-inner).
+  my @dims = split '',$dims;      # e.g., ('w', 'y', 'x', 'z');
   my $code = $types->[$type];     # e.g., 'loop(D0) { ... }'.
   for my $ld (0..$#dims) {
     $dims[$ld] = "$varPrefix$dims[$ld]$varSuffix"; # e.g., 'bnv'.
@@ -1378,9 +1390,7 @@ sub fitness {
   $g3d =~ s/3/2/;               # move 'y' from posn 3 to 2.
   $g3d =~ s/4/3/;               # move 'z' from posn 4 to 3.
   $mvars .= " layout_xyz=Layout_$g3d layout_txyz=Layout_$g4d";
-  if ($vars > 1) {
-    $mvars .= " layout_nxyz=Layout_4$g3d layout_tnxyz=Layout_5$g4d";
-  }
+  $mvars .= " layout_wxyz=Layout_4$g3d layout_twxyz=Layout_5$g4d" if $dw > 1;
 
   # prefetch distances.
   if ($pfdl1 > 0 && $pfdl2 > 0) {
@@ -1419,7 +1429,7 @@ sub fitness {
   $args .= " -block_threads ".(1 << $bthreads_exp);
 
   # sizes.
-  $args .= " -dn $vars" if $vars > 1;
+  $args .= " -dw $dw" if $dw > 1;
   $args .= " -dx $ds[0] -dy $ds[1] -dz $ds[2]";
   $args .= " -rx $rs[0] -ry $rs[1] -rz $rs[2]";
   $args .= " -bx $bs[0] -by $bs[1] -bz $bs[2]";
@@ -1427,8 +1437,8 @@ sub fitness {
   $args .= " -px $ps[0] -py $ps[1] -pz $ps[2]";
 
   # num of iterations and trials.
-  my $shortIters = ($vars > 10) ? 2 : 5;
-  my $longIters = ($vars > 10) ? 15 : 30;
+  my $shortIters = 5;
+  my $longIters = 30;
   my $longTrials = min($gen, 2);
 
   # various commands.

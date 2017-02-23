@@ -25,26 +25,27 @@ IN THE SOFTWARE.
 
 // Simple stencil that calculates an average of the points in a cube.
 // Similar to MG_STENCIL_3D27PT heat-transfer stencil from miniGhost benchmark.
+// Uses the 'w' dimension to index independent grids.
 
 #include "StencilBase.hpp"
 
 class AveStencil : public StencilRadiusBase {
 
 protected:
-    Grid multi_grid;            // N time-varying 3D grids.
+    Grid heat;            // W time-varying 3D grids.
     
 public:
     AveStencil(StencilList& stencils, int radius=2) :
         StencilRadiusBase("ave", stencils, radius)
     {
-        INIT_GRID_5D(multi_grid, t, n, x, y, z);
+        INIT_GRID_5D(heat, t, w, x, y, z);
     }
 
     // Define equation for grid n at t as average of
-    // (2*radius+1)^3 cube of values from grid n at t-1.
+    // (2*radius+1)^3 cube of values from grid w at t-1.
     virtual void define(const IntTuple& offsets) {
         GET_OFFSET(t);
-        GET_OFFSET(n);
+        GET_OFFSET(w);
         GET_OFFSET(x);
         GET_OFFSET(y);
         GET_OFFSET(z);
@@ -57,7 +58,7 @@ public:
         for (int rx = rBegin; rx <= rEnd; rx++)
             for (int ry = rBegin; ry <= rEnd; ry++)
                 for (int rz = rBegin; rz <= rEnd; rz++) {
-                    v += multi_grid(t, n, x+rx, y+ry, z+rz);
+                    v += heat(t, w, x+rx, y+ry, z+rz);
                     nPts++;
                 }
 
@@ -65,7 +66,7 @@ public:
         v *= 1.0 / double(nPts);
 
         // define the grid value at t+1 to be equivalent to v.
-        multi_grid(t+1, n, x, y, z) IS_EQUIV_TO v;
+        heat(t+1, w, x, y, z) IS_EQUIV_TO v;
     }
 };
 

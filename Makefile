@@ -68,7 +68,7 @@ mpi		=	0
 
 # Defaults based on stencil type.
 ifeq ($(stencil),)
-$(error Stencil not specified; use stencil=iso3dfd, 3axis, 9axis, 3plane, cube, ave, stream, awp, awp_elastic, ssg , fsg or fsg_abc)
+$(error Stencil not specified; use stencil=iso3dfd, 3axis, 9axis, 3plane, cube, ave, stream, awp, awp_elastic, ssg, fsg, or fsg_abc)
 
 else ifeq ($(stencil),ave)
 radius		?=	1
@@ -207,8 +207,8 @@ def_thread_divisor	?=	1
 real_bytes		?=	4
 layout_xyz		?=	Layout_123
 layout_txyz		?=	Layout_2314
-layout_nxyz		?=	Layout_1234
-layout_tnxyz		?=	Layout_23415
+layout_wxyz		?=	Layout_1234
+layout_twxyz		?=	Layout_23415
 def_rank_size	?=	128
 def_block_size		?=	64
 def_pad			?=	1
@@ -276,8 +276,8 @@ endif
 MACROS		+=	REAL_BYTES=$(real_bytes)
 MACROS		+=	LAYOUT_XYZ=$(layout_xyz)
 MACROS		+=	LAYOUT_TXYZ=$(layout_txyz)
-MACROS		+=	LAYOUT_NXYZ=$(layout_nxyz)
-MACROS		+=	LAYOUT_TNXYZ=$(layout_tnxyz)
+MACROS		+=	LAYOUT_WXYZ=$(layout_wxyz)
+MACROS		+=	LAYOUT_TWXYZ=$(layout_twxyz)
 MACROS		+=	DEF_RANK_SIZE=$(def_rank_size)
 MACROS		+=	DEF_BLOCK_SIZE=$(def_block_size)
 MACROS		+=	DEF_BLOCK_THREADS=$(def_block_threads)
@@ -344,19 +344,19 @@ endif
 # grouped, serpentine, square-wave) may not be used here when
 # using temporal wavefronts. The time loop may be found
 # in StencilEquations::calc_rank().
-RANK_LOOP_OPTS		=	-dims 'dn,dx,dy,dz'
-RANK_LOOP_CODE		?=	$(RANK_LOOP_OUTER_MODS) loop(dn,dx,dy,dz) \
+RANK_LOOP_OPTS		=	-dims 'dw,dx,dy,dz'
+RANK_LOOP_CODE		?=	$(RANK_LOOP_OUTER_MODS) loop(dw,dx,dy,dz) \
 				{ $(RANK_LOOP_INNER_MODS) calc(region(start_dt, stop_dt, eqGroup_ptr)); }
 
 # Region loops break up a region using OpenMP threading into blocks.
 # The region time loops are not coded here to allow for proper
 # spatial skewing for temporal wavefronts. The time loop may be found
 # in StencilEquations::calc_region().
-REGION_LOOP_OPTS	=     	-dims 'rn,rx,ry,rz' \
+REGION_LOOP_OPTS	=     	-dims 'rw,rx,ry,rz' \
 				-ompConstruct '$(omp_par_for) schedule($(omp_schedule)) proc_bind(spread)' \
 				-calcPrefix 'eg->calc_'
 REGION_LOOP_OUTER_MODS	?=	grouped omp
-REGION_LOOP_CODE	?=	$(REGION_LOOP_OUTER_MODS) loop(rn,rx,ry,rz) \
+REGION_LOOP_CODE	?=	$(REGION_LOOP_OUTER_MODS) loop(rw,rx,ry,rz) \
 				{ $(REGION_LOOP_INNER_MODS) calc(block(rt)); }
 
 # Block loops break up a block into vector clusters.
@@ -364,21 +364,21 @@ REGION_LOOP_CODE	?=	$(REGION_LOOP_OUTER_MODS) loop(rn,rx,ry,rz) \
 # this is indicated by the 'v' suffix.
 # The 'omp' modifier creates a nested OpenMP loop.
 # There is no time loop here because threaded temporal blocking is not yet supported.
-BLOCK_LOOP_OPTS		=     	-dims 'bnv,bxv,byv,bzv' \
+BLOCK_LOOP_OPTS		=     	-dims 'bwv,bxv,byv,bzv' \
 				-ompConstruct '$(omp_par_for) schedule($(omp_block_schedule)) proc_bind(close)'
 BLOCK_LOOP_INNER_MODS	?=	prefetch(L2)
 BLOCK_LOOP_OUTER_MODS	?=	omp
-BLOCK_LOOP_CODE		?=	$(BLOCK_LOOP_OUTER_MODS) loop(bnv,bxv) { loop(byv) \
+BLOCK_LOOP_CODE		?=	$(BLOCK_LOOP_OUTER_MODS) loop(bwv,bxv) { loop(byv) \
 				{ $(BLOCK_LOOP_INNER_MODS) loop(bzv) { calc(cluster(bt)); } } }
 
 # Halo pack/unpack loops break up a region face, edge, or corner into vectors.
 # The indices at this level are by vector instead of element;
 # this is indicated by the 'v' suffix.
 # Nested OpenMP is not used here because there is no sharing between threads.
-HALO_LOOP_OPTS		=     	-dims 'nv,xv,yv,zv' \
+HALO_LOOP_OPTS		=     	-dims 'wv,xv,yv,zv' \
 				-ompConstruct '$(omp_par_for) schedule($(omp_halo_schedule)) proc_bind(spread)'
 HALO_LOOP_OUTER_MODS	?=	omp
-HALO_LOOP_CODE		?=	$(HALO_LOOP_OUTER_MODS) loop(nv,xv,yv,zv) \
+HALO_LOOP_CODE		?=	$(HALO_LOOP_OUTER_MODS) loop(wv,xv,yv,zv) \
 				$(HALO_LOOP_INNER_MODS) { calc(halo(t)); }
 
 # compile with model_cache=1 or 2 to check prefetching.
@@ -421,8 +421,8 @@ echo-settings:
 	@echo real_bytes=$(real_bytes)
 	@echo layout_xyz=$(layout_xyz)
 	@echo layout_txyz=$(layout_txyz)
-	@echo layout_nxyz=$(layout_nxyz)
-	@echo layout_tnxyz=$(layout_tnxyz)
+	@echo layout_wxyz=$(layout_wxyz)
+	@echo layout_twxyz=$(layout_twxyz)
 	@echo streaming_stores=$(streaming_stores)
 	@echo def_block_threads=$(def_block_threads)
 	@echo omp_schedule=$(omp_schedule)
@@ -519,7 +519,7 @@ clean:
 	rm -fv src/*.[io] *.optrpt src/*.optrpt *.s $(GEN_HEADERS) $(MAKE_REPORT_FILE)
 
 realclean: clean
-	rm -fv stencil*.exe foldBuilder TAGS
+	rm -fv stencil*.exe foldBuilder TAGS $(MAKE_REPORT_FILE) $(CXXFLAGS_FILE) $(LFLAGS_FILE)
 	find . -name '*~' | xargs -r rm -v
 
 help:
