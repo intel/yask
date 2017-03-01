@@ -250,6 +250,7 @@ EXTRA_FB_CXXFLAGS =
 FB_FLAGS   	+=	-st $(stencil) -cluster $(cluster) -fold $(fold)
 ST_MACRO_FILE	:=	stencil_macros.hpp
 ST_CODE_FILE	:=	stencil_code.hpp
+FB_STENCIL_LIST	:=	src/foldBuilder/stencils.hpp
 GEN_HEADERS     =	$(addprefix src/, \
 				stencil_rank_loops.hpp \
 				stencil_region_loops.hpp \
@@ -486,8 +487,14 @@ src/layouts.hpp: gen-layouts.pl
 
 # Compile the stencil compiler.
 # TODO: move this to its own makefile.
-foldBuilder: src/foldBuilder/*.*pp src/foldBuilder/stencils/*.*pp
+foldBuilder: src/foldBuilder/*.*pp src/foldBuilder/stencils/*.*pp $(FB_STENCIL_LIST)
 	$(FB_CXX) $(FB_CXXFLAGS) -Isrc/foldBuilder/stencils -o $@ src/foldBuilder/*.cpp $(EXTRA_FB_CXXFLAGS)
+
+$(FB_STENCIL_LIST): src/foldBuilder/stencils/*.hpp
+	@- rm -f $@
+	for sfile in $(^F); do \
+	  echo '#include "'$$sfile'"' >> $@; \
+	done
 
 # Run the stencil compiler and post-process its output files.
 # Use the gmake pattern-rule trick to specify simultaneous targets.
@@ -503,7 +510,7 @@ foldBuilder: src/foldBuilder/*.*pp src/foldBuilder/stencils/*.*pp
 	  indent -fca $*/$(ST_CODE_FILE) || \
 	  echo "note:" $*/$(ST_CODE_FILE) "not formatted."
 
-headers: $(GEN_HEADERS)
+headers: $(GEN_HEADERS) $(FB_STENCIL_LIST)
 	@ echo 'Header files generated.'
 
 %.$(arch).o: %.cpp src/*.hpp src/foldBuilder/*.hpp $(GEN_HEADERS)
@@ -519,7 +526,7 @@ clean:
 	rm -fv src/*.[io] *.optrpt src/*.optrpt *.s $(GEN_HEADERS) $(MAKE_REPORT_FILE)
 
 realclean: clean
-	rm -fv stencil*.exe foldBuilder TAGS $(MAKE_REPORT_FILE) $(CXXFLAGS_FILE) $(LFLAGS_FILE)
+	rm -fv stencil*.exe foldBuilder TAGS $(MAKE_REPORT_FILE) $(CXXFLAGS_FILE) $(LFLAGS_FILE) $(FB_STENCIL_LIST)
 	find . -name '*~' | xargs -r rm -v
 
 help:

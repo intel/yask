@@ -35,15 +35,9 @@ StencilList stencils;
 #define REGISTER_STENCIL(Class) static Class registered_ ## Class(stencils)
 
 // Stencils.
-#include "ExampleStencil.hpp"
-#include "Iso3dfdStencil.hpp"
-#include "AveStencil.hpp"
-#include "AwpStencil.hpp"
-#include "AwpElasticStencil.hpp"
-#include "StreamStencil.hpp"
-#include "SSGElasticStencil.hpp"
-#include "FSGElasticStencil.hpp"
+#include "stencils.hpp"
 
+// Misc headers.
 #include <fstream>
 
 // output streams.
