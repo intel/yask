@@ -299,11 +299,11 @@ namespace yask {
         const idx_t step_ry = _opts->by;
         const idx_t step_rz = _opts->bz;
 
-        // Groups in region loops are based on group sizes.
-        const idx_t group_size_rw = _opts->gw;
-        const idx_t group_size_rx = _opts->gx;
-        const idx_t group_size_ry = _opts->gy;
-        const idx_t group_size_rz = _opts->gz;
+        // Groups in region loops are based on block-group sizes.
+        const idx_t group_size_rw = _opts->bgw;
+        const idx_t group_size_rx = _opts->bgx;
+        const idx_t group_size_ry = _opts->bgy;
+        const idx_t group_size_rz = _opts->bgz;
 
         // Not yet supporting temporal blocking.
         if (step_rt != 1) {
@@ -787,7 +787,7 @@ namespace yask {
             " block-size:       " <<
             _opts->bt << '*' << _opts->bw << '*' << _opts->bx << '*' << _opts->by << '*' << _opts->bz << endl <<
             " block-group-size: 1*" <<
-            _opts->gw << '*' << _opts->gx << '*' << _opts->gy << '*' << _opts->gz << endl <<
+            _opts->bgw << '*' << _opts->bgx << '*' << _opts->bgy << '*' << _opts->bgz << endl <<
             " region-size:      " <<
             _opts->rt << '*' << _opts->rw << '*' << _opts->rx << '*' << _opts->ry << '*' << _opts->rz << endl <<
             " rank-domain-size: " <<
@@ -1445,7 +1445,7 @@ namespace yask {
         ADD_T_DIM_OPTION("d", "Domain size for this rank", d);
         ADD_T_DIM_OPTION("r", "Region size", r);
         ADD_DIM_OPTION("b", "Block size", b);
-        ADD_DIM_OPTION("g", "Block-group size", g);
+        ADD_DIM_OPTION("bg", "Block-group size", bg);
         ADD_DIM_OPTION("p", "Extra memory-padding size", p);
 #ifdef USE_MPI
         ADD_DIM_OPTION("nr", "Num ranks", nr);
@@ -1542,13 +1542,13 @@ namespace yask {
         // Determine num regions.
         // Also fix up region sizes as needed.
         os << "\nRegions:" << endl;
-        idx_t nrgt = findNumRegions(os, rt, dt, CPTS_T, "t");
-        idx_t nrgw = findNumRegions(os, rw, dw, CPTS_W, "w");
-        idx_t nrgx = findNumRegions(os, rx, dx, CPTS_X, "x");
-        idx_t nrgy = findNumRegions(os, ry, dy, CPTS_Y, "y");
-        idx_t nrgz = findNumRegions(os, rz, dz, CPTS_Z, "z");
-        idx_t nrg = nrgt * nrgw * nrgx * nrgy * nrgz;
-        os << " num-regions-per-rank: " << nrg << endl;
+        idx_t nrt = findNumRegions(os, rt, dt, CPTS_T, "t");
+        idx_t nrw = findNumRegions(os, rw, dw, CPTS_W, "w");
+        idx_t nrx = findNumRegions(os, rx, dx, CPTS_X, "x");
+        idx_t nry = findNumRegions(os, ry, dy, CPTS_Y, "y");
+        idx_t nrz = findNumRegions(os, rz, dz, CPTS_Z, "z");
+        idx_t nr = nrt * nrw * nrx * nry * nrz;
+        os << " num-regions-per-rank: " << nr << endl;
 
         // Determine num blocks.
         // Also fix up block sizes as needed.
@@ -1562,20 +1562,20 @@ namespace yask {
         os << " num-blocks-per-region: " << nb << endl;
 
         // Adjust defaults for block-groups.
-        if (!gw) gw = bw;
-        if (!gx) gx = bx;
-        if (!gy) gy = by;
-        if (!gz) gz = bz;
+        if (!bgw) bgw = bw;
+        if (!bgx) bgx = bx;
+        if (!bgy) bgy = by;
+        if (!bgz) bgz = bz;
 
-        // Determine num groups.
-        // Also fix up group sizes as needed.
+        // Determine num block-groups.
+        // Also fix up block-group sizes as needed.
         os << "\nBlock-groups:" << endl;
-        idx_t ngw = findNumGroups(os, gw, rw, bw, "w");
-        idx_t ngx = findNumGroups(os, gx, rx, bx, "x");
-        idx_t ngy = findNumGroups(os, gy, ry, by, "y");
-        idx_t ngz = findNumGroups(os, gz, rz, bz, "z");
-        idx_t ng = ngw * ngx * ngy * ngz;
-        os << " num-block-groups-per-region: " << ng << endl;
+        idx_t nbgw = findNumGroups(os, bgw, rw, bw, "w");
+        idx_t nbgx = findNumGroups(os, bgx, rx, bx, "x");
+        idx_t nbgy = findNumGroups(os, bgy, ry, by, "y");
+        idx_t nbgz = findNumGroups(os, bgz, rz, bz, "z");
+        idx_t nbg = nbgw * nbgx * nbgy * nbgz;
+        os << " num-block-groups-per-region: " << nbg << endl;
     }
 
 

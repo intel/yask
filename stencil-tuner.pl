@@ -337,7 +337,7 @@ my @metrics = ( $fitnessMetric,
                 'cluster-size',
                 'vector-size',
                 'num-regions',
-                'num-groups-per-region',
+                'num-blocks-per-region',
                 'num-block-groups-per-region',
                 'padding',
                 'max-halos',
@@ -509,10 +509,10 @@ my @rangesAll =
    [ 0, $maxDim, 1, 'ry' ],
    [ 0, $maxDim, 1, 'rz' ],
 
-   # group size.
-   [ 0, $maxDim, 1, 'gx' ],
-   [ 0, $maxDim, 1, 'gy' ],
-   [ 0, $maxDim, 1, 'gz' ],
+   # block-group size.
+   [ 0, $maxDim, 1, 'bgx' ],
+   [ 0, $maxDim, 1, 'bgy' ],
+   [ 0, $maxDim, 1, 'bgz' ],
 
    # block size.
    [ 0, $maxDim, 1, 'bx' ],
@@ -1222,7 +1222,7 @@ sub fitness {
   my $h = makeHash($values);
   my @ds = readHashes($h, 'd', 0);
   my @rs = readHashes($h, 'r', 0);
-  my @gs = readHashes($h, 'g', 0);
+  my @bgs = readHashes($h, 'bg', 0);
   my @bs = readHashes($h, 'b', 0);
   my @cvs = readHashes($h, 'c', 1); # in vectors, not in points!
   my @ps = readHashes($h, 'p', 0);
@@ -1277,12 +1277,12 @@ sub fitness {
   # adjust inner sizes.
   adjSizes(\@rs, \@ds);
   adjSizes(\@bs, \@rs);
-  adjSizes(\@gs, \@rs);
+  adjSizes(\@bgs, \@rs);
 
   # 3d sizes in points.
   my $dPts = mult(@ds);
   my $rPts = mult(@rs);
-  my $gPts = mult(@gs);
+  my $bgPts = mult(@bgs);
   my $bPts = mult(@bs);
   my $cPts = mult(@cs);
   my $fPts = mult(@fs);
@@ -1296,8 +1296,8 @@ sub fitness {
   my $rBlks = mult(@rbs);
 
   # Groups per region.
-  my @rgs = map { ceil($rs[$_] / $gs[$_]) } 0..$#dirs;
-  my $rGrps = mult(@rgs);
+  my @rbgs = map { ceil($rs[$_] / $bgs[$_]) } 0..$#dirs;
+  my $rBlkGrps = mult(@rbgs);
 
   # Regions per rank.
   my @drs = map { ceil($ds[$_] / $rs[$_]) } 0..$#dirs;
@@ -1310,7 +1310,7 @@ sub fitness {
     print "Sizes:\n";
     print "  rank size = $dPts\n";
     print "  region size = $rPts\n";
-    print "  group size = $gPts\n";
+    print "  block-group size = $bgPts\n";
     print "  block size = $bPts\n";
     print "  cluster size = $cPts\n";
     print "  fold size = $fPts\n";
@@ -1363,7 +1363,7 @@ sub fitness {
   addStat($ok, 'mem estimate', $overallSize);
   addStat($ok, 'rank size', $dPts);
   addStat($ok, 'region size', $rPts);
-  addStat($ok, 'group size', $gPts);
+  addStat($ok, 'block-group size', $bgPts);
   addStat($ok, 'block size', $bPts);
   addStat($ok, 'cluster size', $cPts);
   addStat($ok, 'regions per rank', $dRegs);
@@ -1433,7 +1433,7 @@ sub fitness {
   $args .= " -dx $ds[0] -dy $ds[1] -dz $ds[2]";
   $args .= " -rx $rs[0] -ry $rs[1] -rz $rs[2]";
   $args .= " -bx $bs[0] -by $bs[1] -bz $bs[2]";
-  $args .= " -gx $gs[0] -gy $gs[1] -gz $gs[2]";
+  $args .= " -bgx $bgs[0] -bgy $bgs[1] -bgz $bgs[2]";
   $args .= " -px $ps[0] -py $ps[1] -pz $ps[2]";
 
   # num of iterations and trials.

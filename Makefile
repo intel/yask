@@ -320,8 +320,10 @@ ifneq ($(findstring ic,$(notdir $(CXX))),)  # Intel compiler
 
 CODE_STATS      =   	code_stats
 CXXFLAGS        +=      $(ISA) -debug extended -Fa -restrict -ansi-alias -fno-alias
-CXXFLAGS	+=	-fimf-precision=low -fast-transcendentals -no-prec-sqrt -no-prec-div -fp-model fast=2 -fno-protect-parens -rcd -ftz -fma -fimf-domain-exclusion=none -qopt-assume-safe-padding -qoverride-limits -vec-threshold0
-CXXFLAGS	+=      -qopt-report=5 -qopt-report-phase=VEC,PAR,OPENMP,IPO,LOOP
+CXXFLAGS	+=	-fimf-precision=low -fast-transcendentals -no-prec-sqrt -no-prec-div -fp-model fast=2 -fno-protect-parens -rcd -ftz -fma -fimf-domain-exclusion=none -qopt-assume-safe-padding
+#CXXFLAGS	+=	-qoverride-limits -vec-threshold0
+CXXFLAGS	+=      -qopt-report=5
+#CXXFLAGS	+=	-qopt-report-phase=VEC,PAR,OPENMP,IPO,LOOP
 CXXFLAGS	+=	-no-diag-message-catalog
 CXX_VER_CMD	=	$(CXX) -V
 

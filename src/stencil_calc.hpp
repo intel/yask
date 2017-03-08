@@ -112,7 +112,7 @@ namespace yask {
         idx_t dt=1, dw=0, dx=0, dy=0, dz=0; // rank size (without halos).
         idx_t rt=1, rw=0, rx=0, ry=0, rz=0; // region size (used for wave-front tiling).
         idx_t bt=1, bw=0, bx=0, by=0, bz=0; // block size (used for cache locality).
-        idx_t gw=0, gx=0, gy=0, gz=0;     // group-of-blocks size (only used for 'grouped' loop paths).
+        idx_t bgw=0, bgx=0, bgy=0, bgz=0; // group-of-blocks size (only used for 'grouped' loop paths).
         idx_t pw=0, px=0, py=0, pz=0;     // spatial padding (in addition to halos, to avoid aliasing).
 
         // MPI settings.
