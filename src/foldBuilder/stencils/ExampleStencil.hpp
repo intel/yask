@@ -70,7 +70,7 @@ public:
         addPoints(v, t, x, y, z);
 
         // define the value at t+1 to be equivalent to v.
-        data(t+1, x, y, z) IS_EQUIV_TO v;
+        data(t+1, x, y, z) EQUALS v;
     }
 };
 

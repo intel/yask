@@ -198,7 +198,7 @@ IfExprPtr operator IF_OPER(EqualsExprPtr expr, const BoolExprPtr cond) {
 }
 
 // Define the value of a grid point.
-EqualsExprPtr operator EQUIV_OPER(GridPointPtr gpp, const NumExprPtr rhs) {
+EqualsExprPtr operator EQUALS_OPER(GridPointPtr gpp, const NumExprPtr rhs) {
 
     // Get grid referenced by the expr.
     assert(gpp);
@@ -220,8 +220,8 @@ EqualsExprPtr operator EQUIV_OPER(GridPointPtr gpp, const NumExprPtr rhs) {
 
     return expr;
 }
-EqualsExprPtr operator EQUIV_OPER(GridPointPtr gpp, double rhs) {
-    return gpp EQUIV_OPER constNum(rhs);
+EqualsExprPtr operator EQUALS_OPER(GridPointPtr gpp, double rhs) {
+    return gpp EQUALS_OPER constNum(rhs);
 }
 
 // Visitor acceptors.
@@ -807,8 +807,8 @@ void Grids::findDeps(IntTuple& pts,
                     // may or may not be legal.
                     //
                     // Example:
-                    //  eq1: a(t+1, x, ...) IS_EQUIV_TO ... IF ... 
-                    //  eq2: b(t+1, x, ...) IS_EQUIV_TO a(t+1, x+5, ...) ... IF ...
+                    //  eq1: a(t+1, x, ...) EQUALS ... IF ... 
+                    //  eq2: b(t+1, x, ...) EQUALS a(t+1, x+5, ...) ... IF ...
                     //
                     // TODO: be much smarter about this and find only real
                     // dependencies--use a polyhedral library?

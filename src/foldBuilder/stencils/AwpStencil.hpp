@@ -137,7 +137,7 @@ public:
         adjust_for_sponge(next_vel_x, x, y, z);
 
         // define the value at t+1.
-        vel_x(t+1, x, y, z) IS_EQUIV_TO next_vel_x;
+        vel_x(t+1, x, y, z) EQUALS next_vel_x;
     }
     void define_vel_y(GridIndex t, GridIndex x, GridIndex y, GridIndex z) {
         GridValue rho_val = (rho(x,   y, z  ) +
@@ -155,7 +155,7 @@ public:
         adjust_for_sponge(next_vel_y, x, y, z);
 
         // define the value at t+1.
-        vel_y(t+1, x, y, z) IS_EQUIV_TO next_vel_y;
+        vel_y(t+1, x, y, z) EQUALS next_vel_y;
     }
     void define_vel_z(GridIndex t, GridIndex x, GridIndex y, GridIndex z) {
         GridValue rho_val = (rho(x,   y,   z) +
@@ -173,7 +173,7 @@ public:
         adjust_for_sponge(next_vel_z, x, y, z);
 
         // define the value at t+1.
-        vel_z(t+1, x, y, z) IS_EQUIV_TO next_vel_z;
+        vel_z(t+1, x, y, z) EQUALS next_vel_z;
     }
 
     // Stress-grid define functions.  For each D in xx, yy, zz, xy, xz, yz,
@@ -204,8 +204,8 @@ public:
         adjust_for_sponge(next_stress_xx, x, y, z);
 
         // define the value at t+1.
-        stress_mem_xx(t+1, x, y, z) IS_EQUIV_TO next_stress_mem_xx;
-        stress_xx(t+1, x, y, z) IS_EQUIV_TO next_stress_xx;
+        stress_mem_xx(t+1, x, y, z) EQUALS next_stress_mem_xx;
+        stress_xx(t+1, x, y, z) EQUALS next_stress_xx;
     }
     void define_stress_yy(GridIndex t, GridIndex x, GridIndex y, GridIndex z,
                           GridValue lambda_val, GridValue mu_val,
@@ -227,8 +227,8 @@ public:
         adjust_for_sponge(next_stress_yy, x, y, z);
 
         // define the value at t+1.
-        stress_mem_yy(t+1, x, y, z) IS_EQUIV_TO next_stress_mem_yy;
-        stress_yy(t+1, x, y, z) IS_EQUIV_TO next_stress_yy;
+        stress_mem_yy(t+1, x, y, z) EQUALS next_stress_mem_yy;
+        stress_yy(t+1, x, y, z) EQUALS next_stress_yy;
     }
     void define_stress_zz(GridIndex t, GridIndex x, GridIndex y, GridIndex z,
                           GridValue lambda_val, GridValue mu_val,
@@ -250,8 +250,8 @@ public:
         adjust_for_sponge(next_stress_zz, x, y, z);
 
         // define the value at t+1.
-        stress_mem_zz(t+1, x, y, z) IS_EQUIV_TO next_stress_mem_zz;
-        stress_zz(t+1, x, y, z) IS_EQUIV_TO next_stress_zz;
+        stress_mem_zz(t+1, x, y, z) EQUALS next_stress_mem_zz;
+        stress_zz(t+1, x, y, z) EQUALS next_stress_zz;
     }
     void define_stress_xy(GridIndex t, GridIndex x, GridIndex y, GridIndex z,
                           GridValue tau1) {
@@ -280,8 +280,8 @@ public:
         adjust_for_sponge(next_stress_xy, x, y, z);
 
         // define the value at t+1.
-        stress_mem_xy(t+1, x, y, z) IS_EQUIV_TO next_stress_mem_xy;
-        stress_xy(t+1, x, y, z) IS_EQUIV_TO next_stress_xy;
+        stress_mem_xy(t+1, x, y, z) EQUALS next_stress_mem_xy;
+        stress_xy(t+1, x, y, z) EQUALS next_stress_xy;
     }
     void define_stress_xz(GridIndex t, GridIndex x, GridIndex y, GridIndex z,
                           GridValue tau1) {
@@ -310,8 +310,8 @@ public:
         adjust_for_sponge(next_stress_xz, x, y, z);
 
         // define the value at t+1.
-        stress_mem_xz(t+1, x, y, z) IS_EQUIV_TO next_stress_mem_xz;
-        stress_xz(t+1, x, y, z) IS_EQUIV_TO next_stress_xz;
+        stress_mem_xz(t+1, x, y, z) EQUALS next_stress_mem_xz;
+        stress_xz(t+1, x, y, z) EQUALS next_stress_xz;
     }
     void define_stress_yz(GridIndex t, GridIndex x, GridIndex y, GridIndex z,
                           GridValue tau1) {
@@ -340,8 +340,8 @@ public:
         adjust_for_sponge(next_stress_yz, x, y, z);
 
         // define the value at t+1.
-        stress_mem_yz(t+1, x, y, z) IS_EQUIV_TO next_stress_mem_yz;
-        stress_yz(t+1, x, y, z) IS_EQUIV_TO next_stress_yz;
+        stress_mem_yz(t+1, x, y, z) EQUALS next_stress_mem_yz;
+        stress_yz(t+1, x, y, z) EQUALS next_stress_yz;
     }
 
     // Call all the define_* functions.

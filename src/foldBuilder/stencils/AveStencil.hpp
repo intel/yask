@@ -66,7 +66,7 @@ public:
         v *= 1.0 / double(nPts);
 
         // define the grid value at t+1 to be equivalent to v.
-        heat(t+1, w, x, y, z) IS_EQUIV_TO v;
+        heat(t+1, w, x, y, z) EQUALS v;
     }
 };
 

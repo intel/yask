@@ -47,12 +47,14 @@ namespace yask {
     // +6 / +3 = +2, +6 % +3 = +0, idiv_flr(+6, +3) = +2, imod_flr(+6, +3) = +0
     // +7 / +3 = +2, +7 % +3 = +1, idiv_flr(+7, +3) = +2, imod_flr(+7, +3) = +1
     // +8 / +3 = +2, +8 % +3 = +2, idiv_flr(+8, +3) = +2, imod_flr(+8, +3) = +2
+
     template<typename T>
     inline T idiv_flr(T a, T b) {
         //return (a<0 ? a-(b-1) : a) / b;
         //return (a - (a<0 ? b-1 : 0)) / b;
         return (a + (a>>(sizeof(a)*8-1)) * (b-1)) / b;
     }
+
     template<typename T>
     inline T imod_flr(T a, T b) {
         //return ((a % b) + b) % b;
@@ -60,6 +62,9 @@ namespace yask {
         //T c = a % b; return (c < 0) ? c + b : c;
         T c = a % b; return c - ((c>>(sizeof(c)*8-1)) * b);
     }
+
+    // NB: (a>>(sizeof(a)*8-1) is equiv to (a >= 0) ? 0 : 1;
+    // thus, (a>>(sizeof(a)*8-1) * b is equiv to (a >= 0) ? 0 : b;
 }
 
 #endif

@@ -97,11 +97,12 @@ void operator/=(NumExprPtr& lhs, const NumExprPtr rhs);
 void operator/=(NumExprPtr& lhs, double rhs);
 
 // The '==' operator used for defining a grid value.
-#define EQUIV_OPER ==
-EqualsExprPtr operator EQUIV_OPER(GridPointPtr gpp, const NumExprPtr rhs);
-EqualsExprPtr operator EQUIV_OPER(GridPointPtr gpp, double rhs);
-#define IS_EQUIV_TO EQUIV_OPER
-#define IS_EQUIVALENT_TO EQUIV_OPER
+#define EQUALS_OPER ==
+EqualsExprPtr operator EQUALS_OPER(GridPointPtr gpp, const NumExprPtr rhs);
+EqualsExprPtr operator EQUALS_OPER(GridPointPtr gpp, double rhs);
+#define EQUALS EQUALS_OPER
+#define IS_EQUIV_TO EQUALS_OPER
+#define IS_EQUIVALENT_TO EQUALS_OPER
 
 // The '==' operator for comparing values.
 BoolExprPtr operator==(const NumExprPtr lhs, const NumExprPtr rhs);
@@ -1142,7 +1143,7 @@ public:
 
 // Aliases for parameters.
 // Even though these are just typedefs for now, don't interchange them.
-// TODO: enforce the difference between grids and parameters.
+// TODO: make params just a special case of grids.
 typedef Grid Param;
 typedef Grids Params;
 
@@ -1436,7 +1437,7 @@ typedef NumExprPtr GridValue;
 #define SET_VALUE_FROM_EXPR(lhs, rhs) do {              \
         ostringstream oss;                              \
         oss << setprecision(17) << scientific;          \
-        oss << "(" << rhs << ")";                   \
+        oss << "(" << rhs << ")";                       \
         lhs  make_shared<CodeExpr>(oss.str());          \
     } while(0)
 

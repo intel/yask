@@ -304,19 +304,19 @@ public:
         // define the value at t+1.
         if ( hasBoundaryCondition ) {            
             Condition not_at_bc = bc->is_not_at_boundary(t,x,y,z);
-            sxx(t+1, x, y, z) IS_EQUIV_TO next_sxx IF not_at_bc;
-            syy(t+1, x, y, z) IS_EQUIV_TO next_syy IF not_at_bc;
-            szz(t+1, x, y, z) IS_EQUIV_TO next_szz IF not_at_bc;
-            syz(t+1, x, y, z) IS_EQUIV_TO next_syz IF not_at_bc;
-            sxz(t+1, x, y, z) IS_EQUIV_TO next_sxz IF not_at_bc;
-            sxy(t+1, x, y, z) IS_EQUIV_TO next_sxy IF not_at_bc;
+            sxx(t+1, x, y, z) EQUALS next_sxx IF not_at_bc;
+            syy(t+1, x, y, z) EQUALS next_syy IF not_at_bc;
+            szz(t+1, x, y, z) EQUALS next_szz IF not_at_bc;
+            syz(t+1, x, y, z) EQUALS next_syz IF not_at_bc;
+            sxz(t+1, x, y, z) EQUALS next_sxz IF not_at_bc;
+            sxy(t+1, x, y, z) EQUALS next_sxy IF not_at_bc;
         } else {
-            sxx(t+1, x, y, z) IS_EQUIV_TO next_sxx;
-            syy(t+1, x, y, z) IS_EQUIV_TO next_syy;
-            szz(t+1, x, y, z) IS_EQUIV_TO next_szz;
-            syz(t+1, x, y, z) IS_EQUIV_TO next_syz;
-            sxz(t+1, x, y, z) IS_EQUIV_TO next_sxz;
-            sxy(t+1, x, y, z) IS_EQUIV_TO next_sxy;
+            sxx(t+1, x, y, z) EQUALS next_sxx;
+            syy(t+1, x, y, z) EQUALS next_syy;
+            szz(t+1, x, y, z) EQUALS next_szz;
+            syz(t+1, x, y, z) EQUALS next_syz;
+            sxz(t+1, x, y, z) EQUALS next_sxz;
+            sxy(t+1, x, y, z) EQUALS next_sxy;
         }
     }
 
@@ -432,7 +432,7 @@ public:
         next_v *= abc_sq_x(x,y,z) * abc_sq_y(x,y,z) * abc_sq_z(x,y,z);
 
         // define the value at t+1.
-        v(t+1, x, y, z) IS_EQUIV_TO next_v IF at_abc;
+        v(t+1, x, y, z) EQUALS next_v IF at_abc;
     }    
     
     void velocity (GridIndex t, GridIndex x, GridIndex y, GridIndex z )
@@ -512,12 +512,12 @@ public:
 
         // define the value at t+1.
         Condition at_abc = is_at_boundary(t,x,y,z);
-        sxx(t+1, x, y, z) IS_EQUIV_TO next_sxx IF at_abc;
-        syy(t+1, x, y, z) IS_EQUIV_TO next_syy IF at_abc;
-        szz(t+1, x, y, z) IS_EQUIV_TO next_szz IF at_abc;
-        syz(t+1, x, y, z) IS_EQUIV_TO next_syz IF at_abc;
-        sxz(t+1, x, y, z) IS_EQUIV_TO next_sxz IF at_abc;
-        sxy(t+1, x, y, z) IS_EQUIV_TO next_sxy IF at_abc;
+        sxx(t+1, x, y, z) EQUALS next_sxx IF at_abc;
+        syy(t+1, x, y, z) EQUALS next_syy IF at_abc;
+        szz(t+1, x, y, z) EQUALS next_szz IF at_abc;
+        syz(t+1, x, y, z) EQUALS next_syz IF at_abc;
+        sxz(t+1, x, y, z) EQUALS next_sxz IF at_abc;
+        sxy(t+1, x, y, z) EQUALS next_sxy IF at_abc;
     }
         
     void stress (GridIndex t, GridIndex x, GridIndex y, GridIndex z )

@@ -220,9 +220,9 @@ public:
         // define the value at t+1.
         if ( hasBoundaryCondition ) {
             Condition not_at_bc = bc->is_not_at_boundary(t,x,y,z);
-            v(t+1, x, y, z) IS_EQUIV_TO next_v IF not_at_bc;
+            v(t+1, x, y, z) EQUALS next_v IF not_at_bc;
         } else
-            v(t+1, x, y, z) IS_EQUIV_TO next_v;
+            v(t+1, x, y, z) EQUALS next_v;
     }
 
     GridValue stencil_O2_Z( GridIndex t, GridIndex x, GridIndex y, GridIndex z, Grid &g, const int offset )
