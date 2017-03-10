@@ -109,25 +109,29 @@ namespace yask {
         return res;
     }
     
-    // Fix bsize, if needed, to fit into rsize and be a multiple of mult.
+    // Alter 'inner_size', if needed, to fit into 'outer_size' and be a multiple of 'mult'.
+    // Output info to 'os' using '*_name' and 'dim'.
     // Return number of blocks.
     idx_t findNumSubsets(ostream& os,
-                         idx_t& bsize, const string& bname,
-                         idx_t rsize, const string& rname,
+                         idx_t& inner_size, const string& inner_name,
+                         idx_t outer_size, const string& outer_name,
                          idx_t mult, const string& dim) {
-        if (bsize < 1) bsize = rsize; // 0 => use full size.
-        bsize = ROUND_UP(bsize, mult);
-        if (bsize > rsize) bsize = rsize;
-        idx_t nblks = (rsize + bsize - 1) / bsize;
-        idx_t rem = rsize % bsize;
-        idx_t nfull_blks = rem ? (nblks - 1) : nblks;
+        if (inner_size < 1)
+            inner_size = outer_size; // 0 => use full size.
+        inner_size = ROUND_UP(inner_size, mult);
+        if (inner_size > outer_size)
+            inner_size = outer_size;
+        idx_t ninner = (outer_size + inner_size - 1) / inner_size; // full or partial.
+        idx_t rem = outer_size % inner_size;                       // size of remainder.
+        idx_t nfull = rem ? (ninner - 1) : ninner; // full only.
 
-        os << " In '" << dim << "' dimension, " << rname << " of size " <<
-            rsize << " is divided into " << nfull_blks << " " << bname << "(s) of size " << bsize;
+        os << " In '" << dim << "' dimension, " << outer_name << " of size " <<
+            outer_size << " contains " << nfull << " " <<
+            inner_name << "(s) of size " << inner_size;
         if (rem)
-            os << " plus 1 remainder " << bname << " of size " << rem;
+            os << " plus 1 remainder " << inner_name << " of size " << rem;
         os << "." << endl;
-        return nblks;
+        return ninner;
     }
 
     // Find sum of rank_vals over all ranks.

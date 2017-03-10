@@ -793,15 +793,16 @@ void YASKCppPrinter::printCode(ostream& os) {
             "\n struct " << egsName << " {\n" <<
             " std::string name = \"" << eqName << "\";\n";
 
-        // Ops for this eqGroup.
-        CounterVisitor fpops;
-        eq.visitEqs(&fpops);
+        // Stats for this eqGroup.
+        CounterVisitor stats;
+        eq.visitEqs(&stats);
             
         // Example computation.
-        os << endl << " // " << fpops.getNumOps() << " FP operation(s) per point:" << endl;
+        os << endl << " // " << stats.getNumOps() << " FP operation(s) per point:" << endl;
         addComment(os, eq);
-        os << " const int scalar_fp_ops = " << fpops.getNumOps() << ";" << endl <<
-            " const int scalar_points_updated = " << eq.getNumEqs() << ";" << endl;
+        os << " const int scalar_fp_ops = " << stats.getNumOps() << ";\n" <<
+            " const int scalar_points_read = " << stats.getNumReads() << ";\n" <<
+            " const int scalar_points_written = " << stats.getNumWrites() << ";\n";
 
         // Eq-group ctor.
         {
@@ -901,7 +902,7 @@ void YASKCppPrinter::printCode(ostream& os) {
             os << " // SIMD calculations use " << vv.getNumPoints() <<
                 " vector block(s) created from " << vv.getNumAlignedVecs() <<
                 " aligned vector-block(s)." << endl;
-            os << " // There are approximately " << (fpops.getNumOps() * numResults) <<
+            os << " // There are approximately " << (stats.getNumOps() * numResults) <<
                 " FP operation(s) per invocation." << endl;
             os << " void calc_cluster(" << _context_base << "& context, " <<
                 _dims._allDims.makeDimStr(", ", "idx_t ", "v") << ") {" << endl;

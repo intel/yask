@@ -809,13 +809,19 @@ namespace yask {
             " manual-L2-prefetch-distance: " << PFDL2 << endl <<
             endl;
         
-        rank_numpts_1t = 0; rank_numFpOps_1t = 0; // sums across eqs for this rank.
+        // sums across eqs for this rank.
+        rank_numpts_1t = 0;
+        rank_reads_1t = 0;
+        rank_numFpOps_1t = 0;
         for (auto eg : eqGroups) {
-            idx_t updates1 = eg->get_scalar_points_updated();
+            idx_t updates1 = eg->get_scalar_points_written();
             idx_t updates_domain = updates1 * eg->bb_num_points;
+            rank_numpts_1t += updates_domain;
+            idx_t reads1 = eg->get_scalar_points_read();
+            idx_t reads_domain = reads1 * eg->bb_num_points;
+            rank_reads_1t += reads_domain;
             idx_t fpops1 = eg->get_scalar_fp_ops();
             idx_t fpops_domain = fpops1 * eg->bb_num_points;
-            rank_numpts_1t += updates_domain;
             rank_numFpOps_1t += fpops_domain;
             os << "Stats for equation-group '" << eg->get_name() << "':\n" <<
                 " sub-domain size:            " <<
@@ -823,6 +829,8 @@ namespace yask {
                 " valid points in sub domain: " << printWithPow10Multiplier(eg->bb_num_points) << endl <<
                 " grid-updates per point:     " << updates1 << endl <<
                 " grid-updates in sub-domain: " << printWithPow10Multiplier(updates_domain) << endl <<
+                " grid-reads per point:       " << reads1 << endl <<
+                " grid-reads in sub-domain:   " << printWithPow10Multiplier(reads_domain) << endl <<
                 " est FP-ops per point:       " << fpops1 << endl <<
                 " est FP-ops in sub-domain:   " << printWithPow10Multiplier(fpops_domain) << endl;
         }
@@ -839,6 +847,10 @@ namespace yask {
         rank_numpts_dt = rank_numpts_1t * dt;
         tot_numpts_1t = sumOverRanks(rank_numpts_1t, comm);
         tot_numpts_dt = tot_numpts_1t * dt;
+
+        rank_reads_dt = rank_reads_1t * dt;
+        tot_reads_1t = sumOverRanks(rank_reads_1t, comm);
+        tot_reads_dt = tot_reads_1t * dt;
 
         rank_numFpOps_dt = rank_numFpOps_1t * dt;
         tot_numFpOps_1t = sumOverRanks(rank_numFpOps_1t, comm);
@@ -861,14 +873,23 @@ namespace yask {
             " problem-size in all ranks, for all time-steps: " <<
             printWithPow10Multiplier(tot_domain_dt) << endl <<
             endl <<
-            " grid-points-updated in this rank, for one time-step: " <<
+            " grid-point-updates in this rank, for one time-step: " <<
             printWithPow10Multiplier(rank_numpts_1t) << endl <<
-            " grid-points-updated in all ranks, for one time-step: " <<
+            " grid-point-updates in all ranks, for one time-step: " <<
             printWithPow10Multiplier(tot_numpts_1t) << endl <<
-            " grid-points-updated in this rank, for all time-steps: " <<
+            " grid-point-updates in this rank, for all time-steps: " <<
             printWithPow10Multiplier(rank_numpts_dt) << endl <<
-            " grid-points-updated in all ranks, for all time-steps: " <<
+            " grid-point-updates in all ranks, for all time-steps: " <<
             printWithPow10Multiplier(tot_numpts_dt) << endl <<
+            endl <<
+            " grid-point-reads in this rank, for one time-step: " <<
+            printWithPow10Multiplier(rank_reads_1t) << endl <<
+            " grid-point-reads in all ranks, for one time-step: " <<
+            printWithPow10Multiplier(tot_reads_1t) << endl <<
+            " grid-point-reads in this rank, for all time-steps: " <<
+            printWithPow10Multiplier(rank_reads_dt) << endl <<
+            " grid-point-reads in all ranks, for all time-steps: " <<
+            printWithPow10Multiplier(tot_reads_dt) << endl <<
             endl <<
             " est-FP-ops in this rank, for one time-step: " <<
             printWithPow10Multiplier(rank_numFpOps_1t) << endl <<
@@ -881,8 +902,9 @@ namespace yask {
             endl << 
             "Notes:\n" <<
             " problem-size is based on rank-domain sizes specified in command-line (dw * dx * dy * dz).\n" <<
-            " grid-points-updated is based sum of grid-updates-in-sub-domain across equation-group(s).\n" <<
-            " est-FP-ops is based on sum of est-FP-ops-in-sub-domain across equation-group(s).\n" <<
+            " grid-point-updates is based on sum of grid-updates in sub-domain across equation-group(s).\n" <<
+            " grid-point-reads is based on sum of grid-reads in sub-domain across equation-group(s).\n" <<
+            " est-FP-ops is based on sum of est-FP-ops in sub-domain across equation-group(s).\n" <<
             endl;
 
     }
@@ -1542,26 +1564,36 @@ namespace yask {
         // Determine num regions.
         // Also fix up region sizes as needed.
         os << "\nRegions:" << endl;
-        idx_t nrt = findNumRegions(os, rt, dt, CPTS_T, "t");
-        idx_t nrw = findNumRegions(os, rw, dw, CPTS_W, "w");
-        idx_t nrx = findNumRegions(os, rx, dx, CPTS_X, "x");
-        idx_t nry = findNumRegions(os, ry, dy, CPTS_Y, "y");
-        idx_t nrz = findNumRegions(os, rz, dz, CPTS_Z, "z");
+        idx_t nrt = findNumRegionsInDomain(os, rt, dt, CPTS_T, "t");
+        idx_t nrw = findNumRegionsInDomain(os, rw, dw, CPTS_W, "w");
+        idx_t nrx = findNumRegionsInDomain(os, rx, dx, CPTS_X, "x");
+        idx_t nry = findNumRegionsInDomain(os, ry, dy, CPTS_Y, "y");
+        idx_t nrz = findNumRegionsInDomain(os, rz, dz, CPTS_Z, "z");
         idx_t nr = nrt * nrw * nrx * nry * nrz;
-        os << " num-regions-per-rank: " << nr << endl;
+        os << " num-regions-per-rank-domain: " << nr << endl;
+        os << " Since the temporal region size is " << rt <<
+            ", temporal wave-front tiling is ";
+        if (rt <= 1) os << "NOT ";
+        os << "enabled.\n";
 
         // Determine num blocks.
         // Also fix up block sizes as needed.
         os << "\nBlocks:" << endl;
-        idx_t nbt = findNumBlocks(os, bt, rt, CPTS_T, "t");
-        idx_t nbw = findNumBlocks(os, bw, rw, CPTS_W, "w");
-        idx_t nbx = findNumBlocks(os, bx, rx, CPTS_X, "x");
-        idx_t nby = findNumBlocks(os, by, ry, CPTS_Y, "y");
-        idx_t nbz = findNumBlocks(os, bz, rz, CPTS_Z, "z");
+        idx_t nbt = findNumBlocksInRegion(os, bt, rt, CPTS_T, "t");
+        idx_t nbw = findNumBlocksInRegion(os, bw, rw, CPTS_W, "w");
+        idx_t nbx = findNumBlocksInRegion(os, bx, rx, CPTS_X, "x");
+        idx_t nby = findNumBlocksInRegion(os, by, ry, CPTS_Y, "y");
+        idx_t nbz = findNumBlocksInRegion(os, bz, rz, CPTS_Z, "z");
         idx_t nb = nbt * nbw * nbx * nby * nbz;
         os << " num-blocks-per-region: " << nb << endl;
+        nbw = findNumBlocksInDomain(os, bw, dw, CPTS_W, "w");
+        nbx = findNumBlocksInDomain(os, bx, dx, CPTS_X, "x");
+        nby = findNumBlocksInDomain(os, by, dy, CPTS_Y, "y");
+        nbz = findNumBlocksInDomain(os, bz, dz, CPTS_Z, "z");
+        nb = nbw * nbx * nby * nbz;
+        os << " num-blocks-per-rank-domain: " << nb << endl;
 
-        // Adjust defaults for block-groups.
+        // Adjust defaults for block-groups to be size of block.
         if (!bgw) bgw = bw;
         if (!bgx) bgx = bx;
         if (!bgy) bgy = by;
@@ -1569,15 +1601,20 @@ namespace yask {
 
         // Determine num block-groups.
         // Also fix up block-group sizes as needed.
+        // TODO: only print this if block-grouping is enabled.
         os << "\nBlock-groups:" << endl;
-        idx_t nbgw = findNumGroups(os, bgw, rw, bw, "w");
-        idx_t nbgx = findNumGroups(os, bgx, rx, bx, "x");
-        idx_t nbgy = findNumGroups(os, bgy, ry, by, "y");
-        idx_t nbgz = findNumGroups(os, bgz, rz, bz, "z");
+        idx_t nbgw = findNumGroupsInRegion(os, bgw, rw, bw, "w");
+        idx_t nbgx = findNumGroupsInRegion(os, bgx, rx, bx, "x");
+        idx_t nbgy = findNumGroupsInRegion(os, bgy, ry, by, "y");
+        idx_t nbgz = findNumGroupsInRegion(os, bgz, rz, bz, "z");
         idx_t nbg = nbgw * nbgx * nbgy * nbgz;
         os << " num-block-groups-per-region: " << nbg << endl;
+        nbw = findNumBlocksInGroup(os, bw, bgw, CPTS_W, "w");
+        nbx = findNumBlocksInGroup(os, bx, bgx, CPTS_X, "x");
+        nby = findNumBlocksInGroup(os, by, bgy, CPTS_Y, "y");
+        nbz = findNumBlocksInGroup(os, bz, bgz, CPTS_Z, "z");
+        nb = nbw * nbx * nby * nbz;
+        os << " num-blocks-per-block-group: " << nb << endl;
     }
-
-
 
 } // namespace yask.

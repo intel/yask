@@ -258,7 +258,7 @@ int main(int argc, char** argv)
         os << 
             "time (sec):                             " << printWithPow10Multiplier(elapsed_time) << endl <<
             "throughput (prob-size-points/sec):      " << printWithPow10Multiplier(dpps) << endl <<
-            "throughput (points-updated/sec):        " << printWithPow10Multiplier(apps) << endl <<
+            "throughput (point-updates/sec):         " << printWithPow10Multiplier(apps) << endl <<
             "throughput (est-FLOPS):                 " << printWithPow10Multiplier(flops) << endl;
 #ifdef USE_MPI
         os <<
@@ -276,12 +276,12 @@ int main(int argc, char** argv)
     os << divLine <<
         "best-time (sec):                        " << printWithPow10Multiplier(best_elapsed_time) << endl <<
         "best-throughput (prob-size-points/sec): " << printWithPow10Multiplier(best_dpps) << endl <<
-        "best-throughput (points-updated/sec):   " << printWithPow10Multiplier(best_apps) << endl <<
+        "best-throughput (point-updates/sec):    " << printWithPow10Multiplier(best_apps) << endl <<
         "best-throughput (est-FLOPS):            " << printWithPow10Multiplier(best_flops) << endl <<
         divLine <<
         "Notes:\n" <<
         " prob-size-points/sec is based on problem-size as described above.\n" <<
-        " points-updated/sec is based on grid-points-updated as described above.\n" <<
+        " point-updates/sec is based on grid-point-updates as described above.\n" <<
         " est-FLOPS is based on est-FP-ops as described above.\n" <<
         endl;
     

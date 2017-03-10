@@ -70,6 +70,7 @@ bool doCse = true;
 string stepDim = "t";
 int haloSize = 0;                     // 0 means auto.
 int stepAlloc = 0;                    // 0 means auto.
+bool find_deps = true;                // find dependencies between equations.
 string eq_group_basename_default = "stencil";
 
 ostream* open_file(const string& name) {
@@ -129,11 +130,11 @@ void usage(const string& cmd) {
         " -halo <size>\n"
         "    Specify the sizes of the halos.\n"
         "      By default, halos are calculated automatically for each grid.\n"
-        " -lus\n"
-        "    Make last dimension of fold unit stride (instead of first).\n"
+        " [-no]-lus\n"
+        "    Make last dimension of fold unit stride (default=" << (!firstInner) << ").\n"
         "      This controls the intra-vector memory layout.\n"
-        " -aul\n"
-        "    Allow simple unaligned loads.\n"
+        " [-no]-aul\n"
+        "    Allow simple unaligned loads (default=" << allowUnalignedLoads << ").\n"
         "      To use this correctly, only 1D folds are allowed, and\n"
         "        the memory layout used by YASK must have that same dimension in unit stride.\n"
         " [-no]-comb\n"
@@ -144,6 +145,8 @@ void usage(const string& cmd) {
         "    Set heuristic for max single expression-size (default=" << maxExprSize << ").\n"
         " -min-es <num-nodes>\n"
         "    Set heuristic for min expression-size for reuse (default=" << minExprSize << ").\n"
+        " [-no]-find-deps\n"
+        "    Automatically find dependencies between equations (default=" << find_deps << ").\n"
         "\n"
         //" -ps <vec-len>         Print stats for all folding options for given vector length.\n"
         " -pm <filename>\n"
@@ -190,8 +193,16 @@ void parseOpts(int argc, const char* argv[])
 
             else if (opt == "-lus")
                 firstInner = false;
+            else if (opt == "-no-lus")
+                firstInner = true;
             else if (opt == "-aul")
                 allowUnalignedLoads = true;
+            else if (opt == "-no-aul")
+                allowUnalignedLoads = false;
+            else if (opt == "-find-deps")
+                find_deps = true;
+            else if (opt == "-no-find-deps")
+                find_deps = false;
             else if (opt == "-comb")
                 doComb = true;
             else if (opt == "-no-comb")
@@ -399,21 +410,25 @@ int main(int argc, const char* argv[]) {
     stencilFunc->define(dims._allDims);
 
     // Check for illegal dependencies within equations for scalar size.
-    cout << "Checking equation(s) with scalar operations...\n"
-        " If this fails, review stencil equation(s) for illegal dependencies.\n";
-    grids.checkDeps(dims._scalar, dims._stepDim);
+    if (find_deps) {
+        cout << "Checking equation(s) with scalar operations...\n"
+            " If this fails, review stencil equation(s) for illegal dependencies.\n";
+        grids.checkDeps(dims._scalar, dims._stepDim);
+    }
 
     // Check for illegal dependencies within equations for vector size.
-    cout << "Checking equation(s) with folded-vector  operations...\n"
-        " If this fails, the fold dimensions are not compatible with all equations.\n";
-    grids.checkDeps(dims._fold, dims._stepDim);
-
-    // Check for illegal dependencies within equations for cluster sizes and
+    if (find_deps) {
+        cout << "Checking equation(s) with folded-vector  operations...\n"
+            " If this fails, the fold dimensions are not compatible with all equations.\n";
+        grids.checkDeps(dims._fold, dims._stepDim);
+    }
+    
+    // Check for illegal dependencies within equations for cluster size and
     // also create equation groups based on legal dependencies.
     cout << "Checking equation(s) with clusters of vectors...\n"
         " If this fails, the cluster dimensions are not compatible with all equations.\n";
     EqGroups eqGroups(eq_group_basename_default, dims);
-    eqGroups.findEqGroups(grids, eqGroupTargets, dims._clusterPts);
+    eqGroups.findEqGroups(grids, eqGroupTargets, dims._clusterPts, find_deps);
     optimizeEqGroups(eqGroups, "scalar & vector", false, cout);
 
     // Make copies of all the equations at each cluster offset.

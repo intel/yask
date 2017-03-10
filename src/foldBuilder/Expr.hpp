@@ -879,7 +879,7 @@ public:
     
     // Check whether eq a depends on b.
     virtual bool is_dep_on(EqualsExprPtr a, EqualsExprPtr b) const {
-        assert(_done);
+        assert(_done || _deps.size() == 0);
         return _full_deps.count(a) && _full_deps.at(a).count(b) > 0;
     }
     
@@ -1325,9 +1325,11 @@ public:
                       EqDepMap& eq_deps);
     void findEqGroups(Grids& grids,
                       const string& targets,
-                      IntTuple& pts) {
+                      IntTuple& pts,
+                      bool find_deps) {
         EqDepMap eq_deps;
-        grids.findDeps(pts, _dims->_stepDim, &eq_deps);
+        if (find_deps)
+            grids.findDeps(pts, _dims->_stepDim, &eq_deps);
         findEqGroups(grids, targets, pts, eq_deps);
     }
 

@@ -260,16 +260,18 @@ namespace yask {
         // Various metrics calculated in allocAll().
         // 'rank_' prefix indicates for this rank.
         // 'tot_' prefix indicates over all ranks.
-        // 'numpts' indicates points actually calculated in sub-domains.
         // 'domain' indicates points in domain-size specified on cmd-line.
+        // 'numpts' indicates points actually calculated in sub-domains.
+        // 'reads' indicates points actually read by eq-groups.
         // 'numFpOps' indicates est. number of FP ops.
         // 'nbytes' indicates number of bytes allocated.
         // '_1t' suffix indicates work for one time-step.
         // '_dt' suffix indicates work for all time-steps.
-        idx_t rank_numpts_1t, rank_numpts_dt, tot_numpts_1t, tot_numpts_dt;
-        idx_t rank_domain_1t, rank_domain_dt, tot_domain_1t, tot_domain_dt;
-        idx_t rank_numFpOps_1t, rank_numFpOps_dt, tot_numFpOps_1t, tot_numFpOps_dt;
-        idx_t rank_nbytes, tot_nbytes;
+        idx_t rank_domain_1t=0, rank_domain_dt=0, tot_domain_1t=0, tot_domain_dt=0;
+        idx_t rank_numpts_1t=0, rank_numpts_dt=0, tot_numpts_1t=0, tot_numpts_dt=0;
+        idx_t rank_reads_1t=0, rank_reads_dt=0, tot_reads_1t=0, tot_reads_dt=0;
+        idx_t rank_numFpOps_1t=0, rank_numFpOps_dt=0, tot_numFpOps_1t=0, tot_numFpOps_dt=0;
+        idx_t rank_nbytes=0, tot_nbytes=0;
         
         // MPI environment.
         MPI_Comm comm=0;
@@ -473,8 +475,9 @@ namespace yask {
         // Get estimated number of FP ops done for one scalar eval.
         virtual int get_scalar_fp_ops() const =0;
 
-        // Get number of points updated for one scalar eval.
-        virtual int get_scalar_points_updated() const =0;
+        // Get number of points read and written for one scalar eval.
+        virtual int get_scalar_points_read() const =0;
+        virtual int get_scalar_points_written() const =0;
 
         // Set the bounding-box vars for this eq group in this rank.
         virtual void find_bounding_box();
@@ -553,8 +556,11 @@ namespace yask {
         virtual int get_scalar_fp_ops() const {
             return _eqGroup.scalar_fp_ops;
         }
-        virtual int get_scalar_points_updated() const {
-            return _eqGroup.scalar_points_updated;
+        virtual int get_scalar_points_read() const {
+            return _eqGroup.scalar_points_read;
+        }
+        virtual int get_scalar_points_written() const {
+            return _eqGroup.scalar_points_written;
         }
 
         // Add dependency.

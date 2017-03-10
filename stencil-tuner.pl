@@ -322,7 +322,7 @@ $outFile = '/dev/null' if $checking;
 open OUTFILE, ">$outFile" or die "error: cannot write to '$outFile'\n";
 
 # things to get from the run.
-my $fitnessMetric = 'best-throughput (points-updated/sec)';
+my $fitnessMetric = 'best-throughput (point-updates/sec)';
 my $timeMetric = 'best-time (sec)';
 my $dimsMetric = 'rank-domain-size';
 my @metrics = ( $fitnessMetric,
@@ -344,7 +344,8 @@ my @metrics = ( $fitnessMetric,
                 'manual-L1-prefetch-distance',
                 'manual-L2-prefetch-distance',
                 'problem-size in all ranks, for all time-steps',
-                'grid-points-updated in all ranks, for all time-steps',
+                'grid-point-updates in all ranks, for all time-steps',
+                'grid-point-reads in all ranks, for all time-steps',
                 'Total overall allocation',
               );
 
