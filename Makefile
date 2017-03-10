@@ -245,7 +245,7 @@ MAKE		=	make
 CXXFLAGS        +=   	-g -O3 -std=c++11 -Wall
 OMPFLAGS	+=	-fopenmp 
 LFLAGS          +=      -lrt
-FB_CXX    	=       $(CXX)
+FB_CXX    	=       g++  # faster than icpc for the foldBuilder.
 FB_CXXFLAGS 	+=	-g -O0 -std=c++11 -Wall  # low opt to reduce compile time.
 EXTRA_FB_CXXFLAGS =
 FB_FLAGS   	+=	-st $(stencil) -cluster $(cluster) -fold $(fold)
