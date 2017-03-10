@@ -450,43 +450,47 @@ void DOTPrintVisitor::visit(CodeExpr* ce) {
 // Generic numeric unary operators.
 void DOTPrintVisitor::visit(UnaryNumExpr* ue) {
     string label = getLabel(ue);
-    if (label.size())
+    if (label.size()) {
         _os << label << " [ label = \"" << ue->getOpStr() << "\" ];" << endl;
-    _os << ue->makeQuotedStr() << " -> " << ue->getRhs()->makeQuotedStr() << ";" << endl;
-    ue->getRhs()->accept(this);
+        _os << getLabel(ue, false) << " -> " << getLabel(ue->getRhs(), false) << ";" << endl;
+        ue->getRhs()->accept(this);
+    }
 }
 
 // Generic numeric binary operators.
 void DOTPrintVisitor::visit(BinaryNumExpr* be) {
     string label = getLabel(be);
-    if (label.size())
+    if (label.size()) {
         _os << label << " [ label = \"" << be->getOpStr() << "\" ];" << endl;
-    _os << be->makeQuotedStr() << " -> " << be->getLhs()->makeQuotedStr() << ";" << endl <<
-        be->makeQuotedStr() << " -> " << be->getRhs()->makeQuotedStr() << ";" << endl;
-    be->getLhs()->accept(this);
-    be->getRhs()->accept(this);
+        _os << getLabel(be, false) << " -> " << getLabel(be->getLhs(), false) << ";" << endl <<
+            getLabel(be, false) << " -> " << getLabel(be->getRhs(), false) << ";" << endl;
+        be->getLhs()->accept(this);
+        be->getRhs()->accept(this);
+    }
 }
 
 // A commutative operator.
 void DOTPrintVisitor::visit(CommutativeExpr* ce) {
     string label = getLabel(ce);
-    if (label.size())
+    if (label.size()) {
         _os << label << " [ label = \"" << ce->getOpStr() << "\" ];" << endl;
-    for (auto ep : ce->getOps()) {
-        _os << ce->makeQuotedStr() << " -> " << ep->makeQuotedStr() << ";" << endl;
-        ep->accept(this);
+        for (auto ep : ce->getOps()) {
+            _os << getLabel(ce, false) << " -> " << getLabel(ep, false) << ";" << endl;
+            ep->accept(this);
+        }
     }
 }
 
 // An equals operator.
 void DOTPrintVisitor::visit(EqualsExpr* ee) {
     string label = getLabel(ee);
-    if (label.size())
-        _os << label << " [ label = \"==\" ];" << endl;
-    _os << ee->makeQuotedStr() << " -> " << ee->getLhs()->makeQuotedStr()  << ";" << endl <<
-        ee->makeQuotedStr() << " -> " << ee->getRhs()->makeQuotedStr() << ";" << endl;
-    ee->getLhs()->accept(this);
-    ee->getRhs()->accept(this);
+    if (label.size()) {
+        _os << label << " [ label = \"EQUALS\" ];" << endl;
+        _os << getLabel(ee, false) << " -> " << getLabel(ee->getLhs(), false)  << ";" << endl <<
+            getLabel(ee, false) << " -> " << getLabel(ee->getRhs(), false) << ";" << endl;
+        ee->getLhs()->accept(this);
+        ee->getRhs()->accept(this);
+    }
 }
 
 // A grid or parameter access.
@@ -494,9 +498,10 @@ void SimpleDOTPrintVisitor::visit(GridPoint* gp) {
     if (gp->isParam())
         return;
     string label = getLabel(gp);
-    if (label.size())
+    if (label.size()) {
         _os << label << " [ shape = box ];" << endl;
-    _gridsSeen.insert(gp->makeQuotedStr());
+        _gridsSeen.insert(label);
+    }
 }
 
 // Generic numeric unary operators.
@@ -521,7 +526,7 @@ void SimpleDOTPrintVisitor::visit(EqualsExpr* ee) {
 
     // LHS is source.
     ee->getLhs()->accept(this);
-    string label = ee->makeQuotedStr();
+    string label = getLabel(ee, false);
     for (auto g : _gridsSeen)
         label = g;              // really should only be one.
     _gridsSeen.clear();
@@ -580,13 +585,14 @@ void DOTPrinter::print(ostream& os) {
         new SimpleDOTPrintVisitor(os) :
         new DOTPrintVisitor(os);
 
-    os << "digraph \"Stencil " << _stencil.getName() << "\" {" << endl;
+    os << "digraph \"Stencil " << _stencil.getName() << "\" {\n"
+        "rankdir=LR; ranksep=1.5;\n";
 
     // Loop through all eqGroups.
     for (auto& eq : _eqGroups) {
-        //os << "subgraph \"Equation-group " << eq.getName() << "\" {" << endl;
+        os << "subgraph \"Equation-group " << eq.getName() << "\" {" << endl;
         eq.visitEqs(pv);
-        //os << "}" << endl;
+        os << "}" << endl;
     }
     os << "}" << endl;
     delete pv;

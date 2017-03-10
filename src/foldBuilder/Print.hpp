@@ -323,13 +323,18 @@ protected:
     set<string> _done;
 
     // Get label to use.
-    // Return empty string if already done.
-    virtual string getLabel(Expr* ep) {
-        string key = ep->makeQuotedStr();
-        if (_done.count(key))
-            return "";
-        _done.insert(key);
+    // Return empty string if already done if once == true.
+    virtual string getLabel(Expr* ep, bool once = true) {
+        string key = ep->makeQuotedStr("\"");
+        if (once) {
+            if (_done.count(key))
+                return "";
+            _done.insert(key);
+        }
         return key;
+    }
+    virtual string getLabel(ExprPtr ep, bool once = true) {
+        return getLabel(ep.get(), once);
     }
     
 public:
