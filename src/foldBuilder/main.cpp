@@ -166,7 +166,7 @@ void usage(const string& cmd) {
         //" -pp <filename>        Print POV-Ray code.\n"
         "\n"
         "Examples:\n"
-        " " << cmd << " -st 3axis -or 2 -fold x=4,y=4 -ph -\n"
+        " " << cmd << " -st 3axis -or 2 -fold x=4,y=4 -ph -  # '-' for stdout\n"
         " " << cmd << " -st awp -fold y=4,y=2 -p256 stencil_code.hpp\n"
         " " << cmd << " -st iso3dfd -or 8 -fold x=4,y=4 -cluster y=2 -p512 stencil_code.hpp\n";
     exit(1);
