@@ -135,6 +135,18 @@ namespace yask {
                                 idx_t& inner_size, const std::string& inner_name,
                                 idx_t outer_size, const std::string& outer_name,
                                 idx_t mult, const std::string& dim);
+    inline idx_t findNumSubBlocksInBlock(std::ostream& os, idx_t& sbsize, idx_t bsize,
+                                         idx_t mult, const std::string& dim) {
+        return findNumSubsets(os, sbsize, "sub-block", bsize, "block", mult, dim);
+    }
+    inline idx_t findNumSubBlocksInSubBlockGroup(std::ostream& os, idx_t& sbsize, idx_t sbgsize,
+                                                 idx_t mult, const std::string& dim) {
+        return findNumSubsets(os, sbsize, "sub-block", sbgsize, "sub-block-group", mult, dim);
+    }
+    inline idx_t findNumSubBlockGroupsInBlock(std::ostream& os, idx_t& sbgsize, idx_t bsize,
+                                              idx_t mult, const std::string& dim) {
+        return findNumSubsets(os, sbgsize, "sub-block-group", bsize, "block", mult, dim);
+    }
     inline idx_t findNumBlocksInDomain(std::ostream& os, idx_t& bsize, idx_t dsize,
                                        idx_t mult, const std::string& dim) {
         return findNumSubsets(os, bsize, "block", dsize, "rank-domain", mult, dim);
@@ -143,11 +155,11 @@ namespace yask {
                                idx_t mult, const std::string& dim) {
         return findNumSubsets(os, bsize, "block", rsize, "region", mult, dim);
     }
-    inline idx_t findNumBlocksInGroup(std::ostream& os, idx_t& bsize, idx_t gsize,
+    inline idx_t findNumBlocksInBlockGroup(std::ostream& os, idx_t& bsize, idx_t gsize,
                                       idx_t mult, const std::string& dim) {
         return findNumSubsets(os, bsize, "block", gsize, "block-group", mult, dim);
     }
-    inline idx_t findNumGroupsInRegion(std::ostream& os, idx_t& gsize, idx_t rsize,
+    inline idx_t findNumBlockGroupsInRegion(std::ostream& os, idx_t& gsize, idx_t rsize,
                                idx_t mult, const std::string& dim) {
         return findNumSubsets(os, gsize, "block-group", rsize, "region", mult, dim);
     }

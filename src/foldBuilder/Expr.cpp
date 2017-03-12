@@ -684,7 +684,7 @@ void Grids::findDeps(IntTuple& pts,
             assert(outGrids.count(eq1p));
             assert(inGrids.count(eq1p));
             auto& og1 = outGrids.at(eq1p);
-            auto& ig1 = inGrids.at(eq1p);
+            //auto& ig1 = inGrids.at(eq1p);
             auto& op1 = outPts.at(eq1p);
             auto& ip1 = inPts.at(eq1p);
             auto cond1 = g1->getCond(eq1p);
@@ -744,7 +744,7 @@ void Grids::findDeps(IntTuple& pts,
                 // All eqs in grid g2.
                 for (auto eq2 : g2->getEqs()) {
                     auto* eq2p = eq2.get();
-                    auto& og2 = outGrids.at(eq2p);
+                    //auto& og2 = outGrids.at(eq2p);
                     auto& ig2 = inGrids.at(eq2p);
                     auto& op2 = outPts.at(eq2p);
                     auto& ip2 = inPts.at(eq2p);
@@ -1168,7 +1168,7 @@ void EqGroups::findEqGroups(Grids& allGrids,
                             IntTuple& pts,
                             EqDepMap& eq_deps)
 {
-    auto& stepDim = _dims->_stepDim;
+    //auto& stepDim = _dims->_stepDim;
     
     // Map to track indices per eq-group name.
     map<string, int> indices;

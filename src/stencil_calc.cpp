@@ -280,13 +280,15 @@ namespace yask {
     // Each region is typically computed in a separate OpenMP 'for' region.
     // In it, we loop over the time steps and the stencil
     // equations and evaluate the blocks in the region.
+    // Boundaries are named start_d* and stop_d* because region loops are nested
+    // inside the rank-domain loops.
     void StencilContext::calc_region(idx_t start_dt, idx_t stop_dt,
                                      EqGroupSet* eqGroup_set,
                                      idx_t start_dw, idx_t start_dx, idx_t start_dy, idx_t start_dz,
                                      idx_t stop_dw, idx_t stop_dx, idx_t stop_dy, idx_t stop_dz)
     {
         TRACE_MSG("calc_region(t=" << start_dt << ".." << (stop_dt-1) <<
-                  ", n=" << start_dw << ".." << (stop_dw-1) <<
+                  ", w=" << start_dw << ".." << (stop_dw-1) <<
                   ", x=" << start_dx << ".." << (stop_dx-1) <<
                   ", y=" << start_dy << ".." << (stop_dy-1) <<
                   ", z=" << start_dz << ".." << (stop_dz-1) <<
@@ -332,7 +334,7 @@ namespace yask {
                 if (!eqGroup_set || eqGroup_set->count(eg)) {
                     TRACE_MSG("calc_region: eq-group '" << eg->get_name() << "'");
 
-                    // For wavefnot adjustments, see conceptual diagram in
+                    // For wavefront adjustments, see conceptual diagram in
                     // calc_rank_opt().  In this function, 1 of the 4
                     // parallelogram-shaped regions is being evaluated.  At
                     // each time-step, the parallelogram may be trimmed
@@ -362,10 +364,11 @@ namespace yask {
                         // Set number of threads for a region.
                         set_region_threads();
 
-                        // Include automatically-generated loop code that calls
-                        // calc_block() for each block in this region.  Loops
-                        // through n from begin_rn to end_rn-1; similar for x, y,
-                        // and z.  This code typically contains OpenMP loop(s).
+                        // Include automatically-generated loop code that
+                        // calls calc_block() for each block in this region.
+                        // Loops through w from begin_rw to end_rw-1;
+                        // similar for x, y, and z.  This code typically
+                        // contains the outer OpenMP loop(s).
 #include "stencil_region_loops.hpp"
 
                         // Reset threads back to max.
@@ -391,6 +394,42 @@ namespace yask {
         } // time.
     }
 
+    // Calculate results within a block.
+    void EqGroupBase::calc_block(idx_t bt,
+                                 idx_t begin_bw, idx_t begin_bx, idx_t begin_by, idx_t begin_bz,
+                                 idx_t end_bw, idx_t end_bx, idx_t end_by, idx_t end_bz)
+    {
+        TRACE_MSG2(get_name() << ".calc_block(t=" << bt <<
+                  ", w=" << begin_bw << ".." << (end_bw-1) <<
+                  ", x=" << begin_bx << ".." << (end_bx-1) <<
+                  ", y=" << begin_by << ".." << (end_by-1) <<
+                  ", z=" << begin_bz << ".." << (end_bz-1) <<
+                  ").");
+        StencilSettings& opts = _generic_context->get_settings();
+
+        // Steps within a block are based on sub-block sizes.
+        const idx_t step_bw = opts.sbw;
+        const idx_t step_bx = opts.sbx;
+        const idx_t step_by = opts.sby;
+        const idx_t step_bz = opts.sbz;
+
+        // Groups in block loops are based on sub-block-group sizes.
+        const idx_t group_size_bw = opts.sbgw;
+        const idx_t group_size_bx = opts.sbgx;
+        const idx_t group_size_by = opts.sbgy;
+        const idx_t group_size_bz = opts.sbgz;
+
+        // Set number of threads for a block.
+        _generic_context->set_block_threads();
+
+        // Include automatically-generated loop code that calls
+        // calc_sub_block() for each sub-block in this block.  Loops through
+        // w from begin_bw to end_bw-1; similar for x, y, and z.  This
+        // code typically contains the nested OpenMP loop(s).
+#include "stencil_block_loops.hpp"
+
+    }
+    
     // Init MPI-related vars and other vars related to my rank's place in
     // the global problem: rank index, offset, etc.  Need to call this even
     // if not using MPI to properly init these vars.  Called from
@@ -780,19 +819,23 @@ namespace yask {
         // Report some stats.
         idx_t dt = _opts->dt;
         os << "\nSizes in points per grid (t*w*x*y*z):\n"
-            " vector-size:      " <<
+            " vector-size:          " <<
             VLEN_T << '*' << VLEN_W << '*' << VLEN_X << '*' << VLEN_Y << '*' << VLEN_Z << endl <<
-            " cluster-size:     " <<
+            " cluster-size:         " <<
             CPTS_T << '*' << CPTS_W << '*' << CPTS_X << '*' << CPTS_Y << '*' << CPTS_Z << endl <<
-            " block-size:       " <<
+            " sub-block-size:       " <<
+            _opts->sbt << '*' << _opts->sbw << '*' << _opts->sbx << '*' << _opts->sby << '*' << _opts->sbz << endl <<
+            " sub-block-group-size: 1*" <<
+            _opts->sbgw << '*' << _opts->sbgx << '*' << _opts->sbgy << '*' << _opts->sbgz << endl <<
+            " block-size:           " <<
             _opts->bt << '*' << _opts->bw << '*' << _opts->bx << '*' << _opts->by << '*' << _opts->bz << endl <<
-            " block-group-size: 1*" <<
+            " block-group-size:     1*" <<
             _opts->bgw << '*' << _opts->bgx << '*' << _opts->bgy << '*' << _opts->bgz << endl <<
-            " region-size:      " <<
+            " region-size:          " <<
             _opts->rt << '*' << _opts->rw << '*' << _opts->rx << '*' << _opts->ry << '*' << _opts->rz << endl <<
-            " rank-domain-size: " <<
+            " rank-domain-size:     " <<
             dt << '*' << _opts->dw << '*' << _opts->dx << '*' << _opts->dy << '*' << _opts->dz << endl <<
-            " problem-size:     " <<
+            " overall-problem-size: " <<
             dt << '*' << tot_w << '*' << tot_x << '*' << tot_y << '*' << tot_z << endl <<
             endl <<
             "Other settings:\n"
@@ -901,10 +944,10 @@ namespace yask {
             printWithPow10Multiplier(tot_numFpOps_dt) << endl <<
             endl << 
             "Notes:\n" <<
-            " problem-size is based on rank-domain sizes specified in command-line (dw * dx * dy * dz).\n" <<
-            " grid-point-updates is based on sum of grid-updates in sub-domain across equation-group(s).\n" <<
-            " grid-point-reads is based on sum of grid-reads in sub-domain across equation-group(s).\n" <<
-            " est-FP-ops is based on sum of est-FP-ops in sub-domain across equation-group(s).\n" <<
+            " problem-sizes are based on rank-domain sizes specified in command-line (dw * dx * dy * dz).\n" <<
+            " grid-point-updates are based on sum of grid-updates in sub-domain across equation-group(s).\n" <<
+            " grid-point-reads are based on sum of grid-reads in sub-domain across equation-group(s).\n" <<
+            " est-FP-ops are based on sum of est-FP-ops in sub-domain across equation-group(s).\n" <<
             endl;
 
     }
@@ -1464,10 +1507,12 @@ namespace yask {
     // Add these settigns to a cmd-line parser.
     void StencilSettings::add_options(CommandLineParser& parser)
     {
-        ADD_T_DIM_OPTION("d", "Domain size for this rank", d);
+        ADD_T_DIM_OPTION("d", "Rank-domain size", d);
         ADD_T_DIM_OPTION("r", "Region size", r);
         ADD_DIM_OPTION("b", "Block size", b);
         ADD_DIM_OPTION("bg", "Block-group size", bg);
+        ADD_DIM_OPTION("sb", "Sub-block size", sb);
+        ADD_DIM_OPTION("sbg", "Sub-block-group size", sbg);
         ADD_DIM_OPTION("p", "Extra memory-padding size", p);
 #ifdef USE_MPI
         ADD_DIM_OPTION("nr", "Num ranks", nr);
@@ -1501,18 +1546,47 @@ namespace yask {
         os << "Usage: " << pgmName << " [options]\n"
             "Options:\n";
         parser.print_help(os);
-        os << "Guidelines:\n"
-            " Set block sizes to specify the amount of work done in each block.\n"
+        os <<
+            "Terms:\n"
+            " A vector is composed of FP elements.\n"
+            "  A 'folded vector' contains elements in more than one dimension.\n"
+            "  The size of a vector is typically that of a SIMD register.\n"
+            " A vector-cluster is composed of vectors.\n"
+            "  The size of a vector-cluster is set at compile-time.\n"
+            " A sub-block is composed of vector-clusters.\n"
+            "  This is the unit of work for one OpenMP thread.\n"
+            " A block is composed of sub-blocks.\n"
+            "  This is the unit of work for one OpenMP thread team.\n"
+            " A region is composed of blocks.\n"
+            "  Regions are used to implement temporal wave-front tiling.\n"
+            " A rank-domain is composed of regions.\n"
+            "  This is the unit of work for one MPI rank.\n"
+            " The overall problem domain is composed of rank-domains.\n"
+            "  This is the unit of work for all MPI ranks.\n"
+            "Guidelines:\n"
+            " Set sub-block sizes to specify a unit of work done by each thread.\n"
+            "  A sub-block size of 0 in dimensions 'w' or 'x' =>\n"
+            "   sub-block size is set to vector-cluster size in that dimension.\n"
+            "  A sub-block size of 0 in dimensions 'y' or 'z' =>\n"
+            "   sub-block size is set to block size in that dimension.\n"
+            "  Thus, the default sub-block is a 'y-z' slab.\n"
+            "  Temporal tiling in sub-blocks is not yet supported, so effectively, sbt = 1.\n"
+            " Set sub-block-group sizes to control in what order sub-blocks are evaluated within a block.\n"
+            "  All sub-blocks that fit within a sub-block-group are evaluated before sub-blocks\n"
+            "   in the next sub-block-group.\n"
+            "  A sub-block-group size of 0 in a given dimension =>\n"
+            "   sub-block-group size is set to sub-block size in that dimension.\n"
+            " Set block sizes to specify a unit of work done by each thread team.\n"
             "  A block size of 0 in a given dimension =>\n"
             "   block size is set to region size in that dimension.\n"
-            "  Temporal cache-blocking is not yet supported, so effectively, bt = 1.\n"
-            " Set block-group sizes to control in what order blocks are evaluated.\n"
+            "  Temporal tiling in blocks is not yet supported, so effectively, bt = 1.\n"
+            " Set block-group sizes to control in what order blocks are evaluated within a region.\n"
             "  All blocks that fit within a block-group are evaluated before blocks\n"
             "   in the next block-group.\n"
             "  A block-group size of 0 in a given dimension =>\n"
             "   block-group size is set to block size in that dimension.\n"
             " Set region sizes to control temporal wave-front tile sizes.\n"
-            "  The tempral region size should be larger than one, and\n"
+            "  The temopral region size should be larger than one, and\n"
             "   the spatial region sizes should be less than the rank-domain sizes\n"
             "   in at least one dimension to enable temporal wave-front tiling.\n"
             "  The spatial region sizes should be greater than block sizes\n"
@@ -1586,12 +1660,7 @@ namespace yask {
         idx_t nbz = findNumBlocksInRegion(os, bz, rz, CPTS_Z, "z");
         idx_t nb = nbt * nbw * nbx * nby * nbz;
         os << " num-blocks-per-region: " << nb << endl;
-        nbw = findNumBlocksInDomain(os, bw, dw, CPTS_W, "w");
-        nbx = findNumBlocksInDomain(os, bx, dx, CPTS_X, "x");
-        nby = findNumBlocksInDomain(os, by, dy, CPTS_Y, "y");
-        nbz = findNumBlocksInDomain(os, bz, dz, CPTS_Z, "z");
-        nb = nbw * nbx * nby * nbz;
-        os << " num-blocks-per-rank-domain: " << nb << endl;
+        os << " num-blocks-per-rank-domain: " << (nb * nr) << endl;
 
         // Adjust defaults for block-groups to be size of block.
         if (!bgw) bgw = bw;
@@ -1603,18 +1672,58 @@ namespace yask {
         // Also fix up block-group sizes as needed.
         // TODO: only print this if block-grouping is enabled.
         os << "\nBlock-groups:" << endl;
-        idx_t nbgw = findNumGroupsInRegion(os, bgw, rw, bw, "w");
-        idx_t nbgx = findNumGroupsInRegion(os, bgx, rx, bx, "x");
-        idx_t nbgy = findNumGroupsInRegion(os, bgy, ry, by, "y");
-        idx_t nbgz = findNumGroupsInRegion(os, bgz, rz, bz, "z");
-        idx_t nbg = nbgw * nbgx * nbgy * nbgz;
+        idx_t nbgw = findNumBlockGroupsInRegion(os, bgw, rw, bw, "w");
+        idx_t nbgx = findNumBlockGroupsInRegion(os, bgx, rx, bx, "x");
+        idx_t nbgy = findNumBlockGroupsInRegion(os, bgy, ry, by, "y");
+        idx_t nbgz = findNumBlockGroupsInRegion(os, bgz, rz, bz, "z");
+        idx_t nbg = nbt * nbgw * nbgx * nbgy * nbgz;
         os << " num-block-groups-per-region: " << nbg << endl;
-        nbw = findNumBlocksInGroup(os, bw, bgw, CPTS_W, "w");
-        nbx = findNumBlocksInGroup(os, bx, bgx, CPTS_X, "x");
-        nby = findNumBlocksInGroup(os, by, bgy, CPTS_Y, "y");
-        nbz = findNumBlocksInGroup(os, bz, bgz, CPTS_Z, "z");
+        nbw = findNumBlocksInBlockGroup(os, bw, bgw, CPTS_W, "w");
+        nbx = findNumBlocksInBlockGroup(os, bx, bgx, CPTS_X, "x");
+        nby = findNumBlocksInBlockGroup(os, by, bgy, CPTS_Y, "y");
+        nbz = findNumBlocksInBlockGroup(os, bz, bgz, CPTS_Z, "z");
         nb = nbw * nbx * nby * nbz;
         os << " num-blocks-per-block-group: " << nb << endl;
+
+        // Adjust defaults for sub-blocks to be y-z slab.
+        if (!sbw) sbw = CPTS_W;
+        if (!sbx) sbx = CPTS_X;
+        if (!sby) sby = by;
+        if (!sbz) sbz = bz;
+
+        // Determine num sub-blocks.
+        // Also fix up sub-block sizes as needed.
+        os << "\nSub-blocks:" << endl;
+        idx_t nsbt = findNumSubBlocksInBlock(os, sbt, bt, CPTS_T, "t");
+        idx_t nsbw = findNumSubBlocksInBlock(os, sbw, bw, CPTS_W, "w");
+        idx_t nsbx = findNumSubBlocksInBlock(os, sbx, bx, CPTS_X, "x");
+        idx_t nsby = findNumSubBlocksInBlock(os, sby, by, CPTS_Y, "y");
+        idx_t nsbz = findNumSubBlocksInBlock(os, sbz, bz, CPTS_Z, "z");
+        idx_t nsb = nsbt * nsbw * nsbx * nsby * nsbz;
+        os << " num-sub-blocks-per-block: " << nsb << endl;
+
+        // Adjust defaults for sub-block-groups to be size of sub-block.
+        if (!sbgw) sbgw = sbw;
+        if (!sbgx) sbgx = sbx;
+        if (!sbgy) sbgy = sby;
+        if (!sbgz) sbgz = sbz;
+
+        // Determine num sub-block-groups.
+        // Also fix up sub-block-group sizes as needed.
+        // TODO: only print this if sub-block-grouping is enabled.
+        os << "\nSub-block-groups:" << endl;
+        idx_t nsbgw = findNumSubBlockGroupsInBlock(os, sbgw, bw, sbw, "w");
+        idx_t nsbgx = findNumSubBlockGroupsInBlock(os, sbgx, bx, sbx, "x");
+        idx_t nsbgy = findNumSubBlockGroupsInBlock(os, sbgy, by, sby, "y");
+        idx_t nsbgz = findNumSubBlockGroupsInBlock(os, sbgz, bz, sbz, "z");
+        idx_t nsbg = nsbgw * nsbgx * nsbgy * nsbgz;
+        os << " num-sub-block-groups-per-block: " << nsbg << endl;
+        nsbw = findNumSubBlocksInSubBlockGroup(os, sbw, sbgw, CPTS_W, "w");
+        nsbx = findNumSubBlocksInSubBlockGroup(os, sbx, sbgx, CPTS_X, "x");
+        nsby = findNumSubBlocksInSubBlockGroup(os, sby, sbgy, CPTS_Y, "y");
+        nsbz = findNumSubBlocksInSubBlockGroup(os, sbz, sbgz, CPTS_Z, "z");
+        nsb = nsbw * nsbx * nsby * nsbz;
+        os << " num-sub-blocks-per-sub-block-group: " << nsb << endl;
     }
 
 } // namespace yask.

@@ -111,8 +111,10 @@ namespace yask {
         // Sizes are the same for all grids. TODO: relax this restriction.
         idx_t dt=1, dw=0, dx=0, dy=0, dz=0; // rank size (without halos).
         idx_t rt=1, rw=0, rx=0, ry=0, rz=0; // region size (used for wave-front tiling).
-        idx_t bt=1, bw=0, bx=0, by=0, bz=0; // block size (used for cache locality).
-        idx_t bgw=0, bgx=0, bgy=0, bgz=0; // group-of-blocks size (only used for 'grouped' loop paths).
+        idx_t bgw=0, bgx=0, bgy=0, bgz=0; // block-group size (only used for 'grouped' region loops).
+        idx_t bt=1, bw=0, bx=0, by=0, bz=0; // block size (used for each outer thread).
+        idx_t sbgw=0, sbgx=0, sbgy=0, sbgz=0; // sub-block-group size (only used for 'grouped' block loops).
+        idx_t sbt=1, sbw=0, sbx=0, sby=0, sbz=0; // sub-block size (used for each nested thread).
         idx_t pw=0, px=0, py=0, pz=0;     // spatial padding (in addition to halos, to avoid aliasing).
 
         // MPI settings.
@@ -402,6 +404,7 @@ namespace yask {
         }
 
         // Set number of threads for a block.
+        // Return that number.
         virtual int set_block_threads() {
 
             // This should be a nested OMP region.
@@ -423,8 +426,11 @@ namespace yask {
         // Vectorized and blocked stencil calculations.
         virtual void calc_rank_opt();
 
-        // Calculate results within a region.
-        // TODO: create a public interface w/a more logical index ordering.
+        // Calculate results within a region.  Boundaries are named start_d*
+        // and stop_d* because region loops are nested inside the
+        // rank-domain loops; the actual begin_r* and end_r* values for the
+        // region are derived from these.  TODO: create a public interface
+        // w/a more logical index ordering.
         virtual void calc_region(idx_t start_dt, idx_t stop_dt,
                                  EqGroupSet* eqGroup_set,
                                  idx_t start_dw, idx_t start_dx, idx_t start_dy, idx_t start_dz,
@@ -488,10 +494,15 @@ namespace yask {
         // Calculate one scalar result at time t.
         virtual void calc_scalar(idx_t t, idx_t w, idx_t x, idx_t y, idx_t z) =0;
 
-        // Calculate one block of results from begin to end-1 on each dimension.
+        // Calculate results within a block.
         virtual void calc_block(idx_t bt,
                                 idx_t begin_bw, idx_t begin_bx, idx_t begin_by, idx_t begin_bz,
-                                idx_t end_bw, idx_t end_bx, idx_t end_by, idx_t end_bz) =0;
+                                idx_t end_bw, idx_t end_bx, idx_t end_by, idx_t end_bz);
+
+        // Calculate one sub-block of results from begin to end-1 on each dimension.
+        virtual void calc_sub_block(idx_t sbt,
+                                    idx_t begin_sbw, idx_t begin_sbx, idx_t begin_sby, idx_t begin_sbz,
+                                    idx_t end_sbw, idx_t end_sbx, idx_t end_sby, idx_t end_sbz) =0;
     };
 
     // Define a method named cfn to prefetch a cluster by calling vfn.
@@ -574,14 +585,14 @@ namespace yask {
         }
     
         // Determine whether indices are in [sub-]domain for this eq group.
-        virtual bool is_in_valid_domain(idx_t t, idx_t w, idx_t x, idx_t y, idx_t z) {
+        virtual bool is_in_valid_domain(idx_t t, idx_t w, idx_t x, idx_t y, idx_t z) final {
             return _eqGroup.is_in_valid_domain(*_context, t,
                                                ARG_W(w) x, y, z);
         }
 
         // Calculate one scalar result.
         // This function implements the interface in the base class.
-        virtual void calc_scalar(idx_t t, idx_t w, idx_t x, idx_t y, idx_t z) {
+        virtual void calc_scalar(idx_t t, idx_t w, idx_t x, idx_t y, idx_t z) final {
             TRACE_MSG2(get_name() << ".calc_scalar(t=" << t <<
                        ", w=" << w << ", x=" << x <<
                        ", y=" << y << ", z=" << z << ")");
@@ -589,7 +600,7 @@ namespace yask {
         }
 
         // Calculate results within a cluster of vectors.
-        // Called from calc_block().
+        // Called from calc_sub_block().
         // The begin/end_c* vars are the start/stop_b* vars from the block loops.
         ALWAYS_INLINE void
         calc_cluster(idx_t ct,
@@ -597,13 +608,13 @@ namespace yask {
                      idx_t end_cwv, idx_t end_cxv, idx_t end_cyv, idx_t end_czv)
         {
             TRACE_MSG2("calc_cluster(t=" << ct <<
-                      ", wv=" << begin_cwv << ".." << (end_cwv-1) <<
-                      ", xv=" << begin_cxv << ".." << (end_cxv-1) <<
-                      ", yv=" << begin_cyv << ".." << (end_cyv-1) <<
-                      ", zv=" << begin_czv << ".." << (end_czv-1) <<
+                       ", w=" << (begin_cwv*CLEN_W) << ".." << (end_cwv*CLEN_W-1) <<
+                       ", x=" << (begin_cxv*CLEN_X) << ".." << (end_cxv*CLEN_X-1) <<
+                       ", y=" << (begin_cyv*CLEN_Y) << ".." << (end_cyv*CLEN_Y-1) <<
+                       ", z=" << (begin_czv*CLEN_Z) << ".." << (end_czv*CLEN_Z-1) <<
                       ")");
 
-            // The step vars are hard-coded in calc_block below, and there should
+            // The step vars are hard-coded in calc_sub_block below, and there should
             // never be a partial step at this level. So, we can assume one var and
             // exactly CLEN_d steps in each given direction d are calculated in this
             // function.  Thus, we can ignore the end_* vars in the calc function.
@@ -621,26 +632,26 @@ namespace yask {
         // TODO: handle pre-fetching correctly for non-simple BBs.
         PREFETCH_CLUSTER_METHOD(prefetch_cluster, prefetch_cluster)
 #if USING_DIM_W
-        PREFETCH_CLUSTER_METHOD(prefetch_cluster_bwv, prefetch_cluster_w)
+        PREFETCH_CLUSTER_METHOD(prefetch_cluster_sbwv, prefetch_cluster_w)
 #endif
-        PREFETCH_CLUSTER_METHOD(prefetch_cluster_bxv, prefetch_cluster_x)
-        PREFETCH_CLUSTER_METHOD(prefetch_cluster_byv, prefetch_cluster_y)
-        PREFETCH_CLUSTER_METHOD(prefetch_cluster_bzv, prefetch_cluster_z)
+        PREFETCH_CLUSTER_METHOD(prefetch_cluster_sbxv, prefetch_cluster_x)
+        PREFETCH_CLUSTER_METHOD(prefetch_cluster_sbyv, prefetch_cluster_y)
+        PREFETCH_CLUSTER_METHOD(prefetch_cluster_sbzv, prefetch_cluster_z)
     
-        // Calculate results within a cache block.
+        // Calculate results for one sub-block.
         // This function implements the interface in the base class.
-        // Each block is typically computed in a separate OpenMP task.
-        // The begin/end_b* vars are the start/stop_r* vars from the region loops.
+        // Each block is typically computed in a separate OpenMP thread.
+        // The begin/end_sb* vars are the start/stop_b* vars from the block loops.
         virtual void
-        calc_block(idx_t bt,
-                   idx_t begin_bw, idx_t begin_bx, idx_t begin_by, idx_t begin_bz,
-                   idx_t end_bw, idx_t end_bx, idx_t end_by, idx_t end_bz)
+        calc_sub_block(idx_t sbt,
+                       idx_t begin_sbw, idx_t begin_sbx, idx_t begin_sby, idx_t begin_sbz,
+                       idx_t end_sbw, idx_t end_sbx, idx_t end_sby, idx_t end_sbz) final
         {
-            TRACE_MSG2(get_name() << ".calc_block(t=" << bt <<
-                       ", w=" << begin_bw << ".." << (end_bw-1) <<
-                       ", x=" << begin_bx << ".." << (end_bx-1) <<
-                       ", y=" << begin_by << ".." << (end_by-1) <<
-                       ", z=" << begin_bz << ".." << (end_bz-1) <<
+            TRACE_MSG2(get_name() << ".calc_sub_block(t=" << sbt <<
+                       ", w=" << begin_sbw << ".." << (end_sbw-1) <<
+                       ", x=" << begin_sbx << ".." << (end_sbx-1) <<
+                       ", y=" << begin_sby << ".." << (end_sby-1) <<
+                       ", z=" << begin_sbz << ".." << (end_sbz-1) <<
                        ").");
 
             // If not a 'simple' domain, must use scalar code.  TODO: this
@@ -648,24 +659,24 @@ namespace yask {
             if (!bb_simple) {
 
                 TRACE_MSG2("...using scalar code.");
-                for (idx_t w = begin_bw; w < end_bw; w++)
-                    for (idx_t x = begin_bx; x < end_bx; x++)
-                        for (idx_t y = begin_by; y < end_by; y++) {
+                for (idx_t w = begin_sbw; w < end_sbw; w++)
+                    for (idx_t x = begin_sbx; x < end_sbx; x++)
+                        for (idx_t y = begin_sby; y < end_sby; y++) {
 
                             // Are there holes in the BB?
                             if (bb_num_points != bb_size) {
-                                for (idx_t z = begin_bz; z < end_bz; z++) {
+                                for (idx_t z = begin_sbz; z < end_sbz; z++) {
 
                                     // Update only if point is in sub-domain for this eq group.
-                                    if (is_in_valid_domain(bt, w, x, y, z))
-                                        calc_scalar(bt, w, x, y, z);
+                                    if (is_in_valid_domain(sbt, w, x, y, z))
+                                        calc_scalar(sbt, w, x, y, z);
                                 }
                             }
 
                             // If no holes, don't need to check domain.
                             else {
-                                for (idx_t z = begin_bz; z < end_bz; z++) {
-                                    calc_scalar(bt, w, x, y, z);
+                                for (idx_t z = begin_sbz; z < end_sbz; z++) {
+                                    calc_scalar(sbt, w, x, y, z);
                                 }
                             }
                 }
@@ -675,38 +686,36 @@ namespace yask {
 
             // Divide indices by vector lengths.  Use idiv_flr() instead of '/'
             // because begin/end vars may be negative (if in halo).
-            const idx_t begin_bwv = idiv_flr<idx_t>(begin_bw, VLEN_W);
-            const idx_t begin_bxv = idiv_flr<idx_t>(begin_bx, VLEN_X);
-            const idx_t begin_byv = idiv_flr<idx_t>(begin_by, VLEN_Y);
-            const idx_t begin_bzv = idiv_flr<idx_t>(begin_bz, VLEN_Z);
-            const idx_t end_bwv = idiv_flr<idx_t>(end_bw, VLEN_W);
-            const idx_t end_bxv = idiv_flr<idx_t>(end_bx, VLEN_X);
-            const idx_t end_byv = idiv_flr<idx_t>(end_by, VLEN_Y);
-            const idx_t end_bzv = idiv_flr<idx_t>(end_bz, VLEN_Z);
+            const idx_t begin_sbwv = idiv_flr<idx_t>(begin_sbw, VLEN_W);
+            const idx_t begin_sbxv = idiv_flr<idx_t>(begin_sbx, VLEN_X);
+            const idx_t begin_sbyv = idiv_flr<idx_t>(begin_sby, VLEN_Y);
+            const idx_t begin_sbzv = idiv_flr<idx_t>(begin_sbz, VLEN_Z);
+            const idx_t end_sbwv = idiv_flr<idx_t>(end_sbw, VLEN_W);
+            const idx_t end_sbxv = idiv_flr<idx_t>(end_sbx, VLEN_X);
+            const idx_t end_sbyv = idiv_flr<idx_t>(end_sby, VLEN_Y);
+            const idx_t end_sbzv = idiv_flr<idx_t>(end_sbz, VLEN_Z);
 
             // Vector-size steps are based on cluster lengths.
             // Using CLEN_* instead of CPTS_* because we want multiples of vector lengths.
-            const idx_t step_bwv = CLEN_W;
-            const idx_t step_bxv = CLEN_X;
-            const idx_t step_byv = CLEN_Y;
-            const idx_t step_bzv = CLEN_Z;
+            const idx_t step_sbwv = CLEN_W;
+            const idx_t step_sbxv = CLEN_X;
+            const idx_t step_sbyv = CLEN_Y;
+            const idx_t step_sbzv = CLEN_Z;
 
-            // Groups in block loops are set to smallest size.
-            const idx_t group_size_bwv = 1;
-            const idx_t group_size_bxv = 1;
-            const idx_t group_size_byv = 1;
-            const idx_t group_size_bzv = 1;
+            // Groups in sub-block loops are set to cluster size.
+            // TODO: specify cluster-group sizes.
+            const idx_t group_size_bwv = CLEN_W;
+            const idx_t group_size_bxv = CLEN_X;
+            const idx_t group_size_byv = CLEN_Y;
+            const idx_t group_size_bzv = CLEN_Z;
             
 #if !defined(DEBUG) && defined(__INTEL_COMPILER)
 #pragma forceinline recursive
 #endif
             {
-                // Set threads for a block.
-                _context->set_block_threads();
-
                 // Include automatically-generated loop code that calls calc_cluster()
                 // and optionally, the prefetch functions().
-#include "stencil_block_loops.hpp"
+#include "stencil_sub_block_loops.hpp"
             }
         }
     };

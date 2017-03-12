@@ -75,7 +75,7 @@ my $debugCheck = 0;      # print each initial check result.
 my $doBuild = 1;         # do compiles.
 my $doVal = 0;           # do validation runs.
 my $maxVecsInCluster = 4;       # max vectors in a cluster.
-my @folds = ();     # folding variations to explore
+my @folds = ();     # folding variations to explore.
 
 sub usage {
   my $msg = shift;              # error message or undef.
@@ -334,6 +334,8 @@ my @metrics = ( $fitnessMetric,
                 'region-size',
                 'block-group-size',
                 'block-size',
+                'sub-block-group-size',
+                'sub-block-size',
                 'cluster-size',
                 'vector-size',
                 'num-regions',
@@ -390,82 +392,64 @@ my @layouts =
 # only allow z (dim 4) in last mem dimension if requested.
 @layouts = grep /4$/, @layouts if $zLayout;
 
-# list of possible loop orders.
-# start with w on outer loop only.
+# List of possible loop orders.
+# Start with w on outer loop only.
 my @loopOrders =
   ('wxyz', 'wxzy', 'wyxz', 'wyzx', 'wzxy', 'wzyx');
 
-# add more options if there are >1 var, i.e., 'w'
-# is meaningful.
+# Add more options if there are >1 var, i.e., 'w' is meaningful.
 push  @loopOrders,
   ('xwyz', 'xwzy', 'xywz', 'xyzw', 'xzwy', 'xzyw',
    'ywxz', 'ywzx', 'yxwz', 'yxzw', 'yzwx', 'yzxw',
    'zwxy', 'zwyx', 'zxwy', 'zxyw', 'zywx', 'zyxw', )
   if $dw > 1;
 
-# only allow z in inner loop if requested.
+# Only allow z in inner loop if requested.
 @loopOrders = grep /z$/, @loopOrders if $zLoop;
 
-# types of space-filling curves.
-# 'grouped' must be last.
+# Possible space-filling curve modifiers.
 my @pathNames =
   ('', 'serpentine', 'square_wave serpentine', 'grouped');
 
-# list of possible block-loop templates.
+# Possible loops for various levels.
 # D0..D3 will get replaced by bv..bz, but not necessarily in that order.
-# modifiers 'pipeline' & 'prefetch' will be removed if not enabled.
-# modifier placeholder 'PATH' will be removed or changed as selected.
-# this is the loop taken by each OpenMP task.
-my @blockLoops =
+# Modifier placeholders 'PATH*' and 'SBMOD' will be removed or changed
+# based on relevant genes.
+
+# List of possible block-loop templates.
+# This is the loop taken by each nested OpenMP task.
+my @subBlockLoops =
   (
-   # nested omp:
-   "loop(D0) { omp loop(D1) { pipeline prefetch loop(D2) { loop(D3) { calc(cluster(bt)); } } } }",
-   "loop(D0) { omp loop(D1) { pipeline prefetch PATH1 loop(D2,D3) { calc(cluster(bt)); } } }",
-
-   "loop(D0) { loop(D1) { omp loop(D2) { pipeline prefetch loop(D3) { calc(cluster(bt)); } } } }",
-   "PATH0 loop(D0,D1) { omp loop(D2) { pipeline prefetch loop(D3) { calc(cluster(bt)); } } }",
-
-   "loop(D0) { omp PATH0 loop(D1,D2) { pipeline prefetch loop(D3) { calc(cluster(bt)); } } }",
-
-   # no nested omp:
-   "PATH0 loop(D0,D1,D2) { pipeline prefetch loop(D3) { calc(cluster(bt)); } }",
-   "PATH0 loop(D0,D1) { loop(D2) { pipeline prefetch loop(D3) { calc(cluster(bt)); } } }",
-
-   "loop(D0) { loop(D1) { PATH1 pipeline prefetch loop(D2,D3) { calc(cluster(bt)); } } }",
-   "PATH0 loop(D0,D1) { PATH1 pipeline prefetch loop(D2,D3) { calc(cluster(bt)); } }",
-
-   "loop(D0) { PATH1 pipeline prefetch loop(D1,D2,D3) { calc(cluster(bt)); } }",
-
-   # omp on inner loop:
-   #"loop(D0) { loop(D1) { loop(D2) { omp pipeline prefetch loop(D3) { calc(cluster(bt)); } } } }",
-   #"loop(D0) { PATH0 loop(D1,D2) { omp pipeline prefetch loop(D3) { calc(cluster(bt)); } } }",
-   #"PATH0 loop(D0,D1,D2) { omp pipeline prefetch loop(D3) { calc(cluster(bt)); } }",
-   #"PATH0 loop(D0,D1) { loop(D2) { omp pipeline prefetch loop(D3) { calc(cluster(bt)); } } }",
-
-   #"loop(D0) { loop(D1) { PATH1 omp pipeline prefetch loop(D2,D3) { calc(cluster(bt)); } } }",
-   #"PATH0 loop(D0,D1) { PATH1 omp pipeline prefetch loop(D2,D3) { calc(cluster(bt)); } }",
-
-   #"loop(D0) { PATH1 omp pipeline prefetch loop(D1,D2,D3) { calc(cluster(bt)); } }",
+   "PATH0 loop(D0,D1,D2) { SBMOD loop(D3) { calc(cluster(bt)); } }",
+   "PATH0 loop(D0,D1) { loop(D2) { SBMOD loop(D3) { calc(cluster(bt)); } } }",
   );
 
-# list of possible region loop templates.
-# this is the loop that creates OpenMP tasks.
+# List of possible block-loop templates.
+# This is the loop that creates nested OpenMP tasks.
+# TODO: add other options.
+my @blockLoops =
+  (
+   "omp PATH1 loop(D0,D1,D2,D3) { calc(sub_block(rt)); }",
+  );
+
+# List of possible region loop templates.
+# This is the loop that creates outer OpenMP tasks.
 # TODO: add other options.
 my @regionLoops =
   (
    "omp PATH2 loop(D0,D1,D2,D3) { calc(block(rt)); }",
   );
 
-# list of possible rank loop templates.
-# this is the loop that creates OpenMP regions.
+# List of possible rank loop templates.
+# This is the loop that creates OpenMP regions.
 # TODO: add other options.
 my @rankLoops =
   (
    "PATH3 loop(D0,D1,D2,D3) { calc(region(start_dt, stop_dt, eqGroup_ptr)); }",
   );
 
-# list of folds.
-# start with inline in z only.
+# List of folds.
+# Start with inline in z only.
 if ( !@folds ) {
   @folds = "1 1 $velems";
 
@@ -494,7 +478,7 @@ my @schedules =
 
 # Data structure to describe each gene in the genome.
 # 2-D array. Each outer array element contains the following elements:
-# 0. min allowed value.
+# 0. min allowed value; '0' is a special case handled by YASK.
 # 1. max allowed value.
 # 2. step size between values (usually 1).
 # 3. name.
@@ -520,6 +504,16 @@ my @rangesAll =
    [ 0, $maxDim, 1, 'by' ],
    [ 0, $maxDim, 1, 'bz' ],
 
+   # sub-block-group size.
+   [ 0, $maxDim, 1, 'sbgx' ],
+   [ 0, $maxDim, 1, 'sbgy' ],
+   [ 0, $maxDim, 1, 'sbgz' ],
+
+   # sub-block size.
+   [ 0, $maxDim, 1, 'sbx' ],
+   [ 0, $maxDim, 1, 'sby' ],
+   [ 0, $maxDim, 1, 'sbz' ],
+
    # padding.
    [ 0, $maxPad, 1, 'px' ],
    [ 0, $maxPad, 1, 'py' ],
@@ -535,18 +529,25 @@ if ($doBuild) {
   push @rangesAll,
     (
 
-     # loops, from the list above.
+     # Loops, from the list above.
+     # Each loop consists of the loop structure, index order, and path mods.
+     [ 0, $#subBlockLoops, 1, 'subBlockLoop' ],
+     [ 0, $#loopOrders, 1, 'subBlockLoopOrder' ],
+     [ 0, $#pathNames, 1, 'path0' ],
      [ 0, $#blockLoops, 1, 'blockLoop' ],
      [ 0, $#loopOrders, 1, 'blockLoopOrder' ],
+     [ 0, $#pathNames, 1, 'path1' ],
      [ 0, $#regionLoops, 1, 'regionLoop' ],
      [ 0, $#loopOrders, 1, 'regionLoopOrder' ],
+     [ 0, $#pathNames, 1, 'path2' ],
      [ 0, $#rankLoops, 1, 'rankLoop' ],
      [ 0, $#loopOrders, 1, 'rankLoopOrder' ],
+     [ 0, 0, 1, 'path3' ], # allow only incrementing-index path for rank.
 
      # how to shape vectors, from the list above.
      [ 0, $#folds, 1, 'fold' ],
 
-     # cluster sizes.
+     # vector-cluster sizes.
      [ 1, $maxCluster, 1, 'cx' ],
      [ 1, $maxCluster, 1, 'cy' ],
      [ 1, $maxCluster, 1, 'cz' ],
@@ -556,13 +557,6 @@ if ($doBuild) {
 
      # whether or not to allow pipelining.
      #[ 0, 1, 1, 'pipe' ],
-
-     # types of curves.
-     # (use '-1' to avoid grouping.)
-     [ 0, $#pathNames-1, 1, 'path0' ],
-     [ 0, $#pathNames-1, 1, 'path1' ],
-     [ 0, $#pathNames,   1, 'path2' ], # grouping ok here.
-     [ 0, $#pathNames-1, 1, 'path3' ],
 
      # prefetch distances for l1 and l2.
      # all non-pos numbers => no prefetching, so ~50% chance of being enabled.
@@ -647,7 +641,7 @@ sub init() {
   $bestGen = 0;
 }
 
-# convert a number so that values in [a0..a1] are mapped to [b0..b1],
+# convert a number n so that values in [a0..a1] are mapped to [b0..b1],
 # values < a0 => b0.
 # values > a1 => b1.
 sub adjRange($$$$$) {
@@ -821,28 +815,32 @@ sub calcSize($$$) {
     my $numGrids = 0;
     my $numUpdatedGrids = 0;
     my @cmdOut;
-    print "Running '$cmd' to determine number of grids...\n";
-    open CMD, "$cmd 2>&1 |" or die "error: cannot run '$cmd'\n";
-    while (<CMD>) {
-      push @cmdOut, $_;
+    if ($testing) {
+      $numSpatialGrids = 1;
+    } else {
+      print "Running '$cmd' to determine number of grids...\n";
+      open CMD, "$cmd 2>&1 |" or die "error: cannot run '$cmd'\n";
+      while (<CMD>) {
+        push @cmdOut, $_;
 
-      # E.g.,
-      # 4D (t=1 * x=8 * y=1 * z=1) 'vel_x' data is at 0x7fce08200000: 1.176K element(s) of 4 byte(s) each, 147 vector(s), 4.59375KiB.
-      # 3D (x=8 * y=1 * z=1) 'lambda' data is at 0x7fce0820f880: 600 element(s) of 4 byte(s) each, 75 vector(s), 2.34375KiB.
-      if (/^\s*5D.*t=(\d+).*w=(\d+)/) {
-        $numSpatialGrids += $1 * $2;  # twxyz
+        # E.g.,
+        # 4D (t=1 * x=8 * y=1 * z=1) 'vel_x' data is at 0x7fce08200000: 1.176K element(s) of 4 byte(s) each, 147 vector(s), 4.59375KiB.
+        # 3D (x=8 * y=1 * z=1) 'lambda' data is at 0x7fce0820f880: 600 element(s) of 4 byte(s) each, 75 vector(s), 2.34375KiB.
+        if (/^\s*5D.*t=(\d+).*w=(\d+)/) {
+          $numSpatialGrids += $1 * $2;  # twxyz
+        }
+        elsif (/^\s*4D.*w=(\d+)/) {
+          $numSpatialGrids += $1;  # wxyz
+        }
+        elsif (/^\s*4D.*t=(\d+)/) {
+          $numSpatialGrids += $1; # txyz.
+        }
+        elsif (/^\s*3D.*x=/) {
+          $numSpatialGrids += 1;  # xyz.
+        }
       }
-      elsif (/^\s*4D.*w=(\d+)/) {
-        $numSpatialGrids += $1;  # wxyz
-      }
-      elsif (/^\s*4D.*t=(\d+)/) {
-        $numSpatialGrids += $1; # txyz.
-      }
-      elsif (/^\s*3D.*x=/) {
-        $numSpatialGrids += 1;  # xyz.
-      }
+      close CMD;
     }
-    close CMD;
     if (!$numSpatialGrids) {
       map { print ">> $_"; } @cmdOut;
       die "error: no grids defined in '$cmd'.\n";
@@ -1225,13 +1223,15 @@ sub fitness {
   my @rs = readHashes($h, 'r', 0);
   my @bgs = readHashes($h, 'bg', 0);
   my @bs = readHashes($h, 'b', 0);
+  my @sbgs = readHashes($h, 'sbg', 0);
+  my @sbs = readHashes($h, 'sb', 0);
   my @cvs = readHashes($h, 'c', 1); # in vectors, not in points!
   my @ps = readHashes($h, 'p', 0);
   my $fold = readHash($h, 'fold', 1);
   my $exprSize = readHash($h, 'exprSize', 1);
   my $thread_divisor_exp = readHash($h, 'thread_divisor_exp', 0);
   my $bthreads_exp = readHash($h, 'bthreads_exp', 0);
-  my $pipe = 0; # readHash($h, 'pipe', 1);
+  my $pipe = 0; # readHash($h, 'pipe', 0);
   my @paths = ( readHash($h, 'path0', 1),
                 readHash($h, 'path1', 1),
                 readHash($h, 'path2', 1),
@@ -1245,18 +1245,21 @@ sub fitness {
   my $foldNums = $folds[$fold];
   my @fs = split ' ', $foldNums;
 
-  # block loops.
-  my $blockCode = makeLoopCode($h, 'block', 'b', 'v', \@blockLoops);
-  $blockCode =~ s/\bpipeline\b//g if !$pipe;
+  # sub-block loops.
+  my $subBlockCode = makeLoopCode($h, 'subBlock', 'sb', 'v', \@subBlockLoops);
+  my $subBlockMods = '';
+  $subBlockMods .= 'pipeline ' if $pipe;
   if ($pfdl1 > 0 && $pfdl2 > 0) {
-    $blockCode =~ s/\bprefetch\b/prefetch(L1,L2)/g;
+    $subBlockMods .= 'prefetch(L1,L2) ';
   } elsif ($pfdl1 > 0) {
-    $blockCode =~ s/\bprefetch\b/prefetch(L1)/g;
+    $subBlockMods .= 'prefetch(L1) ';
   } elsif ($pfdl2 > 0) {
-    $blockCode =~ s/\bprefetch\b/prefetch(L2)/g;
-  } else {
-    $blockCode =~ s/\bprefetch\b//g;
+    $subBlockMods .= 'prefetch(L2) ';
   }
+  $subBlockCode =~ s/SBMOD/$subBlockMods/g;
+
+  # block loops.
+  my $blockCode = makeLoopCode($h, 'block', 'b', '', \@blockLoops);
 
   # region loops.
   my $regionCode = makeLoopCode($h, 'region', 'r', '', \@regionLoops);
@@ -1275,16 +1278,20 @@ sub fitness {
   # cluster sizes in points.
   my @cs = map { $fs[$_] * $cvs[$_] } 0..$#dirs;
 
-  # adjust inner sizes.
+  # adjust inner sizes to fit in their enclosing sizes.
   adjSizes(\@rs, \@ds);
-  adjSizes(\@bs, \@rs);
   adjSizes(\@bgs, \@rs);
+  adjSizes(\@bs, \@rs);     # use region because groups are rounded up.
+  adjSizes(\@sbgs, \@bs);
+  adjSizes(\@sbs, \@bs);    # use block because groups are rounded up.
 
   # 3d sizes in points.
   my $dPts = mult(@ds);
   my $rPts = mult(@rs);
   my $bgPts = mult(@bgs);
   my $bPts = mult(@bs);
+  my $sbgPts = mult(@sbgs);
+  my $sbPts = mult(@sbs);
   my $cPts = mult(@cs);
   my $fPts = mult(@fs);
 
@@ -1295,10 +1302,6 @@ sub fitness {
   # Blocks per region.
   my @rbs = map { ceil($rs[$_] / $bs[$_]) } 0..$#dirs;
   my $rBlks = mult(@rbs);
-
-  # Groups per region.
-  my @rbgs = map { ceil($rs[$_] / $bgs[$_]) } 0..$#dirs;
-  my $rBlkGrps = mult(@rbgs);
 
   # Regions per rank.
   my @drs = map { ceil($ds[$_] / $rs[$_]) } 0..$#dirs;
@@ -1313,6 +1316,8 @@ sub fitness {
     print "  region size = $rPts\n";
     print "  block-group size = $bgPts\n";
     print "  block size = $bPts\n";
+    print "  sub-block-group size = $sbgPts\n";
+    print "  sub-block size = $sbPts\n";
     print "  cluster size = $cPts\n";
     print "  fold size = $fPts\n";
     print "  regions per rank = $dRegs\n";
@@ -1366,6 +1371,8 @@ sub fitness {
   addStat($ok, 'region size', $rPts);
   addStat($ok, 'block-group size', $bgPts);
   addStat($ok, 'block size', $bPts);
+  addStat($ok, 'sub-block-group size', $sbgPts);
+  addStat($ok, 'sub-block size', $sbPts);
   addStat($ok, 'cluster size', $cPts);
   addStat($ok, 'regions per rank', $dRegs);
   addStat($ok, 'blocks per region', $rBlks);
@@ -1409,7 +1416,10 @@ sub fitness {
   # gen-loops vars.
   $mvars .= " RANK_LOOP_CODE='$rankCode'".
     " REGION_LOOP_CODE='$regionCode'".
-    " BLOCK_LOOP_CODE='$blockCode'";
+    " BLOCK_LOOP_CODE='$blockCode'".
+    " SUB_BLOCK_LOOP_CODE='$subBlockCode'";
+
+  # substitute PATH* placeholders with actual path strings.
   for my $pi (0..$#paths) {
     my $pathName = $pathNames[$paths[$pi]];
     $mvars =~ s/\bPATH$pi\b/$pathName/g;
@@ -1435,6 +1445,8 @@ sub fitness {
   $args .= " -rx $rs[0] -ry $rs[1] -rz $rs[2]";
   $args .= " -bx $bs[0] -by $bs[1] -bz $bs[2]";
   $args .= " -bgx $bgs[0] -bgy $bgs[1] -bgz $bgs[2]";
+  $args .= " -sbx $sbs[0] -sby $sbs[1] -sbz $sbs[2]";
+  $args .= " -sbgx $sbgs[0] -sbgy $sbgs[1] -sbgz $sbgs[2]";
   $args .= " -px $ps[0] -py $ps[1] -pz $ps[2]";
 
   # num of iterations and trials.

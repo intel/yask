@@ -38,7 +38,7 @@
 #
 # fold: How to fold vectors (x*y*z).
 #   Vectorization in dimensions perpendicular to the inner loop
-#   (defined by BLOCK_LOOP_CODE below) often works well.
+#   (defined by SUB_BLOCK_LOOP_CODE below) often works well.
 #
 # cluster: How many folded vectors to evaluate simultaneously.
 #
@@ -127,8 +127,6 @@ else ifeq ($(stencil),fsg)
 eqs             ?=      v_br=v_br,v_bl=v_bl,v_tr=v_tr,v_tl=v_tl,s_br=s_br,s_bl=s_bl,s_tr=s_tr,s_tl=s_tl
 time_alloc	?=	1
 ifeq ($(arch),knl)
-REGION_LOOP_CODE ?=     omp serpentine loop(rn,ry,rx,rz) { calc(block(rt)); } 
-BLOCK_LOOP_CODE ?=      serpentine loop(bnv,byv,bxv) {  prefetch(L2) loop(bzv) { calc(cluster(bt)); } }
 omp_schedule    ?=	guided
 def_block_size  ?=      16
 def_thread_divisor ?=	4
@@ -144,8 +142,8 @@ ifeq ($(arch),knc)
 ISA		?= 	-mmic
 MACROS		+=	USE_INTRIN512
 FB_TARGET  	?=       knc
-def_block_threads ?=	4
-BLOCK_LOOP_INNER_MODS	?=	prefetch(L1,L2)
+def_block_threads  ?=	4
+SUB_BLOCK_LOOP_INNER_MODS  ?=	prefetch(L1,L2)
 
 else ifeq ($(arch),knl)
 
@@ -156,7 +154,7 @@ FB_TARGET  	?=       512
 def_block_size	?=	96
 def_block_threads ?=	8
 streaming_stores  ?= 	0
-BLOCK_LOOP_INNER_MODS	?=	prefetch(L1)
+SUB_BLOCK_LOOP_INNER_MODS  ?=	prefetch(L1)
 
 else ifeq ($(arch),skx)
 
@@ -255,8 +253,9 @@ FB_STENCIL_LIST	:=	src/foldBuilder/stencils.hpp
 GEN_HEADERS     =	$(addprefix src/, \
 				stencil_rank_loops.hpp \
 				stencil_region_loops.hpp \
-				stencil_halo_loops.hpp \
 				stencil_block_loops.hpp \
+				stencil_sub_block_loops.hpp \
+				stencil_halo_loops.hpp \
 				layout_macros.hpp layouts.hpp \
 				$(ST_MACRO_FILE) $(ST_CODE_FILE) )
 ifneq ($(eqs),)
@@ -341,39 +340,47 @@ endif
 
 # gen-loops.pl args:
 
-# Rank loops break up the whole rank into smaller regions.
-# In order for temporal wavefronts to operate properly, the
-# order of spatial dimensions may be changed, but traversal
-# paths that do not have strictly incrementing indices (e.g.,
-# grouped, serpentine, square-wave) may not be used here when
-# using temporal wavefronts. The time loop may be found
-# in StencilEquations::calc_rank().
+# Rank loops break up the whole rank into smaller regions.  In order for
+# temporal wavefronts to operate properly, the order of spatial dimensions
+# may be changed, but the scanning paths must have strictly incrementing
+# indices. Those that do not (e.g., grouped, serpentine, square-wave) may
+# *not* be used here when using temporal wavefronts. The time loop may be
+# found in StencilEquations::calc_rank().
 RANK_LOOP_OPTS		=	-dims 'dw,dx,dy,dz'
 RANK_LOOP_CODE		?=	$(RANK_LOOP_OUTER_MODS) loop(dw,dx,dy,dz) \
 				{ $(RANK_LOOP_INNER_MODS) calc(region(start_dt, stop_dt, eqGroup_ptr)); }
 
-# Region loops break up a region using OpenMP threading into blocks.
-# The region time loops are not coded here to allow for proper
-# spatial skewing for temporal wavefronts. The time loop may be found
-# in StencilEquations::calc_region().
+# Region loops break up a region using OpenMP threading into blocks.  The
+# 'omp' modifier creates an outer OpenMP loop so that each block is assigned
+# to a top-level OpenMP thread.  The region time loops are not coded here to
+# allow for proper spatial skewing for temporal wavefronts. The time loop
+# may be found in StencilEquations::calc_region().
 REGION_LOOP_OPTS	=     	-dims 'rw,rx,ry,rz' \
 				-ompConstruct '$(omp_par_for) schedule($(omp_schedule)) proc_bind(spread)' \
 				-calcPrefix 'eg->calc_'
 REGION_LOOP_OUTER_MODS	?=	grouped omp
-REGION_LOOP_CODE	?=	$(REGION_LOOP_OUTER_MODS) loop(rw,rx,ry,rz) \
-				{ $(REGION_LOOP_INNER_MODS) calc(block(rt)); }
+REGION_LOOP_CODE	?=	$(REGION_LOOP_OUTER_MODS) loop(rw,rx,ry,rz) { \
+				$(REGION_LOOP_INNER_MODS) calc(block(rt)); }
 
-# Block loops break up a block into vector clusters.
-# The indices at this level are by vector instead of element;
-# this is indicated by the 'v' suffix.
-# The 'omp' modifier creates a nested OpenMP loop.
-# There is no time loop here because threaded temporal blocking is not yet supported.
-BLOCK_LOOP_OPTS		=     	-dims 'bwv,bxv,byv,bzv' \
+# Block loops break up a block into sub-blocks.  The 'omp' modifier creates
+# a nested OpenMP loop so that each sub-block is assigned to a nested OpenMP
+# thread.  There is no time loop here because threaded temporal blocking is
+# not yet supported.
+BLOCK_LOOP_OPTS		=     	-dims 'bw,bx,by,bz' \
 				-ompConstruct '$(omp_par_for) schedule($(omp_block_schedule)) proc_bind(close)'
-BLOCK_LOOP_INNER_MODS	?=	prefetch(L2)
-BLOCK_LOOP_OUTER_MODS	?=	omp
-BLOCK_LOOP_CODE		?=	$(BLOCK_LOOP_OUTER_MODS) loop(bwv,bxv) { loop(byv) \
-				{ $(BLOCK_LOOP_INNER_MODS) loop(bzv) { calc(cluster(bt)); } } }
+BLOCK_LOOP_OUTER_MODS	?=	grouped omp
+BLOCK_LOOP_CODE		?=	$(BLOCK_LOOP_OUTER_MODS) loop(bw,bx,by,bz) { \
+				$(BLOCK_LOOP_INNER_MODS) calc(sub_block(bt)); }
+
+# Sub-block loops break up a sub-block into vector clusters.  The indices at
+# this level are by vector instead of element; this is indicated by the 'v'
+# suffix. The innermost loop here is the final innermost loop. There is
+# no time loop here because threaded temporal blocking is not yet supported.
+SUB_BLOCK_LOOP_OPTS		=     	-dims 'sbwv,sbxv,sbyv,sbzv'
+SUB_BLOCK_LOOP_OUTER_MODS	?=	square_wave serpentine
+SUB_BLOCK_LOOP_INNER_MODS	?=	prefetch(L2)
+SUB_BLOCK_LOOP_CODE		?=	$(SUB_BLOCK_LOOP_OUTER_MODS) loop(sbwv,sbxv,sbyv) { \
+					$(SUB_BLOCK_LOOP_INNER_MODS) loop(sbzv) { calc(cluster(sbt)); } }
 
 # Halo pack/unpack loops break up a region face, edge, or corner into vectors.
 # The indices at this level are by vector instead of element;
@@ -453,6 +460,10 @@ echo-settings:
 	@echo BLOCK_LOOP_OUTER_MODS="\"$(BLOCK_LOOP_OUTER_MODS)\""
 	@echo BLOCK_LOOP_INNER_MODS="\"$(BLOCK_LOOP_INNER_MODS)\""
 	@echo BLOCK_LOOP_CODE="\"$(BLOCK_LOOP_CODE)\""
+	@echo SUB_BLOCK_LOOP_OPTS="\"$(SUB_BLOCK_LOOP_OPTS)\""
+	@echo SUB_BLOCK_LOOP_OUTER_MODS="\"$(SUB_BLOCK_LOOP_OUTER_MODS)\""
+	@echo SUB_BLOCK_LOOP_INNER_MODS="\"$(SUB_BLOCK_LOOP_INNER_MODS)\""
+	@echo SUB_BLOCK_LOOP_CODE="\"$(SUB_BLOCK_LOOP_CODE)\""
 	@echo HALO_LOOP_OPTS="\"$(HALO_LOOP_OPTS)\""
 	@echo HALO_LOOP_OUTER_MODS="\"$(RANK_LOOP_OUTER_MODS)\""
 	@echo HALO_LOOP_INNER_MODS="\"$(RANK_LOOP_INNER_MODS)\""
@@ -463,7 +474,7 @@ echo-settings:
 code_stats:
 	@echo
 	@echo "Code stats for stencil computation:"
-	./get-loop-stats.pl -t='block_loops' *.s
+	./get-loop-stats.pl -t='sub_block_loops' *.s
 
 $(STENCIL_EXEC_NAME): $(STENCIL_OBJS)
 	$(LD) -o $@ $(STENCIL_OBJS) $(CXXFLAGS) $(LFLAGS)
@@ -476,11 +487,14 @@ src/stencil_rank_loops.hpp: gen-loops.pl Makefile
 src/stencil_region_loops.hpp: gen-loops.pl Makefile
 	./$< -output $@ $(REGION_LOOP_OPTS) $(EXTRA_LOOP_OPTS) $(EXTRA_REGION_LOOP_OPTS) "$(REGION_LOOP_CODE)"
 
-src/stencil_halo_loops.hpp: gen-loops.pl Makefile
-	./$< -output $@ $(HALO_LOOP_OPTS) $(EXTRA_LOOP_OPTS) $(EXTRA_HALO_LOOP_OPTS) "$(HALO_LOOP_CODE)"
-
 src/stencil_block_loops.hpp: gen-loops.pl Makefile
 	./$< -output $@ $(BLOCK_LOOP_OPTS) $(EXTRA_LOOP_OPTS) $(EXTRA_BLOCK_LOOP_OPTS) "$(BLOCK_LOOP_CODE)"
+
+src/stencil_sub_block_loops.hpp: gen-loops.pl Makefile
+	./$< -output $@ $(SUB_BLOCK_LOOP_OPTS) $(EXTRA_LOOP_OPTS) $(EXTRA_SUB_BLOCK_LOOP_OPTS) "$(SUB_BLOCK_LOOP_CODE)"
+
+src/stencil_halo_loops.hpp: gen-loops.pl Makefile
+	./$< -output $@ $(HALO_LOOP_OPTS) $(EXTRA_LOOP_OPTS) $(EXTRA_HALO_LOOP_OPTS) "$(HALO_LOOP_CODE)"
 
 src/layout_macros.hpp: gen-layouts.pl
 	./$< -m > $@
@@ -537,7 +551,7 @@ help:
 	@echo "make clean; make arch=knl stencil=iso3dfd"
 	@echo "make clean; make arch=knl stencil=awp mpi=1"
 	@echo "make clean; make arch=skx stencil=ave fold='x=1,y=2,z=4' cluster='x=2'"
-	@echo "make clean; make arch=knc stencil=3axis radius=4 BLOCK_LOOP_INNER_MODS='prefetch(L1,L2)' EXTRA_MACROS='PFDL1=2 PFDL2=4'"
+	@echo "make clean; make arch=knc stencil=3axis radius=4 SUB_BLOCK_LOOP_INNER_MODS='prefetch(L1,L2)' EXTRA_MACROS='PFDL1=2 PFDL2=4'"
 	@echo " "
 	@echo "Example debug usage:"
 	@echo "make arch=knl  stencil=iso3dfd OMPFLAGS='-qopenmp-stubs' EXTRA_CXXFLAGS='-O0' EXTRA_MACROS='DEBUG'"

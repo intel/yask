@@ -131,10 +131,10 @@ void usage(const string& cmd) {
         "    Specify the sizes of the halos.\n"
         "      By default, halos are calculated automatically for each grid.\n"
         " [-no]-lus\n"
-        "    Make last dimension of fold unit stride (default=" << (!firstInner) << ").\n"
+        "    Make last [first] dimension of fold unit stride (default=" << (!firstInner) << ").\n"
         "      This controls the intra-vector memory layout.\n"
         " [-no]-aul\n"
-        "    Allow simple unaligned loads (default=" << allowUnalignedLoads << ").\n"
+        "    Do [not] allow simple unaligned loads (default=" << allowUnalignedLoads << ").\n"
         "      To use this correctly, only 1D folds are allowed, and\n"
         "        the memory layout used by YASK must have that same dimension in unit stride.\n"
         " [-no]-comb\n"
@@ -396,7 +396,7 @@ int main(int argc, const char* argv[]) {
     
     // Reference to the grids and params in the stencil.
     Grids& grids = stencilFunc->getGrids();
-    Params& params = stencilFunc->getParams();
+    //Params& params = stencilFunc->getParams();
 
     // Find all the stencil dimensions from the grids.
     // Create the final folds and clusters from the cmd-line options.
