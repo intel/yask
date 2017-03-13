@@ -127,11 +127,12 @@ else ifeq ($(stencil),fsg)
 eqs             ?=      v_br=v_br,v_bl=v_bl,v_tr=v_tr,v_tl=v_tl,s_br=s_br,s_bl=s_bl,s_tr=s_tr,s_tl=s_tl
 time_alloc	?=	1
 ifeq ($(arch),knl)
-omp_schedule    ?=	guided
-def_block_size  ?=      16
-def_thread_divisor ?=	4
-def_block_threads ?= 	1
-def_pad		?=	2
+omp_schedule    	?=	guided
+def_block_size  	?=      16
+def_thread_divisor	?=	4
+def_block_threads	?= 	1
+def_pad			?=	2
+SUB_BLOCK_LOOP_INNER_MODS  ?=	prefetch(L2)
 endif
 
 endif # stencil-specific.
@@ -234,23 +235,24 @@ endif # not 512 bits.
 
 # More build flags.
 ifeq ($(mpi),1)
-CXX		=	mpiicpc
+CXX		:=	mpiicpc
 else
-CXX		=	icpc
+CXX		:=	icpc
 endif
-LD		=	$(CXX)
-MAKE		=	make
-CXXFLAGS        +=   	-g -O3 -std=c++11 -Wall
+LD		:=	$(CXX)
+MAKE		:=	make
+CXXOPT		:=	-O3
+CXXFLAGS        +=   	-g -std=c++11 -Wall $(CXXOPT)
 OMPFLAGS	+=	-fopenmp 
 LFLAGS          +=      -lrt
-FB_CXX    	=       g++  # faster than icpc for the foldBuilder.
+FB_CXX    	:=       g++  # faster than icpc for the foldBuilder.
 FB_CXXFLAGS 	+=	-g -O0 -std=c++11 -Wall  # low opt to reduce compile time.
 EXTRA_FB_CXXFLAGS =
 FB_FLAGS   	+=	-st $(stencil) -cluster $(cluster) -fold $(fold)
 ST_MACRO_FILE	:=	stencil_macros.hpp
 ST_CODE_FILE	:=	stencil_code.hpp
 FB_STENCIL_LIST	:=	src/foldBuilder/stencils.hpp
-GEN_HEADERS     =	$(addprefix src/, \
+GEN_HEADERS     :=	$(addprefix src/, \
 				stencil_rank_loops.hpp \
 				stencil_region_loops.hpp \
 				stencil_block_loops.hpp \
@@ -320,7 +322,8 @@ ifneq ($(findstring ic,$(notdir $(CXX))),)  # Intel compiler
 CODE_STATS      =   	code_stats
 CXXFLAGS        +=      $(ISA) -debug extended -Fa -restrict -ansi-alias -fno-alias
 CXXFLAGS	+=	-fimf-precision=low -fast-transcendentals -no-prec-sqrt -no-prec-div -fp-model fast=2 -fno-protect-parens -rcd -ftz -fma -fimf-domain-exclusion=none -qopt-assume-safe-padding
-#CXXFLAGS	+=	-qoverride-limits -vec-threshold0
+CXXFLAGS	+=	-qoverride-limits
+#CXXFLAGS	+=	-vec-threshold0
 CXXFLAGS	+=      -qopt-report=5
 #CXXFLAGS	+=	-qopt-report-phase=VEC,PAR,OPENMP,IPO,LOOP
 CXXFLAGS	+=	-no-diag-message-catalog
@@ -358,7 +361,7 @@ RANK_LOOP_CODE		?=	$(RANK_LOOP_OUTER_MODS) loop(dw,dx,dy,dz) \
 REGION_LOOP_OPTS	=     	-dims 'rw,rx,ry,rz' \
 				-ompConstruct '$(omp_par_for) schedule($(omp_schedule)) proc_bind(spread)' \
 				-calcPrefix 'eg->calc_'
-REGION_LOOP_OUTER_MODS	?=	grouped omp
+REGION_LOOP_OUTER_MODS	?=	omp grouped
 REGION_LOOP_CODE	?=	$(REGION_LOOP_OUTER_MODS) loop(rw,rx,ry,rz) { \
 				$(REGION_LOOP_INNER_MODS) calc(block(rt)); }
 
@@ -368,7 +371,7 @@ REGION_LOOP_CODE	?=	$(REGION_LOOP_OUTER_MODS) loop(rw,rx,ry,rz) { \
 # not yet supported.
 BLOCK_LOOP_OPTS		=     	-dims 'bw,bx,by,bz' \
 				-ompConstruct '$(omp_par_for) schedule($(omp_block_schedule)) proc_bind(close)'
-BLOCK_LOOP_OUTER_MODS	?=	grouped omp
+BLOCK_LOOP_OUTER_MODS	?=	omp grouped
 BLOCK_LOOP_CODE		?=	$(BLOCK_LOOP_OUTER_MODS) loop(bw,bx,by,bz) { \
 				$(BLOCK_LOOP_INNER_MODS) calc(sub_block(bt)); }
 
@@ -377,10 +380,13 @@ BLOCK_LOOP_CODE		?=	$(BLOCK_LOOP_OUTER_MODS) loop(bw,bx,by,bz) { \
 # suffix. The innermost loop here is the final innermost loop. There is
 # no time loop here because threaded temporal blocking is not yet supported.
 SUB_BLOCK_LOOP_OPTS		=     	-dims 'sbwv,sbxv,sbyv,sbzv'
+ifeq ($(split_L2),1)
+SUB_BLOCK_LOOP_OPTS		+=     	-splitL2
+endif
 SUB_BLOCK_LOOP_OUTER_MODS	?=	square_wave serpentine
 SUB_BLOCK_LOOP_INNER_MODS	?=	prefetch(L2)
 SUB_BLOCK_LOOP_CODE		?=	$(SUB_BLOCK_LOOP_OUTER_MODS) loop(sbwv,sbxv,sbyv) { \
-					$(SUB_BLOCK_LOOP_INNER_MODS) loop(sbzv) { calc(cluster(sbt)); } }
+					$(SUB_BLOCK_LOOP_INNER_MODS) loop(sbzv) { calc(cluster(begin_sbtv)); } }
 
 # Halo pack/unpack loops break up a region face, edge, or corner into vectors.
 # The indices at this level are by vector instead of element;
@@ -554,6 +560,6 @@ help:
 	@echo "make clean; make arch=knc stencil=3axis radius=4 SUB_BLOCK_LOOP_INNER_MODS='prefetch(L1,L2)' EXTRA_MACROS='PFDL1=2 PFDL2=4'"
 	@echo " "
 	@echo "Example debug usage:"
-	@echo "make arch=knl  stencil=iso3dfd OMPFLAGS='-qopenmp-stubs' EXTRA_CXXFLAGS='-O0' EXTRA_MACROS='DEBUG'"
-	@echo "make arch=intel64 stencil=ave OMPFLAGS='-qopenmp-stubs' EXTRA_CXXFLAGS='-O0' EXTRA_MACROS='DEBUG' model_cache=2"
-	@echo "make arch=intel64 stencil=3axis radius=0 fold='x=1,y=1,z=1' OMPFLAGS='-qopenmp-stubs' EXTRA_MACROS='DEBUG DEBUG_TOLERANCE NO_INTRINSICS TRACE TRACE_MEM TRACE_INTRINSICS' EXTRA_CXXFLAGS='-O0'"
+	@echo "make arch=knl  stencil=iso3dfd OMPFLAGS='-qopenmp-stubs' CXXOPT='-O0' EXTRA_MACROS='DEBUG'"
+	@echo "make arch=intel64 stencil=ave OMPFLAGS='-qopenmp-stubs' CXXOPT='-O0' EXTRA_MACROS='DEBUG' model_cache=2"
+	@echo "make arch=intel64 stencil=3axis radius=0 fold='x=1,y=1,z=1' OMPFLAGS='-qopenmp-stubs' EXTRA_MACROS='DEBUG DEBUG_TOLERANCE NO_INTRINSICS TRACE TRACE_MEM TRACE_INTRINSICS' CXXOPT='-O0'"

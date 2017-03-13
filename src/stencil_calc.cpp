@@ -122,10 +122,10 @@ namespace yask {
                             for (idx_t z = eg->begin_bbz; z < eg->end_bbz; z++) {
 
                                 // Update only if point is in sub-domain for this eq group.
-                                if (eg->is_in_valid_domain(t, w, x, y, z)) {
+                                if (eg->is_in_valid_domain(t, ARG_W(w) x, y, z)) {
                                     
                                     // Evaluate the reference scalar code.
-                                    eg->calc_scalar(t, w, x, y, z);
+                                    eg->calc_scalar(t, ARG_W(w) x, y, z);
                                 }
                             }
 
@@ -430,6 +430,69 @@ namespace yask {
 
     }
     
+    // Calculate results for one sub-block.
+    // Each block is typically computed in a separate OpenMP thread.
+    // The begin/end_sb* vars are the start/stop_b* vars from the block loops.
+    void EqGroupBase::calc_sub_block(idx_t sbt,
+                                     idx_t begin_sbw, idx_t begin_sbx, idx_t begin_sby, idx_t begin_sbz,
+                                     idx_t end_sbw, idx_t end_sbx, idx_t end_sby, idx_t end_sbz)
+    {
+        TRACE_MSG2(get_name() << ".calc_sub_block(t=" << sbt <<
+                   ", w=" << begin_sbw << ".." << (end_sbw-1) <<
+                   ", x=" << begin_sbx << ".." << (end_sbx-1) <<
+                   ", y=" << begin_sby << ".." << (end_sby-1) <<
+                   ", z=" << begin_sbz << ".." << (end_sbz-1) <<
+                   ").");
+        
+        // If not a 'simple' domain, must use scalar code.  TODO: this
+        // is very inefficient--need to vectorize as much as possible.
+        if (!bb_simple) {
+            
+            TRACE_MSG2("...using scalar code.");
+            for (idx_t w = begin_sbw; w < end_sbw; w++)
+                for (idx_t x = begin_sbx; x < end_sbx; x++)
+                    for (idx_t y = begin_sby; y < end_sby; y++) {
+
+                        // Are there holes in the BB?
+                        if (bb_num_points != bb_size) {
+                            for (idx_t z = begin_sbz; z < end_sbz; z++) {
+
+                                // Update only if point is in sub-domain for this eq group.
+                                if (is_in_valid_domain(sbt, ARG_W(w) x, y, z))
+                                    calc_scalar(sbt, ARG_W(w) x, y, z);
+                            }
+                        }
+
+                        // If no holes, don't need to check domain.
+                        else {
+                            for (idx_t z = begin_sbz; z < end_sbz; z++) {
+                                calc_scalar(sbt, ARG_W(w) x, y, z);
+                            }
+                        }
+                    }
+                
+            return;
+        }
+
+        // Divide indices by vector lengths.  Use idiv_flr() instead of '/'
+        // because begin/end vars may be negative (if in halo).
+        const idx_t begin_sbtv = sbt;
+        const idx_t begin_sbwv = idiv_flr<idx_t>(begin_sbw, VLEN_W);
+        const idx_t begin_sbxv = idiv_flr<idx_t>(begin_sbx, VLEN_X);
+        const idx_t begin_sbyv = idiv_flr<idx_t>(begin_sby, VLEN_Y);
+        const idx_t begin_sbzv = idiv_flr<idx_t>(begin_sbz, VLEN_Z);
+        const idx_t end_sbtv = sbt + CLEN_T;
+        const idx_t end_sbwv = idiv_flr<idx_t>(end_sbw, VLEN_W);
+        const idx_t end_sbxv = idiv_flr<idx_t>(end_sbx, VLEN_X);
+        const idx_t end_sbyv = idiv_flr<idx_t>(end_sby, VLEN_Y);
+        const idx_t end_sbzv = idiv_flr<idx_t>(end_sbz, VLEN_Z);
+
+        // Evaluate sub-block of clusters.
+        calc_sub_block_of_clusters(begin_sbtv, ARG_W(begin_sbwv)
+                                   begin_sbxv, begin_sbyv, begin_sbzv,
+                                   end_sbtv, ARG_W(end_sbwv) end_sbxv, end_sbyv, end_sbzv);
+    }
+
     // Init MPI-related vars and other vars related to my rank's place in
     // the global problem: rank index, offset, etc.  Need to call this even
     // if not using MPI to properly init these vars.  Called from
@@ -1088,7 +1151,7 @@ namespace yask {
                     for(idx_t z = context.ofs_z; z < context.ofs_z + opts.dz; z++) {
 
                         // Update only if point in domain for this eq group.
-                        if (is_in_valid_domain(t, w, x, y, z)) {
+                        if (is_in_valid_domain(t, ARG_W(w) x, y, z)) {
                             minw = min(minw, w);
                             maxw = max(maxw, w);
                             minx = min(minx, x);

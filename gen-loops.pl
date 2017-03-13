@@ -51,17 +51,16 @@ $| = 1;                         # autoflush.
 # Globals.
 my %OPT;                        # cmd-line options.
 my @dims;                       # names of dimensions.
-my @results;                    # names of result buffers.
 my $genericCache = "L#";        # a string placeholder for L1 or L2.
 
 # loop-feature bit fields.
 my $bSerp = 0x1;                # serpentine path
 my $bSquare = 0x2;              # square_wave path
-my $bGroup = 0x4;                # group path
+my $bGroup = 0x4;               # group path
 my $bSimd = 0x8;                # simd prefix
 my $bPrefetchL1 = 0x10;         # prefetch L1
 my $bPrefetchL2 = 0x20;         # prefetch L2
-my $bPipe = 0x40;                # pipeline
+my $bPipe = 0x100;              # pipeline
 
 ##########
 # Function to make names of variables based on dimension string(s).
@@ -851,6 +850,7 @@ sub processCode($) {
                 my $ucDir = uc($innerDim);
                 my $pfd = "PFD$genericCache";
                 my $nVar = numItersVar(@loopDims);
+                my $doSplitL2 = ($features & $bPrefetchL2) && $OPT{splitL2};
 
                 # declare pipeline vars.
                 push @code, " // Pipeline accumulators.", " MAKE_PIPE_$ucDir;"
@@ -902,7 +902,7 @@ sub processCode($) {
                 }
 
                 # midpoint calculation for L2 prefetch only.
-                if ($features & $bPrefetchL2) {
+                if ($doSplitL2) {
                     my $ofs = ($features & $bPrefetchL1) ? "(PFDL2-PFDL1)" : "PFDL2";
                     push @code, " // Point where L2-prefetch policy changes.";
                     push @code, " // This covers all L1 fetches, even unneeded one(s) beyond end."
@@ -917,7 +917,7 @@ sub processCode($) {
                 #  loop 1: w/o L2 prefetch from midpoint to end.
                 # if no L2 prefetch:
                 #  loop 0: no L2 prefetch from start to end.
-                my $lastLoop = ($features & $bPrefetchL2) ? 1 : 0;
+                my $lastLoop = $doSplitL2 ? 1 : 0;
                 for my $loop (0 .. $lastLoop) {
 
                     my $name = "Computation";
@@ -929,6 +929,7 @@ sub processCode($) {
                     my $comment = " // $name loop.";
                     $comment .= " Same as previous loop, except no L2 prefetch." if $loop==1;
                     push @code, $comment;
+                    push @code, $OPT{innerMod};
                     beginLoop(\@code, \@loopDims, \@loopPrefix, 
                               $beginVal, $endVal, $features, \@loopStack);
 
@@ -1041,64 +1042,63 @@ sub processCode($) {
 # Parse arguments and emit code.
 sub main() {
 
-  my(@KNOBS) =
-    ( # knob,        description,   optional default
-     [ "dims=s", "Comma-separated names of dimensions (in order passed via calls).", 'v,x,y,z'],
-     [ "comArgs=s", "Common arguments to all calls (after L1/L2 for prefetch).", ''],
-     [ "resultBlks=s", "Comma-separated name of block-sized buffers that hold inter-loop values and/or final result at 'save' command.", 'result'],
-     [ "calcPrefix=s", "Prefix for calculation call.", 'calc_'],
-     [ "primePrefix=s", "Prefix for pipeline-priming call.", 'prime_'],
-     [ "pipePrefix=s", "Additional prefix for pipeline call.", 'pipe_'],
-     [ "pfPrefix=s", "Prefix for prefetch call.", 'prefetch_'],
-     [ "ompConstruct=s", "Pragma to use before 'omp' loop(s).", "omp parallel for"],
-     [ "output=s", "Name of output file.", 'loops.h'],
-    );
-  my($command_line) = process_command_line(\%OPT, \@KNOBS);
-  print "$command_line\n" if $OPT{verbose};
+    my(@KNOBS) = (
+        # knob,        description,   optional default
+        [ "dims=s", "Comma-separated names of dimensions (in order passed via calls).", 'v,x,y,z'],
+        [ "comArgs=s", "Common arguments to all calls (after L1/L2 for prefetch).", ''],
+        [ "calcPrefix=s", "Prefix for calculation call.", 'calc_'],
+        [ "primePrefix=s", "Prefix for pipeline-priming call.", 'prime_'],
+        [ "pipePrefix=s", "Additional prefix for pipeline call.", 'pipe_'],
+        [ "pfPrefix=s", "Prefix for prefetch call.", 'prefetch_'],
+        [ "ompConstruct=s", "Pragma to use before 'omp' loop(s).", "omp parallel for"],
+        [ "innerMod=s", "Code to insert before inner computation loops.",
+          '_Pragma("nounroll_and_jam") _Pragma("nofusion")'],
+        [ "splitL2!", "Split inner loops with L2 prefetching.", 0],
+        [ "output=s", "Name of output file.", 'loops.h'],
+        );
+    my($command_line) = process_command_line(\%OPT, \@KNOBS);
+    print "$command_line\n" if $OPT{verbose};
 
-  my $script = basename($0);
-  if (!$command_line || $OPT{help} || @ARGV < 1) {
-      print "Outputs C++ code for a loop block.\n",
-      "Usage: $script [options] <loop-code-string>\n",
-      "Examples:\n",
-      "  $script -dims x,y 'loop(x,y) { calc(f); }'\n",
-      "  $script -dims x,y,z 'omp loop(x,y) { loop(z) { calc(f); } }'\n",
-      "  $script -dims x,y,z 'omp loop(x,y) { prefetch loop(z) { calc(f); } }'\n",
-      #"  $script -dims x,y,z 'omp loop(x,y) { pipeline loop(z) { calc(f); } }'\n",
-      "  $script -dims x,y,z 'grouped omp loop(x,y,z) { calc(f); }'\n",
-      "  $script -dims x,y,z 'omp loop(x) { serpentine loop(y,z) { calc(f); } }'\n",
-      "  $script -dims x,y,z 'omp loop(x) { crew loop(y) { loop(z) { calc(f); } } }'\n",
-      "Inner loops should contain calc statements that generate calls to calculation functions.\n",
-      "A loop statement with more than one argument will generate a single collapsed loop.\n",
-      "Optional loop modifiers:\n",
-      "  omp:             generate an OpenMP for loop (distribute work across SW threads).\n",
-      "  crew:            generate an Intel crew loop (distribute work across HW threads).\n",
-      "  prefetch:        generate calls to SW L1 & L2 prefetch functions in addition to calc functions.\n",
-      "  prefetch(L1,L2): generate calls to SW L1 & L2 prefetch functions in addition to calc functions.\n",
-      "  prefetch(L1):    generate calls to SW L1 prefetch functions in addition to calc functions.\n",
-      "  prefetch(L2):    generate calls to SW L2 prefetch functions in addition to calc functions.\n",
-      "  grouped:         generate grouped path within a collapsed loop.\n",
-      "  serpentine:      generate reverse path when enclosing loop dimension is odd.\n",
-      "  square_wave:     generate 2D square-wave path for two innermost dimensions of a collapsed loop.\n",
-      #"  pipeline:        generate calls to pipeline versions of calculation functions (deprecated).\n",
-      "For each dim D in dims, loops are generated from begin_D to end_D-1 by step_D;\n",
-      "  if grouping is used, groups are of size group_size_D;\n",
-      "  these vars must be defined *outside* of the generated code.\n",
-      "Each iteration will cover values from start_D to stop_D-1;\n",
-      "  these vars will be defined in the generated code.\n",
-      "Options:\n";
-    print_options_help(\@KNOBS);
-    exit 1;
-  }
+    my $script = basename($0);
+    if (!$command_line || $OPT{help} || @ARGV < 1) {
+        print "Outputs C++ code for a loop block.\n",
+            "Usage: $script [options] <loop-code-string>\n",
+            "Examples:\n",
+            "  $script -dims x,y 'loop(x,y) { calc(f); }'\n",
+            "  $script -dims x,y,z 'omp loop(x,y) { loop(z) { calc(f); } }'\n",
+            "  $script -dims x,y,z 'omp loop(x,y) { prefetch loop(z) { calc(f); } }'\n",
+            #"  $script -dims x,y,z 'omp loop(x,y) { pipeline loop(z) { calc(f); } }'\n",
+            "  $script -dims x,y,z 'grouped omp loop(x,y,z) { calc(f); }'\n",
+            "  $script -dims x,y,z 'omp loop(x) { serpentine loop(y,z) { calc(f); } }'\n",
+            "  $script -dims x,y,z 'omp loop(x) { crew loop(y) { loop(z) { calc(f); } } }'\n",
+            "Inner loops should contain calc statements that generate calls to calculation functions.\n",
+            "A loop statement with more than one argument will generate a single collapsed loop.\n",
+            "Optional loop modifiers:\n",
+            "  omp:             generate an OpenMP for loop (distribute work across SW threads).\n",
+            "  crew:            generate an Intel crew loop (distribute work across HW threads).\n",
+            "  prefetch:        generate calls to SW L1 & L2 prefetch functions in addition to calc functions.\n",
+            "  prefetch(L1,L2): generate calls to SW L1 & L2 prefetch functions in addition to calc functions.\n",
+            "  prefetch(L1):    generate calls to SW L1 prefetch functions in addition to calc functions.\n",
+            "  prefetch(L2):    generate calls to SW L2 prefetch functions in addition to calc functions.\n",
+            "  grouped:         generate grouped path within a collapsed loop.\n",
+            "  serpentine:      generate reverse path when enclosing loop dimension is odd.\n",
+            "  square_wave:     generate 2D square-wave path for two innermost dimensions of a collapsed loop.\n",
+            #"  pipeline:        generate calls to pipeline versions of calculation functions (deprecated).\n",
+            "For each dim D in dims, loops are generated from begin_D to end_D-1 by step_D;\n",
+            "  if grouping is used, groups are of size group_size_D;\n",
+            "  these vars must be defined *outside* of the generated code.\n",
+            "Each iteration will cover values from start_D to stop_D-1;\n",
+            "  these vars will be defined in the generated code.\n",
+            "Options:\n";
+        print_options_help(\@KNOBS);
+        exit 1;
+    }
 
-  @dims = split(/\s*,\s*/, $OPT{dims});
-  @results = split(/\s*,\s*/, $OPT{resultBlks});
+    @dims = split(/\s*,\s*/, $OPT{dims});
+    warn "info: generating ".scalar(@dims)."-D loop code...\n";
 
-  warn "info: generating ".scalar(@dims)."-D loop code with ".
-    scalar(@results)." output(s).\n";
-
-  my $codeString = join(' ', @ARGV);
-  processCode($codeString);
+    my $codeString = join(' ', @ARGV);
+    processCode($codeString);
 }
 
 main();

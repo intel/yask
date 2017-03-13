@@ -420,8 +420,8 @@ my @pathNames =
 # This is the loop taken by each nested OpenMP task.
 my @subBlockLoops =
   (
-   "PATH0 loop(D0,D1,D2) { SBMOD loop(D3) { calc(cluster(bt)); } }",
-   "PATH0 loop(D0,D1) { loop(D2) { SBMOD loop(D3) { calc(cluster(bt)); } } }",
+   "PATH0 loop(D0,D1,D2) { SBMOD loop(D3) { calc(cluster(begin_sbtv)); } }",
+   "PATH0 loop(D0,D1) { loop(D2) { SBMOD loop(D3) { calc(cluster(begin_sbtv)); } } }",
   );
 
 # List of possible block-loop templates.
@@ -429,7 +429,7 @@ my @subBlockLoops =
 # TODO: add other options.
 my @blockLoops =
   (
-   "omp PATH1 loop(D0,D1,D2,D3) { calc(sub_block(rt)); }",
+   "omp PATH1 loop(D0,D1,D2,D3) { calc(sub_block(bt)); }",
   );
 
 # List of possible region loop templates.

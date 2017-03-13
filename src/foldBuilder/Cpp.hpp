@@ -64,7 +64,7 @@ public:
 
     // Return a parameter reference.
     virtual string readFromParam(ostream& os, const GridPoint& pp) {
-        string str = "(*context." + pp.getName() + ")(" + pp.makeValStr() + ")";
+        string str = "(*_context->" + pp.getName() + ")(" + pp.makeValStr() + ")";
         return str;
     }
     
@@ -73,7 +73,7 @@ public:
     virtual string makePointCall(const GridPoint& gp,
                                  const string& fname, string optArg = "") const {
         ostringstream oss;
-        oss << "context." << gp.getName() << "->" << fname << "(";
+        oss << "_context->" << gp.getName() << "->" << fname << "(";
         if (optArg.length()) oss << optArg << ", ";
         oss << gp.makeDimValOffsetStr() << ", __LINE__)";
         return oss.str();
@@ -120,7 +120,7 @@ protected:
 
     // Return a parameter reference.
     virtual string readFromParam(ostream& os, const GridPoint& pp) {
-        string str = "(*context." + pp.getName() + ")(" + pp.makeValStr() + ")";
+        string str = "(*_context->" + pp.getName() + ")(" + pp.makeValStr() + ")";
         return str;
     }
     
@@ -140,7 +140,7 @@ protected:
                                 const string& firstArg,
                                 const string& lastArg,
                                 bool isNorm) const {
-        os << " context." << gp.getName() << "->" << funcName << "(";
+        os << " _context->" << gp.getName() << "->" << funcName << "(";
         if (firstArg.length())
             os << firstArg << ", ";
         if (isNorm)
@@ -300,6 +300,8 @@ protected:
     Dimensions& _dims;
     YASKCppSettings& _settings;
     string _context, _context_base;
+    IntTuple _yask_dims;        // spatial dims in yask.
+    string _yask_step;          // step dim in yask.
 
     // Print an expression as a one-line C++ comment.
     void addComment(ostream& os, EqGroup& eq) {
@@ -333,12 +335,23 @@ public:
         // name of C++ struct.
         _context = "StencilContext_" + _stencil.getName();
         _context_base = _context + "_data";
+
+        // YASK dims are hard-coded.
+        // TODO: fix YASK.
+        _yask_step = "t";
+        _yask_dims.addDimBack("w", 1);
+        _yask_dims.addDimBack("x", 1);
+        _yask_dims.addDimBack("y", 1);
+        _yask_dims.addDimBack("z", 1);
     }
     virtual ~YASKCppPrinter() { }
 
     virtual void printMacros(ostream& os);
     virtual void printGrids(ostream& os);
     virtual void printCode(ostream& os);
+    virtual void printShim(ostream& os, const string& fname,
+                           bool use_template = false,
+                           const string& dim = "");
 };
 
 #endif

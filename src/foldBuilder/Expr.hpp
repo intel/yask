@@ -1432,10 +1432,10 @@ typedef NumExprPtr GridValue;
 //   of the local var must be evaluated and inserted in the expr.
 // Example code:
 //   GridValue v;
-//   SET_VALUE_FROM_EXPR(v =, "context.temp * " << 0.2);
-//   SET_VALUE_FROM_EXPR(v +=, "context.coeff[" << r << "]");
+//   SET_VALUE_FROM_EXPR(v =, "_context->temp * " << 0.2);
+//   SET_VALUE_FROM_EXPR(v +=, "_context->coeff[" << r << "]");
 // This example would generate the following partial expression (when r=9):
-//   (context.temp * 2.00000000000000000e-01) + (context.coeff[9])
+//   (_context->temp * 2.00000000000000000e-01) + (_context->coeff[9])
 #define SET_VALUE_FROM_EXPR(lhs, rhs) do {              \
         ostringstream oss;                              \
         oss << setprecision(17) << scientific;          \
