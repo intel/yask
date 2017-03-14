@@ -153,13 +153,13 @@ namespace yask {
             os << "Modeling cache...\n";
 #endif
         
-        // Problem begin points.
+        // Domain begin points.
         idx_t begin_dw = begin_bbw;
         idx_t begin_dx = begin_bbx;
         idx_t begin_dy = begin_bby;
         idx_t begin_dz = begin_bbz;
     
-        // Problem end-points.
+        // Domain end-points.
         idx_t end_dw = end_bbw;
         idx_t end_dx = end_bbx;
         idx_t end_dy = end_bby;
@@ -970,13 +970,13 @@ namespace yask {
         // Print some more stats.
         os << endl <<
             "Amount-of-work stats:\n" <<
-            " problem-size in this rank, for one time-step: " <<
+            " domain-size in this rank, for one time-step: " <<
             printWithPow10Multiplier(rank_domain_1t) << endl <<
-            " problem-size in all ranks, for one time-step: " <<
+            " overall-problem-size in all ranks, for one time-step: " <<
             printWithPow10Multiplier(tot_domain_1t) << endl <<
-            " problem-size in this rank, for all time-steps: " <<
+            " domain-size in this rank, for all time-steps: " <<
             printWithPow10Multiplier(rank_domain_dt) << endl <<
-            " problem-size in all ranks, for all time-steps: " <<
+            " overall-problem-size in all ranks, for all time-steps: " <<
             printWithPow10Multiplier(tot_domain_dt) << endl <<
             endl <<
             " grid-point-updates in this rank, for one time-step: " <<
@@ -1006,13 +1006,13 @@ namespace yask {
             " est-FP-ops in all ranks, for all time-steps: " <<
             printWithPow10Multiplier(tot_numFpOps_dt) << endl <<
             endl << 
-            "Notes:\n" <<
-            " problem-sizes are based on rank-domain sizes specified in command-line (dw * dx * dy * dz).\n" <<
-            " grid-point-updates are based on sum of grid-updates in sub-domain across equation-group(s).\n" <<
-            " grid-point-reads are based on sum of grid-reads in sub-domain across equation-group(s).\n" <<
-            " est-FP-ops are based on sum of est-FP-ops in sub-domain across equation-group(s).\n" <<
-            endl;
-
+            "Notes:\n"
+            " Domain-sizes and overall-problem-sizes are based on rank-domain sizes (dw * dx * dy * dz)\n"
+            "  and number of ranks (nrw * nrx * nry * nrz) regardless of number of grids or sub-domains.\n"
+            " Grid-point-updates are based on sum of grid-updates in sub-domain across equation-group(s).\n"
+            " Grid-point-reads are based on sum of grid-reads in sub-domain across equation-group(s).\n"
+            " Est-FP-ops are based on sum of est-FP-ops in sub-domain across equation-group(s).\n"
+            "\n";
     }
 
     // Init all grids & params by calling initFn.
@@ -1609,24 +1609,30 @@ namespace yask {
         os << "Usage: " << pgmName << " [options]\n"
             "Options:\n";
         parser.print_help(os);
-        os <<
-            "Terms:\n"
-            " A vector is composed of FP elements.\n"
-            "  A 'folded vector' contains elements in more than one dimension.\n"
+        os << "Terms for the various levels of tiling:\n"
+            " A 'point' is a single floating-point (FP) element.\n"
+            "  This binary uses " << REAL_BYTES << "-byte FP elements.\n"
+            " A 'vector' is composed of points.\n"
+            "  A 'folded vector' contains points in more than one dimension.\n"
             "  The size of a vector is typically that of a SIMD register.\n"
-            " A vector-cluster is composed of vectors.\n"
-            "  The size of a vector-cluster is set at compile-time.\n"
-            " A sub-block is composed of vector-clusters.\n"
+            " A 'vector-cluster' is composed of vectors.\n"
+            "  This is the unit of work done in each inner-most loop iteration.\n"
+            " A 'sub-block' is composed of vector-clusters.\n"
             "  This is the unit of work for one OpenMP thread.\n"
-            " A block is composed of sub-blocks.\n"
+            " A 'block' is composed of sub-blocks.\n"
             "  This is the unit of work for one OpenMP thread team.\n"
-            " A region is composed of blocks.\n"
+            " A 'region' is composed of blocks.\n"
             "  Regions are used to implement temporal wave-front tiling.\n"
-            " A rank-domain is composed of regions.\n"
+            " A 'rank-domain' is composed of regions.\n"
             "  This is the unit of work for one MPI rank.\n"
-            " The overall problem domain is composed of rank-domains.\n"
+            " The 'overall-problem' is composed of rank-domains.\n"
             "  This is the unit of work for all MPI ranks.\n"
-            "Guidelines:\n"
+#ifndef USE_MPI
+            "  This binary has NOT been compiled with MPI support.\n"
+#endif
+            "Guidelines for setting tiling sizes:\n"
+            " The vector and vector-cluster sizes are set at compile-time, so\n"
+            "  there are no run-time options to set them.\n"
             " Set sub-block sizes to specify a unit of work done by each thread.\n"
             "  A sub-block size of 0 in dimensions 'w' or 'x' =>\n"
             "   sub-block size is set to vector-cluster size in that dimension.\n"
@@ -1634,17 +1640,17 @@ namespace yask {
             "   sub-block size is set to block size in that dimension.\n"
             "  Thus, the default sub-block is a 'y-z' slab.\n"
             "  Temporal tiling in sub-blocks is not yet supported, so effectively, sbt = 1.\n"
-            " Set sub-block-group sizes to control in what order sub-blocks are evaluated within a block.\n"
-            "  All sub-blocks that fit within a sub-block-group are evaluated before sub-blocks\n"
-            "   in the next sub-block-group.\n"
+            " Set sub-block-group sizes to control the ordering of sub-blocks within a block.\n"
+            "  All sub-blocks that intersect a given sub-block-group are evaluated\n"
+            "   before sub-blocks in the next sub-block-group.\n"
             "  A sub-block-group size of 0 in a given dimension =>\n"
             "   sub-block-group size is set to sub-block size in that dimension.\n"
             " Set block sizes to specify a unit of work done by each thread team.\n"
             "  A block size of 0 in a given dimension =>\n"
             "   block size is set to region size in that dimension.\n"
             "  Temporal tiling in blocks is not yet supported, so effectively, bt = 1.\n"
-            " Set block-group sizes to control in what order blocks are evaluated within a region.\n"
-            "  All blocks that fit within a block-group are evaluated before blocks\n"
+            " Set block-group sizes to control the ordering of blocks within a region.\n"
+            "  All blocks that intersect a given block-group are evaluated before blocks\n"
             "   in the next block-group.\n"
             "  A block-group size of 0 in a given dimension =>\n"
             "   block-group size is set to block size in that dimension.\n"
@@ -1652,29 +1658,33 @@ namespace yask {
             "  The temopral region size should be larger than one, and\n"
             "   the spatial region sizes should be less than the rank-domain sizes\n"
             "   in at least one dimension to enable temporal wave-front tiling.\n"
-            "  The spatial region sizes should be greater than block sizes\n"
+            "  The spatial region sizes should be greater than corresponding block sizes\n"
             "   to enable threading withing each wave-front tile.\n"
             "  Control the time-steps in each temporal wave-front with -rt.\n"
             "   Special cases:\n"
             "    Using '-rt 1' disables wave-front tiling.\n"
-            "    Using '-rt 0' => all time-steps in one wave-front.\n"
+            "    Using '-rt 0' => all time-steps done in one wave-front.\n"
             "  A region size of 0 in a given dimension =>\n"
             "   region size is set to rank-domain size in that dimension.\n"
-            " Set rank-domain sizes to specify the problem size done on this rank.\n"
-            "  To 'weak-scale' this to a larger overall problem size, use multiple MPI ranks.\n"
-#ifndef USE_MPI
-            "  This binary has NOT been built with MPI support.\n"
+            " Set rank-domain sizes to specify the work done on this rank.\n"
+            "  This and the number of grids affect the amount of memory used.\n"
+            "Controlling OpenMP threading:\n"
+            " Using '-max_threads 0' =>\n"
+            "  max_threads is set to OpenMP's default number of threads.\n"
+            " The -thread_divisor option is a convenience to control the number of\n"
+            "  hyper-threads used without having to know the number of cores,\n"
+            "  e.g., using '-thread_divisor 2' will halve the number of OpenMP threads.\n"
+            " For stencil evaluation, threads are allocated using nested OpenMP:\n"
+            "  Num blocks evaluated in parallel = max_threads / thread_divisor / block_threads.\n"
+            "  Num threads per block = block_threads.\n"
+            "  Num threads per sub-block = 1.\n" <<
+#ifdef USE_MPI
+            "Controlling MPI scaling:\n"
+            "  To 'weak-scale' to a larger overall-problem size, use multiple MPI ranks\n"
+            "   and keep the rank-domain sizes constant.\n"
+            "  To 'strong-scale' a given overall-problem size, use multiple MPI ranks\n"
+            "   and reduce the size of each rank-domain appropriately.\n" <<
 #endif
-            " So, rank-domain size >= region size >= block-group size >= block size.\n"
-            " Controlling OpenMP threading:\n"
-            "  Using '-max_threads 0' =>\n"
-            "   max_threads is set to OpenMP's default number of threads.\n"
-            "  The -thread_divisor option is a convenience to control the number of\n"
-            "   hyper-threads used without having to know the number of cores,\n"
-            "   e.g., using '-thread_divisor 2' will halve the number of OpenMP threads.\n"
-            "  For stencil evaluation, threads are allocated using nested OpenMP:\n"
-            "   Num blocks evaluated in parallel = max_threads / thread_divisor / block_threads.\n"
-            "   Num threads per block = block_threads.\n" <<
             appNotes <<
             "Examples:\n" <<
             " " << pgmName << " -d 768 -dt 25\n" <<
@@ -1686,107 +1696,114 @@ namespace yask {
         os << flush;
     }
     
-    // Make sure all user-provided settings are valid and finish setting up some
-    // other vars before allocating memory.
-    // Called from allocAll(), so it doesn't normally need to be called from user code.
-    void StencilSettings::finalizeSettings(std::ostream& os) {
+        // Make sure all user-provided settings are valid and finish setting up some
+        // other vars before allocating memory.
+        // Called from allocAll(), so it doesn't normally need to be called from user code.
+        void StencilSettings::finalizeSettings(std::ostream& os) {
 
-        // Round up domain size as needed.
-        dt = roundUp(os, dt, CPTS_T, "rank domain size in t (time steps)");
-        dw = roundUp(os, dw, CPTS_W, "rank domain size in w");
-        dx = roundUp(os, dx, CPTS_X, "rank domain size in x");
-        dy = roundUp(os, dy, CPTS_Y, "rank domain size in y");
-        dz = roundUp(os, dz, CPTS_Z, "rank domain size in z");
+            // Round up domain size as needed.
+            dt = roundUp(os, dt, CPTS_T, "rank domain size in t (time steps)");
+            dw = roundUp(os, dw, CPTS_W, "rank domain size in w");
+            dx = roundUp(os, dx, CPTS_X, "rank domain size in x");
+            dy = roundUp(os, dy, CPTS_Y, "rank domain size in y");
+            dz = roundUp(os, dz, CPTS_Z, "rank domain size in z");
 
-        // Determine num regions.
-        // Also fix up region sizes as needed.
-        os << "\nRegions:" << endl;
-        idx_t nrt = findNumRegionsInDomain(os, rt, dt, CPTS_T, "t");
-        idx_t nrw = findNumRegionsInDomain(os, rw, dw, CPTS_W, "w");
-        idx_t nrx = findNumRegionsInDomain(os, rx, dx, CPTS_X, "x");
-        idx_t nry = findNumRegionsInDomain(os, ry, dy, CPTS_Y, "y");
-        idx_t nrz = findNumRegionsInDomain(os, rz, dz, CPTS_Z, "z");
-        idx_t nr = nrt * nrw * nrx * nry * nrz;
-        os << " num-regions-per-rank-domain: " << nr << endl;
-        os << " Since the temporal region size is " << rt <<
-            ", temporal wave-front tiling is ";
-        if (rt <= 1) os << "NOT ";
-        os << "enabled.\n";
+            // Determine num regions.
+            // Also fix up region sizes as needed.
+            // Default region size (if 0) will be size of rank-domain.
+            os << "\nRegions:" << endl;
+            idx_t nrt = findNumRegionsInDomain(os, rt, dt, CPTS_T, "t");
+            idx_t nrw = findNumRegionsInDomain(os, rw, dw, CPTS_W, "w");
+            idx_t nrx = findNumRegionsInDomain(os, rx, dx, CPTS_X, "x");
+            idx_t nry = findNumRegionsInDomain(os, ry, dy, CPTS_Y, "y");
+            idx_t nrz = findNumRegionsInDomain(os, rz, dz, CPTS_Z, "z");
+            idx_t nr = nrt * nrw * nrx * nry * nrz;
+            os << " num-regions-per-rank-domain: " << nr << endl;
+            os << " Since the temporal region size is " << rt <<
+                ", temporal wave-front tiling is ";
+            if (rt <= 1) os << "NOT ";
+            os << "enabled.\n";
 
-        // Determine num blocks.
-        // Also fix up block sizes as needed.
-        os << "\nBlocks:" << endl;
-        idx_t nbt = findNumBlocksInRegion(os, bt, rt, CPTS_T, "t");
-        idx_t nbw = findNumBlocksInRegion(os, bw, rw, CPTS_W, "w");
-        idx_t nbx = findNumBlocksInRegion(os, bx, rx, CPTS_X, "x");
-        idx_t nby = findNumBlocksInRegion(os, by, ry, CPTS_Y, "y");
-        idx_t nbz = findNumBlocksInRegion(os, bz, rz, CPTS_Z, "z");
-        idx_t nb = nbt * nbw * nbx * nby * nbz;
-        os << " num-blocks-per-region: " << nb << endl;
-        os << " num-blocks-per-rank-domain: " << (nb * nr) << endl;
+            // Determine num blocks.
+            // Also fix up block sizes as needed.
+            // Default block size (if 0) will be size of region.
+            os << "\nBlocks:" << endl;
+            idx_t nbt = findNumBlocksInRegion(os, bt, rt, CPTS_T, "t");
+            idx_t nbw = findNumBlocksInRegion(os, bw, rw, CPTS_W, "w");
+            idx_t nbx = findNumBlocksInRegion(os, bx, rx, CPTS_X, "x");
+            idx_t nby = findNumBlocksInRegion(os, by, ry, CPTS_Y, "y");
+            idx_t nbz = findNumBlocksInRegion(os, bz, rz, CPTS_Z, "z");
+            idx_t nb = nbt * nbw * nbx * nby * nbz;
+            os << " num-blocks-per-region: " << nb << endl;
+            os << " num-blocks-per-rank-domain: " << (nb * nr) << endl;
 
-        // Adjust defaults for block-groups to be size of block.
-        if (!bgw) bgw = bw;
-        if (!bgx) bgx = bx;
-        if (!bgy) bgy = by;
-        if (!bgz) bgz = bz;
+            // Adjust defaults for sub-blocks to be y-z slab.
+            // Otherwise, findNumSubBlocksInBlock() would set default
+            // to entire block.
+            if (!sbw) sbw = CPTS_W; // min size in 'w'.
+            if (!sbx) sbx = CPTS_X; // min size in 'x'.
+            if (!sby) sby = by;     // max size in 'y'.
+            if (!sbz) sbz = bz;     // max size in 'z'.
 
-        // Determine num block-groups.
-        // Also fix up block-group sizes as needed.
-        // TODO: only print this if block-grouping is enabled.
-        os << "\nBlock-groups:" << endl;
-        idx_t nbgw = findNumBlockGroupsInRegion(os, bgw, rw, bw, "w");
-        idx_t nbgx = findNumBlockGroupsInRegion(os, bgx, rx, bx, "x");
-        idx_t nbgy = findNumBlockGroupsInRegion(os, bgy, ry, by, "y");
-        idx_t nbgz = findNumBlockGroupsInRegion(os, bgz, rz, bz, "z");
-        idx_t nbg = nbt * nbgw * nbgx * nbgy * nbgz;
-        os << " num-block-groups-per-region: " << nbg << endl;
-        nbw = findNumBlocksInBlockGroup(os, bw, bgw, CPTS_W, "w");
-        nbx = findNumBlocksInBlockGroup(os, bx, bgx, CPTS_X, "x");
-        nby = findNumBlocksInBlockGroup(os, by, bgy, CPTS_Y, "y");
-        nbz = findNumBlocksInBlockGroup(os, bz, bgz, CPTS_Z, "z");
-        nb = nbw * nbx * nby * nbz;
-        os << " num-blocks-per-block-group: " << nb << endl;
+            // Determine num sub-blocks.
+            // Also fix up sub-block sizes as needed.
+            os << "\nSub-blocks:" << endl;
+            idx_t nsbt = findNumSubBlocksInBlock(os, sbt, bt, CPTS_T, "t");
+            idx_t nsbw = findNumSubBlocksInBlock(os, sbw, bw, CPTS_W, "w");
+            idx_t nsbx = findNumSubBlocksInBlock(os, sbx, bx, CPTS_X, "x");
+            idx_t nsby = findNumSubBlocksInBlock(os, sby, by, CPTS_Y, "y");
+            idx_t nsbz = findNumSubBlocksInBlock(os, sbz, bz, CPTS_Z, "z");
+            idx_t nsb = nsbt * nsbw * nsbx * nsby * nsbz;
+            os << " num-sub-blocks-per-block: " << nsb << endl;
 
-        // Adjust defaults for sub-blocks to be y-z slab.
-        if (!sbw) sbw = CPTS_W;
-        if (!sbx) sbx = CPTS_X;
-        if (!sby) sby = by;
-        if (!sbz) sbz = bz;
+            // Now, we adjust groups. These are done after all the above sizes
+            // because group sizes are more like 'guidelines' and don't have
+            // their own loops.
+            os << "\nGroups:" << endl;
+        
+            // Adjust defaults for block-groups to be size of block.
+            if (!bgw) bgw = bw;
+            if (!bgx) bgx = bx;
+            if (!bgy) bgy = by;
+            if (!bgz) bgz = bz;
 
-        // Determine num sub-blocks.
-        // Also fix up sub-block sizes as needed.
-        os << "\nSub-blocks:" << endl;
-        idx_t nsbt = findNumSubBlocksInBlock(os, sbt, bt, CPTS_T, "t");
-        idx_t nsbw = findNumSubBlocksInBlock(os, sbw, bw, CPTS_W, "w");
-        idx_t nsbx = findNumSubBlocksInBlock(os, sbx, bx, CPTS_X, "x");
-        idx_t nsby = findNumSubBlocksInBlock(os, sby, by, CPTS_Y, "y");
-        idx_t nsbz = findNumSubBlocksInBlock(os, sbz, bz, CPTS_Z, "z");
-        idx_t nsb = nsbt * nsbw * nsbx * nsby * nsbz;
-        os << " num-sub-blocks-per-block: " << nsb << endl;
+            // Determine num block-groups.
+            // Also fix up block-group sizes as needed.
+            // TODO: only print this if block-grouping is enabled.
+            idx_t nbgw = findNumBlockGroupsInRegion(os, bgw, rw, bw, "w");
+            idx_t nbgx = findNumBlockGroupsInRegion(os, bgx, rx, bx, "x");
+            idx_t nbgy = findNumBlockGroupsInRegion(os, bgy, ry, by, "y");
+            idx_t nbgz = findNumBlockGroupsInRegion(os, bgz, rz, bz, "z");
+            idx_t nbg = nbt * nbgw * nbgx * nbgy * nbgz;
+            os << " num-block-groups-per-region: " << nbg << endl;
+            nbw = findNumBlocksInBlockGroup(os, bw, bgw, CPTS_W, "w");
+            nbx = findNumBlocksInBlockGroup(os, bx, bgx, CPTS_X, "x");
+            nby = findNumBlocksInBlockGroup(os, by, bgy, CPTS_Y, "y");
+            nbz = findNumBlocksInBlockGroup(os, bz, bgz, CPTS_Z, "z");
+            nb = nbw * nbx * nby * nbz;
+            os << " num-blocks-per-block-group: " << nb << endl;
 
-        // Adjust defaults for sub-block-groups to be size of sub-block.
-        if (!sbgw) sbgw = sbw;
-        if (!sbgx) sbgx = sbx;
-        if (!sbgy) sbgy = sby;
-        if (!sbgz) sbgz = sbz;
+            // Adjust defaults for sub-block-groups to be size of sub-block.
+            if (!sbgw) sbgw = sbw;
+            if (!sbgx) sbgx = sbx;
+            if (!sbgy) sbgy = sby;
+            if (!sbgz) sbgz = sbz;
 
-        // Determine num sub-block-groups.
-        // Also fix up sub-block-group sizes as needed.
-        // TODO: only print this if sub-block-grouping is enabled.
-        os << "\nSub-block-groups:" << endl;
-        idx_t nsbgw = findNumSubBlockGroupsInBlock(os, sbgw, bw, sbw, "w");
-        idx_t nsbgx = findNumSubBlockGroupsInBlock(os, sbgx, bx, sbx, "x");
-        idx_t nsbgy = findNumSubBlockGroupsInBlock(os, sbgy, by, sby, "y");
-        idx_t nsbgz = findNumSubBlockGroupsInBlock(os, sbgz, bz, sbz, "z");
-        idx_t nsbg = nsbgw * nsbgx * nsbgy * nsbgz;
-        os << " num-sub-block-groups-per-block: " << nsbg << endl;
-        nsbw = findNumSubBlocksInSubBlockGroup(os, sbw, sbgw, CPTS_W, "w");
-        nsbx = findNumSubBlocksInSubBlockGroup(os, sbx, sbgx, CPTS_X, "x");
-        nsby = findNumSubBlocksInSubBlockGroup(os, sby, sbgy, CPTS_Y, "y");
-        nsbz = findNumSubBlocksInSubBlockGroup(os, sbz, sbgz, CPTS_Z, "z");
-        nsb = nsbw * nsbx * nsby * nsbz;
-        os << " num-sub-blocks-per-sub-block-group: " << nsb << endl;
-    }
+            // Determine num sub-block-groups.
+            // Also fix up sub-block-group sizes as needed.
+            // TODO: only print this if sub-block-grouping is enabled.
+            idx_t nsbgw = findNumSubBlockGroupsInBlock(os, sbgw, bw, sbw, "w");
+            idx_t nsbgx = findNumSubBlockGroupsInBlock(os, sbgx, bx, sbx, "x");
+            idx_t nsbgy = findNumSubBlockGroupsInBlock(os, sbgy, by, sby, "y");
+            idx_t nsbgz = findNumSubBlockGroupsInBlock(os, sbgz, bz, sbz, "z");
+            idx_t nsbg = nsbgw * nsbgx * nsbgy * nsbgz;
+            os << " num-sub-block-groups-per-block: " << nsbg << endl;
+            nsbw = findNumSubBlocksInSubBlockGroup(os, sbw, sbgw, CPTS_W, "w");
+            nsbx = findNumSubBlocksInSubBlockGroup(os, sbx, sbgx, CPTS_X, "x");
+            nsby = findNumSubBlocksInSubBlockGroup(os, sby, sbgy, CPTS_Y, "y");
+            nsbz = findNumSubBlocksInSubBlockGroup(os, sbz, sbgz, CPTS_Z, "z");
+            nsb = nsbw * nsbx * nsby * nsbz;
+            os << " num-sub-blocks-per-sub-block-group: " << nsb << endl;
+        }
 
 } // namespace yask.
