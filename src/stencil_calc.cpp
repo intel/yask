@@ -1682,7 +1682,7 @@ namespace yask {
             "  Num threads per region = max_threads / thread_divisor / block_threads.\n"
             "  Num threads per block = block_threads.\n"
             "  Num threads per sub-block = 1.\n"
-            "  Num threads used for halo exchange is same as num per region.\n"
+            "  Num threads used for halo exchange is same as num per region.\n" <<
 #ifdef USE_MPI
             "Controlling MPI scaling:\n"
             "  To 'weak-scale' to a larger overall-problem size, use multiple MPI ranks\n"
