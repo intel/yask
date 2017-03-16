@@ -211,6 +211,9 @@ namespace yask {
                   ", z=" << begin_dz << ".." << (end_dz-1) <<
                   ")");
 
+        // Set number of threads for a region.
+        set_region_threads();
+
         // Number of iterations to get from begin_dt to (but not including) end_dt,
         // stepping by step_dt.
         const idx_t num_dt = ((end_dt - begin_dt) + (step_dt - 1)) / step_dt;
@@ -263,6 +266,9 @@ namespace yask {
             }
 
         }
+
+        // Reset threads back to max.
+        set_all_threads();
 
 #ifdef MODEL_CACHE
         // Print cache stats, then disable.
@@ -361,9 +367,6 @@ namespace yask {
                         end_ry > begin_ry &&
                         end_rz > begin_rz) {
 
-                        // Set number of threads for a region.
-                        set_region_threads();
-
                         // Include automatically-generated loop code that
                         // calls calc_block() for each block in this region.
                         // Loops through w from begin_rw to end_rw-1;
@@ -371,8 +374,6 @@ namespace yask {
                         // contains the outer OpenMP loop(s).
 #include "stencil_region_loops.hpp"
 
-                        // Reset threads back to max.
-                        set_all_threads();
                     }
             
                     // Shift spatial region boundaries for next iteration to
@@ -420,6 +421,7 @@ namespace yask {
         const idx_t group_size_bz = opts.sbgz;
 
         // Set number of threads for a block.
+        // This should be nested within a top-level OpenMP task.
         _generic_context->set_block_threads();
 
         // Include automatically-generated loop code that calls
@@ -1412,6 +1414,7 @@ namespace yask {
 
                              // Define calc_halo to copy data between main grid and MPI buffer.
                              // Add a short loop in z-dim to increase work done in halo loop.
+                             // Use 'index_*' vars to access buffers because they are always 0-based.
 #define calc_halo(t,                                                    \
                   start_wv, start_xv, start_yv, start_zv,               \
                   stop_wv, stop_xv, stop_yv, stop_zv)  do {             \
@@ -1421,8 +1424,9 @@ namespace yask {
                                  idx_t izv = index_zv * step_zv;        \
                                  if (hi == halo_isend) {                \
                                      for (idx_t zv = start_zv; zv < stop_zv; zv++) { \
-                                         real_vec_t hval = gp->readVecNorm_TWXYZ(t, wv, xv, yv, zv, \
-                                                                                 __LINE__); \
+                                         real_vec_t hval =              \
+                                             gp->readVecNorm_TWXYZ(t, wv, xv, yv, zv, \
+                                                                   __LINE__); \
                                          sendBuf->writeVecNorm(hval, index_wv, index_xv, index_yv, izv++, \
                                                                __LINE__); \
                                      }                                  \
@@ -1675,9 +1679,10 @@ namespace yask {
             "  hyper-threads used without having to know the number of cores,\n"
             "  e.g., using '-thread_divisor 2' will halve the number of OpenMP threads.\n"
             " For stencil evaluation, threads are allocated using nested OpenMP:\n"
-            "  Num blocks evaluated in parallel = max_threads / thread_divisor / block_threads.\n"
+            "  Num threads per region = max_threads / thread_divisor / block_threads.\n"
             "  Num threads per block = block_threads.\n"
-            "  Num threads per sub-block = 1.\n" <<
+            "  Num threads per sub-block = 1.\n"
+            "  Num threads used for halo exchange is same as num per region.\n"
 #ifdef USE_MPI
             "Controlling MPI scaling:\n"
             "  To 'weak-scale' to a larger overall-problem size, use multiple MPI ranks\n"
