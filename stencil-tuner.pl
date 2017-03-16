@@ -474,7 +474,7 @@ if ( !@folds ) {
 
 # OMP.
 my @schedules =
-  ( 'static', 'dynamic', 'guided' );
+  ( 'static,1', 'dynamic,1', 'guided,1' );
 
 # Data structure to describe each gene in the genome.
 # 2-D array. Each outer array element contains the following elements:
@@ -565,7 +565,8 @@ if ($doBuild) {
 
      # other build options.
      [ 0, 100, 1, 'exprSize' ],          # expression-size threshold.
-     [ 0, $#schedules, 1, 'ompSchedule' ], # OMP for schedule.
+     [ 0, $#schedules, 1, 'ompSchedule' ], # OMP schedule for region loop.
+     [ 0, $#schedules, 1, 'ompBlockSchedule' ], # OMP schedule for block loop.
 
     );
 }
@@ -1240,6 +1241,7 @@ sub fitness {
   my $pfdl1 = readHash($h, 'pfdl1', 1);
   my $pfdl2 = readHash($h, 'pfdl2', 1);
   my $ompSchedule = readHash($h, 'ompSchedule', 1);
+  my $ompBlockSchedule = readHash($h, 'ompBlockSchedule', 1);
 
   # fold numbers.
   my $foldNums = $folds[$fold];
@@ -1384,6 +1386,7 @@ sub fitness {
 
   # OMP settings.
   my $scheduleStr = $schedules[$ompSchedule];
+  my $blockScheduleStr = $schedules[$ompBlockSchedule];
 
   # compile-time settings.
   my $macros = '';
@@ -1426,7 +1429,7 @@ sub fitness {
   }
 
   # other vars.
-  $mvars .= " omp_schedule=$scheduleStr expr_size=$exprSize";
+  $mvars .= " omp_schedule=$scheduleStr omp_block_schedule=$blockScheduleStr expr_size=$exprSize";
   $mvars .= " mpi=1" if $nranks > 1;
 
   # how to make.
