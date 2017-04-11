@@ -83,6 +83,10 @@ struct AppSettings : public StencilSettings {
         }
     };
 
+#ifndef DEF_ARGS
+#define DEF_ARGS ""
+#endif
+    
     // Parse options from the command-line and set corresponding vars.
     // Exit with message on error or request for help.
     void parse(int argc, char** argv) {
@@ -115,6 +119,7 @@ struct AppSettings : public StencilSettings {
         // Parse cmd-line options.
         // Any remaining strings will be left in args.
         vector<string> args;
+        parser.set_args(DEF_ARGS, args);
         parser.parse_args(argc, argv, args);
 
         if (help) {
@@ -152,6 +157,7 @@ struct AppSettings : public StencilSettings {
             "\nStencil name: " YASK_STENCIL_NAME << endl;
 
         // Echo invocation parameters for record-keeping.
+        os << "Default arguments: " DEF_ARGS << endl;
         os << "Invocation:";
         for (int argi = 0; argi < argc; argi++)
             os << " " << argv[argi];

@@ -343,6 +343,9 @@ namespace yask {
             parse_args(pgmName, args);
         }
 
+        // Tokenize args from a string.
+        virtual void set_args(std::string arg_string,
+                              std::vector<std::string>& args);
     };
 }
 

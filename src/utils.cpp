@@ -365,5 +365,44 @@ namespace yask {
         // Return unused args in args var.
         args.swap(non_args);
     }
-    
+
+    // Tokenize args from a string.
+    void CommandLineParser::set_args(std::string arg_string,
+                                     std::vector<std::string>& args) {
+        string tmp;
+        bool in_quotes = false;
+        for (char c : arg_string) {
+
+            // If WS, start a new string unless in quotes.
+            if (isspace(c)) {
+                if (in_quotes)
+                    tmp += c;
+                else {
+                    if (tmp.length())
+                        args.push_back(tmp);
+                    tmp.clear();
+                }
+            }
+
+            // If quote, start or end quotes.
+            else if (c == '"') {
+                if (in_quotes) {
+                    if (tmp.length())
+                        args.push_back(tmp);
+                    tmp.clear();
+                    in_quotes = false;
+                }
+                else
+                    in_quotes = true;
+            }
+
+            // Otherwise, just add to tmp.
+            else
+                tmp += c;
+        }
+
+        // Last string.
+        if (tmp.length())
+            args.push_back(tmp);
+    }
 }
