@@ -49,14 +49,15 @@ my $oneG = 1e9;
 my $oneT = 1e12;
 
 # command-line options.
+my $stencil;             # type of stencil.
+my $arch;                # target architecture.
+my $sweep = 0;           # if true, sweep instead of search.
 my $testing = 0;         # if true, don't run real trials.
 my $checking = 0;        # if true, don't run at all.
 my $mic;                 # set to 0, 1, etc. for KNC mic.
 my $host;                # set to run on a different host.
 my $sde = 0;             # run under sde (for testing).
 my $sim = 0;             # run under any simulator/emulator.
-my $sweep = 0;           # sweep instead of search.
-my $stencil;             # type of stencil.
 my $radius;              # stencil radius.
 my $zLoop = 0;           # Force inner loop in 'z' direction.
 my $zLayout = 0;         # Force inner memory layout in 'z' direction.
@@ -69,7 +70,6 @@ my $makePrefix = '';     # prefix for make.
 my $runArgs = '';        # extra run arguments.
 my $maxGB = 16;          # max mem usage.
 my $minGB = 0;           # min mem usage.
-my $arch;                # target architecture.
 my $nranks = 1;          # num ranks.
 my $debugCheck = 0;      # print each initial check result.
 my $doBuild = 1;         # do compiles.
@@ -298,10 +298,6 @@ $dw = $isAve ? 40 : 1 if !defined $dw;     # 40 grids in miniGhost.
 # disable folding for DP MIC (no valignq).
 $folding = 0 if (defined $mic && $dp);
 
-# date.
-my $date=`date +%Y-%m-%d_%H-%M`;
-chomp $date;
-
 # clean up restrictions.
 for my $key (keys %geneRanges) {
 
@@ -313,8 +309,11 @@ for my $key (keys %geneRanges) {
 }
 
 # csv filename.
-my $searchTypeStr = $sweep ? 'sweep' : 'search';
-my $outFile = "stencil-$searchTypeStr.$date.csv";
+my $searchTypeStr = $sweep ? '-sweep' : '';
+my $hostStr = defined $host ? $host : hostname();
+my $timeStamp=`date +%Y-%m-%d_%H-%M-%S`;
+chomp $timeStamp;
+my $outFile = "stencil-tuner$searchTypeStr.$stencil.$arch.$hostStr.$timeStamp.csv";
 print "Output will be saved in '$outFile'.\n";
 $outFile = '/dev/null' if $checking;
 
