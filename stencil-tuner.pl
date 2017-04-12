@@ -410,43 +410,6 @@ push  @loopOrders,
 my @pathNames =
   ('', 'serpentine', 'square_wave serpentine', 'grouped');
 
-# Possible loops for various levels.
-# D0..D3 will get replaced by bv..bz, but not necessarily in that order.
-# Modifier placeholders 'PATH*' and 'SBMOD' will be removed or changed
-# based on relevant genes.
-
-# List of possible block-loop templates.
-# This is the loop taken by each nested OpenMP task.
-my @subBlockLoops =
-  (
-   "PATH0 loop(D0,D1,D2) { SBMOD loop(D3) { calc(cluster(begin_sbtv)); } }",
-   "PATH0 loop(D0,D1) { loop(D2) { SBMOD loop(D3) { calc(cluster(begin_sbtv)); } } }",
-  );
-
-# List of possible block-loop templates.
-# This is the loop that creates nested OpenMP tasks.
-# TODO: add other options.
-my @blockLoops =
-  (
-   "omp PATH1 loop(D0,D1,D2,D3) { calc(sub_block(bt)); }",
-  );
-
-# List of possible region loop templates.
-# This is the loop that creates outer OpenMP tasks.
-# TODO: add other options.
-my @regionLoops =
-  (
-   "omp PATH2 loop(D0,D1,D2,D3) { calc(block(rt)); }",
-  );
-
-# List of possible rank loop templates.
-# This is the loop that creates OpenMP regions.
-# TODO: add other options.
-my @rankLoops =
-  (
-   "PATH3 loop(D0,D1,D2,D3) { calc(region(start_dt, stop_dt, eqGroup_ptr)); }",
-  );
-
 # List of folds.
 # Start with inline in z only.
 if ( !@folds ) {
@@ -529,19 +492,13 @@ if ($doBuild) {
     (
 
      # Loops, from the list above.
-     # Each loop consists of the loop structure, index order, and path mods.
-     [ 0, $#subBlockLoops, 1, 'subBlockLoop' ],
-     [ 0, $#loopOrders, 1, 'subBlockLoopOrder' ],
-     [ 0, $#pathNames, 1, 'path0' ],
-     [ 0, $#blockLoops, 1, 'blockLoop' ],
-     [ 0, $#loopOrders, 1, 'blockLoopOrder' ],
-     [ 0, $#pathNames, 1, 'path1' ],
-     [ 0, $#regionLoops, 1, 'regionLoop' ],
-     [ 0, $#loopOrders, 1, 'regionLoopOrder' ],
-     [ 0, $#pathNames, 1, 'path2' ],
-     [ 0, $#rankLoops, 1, 'rankLoop' ],
-     [ 0, $#loopOrders, 1, 'rankLoopOrder' ],
-     [ 0, 0, 1, 'path3' ], # allow only incrementing-index path for rank.
+     # Each loop consists of index order and path mods.
+     [ 0, $#loopOrders, 1, 'subBlockOrder' ],
+     [ 0, $#pathNames, 1, 'subBlockPath' ],
+     [ 0, $#loopOrders, 1, 'blockOrder' ],
+     [ 0, $#pathNames, 1, 'blockPath' ],
+     [ 0, $#loopOrders, 1, 'regionOrder' ],
+     [ 0, $#pathNames, 1, 'regionPath' ],
 
      # how to shape vectors, from the list above.
      [ 0, $#folds, 1, 'fold' ],
@@ -554,9 +511,6 @@ if ($doBuild) {
      # 4D->1D layout, from the list above.
      [ 0, $#layouts, 1, 'layout' ],
 
-     # whether or not to allow pipelining.
-     #[ 0, 1, 1, 'pipe' ],
-
      # prefetch distances for l1 and l2.
      # all non-pos numbers => no prefetching, so ~50% chance of being enabled.
      [ -$maxPfdl1, $maxPfdl1, 1, 'pfdl1' ],
@@ -564,7 +518,7 @@ if ($doBuild) {
 
      # other build options.
      [ 0, 100, 1, 'exprSize' ],          # expression-size threshold.
-     [ 0, $#schedules, 1, 'ompSchedule' ], # OMP schedule for region loop.
+     [ 0, $#schedules, 1, 'ompRegionSchedule' ], # OMP schedule for region loop.
      [ 0, $#schedules, 1, 'ompBlockSchedule' ], # OMP schedule for block loop.
 
     );
@@ -1104,26 +1058,42 @@ sub evalIndiv($$$$$$$) {
   return $fitness, $results;
 }
 
-# return loop code.
-sub makeLoopCode($$$$$) {
+# return loop-ctrl vars.
+sub makeLoopVars($$$$$) {
   my $h = shift;
-  my $nameLong = shift;         # e.g., 'block'
+  my $makePrefix = shift;       # e.g., 'BLOCK'
+  my $tunerPrefix = shift;      # e.g., 'block'
   my $varPrefix = shift;        # e.g., 'b'
   my $varSuffix = shift;        # e.g., 'v'
-  my $types = shift;
 
-  my $order = readHash($h, $nameLong."LoopOrder", 1);
-  my $type = readHash($h, $nameLong."Loop", 1);
+  my $order = readHash($h, $tunerPrefix."Order", 1);
+  my $orderStr = $loopOrders[$order];           # e.g., 'wxzy'.
+  my $path = readHash($h, $tunerPrefix."Path", 1);
+  my $pathStr = @pathNames[$path];                # e.g., 'grouped'.
 
-  my $dims = $loopOrders[$order]; # e.g., 'wyxz' (outer-to-inner).
-  my @dims = split '',$dims;      # e.g., ('w', 'y', 'x', 'z');
-  my $code = $types->[$type];     # e.g., 'loop(D0) { ... }'.
+  # dimension vars.
+  my @dims = split '',$orderStr;      # e.g., ('w', 'y', 'x', 'z');
   for my $ld (0..$#dims) {
-    $dims[$ld] = "$varPrefix$dims[$ld]$varSuffix"; # e.g., 'bnv'.
-    $code =~ s/D$ld/$dims[$ld]/g;   # e.g., replace 'D0' with 'bnv';
+    $dims[$ld] = "$varPrefix$dims[$ld]$varSuffix"; # e.g., 'bxv'.
   }
 
-  return $code;
+  # vars to create.
+  my $outerVars = '';
+  my $innerVars = '';
+
+  # special-case for sub-blocks.
+  if ($makePrefix eq 'SUB_BLOCK') {
+    $outerVars = join(',',@dims[0..$#dims-1]); # all but last one.
+    $innerVars = $dims[$#dims];                # just last one.
+  } else {
+    $outerVars = join(',',@dims); # all vars.
+  }
+  my $outerMods = $pathStr;
+
+  my $loopVars = " ".$makePrefix."_LOOP_OUTER_VARS='$outerVars'";
+  $loopVars .= " ".$makePrefix."_LOOP_OUTER_MODS='$outerMods'";
+  $loopVars .= " ".$makePrefix."_LOOP_INNER_VARS='$innerVars'";
+  return $loopVars;
 }
 
 # sanity-check vars.
@@ -1231,42 +1201,15 @@ sub fitness {
   my $exprSize = readHash($h, 'exprSize', 1);
   my $thread_divisor_exp = readHash($h, 'thread_divisor_exp', 0);
   my $bthreads_exp = readHash($h, 'bthreads_exp', 0);
-  my $pipe = 0; # readHash($h, 'pipe', 0);
-  my @paths = ( readHash($h, 'path0', 1),
-                readHash($h, 'path1', 1),
-                readHash($h, 'path2', 1),
-                readHash($h, 'path3', 1) );
   my $layout = readHash($h, 'layout', 1);
   my $pfdl1 = readHash($h, 'pfdl1', 1);
   my $pfdl2 = readHash($h, 'pfdl2', 1);
-  my $ompSchedule = readHash($h, 'ompSchedule', 1);
+  my $ompRegionSchedule = readHash($h, 'ompRegionSchedule', 1);
   my $ompBlockSchedule = readHash($h, 'ompBlockSchedule', 1);
 
   # fold numbers.
   my $foldNums = $folds[$fold];
   my @fs = split ' ', $foldNums;
-
-  # sub-block loops.
-  my $subBlockCode = makeLoopCode($h, 'subBlock', 'sb', 'v', \@subBlockLoops);
-  my $subBlockMods = '';
-  $subBlockMods .= 'pipeline ' if $pipe;
-  if ($pfdl1 > 0 && $pfdl2 > 0) {
-    $subBlockMods .= 'prefetch(L1,L2) ';
-  } elsif ($pfdl1 > 0) {
-    $subBlockMods .= 'prefetch(L1) ';
-  } elsif ($pfdl2 > 0) {
-    $subBlockMods .= 'prefetch(L2) ';
-  }
-  $subBlockCode =~ s/SBMOD/$subBlockMods/g;
-
-  # block loops.
-  my $blockCode = makeLoopCode($h, 'block', 'b', '', \@blockLoops);
-
-  # region loops.
-  my $regionCode = makeLoopCode($h, 'region', 'r', '', \@regionLoops);
-
-  # rank loops.
-  my $rankCode = makeLoopCode($h, 'rank', 'd', '', \@rankLoops);
 
   # vectors in cluster.
   my $cvs = mult(@cvs);
@@ -1384,12 +1327,12 @@ sub fitness {
   return $ok if $justChecking;
 
   # OMP settings.
-  my $scheduleStr = $schedules[$ompSchedule];
+  my $regionScheduleStr = $schedules[$ompRegionSchedule];
   my $blockScheduleStr = $schedules[$ompBlockSchedule];
 
   # compile-time settings.
-  my $macros = '';
-  my $mvars = '';
+  my $macros = '';              # string of macros.
+  my $mvars = '';               # other make vars.
 
   # layouts. 4D layout is selected by GA; then the corresponding 3D layout is
   # created from it by removing 't' and shifting the other 3 dims.
@@ -1416,19 +1359,23 @@ sub fitness {
   $mvars .= " fold=x=$fs[0],y=$fs[1],z=$fs[2]";
 
   # gen-loops vars.
-  $mvars .= " RANK_LOOP_CODE='$rankCode'".
-    " REGION_LOOP_CODE='$regionCode'".
-    " BLOCK_LOOP_CODE='$blockCode'".
-    " SUB_BLOCK_LOOP_CODE='$subBlockCode'";
+  $mvars .= makeLoopVars($h, 'REGION', 'region', 'r', '');
+  $mvars .= makeLoopVars($h, 'BLOCK', 'block', 'b', '');
+  $mvars .= makeLoopVars($h, 'SUB_BLOCK', 'subBlock', 'sb', 'v');
 
-  # substitute PATH* placeholders with actual path strings.
-  for my $pi (0..$#paths) {
-    my $pathName = $pathNames[$paths[$pi]];
-    $mvars =~ s/\bPATH$pi\b/$pathName/g;
+  # sub-block loops.
+  my $subBlockMods = '';
+  if ($pfdl1 > 0 && $pfdl2 > 0) {
+    $subBlockMods .= 'prefetch(L1,L2)';
+  } elsif ($pfdl1 > 0) {
+    $subBlockMods .= 'prefetch(L1)';
+  } elsif ($pfdl2 > 0) {
+    $subBlockMods .= 'prefetch(L2)';
   }
+  $mvars .= " SUB_BLOCK_LOOP_INNER_MODS='$subBlockMods'";
 
   # other vars.
-  $mvars .= " omp_schedule=$scheduleStr omp_block_schedule=$blockScheduleStr expr_size=$exprSize";
+  $mvars .= " omp_region_schedule=$regionScheduleStr omp_block_schedule=$blockScheduleStr expr_size=$exprSize";
   $mvars .= " mpi=1" if $nranks > 1;
 
   # how to make.

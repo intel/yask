@@ -26,7 +26,7 @@
 # Purpose: find best result from each GA search csv file.
 
 if ( "-$1" == "-" ) then
-    if ( `echo stencil-search.*.csv | wc -l` > 0 ) then
+    if ( `echo stencil-tuner*.csv | wc -l` > 0 ) then
         $0 stencil-search.*.csv
     else
         echo "usage: $0 <csv-file(s) from stencil-tuner>"

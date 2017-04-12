@@ -108,8 +108,8 @@ namespace yask {
         // Sizes in elements (points).
         // - time sizes (t) are in steps to be done.
         // - spatial sizes (w, x, y, z) are in elements (not vectors).
-        // Sizes are the same for all grids. TODO: relax this restriction.
-        idx_t dt=1, dw=0, dx=0, dy=0, dz=0; // rank size (without halos).
+        // Sizes are the same for all grids.
+        idx_t dt=50, dw=1, dx=100, dy=100, dz=100; // rank size (without halos).
         idx_t rt=1, rw=0, rx=0, ry=0, rz=0; // region size (used for wave-front tiling).
         idx_t bgw=0, bgx=0, bgy=0, bgz=0; // block-group size (only used for 'grouped' region loops).
         idx_t bt=1, bw=0, bx=0, by=0, bz=0; // block size (used for each outer thread).
@@ -124,18 +124,12 @@ namespace yask {
         int msg_rank=0;             // rank that prints informational messages.
 
         // OpenMP settings.
-        int max_threads=1;       // Initial number of threads to use overall.
-        int thread_divisor;    // Reduce number of threads by this amount.
-        int num_block_threads; // Number of threads to use for a block.
+        int max_threads;        // Initial number of threads to use overall.
+        int thread_divisor=1;   // Reduce number of threads by this amount.
+        int num_block_threads=1; // Number of threads to use for a block.
 
         // Ctor.
-        StencilSettings() :
-            dt(50), dw(1), dx(DEF_RANK_SIZE), dy(DEF_RANK_SIZE), dz(DEF_RANK_SIZE),
-            bt(1), bw(1), bx(DEF_BLOCK_SIZE), by(DEF_BLOCK_SIZE), bz(DEF_BLOCK_SIZE),
-            pw(0), px(DEF_PAD), py(DEF_PAD), pz(DEF_PAD),
-            thread_divisor(DEF_THREAD_DIVISOR),
-            num_block_threads(DEF_BLOCK_THREADS)
-        {
+        StencilSettings() {
             max_threads = omp_get_max_threads();
         }
 
