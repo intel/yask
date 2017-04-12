@@ -126,14 +126,14 @@ else ifneq ($(findstring awp,$(stencil)),)
   def_block_threads		=	4
   def_block_args		=	-b 48 -bx 112
  else ifeq ($(arch),hsw)
-  REGION_LOOP_OUTER_VARS		=	rw,ry,rx,rz
+  REGION_LOOP_OUTER_VARS	=	rw,ry,rx,rz
   SUB_BLOCK_LOOP_INNER_MODS	=	prefetch(L1,L2)
   omp_block_schedule		=	dynamic,1
   ifeq ($(real_bytes),4)
    fold				=	x=4,y=2,z=1
   endif
   cluster			=	x=2
-  def_block_args			=	-bx 8 -by 28 -bz 70
+  def_block_args		=	-bx 8 -by 28 -bz 70
   more_def_args			+=	-sbx 8 -sby 18 -sbz 40
  else ifeq ($(arch),skx)
   ifeq ($(real_bytes),4)
