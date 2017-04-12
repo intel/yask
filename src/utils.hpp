@@ -135,15 +135,35 @@ namespace yask {
                                 idx_t& inner_size, const std::string& inner_name,
                                 idx_t outer_size, const std::string& outer_name,
                                 idx_t mult, const std::string& dim);
-    inline idx_t findNumBlocks(std::ostream& os, idx_t& bsize, idx_t rsize,
+    inline idx_t findNumSubBlocksInBlock(std::ostream& os, idx_t& sbsize, idx_t bsize,
+                                         idx_t mult, const std::string& dim) {
+        return findNumSubsets(os, sbsize, "sub-block", bsize, "block", mult, dim);
+    }
+    inline idx_t findNumSubBlocksInSubBlockGroup(std::ostream& os, idx_t& sbsize, idx_t sbgsize,
+                                                 idx_t mult, const std::string& dim) {
+        return findNumSubsets(os, sbsize, "sub-block", sbgsize, "sub-block-group", mult, dim);
+    }
+    inline idx_t findNumSubBlockGroupsInBlock(std::ostream& os, idx_t& sbgsize, idx_t bsize,
+                                              idx_t mult, const std::string& dim) {
+        return findNumSubsets(os, sbgsize, "sub-block-group", bsize, "block", mult, dim);
+    }
+    inline idx_t findNumBlocksInDomain(std::ostream& os, idx_t& bsize, idx_t dsize,
+                                       idx_t mult, const std::string& dim) {
+        return findNumSubsets(os, bsize, "block", dsize, "rank-domain", mult, dim);
+    }
+    inline idx_t findNumBlocksInRegion(std::ostream& os, idx_t& bsize, idx_t rsize,
                                idx_t mult, const std::string& dim) {
         return findNumSubsets(os, bsize, "block", rsize, "region", mult, dim);
     }
-    inline idx_t findNumGroups(std::ostream& os, idx_t& gsize, idx_t rsize,
-                               idx_t mult, const std::string& dim) {
-        return findNumSubsets(os, gsize, "group", rsize, "region", mult, dim);
+    inline idx_t findNumBlocksInBlockGroup(std::ostream& os, idx_t& bsize, idx_t gsize,
+                                      idx_t mult, const std::string& dim) {
+        return findNumSubsets(os, bsize, "block", gsize, "block-group", mult, dim);
     }
-    inline idx_t findNumRegions(std::ostream& os, idx_t& rsize, idx_t dsize,
+    inline idx_t findNumBlockGroupsInRegion(std::ostream& os, idx_t& gsize, idx_t rsize,
+                               idx_t mult, const std::string& dim) {
+        return findNumSubsets(os, gsize, "block-group", rsize, "region", mult, dim);
+    }
+    inline idx_t findNumRegionsInDomain(std::ostream& os, idx_t& rsize, idx_t dsize,
                                 idx_t mult, const std::string& dim) {
         return findNumSubsets(os, rsize, "region", dsize, "rank-domain", mult, dim);
     }
@@ -323,6 +343,9 @@ namespace yask {
             parse_args(pgmName, args);
         }
 
+        // Tokenize args from a string.
+        virtual void set_args(std::string arg_string,
+                              std::vector<std::string>& args);
     };
 }
 

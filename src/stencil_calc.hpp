@@ -33,12 +33,12 @@ IN THE SOFTWARE.
 // Stencil types.
 #include "stencil.hpp"
 
-// Macro for automatically adding N dimension's arg.
+// Macro for automatically adding W dimension's arg.
 // TODO: make all args programmatic.
-#if USING_DIM_N
-#define ARG_N(n) n,
+#if USING_DIM_W
+#define ARG_W(w) w,
 #else
-#define ARG_N(n)
+#define ARG_W(w)
 #endif
 
 namespace yask {
@@ -61,7 +61,7 @@ namespace yask {
         enum BufDir { bufSend, bufRec, nBufDirs };
 
         // A type to store buffers for all possible neighbors.
-        typedef Grid_NXYZ* NeighborBufs[nBufDirs][num_neighbors][num_neighbors][num_neighbors][num_neighbors];
+        typedef Grid_WXYZ* NeighborBufs[nBufDirs][num_neighbors][num_neighbors][num_neighbors][num_neighbors];
         NeighborBufs bufs;
 
         MPIBufs() {
@@ -69,35 +69,36 @@ namespace yask {
         }
 
         // Access a buffer by direction and 4D neighbor indices.
-        Grid_NXYZ** getBuf(int bd,
-                          idx_t nn, idx_t nx, idx_t ny, idx_t nz) {
+        Grid_WXYZ** getBuf(int bd,
+                           idx_t nw, idx_t nx, idx_t ny, idx_t nz) {
             assert(bd >= 0);
             assert(bd < nBufDirs);
-            assert(nn >= 0);
-            assert(nn < num_neighbors);
+            assert(nw >= 0);
+            assert(nw < num_neighbors);
             assert(nx >= 0);
             assert(nx < num_neighbors);
             assert(ny >= 0);
             assert(ny < num_neighbors);
             assert(nz >= 0);
-            assert(nn < num_neighbors);
-            return &bufs[bd][nn][nx][ny][nz];
+            assert(nz < num_neighbors);
+            return &bufs[bd][nw][nx][ny][nz];
         }
 
         // Apply a function to each neighbor rank.
         // Called visitor function will contain the rank index of the neighbor.
         // The send and receive buffer pointers may be null if 'null_ok' is true.
+        // TODO: remove 'null_ok' when non-symmetrical halos are supported.
         virtual void visitNeighbors(StencilContext& context,
                                     bool null_ok,
-                                    std::function<void (idx_t nn, idx_t nx, idx_t ny, idx_t nz,
+                                    std::function<void (idx_t nw, idx_t nx, idx_t ny, idx_t nz,
                                                         int rank,
-                                                        Grid_NXYZ* sendBuf,
-                                                        Grid_NXYZ* rcvBuf)> visitor);
+                                                        Grid_WXYZ* sendBuf,
+                                                        Grid_WXYZ* rcvBuf)> visitor);
             
         // Create new buffer in given direction and size.
-        virtual Grid_NXYZ* makeBuf(int bd,
-                                   idx_t nn, idx_t nx, idx_t ny, idx_t nz,
-                                   idx_t dn, idx_t dx, idx_t dy, idx_t dz,
+        virtual Grid_WXYZ* makeBuf(int bd,
+                                   idx_t nw, idx_t nx, idx_t ny, idx_t nz,
+                                   idx_t dw, idx_t dx, idx_t dy, idx_t dz,
                                    const std::string& name);
     };
 
@@ -106,33 +107,29 @@ namespace yask {
 
         // Sizes in elements (points).
         // - time sizes (t) are in steps to be done.
-        // - spatial sizes (n, x, y, z) are in elements (not vectors).
-        // Sizes are the same for all grids. TODO: relax this restriction.
-        idx_t dt=1, dn=0, dx=0, dy=0, dz=0; // rank size (without halos).
-        idx_t rt=1, rn=0, rx=0, ry=0, rz=0; // region size (used for wave-front tiling).
-        idx_t bt=1, bn=0, bx=0, by=0, bz=0; // block size (used for cache locality).
-        idx_t gn=0, gx=0, gy=0, gz=0;     // group-of-blocks size (only used for 'grouped' loop paths).
-        idx_t pn=0, px=0, py=0, pz=0;     // spatial padding (in addition to halos, to avoid aliasing).
+        // - spatial sizes (w, x, y, z) are in elements (not vectors).
+        // Sizes are the same for all grids.
+        idx_t dt=50, dw=1, dx=100, dy=100, dz=100; // rank size (without halos).
+        idx_t rt=1, rw=0, rx=0, ry=0, rz=0; // region size (used for wave-front tiling).
+        idx_t bgw=0, bgx=0, bgy=0, bgz=0; // block-group size (only used for 'grouped' region loops).
+        idx_t bt=1, bw=0, bx=0, by=0, bz=0; // block size (used for each outer thread).
+        idx_t sbgw=0, sbgx=0, sbgy=0, sbgz=0; // sub-block-group size (only used for 'grouped' block loops).
+        idx_t sbt=1, sbw=0, sbx=0, sby=0, sbz=0; // sub-block size (used for each nested thread).
+        idx_t pw=0, px=0, py=0, pz=0;     // spatial padding (in addition to halos, to avoid aliasing).
 
         // MPI settings.
-        idx_t nrn=1, nrx=1, nry=1, nrz=1; // number of ranks in each dim.
-        idx_t rin=0, rix=0, riy=0, riz=0; // my rank index in each dim.
+        idx_t nrw=1, nrx=1, nry=1, nrz=1; // number of ranks in each dim.
+        idx_t riw=0, rix=0, riy=0, riz=0; // my rank index in each dim.
         bool find_loc=true;            // whether my rank index needs to be calculated.
         int msg_rank=0;             // rank that prints informational messages.
 
         // OpenMP settings.
-        int max_threads=1;       // Initial number of threads to use overall.
-        int thread_divisor;    // Reduce number of threads by this amount.
-        int num_block_threads; // Number of threads to use for a block.
+        int max_threads;        // Initial number of threads to use overall.
+        int thread_divisor=1;   // Reduce number of threads by this amount.
+        int num_block_threads=1; // Number of threads to use for a block.
 
         // Ctor.
-        StencilSettings() :
-            dt(50), dn(1), dx(DEF_RANK_SIZE), dy(DEF_RANK_SIZE), dz(DEF_RANK_SIZE),
-            bt(1), bn(1), bx(DEF_BLOCK_SIZE), by(DEF_BLOCK_SIZE), bz(DEF_BLOCK_SIZE),
-            pn(0), px(DEF_PAD), py(DEF_PAD), pz(DEF_PAD),
-            thread_divisor(DEF_THREAD_DIVISOR),
-            num_block_threads(DEF_BLOCK_THREADS)
-        {
+        StencilSettings() {
             max_threads = omp_get_max_threads();
         }
 
@@ -153,9 +150,9 @@ namespace yask {
     
     // A 4D bounding-box.
     struct BoundingBox {
-        idx_t begin_bbn=0, begin_bbx=0, begin_bby=0, begin_bbz=0;
-        idx_t end_bbn=1, end_bbx=1, end_bby=1, end_bbz=1; // one past last value.
-        idx_t len_bbn=1, len_bbx=1, len_bby=1, len_bbz=1;
+        idx_t begin_bbw=0, begin_bbx=0, begin_bby=0, begin_bbz=0;
+        idx_t end_bbw=1, end_bbx=1, end_bby=1, end_bbz=1; // one past last value.
+        idx_t len_bbw=1, len_bbx=1, len_bby=1, len_bbz=1;
         idx_t bb_size=1;        // points in the entire box.
         idx_t bb_num_points=1;  // valid points within the box.
         bool bb_simple=true;    // full box with vector-length sizes.
@@ -165,11 +162,11 @@ namespace yask {
 
         // Find lengths and set valid to true.
         virtual void update_lengths() {
-            len_bbn = end_bbn - begin_bbn;
+            len_bbw = end_bbw - begin_bbw;
             len_bbx = end_bbx - begin_bbx;
             len_bby = end_bby - begin_bby;
             len_bbz = end_bbz - begin_bbz;
-            bb_size = len_bbn * len_bbx * len_bby * len_bbz;
+            bb_size = len_bbw * len_bbx * len_bby * len_bbz;
             bb_valid = true;
         }
     };
@@ -248,27 +245,29 @@ namespace yask {
         ParamPtrMap paramMap;
 
         // Some calculated sizes.
-        idx_t ofs_t=0, ofs_n=0, ofs_x=0, ofs_y=0, ofs_z=0; // Index offsets for this rank.
-        idx_t tot_n=0, tot_x=0, tot_y=0, tot_z=0; // Total of rank domains over all ranks.
+        idx_t ofs_t=0, ofs_w=0, ofs_x=0, ofs_y=0, ofs_z=0; // Index offsets for this rank.
+        idx_t tot_w=0, tot_x=0, tot_y=0, tot_z=0; // Total of rank domains over all ranks.
 
         // Maximum halos and skewing angles over all grids and
         // equations. Used for calculating worst-case minimum regions.
-        idx_t hn=0, hx=0, hy=0, hz=0;                     // spatial halos.
-        idx_t angle_n=0, angle_x=0, angle_y=0, angle_z=0; // temporal skewing angles.
+        idx_t hw=0, hx=0, hy=0, hz=0;                     // spatial halos.
+        idx_t angle_w=0, angle_x=0, angle_y=0, angle_z=0; // temporal skewing angles.
 
         // Various metrics calculated in allocAll().
         // 'rank_' prefix indicates for this rank.
         // 'tot_' prefix indicates over all ranks.
-        // 'numpts' indicates points actually calculated in sub-domains.
         // 'domain' indicates points in domain-size specified on cmd-line.
+        // 'numpts' indicates points actually calculated in sub-domains.
+        // 'reads' indicates points actually read by eq-groups.
         // 'numFpOps' indicates est. number of FP ops.
         // 'nbytes' indicates number of bytes allocated.
         // '_1t' suffix indicates work for one time-step.
         // '_dt' suffix indicates work for all time-steps.
-        idx_t rank_numpts_1t, rank_numpts_dt, tot_numpts_1t, tot_numpts_dt;
-        idx_t rank_domain_1t, rank_domain_dt, tot_domain_1t, tot_domain_dt;
-        idx_t rank_numFpOps_1t, rank_numFpOps_dt, tot_numFpOps_1t, tot_numFpOps_dt;
-        idx_t rank_nbytes, tot_nbytes;
+        idx_t rank_domain_1t=0, rank_domain_dt=0, tot_domain_1t=0, tot_domain_dt=0;
+        idx_t rank_numpts_1t=0, rank_numpts_dt=0, tot_numpts_1t=0, tot_numpts_dt=0;
+        idx_t rank_reads_1t=0, rank_reads_dt=0, tot_reads_1t=0, tot_reads_dt=0;
+        idx_t rank_numFpOps_1t=0, rank_numFpOps_dt=0, tot_numFpOps_1t=0, tot_numFpOps_dt=0;
+        idx_t rank_nbytes=0, tot_nbytes=0;
         
         // MPI environment.
         MPI_Comm comm=0;
@@ -399,6 +398,7 @@ namespace yask {
         }
 
         // Set number of threads for a block.
+        // Return that number.
         virtual int set_block_threads() {
 
             // This should be a nested OMP region.
@@ -420,12 +420,15 @@ namespace yask {
         // Vectorized and blocked stencil calculations.
         virtual void calc_rank_opt();
 
-        // Calculate results within a region.
-        // TODO: create a public interface w/a more logical index ordering.
+        // Calculate results within a region.  Boundaries are named start_d*
+        // and stop_d* because region loops are nested inside the
+        // rank-domain loops; the actual begin_r* and end_r* values for the
+        // region are derived from these.  TODO: create a public interface
+        // w/a more logical index ordering.
         virtual void calc_region(idx_t start_dt, idx_t stop_dt,
                                  EqGroupSet* eqGroup_set,
-                                 idx_t start_dn, idx_t start_dx, idx_t start_dy, idx_t start_dz,
-                                 idx_t stop_dn, idx_t stop_dx, idx_t stop_dy, idx_t stop_dz);
+                                 idx_t start_dw, idx_t start_dx, idx_t start_dy, idx_t start_dz,
+                                 idx_t stop_dw, idx_t stop_dx, idx_t stop_dy, idx_t stop_dz);
 
         // Exchange halo data needed by eq-group 'eg' at the given time.
         virtual void exchange_halos(idx_t start_dt, idx_t stop_dt, EqGroupBase& eg);
@@ -451,7 +454,14 @@ namespace yask {
     // A pure-virtual class base for a stencil equation-set.
     class EqGroupBase : public BoundingBox {
     protected:
-        StencilContext* _generic_context;
+        StencilContext* _generic_context = 0;
+        std::string _name;
+        int _scalar_fp_ops = 0;
+        int _scalar_points_read = 0;
+        int _scalar_points_written = 0;
+
+        // Eq-groups that this one depends on.
+        std::map<DepType, EqGroupSet> _depends_on;
         
     public:
 
@@ -463,98 +473,24 @@ namespace yask {
 
         // ctor, dtor.
         EqGroupBase(StencilContext* context) :
-            _generic_context(context) { }
-        virtual ~EqGroupBase() { }
-
-        // Get name of this equation set.
-        virtual const std::string& get_name() const =0;
-
-        // Get estimated number of FP ops done for one scalar eval.
-        virtual int get_scalar_fp_ops() const =0;
-
-        // Get number of points updated for one scalar eval.
-        virtual int get_scalar_points_updated() const =0;
-
-        // Set the bounding-box vars for this eq group in this rank.
-        virtual void find_bounding_box();
-
-        // Determine whether indices are in [sub-]domain.
-        virtual bool is_in_valid_domain(idx_t t, idx_t n, idx_t x, idx_t y, idx_t z) =0;
-
-        // Calculate one scalar result at time t.
-        virtual void calc_scalar(idx_t t, idx_t n, idx_t x, idx_t y, idx_t z) =0;
-
-        // Calculate one block of results from begin to end-1 on each dimension.
-        virtual void calc_block(idx_t bt,
-                                idx_t begin_bn, idx_t begin_bx, idx_t begin_by, idx_t begin_bz,
-                                idx_t end_bn, idx_t end_bx, idx_t end_by, idx_t end_bz) =0;
-    };
-
-    // Define a method named cfn to prefetch a cluster by calling vfn.
-#define PREFETCH_CLUSTER_METHOD(cfn, vfn)                               \
-    template<int level>                                                 \
-    ALWAYS_INLINE void                                                  \
-    cfn (idx_t ct,                                                      \
-         idx_t begin_cnv, idx_t begin_cxv, idx_t begin_cyv, idx_t begin_czv, \
-         idx_t end_cnv, idx_t end_cxv, idx_t end_cyv, idx_t end_czv) {  \
-        TRACE_MSG2(get_name() << "." #cfn "<" << level << ">("          \
-                  "t=" << ct <<                                         \
-                  ", nv=" << begin_cnv <<                               \
-                  ", xv=" << begin_cxv <<                               \
-                  ", yv=" << begin_cyv <<                               \
-                  ", zv=" << begin_czv << ")");                         \
-        _eqGroup.vfn<level>(*_context, ct,                              \
-                     ARG_N(begin_cnv) begin_cxv, begin_cyv, begin_czv); \
-    }
-
-    // A template that provides wrappers around a stencil-equation class
-    // created by the foldBuilder. A template is used instead of inheritance
-    // for performance.  By using templates, the compiler can inline stencil
-    // code into loops and avoid indirect calls.
-    template <typename EqGroupClass, typename ContextClass>
-    class EqGroupTemplate : public EqGroupBase {
-
-    protected:
-
-        // Pointer to a more specific context.
-        ContextClass* _context;
-        
-        // EqGroupClass must implement calc_scalar(), calc_cluster(),
-        // etc., that are used below.
-        // This class is generated by the foldBuilder.
-        EqGroupClass _eqGroup;
-
-        // Eq-groups that this one depends on.
-        std::map<DepType, EqGroupSet> _depends_on;
-        
-    public:
-
-        // Ctor.
-        EqGroupTemplate(ContextClass* context) :
-            EqGroupBase(context),
-            _context(context),
-            _eqGroup(*_context, outputGridPtrs, inputGridPtrs)
-        {
-            assert(_generic_context);
-            assert(_context);
+            _generic_context(context) {
 
             // Make sure map entries exist.
             for (DepType dt = certain_dep; dt < num_deps; dt = DepType(dt+1)) {
                 _depends_on[dt];
             }
         }
-        virtual ~EqGroupTemplate() {}
+        virtual ~EqGroupBase() { }
 
-        // Get values from _eqGroup.
-        virtual const std::string& get_name() const {
-            return _eqGroup.name;
-        }
-        virtual int get_scalar_fp_ops() const {
-            return _eqGroup.scalar_fp_ops;
-        }
-        virtual int get_scalar_points_updated() const {
-            return _eqGroup.scalar_points_updated;
-        }
+        // Get name of this equation set.
+        virtual const std::string& get_name() { return _name; }
+
+        // Get estimated number of FP ops done for one scalar eval.
+        virtual int get_scalar_fp_ops() { return _scalar_fp_ops; }
+
+        // Get number of points read and written for one scalar eval.
+        virtual int get_scalar_points_read() const { return _scalar_points_read; }
+        virtual int get_scalar_points_written() const { return _scalar_points_written; }
 
         // Add dependency.
         virtual void add_dep(DepType dt, EqGroupBase* eg) {
@@ -566,145 +502,43 @@ namespace yask {
             return _depends_on.at(dt);
         }
     
-        // Determine whether indices are in [sub-]domain for this eq group.
-        virtual bool is_in_valid_domain(idx_t t, idx_t n, idx_t x, idx_t y, idx_t z) {
-            return _eqGroup.is_in_valid_domain(*_context, t,
-                                               ARG_N(n) x, y, z);
-        }
+        // Set the bounding-box vars for this eq group in this rank.
+        virtual void find_bounding_box();
 
-        // Calculate one scalar result.
-        // This function implements the interface in the base class.
-        virtual void calc_scalar(idx_t t, idx_t n, idx_t x, idx_t y, idx_t z) {
-            TRACE_MSG2(get_name() << ".calc_scalar(t=" << t <<
-                       ", n=" << n << ", x=" << x <<
-                       ", y=" << y << ", z=" << z << ")");
-            _eqGroup.calc_scalar(*_context, t, ARG_N(n) x, y, z);
-        }
+        // Determine whether indices are in [sub-]domain.
+        virtual bool
+        is_in_valid_domain(idx_t t, ARG_W(idx_t w) idx_t x, idx_t y, idx_t z) =0;
 
-        // Calculate results within a cluster of vectors.
-        // Called from calc_block().
-        // The begin/end_c* vars are the start/stop_b* vars from the block loops.
-        ALWAYS_INLINE void
-        calc_cluster(idx_t ct,
-                     idx_t begin_cnv, idx_t begin_cxv, idx_t begin_cyv, idx_t begin_czv,
-                     idx_t end_cnv, idx_t end_cxv, idx_t end_cyv, idx_t end_czv)
-        {
-            TRACE_MSG2("calc_cluster(t=" << ct <<
-                      ", nv=" << begin_cnv << ".." << (end_cnv-1) <<
-                      ", xv=" << begin_cxv << ".." << (end_cxv-1) <<
-                      ", yv=" << begin_cyv << ".." << (end_cyv-1) <<
-                      ", zv=" << begin_czv << ".." << (end_czv-1) <<
-                      ")");
+        // Calculate one scalar result at time t.
+        virtual void
+        calc_scalar(idx_t t, ARG_W(idx_t w) idx_t x, idx_t y, idx_t z) =0;
 
-            // The step vars are hard-coded in calc_block below, and there should
-            // never be a partial step at this level. So, we can assume one var and
-            // exactly CLEN_d steps in each given direction d are calculated in this
-            // function.  Thus, we can ignore the end_* vars in the calc function.
-            assert(end_cnv == begin_cnv + CLEN_N);
-            assert(end_cxv == begin_cxv + CLEN_X);
-            assert(end_cyv == begin_cyv + CLEN_Y);
-            assert(end_czv == begin_czv + CLEN_Z);
-        
-            // Calculate results.
-            _eqGroup.calc_cluster(*_context, ct, ARG_N(begin_cnv) begin_cxv, begin_cyv, begin_czv);
-        }
-
-        // Prefetch a cluster.
-        // Separate methods for full cluster and each direction.
-        // TODO: handle pre-fetching correctly for non-simple BBs.
-        PREFETCH_CLUSTER_METHOD(prefetch_cluster, prefetch_cluster)
-#if USING_DIM_N
-        PREFETCH_CLUSTER_METHOD(prefetch_cluster_bnv, prefetch_cluster_n)
-#endif
-        PREFETCH_CLUSTER_METHOD(prefetch_cluster_bxv, prefetch_cluster_x)
-        PREFETCH_CLUSTER_METHOD(prefetch_cluster_byv, prefetch_cluster_y)
-        PREFETCH_CLUSTER_METHOD(prefetch_cluster_bzv, prefetch_cluster_z)
-    
-        // Calculate results within a cache block.
-        // This function implements the interface in the base class.
-        // Each block is typically computed in a separate OpenMP task.
-        // The begin/end_b* vars are the start/stop_r* vars from the region loops.
+        // Calculate results within a block.
         virtual void
         calc_block(idx_t bt,
-                   idx_t begin_bn, idx_t begin_bx, idx_t begin_by, idx_t begin_bz,
-                   idx_t end_bn, idx_t end_bx, idx_t end_by, idx_t end_bz)
-        {
-            TRACE_MSG2(get_name() << ".calc_block(t=" << bt <<
-                       ", n=" << begin_bn << ".." << (end_bn-1) <<
-                       ", x=" << begin_bx << ".." << (end_bx-1) <<
-                       ", y=" << begin_by << ".." << (end_by-1) <<
-                       ", z=" << begin_bz << ".." << (end_bz-1) <<
-                       ").");
+                   idx_t begin_bw, idx_t begin_bx, idx_t begin_by, idx_t begin_bz,
+                   idx_t end_bw, idx_t end_bx, idx_t end_by, idx_t end_bz);
 
-            // If not a 'simple' domain, must use scalar code.  TODO: this
-            // is very inefficient--need to vectorize as much as possible.
-            if (!bb_simple) {
+        // Calculate one sub-block of results from begin to end-1 on each dimension.
+        // In the 't' dimension, evaluation is at 'sbt' only.
+        virtual void
+        calc_sub_block(idx_t sbt,
+                       idx_t begin_sbw, idx_t begin_sbx, idx_t begin_sby, idx_t begin_sbz,
+                       idx_t end_sbw, idx_t end_sbx, idx_t end_sby, idx_t end_sbz);
 
-                TRACE_MSG2("...using scalar code.");
-                for (idx_t n = begin_bn; n < end_bn; n++)
-                    for (idx_t x = begin_bx; x < end_bx; x++)
-                        for (idx_t y = begin_by; y < end_by; y++) {
-
-                            // Are there holes in the BB?
-                            if (bb_num_points != bb_size) {
-                                for (idx_t z = begin_bz; z < end_bz; z++) {
-
-                                    // Update only if point is in sub-domain for this eq group.
-                                    if (is_in_valid_domain(bt, n, x, y, z))
-                                        calc_scalar(bt, n, x, y, z);
-                                }
-                            }
-
-                            // If no holes, don't need to check domain.
-                            else {
-                                for (idx_t z = begin_bz; z < end_bz; z++) {
-                                    calc_scalar(bt, n, x, y, z);
-                                }
-                            }
-                }
-                
-                return;
-            }
-
-            // Divide indices by vector lengths.  Use idiv_flr() instead of '/'
-            // because begin/end vars may be negative (if in halo).
-            const idx_t begin_bnv = idiv_flr<idx_t>(begin_bn, VLEN_N);
-            const idx_t begin_bxv = idiv_flr<idx_t>(begin_bx, VLEN_X);
-            const idx_t begin_byv = idiv_flr<idx_t>(begin_by, VLEN_Y);
-            const idx_t begin_bzv = idiv_flr<idx_t>(begin_bz, VLEN_Z);
-            const idx_t end_bnv = idiv_flr<idx_t>(end_bn, VLEN_N);
-            const idx_t end_bxv = idiv_flr<idx_t>(end_bx, VLEN_X);
-            const idx_t end_byv = idiv_flr<idx_t>(end_by, VLEN_Y);
-            const idx_t end_bzv = idiv_flr<idx_t>(end_bz, VLEN_Z);
-
-            // Vector-size steps are based on cluster lengths.
-            // Using CLEN_* instead of CPTS_* because we want multiples of vector lengths.
-            const idx_t step_bnv = CLEN_N;
-            const idx_t step_bxv = CLEN_X;
-            const idx_t step_byv = CLEN_Y;
-            const idx_t step_bzv = CLEN_Z;
-
-            // Groups in block loops are set to smallest size.
-            const idx_t group_size_bnv = 1;
-            const idx_t group_size_bxv = 1;
-            const idx_t group_size_byv = 1;
-            const idx_t group_size_bzv = 1;
-            
-#if !defined(DEBUG) && defined(__INTEL_COMPILER)
-#pragma forceinline recursive
-#endif
-            {
-                // Set threads for a block.
-                _context->set_block_threads();
-
-                // Include automatically-generated loop code that calls calc_cluster()
-                // and optionally, the prefetch functions().
-#include "stencil_block_loops.hpp"
-            }
-        }
+        // Calculate one sub-block of results in whole clusters from
+        // 'begin_sb*v' to 'end_sb*v'-1 on each spatial dimension.  In the
+        // time dimension, evaluation is at 'begin_sbtv' only.  All indices
+        // are in vectors (hence, the 'v' suffix), i.e., element indices
+        // dividied by 'VLEN_*'.
+        virtual void
+        calc_sub_block_of_clusters(idx_t begin_sbtv, ARG_W(idx_t begin_sbwv)
+                                   idx_t begin_sbxv, idx_t begin_sbyv, idx_t begin_sbzv,
+                                   idx_t end_sbtv, ARG_W(idx_t end_sbwv)
+                                   idx_t end_sbxv, idx_t end_sbyv, idx_t end_sbzv) =0;
     };
 
-}
+} // yask namespace.
 
 // Include auto-generated stencil code.
 #include "stencil_code.hpp"

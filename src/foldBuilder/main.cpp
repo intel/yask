@@ -35,15 +35,9 @@ StencilList stencils;
 #define REGISTER_STENCIL(Class) static Class registered_ ## Class(stencils)
 
 // Stencils.
-#include "ExampleStencil.hpp"
-#include "Iso3dfdStencil.hpp"
-#include "AveStencil.hpp"
-#include "AwpStencil.hpp"
-#include "AwpElasticStencil.hpp"
-#include "StreamStencil.hpp"
-#include "SSGElasticStencil.hpp"
-#include "FSGElasticStencil.hpp"
+#include "stencils.hpp"
 
+// Misc headers.
 #include <fstream>
 
 // output streams.
@@ -76,6 +70,7 @@ bool doCse = true;
 string stepDim = "t";
 int haloSize = 0;                     // 0 means auto.
 int stepAlloc = 0;                    // 0 means auto.
+bool find_deps = true;                // find dependencies between equations.
 string eq_group_basename_default = "stencil";
 
 ostream* open_file(const string& name) {
@@ -135,11 +130,11 @@ void usage(const string& cmd) {
         " -halo <size>\n"
         "    Specify the sizes of the halos.\n"
         "      By default, halos are calculated automatically for each grid.\n"
-        " -lus\n"
-        "    Make last dimension of fold unit stride (instead of first).\n"
+        " [-no]-lus\n"
+        "    Make last [first] dimension of fold unit stride (default=" << (!firstInner) << ").\n"
         "      This controls the intra-vector memory layout.\n"
-        " -aul\n"
-        "    Allow simple unaligned loads.\n"
+        " [-no]-aul\n"
+        "    Do [not] allow simple unaligned loads (default=" << allowUnalignedLoads << ").\n"
         "      To use this correctly, only 1D folds are allowed, and\n"
         "        the memory layout used by YASK must have that same dimension in unit stride.\n"
         " [-no]-comb\n"
@@ -150,6 +145,8 @@ void usage(const string& cmd) {
         "    Set heuristic for max single expression-size (default=" << maxExprSize << ").\n"
         " -min-es <num-nodes>\n"
         "    Set heuristic for min expression-size for reuse (default=" << minExprSize << ").\n"
+        " [-no]-find-deps\n"
+        "    Automatically find dependencies between equations (default=" << find_deps << ").\n"
         "\n"
         //" -ps <vec-len>         Print stats for all folding options for given vector length.\n"
         " -pm <filename>\n"
@@ -172,9 +169,9 @@ void usage(const string& cmd) {
         //" -pp <filename>        Print POV-Ray code.\n"
         "\n"
         "Examples:\n"
-        " " << cmd << " -st 3axis -or 2 -fold x=4,y=4 -ph -\n"
-        " " << cmd << " -st awp -fold y=4,y=2 -p256 stencil_code.hpp\n"
-        " " << cmd << " -st iso3dfd -or 8 -fold x=4,y=4 -cluster y=2 -p512 stencil_code.hpp\n";
+        " " << cmd << " -st 3axis -r 2 -fold x=4,y=4 -ph -  # '-' for stdout\n"
+        " " << cmd << " -st awp -fold x=4,y=2 -p256 stencil_code.hpp\n"
+        " " << cmd << " -st iso3dfd -r 8 -fold x=4,y=4 -cluster y=2 -p512 stencil_code.hpp\n";
     exit(1);
 }
 
@@ -196,8 +193,16 @@ void parseOpts(int argc, const char* argv[])
 
             else if (opt == "-lus")
                 firstInner = false;
+            else if (opt == "-no-lus")
+                firstInner = true;
             else if (opt == "-aul")
                 allowUnalignedLoads = true;
+            else if (opt == "-no-aul")
+                allowUnalignedLoads = false;
+            else if (opt == "-find-deps")
+                find_deps = true;
+            else if (opt == "-no-find-deps")
+                find_deps = false;
             else if (opt == "-comb")
                 doComb = true;
             else if (opt == "-no-comb")
@@ -391,7 +396,7 @@ int main(int argc, const char* argv[]) {
     
     // Reference to the grids and params in the stencil.
     Grids& grids = stencilFunc->getGrids();
-    Params& params = stencilFunc->getParams();
+    //Params& params = stencilFunc->getParams();
 
     // Find all the stencil dimensions from the grids.
     // Create the final folds and clusters from the cmd-line options.
@@ -405,21 +410,25 @@ int main(int argc, const char* argv[]) {
     stencilFunc->define(dims._allDims);
 
     // Check for illegal dependencies within equations for scalar size.
-    cout << "Checking equation(s) with scalar operations...\n"
-        " If this fails, review stencil equation(s) for illegal dependencies.\n";
-    grids.checkDeps(dims._scalar, dims._stepDim);
+    if (find_deps) {
+        cout << "Checking equation(s) with scalar operations...\n"
+            " If this fails, review stencil equation(s) for illegal dependencies.\n";
+        grids.checkDeps(dims._scalar, dims._stepDim);
+    }
 
     // Check for illegal dependencies within equations for vector size.
-    cout << "Checking equation(s) with folded-vector  operations...\n"
-        " If this fails, the fold dimensions are not compatible with all equations.\n";
-    grids.checkDeps(dims._fold, dims._stepDim);
-
-    // Check for illegal dependencies within equations for cluster sizes and
+    if (find_deps) {
+        cout << "Checking equation(s) with folded-vector  operations...\n"
+            " If this fails, the fold dimensions are not compatible with all equations.\n";
+        grids.checkDeps(dims._fold, dims._stepDim);
+    }
+    
+    // Check for illegal dependencies within equations for cluster size and
     // also create equation groups based on legal dependencies.
     cout << "Checking equation(s) with clusters of vectors...\n"
         " If this fails, the cluster dimensions are not compatible with all equations.\n";
     EqGroups eqGroups(eq_group_basename_default, dims);
-    eqGroups.findEqGroups(grids, eqGroupTargets, dims._clusterPts);
+    eqGroups.findEqGroups(grids, eqGroupTargets, dims._clusterPts, find_deps);
     optimizeEqGroups(eqGroups, "scalar & vector", false, cout);
 
     // Make copies of all the equations at each cluster offset.

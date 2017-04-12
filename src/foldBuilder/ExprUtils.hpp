@@ -136,6 +136,7 @@ protected:
     map<Expr*, int> _counts;
     int _visits;
 
+    // Visits are considered unique by address, not semantic equivalence.
     virtual bool alreadyVisited(Expr* ep) {
 #if DEBUG_TRACKING >= 1
         cout << "- tracking '" << ep->makeStr() << "'@" << ep << endl;

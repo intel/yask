@@ -49,32 +49,33 @@ my $oneG = 1e9;
 my $oneT = 1e12;
 
 # command-line options.
+my $stencil;             # type of stencil.
+my $arch;                # target architecture.
+my $sweep = 0;           # if true, sweep instead of search.
 my $testing = 0;         # if true, don't run real trials.
 my $checking = 0;        # if true, don't run at all.
 my $mic;                 # set to 0, 1, etc. for KNC mic.
 my $host;                # set to run on a different host.
 my $sde = 0;             # run under sde (for testing).
 my $sim = 0;             # run under any simulator/emulator.
-my $sweep = 0;           # sweep instead of search.
-my $stencil;             # type of stencil.
 my $radius;              # stencil radius.
 my $zLoop = 0;           # Force inner loop in 'z' direction.
 my $zLayout = 0;         # Force inner memory layout in 'z' direction.
 my $zVec = 0;            # Force 1D vectorization in 'z' direction.
 my $folding = 1;         # 2D & 3D folding allowed.
 my $dp;                  # double precision.
+my $dw = 1;              # 'w' dimension (fixed).
 my $makeArgs = '';       # extra make arguments.
 my $makePrefix = '';     # prefix for make.
 my $runArgs = '';        # extra run arguments.
 my $maxGB = 16;          # max mem usage.
 my $minGB = 0;           # min mem usage.
-my $arch;                # target architecture.
 my $nranks = 1;          # num ranks.
 my $debugCheck = 0;      # print each initial check result.
 my $doBuild = 1;         # do compiles.
 my $doVal = 0;           # do validation runs.
 my $maxVecsInCluster = 4;       # max vectors in a cluster.
-my @folds = ();     # folding variations to explore
+my @folds = ();     # folding variations to explore.
 
 sub usage {
   my $msg = shift;              # error message or undef.
@@ -115,6 +116,8 @@ sub usage {
       "                        See the notes above on <gene_name> specification.\n".
       " -folds=<list>      Comma separated list of folds to use.\n".
       "                    Examples: '-folds=4 4 1', '-folds=1 1 16, 4 4 1, 1 4 4'.\n".
+      "                    Can only specify 3D folds.\n".
+      " -dw=<N>            Set size of 'w' dim to <N> (only for 4D problems).\n".
       " -mem=<N>-<M>           Set allowable est. memory usage between <N> and <M> GiB (default is $minGB-$maxGB).\n".
       " -maxVecsInCluster=<N>  Maximum vectors allowed in cluster (default is $maxVecsInCluster).\n".
       " -noPrefetch        Disable any prefetching (shortcut for '-pfdl1=0 -pfdl2=0').\n".
@@ -194,6 +197,9 @@ for my $origOpt (@ARGV) {
   elsif ($opt =~ '^-mem=([.\d]+)-([.\d]+)$') {
     $minGB = $1;
     $maxGB = $2;
+  }
+  elsif ($opt =~ '^-dw=(\d+)$') {
+    $dw = $1;
   }
   elsif ($opt =~ '^-radius=(\d+)$') {
     $radius = $1;
@@ -286,15 +292,11 @@ my $velems = $vbits / 8 / $realBytes;
 # radius.
 $radius = $isAve ? 1 : 8 if !defined $radius;
 
-# n dimension.
-my $vars = $isAve ? 40 : 1;
+# w dimension.
+$dw = $isAve ? 40 : 1 if !defined $dw;     # 40 grids in miniGhost.
 
 # disable folding for DP MIC (no valignq).
 $folding = 0 if (defined $mic && $dp);
-
-# date.
-my $date=`date +%Y-%m-%d_%H-%M`;
-chomp $date;
 
 # clean up restrictions.
 for my $key (keys %geneRanges) {
@@ -307,8 +309,11 @@ for my $key (keys %geneRanges) {
 }
 
 # csv filename.
-my $searchTypeStr = $sweep ? 'sweep' : 'search';
-my $outFile = "stencil-$searchTypeStr.$date.csv";
+my $searchTypeStr = $sweep ? '-sweep' : '';
+my $hostStr = defined $host ? $host : hostname();
+my $timeStamp=`date +%Y-%m-%d_%H-%M-%S`;
+chomp $timeStamp;
+my $outFile = "stencil-tuner$searchTypeStr.$stencil.$arch.$hostStr.$timeStamp.csv";
 print "Output will be saved in '$outFile'.\n";
 $outFile = '/dev/null' if $checking;
 
@@ -316,7 +321,7 @@ $outFile = '/dev/null' if $checking;
 open OUTFILE, ">$outFile" or die "error: cannot write to '$outFile'\n";
 
 # things to get from the run.
-my $fitnessMetric = 'best-throughput (points-updated/sec)';
+my $fitnessMetric = 'best-throughput (point-updates/sec)';
 my $timeMetric = 'best-time (sec)';
 my $dimsMetric = 'rank-domain-size';
 my @metrics = ( $fitnessMetric,
@@ -328,17 +333,20 @@ my @metrics = ( $fitnessMetric,
                 'region-size',
                 'block-group-size',
                 'block-size',
+                'sub-block-group-size',
+                'sub-block-size',
                 'cluster-size',
                 'vector-size',
                 'num-regions',
-                'num-groups-per-region',
+                'num-blocks-per-region',
                 'num-block-groups-per-region',
                 'padding',
                 'max-halos',
                 'manual-L1-prefetch-distance',
                 'manual-L2-prefetch-distance',
                 'problem-size in all ranks, for all time-steps',
-                'grid-points-updated in all ranks, for all time-steps',
+                'grid-point-updates in all ranks, for all time-steps',
+                'grid-point-reads in all ranks, for all time-steps',
                 'Total overall allocation',
               );
 
@@ -383,82 +391,27 @@ my @layouts =
 # only allow z (dim 4) in last mem dimension if requested.
 @layouts = grep /4$/, @layouts if $zLayout;
 
-# list of possible loop orders.
-# start with n on outer loop only.
+# List of possible loop orders.
+# Start with w on outer loop only.
 my @loopOrders =
-  ('nxyz', 'nxzy', 'nyxz', 'nyzx', 'nzxy', 'nzyx');
+  ('wxyz', 'wxzy', 'wyxz', 'wyzx', 'wzxy', 'wzyx');
 
-# add more options if there are >1 var, i.e., 'n'
-# is meaningful.
+# Add more options if there are >1 var, i.e., 'w' is meaningful.
 push  @loopOrders,
-  ('xnyz', 'xnzy', 'xynz', 'xyzn', 'xzny', 'xzyn',
-   'ynxz', 'ynzx', 'yxnz', 'yxzn', 'yznx', 'yzxn',
-   'znxy', 'znyx', 'zxny', 'zxyn', 'zynx', 'zyxn', )
-  if $vars > 1;
+  ('xwyz', 'xwzy', 'xywz', 'xyzw', 'xzwy', 'xzyw',
+   'ywxz', 'ywzx', 'yxwz', 'yxzw', 'yzwx', 'yzxw',
+   'zwxy', 'zwyx', 'zxwy', 'zxyw', 'zywx', 'zyxw', )
+  if $dw > 1;
 
-# only allow z in inner loop if requested.
+# Only allow z in inner loop if requested.
 @loopOrders = grep /z$/, @loopOrders if $zLoop;
 
-# types of space-filling curves.
-# 'grouped' must be last.
+# Possible space-filling curve modifiers.
 my @pathNames =
   ('', 'serpentine', 'square_wave serpentine', 'grouped');
 
-# list of possible block-loop templates.
-# D0..D3 will get replaced by bv..bz, but not necessarily in that order.
-# modifiers 'pipeline' & 'prefetch' will be removed if not enabled.
-# modifier placeholder 'PATH' will be removed or changed as selected.
-# this is the loop taken by each OpenMP task.
-my @blockLoops =
-  (
-   # nested omp:
-   "loop(D0) { omp loop(D1) { pipeline prefetch loop(D2) { loop(D3) { calc(cluster(bt)); } } } }",
-   "loop(D0) { omp loop(D1) { pipeline prefetch PATH1 loop(D2,D3) { calc(cluster(bt)); } } }",
-
-   "loop(D0) { loop(D1) { omp loop(D2) { pipeline prefetch loop(D3) { calc(cluster(bt)); } } } }",
-   "PATH0 loop(D0,D1) { omp loop(D2) { pipeline prefetch loop(D3) { calc(cluster(bt)); } } }",
-
-   "loop(D0) { omp PATH0 loop(D1,D2) { pipeline prefetch loop(D3) { calc(cluster(bt)); } } }",
-
-   # no nested omp:
-   "PATH0 loop(D0,D1,D2) { pipeline prefetch loop(D3) { calc(cluster(bt)); } }",
-   "PATH0 loop(D0,D1) { loop(D2) { pipeline prefetch loop(D3) { calc(cluster(bt)); } } }",
-
-   "loop(D0) { loop(D1) { PATH1 pipeline prefetch loop(D2,D3) { calc(cluster(bt)); } } }",
-   "PATH0 loop(D0,D1) { PATH1 pipeline prefetch loop(D2,D3) { calc(cluster(bt)); } }",
-
-   "loop(D0) { PATH1 pipeline prefetch loop(D1,D2,D3) { calc(cluster(bt)); } }",
-
-   # omp on inner loop:
-   #"loop(D0) { loop(D1) { loop(D2) { omp pipeline prefetch loop(D3) { calc(cluster(bt)); } } } }",
-   #"loop(D0) { PATH0 loop(D1,D2) { omp pipeline prefetch loop(D3) { calc(cluster(bt)); } } }",
-   #"PATH0 loop(D0,D1,D2) { omp pipeline prefetch loop(D3) { calc(cluster(bt)); } }",
-   #"PATH0 loop(D0,D1) { loop(D2) { omp pipeline prefetch loop(D3) { calc(cluster(bt)); } } }",
-
-   #"loop(D0) { loop(D1) { PATH1 omp pipeline prefetch loop(D2,D3) { calc(cluster(bt)); } } }",
-   #"PATH0 loop(D0,D1) { PATH1 omp pipeline prefetch loop(D2,D3) { calc(cluster(bt)); } }",
-
-   #"loop(D0) { PATH1 omp pipeline prefetch loop(D1,D2,D3) { calc(cluster(bt)); } }",
-  );
-
-# list of possible region loop templates.
-# this is the loop that creates OpenMP tasks.
-# TODO: add other options.
-my @regionLoops =
-  (
-   "omp PATH2 loop(D0,D1,D2,D3) { calc(block(rt)); }",
-  );
-
-# list of possible rank loop templates.
-# this is the loop that creates OpenMP regions.
-# TODO: add other options.
-my @rankLoops =
-  (
-   "PATH3 loop(D0,D1,D2,D3) { calc(region(start_dt, stop_dt, eqGroup_ptr)); }",
-  );
-
-# list of folds.
-# start with inline in z only.
+# List of folds.
+# Start with inline in z only.
 if ( !@folds ) {
   @folds = "1 1 $velems";
 
@@ -466,7 +419,7 @@ if ( !@folds ) {
   push @folds, ("1 $velems 1", "$velems 1 1") if !$zVec;
 
 # add remaining options if folding.
-# TODO: add n-dim folding.
+# TODO: add w-dim folding.
   push @folds, ($velems == 8) ?
     ("4 2 1", "4 1 2",
      "2 4 1", "2 1 4",
@@ -483,11 +436,11 @@ if ( !@folds ) {
 
 # OMP.
 my @schedules =
-  ( 'static', 'dynamic', 'guided' );
+  ( 'static,1', 'dynamic,1', 'guided,1' );
 
 # Data structure to describe each gene in the genome.
 # 2-D array. Each outer array element contains the following elements:
-# 0. min allowed value.
+# 0. min allowed value; '0' is a special case handled by YASK.
 # 1. max allowed value.
 # 2. step size between values (usually 1).
 # 3. name.
@@ -503,15 +456,25 @@ my @rangesAll =
    [ 0, $maxDim, 1, 'ry' ],
    [ 0, $maxDim, 1, 'rz' ],
 
-   # group size.
-   [ 0, $maxDim, 1, 'gx' ],
-   [ 0, $maxDim, 1, 'gy' ],
-   [ 0, $maxDim, 1, 'gz' ],
+   # block-group size.
+   [ 0, $maxDim, 1, 'bgx' ],
+   [ 0, $maxDim, 1, 'bgy' ],
+   [ 0, $maxDim, 1, 'bgz' ],
 
    # block size.
    [ 0, $maxDim, 1, 'bx' ],
    [ 0, $maxDim, 1, 'by' ],
    [ 0, $maxDim, 1, 'bz' ],
+
+   # sub-block-group size.
+   [ 0, $maxDim, 1, 'sbgx' ],
+   [ 0, $maxDim, 1, 'sbgy' ],
+   [ 0, $maxDim, 1, 'sbgz' ],
+
+   # sub-block size.
+   [ 0, $maxDim, 1, 'sbx' ],
+   [ 0, $maxDim, 1, 'sby' ],
+   [ 0, $maxDim, 1, 'sbz' ],
 
    # padding.
    [ 0, $maxPad, 1, 'px' ],
@@ -528,34 +491,25 @@ if ($doBuild) {
   push @rangesAll,
     (
 
-     # loops, from the list above.
-     [ 0, $#blockLoops, 1, 'blockLoop' ],
-     [ 0, $#loopOrders, 1, 'blockLoopOrder' ],
-     [ 0, $#regionLoops, 1, 'regionLoop' ],
-     [ 0, $#loopOrders, 1, 'regionLoopOrder' ],
-     [ 0, $#rankLoops, 1, 'rankLoop' ],
-     [ 0, $#loopOrders, 1, 'rankLoopOrder' ],
+     # Loops, from the list above.
+     # Each loop consists of index order and path mods.
+     [ 0, $#loopOrders, 1, 'subBlockOrder' ],
+     [ 0, $#pathNames, 1, 'subBlockPath' ],
+     [ 0, $#loopOrders, 1, 'blockOrder' ],
+     [ 0, $#pathNames, 1, 'blockPath' ],
+     [ 0, $#loopOrders, 1, 'regionOrder' ],
+     [ 0, $#pathNames, 1, 'regionPath' ],
 
      # how to shape vectors, from the list above.
      [ 0, $#folds, 1, 'fold' ],
 
-     # cluster sizes.
+     # vector-cluster sizes.
      [ 1, $maxCluster, 1, 'cx' ],
      [ 1, $maxCluster, 1, 'cy' ],
      [ 1, $maxCluster, 1, 'cz' ],
 
      # 4D->1D layout, from the list above.
      [ 0, $#layouts, 1, 'layout' ],
-
-     # whether or not to allow pipelining.
-     #[ 0, 1, 1, 'pipe' ],
-
-     # types of curves.
-     # (use '-1' to avoid grouping.)
-     [ 0, $#pathNames-1, 1, 'path0' ],
-     [ 0, $#pathNames-1, 1, 'path1' ],
-     [ 0, $#pathNames,   1, 'path2' ], # grouping ok here.
-     [ 0, $#pathNames-1, 1, 'path3' ],
 
      # prefetch distances for l1 and l2.
      # all non-pos numbers => no prefetching, so ~50% chance of being enabled.
@@ -564,7 +518,8 @@ if ($doBuild) {
 
      # other build options.
      [ 0, 100, 1, 'exprSize' ],          # expression-size threshold.
-     [ 0, $#schedules, 1, 'ompSchedule' ], # OMP for schedule.
+     [ 0, $#schedules, 1, 'ompRegionSchedule' ], # OMP schedule for region loop.
+     [ 0, $#schedules, 1, 'ompBlockSchedule' ], # OMP schedule for block loop.
 
     );
 }
@@ -640,7 +595,7 @@ sub init() {
   $bestGen = 0;
 }
 
-# convert a number so that values in [a0..a1] are mapped to [b0..b1],
+# convert a number n so that values in [a0..a1] are mapped to [b0..b1],
 # values < a0 => b0.
 # values > a1 => b1.
 sub adjRange($$$$$) {
@@ -801,43 +756,53 @@ sub calcSize($$$) {
   my $pads = shift;             # ref to pad array.
   my $mults = shift;            # ref to array of multiples.
 
-  # need to determine how many grids will be allocated for this stencil.
+  # need to determine how many XYZ grids will be allocated for this stencil.
   if (!$numSpatialGrids) {
 
     my $makeCmd = getMakeCmd('', 'EXTRA_CXXFLAGS=-O0');
     my $runCmd = getRunCmd();
     $runCmd .= ' -t 0 -d 1';
+    $runCmd .= " -dw $dw" if $dw > 1;
     my $cmd = "$makeCmd 2>&1 && $runCmd";
 
     my $timeDim = 0;
     my $numGrids = 0;
     my $numUpdatedGrids = 0;
     my @cmdOut;
-    print "Running '$cmd' to determine number of grids...\n";
-    open CMD, "$cmd 2>&1 |" or die "error: cannot run '$cmd'\n";
-    while (<CMD>) {
-      push @cmdOut, $_;
+    if ($testing) {
+      $numSpatialGrids = 1;
+    } else {
+      print "Running '$cmd' to determine number of grids...\n";
+      open CMD, "$cmd 2>&1 |" or die "error: cannot run '$cmd'\n";
+      while (<CMD>) {
+        push @cmdOut, $_;
 
-      # E.g.,
-      # 4D (t=1 * x=8 * y=1 * z=1) 'vel_x' data is at 0x7fce08200000: 1.176K element(s) of 4 byte(s) each, 147 vector(s), 4.59375KiB.
-      # 3D (x=8 * y=1 * z=1) 'lambda' data is at 0x7fce0820f880: 600 element(s) of 4 byte(s) each, 75 vector(s), 2.34375KiB.
-      if (/^\s*4D.*t=(\d+)/) {
-        $numSpatialGrids += $1;
+        # E.g.,
+        # 4D (t=1 * x=8 * y=1 * z=1) 'vel_x' data is at 0x7fce08200000: 1.176K element(s) of 4 byte(s) each, 147 vector(s), 4.59375KiB.
+        # 3D (x=8 * y=1 * z=1) 'lambda' data is at 0x7fce0820f880: 600 element(s) of 4 byte(s) each, 75 vector(s), 2.34375KiB.
+        if (/^\s*5D.*t=(\d+).*w=(\d+)/) {
+          $numSpatialGrids += $1 * $2;  # twxyz
+        }
+        elsif (/^\s*4D.*w=(\d+)/) {
+          $numSpatialGrids += $1;  # wxyz
+        }
+        elsif (/^\s*4D.*t=(\d+)/) {
+          $numSpatialGrids += $1; # txyz.
+        }
+        elsif (/^\s*3D.*x=/) {
+          $numSpatialGrids += 1;  # xyz.
+        }
       }
-      elsif (/^\s*3D.*x=/) {
-        $numSpatialGrids += 1;
-      }
+      close CMD;
     }
-    close CMD;
     if (!$numSpatialGrids) {
       map { print ">> $_"; } @cmdOut;
       die "error: no grids defined in '$cmd'.\n";
     }
-    print "Determined that $numSpatialGrids spatial grids are allocated.\n";
+    print "Determined that $numSpatialGrids XYZ grids are allocated.\n";
   }
 
-  # actual dimensions of allocated memory.
-  # TODO: fix over-estimate due to assumption of max halo size.
+  # estimate each dim of allocated memory as size + 2 * (halo + pad).
   my @sizes = map { roundUp($sizes->[$_], $mults->[$_]) +
                       2 * roundUp($radius + $pads->[$_], $mults->[$_]) } 0..$#dirs;
 
@@ -891,13 +856,13 @@ sub setResults($$) {
       my $val = $1;
 
       # adjust for suffixes.
-      if ($val =~ /^([0-9.e+-]+)Ki$/) {
+      if ($val =~ /^([0-9.e+-]+)KiB?$/) {
         $val = $1 * $oneKi;
-      } elsif ($val =~ /^([0-9.e+-]+)Mi$/) {
+      } elsif ($val =~ /^([0-9.e+-]+)MiB?$/) {
         $val = $1 * $oneMi;
-      } elsif ($val =~ /^([0-9.e+-]+)Gi$/) {
+      } elsif ($val =~ /^([0-9.e+-]+)GiB?$/) {
         $val = $1 * $oneGi;
-      } elsif ($val =~ /^([0-9.e+-]+)Ti$/) {
+      } elsif ($val =~ /^([0-9.e+-]+)TiB?$/) {
         $val = $1 * $oneTi;
       } elsif ($val =~ /^([0-9.e+-]+)K$/) {
         $val = $1 * $oneK;
@@ -1093,26 +1058,42 @@ sub evalIndiv($$$$$$$) {
   return $fitness, $results;
 }
 
-# return loop code.
-sub makeLoopCode($$$$$) {
+# return loop-ctrl vars.
+sub makeLoopVars($$$$$) {
   my $h = shift;
-  my $nameLong = shift;         # e.g., 'block'
+  my $makePrefix = shift;       # e.g., 'BLOCK'
+  my $tunerPrefix = shift;      # e.g., 'block'
   my $varPrefix = shift;        # e.g., 'b'
   my $varSuffix = shift;        # e.g., 'v'
-  my $types = shift;
 
-  my $order = readHash($h, $nameLong."LoopOrder", 1);
-  my $type = readHash($h, $nameLong."Loop", 1);
+  my $order = readHash($h, $tunerPrefix."Order", 1);
+  my $orderStr = $loopOrders[$order];           # e.g., 'wxzy'.
+  my $path = readHash($h, $tunerPrefix."Path", 1);
+  my $pathStr = @pathNames[$path];                # e.g., 'grouped'.
 
-  my $dims = $loopOrders[$order]; # e.g., 'nyxz' (outer-to-inner).
-  my @dims = split '',$dims;      # e.g., ('n', 'y', 'x', 'z');
-  my $code = $types->[$type];     # e.g., 'loop(D0) { ... }'.
+  # dimension vars.
+  my @dims = split '',$orderStr;      # e.g., ('w', 'y', 'x', 'z');
   for my $ld (0..$#dims) {
-    $dims[$ld] = "$varPrefix$dims[$ld]$varSuffix"; # e.g., 'bnv'.
-    $code =~ s/D$ld/$dims[$ld]/g;   # e.g., replace 'D0' with 'bnv';
+    $dims[$ld] = "$varPrefix$dims[$ld]$varSuffix"; # e.g., 'bxv'.
   }
 
-  return $code;
+  # vars to create.
+  my $outerVars = '';
+  my $innerVars = '';
+
+  # special-case for sub-blocks.
+  if ($makePrefix eq 'SUB_BLOCK') {
+    $outerVars = join(',',@dims[0..$#dims-1]); # all but last one.
+    $innerVars = $dims[$#dims];                # just last one.
+  } else {
+    $outerVars = join(',',@dims); # all vars.
+  }
+  my $outerMods = $pathStr;
+
+  my $loopVars = " ".$makePrefix."_LOOP_OUTER_VARS='$outerVars'";
+  $loopVars .= " ".$makePrefix."_LOOP_OUTER_MODS='$outerMods'";
+  $loopVars .= " ".$makePrefix."_LOOP_INNER_VARS='$innerVars'";
+  return $loopVars;
 }
 
 # sanity-check vars.
@@ -1210,46 +1191,25 @@ sub fitness {
   my $h = makeHash($values);
   my @ds = readHashes($h, 'd', 0);
   my @rs = readHashes($h, 'r', 0);
-  my @gs = readHashes($h, 'g', 0);
+  my @bgs = readHashes($h, 'bg', 0);
   my @bs = readHashes($h, 'b', 0);
+  my @sbgs = readHashes($h, 'sbg', 0);
+  my @sbs = readHashes($h, 'sb', 0);
   my @cvs = readHashes($h, 'c', 1); # in vectors, not in points!
   my @ps = readHashes($h, 'p', 0);
   my $fold = readHash($h, 'fold', 1);
   my $exprSize = readHash($h, 'exprSize', 1);
   my $thread_divisor_exp = readHash($h, 'thread_divisor_exp', 0);
   my $bthreads_exp = readHash($h, 'bthreads_exp', 0);
-  my $pipe = 0; # readHash($h, 'pipe', 1);
-  my @paths = ( readHash($h, 'path0', 1),
-                readHash($h, 'path1', 1),
-                readHash($h, 'path2', 1),
-                readHash($h, 'path3', 1) );
   my $layout = readHash($h, 'layout', 1);
   my $pfdl1 = readHash($h, 'pfdl1', 1);
   my $pfdl2 = readHash($h, 'pfdl2', 1);
-  my $ompSchedule = readHash($h, 'ompSchedule', 1);
+  my $ompRegionSchedule = readHash($h, 'ompRegionSchedule', 1);
+  my $ompBlockSchedule = readHash($h, 'ompBlockSchedule', 1);
 
   # fold numbers.
   my $foldNums = $folds[$fold];
   my @fs = split ' ', $foldNums;
-
-  # block loops.
-  my $blockCode = makeLoopCode($h, 'block', 'b', 'v', \@blockLoops);
-  $blockCode =~ s/\bpipeline\b//g if !$pipe;
-  if ($pfdl1 > 0 && $pfdl2 > 0) {
-    $blockCode =~ s/\bprefetch\b/prefetch(L1,L2)/g;
-  } elsif ($pfdl1 > 0) {
-    $blockCode =~ s/\bprefetch\b/prefetch(L1)/g;
-  } elsif ($pfdl2 > 0) {
-    $blockCode =~ s/\bprefetch\b/prefetch(L2)/g;
-  } else {
-    $blockCode =~ s/\bprefetch\b//g;
-  }
-
-  # region loops.
-  my $regionCode = makeLoopCode($h, 'region', 'r', '', \@regionLoops);
-
-  # rank loops.
-  my $rankCode = makeLoopCode($h, 'rank', 'd', '', \@rankLoops);
 
   # vectors in cluster.
   my $cvs = mult(@cvs);
@@ -1262,16 +1222,20 @@ sub fitness {
   # cluster sizes in points.
   my @cs = map { $fs[$_] * $cvs[$_] } 0..$#dirs;
 
-  # adjust inner sizes.
+  # adjust inner sizes to fit in their enclosing sizes.
   adjSizes(\@rs, \@ds);
-  adjSizes(\@bs, \@rs);
-  adjSizes(\@gs, \@rs);
+  adjSizes(\@bgs, \@rs);
+  adjSizes(\@bs, \@rs);     # use region because groups are rounded up.
+  adjSizes(\@sbgs, \@bs);
+  adjSizes(\@sbs, \@bs);    # use block because groups are rounded up.
 
   # 3d sizes in points.
   my $dPts = mult(@ds);
   my $rPts = mult(@rs);
-  my $gPts = mult(@gs);
+  my $bgPts = mult(@bgs);
   my $bPts = mult(@bs);
+  my $sbgPts = mult(@sbgs);
+  my $sbPts = mult(@sbs);
   my $cPts = mult(@cs);
   my $fPts = mult(@fs);
 
@@ -1282,10 +1246,6 @@ sub fitness {
   # Blocks per region.
   my @rbs = map { ceil($rs[$_] / $bs[$_]) } 0..$#dirs;
   my $rBlks = mult(@rbs);
-
-  # Groups per region.
-  my @rgs = map { ceil($rs[$_] / $gs[$_]) } 0..$#dirs;
-  my $rGrps = mult(@rgs);
 
   # Regions per rank.
   my @drs = map { ceil($ds[$_] / $rs[$_]) } 0..$#dirs;
@@ -1298,8 +1258,10 @@ sub fitness {
     print "Sizes:\n";
     print "  rank size = $dPts\n";
     print "  region size = $rPts\n";
-    print "  group size = $gPts\n";
+    print "  block-group size = $bgPts\n";
     print "  block size = $bPts\n";
+    print "  sub-block-group size = $sbgPts\n";
+    print "  sub-block size = $sbPts\n";
     print "  cluster size = $cPts\n";
     print "  fold size = $fPts\n";
     print "  regions per rank = $dRegs\n";
@@ -1351,8 +1313,10 @@ sub fitness {
   addStat($ok, 'mem estimate', $overallSize);
   addStat($ok, 'rank size', $dPts);
   addStat($ok, 'region size', $rPts);
-  addStat($ok, 'group size', $gPts);
+  addStat($ok, 'block-group size', $bgPts);
   addStat($ok, 'block size', $bPts);
+  addStat($ok, 'sub-block-group size', $sbgPts);
+  addStat($ok, 'sub-block size', $sbPts);
   addStat($ok, 'cluster size', $cPts);
   addStat($ok, 'regions per rank', $dRegs);
   addStat($ok, 'blocks per region', $rBlks);
@@ -1363,11 +1327,12 @@ sub fitness {
   return $ok if $justChecking;
 
   # OMP settings.
-  my $scheduleStr = $schedules[$ompSchedule];
+  my $regionScheduleStr = $schedules[$ompRegionSchedule];
+  my $blockScheduleStr = $schedules[$ompBlockSchedule];
 
   # compile-time settings.
-  my $macros = '';
-  my $mvars = '';
+  my $macros = '';              # string of macros.
+  my $mvars = '';               # other make vars.
 
   # layouts. 4D layout is selected by GA; then the corresponding 3D layout is
   # created from it by removing 't' and shifting the other 3 dims.
@@ -1378,9 +1343,7 @@ sub fitness {
   $g3d =~ s/3/2/;               # move 'y' from posn 3 to 2.
   $g3d =~ s/4/3/;               # move 'z' from posn 4 to 3.
   $mvars .= " layout_xyz=Layout_$g3d layout_txyz=Layout_$g4d";
-  if ($vars > 1) {
-    $mvars .= " layout_nxyz=Layout_4$g3d layout_tnxyz=Layout_5$g4d";
-  }
+  $mvars .= " layout_wxyz=Layout_4$g3d layout_twxyz=Layout_5$g4d" if $dw > 1;
 
   # prefetch distances.
   if ($pfdl1 > 0 && $pfdl2 > 0) {
@@ -1396,16 +1359,23 @@ sub fitness {
   $mvars .= " fold=x=$fs[0],y=$fs[1],z=$fs[2]";
 
   # gen-loops vars.
-  $mvars .= " RANK_LOOP_CODE='$rankCode'".
-    " REGION_LOOP_CODE='$regionCode'".
-    " BLOCK_LOOP_CODE='$blockCode'";
-  for my $pi (0..$#paths) {
-    my $pathName = $pathNames[$paths[$pi]];
-    $mvars =~ s/\bPATH$pi\b/$pathName/g;
+  $mvars .= makeLoopVars($h, 'REGION', 'region', 'r', '');
+  $mvars .= makeLoopVars($h, 'BLOCK', 'block', 'b', '');
+  $mvars .= makeLoopVars($h, 'SUB_BLOCK', 'subBlock', 'sb', 'v');
+
+  # sub-block loops.
+  my $subBlockMods = '';
+  if ($pfdl1 > 0 && $pfdl2 > 0) {
+    $subBlockMods .= 'prefetch(L1,L2)';
+  } elsif ($pfdl1 > 0) {
+    $subBlockMods .= 'prefetch(L1)';
+  } elsif ($pfdl2 > 0) {
+    $subBlockMods .= 'prefetch(L2)';
   }
+  $mvars .= " SUB_BLOCK_LOOP_INNER_MODS='$subBlockMods'";
 
   # other vars.
-  $mvars .= " omp_schedule=$scheduleStr expr_size=$exprSize";
+  $mvars .= " omp_region_schedule=$regionScheduleStr omp_block_schedule=$blockScheduleStr expr_size=$exprSize";
   $mvars .= " mpi=1" if $nranks > 1;
 
   # how to make.
@@ -1419,16 +1389,18 @@ sub fitness {
   $args .= " -block_threads ".(1 << $bthreads_exp);
 
   # sizes.
-  $args .= " -dn $vars" if $vars > 1;
+  $args .= " -dw $dw" if $dw > 1;
   $args .= " -dx $ds[0] -dy $ds[1] -dz $ds[2]";
   $args .= " -rx $rs[0] -ry $rs[1] -rz $rs[2]";
   $args .= " -bx $bs[0] -by $bs[1] -bz $bs[2]";
-  $args .= " -gx $gs[0] -gy $gs[1] -gz $gs[2]";
+  $args .= " -bgx $bgs[0] -bgy $bgs[1] -bgz $bgs[2]";
+  $args .= " -sbx $sbs[0] -sby $sbs[1] -sbz $sbs[2]";
+  $args .= " -sbgx $sbgs[0] -sbgy $sbgs[1] -sbgz $sbgs[2]";
   $args .= " -px $ps[0] -py $ps[1] -pz $ps[2]";
 
   # num of iterations and trials.
-  my $shortIters = ($vars > 10) ? 2 : 5;
-  my $longIters = ($vars > 10) ? 15 : 30;
+  my $shortIters = 5;
+  my $longIters = 30;
   my $longTrials = min($gen, 2);
 
   # various commands.

@@ -119,9 +119,9 @@ public:
         // This equation does NOT have a special case at surface, but the
         // formula is replicated to unify the sub-domains. Eventually,
         // YASK should be able to do this automatically.
-        vel_x(t+1, x, y, z) IS_EQUIV_TO next_vel_x
+        vel_x(t+1, x, y, z) EQUALS next_vel_x
             IF !at_last_z;
-        vel_x(t+1, x, y, z) IS_EQUIV_TO next_vel_x
+        vel_x(t+1, x, y, z) EQUALS next_vel_x
             IF at_last_z;
     }
     void define_vel_y(GridIndex t, GridIndex x, GridIndex y, GridIndex z,
@@ -144,9 +144,9 @@ public:
         // This equation does NOT have a special case at surface, but the
         // formula is replicated to unify the sub-domains. Eventually,
         // YASK should be able to do this automatically.
-        vel_y(t+1, x, y, z) IS_EQUIV_TO next_vel_y
+        vel_y(t+1, x, y, z) EQUALS next_vel_y
             IF !at_last_z;
-        vel_y(t+1, x, y, z) IS_EQUIV_TO next_vel_y
+        vel_y(t+1, x, y, z) EQUALS next_vel_y
             IF at_last_z;
     }
     void define_vel_z(GridIndex t, GridIndex x, GridIndex y, GridIndex z,
@@ -169,9 +169,9 @@ public:
         // This equation does NOT have a special case at surface, but the
         // formula is replicated to unify the sub-domains. Eventually,
         // YASK should be able to do this automatically.
-        vel_z(t+1, x, y, z) IS_EQUIV_TO next_vel_z
+        vel_z(t+1, x, y, z) EQUALS next_vel_z
             IF !at_last_z;
-        vel_z(t+1, x, y, z) IS_EQUIV_TO next_vel_z
+        vel_z(t+1, x, y, z) EQUALS next_vel_z
             IF at_last_z;
     }
 
@@ -202,11 +202,11 @@ public:
               (2.0 / mu(x, y, z) + 1.0 / lambda(x, y, z))));
 
         // Define equivalencies to be valid only when z == last value in domain.
-        vel_x(t+1, x, y, z+1) IS_EQUIV_TO plus1_vel_x
+        vel_x(t+1, x, y, z+1) EQUALS plus1_vel_x
             IF at_last_z;
-        vel_y(t+1, x, y, z+1) IS_EQUIV_TO plus1_vel_y
+        vel_y(t+1, x, y, z+1) EQUALS plus1_vel_y
             IF at_last_z;
-        vel_z(t+1, x, y, z+1) IS_EQUIV_TO plus1_vel_z
+        vel_z(t+1, x, y, z+1) EQUALS plus1_vel_z
             IF at_last_z;
     }
     
@@ -232,9 +232,9 @@ public:
         // This equation does NOT have a special case at surface, but the
         // formula is replicated to unify the sub-domains. Eventually,
         // YASK should be able to do this automatically.
-        stress_xx(t+1, x, y, z) IS_EQUIV_TO next_stress_xx
+        stress_xx(t+1, x, y, z) EQUALS next_stress_xx
             IF !at_last_z;
-        stress_xx(t+1, x, y, z) IS_EQUIV_TO next_stress_xx
+        stress_xx(t+1, x, y, z) EQUALS next_stress_xx
             IF at_last_z;
     }
     void define_stress_yy(GridIndex t, GridIndex x, GridIndex y, GridIndex z,
@@ -251,9 +251,9 @@ public:
         // This equation does NOT have a special case at surface, but the
         // formula is replicated to unify the sub-domains. Eventually,
         // YASK should be able to do this automatically.
-        stress_yy(t+1, x, y, z) IS_EQUIV_TO next_stress_yy
+        stress_yy(t+1, x, y, z) EQUALS next_stress_yy
             IF !at_last_z;
-        stress_yy(t+1, x, y, z) IS_EQUIV_TO next_stress_yy
+        stress_yy(t+1, x, y, z) EQUALS next_stress_yy
             IF at_last_z;
     }
     void define_stress_zz(GridIndex t, GridIndex x, GridIndex y, GridIndex z,
@@ -270,9 +270,9 @@ public:
         // This equation does NOT have a special case at surface, but the
         // formula is replicated to unify the sub-domains. Eventually,
         // YASK should be able to do this automatically.
-        stress_zz(t+1, x, y, z) IS_EQUIV_TO next_stress_zz
+        stress_zz(t+1, x, y, z) EQUALS next_stress_zz
             IF !at_last_z;
-        stress_zz(t+1, x, y, z) IS_EQUIV_TO next_stress_zz
+        stress_zz(t+1, x, y, z) EQUALS next_stress_zz
             IF at_last_z;
     }
     void define_stress_xy(GridIndex t, GridIndex x, GridIndex y, GridIndex z,
@@ -297,9 +297,9 @@ public:
         // This equation does NOT have a special case at surface, but the
         // formula is replicated to unify the sub-domains. Eventually,
         // YASK should be able to do this automatically.
-        stress_xy(t+1, x, y, z) IS_EQUIV_TO next_stress_xy
+        stress_xy(t+1, x, y, z) EQUALS next_stress_xy
             IF !at_last_z;
-        stress_xy(t+1, x, y, z) IS_EQUIV_TO next_stress_xy
+        stress_xy(t+1, x, y, z) EQUALS next_stress_xy
             IF at_last_z;
     }
     void define_stress_xz(GridIndex t, GridIndex x, GridIndex y, GridIndex z,
@@ -321,9 +321,9 @@ public:
         adjust_for_sponge(next_stress_xz, x, y, z);
 
         // define the value at t+1 (special case: zero at surface).
-        stress_xz(t+1, x, y, z) IS_EQUIV_TO next_stress_xz
+        stress_xz(t+1, x, y, z) EQUALS next_stress_xz
             IF !at_last_z;
-        stress_xz(t+1, x, y, z) IS_EQUIV_TO 0.0
+        stress_xz(t+1, x, y, z) EQUALS 0.0
             IF at_last_z;
     }
     void define_stress_yz(GridIndex t, GridIndex x, GridIndex y, GridIndex z,
@@ -345,9 +345,9 @@ public:
         adjust_for_sponge(next_stress_yz, x, y, z);
 
         // define the value at t+1 (special case: zero at surface).
-        stress_yz(t+1, x, y, z) IS_EQUIV_TO next_stress_yz
+        stress_yz(t+1, x, y, z) EQUALS next_stress_yz
             IF !at_last_z;
-        stress_yz(t+1, x, y, z) IS_EQUIV_TO 0.0
+        stress_yz(t+1, x, y, z) EQUALS 0.0
             IF at_last_z;
     }
 
@@ -358,19 +358,19 @@ public:
         // Define equivalencies to be valid only when z == last value in domain.
         // Note that values beyond the last index are updated, i.e., in the halo.
 
-        stress_zz(t+1, x, y, z+1) IS_EQUIV_TO -stress_zz(t+1, x, y, z)
+        stress_zz(t+1, x, y, z+1) EQUALS -stress_zz(t+1, x, y, z)
             IF at_last_z;
-        stress_zz(t+1, x, y, z+2) IS_EQUIV_TO -stress_zz(t+1, x, y, z-1)
-            IF at_last_z;
-
-        stress_xz(t+1, x, y, z+1) IS_EQUIV_TO -stress_xz(t+1, x, y, z-1)
-            IF at_last_z;
-        stress_xz(t+1, x, y, z+2) IS_EQUIV_TO -stress_xz(t+1, x, y, z-2)
+        stress_zz(t+1, x, y, z+2) EQUALS -stress_zz(t+1, x, y, z-1)
             IF at_last_z;
 
-        stress_yz(t+1, x, y, z+1) IS_EQUIV_TO -stress_yz(t+1, x, y, z-1)
+        stress_xz(t+1, x, y, z+1) EQUALS -stress_xz(t+1, x, y, z-1)
             IF at_last_z;
-        stress_yz(t+1, x, y, z+2) IS_EQUIV_TO -stress_yz(t+1, x, y, z-2)
+        stress_xz(t+1, x, y, z+2) EQUALS -stress_xz(t+1, x, y, z-2)
+            IF at_last_z;
+
+        stress_yz(t+1, x, y, z+1) EQUALS -stress_yz(t+1, x, y, z-1)
+            IF at_last_z;
+        stress_yz(t+1, x, y, z+2) EQUALS -stress_yz(t+1, x, y, z-2)
             IF at_last_z;
     }
     

@@ -76,36 +76,34 @@ public:
 
         // StencilContex specific code
         REGISTER_STENCIL_CONTEXT_EXTENSION(
-            void init ( )
-            {
-                  initDiff();
-            }
+           virtual void initData() {
+               initDiff();
+           }
         );
     }
 
-
     GridValue interp_mu( GridIndex x, GridIndex y, GridIndex z, const BR )
     {
-        return ( 2.0f/ (mu(x  , y  , z  ) +
-                        mu(x  , y+1, z  ) +
-                        mu(x  , y  , z+1) +
-                        mu(x  , y+1, z+1)) );
+        return ( 2.0/ (mu(x  , y  , z  ) +
+                       mu(x  , y+1, z  ) +
+                       mu(x  , y  , z+1) +
+                       mu(x  , y+1, z+1)) );
     }
 
     GridValue interp_mu( GridIndex x, GridIndex y, GridIndex z, const BL )
     {
-        return ( 2.0f/ (mu(x  , y  , z  ) +
-                        mu(x+1, y  , z  ) +
-                        mu(x  , y  , z+1) +
-                        mu(x+1, y  , z+1)) );
+        return ( 2.0/ (mu(x  , y  , z  ) +
+                       mu(x+1, y  , z  ) +
+                       mu(x  , y  , z+1) +
+                       mu(x+1, y  , z+1)) );
     }
 
     GridValue interp_mu( GridIndex x, GridIndex y, GridIndex z, const TR )
     {
-        return ( 2.0f/ (mu(x  , y  , z  ) +
-                        mu(x+1, y  , z  ) +
-                        mu(x  , y+1, z  ) +
-                        mu(x+1, y+1, z  )) );
+        return ( 2.0/ (mu(x  , y  , z  ) +
+                       mu(x+1, y  , z  ) +
+                       mu(x  , y+1, z  ) +
+                       mu(x+1, y+1, z  )) );
     }
 
     template<typename N>
@@ -143,8 +141,8 @@ public:
     void define_str_TL(GridIndex t, GridIndex x, GridIndex y, GridIndex z )
     {
 
-        GridValue ilambdamu2 = 1.f / lambdamu2(x,y,z);
-        GridValue ilambda    = 1.f / lambda   (x,y,z);
+        GridValue ilambdamu2 = 1.0 / lambdamu2(x,y,z);
+        GridValue ilambda    = 1.0 / lambda   (x,y,z);
 
         GridValue vtx    = stencil_O8<X,F>( t, x, y, z, v_tr_u );
         GridValue vty    = stencil_O8<Y,B>( t, x, y, z, v_tl_v );

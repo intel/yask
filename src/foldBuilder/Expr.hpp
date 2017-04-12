@@ -97,11 +97,12 @@ void operator/=(NumExprPtr& lhs, const NumExprPtr rhs);
 void operator/=(NumExprPtr& lhs, double rhs);
 
 // The '==' operator used for defining a grid value.
-#define EQUIV_OPER ==
-EqualsExprPtr operator EQUIV_OPER(GridPointPtr gpp, const NumExprPtr rhs);
-EqualsExprPtr operator EQUIV_OPER(GridPointPtr gpp, double rhs);
-#define IS_EQUIV_TO EQUIV_OPER
-#define IS_EQUIVALENT_TO EQUIV_OPER
+#define EQUALS_OPER ==
+EqualsExprPtr operator EQUALS_OPER(GridPointPtr gpp, const NumExprPtr rhs);
+EqualsExprPtr operator EQUALS_OPER(GridPointPtr gpp, double rhs);
+#define EQUALS EQUALS_OPER
+#define IS_EQUIV_TO EQUALS_OPER
+#define IS_EQUIVALENT_TO EQUALS_OPER
 
 // The '==' operator for comparing values.
 BoolExprPtr operator==(const NumExprPtr lhs, const NumExprPtr rhs);
@@ -878,7 +879,7 @@ public:
     
     // Check whether eq a depends on b.
     virtual bool is_dep_on(EqualsExprPtr a, EqualsExprPtr b) const {
-        assert(_done);
+        assert(_done || _deps.size() == 0);
         return _full_deps.count(a) && _full_deps.at(a).count(b) > 0;
     }
     
@@ -1142,7 +1143,7 @@ public:
 
 // Aliases for parameters.
 // Even though these are just typedefs for now, don't interchange them.
-// TODO: enforce the difference between grids and parameters.
+// TODO: make params just a special case of grids.
 typedef Grid Param;
 typedef Grids Params;
 
@@ -1324,9 +1325,11 @@ public:
                       EqDepMap& eq_deps);
     void findEqGroups(Grids& grids,
                       const string& targets,
-                      IntTuple& pts) {
+                      IntTuple& pts,
+                      bool find_deps) {
         EqDepMap eq_deps;
-        grids.findDeps(pts, _dims->_stepDim, &eq_deps);
+        if (find_deps)
+            grids.findDeps(pts, _dims->_stepDim, &eq_deps);
         findEqGroups(grids, targets, pts, eq_deps);
     }
 
@@ -1429,14 +1432,14 @@ typedef NumExprPtr GridValue;
 //   of the local var must be evaluated and inserted in the expr.
 // Example code:
 //   GridValue v;
-//   SET_VALUE_FROM_EXPR(v =, "context.temp * " << 0.2);
-//   SET_VALUE_FROM_EXPR(v +=, "context.coeff[" << r << "]");
+//   SET_VALUE_FROM_EXPR(v =, "_context->temp * " << 0.2);
+//   SET_VALUE_FROM_EXPR(v +=, "_context->coeff[" << r << "]");
 // This example would generate the following partial expression (when r=9):
-//   (context.temp * 2.00000000000000000e-01) + (context.coeff[9])
+//   (_context->temp * 2.00000000000000000e-01) + (_context->coeff[9])
 #define SET_VALUE_FROM_EXPR(lhs, rhs) do {              \
         ostringstream oss;                              \
         oss << setprecision(17) << scientific;          \
-        oss << "(" << rhs << ")";                   \
+        oss << "(" << rhs << ")";                       \
         lhs  make_shared<CodeExpr>(oss.str());          \
     } while(0)
 

@@ -61,18 +61,18 @@ protected:
     Grid rho;
 
     // Spatial FD coefficients.
-    const float c0_8 = 1.2f;
-    const float c1_8 = 1.4f;
-    const float c2_8 = 1.6f;
-    const float c3_8 = 1.8f;
+    const double c0_8 = 1.2;
+    const double c1_8 = 1.4;
+    const double c2_8 = 1.6;
+    const double c3_8 = 1.8;
 
     // Physical dimensions in time and space.
-    const float delta_t = 0.002452f;
+    const double delta_t = 0.002452;
 
     // Inverse of discretization.
-    const float dxi = 36.057693f;
-    const float dyi = 36.057693f;
-    const float dzi = 36.057693f;
+    const double dxi = 36.057693;
+    const double dyi = 36.057693;
+    const double dzi = 36.057693;
 
     bool                      hasBoundaryCondition;
     ElasticBoundaryCondition *bc;
@@ -90,32 +90,32 @@ public:
 
     GridValue interp_rho( GridIndex x, GridIndex y, GridIndex z, const TL )
     {
-        return ( 2.0f/ (rho(x  , y  , z  ) +
-                        rho(x+1, y  , z  )) );
+        return ( 2.0/ (rho(x  , y  , z  ) +
+                       rho(x+1, y  , z  )) );
     }
 
     GridValue interp_rho( GridIndex x, GridIndex y, GridIndex z, const TR )
     {
-        return ( 2.0f/ (rho(x  , y  , z  ) +
-                        rho(x  , y+1, z  )) );
+        return ( 2.0/ (rho(x  , y  , z  ) +
+                       rho(x  , y+1, z  )) );
     }
 
     GridValue interp_rho( GridIndex x, GridIndex y, GridIndex z, const BL )
     {
-        return ( 2.0f/ (rho(x  , y  , z  ) +
-                        rho(x  , y  , z+1)) );
+        return ( 2.0/ (rho(x  , y  , z  ) +
+                       rho(x  , y  , z+1)) );
     }
 
     GridValue interp_rho( GridIndex x, GridIndex y, GridIndex z, const BR )
     {
-        return ( 8.0f/ (rho(x  , y  , z  ) +
-                        rho(x  , y  , z+1) +
-                        rho(x  , y+1, z  ) +
-                        rho(x+1, y  , z  ) +
-                        rho(x+1, y+1, z  ) +
-                        rho(x  , y+1, z+1) +
-                        rho(x+1, y  , z+1) +
-                        rho(x+1, y+1, z+1)) );
+        return ( 8.0/ (rho(x  , y  , z  ) +
+                       rho(x  , y  , z+1) +
+                       rho(x  , y+1, z  ) +
+                       rho(x+1, y  , z  ) +
+                       rho(x+1, y+1, z  ) +
+                       rho(x  , y+1, z+1) +
+                       rho(x+1, y  , z+1) +
+                       rho(x+1, y+1, z+1)) );
     }
 
     template<typename N>
@@ -220,9 +220,9 @@ public:
         // define the value at t+1.
         if ( hasBoundaryCondition ) {
             Condition not_at_bc = bc->is_not_at_boundary(t,x,y,z);
-            v(t+1, x, y, z) IS_EQUIV_TO next_v IF not_at_bc;
+            v(t+1, x, y, z) EQUALS next_v IF not_at_bc;
         } else
-            v(t+1, x, y, z) IS_EQUIV_TO next_v;
+            v(t+1, x, y, z) EQUALS next_v;
     }
 
     GridValue stencil_O2_Z( GridIndex t, GridIndex x, GridIndex y, GridIndex z, Grid &g, const int offset )

@@ -57,7 +57,11 @@ struct AppSettings : public StencilSettings {
     public:
         ValOption(AppSettings& as) :
                 OptionBase("v",
-                           "Shortcut for -validate -no-warmup -t 1 -dt 1 -d 64 -b 24."),
+                           "Shortcut for '-validate -no-warmup -t 1 -dt 1 -d 64"
+#if USING_DIM_W
+                           " -dw 3"
+#endif
+                           " -b 24'."),
                 _as(as) { }
 
         // Set multiple vars.
@@ -68,6 +72,9 @@ struct AppSettings : public StencilSettings {
                 _as.doWarmup = false;
                 _as.num_trials = 1;
                 _as.dt = 1;
+#if USING_DIM_W
+                _as.dw = 3;
+#endif
                 _as.dx = _as.dy = _as.dz = 64;
                 _as.bx = _as.by = _as.bz = 24;
                 return true;
@@ -76,6 +83,10 @@ struct AppSettings : public StencilSettings {
         }
     };
 
+#ifndef DEF_ARGS
+#define DEF_ARGS ""
+#endif
+    
     // Parse options from the command-line and set corresponding vars.
     // Exit with message on error or request for help.
     void parse(int argc, char** argv) {
@@ -108,21 +119,22 @@ struct AppSettings : public StencilSettings {
         // Parse cmd-line options.
         // Any remaining strings will be left in args.
         vector<string> args;
+        parser.set_args(DEF_ARGS, args);
         parser.parse_args(argc, argv, args);
 
         if (help) {
             string appNotes =
-                " Validation is very slow and uses 2x memory,\n"
-                "  so run with very small sizes and number of time-steps.\n"
-                "  If validation fails, it may be due to rounding error;\n"
-                "   try building with 8-byte reals.\n";
+                "Validation is very slow and uses 2x memory,\n"
+                " so run with very small sizes and number of time-steps.\n"
+                " If validation fails, it may be due to rounding error;\n"
+                "  try building with 8-byte reals.\n";
             vector<string> appExamples;
             appExamples.push_back("-t 2");
             appExamples.push_back("-v");
             print_usage(cout, parser, argv[0], appNotes, appExamples);
             exit_yask(1);
         }
-        
+
         if (args.size()) {
             cerr << "Error: extraneous parameter(s):";
             for (auto arg : args)
@@ -145,6 +157,7 @@ struct AppSettings : public StencilSettings {
             "\nStencil name: " YASK_STENCIL_NAME << endl;
 
         // Echo invocation parameters for record-keeping.
+        os << "Default arguments: " DEF_ARGS << endl;
         os << "Invocation:";
         for (int argi = 0; argi < argc; argi++)
             os << " " << argv[argi];
@@ -251,7 +264,7 @@ int main(int argc, char** argv)
         os << 
             "time (sec):                             " << printWithPow10Multiplier(elapsed_time) << endl <<
             "throughput (prob-size-points/sec):      " << printWithPow10Multiplier(dpps) << endl <<
-            "throughput (points-updated/sec):        " << printWithPow10Multiplier(apps) << endl <<
+            "throughput (point-updates/sec):         " << printWithPow10Multiplier(apps) << endl <<
             "throughput (est-FLOPS):                 " << printWithPow10Multiplier(flops) << endl;
 #ifdef USE_MPI
         os <<
@@ -269,12 +282,12 @@ int main(int argc, char** argv)
     os << divLine <<
         "best-time (sec):                        " << printWithPow10Multiplier(best_elapsed_time) << endl <<
         "best-throughput (prob-size-points/sec): " << printWithPow10Multiplier(best_dpps) << endl <<
-        "best-throughput (points-updated/sec):   " << printWithPow10Multiplier(best_apps) << endl <<
+        "best-throughput (point-updates/sec):    " << printWithPow10Multiplier(best_apps) << endl <<
         "best-throughput (est-FLOPS):            " << printWithPow10Multiplier(best_flops) << endl <<
         divLine <<
         "Notes:\n" <<
         " prob-size-points/sec is based on problem-size as described above.\n" <<
-        " points-updated/sec is based on grid-points-updated as described above.\n" <<
+        " point-updates/sec is based on grid-point-updates as described above.\n" <<
         " est-FLOPS is based on est-FP-ops as described above.\n" <<
         endl;
     

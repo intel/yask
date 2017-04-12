@@ -23,8 +23,8 @@ IN THE SOFTWARE.
 
 *****************************************************************************/
 
-// Implement isotropic 3D finite-difference stencil.
-// 2nd-order in time.
+// Implement isotropic 3D finite-difference (FD) stencil, nth-order accurate in
+// space (where n = 2 * radius) and 2nd-order accurate in time.
 
 #include "StencilBase.hpp"
 
@@ -37,6 +37,11 @@ protected:
     
 public:
 
+    // For this stencil, the 'radius' is half the FD accuracy in space.  For
+    // example, radius=8 implements a 16th-order accurate FD stencil.  To
+    // obtain the correct result, the 'coeff' array should be initialized
+    // with the corresponding central FD coefficients.  The accuracy in time
+    // is fixed at 2nd order.
     Iso3dfdStencil(StencilList& stencils, int radius=8) :
         StencilRadiusBase("iso3dfd", stencils, radius)
     {
@@ -62,37 +67,39 @@ public:
         GET_OFFSET(y);
         GET_OFFSET(z);
 
-        // start with center value multiplied by coeff 0.
-        GridValue v = pressure(t, x, y, z) * coeff(0);
+        // Start with center value multiplied by coeff 0.
+        GridValue next_p = pressure(t, x, y, z) * coeff(0);
 
-        // add values from x, y, and z axes multiplied by the
+        // Add values from x, y, and z axes multiplied by the
         // coeff for the given radius.
         for (int r = 1; r <= _radius; r++) {
 
             // Add values from axes at radius r.
-            v += (
-                  // x-axis.
-                  pressure(t, x-r, y, z) +
-                  pressure(t, x+r, y, z) +
+            next_p += (
+                       // x-axis.
+                       pressure(t, x-r, y, z) +
+                       pressure(t, x+r, y, z) +
                 
-                  // y-axis.
-                  pressure(t, x, y-r, z) +
-                  pressure(t, x, y+r, z) +
+                       // y-axis.
+                       pressure(t, x, y-r, z) +
+                       pressure(t, x, y+r, z) +
                 
-                  // z-axis.
-                  pressure(t, x, y, z-r) +
-                  pressure(t, x, y, z+r)
+                       // z-axis.
+                       pressure(t, x, y, z-r) +
+                       pressure(t, x, y, z+r)
 
-                  ) * coeff(r);
+                       ) * coeff(r);
         }
 
-        // finish equation, including t-1 and velocity components.
-        v = (2.0 * pressure(t, x, y, z))
+        // Finish equation, including t-1 and velocity components.
+        next_p = (2.0 * pressure(t, x, y, z))
             - pressure(t-1, x, y, z) // subtract pressure from t-1.
-            + (v * vel(x, y, z));       // add v * velocity.
+            + (next_p * vel(x, y, z));       // add next_p * velocity.
 
-        // define the value at t+1 to be equivalent to v.
-        pressure(t+1, x, y, z) IS_EQUIV_TO v;
+        // Define the value at t+1 to be equal to next_p.
+        // Since this implements the finite-difference method, this
+        // is actually an approximation.
+        pressure(t+1, x, y, z) EQUALS next_p;
     }
 };
 

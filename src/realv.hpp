@@ -117,8 +117,8 @@ namespace yask {
 #ifndef VLEN_T
 #define VLEN_T (1)
 #endif
-#ifndef VLEN_N
-#define VLEN_N (1)
+#ifndef VLEN_W
+#define VLEN_W (1)
 #endif
 #ifndef VLEN_X
 #define VLEN_X (1)
@@ -130,7 +130,7 @@ namespace yask {
 #define VLEN_Z (1)
 #endif
 #ifndef VLEN
-#define VLEN ((VLEN_T) * (VLEN_N) * (VLEN_X) * (VLEN_Y) * (VLEN_Z))
+#define VLEN ((VLEN_T) * (VLEN_W) * (VLEN_X) * (VLEN_Y) * (VLEN_Z))
 #endif
 
 #if VLEN_T != 1
@@ -210,7 +210,7 @@ namespace yask {
 
     // Type for a vector block.
     // The union 'u' is a 4-dimensional "folded" vector
-    // of size VLEN_N * VLEN_X * VLEN_Y * VLEN_Z.
+    // of size VLEN_W * VLEN_X * VLEN_Y * VLEN_Z.
     struct real_vec_t {
 
         // union of data types.
@@ -292,32 +292,33 @@ namespace yask {
             return u.r[l];
         }
 
-        // access a real_t by n,x,y,z vector-block indices.
-        ALWAYS_INLINE const real_t& operator()(idx_t n, idx_t i, idx_t j, idx_t k) const {
-            assert(n >= 0);
-            assert(n < VLEN_N);
-            assert(i >= 0);
-            assert(i < VLEN_X);
-            assert(j >= 0);
-            assert(j < VLEN_Y);
-            assert(k >= 0);
-            assert(k < VLEN_Z);
+        // access a real_t by w,x,y,z element indices.
+        ALWAYS_INLINE const real_t& operator()(idx_t w, idx_t x, idx_t y, idx_t z) const {
+            assert(w >= 0);
+            assert(w < VLEN_W);
+            assert(x >= 0);
+            assert(x < VLEN_X);
+            assert(y >= 0);
+            assert(y < VLEN_Y);
+            assert(z >= 0);
+            assert(z < VLEN_Z);
 
+            // TODO: move this to stencil compiler.
 #if VLEN_FIRST_DIM_IS_UNIT_STRIDE
 
-            // n dim is unit stride, followed by x, y, z.
-            idx_t l = LAYOUT_4321(n, i, j, k, VLEN_N, VLEN_X, VLEN_Y, VLEN_Z);
+            // w dim is unit stride, followed by x, y, z.
+            idx_t l = LAYOUT_4321(w, x, y, z, VLEN_W, VLEN_X, VLEN_Y, VLEN_Z);
 #else
 
-            // z dim is unit stride, followed by y, x, n.
-            idx_t l = LAYOUT_1234(n, i, j, k, VLEN_N, VLEN_X, VLEN_Y, VLEN_Z);
+            // z dim is unit stride, followed by y, x, w.
+            idx_t l = LAYOUT_1234(w, x, y, z, VLEN_W, VLEN_X, VLEN_Y, VLEN_Z);
 #endif
         
             return u.r[l];
         }
-        ALWAYS_INLINE real_t& operator()(idx_t n, idx_t i, idx_t j, idx_t k) {
+        ALWAYS_INLINE real_t& operator()(idx_t w, idx_t x, idx_t y, idx_t z) {
             const real_vec_t* ct = const_cast<const real_vec_t*>(this);
-            const real_t& cr = (*ct)(n, i, j, k);
+            const real_t& cr = (*ct)(w, x, y, z);
             return const_cast<real_t&>(cr);
         }
 
