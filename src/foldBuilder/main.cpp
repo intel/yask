@@ -64,7 +64,6 @@ int radius = 1;
 bool firstInner = true;
 bool allowUnalignedLoads = false;
 string eqGroupTargets;
-string gridRegex;
 bool doFuse = false;
 bool doComb = false;
 bool doCse = true;
@@ -94,7 +93,7 @@ void usage(const string& cmd) {
     cout << "Options:\n"
         " -h                 print this help message.\n"
         "\n"
-        " -stencil <name>    set stencil type (required); supported stencils:\n";
+        " -st <name>         set stencil type (required); supported stencils:\n";
     for (auto si : stencils) {
         auto name = si.first;
         auto sp = si.second;
@@ -111,24 +110,16 @@ void usage(const string& cmd) {
         "    Set number of elements in each dimension in a vector block.\n"
         " -cluster <dim>=<size>,...\n"
         "    Set number of vectors to evaluate in each dimension.\n"
-        " -grids <regex>\n"
-        "    Only process updates to grids whose names match <regex>.\n"
-        " -eq-grouping <name>=<regex>,...\n"
-        "    Put updates to grids matching <regex> in equation-groups with base-name <name>.\n"
+        " -eq <name>=<substr>,...\n"
+        "    Put updates to grids containing <substr> in equation-groups with base-name <name>.\n"
         "      By default, eq-groups are defined as needed based on dependencies with\n"
-        "        base-name '" << eq_group_basename_default << "': equations that are independent\n"
-        "        of each other are placed together within a group.\n"
-        "      This option allows more control over this grouping.\n"
+        "        base-name '" << eq_group_basename_default << "'.\n"
         "      Eq-groups are created in the order in which they are specified.\n"
         "        By default, they are created based on the order in which the grids are initialized.\n"
         "      Each eq-group base-name is appended with a unique index number.\n"
-        "      Example: \"-eq-grouping a=foo,b=b[aeiou]r\" creates one or more eq-groups named 'a_0', 'a_1', etc.\n"
-        "        containing updates to each grid whose name contains 'foo' and one or more eq-groups\n"
-        "        named 'b_0', 'b_1', etc. containing updates to each grid whose name matches 'b[aeiou]r'.\n"
-        "      Standard regex-format tokens in <name> will be replaced based on matches to <regex>.\n"
-        "      Example: \"-eq-grouping 'g_$&=b[aeiou]r'\" with grids 'bar_x', 'bar_y', 'ber_x', and 'ber_y'\n"
-        "        would create eq-group 'g_bar_0' for grids 'bar_x' and 'bar_y' and eq-group 'g_ber_0' for\n"
-        "        grids 'ber_x' and 'ber_y'.\n"
+        "      Example: '-eq a=foo,b=bar' creates one or more eq-groups with base-name 'a'\n"
+        "        containing updates to grids whose name contains 'foo' and one or more eq-groups\n"
+        "        with base-name 'b' containing updates to grids whose name contains 'bar'.\n"
         //" [-no]-fuse         Do [not] pack grids together in meta container(s) (default=" << doFuse << ").\n"
         " -step <dim>\n"
         "    Specify stepping dimension <dim> (default='" << stepDim << "').\n"
@@ -178,9 +169,9 @@ void usage(const string& cmd) {
         //" -pp <filename>        Print POV-Ray code.\n"
         "\n"
         "Examples:\n"
-        " " << cmd << " -stencil 3axis -r 2 -fold x=4,y=4 -ph -  # '-' for stdout\n"
-        " " << cmd << " -stencil awp -fold x=4,y=2 -p256 stencil_code.hpp\n"
-        " " << cmd << " -stencil iso3dfd -r 8 -fold x=4,y=4 -cluster y=2 -p512 stencil_code.hpp\n";
+        " " << cmd << " -st 3axis -r 2 -fold x=4,y=4 -ph -  # '-' for stdout\n"
+        " " << cmd << " -st awp -fold x=4,y=2 -p256 stencil_code.hpp\n"
+        " " << cmd << " -st iso3dfd -r 8 -fold x=4,y=4 -cluster y=2 -p512 stencil_code.hpp\n";
     exit(1);
 }
 
@@ -238,14 +229,12 @@ void parseOpts(int argc, const char* argv[])
                 string argop = argv[++argi];
 
                 // options w/a string value.
-                if (opt == "-stencil")
+                if (opt == "-st")
                     shapeName = argop;
                 else if (opt == "-step")
                     stepDim = argop;
-                else if (opt == "-eq-grouping")
+                else if (opt == "-eq")
                     eqGroupTargets = argop;
-                else if (opt == "-grids")
-                    gridRegex = argop;
                 else if (opt == "-fold" || opt == "-cluster") {
 
                     // example: x=4,y=2
@@ -439,7 +428,7 @@ int main(int argc, const char* argv[]) {
     cout << "Checking equation(s) with clusters of vectors...\n"
         " If this fails, the cluster dimensions are not compatible with all equations.\n";
     EqGroups eqGroups(eq_group_basename_default, dims);
-    eqGroups.findEqGroups(grids, gridRegex, eqGroupTargets, dims._clusterPts, find_deps);
+    eqGroups.findEqGroups(grids, eqGroupTargets, dims._clusterPts, find_deps);
     optimizeEqGroups(eqGroups, "scalar & vector", false, cout);
 
     // Make copies of all the equations at each cluster offset.

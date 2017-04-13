@@ -1320,19 +1320,17 @@ public:
     // each remaining grid goes in a eqGroup named after the grid.
     // Only grids with eqGroups are put in eqGroups.
     void findEqGroups(Grids& grids,
-                      const string& gridRegex,
                       const string& targets,
                       IntTuple& pts,
                       EqDepMap& eq_deps);
     void findEqGroups(Grids& grids,
-                      const string& gridRegex,
                       const string& targets,
                       IntTuple& pts,
                       bool find_deps) {
         EqDepMap eq_deps;
         if (find_deps)
             grids.findDeps(pts, _dims->_stepDim, &eq_deps);
-        findEqGroups(grids, gridRegex, targets, pts, eq_deps);
+        findEqGroups(grids, targets, pts, eq_deps);
     }
 
     virtual const Grids& getOutputGrids() const {

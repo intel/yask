@@ -38,7 +38,6 @@ IN THE SOFTWARE.
 #include <map>
 #include <set>
 #include <vector>
-#include <regex>
 
 using namespace std;
 

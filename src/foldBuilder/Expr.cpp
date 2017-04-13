@@ -1164,57 +1164,37 @@ bool EqGroups::addExprsFromGrid(const string& baseName,
 // 'pts': extent of vectorization or cluster.
 // 'eq_deps': pre-computed dependencies between equations.
 void EqGroups::findEqGroups(Grids& allGrids,
-                            const string& gridRegex,
                             const string& targets,
                             IntTuple& pts,
                             EqDepMap& eq_deps)
 {
     //auto& stepDim = _dims->_stepDim;
-
-    // Make a regex for the grids.
-    regex gridx(gridRegex);
     
     // Map to track indices per eq-group name.
     map<string, int> indices;
     
     // Handle each key-value pair in 'targets' string.
-    // Key is eq-group name (with possible format strings); value is regex pattern.
     ArgParser ap;
     ap.parseKeyValuePairs
-        (targets, [&](const string& egfmt, const string& pattern) {
+        (targets, [&](const string& key, const string& value) {
 
-            // Make a regex for the pattern.
-            regex patx(pattern);
-
-            // Search all grids for matches to gridx and patx.
+            // Search allGrids for matches to current value.
             for (auto gp : allGrids) {
-
-                // Match to gridx?
                 string gname = gp->getName();
-                if (!regex_search(gname, gridx))
+
+                // value doesn't appear in the grid name?
+                size_t np = gname.find(value);
+                if (np == string::npos)
                     continue;
 
-                // Match to patx?
-                smatch mr;
-                if (!regex_search(gname, mr, patx))
-                    continue;
-
-                // Substitute special tokens with match.
-                string egname = mr.format(egfmt);
-                
-                // Add equation(s) from this grid.
-                addExprsFromGrid(egname, indices, gp, eq_deps);
+                // Add equations.
+                addExprsFromGrid(key, indices, gp, eq_deps);
             }
         });
 
     // Add all grids not matching any values in the 'targets' string.
     for (auto gp : allGrids) {
 
-        // Match to gridx?
-        string gname = gp->getName();
-        if (!regex_search(gname, gridx))
-            continue;
-        
         // Add equations.
         addExprsFromGrid(_basename_default, indices, gp, eq_deps);
     }
