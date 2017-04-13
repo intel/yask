@@ -553,13 +553,15 @@ for my $i (0..$#rangesAll) {
     $r->[$stepI] = $step;
     $usedGeneRanges{$rkey} = 1;
   }
-  $rkey =~ s/[xyz]$//;          # e.g., 'dx' -> 'd'.
-  if (exists $geneRanges{$rkey}) {
-    my ($min, $max, $step) = @{$geneRanges{$rkey}};
-    $r->[$minI] = $min;
-    $r->[$maxI] = $max;
-    $r->[$stepI] = $step;
-    $usedGeneRanges{$rkey} = 1;
+  else {
+    $rkey =~ s/[xyz]$//;          # e.g., 'dx' -> 'd'.
+    if (exists $geneRanges{$rkey}) {
+      my ($min, $max, $step) = @{$geneRanges{$rkey}};
+      $r->[$minI] = $min;
+      $r->[$maxI] = $max;
+      $r->[$stepI] = $step;
+      $usedGeneRanges{$rkey} = 1;
+    }
   }
 
   die "error: key: max value $r->[$maxI] of '$key' < min value $r->[$minI]\n"
