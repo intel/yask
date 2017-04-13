@@ -27,7 +27,7 @@
 
 if ( "-$1" == "-" ) then
     if ( `echo stencil-tuner*.csv | wc -l` > 0 ) then
-        $0 stencil-search.*.csv
+        $0 stencil-tuner*.csv
     else
         echo "usage: $0 <csv-file(s) from stencil-tuner>"
     endif
