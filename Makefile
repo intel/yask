@@ -71,50 +71,50 @@ real_bytes	=	4
 
 # Defaults based on stencil type (and arch for some stencils).
 ifeq ($(stencil),)
- $(error Stencil not specified; use stencil=iso3dfd, 3axis, 9axis, 3plane, cube, ave, stream, awp, awp_elastic, ssg, fsg, or fsg_abc)
+ $(error Stencil not specified)
 
 else ifeq ($(stencil),ave)
- radius		?=	1
+ radius		=	1
 
 else ifeq ($(stencil),3axis)
  MACROS		+=	MAX_EXCH_DIST=1
- radius		?=	6
+ radius		=	6
 
 else ifeq ($(stencil),9axis)
  MACROS		+=	MAX_EXCH_DIST=2
- radius		?=	4
+ radius		=	4
 
 else ifeq ($(stencil),3plane)
  MACROS		+=	MAX_EXCH_DIST=2
- radius		?=	3
+ radius		=	3
 
 else ifeq ($(stencil),cube)
  MACROS		+=	MAX_EXCH_DIST=3
- radius		?=	2
+ radius		=	2
 
 else ifeq ($(stencil),iso3dfd)
  MACROS		+=	MAX_EXCH_DIST=1
- radius		?=	8
+ radius		=	8
  ifeq ($(arch),knl)
-  def_block_args	?=	-b 96 -bx 192
+  def_block_args	=	-b 96 -bx 192
   ifeq ($(real_bytes),4)
-   fold		?=	x=2,y=8,z=1
+   fold		=	x=2,y=8,z=1
   else
-   fold		?=	x=2,y=4,z=1
+   fold		=	x=2,y=4,z=1
   endif
-  cluster	?=	x=2
+  cluster	=	x=2
  else ifeq ($(arch),hsw)
   def_thread_divisor		=	2
   def_block_threads		=	1
-  def_block_args		?=	-bx 296 -by 5 -bz 290
+  def_block_args		=	-bx 296 -by 5 -bz 290
   SUB_BLOCK_LOOP_INNER_MODS	=
-  cluster			?=	z=2
+  cluster			=	z=2
  endif
 
 else ifeq ($(stencil),stream)
  MACROS		+=	MAX_EXCH_DIST=0
- radius		?=	2
- cluster		?=	x=2
+ radius		=	2
+ cluster	=	x=2
 
 else ifneq ($(findstring awp,$(stencil)),)
  time_alloc			=	1
@@ -137,29 +137,30 @@ else ifneq ($(findstring awp,$(stencil)),)
   more_def_args			+=	-sbx 8 -sby 18 -sbz 40
  else ifeq ($(arch),skx)
   ifeq ($(real_bytes),4)
-   fold				?=	x=2,y=8,z=1
+   fold				=	x=2,y=8,z=1
   endif
   def_block_args		=	-b 32 -bx 96
   SUB_BLOCK_LOOP_INNER_MODS	=	prefetch(L1)
  endif
 
-else ifeq ($(stencil)),ssg)
- eqs		?=	v_bl=v_bl,v_tr=v_tr,v_tl=v_tl,s_br=s_br,s_bl=s_bl,s_tr=s_tr,s_tl=s_tl
+else ifeq ($(stencil),ssg)
+ eqs		=	v_bl=v_bl,v_tr=v_tr,v_tl=v_tl,s_br=s_br,s_bl=s_bl,s_tr=s_tr,s_tl=s_tl
 
 else ifeq ($(stencil),fsg)
- eqs		?=      v_br=v_br,v_bl=v_bl,v_tr=v_tr,v_tl=v_tl,s_br=s_br,s_bl=s_bl,s_tr=s_tr,s_tl=s_tl
- time_alloc	?=	1
+ eqs		=      v_br=v_br,v_bl=v_bl,v_tr=v_tr,v_tl=v_tl,s_br=s_br,s_bl=s_bl,s_tr=s_tr,s_tl=s_tl
+ time_alloc	=	1
  ifeq ($(arch),knl)
-  omp_region_schedule  	?=	guided
-  def_block_args  	?=      -b 16
-  def_thread_divisor	?=	4
-  def_block_threads	?= 	1
-  SUB_BLOCK_LOOP_INNER_MODS  ?=	prefetch(L2)
+  omp_region_schedule  	=	guided
+  def_block_args  	=      -b 16
+  def_thread_divisor	=	4
+  def_block_threads	= 	1
+  SUB_BLOCK_LOOP_INNER_MODS  =	prefetch(L2)
  endif
 
 endif # stencil-specific.
 
 # Defaut settings based on architecture.
+# (Use '?=' to avoid replacing above settings.)
 ifeq ($(arch),knc)
 
  ISA		?= 	-mmic
