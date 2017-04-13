@@ -74,52 +74,52 @@ ifeq ($(stencil),)
  $(error Stencil not specified; use stencil=iso3dfd, 3axis, 9axis, 3plane, cube, ave, stream, awp, awp_elastic, ssg, fsg, or fsg_abc)
 
 else ifeq ($(stencil),ave)
- radius		?=	1
+ radius		=	1
 
 else ifeq ($(stencil),3axis)
  MACROS		+=	MAX_EXCH_DIST=1
- radius		?=	6
+ radius		=	6
 
 else ifeq ($(stencil),9axis)
  MACROS		+=	MAX_EXCH_DIST=2
- radius		?=	4
+ radius		=	4
 
 else ifeq ($(stencil),3plane)
  MACROS		+=	MAX_EXCH_DIST=2
- radius		?=	3
+ radius		=	3
 
 else ifeq ($(stencil),cube)
  MACROS		+=	MAX_EXCH_DIST=3
- radius		?=	2
+ radius		=	2
 
 else ifeq ($(stencil),iso3dfd)
  MACROS		+=	MAX_EXCH_DIST=1
- radius		?=	8
+ radius		=	8
  ifeq ($(arch),knl)
-  def_block_args	?=	-b 96 -bx 192
+  def_block_args	=	-b 96 -bx 192
   ifeq ($(real_bytes),4)
-   fold		?=	x=2,y=8,z=1
+   fold		=	x=2,y=8,z=1
   else
-   fold		?=	x=2,y=4,z=1
+   fold		=	x=2,y=4,z=1
   endif
-  cluster	?=	x=2
+  cluster	=	x=2
  else ifeq ($(arch),hsw)
   def_thread_divisor		=	2
   def_block_threads		=	1
-  def_block_args		?=	-bx 296 -by 5 -bz 290
+  def_block_args		=	-bx 296 -by 5 -bz 290
   SUB_BLOCK_LOOP_INNER_MODS	=
-  cluster			?=	z=2
+  cluster			=	z=2
  endif
 
 else ifeq ($(stencil),stream)
  MACROS		+=	MAX_EXCH_DIST=0
- radius		?=	2
- cluster		?=	x=2
+ radius		=	2
+ cluster	=	x=2
 
 else ifneq ($(findstring awp,$(stencil)),)
  time_alloc			=	1
  def_block_args			=	-b 32
- eqs				=	velocity=vel,stress=str
+ eqs				=	'$$&=vel|stress' # make 2 eq-groups.
  FB_FLAGS			+=	-min-es 1
  ifeq ($(arch),knl)
   def_thread_divisor		=	2
@@ -137,29 +137,31 @@ else ifneq ($(findstring awp,$(stencil)),)
   more_def_args			+=	-sbx 8 -sby 18 -sbz 40
  else ifeq ($(arch),skx)
   ifeq ($(real_bytes),4)
-   fold				?=	x=2,y=8,z=1
+   fold				=	x=2,y=8,z=1
   endif
   def_block_args		=	-b 32 -bx 96
   SUB_BLOCK_LOOP_INNER_MODS	=	prefetch(L1)
  endif
 
-else ifeq ($(stencil)),ssg)
- eqs		?=	v_bl=v_bl,v_tr=v_tr,v_tl=v_tl,s_br=s_br,s_bl=s_bl,s_tr=s_tr,s_tl=s_tl
+else ifeq ($(stencil),ssg)
+ eqs			=	'$$&=[a-z]_[a-z]+'  # match 1st and 2nd 'parts' of grid names.
+ time_alloc		=	1
 
 else ifeq ($(stencil),fsg)
- eqs		?=      v_br=v_br,v_bl=v_bl,v_tr=v_tr,v_tl=v_tl,s_br=s_br,s_bl=s_bl,s_tr=s_tr,s_tl=s_tl
- time_alloc	?=	1
+ eqs			=	'$$&=[a-z]_[a-z]+'  # match 1st and 2nd 'parts' of grid names.
+ time_alloc		=	1
  ifeq ($(arch),knl)
-  omp_region_schedule  	?=	guided
-  def_block_args  	?=      -b 16
-  def_thread_divisor	?=	4
-  def_block_threads	?= 	1
-  SUB_BLOCK_LOOP_INNER_MODS  ?=	prefetch(L2)
+  omp_region_schedule  	=	guided
+  def_block_args  	=      -b 16
+  def_thread_divisor	=	4
+  def_block_threads	= 	1
+  SUB_BLOCK_LOOP_INNER_MODS  =	prefetch(L2)
  endif
 
 endif # stencil-specific.
 
 # Defaut settings based on architecture.
+# Use '?=' to avoid changing anything set above.
 ifeq ($(arch),knc)
 
  ISA		?= 	-mmic
@@ -277,10 +279,10 @@ CXXOPT		:=	-O3
 CXXFLAGS        +=   	-g -std=c++11 -Wall $(CXXOPT)
 OMPFLAGS	+=	-fopenmp 
 LFLAGS          +=      -lrt
-FB_CXX    	:=       g++  # faster than icpc for the foldBuilder.
+FB_CXX    	:=      g++  # g++ 4.9+ needed for regex.
 FB_CXXFLAGS 	+=	-g -O0 -std=c++11 -Wall  # low opt to reduce compile time.
 EXTRA_FB_CXXFLAGS =
-FB_FLAGS   	+=	-st $(stencil) -cluster $(cluster) -fold $(fold)
+FB_FLAGS   	+=	-stencil $(stencil) -cluster $(cluster) -fold $(fold)
 ST_MACRO_FILE	:=	stencil_macros.hpp
 ST_CODE_FILE	:=	stencil_code.hpp
 FB_STENCIL_LIST	:=	src/foldBuilder/stencils.hpp
@@ -293,7 +295,7 @@ GEN_HEADERS     :=	$(addprefix src/, \
 				layout_macros.hpp layouts.hpp \
 				$(ST_MACRO_FILE) $(ST_CODE_FILE) )
 ifneq ($(eqs),)
- FB_FLAGS   	+=	-eq $(eqs)
+ FB_FLAGS   	+=	-eq-grouping $(eqs)
 endif
 ifneq ($(radius),)
  FB_FLAGS   	+=	-r $(radius)
