@@ -93,28 +93,33 @@ else ifeq ($(stencil),cube)
  radius		=	2
 
 else ifeq ($(stencil),iso3dfd)
- MACROS		+=	MAX_EXCH_DIST=1
- radius		=	8
+ MACROS				+=	MAX_EXCH_DIST=1
+ radius				=	8
  ifeq ($(arch),knl)
-  def_block_args	=	-b 96 -bx 192
   ifeq ($(real_bytes),4)
-   fold		=	x=2,y=8,z=1
-  else
-   fold		=	x=2,y=4,z=1
+   fold				=	x=2,y=8
   endif
-  cluster	=	x=2
+  cluster			=	x=2
+  def_block_args		=	-b 96 -bx 192
  else ifeq ($(arch),hsw)
+  ifeq ($(real_bytes),4)
+   fold				=	x=8
+  endif
   def_thread_divisor		=	2
   def_block_threads		=	1
   def_block_args		=	-bx 296 -by 5 -bz 290
-  SUB_BLOCK_LOOP_INNER_MODS	=
   cluster			=	z=2
+  SUB_BLOCK_LOOP_INNER_MODS	=
+ else ifeq ($(arch),skx)
+  ifeq ($(real_bytes),4)
+   fold				=	x=4,y=4
+  endif
+  def_thread_divisor		=	1
+  def_block_threads		=	2
+  def_block_args		=	-b 64
+  cluster			=	z=2
+  SUB_BLOCK_LOOP_INNER_MODS	=	prefetch(L1)
  endif
-
-else ifeq ($(stencil),stream)
- MACROS		+=	MAX_EXCH_DIST=0
- radius		=	2
- cluster	=	x=2
 
 else ifneq ($(findstring awp,$(stencil)),)
  time_alloc			=	1
@@ -130,32 +135,38 @@ else ifneq ($(findstring awp,$(stencil)),)
   SUB_BLOCK_LOOP_INNER_MODS	=	prefetch(L1,L2)
   omp_block_schedule		=	dynamic,1
   ifeq ($(real_bytes),4)
-   fold				=	x=4,y=2,z=1
+   fold				=	x=4,y=2
   endif
   cluster			=	x=2
   def_block_args		=	-bx 8 -by 28 -bz 70
   more_def_args			+=	-sbx 8 -sby 18 -sbz 40
  else ifeq ($(arch),skx)
   ifeq ($(real_bytes),4)
-   fold				=	x=2,y=8,z=1
+   fold				=	x=2,y=8
   endif
   def_block_args		=	-b 32 -bx 96
   SUB_BLOCK_LOOP_INNER_MODS	=	prefetch(L1)
  endif
 
 else ifeq ($(stencil),ssg)
+ time_alloc	=	1
  eqs		=	v_bl=v_bl,v_tr=v_tr,v_tl=v_tl,s_br=s_br,s_bl=s_bl,s_tr=s_tr,s_tl=s_tl
 
 else ifeq ($(stencil),fsg)
- eqs		=      v_br=v_br,v_bl=v_bl,v_tr=v_tr,v_tl=v_tl,s_br=s_br,s_bl=s_bl,s_tr=s_tr,s_tl=s_tl
  time_alloc	=	1
+ eqs		=      v_br=v_br,v_bl=v_bl,v_tr=v_tr,v_tl=v_tl,s_br=s_br,s_bl=s_bl,s_tr=s_tr,s_tl=s_tl
  ifeq ($(arch),knl)
   omp_region_schedule  	=	guided
-  def_block_args  	=      -b 16
+  def_block_args  	=	-b 16
   def_thread_divisor	=	4
-  def_block_threads	= 	1
+  def_block_threads	=	1
   SUB_BLOCK_LOOP_INNER_MODS  =	prefetch(L2)
  endif
+
+else ifeq ($(stencil),stream)
+ MACROS		+=	MAX_EXCH_DIST=0
+ radius		=	2
+ cluster	=	x=2
 
 endif # stencil-specific.
 
