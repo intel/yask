@@ -37,7 +37,9 @@
 #
 # fold: How to fold vectors (x*y*z).
 #   Vectorization in dimensions perpendicular to the inner loop
-#   (defined by SUB_BLOCK_LOOP_CODE below) often works well.
+#   (defined by SUB_BLOCK_LOOP_INNER_VARS below) often works well.
+# fold_4byte: How to fold vectors when real_bytes=4.
+# fold_8byte: How to fold vectors when real_bytes=8.
 #
 # cluster: How many folded vectors to evaluate simultaneously.
 #
@@ -71,95 +73,103 @@ real_bytes	=	4
 
 # Defaults based on stencil type (and arch for some stencils).
 ifeq ($(stencil),)
- $(error Stencil not specified; use stencil=iso3dfd, 3axis, 9axis, 3plane, cube, ave, stream, awp, awp_elastic, ssg, fsg, or fsg_abc)
+ $(error Stencil not specified)
 
 else ifeq ($(stencil),ave)
- radius		?=	1
+ radius		=	1
 
 else ifeq ($(stencil),3axis)
  MACROS		+=	MAX_EXCH_DIST=1
- radius		?=	6
+ radius		=	6
 
 else ifeq ($(stencil),9axis)
  MACROS		+=	MAX_EXCH_DIST=2
- radius		?=	4
+ radius		=	4
 
 else ifeq ($(stencil),3plane)
  MACROS		+=	MAX_EXCH_DIST=2
- radius		?=	3
+ radius		=	3
 
 else ifeq ($(stencil),cube)
  MACROS		+=	MAX_EXCH_DIST=3
- radius		?=	2
+ radius		=	2
 
 else ifeq ($(stencil),iso3dfd)
- MACROS		+=	MAX_EXCH_DIST=1
- radius		?=	8
+ MACROS				+=	MAX_EXCH_DIST=1
+ radius				=	8
+ def_rank_args			=	-d 1024 -dx 512 # assume 2 ranks/node in 'x'.
+ def_pad_args			=	-p 1
  ifeq ($(arch),knl)
-  def_block_args	?=	-b 96 -bx 192
-  ifeq ($(real_bytes),4)
-   fold		?=	x=2,y=8,z=1
-  else
-   fold		?=	x=2,y=4,z=1
-  endif
-  cluster	?=	x=2
+  def_rank_args			=	-d 1024 # assume 1 rank/node.
+  fold_4byte			=	x=2,y=8
+  cluster			=	x=2
+  def_block_args		=	-b 96 -bx 192
  else ifeq ($(arch),hsw)
+  fold_4byte			=	x=8
   def_thread_divisor		=	2
   def_block_threads		=	1
-  def_block_args		?=	-bx 296 -by 5 -bz 290
+  def_block_args		=	-bx 296 -by 5 -bz 290
+  cluster			=	z=2
   SUB_BLOCK_LOOP_INNER_MODS	=
-  cluster			?=	z=2
+ else ifeq ($(arch),skx)
+  fold_4byte			=	x=4,y=4
+  def_thread_divisor		=	1
+  def_block_threads		=	2
+  def_block_args		=	-b 64
+  cluster			=	z=2
+  SUB_BLOCK_LOOP_INNER_MODS	=	prefetch(L1)
  endif
-
-else ifeq ($(stencil),stream)
- MACROS		+=	MAX_EXCH_DIST=0
- radius		?=	2
- cluster		?=	x=2
 
 else ifneq ($(findstring awp,$(stencil)),)
  time_alloc			=	1
- def_block_args			=	-b 32
  eqs				=	velocity=vel,stress=str
+ def_block_args			=	-b 32
  FB_FLAGS			+=	-min-es 1
+ def_rank_args			=	-dx 512 -dy 1024 -dz 128 # assume 2 ranks/node in 'x'.
+ def_pad_args			=	-p 1
  ifeq ($(arch),knl)
+  def_rank_args			=	-dx 1024 -dy 1024 -dz 128 # assume 1 rank/node.
   def_thread_divisor		=	2
   def_block_threads		=	4
   def_block_args		=	-b 48 -bx 112
  else ifeq ($(arch),hsw)
-  REGION_LOOP_OUTER_VARS	=	rw,ry,rx,rz
   SUB_BLOCK_LOOP_INNER_MODS	=	prefetch(L1,L2)
   omp_block_schedule		=	dynamic,1
-  ifeq ($(real_bytes),4)
-   fold				=	x=4,y=2,z=1
-  endif
-  cluster			=	x=2
-  def_block_args		=	-bx 8 -by 28 -bz 70
-  more_def_args			+=	-sbx 8 -sby 18 -sbz 40
+  fold_4byte			=	x=8
+  cluster			=	y=2
+  def_pad_args			=	-px 1 -py 1 -pz 0
+  def_block_args		=	-bx 128 -by 16 -bz 32 
+  more_def_args			+=	-sbx 32 -sby 2 -sbz 32
  else ifeq ($(arch),skx)
-  ifeq ($(real_bytes),4)
-   fold				?=	x=2,y=8,z=1
-  endif
+  fold_4byte			=	x=2,y=8
   def_block_args		=	-b 32 -bx 96
   SUB_BLOCK_LOOP_INNER_MODS	=	prefetch(L1)
  endif
 
-else ifeq ($(stencil)),ssg)
- eqs		?=	v_bl=v_bl,v_tr=v_tr,v_tl=v_tl,s_br=s_br,s_bl=s_bl,s_tr=s_tr,s_tl=s_tl
+else ifeq ($(stencil),ssg)
+ time_alloc	=	1
+ eqs		=	v_bl=v_bl,v_tr=v_tr,v_tl=v_tl,s_br=s_br,s_bl=s_bl,s_tr=s_tr,s_tl=s_tl
 
 else ifeq ($(stencil),fsg)
- eqs		?=      v_br=v_br,v_bl=v_bl,v_tr=v_tr,v_tl=v_tl,s_br=s_br,s_bl=s_bl,s_tr=s_tr,s_tl=s_tl
- time_alloc	?=	1
+ time_alloc	=	1
+ eqs		=      v_br=v_br,v_bl=v_bl,v_tr=v_tr,v_tl=v_tl,s_br=s_br,s_bl=s_bl,s_tr=s_tr,s_tl=s_tl
  ifeq ($(arch),knl)
-  omp_region_schedule  	?=	guided
-  def_block_args  	?=      -b 16
-  def_thread_divisor	?=	4
-  def_block_threads	?= 	1
-  SUB_BLOCK_LOOP_INNER_MODS  ?=	prefetch(L2)
+  omp_region_schedule  	=	guided
+  def_block_args  	=	-b 16
+  def_thread_divisor	=	4
+  def_block_threads	=	1
+  SUB_BLOCK_LOOP_INNER_MODS  =	prefetch(L2)
  endif
+
+else ifeq ($(stencil),stream)
+ MACROS		+=	MAX_EXCH_DIST=0
+ radius		=	2
+ cluster	=	x=2
 
 endif # stencil-specific.
 
 # Defaut settings based on architecture.
+# (Use '?=' to avoid replacing above settings.)
 ifeq ($(arch),knc)
 
  ISA		?= 	-mmic
@@ -184,7 +194,7 @@ else ifeq ($(arch),skx)
  ISA		?=	-xCORE-AVX512
  GCXX_ISA	?=	-march=knl -mno-avx512er -mno-avx512pf
  MACROS		+=	USE_INTRIN512
- FB_TARGET  	?=       512
+ FB_TARGET  	?=	512
  mpi		=	1
 
 else ifeq ($(arch),hsw)
@@ -192,7 +202,7 @@ else ifeq ($(arch),hsw)
  ISA		?=	-xCORE-AVX2
  GCXX_ISA	?=	-march=haswell
  MACROS		+=	USE_INTRIN256
- FB_TARGET  	?=       256
+ FB_TARGET  	?=	256
  mpi		=	1
 
 else ifeq ($(arch),ivb)
@@ -200,7 +210,7 @@ else ifeq ($(arch),ivb)
  ISA		?=	-xCORE-AVX-I
  GCXX_ISA	?=	-march=ivybridge
  MACROS		+=	USE_INTRIN256
- FB_TARGET  	?=       256
+ FB_TARGET  	?=	256
  mpi		=	1
 
 else ifeq ($(arch),snb)
@@ -208,7 +218,7 @@ else ifeq ($(arch),snb)
  ISA		?=	-xAVX
  GCXX_ISA	?=	-march=sandybridge
  MACROS		+= 	USE_INTRIN256
- FB_TARGET  	?=       256
+ FB_TARGET  	?=	256
  mpi		=	1
 
 else ifeq ($(arch),intel64)
@@ -228,8 +238,8 @@ omp_par_for		?=	omp parallel for
 omp_region_schedule	?=	dynamic,1
 omp_block_schedule	?=	static,1
 omp_halo_schedule	?=	static
-def_block_threads	?=	2
 def_thread_divisor	?=	1
+def_block_threads	?=	2
 real_bytes		?=	4
 layout_xyz		?=	Layout_123
 layout_txyz		?=	Layout_2314
@@ -237,7 +247,7 @@ layout_wxyz		?=	Layout_1234
 layout_twxyz		?=	Layout_23415
 def_rank_args		?=	-d 128
 def_block_args		?=	-b 64
-def_pad_args		?=	-p 1
+def_pad_args		?=	-p 0
 cluster			?=	x=1
 pfd_l1			?=	1
 pfd_l2			?=	2
@@ -245,25 +255,24 @@ pfd_l2			?=	2
 # default folding depends on HW vector size.
 ifneq ($(findstring INTRIN512,$(MACROS)),)  # 512 bits.
 
- ifeq ($(real_bytes),4)
-  # 16 SP floats.
-  fold		?=	x=4,y=4,z=1
- else
-  # 8 DP floats.
-  fold		?=	x=4,y=2,z=1
- endif
+ # 16 SP floats.
+ fold_4byte	?=	x=4,y=4,z=1
 
-else  # not 512 bits.
+ # 8 DP floats.
+ fold_8byte	?=	x=4,y=2,z=1
 
- ifeq ($(real_bytes),4)
-  # 8 SP floats.
-  fold		?=	x=8
- else
-  # 4 DP floats.
-  fold		?=	x=4
- endif
+else  # not 512 bits (assume 256).
+
+ # 8 SP floats.
+ fold_4byte	?=	x=8
+
+ # 4 DP floats.
+ fold_8byte	?=	x=4
 
 endif # not 512 bits.
+
+# select fold based on size of reals.
+fold	= 	$(fold_$(real_bytes)byte) # e.g., fold_4byte
 
 # More build flags.
 ifeq ($(mpi),1)

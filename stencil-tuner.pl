@@ -140,6 +140,7 @@ sub usage {
 # or $geneRanges{key}[0]-$geneRanges{key}[1]
 # or $geneRanges{key}[0]-$geneRanges{key}[1] by $geneRanges{key}[2].
 my %geneRanges;
+my $autoKey = 'auto_';          # prefix for special-case settings.
 
 # autoflush.
 $| = 1;
@@ -208,8 +209,8 @@ for my $origOpt (@ARGV) {
     $stencil = $1;
   }
   elsif ($opt eq '-noprefetch') {
-    $geneRanges{pfdl1} = [ 0 ];
-    $geneRanges{pfdl2} = [ 0 ];
+    $geneRanges{$autoKey.'pfdl1'} = [ 0 ];
+    $geneRanges{$autoKey.'pfdl2'} = [ 0 ];
   }
   elsif ($opt =~ '^-maxvecsincluster=(\d+)$') {
     $maxVecsInCluster = $1;
@@ -261,15 +262,15 @@ for my $origOpt (@ARGV) {
     # special case for problem size: also set upper block & region sizes.
     if ($key =~ /^d[xyz]?$/ && $max > 0) {
       $key =~ s/^d/b/;
-      $geneRanges{$key} = [ 1, $max ];
+      $geneRanges{$autoKey.$key} = [ 1, $max ];
       $key =~ s/^b/r/;
-      $geneRanges{$key} = [ 1, $max ];
+      $geneRanges{$autoKey.$key} = [ 1, $max ];
     }
 
     # special case for region size: also set upper block size.
     elsif ($key =~ /^r[xyz]?$/ && $max > 0) {
       $key =~ s/^r/b/;
-      $geneRanges{$key} = [ 1, $max ];
+      $geneRanges{$autoKey.$key} = [ 1, $max ];
     }
   }
   else {
@@ -297,16 +298,6 @@ $dw = $isAve ? 40 : 1 if !defined $dw;     # 40 grids in miniGhost.
 
 # disable folding for DP MIC (no valignq).
 $folding = 0 if (defined $mic && $dp);
-
-# clean up restrictions.
-for my $key (keys %geneRanges) {
-
-  # cleanup.
-  my ($min, $max, $step) = @{$geneRanges{$key}};
-  $max = $min if !defined $max;
-  $step = 1 if !defined $step;
-  $geneRanges{$key} = [ $min, $max, $step ];
-}
 
 # csv filename.
 my $searchTypeStr = $sweep ? '-sweep' : '';
@@ -531,41 +522,56 @@ my $stepI = 2;
 my $nameI = 3;
 my $numIs = 4;
 
-# genes w/only one value.
+# Genes w/only one value.
+# These will be removed from the GA search.
 my %fixedVals;
 
-# check and/or modify gene ranges.
+# Fill in default values in dynamic gene ranges.
+for my $key (keys %geneRanges) {
+
+  # cleanup.
+  my ($min, $max, $step) = @{$geneRanges{$key}};
+  $max = $min if !defined $max;
+  $step = 1 if !defined $step;
+  $geneRanges{$key} = [ $min, $max, $step ];
+}
+
+# Apply dynamic gene ranges and make some checks on the final ranges.
 my %usedGeneRanges;
 for my $i (0..$#rangesAll) {
   my $r = $rangesAll[$i];        #  ref to array.
   my $key = $r->[$nameI];
 
-#  die "internal error: not $numIs elements in ranges[$key]\n"
-#    unless scalar @{$r} == $numIs;
-
-  # apply limits.
-  # try full-match of key and w/o x,y,z.
+  # Look for match in dynamic limits.
+  # Try full-match of key, then w/o x,y,z suffix.
+  # Try each w/cmd-line specified key, then w/auto-gen key.
+  # E.g., for 'dx', try the following: 'dx', 'd', 'auto_dx', 'auto_d'.
   my $rkey = lc $key;
-  if (exists $geneRanges{$rkey}) {
-    my ($min, $max, $step) = @{$geneRanges{$rkey}};
-    $r->[$minI] = $min;
-    $r->[$maxI] = $max;
-    $r->[$stepI] = $step;
-    $usedGeneRanges{$rkey} = 1;
-  }
-  $rkey =~ s/[xyz]$//;          # e.g., 'dx' -> 'd'.
-  if (exists $geneRanges{$rkey}) {
-    my ($min, $max, $step) = @{$geneRanges{$rkey}};
-    $r->[$minI] = $min;
-    $r->[$maxI] = $max;
-    $r->[$stepI] = $step;
-    $usedGeneRanges{$rkey} = 1;
+  my $rkey2 = $rkey;
+  $rkey2 =~ s/[xyz]$//;          # e.g., 'dx' -> 'd'.
+  for my $rk ($rkey, $rkey2, $autoKey.$rkey, $autoKey.$rkey2) {
+    if (exists $geneRanges{$rk}) {
+      my ($min, $max, $step) = @{$geneRanges{$rk}};
+      $r->[$minI] = $min;
+      $r->[$maxI] = $max;
+      $r->[$stepI] = $step;
+      last;
+    }
   }
 
+  # Mark all forms as used.
+  $usedGeneRanges{$rkey} = 1;
+  $usedGeneRanges{$rkey2} = 1;
+  $usedGeneRanges{$autoKey.$rkey} = 1;
+  $usedGeneRanges{$autoKey.$rkey2} = 1;
+
+  # Check range.
+  die "internal error: not $numIs elements in ranges[$key]\n"
+    unless scalar @{$r} == $numIs;
   die "error: key: max value $r->[$maxI] of '$key' < min value $r->[$minI]\n"
     if $r->[$minI] > $r->[$maxI];
 
-  # add to fixed-vals if only one choice.
+  # Add to fixed-vals if only one choice.
   if ($r->[$minI] == $r->[$maxI]) {
     $fixedVals{$key} = $r->[$minI];
     print "Gene '$key' set to $fixedVals{$key}.\n";
@@ -1036,7 +1042,7 @@ sub evalIndiv($$$$$$$) {
         }
 
         # bail if fitness not close to best.
-        if ($fitness < $bestFit * 0.8) {
+        if ($fitness < $bestFit * 0.9) {
           print " stopping after short run due to non-promising fitness\n";
           last;
         } else {
