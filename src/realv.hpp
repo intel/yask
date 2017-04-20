@@ -163,13 +163,20 @@ namespace yask {
     for (int i=0; i<VLEN; i++)
 #else
 #define REAL_VEC_LOOP(i)                                                \
-    _Pragma("vector aligned") _Pragma("vector always") _Pragma("simd")  \
+    _Pragma("vector aligned") _Pragma("vector always") _Pragma("omp simd")  \
     for (int i=0; i<VLEN; i++)
 #define REAL_VEC_LOOP_UNALIGNED(i)              \
-    _Pragma("vector always") _Pragma("simd")    \
+    _Pragma("vector always") _Pragma("omp simd")    \
     for (int i=0; i<VLEN; i++)
 #endif
 
+    // fence needed before loads after streaming stores.
+    inline void make_stores_visible() {
+#if defined(USE_STREAMING_STORE)
+        _mm_mfence();
+#endif
+    }
+    
     // conditional inlining
 #ifdef DEBUG
 #define ALWAYS_INLINE inline

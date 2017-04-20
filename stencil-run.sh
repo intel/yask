@@ -170,9 +170,10 @@ else
     envs="$envs LD_LIBRARY_PATH=./lib:$LD_LIBRARY_PATH$libpath"
 fi
 
-# echo make report if it exists.
-if [[ -e make-report.txt ]]; then
-    cat make-report.txt
+# print make report if it exists.
+make_report=make-report.$arch.txt
+if [[ -e $make_report ]]; then
+    cat $make_report
 fi
 
 # command sequence.

@@ -186,7 +186,6 @@ else ifeq ($(arch),knl)
  FB_TARGET  	?=       512
  def_block_args	?=	-b 96
  def_block_threads ?=	8
- streaming_stores  ?= 	0
  SUB_BLOCK_LOOP_INNER_MODS  ?=	prefetch(L1)
 
 else ifeq ($(arch),skx)
@@ -224,6 +223,7 @@ else ifeq ($(arch),snb)
 else ifeq ($(arch),intel64)
 
  ISA		?=	-xHOST
+ GCXX_ISA       ?=      -march=native
  FB_TARGET	?=	cpp
 
 else
@@ -233,7 +233,7 @@ $(error Architecture not recognized; use arch=knl, knc, skx, hsw, ivb, snb, or i
 endif # arch-specific.
 
 # general defaults for vars if not set above.
-streaming_stores	?= 	1
+streaming_stores	?= 	0
 omp_par_for		?=	omp parallel for
 omp_region_schedule	?=	dynamic,1
 omp_block_schedule	?=	static,1
@@ -282,13 +282,12 @@ else
 endif
 LD		:=	$(CXX)
 MAKE		:=	make
-CXXOPT		:=	-O3
+CXXOPT		?=	-O3
 CXXFLAGS        +=   	-g -std=c++11 -Wall $(CXXOPT)
 OMPFLAGS	+=	-fopenmp 
 LFLAGS          +=      -lrt
-FB_CXX    	:=       g++  # faster than icpc for the foldBuilder.
+FB_CXX    	?=       g++  # faster than icpc for the foldBuilder.
 FB_CXXFLAGS 	+=	-g -O0 -std=c++11 -Wall  # low opt to reduce compile time.
-EXTRA_FB_CXXFLAGS =
 FB_FLAGS   	+=	-st $(stencil) -cluster $(cluster) -fold $(fold)
 ST_MACRO_FILE	:=	stencil_macros.hpp
 ST_CODE_FILE	:=	stencil_code.hpp
@@ -461,9 +460,9 @@ STENCIL_BASES		:=	stencil_main stencil_calc realv_grids utils
 STENCIL_OBJS		:=	$(addprefix src/,$(addsuffix .$(arch).o,$(STENCIL_BASES)))
 STENCIL_CXX		:=	$(addprefix src/,$(addsuffix .$(arch).i,$(STENCIL_BASES)))
 STENCIL_EXEC_NAME	:=	stencil.$(arch).exe
-MAKE_REPORT_FILE	:=	make-report.txt
-CXXFLAGS_FILE		:=	cxx-flags.txt
-LFLAGS_FILE		:=	ld-flags.txt
+MAKE_REPORT_FILE	:=	make-report.$(arch).txt
+CXXFLAGS_FILE		:=	cxx-flags.$(arch).txt
+LFLAGS_FILE		:=	ld-flags.$(arch).txt
 
 all:	$(STENCIL_EXEC_NAME) $(MAKE_REPORT_FILE)
 	echo $(CXXFLAGS) > $(CXXFLAGS_FILE)
@@ -478,6 +477,7 @@ $(MAKE_REPORT_FILE): $(STENCIL_EXEC_NAME)
 echo-settings:
 	@echo
 	@echo "Build environment for" $(STENCIL_EXEC_NAME) on `date`
+	@echo host=`hostname`
 	@echo arch=$(arch)
 	@echo stencil=$(stencil)
 	@echo def_thread_divisor=$(def_thread_divisor)
@@ -509,7 +509,10 @@ echo-settings:
 	@echo ISA=$(ISA)
 	@echo OMPFLAGS="\"$(OMPFLAGS)\""
 	@echo EXTRA_CXXFLAGS="\"$(EXTRA_CXXFLAGS)\""
+	@echo CXX=$(CXX)
+	@echo CXXOPT=$(CXXOPT)
 	@echo CXXFLAGS="\"$(CXXFLAGS)\""
+	@$(CXX) -v; $(CXX_VER_CMD)
 	@echo RANK_LOOP_OPTS="\"$(RANK_LOOP_OPTS)\""
 	@echo RANK_LOOP_OUTER_MODS="\"$(RANK_LOOP_OUTER_MODS)\""
 	@echo RANK_LOOP_OUTER_VARS="\"$(RANK_LOOP_OUTER_VARS)\""
@@ -536,9 +539,6 @@ echo-settings:
 	@echo HALO_LOOP_OUTER_VARS="\"$(HALO_LOOP_OUTER_VARS)\""
 	@echo HALO_LOOP_INNER_MODS="\"$(HALO_LOOP_INNER_MODS)\""
 	@echo HALO_LOOP_CODE="\"$(HALO_LOOP_CODE)\""
-	@echo CXX=$(CXX)
-	@echo CXXOPT=$(CXXOPT)
-	@$(CXX) -v; $(CXX_VER_CMD)
 
 code_stats:
 	@echo
@@ -612,7 +612,7 @@ clean:
 	rm -fv src/*.[io] *.optrpt src/*.optrpt *.s $(GEN_HEADERS) $(MAKE_REPORT_FILE)
 
 realclean: clean
-	rm -fv stencil*.exe foldBuilder TAGS $(MAKE_REPORT_FILE) $(CXXFLAGS_FILE) $(LFLAGS_FILE) $(FB_STENCIL_LIST)
+	rm -fv stencil*.exe make-report*.txt cxx-flags*.txt ld-flags.*txt foldBuilder $(FB_STENCIL_LIST) TAGS
 	find . -name '*~' | xargs -r rm -v
 
 help:

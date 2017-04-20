@@ -47,7 +47,6 @@ IN THE SOFTWARE.
 #include <sstream>
 
 #ifdef WIN32
-#define _mm_clevict(p,h) ((void)0)
 #define _Pragma(x)
 #endif
 
