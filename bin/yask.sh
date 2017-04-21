@@ -24,7 +24,8 @@
 ##############################################################################
 
 # Purpose: run stencil kernel in specified environment.
-echo "Invocation: $0 $@"
+invo="Invocation: $0 $@"
+echo $invo
 
 # Env vars to set.
 envs="OMP_DISPLAY_ENV=VERBOSE OMP_PLACES=cores"
@@ -43,29 +44,43 @@ while true; do
     elif [[ "$1" == "-h" || "$1" == "-help" ]]; then
         opts="$opts -h"
         shift
-        echo "$0 is a wrapper around the stencil executable to facilitate setting up the proper environment."
-        echo "usage: $0 -stencil <stencil> -arch <arch> [-mic <N>|-host <hostname>] [-sh_prefix <command>] [-exe_prefix <command>] [-ranks <N>] [<env-var=value>...] [[--] <executable options>]"
+        echo "$0 is a wrapper around the stencil executable to set up the proper environment."
+        echo "usage: $0 -stencil <stencil> -arch <arch> [script-options] [--] [exe-options]"
+        echo "required parameters to specify the executable:"
+        echo "  -stencil <stencil>"
+        echo "     Corresponds to stencil=<stencil> used during compilation"
+        echo "  -arch <arch>"
+        echo "     Corresponds to arch=<arch> used during compilation"
+        echo "script-options:"
+        echo "  -h"
+        echo "     Print this help."
+        echo "     To get executable help, run '$0 -stencil <stencil> -arch <arch> -- -help'"
+        echo "  -host <hostname>|-mic <N>"
+        echo "     Specify host to run executable on."
+        echo "     'ssh <hostname>' will be pre-pended to the sh_prefix command."
+        echo "     If -arch 'knl' is given, it implies the following (which can be overridden):"
+        echo "       -exe_prefix 'numactl --preferred=1'"
+        echo "     If -mic <N> is given, it implies the following (which can be overridden):"
+        echo "       -arch 'knc'"
+        echo "       -host "`hostname`"-mic<N>"
+        echo "  -sh_prefix <command>"
+        echo "     Add command-prefix before the sub-shell."
+        echo "  -exe_prefix <command>"
+        echo "     Add command-prefix before the executable."
+        echo "  -ranks <N>"
+        echo "     Simplified MPI run (x-dimension partition only)."
+        echo "     'mpirun -n <N> -ppn <N>' is prepended to the exe_prefix command,"
+        echo "     and '-nrx' <N> is passed to the executable."
+        echo "     If a different MPI command or config is needed, use -exe_prefix <command>"
+        echo "     explicitly and -nr* options as needed (and do not use '-ranks')."
+        echo "  -log <file>"
+        echo "     Write copy of output to <file>."
+        echo "     Default is based on stencil, arch, host-name, and time-stamp."
+        echo "     Use '/dev/null' to avoid making a log."
+        echo "  <env-var=value>"
+        echo "     Set environment variable <env-var> to <value>."
+        echo "     Repeat as necessary to set multiple vars."
         echo " "
-        if [[ -z ${stencil:+ok} || -z ${arch:+ok} ]]; then
-            echo "To see executable options, run '$0 -stencil <stencil> -arch <arch> -- -help'."
-        else
-            echo "To see executable options, run '$0 -stencil $stencil -arch $arch -- -help'."
-        fi
-        echo " "
-        echo "All options to be passed to the executable must be at the end of the command line."
-        echo "The sh_prefix command is used to prefix a sub-shell."
-        echo "The exe_prefix command is used to prefix the executable (set to 'true' to avoid actual run)."
-        echo "If '-host <hostname>' is given, 'ssh <hostname>' will be pre-pended to the sh_prefix command."
-        echo "The '-ranks' option is for simple one-socket x-dimension partitioning only."
-        echo " If -ranks <N> is given, 'mpirun -n <N> -ppn <N>' is pre-pended to the exe_prefix command,"
-        echo " and -nrx <N> is passed to the executable."
-        echo " If a different MPI command or config is needed, use -exe_prefix <command> explicitly"
-        echo " and -nr* options as needed."
-        echo "If -arch 'knl' is given, it implies the following (which can be overridden):"
-        echo " -exe_prefix 'numactl --preferred=1'"
-        echo "If -mic <N> is given, it implies the following (which can be overridden):"
-        echo " -arch 'knc'"
-        echo " -host "`hostname`"-mic<N>"
         exit 1
 
     elif [[ "$1" == "-stencil" && -n ${2+set} ]]; then
@@ -85,6 +100,11 @@ while true; do
 
     elif [[ "$1" == "-exe_prefix" && -n ${2+set} ]]; then
         exe_prefix=$2
+        shift
+        shift
+
+    elif [[ "$1" == "-log" && -n ${2+set} ]]; then
+        logfile=$2
         shift
         shift
 
@@ -150,23 +170,39 @@ fi
 # Bail on errors past this point.
 set -e
 
+# Actual host.
+exe_host=${host:-`hostname`}
+
+# Init log file.
+true ${logfile=logs/yask.$stencil.$arch.$exe_host.`date +%Y-%m-%d_%H-%M-%S`.log}
+echo "Writing log to '$logfile'."
+mkdir -p `dirname $logfile`
+echo $invo > $logfile
+
 # These values must match the ones in Makefile.
 tag=$stencil.$arch
 exe="bin/yask.$tag.exe"
 make_report=make-report.$tag.txt
 
-# Check for executable.
+# Try to build exe if needed.
 if [[ ! -x $exe ]]; then
     echo "'$exe' not found or not executable; trying to build with default settings..."
-    make clean; make -j stencil=$stencil arch=$arch
+    make clean; make -j stencil=$stencil arch=$arch 2>&1 | tee -a $logfile
+
+# Or, save most recent make report to log if it exists.
+elif [[ -e $make_report ]]; then
+    echo "Build log from '$make_report':" >> $logfile
+    cat $make_report >> $logfile
 fi
+
+# Double-check that exe exists.
 if [[ ! -x $exe ]]; then
-    echo "error: '$exe' not found or not executable."
+    echo "error: '$exe' not found or not executable." | tee -a $logfile
     exit 1
 fi
 
-# Additional settings w/special cases for KNC when no host specified.
-if [[ $arch == "knc" && -z ${host+ok} ]]; then
+# Additional setup for KNC.
+if [[ $arch == "knc" && -n "$host" ]]; then
     dir=/tmp/$USER
     icc=`which icc`
     iccdir=`dirname $icc`/../..
@@ -178,7 +214,7 @@ else
     libpath=":$HOME/lib"
 fi
 
-# Run on specified host
+# Setup to run on specified host.
 if [[ -n "$host" ]]; then
     sh_prefix="ssh $host $sh_prefix"
     envs="$envs PATH=$PATH LD_LIBRARY_PATH=./lib:$LD_LIBRARY_PATH$libpath"
@@ -194,23 +230,18 @@ else
     envs="$envs LD_LIBRARY_PATH=./lib:$LD_LIBRARY_PATH$libpath"
 fi
 
-# Print make report if it exists.
-if [[ -e $make_report ]]; then
-    echo "Build report:"
-    cat $make_report
-fi
-
 # Command sequence.
 cmds="cd $dir; uname -a; lscpu; numactl -H; ldd $exe; env $envs $exe_prefix $exe $opts $@"
 
-date
-echo "==================="
+date | tee -a $logfile
+echo "===================" | tee -a $logfile
 
 if [[ -z "$sh_prefix" ]]; then
-    sh -c -x "$cmds"
+    sh -c -x "$cmds" 2>&1 | tee -a $logfile
 else
     echo "Running shell under '$sh_prefix'..."
-    $sh_prefix "sh -c -x '$cmds'"
+    $sh_prefix "sh -c -x '$cmds'" 2>&1 | tee -a $logfile
 fi
 
-date
+date | tee -a $logfile
+echo "Log saved in '$logfile'."
