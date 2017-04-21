@@ -26,15 +26,15 @@
 # Purpose: find best result from each GA search csv file.
 
 if ( "-$1" == "-" ) then
-    if ( `echo stencil-tuner*.csv | wc -l` > 0 ) then
-        $0 stencil-tuner*.csv
+    if ( `echo yask-tuner*.csv | wc -l` > 0 ) then
+        $0 yask-tuner*.csv
     else
-        echo "usage: $0 <csv-file(s) from stencil-tuner>"
+        echo "usage: $0 <csv-file(s) from yask-tuner>"
     endif
     exit
 endif
 
-echo "Summary of stencil-tuner results:"
+echo "Summary of yask-tuner results:"
 head -n1 $1
 foreach f ($*)
     echo '=========='

@@ -286,7 +286,8 @@ CXXOPT		?=	-O3
 CXXFLAGS        +=   	-g -std=c++11 -Wall $(CXXOPT)
 OMPFLAGS	+=	-fopenmp 
 LFLAGS          +=      -lrt
-FB_CXX    	?=       g++  # faster than icpc for the foldBuilder.
+FB_EXEC		:=	bin/foldBuilder.exe
+FB_CXX    	?=	g++  # faster than icpc for the foldBuilder.
 FB_CXXFLAGS 	+=	-g -O0 -std=c++11 -Wall  # low opt to reduce compile time.
 FB_FLAGS   	+=	-st $(stencil) -cluster $(cluster) -fold $(fold)
 ST_MACRO_FILE	:=	stencil_macros.hpp
@@ -381,6 +382,28 @@ else # not Intel compiler
 
 endif # compiler.
 
+# Compile with model_cache=1 or 2 to check prefetching.
+ifeq ($(model_cache),1)
+ MACROS       	+=      MODEL_CACHE=1
+ OMPFLAGS	=	-qopenmp-stubs
+else ifeq ($(model_cache),2)
+ MACROS       	+=      MODEL_CACHE=2
+ OMPFLAGS	=	-qopenmp-stubs
+endif
+
+# Add in OMP flags and user-added flags.
+CXXFLAGS	+=	$(OMPFLAGS) $(EXTRA_CXXFLAGS)
+
+# Some file names.
+TAG			:=	$(stencil).$(arch)
+STENCIL_BASES		:=	stencil_main stencil_calc realv_grids utils
+STENCIL_OBJS		:=	$(addprefix src/,$(addsuffix .$(TAG).o,$(STENCIL_BASES)))
+STENCIL_CXX		:=	$(addprefix src/,$(addsuffix .$(TAG).i,$(STENCIL_BASES)))
+EXEC_NAME		:=	bin/yask.$(TAG).exe
+MAKE_REPORT_FILE	:=	make-report.$(TAG).txt
+CXXFLAGS_FILE		:=	cxx-flags.$(TAG).txt
+LFLAGS_FILE		:=	ld-flags.$(TAG).txt
+
 # gen-loops.pl args:
 
 # Rank loops break up the whole rank into smaller regions.  In order for
@@ -445,41 +468,24 @@ HALO_LOOP_OUTER_VARS	?=	wv,xv,yv,zv
 HALO_LOOP_CODE		?=	$(HALO_LOOP_OUTER_MODS) loop($(HALO_LOOP_OUTER_VARS)) \
 				$(HALO_LOOP_INNER_MODS) { calc(halo(t)); }
 
-# compile with model_cache=1 or 2 to check prefetching.
-ifeq ($(model_cache),1)
- MACROS       	+=      MODEL_CACHE=1
- OMPFLAGS	=	-qopenmp-stubs
-else ifeq ($(model_cache),2)
- MACROS       	+=      MODEL_CACHE=2
- OMPFLAGS	=	-qopenmp-stubs
-endif
+#### Targets and rules ####
 
-CXXFLAGS	+=	$(OMPFLAGS) $(EXTRA_CXXFLAGS)
-
-STENCIL_BASES		:=	stencil_main stencil_calc realv_grids utils
-STENCIL_OBJS		:=	$(addprefix src/,$(addsuffix .$(arch).o,$(STENCIL_BASES)))
-STENCIL_CXX		:=	$(addprefix src/,$(addsuffix .$(arch).i,$(STENCIL_BASES)))
-STENCIL_EXEC_NAME	:=	stencil.$(arch).exe
-MAKE_REPORT_FILE	:=	make-report.$(arch).txt
-CXXFLAGS_FILE		:=	cxx-flags.$(arch).txt
-LFLAGS_FILE		:=	ld-flags.$(arch).txt
-
-all:	$(STENCIL_EXEC_NAME) $(MAKE_REPORT_FILE)
+all:	$(EXEC_NAME) $(MAKE_REPORT_FILE)
 	echo $(CXXFLAGS) > $(CXXFLAGS_FILE)
 	echo $(LFLAGS) > $(LFLAGS_FILE)
 	@cat $(MAKE_REPORT_FILE)
-	@echo $(STENCIL_EXEC_NAME) "has been built."
+	@echo $(EXEC_NAME) "has been built. Use bin/yask.sh to run it."
 
-$(MAKE_REPORT_FILE): $(STENCIL_EXEC_NAME)
+$(MAKE_REPORT_FILE): $(EXEC_NAME)
 	@echo MAKEFLAGS="\"$(MAKEFLAGS)"\" > $@ 2>&1
 	$(MAKE) -j1 $(CODE_STATS) echo-settings >> $@ 2>&1
 
 echo-settings:
 	@echo
-	@echo "Build environment for" $(STENCIL_EXEC_NAME) on `date`
+	@echo "Build environment for" $(EXEC_NAME) on `date`
 	@echo host=`hostname`
-	@echo arch=$(arch)
 	@echo stencil=$(stencil)
+	@echo arch=$(arch)
 	@echo def_thread_divisor=$(def_thread_divisor)
 	@echo def_block_threads=$(def_block_threads)
 	@echo def_rank_args=$(def_rank_args)
@@ -543,37 +549,37 @@ echo-settings:
 code_stats:
 	@echo
 	@echo "Code stats for stencil computation:"
-	./get-loop-stats.pl -t='sub_block_loops' *.s
+	bin/get-loop-stats.pl -t='sub_block_loops' *.s
 
-$(STENCIL_EXEC_NAME): $(STENCIL_OBJS)
+$(EXEC_NAME): $(STENCIL_OBJS)
 	$(LD) -o $@ $(STENCIL_OBJS) $(CXXFLAGS) $(LFLAGS)
 
 preprocess: $(STENCIL_CXX)
 
-src/stencil_rank_loops.hpp: gen-loops.pl Makefile
-	./$< -output $@ $(RANK_LOOP_OPTS) $(EXTRA_LOOP_OPTS) $(EXTRA_RANK_LOOP_OPTS) "$(RANK_LOOP_CODE)"
+src/stencil_rank_loops.hpp: bin/gen-loops.pl Makefile
+	$< -output $@ $(RANK_LOOP_OPTS) $(EXTRA_LOOP_OPTS) $(EXTRA_RANK_LOOP_OPTS) "$(RANK_LOOP_CODE)"
 
-src/stencil_region_loops.hpp: gen-loops.pl Makefile
-	./$< -output $@ $(REGION_LOOP_OPTS) $(EXTRA_LOOP_OPTS) $(EXTRA_REGION_LOOP_OPTS) "$(REGION_LOOP_CODE)"
+src/stencil_region_loops.hpp: bin/gen-loops.pl Makefile
+	$< -output $@ $(REGION_LOOP_OPTS) $(EXTRA_LOOP_OPTS) $(EXTRA_REGION_LOOP_OPTS) "$(REGION_LOOP_CODE)"
 
-src/stencil_block_loops.hpp: gen-loops.pl Makefile
-	./$< -output $@ $(BLOCK_LOOP_OPTS) $(EXTRA_LOOP_OPTS) $(EXTRA_BLOCK_LOOP_OPTS) "$(BLOCK_LOOP_CODE)"
+src/stencil_block_loops.hpp: bin/gen-loops.pl Makefile
+	$< -output $@ $(BLOCK_LOOP_OPTS) $(EXTRA_LOOP_OPTS) $(EXTRA_BLOCK_LOOP_OPTS) "$(BLOCK_LOOP_CODE)"
 
-src/stencil_sub_block_loops.hpp: gen-loops.pl Makefile
-	./$< -output $@ $(SUB_BLOCK_LOOP_OPTS) $(EXTRA_LOOP_OPTS) $(EXTRA_SUB_BLOCK_LOOP_OPTS) "$(SUB_BLOCK_LOOP_CODE)"
+src/stencil_sub_block_loops.hpp: bin/gen-loops.pl Makefile
+	$< -output $@ $(SUB_BLOCK_LOOP_OPTS) $(EXTRA_LOOP_OPTS) $(EXTRA_SUB_BLOCK_LOOP_OPTS) "$(SUB_BLOCK_LOOP_CODE)"
 
-src/stencil_halo_loops.hpp: gen-loops.pl Makefile
-	./$< -output $@ $(HALO_LOOP_OPTS) $(EXTRA_LOOP_OPTS) $(EXTRA_HALO_LOOP_OPTS) "$(HALO_LOOP_CODE)"
+src/stencil_halo_loops.hpp: bin/gen-loops.pl Makefile
+	$< -output $@ $(HALO_LOOP_OPTS) $(EXTRA_LOOP_OPTS) $(EXTRA_HALO_LOOP_OPTS) "$(HALO_LOOP_CODE)"
 
-src/layout_macros.hpp: gen-layouts.pl
-	./$< -m > $@
+src/layout_macros.hpp: bin/gen-layouts.pl
+	$< -m > $@
 
-src/layouts.hpp: gen-layouts.pl
-	./$< -d > $@
+src/layouts.hpp: bin/gen-layouts.pl
+	$< -d > $@
 
 # Compile the stencil compiler.
 # TODO: move this to its own makefile.
-foldBuilder: src/foldBuilder/*.*pp src/foldBuilder/stencils/*.*pp $(FB_STENCIL_LIST)
+$(FB_EXEC): src/foldBuilder/*.*pp src/foldBuilder/stencils/*.*pp $(FB_STENCIL_LIST)
 	$(FB_CXX) $(FB_CXXFLAGS) -Isrc/foldBuilder/stencils -o $@ src/foldBuilder/*.cpp $(EXTRA_FB_CXXFLAGS)
 
 $(FB_STENCIL_LIST): src/foldBuilder/stencils/*.hpp
@@ -584,8 +590,8 @@ $(FB_STENCIL_LIST): src/foldBuilder/stencils/*.hpp
 
 # Run the stencil compiler and post-process its output files.
 # Use the gmake pattern-rule trick to specify simultaneous targets.
-%/$(ST_MACRO_FILE) %/$(ST_CODE_FILE): foldBuilder
-	./$< $(FB_FLAGS) $(EXTRA_FB_FLAGS) \
+%/$(ST_MACRO_FILE) %/$(ST_CODE_FILE): $(FB_EXEC)
+	$< $(FB_FLAGS) $(EXTRA_FB_FLAGS) \
 	  -pm $*/$(ST_MACRO_FILE) -p$(FB_TARGET) $*/$(ST_CODE_FILE)
 	echo >> $*/$(ST_MACRO_FILE)
 	echo '// Settings from YASK Makefile' >> $*/$(ST_MACRO_FILE)
@@ -599,20 +605,21 @@ $(FB_STENCIL_LIST): src/foldBuilder/stencils/*.hpp
 headers: $(GEN_HEADERS) $(FB_STENCIL_LIST)
 	@ echo 'Header files generated.'
 
-%.$(arch).o: %.cpp src/*.hpp src/foldBuilder/*.hpp $(GEN_HEADERS)
+%.$(TAG).o: %.cpp src/*.hpp src/foldBuilder/*.hpp $(GEN_HEADERS)
 	$(CXX) $(CXXFLAGS) -c -o $@ $<
 
-%.$(arch).i: %.cpp src/*.hpp src/foldBuilder/*.hpp $(GEN_HEADERS)
+%.$(TAG).i: %.cpp src/*.hpp src/foldBuilder/*.hpp $(GEN_HEADERS)
 	$(CXX) $(CXXFLAGS) -E $< > $@
 
 tags:
 	rm -f TAGS ; find . -name '*.[ch]pp' | xargs etags -C -a
 
 clean:
-	rm -fv src/*.[io] *.optrpt src/*.optrpt *.s $(GEN_HEADERS) $(MAKE_REPORT_FILE)
+	rm -fv src/*.[io] *.optrpt */*.optrpt *.s $(GEN_HEADERS) $(MAKE_REPORT_FILE)
 
 realclean: clean
-	rm -fv stencil*.exe make-report*.txt cxx-flags*.txt ld-flags.*txt foldBuilder $(FB_STENCIL_LIST) TAGS
+	rm -fv bin/yask*.exe make-report*.txt cxx-flags*.txt ld-flags.*txt $(FB_EXEC) $(FB_STENCIL_LIST) TAGS
+	rm -fv stencil*.exe stencil-tuner-summary.csh stencil-tuner.pl gen-layouts.pl gen-loops.pl get-loop-stats.pl
 	find . -name '*~' | xargs -r rm -v
 
 help:
