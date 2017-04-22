@@ -97,7 +97,7 @@ sub usage {
       " -sde               Run binary on SDE (for testing only).\n".
       " -makePrefix=<CMD>  Prefix make command with <CMD>.\n".
       " -makeArgs=<ARGS>   Pass additional <ARGS> to make command.\n".
-      " -runArgs=<ARGS>    Pass additional <ARGS> to stencil-run command.\n".
+      " -runArgs=<ARGS>    Pass additional <ARGS> to bin/yask.sh command.\n".
       " -ranks=<N>         Number of ranks to use on host (x-dimension only).\n".
       "\nstencil options:\n".
       " -stencil=<NAME>    Specify stencil: iso3dfd, 3axis, 9axis, 3plane, cube, ave, awp, ... (required).\n".
@@ -120,7 +120,7 @@ sub usage {
       " -dw=<N>            Set size of 'w' dim to <N> (only for 4D problems).\n".
       " -mem=<N>-<M>           Set allowable est. memory usage between <N> and <M> GiB (default is $minGB-$maxGB).\n".
       " -maxVecsInCluster=<N>  Maximum vectors allowed in cluster (default is $maxVecsInCluster).\n".
-      " -noPrefetch        Disable any prefetching (shortcut for '-pfdl1=0 -pfdl2=0').\n".
+      " -noPrefetch        Disable any prefetching (shortcut for '-pfd_l1=0 -pfd_l2=0').\n".
       " -noFolding         Allow only 1D vectorization (in any direction).\n".
       " -zLoop             Force inner loop in 'z' direction.\n".
       " -zLayout           Force inner memory layout in 'z' direction.\n".
@@ -209,8 +209,8 @@ for my $origOpt (@ARGV) {
     $stencil = $1;
   }
   elsif ($opt eq '-noprefetch') {
-    $geneRanges{$autoKey.'pfdl1'} = [ 0 ];
-    $geneRanges{$autoKey.'pfdl2'} = [ 0 ];
+    $geneRanges{$autoKey.'pfd_l1'} = [ 0 ];
+    $geneRanges{$autoKey.'pfd_l2'} = [ 0 ];
   }
   elsif ($opt =~ '^-maxvecsincluster=(\d+)$') {
     $maxVecsInCluster = $1;
@@ -304,7 +304,7 @@ my $searchTypeStr = $sweep ? '-sweep' : '';
 my $hostStr = defined $host ? $host : hostname();
 my $timeStamp=`date +%Y-%m-%d_%H-%M-%S`;
 chomp $timeStamp;
-my $outFile = "stencil-tuner$searchTypeStr.$stencil.$arch.$hostStr.$timeStamp.csv";
+my $outFile = "yask-tuner$searchTypeStr.$stencil.$arch.$hostStr.$timeStamp.csv";
 print "Output will be saved in '$outFile'.\n";
 $outFile = '/dev/null' if $checking;
 
@@ -504,8 +504,8 @@ if ($doBuild) {
 
      # prefetch distances for l1 and l2.
      # all non-pos numbers => no prefetching, so ~50% chance of being enabled.
-     [ -$maxPfdl1, $maxPfdl1, 1, 'pfdl1' ],
-     [ -$maxPfdl2, $maxPfdl2, 1, 'pfdl2' ],
+     [ -$maxPfdl1, $maxPfdl1, 1, 'pfd_l1' ],
+     [ -$maxPfdl2, $maxPfdl2, 1, 'pfd_l2' ],
 
      # other build options.
      [ 0, 100, 1, 'exprSize' ],          # expression-size threshold.
@@ -734,7 +734,7 @@ sub getMakeCmd($$) {
 
   my $makeCmd = "$makePrefix make clean; ".
     "$makePrefix make -j all EXTRA_MACROS='$macros' ".
-    "arch=$arch real_bytes=$realBytes stencil=$stencil radius=$radius $margs $makeArgs";
+    "stencil=$stencil arch=$arch real_bytes=$realBytes radius=$radius $margs $makeArgs";
   $makeCmd = "echo 'build disabled'" if !$doBuild;
   return $makeCmd;
 }
@@ -744,14 +744,14 @@ sub getRunCmd() {
   my $exePrefix = 'time';
   $exePrefix .= " sde -$arch --" if $sde;
 
-  my $runCmd = "./stencil-run.sh";
+  my $runCmd = "bin/yask.sh";
   if (defined $mic) {
     $runCmd .= " -mic $mic";
   } else {
     $exePrefix .= " numactl -p 1" if $arch eq 'knl' && !$sde; # TODO: fix for cache mode.
     $runCmd .= " -host $host" if defined $host;
   }
-  $runCmd .= " -exe_prefix '$exePrefix' -arch $arch $runArgs";
+  $runCmd .= " -exe_prefix '$exePrefix' -stencil $stencil -arch $arch $runArgs";
   return $runCmd;
 }
 
@@ -1208,8 +1208,8 @@ sub fitness {
   my $thread_divisor_exp = readHash($h, 'thread_divisor_exp', 0);
   my $bthreads_exp = readHash($h, 'bthreads_exp', 0);
   my $layout = readHash($h, 'layout', 1);
-  my $pfdl1 = readHash($h, 'pfdl1', 1);
-  my $pfdl2 = readHash($h, 'pfdl2', 1);
+  my $pfdl1 = readHash($h, 'pfd_l1', 1);
+  my $pfdl2 = readHash($h, 'pfd_l2', 1);
   my $ompRegionSchedule = readHash($h, 'ompRegionSchedule', 1);
   my $ompBlockSchedule = readHash($h, 'ompBlockSchedule', 1);
 
@@ -1357,8 +1357,8 @@ sub fitness {
     # make sure pfld2 > pfld1.
     $pfdl2 = $pfdl1 + 1 if $pfdl1 >= $pfdl2;
   }
-  $macros .= " PFDL1=$pfdl1" if $pfdl1 > 0;
-  $macros .= " PFDL2=$pfdl2" if $pfdl2 > 0;
+  $mvars .= " pfd_l1=$pfdl1" if $pfdl1 > 0;
+  $mvars .= " pfd_l2=$pfdl2" if $pfdl2 > 0;
 
   # cluster & fold.
   $mvars .= " cluster=x=$cvs[0],y=$cvs[1],z=$cvs[2]";

@@ -429,7 +429,6 @@ namespace yask {
         // w from begin_bw to end_bw-1; similar for x, y, and z.  This
         // code typically contains the nested OpenMP loop(s).
 #include "stencil_block_loops.hpp"
-
     }
     
     // Calculate results for one sub-block.
@@ -472,27 +471,32 @@ namespace yask {
                             }
                         }
                     }
-                
-            return;
         }
 
-        // Divide indices by vector lengths.  Use idiv_flr() instead of '/'
-        // because begin/end vars may be negative (if in halo).
-        const idx_t begin_sbtv = sbt;
-        const idx_t begin_sbwv = idiv_flr<idx_t>(begin_sbw, VLEN_W);
-        const idx_t begin_sbxv = idiv_flr<idx_t>(begin_sbx, VLEN_X);
-        const idx_t begin_sbyv = idiv_flr<idx_t>(begin_sby, VLEN_Y);
-        const idx_t begin_sbzv = idiv_flr<idx_t>(begin_sbz, VLEN_Z);
-        const idx_t end_sbtv = sbt + CLEN_T;
-        const idx_t end_sbwv = idiv_flr<idx_t>(end_sbw, VLEN_W);
-        const idx_t end_sbxv = idiv_flr<idx_t>(end_sbx, VLEN_X);
-        const idx_t end_sbyv = idiv_flr<idx_t>(end_sby, VLEN_Y);
-        const idx_t end_sbzv = idiv_flr<idx_t>(end_sbz, VLEN_Z);
+        // Full rectangular polytope: use optimized code.
+        else {
 
-        // Evaluate sub-block of clusters.
-        calc_sub_block_of_clusters(begin_sbtv, ARG_W(begin_sbwv)
-                                   begin_sbxv, begin_sbyv, begin_sbzv,
-                                   end_sbtv, ARG_W(end_sbwv) end_sbxv, end_sbyv, end_sbzv);
+            // Divide indices by vector lengths.  Use idiv_flr() instead of '/'
+            // because begin/end vars may be negative (if in halo).
+            const idx_t begin_sbtv = sbt;
+            const idx_t begin_sbwv = idiv_flr<idx_t>(begin_sbw, VLEN_W);
+            const idx_t begin_sbxv = idiv_flr<idx_t>(begin_sbx, VLEN_X);
+            const idx_t begin_sbyv = idiv_flr<idx_t>(begin_sby, VLEN_Y);
+            const idx_t begin_sbzv = idiv_flr<idx_t>(begin_sbz, VLEN_Z);
+            const idx_t end_sbtv = sbt + CLEN_T;
+            const idx_t end_sbwv = idiv_flr<idx_t>(end_sbw, VLEN_W);
+            const idx_t end_sbxv = idiv_flr<idx_t>(end_sbx, VLEN_X);
+            const idx_t end_sbyv = idiv_flr<idx_t>(end_sby, VLEN_Y);
+            const idx_t end_sbzv = idiv_flr<idx_t>(end_sbz, VLEN_Z);
+
+            // Evaluate sub-block of clusters.
+            calc_sub_block_of_clusters(begin_sbtv, ARG_W(begin_sbwv)
+                                       begin_sbxv, begin_sbyv, begin_sbzv,
+                                       end_sbtv, ARG_W(end_sbwv) end_sbxv, end_sbyv, end_sbzv);
+        }
+        
+        // Make sure stores are visible for later loads.
+        make_stores_visible();
     }
 
     // Init MPI-related vars and other vars related to my rank's place in
