@@ -30,20 +30,7 @@ IN THE SOFTWARE.
 #ifndef GENERIC_GRIDS
 #define GENERIC_GRIDS
 
-#include <assert.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <malloc.h>
-#include <stdlib.h>
-#include <stdexcept>
-
-#include <string>
-#include <iostream>
-#include "utils.hpp"
-
 namespace yask {
-
-#include "layouts.hpp"
 
     // A base class for a generic grid of elements of arithmetic type T.
     // This class provides linear-access support, i.e., no layout.

@@ -23,12 +23,7 @@ IN THE SOFTWARE.
 
 *****************************************************************************/
 
-// Stencil types.
 #include "stencil.hpp"
-
-// Base classes for stencil code.
-#include "stencil_calc.hpp"
-
 using namespace std;
 
 namespace yask {

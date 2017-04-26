@@ -28,35 +28,6 @@ IN THE SOFTWARE.
 #ifndef _REAL_VEC_H
 #define _REAL_VEC_H
 
-// Control assert() by turning on with DEBUG instead of turning off with
-// NDEBUG. This makes it off by default.
-#ifndef DEBUG
-#define NDEBUG
-#endif
-
-#include <cstdint>
-#include <iostream>
-#include <string>
-#include <stdexcept>
-
-#include <assert.h>
-#include <malloc.h>
-#include <math.h>
-#include <stdio.h>
-#include <stdlib.h>
-
-#ifndef WIN32
-#include <unistd.h>
-#include <stdint.h>
-#include <immintrin.h>
-#endif
-
-// safe integer divide and mod.
-#include "idiv.hpp"
-
-// macros for 1D<->nD transforms.
-#include "layout_macros.hpp"
-
 namespace yask {
 
     // Type to use for indexing grids and real_vec_t elements.

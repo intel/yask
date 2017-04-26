@@ -26,21 +26,6 @@ IN THE SOFTWARE.
 #ifndef STENCIL_CALC
 #define STENCIL_CALC
 
-#include <string.h>
-#include <algorithm>
-#include <functional>
-
-// Stencil types.
-#include "stencil.hpp"
-
-// Macro for automatically adding W dimension's arg.
-// TODO: make all args programmatic.
-#if USING_DIM_W
-#define ARG_W(w) w,
-#else
-#define ARG_W(w)
-#endif
-
 namespace yask {
 
     // Forward defn.
@@ -539,8 +524,5 @@ namespace yask {
     };
 
 } // yask namespace.
-
-// Include auto-generated stencil code.
-#include "stencil_code.hpp"
 
 #endif

@@ -26,12 +26,6 @@ IN THE SOFTWARE.
 #ifndef REAL_VEC_GRIDS
 #define REAL_VEC_GRIDS
 
-#include "generic_grids.hpp"
-
-#ifdef MODEL_CACHE
-extern yask::Cache cache_model;
-#endif
-
 namespace yask {
 
     typedef GenericGridBase<real_t> RealGrid;

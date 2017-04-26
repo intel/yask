@@ -27,9 +27,7 @@ IN THE SOFTWARE.
 // used as a starting-point for integrating a YASK stencil kernel into other
 // applications.
 
-// Base classes for stencil code.
-#include "stencil_calc.hpp"
-
+#include "stencil.hpp"
 using namespace std;
 using namespace yask;
 
