@@ -202,7 +202,7 @@ inline bool areExprsSame(const ExprPtr e1, const ExprPtr e2) {
     return areExprsSame(e1.get(), e2.get());
 }
 
-// Real or int values.
+// Real or int value.
 class NumExpr : public virtual Expr {
 public:
     
@@ -233,7 +233,7 @@ public:
     virtual NumExprPtr clone() const =0;
 };
 
-// Boolean values.
+// Boolean value.
 class BoolExpr : public virtual Expr {
 public:
 
@@ -276,7 +276,7 @@ public:
     virtual NumExprPtr clone() const { return make_shared<ConstExpr>(*this); }
 };
 
-// Types of indices.
+// Special grid index values.
 enum IndexType {
     FIRST_INDEX,
     LAST_INDEX
