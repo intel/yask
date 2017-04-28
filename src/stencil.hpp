@@ -202,7 +202,8 @@ namespace yask {
     // RealGrids using traditional C layout.
     typedef GenericGrid3d<real_t, LAYOUT_XYZ> RealGrid_XYZ;
     typedef GenericGrid4d<real_t, LAYOUT_WXYZ> RealGrid_WXYZ;
-}
+
+} // namespace yask.
 
 // Base types for stencil context, etc.
 #include "stencil_calc.hpp"

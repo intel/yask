@@ -41,46 +41,50 @@ IN THE SOFTWARE.
 
 using namespace std;
 
-class ArgParser {
-public:
+namespace yask {
+
+    class ArgParser {
+    public:
     
-    // For strings like x=4,y=2, call the lambda function for
-    // each key, value pair.
-    virtual void parseKeyValuePairs(const string& argStr,
-                                    function<void (const string& key,
-                                                   const string& value)> handle)
-    {
-        if (argStr.length() == 0)
-            return;
+        // For strings like x=4,y=2, call the lambda function for
+        // each key, value pair.
+        virtual void parseKeyValuePairs(const string& argStr,
+                                        function<void (const string& key,
+                                                       const string& value)> handle)
+        {
+            if (argStr.length() == 0)
+                return;
         
-        // split by commas.
-        vector<string> args;
-        string arg;
-        for (char c1 : argStr) {
-            if (c1 == ',') {
-                args.push_back(arg);
-                arg = "";
-            } else
-                arg += c1;
-        }
-        args.push_back(arg);
-
-        // process each k=v pair.
-        for (auto pStr : args) {
-                        
-            // split by equal sign.
-            size_t ep = pStr.find("=");
-            if (ep == string::npos) {
-                cerr << "Error: no equal sign in '" << pStr << "'." << endl;
-                exit(1);
+            // split by commas.
+            vector<string> args;
+            string arg;
+            for (char c1 : argStr) {
+                if (c1 == ',') {
+                    args.push_back(arg);
+                    arg = "";
+                } else
+                    arg += c1;
             }
-            string key = pStr.substr(0, ep);
-            string value = pStr.substr(ep+1);
+            args.push_back(arg);
 
-            // call handler.
-            handle(key, value);
+            // process each k=v pair.
+            for (auto pStr : args) {
+                        
+                // split by equal sign.
+                size_t ep = pStr.find("=");
+                if (ep == string::npos) {
+                    cerr << "Error: no equal sign in '" << pStr << "'." << endl;
+                    exit(1);
+                }
+                string key = pStr.substr(0, ep);
+                string value = pStr.substr(ep+1);
+
+                // call handler.
+                handle(key, value);
+            }
         }
-    }
-};
+    };
+
+} // namespace yask.
 
 #endif

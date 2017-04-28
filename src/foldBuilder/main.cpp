@@ -30,6 +30,8 @@ IN THE SOFTWARE.
 #include "CppIntrin.hpp"
 #include "Parse.hpp"
 
+using namespace yask;
+
 // A register of stencils.
 StencilList stencils;
 
