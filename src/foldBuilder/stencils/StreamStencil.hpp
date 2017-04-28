@@ -43,7 +43,7 @@ public:
     }
     virtual ~StreamStencil() { }
 
-    // Define equation to read radius values and write one.
+    // Define equation to read '_radius' values and write one.
     virtual void define(const IntTuple& offsets) {
         GET_OFFSET(t);
         GET_OFFSET(x);
@@ -52,7 +52,7 @@ public:
 
         GridValue v = constNum(1.0);
 
-        // Add radius values.
+        // Add '_radius' values from past time-steps to ensure no spatial locality.
         for (int r = 0; r < _radius; r++) {
             v += grid(t-r, x, y, z);
         }

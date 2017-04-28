@@ -31,6 +31,8 @@ IN THE SOFTWARE.
 #include <map>
 using namespace std;
 
+#define REGISTER_STENCIL(Class) static Class registered_ ## Class(stencils)
+
 typedef enum { STENCIL_CONTEXT } YASKSection;
 typedef vector<string> CodeList;
 typedef map<YASKSection, CodeList > ExtensionsList;
@@ -41,7 +43,21 @@ typedef map<YASKSection, CodeList > ExtensionsList;
 class StencilBase;
 typedef map<string, StencilBase*> StencilList;
 
-class StencilBase {
+// An interface for all objects that participate in stencil definitions.
+// This allows a programmer to use object composition in addition to
+// inheritance to define stencils.
+class StencilPart {
+
+public:
+    StencilPart() {}
+    virtual ~StencilPart() {}
+
+    // Return a reference to the main stencil object.
+    virtual StencilBase& get_stencil_base() =0;
+};
+
+// The class all stencil problems must implement.
+class StencilBase : public StencilPart {
 protected:
 
     // Simple name for the stencil.
@@ -57,26 +73,36 @@ protected:
     // At this time, this is not checked, so be careful!!
     Params _params;     // keep track of all registered non-grid vars.
 
+    // All equations defined in this stencil.
+    Eqs _eqs;
+    
     // Code extensions that overload default functions from YASK in the generated code for this 
     // Stencil code
     ExtensionsList _extensions;
-    
-public:
-    virtual ~StencilBase() {}
 
+public:
     // Initialize name and register this new object in a list.
     StencilBase(const string name, StencilList& stencils) :
         _name(name)
     {
         stencils[_name] = this;
     }
+    virtual ~StencilBase() {}
 
+    // Return a reference to the main stencil object.
+    virtual StencilBase& get_stencil_base() {
+        return *this;
+    }
+    
     // Identification.
     virtual const string& getName() const { return _name; }
     
     // Get the registered grids and params.
     virtual Grids& getGrids() { return _grids; }
     virtual Grids& getParams() { return _params; }
+
+    // Get the registered equations.
+    virtual Eqs& getEqs() { return _eqs; }
 
     // Radius stub methods.
     virtual bool usesRadius() const { return false; }
@@ -85,7 +111,8 @@ public:
 
     // Define grid values relative to given offsets in each dimension.
     virtual void define(const IntTuple& offsets) = 0;
-    
+
+    // Get user-provided code for the given section.
     CodeList * getExtensionCode ( YASKSection section ) 
     { 
         auto elem = _extensions.find(section);

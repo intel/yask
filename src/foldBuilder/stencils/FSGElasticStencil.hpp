@@ -36,31 +36,21 @@ namespace fsg {
     class FSGBoundaryCondition : public ElasticBoundaryCondition
     {
     public:
+        FSGBoundaryCondition(StencilBase& base) :
+            ElasticBoundaryCondition(base) {}
         virtual void velocity (GridIndex t, GridIndex x, GridIndex y, GridIndex z ) {}
         virtual void stress (GridIndex t, GridIndex x, GridIndex y, GridIndex z ) {}
     };
 
     class FSGElasticStencilBase : public ElasticStencilBase {
         friend FSG_ABC;
-
+        
     protected:
-
-        //struct V_Node {
-        //Grid u, v, w;
-        //};
-        // Time-varying 3D-spatial velocity grids.
-        //V_Node v_bl, v_br, v_tl, v_tr;
 
         Grid v_bl_u, v_bl_v, v_bl_w;
         Grid v_br_u, v_br_v, v_br_w;
         Grid v_tl_u, v_tl_v, v_tl_w;
         Grid v_tr_u, v_tr_v, v_tr_w;
-
-        //struct S_Node {
-        //Grid xx, yy, zz, xy, xz, yz;
-        //};
-        // Time-varying 3D-spatial Stress grids.
-        //S_Node s_bl, s_br, s_tl, s_tr;
 
         Grid s_bl_xx, s_bl_yy, s_bl_zz, s_bl_xy, s_bl_xz, s_bl_yz;
         Grid s_br_xx, s_br_yy, s_br_zz, s_br_xy, s_br_xz, s_br_yz;
@@ -301,7 +291,7 @@ namespace fsg {
                 stress_update(ic16,ic26,ic36,ic46,ic56,ic66,u_z,u_x,u_y,v_z,v_x,v_y,w_z,w_x,w_y);
 
             // define the value at t+1.
-            if ( hasBoundaryCondition ) {            
+            if ( hasBoundaryCondition() ) {
                 Condition not_at_bc = bc->is_not_at_boundary(t,x,y,z);
                 sxx(t+1, x, y, z) EQUALS next_sxx IF not_at_bc;
                 syy(t+1, x, y, z) EQUALS next_syy IF not_at_bc;
@@ -318,7 +308,6 @@ namespace fsg {
                 sxy(t+1, x, y, z) EQUALS next_sxy;
             }
         }
-
 
         // Call all the define_* functions.
         virtual void define(const IntTuple& offsets) {
@@ -343,7 +332,7 @@ namespace fsg {
             define_vel<BL, F, B, B>(t, x, y, z, v_bl_v, s_bl_yy, s_br_xy, s_tl_yz);
             define_vel<BR, F, F, F>(t, x, y, z, v_br_v, s_br_yy, s_bl_xy, s_tr_yz);
         
-            if ( hasBoundaryCondition )
+            if ( hasBoundaryCondition() )
                 fsg_bc.velocity(t,x,y,z);
 
             //// Define stresses components.
@@ -356,13 +345,14 @@ namespace fsg {
             define_str<TL, B, B, B>(t, x, y, z, s_tl_xx, s_tl_yy, s_tl_zz, s_tl_xy, s_tl_xz, s_tl_yz,
                                     v_tl_u, v_tl_v, v_tl_w, v_tr_u, v_tr_v, v_tr_w, v_bl_u, v_bl_v, v_bl_w);
                                
-            if ( hasBoundaryCondition )
+            if ( hasBoundaryCondition() )
                 fsg_bc.stress(t,x,y,z);
         }
     };
 
     class FSG_ABC : public FSGBoundaryCondition
     {
+    protected:
         const int abc_width = 20;
     
         // Sponge coefficients.
@@ -383,21 +373,21 @@ namespace fsg {
 
     public:
 
-        FSG_ABC (FSGElasticStencilBase &_fsg) : fsg(_fsg)
+        FSG_ABC (FSGElasticStencilBase &_fsg) :
+            FSGBoundaryCondition(_fsg), fsg(_fsg)
         {
-            // fsg.INIT_GRID_3D is a hack on how the macro works. It can break at anytime
-            fsg.INIT_GRID_3D(sponge_lx, x, y, z);
-            fsg.INIT_GRID_3D(sponge_rx, x, y, z);
-            fsg.INIT_GRID_3D(sponge_bz, x, y, z);
-            fsg.INIT_GRID_3D(sponge_tz, x, y, z);
-            fsg.INIT_GRID_3D(sponge_fy, x, y, z);
-            fsg.INIT_GRID_3D(sponge_by, x, y, z);
-            fsg.INIT_GRID_3D(sponge_sq_lx, x, y, z);
-            fsg.INIT_GRID_3D(sponge_sq_rx, x, y, z);
-            fsg.INIT_GRID_3D(sponge_sq_bz, x, y, z);
-            fsg.INIT_GRID_3D(sponge_sq_tz, x, y, z);
-            fsg.INIT_GRID_3D(sponge_sq_fy, x, y, z);
-            fsg.INIT_GRID_3D(sponge_sq_by, x, y, z);        
+            INIT_GRID_3D(sponge_lx, x, y, z);
+            INIT_GRID_3D(sponge_rx, x, y, z);
+            INIT_GRID_3D(sponge_bz, x, y, z);
+            INIT_GRID_3D(sponge_tz, x, y, z);
+            INIT_GRID_3D(sponge_fy, x, y, z);
+            INIT_GRID_3D(sponge_by, x, y, z);
+            INIT_GRID_3D(sponge_sq_lx, x, y, z);
+            INIT_GRID_3D(sponge_sq_rx, x, y, z);
+            INIT_GRID_3D(sponge_sq_bz, x, y, z);
+            INIT_GRID_3D(sponge_sq_tz, x, y, z);
+            INIT_GRID_3D(sponge_sq_fy, x, y, z);
+            INIT_GRID_3D(sponge_sq_by, x, y, z);        
         }
 
         Condition is_at_boundary( GridIndex t, GridIndex x, GridIndex y, GridIndex z ) 

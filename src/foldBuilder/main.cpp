@@ -32,7 +32,6 @@ IN THE SOFTWARE.
 
 // A register of stencils.
 StencilList stencils;
-#define REGISTER_STENCIL(Class) static Class registered_ ## Class(stencils)
 
 // Stencils.
 #include "stencils.hpp"
@@ -391,12 +390,13 @@ int main(int argc, const char* argv[]) {
     // parse options.
     parseOpts(argc, argv);
 
-    // Set default fold ordering.
+    // Set default fold layout.
     IntTuple::setDefaultFirstInner(firstInner);
     
-    // Reference to the grids and params in the stencil.
+    // Reference to objects in the stencil.
     Grids& grids = stencilFunc->getGrids();
     //Params& params = stencilFunc->getParams();
+    Eqs& eqs = stencilFunc->getEqs();
 
     // Find all the stencil dimensions from the grids.
     // Create the final folds and clusters from the cmd-line options.
@@ -413,14 +413,14 @@ int main(int argc, const char* argv[]) {
     if (find_deps) {
         cout << "Checking equation(s) with scalar operations...\n"
             " If this fails, review stencil equation(s) for illegal dependencies.\n";
-        grids.checkDeps(dims._scalar, dims._stepDim);
+        eqs.checkDeps(dims._scalar, dims._stepDim);
     }
 
     // Check for illegal dependencies within equations for vector size.
     if (find_deps) {
-        cout << "Checking equation(s) with folded-vector  operations...\n"
+        cout << "Checking equation(s) with folded-vector operations...\n"
             " If this fails, the fold dimensions are not compatible with all equations.\n";
-        grids.checkDeps(dims._fold, dims._stepDim);
+        eqs.checkDeps(dims._fold, dims._stepDim);
     }
     
     // Check for illegal dependencies within equations for cluster size and
@@ -428,7 +428,7 @@ int main(int argc, const char* argv[]) {
     cout << "Checking equation(s) with clusters of vectors...\n"
         " If this fails, the cluster dimensions are not compatible with all equations.\n";
     EqGroups eqGroups(eq_group_basename_default, dims);
-    eqGroups.findEqGroups(grids, eqGroupTargets, dims._clusterPts, find_deps);
+    eqGroups.makeEqGroups(eqs, eqGroupTargets, dims._clusterPts, find_deps);
     optimizeEqGroups(eqGroups, "scalar & vector", false, cout);
 
     // Make copies of all the equations at each cluster offset.

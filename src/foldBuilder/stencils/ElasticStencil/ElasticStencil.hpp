@@ -47,11 +47,24 @@ struct X: public StencilDimension{};
 struct Y: public StencilDimension{};
 struct Z: public StencilDimension{};
 
-class ElasticBoundaryCondition
+class ElasticBoundaryCondition : public StencilPart
 {
+protected:
+    StencilBase& _base;
+    
     public:
-        virtual Condition is_at_boundary( GridIndex t, GridIndex x, GridIndex y, GridIndex z ) = 0;
-        virtual Condition is_not_at_boundary( GridIndex t, GridIndex x, GridIndex y, GridIndex z ) = 0;
+    ElasticBoundaryCondition(StencilBase& base) :
+        _base(base) {}
+    virtual ~ElasticBoundaryCondition() {}
+
+    // Determine whether at boundary.
+    virtual Condition is_at_boundary( GridIndex t, GridIndex x, GridIndex y, GridIndex z ) = 0;
+    virtual Condition is_not_at_boundary( GridIndex t, GridIndex x, GridIndex y, GridIndex z ) = 0;
+
+    // Return a reference to the main stencil object.
+    virtual StencilBase& get_stencil_base() {
+        return _base;
+    }
 };
 
 class ElasticStencilBase : public StencilBase {
@@ -74,20 +87,24 @@ protected:
     const double dyi = 36.057693;
     const double dzi = 36.057693;
 
-    bool                      hasBoundaryCondition;
-    ElasticBoundaryCondition *bc;
+    ElasticBoundaryCondition *bc = NULL;
     
 public:
     ElasticStencilBase(const string& name, StencilList& stencils) :
-        StencilBase(name, stencils), hasBoundaryCondition(false), bc(NULL)
+        StencilBase(name, stencils)
     {
     }
     
     ElasticStencilBase(const string& name, ElasticBoundaryCondition *_bc, StencilList& stencils) :
-        StencilBase(name, stencils), hasBoundaryCondition(true), bc(_bc)
+        StencilBase(name, stencils), bc(_bc)
     {
     }
 
+    bool hasBoundaryCondition()
+    {
+        return bc != NULL;
+    }
+    
     GridValue interp_rho( GridIndex x, GridIndex y, GridIndex z, const TL )
     {
         return ( 2.0/ (rho(x  , y  , z  ) +
@@ -218,7 +235,7 @@ public:
         GridValue next_v = v(t, x, y, z) + ((stx + sty + stz) * delta_t * lrho);
         
         // define the value at t+1.
-        if ( hasBoundaryCondition ) {
+        if ( hasBoundaryCondition() ) {
             Condition not_at_bc = bc->is_not_at_boundary(t,x,y,z);
             v(t+1, x, y, z) EQUALS next_v IF not_at_bc;
         } else

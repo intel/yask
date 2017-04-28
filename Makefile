@@ -580,7 +580,7 @@ src/layouts.hpp: bin/gen-layouts.pl
 # Compile the stencil compiler.
 # TODO: move this to its own makefile.
 $(FB_EXEC): src/foldBuilder/*.*pp src/foldBuilder/stencils/*.*pp $(FB_STENCIL_LIST)
-	$(FB_CXX) $(FB_CXXFLAGS) -Isrc/foldBuilder/stencils -o $@ src/foldBuilder/*.cpp $(EXTRA_FB_CXXFLAGS)
+	$(FB_CXX) $(FB_CXXFLAGS) -Isrc/foldBuilder -Isrc/foldBuilder/stencils -o $@ src/foldBuilder/*.cpp $(EXTRA_FB_CXXFLAGS)
 
 $(FB_STENCIL_LIST): src/foldBuilder/stencils/*.hpp
 	@- rm -f $@

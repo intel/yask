@@ -753,6 +753,13 @@ public:
     static string opStr() { return "=="; }
     virtual void accept(ExprVisitor* ev);
 
+    // Get pointer to updated grid or NULL if not set.
+    virtual Grid* getGrid() {
+        if (_lhs.get())
+            return _lhs->getGrid();
+        return NULL;
+    }
+    
     // Check for equivalency.
     virtual bool isSame(const Expr* other) const;
 
@@ -902,68 +909,29 @@ public:
 
 typedef map<DepType, EqDeps> EqDepMap;
 
-///////// Grids ////////////
-
-typedef set<GridPoint> GridPointSet;
-typedef set<GridPointPtr> GridPointPtrSet;
-typedef vector<GridPoint> GridPointVec;
-
 // A list of unique equation ptrs.
 typedef vector_set<EqualsExprPtr> EqList;
 
-// A 'GridIndex' is simply a pointer to a numerical expression.
-typedef NumExprPtr GridIndex;
+// Map of expressions: key = expression ptr, value = if-condition ptr.
+// We use this to simplify the process of replacing statements
+//  when an if-condition is encountered.
+// Example: key: grid(t,x)==grid(t,x+1); value: x>5;
+typedef map<EqualsExpr*, BoolExprPtr> CondMap;
 
-// A 'Condition' is simply a pointer to a binary expression.
-typedef BoolExprPtr Condition;
+// A set of equations and related data.
+class Eqs {
 
-// A class for a collection of GridPoints.
-// Dims in the IntTuple describe the grid or param.
-// For grids, values in the IntTuple are ignored (grids are sized at run-time).
-// For params, values in the IntTuple define the sizes.
-class Grid : public IntTuple {
-
-    // Should not be copying grids.
-    Grid(const Grid& src) { assert(0); }
-    
 protected:
-    string _name;               // name of the grid.
-
-    // Note: at this time, a Grid is either indexed only by stencil indices,
-    // and a 'parameter' is indexed only by non-stencil indices. So, scalar
-    // parameter values will be broadcast to all elements of a grid
-    // vector. TODO: generalize this so that grids may be projected between
-    // different dimensionalities.
-    bool _isParam;              // is a parameter.
-
-    // Map of expressions: key = expression ptr, value = if-condition ptr.
-    // We use this to simplify the process of replacing statements
-    //  when an if-condition is encountered.
-    // key: grid(t,x)==grid(t,x+1); value: x>5;
-    typedef map<EqualsExpr*, BoolExprPtr> CondMap;
-
+    
     // Equations(s) describing how values in this grid are computed.
     EqList _eqs;          // just equations w/o conditions.
     CondMap _conds;       // map from equations to their conditions, if any.
 
-    // Max abs-value of non-step-index halos required by all eqs at
-    // various step-index values.
-    // TODO: have separate pos and neg halos.
-    string _stepDim;            // Assumes all eqs use same step-dim.
-    map<int, IntTuple> _halos;  // key: step-dim offset.
-
 public:
-    Grid() { }
-    virtual ~Grid() { }
 
-    // Name accessors.
-    const string& getName() const { return _name; }
-    void setName(const string& name) { _name = name; }
+    Eqs() {}
+    virtual ~Eqs() {}
 
-    // Param-type accessors.
-    bool isParam() const { return _isParam; }
-    void setParam(bool isParam) { _isParam = isParam; }
-    
     // Equation accessors.
     virtual void addEq(EqualsExprPtr ep) {
         _eqs.insert(ep);
@@ -991,6 +959,85 @@ public:
             return nullptr;
     }
 
+    // Visit all equations.
+    // Will NOT visit conditions.
+    virtual void visitEqs(ExprVisitor* ev) {
+        for (auto& ep : _eqs) {
+            ep->accept(ev);
+        }
+    }
+
+    // Find dependencies based on all eqs.  If 'eq_deps' is
+    // set, save dependencies between eqs.
+    virtual void findDeps(IntTuple& pts,
+                          const string& stepDim,
+                          EqDepMap* eq_deps);
+
+    // Check for illegal dependencies in all equations.
+    // Exit with error if any found.
+    virtual void checkDeps(IntTuple& pts,
+                           const string& stepDim) {
+        findDeps(pts, stepDim, NULL);
+    }
+};
+
+///////// Grids ////////////
+
+typedef set<GridPoint> GridPointSet;
+typedef set<GridPointPtr> GridPointPtrSet;
+typedef vector<GridPoint> GridPointVec;
+
+// A 'GridIndex' is simply a pointer to a numerical expression.
+typedef NumExprPtr GridIndex;
+
+// A 'Condition' is simply a pointer to a binary expression.
+typedef BoolExprPtr Condition;
+
+// A class for a Grid or a Parameter.
+// Dims in the IntTuple describe the grid or param.
+// For grids, values in the IntTuple are ignored (grids are sized at run-time).
+// For params, values in the IntTuple define the sizes.
+class Grid : public IntTuple {
+
+    // Should not be copying grids.
+    Grid(const Grid& src) { assert(0); }
+    
+protected:
+    string _name;               // name of the grid.
+
+    // Note: at this time, a Grid is either indexed only by stencil indices,
+    // and a 'parameter' is indexed only by non-stencil indices. So, scalar
+    // parameter values will be broadcast to all elements of a grid
+    // vector. TODO: generalize this so that grids may be projected between
+    // different dimensionalities.
+    bool _isParam = false;              // is a parameter.
+
+    // Ptr to object to store equations when they are encountered.
+    Eqs* _eqs = 0;
+    
+    // Max abs-value of non-step-index halos required by all eqs at
+    // various step-index values.
+    // TODO: keep separate pos and neg halos.
+    // TODO: keep separate halos for each equation.
+    string _stepDim;            // Assumes all eqs use same step-dim.
+    map<int, IntTuple> _halos;  // key: step-dim offset.
+
+public:
+    Grid() { }
+    virtual ~Grid() { }
+
+    // Name accessors.
+    const string& getName() const { return _name; }
+    void setName(const string& name) { _name = name; }
+
+    // Param-type accessors.
+    bool isParam() const { return _isParam; }
+    void setParam(bool isParam) { _isParam = isParam; }
+
+    // Access to equations in this stencil.
+    virtual Eqs* getEqs() { return _eqs; }
+    virtual void setEqs(Eqs* eqs) { _eqs = eqs; }
+    
     // Get the max size in 'dim' of halo across all step dims.
     virtual int getHaloSize(const string& dim) const {
         int h = 0;
@@ -1009,21 +1056,6 @@ public:
     // Update halos based on each value in 'vals' given the step-dim 'stepDim'.
     virtual void updateHalo(const string& stepDim, const IntTuple& vals);
     
-    // Visit all equations.
-    // Will NOT visit conditions.
-    virtual void visitEqs(ExprVisitor* ev) {
-        for (auto& ep : _eqs) {
-            ep->accept(ev);
-        }
-    }
-
-    // Remove data related to attached eqs.
-    virtual void clearTemp() {
-        _eqs.clear();
-        _conds.clear();
-        _halos.clear();
-    }
-
     // Create an expression to a specific point in this grid.
     // Note that this doesn't actually 'read' or 'write' a value;
     // it's just a node in an expression.
@@ -1104,41 +1136,14 @@ public:
 // A list of grids.  This holds pointers to grids defined by the stencil
 // class in the order in which they are added via the INIT_GRID_* macros.
 class Grids : public vector_set<Grid*> {
-    
 public:
-
+    
     Grids() {}
     virtual ~Grids() {}
 
     // Copy ctor.
     // Copies list of grid pointers, but not grids.
     Grids(const Grids& src) : vector_set<Grid*>(src) {}
-    
-    // Visit all equations in all grids.
-    // Will NOT visit conditions.
-    virtual void visitEqs(ExprVisitor* ev) {
-        for (auto* gp : *this)
-            gp->visitEqs(ev);
-    }
-    
-    // Find dependencies based on all eqs in all grids.  If 'eq_deps' is
-    // set, save dependencies between eqs.
-    virtual void findDeps(IntTuple& pts,
-                          const string& stepDim,
-                          EqDepMap* eq_deps);
-
-    // Check for illegal dependencies in all equations.
-    // Exit with error if any found.
-    virtual void checkDeps(IntTuple& pts,
-                           const string& stepDim) {
-        findDeps(pts, stepDim, NULL);
-    }
-    
-    // Remove expressions and points in grids.
-    virtual void clearTemp() {
-        for (auto* gp : *this)
-            gp->clearTemp();
-    }    
 };
 
 // Aliases for parameters.
@@ -1170,6 +1175,7 @@ struct Dimensions {
 };
 
 // A named equation group, which contains one or more grid-update equations.
+// All equations in a group must have the same condition.
 // Equations should not have inter-dependencies because they will be
 // combined into a single expression.  TODO: make this a proper class, e.g.,
 // encapsulate the fields.
@@ -1284,19 +1290,32 @@ public:
     virtual void printStats(ostream& os, const string& msg);
 };
 
-// Container for equation groups.
+// Container for multiple equation groups.
 class EqGroups : public vector<EqGroup> {
 protected:
-    Grids _outGrids;        // all grids updated.
+
+    // Copy of some global data.
     string _basename_default;
     const Dimensions* _dims = 0;
 
-    // Add expressions from a grid to group(s) named groupName.
+    // Track grids that are udpated.
+    Grids _outGrids;
+
+    // Map to track indices per eq-group name.
+    map<string, int> _indices;
+
+    // Track equations that have been added already.
+    set<EqualsExprPtr> _eqs_in_groups;
+    
+    // Add expression 'eq' with condition 'cond' to eq-group with 'baseName'
+    // unless alread added.  The corresponding index in '_indices' will be
+    // incremented if a new group is created.
+    // 'eq_deps': pre-computed dependencies between equations.
     // Returns whether a new group was created.
-    virtual bool addExprsFromGrid(const string& groupName,
-                                  map<string, int>& indices,
-                                  Grid* gp,
-                                  EqDepMap& eq_deps);
+    virtual bool addExprToGroup(EqualsExprPtr eq,
+                                BoolExprPtr cond,
+                                const string& baseName,
+                                EqDepMap& eq_deps);
 
 public:
     EqGroups(const string& basename_default, const Dimensions& dims) :
@@ -1307,30 +1326,31 @@ public:
     // Copy ctor.
     EqGroups(const EqGroups& src) :
         vector<EqGroup>(src),
+        _basename_default(src._basename_default),
+        _dims(src._dims),
         _outGrids(src._outGrids),
-        _dims(src._dims)
+        _indices(src._indices),
+        _eqs_in_groups(src._eqs_in_groups)
     {}
     
-    // Separate a set of grids into eqGroups based
+    // Separate a set of equations into eqGroups based
     // on the target string.
     // Target string is a comma-separated list of key-value pairs, e.g.,
     // "eqGroup1=foo,eqGroup2=bar".
-    // In this example, all grids with names containing 'foo' go in eqGroup1,
-    // all grids with names containing 'bar' go in eqGroup2, and
-    // each remaining grid goes in a eqGroup named after the grid.
-    // Only grids with eqGroups are put in eqGroups.
-    void findEqGroups(Grids& grids,
+    // In this example, all eqs updating grid names containing 'foo' go in eqGroup1,
+    // all eqs updating grid names containing 'bar' go in eqGroup2, and
+    // each remaining eq goes in an eqGroup named after its grid.
+    void makeEqGroups(Eqs& eqs,
                       const string& targets,
-                      IntTuple& pts,
                       EqDepMap& eq_deps);
-    void findEqGroups(Grids& grids,
+    void makeEqGroups(Eqs& eqs,
                       const string& targets,
                       IntTuple& pts,
                       bool find_deps) {
         EqDepMap eq_deps;
         if (find_deps)
-            grids.findDeps(pts, _dims->_stepDim, &eq_deps);
-        findEqGroups(grids, targets, pts, eq_deps);
+            eqs.findDeps(pts, _dims->_stepDim, &eq_deps);
+        makeEqGroups(eqs, targets, eq_deps);
     }
 
     virtual const Grids& getOutputGrids() const {
@@ -1373,12 +1393,14 @@ public:
 // A 'GridValue' is simply a pointer to an expression.
 typedef NumExprPtr GridValue;
 
-// Convenience macros for initializing grids in stencil ctors.
+// Convenience macros for initializing grids from a class implementing StencilPart.
 // Each names the grid according to the 'gvar' parameter and adds it
-// to the default '_grids' collection.
+// to the default '_grids' collection in StencilBase.
 // The dimensions are named according to the remaining parameters.
 #define INIT_GRID_0D(gvar) \
-    _grids.insert(&gvar); gvar.setName(#gvar)
+    get_stencil_base().getGrids().insert(&gvar); \
+    gvar.setName(#gvar); \
+    gvar.setEqs(&get_stencil_base().getEqs())
 #define INIT_GRID_1D(gvar, d1) \
     INIT_GRID_0D(gvar); gvar.addDimBack(#d1, 1)
 #define INIT_GRID_2D(gvar, d1, d2) \
@@ -1392,12 +1414,14 @@ typedef NumExprPtr GridValue;
 #define INIT_GRID_6D(gvar, d1, d2, d3, d4, d5, d6) \
     INIT_GRID_5D(gvar, d1, d2, d3, d4, d5); gvar.addDimBack(#d6, 1)
 
-// Convenience macros for initializing parameters in stencil ctors.
+// Convenience macros for initializing parameters from a class implementing StencilPart.
 // Each names the param according to the 'pvar' parameter and adds it
 // to the default '_params' collection.
 // The dimensions are named and sized according to the remaining parameters.
 #define INIT_PARAM(pvar) \
-    _params.insert(&pvar); pvar.setName(#pvar); pvar.setParam(true)
+    get_stencil_base().getParams().insert(&pvar);       \
+    pvar.setName(#pvar); \
+    pvar.setParam(true)
 #define INIT_PARAM_1D(pvar, d1, s1) \
     INIT_PARAM(pvar); pvar.addDimBack(#d1, s1)
 #define INIT_PARAM_2D(pvar, d1, s1, d2, s2) \

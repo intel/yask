@@ -187,12 +187,14 @@ IfExprPtr operator IF_OPER(EqualsExprPtr expr, const BoolExprPtr cond) {
     assert(gpp);
     Grid* gp = gpp->getGrid();
     assert(gp);
+    auto* eqs = gp->getEqs();
+    assert(eqs);
     
     // Make if-expression node.
     auto ifp = make_shared<IfExpr>(expr, cond);
 
-    // Save expr and if-cond in grid.
-    gp->addCondEq(expr, cond);
+    // Save expr and if-cond.
+    eqs->addCondEq(expr, cond);
 
     return ifp;
 }
@@ -204,6 +206,8 @@ EqualsExprPtr operator EQUALS_OPER(GridPointPtr gpp, const NumExprPtr rhs) {
     assert(gpp);
     auto* gp = gpp->getGrid();
     assert(gp);
+    auto* eqs = gp->getEqs();
+    assert(eqs);
     
     // Make sure this is a grid.
     if (gp->isParam()) {
@@ -215,8 +219,8 @@ EqualsExprPtr operator EQUALS_OPER(GridPointPtr gpp, const NumExprPtr rhs) {
     // Make expression node.
     auto expr = make_shared<EqualsExpr>(gpp, rhs);
 
-    // Save it in the grid.
-    gp->addEq(expr);
+    // Save the expression.
+    eqs->addEq(expr);
 
     return expr;
 }
@@ -647,189 +651,173 @@ bool EqDeps::_analyze(EqualsExprPtr a, SeenSet* seen)
     return false;
 }
 
-// Find dependencies based on all eqs in all grids.
+// Find dependencies based on all eqs.
 // If 'eq_deps' is set, save dependencies between eqs.
 // TODO: replace dependency algorithms with integration of a polyhedral
 // library.
-void Grids::findDeps(IntTuple& pts,
-                     const string& stepDim,
-                     EqDepMap* eq_deps) {
+void Eqs::findDeps(IntTuple& pts,
+                   const string& stepDim,
+                   EqDepMap* eq_deps) {
 
     // Gather points from all eqs in all grids.
     PointVisitor pt_vis(pts);
-    cout << " Scanning equations for " << size() << " grid(s)...\n";
+    cout << " Scanning " << getEqs().size() << " equations(s)...\n";
 
-    // All grids.
-    for (auto g1 : *this) {
-        if (g1->getNumEqs() == 0)
-            continue;
-
-        // All eqs in grid g1.
-        for (auto eq1 : g1->getEqs()) {
-            eq1->accept(&pt_vis);
-        }
-    }
-    cout << "  Scanned " << pt_vis.getNumEqs() << " equation(s).\n";
+    // Gather initial stats from all eqs.
+    for (auto eq1 : getEqs())
+        eq1->accept(&pt_vis);
     auto& outGrids = pt_vis.getOutputGrids();
     auto& inGrids = pt_vis.getInputGrids();
     auto& outPts = pt_vis.getOutputPts();
     auto& inPts = pt_vis.getInputPts();
         
-    // Check dependencies on all eqs in all grids.
-    for (auto* g1 : *this) {
-        
-        // All eqs in grid g1.
-        for (auto eq1 : g1->getEqs()) {
-            auto* eq1p = eq1.get();
-            assert(outGrids.count(eq1p));
-            assert(inGrids.count(eq1p));
-            auto& og1 = outGrids.at(eq1p);
-            //auto& ig1 = inGrids.at(eq1p);
-            auto& op1 = outPts.at(eq1p);
-            auto& ip1 = inPts.at(eq1p);
-            auto cond1 = g1->getCond(eq1p);
+    // Check dependencies on all eqs.
+    for (auto eq1 : getEqs()) {
+        auto* eq1p = eq1.get();
+        assert(outGrids.count(eq1p));
+        assert(inGrids.count(eq1p));
+        auto& og1 = outGrids.at(eq1p);
+        //auto& ig1 = inGrids.at(eq1p);
+        auto& op1 = outPts.at(eq1p);
+        auto& ip1 = inPts.at(eq1p);
+        auto cond1 = getCond(eq1p);
 
-            // An equation must update its grid only.
-            assert(og1.size() == 1);
-            assert(og1.count(g1) == 1);
+        // An equation must update one grid only.
+        assert(og1.size() == 1);
+        auto* g1 = eq1->getGrid();
+        assert(og1.count(g1));
 
-            // Scan output (LHS) points.
-            int si1 = 0;        // step index for LHS of eq1.
-            for (auto i1 : op1) {
+        // Scan output (LHS) points.
+        int si1 = 0;        // step index for LHS of eq1.
+        for (auto i1 : op1) {
             
-                // LHS of an equation must use step index.
-                auto* si1p = i1->lookup(stepDim);
-                if (!si1p) {
+            // LHS of an equation must use step index.
+            auto* si1p = i1->lookup(stepDim);
+            if (!si1p) {
+                cerr << "Error: equation " << eq1->makeQuotedStr() <<
+                    " does not reference step-dimension index '" << stepDim <<
+                    "' on LHS.\n";
+                exit(1);
+            }
+            assert(si1p);
+            si1 = *si1p;
+        }
+
+        // Scan input (RHS) points.
+        for (auto i1 : ip1) {
+
+            // Check RHS of an equation that uses step index.
+            auto* rsi1p = i1->lookup(stepDim);
+            if (rsi1p) {
+                int rsi1 = *rsi1p;
+
+                // Cannot depend on future value in this dim.
+                if (rsi1 > si1) {
                     cerr << "Error: equation " << eq1->makeQuotedStr() <<
-                        " does not reference step-dimension index '" << stepDim <<
-                        "' on LHS.\n";
+                        " contains an illegal dependence from offset " << rsi1 <<
+                        " to " << si1 << " relative to step-dimension index '" <<
+                        stepDim << "'.\n";
                     exit(1);
                 }
-                assert(si1p);
-                si1 = *si1p;
+
+                // TODO: should make some dependency checks when rsi1 == si1.
             }
+        }
 
-            // Scan input (RHS) points.
-            for (auto i1 : ip1) {
-
-                // Check RHS of an equation that uses step index.
-                auto* rsi1p = i1->lookup(stepDim);
-                if (rsi1p) {
-                    int rsi1 = *rsi1p;
-
-                    // Cannot depend on future value in this dim.
-                    if (rsi1 > si1) {
-                        cerr << "Error: equation " << eq1->makeQuotedStr() <<
-                            " contains an illegal dependence from offset " << rsi1 <<
-                            " to " << si1 << " relative to step-dimension index '" <<
-                            stepDim << "'.\n";
-                        exit(1);
-                    }
-
-                    // TODO: should make some dependency checks when rsi1 == si1.
-                }
-            }
-
-            // TODO: check to make sure cond1 doesn't depend on stepDim.
+        // TODO: check to make sure cond1 doesn't depend on stepDim.
             
 #ifdef DEBUG_DEP
-            cout << " Checking dependencies *within* equation " <<
-                eq1->makeQuotedStr() << "...\n";
+        cout << " Checking dependencies *within* equation " <<
+            eq1->makeQuotedStr() << "...\n";
 #endif
 
-            // Find other eqs that depend on eq1.
-            for (auto g2 : *this) {
-                bool same_grid = g1 == g2;
+        // Find other eqs that depend on eq1.
+        for (auto eq2 : getEqs()) {
+            auto* eq2p = eq2.get();
+            //auto& og2 = outGrids.at(eq2p);
+            auto& ig2 = inGrids.at(eq2p);
+            auto& op2 = outPts.at(eq2p);
+            auto& ip2 = inPts.at(eq2p);
+            auto cond2 = getCond(eq2p);
 
-                // All eqs in grid g2.
-                for (auto eq2 : g2->getEqs()) {
-                    auto* eq2p = eq2.get();
-                    //auto& og2 = outGrids.at(eq2p);
-                    auto& ig2 = inGrids.at(eq2p);
-                    auto& op2 = outPts.at(eq2p);
-                    auto& ip2 = inPts.at(eq2p);
-                    auto cond2 = g2->getCond(eq2p);
+            bool same_eq = eq1 == eq2;
+            bool same_cond = areExprsSame(cond1, cond2);
 
-                    bool same_eq = eq1 == eq2;
-                    bool same_cond = areExprsSame(cond1, cond2);
+            // If two different eqs have the same condition, they
+            // cannot update the exact same point.
+            if (!same_eq && same_cond &&
+                pt_vis.do_sets_intersect(op1, op2)) {
+                cerr << "Error: two equations with condition " <<
+                    cond1->makeQuotedStr() << " update the same point: " <<
+                    eq1->makeQuotedStr() << " and " <<
+                    eq2->makeQuotedStr() << endl;
+                exit(1);
+            }
 
-                    // If two different eqs have the same condition, they
-                    // cannot update the exact same point.
-                    if (!same_eq && same_cond && same_grid &&
-                        pt_vis.do_sets_intersect(op1, op2)) {
-                        cerr << "Error: two equations with condition " <<
-                            cond1->makeQuotedStr() << " update the same point: " <<
-                            eq1->makeQuotedStr() << " and " <<
-                            eq2->makeQuotedStr() << endl;
-                        exit(1);
-                    }
+            // eq2 dep on eq1 => some output of eq1 is an input to eq2.
+            // If the two eqs have the same condition, detect certain
+            // dependencies by looking for exact matches.
+            if (same_cond &&
+                pt_vis.do_sets_intersect(op1, ip2)) {
 
-                    // eq2 dep on eq1 => some output of eq1 is an input to eq2.
-                    // If the two eqs have the same condition, detect certain
-                    // dependencies by looking for exact matches.
-                    if (same_cond &&
-                        pt_vis.do_sets_intersect(op1, ip2)) {
-
-                        // Eq depends on itself?
-                        if (same_eq) {
+                // Eq depends on itself?
+                if (same_eq) {
                                     
-                            // Exit with error.
-                            cerr << "Error: illegal dependency between LHS and RHS of equation " <<
-                                eq1->makeQuotedStr() <<
-                                " within offsets in range " << pts.makeDimValStr(" * ") << ".\n";
-                            exit(1);
-                        }
+                    // Exit with error.
+                    cerr << "Error: illegal dependency between LHS and RHS of equation " <<
+                        eq1->makeQuotedStr() <<
+                        " within offsets in range " << pts.makeDimValStr(" * ") << ".\n";
+                    exit(1);
+                }
+
+                // Save dependency.
+                // Flag as both certain and possible because we need to follow
+                // certain ones when resolving indirect possible ones.
+                if (eq_deps) {
+                    (*eq_deps)[certain_dep].set_dep_on(eq2, eq1);
+                    (*eq_deps)[possible_dep].set_dep_on(eq2, eq1);
+                }
+                        
+                // Move along to next eq2.
+                continue;
+            }
+
+            // Check more only if saving dependencies.
+            if (!eq_deps)
+                continue;
+
+            // Only check between different equations.
+            if (same_eq)
+                continue;
+
+            // Does eq1 define *any* point in a grid that eq2 inputs
+            // at the same step index?  If so, they *might* have a
+            // dependency. Some of these may not be real
+            // dependencies due to conditions. Those that are real
+            // may or may not be legal.
+            //
+            // Example:
+            //  eq1: a(t+1, x, ...) EQUALS ... IF ... 
+            //  eq2: b(t+1, x, ...) EQUALS a(t+1, x+5, ...) ... IF ...
+            //
+            // TODO: be much smarter about this and find only real
+            // dependencies--use a polyhedral library?
+            if (pt_vis.do_sets_intersect(og1, ig2)) {
+
+                // detailed check of g1 input points from eq2.
+                for (auto* i2 : ip2) {
+                    if (i2->getGrid() != g1) continue;
+
+                    // From same step index, e.g., same time?
+                    auto* si2p = i2->lookup(stepDim);
+                    if (si2p && (*si2p == si1)) {
 
                         // Save dependency.
-                        // Flag as both certain and possible because we need to follow
-                        // certain ones when resolving indirect possible ones.
-                        if (eq_deps) {
-                            (*eq_deps)[certain_dep].set_dep_on(eq2, eq1);
+                        if (eq_deps)
                             (*eq_deps)[possible_dep].set_dep_on(eq2, eq1);
-                        }
-                        
-                        // Move along to next eq2.
-                        continue;
-                    }
-
-                    // Check more only if saving dependencies.
-                    if (!eq_deps)
-                        continue;
-
-                    // Only check between different equations.
-                    if (same_eq)
-                        continue;
-
-                    // Does eq1 define *any* point in a grid that eq2 inputs
-                    // at the same step index?  If so, they *might* have a
-                    // dependency. Some of these may not be real
-                    // dependencies due to conditions. Those that are real
-                    // may or may not be legal.
-                    //
-                    // Example:
-                    //  eq1: a(t+1, x, ...) EQUALS ... IF ... 
-                    //  eq2: b(t+1, x, ...) EQUALS a(t+1, x+5, ...) ... IF ...
-                    //
-                    // TODO: be much smarter about this and find only real
-                    // dependencies--use a polyhedral library?
-                    if (pt_vis.do_sets_intersect(og1, ig2)) {
-
-                        // detailed check of g1 input points from eq2.
-                        for (auto* i2 : ip2) {
-                            if (i2->getGrid() != g1) continue;
-
-                            // From same step index, e.g., same time?
-                            auto* si2p = i2->lookup(stepDim);
-                            if (si2p && (*si2p == si1)) {
-
-                                // Save dependency.
-                                if (eq_deps)
-                                    (*eq_deps)[possible_dep].set_dep_on(eq2, eq1);
                                 
-                                // Move along to next equation.
-                                break;
-                            }
-                        }
+                        // Move along to next equation.
+                        break;
                     }
                 }
             }
@@ -841,8 +829,8 @@ void Grids::findDeps(IntTuple& pts,
         cout << "  Resolving indirect dependencies...\n";
         for (DepType dt = certain_dep; dt < num_deps; dt = DepType(dt+1))
             (*eq_deps)[dt].analyze();
-        cout << "   Done.\n";
     }
+    cout << " Done.\n";
 }
 
 // Get the full name of an eq-group.
@@ -1069,134 +1057,124 @@ void EqGroups::sort()
     }
 }
 
-// Add expressions from a grid to group(s) named 'baseName'.
-// The corresponding index in 'indices' will be incremented
-// if a new group is created.
-// 'gp': grid containing eqs being considered.
+// Add expression 'eq' with condition 'cond' to eq-group with 'baseName'
+// unless alread added.  The corresponding index in '_indices' will be
+// incremented if a new group is created.
 // 'eq_deps': pre-computed dependencies between equations.
 // Returns whether a new group was created.
-bool EqGroups::addExprsFromGrid(const string& baseName,
-                                map<string, int>& indices,
-                                Grid* gp,
-                                EqDepMap& eq_deps)
+bool EqGroups::addExprToGroup(EqualsExprPtr eq,
+                              BoolExprPtr cond,
+                              const string& baseName,
+                              EqDepMap& eq_deps)
 {
-    bool newGroup = false;
-
-    // Grid has no exprs?
-    if (gp->getNumEqs() == 0)
+    // Equation already added?
+    if (_eqs_in_groups.count(eq))
         return false;
 
-    // Grid's equations already added?
-    if (_outGrids.count(gp))
-        return false;
+    // Look for existing group matching base-name and condition.
+    EqGroup* target = 0;
+    for (auto& eg : *this) {
 
-    // Loop through all equations in grid.
-    for (auto& eq : gp->getEqs()) {
-        auto cond = gp->getCond(eq); // condition; might be NULL.
+        if (eg.baseName == baseName &&
+            areExprsSame(eg.cond, cond)) {
 
-        // Look for existing group matching base-name and condition.
-        EqGroup* target = 0;
-        for (auto& eg : *this) {
+            // Look for any dependencies that would prevent adding
+            // eq to eg.
+            bool is_dep = false;
+            for (auto& eq2 : eg.getEqs()) {
 
-            if (eg.baseName == baseName &&
-                areExprsSame(eg.cond, cond)) {
-
-                // Look for any dependencies that would prevent adding
-                // eq to eg.
-                bool is_dep = false;
-                for (auto& eq2 : eg.getEqs()) {
-
-                    for (DepType dt = certain_dep; dt < num_deps; dt = DepType(dt+1)) {
-                        if (eq_deps[dt].is_dep(eq, eq2)) {
+                for (DepType dt = certain_dep; dt < num_deps; dt = DepType(dt+1)) {
+                    if (eq_deps[dt].is_dep(eq, eq2)) {
 #if DEBUG_ADD_EXPRS
-                            cout << "addExprsFromGrid: not adding equation " <<
-                                eq->makeQuotedStr() << " to " << eg.getDescription() <<
-                                " because of dependency w/equation " <<
-                                eq2->makeQuotedStr() << endl;
+                        cout << "addExprsFromGrid: not adding equation " <<
+                            eq->makeQuotedStr() << " to " << eg.getDescription() <<
+                            " because of dependency w/equation " <<
+                            eq2->makeQuotedStr() << endl;
 #endif
-                            is_dep = true;
-                            break;
-                        }
-                    }
-                    if (is_dep)
+                        is_dep = true;
                         break;
+                    }
                 }
-
-                if (!is_dep) {
-                    target = &eg;
+                if (is_dep)
                     break;
-                }
+            }
+
+            // Remember target group if found and no deps.
+            if (!is_dep) {
+                target = &eg;
+                break;
             }
         }
-        
-        // Make new group if needed.
-        if (!target) {
-            EqGroup ne(*_dims);
-            push_back(ne);
-            target = &back();
-            target->baseName = baseName;
-            target->index = indices[baseName]++;
-            target->cond = cond;
-            newGroup = true;
-
-#if DEBUG_ADD_EXPRS
-            cout << "Creating new " << target->getDescription() << endl;
-#endif
-        }
-
-        // Add eq to target eq-group.
-        assert(target);
-#if DEBUG_ADD_EXPRS
-        cout << "Adding " << eq->makeQuotedStr() <<
-            " to " << target->getDescription() << endl;
-#endif
-        target->addEq(eq);
     }
+        
+    // Make new group if needed.
+    bool newGroup = false;
+    if (!target) {
+        EqGroup ne(*_dims);
+        push_back(ne);
+        target = &back();
+        target->baseName = baseName;
+        target->index = _indices[baseName]++;
+        target->cond = cond;
+        newGroup = true;
+        
+#if DEBUG_ADD_EXPRS
+        cout << "Creating new " << target->getDescription() << endl;
+#endif
+    }
+
+    // Add eq to target eq-group.
+    assert(target);
+#if DEBUG_ADD_EXPRS
+    cout << "Adding " << eq->makeQuotedStr() <<
+        " to " << target->getDescription() << endl;
+#endif
+    target->addEq(eq);
     
-    // Remember all grids updated.
-    _outGrids.insert(gp);
+    // Remember eq and updated grid.
+    _eqs_in_groups.insert(eq);
+    _outGrids.insert(eq->getGrid());
 
     return newGroup;
 }
 
-// Collect expressions from grids into eqGroups.
+// Divide all equations into eqGroups.
 // 'targets': string provided by user to specify grouping.
-// 'pts': extent of vectorization or cluster.
 // 'eq_deps': pre-computed dependencies between equations.
-void EqGroups::findEqGroups(Grids& allGrids,
+void EqGroups::makeEqGroups(Eqs& allEqs,
                             const string& targets,
-                            IntTuple& pts,
                             EqDepMap& eq_deps)
 {
     //auto& stepDim = _dims->_stepDim;
-    
-    // Map to track indices per eq-group name.
-    map<string, int> indices;
     
     // Handle each key-value pair in 'targets' string.
     ArgParser ap;
     ap.parseKeyValuePairs
         (targets, [&](const string& key, const string& value) {
 
-            // Search allGrids for matches to current value.
-            for (auto gp : allGrids) {
+            // Search allEqs for matches to current value.
+            for (auto eq : allEqs.getEqs()) {
+
+                // Get name of updated grid.
+                auto gp = eq->getGrid();
+                assert(gp);
                 string gname = gp->getName();
 
-                // value doesn't appear in the grid name?
+                // Does value appear in the grid name?
                 size_t np = gname.find(value);
-                if (np == string::npos)
-                    continue;
+                if (np != string::npos) {
 
-                // Add equations.
-                addExprsFromGrid(key, indices, gp, eq_deps);
+                    // Add equation.
+                    addExprToGroup(eq, allEqs.getCond(eq), key, eq_deps);
+                }
             }
         });
 
-    // Add all grids not matching any values in the 'targets' string.
-    for (auto gp : allGrids) {
+    // Add all remaining equations.
+    for (auto eq : allEqs.getEqs()) {
 
-        // Add equations.
-        addExprsFromGrid(_basename_default, indices, gp, eq_deps);
+        // Add equation.
+        addExprToGroup(eq, allEqs.getCond(eq), _basename_default, eq_deps);
     }
 
     // Find dependencies between eq-groups based on deps between their eqs.
