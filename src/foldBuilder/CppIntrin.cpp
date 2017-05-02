@@ -27,7 +27,6 @@ IN THE SOFTWARE.
 
 #include "CppIntrin.hpp"
 
-
 // Try to use align instruction(s) to construct nelemsTarget elements
 // per instruction.
 void CppIntrinPrintHelper::tryAlign(ostream& os,

@@ -289,6 +289,7 @@ LFLAGS          +=      -lrt
 FB_EXEC		:=	bin/foldBuilder.exe
 FB_CXX    	?=	g++  # faster than icpc for the foldBuilder.
 FB_CXXFLAGS 	+=	-g -O0 -std=c++11 -Wall  # low opt to reduce compile time.
+FB_CXXFLAGS	+=	-Iinclude -Isrc/foldBuilder -Isrc/foldBuilder/stencils
 FB_FLAGS   	+=	-st $(stencil) -cluster $(cluster) -fold $(fold)
 ST_MACRO_FILE	:=	stencil_macros.hpp
 ST_CODE_FILE	:=	stencil_code.hpp
@@ -580,7 +581,7 @@ src/layouts.hpp: bin/gen-layouts.pl
 # Compile the stencil compiler.
 # TODO: move this to its own makefile.
 $(FB_EXEC): src/foldBuilder/*.*pp src/foldBuilder/stencils/*.*pp $(FB_STENCIL_LIST)
-	$(FB_CXX) $(FB_CXXFLAGS) -Isrc/foldBuilder -Isrc/foldBuilder/stencils -o $@ src/foldBuilder/*.cpp $(EXTRA_FB_CXXFLAGS)
+	$(FB_CXX) $(FB_CXXFLAGS) -o $@ src/foldBuilder/*.cpp $(EXTRA_FB_CXXFLAGS)
 
 $(FB_STENCIL_LIST): src/foldBuilder/stencils/*.hpp
 	@- rm -f $@
@@ -610,6 +611,27 @@ headers: $(GEN_HEADERS) $(FB_STENCIL_LIST)
 
 %.$(TAG).i: %.cpp src/*.hpp src/foldBuilder/*.hpp $(GEN_HEADERS)
 	$(CXX) $(CXXFLAGS) -E $< > $@
+
+# NB: All the following api* targets are temporary placeholders.
+# TODO: Create better rules with real dependencies.
+
+api-docs:
+	cd docs; doxygen yask_compiler.doxy
+
+api-swig:
+	cd src/foldBuilder/swig; \
+	swig -v -I../../../include -c++ -python yask_compiler_api.i; \
+	python setup.py build_ext --inplace
+
+api-cxx-test:
+	$(FB_CXX) $(FB_CXXFLAGS) -o bin/api_test.exe \
+	 $(addprefix src/foldBuilder/,tests/api_test.cpp Expr.cpp Print.cpp) $(EXTRA_FB_CXXFLAGS)
+	bin/api_test.exe
+
+api-py-test:
+	cd src/foldBuilder/tests; python api_test.py
+
+api:	api-docs api-swig api-cxx-test api-py-test
 
 tags:
 	rm -f TAGS ; find . -name '*.[ch]pp' | xargs etags -C -a

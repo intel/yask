@@ -31,6 +31,48 @@ IN THE SOFTWARE.
 
 namespace yask {
 
+    // node_factory API methods.
+    const_number_node_ptr node_factory::new_const_number_node(double val) {
+        return make_shared<ConstExpr>(val);
+    }
+    negate_node_ptr node_factory::new_negate_node(number_node_ptr rhs) {
+        auto p = dynamic_pointer_cast<NumExpr>(rhs);
+        assert(p);
+        return make_shared<NegExpr>(p);
+    }
+    add_node_ptr node_factory::new_add_node(number_node_ptr lhs,
+                                            number_node_ptr rhs) {
+        auto lp = dynamic_pointer_cast<NumExpr>(lhs);
+        assert(lp);
+        auto rp = dynamic_pointer_cast<NumExpr>(rhs);
+        assert(rp);
+        return make_shared<AddExpr>(lp, rp);
+    }
+    multiply_node_ptr node_factory::new_multiply_node(number_node_ptr lhs,
+                                                      number_node_ptr rhs) {
+        auto lp = dynamic_pointer_cast<NumExpr>(lhs);
+        assert(lp);
+        auto rp = dynamic_pointer_cast<NumExpr>(rhs);
+        assert(rp);
+        return make_shared<MultExpr>(lp, rp);
+    }
+    subtract_node_ptr node_factory::new_subtract_node(number_node_ptr lhs,
+                                                      number_node_ptr rhs) {
+        auto lp = dynamic_pointer_cast<NumExpr>(lhs);
+        assert(lp);
+        auto rp = dynamic_pointer_cast<NumExpr>(rhs);
+        assert(rp);
+        return make_shared<SubExpr>(lp, rp);
+    }
+    divide_node_ptr node_factory::new_divide_node(number_node_ptr lhs,
+                                                  number_node_ptr rhs) {
+        auto lp = dynamic_pointer_cast<NumExpr>(lhs);
+        assert(lp);
+        auto rp = dynamic_pointer_cast<NumExpr>(rhs);
+        assert(rp);
+        return make_shared<DivExpr>(lp, rp);
+    }
+    
     // Compare 2 expr pointers and return whether the expressions are
     // equivalent.
     bool areExprsSame(const Expr* e1, const Expr* e2) {

@@ -28,6 +28,8 @@ IN THE SOFTWARE.
 #ifndef TUPLE_HPP
 #define TUPLE_HPP
 
+#include "yask_compiler_api.hpp"
+
 #include <math.h>
 #include <iostream>
 #include <iomanip>
