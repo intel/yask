@@ -29,7 +29,7 @@ sys.path.append('../swig')
 import yask_compiler
 cfac = yask_compiler.yask_compiler_factory()
 soln = cfac.new_stencil_solution("test_solution")
-g1 = soln.add_grid("test_grid", "t", "x", "y", "z")
+g1 = soln.new_grid("test_grid", "t", "x", "y", "z")
 
 fac = yask_compiler.node_factory()
 
@@ -50,7 +50,13 @@ print(n5.format_simple())
 
 n6 = fac.new_divide_node(n4, n5)
 print(n6.format_simple())
-n6l = n6.get_lhs()
-print(" LHS: " + n6l.format_simple())
-n6r = n6.get_rhs()
-print(" RHS: " + n6r.format_simple())
+
+n7 = g1.new_relative_grid_point(1, 0, 0, 0)
+print(n7.format_simple())
+
+n8 = fac.new_equation_node(n7, n6)
+print(n8.format_simple())
+
+soln.add_equation(n8)
+print(soln.get_name() + " contains " +
+      str(soln.get_num_equations()) + " equation(s).")

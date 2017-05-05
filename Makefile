@@ -640,7 +640,8 @@ clean:
 	rm -fv src/*.[io] *.optrpt */*.optrpt *.s $(GEN_HEADERS) $(MAKE_REPORT_FILE)
 
 realclean: clean
-	rm -fv bin/yask*.exe make-report*.txt cxx-flags*.txt ld-flags.*txt $(FB_EXEC) $(FB_STENCIL_LIST) TAGS
+	rm -fv bin/*.exe make-report*.txt cxx-flags*.txt ld-flags.*txt $(FB_EXEC) $(FB_STENCIL_LIST) TAGS
+	rm -fr docs/html docs/latex
 	rm -fv stencil*.exe stencil-tuner-summary.csh stencil-tuner.pl gen-layouts.pl gen-loops.pl get-loop-stats.pl
 	find . -name '*~' | xargs -r rm -v
 

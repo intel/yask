@@ -167,13 +167,26 @@ namespace yask {
             return _name;
         }
 
-        virtual grid_ptr add_grid(std::string name,
+        virtual grid_ptr new_grid(std::string name,
                                   std::string dim1 = "",
                                   std::string dim2 = "",
                                   std::string dim3 = "",
                                   std::string dim4 = "",
                                   std::string dim5 = "",
                                   std::string dim6 = "");
+
+        virtual void add_equation(equation_node_ptr eq) {
+            auto p = dynamic_pointer_cast<EqualsExpr>(eq);
+            assert(p);
+            _eqs.addEq(p);
+        }
+        virtual int get_num_equations() const {
+            return _eqs.getNumEqs();
+        }
+        virtual equation_node_ptr get_equation(int n) {
+            assert(n >= 0 && n < get_num_equations());
+            return _eqs.getEqs().at(n);
+        }
 
         // Equations normally created by 'define' must be
         // created via APIs.

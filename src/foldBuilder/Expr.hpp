@@ -787,8 +787,11 @@ namespace std {
 namespace yask {
     
     // Equality operator for a grid point.
+    // This defines the LHS as equal to the RHS; it is NOT
+    // a comparison operator.
     // (Not inherited from BinaryExpr because LHS is special.)
-    class EqualsExpr : public UnaryNumExpr {
+    class EqualsExpr : public UnaryNumExpr,
+                       public virtual equation_node {
     protected:
         GridPointPtr _lhs;
 
@@ -805,7 +808,7 @@ namespace yask {
         static string opStr() { return "=="; }
         virtual void accept(ExprVisitor* ev);
 
-        // Get pointer to updated grid or NULL if not set.
+        // Get pointer to grid on LHS or NULL if not set.
         virtual Grid* getGrid() {
             if (_lhs.get())
                 return _lhs->getGrid();
@@ -818,6 +821,14 @@ namespace yask {
         // Create a deep copy of this expression.
         virtual NumExprPtr clone() const { return make_shared<EqualsExpr>(*this); }
         virtual EqualsExprPtr cloneEquals() const { return make_shared<EqualsExpr>(*this); }
+
+        // APIs.
+        virtual grid_point_node_ptr get_lhs() {
+            return _lhs;
+        }
+        virtual number_node_ptr get_rhs() {
+            return _rhs;
+        }
     };
 
     // Conditional operator.
@@ -1061,8 +1072,8 @@ namespace yask {
         // Note: at this time, a Grid is either indexed only by stencil indices,
         // and a 'parameter' is indexed only by non-stencil indices. So, scalar
         // parameter values will be broadcast to all elements of a grid
-        // vector. TODO: generalize this so that grids may be projected between
-        // different dimensionalities.
+        // vector. TODO: generalize this so that a parameter is just one special
+        // case of a grid.
         bool _isParam = false;              // is a parameter.
 
         // Ptr to object to store equations when they are encountered.
@@ -1116,12 +1127,15 @@ namespace yask {
 
         // Convenience functions for zero dimensions (scalar).
         virtual operator NumExprPtr() { // implicit conversion.
+            assert(_isParam);
             return makePoint(0);
         }
         virtual operator GridPointPtr() { // implicit conversion.
+            assert(_isParam);
             return makePoint(0);
         }
         virtual GridPointPtr operator()() {
+            assert(_isParam);
             return makePoint(0);
         }
 
@@ -1129,9 +1143,11 @@ namespace yask {
         // TODO: separate out ExprPtr varieties for Grid
         // and int varieties for Param.
         virtual GridPointPtr operator[](int i1) {
+            assert(_isParam);
             return makePoint(1, i1);
         }
         virtual GridPointPtr operator()(int i1) {
+            assert(_isParam);
             return makePoint(1, i1);
         }
         virtual GridPointPtr operator[](const NumExprPtr i1) {
@@ -1143,18 +1159,23 @@ namespace yask {
 
         // Convenience functions for more dimensions.
         virtual GridPointPtr operator()(int i1, int i2) {
+            assert(_isParam);
             return makePoint(2, i1, i2);
         }
         virtual GridPointPtr operator()(int i1, int i2, int i3) {
+            assert(_isParam);
             return makePoint(3, i1, i2, i3);
         }
         virtual GridPointPtr operator()(int i1, int i2, int i3, int i4) {
+            assert(_isParam);
             return makePoint(4, i1, i2, i3, i4);
         }
         virtual GridPointPtr operator()(int i1, int i2, int i3, int i4, int i5) {
+            assert(_isParam);
             return makePoint(5, i1, i2, i3, i4, i5);
         }
         virtual GridPointPtr operator()(int i1, int i2, int i3, int i4, int i5, int i6) {
+            assert(_isParam);
             return makePoint(6, i1, i2, i3, i4, i5, i6);
         }
         virtual GridPointPtr operator()(const NumExprPtr i1, const NumExprPtr i2) {
@@ -1194,7 +1215,7 @@ namespace yask {
         }
         virtual const string& get_dim_name(int n) const {
             auto& dims = getDims();
-            assert(n > 0 && n < getNumDims());
+            assert(n >= 0 && n < getNumDims());
             return *dims.at(n);
         }
         virtual grid_point_node_ptr

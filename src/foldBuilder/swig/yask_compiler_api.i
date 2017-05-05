@@ -36,6 +36,7 @@ IN THE SOFTWARE.
 // Must declare shared_ptrs for the entire expr_node hierarchy!
 %shared_ptr(yask::stencil_solution)
 %shared_ptr(yask::expr_node)
+%shared_ptr(yask::equation_node)
 %shared_ptr(yask::number_node)
 %shared_ptr(yask::grid_point_node)
 %shared_ptr(yask::const_number_node)

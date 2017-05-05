@@ -43,6 +43,8 @@ namespace yask {
     typedef grid* grid_ptr;
     class expr_node;
     typedef std::shared_ptr<expr_node> expr_node_ptr;
+    class equation_node;
+    typedef std::shared_ptr<equation_node> equation_node_ptr;
     class number_node;
     typedef std::shared_ptr<number_node> number_node_ptr;
     class grid_point_node;
@@ -89,20 +91,34 @@ namespace yask {
         /// Set the name of the solution.
         virtual void set_name(std::string name) =0;
 
-        /// Add an n-dimensional grid to the solution.
+        /// Create an n-dimensional grid in the solution.
         /** "Grid" is a generic term for any n-dimensional tensor.  A 1-dim
          * grid is an array, a 2-dim grid is a matrix, etc.  Define the name
          * of each dimension that is needed via this interface. Example:
          * new_grid("heat", "t", "x", "y") will create a 3D grid.
          * @returns Pointer to the new grid. */
         virtual grid_ptr
-        add_grid(std::string name /**< [in] Unique name of the grid. */,
+        new_grid(std::string name /**< [in] Unique name of the grid. */,
                  std::string dim1 = "" /**< [in] Name of 1st dimension. */,
                  std::string dim2 = "" /**< [in] Name of 2nd dimension. */,
                  std::string dim3 = "" /**< [in] Name of 3rd dimension. */,
                  std::string dim4 = "" /**< [in] Name of 4th dimension. */,
                  std::string dim5 = "" /**< [in] Name of 5th dimension. */,
                  std::string dim6 = "" /**< [in] Name of 6th dimension. */ ) =0;
+
+        /// Add a grid-point equation to the solution.
+        virtual void
+        add_equation(equation_node_ptr eq /**< [in] Equation to add. */ ) =0;
+
+        /// Get the number of equations in the solution.
+        virtual int
+        get_num_equations() const =0;
+
+        /// Get the specified equation.
+        virtual equation_node_ptr
+        get_equation(int n /**< [in] Index of dimension between zero (0)
+                              and get_num_equations()-1. */ ) =0;
+        
     };
 
     /// A grid.
@@ -124,7 +140,7 @@ namespace yask {
         get_dim_name(int n /**< [in] Index of dimension between zero (0)
                               and get_num_dims()-1. */ ) const =0;
 
-        /// Create a reference to a point in a 1D grid.
+        /// Create a reference to a point in a 1D grid (array).
         /** See more detail on 3-argument version. */
         virtual grid_point_node_ptr
         new_relative_grid_point(int dim1_offset /**< [in] offset from dim1 index. */ ) =0;
@@ -136,7 +152,7 @@ namespace yask {
                                 int dim2_offset /**< [in] offset from dim2 index. */ ) =0;
 
         /// Create a reference to a point in a 3D grid.
-        /** The indices are specified relative to the stencil evaluation
+        /** The indices are specified relative to the stencil-evaluation
          * index.  Each offset refers to the dimensions defined when the
          * grid was added to a stencil_solution. Example: if g =
          * new_grid("heat", "t", "x", "y"), then
@@ -182,6 +198,13 @@ namespace yask {
     class node_factory {
     public:
         virtual ~node_factory() {}
+
+        /// Create an equation node.
+        /** Indicates grid point on LHS is equivalent to expression
+         * on RHS. This is NOT a test for equality. */
+        virtual equation_node_ptr
+        new_equation_node(grid_point_node_ptr lhs /**< [in] Grid-point before EQUALS operator. */,
+                        number_node_ptr rhs /**< [in] Expression after EQUALS operator. */ );
 
         /// Create a constant numerical value node.
         /** This is unary negation.
@@ -239,9 +262,24 @@ namespace yask {
         virtual std::string format_simple() const =0;
 
         /// Count the size of the AST.
-        /** @return Number of nodes in this [sub]tree,
-         * inclusing this node and all its descendants. */
+        /** @return Number of nodes in this tree,
+         * including this node and all its descendants. */
         virtual int get_num_nodes() const =0;
+    };
+
+    /// Equation node.
+    /** Indicates grid point on LHS is equivalent to expression
+     * on RHS. This is NOT a test for equality. */
+    class equation_node : public virtual expr_node {
+    public:
+
+        /// Get the left-hand-side operand.
+        /** @return Grid-point node appearing before the EQUALS operator. */
+        virtual grid_point_node_ptr get_lhs() =0;
+    
+        /// Get the right-hand-side operand.
+        /** @return Expression node appearing after the EQUALS operator. */
+        virtual number_node_ptr get_rhs() =0;
     };
 
     /// Base class for all real or integer AST nodes.
@@ -325,11 +363,11 @@ namespace yask {
     public:
 
         /// Get the left-hand-side operand.
-        /** @return Expression node appearing before the opeator. */
+        /** @return Expression node appearing before the '-' sign. */
         virtual number_node_ptr get_lhs() =0;
     
         /// Get the right-hand-side operand.
-        /** @return Expression node appearing after the opeator. */
+        /** @return Expression node appearing after the '-' sign. */
         virtual number_node_ptr get_rhs() =0;
     };
 
@@ -338,11 +376,11 @@ namespace yask {
     public:
 
         /// Get the left-hand-side operand.
-        /** @return Expression node appearing before the opeator. */
+        /** @return Expression node appearing before the '/' sign. */
         virtual number_node_ptr get_lhs() =0;
     
         /// Get the right-hand-side operand.
-        /** @return Expression node appearing after the opeator. */
+        /** @return Expression node appearing after the '/' sign. */
         virtual number_node_ptr get_rhs() =0;
     };
 

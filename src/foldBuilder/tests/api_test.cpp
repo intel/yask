@@ -35,7 +35,7 @@ int main() {
 
     yask_compiler_factory cfac;
     auto soln = cfac.new_stencil_solution("test_solution");
-    auto g1 = soln->add_grid("test_grid", "t", "x", "y", "z");
+    auto g1 = soln->new_grid("test_grid", "t", "x", "y", "z");
     
     node_factory fac;
 
@@ -56,10 +56,16 @@ int main() {
 
     auto n6 = fac.new_divide_node(n4, n5);
     cout << n6->format_simple() << endl;
-    auto n6l = n6->get_lhs();
-    cout << " LHS: " << n6l->format_simple() << endl;
-    auto n6r = n6->get_rhs();
-    cout << " RHS: " << n6r->format_simple() << endl;
-    
+
+    auto n7 = g1->new_relative_grid_point(1, 0, 0, 0);
+    cout << n7->format_simple() << endl;
+
+    auto n8 = fac.new_equation_node(n7, n6);
+    cout << n8->format_simple() << endl;
+
+    soln->add_equation(n8);
+    cout << soln->get_name() << " contains " << 
+        soln->get_num_equations() << " equation(s)." << endl;
+
     return 0;
 }

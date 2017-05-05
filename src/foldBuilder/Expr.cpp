@@ -32,7 +32,7 @@ IN THE SOFTWARE.
 namespace yask {
 
     // Stencil-solution APIs.
-    grid_ptr StencilSolution::add_grid(std::string name,
+    grid_ptr StencilSolution::new_grid(std::string name,
                                        std::string dim1,
                                        std::string dim2,
                                        std::string dim3,
@@ -83,10 +83,21 @@ namespace yask {
     }
     
     //node_factory API methods.
-    const_number_node_ptr node_factory::new_const_number_node(double val) {
+    equation_node_ptr
+    node_factory::new_equation_node(grid_point_node_ptr lhs,
+                                    number_node_ptr rhs) {
+        auto lp = dynamic_pointer_cast<GridPoint>(lhs);
+        assert(lp);
+        auto rp = dynamic_pointer_cast<NumExpr>(rhs);
+        assert(rp);
+        return make_shared<EqualsExpr>(lp, rp);
+    }
+    const_number_node_ptr
+    node_factory::new_const_number_node(double val) {
         return make_shared<ConstExpr>(val);
     }
-    negate_node_ptr node_factory::new_negate_node(number_node_ptr rhs) {
+    negate_node_ptr
+    node_factory::new_negate_node(number_node_ptr rhs) {
         auto p = dynamic_pointer_cast<NumExpr>(rhs);
         assert(p);
         return make_shared<NegExpr>(p);
