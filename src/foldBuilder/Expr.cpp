@@ -31,7 +31,58 @@ IN THE SOFTWARE.
 
 namespace yask {
 
-    // node_factory API methods.
+    // Stencil-solution APIs.
+    grid_ptr StencilSolution::add_grid(std::string name,
+                                       std::string dim1,
+                                       std::string dim2,
+                                       std::string dim3,
+                                       std::string dim4,
+                                       std::string dim5,
+                                       std::string dim6) {
+
+        // Make new grid and add to solution.
+        auto* gp = new Grid();  // TODO: delete this in dtor.
+        assert(gp);
+        gp->setEqs(&_eqs);
+        _grids.insert(gp);
+
+        // Set name.
+        // TODO: validate that name is legal C++ var name.
+        gp->setName(name);
+
+        // Set dims.
+        if (dim1.length()) {
+            gp->addDimBack(dim1, 1);
+            if (dim2.length()) {
+                gp->addDimBack(dim2, 1);
+                if (dim3.length()) {
+                    gp->addDimBack(dim3, 1);
+                    if (dim4.length()) {
+                        gp->addDimBack(dim4, 1);
+                        if (dim5.length()) {
+                            gp->addDimBack(dim5, 1);
+                            if (dim6.length()) {
+                                gp->addDimBack(dim6, 1);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        return gp;
+    }
+
+    // grid_point APIs.
+    grid* GridPoint::get_grid() {
+        return _grid;
+    }
+    
+    // yask_compiler_factory API methods.
+    stencil_solution_ptr yask_compiler_factory::new_stencil_solution(const std::string& name) {
+        return make_shared<StencilSolution>(name);
+    }
+    
+    //node_factory API methods.
     const_number_node_ptr node_factory::new_const_number_node(double val) {
         return make_shared<ConstExpr>(val);
     }
@@ -72,7 +123,7 @@ namespace yask {
         assert(rp);
         return make_shared<DivExpr>(lp, rp);
     }
-    
+
     // Compare 2 expr pointers and return whether the expressions are
     // equivalent.
     bool areExprsSame(const Expr* e1, const Expr* e2) {

@@ -31,119 +31,156 @@ IN THE SOFTWARE.
 #include <map>
 using namespace std;
 
+namespace yask {
+
 #define REGISTER_STENCIL(Class) static Class registered_ ## Class(stencils)
 
-typedef enum { STENCIL_CONTEXT } YASKSection;
-typedef vector<string> CodeList;
-typedef map<YASKSection, CodeList > ExtensionsList;
+    typedef enum { STENCIL_CONTEXT } YASKSection;
+    typedef vector<string> CodeList;
+    typedef map<YASKSection, CodeList > ExtensionsList;
 
 #define REGISTER_CODE_EXTENSION(section,code) _extensions[section].push_back(code);
 #define REGISTER_STENCIL_CONTEXT_EXTENSION(...) REGISTER_CODE_EXTENSION(STENCIL_CONTEXT,#__VA_ARGS__)
 
-class StencilBase;
-typedef map<string, StencilBase*> StencilList;
+    class StencilBase;
+    typedef map<string, StencilBase*> StencilList;
 
-// An interface for all objects that participate in stencil definitions.
-// This allows a programmer to use object composition in addition to
-// inheritance to define stencils.
-class StencilPart {
+    // An interface for all objects that participate in stencil definitions.
+    // This allows a programmer to use object composition in addition to
+    // inheritance to define stencils.
+    class StencilPart {
 
-public:
-    StencilPart() {}
-    virtual ~StencilPart() {}
+    public:
+        StencilPart() {}
+        virtual ~StencilPart() {}
 
-    // Return a reference to the main stencil object.
-    virtual StencilBase& get_stencil_base() =0;
-};
+        // Return a reference to the main stencil object.
+        virtual StencilBase& get_stencil_base() =0;
+    };
 
-// The class all stencil problems must implement.
-class StencilBase : public StencilPart {
-protected:
+    // The class all stencil problems must implement.
+    class StencilBase : public StencilPart {
+    protected:
 
-    // Simple name for the stencil.
-    string _name;
+        // Simple name for the stencil.
+        string _name;
     
-    // A grid is an n-dimensional tensor that is indexed by grid indices.
-    // Vectorization will be applied to grid accesses.
-    Grids _grids;       // keep track of all registered grids.
+        // A grid is an n-dimensional tensor that is indexed by grid indices.
+        // Vectorization will be applied to grid accesses.
+        Grids _grids;       // keep track of all registered grids.
 
-    // A parameter is an n-dimensional tensor that is NOT indexed by grid indices.
-    // It is used to pass some sort of index-invarant setting to a stencil function.
-    // Its indices must be resolved when define() is called.
-    // At this time, this is not checked, so be careful!!
-    Params _params;     // keep track of all registered non-grid vars.
+        // A parameter is an n-dimensional tensor that is NOT indexed by grid indices.
+        // It is used to pass some sort of index-invarant setting to a stencil function.
+        // Its indices must be resolved when define() is called.
+        // At this time, this is not checked, so be careful!!
+        Params _params;     // keep track of all registered non-grid vars.
 
-    // All equations defined in this stencil.
-    Eqs _eqs;
+        // All equations defined in this stencil.
+        Eqs _eqs;
     
-    // Code extensions that overload default functions from YASK in the generated code for this 
-    // Stencil code
-    ExtensionsList _extensions;
+        // Code extensions that overload default functions from YASK in the generated code for this 
+        // Stencil code
+        ExtensionsList _extensions;
 
-public:
-    // Initialize name and register this new object in a list.
-    StencilBase(const string name, StencilList& stencils) :
-        _name(name)
-    {
-        stencils[_name] = this;
-    }
-    virtual ~StencilBase() {}
-
-    // Return a reference to the main stencil object.
-    virtual StencilBase& get_stencil_base() {
-        return *this;
-    }
+        // Initialize name.
+        StencilBase(const string name) :
+            _name(name) { }
     
-    // Identification.
-    virtual const string& getName() const { return _name; }
-    
-    // Get the registered grids and params.
-    virtual Grids& getGrids() { return _grids; }
-    virtual Grids& getParams() { return _params; }
-
-    // Get the registered equations.
-    virtual Eqs& getEqs() { return _eqs; }
-
-    // Radius stub methods.
-    virtual bool usesRadius() const { return false; }
-    virtual bool setRadius(int radius) { return false; }
-    virtual int getRadius() const { return 0; }
-
-    // Define grid values relative to given offsets in each dimension.
-    virtual void define(const IntTuple& offsets) = 0;
-
-    // Get user-provided code for the given section.
-    CodeList * getExtensionCode ( YASKSection section ) 
-    { 
-        auto elem = _extensions.find(section);
-        if ( elem != _extensions.end() ) {
-            return &elem->second;
+    public:
+        // Initialize name and register this new object in a list.
+        StencilBase(const string name, StencilList& stencils) :
+            _name(name)
+        {
+            stencils[_name] = this;
         }
-        return NULL;
-    }
-};
+        virtual ~StencilBase() { }
 
-// A base class for stencils that have a 'radius'.
-class StencilRadiusBase : public StencilBase {
-protected:
-    int _radius;         // stencil radius (for convenience; optional).
-
-public:
-    StencilRadiusBase(const string name, StencilList& stencils, int radius) :
-        StencilBase(name, stencils), _radius(radius) {}
-
-    // Does use radius.
-    virtual bool usesRadius() const { return true; }
+        // Return a reference to the main stencil object.
+        virtual StencilBase& get_stencil_base() {
+            return *this;
+        }
     
-    // Set radius.
-    // Return true if successful.
-    virtual bool setRadius(int radius) {
-        _radius = radius;
-        return radius >= 0;  // support only non-neg. radius.
-    }
+        // Identification.
+        virtual const string& getName() const { return _name; }
+    
+        // Get the registered grids and params.
+        virtual Grids& getGrids() { return _grids; }
+        virtual Grids& getParams() { return _params; }
 
-    // Get radius.
-    virtual int getRadius() { return _radius; }
-};
+        // Get the registered equations.
+        virtual Eqs& getEqs() { return _eqs; }
+
+        // Radius stub methods.
+        virtual bool usesRadius() const { return false; }
+        virtual bool setRadius(int radius) { return false; }
+        virtual int getRadius() const { return 0; }
+
+        // Define grid values relative to given offsets in each dimension.
+        virtual void define(const IntTuple& offsets) = 0;
+
+        // Get user-provided code for the given section.
+        CodeList * getExtensionCode ( YASKSection section ) 
+        { 
+            auto elem = _extensions.find(section);
+            if ( elem != _extensions.end() ) {
+                return &elem->second;
+            }
+            return NULL;
+        }
+    };
+
+    // A base class for stencils that have a 'radius'.
+    class StencilRadiusBase : public StencilBase {
+    protected:
+        int _radius;         // stencil radius (for convenience; optional).
+
+    public:
+        StencilRadiusBase(const string name, StencilList& stencils, int radius) :
+            StencilBase(name, stencils), _radius(radius) {}
+
+        // Does use radius.
+        virtual bool usesRadius() const { return true; }
+    
+        // Set radius.
+        // Return true if successful.
+        virtual bool setRadius(int radius) {
+            _radius = radius;
+            return radius >= 0;  // support only non-neg. radius.
+        }
+
+        // Get radius.
+        virtual int getRadius() { return _radius; }
+    };
+
+    // A base class for stencils created via the YASK compiler API.
+    class StencilSolution : public StencilBase,
+                            public virtual stencil_solution {
+    public:
+        StencilSolution(const string& name) :
+            StencilBase(name) { }
+        virtual ~StencilSolution() {}
+
+        virtual void set_name(std::string name) {
+            _name = name;
+        }
+        virtual const std::string& get_name() const {
+            return _name;
+        }
+
+        virtual grid_ptr add_grid(std::string name,
+                                  std::string dim1 = "",
+                                  std::string dim2 = "",
+                                  std::string dim3 = "",
+                                  std::string dim4 = "",
+                                  std::string dim5 = "",
+                                  std::string dim6 = "");
+
+        // Equations normally created by 'define' must be
+        // created via APIs.
+        virtual void define(const IntTuple& offsets) {
+            assert(0);
+        }
+    };
+} // namespace yask.
 
 #endif

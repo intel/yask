@@ -33,6 +33,10 @@ using namespace yask;
 
 int main() {
 
+    yask_compiler_factory cfac;
+    auto soln = cfac.new_stencil_solution("test_solution");
+    auto g1 = soln->add_grid("test_grid", "t", "x", "y", "z");
+    
     node_factory fac;
 
     auto n1 = fac.new_const_number_node(3.14);
@@ -41,14 +45,13 @@ int main() {
     auto n2 = fac.new_negate_node(n1);
     cout << n2->format_simple() << endl;
 
-    auto v1 = n1->get_value();
-    auto n3 = fac.new_const_number_node(v1 * 2.0);
+    auto n3 = g1->new_relative_grid_point(0, 1, 0, -2);
     cout << n3->format_simple() << endl;
 
     auto n4 = fac.new_add_node(n2, n3);
     cout << n4->format_simple() << endl;
 
-    auto n5 = fac.new_const_number_node(v1 * 3.0);
+    auto n5 = g1->new_relative_grid_point(0, 1, -1, 0);
     cout << n5->format_simple() << endl;
 
     auto n6 = fac.new_divide_node(n4, n5);

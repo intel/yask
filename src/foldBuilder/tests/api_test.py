@@ -27,6 +27,10 @@ import sys
 sys.path.append('../swig')
 
 import yask_compiler
+cfac = yask_compiler.yask_compiler_factory()
+soln = cfac.new_stencil_solution("test_solution")
+g1 = soln.add_grid("test_grid", "t", "x", "y", "z")
+
 fac = yask_compiler.node_factory()
 
 n1 = fac.new_const_number_node(3.14)
@@ -35,14 +39,13 @@ print(n1.format_simple())
 n2 = fac.new_negate_node(n1)
 print(n2.format_simple())
 
-v1 = n1.get_value()
-n3 = fac.new_const_number_node(v1 * 2.0)
+n3 = g1.new_relative_grid_point(0, 1, 0, -2)
 print(n3.format_simple())
 
 n4 = fac.new_add_node(n2, n3)
 print(n4.format_simple())
 
-n5 = fac.new_const_number_node(v1 * 3.0)
+n5 = g1.new_relative_grid_point(0, 1, -1, 0)
 print(n5.format_simple())
 
 n6 = fac.new_divide_node(n4, n5)

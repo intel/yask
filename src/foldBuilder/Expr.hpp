@@ -702,7 +702,9 @@ namespace yask {
 
     // One specific point in a grid.
     // This is an expression leaf-node.
-    class GridPoint : public NumExpr, public IntTuple {
+    class GridPoint : public NumExpr,
+                      public IntTuple,
+                      public virtual grid_point_node {
 
     protected:
         Grid* _grid;          // the grid this point is from.
@@ -763,6 +765,9 @@ namespace yask {
     
         // Determine whether this is 'ahead of' rhs in given direction.
         virtual bool isAheadOfInDir(const GridPoint& rhs, const IntTuple& dir) const;
+
+        // APIs.
+        virtual grid* get_grid();
     };
 } // namespace yask.
 
@@ -1044,7 +1049,8 @@ namespace yask {
     // Dims in the IntTuple describe the grid or param.
     // For grids, values in the IntTuple are ignored (grids are sized at run-time).
     // For params, values in the IntTuple define the sizes.
-    class Grid : public IntTuple {
+    class Grid : public IntTuple,
+                 public virtual grid {
 
         // Should not be copying grids.
         Grid(const Grid& src) { assert(0); }
@@ -1081,7 +1087,7 @@ namespace yask {
         bool isParam() const { return _isParam; }
         void setParam(bool isParam) { _isParam = isParam; }
 
-        // Access to equations in this stencil.
+        // Access to all equations in this stencil.
         virtual Eqs* getEqs() { return _eqs; }
         virtual void setEqs(Eqs* eqs) { _eqs = eqs; }
     
@@ -1178,6 +1184,61 @@ namespace yask {
                              i3->getIntVal(), i4->getIntVal(),
                              i5->getIntVal(), i6->getIntVal());
         }
+
+        // APIs.
+        virtual const string& get_name() const {
+            return _name;
+        }
+        virtual int get_num_dims() const {
+            return getNumDims();
+        }
+        virtual const string& get_dim_name(int n) const {
+            auto& dims = getDims();
+            assert(n > 0 && n < getNumDims());
+            return *dims.at(n);
+        }
+        virtual grid_point_node_ptr
+        new_relative_grid_point(int dim1_offset) {
+            return makePoint(1, dim1_offset);
+        }
+        virtual grid_point_node_ptr
+        new_relative_grid_point(int dim1_offset,
+                                int dim2_offset) {
+            return makePoint(2, dim1_offset, dim2_offset);
+        }
+        virtual grid_point_node_ptr
+        new_relative_grid_point(int dim1_offset,
+                                int dim2_offset,
+                                int dim3_offset) {
+            return makePoint(3, dim1_offset, dim2_offset, dim3_offset);
+        }
+        virtual grid_point_node_ptr
+        new_relative_grid_point(int dim1_offset,
+                                int dim2_offset,
+                                int dim3_offset,
+                                int dim4_offset) {
+            return makePoint(4, dim1_offset, dim2_offset,
+                             dim3_offset, dim4_offset);
+        }
+        virtual grid_point_node_ptr
+        new_relative_grid_point(int dim1_offset,
+                                int dim2_offset,
+                                int dim3_offset,
+                                int dim4_offset,
+                                int dim5_offset) {
+            return makePoint(5, dim1_offset, dim2_offset,
+                             dim3_offset, dim4_offset, dim5_offset);
+        }
+        virtual grid_point_node_ptr
+        new_relative_grid_point(int dim1_offset,
+                                int dim2_offset,
+                                int dim3_offset,
+                                int dim4_offset,
+                                int dim5_offset,
+                                int dim6_offset) {
+            return makePoint(6, dim1_offset, dim2_offset, dim3_offset,
+                             dim4_offset, dim5_offset, dim6_offset);
+        }
     };
 
     // A list of grids.  This holds pointers to grids defined by the stencil
@@ -1189,7 +1250,7 @@ namespace yask {
         virtual ~Grids() {}
 
         // Copy ctor.
-        // Copies list of grid pointers, but not grids.
+        // Copies list of grid pointers, but not grids (shallow copy).
         Grids(const Grids& src) : vector_set<Grid*>(src) {}
     };
 

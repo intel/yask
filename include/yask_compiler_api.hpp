@@ -32,14 +32,21 @@ IN THE SOFTWARE.
 
 #include <string>
 #include <memory>
+#include <climits>
 
 namespace yask {
 
-    // Forward declarations of AST nodes and pointers to them.
+    // Forward declarations of classes and smart pointers.
+    class stencil_solution;
+    typedef std::shared_ptr<stencil_solution> stencil_solution_ptr;
+    class grid;
+    typedef grid* grid_ptr;
     class expr_node;
     typedef std::shared_ptr<expr_node> expr_node_ptr;
     class number_node;
     typedef std::shared_ptr<number_node> number_node_ptr;
+    class grid_point_node;
+    typedef std::shared_ptr<grid_point_node> grid_point_node_ptr;
     class const_number_node;
     typedef std::shared_ptr<const_number_node> const_number_node_ptr;
     class negate_node;
@@ -57,7 +64,121 @@ namespace yask {
     class bool_node;
     typedef std::shared_ptr<bool_node> bool_node_ptr;
 
+    /// Factory to create objects needed to define a stencil solution.
+    class yask_compiler_factory {
+    public:
+        virtual ~yask_compiler_factory() {}
+
+        /// Create a stencil solution.
+        /** A stencil solution contains all the grids and equations.
+         * @returns Pointer to new solution object. */
+        virtual stencil_solution_ptr
+        new_stencil_solution(const std::string& name /**< [in] Name of the solution. */ );
+    };
+            
+    /// Stencil solution.
+    /** Objects of this type contain all the grids and equations
+     * that comprise a solution. */
+    class stencil_solution {
+    public:
+        virtual ~stencil_solution() {}
+
+        /// Get the name of the solution.
+        virtual const std::string& get_name() const =0;
+
+        /// Set the name of the solution.
+        virtual void set_name(std::string name) =0;
+
+        /// Add an n-dimensional grid to the solution.
+        /** "Grid" is a generic term for any n-dimensional tensor.  A 1-dim
+         * grid is an array, a 2-dim grid is a matrix, etc.  Define the name
+         * of each dimension that is needed via this interface. Example:
+         * new_grid("heat", "t", "x", "y") will create a 3D grid.
+         * @returns Pointer to the new grid. */
+        virtual grid_ptr
+        add_grid(std::string name /**< [in] Unique name of the grid. */,
+                 std::string dim1 = "" /**< [in] Name of 1st dimension. */,
+                 std::string dim2 = "" /**< [in] Name of 2nd dimension. */,
+                 std::string dim3 = "" /**< [in] Name of 3rd dimension. */,
+                 std::string dim4 = "" /**< [in] Name of 4th dimension. */,
+                 std::string dim5 = "" /**< [in] Name of 5th dimension. */,
+                 std::string dim6 = "" /**< [in] Name of 6th dimension. */ ) =0;
+    };
+
+    /// A grid.
+    /** "Grid" is a generic term for any n-dimensional tensor.  A 0-dim
+     * grid is a scalar, a 1-dim grid is an array, etc. 
+     * Create new grids via stencil_solution::add_grid(). */
+    class grid {
+    public:
+        virtual ~grid() {}
+
+        /// Get the name of the grid.
+        virtual const std::string& get_name() const =0;
+
+        /// Get the number of dimensions.
+        virtual int get_num_dims() const =0;
+
+        /// Get the name of the specified dimension.
+        virtual const std::string&
+        get_dim_name(int n /**< [in] Index of dimension between zero (0)
+                              and get_num_dims()-1. */ ) const =0;
+
+        /// Create a reference to a point in a 1D grid.
+        /** See more detail on 3-argument version. */
+        virtual grid_point_node_ptr
+        new_relative_grid_point(int dim1_offset /**< [in] offset from dim1 index. */ ) =0;
+
+        /// Create a reference to a point in a 2D grid.
+        /** See more detail on 3-argument version. */
+        virtual grid_point_node_ptr
+        new_relative_grid_point(int dim1_offset /**< [in] offset from dim1 index. */,
+                                int dim2_offset /**< [in] offset from dim2 index. */ ) =0;
+
+        /// Create a reference to a point in a 3D grid.
+        /** The indices are specified relative to the stencil evaluation
+         * index.  Each offset refers to the dimensions defined when the
+         * grid was added to a stencil_solution. Example: if g =
+         * new_grid("heat", "t", "x", "y"), then
+         * g->new_relative_grid_point(1, -1, 0) refers to heat(t+1, x-1, y)
+         * for some point t, x, y during stencil evaluation.
+         * @returns Pointer to AST node used to read or write from point in grid. */
+        virtual grid_point_node_ptr
+        new_relative_grid_point(int dim1_offset /**< [in] offset from dim1 index. */,
+                                int dim2_offset /**< [in] offset from dim2 index. */,
+                                int dim3_offset /**< [in] offset from dim3 index. */ ) =0;
+
+        /// Create a reference to a point in a 4D grid.
+        /** See more detail on 3-argument version. */
+        virtual grid_point_node_ptr
+        new_relative_grid_point(int dim1_offset /**< [in] offset from dim1 index. */,
+                                int dim2_offset /**< [in] offset from dim2 index. */,
+                                int dim3_offset /**< [in] offset from dim3 index. */,
+                                int dim4_offset /**< [in] offset from dim4 index. */ ) =0;
+
+        /// Create a reference to a point in a 5D grid.
+        /** See more detail on 3-argument version. */
+        virtual grid_point_node_ptr
+        new_relative_grid_point(int dim1_offset /**< [in] offset from dim1 index. */,
+                                int dim2_offset /**< [in] offset from dim2 index. */,
+                                int dim3_offset /**< [in] offset from dim3 index. */,
+                                int dim4_offset /**< [in] offset from dim4 index. */,
+                                int dim5_offset /**< [in] offset from dim5 index. */ ) =0;
+
+        /// Create a reference to a point in a 6D grid.
+        /** See more detail on 3-argument version. */
+        virtual grid_point_node_ptr
+        new_relative_grid_point(int dim1_offset /**< [in] offset from dim1 index. */,
+                                int dim2_offset /**< [in] offset from dim2 index. */,
+                                int dim3_offset /**< [in] offset from dim3 index. */,
+                                int dim4_offset /**< [in] offset from dim4 index. */,
+                                int dim5_offset /**< [in] offset from dim5 index. */,
+                                int dim6_offset /**< [in] offset from dim6 index. */ ) =0;
+    };
+
     /// Factory to create AST nodes.
+    /** Note: Grid-point reference nodes are created from a grid object
+     * instead of from this factory. */
     class node_factory {
     public:
         virtual ~node_factory() {}
@@ -104,7 +225,7 @@ namespace yask {
         new_divide_node(number_node_ptr lhs /**< [in] Expression before '/' sign. */,
                         number_node_ptr rhs /**< [in] Expression after '/' sign. */ );
     };
-    
+
     /// Base class for all AST nodes.
     /** An object of this abstract type cannot be created. */
     class expr_node {
@@ -131,10 +252,18 @@ namespace yask {
     /** An object of this abstract type cannot be created. */
     class bool_node : public virtual expr_node { };
 
+    /// A reference to a point in a grid.
+    class grid_point_node : public virtual number_node {
+    public:
+
+        /// Get the grid this point is in.
+        virtual grid_ptr get_grid() =0;
+    };
+    
     /// A constant numerical value.
     /** All values are stored as doubles.
      * This is a leaf node in an AST.
-     * Use a node_factory object to create an object of this type. */
+     * Use a yask_compiler_factory object to create an object of this type. */
     class const_number_node : public virtual number_node {
     public:
 
@@ -150,7 +279,7 @@ namespace yask {
 
     /// A numerical negation operator.
     /** Example: used to implement -(a*b).
-     * Use a node_factory object to create an object of this type. */
+     * Use a yask_compiler_factory object to create an object of this type. */
     class negate_node : public virtual number_node {
     public:
 
