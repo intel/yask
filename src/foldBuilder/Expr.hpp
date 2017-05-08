@@ -1298,6 +1298,7 @@ namespace yask {
         void setDims(Grids& grids,
                      string stepDim,
                      IntTuple& foldOptions,
+                     bool firstInner,
                      IntTuple& clusterOptions,
                      bool allowUnalignedLoads,
                      ostream& os);

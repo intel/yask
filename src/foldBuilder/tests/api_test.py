@@ -57,6 +57,6 @@ print(n7.format_simple())
 n8 = fac.new_equation_node(n7, n6)
 print(n8.format_simple())
 
-soln.add_equation(n8)
-print(soln.get_name() + " contains " +
+print("Solution '" + soln.get_name() + "' contains " +
+      str(soln.get_num_grids()) + " grid(s), and " +
       str(soln.get_num_equations()) + " equation(s).")

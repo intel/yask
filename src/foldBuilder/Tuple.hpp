@@ -79,8 +79,7 @@ namespace yask {
         // If _firstInner == true, x is unit stride.
         // If _firstInner == false, z is unit stride.
         // This setting affects layout() and visitAllPoints().
-        bool _firstInner;           // whether first dim is used for inner loop.
-        static bool _defaultFirstInner; // global default for _firstInner.
+        bool _firstInner = true; // whether first dim is used for inner loop.
 
         // Return an upper-case string.
         static string _allCaps(string str) {
@@ -89,18 +88,16 @@ namespace yask {
         }
     
     public:
-
-        // Default ctor.
-        Tuple() : _firstInner(_defaultFirstInner) { }
+        Tuple() {}
+        virtual ~Tuple() {}
 
         // Copy ctor.
         Tuple(const Tuple& rhs) :
             _map(rhs._map),
             _dims(rhs._dims),
             _firstInner(rhs._firstInner) { }
-        virtual ~Tuple() {}
 
-        // Copy.
+        // Copy operator.
         virtual void operator=(const Tuple& rhs) {
             _map = rhs._map;
             _dims = rhs._dims;
@@ -110,8 +107,6 @@ namespace yask {
         // first-inner (first dim is unit stride) accessors.
         virtual bool getFirstInner() const { return _firstInner; }
         virtual void setFirstInner(bool fi) { _firstInner = fi; }
-        static bool getDefaultFirstInner() { return _defaultFirstInner; }
-        static void setDefaultFirstInner(bool fi) { _defaultFirstInner = fi; }
     
         // Return pointer to value or null if it doesn't exist.
         virtual const T* lookup(const string& dim) const {
@@ -325,9 +320,8 @@ namespace yask {
             return !((*this) < rhs);
         }
 
-        // Convert offsets to 1D offset using C-style map (last index is
-        // unit stride) assuming values in this are sizes.
-        // if strictRhs==true, RHS elements must be same as this;
+        // Convert nD offsets to 1D offset using values in 'this' as sizes.
+        // If strictRhs==true, RHS elements must be same as this;
         // else, only matching ones are considered.
         virtual size_t layout(const Tuple& offsets, bool strictRhs=true) const {
             if (strictRhs)
@@ -649,7 +643,7 @@ namespace yask {
             return oss.str();
         }
 
-        // Call the visitor lambda function at every point in the space defined by this.
+        // Call the 'visitor' lambda function at every point in the space defined by 'this'.
         // Visitation order is with first dimension in unit stride, i.e., a conceptual
         // "outer loop" iterates through last dimension, and an "inner loop" iterates
         // through first dimension. If '_firstInner' is false, it is done the opposite way.
@@ -671,7 +665,7 @@ namespace yask {
         virtual void visitAllPoints(function<void (Tuple&)> visitor,
                                     int curDimNum, int step, Tuple& tp) const {
 
-            // Ready to call visitor, i.e., have we recursed beyond a dimension?
+            // Ready to call visitor, i.e., have we recursed beyond final dimension?
             if (curDimNum < 0 || curDimNum >= size())
                 visitor(tp);
         
@@ -688,8 +682,6 @@ namespace yask {
     };
 
     // Static members.
-    template <typename T>
-    bool Tuple<T>::_defaultFirstInner = true;
     template <typename T>
     set<string> Tuple<T>::_allDims;
 

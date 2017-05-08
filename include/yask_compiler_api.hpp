@@ -106,17 +106,23 @@ namespace yask {
                  std::string dim5 = "" /**< [in] Name of 5th dimension. */,
                  std::string dim6 = "" /**< [in] Name of 6th dimension. */ ) =0;
 
-        /// Add a grid-point equation to the solution.
-        virtual void
-        add_equation(equation_node_ptr eq /**< [in] Equation to add. */ ) =0;
-
+        /// Get the number of grids in the solution.
+        virtual int
+        get_num_grids() const =0;
+        
+        /// Get the specified grid.
+        virtual grid_ptr
+        get_grid(int n /**< [in] Index of grid between zero (0)
+                              and get_num_grids()-1. */ ) =0;
+        
         /// Get the number of equations in the solution.
+        /** Equations are added when equation_nodes are created. */
         virtual int
         get_num_equations() const =0;
 
         /// Get the specified equation.
         virtual equation_node_ptr
-        get_equation(int n /**< [in] Index of dimension between zero (0)
+        get_equation(int n /**< [in] Index of equation between zero (0)
                               and get_num_equations()-1. */ ) =0;
         
     };
@@ -200,8 +206,11 @@ namespace yask {
         virtual ~node_factory() {}
 
         /// Create an equation node.
-        /** Indicates grid point on LHS is equivalent to expression
-         * on RHS. This is NOT a test for equality. */
+        /** Indicates grid point on LHS is equivalent to expression on
+         * RHS. This is NOT a test for equality.  When an equation is
+         * created, it is automatically added to the list of equations for
+         * the stencil_solution that contains the grid that is on the
+         * LHS. */
         virtual equation_node_ptr
         new_equation_node(grid_point_node_ptr lhs /**< [in] Grid-point before EQUALS operator. */,
                         number_node_ptr rhs /**< [in] Expression after EQUALS operator. */ );

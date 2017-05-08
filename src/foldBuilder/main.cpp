@@ -392,9 +392,6 @@ int main(int argc, const char* argv[]) {
     // parse options.
     parseOpts(argc, argv);
 
-    // Set default fold layout.
-    IntTuple::setDefaultFirstInner(firstInner);
-    
     // Reference to objects in the stencil.
     Grids& grids = stencilFunc->getGrids();
     //Params& params = stencilFunc->getParams();
@@ -404,7 +401,7 @@ int main(int argc, const char* argv[]) {
     // Create the final folds and clusters from the cmd-line options.
     Dimensions dims;
     dims.setDims(grids, stepDim,
-                 foldOptions, clusterOptions,
+                 foldOptions, firstInner, clusterOptions,
                  allowUnalignedLoads, cout);
 
     // Call the stencil 'define' method to create ASTs in grids.
@@ -433,7 +430,7 @@ int main(int argc, const char* argv[]) {
     eqGroups.makeEqGroups(eqs, eqGroupTargets, dims._clusterPts, find_deps);
     optimizeEqGroups(eqGroups, "scalar & vector", false, cout);
 
-    // Make copies of all the equations at each cluster offset.
+    // Make a copy of each equation at each cluster offset.
     // We will use these for inter-cluster optimizations and code generation.
     cout << "Constructing cluster of equations containing " <<
         dims._clusterMults.product() << " vector(s)...\n";

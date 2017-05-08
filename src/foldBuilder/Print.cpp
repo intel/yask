@@ -1158,7 +1158,7 @@ namespace yask {
         }
         os << "#define VLEN (" << _dims._fold.product() << ")" << endl;
         os << "#define VLEN_FIRST_DIM_IS_UNIT_STRIDE (" <<
-            (IntTuple::getDefaultFirstInner() ? 1 : 0) << ")" << endl;
+            (_dims._fold.getFirstInner() ? 1 : 0) << ")" << endl;
         os << "#define USING_UNALIGNED_LOADS (" <<
             (_settings._allowUnalignedLoads ? 1 : 0) << ")" << endl;
 

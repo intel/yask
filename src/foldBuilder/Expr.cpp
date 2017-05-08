@@ -50,7 +50,7 @@ namespace yask {
         // TODO: validate that name is legal C++ var name.
         gp->setName(name);
 
-        // Set dims.
+        // Set dims up to first argument that is a null string.
         if (dim1.length()) {
             gp->addDimBack(dim1, 1);
             if (dim2.length()) {
@@ -90,7 +90,7 @@ namespace yask {
         assert(lp);
         auto rp = dynamic_pointer_cast<NumExpr>(rhs);
         assert(rp);
-        return make_shared<EqualsExpr>(lp, rp);
+        return operator EQUALS_OPER(lp, rp);
     }
     const_number_node_ptr
     node_factory::new_const_number_node(double val) {
@@ -137,6 +137,7 @@ namespace yask {
 
     // Compare 2 expr pointers and return whether the expressions are
     // equivalent.
+    // TODO: Be much smarter about matching symbolically-equivalent exprs.
     bool areExprsSame(const Expr* e1, const Expr* e2) {
 
         // Handle null pointers.
@@ -306,6 +307,7 @@ namespace yask {
     }
 
     // Define the value of a grid point.
+    // Add this equation to the list of eqs for this stencil.
     EqualsExprPtr operator EQUALS_OPER(GridPointPtr gpp, const NumExprPtr rhs) {
 
         // Get grid referenced by the expr.
@@ -1054,6 +1056,7 @@ namespace yask {
         // Visit a grid point.
         virtual void visit(GridPoint* gp) {
 
+            // Shift grid _ofs points.
             IntTuple new_loc = gp->addElements(_ofs, false);
             gp->setVals(new_loc, false);
         }
@@ -1326,12 +1329,21 @@ namespace yask {
     void Dimensions::setDims(Grids& grids,
                              string stepDim,
                              IntTuple& foldOptions,
+                             bool firstInner,
                              IntTuple& clusterOptions,
                              bool allowUnalignedLoads,
                              ostream& os)
     {
+        _allDims.clear();
+        _dimCounts.clear();
         _stepDim = stepDim;
-                     
+        _scalar.clear();
+        _fold.clear();
+        _clusterPts.clear();
+        _clusterMults.clear();
+        _miscDims.clear();
+        _fold.setFirstInner(firstInner);
+        
         // Create a tuple of all dimensions in all grids.
         // Also keep count of how many grids have each dim.
         // Note that dimensions won't be in any particular order!

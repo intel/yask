@@ -63,8 +63,8 @@ int main() {
     auto n8 = fac.new_equation_node(n7, n6);
     cout << n8->format_simple() << endl;
 
-    soln->add_equation(n8);
-    cout << soln->get_name() << " contains " << 
+    cout << "Solution '" << soln->get_name() << "' contains " <<
+        soln->get_num_grids() << " grid(s), and " <<
         soln->get_num_equations() << " equation(s)." << endl;
 
     return 0;

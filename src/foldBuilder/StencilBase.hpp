@@ -175,11 +175,14 @@ namespace yask {
                                   std::string dim5 = "",
                                   std::string dim6 = "");
 
-        virtual void add_equation(equation_node_ptr eq) {
-            auto p = dynamic_pointer_cast<EqualsExpr>(eq);
-            assert(p);
-            _eqs.addEq(p);
+        virtual int get_num_grids() const {
+            return int(_grids.size());
         }
+        virtual grid_ptr get_grid(int n) {
+            assert(n >= 0 && n < get_num_grids());
+            return _grids.at(n);
+        }
+        
         virtual int get_num_equations() const {
             return _eqs.getNumEqs();
         }
