@@ -46,8 +46,6 @@ ostream* printPseudo = NULL;
 ostream* printPOVRay = NULL;
 ostream* printDOT = NULL;
 ostream* printSimpleDOT = NULL;
-ostream* printMacros = NULL;
-ostream* printGrids = NULL;
 ostream* printCpp = NULL;
 ostream* printKncCpp = NULL;
 ostream* print512Cpp = NULL;
@@ -55,7 +53,7 @@ ostream* print256Cpp = NULL;
 
 // other vars set via cmd-line options.
 int vlenForStats = 0;
-StencilBase* stencilFunc = NULL;
+StencilBase* stencilSoln = NULL;
 string shapeName;
 IntTuple foldOptions;                     // vector fold.
 IntTuple clusterOptions;                  // cluster sizes.
@@ -87,6 +85,14 @@ ostream* open_file(const string& name) {
         exit(1);
     }
     return ofs;
+}
+
+void close_file(ostream* os) {
+    if (!os) return;
+    if (os == &cout) return;
+    if (os == &cerr) return;
+
+    delete os;
 }
 
 void usage(const string& cmd) {
@@ -261,10 +267,6 @@ void parseOpts(int argc, const char* argv[])
                     printSimpleDOT = open_file(argop);
                 else if (opt == "-pp")
                     printPOVRay = open_file(argop);
-                else if (opt == "-pm")
-                    printMacros = open_file(argop);
-                else if (opt == "-pg")
-                    printGrids = open_file(argop);
                 else if (opt == "-pcpp")
                     printCpp = open_file(argop);
                 else if (opt == "-pknc")
@@ -323,12 +325,12 @@ void parseOpts(int argc, const char* argv[])
         cerr << "Error: unknown stencil shape '" << shapeName << "'." << endl;
         usage(argv[0]);
     }
-    stencilFunc = stencilIter->second;
-    assert(stencilFunc);
+    stencilSoln = stencilIter->second;
+    assert(stencilSoln);
     
     cout << "Stencil name: " << shapeName << endl;
-    if (stencilFunc->usesRadius()) {
-        bool rOk = stencilFunc->setRadius(radius);
+    if (stencilSoln->usesRadius()) {
+        bool rOk = stencilSoln->setRadius(radius);
         if (!rOk) {
             cerr << "Error: invalid radius=" << radius << " for stencil type '" <<
                 shapeName << "'." << endl;
@@ -393,20 +395,20 @@ int main(int argc, const char* argv[]) {
     parseOpts(argc, argv);
 
     // Reference to objects in the stencil.
-    Grids& grids = stencilFunc->getGrids();
-    //Params& params = stencilFunc->getParams();
-    Eqs& eqs = stencilFunc->getEqs();
+    Grids& grids = stencilSoln->getGrids();
+    //Params& params = stencilSoln->getParams();
+    Eqs& eqs = stencilSoln->getEqs();
 
     // Find all the stencil dimensions from the grids.
     // Create the final folds and clusters from the cmd-line options.
-    Dimensions dims;
+    Dimensions& dims = stencilSoln->getDims();
     dims.setDims(grids, stepDim,
                  foldOptions, firstInner, clusterOptions,
                  allowUnalignedLoads, cout);
 
     // Call the stencil 'define' method to create ASTs in grids.
     // All grid points will be relative to origin (0,0,...,0).
-    stencilFunc->define(dims._allDims);
+    stencilSoln->define(dims._allDims);
 
     // Check for illegal dependencies within equations for scalar size.
     if (find_deps) {
@@ -443,28 +445,32 @@ int main(int argc, const char* argv[]) {
     
     // Human-readable output.
     if (printPseudo) {
-        PseudoPrinter printer(*stencilFunc, clusterEqGroups,
+        PseudoPrinter printer(*stencilSoln, clusterEqGroups,
                               maxExprSize, minExprSize);
         printer.print(*printPseudo);
+        close_file(printPseudo);
     }
 
     // DOT output.
     if (printDOT) {
-        DOTPrinter printer(*stencilFunc, clusterEqGroups,
+        DOTPrinter printer(*stencilSoln, clusterEqGroups,
                            maxExprSize, minExprSize, false);
         printer.print(*printDOT);
+        close_file(printDOT);
     }
     if (printSimpleDOT) {
-        DOTPrinter printer(*stencilFunc, clusterEqGroups,
+        DOTPrinter printer(*stencilSoln, clusterEqGroups,
                            maxExprSize, minExprSize, true);
         printer.print(*printSimpleDOT);
+        close_file(printSimpleDOT);
     }
 
     // POV-Ray output.
     if (printPOVRay) {
-        POVRayPrinter printer(*stencilFunc, clusterEqGroups,
+        POVRayPrinter printer(*stencilSoln, clusterEqGroups,
                               maxExprSize, minExprSize);
         printer.print(*printPOVRay);
+        close_file(printPOVRay);
     }
 
     // Settings for YASK.
@@ -475,41 +481,30 @@ int main(int argc, const char* argv[]) {
     yaskSettings._maxExprSize = maxExprSize;
     yaskSettings._minExprSize = minExprSize;
     
-    // Print YASK classes for grids.
-    // NB: not currently used.
-    if (printGrids) {
-        YASKCppPrinter printer(*stencilFunc, eqGroups, clusterEqGroups,
-                               dims, yaskSettings);
-        printer.printGrids(*printGrids);
-    }
-
-    // Print CPP macros.
-    if (printMacros) {
-        YASKCppPrinter printer(*stencilFunc, eqGroups, clusterEqGroups,
-                               dims, yaskSettings);
-        printer.printMacros(*printMacros);
-    }
-    
-    // Print YASK classes to update grids and/or prefetch.
+    // Print YASK code for various ISAs.
     if (printCpp) {
-        YASKCppPrinter printer(*stencilFunc, eqGroups, clusterEqGroups,
+        YASKCppPrinter printer(*stencilSoln, eqGroups, clusterEqGroups,
                                dims, yaskSettings);
         printer.printCode(*printCpp);
+        close_file(printCpp);
     }
     if (printKncCpp) {
-        YASKKncPrinter printer(*stencilFunc, eqGroups, clusterEqGroups,
+        YASKKncPrinter printer(*stencilSoln, eqGroups, clusterEqGroups,
                                dims, yaskSettings);
         printer.printCode(*printKncCpp);
+        close_file(printKncCpp);
     }
     if (print512Cpp) {
-        YASKAvx512Printer printer(*stencilFunc, eqGroups, clusterEqGroups,
+        YASKAvx512Printer printer(*stencilSoln, eqGroups, clusterEqGroups,
                                   dims, yaskSettings);
         printer.printCode(*print512Cpp);
+        close_file(print512Cpp);
     }
     if (print256Cpp) {
-        YASKAvx256Printer printer(*stencilFunc, eqGroups, clusterEqGroups,
+        YASKAvx256Printer printer(*stencilSoln, eqGroups, clusterEqGroups,
                                   dims, yaskSettings);
         printer.printCode(*print256Cpp);
+        close_file(print256Cpp);
     }
 
     // TODO: re-enable this.

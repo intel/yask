@@ -50,20 +50,20 @@ struct Z: public StencilDimension{};
 class ElasticBoundaryCondition : public StencilPart
 {
 protected:
-    StencilBase& _base;
+    StencilSolution& _sol;
     
     public:
-    ElasticBoundaryCondition(StencilBase& base) :
-        _base(base) {}
+    ElasticBoundaryCondition(StencilSolution& solution) :
+        _sol(solution) {}
     virtual ~ElasticBoundaryCondition() {}
 
     // Determine whether at boundary.
     virtual Condition is_at_boundary( GridIndex t, GridIndex x, GridIndex y, GridIndex z ) = 0;
     virtual Condition is_not_at_boundary( GridIndex t, GridIndex x, GridIndex y, GridIndex z ) = 0;
 
-    // Return a reference to the main stencil object.
-    virtual StencilBase& get_stencil_base() {
-        return _base;
+    // Return a reference to the main stencil-solution object provided during construction.
+    virtual StencilSolution& get_stencil_solution() {
+        return _sol;
     }
 };
 

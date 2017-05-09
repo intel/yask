@@ -659,11 +659,18 @@ namespace yask {
     // TODO: split this into smaller methods.
     void YASKCppPrinter::printCode(ostream& os) {
 
-        os << "// Automatically generated code; do not edit." << endl;
+        os << "// Automatically-generated code; do not edit.\n"
+            "\n////// YASK implementation of the '" << _stencil.getName() <<
+            "' stencil //////\n";
 
-        os << endl << "////// YASK implementation of the '" << _stencil.getName() <<
-            "' stencil //////" << endl;
-        os << endl << "namespace yask {" << endl;
+        // Macros.
+        os << "\n#ifdef DEFINE_MACROS\n";
+        printMacros(os);
+        os << "\n#endif // DEFINE_MACROS\n";
+
+        // Stencil-context code.
+        os << "\n#ifdef DEFINE_CONTEXT\n"
+            "namespace yask {" << endl;
 
         // First, create a class to hold the data (grids and params).
         {
@@ -1114,20 +1121,10 @@ namespace yask {
         
             os << "}; // " << _context << endl;
         }
-        os << "} // namespace yask." << endl;
-        
-    }
 
-    // Print YASK grids.
-    // Under development--not used.
-    void YASKCppPrinter::printGrids(ostream& os) {
-        os << "// Automatically generated code; do not edit." << endl;
-
-        os << endl << "////// Grid classes needed to implement the '" << _stencil.getName() <<
-            "' stencil //////" << endl;
-        os << endl << "namespace yask {" << endl;
-    
-        os << "} // namespace yask." << endl;
+        os << "} // namespace yask.\n"
+            "#endif // DEFINE_CONTEXT\n"
+            "\n//End of automatically-generated code." << endl;
     }
 
     // Print YASK macros.  TODO: many hacks below assume certain dimensions and
@@ -1135,9 +1132,7 @@ namespace yask {
     // flexible and then communicate info more generically. Goal is to get rid
     // of all these macros.
     void YASKCppPrinter::printMacros(ostream& os) {
-        os << "// Automatically generated code; do not edit." << endl;
 
-        os << endl;
         os << "// Stencil:" << endl;
         os << "#define YASK_STENCIL_NAME \"" << _stencil.getName() << "\"" << endl;
         os << "#define YASK_STENCIL_IS_" << allCaps(_stencil.getName()) << " (1)" << endl;

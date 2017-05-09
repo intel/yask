@@ -1523,52 +1523,6 @@ namespace yask {
     // A 'GridValue' is simply a pointer to an expression.
     typedef NumExprPtr GridValue;
 
-    // Convenience macros for initializing grids from a class implementing StencilPart.
-    // Each names the grid according to the 'gvar' parameter and adds it
-    // to the default '_grids' collection in StencilBase.
-    // The dimensions are named according to the remaining parameters.
-#define INIT_GRID_0D(gvar)                              \
-    get_stencil_base().getGrids().insert(&gvar);        \
-    gvar.setName(#gvar);                                \
-    gvar.setEqs(&get_stencil_base().getEqs())
-#define INIT_GRID_1D(gvar, d1)                  \
-    INIT_GRID_0D(gvar); gvar.addDimBack(#d1, 1)
-#define INIT_GRID_2D(gvar, d1, d2)                      \
-    INIT_GRID_1D(gvar, d1); gvar.addDimBack(#d2, 1)
-#define INIT_GRID_3D(gvar, d1, d2, d3)                  \
-    INIT_GRID_2D(gvar, d1, d2); gvar.addDimBack(#d3, 1)
-#define INIT_GRID_4D(gvar, d1, d2, d3, d4)                      \
-    INIT_GRID_3D(gvar, d1, d2, d3); gvar.addDimBack(#d4, 1)
-#define INIT_GRID_5D(gvar, d1, d2, d3, d4, d5)                  \
-    INIT_GRID_4D(gvar, d1, d2, d3, d4); gvar.addDimBack(#d5, 1)
-#define INIT_GRID_6D(gvar, d1, d2, d3, d4, d5, d6)                      \
-    INIT_GRID_5D(gvar, d1, d2, d3, d4, d5); gvar.addDimBack(#d6, 1)
-
-    // Convenience macros for initializing parameters from a class implementing StencilPart.
-    // Each names the param according to the 'pvar' parameter and adds it
-    // to the default '_params' collection.
-    // The dimensions are named and sized according to the remaining parameters.
-#define INIT_PARAM(pvar)                                \
-    get_stencil_base().getParams().insert(&pvar);       \
-    pvar.setName(#pvar);                                \
-    pvar.setParam(true)
-#define INIT_PARAM_1D(pvar, d1, s1)             \
-    INIT_PARAM(pvar); pvar.addDimBack(#d1, s1)
-#define INIT_PARAM_2D(pvar, d1, s1, d2, s2)                     \
-    INIT_PARAM_1D(pvar, d1, s1); pvar.addDimBack(#d2, s2)
-#define INIT_PARAM_3D(pvar, d1, s1, d2, s2, d3, s3)                     \
-    INIT_PARAM_2D(pvar, d1, s1, d2, s2); pvar.addDimBack(#d3, s3)
-#define INIT_PARAM_4D(pvar, d1, s1, d2, s2, d3, s3, d4, s4)             \
-    INIT_PARAM_3D(pvar, d1, s1, d2, s2, d3, s3); pvar.addDimBack(#d4, d4)
-#define INIT_PARAM_5D(pvar, d1, s1, d2, s2, d3, s3, d4, s4, d5, s5)     \
-    INIT_PARAM_4D(pvar, d1, s1, d2, s2, d3, s3, d4, s4); pvar.addDimBack(#d5, d5)
-#define INIT_PARAM_6D(pvar, d1, s1, d2, s2, d3, s3, d4, s4, d5, s5, d6, s6) \
-    INIT_PARAM_4D(pvar, d1, s1, d2, s2, d3, s3, d4, s4, d5, s5); pvar.addDimBack(#d6, d6)
-
-    // Convenience macro for getting one offset from the 'offsets' tuple.
-#define GET_OFFSET(ovar)                                                \
-    NumExprPtr ovar = make_shared<IntTupleExpr>(offsets.getDirInDim(#ovar))
- 
  
     // Use SET_VALUE_FROM_EXPR for creating a string to insert any C++ code
     // that evaluates to a real_t.
@@ -1596,7 +1550,7 @@ namespace yask {
         oss << "(" << rhs << ")";               \
         lhs  make_shared<CodeExpr>(oss.str());  \
     } while(0)
-
+    
 } // namespace yask.
     
 #endif

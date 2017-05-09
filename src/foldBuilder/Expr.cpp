@@ -43,8 +43,8 @@ namespace yask {
         // Make new grid and add to solution.
         auto* gp = new Grid();  // TODO: delete this in dtor.
         assert(gp);
-        gp->setEqs(&_eqs);
-        _grids.insert(gp);
+        gp->setEqs(&_eqs);      // Save equation access in grid.
+        _grids.insert(gp);      // Add to solution.
 
         // Set name.
         // TODO: validate that name is legal C++ var name.

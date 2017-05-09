@@ -323,6 +323,14 @@ namespace yask {
                                          "temp_vec", "real_vec_t", " ", ";\n");
         }
 
+        // Print a shim function to map hard-coded YASK vars to actual dims.
+        virtual void printShim(ostream& os, const string& fname,
+                               bool use_template = false,
+                               const string& dim = "");
+
+        // Print YASK macros.
+        virtual void printMacros(ostream& os);
+        
     public:
         YASKCppPrinter(StencilBase& stencil,
                        EqGroups& eqGroups,
@@ -348,12 +356,8 @@ namespace yask {
         }
         virtual ~YASKCppPrinter() { }
 
-        virtual void printMacros(ostream& os);
-        virtual void printGrids(ostream& os);
+        // Output all code for YASK.
         virtual void printCode(ostream& os);
-        virtual void printShim(ostream& os, const string& fname,
-                               bool use_template = false,
-                               const string& dim = "");
     };
 
 } // namespace yask.

@@ -292,17 +292,17 @@ FB_CXX    	?=	g++  # faster than icpc for the foldBuilder.
 FB_CXXFLAGS 	+=	-g -O0 -std=c++11 -Wall  # low opt to reduce compile time.
 FB_CXXFLAGS	+=	-Iinclude -Isrc/foldBuilder -Isrc/foldBuilder/stencils
 FB_FLAGS   	+=	-st $(stencil) -cluster $(cluster) -fold $(fold)
-ST_MACRO_FILE	:=	stencil_macros.hpp
-ST_CODE_FILE	:=	stencil_code.hpp
 FB_STENCIL_LIST	:=	src/foldBuilder/stencils.hpp
+ST_MACRO_FILE	:=	src/stencil_macros.hpp
+ST_CODE_FILE	:=	src/stencil_code.hpp
 GEN_HEADERS     :=	$(addprefix src/, \
 				stencil_rank_loops.hpp \
 				stencil_region_loops.hpp \
 				stencil_block_loops.hpp \
 				stencil_sub_block_loops.hpp \
 				stencil_halo_loops.hpp \
-				layout_macros.hpp layouts.hpp \
-				$(ST_MACRO_FILE) $(ST_CODE_FILE) )
+				layout_macros.hpp layouts.hpp) \
+				$(ST_MACRO_FILE) $(ST_CODE_FILE)
 ifneq ($(eqs),)
  FB_FLAGS   	+=	-eq $(eqs)
 endif
@@ -483,6 +483,98 @@ $(MAKE_REPORT_FILE): $(EXEC_NAME)
 	@echo MAKEFLAGS="\"$(MAKEFLAGS)"\" > $@ 2>&1
 	$(MAKE) -j1 $(CODE_STATS) echo-settings >> $@ 2>&1
 
+$(EXEC_NAME): $(STENCIL_OBJS)
+	$(LD) -o $@ $(STENCIL_OBJS) $(CXXFLAGS) $(LFLAGS)
+
+preprocess: $(STENCIL_CXX)
+
+src/stencil_rank_loops.hpp: bin/gen-loops.pl Makefile
+	$< -output $@ $(RANK_LOOP_OPTS) $(EXTRA_LOOP_OPTS) $(EXTRA_RANK_LOOP_OPTS) "$(RANK_LOOP_CODE)"
+
+src/stencil_region_loops.hpp: bin/gen-loops.pl Makefile
+	$< -output $@ $(REGION_LOOP_OPTS) $(EXTRA_LOOP_OPTS) $(EXTRA_REGION_LOOP_OPTS) "$(REGION_LOOP_CODE)"
+
+src/stencil_block_loops.hpp: bin/gen-loops.pl Makefile
+	$< -output $@ $(BLOCK_LOOP_OPTS) $(EXTRA_LOOP_OPTS) $(EXTRA_BLOCK_LOOP_OPTS) "$(BLOCK_LOOP_CODE)"
+
+src/stencil_sub_block_loops.hpp: bin/gen-loops.pl Makefile
+	$< -output $@ $(SUB_BLOCK_LOOP_OPTS) $(EXTRA_LOOP_OPTS) $(EXTRA_SUB_BLOCK_LOOP_OPTS) "$(SUB_BLOCK_LOOP_CODE)"
+
+src/stencil_halo_loops.hpp: bin/gen-loops.pl Makefile
+	$< -output $@ $(HALO_LOOP_OPTS) $(EXTRA_LOOP_OPTS) $(EXTRA_HALO_LOOP_OPTS) "$(HALO_LOOP_CODE)"
+
+src/layout_macros.hpp: bin/gen-layouts.pl
+	$< -m > $@
+
+src/layouts.hpp: bin/gen-layouts.pl
+	$< -d > $@
+
+# Compile the stencil compiler.
+# TODO: move this to its own makefile.
+$(FB_EXEC): src/foldBuilder/*.*pp src/foldBuilder/stencils/*.*pp $(FB_STENCIL_LIST)
+	$(FB_CXX) $(FB_CXXFLAGS) -o $@ src/foldBuilder/*.cpp $(EXTRA_FB_CXXFLAGS)
+
+$(FB_STENCIL_LIST): src/foldBuilder/stencils/*.hpp
+	echo '// Automatically-generated code; do not edit.' > $@
+	for sfile in $(^F); do \
+	  echo '#include "'$$sfile'"' >> $@; \
+	done
+
+# Run the stencil compiler and post-process its output.
+$(ST_CODE_FILE): $(FB_EXEC)
+	$< $(FB_FLAGS) $(EXTRA_FB_FLAGS) -p$(FB_TARGET) $@
+	@- gindent -fca $@ || \
+	  indent -fca $@ ||   \
+	  echo "note:" $@ "not formatted."
+
+$(ST_MACRO_FILE):
+	echo '// Settings from YASK Makefile' > $@
+	for macro in $(MACROS) $(EXTRA_MACROS); do \
+	  echo '#define' $$macro | sed 's/=/ /' >> $@; \
+	done
+
+headers: $(GEN_HEADERS)
+	@ echo 'Header files generated.'
+
+%.$(TAG).o: %.cpp src/*.hpp src/foldBuilder/*.hpp $(GEN_HEADERS)
+	$(CXX) $(CXXFLAGS) -c -o $@ $<
+
+%.$(TAG).i: %.cpp src/*.hpp src/foldBuilder/*.hpp $(GEN_HEADERS)
+	$(CXX) $(CXXFLAGS) -E $< > $@
+
+# NB: All the following api* targets are temporary placeholders.
+# TODO: Create better rules with real dependencies.
+
+api-docs:
+	cd docs; doxygen yask_compiler.doxy
+
+api-swig:
+	cd src/foldBuilder/swig; \
+	swig -v -I../../../include -c++ -python yask_compiler_api.i; \
+	python setup.py build_ext --inplace
+
+api-cxx-test:
+	$(FB_CXX) $(FB_CXXFLAGS) -o bin/api_test.exe \
+	 $(addprefix src/foldBuilder/,tests/api_test.cpp Expr.cpp Print.cpp) $(EXTRA_FB_CXXFLAGS)
+	bin/api_test.exe
+
+api-py-test:
+	cd src/foldBuilder/tests; python api_test.py
+
+api:	api-docs api-swig api-cxx-test api-py-test
+
+tags:
+	rm -f TAGS ; find . -name '*.[ch]pp' | xargs etags -C -a
+
+clean:
+	rm -fv src/*.[io] *.optrpt */*.optrpt *.s $(GEN_HEADERS) $(MAKE_REPORT_FILE)
+
+realclean: clean
+	rm -fv bin/*.exe make-report*.txt cxx-flags*.txt ld-flags.*txt $(FB_EXEC) TAGS $(FB_STENCIL_LIST)
+	rm -fr docs/html docs/latex
+	rm -fv stencil*.exe stencil-tuner-summary.csh stencil-tuner.pl gen-layouts.pl gen-loops.pl get-loop-stats.pl
+	find . -name '*~' | xargs -r rm -v
+
 echo-settings:
 	@echo
 	@echo "Build environment for" $(EXEC_NAME) on `date`
@@ -553,99 +645,6 @@ code_stats:
 	@echo
 	@echo "Code stats for stencil computation:"
 	bin/get-loop-stats.pl -t='sub_block_loops' *.s
-
-$(EXEC_NAME): $(STENCIL_OBJS)
-	$(LD) -o $@ $(STENCIL_OBJS) $(CXXFLAGS) $(LFLAGS)
-
-preprocess: $(STENCIL_CXX)
-
-src/stencil_rank_loops.hpp: bin/gen-loops.pl Makefile
-	$< -output $@ $(RANK_LOOP_OPTS) $(EXTRA_LOOP_OPTS) $(EXTRA_RANK_LOOP_OPTS) "$(RANK_LOOP_CODE)"
-
-src/stencil_region_loops.hpp: bin/gen-loops.pl Makefile
-	$< -output $@ $(REGION_LOOP_OPTS) $(EXTRA_LOOP_OPTS) $(EXTRA_REGION_LOOP_OPTS) "$(REGION_LOOP_CODE)"
-
-src/stencil_block_loops.hpp: bin/gen-loops.pl Makefile
-	$< -output $@ $(BLOCK_LOOP_OPTS) $(EXTRA_LOOP_OPTS) $(EXTRA_BLOCK_LOOP_OPTS) "$(BLOCK_LOOP_CODE)"
-
-src/stencil_sub_block_loops.hpp: bin/gen-loops.pl Makefile
-	$< -output $@ $(SUB_BLOCK_LOOP_OPTS) $(EXTRA_LOOP_OPTS) $(EXTRA_SUB_BLOCK_LOOP_OPTS) "$(SUB_BLOCK_LOOP_CODE)"
-
-src/stencil_halo_loops.hpp: bin/gen-loops.pl Makefile
-	$< -output $@ $(HALO_LOOP_OPTS) $(EXTRA_LOOP_OPTS) $(EXTRA_HALO_LOOP_OPTS) "$(HALO_LOOP_CODE)"
-
-src/layout_macros.hpp: bin/gen-layouts.pl
-	$< -m > $@
-
-src/layouts.hpp: bin/gen-layouts.pl
-	$< -d > $@
-
-# Compile the stencil compiler.
-# TODO: move this to its own makefile.
-$(FB_EXEC): src/foldBuilder/*.*pp src/foldBuilder/stencils/*.*pp $(FB_STENCIL_LIST)
-	$(FB_CXX) $(FB_CXXFLAGS) -o $@ src/foldBuilder/*.cpp $(EXTRA_FB_CXXFLAGS)
-
-$(FB_STENCIL_LIST): src/foldBuilder/stencils/*.hpp
-	@- rm -f $@
-	for sfile in $(^F); do \
-	  echo '#include "'$$sfile'"' >> $@; \
-	done
-
-# Run the stencil compiler and post-process its output files.
-# Use the gmake pattern-rule trick to specify simultaneous targets.
-%/$(ST_MACRO_FILE) %/$(ST_CODE_FILE): $(FB_EXEC)
-	$< $(FB_FLAGS) $(EXTRA_FB_FLAGS) \
-	  -pm $*/$(ST_MACRO_FILE) -p$(FB_TARGET) $*/$(ST_CODE_FILE)
-	echo >> $*/$(ST_MACRO_FILE)
-	echo '// Settings from YASK Makefile' >> $*/$(ST_MACRO_FILE)
-	for macro in $(MACROS) $(EXTRA_MACROS); do \
-	  echo '#define' $$macro | sed 's/=/ /' >> $*/$(ST_MACRO_FILE); \
-	done
-	@- gindent -fca $*/$(ST_CODE_FILE) || \
-	  indent -fca $*/$(ST_CODE_FILE) || \
-	  echo "note:" $*/$(ST_CODE_FILE) "not formatted."
-
-headers: $(GEN_HEADERS) $(FB_STENCIL_LIST)
-	@ echo 'Header files generated.'
-
-%.$(TAG).o: %.cpp src/*.hpp src/foldBuilder/*.hpp $(GEN_HEADERS)
-	$(CXX) $(CXXFLAGS) -c -o $@ $<
-
-%.$(TAG).i: %.cpp src/*.hpp src/foldBuilder/*.hpp $(GEN_HEADERS)
-	$(CXX) $(CXXFLAGS) -E $< > $@
-
-# NB: All the following api* targets are temporary placeholders.
-# TODO: Create better rules with real dependencies.
-
-api-docs:
-	cd docs; doxygen yask_compiler.doxy
-
-api-swig:
-	cd src/foldBuilder/swig; \
-	swig -v -I../../../include -c++ -python yask_compiler_api.i; \
-	python setup.py build_ext --inplace
-
-api-cxx-test:
-	$(FB_CXX) $(FB_CXXFLAGS) -o bin/api_test.exe \
-	 $(addprefix src/foldBuilder/,tests/api_test.cpp Expr.cpp Print.cpp) $(EXTRA_FB_CXXFLAGS)
-	bin/api_test.exe
-
-api-py-test:
-	cd src/foldBuilder/tests; python api_test.py
-
-api:	api-docs api-swig api-cxx-test api-py-test
-
-tags:
-	rm -f TAGS ; find . -name '*.[ch]pp' | xargs etags -C -a
-
-clean:
-	rm -fv src/*.[io] *.optrpt */*.optrpt *.s $(GEN_HEADERS) $(MAKE_REPORT_FILE)
-
-realclean: clean
-	rm -fv bin/*.exe make-report*.txt cxx-flags*.txt ld-flags.*txt $(FB_EXEC) $(FB_STENCIL_LIST) TAGS
-	rm -fr docs/html docs/latex
-	rm -fv stencil*.exe stencil-tuner-summary.csh stencil-tuner.pl gen-layouts.pl gen-loops.pl get-loop-stats.pl
-	find . -name '*~' | xargs -r rm -v
 
 help:
 	@echo "Example usage:"
