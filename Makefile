@@ -129,6 +129,7 @@ else ifneq ($(findstring awp,$(stencil)),)
  def_pad_args			=	-p 1
  ifeq ($(arch),knl)
   def_rank_args			=	-dx 1024 -dy 1024 -dz 128 # assume 1 rank/node.
+  fold_4byte			=	x=4,y=4
   def_thread_divisor		=	2
   def_block_threads		=	4
   def_block_args		=	-b 48 -bx 112
@@ -146,11 +147,11 @@ else ifneq ($(findstring awp,$(stencil)),)
   SUB_BLOCK_LOOP_INNER_MODS	=	prefetch(L1)
  endif
 
-else ifeq ($(stencil),ssg)
+else ifneq ($(findstring ssg,$(stencil)),)
  time_alloc	=	1
  eqs		=	v_bl=v_bl,v_tr=v_tr,v_tl=v_tl,s_br=s_br,s_bl=s_bl,s_tr=s_tr,s_tl=s_tl
 
-else ifeq ($(stencil),fsg)
+else ifneq ($(findstring fsg,$(stencil)),)
  time_alloc	=	1
  eqs		=      v_br=v_br,v_bl=v_bl,v_tr=v_tr,v_tl=v_tl,s_br=s_br,s_bl=s_bl,s_tr=s_tr,s_tl=s_tl
  ifeq ($(arch),knl)
@@ -256,10 +257,10 @@ pfd_l2			?=	2
 ifneq ($(findstring INTRIN512,$(MACROS)),)  # 512 bits.
 
  # 16 SP floats.
- fold_4byte	?=	x=4,y=4,z=1
+ fold_4byte	?=	x=4,y=4
 
  # 8 DP floats.
- fold_8byte	?=	x=4,y=2,z=1
+ fold_8byte	?=	x=4,y=2
 
 else  # not 512 bits (assume 256).
 
@@ -368,8 +369,8 @@ ifneq ($(findstring ic,$(notdir $(CXX))),)  # Intel compiler
  CODE_STATS      =   	code_stats
  CXXFLAGS        +=      $(ISA) -debug extended -Fa -restrict -ansi-alias -fno-alias
  CXXFLAGS	+=	-fimf-precision=low -fast-transcendentals -no-prec-sqrt -no-prec-div -fp-model fast=2 -fno-protect-parens -rcd -ftz -fma -fimf-domain-exclusion=none -qopt-assume-safe-padding
- CXXFLAGS	+=	-qoverride-limits
- #CXXFLAGS	+=	-vec-threshold0
+ #CXXFLAGS	+=	-qoverride-limits
+ CXXFLAGS	+=	-vec-threshold0
  CXXFLAGS	+=      -qopt-report=5
  #CXXFLAGS	+=	-qopt-report-phase=VEC,PAR,OPENMP,IPO,LOOP
  CXXFLAGS	+=	-no-diag-message-catalog
@@ -475,7 +476,8 @@ all:	$(EXEC_NAME) $(MAKE_REPORT_FILE)
 	echo $(CXXFLAGS) > $(CXXFLAGS_FILE)
 	echo $(LFLAGS) > $(LFLAGS_FILE)
 	@cat $(MAKE_REPORT_FILE)
-	@echo $(EXEC_NAME) "has been built. Use bin/yask.sh to run it."
+	@echo "Binary" $(EXEC_NAME) "has been built."
+	@echo "Run command: bin/yask.sh -stencil" $(stencil) "-arch" $(arch) "[options]"
 
 $(MAKE_REPORT_FILE): $(EXEC_NAME)
 	@echo MAKEFLAGS="\"$(MAKEFLAGS)"\" > $@ 2>&1

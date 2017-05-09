@@ -170,7 +170,7 @@ namespace yask {
 // First/last index macros.
 // These are relative to global problem, not rank.
 #define FIRST_INDEX(dim) (0)
-#define LAST_INDEX(dim) (context.tot_ ## dim - 1)
+#define LAST_INDEX(dim) (_context->tot_ ## dim - 1)
 
 namespace yask {
 

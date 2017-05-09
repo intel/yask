@@ -1418,7 +1418,7 @@ namespace yask {
                 exit(1);
             }
             else if (foldGT1.size() > 0)
-                os << "Notice: memory map MUST be with unit-stride in " <<
+                os << "Notice: memory layout MUST have unit-stride in " <<
                     foldGT1.makeDimStr() << " dimension!" << endl;
         }
 
