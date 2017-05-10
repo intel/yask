@@ -346,8 +346,7 @@ void CppIntrinPrintHelper::tryPerm2(ostream& os,
 
             // Have we found the target number of bits?
             if (foundElems.size() == nelemsTarget) {
-                bool needMask = doneElems.size() > 0;
-                assert(!needMask);
+                assert(doneElems.size() == 0);
 
                 string nameStr = nameSS.str();
                 string ctrlStr = "{ .ci = { " + ctrlSS.str() + " } }";

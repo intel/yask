@@ -175,7 +175,7 @@ ifeq ($(arch),knc)
 
  ISA		?= 	-mmic
  MACROS		+=	USE_INTRIN512
- FB_TARGET  	?=       knc
+ FB_TARGET  	?=	knc
  def_block_threads  ?=	4
  SUB_BLOCK_LOOP_INNER_MODS  ?=	prefetch(L1,L2)
 
@@ -184,7 +184,7 @@ else ifeq ($(arch),knl)
  ISA		?=	-xMIC-AVX512
  GCXX_ISA	?=	-march=knl
  MACROS		+=	USE_INTRIN512 USE_RCP28
- FB_TARGET  	?=       512
+ FB_TARGET  	?=	avx512
  def_block_args	?=	-b 96
  def_block_threads ?=	8
  SUB_BLOCK_LOOP_INNER_MODS  ?=	prefetch(L1)
@@ -194,7 +194,7 @@ else ifeq ($(arch),skx)
  ISA		?=	-xCORE-AVX512
  GCXX_ISA	?=	-march=knl -mno-avx512er -mno-avx512pf
  MACROS		+=	USE_INTRIN512
- FB_TARGET  	?=	512
+ FB_TARGET  	?=	avx512
  mpi		=	1
 
 else ifeq ($(arch),hsw)
@@ -202,7 +202,7 @@ else ifeq ($(arch),hsw)
  ISA		?=	-xCORE-AVX2
  GCXX_ISA	?=	-march=haswell
  MACROS		+=	USE_INTRIN256
- FB_TARGET  	?=	256
+ FB_TARGET  	?=	avx2
  mpi		=	1
 
 else ifeq ($(arch),ivb)
@@ -210,7 +210,7 @@ else ifeq ($(arch),ivb)
  ISA		?=	-xCORE-AVX-I
  GCXX_ISA	?=	-march=ivybridge
  MACROS		+=	USE_INTRIN256
- FB_TARGET  	?=	256
+ FB_TARGET  	?=	avx
  mpi		=	1
 
 else ifeq ($(arch),snb)
@@ -218,7 +218,7 @@ else ifeq ($(arch),snb)
  ISA		?=	-xAVX
  GCXX_ISA	?=	-march=sandybridge
  MACROS		+= 	USE_INTRIN256
- FB_TARGET  	?=	256
+ FB_TARGET  	?=	avx
  mpi		=	1
 
 else ifeq ($(arch),intel64)
@@ -522,7 +522,7 @@ $(FB_STENCIL_LIST): src/foldBuilder/stencils/*.hpp
 
 # Run the stencil compiler and post-process its output.
 $(ST_CODE_FILE): $(FB_EXEC)
-	$< $(FB_FLAGS) $(EXTRA_FB_FLAGS) -p$(FB_TARGET) $@
+	$< $(FB_FLAGS) $(EXTRA_FB_FLAGS) -p $(FB_TARGET) $@
 	@- gindent -fca $@ || \
 	  indent -fca $@ ||   \
 	  echo "note:" $@ "not formatted."
@@ -545,23 +545,35 @@ headers: $(GEN_HEADERS)
 # NB: All the following api* targets are temporary placeholders.
 # TODO: Create better rules with real dependencies.
 
-api-docs:
+docs/latex/refman.tex: include/*hpp
 	cd docs; doxygen yask_compiler.doxy
 
-api-swig:
+api-docs: docs/latex/refman.tex
+
+src/foldBuilder/swig/yask_compiler.py: include/*hpp $(addprefix src/foldBuilder/,swig/setup.py *pp)
 	cd src/foldBuilder/swig; \
 	swig -v -I../../../include -c++ -python yask_compiler_api.i; \
 	python setup.py build_ext --inplace
 
-api-cxx-test:
-	$(FB_CXX) $(FB_CXXFLAGS) -o bin/api_test.exe \
-	 $(addprefix src/foldBuilder/,tests/api_test.cpp Expr.cpp Print.cpp) $(EXTRA_FB_CXXFLAGS)
-	bin/api_test.exe
+# TODO: build .so for compiler and link to it.
+bin/yask_compiler_api_test.exe: $(addprefix src/foldBuilder/,tests/api_test.cpp *pp)
+	$(FB_CXX) $(FB_CXXFLAGS) -o $@ \
+	 $(addprefix src/foldBuilder/,tests/api_test.cpp [A-Z]*.cpp) $(EXTRA_FB_CXXFLAGS)
 
-api-py-test:
-	cd src/foldBuilder/tests; python api_test.py
+api-cxx-test: bin/yask_compiler_api_test.exe
+	$<
+	mv api-cxx-test.dot src/foldBuilder/tests
+	cd src/foldBuilder/tests; \
+	dot -Tpdf -O api-cxx-test.dot; \
+	ls -l api-cxx-test.dot*
 
-api:	api-docs api-swig api-cxx-test api-py-test
+api-py-test: src/foldBuilder/swig/yask_compiler.py
+	cd src/foldBuilder/tests; \
+	python api_test.py; \
+	dot -Tpdf -O api-py-test.dot; \
+	ls -l api-py-test.dot*
+
+api:	api-docs api-cxx-test api-py-test
 
 tags:
 	rm -f TAGS ; find . -name '*.[ch]pp' | xargs etags -C -a
@@ -572,6 +584,7 @@ clean:
 realclean: clean
 	rm -fv bin/*.exe make-report*.txt cxx-flags*.txt ld-flags.*txt $(FB_EXEC) TAGS $(FB_STENCIL_LIST)
 	rm -fr docs/html docs/latex
+	rm -fv src/foldBuilder/tests/*.dot*
 	rm -fv stencil*.exe stencil-tuner-summary.csh stencil-tuner.pl gen-layouts.pl gen-loops.pl get-loop-stats.pl
 	find . -name '*~' | xargs -r rm -v
 

@@ -124,7 +124,44 @@ namespace yask {
         virtual equation_node_ptr
         get_equation(int n /**< [in] Index of equation between zero (0)
                               and get_num_equations()-1. */ ) =0;
+
+        /// Set the solution step dimension.
+        virtual void
+        set_step_dim(const std::string& dim /**< [in] Step dimension, e.g., "t". */ ) =0;
         
+        /// Set the vectorization length in given dimension.
+        virtual void
+        set_fold_len(const std::string& dim /**< [in] Dimension of fold, e.g., "x". */,
+                     int len /**< [in] Length of vectorization in 'dim' */ ) =0;
+
+        /// Set the cluster multiplier (unroll factor) in given dimension.
+        virtual void
+        set_cluster_mult(const std::string& dim /**< [in] Direction of unroll, e.g., "y". */,
+                         int mult /**< [in] Number of vectors in 'dim' */ ) =0;
+
+        /// Format the current equation(s).
+        /** Currently supported format types:
+         * Type    | Output
+         * --------|--------
+         * cpp     | YASK stencil classes for generic C++.
+         * avx     | YASK stencil classes for CORE AVX ISA. 
+         * avx2    | YASK stencil classes for CORE AVX2 ISA.
+         * avx512  | YASK stencil classes for CORE AVX-512 & MIC AVX-512 ISAs.
+         * knc     | YASK stencil classes for Knights Corner ISA. 
+         * dot     | DOT-language description.
+         * dot-lite| DOT-language description of grid accesses only.
+         * pseudo  | Human-readable pseudo-code (for debug).
+         */
+        virtual std::string
+        format(const std::string& format_type /**< [in] Name of type from above table. */,
+               bool debug = false /**< [in] Print diagnostic info to stdout. */ ) =0;
+
+        /// Format the current equation(s) and write to given file.
+        /** See format() for supported format types. */
+        virtual void
+        write(const std::string& filename /**< [in] Name of output file. */,
+              const std::string& format_type /**< [in] Name of type from format() table. */,
+              bool debug = false /**< [in] Print diagnostic info to stdout. */ ) =0;
     };
 
     /// A grid.
@@ -264,7 +301,7 @@ namespace yask {
     public:
         virtual ~expr_node() {}
 
-        /// Create a simple readable string.
+        /// Create a simple human-readable string.
         /** Formats the expression starting at this node 
          * into a single-line readable string.
          */

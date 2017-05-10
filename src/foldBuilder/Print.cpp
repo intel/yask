@@ -198,8 +198,8 @@ namespace yask {
 
         // How many nodes in ex?
         int exprSize = ex->getNumNodes();
-        bool tooBig = exprSize > _maxExprSize;
-        bool tooSmall = exprSize < _minExprSize;
+        bool tooBig = exprSize > _settings._maxExprSize;
+        bool tooSmall = exprSize < _settings._minExprSize;
 
         // Determine whether this expr has already been evaluated
         // and a variable holds its result.
@@ -573,7 +573,7 @@ namespace yask {
             eq.visitEqs(&pv1);
             
             os << endl << " // Bottom-up stencil calculation:" << endl;
-            PrintVisitorBottomUp pv2(os, ph, _maxExprSize, _minExprSize);
+            PrintVisitorBottomUp pv2(os, ph, _settings);
             eq.visitEqs(&pv2);
         }
     }
@@ -657,7 +657,7 @@ namespace yask {
 
     // Print YASK code in new stencil context class.
     // TODO: split this into smaller methods.
-    void YASKCppPrinter::printCode(ostream& os) {
+    void YASKCppPrinter::print(ostream& os) {
 
         os << "// Automatically-generated code; do not edit.\n"
             "\n////// YASK implementation of the '" << _stencil.getName() <<
@@ -898,7 +898,7 @@ namespace yask {
                 // The visitor is accepted at all nodes in the scalar AST;
                 // for each node in the AST, code is generated and
                 // stored in the expression-string in the visitor.
-                PrintVisitorBottomUp pcv(os, *sp, _maxExprSize, _minExprSize);
+                PrintVisitorBottomUp pcv(os, *sp, _settings);
 
                 // Generate the code.
                 eq.visitEqs(&pcv);
@@ -963,7 +963,7 @@ namespace yask {
                 // The visitor is accepted at all nodes in the cluster AST;
                 // for each node in the AST, code is generated and
                 // stored in the expression-string in the visitor.
-                PrintVisitorBottomUp pcv(os, *vp, _maxExprSize, _minExprSize);
+                PrintVisitorBottomUp pcv(os, *vp, _settings);
 
                 // Generate the code.
                 // Visit all expressions to cover the whole cluster.

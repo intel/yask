@@ -28,6 +28,8 @@ IN THE SOFTWARE.
 #include "Print.hpp"
 #include "ExprUtils.hpp"
 #include "Parse.hpp"
+#include "Print.hpp"
+#include "CppIntrin.hpp"
 
 namespace yask {
 
@@ -72,6 +74,145 @@ namespace yask {
         return gp;
     }
 
+    void StencilSolution::set_fold_len(const std::string& dim, int len) {
+        auto& fold = _settings._foldOptions;
+        auto* p = fold.lookup(dim);
+        if (p)
+            *p = len;
+        else
+            fold.addDimBack(dim, len);
+    }
+    void StencilSolution::set_cluster_mult(const std::string& dim, int mult) {
+        auto& cluster = _settings._clusterOptions;
+        auto* p = cluster.lookup(dim);
+        if (p)
+            *p = mult;
+        else
+            cluster.addDimBack(dim, mult);
+    }
+
+    // Create the intermediate data for printing.
+    void StencilSolution::analyze_solution(ostream& os) {
+
+        // Find all the stencil dimensions from the grids.
+        // Create the final folds and clusters from the cmd-line options.
+        _dims.setDims(_grids, _settings, os);
+
+        // Call the stencil 'define' method to create ASTs.
+        // All grid points will be relative to origin (0,0,...,0).
+        define(_dims._allDims);
+
+        // Check for illegal dependencies within equations for scalar size.
+        if (_settings._find_deps) {
+            os << "Checking equation(s) with scalar operations...\n"
+                " If this fails, review stencil equation(s) for illegal dependencies.\n";
+            _eqs.checkDeps(_dims._scalar, _dims._stepDim);
+        }
+
+        // Check for illegal dependencies within equations for vector size.
+        if (_settings._find_deps) {
+            os << "Checking equation(s) with folded-vector operations...\n"
+                " If this fails, the fold dimensions are not compatible with all equations.\n";
+            _eqs.checkDeps(_dims._fold, _dims._stepDim);
+        }
+
+        // Check for illegal dependencies within equations for cluster size and
+        // also create equation groups based on legal dependencies.
+        os << "Checking equation(s) with clusters of vectors...\n"
+            " If this fails, the cluster dimensions are not compatible with all equations.\n";
+        _eqGroups.set_basename_default(_settings._eq_group_basename_default);
+        _eqGroups.set_dims(_dims);
+        _eqGroups.makeEqGroups(_eqs, _settings._eqGroupTargets,
+                               _dims._clusterPts, _settings._find_deps);
+        _eqGroups.optimizeEqGroups(_settings, "scalar & vector", false, os);
+
+        // Make a copy of each equation at each cluster offset.
+        // We will use these for inter-cluster optimizations and code generation.
+        os << "Constructing cluster of equations containing " <<
+            _dims._clusterMults.product() << " vector(s)...\n";
+        _clusterEqGroups = _eqGroups;
+        _clusterEqGroups.replicateEqsInCluster(_dims);
+        _clusterEqGroups.optimizeEqGroups(_settings, "cluster", true, cout);
+    }
+
+    // Format in given format-type.
+    string StencilSolution::format(const string& format_type,
+                                   ostream& os) {
+        analyze_solution(os);
+
+        // Look for format match.
+        // TODO: handle failures before analysis.
+        PrinterBase* printer = 0;
+        if (format_type == "cpp")
+            printer = new YASKCppPrinter(*this, _eqGroups, _clusterEqGroups,
+                                         _dims, _settings);
+        else if (format_type == "knc")
+            printer = new YASKKncPrinter(*this, _eqGroups, _clusterEqGroups,
+                                         _dims, _settings);
+        else if (format_type == "avx" || format_type == "avx2") // same for now.
+            printer = new YASKAvx256Printer(*this, _eqGroups, _clusterEqGroups,
+                                         _dims, _settings);
+        else if (format_type == "avx512")
+            printer = new YASKAvx512Printer(*this, _eqGroups, _clusterEqGroups,
+                                         _dims, _settings);
+        else if (format_type == "dot")
+            printer = new DOTPrinter(*this, _clusterEqGroups,
+                                     _settings, false);
+        else if (format_type == "dot-lite")
+            printer = new DOTPrinter(*this, _clusterEqGroups,
+                                     _settings, true);
+        else if (format_type == "pseudo")
+            printer = new PseudoPrinter(*this, _clusterEqGroups,
+                                        _settings);
+        else if (format_type == "pov-ray") // undocumented.
+            printer = new POVRayPrinter(*this, _clusterEqGroups,
+                                        _settings);
+        else {
+            cerr << "Error: format-type '" << format_type <<
+                "' is not recognized." << endl;
+            exit(1);
+        }
+        os << "Generating '" << format_type << "' output...\n";
+        string res = printer->format();
+        delete printer;
+
+        return res;
+    }
+    void StencilSolution::write(const std::string& filename,
+                                const std::string& format_type,
+                                bool debug) {
+
+        // Get file stream.
+        ostream* os = 0;
+        ofstream* ofs = 0;
+
+        // Use '-' for stdout.
+        if (filename == "-")
+            os = &cout;
+        else {
+            ofs = new ofstream(filename, ofstream::out | ofstream::trunc);
+            if (!ofs || !ofs->is_open()) {
+                cerr << "Error: cannot open '" << filename <<
+                    "' for output.\n";
+                exit(1);
+            }
+            os = ofs;
+        }
+        assert(os);
+
+        // Create output.
+        string res = format(format_type, debug);
+
+        // Send to stream.
+        *os << res;
+
+        // Close file if needed.
+        if (ofs) {
+            ofs->close();
+            delete ofs;
+        }
+    }
+
     // grid_point APIs.
     grid* GridPoint::get_grid() {
         return _grid;
@@ -79,7 +220,7 @@ namespace yask {
     
     // yask_compiler_factory API methods.
     stencil_solution_ptr yask_compiler_factory::new_stencil_solution(const std::string& name) {
-        return make_shared<StencilSolution>(name);
+        return make_shared<EmptyStencil>(name);
     }
     
     //node_factory API methods.
@@ -1325,24 +1466,68 @@ namespace yask {
         cv.printStats(os, msg);
     }
 
+    // Apply optimizations.
+    void EqGroups::optimizeEqGroups(StencilSettings& settings,
+                                    const string& descr,
+                                    bool printSets,
+                                    ostream& os) {
+        // print stats.
+        string edescr = "for " + descr + " equation-group(s)";
+        printStats(os, edescr);
+    
+        // Make a list of optimizations to apply to eqGroups.
+        vector<OptVisitor*> opts;
+
+        // CSE.
+        if (settings._doCse)
+            opts.push_back(new CseVisitor);
+
+        // Operator combination.
+        if (settings._doComb) {
+            opts.push_back(new CombineVisitor);
+
+            // Do CSE again after combination.
+            if (settings._doCse)
+                opts.push_back(new CseVisitor);
+        }
+
+        // Apply opts.
+        for (auto optimizer : opts) {
+
+            visitEqs(optimizer);
+            int numChanges = optimizer->getNumChanges();
+            string odescr = "after applying " + optimizer->getName() + " to " +
+                descr + " equation-group(s)";
+
+            // Get new stats.
+            if (numChanges)
+                printStats(os, odescr);
+            else
+                os << "No changes " << odescr << '.' << endl;
+        }
+
+        // Final stats per equation group.
+        if (printSets && size() > 1) {
+            os << "Stats per equation-group:\n";
+            for (auto eg : *this)
+                eg.printStats(os, "for " + eg.getDescription());
+        }
+    }
+
     // Find the dimensions to be used.
     void Dimensions::setDims(Grids& grids,
-                             string stepDim,
-                             IntTuple& foldOptions,
-                             bool firstInner,
-                             IntTuple& clusterOptions,
-                             bool allowUnalignedLoads,
+                             StencilSettings& settings,
                              ostream& os)
     {
         _allDims.clear();
         _dimCounts.clear();
-        _stepDim = stepDim;
         _scalar.clear();
         _fold.clear();
         _clusterPts.clear();
         _clusterMults.clear();
         _miscDims.clear();
-        _fold.setFirstInner(firstInner);
+        _stepDim = settings._stepDim;
+        _fold.setFirstInner(settings._firstInner);
         
         // Create a tuple of all dimensions in all grids.
         // Also keep count of how many grids have each dim.
@@ -1369,7 +1554,7 @@ namespace yask {
         for (auto* dim : _dimCounts.getDims()) {
 
             // Step dim cannot be folded.
-            if (*dim == stepDim) {
+            if (*dim == _stepDim) {
                 continue;
             }
         
@@ -1383,20 +1568,20 @@ namespace yask {
                 _miscDims.addDimBack(dim, 1);
             }
         }
-        os << "Step dimension: " << stepDim << endl;
+        os << "Step dimension: " << _stepDim << endl;
     
         // Create final fold lengths based on cmd-line options.
         IntTuple foldGT1;    // fold dimensions > 1.
-        for (auto* dim : foldOptions.getDims()) {
-            int sz = foldOptions.getVal(dim);
+        for (auto* dim : settings._foldOptions.getDims()) {
+            int sz = settings._foldOptions.getVal(dim);
             int* p = _fold.lookup(dim);
             if (!p) {
-                os << "Error: fold-length of " << sz << " in '" << dim <<
+                cerr << "Error: fold-length of " << sz << " in '" << dim <<
                     "' dimension not allowed because '" << dim << "' ";
-                if (*dim == stepDim)
-                    os << "is the step dimension." << endl;
+                if (*dim == _stepDim)
+                    cerr << "is the step dimension." << endl;
                 else
-                    os << "doesn't exist in all grids." << endl;
+                    cerr << "doesn't exist in all grids." << endl;
                 exit(1);
             }
 
@@ -1409,30 +1594,29 @@ namespace yask {
         os << "Vector-fold dimension(s) and size(s): " <<
             _fold.makeDimValStr(" * ") << endl;
 
-
         // Checks for unaligned loads.
-        if (allowUnalignedLoads) {
+        if (settings._allowUnalignedLoads) {
             if (foldGT1.size() > 1) {
-                os << "Error: attempt to allow unaligned loads when there are " <<
+                cerr << "Error: attempt to allow unaligned loads when there are " <<
                     foldGT1.size() << " dimensions in the vector-fold that are > 1." << endl;
                 exit(1);
             }
             else if (foldGT1.size() > 0)
-                os << "Notice: memory layout MUST have unit-stride in " <<
+                cerr << "Notice: memory layout MUST have unit-stride in " <<
                     foldGT1.makeDimStr() << " dimension!" << endl;
         }
 
         // Create final cluster lengths based on cmd-line options.
-        for (auto* dim : clusterOptions.getDims()) {
-            int mult = clusterOptions.getVal(dim);
+        for (auto* dim : settings._clusterOptions.getDims()) {
+            int mult = settings._clusterOptions.getVal(dim);
             int* p = _clusterMults.lookup(dim);
             if (!p) {
-                os << "Error: cluster-multiplier of " << mult << " in '" << dim <<
+                cerr << "Error: cluster-multiplier of " << mult << " in '" << dim <<
                     "' dimension not allowed because '" << dim << "' ";
-                if (*dim == stepDim)
-                    os << "is the step dimension." << endl;
+                if (*dim == _stepDim)
+                    cerr << "is the step dimension." << endl;
                 else
-                    os << "doesn't exist in all grids." << endl;
+                    cerr << "doesn't exist in all grids." << endl;
                 exit(1);
             }
 

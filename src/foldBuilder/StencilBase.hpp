@@ -60,15 +60,26 @@ namespace yask {
         // At this time, this is not checked, so be careful!!
         Params _params;     // keep track of all registered non-grid vars.
 
+        // Code extensions that overload default functions from YASK in the
+        // generated code for this solution.
+        ExtensionsList _extensions;
+
         // All equations defined in this solution.
         Eqs _eqs;
 
-        // All dimensions in the solution.
-        Dimensions _dims;
-    
-        // Code extensions that overload default functions from YASK in the generated code for this 
-        // Stencil code
-        ExtensionsList _extensions;
+        // Settings for the solution.
+        StencilSettings _settings;
+
+    private:
+
+        // Intermediate data needed to format output.
+        Dimensions _dims;       // various dimensions.
+        EqGroups _eqGroups;     // eq-groups for scalar and vector.
+        EqGroups _clusterEqGroups; // eq-groups for scalar and vector.
+        ofstream _nullos;        // Dummy output stream.
+
+        // Create the intermediate data.
+        void analyze_solution(ostream& os);
 
     public:
         StencilSolution(const string& name) :
@@ -78,15 +89,11 @@ namespace yask {
         // Identification.
         virtual const string& getName() const { return _name; }
     
-        // Get the registered grids and params.
+        // Simple accessors.
         virtual Grids& getGrids() { return _grids; }
         virtual Grids& getParams() { return _params; }
-
-        // Get the registered equations.
         virtual Eqs& getEqs() { return _eqs; }
-
-        // Get the dimensions.
-        virtual Dimensions& getDims() { return _dims; }
+        virtual StencilSettings& getSettings() { return _settings; }
 
         // Get user-provided code for the given section.
         CodeList * getExtensionCode ( YASKSection section ) 
@@ -98,7 +105,12 @@ namespace yask {
             return NULL;
         }
 
+        // Define grid values relative to given offsets in each dimension.
+        // This must be implemented by each concrete stencil solution.
+        virtual void define(const IntTuple& offsets) = 0;
+
         // stencil_solution APIs.
+        // See yask_stencil_api.hpp for documentation.
         virtual void set_name(std::string name) {
             _name = name;
         }
@@ -129,8 +141,38 @@ namespace yask {
             assert(n >= 0 && n < get_num_equations());
             return _eqs.getEqs().at(n);
         }
+        virtual void set_fold(const std::string& dim, int len) {
+            auto& fold = _settings._foldOptions;
+            auto* p = fold.lookup(dim);
+            if (p)
+                *p = len;
+            else
+                fold.addDimBack(dim, len);
+        }
+        virtual void set_fold_len(const std::string& dim, int len);
+        virtual void set_cluster_mult(const std::string& dim, int mult);
+        virtual void set_step_dim(const std::string& dim) {
+            _settings._stepDim = dim;
+        }
+        virtual std::string format(const std::string& format_type, ostream& msg_stream);
+        virtual std::string format(const std::string& format_type, bool debug) {
+            return format(format_type, debug? cout : _nullos);
+        }
+        virtual void write(const std::string& filename,
+                           const std::string& format_type,
+                           bool debug);
     };
 
+    // A stencil solution that does not define any grids.
+    // This is used by a program via the compiler API to add grids
+    // programmatically.
+    class EmptyStencil : public StencilSolution {
+    public:
+        EmptyStencil(std::string name) :
+            StencilSolution(name) { }
+        virtual void define(const IntTuple& offsets) { }
+    };
+    
     // An interface for all objects that participate in stencil definitions.
     // This allows a programmer to use object composition in addition to
     // inheritance from StencilBase to define stencils.
@@ -166,10 +208,6 @@ namespace yask {
         virtual bool usesRadius() const { return false; }
         virtual bool setRadius(int radius) { return false; }
         virtual int getRadius() const { return 0; }
-
-        // Define grid values relative to given offsets in each dimension.
-        // This must be implemented by each concrete stencil solution.
-        virtual void define(const IntTuple& offsets) = 0;
 
     };
 

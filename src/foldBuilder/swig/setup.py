@@ -45,6 +45,8 @@ for key, value in cfg_vars.items():
 yask_compiler_module = Extension('_yask_compiler',
                                  sources=['yask_compiler_api_wrap.cxx',
                                           '../Expr.cpp',
+                                          '../ExprUtils.cpp',
+                                          '../CppIntrin.cpp',
                                           '../Print.cpp'],
                                  include_dirs=['../../../include'],
                                  extra_compile_args=['-std=c++11'],

@@ -204,17 +204,14 @@ namespace yask {
     };
 
     // Outputs a simple, human-readable version of the AST in a bottom-up
-    // fashion with multiple sub-expressions, each assigned to a temp var.  The
-    // min/maxExprSize parameters control when and where expressions are
-    // sub-divided. Within each sub-expression, a top-down visitor is used.
+    // fashion with multiple sub-expressions, each assigned to a temp var.
+    // The min/maxExprSize vars in StencilSettings control when and where
+    // expressions are sub-divided. Within each sub-expression, a top-down
+    // visitor is used.
     class PrintVisitorBottomUp : public PrintVisitorBase {
 
     protected:
-        // max size of a single expression.
-        int _maxExprSize;
-
-        // min size to use sharing.
-        int _minExprSize;
+        StencilSettings& _settings;
 
         // map sub-expressions to var names.
         map<Expr*, string> _tempVars;
@@ -231,10 +228,9 @@ namespace yask {
     public:
         // os is used for printing intermediate results as needed.
         PrintVisitorBottomUp(ostream& os, PrintHelper& ph,
-                             int maxExprSize, int minExprSize) :
+                             StencilSettings settings) :
             PrintVisitorBase(os, ph),
-            _maxExprSize(maxExprSize),
-            _minExprSize(minExprSize) { }
+            _settings(settings) { }
 
         // make a new top-down visitor with the same print helper.
         virtual PrintVisitorTopDown* newPrintVisitorTopDown() {
@@ -410,12 +406,11 @@ namespace yask {
     // do this.
     class PrinterBase {
     protected:
-        StencilBase& _stencil;
+        StencilSolution& _stencil;
         Grids& _grids;
         Params& _params;
         EqGroups& _eqGroups;
-        int _maxExprSize;
-        int _minExprSize;
+        StencilSettings& _settings;
 
         // Return an upper-case string.
         string allCaps(string str) {
@@ -424,27 +419,35 @@ namespace yask {
         }
     
     public:
-        PrinterBase(StencilBase& stencil, EqGroups& eqGroups,
-                    int maxExprSize, int minExprSize) :
+        PrinterBase(StencilSolution& stencil,
+                    EqGroups& eqGroups,
+                    StencilSettings& settings) :
             _stencil(stencil), 
             _grids(stencil.getGrids()),
             _params(stencil.getParams()),
             _eqGroups(eqGroups),
-            _maxExprSize(maxExprSize),
-            _minExprSize(minExprSize)
+            _settings(settings)
         { }
         virtual ~PrinterBase() { }
-    
-    };
 
+        // Output to 'os'.
+        virtual void print(ostream& os) =0;
+
+        // Output to string.
+        virtual string format() {
+            ostringstream oss;
+            print(oss);
+            return oss.str();
+        }
+    };
 
     // Print out a stencil in human-readable form, for debug or documentation.
     class PseudoPrinter : public PrinterBase {
         
     public:
-        PseudoPrinter(StencilBase& stencil, EqGroups& eqGroups,
-                      int maxExprSize, int minExprSize) :
-            PrinterBase(stencil, eqGroups, maxExprSize, minExprSize) { }
+        PseudoPrinter(StencilSolution& stencil, EqGroups& eqGroups,
+                      StencilSettings& settings) :
+            PrinterBase(stencil, eqGroups, settings) { }
         virtual ~PseudoPrinter() { }
 
         virtual void print(ostream& os);
@@ -456,9 +459,9 @@ namespace yask {
         bool _isSimple;
         
     public:
-        DOTPrinter(StencilBase& stencil, EqGroups& eqGroups,
-                   int maxExprSize, int minExprSize, bool isSimple) :
-            PrinterBase(stencil, eqGroups, maxExprSize, minExprSize),
+        DOTPrinter(StencilSolution& stencil, EqGroups& eqGroups,
+                   StencilSettings& settings, bool isSimple) :
+            PrinterBase(stencil, eqGroups, settings),
             _isSimple(isSimple) { }
         virtual ~DOTPrinter() { }
 
@@ -469,9 +472,9 @@ namespace yask {
     class POVRayPrinter : public PrinterBase {
         
     public:
-        POVRayPrinter(StencilBase& stencil, EqGroups& eqGroups,
-                      int maxExprSize, int minExprSize) :
-            PrinterBase(stencil, eqGroups, maxExprSize, minExprSize) { }
+        POVRayPrinter(StencilSolution& stencil, EqGroups& eqGroups,
+                      StencilSettings& settings) :
+            PrinterBase(stencil, eqGroups, settings) { }
         virtual ~POVRayPrinter() { }
 
         virtual void print(ostream& os);

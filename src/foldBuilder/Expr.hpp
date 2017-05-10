@@ -35,6 +35,7 @@ IN THE SOFTWARE.
 #include <vector>
 #include <cstdarg>
 #include <assert.h>
+#include <fstream>
 
 #include "Tuple.hpp"
 
@@ -135,7 +136,7 @@ namespace yask {
 
     //// Classes to implement parts of expressions.
     // The expressions are constructed at run-time when the
-    // StencilBase::define() method is called.
+    // StencilSolution::define() method is called.
 
     // The base class for all expression nodes.
     class Expr : public virtual expr_node {
@@ -1281,6 +1282,26 @@ namespace yask {
     typedef Grid Param;
     typedef Grids Params;
 
+    // Settings for a stencil solution.
+    // May be provided via cmd-line or API.
+    class StencilSettings {
+    public:
+        string _stepDim = "t";
+        IntTuple _foldOptions;    // vector fold.
+        IntTuple _clusterOptions; // cluster multipliers.
+        bool _firstInner = true; // first dimension of fold is unit step.
+        string _eq_group_basename_default = "stencil";
+        bool _allowUnalignedLoads = false;
+        int _haloSize = 0;      // 0 => calculate each halo separately and automatically.
+        int _stepAlloc = 0;     // 0 => calculate step allocation automatically.
+        int _maxExprSize = 50;
+        int _minExprSize = 2;
+        bool _doComb = false;    // combine commutative operations.
+        bool _doCse = true;      // do common-subexpr elim.
+        bool _find_deps = true;  // find dependencies between equations.
+        string _eqGroupTargets;  // how to group equations.
+    };
+    
     // Stencil dimensions.
     struct Dimensions {
         IntTuple _allDims;          // all dims with zero value.
@@ -1289,18 +1310,14 @@ namespace yask {
         IntTuple _scalar, _fold;    // points in scalar and fold.
         IntTuple _clusterPts;       // cluster size in points.
         IntTuple _clusterMults;     // cluster size in vectors.
-        IntTuple _miscDims;         // all other dims.
+        IntTuple _miscDims;         // all dims that are not the step or in folds/clusters.
 
         Dimensions() {}
         virtual ~Dimensions() {}
     
         // Find the dimensions to be used.
         void setDims(Grids& grids,
-                     string stepDim,
-                     IntTuple& foldOptions,
-                     bool firstInner,
-                     IntTuple& clusterOptions,
-                     bool allowUnalignedLoads,
+                     StencilSettings& settings,
                      ostream& os);
     };
 
@@ -1443,26 +1460,24 @@ namespace yask {
         // 'eq_deps': pre-computed dependencies between equations.
         // Returns whether a new group was created.
         virtual bool addExprToGroup(EqualsExprPtr eq,
-                                    BoolExprPtr cond,
+                                    BoolExprPtr cond, // may be nullptr.
                                     const string& baseName,
                                     EqDepMap& eq_deps);
 
     public:
+        EqGroups() {}
         EqGroups(const string& basename_default, const Dimensions& dims) :
             _basename_default(basename_default),
             _dims(&dims) {}
         virtual ~EqGroups() {}
 
-        // Copy ctor.
-        EqGroups(const EqGroups& src) :
-            vector<EqGroup>(src),
-            _basename_default(src._basename_default),
-            _dims(src._dims),
-            _outGrids(src._outGrids),
-            _indices(src._indices),
-            _eqs_in_groups(src._eqs_in_groups)
-        {}
-    
+        virtual void set_basename_default(const string& basename_default) {
+            _basename_default = basename_default;
+        }
+        virtual void set_dims(const Dimensions& dims) {
+            _dims = &dims;
+        }
+        
         // Separate a set of equations into eqGroups based
         // on the target string.
         // Target string is a comma-separated list of key-value pairs, e.g.,
@@ -1518,6 +1533,12 @@ namespace yask {
 
         // Print stats for the equation(s) in all groups.
         virtual void printStats(ostream& os, const string& msg);
+
+        // Apply optimizations requested in settings.
+        void optimizeEqGroups(StencilSettings& settings,
+                              const string& descr,
+                              bool printSets,
+                              ostream& os);
     };
 
     // A 'GridValue' is simply a pointer to an expression.

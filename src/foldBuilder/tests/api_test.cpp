@@ -48,13 +48,14 @@ int main() {
     auto n3 = g1->new_relative_grid_point(0, 1, 0, -2);
     cout << n3->format_simple() << endl;
 
-    auto n4 = fac.new_add_node(n2, n3);
-    cout << n4->format_simple() << endl;
+    auto n4a = fac.new_add_node(n2, n3);
+    auto n4b = fac.new_add_node(n4a, n1);
+    cout << n4b->format_simple() << endl;
 
     auto n5 = g1->new_relative_grid_point(0, 1, -1, 0);
     cout << n5->format_simple() << endl;
 
-    auto n6 = fac.new_divide_node(n4, n5);
+    auto n6 = fac.new_divide_node(n4b, n5);
     cout << n6->format_simple() << endl;
 
     auto n7 = g1->new_relative_grid_point(1, 0, 0, 0);
@@ -67,5 +68,13 @@ int main() {
         soln->get_num_grids() << " grid(s), and " <<
         soln->get_num_equations() << " equation(s)." << endl;
 
+    soln->set_step_dim("t");
+    soln->set_fold_len("x", 2);
+    soln->set_fold_len("y", 8);
+
+    string dot_file = "api-cxx-test.dot";
+    soln->write(dot_file, "dot", true);
+    cout << "DOT-format written to '" << dot_file << "'.\n";
+    
     return 0;
 }

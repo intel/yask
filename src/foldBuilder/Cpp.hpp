@@ -287,20 +287,11 @@ namespace yask {
         }
     };
 
-    // Settings for C++ printing.
-    struct YASKCppSettings {
-        bool _allowUnalignedLoads = false;
-        int _haloSize = 0;
-        int _stepAlloc = 2; 
-        int _maxExprSize = 50, _minExprSize = 0;
-    };
-
     // Print out a stencil in C++ form for YASK.
     class YASKCppPrinter : public PrinterBase {
     protected:
         EqGroups& _clusterEqGroups;
         Dimensions& _dims;
-        YASKCppSettings& _settings;
         string _context, _context_base;
         IntTuple _yask_dims;        // spatial dims in yask.
         string _yask_step;          // step dim in yask.
@@ -332,15 +323,14 @@ namespace yask {
         virtual void printMacros(ostream& os);
         
     public:
-        YASKCppPrinter(StencilBase& stencil,
+        YASKCppPrinter(StencilSolution& stencil,
                        EqGroups& eqGroups,
                        EqGroups& clusterEqGroups,
                        Dimensions& dims,
-                       YASKCppSettings& settings) :
-            PrinterBase(stencil, eqGroups,
-                        settings._maxExprSize, settings._minExprSize),
+                       StencilSettings& settings) :
+            PrinterBase(stencil, eqGroups, settings),
             _clusterEqGroups(clusterEqGroups),
-            _dims(dims), _settings(settings)
+            _dims(dims)
         {
             // name of C++ struct.
             _context = "StencilContext_" + _stencil.getName();
@@ -357,7 +347,7 @@ namespace yask {
         virtual ~YASKCppPrinter() { }
 
         // Output all code for YASK.
-        virtual void printCode(ostream& os);
+        virtual void print(ostream& os);
     };
 
 } // namespace yask.

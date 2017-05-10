@@ -197,11 +197,11 @@ namespace yask {
         }
 
     public:
-        YASKKncPrinter(StencilBase& stencil,
+        YASKKncPrinter(StencilSolution& stencil,
                        EqGroups& eqGroups,
                        EqGroups& clusterEqGroups,
                        Dimensions& dims,
-                       YASKCppSettings& settings) :
+                       StencilSettings& settings) :
             YASKCppPrinter(stencil, eqGroups, clusterEqGroups,
                            dims, settings) { }
     };
@@ -216,11 +216,11 @@ namespace yask {
         }
 
     public:
-        YASKAvx256Printer(StencilBase& stencil,
+        YASKAvx256Printer(StencilSolution& stencil,
                           EqGroups& eqGroups,
                           EqGroups& clusterEqGroups,
                           Dimensions& dims,
-                          YASKCppSettings& settings) :
+                          StencilSettings& settings) :
             YASKCppPrinter(stencil, eqGroups, clusterEqGroups,
                            dims, settings) { }
     };
@@ -235,11 +235,11 @@ namespace yask {
         }
 
     public:
-        YASKAvx512Printer(StencilBase& stencil,
+        YASKAvx512Printer(StencilSolution& stencil,
                           EqGroups& eqGroups,
                           EqGroups& clusterEqGroups,
                           Dimensions& dims,
-                          YASKCppSettings& settings) :
+                          StencilSettings& settings) :
             YASKCppPrinter(stencil, eqGroups, clusterEqGroups,
                            dims, settings) { }
     };

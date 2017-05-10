@@ -42,13 +42,14 @@ print(n2.format_simple())
 n3 = g1.new_relative_grid_point(0, 1, 0, -2)
 print(n3.format_simple())
 
-n4 = fac.new_add_node(n2, n3)
-print(n4.format_simple())
+n4a = fac.new_add_node(n2, n3)
+n4b = fac.new_add_node(n4a, n1)
+print(n4b.format_simple())
 
 n5 = g1.new_relative_grid_point(0, 1, -1, 0)
 print(n5.format_simple())
 
-n6 = fac.new_divide_node(n4, n5)
+n6 = fac.new_divide_node(n4b, n5)
 print(n6.format_simple())
 
 n7 = g1.new_relative_grid_point(1, 0, 0, 0)
@@ -60,3 +61,11 @@ print(n8.format_simple())
 print("Solution '" + soln.get_name() + "' contains " +
       str(soln.get_num_grids()) + " grid(s), and " +
       str(soln.get_num_equations()) + " equation(s).")
+
+soln.set_step_dim("t");
+soln.set_fold_len("x", 2)
+soln.set_fold_len("y", 8)
+
+dot_file = "api-py-test.dot"
+soln.write(dot_file, "dot", True)
+print("DOT-format written to '" + dot_file + "'.")
