@@ -28,7 +28,7 @@ sys.path.append('../swig')
 
 import yask_compiler
 cfac = yask_compiler.yask_compiler_factory()
-soln = cfac.new_stencil_solution("test_solution")
+soln = cfac.new_stencil_solution("api_py_test")
 g1 = soln.new_grid("test_grid", "t", "x", "y", "z")
 
 fac = yask_compiler.node_factory()
@@ -63,9 +63,13 @@ print("Solution '" + soln.get_name() + "' contains " +
       str(soln.get_num_equations()) + " equation(s).")
 
 soln.set_step_dim("t");
-soln.set_fold_len("x", 2)
 soln.set_fold_len("y", 8)
 
 dot_file = "api-py-test.dot"
 soln.write(dot_file, "dot", True)
 print("DOT-format written to '" + dot_file + "'.")
+
+yask_file = "../../stencil_code.hpp"
+soln.write(yask_file, "avx", True)
+print("YASK-format written to '" + yask_file + "'.")
+

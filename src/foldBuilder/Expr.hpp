@@ -1296,8 +1296,8 @@ namespace yask {
         int _stepAlloc = 0;     // 0 => calculate step allocation automatically.
         int _maxExprSize = 50;
         int _minExprSize = 2;
-        bool _doComb = false;    // combine commutative operations.
         bool _doCse = true;      // do common-subexpr elim.
+        bool _doComb = true;    // combine commutative operations.
         bool _find_deps = true;  // find dependencies between equations.
         string _eqGroupTargets;  // how to group equations.
     };
@@ -1352,17 +1352,6 @@ namespace yask {
             }
         }
         virtual ~EqGroup() {}
-
-        // Copy ctor.
-        EqGroup(const EqGroup& src) :
-            _eqs(src._eqs),
-            _outGrids(src._outGrids),
-            _inGrids(src._inGrids),
-            _dims(src._dims),
-            _dep_on(src._dep_on),
-            baseName(src.baseName),
-            index(src.index),
-            cond(src.cond) {}
 
         // Add an equation.
         // If 'update_stats', update grid and halo data.

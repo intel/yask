@@ -86,10 +86,13 @@ namespace yask {
         virtual ~stencil_solution() {}
 
         /// Get the name of the solution.
-        virtual const std::string& get_name() const =0;
+        /** @returns String containing the solution name. */
+        virtual const std::string&
+        get_name() const =0;
 
         /// Set the name of the solution.
-        virtual void set_name(std::string name) =0;
+        virtual void
+        set_name(std::string name /**< [in] Name; must be a valid C++ identifier. */ ) =0;
 
         /// Create an n-dimensional grid in the solution.
         /** "Grid" is a generic term for any n-dimensional tensor.  A 1-dim
@@ -98,7 +101,8 @@ namespace yask {
          * new_grid("heat", "t", "x", "y") will create a 3D grid.
          * @returns Pointer to the new grid. */
         virtual grid_ptr
-        new_grid(std::string name /**< [in] Unique name of the grid. */,
+        new_grid(std::string name /**< [in] Unique name of the grid;
+                                     must be a valid C++ identifier.. */,
                  std::string dim1 = "" /**< [in] Name of 1st dimension. */,
                  std::string dim2 = "" /**< [in] Name of 2nd dimension. */,
                  std::string dim3 = "" /**< [in] Name of 3rd dimension. */,
@@ -107,20 +111,24 @@ namespace yask {
                  std::string dim6 = "" /**< [in] Name of 6th dimension. */ ) =0;
 
         /// Get the number of grids in the solution.
+        /** @returns Number of grids that have been created via new_grid(). */
         virtual int
         get_num_grids() const =0;
         
         /// Get the specified grid.
+        /** @returns Pointer to the indexed grid. */
         virtual grid_ptr
         get_grid(int n /**< [in] Index of grid between zero (0)
                               and get_num_grids()-1. */ ) =0;
         
         /// Get the number of equations in the solution.
-        /** Equations are added when equation_nodes are created. */
+        /** Equations are added when equation_nodes are created via new_equation_node().
+         * @returns Number of equations that have been created. */
         virtual int
         get_num_equations() const =0;
 
         /// Get the specified equation.
+        /** @returns Pointer to equation_node of indexed equation. */
         virtual equation_node_ptr
         get_equation(int n /**< [in] Index of equation between zero (0)
                               and get_num_equations()-1. */ ) =0;
@@ -151,6 +159,8 @@ namespace yask {
          * dot     | DOT-language description.
          * dot-lite| DOT-language description of grid accesses only.
          * pseudo  | Human-readable pseudo-code (for debug).
+         * @returns String containing formatted output. 
+         * The YASK or DOT strings are typically then written to a file.
          */
         virtual std::string
         format(const std::string& format_type /**< [in] Name of type from above table. */,
@@ -167,18 +177,21 @@ namespace yask {
     /// A grid.
     /** "Grid" is a generic term for any n-dimensional tensor.  A 0-dim
      * grid is a scalar, a 1-dim grid is an array, etc. 
-     * Create new grids via stencil_solution::add_grid(). */
+     * Create new grids via new_grid(). */
     class grid {
     public:
         virtual ~grid() {}
 
         /// Get the name of the grid.
+        /** @returns String containing name provided via new_grid(). */
         virtual const std::string& get_name() const =0;
 
         /// Get the number of dimensions.
+        /** @returns Number of dimensions created via new_grid(). */
         virtual int get_num_dims() const =0;
 
         /// Get the name of the specified dimension.
+        /** @returns String containing name of dimension created via new_grid(). */
         virtual const std::string&
         get_dim_name(int n /**< [in] Index of dimension between zero (0)
                               and get_num_dims()-1. */ ) const =0;
@@ -247,7 +260,8 @@ namespace yask {
          * RHS. This is NOT a test for equality.  When an equation is
          * created, it is automatically added to the list of equations for
          * the stencil_solution that contains the grid that is on the
-         * LHS. */
+         * LHS.
+         * @returns Pointer to new node. */
         virtual equation_node_ptr
         new_equation_node(grid_point_node_ptr lhs /**< [in] Grid-point before EQUALS operator. */,
                         number_node_ptr rhs /**< [in] Expression after EQUALS operator. */ );
@@ -255,19 +269,19 @@ namespace yask {
         /// Create a constant numerical value node.
         /** This is unary negation.
          *  Use new_subtraction_node() for binary '-'.
-         * @returns New node. */
+         * @returns Pointer to new node. */
         virtual const_number_node_ptr
         new_const_number_node(double val /**< [in] Value to store in node. */ );
 
         /// Create a numerical negation operator node.
-        /** @returns New node. */
+        /** @returns Pointer to new node. */
         virtual negate_node_ptr
         new_negate_node(number_node_ptr rhs /**< [in] Expression after '-' sign. */ );
 
         /// Create an addition node.
         /** Nodes must be created with at least two operands, and more can
          *  be added by calling add_operand() on the returned node.
-         * @returns New node. */
+         * @returns Pointer to new node. */
         virtual add_node_ptr
         new_add_node(number_node_ptr lhs /**< [in] Expression before '+' sign. */,
                      number_node_ptr rhs /**< [in] Expression after '+' sign. */ );
@@ -275,7 +289,7 @@ namespace yask {
         /// Create a multiplication node.
         /** Nodes must be created with at least two operands, and more can
          *  be added by calling add_operand() on the returned node.
-         * @returns New node. */
+         * @returns Pointer to new node. */
         virtual multiply_node_ptr
         new_multiply_node(number_node_ptr lhs /**< [in] Expression before '*' sign. */,
                           number_node_ptr rhs /**< [in] Expression after '*' sign. */ );
@@ -283,13 +297,13 @@ namespace yask {
         /// Create a subtraction node.
         /** This is binary subtraction.
          *  Use new_negation_node() for unary '-'.
-         * @returns New node. */
+         * @returns Pointer to new node. */
         virtual subtract_node_ptr
         new_subtract_node(number_node_ptr lhs /**< [in] Expression before '-' sign. */,
                           number_node_ptr rhs /**< [in] Expression after '-' sign. */ );
 
         /// Create a division node.
-        /** @returns New node. */
+        /** @returns Pointer to new node. */
         virtual divide_node_ptr
         new_divide_node(number_node_ptr lhs /**< [in] Expression before '/' sign. */,
                         number_node_ptr rhs /**< [in] Expression after '/' sign. */ );
@@ -302,13 +316,13 @@ namespace yask {
         virtual ~expr_node() {}
 
         /// Create a simple human-readable string.
-        /** Formats the expression starting at this node 
-         * into a single-line readable string.
+        /** Formats the expression starting at this node.
+         * @returns String containing a single-line human-readable version of the expression.
          */
         virtual std::string format_simple() const =0;
 
         /// Count the size of the AST.
-        /** @return Number of nodes in this tree,
+        /** @returns Number of nodes in this tree,
          * including this node and all its descendants. */
         virtual int get_num_nodes() const =0;
     };
@@ -320,11 +334,11 @@ namespace yask {
     public:
 
         /// Get the left-hand-side operand.
-        /** @return Grid-point node appearing before the EQUALS operator. */
+        /** @returns Grid-point node appearing before the EQUALS operator. */
         virtual grid_point_node_ptr get_lhs() =0;
     
         /// Get the right-hand-side operand.
-        /** @return Expression node appearing after the EQUALS operator. */
+        /** @returns Expression node appearing after the EQUALS operator. */
         virtual number_node_ptr get_rhs() =0;
     };
 
@@ -341,6 +355,7 @@ namespace yask {
     public:
 
         /// Get the grid this point is in.
+        /** @returns Pointer to grid. */
         virtual grid_ptr get_grid() =0;
     };
     
@@ -357,7 +372,7 @@ namespace yask {
         virtual void set_value(double val /**< [in] Value to store in node. */ ) =0;
 
         /// Get the stored value.
-        /** @return Copy of stored value. */
+        /** @returns Copy of stored value. */
         virtual double get_value() const =0;
     };
 
@@ -368,9 +383,9 @@ namespace yask {
     public:
 
         /// Get the [only] operand.
-        /** @return Expression node on right-hand-side of '-' sign.  This
-         * node implements unary negation only, not subtraction, so there is
-         * never a left-hand-side. */
+        /**  This node implements unary negation only, not subtraction, so there is
+         * never a left-hand-side.
+         * @returns Expression node on right-hand-side of '-' sign. */
         virtual number_node_ptr get_rhs() =0;
     };
 
@@ -384,11 +399,12 @@ namespace yask {
         /** If there is just one operand, the operation itself is moot.  If
          * there are more than one operand, the operation applies between
          * them. Example: for an add operator, if the operands are 'a',
-         * 'b', and 'c', then the expression is 'a + b + c'. */
+         * 'b', and 'c', then the expression is 'a + b + c'.
+         * @returns Number of operands. */
         virtual int get_num_operands() =0;
 
         /// Get the specified operand.
-        /** @returns Node at given position or null pointer if out of bounds. */
+        /** @returns Pointer to node at given position or null pointer if out of bounds. */
         virtual number_node_ptr
         get_operand(int i /**< [in] Index between zero (0)
                              and get_num_operands()-1. */ ) =0;
@@ -409,11 +425,11 @@ namespace yask {
     public:
 
         /// Get the left-hand-side operand.
-        /** @return Expression node appearing before the '-' sign. */
+        /** @returns Pointer to expression node appearing before the '-' sign. */
         virtual number_node_ptr get_lhs() =0;
     
         /// Get the right-hand-side operand.
-        /** @return Expression node appearing after the '-' sign. */
+        /** @returns Pointer to expression node appearing after the '-' sign. */
         virtual number_node_ptr get_rhs() =0;
     };
 
@@ -422,11 +438,11 @@ namespace yask {
     public:
 
         /// Get the left-hand-side operand.
-        /** @return Expression node appearing before the '/' sign. */
+        /** @returns Pointer to expression node appearing before the '/' sign. */
         virtual number_node_ptr get_lhs() =0;
     
         /// Get the right-hand-side operand.
-        /** @return Expression node appearing after the '/' sign. */
+        /** @returns Pointer to expression node appearing after the '/' sign. */
         virtual number_node_ptr get_rhs() =0;
     };
 

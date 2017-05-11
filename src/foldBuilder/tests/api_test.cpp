@@ -34,7 +34,7 @@ using namespace yask;
 int main() {
 
     yask_compiler_factory cfac;
-    auto soln = cfac.new_stencil_solution("test_solution");
+    auto soln = cfac.new_stencil_solution("api_cxx_test");
     auto g1 = soln->new_grid("test_grid", "t", "x", "y", "z");
     
     node_factory fac;
@@ -69,12 +69,15 @@ int main() {
         soln->get_num_equations() << " equation(s)." << endl;
 
     soln->set_step_dim("t");
-    soln->set_fold_len("x", 2);
     soln->set_fold_len("y", 8);
 
     string dot_file = "api-cxx-test.dot";
     soln->write(dot_file, "dot", true);
     cout << "DOT-format written to '" << dot_file << "'.\n";
+
+    string yask_file = "src/stencil_code.hpp";
+    soln->write(yask_file, "avx", true);
+    cout << "YASK-format written to '" << yask_file << "'.\n";
     
     return 0;
 }

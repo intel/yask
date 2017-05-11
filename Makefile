@@ -511,7 +511,7 @@ src/layouts.hpp: bin/gen-layouts.pl
 
 # Compile the stencil compiler.
 # TODO: move this to its own makefile.
-$(FB_EXEC): src/foldBuilder/*.*pp src/foldBuilder/stencils/*.*pp $(FB_STENCIL_LIST)
+$(FB_EXEC): src/foldBuilder/*.*pp $(FB_STENCIL_LIST)
 	$(FB_CXX) $(FB_CXXFLAGS) -o $@ src/foldBuilder/*.cpp $(EXTRA_FB_CXXFLAGS)
 
 $(FB_STENCIL_LIST): src/foldBuilder/stencils/*.hpp
@@ -560,18 +560,26 @@ bin/yask_compiler_api_test.exe: $(addprefix src/foldBuilder/,tests/api_test.cpp 
 	$(FB_CXX) $(FB_CXXFLAGS) -o $@ \
 	 $(addprefix src/foldBuilder/,tests/api_test.cpp [A-Z]*.cpp) $(EXTRA_FB_CXXFLAGS)
 
+# Flags to avoid running stencil compiler.
+API_MAKE_FLAGS := --new-file=$(FB_EXEC) --old-file=$(ST_CODE_FILE)
 api-cxx-test: bin/yask_compiler_api_test.exe
+	$(MAKE) clean
 	$<
 	mv api-cxx-test.dot src/foldBuilder/tests
 	cd src/foldBuilder/tests; \
 	dot -Tpdf -O api-cxx-test.dot; \
 	ls -l api-cxx-test.dot*
+	$(MAKE) -j $(API_MAKE_FLAGS) stencil=api-cxx-test arch=snb
+	bin/yask.sh -stencil api-cxx-test -arch snb -v
 
 api-py-test: src/foldBuilder/swig/yask_compiler.py
+	$(MAKE) clean
 	cd src/foldBuilder/tests; \
 	python api_test.py; \
 	dot -Tpdf -O api-py-test.dot; \
 	ls -l api-py-test.dot*
+	$(MAKE) -j $(API_MAKE_FLAGS) stencil=api-py-test arch=snb
+	bin/yask.sh -stencil api-py-test -arch snb -v
 
 api:	api-docs api-cxx-test api-py-test
 

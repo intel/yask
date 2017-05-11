@@ -1223,10 +1223,6 @@ namespace yask {
                     // corresponding cluster offset will be (0,4).
                     auto clusterOffset = clusterIndex.multElements(dims._fold);
 
-                    // Create a set of offsets with all dims.
-                    // This will be a union of clusterOffset and allDims.
-                    //IntTuple offsets = clusterOffset.makeUnionWith(dims._allDims);
-
                     // Loop thru eqs.
                     for (auto eq : eqs) {
                         assert(eq.get());
