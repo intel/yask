@@ -36,6 +36,36 @@ IN THE SOFTWARE.
 
 namespace yask {
 
+    /** @mainpage
+     * @section oview Overview
+     * This document provides usage information for the YASK stencil compiler
+     * API (application-programmer interface).\n
+     * The API is available for C++ and for Python via SWIG.
+     * @section usage Typical Usage Model
+     * - Create a stencil_solution via yask_compiler_factory::new_stencil_solution().
+     * - Create one or more grids via stencil_solution::new_grid() as needed by
+     *   the stencil kernel being implemented.
+     *   Calls to new_grid() specify the name and dimensions of each grid.
+     *   Grids may be read-only (constants) or read-write.
+     *   Each grid will be "owned" by the stencil_solution from which it was created.
+     * - Create an equation for each read-write grid.
+     *   - Example equation: `u(t+1, x, y, z) EQUALS (u(t, x, y, z) + u(t, x+1, y, z)) / 2`.
+     *   - Create expressions "bottom-up" by creating the leaf nodes first.
+     *   - Leaf nodes may be floating-point (FP) constants or references to grid points.
+     *   - References to grid points are created via grid::new_relative_grid_point(), which
+     *     specifies the grid indices relative to any point within the grid domain.
+     *   - Create operator nodes via calls to node_factory::new_add_node(), etc., to build up
+     *     larger expressions.
+     *   - To complete each equation, use node_factory::new_equation_node() to specify an expression
+     *     on the right-hand side (RHS) and the grid point that is defined to be equal
+     *     to it on the left-hand side (LHS).
+     * - Specify the solution step dimension via stencil_solution::set_step_dim().
+     *   (This is usually "t" for time.)
+     * - Specify the vector-folding and vector-clustering via stencil_solution::set_fold_len() and
+     *   stencil_solution::set_cluster_mult().
+     * - Format the equations for additional processing via stencil_solution::format() or stencil_solution::write().
+     */
+    
     // Forward declarations of classes and smart pointers.
     class stencil_solution;
     typedef std::shared_ptr<stencil_solution> stencil_solution_ptr;
@@ -75,7 +105,8 @@ namespace yask {
         /** A stencil solution contains all the grids and equations.
          * @returns Pointer to new solution object. */
         virtual stencil_solution_ptr
-        new_stencil_solution(const std::string& name /**< [in] Name of the solution. */ );
+        new_stencil_solution(const std::string& name /**< [in] Name of the solution; 
+                                                        must be a valid C++ identifier. */ );
     };
             
     /// Stencil solution.
@@ -86,11 +117,12 @@ namespace yask {
         virtual ~stencil_solution() {}
 
         /// Get the name of the solution.
-        /** @returns String containing the solution name. */
+        /** @returns String containing the solution name provided via new_stencil_solution(). */
         virtual const std::string&
         get_name() const =0;
 
         /// Set the name of the solution.
+        /** Allows changing the name from what was provided via new_stencil_solution(). */
         virtual void
         set_name(std::string name /**< [in] Name; must be a valid C++ identifier. */ ) =0;
 
@@ -99,6 +131,7 @@ namespace yask {
          * grid is an array, a 2-dim grid is a matrix, etc.  Define the name
          * of each dimension that is needed via this interface. Example:
          * new_grid("heat", "t", "x", "y") will create a 3D grid.
+         * All dimension-name strings must be valid C++ identifiers.
          * @returns Pointer to the new grid. */
         virtual grid_ptr
         new_grid(std::string name /**< [in] Unique name of the grid;
@@ -116,7 +149,7 @@ namespace yask {
         get_num_grids() const =0;
         
         /// Get the specified grid.
-        /** @returns Pointer to the indexed grid. */
+        /** @returns Pointer to the nth grid. */
         virtual grid_ptr
         get_grid(int n /**< [in] Index of grid between zero (0)
                               and get_num_grids()-1. */ ) =0;
@@ -128,21 +161,33 @@ namespace yask {
         get_num_equations() const =0;
 
         /// Get the specified equation.
-        /** @returns Pointer to equation_node of indexed equation. */
+        /** @returns Pointer to equation_node of nth equation. */
         virtual equation_node_ptr
         get_equation(int n /**< [in] Index of equation between zero (0)
                               and get_num_equations()-1. */ ) =0;
 
         /// Set the solution step dimension.
+        /** Default is "t" for time. */
         virtual void
         set_step_dim(const std::string& dim /**< [in] Step dimension, e.g., "t". */ ) =0;
-        
+
         /// Set the vectorization length in given dimension.
+        /** For YASK-code generation, the product of the fold lengths should
+         * be equal to the number of elements in a HW SIMD register. For
+         * example, for SP FP elements in AVX-512 vectors, the product of
+         * the fold lengths should be 16, e.g., x=4 and y=4. This is not
+         * checked by the compiler, since it does not know the FP precision
+         * that will be used. A fold length >1 cannot be applied to the step
+         * dimension. Default is one (1) in each dimension. */
         virtual void
         set_fold_len(const std::string& dim /**< [in] Dimension of fold, e.g., "x". */,
                      int len /**< [in] Length of vectorization in 'dim' */ ) =0;
 
         /// Set the cluster multiplier (unroll factor) in given dimension.
+        /** For YASK-code generation, this will have the effect of creating
+         * N vectors of output for each equation, where N is the product of
+         * the cluster multipliers. A fold length >1 cannot be applied to
+         * the step dimension. Default is one (1) in each dimension. */
         virtual void
         set_cluster_mult(const std::string& dim /**< [in] Direction of unroll, e.g., "y". */,
                          int mult /**< [in] Number of vectors in 'dim' */ ) =0;
@@ -175,9 +220,9 @@ namespace yask {
     };
 
     /// A grid.
-    /** "Grid" is a generic term for any n-dimensional tensor.  A 0-dim
-     * grid is a scalar, a 1-dim grid is an array, etc. 
-     * Create new grids via new_grid(). */
+    /** "Grid" is a generic term for any n-dimensional tensor.  A 0-dim grid
+     * is a scalar, a 1-dim grid is an array, etc.  Create new grids via
+     * new_grid(). */
     class grid {
     public:
         virtual ~grid() {}

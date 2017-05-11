@@ -515,7 +515,8 @@ $(FB_EXEC): src/foldBuilder/*.*pp $(FB_STENCIL_LIST)
 	$(FB_CXX) $(FB_CXXFLAGS) -o $@ src/foldBuilder/*.cpp $(EXTRA_FB_CXXFLAGS)
 
 $(FB_STENCIL_LIST): src/foldBuilder/stencils/*.hpp
-	echo '// Automatically-generated code; do not edit.' > $@
+	echo '// Stencil-definition files.' > $@
+	echo '// Automatically-generated code; do not edit.' >> $@
 	for sfile in $(^F); do \
 	  echo '#include "'$$sfile'"' >> $@; \
 	done
@@ -525,10 +526,11 @@ $(ST_CODE_FILE): $(FB_EXEC)
 	$< $(FB_FLAGS) $(EXTRA_FB_FLAGS) -p $(FB_TARGET) $@
 	@- gindent -fca $@ || \
 	  indent -fca $@ ||   \
-	  echo "note:" $@ "not formatted."
+	  echo "note:" $@ "is not properly indented because no indent program was found."
 
 $(ST_MACRO_FILE):
 	echo '// Settings from YASK Makefile' > $@
+	echo '// Automatically-generated code; do not edit.' >> $@
 	for macro in $(MACROS) $(EXTRA_MACROS); do \
 	  echo '#define' $$macro | sed 's/=/ /' >> $@; \
 	done
@@ -560,7 +562,7 @@ bin/yask_compiler_api_test.exe: $(addprefix src/foldBuilder/,tests/api_test.cpp 
 	$(FB_CXX) $(FB_CXXFLAGS) -o $@ \
 	 $(addprefix src/foldBuilder/,tests/api_test.cpp [A-Z]*.cpp) $(EXTRA_FB_CXXFLAGS)
 
-# Flags to avoid running stencil compiler.
+# Flags to avoid building and running stencil compiler.
 API_MAKE_FLAGS := --new-file=$(FB_EXEC) --old-file=$(ST_CODE_FILE)
 api-cxx-test: bin/yask_compiler_api_test.exe
 	$(MAKE) clean
