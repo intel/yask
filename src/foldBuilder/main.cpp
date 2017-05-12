@@ -100,10 +100,12 @@ void usage(const string& cmd) {
         settings._allowUnalignedLoads << ").\n"
         "      To use this correctly, only 1D folds are allowed, and\n"
         "        the memory layout used by YASK must have that same dimension in unit stride.\n"
-        " [-no]-comb\n"
+        " [-no]-opt-comb\n"
         "    Do [not] combine commutative operations (default=" << settings._doComb << ").\n"
-        " [-no]-cse\n"
+        " [-no]-opt-cse\n"
         "    Do [not] eliminate common subexpressions (default=" << settings._doCse << ").\n"
+        " [-no]-opt-cluster\n"
+        "    Do [not] apply optimizations across the cluster (default=" << settings._doOptCluster << ").\n"
         " -max-es <num-nodes>\n"
         "    Set heuristic for max single expression-size (default=" <<
         settings._maxExprSize << ").\n"
@@ -162,14 +164,18 @@ void parseOpts(int argc, const char* argv[])
                 settings._find_deps = true;
             else if (opt == "-no-find-deps")
                 settings._find_deps = false;
-            else if (opt == "-comb")
+            else if (opt == "-opt-comb")
                 settings._doComb = true;
-            else if (opt == "-no-comb")
+            else if (opt == "-no-opt-comb")
                 settings._doComb = false;
-            else if (opt == "-cse")
+            else if (opt == "-opt-cse")
                 settings._doCse = true;
-            else if (opt == "-no-cse")
+            else if (opt == "-no-opt-cse")
                 settings._doCse = false;
+            else if (opt == "-opt-cluster")
+                settings._doOptCluster = true;
+            else if (opt == "-no-opt-cluster")
+                settings._doOptCluster = false;
 
             // add any more options w/o values above.
 

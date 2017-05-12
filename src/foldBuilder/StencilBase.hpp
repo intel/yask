@@ -96,7 +96,7 @@ namespace yask {
         virtual StencilSettings& getSettings() { return _settings; }
 
         // Get user-provided code for the given section.
-        CodeList * getExtensionCode ( YASKSection section ) 
+        CodeList * getExtensionCode(YASKSection section)
         { 
             auto elem = _extensions.find(section);
             if ( elem != _extensions.end() ) {
@@ -150,9 +150,14 @@ namespace yask {
                 fold.addDimBack(dim, len);
         }
         virtual void set_fold_len(const std::string& dim, int len);
+        virtual void clear_folding() { _settings._foldOptions.clear(); }
         virtual void set_cluster_mult(const std::string& dim, int mult);
+        virtual void clear_clustering() { _settings._clusterOptions.clear(); }
         virtual void set_step_dim(const std::string& dim) {
             _settings._stepDim = dim;
+        }
+        virtual const std::string& get_step_dim() const {
+            return _settings._stepDim;
         }
         virtual std::string format(const std::string& format_type, ostream& msg_stream);
         virtual std::string format(const std::string& format_type, bool debug) {

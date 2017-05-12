@@ -124,7 +124,7 @@ else ifneq ($(findstring awp,$(stencil)),)
  time_alloc			=	1
  eqs				=	velocity=vel,stress=str
  def_block_args			=	-b 32
- FB_FLAGS			+=	-min-es 1
+ YSC_FLAGS			+=	-min-es 1
  def_rank_args			=	-dx 512 -dy 1024 -dz 128 # assume 2 ranks/node in 'x'.
  def_pad_args			=	-p 1
  ifeq ($(arch),knl)
@@ -175,7 +175,7 @@ ifeq ($(arch),knc)
 
  ISA		?= 	-mmic
  MACROS		+=	USE_INTRIN512
- FB_TARGET  	?=	knc
+ YSC_TARGET  	?=	knc
  def_block_threads  ?=	4
  SUB_BLOCK_LOOP_INNER_MODS  ?=	prefetch(L1,L2)
 
@@ -184,7 +184,7 @@ else ifeq ($(arch),knl)
  ISA		?=	-xMIC-AVX512
  GCXX_ISA	?=	-march=knl
  MACROS		+=	USE_INTRIN512 USE_RCP28
- FB_TARGET  	?=	avx512
+ YSC_TARGET  	?=	avx512
  def_block_args	?=	-b 96
  def_block_threads ?=	8
  SUB_BLOCK_LOOP_INNER_MODS  ?=	prefetch(L1)
@@ -194,7 +194,7 @@ else ifeq ($(arch),skx)
  ISA		?=	-xCORE-AVX512
  GCXX_ISA	?=	-march=knl -mno-avx512er -mno-avx512pf
  MACROS		+=	USE_INTRIN512
- FB_TARGET  	?=	avx512
+ YSC_TARGET  	?=	avx512
  mpi		=	1
 
 else ifeq ($(arch),hsw)
@@ -202,7 +202,7 @@ else ifeq ($(arch),hsw)
  ISA		?=	-xCORE-AVX2
  GCXX_ISA	?=	-march=haswell
  MACROS		+=	USE_INTRIN256
- FB_TARGET  	?=	avx2
+ YSC_TARGET  	?=	avx2
  mpi		=	1
 
 else ifeq ($(arch),ivb)
@@ -210,7 +210,7 @@ else ifeq ($(arch),ivb)
  ISA		?=	-xCORE-AVX-I
  GCXX_ISA	?=	-march=ivybridge
  MACROS		+=	USE_INTRIN256
- FB_TARGET  	?=	avx
+ YSC_TARGET  	?=	avx
  mpi		=	1
 
 else ifeq ($(arch),snb)
@@ -218,14 +218,14 @@ else ifeq ($(arch),snb)
  ISA		?=	-xAVX
  GCXX_ISA	?=	-march=sandybridge
  MACROS		+= 	USE_INTRIN256
- FB_TARGET  	?=	avx
+ YSC_TARGET  	?=	avx
  mpi		=	1
 
 else ifeq ($(arch),intel64)
 
  ISA		?=	-xHOST
  GCXX_ISA       ?=      -march=native
- FB_TARGET	?=	cpp
+ YSC_TARGET	?=	cpp
 
 else
 
@@ -287,12 +287,12 @@ CXXOPT		?=	-O3
 CXXFLAGS        +=   	-g -std=c++11 -Wall $(CXXOPT)
 OMPFLAGS	+=	-fopenmp 
 LFLAGS          +=      -lrt
-FB_EXEC		:=	bin/foldBuilder.exe
-FB_CXX    	?=	g++  # faster than icpc for the foldBuilder.
-FB_CXXFLAGS 	+=	-g -O0 -std=c++11 -Wall  # low opt to reduce compile time.
-FB_CXXFLAGS	+=	-Iinclude -Isrc/foldBuilder -Isrc/foldBuilder/stencils
-FB_FLAGS   	+=	-st $(stencil) -cluster $(cluster) -fold $(fold)
-FB_STENCIL_LIST	:=	src/foldBuilder/stencils.hpp
+YSC_EXEC	:=	bin/yask-stencil-compiler.exe
+YSC_CXX    	?=	g++  # faster than icpc for building the compiler.
+YSC_CXXFLAGS 	+=	-g -O0 -std=c++11 -Wall  # low opt to reduce compile time.
+YSC_CXXFLAGS	+=	-Iinclude -Isrc/foldBuilder -Isrc/foldBuilder/stencils
+YSC_FLAGS   	+=	-st $(stencil) -cluster $(cluster) -fold $(fold)
+YSC_STENCIL_LIST	:=	src/foldBuilder/stencils.hpp
 ST_MACRO_FILE	:=	src/stencil_macros.hpp
 ST_CODE_FILE	:=	src/stencil_code.hpp
 GEN_HEADERS     :=	$(addprefix src/, \
@@ -304,16 +304,16 @@ GEN_HEADERS     :=	$(addprefix src/, \
 				layout_macros.hpp layouts.hpp) \
 				$(ST_MACRO_FILE) $(ST_CODE_FILE)
 ifneq ($(eqs),)
- FB_FLAGS   	+=	-eq $(eqs)
+ YSC_FLAGS   	+=	-eq $(eqs)
 endif
 ifneq ($(radius),)
- FB_FLAGS   	+=	-r $(radius)
+ YSC_FLAGS   	+=	-r $(radius)
 endif
 ifneq ($(halo),)
- FB_FLAGS   	+=	-halo $(halo)
+ YSC_FLAGS   	+=	-halo $(halo)
 endif
 ifneq ($(time_alloc),)
- FB_FLAGS   	+=	-step-alloc $(time_alloc)
+ YSC_FLAGS   	+=	-step-alloc $(time_alloc)
 endif
 
 # Default cmd-line args.
@@ -511,10 +511,10 @@ src/layouts.hpp: bin/gen-layouts.pl
 
 # Compile the stencil compiler.
 # TODO: move this to its own makefile.
-$(FB_EXEC): src/foldBuilder/*.*pp $(FB_STENCIL_LIST)
-	$(FB_CXX) $(FB_CXXFLAGS) -o $@ src/foldBuilder/*.cpp $(EXTRA_FB_CXXFLAGS)
+$(YSC_EXEC): src/foldBuilder/*.*pp $(YSC_STENCIL_LIST)
+	$(YSC_CXX) $(YSC_CXXFLAGS) -o $@ src/foldBuilder/*.cpp $(EXTRA_YSC_CXXFLAGS)
 
-$(FB_STENCIL_LIST): src/foldBuilder/stencils/*.hpp
+$(YSC_STENCIL_LIST): src/foldBuilder/stencils/*.hpp
 	echo '// Stencil-definition files.' > $@
 	echo '// Automatically-generated code; do not edit.' >> $@
 	for sfile in $(^F); do \
@@ -522,8 +522,8 @@ $(FB_STENCIL_LIST): src/foldBuilder/stencils/*.hpp
 	done
 
 # Run the stencil compiler and post-process its output.
-$(ST_CODE_FILE): $(FB_EXEC)
-	$< $(FB_FLAGS) $(EXTRA_FB_FLAGS) -p $(FB_TARGET) $@
+$(ST_CODE_FILE): $(YSC_EXEC)
+	$< $(YSC_FLAGS) $(EXTRA_YSC_FLAGS) -p $(YSC_TARGET) $@
 	@- gindent -fca $@ || \
 	  indent -fca $@ ||   \
 	  echo "note:" $@ "is not properly indented because no indent program was found."
@@ -547,7 +547,7 @@ headers: $(GEN_HEADERS)
 # NB: All the following api* targets are temporary placeholders.
 # TODO: Create better rules with real dependencies.
 
-docs/latex/refman.tex: include/*hpp
+docs/latex/refman.tex: include/*hpp docs/yask_compiler.doxy
 	cd docs; doxygen yask_compiler.doxy
 
 api-docs: docs/latex/refman.tex
@@ -558,13 +558,13 @@ src/foldBuilder/swig/yask_compiler.py: include/*hpp $(addprefix src/foldBuilder/
 	python setup.py build_ext --inplace
 
 # TODO: build .so for compiler and link to it.
-bin/yask_compiler_api_test.exe: $(addprefix src/foldBuilder/,tests/api_test.cpp *pp)
-	$(FB_CXX) $(FB_CXXFLAGS) -o $@ \
-	 $(addprefix src/foldBuilder/,tests/api_test.cpp [A-Z]*.cpp) $(EXTRA_FB_CXXFLAGS)
+bin/yask-compiler-api-test.exe: $(addprefix src/foldBuilder/,tests/api_test.cpp *pp)
+	$(YSC_CXX) $(YSC_CXXFLAGS) -o $@ \
+	 $(addprefix src/foldBuilder/,tests/api_test.cpp [A-Z]*.cpp) $(EXTRA_YSC_CXXFLAGS)
 
 # Flags to avoid building and running stencil compiler.
-API_MAKE_FLAGS := --new-file=$(FB_EXEC) --old-file=$(ST_CODE_FILE)
-api-cxx-test: bin/yask_compiler_api_test.exe
+API_MAKE_FLAGS := --new-file=$(YSC_EXEC) --old-file=$(ST_CODE_FILE)
+api-cxx-test: bin/yask-compiler-api-test.exe
 	$(MAKE) clean
 	$<
 	mv api-cxx-test.dot src/foldBuilder/tests
@@ -580,6 +580,7 @@ api-py-test: src/foldBuilder/swig/yask_compiler.py
 	python api_test.py; \
 	dot -Tpdf -O api-py-test.dot; \
 	ls -l api-py-test.dot*
+	mv src/foldBuilder/tests/stencil_code.hpp src
 	$(MAKE) -j $(API_MAKE_FLAGS) stencil=api-py-test arch=snb
 	bin/yask.sh -stencil api-py-test -arch snb -v
 
@@ -588,14 +589,20 @@ api:	api-docs api-cxx-test api-py-test
 tags:
 	rm -f TAGS ; find . -name '*.[ch]pp' | xargs etags -C -a
 
+# Remove intermediate files.
+# Make this target before rebuilding YASK with any new parameters.
 clean:
 	rm -fv src/*.[io] *.optrpt */*.optrpt *.s $(GEN_HEADERS) $(MAKE_REPORT_FILE)
 
-realclean: clean
-	rm -fv bin/*.exe make-report*.txt cxx-flags*.txt ld-flags.*txt $(FB_EXEC) TAGS $(FB_STENCIL_LIST)
+# Remove files from old versions.
+clean-old:
+	rm -fv stencil*.exe stencil-tuner-summary.csh stencil-tuner.pl gen-layouts.pl gen-loops.pl get-loop-stats.pl
+
+# Remove executables, documentation, etc. (not logs).
+realclean: clean clean-old
+	rm -fv bin/*.exe make-report*.txt cxx-flags*.txt ld-flags.*txt TAGS $(YSC_STENCIL_LIST)
 	rm -fr docs/html docs/latex
 	rm -fv src/foldBuilder/tests/*.dot*
-	rm -fv stencil*.exe stencil-tuner-summary.csh stencil-tuner.pl gen-layouts.pl gen-loops.pl get-loop-stats.pl
 	find . -name '*~' | xargs -r rm -v
 
 echo-settings:
@@ -625,9 +632,9 @@ echo-settings:
 	@echo omp_region_schedule=$(omp_region_schedule)
 	@echo omp_block_schedule=$(omp_block_schedule)
 	@echo omp_halo_schedule=$(omp_halo_schedule)
-	@echo FB_TARGET="\"$(FB_TARGET)\""
-	@echo FB_FLAGS="\"$(FB_FLAGS)\""
-	@echo EXTRA_FB_FLAGS="\"$(EXTRA_FB_FLAGS)\""
+	@echo YSC_TARGET="\"$(YSC_TARGET)\""
+	@echo YSC_FLAGS="\"$(YSC_FLAGS)\""
+	@echo EXTRA_YSC_FLAGS="\"$(EXTRA_YSC_FLAGS)\""
 	@echo MACROS="\"$(MACROS)\""
 	@echo EXTRA_MACROS="\"$(EXTRA_MACROS)\""
 	@echo ISA=$(ISA)

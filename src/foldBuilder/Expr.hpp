@@ -1298,6 +1298,7 @@ namespace yask {
         int _minExprSize = 2;
         bool _doCse = true;      // do common-subexpr elim.
         bool _doComb = true;    // combine commutative operations.
+        bool _doOptCluster = true; // apply optimizations also to cluster.
         bool _find_deps = true;  // find dependencies between equations.
         string _eqGroupTargets;  // how to group equations.
     };

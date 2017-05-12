@@ -26,6 +26,7 @@ IN THE SOFTWARE.
 ///////// API for the YASK stencil compiler. ////////////
 
 // This file uses Doxygen 1.8 markup for API documentation-generation.
+// See http://www.stack.nl/~dimitri/doxygen.
 
 #ifndef YASK_COMPILER_API
 #define YASK_COMPILER_API
@@ -52,6 +53,7 @@ namespace yask {
      *   - Example equation: `u(t+1, x, y, z) EQUALS (u(t, x, y, z) + u(t, x+1, y, z)) / 2`.
      *   - Create expressions "bottom-up" by creating the leaf nodes first.
      *   - Leaf nodes may be floating-point (FP) constants or references to grid points.
+     *   - Constants are created via node_factory::new_const_number_node().
      *   - References to grid points are created via grid::new_relative_grid_point(), which
      *     specifies the grid indices relative to any point within the grid domain.
      *   - Create operator nodes via calls to node_factory::new_add_node(), etc., to build up
@@ -166,10 +168,15 @@ namespace yask {
         get_equation(int n /**< [in] Index of equation between zero (0)
                               and get_num_equations()-1. */ ) =0;
 
-        /// Set the solution step dimension.
+        /// Set the solution step dimension name.
         /** Default is "t" for time. */
         virtual void
         set_step_dim(const std::string& dim /**< [in] Step dimension, e.g., "t". */ ) =0;
+
+        /// Get the solution step dimension.
+        /** @returns String containing the current step dimension name. */
+        virtual const std::string&
+        get_step_dim() const =0;
 
         /// Set the vectorization length in given dimension.
         /** For YASK-code generation, the product of the fold lengths should
@@ -183,6 +190,11 @@ namespace yask {
         set_fold_len(const std::string& dim /**< [in] Dimension of fold, e.g., "x". */,
                      int len /**< [in] Length of vectorization in 'dim' */ ) =0;
 
+        /// Reset all vector-folding settings.
+        /** All fold lengths will return to the default of one (1). */
+        virtual void
+        clear_folding() =0;
+        
         /// Set the cluster multiplier (unroll factor) in given dimension.
         /** For YASK-code generation, this will have the effect of creating
          * N vectors of output for each equation, where N is the product of
@@ -192,6 +204,11 @@ namespace yask {
         set_cluster_mult(const std::string& dim /**< [in] Direction of unroll, e.g., "y". */,
                          int mult /**< [in] Number of vectors in 'dim' */ ) =0;
 
+        /// Reset all vector-clustering settings.
+        /** All cluster multipliers will return to the default of one (1). */
+        virtual void
+        clear_clustering() =0;
+        
         /// Format the current equation(s).
         /** Currently supported format types:
          * Type    | Output
@@ -204,6 +221,9 @@ namespace yask {
          * dot     | DOT-language description.
          * dot-lite| DOT-language description of grid accesses only.
          * pseudo  | Human-readable pseudo-code (for debug).
+         * @warning *Side effect:* Applies optimizations to the equation(s), so some pointers
+         * to nodes in the original equations may refer to modified nodes or nodes
+         * that have been optimized away after calling format().
          * @returns String containing formatted output. 
          * The YASK or DOT strings are typically then written to a file.
          */
@@ -212,7 +232,7 @@ namespace yask {
                bool debug = false /**< [in] Print diagnostic info to stdout. */ ) =0;
 
         /// Format the current equation(s) and write to given file.
-        /** See format() for supported format types. */
+        /** See format() for supported format types and side-effects. */
         virtual void
         write(const std::string& filename /**< [in] Name of output file. */,
               const std::string& format_type /**< [in] Name of type from format() table. */,

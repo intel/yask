@@ -132,7 +132,8 @@ namespace yask {
             _dims._clusterMults.product() << " vector(s)...\n";
         _clusterEqGroups = _eqGroups;
         _clusterEqGroups.replicateEqsInCluster(_dims);
-        _clusterEqGroups.optimizeEqGroups(_settings, "cluster", true, cout);
+        if (_settings._doOptCluster)
+            _clusterEqGroups.optimizeEqGroups(_settings, "cluster", true, cout);
     }
 
     // Format in given format-type.
@@ -1462,7 +1463,7 @@ namespace yask {
         cv.printStats(os, msg);
     }
 
-    // Apply optimizations.
+    // Apply optimizations according to the 'settings'.
     void EqGroups::optimizeEqGroups(StencilSettings& settings,
                                     const string& descr,
                                     bool printSets,
@@ -1483,6 +1484,7 @@ namespace yask {
             opts.push_back(new CombineVisitor);
 
             // Do CSE again after combination.
+            // TODO: do this only if the combination did something.
             if (settings._doCse)
                 opts.push_back(new CseVisitor);
         }

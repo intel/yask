@@ -69,7 +69,7 @@ dot_file = "api-py-test.dot"
 soln.write(dot_file, "dot", True)
 print("DOT-format written to '" + dot_file + "'.")
 
-yask_file = "../../stencil_code.hpp"
+yask_file = "stencil_code.hpp"
 soln.write(yask_file, "avx", True)
 print("YASK-format written to '" + yask_file + "'.")
 
