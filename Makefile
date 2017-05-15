@@ -98,7 +98,7 @@ else ifeq ($(stencil),iso3dfd)
  MACROS				+=	MAX_EXCH_DIST=1
  radius				=	8
  def_rank_args			=	-d 1024 -dx 512 # assume 2 ranks/node in 'x'.
- def_pad_args			=	-p 1
+ def_pad_args			=	-ep 1
  ifeq ($(arch),knl)
   def_rank_args			=	-d 1024 # assume 1 rank/node.
   fold_4byte			=	x=2,y=8
@@ -126,7 +126,7 @@ else ifneq ($(findstring awp,$(stencil)),)
  def_block_args			=	-b 32
  YSC_FLAGS			+=	-min-es 1
  def_rank_args			=	-dx 512 -dy 1024 -dz 128 # assume 2 ranks/node in 'x'.
- def_pad_args			=	-p 1
+ def_pad_args			=	-ep 1
  ifeq ($(arch),knl)
   def_rank_args			=	-dx 1024 -dy 1024 -dz 128 # assume 1 rank/node.
   fold_4byte			=	x=4,y=4
@@ -138,7 +138,7 @@ else ifneq ($(findstring awp,$(stencil)),)
   omp_block_schedule		=	dynamic,1
   fold_4byte			=	x=8
   cluster			=	y=2
-  def_pad_args			=	-px 1 -py 1 -pz 0
+  def_pad_args			=	-epx 1 -epy 1 -epz 0
   def_block_args		=	-bx 128 -by 16 -bz 32 
   more_def_args			+=	-sbx 32 -sby 2 -sbz 32
  else ifeq ($(arch),skx)
@@ -248,7 +248,7 @@ layout_wxyz		?=	Layout_1234
 layout_twxyz		?=	Layout_23415
 def_rank_args		?=	-d 128
 def_block_args		?=	-b 64
-def_pad_args		?=	-p 0
+def_pad_args		?=	-ep 0
 cluster			?=	x=1
 pfd_l1			?=	1
 pfd_l2			?=	2
@@ -319,8 +319,8 @@ endif
 # Default cmd-line args.
 DEF_ARGS	+=	-thread_divisor $(def_thread_divisor)
 DEF_ARGS	+=	-block_threads $(def_block_threads)
-DEF_ARGS	+=	$(def_rank_args) $(def_block_args) $(def_pad_args)
-MACROS		+=	DEF_ARGS='"$(DEF_ARGS) $(more_def_args) $(EXTRA_DEF_ARGS)"'
+DEF_ARGS	+=	$(def_rank_args) $(def_block_args) $(def_pad_args) $(more_def_args) 
+MACROS		+=	DEF_ARGS='"$(DEF_ARGS) $(EXTRA_DEF_ARGS)"'
 
 # Set more MACROS based on individual makefile vars.
 # MACROS and EXTRA_MACROS will be written to a header file.

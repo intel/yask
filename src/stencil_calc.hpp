@@ -100,7 +100,7 @@ namespace yask {
         idx_t bt=1, bw=0, bx=0, by=0, bz=0; // block size (used for each outer thread).
         idx_t sbgw=0, sbgx=0, sbgy=0, sbgz=0; // sub-block-group size (only used for 'grouped' block loops).
         idx_t sbt=1, sbw=0, sbx=0, sby=0, sbz=0; // sub-block size (used for each nested thread).
-        idx_t pw=0, px=0, py=0, pz=0;     // spatial padding (in addition to halos, to avoid aliasing).
+        idx_t epw=0, epx=0, epy=0, epz=0;     // extra spatial padding (in addition to halos).
 
         // MPI settings.
         idx_t nrw=1, nrx=1, nry=1, nrz=1; // number of ranks in each dim.

@@ -715,15 +715,15 @@ namespace yask {
         // Grids.
         for (auto gp : gridPtrs) {
 
-            // set grid sizes from settings.
+            // Set grid sizes from settings.
             gp->set_dw(_opts->dw);
             gp->set_dx(_opts->dx);
             gp->set_dy(_opts->dy);
             gp->set_dz(_opts->dz);
-            gp->set_pad_w(_opts->pw);
-            gp->set_pad_x(_opts->px);
-            gp->set_pad_y(_opts->py);
-            gp->set_pad_z(_opts->pz);
+            gp->set_extra_pad_w(_opts->epw);
+            gp->set_extra_pad_x(_opts->epx);
+            gp->set_extra_pad_y(_opts->epy);
+            gp->set_extra_pad_z(_opts->epz);
             gp->set_ofs_w(ofs_w);
             gp->set_ofs_x(ofs_x);
             gp->set_ofs_y(ofs_y);
@@ -908,7 +908,7 @@ namespace yask {
             _opts->nrw << '*' << _opts->nrx << '*' << _opts->nry << '*' << _opts->nrz << endl <<
             " vector-len: " << VLEN << endl <<
             " extra-padding: " <<
-            _opts->pw << '+' << _opts->px << '+' << _opts->py << '+' << _opts->pz << endl <<
+            _opts->epw << '+' << _opts->epx << '+' << _opts->epy << '+' << _opts->epz << endl <<
             " max-wave-front-angles: " <<
             angle_w << '+' << angle_x << '+' << angle_y << '+' << angle_z << endl <<
             " max-halos: " << hw << '+' << hx << '+' << hy << '+' << hz << endl <<
@@ -1579,7 +1579,7 @@ namespace yask {
         ADD_DIM_OPTION("bg", "Block-group size", bg);
         ADD_DIM_OPTION("sb", "Sub-block size", sb);
         ADD_DIM_OPTION("sbg", "Sub-block-group size", sbg);
-        ADD_DIM_OPTION("p", "Extra memory-padding size", p);
+        ADD_DIM_OPTION("ep", "Extra memory-padding size", ep);
 #ifdef USE_MPI
         ADD_DIM_OPTION("nr", "Num ranks", nr);
         ADD_DIM_OPTION("ri", "This rank's logical index", ri);

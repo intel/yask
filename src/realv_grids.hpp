@@ -144,13 +144,20 @@ namespace yask {
         inline idx_t get_halo_y() const { return _hy; }
         inline idx_t get_halo_z() const { return _hz; }
 
+        // Get padding-size after round-up.
+        // This includes the halo.
+        inline idx_t get_pad_w() const { return _pw; }
+        inline idx_t get_pad_x() const { return _px; }
+        inline idx_t get_pad_y() const { return _py; }
+        inline idx_t get_pad_z() const { return _pz; }
+
         // Get extra-padding-size after round-up.
         // Since the extra pad is in addition to the halo, these
         // values may not be multiples of the vector lengths.
-        inline idx_t get_pad_w() const { return _pw - _hw; }
-        inline idx_t get_pad_x() const { return _px - _hx; }
-        inline idx_t get_pad_y() const { return _py - _hy; }
-        inline idx_t get_pad_z() const { return _pz - _hz; }
+        inline idx_t get_extra_pad_w() const { return _pw - _hw; }
+        inline idx_t get_extra_pad_x() const { return _px - _hx; }
+        inline idx_t get_extra_pad_y() const { return _py - _hy; }
+        inline idx_t get_extra_pad_z() const { return _pz - _hz; }
 
         // Get first logical index in domain on this rank.
         inline idx_t get_first_w() const { return _ow; }
@@ -175,27 +182,30 @@ namespace yask {
             _dz = ROUND_UP(dz, VLEN_Z); _dzv = _dz / VLEN_Z; resize_g(); }
 
         // Set halo sizes.
-        // Increase padding if needed.
-        inline void set_halo_w(idx_t hw) {
-            _hw = hw; _pw = ROUND_UP(std::max(_pw, hw), VLEN_W); resize_g(); }
-        inline void set_halo_x(idx_t hx) {
-            _hx = hx; _px = ROUND_UP(std::max(_px, hx), VLEN_X); resize_g(); }
-        inline void set_halo_y(idx_t hy) {
-            _hy = hy; _py = ROUND_UP(std::max(_py, hy), VLEN_Y); resize_g(); }
-        inline void set_halo_z(idx_t hz) {
-            _hz = hz; _pz = ROUND_UP(std::max(_pz, hz), VLEN_Z); resize_g(); }
+        // Automatically increase padding if less than halo.
+        // Halo sizes are not rounded up.
+        inline void set_halo_w(idx_t hw) { _hw = hw; set_pad_w(_pw); }
+        inline void set_halo_x(idx_t hx) { _hx = hx; set_pad_x(_px); }
+        inline void set_halo_y(idx_t hy) { _hy = hy; set_pad_y(_py); }
+        inline void set_halo_z(idx_t hz) { _hz = hz; set_pad_z(_pz); }
 
-        // Set padding and round-up to encompass halo.
-        // To get minimum padding, set halo first.
+        // Set padding and round-up.
+        // Padding will be increased to size of halo if needed.
         inline void set_pad_w(idx_t pw) {
-            _pw = ROUND_UP(pw + _hw, VLEN_W); _pwv = _pw / VLEN_W; resize_g(); }
+            _pw = ROUND_UP(std::max(pw, _hw), VLEN_W); _pwv = _pw / VLEN_W; resize_g(); }
         inline void set_pad_x(idx_t px) {
-            _px = ROUND_UP(px + _hx, VLEN_X); _pxv = _px / VLEN_X; resize_g(); }
+            _px = ROUND_UP(std::max(px, _hx), VLEN_X); _pxv = _px / VLEN_X; resize_g(); }
         inline void set_pad_y(idx_t py) {
-            _py = ROUND_UP(py + _hy, VLEN_Y); _pyv = _py / VLEN_Y; resize_g(); }
+            _py = ROUND_UP(std::max(py, _hy), VLEN_Y); _pyv = _py / VLEN_Y; resize_g(); }
         inline void set_pad_z(idx_t pz) {
-            _pz = ROUND_UP(pz + _hz, VLEN_Z); _pzv = _pz / VLEN_Z; resize_g(); }
+            _pz = ROUND_UP(std::max(pz, _hz), VLEN_Z); _pzv = _pz / VLEN_Z; resize_g(); }
 
+        // Set padding in addition to halo size and round-up.
+        inline void set_extra_pad_w(idx_t epw) { set_pad_w(_hw + epw); }
+        inline void set_extra_pad_x(idx_t epx) { set_pad_x(_hx + epx); }
+        inline void set_extra_pad_y(idx_t epy) { set_pad_y(_hy + epy); }
+        inline void set_extra_pad_z(idx_t epz) { set_pad_z(_hz + epz); }
+        
         // Set offset and round-up.
         inline void set_ofs_w(idx_t ow) {
             _ow = ROUND_UP(ow, VLEN_W); _owv = _ow / VLEN_W; }
