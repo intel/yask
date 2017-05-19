@@ -79,7 +79,9 @@ namespace yask {
         ofstream _nullos;        // Dummy output stream.
 
         // Create the intermediate data.
-        void analyze_solution(ostream& os);
+        void analyze_solution(int vlen,
+                              bool is_folding_efficient,
+                              ostream& os);
 
     public:
         StencilSolution(const string& name) :
@@ -159,6 +161,8 @@ namespace yask {
         virtual const std::string& get_step_dim() const {
             return _settings._stepDim;
         }
+        virtual void set_elem_bytes(int nbytes) { _settings._elem_bytes = nbytes; }
+        virtual int get_elem_bytes() const { return _settings._elem_bytes; }
         virtual std::string format(const std::string& format_type, ostream& msg_stream);
         virtual std::string format(const std::string& format_type, bool debug) {
             return format(format_type, debug? cout : _nullos);
@@ -292,6 +296,6 @@ namespace yask {
 
 // Convenience macro for getting one offset from the 'offsets' tuple.
 #define GET_OFFSET(ovar)                                                \
-    NumExprPtr ovar = make_shared<IntTupleExpr>(offsets.getDirInDim(#ovar))
+    NumExprPtr ovar = make_shared<IntScalarExpr>(offsets.getDim(#ovar))
  
 #endif

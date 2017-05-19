@@ -25,6 +25,8 @@ IN THE SOFTWARE.
 
 ///////// Stencil AST Expressions. ////////////
 
+// TODO: break this up into several smaller files.
+
 #include "Print.hpp"
 #include "ExprUtils.hpp"
 #include "Parse.hpp"
@@ -43,7 +45,7 @@ namespace yask {
                                        std::string dim6) {
 
         // Make new grid and add to solution.
-        auto* gp = new Grid();  // TODO: delete this in dtor.
+        auto* gp = new Grid();  // FIXME: mem leak--delete this in dtor or make smart ptr.
         assert(gp);
         gp->setEqs(&_eqs);      // Save equation access in grid.
         _grids.insert(gp);      // Add to solution.
@@ -52,25 +54,19 @@ namespace yask {
         // TODO: validate that name is legal C++ var name.
         gp->setName(name);
 
-        // Set dims up to first argument that is a null string.
-        if (dim1.length()) {
+        // Set dims that are not null strings.
+        if (dim1.length())
             gp->addDimBack(dim1, 1);
-            if (dim2.length()) {
-                gp->addDimBack(dim2, 1);
-                if (dim3.length()) {
-                    gp->addDimBack(dim3, 1);
-                    if (dim4.length()) {
-                        gp->addDimBack(dim4, 1);
-                        if (dim5.length()) {
-                            gp->addDimBack(dim5, 1);
-                            if (dim6.length()) {
-                                gp->addDimBack(dim6, 1);
-                            }
-                        }
-                    }
-                }
-            }
-        }
+        if (dim2.length())
+            gp->addDimBack(dim2, 1);
+        if (dim3.length())
+            gp->addDimBack(dim3, 1);
+        if (dim4.length())
+            gp->addDimBack(dim4, 1);
+        if (dim5.length())
+            gp->addDimBack(dim5, 1);
+        if (dim6.length())
+            gp->addDimBack(dim6, 1);
         return gp;
     }
 
@@ -92,14 +88,17 @@ namespace yask {
     }
 
     // Create the intermediate data for printing.
-    void StencilSolution::analyze_solution(ostream& os) {
+    void StencilSolution::analyze_solution(int vlen,
+                                           bool is_folding_efficient,
+                                           ostream& os) {
 
         // Find all the stencil dimensions from the grids.
         // Create the final folds and clusters from the cmd-line options.
-        _dims.setDims(_grids, _settings, os);
+        _dims.setDims(_grids, _settings, vlen, is_folding_efficient, os);
 
         // Call the stencil 'define' method to create ASTs.
         // All grid points will be relative to origin (0,0,...,0).
+        // ASTs can also be created via the APIs.
         define(_dims._allDims);
 
         // Check for illegal dependencies within equations for scalar size.
@@ -139,40 +138,39 @@ namespace yask {
     // Format in given format-type.
     string StencilSolution::format(const string& format_type,
                                    ostream& os) {
-        analyze_solution(os);
-
         // Look for format match.
-        // TODO: handle failures before analysis.
+        // Most args to the printers just set references to data.
+        // Data itself will be created in analyze_solution().
         PrinterBase* printer = 0;
         if (format_type == "cpp")
-            printer = new YASKCppPrinter(*this, _eqGroups, _clusterEqGroups,
-                                         _dims, _settings);
+            printer = new YASKCppPrinter(*this, _eqGroups, _clusterEqGroups, _dims);
         else if (format_type == "knc")
-            printer = new YASKKncPrinter(*this, _eqGroups, _clusterEqGroups,
-                                         _dims, _settings);
-        else if (format_type == "avx" || format_type == "avx2") // same for now.
-            printer = new YASKAvx256Printer(*this, _eqGroups, _clusterEqGroups,
-                                         _dims, _settings);
+            printer = new YASKKncPrinter(*this, _eqGroups, _clusterEqGroups, _dims);
+        else if (format_type == "avx" || format_type == "avx2")
+            printer = new YASKAvx256Printer(*this, _eqGroups, _clusterEqGroups, _dims);
         else if (format_type == "avx512")
-            printer = new YASKAvx512Printer(*this, _eqGroups, _clusterEqGroups,
-                                         _dims, _settings);
+            printer = new YASKAvx512Printer(*this, _eqGroups, _clusterEqGroups, _dims);
         else if (format_type == "dot")
-            printer = new DOTPrinter(*this, _clusterEqGroups,
-                                     _settings, false);
+            printer = new DOTPrinter(*this, _clusterEqGroups, false);
         else if (format_type == "dot-lite")
-            printer = new DOTPrinter(*this, _clusterEqGroups,
-                                     _settings, true);
+            printer = new DOTPrinter(*this, _clusterEqGroups, true);
         else if (format_type == "pseudo")
-            printer = new PseudoPrinter(*this, _clusterEqGroups,
-                                        _settings);
+            printer = new PseudoPrinter(*this, _clusterEqGroups);
         else if (format_type == "pov-ray") // undocumented.
-            printer = new POVRayPrinter(*this, _clusterEqGroups,
-                                        _settings);
+            printer = new POVRayPrinter(*this, _clusterEqGroups);
         else {
             cerr << "Error: format-type '" << format_type <<
                 "' is not recognized." << endl;
             exit(1);
         }
+        assert(printer);
+        int vlen = printer->num_vec_elems();
+        bool is_folding_efficient = printer->is_folding_efficient();
+
+        // Set data for equation groups, dims, etc.
+        analyze_solution(vlen, is_folding_efficient, os);
+
+        // Create the output.
         os << "Generating '" << format_type << "' output...\n";
         string res = printer->format();
         delete printer;
@@ -515,7 +513,7 @@ namespace yask {
     void GridPoint::accept(ExprVisitor* ev) {
         ev->visit(this);
     }
-    void IntTupleExpr::accept(ExprVisitor* ev) {
+    void IntScalarExpr::accept(ExprVisitor* ev) {
         ev->visit(this);
     }
     void EqualsExpr::accept(ExprVisitor* ev) {
@@ -531,14 +529,8 @@ namespace yask {
     // Index methods.
     IndexExpr::IndexExpr(NumExprPtr dim, IndexType type) :
         _type(type) {
-        auto dp = castExpr<IntTupleExpr>(dim, "dimension");
-        if (dp->size() != 1) {
-            cerr << "Error: '" << dp->makeStr() <<
-                "'argument to '" << getFnName() <<
-                "' is not a dimension" << endl;
-            exit(1);
-        }
-        _dirName = *dp->getDirName();
+        auto dp = castExpr<IntScalarExpr>(dim, "dimension");
+        _dirName = dp->getName();
     }
 
     // EqualsExpr methods.
@@ -608,7 +600,7 @@ namespace yask {
             (_grid > rhs._grid) ? false :
             IntTuple::operator<(rhs);
     }
-    bool GridPoint::isAheadOfInDir(const GridPoint& rhs, const IntTuple& dir) const {
+    bool GridPoint::isAheadOfInDir(const GridPoint& rhs, const IntScalar& dir) const {
         return _grid == rhs._grid && // must be same var.
             IntTuple::isAheadOfInDir(rhs, dir);
     }
@@ -667,7 +659,7 @@ namespace yask {
         // set the values in the tuple using the var args.
         va_list args;
         va_start(args, count);
-        pt.setVals(count, args);
+        pt.setVals<int>(count, args);
         va_end(args);
 
         // Create a point from the tuple.
@@ -691,14 +683,15 @@ namespace yask {
         auto& halos = _halos[stepVal];
 
         // Update halo vals.
-        for (auto* dim : vals.getDims()) {
-            if (*dim == stepDim)
+        for (auto& dim : vals.getDims()) {
+            auto& dname = dim.getName();
+            if (dname == stepDim)
                 continue;
 
-            auto* p = halos.lookup(*dim);
-            int val = abs(vals.getVal(*dim));
+            auto* p = halos.lookup(dname);
+            int val = abs(vals.getVal(dname));
             if (!p)
-                halos.addDimBack(*dim, val);
+                halos.addDimBack(dname, val);
             else if (*p < val)
                 *p = val;
             // else, current value is larger than val, so don't update.
@@ -785,7 +778,7 @@ namespace yask {
 
             // Visit each point in pts.
             if (_pts) {
-                _pts->visitAllPoints([&](IntTuple& pt){
+                _pts->visitAllPoints([&](const IntTuple& pt){
 
                         // Add offset to pt0.
                         auto pt1 = pt0->addElements(pt, false);
@@ -1515,6 +1508,8 @@ namespace yask {
     // Find the dimensions to be used.
     void Dimensions::setDims(Grids& grids,
                              StencilSettings& settings,
+                             int vlen,
+                             bool is_folding_efficient,
                              ostream& os)
     {
         _allDims.clear();
@@ -1533,14 +1528,27 @@ namespace yask {
         for (auto gp : grids) {
 
             // Count dimensions from this grid.
-            for (auto dim : gp->getDims()) {
-                if (_dimCounts.lookup(dim))
-                    _dimCounts.setVal(dim, _dimCounts.getVal(dim) + 1);
+            for (auto& dim : gp->getDims()) {
+                auto& dname = dim.getName();
+                auto* p = _dimCounts.lookup(dname);
+                if (p)
+                    (*p)++;     // increment count.
+
+                // first time seeing this dim.
                 else {
-                    _dimCounts.addDimBack(dim, 1);
-                    _allDims.addDimBack(dim, 0);
+                    _dimCounts.addDimBack(dname, 1);
+                    _allDims.addDimBack(dname, 0);
                 }
             }
+        }
+        if (!_allDims.lookup(_stepDim)) {
+            cerr << "Error: step dimension '" << _stepDim <<
+                "' not found in any grid.\n";
+            exit(1);
+        }
+        if (_allDims.getNumDims() < 2) {
+            cerr << "Error: no grids found with any non-step dimensions.\n";
+            exit(1);
         }
     
         // For now, there are only global specifications for vector and cluster
@@ -1549,45 +1557,114 @@ namespace yask {
         // vector and cluster sizes based on dimensions that appear in ALL
         // grids. 
         // TODO: relax this restriction.
-        for (auto* dim : _dimCounts.getDims()) {
+        for (auto& dim : _dimCounts.getDims()) {
+            auto& dname = dim.getName();
 
             // Step dim cannot be folded.
-            if (*dim == _stepDim) {
+            if (dname == _stepDim) {
                 continue;
             }
         
             // Add this dimension to scalar/fold/cluster only if it was found in all grids.
-            if (_dimCounts.getVal(dim) == (int)grids.size()) {
-                _scalar.addDimBack(dim, 1);
-                _fold.addDimBack(dim, 1);
-                _clusterMults.addDimBack(dim, 1);
+            if (_dimCounts.getVal(dname) == (int)grids.size()) {
+                _scalar.addDimBack(dname, 1);
+                _fold.addDimBack(dname, 1);
+                _clusterMults.addDimBack(dname, 1);
             }
             else {
-                _miscDims.addDimBack(dim, 1);
+                _miscDims.addDimBack(dname, 1);
             }
         }
         os << "Step dimension: " << _stepDim << endl;
+        os << "Number of SIMD elements: " << vlen << endl;
     
-        // Create final fold lengths based on cmd-line options.
+        // Set fold lengths based on cmd-line options.
         IntTuple foldGT1;    // fold dimensions > 1.
-        for (auto* dim : settings._foldOptions.getDims()) {
-            int sz = settings._foldOptions.getVal(dim);
-            int* p = _fold.lookup(dim);
+        for (auto& dim : settings._foldOptions.getDims()) {
+            auto& dname = dim.getName();
+            int sz = dim.getVal();
+
+            // Does it exist anywhere?
+            if (!_allDims.lookup(dname)) {
+                os << "Warning: fold in '" << dname <<
+                    "' dimension ignored because dimension is not used.\n";
+                continue;
+            }
+
+            // Nothing to do for fold < 2.
+            if (sz <= 1)
+                continue;
+
+            // Check that it's legal to fold this dim.
+            int* p = _fold.lookup(dname);
             if (!p) {
-                cerr << "Error: fold-length of " << sz << " in '" << dim <<
-                    "' dimension not allowed because '" << dim << "' ";
-                if (*dim == _stepDim)
-                    cerr << "is the step dimension." << endl;
+                os << "Warning: fold-length of " << sz << " in '" << dname <<
+                    "' dimension not allowed because '" << dname << "' ";
+                if (dname == _stepDim)
+                    os << "is the step dimension";
                 else
-                    cerr << "doesn't exist in all grids." << endl;
-                exit(1);
+                    os << "doesn't exist in all grids";
+                os << "; ignored.\n";
+                continue;
             }
 
             // Set size.
             *p = sz;
-            if (sz > 1)
-                foldGT1.addDimBack(dim, sz);
-            
+            foldGT1.addDimBack(dname, sz);
+        }
+
+        // Make sure folds cover vlen (unless vlen is 1).
+        if (vlen > 1 && _fold.product() != vlen) {
+            if (_fold.product() > 1)
+                os << "Notice: adjusting requested fold to achieve SIMD length of " <<
+                    vlen << ".\n";
+
+            // Heuristics to determine which dims to modify.
+            IntTuple targets = foldGT1; // start with specified ones >1.
+            const int nTargets = is_folding_efficient ? 2 : 1; // desired num targets.
+            int fdims = _fold.getNumDims();
+            if (targets.getNumDims() < nTargets && fdims > 1)
+                targets.addDimBack(_fold.getDim(fdims - 2)); // 2nd from last.
+            if (targets.getNumDims() < nTargets && fdims > 2)
+                targets.addDimBack(_fold.getDim(fdims - 3)); // 3rd from last.
+            if (targets.getNumDims() < nTargets)
+                targets = _fold; // all.
+
+            // Heuristic: incrementally increase targets by powers of 2.
+            _fold.setValsSame(1);
+            for (int n = 1; _fold.product() < vlen; n++) {
+                for (auto i : targets.getDims()) {
+                    auto& dname = i.getName();
+                    if (_fold.product() < vlen)
+                        _fold.setVal(dname, 1 << n);
+                }
+            }
+
+            // Still wrong?
+            if (_fold.product() != vlen) {
+                _fold.setValsSame(1);
+
+                // Heuristic: set first target to vlen.
+                if (targets.getNumDims()) {
+                    auto& dname = targets.getDim(0).getName();
+                    _fold.setVal(dname, vlen);
+                }
+            }
+
+            // Still wrong?
+            if (_fold.product() != vlen) {
+                _fold.setValsSame(1);
+                os << "Warning: not able to adjust fold.\n";
+            }
+
+            // Fix foldGT1.
+            foldGT1.clear();
+            for (auto i : _fold.getDims()) {
+                auto& dname = i.getName();
+                auto& val = i.getVal();
+                if (val > 1)
+                    foldGT1.addDimBack(dname, val);
+            }
         }
         os << "Vector-fold dimension(s) and size(s): " <<
             _fold.makeDimValStr(" * ") << endl;
@@ -1605,17 +1682,31 @@ namespace yask {
         }
 
         // Create final cluster lengths based on cmd-line options.
-        for (auto* dim : settings._clusterOptions.getDims()) {
-            int mult = settings._clusterOptions.getVal(dim);
-            int* p = _clusterMults.lookup(dim);
+        for (auto& dim : settings._clusterOptions.getDims()) {
+            auto& dname = dim.getName();
+            int mult = dim.getVal();
+
+            // Does it exist anywhere?
+            if (!_allDims.lookup(dname)) {
+                os << "Warning: cluster-multiplier in '" << dname <<
+                    "' dimension ignored because dimension is not used.\n";
+                continue;
+            }
+
+            // Nothing to do for mult < 2.
+            if (mult <= 1)
+                continue;
+
+            int* p = _clusterMults.lookup(dname);
             if (!p) {
-                cerr << "Error: cluster-multiplier of " << mult << " in '" << dim <<
-                    "' dimension not allowed because '" << dim << "' ";
-                if (*dim == _stepDim)
-                    cerr << "is the step dimension." << endl;
+                cerr << "Warning: cluster-multiplier of " << mult << " in '" << dname <<
+                    "' dimension not allowed because '" << dname << "' ";
+                if (dname == _stepDim)
+                    cerr << "is the step dimension";
                 else
-                    cerr << "doesn't exist in all grids." << endl;
-                exit(1);
+                    cerr << "doesn't exist in all grids";
+                os << "; ignored.\n";
+                continue;
             }
 
             // Set the size.

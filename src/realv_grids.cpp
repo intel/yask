@@ -117,7 +117,7 @@ namespace yask {
         // TODO: make commas look ok w/o z dim.
         if (m.length())
             os << m << ": ";
-        os << _name << "[";
+        os << get_name() << "[";
         if (got_t()) os << "t=" << t << ", ";
         if (got_w()) os << "w=" << w << ", ";
         if (got_x()) os << "x=" << x << ", ";

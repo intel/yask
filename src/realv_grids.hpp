@@ -26,6 +26,8 @@ IN THE SOFTWARE.
 #ifndef REAL_VEC_GRIDS
 #define REAL_VEC_GRIDS
 
+#define USE_GET_INDEX 0
+
 namespace yask {
 
     typedef GenericGridBase<real_t> RealGrid;
@@ -41,7 +43,6 @@ namespace yask {
     class RealVecGridBase {
 
     protected:
-        std::string _name;
         RealVecGrid* _gp;
 
         // real_t sizes for up to 4 spatial dims.
@@ -107,13 +108,12 @@ namespace yask {
         virtual void resize_g() =0;
         
     public:
-        RealVecGridBase(const std::string& name,
-                        RealVecGrid* gp) :
-            _name(name), _gp(gp) { }
+        RealVecGridBase(RealVecGrid* gp) :
+            _gp(gp) { }
         virtual ~RealVecGridBase() { }
 
         // Get name.
-        const std::string& get_name() { return _name; }
+        const std::string& get_name() const { return _gp->get_name(); }
 
         // Determine what dims are actually used for derived type.
         virtual bool got_t() const { return false; }
@@ -343,7 +343,8 @@ namespace yask {
 
         // Ctor.
         RealVecGrid_XYZ(const std::string& name) :
-            RealVecGridBase(name, &_data) { }
+            RealVecGridBase(&_data),
+            _data(name, "x", "y", "z") { }
 
         // Determine what dims are defined.
         virtual bool got_x() const { return true; }
@@ -567,7 +568,8 @@ namespace yask {
 
         // Ctor.
         RealVecGrid_WXYZ(const std::string& name) :
-            RealVecGridBase(name, &_data) { }
+            RealVecGridBase(&_data),
+            _data(name, "w", "x", "y", "z") { }
 
         // Determine what dims are defined.
         virtual bool got_w() const { return true; }
@@ -771,10 +773,11 @@ namespace yask {
 
     // Base class that adds a templated temporal size for
     // index-calculation efficiency.
-    template <idx_t _tdim>
-    class RealVecGridTemplate : public RealVecGridBase {
+    template <idx_t tdim>
+    class RealVecGrid_T : public RealVecGridBase {
 
     protected:
+        idx_t _tdim = 1;        // FIXME: remove this test.
 
         // Adjust logical time index to 0-based index
         // using temporal allocation size.
@@ -792,7 +795,7 @@ namespace yask {
 
             // Avoid discontinuity caused by negative time by adding a large
             // offset to the t index.  So, t can be negative, but not so
-            // much that it would still be negaive after adding the offset.
+            // much that it would still be negative after adding the offset.
             // This should not be a practical restriction.
             t += 256 * _tdim;
             assert(t >= 0);
@@ -803,9 +806,8 @@ namespace yask {
 
     public:
 
-        RealVecGridTemplate(const std::string& name,
-                            RealVecGrid* gp) :
-            RealVecGridBase(name, gp) { }
+        RealVecGrid_T(RealVecGrid* gp) :
+            RealVecGridBase(gp), _tdim(tdim) { }
 
         // Get temporal allocation.
         virtual inline idx_t get_tdim() const final {
@@ -816,7 +818,7 @@ namespace yask {
     // A 4D (t, x, y, z) collection of real_vec_t elements.
     // Supports symmetric padding in each dimension.
     template <typename LayoutFn, idx_t _tdim> class RealVecGrid_TXYZ :
-        public RealVecGridTemplate<_tdim> {
+        public RealVecGrid_T<_tdim> {
     
     protected:
 
@@ -833,7 +835,8 @@ namespace yask {
 
         // Ctor.
         RealVecGrid_TXYZ(const std::string& name) :
-            RealVecGridTemplate<_tdim>(name, &_data) { }
+            RealVecGrid_T<_tdim>(&_data),
+            _data(name, "t", "x", "y", "z") { }
 
         // Determine what dims are defined.
         virtual bool got_t() const { return true; }
@@ -1042,7 +1045,7 @@ namespace yask {
     // A 5D (t, w, x, y, z) collection of real_vec_t elements.
     // Supports symmetric padding in each dimension.
     template <typename LayoutFn, idx_t _tdim> class RealVecGrid_TWXYZ :
-        public RealVecGridTemplate<_tdim> {
+        public RealVecGrid_T<_tdim> {
     
     protected:
 
@@ -1060,7 +1063,8 @@ namespace yask {
 
         // Ctor.
         RealVecGrid_TWXYZ(const std::string& name) :
-            RealVecGridTemplate<_tdim>(name, &_data) { }
+            RealVecGrid_T<_tdim>(&_data),
+            _data(name, "t", "w", "x", "y", "z") { }
 
         // Determine what dims are defined.
         virtual bool got_t() const { return true; }

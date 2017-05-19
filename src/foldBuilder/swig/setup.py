@@ -48,7 +48,8 @@ yask_compiler_module = Extension('_yask_compiler',
                                           '../ExprUtils.cpp',
                                           '../CppIntrin.cpp',
                                           '../Print.cpp'],
-                                 include_dirs=['../../../include'],
+                                 include_dirs=['../../../include',
+                                               '../..'],
                                  extra_compile_args=['-std=c++11'],
 )
 

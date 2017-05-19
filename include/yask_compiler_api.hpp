@@ -63,8 +63,10 @@ namespace yask {
      *     to it on the left-hand side (LHS).
      * - Specify the solution step dimension via stencil_solution::set_step_dim().
      *   (This is usually "t" for time.)
-     * - Specify the vector-folding and vector-clustering via stencil_solution::set_fold_len() and
-     *   stencil_solution::set_cluster_mult().
+     * - Specify the number of bytes in a floating-point element via stencil_solution::set_elem_bytes().
+     *   This should be 4 or 8.
+     * - Optionally specify the vector-folding and/or vector-clustering via 
+     *   stencil_solution::set_fold_len() and/or stencil_solution::set_cluster_mult().
      * - Format the equations for additional processing via stencil_solution::format() or stencil_solution::write().
      */
     
@@ -131,14 +133,17 @@ namespace yask {
         /// Create an n-dimensional grid in the solution.
         /** "Grid" is a generic term for any n-dimensional tensor.  A 1-dim
          * grid is an array, a 2-dim grid is a matrix, etc.  Define the name
-         * of each dimension that is needed via this interface. Example:
-         * new_grid("heat", "t", "x", "y") will create a 3D grid.
-         * All dimension-name strings must be valid C++ identifiers.
-         * @returns Pointer to the new grid. */
+         * of each dimension that is needed via this interface, starting
+         * with 'dim1'. Example: new_grid("heat", "t", "x", "y") will create
+         * a 3D grid.  @returns Pointer to the new grid. */
         virtual grid_ptr
-        new_grid(std::string name /**< [in] Unique name of the grid;
-                                     must be a valid C++ identifier.. */,
-                 std::string dim1 = "" /**< [in] Name of 1st dimension. */,
+        new_grid(std::string name /**< [in] Unique name of the grid; must be
+                                     a valid C++ identifier and unique
+                                     across grids. */,
+                 std::string dim1 = "" /**< [in] Name of 1st dimension. All
+                                          dimension names must be valid C++
+                                          identifiers and unique within this
+                                          grid. */,
                  std::string dim2 = "" /**< [in] Name of 2nd dimension. */,
                  std::string dim3 = "" /**< [in] Name of 3rd dimension. */,
                  std::string dim4 = "" /**< [in] Name of 4th dimension. */,
@@ -182,9 +187,12 @@ namespace yask {
         /** For YASK-code generation, the product of the fold lengths should
          * be equal to the number of elements in a HW SIMD register. For
          * example, for SP FP elements in AVX-512 vectors, the product of
-         * the fold lengths should be 16, e.g., x=4 and y=4. This is not
-         * checked by the compiler, since it does not know the FP precision
-         * that will be used. A fold length >1 cannot be applied to the step
+         * the fold lengths should be 16, e.g., x=4 and y=4. If the product
+         * of the fold lengths is not the number of elements in a HW SIMD
+         * register, the fold lengths will be adjusted based on an internal
+         * heuristic.  The number of elements in a HW SIMD register is
+         * determined by the number of bytes in an element and the print
+         * format.  A fold length >1 cannot be applied to the step
          * dimension. Default is one (1) in each dimension. */
         virtual void
         set_fold_len(const std::string& dim /**< [in] Dimension of fold, e.g., "x". */,
@@ -194,6 +202,16 @@ namespace yask {
         /** All fold lengths will return to the default of one (1). */
         virtual void
         clear_folding() =0;
+
+        /// Set floating-point precision.
+        virtual void
+        set_elem_bytes(int nbytes /**< [in] Number of bytes in a FP number.
+                                     Should be 4 or 8. */ ) =0;
+
+        /// Get floating-point precision.
+        /** @returns Number of bytes in a FP number. */
+        virtual int
+        get_elem_bytes() const =0;
         
         /// Set the cluster multiplier (unroll factor) in given dimension.
         /** For YASK-code generation, this will have the effect of creating

@@ -25,6 +25,8 @@ IN THE SOFTWARE.
 
 ///////// AST Expressions ////////////
 
+// TODO: break this up into several smaller files.
+
 #ifndef EXPR_HPP
 #define EXPR_HPP
 
@@ -37,13 +39,15 @@ IN THE SOFTWARE.
 #include <assert.h>
 #include <fstream>
 
-#include "Tuple.hpp"
+#include "tuple.hpp"
+#include "yask_compiler_api.hpp"
 
 using namespace std;
 
 namespace yask {
 
-    // A tuple of integers, used for dimensions, indices, etc.
+    // Collections of integers, used for dimensions, indices, etc.
+    typedef Scalar<int> IntScalar;
     typedef Tuple<int> IntTuple;
 
     // Forward-declarations of expressions.
@@ -57,8 +61,8 @@ namespace yask {
     typedef shared_ptr<EqualsExpr> EqualsExprPtr;
     class IfExpr;
     typedef shared_ptr<IfExpr> IfExprPtr;
-    class IntTupleExpr;
-    typedef shared_ptr<IntTupleExpr> IntTupleExprPtr;
+    class IntScalarExpr;
+    typedef shared_ptr<IntScalarExpr> IntScalarExprPtr;
     typedef vector<NumExprPtr> NumExprPtrVec;
 
     // Forward-declare expression visitor.
@@ -657,33 +661,33 @@ namespace yask {
     COMM_EXPR(AddExpr, add_node, "+", 0.0, lhs + rhs);
 #undef COMM_EXPR
 
-    // A tuple expression.
+    // A scalar expression with a named dimension.
     // This is an expression leaf-node.
-    class IntTupleExpr : public NumExpr, public IntTuple {
+    class IntScalarExpr : public NumExpr, public IntScalar {
 
     public:
-        IntTupleExpr(const IntTuple& tuple) :
-            IntTuple(tuple) { }
-        IntTupleExpr(const IntTupleExpr& src) :
-            IntTuple(src) { }
-        IntTupleExpr(const IntTupleExprPtr src) :
-            IntTuple(*src) { }
+        IntScalarExpr(const IntScalar& src) :
+            IntScalar(src) { }
+        IntScalarExpr(const IntScalarExpr& src) :
+            IntScalar(src) { }
+        IntScalarExpr(const IntScalarExprPtr src) :
+            IntScalar(*src) { }
     
-        virtual ~IntTupleExpr() { }
+        virtual ~IntScalarExpr() { }
 
         virtual double getNumVal() const {
-            return double(getDirVal());
+            return double(getVal());
         }
         virtual int getIntVal() const {
-            return getDirVal();
+            return getVal();
         }
 
         // Some comparisons.
-        bool operator==(const IntTupleExpr& rhs) const {
-            return IntTuple::operator==(rhs);
+        bool operator==(const IntScalarExpr& rhs) const {
+            return IntScalar::operator==(rhs);
         }
-        bool operator<(const IntTupleExpr& rhs) const {
-            return IntTuple::operator<(rhs);
+        bool operator<(const IntScalarExpr& rhs) const {
+            return IntScalar::operator<(rhs);
         }
 
         // Take ev to each value.
@@ -691,14 +695,14 @@ namespace yask {
 
         // Check for equivalency.
         virtual bool isSame(const Expr* other) const {
-            auto p = dynamic_cast<const IntTupleExpr*>(other);
+            auto* p = dynamic_cast<const IntScalarExpr*>(other);
 
             // Only compare dimensions, not values.
-            return p && areDimsSame(*p);
+            return p->getName() == getName();
         }
     
         // Create a deep copy of this expression.
-        virtual NumExprPtr clone() const { return make_shared<IntTupleExpr>(*this); }
+        virtual NumExprPtr clone() const { return make_shared<IntScalarExpr>(*this); }
     };
 
     // One specific point in a grid.
@@ -765,7 +769,7 @@ namespace yask {
         virtual GridPointPtr cloneGridPoint() const { return make_shared<GridPoint>(*this); }
     
         // Determine whether this is 'ahead of' rhs in given direction.
-        virtual bool isAheadOfInDir(const GridPoint& rhs, const IntTuple& dir) const;
+        virtual bool isAheadOfInDir(const GridPoint& rhs, const IntScalar& dir) const;
 
         // APIs.
         virtual grid* get_grid();
@@ -1215,9 +1219,7 @@ namespace yask {
             return getNumDims();
         }
         virtual const string& get_dim_name(int n) const {
-            auto& dims = getDims();
-            assert(n >= 0 && n < getNumDims());
-            return *dims.at(n);
+            return getDimName(n);
         }
         virtual grid_point_node_ptr
         new_relative_grid_point(int dim1_offset) {
@@ -1286,7 +1288,8 @@ namespace yask {
     // May be provided via cmd-line or API.
     class StencilSettings {
     public:
-        string _stepDim = "t";
+        int _elem_bytes = 4;    // bytes in an FP element.
+        string _stepDim = "t";  // name of stepping dimension.
         IntTuple _foldOptions;    // vector fold.
         IntTuple _clusterOptions; // cluster multipliers.
         bool _firstInner = true; // first dimension of fold is unit step.
@@ -1319,6 +1322,8 @@ namespace yask {
         // Find the dimensions to be used.
         void setDims(Grids& grids,
                      StencilSettings& settings,
+                     int vlen,
+                     bool is_folding_efficient,
                      ostream& os);
     };
 

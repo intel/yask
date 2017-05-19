@@ -252,23 +252,24 @@ namespace yask {
         virtual void printNorm(ostream& os, const IntTuple& dims) {
             const IntTuple& vlen = getFold();
             os << endl << " // Normalize indices by vector fold lengths." << endl;
-            for (auto dim : dims.getDims()) {
-                const int* p = vlen.lookup(dim);
-                os << " const idx_t " << dim << "v = " << dim;
+            for (auto& dim : dims.getDims()) {
+                auto& dname = dim.getName();
+                const int* p = vlen.lookup(dname);
+                os << " const idx_t " << dname << "v = " << dname;
                 if (p) os << " / " << *p;
                 os << ";" << endl;
             }
         }
 
         // Print body of prefetch function.
-        virtual void printPrefetches(ostream& os, const IntTuple& dir) const {
+        virtual void printPrefetches(ostream& os, const IntScalar& dir) const {
 
             // Points to prefetch.
             GridPointSet* pfPts = NULL;
 
-            // Prefetch leading points only if dir is set.
+            // Prefetch leading points only if dir name is set.
             GridPointSet edge;
-            if (dir.size() > 0) {
+            if (dir.getName().length()) {
                 _vv.getLeadingEdge(edge, dir);
                 pfPts = &edge;
             }
@@ -326,9 +327,8 @@ namespace yask {
         YASKCppPrinter(StencilSolution& stencil,
                        EqGroups& eqGroups,
                        EqGroups& clusterEqGroups,
-                       Dimensions& dims,
-                       StencilSettings& settings) :
-            PrinterBase(stencil, eqGroups, settings),
+                       Dimensions& dims) :
+            PrinterBase(stencil, eqGroups),
             _clusterEqGroups(clusterEqGroups),
             _dims(dims)
         {

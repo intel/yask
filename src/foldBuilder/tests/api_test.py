@@ -62,8 +62,8 @@ print("Solution '" + soln.get_name() + "' contains " +
       str(soln.get_num_grids()) + " grid(s), and " +
       str(soln.get_num_equations()) + " equation(s).")
 
-soln.set_step_dim("t");
-soln.set_fold_len("y", 8)
+soln.set_step_dim("t")
+soln.set_elem_bytes(4)
 
 dot_file = "api-py-test.dot"
 soln.write(dot_file, "dot", True)

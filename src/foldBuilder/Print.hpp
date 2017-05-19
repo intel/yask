@@ -174,7 +174,7 @@ namespace yask {
         virtual void visit(GridPoint* gp);
 
         // An index.
-        virtual void visit(IntTupleExpr* ite);
+        virtual void visit(IntScalarExpr* ite);
         virtual void visit(IndexExpr* ie);
     
         // A constant.
@@ -246,7 +246,7 @@ namespace yask {
         virtual void visit(GridPoint* gp);
 
         // An index.
-        virtual void visit(IntTupleExpr* ite);
+        virtual void visit(IntScalarExpr* ite);
 
         // A constant.
         virtual void visit(ConstExpr* ce);
@@ -411,7 +411,7 @@ namespace yask {
         Params& _params;
         EqGroups& _eqGroups;
         StencilSettings& _settings;
-
+        
         // Return an upper-case string.
         string allCaps(string str) {
             transform(str.begin(), str.end(), str.begin(), ::toupper);
@@ -420,16 +420,22 @@ namespace yask {
     
     public:
         PrinterBase(StencilSolution& stencil,
-                    EqGroups& eqGroups,
-                    StencilSettings& settings) :
+                    EqGroups& eqGroups) :
             _stencil(stencil), 
             _grids(stencil.getGrids()),
             _params(stencil.getParams()),
             _eqGroups(eqGroups),
-            _settings(settings)
+            _settings(stencil.getSettings())
         { }
         virtual ~PrinterBase() { }
 
+        // Number of elements that should be in a SIMD vector.
+        // 1 => scalars only.
+        virtual int num_vec_elems() const { return 1; }
+
+        // Whether multi-dim folding is efficient.
+        virtual bool is_folding_efficient() const { return false; }
+        
         // Output to 'os'.
         virtual void print(ostream& os) =0;
 
@@ -445,9 +451,8 @@ namespace yask {
     class PseudoPrinter : public PrinterBase {
         
     public:
-        PseudoPrinter(StencilSolution& stencil, EqGroups& eqGroups,
-                      StencilSettings& settings) :
-            PrinterBase(stencil, eqGroups, settings) { }
+        PseudoPrinter(StencilSolution& stencil, EqGroups& eqGroups) :
+            PrinterBase(stencil, eqGroups) { }
         virtual ~PseudoPrinter() { }
 
         virtual void print(ostream& os);
@@ -460,8 +465,8 @@ namespace yask {
         
     public:
         DOTPrinter(StencilSolution& stencil, EqGroups& eqGroups,
-                   StencilSettings& settings, bool isSimple) :
-            PrinterBase(stencil, eqGroups, settings),
+                   bool isSimple) :
+            PrinterBase(stencil, eqGroups),
             _isSimple(isSimple) { }
         virtual ~DOTPrinter() { }
 
@@ -472,9 +477,8 @@ namespace yask {
     class POVRayPrinter : public PrinterBase {
         
     public:
-        POVRayPrinter(StencilSolution& stencil, EqGroups& eqGroups,
-                      StencilSettings& settings) :
-            PrinterBase(stencil, eqGroups, settings) { }
+        POVRayPrinter(StencilSolution& stencil, EqGroups& eqGroups) :
+            PrinterBase(stencil, eqGroups) { }
         virtual ~POVRayPrinter() { }
 
         virtual void print(ostream& os);

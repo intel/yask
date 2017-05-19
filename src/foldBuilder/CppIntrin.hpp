@@ -200,10 +200,14 @@ namespace yask {
         YASKKncPrinter(StencilSolution& stencil,
                        EqGroups& eqGroups,
                        EqGroups& clusterEqGroups,
-                       Dimensions& dims,
-                       StencilSettings& settings) :
+                       Dimensions& dims) :
             YASKCppPrinter(stencil, eqGroups, clusterEqGroups,
-                           dims, settings) { }
+                           dims) { }
+
+        virtual int num_vec_elems() const { return 64 / _settings._elem_bytes; }
+
+        // Whether multi-dim folding is efficient.
+        virtual bool is_folding_efficient() const { return true; }
     };
 
     // Print 256-bit AVX intrinsic code.
@@ -219,10 +223,11 @@ namespace yask {
         YASKAvx256Printer(StencilSolution& stencil,
                           EqGroups& eqGroups,
                           EqGroups& clusterEqGroups,
-                          Dimensions& dims,
-                          StencilSettings& settings) :
+                          Dimensions& dims) :
             YASKCppPrinter(stencil, eqGroups, clusterEqGroups,
-                           dims, settings) { }
+                           dims) { }
+
+        virtual int num_vec_elems() const { return 32 / _settings._elem_bytes; }
     };
 
     // Print 512-bit AVX intrinsic code.
@@ -238,10 +243,14 @@ namespace yask {
         YASKAvx512Printer(StencilSolution& stencil,
                           EqGroups& eqGroups,
                           EqGroups& clusterEqGroups,
-                          Dimensions& dims,
-                          StencilSettings& settings) :
+                          Dimensions& dims) :
             YASKCppPrinter(stencil, eqGroups, clusterEqGroups,
-                           dims, settings) { }
+                           dims) { }
+
+        virtual int num_vec_elems() const { return 64 / _settings._elem_bytes; }
+
+        // Whether multi-dim folding is efficient.
+        virtual bool is_folding_efficient() const { return true; }
     };
 
 } // namespace yask.

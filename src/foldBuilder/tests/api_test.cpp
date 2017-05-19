@@ -69,7 +69,7 @@ int main() {
         soln->get_num_equations() << " equation(s)." << endl;
 
     soln->set_step_dim("t");
-    soln->set_fold_len("y", 8);
+    soln->set_elem_bytes(4);
 
     string dot_file = "api-cxx-test.dot";
     soln->write(dot_file, "dot", true);

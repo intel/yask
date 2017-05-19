@@ -290,8 +290,8 @@ LFLAGS          +=      -lrt
 YSC_EXEC	:=	bin/yask-stencil-compiler.exe
 YSC_CXX    	?=	g++  # faster than icpc for building the compiler.
 YSC_CXXFLAGS 	+=	-g -O0 -std=c++11 -Wall  # low opt to reduce compile time.
-YSC_CXXFLAGS	+=	-Iinclude -Isrc/foldBuilder -Isrc/foldBuilder/stencils
-YSC_FLAGS   	+=	-st $(stencil) -cluster $(cluster) -fold $(fold)
+YSC_CXXFLAGS	+=	-Iinclude -Isrc -Isrc/foldBuilder -Isrc/foldBuilder/stencils
+YSC_FLAGS   	+=	-stencil $(stencil) -cluster $(cluster) -fold $(fold)
 YSC_STENCIL_LIST	:=	src/foldBuilder/stencils.hpp
 ST_MACRO_FILE	:=	src/stencil_macros.hpp
 ST_CODE_FILE	:=	src/stencil_code.hpp
@@ -307,7 +307,7 @@ ifneq ($(eqs),)
  YSC_FLAGS   	+=	-eq $(eqs)
 endif
 ifneq ($(radius),)
- YSC_FLAGS   	+=	-r $(radius)
+ YSC_FLAGS   	+=	-radius $(radius)
 endif
 ifneq ($(halo),)
  YSC_FLAGS   	+=	-halo $(halo)
@@ -511,7 +511,7 @@ src/layouts.hpp: bin/gen-layouts.pl
 
 # Compile the stencil compiler.
 # TODO: move this to its own makefile.
-$(YSC_EXEC): src/foldBuilder/*.*pp $(YSC_STENCIL_LIST)
+$(YSC_EXEC): src/foldBuilder/*.*pp $(YSC_STENCIL_LIST) src/tuple.hpp
 	$(YSC_CXX) $(YSC_CXXFLAGS) -o $@ src/foldBuilder/*.cpp $(EXTRA_YSC_CXXFLAGS)
 
 $(YSC_STENCIL_LIST): src/foldBuilder/stencils/*.hpp

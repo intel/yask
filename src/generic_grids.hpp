@@ -30,20 +30,29 @@ IN THE SOFTWARE.
 #ifndef GENERIC_GRIDS
 #define GENERIC_GRIDS
 
+#include "tuple.hpp"
+
 namespace yask {
+
+    typedef Tuple<idx_t> IdxTuple;
 
     // A base class for a generic grid of elements of arithmetic type T.
     // This class provides linear-access support, i.e., no layout.
     template <typename T> class GenericGridBase {
     protected:
-        T* _elems = 0;
-        bool _do_free = false;
+        std::string _name;      // name for grid.
+        IdxTuple _dims;         // names and lengths of dimensions.
+        T* _elems = 0;          // actual data.
+        bool _do_free = false;  // whether to free at destruction.
+
+        // Alignment to use for default allocation.
         const static size_t _def_alignment = CACHELINE_BYTES;
 
     public:
 
         // Ctor. No allocation is done. See notes on default_alloc().
-        GenericGridBase() { }
+        GenericGridBase(std::string name) :
+            _name(name) { }
 
         // Dealloc memory only if allocated via default_alloc().
         virtual ~GenericGridBase() {
@@ -65,6 +74,10 @@ namespace yask {
             _do_free = true;
         }
         
+        // Access name.
+        const std::string& get_name() const { return _name; }
+        void set_name(const std::string& name) { _name = name; }
+
         // Get number of elements.
         virtual idx_t get_num_elems() const =0;
 
@@ -73,15 +86,35 @@ namespace yask {
             return sizeof(T) * get_num_elems();
         }
 
-        // Print some info.
-        virtual void print_info(const std::string& name, std::ostream& os) {
-            os << "'" << name << "' data is at " << _elems << ", containing " <<
+        // Get number of dimensions.
+        inline int get_num_dims() const {
+            return _dims.getNumDims();
+        }
+
+        // Get the nth dim name.
+        inline const std::string& get_dim_name(int n) const {
+            return _dims.getDimName(n);
+        }
+
+        // Get the nth dim size.
+        inline idx_t get_dim_size(int n) const {
+            return _dims.getVal(n);
+        }
+
+        // Print some descriptive info to 'os'.
+        virtual void print_info(std::ostream& os) const {
+            if (_dims.getNumDims() == 0)
+                os << "scalar";
+            else
+                os << _dims.getNumDims() << "D (" <<
+                    _dims.makeDimValStr(" * ") << ")";
+            os << " '" << _name << "' data is at " << _elems << ", containing " <<
                 printWithPow10Multiplier(get_num_elems()) << " element(s) of " <<
                 sizeof(T) << " byte(s) each = " <<
                 printWithPow2Multiplier(get_num_bytes()) << " bytes.\n";
         }
 
-        // Initialize memory to a given value.
+        // Initialize all elements to the same given value.
         virtual void set_same(T val) {
 
 #pragma omp parallel for
@@ -106,6 +139,7 @@ namespace yask {
 
         // Check for equality.
         // Return number of mismatches greater than epsilon.
+        // Assumes same layout.
         virtual idx_t count_diffs(const GenericGridBase<T>& ref, T epsilon) const {
             idx_t errs = 0;
 
@@ -155,13 +189,8 @@ namespace yask {
     public:
 
         // Construct an unallocated scalar.
-        GenericGrid0d() {}
-
-        // Print some info.
-        virtual void print_info(const std::string& name, std::ostream& os) {
-            os << "scalar ";
-            GenericGridBase<T>::print_info(name, os);
-        }
+        GenericGrid0d(std::string name) :
+            GenericGridBase<T>(name) { }
 
         // Get number of elements.
         virtual idx_t get_num_elems() const {
@@ -219,25 +248,21 @@ namespace yask {
     public:
 
         // Construct an unallocated array of length 1.
-        GenericGrid1d() { }
-
-        // Construct an array of length d1.
-        GenericGrid1d(idx_t d1) :
-            _layout(d1) { }
+        GenericGrid1d(std::string name,
+                      const std::string& dim1) :
+            GenericGridBase<T>(name) {
+            this->_dims.addDimBack(dim1, 1);
+        }
 
         // Get/set size.
         inline idx_t get_d1() const { return _layout.get_d1(); }
-        inline void set_d1(idx_t d1) { _layout.set_d1(d1); }
+        inline void set_d1(idx_t d1) {
+            _layout.set_d1(d1);
+            this->_dims.setVal(0, d1); }
 
         // Get number of elements.
         virtual idx_t get_num_elems() const {
             return _layout.get_size();
-        }
-
-        // Print some info.
-        virtual void print_info(const std::string& name, std::ostream& os) {
-            os << "1D (" << get_d1() << ") ";
-            GenericGridBase<T>::print_info(name, os);
         }
 
         // Get 1D index.
@@ -313,27 +338,29 @@ namespace yask {
     public:
 
         // Construct an unallocated grid of dimensions 1*1.
-        GenericGrid2d() { }
-
-        // Construct a grid of dimensions d1*d2.
-        GenericGrid2d(idx_t d1, idx_t d2) :
-            _layout(d1, d2) { }
-
+        GenericGrid2d(std::string name,
+                      const std::string& dim1,
+                      const std::string& dim2) :
+            GenericGridBase<T>(name) {
+            this->_dims.addDimBack(dim1, 1);
+            this->_dims.addDimBack(dim2, 1);
+        }
+        
         // Get/set sizes.
         inline idx_t get_d1() const { return _layout.get_d1(); }
         inline idx_t get_d2() const { return _layout.get_d2(); }
-        inline void set_d1(idx_t d1) { _layout.set_d1(d1); }
-        inline void set_d2(idx_t d2) { _layout.set_d2(d2); }
+        inline void set_d1(idx_t d1) {
+            _layout.set_d1(d1); 
+            this->_dims.setVal(0, d1);
+        }
+        inline void set_d2(idx_t d2) {
+            _layout.set_d2(d2); 
+            this->_dims.setVal(0, d2);
+        }
 
         // Get number of elements.
         virtual idx_t get_num_elems() const {
             return _layout.get_size();
-        }
-
-        // Print some info.
-        virtual void print_info(const std::string& name, std::ostream& os) {
-            os << "2D (" << get_d1() << " * " << get_d2() << ") ";
-            GenericGridBase<T>::print_info(name, os);
         }
 
         // Get 1D index.
@@ -414,29 +441,36 @@ namespace yask {
     public:
 
         // Construct an unallocated grid of dimensions 1*1*1.
-        GenericGrid3d() { }
+        GenericGrid3d(const std::string& name,
+                      const std::string& dim1,
+                      const std::string& dim2,
+                      const std::string& dim3) :
+            GenericGridBase<T>(name) {
+            this->_dims.addDimBack(dim1, 1);
+            this->_dims.addDimBack(dim2, 1);
+            this->_dims.addDimBack(dim3, 1);
+        }
 
-        // Construct a grid of dimensions d1*d2*d3.
-        GenericGrid3d(idx_t d1, idx_t d2, idx_t d3) :
-            _layout(d1, d2, d3) { }
-    
         // Get/set sizes.
         inline idx_t get_d1() const { return _layout.get_d1(); }
         inline idx_t get_d2() const { return _layout.get_d2(); }
         inline idx_t get_d3() const { return _layout.get_d3(); }
-        inline void set_d1(idx_t d1) { _layout.set_d1(d1); }
-        inline void set_d2(idx_t d2) { _layout.set_d2(d2); }
-        inline void set_d3(idx_t d3) { _layout.set_d3(d3); }
+        inline void set_d1(idx_t d1) {
+            _layout.set_d1(d1);
+            this->_dims.setVal(0, d1);
+        }
+        inline void set_d2(idx_t d2) {
+            _layout.set_d2(d2);
+            this->_dims.setVal(1, d2);
+        }
+        inline void set_d3(idx_t d3) {
+            _layout.set_d3(d3);
+            this->_dims.setVal(2, d3);
+        }
 
         // Get number of elements.
         virtual idx_t get_num_elems() const {
             return _layout.get_size();
-        }
-
-        // Print some info.
-        virtual void print_info(const std::string& name, std::ostream& os) {
-            os << "3D (" << get_d1() << " * " << get_d2() << " * " << get_d3() << ") ";
-            GenericGridBase<T>::print_info(name, os);
         }
 
         // Get 1D index.
@@ -521,31 +555,43 @@ namespace yask {
     public:
 
         // Construct an unallocated grid of dimensions 1*1*1*1.
-        GenericGrid4d() { }
-
-        // Construct a grid of dimensions d1 * d2 * d3 * d4.
-        GenericGrid4d(idx_t d1, idx_t d2, idx_t d3, idx_t d4) :
-            _layout(d1, d2, d3, d4) { }
+        GenericGrid4d(const std::string& name,
+                      const std::string& dim1,
+                      const std::string& dim2,
+                      const std::string& dim3,
+                      const std::string& dim4) :
+            GenericGridBase<T>(name) {
+            this->_dims.addDimBack(dim1, 1);
+            this->_dims.addDimBack(dim2, 1);
+            this->_dims.addDimBack(dim3, 1);
+            this->_dims.addDimBack(dim4, 1);
+        }
 
         // Get/set sizes.
         inline idx_t get_d1() const { return _layout.get_d1(); }
         inline idx_t get_d2() const { return _layout.get_d2(); }
         inline idx_t get_d3() const { return _layout.get_d3(); }
         inline idx_t get_d4() const { return _layout.get_d4(); }
-        inline void set_d1(idx_t d1) { _layout.set_d1(d1); }
-        inline void set_d2(idx_t d2) { _layout.set_d2(d2); }
-        inline void set_d3(idx_t d3) { _layout.set_d3(d3); }
-        inline void set_d4(idx_t d4) { _layout.set_d4(d4); }
+        inline void set_d1(idx_t d1) {
+            _layout.set_d1(d1);
+            this->_dims.setVal(0, d1);
+        }
+        inline void set_d2(idx_t d2) {
+            _layout.set_d2(d2);
+            this->_dims.setVal(1, d2);
+        }
+        inline void set_d3(idx_t d3) {
+            _layout.set_d3(d3);
+            this->_dims.setVal(2, d3);
+        }
+        inline void set_d4(idx_t d4) {
+            _layout.set_d4(d4);
+            this->_dims.setVal(3, d4);
+        }
 
         // Get number of elements.
         virtual idx_t get_num_elems() const {
             return _layout.get_size();
-        }
-
-        // Print some info.
-        virtual void print_info(const std::string& name, std::ostream& os) {
-            os << "4D (" << get_d1() << " * " << get_d2() << " * " << get_d3() << " * " << get_d4() << ") ";
-            GenericGridBase<T>::print_info(name, os);
         }
 
         // Get 1D index.
@@ -635,11 +681,19 @@ namespace yask {
     public:
 
         // Construct an unallocated grid of dimensions 1*1*1*1*1.
-        GenericGrid5d() { }
-
-        // Construct a grid of dimensions d1 * d2 * d3 * d4 * d5.
-        GenericGrid5d(idx_t d1, idx_t d2, idx_t d3, idx_t d4, idx_t d5) :
-            _layout(d1, d2, d3, d4, d5) { }
+        GenericGrid5d(const std::string& name,
+                      const std::string& dim1,
+                      const std::string& dim2,
+                      const std::string& dim3,
+                      const std::string& dim4,
+                      const std::string& dim5) :
+            GenericGridBase<T>(name) {
+            this->_dims.addDimBack(dim1, 1);
+            this->_dims.addDimBack(dim2, 1);
+            this->_dims.addDimBack(dim3, 1);
+            this->_dims.addDimBack(dim4, 1);
+            this->_dims.addDimBack(dim5, 1);
+        }
 
         // Get/set sizes.
         inline idx_t get_d1() const { return _layout.get_d1(); }
@@ -647,22 +701,30 @@ namespace yask {
         inline idx_t get_d3() const { return _layout.get_d3(); }
         inline idx_t get_d4() const { return _layout.get_d4(); }
         inline idx_t get_d5() const { return _layout.get_d5(); }
-        inline void set_d1(idx_t d1) { _layout.set_d1(d1); }
-        inline void set_d2(idx_t d2) { _layout.set_d2(d2); }
-        inline void set_d3(idx_t d3) { _layout.set_d3(d3); }
-        inline void set_d4(idx_t d4) { _layout.set_d4(d4); }
-        inline void set_d5(idx_t d5) { _layout.set_d5(d5); }
+        inline void set_d1(idx_t d1) {
+            _layout.set_d1(d1);
+            this->_dims.setVal(0, d1);
+        }
+        inline void set_d2(idx_t d2) {
+            _layout.set_d2(d2);
+            this->_dims.setVal(1, d2);
+        }
+        inline void set_d3(idx_t d3) {
+            _layout.set_d3(d3);
+            this->_dims.setVal(2, d3);
+        }
+        inline void set_d4(idx_t d4) {
+            _layout.set_d4(d4);
+            this->_dims.setVal(3, d4);
+        }
+        inline void set_d5(idx_t d5) {
+            _layout.set_d5(d5);
+            this->_dims.setVal(4, d5);
+        }
 
         // Get number of elements.
         virtual idx_t get_num_elems() const {
             return _layout.get_size();
-        }
-
-        // Print some info.
-        virtual void print_info(const std::string& name, std::ostream& os) {
-            os << "5D (" << get_d1() << " * " << get_d2() << " * " <<
-                get_d3() << " * " << get_d4() <<  " * " << get_d5() << ") ";
-            GenericGridBase<T>::print_info(name, os);
         }
 
         // Get 1D index.

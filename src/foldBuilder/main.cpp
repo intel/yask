@@ -53,7 +53,7 @@ void usage(const string& cmd) {
     cout << "Options:\n"
         " -h                 print this help message.\n"
         "\n"
-        " -st <name>         set stencil solution (required); supported solutions:\n";
+        " -stencil <name>         set stencil solution (required); supported solutions:\n";
     for (auto si : stencils) {
         auto name = si.first;
         auto sp = si.second;
@@ -63,11 +63,16 @@ void usage(const string& cmd) {
         cout << endl;
     }
     cout <<
-        " -r <radius>\n"
+        " -radius <radius>\n"
         "     Set radius for stencils marked with '*' above (default=" << radius << ").\n"
         "\n"
+        " -elem-bytes <n>"
+        "    Set number of bytes in each FP element (default=" << settings._elem_bytes << ").\n"
         " -fold <dim>=<size>,...\n"
-        "    Set number of elements in each dimension in a vector block.\n"
+        "    Set number of elements in each given dimension in a vector block.\n"
+        "    Default depends on -elem-bytes setting and print format (below).\n"
+        "    If product of fold lengths does not equal SIMD vector length for print\n"
+        "      formats with explicit lengths, lengths will adjusted as needed.\n"
         " -cluster <dim>=<size>,...\n"
         "    Set number of vectors to evaluate in each dimension.\n"
         " -eq <name>=<substr>,...\n"
@@ -118,11 +123,11 @@ void usage(const string& cmd) {
         " -p <format-type> <filename>\n"
         "    Format output per <format-type> and write to <filename>.\n"
         "    Supported format-types:\n"
-        "      cpp       YASK stencil classes for generic C++.\n"
-        "      avx       YASK stencil classes for CORE AVX ISA.\n"
-        "      avx2      YASK stencil classes for CORE AVX2 ISA.\n"
-        "      avx512    YASK stencil classes for CORE AVX-512 & MIC AVX-512 ISAs.\n"
-        "      knc       YASK stencil classes for KNC ISA.\n"
+        "      cpp       YASK stencil classes for generic C++ (no explicit HW SIMD vectors).\n"
+        "      avx       YASK stencil classes for CORE AVX ISA (256-bit HW SIMD vectors).\n"
+        "      avx2      YASK stencil classes for CORE AVX2 ISA (256-bit HW SIMD vectors).\n"
+        "      avx512    YASK stencil classes for CORE AVX-512 & MIC AVX-512 ISAs (512-bit HW SIMD vectors).\n"
+        "      knc       YASK stencil classes for KNC ISA (512-bit HW SIMD vectors).\n"
         "      pseudo    Human-readable scalar pseudo-code for one point.\n"
         "      dot       DOT-language description.\n"
         "      dot-lite  DOT-language description of grid accesses only.\n"
@@ -130,9 +135,9 @@ void usage(const string& cmd) {
         //" -ps <vec-len>         Print stats for all folding options for given vector length.\n"
         "\n"
         "Examples:\n"
-        " " << cmd << " -st 3axis -r 2 -fold x=4,y=4 -ph -  # '-' for stdout\n"
-        " " << cmd << " -st awp -fold x=4,y=2 -p256 stencil_code.hpp\n"
-        " " << cmd << " -st iso3dfd -r 8 -fold x=4,y=4 -cluster y=2 -p512 stencil_code.hpp\n";
+        " " << cmd << " -stencil 3axis -radius 2 -fold x=4,y=4 -p pseudo -  # '-' for stdout\n"
+        " " << cmd << " -stencil awp -elem-bytes 8 -fold x=4,y=2 -p avx2 stencil_code.hpp\n"
+        " " << cmd << " -stencil iso3dfd -radius 8 -cluster y=2 -p avx512 stencil_code.hpp\n";
     exit(1);
 }
 
@@ -190,7 +195,7 @@ void parseOpts(int argc, const char* argv[])
                 string argop = argv[++argi];
 
                 // options w/a string value.
-                if (opt == "-st")
+                if (opt == "-stencil")
                     solutionName = argop;
                 else if (opt == "-step")
                     settings._stepDim = argop;
@@ -234,11 +239,13 @@ void parseOpts(int argc, const char* argv[])
 
                     if (opt == "-max-es")
                         settings._maxExprSize = val;
-                    if (opt == "-min-es")
+                    else if (opt == "-min-es")
                         settings._minExprSize = val;
 
-                    else if (opt == "-r")
+                    else if (opt == "-radius")
                         radius = val;
+                    else if (opt == "-elem-bytes")
+                        settings._elem_bytes = val;
 
                     else if (opt == "-ps")
                         vlenForStats = val;
@@ -309,35 +316,6 @@ int main(int argc, const char* argv[]) {
 
         stencilSoln->write(fname, type, true);
     }
-
-    // TODO: re-enable this.
-#if 0
-    // Print stats for various folding options.
-    if (vlenForStats) {
-        string separator(",");
-        VecInfoVisitor::printStatsHeader(cout, separator);
-
-        // Loop through all grids.
-        for (auto gp : grids) {
-
-            // Loop through possible folds of given length.
-            for (int xlen = vlenForStats; xlen > 0; xlen--) {
-                for (int ylen = vlenForStats / xlen; ylen > 0; ylen--) {
-                    int zlen = vlenForStats / xlen / ylen;
-                    if (vlenForStats == xlen * ylen * zlen) {
-                        
-                        // Create vectors needed to implement RHS.
-                        VecInfoVisitor vv(xlen, ylen, zlen);
-                        gp->visitExprs(&vv);
-                        
-                        // Print stats.
-                        vv.printStats(cout, gp->getName(), separator);
-                    }
-                }
-            }
-        }
-    }
-#endif
 
     cout << "YASK Stencil Compiler done.\n";
     return 0;

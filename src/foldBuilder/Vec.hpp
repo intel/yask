@@ -156,20 +156,17 @@ namespace yask {
             }
 
             // calc footprint in each dim.
-            map<const string*, int> footprints;
-            for (auto* dim : _dims._fold.getDims()) {
-
-                // Create direction vector in this dim.
-                IntTuple dir;
-                dir.addDimBack(dim, 1);
+            map<const string, int> footprints;
+            for (auto& dim : _dims._fold.getDims()) {
+                auto& dname = dim.getName();
 
                 // Make set of aligned vecs projected in this dir.
                 set<IntTuple> footprint;
                 for (auto vb : _alignedVecs) {
-                    IntTuple proj = vb.removeDimInDir(dir);
+                    IntTuple proj = vb.removeDim(dim);
                     footprint.insert(proj);
                 }
-                footprints[dim] = footprint.size();
+                footprints[dname] = footprint.size();
             }
             
             os << destGrid <<
@@ -178,19 +175,19 @@ namespace yask {
                 separator << getNumPoints() <<
                 separator << getNumAlignedVecs() <<
                 separator << numBlends;
-            for (auto dim : _dims._fold.getDims())
-                os << separator << footprints[dim];
+            for (auto& dim : _dims._fold.getDims())
+                os << separator << footprints[dim.getName()];
             os << endl;
         }
 
         // Get the set of aligned vectors on the leading edge
         // in the given direction and magnitude in dir.
         // Pre-requisite: visitor has been accepted.
-        virtual void getLeadingEdge(GridPointSet& edge, const IntTuple& dir) const {
+        virtual void getLeadingEdge(GridPointSet& edge, const IntScalar& dir) const {
             edge.clear();
 
             // Repeat based on magnitude (cluster step in given dir).
-            for (int i = 0; i < dir.getDirVal(); i++) {
+            for (int i = 0; i < dir.getVal(); i++) {
         
                 // loop over aligned vectors.
                 for (auto avi : _alignedVecs) {
@@ -200,7 +197,7 @@ namespace yask {
                         continue;
 
                     // ignore if this vector doesn't have a dimension in dir.
-                    if (!avi.lookup(dir.getDirName()))
+                    if (!avi.lookup(dir.getName()))
                         continue;
 
                     // compare to all points.
@@ -259,17 +256,18 @@ namespace yask {
                     // Find aligned vector indices and offsets
                     // for this one point.
                     IntTuple vecOffsets, vecLocation;
-                    for (auto dim : offsets.getDims()) {
+                    for (auto& dim : offsets.getDims()) {
+                        auto& dname = dim.getName();
 
                         // length of this dimension in fold, if it exists.
-                        const int* p = _dims._fold.lookup(dim);
+                        const int* p = _dims._fold.lookup(dname);
                         int len = p ? *p : 1;
 
                         // convert this offset to vector index and vector offset.
                         int vecIndex, vecOffset;
-                        fixIndexOffset(0, offsets.getVal(dim), vecIndex, vecOffset, len);
-                        vecOffsets.addDimBack(dim, vecOffset);
-                        vecLocation.addDimBack(dim, vecIndex * len);
+                        fixIndexOffset(0, dim.getVal(), vecIndex, vecOffset, len);
+                        vecOffsets.addDimBack(dname, vecOffset);
+                        vecLocation.addDimBack(dname, vecIndex * len);
                     }
 #ifdef DEBUG_VV
                     cout << " element @ " << offsets.makeDimValStr() << " => " <<
