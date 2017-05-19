@@ -1151,21 +1151,22 @@ namespace yask {
     // of all these macros.
     void YASKCppPrinter::printMacros(ostream& os) {
 
-        os << "// Stencil:" << endl;
-        os << "#define YASK_STENCIL_NAME \"" << _stencil.getName() << "\"" << endl;
-        os << "#define YASK_STENCIL_IS_" << allCaps(_stencil.getName()) << " (1)" << endl;
-        os << "#define YASK_STENCIL_CONTEXT " << _context << endl;
+        os << "// Stencil solution:\n"
+            "#define YASK_STENCIL_NAME \"" << _stencil.getName() << "\"\n"
+            "#define YASK_STENCIL_IS_" << allCaps(_stencil.getName()) << " (1)\n"
+            "#define YASK_STENCIL_CONTEXT " << _context << endl;
 
-        os << endl;
-        os << "// Dimensions:" << endl;
+        os << "\n// Dimensions:\n";
         for (auto dim : _dims._allDims.getDims()) {
             auto& dname = dim.getName();
             os << "#define USING_DIM_" << allCaps(dname) << " (1)" << endl;
         }
+
+        os << "\n// FP precision:\n"
+            "#define REAL_BYTES " << _settings._elem_bytes << endl;
         
         // Vec/cluster lengths.
-        os << endl;
-        os << "// One vector fold: " << _dims._fold.makeDimValStr(" * ") << endl;
+        os << "\n// One vector fold: " << _dims._fold.makeDimValStr(" * ") << endl;
         for (auto& dim : _dims._fold.getDims()) {
             auto& dname = dim.getName();
             string ucDim = allCaps(dname);

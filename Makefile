@@ -291,7 +291,7 @@ YSC_EXEC	:=	bin/yask-stencil-compiler.exe
 YSC_CXX    	?=	g++  # faster than icpc for building the compiler.
 YSC_CXXFLAGS 	+=	-g -O0 -std=c++11 -Wall  # low opt to reduce compile time.
 YSC_CXXFLAGS	+=	-Iinclude -Isrc -Isrc/foldBuilder -Isrc/foldBuilder/stencils
-YSC_FLAGS   	+=	-stencil $(stencil) -cluster $(cluster) -fold $(fold)
+YSC_FLAGS   	+=	-stencil $(stencil) -elem-bytes $(real_bytes) -cluster $(cluster) -fold $(fold)
 YSC_STENCIL_LIST	:=	src/foldBuilder/stencils.hpp
 ST_MACRO_FILE	:=	src/stencil_macros.hpp
 ST_CODE_FILE	:=	src/stencil_code.hpp
@@ -324,7 +324,6 @@ MACROS		+=	DEF_ARGS='"$(DEF_ARGS) $(EXTRA_DEF_ARGS)"'
 
 # Set more MACROS based on individual makefile vars.
 # MACROS and EXTRA_MACROS will be written to a header file.
-MACROS		+=	REAL_BYTES=$(real_bytes)
 MACROS		+=	LAYOUT_XYZ=$(layout_xyz)
 MACROS		+=	LAYOUT_TXYZ=$(layout_txyz)
 MACROS		+=	LAYOUT_WXYZ=$(layout_wxyz)
