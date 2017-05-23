@@ -1076,7 +1076,7 @@ namespace yask {
                     " {\n"
                     "  // Include automatically-generated loop code that calls calc_cluster()"
                     "  and optionally, the prefetch function(s).\n"
-                    "  #include \"stencil_sub_block_loops.hpp\"\n"
+                    "  #include \"yask_sub_block_loops.hpp\"\n"
                     " }\n"
                     "} // calc_sub_block_of_clusters\n";
             }

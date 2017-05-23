@@ -36,13 +36,13 @@ IN THE SOFTWARE.
 namespace yask {
 
     // Stencil-solution APIs.
-    grid_ptr StencilSolution::new_grid(std::string name,
-                                       std::string dim1,
-                                       std::string dim2,
-                                       std::string dim3,
-                                       std::string dim4,
-                                       std::string dim5,
-                                       std::string dim6) {
+    yc_grid_ptr StencilSolution::new_grid(const std::string& name,
+                                          const std::string& dim1,
+                                          const std::string& dim2,
+                                          const std::string& dim3,
+                                          const std::string& dim4,
+                                          const std::string& dim5,
+                                          const std::string& dim6) {
 
         // Make new grid and add to solution.
         auto* gp = new Grid();  // FIXME: mem leak--delete this in dtor or make smart ptr.
@@ -212,62 +212,99 @@ namespace yask {
         }
     }
 
+    // grid APIs.
+    yc_grid_point_node_ptr
+    Grid::new_relative_grid_point(int dim1_offset,
+                                  int dim2_offset,
+                                  int dim3_offset,
+                                  int dim4_offset,
+                                  int dim5_offset,
+                                  int dim6_offset) {
+        switch (getNumDims()) {
+        case 0:
+            return makePoint(0);
+        case 1:
+            return makePoint(1, dim1_offset);
+        case 2:
+            return makePoint(2, dim1_offset, dim2_offset);
+        case 3:
+            return makePoint(3, dim1_offset, dim2_offset, dim3_offset);
+        case 4:
+            return makePoint(4, dim1_offset, dim2_offset, dim3_offset,
+                             dim4_offset);
+        case 5:
+            return makePoint(5, dim1_offset, dim2_offset, dim3_offset,
+                             dim4_offset, dim5_offset);
+        case 6:
+            return makePoint(6, dim1_offset, dim2_offset, dim3_offset,
+                             dim4_offset, dim5_offset, dim6_offset);
+        default:
+            cerr << "Error: " << getNumDims() << "D grid not supported.\n";
+            exit(1);
+        }
+    }
+
     // grid_point APIs.
-    grid* GridPoint::get_grid() {
+    yc_grid* GridPoint::get_grid() {
         return _grid;
     }
     
     // yask_compiler_factory API methods.
-    stencil_solution_ptr yask_compiler_factory::new_stencil_solution(const std::string& name) {
+    yc_solution_ptr
+    yc_factory::new_solution(const std::string& name) {
         return make_shared<EmptyStencil>(name);
     }
     
     //node_factory API methods.
-    equation_node_ptr
-    node_factory::new_equation_node(grid_point_node_ptr lhs,
-                                    number_node_ptr rhs) {
+    yc_equation_node_ptr
+    yc_node_factory::new_equation_node(yc_grid_point_node_ptr lhs,
+                                       yc_number_node_ptr rhs) {
         auto lp = dynamic_pointer_cast<GridPoint>(lhs);
         assert(lp);
         auto rp = dynamic_pointer_cast<NumExpr>(rhs);
         assert(rp);
         return operator EQUALS_OPER(lp, rp);
     }
-    const_number_node_ptr
-    node_factory::new_const_number_node(double val) {
+    yc_const_number_node_ptr
+    yc_node_factory::new_const_number_node(double val) {
         return make_shared<ConstExpr>(val);
     }
-    negate_node_ptr
-    node_factory::new_negate_node(number_node_ptr rhs) {
+    yc_negate_node_ptr
+    yc_node_factory::new_negate_node(yc_number_node_ptr rhs) {
         auto p = dynamic_pointer_cast<NumExpr>(rhs);
         assert(p);
         return make_shared<NegExpr>(p);
     }
-    add_node_ptr node_factory::new_add_node(number_node_ptr lhs,
-                                            number_node_ptr rhs) {
+    yc_add_node_ptr
+    yc_node_factory::new_add_node(yc_number_node_ptr lhs,
+                                  yc_number_node_ptr rhs) {
         auto lp = dynamic_pointer_cast<NumExpr>(lhs);
         assert(lp);
         auto rp = dynamic_pointer_cast<NumExpr>(rhs);
         assert(rp);
         return make_shared<AddExpr>(lp, rp);
     }
-    multiply_node_ptr node_factory::new_multiply_node(number_node_ptr lhs,
-                                                      number_node_ptr rhs) {
+    yc_multiply_node_ptr
+    yc_node_factory::new_multiply_node(yc_number_node_ptr lhs,
+                                       yc_number_node_ptr rhs) {
         auto lp = dynamic_pointer_cast<NumExpr>(lhs);
         assert(lp);
         auto rp = dynamic_pointer_cast<NumExpr>(rhs);
         assert(rp);
         return make_shared<MultExpr>(lp, rp);
     }
-    subtract_node_ptr node_factory::new_subtract_node(number_node_ptr lhs,
-                                                      number_node_ptr rhs) {
+    yc_subtract_node_ptr
+    yc_node_factory::new_subtract_node(yc_number_node_ptr lhs,
+                                       yc_number_node_ptr rhs) {
         auto lp = dynamic_pointer_cast<NumExpr>(lhs);
         assert(lp);
         auto rp = dynamic_pointer_cast<NumExpr>(rhs);
         assert(rp);
         return make_shared<SubExpr>(lp, rp);
     }
-    divide_node_ptr node_factory::new_divide_node(number_node_ptr lhs,
-                                                  number_node_ptr rhs) {
+    yc_divide_node_ptr
+    yc_node_factory::new_divide_node(yc_number_node_ptr lhs,
+                                     yc_number_node_ptr rhs) {
         auto lp = dynamic_pointer_cast<NumExpr>(lhs);
         assert(lp);
         auto rp = dynamic_pointer_cast<NumExpr>(rhs);

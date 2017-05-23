@@ -37,118 +37,87 @@ IN THE SOFTWARE.
 
 namespace yask {
 
-    /** @mainpage
-     * @section oview Overview
-     * This document provides usage information for the YASK stencil compiler
-     * API (application-programmer interface).\n
-     * The API is available for C++ and for Python via SWIG.
-     * @section usage Typical Usage Model
-     * - Create a stencil_solution via yask_compiler_factory::new_stencil_solution().
-     * - Create one or more grids via stencil_solution::new_grid() as needed by
-     *   the stencil kernel being implemented.
-     *   Calls to new_grid() specify the name and dimensions of each grid.
-     *   Grids may be read-only (constants) or read-write.
-     *   Each grid will be "owned" by the stencil_solution from which it was created.
-     * - Create an equation for each read-write grid.
-     *   - Example equation: `u(t+1, x, y, z) EQUALS (u(t, x, y, z) + u(t, x+1, y, z)) / 2`.
-     *   - Create expressions "bottom-up" by creating the leaf nodes first.
-     *   - Leaf nodes may be floating-point (FP) constants or references to grid points.
-     *   - Constants are created via node_factory::new_const_number_node().
-     *   - References to grid points are created via grid::new_relative_grid_point(), which
-     *     specifies the grid indices relative to any point within the grid domain.
-     *   - Create operator nodes via calls to node_factory::new_add_node(), etc., to build up
-     *     larger expressions.
-     *   - To complete each equation, use node_factory::new_equation_node() to specify an expression
-     *     on the right-hand side (RHS) and the grid point that is defined to be equal
-     *     to it on the left-hand side (LHS).
-     * - Specify the solution step dimension via stencil_solution::set_step_dim().
-     *   (This is usually "t" for time.)
-     * - Specify the number of bytes in a floating-point element via stencil_solution::set_elem_bytes().
-     *   This should be 4 or 8.
-     * - Optionally specify the vector-folding and/or vector-clustering via 
-     *   stencil_solution::set_fold_len() and/or stencil_solution::set_cluster_mult().
-     * - Format the equations for additional processing via stencil_solution::format() or stencil_solution::write().
-     */
-    
     // Forward declarations of classes and smart pointers.
-    class stencil_solution;
-    typedef std::shared_ptr<stencil_solution> stencil_solution_ptr;
-    class grid;
-    typedef grid* grid_ptr;
-    class expr_node;
-    typedef std::shared_ptr<expr_node> expr_node_ptr;
-    class equation_node;
-    typedef std::shared_ptr<equation_node> equation_node_ptr;
-    class number_node;
-    typedef std::shared_ptr<number_node> number_node_ptr;
-    class grid_point_node;
-    typedef std::shared_ptr<grid_point_node> grid_point_node_ptr;
-    class const_number_node;
-    typedef std::shared_ptr<const_number_node> const_number_node_ptr;
-    class negate_node;
-    typedef std::shared_ptr<negate_node> negate_node_ptr;
-    class commutative_number_node;
-    typedef std::shared_ptr<commutative_number_node> commutative_number_node_ptr;
-    class add_node;
-    typedef std::shared_ptr<add_node> add_node_ptr;
-    class multiply_node;
-    typedef std::shared_ptr<multiply_node> multiply_node_ptr;
-    class subtract_node;
-    typedef std::shared_ptr<subtract_node> subtract_node_ptr;
-    class divide_node;
-    typedef std::shared_ptr<divide_node> divide_node_ptr;
-    class bool_node;
-    typedef std::shared_ptr<bool_node> bool_node_ptr;
+    class yc_solution;
+    typedef std::shared_ptr<yc_solution> yc_solution_ptr;
+    class yc_grid;
+    typedef yc_grid* yc_grid_ptr;
+    class yc_expr_node;
+    typedef std::shared_ptr<yc_expr_node> yc_expr_node_ptr;
+    class yc_equation_node;
+    typedef std::shared_ptr<yc_equation_node> yc_equation_node_ptr;
+    class yc_number_node;
+    typedef std::shared_ptr<yc_number_node> yc_number_node_ptr;
+    class yc_grid_point_node;
+    typedef std::shared_ptr<yc_grid_point_node> yc_grid_point_node_ptr;
+    class yc_const_number_node;
+    typedef std::shared_ptr<yc_const_number_node> yc_const_number_node_ptr;
+    class yc_negate_node;
+    typedef std::shared_ptr<yc_negate_node> yc_negate_node_ptr;
+    class yc_commutative_number_node;
+    typedef std::shared_ptr<yc_commutative_number_node> yc_commutative_number_node_ptr;
+    class yc_add_node;
+    typedef std::shared_ptr<yc_add_node> yc_add_node_ptr;
+    class yc_multiply_node;
+    typedef std::shared_ptr<yc_multiply_node> yc_multiply_node_ptr;
+    class yc_subtract_node;
+    typedef std::shared_ptr<yc_subtract_node> yc_subtract_node_ptr;
+    class yc_divide_node;
+    typedef std::shared_ptr<yc_divide_node> yc_divide_node_ptr;
+    class yc_bool_node;
+    typedef std::shared_ptr<yc_bool_node> yc_bool_node_ptr;
 
     /// Factory to create objects needed to define a stencil solution.
-    class yask_compiler_factory {
+    class yc_factory {
     public:
-        virtual ~yask_compiler_factory() {}
+        virtual ~yc_factory() {}
 
         /// Create a stencil solution.
         /** A stencil solution contains all the grids and equations.
          * @returns Pointer to new solution object. */
-        virtual stencil_solution_ptr
-        new_stencil_solution(const std::string& name /**< [in] Name of the solution; 
-                                                        must be a valid C++ identifier. */ );
+        virtual yc_solution_ptr
+        new_solution(const std::string& name /**< [in] Name of the solution; 
+                                                must be a valid C++ identifier. */ );
     };
             
     /// Stencil solution.
     /** Objects of this type contain all the grids and equations
      * that comprise a solution. */
-    class stencil_solution {
+    class yc_solution {
     public:
-        virtual ~stencil_solution() {}
+        virtual ~yc_solution() {}
 
         /// Get the name of the solution.
-        /** @returns String containing the solution name provided via new_stencil_solution(). */
+        /** @returns String containing the solution name provided via new_solution(). */
         virtual const std::string&
         get_name() const =0;
 
         /// Set the name of the solution.
-        /** Allows changing the name from what was provided via new_stencil_solution(). */
+        /** Allows changing the name from what was provided via new_solution(). */
         virtual void
         set_name(std::string name /**< [in] Name; must be a valid C++ identifier. */ ) =0;
 
         /// Create an n-dimensional grid in the solution.
-        /** "Grid" is a generic term for any n-dimensional tensor.  A 1-dim
-         * grid is an array, a 2-dim grid is a matrix, etc.  Define the name
-         * of each dimension that is needed via this interface, starting
-         * with 'dim1'. Example: new_grid("heat", "t", "x", "y") will create
-         * a 3D grid.  @returns Pointer to the new grid. */
-        virtual grid_ptr
-        new_grid(std::string name /**< [in] Unique name of the grid; must be
-                                     a valid C++ identifier and unique
-                                     across grids. */,
-                 std::string dim1 = "" /**< [in] Name of 1st dimension. All
-                                          dimension names must be valid C++
-                                          identifiers and unique within this
-                                          grid. */,
-                 std::string dim2 = "" /**< [in] Name of 2nd dimension. */,
-                 std::string dim3 = "" /**< [in] Name of 3rd dimension. */,
-                 std::string dim4 = "" /**< [in] Name of 4th dimension. */,
-                 std::string dim5 = "" /**< [in] Name of 5th dimension. */,
-                 std::string dim6 = "" /**< [in] Name of 6th dimension. */ ) =0;
+        /** "Grid" is a generic term for any n-dimensional array.  A 0-dim
+         * grid is a scalar, a 1-dim grid is a vector, a 2-dim grid is a
+         * matrix, etc.  Define the name of each dimension that is needed
+         * via this interface, starting with 'dim1'. Example:
+         * new_grid("heat", "t", "x", "y") will create a 3D grid with one
+         * temporal dimension and two spatial dimensions.
+         * @returns Pointer to the new grid. */
+        virtual yc_grid_ptr
+        new_grid(const std::string& name /**< [in] Unique name of the grid; must be
+                                            a valid C++ identifier and unique
+                                            across grids. */,
+                 const std::string& dim1 = "" /**< [in] Name of 1st dimension. All
+                                                 dimension names must be valid C++
+                                                 identifiers and unique within this
+                                                 grid. */,
+                 const std::string& dim2 = "" /**< [in] Name of 2nd dimension. */,
+                 const std::string& dim3 = "" /**< [in] Name of 3rd dimension. */,
+                 const std::string& dim4 = "" /**< [in] Name of 4th dimension. */,
+                 const std::string& dim5 = "" /**< [in] Name of 5th dimension. */,
+                 const std::string& dim6 = "" /**< [in] Name of 6th dimension. */ ) =0;
 
         /// Get the number of grids in the solution.
         /** @returns Number of grids that have been created via new_grid(). */
@@ -157,7 +126,7 @@ namespace yask {
         
         /// Get the specified grid.
         /** @returns Pointer to the nth grid. */
-        virtual grid_ptr
+        virtual yc_grid_ptr
         get_grid(int n /**< [in] Index of grid between zero (0)
                               and get_num_grids()-1. */ ) =0;
         
@@ -169,7 +138,7 @@ namespace yask {
 
         /// Get the specified equation.
         /** @returns Pointer to equation_node of nth equation. */
-        virtual equation_node_ptr
+        virtual yc_equation_node_ptr
         get_equation(int n /**< [in] Index of equation between zero (0)
                               and get_num_equations()-1. */ ) =0;
 
@@ -185,15 +154,19 @@ namespace yask {
 
         /// Set the vectorization length in given dimension.
         /** For YASK-code generation, the product of the fold lengths should
-         * be equal to the number of elements in a HW SIMD register. For
-         * example, for SP FP elements in AVX-512 vectors, the product of
-         * the fold lengths should be 16, e.g., x=4 and y=4. If the product
-         * of the fold lengths is not the number of elements in a HW SIMD
-         * register, the fold lengths will be adjusted based on an internal
-         * heuristic.  The number of elements in a HW SIMD register is
+         * be equal to the number of elements in a HW SIMD register.
+         * The number of elements in a HW SIMD register is
          * determined by the number of bytes in an element and the print
-         * format.  A fold length >1 cannot be applied to the step
-         * dimension. Default is one (1) in each dimension. */
+         * format.  
+         * Example: For SP FP elements in AVX-512 vectors, the product of
+         * the fold lengths should be 16, e.g., x=4 and y=4.
+         * @note If the product
+         * of the fold lengths is *not* the number of elements in a HW SIMD
+         * register, the fold lengths will be adjusted based on an internal
+         * heuristic. In this heuristic, any fold length that is >1 is
+         * used as a hint to indicate where to apply folding.
+         * @note A fold length >1 cannot be applied to the step dimension.
+         * @note Default length is one (1) in each dimension. */
         virtual void
         set_fold_len(const std::string& dim /**< [in] Dimension of fold, e.g., "x". */,
                      int len /**< [in] Length of vectorization in 'dim' */ ) =0;
@@ -216,8 +189,10 @@ namespace yask {
         /// Set the cluster multiplier (unroll factor) in given dimension.
         /** For YASK-code generation, this will have the effect of creating
          * N vectors of output for each equation, where N is the product of
-         * the cluster multipliers. A fold length >1 cannot be applied to
-         * the step dimension. Default is one (1) in each dimension. */
+         * the cluster multipliers. 
+         * @note A multiplier >1 cannot be applied to
+         * the step dimension. 
+         * @note Default is one (1) in each dimension. */
         virtual void
         set_cluster_mult(const std::string& dim /**< [in] Direction of unroll, e.g., "y". */,
                          int mult /**< [in] Number of vectors in 'dim' */ ) =0;
@@ -258,12 +233,12 @@ namespace yask {
     };
 
     /// A grid.
-    /** "Grid" is a generic term for any n-dimensional tensor.  A 0-dim grid
+    /** "Grid" is a generic term for any n-dimensional array.  A 0-dim grid
      * is a scalar, a 1-dim grid is an array, etc.  Create new grids via
      * new_grid(). */
-    class grid {
+    class yc_grid {
     public:
-        virtual ~grid() {}
+        virtual ~yc_grid() {}
 
         /// Get the name of the grid.
         /** @returns String containing name provided via new_grid(). */
@@ -279,124 +254,90 @@ namespace yask {
         get_dim_name(int n /**< [in] Index of dimension between zero (0)
                               and get_num_dims()-1. */ ) const =0;
 
-        /// Create a reference to a point in a 1D grid (array).
-        /** See more detail on 3-argument version. */
-        virtual grid_point_node_ptr
-        new_relative_grid_point(int dim1_offset /**< [in] offset from dim1 index. */ ) =0;
-
-        /// Create a reference to a point in a 2D grid.
-        /** See more detail on 3-argument version. */
-        virtual grid_point_node_ptr
-        new_relative_grid_point(int dim1_offset /**< [in] offset from dim1 index. */,
-                                int dim2_offset /**< [in] offset from dim2 index. */ ) =0;
-
-        /// Create a reference to a point in a 3D grid.
+        /// Create a reference to a point in a grid.
         /** The indices are specified relative to the stencil-evaluation
          * index.  Each offset refers to the dimensions defined when the
-         * grid was added to a stencil_solution. Example: if g =
-         * new_grid("heat", "t", "x", "y"), then
+         * grid was created via stencil_solution::new_grid(). 
+         * Example: if g = new_grid("heat", "t", "x", "y"), then
          * g->new_relative_grid_point(1, -1, 0) refers to heat(t+1, x-1, y)
          * for some point t, x, y during stencil evaluation.
+         * @note Offsets beyond the dimensions in the grid will be ignored.
          * @returns Pointer to AST node used to read or write from point in grid. */
-        virtual grid_point_node_ptr
-        new_relative_grid_point(int dim1_offset /**< [in] offset from dim1 index. */,
-                                int dim2_offset /**< [in] offset from dim2 index. */,
-                                int dim3_offset /**< [in] offset from dim3 index. */ ) =0;
-
-        /// Create a reference to a point in a 4D grid.
-        /** See more detail on 3-argument version. */
-        virtual grid_point_node_ptr
-        new_relative_grid_point(int dim1_offset /**< [in] offset from dim1 index. */,
-                                int dim2_offset /**< [in] offset from dim2 index. */,
-                                int dim3_offset /**< [in] offset from dim3 index. */,
-                                int dim4_offset /**< [in] offset from dim4 index. */ ) =0;
-
-        /// Create a reference to a point in a 5D grid.
-        /** See more detail on 3-argument version. */
-        virtual grid_point_node_ptr
-        new_relative_grid_point(int dim1_offset /**< [in] offset from dim1 index. */,
-                                int dim2_offset /**< [in] offset from dim2 index. */,
-                                int dim3_offset /**< [in] offset from dim3 index. */,
-                                int dim4_offset /**< [in] offset from dim4 index. */,
-                                int dim5_offset /**< [in] offset from dim5 index. */ ) =0;
-
-        /// Create a reference to a point in a 6D grid.
-        /** See more detail on 3-argument version. */
-        virtual grid_point_node_ptr
-        new_relative_grid_point(int dim1_offset /**< [in] offset from dim1 index. */,
-                                int dim2_offset /**< [in] offset from dim2 index. */,
-                                int dim3_offset /**< [in] offset from dim3 index. */,
-                                int dim4_offset /**< [in] offset from dim4 index. */,
-                                int dim5_offset /**< [in] offset from dim5 index. */,
-                                int dim6_offset /**< [in] offset from dim6 index. */ ) =0;
+        virtual yc_grid_point_node_ptr
+        new_relative_grid_point(int dim1_offset=0 /**< [in] offset from dim1 index. */,
+                                int dim2_offset=0 /**< [in] offset from dim2 index. */,
+                                int dim3_offset=0 /**< [in] offset from dim3 index. */,
+                                int dim4_offset=0 /**< [in] offset from dim4 index. */,
+                                int dim5_offset=0 /**< [in] offset from dim5 index. */,
+                                int dim6_offset=0 /**< [in] offset from dim6 index. */ ) =0;
     };
 
     /// Factory to create AST nodes.
-    /** Note: Grid-point reference nodes are created from a grid object
+    /** @note Grid-point reference nodes are created from a `yc_grid` object
      * instead of from this factory. */
-    class node_factory {
+    class yc_node_factory {
     public:
-        virtual ~node_factory() {}
+        virtual ~yc_node_factory() {}
 
         /// Create an equation node.
         /** Indicates grid point on LHS is equivalent to expression on
          * RHS. This is NOT a test for equality.  When an equation is
          * created, it is automatically added to the list of equations for
-         * the stencil_solution that contains the grid that is on the
+         * the yc_solution that contains the grid that is on the
          * LHS.
          * @returns Pointer to new node. */
-        virtual equation_node_ptr
-        new_equation_node(grid_point_node_ptr lhs /**< [in] Grid-point before EQUALS operator. */,
-                        number_node_ptr rhs /**< [in] Expression after EQUALS operator. */ );
+        virtual yc_equation_node_ptr
+        new_equation_node(yc_grid_point_node_ptr lhs /**< [in] Grid-point before EQUALS operator. */,
+                        yc_number_node_ptr rhs /**< [in] Expression after EQUALS operator. */ );
 
         /// Create a constant numerical value node.
         /** This is unary negation.
          *  Use new_subtraction_node() for binary '-'.
          * @returns Pointer to new node. */
-        virtual const_number_node_ptr
+        virtual yc_const_number_node_ptr
         new_const_number_node(double val /**< [in] Value to store in node. */ );
 
         /// Create a numerical negation operator node.
         /** @returns Pointer to new node. */
-        virtual negate_node_ptr
-        new_negate_node(number_node_ptr rhs /**< [in] Expression after '-' sign. */ );
+        virtual yc_negate_node_ptr
+        new_negate_node(yc_number_node_ptr rhs /**< [in] Expression after '-' sign. */ );
 
         /// Create an addition node.
         /** Nodes must be created with at least two operands, and more can
          *  be added by calling add_operand() on the returned node.
          * @returns Pointer to new node. */
-        virtual add_node_ptr
-        new_add_node(number_node_ptr lhs /**< [in] Expression before '+' sign. */,
-                     number_node_ptr rhs /**< [in] Expression after '+' sign. */ );
+        virtual yc_add_node_ptr
+        new_add_node(yc_number_node_ptr lhs /**< [in] Expression before '+' sign. */,
+                     yc_number_node_ptr rhs /**< [in] Expression after '+' sign. */ );
 
         /// Create a multiplication node.
         /** Nodes must be created with at least two operands, and more can
          *  be added by calling add_operand() on the returned node.
          * @returns Pointer to new node. */
-        virtual multiply_node_ptr
-        new_multiply_node(number_node_ptr lhs /**< [in] Expression before '*' sign. */,
-                          number_node_ptr rhs /**< [in] Expression after '*' sign. */ );
+        virtual yc_multiply_node_ptr
+        new_multiply_node(yc_number_node_ptr lhs /**< [in] Expression before '*' sign. */,
+                          yc_number_node_ptr rhs /**< [in] Expression after '*' sign. */ );
 
         /// Create a subtraction node.
         /** This is binary subtraction.
          *  Use new_negation_node() for unary '-'.
          * @returns Pointer to new node. */
-        virtual subtract_node_ptr
-        new_subtract_node(number_node_ptr lhs /**< [in] Expression before '-' sign. */,
-                          number_node_ptr rhs /**< [in] Expression after '-' sign. */ );
+        virtual yc_subtract_node_ptr
+        new_subtract_node(yc_number_node_ptr lhs /**< [in] Expression before '-' sign. */,
+                          yc_number_node_ptr rhs /**< [in] Expression after '-' sign. */ );
 
         /// Create a division node.
         /** @returns Pointer to new node. */
-        virtual divide_node_ptr
-        new_divide_node(number_node_ptr lhs /**< [in] Expression before '/' sign. */,
-                        number_node_ptr rhs /**< [in] Expression after '/' sign. */ );
+        virtual yc_divide_node_ptr
+        new_divide_node(yc_number_node_ptr lhs /**< [in] Expression before '/' sign. */,
+                        yc_number_node_ptr rhs /**< [in] Expression after '/' sign. */ );
     };
 
     /// Base class for all AST nodes.
     /** An object of this abstract type cannot be created. */
-    class expr_node {
+    class yc_expr_node {
     public:
-        virtual ~expr_node() {}
+        virtual ~yc_expr_node() {}
 
         /// Create a simple human-readable string.
         /** Formats the expression starting at this node.
@@ -413,40 +354,40 @@ namespace yask {
     /// Equation node.
     /** Indicates grid point on LHS is equivalent to expression
      * on RHS. This is NOT a test for equality. */
-    class equation_node : public virtual expr_node {
+    class yc_equation_node : public virtual yc_expr_node {
     public:
 
         /// Get the left-hand-side operand.
         /** @returns Grid-point node appearing before the EQUALS operator. */
-        virtual grid_point_node_ptr get_lhs() =0;
+        virtual yc_grid_point_node_ptr get_lhs() =0;
     
         /// Get the right-hand-side operand.
         /** @returns Expression node appearing after the EQUALS operator. */
-        virtual number_node_ptr get_rhs() =0;
+        virtual yc_number_node_ptr get_rhs() =0;
     };
 
     /// Base class for all real or integer AST nodes.
     /** An object of this abstract type cannot be created. */
-    class number_node : public virtual expr_node { };
+    class yc_number_node : public virtual yc_expr_node { };
 
     /// Base class for all boolean AST nodes.
     /** An object of this abstract type cannot be created. */
-    class bool_node : public virtual expr_node { };
+    class yc_bool_node : public virtual yc_expr_node { };
 
     /// A reference to a point in a grid.
-    class grid_point_node : public virtual number_node {
+    class yc_grid_point_node : public virtual yc_number_node {
     public:
 
         /// Get the grid this point is in.
         /** @returns Pointer to grid. */
-        virtual grid_ptr get_grid() =0;
+        virtual yc_grid_ptr get_grid() =0;
     };
     
     /// A constant numerical value.
     /** All values are stored as doubles.
      * This is a leaf node in an AST.
      * Use a yask_compiler_factory object to create an object of this type. */
-    class const_number_node : public virtual number_node {
+    class yc_const_number_node : public virtual yc_number_node {
     public:
 
         /// Set the value.
@@ -462,20 +403,20 @@ namespace yask {
     /// A numerical negation operator.
     /** Example: used to implement -(a*b).
      * Use a yask_compiler_factory object to create an object of this type. */
-    class negate_node : public virtual number_node {
+    class yc_negate_node : public virtual yc_number_node {
     public:
 
         /// Get the [only] operand.
         /**  This node implements unary negation only, not subtraction, so there is
          * never a left-hand-side.
          * @returns Expression node on right-hand-side of '-' sign. */
-        virtual number_node_ptr get_rhs() =0;
+        virtual yc_number_node_ptr get_rhs() =0;
     };
 
     /// Base class for commutative numerical operators.
     /** This is used for operators whose arguments can be rearranged
      * mathematically, e.g., add and multiply. */
-    class commutative_number_node : public virtual number_node {
+    class yc_commutative_number_node : public virtual yc_number_node {
     public:
 
         /// Get the number of operands.
@@ -488,45 +429,45 @@ namespace yask {
 
         /// Get the specified operand.
         /** @returns Pointer to node at given position or null pointer if out of bounds. */
-        virtual number_node_ptr
+        virtual yc_number_node_ptr
         get_operand(int i /**< [in] Index between zero (0)
                              and get_num_operands()-1. */ ) =0;
 
         /// Add an operand.
         virtual void
-        add_operand(number_node_ptr node /**< [in] Top node of AST to add. */ ) =0;
+        add_operand(yc_number_node_ptr node /**< [in] Top node of AST to add. */ ) =0;
     };
 
     /// An addition node.
-    class add_node : public virtual commutative_number_node { };
+    class yc_add_node : public virtual yc_commutative_number_node { };
 
     /// A multiplication node.
-    class multiply_node : public virtual commutative_number_node { };
+    class yc_multiply_node : public virtual yc_commutative_number_node { };
 
     /// A subtraction node.
-    class subtract_node : public virtual number_node {
+    class yc_subtract_node : public virtual yc_number_node {
     public:
 
         /// Get the left-hand-side operand.
         /** @returns Pointer to expression node appearing before the '-' sign. */
-        virtual number_node_ptr get_lhs() =0;
+        virtual yc_number_node_ptr get_lhs() =0;
     
         /// Get the right-hand-side operand.
         /** @returns Pointer to expression node appearing after the '-' sign. */
-        virtual number_node_ptr get_rhs() =0;
+        virtual yc_number_node_ptr get_rhs() =0;
     };
 
     /// A division node.
-    class divide_node : public virtual number_node {
+    class yc_divide_node : public virtual yc_number_node {
     public:
 
         /// Get the left-hand-side operand.
         /** @returns Pointer to expression node appearing before the '/' sign. */
-        virtual number_node_ptr get_lhs() =0;
+        virtual yc_number_node_ptr get_lhs() =0;
     
         /// Get the right-hand-side operand.
         /** @returns Pointer to expression node appearing after the '/' sign. */
-        virtual number_node_ptr get_rhs() =0;
+        virtual yc_number_node_ptr get_rhs() =0;
     };
 
 } // namespace yask.

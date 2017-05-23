@@ -44,12 +44,13 @@ for key, value in cfg_vars.items():
 # Create an extension module for the YASK compiler API.
 yask_compiler_module = Extension('_yask_compiler',
                                  sources=['yask_compiler_api_wrap.cxx',
-                                          '../Expr.cpp',
-                                          '../ExprUtils.cpp',
-                                          '../CppIntrin.cpp',
-                                          '../Print.cpp'],
+                                          '../lib/Expr.cpp',
+                                          '../lib/ExprUtils.cpp',
+                                          '../lib/CppIntrin.cpp',
+                                          '../lib/Print.cpp'],
                                  include_dirs=['../../../include',
-                                               '../..'],
+                                               '../../common',
+                                               '../lib'],
                                  extra_compile_args=['-std=c++11'],
 )
 

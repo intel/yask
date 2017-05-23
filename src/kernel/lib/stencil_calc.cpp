@@ -23,7 +23,7 @@ IN THE SOFTWARE.
 
 *****************************************************************************/
 
-#include "stencil.hpp"
+#include "yask.hpp"
 using namespace std;
 
 namespace yask {
@@ -236,7 +236,7 @@ namespace yask {
 
                     // Include automatically-generated loop code that calls
                     // calc_region() for each region.
-#include "stencil_rank_loops.hpp"
+#include "yask_rank_loops.hpp"
 
                     // Remember grids that have been written to by this eq-group.
                     mark_grids_dirty(*eg);
@@ -257,7 +257,7 @@ namespace yask {
                 EqGroupSet* eqGroup_ptr = NULL;
                 
                 // Include automatically-generated loop code that calls calc_region() for each region.
-#include "stencil_rank_loops.hpp"
+#include "yask_rank_loops.hpp"
             }
 
         }
@@ -367,7 +367,7 @@ namespace yask {
                         // Loops through w from begin_rw to end_rw-1;
                         // similar for x, y, and z.  This code typically
                         // contains the outer OpenMP loop(s).
-#include "stencil_region_loops.hpp"
+#include "yask_region_loops.hpp"
 
                     }
             
@@ -423,7 +423,7 @@ namespace yask {
         // calc_sub_block() for each sub-block in this block.  Loops through
         // w from begin_bw to end_bw-1; similar for x, y, and z.  This
         // code typically contains the nested OpenMP loop(s).
-#include "stencil_block_loops.hpp"
+#include "yask_block_loops.hpp"
     }
     
     // Calculate results for one sub-block.
@@ -1440,7 +1440,7 @@ namespace yask {
 
                              // Include auto-generated loops to invoke calc_halo() from
                              // begin_*v to end_*v by step_*v.
-#include "stencil_halo_loops.hpp"
+#include "yask_halo_loops.hpp"
 #undef calc_halo
 
                              // Send filled buffer to neighbor.

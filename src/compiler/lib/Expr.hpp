@@ -143,7 +143,7 @@ namespace yask {
     // StencilSolution::define() method is called.
 
     // The base class for all expression nodes.
-    class Expr : public virtual expr_node {
+    class Expr : public virtual yc_expr_node {
 
     public:
         Expr() { }
@@ -218,7 +218,7 @@ namespace yask {
     }
 
     // Real or int value.
-    class NumExpr : public Expr, public virtual number_node {
+    class NumExpr : public Expr, public virtual yc_number_node {
     public:
     
         // Get the current value.
@@ -249,7 +249,7 @@ namespace yask {
     };
 
     // Boolean value.
-    class BoolExpr : public Expr, public virtual bool_node  {
+    class BoolExpr : public Expr, public virtual yc_bool_node  {
     public:
 
         // Get the current value.
@@ -268,7 +268,7 @@ namespace yask {
 
     // A simple constant value.
     // This is an expression leaf-node.
-    class ConstExpr : public NumExpr, public virtual const_number_node {
+    class ConstExpr : public NumExpr, public virtual yc_const_number_node {
     protected:
         double _f = 0.0;
 
@@ -404,7 +404,7 @@ namespace yask {
     typedef UnaryExpr<BoolExpr, NumExprPtr> UnaryNum2BoolExpr;
 
     // Negate operator.
-    class NegExpr : public UnaryNumExpr, public virtual negate_node {
+    class NegExpr : public UnaryNumExpr, public virtual yc_negate_node {
     public:
         NegExpr(NumExprPtr rhs) :
             UnaryNumExpr(opStr(), rhs) { }
@@ -421,7 +421,7 @@ namespace yask {
         }
 
         // APIs.
-        virtual number_node_ptr get_rhs() {
+        virtual yc_number_node_ptr get_rhs() {
             return _rhs;
         }
     };
@@ -496,15 +496,15 @@ namespace yask {
         virtual NumExprPtr clone() const {              \
             return make_shared<type>(*this);            \
         }                                               \
-        virtual number_node_ptr get_lhs() {             \
+        virtual yc_number_node_ptr get_lhs() {          \
             return getLhs();                            \
         }                                               \
-        virtual number_node_ptr get_rhs() {             \
+        virtual yc_number_node_ptr get_rhs() {          \
             return getRhs();                            \
         }                                               \
     }
-    BIN_NUM_EXPR(SubExpr, subtract_node, "-", lhs - rhs);
-    BIN_NUM_EXPR(DivExpr, divide_node, "/", lhs / rhs); // TODO: add check for div-by-0.
+    BIN_NUM_EXPR(SubExpr, yc_subtract_node, "-", lhs - rhs);
+    BIN_NUM_EXPR(DivExpr, yc_divide_node, "/", lhs / rhs); // TODO: add check for div-by-0.
 #undef BIN_NUM_EXPR
 
 // Boolean binary operators with numerical inputs.
@@ -560,7 +560,7 @@ namespace yask {
     // A list of exprs with a common operator that can be rearranged,
     // e.g., 'a * b * c' or 'a + b + c'.
     // Still pure virtual because clone() not implemented.
-    class CommutativeExpr : public NumExpr, public virtual commutative_number_node {
+    class CommutativeExpr : public NumExpr, public virtual yc_commutative_number_node {
     protected:
         NumExprPtrVec _ops;
         string _opStr;
@@ -619,14 +619,14 @@ namespace yask {
         virtual int get_num_operands() {
             return _ops.size();
         }
-        virtual number_node_ptr get_operand(int i) {
+        virtual yc_number_node_ptr get_operand(int i) {
             if (i >= 0 &&
                 size_t(i) < _ops.size())
                 return _ops.at(size_t(i));
             else
                 return nullptr;
         }
-        virtual void add_operand(number_node_ptr node) {
+        virtual void add_operand(yc_number_node_ptr node) {
             auto p = dynamic_pointer_cast<NumExpr>(node);
             assert(p);
             appendOp(p);
@@ -657,8 +657,8 @@ namespace yask {
     }                                                                   \
     virtual NumExprPtr clone() const { return make_shared<type>(*this); } \
     }
-    COMM_EXPR(MultExpr, multiply_node, "*", 1.0, lhs * rhs);
-    COMM_EXPR(AddExpr, add_node, "+", 0.0, lhs + rhs);
+    COMM_EXPR(MultExpr, yc_multiply_node, "*", 1.0, lhs * rhs);
+    COMM_EXPR(AddExpr, yc_add_node, "+", 0.0, lhs + rhs);
 #undef COMM_EXPR
 
     // A scalar expression with a named dimension.
@@ -709,7 +709,7 @@ namespace yask {
     // This is an expression leaf-node.
     class GridPoint : public NumExpr,
                       public IntTuple,
-                      public virtual grid_point_node {
+                      public virtual yc_grid_point_node {
 
     protected:
         Grid* _grid;          // the grid this point is from.
@@ -772,7 +772,7 @@ namespace yask {
         virtual bool isAheadOfInDir(const GridPoint& rhs, const IntScalar& dir) const;
 
         // APIs.
-        virtual grid* get_grid();
+        virtual yc_grid* get_grid();
     };
 } // namespace yask.
 
@@ -796,7 +796,7 @@ namespace yask {
     // a comparison operator.
     // (Not inherited from BinaryExpr because LHS is special.)
     class EqualsExpr : public UnaryNumExpr,
-                       public virtual equation_node {
+                       public virtual yc_equation_node {
     protected:
         GridPointPtr _lhs;
 
@@ -828,10 +828,10 @@ namespace yask {
         virtual EqualsExprPtr cloneEquals() const { return make_shared<EqualsExpr>(*this); }
 
         // APIs.
-        virtual grid_point_node_ptr get_lhs() {
+        virtual yc_grid_point_node_ptr get_lhs() {
             return _lhs;
         }
-        virtual number_node_ptr get_rhs() {
+        virtual yc_number_node_ptr get_rhs() {
             return _rhs;
         }
     };
@@ -1066,7 +1066,7 @@ namespace yask {
     // For grids, values in the IntTuple are ignored (grids are sized at run-time).
     // For params, values in the IntTuple define the sizes.
     class Grid : public IntTuple,
-                 public virtual grid {
+                 public virtual yc_grid {
 
         // Should not be copying grids.
         Grid(const Grid& src) { assert(0); }
@@ -1221,48 +1221,13 @@ namespace yask {
         virtual const string& get_dim_name(int n) const {
             return getDimName(n);
         }
-        virtual grid_point_node_ptr
-        new_relative_grid_point(int dim1_offset) {
-            return makePoint(1, dim1_offset);
-        }
-        virtual grid_point_node_ptr
-        new_relative_grid_point(int dim1_offset,
-                                int dim2_offset) {
-            return makePoint(2, dim1_offset, dim2_offset);
-        }
-        virtual grid_point_node_ptr
-        new_relative_grid_point(int dim1_offset,
-                                int dim2_offset,
-                                int dim3_offset) {
-            return makePoint(3, dim1_offset, dim2_offset, dim3_offset);
-        }
-        virtual grid_point_node_ptr
-        new_relative_grid_point(int dim1_offset,
-                                int dim2_offset,
-                                int dim3_offset,
-                                int dim4_offset) {
-            return makePoint(4, dim1_offset, dim2_offset,
-                             dim3_offset, dim4_offset);
-        }
-        virtual grid_point_node_ptr
-        new_relative_grid_point(int dim1_offset,
-                                int dim2_offset,
-                                int dim3_offset,
-                                int dim4_offset,
-                                int dim5_offset) {
-            return makePoint(5, dim1_offset, dim2_offset,
-                             dim3_offset, dim4_offset, dim5_offset);
-        }
-        virtual grid_point_node_ptr
+        virtual yc_grid_point_node_ptr
         new_relative_grid_point(int dim1_offset,
                                 int dim2_offset,
                                 int dim3_offset,
                                 int dim4_offset,
                                 int dim5_offset,
-                                int dim6_offset) {
-            return makePoint(6, dim1_offset, dim2_offset, dim3_offset,
-                             dim4_offset, dim5_offset, dim6_offset);
-        }
+                                int dim6_offset);
     };
 
     // A list of grids.  This holds pointers to grids defined by the stencil

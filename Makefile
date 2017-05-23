@@ -22,8 +22,8 @@
 ##############################################################################
 
 # Type 'make help' for some examples.
-
-# Some of the make vars available:
+#
+# Some of the make vars that are commonly set via the command-line:
 #
 # stencil: see list below.
 #
@@ -64,6 +64,10 @@
 # def_thread_divisor: Divide number of OpenMP threads by this factor by default.
 # def_*_args: Default cmd-line args for specific settings.
 # more_def_args: Additional default cmd-line args.
+
+# Convention: when useful for distinction,
+# - vars starting with 'YK_' apply to the run-time stencil kernel.
+# - vars starting with 'YC_' apply to the stencil compiler.
 
 # Initial defaults.
 stencil		=	unspecified
@@ -124,7 +128,7 @@ else ifneq ($(findstring awp,$(stencil)),)
  time_alloc			=	1
  eqs				=	velocity=vel,stress=str
  def_block_args			=	-b 32
- YSC_FLAGS			+=	-min-es 1
+ YC_FLAGS			+=	-min-es 1
  def_rank_args			=	-dx 512 -dy 1024 -dz 128 # assume 2 ranks/node in 'x'.
  def_pad_args			=	-ep 1
  ifeq ($(arch),knl)
@@ -175,7 +179,7 @@ ifeq ($(arch),knc)
 
  ISA		?= 	-mmic
  MACROS		+=	USE_INTRIN512
- YSC_TARGET  	?=	knc
+ YC_TARGET  	?=	knc
  def_block_threads  ?=	4
  SUB_BLOCK_LOOP_INNER_MODS  ?=	prefetch(L1,L2)
 
@@ -184,7 +188,7 @@ else ifeq ($(arch),knl)
  ISA		?=	-xMIC-AVX512
  GCXX_ISA	?=	-march=knl
  MACROS		+=	USE_INTRIN512 USE_RCP28
- YSC_TARGET  	?=	avx512
+ YC_TARGET  	?=	avx512
  def_block_args	?=	-b 96
  def_block_threads ?=	8
  SUB_BLOCK_LOOP_INNER_MODS  ?=	prefetch(L1)
@@ -194,7 +198,7 @@ else ifeq ($(arch),skx)
  ISA		?=	-xCORE-AVX512
  GCXX_ISA	?=	-march=knl -mno-avx512er -mno-avx512pf
  MACROS		+=	USE_INTRIN512
- YSC_TARGET  	?=	avx512
+ YC_TARGET  	?=	avx512
  mpi		=	1
 
 else ifeq ($(arch),hsw)
@@ -202,7 +206,7 @@ else ifeq ($(arch),hsw)
  ISA		?=	-xCORE-AVX2
  GCXX_ISA	?=	-march=haswell
  MACROS		+=	USE_INTRIN256
- YSC_TARGET  	?=	avx2
+ YC_TARGET  	?=	avx2
  mpi		=	1
 
 else ifeq ($(arch),ivb)
@@ -210,7 +214,7 @@ else ifeq ($(arch),ivb)
  ISA		?=	-xCORE-AVX-I
  GCXX_ISA	?=	-march=ivybridge
  MACROS		+=	USE_INTRIN256
- YSC_TARGET  	?=	avx
+ YC_TARGET  	?=	avx
  mpi		=	1
 
 else ifeq ($(arch),snb)
@@ -218,14 +222,14 @@ else ifeq ($(arch),snb)
  ISA		?=	-xAVX
  GCXX_ISA	?=	-march=sandybridge
  MACROS		+= 	USE_INTRIN256
- YSC_TARGET  	?=	avx
+ YC_TARGET  	?=	avx
  mpi		=	1
 
 else ifeq ($(arch),intel64)
 
  ISA		?=	-xHOST
  GCXX_ISA       ?=      -march=native
- YSC_TARGET	?=	cpp
+ YC_TARGET	?=	cpp
 
 else
 
@@ -282,38 +286,27 @@ else
  CXX		:=	icpc
 endif
 LD		:=	$(CXX)
-MAKE		:=	make
+MAKE		?=	make
 CXXOPT		?=	-O3
 CXXFLAGS        +=   	-g -std=c++11 -Wall $(CXXOPT)
+CXXFLAGS	+=	-Iinclude -Isrc/common -Isrc/kernel/lib -Isrc/kernel/gen
 OMPFLAGS	+=	-fopenmp 
 LFLAGS          +=      -lrt
-YSC_EXEC	:=	bin/yask-stencil-compiler.exe
-YSC_CXX    	?=	g++  # faster than icpc for building the compiler.
-YSC_CXXFLAGS 	+=	-g -O0 -std=c++11 -Wall  # low opt to reduce compile time.
-YSC_CXXFLAGS	+=	-Iinclude -Isrc -Isrc/foldBuilder -Isrc/foldBuilder/stencils
-YSC_FLAGS   	+=	-stencil $(stencil) -elem-bytes $(real_bytes) -cluster $(cluster) -fold $(fold)
-YSC_STENCIL_LIST	:=	src/foldBuilder/stencils.hpp
-ST_MACRO_FILE	:=	src/stencil_macros.hpp
-ST_CODE_FILE	:=	src/stencil_code.hpp
-GEN_HEADERS     :=	$(addprefix src/, \
-				stencil_rank_loops.hpp \
-				stencil_region_loops.hpp \
-				stencil_block_loops.hpp \
-				stencil_sub_block_loops.hpp \
-				stencil_halo_loops.hpp \
-				layout_macros.hpp layouts.hpp) \
-				$(ST_MACRO_FILE) $(ST_CODE_FILE)
+YC_CXX    	?=	g++  # faster than icpc for building the compiler.
+YC_CXXFLAGS 	+=	-g -O0 -std=c++11 -Wall  # low opt to reduce compile time.
+YC_CXXFLAGS	+=	-Iinclude -Isrc/common -Isrc/compiler/lib -Isrc/stencils
+YC_FLAGS   	+=	-stencil $(stencil) -elem-bytes $(real_bytes) -cluster $(cluster) -fold $(fold)
 ifneq ($(eqs),)
- YSC_FLAGS   	+=	-eq $(eqs)
+ YC_FLAGS   	+=	-eq $(eqs)
 endif
 ifneq ($(radius),)
- YSC_FLAGS   	+=	-radius $(radius)
+ YC_FLAGS   	+=	-radius $(radius)
 endif
 ifneq ($(halo),)
- YSC_FLAGS   	+=	-halo $(halo)
+ YC_FLAGS   	+=	-halo $(halo)
 endif
 ifneq ($(time_alloc),)
- YSC_FLAGS   	+=	-step-alloc $(time_alloc)
+ YC_FLAGS   	+=	-step-alloc $(time_alloc)
 endif
 
 # Default cmd-line args.
@@ -365,15 +358,17 @@ endif
 # compiler-specific settings
 ifneq ($(findstring ic,$(notdir $(CXX))),)  # Intel compiler
 
- CODE_STATS      =   	code_stats
- CXXFLAGS        +=      $(ISA) -debug extended -Fa -restrict -ansi-alias -fno-alias
- CXXFLAGS	+=	-fimf-precision=low -fast-transcendentals -no-prec-sqrt -no-prec-div -fp-model fast=2 -fno-protect-parens -rcd -ftz -fma -fimf-domain-exclusion=none -qopt-assume-safe-padding
+ CODE_STATS	:=   	code_stats
+ CXXFLAGS	+=      $(ISA) -debug extended -Fa -restrict -ansi-alias -fno-alias
+ CXXFLAGS	+=	-fimf-precision=low -fast-transcendentals -no-prec-sqrt \
+			-no-prec-div -fp-model fast=2 -fno-protect-parens -rcd -ftz \
+			-fma -fimf-domain-exclusion=none -qopt-assume-safe-padding
  #CXXFLAGS	+=	-qoverride-limits
  CXXFLAGS	+=	-vec-threshold0
  CXXFLAGS	+=      -qopt-report=5
  #CXXFLAGS	+=	-qopt-report-phase=VEC,PAR,OPENMP,IPO,LOOP
  CXXFLAGS	+=	-no-diag-message-catalog
- CXX_VER_CMD	=	$(CXX) -V
+ CXX_VER_CMD	:=	$(CXX) -V
 
  # work around an optimization bug.
  MACROS		+=	NO_STORE_INTRINSICS
@@ -394,16 +389,40 @@ endif
 
 # Add in OMP flags and user-added flags.
 CXXFLAGS	+=	$(OMPFLAGS) $(EXTRA_CXXFLAGS)
+YC_CXXFLAGS	+=	$(EXTRA_YC_CXXFLAGS)
 
-# Some file names.
-TAG			:=	$(stencil).$(arch)
-STENCIL_BASES		:=	stencil_main stencil_calc realv_grids utils
-STENCIL_OBJS		:=	$(addprefix src/,$(addsuffix .$(TAG).o,$(STENCIL_BASES)))
-STENCIL_CXX		:=	$(addprefix src/,$(addsuffix .$(TAG).i,$(STENCIL_BASES)))
-EXEC_NAME		:=	bin/yask.$(TAG).exe
-MAKE_REPORT_FILE	:=	make-report.$(TAG).txt
-CXXFLAGS_FILE		:=	cxx-flags.$(TAG).txt
-LFLAGS_FILE		:=	ld-flags.$(TAG).txt
+# More file names.
+YC_BASES	:=	CppIntrin Expr ExprUtils Print
+YC_OBJS		:=	$(addprefix src/compiler/lib/,$(addsuffix .o,$(YC_BASES)))
+YC_LIB		:=	lib/yask-compiler.so
+YC_EXEC		:=	bin/yask-compiler.exe
+YC_STENCIL_LIST	:=	src/compiler/stencils.hpp
+
+YK_GEN_DIR	:=	src/kernel/gen
+YK_MACRO_FILE	:=	$(YK_GEN_DIR)/yask_macros.hpp
+YK_CODE_FILE	:=	$(YK_GEN_DIR)/yask_stencil_code.hpp
+YK_GEN_HEADERS	:=	$(addprefix $(YK_GEN_DIR)/, \
+				yask_rank_loops.hpp \
+				yask_region_loops.hpp \
+				yask_block_loops.hpp \
+				yask_sub_block_loops.hpp \
+				yask_halo_loops.hpp \
+				yask_layout_macros.hpp \
+				yask_layouts.hpp) \
+				$(YK_MACRO_FILE) \
+				$(YK_CODE_FILE)
+
+YK_TAG		:=	$(stencil).$(arch)
+YK_BASES	:=	stencil_calc realv_grids utils
+YK_OBJS		:=	$(addprefix src/kernel/lib/,$(addsuffix .$(YK_TAG).o,$(YK_BASES)))
+YK_LIB		:=	lib/yask.$(YK_TAG).so
+YK_EXEC		:=	bin/yask.$(YK_TAG).exe
+
+MAKE_REPORT_FILE:=	make-report.$(YK_TAG).txt
+CXXFLAGS_FILE	:=	cxx-flags.$(YK_TAG).txt
+LFLAGS_FILE	:=	ld-flags.$(YK_TAG).txt
+
+YK_MK_GEN_DIR	:=	mkdir -p -v $(YK_GEN_DIR)
 
 # gen-loops.pl args:
 
@@ -469,65 +488,67 @@ HALO_LOOP_OUTER_VARS	?=	wv,xv,yv,zv
 HALO_LOOP_CODE		?=	$(HALO_LOOP_OUTER_MODS) loop($(HALO_LOOP_OUTER_VARS)) \
 				$(HALO_LOOP_INNER_MODS) { calc(halo(t)); }
 
-#### Targets and rules ####
+#### Targets & rules
 
-all:	$(EXEC_NAME) $(MAKE_REPORT_FILE)
+all:	$(YK_EXEC) $(MAKE_REPORT_FILE)
 	echo $(CXXFLAGS) > $(CXXFLAGS_FILE)
 	echo $(LFLAGS) > $(LFLAGS_FILE)
 	@cat $(MAKE_REPORT_FILE)
-	@echo "Binary" $(EXEC_NAME) "has been built."
+	@echo "Binary" $(YK_EXEC) "has been built."
 	@echo "Run command: bin/yask.sh -stencil" $(stencil) "-arch" $(arch) "[options]"
 
-$(MAKE_REPORT_FILE): $(EXEC_NAME)
+$(MAKE_REPORT_FILE): $(YK_EXEC)
 	@echo MAKEFLAGS="\"$(MAKEFLAGS)"\" > $@ 2>&1
 	$(MAKE) -j1 $(CODE_STATS) echo-settings >> $@ 2>&1
 
-$(EXEC_NAME): $(STENCIL_OBJS)
-	$(LD) -o $@ $(STENCIL_OBJS) $(CXXFLAGS) $(LFLAGS)
+# Compile the kernel.
+%.$(YK_TAG).o: %.cpp src/common/*hpp src/kernel/lib/*hpp include/*hpp $(YK_GEN_HEADERS)
+	$(CXX) $(CXXFLAGS) -fPIC -c -o $@ $<
 
-preprocess: $(STENCIL_CXX)
+$(YK_EXEC): $(YK_LIB) src/kernel/yask_main.cpp
+	$(CXX) $(CXXFLAGS) $(LFLAGS) -o $@ $^
 
-src/stencil_rank_loops.hpp: bin/gen-loops.pl Makefile
+$(YK_LIB): $(YK_OBJS)
+	$(CXX) $(CXXFLAGS) -shared -o $@ $^
+
+$(YK_GEN_DIR)/yask_rank_loops.hpp: bin/gen-loops.pl Makefile
+	$(YK_MK_GEN_DIR)
 	$< -output $@ $(RANK_LOOP_OPTS) $(EXTRA_LOOP_OPTS) $(EXTRA_RANK_LOOP_OPTS) "$(RANK_LOOP_CODE)"
 
-src/stencil_region_loops.hpp: bin/gen-loops.pl Makefile
+$(YK_GEN_DIR)/yask_region_loops.hpp: bin/gen-loops.pl Makefile
+	$(YK_MK_GEN_DIR)
 	$< -output $@ $(REGION_LOOP_OPTS) $(EXTRA_LOOP_OPTS) $(EXTRA_REGION_LOOP_OPTS) "$(REGION_LOOP_CODE)"
 
-src/stencil_block_loops.hpp: bin/gen-loops.pl Makefile
+$(YK_GEN_DIR)/yask_block_loops.hpp: bin/gen-loops.pl Makefile
+	$(YK_MK_GEN_DIR)
 	$< -output $@ $(BLOCK_LOOP_OPTS) $(EXTRA_LOOP_OPTS) $(EXTRA_BLOCK_LOOP_OPTS) "$(BLOCK_LOOP_CODE)"
 
-src/stencil_sub_block_loops.hpp: bin/gen-loops.pl Makefile
+$(YK_GEN_DIR)/yask_sub_block_loops.hpp: bin/gen-loops.pl Makefile
+	$(YK_MK_GEN_DIR)
 	$< -output $@ $(SUB_BLOCK_LOOP_OPTS) $(EXTRA_LOOP_OPTS) $(EXTRA_SUB_BLOCK_LOOP_OPTS) "$(SUB_BLOCK_LOOP_CODE)"
 
-src/stencil_halo_loops.hpp: bin/gen-loops.pl Makefile
+$(YK_GEN_DIR)/yask_halo_loops.hpp: bin/gen-loops.pl Makefile
+	$(YK_MK_GEN_DIR)
 	$< -output $@ $(HALO_LOOP_OPTS) $(EXTRA_LOOP_OPTS) $(EXTRA_HALO_LOOP_OPTS) "$(HALO_LOOP_CODE)"
 
-src/layout_macros.hpp: bin/gen-layouts.pl
+$(YK_GEN_DIR)/yask_layout_macros.hpp: bin/gen-layouts.pl
+	$(YK_MK_GEN_DIR)
 	$< -m > $@
 
-src/layouts.hpp: bin/gen-layouts.pl
+$(YK_GEN_DIR)/yask_layouts.hpp: bin/gen-layouts.pl
+	$(YK_MK_GEN_DIR)
 	$< -d > $@
 
-# Compile the stencil compiler.
-# TODO: move this to its own makefile.
-$(YSC_EXEC): src/foldBuilder/*.*pp $(YSC_STENCIL_LIST) src/tuple.hpp
-	$(YSC_CXX) $(YSC_CXXFLAGS) -o $@ src/foldBuilder/*.cpp $(EXTRA_YSC_CXXFLAGS)
-
-$(YSC_STENCIL_LIST): src/foldBuilder/stencils/*.hpp
-	echo '// Stencil-definition files.' > $@
-	echo '// Automatically-generated code; do not edit.' >> $@
-	for sfile in $(^F); do \
-	  echo '#include "'$$sfile'"' >> $@; \
-	done
-
 # Run the stencil compiler and post-process its output.
-$(ST_CODE_FILE): $(YSC_EXEC)
-	$< $(YSC_FLAGS) $(EXTRA_YSC_FLAGS) -p $(YSC_TARGET) $@
+$(YK_CODE_FILE): $(YC_EXEC)
+	$(YK_MK_GEN_DIR)
+	$< $(YC_FLAGS) $(EXTRA_YC_FLAGS) -p $(YC_TARGET) $@
 	@- gindent -fca $@ || \
 	  indent -fca $@ ||   \
 	  echo "note:" $@ "is not properly indented because no indent program was found."
 
-$(ST_MACRO_FILE):
+$(YK_MACRO_FILE):
+	$(YK_MK_GEN_DIR)
 	echo '// Settings from YASK Makefile' > $@
 	echo '// Automatically-generated code; do not edit.' >> $@
 	for macro in $(MACROS) $(EXTRA_MACROS); do \
@@ -537,76 +558,101 @@ $(ST_MACRO_FILE):
 headers: $(GEN_HEADERS)
 	@ echo 'Header files generated.'
 
-%.$(TAG).o: %.cpp src/*.hpp src/foldBuilder/*.hpp $(GEN_HEADERS)
-	$(CXX) $(CXXFLAGS) -c -o $@ $<
+# Compile the stencil compiler.
+%.o: %.cpp src/common/*hpp src/compiler/lib/*hpp include/yask_compiler_api.hpp $(YC_STENCIL_LIST)
+	$(YC_CXX) $(YC_CXXFLAGS) -fPIC -c -o $@ $<
 
-%.$(TAG).i: %.cpp src/*.hpp src/foldBuilder/*.hpp $(GEN_HEADERS)
-	$(CXX) $(CXXFLAGS) -E $< > $@
+$(YC_EXEC): $(YC_LIB) src/compiler/main.cpp
+	$(YC_CXX) $(YC_CXXFLAGS) -o $@ $^
 
-# NB: All the following api* targets are temporary placeholders.
-# TODO: Create better rules with real dependencies.
+$(YC_LIB): $(YC_OBJS)
+	$(YC_CXX) $(YC_CXXFLAGS) -shared -o $@ $^
 
-docs/latex/refman.tex: include/*hpp docs/yask_compiler.doxy
-	cd docs; doxygen yask_compiler.doxy
+$(YC_STENCIL_LIST): src/stencils/*.hpp
+	echo '// Stencil-definition files.' > $@
+	echo '// Automatically-generated code; do not edit.' >> $@
+	for sfile in $(^F); do \
+	  echo '#include "'$$sfile'"' >> $@; \
+	done
 
-api-docs: docs/latex/refman.tex
+# API document and code creation:
 
-src/foldBuilder/swig/yask_compiler.py: include/*hpp $(addprefix src/foldBuilder/,swig/setup.py *pp)
-	cd src/foldBuilder/swig; \
+docs/api/latex/refman.tex: include/*.hpp docs/api/*.*
+	cd docs/api; doxygen doxygen_config.txt
+
+api-docs: docs/api/latex/refman.tex
+
+# Python interface.
+# TODO: install in lib dir.
+src/compiler/swig/yask_compiler.py: include/*hpp $(addprefix src/compiler/,swig/setup.py *pp)
+	cd src/compiler/swig; \
 	swig -v -I../../../include -c++ -python yask_compiler_api.i; \
 	python setup.py build_ext --inplace
 
-# TODO: build .so for compiler and link to it.
-bin/yask-compiler-api-test.exe: $(addprefix src/foldBuilder/,tests/api_test.cpp *pp)
-	$(YSC_CXX) $(YSC_CXXFLAGS) -o $@ \
-	 $(addprefix src/foldBuilder/,tests/api_test.cpp [A-Z]*.cpp) $(EXTRA_YSC_CXXFLAGS)
+# Compiler API test.
+bin/yask-compiler-api-test.exe: $(YC_LIB) src/compiler/tests/api_test.cpp
+	$(YC_CXX) $(YC_CXXFLAGS) -o $@ $^
 
 # Flags to avoid building and running stencil compiler.
-API_MAKE_FLAGS := --new-file=$(YSC_EXEC) --old-file=$(ST_CODE_FILE)
-api-cxx-test: bin/yask-compiler-api-test.exe
+API_MAKE_FLAGS := --new-file=$(YC_EXEC) --old-file=$(YK_CODE_FILE)
+yc-api-test-cxx: bin/yask-compiler-api-test.exe
 	$(MAKE) clean
 	$<
-	mv api-cxx-test.dot src/foldBuilder/tests
-	cd src/foldBuilder/tests; \
-	dot -Tpdf -O api-cxx-test.dot; \
-	ls -l api-cxx-test.dot*
-	$(MAKE) -j $(API_MAKE_FLAGS) stencil=api-cxx-test arch=snb
-	bin/yask.sh -stencil api-cxx-test -arch snb -v
+	mv yc-api-test-cxx.hpp $(YK_CODE_FILE)
+	mv yc-api-test-cxx.dot src/compiler/tests
+	cd src/compiler/tests && \
+	dot -Tpdf -O yc-api-test-cxx.dot && \
+	ls -l yc-*.dot*
+	$(MAKE) -j $(API_MAKE_FLAGS) stencil=yc-api-test-cxx arch=snb
+	bin/yask.sh -stencil yc-api-test-cxx -arch snb -v
 
-api-py-test: src/foldBuilder/swig/yask_compiler.py
+yc-api-test-py: src/compiler/swig/yask_compiler.py
 	$(MAKE) clean
-	cd src/foldBuilder/tests; \
-	python api_test.py; \
-	dot -Tpdf -O api-py-test.dot; \
-	ls -l api-py-test.dot*
-	mv src/foldBuilder/tests/stencil_code.hpp src
-	$(MAKE) -j $(API_MAKE_FLAGS) stencil=api-py-test arch=snb
-	bin/yask.sh -stencil api-py-test -arch snb -v
+	cd src/compiler/tests && \
+	python api_test.py && \
+	dot -Tpdf -O yc-api-test-py.dot && \
+	ls -l yc-*.dot*
+	mv src/compiler/tests/yc-api-test-py.hpp $(YK_CODE_FILE)
+	$(MAKE) -j $(API_MAKE_FLAGS) stencil=yc-api-test-py arch=snb
+	bin/yask.sh -stencil yc-api-test-py -arch snb -v
 
-api:	api-docs api-cxx-test api-py-test
+yc-api:	src/compiler/swig/yask_compiler.py
+
+yc-api-test: yc-api-test-cxx yc-api-test-py
+
+api: api-docs yc-api yc-api-test
 
 tags:
 	rm -f TAGS ; find . -name '*.[ch]pp' | xargs etags -C -a
 
 # Remove intermediate files.
+# Should not trigger remake of stencil compiler.
 # Make this target before rebuilding YASK with any new parameters.
 clean:
-	rm -fv src/*.[io] *.optrpt */*.optrpt *.s $(GEN_HEADERS) $(MAKE_REPORT_FILE)
+	rm -fv *.s $(MAKE_REPORT_FILE)
+	rm -fr src/compiler/swig/build $(YK_GEN_DIR)
+	find src/kernel -name '*.[io]' | xargs -r rm -v
+	find src/kernel -name '*.optrpt' | xargs -r rm -v
 
 # Remove files from old versions.
 clean-old:
 	rm -fv stencil*.exe stencil-tuner-summary.csh stencil-tuner.pl gen-layouts.pl gen-loops.pl get-loop-stats.pl
+	rm -fr docs/html docs/latex
+	rm -fv src/tests/*.dot*
+	rm -fv src/foldBuilder/*pp
 
 # Remove executables, documentation, etc. (not logs).
 realclean: clean clean-old
-	rm -fv bin/*.exe make-report*.txt cxx-flags*.txt ld-flags.*txt TAGS $(YSC_STENCIL_LIST)
-	rm -fr docs/html docs/latex
-	rm -fv src/foldBuilder/tests/*.dot*
+	rm -fv bin/*.exe lib/*.so make-report*.txt cxx-flags*.txt ld-flags.*txt TAGS $(YC_STENCIL_LIST)
+	rm -fr docs/*/html docs/*/latex
+	rm -fv src/compiler/tests/*.dot*
+	find . -name '*.[io]' | xargs -r rm -v
+	find . -name '*.optrpt' | xargs -r rm -v
 	find . -name '*~' | xargs -r rm -v
 
 echo-settings:
 	@echo
-	@echo "Build environment for" $(EXEC_NAME) on `date`
+	@echo "Build environment for" $(YK_EXEC) on `date`
 	@echo host=`hostname`
 	@echo stencil=$(stencil)
 	@echo arch=$(arch)
@@ -631,9 +677,9 @@ echo-settings:
 	@echo omp_region_schedule=$(omp_region_schedule)
 	@echo omp_block_schedule=$(omp_block_schedule)
 	@echo omp_halo_schedule=$(omp_halo_schedule)
-	@echo YSC_TARGET="\"$(YSC_TARGET)\""
-	@echo YSC_FLAGS="\"$(YSC_FLAGS)\""
-	@echo EXTRA_YSC_FLAGS="\"$(EXTRA_YSC_FLAGS)\""
+	@echo YC_TARGET="\"$(YC_TARGET)\""
+	@echo YC_FLAGS="\"$(YC_FLAGS)\""
+	@echo EXTRA_YC_FLAGS="\"$(EXTRA_YC_FLAGS)\""
 	@echo MACROS="\"$(MACROS)\""
 	@echo EXTRA_MACROS="\"$(EXTRA_MACROS)\""
 	@echo ISA=$(ISA)
@@ -676,13 +722,17 @@ code_stats:
 	bin/get-loop-stats.pl -t='sub_block_loops' *.s
 
 help:
-	@echo "Example usage:"
-	@echo "make clean; make arch=knl stencil=iso3dfd"
-	@echo "make clean; make arch=knl stencil=awp mpi=1"
-	@echo "make clean; make arch=skx stencil=ave fold='x=1,y=2,z=4' cluster='x=2'"
-	@echo "make clean; make arch=knc stencil=3axis radius=4 SUB_BLOCK_LOOP_INNER_MODS='prefetch(L1,L2)' pfd_l2=3"
+	@echo "Example build:"
+	@echo "make clean; make -j arch=knl stencil=iso3dfd"
+	@echo "make clean; make -j arch=knl stencil=awp mpi=1"
+	@echo "make clean; make -j arch=skx stencil=ave fold='x=1,y=2,z=4' cluster='x=2'"
+	@echo "make clean; make -j arch=hsw stencil=3axis radius=4 SUB_BLOCK_LOOP_INNER_MODS='prefetch(L1,L2)' pfd_l2=3"
 	@echo " "
-	@echo "Example debug usage:"
+	@echo "Example debug build:"
 	@echo "make arch=knl  stencil=iso3dfd OMPFLAGS='-qopenmp-stubs' CXXOPT='-O0' EXTRA_MACROS='DEBUG'"
 	@echo "make arch=intel64 stencil=ave OMPFLAGS='-qopenmp-stubs' CXXOPT='-O0' EXTRA_MACROS='DEBUG' model_cache=2"
 	@echo "make arch=intel64 stencil=3axis radius=0 fold='x=1,y=1,z=1' OMPFLAGS='-qopenmp-stubs' EXTRA_MACROS='DEBUG DEBUG_TOLERANCE NO_INTRINSICS TRACE TRACE_MEM TRACE_INTRINSICS' CXXOPT='-O0'"
+	@echo " "
+	@echo "API build and test:"
+	@echo "make api"
+

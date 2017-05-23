@@ -23,7 +23,7 @@ IN THE SOFTWARE.
 
 *****************************************************************************/
 
-#include "stencil.hpp"
+#include "yask.hpp"
 
 // Set MODEL_CACHE to 1 or 2 to model that cache level
 // and create a global cache object here.

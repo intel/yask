@@ -33,11 +33,11 @@ using namespace yask;
 
 int main() {
 
-    yask_compiler_factory cfac;
-    auto soln = cfac.new_stencil_solution("api_cxx_test");
+    yc_factory cfac;
+    auto soln = cfac.new_solution("api_cxx_test");
     auto g1 = soln->new_grid("test_grid", "t", "x", "y", "z");
     
-    node_factory fac;
+    yc_node_factory fac;
 
     auto n1 = fac.new_const_number_node(3.14);
     cout << n1->format_simple() << endl;
@@ -71,11 +71,11 @@ int main() {
     soln->set_step_dim("t");
     soln->set_elem_bytes(4);
 
-    string dot_file = "api-cxx-test.dot";
+    string dot_file = "yc-api-test-cxx.dot";
     soln->write(dot_file, "dot", true);
     cout << "DOT-format written to '" << dot_file << "'.\n";
 
-    string yask_file = "src/stencil_code.hpp";
+    string yask_file = "yc-api-test-cxx.hpp";
     soln->write(yask_file, "avx", true);
     cout << "YASK-format written to '" << yask_file << "'.\n";
     

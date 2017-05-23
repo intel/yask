@@ -44,7 +44,8 @@ namespace yask {
     // A base class for whole stencil solutions.  This is used by solutions
     // defined in C++ that are inherited from StencilBase as well as those
     // defined via the stencil-compiler API.
-    class StencilSolution : public virtual stencil_solution {
+    class StencilSolution :
+        public virtual yc_solution {
     protected:
         
         // Simple name for the stencil.
@@ -120,18 +121,18 @@ namespace yask {
             return _name;
         }
 
-        virtual grid_ptr new_grid(std::string name,
-                                  std::string dim1 = "",
-                                  std::string dim2 = "",
-                                  std::string dim3 = "",
-                                  std::string dim4 = "",
-                                  std::string dim5 = "",
-                                  std::string dim6 = "");
+        virtual yc_grid_ptr new_grid(const std::string& name,
+                                     const std::string& dim1 = "",
+                                     const std::string& dim2 = "",
+                                     const std::string& dim3 = "",
+                                     const std::string& dim4 = "",
+                                     const std::string& dim5 = "",
+                                     const std::string& dim6 = "");
 
         virtual int get_num_grids() const {
             return int(_grids.size());
         }
-        virtual grid_ptr get_grid(int n) {
+        virtual yc_grid_ptr get_grid(int n) {
             assert(n >= 0 && n < get_num_grids());
             return _grids.at(n);
         }
@@ -139,7 +140,7 @@ namespace yask {
         virtual int get_num_equations() const {
             return _eqs.getNumEqs();
         }
-        virtual equation_node_ptr get_equation(int n) {
+        virtual yc_equation_node_ptr get_equation(int n) {
             assert(n >= 0 && n < get_num_equations());
             return _eqs.getEqs().at(n);
         }

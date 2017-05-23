@@ -59,17 +59,17 @@ IN THE SOFTWARE.
 #include "idiv.hpp"
 
 // macros for 1D<->nD transforms.
-#include "layout_macros.hpp"
+#include "yask_layout_macros.hpp"
 
 // Auto-generated macros from foldBuilder.
 // It's important that this be included before realv.hpp
 // to properly set the vector lengths.
 #define DEFINE_MACROS
-#include "stencil_code.hpp"
+#include "yask_stencil_code.hpp"
 #undef DEFINE_MACROS
 
 // Settings from makefile.
-#include "stencil_macros.hpp"
+#include "yask_macros.hpp"
 
 // Define a folded vector of reals.
 #include "realv.hpp"
@@ -166,7 +166,7 @@ extern yask::Cache cache_model;
 
 // Memory-accessing code.
 namespace yask {
-#include "layouts.hpp"
+#include "yask_layouts.hpp"
 }
 #include "generic_grids.hpp"
 #include "realv_grids.hpp"
@@ -214,7 +214,7 @@ namespace yask {
 
 // Auto-generated stencil code that extends base types.
 #define DEFINE_CONTEXT
-#include "stencil_code.hpp"
+#include "yask_stencil_code.hpp"
 #undef DEFINE_CONTEXT
 
 #endif
