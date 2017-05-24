@@ -6,13 +6,19 @@
 namespace yask {
 
 /** @mainpage
-@section oview Overview
+
+@section yk YASK Stencil Kernel
+
+TBD.
+
+@section yc YASK Stencil Compiler
+@subsection yc_oview Overview
 This document provides usage information for the YASK stencil compiler
 API (application-programmer interface).\n
 The API is available for C++ and for Python via SWIG.
 Type names are prefixed with 'yc_' to indicate "YASK compiler";
 this distinguishes them from the 'yk_'-prefixed types used in the "YASK kernel".
-@section usage Typical Usage Model
+@subsection yc_usage Typical Usage Model
 - Create a 'yc_solution' via yc_factory::new_solution().
 - Create one or more grids (`yc_grid` type) via yc_solution::new_grid() as needed by
   the stencil kernel(s) being implemented.

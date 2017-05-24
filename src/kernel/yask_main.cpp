@@ -31,9 +31,9 @@ IN THE SOFTWARE.
 using namespace std;
 using namespace yask;
 
-// Add some command-line options for this application to the
+// Add some command-line options for this application in addition to the
 // default ones provided by YASK.
-struct AppSettings : public StencilSettings {
+struct AppSettings : public KernelSettings {
     bool help;                  // help requested.
     bool doWarmup;              // whether to do warmup run.
     int num_trials;             // number of trials.
@@ -166,36 +166,42 @@ struct AppSettings : public StencilSettings {
 // Parse command-line args, run kernel, run validation if requested.
 int main(int argc, char** argv)
 {
+    // Bootstrap factory from kernel API.
+    yk_factory kfac;
+        
     // Parse cmd-line options.
-    AppSettings opts;
-    opts.parse(argc, argv);
+    // TODO: do this through APIs.
+    auto opts = make_shared<AppSettings>();
+    opts->parse(argc, argv);
 
     // Object containing data and parameters for stencil eval.
-    YASK_STENCIL_CONTEXT context(opts);
+    // TODO: do everything through API without cast to StencilContext.
+    auto ksoln = kfac.new_solution(opts);
+    auto context = dynamic_pointer_cast<StencilContext>(ksoln);
 
     // Init MPI, OMP, etc.
-    context.initEnv(&argc, &argv);
+    context->initEnv(&argc, &argv);
 
     // Print splash banner and related info.
-    ostream& os = context.get_ostr();
-    opts.splash(os, argc, argv);
+    ostream& os = context->get_ostr();
+    opts->splash(os, argc, argv);
 
     // Alloc memory, create lists of grids, etc.
-    context.allocAll();
+    context->allocAll();
 
     // Exit if nothing to do.
-    if (opts.num_trials < 1) {
+    if (opts->num_trials < 1) {
         cerr << "Exiting because no trials are specified." << endl;
         exit_yask(1);
     }
-    if (context.tot_numpts_dt < 1) {
+    if (context->tot_numpts_dt < 1) {
         cerr << "Exiting because there are zero points to evaluate." << endl;
         exit_yask(1);
     }
 
     // init data in grids and params.
-    if (opts.doWarmup || !opts.validate)
-        context.initData();
+    if (opts->doWarmup || !opts->validate)
+        context->initData();
 
     // just a line.
     string divLine;
@@ -204,20 +210,20 @@ int main(int argc, char** argv)
     divLine += "\n";
     
     // warmup caches, threading, etc.
-    if (opts.doWarmup) {
+    if (opts->doWarmup) {
 
         // Temporarily set dt to a temp value for warmup.
-        idx_t dt = opts.dt;
-        idx_t tmp_dt = min<idx_t>(opts.dt, 1);
-        opts.dt = tmp_dt;
+        idx_t dt = opts->dt;
+        idx_t tmp_dt = min<idx_t>(opts->dt, 1);
+        opts->dt = tmp_dt;
 
         os << endl << divLine <<
-            "Running " << opts.dt << " time step(s) for warm-up...\n" << flush;
-        context.calc_rank_opt();
+            "Running " << opts->dt << " time step(s) for warm-up...\n" << flush;
+        context->calc_rank_opt();
 
         // Replace temp setting with correct value.
-        opts.dt = dt;
-        context.global_barrier();
+        opts->dt = dt;
+        context->global_barrier();
     }
 
     // variables for measuring performance.
@@ -226,29 +232,29 @@ int main(int argc, char** argv)
 
     // Performance runs.
     os << endl << divLine <<
-        "Running " << opts.num_trials << " performance trial(s) of " <<
-        opts.dt << " time step(s) each...\n";
-    for (idx_t tr = 0; tr < opts.num_trials; tr++) {
+        "Running " << opts->num_trials << " performance trial(s) of " <<
+        opts->dt << " time step(s) each...\n";
+    for (idx_t tr = 0; tr < opts->num_trials; tr++) {
         os << divLine;
 
         // init data befor each trial for comparison if validating.
-        if (opts.validate)
-            context.initDiff();
+        if (opts->validate)
+            context->initDiff();
 
         // Stabilize.
         os << flush;
-        if (opts.pre_trial_sleep_time > 0)
-            sleep(opts.pre_trial_sleep_time);
-        context.global_barrier();
+        if (opts->pre_trial_sleep_time > 0)
+            sleep(opts->pre_trial_sleep_time);
+        context->global_barrier();
 
         // Start timing.
         VTUNE_RESUME;
-        context.mpi_time = 0.0;
+        context->mpi_time = 0.0;
         wstart = getTimeInSecs();
 
         // Actual work (must wait until all ranks are done).
-        context.calc_rank_opt();
-        context.global_barrier();
+        context->calc_rank_opt();
+        context->global_barrier();
 
         // Stop timing.
         wstop =  getTimeInSecs();
@@ -256,9 +262,9 @@ int main(int argc, char** argv)
             
         // Calc and report perf.
         float elapsed_time = (float)(wstop - wstart);
-        float apps = float(context.tot_numpts_dt) / elapsed_time;
-        float dpps = float(context.tot_domain_dt) / elapsed_time;
-        float flops = float(context.tot_numFpOps_dt) / elapsed_time;
+        float apps = float(context->tot_numpts_dt) / elapsed_time;
+        float dpps = float(context->tot_domain_dt) / elapsed_time;
+        float flops = float(context->tot_numFpOps_dt) / elapsed_time;
         os << 
             "time (sec):                             " << printWithPow10Multiplier(elapsed_time) << endl <<
             "throughput (prob-size-points/sec):      " << printWithPow10Multiplier(dpps) << endl <<
@@ -266,7 +272,7 @@ int main(int argc, char** argv)
             "throughput (est-FLOPS):                 " << printWithPow10Multiplier(flops) << endl;
 #ifdef USE_MPI
         os <<
-            "time in halo exch (sec):                " << printWithPow10Multiplier(context.mpi_time) << endl;
+            "time in halo exch (sec):                " << printWithPow10Multiplier(context->mpi_time) << endl;
 #endif
 
         if (apps > best_apps) {
@@ -289,25 +295,26 @@ int main(int argc, char** argv)
         " est-FLOPS is based on est-FP-ops as described above.\n" <<
         endl;
     
-    if (opts.validate) {
-        context.global_barrier();
+    if (opts->validate) {
+        context->global_barrier();
         os << endl << divLine <<
             "Setup for validation...\n";
 
         // Make a reference context for comparisons w/new grids.
-        YASK_STENCIL_CONTEXT ref_context(opts);
-        ref_context.name += "-reference";
-        ref_context.copyEnv(context);
-        ref_context.allocAll();
+        auto ref_soln = kfac.new_solution(opts);
+        auto ref_context = dynamic_pointer_cast<StencilContext>(ref_soln);
+        ref_context->name += "-reference";
+        ref_context->copyEnv(*context);
+        ref_context->allocAll();
 
         // init to same value used in context.
-        ref_context.initDiff();
+        ref_context->initDiff();
 
         // Debug code to determine if data immediately after init matches.
 #if CHECK_INIT
         {
-            context.initDiff();
-            idx_t errs = context.compareData(ref_context);
+            context->initDiff();
+            idx_t errs = context->compareData(ref_context);
             if( errs == 0 ) {
                 os << "INIT CHECK PASSED." << endl;
                 exit_yask(0);
@@ -320,13 +327,13 @@ int main(int argc, char** argv)
 
         // Ref trial.
         os << endl << divLine <<
-            "Running " << opts.dt << " time step(s) for validation...\n" << flush;
-        ref_context.calc_rank_ref();
+            "Running " << opts->dt << " time step(s) for validation...\n" << flush;
+        ref_context->calc_rank_ref();
 
         // check for equality.
-        context.global_barrier();
-        os << "Checking results on rank " << context.my_rank << "..." << endl;
-        idx_t errs = context.compareData(ref_context);
+        context->global_barrier();
+        os << "Checking results on rank " << context->my_rank << "..." << endl;
+        idx_t errs = context->compareData(*ref_context);
         if( errs == 0 ) {
             os << "TEST PASSED." << endl;
         } else {
@@ -339,7 +346,7 @@ int main(int argc, char** argv)
     else
         os << "\nRESULTS NOT VERIFIED.\n";
 
-    context.global_barrier();
+    context->global_barrier();
     MPI_Finalize();
     os << "YASK DONE." << endl << divLine;
     

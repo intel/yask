@@ -42,7 +42,7 @@ StencilList stencils;
 map<string, string> outfiles;
 
 // other vars set via cmd-line options.
-StencilSettings settings;
+CompilerSettings settings;
 int vlenForStats = 0;
 StencilBase* stencilSoln = NULL;
 string solutionName;

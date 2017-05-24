@@ -511,6 +511,9 @@ $(YK_EXEC): $(YK_LIB) src/kernel/yask_main.cpp
 $(YK_LIB): $(YK_OBJS)
 	$(CXX) $(CXXFLAGS) -shared -o $@ $^
 
+kernel: $(YK_EXEC)
+
+# Auto-generated files.
 $(YK_GEN_DIR)/yask_rank_loops.hpp: bin/gen-loops.pl Makefile
 	$(YK_MK_GEN_DIR)
 	$< -output $@ $(RANK_LOOP_OPTS) $(EXTRA_LOOP_OPTS) $(EXTRA_RANK_LOOP_OPTS) "$(RANK_LOOP_CODE)"
@@ -539,7 +542,6 @@ $(YK_GEN_DIR)/yask_layouts.hpp: bin/gen-layouts.pl
 	$(YK_MK_GEN_DIR)
 	$< -d > $@
 
-# Run the stencil compiler and post-process its output.
 $(YK_CODE_FILE): $(YC_EXEC)
 	$(YK_MK_GEN_DIR)
 	$< $(YC_FLAGS) $(EXTRA_YC_FLAGS) -p $(YC_TARGET) $@
@@ -575,29 +577,38 @@ $(YC_STENCIL_LIST): src/stencils/*.hpp
 	  echo '#include "'$$sfile'"' >> $@; \
 	done
 
-# API document and code creation:
+compiler: $(YC_EXEC)
 
+# API documents.
 docs/api/latex/refman.tex: include/*.hpp docs/api/*.*
 	cd docs/api; doxygen doxygen_config.txt
 
 api-docs: docs/api/latex/refman.tex
 
-# Python interface.
+# Python interfaces.
 # TODO: install in lib dir.
-src/compiler/swig/yask_compiler.py: include/*hpp $(addprefix src/compiler/,swig/setup.py *pp)
+src/compiler/swig/_yask_compiler.so: include/*hpp $(addprefix src/compiler/,swig/yask*.i swig/setup.py lib/*pp)
 	cd src/compiler/swig; \
 	swig -v -I../../../include -c++ -python yask_compiler_api.i; \
 	python setup.py build_ext --inplace
 
-# Compiler API test.
+src/kernel/swig/_yask_kernel.so: include/*hpp $(addprefix src/kernel/,swig/yask*.i swig/setup.py lib/*pp)
+	cd src/kernel/swig; \
+	swig -v -I../../../include -c++ -python yask_kernel_api.i; \
+	python setup.py build_ext --inplace
+
+# Flags to avoid building and running stencil compiler.
+# TODO: use the kernel API to avoid this hack.
+API_MAKE_FLAGS := --new-file=$(YC_EXEC) --old-file=$(YK_CODE_FILE)
+
+# C++ compiler API test.
 bin/yask-compiler-api-test.exe: $(YC_LIB) src/compiler/tests/api_test.cpp
 	$(YC_CXX) $(YC_CXXFLAGS) -o $@ $^
 
-# Flags to avoid building and running stencil compiler.
-API_MAKE_FLAGS := --new-file=$(YC_EXEC) --old-file=$(YK_CODE_FILE)
 yc-api-test-cxx: bin/yask-compiler-api-test.exe
 	$(MAKE) clean
 	$<
+	$(YK_MK_GEN_DIR)
 	mv yc-api-test-cxx.hpp $(YK_CODE_FILE)
 	mv yc-api-test-cxx.dot src/compiler/tests
 	cd src/compiler/tests && \
@@ -606,24 +617,34 @@ yc-api-test-cxx: bin/yask-compiler-api-test.exe
 	$(MAKE) -j $(API_MAKE_FLAGS) stencil=yc-api-test-cxx arch=snb
 	bin/yask.sh -stencil yc-api-test-cxx -arch snb -v
 
-yc-api-test-py: src/compiler/swig/yask_compiler.py
+# Python compiler API test.
+yc-api-test-py: src/compiler/swig/_yask_compiler.so
 	$(MAKE) clean
 	cd src/compiler/tests && \
 	python api_test.py && \
 	dot -Tpdf -O yc-api-test-py.dot && \
 	ls -l yc-*.dot*
+	$(YK_MK_GEN_DIR)
 	mv src/compiler/tests/yc-api-test-py.hpp $(YK_CODE_FILE)
 	$(MAKE) -j $(API_MAKE_FLAGS) stencil=yc-api-test-py arch=snb
 	bin/yask.sh -stencil yc-api-test-py -arch snb -v
 
-yc-api:	src/compiler/swig/yask_compiler.py
+# Compiler API code.
+yc-api: $(YC_LIB) src/compiler/swig/_yask_compiler.so
 
+# Compiler API tests.
 yc-api-test: yc-api-test-cxx yc-api-test-py
 
+# API docs and compiler API code and tests.
 api: api-docs yc-api yc-api-test
 
+# Kernel API code.
+# NB: must set stencil and arch to generate the kernel API.
+# FIXME: currently does not work due to python build env.
+yk-api: $(YK_LIB) src/kernel/swig/_yask_kernel.so
+
 tags:
-	rm -f TAGS ; find . -name '*.[ch]pp' | xargs etags -C -a
+	rm -f TAGS ; find src include -name '*.[ch]pp' | xargs etags -C -a
 
 # Remove intermediate files.
 # Should not trigger remake of stencil compiler.
@@ -631,7 +652,7 @@ tags:
 clean:
 	rm -fv *.s $(MAKE_REPORT_FILE)
 	rm -fr src/compiler/swig/build $(YK_GEN_DIR)
-	find src/kernel -name '*.[io]' | xargs -r rm -v
+	find src/kernel -name '*.o' | xargs -r rm -v
 	find src/kernel -name '*.optrpt' | xargs -r rm -v
 
 # Remove files from old versions.
@@ -646,7 +667,7 @@ realclean: clean clean-old
 	rm -fv bin/*.exe lib/*.so make-report*.txt cxx-flags*.txt ld-flags.*txt TAGS $(YC_STENCIL_LIST)
 	rm -fr docs/*/html docs/*/latex
 	rm -fv src/compiler/tests/*.dot*
-	find . -name '*.[io]' | xargs -r rm -v
+	find . -name '*.o' | xargs -r rm -v
 	find . -name '*.optrpt' | xargs -r rm -v
 	find . -name '*~' | xargs -r rm -v
 
@@ -686,9 +707,9 @@ echo-settings:
 	@echo OMPFLAGS="\"$(OMPFLAGS)\""
 	@echo EXTRA_CXXFLAGS="\"$(EXTRA_CXXFLAGS)\""
 	@echo CXX=$(CXX)
+	@$(CXX) -v; $(CXX_VER_CMD)
 	@echo CXXOPT=$(CXXOPT)
 	@echo CXXFLAGS="\"$(CXXFLAGS)\""
-	@$(CXX) -v; $(CXX_VER_CMD)
 	@echo RANK_LOOP_OPTS="\"$(RANK_LOOP_OPTS)\""
 	@echo RANK_LOOP_OUTER_MODS="\"$(RANK_LOOP_OUTER_MODS)\""
 	@echo RANK_LOOP_OUTER_VARS="\"$(RANK_LOOP_OUTER_VARS)\""

@@ -1249,9 +1249,9 @@ namespace yask {
     typedef Grid Param;
     typedef Grids Params;
 
-    // Settings for a stencil solution.
+    // Settings for the compiler.
     // May be provided via cmd-line or API.
-    class StencilSettings {
+    class CompilerSettings {
     public:
         int _elem_bytes = 4;    // bytes in an FP element.
         string _stepDim = "t";  // name of stepping dimension.
@@ -1286,7 +1286,7 @@ namespace yask {
     
         // Find the dimensions to be used.
         void setDims(Grids& grids,
-                     StencilSettings& settings,
+                     CompilerSettings& settings,
                      int vlen,
                      bool is_folding_efficient,
                      ostream& os);
@@ -1495,7 +1495,7 @@ namespace yask {
         virtual void printStats(ostream& os, const string& msg);
 
         // Apply optimizations requested in settings.
-        void optimizeEqGroups(StencilSettings& settings,
+        void optimizeEqGroups(CompilerSettings& settings,
                               const string& descr,
                               bool printSets,
                               ostream& os);

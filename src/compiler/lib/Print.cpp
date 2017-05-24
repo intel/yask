@@ -811,7 +811,7 @@ namespace yask {
             // Ctor.
             {
                 os << "\n // Constructor.\n" <<
-                    " " << _context_base << "(StencilSettings& settings) :"
+                    " " << _context_base << "(KernelSettingsPtr settings) :"
                     " StencilContext(settings)" << ctorList <<
                     " {\n  name = \"" << _stencil.getName() << "\";\n";
 
@@ -1100,7 +1100,7 @@ namespace yask {
 
             // Ctor.
             os << "\n // Constructor.\n" <<
-                " " << _context << "(StencilSettings& settings) : " <<
+                " " << _context << "(KernelSettingsPtr settings) : " <<
                 _context_base << "(settings)";
             for (auto& eg : _eqGroups) {
                 string egName = eg.getName();

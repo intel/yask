@@ -88,7 +88,8 @@ namespace yask {
     };
 
     // Application settings to control size and perf of stencil code.
-    struct StencilSettings {
+    struct KernelSettings :
+        public virtual yk_settings {
 
         // Sizes in elements (points).
         // - time sizes (t) are in steps to be done.
@@ -114,7 +115,7 @@ namespace yask {
         int num_block_threads=1; // Number of threads to use for a block.
 
         // Ctor.
-        StencilSettings() {
+        KernelSettings() {
             max_threads = omp_get_max_threads();
         }
 
@@ -131,7 +132,17 @@ namespace yask {
         // Make sure all user-provided settings are valid.
         // Called from allocAll(), so it doesn't normally need to be called from user code.
         virtual void finalizeSettings(std::ostream& os);
+
+        // APIs.
+        // See yask_kernel_api.hpp.
+        virtual void set_domain_size(const std::string& dim,
+                                     idx_t size);
+        virtual void set_pad_size(const std::string& dim,
+                                  idx_t size);
+        
     };
+
+    typedef std::shared_ptr<KernelSettings> KernelSettingsPtr;
     
     // A 4D bounding-box.
     struct BoundingBox {
@@ -171,7 +182,9 @@ namespace yask {
     // for a specific problem.
     // Each eq group is valid within its bounding box (BB).
     // The context's BB encompasses all eq-group BBs.
-    class StencilContext : public BoundingBox {
+    class StencilContext :
+        public BoundingBox,
+        public virtual yk_solution {
 
     private:
         // Disallow copying.
@@ -188,7 +201,7 @@ namespace yask {
         std::ostream* _ostr;
 
         // Command-line and env parameters.
-        StencilSettings* _opts;
+        KernelSettingsPtr _opts;
 
         // Underlying data allocation.
         // TODO: create different types of memory, e.g., HBM.
@@ -265,9 +278,9 @@ namespace yask {
         std::map<std::string, MPIBufs> mpiBufs;
         
         // Constructor.
-        StencilContext(StencilSettings& settings) :
+        StencilContext(KernelSettingsPtr settings) :
             _ostr(&std::cout),
-            _opts(&settings)
+            _opts(settings)
         {
             // Init my_neighbors to indicate no neighbor.
             int *p = (int *)my_neighbors;
@@ -297,7 +310,7 @@ namespace yask {
         }
 
         // Get access to settings.
-        virtual StencilSettings& get_settings() {
+        virtual KernelSettings& get_settings() {
             assert(_opts);
             return *_opts;
         }
@@ -424,6 +437,22 @@ namespace yask {
         // Set the bounding-box around all eq groups.
         virtual void find_bounding_boxes();
 
+
+        // APIs.
+        // See yask_kernel_api.hpp.
+        virtual const std::string& get_name() const {
+            return name;
+        }
+
+        virtual int get_num_grids() const {
+            return int(gridPtrs.size());
+        }
+
+        virtual yk_grid_ptr get_grid(int n) {
+            assert (n >= 0);
+            assert (n < get_num_grids());
+            return gridPtrs.at(n);
+        }
     };
     
     /// Classes that support evaluation of one stencil equation-group.

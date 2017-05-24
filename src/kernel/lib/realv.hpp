@@ -30,9 +30,7 @@ IN THE SOFTWARE.
 
 namespace yask {
 
-    // Type to use for indexing grids and real_vec_t elements.
-    // Must be signed to allow negative indices in halos.
-    typedef int64_t idx_t;
+    // Max and min indices.
     const idx_t idx_max = INT64_MAX;
     const idx_t idx_min = INT64_MIN;
 

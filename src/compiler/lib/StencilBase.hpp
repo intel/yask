@@ -69,7 +69,7 @@ namespace yask {
         Eqs _eqs;
 
         // Settings for the solution.
-        StencilSettings _settings;
+        CompilerSettings _settings;
 
     private:
 
@@ -96,7 +96,7 @@ namespace yask {
         virtual Grids& getGrids() { return _grids; }
         virtual Grids& getParams() { return _params; }
         virtual Eqs& getEqs() { return _eqs; }
-        virtual StencilSettings& getSettings() { return _settings; }
+        virtual CompilerSettings& getSettings() { return _settings; }
 
         // Get user-provided code for the given section.
         CodeList * getExtensionCode(YASKSection section)

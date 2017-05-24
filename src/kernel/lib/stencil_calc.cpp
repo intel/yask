@@ -28,6 +28,46 @@ using namespace std;
 
 namespace yask {
 
+    // APIs.
+    yk_settings_ptr yk_factory::new_settings() const {
+        return make_shared<KernelSettings>();
+    }
+    void KernelSettings::set_domain_size(const std::string& dim,
+                                         idx_t size) {
+        assert(size > 0);
+        
+        // TODO: remove hard-coded dimensions.
+        if (dim == "t") dt = size;
+        else if (dim == "w") dw = size;
+        else if (dim == "x") dx = size;
+        else if (dim == "y") dy = size;
+        else if (dim == "z") dz = size;
+        else {
+            cerr << "Error: set_domain_size(): bad dim '" << dim << "'\n";
+            exit(1);
+        }
+    }
+    void KernelSettings::set_pad_size(const std::string& dim,
+                                      idx_t size) {
+        assert(size >= 0);
+        
+        // TODO: remove hard-coded dimensions.
+        if (dim == "w") epw = size;
+        else if (dim == "x") epx = size;
+        else if (dim == "y") epy = size;
+        else if (dim == "z") epz = size;
+        else {
+            cerr << "Error: set_pad_size(): bad dim '" << dim << "'\n";
+            exit(1);
+        }
+    }
+    
+    yk_solution_ptr yk_factory::new_solution(yk_settings_ptr opts) const {
+        auto sp = dynamic_pointer_cast<KernelSettings>(opts);
+        assert(sp);
+        return make_shared<YASK_STENCIL_CONTEXT>(sp);
+    }
+    
     ///// StencilContext functions:
 
     // Init MPI, OMP, etc.
@@ -401,7 +441,7 @@ namespace yask {
                   ", y=" << begin_by << ".." << (end_by-1) <<
                   ", z=" << begin_bz << ".." << (end_bz-1) <<
                   ").");
-        StencilSettings& opts = _generic_context->get_settings();
+        KernelSettings& opts = _generic_context->get_settings();
 
         // Steps within a block are based on sub-block sizes.
         const idx_t step_bw = opts.sbw;
@@ -1126,7 +1166,7 @@ namespace yask {
     void EqGroupBase::find_bounding_box() {
         if (bb_valid) return;
         StencilContext& context = *_generic_context;
-        StencilSettings& opts = context.get_settings();
+        KernelSettings& opts = context.get_settings();
         ostream& os = context.get_ostr();
 
         // Init min vars w/max val and vice-versa.
@@ -1222,7 +1262,7 @@ namespace yask {
     // TODO: overlap halo exchange with computation.
     void StencilContext::exchange_halos(idx_t start_dt, idx_t stop_dt, EqGroupBase& eg)
     {
-        StencilSettings& opts = get_settings();
+        KernelSettings& opts = get_settings();
         TRACE_MSG("exchange_halos(t=" << start_dt << ".." << (stop_dt-1) <<
                   ", needed for eq-group '" << eg.get_name() << "')");
 
@@ -1571,7 +1611,7 @@ namespace yask {
 #endif
     
     // Add these settigns to a cmd-line parser.
-    void StencilSettings::add_options(CommandLineParser& parser)
+    void KernelSettings::add_options(CommandLineParser& parser)
     {
         ADD_T_DIM_OPTION("d", "Rank-domain size", d);
         ADD_T_DIM_OPTION("r", "Region size", r);
@@ -1603,7 +1643,7 @@ namespace yask {
     }
     
     // Print usage message.
-    void StencilSettings::print_usage(ostream& os,
+    void KernelSettings::print_usage(ostream& os,
                                       CommandLineParser& parser,
                                       const string& pgmName,
                                       const string& appNotes,
@@ -1703,7 +1743,7 @@ namespace yask {
         // Make sure all user-provided settings are valid and finish setting up some
         // other vars before allocating memory.
         // Called from allocAll(), so it doesn't normally need to be called from user code.
-        void StencilSettings::finalizeSettings(std::ostream& os) {
+        void KernelSettings::finalizeSettings(std::ostream& os) {
 
             // Round up domain size as needed.
             dt = roundUp(os, dt, CPTS_T, "rank domain size in t (time steps)");

@@ -251,7 +251,7 @@ namespace yask {
     
     // yask_compiler_factory API methods.
     yc_solution_ptr
-    yc_factory::new_solution(const std::string& name) {
+    yc_factory::new_solution(const std::string& name) const {
         return make_shared<EmptyStencil>(name);
     }
     
@@ -1494,7 +1494,7 @@ namespace yask {
     }
 
     // Apply optimizations according to the 'settings'.
-    void EqGroups::optimizeEqGroups(StencilSettings& settings,
+    void EqGroups::optimizeEqGroups(CompilerSettings& settings,
                                     const string& descr,
                                     bool printSets,
                                     ostream& os) {
@@ -1544,7 +1544,7 @@ namespace yask {
 
     // Find the dimensions to be used.
     void Dimensions::setDims(Grids& grids,
-                             StencilSettings& settings,
+                             CompilerSettings& settings,
                              int vlen,
                              bool is_folding_efficient,
                              ostream& os)

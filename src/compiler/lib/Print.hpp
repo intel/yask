@@ -205,13 +205,13 @@ namespace yask {
 
     // Outputs a simple, human-readable version of the AST in a bottom-up
     // fashion with multiple sub-expressions, each assigned to a temp var.
-    // The min/maxExprSize vars in StencilSettings control when and where
+    // The min/maxExprSize vars in CompilerSettings control when and where
     // expressions are sub-divided. Within each sub-expression, a top-down
     // visitor is used.
     class PrintVisitorBottomUp : public PrintVisitorBase {
 
     protected:
-        StencilSettings& _settings;
+        CompilerSettings& _settings;
 
         // map sub-expressions to var names.
         map<Expr*, string> _tempVars;
@@ -228,7 +228,7 @@ namespace yask {
     public:
         // os is used for printing intermediate results as needed.
         PrintVisitorBottomUp(ostream& os, PrintHelper& ph,
-                             StencilSettings settings) :
+                             CompilerSettings settings) :
             PrintVisitorBase(os, ph),
             _settings(settings) { }
 
@@ -410,7 +410,7 @@ namespace yask {
         Grids& _grids;
         Params& _params;
         EqGroups& _eqGroups;
-        StencilSettings& _settings;
+        CompilerSettings& _settings;
         
         // Return an upper-case string.
         string allCaps(string str) {

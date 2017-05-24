@@ -33,11 +33,10 @@ IN THE SOFTWARE.
 
 #include <string>
 #include <memory>
-#include <climits>
 
 namespace yask {
 
-    // Forward declarations of classes and smart pointers.
+    // Forward declarations of classes pointers.
     class yc_solution;
     typedef std::shared_ptr<yc_solution> yc_solution_ptr;
     class yc_grid;
@@ -77,7 +76,7 @@ namespace yask {
          * @returns Pointer to new solution object. */
         virtual yc_solution_ptr
         new_solution(const std::string& name /**< [in] Name of the solution; 
-                                                must be a valid C++ identifier. */ );
+                                                must be a valid C++ identifier. */ ) const;
     };
             
     /// Stencil solution.

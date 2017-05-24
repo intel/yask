@@ -29,6 +29,9 @@ IN THE SOFTWARE.
 #ifndef STENCIL_HPP
 #define STENCIL_HPP
 
+// Include the API first. This helps to ensure that it will stand alone.
+#include "yask_kernel_api.hpp"
+
 // Control assert() by turning on with DEBUG instead of turning off with
 // NDEBUG. This makes it off by default.
 #ifndef DEBUG

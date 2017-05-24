@@ -40,7 +40,8 @@ namespace yask {
     // the 1st rank's x indices will be -10..110, and the 2nd rank's x
     // indices will be 90..210.  TODO: allow different pos and neg-side
     // halos and/or padding.
-    class RealVecGridBase {
+    class RealVecGridBase :
+        public virtual yk_grid {
 
     protected:
         RealVecGrid* _gp;
@@ -322,6 +323,14 @@ namespace yask {
             return _gp;
         }
 
+
+        // APIs not defined above.
+        // See yask_kernel_api.hpp.
+        virtual const std::string& get_dim_name(int n) const {
+            assert(n >= 0);
+            assert(n < get_num_dims());
+            return _gp->get_dim_name(n);
+        }
     };
     
     // A 3D (x, y, z) collection of real_vec_t elements.
