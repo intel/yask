@@ -276,25 +276,10 @@ else  # not 512 bits (assume 256).
 
 endif # not 512 bits.
 
-# select fold based on size of reals.
+# Select fold based on size of reals.
 fold	= 	$(fold_$(real_bytes)byte) # e.g., fold_4byte
 
-# More build flags.
-ifeq ($(mpi),1)
- CXX		:=	mpiicpc
-else
- CXX		:=	icpc
-endif
-LD		:=	$(CXX)
-MAKE		?=	make
-CXXOPT		?=	-O3
-CXXFLAGS        +=   	-g -std=c++11 -Wall $(CXXOPT)
-CXXFLAGS	+=	-Iinclude -Isrc/common -Isrc/kernel/lib -Isrc/kernel/gen
-OMPFLAGS	+=	-fopenmp 
-LFLAGS          +=      -lrt
-YC_CXX    	?=	g++  # faster than icpc for building the compiler.
-YC_CXXFLAGS 	+=	-g -O0 -std=c++11 -Wall  # low opt to reduce compile time.
-YC_CXXFLAGS	+=	-Iinclude -Isrc/common -Isrc/compiler/lib -Isrc/stencils
+# Flags for stencil compiler.
 YC_FLAGS   	+=	-stencil $(stencil) -elem-bytes $(real_bytes) -cluster $(cluster) -fold $(fold)
 ifneq ($(eqs),)
  YC_FLAGS   	+=	-eq $(eqs)
@@ -308,6 +293,30 @@ endif
 ifneq ($(time_alloc),)
  YC_FLAGS   	+=	-step-alloc $(time_alloc)
 endif
+
+# Compiler, etc.
+ifeq ($(mpi),1)
+ CXX		:=	mpiicpc
+else
+ CXX		:=	icpc
+endif
+LD		:=	$(CXX)
+MAKE		?=	make
+
+# More build flags.
+CXXOPT		?=	-O3
+CXXFLAGS        +=   	-g -std=c++11 -Wall $(CXXOPT)
+CXXFLAGS	+=	-Iinclude -Isrc/common -Isrc/kernel/lib -Isrc/kernel/gen
+OMPFLAGS	+=	-fopenmp
+
+CWD		:=	$(shell pwd)
+LFLAGS          +=      -lrt -Wl,-rpath=$(CWD)/lib -L$(CWD)/lib
+YC_LFLAGS	:=	$(LFLAGS)
+YK_LFLAGS	:=	$(LFLAGS)
+
+YC_CXX    	?=	g++  # faster than icpc for building the compiler.
+YC_CXXFLAGS 	+=	-g -std=c++11 -Wall
+YC_CXXFLAGS	+=	-Iinclude -Isrc/common -Isrc/compiler/lib -Isrc/stencils
 
 # Default cmd-line args.
 DEF_ARGS	+=	-thread_divisor $(def_thread_divisor)
@@ -340,7 +349,7 @@ ifeq ($(hbw),1)
  MACROS		+=	USE_HBW
  HBW_DIR 	=	$(HOME)/memkind_build
  CXXFLAGS	+=	-I$(HBW_DIR)/include
- LFLAGS		+= 	-lnuma $(HBW_DIR)/lib/libmemkind.a
+ YK_LFLAGS	+= 	-lnuma $(HBW_DIR)/lib/libmemkind.a
 endif
 
 # VTUNE settings.
@@ -352,7 +361,7 @@ else
  VTUNE_DIR	=	$(VTUNE_AMPLIFIER_XE_2016_DIR)
 endif
 CXXFLAGS	+=	-I$(VTUNE_DIR)/include
-LFLAGS		+=	$(VTUNE_DIR)/lib64/libittnotify.a
+YK_LFLAGS	+=	$(VTUNE_DIR)/lib64/libittnotify.a
 endif
 
 # compiler-specific settings
@@ -392,10 +401,11 @@ CXXFLAGS	+=	$(OMPFLAGS) $(EXTRA_CXXFLAGS)
 YC_CXXFLAGS	+=	$(EXTRA_YC_CXXFLAGS)
 
 # More file names.
-YC_BASES	:=	CppIntrin Expr ExprUtils Print
-YC_OBJS		:=	$(addprefix src/compiler/lib/,$(addsuffix .o,$(YC_BASES)))
-YC_LIB		:=	lib/yask-compiler.so
-YC_EXEC		:=	bin/yask-compiler.exe
+YC_SRC_BASES	:=	CppIntrin Expr ExprUtils Print
+YC_OBJS		:=	$(addprefix src/compiler/lib/,$(addsuffix .o,$(YC_SRC_BASES)))
+YC_BASE		:=	yask-compiler
+YC_LIB		:=	lib/lib$(YC_BASE).so
+YC_EXEC		:=	bin/$(YC_BASE).exe
 YC_STENCIL_LIST	:=	src/compiler/stencils.hpp
 
 YK_GEN_DIR	:=	src/kernel/gen
@@ -413,10 +423,11 @@ YK_GEN_HEADERS	:=	$(addprefix $(YK_GEN_DIR)/, \
 				$(YK_CODE_FILE)
 
 YK_TAG		:=	$(stencil).$(arch)
-YK_BASES	:=	stencil_calc realv_grids utils
-YK_OBJS		:=	$(addprefix src/kernel/lib/,$(addsuffix .$(YK_TAG).o,$(YK_BASES)))
-YK_LIB		:=	lib/yask.$(YK_TAG).so
-YK_EXEC		:=	bin/yask.$(YK_TAG).exe
+YK_SRC_BASES	:=	stencil_calc realv_grids utils
+YK_OBJS		:=	$(addprefix src/kernel/lib/,$(addsuffix .$(YK_TAG).o,$(YK_SRC_BASES)))
+YK_BASE		:=	yask-kernel.$(YK_TAG)
+YK_LIB		:=	lib/lib$(YK_BASE).so
+YK_EXEC		:=	bin/$(YK_BASE).exe
 
 MAKE_REPORT_FILE:=	make-report.$(YK_TAG).txt
 CXXFLAGS_FILE	:=	cxx-flags.$(YK_TAG).txt
@@ -492,7 +503,7 @@ HALO_LOOP_CODE		?=	$(HALO_LOOP_OUTER_MODS) loop($(HALO_LOOP_OUTER_VARS)) \
 
 all:	$(YK_EXEC) $(MAKE_REPORT_FILE)
 	echo $(CXXFLAGS) > $(CXXFLAGS_FILE)
-	echo $(LFLAGS) > $(LFLAGS_FILE)
+	echo $(YK_LFLAGS) > $(LFLAGS_FILE)
 	@cat $(MAKE_REPORT_FILE)
 	@echo "Binary" $(YK_EXEC) "has been built."
 	@echo "Run command: bin/yask.sh -stencil" $(stencil) "-arch" $(arch) "[options]"
@@ -503,13 +514,14 @@ $(MAKE_REPORT_FILE): $(YK_EXEC)
 
 # Compile the kernel.
 %.$(YK_TAG).o: %.cpp src/common/*hpp src/kernel/lib/*hpp include/*hpp $(YK_GEN_HEADERS)
+	$(CXX) --version
 	$(CXX) $(CXXFLAGS) -fPIC -c -o $@ $<
-
-$(YK_EXEC): $(YK_LIB) src/kernel/yask_main.cpp
-	$(CXX) $(CXXFLAGS) $(LFLAGS) -o $@ $^
 
 $(YK_LIB): $(YK_OBJS)
 	$(CXX) $(CXXFLAGS) -shared -o $@ $^
+
+$(YK_EXEC): src/kernel/yask_main.cpp $(YK_LIB)
+	$(CXX) $(CXXFLAGS) $(YK_LFLAGS) -o $@ $< -l$(YK_BASE)
 
 kernel: $(YK_EXEC)
 
@@ -562,13 +574,14 @@ headers: $(GEN_HEADERS)
 
 # Compile the stencil compiler.
 %.o: %.cpp src/common/*hpp src/compiler/lib/*hpp include/yask_compiler_api.hpp $(YC_STENCIL_LIST)
-	$(YC_CXX) $(YC_CXXFLAGS) -fPIC -c -o $@ $<
-
-$(YC_EXEC): $(YC_LIB) src/compiler/main.cpp
-	$(YC_CXX) $(YC_CXXFLAGS) -o $@ $^
+	$(YC_CXX) --version
+	$(YC_CXX) $(YC_CXXFLAGS) -O2 -fPIC -c -o $@ $<
 
 $(YC_LIB): $(YC_OBJS)
 	$(YC_CXX) $(YC_CXXFLAGS) -shared -o $@ $^
+
+$(YC_EXEC): src/compiler/main.cpp $(YC_LIB)
+	$(YC_CXX) $(YC_CXXFLAGS) -O0 $(YC_LFLAGS) -o $@ $< -l$(YC_BASE)
 
 $(YC_STENCIL_LIST): src/stencils/*.hpp
 	echo '// Stencil-definition files.' > $@
@@ -581,6 +594,7 @@ compiler: $(YC_EXEC)
 
 # API documents.
 docs/api/latex/refman.tex: include/*.hpp docs/api/*.*
+	doxygen -v
 	cd docs/api; doxygen doxygen_config.txt
 
 api-docs: docs/api/latex/refman.tex
@@ -588,6 +602,7 @@ api-docs: docs/api/latex/refman.tex
 # Python compiler interface.
 # TODO: install in lib dir.
 src/compiler/swig/_yask_compiler.so: include/*hpp $(addprefix src/compiler/,swig/yask*.i swig/setup.py lib/*pp)
+	swig -version
 	cd src/compiler/swig; \
 	swig -v -I../../../include -c++ -python yask_compiler_api.i; \
 	python setup.py build_ext --inplace
@@ -596,6 +611,7 @@ src/compiler/swig/_yask_compiler.so: include/*hpp $(addprefix src/compiler/,swig
 # TODO: install in lib dir.
 # FIXME: currently does not work due to python build env.
 src/kernel/swig/_yask_kernel.so: include/*hpp $(addprefix src/kernel/,swig/yask*.i swig/setup.py lib/*pp)
+	swig -version
 	cd src/kernel/swig; \
 	swig -v -I../../../include -c++ -python yask_kernel_api.i; \
 	python setup.py build_ext --inplace
