@@ -259,6 +259,9 @@ namespace yask {
         inline void set_d1(idx_t d1) {
             _layout.set_d1(d1);
             this->_dims.setVal(0, d1); }
+        inline void set_dim_sizes(idx_t d1) {
+            set_d1(d1);
+        }
 
         // Get number of elements.
         virtual idx_t get_num_elems() const {
@@ -356,6 +359,10 @@ namespace yask {
         inline void set_d2(idx_t d2) {
             _layout.set_d2(d2); 
             this->_dims.setVal(0, d2);
+        }
+        inline void set_dim_sizes(idx_t d1, idx_t d2) {
+            set_d1(d1);
+            set_d2(d2);
         }
 
         // Get number of elements.
@@ -466,6 +473,11 @@ namespace yask {
         inline void set_d3(idx_t d3) {
             _layout.set_d3(d3);
             this->_dims.setVal(2, d3);
+        }
+        inline void set_dim_sizes(idx_t d1, idx_t d2, idx_t d3) {
+            set_d1(d1);
+            set_d2(d2);
+            set_d3(d3);
         }
 
         // Get number of elements.
@@ -587,6 +599,12 @@ namespace yask {
         inline void set_d4(idx_t d4) {
             _layout.set_d4(d4);
             this->_dims.setVal(3, d4);
+        }
+        inline void set_dim_sizes(idx_t d1, idx_t d2, idx_t d3, idx_t d4) {
+            set_d1(d1);
+            set_d2(d2);
+            set_d3(d3);
+            set_d4(d4);
         }
 
         // Get number of elements.
@@ -720,6 +738,13 @@ namespace yask {
         inline void set_d5(idx_t d5) {
             _layout.set_d5(d5);
             this->_dims.setVal(4, d5);
+        }
+        inline void set_dim_sizes(idx_t d1, idx_t d2, idx_t d3, idx_t d4, idx_t d5) {
+            set_d1(d1);
+            set_d2(d2);
+            set_d3(d3);
+            set_d4(d4);
+            set_d5(d5);
         }
 
         // Get number of elements.

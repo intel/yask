@@ -802,8 +802,10 @@ namespace yask {
                     ctorCode += ", \"" + dname + "\""; // add dim name.
                 }
                 ctorCode += ");\n"
-                    " assert(" + param + ");\n"
-                    " " + param + "->set_d1(" + dimArg + ");\n"
+                    " assert(" + param + ");\n";
+                if (pp->getNumDims())
+                    ctorCode += " " + param + "->set_dim_sizes(" + dimArg + ");\n";
+                ctorCode +=
                     " paramPtrs.push_back(" + param + ");\n"
                     " paramMap[\"" + param + "\"] = " + param + ";\n";
             }
