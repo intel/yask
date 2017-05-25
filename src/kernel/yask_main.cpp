@@ -23,9 +23,7 @@ IN THE SOFTWARE.
 
 *****************************************************************************/
 
-// This code is the YASK stencil performance-measurement tool.  It can be
-// used as a starting-point for integrating a YASK stencil kernel into other
-// applications.
+// This code implements the YASK stand-alone performance-measurement tool.
 
 #include "yask.hpp"
 using namespace std;

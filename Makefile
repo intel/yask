@@ -585,28 +585,35 @@ docs/api/latex/refman.tex: include/*.hpp docs/api/*.*
 
 api-docs: docs/api/latex/refman.tex
 
-# Python interfaces.
+# Python compiler interface.
 # TODO: install in lib dir.
 src/compiler/swig/_yask_compiler.so: include/*hpp $(addprefix src/compiler/,swig/yask*.i swig/setup.py lib/*pp)
 	cd src/compiler/swig; \
 	swig -v -I../../../include -c++ -python yask_compiler_api.i; \
 	python setup.py build_ext --inplace
 
+# Python kernel interface.
+# TODO: install in lib dir.
+# FIXME: currently does not work due to python build env.
 src/kernel/swig/_yask_kernel.so: include/*hpp $(addprefix src/kernel/,swig/yask*.i swig/setup.py lib/*pp)
 	cd src/kernel/swig; \
 	swig -v -I../../../include -c++ -python yask_kernel_api.i; \
 	python setup.py build_ext --inplace
 
-# Flags to avoid building and running stencil compiler.
-# TODO: use the kernel API to avoid this hack.
-API_MAKE_FLAGS := --new-file=$(YC_EXEC) --old-file=$(YK_CODE_FILE)
-
-# C++ compiler API test.
+# Build C++ compiler API test.
 bin/yask-compiler-api-test.exe: $(YC_LIB) src/compiler/tests/api_test.cpp
 	$(YC_CXX) $(YC_CXXFLAGS) -o $@ $^
 
+# Flags to avoid building and running stencil compiler.
+# NB: This trick is only needed when using the compiler API to create
+# a stencil to replace the one normally created by the pre-built stencil compiler.
+API_MAKE_FLAGS := --new-file=$(YC_EXEC) --old-file=$(YK_CODE_FILE)
+
+# Run C++ compiler API test, then build YASK kernel to use its output.
+# Also create .pdf rendering of stencil AST.
 yc-api-test-cxx: bin/yask-compiler-api-test.exe
 	$(MAKE) clean
+	@echo '*** Running the YASK compiler API test...'
 	$<
 	$(YK_MK_GEN_DIR)
 	mv yc-api-test-cxx.hpp $(YK_CODE_FILE)
@@ -617,9 +624,11 @@ yc-api-test-cxx: bin/yask-compiler-api-test.exe
 	$(MAKE) -j $(API_MAKE_FLAGS) stencil=yc-api-test-cxx arch=snb
 	bin/yask.sh -stencil yc-api-test-cxx -arch snb -v
 
-# Python compiler API test.
+# Run Python compiler API test, then build YASK kernel to use its output.
+# Also create .pdf rendering of stencil AST.
 yc-api-test-py: src/compiler/swig/_yask_compiler.so
 	$(MAKE) clean
+	@echo '*** Running the YASK compiler API test...'
 	cd src/compiler/tests && \
 	python api_test.py && \
 	dot -Tpdf -O yc-api-test-py.dot && \
@@ -638,9 +647,19 @@ yc-api-test: yc-api-test-cxx yc-api-test-py
 # API docs and compiler API code and tests.
 api: api-docs yc-api yc-api-test
 
+# Build C++ kernel API test.
+# NB: must set stencil and arch to generate the kernel API.
+bin/yask-kernel-api-test.exe: $(YK_LIB) src/kernel/tests/api_test.cpp
+	$(CXX) $(CXXFLAGS) $(LFLAGS) -o $@ $^
+
+# Run C++ kernel API test.
+# NB: must set stencil and arch to use the correct kernel API.
+yk-api-test-cxx: bin/yask-kernel-api-test.exe
+	@echo '*** Running the YASK kernel API test...'
+	$<
+
 # Kernel API code.
 # NB: must set stencil and arch to generate the kernel API.
-# FIXME: currently does not work due to python build env.
 yk-api: $(YK_LIB) src/kernel/swig/_yask_kernel.so
 
 tags:
@@ -743,17 +762,18 @@ code_stats:
 	bin/get-loop-stats.pl -t='sub_block_loops' *.s
 
 help:
-	@echo "Example build:"
+	@echo "Example performance builds:"
 	@echo "make clean; make -j arch=knl stencil=iso3dfd"
 	@echo "make clean; make -j arch=knl stencil=awp mpi=1"
 	@echo "make clean; make -j arch=skx stencil=ave fold='x=1,y=2,z=4' cluster='x=2'"
 	@echo "make clean; make -j arch=hsw stencil=3axis radius=4 SUB_BLOCK_LOOP_INNER_MODS='prefetch(L1,L2)' pfd_l2=3"
 	@echo " "
-	@echo "Example debug build:"
-	@echo "make arch=knl  stencil=iso3dfd OMPFLAGS='-qopenmp-stubs' CXXOPT='-O0' EXTRA_MACROS='DEBUG'"
-	@echo "make arch=intel64 stencil=ave OMPFLAGS='-qopenmp-stubs' CXXOPT='-O0' EXTRA_MACROS='DEBUG' model_cache=2"
-	@echo "make arch=intel64 stencil=3axis radius=0 fold='x=1,y=1,z=1' OMPFLAGS='-qopenmp-stubs' EXTRA_MACROS='DEBUG DEBUG_TOLERANCE NO_INTRINSICS TRACE TRACE_MEM TRACE_INTRINSICS' CXXOPT='-O0'"
+	@echo "Example debug builds:"
+	@echo "make clean; make arch=knl  stencil=iso3dfd OMPFLAGS='-qopenmp-stubs' CXXOPT='-O0' EXTRA_MACROS='DEBUG'"
+	@echo "make clean; make arch=intel64 stencil=ave OMPFLAGS='-qopenmp-stubs' CXXOPT='-O0' EXTRA_MACROS='DEBUG' model_cache=2"
+	@echo "make clean; make arch=intel64 stencil=3axis radius=0 fold='x=1,y=1,z=1' OMPFLAGS='-qopenmp-stubs' CXXOPT='-O0' EXTRA_MACROS='DEBUG TRACE TRACE_MEM TRACE_INTRINSICS'"
 	@echo " "
-	@echo "API build and test:"
-	@echo "make api"
-
+	@echo "Example API document generation, build, and test:"
+	@echo "make api-docs"
+	@echo "make -j yc-api yc-api-test"
+	@echo "make clean; make -j arch=snb stencil=iso3dfd yk-api-test-cxx"

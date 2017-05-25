@@ -72,34 +72,44 @@ namespace yask {
         virtual ~yk_settings() {}
 
         /// Set the domain size.
-        /** The domain defines the points that will be
-         * evaluated with the stencil(s). It affects the size of the grids, but it is not equivalent.
-         * Specifically, it does *not* include the halo region or any additional padding.
-         * The actual number of points evaluated may be less than the domain if a given stencil
-         * equation has a non-default condition.
-         * Also, actual number of points in the domain of a given grid may be greater than
-         * this specified size due to rounding up to fold-cluster sizes. 
-         * Get the domain size of a specific grid to determine the actual size. */
+        /** The domain defines the points that will be evaluated with the
+         * stencil(s). It affects the size of the grids, but it is not
+         * equivalent.  Specifically, it does *not* include the halo region
+         * or any additional padding.  The actual number of points evaluated
+         * may be less than the domain if a given stencil equation has a
+         * non-default condition.  Also, actual number of points in the
+         * domain of a given grid may be greater than this specified size
+         * due to rounding up to fold-cluster sizes.  Finally, the
+         * allocation in the solution-step dimension is not related to the
+         * domain size in the step dimension due to memory reuse.  Get the
+         * domain size of a specific grid to determine the actual size. */
         virtual void
-        set_domain_size(const std::string& dim /**< [in] Dimension to set. */,
+        set_domain_size(const std::string& dim /**< [in] Name of dimension to set.
+                                                Must correspond to a dimension set via
+                                                INIT_GRID() or yc_solution::new_grid(). */,
                         idx_t size /**< [in] Points in this `dim`. */ ) =0;
 
         /// Set the grid pad size.
-        /** This sets a minimum number of points in each grid that is allocated outside of the domain
-         * in the given dimension.
-         * There is no padding allowed in the solution-step dimension (usually "t").
-         * If a grid has a halo size set in a given dimension before allocation, 
-         * this pad will be added to that halo size. 
-         * (Thus, a pad is not required a priori if the halo size is already set.)
-         * If a grid does *not* have a halo size set in a given dimension before allocation,
-         * the halo can be set after allocation to a value less than or equal to the pad size without
-         * requiring re-allocation, and the pad size will be reduced as needed.
-         * Also, the actual pad may be greater than
-         * the specified size due to rounding up to fold sizes. 
-         * Get the pad size of a specific grid to determine the actual size. */
+        /** This sets a minimum number of points in each grid that is
+         * allocated outside of the domain in the given dimension.  The
+         * specified padding is added to both sides, i.e., both "before" and
+         * "after" the domain.  There is no padding allowed in the
+         * solution-step dimension (usually "t").  If a grid has a halo size
+         * set in a given dimension before allocation, this pad will be
+         * added to that halo size.  (Thus, a pad is not required a priori
+         * if the halo size is already set.)  If a grid does *not* have a
+         * halo size set in a given dimension before allocation, the halo
+         * can be set after allocation to a value less than or equal to the
+         * pad size without requiring re-allocation, and the pad size will
+         * be reduced as needed.  Also, the actual pad may be greater than
+         * the specified size due to rounding up to fold sizes.  Get the pad
+         * size of a specific grid to determine the actual size. */
         virtual void
-        set_pad_size(const std::string& dim /**< [in] Dimension to set. */,
-                     idx_t size /**< [in] Points in this `dim`. */ ) =0;
+        set_pad_size(const std::string& dim /**< [in] Name of dimension to set.
+                                               Must correspond to a dimension created via
+                                               INIT_GRID() or yc_solution::new_grid(). */,
+                     idx_t size /**< [in] Points in this `dim` applied
+                                   to both sides of the domain. */ ) =0;
     };
     
     /// Stencil solution.
@@ -126,10 +136,11 @@ namespace yask {
                               and get_num_grids()-1. */ ) =0;
     };
 
-    /// A grid.
+    /// A run-time grid.
     /** "Grid" is a generic term for any n-dimensional array.  A 0-dim grid
-     * is a scalar, a 1-dim grid is an array, etc. 
-     * Access grids via yk_solution::get_grid(). */
+     * is a scalar, a 1-dim grid is an array, etc.  A run-time grid contains
+     * data, unlike yc_grid, a compile-time grid.  Access grids via
+     * yk_solution::get_grid(). */
     class yk_grid {
     public:
         virtual ~yk_grid() {}

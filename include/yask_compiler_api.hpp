@@ -96,7 +96,7 @@ namespace yask {
         virtual void
         set_name(std::string name /**< [in] Name; must be a valid C++ identifier. */ ) =0;
 
-        /// Create an n-dimensional grid in the solution.
+        /// Create an n-dimensional grid variable in the solution.
         /** "Grid" is a generic term for any n-dimensional array.  A 0-dim
          * grid is a scalar, a 1-dim grid is a vector, a 2-dim grid is a
          * matrix, etc.  Define the name of each dimension that is needed
@@ -231,10 +231,13 @@ namespace yask {
               bool debug = false /**< [in] Print diagnostic info to stdout. */ ) =0;
     };
 
-    /// A grid.
+    /// A compile-time grid.
     /** "Grid" is a generic term for any n-dimensional array.  A 0-dim grid
-     * is a scalar, a 1-dim grid is an array, etc.  Create new grids via
-     * new_grid(). */
+     * is a scalar, a 1-dim grid is an array, etc.
+     * A compile-time grid is a variable used for constructing equations.
+     * It does not contain any data.
+     * Data is only stored during run-time, using a yk_grid.
+     * Create new grids via yc_solution::new_grid(). */
     class yc_grid {
     public:
         virtual ~yc_grid() {}
