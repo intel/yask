@@ -619,7 +619,7 @@ yk-api: $(YK_LIB) lib/_yask_kernel.so
 # Run C++ and Python kernel API tests.
 yk-api-test: yk-api-test-cxx yk-api-test-py
 
-
+ 
 
 # Format API documents.
 docs/api/latex/refman.tex: include/*.hpp docs/api/*.*
@@ -709,7 +709,7 @@ tags:
 clean:
 	rm -fv *.s $(MAKE_REPORT_FILE)
 	rm -fr src/*/swig/build $(YK_GEN_DIR)
-	rm -fv $(YK_SWIG_DIR)/yask_kernel_api_wrap.{cpp,o} 
+	rm -fv $(YK_SWIG_DIR)/yask_kernel_api_wrap.{cpp,o}
 	find src/kernel -name '*.o' | xargs -r rm -v
 	find src/kernel -name '*.optrpt' | xargs -r rm -v
 
@@ -724,8 +724,8 @@ clean-old:
 realclean: clean clean-old
 	rm -fv bin/*.exe lib/*.so make-report*.txt cxx-flags*.txt ld-flags.*txt TAGS $(YC_STENCIL_LIST)
 	rm -fr docs/*/html docs/*/latex
-	rm -fv *api-test*/*.dot*
-	rm -fv $(YC_SWIG_DIR)/yask_compiler_api_wrap.{cpp,o} 
+	rm -fv $(YC_SWIG_DIR)/yask_compiler_api_wrap.{cpp,o} lib/yask_{compiler,kernel}.py*
+	rm -fv *api-test*.dot*
 	find . -name '*.o' | xargs -r rm -v
 	find . -name '*.optrpt' | xargs -r rm -v
 	find . -name '*~' | xargs -r rm -v
