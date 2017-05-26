@@ -50,6 +50,7 @@ IN THE SOFTWARE.
 %shared_ptr(yask::yc_bool_node)
 
 %{
+#define SWIG_FILE_WITH_INIT
 #include "yask_compiler_api.hpp"
 %}
 

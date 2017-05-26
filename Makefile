@@ -309,6 +309,7 @@ CXXFLAGS        +=   	-g -std=c++11 -Wall $(CXXOPT)
 CXXFLAGS	+=	-Iinclude -Isrc/common -Isrc/kernel/lib -Isrc/kernel/gen
 OMPFLAGS	+=	-fopenmp
 
+PYINC		:= 	$(shell python -c "from distutils import sysconfig; print sysconfig.get_python_inc()")
 CWD		:=	$(shell pwd)
 LFLAGS          +=      -lrt -Wl,-rpath=$(CWD)/lib -L$(CWD)/lib
 YC_LFLAGS	:=	$(LFLAGS)
@@ -407,8 +408,10 @@ YC_BASE		:=	yask-compiler
 YC_LIB		:=	lib/lib$(YC_BASE).so
 YC_EXEC		:=	bin/$(YC_BASE).exe
 YC_STENCIL_LIST	:=	src/compiler/stencils.hpp
+YC_SWIG_DIR	:=	src/compiler/swig
 
 YK_GEN_DIR	:=	src/kernel/gen
+YK_SWIG_DIR	:=	src/kernel/swig
 YK_MACRO_FILE	:=	$(YK_GEN_DIR)/yask_macros.hpp
 YK_CODE_FILE	:=	$(YK_GEN_DIR)/yask_stencil_code.hpp
 YK_GEN_HEADERS	:=	$(addprefix $(YK_GEN_DIR)/, \
@@ -499,7 +502,8 @@ HALO_LOOP_OUTER_VARS	?=	wv,xv,yv,zv
 HALO_LOOP_CODE		?=	$(HALO_LOOP_OUTER_MODS) loop($(HALO_LOOP_OUTER_VARS)) \
 				$(HALO_LOOP_INNER_MODS) { calc(halo(t)); }
 
-#### Targets & rules
+######## Primary targets & rules
+# NB: must set stencil and arch to generate the YASK kernel.
 
 all:	$(YK_EXEC) $(MAKE_REPORT_FILE)
 	echo $(CXXFLAGS) > $(CXXFLAGS_FILE)
@@ -573,14 +577,14 @@ headers: $(GEN_HEADERS)
 	@ echo 'Header files generated.'
 
 # Compile the stencil compiler.
-%.o: %.cpp src/common/*hpp src/compiler/lib/*hpp include/yask_compiler_api.hpp $(YC_STENCIL_LIST)
+%.o: %.cpp src/common/*hpp src/compiler/lib/*hpp include/yask_compiler_api.hpp
 	$(YC_CXX) --version
 	$(YC_CXX) $(YC_CXXFLAGS) -O2 -fPIC -c -o $@ $<
 
 $(YC_LIB): $(YC_OBJS)
 	$(YC_CXX) $(YC_CXXFLAGS) -shared -o $@ $^
 
-$(YC_EXEC): src/compiler/main.cpp $(YC_LIB)
+$(YC_EXEC): src/compiler/main.cpp $(YC_LIB) $(YC_STENCIL_LIST)
 	$(YC_CXX) $(YC_CXXFLAGS) -O0 $(YC_LFLAGS) -o $@ $< -l$(YC_BASE)
 
 $(YC_STENCIL_LIST): src/stencils/*.hpp
@@ -592,40 +596,82 @@ $(YC_STENCIL_LIST): src/stencils/*.hpp
 
 compiler: $(YC_EXEC)
 
-# API documents.
+
+
+######## API targets
+# NB: must set stencil and arch to generate the kernel API.
+
+# API docs, libs, and tests.
+api-all: api-docs yc-api yc-api-test yk-api yk-api-test
+
+# Format API documents.
+api-docs: docs/api/latex/refman.tex
+
+# Build C++ and Python compiler API libs.
+yc-api: $(YC_LIB) lib/_yask_compiler.so
+
+# Run C++ and Python compiler API tests.
+yc-api-test: yc-api-test-cxx yc-api-test-py
+
+# Build kernel API lib.
+yk-api: $(YK_LIB) lib/_yask_kernel.so
+
+# Run C++ and Python kernel API tests.
+yk-api-test: yk-api-test-cxx yk-api-test-py
+
+
+
+# Format API documents.
 docs/api/latex/refman.tex: include/*.hpp docs/api/*.*
 	doxygen -v
 	cd docs/api; doxygen doxygen_config.txt
 
-api-docs: docs/api/latex/refman.tex
-
-# Python compiler interface.
-# TODO: install in lib dir.
-src/compiler/swig/_yask_compiler.so: include/*hpp $(addprefix src/compiler/,swig/yask*.i swig/setup.py lib/*pp)
+# Build Python compiler API lib.
+$(YC_SWIG_DIR)/yask_compiler_api_wrap.cpp: $(YC_SWIG_DIR)/yask*.i include/*hpp
 	swig -version
-	cd src/compiler/swig; \
-	swig -v -I../../../include -c++ -python yask_compiler_api.i; \
-	python setup.py build_ext --inplace
+	swig -v -cppext cpp -Iinclude -c++ -python -outdir lib -builtin $<
 
-# Python kernel interface.
-# TODO: install in lib dir.
-# FIXME: currently does not work due to python build env.
-src/kernel/swig/_yask_kernel.so: include/*hpp $(addprefix src/kernel/,swig/yask*.i swig/setup.py lib/*pp)
-	swig -version
-	cd src/kernel/swig; \
-	swig -v -I../../../include -c++ -python yask_kernel_api.i; \
-	python setup.py build_ext --inplace
+$(YC_SWIG_DIR)/yask_compiler_api_wrap.o: $(YC_SWIG_DIR)/yask_compiler_api_wrap.cpp
+	$(YC_CXX) $(YC_CXXFLAGS) -I$(PYINC) -O2 -fPIC -c -o $@ $<
+
+lib/_yask_compiler.so: $(YC_OBJS) $(YC_SWIG_DIR)/yask_compiler_api_wrap.o
+	$(YC_CXX) $(YC_CXXFLAGS) -shared -o $@ $^
 
 # Build C++ compiler API test.
 bin/yask-compiler-api-test.exe: $(YC_LIB) src/compiler/tests/api_test.cpp
 	$(YC_CXX) $(YC_CXXFLAGS) -o $@ $^
+
+# Python kernel API lib.
+# TODO: consider adding $(YK_TAG) to these targets.
+$(YK_SWIG_DIR)/yask_kernel_api_wrap.cpp: $(YK_SWIG_DIR)/yask*.i include/*hpp
+	swig -version
+	swig -v -cppext cpp -Iinclude -c++ -python -outdir lib $<
+
+$(YK_SWIG_DIR)/yask_kernel_api_wrap.o: $(YK_SWIG_DIR)/yask_kernel_api_wrap.cpp
+	$(CXX) $(CXXFLAGS) -I$(PYINC) -fPIC -c -o $@ $<
+
+lib/_yask_kernel.so: $(YK_OBJS) $(YK_SWIG_DIR)/yask_kernel_api_wrap.o
+	$(CXX) $(CXXFLAGS) -shared -o $@ $^
 
 # Flags to avoid building and running stencil compiler.
 # NB: This trick is only needed when using the compiler API to create
 # a stencil to replace the one normally created by the pre-built stencil compiler.
 API_MAKE_FLAGS := --new-file=$(YC_EXEC) --old-file=$(YK_CODE_FILE)
 
-# Run C++ compiler API test, then build YASK kernel to use its output.
+# Run Python compiler API test, then build YASK kernel using its output.
+# Also create .pdf rendering of stencil AST.
+yc-api-test-py: bin/yask-compiler-api-test.py lib/_yask_compiler.so
+	$(MAKE) clean
+	@echo '*** Running the YASK compiler API test...'
+	python $<
+	$(YK_MK_GEN_DIR)
+	mv yc-api-test-py.hpp $(YK_CODE_FILE)
+	$(MAKE) -j $(API_MAKE_FLAGS) stencil=yc-api-test-py arch=snb
+	bin/yask.sh -stencil yc-api-test-py -arch snb -v
+	dot -Tpdf -O yc-api-test-py.dot
+	ls -l yc-*.dot*
+
+# Run C++ compiler API test, then build YASK kernel using its output.
 # Also create .pdf rendering of stencil AST.
 yc-api-test-cxx: bin/yask-compiler-api-test.exe
 	$(MAKE) clean
@@ -633,50 +679,26 @@ yc-api-test-cxx: bin/yask-compiler-api-test.exe
 	$<
 	$(YK_MK_GEN_DIR)
 	mv yc-api-test-cxx.hpp $(YK_CODE_FILE)
-	mv yc-api-test-cxx.dot src/compiler/tests
-	cd src/compiler/tests && \
-	dot -Tpdf -O yc-api-test-cxx.dot && \
-	ls -l yc-*.dot*
 	$(MAKE) -j $(API_MAKE_FLAGS) stencil=yc-api-test-cxx arch=snb
 	bin/yask.sh -stencil yc-api-test-cxx -arch snb -v
-
-# Run Python compiler API test, then build YASK kernel to use its output.
-# Also create .pdf rendering of stencil AST.
-yc-api-test-py: src/compiler/swig/_yask_compiler.so
-	$(MAKE) clean
-	@echo '*** Running the YASK compiler API test...'
-	cd src/compiler/tests && \
-	python api_test.py && \
-	dot -Tpdf -O yc-api-test-py.dot && \
+	dot -Tpdf -O yc-api-test-cxx.dot
 	ls -l yc-*.dot*
-	$(YK_MK_GEN_DIR)
-	mv src/compiler/tests/yc-api-test-py.hpp $(YK_CODE_FILE)
-	$(MAKE) -j $(API_MAKE_FLAGS) stencil=yc-api-test-py arch=snb
-	bin/yask.sh -stencil yc-api-test-py -arch snb -v
-
-# Compiler API code.
-yc-api: $(YC_LIB) src/compiler/swig/_yask_compiler.so
-
-# Compiler API tests.
-yc-api-test: yc-api-test-cxx yc-api-test-py
-
-# API docs and compiler API code and tests.
-api: api-docs yc-api yc-api-test
 
 # Build C++ kernel API test.
-# NB: must set stencil and arch to generate the kernel API.
 bin/yask-kernel-api-test.exe: $(YK_LIB) src/kernel/tests/api_test.cpp
 	$(CXX) $(CXXFLAGS) $(LFLAGS) -o $@ $^
 
 # Run C++ kernel API test.
-# NB: must set stencil and arch to use the correct kernel API.
 yk-api-test-cxx: bin/yask-kernel-api-test.exe
 	@echo '*** Running the YASK kernel API test...'
 	$<
 
-# Kernel API code.
-# NB: must set stencil and arch to generate the kernel API.
-yk-api: $(YK_LIB) src/kernel/swig/_yask_kernel.so
+# Run Python kernel API test.
+yk-api-test-py: bin/yask-kernel-api-test.py lib/_yask_kernel.so
+	@echo '*** Running the YASK kernel API test...'
+	python $<
+
+######## Misc targets
 
 tags:
 	rm -f TAGS ; find src include -name '*.[ch]pp' | xargs etags -C -a
@@ -686,7 +708,8 @@ tags:
 # Make this target before rebuilding YASK with any new parameters.
 clean:
 	rm -fv *.s $(MAKE_REPORT_FILE)
-	rm -fr src/compiler/swig/build $(YK_GEN_DIR)
+	rm -fr src/*/swig/build $(YK_GEN_DIR)
+	rm -fv $(YK_SWIG_DIR)/yask_kernel_api_wrap.{cpp,o} 
 	find src/kernel -name '*.o' | xargs -r rm -v
 	find src/kernel -name '*.optrpt' | xargs -r rm -v
 
@@ -701,7 +724,8 @@ clean-old:
 realclean: clean clean-old
 	rm -fv bin/*.exe lib/*.so make-report*.txt cxx-flags*.txt ld-flags.*txt TAGS $(YC_STENCIL_LIST)
 	rm -fr docs/*/html docs/*/latex
-	rm -fv src/compiler/tests/*.dot*
+	rm -fv *api-test*/*.dot*
+	rm -fv $(YC_SWIG_DIR)/yask_compiler_api_wrap.{cpp,o} 
 	find . -name '*.o' | xargs -r rm -v
 	find . -name '*.optrpt' | xargs -r rm -v
 	find . -name '*~' | xargs -r rm -v

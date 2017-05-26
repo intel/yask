@@ -15,15 +15,21 @@ Supported Platforms
 * Intel(R) Xeon Phi(TM) coprocessor supporting the Knights-Corner instruction set.
 
 Pre-requisites:
-* Intel(R) C++ compiler,
+* Intel(R) C++ compiler (17.0.2 or later recommended),
   https://software.intel.com/en-us/intel-parallel-studio-xe.
 * Intel(R) Software Development Emulator,
   https://software.intel.com/en-us/articles/intel-software-development-emulator
   (optional: for functional testing if you don't have native ISA support).
 * Intel(R) MPI Library, https://software.intel.com/en-us/intel-mpi-library,
   or equivalent (optional: for multi-core and multi-node operation).
-* Perl 5.010 or later.
+* Perl (5.010 or later).
 * The 'indent' or 'gindent' utility (optional: to make the generated code easier for humans to read).
+* SWIG (3.0.12 or later),
+  http://www.swig.org (optional: for creating the Python interface).
+* Python 2 (2.7.5 or later) or 3 (3.6.1 or later),
+  https://www.python.org/downloads (optional: for creating and using the Python interface).
+* Doxygen (1.8.11 or later),
+  http://doxygen.org (optional: for creating API documentation).
 * Install all these pre-requisites and ensure that all
   tool and library paths are included in the proper environment variables.
 * The YASK source code via 'git clone https://github.com/01org/yask'.

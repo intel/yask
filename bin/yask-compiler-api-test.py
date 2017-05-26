@@ -1,3 +1,5 @@
+#!/usr/bin/env python
+
 ##############################################################################
 ## YASK: Yet Another Stencil Kernel
 ## Copyright (c) 2014-2017, Intel Corporation
@@ -24,7 +26,7 @@
 ## Test the YASK stencil compiler API for Python.
 
 import sys
-sys.path.append('../swig')
+sys.path.append('lib')
 
 import yask_compiler
 cfac = yask_compiler.yc_factory()

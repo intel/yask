@@ -38,6 +38,7 @@ IN THE SOFTWARE.
 %shared_ptr(yask::yk_solution)
 
 %{
+#define SWIG_FILE_WITH_INIT
 #include "yask_kernel_api.hpp"
 %}
 
