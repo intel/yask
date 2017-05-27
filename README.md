@@ -30,6 +30,8 @@ Pre-requisites:
   https://www.python.org/downloads (optional: for creating and using the Python interface).
 * Doxygen (1.8.11 or later),
   http://doxygen.org (optional: for creating API documentation).
+* Graphviz (2.30.1 or later),
+  http://www.graphviz.org (optional: for rendering stencil diagrams).
 * Install all these pre-requisites and ensure that all
   tool and library paths are included in the proper environment variables.
 * The YASK source code via 'git clone https://github.com/01org/yask'.

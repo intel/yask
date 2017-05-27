@@ -7,26 +7,127 @@ namespace yask {
 
 /** @mainpage
 
-@section yk YASK Stencil Kernel
+@section intro Introduction
 
-TBD.
+The typical high-level YASK workflow is as follows:
+-# Define a stencil solution.
+  Use the YASK stencil compiler to generate C++ kernel code from the stencil solution.
+-# Compile the generated kernel code to create a YASK kernel library.
+  Create and use a stencil-based application using the kernel library.
 
-@section yc YASK Stencil Compiler
-@subsection yc_oview Overview
-This document provides usage information for the YASK stencil compiler
+There are two sets of APIs provided by YASK corresponding to these tasks:
+-# The YASK Stencil Compiler API (available in C++ and Python).
+-# The YASK Stencil Kernel API (available in C++ and Python).
+
+For each of the tasks, you can either use use the YASK-provided application
+or create your own application built with the corresponding API.
+
+These alternatives may be mixed-or-matched in all combinations.
+For example, you can use the YASK-provided stencil compiler to generate a YASK kernel library
+and then use that library via the kernel API to create your own stencil-based Python application.
+
+The following sub-sections describe each of the tasks in the workflow and when the APIs may be used.
+
+@subsection yc_intro Define a Stencil Solution and Generate Kernel Code
+
+A stencil solution consists of the grid variables containing the problem data
+and one or more equations that describe how grid points are calculated.
+An equation consists of a grid point to be calculated that "EQUALS" an expression
+consisting of other grid points, constants, mathematical operators, etc.
+- Example equation: `u(t+1, x, y) EQUALS (u(t, x, y) + u(t, x+1, y) + u(t, x, y+1)) / 3`.
+
+A new stencil solution may be defined in one of the following ways:
+-# Write a stencil in C++ that will be compiled into the standard YASK stencil compiler, `bin/yask-compiler.exe`.
+  - This approach is typically taken when the programmer or scientist wants to express
+    the equations of the stencil directly.
+  - In this case, the equations can be typed exactly as shown in the above example
+    (C++ operator overloading is used automatically to construct an internal representation of each equation).
+  - To generate the kernel code for the defined stencil, [re]compile and run the YASK stencil compiler.
+    This is done automatically when building a YASK kernel using the YASK `Makefile`, or
+    you can build it explicity via `make compiler` and run it from your shell command-prompt.
+  - See example stencils in `src/stencils`.
+-# Use the YASK compiler API to create another application that defines stencils.
+  - This approach is typically taken when a front-end tool will be creating stencils
+    from a higher-level description, e.g., applying finite-difference methods to differential equations.
+  - In this case, the equations are built up programmatically into an abstract syntax tree (AST).
+  - The mechanism to generate the kernel code in this approach depends on the application
+    created from the APIs. The application might be run from a command-prompt, or the user
+    might control it interactively.
+  - See `src/compiler/tests/yask-compiler-api-test.cpp` for an example stencil definition in C++.
+  - See `bin/yask-compiler-api-test.py` for an example stencil definition in Python.
+  - See \ref yc for documentation on the compiler API.
+
+In either case, the resulting generated code should written to the C++ stencil-code file,
+src/kernel/gen/yask_stencil_code.hpp`.
+
+@subsection yk_intro Create a Stencil Kernel Library and Stencil-based Application
+
+Once the stencil-code file is created, it must be compiled into a YASK kernel library.
+- There will be a separate library created for each stencil solution and target architecture combination.
+- This is done automatically when building a YASK kernel using the YASK `Makefile`, e.g., via
+  `make -j stencil=iso3dfd arch=knl`, which builds the "iso3dfd" stencil for the Intel Xeon Phi processor.
+- If you generated the stencil-code file via another means (e.g., by running the compiler manually
+  or using a program using the compiler API), you may still create a kernel library using
+  the `Makefile`; you'll just need to use the special target `kernel-only` to avoid running the compiler.
+  You'll also still need to specify the target architecture and give a descriptive name to the stencil.
+  Example: `make stencil=my-stencil arch=hsw kernel-only`.
+
+If `make` is invoked as in one of the above examples, it will create the kernel library
+in `lib/yask-kernel.`<em>stencil.arch</em>`.so`, where *stencil* and *arch* match the corresponding
+variables provided during `make`.
+
+To use the kernel library, an executable must be created from it.
+This may be done in one of the following ways:
+-# The default YASK kernel executable will automatically be created
+  in `bin/yask-kernel.`<em>stencil.arch</em>`.exe` when `make` is invoked as in the above examples.
+  - This application may be run via `bin/yask.sh` to obtain a performance measurement of the kernel.
+-# You can also create your own stencil application using the YASK stencil kernel API.
+  - This approach would be taken to integrate the kernel into a larger application that
+    would inject real-world initial-state data into the grids and extract the
+    final-state data for analysis or further processing.
+  - See `src/kernel/tests/yask-kernel-api-test.cpp` for an example kernel usage in C++.
+  - See `bin/yask-compiler-api-test.py` for an example kernel usage in Python.
+  - See \ref yk for documentation on the kernel API.
+
+@note Anytime you want to change the name or compile-time properties of the kernel, be sure to run
+`make clean` to force the removal of all kernel-specific intermediate code.
+Otherwise, you will likely see some unexpected errors when building the new kernel.
+
+@subsection examples Example Tests
+
+The following examples illustrate possible combinations of compilers and kernels.
+- You can substitute `snb` for one of the other architectures listed in the `Makefile` if desired.
+- Run `make clean` before all of the example commands to ensure consistent builds.
+
+Stencil Compiler    | Stencil Application | Example Test Command
+--------------------|---------------------|-------------
+YASK-provided       | YASK-provided       | `make clean; make -j stencil=iso3dfd arch=snb yk-test`
+YASK-provided       | C++ test example    | `make clean; make -j stencil=iso3dfd arch=snb cxx-yk-api-test`
+YASK-provided       | Python test example | `make clean; make -j stencil=iso3dfd arch=snb py-yk-api-test`
+C++ test example    | YASK-provided       | `make clean; make -j stencil=test arch=snb cxx-yc-api-and-yk-test`
+C++ test example    | C++ test example    | `make clean; make -j stencil=test arch=snb cxx-yc-api-and-cxx-yk-api-test`
+C++ test example    | Python test example | `make clean; make -j stencil=test arch=snb cxx-yc-api-and-py-yk-api-test`
+Python test example | YASK-provided       | `make clean; make -j stencil=test arch=snb py-yc-api-and-yk-test`
+Python test example | C++ test example    | `make clean; make -j stencil=test arch=snb py-yc-api-and-cxx-yk-api-test`
+Python test example | Python test example | `make clean; make -j stencil=test arch=snb py-yc-api-and-py-yk-api-test`
+
+@section yc YASK Stencil Compiler API
+
+@subsection yc_oview Compiler Overview
+This section provides usage information for the YASK stencil compiler
 API (application-programmer interface).\n
 The API is available for C++ and for Python via SWIG.
 Type names are prefixed with 'yc_' to indicate "YASK compiler";
-this distinguishes them from the 'yk_'-prefixed types used in the "YASK kernel".
-@subsection yc_usage Typical Usage Model
-- Create a 'yc_solution' via yc_factory::new_solution().
+this distinguishes them from the 'yk_'-prefixed types used in the "YASK kernel" API.
+
+@subsection yc_usage Typical Program Flow using the Compiler API
+- Create a yc_solution object via yc_factory::new_solution().
 - Create one or more grids (`yc_grid` type) via yc_solution::new_grid() as needed by
   the stencil kernel(s) being implemented.
   Calls to new_grid() specify the name and dimensions of each grid.
   Grids may be read-only (constants) or read-write.
   Each grid will be "owned" by the solution from which it was created.
 - Create an equation for each read-write grid.
-  - Example equation: `u(t+1, x, y, z) EQUALS (u(t, x, y, z) + u(t, x+1, y, z)) / 2`.
   - Create expressions "bottom-up" by creating the leaf nodes first.
   - Leaf nodes may be floating-point (FP) constants or references to grid points.
   - Constants are created via yc_node_factory::new_const_number_node().
@@ -44,6 +145,22 @@ this distinguishes them from the 'yk_'-prefixed types used in the "YASK kernel".
 - Optionally specify the vector-folding and/or vector-clustering via 
   yc_solution::set_fold_len() and/or yc_solution::set_cluster_mult().
 - Format the equations for additional processing via yc_solution::format() or yc_solution::write().
+
+@section yk YASK Stencil Kernel API
+
+@subsection yk_oview Kernel Overview
+This section provides usage information for the YASK stencil kernel
+API (application-programmer interface).\n
+The API is available for C++ and for Python via SWIG.
+Type names are prefixed with 'yk_' to indicate "YASK kernel";
+this distinguishes them from the 'yc_'-prefixed types used in the "YASK compiler" API.
+
+@subsection yk_usage Typical Program Flow using the Kernel API
+- Create a yk_settings object via yk_factory::new_settings().
+  Use the yk_settings methdods to configure options that will be used when creating a solution,
+  like the size of the problem domain.
+- Create a yk_solution object via yk_factory::new_solution().
+  This contains the grids and equations created by the compiler.
 
 */
 

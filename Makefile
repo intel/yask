@@ -71,7 +71,7 @@
 
 # Initial defaults.
 stencil		=	unspecified
-arch		=	knl
+arch		=	snb
 mpi		=	0
 real_bytes	=	4
 
@@ -301,7 +301,7 @@ else
  CXX		:=	icpc
 endif
 LD		:=	$(CXX)
-MAKE		?=	make
+PYTHON		:=	python
 
 # More build flags.
 CXXOPT		?=	-O3
@@ -309,7 +309,10 @@ CXXFLAGS        +=   	-g -std=c++11 -Wall $(CXXOPT)
 CXXFLAGS	+=	-Iinclude -Isrc/common -Isrc/kernel/lib -Isrc/kernel/gen
 OMPFLAGS	+=	-fopenmp
 
-PYINC		:= 	$(shell python -c "from distutils import sysconfig; print sysconfig.get_python_inc()")
+# Find include path needed for python interface.
+# NB: constructing string inside print() to work for python 2 or 3.
+PYINC		:= 	$(addprefix -I,$(shell $(PYTHON) -c 'import distutils.sysconfig; print(distutils.sysconfig.get_python_inc() + " " + distutils.sysconfig.get_python_inc(plat_specific=1))'))
+
 CWD		:=	$(shell pwd)
 LFLAGS          +=      -lrt -Wl,-rpath=$(CWD)/lib -L$(CWD)/lib
 YC_LFLAGS	:=	$(LFLAGS)
@@ -368,7 +371,6 @@ endif
 # compiler-specific settings
 ifneq ($(findstring ic,$(notdir $(CXX))),)  # Intel compiler
 
- CODE_STATS	:=   	code_stats
  CXXFLAGS	+=      $(ISA) -debug extended -Fa -restrict -ansi-alias -fno-alias
  CXXFLAGS	+=	-fimf-precision=low -fast-transcendentals -no-prec-sqrt \
 			-no-prec-div -fp-model fast=2 -fno-protect-parens -rcd -ftz \
@@ -514,7 +516,8 @@ all:	$(YK_EXEC) $(MAKE_REPORT_FILE)
 
 $(MAKE_REPORT_FILE): $(YK_EXEC)
 	@echo MAKEFLAGS="\"$(MAKEFLAGS)"\" > $@ 2>&1
-	$(MAKE) -j1 $(CODE_STATS) echo-settings >> $@ 2>&1
+	$(MAKE) echo-settings >> $@ 2>&1
+	$(MAKE) code-stats >> $@ 2>&1
 
 # Compile the kernel.
 %.$(YK_TAG).o: %.cpp src/common/*hpp src/kernel/lib/*hpp include/*hpp $(YK_GEN_HEADERS)
@@ -528,6 +531,9 @@ $(YK_EXEC): src/kernel/yask_main.cpp $(YK_LIB)
 	$(CXX) $(CXXFLAGS) $(YK_LFLAGS) -o $@ $< -l$(YK_BASE)
 
 kernel: $(YK_EXEC)
+
+yk-test: $(YK_EXEC)
+	bin/yask.sh -stencil $(stencil) -arch $(arch) -v
 
 # Auto-generated files.
 $(YK_GEN_DIR)/yask_rank_loops.hpp: bin/gen-loops.pl Makefile
@@ -596,13 +602,11 @@ $(YC_STENCIL_LIST): src/stencils/*.hpp
 
 compiler: $(YC_EXEC)
 
-
-
 ######## API targets
 # NB: must set stencil and arch to generate the kernel API.
 
-# API docs, libs, and tests.
-api-all: api-docs yc-api yc-api-test yk-api yk-api-test
+# API docs & libs.
+api-all: api-docs yk-api yc-api
 
 # Format API documents.
 api-docs: docs/api/latex/refman.tex
@@ -610,93 +614,111 @@ api-docs: docs/api/latex/refman.tex
 # Build C++ and Python compiler API libs.
 yc-api: $(YC_LIB) lib/_yask_compiler.so
 
-# Run C++ and Python compiler API tests.
-yc-api-test: yc-api-test-cxx yc-api-test-py
-
-# Build kernel API lib.
+# Build C++ and Python kernel API libs.
 yk-api: $(YK_LIB) lib/_yask_kernel.so
 
-# Run C++ and Python kernel API tests.
-yk-api-test: yk-api-test-cxx yk-api-test-py
-
- 
 
 # Format API documents.
 docs/api/latex/refman.tex: include/*.hpp docs/api/*.*
 	doxygen -v
 	cd docs/api; doxygen doxygen_config.txt
 
-# Build Python compiler API lib.
+# Build python compiler API lib.
 $(YC_SWIG_DIR)/yask_compiler_api_wrap.cpp: $(YC_SWIG_DIR)/yask*.i include/*hpp
 	swig -version
 	swig -v -cppext cpp -Iinclude -c++ -python -outdir lib -builtin $<
 
 $(YC_SWIG_DIR)/yask_compiler_api_wrap.o: $(YC_SWIG_DIR)/yask_compiler_api_wrap.cpp
-	$(YC_CXX) $(YC_CXXFLAGS) -I$(PYINC) -O2 -fPIC -c -o $@ $<
+	$(YC_CXX) $(YC_CXXFLAGS) $(PYINC) -O2 -fPIC -c -o $@ $<
 
 lib/_yask_compiler.so: $(YC_OBJS) $(YC_SWIG_DIR)/yask_compiler_api_wrap.o
 	$(YC_CXX) $(YC_CXXFLAGS) -shared -o $@ $^
 
-# Build C++ compiler API test.
-bin/yask-compiler-api-test.exe: $(YC_LIB) src/compiler/tests/api_test.cpp
-	$(YC_CXX) $(YC_CXXFLAGS) -o $@ $^
-
-# Python kernel API lib.
-# TODO: consider adding $(YK_TAG) to these targets.
+# Build python kernel API lib.
+# TODO: consider adding $(YK_TAG) to [some of] these targets.
 $(YK_SWIG_DIR)/yask_kernel_api_wrap.cpp: $(YK_SWIG_DIR)/yask*.i include/*hpp
 	swig -version
 	swig -v -cppext cpp -Iinclude -c++ -python -outdir lib $<
 
 $(YK_SWIG_DIR)/yask_kernel_api_wrap.o: $(YK_SWIG_DIR)/yask_kernel_api_wrap.cpp
-	$(CXX) $(CXXFLAGS) -I$(PYINC) -fPIC -c -o $@ $<
+	$(CXX) $(CXXFLAGS) $(PYINC) -fPIC -c -o $@ $<
 
 lib/_yask_kernel.so: $(YK_OBJS) $(YK_SWIG_DIR)/yask_kernel_api_wrap.o
 	$(CXX) $(CXXFLAGS) -shared -o $@ $^
 
-# Flags to avoid building and running stencil compiler.
+# Build C++ compiler API test.
+bin/yask-compiler-api-test.exe: $(YC_LIB) src/compiler/tests/yask-compiler-api-test.cpp
+	$(YC_CXX) $(YC_CXXFLAGS) -o $@ $^
+
+# Build C++ kernel API test.
+bin/yask-kernel-api-test.exe: $(YK_LIB) src/kernel/tests/yask-kernel-api-test.cpp
+	$(CXX) $(CXXFLAGS) $(LFLAGS) -o $@ $^
+
+# Special target to avoid building and running stencil compiler.
 # NB: This trick is only needed when using the compiler API to create
 # a stencil to replace the one normally created by the pre-built stencil compiler.
-API_MAKE_FLAGS := --new-file=$(YC_EXEC) --old-file=$(YK_CODE_FILE)
+NO_YC_MAKE_FLAGS := --new-file=$(YC_EXEC) --old-file=$(YK_CODE_FILE)
+kernel-only:
+	$(MAKE) $(NO_YC_MAKE_FLAGS)
 
-# Run Python compiler API test, then build YASK kernel using its output.
-# Also create .pdf rendering of stencil AST.
-yc-api-test-py: bin/yask-compiler-api-test.py lib/_yask_compiler.so
+# Run Python compiler API test to create stencil-code file.
+# Also create .pdf rendering of stencil AST if Graphviz is installed.
+py-yc-api-test: bin/yask-compiler-api-test.py lib/_yask_compiler.so
 	$(MAKE) clean
-	@echo '*** Running the YASK compiler API test...'
-	python $<
+	@echo '*** Running the Python YASK compiler API test...'
+	$(PYTHON) $<
 	$(YK_MK_GEN_DIR)
 	mv yc-api-test-py.hpp $(YK_CODE_FILE)
-	$(MAKE) -j $(API_MAKE_FLAGS) stencil=yc-api-test-py arch=snb
-	bin/yask.sh -stencil yc-api-test-py -arch snb -v
-	dot -Tpdf -O yc-api-test-py.dot
-	ls -l yc-*.dot*
+	- dot -Tpdf -O yc-api-test-py.dot && ls -l yc-api-test-py.dot*
 
-# Run C++ compiler API test, then build YASK kernel using its output.
-# Also create .pdf rendering of stencil AST.
-yc-api-test-cxx: bin/yask-compiler-api-test.exe
+# Run C++ compiler API test to create stencil-code file.
+# Also create .pdf rendering of stencil AST if Graphviz is installed.
+cxx-yc-api-test: bin/yask-compiler-api-test.exe
 	$(MAKE) clean
-	@echo '*** Running the YASK compiler API test...'
+	@echo '*** Running the C++ YASK compiler API test...'
 	$<
 	$(YK_MK_GEN_DIR)
 	mv yc-api-test-cxx.hpp $(YK_CODE_FILE)
-	$(MAKE) -j $(API_MAKE_FLAGS) stencil=yc-api-test-cxx arch=snb
-	bin/yask.sh -stencil yc-api-test-cxx -arch snb -v
-	dot -Tpdf -O yc-api-test-cxx.dot
-	ls -l yc-*.dot*
+	- dot -Tpdf -O yc-api-test-cxx.dot && ls -l yc-api-test-cxx.dot*
 
-# Build C++ kernel API test.
-bin/yask-kernel-api-test.exe: $(YK_LIB) src/kernel/tests/api_test.cpp
-	$(CXX) $(CXXFLAGS) $(LFLAGS) -o $@ $^
+# Run the YASK kernel without implicity using the YASK compiler.
+yk-test-no-yc: kernel-only
+	bin/yask.sh -stencil $(stencil) -arch $(arch) -v
+
+# Run C++ compiler API test, then run YASK kernel using its output.
+cxx-yc-api-and-yk-test: cxx-yc-api-test
+	$(MAKE) yk-test-no-yc
+
+# Run Python compiler API test, then run YASK kernel using its output.
+py-yc-api-and-yk-test: py-yc-api-test
+	$(MAKE) yk-test-no-yc
 
 # Run C++ kernel API test.
-yk-api-test-cxx: bin/yask-kernel-api-test.exe
-	@echo '*** Running the YASK kernel API test...'
+cxx-yk-api-test: bin/yask-kernel-api-test.exe
+	@echo '*** Running the C++ YASK kernel API test...'
 	$<
 
 # Run Python kernel API test.
-yk-api-test-py: bin/yask-kernel-api-test.py lib/_yask_kernel.so
-	@echo '*** Running the YASK kernel API test...'
-	python $<
+py-yk-api-test: bin/yask-kernel-api-test.py lib/_yask_kernel.so
+	@echo '*** Running the Python YASK kernel API test...'
+	$(PYTHON) $<
+
+# Run C++ compiler API test, then run C++ kernel API test.
+cxx-yc-api-and-cxx-yk-api-test: cxx-yc-api-test
+	$(MAKE) $(NO_YC_MAKE_FLAGS) cxx-yk-api-test
+
+# Run C++ compiler API test, then run python kernel API test.
+cxx-yc-api-and-py-yk-api-test: cxx-yc-api-test
+	$(MAKE) $(NO_YC_MAKE_FLAGS) py-yk-api-test
+
+# Run python compiler API test, then run C++ kernel API test.
+py-yc-api-and-cxx-yk-api-test: py-yc-api-test
+	$(MAKE) $(NO_YC_MAKE_FLAGS) cxx-yk-api-test
+
+# Run python compiler API test, then run python kernel API test.
+py-yc-api-and-py-yk-api-test: py-yc-api-test
+	$(MAKE) $(NO_YC_MAKE_FLAGS) py-yk-api-test
+
 
 ######## Misc targets
 
@@ -796,7 +818,7 @@ echo-settings:
 	@echo HALO_LOOP_INNER_MODS="\"$(HALO_LOOP_INNER_MODS)\""
 	@echo HALO_LOOP_CODE="\"$(HALO_LOOP_CODE)\""
 
-code_stats:
+code-stats:
 	@echo
 	@echo "Code stats for stencil computation:"
 	bin/get-loop-stats.pl -t='sub_block_loops' *.s
@@ -813,7 +835,7 @@ help:
 	@echo "make clean; make arch=intel64 stencil=ave OMPFLAGS='-qopenmp-stubs' CXXOPT='-O0' EXTRA_MACROS='DEBUG' model_cache=2"
 	@echo "make clean; make arch=intel64 stencil=3axis radius=0 fold='x=1,y=1,z=1' OMPFLAGS='-qopenmp-stubs' CXXOPT='-O0' EXTRA_MACROS='DEBUG TRACE TRACE_MEM TRACE_INTRINSICS'"
 	@echo " "
-	@echo "Example API document generation, build, and test:"
-	@echo "make api-docs"
-	@echo "make -j yc-api yc-api-test"
-	@echo "make clean; make -j arch=snb stencil=iso3dfd yk-api-test-cxx"
+	@echo "Example API document generation and builds:"
+	@echo "make clean; make -j arch=snb stencil=iso3dfd api-all"
+	@echo " "
+	@echo "make api-docs, then see the 'Example Tests' section in docs/api/html/index.html for more."

@@ -35,6 +35,15 @@ settings.set_domain_size("x", 128)
 settings.set_domain_size("y", 128)
 settings.set_domain_size("z", 128)
 
-soln = kfac.new_solution("api_py_test")
+soln = kfac.new_solution(settings)
 name = soln.get_name()
-print("Created stencil-solution '" + name + "' with " + soln.get_num_grids() + " grids.")
+print("Created stencil-solution '" + name + "' with the following grids:")
+for gi in range(soln.get_num_grids()) :
+    grid = soln.get_grid(gi)
+    desc = grid.get_name() + "(";
+    for di in range(grid.get_num_dims()) :
+        if di > 0 :
+            desc += ", ";
+        desc += grid.get_dim_name(di)
+    desc += ")"
+    print("  " + desc)

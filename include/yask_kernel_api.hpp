@@ -33,13 +33,18 @@ IN THE SOFTWARE.
 
 #include <string>
 #include <memory>
+#include <cinttypes>
 
 namespace yask {
 
     /// Type to use for indexing grids.
     /** Index types are signed to allow negative indices in halos. */
-    typedef int64_t idx_t;
-   
+#ifdef SWIG
+    typedef long int idx_t;     // SWIG doesn't understand int64_t.
+#else
+    typedef std::int64_t idx_t;
+#endif
+    
     // Forward declarations of classes and pointers.
     class yk_settings;
     typedef std::shared_ptr<yk_settings> yk_settings_ptr;
