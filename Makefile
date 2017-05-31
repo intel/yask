@@ -638,7 +638,7 @@ lib/_yask_compiler.so: $(YC_OBJS) $(YC_SWIG_DIR)/yask_compiler_api_wrap.o
 # TODO: consider adding $(YK_TAG) to [some of] these targets.
 $(YK_SWIG_DIR)/yask_kernel_api_wrap.cpp: $(YK_SWIG_DIR)/yask*.i include/*hpp
 	swig -version
-	swig -v -cppext cpp -Iinclude -c++ -python -outdir lib $<
+	swig -v -cppext cpp -Iinclude -c++ -python -outdir lib -builtin $<
 
 $(YK_SWIG_DIR)/yask_kernel_api_wrap.o: $(YK_SWIG_DIR)/yask_kernel_api_wrap.cpp
 	$(CXX) $(CXXFLAGS) $(PYINC) -fPIC -c -o $@ $<

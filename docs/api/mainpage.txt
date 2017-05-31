@@ -46,6 +46,7 @@ A new stencil solution may be defined in one of the following ways:
     This is done automatically when building a YASK kernel using the YASK `Makefile`, or
     you can build it explicity via `make compiler` and run it from your shell command-prompt.
   - See example stencils in `src/stencils`.
+    These stencils are written as classes inherited from the `StencilBase` class.
 -# Use the YASK compiler API to create another application that defines stencils.
   - This approach is typically taken when a front-end tool will be creating stencils
     from a higher-level description, e.g., applying finite-difference methods to differential equations.

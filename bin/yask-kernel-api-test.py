@@ -29,13 +29,23 @@ import sys
 sys.path.append('lib')
 import yask_kernel
 
+# The factory from which all other kernel object are made.
 kfac = yask_kernel.yk_factory()
+
+# Create and init settings.
 settings = kfac.new_settings()
 settings.set_domain_size("x", 128)
 settings.set_domain_size("y", 128)
 settings.set_domain_size("z", 128)
+settings.set_block_size("x", 32)
+settings.set_block_size("y", 32)
+settings.set_block_size("z", 64)
 
+# Create and init solution based on settings.
 soln = kfac.new_solution(settings)
+soln.init_env()
+
+# Print some info about the solution.
 name = soln.get_name()
 print("Created stencil-solution '" + name + "' with the following grids:")
 for gi in range(soln.get_num_grids()) :
@@ -47,3 +57,9 @@ for gi in range(soln.get_num_grids()) :
         desc += grid.get_dim_name(di)
     desc += ")"
     print("  " + desc)
+
+# Allocate memory for any grids that do not have storage set.
+# Set other data structures needed for stencil application.
+soln.prepare_solution()
+
+print("End of YASK kernel API test.")

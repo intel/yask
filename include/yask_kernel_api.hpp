@@ -40,7 +40,7 @@ namespace yask {
     /// Type to use for indexing grids.
     /** Index types are signed to allow negative indices in halos. */
 #ifdef SWIG
-    typedef long int idx_t;     // SWIG doesn't understand int64_t.
+    typedef long long int idx_t;     // SWIG doesn't seem to understand int64_t.
 #else
     typedef std::int64_t idx_t;
 #endif
@@ -76,45 +76,61 @@ namespace yask {
     public:
         virtual ~yk_settings() {}
 
-        /// Set the domain size.
+        /// Set the size of the solution domain.
         /** The domain defines the points that will be evaluated with the
          * stencil(s). It affects the size of the grids, but it is not
          * equivalent.  Specifically, it does *not* include the halo region
          * or any additional padding.  The actual number of points evaluated
          * may be less than the domain if a given stencil equation has a
-         * non-default condition.  Also, actual number of points in the
+         * non-default condition.  Also, the actual number of points in the
          * domain of a given grid may be greater than this specified size
-         * due to rounding up to fold-cluster sizes.  Finally, the
-         * allocation in the solution-step dimension is not related to the
-         * domain size in the step dimension due to memory reuse.  Get the
-         * domain size of a specific grid to determine the actual size. */
+         * due to rounding up to fold-cluster sizes. Get the
+         * domain size of a specific grid to determine the actual size.
+         * There is no domain-size setting allowed in the
+         * solution-step dimension (usually "t"). */
         virtual void
         set_domain_size(const std::string& dim /**< [in] Name of dimension to set.
                                                 Must correspond to a dimension set via
                                                 INIT_GRID() or yc_solution::new_grid(). */,
-                        idx_t size /**< [in] Points in this `dim`. */ ) =0;
+                        idx_t size /**< [in] Points in the domain in this `dim`. */ ) =0;
 
-        /// Set the grid pad size.
-        /** This sets a minimum number of points in each grid that is
-         * allocated outside of the domain in the given dimension.  The
-         * specified padding is added to both sides, i.e., both "before" and
-         * "after" the domain.  There is no padding allowed in the
-         * solution-step dimension (usually "t").  If a grid has a halo size
-         * set in a given dimension before allocation, this pad will be
-         * added to that halo size.  (Thus, a pad is not required a priori
-         * if the halo size is already set.)  If a grid does *not* have a
-         * halo size set in a given dimension before allocation, the halo
-         * can be set after allocation to a value less than or equal to the
-         * pad size without requiring re-allocation, and the pad size will
-         * be reduced as needed.  Also, the actual pad may be greater than
+        /// Set the minimum size of additional grid padding.
+        /** This sets the default minimum number of points in each grid that is
+         * allocated outside of the grid domain + halo in the given dimension.  The
+         * specified number of points are added to both sides, i.e., both "before" and
+         * "after" the domain and halo.
+         * The *total* padding is the number of points outside the domain on either side
+         * and includes the halo.
+         * The *extra* padding is the number of points outside the domain and halo on
+         * either side and does not include the halo.
+         * The actual pad may be greater than
          * the specified size due to rounding up to fold sizes.  Get the pad
-         * size of a specific grid to determine the actual size. */
+         * size of a specific grid to determine the actual size.
+         * There is no padding allowed in the
+         * solution-step dimension (usually "t").
+         */
         virtual void
-        set_pad_size(const std::string& dim /**< [in] Name of dimension to set.
-                                               Must correspond to a dimension created via
-                                               INIT_GRID() or yc_solution::new_grid(). */,
+        set_extra_pad_size(const std::string& dim /**< [in] Name of dimension to set.
+                                                     Must correspond to a dimension created via
+                                                     INIT_GRID() or yc_solution::new_grid(). */,
                      idx_t size /**< [in] Points in this `dim` applied
                                    to both sides of the domain. */ ) =0;
+
+        /// Set the block size.
+        /** This sets the approximate number of points that are evaluated in
+         * each "block".  A block is typically the unit of work done by a
+         * top-level OpenMP thread.  The actual number of points evaluated
+         * in a block may be greater than the specified size due to rounding
+         * up to fold-cluster sizes.  The number of points in a block may
+         * also be smaller than the specified size when the block is at the
+         * edge of the domain. The block size cannot be set in the
+         * solution-step dimension (because temporal blocking is not yet enabled). */
+        virtual void
+        set_block_size(const std::string& dim
+                       /**< [in] Name of dimension to set.
+                          Must correspond to a dimension created via
+                          INIT_GRID() or yc_solution::new_grid(). */,
+                       idx_t size /**< [in] Points in a block in this `dim`. */ ) =0;
     };
     
     /// Stencil solution.
@@ -124,6 +140,25 @@ namespace yask {
     public:
         virtual ~yk_solution() {}
 
+        /// Initialize the solution's environment.
+        /** Either init_env() or copy_env() must be called before
+         * a solution is used.
+         * This call initializes the MPI (if enabled) and OpenMP
+         * settings.
+         */
+        virtual void
+        init_env() =0;
+        
+        /// Copy the solution's environment from an existing one.
+        /** Either init_env() or copy_env() must be called before
+         * a solution is used.
+         * This call copies the MPI (if enabled) and OpenMP
+         * settings.
+         */
+        virtual void
+        copy_env(const yk_solution_ptr src /**< [in] Pointer to solution that environment
+                                              settings will be copied from. */ ) =0;
+        
         /// Get the name of the solution.
         /** @returns String containing the solution name provided during stencil compilation. */
         virtual const std::string&
@@ -139,6 +174,16 @@ namespace yask {
         virtual yk_grid_ptr
         get_grid(int n /**< [in] Index of grid between zero (0)
                               and get_num_grids()-1. */ ) =0;
+
+
+        /// Prepare the solution for stencil application.
+        /** Allocates data in grids that do not already have storage allocated.
+         * Sets many other data structures needed for proper stencil application.
+         * Must be called before querying grids for their final sizes or domain positions.
+         * Must be called before applying any stencils.
+         */
+        virtual void
+        prepare_solution() =0;
     };
 
     /// A run-time grid.
@@ -164,6 +209,66 @@ namespace yask {
         get_dim_name(int n /**< [in] Index of dimension between zero (0)
                               and get_num_dims()-1. */ ) const =0;
 
+        /// Get the domain size in the specified dimension.
+        /** Value does *not* include padding or halo.  Value may be slightly
+         * different than that provided via yk_settings::set_domain_size()
+         * as described in that function's documentation.  
+         * @returns Points in domain in given dimension. */
+        virtual idx_t
+        get_domain_size(const std::string& dim
+                        /**< [in] Name of dimension from get_dim_name().
+                           Cannot be the step dimension. */ ) =0;
+
+        /// Get the halo size in the specified dimension.
+        /** This value is set by the stencil compiler.
+         * @returns Points in halo in given dimension. */
+        virtual idx_t
+        get_halo_size(const std::string& dim
+                      /**< [in] Name of dimension from get_dim_name().
+                         Cannot be the step dimension. */ ) =0;
+
+        /// Get the extra padding in the specified dimension.
+        /** The *extra* pad size is the total pad size minus the halo size.
+         * Value may be slightly
+         * different than that provided via yk_settings::set_extra_pad_size()
+         * as described in that function's documentation.
+         * @returns Points in extra padding in given dimension. */
+        virtual idx_t
+        get_extra_pad_size(const std::string& dim
+                           /**< [in] Name of dimension from get_dim_name().
+                              Cannot be the step dimension. */ ) =0;
+
+        /// Get the storage allocation in the specified dimension.
+        /** For the step dimension, this is the specified allocation and
+         * does not typically depend on the number of steps evaluated.
+         * For the non-step dimensions, this is get_domain_size() + 
+         * (2 * (get_halo_size() + get_extra_pad_size())).
+         * @returns allocation in number of points (not bytes). */
+        virtual idx_t
+        get_alloc_size(const std::string& dim
+                       /**< [in] Name of dimension from get_dim_name(). */ ) =0;
+
+        /// Set the storage allocation in the specified dimension.
+        /** This is only allowed in the step dimension.
+         * Allocations in other dimensions should be set indirectly
+         * via the domain and padding sizes. */
+        virtual void
+        set_alloc_size(const std::string& dim
+                       /**< [in] Name of dimension from get_dim_name().
+                          Must be the step dimension. */,
+                       idx_t size /**< [in] Number of points to allocate. */ ) =0;
+
+        /// Set the total padding in the specified dimension.
+        /** See yk_settings::set_extra_pad_size() for a discussion
+         * of extra vs total padding. */
+        virtual void
+        set_total_pad_size(const std::string& dim
+                           /**< [in] Name of dimension from get_dim_name().
+                              Cannot be the step dimension. */,
+                           idx_t size
+                           /**< [in] Number of points to allocate beyond the domain size.
+                              Must be greater than or equal to the halo size. */ ) =0;
+        
     };
 
 

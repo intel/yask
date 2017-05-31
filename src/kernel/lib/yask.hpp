@@ -201,10 +201,8 @@ namespace yask {
     // RealVecGrids using layouts defined above.
     using Grid_XYZ = RealVecGrid_XYZ<LAYOUT_XYZ>;
     using Grid_WXYZ = RealVecGrid_WXYZ<LAYOUT_WXYZ>;
-    template <idx_t tdim>
-    using Grid_TXYZ = RealVecGrid_TXYZ<LAYOUT_TXYZ, tdim>;
-    template <idx_t tdim>
-    using Grid_TWXYZ = RealVecGrid_TWXYZ<LAYOUT_TWXYZ, tdim>;
+    using Grid_TXYZ = RealVecGrid_TXYZ<LAYOUT_TXYZ>;
+    using Grid_TWXYZ = RealVecGrid_TWXYZ<LAYOUT_TWXYZ>;
 
     // RealGrids using traditional C layout.
     typedef GenericGrid3d<real_t, LAYOUT_XYZ> RealGrid_XYZ;

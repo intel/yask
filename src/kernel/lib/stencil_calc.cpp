@@ -29,8 +29,15 @@ using namespace std;
 namespace yask {
 
     // APIs.
+    // See yask_kernel_api.hpp.
     yk_settings_ptr yk_factory::new_settings() const {
-        return make_shared<KernelSettings>();
+        auto sp = make_shared<KernelSettings>();
+
+        // Set time-domain size to a very large value because
+        // we don't use this limit via the API.
+        sp->dt = LONG_MAX;      // Could use LLONG_MAX, but seems like overkill.
+            
+        return sp;
     }
     void KernelSettings::set_domain_size(const std::string& dim,
                                          idx_t size) {
@@ -47,8 +54,8 @@ namespace yask {
             exit(1);
         }
     }
-    void KernelSettings::set_pad_size(const std::string& dim,
-                                      idx_t size) {
+    void KernelSettings::set_extra_pad_size(const std::string& dim,
+                                            idx_t size) {
         assert(size >= 0);
         
         // TODO: remove hard-coded dimensions.
@@ -61,12 +68,37 @@ namespace yask {
             exit(1);
         }
     }
+    void KernelSettings::set_block_size(const std::string& dim,
+                                        idx_t size) {
+        assert(size >= 0);
+        
+        // TODO: remove hard-coded dimensions.
+        if (dim == "w") bw = size;
+        else if (dim == "x") bx = size;
+        else if (dim == "y") by = size;
+        else if (dim == "z") bz = size;
+        else {
+            cerr << "Error: set_block_size(): bad dim '" << dim << "'\n";
+            exit(1);
+        }
+    }
     
     yk_solution_ptr yk_factory::new_solution(yk_settings_ptr opts) const {
-        auto sp = dynamic_pointer_cast<KernelSettings>(opts);
+        auto op = dynamic_pointer_cast<KernelSettings>(opts);
+        assert(op);
+
+        // Create problem-specific object defined by stencil compiler.
+        auto sp = make_shared<YASK_STENCIL_CONTEXT>(op);
         assert(sp);
-        return make_shared<YASK_STENCIL_CONTEXT>(sp);
+        return sp;
     }
+
+    void StencilContext::copy_env(const yk_solution_ptr src) {
+        auto cp = dynamic_pointer_cast<StencilContext>(src);
+        assert(cp);
+        copyEnv(cp.get());
+    }
+    
     
     ///// StencilContext functions:
 
@@ -106,11 +138,12 @@ namespace yask {
     }
 
     // Copy env settings from another context.
-    void StencilContext::copyEnv(const StencilContext& src) {
-        comm = src.comm;
-        my_rank = src.my_rank;
-        num_ranks = src.num_ranks;
-        _ostr = src._ostr;
+    void StencilContext::copyEnv(const StencilContext* src) {
+        assert(src);
+        comm = src->comm;
+        my_rank = src->my_rank;
+        num_ranks = src->num_ranks;
+        _ostr = src->_ostr;
     }
 
     // Set ostr to given stream if provided.
@@ -537,8 +570,9 @@ namespace yask {
     // Init MPI-related vars and other vars related to my rank's place in
     // the global problem: rank index, offset, etc.  Need to call this even
     // if not using MPI to properly init these vars.  Called from
-    // allocAll(), so it doesn't normally need to be called from user code.
-    void StencilContext::setupRank() {
+    // prepare_solution(), so it doesn't normally need to be called from user code.
+    void StencilContext::setupRank()
+    {
         ostream& os = get_ostr();
 
         // Report ranks.
@@ -739,23 +773,132 @@ namespace yask {
         os << "Number of halo exchanges from this rank: " << num_exchanges << endl;
         os << "Problem-domain offsets of this rank: " <<
             ofs_w << ", " << ofs_x << ", " << ofs_y << ", " << ofs_z << endl;
+
+        // Set offsets in grids.
+        for (auto gp : gridPtrs) {
+            gp->set_ofs_w(ofs_w);
+            gp->set_ofs_x(ofs_x);
+            gp->set_ofs_y(ofs_y);
+            gp->set_ofs_z(ofs_z);
+        }
     }
 
-    // Allocate memory for grids, params, and MPI bufs.
+    // Allocate memory for grids, params, and MPI bufs that do not
+    // already have storage.
     // TODO: allow different types of memory for different grids, MPI bufs, etc.
-    void StencilContext::allocData() {
+    void StencilContext::allocData()
+    {
         ostream& os = get_ostr();
 
-        // if '_data_buf' is null, allocate memory and call recursively to distribute.
-        // If '_data_buf' is not null, distribute already-allocated memory.
+        // Pass 0: count required size, allocate memory.
+        // Pass 1: distribute already-allocated memory.
+        for (int pass = 0; pass < 2; pass++) {
         
-        // Determine how many bytes are needed.
-        size_t nbytes = 0, gbytes = 0, pbytes = 0, bbytes = 0;
+            // Determine how many bytes are needed.
+            size_t nbytes = 0, gbytes = 0, pbytes = 0, bbytes = 0;
         
-        // Grids.
-        for (auto gp : gridPtrs) {
+            // Grids.
+            for (auto gp : gridPtrs) {
+                if (gp->get_storage()) continue; // already has storage.
 
-            // Set grid sizes from settings.
+                // Set storage if buffer has been allocated.
+                if (pass == 1) {
+                    gp->set_storage(_data_buf, nbytes);
+                    gp->print_info(os);
+                }
+
+                // Determine size used (also offset to next location).
+                gbytes += gp->get_num_bytes();
+                nbytes += ROUND_UP(gp->get_num_bytes() + _data_buf_pad,
+                                   CACHELINE_BYTES);
+                TRACE_MSG("grid '" << gp->get_name() << "' needs " <<
+                          gp->get_num_bytes() << " bytes");
+            }
+
+            // Params.
+            for (auto pp : paramPtrs) {
+                if (pp->get_storage()) continue; // already has storage.
+
+                // Set storage if buffer has been allocated.
+                if (pass == 1)
+                    pp->set_storage(_data_buf, nbytes);
+
+                // determine size used (also offset to next location).
+                pbytes += pp->get_num_bytes();
+                nbytes += ROUND_UP(pp->get_num_bytes() + _data_buf_pad,
+                                   CACHELINE_BYTES);
+                TRACE_MSG("param needs " <<
+                          pp->get_num_bytes() << " bytes");
+            }
+
+            // MPI buffers.
+            for (auto* gp : gridPtrs) {
+                auto& gname = gp->get_name();
+                if (mpiBufs.count(gname) == 0)
+                    continue;
+
+                // Visit buffers for each neighbor for this grid.
+                mpiBufs[gname].visitNeighbors
+                    (*this, false,
+                     [&](idx_t nw, idx_t nx, idx_t ny, idx_t nz,
+                         int rank,
+                         Grid_WXYZ* sendBuf,
+                         Grid_WXYZ* rcvBuf)
+                     {
+                         // Send.
+                         if (!sendBuf->get_storage()) {
+                             if (pass == 1)
+                                 sendBuf->set_storage(_data_buf, nbytes);
+                             bbytes += sendBuf->get_num_bytes();
+                             nbytes += ROUND_UP(sendBuf->get_num_bytes() + _data_buf_pad,
+                                                CACHELINE_BYTES);
+                             TRACE_MSG("send buf '" << sendBuf->get_name() << "' needs " <<
+                                       sendBuf->get_num_bytes() << " bytes");
+                         }
+
+                         // Recv.
+                         if (!rcvBuf->get_storage()) {
+                             if (pass == 1)
+                                 rcvBuf->set_storage(_data_buf, nbytes);
+                             bbytes += rcvBuf->get_num_bytes();
+                             nbytes += ROUND_UP(rcvBuf->get_num_bytes() + _data_buf_pad,
+                                                CACHELINE_BYTES);
+                             TRACE_MSG("rcv buf '" << rcvBuf->get_name() << "' needs " <<
+                                       rcvBuf->get_num_bytes() << " bytes");
+                         }
+                     } );
+            }
+
+            // Don't need pad after last one.
+            if (nbytes >= _data_buf_pad)
+                nbytes -= _data_buf_pad;
+
+            // Allocate data.
+            if (pass == 0 && nbytes > 0) {
+                os << "Allocating " << printWithPow2Multiplier(nbytes) <<
+                    "B for all grids, parameters, and other buffers with a " <<
+                    printWithPow2Multiplier(_data_buf_alignment) << "B alignment...\n" << flush;
+                int ret = posix_memalign(&_data_buf, _data_buf_alignment, nbytes);
+                if (ret || !_data_buf) {
+                    cerr << "Error: unable to allocate memory.\n";
+                    exit_yask(1);
+                }
+                _data_buf_size = nbytes;
+
+                os << "  " << printWithPow2Multiplier(gbytes) << "B for grid(s).\n" <<
+                    "  " << printWithPow2Multiplier(pbytes) << "B for parameters(s).\n" <<
+                    "  " << printWithPow2Multiplier(bbytes) << "B for MPI buffers(s).\n" <<
+                    "  " << printWithPow2Multiplier(nbytes - gbytes - pbytes - bbytes) <<
+                    "B for inter-data padding.\n";
+            }
+        }
+    }
+
+    // Set grid sizes based on settings.
+    void StencilContext::set_grid_sizes()
+    {
+        // Set domain and pad sizes.
+        for (auto gp : gridPtrs) {
             gp->set_dw(_opts->dw);
             gp->set_dx(_opts->dx);
             gp->set_dy(_opts->dy);
@@ -764,104 +907,12 @@ namespace yask {
             gp->set_extra_pad_x(_opts->epx);
             gp->set_extra_pad_y(_opts->epy);
             gp->set_extra_pad_z(_opts->epz);
-            gp->set_ofs_w(ofs_w);
-            gp->set_ofs_x(ofs_x);
-            gp->set_ofs_y(ofs_y);
-            gp->set_ofs_z(ofs_z);
-
-            // set storage if requested.
-            if (_data_buf) {
-                gp->set_storage(_data_buf, nbytes);
-                gp->print_info(os);
-            }
-
-            // determine size used (also offset to next location).
-            gbytes += gp->get_num_bytes();
-            nbytes += ROUND_UP(gp->get_num_bytes() + _data_buf_pad,
-                               CACHELINE_BYTES);
-            TRACE_MSG("grid '" << gp->get_name() << "' needs " <<
-                      gp->get_num_bytes() << " bytes");
-        }
-
-        // Params.
-        for (auto pp : paramPtrs) {
-
-            // set storage if requested.
-            if (_data_buf)
-                pp->set_storage(_data_buf, nbytes);
-
-            // determine size used (also offset to next location).
-            pbytes += pp->get_num_bytes();
-            nbytes += ROUND_UP(pp->get_num_bytes() + _data_buf_pad,
-                               CACHELINE_BYTES);
-            TRACE_MSG("param needs " <<
-                      pp->get_num_bytes() << " bytes");
-        }
-
-        // MPI buffers.
-        for (auto* gp : gridPtrs) {
-            auto& gname = gp->get_name();
-            if (mpiBufs.count(gname) == 0)
-                continue;
-
-            // Visit buffers for each neighbor for this grid.
-            mpiBufs[gname].visitNeighbors
-                (*this, false,
-                 [&](idx_t nw, idx_t nx, idx_t ny, idx_t nz,
-                     int rank,
-                     Grid_WXYZ* sendBuf,
-                     Grid_WXYZ* rcvBuf)
-                 {
-                     // Send.
-                     if (_data_buf)
-                         sendBuf->set_storage(_data_buf, nbytes);
-                     bbytes += sendBuf->get_num_bytes();
-                     nbytes += ROUND_UP(sendBuf->get_num_bytes() + _data_buf_pad,
-                                        CACHELINE_BYTES);
-                     TRACE_MSG("send buf '" << sendBuf->get_name() << "' needs " <<
-                               sendBuf->get_num_bytes() << " bytes");
-
-                     // Recv.
-                     if (_data_buf)
-                         rcvBuf->set_storage(_data_buf, nbytes);
-                     bbytes += rcvBuf->get_num_bytes();
-                     nbytes += ROUND_UP(rcvBuf->get_num_bytes() + _data_buf_pad,
-                                        CACHELINE_BYTES);
-                     TRACE_MSG("rcv buf '" << rcvBuf->get_name() << "' needs " <<
-                               rcvBuf->get_num_bytes() << " bytes");
-                 } );
-        }
-
-        // Don't need pad after last one.
-        if (nbytes)
-            nbytes -= _data_buf_pad;
-
-        // Allocate and distribute data.
-        if (!_data_buf) {
-            os << "Allocating " << printWithPow2Multiplier(nbytes) <<
-                "B for all grids, parameters, and other buffers with a " <<
-                printWithPow2Multiplier(_data_buf_alignment) << "B alignment...\n" << flush;
-            int ret = posix_memalign(&_data_buf, _data_buf_alignment, nbytes);
-            if (ret || !_data_buf) {
-                cerr << "Error: unable to allocate memory.\n";
-                exit_yask(1);
-            }
-            _data_buf_size = nbytes;
-
-            os << "  " << printWithPow2Multiplier(gbytes) << "B for grid(s).\n" <<
-                "  " << printWithPow2Multiplier(pbytes) << "B for parameters(s).\n" <<
-                "  " << printWithPow2Multiplier(bbytes) << "B for MPI buffers(s).\n" <<
-                "  " << printWithPow2Multiplier(nbytes - gbytes - pbytes - bbytes) <<
-                "B for inter-data padding.\n";
-                
-            // Distribute this allocation w/a recursive call.
-            allocData();
         }
     }
-
+    
     // Allocate grids, params, and MPI bufs.
     // Initialize some data structures.
-    void StencilContext::allocAll()
+    void StencilContext::prepare_solution()
     {
         // Don't continue until all ranks are this far.
         global_barrier();
@@ -884,7 +935,11 @@ namespace yask {
 #endif
         
         // Adjust all settings before setting MPI buffers or sizing grids.
+        // Prints out final settings.
         _opts->finalizeSettings(os);
+
+        // Size grids based on finalized settings.
+        set_grid_sizes();
         
         // report threads.
         os << endl;
@@ -908,10 +963,7 @@ namespace yask {
         os << "Num grids to be updated: " << outputGridPtrs.size() << endl;
         os << "Num stencil equation-groups: " << eqGroups.size() << endl;
         
-        // Set up MPI data.  Must do this before sizing grids so that
-        // global offsets are calculated properly.
-        if (num_ranks > 1)
-            os << "Creating MPI buffers..." << endl;
+        // Set up data based on MPI rank, including grid positions.
         setupRank();
 
         // Determine bounding-boxes for all eq-groups.
@@ -1652,7 +1704,7 @@ namespace yask {
         os << "Usage: " << pgmName << " [options]\n"
             "Options:\n";
         parser.print_help(os);
-        os << "Terms for the various levels of tiling:\n"
+        os << "Terms for the various levels of tiling from smallest to largest:\n"
             " A 'point' is a single floating-point (FP) element.\n"
             "  This binary uses " << REAL_BYTES << "-byte FP elements.\n"
             " A 'vector' is composed of points.\n"
@@ -1661,17 +1713,22 @@ namespace yask {
             " A 'vector-cluster' is composed of vectors.\n"
             "  This is the unit of work done in each inner-most loop iteration.\n"
             " A 'sub-block' is composed of vector-clusters.\n"
-            "  This is the unit of work for one OpenMP thread.\n"
+            "  If the number of threads-per-block is greater than one,\n"
+            "   then this is the unit of work for one nested OpenMP thread;\n"
+            "   else, sub-blocks are evaluated sequentially within each block.\n"
             " A 'block' is composed of sub-blocks.\n"
-            "  This is the unit of work for one OpenMP thread team.\n"
+            "  This is the unit of work for one top-level OpenMP thread.\n"
             " A 'region' is composed of blocks.\n"
-            "  Regions are used to implement temporal wave-front tiling.\n"
+            "  If using temporal wave-front tiling (see region-size guidelines),\n"
+            "   then, this is the unit of work for each wave-front tile;\n"
+            "   else, there is typically only one region the sie of the rank-domain.\n"
             " A 'rank-domain' is composed of regions.\n"
             "  This is the unit of work for one MPI rank.\n"
             " The 'overall-problem' is composed of rank-domains.\n"
-            "  This is the unit of work for all MPI ranks.\n"
+            "  This is the unit of work across all MPI ranks.\n" <<
 #ifndef USE_MPI
-            "  This binary has NOT been compiled with MPI support.\n"
+            "   This binary has NOT been compiled with MPI support,\n"
+            "   so the overall-problem is equivalent to the single rank-domain.\n" <<
 #endif
             "Guidelines for setting tiling sizes:\n"
             " The vector and vector-cluster sizes are set at compile-time, so\n"
@@ -1740,114 +1797,114 @@ namespace yask {
         os << flush;
     }
     
-        // Make sure all user-provided settings are valid and finish setting up some
-        // other vars before allocating memory.
-        // Called from allocAll(), so it doesn't normally need to be called from user code.
-        void KernelSettings::finalizeSettings(std::ostream& os) {
+    // Make sure all user-provided settings are valid and finish setting up some
+    // other vars before allocating memory.
+    // Called from prepare_solution(), so it doesn't normally need to be called from user code.
+    void KernelSettings::finalizeSettings(std::ostream& os)
+    {
+        // Round up domain size as needed.
+        dt = roundUp(os, dt, CPTS_T, "rank domain size in t (time steps)");
+        dw = roundUp(os, dw, CPTS_W, "rank domain size in w");
+        dx = roundUp(os, dx, CPTS_X, "rank domain size in x");
+        dy = roundUp(os, dy, CPTS_Y, "rank domain size in y");
+        dz = roundUp(os, dz, CPTS_Z, "rank domain size in z");
 
-            // Round up domain size as needed.
-            dt = roundUp(os, dt, CPTS_T, "rank domain size in t (time steps)");
-            dw = roundUp(os, dw, CPTS_W, "rank domain size in w");
-            dx = roundUp(os, dx, CPTS_X, "rank domain size in x");
-            dy = roundUp(os, dy, CPTS_Y, "rank domain size in y");
-            dz = roundUp(os, dz, CPTS_Z, "rank domain size in z");
+        // Determine num regions.
+        // Also fix up region sizes as needed.
+        // Default region size (if 0) will be size of rank-domain.
+        os << "\nRegions:" << endl;
+        idx_t nrt = findNumRegionsInDomain(os, rt, dt, CPTS_T, "t");
+        idx_t nrw = findNumRegionsInDomain(os, rw, dw, CPTS_W, "w");
+        idx_t nrx = findNumRegionsInDomain(os, rx, dx, CPTS_X, "x");
+        idx_t nry = findNumRegionsInDomain(os, ry, dy, CPTS_Y, "y");
+        idx_t nrz = findNumRegionsInDomain(os, rz, dz, CPTS_Z, "z");
+        idx_t nr = nrt * nrw * nrx * nry * nrz;
+        os << " num-regions-per-rank-domain: " << nr << endl;
+        os << " Since the temporal region size is " << rt <<
+            ", temporal wave-front tiling is ";
+        if (rt <= 1) os << "NOT ";
+        os << "enabled.\n";
 
-            // Determine num regions.
-            // Also fix up region sizes as needed.
-            // Default region size (if 0) will be size of rank-domain.
-            os << "\nRegions:" << endl;
-            idx_t nrt = findNumRegionsInDomain(os, rt, dt, CPTS_T, "t");
-            idx_t nrw = findNumRegionsInDomain(os, rw, dw, CPTS_W, "w");
-            idx_t nrx = findNumRegionsInDomain(os, rx, dx, CPTS_X, "x");
-            idx_t nry = findNumRegionsInDomain(os, ry, dy, CPTS_Y, "y");
-            idx_t nrz = findNumRegionsInDomain(os, rz, dz, CPTS_Z, "z");
-            idx_t nr = nrt * nrw * nrx * nry * nrz;
-            os << " num-regions-per-rank-domain: " << nr << endl;
-            os << " Since the temporal region size is " << rt <<
-                ", temporal wave-front tiling is ";
-            if (rt <= 1) os << "NOT ";
-            os << "enabled.\n";
+        // Determine num blocks.
+        // Also fix up block sizes as needed.
+        // Default block size (if 0) will be size of region.
+        os << "\nBlocks:" << endl;
+        idx_t nbt = findNumBlocksInRegion(os, bt, rt, CPTS_T, "t");
+        idx_t nbw = findNumBlocksInRegion(os, bw, rw, CPTS_W, "w");
+        idx_t nbx = findNumBlocksInRegion(os, bx, rx, CPTS_X, "x");
+        idx_t nby = findNumBlocksInRegion(os, by, ry, CPTS_Y, "y");
+        idx_t nbz = findNumBlocksInRegion(os, bz, rz, CPTS_Z, "z");
+        idx_t nb = nbt * nbw * nbx * nby * nbz;
+        os << " num-blocks-per-region: " << nb << endl;
+        os << " num-blocks-per-rank-domain: " << (nb * nr) << endl;
 
-            // Determine num blocks.
-            // Also fix up block sizes as needed.
-            // Default block size (if 0) will be size of region.
-            os << "\nBlocks:" << endl;
-            idx_t nbt = findNumBlocksInRegion(os, bt, rt, CPTS_T, "t");
-            idx_t nbw = findNumBlocksInRegion(os, bw, rw, CPTS_W, "w");
-            idx_t nbx = findNumBlocksInRegion(os, bx, rx, CPTS_X, "x");
-            idx_t nby = findNumBlocksInRegion(os, by, ry, CPTS_Y, "y");
-            idx_t nbz = findNumBlocksInRegion(os, bz, rz, CPTS_Z, "z");
-            idx_t nb = nbt * nbw * nbx * nby * nbz;
-            os << " num-blocks-per-region: " << nb << endl;
-            os << " num-blocks-per-rank-domain: " << (nb * nr) << endl;
+        // Adjust defaults for sub-blocks to be y-z slab.
+        // Otherwise, findNumSubBlocksInBlock() would set default
+        // to entire block.
+        if (!sbw) sbw = CPTS_W; // min size in 'w'.
+        if (!sbx) sbx = CPTS_X; // min size in 'x'.
+        if (!sby) sby = by;     // max size in 'y'.
+        if (!sbz) sbz = bz;     // max size in 'z'.
 
-            // Adjust defaults for sub-blocks to be y-z slab.
-            // Otherwise, findNumSubBlocksInBlock() would set default
-            // to entire block.
-            if (!sbw) sbw = CPTS_W; // min size in 'w'.
-            if (!sbx) sbx = CPTS_X; // min size in 'x'.
-            if (!sby) sby = by;     // max size in 'y'.
-            if (!sbz) sbz = bz;     // max size in 'z'.
+        // Determine num sub-blocks.
+        // Also fix up sub-block sizes as needed.
+        os << "\nSub-blocks:" << endl;
+        idx_t nsbt = findNumSubBlocksInBlock(os, sbt, bt, CPTS_T, "t");
+        idx_t nsbw = findNumSubBlocksInBlock(os, sbw, bw, CPTS_W, "w");
+        idx_t nsbx = findNumSubBlocksInBlock(os, sbx, bx, CPTS_X, "x");
+        idx_t nsby = findNumSubBlocksInBlock(os, sby, by, CPTS_Y, "y");
+        idx_t nsbz = findNumSubBlocksInBlock(os, sbz, bz, CPTS_Z, "z");
+        idx_t nsb = nsbt * nsbw * nsbx * nsby * nsbz;
+        os << " num-sub-blocks-per-block: " << nsb << endl;
 
-            // Determine num sub-blocks.
-            // Also fix up sub-block sizes as needed.
-            os << "\nSub-blocks:" << endl;
-            idx_t nsbt = findNumSubBlocksInBlock(os, sbt, bt, CPTS_T, "t");
-            idx_t nsbw = findNumSubBlocksInBlock(os, sbw, bw, CPTS_W, "w");
-            idx_t nsbx = findNumSubBlocksInBlock(os, sbx, bx, CPTS_X, "x");
-            idx_t nsby = findNumSubBlocksInBlock(os, sby, by, CPTS_Y, "y");
-            idx_t nsbz = findNumSubBlocksInBlock(os, sbz, bz, CPTS_Z, "z");
-            idx_t nsb = nsbt * nsbw * nsbx * nsby * nsbz;
-            os << " num-sub-blocks-per-block: " << nsb << endl;
-
-            // Now, we adjust groups. These are done after all the above sizes
-            // because group sizes are more like 'guidelines' and don't have
-            // their own loops.
-            os << "\nGroups:" << endl;
+        // Now, we adjust groups. These are done after all the above sizes
+        // because group sizes are more like 'guidelines' and don't have
+        // their own loops.
+        os << "\nGroups:" << endl;
         
-            // Adjust defaults for block-groups to be size of block.
-            if (!bgw) bgw = bw;
-            if (!bgx) bgx = bx;
-            if (!bgy) bgy = by;
-            if (!bgz) bgz = bz;
+        // Adjust defaults for block-groups to be size of block.
+        if (!bgw) bgw = bw;
+        if (!bgx) bgx = bx;
+        if (!bgy) bgy = by;
+        if (!bgz) bgz = bz;
 
-            // Determine num block-groups.
-            // Also fix up block-group sizes as needed.
-            // TODO: only print this if block-grouping is enabled.
-            idx_t nbgw = findNumBlockGroupsInRegion(os, bgw, rw, bw, "w");
-            idx_t nbgx = findNumBlockGroupsInRegion(os, bgx, rx, bx, "x");
-            idx_t nbgy = findNumBlockGroupsInRegion(os, bgy, ry, by, "y");
-            idx_t nbgz = findNumBlockGroupsInRegion(os, bgz, rz, bz, "z");
-            idx_t nbg = nbt * nbgw * nbgx * nbgy * nbgz;
-            os << " num-block-groups-per-region: " << nbg << endl;
-            nbw = findNumBlocksInBlockGroup(os, bw, bgw, CPTS_W, "w");
-            nbx = findNumBlocksInBlockGroup(os, bx, bgx, CPTS_X, "x");
-            nby = findNumBlocksInBlockGroup(os, by, bgy, CPTS_Y, "y");
-            nbz = findNumBlocksInBlockGroup(os, bz, bgz, CPTS_Z, "z");
-            nb = nbw * nbx * nby * nbz;
-            os << " num-blocks-per-block-group: " << nb << endl;
+        // Determine num block-groups.
+        // Also fix up block-group sizes as needed.
+        // TODO: only print this if block-grouping is enabled.
+        idx_t nbgw = findNumBlockGroupsInRegion(os, bgw, rw, bw, "w");
+        idx_t nbgx = findNumBlockGroupsInRegion(os, bgx, rx, bx, "x");
+        idx_t nbgy = findNumBlockGroupsInRegion(os, bgy, ry, by, "y");
+        idx_t nbgz = findNumBlockGroupsInRegion(os, bgz, rz, bz, "z");
+        idx_t nbg = nbt * nbgw * nbgx * nbgy * nbgz;
+        os << " num-block-groups-per-region: " << nbg << endl;
+        nbw = findNumBlocksInBlockGroup(os, bw, bgw, CPTS_W, "w");
+        nbx = findNumBlocksInBlockGroup(os, bx, bgx, CPTS_X, "x");
+        nby = findNumBlocksInBlockGroup(os, by, bgy, CPTS_Y, "y");
+        nbz = findNumBlocksInBlockGroup(os, bz, bgz, CPTS_Z, "z");
+        nb = nbw * nbx * nby * nbz;
+        os << " num-blocks-per-block-group: " << nb << endl;
 
-            // Adjust defaults for sub-block-groups to be size of sub-block.
-            if (!sbgw) sbgw = sbw;
-            if (!sbgx) sbgx = sbx;
-            if (!sbgy) sbgy = sby;
-            if (!sbgz) sbgz = sbz;
+        // Adjust defaults for sub-block-groups to be size of sub-block.
+        if (!sbgw) sbgw = sbw;
+        if (!sbgx) sbgx = sbx;
+        if (!sbgy) sbgy = sby;
+        if (!sbgz) sbgz = sbz;
 
-            // Determine num sub-block-groups.
-            // Also fix up sub-block-group sizes as needed.
-            // TODO: only print this if sub-block-grouping is enabled.
-            idx_t nsbgw = findNumSubBlockGroupsInBlock(os, sbgw, bw, sbw, "w");
-            idx_t nsbgx = findNumSubBlockGroupsInBlock(os, sbgx, bx, sbx, "x");
-            idx_t nsbgy = findNumSubBlockGroupsInBlock(os, sbgy, by, sby, "y");
-            idx_t nsbgz = findNumSubBlockGroupsInBlock(os, sbgz, bz, sbz, "z");
-            idx_t nsbg = nsbgw * nsbgx * nsbgy * nsbgz;
-            os << " num-sub-block-groups-per-block: " << nsbg << endl;
-            nsbw = findNumSubBlocksInSubBlockGroup(os, sbw, sbgw, CPTS_W, "w");
-            nsbx = findNumSubBlocksInSubBlockGroup(os, sbx, sbgx, CPTS_X, "x");
-            nsby = findNumSubBlocksInSubBlockGroup(os, sby, sbgy, CPTS_Y, "y");
-            nsbz = findNumSubBlocksInSubBlockGroup(os, sbz, sbgz, CPTS_Z, "z");
-            nsb = nsbw * nsbx * nsby * nsbz;
-            os << " num-sub-blocks-per-sub-block-group: " << nsb << endl;
-        }
+        // Determine num sub-block-groups.
+        // Also fix up sub-block-group sizes as needed.
+        // TODO: only print this if sub-block-grouping is enabled.
+        idx_t nsbgw = findNumSubBlockGroupsInBlock(os, sbgw, bw, sbw, "w");
+        idx_t nsbgx = findNumSubBlockGroupsInBlock(os, sbgx, bx, sbx, "x");
+        idx_t nsbgy = findNumSubBlockGroupsInBlock(os, sbgy, by, sby, "y");
+        idx_t nsbgz = findNumSubBlockGroupsInBlock(os, sbgz, bz, sbz, "z");
+        idx_t nsbg = nsbgw * nsbgx * nsbgy * nsbgz;
+        os << " num-sub-block-groups-per-block: " << nsbg << endl;
+        nsbw = findNumSubBlocksInSubBlockGroup(os, sbw, sbgw, CPTS_W, "w");
+        nsbx = findNumSubBlocksInSubBlockGroup(os, sbx, sbgx, CPTS_X, "x");
+        nsby = findNumSubBlocksInSubBlockGroup(os, sby, sbgy, CPTS_Y, "y");
+        nsbz = findNumSubBlocksInSubBlockGroup(os, sbz, sbgz, CPTS_Z, "z");
+
+        os << " num-sub-blocks-per-sub-block-group: " << nsb << endl;
+    }
 
 } // namespace yask.

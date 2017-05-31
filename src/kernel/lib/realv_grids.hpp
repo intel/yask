@@ -34,7 +34,7 @@ namespace yask {
     typedef GenericGridBase<real_vec_t> RealVecGrid;
 
     // Pure-virtual base class for real_vec_t grids.  Supports up to 4
-    // spatial dims and optional temporal dim.  Indices used to access
+    // spatial dims and one temporal dim.  Indices used to access
     // points are global and logical.  Example: if there are two ranks in
     // the x-dim, each of which has domain-size of 100 and a pad-size of 10,
     // the 1st rank's x indices will be -10..110, and the 2nd rank's x
@@ -45,6 +45,9 @@ namespace yask {
 
     protected:
         RealVecGrid* _gp;
+
+        // Allocation in time domain.
+        idx_t _tdim = 1;
 
         // real_t sizes for up to 4 spatial dims.
         idx_t _dw=VLEN_W, _dx=VLEN_X, _dy=VLEN_Y, _dz=VLEN_Z; // domain sizes.
@@ -79,6 +82,31 @@ namespace yask {
 
             // Divide values with padding in numerator to avoid negative indices to get offsets.
             elem_ofs = padded_index % vec_len;
+        }
+
+        // Adjust logical time index to 0-based index
+        // using temporal allocation size.
+        ALWAYS_INLINE
+        idx_t get_index_t(idx_t t) const {
+
+            // Index wraps in tdim.
+            // Examples based on tdim == 2:
+            // t_idx => return value.
+            // -2 => 0.
+            // -1 => 1.
+            //  0 => 0.
+            //  1 => 1.
+            //  2 => 0.
+
+            // Avoid discontinuity caused by negative time by adding a large
+            // offset to the t index.  So, t can be negative, but not so
+            // much that it would still be negative after adding the offset.
+            // This should not be a practical restriction.
+            t += 0x1000 * idx_t(CPTS_T);
+            assert(t >= 0);
+            assert(t % CPTS_T == 0);
+            idx_t t_idx = t / idx_t(CPTS_T);
+            return t_idx % _tdim;
         }
 
         // Adjust logical spatial vector index to 0-based internal index by
@@ -130,8 +158,12 @@ namespace yask {
                 (got_z() ? 1 : 0);
         }
 
-        // Get temporal allocation.
-        virtual inline idx_t get_tdim() const { return 1; }
+        // Get storage allocation in number of points.
+        inline idx_t get_alloc_t() const { return _tdim; }
+        inline idx_t get_alloc_w() const { return _dw + 2 * _pw; }
+        inline idx_t get_alloc_x() const { return _dx + 2 * _px; }
+        inline idx_t get_alloc_y() const { return _dy + 2 * _py; }
+        inline idx_t get_alloc_z() const { return _dz + 2 * _pz; }
         
         // Get domain-size for this rank after round-up.
         inline idx_t get_dw() const { return _dw; }
@@ -172,14 +204,23 @@ namespace yask {
         inline idx_t get_last_y() const { return _oy + _dy - 1; }
         inline idx_t get_last_z() const { return _oz + _dz - 1; }
 
+        // Set temporal storage allocation.
+        inline void set_alloc_t(idx_t tdim) {
+            assert(tdim >= 1);
+            _tdim = tdim; resize_g(); }
+
         // Set domain-size for this rank and round-up.
         inline void set_dw(idx_t dw) {
+            assert(dw >= 1);
             _dw = ROUND_UP(dw, VLEN_W); _dwv = _dw / VLEN_W; resize_g(); }
         inline void set_dx(idx_t dx) {
+            assert(dx >= 1);
             _dx = ROUND_UP(dx, VLEN_X); _dxv = _dx / VLEN_X; resize_g(); }
         inline void set_dy(idx_t dy) {
+            assert(yw >= 1);
             _dy = ROUND_UP(dy, VLEN_Y); _dyv = _dy / VLEN_Y; resize_g(); }
         inline void set_dz(idx_t dz) {
+            assert(dz >= 1);
             _dz = ROUND_UP(dz, VLEN_Z); _dzv = _dz / VLEN_Z; resize_g(); }
 
         // Set halo sizes.
@@ -331,6 +372,12 @@ namespace yask {
             assert(n < get_num_dims());
             return _gp->get_dim_name(n);
         }
+        virtual idx_t get_domain_size(const std::string& dim);
+        virtual idx_t get_halo_size(const std::string& dim);
+        virtual idx_t get_extra_pad_size(const std::string& dim);
+        virtual idx_t get_alloc_size(const std::string& dim);
+        virtual void set_alloc_size(const std::string& dim, idx_t tdim);
+        virtual void set_total_pad_size(const std::string& dim, idx_t size);
     };
     
     // A 3D (x, y, z) collection of real_vec_t elements.
@@ -780,57 +827,12 @@ namespace yask {
         }
     };
 
-    // Base class that adds a templated temporal size for
-    // index-calculation efficiency.
-    template <idx_t tdim>
-    class RealVecGrid_T : public RealVecGridBase {
-
-    protected:
-        idx_t _tdim = 1;        // FIXME: remove this test.
-
-        // Adjust logical time index to 0-based index
-        // using temporal allocation size.
-        ALWAYS_INLINE
-        idx_t get_index_t(idx_t t) const {
-
-            // Index wraps in tdim.
-            // Examples based on tdim == 2:
-            // t_idx => return value.
-            // -2 => 0.
-            // -1 => 1.
-            //  0 => 0.
-            //  1 => 1.
-            //  2 => 0.
-
-            // Avoid discontinuity caused by negative time by adding a large
-            // offset to the t index.  So, t can be negative, but not so
-            // much that it would still be negative after adding the offset.
-            // This should not be a practical restriction.
-            t += 256 * _tdim;
-            assert(t >= 0);
-            assert(t % CPTS_T == 0);
-            idx_t t_idx = t / idx_t(CPTS_T);
-            return t_idx % _tdim;
-        }
-
-    public:
-
-        RealVecGrid_T(RealVecGrid* gp) :
-            RealVecGridBase(gp), _tdim(tdim) { }
-
-        // Get temporal allocation.
-        virtual inline idx_t get_tdim() const final {
-            return _tdim;
-        }
-    };
-
     // A 4D (t, x, y, z) collection of real_vec_t elements.
-    // Supports symmetric padding in each dimension.
-    template <typename LayoutFn, idx_t _tdim> class RealVecGrid_TXYZ :
-        public RealVecGrid_T<_tdim> {
+    // Supports symmetric padding in each spatial dimension.
+    template <typename LayoutFn> class RealVecGrid_TXYZ :
+        public RealVecGridBase {
     
     protected:
-
         GenericGrid4d<real_vec_t, LayoutFn> _data;
 
         virtual void resize_g() {
@@ -844,7 +846,7 @@ namespace yask {
 
         // Ctor.
         RealVecGrid_TXYZ(const std::string& name) :
-            RealVecGrid_T<_tdim>(&_data),
+            RealVecGridBase(&_data),
             _data(name, "t", "x", "y", "z") { }
 
         // Determine what dims are defined.
@@ -1052,12 +1054,11 @@ namespace yask {
     };
 
     // A 5D (t, w, x, y, z) collection of real_vec_t elements.
-    // Supports symmetric padding in each dimension.
-    template <typename LayoutFn, idx_t _tdim> class RealVecGrid_TWXYZ :
-        public RealVecGrid_T<_tdim> {
+    // Supports symmetric padding in each spatial dimension.
+    template <typename LayoutFn> class RealVecGrid_TWXYZ :
+        public RealVecGridBase {
     
     protected:
-
         GenericGrid5d<real_vec_t, LayoutFn> _data;
 
         virtual void resize_g() {
@@ -1072,7 +1073,7 @@ namespace yask {
 
         // Ctor.
         RealVecGrid_TWXYZ(const std::string& name) :
-            RealVecGrid_T<_tdim>(&_data),
+            RealVecGridBase(&_data),
             _data(name, "t", "w", "x", "y", "z") { }
 
         // Determine what dims are defined.

@@ -90,6 +90,7 @@ namespace yask {
     // Application settings to control size and perf of stencil code.
     struct KernelSettings :
         public virtual yk_settings {
+        const idx_t def_block = 32;
 
         // Sizes in elements (points).
         // - time sizes (t) are in steps to be done.
@@ -98,7 +99,7 @@ namespace yask {
         idx_t dt=50, dw=1, dx=100, dy=100, dz=100; // rank size (without halos).
         idx_t rt=1, rw=0, rx=0, ry=0, rz=0; // region size (used for wave-front tiling).
         idx_t bgw=0, bgx=0, bgy=0, bgz=0; // block-group size (only used for 'grouped' region loops).
-        idx_t bt=1, bw=0, bx=0, by=0, bz=0; // block size (used for each outer thread).
+        idx_t bt=1, bw=1, bx=def_block, by=def_block, bz=def_block; // block size (used for each outer thread).
         idx_t sbgw=0, sbgx=0, sbgy=0, sbgz=0; // sub-block-group size (only used for 'grouped' block loops).
         idx_t sbt=1, sbw=0, sbx=0, sby=0, sbz=0; // sub-block size (used for each nested thread).
         idx_t epw=0, epx=0, epy=0, epz=0;     // extra spatial padding (in addition to halos).
@@ -130,15 +131,17 @@ namespace yask {
                          const std::vector<std::string>& appExamples) const;
         
         // Make sure all user-provided settings are valid.
-        // Called from allocAll(), so it doesn't normally need to be called from user code.
+        // Called from prepare_solution(), so it doesn't normally need to be called from user code.
         virtual void finalizeSettings(std::ostream& os);
 
         // APIs.
         // See yask_kernel_api.hpp.
         virtual void set_domain_size(const std::string& dim,
                                      idx_t size);
-        virtual void set_pad_size(const std::string& dim,
-                                  idx_t size);
+        virtual void set_extra_pad_size(const std::string& dim,
+                                        idx_t size);
+        virtual void set_block_size(const std::string& dim,
+                                    idx_t size);
         
     };
 
@@ -251,7 +254,7 @@ namespace yask {
         idx_t hw=0, hx=0, hy=0, hz=0;                     // spatial halos.
         idx_t angle_w=0, angle_x=0, angle_y=0, angle_z=0; // temporal skewing angles.
 
-        // Various metrics calculated in allocAll().
+        // Various metrics calculated in prepare_solution().
         // 'rank_' prefix indicates for this rank.
         // 'tot_' prefix indicates over all ranks.
         // 'domain' indicates points in domain-size specified on cmd-line.
@@ -296,7 +299,8 @@ namespace yask {
         virtual void initEnv(int* argc, char*** argv);
 
         // Copy env settings from another context.
-        virtual void copyEnv(const StencilContext& src);
+        // This is an alternative to calling init_env().
+        virtual void copyEnv(const StencilContext* src);
 
         // Set ostr to given stream if provided.
         // If not provided, set to cout if my_rank == msg_rank
@@ -317,17 +321,21 @@ namespace yask {
         
         // Set vars related to this rank's role in global problem.
         // Allocate MPI buffers as needed.
-        // Called from allocAll(), so it doesn't normally need to be called from user code.
+        // Called from prepare_solution(), so it doesn't normally need to be called from user code.
         virtual void setupRank();
 
         // Allocate grid, param, and MPI memory.
-        // Called from allocAll(), so it doesn't normally need to be called from user code.
+        // Called from prepare_solution(), so it doesn't normally need to be called from user code.
         virtual void allocData();
 
         // Allocate grids, params, MPI bufs, etc.
         // Initialize some other data structures.
         // Print lots of stats.
-        virtual void allocAll();
+        virtual void prepare_solution();
+
+        // Set grid sizes based on settings.
+        // Called from prepare_solution(), so it doesn't normally need to be called from user code.
+        virtual void set_grid_sizes();
         
         // Get total memory allocation.
         virtual size_t get_num_bytes() {
@@ -453,6 +461,11 @@ namespace yask {
             assert (n < get_num_grids());
             return gridPtrs.at(n);
         }
+
+        virtual void init_env() {
+            initEnv(0, 0);      // Default call with no cmd-line params.
+        }
+        virtual void copy_env(const yk_solution_ptr src);
     };
     
     /// Classes that support evaluation of one stencil equation-group.

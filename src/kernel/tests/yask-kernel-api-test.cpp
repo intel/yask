@@ -33,13 +33,23 @@ using namespace yask;
 
 int main() {
 
+    // The factory from which all other kernel object are made.
     yk_factory kfac;
+
+    // Create and init settings.
     auto settings = kfac.new_settings();
     settings->set_domain_size("x", 128);
     settings->set_domain_size("y", 128);
     settings->set_domain_size("z", 128);
+    settings->set_block_size("x", 32);
+    settings->set_block_size("y", 32);
+    settings->set_block_size("z", 64);
 
+    // Create and init solution based on settings.
     auto soln = kfac.new_solution(settings);
+    soln->init_env();
+
+    // Print some info about the solution.
     auto name = soln->get_name();
     cout << "Created stencil-solution '" << name << "' with the following grids:\n";
     for (int gi = 0; gi < soln->get_num_grids(); gi++) {
@@ -51,6 +61,11 @@ int main() {
         }
         cout << ")\n";
     }
-    
+
+    // Allocate memory for any grids that do not have storage set.
+    // Set other data structures needed for stencil application.
+    soln->prepare_solution();
+
+    cout << "End of YASK kernel API test.\n";
     return 0;
 }

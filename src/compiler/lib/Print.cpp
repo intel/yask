@@ -699,7 +699,7 @@ namespace yask {
                     os << "not updated by any equation (read-only).\n";
             
                 // Type name.
-                // Name in kernel is 'Grid_' followed by dimensions.
+                // Name in kernel is 'Grid_' followed by dimensions, e.g., "Grid_TXYZ".
                 string typeName = "Grid_";
                 string templStr;
                 for (auto& dim : gp->getDims()) {
@@ -708,16 +708,6 @@ namespace yask {
                     // Add dim suffix.
                     string ucDim = allCaps(dname);
                     typeName += ucDim;
-
-                    // step dimension.
-                    if (dname == _dims._stepDim) {
-                        string sdvar = grid + "_alloc_" + dname;
-                        int sdval = _settings._stepAlloc > 0 ?
-                            _settings._stepAlloc : gp->getStepDimSize();
-                        os << " static const idx_t " << sdvar << " = " << sdval <<
-                            "; // total allocation required in '" << dname << "' dimension.\n";
-                        templStr = "<" + sdvar + ">";
-                    }
                 }
                 typeName += templStr;
 
@@ -733,13 +723,24 @@ namespace yask {
                     ctorCode += " outputGridPtrs.push_back(" + grid  + ");\n" +
                         " outputGridMap[\"" + grid  + "\"] = " + grid + ";\n";
                 }
-            
-                // Halo-setting code.
+
+                // Alloc-setting code.
                 for (auto& dim : gp->getDims()) {
                     auto& dname = dim.getName();
 
+                    // step dimension.
+                    if (dname == _dims._stepDim) {
+                        string sdvar = grid + "_alloc_" + dname;
+                        int sdval = _settings._stepAlloc > 0 ?
+                            _settings._stepAlloc : gp->getStepDimSize();
+                        os << " const idx_t " << sdvar << " = " << sdval <<
+                            "; // total allocation required in '" << dname << "' dimension.\n";
+                        ctorCode += " " + grid + "->set_alloc_" + dname +
+                            "(" + sdvar + ");\n";
+                    }
+                    
                     // non-step dimension.
-                    if (dname != _dims._stepDim) {
+                    else {
 
                         // Halo for this dimension.
                         string hvar = grid + "_halo_" + dname;

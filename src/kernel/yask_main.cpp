@@ -177,15 +177,15 @@ int main(int argc, char** argv)
     auto ksoln = kfac.new_solution(opts);
     auto context = dynamic_pointer_cast<StencilContext>(ksoln);
 
-    // Init MPI, OMP, etc.
-    context->initEnv(&argc, &argv);
-
+    // Set up the environment.
+    ksoln->init_env();
+    
     // Print splash banner and related info.
     ostream& os = context->get_ostr();
     opts->splash(os, argc, argv);
 
-    // Alloc memory, create lists of grids, etc.
-    context->allocAll();
+    // Alloc memory, etc.
+    ksoln->prepare_solution();
 
     // Exit if nothing to do.
     if (opts->num_trials < 1) {
@@ -302,8 +302,8 @@ int main(int argc, char** argv)
         auto ref_soln = kfac.new_solution(opts);
         auto ref_context = dynamic_pointer_cast<StencilContext>(ref_soln);
         ref_context->name += "-reference";
-        ref_context->copyEnv(*context);
-        ref_context->allocAll();
+        ref_soln->copy_env(ksoln);
+        ref_soln->prepare_solution();
 
         // init to same value used in context.
         ref_context->initDiff();

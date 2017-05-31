@@ -30,6 +30,79 @@ using namespace std;
 
 namespace yask {
 
+    // APIs.
+    idx_t RealVecGridBase::get_domain_size(const string& dim) {
+
+        // TODO: remove hard-coded dimensions.
+        if (dim == "w" && got_w()) return get_dw();
+        else if (dim == "x" && got_x()) return get_dx();
+        else if (dim == "y" && got_x()) return get_dy();
+        else if (dim == "z" && got_x()) return get_dz();
+        else {
+            cerr << "Error: get_domain_size(): bad dim '" << dim << "'\n";
+            exit(1);
+        }
+    }
+    idx_t RealVecGridBase::get_halo_size(const string& dim) {
+
+        // TODO: remove hard-coded dimensions.
+        if (dim == "w" && got_w()) return get_halo_w();
+        else if (dim == "x" && got_x()) return get_halo_x();
+        else if (dim == "y" && got_x()) return get_halo_y();
+        else if (dim == "z" && got_x()) return get_halo_z();
+        else {
+            cerr << "Error: get_halo_size(): bad dim '" << dim << "'\n";
+            exit(1);
+        }
+    }
+    idx_t RealVecGridBase::get_extra_pad_size(const string& dim) {
+
+        // TODO: remove hard-coded dimensions.
+        if (dim == "w" && got_w()) return get_extra_pad_w();
+        else if (dim == "x" && got_x()) return get_extra_pad_x();
+        else if (dim == "y" && got_x()) return get_extra_pad_y();
+        else if (dim == "z" && got_x()) return get_extra_pad_z();
+        else {
+            cerr << "Error: get_extra_pad_size(): bad dim '" << dim << "'\n";
+            exit(1);
+        }
+    }
+    idx_t RealVecGridBase::get_alloc_size(const string& dim) {
+
+        // TODO: remove hard-coded dimensions.
+        if (dim == "w" && got_w()) return get_alloc_w();
+        else if (dim == "x" && got_x()) return get_alloc_x();
+        else if (dim == "y" && got_x()) return get_alloc_y();
+        else if (dim == "z" && got_x()) return get_alloc_z();
+        else if (dim == "t" && got_t()) return get_alloc_t();
+        else {
+            cerr << "Error: get_alloc_size(): bad dim '" << dim << "'\n";
+            exit(1);
+        }
+    }
+    void RealVecGridBase::set_alloc_size(const string& dim, idx_t tdim) {
+
+        // TODO: remove hard-coded dimensions.
+        if (dim == "t" && got_t()) return set_alloc_t(tdim);
+        else {
+            cerr << "Error: set_alloc_size(): bad dim '" << dim << "'\n";
+            exit(1);
+        }
+    }
+    void RealVecGridBase::set_total_pad_size(const std::string& dim,
+                                             idx_t size) {
+
+        // TODO: remove hard-coded dimensions.
+        if (dim == "w" && got_w()) return set_pad_w(size);
+        else if (dim == "x" && got_x()) return set_pad_x(size);
+        else if (dim == "y" && got_x()) return set_pad_y(size);
+        else if (dim == "z" && got_x()) return set_pad_z(size);
+        else {
+            cerr << "Error: set_pad_size(): bad dim '" << dim << "'\n";
+            exit(1);
+        }
+    }
+    
     // Initialize memory to incrementing values based on val.
     void RealVecGridBase::set_diff(real_t val) {
 
@@ -46,11 +119,11 @@ namespace yask {
 
         // TODO: fix '*'s w/o z dim.
         os << get_num_dims() << "D (";
-        if (got_t()) os << "t=" << get_tdim() << " * ";
-        if (got_w()) os << "w=" << get_dw() << " * ";
-        if (got_x()) os << "x=" << get_dx() << " * ";
-        if (got_y()) os << "y=" << get_dy() << " * ";
-        if (got_z()) os << "z=" << get_dz();
+        if (got_t()) os << "t=" << get_alloc_t() << " * ";
+        if (got_w()) os << "w=" << get_alloc_w() << " * ";
+        if (got_x()) os << "x=" << get_alloc_x() << " * ";
+        if (got_y()) os << "y=" << get_alloc_y() << " * ";
+        if (got_z()) os << "z=" << get_alloc_z();
         os << ") '" << get_name() << "' data is at " << get_storage() << ": " <<
                 printWithPow10Multiplier(get_num_elems()) << " element(s) of " <<
                 sizeof(real_t) << " byte(s) each, " <<
@@ -76,7 +149,7 @@ namespace yask {
             // Need to recount errors by element.
             errs = 0;
             
-            for (int ti = 0; ti <= get_tdim(); ti++) {
+            for (int ti = 0; ti <= get_alloc_t(); ti++) {
                 for (int wi = get_first_w(); wi <= get_last_w(); wi++) {
                     for (int xi = get_first_x(); xi <= get_last_x(); xi++) {
                         for (int yi = get_first_y(); yi <= get_last_y(); yi++) {
