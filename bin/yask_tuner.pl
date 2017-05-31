@@ -304,7 +304,7 @@ my $searchTypeStr = $sweep ? '-sweep' : '';
 my $hostStr = defined $host ? $host : hostname();
 my $timeStamp=`date +%Y-%m-%d_%H-%M-%S`;
 chomp $timeStamp;
-my $outFile = "yask-tuner$searchTypeStr.$stencil.$arch.$hostStr.$timeStamp.csv";
+my $outFile = "yask_tuner$searchTypeStr.$stencil.$arch.$hostStr.$timeStamp.csv";
 print "Output will be saved in '$outFile'.\n";
 $outFile = '/dev/null' if $checking;
 

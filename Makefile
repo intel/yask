@@ -406,7 +406,7 @@ YC_CXXFLAGS	+=	$(EXTRA_YC_CXXFLAGS)
 # More file names.
 YC_SRC_BASES	:=	CppIntrin Expr ExprUtils Print
 YC_OBJS		:=	$(addprefix src/compiler/lib/,$(addsuffix .o,$(YC_SRC_BASES)))
-YC_BASE		:=	yask-compiler
+YC_BASE		:=	yask_compiler
 YC_LIB		:=	lib/lib$(YC_BASE).so
 YC_EXEC		:=	bin/$(YC_BASE).exe
 YC_STENCIL_LIST	:=	src/compiler/stencils.hpp
@@ -430,7 +430,7 @@ YK_GEN_HEADERS	:=	$(addprefix $(YK_GEN_DIR)/, \
 YK_TAG		:=	$(stencil).$(arch)
 YK_SRC_BASES	:=	stencil_calc realv_grids utils
 YK_OBJS		:=	$(addprefix src/kernel/lib/,$(addsuffix .$(YK_TAG).o,$(YK_SRC_BASES)))
-YK_BASE		:=	yask-kernel.$(YK_TAG)
+YK_BASE		:=	yask_kernel.$(YK_TAG)
 YK_LIB		:=	lib/lib$(YK_BASE).so
 YK_EXEC		:=	bin/$(YK_BASE).exe
 
@@ -440,7 +440,7 @@ LFLAGS_FILE	:=	ld-flags.$(YK_TAG).txt
 
 YK_MK_GEN_DIR	:=	mkdir -p -v $(YK_GEN_DIR)
 
-# gen-loops.pl args:
+# gen_loops.pl args:
 
 # Rank loops break up the whole rank into smaller regions.  In order for
 # temporal wavefronts to operate properly, the order of spatial dimensions
@@ -536,31 +536,31 @@ yk-test: $(YK_EXEC)
 	bin/yask.sh -stencil $(stencil) -arch $(arch) -v
 
 # Auto-generated files.
-$(YK_GEN_DIR)/yask_rank_loops.hpp: bin/gen-loops.pl Makefile
+$(YK_GEN_DIR)/yask_rank_loops.hpp: bin/gen_loops.pl Makefile
 	$(YK_MK_GEN_DIR)
 	$< -output $@ $(RANK_LOOP_OPTS) $(EXTRA_LOOP_OPTS) $(EXTRA_RANK_LOOP_OPTS) "$(RANK_LOOP_CODE)"
 
-$(YK_GEN_DIR)/yask_region_loops.hpp: bin/gen-loops.pl Makefile
+$(YK_GEN_DIR)/yask_region_loops.hpp: bin/gen_loops.pl Makefile
 	$(YK_MK_GEN_DIR)
 	$< -output $@ $(REGION_LOOP_OPTS) $(EXTRA_LOOP_OPTS) $(EXTRA_REGION_LOOP_OPTS) "$(REGION_LOOP_CODE)"
 
-$(YK_GEN_DIR)/yask_block_loops.hpp: bin/gen-loops.pl Makefile
+$(YK_GEN_DIR)/yask_block_loops.hpp: bin/gen_loops.pl Makefile
 	$(YK_MK_GEN_DIR)
 	$< -output $@ $(BLOCK_LOOP_OPTS) $(EXTRA_LOOP_OPTS) $(EXTRA_BLOCK_LOOP_OPTS) "$(BLOCK_LOOP_CODE)"
 
-$(YK_GEN_DIR)/yask_sub_block_loops.hpp: bin/gen-loops.pl Makefile
+$(YK_GEN_DIR)/yask_sub_block_loops.hpp: bin/gen_loops.pl Makefile
 	$(YK_MK_GEN_DIR)
 	$< -output $@ $(SUB_BLOCK_LOOP_OPTS) $(EXTRA_LOOP_OPTS) $(EXTRA_SUB_BLOCK_LOOP_OPTS) "$(SUB_BLOCK_LOOP_CODE)"
 
-$(YK_GEN_DIR)/yask_halo_loops.hpp: bin/gen-loops.pl Makefile
+$(YK_GEN_DIR)/yask_halo_loops.hpp: bin/gen_loops.pl Makefile
 	$(YK_MK_GEN_DIR)
 	$< -output $@ $(HALO_LOOP_OPTS) $(EXTRA_LOOP_OPTS) $(EXTRA_HALO_LOOP_OPTS) "$(HALO_LOOP_CODE)"
 
-$(YK_GEN_DIR)/yask_layout_macros.hpp: bin/gen-layouts.pl
+$(YK_GEN_DIR)/yask_layout_macros.hpp: bin/gen_layouts.pl
 	$(YK_MK_GEN_DIR)
 	$< -m > $@
 
-$(YK_GEN_DIR)/yask_layouts.hpp: bin/gen-layouts.pl
+$(YK_GEN_DIR)/yask_layouts.hpp: bin/gen_layouts.pl
 	$(YK_MK_GEN_DIR)
 	$< -d > $@
 
@@ -647,11 +647,11 @@ lib/_yask_kernel.so: $(YK_OBJS) $(YK_SWIG_DIR)/yask_kernel_api_wrap.o
 	$(CXX) $(CXXFLAGS) -shared -o $@ $^
 
 # Build C++ compiler API test.
-bin/yask-compiler-api-test.exe: $(YC_LIB) src/compiler/tests/yask-compiler-api-test.cpp
+bin/yask_compiler_api_test.exe: $(YC_LIB) src/compiler/tests/yask_compiler_api_test.cpp
 	$(YC_CXX) $(YC_CXXFLAGS) -o $@ $^
 
 # Build C++ kernel API test.
-bin/yask-kernel-api-test.exe: $(YK_LIB) src/kernel/tests/yask-kernel-api-test.cpp
+bin/yask_kernel_api_test.exe: $(YK_LIB) src/kernel/tests/yask_kernel_api_test.cpp
 	$(CXX) $(CXXFLAGS) $(LFLAGS) -o $@ $^
 
 # Special target to avoid building and running stencil compiler.
@@ -663,7 +663,7 @@ kernel-only:
 
 # Run Python compiler API test to create stencil-code file.
 # Also create .pdf rendering of stencil AST if Graphviz is installed.
-py-yc-api-test: bin/yask-compiler-api-test.py lib/_yask_compiler.so
+py-yc-api-test: bin/yask_compiler_api_test.py lib/_yask_compiler.so
 	$(MAKE) clean
 	@echo '*** Running the Python YASK compiler API test...'
 	$(PYTHON) $<
@@ -673,7 +673,7 @@ py-yc-api-test: bin/yask-compiler-api-test.py lib/_yask_compiler.so
 
 # Run C++ compiler API test to create stencil-code file.
 # Also create .pdf rendering of stencil AST if Graphviz is installed.
-cxx-yc-api-test: bin/yask-compiler-api-test.exe
+cxx-yc-api-test: bin/yask_compiler_api_test.exe
 	$(MAKE) clean
 	@echo '*** Running the C++ YASK compiler API test...'
 	$<
@@ -694,12 +694,12 @@ py-yc-api-and-yk-test: py-yc-api-test
 	$(MAKE) yk-test-no-yc
 
 # Run C++ kernel API test.
-cxx-yk-api-test: bin/yask-kernel-api-test.exe
+cxx-yk-api-test: bin/yask_kernel_api_test.exe
 	@echo '*** Running the C++ YASK kernel API test...'
 	$<
 
 # Run Python kernel API test.
-py-yk-api-test: bin/yask-kernel-api-test.py lib/_yask_kernel.so
+py-yk-api-test: bin/yask_kernel_api_test.py lib/_yask_kernel.so
 	@echo '*** Running the Python YASK kernel API test...'
 	$(PYTHON) $<
 
@@ -821,7 +821,7 @@ echo-settings:
 code-stats:
 	@echo
 	@echo "Code stats for stencil computation:"
-	bin/get-loop-stats.pl -t='sub_block_loops' *.s
+	bin/get_loop_stats.pl -t='sub_block_loops' *.s
 
 help:
 	@echo "Example performance builds:"

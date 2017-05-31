@@ -181,7 +181,7 @@ echo $invo > $logfile
 
 # These values must match the ones in Makefile.
 tag=$stencil.$arch
-exe="bin/yask-kernel.$tag.exe"
+exe="bin/yask_kernel.$tag.exe"
 make_report=make-report.$tag.txt
 
 # Try to build exe if needed.
