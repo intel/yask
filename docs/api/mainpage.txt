@@ -162,7 +162,15 @@ this distinguishes them from the 'yc_'-prefixed types used in the "YASK compiler
   like the size of the problem domain.
 - Create a yk_solution object via yk_factory::new_solution().
   This contains the grids and equations created by the compiler.
-
+- If this is the first solution in a process, initialize its environment
+  via yk_solution::init_env().
+  Otherwise, copy the environment from an existing one via yk_solution::copy_env().
+- Set up internal data structures via yk_solution::prepare_solution().
+  This adjusts any settings as needed, determines each rank's position in the problem
+  if MPI is enabled, and allocates data for the grids.
+- Access the solution grids via yk_solution::get_grid().
+  Various properties of each grid may be retrieved or set.
+  In particular, you should usually initialize the data in each grid.
 */
 
 }

@@ -31,74 +31,49 @@ using namespace std;
 namespace yask {
 
     // APIs.
-    idx_t RealVecGridBase::get_domain_size(const string& dim) {
-
-        // TODO: remove hard-coded dimensions.
-        if (dim == "w" && got_w()) return get_dw();
-        else if (dim == "x" && got_x()) return get_dx();
-        else if (dim == "y" && got_x()) return get_dy();
-        else if (dim == "z" && got_x()) return get_dz();
-        else {
-            cerr << "Error: get_domain_size(): bad dim '" << dim << "'\n";
-            exit(1);
-        }
+    // TODO: remove hard-coded dimensions.
+#define GET_GRID_API(api_name, fn_prefix, t_ok, t_fn)                   \
+    idx_t RealVecGridBase::api_name(const string& dim) const {          \
+        if (t_ok && dim == "t" && got_t()) return t_fn;                 \
+        else if (dim == "w" && got_w()) return fn_prefix ## w();        \
+        else if (dim == "x" && got_x()) return fn_prefix ## x();        \
+        else if (dim == "y" && got_x()) return fn_prefix ## y();        \
+        else if (dim == "z" && got_x()) return fn_prefix ## z();        \
+        else {                                                          \
+            cerr << "Error: " #api_name "(): bad dimension '" << dim << "'\n"; \
+            exit(1);                                                    \
+        }                                                               \
     }
-    idx_t RealVecGridBase::get_halo_size(const string& dim) {
+    GET_GRID_API(get_first_domain_index, get_first_, false, 0)
+    GET_GRID_API(get_last_domain_index, get_last_, false, 0)
+    GET_GRID_API(get_domain_size, get_d, false, 0)
+    GET_GRID_API(get_halo_size, get_halo_, false, 0)
+    GET_GRID_API(get_extra_pad_size, get_extra_pad_, false, 0)
+    GET_GRID_API(get_total_pad_size, get_pad_, false, 0)
+    GET_GRID_API(get_alloc_size, get_alloc_, true, get_alloc_t())
 
-        // TODO: remove hard-coded dimensions.
-        if (dim == "w" && got_w()) return get_halo_w();
-        else if (dim == "x" && got_x()) return get_halo_x();
-        else if (dim == "y" && got_x()) return get_halo_y();
-        else if (dim == "z" && got_x()) return get_halo_z();
-        else {
-            cerr << "Error: get_halo_size(): bad dim '" << dim << "'\n";
-            exit(1);
-        }
+#define SET_GRID_API(api_name, fn_prefix, t_ok, t_fn)                   \
+    void RealVecGridBase::api_name(const string& dim, idx_t n) {        \
+        if (t_ok && dim == "t" && got_t()) t_fn;                        \
+        else if (dim == "w" && got_w()) fn_prefix ## w(n);              \
+        else if (dim == "x" && got_x()) fn_prefix ## x(n);              \
+        else if (dim == "y" && got_x()) fn_prefix ## y(n);              \
+        else if (dim == "z" && got_x()) fn_prefix ## z(n);              \
+        else {                                                          \
+            cerr << "Error: " #api_name "(): bad dimension '" << dim << "'\n"; \
+            exit(1);                                                    \
+        }                                                               \
     }
-    idx_t RealVecGridBase::get_extra_pad_size(const string& dim) {
+    SET_GRID_API(set_extra_pad_size, set_extra_pad_, false, (void)0)
+    SET_GRID_API(set_total_pad_size, set_pad_, false, (void)0)
 
-        // TODO: remove hard-coded dimensions.
-        if (dim == "w" && got_w()) return get_extra_pad_w();
-        else if (dim == "x" && got_x()) return get_extra_pad_x();
-        else if (dim == "y" && got_x()) return get_extra_pad_y();
-        else if (dim == "z" && got_x()) return get_extra_pad_z();
-        else {
-            cerr << "Error: get_extra_pad_size(): bad dim '" << dim << "'\n";
-            exit(1);
-        }
-    }
-    idx_t RealVecGridBase::get_alloc_size(const string& dim) {
-
-        // TODO: remove hard-coded dimensions.
-        if (dim == "w" && got_w()) return get_alloc_w();
-        else if (dim == "x" && got_x()) return get_alloc_x();
-        else if (dim == "y" && got_x()) return get_alloc_y();
-        else if (dim == "z" && got_x()) return get_alloc_z();
-        else if (dim == "t" && got_t()) return get_alloc_t();
-        else {
-            cerr << "Error: get_alloc_size(): bad dim '" << dim << "'\n";
-            exit(1);
-        }
-    }
+    // Not using macro because only 't' is allowed.
     void RealVecGridBase::set_alloc_size(const string& dim, idx_t tdim) {
 
         // TODO: remove hard-coded dimensions.
         if (dim == "t" && got_t()) return set_alloc_t(tdim);
         else {
             cerr << "Error: set_alloc_size(): bad dim '" << dim << "'\n";
-            exit(1);
-        }
-    }
-    void RealVecGridBase::set_total_pad_size(const std::string& dim,
-                                             idx_t size) {
-
-        // TODO: remove hard-coded dimensions.
-        if (dim == "w" && got_w()) return set_pad_w(size);
-        else if (dim == "x" && got_x()) return set_pad_x(size);
-        else if (dim == "y" && got_x()) return set_pad_y(size);
-        else if (dim == "z" && got_x()) return set_pad_z(size);
-        else {
-            cerr << "Error: set_pad_size(): bad dim '" << dim << "'\n";
             exit(1);
         }
     }

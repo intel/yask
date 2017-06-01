@@ -54,8 +54,8 @@ namespace yask {
             exit(1);
         }
     }
-    void KernelSettings::set_extra_pad_size(const std::string& dim,
-                                            idx_t size) {
+    void KernelSettings::set_default_extra_pad_size(const std::string& dim,
+                                                    idx_t size) {
         assert(size >= 0);
         
         // TODO: remove hard-coded dimensions.

@@ -273,17 +273,17 @@ namespace yask {
         virtual void set_diff(real_t val);
 
         // Get number of real_vecs, including halos & padding.
-        inline idx_t get_num_real_vecs() const {
+        virtual idx_t get_num_real_vecs() const {
             return _gp->get_num_elems();
         }
 
         // Get number of elements.
-        inline idx_t get_num_elems() {
+        virtual idx_t get_num_elems() const {
             return _gp->get_num_bytes() / sizeof(real_t);
         }
 
         // Get size in bytes.
-        inline size_t get_num_bytes() const {
+        virtual size_t get_num_bytes() const {
             return _gp->get_num_bytes();
         }
 
@@ -372,11 +372,15 @@ namespace yask {
             assert(n < get_num_dims());
             return _gp->get_dim_name(n);
         }
-        virtual idx_t get_domain_size(const std::string& dim);
-        virtual idx_t get_halo_size(const std::string& dim);
-        virtual idx_t get_extra_pad_size(const std::string& dim);
-        virtual idx_t get_alloc_size(const std::string& dim);
+        virtual idx_t get_first_domain_index(const std::string& dim) const;
+        virtual idx_t get_last_domain_index(const std::string& dim) const;
+        virtual idx_t get_domain_size(const std::string& dim) const;
+        virtual idx_t get_halo_size(const std::string& dim) const;
+        virtual idx_t get_extra_pad_size(const std::string& dim) const;
+        virtual idx_t get_total_pad_size(const std::string& dim) const;
+        virtual idx_t get_alloc_size(const std::string& dim) const;
         virtual void set_alloc_size(const std::string& dim, idx_t tdim);
+        virtual void set_extra_pad_size(const std::string& dim, idx_t size);
         virtual void set_total_pad_size(const std::string& dim, idx_t size);
     };
     

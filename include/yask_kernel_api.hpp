@@ -78,14 +78,20 @@ namespace yask {
 
         /// Set the size of the solution domain.
         /** The domain defines the points that will be evaluated with the
-         * stencil(s). It affects the size of the grids, but it is not
+         * stencil(s). 
+         * If MPI is not enabled, this is the entire problem domain.
+         * If MPI is enabled, this is the domain for the current rank only,
+         * and the problem domain consist of the sum of all rank domains
+         * in each dimension.
+         * The domain size affects the size of the grids, but it is not
          * equivalent.  Specifically, it does *not* include the halo region
          * or any additional padding.  The actual number of points evaluated
          * may be less than the domain if a given stencil equation has a
          * non-default condition.  Also, the actual number of points in the
          * domain of a given grid may be greater than this specified size
-         * due to rounding up to fold-cluster sizes. Get the
-         * domain size of a specific grid to determine the actual size.
+         * due to rounding up to fold-cluster sizes. 
+         * Call yk_grid::get_domain_size() to determine the actual size.
+         * See the "Detailed Description" for \ref yk_grid for more information on grid sizes.
          * There is no domain-size setting allowed in the
          * solution-step dimension (usually "t"). */
         virtual void
@@ -94,31 +100,36 @@ namespace yask {
                                                 INIT_GRID() or yc_solution::new_grid(). */,
                         idx_t size /**< [in] Points in the domain in this `dim`. */ ) =0;
 
-        /// Set the minimum size of additional grid padding.
+        /// Set the amount of additional grid padding.
         /** This sets the default minimum number of points in each grid that is
-         * allocated outside of the grid domain + halo in the given dimension.  The
-         * specified number of points are added to both sides, i.e., both "before" and
+         * allocated outside of the grid domain + halos in the given dimension.  The
+         * specified number of points is added to both sides, i.e., both "before" and
          * "after" the domain and halo.
-         * The *total* padding is the number of points outside the domain on either side
-         * and includes the halo.
-         * The *extra* padding is the number of points outside the domain and halo on
-         * either side and does not include the halo.
          * The actual pad may be greater than
-         * the specified size due to rounding up to fold sizes.  Get the pad
-         * size of a specific grid to determine the actual size.
-         * There is no padding allowed in the
-         * solution-step dimension (usually "t").
+         * the specified size due to rounding up to fold sizes.  
+         * Call yk_grid::get_extra_pad_size() to determine the actual size.
+         * See the "Detailed Description" for \ref yk_grid for more information on grid sizes.
+         * This function sets the extra-padding size that is added by default to *all* grids;
+         * you can also set the padding of each grid individually via yk_grid::set_extra_pad_size()
+         * and/or yk_grid::set_total_pad_size().
+         * There is no padding allowed in the solution-step dimension (usually "t").
          */
         virtual void
-        set_extra_pad_size(const std::string& dim /**< [in] Name of dimension to set.
-                                                     Must correspond to a dimension created via
-                                                     INIT_GRID() or yc_solution::new_grid(). */,
-                     idx_t size /**< [in] Points in this `dim` applied
-                                   to both sides of the domain. */ ) =0;
+        set_default_extra_pad_size(const std::string& dim
+                                   /**< [in] Name of dimension to set.  Must
+                                      correspond to a dimension created via
+                                      INIT_GRID() or
+                                      yc_solution::new_grid(). */,
+                                   idx_t size
+                                   /**< [in] Points in this `dim` applied
+                                      to both sides of the domain. */ ) =0;
 
         /// Set the block size.
         /** This sets the approximate number of points that are evaluated in
-         * each "block".  A block is typically the unit of work done by a
+         * each "block".  
+         * This is a performance setting and should not affect the functional
+         * correctness or total number of points evaluated.
+         * A block is typically the unit of work done by a
          * top-level OpenMP thread.  The actual number of points evaluated
          * in a block may be greater than the specified size due to rounding
          * up to fold-cluster sizes.  The number of points in a block may
@@ -189,8 +200,53 @@ namespace yask {
     /// A run-time grid.
     /** "Grid" is a generic term for any n-dimensional array.  A 0-dim grid
      * is a scalar, a 1-dim grid is an array, etc.  A run-time grid contains
-     * data, unlike yc_grid, a compile-time grid.  Access grids via
-     * yk_solution::get_grid(). */
+     * data, unlike yc_grid, a compile-time grid variable.  
+     * Gain access to each grid via yk_solution::get_grid().
+     *
+     * In each dimension, grid sizes include the following components:
+     * - The *domain* is the points to which the stencils are applied.
+     * - The *total padding* is the points outside the domain on either side
+     * and includes the halo.
+     * - The *extra padding* is the points outside the domain and halo on
+     * either side and thus does not include the halo.
+     * - The *allocation* includes the domain and the padding.
+     *
+     * All sizes are expressed in numbers of elements, which may be 4-byte (single precision)
+     * or 8-byte (double precision) floating-point values.
+     *
+     * Visually, in each of the non-step dimensions, these sizes are related as follows:
+     * <table>
+     * <tr><td>extra pad <td>halo <td rowspan="2">domain <td>halo <td>extra pad
+     * <tr><td colspan="2"><center>total pad</center> <td colspan="2"><center>total pad</center>
+     * <tr><td colspan="5"><center>allocation</center>
+     * </table>
+     * In the step dimension (usually "t"), there is no fixed domain size.
+     * But there is an allocation size, which is the number of values in the step
+     * dimension that are stored in memory. 
+     * Step-dimension indices "wrap-around" within this allocation to reuse memory.
+     * For example, if the step dimension is "t", and the t-dimension allocation size is 3, t=0,
+     * t=3, t=6, etc. would all alias to the same value in memory.
+     * 
+     * Domain sizes specified via yk_settings::set_domain_size() apply to each process or *rank*.
+     * If MPI is not enabled, a rank's domain is the entire problem size.
+     * If MPI is enabled, the domains of the ranks are logically adjoined to create the 
+     * overall problem domain in each dimension:
+     * <table>
+     * <tr><td>extra pad of rank A <td>halo of rank A <td>domain of rank A <td>domain of rank B
+     *   <td>... <td>domain of rank Z <td>halo of rank Z <td>extra pad of rank Z
+     * <tr><td colspan="2"><center>total pad of rank A</center>
+     *   <td colspan="4"><center>overall problem domain</center>
+     *   <td colspan="2"><center>total pad of rank Z</center>
+     * </table>
+     * The beginning and ending overall-problem index that lies within a rank can be
+     * retrieved via get_first_domain_index() and get_last_domain_index(), respectively.
+     *
+     * The intermediate halos and pads also exist, but are not shown in the above diagram.
+     * They overlap the domains of adjacent ranks.
+     * For example, the left halo of rank B in the diagram would overlap the domain of rank A.
+     * Data in these overlapped regions is exchanged as needed during stencil application
+     * to maintain a consistent values as if there was only one rank.
+     */
     class yk_grid {
     public:
         virtual ~yk_grid() {}
@@ -209,6 +265,42 @@ namespace yask {
         get_dim_name(int n /**< [in] Index of dimension between zero (0)
                               and get_num_dims()-1. */ ) const =0;
 
+        /// Get the first logical index of the domain in the specified dimension.
+        /** This returns the first index at the beginning of the domain.
+         * Points within the domain lie between the values returned by
+         * get_first_domain_index() and get_last_domain_index(), inclusive.
+         * This value does *not* include
+         * indices within the pad area, including the halo region.
+         * Call get_halo_size() to find the number of points that may be
+         * indexed before the first domain index.
+         * If there is only one MPI, this is typically zero (0).
+         * However, if there is more than one MPI rank, the value depends
+         * on the the rank's position within the overall problem domain.
+         * @returns First logical domain index. */
+        virtual idx_t
+        get_first_domain_index(const std::string& dim
+                               /**< [in] Name of dimension from get_dim_name().
+                                  Cannot be the step dimension. */ ) const =0;
+
+        /// Get the last logical index of the domain in the specified dimension.
+        /** This returns the last index at the end of the domain
+         * (*not* one past the end).
+         * Points within the domain lie between the values returned by
+         * get_first_domain_index() and get_last_domain_index(), inclusive.
+         * This value does *not* include
+         * indices within the pad area, including the halo region.
+         * Call get_halo_size() to find the number of points that may be
+         * indexed after the last domain index.
+         * If there is only one MPI, this is typically one less than the value
+         * provided by yk_settings::set_domain_size().
+         * However, if there is more than one MPI rank, the value depends
+         * on the the rank's position within the overall problem domain.
+         * @returns Last logical index. */
+        virtual idx_t
+        get_last_domain_index(const std::string& dim
+                               /**< [in] Name of dimension from get_dim_name().
+                                  Cannot be the step dimension. */ ) const =0;
+
         /// Get the domain size in the specified dimension.
         /** Value does *not* include padding or halo.  Value may be slightly
          * different than that provided via yk_settings::set_domain_size()
@@ -217,38 +309,49 @@ namespace yask {
         virtual idx_t
         get_domain_size(const std::string& dim
                         /**< [in] Name of dimension from get_dim_name().
-                           Cannot be the step dimension. */ ) =0;
+                           Cannot be the step dimension. */ ) const =0;
 
         /// Get the halo size in the specified dimension.
-        /** This value is set by the stencil compiler.
+        /** This value is typically set by the stencil compiler.
          * @returns Points in halo in given dimension. */
         virtual idx_t
         get_halo_size(const std::string& dim
                       /**< [in] Name of dimension from get_dim_name().
-                         Cannot be the step dimension. */ ) =0;
+                         Cannot be the step dimension. */ ) const =0;
 
         /// Get the extra padding in the specified dimension.
         /** The *extra* pad size is the total pad size minus the halo size.
-         * Value may be slightly
-         * different than that provided via yk_settings::set_extra_pad_size()
-         * as described in that function's documentation.
+         * The value may be slightly
+         * different than that provided via yk_settings::set_default_extra_pad_size()
+         * or set_extra_pad_size() as described in those functions' documentation.
          * @returns Points in extra padding in given dimension. */
         virtual idx_t
         get_extra_pad_size(const std::string& dim
                            /**< [in] Name of dimension from get_dim_name().
-                              Cannot be the step dimension. */ ) =0;
+                              Cannot be the step dimension. */ ) const =0;
+
+        /// Get the total padding in the specified dimension.
+        /** The *total* pad size includes the halo size.
+         * The value may be slightly
+         * different than that provided via set_total_pad_size() due to rounding.
+         * @returns Points in extra padding in given dimension. */
+        virtual idx_t
+        get_total_pad_size(const std::string& dim
+                           /**< [in] Name of dimension from get_dim_name().
+                              Cannot be the step dimension. */ ) const =0;
 
         /// Get the storage allocation in the specified dimension.
         /** For the step dimension, this is the specified allocation and
          * does not typically depend on the number of steps evaluated.
          * For the non-step dimensions, this is get_domain_size() + 
          * (2 * (get_halo_size() + get_extra_pad_size())).
+         * See the "Detailed Description" for \ref yk_grid for information on grid sizes.
          * @returns allocation in number of points (not bytes). */
         virtual idx_t
         get_alloc_size(const std::string& dim
-                       /**< [in] Name of dimension from get_dim_name(). */ ) =0;
+                       /**< [in] Name of dimension from get_dim_name(). */ ) const =0;
 
-        /// Set the storage allocation in the specified dimension.
+        /// Set the number of points to allocate in the specified dimension.
         /** This is only allowed in the step dimension.
          * Allocations in other dimensions should be set indirectly
          * via the domain and padding sizes. */
@@ -259,15 +362,28 @@ namespace yask {
                        idx_t size /**< [in] Number of points to allocate. */ ) =0;
 
         /// Set the total padding in the specified dimension.
-        /** See yk_settings::set_extra_pad_size() for a discussion
-         * of extra vs total padding. */
+        /** This overrides yk_settings::set_default_extra_pad_size()
+            and any earlier call to set_extra_pad_size().
+            See the "Detailed Description" for \ref yk_grid for information on grid sizes. */
         virtual void
         set_total_pad_size(const std::string& dim
                            /**< [in] Name of dimension from get_dim_name().
                               Cannot be the step dimension. */,
                            idx_t size
                            /**< [in] Number of points to allocate beyond the domain size.
-                              Must be greater than or equal to the halo size. */ ) =0;
+                              If less than the halo size, it will be increased as needed. */ ) =0;
+        
+        /// Set the extra padding in the specified dimension.
+        /** This overrides yk_settings::set_default_extra_pad_size()
+            and any earlier call to set_total_pad_size().
+            See the "Detailed Description" for \ref yk_grid for information on grid sizes. */
+        virtual void
+        set_extra_pad_size(const std::string& dim
+                           /**< [in] Name of dimension from get_dim_name().
+                              Cannot be the step dimension. */,
+                           idx_t size
+                           /**< [in] Number of points to allocate beyond the domain and halo size.
+                              Must be greater than or equal to zero. */ ) =0;
         
     };
 

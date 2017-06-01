@@ -45,6 +45,10 @@ settings.set_block_size("z", 64)
 soln = kfac.new_solution(settings)
 soln.init_env()
 
+# Allocate memory for any grids that do not have storage set.
+# Set other data structures needed for stencil application.
+soln.prepare_solution()
+
 # Print some info about the solution.
 name = soln.get_name()
 print("Created stencil-solution '" + name + "' with the following grids:")
@@ -58,8 +62,6 @@ for gi in range(soln.get_num_grids()) :
     desc += ")"
     print("  " + desc)
 
-# Allocate memory for any grids that do not have storage set.
-# Set other data structures needed for stencil application.
-soln.prepare_solution()
-
+# TODO: initialize data in the grids and apply the stencil.
+    
 print("End of YASK kernel API test.")

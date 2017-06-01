@@ -49,6 +49,10 @@ int main() {
     auto soln = kfac.new_solution(settings);
     soln->init_env();
 
+    // Allocate memory for any grids that do not have storage set.
+    // Set other data structures needed for stencil application.
+    soln->prepare_solution();
+
     // Print some info about the solution.
     auto name = soln->get_name();
     cout << "Created stencil-solution '" << name << "' with the following grids:\n";
@@ -62,9 +66,7 @@ int main() {
         cout << ")\n";
     }
 
-    // Allocate memory for any grids that do not have storage set.
-    // Set other data structures needed for stencil application.
-    soln->prepare_solution();
+    // TODO: initialize data in the grids and apply the stencil.
 
     cout << "End of YASK kernel API test.\n";
     return 0;

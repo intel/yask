@@ -138,8 +138,8 @@ namespace yask {
         // See yask_kernel_api.hpp.
         virtual void set_domain_size(const std::string& dim,
                                      idx_t size);
-        virtual void set_extra_pad_size(const std::string& dim,
-                                        idx_t size);
+        virtual void set_default_extra_pad_size(const std::string& dim,
+                                                idx_t size);
         virtual void set_block_size(const std::string& dim,
                                     idx_t size);
         
