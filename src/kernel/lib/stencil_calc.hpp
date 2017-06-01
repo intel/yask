@@ -170,7 +170,8 @@ namespace yask {
                                                 idx_t size);
         virtual void set_block_size(const std::string& dim,
                                     idx_t size);
-        
+        virtual void set_num_ranks(const std::string& dim,
+                                   idx_t size);
     };
     typedef std::shared_ptr<KernelSettings> KernelSettingsPtr;
     
@@ -495,6 +496,9 @@ namespace yask {
             return USING_DIM_W ? 4 : 3;
         }
         virtual std::string get_domain_dim_name(int n) const;
+
+        virtual void apply_solution(idx_t first_step_index,
+                                    idx_t last_step_index);
     };
     
     /// Classes that support evaluation of one stencil equation-group.

@@ -49,49 +49,23 @@ namespace yask {
 
         return sp;
     }
-    void KernelSettings::set_domain_size(const std::string& dim,
-                                         idx_t size) {
-        assert(size > 0);
-        
-        // TODO: remove hard-coded dimensions.
-        if (dim == "t") dt = size;
-        else if (dim == "w") dw = size;
-        else if (dim == "x") dx = size;
-        else if (dim == "y") dy = size;
-        else if (dim == "z") dz = size;
-        else {
-            cerr << "Error: set_domain_size(): bad dim '" << dim << "'\n";
-            exit_yask(1);
-        }
+#define SET_SETTING_API(api_name, var_prefix, t_ok, t_stmt)             \
+    void KernelSettings::api_name(const string& dim, idx_t n) {         \
+        assert(n >= 0);                                                 \
+        if (t_ok && dim == "t") t_stmt;                                 \
+        else if (dim == "w") var_prefix ## w = n;                       \
+        else if (dim == "x") var_prefix ## x = n;                       \
+        else if (dim == "y") var_prefix ## y = n;                       \
+        else if (dim == "z") var_prefix ## z = n;                       \
+        else {                                                          \
+            cerr << "Error: " #api_name "(): bad dimension '" << dim << "'\n"; \
+            exit_yask(1);                                               \
+        }                                                               \
     }
-    void KernelSettings::set_default_extra_pad_size(const std::string& dim,
-                                                    idx_t size) {
-        assert(size >= 0);
-        
-        // TODO: remove hard-coded dimensions.
-        if (dim == "w") epw = size;
-        else if (dim == "x") epx = size;
-        else if (dim == "y") epy = size;
-        else if (dim == "z") epz = size;
-        else {
-            cerr << "Error: set_pad_size(): bad dim '" << dim << "'\n";
-            exit_yask(1);
-        }
-    }
-    void KernelSettings::set_block_size(const std::string& dim,
-                                        idx_t size) {
-        assert(size >= 0);
-        
-        // TODO: remove hard-coded dimensions.
-        if (dim == "w") bw = size;
-        else if (dim == "x") bx = size;
-        else if (dim == "y") by = size;
-        else if (dim == "z") bz = size;
-        else {
-            cerr << "Error: set_block_size(): bad dim '" << dim << "'\n";
-            exit_yask(1);
-        }
-    }
+    SET_SETTING_API(set_domain_size, d, false, (void)0)
+    SET_SETTING_API(set_default_extra_pad_size, ep, false, (void)0)
+    SET_SETTING_API(set_block_size, b, false, (void)0)
+    SET_SETTING_API(set_num_ranks, nr, false, (void)0)
     
     yk_solution_ptr yk_factory::new_solution(yk_env_ptr env,
                                              yk_settings_ptr opts) const {
@@ -216,12 +190,13 @@ namespace yask {
     }
 
     // Eval equation group(s) over grid(s) using optimized code.
-    void StencilContext::calc_rank_opt()
+    void StencilContext::apply_solution(idx_t first_step_index,
+                                        idx_t last_step_index)
     {
-        idx_t begin_dt = ofs_t;
-        idx_t end_dt = begin_dt + _opts->dt;
+        idx_t begin_dt = first_step_index;
+        idx_t end_dt = last_step_index + 1; // end is 1 past last.
         idx_t step_dt = _opts->rt;
-        TRACE_MSG("calc_rank_opt(t=" << begin_dt << ".." << (end_dt-1) <<
+        TRACE_MSG("calc_rank_opt(t=" << first_step_index << ".." << last_step_index <<
                   " by " << step_dt << ")");
         ostream& os = get_ostr();
 
@@ -359,6 +334,15 @@ namespace yask {
         }
 #endif
 
+    }
+
+    // Apply solution for 'dt' time-steps.
+    void StencilContext::calc_rank_opt()
+    {
+        idx_t begin_dt = ofs_t;
+        idx_t end_dt = begin_dt + _opts->dt;
+
+        apply_solution(begin_dt, end_dt - 1);
     }
 
     // Calculate results within a region.

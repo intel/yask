@@ -139,9 +139,10 @@ namespace yask {
          * There is no domain-size setting allowed in the
          * solution-step dimension (usually "t"). */
         virtual void
-        set_domain_size(const std::string& dim /**< [in] Name of dimension to set.
-                                                Must correspond to a dimension set via
-                                                INIT_GRID() or yc_solution::new_grid(). */,
+        set_domain_size(const std::string& dim
+                        /**< [in] Name of dimension to set.  Must be one of
+                           the names from
+                           yk_solution::get_domain_dim_name(). */,
                         idx_t size /**< [in] Points in the domain in this `dim`. */ ) =0;
 
         /// Set the amount of additional grid padding.
@@ -161,14 +162,13 @@ namespace yask {
         virtual void
         set_default_extra_pad_size(const std::string& dim
                                    /**< [in] Name of dimension to set.  Must
-                                      correspond to a dimension created via
-                                      INIT_GRID() or
-                                      yc_solution::new_grid(). */,
+                                      be one of the names from
+                                      yk_solution::get_domain_dim_name(). */,
                                    idx_t size
                                    /**< [in] Points in this `dim` applied
                                       to both sides of the domain. */ ) =0;
 
-        /// Set the block size.
+        /// Set the block size in the given dimension.
         /** This sets the approximate number of points that are evaluated in
          * each "block".  
          * This is a performance setting and should not affect the functional
@@ -182,13 +182,30 @@ namespace yask {
          * solution-step dimension (because temporal blocking is not yet enabled). */
         virtual void
         set_block_size(const std::string& dim
-                       /**< [in] Name of dimension to set.
-                          Must correspond to a dimension created via
-                          INIT_GRID() or yc_solution::new_grid(). */,
+                       /**< [in] Name of dimension to set.  Must be one of
+                          the names from
+                          yk_solution::get_domain_dim_name(). */,
                        idx_t size /**< [in] Points in a block in this `dim`. */ ) =0;
+
+        /// Set the number of MPI ranks in the given dimension.
+        /**
+         * The product of the number of ranks across all dimensions must
+         * equal the total number of ranks available when yk_factory::new_env() 
+         * was called.
+         * The curent MPI rank will be assigned a unique location 
+         * within the overall problem domain based on its MPI rank index.
+         * The same number of MPI ranks must be set via this API on each
+         * MPI rank to ensure a consistent overall configuration.
+         */
+        virtual void
+        set_num_ranks(const std::string& dim
+                      /**< [in] Name of dimension to set.  Must be one of
+                         the names from
+                         yk_solution::get_domain_dim_name(). */,
+                      idx_t num /**< [in] Number of ranks in `dim`. */ ) =0;
     };
     
-    /// Stencil solution.
+    /// Stencil solution as defined by the generated code from the YASK stencil compiler.
     /** Objects of this type contain all the grids and equations
      * that comprise a solution. */
     class yk_solution {
@@ -230,7 +247,6 @@ namespace yask {
         get_grid(int n /**< [in] Index of grid between zero (0)
                               and get_num_grids()-1. */ ) =0;
 
-
         /// Prepare the solution for stencil application.
         /** Allocates data in grids that do not already have storage allocated.
          * Sets many other data structures needed for proper stencil application.
@@ -239,6 +255,15 @@ namespace yask {
          */
         virtual void
         prepare_solution() =0;
+
+        /// Apply the stencil solution for the specified number of steps.
+        /** The stencil(s) in the solution are applied from
+         * the first to last step index, inclusive.
+         * MPI halo exchanges will occur as necessary.
+         */
+        virtual void
+        apply_solution(idx_t first_step_index /**< [in] First index in the step dimension */,
+                       idx_t last_step_index /**< [in] First index in the step dimension */ ) =0;
     };
 
     /// A run-time grid.

@@ -52,6 +52,10 @@ for di in range(soln.get_num_domain_dims()) :
     else :
         settings.set_block_size(dim_name, 32)
 
+# Simple rank configuration in 1st dim only.
+ddim1 = soln.get_domain_dim_name(0)
+settings.set_num_ranks(ddim1, env.get_num_ranks())
+
 # Allocate memory for any grids that do not have storage set.
 # Set other data structures needed for stencil application.
 soln.prepare_solution()
@@ -71,6 +75,13 @@ for gi in range(soln.get_num_grids()) :
 
     grid.set_all_elements(0.0);
     
-# TODO: apply the stencil.
+# NB: In a real application, the data in the grids would be
+# loaded or otherwise set to meaningful values here.
+    
+# Apply the stencil solution to the data.
+print("Applying the solution for 1 step...")
+soln.apply_solution(0, 1)
+print("Applying the solution for 100 more steps...")
+soln.apply_solution(2, 101)
     
 print("End of YASK kernel API test.")

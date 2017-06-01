@@ -57,6 +57,10 @@ int main() {
             settings->set_block_size(dim_name, 32);
     }
 
+    // Simple rank configuration in 1st dim only.
+    auto ddim1 = soln->get_domain_dim_name(0);
+    settings->set_num_ranks(ddim1, env->get_num_ranks());
+
     // Allocate memory for any grids that do not have storage set.
     // Set other data structures needed for stencil application.
     soln->prepare_solution();
@@ -75,8 +79,15 @@ int main() {
 
         grid->set_all_elements(0.0);
     }
-  
-    // TODO: apply the stencil.
+
+    // NB: In a real application, the data in the grids would be
+    // loaded or otherwise set to meaningful values here.
+    
+    // Apply the stencil solution to the data.
+    cout << "Applying the solution for 1 step...\n";
+    soln->apply_solution(0, 1);
+    cout << "Applying the solution for 100 more steps...\n";
+    soln->apply_solution(2, 101);
 
     cout << "End of YASK kernel API test.\n";
     return 0;
