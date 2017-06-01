@@ -814,8 +814,8 @@ namespace yask {
             // Ctor.
             {
                 os << "\n // Constructor.\n" <<
-                    " " << _context_base << "(KernelSettingsPtr settings) :"
-                    " StencilContext(settings)" << ctorList <<
+                    " " << _context_base << "(KernelEnvPtr env, KernelSettingsPtr settings) :"
+                    " StencilContext(env, settings)" << ctorList <<
                     " {\n  name = \"" << _stencil.getName() << "\";\n";
 
                 os << "\n // Create grids and parameters.\n" <<
@@ -1103,8 +1103,8 @@ namespace yask {
 
             // Ctor.
             os << "\n // Constructor.\n" <<
-                " " << _context << "(KernelSettingsPtr settings) : " <<
-                _context_base << "(settings)";
+                " " << _context << "(KernelEnvPtr env, KernelSettingsPtr settings) : " <<
+                _context_base << "(env, settings)";
             for (auto& eg : _eqGroups) {
                 string egName = eg.getName();
                 os << ",\n  eqGroup_" << egName << "(this)";
@@ -1160,6 +1160,7 @@ namespace yask {
             "#define YASK_STENCIL_CONTEXT " << _context << endl;
 
         os << "\n// Dimensions:\n";
+        os << "#define STEP_DIM \"" << _dims._stepDim << "\"\n";
         for (auto dim : _dims._allDims.getDims()) {
             auto& dname = dim.getName();
             os << "#define USING_DIM_" << allCaps(dname) << " (1)" << endl;

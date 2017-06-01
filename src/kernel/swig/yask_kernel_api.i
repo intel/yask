@@ -34,8 +34,10 @@ IN THE SOFTWARE.
 %include <std_shared_ptr.i>
 
 // Must declare shared_ptrs for each one used in the API.
+%shared_ptr(yask::yk_env)
 %shared_ptr(yask::yk_settings)
 %shared_ptr(yask::yk_solution)
+%shared_ptr(yask::yk_grid)
 
 %{
 #define SWIG_FILE_WITH_INIT

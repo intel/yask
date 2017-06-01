@@ -71,6 +71,11 @@ IN THE SOFTWARE.
 #include "yask_stencil_code.hpp"
 #undef DEFINE_MACROS
 
+// Defaults not provided in generated code.
+#ifndef USING_DIM_W
+#define USING_DIM_W (0)
+#endif
+
 // Settings from makefile.
 #include "yask_macros.hpp"
 

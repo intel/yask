@@ -28,8 +28,37 @@ IN THE SOFTWARE.
 
 namespace yask {
 
-    // Forward defn.
+    // Forward defns.
     struct StencilContext;
+    struct KernelEnv;
+
+    // Environmental settings.
+    typedef std::shared_ptr<KernelEnv> KernelEnvPtr;
+    struct KernelEnv :
+        public virtual yk_env {
+
+        // MPI vars.
+        MPI_Comm comm=0;        // communicator.
+        int num_ranks=1;        // total number of ranks.
+        int my_rank=0;          // MPI-assigned index.
+
+        virtual ~KernelEnv() {}
+        
+        // Init MPI, OMP, etc.
+        // This is normally called very early in the program.
+        virtual void initEnv(int* argc, char*** argv);
+
+        // APIs.
+        virtual int get_num_ranks() const {
+            return num_ranks;
+        }
+        virtual int get_rank_index() const {
+            return my_rank;
+        }
+        virtual void global_barrier() const {
+            MPI_Barrier(comm);
+        }
+    };
     
     // MPI buffers for *one* grid.
     struct MPIBufs {
@@ -111,14 +140,13 @@ namespace yask {
         int msg_rank=0;             // rank that prints informational messages.
 
         // OpenMP settings.
-        int max_threads;        // Initial number of threads to use overall.
+        int max_threads=0;      // Initial number of threads to use overall; 0=>OMP default.
         int thread_divisor=1;   // Reduce number of threads by this amount.
         int num_block_threads=1; // Number of threads to use for a block.
 
         // Ctor.
-        KernelSettings() {
-            max_threads = omp_get_max_threads();
-        }
+        KernelSettings() { }
+        virtual ~KernelSettings() { }
 
         // Add these settigns to a cmd-line parser.
         virtual void add_options(CommandLineParser& parser);
@@ -144,7 +172,6 @@ namespace yask {
                                     idx_t size);
         
     };
-
     typedef std::shared_ptr<KernelSettings> KernelSettingsPtr;
     
     // A 4D bounding-box.
@@ -202,6 +229,9 @@ namespace yask {
         
         // Output stream for messages.
         std::ostream* _ostr;
+
+        // Env.
+        KernelEnvPtr _env;
 
         // Command-line and env parameters.
         KernelSettingsPtr _opts;
@@ -270,9 +300,7 @@ namespace yask {
         idx_t rank_numFpOps_1t=0, rank_numFpOps_dt=0, tot_numFpOps_1t=0, tot_numFpOps_dt=0;
         idx_t rank_nbytes=0, tot_nbytes=0;
         
-        // MPI environment.
-        MPI_Comm comm=0;
-        int num_ranks=1, my_rank=0;   // MPI-assigned index.
+        // MPI settings.
         double mpi_time=0.0;          // time spent doing MPI.
         MPIBufs::Neighbors my_neighbors;   // neighbor ranks.
 
@@ -281,10 +309,14 @@ namespace yask {
         std::map<std::string, MPIBufs> mpiBufs;
         
         // Constructor.
-        StencilContext(KernelSettingsPtr settings) :
+        StencilContext(KernelEnvPtr env, KernelSettingsPtr settings) :
             _ostr(&std::cout),
+            _env(env),
             _opts(settings)
         {
+            // Set output to msg-rank.
+            set_ostr();
+            
             // Init my_neighbors to indicate no neighbor.
             int *p = (int *)my_neighbors;
             for (int i = 0; i < MPIBufs::neighborhood_size; i++)
@@ -293,14 +325,6 @@ namespace yask {
 
         // Destructor.
         virtual ~StencilContext() { }
-
-        // Init MPI, OMP, etc.
-        // This is normally called very early in the program.
-        virtual void initEnv(int* argc, char*** argv);
-
-        // Copy env settings from another context.
-        // This is an alternative to calling init_env().
-        virtual void copyEnv(const StencilContext* src);
 
         // Set ostr to given stream if provided.
         // If not provided, set to cout if my_rank == msg_rank
@@ -314,9 +338,9 @@ namespace yask {
         }
 
         // Get access to settings.
-        virtual KernelSettings& get_settings() {
+        virtual KernelSettingsPtr get_settings() {
             assert(_opts);
-            return *_opts;
+            return _opts;
         }
         
         // Set vars related to this rank's role in global problem.
@@ -376,6 +400,11 @@ namespace yask {
         // Set number of threads to use for something other than a region.
         virtual int set_all_threads() {
 
+            // Get max number of threads.
+            int mt = _opts->max_threads;
+            if (!mt)
+                mt = omp_get_max_threads();
+            
             // Reset number of OMP threads to max allowed.
             int nt = _opts->max_threads / _opts->thread_divisor;
             nt = std::max(nt, 1);
@@ -413,11 +442,6 @@ namespace yask {
             TRACE_MSG("set_block_threads: omp_set_num_threads=" << nt);
             omp_set_num_threads(nt);
             return nt;
-        }
-
-        // Wait for a global barrier.
-        virtual void global_barrier() {
-            MPI_Barrier(comm);
         }
 
         // Reference stencil calculations.
@@ -462,10 +486,15 @@ namespace yask {
             return gridPtrs.at(n);
         }
 
-        virtual void init_env() {
-            initEnv(0, 0);      // Default call with no cmd-line params.
+        virtual std::string get_step_dim() const {
+            return STEP_DIM;
         }
-        virtual void copy_env(const yk_solution_ptr src);
+        virtual int get_num_domain_dims() const {
+
+            // TODO: remove hard-coded assumptions.
+            return USING_DIM_W ? 4 : 3;
+        }
+        virtual std::string get_domain_dim_name(int n) const;
     };
     
     /// Classes that support evaluation of one stencil equation-group.

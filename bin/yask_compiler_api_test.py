@@ -65,7 +65,7 @@ print("Solution '" + soln.get_name() + "' contains " +
       str(soln.get_num_equations()) + " equation(s).")
 
 soln.set_step_dim("t")
-soln.set_elem_bytes(4)
+soln.set_element_bytes(4)
 
 dot_file = "yc-api-test-py.dot"
 soln.write(dot_file, "dot", True)

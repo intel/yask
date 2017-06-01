@@ -382,6 +382,9 @@ namespace yask {
         virtual void set_alloc_size(const std::string& dim, idx_t tdim);
         virtual void set_extra_pad_size(const std::string& dim, idx_t size);
         virtual void set_total_pad_size(const std::string& dim, idx_t size);
+        virtual void set_all_elements(double val) {
+            set_same(real_t(val));
+        }
     };
     
     // A 3D (x, y, z) collection of real_vec_t elements.
@@ -564,6 +567,13 @@ namespace yask {
             assert(w == 0);
             return readElem(x, y, z, line);
         }
+        virtual double get_element(idx_t dim1_index, idx_t dim2_index,
+                                   idx_t dim3_index, idx_t dim4_index,
+                                   idx_t dim5_index, idx_t dim6_index) const {
+            // TODO: add range-checking.
+            return double(readElem(dim1_index, dim2_index,
+                                   dim3_index, __LINE__));
+        }
 
         // Write one element.
         virtual void writeElem_TWXYZ(real_t val,
@@ -573,6 +583,15 @@ namespace yask {
             assert(w == 0);
             writeElem(val, x, y, z, line);
         }
+        virtual void set_element(double val,
+                                 idx_t dim1_index, idx_t dim2_index,
+                                 idx_t dim3_index, idx_t dim4_index,
+                                 idx_t dim5_index, idx_t dim6_index) {
+            // TODO: add range-checking.
+            writeElem(real_t(val),
+                      dim1_index, dim2_index,
+                      dim3_index, __LINE__);
+        }            
 
         // Read one vector at *vector* offset.
         // Indices must be normalized, i.e., already divided by VLEN_*.
@@ -790,6 +809,13 @@ namespace yask {
             assert(t == 0);
             return readElem(w, x, y, z, line);
         }
+        virtual double get_element(idx_t dim1_index, idx_t dim2_index,
+                                   idx_t dim3_index, idx_t dim4_index,
+                                   idx_t dim5_index, idx_t dim6_index) const {
+            // TODO: add range-checking.
+            return double(readElem(dim1_index, dim2_index,
+                                   dim3_index, dim4_index,__LINE__));
+        }
 
         // Write one element.
         virtual void writeElem_TWXYZ(real_t val,
@@ -798,6 +824,15 @@ namespace yask {
             assert(t == 0);
             writeElem(val, w, x, y, z, line);
         }
+        virtual void set_element(double val,
+                                 idx_t dim1_index, idx_t dim2_index,
+                                 idx_t dim3_index, idx_t dim4_index,
+                                 idx_t dim5_index, idx_t dim6_index) {
+            // TODO: add range-checking.
+            writeElem(real_t(val),
+                      dim1_index, dim2_index,
+                      dim3_index, dim4_index, __LINE__);
+        }            
 
         // Read one vector at *vector* offset.
         // Indices must be normalized, i.e., already divided by VLEN_*.
@@ -1014,6 +1049,13 @@ namespace yask {
             assert(w == 0);
             return readElem(t, x, y, z, line);
         }
+        virtual double get_element(idx_t dim1_index, idx_t dim2_index,
+                                   idx_t dim3_index, idx_t dim4_index,
+                                   idx_t dim5_index, idx_t dim6_index) const {
+            // TODO: add range-checking.
+            return double(readElem(dim1_index, dim2_index,
+                                   dim3_index, dim4_index,__LINE__));
+        }
 
         // Write one element.
         virtual void writeElem_TWXYZ(real_t val,
@@ -1022,6 +1064,15 @@ namespace yask {
             assert(w == 0);
             writeElem(val, t, x, y, z, line);
         }
+        virtual void set_element(double val,
+                                 idx_t dim1_index, idx_t dim2_index,
+                                 idx_t dim3_index, idx_t dim4_index,
+                                 idx_t dim5_index, idx_t dim6_index) {
+            // TODO: add range-checking.
+            writeElem(real_t(val),
+                      dim1_index, dim2_index,
+                      dim3_index, dim4_index, __LINE__);
+        }            
 
         // Read one vector at *vector* offset.
         // Indices must be normalized, i.e., already divided by VLEN_*.
@@ -1244,6 +1295,14 @@ namespace yask {
                                       int line) const {
             return readElem(t, w, x, y, z, line);
         }
+        virtual double get_element(idx_t dim1_index, idx_t dim2_index,
+                                   idx_t dim3_index, idx_t dim4_index,
+                                   idx_t dim5_index, idx_t dim6_index) const {
+            // TODO: add range-checking.
+            return double(readElem(dim1_index, dim2_index,
+                                   dim3_index, dim4_index,
+                                   dim5_index, __LINE__));
+        }
 
         // Write one element.
         virtual void writeElem_TWXYZ(real_t val,
@@ -1251,6 +1310,16 @@ namespace yask {
                                      int line) {
             writeElem(val, t, w, x, y, z, line);
         }
+        virtual void set_element(double val,
+                                 idx_t dim1_index, idx_t dim2_index,
+                                 idx_t dim3_index, idx_t dim4_index,
+                                 idx_t dim5_index, idx_t dim6_index) {
+            // TODO: add range-checking.
+            writeElem(real_t(val),
+                      dim1_index, dim2_index,
+                      dim3_index, dim4_index,
+                      dim5_index, __LINE__);
+        }            
 
         // Read one vector at *vector* offset.
         // Indices must be normalized, i.e., already divided by VLEN_*.

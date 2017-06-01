@@ -30,13 +30,23 @@ namespace yask {
 
     // APIs.
     // See yask_kernel_api.hpp.
+    yk_env_ptr yk_factory::new_env() const {
+        auto ep = make_shared<KernelEnv>();
+        assert(ep);
+        ep->initEnv(0, 0);
+        return ep;
+    }
     yk_settings_ptr yk_factory::new_settings() const {
         auto sp = make_shared<KernelSettings>();
+        assert(sp);
 
-        // Set time-domain size to a very large value because
-        // we don't use this limit via the API.
-        sp->dt = LONG_MAX;      // Could use LLONG_MAX, but seems like overkill.
-            
+        // Set time-domain size to some large number.
+        // It's not actually used in the API, but it needs to be set to avoid
+        // breaking temporal blocking.
+        // TODO: clean up this whole concept, or at least what's printed out
+        // when using the API.
+        sp->dt = 1000;
+
         return sp;
     }
     void KernelSettings::set_domain_size(const std::string& dim,
@@ -51,7 +61,7 @@ namespace yask {
         else if (dim == "z") dz = size;
         else {
             cerr << "Error: set_domain_size(): bad dim '" << dim << "'\n";
-            exit(1);
+            exit_yask(1);
         }
     }
     void KernelSettings::set_default_extra_pad_size(const std::string& dim,
@@ -65,7 +75,7 @@ namespace yask {
         else if (dim == "z") epz = size;
         else {
             cerr << "Error: set_pad_size(): bad dim '" << dim << "'\n";
-            exit(1);
+            exit_yask(1);
         }
     }
     void KernelSettings::set_block_size(const std::string& dim,
@@ -79,45 +89,61 @@ namespace yask {
         else if (dim == "z") bz = size;
         else {
             cerr << "Error: set_block_size(): bad dim '" << dim << "'\n";
-            exit(1);
+            exit_yask(1);
         }
     }
     
-    yk_solution_ptr yk_factory::new_solution(yk_settings_ptr opts) const {
+    yk_solution_ptr yk_factory::new_solution(yk_env_ptr env,
+                                             yk_settings_ptr opts) const {
+        auto ep = dynamic_pointer_cast<KernelEnv>(env);
+        assert(ep);
         auto op = dynamic_pointer_cast<KernelSettings>(opts);
         assert(op);
 
         // Create problem-specific object defined by stencil compiler.
-        auto sp = make_shared<YASK_STENCIL_CONTEXT>(op);
+        auto sp = make_shared<YASK_STENCIL_CONTEXT>(ep, op);
         assert(sp);
+
         return sp;
     }
 
-    void StencilContext::copy_env(const yk_solution_ptr src) {
-        auto cp = dynamic_pointer_cast<StencilContext>(src);
-        assert(cp);
-        copyEnv(cp.get());
+    string StencilContext::get_domain_dim_name(int n) const {
+
+        // TODO: remove hard-coded names.
+        int m = USING_DIM_W ? n : n + 1;
+        switch (m) {
+        case 0: return "w";
+        case 1: return "x";
+        case 2: return "y";
+        case 3: return "z";
+        default:
+            cerr << "Error: get_domain_dim_name(): bad index '" << n << "'\n";
+            exit_yask(1);
+            return 0;
+        }
     }
-    
     
     ///// StencilContext functions:
 
-    // Init MPI, OMP, etc.
-    void StencilContext::initEnv(int* argc, char*** argv)
+    // Init MPI, OMP.
+    void KernelEnv::initEnv(int* argc, char*** argv)
     {
-        // Stop collecting VTune data.
-        // Even better to use -start-paused option.
-        VTUNE_PAUSE;
-
         // MPI init.
         my_rank = 0;
         num_ranks = 1;
+        
 #ifdef USE_MPI
-        int provided = 0;
-        MPI_Init_thread(argc, argv, MPI_THREAD_SERIALIZED, &provided);
-        if (provided < MPI_THREAD_SERIALIZED) {
-            cerr << "error: MPI_THREAD_SERIALIZED not provided.\n";
-            exit_yask(1);
+        int is_init = false;
+        MPI_Initialized(&is_init);
+
+        if (!is_init) {
+            int provided = 0;
+            MPI_Init_thread(argc, argv, MPI_THREAD_SERIALIZED, &provided);
+            if (provided < MPI_THREAD_SERIALIZED) {
+                cerr << "error: MPI_THREAD_SERIALIZED not provided.\n";
+                exit_yask(1);
+            }
+            is_init = true;
         }
         comm = MPI_COMM_WORLD;
         MPI_Comm_rank(comm, &my_rank);
@@ -126,24 +152,9 @@ namespace yask {
         comm = 0;
 #endif
 
-        // Enable the default output stream on the msg-rank only.
-        set_ostr();
-
         // There is no specific call to init OMP, but we make a gratuitous
         // OMP call to trigger any debug output.
         omp_get_num_procs();
-        
-        // Make sure any MPI/OMP debug data is dumped before continuing.
-        global_barrier();
-    }
-
-    // Copy env settings from another context.
-    void StencilContext::copyEnv(const StencilContext* src) {
-        assert(src);
-        comm = src->comm;
-        my_rank = src->my_rank;
-        num_ranks = src->num_ranks;
-        _ostr = src->_ostr;
     }
 
     // Set ostr to given stream if provided.
@@ -152,7 +163,7 @@ namespace yask {
     ostream& StencilContext::set_ostr(std::ostream* os) {
         if (os)
             _ostr = os;
-        else if (my_rank == _opts->msg_rank)
+        else if (_env->my_rank == _opts->msg_rank)
             _ostr = &cout;
         else
             _ostr = new ofstream;    // null stream (unopened ofstream).
@@ -321,7 +332,7 @@ namespace yask {
             else {
 
                 // TODO: enable halo exchange for wave-fronts.
-                if (num_ranks > 1) {
+                if (_env->num_ranks > 1) {
                     cerr << "Error: halo exchange with wave-fronts not yet supported.\n";
                     exit_yask(1);
                 }
@@ -474,19 +485,19 @@ namespace yask {
                   ", y=" << begin_by << ".." << (end_by-1) <<
                   ", z=" << begin_bz << ".." << (end_bz-1) <<
                   ").");
-        KernelSettings& opts = _generic_context->get_settings();
+        auto opts = _generic_context->get_settings();
 
         // Steps within a block are based on sub-block sizes.
-        const idx_t step_bw = opts.sbw;
-        const idx_t step_bx = opts.sbx;
-        const idx_t step_by = opts.sby;
-        const idx_t step_bz = opts.sbz;
+        const idx_t step_bw = opts->sbw;
+        const idx_t step_bx = opts->sbx;
+        const idx_t step_by = opts->sby;
+        const idx_t step_bz = opts->sbz;
 
         // Groups in block loops are based on sub-block-group sizes.
-        const idx_t group_size_bw = opts.sbgw;
-        const idx_t group_size_bx = opts.sbgx;
-        const idx_t group_size_by = opts.sbgy;
-        const idx_t group_size_bz = opts.sbgz;
+        const idx_t group_size_bw = opts->sbgw;
+        const idx_t group_size_bx = opts->sbgx;
+        const idx_t group_size_by = opts->sbgy;
+        const idx_t group_size_bz = opts->sbgz;
 
         // Set number of threads for a block.
         // This should be nested within a top-level OpenMP task.
@@ -575,24 +586,20 @@ namespace yask {
     {
         ostream& os = get_ostr();
 
-        // Report ranks.
-        os << "Num ranks: " << num_ranks << endl;
-        os << "This rank index: " << my_rank << endl;
-
         // Check ranks.
         idx_t req_ranks = _opts->nrw * _opts->nrx * _opts->nry * _opts->nrz;
-        if (req_ranks != num_ranks) {
+        if (req_ranks != _env->num_ranks) {
             cerr << "error: " << req_ranks << " rank(s) requested, but " <<
-                num_ranks << " rank(s) are active." << endl;
+                _env->num_ranks << " rank(s) are active." << endl;
             exit_yask(1);
         }
-        assertEqualityOverRanks(_opts->dt, comm, "time-step");
+        assertEqualityOverRanks(_opts->dt, _env->comm, "time-step");
 
         // Determine my coordinates if not provided already.
         // TODO: do this more intelligently based on proximity.
         if (_opts->find_loc) {
             Layout_4321 rank_layout(_opts->nrw, _opts->nrx, _opts->nry, _opts->nrz);
-            rank_layout.unlayout((idx_t)my_rank,
+            rank_layout.unlayout((idx_t)_env->my_rank,
                                  _opts->riw, _opts->rix, _opts->riy, _opts->riz);
         }
         os << "Logical coordinates of this rank: " <<
@@ -603,37 +610,37 @@ namespace yask {
 
         // A table of rank-coordinates for everyone.
         const int num_dims = 4;
-        idx_t coords[num_ranks][num_dims];
+        idx_t coords[_env->num_ranks][num_dims];
 
         // Init coords for this rank.
-        coords[my_rank][0] = _opts->riw;
-        coords[my_rank][1] = _opts->rix;
-        coords[my_rank][2] = _opts->riy;
-        coords[my_rank][3] = _opts->riz;
+        coords[_env->my_rank][0] = _opts->riw;
+        coords[_env->my_rank][1] = _opts->rix;
+        coords[_env->my_rank][2] = _opts->riy;
+        coords[_env->my_rank][3] = _opts->riz;
 
         // A table of rank-sizes for everyone.
-        idx_t rsizes[num_ranks][num_dims];
+        idx_t rsizes[_env->num_ranks][num_dims];
 
         // Init sizes for this rank.
-        rsizes[my_rank][0] = _opts->dw;
-        rsizes[my_rank][1] = _opts->dx;
-        rsizes[my_rank][2] = _opts->dy;
-        rsizes[my_rank][3] = _opts->dz;
+        rsizes[_env->my_rank][0] = _opts->dw;
+        rsizes[_env->my_rank][1] = _opts->dx;
+        rsizes[_env->my_rank][2] = _opts->dy;
+        rsizes[_env->my_rank][3] = _opts->dz;
 
 #ifdef USE_MPI
         // Exchange coord and size info between all ranks.
-        for (int rn = 0; rn < num_ranks; rn++) {
+        for (int rn = 0; rn < _env->num_ranks; rn++) {
             MPI_Bcast(&coords[rn][0], num_dims, MPI_INTEGER8,
-                      rn, comm);
+                      rn, _env->comm);
             MPI_Bcast(&rsizes[rn][0], num_dims, MPI_INTEGER8,
-                      rn, comm);
+                      rn, _env->comm);
         }
 #endif
         
         ofs_w = ofs_x = ofs_y = ofs_z = 0;
         tot_w = tot_x = tot_y = tot_z = 0;
         int num_neighbors = 0, num_exchanges = 0;
-        for (int rn = 0; rn < num_ranks; rn++) {
+        for (int rn = 0; rn < _env->num_ranks; rn++) {
 
             // Get coordinates of rn.
             idx_t rnw = coords[rn][0];
@@ -682,7 +689,7 @@ namespace yask {
             int mdist = abs(rdw) + abs(rdx) + abs(rdy) + abs(rdz);
             
             // Myself.
-            if (rn == my_rank) {
+            if (rn == _env->my_rank) {
                 if (mdist != 0) {
                     cerr << "internal error: distance to own rank == " << mdist << endl;
                     exit_yask(1);
@@ -693,7 +700,7 @@ namespace yask {
             // Someone else.
             else {
                 if (mdist == 0) {
-                    cerr << "error: ranks " << my_rank <<
+                    cerr << "error: ranks " << _env->my_rank <<
                         " and " << rn << " at same coordinates." << endl;
                     exit_yask(1);
                 }
@@ -753,9 +760,9 @@ namespace yask {
                         ostringstream oss;
                         oss << gname;
                         if (bd == MPIBufs::bufSend)
-                            oss << "_send_halo_from_" << my_rank << "_to_" << rn;
+                            oss << "_send_halo_from_" << _env->my_rank << "_to_" << rn;
                         else
-                            oss << "_get_halo_to_" << my_rank << "_from_" << rn;
+                            oss << "_get_halo_to_" << _env->my_rank << "_from_" << rn;
                         
                         Grid_WXYZ* bp = mpiBufs[gname].makeBuf(bd,
                                                                rdw+1, rdx+1, rdy+1, rdz+1,
@@ -915,7 +922,7 @@ namespace yask {
     void StencilContext::prepare_solution()
     {
         // Don't continue until all ranks are this far.
-        global_barrier();
+        _env->global_barrier();
 
         ostream& os = get_ostr();
 #ifdef DEBUG
@@ -941,8 +948,12 @@ namespace yask {
         // Size grids based on finalized settings.
         set_grid_sizes();
         
-        // report threads.
+        // Report ranks.
         os << endl;
+        os << "Num ranks: " << _env->get_num_ranks() << endl;
+        os << "This rank index: " << _env->get_rank_index() << endl;
+
+        // report threads.
         os << "Num OpenMP procs: " << omp_get_num_procs() << endl;
         set_all_threads();
         os << "Num OpenMP threads: " << omp_get_max_threads() << endl;
@@ -953,7 +964,7 @@ namespace yask {
         set_all_threads(); // Back to normal.
 
         // TODO: enable multi-rank wave-front tiling.
-        if (_opts->rt > 1 && num_ranks > 1) {
+        if (_opts->rt > 1 && _env->num_ranks > 1) {
             cerr << "MPI communication is not currently enabled with wave-front tiling." << endl;
             exit_yask(1);
         }
@@ -1038,26 +1049,26 @@ namespace yask {
         rank_nbytes = get_num_bytes();
         os << "Total allocation in this rank (bytes): " <<
             printWithPow2Multiplier(rank_nbytes) << endl;
-        tot_nbytes = sumOverRanks(rank_nbytes, comm);
-        os << "Total overall allocation in " << num_ranks << " rank(s) (bytes): " <<
+        tot_nbytes = sumOverRanks(rank_nbytes, _env->comm);
+        os << "Total overall allocation in " << _env->num_ranks << " rank(s) (bytes): " <<
             printWithPow2Multiplier(tot_nbytes) << endl;
     
         // Various metrics for amount of work.
         rank_numpts_dt = rank_numpts_1t * dt;
-        tot_numpts_1t = sumOverRanks(rank_numpts_1t, comm);
+        tot_numpts_1t = sumOverRanks(rank_numpts_1t, _env->comm);
         tot_numpts_dt = tot_numpts_1t * dt;
 
         rank_reads_dt = rank_reads_1t * dt;
-        tot_reads_1t = sumOverRanks(rank_reads_1t, comm);
+        tot_reads_1t = sumOverRanks(rank_reads_1t, _env->comm);
         tot_reads_dt = tot_reads_1t * dt;
 
         rank_numFpOps_dt = rank_numFpOps_1t * dt;
-        tot_numFpOps_1t = sumOverRanks(rank_numFpOps_1t, comm);
+        tot_numFpOps_1t = sumOverRanks(rank_numFpOps_1t, _env->comm);
         tot_numFpOps_dt = tot_numFpOps_1t * dt;
 
         rank_domain_1t = _opts->dw * _opts->dx * _opts->dy * _opts->dz;
         rank_domain_dt = rank_domain_1t * dt;
-        tot_domain_1t = sumOverRanks(rank_domain_1t, comm);
+        tot_domain_1t = sumOverRanks(rank_domain_1t, _env->comm);
         tot_domain_dt = tot_domain_1t * dt;
     
         // Print some more stats.
@@ -1218,7 +1229,9 @@ namespace yask {
     void EqGroupBase::find_bounding_box() {
         if (bb_valid) return;
         StencilContext& context = *_generic_context;
-        KernelSettings& opts = context.get_settings();
+        auto optsp = context.get_settings();
+        assert(optsp);
+        auto opts = *optsp.get();
         ostream& os = context.get_ostr();
 
         // Init min vars w/max val and vice-versa.
@@ -1314,7 +1327,7 @@ namespace yask {
     // TODO: overlap halo exchange with computation.
     void StencilContext::exchange_halos(idx_t start_dt, idx_t stop_dt, EqGroupBase& eg)
     {
-        KernelSettings& opts = get_settings();
+        auto opts = get_settings();
         TRACE_MSG("exchange_halos(t=" << start_dt << ".." << (stop_dt-1) <<
                   ", needed for eq-group '" << eg.get_name() << "')");
 
@@ -1397,7 +1410,7 @@ namespace yask {
                                        neighbor_rank << " for grid '" << gname << "'...");
                              void* buf = (void*)(rcvBuf->get_storage());
                              MPI_Irecv(buf, rcvBuf->get_num_bytes(), MPI_BYTE,
-                                       neighbor_rank, int(gi), comm, &recv_reqs[gi][ni]);
+                                       neighbor_rank, int(gi), _env->comm, &recv_reqs[gi][ni]);
                          }
 
                          // Common code for pack (and send) and unpack.
@@ -1410,10 +1423,10 @@ namespace yask {
                              idx_t begin_x = 0;
                              idx_t begin_y = 0;
                              idx_t begin_z = 0;
-                             idx_t end_w = opts.dw;
-                             idx_t end_x = opts.dx;
-                             idx_t end_y = opts.dy;
-                             idx_t end_z = opts.dz;
+                             idx_t end_w = opts->dw;
+                             idx_t end_x = opts->dx;
+                             idx_t end_y = opts->dy;
+                             idx_t end_z = opts->dz;
 
                              // Region to read from, i.e., data to be put into receiver's halo.
                              if (hi == halo_isend) {
@@ -1422,19 +1435,19 @@ namespace yask {
                                  if (nw == idx_t(MPIBufs::rank_prev)) // neighbor is prev W.
                                      end_w = ghw; // read first halo-width only.
                                  if (nw == idx_t(MPIBufs::rank_next)) // neighbor is next W.
-                                     begin_w = opts.dw - ghw; // read last halo-width only.
+                                     begin_w = opts->dw - ghw; // read last halo-width only.
                                  if (nx == idx_t(MPIBufs::rank_prev)) // neighbor is on left.
                                      end_x = ghx;
                                  if (nx == idx_t(MPIBufs::rank_next)) // neighbor is on right.
-                                     begin_x = opts.dx - ghx;
+                                     begin_x = opts->dx - ghx;
                                  if (ny == idx_t(MPIBufs::rank_prev)) // neighbor is in front.
                                      end_y = ghy;
                                  if (ny == idx_t(MPIBufs::rank_next)) // neighbor is in back.
-                                     begin_y = opts.dy - ghy;
+                                     begin_y = opts->dy - ghy;
                                  if (nz == idx_t(MPIBufs::rank_prev)) // neighbor is above.
                                      end_z = ghz;
                                  if (nz == idx_t(MPIBufs::rank_next)) // neighbor is below.
-                                     begin_z = opts.dz - ghz;
+                                     begin_z = opts->dz - ghz;
                              }
 
                              // Region to write to, i.e., this rank's halo.
@@ -1446,32 +1459,32 @@ namespace yask {
                                      end_w = 0;     // end at inside of halo.
                                  }
                                  if (nw == idx_t(MPIBufs::rank_next)) { // neighbor is next W.
-                                     begin_w = opts.dw; // begin at inside of halo.
-                                     end_w = opts.dw + ghw; // end of outside of halo.
+                                     begin_w = opts->dw; // begin at inside of halo.
+                                     end_w = opts->dw + ghw; // end of outside of halo.
                                  }
                                  if (nx == idx_t(MPIBufs::rank_prev)) { // neighbor is on left.
                                      begin_x = -ghx;
                                      end_x = 0;
                                  }
                                  if (nx == idx_t(MPIBufs::rank_next)) { // neighbor is on right.
-                                     begin_x = opts.dx;
-                                     end_x = opts.dx + ghx;
+                                     begin_x = opts->dx;
+                                     end_x = opts->dx + ghx;
                                  }
                                  if (ny == idx_t(MPIBufs::rank_prev)) { // neighbor is in front.
                                      begin_y = -ghy;
                                      end_y = 0;
                                  }
                                  if (ny == idx_t(MPIBufs::rank_next)) { // neighbor is in back.
-                                     begin_y = opts.dy;
-                                     end_y = opts.dy + ghy;
+                                     begin_y = opts->dy;
+                                     end_y = opts->dy + ghy;
                                  }
                                  if (nz == idx_t(MPIBufs::rank_prev)) { // neighbor is above.
                                      begin_z = -ghz;
                                      end_z = 0;
                                  }
                                  if (nz == idx_t(MPIBufs::rank_next)) { // neighbor is below.
-                                     begin_z = opts.dz;
-                                     end_z = opts.dz + ghz;
+                                     begin_z = opts->dz;
+                                     end_z = opts->dz + ghz;
                                  }
                              }
 
@@ -1541,7 +1554,8 @@ namespace yask {
                                            neighbor_rank << " for grid '" << gname << "'...");
                                  const void* buf = (const void*)(sendBuf->get_storage());
                                  MPI_Isend(buf, sendBuf->get_num_bytes(), MPI_BYTE,
-                                           neighbor_rank, int(gi), comm, &send_reqs[num_send_reqs++]);
+                                           neighbor_rank, int(gi), _env->comm,
+                                           &send_reqs[num_send_reqs++]);
                              }
                          } // not receive.
                      } ); // visit neighbors.
@@ -1650,7 +1664,7 @@ namespace yask {
     ADD_TXYZ_OPTION(name, help, var); \
     ADD_1_OPTION(name, help, "", var, w)
 
-#ifdef USING_DIM_W
+#if USING_DIM_W
 #define ADD_T_DIM_OPTION(name, help, var) \
     ADD_TWXYZ_OPTION(name, help, var)
 #define ADD_DIM_OPTION(name, help, var) \
@@ -1677,7 +1691,7 @@ namespace yask {
         ADD_DIM_OPTION("ri", "This rank's logical index", ri);
         parser.add_option(new CommandLineParser::IntOption
                           ("msg_rank",
-                           "Rank that will print informational messages.",
+                           "Index of MPI rank that will print informational messages.",
                            msg_rank));
 #endif
         parser.add_option(new CommandLineParser::IntOption
@@ -1802,6 +1816,10 @@ namespace yask {
     // Called from prepare_solution(), so it doesn't normally need to be called from user code.
     void KernelSettings::finalizeSettings(std::ostream& os)
     {
+        // Set max number of threads.
+        if (max_threads <= 0)
+            max_threads = omp_get_max_threads();
+        
         // Round up domain size as needed.
         dt = roundUp(os, dt, CPTS_T, "rank domain size in t (time steps)");
         dw = roundUp(os, dw, CPTS_W, "rank domain size in w");

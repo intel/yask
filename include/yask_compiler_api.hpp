@@ -147,7 +147,7 @@ namespace yask {
         set_step_dim(const std::string& dim /**< [in] Step dimension, e.g., "t". */ ) =0;
 
         /// Get the solution step dimension.
-        /** @returns String containing the current step dimension name. */
+        /** @returns String containing the current step-dimension name. */
         virtual const std::string&
         get_step_dim() const =0;
 
@@ -175,16 +175,16 @@ namespace yask {
         virtual void
         clear_folding() =0;
 
-        /// Set floating-point precision.
-        virtual void
-        set_elem_bytes(int nbytes /**< [in] Number of bytes in a FP number.
-                                     Should be 4 or 8. */ ) =0;
-
-        /// Get floating-point precision.
+        /// Get current floating-point precision setting.
         /** @returns Number of bytes in a FP number. */
         virtual int
-        get_elem_bytes() const =0;
-        
+        get_element_bytes() const =0;
+
+        /// Set floating-point precision.
+        virtual void
+        set_element_bytes(int nbytes /**< [in] Number of bytes in a FP number.
+                                        Should be 4 or 8. */ ) =0;
+
         /// Set the cluster multiplier (unroll factor) in given dimension.
         /** For YASK-code generation, this will have the effect of creating
          * N vectors of output for each equation, where N is the product of

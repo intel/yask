@@ -32,24 +32,31 @@ import yask_kernel
 # The factory from which all other kernel object are made.
 kfac = yask_kernel.yk_factory()
 
-# Create and init settings.
-settings = kfac.new_settings()
-settings.set_domain_size("x", 128)
-settings.set_domain_size("y", 128)
-settings.set_domain_size("z", 128)
-settings.set_block_size("x", 32)
-settings.set_block_size("y", 32)
-settings.set_block_size("z", 64)
+# Initalize MPI, etc.
+env = kfac.new_env()
 
-# Create and init solution based on settings.
-soln = kfac.new_solution(settings)
-soln.init_env()
+# Create settings and solution.
+settings = kfac.new_settings()
+soln = kfac.new_solution(env, settings)
+
+# Init global settings.
+for di in range(soln.get_num_domain_dims()) :
+    dim_name = soln.get_domain_dim_name(di)
+
+    # Set min. domain size in each dim.
+    settings.set_domain_size(dim_name, 150)
+
+    # Set block size to 64 in z dim and 32 in other dims.
+    if dim_name == "z" :
+        settings.set_block_size(dim_name, 64)
+    else :
+        settings.set_block_size(dim_name, 32)
 
 # Allocate memory for any grids that do not have storage set.
 # Set other data structures needed for stencil application.
 soln.prepare_solution()
 
-# Print some info about the solution.
+# Print some info about the solution and init the grids.
 name = soln.get_name()
 print("Created stencil-solution '" + name + "' with the following grids:")
 for gi in range(soln.get_num_grids()) :
@@ -62,6 +69,8 @@ for gi in range(soln.get_num_grids()) :
     desc += ")"
     print("  " + desc)
 
-# TODO: initialize data in the grids and apply the stencil.
+    grid.set_all_elements(0.0);
+    
+# TODO: apply the stencil.
     
 print("End of YASK kernel API test.")

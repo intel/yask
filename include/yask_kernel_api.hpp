@@ -46,6 +46,8 @@ namespace yask {
 #endif
     
     // Forward declarations of classes and pointers.
+    class yk_env;
+    typedef std::shared_ptr<yk_env> yk_env_ptr;
     class yk_settings;
     typedef std::shared_ptr<yk_settings> yk_settings_ptr;
     class yk_solution;
@@ -58,7 +60,27 @@ namespace yask {
     public:
         virtual ~yk_factory() {}
 
-        /// Create an object to hold kernel settings.
+        /// Create an object to hold environment information.
+        /**
+         * Initializes MPI if MPI is enabled.
+         * Environment info is kept in a separate object to factilitate
+         * initializing the environment before creating a solution
+         * and sharing an environment among multiple solutions.
+         * @returns Pointer to new env object.
+         */
+        virtual yk_env_ptr
+        new_env() const;
+
+        /// Create an object to hold kernel solution settings.
+        /**
+         * Settings are kept in a separate object to facilitate the
+         * sharing of settings among multiple solutions.
+         * The settings may be modified via the returned pointer
+         * after a solution has been created via new_solution().
+         * However, the settings should not be changed after
+         * calling yk_solution::prepare_solution().
+         * @returns Pointer to new settings object.
+         */
         virtual yk_settings_ptr
         new_settings() const;
         
@@ -67,9 +89,31 @@ namespace yask {
          * that were created during stencil compilation.
          * @returns Pointer to new solution object. */
         virtual yk_solution_ptr
-        new_solution(yk_settings_ptr settings /**< [in] Pointer to kernel settings. */ ) const;
+        new_solution(yk_env_ptr env /**< [in] Pointer to env info. */,
+                     yk_settings_ptr settings /**< [in] Pointer to kernel settings. */ ) const;
     };
 
+    /// Kernel environment.
+    class yk_env {
+    public:
+        virtual ~yk_env() {}
+
+        /// Get number of MPI ranks.
+        /** @returns Number of ranks in MPI communicator or one (1) if MPI is not enabled. */
+        virtual int get_num_ranks() const =0;
+
+        /// Get MPI rank index.
+        /** @returns Index of this MPI rank or zero (0) if MPI is not enabled. */
+        virtual int get_rank_index() const =0;
+
+        /// Wait until all ranks have reached this point.
+        /** If MPI is enabled, calls MPI_Barrier().
+         * Otherwise, has no effect.
+         */
+        virtual void
+        global_barrier() const =0;
+    };
+    
     /// Kernel settings.
     /** Contains preferences for constructing a solution. */
     class yk_settings {
@@ -151,29 +195,29 @@ namespace yask {
     public:
         virtual ~yk_solution() {}
 
-        /// Initialize the solution's environment.
-        /** Either init_env() or copy_env() must be called before
-         * a solution is used.
-         * This call initializes the MPI (if enabled) and OpenMP
-         * settings.
-         */
-        virtual void
-        init_env() =0;
-        
-        /// Copy the solution's environment from an existing one.
-        /** Either init_env() or copy_env() must be called before
-         * a solution is used.
-         * This call copies the MPI (if enabled) and OpenMP
-         * settings.
-         */
-        virtual void
-        copy_env(const yk_solution_ptr src /**< [in] Pointer to solution that environment
-                                              settings will be copied from. */ ) =0;
-        
         /// Get the name of the solution.
         /** @returns String containing the solution name provided during stencil compilation. */
         virtual const std::string&
         get_name() const =0;
+
+        /// Get the solution step dimension.
+        /** @returns String containing the step-dimension name. */
+        virtual std::string
+        get_step_dim() const =0;
+
+        /// Get the number of domain dimensions used in this solution.
+        /**
+         * Does *not* include the step dimension.
+         * @returns Number of dimensions that define the problem domain. */
+        virtual int
+        get_num_domain_dims() const =0;
+
+        /// Get the name of the specified domain dimension.
+        /**
+         * @returns String containing name of domain dimension. */
+        virtual std::string
+        get_domain_dim_name(int n /**< [in] Index of dimension between zero (0)
+                                     and get_num_domain_dims()-1. */ ) const =0;
 
         /// Get the number of grids in the solution.
         /** @returns Number of grids that have been created via new_grid(). */
@@ -224,8 +268,8 @@ namespace yask {
      * But there is an allocation size, which is the number of values in the step
      * dimension that are stored in memory. 
      * Step-dimension indices "wrap-around" within this allocation to reuse memory.
-     * For example, if the step dimension is "t", and the t-dimension allocation size is 3, t=0,
-     * t=3, t=6, etc. would all alias to the same value in memory.
+     * For example, if the step dimension is "t", and the t-dimension allocation size is 3,
+     * then t=-2, t=0, t=3, t=6, ..., t=303, etc. would all alias to the same spatial values in memory.
      * 
      * Domain sizes specified via yk_settings::set_domain_size() apply to each process or *rank*.
      * If MPI is not enabled, a rank's domain is the entire problem size.
@@ -252,15 +296,21 @@ namespace yask {
         virtual ~yk_grid() {}
 
         /// Get the name of the grid.
-        /** @returns String containing name provided via new_grid(). */
+        /** @returns String containing name provided via yc_solution::new_grid(). */
         virtual const std::string& get_name() const =0;
 
-        /// Get the number of dimensions.
-        /** @returns Number of dimensions created via new_grid(). */
+        /// Get the number of dimensions used in this grid.
+        /**
+         * May include step dimension.
+         * May be different than value returned from yk_solution::get_num_domain_dims().
+         * @returns Number of dimensions created via yc_solution::new_grid(). */
         virtual int get_num_dims() const =0;
 
-        /// Get the name of the specified dimension.
-        /** @returns String containing name of dimension created via new_grid(). */
+        /// Get the name of the specified dimension in this grid.
+        /**
+         * Dimensions are not necessarily in the same order as those returned
+         * via yk_solution::get_domain_dim_name().
+         * @returns String containing name of dimension created via new_grid(). */
         virtual const std::string&
         get_dim_name(int n /**< [in] Index of dimension between zero (0)
                               and get_num_dims()-1. */ ) const =0;
@@ -384,7 +434,57 @@ namespace yask {
                            idx_t size
                            /**< [in] Number of points to allocate beyond the domain and halo size.
                               Must be greater than or equal to zero. */ ) =0;
-        
+
+        /// Initialize all grid points to the same value.
+        /** Sets all allocated elements, including those in the domain, halo, and extra padding
+         * area to the same provided value.
+         * @note The parameter is a double-precision floating-point value, but
+         * it may be converted to single-precision if the solution was configured with 4-byte
+         * elements via yc_solution::set_element_bytes().
+         * @note If storage has not been allocated via yk_solution::prepare_solution(),
+         * this will have no effect.
+         */
+        virtual void
+        set_all_elements(double val /**< [in] All points will be set to this. */ ) =0;
+
+        /// Get the value of one grid point.
+        /** Provide the number of indices equal to the number of dimensions in the grid.
+         * Indices beyond that will be ignored.
+         * Indices are relative to the overall problem domain.
+         * You can only get elements that are located in the grid in the current rank.
+         * See get_first_domain_index(), get_last_domain_index(), and the 
+         * "Detailed Description" for \ref yk_grid for more information on grid sizes.
+         * @note The return value is a double-precision floating-point value, but
+         * it may be converted from a single-precision if the solution was configured with 4-byte
+         * elements via yc_solution::set_element_bytes().
+         */
+        virtual double
+        get_element(idx_t dim1_index=0 /**< [in] Index in dimension 1. */,
+                    idx_t dim2_index=0 /**< [in] Index in dimension 2. */,
+                    idx_t dim3_index=0 /**< [in] Index in dimension 3. */,
+                    idx_t dim4_index=0 /**< [in] Index in dimension 4. */,
+                    idx_t dim5_index=0 /**< [in] Index in dimension 5. */,
+                    idx_t dim6_index=0 /**< [in] Index in dimension 6. */ ) const =0;
+
+        /// Set the value of one grid point.
+        /** Provide the number of indices equal to the number of dimensions in the grid.
+         * Indices beyond that will be ignored.
+         * Indices are relative to the overall problem domain.
+         * You can only set elements that are located in the grid in the current rank.
+         * See get_first_domain_index(), get_last_domain_index(), and the 
+         * "Detailed Description" for \ref yk_grid for more information on grid sizes.
+         * @note The parameter value is a double-precision floating-point value, but
+         * it may be converted to single-precision if the solution was configured with 4-byte
+         * elements via yc_solution::set_element_bytes().
+         */
+        virtual void
+        set_element(double val /**< [in] Point in grid will be set to this. */,
+                    idx_t dim1_index=0 /**< [in] Index in dimension 1. */,
+                    idx_t dim2_index=0 /**< [in] Index in dimension 2. */,
+                    idx_t dim3_index=0 /**< [in] Index in dimension 3. */,
+                    idx_t dim4_index=0 /**< [in] Index in dimension 4. */,
+                    idx_t dim5_index=0 /**< [in] Index in dimension 5. */,
+                    idx_t dim6_index=0 /**< [in] Index in dimension 6. */ ) =0;
     };
 
 

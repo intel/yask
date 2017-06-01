@@ -98,18 +98,18 @@ inline void omp_set_nested(int n) { }
 
 namespace yask {
 
-#ifdef USE_MPI
     inline void exit_yask(int code) {
+#ifdef USE_MPI
         int flag;
         MPI_Initialized(&flag);
         if (flag)
             MPI_Abort(MPI_COMM_WORLD, code);
         else
             exit(code);
-    }
 #else
-    inline void exit_yask(int code) { exit(code); }
+        exit(code);
 #endif
+    }
 
     // Some utility functions.
     extern double getTimeInSecs();

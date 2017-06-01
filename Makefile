@@ -318,8 +318,8 @@ LFLAGS          +=      -lrt -Wl,-rpath=$(CWD)/lib -L$(CWD)/lib
 YC_LFLAGS	:=	$(LFLAGS)
 YK_LFLAGS	:=	$(LFLAGS)
 
-YC_CXX    	?=	g++  # faster than icpc for building the compiler.
-YC_CXXFLAGS 	+=	-g -std=c++11 -Wall
+YC_CXX    	?=	g++  # usually faster than icpc for building the compiler.
+YC_CXXFLAGS 	+=	-g -std=c++11 -Wall -O2
 YC_CXXFLAGS	+=	-Iinclude -Isrc/common -Isrc/compiler/lib -Isrc/stencils
 
 # Default cmd-line args.
@@ -585,7 +585,7 @@ headers: $(GEN_HEADERS)
 # Compile the stencil compiler.
 %.o: %.cpp src/common/*hpp src/compiler/lib/*hpp include/yask_compiler_api.hpp
 	$(YC_CXX) --version
-	$(YC_CXX) $(YC_CXXFLAGS) -O2 -fPIC -c -o $@ $<
+	$(YC_CXX) $(YC_CXXFLAGS) -fPIC -c -o $@ $<
 
 $(YC_LIB): $(YC_OBJS)
 	$(YC_CXX) $(YC_CXXFLAGS) -shared -o $@ $^
@@ -629,7 +629,7 @@ $(YC_SWIG_DIR)/yask_compiler_api_wrap.cpp: $(YC_SWIG_DIR)/yask*.i include/*hpp
 	swig -v -cppext cpp -Iinclude -c++ -python -outdir lib -builtin $<
 
 $(YC_SWIG_DIR)/yask_compiler_api_wrap.o: $(YC_SWIG_DIR)/yask_compiler_api_wrap.cpp
-	$(YC_CXX) $(YC_CXXFLAGS) $(PYINC) -O2 -fPIC -c -o $@ $<
+	$(YC_CXX) $(YC_CXXFLAGS) $(PYINC) -fPIC -c -o $@ $<
 
 lib/_yask_compiler.so: $(YC_OBJS) $(YC_SWIG_DIR)/yask_compiler_api_wrap.o
 	$(YC_CXX) $(YC_CXXFLAGS) -shared -o $@ $^
@@ -721,6 +721,19 @@ py-yc-api-and-py-yk-api-test: py-yc-api-test
 
 
 ######## Misc targets
+
+# NB: must set stencil and arch to run tests.
+# NB: decrease time by using CXXOPT=-O2
+all-tests:
+	$(MAKE) clean; $(MAKE) -j yk-test
+	$(MAKE) clean; $(MAKE) -j cxx-yk-api-test
+	$(MAKE) clean; $(MAKE) -j py-yk-api-test
+	$(MAKE) clean; $(MAKE) -j stencil=test cxx-yc-api-and-yk-test
+	$(MAKE) clean; $(MAKE) -j stencil=test cxx-yc-api-and-cxx-yk-api-test
+	$(MAKE) clean; $(MAKE) -j stencil=test cxx-yc-api-and-py-yk-api-test
+	$(MAKE) clean; $(MAKE) -j stencil=test py-yc-api-and-yk-test
+	$(MAKE) clean; $(MAKE) -j stencil=test py-yc-api-and-cxx-yk-api-test
+	$(MAKE) clean; $(MAKE) -j stencil=test py-yc-api-and-py-yk-api-test
 
 tags:
 	rm -f TAGS ; find src include -name '*.[ch]pp' | xargs etags -C -a

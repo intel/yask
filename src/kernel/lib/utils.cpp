@@ -224,7 +224,7 @@ namespace yask {
     {
         if (size_t(argi) >= args.size() || args[argi].length() == 0) {
             cerr << "Error: no argument for option '" << args[argi - 1] << "'." << endl;
-            exit(1);
+            exit_yask(1);
         }
 
         const char* nptr = args[argi].c_str();
@@ -232,7 +232,7 @@ namespace yask {
         long long int val = strtoll(nptr, &endptr, 0);
         if (val == LLONG_MIN || val == LLONG_MAX || *endptr != '\0') {
             cerr << "Error: argument for option '" << args[argi - 1] << "' is not an integer." << endl;
-            exit(1);
+            exit_yask(1);
         }
 
         argi++;

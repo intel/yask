@@ -665,7 +665,7 @@ namespace yask {
 
 #elif defined(ARCH_KNC)
         std::cerr << "error: 2-input permute not supported on KNC" << std::endl;
-        exit(1);
+        exit_yask(1);
 #else
         res.u.mi = INAMEI(permutex2var)(a.u.mi, ctrl.u.mi, b.u.mi);
 #endif

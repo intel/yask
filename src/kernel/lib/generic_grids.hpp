@@ -116,10 +116,12 @@ namespace yask {
 
         // Initialize all elements to the same given value.
         virtual void set_same(T val) {
+            if (_elems) {
 
 #pragma omp parallel for
-            for (idx_t ai = 0; ai < get_num_elems(); ai++)
-                _elems[ai] = val;
+                for (idx_t ai = 0; ai < get_num_elems(); ai++)
+                    _elems[ai] = val;
+            }
         }
 
         // Initialize memory: first element to value,

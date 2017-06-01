@@ -164,9 +164,16 @@ struct AppSettings : public KernelSettings {
 // Parse command-line args, run kernel, run validation if requested.
 int main(int argc, char** argv)
 {
+    // Stop collecting VTune data.
+    // Even better to use -start-paused option.
+    VTUNE_PAUSE;
+
     // Bootstrap factory from kernel API.
     yk_factory kfac;
-        
+
+    // Set up the environment (mostly MPI).
+    auto kenv = kfac.new_env();
+
     // Parse cmd-line options.
     // TODO: do this through APIs.
     auto opts = make_shared<AppSettings>();
@@ -174,14 +181,14 @@ int main(int argc, char** argv)
 
     // Object containing data and parameters for stencil eval.
     // TODO: do everything through API without cast to StencilContext.
-    auto ksoln = kfac.new_solution(opts);
+    auto ksoln = kfac.new_solution(kenv, opts);
     auto context = dynamic_pointer_cast<StencilContext>(ksoln);
-
-    // Set up the environment.
-    ksoln->init_env();
+    ostream& os = context->get_ostr();
+    
+    // Make sure any MPI/OMP debug data is dumped from all ranks before continuing.
+    kenv->global_barrier();
     
     // Print splash banner and related info.
-    ostream& os = context->get_ostr();
     opts->splash(os, argc, argv);
 
     // Alloc memory, etc.
@@ -221,7 +228,7 @@ int main(int argc, char** argv)
 
         // Replace temp setting with correct value.
         opts->dt = dt;
-        context->global_barrier();
+        kenv->global_barrier();
     }
 
     // variables for measuring performance.
@@ -243,7 +250,7 @@ int main(int argc, char** argv)
         os << flush;
         if (opts->pre_trial_sleep_time > 0)
             sleep(opts->pre_trial_sleep_time);
-        context->global_barrier();
+        kenv->global_barrier();
 
         // Start timing.
         VTUNE_RESUME;
@@ -252,7 +259,7 @@ int main(int argc, char** argv)
 
         // Actual work (must wait until all ranks are done).
         context->calc_rank_opt();
-        context->global_barrier();
+        kenv->global_barrier();
 
         // Stop timing.
         wstop =  getTimeInSecs();
@@ -294,15 +301,14 @@ int main(int argc, char** argv)
         endl;
     
     if (opts->validate) {
-        context->global_barrier();
+        kenv->global_barrier();
         os << endl << divLine <<
             "Setup for validation...\n";
 
         // Make a reference context for comparisons w/new grids.
-        auto ref_soln = kfac.new_solution(opts);
+        auto ref_soln = kfac.new_solution(kenv, opts);
         auto ref_context = dynamic_pointer_cast<StencilContext>(ref_soln);
         ref_context->name += "-reference";
-        ref_soln->copy_env(ksoln);
         ref_soln->prepare_solution();
 
         // init to same value used in context.
@@ -329,8 +335,8 @@ int main(int argc, char** argv)
         ref_context->calc_rank_ref();
 
         // check for equality.
-        context->global_barrier();
-        os << "Checking results on rank " << context->my_rank << "..." << endl;
+        kenv->global_barrier();
+        os << "Checking results..." << endl;
         idx_t errs = context->compareData(*ref_context);
         if( errs == 0 ) {
             os << "TEST PASSED." << endl;
@@ -344,7 +350,7 @@ int main(int argc, char** argv)
     else
         os << "\nRESULTS NOT VERIFIED.\n";
 
-    context->global_barrier();
+    kenv->global_barrier();
     MPI_Finalize();
     os << "YASK DONE." << endl << divLine;
     

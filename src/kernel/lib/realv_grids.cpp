@@ -41,7 +41,8 @@ namespace yask {
         else if (dim == "z" && got_x()) return fn_prefix ## z();        \
         else {                                                          \
             cerr << "Error: " #api_name "(): bad dimension '" << dim << "'\n"; \
-            exit(1);                                                    \
+            exit_yask(1);                                               \
+            return 0;                                                   \
         }                                                               \
     }
     GET_GRID_API(get_first_domain_index, get_first_, false, 0)
@@ -61,7 +62,7 @@ namespace yask {
         else if (dim == "z" && got_x()) fn_prefix ## z(n);              \
         else {                                                          \
             cerr << "Error: " #api_name "(): bad dimension '" << dim << "'\n"; \
-            exit(1);                                                    \
+            exit_yask(1);                                               \
         }                                                               \
     }
     SET_GRID_API(set_extra_pad_size, set_extra_pad_, false, (void)0)
@@ -74,7 +75,7 @@ namespace yask {
         if (dim == "t" && got_t()) return set_alloc_t(tdim);
         else {
             cerr << "Error: set_alloc_size(): bad dim '" << dim << "'\n";
-            exit(1);
+            exit_yask(1);
         }
     }
     
