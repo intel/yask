@@ -499,6 +499,9 @@ namespace yask {
 
         virtual void apply_solution(idx_t first_step_index,
                                     idx_t last_step_index);
+        virtual void apply_solution(idx_t step_index) {
+            apply_solution(step_index, step_index);
+        }
     };
     
     /// Classes that support evaluation of one stencil equation-group.

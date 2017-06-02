@@ -81,8 +81,8 @@ for gi in range(soln.get_num_grids()) :
 # Apply the stencil solution to the data.
 env.global_barrier()
 print("Applying the solution for 1 step...")
-soln.apply_solution(0, 1)
+soln.apply_solution(0)
 print("Applying the solution for 100 more steps...")
-soln.apply_solution(2, 101)
+soln.apply_solution(1, 100)
     
 print("End of YASK kernel API test.")

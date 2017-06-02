@@ -86,9 +86,9 @@ int main() {
     // Apply the stencil solution to the data.
     env->global_barrier();
     cout << "Applying the solution for 1 step...\n";
-    soln->apply_solution(0, 1);
+    soln->apply_solution(0);
     cout << "Applying the solution for 100 more steps...\n";
-    soln->apply_solution(2, 101);
+    soln->apply_solution(1, 100);
 
     cout << "End of YASK kernel API test.\n";
     return 0;

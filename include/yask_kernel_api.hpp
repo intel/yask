@@ -256,6 +256,14 @@ namespace yask {
         virtual void
         prepare_solution() =0;
 
+        /// Apply the stencil solution for one step.
+        /** The stencil(s) in the solution are applied
+         * across the entire domain as specified in yk_settings::set_domain_size().
+         * MPI halo exchanges will occur as necessary.
+         */
+        virtual void
+        apply_solution(idx_t step_index /**< [in] Index in the step dimension */ ) =0;
+
         /// Apply the stencil solution for the specified number of steps.
         /** The stencil(s) in the solution are applied from
          * the first to last step index, inclusive.
@@ -263,7 +271,7 @@ namespace yask {
          */
         virtual void
         apply_solution(idx_t first_step_index /**< [in] First index in the step dimension */,
-                       idx_t last_step_index /**< [in] First index in the step dimension */ ) =0;
+                       idx_t last_step_index /**< [in] Last index in the step dimension */ ) =0;
     };
 
     /// A run-time grid.

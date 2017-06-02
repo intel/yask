@@ -722,12 +722,18 @@ py-yc-api-and-py-yk-api-test: py-yc-api-test
 
 ######## Misc targets
 
-# NB: must set stencil and arch to run tests.
-# NB: decrease time by using CXXOPT=-O2
+# NB: set arch var if applicable.
+# NB: save some time by using CXXOPT=-O2.
 all-tests:
-	$(MAKE) clean; $(MAKE) -j yk-test
-	$(MAKE) clean; $(MAKE) -j cxx-yk-api-test
-	$(MAKE) clean; $(MAKE) -j py-yk-api-test
+	$(MAKE) clean; $(MAKE) -j stencil=iso3dfd yk-test
+	$(MAKE) clean; $(MAKE) -j stencil=iso3dfd cxx-yk-api-test
+	$(MAKE) clean; $(MAKE) -j stencil=iso3dfd py-yk-api-test
+	$(MAKE) clean; $(MAKE) -j stencil=ave yk-test
+	$(MAKE) clean; $(MAKE) -j stencil=ave cxx-yk-api-test
+	$(MAKE) clean; $(MAKE) -j stencil=ave py-yk-api-test
+	$(MAKE) clean; $(MAKE) -j stencil=fsg_abc yk-test
+	$(MAKE) clean; $(MAKE) -j stencil=fsg_abc cxx-yk-api-test
+	$(MAKE) clean; $(MAKE) -j stencil=fsg_abc py-yk-api-test
 	$(MAKE) clean; $(MAKE) -j stencil=test cxx-yc-api-and-yk-test
 	$(MAKE) clean; $(MAKE) -j stencil=test cxx-yc-api-and-cxx-yk-api-test
 	$(MAKE) clean; $(MAKE) -j stencil=test cxx-yc-api-and-py-yk-api-test

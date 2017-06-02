@@ -37,7 +37,7 @@ consisting of other grid points, constants, mathematical operators, etc.
 - Example equation: `u(t+1, x, y) EQUALS (u(t, x, y) + u(t, x+1, y) + u(t, x, y+1)) / 3`.
 
 A new stencil solution may be defined in one of the following ways:
--# Write a stencil in C++ that will be compiled into the standard YASK stencil compiler, `bin/yask-compiler.exe`.
+-# Write a stencil in C++ that will be compiled into the standard YASK stencil compiler, `bin/yask_compiler.exe`.
   - This approach is typically taken when the programmer or scientist wants to express
     the equations of the stencil directly.
   - In this case, the equations can be typed exactly as shown in the above example
@@ -54,8 +54,8 @@ A new stencil solution may be defined in one of the following ways:
   - The mechanism to generate the kernel code in this approach depends on the application
     created from the APIs. The application might be run from a command-prompt, or the user
     might control it interactively.
-  - See `src/compiler/tests/yask-compiler-api-test.cpp` for an example stencil definition in C++.
-  - See `bin/yask-compiler-api-test.py` for an example stencil definition in Python.
+  - See `src/compiler/tests/yask_compiler_api_test.cpp` for an example stencil definition in C++.
+  - See `bin/yask_compiler_api_test.py` for an example stencil definition in Python.
   - See \ref yc for documentation on the compiler API.
 
 In either case, the resulting generated code should written to the C++ stencil-code file,
@@ -74,20 +74,20 @@ Once the stencil-code file is created, it must be compiled into a YASK kernel li
   Example: `make stencil=my-stencil arch=hsw kernel-only`.
 
 If `make` is invoked as in one of the above examples, it will create the kernel library
-in `lib/yask-kernel.`<em>stencil.arch</em>`.so`, where *stencil* and *arch* match the corresponding
+in `lib/libyask_kernel.`<em>stencil.arch</em>`.so`, where *stencil* and *arch* match the corresponding
 variables provided during `make`.
 
 To use the kernel library, an executable must be created from it.
 This may be done in one of the following ways:
 -# The default YASK kernel executable will automatically be created
-  in `bin/yask-kernel.`<em>stencil.arch</em>`.exe` when `make` is invoked as in the above examples.
+  in `bin/yask_kernel.`<em>stencil.arch</em>`.exe` when `make` is invoked as in the above examples.
   - This application may be run via `bin/yask.sh` to obtain a performance measurement of the kernel.
 -# You can also create your own stencil application using the YASK stencil kernel API.
   - This approach would be taken to integrate the kernel into a larger application that
     would inject real-world initial-state data into the grids and extract the
     final-state data for analysis or further processing.
-  - See `src/kernel/tests/yask-kernel-api-test.cpp` for an example kernel usage in C++.
-  - See `bin/yask-compiler-api-test.py` for an example kernel usage in Python.
+  - See `src/kernel/tests/yask_kernel_api_test.cpp` for an example kernel usage in C++.
+  - See `bin/yask_kernel_api_test.py` for an example kernel usage in Python.
   - See \ref yk for documentation on the kernel API.
 
 @note Anytime you want to change the name or compile-time properties of the kernel, be sure to run
