@@ -257,9 +257,8 @@ int main(int argc, char** argv)
         context->mpi_time = 0.0;
         wstart = getTimeInSecs();
 
-        // Actual work (must wait until all ranks are done).
+        // Actual work.
         context->calc_rank_opt();
-        kenv->global_barrier();
 
         // Stop timing.
         wstop =  getTimeInSecs();
@@ -335,7 +334,6 @@ int main(int argc, char** argv)
         ref_context->calc_rank_ref();
 
         // check for equality.
-        kenv->global_barrier();
         os << "Checking results..." << endl;
         idx_t errs = context->compareData(*ref_context);
         if( errs == 0 ) {

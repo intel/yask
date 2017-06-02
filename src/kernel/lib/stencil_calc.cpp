@@ -187,6 +187,9 @@ namespace yask {
                 
             } // eq-groups.
         } // iterations.
+
+        // Make sure all ranks are done.
+        _env->global_barrier();
     }
 
     // Eval equation group(s) over grid(s) using optimized code.
@@ -324,6 +327,9 @@ namespace yask {
         // Reset threads back to max.
         set_all_threads();
 
+        // Make sure all ranks are done.
+        _env->global_barrier();
+
 #ifdef MODEL_CACHE
         // Print cache stats, then disable.
         // Thus, cache is only modeled for first call.
@@ -333,7 +339,6 @@ namespace yask {
             cache_model.disable();
         }
 #endif
-
     }
 
     // Apply solution for 'dt' time-steps.

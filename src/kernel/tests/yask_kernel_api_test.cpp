@@ -84,6 +84,7 @@ int main() {
     // loaded or otherwise set to meaningful values here.
     
     // Apply the stencil solution to the data.
+    env->global_barrier();
     cout << "Applying the solution for 1 step...\n";
     soln->apply_solution(0, 1);
     cout << "Applying the solution for 100 more steps...\n";

@@ -606,7 +606,7 @@ compiler: $(YC_EXEC)
 # NB: must set stencil and arch to generate the kernel API.
 
 # API docs & libs.
-api-all: api-docs yk-api yc-api
+api-all: api-docs yc-api yk-api
 
 # Format API documents.
 api-docs: docs/api/latex/refman.tex

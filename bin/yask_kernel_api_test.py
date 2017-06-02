@@ -79,6 +79,7 @@ for gi in range(soln.get_num_grids()) :
 # loaded or otherwise set to meaningful values here.
     
 # Apply the stencil solution to the data.
+env.global_barrier()
 print("Applying the solution for 1 step...")
 soln.apply_solution(0, 1)
 print("Applying the solution for 100 more steps...")
