@@ -73,7 +73,7 @@ namespace yask {
 
         /// Create a stencil solution.
         /** A stencil solution contains all the grids and equations.
-         * @returns Pointer to new solution object. */
+            @returns Pointer to new solution object. */
         virtual yc_solution_ptr
         new_solution(const std::string& name /**< [in] Name of the solution; 
                                                 must be a valid C++ identifier. */ ) const;
@@ -81,7 +81,7 @@ namespace yask {
             
     /// Stencil solution.
     /** Objects of this type contain all the grids and equations
-     * that comprise a solution. */
+        that comprise a solution. */
     class yc_solution {
     public:
         virtual ~yc_solution() {}
@@ -98,12 +98,12 @@ namespace yask {
 
         /// Create an n-dimensional grid variable in the solution.
         /** "Grid" is a generic term for any n-dimensional array.  A 0-dim
-         * grid is a scalar, a 1-dim grid is a vector, a 2-dim grid is a
-         * matrix, etc.  Define the name of each dimension that is needed
-         * via this interface, starting with 'dim1'. Example:
-         * new_grid("heat", "t", "x", "y") will create a 3D grid with one
-         * temporal dimension and two spatial dimensions.
-         * @returns Pointer to the new grid. */
+            grid is a scalar, a 1-dim grid is a vector, a 2-dim grid is a
+            matrix, etc.  Define the name of each dimension that is needed
+            via this interface, starting with 'dim1'. Example:
+            new_grid("heat", "t", "x", "y") will create a 3D grid with one
+            temporal dimension and two spatial dimensions.
+            @returns Pointer to the new grid. */
         virtual yc_grid_ptr
         new_grid(const std::string& name /**< [in] Unique name of the grid; must be
                                             a valid C++ identifier and unique
@@ -131,7 +131,7 @@ namespace yask {
         
         /// Get the number of equations in the solution.
         /** Equations are added when equation_nodes are created via new_equation_node().
-         * @returns Number of equations that have been created. */
+            @returns Number of equations that have been created. */
         virtual int
         get_num_equations() const =0;
 
@@ -153,19 +153,19 @@ namespace yask {
 
         /// Set the vectorization length in given dimension.
         /** For YASK-code generation, the product of the fold lengths should
-         * be equal to the number of elements in a HW SIMD register.
-         * The number of elements in a HW SIMD register is
-         * determined by the number of bytes in an element and the print
-         * format.  
-         * Example: For SP FP elements in AVX-512 vectors, the product of
-         * the fold lengths should be 16, e.g., x=4 and y=4.
-         * @note If the product
-         * of the fold lengths is *not* the number of elements in a HW SIMD
-         * register, the fold lengths will be adjusted based on an internal
-         * heuristic. In this heuristic, any fold length that is >1 is
-         * used as a hint to indicate where to apply folding.
-         * @note A fold length >1 cannot be applied to the step dimension.
-         * @note Default length is one (1) in each dimension. */
+            be equal to the number of elements in a HW SIMD register.
+            The number of elements in a HW SIMD register is
+            determined by the number of bytes in an element and the print
+            format.  
+            Example: For SP FP elements in AVX-512 vectors, the product of
+            the fold lengths should be 16, e.g., x=4 and y=4.
+            @note If the product
+            of the fold lengths is *not* the number of elements in a HW SIMD
+            register, the fold lengths will be adjusted based on an internal
+            heuristic. In this heuristic, any fold length that is >1 is
+            used as a hint to indicate where to apply folding.
+            @note A fold length >1 cannot be applied to the step dimension.
+            @note Default length is one (1) in each dimension. */
         virtual void
         set_fold_len(const std::string& dim /**< [in] Dimension of fold, e.g., "x". */,
                      int len /**< [in] Length of vectorization in 'dim' */ ) =0;
@@ -187,11 +187,11 @@ namespace yask {
 
         /// Set the cluster multiplier (unroll factor) in given dimension.
         /** For YASK-code generation, this will have the effect of creating
-         * N vectors of output for each equation, where N is the product of
-         * the cluster multipliers. 
-         * @note A multiplier >1 cannot be applied to
-         * the step dimension. 
-         * @note Default is one (1) in each dimension. */
+            N vectors of output for each equation, where N is the product of
+            the cluster multipliers. 
+            @note A multiplier >1 cannot be applied to
+            the step dimension. 
+            @note Default is one (1) in each dimension. */
         virtual void
         set_cluster_mult(const std::string& dim /**< [in] Direction of unroll, e.g., "y". */,
                          int mult /**< [in] Number of vectors in 'dim' */ ) =0;
@@ -203,21 +203,22 @@ namespace yask {
         
         /// Format the current equation(s).
         /** Currently supported format types:
-         * Type    | Output
-         * --------|--------
-         * cpp     | YASK stencil classes for generic C++.
-         * avx     | YASK stencil classes for CORE AVX ISA. 
-         * avx2    | YASK stencil classes for CORE AVX2 ISA.
-         * avx512  | YASK stencil classes for CORE AVX-512 & MIC AVX-512 ISAs.
-         * knc     | YASK stencil classes for Knights Corner ISA. 
-         * dot     | DOT-language description.
-         * dot-lite| DOT-language description of grid accesses only.
-         * pseudo  | Human-readable pseudo-code (for debug).
-         * @warning *Side effect:* Applies optimizations to the equation(s), so some pointers
-         * to nodes in the original equations may refer to modified nodes or nodes
-         * that have been optimized away after calling format().
-         * @returns String containing formatted output. 
-         * The YASK or DOT strings are typically then written to a file.
+            Type    | Output
+            --------|--------
+            cpp     | YASK stencil classes for generic C++.
+            avx     | YASK stencil classes for CORE AVX ISA. 
+            avx2    | YASK stencil classes for CORE AVX2 ISA.
+            avx512  | YASK stencil classes for CORE AVX-512 & MIC AVX-512 ISAs.
+            knc     | YASK stencil classes for Knights Corner ISA. 
+            dot     | DOT-language description.
+            dot-lite| DOT-language description of grid accesses only.
+            pseudo  | Human-readable pseudo-code (for debug).
+
+            @warning *Side effect:* Applies optimizations to the equation(s), so some pointers
+            to nodes in the original equations may refer to modified nodes or nodes
+            that have been optimized away after calling format().
+            @returns String containing formatted output. 
+            The YASK or DOT strings are typically then written to a file.
          */
         virtual std::string
         format(const std::string& format_type /**< [in] Name of type from above table. */,
@@ -233,11 +234,11 @@ namespace yask {
 
     /// A compile-time grid.
     /** "Grid" is a generic term for any n-dimensional array.  A 0-dim grid
-     * is a scalar, a 1-dim grid is an array, etc.
-     * A compile-time grid is a variable used for constructing equations.
-     * It does not contain any data.
-     * Data is only stored during run-time, using a yk_grid.
-     * Create new grids via yc_solution::new_grid(). */
+        is a scalar, a 1-dim grid is an array, etc.
+        A compile-time grid is a variable used for constructing equations.
+        It does not contain any data.
+        Data is only stored during run-time, using a yk_grid.
+        Create new grids via yc_solution::new_grid(). */
     class yc_grid {
     public:
         virtual ~yc_grid() {}
@@ -258,13 +259,13 @@ namespace yask {
 
         /// Create a reference to a point in a grid.
         /** The indices are specified relative to the stencil-evaluation
-         * index.  Each offset refers to the dimensions defined when the
-         * grid was created via stencil_solution::new_grid(). 
-         * Example: if g = new_grid("heat", "t", "x", "y"), then
-         * g->new_relative_grid_point(1, -1, 0) refers to heat(t+1, x-1, y)
-         * for some point t, x, y during stencil evaluation.
-         * @note Offsets beyond the dimensions in the grid will be ignored.
-         * @returns Pointer to AST node used to read or write from point in grid. */
+            index.  Each offset refers to the dimensions defined when the
+            grid was created via stencil_solution::new_grid(). 
+            Example: if g = new_grid("heat", "t", "x", "y"), then
+            g->new_relative_grid_point(1, -1, 0) refers to heat(t+1, x-1, y)
+            for some point t, x, y during stencil evaluation.
+            @note Offsets beyond the dimensions in the grid will be ignored.
+            @returns Pointer to AST node used to read or write from point in grid. */
         virtual yc_grid_point_node_ptr
         new_relative_grid_point(int dim1_offset=0 /**< [in] offset from dim1 index. */,
                                 int dim2_offset=0 /**< [in] offset from dim2 index. */,
@@ -276,26 +277,26 @@ namespace yask {
 
     /// Factory to create AST nodes.
     /** @note Grid-point reference nodes are created from a `yc_grid` object
-     * instead of from this factory. */
+        instead of from this factory. */
     class yc_node_factory {
     public:
         virtual ~yc_node_factory() {}
 
         /// Create an equation node.
         /** Indicates grid point on LHS is equivalent to expression on
-         * RHS. This is NOT a test for equality.  When an equation is
-         * created, it is automatically added to the list of equations for
-         * the yc_solution that contains the grid that is on the
-         * LHS.
-         * @returns Pointer to new node. */
+            RHS. This is NOT a test for equality.  When an equation is
+            created, it is automatically added to the list of equations for
+            the yc_solution that contains the grid that is on the
+            LHS.
+            @returns Pointer to new node. */
         virtual yc_equation_node_ptr
         new_equation_node(yc_grid_point_node_ptr lhs /**< [in] Grid-point before EQUALS operator. */,
                         yc_number_node_ptr rhs /**< [in] Expression after EQUALS operator. */ );
 
         /// Create a constant numerical value node.
         /** This is unary negation.
-         *  Use new_subtraction_node() for binary '-'.
-         * @returns Pointer to new node. */
+             Use new_subtraction_node() for binary '-'.
+            @returns Pointer to new node. */
         virtual yc_const_number_node_ptr
         new_const_number_node(double val /**< [in] Value to store in node. */ );
 
@@ -306,24 +307,24 @@ namespace yask {
 
         /// Create an addition node.
         /** Nodes must be created with at least two operands, and more can
-         *  be added by calling add_operand() on the returned node.
-         * @returns Pointer to new node. */
+             be added by calling add_operand() on the returned node.
+            @returns Pointer to new node. */
         virtual yc_add_node_ptr
         new_add_node(yc_number_node_ptr lhs /**< [in] Expression before '+' sign. */,
                      yc_number_node_ptr rhs /**< [in] Expression after '+' sign. */ );
 
         /// Create a multiplication node.
         /** Nodes must be created with at least two operands, and more can
-         *  be added by calling add_operand() on the returned node.
-         * @returns Pointer to new node. */
+             be added by calling add_operand() on the returned node.
+            @returns Pointer to new node. */
         virtual yc_multiply_node_ptr
         new_multiply_node(yc_number_node_ptr lhs /**< [in] Expression before '*' sign. */,
                           yc_number_node_ptr rhs /**< [in] Expression after '*' sign. */ );
 
         /// Create a subtraction node.
         /** This is binary subtraction.
-         *  Use new_negation_node() for unary '-'.
-         * @returns Pointer to new node. */
+             Use new_negation_node() for unary '-'.
+            @returns Pointer to new node. */
         virtual yc_subtract_node_ptr
         new_subtract_node(yc_number_node_ptr lhs /**< [in] Expression before '-' sign. */,
                           yc_number_node_ptr rhs /**< [in] Expression after '-' sign. */ );
@@ -343,19 +344,19 @@ namespace yask {
 
         /// Create a simple human-readable string.
         /** Formats the expression starting at this node.
-         * @returns String containing a single-line human-readable version of the expression.
+            @returns String containing a single-line human-readable version of the expression.
          */
         virtual std::string format_simple() const =0;
 
         /// Count the size of the AST.
         /** @returns Number of nodes in this tree,
-         * including this node and all its descendants. */
+            including this node and all its descendants. */
         virtual int get_num_nodes() const =0;
     };
 
     /// Equation node.
     /** Indicates grid point on LHS is equivalent to expression
-     * on RHS. This is NOT a test for equality. */
+        on RHS. This is NOT a test for equality. */
     class yc_equation_node : public virtual yc_expr_node {
     public:
 
@@ -387,14 +388,14 @@ namespace yask {
     
     /// A constant numerical value.
     /** All values are stored as doubles.
-     * This is a leaf node in an AST.
-     * Use a yask_compiler_factory object to create an object of this type. */
+        This is a leaf node in an AST.
+        Use a yask_compiler_factory object to create an object of this type. */
     class yc_const_number_node : public virtual yc_number_node {
     public:
 
         /// Set the value.
         /** The value is considered "constant" only when the 
-         * compiler output is created. It can be changed in the AST. */
+            compiler output is created. It can be changed in the AST. */
         virtual void set_value(double val /**< [in] Value to store in node. */ ) =0;
 
         /// Get the stored value.
@@ -404,29 +405,29 @@ namespace yask {
 
     /// A numerical negation operator.
     /** Example: used to implement -(a*b).
-     * Use a yask_compiler_factory object to create an object of this type. */
+        Use a yask_compiler_factory object to create an object of this type. */
     class yc_negate_node : public virtual yc_number_node {
     public:
 
         /// Get the [only] operand.
         /**  This node implements unary negation only, not subtraction, so there is
-         * never a left-hand-side.
-         * @returns Expression node on right-hand-side of '-' sign. */
+            never a left-hand-side.
+            @returns Expression node on right-hand-side of '-' sign. */
         virtual yc_number_node_ptr get_rhs() =0;
     };
 
     /// Base class for commutative numerical operators.
     /** This is used for operators whose arguments can be rearranged
-     * mathematically, e.g., add and multiply. */
+        mathematically, e.g., add and multiply. */
     class yc_commutative_number_node : public virtual yc_number_node {
     public:
 
         /// Get the number of operands.
         /** If there is just one operand, the operation itself is moot.  If
-         * there are more than one operand, the operation applies between
-         * them. Example: for an add operator, if the operands are 'a',
-         * 'b', and 'c', then the expression is 'a + b + c'.
-         * @returns Number of operands. */
+            there are more than one operand, the operation applies between
+            them. Example: for an add operator, if the operands are 'a',
+            'b', and 'c', then the expression is 'a + b + c'.
+            @returns Number of operands. */
         virtual int get_num_operands() =0;
 
         /// Get the specified operand.

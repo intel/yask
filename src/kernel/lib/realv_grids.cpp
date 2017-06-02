@@ -78,6 +78,33 @@ namespace yask {
             exit_yask(1);
         }
     }
+
+
+    // Checked resize: fails if mem different and already alloc'd.
+    void RealVecGridBase::resize() {
+
+        // Just resize if not alloc'd.
+        auto p = get_storage();
+        if (!p)
+            resize_g();
+            
+        else {
+            // Original size.
+            size_t nb1 = get_num_bytes();
+        
+            // Resize the underlying grid.
+            resize_g();
+
+            // Changed?
+            size_t nb2 = get_num_bytes();
+            if (nb1 != nb2) {
+                cerr << "Error: attempt to change required grid size from " <<
+                    printWithPow2Multiplier(nb1) << "B to " <<
+                    printWithPow2Multiplier(nb2) << "B after storage has been allocated.\n";
+                exit_yask(1);
+            }
+        }
+    }
     
     // Initialize memory to incrementing values based on val.
     void RealVecGridBase::set_diff(real_t val) {

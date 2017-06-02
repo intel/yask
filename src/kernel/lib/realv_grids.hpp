@@ -98,13 +98,13 @@ namespace yask {
             //  1 => 1.
             //  2 => 0.
 
-            // Avoid discontinuity caused by negative time by adding a large
-            // offset to the t index.  So, t can be negative, but not so
-            // much that it would still be negative after adding the offset.
-            // This should not be a practical restriction.
+            // Avoid discontinuity caused by dividing negative numbers by
+            // adding a large offset to the t index.  So, t can be negative,
+            // but not so much that it would still be negative after adding
+            // the offset.  This should not be a practical restriction.
+            assert(t % CPTS_T == 0);
             t += 0x1000 * idx_t(CPTS_T);
             assert(t >= 0);
-            assert(t % CPTS_T == 0);
             idx_t t_idx = t / idx_t(CPTS_T);
             return t_idx % _tdim;
         }
@@ -132,6 +132,9 @@ namespace yask {
         ALWAYS_INLINE idx_t get_index_z(idx_t vec_index) const {
             return get_index(vec_index, _pzv, _ozv);
         }
+
+        // Resize only if not allocated.
+        virtual void resize();
 
         // Resize the underlying grid based on the current settings.
         virtual void resize_g() =0;
@@ -207,21 +210,21 @@ namespace yask {
         // Set temporal storage allocation.
         inline void set_alloc_t(idx_t tdim) {
             assert(tdim >= 1);
-            _tdim = tdim; resize_g(); }
+            _tdim = tdim; resize(); }
 
         // Set domain-size for this rank and round-up.
         inline void set_dw(idx_t dw) {
             assert(dw >= 1);
-            _dw = ROUND_UP(dw, VLEN_W); _dwv = _dw / VLEN_W; resize_g(); }
+            _dw = ROUND_UP(dw, VLEN_W); _dwv = _dw / VLEN_W; resize(); }
         inline void set_dx(idx_t dx) {
             assert(dx >= 1);
-            _dx = ROUND_UP(dx, VLEN_X); _dxv = _dx / VLEN_X; resize_g(); }
+            _dx = ROUND_UP(dx, VLEN_X); _dxv = _dx / VLEN_X; resize(); }
         inline void set_dy(idx_t dy) {
             assert(yw >= 1);
-            _dy = ROUND_UP(dy, VLEN_Y); _dyv = _dy / VLEN_Y; resize_g(); }
+            _dy = ROUND_UP(dy, VLEN_Y); _dyv = _dy / VLEN_Y; resize(); }
         inline void set_dz(idx_t dz) {
             assert(dz >= 1);
-            _dz = ROUND_UP(dz, VLEN_Z); _dzv = _dz / VLEN_Z; resize_g(); }
+            _dz = ROUND_UP(dz, VLEN_Z); _dzv = _dz / VLEN_Z; resize(); }
 
         // Set halo sizes.
         // Automatically increase padding if less than halo.
@@ -234,13 +237,13 @@ namespace yask {
         // Set padding and round-up.
         // Padding will be increased to size of halo if needed.
         inline void set_pad_w(idx_t pw) {
-            _pw = ROUND_UP(std::max(pw, _hw), VLEN_W); _pwv = _pw / VLEN_W; resize_g(); }
+            _pw = ROUND_UP(std::max(pw, _hw), VLEN_W); _pwv = _pw / VLEN_W; resize(); }
         inline void set_pad_x(idx_t px) {
-            _px = ROUND_UP(std::max(px, _hx), VLEN_X); _pxv = _px / VLEN_X; resize_g(); }
+            _px = ROUND_UP(std::max(px, _hx), VLEN_X); _pxv = _px / VLEN_X; resize(); }
         inline void set_pad_y(idx_t py) {
-            _py = ROUND_UP(std::max(py, _hy), VLEN_Y); _pyv = _py / VLEN_Y; resize_g(); }
+            _py = ROUND_UP(std::max(py, _hy), VLEN_Y); _pyv = _py / VLEN_Y; resize(); }
         inline void set_pad_z(idx_t pz) {
-            _pz = ROUND_UP(std::max(pz, _hz), VLEN_Z); _pzv = _pz / VLEN_Z; resize_g(); }
+            _pz = ROUND_UP(std::max(pz, _hz), VLEN_Z); _pzv = _pz / VLEN_Z; resize(); }
 
         // Set padding in addition to halo size and round-up.
         inline void set_extra_pad_w(idx_t epw) { set_pad_w(_hw + epw); }

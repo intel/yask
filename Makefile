@@ -70,9 +70,9 @@
 # - vars starting with 'YC_' apply to the stencil compiler.
 
 # Initial defaults.
-stencil		=	unspecified
+stencil		=	iso3dfd
 arch		=	snb
-mpi		=	0
+mpi		=	1
 real_bytes	=	4
 
 # Defaults based on stencil type (and arch for some stencils).
@@ -199,7 +199,6 @@ else ifeq ($(arch),skx)
  GCXX_ISA	?=	-march=knl -mno-avx512er -mno-avx512pf
  MACROS		+=	USE_INTRIN512
  YC_TARGET  	?=	avx512
- mpi		=	1
 
 else ifeq ($(arch),hsw)
 
@@ -207,7 +206,6 @@ else ifeq ($(arch),hsw)
  GCXX_ISA	?=	-march=haswell
  MACROS		+=	USE_INTRIN256
  YC_TARGET  	?=	avx2
- mpi		=	1
 
 else ifeq ($(arch),ivb)
 
@@ -215,7 +213,6 @@ else ifeq ($(arch),ivb)
  GCXX_ISA	?=	-march=ivybridge
  MACROS		+=	USE_INTRIN256
  YC_TARGET  	?=	avx
- mpi		=	1
 
 else ifeq ($(arch),snb)
 
@@ -223,7 +220,6 @@ else ifeq ($(arch),snb)
  GCXX_ISA	?=	-march=sandybridge
  MACROS		+= 	USE_INTRIN256
  YC_TARGET  	?=	avx
- mpi		=	1
 
 else ifeq ($(arch),intel64)
 
