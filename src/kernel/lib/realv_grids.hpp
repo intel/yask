@@ -375,9 +375,6 @@ namespace yask {
             assert(n < get_num_dims());
             return _gp->get_dim_name(n);
         }
-        virtual idx_t get_first_domain_index(const std::string& dim) const;
-        virtual idx_t get_last_domain_index(const std::string& dim) const;
-        virtual idx_t get_domain_size(const std::string& dim) const;
         virtual idx_t get_halo_size(const std::string& dim) const;
         virtual idx_t get_extra_pad_size(const std::string& dim) const;
         virtual idx_t get_total_pad_size(const std::string& dim) const;

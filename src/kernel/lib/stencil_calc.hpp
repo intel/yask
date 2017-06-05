@@ -164,7 +164,7 @@ namespace yask {
 
         // APIs.
         // See yask_kernel_api.hpp.
-        virtual void set_domain_size(const std::string& dim,
+        virtual void set_rank_domain_size(const std::string& dim,
                                      idx_t size);
         virtual void set_default_extra_pad_size(const std::string& dim,
                                                 idx_t size);
@@ -172,6 +172,10 @@ namespace yask {
                                     idx_t size);
         virtual void set_num_ranks(const std::string& dim,
                                    idx_t size);
+        virtual idx_t get_rank_domain_size(const std::string& dim) const;
+        virtual idx_t get_default_extra_pad_size(const std::string& dim) const;
+        virtual idx_t get_block_size(const std::string& dim) const;
+        virtual idx_t get_num_ranks(const std::string& dim) const;
     };
     typedef std::shared_ptr<KernelSettings> KernelSettingsPtr;
     
@@ -354,6 +358,7 @@ namespace yask {
         virtual void allocData();
 
         // Allocate grids, params, MPI bufs, etc.
+        // Calculate rank position in problem.
         // Initialize some other data structures.
         // Print lots of stats.
         virtual void prepare_solution();
@@ -496,6 +501,10 @@ namespace yask {
             return USING_DIM_W ? 4 : 3;
         }
         virtual std::string get_domain_dim_name(int n) const;
+
+        virtual idx_t get_first_rank_domain_index(const std::string& dim) const;
+        virtual idx_t get_last_rank_domain_index(const std::string& dim) const;
+        virtual idx_t get_overall_domain_size(const std::string& dim) const;
 
         virtual void apply_solution(idx_t first_step_index,
                                     idx_t last_step_index);

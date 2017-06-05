@@ -120,38 +120,49 @@ namespace yask {
     public:
         virtual ~yk_settings() {}
 
-        /// Set the size of the solution domain.
+        /// Set the size of the solution domain for this rank.
         /** The domain defines the points that will be evaluated with the stencil(s). 
             If MPI is not enabled, this is the entire problem domain.
             If MPI is enabled, this is the domain for the current rank only,
-            and the problem domain consist of the sum of all rank domains
-            in each dimension.
+            and the problem domain consists of the sum of all rank domains
+            in each dimension (weak-scaling).
             The domain size affects the size of the grids, but it is not
-            equivalent.  Specifically, it does *not* include the halo region
-            or any additional padding.  The actual number of points evaluated
-            may be less than the domain if a given stencil equation has a
-            non-default condition.  Also, the actual number of points in the
-            domain of a given grid may be greater than this specified size
-            due to rounding up to fold-cluster sizes. 
-            Call yk_grid::get_domain_size() to determine the actual size.
+            equivalent.  
+            Specifically, it does *not* include the halo region
+            or any additional padding.  
+            The actual number of points in the
+            domain may be greater than this specified size
+            due to rounding up to fold-cluster sizes.
+            Call get_rank_domain_size() to get the actual value.
             See the "Detailed Description" for \ref yk_grid for more information on grid sizes.
             There is no domain-size setting allowed in the
             solution-step dimension (usually "t"). */
         virtual void
-        set_domain_size(const std::string& dim
-                        /**< [in] Name of dimension to set.  Must be one of
-                           the names from
-                           yk_solution::get_domain_dim_name(). */,
-                        idx_t size /**< [in] Points in the domain in this `dim`. */ ) =0;
+        set_rank_domain_size(const std::string& dim
+                             /**< [in] Name of dimension to set.  Must be one of
+                                the names from
+                                yk_solution::get_domain_dim_name(). */,
+                             idx_t size /**< [in] Points in the domain in this `dim`. */ ) =0;
 
-        /// Set the amount of additional grid padding.
+        /// Get the domain size for this rank.
+        /** Returned value may be slightly larger than the value provided
+            via set_rank_domain_size() due to rounding.
+            Returns the domain on this rank only if MPI is enabled.
+            @returns Number of points in domain in given dimension.
+        */
+        virtual idx_t
+        get_rank_domain_size(const std::string& dim
+                             /**< [in] Name of dimension to get.  Must be one of
+                                the names from
+                                yk_solution::get_domain_dim_name(). */) const =0;
+
+        /// Set the default amount of additional grid padding.
         /** This sets the default minimum number of points in each grid that is
             allocated outside of the grid domain + halos in the given dimension.  The
             specified number of points is added to both sides, i.e., both "before" and
             "after" the domain and halo.
-            The actual pad may be greater than
-            the specified size due to rounding up to fold sizes.  
-            Call yk_grid::get_extra_pad_size() to determine the actual size.
+            Call yk_grid::get_extra_pad_size() or
+            yk_grid::get_total_pad_size() to determine the actual size for a given grid.
             See the "Detailed Description" for \ref yk_grid for more information on grid sizes.
             This function sets the extra-padding size that is added by default to *all* grids;
             you can also set the padding of each grid individually via yk_grid::set_extra_pad_size()
@@ -166,6 +177,15 @@ namespace yask {
                                    idx_t size
                                    /**< [in] Points in this `dim` applied
                                       to both sides of the domain. */ ) =0;
+
+        /// Get the default amount of additional grid padding.
+        /** @returns Number of points in default padding in given dimension.
+         */
+        virtual idx_t
+        get_default_extra_pad_size(const std::string& dim
+                                   /**< [in] Name of dimension to get.  Must be one of
+                                      the names from
+                                      yk_solution::get_domain_dim_name(). */) const =0;
 
         /// Set the block size in the given dimension.
         /** This sets the approximate number of points that are evaluated in
@@ -186,15 +206,27 @@ namespace yask {
                           yk_solution::get_domain_dim_name(). */,
                        idx_t size /**< [in] Points in a block in this `dim`. */ ) =0;
 
+        /// Get the block size.
+        /** Returned value may be slightly larger than the value provided
+            via set_block_size() due to rounding.
+            @returns Number of points in each block in given dimension.
+        */
+        virtual idx_t
+        get_block_size(const std::string& dim
+                        /**< [in] Name of dimension to get.  Must be one of
+                           the names from
+                           yk_solution::get_domain_dim_name(). */) const =0;
+
         /// Set the number of MPI ranks in the given dimension.
         /**
-            The product of the number of ranks across all dimensions must
-            equal the total number of ranks available when yk_factory::new_env() 
-            was called.
-            The curent MPI rank will be assigned a unique location 
-            within the overall problem domain based on its MPI rank index.
-            The same number of MPI ranks must be set via this API on each
-            MPI rank to ensure a consistent overall configuration.
+           The *product* of the number of ranks across all dimensions must
+           equal yk_env::get_num_ranks().
+           The curent MPI rank will be assigned a unique location 
+           within the overall problem domain based on its MPI rank index.
+           The same number of MPI ranks must be set via this API on each
+           constituent MPI rank to ensure a consistent overall configuration.
+           There is no rank setting allowed in the
+           solution-step dimension (usually "t").
          */
         virtual void
         set_num_ranks(const std::string& dim
@@ -202,6 +234,17 @@ namespace yask {
                          the names from
                          yk_solution::get_domain_dim_name(). */,
                       idx_t num /**< [in] Number of ranks in `dim`. */ ) =0;
+
+        /// Get the number of MPI ranks in the given dimension.
+        /**
+           @returns Number of ranks in given dimension.
+         */
+        virtual idx_t
+        get_num_ranks(const std::string& dim
+                      /**< [in] Name of dimension to get.  Must be one of
+                         the names from
+                         yk_solution::get_domain_dim_name(). */) const =0;
+
     };
     
     /// Stencil solution as defined by the generated code from the YASK stencil compiler.
@@ -247,26 +290,77 @@ namespace yask {
                               and get_num_grids()-1. */ ) =0;
 
         /// Prepare the solution for stencil application.
-        /** Allocates data in grids that do not already have storage allocated.
+        /** 
+            Allocates data in grids that do not already have storage allocated.
+            Calculates the position of each rank in the overall problem domain.
             Sets many other data structures needed for proper stencil application.
-            Must be called before querying grids for their final sizes or domain positions.
+            Since this function initiates MPI communication, it must be called
+            on all MPI ranks, and it will block until all ranks have completed.
             Must be called before applying any stencils.
          */
         virtual void
         prepare_solution() =0;
 
+        /// Get the overall problem size in the specified dimension.
+        /** 
+            This function should be called only *after* calling prepare_solution()
+            because prepare_solution() assigns this rank's position in the problem domain.
+            @returns Sum of the ranks' domain sizes in the given dimension.
+        */
+        virtual idx_t
+        get_overall_domain_size(const std::string& dim
+                                /**< [in] Name of dimension from get_domain_dim_name().
+                                   Cannot be the step dimension. */ ) const =0;
+
+        /// Get the first logical index of the domain in this rank in the specified dimension.
+        /** This returns the first index at the beginning of the domain.
+            Points within the domain in this rank lie between the values returned by
+            get_first_rank_domain_index() and get_last_rank_domain_index(), inclusive.
+            If there is only one MPI rank, this is typically zero (0).
+            If there is more than one MPI rank, the value depends
+            on the the rank's position within the overall problem domain.
+            This function should be called only *after* calling prepare_solution()
+            because prepare_solution() assigns this rank's position in the problem domain.
+            @returns First logical domain index in this rank. */
+        virtual idx_t
+        get_first_rank_domain_index(const std::string& dim
+                                    /**< [in] Name of dimension from get_domain_dim_name().
+                                       Cannot be the step dimension. */ ) const =0;
+
+        /// Get the last logical index of the domain in this rank the specified dimension.
+        /** This returns the last index within the domain in this rank
+            (*not* one past the end).
+            If there is only one MPI rank, this is typically one less than the value
+            provided by yk_settings::set_rank_domain_size().
+            If there is more than one MPI rank, the value depends
+            on the the rank's position within the overall problem domain.
+            See get_first_rank_domain_index() for more information.
+            This function should be called only *after* calling prepare_solution()
+            because prepare_solution() assigns this rank's position in the problem domain.
+            @returns Last logical index in this rank. */
+        virtual idx_t
+        get_last_rank_domain_index(const std::string& dim
+                                   /**< [in] Name of dimension from get_domain_dim_name().
+                                      Cannot be the step dimension. */ ) const =0;
+
         /// Apply the stencil solution for one step.
         /** The stencil(s) in the solution are applied
-            across the entire domain as specified in yk_settings::set_domain_size().
+            at the given step index
+            across the entire domain as returned by yk_solution::get_overall_domain_size().
             MPI halo exchanges will occur as necessary.
+            Since this function initiates MPI communication, it must be called
+            on all MPI ranks, and it will block until all ranks have completed.
          */
         virtual void
         apply_solution(idx_t step_index /**< [in] Index in the step dimension */ ) =0;
 
         /// Apply the stencil solution for the specified number of steps.
         /** The stencil(s) in the solution are applied from
-            the first to last step index, inclusive.
+            the first to last step index, inclusive,
+            across the entire domain as returned by yk_solution::get_overall_domain_size().
             MPI halo exchanges will occur as necessary.
+            Since this function initiates MPI communication, it must be called
+            on all MPI ranks, and it will block until all ranks have completed.
          */
         virtual void
         apply_solution(idx_t first_step_index /**< [in] First index in the step dimension */,
@@ -303,9 +397,9 @@ namespace yask {
         For example, if the step dimension is "t", and the t-dimension allocation size is 3,
         then t=-2, t=0, t=3, t=6, ..., t=303, etc. would all alias to the same spatial values in memory.
         
-        Domain sizes specified via yk_settings::set_domain_size() apply to each process or *rank*.
+        Domain sizes specified via yk_settings::set_rank_domain_size() apply to each process or *rank*.
         If MPI is not enabled, a rank's domain is the entire problem size.
-        If MPI is enabled, the domains of the ranks are logically adjoined to create the 
+        If MPI is enabled, the domains of the ranks are logically abutted to create the 
         overall problem domain in each dimension:
         <table>
         <tr><td>extra pad of rank A <td>halo of rank A <td>domain of rank A <td>domain of rank B
@@ -315,7 +409,8 @@ namespace yask {
           <td colspan="2"><center>total pad of rank Z</center>
         </table>
         The beginning and ending overall-problem index that lies within a rank can be
-        retrieved via get_first_domain_index() and get_last_domain_index(), respectively.
+        retrieved via yk_solution::get_first_rank_domain_index() and 
+        yk_solution::get_last_rank_domain_index(), respectively.
      
         The intermediate halos and pads also exist, but are not shown in the above diagram.
         They overlap the domains of adjacent ranks.
@@ -347,52 +442,6 @@ namespace yask {
         get_dim_name(int n /**< [in] Index of dimension between zero (0)
                               and get_num_dims()-1. */ ) const =0;
 
-        /// Get the first logical index of the domain in the specified dimension.
-        /** This returns the first index at the beginning of the domain.
-            Points within the domain lie between the values returned by
-            get_first_domain_index() and get_last_domain_index(), inclusive.
-            This value does *not* include
-            indices within the pad area, including the halo region.
-            Call get_halo_size() to find the number of points that may be
-            indexed before the first domain index.
-            If there is only one MPI, this is typically zero (0).
-            However, if there is more than one MPI rank, the value depends
-            on the the rank's position within the overall problem domain.
-            @returns First logical domain index. */
-        virtual idx_t
-        get_first_domain_index(const std::string& dim
-                               /**< [in] Name of dimension from get_dim_name().
-                                  Cannot be the step dimension. */ ) const =0;
-
-        /// Get the last logical index of the domain in the specified dimension.
-        /** This returns the last index at the end of the domain
-            (*not* one past the end).
-            Points within the domain lie between the values returned by
-            get_first_domain_index() and get_last_domain_index(), inclusive.
-            This value does *not* include
-            indices within the pad area, including the halo region.
-            Call get_halo_size() to find the number of points that may be
-            indexed after the last domain index.
-            If there is only one MPI, this is typically one less than the value
-            provided by yk_settings::set_domain_size().
-            However, if there is more than one MPI rank, the value depends
-            on the the rank's position within the overall problem domain.
-            @returns Last logical index. */
-        virtual idx_t
-        get_last_domain_index(const std::string& dim
-                               /**< [in] Name of dimension from get_dim_name().
-                                  Cannot be the step dimension. */ ) const =0;
-
-        /// Get the domain size in the specified dimension.
-        /** Value does *not* include padding or halo.  Value may be slightly
-            different than that provided via yk_settings::set_domain_size()
-            as described in that function's documentation.  
-            @returns Points in domain in given dimension. */
-        virtual idx_t
-        get_domain_size(const std::string& dim
-                        /**< [in] Name of dimension from get_dim_name().
-                           Cannot be the step dimension. */ ) const =0;
-
         /// Get the halo size in the specified dimension.
         /** This value is typically set by the stencil compiler.
             @returns Points in halo in given dimension. */
@@ -403,9 +452,6 @@ namespace yask {
 
         /// Get the extra padding in the specified dimension.
         /** The *extra* pad size is the total pad size minus the halo size.
-            The value may be slightly
-            different than that provided via yk_settings::set_default_extra_pad_size()
-            or set_extra_pad_size() as described in those functions' documentation.
             @returns Points in extra padding in given dimension. */
         virtual idx_t
         get_extra_pad_size(const std::string& dim
@@ -425,7 +471,7 @@ namespace yask {
         /// Get the storage allocation in the specified dimension.
         /** For the step dimension, this is the specified allocation and
             does not typically depend on the number of steps evaluated.
-            For the non-step dimensions, this is get_domain_size() + 
+            For the non-step dimensions, this is yk_settings::get_rank_domain_size() + 
             (2 * (get_halo_size() + get_extra_pad_size())).
             See the "Detailed Description" for \ref yk_grid for information on grid sizes.
             @returns allocation in number of points (not bytes). */
@@ -448,7 +494,7 @@ namespace yask {
 
         /// Set the total padding in the specified dimension.
         /** This overrides yk_settings::set_default_extra_pad_size()
-            and any earlier call to set_extra_pad_size().
+            and any earlier call to set_total_pad_size() or set_extra_pad_size().
             The total pad size cannot be set to a value smaller than the halo size.
             It will be automatically increased as needed.
             The pad size cannot be changed after data storage
@@ -464,9 +510,9 @@ namespace yask {
         
         /// Set the extra padding in the specified dimension.
         /** This overrides yk_settings::set_default_extra_pad_size()
-            and any earlier call to set_total_pad_size().
-            Calling `set_extra_pad_size(dim, eps)` is a shortcut for
-            set_total_pad_size(dim, eps + get_halo_size(dim))`.
+            and any earlier call to set_total_pad_size() or set_extra_pad_size().
+            Calling `set_extra_pad_size(dim, n)` is a shortcut for
+            `set_total_pad_size(dim, n + get_halo_size(dim))`.
             The pad size cannot be changed after data storage
             has been allocated for this grid.
             See the "Detailed Description" for \ref yk_grid for information on grid sizes. */
@@ -495,7 +541,8 @@ namespace yask {
             Indices beyond that will be ignored.
             Indices are relative to the overall problem domain.
             You can only get elements that are located in the grid in the current rank.
-            See get_first_domain_index(), get_last_domain_index(), and the 
+            See yk_solution::get_first_domain_index(), 
+            yk_solution::get_last_domain_index(), and the 
             "Detailed Description" for \ref yk_grid for more information on grid sizes.
             @note The return value is a double-precision floating-point value, but
             it may be converted from a single-precision if the solution was configured with 4-byte
@@ -514,7 +561,8 @@ namespace yask {
             Indices beyond that will be ignored.
             Indices are relative to the overall problem domain.
             You can only set elements that are located in the grid in the current rank.
-            See get_first_domain_index(), get_last_domain_index(), and the 
+            See yk_solution::get_first_domain_index(), 
+            yk_solution::get_last_domain_index(), and the 
             "Detailed Description" for \ref yk_grid for more information on grid sizes.
             @note The parameter value is a double-precision floating-point value, but
             it may be converted to single-precision if the solution was configured with 4-byte

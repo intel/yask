@@ -49,23 +49,41 @@ namespace yask {
 
         return sp;
     }
-#define SET_SETTING_API(api_name, var_prefix, t_ok, t_stmt)             \
+#define SET_SETTING_API(api_name, var_prefix, do_round_up, t_ok, t_stmt) \
     void KernelSettings::api_name(const string& dim, idx_t n) {         \
         assert(n >= 0);                                                 \
         if (t_ok && dim == "t") t_stmt;                                 \
-        else if (dim == "w") var_prefix ## w = n;                       \
-        else if (dim == "x") var_prefix ## x = n;                       \
-        else if (dim == "y") var_prefix ## y = n;                       \
-        else if (dim == "z") var_prefix ## z = n;                       \
+        else if (dim == "w") var_prefix ## w = do_round_up ? ROUND_UP(n, CPTS_W) : n; \
+        else if (dim == "x") var_prefix ## x = do_round_up ? ROUND_UP(n, CPTS_X) : n; \
+        else if (dim == "y") var_prefix ## y = do_round_up ? ROUND_UP(n, CPTS_Y) : n; \
+        else if (dim == "z") var_prefix ## z = do_round_up ? ROUND_UP(n, CPTS_Z) : n; \
         else {                                                          \
             cerr << "Error: " #api_name "(): bad dimension '" << dim << "'\n"; \
             exit_yask(1);                                               \
         }                                                               \
     }
-    SET_SETTING_API(set_domain_size, d, false, (void)0)
-    SET_SETTING_API(set_default_extra_pad_size, ep, false, (void)0)
-    SET_SETTING_API(set_block_size, b, false, (void)0)
-    SET_SETTING_API(set_num_ranks, nr, false, (void)0)
+    SET_SETTING_API(set_rank_domain_size, d, true, false, (void)0)
+    SET_SETTING_API(set_default_extra_pad_size, ep, false, false, (void)0)
+    SET_SETTING_API(set_block_size, b, true, false, (void)0)
+    SET_SETTING_API(set_num_ranks, nr, false, false, (void)0)
+
+#define GET_SETTING_API(api_name, var_prefix, t_ok, t_var)              \
+    idx_t KernelSettings::api_name(const string& dim) const {           \
+    if (t_ok && dim == "t") return t_var;                               \
+    else if (dim == "w") return var_prefix ## w;                        \
+    else if (dim == "x") return var_prefix ## x;                        \
+    else if (dim == "y") return var_prefix ## y;                        \
+    else if (dim == "z") return var_prefix ## z;                        \
+        else {                                                          \
+            cerr << "Error: " #api_name "(): bad dimension '" << dim << "'\n"; \
+            exit_yask(1);                                               \
+            return 0;                                                   \
+        }                                                               \
+    }
+    GET_SETTING_API(get_rank_domain_size, d, false, 0)
+    GET_SETTING_API(get_default_extra_pad_size, ep, false, 0)
+    GET_SETTING_API(get_block_size, b, false, 0)
+    GET_SETTING_API(get_num_ranks, nr, false, 0)
     
     yk_solution_ptr yk_factory::new_solution(yk_env_ptr env,
                                              yk_settings_ptr opts) const {
@@ -96,6 +114,23 @@ namespace yask {
             return 0;
         }
     }
+
+#define GET_SOLUTION_API(api_name, var_prefix, adj, t_ok, t_val)        \
+    idx_t StencilContext::api_name(const string& dim) const {           \
+        if (t_ok && dim == "t") return t_val;                           \
+        else if (dim == "w") return var_prefix ## w + adj;              \
+        else if (dim == "x") return var_prefix ## x + adj;              \
+        else if (dim == "y") return var_prefix ## y + adj;              \
+        else if (dim == "z") return var_prefix ## z + adj;              \
+        else {                                                          \
+            cerr << "Error: " #api_name "(): bad dimension '" << dim << "'\n"; \
+            exit_yask(1);                                               \
+            return 0;                                                   \
+        }                                                               \
+    }
+    GET_SOLUTION_API(get_first_rank_domain_index, begin_bb, 0, false, 0)
+    GET_SOLUTION_API(get_last_rank_domain_index, end_bb, -1, false, 0)
+    GET_SOLUTION_API(get_overall_domain_size, tot_, 0, false, 0)
     
     ///// StencilContext functions:
 

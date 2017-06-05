@@ -45,9 +45,6 @@ namespace yask {
             return 0;                                                   \
         }                                                               \
     }
-    GET_GRID_API(get_first_domain_index, get_first_, false, 0)
-    GET_GRID_API(get_last_domain_index, get_last_, false, 0)
-    GET_GRID_API(get_domain_size, get_d, false, 0)
     GET_GRID_API(get_halo_size, get_halo_, false, 0)
     GET_GRID_API(get_extra_pad_size, get_extra_pad_, false, 0)
     GET_GRID_API(get_total_pad_size, get_pad_, false, 0)

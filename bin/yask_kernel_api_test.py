@@ -44,7 +44,7 @@ for di in range(soln.get_num_domain_dims()) :
     dim_name = soln.get_domain_dim_name(di)
 
     # Set min. domain size in each dim.
-    settings.set_domain_size(dim_name, 150)
+    settings.set_rank_domain_size(dim_name, 150)
 
     # Set block size to 64 in z dim and 32 in other dims.
     if dim_name == "z" :
