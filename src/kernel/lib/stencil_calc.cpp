@@ -40,32 +40,31 @@ namespace yask {
         auto sp = make_shared<KernelSettings>();
         assert(sp);
 
-        // Set time-domain size to some large number.
-        // It's not actually used in the API, but it needs to be set to avoid
-        // breaking temporal blocking.
-        // TODO: clean up this whole concept, or at least what's printed out
-        // when using the API.
-        sp->dt = 1000;
+        // Set time-domain size because it's not really used in the API.
+        sp->dt = 1;
 
         return sp;
     }
-#define SET_SETTING_API(api_name, var_prefix, do_round_up, t_ok, t_stmt) \
+#define SET_SETTING_API(api_name, var_prefix, t_ok, t_stmt) \
     void KernelSettings::api_name(const string& dim, idx_t n) {         \
         assert(n >= 0);                                                 \
         if (t_ok && dim == "t") t_stmt;                                 \
-        else if (dim == "w") var_prefix ## w = do_round_up ? ROUND_UP(n, CPTS_W) : n; \
-        else if (dim == "x") var_prefix ## x = do_round_up ? ROUND_UP(n, CPTS_X) : n; \
-        else if (dim == "y") var_prefix ## y = do_round_up ? ROUND_UP(n, CPTS_Y) : n; \
-        else if (dim == "z") var_prefix ## z = do_round_up ? ROUND_UP(n, CPTS_Z) : n; \
+        else if (dim == "w") var_prefix ## w = n;                       \
+        else if (dim == "x") var_prefix ## x = n;                       \
+        else if (dim == "y") var_prefix ## y = n;                       \
+        else if (dim == "z") var_prefix ## z = n;                       \
         else {                                                          \
-            cerr << "Error: " #api_name "(): bad dimension '" << dim << "'\n"; \
+            cerr << "Error: " #api_name "(): bad dimension '" <<        \
+                dim << "'\n";                                           \
             exit_yask(1);                                               \
         }                                                               \
+        if (_context) _context->set_grids();                            \
+        else adjustSettings(cout, false);                               \
     }
-    SET_SETTING_API(set_rank_domain_size, d, true, false, (void)0)
-    SET_SETTING_API(set_default_extra_pad_size, ep, false, false, (void)0)
-    SET_SETTING_API(set_block_size, b, true, false, (void)0)
-    SET_SETTING_API(set_num_ranks, nr, false, false, (void)0)
+    SET_SETTING_API(set_rank_domain_size, d, false, (void)0)
+    SET_SETTING_API(set_min_pad_size, mp, false, (void)0)
+    SET_SETTING_API(set_block_size, b, false, (void)0)
+    SET_SETTING_API(set_num_ranks, nr, false, (void)0)
 
 #define GET_SETTING_API(api_name, var_prefix, t_ok, t_var)              \
     idx_t KernelSettings::api_name(const string& dim) const {           \
@@ -75,13 +74,14 @@ namespace yask {
     else if (dim == "y") return var_prefix ## y;                        \
     else if (dim == "z") return var_prefix ## z;                        \
         else {                                                          \
-            cerr << "Error: " #api_name "(): bad dimension '" << dim << "'\n"; \
+            cerr << "Error: " #api_name "(): bad dimension '" <<        \
+                dim << "'\n";                                           \
             exit_yask(1);                                               \
             return 0;                                                   \
         }                                                               \
     }
     GET_SETTING_API(get_rank_domain_size, d, false, 0)
-    GET_SETTING_API(get_default_extra_pad_size, ep, false, 0)
+    GET_SETTING_API(get_min_pad_size, mp, false, 0)
     GET_SETTING_API(get_block_size, b, false, 0)
     GET_SETTING_API(get_num_ranks, nr, false, 0)
     
@@ -165,6 +165,9 @@ namespace yask {
                 dim6 << ") is not currently supported.\n";
             exit_yask(1);
         }
+
+        // Set default sizes from settings and get offset, if set.
+        set_grids();
         return gp;
     }
     
@@ -845,12 +848,7 @@ namespace yask {
             ofs_w << ", " << ofs_x << ", " << ofs_y << ", " << ofs_z << endl;
 
         // Set offsets in grids.
-        for (auto gp : gridPtrs) {
-            gp->set_ofs_w(ofs_w);
-            gp->set_ofs_x(ofs_x);
-            gp->set_ofs_y(ofs_y);
-            gp->set_ofs_z(ofs_z);
-        }
+        set_grids();
     }
 
     // Allocate memory for grids, params, and MPI bufs that do not
@@ -869,6 +867,7 @@ namespace yask {
         
             // Grids.
             for (auto gp : gridPtrs) {
+                if (!gp) continue;
                 if (gp->get_storage()) continue; // already has storage.
 
                 // Set storage if buffer has been allocated.
@@ -887,6 +886,7 @@ namespace yask {
 
             // Params.
             for (auto pp : paramPtrs) {
+                if (!pp) continue;
                 if (pp->get_storage()) continue; // already has storage.
 
                 // Set storage if buffer has been allocated.
@@ -903,6 +903,7 @@ namespace yask {
 
             // MPI buffers.
             for (auto gp : gridPtrs) {
+                if (!gp) continue;
                 auto& gname = gp->get_name();
                 if (mpiBufs.count(gname) == 0)
                     continue;
@@ -953,7 +954,6 @@ namespace yask {
                     cerr << "Error: unable to allocate memory.\n";
                     exit_yask(1);
                 }
-                _data_buf_size = nbytes;
 
                 os << "  " << printWithPow2Multiplier(gbytes) << "B for grid(s).\n" <<
                     "  " << printWithPow2Multiplier(pbytes) << "B for parameters(s).\n" <<
@@ -964,19 +964,34 @@ namespace yask {
         }
     }
 
-    // Set grid sizes based on settings.
-    void StencilContext::set_grid_sizes()
+    // Set grid sizes and offsets.
+    // This should be called anytime a setting or offset is changed.
+    void StencilContext::set_grids()
     {
-        // Set domain and pad sizes.
+        assert(_opts);
+        
+        // Round-up any settings as needed.
+        _opts->adjustSettings(get_ostr(), false);
+        
         for (auto gp : gridPtrs) {
+
+            // Domains.
             gp->set_dw(_opts->dw);
             gp->set_dx(_opts->dx);
             gp->set_dy(_opts->dy);
             gp->set_dz(_opts->dz);
-            gp->set_extra_pad_w(_opts->epw);
-            gp->set_extra_pad_x(_opts->epx);
-            gp->set_extra_pad_y(_opts->epy);
-            gp->set_extra_pad_z(_opts->epz);
+
+            // Pads.
+            gp->set_min_pad_w(_opts->mpw);
+            gp->set_min_pad_x(_opts->mpx);
+            gp->set_min_pad_y(_opts->mpy);
+            gp->set_min_pad_z(_opts->mpz);
+
+            // Offsets.
+            gp->set_ofs_w(ofs_w);
+            gp->set_ofs_x(ofs_x);
+            gp->set_ofs_y(ofs_y);
+            gp->set_ofs_z(ofs_z);
         }
     }
     
@@ -1006,10 +1021,10 @@ namespace yask {
         
         // Adjust all settings before setting MPI buffers or sizing grids.
         // Prints out final settings.
-        _opts->finalizeSettings(os);
+        _opts->adjustSettings(os, true);
 
         // Size grids based on finalized settings.
-        set_grid_sizes();
+        set_grids();
         
         // Report ranks.
         os << endl;
@@ -1073,11 +1088,11 @@ namespace yask {
             " num-ranks: " <<
             _opts->nrw << '*' << _opts->nrx << '*' << _opts->nry << '*' << _opts->nrz << endl <<
             " vector-len: " << VLEN << endl <<
-            " extra-padding: " <<
-            _opts->epw << '+' << _opts->epx << '+' << _opts->epy << '+' << _opts->epz << endl <<
+            " minimum-padding: " <<
+            _opts->mpw << ", " << _opts->mpx << ", " << _opts->mpy << ", " << _opts->mpz << endl <<
             " max-wave-front-angles: " <<
-            angle_w << '+' << angle_x << '+' << angle_y << '+' << angle_z << endl <<
-            " max-halos: " << hw << '+' << hx << '+' << hy << '+' << hz << endl <<
+            angle_w << ", " << angle_x << ", " << angle_y << ", " << angle_z << endl <<
+            " max-halos: " << hw << ", " << hx << ", " << hy << ", " << hz << endl <<
             " manual-L1-prefetch-distance: " << PFDL1 << endl <<
             " manual-L2-prefetch-distance: " << PFDL2 << endl <<
             endl;
@@ -1748,7 +1763,7 @@ namespace yask {
         ADD_DIM_OPTION("bg", "Block-group size", bg);
         ADD_DIM_OPTION("sb", "Sub-block size", sb);
         ADD_DIM_OPTION("sbg", "Sub-block-group size", sbg);
-        ADD_DIM_OPTION("ep", "Extra memory-padding size", ep);
+        ADD_DIM_OPTION("mp", "Minimum grid-padding size", mp);
 #ifdef USE_MPI
         ADD_DIM_OPTION("nr", "Num ranks", nr);
         ADD_DIM_OPTION("ri", "This rank's logical index", ri);
@@ -1877,47 +1892,53 @@ namespace yask {
     // Make sure all user-provided settings are valid and finish setting up some
     // other vars before allocating memory.
     // Called from prepare_solution(), so it doesn't normally need to be called from user code.
-    void KernelSettings::finalizeSettings(std::ostream& os)
-    {
+    void KernelSettings::adjustSettings(std::ostream& os, bool finalize) {
+        
         // Set max number of threads.
-        if (max_threads <= 0)
+        if (finalize && max_threads <= 0)
             max_threads = omp_get_max_threads();
         
         // Round up domain size as needed.
-        dt = roundUp(os, dt, CPTS_T, "rank domain size in t (time steps)");
-        dw = roundUp(os, dw, CPTS_W, "rank domain size in w");
-        dx = roundUp(os, dx, CPTS_X, "rank domain size in x");
-        dy = roundUp(os, dy, CPTS_Y, "rank domain size in y");
-        dz = roundUp(os, dz, CPTS_Z, "rank domain size in z");
+        dt = roundUp(os, dt, CPTS_T, "rank domain size in t (time steps)", finalize);
+        dw = roundUp(os, dw, CPTS_W, "rank domain size in w", finalize);
+        dx = roundUp(os, dx, CPTS_X, "rank domain size in x", finalize);
+        dy = roundUp(os, dy, CPTS_Y, "rank domain size in y", finalize);
+        dz = roundUp(os, dz, CPTS_Z, "rank domain size in z", finalize);
 
         // Determine num regions.
         // Also fix up region sizes as needed.
         // Default region size (if 0) will be size of rank-domain.
-        os << "\nRegions:" << endl;
-        idx_t nrt = findNumRegionsInDomain(os, rt, dt, CPTS_T, "t");
-        idx_t nrw = findNumRegionsInDomain(os, rw, dw, CPTS_W, "w");
-        idx_t nrx = findNumRegionsInDomain(os, rx, dx, CPTS_X, "x");
-        idx_t nry = findNumRegionsInDomain(os, ry, dy, CPTS_Y, "y");
-        idx_t nrz = findNumRegionsInDomain(os, rz, dz, CPTS_Z, "z");
+        if (finalize)
+            os << "\nRegions:" << endl;
+        idx_t nrt = findNumRegionsInDomain(os, rt, dt, CPTS_T, "t", finalize);
+        idx_t nrw = findNumRegionsInDomain(os, rw, dw, CPTS_W, "w", finalize);
+        idx_t nrx = findNumRegionsInDomain(os, rx, dx, CPTS_X, "x", finalize);
+        idx_t nry = findNumRegionsInDomain(os, ry, dy, CPTS_Y, "y", finalize);
+        idx_t nrz = findNumRegionsInDomain(os, rz, dz, CPTS_Z, "z", finalize);
         idx_t nr = nrt * nrw * nrx * nry * nrz;
-        os << " num-regions-per-rank-domain: " << nr << endl;
-        os << " Since the temporal region size is " << rt <<
-            ", temporal wave-front tiling is ";
-        if (rt <= 1) os << "NOT ";
-        os << "enabled.\n";
+        if (finalize) {
+            os << " num-regions-per-rank-domain: " << nr << endl;
+            os << " Since the temporal region size is " << rt <<
+                ", temporal wave-front tiling is ";
+            if (rt <= 1) os << "NOT ";
+            os << "enabled.\n";
+        }
 
         // Determine num blocks.
         // Also fix up block sizes as needed.
         // Default block size (if 0) will be size of region.
-        os << "\nBlocks:" << endl;
-        idx_t nbt = findNumBlocksInRegion(os, bt, rt, CPTS_T, "t");
-        idx_t nbw = findNumBlocksInRegion(os, bw, rw, CPTS_W, "w");
-        idx_t nbx = findNumBlocksInRegion(os, bx, rx, CPTS_X, "x");
-        idx_t nby = findNumBlocksInRegion(os, by, ry, CPTS_Y, "y");
-        idx_t nbz = findNumBlocksInRegion(os, bz, rz, CPTS_Z, "z");
+        if (finalize)
+            os << "\nBlocks:" << endl;
+        idx_t nbt = findNumBlocksInRegion(os, bt, rt, CPTS_T, "t", finalize);
+        idx_t nbw = findNumBlocksInRegion(os, bw, rw, CPTS_W, "w", finalize);
+        idx_t nbx = findNumBlocksInRegion(os, bx, rx, CPTS_X, "x", finalize);
+        idx_t nby = findNumBlocksInRegion(os, by, ry, CPTS_Y, "y", finalize);
+        idx_t nbz = findNumBlocksInRegion(os, bz, rz, CPTS_Z, "z", finalize);
         idx_t nb = nbt * nbw * nbx * nby * nbz;
-        os << " num-blocks-per-region: " << nb << endl;
-        os << " num-blocks-per-rank-domain: " << (nb * nr) << endl;
+        if (finalize) {
+            os << " num-blocks-per-region: " << nb << endl;
+            os << " num-blocks-per-rank-domain: " << (nb * nr) << endl;
+        }
 
         // Adjust defaults for sub-blocks to be y-z slab.
         // Otherwise, findNumSubBlocksInBlock() would set default
@@ -1929,19 +1950,22 @@ namespace yask {
 
         // Determine num sub-blocks.
         // Also fix up sub-block sizes as needed.
-        os << "\nSub-blocks:" << endl;
-        idx_t nsbt = findNumSubBlocksInBlock(os, sbt, bt, CPTS_T, "t");
-        idx_t nsbw = findNumSubBlocksInBlock(os, sbw, bw, CPTS_W, "w");
-        idx_t nsbx = findNumSubBlocksInBlock(os, sbx, bx, CPTS_X, "x");
-        idx_t nsby = findNumSubBlocksInBlock(os, sby, by, CPTS_Y, "y");
-        idx_t nsbz = findNumSubBlocksInBlock(os, sbz, bz, CPTS_Z, "z");
+        if (finalize)
+            os << "\nSub-blocks:" << endl;
+        idx_t nsbt = findNumSubBlocksInBlock(os, sbt, bt, CPTS_T, "t", finalize);
+        idx_t nsbw = findNumSubBlocksInBlock(os, sbw, bw, CPTS_W, "w", finalize);
+        idx_t nsbx = findNumSubBlocksInBlock(os, sbx, bx, CPTS_X, "x", finalize);
+        idx_t nsby = findNumSubBlocksInBlock(os, sby, by, CPTS_Y, "y", finalize);
+        idx_t nsbz = findNumSubBlocksInBlock(os, sbz, bz, CPTS_Z, "z", finalize);
         idx_t nsb = nsbt * nsbw * nsbx * nsby * nsbz;
-        os << " num-sub-blocks-per-block: " << nsb << endl;
+        if (finalize)
+            os << " num-sub-blocks-per-block: " << nsb << endl;
 
         // Now, we adjust groups. These are done after all the above sizes
         // because group sizes are more like 'guidelines' and don't have
         // their own loops.
-        os << "\nGroups:" << endl;
+        if (finalize)
+            os << "\nGroups:" << endl;
         
         // Adjust defaults for block-groups to be size of block.
         if (!bgw) bgw = bw;
@@ -1952,18 +1976,20 @@ namespace yask {
         // Determine num block-groups.
         // Also fix up block-group sizes as needed.
         // TODO: only print this if block-grouping is enabled.
-        idx_t nbgw = findNumBlockGroupsInRegion(os, bgw, rw, bw, "w");
-        idx_t nbgx = findNumBlockGroupsInRegion(os, bgx, rx, bx, "x");
-        idx_t nbgy = findNumBlockGroupsInRegion(os, bgy, ry, by, "y");
-        idx_t nbgz = findNumBlockGroupsInRegion(os, bgz, rz, bz, "z");
+        idx_t nbgw = findNumBlockGroupsInRegion(os, bgw, rw, bw, "w", finalize);
+        idx_t nbgx = findNumBlockGroupsInRegion(os, bgx, rx, bx, "x", finalize);
+        idx_t nbgy = findNumBlockGroupsInRegion(os, bgy, ry, by, "y", finalize);
+        idx_t nbgz = findNumBlockGroupsInRegion(os, bgz, rz, bz, "z", finalize);
         idx_t nbg = nbt * nbgw * nbgx * nbgy * nbgz;
-        os << " num-block-groups-per-region: " << nbg << endl;
-        nbw = findNumBlocksInBlockGroup(os, bw, bgw, CPTS_W, "w");
-        nbx = findNumBlocksInBlockGroup(os, bx, bgx, CPTS_X, "x");
-        nby = findNumBlocksInBlockGroup(os, by, bgy, CPTS_Y, "y");
-        nbz = findNumBlocksInBlockGroup(os, bz, bgz, CPTS_Z, "z");
+        if (finalize)
+            os << " num-block-groups-per-region: " << nbg << endl;
+        nbw = findNumBlocksInBlockGroup(os, bw, bgw, CPTS_W, "w", finalize);
+        nbx = findNumBlocksInBlockGroup(os, bx, bgx, CPTS_X, "x", finalize);
+        nby = findNumBlocksInBlockGroup(os, by, bgy, CPTS_Y, "y", finalize);
+        nbz = findNumBlocksInBlockGroup(os, bz, bgz, CPTS_Z, "z", finalize);
         nb = nbw * nbx * nby * nbz;
-        os << " num-blocks-per-block-group: " << nb << endl;
+        if (finalize)
+            os << " num-blocks-per-block-group: " << nb << endl;
 
         // Adjust defaults for sub-block-groups to be size of sub-block.
         if (!sbgw) sbgw = sbw;
@@ -1974,18 +2000,19 @@ namespace yask {
         // Determine num sub-block-groups.
         // Also fix up sub-block-group sizes as needed.
         // TODO: only print this if sub-block-grouping is enabled.
-        idx_t nsbgw = findNumSubBlockGroupsInBlock(os, sbgw, bw, sbw, "w");
-        idx_t nsbgx = findNumSubBlockGroupsInBlock(os, sbgx, bx, sbx, "x");
-        idx_t nsbgy = findNumSubBlockGroupsInBlock(os, sbgy, by, sby, "y");
-        idx_t nsbgz = findNumSubBlockGroupsInBlock(os, sbgz, bz, sbz, "z");
+        idx_t nsbgw = findNumSubBlockGroupsInBlock(os, sbgw, bw, sbw, "w", finalize);
+        idx_t nsbgx = findNumSubBlockGroupsInBlock(os, sbgx, bx, sbx, "x", finalize);
+        idx_t nsbgy = findNumSubBlockGroupsInBlock(os, sbgy, by, sby, "y", finalize);
+        idx_t nsbgz = findNumSubBlockGroupsInBlock(os, sbgz, bz, sbz, "z", finalize);
         idx_t nsbg = nsbgw * nsbgx * nsbgy * nsbgz;
-        os << " num-sub-block-groups-per-block: " << nsbg << endl;
-        nsbw = findNumSubBlocksInSubBlockGroup(os, sbw, sbgw, CPTS_W, "w");
-        nsbx = findNumSubBlocksInSubBlockGroup(os, sbx, sbgx, CPTS_X, "x");
-        nsby = findNumSubBlocksInSubBlockGroup(os, sby, sbgy, CPTS_Y, "y");
-        nsbz = findNumSubBlocksInSubBlockGroup(os, sbz, sbgz, CPTS_Z, "z");
-
-        os << " num-sub-blocks-per-sub-block-group: " << nsb << endl;
+        if (finalize)
+            os << " num-sub-block-groups-per-block: " << nsbg << endl;
+        nsbw = findNumSubBlocksInSubBlockGroup(os, sbw, sbgw, CPTS_W, "w", finalize);
+        nsbx = findNumSubBlocksInSubBlockGroup(os, sbx, sbgx, CPTS_X, "x", finalize);
+        nsby = findNumSubBlocksInSubBlockGroup(os, sby, sbgy, CPTS_Y, "y", finalize);
+        nsbz = findNumSubBlocksInSubBlockGroup(os, sbz, sbgz, CPTS_Z, "z", finalize);
+        if (finalize)
+            os << " num-sub-blocks-per-sub-block-group: " << nsb << endl;
     }
 
 } // namespace yask.

@@ -52,7 +52,7 @@ namespace yask {
         // real_t sizes for up to 4 spatial dims.
         idx_t _dw=VLEN_W, _dx=VLEN_X, _dy=VLEN_Y, _dz=VLEN_Z; // domain sizes.
         idx_t _hw=0, _hx=0, _hy=0, _hz=0; // halo sizes.
-        idx_t _pw=0, _px=0, _py=0, _pz=0; // halo + extra-pad sizes.
+        idx_t _pw=0, _px=0, _py=0, _pz=0; // pad sizes, which include halos.
         idx_t _ow=0, _ox=0, _oy=0, _oz=0; // offsets into global problem domain.
 
         // real_vec_t sizes for up to 4 spatial dims.
@@ -63,6 +63,9 @@ namespace yask {
 
         // Dynamic data.
         bool _is_updated = false; // data has been received from neighbors' halos.
+
+        // Set the generic grid pointer to specialized data.
+        virtual void fix_gp() =0;
         
         // Normalize element indices to vector indices and element offsets.
         ALWAYS_INLINE
@@ -245,11 +248,11 @@ namespace yask {
         inline void set_pad_z(idx_t pz) {
             _pz = ROUND_UP(std::max(pz, _hz), VLEN_Z); _pzv = _pz / VLEN_Z; resize(); }
 
-        // Set padding in addition to halo size and round-up.
-        inline void set_extra_pad_w(idx_t epw) { set_pad_w(_hw + epw); }
-        inline void set_extra_pad_x(idx_t epx) { set_pad_x(_hx + epx); }
-        inline void set_extra_pad_y(idx_t epy) { set_pad_y(_hy + epy); }
-        inline void set_extra_pad_z(idx_t epz) { set_pad_z(_hz + epz); }
+        // Increase padding if below minimum.
+        inline void set_min_pad_w(idx_t mpw) { if (_pw < mpw) set_pad_w(mpw); }
+        inline void set_min_pad_x(idx_t mpx) { if (_px < mpx) set_pad_x(mpx); }
+        inline void set_min_pad_y(idx_t mpy) { if (_py < mpy) set_pad_y(mpy); }
+        inline void set_min_pad_z(idx_t mpz) { if (_pz < mpz) set_pad_z(mpz); }
         
         // Set offset and round-up.
         inline void set_ofs_w(idx_t ow) {
@@ -377,15 +380,17 @@ namespace yask {
         }
         virtual idx_t get_halo_size(const std::string& dim) const;
         virtual idx_t get_extra_pad_size(const std::string& dim) const;
-        virtual idx_t get_total_pad_size(const std::string& dim) const;
+        virtual idx_t get_pad_size(const std::string& dim) const;
         virtual idx_t get_alloc_size(const std::string& dim) const;
         virtual void set_alloc_size(const std::string& dim, idx_t tdim);
-        virtual void set_extra_pad_size(const std::string& dim, idx_t size);
-        virtual void set_total_pad_size(const std::string& dim, idx_t size);
+        virtual void set_min_pad_size(const std::string& dim, idx_t size);
         virtual void set_all_elements(double val) {
             set_same(real_t(val));
         }
         virtual void share_storage(yk_grid_ptr source);
+        virtual void alloc_storage() {
+            _gp->default_alloc();
+        }
     };
     
     // A 3D (x, y, z) collection of real_vec_t elements.
@@ -397,6 +402,10 @@ namespace yask {
 
         GenericGrid3d<real_vec_t, LayoutFn> _data;
 
+        virtual void fix_gp() {
+            _gp = &_data;
+        }
+        
         virtual void resize_g() {
             _data.set_d1(_dxv + 2 * _pxv);
             _data.set_d2(_dyv + 2 * _pyv);
@@ -637,6 +646,10 @@ namespace yask {
 
         GenericGrid4d<real_vec_t, LayoutFn> _data;
 
+        virtual void fix_gp() {
+            _gp = &_data;
+        }
+        
         virtual void resize_g() {
             _data.set_d1(_dwv + 2 * _pwv);
             _data.set_d2(_dxv + 2 * _pxv);
@@ -875,6 +888,10 @@ namespace yask {
     protected:
         GenericGrid4d<real_vec_t, LayoutFn> _data;
 
+        virtual void fix_gp() {
+            _gp = &_data;
+        }
+        
         virtual void resize_g() {
             _data.set_d1(_tdim);
             _data.set_d2(this->_dxv + 2 * this->_pxv);
@@ -1117,6 +1134,10 @@ namespace yask {
     protected:
         GenericGrid5d<real_vec_t, LayoutFn> _data;
 
+        virtual void fix_gp() {
+            _gp = &_data;
+        }
+        
         virtual void resize_g() {
             _data.set_d1(_tdim);
             _data.set_d2(this->_dwv + 2 * this->_pwv);

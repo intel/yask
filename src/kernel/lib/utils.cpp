@@ -96,41 +96,46 @@ namespace yask {
     }
 
     // Round up val to a multiple of mult.
-    // Print a message if rounding is done.
-    idx_t roundUp(ostream& os, idx_t val, idx_t mult, const string& name)
+    // Print a message if rounding is done and do_print is set.
+    idx_t roundUp(ostream& os, idx_t val, idx_t mult,
+                  const string& name, bool do_print)
     {
         assert(mult > 0);
         idx_t res = val;
         if (val % mult != 0) {
             res = ROUND_UP(res, mult);
-            os << "Adjusting " << name << " from " << val << " to " <<
-                res << " to be a multiple of " << mult << endl;
+            if (do_print)
+                os << "Adjusting " << name << " from " << val << " to " <<
+                    res << " to be a multiple of " << mult << endl;
         }
         return res;
     }
     
-    // Alter 'inner_size', if needed, to fit into 'outer_size' and be a multiple of 'mult'.
-    // Output info to 'os' using '*_name' and 'dim'.
+    // If 'finalize' and 'inner_size' is zero, make it equal to 'outer_size'.
+    // Round up 'inner_size' to be a multiple of 'mult'.
+    // If 'finalize', output info to 'os' using '*_name' and 'dim'.
     // Return number of blocks.
     idx_t findNumSubsets(ostream& os,
                          idx_t& inner_size, const string& inner_name,
                          idx_t outer_size, const string& outer_name,
-                         idx_t mult, const string& dim) {
-        if (inner_size < 1)
+                         idx_t mult, const string& dim,
+                         bool finalize) {
+        if (finalize && inner_size <= 0)
             inner_size = outer_size; // 0 => use full size.
         inner_size = ROUND_UP(inner_size, mult);
-        if (inner_size > outer_size)
-            inner_size = outer_size;
-        idx_t ninner = (outer_size + inner_size - 1) / inner_size; // full or partial.
-        idx_t rem = outer_size % inner_size;                       // size of remainder.
-        idx_t nfull = rem ? (ninner - 1) : ninner; // full only.
+        idx_t ninner = (inner_size <= 0) ? 0 :
+            (outer_size + inner_size - 1) / inner_size; // full or partial.
+        if (finalize) {
+            idx_t rem = outer_size % inner_size;                       // size of remainder.
+            idx_t nfull = rem ? (ninner - 1) : ninner; // full only.
 
-        os << " In '" << dim << "' dimension, " << outer_name << " of size " <<
-            outer_size << " contains " << nfull << " " <<
-            inner_name << "(s) of size " << inner_size;
-        if (rem)
-            os << " plus 1 remainder " << inner_name << " of size " << rem;
-        os << "." << endl;
+            os << " In '" << dim << "' dimension, " << outer_name << " of size " <<
+                outer_size << " contains " << nfull << " " <<
+                inner_name << "(s) of size " << inner_size;
+            if (rem)
+                os << " plus 1 remainder " << inner_name << " of size " << rem;
+            os << "." << endl;
+        }
         return ninner;
     }
 

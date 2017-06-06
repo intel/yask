@@ -112,7 +112,7 @@ struct AppSettings : public KernelSettings {
                                          validate));
         parser.add_option(new ValOption(*this));
         
-        // Parse cmd-line options.
+        // Parse cmd-line options, which sets values.
         // Any remaining strings will be left in args.
         vector<string> args;
         parser.set_args(DEF_ARGS, args);

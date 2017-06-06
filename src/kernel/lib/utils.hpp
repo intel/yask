@@ -120,51 +120,62 @@ namespace yask {
     extern idx_t sumOverRanks(idx_t rank_val, MPI_Comm comm);
 
     // Make sure rank_val is same over all ranks.
-    void assertEqualityOverRanks(idx_t rank_val, MPI_Comm comm,
-                                 const std::string& descr);
+    extern void assertEqualityOverRanks(idx_t rank_val, MPI_Comm comm,
+                                        const std::string& descr);
     
     // Round up val to a multiple of mult.
-    // Print a message if rounding is done.
-    extern idx_t roundUp(std::ostream& os,
-                         idx_t val, idx_t mult, const std::string& name);
+    // Print a message if rounding is done and do_print is set.
+    extern idx_t roundUp(std::ostream& os, idx_t val, idx_t mult,
+                         const std::string& name, bool do_print);
 
-    // Fix inner_size, if needed, to fit into outer_size and be a multiple
-    // of mult.  Return number of inner_sized things.
+    // Fix inner_size to be a multiple of mult.
+    // Set defaults and print info if 'finalize'.
+    // Return number of inner_sized things.
     extern idx_t findNumSubsets(std::ostream& os,
                                 idx_t& inner_size, const std::string& inner_name,
                                 idx_t outer_size, const std::string& outer_name,
-                                idx_t mult, const std::string& dim);
+                                idx_t mult,
+                                const std::string& dim,
+                                bool finalize);
     inline idx_t findNumSubBlocksInBlock(std::ostream& os, idx_t& sbsize, idx_t bsize,
-                                         idx_t mult, const std::string& dim) {
-        return findNumSubsets(os, sbsize, "sub-block", bsize, "block", mult, dim);
+                                         idx_t mult, const std::string& dim,
+                                         bool finalize) {
+        return findNumSubsets(os, sbsize, "sub-block", bsize, "block", mult, dim, finalize);
     }
     inline idx_t findNumSubBlocksInSubBlockGroup(std::ostream& os, idx_t& sbsize, idx_t sbgsize,
-                                                 idx_t mult, const std::string& dim) {
-        return findNumSubsets(os, sbsize, "sub-block", sbgsize, "sub-block-group", mult, dim);
+                                                 idx_t mult, const std::string& dim,
+                                                 bool finalize) {
+        return findNumSubsets(os, sbsize, "sub-block", sbgsize, "sub-block-group", mult, dim, finalize);
     }
     inline idx_t findNumSubBlockGroupsInBlock(std::ostream& os, idx_t& sbgsize, idx_t bsize,
-                                              idx_t mult, const std::string& dim) {
-        return findNumSubsets(os, sbgsize, "sub-block-group", bsize, "block", mult, dim);
+                                              idx_t mult, const std::string& dim,
+                                              bool finalize) {
+        return findNumSubsets(os, sbgsize, "sub-block-group", bsize, "block", mult, dim, finalize);
     }
     inline idx_t findNumBlocksInDomain(std::ostream& os, idx_t& bsize, idx_t dsize,
-                                       idx_t mult, const std::string& dim) {
-        return findNumSubsets(os, bsize, "block", dsize, "rank-domain", mult, dim);
+                                       idx_t mult, const std::string& dim,
+                                       bool finalize) {
+        return findNumSubsets(os, bsize, "block", dsize, "rank-domain", mult, dim, finalize);
     }
     inline idx_t findNumBlocksInRegion(std::ostream& os, idx_t& bsize, idx_t rsize,
-                               idx_t mult, const std::string& dim) {
-        return findNumSubsets(os, bsize, "block", rsize, "region", mult, dim);
+                               idx_t mult, const std::string& dim,
+                                       bool finalize) {
+        return findNumSubsets(os, bsize, "block", rsize, "region", mult, dim, finalize);
     }
     inline idx_t findNumBlocksInBlockGroup(std::ostream& os, idx_t& bsize, idx_t gsize,
-                                      idx_t mult, const std::string& dim) {
-        return findNumSubsets(os, bsize, "block", gsize, "block-group", mult, dim);
+                                      idx_t mult, const std::string& dim,
+                                           bool finalize) {
+        return findNumSubsets(os, bsize, "block", gsize, "block-group", mult, dim, finalize);
     }
     inline idx_t findNumBlockGroupsInRegion(std::ostream& os, idx_t& gsize, idx_t rsize,
-                               idx_t mult, const std::string& dim) {
-        return findNumSubsets(os, gsize, "block-group", rsize, "region", mult, dim);
+                               idx_t mult, const std::string& dim,
+                                            bool finalize) {
+        return findNumSubsets(os, gsize, "block-group", rsize, "region", mult, dim, finalize);
     }
     inline idx_t findNumRegionsInDomain(std::ostream& os, idx_t& rsize, idx_t dsize,
-                                idx_t mult, const std::string& dim) {
-        return findNumSubsets(os, rsize, "region", dsize, "rank-domain", mult, dim);
+                                idx_t mult, const std::string& dim,
+                                        bool finalize) {
+        return findNumSubsets(os, rsize, "region", dsize, "rank-domain", mult, dim, finalize);
     }
 
     // A class to parse command-line args.

@@ -117,10 +117,14 @@ namespace yask {
     };
 
     // Application settings to control size and perf of stencil code.
-    struct KernelSettings :
+    class KernelSettings :
         public virtual yk_settings {
-        const idx_t def_block = 32;
 
+    protected:
+        const idx_t def_block = 32;
+        StencilContext* _context = 0; // owner of these settings.
+
+    public:
         // Sizes in elements (points).
         // - time sizes (t) are in steps to be done.
         // - spatial sizes (w, x, y, z) are in elements (not vectors).
@@ -131,7 +135,7 @@ namespace yask {
         idx_t bt=1, bw=1, bx=def_block, by=def_block, bz=def_block; // block size (used for each outer thread).
         idx_t sbgw=0, sbgx=0, sbgy=0, sbgz=0; // sub-block-group size (only used for 'grouped' block loops).
         idx_t sbt=1, sbw=0, sbx=0, sby=0, sbz=0; // sub-block size (used for each nested thread).
-        idx_t epw=0, epx=0, epy=0, epz=0;     // extra spatial padding (in addition to halos).
+        idx_t mpw=0, mpx=0, mpy=0, mpz=0;     // minimum spatial padding.
 
         // MPI settings.
         idx_t nrw=1, nrx=1, nry=1, nrz=1; // number of ranks in each dim.
@@ -146,8 +150,17 @@ namespace yask {
 
         // Ctor.
         KernelSettings() { }
+        KernelSettings(StencilContext* context) : _context(context) { }
         virtual ~KernelSettings() { }
 
+        // Pointer to context.
+        virtual StencilContext* get_context() {
+            return _context;
+        }
+        virtual void set_context(StencilContext* context) {
+            _context = context;
+        }
+        
         // Add these settigns to a cmd-line parser.
         virtual void add_options(CommandLineParser& parser);
 
@@ -158,22 +171,24 @@ namespace yask {
                          const std::string& appNotes,
                          const std::vector<std::string>& appExamples) const;
         
-        // Make sure all user-provided settings are valid.
+        // Make sure all user-provided settings are valid by rounding-up
+        // values as needed.
+        // If 'finalize' is true, also set defaults and print info.
         // Called from prepare_solution(), so it doesn't normally need to be called from user code.
-        virtual void finalizeSettings(std::ostream& os);
+        virtual void adjustSettings(std::ostream& os, bool finalize);
 
         // APIs.
         // See yask_kernel_api.hpp.
         virtual void set_rank_domain_size(const std::string& dim,
                                      idx_t size);
-        virtual void set_default_extra_pad_size(const std::string& dim,
-                                                idx_t size);
+        virtual void set_min_pad_size(const std::string& dim,
+                                      idx_t size);
         virtual void set_block_size(const std::string& dim,
                                     idx_t size);
         virtual void set_num_ranks(const std::string& dim,
                                    idx_t size);
         virtual idx_t get_rank_domain_size(const std::string& dim) const;
-        virtual idx_t get_default_extra_pad_size(const std::string& dim) const;
+        virtual idx_t get_min_pad_size(const std::string& dim) const;
         virtual idx_t get_block_size(const std::string& dim) const;
         virtual idx_t get_num_ranks(const std::string& dim) const;
     };
@@ -243,9 +258,9 @@ namespace yask {
         KernelSettingsPtr _opts;
 
         // Underlying data allocation.
+        // Should be set via malloc(), etc.
         // TODO: create different types of memory, e.g., HBM.
         void* _data_buf = 0;
-        size_t _data_buf_size = 0;
 
         // Byes between each buffer to help avoid aliasing
         // in the HW.
@@ -320,8 +335,15 @@ namespace yask {
             _env(env),
             _opts(settings)
         {
+            // Set pointer from settings.
+            if (settings)
+                settings->set_context(this);
+            
             // Set output to msg-rank.
             set_ostr();
+
+            // Round-up any settings as needed at this point.
+            _opts->adjustSettings(get_ostr(), false);
             
             // Init my_neighbors to indicate no neighbor.
             int *p = (int *)my_neighbors;
@@ -330,7 +352,10 @@ namespace yask {
         }
 
         // Destructor.
-        virtual ~StencilContext() { }
+        virtual ~StencilContext() {
+            if (_data_buf)
+                free(_data_buf);
+        }
 
         // Set ostr to given stream if provided.
         // If not provided, set to cout if my_rank == msg_rank
@@ -374,13 +399,21 @@ namespace yask {
         // Print lots of stats.
         virtual void prepare_solution();
 
-        // Set grid sizes based on settings.
-        // Called from prepare_solution(), so it doesn't normally need to be called from user code.
-        virtual void set_grid_sizes();
+        // Set grid sizes and offsets.
+        // This should be called anytime a setting or offset is changed.
+        virtual void set_grids();
         
-        // Get total memory allocation.
+        // Get total memory allocation required by grids.
+        // Does not include MPI buffers.
         virtual size_t get_num_bytes() {
-            return _data_buf_size;
+            size_t sz = 0;
+            for (auto gp : gridPtrs)
+                if (gp)
+                    sz += gp->get_num_bytes() + _data_buf_pad;
+            for (auto pp : paramPtrs)
+                if (pp)
+                    sz += pp->get_num_bytes() + _data_buf_pad;
+            return sz;
         }
 
         // Init all grids & params by calling initFn.

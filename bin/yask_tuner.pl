@@ -109,7 +109,7 @@ sub usage {
       "                    Setting rank-domain size (d) also sets upper block and region sizes.\n".
       "                    Leave off 'x', 'y', 'z' suffix to set these 3 vars to same val.\n".
       "                    Examples: '-d=512'      Set problem size to 512^3.\n".
-      "                              '-p=0'        Disable padding.\n".
+      "                              '-p=0'        Disable min padding.\n".
       "                              '-c=1'        Allow only one vector in a cluster.\n".
       "                              '-r=0'        Allow only one OpenMP region (region size=0 => rank size).\n".
       " -<gene_name>=<N>-<M>   Restrict <gene_name> between <N> and <M>.\n".
@@ -331,7 +331,7 @@ my @metrics = ( $fitnessMetric,
                 'num-regions',
                 'num-blocks-per-region',
                 'num-block-groups-per-region',
-                'padding',
+                'minimum-padding',
                 'max-halos',
                 'manual-L1-prefetch-distance',
                 'manual-L2-prefetch-distance',
@@ -467,7 +467,7 @@ my @rangesAll =
    [ 0, $maxDim, 1, 'sby' ],
    [ 0, $maxDim, 1, 'sbz' ],
 
-   # padding.
+   # min padding.
    [ 0, $maxPad, 1, 'px' ],
    [ 0, $maxPad, 1, 'py' ],
    [ 0, $maxPad, 1, 'pz' ],
@@ -1402,7 +1402,7 @@ sub fitness {
   $args .= " -bgx $bgs[0] -bgy $bgs[1] -bgz $bgs[2]";
   $args .= " -sbx $sbs[0] -sby $sbs[1] -sbz $sbs[2]";
   $args .= " -sbgx $sbgs[0] -sbgy $sbgs[1] -sbgz $sbgs[2]";
-  $args .= " -px $ps[0] -py $ps[1] -pz $ps[2]";
+  $args .= " -mpx $ps[0] -mpy $ps[1] -mpz $ps[2]";
 
   # num of iterations and trials.
   my $shortIters = 5;

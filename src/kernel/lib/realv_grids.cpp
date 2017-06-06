@@ -47,7 +47,7 @@ namespace yask {
     }
     GET_GRID_API(get_halo_size, get_halo_, false, 0)
     GET_GRID_API(get_extra_pad_size, get_extra_pad_, false, 0)
-    GET_GRID_API(get_total_pad_size, get_pad_, false, 0)
+    GET_GRID_API(get_pad_size, get_pad_, false, 0)
     GET_GRID_API(get_alloc_size, get_alloc_, true, get_alloc_t())
 
 #define SET_GRID_API(api_name, fn_prefix, t_ok, t_fn)                   \
@@ -62,8 +62,7 @@ namespace yask {
             exit_yask(1);                                               \
         }                                                               \
     }
-    SET_GRID_API(set_extra_pad_size, set_extra_pad_, false, (void)0)
-    SET_GRID_API(set_total_pad_size, set_pad_, false, (void)0)
+    SET_GRID_API(set_min_pad_size, set_min_pad_, false, (void)0)
 
     // Not using SET_GRID_API macro because *only* 't' is allowed.
     void RealVecGridBase::set_alloc_size(const string& dim, idx_t tdim) {
@@ -78,17 +77,17 @@ namespace yask {
     void RealVecGridBase::share_storage(yk_grid_ptr source) {
         auto sp = dynamic_pointer_cast<RealVecGridBase>(source);
         assert(sp);
+
         if (!sp->get_storage()) {
-            cerr << "Error: share_storage() called without source storage set.\n";
+            cerr << "Error: share_storage() called without source storage allocated.\n";
             exit_yask(1);
         }
-        if (!_gp->is_same_dims(*sp->_gp)) {
-            cerr << "Error: share_storage() called with incompatible source:\n";
-            print_info(cerr);
-            sp->print_info(cerr);
-            exit_yask(1);
-        }
-        set_storage(sp->get_storage(), 0);
+        
+        // Shallow-copy settings from source.
+        *this = *sp;
+
+        // Fix pointer to underlying grid.
+        fix_gp();
     }
 
     // Checked resize: fails if mem different and already alloc'd.

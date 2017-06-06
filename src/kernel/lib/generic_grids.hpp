@@ -43,10 +43,11 @@ namespace yask {
         std::string _name;      // name for grid.
         IdxTuple _dims;         // names and lengths of dimensions.
         T* _elems = 0;          // actual data.
-        bool _do_free = false;  // whether to free at destruction.
+        void* _owned_ptr = 0;   // pointer to free at destruction.
 
         // Alignment to use for default allocation.
         const static size_t _def_alignment = CACHELINE_BYTES;
+        const static size_t _def_big_alignment = YASK_ALIGNMENT;
 
     public:
 
@@ -56,8 +57,8 @@ namespace yask {
 
         // Dealloc memory only if allocated via default_alloc().
         virtual ~GenericGridBase() {
-            if (_elems && _do_free)
-                free(_elems);
+            if (_owned_ptr)
+                free(_owned_ptr);
         }
 
         // Perform default allocation. Will be free'd upon destruction.
@@ -66,12 +67,13 @@ namespace yask {
         // then provide allocated memory via set_storage().
         virtual void default_alloc() {
             size_t sz = get_num_bytes();
-            int ret = posix_memalign((void **)&_elems, _def_alignment, sz);
+            size_t align = (sz >= _def_big_alignment) ? _def_big_alignment : _def_alignment;
+            int ret = posix_memalign(&_owned_ptr, align, sz);
             if (ret) {
                 std::cerr << "error: cannot allocate " << sz << " bytes." << std::endl;
                 exit_yask(1);
             }
-            _do_free = true;
+            _elems = (T*)_owned_ptr;
         }
         
         // Access name.
@@ -179,13 +181,13 @@ namespace yask {
         // Free old storage if it was allocated in ctor.
         // 'buf' should provide get_num_bytes() bytes at offset bytes.
         void set_storage(void* buf, size_t offset) {
-            if (_elems && _do_free) {
-                free(_elems);
+            if (_owned_ptr) {
+                free(_owned_ptr);
+                _owned_ptr = 0;
                 _elems = 0;
             }
-            _do_free = false;
             char* p = static_cast<char*>(buf) + offset;
-            _elems = (T*)(p);
+            _elems = (T*)p;
         }
     };
 
