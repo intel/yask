@@ -162,6 +162,11 @@ namespace yask {
         virtual const std::string& get_step_dim() const {
             return _settings._stepDim;
         }
+        virtual void set_domain_dims(const std::string& dim1,
+                                     const std::string& dim2 = "",
+                                     const std::string& dim3 = "",
+                                     const std::string& dim4 = "",
+                                     const std::string& dim5 = "");
         virtual void set_element_bytes(int nbytes) { _settings._elem_bytes = nbytes; }
         virtual int get_element_bytes() const { return _settings._elem_bytes; }
         virtual std::string format(const std::string& format_type, ostream& msg_stream);

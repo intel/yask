@@ -33,10 +33,18 @@ using namespace yask;
 
 int main() {
 
+    // Compiler 'bootstrap' factory.
     yc_factory cfac;
+
+    // Create a new stencil solution.
     auto soln = cfac.new_solution("api_cxx_test");
-    auto g1 = soln->new_grid("test_grid", "t", "x", "y", "z");
+    soln->set_step_dim("t");
+    soln->set_domain_dims("x", "y", "z");
     
+    // Create a grid var.
+    auto g1 = soln->new_grid("test_grid", "t", "x", "y", "z");
+
+    // Create an equation for the grid.
     yc_node_factory fac;
 
     auto n1 = fac.new_const_number_node(3.14);
@@ -68,13 +76,15 @@ int main() {
         soln->get_num_grids() << " grid(s), and " <<
         soln->get_num_equations() << " equation(s)." << endl;
 
-    soln->set_step_dim("t");
+    // Number of bytes in each FP value.
     soln->set_element_bytes(4);
 
+    // Generate DOT output.
     string dot_file = "yc-api-test-cxx.dot";
     soln->write(dot_file, "dot", true);
     cout << "DOT-format written to '" << dot_file << "'.\n";
 
+    // Generate YASK output.
     string yask_file = "yc-api-test-cxx.hpp";
     soln->write(yask_file, "avx", true);
     cout << "YASK-format written to '" << yask_file << "'.\n";

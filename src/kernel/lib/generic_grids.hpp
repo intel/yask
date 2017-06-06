@@ -101,6 +101,12 @@ namespace yask {
             return _dims.getVal(n);
         }
 
+        // Return 'true' if dimensions are same names
+        // and sizes, 'false' otherwise.
+        inline bool is_same_dims(const GenericGridBase& src) {
+            return _dims == src._dims;
+        }
+
         // Print some descriptive info to 'os'.
         virtual void print_info(std::ostream& os) const {
             if (_dims.getNumDims() == 0)

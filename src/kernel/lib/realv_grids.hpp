@@ -385,6 +385,7 @@ namespace yask {
         virtual void set_all_elements(double val) {
             set_same(real_t(val));
         }
+        virtual void share_storage(yk_grid_ptr source);
     };
     
     // A 3D (x, y, z) collection of real_vec_t elements.

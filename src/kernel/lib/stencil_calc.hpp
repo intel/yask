@@ -206,10 +206,11 @@ namespace yask {
     class EqGroupBase;
     typedef std::vector<EqGroupBase*> EqGroupList;
     typedef std::set<EqGroupBase*> EqGroupSet;
-    typedef std::vector<RealVecGridBase*> GridPtrs;
-    typedef std::set<RealVecGridBase*> GridPtrSet;
+    typedef std::shared_ptr<RealVecGridBase> RealVecGridPtr;
+    typedef std::vector<RealVecGridPtr> GridPtrs;
+    typedef std::set<RealVecGridPtr> GridPtrSet;
     typedef std::vector<RealGrid*> ParamPtrs;
-    typedef std::map<std::string, RealVecGridBase*> GridPtrMap;
+    typedef std::map<std::string, RealVecGridPtr> GridPtrMap;
     typedef std::map<std::string, RealGrid*> ParamPtrMap;
     
     // Data and hierarchical sizes.
@@ -347,6 +348,16 @@ namespace yask {
             assert(_opts);
             return _opts;
         }
+
+        // Add a new grid to the containers.
+        virtual void addGrid(RealVecGridPtr gp, bool is_output) {
+            gridPtrs.push_back(gp);
+            gridMap[gp->get_name()] = gp;
+            if (is_output) {
+                outputGridPtrs.push_back(gp);
+                outputGridMap[gp->get_name()] = gp;
+            }
+        }
         
         // Set vars related to this rank's role in global problem.
         // Allocate MPI buffers as needed.
@@ -373,7 +384,7 @@ namespace yask {
         }
 
         // Init all grids & params by calling initFn.
-        virtual void initValues(std::function<void (RealVecGridBase* gp, 
+        virtual void initValues(std::function<void (RealVecGridPtr gp, 
                                                     real_t seed)> realVecInitFn,
                                 std::function<void (RealGrid* gp,
                                                     real_t seed)> realInitFn);
@@ -381,14 +392,14 @@ namespace yask {
         // Init all grids & params to same value within grids,
         // but different for each grid.
         virtual void initSame() {
-            initValues([&](RealVecGridBase* gp, real_t seed){ gp->set_same(seed); },
+            initValues([&](RealVecGridPtr gp, real_t seed){ gp->set_same(seed); },
                        [&](RealGrid* gp, real_t seed){ gp->set_same(seed); });
         }
 
         // Init all grids & params to different values within grids,
         // and different for each grid.
         virtual void initDiff() {
-            initValues([&](RealVecGridBase* gp, real_t seed){ gp->set_diff(seed); },
+            initValues([&](RealVecGridPtr gp, real_t seed){ gp->set_diff(seed); },
                        [&](RealGrid* gp, real_t seed){ gp->set_diff(seed); });
         }
 
@@ -489,8 +500,17 @@ namespace yask {
         virtual yk_grid_ptr get_grid(int n) {
             assert (n >= 0);
             assert (n < get_num_grids());
-            return gridPtrs.at(n);
+            auto new_ptr = RealVecGridPtr(gridPtrs.at(n)); // shares ownership.
+            return new_ptr;
         }
+        virtual yk_grid_ptr
+        new_grid(const std::string& name,
+                 const std::string& dim1 = "",
+                 const std::string& dim2 = "",
+                 const std::string& dim3 = "",
+                 const std::string& dim4 = "",
+                 const std::string& dim5 = "",
+                 const std::string& dim6 = "");
 
         virtual std::string get_step_dim() const {
             return STEP_DIM;

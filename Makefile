@@ -762,10 +762,10 @@ realclean: clean clean-old
 	rm -fv bin/*.exe lib/*.so make-report*.txt cxx-flags*.txt ld-flags.*txt TAGS $(YC_STENCIL_LIST)
 	rm -fr docs/*/html docs/*/latex
 	rm -fv $(YC_SWIG_DIR)/yask_compiler_api_wrap.{cpp,o} lib/yask_{compiler,kernel}.py*
-	rm -fv *api-test*.dot*
-	find . -name '*.o' | xargs -r rm -v
-	find . -name '*.optrpt' | xargs -r rm -v
-	find . -name '*~' | xargs -r rm -v
+	rm -fv *api-test*.dot* *~
+	find * -name '*.o' | xargs -r rm -v
+	find * -name '*.optrpt' | xargs -r rm -v
+	find * -name '*~' | xargs -r rm -v
 
 echo-settings:
 	@echo

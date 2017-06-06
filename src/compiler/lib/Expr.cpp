@@ -86,6 +86,18 @@ namespace yask {
         else
             cluster.addDimBack(dim, mult);
     }
+    void StencilSolution::set_domain_dims(const std::string& dim1,
+                                          const std::string& dim2,
+                                          const std::string& dim3,
+                                          const std::string& dim4,
+                                          const std::string& dim5) {
+        auto& ddims = _settings._domainDims;
+        if (dim1.length()) ddims.addDimBack(dim1, 0);
+        if (dim2.length()) ddims.addDimBack(dim2, 0);
+        if (dim3.length()) ddims.addDimBack(dim3, 0);
+        if (dim4.length()) ddims.addDimBack(dim4, 0);
+        if (dim5.length()) ddims.addDimBack(dim5, 0);
+    }
 
     // Create the intermediate data for printing.
     void StencilSolution::analyze_solution(int vlen,
@@ -1550,70 +1562,48 @@ namespace yask {
                              ostream& os)
     {
         _allDims.clear();
-        _dimCounts.clear();
         _scalar.clear();
         _fold.clear();
         _clusterPts.clear();
         _clusterMults.clear();
         _miscDims.clear();
-        _stepDim = settings._stepDim;
-        _fold.setFirstInner(settings._firstInner);
-        
-        // Create a tuple of all dimensions in all grids.
-        // Also keep count of how many grids have each dim.
-        // Note that dimensions won't be in any particular order!
-        for (auto gp : grids) {
 
-            // Count dimensions from this grid.
-            for (auto& dim : gp->getDims()) {
-                auto& dname = dim.getName();
-                auto* p = _dimCounts.lookup(dname);
-                if (p)
-                    (*p)++;     // increment count.
-
-                // first time seeing this dim.
-                else {
-                    _dimCounts.addDimBack(dname, 1);
-                    _allDims.addDimBack(dname, 0);
+        // Get domain dims from grids if no domain vars created.
+        // TODO: consider getting rid of this and forcing
+        // domain-dim specification.
+        if (settings._domainDims.size() == 0) {
+            for (auto gp : grids) {
+                
+                // Dimensions in this grid.
+                for (auto& dim : gp->getDims()) {
+                    auto& dname = dim.getName();
+                    
+                    // non-step dims.
+                    if (dname != _stepDim)
+                        settings._domainDims.addDimBack(dname, 0);
                 }
             }
         }
-        if (!_allDims.lookup(_stepDim)) {
-            cerr << "Error: step dimension '" << _stepDim <<
-                "' not found in any grid.\n";
-            exit(1);
+        
+        // Dims from settings.
+        _stepDim = settings._stepDim;
+        _allDims.addDimBack(_stepDim, 0);
+        _fold.setFirstInner(settings._firstInner);
+        for (auto& dim : settings._domainDims.getDims()) {
+            auto& dname = dim.getName();
+            _allDims.addDimBack(dname, 0);
+            _scalar.addDimBack(dname, 1);
+            _fold.addDimBack(dname, 1);
+            _clusterMults.addDimBack(dname, 1);
         }
         if (_allDims.getNumDims() < 2) {
-            cerr << "Error: no grids found with any non-step dimensions.\n";
+            cerr << "Error: no domain dimensions defined.\n";
             exit(1);
         }
-    
-        // For now, there are only global specifications for vector and cluster
-        // sizes. Also, vector folding and clustering is done identially for
-        // every grid access. Thus, sizes > 1 must exist in all grids.  So, init
-        // vector and cluster sizes based on dimensions that appear in ALL
-        // grids. 
-        // TODO: relax this restriction.
-        for (auto& dim : _dimCounts.getDims()) {
-            auto& dname = dim.getName();
-
-            // Step dim cannot be folded.
-            if (dname == _stepDim) {
-                continue;
-            }
         
-            // Add this dimension to scalar/fold/cluster only if it was found in all grids.
-            if (_dimCounts.getVal(dname) == (int)grids.size()) {
-                _scalar.addDimBack(dname, 1);
-                _fold.addDimBack(dname, 1);
-                _clusterMults.addDimBack(dname, 1);
-            }
-            else {
-                _miscDims.addDimBack(dname, 1);
-            }
-        }
-        os << "Step dimension: " << _stepDim << endl;
         os << "Number of SIMD elements: " << vlen << endl;
+        os << "Step dimension: " << _stepDim << endl;
+        os << "Domain dimension(s): " << _scalar.makeDimStr() << endl;
     
         // Set fold lengths based on cmd-line options.
         IntTuple foldGT1;    // fold dimensions > 1.
@@ -1755,6 +1745,7 @@ namespace yask {
             _clusterMults.makeDimValStr(" * ") << endl;
         os << "Cluster dimension(s) and size(s) in points: " <<
             _clusterPts.makeDimValStr(" * ") << endl;
-        os << "Other dimension(s): " << _miscDims.makeDimStr(", ") << endl;
+        if (_miscDims.getNumDims())
+            os << "Other dimension(s): " << _miscDims.makeDimStr() << endl;
     }
 } // namespace yask.

@@ -151,6 +151,21 @@ namespace yask {
         virtual const std::string&
         get_step_dim() const =0;
 
+        /// Set the domain dimensions.
+        /** Name all the dimensions that describe the domain of the 
+            problem *except* the step dimension, which is specified via
+            set_step_dim().
+         */
+        virtual void
+        set_domain_dims(const std::string& dim1 /**< [in] Name of 1st dimension. All
+                                                   dimension names must be valid C++
+                                                   identifiers and unique within this
+                                                   grid. */,
+                        const std::string& dim2 = "" /**< [in] Name of 2nd dimension. */,
+                        const std::string& dim3 = "" /**< [in] Name of 3rd dimension. */,
+                        const std::string& dim4 = "" /**< [in] Name of 4th dimension. */,
+                        const std::string& dim5 = "" /**< [in] Name of 5th dimension. */ ) =0;
+        
         /// Set the vectorization length in given dimension.
         /** For YASK-code generation, the product of the fold lengths should
             be equal to the number of elements in a HW SIMD register.

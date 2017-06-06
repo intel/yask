@@ -27,12 +27,20 @@
 
 import sys
 sys.path.append('lib')
-
 import yask_compiler
+
+# Compiler 'bootstrap' factory.
 cfac = yask_compiler.yc_factory()
+
+# Create a new stencil solution.
 soln = cfac.new_solution("api_py_test")
+soln.set_step_dim("t")
+soln.set_domain_dims("x", "y", "z")
+
+# Create a grid var.
 g1 = soln.new_grid("test_grid", "t", "x", "y", "z")
 
+# Create an equation for the grid.
 fac = yask_compiler.yc_node_factory()
 
 n1 = fac.new_const_number_node(3.14)
@@ -64,13 +72,15 @@ print("Solution '" + soln.get_name() + "' contains " +
       str(soln.get_num_grids()) + " grid(s), and " +
       str(soln.get_num_equations()) + " equation(s).")
 
-soln.set_step_dim("t")
+# Number of bytes in each FP value.
 soln.set_element_bytes(4)
 
+# Generate DOT output.
 dot_file = "yc-api-test-py.dot"
 soln.write(dot_file, "dot", True)
 print("DOT-format written to '" + dot_file + "'.")
 
+# Generate YASK output.
 yask_file = "yc-api-test-py.hpp"
 soln.write(yask_file, "avx", True)
 print("YASK-format written to '" + yask_file + "'.")

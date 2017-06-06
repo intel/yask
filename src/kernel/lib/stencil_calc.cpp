@@ -131,8 +131,45 @@ namespace yask {
     GET_SOLUTION_API(get_first_rank_domain_index, begin_bb, 0, false, 0)
     GET_SOLUTION_API(get_last_rank_domain_index, end_bb, -1, false, 0)
     GET_SOLUTION_API(get_overall_domain_size, tot_, 0, false, 0)
+
+    yk_grid_ptr StencilContext::new_grid(const std::string& name,
+                                         const std::string& dim1,
+                                         const std::string& dim2,
+                                         const std::string& dim3,
+                                         const std::string& dim4,
+                                         const std::string& dim5,
+                                         const std::string& dim6) {
+        RealVecGridPtr gp;
+        
+        // TODO: get rid of hard-coded dims.
+        // For now, only works with very limited combo of dims.
+        if (dim1 == "x" && dim2 == "y" && dim3 == "z") {
+            gp = make_shared<Grid_XYZ>(name);
+            addGrid(gp, false);
+        }
+        else if (dim1 == "w" && dim2 == "x" && dim3 == "y" && dim4 == "z") {
+            gp = make_shared<Grid_WXYZ>(name);
+            addGrid(gp, false);
+        }
+        else if (dim1 == "t" && dim2 == "x" && dim3 == "y" && dim4 == "z") {
+            gp = make_shared<Grid_TXYZ>(name);
+            addGrid(gp, false);
+        }
+        else if (dim1 == "t" && dim2 == "w" && dim3 == "x" && dim4 == "y" && dim5 == "z") {
+            gp = make_shared<Grid_TWXYZ>(name);
+            addGrid(gp, false);
+        }
+        else {
+            cerr << "Error: new_grid(\"" << name << "\", " << dim1 << ", " <<
+                dim2 << ", " << dim3 << ", " << dim4 << ", " << dim5 << ", " <<
+                dim6 << ") is not currently supported.\n";
+            exit_yask(1);
+        }
+        return gp;
+    }
     
-    ///// StencilContext functions:
+
+    ///// KernelEnv functions:
 
     // Init MPI, OMP.
     void KernelEnv::initEnv(int* argc, char*** argv)
@@ -165,6 +202,8 @@ namespace yask {
         // OMP call to trigger any debug output.
         omp_get_num_procs();
     }
+
+    ///// StencilContext functions:
 
     // Set ostr to given stream if provided.
     // If not provided, set to cout if my_rank == msg_rank
@@ -761,7 +800,7 @@ namespace yask {
 
             // Determine size of MPI buffers between rn and my rank.
             // Need send and receive for each updated grid.
-            for (auto* gp : gridPtrs) {
+            for (auto gp : gridPtrs) {
                 auto& gname = gp->get_name();
                 
                 // Size of buffer in each direction: if dist to neighbor is
@@ -863,7 +902,7 @@ namespace yask {
             }
 
             // MPI buffers.
-            for (auto* gp : gridPtrs) {
+            for (auto gp : gridPtrs) {
                 auto& gname = gp->get_name();
                 if (mpiBufs.count(gname) == 0)
                     continue;
@@ -1144,7 +1183,7 @@ namespace yask {
     }
 
     // Init all grids & params by calling initFn.
-    void StencilContext::initValues(function<void (RealVecGridBase* gp, 
+    void StencilContext::initValues(function<void (RealVecGridPtr gp, 
                                                    real_t seed)> realVecInitFn,
                                     function<void (RealGrid* gp,
                                                    real_t seed)> realInitFn)
@@ -1609,7 +1648,7 @@ namespace yask {
     // TODO: only mark grids that are written to in their halo-read area.
     void StencilContext::mark_grids_dirty(EqGroupBase& eg)
     {
-        for (auto* gp : eg.outputGridPtrs) {
+        for (auto gp : eg.outputGridPtrs) {
             gp->set_updated(false);
             TRACE_MSG("grid '" << gp->get_name() << "' is modified");
         }

@@ -712,17 +712,19 @@ namespace yask {
                 typeName += templStr;
 
                 // Actual grid declaration.
-                os << " " << typeName << "* " << grid << ";\n";
+                os << " std::shared_ptr<" << typeName << "> " << grid << "_ptr;\n" <<
+                    " " << typeName << "* " << grid << ";\n";
 
                 // Grid init.
                 ctorCode += "\n  // Init grid '" + grid + "'.\n" +
-                    " " + grid + " = new " + typeName + "(\"" + grid + "\");\n" +
-                    " gridPtrs.push_back(" + grid + ");\n" +
-                    " gridMap[\"" + grid + "\"] = " + grid + ";\n";
-                if (_eqGroups.getOutputGrids().count(gp)) {
-                    ctorCode += " outputGridPtrs.push_back(" + grid  + ");\n" +
-                        " outputGridMap[\"" + grid  + "\"] = " + grid + ";\n";
-                }
+                    " " + grid + "_ptr = std::make_shared<" + typeName + ">(\"" + grid + "\");\n" +
+                    " " + grid + " = " + grid + "_ptr.get();\n" +
+                    " addGrid(" + grid + "_ptr, ";
+                if (_eqGroups.getOutputGrids().count(gp))
+                    ctorCode += "true";
+                else
+                    ctorCode += "false";
+                ctorCode += ");\n";
 
                 // Alloc-setting code.
                 for (auto& dim : gp->getDims()) {
@@ -872,13 +874,13 @@ namespace yask {
                 if (eq.getOutputGrids().size()) {
                     os << "\n // The following grids are written by " << egsName << endl;
                     for (auto gp : eq.getOutputGrids())
-                        os << "  outputGridPtrs.push_back(_context->" << gp->getName() << ");" << endl;
+                        os << "  outputGridPtrs.push_back(_context->" << gp->getName() << "_ptr);" << endl;
                 }
                 if (eq.getInputGrids().size()) {
                     os << "\n // The following grids are read by " << egsName << endl;
                     for (auto gp : eq.getInputGrids())
                         if (!gp->isParam())
-                            os << "  inputGridPtrs.push_back(_context->" << gp->getName() << ");" << endl;
+                            os << "  inputGridPtrs.push_back(_context->" << gp->getName() << "_ptr);" << endl;
                 }
                 os << " } // Ctor." << endl;
             }

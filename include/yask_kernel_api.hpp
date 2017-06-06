@@ -53,7 +53,7 @@ namespace yask {
     class yk_solution;
     typedef std::shared_ptr<yk_solution> yk_solution_ptr;
     class yk_grid;
-    typedef yk_grid* yk_grid_ptr;
+    typedef std::shared_ptr<yk_grid> yk_grid_ptr;
 
     /// Factory to create a stencil solution.
     class yk_factory {
@@ -77,7 +77,7 @@ namespace yask {
            sharing of settings among multiple solutions.
            The settings may be modified via the returned pointer
            after a solution has been created via new_solution().
-           However, the settings should not be changed after
+           However, the settings should *not* be changed after
            calling yk_solution::prepare_solution().
            @returns Pointer to new settings object.
         */
@@ -279,7 +279,11 @@ namespace yask {
                                      and get_num_domain_dims()-1. */ ) const =0;
 
         /// Get the number of grids in the solution.
-        /** @returns Number of grids that have been created via new_grid(). */
+        /**
+           Grids may be pre-defined by the stencil compiler
+           (e.g., via yc_solution::new_grid())
+           or created explicitly via yk_solution::new_grid().
+           @returns Number of grids that have been created. */
         virtual int
         get_num_grids() const =0;
         
@@ -288,6 +292,35 @@ namespace yask {
         virtual yk_grid_ptr
         get_grid(int n /**< [in] Index of grid between zero (0)
                               and get_num_grids()-1. */ ) =0;
+
+        /// Add a new grid to the solution.
+        /**
+           This is typically not needed because grids are usually pre-defined
+           by the solution itself via the stencil compiler.
+           A grid may be created explicitly via this function
+           in order to use it for purposes other than in
+           pre-defined stencils within the current solution.
+           A new grid's domain size will be the same as those returned by
+           yk_settings::get_rank_domain_size().
+           After creating a new grid, you can modify its halo and padding
+           sizes via \ref yk_grid functions.
+           After all sizes are set, you can allocate storage for
+           all grids via prepare_solution().
+           @returns Pointer to the new grid.
+        */
+        virtual yk_grid_ptr
+        new_grid(const std::string& name /**< [in] Unique name of the grid; must be
+                                            a valid C++ identifier and unique
+                                            across grids. */,
+                 const std::string& dim1 = "" /**< [in] Name of 1st dimension. All
+                                                 dimension names must be valid C++
+                                                 identifiers and unique within this
+                                                 grid. */,
+                 const std::string& dim2 = "" /**< [in] Name of 2nd dimension. */,
+                 const std::string& dim3 = "" /**< [in] Name of 3rd dimension. */,
+                 const std::string& dim4 = "" /**< [in] Name of 4th dimension. */,
+                 const std::string& dim5 = "" /**< [in] Name of 5th dimension. */,
+                 const std::string& dim6 = "" /**< [in] Name of 6th dimension. */ ) =0;
 
         /// Prepare the solution for stencil application.
         /** 
@@ -300,17 +333,6 @@ namespace yask {
          */
         virtual void
         prepare_solution() =0;
-
-        /// Get the overall problem size in the specified dimension.
-        /** 
-            This function should be called only *after* calling prepare_solution()
-            because prepare_solution() assigns this rank's position in the problem domain.
-            @returns Sum of the ranks' domain sizes in the given dimension.
-        */
-        virtual idx_t
-        get_overall_domain_size(const std::string& dim
-                                /**< [in] Name of dimension from get_domain_dim_name().
-                                   Cannot be the step dimension. */ ) const =0;
 
         /// Get the first logical index of the domain in this rank in the specified dimension.
         /** This returns the first index at the beginning of the domain.
@@ -342,6 +364,17 @@ namespace yask {
         get_last_rank_domain_index(const std::string& dim
                                    /**< [in] Name of dimension from get_domain_dim_name().
                                       Cannot be the step dimension. */ ) const =0;
+
+        /// Get the overall problem size in the specified dimension.
+        /** 
+            This function should be called only *after* calling prepare_solution()
+            because prepare_solution() assigns this rank's position in the problem domain.
+            @returns Sum of the ranks' domain sizes in the given dimension.
+        */
+        virtual idx_t
+        get_overall_domain_size(const std::string& dim
+                                /**< [in] Name of dimension from get_domain_dim_name().
+                                   Cannot be the step dimension. */ ) const =0;
 
         /// Apply the stencil solution for one step.
         /** The stencil(s) in the solution are applied
@@ -576,6 +609,17 @@ namespace yask {
                     idx_t dim4_index=0 /**< [in] Index in dimension 4. */,
                     idx_t dim5_index=0 /**< [in] Index in dimension 5. */,
                     idx_t dim6_index=0 /**< [in] Index in dimension 6. */ ) =0;
+
+        /// Use existing data-storage from specified grid.
+        /**
+           This is an alternative to allocating data storage via prepare_solution().
+           In this case, data from a grid in another solution can be shared with
+           this grid.
+           All sizes in the source grid must be the same as this grid.
+        */
+        virtual void
+        share_storage(yk_grid_ptr source
+                      /**< [in] Grid from which storage will be shared. */) =0;
     };
 
 

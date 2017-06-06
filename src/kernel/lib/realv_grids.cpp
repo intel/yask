@@ -65,7 +65,7 @@ namespace yask {
     SET_GRID_API(set_extra_pad_size, set_extra_pad_, false, (void)0)
     SET_GRID_API(set_total_pad_size, set_pad_, false, (void)0)
 
-    // Not using macro because only 't' is allowed.
+    // Not using SET_GRID_API macro because *only* 't' is allowed.
     void RealVecGridBase::set_alloc_size(const string& dim, idx_t tdim) {
 
         // TODO: remove hard-coded dimensions.
@@ -75,7 +75,21 @@ namespace yask {
             exit_yask(1);
         }
     }
-
+    void RealVecGridBase::share_storage(yk_grid_ptr source) {
+        auto sp = dynamic_pointer_cast<RealVecGridBase>(source);
+        assert(sp);
+        if (!sp->get_storage()) {
+            cerr << "Error: share_storage() called without source storage set.\n";
+            exit_yask(1);
+        }
+        if (!_gp->is_same_dims(*sp->_gp)) {
+            cerr << "Error: share_storage() called with incompatible source:\n";
+            print_info(cerr);
+            sp->print_info(cerr);
+            exit_yask(1);
+        }
+        set_storage(sp->get_storage(), 0);
+    }
 
     // Checked resize: fails if mem different and already alloc'd.
     void RealVecGridBase::resize() {

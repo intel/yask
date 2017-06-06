@@ -1255,6 +1255,7 @@ namespace yask {
     public:
         int _elem_bytes = 4;    // bytes in an FP element.
         string _stepDim = "t";  // name of stepping dimension.
+        IntTuple _domainDims;   // names of domain dimensions.
         IntTuple _foldOptions;    // vector fold.
         IntTuple _clusterOptions; // cluster multipliers.
         bool _firstInner = true; // first dimension of fold is unit step.
@@ -1274,7 +1275,6 @@ namespace yask {
     // Stencil dimensions.
     struct Dimensions {
         IntTuple _allDims;          // all dims with zero value.
-        IntTuple _dimCounts;        // how many grids use each dim.
         string _stepDim;            // step dimension.
         IntTuple _scalar, _fold;    // points in scalar and fold.
         IntTuple _clusterPts;       // cluster size in points.
