@@ -257,18 +257,10 @@ namespace yask {
         // Command-line and env parameters.
         KernelSettingsPtr _opts;
 
-        // Underlying data allocation.
-        // Should be set via malloc(), etc.
-        // TODO: create different types of memory, e.g., HBM.
-        void* _data_buf = 0;
-
-        // Byes between each buffer to help avoid aliasing
+        // Bytes between each buffer to help avoid aliasing
         // in the HW.
         size_t _data_buf_pad = (YASK_PAD * CACHELINE_BYTES);
 
-        // Alignment for _data_buf;
-        size_t _data_buf_alignment = YASK_ALIGNMENT;
-        
         // TODO: move vars into private or protected sections and
         // add accessor methods.
     public:
@@ -352,10 +344,7 @@ namespace yask {
         }
 
         // Destructor.
-        virtual ~StencilContext() {
-            if (_data_buf)
-                free(_data_buf);
-        }
+        virtual ~StencilContext() { }
 
         // Set ostr to given stream if provided.
         // If not provided, set to cout if my_rank == msg_rank

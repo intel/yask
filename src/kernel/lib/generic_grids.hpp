@@ -42,12 +42,8 @@ namespace yask {
     protected:
         std::string _name;      // name for grid.
         IdxTuple _dims;         // names and lengths of dimensions.
-        T* _elems = 0;          // actual data.
-        void* _owned_ptr = 0;   // pointer to free at destruction.
-
-        // Alignment to use for default allocation.
-        const static size_t _def_alignment = CACHELINE_BYTES;
-        const static size_t _def_big_alignment = YASK_ALIGNMENT;
+        std::shared_ptr<char> _base; // base address of malloc'd memory.
+        T* _elems = 0;          // actual data, which may be offset from _base.
 
     public:
 
@@ -55,25 +51,28 @@ namespace yask {
         GenericGridBase(std::string name) :
             _name(name) { }
 
-        // Dealloc memory only if allocated via default_alloc().
+        // Dealloc _base when last pointer to it is destructed.
         virtual ~GenericGridBase() {
-            if (_owned_ptr)
-                free(_owned_ptr);
+
+            // Release any old data if last owner.
+            _base.reset();
         }
 
-        // Perform default allocation. Will be free'd upon destruction.
+        // Perform default allocation.
         // For other options,
         // programmer should call get_num_elems() or get_num_bytes() and
         // then provide allocated memory via set_storage().
         virtual void default_alloc() {
+
+            // Release any old data if last owner.
+            _base.reset();
+
+            // Alloc required number of bytes.
             size_t sz = get_num_bytes();
-            size_t align = (sz >= _def_big_alignment) ? _def_big_alignment : _def_alignment;
-            int ret = posix_memalign(&_owned_ptr, align, sz);
-            if (ret) {
-                std::cerr << "error: cannot allocate " << sz << " bytes." << std::endl;
-                exit_yask(1);
-            }
-            _elems = (T*)_owned_ptr;
+            _base = std::shared_ptr<char>(alignedAlloc(sz), AlignedDeleter());
+
+            // No offset.
+            _elems = (T*)_base.get();
         }
         
         // Access name.
@@ -105,7 +104,7 @@ namespace yask {
 
         // Return 'true' if dimensions are same names
         // and sizes, 'false' otherwise.
-        inline bool is_same_dims(const GenericGridBase& src) {
+        inline bool are_same_dims(const GenericGridBase& src) {
             return _dims == src._dims;
         }
 
@@ -179,14 +178,17 @@ namespace yask {
 
         // Set pointer to storage.
         // Free old storage if it was allocated in ctor.
-        // 'buf' should provide get_num_bytes() bytes at offset bytes.
-        void set_storage(void* buf, size_t offset) {
-            if (_owned_ptr) {
-                free(_owned_ptr);
-                _owned_ptr = 0;
-                _elems = 0;
-            }
-            char* p = static_cast<char*>(buf) + offset;
+        // 'base' should provide get_num_bytes() bytes at offset bytes.
+        void set_storage(std::shared_ptr<char>& base, size_t offset) {
+
+            // Release any old data if last owner.
+            _base.reset();
+
+            // Share ownership of base.
+            _base = base;
+            
+            // Set plain pointer to new data.
+            char* p = _base.get() + offset;
             _elems = (T*)p;
         }
     };

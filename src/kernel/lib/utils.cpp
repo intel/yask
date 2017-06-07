@@ -51,6 +51,24 @@ namespace yask {
 #endif
     }
 
+    // Alligned allocation.
+    char* alignedAlloc(std::size_t nbytes) {
+
+        // Alignment to use based on size.
+        const size_t _def_alignment = CACHELINE_BYTES;
+        const size_t _def_big_alignment = YASK_ALIGNMENT;
+
+        size_t align = (nbytes >= _def_big_alignment) ?
+            _def_big_alignment : _def_alignment;
+        void* p = 0;
+        int ret = posix_memalign(&p, align, nbytes);
+        if (ret) {
+            std::cerr << "error: cannot allocate " << printWithPow2Multiplier(nbytes) << "B.\n";
+            exit_yask(1);
+        }
+        return static_cast<char*>(p);
+    }
+
     // Return num with SI multiplier.
     // Use this one for bytes, etc.
     string printWithPow2Multiplier(double num)

@@ -858,6 +858,9 @@ namespace yask {
     {
         ostream& os = get_ostr();
 
+        // Base ptr for all data.
+        shared_ptr<char> _data_buf;
+        
         // Pass 0: count required size, allocate memory.
         // Pass 1: distribute already-allocated memory.
         for (int pass = 0; pass < 2; pass++) {
@@ -947,14 +950,10 @@ namespace yask {
             // Allocate data.
             if (pass == 0 && nbytes > 0) {
                 os << "Allocating " << printWithPow2Multiplier(nbytes) <<
-                    "B for all grids, parameters, and other buffers with a " <<
-                    printWithPow2Multiplier(_data_buf_alignment) << "B alignment...\n" << flush;
-                int ret = posix_memalign(&_data_buf, _data_buf_alignment, nbytes);
-                if (ret || !_data_buf) {
-                    cerr << "Error: unable to allocate memory.\n";
-                    exit_yask(1);
-                }
+                    "B for all grids, parameters, and other buffers...\n" << flush;
 
+                _data_buf = shared_ptr<char>(alignedAlloc(nbytes), AlignedDeleter());
+                
                 os << "  " << printWithPow2Multiplier(gbytes) << "B for grid(s).\n" <<
                     "  " << printWithPow2Multiplier(pbytes) << "B for parameters(s).\n" <<
                     "  " << printWithPow2Multiplier(bbytes) << "B for MPI buffers(s).\n" <<

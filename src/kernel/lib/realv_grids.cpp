@@ -63,6 +63,7 @@ namespace yask {
         }                                                               \
     }
     SET_GRID_API(set_min_pad_size, set_min_pad_, false, (void)0)
+    SET_GRID_API(set_halo_size, set_halo_, false, (void)0)
 
     // Not using SET_GRID_API macro because *only* 't' is allowed.
     void RealVecGridBase::set_alloc_size(const string& dim, idx_t tdim) {
@@ -82,11 +83,17 @@ namespace yask {
             cerr << "Error: share_storage() called without source storage allocated.\n";
             exit_yask(1);
         }
+        if (!_gp->are_same_dims(*sp->_gp)) {
+            cerr << "Error: share_storage() called with incompatible source:\n";
+            print_info(cerr);
+            sp->print_info(cerr);
+            exit_yask(1);
+        }
         
-        // Shallow-copy settings from source.
+        // Shallow-copy settings and _data from source.
         *this = *sp;
 
-        // Fix pointer to underlying grid.
+        // Fix pointer to _data.
         fix_gp();
     }
 

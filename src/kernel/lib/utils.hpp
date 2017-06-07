@@ -45,6 +45,7 @@ IN THE SOFTWARE.
 #include <iostream>
 #include <fstream>
 #include <sstream>
+#include <cstdlib>
 
 #ifdef WIN32
 #define _Pragma(x)
@@ -95,6 +96,11 @@ inline void omp_set_nested(int n) { }
 // rounding macros for integer types.
 #define CEIL_DIV(numer, denom) (((numer) + (denom) - 1) / (denom))
 #define ROUND_UP(n, mult) (CEIL_DIV(n, mult) * (mult))
+
+// Default alignment and padding.
+#define CACHELINE_BYTES  (64)
+#define YASK_PAD (17) // cache-lines between data buffers.
+#define YASK_ALIGNMENT (2 * 1024 * 1024) // 2MiB-page
 
 namespace yask {
 
@@ -177,6 +183,16 @@ namespace yask {
                                         bool finalize) {
         return findNumSubsets(os, rsize, "region", dsize, "rank-domain", mult, dim, finalize);
     }
+
+    // Helpers for shared and aligned malloc and free.
+    // Use like this:
+    // shared_ptr<char> sp(alignedAlloc(nbytes), AlignedDeleter());
+    extern char* alignedAlloc(std::size_t nbytes);
+    struct AlignedDeleter {
+        void operator()(char* p) {
+            std::free(p);
+        }
+    };
 
     // A class to parse command-line args.
     class CommandLineParser {

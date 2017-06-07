@@ -136,11 +136,6 @@ IN THE SOFTWARE.
 #define CPTS_Z (CLEN_Z * VLEN_Z)
 #define CPTS (CLEN_T * CPTS_W * CPTS_X * CPTS_Y * CPTS_Z)
 
-// Default alignment and padding.
-#define CACHELINE_BYTES  (64)
-#define YASK_PAD (17) // cache-lines between data buffers.
-#define YASK_ALIGNMENT (2 * 1024 * 1024) // 2MiB-page
-
 // L1 and L2 hints
 #define L1 _MM_HINT_T0
 #define L2 _MM_HINT_T1

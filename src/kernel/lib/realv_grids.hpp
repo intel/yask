@@ -360,8 +360,8 @@ namespace yask {
         const real_vec_t* get_storage() const {
             return _gp->get_storage();
         }
-        void set_storage(void* buf, size_t offset) {
-            _gp->set_storage(buf, offset);
+        void set_storage(std::shared_ptr<char> base, size_t offset) {
+            _gp->set_storage(base, offset);
         }
         RealVecGrid* getGenericGrid() {
             return _gp;
@@ -382,8 +382,9 @@ namespace yask {
         virtual idx_t get_extra_pad_size(const std::string& dim) const;
         virtual idx_t get_pad_size(const std::string& dim) const;
         virtual idx_t get_alloc_size(const std::string& dim) const;
-        virtual void set_alloc_size(const std::string& dim, idx_t tdim);
+        virtual void set_halo_size(const std::string& dim, idx_t size);
         virtual void set_min_pad_size(const std::string& dim, idx_t size);
+        virtual void set_alloc_size(const std::string& dim, idx_t size);
         virtual void set_all_elements(double val) {
             set_same(real_t(val));
         }
