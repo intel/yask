@@ -29,60 +29,59 @@ import sys
 sys.path.append('lib')
 import yask_kernel
 
-# The factory from which all other kernel object are made.
-kfac = yask_kernel.yk_factory()
+if __name__ == "__main__":
 
-# Initalize MPI, etc.
-env = kfac.new_env()
+    # The factory from which all other kernel object are made.
+    kfac = yask_kernel.yk_factory()
 
-# Create settings and solution.
-settings = kfac.new_settings()
-soln = kfac.new_solution(env, settings)
+    # Initalize MPI, etc.
+    env = kfac.new_env()
 
-# Init global settings.
-for di in range(soln.get_num_domain_dims()) :
-    dim_name = soln.get_domain_dim_name(di)
+    # Create settings and solution.
+    settings = kfac.new_settings()
+    soln = kfac.new_solution(env, settings)
+    name = soln.get_name()
 
-    # Set min. domain size in each dim.
-    settings.set_rank_domain_size(dim_name, 150)
+    # Init global settings.
+    for di in range(soln.get_num_domain_dims()) :
+        dim_name = soln.get_domain_dim_name(di)
 
-    # Set block size to 64 in z dim and 32 in other dims.
-    if dim_name == "z" :
-        settings.set_block_size(dim_name, 64)
-    else :
-        settings.set_block_size(dim_name, 32)
+        # Set min. domain size in each dim.
+        settings.set_rank_domain_size(dim_name, 150)
 
-# Simple rank configuration in 1st dim only.
-ddim1 = soln.get_domain_dim_name(0)
-settings.set_num_ranks(ddim1, env.get_num_ranks())
+        # Set block size to 64 in z dim and 32 in other dims.
+        if dim_name == "z" :
+            settings.set_block_size(dim_name, 64)
+        else :
+            settings.set_block_size(dim_name, 32)
 
-# Allocate memory for any grids that do not have storage set.
-# Set other data structures needed for stencil application.
-soln.prepare_solution()
+    # Simple rank configuration in 1st dim only.
+    ddim1 = soln.get_domain_dim_name(0)
+    settings.set_num_ranks(ddim1, env.get_num_ranks())
 
-# Print some info about the solution and init the grids.
-name = soln.get_name()
-print("Created stencil-solution '" + name + "' with the following grids:")
-for gi in range(soln.get_num_grids()) :
-    grid = soln.get_grid(gi)
-    desc = grid.get_name() + "(";
-    for di in range(grid.get_num_dims()) :
-        if di > 0 :
-            desc += ", ";
-        desc += grid.get_dim_name(di)
-    desc += ")"
-    print("  " + desc)
+    # Allocate memory for any grids that do not have storage set.
+    # Set other data structures needed for stencil application.
+    soln.prepare_solution()
 
-    grid.set_all_elements(0.0);
-    
-# NB: In a real application, the data in the grids would be
-# loaded or otherwise set to meaningful values here.
-    
-# Apply the stencil solution to the data.
-env.global_barrier()
-print("Applying the solution for 1 step...")
-soln.apply_solution(0)
-print("Applying the solution for 100 more steps...")
-soln.apply_solution(1, 100)
-    
-print("End of YASK kernel API test.")
+    # Print some info about the solution and init the grids.
+    print("Stencil-solution '" + name + "':")
+    print("  Step dimension: " + repr(soln.get_step_dim_name()))
+    print("  Domain dimensions: " + repr(soln.get_domain_dim_names()))
+    print("  Grids:")
+    for grid in soln.get_grids() :
+        print("    " + grid.get_name() + repr(grid.get_dim_names()))
+
+        # Init the values.
+        grid.set_all_elements(0.0);
+
+    # NB: In a real application, the data in the grids would be
+    # loaded or otherwise set to meaningful values here.
+
+    # Apply the stencil solution to the data.
+    env.global_barrier()
+    print("Applying the solution for 1 step...")
+    soln.apply_solution(0)
+    print("Applying the solution for 100 more steps...")
+    soln.apply_solution(1, 100)
+
+    print("End of YASK kernel API test.")

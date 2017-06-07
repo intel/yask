@@ -45,26 +45,6 @@ namespace yask {
 
         return sp;
     }
-#define SET_SETTING_API(api_name, var_prefix, t_ok, t_stmt) \
-    void KernelSettings::api_name(const string& dim, idx_t n) {         \
-        assert(n >= 0);                                                 \
-        if (t_ok && dim == "t") t_stmt;                                 \
-        else if (dim == "w") var_prefix ## w = n;                       \
-        else if (dim == "x") var_prefix ## x = n;                       \
-        else if (dim == "y") var_prefix ## y = n;                       \
-        else if (dim == "z") var_prefix ## z = n;                       \
-        else {                                                          \
-            cerr << "Error: " #api_name "(): bad dimension '" <<        \
-                dim << "'\n";                                           \
-            exit_yask(1);                                               \
-        }                                                               \
-        if (_context) _context->set_grids();                            \
-        else adjustSettings(cout, false);                               \
-    }
-    SET_SETTING_API(set_rank_domain_size, d, false, (void)0)
-    SET_SETTING_API(set_min_pad_size, mp, false, (void)0)
-    SET_SETTING_API(set_block_size, b, false, (void)0)
-    SET_SETTING_API(set_num_ranks, nr, false, (void)0)
 
 #define GET_SETTING_API(api_name, var_prefix, t_ok, t_var)              \
     idx_t KernelSettings::api_name(const string& dim) const {           \
@@ -84,6 +64,27 @@ namespace yask {
     GET_SETTING_API(get_min_pad_size, mp, false, 0)
     GET_SETTING_API(get_block_size, b, false, 0)
     GET_SETTING_API(get_num_ranks, nr, false, 0)
+
+#define SET_SETTING_API(api_name, var_prefix, t_ok, t_stmt)             \
+    void KernelSettings::api_name(const string& dim, idx_t n) {         \
+        assert(n >= 0);                                                 \
+        if (t_ok && dim == "t") t_stmt;                                 \
+        else if (dim == "w") var_prefix ## w = n;                       \
+        else if (dim == "x") var_prefix ## x = n;                       \
+        else if (dim == "y") var_prefix ## y = n;                       \
+        else if (dim == "z") var_prefix ## z = n;                       \
+        else {                                                          \
+            cerr << "Error: " #api_name "(): bad dimension '" <<        \
+                dim << "'\n";                                           \
+            exit_yask(1);                                               \
+        }                                                               \
+        if (_context) _context->set_grids();                            \
+        else adjustSettings(cout, false);                               \
+    }
+    SET_SETTING_API(set_rank_domain_size, d, false, (void)0)
+    SET_SETTING_API(set_min_pad_size, mp, false, (void)0)
+    SET_SETTING_API(set_block_size, b, false, (void)0)
+    SET_SETTING_API(set_num_ranks, nr, false, (void)0)
     
     yk_solution_ptr yk_factory::new_solution(yk_env_ptr env,
                                              yk_settings_ptr opts) const {
@@ -171,6 +172,19 @@ namespace yask {
         return gp;
     }
     
+    void StencilContext::share_grid_storage(yk_solution_ptr source) {
+        auto sp = dynamic_pointer_cast<StencilContext>(source);
+        assert(sp);
+        
+        for (auto gp : gridPtrs) {
+            auto gname = gp->get_name();
+            auto si = sp->gridMap.find(gname);
+            if (si != sp->gridMap.end()) {
+                auto sgp = si->second;
+                gp->share_storage(sgp);
+            }
+        }
+    }
 
     ///// KernelEnv functions:
 
@@ -877,6 +891,7 @@ namespace yask {
                 if (pass == 1) {
                     gp->set_storage(_data_buf, nbytes);
                     gp->print_info(os);
+                    os << endl;
                 }
 
                 // Determine size used (also offset to next location).

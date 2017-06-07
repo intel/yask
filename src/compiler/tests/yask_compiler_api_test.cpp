@@ -89,5 +89,6 @@ int main() {
     soln->write(yask_file, "avx", true);
     cout << "YASK-format written to '" << yask_file << "'.\n";
     
+    cout << "End of YASK compiler API test.\n";
     return 0;
 }

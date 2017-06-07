@@ -45,6 +45,7 @@ namespace yask {
             return 0;                                                   \
         }                                                               \
     }
+    GET_GRID_API(get_domain_size, get_d, false, 0)
     GET_GRID_API(get_halo_size, get_halo_, false, 0)
     GET_GRID_API(get_extra_pad_size, get_extra_pad_, false, 0)
     GET_GRID_API(get_pad_size, get_pad_, false, 0)
@@ -63,6 +64,7 @@ namespace yask {
         }                                                               \
     }
     SET_GRID_API(set_min_pad_size, set_min_pad_, false, (void)0)
+    SET_GRID_API(set_pad_size, set_pad_, false, (void)0)
     SET_GRID_API(set_halo_size, set_halo_, false, (void)0)
 
     // Not using SET_GRID_API macro because *only* 't' is allowed.
@@ -83,18 +85,45 @@ namespace yask {
             cerr << "Error: share_storage() called without source storage allocated.\n";
             exit_yask(1);
         }
-        if (!_gp->are_same_dims(*sp->_gp)) {
-            cerr << "Error: share_storage() called with incompatible source:\n";
-            print_info(cerr);
-            sp->print_info(cerr);
+        release_storage();
+        
+        for (int i = 0; i < get_num_dims(); i++) {
+            auto dname = get_dim_name(i);
+            if (sp->get_num_dims() != get_num_dims() ||
+                sp->get_dim_name(i) != dname) {
+                cerr << "Error: share_storage() called with incompatible grids: ";
+                print_info(cerr);
+                cerr << "; and ";
+                sp->print_info(cerr);
+                cerr << ".\n";
+                exit_yask(1);
+            }
+            auto tdom = get_domain_size(dname);
+            auto sdom = sp->get_domain_size(dname);
+            if (tdom != sdom) {
+                cerr << "Error: attempt to share storage from grid '" << sp->get_name() <<
+                    "' with domain-size " << sdom << " with grid '" << get_name() <<
+                    "' with domain-size " << tdom << " in '" << dname << "' dim.\n";
+                exit_yask(1);
+            }
+            auto thalo = get_halo_size(dname);
+            auto spad = sp->get_pad_size(dname);
+            if (thalo > spad) {
+                cerr << "Error: attempt to share storage from grid '" << sp->get_name() <<
+                    "' with padding-size " << spad << " with grid '" << get_name() <<
+                    "' with halo-size " << thalo << " in '" << dname << "' dim.\n";
+                exit_yask(1);
+            }
+
+            // Copy settings in this dim.
+            set_pad_size(dname, spad);
+        }
+
+        // Copy data.
+        if (!share_data(sp.get())) {
+            cerr << "Error: unexpected failure in data sharing.\n";
             exit_yask(1);
         }
-        
-        // Shallow-copy settings and _data from source.
-        *this = *sp;
-
-        // Fix pointer to _data.
-        fix_gp();
     }
 
     // Checked resize: fails if mem different and already alloc'd.
@@ -136,20 +165,8 @@ namespace yask {
 
     // Print some info.
     void RealVecGridBase::print_info(std::ostream& os) {
-
-        // TODO: fix '*'s w/o z dim.
-        os << get_num_dims() << "D (";
-        if (got_t()) os << "t=" << get_alloc_t() << " * ";
-        if (got_w()) os << "w=" << get_alloc_w() << " * ";
-        if (got_x()) os << "x=" << get_alloc_x() << " * ";
-        if (got_y()) os << "y=" << get_alloc_y() << " * ";
-        if (got_z()) os << "z=" << get_alloc_z();
-        os << ") '" << get_name() << "' data is at " << get_storage() << ": " <<
-                printWithPow10Multiplier(get_num_elems()) << " element(s) of " <<
-                sizeof(real_t) << " byte(s) each, " <<
-                printWithPow10Multiplier(get_num_real_vecs()) << " vector(s), " <<
-                printWithPow2Multiplier(get_num_bytes()) << "B.\n";
-        }
+        _gp->print_info(os, "SIMD vector");
+    }
     
     // Check for equality.
     // Return number of mismatches greater than epsilon.

@@ -64,8 +64,19 @@ namespace yask {
         // Dynamic data.
         bool _is_updated = false; // data has been received from neighbors' halos.
 
-        // Set the generic grid pointer to specialized data.
-        virtual void fix_gp() =0;
+        // Share data from source grid.
+        virtual bool share_data(RealVecGridBase* src) =0;
+
+        // Share data from source grid.
+        template<typename GT>
+        bool _share_data(RealVecGridBase* src) {
+            auto* tp = dynamic_cast<GT*>(_gp);
+            if (!tp) return false;
+            auto* sp = dynamic_cast<GT*>(src->_gp);
+            if (!sp) return false;
+            *tp = *sp; // shallow copy.
+            return true;
+        }
         
         // Normalize element indices to vector indices and element offsets.
         ALWAYS_INLINE
@@ -373,24 +384,41 @@ namespace yask {
 
         // APIs not defined above.
         // See yask_kernel_api.hpp.
+        virtual bool is_dim_used(const std::string& dim) const {
+            return _gp->is_dim_used(dim);
+        }
         virtual const std::string& get_dim_name(int n) const {
             assert(n >= 0);
             assert(n < get_num_dims());
             return _gp->get_dim_name(n);
         }
+        virtual std::vector<std::string> get_dim_names() const {
+            std::vector<std::string> dims;
+            for (int i = 0; i < get_num_dims(); i++)
+                dims.push_back(get_dim_name(i));
+            return dims;
+        }
+        virtual idx_t get_domain_size(const std::string& dim) const; // not exposed.
         virtual idx_t get_halo_size(const std::string& dim) const;
         virtual idx_t get_extra_pad_size(const std::string& dim) const;
         virtual idx_t get_pad_size(const std::string& dim) const;
         virtual idx_t get_alloc_size(const std::string& dim) const;
         virtual void set_halo_size(const std::string& dim, idx_t size);
+        virtual void set_pad_size(const std::string& dim, idx_t size); // not exposed.
         virtual void set_min_pad_size(const std::string& dim, idx_t size);
         virtual void set_alloc_size(const std::string& dim, idx_t size);
         virtual void set_all_elements(double val) {
             set_same(real_t(val));
         }
-        virtual void share_storage(yk_grid_ptr source);
         virtual void alloc_storage() {
             _gp->default_alloc();
+        }
+        virtual void release_storage() {
+            _gp->release_storage();
+        }            
+        virtual void share_storage(yk_grid_ptr source);
+        virtual bool is_storage_allocated() const {
+            return get_storage() != 0;
         }
     };
     
@@ -401,10 +429,12 @@ namespace yask {
 
     protected:
 
-        GenericGrid3d<real_vec_t, LayoutFn> _data;
+        typedef GenericGrid3d<real_vec_t, LayoutFn> _grid_type;
+        _grid_type _data;
 
-        virtual void fix_gp() {
-            _gp = &_data;
+        // Share data from source grid.
+        virtual bool share_data(RealVecGridBase* src) {
+            return _share_data<_grid_type>(src);
         }
         
         virtual void resize_g() {
@@ -585,6 +615,10 @@ namespace yask {
             return double(readElem(dim1_index, dim2_index,
                                    dim3_index, __LINE__));
         }
+        virtual double get_element(const std::vector<idx_t>& indices) const {
+            return double(readElem(indices.at(0), indices.at(1),
+                                   indices.at(2), __LINE__));
+        }
 
         // Write one element.
         virtual void writeElem_TWXYZ(real_t val,
@@ -603,6 +637,11 @@ namespace yask {
                       dim1_index, dim2_index,
                       dim3_index, __LINE__);
         }            
+        virtual void set_element(double val, const std::vector<idx_t>& indices) {
+            writeElem(real_t(val),
+                      indices.at(0), indices.at(1),
+                      indices.at(2), __LINE__);
+        }
 
         // Read one vector at *vector* offset.
         // Indices must be normalized, i.e., already divided by VLEN_*.
@@ -645,10 +684,12 @@ namespace yask {
     
     protected:
 
-        GenericGrid4d<real_vec_t, LayoutFn> _data;
+        typedef GenericGrid4d<real_vec_t, LayoutFn> _grid_type;
+        _grid_type _data;
 
-        virtual void fix_gp() {
-            _gp = &_data;
+        // Share data from source grid.
+        virtual bool share_data(RealVecGridBase* src) {
+            return _share_data<_grid_type>(src);
         }
         
         virtual void resize_g() {
@@ -831,6 +872,10 @@ namespace yask {
             return double(readElem(dim1_index, dim2_index,
                                    dim3_index, dim4_index,__LINE__));
         }
+        virtual double get_element(const std::vector<idx_t>& indices) const {
+            return double(readElem(indices.at(0), indices.at(1),
+                                   indices.at(2), indices.at(3), __LINE__));
+        }
 
         // Write one element.
         virtual void writeElem_TWXYZ(real_t val,
@@ -848,6 +893,11 @@ namespace yask {
                       dim1_index, dim2_index,
                       dim3_index, dim4_index, __LINE__);
         }            
+        virtual void set_element(double val, const std::vector<idx_t>& indices) {
+            writeElem(real_t(val),
+                      indices.at(0), indices.at(1),
+                      indices.at(2), indices.at(3), __LINE__);
+        }
 
         // Read one vector at *vector* offset.
         // Indices must be normalized, i.e., already divided by VLEN_*.
@@ -887,10 +937,13 @@ namespace yask {
         public RealVecGridBase {
     
     protected:
-        GenericGrid4d<real_vec_t, LayoutFn> _data;
 
-        virtual void fix_gp() {
-            _gp = &_data;
+        typedef GenericGrid4d<real_vec_t, LayoutFn> _grid_type;
+        _grid_type _data;
+
+        // Share data from source grid.
+        virtual bool share_data(RealVecGridBase* src) {
+            return _share_data<_grid_type>(src);
         }
         
         virtual void resize_g() {
@@ -1073,9 +1126,13 @@ namespace yask {
                                    idx_t dim5_index, idx_t dim6_index) const {
             // TODO: add range-checking.
             return double(readElem(dim1_index, dim2_index,
-                                   dim3_index, dim4_index,__LINE__));
+                                   dim3_index, dim4_index, __LINE__));
         }
-
+        virtual double get_element(const std::vector<idx_t>& indices) const {
+            return double(readElem(indices.at(0), indices.at(1),
+                                   indices.at(2), indices.at(3), __LINE__));
+        }
+        
         // Write one element.
         virtual void writeElem_TWXYZ(real_t val,
                                      idx_t t, idx_t w, idx_t x, idx_t y, idx_t z,                               
@@ -1092,6 +1149,11 @@ namespace yask {
                       dim1_index, dim2_index,
                       dim3_index, dim4_index, __LINE__);
         }            
+        virtual void set_element(double val, const std::vector<idx_t>& indices) {
+            writeElem(real_t(val),
+                      indices.at(0), indices.at(1),
+                      indices.at(2), indices.at(3), __LINE__);
+        }
 
         // Read one vector at *vector* offset.
         // Indices must be normalized, i.e., already divided by VLEN_*.
@@ -1133,10 +1195,13 @@ namespace yask {
         public RealVecGridBase {
     
     protected:
-        GenericGrid5d<real_vec_t, LayoutFn> _data;
 
-        virtual void fix_gp() {
-            _gp = &_data;
+        typedef GenericGrid5d<real_vec_t, LayoutFn> _grid_type;
+        _grid_type _data;
+
+        // Share data from source grid.
+        virtual bool share_data(RealVecGridBase* src) {
+            return _share_data<_grid_type>(src);
         }
         
         virtual void resize_g() {
@@ -1326,6 +1391,11 @@ namespace yask {
                                    dim3_index, dim4_index,
                                    dim5_index, __LINE__));
         }
+        virtual double get_element(const std::vector<idx_t>& indices) const {
+            return double(readElem(indices.at(0), indices.at(1),
+                                   indices.at(2), indices.at(3),
+                                   indices.at(4), __LINE__));
+        }
 
         // Write one element.
         virtual void writeElem_TWXYZ(real_t val,
@@ -1343,6 +1413,12 @@ namespace yask {
                       dim3_index, dim4_index,
                       dim5_index, __LINE__);
         }            
+        virtual void set_element(double val, const std::vector<idx_t>& indices) {
+            writeElem(real_t(val),
+                      indices.at(0), indices.at(1),
+                      indices.at(2), indices.at(3),
+                      indices.at(4), __LINE__);
+        }
 
         // Read one vector at *vector* offset.
         // Indices must be normalized, i.e., already divided by VLEN_*.

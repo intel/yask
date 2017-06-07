@@ -54,8 +54,8 @@ namespace yask {
         // Dealloc _base when last pointer to it is destructed.
         virtual ~GenericGridBase() {
 
-            // Release any old data if last owner.
-            _base.reset();
+            // Release data.
+            release_storage();
         }
 
         // Perform default allocation.
@@ -65,7 +65,7 @@ namespace yask {
         virtual void default_alloc() {
 
             // Release any old data if last owner.
-            _base.reset();
+            release_storage();
 
             // Alloc required number of bytes.
             size_t sz = get_num_bytes();
@@ -97,6 +97,11 @@ namespace yask {
             return _dims.getDimName(n);
         }
 
+        // Is dim used?
+        virtual bool is_dim_used(const std::string& dim) const {
+            return _dims.lookup(dim) != 0;
+        }
+
         // Get the nth dim size.
         inline idx_t get_dim_size(int n) const {
             return _dims.getVal(n);
@@ -104,21 +109,25 @@ namespace yask {
 
         // Return 'true' if dimensions are same names
         // and sizes, 'false' otherwise.
-        inline bool are_same_dims(const GenericGridBase& src) {
+        inline bool are_dims_same(const GenericGridBase& src) {
             return _dims == src._dims;
         }
 
         // Print some descriptive info to 'os'.
-        virtual void print_info(std::ostream& os) const {
+        virtual void print_info(std::ostream& os,
+                                const std::string& elem_name) const {
             if (_dims.getNumDims() == 0)
                 os << "scalar";
             else
-                os << _dims.getNumDims() << "D (" <<
+                os << _dims.getNumDims() << "D grid (" <<
                     _dims.makeDimValStr(" * ") << ")";
-            os << " '" << _name << "' data is at " << _elems << ", containing " <<
-                printWithPow10Multiplier(get_num_elems()) << " element(s) of " <<
-                sizeof(T) << " byte(s) each = " <<
-                printWithPow2Multiplier(get_num_bytes()) << " bytes.\n";
+            os << " '" << _name << "'";
+            if (_elems)
+                os << ", data at " << _elems << ", containing " <<
+                    printWithPow10Multiplier(get_num_elems()) <<
+                    elem_name << " element(s) of " <<
+                    sizeof(T) << " byte(s) each, " <<
+                    printWithPow2Multiplier(get_num_bytes()) << "B";
         }
 
         // Initialize all elements to the same given value.
@@ -176,20 +185,30 @@ namespace yask {
             return _elems;
         }
 
+        // Release storage.
+        void release_storage() {
+            _base.reset();
+            _elems = 0;
+        }
+        
         // Set pointer to storage.
-        // Free old storage if it was allocated in ctor.
+        // Free old storage.
         // 'base' should provide get_num_bytes() bytes at offset bytes.
         void set_storage(std::shared_ptr<char>& base, size_t offset) {
 
             // Release any old data if last owner.
-            _base.reset();
-
+            release_storage();
+            
             // Share ownership of base.
             _base = base;
             
             // Set plain pointer to new data.
-            char* p = _base.get() + offset;
-            _elems = (T*)p;
+            if (base.get()) {
+                char* p = _base.get() + offset;
+                _elems = (T*)p;
+            } else {
+                _elems = 0;
+            }
         }
     };
 

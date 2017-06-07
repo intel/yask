@@ -32,6 +32,7 @@ IN THE SOFTWARE.
 #define YASK_KERNEL_API
 
 #include <string>
+#include <vector>
 #include <memory>
 #include <cinttypes>
 
@@ -40,7 +41,7 @@ namespace yask {
     /// Type to use for indexing grids.
     /** Index types are signed to allow negative indices in halos. */
 #ifdef SWIG
-    typedef long long int idx_t;     // SWIG doesn't seem to understand int64_t.
+    typedef long int idx_t;     // SWIG doesn't seem to understand int64_t.
 #else
     typedef std::int64_t idx_t;
 #endif
@@ -163,16 +164,16 @@ namespace yask {
             The specified number of points is added to both sides, i.e., both "before" and
             "after" the domain.
 
-            The *actual* pad size will be the largest of the following values,
+            The *actual* padding size will be the largest of the following values,
             additionally rounded up based on the vector-folding dimensions:
             - Halo size.
             - Value provided by yk_settings::set_min_pad_size().
             - Value provided by this function, yk_grid::set_min_pad_size().
 
-            The pad size cannot be changed after data storage
+            The padding size cannot be changed after data storage
             has been allocated for a given grid.
             In addition, once a grid's padding is set, it cannot be reduced, only increased.
-            Call yk_grid::get_pad_size() to determine the actual pad size for a given grid.
+            Call yk_grid::get_pad_size() to determine the actual padding size for a given grid.
             See the "Detailed Description" for \ref yk_grid for more information on grid sizes.
             There is no padding allowed in the solution-step dimension (usually "t").
          */
@@ -269,7 +270,7 @@ namespace yask {
         /// Get the solution step dimension.
         /** @returns String containing the step-dimension name. */
         virtual std::string
-        get_step_dim() const =0;
+        get_step_dim_name() const =0;
 
         /// Get the number of domain dimensions used in this solution.
         /**
@@ -284,6 +285,13 @@ namespace yask {
         virtual std::string
         get_domain_dim_name(int n /**< [in] Index of dimension between zero (0)
                                      and get_num_domain_dims()-1. */ ) const =0;
+
+        /// Get all the domain dimension names.
+        /**
+           @returns List of all domain-dimension names.
+        */
+        virtual std::vector<std::string>
+        get_domain_dim_names() const =0;
 
         /// Get the number of grids in the solution.
         /**
@@ -300,22 +308,27 @@ namespace yask {
         get_grid(int n /**< [in] Index of grid between zero (0)
                               and get_num_grids()-1. */ ) =0;
 
+        /// Get all the grids.
+        /** @returns List of all grids in the solution. */
+        virtual std::vector<yk_grid_ptr>
+        get_grids() =0;
+
         /// **[Advanced]** Add a new grid to the solution.
         /**
            This is typically not needed because grids are usually pre-defined
            by the solution itself via the stencil compiler.
            However, a grid may be created explicitly via this function
-           in order to use it for purposes other than in the
+           in order to use it for purposes other than by the
            pre-defined stencils within the current solution.
            A new grid's domain size will be the same as that returned by
            yk_settings::get_rank_domain_size().
            A new grid's initial padding size will be the same as that returned by
            yk_settings::get_min_pad_size().
-           After creating a new grid, you can modify its padding
-           sizes via \ref yk_grid functions.
+           After creating a new grid, you can increase its padding
+           sizes via yk_grid::set_min_pad_size().
            A new grid contains only the meta-data for the grid; data storage
            is not yet allocated.
-           Storage may be allocated in any of the methods listed 
+           Storage may be allocated in any of the methods listed
            in the "Detailed Description" for \ref yk_grid.
            @returns Pointer to the new grid.
         */
@@ -409,6 +422,16 @@ namespace yask {
         virtual void
         apply_solution(idx_t first_step_index /**< [in] First index in the step dimension */,
                        idx_t last_step_index /**< [in] Last index in the step dimension */ ) =0;
+
+        /// **[Advanced]** Use data-storage from existing grids in specified solution.
+        /**
+           Calls yk_grid::share_storage() for each pair of grids that have the same name
+           in this solution and the source solution.
+           All conditions listed in yk_grid::share_storage() must hold for each of the pairs.
+        */
+        virtual void
+        share_grid_storage(yk_solution_ptr source
+                           /**< [in] Solution from which grid storage will be shared. */) =0;
     };
 
     /// A run-time grid.
@@ -435,8 +458,8 @@ namespace yask {
 
         Visually, in each of the non-step dimensions, these sizes are related as follows:
         <table>
-        <tr><td>extra pad <td>halo <td rowspan="2">domain <td>halo <td>extra pad
-        <tr><td colspan="2"><center>pad</center> <td colspan="2"><center>pad</center>
+        <tr><td>extra padding <td>halo <td rowspan="2">domain <td>halo <td>extra padding
+        <tr><td colspan="2"><center>padding</center> <td colspan="2"><center>padding</center>
         <tr><td colspan="5"><center>allocation</center>
         </table>
         In the step dimension (usually "t"), there is no fixed domain size.
@@ -464,17 +487,17 @@ namespace yask {
         If MPI is enabled, the domains of the ranks are logically abutted to create the 
         overall problem domain in each dimension:
         <table>
-        <tr><td>extra pad of rank A <td>halo of rank A <td>domain of rank A <td>domain of rank B
-          <td>... <td>domain of rank Z <td>halo of rank Z <td>extra pad of rank Z
-        <tr><td colspan="2"><center>pad of rank A</center>
+        <tr><td>extra padding of rank A <td>halo of rank A <td>domain of rank A <td>domain of rank B
+          <td>... <td>domain of rank Z <td>halo of rank Z <td>extra padding of rank Z
+        <tr><td colspan="2"><center>padding of rank A</center>
           <td colspan="4"><center>overall problem domain</center>
-          <td colspan="2"><center>pad of rank Z</center>
+          <td colspan="2"><center>padding of rank Z</center>
         </table>
         The beginning and ending overall-problem index that lies within a rank can be
         retrieved via yk_solution::get_first_rank_domain_index() and 
         yk_solution::get_last_rank_domain_index(), respectively.
      
-        The intermediate halos and pads also exist, but are not shown in the above diagram.
+        The intermediate halos and paddings also exist, but are not shown in the above diagram.
         They overlap the domains of adjacent ranks.
         For example, the left halo of rank B in the diagram would overlap the domain of rank A.
         Data in these overlapped regions is exchanged as needed during stencil application
@@ -504,6 +527,19 @@ namespace yask {
         get_dim_name(int n /**< [in] Index of dimension between zero (0)
                               and get_num_dims()-1. */ ) const =0;
 
+        /// Get all the dimensions in this grid.
+        /** @returns List of names of all the dimensions. */
+        virtual std::vector<std::string>
+        get_dim_names() const =0;
+        
+        /// Determine whether specified dimension exists in this grid.
+        /**
+           @returns 'true' if dimension exists (including step-dimension),
+           'false' otherwise.
+        */
+        virtual bool
+        is_dim_used(const std::string& dim) const =0;
+
         /// Get the halo size in the specified dimension.
         /** This value is typically set by the stencil compiler.
             @returns Points in halo in given dimension. */
@@ -516,10 +552,10 @@ namespace yask {
         /**
            This value is typically set by the stencil compiler, but
            this function allows you to override that value.
-           If the halo is set to a value larger than the pad size, the
-           pad size will be automatically increase to accomodate it.
+           If the halo is set to a value larger than the padding size, the
+           padding size will be automatically increase to accomodate it.
            @note After data storage has been allocated, the halo size
-           can only be set to a value less than or equal to the pad size
+           can only be set to a value less than or equal to the padding size
            in the given dimension.
            @returns Points in halo in given dimension. */
         virtual void
@@ -530,7 +566,7 @@ namespace yask {
                       /**< [in] Number of points in the halo. */ ) =0;
 
         /// Get the padding in the specified dimension.
-        /** The pad size includes the halo size.
+        /** The padding size includes the halo size.
             The value may be slightly
             larger than that provided via set_min_pad_size()
             or yk_settings::set_min_pad_size() due to rounding.
@@ -541,7 +577,7 @@ namespace yask {
                         Cannot be the step dimension. */ ) const =0;
 
         /// Get the extra padding in the specified dimension.
-        /** The *extra* pad size is the pad size minus the halo size.
+        /** The *extra* padding size is the padding size minus the halo size.
             @returns Points in extra padding in given dimension. */
         virtual idx_t
         get_extra_pad_size(const std::string& dim
@@ -555,16 +591,16 @@ namespace yask {
             The specified number of points is added to both sides, i.e., both "before" and
             "after" the domain.
 
-            The *actual* pad size will be the largest of the following values,
+            The *actual* padding size will be the largest of the following values,
             additionally rounded up based on the vector-folding dimensions:
             - Halo size.
             - Value provided by yk_settings::set_min_pad_size().
             - Value provided by this function, yk_grid::set_min_pad_size().
 
-            The pad size cannot be changed after data storage
+            The padding size cannot be changed after data storage
             has been allocated for this grid.
             In addition, once a grid's padding is set, it cannot be reduced, only increased.
-            Call get_pad_size() to determine the actual pad size for the grid.
+            Call get_pad_size() to determine the actual padding size for the grid.
             See the "Detailed Description" for \ref yk_grid for information on grid sizes. */
         virtual void
         set_min_pad_size(const std::string& dim
@@ -608,6 +644,7 @@ namespace yask {
             @note The return value is a double-precision floating-point value, but
             it may be converted from a single-precision if the solution was configured with 4-byte
             elements via yc_solution::set_element_bytes().
+            @returns value in grid at given multi-dimensional location.
          */
         virtual double
         get_element(idx_t dim1_index=0 /**< [in] Index in dimension 1. */,
@@ -616,6 +653,16 @@ namespace yask {
                     idx_t dim4_index=0 /**< [in] Index in dimension 4. */,
                     idx_t dim5_index=0 /**< [in] Index in dimension 5. */,
                     idx_t dim6_index=0 /**< [in] Index in dimension 6. */ ) const =0;
+
+        /// Get the value of one grid point.
+        /** 
+            Same as version of get_element() with individual indices, but
+            indices are provided in a list per the order returned by
+            get_dim_names().
+            @returns value in grid at given multi-dimensional location. */
+        virtual double
+        get_element(const std::vector<idx_t>& indices
+                    /**< [in] List of indices, one for each grid dimension. */ ) const =0;
 
         /// Set the value of one grid point.
         /** Provide the number of indices equal to the number of dimensions in the grid.
@@ -638,6 +685,17 @@ namespace yask {
                     idx_t dim5_index=0 /**< [in] Index in dimension 5. */,
                     idx_t dim6_index=0 /**< [in] Index in dimension 6. */ ) =0;
 
+        /// Set the value of one grid point.
+        /** 
+            Same as version of set_element() with individual indices, but
+            indices are provided in a list per the order returned by
+            get_dim_names().
+        */
+        virtual void
+        set_element(double val /**< [in] Point in grid will be set to this. */,
+                    const std::vector<idx_t>& indices
+                    /**< [in] List of indices, one for each grid dimension. */ ) =0;
+
         /// Initialize all grid points to the same value.
         /** Sets all allocated elements, including those in the domain, halo, and extra padding
             area to the same provided value.
@@ -652,25 +710,56 @@ namespace yask {
 
         /// Explicitly allocate data-storage memory for this grid.
         /**
-           Amount of allocation is calculated based on domain, pad, and 
+           Amount of allocation is calculated based on domain, padding, and 
            step-dimension allocation sizes.
-           See allocation option in the "Detailed Description" for \ref yk_grid.
+           See allocation options in the "Detailed Description" for \ref yk_grid.
          */
         virtual void
         alloc_storage() =0;
+
+        /// Explicitly release any allocated data-storage for this grid.
+        /**
+           This will release storage allocated via any of the options
+           described in the "Detailed Description" for \ref yk_grid.
+           If the data was shared between two or more grids, the data will
+           be retained by the remaining grids.
+        */
+        virtual void
+        release_storage() =0;
+
+        /// Determine whether storage has been allocated.
+        /**
+           @returns 'true' if storage has been allocated,
+           'false' otherwise.
+        */
+        virtual bool
+        is_storage_allocated() const =0;
         
         /// **[Advanced]** Use existing data-storage from specified grid.
         /**
            This is an alternative to allocating data storage via 
            yk_solution::prepare_solution() or alloc_storage().
-           In this case, data from a grid in another solution will be shared with
+           In this case, data from a grid in this or another solution will be shared with
            this grid.
+           In order to successfully share storage, the following conditions must hold:
+           - The source grid must already have storage allocated.
+           - The two grids must have the same dimensions in the same order.
+           - The two grids must have the same domain sizes in all dimensions.
+           - The two grids must have the same step-dimension allocation.
+           - The halo size of this grid must be less than or equal to the padding
+           size of the source grid in all dimensions. In other words, the halo
+           of this grid must be able to "fit inside" the source padding.
+
+           When share_storage() is called, any storage that this grid has will be released,
+           and the padding size of this grid will be set to that of the source grid.
            After calling share_storage(), changes in one grid via set_all_elements()
            or set_element() will be visible in the other grid.
-           The various sizes of this grid will be copied from the source grid.
-           The halo sizes of the two grids do not need to remain equal, but (as usual)
-           they must fit within the pad size.
-           See allocation option in the "Detailed Description" for \ref yk_grid.
+
+           The halo sizes of the two grids do not need to be equal, but (as usual)
+           they must remain less than or equal to the padding size after data storage is
+           allocated.
+           See allocation options and more information about grid sizes
+           in the "Detailed Description" for \ref yk_grid.
         */
         virtual void
         share_storage(yk_grid_ptr source

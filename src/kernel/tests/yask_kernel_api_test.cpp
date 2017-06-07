@@ -67,16 +67,19 @@ int main() {
 
     // Print some info about the solution and init the grids.
     auto name = soln->get_name();
-    cout << "Created stencil-solution '" << name << "' with the following grids:\n";
-    for (int gi = 0; gi < soln->get_num_grids(); gi++) {
-        auto grid = soln->get_grid(gi);
-        cout << "  " << grid->get_name() << "(";
-        for (int di = 0; di < grid->get_num_dims(); di++) {
-            if (di) cout << ", ";
-            cout << grid->get_dim_name(di);
-        }
+    cout << "Stencil-solution '" << name << "':\n";
+    cout << "  Step dimension: '" << soln->get_step_dim_name() << "'\n";
+    cout << "  Domain dimensions:";
+    for (auto dname : soln->get_domain_dim_names())
+        cout << " '" << dname << "'";
+    cout << endl;
+    for (auto grid : soln->get_grids()) {
+        cout << "    " << grid->get_name() << "(";
+        for (auto dname : grid->get_dim_names())
+            cout << " '" << dname << "'";
         cout << ")\n";
 
+        // Init the values.
         grid->set_all_elements(0.0);
     }
 

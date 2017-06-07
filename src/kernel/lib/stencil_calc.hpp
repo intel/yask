@@ -525,6 +525,12 @@ namespace yask {
             auto new_ptr = RealVecGridPtr(gridPtrs.at(n)); // shares ownership.
             return new_ptr;
         }
+        virtual std::vector<yk_grid_ptr> get_grids() {
+            std::vector<yk_grid_ptr> grids;
+            for (int i = 0; i < get_num_grids(); i++)
+                grids.push_back(get_grid(i));
+            return grids;
+        }
         virtual yk_grid_ptr
         new_grid(const std::string& name,
                  const std::string& dim1 = "",
@@ -534,7 +540,7 @@ namespace yask {
                  const std::string& dim5 = "",
                  const std::string& dim6 = "");
 
-        virtual std::string get_step_dim() const {
+        virtual std::string get_step_dim_name() const {
             return STEP_DIM;
         }
         virtual int get_num_domain_dims() const {
@@ -543,6 +549,12 @@ namespace yask {
             return USING_DIM_W ? 4 : 3;
         }
         virtual std::string get_domain_dim_name(int n) const;
+        virtual std::vector<std::string> get_domain_dim_names() const {
+            std::vector<std::string> dims;
+            for (int i = 0; i < get_num_domain_dims(); i++)
+                dims.push_back(get_domain_dim_name(i));
+            return dims;
+        }
 
         virtual idx_t get_first_rank_domain_index(const std::string& dim) const;
         virtual idx_t get_last_rank_domain_index(const std::string& dim) const;
@@ -553,6 +565,7 @@ namespace yask {
         virtual void apply_solution(idx_t step_index) {
             apply_solution(step_index, step_index);
         }
+        virtual void share_grid_storage(yk_solution_ptr source);
     };
     
     /// Classes that support evaluation of one stencil equation-group.

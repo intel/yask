@@ -420,7 +420,7 @@ namespace yask {
             return true;
         }
     
-        // Equality is true only if all dimensions and values are same.
+        // Equality is true if all dimensions and values are same.
         // Dimensions don't have to be in same order.
         virtual bool operator==(const Tuple& rhs) const {
             if (!areDimsSame(rhs))
