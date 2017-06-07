@@ -43,10 +43,9 @@ if __name__ == "__main__":
     name = soln.get_name()
 
     # Init global settings.
-    for di in range(soln.get_num_domain_dims()) :
-        dim_name = soln.get_domain_dim_name(di)
+    for dim_name in soln.get_domain_dim_names() :
 
-        # Set min. domain size in each dim.
+        # Set domain size in each dim.
         settings.set_rank_domain_size(dim_name, 150)
 
         # Set block size to 64 in z dim and 32 in other dims.

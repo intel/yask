@@ -44,8 +44,7 @@ int main() {
     auto soln = kfac.new_solution(env, settings);
 
     // Init global settings.
-    for (int di = 0; di < soln->get_num_domain_dims(); di++) {
-        auto dim_name = soln->get_domain_dim_name(di);
+    for (auto dim_name : soln->get_domain_dim_names()) {
 
         // Set min. domain size in each dim.
         settings->set_rank_domain_size(dim_name, 150);
