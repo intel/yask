@@ -35,6 +35,7 @@ IN THE SOFTWARE.
 namespace yask {
 
     typedef Tuple<idx_t> IdxTuple;
+    typedef std::vector<idx_t> GridIndices;
 
     // A base class for a generic grid of elements of arithmetic type T.
     // This class provides linear-access support, i.e., no layout.

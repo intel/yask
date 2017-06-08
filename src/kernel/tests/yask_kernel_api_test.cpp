@@ -78,13 +78,35 @@ int main() {
             cout << " '" << dname << "'";
         cout << ")\n";
 
-        // Init the values.
-        grid->set_all_elements(0.0);
+        // Subset of domain.
+        vector<idx_t> first_indices, last_indices;
+        for (auto dname : grid->get_dim_names()) {
+            if (dname == soln->get_step_dim_name()) {
+
+                // initial timestep.
+                first_indices.push_back(0); 
+                last_indices.push_back(0);
+            } else {
+
+                // small cube in center of overall problem.
+                idx_t psize = soln->get_overall_domain_size(dname);
+                idx_t first_idx = min(soln->get_last_rank_domain_index(dname),
+                                      max(soln->get_first_rank_domain_index(dname),
+                                          psize/2 - 10));
+                idx_t last_idx = min(soln->get_last_rank_domain_index(dname),
+                                      max(soln->get_first_rank_domain_index(dname),
+                                          psize/2 + 10));
+                first_indices.push_back(first_idx);
+                last_indices.push_back(last_idx);
+            }
+        }
+        
+        // Init the values in a 'hat' function.
+        grid->set_all_elements_same(0.0);
+        idx_t nset = grid->set_elements_in_slice_same(1.0, first_indices, last_indices);
+        cout << "      " << nset << " element(s) set to 1.0.\n";
     }
 
-    // NB: In a real application, the data in the grids would be
-    // loaded or otherwise set to meaningful values here.
-    
     // Apply the stencil solution to the data.
     env->global_barrier();
     cout << "Applying the solution for 1 step...\n";

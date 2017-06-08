@@ -152,6 +152,10 @@ namespace yask {
 
         // Resize the underlying grid based on the current settings.
         virtual void resize_g() =0;
+
+        // Make sure indices are in range.
+        virtual void checkIndices(const GridIndices& indices,
+                                  const std::string& fn) const;
         
     public:
         RealVecGridBase(RealVecGrid* gp) :
@@ -398,7 +402,9 @@ namespace yask {
                 dims.push_back(get_dim_name(i));
             return dims;
         }
-        virtual idx_t get_domain_size(const std::string& dim) const; // not exposed.
+        virtual idx_t get_rank_domain_size(const std::string& dim) const; // not exposed.
+        virtual idx_t get_first_rank_domain_index(const std::string& dim) const; // not exposed.
+        virtual idx_t get_last_rank_domain_index(const std::string& dim) const; // not exposed.
         virtual idx_t get_halo_size(const std::string& dim) const;
         virtual idx_t get_extra_pad_size(const std::string& dim) const;
         virtual idx_t get_pad_size(const std::string& dim) const;
@@ -407,7 +413,7 @@ namespace yask {
         virtual void set_pad_size(const std::string& dim, idx_t size); // not exposed.
         virtual void set_min_pad_size(const std::string& dim, idx_t size);
         virtual void set_alloc_size(const std::string& dim, idx_t size);
-        virtual void set_all_elements(double val) {
+        virtual void set_all_elements_same(double val) {
             set_same(real_t(val));
         }
         virtual void alloc_storage() {
@@ -611,11 +617,11 @@ namespace yask {
         virtual double get_element(idx_t dim1_index, idx_t dim2_index,
                                    idx_t dim3_index, idx_t dim4_index,
                                    idx_t dim5_index, idx_t dim6_index) const {
-            // TODO: add range-checking.
-            return double(readElem(dim1_index, dim2_index,
-                                   dim3_index, __LINE__));
+            GridIndices idx = {dim1_index, dim2_index, dim3_index};
+            return get_element(idx);
         }
-        virtual double get_element(const std::vector<idx_t>& indices) const {
+        virtual double get_element(const GridIndices& indices) const {
+            checkIndices(indices, "get_element");
             return double(readElem(indices.at(0), indices.at(1),
                                    indices.at(2), __LINE__));
         }
@@ -632,17 +638,28 @@ namespace yask {
                                  idx_t dim1_index, idx_t dim2_index,
                                  idx_t dim3_index, idx_t dim4_index,
                                  idx_t dim5_index, idx_t dim6_index) {
-            // TODO: add range-checking.
-            writeElem(real_t(val),
-                      dim1_index, dim2_index,
-                      dim3_index, __LINE__);
+            GridIndices idx = {dim1_index, dim2_index, dim3_index};
+            set_element(val, idx);
         }            
-        virtual void set_element(double val, const std::vector<idx_t>& indices) {
+        virtual void set_element(double val, const GridIndices& indices) {
+            checkIndices(indices, "set_element");
             writeElem(real_t(val),
                       indices.at(0), indices.at(1),
                       indices.at(2), __LINE__);
         }
-
+        virtual idx_t set_elements_in_slice_same(double val,
+                                                 const GridIndices& first_indices,
+                                                 const GridIndices& last_indices) {
+            checkIndices(first_indices, "set_elements_in_slice_same");
+            checkIndices(last_indices, "set_elements_in_slice_same");
+            idx_t n = 0;
+            for (idx_t x = first_indices[0]; x <= last_indices[0]; x++)
+                for (idx_t y = first_indices[1]; y <= last_indices[1]; y++)
+                    for (idx_t z = first_indices[2]; z <= last_indices[2]; z++, n++)
+                        writeElem(real_t(val), x, y, z, __LINE__);
+            return n;
+        }
+        
         // Read one vector at *vector* offset.
         // Indices must be normalized, i.e., already divided by VLEN_*.
         virtual real_vec_t readVecNorm_TWXYZ(idx_t t, idx_t wv, idx_t xv, idx_t yv, idx_t zv,
@@ -868,11 +885,11 @@ namespace yask {
         virtual double get_element(idx_t dim1_index, idx_t dim2_index,
                                    idx_t dim3_index, idx_t dim4_index,
                                    idx_t dim5_index, idx_t dim6_index) const {
-            // TODO: add range-checking.
-            return double(readElem(dim1_index, dim2_index,
-                                   dim3_index, dim4_index,__LINE__));
+            GridIndices idx = {dim1_index, dim2_index, dim3_index, dim4_index};
+            return get_element(idx);
         }
-        virtual double get_element(const std::vector<idx_t>& indices) const {
+        virtual double get_element(const GridIndices& indices) const {
+            checkIndices(indices, "get_element");
             return double(readElem(indices.at(0), indices.at(1),
                                    indices.at(2), indices.at(3), __LINE__));
         }
@@ -888,15 +905,27 @@ namespace yask {
                                  idx_t dim1_index, idx_t dim2_index,
                                  idx_t dim3_index, idx_t dim4_index,
                                  idx_t dim5_index, idx_t dim6_index) {
-            // TODO: add range-checking.
-            writeElem(real_t(val),
-                      dim1_index, dim2_index,
-                      dim3_index, dim4_index, __LINE__);
+            GridIndices idx = {dim1_index, dim2_index, dim3_index, dim4_index};
+            set_element(val, idx);
         }            
-        virtual void set_element(double val, const std::vector<idx_t>& indices) {
+        virtual void set_element(double val, const GridIndices& indices) {
+            checkIndices(indices, "set_element");
             writeElem(real_t(val),
                       indices.at(0), indices.at(1),
                       indices.at(2), indices.at(3), __LINE__);
+        }
+        virtual idx_t set_elements_in_slice_same(double val,
+                                                 const GridIndices& first_indices,
+                                                 const GridIndices& last_indices) {
+            checkIndices(first_indices, "set_elements_in_slice_same");
+            checkIndices(last_indices, "set_elements_in_slice_same");
+            idx_t n = 0;
+            for (idx_t w = first_indices[0]; w <= last_indices[0]; w++)
+                for (idx_t x = first_indices[1]; x <= last_indices[1]; x++)
+                    for (idx_t y = first_indices[2]; y <= last_indices[2]; y++)
+                        for (idx_t z = first_indices[3]; z <= last_indices[3]; z++, n++)
+                            writeElem(real_t(val), w, x, y, z, __LINE__);
+            return n;
         }
 
         // Read one vector at *vector* offset.
@@ -1124,11 +1153,11 @@ namespace yask {
         virtual double get_element(idx_t dim1_index, idx_t dim2_index,
                                    idx_t dim3_index, idx_t dim4_index,
                                    idx_t dim5_index, idx_t dim6_index) const {
-            // TODO: add range-checking.
-            return double(readElem(dim1_index, dim2_index,
-                                   dim3_index, dim4_index, __LINE__));
+            GridIndices idx = {dim1_index, dim2_index, dim3_index, dim4_index};
+            return get_element(idx);
         }
-        virtual double get_element(const std::vector<idx_t>& indices) const {
+        virtual double get_element(const GridIndices& indices) const {
+            checkIndices(indices, "get_element");
             return double(readElem(indices.at(0), indices.at(1),
                                    indices.at(2), indices.at(3), __LINE__));
         }
@@ -1144,15 +1173,27 @@ namespace yask {
                                  idx_t dim1_index, idx_t dim2_index,
                                  idx_t dim3_index, idx_t dim4_index,
                                  idx_t dim5_index, idx_t dim6_index) {
-            // TODO: add range-checking.
-            writeElem(real_t(val),
-                      dim1_index, dim2_index,
-                      dim3_index, dim4_index, __LINE__);
+            GridIndices idx = {dim1_index, dim2_index, dim3_index, dim4_index};
+            set_element(val, idx);
         }            
-        virtual void set_element(double val, const std::vector<idx_t>& indices) {
+        virtual void set_element(double val, const GridIndices& indices) {
+            checkIndices(indices, "set_element");
             writeElem(real_t(val),
                       indices.at(0), indices.at(1),
                       indices.at(2), indices.at(3), __LINE__);
+        }
+        virtual idx_t set_elements_in_slice_same(double val,
+                                                 const GridIndices& first_indices,
+                                                 const GridIndices& last_indices) {
+            checkIndices(first_indices, "set_elements_in_slice_same");
+            checkIndices(last_indices, "set_elements_in_slice_same");
+            idx_t n = 0;
+            for (idx_t t = first_indices[0]; t <= last_indices[0]; t++)
+                for (idx_t x = first_indices[1]; x <= last_indices[1]; x++)
+                    for (idx_t y = first_indices[2]; y <= last_indices[2]; y++)
+                        for (idx_t z = first_indices[3]; z <= last_indices[3]; z++, n++)
+                            writeElem(real_t(val), t, x, y, z, __LINE__);
+            return n;
         }
 
         // Read one vector at *vector* offset.
@@ -1386,12 +1427,12 @@ namespace yask {
         virtual double get_element(idx_t dim1_index, idx_t dim2_index,
                                    idx_t dim3_index, idx_t dim4_index,
                                    idx_t dim5_index, idx_t dim6_index) const {
-            // TODO: add range-checking.
-            return double(readElem(dim1_index, dim2_index,
-                                   dim3_index, dim4_index,
-                                   dim5_index, __LINE__));
+            GridIndices idx = {dim1_index, dim2_index, dim3_index,
+                               dim4_index, dim5_index};
+            return get_element(idx);
         }
-        virtual double get_element(const std::vector<idx_t>& indices) const {
+        virtual double get_element(const GridIndices& indices) const {
+            checkIndices(indices, "get_element");
             return double(readElem(indices.at(0), indices.at(1),
                                    indices.at(2), indices.at(3),
                                    indices.at(4), __LINE__));
@@ -1407,17 +1448,30 @@ namespace yask {
                                  idx_t dim1_index, idx_t dim2_index,
                                  idx_t dim3_index, idx_t dim4_index,
                                  idx_t dim5_index, idx_t dim6_index) {
-            // TODO: add range-checking.
-            writeElem(real_t(val),
-                      dim1_index, dim2_index,
-                      dim3_index, dim4_index,
-                      dim5_index, __LINE__);
+            GridIndices idx = {dim1_index, dim2_index, dim3_index,
+                               dim4_index, dim5_index};
+            set_element(val, idx);
         }            
-        virtual void set_element(double val, const std::vector<idx_t>& indices) {
+        virtual void set_element(double val, const GridIndices& indices) {
+            checkIndices(indices, "set_element");
             writeElem(real_t(val),
                       indices.at(0), indices.at(1),
                       indices.at(2), indices.at(3),
                       indices.at(4), __LINE__);
+        }
+        virtual idx_t set_elements_in_slice_same(double val,
+                                                 const GridIndices& first_indices,
+                                                 const GridIndices& last_indices) {
+            checkIndices(first_indices, "set_elements_in_slice_same");
+            checkIndices(last_indices, "set_elements_in_slice_same");
+            idx_t n = 0;
+            for (idx_t t = first_indices[0]; t <= last_indices[0]; t++)
+                for (idx_t w = first_indices[1]; w <= last_indices[1]; w++)
+                    for (idx_t x = first_indices[2]; x <= last_indices[2]; x++)
+                        for (idx_t y = first_indices[3]; y <= last_indices[3]; y++)
+                            for (idx_t z = first_indices[4]; z <= last_indices[4]; z++, n++)
+                                writeElem(real_t(val), t, w, x, y, z, __LINE__);
+            return n;
         }
 
         // Read one vector at *vector* offset.

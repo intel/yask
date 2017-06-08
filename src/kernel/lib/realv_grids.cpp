@@ -45,7 +45,9 @@ namespace yask {
             return 0;                                                   \
         }                                                               \
     }
-    GET_GRID_API(get_domain_size, get_d, false, 0)
+    GET_GRID_API(get_rank_domain_size, get_d, false, 0)
+    GET_GRID_API(get_first_rank_domain_index, get_first_, false, 0)
+    GET_GRID_API(get_last_rank_domain_index, get_last_, false, 0)
     GET_GRID_API(get_halo_size, get_halo_, false, 0)
     GET_GRID_API(get_extra_pad_size, get_extra_pad_, false, 0)
     GET_GRID_API(get_pad_size, get_pad_, false, 0)
@@ -98,8 +100,8 @@ namespace yask {
                 cerr << ".\n";
                 exit_yask(1);
             }
-            auto tdom = get_domain_size(dname);
-            auto sdom = sp->get_domain_size(dname);
+            auto tdom = get_rank_domain_size(dname);
+            auto sdom = sp->get_rank_domain_size(dname);
             if (tdom != sdom) {
                 cerr << "Error: attempt to share storage from grid '" << sp->get_name() <<
                     "' with domain-size " << sdom << " with grid '" << get_name() <<
@@ -152,6 +154,30 @@ namespace yask {
         }
     }
     
+    // Make sure indices are in range.
+    void RealVecGridBase::checkIndices(const GridIndices& indices,
+                                       const string& fn) const {
+        if (indices.size() != size_t(get_num_dims())) {
+            cerr << "Error: '" << fn << "' called with " << indices.size() <<
+                " indices instead of " << get_num_dims() << ".\n";
+            exit_yask(1);
+        }
+        for (int i = 0; i < get_num_dims(); i++) {
+            idx_t idx = indices[i];
+            auto dname = get_dim_name(i);
+            if (dname == "t") continue; // any time index is ok.
+            auto psize = get_pad_size(dname);
+            auto first_ok = get_first_rank_domain_index(dname) - psize;
+            auto last_ok = get_last_rank_domain_index(dname) + psize;
+            if (idx < first_ok || idx > last_ok) {
+                cerr << "Error: '" << fn << "' index in dim '" << dname <<
+                    "' is " << idx << ", which is not in [" << first_ok <<
+                    "..." << last_ok << "].\n";
+                exit_yask(1);
+            }
+        }
+    }
+        
     // Initialize memory to incrementing values based on val.
     void RealVecGridBase::set_diff(real_t val) {
 

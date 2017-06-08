@@ -636,9 +636,9 @@ namespace yask {
         /// Get the value of one grid point.
         /** Provide the number of indices equal to the number of dimensions in the grid.
             Indices beyond that will be ignored.
-            Indices are relative to the overall problem domain.
+            Indices are relative to the *overall* problem domain.
             You can only get elements that are located in the grid in the current rank.
-            See yk_solution::get_first_domain_index(), 
+            See yk_solution::get_first_domain_index(),
             yk_solution::get_last_domain_index(), and the 
             "Detailed Description" for \ref yk_grid for more information on grid sizes.
             @note The return value is a double-precision floating-point value, but
@@ -665,16 +665,19 @@ namespace yask {
                     /**< [in] List of indices, one for each grid dimension. */ ) const =0;
 
         /// Set the value of one grid point.
-        /** Provide the number of indices equal to the number of dimensions in the grid.
-            Indices beyond that will be ignored.
-            Indices are relative to the overall problem domain.
-            You can only set elements that are located in the grid in the current rank.
-            See yk_solution::get_first_domain_index(), 
-            yk_solution::get_last_domain_index(), and the 
-            "Detailed Description" for \ref yk_grid for more information on grid sizes.
-            @note The parameter value is a double-precision floating-point value, but
-            it may be converted to single-precision if the solution was configured with 4-byte
-            elements via yc_solution::set_element_bytes().
+        /** 
+           Provide the number of indices equal to the number of dimensions in the grid.
+           Indices beyond that will be ignored.
+           Indices are relative to the overall problem domain.
+           You can only set elements that are located in the grid in the current rank.
+           See yk_solution::get_first_domain_index(), 
+           yk_solution::get_last_domain_index(), and the 
+           "Detailed Description" for \ref yk_grid for more information on grid sizes.
+           @note The parameter value is a double-precision floating-point value, but
+           it may be converted to single-precision if the solution was configured with 4-byte
+           elements via yc_solution::set_element_bytes().
+           @note If storage has not been allocated via yk_solution::prepare_solution(),
+           this will have no effect.
          */
         virtual void
         set_element(double val /**< [in] Point in grid will be set to this. */,
@@ -697,21 +700,38 @@ namespace yask {
                     /**< [in] List of indices, one for each grid dimension. */ ) =0;
 
         /// Initialize all grid points to the same value.
-        /** Sets all allocated elements, including those in the domain, halo, and extra padding
-            area to the same provided value.
-            @note The parameter is a double-precision floating-point value, but
-            it may be converted to single-precision if the solution was configured with 4-byte
-            elements via yc_solution::set_element_bytes().
-            @note If storage has not been allocated via yk_solution::prepare_solution(),
-            this will have no effect.
+        /**
+           Sets all allocated elements, including those in the domain and padding
+           area to the same specified value.
+           @note The parameter is a double-precision floating-point value, but
+           it may be converted to single-precision if the solution was configured with 4-byte
+           elements via yc_solution::set_element_bytes().
+           @note If storage has not been allocated via yk_solution::prepare_solution(),
+           this will have no effect.
          */
         virtual void
-        set_all_elements(double val /**< [in] All points will be set to this. */ ) =0;
+        set_all_elements_same(double val /**< [in] All points will be set to this. */ ) =0;
+
+        /// Initialize grid points within specified subset of the grid to the same value.
+        /**
+           Sets all elements from 'first' to 'last' indices in each dimension to the
+           specified value.
+           Index values must fall within the domain or padding area.
+           Notes in set_all_elements() documentation apply.
+           @returns Number of elements set.
+        */
+        virtual idx_t
+        set_elements_in_slice_same(double val /**< [in] All points in the slice will be set to this. */,
+                                   const std::vector<idx_t>& first_indices
+                                   /**< [in] List of beginning indices, one for each grid dimension. */,
+                                   const std::vector<idx_t>& last_indices
+                                   /**< [in] List of ending indices, one for each grid dimension. */ ) =0;
 
         /// Explicitly allocate data-storage memory for this grid.
         /**
            Amount of allocation is calculated based on domain, padding, and 
            step-dimension allocation sizes.
+           Any pre-existing storage will be released before allocation as via release_storage().
            See allocation options in the "Detailed Description" for \ref yk_grid.
          */
         virtual void
@@ -750,8 +770,8 @@ namespace yask {
            size of the source grid in all dimensions. In other words, the halo
            of this grid must be able to "fit inside" the source padding.
 
-           When share_storage() is called, any storage that this grid has will be released,
-           and the padding size of this grid will be set to that of the source grid.
+           Any pre-existing storage will be released before allocation as via release_storage().
+           The padding size of this grid will be set to that of the source grid.
            After calling share_storage(), changes in one grid via set_all_elements()
            or set_element() will be visible in the other grid.
 
