@@ -267,6 +267,11 @@ namespace yask {
         virtual const std::string&
         get_name() const =0;
 
+        /// Get the floating-point precision size.
+        /** @returns Number of bytes in each FP element. */
+        virtual int 
+        get_element_bytes() const =0;
+        
         /// Get the solution step dimension.
         /** @returns String containing the step-dimension name. */
         virtual std::string
@@ -400,7 +405,7 @@ namespace yask {
                                 /**< [in] Name of dimension from get_domain_dim_name().
                                    Cannot be the step dimension. */ ) const =0;
 
-        /// Apply the stencil solution for one step.
+        /// Run the stencil solution for one step.
         /** The stencil(s) in the solution are applied
             at the given step index
             across the entire domain as returned by yk_solution::get_overall_domain_size().
@@ -409,9 +414,9 @@ namespace yask {
             on all MPI ranks, and it will block until all ranks have completed.
          */
         virtual void
-        apply_solution(idx_t step_index /**< [in] Index in the step dimension */ ) =0;
+        run_solution(idx_t step_index /**< [in] Index in the step dimension */ ) =0;
 
-        /// Apply the stencil solution for the specified number of steps.
+        /// Run the stencil solution for the specified number of steps.
         /** The stencil(s) in the solution are applied from
             the first to last step index, inclusive,
             across the entire domain as returned by yk_solution::get_overall_domain_size().
@@ -420,8 +425,8 @@ namespace yask {
             on all MPI ranks, and it will block until all ranks have completed.
          */
         virtual void
-        apply_solution(idx_t first_step_index /**< [in] First index in the step dimension */,
-                       idx_t last_step_index /**< [in] Last index in the step dimension */ ) =0;
+        run_solution(idx_t first_step_index /**< [in] First index in the step dimension */,
+                     idx_t last_step_index /**< [in] Last index in the step dimension */ ) =0;
 
         /// **[Advanced]** Use data-storage from existing grids in specified solution.
         /**
@@ -637,13 +642,13 @@ namespace yask {
         /** Provide the number of indices equal to the number of dimensions in the grid.
             Indices beyond that will be ignored.
             Indices are relative to the *overall* problem domain.
-            You can only get elements that are located in the grid in the current rank.
+            Index values must fall within the rank domain or padding area.
             See yk_solution::get_first_domain_index(),
             yk_solution::get_last_domain_index(), and the 
             "Detailed Description" for \ref yk_grid for more information on grid sizes.
             @note The return value is a double-precision floating-point value, but
-            it may be converted from a single-precision if the solution was configured with 4-byte
-            elements via yc_solution::set_element_bytes().
+            it will be converted from a single-precision if 
+            yk_solution::get_element_bytes() returns 4.
             @returns value in grid at given multi-dimensional location.
          */
         virtual double
@@ -664,18 +669,40 @@ namespace yask {
         get_element(const std::vector<idx_t>& indices
                     /**< [in] List of indices, one for each grid dimension. */ ) const =0;
 
+        /// Get grid points within specified subset of the grid.
+        /**
+           Reads all elements from 'first' to 'last' indices in each dimension in 
+           row-major order, and writes them to consecutive memory locations,
+           starting at 'buffer_ptr'.
+           The buffer pointed to must contain the number of bytes equal to
+           yk_solution::get_element_bytes() multiplied by the number of 
+           points in the specified slice.
+           Since the reads proceed in row-major order, the last index is "unit-stride"
+           in the buffer.
+           Indices are relative to the *overall* problem domain.
+           Index values must fall within the rank domain or padding area.
+           @returns Number of elements read.
+        */
+        virtual idx_t
+        get_elements_in_slice(void* buffer_ptr
+                              /**< [out] Pointer to buffer where values will be written. */,
+                              const std::vector<idx_t>& first_indices
+                              /**< [in] List of beginning indices, one for each grid dimension. */,
+                              const std::vector<idx_t>& last_indices
+                              /**< [in] List of ending indices, one for each grid dimension. */ ) const =0;
+        
         /// Set the value of one grid point.
         /** 
            Provide the number of indices equal to the number of dimensions in the grid.
            Indices beyond that will be ignored.
-           Indices are relative to the overall problem domain.
-           You can only set elements that are located in the grid in the current rank.
+           Indices are relative to the *overall* problem domain.
+           Index values must fall within the rank domain or padding area.
            See yk_solution::get_first_domain_index(), 
            yk_solution::get_last_domain_index(), and the 
            "Detailed Description" for \ref yk_grid for more information on grid sizes.
            @note The parameter value is a double-precision floating-point value, but
-           it may be converted to single-precision if the solution was configured with 4-byte
-           elements via yc_solution::set_element_bytes().
+           it will be converted to single-precision if
+           yk_solution::get_element_bytes() returns 4.
            @note If storage has not been allocated via yk_solution::prepare_solution(),
            this will have no effect.
          */
@@ -704,8 +731,8 @@ namespace yask {
            Sets all allocated elements, including those in the domain and padding
            area to the same specified value.
            @note The parameter is a double-precision floating-point value, but
-           it may be converted to single-precision if the solution was configured with 4-byte
-           elements via yc_solution::set_element_bytes().
+           it will be converted to single-precision if
+           yk_solution::get_element_bytes() returns 4.
            @note If storage has not been allocated via yk_solution::prepare_solution(),
            this will have no effect.
          */
@@ -716,7 +743,8 @@ namespace yask {
         /**
            Sets all elements from 'first' to 'last' indices in each dimension to the
            specified value.
-           Index values must fall within the domain or padding area.
+           Indices are relative to the *overall* problem domain.
+           Index values must fall within the rank domain or padding area.
            Notes in set_all_elements() documentation apply.
            @returns Number of elements set.
         */
@@ -727,6 +755,30 @@ namespace yask {
                                    const std::vector<idx_t>& last_indices
                                    /**< [in] List of ending indices, one for each grid dimension. */ ) =0;
 
+        /// Set grid points within specified subset of the grid.
+        /**
+           Reads elements from consecutive memory locations,
+           starting at 'buffer_ptr',
+           and writes them from 'first' to 'last' indices in each dimension in 
+           row-major order.
+           The buffer pointed to must contain either 4 or 8 byte FP values per point in the 
+           subset, depending on the FP precision of the solution.
+           The buffer pointed to must contain the number of FP values in the specified slice,
+           where each FP value is the size of yk_solution::get_element_bytes().
+           Since the writes proceed in row-major order, the last index is "unit-stride"
+           in the buffer.
+           Indices are relative to the *overall* problem domain.
+           Index values must fall within the rank domain or padding area.
+           @returns Number of elements written.
+        */
+        virtual idx_t
+        set_elements_in_slice(const void* buffer_ptr
+                              /**< [out] Pointer to buffer where values will be read. */,
+                              const std::vector<idx_t>& first_indices
+                              /**< [in] List of beginning indices, one for each grid dimension. */,
+                              const std::vector<idx_t>& last_indices
+                              /**< [in] List of ending indices, one for each grid dimension. */ ) =0;
+        
         /// Explicitly allocate data-storage memory for this grid.
         /**
            Amount of allocation is calculated based on domain, padding, and 

@@ -284,8 +284,8 @@ namespace yask {
     }
 
     // Eval equation group(s) over grid(s) using optimized code.
-    void StencilContext::apply_solution(idx_t first_step_index,
-                                        idx_t last_step_index)
+    void StencilContext::run_solution(idx_t first_step_index,
+                                      idx_t last_step_index)
     {
         idx_t begin_dt = first_step_index;
         idx_t end_dt = last_step_index + 1; // end is 1 past last.
@@ -438,7 +438,7 @@ namespace yask {
         idx_t begin_dt = ofs_t;
         idx_t end_dt = begin_dt + _opts->dt;
 
-        apply_solution(begin_dt, end_dt - 1);
+        run_solution(begin_dt, end_dt - 1);
     }
 
     // Calculate results within a region.

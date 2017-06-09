@@ -625,6 +625,20 @@ namespace yask {
             return double(readElem(indices.at(0), indices.at(1),
                                    indices.at(2), __LINE__));
         }
+        virtual idx_t get_elements_in_slice(void* buffer_ptr,
+                                            const GridIndices& first_indices,
+                                            const GridIndices& last_indices) const {
+            checkIndices(first_indices, "get_elements_in_slice");
+            checkIndices(last_indices, "get_elements_in_slice");
+            idx_t n = 0;
+            for (idx_t x = first_indices[0]; x <= last_indices[0]; x++)
+                for (idx_t y = first_indices[1]; y <= last_indices[1]; y++)
+                    for (idx_t z = first_indices[2]; z <= last_indices[2]; z++, n++) {
+                        real_t val = readElem(x, y, z, __LINE__);
+                        ((real_t*)buffer_ptr)[n] = val;
+                    }
+            return n;
+        }
 
         // Write one element.
         virtual void writeElem_TWXYZ(real_t val,
@@ -657,6 +671,20 @@ namespace yask {
                 for (idx_t y = first_indices[1]; y <= last_indices[1]; y++)
                     for (idx_t z = first_indices[2]; z <= last_indices[2]; z++, n++)
                         writeElem(real_t(val), x, y, z, __LINE__);
+            return n;
+        }
+        virtual idx_t set_elements_in_slice(const void* buffer_ptr,
+                                            const std::vector<idx_t>& first_indices,
+                                            const std::vector<idx_t>& last_indices) {
+            checkIndices(first_indices, "set_elements_in_slice");
+            checkIndices(last_indices, "set_elements_in_slice");
+            idx_t n = 0;
+            for (idx_t x = first_indices[0]; x <= last_indices[0]; x++)
+                for (idx_t y = first_indices[1]; y <= last_indices[1]; y++)
+                    for (idx_t z = first_indices[2]; z <= last_indices[2]; z++, n++) {
+                        real_t val = ((real_t*)buffer_ptr)[n];
+                        writeElem(val, x, y, z, __LINE__);
+                    }
             return n;
         }
         
@@ -893,6 +921,21 @@ namespace yask {
             return double(readElem(indices.at(0), indices.at(1),
                                    indices.at(2), indices.at(3), __LINE__));
         }
+        virtual idx_t get_elements_in_slice(void* buffer_ptr,
+                                            const GridIndices& first_indices,
+                                            const GridIndices& last_indices) const {
+            checkIndices(first_indices, "get_elements_in_slice");
+            checkIndices(last_indices, "get_elements_in_slice");
+            idx_t n = 0;
+            for (idx_t w = first_indices[0]; w <= last_indices[0]; w++)
+                for (idx_t x = first_indices[1]; x <= last_indices[1]; x++)
+                    for (idx_t y = first_indices[2]; y <= last_indices[2]; y++)
+                        for (idx_t z = first_indices[3]; z <= last_indices[3]; z++, n++) {
+                            real_t val = readElem(w, x, y, z, __LINE__);
+                            ((real_t*)buffer_ptr)[n] = val;
+                        }
+            return n;
+        }
 
         // Write one element.
         virtual void writeElem_TWXYZ(real_t val,
@@ -925,6 +968,21 @@ namespace yask {
                     for (idx_t y = first_indices[2]; y <= last_indices[2]; y++)
                         for (idx_t z = first_indices[3]; z <= last_indices[3]; z++, n++)
                             writeElem(real_t(val), w, x, y, z, __LINE__);
+            return n;
+        }
+        virtual idx_t set_elements_in_slice(const void* buffer_ptr,
+                                            const std::vector<idx_t>& first_indices,
+                                            const std::vector<idx_t>& last_indices) {
+            checkIndices(first_indices, "set_elements_in_slice");
+            checkIndices(last_indices, "set_elements_in_slice");
+            idx_t n = 0;
+            for (idx_t w = first_indices[0]; w <= last_indices[0]; w++)
+                for (idx_t x = first_indices[1]; x <= last_indices[1]; x++)
+                    for (idx_t y = first_indices[2]; y <= last_indices[2]; y++)
+                        for (idx_t z = first_indices[3]; z <= last_indices[3]; z++, n++) {
+                            real_t val = ((real_t*)buffer_ptr)[n];
+                            writeElem(val, w, x, y, z, __LINE__);
+                    }
             return n;
         }
 
@@ -1161,6 +1219,21 @@ namespace yask {
             return double(readElem(indices.at(0), indices.at(1),
                                    indices.at(2), indices.at(3), __LINE__));
         }
+        virtual idx_t get_elements_in_slice(void* buffer_ptr,
+                                            const GridIndices& first_indices,
+                                            const GridIndices& last_indices) const {
+            checkIndices(first_indices, "get_elements_in_slice");
+            checkIndices(last_indices, "get_elements_in_slice");
+            idx_t n = 0;
+            for (idx_t t = first_indices[0]; t <= last_indices[0]; t++)
+                for (idx_t x = first_indices[1]; x <= last_indices[1]; x++)
+                    for (idx_t y = first_indices[2]; y <= last_indices[2]; y++)
+                        for (idx_t z = first_indices[3]; z <= last_indices[3]; z++, n++) {
+                            real_t val = readElem(t, x, y, z, __LINE__);
+                            ((real_t*)buffer_ptr)[n] = val;
+                        }
+            return n;
+        }
         
         // Write one element.
         virtual void writeElem_TWXYZ(real_t val,
@@ -1193,6 +1266,21 @@ namespace yask {
                     for (idx_t y = first_indices[2]; y <= last_indices[2]; y++)
                         for (idx_t z = first_indices[3]; z <= last_indices[3]; z++, n++)
                             writeElem(real_t(val), t, x, y, z, __LINE__);
+            return n;
+        }
+        virtual idx_t set_elements_in_slice(const void* buffer_ptr,
+                                            const std::vector<idx_t>& first_indices,
+                                            const std::vector<idx_t>& last_indices) {
+            checkIndices(first_indices, "set_elements_in_slice");
+            checkIndices(last_indices, "set_elements_in_slice");
+            idx_t n = 0;
+            for (idx_t t = first_indices[0]; t <= last_indices[0]; t++)
+                for (idx_t x = first_indices[1]; x <= last_indices[1]; x++)
+                    for (idx_t y = first_indices[2]; y <= last_indices[2]; y++)
+                        for (idx_t z = first_indices[3]; z <= last_indices[3]; z++, n++) {
+                            real_t val = ((real_t*)buffer_ptr)[n];
+                            writeElem(val, t, x, y, z, __LINE__);
+                    }
             return n;
         }
 
@@ -1437,6 +1525,22 @@ namespace yask {
                                    indices.at(2), indices.at(3),
                                    indices.at(4), __LINE__));
         }
+        virtual idx_t get_elements_in_slice(void* buffer_ptr,
+                                            const GridIndices& first_indices,
+                                            const GridIndices& last_indices) const {
+            checkIndices(first_indices, "get_elements_in_slice");
+            checkIndices(last_indices, "get_elements_in_slice");
+            idx_t n = 0;
+            for (idx_t t = first_indices[0]; t <= last_indices[0]; t++)
+                for (idx_t w = first_indices[1]; w <= last_indices[1]; w++)
+                    for (idx_t x = first_indices[2]; x <= last_indices[2]; x++)
+                        for (idx_t y = first_indices[3]; y <= last_indices[3]; y++)
+                            for (idx_t z = first_indices[4]; z <= last_indices[4]; z++, n++) {
+                                real_t val = readElem(t, w, x, y, z, __LINE__);
+                                ((real_t*)buffer_ptr)[n] = val;
+                            }
+            return n;
+        }
 
         // Write one element.
         virtual void writeElem_TWXYZ(real_t val,
@@ -1471,6 +1575,22 @@ namespace yask {
                         for (idx_t y = first_indices[3]; y <= last_indices[3]; y++)
                             for (idx_t z = first_indices[4]; z <= last_indices[4]; z++, n++)
                                 writeElem(real_t(val), t, w, x, y, z, __LINE__);
+            return n;
+        }
+        virtual idx_t set_elements_in_slice(const void* buffer_ptr,
+                                            const std::vector<idx_t>& first_indices,
+                                            const std::vector<idx_t>& last_indices) {
+            checkIndices(first_indices, "set_elements_in_slice");
+            checkIndices(last_indices, "set_elements_in_slice");
+            idx_t n = 0;
+            for (idx_t t = first_indices[0]; t <= last_indices[0]; t++)
+                for (idx_t w = first_indices[1]; w <= last_indices[1]; w++)
+                    for (idx_t x = first_indices[2]; x <= last_indices[2]; x++)
+                        for (idx_t y = first_indices[3]; y <= last_indices[3]; y++)
+                            for (idx_t z = first_indices[4]; z <= last_indices[4]; z++, n++) {
+                                real_t val = ((real_t*)buffer_ptr)[n];
+                                writeElem(val, t, w, x, y, z, __LINE__);
+                            }
             return n;
         }
 

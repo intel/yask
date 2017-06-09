@@ -728,8 +728,6 @@ all-tests:
 	$(MAKE) clean; $(MAKE) -j stencil=ave cxx-yk-api-test
 	$(MAKE) clean; $(MAKE) -j stencil=ave py-yk-api-test
 	$(MAKE) clean; $(MAKE) -j stencil=fsg_abc yk-test
-	$(MAKE) clean; $(MAKE) -j stencil=fsg_abc cxx-yk-api-test
-	$(MAKE) clean; $(MAKE) -j stencil=fsg_abc py-yk-api-test
 	$(MAKE) clean; $(MAKE) -j stencil=test cxx-yc-api-and-yk-test
 	$(MAKE) clean; $(MAKE) -j stencil=test cxx-yc-api-and-cxx-yk-api-test
 	$(MAKE) clean; $(MAKE) -j stencil=test cxx-yc-api-and-py-yk-api-test

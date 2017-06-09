@@ -514,6 +514,9 @@ namespace yask {
         virtual const std::string& get_name() const {
             return name;
         }
+        virtual int get_element_bytes() const {
+            return REAL_BYTES;
+        }
 
         virtual int get_num_grids() const {
             return int(gridPtrs.size());
@@ -560,10 +563,10 @@ namespace yask {
         virtual idx_t get_last_rank_domain_index(const std::string& dim) const;
         virtual idx_t get_overall_domain_size(const std::string& dim) const;
 
-        virtual void apply_solution(idx_t first_step_index,
-                                    idx_t last_step_index);
-        virtual void apply_solution(idx_t step_index) {
-            apply_solution(step_index, step_index);
+        virtual void run_solution(idx_t first_step_index,
+                                  idx_t last_step_index);
+        virtual void run_solution(idx_t step_index) {
+            run_solution(step_index, step_index);
         }
         virtual void share_grid_storage(yk_solution_ptr source);
     };
