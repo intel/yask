@@ -26,8 +26,12 @@
 ## Test the YASK stencil kernel API for Python.
 
 import sys
+import numpy as np
 sys.path.append('lib')
 import yask_kernel
+
+def clamp(x, minimum, maximum):
+    return max(minimum, min(x, maximum))
 
 if __name__ == "__main__":
 
@@ -70,33 +74,38 @@ if __name__ == "__main__":
     for grid in soln.get_grids() :
         print("    " + grid.get_name() + repr(grid.get_dim_names()))
 
-        # Subset of domain.
+        # Create indices to bound a subset of domain:
+        # Index 0 in time, and a small [hyper]cube in center
+        # of overall problem.
         first_indices = []
         last_indices = []
         for dname in grid.get_dim_names() :
             if dname == soln.get_step_dim_name() :
 
-                # initial timestep.
+                # Initial timestep only.
                 first_indices += [0]
                 last_indices += [0]
 
             else :
 
-                # small cube in center of overall problem.
-                psize = soln.get_overall_domain_size(dname)
-                first_idx = min(soln.get_last_rank_domain_index(dname),
-                                max(soln.get_first_rank_domain_index(dname),
-                                    psize/2 - 10))
-                last_idx = min(soln.get_last_rank_domain_index(dname),
-                               max(soln.get_first_rank_domain_index(dname),
-                                   psize/2 + 10))
+                # Midpoint of overall problem in this dim.
+                midpt = soln.get_overall_domain_size(dname) // 2;
+
+                # Create indices a small amount before and after the midpoint,
+                # and clamp them to allowed indices in this rank.
+                first_idx = clamp(midpt - 10,
+                                  soln.get_first_rank_domain_index(dname),
+                                  soln.get_last_rank_domain_index(dname))
+                last_idx = clamp(midpt + 10,
+                                 soln.get_first_rank_domain_index(dname),
+                                 soln.get_last_rank_domain_index(dname))
                 first_indices += [first_idx]
-                last_indices += [last_idx];
+                last_indices += [last_idx]
 
         # Init the values in a 'hat' function.
-        grid.set_all_elements_same(0.0);
+        grid.set_all_elements_same(0.0)
         nset = grid.set_elements_in_slice_same(1.0, first_indices, last_indices)
-        print("      " + repr(nset) + " element(s) set to 1.0.");
+        print("      " + repr(nset) + " element(s) set to 1.0.")
 
     # NB: In a real application, the data in the grids would be
     # loaded or otherwise set to meaningful values here.
