@@ -74,13 +74,11 @@ stencil		=	iso3dfd
 arch		=	snb
 mpi		=	1
 real_bytes	=	4
+radius		=	1
 
 # Defaults based on stencil type (and arch for some stencils).
 ifeq ($(stencil),)
  $(error Stencil not specified)
-
-else ifeq ($(stencil),ave)
- radius		=	1
 
 else ifeq ($(stencil),3axis)
  MACROS		+=	MAX_EXCH_DIST=1
@@ -244,8 +242,6 @@ def_block_threads	?=	2
 real_bytes		?=	4
 layout_xyz		?=	Layout_123
 layout_txyz		?=	Layout_2314
-layout_wxyz		?=	Layout_1234
-layout_twxyz		?=	Layout_23415
 def_rank_args		?=	-d 128
 def_block_args		?=	-b 64
 def_pad_args		?=	-mp 0
@@ -328,8 +324,6 @@ MACROS		+=	DEF_ARGS='"$(DEF_ARGS) $(EXTRA_DEF_ARGS)"'
 # MACROS and EXTRA_MACROS will be written to a header file.
 MACROS		+=	LAYOUT_XYZ=$(layout_xyz)
 MACROS		+=	LAYOUT_TXYZ=$(layout_txyz)
-MACROS		+=	LAYOUT_WXYZ=$(layout_wxyz)
-MACROS		+=	LAYOUT_TWXYZ=$(layout_twxyz)
 MACROS		+=	PFDL1=$(pfd_l1) PFDL2=$(pfd_l2)
 ifeq ($(streaming_stores),1)
  MACROS		+=	USE_STREAMING_STORE
@@ -444,8 +438,8 @@ YK_MK_GEN_DIR	:=	mkdir -p -v $(YK_GEN_DIR)
 # indices. Those that do not (e.g., grouped, serpentine, square-wave) may
 # *not* be used here when using temporal wavefronts. The time loop may be
 # found in StencilEquations::calc_rank().
-RANK_LOOP_OPTS		?=	-dims 'dw,dx,dy,dz'
-RANK_LOOP_OUTER_VARS	?=	dw,dx,dy,dz
+RANK_LOOP_OPTS		?=	-dims 'dx,dy,dz'
+RANK_LOOP_OUTER_VARS	?=	dx,dy,dz
 RANK_LOOP_CODE		?=	$(RANK_LOOP_OUTER_MODS) loop($(RANK_LOOP_OUTER_VARS)) \
 				{ $(RANK_LOOP_INNER_MODS) calc(region(start_dt, stop_dt, eqGroup_ptr)); }
 
@@ -454,10 +448,10 @@ RANK_LOOP_CODE		?=	$(RANK_LOOP_OUTER_MODS) loop($(RANK_LOOP_OUTER_VARS)) \
 # to a top-level OpenMP thread.  The region time loops are not coded here to
 # allow for proper spatial skewing for temporal wavefronts. The time loop
 # may be found in StencilEquations::calc_region().
-REGION_LOOP_OPTS	?=     	-dims 'rw,rx,ry,rz' \
+REGION_LOOP_OPTS	?=     	-dims 'rx,ry,rz' \
 				-ompConstruct '$(omp_par_for) schedule($(omp_region_schedule)) proc_bind(spread)' \
 				-calcPrefix 'eg->calc_'
-REGION_LOOP_OUTER_VARS	?=	rw,rx,ry,rz
+REGION_LOOP_OUTER_VARS	?=	rx,ry,rz
 REGION_LOOP_OUTER_MODS	?=	grouped
 REGION_LOOP_CODE	?=	omp $(REGION_LOOP_OUTER_MODS) loop($(REGION_LOOP_OUTER_VARS)) { \
 				$(REGION_LOOP_INNER_MODS) calc(block(rt)); }
@@ -466,9 +460,9 @@ REGION_LOOP_CODE	?=	omp $(REGION_LOOP_OUTER_MODS) loop($(REGION_LOOP_OUTER_VARS)
 # a nested OpenMP loop so that each sub-block is assigned to a nested OpenMP
 # thread.  There is no time loop here because threaded temporal blocking is
 # not yet supported.
-BLOCK_LOOP_OPTS		=     	-dims 'bw,bx,by,bz' \
+BLOCK_LOOP_OPTS		=     	-dims 'bx,by,bz' \
 				-ompConstruct '$(omp_par_for) schedule($(omp_block_schedule)) proc_bind(close)'
-BLOCK_LOOP_OUTER_VARS	?=	bw,bx,by,bz
+BLOCK_LOOP_OUTER_VARS	?=	bx,by,bz
 BLOCK_LOOP_OUTER_MODS	?=	grouped
 BLOCK_LOOP_CODE		?=	omp $(BLOCK_LOOP_OUTER_MODS) loop($(BLOCK_LOOP_OUTER_VARS)) { \
 				$(BLOCK_LOOP_INNER_MODS) calc(sub_block(bt)); }
@@ -477,11 +471,11 @@ BLOCK_LOOP_CODE		?=	omp $(BLOCK_LOOP_OUTER_MODS) loop($(BLOCK_LOOP_OUTER_VARS)) 
 # this level are by vector instead of element; this is indicated by the 'v'
 # suffix. The innermost loop here is the final innermost loop. There is
 # no time loop here because threaded temporal blocking is not yet supported.
-SUB_BLOCK_LOOP_OPTS		=     	-dims 'sbwv,sbxv,sbyv,sbzv'
+SUB_BLOCK_LOOP_OPTS		=     	-dims 'sbxv,sbyv,sbzv'
 ifeq ($(split_L2),1)
  SUB_BLOCK_LOOP_OPTS		+=     	-splitL2
 endif
-SUB_BLOCK_LOOP_OUTER_VARS	?=	sbwv,sbxv,sbyv
+SUB_BLOCK_LOOP_OUTER_VARS	?=	sbxv,sbyv
 SUB_BLOCK_LOOP_OUTER_MODS	?=	square_wave serpentine
 SUB_BLOCK_LOOP_INNER_VARS	?=	sbzv
 SUB_BLOCK_LOOP_INNER_MODS	?=	prefetch(L2)
@@ -493,10 +487,10 @@ SUB_BLOCK_LOOP_CODE		?=	$(SUB_BLOCK_LOOP_OUTER_MODS) loop($(SUB_BLOCK_LOOP_OUTER
 # The indices at this level are by vector instead of element;
 # this is indicated by the 'v' suffix.
 # Nested OpenMP is not used here because there is no sharing between threads.
-HALO_LOOP_OPTS		=     	-dims 'wv,xv,yv,zv' \
+HALO_LOOP_OPTS		=     	-dims 'xv,yv,zv' \
 				-ompConstruct '$(omp_par_for) schedule($(omp_halo_schedule)) proc_bind(spread)'
 HALO_LOOP_OUTER_MODS	?=	omp
-HALO_LOOP_OUTER_VARS	?=	wv,xv,yv,zv
+HALO_LOOP_OUTER_VARS	?=	xv,yv,zv
 HALO_LOOP_CODE		?=	$(HALO_LOOP_OUTER_MODS) loop($(HALO_LOOP_OUTER_VARS)) \
 				$(HALO_LOOP_INNER_MODS) { calc(halo(t)); }
 
@@ -784,8 +778,6 @@ echo-settings:
 	@echo real_bytes=$(real_bytes)
 	@echo layout_xyz=$(layout_xyz)
 	@echo layout_txyz=$(layout_txyz)
-	@echo layout_wxyz=$(layout_wxyz)
-	@echo layout_twxyz=$(layout_twxyz)
 	@echo pfd_l1=$(pfd_l1)
 	@echo pfd_l2=$(pfd_l2)
 	@echo streaming_stores=$(streaming_stores)

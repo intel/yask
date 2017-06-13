@@ -35,7 +35,6 @@ namespace yask {
 #define GET_GRID_API(api_name, fn_prefix, t_ok, t_fn)                   \
     idx_t RealVecGridBase::api_name(const string& dim) const {          \
         if (t_ok && dim == "t" && got_t()) return t_fn;                 \
-        else if (dim == "w" && got_w()) return fn_prefix ## w();        \
         else if (dim == "x" && got_x()) return fn_prefix ## x();        \
         else if (dim == "y" && got_x()) return fn_prefix ## y();        \
         else if (dim == "z" && got_x()) return fn_prefix ## z();        \
@@ -56,7 +55,6 @@ namespace yask {
 #define SET_GRID_API(api_name, fn_prefix, t_ok, t_fn)                   \
     void RealVecGridBase::api_name(const string& dim, idx_t n) {        \
         if (t_ok && dim == "t" && got_t()) t_fn;                        \
-        else if (dim == "w" && got_w()) fn_prefix ## w(n);              \
         else if (dim == "x" && got_x()) fn_prefix ## x(n);              \
         else if (dim == "y" && got_x()) fn_prefix ## y(n);              \
         else if (dim == "z" && got_x()) fn_prefix ## z(n);              \
@@ -213,27 +211,25 @@ namespace yask {
             errs = 0;
             
             for (int ti = 0; ti <= get_alloc_t(); ti++) {
-                for (int wi = get_first_w(); wi <= get_last_w(); wi++) {
-                    for (int xi = get_first_x(); xi <= get_last_x(); xi++) {
-                        for (int yi = get_first_y(); yi <= get_last_y(); yi++) {
-                            for (int zi = get_first_z(); zi <= get_last_z(); zi++) {
+                for (int xi = get_first_x(); xi <= get_last_x(); xi++) {
+                    for (int yi = get_first_y(); yi <= get_last_y(); yi++) {
+                        for (int zi = get_first_z(); zi <= get_last_z(); zi++) {
 
-                                real_t te = readElem_TWXYZ(ti, wi, xi, yi, zi, __LINE__);
-                                real_t re = ref.readElem_TWXYZ(ti, wi, xi, yi, zi, __LINE__);
+                            real_t te = readElem_TXYZ(ti, xi, yi, zi, __LINE__);
+                            real_t re = ref.readElem_TXYZ(ti, xi, yi, zi, __LINE__);
 
-                                if (!within_tolerance(te, re, epsilon)) {
-                                    errs++;
-                                    if (errs < maxPrint) {
-                                        printElem_TWXYZ(os, "** mismatch",
-                                                        ti, wi, xi, yi, zi,
-                                                        te, 0, false);
-                                        printElem_TWXYZ(os, " != reference",
-                                                        ti, wi, xi, yi, zi,
-                                                        re, 0, true);
-                                    }
-                                    else if (errs == maxPrint)
-                                        os << "** Additional errors not printed." << std::endl;
+                            if (!within_tolerance(te, re, epsilon)) {
+                                errs++;
+                                if (errs < maxPrint) {
+                                    printElem_TXYZ(os, "** mismatch",
+                                                    ti, xi, yi, zi,
+                                                    te, 0, false);
+                                    printElem_TXYZ(os, " != reference",
+                                                    ti, xi, yi, zi,
+                                                    re, 0, true);
                                 }
+                                else if (errs == maxPrint)
+                                    os << "** Additional errors not printed." << std::endl;
                             }
                         }
                     }
@@ -244,8 +240,8 @@ namespace yask {
     }
 
     // Print one element.
-    void  RealVecGridBase::printElem_TWXYZ(std::ostream& os, const std::string& m,
-                                           idx_t t, idx_t w, idx_t x, idx_t y, idx_t z,
+    void  RealVecGridBase::printElem_TXYZ(std::ostream& os, const std::string& m,
+                                           idx_t t, idx_t x, idx_t y, idx_t z,
                                            real_t e,
                                            int line,
                                            bool newline) const {
@@ -255,7 +251,6 @@ namespace yask {
             os << m << ": ";
         os << get_name() << "[";
         if (got_t()) os << "t=" << t << ", ";
-        if (got_w()) os << "w=" << w << ", ";
         if (got_x()) os << "x=" << x << ", ";
         if (got_y()) os << "y=" << y << ", ";
         if (got_z()) os << "z=" << z;
@@ -268,11 +263,10 @@ namespace yask {
 
     // Print one vector at *vector* offset.
     // Indices must be normalized, i.e., already divided by VLEN_*.
-    void RealVecGridBase::printVecNorm_TWXYZ(std::ostream& os, const std::string& m,
-                                             idx_t t, idx_t wv, idx_t xv, idx_t yv, idx_t zv,
+    void RealVecGridBase::printVecNorm_TXYZ(std::ostream& os, const std::string& m,
+                                             idx_t t, idx_t xv, idx_t yv, idx_t zv,
                                              const real_vec_t& v,
                                              int line) const {
-        idx_t w = wv * VLEN_W;
         idx_t x = xv * VLEN_X;
         idx_t y = yv * VLEN_Y;
         idx_t z = zv * VLEN_Z;
@@ -281,21 +275,19 @@ namespace yask {
         for (int zi = 0; zi < VLEN_Z; zi++) {
             for (int yi = 0; yi < VLEN_Y; yi++) {
                 for (int xi = 0; xi < VLEN_X; xi++) {
-                    for (int wi = 0; wi < VLEN_W; wi++) {
-                        real_t e = v(wi, xi, yi, zi);
+                    real_t e = v(xi, yi, zi);
 #ifdef CHECK_VEC_ELEMS
-                        real_t e2 = readElem_TWXYZ(t, w+wi, x+xi, y+yi, z+zi, line);
+                    real_t e2 = readElem_TXYZ(t, x+xi, y+yi, z+zi, line);
 #endif
-                        printElem_TWXYZ(os, m, t, w+wi, x+xi, y+yi, z+zi, e, line);
+                    printElem_TXYZ(os, m, t, x+xi, y+yi, z+zi, e, line);
 #ifdef CHECK_VEC_ELEMS
-                        // compare to per-element read.
-                        if (e == e2)
-                            os << " (same as readElem())";
-                        else
-                            os << " != " << e2 << " from readElem() <<<< ERROR";
+                    // compare to per-element read.
+                    if (e == e2)
+                        os << " (same as readElem())";
+                    else
+                        os << " != " << e2 << " from readElem() <<<< ERROR";
 #endif
-                        os << std::endl << std::flush;
-                    }
+                    os << std::endl << std::flush;
                 }
             }
         }

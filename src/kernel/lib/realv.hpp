@@ -85,9 +85,6 @@ namespace yask {
 #ifndef VLEN_T
 #define VLEN_T (1)
 #endif
-#ifndef VLEN_W
-#define VLEN_W (1)
-#endif
 #ifndef VLEN_X
 #define VLEN_X (1)
 #endif
@@ -98,7 +95,7 @@ namespace yask {
 #define VLEN_Z (1)
 #endif
 #ifndef VLEN
-#define VLEN ((VLEN_T) * (VLEN_W) * (VLEN_X) * (VLEN_Y) * (VLEN_Z))
+#define VLEN ((VLEN_T) * (VLEN_X) * (VLEN_Y) * (VLEN_Z))
 #endif
 
 #if VLEN_T != 1
@@ -185,7 +182,7 @@ namespace yask {
 
     // Type for a vector block.
     // The union 'u' is a 4-dimensional "folded" vector
-    // of size VLEN_W * VLEN_X * VLEN_Y * VLEN_Z.
+    // of size VLEN_X * VLEN_Y * VLEN_Z.
     struct real_vec_t {
 
         // union of data types.
@@ -267,10 +264,8 @@ namespace yask {
             return u.r[l];
         }
 
-        // access a real_t by w,x,y,z element indices.
-        ALWAYS_INLINE const real_t& operator()(idx_t w, idx_t x, idx_t y, idx_t z) const {
-            assert(w >= 0);
-            assert(w < VLEN_W);
+        // access a real_t by x,y,z element indices.
+        ALWAYS_INLINE const real_t& operator()(idx_t x, idx_t y, idx_t z) const {
             assert(x >= 0);
             assert(x < VLEN_X);
             assert(y >= 0);
@@ -281,19 +276,19 @@ namespace yask {
             // TODO: move this to stencil compiler.
 #if VLEN_FIRST_DIM_IS_UNIT_STRIDE
 
-            // w dim is unit stride, followed by x, y, z.
-            idx_t l = LAYOUT_4321(w, x, y, z, VLEN_W, VLEN_X, VLEN_Y, VLEN_Z);
+            // x dim is unit stride, followed by y, z.
+            idx_t l = LAYOUT_321(x, y, z, VLEN_X, VLEN_Y, VLEN_Z);
 #else
 
-            // z dim is unit stride, followed by y, x, w.
-            idx_t l = LAYOUT_1234(w, x, y, z, VLEN_W, VLEN_X, VLEN_Y, VLEN_Z);
+            // z dim is unit stride, followed by y, x.
+            idx_t l = LAYOUT_123(x, y, z, VLEN_X, VLEN_Y, VLEN_Z);
 #endif
         
             return u.r[l];
         }
-        ALWAYS_INLINE real_t& operator()(idx_t w, idx_t x, idx_t y, idx_t z) {
+        ALWAYS_INLINE real_t& operator()(idx_t x, idx_t y, idx_t z) {
             const real_vec_t* ct = const_cast<const real_vec_t*>(this);
-            const real_t& cr = (*ct)(w, x, y, z);
+            const real_t& cr = (*ct)(x, y, z);
             return const_cast<real_t&>(cr);
         }
 

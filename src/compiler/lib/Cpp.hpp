@@ -337,9 +337,8 @@ namespace yask {
             _context_base = _context + "_data";
 
             // YASK dims are hard-coded.
-            // TODO: fix YASK.
+            // TODO: fix YASK kernel code.
             _yask_step = "t";
-            _yask_dims.addDimBack("w", 1);
             _yask_dims.addDimBack("x", 1);
             _yask_dims.addDimBack("y", 1);
             _yask_dims.addDimBack("z", 1);

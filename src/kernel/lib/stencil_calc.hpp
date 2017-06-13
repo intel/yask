@@ -66,36 +66,33 @@ namespace yask {
         // A type to store ranks of all possible neighbors in all
         // directions, including diagonals.
         enum NeighborOffset { rank_prev, rank_self, rank_next, num_neighbors };
-        typedef int Neighbors[num_neighbors][num_neighbors][num_neighbors][num_neighbors];
+        typedef int Neighbors[num_neighbors][num_neighbors][num_neighbors];
 
         // Neighborhood size includes self.
-        static const int neighborhood_size = num_neighbors * num_neighbors * num_neighbors * num_neighbors;
+        static const int neighborhood_size = num_neighbors * num_neighbors * num_neighbors;
         
         // Need one buf for send and one for receive for each neighbor.
         enum BufDir { bufSend, bufRec, nBufDirs };
 
         // A type to store buffers for all possible neighbors.
-        typedef Grid_WXYZ* NeighborBufs[nBufDirs][num_neighbors][num_neighbors][num_neighbors][num_neighbors];
+        typedef Grid_XYZ* NeighborBufs[nBufDirs][num_neighbors][num_neighbors][num_neighbors];
         NeighborBufs bufs;
 
         MPIBufs() {
             memset(bufs, 0, sizeof(bufs));
         }
 
-        // Access a buffer by direction and 4D neighbor indices.
-        Grid_WXYZ** getBuf(int bd,
-                           idx_t nw, idx_t nx, idx_t ny, idx_t nz) {
+        // Access a buffer by direction and 3D neighbor indices.
+        Grid_XYZ** getBuf(int bd, idx_t nx, idx_t ny, idx_t nz) {
             assert(bd >= 0);
             assert(bd < nBufDirs);
-            assert(nw >= 0);
-            assert(nw < num_neighbors);
             assert(nx >= 0);
             assert(nx < num_neighbors);
             assert(ny >= 0);
             assert(ny < num_neighbors);
             assert(nz >= 0);
             assert(nz < num_neighbors);
-            return &bufs[bd][nw][nx][ny][nz];
+            return &bufs[bd][nx][ny][nz];
         }
 
         // Apply a function to each neighbor rank.
@@ -104,15 +101,15 @@ namespace yask {
         // TODO: remove 'null_ok' when non-symmetrical halos are supported.
         virtual void visitNeighbors(StencilContext& context,
                                     bool null_ok,
-                                    std::function<void (idx_t nw, idx_t nx, idx_t ny, idx_t nz,
+                                    std::function<void (idx_t nx, idx_t ny, idx_t nz,
                                                         int rank,
-                                                        Grid_WXYZ* sendBuf,
-                                                        Grid_WXYZ* rcvBuf)> visitor);
+                                                        Grid_XYZ* sendBuf,
+                                                        Grid_XYZ* rcvBuf)> visitor);
             
         // Create new buffer in given direction and size.
-        virtual Grid_WXYZ* makeBuf(int bd,
-                                   idx_t nw, idx_t nx, idx_t ny, idx_t nz,
-                                   idx_t dw, idx_t dx, idx_t dy, idx_t dz,
+        virtual Grid_XYZ* makeBuf(int bd,
+                                   idx_t nx, idx_t ny, idx_t nz,
+                                   idx_t dx, idx_t dy, idx_t dz,
                                    const std::string& name);
     };
 
@@ -127,19 +124,19 @@ namespace yask {
     public:
         // Sizes in elements (points).
         // - time sizes (t) are in steps to be done.
-        // - spatial sizes (w, x, y, z) are in elements (not vectors).
+        // - spatial sizes (x, y, z) are in elements (not vectors).
         // Sizes are the same for all grids.
-        idx_t dt=50, dw=1, dx=100, dy=100, dz=100; // rank size (without halos).
-        idx_t rt=1, rw=0, rx=0, ry=0, rz=0; // region size (used for wave-front tiling).
-        idx_t bgw=0, bgx=0, bgy=0, bgz=0; // block-group size (only used for 'grouped' region loops).
-        idx_t bt=1, bw=1, bx=def_block, by=def_block, bz=def_block; // block size (used for each outer thread).
-        idx_t sbgw=0, sbgx=0, sbgy=0, sbgz=0; // sub-block-group size (only used for 'grouped' block loops).
-        idx_t sbt=1, sbw=0, sbx=0, sby=0, sbz=0; // sub-block size (used for each nested thread).
-        idx_t mpw=0, mpx=0, mpy=0, mpz=0;     // minimum spatial padding.
+        idx_t dt=50, dx=100, dy=100, dz=100; // rank size (without halos).
+        idx_t rt=1, rx=0, ry=0, rz=0; // region size (used for wave-front tiling).
+        idx_t bgx=0, bgy=0, bgz=0; // block-group size (only used for 'grouped' region loops).
+        idx_t bt=1, bx=def_block, by=def_block, bz=def_block; // block size (used for each outer thread).
+        idx_t sbgx=0, sbgy=0, sbgz=0; // sub-block-group size (only used for 'grouped' block loops).
+        idx_t sbt=1, sbx=0, sby=0, sbz=0; // sub-block size (used for each nested thread).
+        idx_t mpx=0, mpy=0, mpz=0;     // minimum spatial padding.
 
         // MPI settings.
-        idx_t nrw=1, nrx=1, nry=1, nrz=1; // number of ranks in each dim.
-        idx_t riw=0, rix=0, riy=0, riz=0; // my rank index in each dim.
+        idx_t nrx=1, nry=1, nrz=1; // number of ranks in each dim.
+        idx_t rix=0, riy=0, riz=0; // my rank index in each dim.
         bool find_loc=true;            // whether my rank index needs to be calculated.
         int msg_rank=0;             // rank that prints informational messages.
 
@@ -196,9 +193,9 @@ namespace yask {
     
     // A 4D bounding-box.
     struct BoundingBox {
-        idx_t begin_bbw=0, begin_bbx=0, begin_bby=0, begin_bbz=0;
-        idx_t end_bbw=1, end_bbx=1, end_bby=1, end_bbz=1; // one past last value.
-        idx_t len_bbw=1, len_bbx=1, len_bby=1, len_bbz=1;
+        idx_t begin_bbx=0, begin_bby=0, begin_bbz=0;
+        idx_t end_bbx=1, end_bby=1, end_bbz=1; // one past last value.
+        idx_t len_bbx=1, len_bby=1, len_bbz=1;
         idx_t bb_size=1;        // points in the entire box.
         idx_t bb_num_points=1;  // valid points within the box.
         bool bb_simple=true;    // full box with vector-length sizes.
@@ -208,11 +205,10 @@ namespace yask {
 
         // Find lengths and set valid to true.
         virtual void update_lengths() {
-            len_bbw = end_bbw - begin_bbw;
             len_bbx = end_bbx - begin_bbx;
             len_bby = end_bby - begin_bby;
             len_bbz = end_bbz - begin_bbz;
-            bb_size = len_bbw * len_bbx * len_bby * len_bbz;
+            bb_size = len_bbx * len_bby * len_bbz;
             bb_valid = true;
         }
     };
@@ -289,13 +285,13 @@ namespace yask {
         ParamPtrMap paramMap;
 
         // Some calculated sizes.
-        idx_t ofs_t=0, ofs_w=0, ofs_x=0, ofs_y=0, ofs_z=0; // Index offsets for this rank.
-        idx_t tot_w=0, tot_x=0, tot_y=0, tot_z=0; // Total of rank domains over all ranks.
+        idx_t ofs_t=0, ofs_x=0, ofs_y=0, ofs_z=0; // Index offsets for this rank.
+        idx_t tot_x=0, tot_y=0, tot_z=0; // Total of rank domains over all ranks.
 
         // Maximum halos and skewing angles over all grids and
         // equations. Used for calculating worst-case minimum regions.
-        idx_t hw=0, hx=0, hy=0, hz=0;                     // spatial halos.
-        idx_t angle_w=0, angle_x=0, angle_y=0, angle_z=0; // temporal skewing angles.
+        idx_t hx=0, hy=0, hz=0;                     // spatial halos.
+        idx_t angle_x=0, angle_y=0, angle_z=0; // temporal skewing angles.
 
         // Various metrics calculated in prepare_solution().
         // 'rank_' prefix indicates for this rank.
@@ -496,8 +492,8 @@ namespace yask {
         // w/a more logical index ordering.
         virtual void calc_region(idx_t start_dt, idx_t stop_dt,
                                  EqGroupSet* eqGroup_set,
-                                 idx_t start_dw, idx_t start_dx, idx_t start_dy, idx_t start_dz,
-                                 idx_t stop_dw, idx_t stop_dx, idx_t stop_dy, idx_t stop_dz);
+                                 idx_t start_dx, idx_t start_dy, idx_t start_dz,
+                                 idx_t stop_dx, idx_t stop_dy, idx_t stop_dz);
 
         // Exchange halo data needed by eq-group 'eg' at the given time.
         virtual void exchange_halos(idx_t start_dt, idx_t stop_dt, EqGroupBase& eg);
@@ -549,7 +545,7 @@ namespace yask {
         virtual int get_num_domain_dims() const {
 
             // TODO: remove hard-coded assumptions.
-            return USING_DIM_W ? 4 : 3;
+            return 3;
         }
         virtual std::string get_domain_dim_name(int n) const;
         virtual std::vector<std::string> get_domain_dim_names() const {
@@ -637,24 +633,24 @@ namespace yask {
 
         // Determine whether indices are in [sub-]domain.
         virtual bool
-        is_in_valid_domain(idx_t t, ARG_W(idx_t w) idx_t x, idx_t y, idx_t z) =0;
+        is_in_valid_domain(idx_t t, idx_t x, idx_t y, idx_t z) =0;
 
         // Calculate one scalar result at time t.
         virtual void
-        calc_scalar(idx_t t, ARG_W(idx_t w) idx_t x, idx_t y, idx_t z) =0;
+        calc_scalar(idx_t t, idx_t x, idx_t y, idx_t z) =0;
 
         // Calculate results within a block.
         virtual void
         calc_block(idx_t bt,
-                   idx_t begin_bw, idx_t begin_bx, idx_t begin_by, idx_t begin_bz,
-                   idx_t end_bw, idx_t end_bx, idx_t end_by, idx_t end_bz);
+                   idx_t begin_bx, idx_t begin_by, idx_t begin_bz,
+                   idx_t end_bx, idx_t end_by, idx_t end_bz);
 
         // Calculate one sub-block of results from begin to end-1 on each dimension.
         // In the 't' dimension, evaluation is at 'sbt' only.
         virtual void
         calc_sub_block(idx_t sbt,
-                       idx_t begin_sbw, idx_t begin_sbx, idx_t begin_sby, idx_t begin_sbz,
-                       idx_t end_sbw, idx_t end_sbx, idx_t end_sby, idx_t end_sbz);
+                       idx_t begin_sbx, idx_t begin_sby, idx_t begin_sbz,
+                       idx_t end_sbx, idx_t end_sby, idx_t end_sbz);
 
         // Calculate one sub-block of results in whole clusters from
         // 'begin_sb*v' to 'end_sb*v'-1 on each spatial dimension.  In the
@@ -662,9 +658,9 @@ namespace yask {
         // are in vectors (hence, the 'v' suffix), i.e., element indices
         // dividied by 'VLEN_*'.
         virtual void
-        calc_sub_block_of_clusters(idx_t begin_sbtv, ARG_W(idx_t begin_sbwv)
+        calc_sub_block_of_clusters(idx_t begin_sbtv,
                                    idx_t begin_sbxv, idx_t begin_sbyv, idx_t begin_sbzv,
-                                   idx_t end_sbtv, ARG_W(idx_t end_sbwv)
+                                   idx_t end_sbtv,
                                    idx_t end_sbxv, idx_t end_sbyv, idx_t end_sbzv) =0;
     };
 

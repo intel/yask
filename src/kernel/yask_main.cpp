@@ -53,11 +53,7 @@ struct AppSettings : public KernelSettings {
     public:
         ValOption(AppSettings& as) :
                 OptionBase("v",
-                           "Shortcut for '-validate -no-warmup -t 1 -dt 1 -d 64"
-#if USING_DIM_W
-                           " -dw 3"
-#endif
-                           " -b 24'."),
+                           "Shortcut for '-validate -no-warmup -t 1 -dt 1 -d 64 -b 24'."),
                 _as(as) { }
 
         // Set multiple vars.
@@ -68,9 +64,6 @@ struct AppSettings : public KernelSettings {
                 _as.doWarmup = false;
                 _as.num_trials = 1;
                 _as.dt = 1;
-#if USING_DIM_W
-                _as.dw = 3;
-#endif
                 _as.dx = _as.dy = _as.dz = 64;
                 _as.bx = _as.by = _as.bz = 24;
                 return true;
