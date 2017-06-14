@@ -127,14 +127,10 @@ namespace yask {
             If MPI is enabled, this is the domain for the current rank only,
             and the problem domain consists of the sum of all rank domains
             in each dimension (weak-scaling).
-            The domain size affects the size of the grids, but it is not
-            equivalent.  
-            Specifically, it does *not* include the halo region
-            or any additional padding.  
-            The actual number of points in the
-            domain may be greater than this specified size
-            due to rounding up to fold-cluster sizes.
-            Call get_rank_domain_size() to get the actual value.
+            The domain size does *not* include the halo region or any padding.
+            For best performance, it is recommended to set the rank domain
+            size to a multiple of the number of points in a vector-cluster in
+            each dimension.
             See the "Detailed Description" for \ref yk_grid for more information on grid sizes.
             There is no domain-size setting allowed in the
             solution-step dimension (usually "t"). */
@@ -146,11 +142,7 @@ namespace yask {
                              idx_t size /**< [in] Points in the domain in this `dim`. */ ) =0;
 
         /// Get the domain size for this rank.
-        /** Returned value may be slightly larger than the value provided
-            via set_rank_domain_size() due to rounding.
-            Returns the domain on this rank only if MPI is enabled.
-            @returns Number of points in domain in given dimension.
-        */
+        /** @returns Current settings of rank domain size in specified dimension. */
         virtual idx_t
         get_rank_domain_size(const std::string& dim
                              /**< [in] Name of dimension to get.  Must be one of
@@ -160,15 +152,15 @@ namespace yask {
         /// Set the minimum amount of grid padding for all grids.
         /** This sets the minimum number of points in each grid that is
             reserved outside of the rank domain in the given dimension.
-            This padding area can be used for required halo regions.
-            The specified number of points is added to both sides, i.e., both "before" and
-            "after" the domain.
+            This padding area can be used for required halo regions.  At
+            least the specified number of elements will be added to both
+            sides, i.e., both "before" and "after" the domain.
 
             The *actual* padding size will be the largest of the following values,
             additionally rounded up based on the vector-folding dimensions:
             - Halo size.
-            - Value provided by yk_settings::set_min_pad_size().
-            - Value provided by this function, yk_grid::set_min_pad_size().
+            - Value provided by this function, yk_settings::set_min_pad_size().
+            - Value provided by yk_grid::set_min_pad_size().
 
             The padding size cannot be changed after data storage
             has been allocated for a given grid.
@@ -197,7 +189,7 @@ namespace yask {
 
         /// Set the block size in the given dimension.
         /** This sets the approximate number of points that are evaluated in
-            each "block".  
+            each "block".
             This is a performance setting and should not affect the functional
             correctness or total number of points evaluated.
             A block is typically the unit of work done by a
@@ -233,6 +225,8 @@ namespace yask {
            within the overall problem domain based on its MPI rank index.
            The same number of MPI ranks must be set via this API on each
            constituent MPI rank to ensure a consistent overall configuration.
+           The number of ranks in each dimension must be properly set
+           before calling yk_solution::prepare_solution().
            There is no rank setting allowed in the
            solution-step dimension (usually "t").
          */
@@ -363,7 +357,7 @@ namespace yask {
         virtual void
         prepare_solution() =0;
 
-        /// Get the first logical index of the domain in this rank in the specified dimension.
+        /// Get the first logical index of the sub-domain in this rank in the specified dimension.
         /** This returns the first index at the beginning of the domain.
             Points within the domain in this rank lie between the values returned by
             get_first_rank_domain_index() and get_last_rank_domain_index(), inclusive.
@@ -378,7 +372,7 @@ namespace yask {
                                     /**< [in] Name of dimension from get_domain_dim_name().
                                        Cannot be the step dimension. */ ) const =0;
 
-        /// Get the last logical index of the domain in this rank the specified dimension.
+        /// Get the last logical index of the sub-domain in this rank the specified dimension.
         /** This returns the last index within the domain in this rank
             (*not* one past the end).
             If there is only one MPI rank, this is typically one less than the value
@@ -397,7 +391,7 @@ namespace yask {
         /// Get the overall problem size in the specified dimension.
         /** 
             This function should be called only *after* calling prepare_solution()
-            because prepare_solution() assigns this rank's position in the problem domain.
+            because prepare_solution() obtains the sub-domain sizes from other ranks.
             @returns Sum of the ranks' domain sizes in the given dimension.
         */
         virtual idx_t
@@ -643,7 +637,7 @@ namespace yask {
             Indices beyond that will be ignored.
             Indices are relative to the *overall* problem domain.
             Index values must fall within the rank domain or padding area.
-            See yk_solution::get_first_domain_index(),
+            See yk_solution::get_first_rank_domain_index(),
             yk_solution::get_last_domain_index(), and the 
             "Detailed Description" for \ref yk_grid for more information on grid sizes.
             @note The return value is a double-precision floating-point value, but
@@ -697,7 +691,7 @@ namespace yask {
            Indices beyond that will be ignored.
            Indices are relative to the *overall* problem domain.
            Index values must fall within the rank domain or padding area.
-           See yk_solution::get_first_domain_index(), 
+           See yk_solution::get_first_rank_domain_index(), 
            yk_solution::get_last_domain_index(), and the 
            "Detailed Description" for \ref yk_grid for more information on grid sizes.
            @note The parameter value is a double-precision floating-point value, but
@@ -744,6 +738,7 @@ namespace yask {
            Sets all elements from 'first' to 'last' indices in each dimension to the
            specified value.
            Indices are relative to the *overall* problem domain.
+           Both indices are inclusive (a la Fortran or Perl).
            Index values must fall within the rank domain or padding area.
            Notes in set_all_elements() documentation apply.
            @returns Number of elements set.
@@ -768,6 +763,7 @@ namespace yask {
            Since the writes proceed in row-major order, the last index is "unit-stride"
            in the buffer.
            Indices are relative to the *overall* problem domain.
+           Both indices are inclusive (a la Fortran or Perl).
            Index values must fall within the rank domain or padding area.
            @returns Number of elements written.
         */

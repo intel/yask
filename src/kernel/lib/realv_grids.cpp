@@ -129,7 +129,26 @@ namespace yask {
     // Checked resize: fails if mem different and already alloc'd.
     void RealVecGridBase::resize() {
 
-        // Just resize if not alloc'd.
+        // Some checking.
+        assert(tdim >= 1);
+        assert(dx >= 1);
+        assert(dy >= 1);
+        assert(dz >= 1);
+        
+        // Some rounding.
+        _pxv = CEIL_DIV(_px, VLEN_X);
+        _pyv = CEIL_DIV(_py, VLEN_Y);
+        _pzv = CEIL_DIV(_pz, VLEN_Z);
+        _px = _pxv * VLEN_X;
+        _py = _pyv * VLEN_Y;
+        _pz = _pzv * VLEN_Z;
+
+        // Alloc.
+        _axv = CEIL_DIV(_dx + 2 * _px, VLEN_X);
+        _ayv = CEIL_DIV(_dy + 2 * _py, VLEN_Y);
+        _azv = CEIL_DIV(_dz + 2 * _pz, VLEN_Z);
+        
+        // Just resize grid if not alloc'd.
         auto p = get_storage();
         if (!p)
             resize_g();
@@ -262,14 +281,15 @@ namespace yask {
     }
 
     // Print one vector at *vector* offset.
+    // Indices must be relative to rank, i.e., offset is already subtracted.
     // Indices must be normalized, i.e., already divided by VLEN_*.
     void RealVecGridBase::printVecNorm_TXYZ(std::ostream& os, const std::string& m,
                                              idx_t t, idx_t xv, idx_t yv, idx_t zv,
                                              const real_vec_t& v,
                                              int line) const {
-        idx_t x = xv * VLEN_X;
-        idx_t y = yv * VLEN_Y;
-        idx_t z = zv * VLEN_Z;
+        idx_t x = xv * VLEN_X + _ox;
+        idx_t y = yv * VLEN_Y + _oy;
+        idx_t z = zv * VLEN_Z + _oz;
 
         // Print each element.
         for (int zi = 0; zi < VLEN_Z; zi++) {

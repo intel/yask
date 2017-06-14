@@ -139,8 +139,9 @@ namespace yask {
                          idx_t mult, const string& dim,
                          bool finalize) {
         if (finalize && inner_size <= 0)
-            inner_size = outer_size; // 0 => use full size.
-        inner_size = ROUND_UP(inner_size, mult);
+            inner_size = outer_size; // 0 => use full size as default.
+        if (mult)
+            inner_size = ROUND_UP(inner_size, mult);
         idx_t ninner = (inner_size <= 0) ? 0 :
             (outer_size + inner_size - 1) / inner_size; // full or partial.
         if (finalize) {

@@ -164,7 +164,7 @@ namespace yask {
         return findNumSubsets(os, bsize, "block", dsize, "rank-domain", mult, dim, finalize);
     }
     inline idx_t findNumBlocksInRegion(std::ostream& os, idx_t& bsize, idx_t rsize,
-                               idx_t mult, const std::string& dim,
+                                       idx_t mult, const std::string& dim,
                                        bool finalize) {
         return findNumSubsets(os, bsize, "block", rsize, "region", mult, dim, finalize);
     }

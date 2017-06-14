@@ -26,7 +26,9 @@ IN THE SOFTWARE.
 #ifndef REAL_VEC_GRIDS
 #define REAL_VEC_GRIDS
 
+#ifndef USE_GET_INDEX
 #define USE_GET_INDEX 0
+#endif
 
 namespace yask {
 
@@ -50,16 +52,14 @@ namespace yask {
         idx_t _tdim = 1;
 
         // real_t sizes for 3 spatial dims.
-        idx_t _dx=VLEN_X, _dy=VLEN_Y, _dz=VLEN_Z; // domain sizes.
+        idx_t _dx=1, _dy=1, _dz=1; // domain sizes.
         idx_t _hx=0, _hy=0, _hz=0; // halo sizes.
         idx_t _px=0, _py=0, _pz=0; // pad sizes, which include halos.
         idx_t _ox=0, _oy=0, _oz=0; // offsets into global problem domain.
 
         // real_vec_t sizes for 3 spatial dims.
-        // halo vector-sizes are not given here, because they are not rounded up.
-        idx_t _dxv=1, _dyv=1, _dzv=1;
-        idx_t _pxv=0, _pyv=0, _pzv=0;
-        idx_t _oxv=0, _oyv=0, _ozv=0;
+        idx_t _axv=1, _ayv=1, _azv=1; // alloc size.
+        idx_t _pxv=0, _pyv=0, _pzv=0; // padding before domain.
 
         // Dynamic data.
         bool _is_updated = false; // data has been received from neighbors' halos.
@@ -78,21 +78,23 @@ namespace yask {
             return true;
         }
         
-        // Normalize element indices to vector indices and element offsets.
+        // Normalize element indices to rank-relative vector indices and
+        // element offsets.
         ALWAYS_INLINE
         void normalize(idx_t elem_index,
                        idx_t& vec_index,
                        idx_t& elem_ofs,
                        idx_t vec_len,
                        idx_t vec_pad,
-                       idx_t elem_pad) const {
+                       idx_t rank_ofs) const {
 
-            // Add padding before division to ensure negative indices work under
-            // truncated division.
-            idx_t padded_index = elem_index + elem_pad;
+            // Remove offset to make rank-relative.
+            // Add padding before division to ensure negative
+            // indices work under truncated division.
+            idx_t padded_index = elem_index - rank_ofs + (vec_pad * vec_len);
 
             // Normalize and remove added padding.
-            vec_index = padded_index / vec_len - vec_pad;
+            vec_index = (padded_index / vec_len) - vec_pad;
 
             // Divide values with padding in numerator to avoid negative indices to get offsets.
             elem_ofs = padded_index % vec_len;
@@ -123,25 +125,24 @@ namespace yask {
             return t_idx % _tdim;
         }
 
-        // Adjust logical spatial vector index to 0-based internal index by
-        // adding padding and removing offset.  TODO: currently, the
+        // Adjust relative spatial vector index to 0-based internal index by
+        // adding padding.  TODO: currently, the
         // compiler isn't able to eliminate some common sub-expressions in
         // addr calculation when these functions are used. Until this is
         // resolved, alternative code is used in derived classes if the
         // macro USE_GET_INDEX is not set.
         ALWAYS_INLINE idx_t get_index(idx_t vec_index,
-                                      idx_t vec_pad,
-                                      idx_t vec_ofs) const {
-            return vec_index + vec_pad - vec_ofs;
+                                      idx_t vec_pad) const {
+            return vec_index + vec_pad;
         }
         ALWAYS_INLINE idx_t get_index_x(idx_t vec_index) const {
-            return get_index(vec_index, _pxv, _oxv);
+            return get_index(vec_index, _pxv);
         }
         ALWAYS_INLINE idx_t get_index_y(idx_t vec_index) const {
-            return get_index(vec_index, _pyv, _oyv);
+            return get_index(vec_index, _pyv);
         }
         ALWAYS_INLINE idx_t get_index_z(idx_t vec_index) const {
-            return get_index(vec_index, _pzv, _ozv);
+            return get_index(vec_index, _pzv);
         }
 
         // Resize only if not allocated.
@@ -176,16 +177,16 @@ namespace yask {
 
         // Get storage allocation in number of points.
         inline idx_t get_alloc_t() const { return _tdim; }
-        inline idx_t get_alloc_x() const { return _dx + 2 * _px; }
-        inline idx_t get_alloc_y() const { return _dy + 2 * _py; }
-        inline idx_t get_alloc_z() const { return _dz + 2 * _pz; }
+        inline idx_t get_alloc_x() const { return _axv * VLEN_X; }
+        inline idx_t get_alloc_y() const { return _ayv * VLEN_Y; }
+        inline idx_t get_alloc_z() const { return _azv * VLEN_Z; }
         
-        // Get domain-size for this rank after round-up.
+        // Get domain-size for this rank.
         inline idx_t get_dx() const { return _dx; }
         inline idx_t get_dy() const { return _dy; }
         inline idx_t get_dz() const { return _dz; }
 
-        // Get halo-size (NOT rounded up).
+        // Get halo-size.
         inline idx_t get_halo_x() const { return _hx; }
         inline idx_t get_halo_y() const { return _hy; }
         inline idx_t get_halo_z() const { return _hz; }
@@ -214,49 +215,35 @@ namespace yask {
         inline idx_t get_last_z() const { return _oz + _dz - 1; }
 
         // Set temporal storage allocation.
-        inline void set_alloc_t(idx_t tdim) {
-            assert(tdim >= 1);
-            _tdim = tdim; resize(); }
+        void set_alloc_t(idx_t tdim) { _tdim = tdim; resize(); }
 
-        // Set domain-size for this rank and round-up.
-        inline void set_dx(idx_t dx) {
-            assert(dx >= 1);
-            _dx = ROUND_UP(dx, VLEN_X); _dxv = _dx / VLEN_X; resize(); }
-        inline void set_dy(idx_t dy) {
-            assert(yw >= 1);
-            _dy = ROUND_UP(dy, VLEN_Y); _dyv = _dy / VLEN_Y; resize(); }
-        inline void set_dz(idx_t dz) {
-            assert(dz >= 1);
-            _dz = ROUND_UP(dz, VLEN_Z); _dzv = _dz / VLEN_Z; resize(); }
+        // Set domain-size for this rank.
+        void set_dx(idx_t dx) { _dx = dx; resize(); }
+        void set_dy(idx_t dy) { _dy = dy; resize(); }
+        void set_dz(idx_t dz) { _dz = dz; resize(); }
 
         // Set halo sizes.
         // Automatically increase padding if less than halo.
         // Halo sizes are not rounded up.
-        inline void set_halo_x(idx_t hx) { _hx = hx; set_pad_x(_px); }
-        inline void set_halo_y(idx_t hy) { _hy = hy; set_pad_y(_py); }
-        inline void set_halo_z(idx_t hz) { _hz = hz; set_pad_z(_pz); }
+        void set_halo_x(idx_t hx) { _hx = hx; set_pad_x(_px); }
+        void set_halo_y(idx_t hy) { _hy = hy; set_pad_y(_py); }
+        void set_halo_z(idx_t hz) { _hz = hz; set_pad_z(_pz); }
 
         // Set padding and round-up.
         // Padding will be increased to size of halo if needed.
-        inline void set_pad_x(idx_t px) {
-            _px = ROUND_UP(std::max(px, _hx), VLEN_X); _pxv = _px / VLEN_X; resize(); }
-        inline void set_pad_y(idx_t py) {
-            _py = ROUND_UP(std::max(py, _hy), VLEN_Y); _pyv = _py / VLEN_Y; resize(); }
-        inline void set_pad_z(idx_t pz) {
-            _pz = ROUND_UP(std::max(pz, _hz), VLEN_Z); _pzv = _pz / VLEN_Z; resize(); }
+        void set_pad_x(idx_t px) { _px = std::max(px, _hx); resize(); }
+        void set_pad_y(idx_t py) { _py = std::max(py, _hy); resize(); }
+        void set_pad_z(idx_t pz) { _pz = std::max(pz, _hz); resize(); }
 
         // Increase padding if below minimum.
-        inline void set_min_pad_x(idx_t mpx) { if (_px < mpx) set_pad_x(mpx); }
-        inline void set_min_pad_y(idx_t mpy) { if (_py < mpy) set_pad_y(mpy); }
-        inline void set_min_pad_z(idx_t mpz) { if (_pz < mpz) set_pad_z(mpz); }
+        void set_min_pad_x(idx_t mpx) { if (_px < mpx) set_pad_x(mpx); }
+        void set_min_pad_y(idx_t mpy) { if (_py < mpy) set_pad_y(mpy); }
+        void set_min_pad_z(idx_t mpz) { if (_pz < mpz) set_pad_z(mpz); }
         
-        // Set offset.
-        inline void set_ofs_x(idx_t ox) {
-            _ox = ROUND_UP(ox, VLEN_X); _oxv = _ox / VLEN_X; }
-        inline void set_ofs_y(idx_t oy) {
-            _oy = ROUND_UP(oy, VLEN_Y); _oyv = _oy / VLEN_Y; }
-        inline void set_ofs_z(idx_t oz) {
-            _oz = ROUND_UP(oz, VLEN_Z); _ozv = _oz / VLEN_Z; }
+        // Set offset for current rank.
+        void set_ofs_x(idx_t ox) { _ox = ox; }
+        void set_ofs_y(idx_t oy) { _oy = oy; }
+        void set_ofs_z(idx_t oz) { _oz = oz; }
 
         // Dynamic data accessors.
         bool is_updated() { return _is_updated; }
@@ -300,15 +287,15 @@ namespace yask {
         // Normalize element indices to vector indices and element offsets.
         ALWAYS_INLINE
         void normalize_x(idx_t x, idx_t& vec_index, idx_t& elem_ofs) const {
-            normalize(x, vec_index, elem_ofs, VLEN_X, _pxv, _px);
+            normalize(x, vec_index, elem_ofs, VLEN_X, _pxv, _ox);
         }
         ALWAYS_INLINE
         void normalize_y(idx_t y, idx_t& vec_index, idx_t& elem_ofs) const {
-            normalize(y, vec_index, elem_ofs, VLEN_Y, _pyv, _py);
+            normalize(y, vec_index, elem_ofs, VLEN_Y, _pyv, _oy);
         }
         ALWAYS_INLINE
         void normalize_z(idx_t z, idx_t& vec_index, idx_t& elem_ofs) const {
-            normalize(z, vec_index, elem_ofs, VLEN_Z, _pzv, _pz);
+            normalize(z, vec_index, elem_ofs, VLEN_Z, _pzv, _oz);
         }
 
         // Read one element.
@@ -321,11 +308,13 @@ namespace yask {
                                      int line) =0;
 
         // Read one vector at *vector* offset.
+        // Indices must be relative to rank, i.e., offset is already subtracted.
         // Indices must be normalized, i.e., already divided by VLEN_*.
         virtual real_vec_t readVecNorm_TXYZ(idx_t t, idx_t xv, idx_t yv, idx_t zv,
                                              int line) const =0;
         
         // Write one vector at *vector* offset.
+        // Indices must be relative to rank, i.e., offset is already subtracted.
         // Indices must be normalized, i.e., already divided by VLEN_*.
         virtual void writeVecNorm_TXYZ(const real_vec_t& v,
                                         idx_t t, idx_t xv, idx_t yv, idx_t zv,
@@ -337,6 +326,7 @@ namespace yask {
                                      real_t e, int line, bool newline = true) const;
 
         // Print one vector at *vector* offset.
+        // Indices must be relative to rank, i.e., offset is already subtracted.
         // Indices must be normalized, i.e., already divided by VLEN_*.
         virtual void printVecNorm_TXYZ(std::ostream& os, const std::string& m,
                                         idx_t t, idx_t xv, idx_t yv, idx_t zv,
@@ -419,9 +409,9 @@ namespace yask {
         }
         
         virtual void resize_g() {
-            _data.set_d1(_dxv + 2 * _pxv);
-            _data.set_d2(_dyv + 2 * _pyv);
-            _data.set_d3(_dzv + 2 * _pzv);
+            _data.set_d1(_axv);
+            _data.set_d2(_ayv);
+            _data.set_d3(_azv);
         }
         
     public:
@@ -437,25 +427,26 @@ namespace yask {
         virtual bool got_z() const { return true; }
 
         // Get pointer to the real_vec_t at vector offset xv, yv, zv.
+        // Indices must be relative to rank, i.e., offset is already subtracted.
         // Indices must be normalized, i.e., already divided by VLEN_*.
         ALWAYS_INLINE
         const real_vec_t* getVecPtrNorm(idx_t xv, idx_t yv, idx_t zv,
                                         bool checkBounds=true) const {
 
 #ifdef TRACE_MEM
-            std::cout << _name << "." << "RealVecGrid_XYZ::getVecPtrNorm(" <<
+            std::cout << get_name() << "." << "RealVecGrid_XYZ::getVecPtrNorm(" <<
                 xv << "," << yv << "," << zv << ")";
 #endif
         
-            // adjust for padding and offset.
+            // adjust for padding.
 #if USE_GET_INDEX
             xv = get_index_x(xv);
             yv = get_index_y(yv);
             zv = get_index_z(zv);
 #else
-            xv += _pxv - _oxv;
-            yv += _pyv - _oyv;
-            zv += _pzv - _ozv;
+            xv += _pxv;
+            yv += _pyv;
+            zv += _pzv;
 #endif
 
 #ifdef TRACE_MEM
@@ -528,6 +519,7 @@ namespace yask {
         }
 
         // Read one vector at vector offset xv, yv, zv.
+        // Indices must be relative to rank, i.e., offset is already subtracted.
         // Indices must be normalized, i.e., already divided by VLEN_*.
         ALWAYS_INLINE
         real_vec_t readVecNorm(idx_t xv, idx_t yv, idx_t zv,
@@ -549,6 +541,7 @@ namespace yask {
         }
 
         // Write one vector at vector offset xv, yv, zv.
+        // Indices must be relative to rank, i.e., offset is already subtracted.
         // Indices must be normalized, i.e., already divided by VLEN_*.
         ALWAYS_INLINE
         void writeVecNorm(const real_vec_t& v, idx_t xv, idx_t yv, idx_t zv,
@@ -565,6 +558,7 @@ namespace yask {
         }
 
         // Prefetch one vector at vector offset xv, yv, zv.
+        // Indices must be relative to rank, i.e., offset is already subtracted.
         // Indices must be normalized, i.e., already divided by VLEN_*.
         template <int level>
         ALWAYS_INLINE
@@ -662,6 +656,7 @@ namespace yask {
         }
         
         // Read one vector at *vector* offset.
+        // Indices must be relative to rank, i.e., offset is already subtracted.
         // Indices must be normalized, i.e., already divided by VLEN_*.
         virtual real_vec_t readVecNorm_TXYZ(idx_t t, idx_t xv, idx_t yv, idx_t zv,
                                              int line) const {
@@ -670,6 +665,7 @@ namespace yask {
         }
         
         // Write one vector at *vector* offset.
+        // Indices must be relative to rank, i.e., offset is already subtracted.
         // Indices must be normalized, i.e., already divided by VLEN_*.
         virtual void writeVecNorm_TXYZ(const real_vec_t& val,
                                         idx_t t, idx_t xv, idx_t yv, idx_t zv,
@@ -682,14 +678,14 @@ namespace yask {
         void printVecNorm(std::ostream& os, const std::string& m,
                       idx_t xv, idx_t yv, idx_t zv, const real_vec_t& v,
                       int line) const {
-            printVecNorm_TXYZ(0, xv, yv, zv, v, line);
+            printVecNorm_TXYZ(os, m, 0, xv, yv, zv, v, line);
         }
 
         // Print one element.
         void printElem(std::ostream& os, const std::string& m,
                        idx_t x, idx_t y, idx_t z, real_t e,
                        int line) const {
-            printElem_TXYZ(0, x, y, z, e, line);
+            printElem_TXYZ(os, m, 0, x, y, z, e, line);
         }
     };
 
@@ -711,9 +707,9 @@ namespace yask {
         
         virtual void resize_g() {
             _data.set_d1(_tdim);
-            _data.set_d2(this->_dxv + 2 * this->_pxv);
-            _data.set_d3(this->_dyv + 2 * this->_pyv);
-            _data.set_d4(this->_dzv + 2 * this->_pzv);
+            _data.set_d2(_axv);
+            _data.set_d3(_ayv);
+            _data.set_d4(_azv);
         }
         
     public:
@@ -730,26 +726,27 @@ namespace yask {
         virtual bool got_z() const { return true; }
         
         // Get pointer to the real_vec_t at vector offset t, xv, yv, zv.
+        // Indices must be relative to rank, i.e., offset is already subtracted.
         // Indices must be normalized, i.e., already divided by VLEN_*.
         ALWAYS_INLINE
         const real_vec_t* getVecPtrNorm(idx_t t, idx_t xv, idx_t yv, idx_t zv,
                                         bool checkBounds=true) const {
 
 #ifdef TRACE_MEM
-            std::cout << _name << "." << "RealVecGrid_TXYZ::getVecPtrNorm(" <<
-                t << "," << << xv << "," << yv << "," << zv << ")";
+            std::cout << get_name() << "." << "RealVecGrid_TXYZ::getVecPtrNorm(" <<
+                t << "," << xv << "," << yv << "," << zv << ")";
 #endif
         
             // adjust for padding and offset.
-            t = this->get_index_t(t);
+            t = get_index_t(t);
 #if USE_GET_INDEX
-            xv = this->get_index_x(xv);
-            yv = this->get_index_y(yv);
-            zv = this->get_index_z(zv);
+            xv = get_index_x(xv);
+            yv = get_index_y(yv);
+            zv = get_index_z(zv);
 #else
-            xv += this->_pxv - this->_oxv;
-            yv += this->_pyv - this->_oyv;
-            zv += this->_pzv - this->_ozv;
+            xv += _pxv;
+            yv += _pyv;
+            zv += _pzv;
 #endif
 
 #ifdef TRACE_MEM
@@ -776,9 +773,9 @@ namespace yask {
         const real_t* getElemPtr(idx_t t, idx_t x, idx_t y, idx_t z,
                                  bool checkBounds=true) const {
             idx_t xv, xe, yv, ye, zv, ze;
-            this->normalize_x(x, xv, xe);
-            this->normalize_y(y, yv, ye);
-            this->normalize_z(z, zv, ze);
+            normalize_x(x, xv, xe);
+            normalize_y(y, yv, ye);
+            normalize_z(z, zv, ze);
 
             // Get vector.
             const real_vec_t* vp = getVecPtrNorm(t, xv, yv, zv, checkBounds);
@@ -822,12 +819,13 @@ namespace yask {
         }
 
         // Read one vector at vector offset t, xv, yv, zv.
+        // Indices must be relative to rank, i.e., offset is already subtracted.
         // Indices must be normalized, i.e., already divided by VLEN_*.
         ALWAYS_INLINE
         real_vec_t readVecNorm(idx_t t, idx_t xv, idx_t yv, idx_t zv,
                                int line) const {
 #ifdef TRACE_MEM
-            std::cout << "readVecNorm(" << t "," << xv <<
+            std::cout << "readVecNorm(" << t << "," << xv <<
                 "," << yv << "," << zv << ")..." << std::endl;
 #endif        
             const real_vec_t* p = getVecPtrNorm(t, xv, yv, zv);
@@ -844,6 +842,7 @@ namespace yask {
         }
 
         // Write one vector at vector offset t, xv, yv, zv.
+        // Indices must be relative to rank, i.e., offset is already subtracted.
         // Indices must be normalized, i.e., already divided by VLEN_*.
         ALWAYS_INLINE void
         writeVecNorm(const real_vec_t& v,
@@ -861,6 +860,7 @@ namespace yask {
         }
 
         // Prefetch one vector at vector offset t, xv, yv, zv.
+        // Indices must be relative to rank, i.e., offset is already subtracted.
         // Indices must be normalized, i.e., already divided by VLEN_*.
         template <int level>
         ALWAYS_INLINE
@@ -959,6 +959,7 @@ namespace yask {
         }
 
         // Read one vector at *vector* offset.
+        // Indices must be relative to rank, i.e., offset is already subtracted.
         // Indices must be normalized, i.e., already divided by VLEN_*.
         virtual real_vec_t readVecNorm_TXYZ(idx_t t, idx_t xv, idx_t yv, idx_t zv,
                                              int line) const {
@@ -966,6 +967,7 @@ namespace yask {
         }
         
         // Write one vector at *vector* offset.
+        // Indices must be relative to rank, i.e., offset is already subtracted.
         // Indices must be normalized, i.e., already divided by VLEN_*.
         virtual void writeVecNorm_TXYZ(const real_vec_t& val,
                                         idx_t t, idx_t xv, idx_t yv, idx_t zv,
@@ -978,7 +980,7 @@ namespace yask {
                           idx_t t, idx_t xv, idx_t yv, idx_t zv,
                           const real_vec_t& v,
                           int line) const {
-            printVecNorm_TXYZ(t, xv, yv, zv, v, line);
+            printVecNorm_TXYZ(os, m, t, xv, yv, zv, v, line);
         }
 
         // Print one element.
@@ -986,7 +988,7 @@ namespace yask {
                        idx_t t, idx_t x, idx_t y, idx_t z,
                        real_t e,
                        int line) const {
-            printElem_TXYZ(t, x, y, z, e, line);
+            printElem_TXYZ(os, m, t, x, y, z, e, line);
         }
     };
 

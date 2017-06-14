@@ -958,26 +958,17 @@ namespace yask {
                     " result(s) relative to indices " << _dims._allDims.makeDimStr(", ") <<
                     " in a '" << _dims._clusterPts.makeDimValStr(" * ") <<
                     "' cluster containing " << _dims._clusterMults.product() << " '" <<
-                    _dims._fold.makeDimValStr(" * ") << "' vector(s)." << endl;
-                os << " // Indices must be normalized, i.e., already divided by VLEN_*." << endl;
-                os << " // SIMD calculations use " << vv.getNumPoints() <<
+                    _dims._fold.makeDimValStr(" * ") << "' vector(s).\n"
+                    " // Indices must be rank-relative.\n"
+                    " // Indices must be normalized, i.e., already divided by VLEN_*.\n"
+                    " // SIMD calculations use " << vv.getNumPoints() <<
                     " vector block(s) created from " << vv.getNumAlignedVecs() <<
-                    " aligned vector-block(s)." << endl;
-                os << " // There are approximately " << (stats.getNumOps() * numResults) <<
+                    " aligned vector-block(s).\n"
+                    " // There are approximately " << (stats.getNumOps() * numResults) <<
                     " FP operation(s) per invocation." << endl;
                 os << " inline void calc_cluster(" <<
                     _dims._allDims.makeDimStr(", ", "idx_t ", "v") << ") {" << endl;
 
-                // Element indices.
-                os << endl << " // Element (un-normalized) indices." << endl;
-                for (auto& dim : _dims._allDims.getDims()) {
-                    auto& dname = dim.getName();
-                    auto p = _dims._fold.lookup(dname);
-                    os << " idx_t " << dname << " = " << dname << "v";
-                    if (p) os << " * VLEN_" << allCaps(dname);
-                    os << ";" << endl;
-                }
-                
                 // Code generator visitor.
                 // The visitor is accepted at all nodes in the cluster AST;
                 // for each node in the AST, code is generated and
@@ -1018,7 +1009,7 @@ namespace yask {
                     }
 
                     // Function header.
-                    os << endl << " // Prefetches cache line(s) ";
+                    os << endl << " // Prefetch cache line(s) ";
                     if (dir.getName().length())
                         os << "for leading edge of stencil advancing by " <<
                             dir.getVal() << " vector(s) in '+" <<
@@ -1028,8 +1019,9 @@ namespace yask {
                     os << "relative to indices " << _dims._allDims.makeDimStr(", ") <<
                         " in a '" << _dims._clusterPts.makeDimValStr(" * ") <<
                         "' cluster containing " << _dims._clusterMults.product() << " '" <<
-                        _dims._fold.makeDimValStr(" * ") << "' vector(s)." << endl;
-                    os << " // Indices must be normalized, i.e., already divided by VLEN_*." << endl;
+                        _dims._fold.makeDimValStr(" * ") << "' vector(s).\n"
+                        " // Indices must be rank-relative.\n"
+                        " // Indices must be normalized, i.e., already divided by VLEN_*.\n";
 
                     string fname1 = "prefetch_cluster";
                     string fname2 = fname1;
@@ -1054,6 +1046,7 @@ namespace yask {
                 // Sub-block.
                 os << endl <<
                     " // Calculate one sub-block of whole clusters.\n"
+                    " // Indices are rank-relative and index vectors.\n"
                     " virtual void calc_sub_block_of_clusters(" <<
                     _dims._allDims.makeDimStr(", ", "idx_t begin_sb", "v") << ", " <<
                     _dims._allDims.makeDimStr(", ", "idx_t end_sb", "v") <<
@@ -1063,8 +1056,8 @@ namespace yask {
                 for (auto& dim : _dims._allDims.getDims()) {
                     auto& dname = dim.getName();
                     string ucDim = allCaps(dname);
-                    os << " const idx_t step_sb" << dname << "v = CLEN_" << ucDim << ";\n"
-                        " const idx_t group_size_sb" << dname << "v = CLEN_" << ucDim << ";\n";
+                    os << " const idx_t step_sb" << dname << "v = CMULT_" << ucDim << ";\n"
+                        " const idx_t group_size_sb" << dname << "v = CMULT_" << ucDim << ";\n";
                 }
                 for (auto& dim : _yask_dims.getDims()) {
                     auto& dname = dim.getName();
@@ -1072,8 +1065,8 @@ namespace yask {
                     if (!_dims._allDims.lookup(dname))
                         os << " const idx_t begin_sb" << dname << "v = 0; // not used in this stencil.\n"
                             " const idx_t end_sb" << dname << "v = 1;\n"
-                            " const idx_t step_sb" << dname << "v = CLEN_" << ucDim << ";\n"
-                            " const idx_t group_size_sb" << dname << "v = CLEN_" << ucDim << ";\n";
+                            " const idx_t step_sb" << dname << "v = CMULT_" << ucDim << ";\n"
+                            " const idx_t group_size_sb" << dname << "v = CMULT_" << ucDim << ";\n";
                 }
                 os << " #if !defined(DEBUG) && defined(__INTEL_COMPILER)\n"
                     " #pragma forceinline recursive\n"
@@ -1190,10 +1183,10 @@ namespace yask {
         for (auto& dim : _dims._clusterMults.getDims()) {
             auto& dname = dim.getName();
             string ucDim = allCaps(dname);
-            os << "#define CLEN_" << ucDim << " (" <<
+            os << "#define CMULT_" << ucDim << " (" <<
                 dim.getVal() << ")" << endl;
         }
-        os << "#define CLEN (" << _dims._clusterMults.product() << ")" << endl;
+        os << "#define CMULT (" << _dims._clusterMults.product() << ")" << endl;
     }
 
     // TODO: fix this old code and make it available as an output.

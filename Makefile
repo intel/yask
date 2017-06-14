@@ -484,13 +484,12 @@ SUB_BLOCK_LOOP_CODE		?=	$(SUB_BLOCK_LOOP_OUTER_MODS) loop($(SUB_BLOCK_LOOP_OUTER
 					calc(cluster(begin_sbtv)); } }
 
 # Halo pack/unpack loops break up a region face, edge, or corner into vectors.
-# The indices at this level are by vector instead of element;
-# this is indicated by the 'v' suffix.
 # Nested OpenMP is not used here because there is no sharing between threads.
-HALO_LOOP_OPTS		=     	-dims 'xv,yv,zv' \
+# TODO: Consider using nested OpenMP to hide more latency.
+HALO_LOOP_OPTS		=     	-dims 'hx,hy,hz' \
 				-ompConstruct '$(omp_par_for) schedule($(omp_halo_schedule)) proc_bind(spread)'
 HALO_LOOP_OUTER_MODS	?=	omp
-HALO_LOOP_OUTER_VARS	?=	xv,yv,zv
+HALO_LOOP_OUTER_VARS	?=	hx,hy,hz
 HALO_LOOP_CODE		?=	$(HALO_LOOP_OUTER_MODS) loop($(HALO_LOOP_OUTER_VARS)) \
 				$(HALO_LOOP_INNER_MODS) { calc(halo(t)); }
 
@@ -718,9 +717,6 @@ all-tests:
 	$(MAKE) clean; $(MAKE) -j stencil=iso3dfd yk-test
 	$(MAKE) clean; $(MAKE) -j stencil=iso3dfd cxx-yk-api-test
 	$(MAKE) clean; $(MAKE) -j stencil=iso3dfd py-yk-api-test
-	$(MAKE) clean; $(MAKE) -j stencil=ave yk-test
-	$(MAKE) clean; $(MAKE) -j stencil=ave cxx-yk-api-test
-	$(MAKE) clean; $(MAKE) -j stencil=ave py-yk-api-test
 	$(MAKE) clean; $(MAKE) -j stencil=fsg_abc yk-test
 	$(MAKE) clean; $(MAKE) -j stencil=test cxx-yc-api-and-yk-test
 	$(MAKE) clean; $(MAKE) -j stencil=test cxx-yc-api-and-cxx-yk-api-test
@@ -832,13 +828,13 @@ help:
 	@echo "Example performance builds:"
 	@echo "make clean; make -j arch=knl stencil=iso3dfd"
 	@echo "make clean; make -j arch=knl stencil=awp mpi=1"
-	@echo "make clean; make -j arch=skx stencil=ave fold='x=1,y=2,z=4' cluster='x=2'"
+	@echo "make clean; make -j arch=skx stencil=3axis fold='x=1,y=2,z=4' cluster='x=2'"
 	@echo "make clean; make -j arch=hsw stencil=3axis radius=4 SUB_BLOCK_LOOP_INNER_MODS='prefetch(L1,L2)' pfd_l2=3"
 	@echo " "
 	@echo "Example debug builds:"
-	@echo "make clean; make arch=knl  stencil=iso3dfd OMPFLAGS='-qopenmp-stubs' CXXOPT='-O0' EXTRA_MACROS='DEBUG'"
-	@echo "make clean; make arch=intel64 stencil=ave OMPFLAGS='-qopenmp-stubs' CXXOPT='-O0' EXTRA_MACROS='DEBUG' model_cache=2"
-	@echo "make clean; make arch=intel64 stencil=3axis radius=0 fold='x=1,y=1,z=1' OMPFLAGS='-qopenmp-stubs' CXXOPT='-O0' EXTRA_MACROS='DEBUG TRACE TRACE_MEM TRACE_INTRINSICS'"
+	@echo "make clean; make -j stencil=iso3dfd mpi=0 OMPFLAGS='-qopenmp-stubs' CXXOPT='-O0' EXTRA_MACROS='DEBUG'"
+	@echo "make clean; make -j arch=intel64 stencil=3axis mpi=0 OMPFLAGS='-qopenmp-stubs' CXXOPT='-O0' EXTRA_MACROS='DEBUG' model_cache=2"
+	@echo "make clean; make -j arch=intel64 stencil=3axis radius=0 fold='x=1,y=1,z=1' mpi=0 OMPFLAGS='-qopenmp-stubs' CXXOPT='-O0' EXTRA_MACROS='DEBUG TRACE TRACE_MEM TRACE_INTRINSICS'"
 	@echo " "
 	@echo "Example API document generation and builds:"
 	@echo "make clean; make -j arch=snb stencil=iso3dfd api-all"

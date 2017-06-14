@@ -276,7 +276,7 @@ namespace yask {
         idx_t begin_dt = first_step_index;
         idx_t end_dt = last_step_index + 1; // end is 1 past last.
         idx_t step_dt = _opts->rt;
-        TRACE_MSG("calc_rank_opt(t=" << first_step_index << ".." << last_step_index <<
+        TRACE_MSG("run_solution(t=" << first_step_index << ".." << last_step_index <<
                   " by " << step_dt << ")");
         ostream& os = get_ostr();
 
@@ -531,7 +531,7 @@ namespace yask {
                                  idx_t begin_bx, idx_t begin_by, idx_t begin_bz,
                                  idx_t end_bx, idx_t end_by, idx_t end_bz)
     {
-        TRACE_MSG2(get_name() << ".calc_block(t=" << bt <<
+        TRACE_MSG3(get_name() << ".calc_block(t=" << bt <<
                   ", x=" << begin_bx << ".." << (end_bx-1) <<
                   ", y=" << begin_by << ".." << (end_by-1) <<
                   ", z=" << begin_bz << ".." << (end_bz-1) <<
@@ -566,20 +566,20 @@ namespace yask {
                                      idx_t begin_sbx, idx_t begin_sby, idx_t begin_sbz,
                                      idx_t end_sbx, idx_t end_sby, idx_t end_sbz)
     {
-        TRACE_MSG2(get_name() << ".calc_sub_block(t=" << sbt <<
+        TRACE_MSG3(get_name() << ".calc_sub_block(t=" << sbt <<
                    ", x=" << begin_sbx << ".." << (end_sbx-1) <<
                    ", y=" << begin_sby << ".." << (end_sby-1) <<
                    ", z=" << begin_sbz << ".." << (end_sbz-1) <<
-                   ").");
+                   ")...");
         
-        // If not a 'simple' domain, must use scalar code.  TODO: this
+        // If not a 'simple' domain, use scalar code.  TODO: this
         // is very inefficient--need to vectorize as much as possible.
         if (!bb_simple) {
             
-            TRACE_MSG2("...using scalar code.");
-
             // Are there holes in the BB?
             if (bb_num_points != bb_size) {
+                TRACE_MSG3("...using scalar code with sub-domain checking.");
+
                 for (idx_t x = begin_sbx; x < end_sbx; x++)
                     for (idx_t y = begin_sby; y < end_sby; y++)
                         for (idx_t z = begin_sbz; z < end_sbz; z++) {
@@ -592,6 +592,8 @@ namespace yask {
 
             // If no holes, don't need to check domain.
             else {
+                TRACE_MSG3("...using scalar code without sub-domain checking.");
+
                 for (idx_t x = begin_sbx; x < end_sbx; x++)
                     for (idx_t y = begin_sby; y < end_sby; y++)
                         for (idx_t z = begin_sbz; z < end_sbz; z++) {
@@ -600,19 +602,27 @@ namespace yask {
             }
         }
 
-        // Full rectangular polytope: use optimized code.
+        // Full rectangular polytope of aligned vectors: use optimized code.
         else {
+            TRACE_MSG3("...using vector code without sub-domain checking.");
 
-            // Divide indices by vector lengths.  Use idiv_flr() instead of '/'
+            StencilContext* cp = _generic_context;
+
+            assert((end_sbx - begin_sbx) % CPTS_X == 0);
+            assert((end_sby - begin_sby) % CPTS_Y == 0);
+            assert((end_sbz - begin_sbz) % CPTS_Z == 0);
+
+            // Subtract rank offset and divide indices by vector lengths as
+            // needed by read/writeVecNorm().  Use idiv_flr() instead of '/'
             // because begin/end vars may be negative (if in halo).
-            const idx_t begin_sbtv = sbt;
-            const idx_t begin_sbxv = idiv_flr<idx_t>(begin_sbx, VLEN_X);
-            const idx_t begin_sbyv = idiv_flr<idx_t>(begin_sby, VLEN_Y);
-            const idx_t begin_sbzv = idiv_flr<idx_t>(begin_sbz, VLEN_Z);
-            const idx_t end_sbtv = sbt + CLEN_T;
-            const idx_t end_sbxv = idiv_flr<idx_t>(end_sbx, VLEN_X);
-            const idx_t end_sbyv = idiv_flr<idx_t>(end_sby, VLEN_Y);
-            const idx_t end_sbzv = idiv_flr<idx_t>(end_sbz, VLEN_Z);
+            const idx_t begin_sbtv = sbt - cp->ofs_t;
+            const idx_t begin_sbxv = idiv_flr<idx_t>(begin_sbx - cp->ofs_x, VLEN_X);
+            const idx_t begin_sbyv = idiv_flr<idx_t>(begin_sby - cp->ofs_y, VLEN_Y);
+            const idx_t begin_sbzv = idiv_flr<idx_t>(begin_sbz - cp->ofs_z, VLEN_Z);
+            const idx_t end_sbtv = sbt - cp->ofs_t + CPTS_T;
+            const idx_t end_sbxv = idiv_flr<idx_t>(end_sbx - cp->ofs_x, VLEN_X);
+            const idx_t end_sbyv = idiv_flr<idx_t>(end_sby - cp->ofs_y, VLEN_Y);
+            const idx_t end_sbzv = idiv_flr<idx_t>(end_sbz - cp->ofs_z, VLEN_Z);
 
             // Evaluate sub-block of clusters.
             calc_sub_block_of_clusters(begin_sbtv, begin_sbxv, begin_sbyv, begin_sbzv,
@@ -679,7 +689,7 @@ namespace yask {
         }
 #endif
         
-        ofs_x = ofs_y = ofs_z = 0;
+        ofs_x = ofs_y = ofs_z = 0; // TODO: allow user to specify starting overall offset.
         tot_x = tot_y = tot_z = 0;
         int num_neighbors = 0, num_exchanges = 0;
         for (int rn = 0; rn < _env->num_ranks; rn++) {
@@ -932,7 +942,7 @@ namespace yask {
     }
 
     // Set grid sizes and offsets.
-    // This should be called anytime a setting or offset is changed.
+    // This should be called anytime a setting or rank offset is changed.
     void StencilContext::set_grids()
     {
         assert(_opts);
@@ -1209,45 +1219,72 @@ namespace yask {
 
         return errs;
     }
+
+    // Set some pre-computed values for a bounding-box.
+    void BoundingBox::update_bb(ostream& os,
+                                const string& name,
+                                StencilContext& context,
+                                bool force_full) {
+        len_bbx = end_bbx - begin_bbx;
+        len_bby = end_bby - begin_bby;
+        len_bbz = end_bbz - begin_bbz;
+        bb_size = len_bbx * len_bby * len_bbz;
+        if (force_full)
+            bb_num_points = bb_size;
+        bb_simple = true;       // assume ok.
+
+        // Solid rectangle?
+        if (bb_num_points != bb_size) {
+            os << "Warning: '" << name << "' domain has only " <<
+                printWithPow10Multiplier(bb_num_points) <<
+                " valid point(s) inside its bounding-box of " <<
+                printWithPow10Multiplier(bb_size) <<
+                " point(s); slower scalar calculations will be used.\n";
+            bb_simple = false;
+        }
+
+        // Lengths are cluster-length multiples?
+        else if (len_bbx % CPTS_X ||
+                 len_bby % CPTS_Y ||
+                 len_bbz % CPTS_Z) {
+            os << "Warning: '" << name << "' domain"
+                " has one or more sizes that are not vector-cluster multiples;"
+                " slower scalar calculations will be used.\n";
+            bb_simple = false;
+        }
+
+        // Begin on cluster-length multiples in rank?
+        else if ((begin_bbx - context.ofs_x) % CPTS_X ||
+                 (begin_bby - context.ofs_y) % CPTS_Y ||
+                 (begin_bbz - context.ofs_z) % CPTS_Z) {
+            os << "Warning: '" << name << "' domain"
+                " has one or more starting edges not on vector-cluster boundaries;"
+                " slower scalar calculations will be used.\n";
+            bb_simple = false;
+        }
+
+        // All done.
+        bb_valid = true;
+    }
     
-    
-    // Set the bounding-box around all eq groups.
+    // Set the bounding-box for each eq-group and whole domain.
+    // Also sets wave-front angles.
     void StencilContext::find_bounding_boxes()
     {
-        if (bb_valid == true) return;
+        ostream& os = get_ostr();
 
-        // Init overall BB.
-        // Init min vars w/max val and vice-versa.
-        begin_bbx = idx_max; end_bbx = idx_min;
-        begin_bby = idx_max; end_bby = idx_min;
-        begin_bbz = idx_max; end_bbz = idx_min;
-
-        // Find BB for each eq group and update context.
-        for (auto eg : eqGroups) {
+        // Find BB for each eq group.
+        for (auto eg : eqGroups)
             eg->find_bounding_box();
 
-            begin_bbx = min(begin_bbx, eg->begin_bbx);
-            begin_bby = min(begin_bby, eg->begin_bby);
-            begin_bbz = min(begin_bbz, eg->begin_bbz);
-            end_bbx = max(end_bbx, eg->end_bbx);
-            end_bby = max(end_bby, eg->end_bby);
-            end_bbz = max(end_bbz, eg->end_bbz);
-        }
-        update_lengths();
-
-        // These vars are N/A for the overall BB.
-        bb_num_points = 0;
-        bb_simple = false;
-        
-        // Adjust region size to be within BB.
-        _opts->rx = min(_opts->rx, len_bbx);
-        _opts->ry = min(_opts->ry, len_bby);
-        _opts->rz = min(_opts->rz, len_bbz);
-
-        // Adjust block size to be within region.
-        _opts->bx = min(_opts->bx, _opts->rx);
-        _opts->by = min(_opts->by, _opts->ry);
-        _opts->bz = min(_opts->bz, _opts->rz);
+        // Overall BB based on rank offsets and rank domain sizes.
+        begin_bbx = ofs_x;
+        end_bbx = ofs_x + _opts->dx;
+        begin_bby = ofs_y;
+        end_bby = ofs_y + _opts->dy;
+        begin_bbz = ofs_z;
+        end_bbz = ofs_z + _opts->dz;
+        update_bb(os, "rank", *this, true);
 
         // Determine the max spatial skewing angles for temporal wavefronts
         // based on the max halos.  This assumes the smallest granularity of
@@ -1262,7 +1299,6 @@ namespace yask {
 
     // Set the bounding-box vars for this eq group in this rank.
     void EqGroupBase::find_bounding_box() {
-        if (bb_valid) return;
         StencilContext& context = *_generic_context;
         auto optsp = context.get_settings();
         assert(optsp);
@@ -1314,38 +1350,10 @@ namespace yask {
             begin_bby = end_bby = 0;
             begin_bbz = end_bbz = 0;
         }
-        update_lengths();
         bb_num_points = npts;
 
-        // Solid rectangle?
-        if (bb_num_points != bb_size) {
-            os << "Warning: domain for equation-group '" << get_name() << "' has only " <<
-                printWithPow10Multiplier(bb_num_points) <<
-                " valid point(s) inside its bounding-box of " <<
-                printWithPow10Multiplier(bb_size) <<
-                " point(s); slower scalar calculations will be used.\n";
-            bb_simple = false;
-        }
-
-        // Lengths are cluster-length multiples?
-        else if (len_bbx % CLEN_X ||
-                 len_bby % CLEN_Y ||
-                 len_bbz % CLEN_Z) {
-            os << "Warning: domain for equation-group '" << get_name() <<
-                "' has one or more sizes that are not vector-cluster multiples;"
-                " slower scalar calculations will be used.\n";
-            bb_simple = false;
-        }
-
-        // Edges are cluster-length multiples?
-        else if (begin_bbx % CLEN_X ||
-                 begin_bby % CLEN_Y ||
-                 begin_bbz % CLEN_Z) {
-            os << "Warning: domain for equation-group '" << get_name() <<
-                "' has one or more edges that do not start on vector-cluster boundaries;"
-                " slower scalar calculations will be used.\n";
-            bb_simple = false;
-        }
+        // Finalize BB.
+        update_bb(os, get_name(), context);
     }
     
     // Exchange halo data needed by eq-group 'eg' at the given time.
@@ -1360,20 +1368,10 @@ namespace yask {
 #ifdef USE_MPI
         double start_time = getTimeInSecs();
 
-        // These vars control blocking within halo packing.
-        // Currently, only zv has a loop in the calc_halo macros below.
-        // Thus, step_{x,y}v must be 1.
-        const idx_t step_xv = 1;
-        const idx_t step_yv = 1;
-#ifndef HALO_STEP_ZV
-#define HALO_STEP_ZV (4)
-#endif
-        const idx_t step_zv = HALO_STEP_ZV;
-
         // Groups in halo loops are set to smallest size.
-        const idx_t group_size_xv = 1;
-        const idx_t group_size_yv = 1;
-        const idx_t group_size_zv = 1;
+        const idx_t group_size_hx = 1;
+        const idx_t group_size_hy = 1;
+        const idx_t group_size_hz = 1;
 
         // 1D array to store send request handles.
         // We use a 1D array so we can call MPI_Waitall().
@@ -1384,18 +1382,19 @@ namespace yask {
         // We use a 2D array to simplify individual indexing.
         MPI_Request recv_reqs[eg.inputGridPtrs.size()][MPIBufs::neighborhood_size];
 
-        // Sequence of things to do for each grid's neighbors.
+        // Sequence of things to do for each grid's neighbors
+        // (isend includes packing).
         enum halo_steps { halo_irecv, halo_isend, halo_unpack, halo_nsteps };
         for (int hi = 0; hi < halo_nsteps; hi++) {
 
             if (hi == halo_irecv)
                 TRACE_MSG("exchange_halos: requesting data...");
             else if (hi == halo_isend)
-                TRACE_MSG("exchange_halos: sending data...");
+                TRACE_MSG("exchange_halos: packing and sending data...");
             else if (hi == halo_unpack)
                 TRACE_MSG("exchange_halos: unpacking data...");
             
-            // Loop thru all grids.
+            // Loop thru all input grids.
             for (size_t gi = 0; gi < eg.inputGridPtrs.size(); gi++) {
                 auto gp = eg.inputGridPtrs[gi];
 
@@ -1408,13 +1407,10 @@ namespace yask {
                 if (mpiBufs.count(gname) == 0)
                     continue;
             
-                // Determine halo sizes to be exchanged for this grid.  Round up
-                // to vector lengths because the halo exchange only works with
-                // whole vectors. TODO: make this more efficient for halos that
-                // are not vector-length multiples.
-                idx_t ghx = ROUND_UP(gp->get_halo_x(), VLEN_X);
-                idx_t ghy = ROUND_UP(gp->get_halo_y(), VLEN_Y);
-                idx_t ghz = ROUND_UP(gp->get_halo_z(), VLEN_Z);
+                // Halo sizes to be exchanged for this grid.
+                idx_t ghx = gp->get_halo_x();
+                idx_t ghy = gp->get_halo_y();
+                idx_t ghz = gp->get_halo_z();
 
                 // Visit all this rank's neighbors.
                 int ni = 0;
@@ -1425,9 +1421,10 @@ namespace yask {
                          Grid_XYZ* sendBuf,
                          Grid_XYZ* rcvBuf)
                      {
-                         ni++;
+                         ni++;  // neighbor index.
 
                          // Submit request to receive data from neighbor.
+                         // TODO: exchange only valid data instead of whole buffer.
                          if (hi == halo_irecv) {
                              TRACE_MSG("exchange_halos: requesting data from rank " <<
                                        neighbor_rank << " for grid '" << gname << "'...");
@@ -1442,29 +1439,44 @@ namespace yask {
                              // Set begin/end vars to indicate what part
                              // of main grid to read from or write to.
                              // Init range to whole rank domain (inside halos).
-                             idx_t begin_x = 0;
-                             idx_t begin_y = 0;
-                             idx_t begin_z = 0;
-                             idx_t end_x = opts->dx;
-                             idx_t end_y = opts->dy;
-                             idx_t end_z = opts->dz;
+                             // These indices are all rank-relative.
+                             idx_t begin_hx = 0;
+                             idx_t begin_hy = 0;
+                             idx_t begin_hz = 0;
+                             idx_t end_hx = opts->dx;
+                             idx_t end_hy = opts->dy;
+                             idx_t end_hz = opts->dz;
 
-                             // Region to read from, i.e., data to be put into receiver's halo.
+                             // These vars control blocking within halo packing.  Units may be in
+                             // vectors or elements, depending on pack/unpack granularity.
+                             // Currently, only hz has a loop in the calc_halo macros below.
+                             // Thus, step_h{x,y} must be 1.
+                             // TODO: add loops in all dims.
+                             const idx_t step_hx = 1;
+                             const idx_t step_hy = 1;
+#ifndef HALO_STEP_Z
+#define HALO_STEP_Z (4)
+#endif
+                             idx_t step_hz = HALO_STEP_Z;
+
+                             // Region to read from, i.e., data from inside
+                             // this rank's halo to be put into receiver's
+                             // halo.
                              if (hi == halo_isend) {
 
                                  // Modify begin and/or end based on direction.
                                  if (nx == idx_t(MPIBufs::rank_prev)) // neighbor is on left.
-                                     end_x = ghx;
+                                     end_hx = ghx;
                                  if (nx == idx_t(MPIBufs::rank_next)) // neighbor is on right.
-                                     begin_x = opts->dx - ghx;
+                                     begin_hx = opts->dx - ghx;
                                  if (ny == idx_t(MPIBufs::rank_prev)) // neighbor is in front.
-                                     end_y = ghy;
+                                     end_hy = ghy;
                                  if (ny == idx_t(MPIBufs::rank_next)) // neighbor is in back.
-                                     begin_y = opts->dy - ghy;
+                                     begin_hy = opts->dy - ghy;
                                  if (nz == idx_t(MPIBufs::rank_prev)) // neighbor is above.
-                                     end_z = ghz;
+                                     end_hz = ghz;
                                  if (nz == idx_t(MPIBufs::rank_next)) // neighbor is below.
-                                     begin_z = opts->dz - ghz;
+                                     begin_hz = opts->dz - ghz;
                              }
 
                              // Region to write to, i.e., this rank's halo.
@@ -1472,39 +1484,69 @@ namespace yask {
 
                                  // Modify begin and/or end based on direction.
                                  if (nx == idx_t(MPIBufs::rank_prev)) { // neighbor is on left.
-                                     begin_x = -ghx;
-                                     end_x = 0;
+                                     begin_hx = -ghx;
+                                     end_hx = 0;
                                  }
                                  if (nx == idx_t(MPIBufs::rank_next)) { // neighbor is on right.
-                                     begin_x = opts->dx;
-                                     end_x = opts->dx + ghx;
+                                     begin_hx = opts->dx;
+                                     end_hx = opts->dx + ghx;
                                  }
                                  if (ny == idx_t(MPIBufs::rank_prev)) { // neighbor is in front.
-                                     begin_y = -ghy;
-                                     end_y = 0;
+                                     begin_hy = -ghy;
+                                     end_hy = 0;
                                  }
                                  if (ny == idx_t(MPIBufs::rank_next)) { // neighbor is in back.
-                                     begin_y = opts->dy;
-                                     end_y = opts->dy + ghy;
+                                     begin_hy = opts->dy;
+                                     end_hy = opts->dy + ghy;
                                  }
                                  if (nz == idx_t(MPIBufs::rank_prev)) { // neighbor is above.
-                                     begin_z = -ghz;
-                                     end_z = 0;
+                                     begin_hz = -ghz;
+                                     end_hz = 0;
                                  }
                                  if (nz == idx_t(MPIBufs::rank_next)) { // neighbor is below.
-                                     begin_z = opts->dz;
-                                     end_z = opts->dz + ghz;
+                                     begin_hz = opts->dz;
+                                     end_hz = opts->dz + ghz;
                                  }
                              }
 
-                             // Add offsets and divide indices by vector
-                             // lengths. Use idiv_flr() because indices may be neg (in halo).
-                             idx_t begin_xv = idiv_flr<idx_t>(ofs_x + begin_x, VLEN_X);
-                             idx_t begin_yv = idiv_flr<idx_t>(ofs_y + begin_y, VLEN_Y);
-                             idx_t begin_zv = idiv_flr<idx_t>(ofs_z + begin_z, VLEN_Z);
-                             idx_t end_xv = idiv_flr<idx_t>(ofs_x + end_x, VLEN_X);
-                             idx_t end_yv = idiv_flr<idx_t>(ofs_y + end_y, VLEN_Y);
-                             idx_t end_zv = idiv_flr<idx_t>(ofs_z + end_z, VLEN_Z);
+                             // Determine whether we have full aligned vectors
+                             // for this halo. This determines pack/unpack granularity.
+                             // TODO: make more efficient when not.
+                             bool use_vecs =
+                                 (begin_hx % VLEN_X == 0) &&
+                                 (begin_hy % VLEN_Y == 0) &&
+                                 (begin_hz % VLEN_Z == 0) &&
+                                 (end_hx % VLEN_X == 0) &&
+                                 (end_hy % VLEN_Y == 0) &&
+                                 (end_hz % VLEN_Z == 0);
+                             TRACE_MSG("exchange_halos: full aligned vectors in halo = " << use_vecs);
+                             
+                             // If not using vectors, need to add rank offset.
+                             if (!use_vecs) {
+                                 begin_hx += ofs_x;
+                                 begin_hy += ofs_y;
+                                 begin_hz += ofs_z;
+                                 end_hx += ofs_x;
+                                 end_hy += ofs_y;
+                                 end_hz += ofs_z;
+
+                                 // Elements.
+                                 step_hz *= VLEN_Z;
+                             }
+
+                             // If using vectors, indices are already
+                             // rank-relative as required by
+                             // read/writeVecNorm_TXYZ().  Divide indices by
+                             // vector lengths. Use idiv_flr() because
+                             // indices may be neg (in halo).
+                             else {
+                                 begin_hx = idiv_flr<idx_t>(begin_hx, VLEN_X);
+                                 begin_hy = idiv_flr<idx_t>(begin_hy, VLEN_Y);
+                                 begin_hz = idiv_flr<idx_t>(begin_hz, VLEN_Z);
+                                 end_hx = idiv_flr<idx_t>(end_hx, VLEN_X);
+                                 end_hy = idiv_flr<idx_t>(end_hy, VLEN_Y);
+                                 end_hz = idiv_flr<idx_t>(end_hz, VLEN_Z);
+                             }
 
                              // Assume only one time-step to exchange.
                              // TODO: fix this when MPI + wave-front is enabled.
@@ -1526,35 +1568,59 @@ namespace yask {
                              // Define calc_halo to copy data between main grid and MPI buffer.
                              // Add a short loop in z-dim to increase work done in halo loop.
                              // Use 'index_*' vars to access buffers because they are always 0-based.
+                             // TODO: redo w/cleaner code, e.g., a lambda function.
 #define calc_halo(t,                                                    \
-                  start_xv, start_yv, start_zv,               \
-                  stop_xv, stop_yv, stop_zv)  do {             \
-                                 idx_t xv = start_xv;                   \
-                                 idx_t yv = start_yv;                   \
-                                 idx_t izv = index_zv * step_zv;        \
-                                 if (hi == halo_isend) {                \
-                                     for (idx_t zv = start_zv; zv < stop_zv; zv++) { \
-                                         real_vec_t hval =              \
-                                             gp->readVecNorm_TXYZ(t, xv, yv, zv, \
+                  start_hx, start_hy, start_hz,                         \
+                  stop_hx, stop_hy, stop_hz)  do {                      \
+                                 idx_t hx = start_hx;                   \
+                                 idx_t hy = start_hy;                   \
+                                 idx_t iz = index_hz * step_hz;         \
+                                 if (use_vecs) {                        \
+                                     if (hi == halo_isend) {            \
+                                         for (idx_t hz = start_hz; hz < stop_hz; hz++) { \
+                                             real_vec_t hval =          \
+                                                 gp->readVecNorm_TXYZ(t, hx, hy, hz, \
+                                                                      __LINE__); \
+                                             sendBuf->writeVecNorm(hval, index_hx, index_hy, iz++, \
                                                                    __LINE__); \
-                                         sendBuf->writeVecNorm(hval, index_xv, index_yv, izv++, \
-                                                               __LINE__); \
+                                         }                              \
+                                     } else if (hi == halo_unpack) {    \
+                                         for (idx_t hz = start_hz; hz < stop_hz; hz++) { \
+                                             real_vec_t hval =          \
+                                                 rcvBuf->readVecNorm(index_hx, index_hy, iz++, \
+                                                                     __LINE__); \
+                                             gp->writeVecNorm_TXYZ(hval, t, hx, hy, hz, \
+                                                                   __LINE__); \
+                                         }                              \
                                      }                                  \
-                                 } else if (hi == halo_unpack) {        \
-                                     for (idx_t zv = start_zv; zv < stop_zv; zv++) { \
-                                         real_vec_t hval =              \
-                                             rcvBuf->readVecNorm(index_xv, index_yv, izv++, \
-                                                                 __LINE__); \
-                                         gp->writeVecNorm_TXYZ(hval, t, xv, yv, zv, \
+                                 } else {                               \
+                                     if (hi == halo_isend) {            \
+                                         for (idx_t hz = start_hz; hz < stop_hz; hz++) { \
+                                             real_t hval =              \
+                                                 gp->readElem_TXYZ(t, hx, hy, hz, \
+                                                                   __LINE__); \
+                                             sendBuf->writeElem(hval, index_hx, index_hy, iz++, \
                                                                 __LINE__); \
-                                     } } } while(0)
-
+                                         }                              \
+                                     } else if (hi == halo_unpack) {    \
+                                         for (idx_t hz = start_hz; hz < stop_hz; hz++) { \
+                                             real_t hval =              \
+                                                 rcvBuf->readElem(index_hx, index_hy, iz++, \
+                                                                  __LINE__); \
+                                             gp->writeElem_TXYZ(hval, t, hx, hy, hz, \
+                                                                __LINE__); \
+                                         }                              \
+                                     }                                  \
+                                 }                                      \
+                             } while(0)
+                             
                              // Include auto-generated loops to invoke calc_halo() from
-                             // begin_*v to end_*v by step_*v.
+                             // begin_h* to end_h* by step_h*.
 #include "yask_halo_loops.hpp"
 #undef calc_halo
 
                              // Send filled buffer to neighbor.
+                             // TODO: exchange only valid data instead of whole buffer.
                              if (hi == halo_isend) {
                                  TRACE_MSG("exchange_halos: sending data to rank " <<
                                            neighbor_rank << " for grid '" << gname << "'...");
@@ -1563,8 +1629,9 @@ namespace yask {
                                            neighbor_rank, int(gi), _env->comm,
                                            &send_reqs[num_send_reqs++]);
                              }
-                         } // not receive.
-                     } ); // visit neighbors.
+                         } // isend or unpack.
+                     } // lambda function.
+                     ); // visit neighbors.
                 
                 // Mark this grid as up-to-date.
                 if (hi == halo_unpack) {
@@ -1578,9 +1645,12 @@ namespace yask {
 
         // Wait for all send requests to complete.
         // TODO: delay this until next attempted halo exchange.
-        TRACE_MSG("exchange_halos: waiting for " << num_send_reqs << " MPI send request(s)...");
-        MPI_Waitall(num_send_reqs, send_reqs, MPI_STATUS_IGNORE);
-        TRACE_MSG("exchange_halos: done waiting for MPI send request(s).");
+        if (num_send_reqs) {
+            TRACE_MSG("exchange_halos: waiting for " << num_send_reqs <<
+                      " MPI send request(s) to complete...");
+            MPI_Waitall(num_send_reqs, send_reqs, MPI_STATUS_IGNORE);
+            TRACE_MSG("exchange_halos: done waiting for MPI send request(s).");
+        }
         
         double end_time = getTimeInSecs();
         mpi_time += end_time - start_time;
@@ -1811,11 +1881,11 @@ namespace yask {
         if (finalize && max_threads <= 0)
             max_threads = omp_get_max_threads();
         
-        // Round up domain size as needed.
-        dt = roundUp(os, dt, CPTS_T, "rank domain size in t (time steps)", finalize);
-        dx = roundUp(os, dx, CPTS_X, "rank domain size in x", finalize);
-        dy = roundUp(os, dy, CPTS_Y, "rank domain size in y", finalize);
-        dz = roundUp(os, dz, CPTS_Z, "rank domain size in z", finalize);
+        // Check domain sizes.
+        assert(dt > 0);
+        assert(dx > 0);
+        assert(dy > 0);
+        assert(dz > 0);
 
         // Determine num regions.
         // Also fix up region sizes as needed.
@@ -1853,9 +1923,11 @@ namespace yask {
         // Adjust defaults for sub-blocks to be y-z slab.
         // Otherwise, findNumSubBlocksInBlock() would set default
         // to entire block.
-        if (!sbx) sbx = CPTS_X; // min size in 'x'.
-        if (!sby) sby = by;     // max size in 'y'.
-        if (!sbz) sbz = bz;     // max size in 'z'.
+        if (finalize) {
+            if (!sbx) sbx = CPTS_X; // min size in 'x'.
+            if (!sby) sby = by;     // max size in 'y'.
+            if (!sbz) sbz = bz;     // max size in 'z'.
+        }
 
         // Determine num sub-blocks.
         // Also fix up sub-block sizes as needed.
@@ -1876,9 +1948,13 @@ namespace yask {
             os << "\nGroups:" << endl;
         
         // Adjust defaults for block-groups to be size of block.
-        if (!bgx) bgx = bx;
-        if (!bgy) bgy = by;
-        if (!bgz) bgz = bz;
+        // Otherwise, findNumBlockGroupsInRegion() would set default
+        // to entire region.
+        if (finalize) {
+            if (!bgx) bgx = bx;
+            if (!bgy) bgy = by;
+            if (!bgz) bgz = bz;
+        }
 
         // Determine num block-groups.
         // Also fix up block-group sizes as needed.
@@ -1897,9 +1973,13 @@ namespace yask {
             os << " num-blocks-per-block-group: " << nb << endl;
 
         // Adjust defaults for sub-block-groups to be size of sub-block.
-        if (!sbgx) sbgx = sbx;
-        if (!sbgy) sbgy = sby;
-        if (!sbgz) sbgz = sbz;
+        // Otherwise, findNumSubBlockGroupsInBlock() would set default
+        // to entire block.
+        if (finalize) {
+            if (!sbgx) sbgx = sbx;
+            if (!sbgy) sbgy = sby;
+            if (!sbgz) sbgz = sbz;
+        }
 
         // Determine num sub-block-groups.
         // Also fix up sub-block-group sizes as needed.

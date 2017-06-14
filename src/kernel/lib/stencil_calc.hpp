@@ -193,24 +193,24 @@ namespace yask {
     
     // A 4D bounding-box.
     struct BoundingBox {
+
+        // Boundaries around all points.
         idx_t begin_bbx=0, begin_bby=0, begin_bbz=0;
         idx_t end_bbx=1, end_bby=1, end_bbz=1; // one past last value.
+        idx_t bb_num_points=1;  // valid points within the box.
+
+        // Following values are calculated from the above ones.
         idx_t len_bbx=1, len_bby=1, len_bbz=1;
         idx_t bb_size=1;        // points in the entire box.
-        idx_t bb_num_points=1;  // valid points within the box.
-        bool bb_simple=true;    // full box with vector-length sizes.
+        bool bb_simple=true;    // full box with aligned vectors only.
         bool bb_valid=false;    // lengths and sizes have been calculated.
         
-        BoundingBox() {}
-
-        // Find lengths and set valid to true.
-        virtual void update_lengths() {
-            len_bbx = end_bbx - begin_bbx;
-            len_bby = end_bby - begin_bby;
-            len_bbz = end_bbz - begin_bbz;
-            bb_size = len_bbx * len_bby * len_bbz;
-            bb_valid = true;
-        }
+        // Calc values and set valid to true.
+        // If 'force_full', set 'bb_num_points' as well as 'bb_size'.
+        void update_bb(std::ostream& os,
+                       const std::string& name,
+                       StencilContext& context,
+                       bool force_full = false);
     };
 
     // Collections of things in a context.
@@ -655,8 +655,10 @@ namespace yask {
         // Calculate one sub-block of results in whole clusters from
         // 'begin_sb*v' to 'end_sb*v'-1 on each spatial dimension.  In the
         // time dimension, evaluation is at 'begin_sbtv' only.  All indices
-        // are in vectors (hence, the 'v' suffix), i.e., element indices
-        // dividied by 'VLEN_*'.
+        // are relative to the current rank, i.e., the rank offset is
+        // subtracted from the overall index.  Also, all indices are in
+        // vectors (hence, the 'v' suffix), i.e., element indices dividied
+        // by 'VLEN_*'.
         virtual void
         calc_sub_block_of_clusters(idx_t begin_sbtv,
                                    idx_t begin_sbxv, idx_t begin_sbyv, idx_t begin_sbzv,
