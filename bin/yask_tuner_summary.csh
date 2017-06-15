@@ -26,8 +26,8 @@
 # Purpose: find best result from each GA search csv file.
 
 if ( "-$1" == "-" ) then
-    if ( `echo yask?tuner*.csv | wc -l` > 0 ) then
-        $0 yask?tuner*.csv
+    if ( `echo logs/yask_*/*.csv | wc -l` > 0 ) then
+        $0 logs/yask_*/*.csv
     else
         echo "usage: $0 <csv-file(s) from yask_tuner.pl>"
     endif

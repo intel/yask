@@ -28,6 +28,7 @@
 
 use strict;
 use File::Basename;
+use File::Path;
 use lib dirname($0)."/lib";
 use lib dirname($0)."/../lib";
 use AI::Genetic;
@@ -49,33 +50,33 @@ my $oneG = 1e9;
 my $oneT = 1e12;
 
 # command-line options.
-my $stencil;             # type of stencil.
-my $arch;                # target architecture.
-my $sweep = 0;           # if true, sweep instead of search.
-my $testing = 0;         # if true, don't run real trials.
-my $checking = 0;        # if true, don't run at all.
-my $mic;                 # set to 0, 1, etc. for KNC mic.
-my $host;                # set to run on a different host.
-my $sde = 0;             # run under sde (for testing).
-my $sim = 0;             # run under any simulator/emulator.
-my $radius;              # stencil radius.
-my $zLoop = 0;           # Force inner loop in 'z' direction.
-my $zLayout = 0;         # Force inner memory layout in 'z' direction.
-my $zVec = 0;            # Force 1D vectorization in 'z' direction.
-my $folding = 1;         # 2D & 3D folding allowed.
-my $dp;                  # double precision.
-my $dw = 1;              # 'w' dimension (fixed).
-my $makeArgs = '';       # extra make arguments.
-my $makePrefix = '';     # prefix for make.
-my $runArgs = '';        # extra run arguments.
-my $maxGB = 16;          # max mem usage.
-my $minGB = 0;           # min mem usage.
-my $nranks = 1;          # num ranks.
-my $debugCheck = 0;      # print each initial check result.
-my $doBuild = 1;         # do compiles.
-my $doVal = 0;           # do validation runs.
-my $maxVecsInCluster = 4;       # max vectors in a cluster.
-my @folds = ();     # folding variations to explore.
+my $outDir = 'logs';           # dir for output.
+my $stencil;                   # type of stencil.
+my $arch;                      # target architecture.
+my $sweep = 0;                 # if true, sweep instead of search.
+my $testing = 0;               # if true, don't run real trials.
+my $checking = 0;              # if true, don't run at all.
+my $mic;                       # set to 0, 1, etc. for KNC mic.
+my $host;                      # set to run on a different host.
+my $sde = 0;                   # run under sde (for testing).
+my $sim = 0;                   # run under any simulator/emulator.
+my $radius;                    # stencil radius.
+my $zLoop = 0;                 # Force inner loop in 'z' direction.
+my $zLayout = 0;               # Force inner memory layout in 'z' direction.
+my $zVec = 0;                  # Force 1D vectorization in 'z' direction.
+my $folding = 1;               # 2D & 3D folding allowed.
+my $dp;                        # double precision.
+my $makeArgs = '';             # extra make arguments.
+my $makePrefix = '';           # prefix for make.
+my $runArgs = '';              # extra run arguments.
+my $maxGB = 16;                # max mem usage.
+my $minGB = 0;                 # min mem usage.
+my $nranks = 1;                # num ranks.
+my $debugCheck = 0;            # print each initial check result.
+my $doBuild = 1;               # do compiles.
+my $doVal = 0;                 # do validation runs.
+my $maxVecsInCluster = 4;      # max vectors in a cluster.
+my @folds = ();                # folding variations to explore.
 
 sub usage {
   my $msg = shift;              # error message or undef.
@@ -90,6 +91,7 @@ sub usage {
       " -sweep             Use exhausitive search instead of GA.\n".
       " -noBuild           Do not compile or modify any compiler genes; binary must already exist.\n".
       " -val               Run validation before each performance test.\n".
+      " -outDir            Directory to write output into (default is '$outDir').\n".
       "\ntarget options:\n".
       " -arch=<ARCH>       Specify target architecture: knc, knl, hsw, ... (required).\n".
       " -mic=<N>           Set hostname to current hostname appended with -mic<N>; sets arch to 'knc'.\n".
@@ -100,16 +102,16 @@ sub usage {
       " -runArgs=<ARGS>    Pass additional <ARGS> to bin/yask.sh command.\n".
       " -ranks=<N>         Number of ranks to use on host (x-dimension only).\n".
       "\nstencil options:\n".
-      " -stencil=<NAME>    Specify stencil: iso3dfd, 3axis, 9axis, 3plane, cube, ave, awp, ... (required).\n".
-      " -dp|-sp            Specify FP precision (default is DP for 'ave' stencil, SP for others).\n".
-      " -radius=<N>        Specify stencil radius (default is 1 for 'ave' stencil, 8 for others).\n".
+      " -stencil=<NAME>    Specify stencil: iso3dfd, 3axis, 9axis, 3plane, cube, awp, ... (required).\n".
+      " -dp|-sp            Specify FP precision (default is SP).\n".
+      " -radius=<N>        Specify stencil radius for stencils that use this option (default is 8).\n".
       "\nsearch-space options:\n".
       " -<gene_name>=<N>   Force <gene_name> to value <N>.\n".
       "                    Run with -check for list of genes and default ranges.\n".
       "                    Setting rank-domain size (d) also sets upper block and region sizes.\n".
       "                    Leave off 'x', 'y', 'z' suffix to set these 3 vars to same val.\n".
       "                    Examples: '-d=512'      Set problem size to 512^3.\n".
-      "                              '-p=0'        Disable min padding.\n".
+      "                              '-ep=0'       Disable extra padding.\n".
       "                              '-c=1'        Allow only one vector in a cluster.\n".
       "                              '-r=0'        Allow only one OpenMP region (region size=0 => rank size).\n".
       " -<gene_name>=<N>-<M>   Restrict <gene_name> between <N> and <M>.\n".
@@ -117,7 +119,6 @@ sub usage {
       " -folds=<list>      Comma separated list of folds to use.\n".
       "                    Examples: '-folds=4 4 1', '-folds=1 1 16, 4 4 1, 1 4 4'.\n".
       "                    Can only specify 3D folds.\n".
-      " -dw=<N>            Set size of 'w' dim to <N> (only for 4D problems).\n".
       " -mem=<N>-<M>           Set allowable est. memory usage between <N> and <M> GiB (default is $minGB-$maxGB).\n".
       " -maxVecsInCluster=<N>  Maximum vectors allowed in cluster (default is $maxVecsInCluster).\n".
       " -noPrefetch        Disable any prefetching (shortcut for '-pfd_l1=0 -pfd_l2=0').\n".
@@ -162,6 +163,9 @@ for my $origOpt (@ARGV) {
   elsif ($opt eq '-debugcheck') {
     $debugCheck = 1;
   }
+  elsif ($origOpt =~ /^-outdir=(.*)$/i) {
+    $outDir = $1;
+  }
   elsif ($origOpt =~ /^-makeargs=(.*)$/i) {
     $makeArgs = $1;
   }
@@ -198,9 +202,6 @@ for my $origOpt (@ARGV) {
   elsif ($opt =~ '^-mem=([.\d]+)-([.\d]+)$') {
     $minGB = $1;
     $maxGB = $2;
-  }
-  elsif ($opt =~ '^-dw=(\d+)$') {
-    $dw = $1;
   }
   elsif ($opt =~ '^-radius=(\d+)$') {
     $radius = $1;
@@ -282,8 +283,6 @@ usage("must specify stencil.") if !defined $stencil;
 usage("must specify arch.") if !defined $arch;
 
 # precision.
-my $isAve = ($stencil eq 'ave');
-$dp = $isAve ? 1 : 0 if !defined $dp;
 my $realBytes = $dp ? 8 : 4;
 
 # vector.
@@ -291,25 +290,26 @@ my $vbits = ($arch =~ /^(k|skx)/) ? 512 : 256;
 my $velems = $vbits / 8 / $realBytes;
 
 # radius.
-$radius = $isAve ? 1 : 8 if !defined $radius;
-
-# w dimension.
-$dw = $isAve ? 40 : 1 if !defined $dw;     # 40 grids in miniGhost.
+$radius = 8 if !defined $radius;
 
 # disable folding for DP MIC (no valignq).
 $folding = 0 if (defined $mic && $dp);
 
-# csv filename.
-my $searchTypeStr = $sweep ? '-sweep' : '';
+# dir name.
+my $searchTypeStr = $sweep ? 'sweep' : 'tuner';
 my $hostStr = defined $host ? $host : hostname();
 my $timeStamp=`date +%Y-%m-%d_%H-%M-%S`;
 chomp $timeStamp;
-my $outFile = "yask_tuner$searchTypeStr.$stencil.$arch.$hostStr.$timeStamp.csv";
-print "Output will be saved in '$outFile'.\n";
-$outFile = '/dev/null' if $checking;
+my $baseName = "yask_$searchTypeStr.$stencil.$arch.$hostStr.$timeStamp";
+$outDir = '.' if !$outDir;
+$outDir .= "/$baseName";
+print "Output will be saved in '$outDir'.\n";
 
 # open output.
-open OUTFILE, ">$outFile" or die "error: cannot write to '$outFile'\n";
+mkpath($outDir,1);
+my $outFile = "$outDir/$baseName.csv";
+open OUTFILE, ">$outFile" or die "error: cannot write to '$outFile'\n"
+  unless $checking;
 
 # things to get from the run.
 my $fitnessMetric = 'best-throughput (point-updates/sec)';
@@ -331,11 +331,12 @@ my @metrics = ( $fitnessMetric,
                 'num-regions',
                 'num-blocks-per-region',
                 'num-block-groups-per-region',
-                'minimum-padding',
                 'max-halos',
+                'extra-padding',
+                'minimum-padding',
                 'manual-L1-prefetch-distance',
                 'manual-L2-prefetch-distance',
-                'problem-size in all ranks, for all time-steps',
+                'overall-problem-size in all ranks, for all time-steps',
                 'grid-point-updates in all ranks, for all time-steps',
                 'grid-point-reads in all ranks, for all time-steps',
                 'Total overall allocation',
@@ -383,16 +384,8 @@ my @layouts =
 @layouts = grep /4$/, @layouts if $zLayout;
 
 # List of possible loop orders.
-# Start with w on outer loop only.
 my @loopOrders =
-  ('wxyz', 'wxzy', 'wyxz', 'wyzx', 'wzxy', 'wzyx');
-
-# Add more options if there are >1 var, i.e., 'w' is meaningful.
-push  @loopOrders,
-  ('xwyz', 'xwzy', 'xywz', 'xyzw', 'xzwy', 'xzyw',
-   'ywxz', 'ywzx', 'yxwz', 'yxzw', 'yzwx', 'yzxw',
-   'zwxy', 'zwyx', 'zxwy', 'zxyw', 'zywx', 'zyxw', )
-  if $dw > 1;
+  ('xyz', 'xzy', 'yxz', 'yzx', 'zxy', 'zyx');
 
 # Only allow z in inner loop if requested.
 @loopOrders = grep /z$/, @loopOrders if $zLoop;
@@ -406,11 +399,10 @@ my @pathNames =
 if ( !@folds ) {
   @folds = "1 1 $velems";
 
-# add more 1D options if not z-vec.
+  # add more 1D options if not z-vec.
   push @folds, ("1 $velems 1", "$velems 1 1") if !$zVec;
 
-# add remaining options if folding.
-# TODO: add w-dim folding.
+  # add remaining options if folding.
   push @folds, ($velems == 8) ?
     ("4 2 1", "4 1 2",
      "2 4 1", "2 1 4",
@@ -467,10 +459,10 @@ my @rangesAll =
    [ 0, $maxDim, 1, 'sby' ],
    [ 0, $maxDim, 1, 'sbz' ],
 
-   # min padding.
-   [ 0, $maxPad, 1, 'px' ],
-   [ 0, $maxPad, 1, 'py' ],
-   [ 0, $maxPad, 1, 'pz' ],
+   # extra padding.
+   [ 0, $maxPad, 1, 'epx' ],
+   [ 0, $maxPad, 1, 'epy' ],
+   [ 0, $maxPad, 1, 'epz' ],
 
    # threads.
    [ $minThreadDivisorExp, $maxThreadDivisorExp, 1, 'thread_divisor_exp' ],
@@ -744,7 +736,7 @@ sub getRunCmd() {
   my $exePrefix = 'time';
   $exePrefix .= " sde -$arch --" if $sde;
 
-  my $runCmd = "bin/yask.sh";
+  my $runCmd = "bin/yask.sh -log $outDir/yask.$stencil.$arch.run".sprintf("%06d",$run).".log";
   if (defined $mic) {
     $runCmd .= " -mic $mic";
   } else {
@@ -768,7 +760,6 @@ sub calcSize($$$) {
     my $makeCmd = getMakeCmd('', 'EXTRA_CXXFLAGS=-O0');
     my $runCmd = getRunCmd();
     $runCmd .= ' -t 0 -d 1';
-    $runCmd .= " -dw $dw" if $dw > 1;
     my $cmd = "$makeCmd 2>&1 && $runCmd";
 
     my $timeDim = 0;
@@ -784,18 +775,12 @@ sub calcSize($$$) {
         push @cmdOut, $_;
 
         # E.g.,
-        # 4D (t=1 * x=8 * y=1 * z=1) 'vel_x' data is at 0x7fce08200000: 1.176K element(s) of 4 byte(s) each, 147 vector(s), 4.59375KiB.
-        # 3D (x=8 * y=1 * z=1) 'lambda' data is at 0x7fce0820f880: 600 element(s) of 4 byte(s) each, 75 vector(s), 2.34375KiB.
-        if (/^\s*5D.*t=(\d+).*w=(\d+)/) {
-          $numSpatialGrids += $1 * $2;  # twxyz
-        }
-        elsif (/^\s*4D.*w=(\d+)/) {
-          $numSpatialGrids += $1;  # wxyz
-        }
-        elsif (/^\s*4D.*t=(\d+)/) {
+        # 4D grid (t=2 * x=522 * y=132 * z=1042) 'pressure', data at 0x7fdc9e400000, containing 143.596MSIMD vector element(s) of 64 byte(s) each, 8.55898GiB
+        # 3D grid (x=522 * y=132 * z=1042) 'vel', data at 0x7fdec2066c40, containing 71.798MSIMD vector element(s) of 64 byte(s) each, 4.27949GiB
+        if (/4D grid.*t=(\d+)/) {
           $numSpatialGrids += $1; # txyz.
         }
-        elsif (/^\s*3D.*x=/) {
+        elsif (/3D grid/) {
           $numSpatialGrids += 1;  # xyz.
         }
       }
@@ -858,7 +843,7 @@ sub setResults($$) {
     $mre =~ s/\)/\\)/g;
 
     # look for metric at beginning of line followed by ':' or '='.
-    if ($line =~ /^\s*$mre[^:=]*[:=]\s*(\S+)/i) {
+    if ($line =~ /^\s*$mre[^:=]*[:=]\s*(.+)/i) {
       my $val = $1;
 
       # adjust for suffixes.
@@ -1202,7 +1187,7 @@ sub fitness {
   my @sbgs = readHashes($h, 'sbg', 0);
   my @sbs = readHashes($h, 'sb', 0);
   my @cvs = readHashes($h, 'c', 1); # in vectors, not in points!
-  my @ps = readHashes($h, 'p', 0);
+  my @ps = readHashes($h, 'ep', 0);
   my $fold = readHash($h, 'fold', 1);
   my $exprSize = readHash($h, 'exprSize', 1);
   my $thread_divisor_exp = readHash($h, 'thread_divisor_exp', 0);
@@ -1349,7 +1334,6 @@ sub fitness {
   $g3d =~ s/3/2/;               # move 'y' from posn 3 to 2.
   $g3d =~ s/4/3/;               # move 'z' from posn 4 to 3.
   $mvars .= " layout_xyz=Layout_$g3d layout_txyz=Layout_$g4d";
-  $mvars .= " layout_wxyz=Layout_4$g3d layout_twxyz=Layout_5$g4d" if $dw > 1;
 
   # prefetch distances.
   if ($pfdl1 > 0 && $pfdl2 > 0) {
@@ -1395,14 +1379,13 @@ sub fitness {
   $args .= " -block_threads ".(1 << $bthreads_exp);
 
   # sizes.
-  $args .= " -dw $dw" if $dw > 1;
   $args .= " -dx $ds[0] -dy $ds[1] -dz $ds[2]";
   $args .= " -rx $rs[0] -ry $rs[1] -rz $rs[2]";
   $args .= " -bx $bs[0] -by $bs[1] -bz $bs[2]";
   $args .= " -bgx $bgs[0] -bgy $bgs[1] -bgz $bgs[2]";
   $args .= " -sbx $sbs[0] -sby $sbs[1] -sbz $sbs[2]";
   $args .= " -sbgx $sbgs[0] -sbgy $sbgs[1] -sbgz $sbgs[2]";
-  $args .= " -mpx $ps[0] -mpy $ps[1] -mpz $ps[2]";
+  $args .= " -epx $ps[0] -epy $ps[1] -epz $ps[2]";
 
   # num of iterations and trials.
   my $shortIters = 5;
@@ -1537,8 +1520,8 @@ print OUTFILE join(',', "run", "generation", "individual",
                    sort(keys %fixedVals), @names,
                    "make command", "run command",
                    @metrics, "fitness",
-                   "best generation so far", "best fitness so far", "this is best so far"), "\n";
-
+                   "best generation so far", "best fitness so far", "is this best so far"), "\n"
+ unless $checking;
 print "\nSize of search space:\n";
 my $nt = 1;
 for my $i (0..$#ranges) {
@@ -1611,4 +1594,4 @@ if ($sweep) {
   }
 }
 close OUTFILE;
-print "Done; output in '$outFile'.\n";
+print "Done; output in '$outDir'.\n";

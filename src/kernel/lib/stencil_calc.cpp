@@ -1056,6 +1056,8 @@ namespace yask {
             " num-ranks: " <<
             _opts->nrx << '*' << _opts->nry << '*' << _opts->nrz << endl <<
             " vector-len: " << VLEN << endl <<
+            " extra-padding: " <<
+            _opts->epx << ", " << _opts->epy << ", " << _opts->epz << endl <<
             " minimum-padding: " <<
             _opts->mpx << ", " << _opts->mpy << ", " << _opts->mpz << endl <<
             " max-wave-front-angles: " <<
@@ -1092,11 +1094,11 @@ namespace yask {
 
         // Report total allocation.
         rank_nbytes = get_num_bytes();
-        os << "Total allocation in this rank (bytes): " <<
-            printWithPow2Multiplier(rank_nbytes) << endl;
+        os << "Total allocation in this rank: " <<
+            printWithPow2Multiplier(rank_nbytes) << "B\n";
         tot_nbytes = sumOverRanks(rank_nbytes, _env->comm);
-        os << "Total overall allocation in " << _env->num_ranks << " rank(s) (bytes): " <<
-            printWithPow2Multiplier(tot_nbytes) << endl;
+        os << "Total overall allocation in " << _env->num_ranks << " rank(s): " <<
+            printWithPow2Multiplier(tot_nbytes) << "B\n";
     
         // Various metrics for amount of work.
         rank_numpts_dt = rank_numpts_1t * dt;
