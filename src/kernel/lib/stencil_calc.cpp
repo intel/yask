@@ -36,80 +36,33 @@ namespace yask {
         ep->initEnv(0, 0);
         return ep;
     }
-    yk_settings_ptr yk_factory::new_settings() const {
-        auto sp = make_shared<KernelSettings>();
-        assert(sp);
-
-        // Set time-domain size because it's not really used in the API.
-        sp->dt = 1;
-
-        return sp;
-    }
-
-#define GET_SETTING_API(api_name, var_prefix, t_ok, t_var)              \
-    idx_t KernelSettings::api_name(const string& dim) const {           \
-    if (t_ok && dim == "t") return t_var;                               \
-    else if (dim == "x") return var_prefix ## x;                        \
-    else if (dim == "y") return var_prefix ## y;                        \
-    else if (dim == "z") return var_prefix ## z;                        \
-        else {                                                          \
-            cerr << "Error: " #api_name "(): bad dimension '" <<        \
-                dim << "'\n";                                           \
-            exit_yask(1);                                               \
-            return 0;                                                   \
-        }                                                               \
-    }
-    GET_SETTING_API(get_rank_domain_size, d, false, 0)
-    GET_SETTING_API(get_min_pad_size, mp, false, 0)
-    GET_SETTING_API(get_block_size, b, false, 0)
-    GET_SETTING_API(get_num_ranks, nr, false, 0)
-
-#define SET_SETTING_API(api_name, var_prefix, t_ok, t_stmt)             \
-    void KernelSettings::api_name(const string& dim, idx_t n) {         \
-        assert(n >= 0);                                                 \
-        if (t_ok && dim == "t") t_stmt;                                 \
-        else if (dim == "x") var_prefix ## x = n;                       \
-        else if (dim == "y") var_prefix ## y = n;                       \
-        else if (dim == "z") var_prefix ## z = n;                       \
-        else {                                                          \
-            cerr << "Error: " #api_name "(): bad dimension '" <<        \
-                dim << "'\n";                                           \
-            exit_yask(1);                                               \
-        }                                                               \
-        if (_context) _context->set_grids();                            \
-        else adjustSettings(cout, false);                               \
-    }
-    SET_SETTING_API(set_rank_domain_size, d, false, (void)0)
-    SET_SETTING_API(set_min_pad_size, mp, false, (void)0)
-    SET_SETTING_API(set_block_size, b, false, (void)0)
-    SET_SETTING_API(set_num_ranks, nr, false, (void)0)
-    
     yk_solution_ptr yk_factory::new_solution(yk_env_ptr env,
-                                             yk_settings_ptr opts) const {
+                                             const yk_solution_ptr source) const {
         auto ep = dynamic_pointer_cast<KernelEnv>(env);
         assert(ep);
-        auto op = dynamic_pointer_cast<KernelSettings>(opts);
+        auto op = make_shared<KernelSettings>();
         assert(op);
 
+        // Copy settings from source.
+        if (source.get()) {
+            auto ssp = dynamic_pointer_cast<StencilContext>(source);
+            assert(ssp);
+            auto sop = ssp->get_settings();
+            assert(sop);
+            *op = *sop;
+        }
+        
         // Create problem-specific object defined by stencil compiler.
         auto sp = make_shared<YASK_STENCIL_CONTEXT>(ep, op);
         assert(sp);
 
+        // Set time-domain size because it's not really used in the API.
+        op->dt = 1;
+
         return sp;
     }
-
-    string StencilContext::get_domain_dim_name(int n) const {
-
-        // TODO: remove hard-coded names.
-        switch (n) {
-        case 0: return "x";
-        case 1: return "y";
-        case 2: return "z";
-        default:
-            cerr << "Error: get_domain_dim_name(): bad index '" << n << "'\n";
-            exit_yask(1);
-            return 0;
-        }
+    yk_solution_ptr yk_factory::new_solution(yk_env_ptr env) const {
+        return new_solution(env, nullptr);
     }
 
 #define GET_SOLUTION_API(api_name, var_prefix, adj, t_ok, t_val)        \
@@ -127,6 +80,44 @@ namespace yask {
     GET_SOLUTION_API(get_first_rank_domain_index, begin_bb, 0, false, 0)
     GET_SOLUTION_API(get_last_rank_domain_index, end_bb, -1, false, 0)
     GET_SOLUTION_API(get_overall_domain_size, tot_, 0, false, 0)
+    GET_SOLUTION_API(get_rank_domain_size, _opts->d, 0, false, 0)
+    GET_SOLUTION_API(get_min_pad_size, _opts->mp, 0, false, 0)
+    GET_SOLUTION_API(get_block_size, _opts->b, 0, false, 0)
+    GET_SOLUTION_API(get_num_ranks, _opts->nr, 0, false, 0)
+    GET_SOLUTION_API(get_rank_index, _opts->ri, 0, false, 0)
+
+#define SET_SOLUTION_API(api_name, var_prefix, t_ok, t_stmt)            \
+    void StencilContext::api_name(const string& dim, idx_t n) {         \
+        assert(n >= 0);                                                 \
+        if (t_ok && dim == "t") t_stmt;                                 \
+        else if (dim == "x") var_prefix ## x = n;                       \
+        else if (dim == "y") var_prefix ## y = n;                       \
+        else if (dim == "z") var_prefix ## z = n;                       \
+        else {                                                          \
+            cerr << "Error: " #api_name "(): bad dimension '" <<        \
+                dim << "'\n";                                           \
+            exit_yask(1);                                               \
+        }                                                               \
+        set_grids();                                                    \
+    }
+    SET_SOLUTION_API(set_rank_domain_size, _opts->d, false, (void)0)
+    SET_SOLUTION_API(set_min_pad_size, _opts->mp, false, (void)0)
+    SET_SOLUTION_API(set_block_size, _opts->b, false, (void)0)
+    SET_SOLUTION_API(set_num_ranks, _opts->nr, false, (void)0)
+    
+    string StencilContext::get_domain_dim_name(int n) const {
+
+        // TODO: remove hard-coded names.
+        switch (n) {
+        case 0: return "x";
+        case 1: return "y";
+        case 2: return "z";
+        default:
+            cerr << "Error: get_domain_dim_name(): bad index '" << n << "'\n";
+            exit_yask(1);
+            return 0;
+        }
+    }
 
     yk_grid_ptr StencilContext::new_grid(const std::string& name,
                                          const std::string& dim1,

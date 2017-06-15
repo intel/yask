@@ -114,19 +114,20 @@ namespace yask {
     };
 
     // Application settings to control size and perf of stencil code.
-    class KernelSettings :
-        public virtual yk_settings {
+    class KernelSettings {
 
     protected:
-        const idx_t def_block = 32;
-        StencilContext* _context = 0; // owner of these settings.
+        const static idx_t def_steps = 50;
+        const static idx_t def_rank = 128;
+        const static idx_t def_block = 32;
 
     public:
         // Sizes in elements (points).
         // - time sizes (t) are in steps to be done.
         // - spatial sizes (x, y, z) are in elements (not vectors).
         // Sizes are the same for all grids.
-        idx_t dt=50, dx=100, dy=100, dz=100; // rank size (without halos).
+        idx_t dt=def_steps;
+        idx_t dx=def_rank, dy=def_rank, dz=def_rank; // rank size (without halos).
         idx_t rt=1, rx=0, ry=0, rz=0; // region size (used for wave-front tiling).
         idx_t bgx=0, bgy=0, bgz=0; // block-group size (only used for 'grouped' region loops).
         idx_t bt=1, bx=def_block, by=def_block, bz=def_block; // block size (used for each outer thread).
@@ -147,16 +148,7 @@ namespace yask {
 
         // Ctor.
         KernelSettings() { }
-        KernelSettings(StencilContext* context) : _context(context) { }
         virtual ~KernelSettings() { }
-
-        // Pointer to context.
-        virtual StencilContext* get_context() {
-            return _context;
-        }
-        virtual void set_context(StencilContext* context) {
-            _context = context;
-        }
         
         // Add these settigns to a cmd-line parser.
         virtual void add_options(CommandLineParser& parser);
@@ -174,20 +166,6 @@ namespace yask {
         // Called from prepare_solution(), so it doesn't normally need to be called from user code.
         virtual void adjustSettings(std::ostream& os, bool finalize);
 
-        // APIs.
-        // See yask_kernel_api.hpp.
-        virtual void set_rank_domain_size(const std::string& dim,
-                                     idx_t size);
-        virtual void set_min_pad_size(const std::string& dim,
-                                      idx_t size);
-        virtual void set_block_size(const std::string& dim,
-                                    idx_t size);
-        virtual void set_num_ranks(const std::string& dim,
-                                   idx_t size);
-        virtual idx_t get_rank_domain_size(const std::string& dim) const;
-        virtual idx_t get_min_pad_size(const std::string& dim) const;
-        virtual idx_t get_block_size(const std::string& dim) const;
-        virtual idx_t get_num_ranks(const std::string& dim) const;
     };
     typedef std::shared_ptr<KernelSettings> KernelSettingsPtr;
     
@@ -323,9 +301,6 @@ namespace yask {
             _env(env),
             _opts(settings)
         {
-            // Set pointer from settings.
-            if (settings)
-                settings->set_context(this);
             
             // Set output to msg-rank.
             set_ostr();
@@ -357,6 +332,9 @@ namespace yask {
         virtual KernelSettingsPtr get_settings() {
             assert(_opts);
             return _opts;
+        }
+        virtual void set_settings(KernelSettingsPtr opts) {
+            _opts = opts;
         }
 
         // Add a new grid to the containers.
@@ -565,6 +543,21 @@ namespace yask {
             run_solution(step_index, step_index);
         }
         virtual void share_grid_storage(yk_solution_ptr source);
+
+        // APIs that access settings.
+        virtual void set_rank_domain_size(const std::string& dim,
+                                     idx_t size);
+        virtual void set_min_pad_size(const std::string& dim,
+                                      idx_t size);
+        virtual void set_block_size(const std::string& dim,
+                                    idx_t size);
+        virtual void set_num_ranks(const std::string& dim,
+                                   idx_t size);
+        virtual idx_t get_rank_domain_size(const std::string& dim) const;
+        virtual idx_t get_min_pad_size(const std::string& dim) const;
+        virtual idx_t get_block_size(const std::string& dim) const;
+        virtual idx_t get_num_ranks(const std::string& dim) const;
+        virtual idx_t get_rank_index(const std::string& dim) const;
     };
     
     /// Classes that support evaluation of one stencil equation-group.

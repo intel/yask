@@ -49,8 +49,6 @@ namespace yask {
     // Forward declarations of classes and pointers.
     class yk_env;
     typedef std::shared_ptr<yk_env> yk_env_ptr;
-    class yk_settings;
-    typedef std::shared_ptr<yk_settings> yk_settings_ptr;
     class yk_solution;
     typedef std::shared_ptr<yk_solution> yk_solution_ptr;
     class yk_grid;
@@ -72,26 +70,22 @@ namespace yask {
         virtual yk_env_ptr
         new_env() const;
 
-        /// Create an object to hold kernel solution settings.
-        /**
-           Settings are kept in a separate object to facilitate the
-           sharing of settings among multiple solutions.
-           The settings may be modified via the returned pointer
-           after a solution has been created via new_solution().
-           However, the settings should *not* be changed after
-           calling yk_solution::prepare_solution().
-           @returns Pointer to new settings object.
-        */
-        virtual yk_settings_ptr
-        new_settings() const;
-        
         /// Create a stencil solution.
         /** A stencil solution contains all the grids and equations
             that were created during stencil compilation.
             @returns Pointer to new solution object. */
         virtual yk_solution_ptr
+        new_solution(yk_env_ptr env /**< [in] Pointer to env info. */) const;
+
+        /// Create a stencil solution by copying the settings from another.
+        /** All the settings that were specified via the `yk_solution::set_*()`
+            functions in the source solution will be copied to the new solution.
+            @returns Pointer to new solution object. */
+        virtual yk_solution_ptr
         new_solution(yk_env_ptr env /**< [in] Pointer to env info. */,
-                     yk_settings_ptr settings /**< [in] Pointer to kernel settings. */ ) const;
+                     const yk_solution_ptr source
+                     /**< [in] Pointer to existing \ref yk_solution from which
+                        the settings will be copied. */ ) const;
     };
 
     /// Kernel environment.
@@ -114,12 +108,49 @@ namespace yask {
         virtual void
         global_barrier() const =0;
     };
-    
-    /// Kernel settings.
-    /** Contains preferences for constructing a solution. */
-    class yk_settings {
+
+    /// Stencil solution as defined by the generated code from the YASK stencil compiler.
+    /** Objects of this type contain all the grids and equations
+        that comprise a solution. */
+    class yk_solution {
     public:
-        virtual ~yk_settings() {}
+        virtual ~yk_solution() {}
+
+        /// Get the name of the solution.
+        /** @returns String containing the solution name provided during stencil compilation. */
+        virtual const std::string&
+        get_name() const =0;
+
+        /// Get the floating-point precision size.
+        /** @returns Number of bytes in each FP element. */
+        virtual int 
+        get_element_bytes() const =0;
+        
+        /// Get the solution step dimension.
+        /** @returns String containing the step-dimension name. */
+        virtual std::string
+        get_step_dim_name() const =0;
+
+        /// Get the number of domain dimensions used in this solution.
+        /**
+            Does *not* include the step dimension.
+            @returns Number of dimensions that define the problem domain. */
+        virtual int
+        get_num_domain_dims() const =0;
+
+        /// Get the name of the specified domain dimension.
+        /**
+            @returns String containing name of domain dimension. */
+        virtual std::string
+        get_domain_dim_name(int n /**< [in] Index of dimension between zero (0)
+                                     and get_num_domain_dims()-1. */ ) const =0;
+
+        /// Get all the domain dimension names.
+        /**
+           @returns List of all domain-dimension names.
+        */
+        virtual std::vector<std::string>
+        get_domain_dim_names() const =0;
 
         /// Set the size of the solution domain for this rank.
         /** The domain defines the points that will be evaluated with the stencil(s). 
@@ -159,7 +190,7 @@ namespace yask {
             The *actual* padding size will be the largest of the following values,
             additionally rounded up based on the vector-folding dimensions:
             - Halo size.
-            - Value provided by this function, yk_settings::set_min_pad_size().
+            - Value provided by this function, set_min_pad_size().
             - Value provided by yk_grid::set_min_pad_size().
 
             The padding size cannot be changed after data storage
@@ -247,50 +278,16 @@ namespace yask {
                          the names from
                          yk_solution::get_domain_dim_name(). */) const =0;
 
-    };
-    
-    /// Stencil solution as defined by the generated code from the YASK stencil compiler.
-    /** Objects of this type contain all the grids and equations
-        that comprise a solution. */
-    class yk_solution {
-    public:
-        virtual ~yk_solution() {}
-
-        /// Get the name of the solution.
-        /** @returns String containing the solution name provided during stencil compilation. */
-        virtual const std::string&
-        get_name() const =0;
-
-        /// Get the floating-point precision size.
-        /** @returns Number of bytes in each FP element. */
-        virtual int 
-        get_element_bytes() const =0;
-        
-        /// Get the solution step dimension.
-        /** @returns String containing the step-dimension name. */
-        virtual std::string
-        get_step_dim_name() const =0;
-
-        /// Get the number of domain dimensions used in this solution.
+        /// Get the rank index in the specified dimension.
         /**
-            Does *not* include the step dimension.
-            @returns Number of dimensions that define the problem domain. */
-        virtual int
-        get_num_domain_dims() const =0;
-
-        /// Get the name of the specified domain dimension.
-        /**
-            @returns String containing name of domain dimension. */
-        virtual std::string
-        get_domain_dim_name(int n /**< [in] Index of dimension between zero (0)
-                                     and get_num_domain_dims()-1. */ ) const =0;
-
-        /// Get all the domain dimension names.
-        /**
-           @returns List of all domain-dimension names.
+           The overall rank indices in the specified dimension will range from
+           zero (0) to get_num_ranks() - 1, inclusive.
+           @returns Zero-based index of this rank.
         */
-        virtual std::vector<std::string>
-        get_domain_dim_names() const =0;
+        virtual idx_t
+        get_rank_index(const std::string& dim
+                       /**< [in] Name of dimension from get_domain_dim_name().
+                          Cannot be the step dimension. */ ) const =0;
 
         /// Get the number of grids in the solution.
         /**
@@ -320,9 +317,9 @@ namespace yask {
            in order to use it for purposes other than by the
            pre-defined stencils within the current solution.
            A new grid's domain size will be the same as that returned by
-           yk_settings::get_rank_domain_size().
+           get_rank_domain_size().
            A new grid's initial padding size will be the same as that returned by
-           yk_settings::get_min_pad_size().
+           get_min_pad_size().
            After creating a new grid, you can increase its padding
            sizes via yk_grid::set_min_pad_size().
            A new grid contains only the meta-data for the grid; data storage
@@ -376,7 +373,7 @@ namespace yask {
         /** This returns the last index within the domain in this rank
             (*not* one past the end).
             If there is only one MPI rank, this is typically one less than the value
-            provided by yk_settings::set_rank_domain_size().
+            provided by set_rank_domain_size().
             If there is more than one MPI rank, the value depends
             on the the rank's position within the overall problem domain.
             See get_first_rank_domain_index() for more information.
@@ -390,6 +387,10 @@ namespace yask {
 
         /// Get the overall problem size in the specified dimension.
         /** 
+            The overall domain indices in the specified dimension will range from
+            zero (0) to get_overall_domain_size() - 1, inclusive.
+            Call get_first_rank_domain_index() and get_last_rank_domain_index()
+            to find the subset of this domain in each rank.
             This function should be called only *after* calling prepare_solution()
             because prepare_solution() obtains the sub-domain sizes from other ranks.
             @returns Sum of the ranks' domain sizes in the given dimension.
@@ -481,7 +482,7 @@ namespace yask {
         - **[Advanced]** Storage for a specific grid may be shared with another grid with
         existing storage via yk_grid::share_storage().
         
-        Domain sizes specified via yk_settings::set_rank_domain_size() apply to each process or *rank*.
+        Domain sizes specified via yk_solution::set_rank_domain_size() apply to each process or *rank*.
         If MPI is not enabled, a rank's domain is the entire problem size.
         If MPI is enabled, the domains of the ranks are logically abutted to create the 
         overall problem domain in each dimension:
@@ -547,7 +548,7 @@ namespace yask {
                       /**< [in] Name of dimension from get_dim_name().
                          Cannot be the step dimension. */ ) const =0;
 
-        /// Set the halo size in the specified dimension.
+        /// **[Advanced]** Set the halo size in the specified dimension.
         /**
            This value is typically set by the stencil compiler, but
            this function allows you to override that value.
@@ -568,7 +569,7 @@ namespace yask {
         /** The padding size includes the halo size.
             The value may be slightly
             larger than that provided via set_min_pad_size()
-            or yk_settings::set_min_pad_size() due to rounding.
+            or yk_solution::set_min_pad_size() due to rounding.
             @returns Points in padding in given dimension. */
         virtual idx_t
         get_pad_size(const std::string& dim
@@ -593,8 +594,8 @@ namespace yask {
             The *actual* padding size will be the largest of the following values,
             additionally rounded up based on the vector-folding dimensions:
             - Halo size.
-            - Value provided by yk_settings::set_min_pad_size().
-            - Value provided by this function, yk_grid::set_min_pad_size().
+            - Value provided by yk_solution::set_min_pad_size().
+            - Value provided by this function, set_min_pad_size().
 
             The padding size cannot be changed after data storage
             has been allocated for this grid.
@@ -611,7 +612,7 @@ namespace yask {
         /// Get the storage allocation in the specified dimension.
         /** For the step dimension, this is the specified allocation and
             does not typically depend on the number of steps evaluated.
-            For the non-step dimensions, this is yk_settings::get_rank_domain_size() + 
+            For the non-step dimensions, this is yk_solution::get_rank_domain_size() + 
             (2 * (get_halo_size() + get_extra_pad_size())).
             See the "Detailed Description" for \ref yk_grid for information on grid sizes.
             @returns allocation in number of points (not bytes). */
@@ -619,7 +620,7 @@ namespace yask {
         get_alloc_size(const std::string& dim
                        /**< [in] Name of dimension from get_dim_name(). */ ) const =0;
 
-        /// Set the number of points to allocate in the specified dimension.
+        /// **[Advanced]** Set the number of points to allocate in the specified dimension.
         /** This is only allowed in the step dimension.
             Allocations in other dimensions should be set indirectly
             via the domain and padding sizes.
@@ -738,7 +739,7 @@ namespace yask {
            Sets all elements from 'first' to 'last' indices in each dimension to the
            specified value.
            Indices are relative to the *overall* problem domain.
-           Both indices are inclusive (a la Fortran or Perl).
+           Both indices are inclusive (more like Fortran and Perl than Python and Lisp).
            Index values must fall within the rank domain or padding area.
            Notes in set_all_elements() documentation apply.
            @returns Number of elements set.
@@ -763,7 +764,7 @@ namespace yask {
            Since the writes proceed in row-major order, the last index is "unit-stride"
            in the buffer.
            Indices are relative to the *overall* problem domain.
-           Both indices are inclusive (a la Fortran or Perl).
+           Both indices are inclusive (more like Fortran and Perl than Python and Lisp).
            Index values must fall within the rank domain or padding area.
            @returns Number of elements written.
         */
@@ -775,7 +776,7 @@ namespace yask {
                               const std::vector<idx_t>& last_indices
                               /**< [in] List of ending indices, one for each grid dimension. */ ) =0;
         
-        /// Explicitly allocate data-storage memory for this grid.
+        /// **[Advanced]** Explicitly allocate data-storage memory for this grid.
         /**
            Amount of allocation is calculated based on domain, padding, and 
            step-dimension allocation sizes.
@@ -785,7 +786,7 @@ namespace yask {
         virtual void
         alloc_storage() =0;
 
-        /// Explicitly release any allocated data-storage for this grid.
+        /// **[Advanced]** Explicitly release any allocated data-storage for this grid.
         /**
            This will release storage allocated via any of the options
            described in the "Detailed Description" for \ref yk_grid.

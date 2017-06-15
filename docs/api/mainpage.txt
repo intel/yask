@@ -160,14 +160,11 @@ this distinguishes them from the 'yc_'-prefixed types used in the "YASK compiler
 @subsection yk_usage Typical Program Flow using the Kernel API
 - Create a \ref yk_factory. This is the "bootstrap" object that will be used to create others.
 - Create a \ref yk_env object via yk_factory::new_env(). This initializes MPI if you have enabled it.
-- Create a \ref yk_settings object via yk_factory::new_settings().
 - Create a \ref yk_solution object via yk_factory::new_solution().
-  Pointers to the environment and settings objects are provided.
-  This three-object structure is designed to allow you to easily share environment and settings objects
-  across multiple solutions.
+  A pointer to the environment object is provided.
+  This structure allows you to initialize MPI early in the program.
   The solution contains the grids and equations defined by the stencil compiler process.
-- Use the \ref yk_settings methods to configure options that will be used when creating a solution,
-  like the size of the problem domain.
+- Use the \ref yk_solution methods to configure options like the size of the problem domain.
 - Set up internal data structures via yk_solution::prepare_solution().
   This adjusts any settings as needed, determines each rank's position in the problem
   if MPI is enabled, and allocates data for the grids.

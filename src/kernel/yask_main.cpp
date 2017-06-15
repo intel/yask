@@ -174,8 +174,10 @@ int main(int argc, char** argv)
 
     // Object containing data and parameters for stencil eval.
     // TODO: do everything through API without cast to StencilContext.
-    auto ksoln = kfac.new_solution(kenv, opts);
+    auto ksoln = kfac.new_solution(kenv);
     auto context = dynamic_pointer_cast<StencilContext>(ksoln);
+    assert(context.get());
+    context->set_settings(opts);
     ostream& os = context->get_ostr();
     
     // Make sure any MPI/OMP debug data is dumped from all ranks before continuing.
@@ -298,8 +300,9 @@ int main(int argc, char** argv)
             "Setup for validation...\n";
 
         // Make a reference context for comparisons w/new grids.
-        auto ref_soln = kfac.new_solution(kenv, opts);
+        auto ref_soln = kfac.new_solution(kenv, ksoln);
         auto ref_context = dynamic_pointer_cast<StencilContext>(ref_soln);
+        assert(ref_context.get());
         ref_context->name += "-reference";
         ref_soln->prepare_solution();
 
