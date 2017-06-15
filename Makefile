@@ -598,7 +598,7 @@ compiler: $(YC_EXEC)
 api-all: api-docs yc-api yk-api
 
 # Format API documents.
-api-docs: docs/api/latex/refman.tex
+api-docs: docs/api/html/index.html
 
 # Build C++ and Python compiler API libs.
 yc-api: $(YC_LIB) lib/_yask_compiler.so
@@ -608,9 +608,10 @@ yk-api: $(YK_LIB) lib/_yask_kernel.so
 
 
 # Format API documents.
-docs/api/latex/refman.tex: include/*.hpp docs/api/*.*
+docs/api/html/index.html: include/*.hpp docs/api/*.*
 	doxygen -v
 	cd docs/api; doxygen doxygen_config.txt
+	@ echo Open $@ 'in a browser to view the API docs.'
 
 # Build python compiler API lib.
 $(YC_SWIG_DIR)/yask_compiler_api_wrap.cpp: $(YC_SWIG_DIR)/yask*.i include/*hpp
@@ -825,18 +826,20 @@ code-stats:
 	bin/get_loop_stats.pl -t='sub_block_loops' *.s
 
 help:
-	@echo "Example performance builds:"
+	@echo "Example performance builds of kernel cmd-line tool:"
 	@echo "make clean; make -j arch=knl stencil=iso3dfd"
-	@echo "make clean; make -j arch=knl stencil=awp mpi=1"
+	@echo "make clean; make -j arch=knl stencil=awp"
 	@echo "make clean; make -j arch=skx stencil=3axis fold='x=1,y=2,z=4' cluster='x=2'"
 	@echo "make clean; make -j arch=hsw stencil=3axis radius=4 SUB_BLOCK_LOOP_INNER_MODS='prefetch(L1,L2)' pfd_l2=3"
 	@echo " "
-	@echo "Example debug builds:"
+	@echo "Example performance builds of kernel API for C++ and Python apps:"
+	@echo "make clean; make -j arch=knl stencil=iso3dfd yk-api"
+	@echo "make clean; make -j arch=skx stencil=awp yk-api"
+	@echo " "
+	@echo "API document generation:"
+	@echo "make api-docs   # then see docs/api/html/index.html"
+	@echo " "
+	@echo "Example debug builds of kernel cmd-line tool:"
 	@echo "make clean; make -j stencil=iso3dfd mpi=0 OMPFLAGS='-qopenmp-stubs' CXXOPT='-O0' EXTRA_MACROS='DEBUG'"
 	@echo "make clean; make -j arch=intel64 stencil=3axis mpi=0 OMPFLAGS='-qopenmp-stubs' CXXOPT='-O0' EXTRA_MACROS='DEBUG' model_cache=2"
 	@echo "make clean; make -j arch=intel64 stencil=3axis radius=0 fold='x=1,y=1,z=1' mpi=0 OMPFLAGS='-qopenmp-stubs' CXXOPT='-O0' EXTRA_MACROS='DEBUG TRACE TRACE_MEM TRACE_INTRINSICS'"
-	@echo " "
-	@echo "Example API document generation and builds:"
-	@echo "make clean; make -j arch=snb stencil=iso3dfd api-all"
-	@echo " "
-	@echo "make api-docs, then see the 'Example Tests' section in docs/api/html/index.html for more."
