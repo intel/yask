@@ -39,26 +39,25 @@ int main() {
     // Initalize MPI, etc.
     auto env = kfac.new_env();
 
-    // Create settings and solution.
-    auto settings = kfac.new_settings();
-    auto soln = kfac.new_solution(env, settings);
+    // Create solution.
+    auto soln = kfac.new_solution(env);
 
     // Init global settings.
     for (auto dim_name : soln->get_domain_dim_names()) {
 
         // Set min. domain size in each dim.
-        settings->set_rank_domain_size(dim_name, 150);
+        soln->set_rank_domain_size(dim_name, 150);
 
         // Set block size to 64 in z dim and 32 in other dims.
         if (dim_name == "z")
-            settings->set_block_size(dim_name, 64);
+            soln->set_block_size(dim_name, 64);
         else
-            settings->set_block_size(dim_name, 32);
+            soln->set_block_size(dim_name, 32);
     }
 
     // Simple rank configuration in 1st dim only.
     auto ddim1 = soln->get_domain_dim_name(0);
-    settings->set_num_ranks(ddim1, env->get_num_ranks());
+    soln->set_num_ranks(ddim1, env->get_num_ranks());
 
     // Allocate memory for any grids that do not have storage set.
     // Set other data structures needed for stencil application.
