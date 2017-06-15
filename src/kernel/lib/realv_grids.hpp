@@ -26,10 +26,6 @@ IN THE SOFTWARE.
 #ifndef REAL_VEC_GRIDS
 #define REAL_VEC_GRIDS
 
-#ifndef USE_GET_INDEX
-#define USE_GET_INDEX 0
-#endif
-
 namespace yask {
 
     typedef GenericGridBase<real_t> RealGrid;
@@ -123,26 +119,6 @@ namespace yask {
             assert(t >= 0);
             idx_t t_idx = t / idx_t(CPTS_T);
             return t_idx % _tdim;
-        }
-
-        // Adjust relative spatial vector index to 0-based internal index by
-        // adding padding.  TODO: currently, the
-        // compiler isn't able to eliminate some common sub-expressions in
-        // addr calculation when these functions are used. Until this is
-        // resolved, alternative code is used in derived classes if the
-        // macro USE_GET_INDEX is not set.
-        ALWAYS_INLINE idx_t get_index(idx_t vec_index,
-                                      idx_t vec_pad) const {
-            return vec_index + vec_pad;
-        }
-        ALWAYS_INLINE idx_t get_index_x(idx_t vec_index) const {
-            return get_index(vec_index, _pxv);
-        }
-        ALWAYS_INLINE idx_t get_index_y(idx_t vec_index) const {
-            return get_index(vec_index, _pyv);
-        }
-        ALWAYS_INLINE idx_t get_index_z(idx_t vec_index) const {
-            return get_index(vec_index, _pzv);
         }
 
         // Resize only if not allocated.
@@ -439,15 +415,9 @@ namespace yask {
 #endif
         
             // adjust for padding.
-#if USE_GET_INDEX
-            xv = get_index_x(xv);
-            yv = get_index_y(yv);
-            zv = get_index_z(zv);
-#else
             xv += _pxv;
             yv += _pyv;
             zv += _pzv;
-#endif
 
 #ifdef TRACE_MEM
             if (checkBounds)
@@ -627,6 +597,7 @@ namespace yask {
             writeElem(real_t(val),
                       indices.at(0), indices.at(1),
                       indices.at(2), __LINE__);
+            set_updated(false);
         }
         virtual idx_t set_elements_in_slice_same(double val,
                                                  const GridIndices& first_indices,
@@ -638,6 +609,7 @@ namespace yask {
                 for (idx_t y = first_indices[1]; y <= last_indices[1]; y++)
                     for (idx_t z = first_indices[2]; z <= last_indices[2]; z++, n++)
                         writeElem(real_t(val), x, y, z, __LINE__);
+            set_updated(false);
             return n;
         }
         virtual idx_t set_elements_in_slice(const void* buffer_ptr,
@@ -652,6 +624,7 @@ namespace yask {
                         real_t val = ((real_t*)buffer_ptr)[n];
                         writeElem(val, x, y, z, __LINE__);
                     }
+            set_updated(false);
             return n;
         }
         
@@ -736,18 +709,14 @@ namespace yask {
             std::cout << get_name() << "." << "RealVecGrid_TXYZ::getVecPtrNorm(" <<
                 t << "," << xv << "," << yv << "," << zv << ")";
 #endif
-        
-            // adjust for padding and offset.
+
+            // Wrap time index.
             t = get_index_t(t);
-#if USE_GET_INDEX
-            xv = get_index_x(xv);
-            yv = get_index_y(yv);
-            zv = get_index_z(zv);
-#else
+
+            // adjust for padding.
             xv += _pxv;
             yv += _pyv;
             zv += _pzv;
-#endif
 
 #ifdef TRACE_MEM
             if (checkBounds)
@@ -928,6 +897,7 @@ namespace yask {
             writeElem(real_t(val),
                       indices.at(0), indices.at(1),
                       indices.at(2), indices.at(3), __LINE__);
+            set_updated(false);
         }
         virtual idx_t set_elements_in_slice_same(double val,
                                                  const GridIndices& first_indices,
@@ -940,6 +910,7 @@ namespace yask {
                     for (idx_t y = first_indices[2]; y <= last_indices[2]; y++)
                         for (idx_t z = first_indices[3]; z <= last_indices[3]; z++, n++)
                             writeElem(real_t(val), t, x, y, z, __LINE__);
+            set_updated(false);
             return n;
         }
         virtual idx_t set_elements_in_slice(const void* buffer_ptr,
@@ -955,6 +926,7 @@ namespace yask {
                             real_t val = ((real_t*)buffer_ptr)[n];
                             writeElem(val, t, x, y, z, __LINE__);
                     }
+            set_updated(false);
             return n;
         }
 
