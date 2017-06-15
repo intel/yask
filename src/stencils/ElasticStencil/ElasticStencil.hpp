@@ -27,9 +27,6 @@ IN THE SOFTWARE.
 
 #pragma once
 
-// NOTE: uncomment for Absorbing Boundary Conditions computation
-//#define ELASTIC_ABC
-
 #include "StencilBase.hpp"
 
 struct Node {};

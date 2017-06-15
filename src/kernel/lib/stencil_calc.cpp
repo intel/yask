@@ -949,6 +949,9 @@ namespace yask {
             gp->set_dz(_opts->dz);
 
             // Pads.
+            gp->set_extra_pad_x(_opts->epx);
+            gp->set_extra_pad_y(_opts->epy);
+            gp->set_extra_pad_z(_opts->epz);
             gp->set_min_pad_x(_opts->mpx);
             gp->set_min_pad_y(_opts->mpy);
             gp->set_min_pad_z(_opts->mpz);
@@ -1723,24 +1726,20 @@ namespace yask {
     ADD_XYZ_OPTION(name, help, var);                             \
     ADD_1_OPTION(name, help, " (number of time steps)", var, t)
 
-#define ADD_T_DIM_OPTION(name, help, var) \
-    ADD_TXYZ_OPTION(name, help, var)
-#define ADD_DIM_OPTION(name, help, var) \
-    ADD_XYZ_OPTION(name, help, var)
-    
     // Add these settigns to a cmd-line parser.
     void KernelSettings::add_options(CommandLineParser& parser)
     {
-        ADD_T_DIM_OPTION("d", "Rank-domain size", d);
-        ADD_T_DIM_OPTION("r", "Region size", r);
-        ADD_DIM_OPTION("b", "Block size", b);
-        ADD_DIM_OPTION("bg", "Block-group size", bg);
-        ADD_DIM_OPTION("sb", "Sub-block size", sb);
-        ADD_DIM_OPTION("sbg", "Sub-block-group size", sbg);
-        ADD_DIM_OPTION("mp", "Minimum grid-padding size", mp);
+        ADD_TXYZ_OPTION("d", "Rank-domain size", d);
+        ADD_TXYZ_OPTION("r", "Region size", r);
+        ADD_XYZ_OPTION("b", "Block size", b);
+        ADD_XYZ_OPTION("bg", "Block-group size", bg);
+        ADD_XYZ_OPTION("sb", "Sub-block size", sb);
+        ADD_XYZ_OPTION("sbg", "Sub-block-group size", sbg);
+        ADD_XYZ_OPTION("mp", "Minimum grid-padding size (including halo)", mp);
+        ADD_XYZ_OPTION("ep", "Extra grid-padding size (beyond halo)", ep);
 #ifdef USE_MPI
-        ADD_DIM_OPTION("nr", "Num ranks", nr);
-        ADD_DIM_OPTION("ri", "This rank's logical index", ri);
+        ADD_XYZ_OPTION("nr", "Num ranks", nr);
+        ADD_XYZ_OPTION("ri", "This rank's logical index", ri);
         parser.add_option(new CommandLineParser::IntOption
                           ("msg_rank",
                            "Index of MPI rank that will print informational messages.",

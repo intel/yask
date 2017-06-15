@@ -211,6 +211,11 @@ namespace yask {
         void set_pad_y(idx_t py) { _py = std::max(py, _hy); resize(); }
         void set_pad_z(idx_t pz) { _pz = std::max(pz, _hz); resize(); }
 
+        // Set padding after halo.
+        void set_extra_pad_x(idx_t px) { set_pad_x(_hx + px); }
+        void set_extra_pad_y(idx_t py) { set_pad_y(_hy + py); }
+        void set_extra_pad_z(idx_t pz) { set_pad_z(_hz + pz); }
+
         // Increase padding if below minimum.
         void set_min_pad_x(idx_t mpx) { if (_px < mpx) set_pad_x(mpx); }
         void set_min_pad_y(idx_t mpy) { if (_py < mpy) set_pad_y(mpy); }
@@ -569,6 +574,7 @@ namespace yask {
             checkIndices(first_indices, "get_elements_in_slice");
             checkIndices(last_indices, "get_elements_in_slice");
             idx_t n = 0;
+            // TODO: Add OMP.
             for (idx_t x = first_indices[0]; x <= last_indices[0]; x++)
                 for (idx_t y = first_indices[1]; y <= last_indices[1]; y++)
                     for (idx_t z = first_indices[2]; z <= last_indices[2]; z++, n++) {
@@ -605,6 +611,7 @@ namespace yask {
             checkIndices(first_indices, "set_elements_in_slice_same");
             checkIndices(last_indices, "set_elements_in_slice_same");
             idx_t n = 0;
+            // TODO: Add OMP.
             for (idx_t x = first_indices[0]; x <= last_indices[0]; x++)
                 for (idx_t y = first_indices[1]; y <= last_indices[1]; y++)
                     for (idx_t z = first_indices[2]; z <= last_indices[2]; z++, n++)
@@ -618,6 +625,7 @@ namespace yask {
             checkIndices(first_indices, "set_elements_in_slice");
             checkIndices(last_indices, "set_elements_in_slice");
             idx_t n = 0;
+            // TODO: Add OMP.
             for (idx_t x = first_indices[0]; x <= last_indices[0]; x++)
                 for (idx_t y = first_indices[1]; y <= last_indices[1]; y++)
                     for (idx_t z = first_indices[2]; z <= last_indices[2]; z++, n++) {
@@ -869,6 +877,7 @@ namespace yask {
             checkIndices(first_indices, "get_elements_in_slice");
             checkIndices(last_indices, "get_elements_in_slice");
             idx_t n = 0;
+            // TODO: Add OMP.
             for (idx_t t = first_indices[0]; t <= last_indices[0]; t++)
                 for (idx_t x = first_indices[1]; x <= last_indices[1]; x++)
                     for (idx_t y = first_indices[2]; y <= last_indices[2]; y++)
@@ -905,6 +914,7 @@ namespace yask {
             checkIndices(first_indices, "set_elements_in_slice_same");
             checkIndices(last_indices, "set_elements_in_slice_same");
             idx_t n = 0;
+            // TODO: Add OMP.
             for (idx_t t = first_indices[0]; t <= last_indices[0]; t++)
                 for (idx_t x = first_indices[1]; x <= last_indices[1]; x++)
                     for (idx_t y = first_indices[2]; y <= last_indices[2]; y++)
@@ -919,6 +929,7 @@ namespace yask {
             checkIndices(first_indices, "set_elements_in_slice");
             checkIndices(last_indices, "set_elements_in_slice");
             idx_t n = 0;
+            // TODO: Add OMP.
             for (idx_t t = first_indices[0]; t <= last_indices[0]; t++)
                 for (idx_t x = first_indices[1]; x <= last_indices[1]; x++)
                     for (idx_t y = first_indices[2]; y <= last_indices[2]; y++)
