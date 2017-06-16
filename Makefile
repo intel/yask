@@ -644,10 +644,10 @@ bin/yask_compiler_api_test.exe: $(YC_LIB) src/compiler/tests/yask_compiler_api_t
 bin/yask_kernel_api_test.exe: $(YK_LIB) src/kernel/tests/yask_kernel_api_test.cpp
 	$(CXX) $(CXXFLAGS) $(LFLAGS) -o $@ $^
 
-# Special target to avoid building and running stencil compiler.
+# Special target to avoid running stencil compiler and replacing the stencil-code file.
 # NB: This trick is only needed when using the compiler API to create
 # a stencil to replace the one normally created by the pre-built stencil compiler.
-NO_YC_MAKE_FLAGS := --new-file=$(YC_EXEC) --old-file=$(YK_CODE_FILE)
+NO_YC_MAKE_FLAGS := --new-file=$(YK_CODE_FILE)
 kernel-only:
 	$(MAKE) $(NO_YC_MAKE_FLAGS)
 

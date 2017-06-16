@@ -33,12 +33,16 @@ IN THE SOFTWARE.
 %include <std_string.i>
 %include <std_shared_ptr.i>
 %include <std_vector.i>
+%include <pybuffer.i>
 
 // Must declare shared_ptr for each one used in the API.
 %shared_ptr(yask::yk_env)
 %shared_ptr(yask::yk_settings)
 %shared_ptr(yask::yk_solution)
 %shared_ptr(yask::yk_grid)
+
+// Mutable buffer to access raw data.
+%pybuffer_mutable_string(void* buffer_ptr)
 
 %{
 #define SWIG_FILE_WITH_INIT

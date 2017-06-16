@@ -25,14 +25,115 @@
 
 ## Test the YASK stencil kernel API for Python.
 
-import sys
 import numpy as np
+
+import sys
 sys.path.append('lib')
 import yask_kernel
 
-def clamp(x, minimum, maximum):
+# Clamp a value x between minimum and maximum.
+def clamp(x, minimum, maximum) :
     return max(minimum, min(x, maximum))
 
+# Determine whether index 'i' is within rank domain in dim 'dname'.
+def is_in_domain(i, dname) :
+    return (i >= soln.get_first_rank_domain_index(dname)) and \
+        (i <= soln.get_last_rank_domain_index(dname))
+
+# Clamp index 'i' within rank domain in dim 'dname'.
+def clamp_to_domain(i, dname) :
+    return clamp(i,
+                 soln.get_first_rank_domain_index(dname),
+                 soln.get_last_rank_domain_index(dname))
+
+# Read data from grid using NumPy ndarray.
+def read_grid(grid, timestep) :
+    print("Reading grid '" + grid.get_name() + "' at time " + repr(timestep) + "...")
+
+    # Create indices for YASK and shape for NumPy.
+    first_indices = []
+    last_indices = []
+    shape = []
+    nelems = 1
+    for dname in grid.get_dim_names() :
+        if dname == soln.get_step_dim_name() :
+
+            # Read one timestep only.
+            # So, we don't need to add a time axis in 'shape'.
+            first_indices += [timestep]
+            last_indices += [timestep]
+
+        else :
+
+            # Full domain in this rank.
+            first_idx = soln.get_first_rank_domain_index(dname)
+            last_idx = soln.get_last_rank_domain_index(dname)
+
+            # Read one point in the halo, too.
+            first_idx -= 1
+            last_idx += 1
+
+            first_indices += [first_idx]
+            last_indices += [last_idx]
+            shape += [last_idx - first_idx + 1]
+            nelems *= last_idx - first_idx + 1
+
+    # Create a NumPy ndarray to hold the extracted data.
+    ndarray = np.empty(shape, dtype, 'C');
+
+    print("Reading " + repr(nelems) + " element(s)...")
+    nread = grid.get_elements_in_slice(ndarray.data, first_indices, last_indices)
+    print(ndarray)
+
+# Init grid using NumPy ndarray.
+def init_grid(grid, timestep) :
+    print("Initializing grid '" + grid.get_name() + "' at time " + repr(timestep) + "...")
+
+    # Create indices for YASK, shape & point for NumPy.
+    first_indices = []
+    last_indices = []
+    shape = []
+    point = ()
+    nelems = 1
+    for dname in grid.get_dim_names() :
+        if dname == soln.get_step_dim_name() :
+
+            # Write one timestep only.
+            # So, we don't need to add a time axis in 'shape'.
+            first_indices += [timestep]
+            last_indices += [timestep]
+
+        else :
+
+            # Full domain in this rank.
+            first_idx = soln.get_first_rank_domain_index(dname)
+            last_idx = soln.get_last_rank_domain_index(dname)
+
+            # Write one point in the halo, too.
+            first_idx -= 1
+            last_idx += 1
+
+            first_indices += [first_idx]
+            last_indices += [last_idx]
+            shape += [last_idx - first_idx + 1]
+            nelems *= last_idx - first_idx + 1
+
+            # Since the array covers one layer of points in the halo
+            # starting at 0,..,0, 1,..,1 is the first point in the
+            # computable domain.
+            point += (1,)
+
+    # Create a NumPy ndarray to hold the data.
+    ndarray = np.zeros(shape, dtype, 'C');
+
+    # Set one point to a non-zero value.
+    ndarray[point] = 21.0;
+    print(ndarray)
+
+    print("Writing " + repr(nelems) + " element(s)...")
+    nwrit = grid.set_elements_in_slice(ndarray.data, first_indices, last_indices)
+
+# Main script.
 if __name__ == "__main__":
 
     # The factory from which all other kernel object are made.
@@ -45,11 +146,24 @@ if __name__ == "__main__":
     soln = kfac.new_solution(env)
     name = soln.get_name()
 
+    # NB: At this point, the grids' meta-data exists, but the grids have no
+    # data allocated. We need to set the size of the domain before
+    # allocating data.
+
+    # Determine the datatype.
+    if soln.get_element_bytes() == 4 :
+        dtype = np.float32
+    else :
+        dtype = np.float64
+        
     # Init global settings.
     for dim_name in soln.get_domain_dim_names() :
 
         # Set domain size in each dim.
-        soln.set_rank_domain_size(dim_name, 150)
+        soln.set_rank_domain_size(dim_name, 128)
+
+        # Add some padding to all grids.
+        soln.set_min_pad_size(dim_name, 16)
 
         # Set block size to 64 in z dim and 32 in other dims.
         if dim_name == "z" :
@@ -58,14 +172,16 @@ if __name__ == "__main__":
             soln.set_block_size(dim_name, 32)
 
     # Simple rank configuration in 1st dim only.
-    ddim1 = soln.get_domain_dim_name(0)
-    soln.set_num_ranks(ddim1, env.get_num_ranks())
+    # In production runs, the ranks would be distributed along
+    # all domain dimensions.
+    ddim1 = soln.get_domain_dim_name(0) # name of 1st dim.
+    soln.set_num_ranks(ddim1, env.get_num_ranks()) # num ranks in this dim.
 
     # Allocate memory for any grids that do not have storage set.
     # Set other data structures needed for stencil application.
     soln.prepare_solution()
 
-    # Print some info about the solution and init the grids.
+    # Print some info about the solution.
     print("Stencil-solution '" + name + "':")
     print("  Step dimension: " + repr(soln.get_step_dim_name()))
     print("  Domain dimensions: " + repr(soln.get_domain_dim_names()))
@@ -73,47 +189,81 @@ if __name__ == "__main__":
     for grid in soln.get_grids() :
         print("    " + grid.get_name() + repr(grid.get_dim_names()))
 
+    # Init the grids.
+    for grid in soln.get_grids() :
+        
+        # Init all values including padding.
+        grid.set_all_elements_same(-9.0)
+
+        # Init timestep 0 using NumPy.
+        init_grid(grid, 0)
+        read_grid(grid, 0)
+
+        # Simple index example.
+        one_index = 100
+        one_indices = []
+        one_in_rank = True
+
         # Create indices to bound a subset of domain:
-        # Index 0 in time, and a small [hyper]cube in center
+        # Index 0 in time, and a small cube in center
         # of overall problem.
+        cube_radius = 20
         first_indices = []
         last_indices = []
+        cube_in_rank = True
+            
         for dname in grid.get_dim_names() :
             if dname == soln.get_step_dim_name() :
 
                 # Initial timestep only.
                 first_indices += [0]
                 last_indices += [0]
+                one_indices += [0]
 
             else :
 
+                # Simple index for one point.
+                if is_in_domain(one_index, dname) :
+                    one_indices += [one_index]
+                else :
+                    one_in_rank = False
+                    
                 # Midpoint of overall problem in this dim.
                 midpt = soln.get_overall_domain_size(dname) // 2;
 
                 # Create indices a small amount before and after the midpoint,
                 # and clamp them to allowed indices in this rank.
-                first_idx = clamp(midpt - 10,
-                                  soln.get_first_rank_domain_index(dname),
-                                  soln.get_last_rank_domain_index(dname))
-                last_idx = clamp(midpt + 10,
-                                 soln.get_first_rank_domain_index(dname),
-                                 soln.get_last_rank_domain_index(dname))
-                first_indices += [first_idx]
-                last_indices += [last_idx]
+                if is_in_domain(midpt - cube_radius, dname) or \
+                   is_in_domain(midpt + cube_radius, dname) :
+                    first_indices += [clamp_to_domain(midpt - cube_radius, dname)]
+                    last_indices += [clamp_to_domain(midpt + cube_radius, dname)]
 
-        # Init the values in a 'hat' function.
-        grid.set_all_elements_same(0.0)
-        nset = grid.set_elements_in_slice_same(1.0, first_indices, last_indices)
-        print("      " + repr(nset) + " element(s) set to 1.0.")
+        # Init value at one point.
+        if one_in_rank :
+            grid.set_element(15.0, one_indices)
 
-    # NB: In a real application, the data in the grids would be
-    # loaded or otherwise set to meaningful values here.
+        # Init the values within the small cube.
+        nset = grid.set_elements_in_slice_same(0.5, first_indices, last_indices)
+        print("Set " + repr(nset + 1) + " element(s).")
+
+        # Print the initial contents of the grid at timesteps 0 and 1.
+        read_grid(grid, 0)
+        read_grid(grid, 1)
 
     # Apply the stencil solution to the data.
     env.global_barrier()
     print("Running the solution for 1 step...")
     soln.run_solution(0)
+
+    # Print result at timestep 1.
+    for grid in soln.get_grids() :
+        read_grid(grid, 1)
+
     print("Running the solution for 100 more steps...")
     soln.run_solution(1, 100)
+
+    # Print final result at timestep 101.
+    for grid in soln.get_grids() :
+        read_grid(grid, 101)
 
     print("End of YASK kernel API test.")

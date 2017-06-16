@@ -42,34 +42,23 @@ if __name__ == "__main__":
     # Create a grid var.
     g1 = soln.new_grid("test_grid", "t", "x", "y", "z")
 
-    # Create an equation for the grid.
+    # Create an expression for the new value.
+    # This will average some of the neighboring points around the
+    # current stencil application point in the current timestep.
     fac = yask_compiler.yc_node_factory()
+    n0 = g1.new_relative_grid_point(0, 0, 0, 0)  # center-point at this timestep.
+    n1 = fac.new_add_node(n0, g1.new_relative_grid_point(0, -1,  0,  0)) # left.
+    n1 = fac.new_add_node(n1, g1.new_relative_grid_point(0,  1,  0,  0)) # right.
+    n1 = fac.new_add_node(n1, g1.new_relative_grid_point(0,  0, -1,  0)) # above.
+    n1 = fac.new_add_node(n1, g1.new_relative_grid_point(0,  0,  1,  0)) # below.
+    n1 = fac.new_add_node(n1, g1.new_relative_grid_point(0,  0,  0, -1)) # in front.
+    n1 = fac.new_add_node(n1, g1.new_relative_grid_point(0,  0,  0,  1)) # behind.
+    n2 = fac.new_divide_node(n1, fac.new_const_number_node(7)) # div by 7.
 
-    n1 = fac.new_const_number_node(3.14)
-    print(n1.format_simple())
-
-    n2 = fac.new_negate_node(n1)
-    print(n2.format_simple())
-
-    n3 = g1.new_relative_grid_point(0, 1, 0, -2)
-    print(n3.format_simple())
-
-    n4a = fac.new_add_node(n2, n3)
-    n4b = fac.new_add_node(n4a, n1)
-    print(n4b.format_simple())
-
-    n5 = g1.new_relative_grid_point(0, 1, -1, 0)
-    print(n5.format_simple())
-
-    n6 = fac.new_divide_node(n4b, n5)
-    print(n6.format_simple())
-
-    n7 = g1.new_relative_grid_point(1, 0, 0, 0)
-    print(n7.format_simple())
-
-    n8 = fac.new_equation_node(n7, n6)
-    print(n8.format_simple())
-
+    # Create an equation to define the value at the next timestep.
+    n3 = g1.new_relative_grid_point(1, 0, 0, 0) # center-point at next timestep.
+    n4 = fac.new_equation_node(n3, n2) # equate to expr n2.
+    print("Equation before formatting: " + n4.format_simple())
     print("Solution '" + soln.get_name() + "' contains " +
           str(soln.get_num_grids()) + " grid(s), and " +
           str(soln.get_num_equations()) + " equation(s).")
@@ -87,4 +76,5 @@ if __name__ == "__main__":
     soln.write(yask_file, "avx", True)
     print("YASK-format written to '" + yask_file + "'.")
 
+    print("Equation after formatting: " + soln.get_equation(0).format_simple())
     print("End of YASK compiler API test.")

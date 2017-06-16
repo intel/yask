@@ -45,7 +45,7 @@ namespace yask {
 #else
     typedef std::int64_t idx_t;
 #endif
-    
+
     // Forward declarations of classes and pointers.
     class yk_env;
     typedef std::shared_ptr<yk_env> yk_env_ptr;
