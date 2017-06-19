@@ -564,7 +564,7 @@ namespace yask {
 
         /// Get the number of dimensions used in this grid.
         /**
-           May include step dimension.
+           Includes step dimension if it is a dimension of this grid.
            May be different than value returned from yk_solution::get_num_domain_dims().
            @returns Number of dimensions created via yc_solution::new_grid().
         */
@@ -572,8 +572,9 @@ namespace yask {
 
         /// Get the name of the specified dimension in this grid.
         /**
-           Dimensions are not necessarily in the same order as those returned
-           via yk_solution::get_domain_dim_name().
+           Includes step dimension if it is a dimension of this grid.
+           @note Domain dimensions are not necessarily in the same order as
+           those returned via yk_solution::get_domain_dim_name().
            @returns String containing name of dimension created via new_grid().
         */
         virtual const std::string&
@@ -582,6 +583,8 @@ namespace yask {
 
         /// Get all the dimensions in this grid.
         /**
+           Includes step dimension if it is a dimension of this grid.
+           May be different than values returned from yk_solution::get_domain_dim_names().
            @returns List of names of all the dimensions.
         */
         virtual std::vector<std::string>

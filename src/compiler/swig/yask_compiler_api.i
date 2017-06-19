@@ -32,6 +32,7 @@ IN THE SOFTWARE.
 // See http://www.swig.org/Doc3.0/Library.html
 %include <std_string.i>
 %include <std_shared_ptr.i>
+%include <std_vector.i>
 
 // Must declare shared_ptrs for the entire expr_node hierarchy!
 %shared_ptr(yask::yc_solution)
@@ -54,4 +55,10 @@ IN THE SOFTWARE.
 #include "yask_compiler_api.hpp"
 %}
 
+// All vector types used in API.
+namespace std {
+  %template(vector_int) vector<int>;
+  %template(vector_str) vector<string>;
+}
+    
 %include "yask_compiler_api.hpp"

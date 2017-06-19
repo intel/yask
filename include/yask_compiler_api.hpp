@@ -32,6 +32,7 @@ IN THE SOFTWARE.
 #define YASK_COMPILER_API
 
 #include <string>
+#include <vector>
 #include <memory>
 
 namespace yask {
@@ -72,38 +73,65 @@ namespace yask {
         virtual ~yc_factory() {}
 
         /// Create a stencil solution.
-        /** A stencil solution contains all the grids and equations.
-            @returns Pointer to new solution object. */
+        /**
+           A stencil solution contains all the grids and equations.
+           @returns Pointer to new solution object.
+        */
         virtual yc_solution_ptr
         new_solution(const std::string& name /**< [in] Name of the solution; 
                                                 must be a valid C++ identifier. */ ) const;
     };
             
     /// Stencil solution.
-    /** Objects of this type contain all the grids and equations
-        that comprise a solution. */
+    /**
+       Objects of this type contain all the grids and equations
+       that comprise a solution. 
+    */
     class yc_solution {
     public:
         virtual ~yc_solution() {}
 
         /// Get the name of the solution.
-        /** @returns String containing the solution name provided via new_solution(). */
+        /**
+           @returns String containing the solution name provided via new_solution().
+        */
         virtual const std::string&
         get_name() const =0;
 
         /// Set the name of the solution.
-        /** Allows changing the name from what was provided via new_solution(). */
+        /**
+           Allows changing the name from what was provided via new_solution(). 
+        */
         virtual void
-        set_name(std::string name /**< [in] Name; must be a valid C++ identifier. */ ) =0;
+        set_name(std::string name
+                 /**< [in] Name; must be a valid C++ identifier. */ ) =0;
 
         /// Create an n-dimensional grid variable in the solution.
-        /** "Grid" is a generic term for any n-dimensional array.  A 0-dim
-            grid is a scalar, a 1-dim grid is a vector, a 2-dim grid is a
-            matrix, etc.  Define the name of each dimension that is needed
-            via this interface, starting with 'dim1'. Example:
-            new_grid("heat", "t", "x", "y") will create a 3D grid with one
-            temporal dimension and two spatial dimensions.
-            @returns Pointer to the new grid. */
+        /**
+           "Grid" is a generic term for any n-dimensional array.  A 0-dim
+           grid is a scalar, a 1-dim grid is a vector, a 2-dim grid is a
+           matrix, etc.
+           @returns Pointer to the new grid. 
+        */
+        virtual yc_grid_ptr
+        new_grid(const std::string& name
+                 /**< [in] Unique name of the grid; must be a valid C++
+                    identifier and unique across grids. */,
+                 const std::vector<std::string>& dims
+                 /**< [in] Names of the dimensions of the grid. All
+                    dimension names must be valid C++ identifiers and unique
+                    within this grid. */ ) =0;
+
+        /// Create an n-dimensional grid variable in the solution.
+        /**
+           "Grid" is a generic term for any n-dimensional array.  A 0-dim
+           grid is a scalar, a 1-dim grid is a vector, a 2-dim grid is a
+           matrix, etc.  Specify the name of each dimension that is needed
+           via this interface, starting with 'dim1'. Example:
+           new_grid("heat", "t", "x", "y") will create a 3D grid with one
+           temporal dimension and two spatial dimensions.
+           @returns Pointer to the new grid. 
+        */
         virtual yc_grid_ptr
         new_grid(const std::string& name /**< [in] Unique name of the grid; must be
                                             a valid C++ identifier and unique
@@ -144,27 +172,44 @@ namespace yask {
         /// Set the solution step dimension name.
         /** Default is "t" for time. */
         virtual void
-        set_step_dim(const std::string& dim /**< [in] Step dimension, e.g., "t". */ ) =0;
+        set_step_dim_name(const std::string& dim
+                          /**< [in] Step dimension, e.g., "t". */ ) =0;
 
         /// Get the solution step dimension.
         /** @returns String containing the current step-dimension name. */
-        virtual const std::string&
-        get_step_dim() const =0;
+        virtual std::string
+        get_step_dim_name() const =0;
 
+        /// Get the domain dimensions.
+        /**
+           @returns Names set via set_domain_dim_names().
+        */
+        virtual std::vector<std::string>
+        get_domain_dim_names() const =0;
+        
         /// Set the domain dimensions.
         /** Name all the dimensions that describe the domain of the 
             problem *except* the step dimension, which is specified via
-            set_step_dim().
+            set_step_dim_name().
          */
         virtual void
-        set_domain_dims(const std::string& dim1 /**< [in] Name of 1st dimension. All
-                                                   dimension names must be valid C++
-                                                   identifiers and unique within this
-                                                   grid. */,
-                        const std::string& dim2 = "" /**< [in] Name of 2nd dimension. */,
-                        const std::string& dim3 = "" /**< [in] Name of 3rd dimension. */,
-                        const std::string& dim4 = "" /**< [in] Name of 4th dimension. */,
-                        const std::string& dim5 = "" /**< [in] Name of 5th dimension. */ ) =0;
+        set_domain_dim_names(const std::vector<std::string>& dims
+                             /**< [in] List of names of dimensions. */) =0;
+        
+        /// Set the domain dimensions.
+        /** Name all the dimensions that describe the domain of the 
+            problem *except* the step dimension, which is specified via
+            set_step_dim_name().
+         */
+        virtual void
+        set_domain_dim_names(const std::string& dim1 /**< [in] Name of 1st dimension. All
+                                                        dimension names must be valid C++
+                                                        identifiers and unique within this
+                                                        grid. */,
+                             const std::string& dim2 = "" /**< [in] Name of 2nd dimension. */,
+                             const std::string& dim3 = "" /**< [in] Name of 3rd dimension. */,
+                             const std::string& dim4 = "" /**< [in] Name of 4th dimension. */,
+                             const std::string& dim5 = "" /**< [in] Name of 5th dimension. */ ) =0;
         
         /// Set the vectorization length in given dimension.
         /** For YASK-code generation, the product of the fold lengths should
@@ -271,6 +316,28 @@ namespace yask {
         virtual const std::string&
         get_dim_name(int n /**< [in] Index of dimension between zero (0)
                               and get_num_dims()-1. */ ) const =0;
+
+        /// Get all the dimensions in this grid.
+        /**
+           Includes step dimension if it is a dimension of this grid.
+           May be different than values returned from yc_solution::get_domain_dim_names().
+           @returns List of names of all the dimensions.
+        */
+        virtual std::vector<std::string>
+        get_dim_names() const =0;
+        
+        /// Create a reference to a point in a grid.
+        /** The indices are specified relative to the stencil-evaluation
+            index.  Each offset refers to the dimensions defined when the
+            grid was created via stencil_solution::new_grid(). 
+            Example: if g = new_grid("heat", "t", "x", "y"), then
+            g->new_relative_grid_point(1, -1, 0) refers to heat(t+1, x-1, y)
+            for some point t, x, y during stencil evaluation.
+            @note Offsets beyond the dimensions in the grid will be ignored.
+            @returns Pointer to AST node used to read or write from point in grid. */
+        virtual yc_grid_point_node_ptr
+        new_relative_grid_point(std::vector<int> dim_offsets
+                                /**< [in] offset from evaluation index in each dim. */ ) =0;
 
         /// Create a reference to a point in a grid.
         /** The indices are specified relative to the stencil-evaluation

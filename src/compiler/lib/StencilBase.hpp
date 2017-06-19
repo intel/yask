@@ -128,6 +128,8 @@ namespace yask {
                                      const std::string& dim4 = "",
                                      const std::string& dim5 = "",
                                      const std::string& dim6 = "");
+        virtual yc_grid_ptr new_grid(const std::string& name,
+                                     const std::vector<std::string>& dims);
 
         virtual int get_num_grids() const {
             return int(_grids.size());
@@ -156,17 +158,19 @@ namespace yask {
         virtual void clear_folding() { _settings._foldOptions.clear(); }
         virtual void set_cluster_mult(const std::string& dim, int mult);
         virtual void clear_clustering() { _settings._clusterOptions.clear(); }
-        virtual void set_step_dim(const std::string& dim) {
+        virtual void set_step_dim_name(const std::string& dim) {
             _settings._stepDim = dim;
         }
-        virtual const std::string& get_step_dim() const {
+        virtual std::string get_step_dim_name() const {
             return _settings._stepDim;
         }
-        virtual void set_domain_dims(const std::string& dim1,
-                                     const std::string& dim2 = "",
-                                     const std::string& dim3 = "",
-                                     const std::string& dim4 = "",
-                                     const std::string& dim5 = "");
+        virtual std::vector<std::string> get_domain_dim_names() const;
+        virtual void set_domain_dim_names(const std::vector<std::string>& dims);
+        virtual void set_domain_dim_names(const std::string& dim1,
+                                          const std::string& dim2 = "",
+                                          const std::string& dim3 = "",
+                                          const std::string& dim4 = "",
+                                          const std::string& dim5 = "");
         virtual void set_element_bytes(int nbytes) { _settings._elem_bytes = nbytes; }
         virtual int get_element_bytes() const { return _settings._elem_bytes; }
         virtual std::string format(const std::string& format_type, ostream& msg_stream);

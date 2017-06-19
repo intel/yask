@@ -1221,6 +1221,7 @@ namespace yask {
         virtual const string& get_dim_name(int n) const {
             return getDimName(n);
         }
+        virtual std::vector<std::string> get_dim_names() const;
         virtual yc_grid_point_node_ptr
         new_relative_grid_point(int dim1_offset,
                                 int dim2_offset,
@@ -1228,6 +1229,8 @@ namespace yask {
                                 int dim4_offset,
                                 int dim5_offset,
                                 int dim6_offset);
+        virtual yc_grid_point_node_ptr
+        new_relative_grid_point(std::vector<int> dim_offsets);
     };
 
     // A list of grids.  This holds pointers to grids defined by the stencil

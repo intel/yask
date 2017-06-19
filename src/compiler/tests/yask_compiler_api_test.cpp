@@ -38,8 +38,8 @@ int main() {
 
     // Create a new stencil solution.
     auto soln = cfac.new_solution("api_cxx_test");
-    soln->set_step_dim("t");
-    soln->set_domain_dims("x", "y", "z");
+    soln->set_step_dim_name("t");
+    soln->set_domain_dim_names("x", "y", "z");
     
     // Create a grid var.
     auto g1 = soln->new_grid("test_grid", "t", "x", "y", "z");

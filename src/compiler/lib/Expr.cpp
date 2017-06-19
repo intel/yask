@@ -37,12 +37,7 @@ namespace yask {
 
     // Stencil-solution APIs.
     yc_grid_ptr StencilSolution::new_grid(const std::string& name,
-                                          const std::string& dim1,
-                                          const std::string& dim2,
-                                          const std::string& dim3,
-                                          const std::string& dim4,
-                                          const std::string& dim5,
-                                          const std::string& dim6) {
+                                          const std::vector<std::string>& dims) {
 
         // Make new grid and add to solution.
         auto* gp = new Grid();  // FIXME: mem leak--delete this in dtor or make smart ptr.
@@ -54,20 +49,39 @@ namespace yask {
         // TODO: validate that name is legal C++ var name.
         gp->setName(name);
 
-        // Set dims that are not null strings.
-        if (dim1.length())
-            gp->addDimBack(dim1, 1);
-        if (dim2.length())
-            gp->addDimBack(dim2, 1);
-        if (dim3.length())
-            gp->addDimBack(dim3, 1);
-        if (dim4.length())
-            gp->addDimBack(dim4, 1);
-        if (dim5.length())
-            gp->addDimBack(dim5, 1);
-        if (dim6.length())
-            gp->addDimBack(dim6, 1);
+        // Set dimsl
+        // TODO: validate that names are legal C++ var names.
+        for (auto dn : dims)
+            gp->addDimBack(dn, 1);
+
         return gp;
+    }
+
+    // Stencil-solution APIs.
+    yc_grid_ptr StencilSolution::new_grid(const std::string& name,
+                                          const std::string& dim1,
+                                          const std::string& dim2,
+                                          const std::string& dim3,
+                                          const std::string& dim4,
+                                          const std::string& dim5,
+                                          const std::string& dim6) {
+        vector<string> dims;
+
+        // Add dims that are not null strings.
+        if (dim1.length())
+            dims.push_back(dim1);
+        if (dim2.length())
+            dims.push_back(dim2);
+        if (dim3.length())
+            dims.push_back(dim3);
+        if (dim4.length())
+            dims.push_back(dim4);
+        if (dim5.length())
+            dims.push_back(dim5);
+        if (dim6.length())
+            dims.push_back(dim6);
+
+        return new_grid(name, dims);
     }
 
     void StencilSolution::set_fold_len(const std::string& dim, int len) {
@@ -86,17 +100,31 @@ namespace yask {
         else
             cluster.addDimBack(dim, mult);
     }
-    void StencilSolution::set_domain_dims(const std::string& dim1,
-                                          const std::string& dim2,
-                                          const std::string& dim3,
-                                          const std::string& dim4,
-                                          const std::string& dim5) {
+    void StencilSolution::set_domain_dim_names(const std::string& dim1,
+                                               const std::string& dim2,
+                                               const std::string& dim3,
+                                               const std::string& dim4,
+                                               const std::string& dim5) {
         auto& ddims = _settings._domainDims;
+        ddims.clear();
         if (dim1.length()) ddims.addDimBack(dim1, 0);
         if (dim2.length()) ddims.addDimBack(dim2, 0);
         if (dim3.length()) ddims.addDimBack(dim3, 0);
         if (dim4.length()) ddims.addDimBack(dim4, 0);
         if (dim5.length()) ddims.addDimBack(dim5, 0);
+    }
+    void StencilSolution::set_domain_dim_names(const vector<string>& dims) {
+        auto& ddims = _settings._domainDims;
+        ddims.clear();
+        for (auto dn : dims)
+            ddims.addDimBack(dn, 0);
+    }
+    vector<string> StencilSolution::get_domain_dim_names() const {
+        vector<string> ret;
+        auto& ddims = _settings._domainDims;
+        for (auto dd : ddims.getDims())
+            ret.push_back(dd.getName());
+        return ret;
     }
 
     // Create the intermediate data for printing.
@@ -226,6 +254,27 @@ namespace yask {
 
     // grid APIs.
     yc_grid_point_node_ptr
+    Grid::new_relative_grid_point(std::vector<int> dim_offsets) {
+
+        // Check for correct number of indices.
+        if (getNumDims() != int(dim_offsets.size())) {
+            cerr << "Error: attempt to create a relative grid point in " <<
+                getNumDims() << "D grid '" << _name << "' with " <<
+                dim_offsets.size() << " indices.\n";
+            exit(1);
+        }
+
+        // Copy the names from the grid to a new tuple.
+        IntTuple pt = *this;
+
+        // Set the values in the tuple.
+        pt.setVals(dim_offsets);
+
+        // Create a point from the tuple.
+        GridPointPtr gpp = make_shared<GridPoint>(this, pt);
+        return gpp;
+    }
+    yc_grid_point_node_ptr
     Grid::new_relative_grid_point(int dim1_offset,
                                   int dim2_offset,
                                   int dim3_offset,
@@ -254,6 +303,12 @@ namespace yask {
             cerr << "Error: " << getNumDims() << "D grid not supported.\n";
             exit(1);
         }
+    }
+    vector<string> Grid::get_dim_names() const {
+        vector<string> ret;
+        for (auto dn : getDims())
+            ret.push_back(dn.getName());
+        return ret;
     }
 
     // grid_point APIs.
@@ -695,17 +750,17 @@ namespace yask {
     // it's just a node in an expression.
     GridPointPtr Grid::makePoint(int count, ...) {
 
-        // check for correct number of indices.
+        // Check for correct number of indices.
         if (count != size()) {
             cerr << "Error: attempt to access " << size() <<
-                "-D grid '" << _name << "' with " << count << " indices.\n";
+                "D grid '" << _name << "' with " << count << " indices.\n";
             exit(1);
         }
 
         // Copy the names from the grid to a new tuple.
         IntTuple pt = *this;
 
-        // set the values in the tuple using the var args.
+        // Set the values in the tuple using the var args.
         va_list args;
         va_start(args, count);
         pt.setVals<int>(count, args);

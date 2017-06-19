@@ -163,6 +163,14 @@ namespace yask {
         virtual bool getFirstInner() const { return _firstInner; }
         virtual void setFirstInner(bool fi) { _firstInner = fi; }
 
+        // Query number of dims.
+        inline int size() const {
+            return int(_q.size());
+        }
+        inline int getNumDims() const {
+            return int(_q.size());
+        }
+
         // Return pointer to scalar pair or null if it doesn't exist.
         // Lookup by dim index.
         // No non-const version because name shouldn't be modified
@@ -262,14 +270,6 @@ namespace yask {
         // Get iteratable contents.
         const std::deque<Scalar<T>>& getDims() const {
             return _q;
-        }
-
-        // Query number of dims.
-        inline int size() const {
-            return int(_q.size());
-        }
-        inline int getNumDims() const {
-            return int(_q.size());
         }
 
         // Clear data.

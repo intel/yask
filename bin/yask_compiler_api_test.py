@@ -36,27 +36,27 @@ if __name__ == "__main__":
 
     # Create a new stencil solution.
     soln = cfac.new_solution("api_py_test")
-    soln.set_step_dim("t")
-    soln.set_domain_dims("x", "y", "z")
+    soln.set_step_dim_name("t")
+    soln.set_domain_dim_names(["x", "y", "z"])
 
     # Create a grid var.
-    g1 = soln.new_grid("test_grid", "t", "x", "y", "z")
+    g1 = soln.new_grid("test_grid", ["t", "x", "y", "z"])
 
     # Create an expression for the new value.
     # This will average some of the neighboring points around the
     # current stencil application point in the current timestep.
     fac = yask_compiler.yc_node_factory()
-    n0 = g1.new_relative_grid_point(0, 0, 0, 0)  # center-point at this timestep.
-    n1 = fac.new_add_node(n0, g1.new_relative_grid_point(0, -1,  0,  0)) # left.
-    n1 = fac.new_add_node(n1, g1.new_relative_grid_point(0,  1,  0,  0)) # right.
-    n1 = fac.new_add_node(n1, g1.new_relative_grid_point(0,  0, -1,  0)) # above.
-    n1 = fac.new_add_node(n1, g1.new_relative_grid_point(0,  0,  1,  0)) # below.
-    n1 = fac.new_add_node(n1, g1.new_relative_grid_point(0,  0,  0, -1)) # in front.
-    n1 = fac.new_add_node(n1, g1.new_relative_grid_point(0,  0,  0,  1)) # behind.
+    n0 = g1.new_relative_grid_point([0, 0, 0, 0])  # center-point at this timestep.
+    n1 = fac.new_add_node(n0, g1.new_relative_grid_point([0, -1,  0,  0])) # left.
+    n1 = fac.new_add_node(n1, g1.new_relative_grid_point([0,  1,  0,  0])) # right.
+    n1 = fac.new_add_node(n1, g1.new_relative_grid_point([0,  0, -1,  0])) # above.
+    n1 = fac.new_add_node(n1, g1.new_relative_grid_point([0,  0,  1,  0])) # below.
+    n1 = fac.new_add_node(n1, g1.new_relative_grid_point([0,  0,  0, -1])) # in front.
+    n1 = fac.new_add_node(n1, g1.new_relative_grid_point([0,  0,  0,  1])) # behind.
     n2 = fac.new_divide_node(n1, fac.new_const_number_node(7)) # div by 7.
 
     # Create an equation to define the value at the next timestep.
-    n3 = g1.new_relative_grid_point(1, 0, 0, 0) # center-point at next timestep.
+    n3 = g1.new_relative_grid_point([1, 0, 0, 0]) # center-point at next timestep.
     n4 = fac.new_equation_node(n3, n2) # equate to expr n2.
     print("Equation before formatting: " + n4.format_simple())
     print("Solution '" + soln.get_name() + "' contains " +

@@ -752,6 +752,7 @@ realclean: clean clean-old
 	rm -fr docs/*/html docs/*/latex
 	rm -fv $(YC_SWIG_DIR)/yask_compiler_api_wrap.{cpp,o} lib/yask_{compiler,kernel}.py*
 	rm -fv *api-test*.dot* *~
+	find * -name '*.pyc' | xargs -r rm -v
 	find * -name '*.o' | xargs -r rm -v
 	find * -name '*.optrpt' | xargs -r rm -v
 	find * -name '*~' | xargs -r rm -v
