@@ -128,9 +128,11 @@ namespace yask {
         virtual void resize_g() =0;
 
         // Make sure indices are in range.
-        virtual void checkIndices(const GridIndices& indices,
-                                  const std::string& fn) const;
-        
+        virtual bool checkIndices(const GridIndices& indices,
+                                  const std::string& fn,
+                                  bool strict_indices,
+                                  GridIndices* fixed_indices = NULL) const;
+
     public:
         RealVecGridBase(RealVecGrid* gp) :
             _gp(gp) { }
@@ -189,6 +191,16 @@ namespace yask {
         inline idx_t get_last_x() const { return _ox + _dx - 1; }
         inline idx_t get_last_y() const { return _oy + _dy - 1; }
         inline idx_t get_last_z() const { return _oz + _dz - 1; }
+
+        // Get first allocated index in this rank.
+        inline idx_t get_first_alloc_x() const { return _ox - _px; }
+        inline idx_t get_first_alloc_y() const { return _oy - _py; }
+        inline idx_t get_first_alloc_z() const { return _oz - _pz; }
+
+        // Get last allocated index in this rank.
+        inline idx_t get_last_alloc_x() const { return get_first_alloc_x() + get_alloc_x() - 1; }
+        inline idx_t get_last_alloc_y() const { return get_first_alloc_y() + get_alloc_y() - 1; }
+        inline idx_t get_last_alloc_z() const { return get_first_alloc_z() + get_alloc_z() - 1; }
 
         // Set temporal storage allocation.
         void set_alloc_t(idx_t tdim) { _tdim = tdim; resize(); }
@@ -331,7 +343,6 @@ namespace yask {
             return _gp;
         }
 
-
         // APIs not defined above.
         // See yask_kernel_api.hpp.
         virtual bool is_dim_used(const std::string& dim) const {
@@ -355,6 +366,8 @@ namespace yask {
         virtual idx_t get_extra_pad_size(const std::string& dim) const;
         virtual idx_t get_pad_size(const std::string& dim) const;
         virtual idx_t get_alloc_size(const std::string& dim) const;
+        virtual idx_t get_first_rank_alloc_index(const std::string& dim) const;
+        virtual idx_t get_last_rank_alloc_index(const std::string& dim) const;
         virtual void set_halo_size(const std::string& dim, idx_t size);
         virtual void set_pad_size(const std::string& dim, idx_t size); // not exposed.
         virtual void set_min_pad_size(const std::string& dim, idx_t size);
@@ -372,6 +385,27 @@ namespace yask {
         virtual bool is_storage_allocated() const {
             return get_storage() != 0;
         }
+        virtual double get_element(idx_t dim1_index, idx_t dim2_index,
+                                   idx_t dim3_index, idx_t dim4_index,
+                                   idx_t dim5_index, idx_t dim6_index) const;
+        virtual double get_element(const GridIndices& indices) const;
+        virtual idx_t get_elements_in_slice(void* buffer_ptr,
+                                            const GridIndices& first_indices,
+                                            const GridIndices& last_indices) const;
+        virtual idx_t set_element(double val,
+                                  idx_t dim1_index, idx_t dim2_index,
+                                  idx_t dim3_index, idx_t dim4_index,
+                                  idx_t dim5_index, idx_t dim6_index);
+        virtual idx_t set_element(double val,
+                                  const GridIndices& indices,
+                                  bool strict_indices);
+        virtual idx_t set_elements_in_slice_same(double val,
+                                                 const GridIndices& first_indices,
+                                                 const GridIndices& last_indices,
+                                                 bool strict_indices);
+        virtual idx_t set_elements_in_slice(const void* buffer_ptr,
+                                            const GridIndices& first_indices,
+                                            const GridIndices& last_indices);
     };
     
     // A 3D (x, y, z) collection of real_vec_t elements.
@@ -557,32 +591,6 @@ namespace yask {
             assert(t == 0);
             return readElem(x, y, z, line);
         }
-        virtual double get_element(idx_t dim1_index, idx_t dim2_index,
-                                   idx_t dim3_index, idx_t dim4_index,
-                                   idx_t dim5_index, idx_t dim6_index) const {
-            GridIndices idx = {dim1_index, dim2_index, dim3_index};
-            return get_element(idx);
-        }
-        virtual double get_element(const GridIndices& indices) const {
-            checkIndices(indices, "get_element");
-            return double(readElem(indices.at(0), indices.at(1),
-                                   indices.at(2), __LINE__));
-        }
-        virtual idx_t get_elements_in_slice(void* buffer_ptr,
-                                            const GridIndices& first_indices,
-                                            const GridIndices& last_indices) const {
-            checkIndices(first_indices, "get_elements_in_slice");
-            checkIndices(last_indices, "get_elements_in_slice");
-            idx_t n = 0;
-            // TODO: Add OMP.
-            for (idx_t x = first_indices[0]; x <= last_indices[0]; x++)
-                for (idx_t y = first_indices[1]; y <= last_indices[1]; y++)
-                    for (idx_t z = first_indices[2]; z <= last_indices[2]; z++, n++) {
-                        real_t val = readElem(x, y, z, __LINE__);
-                        ((real_t*)buffer_ptr)[n] = val;
-                    }
-            return n;
-        }
 
         // Write one element.
         virtual void writeElem_TXYZ(real_t val,
@@ -590,50 +598,6 @@ namespace yask {
                                      int line) {
             assert(t == 0);
             writeElem(val, x, y, z, line);
-        }
-        virtual void set_element(double val,
-                                 idx_t dim1_index, idx_t dim2_index,
-                                 idx_t dim3_index, idx_t dim4_index,
-                                 idx_t dim5_index, idx_t dim6_index) {
-            GridIndices idx = {dim1_index, dim2_index, dim3_index};
-            set_element(val, idx);
-        }            
-        virtual void set_element(double val, const GridIndices& indices) {
-            checkIndices(indices, "set_element");
-            writeElem(real_t(val),
-                      indices.at(0), indices.at(1),
-                      indices.at(2), __LINE__);
-            set_updated(false);
-        }
-        virtual idx_t set_elements_in_slice_same(double val,
-                                                 const GridIndices& first_indices,
-                                                 const GridIndices& last_indices) {
-            checkIndices(first_indices, "set_elements_in_slice_same");
-            checkIndices(last_indices, "set_elements_in_slice_same");
-            idx_t n = 0;
-            // TODO: Add OMP.
-            for (idx_t x = first_indices[0]; x <= last_indices[0]; x++)
-                for (idx_t y = first_indices[1]; y <= last_indices[1]; y++)
-                    for (idx_t z = first_indices[2]; z <= last_indices[2]; z++, n++)
-                        writeElem(real_t(val), x, y, z, __LINE__);
-            set_updated(false);
-            return n;
-        }
-        virtual idx_t set_elements_in_slice(const void* buffer_ptr,
-                                            const std::vector<idx_t>& first_indices,
-                                            const std::vector<idx_t>& last_indices) {
-            checkIndices(first_indices, "set_elements_in_slice");
-            checkIndices(last_indices, "set_elements_in_slice");
-            idx_t n = 0;
-            // TODO: Add OMP.
-            for (idx_t x = first_indices[0]; x <= last_indices[0]; x++)
-                for (idx_t y = first_indices[1]; y <= last_indices[1]; y++)
-                    for (idx_t z = first_indices[2]; z <= last_indices[2]; z++, n++) {
-                        real_t val = ((real_t*)buffer_ptr)[n];
-                        writeElem(val, x, y, z, __LINE__);
-                    }
-            set_updated(false);
-            return n;
         }
         
         // Read one vector at *vector* offset.
@@ -860,85 +824,12 @@ namespace yask {
                                       int line) const {
             return readElem(t, x, y, z, line);
         }
-        virtual double get_element(idx_t dim1_index, idx_t dim2_index,
-                                   idx_t dim3_index, idx_t dim4_index,
-                                   idx_t dim5_index, idx_t dim6_index) const {
-            GridIndices idx = {dim1_index, dim2_index, dim3_index, dim4_index};
-            return get_element(idx);
-        }
-        virtual double get_element(const GridIndices& indices) const {
-            checkIndices(indices, "get_element");
-            return double(readElem(indices.at(0), indices.at(1),
-                                   indices.at(2), indices.at(3), __LINE__));
-        }
-        virtual idx_t get_elements_in_slice(void* buffer_ptr,
-                                            const GridIndices& first_indices,
-                                            const GridIndices& last_indices) const {
-            checkIndices(first_indices, "get_elements_in_slice");
-            checkIndices(last_indices, "get_elements_in_slice");
-            idx_t n = 0;
-            // TODO: Add OMP.
-            for (idx_t t = first_indices[0]; t <= last_indices[0]; t++)
-                for (idx_t x = first_indices[1]; x <= last_indices[1]; x++)
-                    for (idx_t y = first_indices[2]; y <= last_indices[2]; y++)
-                        for (idx_t z = first_indices[3]; z <= last_indices[3]; z++, n++) {
-                            real_t val = readElem(t, x, y, z, __LINE__);
-                            ((real_t*)buffer_ptr)[n] = val;
-                        }
-            return n;
-        }
         
         // Write one element.
         virtual void writeElem_TXYZ(real_t val,
                                      idx_t t, idx_t x, idx_t y, idx_t z,                               
                                      int line) {
             writeElem(val, t, x, y, z, line);
-        }
-        virtual void set_element(double val,
-                                 idx_t dim1_index, idx_t dim2_index,
-                                 idx_t dim3_index, idx_t dim4_index,
-                                 idx_t dim5_index, idx_t dim6_index) {
-            GridIndices idx = {dim1_index, dim2_index, dim3_index, dim4_index};
-            set_element(val, idx);
-        }            
-        virtual void set_element(double val, const GridIndices& indices) {
-            checkIndices(indices, "set_element");
-            writeElem(real_t(val),
-                      indices.at(0), indices.at(1),
-                      indices.at(2), indices.at(3), __LINE__);
-            set_updated(false);
-        }
-        virtual idx_t set_elements_in_slice_same(double val,
-                                                 const GridIndices& first_indices,
-                                                 const GridIndices& last_indices) {
-            checkIndices(first_indices, "set_elements_in_slice_same");
-            checkIndices(last_indices, "set_elements_in_slice_same");
-            idx_t n = 0;
-            // TODO: Add OMP.
-            for (idx_t t = first_indices[0]; t <= last_indices[0]; t++)
-                for (idx_t x = first_indices[1]; x <= last_indices[1]; x++)
-                    for (idx_t y = first_indices[2]; y <= last_indices[2]; y++)
-                        for (idx_t z = first_indices[3]; z <= last_indices[3]; z++, n++)
-                            writeElem(real_t(val), t, x, y, z, __LINE__);
-            set_updated(false);
-            return n;
-        }
-        virtual idx_t set_elements_in_slice(const void* buffer_ptr,
-                                            const std::vector<idx_t>& first_indices,
-                                            const std::vector<idx_t>& last_indices) {
-            checkIndices(first_indices, "set_elements_in_slice");
-            checkIndices(last_indices, "set_elements_in_slice");
-            idx_t n = 0;
-            // TODO: Add OMP.
-            for (idx_t t = first_indices[0]; t <= last_indices[0]; t++)
-                for (idx_t x = first_indices[1]; x <= last_indices[1]; x++)
-                    for (idx_t y = first_indices[2]; y <= last_indices[2]; y++)
-                        for (idx_t z = first_indices[3]; z <= last_indices[3]; z++, n++) {
-                            real_t val = ((real_t*)buffer_ptr)[n];
-                            writeElem(val, t, x, y, z, __LINE__);
-                    }
-            set_updated(false);
-            return n;
         }
 
         // Read one vector at *vector* offset.

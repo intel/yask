@@ -138,7 +138,7 @@ namespace yask {
 
         /// Get the floating-point precision size.
         /**
-           @returns Number of bytes in each FP element.
+           @returns Number of bytes in each FP element: 4 or 8.
         */
         virtual int 
         get_element_bytes() const =0;
@@ -368,6 +368,38 @@ namespace yask {
            is not yet allocated.
            Storage may be allocated in any of the methods listed
            in the "Detailed Description" for \ref yk_grid.
+           @warning Only grids supported at this time are those with
+           dimensions 'x, y, z,' and 't, x, y, z'.
+           @returns Pointer to the new grid.
+        */
+        virtual yk_grid_ptr
+        new_grid(const std::string& name
+                 /**< [in] Unique name of the grid; must be
+                    a valid C++ identifier and unique
+                    across grids. */,
+                 const std::vector<std::string>& dims
+                 /**< [in] List of names of all dimensions. Names must
+                    be valid C++ identifiers and unique within this grid. */ ) =0;
+
+        /// **[Advanced]** Add a new grid to the solution.
+        /**
+           This is typically not needed because grids are usually pre-defined
+           by the solution itself via the stencil compiler.
+           However, a grid may be created explicitly via this function
+           in order to use it for purposes other than by the
+           pre-defined stencils within the current solution.
+           A new grid's domain size will be the same as that returned by
+           get_rank_domain_size().
+           A new grid's initial padding size will be the same as that returned by
+           get_min_pad_size().
+           After creating a new grid, you can increase its padding
+           sizes via yk_grid::set_min_pad_size().
+           A new grid contains only the meta-data for the grid; data storage
+           is not yet allocated.
+           Storage may be allocated in any of the methods listed
+           in the "Detailed Description" for \ref yk_grid.
+           @warning Only grids supported at this time are those with
+           dimensions 'x, y, z,' and 't, x, y, z'.
            @returns Pointer to the new grid.
         */
         virtual yk_grid_ptr
@@ -396,9 +428,9 @@ namespace yask {
         virtual void
         prepare_solution() =0;
 
-        /// Get the first logical index of the sub-domain in this rank in the specified dimension.
+        /// Get the first index of the sub-domain in this rank in the specified dimension.
         /**
-           This returns the first index at the beginning of the domain.
+           This returns the first *overall* index at the beginning of the domain.
            Points within the domain in this rank lie between the values returned by
            get_first_rank_domain_index() and get_last_rank_domain_index(), inclusive.
            If there is only one MPI rank, this is typically zero (0).
@@ -406,16 +438,16 @@ namespace yask {
            on the the rank's position within the overall problem domain.
            This function should be called only *after* calling prepare_solution()
            because prepare_solution() assigns this rank's position in the problem domain.
-           @returns First logical domain index in this rank. 
+           @returns First domain index in this rank. 
         */
         virtual idx_t
         get_first_rank_domain_index(const std::string& dim
                                     /**< [in] Name of dimension from get_domain_dim_name().
                                        Cannot be the step dimension. */ ) const =0;
 
-        /// Get the last logical index of the sub-domain in this rank the specified dimension.
+        /// Get the last index of the sub-domain in this rank the specified dimension.
         /**
-           This returns the last index within the domain in this rank
+           This returns the last *overall* index within the domain in this rank
            (*not* one past the end).
            If there is only one MPI rank, this is typically one less than the value
            provided by set_rank_domain_size().
@@ -424,7 +456,7 @@ namespace yask {
            See get_first_rank_domain_index() for more information.
            This function should be called only *after* calling prepare_solution()
            because prepare_solution() assigns this rank's position in the problem domain.
-           @returns Last logical index in this rank.
+           @returns Last index in this rank.
         */
         virtual idx_t
         get_last_rank_domain_index(const std::string& dim
@@ -497,15 +529,17 @@ namespace yask {
        - The *padding* is the points outside the domain on either side
        and includes the halo.
        - The *halo* is the points just outside the domain which must be
-       copied between ranks during halo exchanges. The halo is part of the padding.
+       copied between ranks during halo exchanges. The halo is contained within the padding.
        - The *extra padding* is the points outside the domain and halo on
        either side and thus does not include the halo.
        - The *allocation* includes the domain and the padding.
        
        All sizes are expressed in numbers of elements, which may be 4-byte (single precision)
-       or 8-byte (double precision) floating-point values.
+       or 8-byte (double precision) floating-point values as returned by
+       yk_solution::get_element_bytes().
        
-       Visually, in each of the non-step dimensions, these sizes are related as follows:
+       Visually, in each of the non-step dimensions, these sizes are related as follows
+       in each MPI rank:
        <table>
        <tr><td>extra padding <td>halo <td rowspan="2">domain <td>halo <td>extra padding
        <tr><td colspan="2"><center>padding</center> <td colspan="2"><center>padding</center>
@@ -542,15 +576,24 @@ namespace yask {
          <td colspan="4"><center>overall problem domain</center>
          <td colspan="2"><center>padding of rank Z</center>
        </table>
-       The beginning and ending overall-problem index that lies within a rank can be
-       retrieved via yk_solution::get_first_rank_domain_index() and 
-       yk_solution::get_last_rank_domain_index(), respectively.
-       
        The intermediate halos and paddings also exist, but are not shown in the above diagram.
        They overlap the domains of adjacent ranks.
        For example, the left halo of rank B in the diagram would overlap the domain of rank A.
        Data in these overlapped regions is exchanged as needed during stencil application
        to maintain a consistent values as if there was only one rank.
+
+       @note The index arguments to the \ref yk_grid functions that require indices
+       are *always* relative to the overall problem; they are *not* relative to the current rank.
+       The first and last overall-problem index that lies within a rank can be
+       retrieved via yk_solution::get_first_rank_domain_index() and 
+       yk_solution::get_last_rank_domain_index(), respectively.
+       The first and last accessible index that lies within a rank for a given grid can be
+       retrieved via yk_grid::get_first_rank_alloc_index() and 
+       yk_grid::get_last_rank_alloc_index(), respectively.
+       Also, index arguments are always inclusive. 
+       Specifically, for functions that return or require a "last" index, that
+       index indicates the last one in the relevant range, i.e., *not* one past the last value
+       (this is more like Fortran and Perl than Python and Lisp).
     */
     class yk_grid {
     public:
@@ -601,7 +644,7 @@ namespace yask {
         /// Get the halo size in the specified dimension.
         /**
            This value is typically set by the stencil compiler.
-           @returns Points in halo in given dimension.
+           @returns Points in halo in given dimension both before and after the domain.
         */
         virtual idx_t
         get_halo_size(const std::string& dim
@@ -617,7 +660,7 @@ namespace yask {
            @note After data storage has been allocated, the halo size
            can only be set to a value less than or equal to the padding size
            in the given dimension.
-           @returns Points in halo in given dimension.
+           @returns Points in halo in given dimension both before and after the domain.
         */
         virtual void
         set_halo_size(const std::string& dim
@@ -628,11 +671,15 @@ namespace yask {
 
         /// Get the padding in the specified dimension.
         /**
+           The padding is the extra memory allocated before
+           and after the domain in a given dimension.
            The padding size includes the halo size.
            The value may be slightly
            larger than that provided via set_min_pad_size()
            or yk_solution::set_min_pad_size() due to rounding.
-           @returns Points in padding in given dimension.
+           @returns Points in padding in given dimension before the
+           domain. The number of points after the domain will be
+           equal to or greater than this.
         */
         virtual idx_t
         get_pad_size(const std::string& dim
@@ -642,7 +689,9 @@ namespace yask {
         /// Get the extra padding in the specified dimension.
         /**
            The *extra* padding size is the padding size minus the halo size.
-           @returns Points in extra padding in given dimension.
+           @returns Points in padding in given dimension before the
+           halo region. The number of points after the halo will be
+           equal to or greater than this.
         */
         virtual idx_t
         get_extra_pad_size(const std::string& dim
@@ -652,7 +701,7 @@ namespace yask {
         /// Set the padding in the specified dimension.
         /**
            This sets the minimum number of points in this grid that is
-           reserved outside of the rank domain in the given dimension.
+           reserved both before and after the rank domain in the given dimension.
            This padding area can be used for required halo regions.
            The specified number of points is added to both sides, i.e., both "before" and
            "after" the domain.
@@ -681,8 +730,7 @@ namespace yask {
         /**
            For the step dimension, this is the specified allocation and
            does not typically depend on the number of steps evaluated.
-           For the non-step dimensions, this is yk_solution::get_rank_domain_size() + 
-           (2 * (get_halo_size() + get_extra_pad_size())).
+           For the non-step dimensions, this includes the domain and padding sizes.
            See the "Detailed Description" for \ref yk_grid for information on grid sizes.
            @returns allocation in number of points (not bytes).
         */
@@ -707,15 +755,49 @@ namespace yask {
                           Must be the step dimension. */,
                        idx_t size /**< [in] Number of points to allocate. */ ) =0;
 
+        /// Get the first accessible index in this grid in this rank in the specified dimension.
+        /**
+           This returns the first *overall* index allowed in this grid.
+           This point may be in the domain, halo, or extra padding area.
+           @returns First allowed index in this grid.
+        */
+        virtual idx_t
+        get_first_rank_alloc_index(const std::string& dim
+                                   /**< [in] Name of dimension from get_domain_dim_name().
+                                      Cannot be the step dimension. */ ) const =0;
+
+        /// Get the last accessible index in this grid in this rank in the specified dimension.
+        /**
+           This returns the last *overall* index allowed in this grid.
+           This point may be in the domain, halo, or extra padding area.
+           @returns Last allowed index in this grid.
+        */
+        virtual idx_t
+        get_last_rank_alloc_index(const std::string& dim
+                                  /**< [in] Name of dimension from get_domain_dim_name().
+                                     Cannot be the step dimension. */ ) const =0;
+
+        /// Get the value of one grid point.
+        /**
+           Provide indices in a list in the same order returned by get_dim_names().
+           Indices are relative to the *overall* problem domain.
+           Index values must fall within the allocated space as returned by
+           get_first_rank_alloc_index() and get_last_rank_alloc_index() for
+           each dimension.
+           @returns value in grid at given multi-dimensional location. 
+        */
+        virtual double
+        get_element(const std::vector<idx_t>& indices
+                    /**< [in] List of indices, one for each grid dimension. */ ) const =0;
+
         /// Get the value of one grid point.
         /**
            Provide the number of indices equal to the number of dimensions in the grid.
            Indices beyond that will be ignored.
            Indices are relative to the *overall* problem domain.
-           Index values must fall within the rank domain or padding area.
-           See yk_solution::get_first_rank_domain_index(),
-           yk_solution::get_last_domain_index(), and the 
-           "Detailed Description" for \ref yk_grid for more information on grid sizes.
+           Index values must fall within the allocated space as returned by
+           get_first_rank_alloc_index() and get_last_rank_alloc_index() for
+           each dimension.
            @note The return value is a double-precision floating-point value, but
            it will be converted from a single-precision if 
            yk_solution::get_element_bytes() returns 4.
@@ -729,55 +811,68 @@ namespace yask {
                     idx_t dim5_index=0 /**< [in] Index in dimension 5. */,
                     idx_t dim6_index=0 /**< [in] Index in dimension 6. */ ) const =0;
 
-        /// Get the value of one grid point.
-        /**
-           Same as version of get_element() with individual indices, but
-           indices are provided in a list per the order returned by
-           get_dim_names().
-           @returns value in grid at given multi-dimensional location. 
-        */
-        virtual double
-        get_element(const std::vector<idx_t>& indices
-                    /**< [in] List of indices, one for each grid dimension. */ ) const =0;
-
         /// Get grid points within specified subset of the grid.
         /**
-           Reads all elements from 'first' to 'last' indices in each dimension in 
-           row-major order, and writes them to consecutive memory locations,
-           starting at 'buffer_ptr'.
+           Reads all elements from 'first' to 'last' indices in each dimension
+           and writes them to consecutive memory locations in the buffer.
+           Indices in the buffer progress in row-major order.
            The buffer pointed to must contain the number of bytes equal to
-           yk_solution::get_element_bytes() multiplied by the number of 
+           yk_solution::get_element_bytes() multiplied by the number of
            points in the specified slice.
            Since the reads proceed in row-major order, the last index is "unit-stride"
            in the buffer.
+           Provide indices in two lists in the same order returned by get_dim_names().
            Indices are relative to the *overall* problem domain.
-           Index values must fall within the rank domain or padding area.
+           Index values must fall within the allocated space as returned by
+           get_first_rank_alloc_index() and get_last_rank_alloc_index() for
+           each dimension.
            @returns Number of elements read.
         */
         virtual idx_t
         get_elements_in_slice(void* buffer_ptr
                               /**< [out] Pointer to buffer where values will be written. */,
                               const std::vector<idx_t>& first_indices
-                              /**< [in] List of beginning indices, one for each grid dimension. */,
+                              /**< [in] List of initial indices, one for each grid dimension. */,
                               const std::vector<idx_t>& last_indices
-                              /**< [in] List of ending indices, one for each grid dimension. */ ) const =0;
+                              /**< [in] List of final indices, one for each grid dimension. */ ) const =0;
         
         /// Set the value of one grid point.
         /**
-           Caller must provide the number of indices equal to the number of dimensions in the grid.
-           Indices beyond that will be ignored.
+           Provide indices in a list in the same order returned by get_dim_names().
            Indices are relative to the *overall* problem domain.
-           Index values must fall within the rank domain or padding area.
-           See yk_solution::get_first_rank_domain_index(), 
-           yk_solution::get_last_domain_index(), and the 
-           "Detailed Description" for \ref yk_grid for more information on grid sizes.
+           Index values must fall within the allocated space as returned by
+           get_first_rank_alloc_index() and get_last_rank_alloc_index() for
+           each dimension.
            @note The parameter value is a double-precision floating-point value, but
            it will be converted to single-precision if
            yk_solution::get_element_bytes() returns 4.
-           @note If storage has not been allocated via yk_solution::prepare_solution(),
-           this will have no effect.
+           If storage has not been allocated for this grid, this will have no effect.
+           @returns Number of elements set.
         */
-        virtual void
+        virtual idx_t
+        set_element(double val /**< [in] Point in grid will be set to this. */,
+                    const std::vector<idx_t>& indices
+                    /**< [in] List of indices, one for each grid dimension. */,
+                    bool strict_indices = false
+                    /**< [in] If true, indices must be within domain or padding.
+                       If false, indices outside of domain and padding result
+                       in no change to grid. */ ) =0;
+
+        /// Set the value of one grid point.
+        /**
+           Provide the number of indices equal to the number of dimensions in the grid.
+           Indices beyond that will be ignored.
+           Indices are relative to the *overall* problem domain.
+           If any index values fall outside of the allocated space as returned by
+           get_first_rank_alloc_index() and get_last_rank_alloc_index() for
+           each dimension, this will have no effect.
+           @note The parameter value is a double-precision floating-point value, but
+           it will be converted to single-precision if
+           yk_solution::get_element_bytes() returns 4.
+           If storage has not been allocated for this grid, this will have no effect.
+           @returns Number of elements set.
+        */
+        virtual idx_t
         set_element(double val /**< [in] Point in grid will be set to this. */,
                     idx_t dim1_index=0 /**< [in] Index in dimension 1. */,
                     idx_t dim2_index=0 /**< [in] Index in dimension 2. */,
@@ -785,17 +880,6 @@ namespace yask {
                     idx_t dim4_index=0 /**< [in] Index in dimension 4. */,
                     idx_t dim5_index=0 /**< [in] Index in dimension 5. */,
                     idx_t dim6_index=0 /**< [in] Index in dimension 6. */ ) =0;
-
-        /// Set the value of one grid point.
-        /**
-           Same as version of set_element() with individual indices, but
-           indices are provided in a list per the order returned by
-           get_dim_names().
-        */
-        virtual void
-        set_element(double val /**< [in] Point in grid will be set to this. */,
-                    const std::vector<idx_t>& indices
-                    /**< [in] List of indices, one for each grid dimension. */ ) =0;
 
         /// Initialize all grid points to the same value.
         /**
@@ -814,43 +898,54 @@ namespace yask {
         /**
            Sets all elements from 'first' to 'last' indices in each dimension to the
            specified value.
+           Provide indices in two lists in the same order returned by get_dim_names().
            Indices are relative to the *overall* problem domain.
-           Both indices are inclusive (more like Fortran and Perl than Python and Lisp).
-           Index values must fall within the rank domain or padding area.
-           Notes in set_all_elements() documentation apply.
+           Index values must fall within the allocated space as returned by
+           get_first_rank_alloc_index() and get_last_rank_alloc_index() for
+           each dimension.
+           Indices are relative to the *overall* problem domain.
+           If storage has not been allocated for this grid, this will have no effect.
            @returns Number of elements set.
         */
         virtual idx_t
         set_elements_in_slice_same(double val /**< [in] All points in the slice will be set to this. */,
                                    const std::vector<idx_t>& first_indices
-                                   /**< [in] List of beginning indices, one for each grid dimension. */,
+                                   /**< [in] List of initial indices, one for each grid dimension. */,
                                    const std::vector<idx_t>& last_indices
-                                   /**< [in] List of ending indices, one for each grid dimension. */ ) =0;
+                                   /**< [in] List of final indices, one for each grid dimension. */,
+                                   bool strict_indices = false
+                                   /**< [in] If true, indices must be within domain or padding.
+                                      If false, only points within the allocation of this grid
+                                      will be set, and points outside will be ignored. */ ) =0;
 
         /// Set grid points within specified subset of the grid.
         /**
            Reads elements from consecutive memory locations,
-           starting at 'buffer_ptr',
-           and writes them from 'first' to 'last' indices in each dimension in 
-           row-major order.
+           starting at 'buffer_ptr'
+           and writes them from 'first' to 'last' indices in each dimension.
+           Indices in the buffer progress in row-major order.
            The buffer pointed to must contain either 4 or 8 byte FP values per point in the 
            subset, depending on the FP precision of the solution.
            The buffer pointed to must contain the number of FP values in the specified slice,
            where each FP value is the size of yk_solution::get_element_bytes().
            Since the writes proceed in row-major order, the last index is "unit-stride"
            in the buffer.
+           Provide indices in two lists in the same order returned by get_dim_names().
            Indices are relative to the *overall* problem domain.
-           Both indices are inclusive (more like Fortran and Perl than Python and Lisp).
-           Index values must fall within the rank domain or padding area.
+           Index values must fall within the allocated space as returned by
+           get_first_rank_alloc_index() and get_last_rank_alloc_index() for
+           each dimension.
+           Indices are relative to the *overall* problem domain.
+           If storage has not been allocated for this grid, this will have no effect.
            @returns Number of elements written.
         */
         virtual idx_t
         set_elements_in_slice(const void* buffer_ptr
                               /**< [out] Pointer to buffer where values will be read. */,
                               const std::vector<idx_t>& first_indices
-                              /**< [in] List of beginning indices, one for each grid dimension. */,
+                              /**< [in] List of initial indices, one for each grid dimension. */,
                               const std::vector<idx_t>& last_indices
-                              /**< [in] List of ending indices, one for each grid dimension. */ ) =0;
+                              /**< [in] List of final indices, one for each grid dimension. */ ) =0;
         
         /// **[Advanced]** Explicitly allocate data-storage memory for this grid.
         /**

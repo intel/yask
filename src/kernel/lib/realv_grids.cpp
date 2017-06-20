@@ -47,6 +47,8 @@ namespace yask {
     GET_GRID_API(get_rank_domain_size, get_d, false, 0)
     GET_GRID_API(get_first_rank_domain_index, get_first_, false, 0)
     GET_GRID_API(get_last_rank_domain_index, get_last_, false, 0)
+    GET_GRID_API(get_first_rank_alloc_index, get_first_alloc_, false, 0)
+    GET_GRID_API(get_last_rank_alloc_index, get_last_alloc_, false, 0)
     GET_GRID_API(get_halo_size, get_halo_, false, 0)
     GET_GRID_API(get_extra_pad_size, get_extra_pad_, false, 0)
     GET_GRID_API(get_pad_size, get_pad_, false, 0)
@@ -126,6 +128,181 @@ namespace yask {
         }
     }
 
+    double RealVecGridBase::get_element(idx_t dim1_index, idx_t dim2_index,
+                                        idx_t dim3_index, idx_t dim4_index,
+                                        idx_t dim5_index, idx_t dim6_index) const {
+        GridIndices idx = {dim1_index, dim2_index, dim3_index};
+        if (got_t())
+            idx.push_back(dim4_index);
+        return get_element(idx);
+    }
+    idx_t RealVecGridBase::set_element(double val,
+                                       idx_t dim1_index, idx_t dim2_index,
+                                       idx_t dim3_index, idx_t dim4_index,
+                                       idx_t dim5_index, idx_t dim6_index) {
+        GridIndices idx = {dim1_index, dim2_index, dim3_index};
+        if (got_t())
+            idx.push_back(dim4_index);
+        return set_element(val, idx, false);
+    }
+
+    // Use the 'halo' loop for reading and writing elements.
+#define SET_HALO_LOOP_VARS(first, last)         \
+    int i = 0;                                  \
+    idx_t begin_ht = 0, end_ht = 1;             \
+    if (got_t()) {                              \
+        begin_ht = first[i];                    \
+        end_ht = last[i++] + 1;                 \
+    }                                           \
+    idx_t begin_hx = first[i];                  \
+    idx_t end_hx = last[i++] + 1;               \
+    idx_t begin_hy = first[i];                  \
+    idx_t end_hy = last[i++] + 1;               \
+    idx_t begin_hz = first[i];                  \
+    idx_t end_hz = last[i++] + 1;               \
+    const idx_t step_hx = 1;                    \
+    const idx_t step_hy = 1;                    \
+    const idx_t step_hz = 1;                    \
+    const idx_t group_size_hx = 1;              \
+    const idx_t group_size_hy = 1;              \
+    const idx_t group_size_hz = 1;              \
+    idx_t num_ht = end_ht - begin_ht;           \
+    idx_t num_hx = end_hx - begin_hx;           \
+    idx_t num_hy = end_hy - begin_hy;           \
+    idx_t num_hz = end_hz - begin_hz;                           \
+    idx_t num_htxyz = num_ht * num_hx * num_hy * num_hz;        \
+    Layout_1234 buf_layout(num_ht, num_hx, num_hy, num_hz)
+    
+    double RealVecGridBase::get_element(const GridIndices& indices) const {
+        if (!get_storage()) {
+            cerr << "Error: call to 'get_element' with no data allocated for grid '" <<
+                get_name() << "'.\n";
+            exit_yask(1);
+        }
+        checkIndices(indices, "get_element", true);
+        SET_HALO_LOOP_VARS(indices, indices);
+        real_t val = readElem_TXYZ(begin_ht, begin_hx, begin_hy, begin_hz, __LINE__);
+        return double(val);
+    }
+    idx_t RealVecGridBase::set_element(double val,
+                                       const GridIndices& indices,
+                                       bool strict_indices) {
+        idx_t nup = 0;
+        if (get_storage() &&
+            checkIndices(indices, "set_element", strict_indices)) {
+            SET_HALO_LOOP_VARS(indices, indices);
+            writeElem_TXYZ(real_t(val),
+                           begin_ht, begin_hx, begin_hy, begin_hz, __LINE__);
+            nup++;
+            set_updated(false);
+        }
+        return nup;
+    }
+    
+    idx_t RealVecGridBase::get_elements_in_slice(void* buffer_ptr,
+                                                 const GridIndices& first_indices,
+                                                 const GridIndices& last_indices) const {
+        if (!get_storage()) {
+            cerr << "Error: call to 'get_elements_in_slice' with no data allocated for grid '" <<
+                get_name() << "'.\n";
+            exit_yask(1);
+        }
+        checkIndices(first_indices, "get_elements_in_slice", true);
+        checkIndices(last_indices, "get_elements_in_slice", true);
+
+        SET_HALO_LOOP_VARS(first_indices, last_indices);
+
+        // Define calc func inside OMP loop.
+        // 'index_h*' vars are 0-based indices for each dim.
+        // Ignoring 'stop_h*' vars because all 'step_h*' vars are 1.
+#define calc_halo(ht,                                                   \
+                  start_hx, start_hy, start_hz,                         \
+                  stop_hx, stop_hy, stop_hz)  do {                      \
+            real_t v = readElem_TXYZ(ht, start_hx, start_hy, start_hz, __LINE__); \
+            idx_t bi = buf_layout.layout(index_ht, index_hx, index_hy, index_hz); \
+            ((real_t*)buffer_ptr)[bi] = v;                            \
+        } while(0)
+
+        // Outer time loop.
+        for (idx_t ht = begin_ht; ht < end_ht; ht++) {
+            idx_t index_ht = ht - begin_ht;
+        
+            // Include auto-generated loops to invoke calc_halo() from
+            // begin_h* to end_h* by step_h*.
+#include "yask_halo_loops.hpp"
+#undef calc_halo
+        }
+        return num_htxyz;
+    }
+    idx_t RealVecGridBase::set_elements_in_slice_same(double val,
+                                                      const GridIndices& first_indices,
+                                                      const GridIndices& last_indices,
+                                                      bool strict_indices) {
+        if (!get_storage())
+            return 0;
+        
+        // 'Fixed' copy of indices.
+        GridIndices first, last;
+        checkIndices(first_indices, "set_elements_in_slice_same", strict_indices, &first);
+        checkIndices(last_indices, "set_elements_in_slice_same", strict_indices, &last);
+
+        SET_HALO_LOOP_VARS(first, last);
+        real_t v = real_t(val);
+        
+        // Define calc func inside OMP loop.
+        // 'index_h*' vars are 0-based indices for each dim.
+        // Ignoring 'stop_h*' vars because all 'step_h*' vars are 1.
+#define calc_halo(ht,                                                   \
+                  start_hx, start_hy, start_hz,                         \
+                  stop_hx, stop_hy, stop_hz)  do {                      \
+            writeElem_TXYZ(v, ht, start_hx, start_hy, start_hz, __LINE__); \
+        } while(0)
+
+        // Outer time loop.
+        for (idx_t ht = begin_ht; ht < end_ht; ht++) {
+            idx_t index_ht = ht - begin_ht;
+        
+            // Include auto-generated loops to invoke calc_halo() from
+            // begin_h* to end_h* by step_h*.
+#include "yask_halo_loops.hpp"
+#undef calc_halo
+        }
+        return num_htxyz;
+    }
+    idx_t RealVecGridBase::set_elements_in_slice(const void* buffer_ptr,
+                                                 const GridIndices& first_indices,
+                                                 const GridIndices& last_indices) {
+        if (!get_storage())
+            return 0;
+        
+        checkIndices(first_indices, "get_elements_in_slice", true);
+        checkIndices(last_indices, "get_elements_in_slice", true);
+
+        SET_HALO_LOOP_VARS(first_indices, last_indices);
+
+        // Define calc func inside OMP loop.
+        // 'index_h*' vars are 0-based indices for each dim.
+        // Ignoring 'stop_h*' vars because all 'step_h*' vars are 1.
+#define calc_halo(ht,                                                   \
+                  start_hx, start_hy, start_hz,                         \
+                  stop_hx, stop_hy, stop_hz)  do {                      \
+            idx_t bi = buf_layout.layout(index_ht, index_hx, index_hy, index_hz); \
+            real_t v = ((real_t*)buffer_ptr)[bi];                       \
+            writeElem_TXYZ(v, ht, start_hx, start_hy, start_hz, __LINE__); \
+        } while(0)
+
+        // Outer time loop.
+        for (idx_t ht = begin_ht; ht < end_ht; ht++) {
+            idx_t index_ht = ht - begin_ht;
+        
+            // Include auto-generated loops to invoke calc_halo() from
+            // begin_h* to end_h* by step_h*.
+#include "yask_halo_loops.hpp"
+#undef calc_halo
+        }
+        return num_htxyz;
+    }
+    
     // Checked resize: fails if mem different and already alloc'd.
     void RealVecGridBase::resize() {
 
@@ -172,27 +349,41 @@ namespace yask {
     }
     
     // Make sure indices are in range.
-    void RealVecGridBase::checkIndices(const GridIndices& indices,
-                                       const string& fn) const {
+    bool RealVecGridBase::checkIndices(const GridIndices& indices,
+                                       const string& fn,
+                                       bool strict_indices,
+                                       GridIndices* fixed_indices) const {
         if (indices.size() != size_t(get_num_dims())) {
             cerr << "Error: '" << fn << "' called with " << indices.size() <<
                 " indices instead of " << get_num_dims() << ".\n";
             exit_yask(1);
         }
+        if (fixed_indices)
+            fixed_indices->clear();
+        bool ok = true;
         for (int i = 0; i < get_num_dims(); i++) {
             idx_t idx = indices[i];
+            if (fixed_indices)
+                fixed_indices->push_back(idx);
             auto dname = get_dim_name(i);
             if (dname == "t") continue; // any time index is ok.
-            auto psize = get_pad_size(dname);
-            auto first_ok = get_first_rank_domain_index(dname) - psize;
-            auto last_ok = get_last_rank_domain_index(dname) + psize;
+            auto first_ok = get_first_rank_alloc_index(dname);
+            auto last_ok = get_last_rank_alloc_index(dname);
             if (idx < first_ok || idx > last_ok) {
-                cerr << "Error: '" << fn << "' index in dim '" << dname <<
-                    "' is " << idx << ", which is not in [" << first_ok <<
-                    "..." << last_ok << "].\n";
-                exit_yask(1);
+                if (strict_indices) {
+                    cerr << "Error: '" << fn << "' index in dim '" << dname <<
+                        "' is " << idx << ", which is not in [" << first_ok <<
+                        "..." << last_ok << "].\n";
+                    exit_yask(1);
+                }
+                if (fixed_indices && idx < first_ok)
+                    fixed_indices->at(i) = first_ok;
+                if (fixed_indices && idx > last_ok)
+                    fixed_indices->at(i) = last_ok;
+                ok = false;
             }
         }
+        return ok;
     }
         
     // Initialize memory to incrementing values based on val.
@@ -312,5 +503,4 @@ namespace yask {
             }
         }
     }
-
 }

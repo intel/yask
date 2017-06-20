@@ -31,21 +31,6 @@ import sys
 sys.path.append('lib')
 import yask_kernel
 
-# Clamp a value x between minimum and maximum.
-def clamp(x, minimum, maximum) :
-    return max(minimum, min(x, maximum))
-
-# Determine whether index 'i' is within rank domain in dim 'dname'.
-def is_in_domain(i, dname) :
-    return (i >= soln.get_first_rank_domain_index(dname)) and \
-        (i <= soln.get_last_rank_domain_index(dname))
-
-# Clamp index 'i' within rank domain in dim 'dname'.
-def clamp_to_domain(i, dname) :
-    return clamp(i,
-                 soln.get_first_rank_domain_index(dname),
-                 soln.get_last_rank_domain_index(dname))
-
 # Read data from grid using NumPy ndarray.
 def read_grid(grid, timestep) :
     print("Reading grid '" + grid.get_name() + "' at time " + repr(timestep) + "...")
@@ -131,7 +116,8 @@ def init_grid(grid, timestep) :
     print(ndarray)
 
     print("Writing " + repr(nelems) + " element(s)...")
-    nwrit = grid.set_elements_in_slice(ndarray.data, first_indices, last_indices)
+    nset = grid.set_elements_in_slice(ndarray.data, first_indices, last_indices)
+    print("Set " + repr(nset) + " element(s) in rank " + repr(env.get_rank_index()))
 
 # Main script.
 if __name__ == "__main__":
@@ -196,26 +182,30 @@ if __name__ == "__main__":
         grid.set_all_elements_same(-9.0)
 
         # Init timestep 0 using NumPy.
+        # This will set one point in each rank.
         init_grid(grid, 0)
         read_grid(grid, 0)
 
-        # Simple index example.
+        # Simple one-index example.
+        # Note that index relative to overall problem domain,
+        # so it will only appear in one rank.
         one_index = 100
         one_indices = []
-        one_in_rank = True
 
         # Create indices to bound a subset of domain:
         # Index 0 in time, and a small cube in center
         # of overall problem.
+        # Note that indices are relative to overall problem domain,
+        # so the cube may be in one rank or it may be spread over
+        # more than one.
         cube_radius = 20
         first_indices = []
         last_indices = []
-        cube_in_rank = True
             
         for dname in grid.get_dim_names() :
             if dname == soln.get_step_dim_name() :
 
-                # Initial timestep only.
+                # Add index for initial timestep only.
                 first_indices += [0]
                 last_indices += [0]
                 one_indices += [0]
@@ -223,28 +213,22 @@ if __name__ == "__main__":
             else :
 
                 # Simple index for one point.
-                if is_in_domain(one_index, dname) :
-                    one_indices += [one_index]
-                else :
-                    one_in_rank = False
+                one_indices += [one_index]
                     
                 # Midpoint of overall problem in this dim.
                 midpt = soln.get_overall_domain_size(dname) // 2;
 
-                # Create indices a small amount before and after the midpoint,
-                # and clamp them to allowed indices in this rank.
-                if is_in_domain(midpt - cube_radius, dname) or \
-                   is_in_domain(midpt + cube_radius, dname) :
-                    first_indices += [clamp_to_domain(midpt - cube_radius, dname)]
-                    last_indices += [clamp_to_domain(midpt + cube_radius, dname)]
+                # Create indices a small amount before and after the midpoint.
+                first_indices += [midpt - cube_radius]
+                last_indices += [midpt + cube_radius]
 
         # Init value at one point.
-        if one_in_rank :
-            grid.set_element(15.0, one_indices)
+        nset = grid.set_element(15.0, one_indices)
+        print("Set " + repr(nset) + " element(s) in rank " + repr(env.get_rank_index()))
 
         # Init the values within the small cube.
         nset = grid.set_elements_in_slice_same(0.5, first_indices, last_indices)
-        print("Set " + repr(nset + 1) + " element(s).")
+        print("Set " + repr(nset) + " element(s) in rank " + repr(env.get_rank_index()))
 
         # Print the initial contents of the grid at timesteps 0 and 1.
         read_grid(grid, 0)

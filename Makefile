@@ -491,7 +491,7 @@ HALO_LOOP_OPTS		=     	-dims 'hx,hy,hz' \
 HALO_LOOP_OUTER_MODS	?=	omp
 HALO_LOOP_OUTER_VARS	?=	hx,hy,hz
 HALO_LOOP_CODE		?=	$(HALO_LOOP_OUTER_MODS) loop($(HALO_LOOP_OUTER_VARS)) \
-				$(HALO_LOOP_INNER_MODS) { calc(halo(t)); }
+				$(HALO_LOOP_INNER_MODS) { calc(halo(ht)); }
 
 ######## Primary targets & rules
 # NB: must set stencil and arch to generate the YASK kernel.

@@ -170,7 +170,7 @@ namespace yask {
     };
     typedef std::shared_ptr<KernelSettings> KernelSettingsPtr;
     
-    // A 4D bounding-box.
+    // A 3D bounding-box.
     struct BoundingBox {
 
         // Boundaries around all points.
@@ -509,6 +509,9 @@ namespace yask {
                 grids.push_back(get_grid(i));
             return grids;
         }
+        virtual yk_grid_ptr
+        new_grid(const std::string& name,
+                 const std::vector<std::string>& dims);
         virtual yk_grid_ptr
         new_grid(const std::string& name,
                  const std::string& dim1 = "",

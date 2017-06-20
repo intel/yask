@@ -120,6 +120,33 @@ namespace yask {
     }
 
     yk_grid_ptr StencilContext::new_grid(const std::string& name,
+                                         const std::vector<std::string>& dims) {
+        RealVecGridPtr gp;
+        
+        // TODO: get rid of hard-coded dims.
+        // For now, only works with very limited combo of dims.
+        if (dims.size() == 3 &&
+            dims[0] == "x" && dims[1] == "y" && dims[2] == "z") {
+            gp = make_shared<Grid_XYZ>(name);
+            addGrid(gp, false);
+        }
+        else if (dims.size() == 4 &&
+                 dims[0] == "t" && dims[1] == "x" &&
+                 dims[2] == "y" && dims[3] == "z") {
+            gp = make_shared<Grid_TXYZ>(name);
+            addGrid(gp, false);
+        }
+        else {
+            cerr << "Error: dims on new_grid(\"" << name <<
+                "\", ...) are not currently supported.\n";
+            exit_yask(1);
+        }
+
+        // Set default sizes from settings and get offset, if set.
+        set_grids();
+        return gp;
+    }
+    yk_grid_ptr StencilContext::new_grid(const std::string& name,
                                          const std::string& dim1,
                                          const std::string& dim2,
                                          const std::string& dim3,
@@ -130,11 +157,14 @@ namespace yask {
         
         // TODO: get rid of hard-coded dims.
         // For now, only works with very limited combo of dims.
-        if (dim1 == "x" && dim2 == "y" && dim3 == "z") {
+        if (dim1 == "x" && dim2 == "y" &&
+            dim3 == "z" && dim4 == "") {
             gp = make_shared<Grid_XYZ>(name);
             addGrid(gp, false);
         }
-        else if (dim1 == "t" && dim2 == "x" && dim3 == "y" && dim4 == "z") {
+        else if (dim1 == "t" && dim2 == "x" &&
+                 dim3 == "y" && dim4 == "z" &&
+                 dim5 == "") {
             gp = make_shared<Grid_TXYZ>(name);
             addGrid(gp, false);
         }
@@ -1547,11 +1577,11 @@ namespace yask {
                              // Assume only one time-step to exchange.
                              // TODO: fix this when MPI + wave-front is enabled.
                              assert(stop_dt = start_dt + 1);
-                             idx_t t = start_dt;
+                             idx_t ht = start_dt;
 
                              // Force dummy time value for grids w/o time dim.
                              if (!gp->got_t())
-                                 t = 0;
+                                 ht = 0;
 
                              // Wait for data.
                              if (hi == halo_unpack) {
@@ -1565,7 +1595,7 @@ namespace yask {
                              // Add a short loop in z-dim to increase work done in halo loop.
                              // Use 'index_*' vars to access buffers because they are always 0-based.
                              // TODO: redo w/cleaner code, e.g., a lambda function.
-#define calc_halo(t,                                                    \
+#define calc_halo(ht,                                                   \
                   start_hx, start_hy, start_hz,                         \
                   stop_hx, stop_hy, stop_hz)  do {                      \
                                  idx_t hx = start_hx;                   \
@@ -1575,7 +1605,7 @@ namespace yask {
                                      if (hi == halo_isend) {            \
                                          for (idx_t hz = start_hz; hz < stop_hz; hz++) { \
                                              real_vec_t hval =          \
-                                                 gp->readVecNorm_TXYZ(t, hx, hy, hz, \
+                                                 gp->readVecNorm_TXYZ(ht, hx, hy, hz, \
                                                                       __LINE__); \
                                              sendBuf->writeVecNorm(hval, index_hx, index_hy, iz++, \
                                                                    __LINE__); \
@@ -1585,7 +1615,7 @@ namespace yask {
                                              real_vec_t hval =          \
                                                  rcvBuf->readVecNorm(index_hx, index_hy, iz++, \
                                                                      __LINE__); \
-                                             gp->writeVecNorm_TXYZ(hval, t, hx, hy, hz, \
+                                             gp->writeVecNorm_TXYZ(hval, ht, hx, hy, hz, \
                                                                    __LINE__); \
                                          }                              \
                                      }                                  \
@@ -1593,7 +1623,7 @@ namespace yask {
                                      if (hi == halo_isend) {            \
                                          for (idx_t hz = start_hz; hz < stop_hz; hz++) { \
                                              real_t hval =              \
-                                                 gp->readElem_TXYZ(t, hx, hy, hz, \
+                                                 gp->readElem_TXYZ(ht, hx, hy, hz, \
                                                                    __LINE__); \
                                              sendBuf->writeElem(hval, index_hx, index_hy, iz++, \
                                                                 __LINE__); \
@@ -1603,7 +1633,7 @@ namespace yask {
                                              real_t hval =              \
                                                  rcvBuf->readElem(index_hx, index_hy, iz++, \
                                                                   __LINE__); \
-                                             gp->writeElem_TXYZ(hval, t, hx, hy, hz, \
+                                             gp->writeElem_TXYZ(hval, ht, hx, hy, hz, \
                                                                 __LINE__); \
                                          }                              \
                                      }                                  \

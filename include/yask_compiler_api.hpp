@@ -111,6 +111,8 @@ namespace yask {
            "Grid" is a generic term for any n-dimensional array.  A 0-dim
            grid is a scalar, a 1-dim grid is a vector, a 2-dim grid is a
            matrix, etc.
+           @warning Only grids supported at this time are those with
+           dimensions 'x, y, z,' and 't, x, y, z'.
            @returns Pointer to the new grid. 
         */
         virtual yc_grid_ptr
@@ -130,6 +132,8 @@ namespace yask {
            via this interface, starting with 'dim1'. Example:
            new_grid("heat", "t", "x", "y") will create a 3D grid with one
            temporal dimension and two spatial dimensions.
+           @warning Only grids supported at this time are those with
+           dimensions 'x, y, z,' and 't, x, y, z'.
            @returns Pointer to the new grid. 
         */
         virtual yc_grid_ptr
@@ -170,7 +174,10 @@ namespace yask {
                               and get_num_equations()-1. */ ) =0;
 
         /// Set the solution step dimension name.
-        /** Default is "t" for time. */
+        /**
+           Default is "t" for time. 
+           @warning Only step dimension supported at this time is 't'.
+        */
         virtual void
         set_step_dim_name(const std::string& dim
                           /**< [in] Step dimension, e.g., "t". */ ) =0;
@@ -188,18 +195,24 @@ namespace yask {
         get_domain_dim_names() const =0;
         
         /// Set the domain dimensions.
-        /** Name all the dimensions that describe the domain of the 
-            problem *except* the step dimension, which is specified via
-            set_step_dim_name().
+        /**
+           Name all the dimensions that describe the domain of the 
+           problem *except* the step dimension, which is specified via
+           set_step_dim_name().
+           @warning Only domain supported at this time is with
+           dimensions 'x, y, z,'.
          */
         virtual void
         set_domain_dim_names(const std::vector<std::string>& dims
                              /**< [in] List of names of dimensions. */) =0;
         
         /// Set the domain dimensions.
-        /** Name all the dimensions that describe the domain of the 
-            problem *except* the step dimension, which is specified via
-            set_step_dim_name().
+        /**
+           Name all the dimensions that describe the domain of the 
+           problem *except* the step dimension, which is specified via
+           set_step_dim_name().
+           @warning Only domain supported at this time is with
+           dimensions 'x, y, z,'.
          */
         virtual void
         set_domain_dim_names(const std::string& dim1 /**< [in] Name of 1st dimension. All
