@@ -26,6 +26,7 @@
 ## Test the YASK stencil kernel API for Python.
 
 import numpy as np
+import ctypes as ct
 
 import sys
 sys.path.append('lib')
@@ -69,6 +70,16 @@ def read_grid(grid, timestep) :
     print("Reading " + repr(nelems) + " element(s)...")
     nread = grid.get_elements_in_slice(ndarray.data, first_indices, last_indices)
     print(ndarray)
+
+    # Raw access to this grid.
+    if soln.get_element_bytes() == 4 :
+        ptype = ct.POINTER(ct.c_float)
+    else :
+        ptype = ct.POINTER(ct.c_double)
+    raw_ptr = grid.get_raw_storage_buffer()
+    fp_ptr = ct.cast(int(raw_ptr), ptype)
+    fp_last = (grid.get_num_storage_bytes() // soln.get_element_bytes()) - 1
+    print("Raw data: " + repr(fp_ptr[0]) + ", ..., " + repr(fp_ptr[fp_last]))
 
 # Init grid using NumPy ndarray.
 def init_grid(grid, timestep) :

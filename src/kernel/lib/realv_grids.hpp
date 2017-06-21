@@ -375,16 +375,6 @@ namespace yask {
         virtual void set_all_elements_same(double val) {
             set_same(real_t(val));
         }
-        virtual void alloc_storage() {
-            _gp->default_alloc();
-        }
-        virtual void release_storage() {
-            _gp->release_storage();
-        }            
-        virtual void share_storage(yk_grid_ptr source);
-        virtual bool is_storage_allocated() const {
-            return get_storage() != 0;
-        }
         virtual double get_element(idx_t dim1_index, idx_t dim2_index,
                                    idx_t dim3_index, idx_t dim4_index,
                                    idx_t dim5_index, idx_t dim6_index) const;
@@ -406,6 +396,23 @@ namespace yask {
         virtual idx_t set_elements_in_slice(const void* buffer_ptr,
                                             const GridIndices& first_indices,
                                             const GridIndices& last_indices);
+        virtual void alloc_storage() {
+            _gp->default_alloc();
+        }
+        virtual void release_storage() {
+            _gp->release_storage();
+        }            
+        virtual void share_storage(yk_grid_ptr source);
+        virtual bool is_storage_allocated() const {
+            return get_storage() != 0;
+        }
+        virtual idx_t get_num_storage_bytes() const {
+            return idx_t(get_num_bytes());
+        }
+        virtual bool is_storage_layout_identical(const yk_grid_ptr other) const;
+        virtual void* get_raw_storage_buffer() {
+            return (void*)get_storage();
+        }
     };
     
     // A 3D (x, y, z) collection of real_vec_t elements.

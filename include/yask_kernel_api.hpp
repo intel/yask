@@ -974,6 +974,33 @@ namespace yask {
         */
         virtual bool
         is_storage_allocated() const =0;
+
+        /// Determine size of raw storage.
+        /**
+           @returns Minimum number of bytes required for
+           storage given the current domain size and padding settings.
+        */
+        virtual idx_t
+        get_num_storage_bytes() const =0;
+
+        /// **[Advanced]** Determines whether storage layout is the same as another grid.
+        /**
+           In order for the storage layout to be identical, the following
+           must be the same:
+           - Number of dimensions.
+           - Name of each dimension, in the same order.
+           - Allocation size in each dimension.
+           - Rank domain size in each dimension.
+           - Padding size in each dimension.
+
+           The following do not have to be identical:
+           - Halo size.
+
+           @returns 'true' if storage for this grid has the same layout as
+           'other' or 'false' otherwise.
+        */
+        virtual bool
+        is_storage_layout_identical(const yk_grid_ptr other) const =0;
         
         /// **[Advanced]** Use existing data-storage from specified grid.
         /**
@@ -1004,6 +1031,45 @@ namespace yask {
         virtual void
         share_storage(yk_grid_ptr source
                       /**< [in] Grid from which storage will be shared. */) =0;
+
+        /// **[Advanced]** Get pointer to raw data storage buffer.
+        /**
+           The following assumptions about the contents of data are safe:
+           - Each FP element starts at a number of bytes from the beginning
+           of the buffer which is a multiple of yk_solution::get_element_bytes().
+           - All the FP elements will be located within get_num_storage_bytes()
+           bytes from the beginning of the buffer.
+           - A call to set_all_elements_same() will initialize all elements
+           within get_num_storage_bytes() bytes from the beginning of the buffer.
+           - If is_storage_layout_identical() returns 'true' between this
+           and some other grid, any given element index applied to both grids
+           will refer to an element at the same offset into their respective
+           data buffers. 
+
+           Thus,
+           - You can perform element-wise unary mathematical operations on
+           all elements of a grid via its raw buffer, e.g., add some constant
+           value to all elements.
+           - If the layouts of two grids are identical, you can use their
+           raw buffers to copy or compare the grid contents for equality or
+           perform element-wise binary mathematical operations on them,
+           e.g., add all elements from one grid to another.
+
+           The following assumptions are not safe: 
+           - Any expectations regarding the relationship between an element
+           index and that element's offset from the beginning of the buffer
+           such as row-major or column-major layout.
+           - All elements in the buffer are part of the rank domain or halo.
+
+           Thus,
+           - You should not perform any operations dependent on
+           the logical indices of any element via raw buffer, e.g., matrix
+           multiply.
+
+           @returns Pointer to raw data storage if is_storage_allocated()
+           returns 'true' or NULL otherwise.
+        */
+        virtual void* get_raw_storage_buffer() =0;
     };
 
 

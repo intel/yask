@@ -79,6 +79,30 @@ namespace yask {
             exit_yask(1);
         }
     }
+    bool RealVecGridBase::is_storage_layout_identical(const yk_grid_ptr other) const {
+        auto op = dynamic_pointer_cast<RealVecGridBase>(other);
+        assert(op);
+
+        // Same size?
+        if (get_num_bytes() != op->get_num_bytes())
+            return false;
+
+        // Same dims?
+        if (get_num_dims() != op->get_num_dims())
+            return false;
+        for (int i = 0; i < get_num_dims(); i++) {
+            auto dname = get_dim_name(i);
+            if (dname != op->get_dim_name(i))
+                return false;
+            if (get_alloc_size(dname) != op->get_alloc_size(dname))
+                return false;
+            if (get_rank_domain_size(dname) != op->get_rank_domain_size(dname))
+                return false;
+            if (get_pad_size(dname) != op->get_pad_size(dname))
+                return false;
+        }
+        return true;
+    }
     void RealVecGridBase::share_storage(yk_grid_ptr source) {
         auto sp = dynamic_pointer_cast<RealVecGridBase>(source);
         assert(sp);

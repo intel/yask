@@ -82,28 +82,31 @@ int main() {
         for (auto dname : grid->get_dim_names()) {
             if (dname == soln->get_step_dim_name()) {
 
-                // initial timestep.
+                // Add index for initial timestep.
                 first_indices.push_back(0); 
                 last_indices.push_back(0);
+
             } else {
 
                 // small cube in center of overall problem.
                 idx_t psize = soln->get_overall_domain_size(dname);
-                idx_t first_idx = min(soln->get_last_rank_domain_index(dname),
-                                      max(soln->get_first_rank_domain_index(dname),
-                                          psize/2 - 10));
-                idx_t last_idx = min(soln->get_last_rank_domain_index(dname),
-                                      max(soln->get_first_rank_domain_index(dname),
-                                          psize/2 + 10));
+                idx_t first_idx = psize/2 - 10;
+                idx_t last_idx = psize/2 + 10;
                 first_indices.push_back(first_idx);
                 last_indices.push_back(last_idx);
             }
         }
         
         // Init the values in a 'hat' function.
-        grid->set_all_elements_same(0.0);
-        idx_t nset = grid->set_elements_in_slice_same(1.0, first_indices, last_indices);
+        grid->set_all_elements_same(0.1);
+        idx_t nset = grid->set_elements_in_slice_same(0.9, first_indices, last_indices);
         cout << "      " << nset << " element(s) set to 1.0.\n";
+
+        // Raw access to this grid.
+        auto raw_p = grid->get_raw_storage_buffer();
+        cout << "      " << grid->get_num_storage_bytes() <<
+            " bytes of raw data at " << raw_p << ": " <<
+            *((float*)raw_p) << ", ...\n";
     }
 
     // Apply the stencil solution to the data.
