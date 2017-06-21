@@ -409,6 +409,9 @@ namespace yask {
         virtual idx_t get_num_storage_bytes() const {
             return idx_t(get_num_bytes());
         }
+        virtual idx_t get_num_storage_elements() const {
+            return get_num_elems();
+        }
         virtual bool is_storage_layout_identical(const yk_grid_ptr other) const;
         virtual void* get_raw_storage_buffer() {
             return (void*)get_storage();

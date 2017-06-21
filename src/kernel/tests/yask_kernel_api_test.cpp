@@ -104,9 +104,13 @@ int main() {
 
         // Raw access to this grid.
         auto raw_p = grid->get_raw_storage_buffer();
+        auto num_elems = grid->get_num_storage_elements();
         cout << "      " << grid->get_num_storage_bytes() <<
-            " bytes of raw data at " << raw_p << ": " <<
-            *((float*)raw_p) << ", ...\n";
+            " bytes of raw data at " << raw_p << ": ";
+        if (soln->get_element_bytes() == 4)
+            cout << ((float*)raw_p)[0] << ", ..., " << ((float*)raw_p)[num_elems-1] << "\n";
+        else
+            cout << ((double*)raw_p)[0] << ", ..., " << ((double*)raw_p)[num_elems-1] << "\n";
     }
 
     // Apply the stencil solution to the data.

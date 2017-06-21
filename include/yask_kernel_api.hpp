@@ -975,13 +975,20 @@ namespace yask {
         virtual bool
         is_storage_allocated() const =0;
 
-        /// Determine size of raw storage.
+        /// Determine size of raw storage in bytes.
         /**
            @returns Minimum number of bytes required for
            storage given the current domain size and padding settings.
         */
         virtual idx_t
         get_num_storage_bytes() const =0;
+
+        /// Determine size of raw storage in elements.
+        /**
+           @returns get_num_storage_bytes() / yk_solution.get_element_bytes().
+        */
+        virtual idx_t
+        get_num_storage_elements() const =0;
 
         /// **[Advanced]** Determines whether storage layout is the same as another grid.
         /**

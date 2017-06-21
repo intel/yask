@@ -65,11 +65,11 @@ def read_grid(grid, timestep) :
             nelems *= last_idx - first_idx + 1
 
     # Create a NumPy ndarray to hold the extracted data.
-    ndarray = np.empty(shape, dtype, 'C');
+    ndarray1 = np.empty(shape, dtype, 'C');
 
     print("Reading " + repr(nelems) + " element(s)...")
-    nread = grid.get_elements_in_slice(ndarray.data, first_indices, last_indices)
-    print(ndarray)
+    nread = grid.get_elements_in_slice(ndarray1.data, first_indices, last_indices)
+    print(ndarray1)
 
     # Raw access to this grid.
     if soln.get_element_bytes() == 4 :
@@ -78,8 +78,9 @@ def read_grid(grid, timestep) :
         ptype = ct.POINTER(ct.c_double)
     raw_ptr = grid.get_raw_storage_buffer()
     fp_ptr = ct.cast(int(raw_ptr), ptype)
-    fp_last = (grid.get_num_storage_bytes() // soln.get_element_bytes()) - 1
-    print("Raw data: " + repr(fp_ptr[0]) + ", ..., " + repr(fp_ptr[fp_last]))
+    num_elems = grid.get_num_storage_elements()
+    print("Raw data: " + repr(fp_ptr[0]) + ", ..., " + repr(fp_ptr[num_elems-1]))
+    #ndarray2 = np.fromiter(fp_ptr, dtype, num_elems); print(ndarray2)
 
 # Init grid using NumPy ndarray.
 def init_grid(grid, timestep) :
