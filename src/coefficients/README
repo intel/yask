@@ -1,0 +1,25 @@
+Use the code here to generate finite difference coefficients to approximate the m^th derivative of a function at an arbitrary point x_0 from an arbitrary set of points (usually x_0, x_0 + h, x_0 -h, ...)
+
+The source code is located in fd_coeff.cpp
+
+fd_coeff_test.cpp shows an example of constructing these coefficients
+
+Increase the accuracy of the approximation by increasing radius. Or otherwise declare grid_points = {...} to change the points used to construct the approximation. Change order to approximate different derivatives. 
+
+
+
+
+
+
+For the function fd_coeff
+/*input:coeff=empty coefficient array (or one that can be overwritten)
+	eval_point=point at which the derivative is approximated
+	order=order of the derivative to approximate (e.g. f'' corresponds to order = 2)
+	points=array of points from which to construct the approximation of the derivative. usually an equi-spaced array with points [-radius*h, -(radius-1)*h,...0, ... radius*h] 
+	num_points=number of elements in points[], e.g. the number of points used to approximate the derivative. 
+	Note: if num_points < order+1, then the coefficients will all be 0
+
+  
+  output:void, fills the coefficient array such that 
+f^(m)[eval_point] ~~ sum of coeff[i]*f[point[i]] from i = 0 to num_points-1
+*/
