@@ -1,3 +1,6 @@
+# Finite-differences coefficients code.
+# Contributed by Jeremy Tillay.
+
 Use the code here to generate finite difference coefficients to approximate the m^th derivative of a function at an arbitrary point x_0 from an arbitrary set of points (usually x_0, x_0 + h, x_0 -h, ...)
 
 The source code is located in fd_coeff.cpp
@@ -5,10 +8,6 @@ The source code is located in fd_coeff.cpp
 fd_coeff_test.cpp shows an example of constructing these coefficients
 
 Increase the accuracy of the approximation by increasing radius. Or otherwise declare grid_points = {...} to change the points used to construct the approximation. Change order to approximate different derivatives. 
-
-
-
-
 
 
 For the function fd_coeff
