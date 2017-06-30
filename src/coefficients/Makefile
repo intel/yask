@@ -23,7 +23,7 @@
 # Finite-differences coefficients code.
 # Contributed by Jeremy Tillay.
 
-SOURCES := fd_coeff_test.cpp fd_coeff.cpp
+SOURCES := fd_coeff_test.cpp fd_coeff.cpp 
 CXX := g++
 CFLAGS := -std=c++11
 INCLUDES := -I.

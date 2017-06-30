@@ -52,11 +52,14 @@ int main()
     float coeff[num_points];
     float grid_points[num_points];
 
+    //cout << "Approximating derivative from grid points: " ;
     for(int i=0; i<num_points; i++){
         grid_points[i] = (i-(num_points-1)/2)*h;
-        cout << grid_points[i]<<endl;
+        cout << grid_points[i]<< " ";
     }
 
+    //cout << endl;
+    
     fd_coeff(coeff, eval_point, order, grid_points, num_points);
 
     string suffix = (order == 1) ? "st" : (order == 2) ? "nd" : (order == 3) ? "rd" : "th";
@@ -71,5 +74,10 @@ int main()
     }
     cout << endl;
 
+    cout << "So coefficients are: ";
+    for(int i=0; i<num_points; i++) {
+        cout << coeff[i] << ", ";
+    }
+    cout << endl;
     return 0;
 }
