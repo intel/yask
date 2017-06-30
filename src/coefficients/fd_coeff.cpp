@@ -75,7 +75,6 @@ void fd_coeff(float *coeff, float eval_point, int order, float points[], int num
         c1=c2;
     }
 
-    cout << "DONE COMPUTING COEFFICIENTS"<< endl;
 
     for(int i=0; i<num_points; i++){
         coeff[i] = d[order][num_points-1][i];

@@ -52,7 +52,7 @@ int main()
     float coeff[num_points];
     float grid_points[num_points];
 
-    //cout << "Approximating derivative from grid points: " ;
+    cout << "Approximating derivative from grid points: " ;
     for(int i=0; i<num_points; i++){
         grid_points[i] = (i-(num_points-1)/2)*h;
         cout << grid_points[i]<< " ";
