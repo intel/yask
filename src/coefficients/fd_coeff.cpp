@@ -45,7 +45,7 @@ using namespace std;
 f^(m)[eval_point] ~~ sum of coeff[i]*f[point[i]] from i = 0 to num_points-1
 */
 	
-void fd_coeff(float coeff[], float eval_point, int order, float points[], int num_points)
+void fd_coeff(float *coeff, float eval_point, int order, float points[], int num_points)
 {
     float c1, c2, c3;
     float x_0=eval_point;
@@ -75,7 +75,6 @@ void fd_coeff(float coeff[], float eval_point, int order, float points[], int nu
         c1=c2;
     }
 
-    cout << "DONE COMPUTING COEFFICIENTS"<< endl;
 
     for(int i=0; i<num_points; i++){
         coeff[i] = d[order][num_points-1][i];
