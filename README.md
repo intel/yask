@@ -21,7 +21,7 @@ Pre-requisites:
   https://software.intel.com/en-us/articles/intel-software-development-emulator
   (optional: for functional testing if you don't have native ISA support).
 * Intel(R) MPI Library, https://software.intel.com/en-us/intel-mpi-library,
-  or equivalent (optional: for multi-core and multi-node operation).
+  or equivalent (optional: for multi-socket and multi-node operation).
 * Perl 5.010 or later.
 * The 'indent' or 'gindent' utility (optional: to make the generated code easier for humans to read).
 * Install all these pre-requisites and ensure that all
