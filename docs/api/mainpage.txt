@@ -100,17 +100,17 @@ The following examples illustrate possible combinations of compilers and kernels
 - You can substitute `snb` for one of the other architectures listed in the `Makefile` if desired.
 - Run `make clean` before all of the example commands to ensure consistent builds.
 
-Stencil Compiler    | Stencil Application | Example Test Command
+Stencil Compiler    | Stencil Application | Test Command
 --------------------|---------------------|-------------
-YASK-provided       | YASK-provided       | `make clean; make -j stencil=iso3dfd arch=snb yk-test`
-YASK-provided       | C++ test example    | `make clean; make -j stencil=iso3dfd arch=snb cxx-yk-api-test`
-YASK-provided       | Python test example | `make clean; make -j stencil=iso3dfd arch=snb py-yk-api-test`
-C++ test example    | YASK-provided       | `make clean; make -j stencil=test arch=snb cxx-yc-api-and-yk-test`
-C++ test example    | C++ test example    | `make clean; make -j stencil=test arch=snb cxx-yc-api-and-cxx-yk-api-test`
-C++ test example    | Python test example | `make clean; make -j stencil=test arch=snb cxx-yc-api-and-py-yk-api-test`
-Python test example | YASK-provided       | `make clean; make -j stencil=test arch=snb py-yc-api-and-yk-test`
-Python test example | C++ test example    | `make clean; make -j stencil=test arch=snb py-yc-api-and-cxx-yk-api-test`
-Python test example | Python test example | `make clean; make -j stencil=test arch=snb py-yc-api-and-py-yk-api-test`
+YASK-provided       | YASK-provided       | `make -j stencil=iso3dfd arch=snb yc-and-yk-test`
+YASK-provided       | C++ test example    | `make -j stencil=iso3dfd arch=snb yc-and-cxx-yk-api-test`
+YASK-provided       | Python test example | `make -j stencil=iso3dfd arch=snb yc-and-py-yk-api-test`
+C++ test example    | YASK-provided       | `make -j stencil=test arch=snb cxx-yc-api-and-yk-test`
+C++ test example    | C++ test example    | `make -j stencil=test arch=snb cxx-yc-api-and-cxx-yk-api-test`
+C++ test example    | Python test example | `make -j stencil=test arch=snb cxx-yc-api-and-py-yk-api-test`
+Python test example | YASK-provided       | `make -j stencil=test arch=snb py-yc-api-and-yk-test`
+Python test example | C++ test example    | `make -j stencil=test arch=snb py-yc-api-and-cxx-yk-api-test`
+Python test example | Python test example | `make -j stencil=test arch=snb py-yc-api-and-py-yk-api-test`
 
 @section yc YASK Stencil Compiler API
 
