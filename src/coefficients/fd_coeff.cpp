@@ -45,40 +45,63 @@ using namespace std;
 f^(m)[eval_point] ~~ sum of coeff[i]*f[point[i]] from i = 0 to num_points-1
 */
 	
-void fd_coeff(float *coeff, float eval_point, int order, float points[], int num_points)
+void fd_coeff(float *coeff, const float eval_point, const int order, float *points, const int num_points)
 {
     float c1, c2, c3;
     float x_0=eval_point;
     float center=0;
 
-    //need a vector which stores fd_coefficients
-    //coefficients are in d[end][end][i]
-    float d[order+1][num_points][num_points];
-    memset(d, 0, sizeof(d));
-    d[0][0][0]=1;
+    
+
+
+//  float* d = (float*) malloc((order+1)*num_points*num_points*sizeof(float));
+    float d[(order+1)*num_points*num_points];
+    int m_idx = (order+1)*num_points;
+    int n_idx = num_points;
+    
+    //array initializer 1
+    /*
+    memset(d, 0.f, sizeof(d));
+    */
+
+    //array initializer 2
+    int sizeofd = (order+1)*(num_points)*(num_points)*sizeof(float);
+    memset(d, 0.f, sizeofd);
+    
+
+    //array initializer 3
+    /*
+    for(int m=0; m <= order; ++m){
+	for(int n=0; n< num_points; ++n){
+	    for(int v=0; v<num_points;++v){
+	    d[m*m_idx+n*n_idx+v]=0.f;
+	    }}}
+    */
+    
+
+    d[0]=1.f;
     c1 = 1.f;
 
-    for(int n=1; n<=num_points-1;n++){
+    for(int n=1; n<=num_points-1;++n){
         c2=1.f;
-	for(int v=0; v<=n-1; v++){
+	for(int v=0; v<=n-1; ++v){
             c3 = points[n] - points[v];
             c2 = c2*c3;
             for(int m=0; m<=MIN(n, order); ++m){
-		d[m][n][v] = (points[n]-x_0)*d[m][n-1][v] - m*d[m-1][n-1][v];
-		d[m][n][v] *= 1.f/c3;
+		d[m*m_idx+n*n_idx + v] = (points[n]-x_0)*d[m*m_idx + (n-1)*n_idx + v] - m*d[(m-1)*m_idx + (n-1)*n_idx + v];
+		d[m*m_idx + n*n_idx + v] *= 1.f/c3;
             }
 	}
-	for(int m=0; m<= MIN(n, order); m++){
-            d[m][n][n] = m*d[m-1][n-1][n-1] - (points[n-1]-x_0)*d[m][n-1][n-1];
-            d[m][n][n] *= c1/c2;
+	for(int m=0; m<= MIN(n, order); ++m){
+            d[m*m_idx+n*n_idx+n] = m*d[(m-1)*m_idx+(n-1)*n_idx+(n-1)] - (points[n-1]-x_0)*d[m*m_idx+(n-1)*n_idx+n-1];
+            d[m*m_idx+n*n_idx+n] *= c1/c2;
 	}
         c1=c2;
     }
 
-
-    for(int i=0; i<num_points; i++){
-        coeff[i] = d[order][num_points-1][i];
-
+    for(int i=0; i<num_points; ++i){
+	coeff[i] = d[order*m_idx+(num_points-1)*n_idx + i];
     }
 
+//    free(d);
 }
