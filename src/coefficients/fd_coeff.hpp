@@ -28,5 +28,5 @@ IN THE SOFTWARE.
 
 #ifndef HEADER_COEFF
 #define HEADER_COEFF
-void fd_coeff(float coeff[], float eval_point, int order, float points[], int num_points);
+void fd_coeff(float *coeff, const float eval_point, const int order, float *points, const int num_points);
 #endif
