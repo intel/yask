@@ -25,7 +25,7 @@
 
 SOURCES := fd_coeff_test.cpp fd_coeff.cpp 
 CXX := g++
-CFLAGS := -std=c++11
+CFLAGS := -std=c++11 
 INCLUDES := -I.
 LDFLAGS :=
 EXECUTABLE := ../../bin/fd_coeff_test.exe

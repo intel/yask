@@ -44,21 +44,26 @@ int main()
     //for most application, this is 0
     float eval_point = 0;
 
-    //Construct a set of points (-h*radius, -h*(radius-1), .. 0, h,..., h*radius) 
-    //Could pass any arbitrary array grid_points = {x_0, x_1, ... x_n} 
     const int radius = 2;
     const int num_points = 2*radius+1;
-    float h = 1;
     float coeff[num_points];
-    float grid_points[num_points];
+    memset(coeff, 0.0, sizeof(coeff));
+    
+    //float* coeff = (float*) malloc(num_points*sizeof(float));
+    //memset(coeff, 0.0, num_points*sizeof(float));
 
+    //Construct a set of points (-h*radius, -h*(radius-1), .. 0, h,..., h*radius) 
+    //Could pass any arbitrary array grid_points = {x_0, x_1, ... x_n} 
+    
+    //float* grid_points = (float*) malloc(num_points*sizeof(float));
+    float grid_points[num_points];
     cout << "Approximating derivative from grid points: " ;
     for(int i=0; i<num_points; i++){
-        grid_points[i] = (i-(num_points-1)/2)*h;
-        cout << grid_points[i]<< " ";
+        grid_points[i] = (-radius + i);
+        cout << grid_points[i]<< ", ";
     }
 
-    //cout << endl;
+    cout << endl;
     
     fd_coeff(coeff, eval_point, order, grid_points, num_points);
 
@@ -67,17 +72,21 @@ int main()
         ") is approximated by this " << num_points << "-point FD formula:" << endl;
     cout << "f^(" << order << ")(" << eval_point << ") ~= ";
 
+
     for(int i=0; i<num_points; i++) {
         if (i)
             cout << " + ";
-        cout << coeff[i] << "*f[" << grid_points[i] << "]";
+            cout << coeff[i] << "*f[" << grid_points[i] << "]";
     }
     cout << endl;
 
-    cout << "So coefficients are: ";
+    cout << "Therefore, the coefficients are: ";
     for(int i=0; i<num_points; i++) {
-        cout << coeff[i] << ", ";
+    	cout << coeff[i] << ", ";
     }
     cout << endl;
-    return 0;
+
+//free(grid_points);
+//free(coeff);   
+return 0;
 }
