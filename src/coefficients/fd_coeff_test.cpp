@@ -86,7 +86,7 @@ int main()
     }
     cout << endl;
 
-free(grid_points);
-free(coeff);   
+//free(grid_points);
+//free(coeff);   
 return 0;
 }
