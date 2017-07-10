@@ -33,52 +33,46 @@ class AwpElasticStencil : public StencilBase {
 
 protected:
 
-    // Time-varying 3D-spatial velocity grids.
-    Grid vel_x, vel_y, vel_z;
+    // Indices & dimensions.
+    MAKE_STEP_INDEX(t);           // step in time dim.
+    MAKE_DOMAIN_INDEX(x);         // spatial dim.
+    MAKE_DOMAIN_INDEX(y);         // spatial dim.
+    MAKE_DOMAIN_INDEX(z);         // spatial dim.
 
+    // Time-varying 3D-spatial velocity grids.
+    MAKE_GRID(vel_x, t, x, y, z);
+    MAKE_GRID(vel_y, t, x, y, z);
+    MAKE_GRID(vel_z, t, x, y, z);
+        
     // Time-varying 3D-spatial Stress grids.
-    Grid stress_xx, stress_yy, stress_zz;
-    Grid stress_xy, stress_xz, stress_yz;
+    MAKE_GRID(stress_xx, t, x, y, z);
+    MAKE_GRID(stress_yy, t, x, y, z);
+    MAKE_GRID(stress_zz, t, x, y, z);
+    MAKE_GRID(stress_xy, t, x, y, z);
+    MAKE_GRID(stress_xz, t, x, y, z);
+    MAKE_GRID(stress_yz, t, x, y, z);
 
     // 3D-spatial Lame' coefficients.
-    Grid lambda, rho, mu;
+    MAKE_GRID(lambda, x, y, z);
+    MAKE_GRID(rho, x, y, z);
+    MAKE_GRID(mu, x, y, z);
 
     // Sponge coefficients.
     // (Most of these will be 1.0.)
-    Grid sponge;
+    MAKE_GRID(sponge, x, y, z);
 
     // Spatial FD coefficients.
     const double c1 = 9.0/8.0;
     const double c2 = -1.0/24.0;
 
     // Physical dimensions in time and space.
-    Param delta_t, h;
+    MAKE_SCALAR(delta_t);
+    MAKE_SCALAR(h);
 
 public:
 
     AwpElasticStencil(StencilList& stencils) :
-        StencilBase("awp_elastic", stencils)
-    {
-        // Specify the dimensions of each grid.
-        // (This names the dimensions; it does not specify their sizes.)
-        INIT_GRID_4D(vel_x, t, x, y, z);
-        INIT_GRID_4D(vel_y, t, x, y, z);
-        INIT_GRID_4D(vel_z, t, x, y, z);
-        INIT_GRID_4D(stress_xx, t, x, y, z);
-        INIT_GRID_4D(stress_yy, t, x, y, z);
-        INIT_GRID_4D(stress_zz, t, x, y, z);
-        INIT_GRID_4D(stress_xy, t, x, y, z);
-        INIT_GRID_4D(stress_xz, t, x, y, z);
-        INIT_GRID_4D(stress_yz, t, x, y, z);
-        INIT_GRID_3D(lambda, x, y, z);
-        INIT_GRID_3D(rho, x, y, z);
-        INIT_GRID_3D(mu, x, y, z);
-        INIT_GRID_3D(sponge, x, y, z);
-
-        // Initialize the parameters (both are scalars).
-        INIT_PARAM(delta_t);
-        INIT_PARAM(h);
-    }
+        StencilBase("awp_elastic", stencils) { }
 
     // Adjustment for sponge layer.
     void adjust_for_sponge(GridValue& val, GridIndex x, GridIndex y, GridIndex z) {
@@ -375,11 +369,7 @@ public:
     }
     
     // Call all the define_* functions.
-    virtual void define(const IntTuple& offsets) {
-        GET_OFFSET(t);
-        GET_OFFSET(x);
-        GET_OFFSET(y);
-        GET_OFFSET(z);
+    virtual void define() {
 
         // A condition that is true when index 'z' is at the free-surface boundary.
         Condition at_last_z = (z == last_index(z));

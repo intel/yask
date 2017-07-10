@@ -36,7 +36,9 @@ IN THE SOFTWARE.
 
 // Must declare shared_ptrs for the entire expr_node hierarchy!
 %shared_ptr(yask::yc_solution)
+%shared_ptr(yask::yc_grid)
 %shared_ptr(yask::yc_expr_node)
+%shared_ptr(yask::yc_index_node)
 %shared_ptr(yask::yc_equation_node)
 %shared_ptr(yask::yc_number_node)
 %shared_ptr(yask::yc_grid_point_node)
@@ -45,7 +47,6 @@ IN THE SOFTWARE.
 %shared_ptr(yask::yc_commutative_number_node)
 %shared_ptr(yask::yc_add_node)
 %shared_ptr(yask::yc_multiply_node)
-%shared_ptr(yask::yc_add_node)
 %shared_ptr(yask::yc_subtract_node)
 %shared_ptr(yask::yc_divide_node)
 %shared_ptr(yask::yc_bool_node)

@@ -274,7 +274,7 @@ namespace yask {
             assert(z < VLEN_Z);
 
             // TODO: move this to stencil compiler.
-#if VLEN_FIRST_DIM_IS_UNIT_STRIDE
+#if VLEN_FIRST_INDEX_IS_UNIT_STRIDE
 
             // x dim is unit stride, followed by y, z.
             idx_t l = LAYOUT_321(x, y, z, VLEN_X, VLEN_Y, VLEN_Z);

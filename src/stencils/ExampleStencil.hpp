@@ -23,7 +23,8 @@ IN THE SOFTWARE.
 
 *****************************************************************************/
 
-// Implement various kinds of example 3D stencils.
+// Implement various shapes of example 3D stencils that read and write from
+// only one 3D grid.
 
 #include "StencilBase.hpp"
 
@@ -31,8 +32,14 @@ class ExampleStencil : public StencilRadiusBase {
 
 protected:
 
-    // Generic time-varying spatial-3D grid.
-    Grid data;
+    // Indices & dimensions.
+    MAKE_STEP_INDEX(t);           // step in time dim.
+    MAKE_DOMAIN_INDEX(x);         // spatial dim.
+    MAKE_DOMAIN_INDEX(y);         // spatial dim.
+    MAKE_DOMAIN_INDEX(z);         // spatial dim.
+
+    // Vars.
+    MAKE_GRID(data, t, x, y, z); // time-varying 3D grid.
     
     // Return a coefficient.  Note: This returns completely fabricated
     // values only for illustrative purposes; they have no mathematical
@@ -47,27 +54,20 @@ protected:
     }
 
     // Add additional points to expression v.
-    virtual void addPoints(GridValue& v, GridIndex t, GridIndex x, GridIndex y, GridIndex z) =0;
+    virtual void addPoints(GridValue& v) =0;
     
 public:
     ExampleStencil(const string& name, StencilList& stencils, int radius=2) :
-        StencilRadiusBase(name, stencils, radius)
-    {
-        INIT_GRID_4D(data, t, x, y, z);
-    }
+        StencilRadiusBase(name, stencils, radius) { }
 
     // Define equation at t+1 based on values at t.
-    virtual void define(const IntTuple& offsets) {
-        GET_OFFSET(t);
-        GET_OFFSET(x);
-        GET_OFFSET(y);
-        GET_OFFSET(z);
+    virtual void define() {
 
         // start with center point.
         GridValue v = coeff(0, 0, 0) * data(t, x, y, z);
 
         // Add additional points from derived class.
-        addPoints(v, t, x, y, z);
+        addPoints(v);
 
         // define the value at t+1 to be equivalent to v.
         data(t+1, x, y, z) EQUALS v;
@@ -79,7 +79,7 @@ class AxisStencil : public ExampleStencil {
 protected:
 
     // Add additional points to v.
-    virtual void addPoints(GridValue& v, GridIndex t, GridIndex x, GridIndex y, GridIndex z)
+    virtual void addPoints(GridValue& v)
     {
         for (int r = 1; r <= _radius; r++) {
 
@@ -117,10 +117,10 @@ class DiagStencil : public AxisStencil {
 protected:
 
     // Add additional points to v.
-    virtual void addPoints(GridValue& v, GridIndex t, GridIndex x, GridIndex y, GridIndex z)
+    virtual void addPoints(GridValue& v)
     {
         // Get points from axes.
-        AxisStencil::addPoints(v, t, x, y, z);
+        AxisStencil::addPoints(v);
 
         // Add points from diagonals.
         for (int r = 1; r <= _radius; r++) {
@@ -159,10 +159,10 @@ class PlaneStencil : public DiagStencil {
 protected:
     
     // Add additional points to v.
-    virtual void addPoints(GridValue& v, GridIndex t, GridIndex x, GridIndex y, GridIndex z)
+    virtual void addPoints(GridValue& v)
     {
         // Get points from axes and diagonals.
-        DiagStencil::addPoints(v, t, x, y, z);
+        DiagStencil::addPoints(v);
 
         // Add remaining points on planes.
         for (int r = 1; r <= _radius; r++) {
@@ -215,10 +215,10 @@ class CubeStencil : public PlaneStencil {
 protected:
 
     // Add additional points to v.
-    virtual void addPoints(GridValue& v, GridIndex t, GridIndex x, GridIndex y, GridIndex z)
+    virtual void addPoints(GridValue& v)
     {
         // Get points from planes.
-        PlaneStencil::addPoints(v, t, x, y, z);
+        PlaneStencil::addPoints(v);
 
         // Add points from rest of cube.
         for (int rx = 1; rx <= _radius; rx++)

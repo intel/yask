@@ -160,7 +160,7 @@ namespace yask {
         }
 
         // first-inner (first dim is unit stride) accessors.
-        virtual bool getFirstInner() const { return _firstInner; }
+        virtual bool isFirstInner() const { return _firstInner; }
         virtual void setFirstInner(bool fi) { _firstInner = fi; }
 
         // Query number of dims.
@@ -668,7 +668,7 @@ namespace yask {
                                rhs);
         }
 
-        // make name like "4x3x2" or "4, 3, 2".
+        // make string like "4x3x2" or "4, 3, 2".
         virtual std::string makeValStr(std::string separator=", ",
                                        std::string prefix="",
                                        std::string suffix="") const {
@@ -684,7 +684,7 @@ namespace yask {
             return oss.str();
         }
 
-        // make name like "x, y, z" or "int x, int y, int z".
+        // make string like "x, y, z" or "int x, int y, int z".
         virtual std::string makeDimStr(std::string separator=", ",
                                        std::string prefix="",
                                        std::string suffix="") const {
@@ -700,7 +700,7 @@ namespace yask {
             return oss.str();
         }
 
-        // make name like "x=4, y=3, z=2".
+        // make string like "x=4, y=3, z=2".
         virtual std::string makeDimValStr(std::string separator=", ",
                                           std::string infix="=",
                                           std::string prefix="",
@@ -717,7 +717,7 @@ namespace yask {
             return oss.str();
         }
 
-        // make name like "x+4, y, z-2".
+        // make string like "x+4, y, z-2".
         virtual std::string makeDimValOffsetStr(std::string separator=", ",
                                                 std::string prefix="",
                                                 std::string suffix="") const {
@@ -737,7 +737,7 @@ namespace yask {
             return oss.str();
         }
 
-        // make name like "xv+(4/2), yv, zv-(2/2)".
+        // make string like "xv+(4/2), yv, zv-(2/2)".
         // this object has numerators; norm object has denominators.
         virtual std::string makeDimValNormOffsetStr(const Tuple& norm,
                                                     std::string separator=", ",

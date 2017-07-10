@@ -125,7 +125,7 @@ namespace yask {
             os << " '" << _name << "'";
             if (_elems)
                 os << ", data at " << _elems << ", containing " <<
-                    printWithPow10Multiplier(get_num_elems()) <<
+                    printWithPow10Multiplier(get_num_elems()) << " " <<
                     elem_name << " element(s) of " <<
                     sizeof(T) << " byte(s) each, " <<
                     printWithPow2Multiplier(get_num_bytes()) << "B";

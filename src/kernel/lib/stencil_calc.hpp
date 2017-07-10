@@ -522,7 +522,7 @@ namespace yask {
                  const std::string& dim6 = "");
 
         virtual std::string get_step_dim_name() const {
-            return STEP_DIM;
+            return STEP_INDEX;
         }
         virtual int get_num_domain_dims() const {
 
@@ -650,17 +650,17 @@ namespace yask {
                        idx_t end_sbx, idx_t end_sby, idx_t end_sbz);
 
         // Calculate one sub-block of results in whole clusters from
-        // 'begin_sb*v' to 'end_sb*v'-1 on each spatial dimension.  In the
-        // time dimension, evaluation is at 'begin_sbtv' only.  All indices
+        // 'begin_sb*' to 'end_sb*'-1 on each spatial dimension.  In the
+        // time dimension, evaluation is at 'begin_sbt' only.  All indices
         // are relative to the current rank, i.e., the rank offset is
         // subtracted from the overall index.  Also, all indices are in
-        // vectors (hence, the 'v' suffix), i.e., element indices dividied
+        // vectors, i.e., element indices dividied
         // by 'VLEN_*'.
         virtual void
-        calc_sub_block_of_clusters(idx_t begin_sbtv,
-                                   idx_t begin_sbxv, idx_t begin_sbyv, idx_t begin_sbzv,
-                                   idx_t end_sbtv,
-                                   idx_t end_sbxv, idx_t end_sbyv, idx_t end_sbzv) =0;
+        calc_sub_block_of_clusters(idx_t begin_sbt,
+                                   idx_t begin_sbx, idx_t begin_sby, idx_t begin_sbz,
+                                   idx_t end_sbt,
+                                   idx_t end_sbx, idx_t end_sby, idx_t end_sbz) =0;
     };
 
 } // yask namespace.

@@ -127,6 +127,7 @@ namespace yask {
             }
         }
 
+#if 0
         // Print stats header.
         virtual void printStatsHeader(ostream& os, string separator) const {
             os << "destination grid" <<
@@ -171,7 +172,7 @@ namespace yask {
             
             os << destGrid <<
                 separator << _vlen <<
-                separator << _dims._fold.makeValStr("x") <<
+                separator << _dims._fold.makeValStr("*") <<
                 separator << getNumPoints() <<
                 separator << getNumAlignedVecs() <<
                 separator << numBlends;
@@ -179,47 +180,12 @@ namespace yask {
                 os << separator << footprints[dim.getName()];
             os << endl;
         }
-
+#endif
+        
         // Get the set of aligned vectors on the leading edge
         // in the given direction and magnitude in dir.
         // Pre-requisite: visitor has been accepted.
-        virtual void getLeadingEdge(GridPointSet& edge, const IntScalar& dir) const {
-            edge.clear();
-
-            // Repeat based on magnitude (cluster step in given dir).
-            for (int i = 0; i < dir.getVal(); i++) {
-        
-                // loop over aligned vectors.
-                for (auto avi : _alignedVecs) {
-
-                    // ignore values already found.
-                    if (edge.count(avi))
-                        continue;
-
-                    // ignore if this vector doesn't have a dimension in dir.
-                    if (!avi.lookup(dir.getName()))
-                        continue;
-
-                    // compare to all points.
-                    bool best = true;
-                    for (auto avj : _alignedVecs) {
-
-                        // ignore values already found.
-                        if (edge.count(avj))
-                            continue;
-
-                        // Determine if avj is ahead of avi in given direction.
-                        // (A point won't be ahead of itself.)
-                        if (avj.isAheadOfInDir(avi, dir))
-                            best = false;
-                    }
-
-                    // keep only if farthest.
-                    if (best)
-                        edge.insert(avi);
-                }
-            }
-        }
+        virtual void getLeadingEdge(GridPointSet& edge, const IntScalar& dir) const;
 
         // Only want to visit the RHS of an eqGroup.
         // Assumes LHS is aligned.
@@ -229,79 +195,7 @@ namespace yask {
         }
     
         // Called when a grid point is read in a stencil function.
-        virtual void visit(GridPoint* gp) {
-
-            // Don't vectorize parameters.
-            if (gp->isParam())
-                return;
-
-            // Already seen this point?
-            if (_vblk2elemLists.count(*gp) > 0)
-                return;
-
-            // Vec of points to calculate.
-#ifdef DEBUG_VV
-            cout << "vec @ " << gp->makeDimValStr() << " => " << endl;
-#endif
-
-            // Loop through all points in the vector at this cluster point.
-            size_t pelem = 0;
-            _dims._fold.visitAllPoints([&](const IntTuple& vecPoint){
-
-                    // Offset in each dim is starting point of grid point plus
-                    // offset in this vector.
-                    // Note: there may be more or fewer dims in vecPoint than in grid point.
-                    auto offsets = gp->addElements(vecPoint, false);
-
-                    // Find aligned vector indices and offsets
-                    // for this one point.
-                    IntTuple vecOffsets, vecLocation;
-                    for (auto& dim : offsets.getDims()) {
-                        auto& dname = dim.getName();
-
-                        // length of this dimension in fold, if it exists.
-                        const int* p = _dims._fold.lookup(dname);
-                        int len = p ? *p : 1;
-
-                        // convert this offset to vector index and vector offset.
-                        int vecIndex, vecOffset;
-                        fixIndexOffset(0, dim.getVal(), vecIndex, vecOffset, len);
-                        vecOffsets.addDimBack(dname, vecOffset);
-                        vecLocation.addDimBack(dname, vecIndex * len);
-                    }
-#ifdef DEBUG_VV
-                    cout << " element @ " << offsets.makeDimValStr() << " => " <<
-                        " vec-location @ " << vecLocation.makeDimValStr() <<
-                        " & vec-offsets @ " << vecOffsets.makeDimValStr() <<
-                        " => " << endl;
-#endif
-                    
-                    // Create aligned vector block that contains this point.
-                    GridPoint alignedVec(gp, vecLocation);
-
-                    // Find linear offset within this aligned vector block.
-                    int alignedElem = _dims._fold.layout(vecOffsets, false);
-                    assert(alignedElem >= 0);
-                    assert(alignedElem < _vlen);
-#ifdef DEBUG_VV
-                    cout << "  general-" << gp->makeStr() << "[" << pelem << "] = aligned-" <<
-                        alignedVec.makeStr() << "[" << alignedElem << "]" << endl;
-#endif
-
-                    // Update set of all aligned vec-blocks.
-                    _alignedVecs.insert(alignedVec);
-
-                    // Update set of aligned vec-blocks and elements needed for this vec-block element.
-                    _vblk2avblks[*gp].insert(alignedVec);
-
-                    // Save which aligned vec-block's element is needed for this vec-block element.
-                    VecElem ve(alignedVec, alignedElem, offsets);
-                    _vblk2elemLists[*gp].push_back(ve); // should be at pelem index.
-                    assert(_vblk2elemLists[*gp].size() == pelem+1); // verify at pelem index.
-
-                    pelem++;
-                });                  // end of vector lambda-function.
-        }                   // end of visit() method.
+        virtual void visit(GridPoint* gp);
     };
 
     // Define methods for printing a vectorized version of the stencil.
@@ -363,45 +257,7 @@ namespace yask {
     
         // Print any needed memory reads and/or constructions.
         // Return var name.
-        virtual string readFromPoint(ostream& os, const GridPoint& gp) {
-
-            string varName;
-
-            // Already done.
-            if (_reuseVars && _readyPoints.count(gp))
-                varName = _readyPoints[gp]; // do nothing.
-
-            // An aligned vector block?
-            else if (_vv._alignedVecs.count(gp))
-                varName = printAlignedVecRead(os, gp);
-
-            // Unaligned loads allowed?
-            else if (_allowUnalignedLoads)
-                varName = printUnalignedVecRead(os, gp);
-
-            // Need to construct an unaligned vector block?
-            else if (_vv._vblk2elemLists.count(gp)) {
-
-                // make sure prerequisites exist by recursing.
-                auto avbs = _vv._vblk2avblks[gp];
-                for (auto pi = avbs.begin(); pi != avbs.end(); pi++) {
-                    auto& p = *pi;
-                    readFromPoint(os, p);
-                }
-
-                // output this construction.
-                varName = printUnalignedVec(os, gp);
-            }
-
-            else {
-                cerr << "Error: on point " << gp.makeStr() << endl;
-                assert("point type unknown");
-            }
-
-            // Remember this point and return its name.
-            _readyPoints[gp] = varName;
-            return varName;
-        }
+        virtual string readFromPoint(ostream& os, const GridPoint& gp);
 
         // Update a grid point.
         // The 'os' parameter is provided for derived types that
@@ -423,84 +279,7 @@ namespace yask {
         virtual ~ExprReorderVisitor() {}
                        
         // Sort a commutative expression.
-        virtual void visit(CommutativeExpr* ce) {
-
-            auto& oev = ce->getOps(); // old exprs.
-            NumExprPtrVec nev; // new exprs.
-
-            // Simple, greedy algorithm:
-            // Select first element that needs the fewest new aligned vecs.
-            // Repeat until done.
-            // TODO: sort based on all reused exprs, not just grid reads.
-
-            GridPointSet alignedVecs; // aligned vecs needed so far.
-            set<size_t> usedExprs; // expressions used.
-            for (size_t i = 0; i < oev.size(); i++) {
-
-#ifdef DEBUG_SORT
-                cout << "  Looking for expr #" << i << "..." << endl;
-#endif
-
-                // Scan unused exprs.
-                size_t jBest = 0;
-                size_t jBestCost = size_t(-1);
-                GridPointSet jBestAlignedVecs;
-                for (size_t j = 0; j < oev.size(); j++) {
-                    if (usedExprs.count(j) == 0) {
-
-                        // This unused expr.
-                        auto& expr = oev[j];
-
-                        // Get aligned vecs needed for this expr.
-                        VecInfoVisitor tmpvv(_vv);
-                        expr->accept(&tmpvv);
-                        auto& tmpAlignedVecs = tmpvv._alignedVecs;
-
-                        // Calculate cost.
-                        size_t cost = 0;
-                        for (auto k = tmpAlignedVecs.begin(); k != tmpAlignedVecs.end(); k++) {
-                            auto& av = *k;
-
-                            // new vector needed?
-                            if (alignedVecs.count(av) == 0) {
-#ifdef DEBUG_SORT
-                                cout << " Vec " << av.makeStr("tmp") << " is new" << endl;
-#endif
-                                cost++; 
-                            }
-                        }
-#ifdef DEBUG_SORT
-                        cout << " Cost of expr " << j << " = " << cost << endl;
-#endif
-                        // Best so far?
-                        if (cost < jBestCost) {
-                            jBestCost = cost;
-                            jBest = j;
-                            jBestAlignedVecs = tmpAlignedVecs;
-#ifdef DEBUG_SORT
-                            cout << "  Best so far has " << jBestAlignedVecs.size() << " aligned vecs" << endl;
-#endif
-                        }
-                    }
-                }
-
-                // Must have a best one.
-                assert(jBestCost != size_t(-1));
-
-                // Add it.
-                nev.push_back(oev[jBest]);
-                usedExprs.insert(jBest);
-
-                // Remember used vectors.
-                for (auto k = jBestAlignedVecs.begin(); k != jBestAlignedVecs.end(); k++) {
-                    alignedVecs.insert(*k);
-                }
-            }
-
-            // Replace the old vector w/the new one.
-            assert(nev.size() == oev.size());
-            oev.swap(nev);
-        }
+        virtual void visit(CommutativeExpr* ce);
     };
 
 } // namespace yask.

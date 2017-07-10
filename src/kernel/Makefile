@@ -267,20 +267,20 @@ BLOCK_LOOP_CODE		?=	omp $(BLOCK_LOOP_OUTER_MODS) loop($(BLOCK_LOOP_OUTER_VARS)) 
 				$(BLOCK_LOOP_INNER_MODS) calc(sub_block(bt)); }
 
 # Sub-block loops break up a sub-block into vector clusters.  The indices at
-# this level are by vector instead of element; this is indicated by the 'v'
-# suffix. The innermost loop here is the final innermost loop. There is
+# this level are by vector instead of element.
+# The innermost loop here is the final innermost loop. There is
 # no time loop here because threaded temporal blocking is not yet supported.
-SUB_BLOCK_LOOP_OPTS		=     	-dims 'sbxv,sbyv,sbzv'
+SUB_BLOCK_LOOP_OPTS		=     	-dims 'sbx,sby,sbz'
 ifeq ($(split_L2),1)
  SUB_BLOCK_LOOP_OPTS		+=     	-splitL2
 endif
-SUB_BLOCK_LOOP_OUTER_VARS	?=	sbxv,sbyv
+SUB_BLOCK_LOOP_OUTER_VARS	?=	sbx,sby
 SUB_BLOCK_LOOP_OUTER_MODS	?=	square_wave serpentine
-SUB_BLOCK_LOOP_INNER_VARS	?=	sbzv
+SUB_BLOCK_LOOP_INNER_VARS	?=	sbz
 SUB_BLOCK_LOOP_INNER_MODS	?=	prefetch(L2)
 SUB_BLOCK_LOOP_CODE		?=	$(SUB_BLOCK_LOOP_OUTER_MODS) loop($(SUB_BLOCK_LOOP_OUTER_VARS)) { \
 					$(SUB_BLOCK_LOOP_INNER_MODS) loop($(SUB_BLOCK_LOOP_INNER_VARS)) { \
-					calc(cluster(begin_sbtv)); } }
+					calc(cluster(begin_sbt)); } }
 
 # Halo pack/unpack loops break up a region face, edge, or corner into vectors.
 # Nested OpenMP is not used here because there is no sharing between threads.
@@ -496,7 +496,7 @@ $(YK_EXEC): yask_main.cpp $(YK_LIB)
 $(MAKE_REPORT_FILE): $(YK_EXEC)
 	@echo MAKEFLAGS="\"$(MAKEFLAGS)"\" > $@ 2>&1
 	$(MAKE) echo-settings >> $@ 2>&1
-	$(MAKE) code-stats >> $@ 2>&1
+	$(MAKE) code-stats | tee -a $@
 
 # Generated files.
 $(YK_GEN_DIR)/yask_rank_loops.hpp: $(GEN_LOOPS)
@@ -622,8 +622,9 @@ yk-test-no-yc: kernel-only
 # NB: set arch var if applicable.
 # NB: save some time by using YK_CXXOPT=-O2.
 all-tests:
-	$(MAKE) clean; $(MAKE) stencil=iso3dfd test
-	$(MAKE) clean; $(MAKE) stencil=fsg_abc test
+	$(MAKE) clean; $(MAKE) stencil=iso3dfd yc-and-yk-test
+	$(MAKE) clean; $(MAKE) stencil=awp yc-and-yk-test
+	$(MAKE) clean; $(MAKE) stencil=fsg_abc yc-and-yk-test
 	$(MAKE) clean; $(MAKE) stencil=iso3dfd cxx-yk-api-test
 	$(MAKE) clean; $(MAKE) stencil=iso3dfd py-yk-api-test
 

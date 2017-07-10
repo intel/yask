@@ -101,14 +101,6 @@ namespace yask {
             return oss.str();
         }
 
-        // Return a parameter reference.
-        virtual string readFromParam(ostream& os, const GridPoint& pp) {
-            string str = pp.getName();
-            if (pp.size())
-                str += "(" + pp.makeValStr() + ")";
-            return str;
-        }
-    
         // Return a grid reference.
         // The 'os' parameter is provided for derived types that
         // need to write intermediate code to a stream.
@@ -170,11 +162,10 @@ namespace yask {
         // has been accepted.
         int getNumCommon() const { return _numCommon; }
     
-        // A grid or parameter read.
+        // A grid read.
         virtual void visit(GridPoint* gp);
 
-        // An index.
-        virtual void visit(IntScalarExpr* ite);
+        // A grid index.
         virtual void visit(IndexExpr* ie);
     
         // A constant.
@@ -242,11 +233,11 @@ namespace yask {
         // Return false if more complex method should be used.
         virtual bool trySimplePrint(Expr* ex, bool force);
 
-        // A grid or param point.
+        // A grid point.
         virtual void visit(GridPoint* gp);
 
         // An index.
-        virtual void visit(IntScalarExpr* ite);
+        virtual void visit(IndexExpr* ie);
 
         // A constant.
         virtual void visit(ConstExpr* ce);
@@ -336,7 +327,7 @@ namespace yask {
     public:
         DOTPrintVisitor(ostream& os) : _os(os) { }
 
-        // A grid or parameter read.
+        // A grid read.
         virtual void visit(GridPoint* gp);
 
         // A constant.
@@ -373,7 +364,7 @@ namespace yask {
         SimpleDOTPrintVisitor(ostream& os) :
             DOTPrintVisitor(os) { }
 
-        // A grid or parameter read.
+        // A grid read.
         virtual void visit(GridPoint* gp);
 
         // A constant.
@@ -408,7 +399,6 @@ namespace yask {
     protected:
         StencilSolution& _stencil;
         Grids& _grids;
-        Params& _params;
         EqGroups& _eqGroups;
         CompilerSettings& _settings;
         
@@ -423,7 +413,6 @@ namespace yask {
                     EqGroups& eqGroups) :
             _stencil(stencil), 
             _grids(stencil.getGrids()),
-            _params(stencil.getParams()),
             _eqGroups(eqGroups),
             _settings(stencil.getSettings())
         { }

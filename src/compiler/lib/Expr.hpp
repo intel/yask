@@ -50,93 +50,28 @@ namespace yask {
     typedef Scalar<int> IntScalar;
     typedef Tuple<int> IntTuple;
 
-    // Forward-declarations of expressions.
+    // Forward-decls of expressions.
     class Expr;
     typedef shared_ptr<Expr> ExprPtr;
     class NumExpr;
     typedef shared_ptr<NumExpr> NumExprPtr;
+    typedef vector<NumExprPtr> NumExprPtrVec;
+    class IndexExpr;
+    typedef shared_ptr<IndexExpr> IndexExprPtr;
+    typedef vector<IndexExprPtr> IndexExprPtrVec;
     class BoolExpr;
     typedef shared_ptr<BoolExpr> BoolExprPtr;
     class EqualsExpr;
     typedef shared_ptr<EqualsExpr> EqualsExprPtr;
     class IfExpr;
     typedef shared_ptr<IfExpr> IfExprPtr;
-    class IntScalarExpr;
-    typedef shared_ptr<IntScalarExpr> IntScalarExprPtr;
-    typedef vector<NumExprPtr> NumExprPtrVec;
 
-    // Forward-declare expression visitor.
+    // More forward-decls.
     class ExprVisitor;
-
-    // Forward-declaration of a grid and a grid point expression.
     class Grid;
     class GridPoint;
     typedef shared_ptr<GridPoint> GridPointPtr;
-
-    ///// The following are operators and functions used in stencil expressions.
-
-    // Various unary operators.
-    NumExprPtr operator-(const NumExprPtr rhs);
-
-    // Various binary operators.
-    NumExprPtr operator+(const NumExprPtr lhs, const NumExprPtr rhs);
-    NumExprPtr operator+(double lhs, const NumExprPtr rhs);
-    NumExprPtr operator+(const NumExprPtr lhs, double rhs);
-    void operator+=(NumExprPtr& lhs, const NumExprPtr rhs);
-    void operator+=(NumExprPtr& lhs, double rhs);
-
-    NumExprPtr operator-(const NumExprPtr lhs, const NumExprPtr rhs);
-    NumExprPtr operator-(double lhs, const NumExprPtr rhs);
-    NumExprPtr operator-(const NumExprPtr lhs, double rhs);
-    void operator-=(NumExprPtr& lhs, const NumExprPtr rhs);
-    void operator-=(NumExprPtr& lhs, double rhs);
-
-    NumExprPtr operator*(const NumExprPtr lhs, const NumExprPtr rhs);
-    NumExprPtr operator*(double lhs, const NumExprPtr rhs);
-    NumExprPtr operator*(const NumExprPtr lhs, double rhs);
-    void operator*=(NumExprPtr& lhs, const NumExprPtr rhs);
-    void operator*=(NumExprPtr& lhs, double rhs);
-
-    NumExprPtr operator/(const NumExprPtr lhs, const NumExprPtr rhs);
-    NumExprPtr operator/(double lhs, const NumExprPtr rhs);
-    NumExprPtr operator/(const NumExprPtr lhs, double rhs);
-    void operator/=(NumExprPtr& lhs, const NumExprPtr rhs);
-    void operator/=(NumExprPtr& lhs, double rhs);
-
-    // The '==' operator used for defining a grid value.
-#define EQUALS_OPER ==
-    EqualsExprPtr operator EQUALS_OPER(GridPointPtr gpp, const NumExprPtr rhs);
-    EqualsExprPtr operator EQUALS_OPER(GridPointPtr gpp, double rhs);
-#define EQUALS EQUALS_OPER
-#define IS_EQUIV_TO EQUALS_OPER
-#define IS_EQUIVALENT_TO EQUALS_OPER
-
-    // The '==' operator for comparing values.
-    BoolExprPtr operator==(const NumExprPtr lhs, const NumExprPtr rhs);
-
-    // Other comparison operators can only be used for comparing.
-    BoolExprPtr operator!=(const NumExprPtr lhs, const NumExprPtr rhs);
-    BoolExprPtr operator<(const NumExprPtr lhs, const NumExprPtr rhs);
-    BoolExprPtr operator>(const NumExprPtr lhs, const NumExprPtr rhs);
-    BoolExprPtr operator<=(const NumExprPtr lhs, const NumExprPtr rhs);
-    BoolExprPtr operator>=(const NumExprPtr lhs, const NumExprPtr rhs);
-
-    // Logical operators.
-    BoolExprPtr operator&&(const BoolExprPtr lhs, const BoolExprPtr rhs);
-    //BoolExprPtr operator&&(bool lhs, const BoolExprPtr rhs);
-    //BoolExprPtr operator&&(const BoolExprPtr lhs, bool rhs);
-    BoolExprPtr operator||(const BoolExprPtr lhs, const BoolExprPtr rhs);
-    //BoolExprPtr operator||(bool lhs, const BoolExprPtr rhs);
-    //BoolExprPtr operator||(const BoolExprPtr lhs, bool rhs);
-    BoolExprPtr operator!(const BoolExprPtr rhs);
-
-    // Boundary indices.
-    NumExprPtr first_index(const NumExprPtr dim);
-    NumExprPtr last_index(const NumExprPtr dim);
-
-    // A function to create a constant double expression.
-    // Usually not needed due to operator overloading.
-    NumExprPtr constNum(double rhs);
+    class StencilSolution;
 
     //// Classes to implement parts of expressions.
     // The expressions are constructed at run-time when the
@@ -220,7 +155,12 @@ namespace yask {
     // Real or int value.
     class NumExpr : public Expr, public virtual yc_number_node {
     public:
-    
+
+        // Return 'true' if this is a compile-time constant.
+        virtual bool isConstVal() const {
+            return false;
+        }
+        
         // Get the current value.
         // Exit with error if not known.
         virtual double getNumVal() const {
@@ -241,6 +181,12 @@ namespace yask {
             }
             return ival;
         }
+
+        // Return 'true' and set offset if this expr is of the form 'dim',
+        // 'dim+const', or 'dim-const'.
+        virtual bool isOffsetFrom(string dim, int& offset) {
+            return false;
+        }
     
         // Create a deep copy of this expression.
         // For this to work properly, each derived type
@@ -248,6 +194,83 @@ namespace yask {
         virtual NumExprPtr clone() const =0;
     };
 
+    // Grid index types.
+    enum IndexType {
+        STEP_INDEX,             // the step dim.
+        DOMAIN_INDEX,           // a domain dim.
+        MISC_INDEX,             // any other dim.
+        FIRST_INDEX,            // first index value in domain.
+        LAST_INDEX              // last index value in domain.
+    };
+
+    // Expression based on a dimension index.
+    // This is an expression leaf-node.
+    class IndexExpr : public NumExpr,
+                      public virtual yc_index_node {
+    protected:
+        string _dimName;
+        IndexType _type;
+
+    public:
+        IndexExpr(string dim, IndexType type) :
+            _dimName(dim), _type(type) { }
+        virtual ~IndexExpr() { }
+
+        const string& getName() const { return _dimName; }
+        IndexType getType() const { return _type; }
+        string format() const {
+            switch (_type) {
+            case FIRST_INDEX:
+                return "FIRST_INDEX(" + _dimName + ")";
+            case LAST_INDEX:
+                return "LAST_INDEX(" + _dimName + ")";
+            default:
+                return _dimName;
+            }
+        }
+        virtual void accept(ExprVisitor* ev);
+
+        // Simple offset?
+        virtual bool isOffsetFrom(string dim, int& offset);
+        
+        // Check for equivalency.
+        virtual bool isSame(const Expr* other) const {
+            auto p = dynamic_cast<const IndexExpr*>(other);
+            return p && _dimName == p->_dimName && _type == p->_type;
+        }
+   
+        // Create a deep copy of this expression.
+        virtual NumExprPtr clone() const { return make_shared<IndexExpr>(*this); }
+
+        // APIs.
+        virtual const string& get_name() const {
+            return _dimName;
+        }
+    };
+
+    // A free function to create a constant expression.
+    // Usually not needed due to operator overloading.
+    NumExprPtr constNum(double rhs);
+
+    // Free functions to create boundary indices, e.g., 'first_index(x)'.
+    NumExprPtr first_index(IndexExprPtr dim);
+    NumExprPtr last_index(IndexExprPtr dim);
+
+    // A simple wrapper to provide automatic construction
+    // of a NumExpr ptr from other types.
+    class NumExprArg : public NumExprPtr {
+
+    public:
+        NumExprArg(NumExprPtr p) :
+            NumExprPtr(p) { }
+        NumExprArg(IndexExprPtr p) :
+            NumExprPtr(p) { }
+        NumExprArg(int i) :
+            NumExprPtr(constNum(i)) { }
+        NumExprArg(double f) :
+            NumExprPtr(constNum(f)) { }
+    };
+    
     // Boolean value.
     class BoolExpr : public Expr, public virtual yc_bool_node  {
     public:
@@ -277,6 +300,7 @@ namespace yask {
         ConstExpr(const ConstExpr& src) : _f(src._f) { }
         virtual ~ConstExpr() { }
 
+        virtual bool isConstVal() const { return true; }
         double getNumVal() const { return _f; }
 
         virtual void accept(ExprVisitor* ev);
@@ -293,50 +317,6 @@ namespace yask {
         // APIs.
         virtual void set_value(double val) { _f = val; }
         virtual double get_value() const { return _f; }
-    };
-
-    // Special grid index values.
-    enum IndexType {
-        FIRST_INDEX,
-        LAST_INDEX
-    };
-
-    // Begin/end of problem domain.
-    // This is an expression leaf-node.
-    class IndexExpr : public NumExpr {
-    protected:
-        string _dirName;
-        IndexType _type;
-
-    public:
-        IndexExpr(NumExprPtr dim, IndexType type);
-        IndexExpr(const IndexExpr& src) :
-            _dirName(src._dirName),
-            _type(src._type) { }
-        virtual ~IndexExpr() { }
-
-        const string& getDirName() const { return _dirName; }
-        IndexType getType() const { return _type; }
-        string getFnName() const {
-            if (_type == FIRST_INDEX)
-                return "FIRST_INDEX";
-            else if (_type == LAST_INDEX)
-                return "LAST_INDEX";
-            else {
-                cerr << "Error: internal error in IndexExpr\n";
-                exit(1);
-            }
-        }
-        virtual void accept(ExprVisitor* ev);
-
-        // Check for equivalency.
-        virtual bool isSame(const Expr* other) const {
-            auto p = dynamic_cast<const IndexExpr*>(other);
-            return p && _dirName == p->_dirName && _type == p->_type;
-        }
-   
-        // Create a deep copy of this expression.
-        virtual NumExprPtr clone() const { return make_shared<IndexExpr>(*this); }
     };
 
     // Any expression that returns a real (not from a grid).
@@ -404,7 +384,8 @@ namespace yask {
     typedef UnaryExpr<BoolExpr, NumExprPtr> UnaryNum2BoolExpr;
 
     // Negate operator.
-    class NegExpr : public UnaryNumExpr, public virtual yc_negate_node {
+    class NegExpr : public UnaryNumExpr,
+                    public virtual yc_negate_node {
     public:
         NegExpr(NumExprPtr rhs) :
             UnaryNumExpr(opStr(), rhs) { }
@@ -412,6 +393,9 @@ namespace yask {
             UnaryExpr(src) { }
 
         static string opStr() { return "-"; }
+        virtual bool isConstVal() const {
+            return _rhs->isConstVal();
+        }
         virtual double getNumVal() const {
             double rhs = _rhs->getNumVal();
             return -rhs;
@@ -488,6 +472,11 @@ namespace yask {
         type(const type& src) :                         \
             BinaryNumExpr(src) { }                      \
         static string opStr() { return opstr; }         \
+        virtual bool isOffsetFrom(string dim, int& offset); \
+        virtual bool isConstVal() const {               \
+            return _lhs->isConstVal() &&                \
+                _rhs->isConstVal();                     \
+        }                                               \
         virtual double getNumVal() const {              \
             double lhs = _lhs->getNumVal();             \
             double rhs = _rhs->getNumVal();             \
@@ -537,7 +526,7 @@ namespace yask {
     // Boolean binary operators with boolean inputs.
     // TODO: redo this with a template.
 #define BIN_BOOL_EXPR(type, opstr, oper)                \
-    class type : public BinaryBoolExpr {        \
+    class type : public BinaryBoolExpr {                \
     public:                                             \
     type(BoolExprPtr lhs, BoolExprPtr rhs) :            \
         BinaryBoolExpr(lhs, opStr(), rhs) { }           \
@@ -646,6 +635,15 @@ namespace yask {
         CommutativeExpr(src) { }                                        \
     virtual ~type() { }                                                 \
     static string opStr() { return opstr; }                             \
+    virtual bool isOffsetFrom(string dim, int& offset);                 \
+    virtual bool isConstVal() const {                                   \
+        bool is_const = true;                                           \
+        for(auto op : _ops) {                                           \
+            bool rhs = op->isConstVal();                                \
+            is_const &= rhs;                                            \
+        }                                                               \
+        return is_const;                                                \
+    }                                                                   \
     virtual double getNumVal() const {                                  \
         double val = baseVal;                                           \
         for(auto op : _ops) {                                           \
@@ -661,82 +659,21 @@ namespace yask {
     COMM_EXPR(AddExpr, yc_add_node, "+", 0.0, lhs + rhs);
 #undef COMM_EXPR
 
-    // A scalar expression with a named dimension.
-    // This is an expression leaf-node.
-    class IntScalarExpr : public NumExpr, public IntScalar {
-
-    public:
-        IntScalarExpr(const IntScalar& src) :
-            IntScalar(src) { }
-        IntScalarExpr(const IntScalarExpr& src) :
-            IntScalar(src) { }
-        IntScalarExpr(const IntScalarExprPtr src) :
-            IntScalar(*src) { }
-    
-        virtual ~IntScalarExpr() { }
-
-        virtual double getNumVal() const {
-            return double(getVal());
-        }
-        virtual int getIntVal() const {
-            return getVal();
-        }
-
-        // Some comparisons.
-        bool operator==(const IntScalarExpr& rhs) const {
-            return IntScalar::operator==(rhs);
-        }
-        bool operator<(const IntScalarExpr& rhs) const {
-            return IntScalar::operator<(rhs);
-        }
-
-        // Take ev to each value.
-        virtual void accept(ExprVisitor* ev);
-
-        // Check for equivalency.
-        virtual bool isSame(const Expr* other) const {
-            auto* p = dynamic_cast<const IntScalarExpr*>(other);
-
-            // Only compare dimensions, not values.
-            return p->getName() == getName();
-        }
-    
-        // Create a deep copy of this expression.
-        virtual NumExprPtr clone() const { return make_shared<IntScalarExpr>(*this); }
-    };
-
     // One specific point in a grid.
     // This is an expression leaf-node.
     class GridPoint : public NumExpr,
-                      public IntTuple,
                       public virtual yc_grid_point_node {
 
     protected:
-        Grid* _grid;          // the grid this point is from.
+        Grid* _grid = 0;        // the grid this point is from.
+        NumExprPtrVec _args;    // index exprs for each dim.
+        IntTuple _offsets;      // simple offset for each expr that is dim +/- offset.
+        IntTuple _consts;       // simple value for each expr that is a const.
 
     public:
 
-        // Construct an n-D point given a grid and offset.
-        GridPoint(Grid* grid, const IntTuple& offsets) :
-            IntTuple(offsets),
-            _grid(grid)
-        {
-            assert(areDimsSame(offsets));
-        }
-
-        // Copy ctor.
-        // Note that _grid is a shallow copy!
-        GridPoint(const GridPoint& src) :
-            IntTuple(src), _grid(src._grid) { }
-        GridPoint(const GridPointPtr src) :
-            GridPoint(*src) { }
-
-        // Construct from another point, but change location.
-        GridPoint(GridPoint* gp, const IntTuple& offsets) :
-            IntTuple(offsets), _grid(gp->_grid)
-        {
-            assert(areDimsSame(offsets));
-        }
+        // Construct a point given a grid and an arg for each dim.
+        GridPoint(Grid* grid, const NumExprPtrVec& args);
 
         // Dtor.
         virtual ~GridPoint() {}
@@ -745,7 +682,20 @@ namespace yask {
         const Grid* getGrid() const { return _grid; }
         Grid* getGrid() { return _grid; }
         virtual const string& getName() const;
-        virtual bool isParam() const;
+
+        // Accessors.
+        virtual const NumExprPtrVec& getArgs() const { return _args; }
+        virtual const IntTuple& getArgOffsets() const { return _offsets; }
+        virtual const IntTuple& getArgConsts() const { return _consts; }
+
+        // Set given arg to given offset; ignore if not in step or domain grid dims.
+        virtual void setArgOffset(const IntScalar& offset);
+        
+        // Set given args to be given offsets.
+        virtual void setArgOffsets(const IntTuple& offsets) {
+            for (auto ofs : offsets.getDims())
+                setArgOffset(ofs);
+        }
 
         // Some comparisons.
         bool operator==(const GridPoint& rhs) const;
@@ -761,8 +711,10 @@ namespace yask {
         }
     
         // Return a description based on this position.
-        virtual string makeStr() const;
-        
+        virtual string makeStr() const;     // with name and parens around args.
+        virtual string makeArgsStr() const; // just comma-sep args.
+        virtual string makeNormArgsStr(const IntTuple& fold) const; // vec-normalized args.
+            
         // Create a deep copy of this expression,
         // except pointed-to grid is not copied.
         virtual NumExprPtr clone() const { return make_shared<GridPoint>(*this); }
@@ -777,14 +729,13 @@ namespace yask {
 } // namespace yask.
 
 // Define hash function for GridPoint for unordered_{set,map}.
+// TODO: make this more efficient.
 namespace std {
     using namespace yask;
     
     template <> struct hash<GridPoint> {
         size_t operator()(const GridPoint& k) const {
-            size_t h1 = hash<string>{}(k.getName());
-            size_t h2 = hash<string>{}(k.makeDimValStr());
-            return h1 ^ (h2 << 1);
+            return hash<string>{}(k.makeStr());
         }
     };
 }
@@ -871,6 +822,75 @@ namespace yask {
 #define IF_OPER ^=
     IfExprPtr operator IF_OPER(EqualsExprPtr expr, const BoolExprPtr cond);
 #define IF IF_OPER
+
+    ///// The following are operators and functions used in stencil expressions.
+
+    // Various unary operators.
+    NumExprPtr operator-(const NumExprPtr rhs);
+
+    // Various binary operators.
+    NumExprPtr operator+(const NumExprPtr lhs, const NumExprPtr rhs);
+    NumExprPtr operator+(double lhs, const NumExprPtr rhs);
+    NumExprPtr operator+(const NumExprPtr lhs, double rhs);
+    void operator+=(NumExprPtr& lhs, const NumExprPtr rhs);
+    void operator+=(NumExprPtr& lhs, double rhs);
+
+    NumExprPtr operator-(const NumExprPtr lhs, const NumExprPtr rhs);
+    NumExprPtr operator-(double lhs, const NumExprPtr rhs);
+    NumExprPtr operator-(const NumExprPtr lhs, double rhs);
+    void operator-=(NumExprPtr& lhs, const NumExprPtr rhs);
+    void operator-=(NumExprPtr& lhs, double rhs);
+
+    NumExprPtr operator*(const NumExprPtr lhs, const NumExprPtr rhs);
+    NumExprPtr operator*(double lhs, const NumExprPtr rhs);
+    NumExprPtr operator*(const NumExprPtr lhs, double rhs);
+    void operator*=(NumExprPtr& lhs, const NumExprPtr rhs);
+    void operator*=(NumExprPtr& lhs, double rhs);
+
+    NumExprPtr operator/(const NumExprPtr lhs, const NumExprPtr rhs);
+    NumExprPtr operator/(double lhs, const NumExprPtr rhs);
+    NumExprPtr operator/(const NumExprPtr lhs, double rhs);
+    void operator/=(NumExprPtr& lhs, const NumExprPtr rhs);
+    void operator/=(NumExprPtr& lhs, double rhs);
+
+    // The '==' operator used for defining a grid value.
+#define EQUALS_OPER ==
+    EqualsExprPtr operator EQUALS_OPER(GridPointPtr gpp, const NumExprPtr rhs);
+    EqualsExprPtr operator EQUALS_OPER(GridPointPtr gpp, double rhs);
+#define EQUALS EQUALS_OPER
+#define IS_EQUIV_TO EQUALS_OPER
+#define IS_EQUIVALENT_TO EQUALS_OPER
+
+    // Binary numerical-to-boolean operators.
+    // Must provide explicit IndexExprPtr operands to keep compiler from
+    // using built-in pointer comparison.
+#define BOOL_OPER(oper, type) \
+    inline BoolExprPtr operator oper(const NumExprPtr lhs, const NumExprPtr rhs) { \
+        return make_shared<type>(lhs, rhs); } \
+    inline BoolExprPtr operator oper(const IndexExprPtr lhs, const NumExprPtr rhs) { \
+        return make_shared<type>(lhs, rhs); } \
+    inline BoolExprPtr operator oper(const NumExprPtr lhs, const IndexExprPtr rhs) { \
+        return make_shared<type>(lhs, rhs); } \
+    inline BoolExprPtr operator oper(const IndexExprPtr lhs, const IndexExprPtr rhs) { \
+        return make_shared<type>(lhs, rhs); }
+
+    BOOL_OPER(==, IsEqualExpr)
+    BOOL_OPER(!=, NotEqualExpr)
+    BOOL_OPER(<, IsLessExpr)
+    BOOL_OPER(>, IsGreaterExpr)
+    BOOL_OPER(<=, NotGreaterExpr)
+    BOOL_OPER(>=, NotLessExpr)
+
+    // Logical operators.
+    inline BoolExprPtr operator&&(const BoolExprPtr lhs, const BoolExprPtr rhs) {
+        return make_shared<AndExpr>(lhs, rhs);
+    }
+    inline BoolExprPtr operator||(const BoolExprPtr lhs, const BoolExprPtr rhs) {
+        return make_shared<OrExpr>(lhs, rhs);
+    }
+    inline BoolExprPtr operator!(const BoolExprPtr rhs) {
+        return make_shared<NotExpr>(rhs);
+    }
 
     // Set that retains order of things added.
     // Or, vector that allows insertion if element doesn't exist.
@@ -1051,6 +1071,21 @@ namespace yask {
 
     ///////// Grids ////////////
 
+    class Grid;
+    
+    // A list of grids.  This holds pointers to grids defined by the stencil
+    // class in the order in which they are added via the INIT_GRID_* macros.
+    class Grids : public vector_set<Grid*> {
+    public:
+    
+        Grids() {}
+        virtual ~Grids() {}
+
+        // Copy ctor.
+        // Copies list of grid pointers, but not grids (shallow copy).
+        Grids(const Grids& src) : vector_set<Grid*>(src) {}
+    };
+
     typedef set<GridPoint> GridPointSet;
     typedef set<GridPointPtr> GridPointPtrSet;
     typedef vector<GridPoint> GridPointVec;
@@ -1061,52 +1096,69 @@ namespace yask {
     // A 'Condition' is simply a pointer to a binary expression.
     typedef BoolExprPtr Condition;
 
-    // A class for a Grid or a Parameter.
-    // Dims in the IntTuple describe the grid or param.
-    // For grids, values in the IntTuple are ignored (grids are sized at run-time).
-    // For params, values in the IntTuple define the sizes.
-    class Grid : public IntTuple,
-                 public virtual yc_grid {
+    // A class for a Grid.
+    // This is a generic container for all variables to be accessed
+    // from the kernel. A 0-D grid is a scalar, a 1-D grid is an array, etc.
+    // Dims can be the step dim, a domain dim, or anything else.
+    class Grid : public virtual yc_grid {
 
-        // Should not be copying grids.
-        Grid(const Grid& src) { assert(0); }
-    
     protected:
-        string _name;               // name of the grid.
+        string _name;           // name of the grid.
+        IndexExprPtrVec _dims;  // dimensions.
 
-        // Note: at this time, a Grid is either indexed only by stencil indices,
-        // and a 'parameter' is indexed only by non-stencil indices. So, scalar
-        // parameter values will be broadcast to all elements of a grid
-        // vector. TODO: generalize this so that a parameter is just one special
-        // case of a grid.
-        bool _isParam = false;              // is a parameter.
+        // Ptr to enclosing solution.
+        // This is a mechanism to get access to parent's vars.
+        StencilSolution* _soln = 0;
 
-        // Ptr to object to store equations when they are encountered.
-        Eqs* _eqs = 0;
-    
+        // Values below are computed based on equations.
+        
+        // Min and max const indices for each dim.
+        IntTuple _minIndices, _maxIndices;
+        
         // Max abs-value of non-step-index halos required by all eqs at
         // various step-index values.
         // TODO: keep separate pos and neg halos.
         // TODO: keep separate halos for each equation.
-        string _stepDim;            // Assumes all eqs use same step-dim.
         map<int, IntTuple> _halos;  // key: step-dim offset.
-
+    
     public:
-        Grid() { }
+        // Ctors.
+        Grid(string name, StencilSolution* soln,
+             const IndexExprPtrVec& dims);
+        Grid(string name, StencilSolution* soln,
+             IndexExprPtr dim1 = nullptr,
+             IndexExprPtr dim2 = nullptr,
+             IndexExprPtr dim3 = nullptr,
+             IndexExprPtr dim4 = nullptr,
+             IndexExprPtr dim5 = nullptr,
+             IndexExprPtr dim6 = nullptr);
+
+        // Dtor.
         virtual ~Grid() { }
 
         // Name accessors.
         const string& getName() const { return _name; }
         void setName(const string& name) { _name = name; }
 
-        // Param-type accessors.
-        bool isParam() const { return _isParam; }
-        void setParam(bool isParam) { _isParam = isParam; }
+        // Access dims.
+        virtual const IndexExprPtrVec& getDims() const { return _dims; }
 
-        // Access to all equations in this stencil.
-        virtual Eqs* getEqs() { return _eqs; }
-        virtual void setEqs(Eqs* eqs) { _eqs = eqs; }
-    
+        // Step dim or null if none.
+        virtual const IndexExprPtr getStepDim() const {
+            for (auto d : _dims)
+                if (d->getType() == STEP_INDEX)
+                    return d;
+            return nullptr;
+        }
+
+        // Access to solution.
+        virtual StencilSolution* getSoln() { return _soln; }
+        virtual void setSoln(StencilSolution* soln) { _soln = soln; }
+
+        // Get min and max observed indices.
+        virtual const IntTuple& getMinIndices() const { return _minIndices; }
+        virtual const IntTuple& getMaxIndices() const { return _maxIndices; }
+
         // Get the max size in 'dim' of halo across all step dims.
         virtual int getHaloSize(const string& dim) const {
             int h = 0;
@@ -1122,93 +1174,88 @@ namespace yask {
         // Determine how many values in step-dim are needed.
         virtual int getStepDimSize() const;
 
-        // Update halos based on each value in 'vals' given the step-dim 'stepDim'.
-        virtual void updateHalo(const string& stepDim, const IntTuple& vals);
+        // Update halos based on each value in 'offsets'.
+        virtual void updateHalo(const IntTuple& offsets);
+
+        // Update const indices based on 'indices'.
+        virtual void updateConstIndices(const IntTuple& indices);
     
         // Create an expression to a specific point in this grid.
         // Note that this doesn't actually 'read' or 'write' a value;
         // it's just a node in an expression.
-        virtual GridPointPtr makePoint(int count, ...);
+        virtual GridPointPtr makePoint(const NumExprPtrVec& args);
+        virtual GridPointPtr makePoint() {
+            NumExprPtrVec args;
+            return makePoint(args);
+        }
 
         // Convenience functions for zero dimensions (scalar).
         virtual operator NumExprPtr() { // implicit conversion.
-            assert(_isParam);
-            return makePoint(0);
+            return makePoint();
         }
         virtual operator GridPointPtr() { // implicit conversion.
-            assert(_isParam);
-            return makePoint(0);
+            return makePoint();
         }
         virtual GridPointPtr operator()() {
-            assert(_isParam);
-            return makePoint(0);
+            return makePoint();
         }
 
         // Convenience functions for one dimension (array).
-        // TODO: separate out ExprPtr varieties for Grid
-        // and int varieties for Param.
-        virtual GridPointPtr operator[](int i1) {
-            assert(_isParam);
-            return makePoint(1, i1);
+        virtual GridPointPtr operator[](const NumExprArg i1) {
+            NumExprPtrVec args;
+            args.push_back(i1);
+            return makePoint(args);
         }
-        virtual GridPointPtr operator()(int i1) {
-            assert(_isParam);
-            return makePoint(1, i1);
-        }
-        virtual GridPointPtr operator[](const NumExprPtr i1) {
-            return makePoint(1, i1->getIntVal());
-        }
-        virtual GridPointPtr operator()(const NumExprPtr i1) {
-            return makePoint(1, i1->getIntVal());
+        virtual GridPointPtr operator()(const NumExprArg i1) {
+            return operator[](i1);
         }
 
         // Convenience functions for more dimensions.
-        virtual GridPointPtr operator()(int i1, int i2) {
-            assert(_isParam);
-            return makePoint(2, i1, i2);
+        virtual GridPointPtr operator()(const NumExprArg i1, const NumExprArg i2) {
+            NumExprPtrVec args;
+            args.push_back(i1);
+            args.push_back(i2);
+            return makePoint(args);
         }
-        virtual GridPointPtr operator()(int i1, int i2, int i3) {
-            assert(_isParam);
-            return makePoint(3, i1, i2, i3);
+        virtual GridPointPtr operator()(const NumExprArg i1, const NumExprArg i2,
+                                        const NumExprArg i3) {
+            NumExprPtrVec args;
+            args.push_back(i1);
+            args.push_back(i2);
+            args.push_back(i3);
+            return makePoint(args);
         }
-        virtual GridPointPtr operator()(int i1, int i2, int i3, int i4) {
-            assert(_isParam);
-            return makePoint(4, i1, i2, i3, i4);
+        virtual GridPointPtr operator()(const NumExprArg i1, const NumExprArg i2,
+                                        const NumExprArg i3, const NumExprArg i4) {
+            NumExprPtrVec args;
+            args.push_back(i1);
+            args.push_back(i2);
+            args.push_back(i3);
+            args.push_back(i4);
+            return makePoint(args);
         }
-        virtual GridPointPtr operator()(int i1, int i2, int i3, int i4, int i5) {
-            assert(_isParam);
-            return makePoint(5, i1, i2, i3, i4, i5);
+        virtual GridPointPtr operator()(const NumExprArg i1, const NumExprArg i2,
+                                        const NumExprArg i3, const NumExprArg i4,
+                                        const NumExprArg i5) {
+            NumExprPtrVec args;
+            args.push_back(i1);
+            args.push_back(i2);
+            args.push_back(i3);
+            args.push_back(i4);
+            args.push_back(i5);
+            return makePoint(args);
         }
-        virtual GridPointPtr operator()(int i1, int i2, int i3, int i4, int i5, int i6) {
-            assert(_isParam);
-            return makePoint(6, i1, i2, i3, i4, i5, i6);
-        }
-        virtual GridPointPtr operator()(const NumExprPtr i1, const NumExprPtr i2) {
-            return makePoint(2, i1->getIntVal(), i2->getIntVal());
-        }
-        virtual GridPointPtr operator()(const NumExprPtr i1, const NumExprPtr i2,
-                                        const NumExprPtr i3) {
-            return makePoint(3, i1->getIntVal(), i2->getIntVal(),
-                             i3->getIntVal());
-        }
-        virtual GridPointPtr operator()(const NumExprPtr i1, const NumExprPtr i2,
-                                        const NumExprPtr i3, const NumExprPtr i4) {
-            return makePoint(4, i1->getIntVal(), i2->getIntVal(),
-                             i3->getIntVal(), i4->getIntVal());
-        }
-        virtual GridPointPtr operator()(const NumExprPtr i1, const NumExprPtr i2,
-                                        const NumExprPtr i3, const NumExprPtr i4,
-                                        const NumExprPtr i5) {
-            return makePoint(5, i1->getIntVal(), i2->getIntVal(),
-                             i3->getIntVal(), i4->getIntVal(),
-                             i5->getIntVal());
-        }
-        virtual GridPointPtr operator()(const NumExprPtr i1, const NumExprPtr i2,
-                                        const NumExprPtr i3, const NumExprPtr i4,
-                                        const NumExprPtr i5, const NumExprPtr i6) {
-            return makePoint(6, i1->getIntVal(), i2->getIntVal(),
-                             i3->getIntVal(), i4->getIntVal(),
-                             i5->getIntVal(), i6->getIntVal());
+        virtual GridPointPtr operator()(const NumExprArg i1, const NumExprArg i2,
+                                        const NumExprArg i3, const NumExprArg i4,
+                                        const NumExprArg i5, const NumExprArg i6) {
+            NumExprPtrVec args;
+            args.push_back(i1);
+            args.push_back(i2);
+            args.push_back(i3);
+            args.push_back(i4);
+            args.push_back(i5);
+            args.push_back(i6);
+            return makePoint(args);
         }
 
         // APIs.
@@ -1216,10 +1263,14 @@ namespace yask {
             return _name;
         }
         virtual int get_num_dims() const {
-            return getNumDims();
+            return int(_dims.size());
         }
         virtual const string& get_dim_name(int n) const {
-            return getDimName(n);
+            assert(n >= 0);
+            assert(n < get_num_dims());
+            auto dp = _dims.at(n);
+            assert(dp);
+            return dp->getName();
         }
         virtual std::vector<std::string> get_dim_names() const;
         virtual yc_grid_point_node_ptr
@@ -1233,32 +1284,11 @@ namespace yask {
         new_relative_grid_point(std::vector<int> dim_offsets);
     };
 
-    // A list of grids.  This holds pointers to grids defined by the stencil
-    // class in the order in which they are added via the INIT_GRID_* macros.
-    class Grids : public vector_set<Grid*> {
-    public:
-    
-        Grids() {}
-        virtual ~Grids() {}
-
-        // Copy ctor.
-        // Copies list of grid pointers, but not grids (shallow copy).
-        Grids(const Grids& src) : vector_set<Grid*>(src) {}
-    };
-
-    // Aliases for parameters.
-    // Even though these are just typedefs for now, don't interchange them.
-    // TODO: make params just a special case of grids.
-    typedef Grid Param;
-    typedef Grids Params;
-
     // Settings for the compiler.
     // May be provided via cmd-line or API.
     class CompilerSettings {
     public:
         int _elem_bytes = 4;    // bytes in an FP element.
-        string _stepDim = "t";  // name of stepping dimension.
-        IntTuple _domainDims;   // names of domain dimensions.
         IntTuple _foldOptions;    // vector fold.
         IntTuple _clusterOptions; // cluster multipliers.
         bool _firstInner = true; // first dimension of fold is unit step.
@@ -1277,12 +1307,16 @@ namespace yask {
     
     // Stencil dimensions.
     struct Dimensions {
-        IntTuple _allDims;          // all dims with zero value.
-        string _stepDim;            // step dimension.
-        IntTuple _scalar, _fold;    // points in scalar and fold.
-        IntTuple _clusterPts;       // cluster size in points.
-        IntTuple _clusterMults;     // cluster size in vectors.
-        IntTuple _miscDims;         // all dims that are not the step or in folds/clusters.
+        string _stepDim;         // step dimension.
+        IntTuple _domainDims;    // domain dims with zero value.
+        IntTuple _stencilDims;       // step and domain dims.
+        IntTuple _miscDims;      // misc dims that are not the step or domain.
+
+        // Following contain only domain dims.
+        IntTuple _scalar;       // points in scalar (value 1 in each).
+        IntTuple _fold;         // points in fold.
+        IntTuple _clusterPts;    // cluster size in points.
+        IntTuple _clusterMults;  // cluster size in vectors.
 
         Dimensions() {}
         virtual ~Dimensions() {}
@@ -1506,7 +1540,6 @@ namespace yask {
 
     // A 'GridValue' is simply a pointer to an expression.
     typedef NumExprPtr GridValue;
-
  
     // Use SET_VALUE_FROM_EXPR for creating a string to insert any C++ code
     // that evaluates to a real_t.

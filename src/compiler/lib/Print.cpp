@@ -34,29 +34,17 @@ namespace yask {
 
     /////// Top-down
 
-    // A grid or parameter read.
+    // A grid read.
     // Uses the PrintHelper to format.
     void PrintVisitorTopDown::visit(GridPoint* gp) {
-        if (gp->isParam())
-            _exprStr += _ph.readFromParam(_os, *gp);
-        else
-            _exprStr += _ph.readFromPoint(_os, *gp);
+        _exprStr += _ph.readFromPoint(_os, *gp);
         _numCommon += _ph.getNumCommon(gp);
-    }
-
-    // An index.
-    void PrintVisitorTopDown::visit(IntScalarExpr* ite) {
-
-        // get name of dimension, e.g., "x".
-        _exprStr += ite->getName();
-        _numCommon += _ph.getNumCommon(ite);
     }
 
     // An index expression.
     void PrintVisitorTopDown::visit(IndexExpr* ie) {
 
-        // E.g., "first_index(x)".
-        _exprStr += ie->getFnName() + '(' + ie->getDirName() + ')';
+        _exprStr += ie->format();
         _numCommon += _ph.getNumCommon(ie);
     }
 
@@ -248,14 +236,14 @@ namespace yask {
         return exprDone;
     }
 
-    // A grid or param point: just set expr.
+    // A grid point: just set expr.
     void PrintVisitorBottomUp::visit(GridPoint* gp) {
         trySimplePrint(gp, true);
     }
 
-    // An index.
-    void PrintVisitorBottomUp::visit(IntScalarExpr* ite) {
-        trySimplePrint(ite, true);
+    // A grid index.
+    void PrintVisitorBottomUp::visit(IndexExpr* ie) {
+        trySimplePrint(ie, true);
     }
 
     // A constant: just set expr.
@@ -418,15 +406,15 @@ namespace yask {
         _numPts++;
 
         // Pick a color based on its distance.
-        size_t ci = gp->max();
+        size_t ci = gp->getArgOffsets().max();
         ci %= _colors.size();
         
-        _os << "point(" + _colors[ci] + ", " << gp->makeValStr() << ")" << endl;
+        _os << "point(" + _colors[ci] + ", " << gp->getArgOffsets().makeValStr() << ")" << endl;
     }
 
     ////// DOT-language.
 
-    // A grid or parameter access.
+    // A grid access.
     void DOTPrintVisitor::visit(GridPoint* gp) {
         string label = getLabel(gp);
         if (label.size())
@@ -494,10 +482,8 @@ namespace yask {
         }
     }
 
-    // A grid or parameter access.
+    // A grid access.
     void SimpleDOTPrintVisitor::visit(GridPoint* gp) {
-        if (gp->isParam())
-            return;
         string label = getLabel(gp);
         if (label.size()) {
             _os << label << " [ shape = box ];" << endl;
@@ -634,24 +620,24 @@ namespace yask {
             os << " template <int level>";
         os << " inline void " << fname;
         if (dim.size())
-            os << "_sb" << dim << "v";
-        os << "(idx_t start_sbtv, " <<
-            _yask_dims.makeDimStr(", ", "idx_t start_sb", "v") << ", " <<
-            _yask_dims.makeDimStr(", ", "idx_t stop_sb", "v") << ") {\n";
-        for (auto& adim : _dims._allDims.getDims()) {
+            os << "_sb" << dim;
+        os << "(idx_t start_sbt, " <<
+            _yask_dims.makeDimStr(", ", "idx_t start_sb") << ", " <<
+            _yask_dims.makeDimStr(", ", "idx_t stop_sb") << ") {\n";
+        for (auto& adim : _dims._stencilDims.getDims()) {
             auto& dname = adim.getName();
             if (dname != _yask_step && !_yask_dims.lookup(dname)) {
                 cerr << "Error: YASK does not support '" << dname << "' dimension.\n";
                 exit(1);
             }
-            os << " idx_t " << dname << "v = start_sb" << dname << "v;\n";
+            os << " idx_t " << dname << " = start_sb" << dname << ";\n";
         }
         os << " " << fname;
         if (dim.size())
             os << "_" << dim;
         if (use_template)
             os << "<level>";
-        os << "(" << _dims._allDims.makeDimStr(", ", "", "v") << ");\n"
+        os << "(" << _dims._stencilDims.makeDimStr() << ");\n"
             "} // " << fname << " shim.\n";
     }
 
@@ -672,7 +658,7 @@ namespace yask {
         os << "\n#ifdef DEFINE_CONTEXT\n"
             "namespace yask {" << endl;
 
-        // First, create a class to hold the data (grids and params).
+        // First, create a class to hold the data (grids).
         {
             // get stats.
             CounterVisitor cve;
@@ -688,28 +674,51 @@ namespace yask {
             string ctorCode, ctorList;
             os << "\n ///// Grid(s)." << endl;
             for (auto gp : _grids) {
-                assert (!gp->isParam());
                 string grid = gp->getName();
+                size_t ndims = gp->getDims().size();
 
-                os << "\n // The " << gp->getNumDims() <<
-                    "D '" << grid << "' grid, which is ";
+                os << "\n // The " << ndims <<
+                    "-D '" << grid << "' grid, which is ";
                 if (_eqGroups.getOutputGrids().count(gp))
                     os << "updated by one or more equations.\n";
                 else
                     os << "not updated by any equation (read-only).\n";
-            
-                // Type name.
-                // Name in kernel is 'Grid_' followed by dimensions, e.g., "Grid_TXYZ".
-                string typeName = "Grid_";
-                string templStr;
-                for (auto& dim : gp->getDims()) {
-                    auto& dname = dim.getName();
 
+                // Type name.
+                string typeName;
+            
+                // Use vector-folded layout if possible.
+                //bool folded = gp->is_foldable();
+
+                // Name in kernel is 'Grid_' followed by dimensions, e.g., "Grid_TXYZ".
+                typeName = "Grid_";
+                for (auto dim : gp->getDims()) {
+                    auto& dname = dim->getName();
+                    
                     // Add dim suffix.
                     string ucDim = allCaps(dname);
                     typeName += ucDim;
                 }
-                typeName += templStr;
+
+                // TODO: redo when YASK generalized.
+                bool folded = typeName == "Grid_XYZ" || typeName == "Grid_TXYZ";
+
+                // Use 'normal' layout if not foldable.
+                if (!folded) {
+
+                    // Type-name in kernel is 'GenericGridNd<real_t, LAYOUT>'.
+                    ostringstream oss;
+                    oss << "GenericGrid" << ndims << "d<real_t";
+                    if (ndims) {
+                        oss << ", Layout_";
+
+                        // Traditional C layout, e.g., 321.
+                        for (size_t dn = ndims; dn > 0; dn--)
+                            oss << dn;
+                    }
+                    oss << ">";
+                    typeName = oss.str();
+                }
 
                 // Actual grid declaration.
                 os << " std::shared_ptr<" << typeName << "> " << grid << "_ptr;\n" <<
@@ -717,49 +726,82 @@ namespace yask {
 
                 // Grid init.
                 ctorCode += "\n  // Init grid '" + grid + "'.\n" +
-                    " " + grid + "_ptr = std::make_shared<" + typeName + ">(\"" + grid + "\");\n" +
-                    " " + grid + " = " + grid + "_ptr.get();\n" +
-                    " addGrid(" + grid + "_ptr, ";
-                if (_eqGroups.getOutputGrids().count(gp))
-                    ctorCode += "true";
-                else
-                    ctorCode += "false";
-                ctorCode += ");\n";
-
+                    " " + grid + "_ptr = std::make_shared<" + typeName + ">(\"" + grid + "\"";
+                if (!folded) {
+                    for (auto dim : gp->getDims()) {
+                        auto& dname = dim->getName();
+                        ctorCode += ", \"" + dname + "\""; // add dim name.
+                    }
+                }
+                ctorCode += ");\n"
+                    " " + grid + " = " + grid + "_ptr.get();\n";
+                if (folded) {
+                    ctorCode += " addGrid(" + grid + "_ptr, ";
+                    if (_eqGroups.getOutputGrids().count(gp))
+                        ctorCode += "true /* is output grid */";
+                    else
+                        ctorCode += "false /* not output grid */";
+                    ctorCode += ");\n";
+                }
+                
                 // Alloc-setting code.
-                for (auto& dim : gp->getDims()) {
-                    auto& dname = dim.getName();
-
-                    // step dimension.
-                    if (dname == _dims._stepDim) {
-                        string sdvar = grid + "_alloc_" + dname;
-                        int sdval = _settings._stepAlloc > 0 ?
-                            _settings._stepAlloc : gp->getStepDimSize();
-                        os << " const idx_t " << sdvar << " = " << sdval <<
-                            "; // total allocation required in '" << dname << "' dimension.\n";
-                        ctorCode += " " + grid + "->set_alloc_" + dname +
-                            "(" + sdvar + ");\n";
-                    }
+                // TODO: redo when YASK kernel grid is updated.
+                if (folded) {
                     
-                    // non-step dimension.
-                    else {
+                    for (auto dim : gp->getDims()) {
+                        auto& dname = dim->getName();
+                        auto dtype = dim->getType();
 
-                        // Halo for this dimension.
-                        string hvar = grid + "_halo_" + dname;
-                        int hval = _settings._haloSize > 0 ?
-                            _settings._haloSize : gp->getHaloSize(dname);
-                        os << " const idx_t " << hvar << " = " << hval <<
-                            "; // halo allocation required in '" << dname << "' dimension.\n";
-                        ctorCode += " " + grid + "->set_halo_" + dname +
-                            "(" + hvar + ");\n";
+                        // step dimension.
+                        if (dtype == STEP_INDEX) {
+                            string sdvar = grid + "_alloc_" + dname;
+                            int sdval = _settings._stepAlloc > 0 ?
+                                _settings._stepAlloc : gp->getStepDimSize();
+                            os << " const idx_t " << sdvar << " = " << sdval <<
+                                "; // total allocation required in '" << dname << "' dimension.\n";
+                            ctorCode += " " + grid + "->set_alloc_" + dname +
+                                "(" + sdvar + ");\n";
+                        }
+                    
+                        // non-step dimension.
+                        else if (dtype == DOMAIN_INDEX) {
 
-                        // Update max halo across grids.
-                        int* mh = maxHalos.lookup(dname);
-                        if (mh)
-                            *mh = max(*mh, hval);
-                        else
-                            maxHalos.addDimBack(dname, hval);
+                            // Halo for this dimension.
+                            string hvar = grid + "_halo_" + dname;
+                            int hval = _settings._haloSize > 0 ?
+                                _settings._haloSize : gp->getHaloSize(dname);
+                            os << " const idx_t " << hvar << " = " << hval <<
+                                "; // halo allocation required in '" << dname << "' dimension.\n";
+                            ctorCode += " " + grid + "->set_halo_" + dname +
+                                "(" + hvar + ");\n";
+
+                            // Update max halo across grids.
+                            int* mh = maxHalos.lookup(dname);
+                            if (mh)
+                                *mh = max(*mh, hval);
+                            else
+                                maxHalos.addDimBack(dname, hval);
+                        }
+
+                        else {
+                            assert("misc index in foldable grid not expected" && 0);
+                        }
                     }
+                }
+
+                // not folded.
+                else {
+                    if (ndims) {
+
+                        // TODO: change when all dim sizes need not be known.
+                        assert(gp->getMinIndices().size() == int(ndims));
+                        assert(gp->getMaxIndices().size() == int(ndims));
+                        string dimArg = gp->getMaxIndices().makeValStr(", ", "", "+1"); // FIXME.
+                        ctorCode += " " + grid + "->set_dim_sizes(" + dimArg + ");\n";
+                    }
+                    ctorCode +=
+                        " paramPtrs.push_back(" + grid + ");\n"
+                        " paramMap[\"" + grid + "\"] = " + grid + ";\n";
                 }
             }
 
@@ -771,48 +813,6 @@ namespace yask {
                     maxHalos.getVal(dname) << ";" << endl;
             }
             
-            // Parameters.
-            if (_params.size())
-                os << "\n ///// Parameter(s)." << endl;
-            for (auto pp : _params) {
-                assert(pp->isParam());
-                string param = pp->getName();
-                os << "\n // The " << pp->getNumDims() <<
-                    "D '" << param << "' parameter.\n";
-            
-                // Type-name in kernel is 'GenericGridNd<real_t, LAYOUT>'.
-                ostringstream oss;
-                oss << "GenericGrid" << pp->size() << "d<real_t";
-                if (pp->size()) {
-                    oss << ", Layout_";
-
-                    // Traditional C layout, e.g., 321.
-                    for (int dn = pp->size(); dn > 0; dn--)
-                        oss << dn;
-                }
-                oss << ">";
-                string ptype = oss.str();
-            
-                // Actual declaration.
-                os << " " << ptype << "* " << param << ";\n";
-
-                // Param init.
-                string dimArg = pp->makeValStr();
-                ctorCode += "\n  // Init parameter '" + param + "'.\n"
-                    " " + param + " = new " + ptype + "(\"" + param + "\"";
-                for (auto& dim : pp->getDims()) {
-                    auto& dname = dim.getName();
-                    ctorCode += ", \"" + dname + "\""; // add dim name.
-                }
-                ctorCode += ");\n"
-                    " assert(" + param + ");\n";
-                if (pp->getNumDims())
-                    ctorCode += " " + param + "->set_dim_sizes(" + dimArg + ");\n";
-                ctorCode +=
-                    " paramPtrs.push_back(" + param + ");\n"
-                    " paramMap[\"" + param + "\"] = " + param + ";\n";
-            }
-
             // Ctor.
             {
                 os << "\n // Constructor.\n" <<
@@ -820,7 +820,7 @@ namespace yask {
                     " StencilContext(env, settings)" << ctorList <<
                     " {\n  name = \"" << _stencil.getName() << "\";\n";
 
-                os << "\n // Create grids and parameters.\n" <<
+                os << "\n // Create grids (but do not allocate data in them).\n" <<
                     ctorCode;
             
                 // Init halo sizes.
@@ -879,8 +879,8 @@ namespace yask {
                 if (eq.getInputGrids().size()) {
                     os << "\n // The following grids are read by " << egsName << endl;
                     for (auto gp : eq.getInputGrids())
-                        if (!gp->isParam())
-                            os << "  inputGridPtrs.push_back(_context->" << gp->getName() << "_ptr);" << endl;
+                        if (gp->getDims().size() > 1) // FIXME: remove this temp hack!
+                        os << "  inputGridPtrs.push_back(_context->" << gp->getName() << "_ptr);" << endl;
                 }
                 os << " } // Ctor." << endl;
             }
@@ -890,7 +890,7 @@ namespace yask {
                 os << endl << " // Determine whether " << egsName << " is valid at the given indices."
                     " Return true if indices are within the valid sub-domain or false otherwise.\n"
                     " virtual bool is_in_valid_domain(" <<
-                    _dims._allDims.makeDimStr(", ", "idx_t ") << ") {" << endl;
+                    _dims._stencilDims.makeDimStr(", ", "idx_t ") << ") {" << endl;
                 if (eq.cond.get())
                     os << " return " << eq.cond->makeStr() << ";" << endl;
                 else
@@ -908,9 +908,9 @@ namespace yask {
                 // Stencil-calculation code.
                 // Function header.
                 os << endl << " // Calculate one scalar result relative to indices " <<
-                    _dims._allDims.makeDimStr(", ") << ".\n"
+                    _dims._stencilDims.makeDimStr(", ") << ".\n"
                     " virtual void calc_scalar(" <<
-                    _dims._allDims.makeDimStr(", ", "idx_t ") << ") {" << endl;
+                    _dims._stencilDims.makeDimStr(", ", "idx_t ") << ") {" << endl;
 
                 // C++ code generator.
                 // The visitor is accepted at all nodes in the scalar AST;
@@ -955,9 +955,9 @@ namespace yask {
                 // Function header.
                 int numResults = _dims._clusterPts.product();
                 os << endl << " // Calculate " << numResults <<
-                    " result(s) relative to indices " << _dims._allDims.makeDimStr(", ") <<
+                    " result(s) relative to indices " << _dims._stencilDims.makeDimStr(", ") <<
                     " in a '" << _dims._clusterPts.makeDimValStr(" * ") <<
-                    "' cluster containing " << _dims._clusterMults.product() << " '" <<
+                    "'-point cluster containing " << _dims._clusterMults.product() << " '" <<
                     _dims._fold.makeDimValStr(" * ") << "' vector(s).\n"
                     " // Indices must be rank-relative.\n"
                     " // Indices must be normalized, i.e., already divided by VLEN_*.\n"
@@ -967,7 +967,7 @@ namespace yask {
                     " // There are approximately " << (stats.getNumOps() * numResults) <<
                     " FP operation(s) per invocation." << endl;
                 os << " inline void calc_cluster(" <<
-                    _dims._allDims.makeDimStr(", ", "idx_t ", "v") << ") {" << endl;
+                    _dims._stencilDims.makeDimStr(", ", "idx_t ") << ") {" << endl;
 
                 // Code generator visitor.
                 // The visitor is accepted at all nodes in the cluster AST;
@@ -987,14 +987,14 @@ namespace yask {
             
                 // Generate prefetch code for no specific direction and then each
                 // orthogonal direction.
-                for (int diri = -1; diri < _dims._allDims.size(); diri++) {
+                for (int diri = -1; diri < _dims._stencilDims.size(); diri++) {
 
                     // Create a direction object.
                     // If diri < 0, there is no direction, indicated by empty name.
                     // If diri >= 0, add a direction.
                     IntScalar dir;
                     if (diri >= 0) {
-                        auto& dim = _dims._allDims.getDim(diri);
+                        auto& dim = _dims._stencilDims.getDim(diri);
                         auto& dname = dim.getName();
 
                         // Magnitude of dimension is based on cluster.
@@ -1016,9 +1016,9 @@ namespace yask {
                             dir.getName() << "' direction ";
                     else
                         os << "for entire stencil ";
-                    os << "relative to indices " << _dims._allDims.makeDimStr(", ") <<
+                    os << "relative to indices " << _dims._stencilDims.makeDimStr(", ") <<
                         " in a '" << _dims._clusterPts.makeDimValStr(" * ") <<
-                        "' cluster containing " << _dims._clusterMults.product() << " '" <<
+                        "'-point cluster containing " << _dims._clusterMults.product() << " '" <<
                         _dims._fold.makeDimValStr(" * ") << "' vector(s).\n"
                         " // Indices must be rank-relative.\n"
                         " // Indices must be normalized, i.e., already divided by VLEN_*.\n";
@@ -1028,7 +1028,7 @@ namespace yask {
                     if (diri >= 0)
                         fname2 += "_" + dir.getName();
                     os << " template<int level> inline void " << fname2 << "(" <<
-                        _dims._allDims.makeDimStr(", ", "idx_t ", "v") << ") {" << endl;
+                        _dims._stencilDims.makeDimStr(", ", "idx_t ") << ") {" << endl;
 
                     // C++ prefetch code.
                     vp->printPrefetches(os, dir);
@@ -1048,25 +1048,25 @@ namespace yask {
                     " // Calculate one sub-block of whole clusters.\n"
                     " // Indices are rank-relative and index vectors.\n"
                     " virtual void calc_sub_block_of_clusters(" <<
-                    _dims._allDims.makeDimStr(", ", "idx_t begin_sb", "v") << ", " <<
-                    _dims._allDims.makeDimStr(", ", "idx_t end_sb", "v") <<
+                    _dims._stencilDims.makeDimStr(", ", "idx_t begin_sb") << ", " <<
+                    _dims._stencilDims.makeDimStr(", ", "idx_t end_sb") <<
                     ") {\n"
                     "\n"
                     " // Steps and group sizes are based on cluster lengths.\n";
-                for (auto& dim : _dims._allDims.getDims()) {
+                for (auto& dim : _dims._stencilDims.getDims()) {
                     auto& dname = dim.getName();
                     string ucDim = allCaps(dname);
-                    os << " const idx_t step_sb" << dname << "v = CMULT_" << ucDim << ";\n"
-                        " const idx_t group_size_sb" << dname << "v = CMULT_" << ucDim << ";\n";
+                    os << " const idx_t step_sb" << dname << " = CMULT_" << ucDim << ";\n"
+                        " const idx_t group_size_sb" << dname << " = CMULT_" << ucDim << ";\n";
                 }
                 for (auto& dim : _yask_dims.getDims()) {
                     auto& dname = dim.getName();
                     string ucDim = allCaps(dname);
-                    if (!_dims._allDims.lookup(dname))
-                        os << " const idx_t begin_sb" << dname << "v = 0; // not used in this stencil.\n"
-                            " const idx_t end_sb" << dname << "v = 1;\n"
-                            " const idx_t step_sb" << dname << "v = CMULT_" << ucDim << ";\n"
-                            " const idx_t group_size_sb" << dname << "v = CMULT_" << ucDim << ";\n";
+                    if (!_dims._stencilDims.lookup(dname))
+                        os << " const idx_t begin_sb" << dname << " = 0; // not used in this stencil.\n"
+                            " const idx_t end_sb" << dname << " = 1;\n"
+                            " const idx_t step_sb" << dname << " = CMULT_" << ucDim << ";\n"
+                            " const idx_t group_size_sb" << dname << " = CMULT_" << ucDim << ";\n";
                 }
                 os << " #if !defined(DEBUG) && defined(__INTEL_COMPILER)\n"
                     " #pragma forceinline recursive\n"
@@ -1155,10 +1155,10 @@ namespace yask {
             "#define YASK_STENCIL_CONTEXT " << _context << endl;
 
         os << "\n// Dimensions:\n";
-        os << "#define STEP_DIM \"" << _dims._stepDim << "\"\n";
-        for (auto dim : _dims._allDims.getDims()) {
+        os << "#define STEP_INDEX \"" << _dims._stepDim << "\"\n";
+        for (auto dim : _dims._stencilDims.getDims()) {
             auto& dname = dim.getName();
-            os << "#define USING_DIM_" << allCaps(dname) << " (1)" << endl;
+            os << "#define USING_INDEX_" << allCaps(dname) << " (1)" << endl;
         }
 
         os << "\n// FP precision:\n"
@@ -1172,8 +1172,8 @@ namespace yask {
             os << "#define VLEN_" << ucDim << " (" << dim.getVal() << ")" << endl;
         }
         os << "#define VLEN (" << _dims._fold.product() << ")" << endl;
-        os << "#define VLEN_FIRST_DIM_IS_UNIT_STRIDE (" <<
-            (_dims._fold.getFirstInner() ? 1 : 0) << ")" << endl;
+        os << "#define VLEN_FIRST_INDEX_IS_UNIT_STRIDE (" <<
+            (_dims._fold.isFirstInner() ? 1 : 0) << ")" << endl;
         os << "#define USING_UNALIGNED_LOADS (" <<
             (_settings._allowUnalignedLoads ? 1 : 0) << ")" << endl;
 

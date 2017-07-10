@@ -44,17 +44,18 @@ YC_PY_MOD	:=	$(LIB_DIR)/$(YC_BASE).py
 YC_SWIG_DIR	:=	./swig
 YC_GEN_DIR	:=	./gen
 YC_LIB_DIR	:=	./lib
-YC_SRC_BASES	:=	CppIntrin Expr ExprUtils Print
+YC_SRC_BASES	:=	CppIntrin Expr ExprUtils Print Vec
 YC_OBJS		:=	$(addprefix $(YC_LIB_DIR)/,$(addsuffix .o,$(YC_SRC_BASES)))
-YC_STENCIL_LIST	:=	$(YC_GEN_DIR)/stencils.hpp
-YC_INC_DIRS	:=	$(INC_DIR) $(YC_LIB_DIR) ../common ../stencils
+YC_INC_DIRS	:=	$(INC_DIR) $(YC_LIB_DIR) ../common
 YC_INC_GLOB	:=	$(addsuffix /*.hpp,$(YC_INC_DIRS))
+YC_STENCIL_DIR	:= 	../stencils
+YC_STENCIL_LIST	:=	$(YC_GEN_DIR)/stencils.hpp
 YC_MK_GEN_DIR	:=	mkdir -p -v $(YC_GEN_DIR)
 
 # Compiler and default flags.
 YC_CXX    	?=	g++  # usually faster than icpc for building the compiler.
 YC_CXXFLAGS 	+=	-g -std=c++11 -Wall -O2
-YC_CXXFLAGS	+=	$(addprefix -I,$(YC_INC_DIRS) $(YC_GEN_DIR))
+YC_CXXFLAGS	+=	$(addprefix -I,$(YC_INC_DIRS) $(YC_GEN_DIR) $(YC_STENCIL_DIR))
 
 # Add user-defined flags.
 YC_CXXFLAGS	+=	$(EXTRA_YC_CXXFLAGS)
@@ -80,18 +81,18 @@ default: compiler
 compiler: $(YC_EXEC)
 	@echo "Binary" $(YC_EXEC) "has been built."
 
-%.o: %.cpp $(YC_STENCIL_LIST) $(YC_INC_GLOB) 
+%.o: %.cpp $(YC_INC_GLOB)
 	$(YC_CXX) $(YC_CXXFLAGS) -fPIC -c -o $@ $<
 
 $(YC_LIB): $(YC_OBJS)
 	$(YC_CXX) $(YC_CXXFLAGS) -shared -o $@ $^
 
-$(YC_EXEC): main.cpp $(YC_LIB)
-	$(YC_LD) $(YC_CXXFLAGS) -O0 $(YC_LFLAGS) -o $@ $<
+$(YC_EXEC): main.cpp $(YC_LIB) $(YC_INC_GLOB) $(YC_STENCIL_LIST)
+	$(YC_LD) $(YC_CXXFLAGS) -O0 $(YC_LFLAGS) -o $@ main.cpp $(YC_LIB)
 	$(MAKE) echo-settings
 
 # Generated files.
-$(YC_STENCIL_LIST): ../stencils/*.hpp
+$(YC_STENCIL_LIST): $(YC_STENCIL_DIR)/*.hpp
 	$(YC_MK_GEN_DIR)
 	echo '// Stencil-definition files.' > $@
 	echo '// Automatically-generated code; do not edit.' >> $@

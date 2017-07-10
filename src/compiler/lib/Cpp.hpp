@@ -54,7 +54,7 @@ namespace yask {
             // https://en.wikipedia.org/wiki/Double-precision_floating-point_format.
             // Some precision might be lost if/when cast to a float, but that's ok.
             ostringstream oss;
-            oss << setprecision(17) << scientific << v;
+            oss << setprecision(15) << scientific << v;
             return oss.str();
         }
     
@@ -64,12 +64,6 @@ namespace yask {
             return formatReal(v);
         }
 
-        // Return a parameter reference.
-        virtual string readFromParam(ostream& os, const GridPoint& pp) {
-            string str = "(*_context->" + pp.getName() + ")(" + pp.makeValStr() + ")";
-            return str;
-        }
-    
         // Make call for a point.
         // This is a utility function used for both reads and writes.
         virtual string makePointCall(const GridPoint& gp,
@@ -77,12 +71,18 @@ namespace yask {
             ostringstream oss;
             oss << "_context->" << gp.getName() << "->" << fname << "(";
             if (optArg.length()) oss << optArg << ", ";
-            oss << gp.makeDimValOffsetStr() << ", __LINE__)";
+            oss << gp.makeArgsStr() << ", __LINE__)";
             return oss.str();
         }
     
         // Return a grid reference.
         virtual string readFromPoint(ostream& os, const GridPoint& gp) {
+
+            // FIXME.
+            if (!gp.getArgOffsets().size()) {
+                string str = "(*_context->" + gp.getName() + ")(" + gp.getArgConsts().makeValStr() + ")";
+                return str;
+            }
             return makePointCall(gp, "readElem");
         }
 
@@ -120,18 +120,11 @@ namespace yask {
             return code;
         }
 
-        // Return a parameter reference.
-        virtual string readFromParam(ostream& os, const GridPoint& pp) {
-            string str = "(*_context->" + pp.getName() + ")(" + pp.makeValStr() + ")";
-            return str;
-        }
-    
         // Print a comment about a point.
         // This is a utility function used for both reads and writes.
         virtual void printPointComment(ostream& os, const GridPoint& gp, const string& verb) const {
 
-            os << endl << " // " << verb << " " << gp.getName() << " at " <<
-                gp.makeDimValOffsetStr() << "." << endl;
+            os << endl << " // " << verb << " " << gp.makeStr() << "." << endl;
         }
 
         // Print call for a point.
@@ -142,13 +135,20 @@ namespace yask {
                                     const string& firstArg,
                                     const string& lastArg,
                                     bool isNorm) const {
+
+            // FIXME.
+            if (!gp.getArgOffsets().size()) {
+                os << "(*_context->" + gp.getName() + ")(" + gp.getArgConsts().makeValStr() + ")";
+                return;
+            }
+
             os << " _context->" << gp.getName() << "->" << funcName << "(";
             if (firstArg.length())
                 os << firstArg << ", ";
             if (isNorm)
-                os << gp.makeDimValNormOffsetStr(getFold());
+                os << gp.makeNormArgsStr(getFold());
             else
-                os << gp.makeDimValOffsetStr();
+                os << gp.makeArgsStr();
             if (lastArg.length()) 
                 os << ", " << lastArg;
             os << ")";

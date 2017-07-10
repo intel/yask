@@ -186,7 +186,7 @@ yc-and-yk-test:
 	$(YK_MAKE) $@
 
 all-tests:
-	$(YK_MAKE) yc-and-yk-test
+	$(YK_MAKE) $@
 	$(MAKE) api-tests
 
 all:
@@ -199,10 +199,9 @@ tags:
 	rm -f TAGS ; find src include -name '*.[ch]pp' | xargs etags -C -a
 
 # Remove intermediate files.
-# Should not trigger remake of stencil compiler.
+# Should not trigger remake of stencil compiler, so does not invoke clean in compiler dir.
 # Make this target before rebuilding YASK with any new parameters.
 clean:
-	$(YC_MAKE) $@
 	$(YK_MAKE) $@
 
 # Remove files from old versions.

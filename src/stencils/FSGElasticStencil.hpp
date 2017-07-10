@@ -47,107 +47,73 @@ namespace fsg {
         
     protected:
 
-        Grid v_bl_u, v_bl_v, v_bl_w;
-        Grid v_br_u, v_br_v, v_br_w;
-        Grid v_tl_u, v_tl_v, v_tl_w;
-        Grid v_tr_u, v_tr_v, v_tr_w;
+        MAKE_GRID(v_bl_u, t, x, y, z);
+        MAKE_GRID(v_bl_v, t, x, y, z);
+        MAKE_GRID(v_bl_w, t, x, y, z);
+        MAKE_GRID(v_br_u, t, x, y, z);
+        MAKE_GRID(v_br_v, t, x, y, z);
+        MAKE_GRID(v_br_w, t, x, y, z);
+        MAKE_GRID(v_tl_u, t, x, y, z);
+        MAKE_GRID(v_tl_v, t, x, y, z);
+        MAKE_GRID(v_tl_w, t, x, y, z);
+        MAKE_GRID(v_tr_u, t, x, y, z);
+        MAKE_GRID(v_tr_v, t, x, y, z);
+        MAKE_GRID(v_tr_w, t, x, y, z);
 
-        Grid s_bl_xx, s_bl_yy, s_bl_zz, s_bl_xy, s_bl_xz, s_bl_yz;
-        Grid s_br_xx, s_br_yy, s_br_zz, s_br_xy, s_br_xz, s_br_yz;
-        Grid s_tl_xx, s_tl_yy, s_tl_zz, s_tl_xy, s_tl_xz, s_tl_yz;
-        Grid s_tr_xx, s_tr_yy, s_tr_zz, s_tr_xy, s_tr_xz, s_tr_yz;
+        MAKE_GRID(s_bl_xx, t, x, y, z);
+        MAKE_GRID(s_bl_yy, t, x, y, z);
+        MAKE_GRID(s_bl_zz, t, x, y, z);
+        MAKE_GRID(s_bl_yz, t, x, y, z);
+        MAKE_GRID(s_bl_xz, t, x, y, z);
+        MAKE_GRID(s_bl_xy, t, x, y, z);
+        MAKE_GRID(s_br_xx, t, x, y, z);
+        MAKE_GRID(s_br_yy, t, x, y, z);
+        MAKE_GRID(s_br_zz, t, x, y, z);
+        MAKE_GRID(s_br_yz, t, x, y, z);
+        MAKE_GRID(s_br_xz, t, x, y, z);
+        MAKE_GRID(s_br_xy, t, x, y, z);
+        MAKE_GRID(s_tl_xx, t, x, y, z);
+        MAKE_GRID(s_tl_yy, t, x, y, z);
+        MAKE_GRID(s_tl_zz, t, x, y, z);
+        MAKE_GRID(s_tl_yz, t, x, y, z);
+        MAKE_GRID(s_tl_xz, t, x, y, z);
+        MAKE_GRID(s_tl_xy, t, x, y, z);
+        MAKE_GRID(s_tr_xx, t, x, y, z);
+        MAKE_GRID(s_tr_yy, t, x, y, z);
+        MAKE_GRID(s_tr_zz, t, x, y, z);
+        MAKE_GRID(s_tr_yz, t, x, y, z);
+        MAKE_GRID(s_tr_xz, t, x, y, z);
+        MAKE_GRID(s_tr_xy, t, x, y, z);
 
         // 3D-spatial coefficients.
-        Grid c11,c12,c13,c14,c15,c16;
-        Grid     c22,c23,c24,c25,c26;
-        Grid         c33,c34,c35,c36;
-        Grid             c44,c45,c46;
-        Grid                 c55,c56;
-        Grid                     c66;
-
+        MAKE_GRID(c11, x, y, z);
+        MAKE_GRID(c12, x, y, z);
+        MAKE_GRID(c13, x, y, z);
+        MAKE_GRID(c14, x, y, z);
+        MAKE_GRID(c15, x, y, z);
+        MAKE_GRID(c16, x, y, z);
+        MAKE_GRID(c22, x, y, z);
+        MAKE_GRID(c23, x, y, z);
+        MAKE_GRID(c24, x, y, z);
+        MAKE_GRID(c25, x, y, z);
+        MAKE_GRID(c26, x, y, z);
+        MAKE_GRID(c33, x, y, z);
+        MAKE_GRID(c34, x, y, z);
+        MAKE_GRID(c35, x, y, z);
+        MAKE_GRID(c36, x, y, z);
+        MAKE_GRID(c44, x, y, z);
+        MAKE_GRID(c45, x, y, z);
+        MAKE_GRID(c46, x, y, z);
+        MAKE_GRID(c55, x, y, z);
+        MAKE_GRID(c56, x, y, z);
+        MAKE_GRID(c66, x, y, z);
+        
     public:
 
-        FSGElasticStencilBase( const string &name, StencilList& stencils ) :
-            ElasticStencilBase ( name, stencils )
+        FSGElasticStencilBase( const string &name, StencilList& stencils,
+                               FSGBoundaryCondition *bc = NULL ) :
+            ElasticStencilBase ( name, stencils, bc )
         {
-            initGrids();
-        }
-    
-        FSGElasticStencilBase( const string &name, FSGBoundaryCondition *bc, StencilList& stencils ) :
-            ElasticStencilBase ( name, bc, stencils )
-        {
-            initGrids();
-        }
-
-        void initGrids ()
-        {
-            // Specify the dimensions of each grid.
-            // (This names the dimensions; it does not specify their sizes.)
-            INIT_GRID_4D(v_bl_u, t, x, y, z);
-            INIT_GRID_4D(v_bl_v, t, x, y, z);
-            INIT_GRID_4D(v_bl_w, t, x, y, z);
-            INIT_GRID_4D(v_br_u, t, x, y, z);
-            INIT_GRID_4D(v_br_v, t, x, y, z);
-            INIT_GRID_4D(v_br_w, t, x, y, z);
-            INIT_GRID_4D(v_tl_u, t, x, y, z);
-            INIT_GRID_4D(v_tl_v, t, x, y, z);
-            INIT_GRID_4D(v_tl_w, t, x, y, z);
-            INIT_GRID_4D(v_tr_u, t, x, y, z);
-            INIT_GRID_4D(v_tr_v, t, x, y, z);
-            INIT_GRID_4D(v_tr_w, t, x, y, z);
-            INIT_GRID_4D(s_bl_xx, t, x, y, z);
-            INIT_GRID_4D(s_bl_yy, t, x, y, z);
-            INIT_GRID_4D(s_bl_zz, t, x, y, z);
-            INIT_GRID_4D(s_bl_yz, t, x, y, z);
-            INIT_GRID_4D(s_bl_xz, t, x, y, z);
-            INIT_GRID_4D(s_bl_xy, t, x, y, z);
-            INIT_GRID_4D(s_br_xx, t, x, y, z);
-            INIT_GRID_4D(s_br_yy, t, x, y, z);
-            INIT_GRID_4D(s_br_zz, t, x, y, z);
-            INIT_GRID_4D(s_br_yz, t, x, y, z);
-            INIT_GRID_4D(s_br_xz, t, x, y, z);
-            INIT_GRID_4D(s_br_xy, t, x, y, z);
-            INIT_GRID_4D(s_tl_xx, t, x, y, z);
-            INIT_GRID_4D(s_tl_yy, t, x, y, z);
-            INIT_GRID_4D(s_tl_zz, t, x, y, z);
-            INIT_GRID_4D(s_tl_yz, t, x, y, z);
-            INIT_GRID_4D(s_tl_xz, t, x, y, z);
-            INIT_GRID_4D(s_tl_xy, t, x, y, z);
-            INIT_GRID_4D(s_tr_xx, t, x, y, z);
-            INIT_GRID_4D(s_tr_yy, t, x, y, z);
-            INIT_GRID_4D(s_tr_zz, t, x, y, z);
-            INIT_GRID_4D(s_tr_yz, t, x, y, z);
-            INIT_GRID_4D(s_tr_xz, t, x, y, z);
-            INIT_GRID_4D(s_tr_xy, t, x, y, z);
-            INIT_GRID_3D(rho, x, y, z);
-            INIT_GRID_3D(c11, x, y, z);
-            INIT_GRID_3D(c12, x, y, z);
-            INIT_GRID_3D(c13, x, y, z);
-            INIT_GRID_3D(c14, x, y, z);
-            INIT_GRID_3D(c15, x, y, z);
-            INIT_GRID_3D(c16, x, y, z);
-            INIT_GRID_3D(c22, x, y, z);
-            INIT_GRID_3D(c23, x, y, z);
-            INIT_GRID_3D(c24, x, y, z);
-            INIT_GRID_3D(c25, x, y, z);
-            INIT_GRID_3D(c26, x, y, z);
-            INIT_GRID_3D(c33, x, y, z);
-            INIT_GRID_3D(c34, x, y, z);
-            INIT_GRID_3D(c35, x, y, z);
-            INIT_GRID_3D(c36, x, y, z);
-            INIT_GRID_3D(c44, x, y, z);
-            INIT_GRID_3D(c45, x, y, z);
-            INIT_GRID_3D(c46, x, y, z);
-            INIT_GRID_3D(c55, x, y, z);
-            INIT_GRID_3D(c56, x, y, z);
-            INIT_GRID_3D(c66, x, y, z);
-
-            // StencilContex specific code
-            REGISTER_STENCIL_CONTEXT_EXTENSION
-                (
-                 virtual void initData() {
-                     initDiff();
-                 } );
         }
 
         GridValue cell_coeff( const GridIndex x, const GridIndex y, const GridIndex z, Grid &c, const BR )
@@ -292,7 +258,7 @@ namespace fsg {
 
             // define the value at t+1.
             if ( hasBoundaryCondition() ) {
-                Condition not_at_bc = bc->is_not_at_boundary(t,x,y,z);
+                Condition not_at_bc = bc->is_not_at_boundary();
                 sxx(t+1, x, y, z) EQUALS next_sxx IF not_at_bc;
                 syy(t+1, x, y, z) EQUALS next_syy IF not_at_bc;
                 szz(t+1, x, y, z) EQUALS next_szz IF not_at_bc;
@@ -310,11 +276,7 @@ namespace fsg {
         }
 
         // Call all the define_* functions.
-        virtual void define(const IntTuple& offsets) {
-            GET_OFFSET(t);
-            GET_OFFSET(x);
-            GET_OFFSET(y);
-            GET_OFFSET(z);
+        virtual void define() {
         
             FSGBoundaryCondition &fsg_bc = *static_cast<FSGBoundaryCondition *>(bc);
 
@@ -356,19 +318,19 @@ namespace fsg {
         const int abc_width = 20;
     
         // Sponge coefficients.
-        Grid sponge_lx;
-        Grid sponge_rx;
-        Grid sponge_bz;
-        Grid sponge_tz;
-        Grid sponge_fy;
-        Grid sponge_by;
-        Grid sponge_sq_lx;
-        Grid sponge_sq_rx;
-        Grid sponge_sq_bz;
-        Grid sponge_sq_tz;
-        Grid sponge_sq_fy;
-        Grid sponge_sq_by;
-    
+        MAKE_GRID(sponge_lx, x, y, z);
+        MAKE_GRID(sponge_rx, x, y, z);
+        MAKE_GRID(sponge_bz, x, y, z);
+        MAKE_GRID(sponge_tz, x, y, z);
+        MAKE_GRID(sponge_fy, x, y, z);
+        MAKE_GRID(sponge_by, x, y, z);
+        MAKE_GRID(sponge_sq_lx, x, y, z);
+        MAKE_GRID(sponge_sq_rx, x, y, z);
+        MAKE_GRID(sponge_sq_bz, x, y, z);
+        MAKE_GRID(sponge_sq_tz, x, y, z);
+        MAKE_GRID(sponge_sq_fy, x, y, z);
+        MAKE_GRID(sponge_sq_by, x, y, z);        
+
         FSGElasticStencilBase &fsg;
 
     public:
@@ -376,30 +338,19 @@ namespace fsg {
         FSG_ABC (FSGElasticStencilBase &_fsg) :
             FSGBoundaryCondition(_fsg), fsg(_fsg)
         {
-            INIT_GRID_3D(sponge_lx, x, y, z);
-            INIT_GRID_3D(sponge_rx, x, y, z);
-            INIT_GRID_3D(sponge_bz, x, y, z);
-            INIT_GRID_3D(sponge_tz, x, y, z);
-            INIT_GRID_3D(sponge_fy, x, y, z);
-            INIT_GRID_3D(sponge_by, x, y, z);
-            INIT_GRID_3D(sponge_sq_lx, x, y, z);
-            INIT_GRID_3D(sponge_sq_rx, x, y, z);
-            INIT_GRID_3D(sponge_sq_bz, x, y, z);
-            INIT_GRID_3D(sponge_sq_tz, x, y, z);
-            INIT_GRID_3D(sponge_sq_fy, x, y, z);
-            INIT_GRID_3D(sponge_sq_by, x, y, z);        
         }
 
-        Condition is_at_boundary( GridIndex t, GridIndex x, GridIndex y, GridIndex z ) 
-        { 
-            Condition bc = ( z < first_index(z)+abc_width || z > last_index(z)-abc_width ) ||
+        Condition is_at_boundary()
+        {
+            Condition bc =
+                ( z < first_index(z)+abc_width || z > last_index(z)-abc_width ) ||
                 ( y < first_index(y)+abc_width || y > last_index(y)-abc_width ) ||
                 ( x < first_index(x)+abc_width || x > last_index(x)-abc_width ); 
             return bc; 
         }
-        Condition is_not_at_boundary( GridIndex t, GridIndex x, GridIndex y, GridIndex z ) 
+        Condition is_not_at_boundary()
         { 
-            return !is_at_boundary(t,x,y,z); 
+            return !is_at_boundary();
         }
 
         template<typename N, typename SZ, typename SX, typename SY>
@@ -407,7 +358,7 @@ namespace fsg {
                             Grid &v, Grid &sx, Grid &sy, Grid &sz, 
                             Grid &abc_x, Grid &abc_y, Grid &abc_z, Grid &abc_sq_x, Grid &abc_sq_y, Grid &abc_sq_z) {
 
-            Condition at_abc = is_at_boundary(t,x,y,z);
+            Condition at_abc = is_at_boundary();
 
             GridValue next_v = v(t, x, y, z) * abc_x(x,y,z) * abc_y(x,y,z) * abc_z(x,y,z);
 
@@ -512,7 +463,7 @@ namespace fsg {
             next_sxy += fsg.stress_update(ic16,ic26,ic36,ic46,ic56,ic66,u_z,u_x,u_y,v_z,v_x,v_y,w_z,w_x,w_y) * abc_sq;
 
             // define the value at t+1.
-            Condition at_abc = is_at_boundary(t,x,y,z);
+            Condition at_abc = is_at_boundary();
             sxx(t+1, x, y, z) EQUALS next_sxx IF at_abc;
             syy(t+1, x, y, z) EQUALS next_syy IF at_abc;
             szz(t+1, x, y, z) EQUALS next_szz IF at_abc;
@@ -553,7 +504,7 @@ namespace fsg {
         FSG_ABC abc; // Absorbing Boundary Condition
     
         FSGABCElasticStencil(StencilList& stencils) :
-            FSGElasticStencilBase("fsg_abc", &abc, stencils),
+            FSGElasticStencilBase("fsg_abc", stencils, &abc),
             abc(*this) { }
     };
 

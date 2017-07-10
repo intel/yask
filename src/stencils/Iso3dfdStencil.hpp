@@ -31,24 +31,29 @@ IN THE SOFTWARE.
 class Iso3dfdStencil : public StencilRadiusBase {
 
 protected:
-    Grid pressure;              // time-varying 3D pressure grid.
-    Grid vel;                   // constant 3D vel grid.
-    Param coeff;                // coefficients.
+
+    // Indices & dimensions.
+    MAKE_STEP_INDEX(t);           // step in time dim.
+    MAKE_DOMAIN_INDEX(x);         // spatial dim.
+    MAKE_DOMAIN_INDEX(y);         // spatial dim.
+    MAKE_DOMAIN_INDEX(z);         // spatial dim.
+    MAKE_MISC_INDEX(r);           // to index the coefficients.
+
+    // Grids.
+    MAKE_GRID(pressure, t, x, y, z); // time-varying 3D pressure grid.
+    MAKE_GRID(vel, x, y, z);         // constant 3D vel grid.
+    MAKE_GRID(coeff, r);             // array of FD coefficients.
     
 public:
 
-    // For this stencil, the 'radius' is half the FD accuracy in space.  For
-    // example, radius=8 implements a 16th-order accurate FD stencil.  To
-    // obtain the correct result, the 'coeff' array should be initialized
-    // with the corresponding central FD coefficients.  The accuracy in time
-    // is fixed at 2nd order.
+    // For this stencil, the 'radius' is the number of FD coefficients on
+    // either side of center in each spatial dimension.  For example,
+    // radius=8 implements a 16th-order accurate FD stencil.  To obtain the
+    // correct result, the 'coeff' array should be initialized with the
+    // corresponding central FD coefficients, adjusted for grid spacing.
+    // The accuracy in time is fixed at 2nd order.
     Iso3dfdStencil(StencilList& stencils, int radius=8) :
-        StencilRadiusBase("iso3dfd", stencils, radius)
-    {
-        INIT_GRID_4D(pressure, t, x, y, z);
-        INIT_GRID_3D(vel, x, y, z);
-        INIT_PARAM_1D(coeff, r, radius + 1); // c0, c1 .. c<radius>.
-    }
+        StencilRadiusBase("iso3dfd", stencils, radius) { }
     virtual ~Iso3dfdStencil() { }
 
     // Set radius.
@@ -56,16 +61,11 @@ public:
     virtual bool setRadius(int radius) {
         if (!StencilRadiusBase::setRadius(radius))
             return false;
-        coeff.setVal("r", radius + 1); // change dimension of coeff.
         return true;
     }
 
     // Define equation for pressure at t+1 based on values from vel and pressure at t.
-    virtual void define(const IntTuple& offsets) {
-        GET_OFFSET(t);
-        GET_OFFSET(x);
-        GET_OFFSET(y);
-        GET_OFFSET(z);
+    virtual void define() {
 
         // Start with center value multiplied by coeff 0.
         GridValue next_p = pressure(t, x, y, z) * coeff(0);

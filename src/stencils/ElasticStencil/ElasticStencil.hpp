@@ -44,19 +44,27 @@ struct X: public StencilDimension{};
 struct Y: public StencilDimension{};
 struct Z: public StencilDimension{};
 
+// This class implements StencilPart but is not the main solution.
+// The main solution is provided during construction.
 class ElasticBoundaryCondition : public StencilPart
 {
 protected:
     StencilSolution& _sol;
+    
+    // Indices & dimensions.
+    MAKE_STEP_INDEX(t);           // step in time dim.
+    MAKE_DOMAIN_INDEX(x);         // spatial dim.
+    MAKE_DOMAIN_INDEX(y);         // spatial dim.
+    MAKE_DOMAIN_INDEX(z);         // spatial dim.
     
     public:
     ElasticBoundaryCondition(StencilSolution& solution) :
         _sol(solution) {}
     virtual ~ElasticBoundaryCondition() {}
 
-    // Determine whether at boundary.
-    virtual Condition is_at_boundary( GridIndex t, GridIndex x, GridIndex y, GridIndex z ) = 0;
-    virtual Condition is_not_at_boundary( GridIndex t, GridIndex x, GridIndex y, GridIndex z ) = 0;
+    // Determine whether current indices are at boundary.
+    virtual Condition is_at_boundary() =0;
+    virtual Condition is_not_at_boundary() =0;
 
     // Return a reference to the main stencil-solution object provided during construction.
     virtual StencilSolution& get_stencil_solution() {
@@ -67,8 +75,15 @@ protected:
 class ElasticStencilBase : public StencilBase {
 
 protected:
+
+    // Dimensions.
+    MAKE_STEP_INDEX(t);           // step in time dim.
+    MAKE_DOMAIN_INDEX(x);         // spatial dim.
+    MAKE_DOMAIN_INDEX(y);         // spatial dim.
+    MAKE_DOMAIN_INDEX(z);         // spatial dim.
+    
     // 3D-spatial coefficients.
-    Grid rho;
+    MAKE_GRID(rho, x, y, z);
 
     // Spatial FD coefficients.
     const double c0_8 = 1.2;
@@ -87,16 +102,22 @@ protected:
     ElasticBoundaryCondition *bc = NULL;
     
 public:
-    ElasticStencilBase(const string& name, StencilList& stencils) :
-        StencilBase(name, stencils)
-    {
-    }
-    
-    ElasticStencilBase(const string& name, ElasticBoundaryCondition *_bc, StencilList& stencils) :
+    ElasticStencilBase(const string& name, StencilList& stencils,
+                       ElasticBoundaryCondition *_bc = NULL) :
         StencilBase(name, stencils), bc(_bc)
     {
+        init();
     }
-
+    
+    void init() {
+        // StencilContex specific code
+        REGISTER_STENCIL_CONTEXT_EXTENSION(
+           virtual void initData() {
+               initDiff();
+           }
+        );
+    }
+    
     bool hasBoundaryCondition()
     {
         return bc != NULL;
@@ -233,7 +254,7 @@ public:
         
         // define the value at t+1.
         if ( hasBoundaryCondition() ) {
-            Condition not_at_bc = bc->is_not_at_boundary(t,x,y,z);
+            Condition not_at_bc = bc->is_not_at_boundary();
             v(t+1, x, y, z) EQUALS next_v IF not_at_bc;
         } else
             v(t+1, x, y, z) EQUALS next_v;
