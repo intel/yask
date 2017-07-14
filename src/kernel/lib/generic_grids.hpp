@@ -233,6 +233,9 @@ namespace yask {
         inline const T& operator()(bool check=true) const {
             return this->_elems[0];
         }
+        ALWAYS_INLINE const T& readElem(int line) const {
+            return (*this)();
+        }
 
         // Non-const version.
         inline T& operator()(bool check=true) {
@@ -315,6 +318,11 @@ namespace yask {
         // Access element.
         inline const T& operator()(idx_t i, bool check=true) const {
             return this->_elems[get_index(i, check)];
+        }
+        ALWAYS_INLINE const T& readElem(idx_t i,
+                                        int line) const {
+            //return (*this)(i);
+            return this->_elems[get_index(i)];
         }
 
         // Non-const version.
@@ -419,6 +427,10 @@ namespace yask {
         // Access element given 2D indices.
         inline const T& operator()(idx_t i, idx_t j, bool check=true) const {
             return this->_elems[get_index(i, j, check)];
+        }
+        ALWAYS_INLINE const T& readElem(idx_t i, idx_t j,
+                                        int line) const {
+            return (*this)(i, j);
         }
 
         // Non-const version.
@@ -536,6 +548,10 @@ namespace yask {
         // Access element given 3D indices.
         inline const T& operator()(idx_t i, idx_t j, idx_t k, bool check=true) const {
             return this->_elems[get_index(i, j, k, check)];
+        }
+        ALWAYS_INLINE const T& readElem(idx_t i, idx_t j, idx_t k,
+                                        int line) const {
+            return (*this)(i, j, k);
         }
 
         // Non-const version.
@@ -665,6 +681,10 @@ namespace yask {
         // Access element given 4D indices.
         inline const T& operator()(idx_t i, idx_t j, idx_t k, idx_t l, bool check=true) const {
             return this->_elems[get_index(i, j, k, l, check)];
+        }
+        ALWAYS_INLINE const T& readElem(idx_t i, idx_t j, idx_t k, idx_t l,
+                                        int line) const {
+            return (*this)(i, j, k, l);
         }
 
         // Non-const version.
@@ -809,6 +829,10 @@ namespace yask {
         inline const T& operator()(idx_t i, idx_t j, idx_t k, idx_t l, idx_t m,
                                    bool check=true) const {
             return this->_elems[get_index(i, j, k, l, m, check)];
+        }
+        ALWAYS_INLINE const T& readElem(idx_t i, idx_t j, idx_t k, idx_t l, idx_t m,
+                                        int line) const {
+            return (*this)(i, j, k, l, m);
         }
 
         // Non-const version.

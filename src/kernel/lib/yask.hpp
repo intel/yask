@@ -32,6 +32,9 @@ IN THE SOFTWARE.
 // Include the API first. This helps to ensure that it will stand alone.
 #include "yask_kernel_api.hpp"
 
+// Settings from makefile.
+#include "yask_macros.hpp"
+
 // Control assert() by turning on with DEBUG instead of turning off with
 // NDEBUG. This makes it off by default.
 #ifndef DEBUG
@@ -71,9 +74,6 @@ IN THE SOFTWARE.
 #include "yask_stencil_code.hpp"
 #undef DEFINE_MACROS
 
-// Settings from makefile.
-#include "yask_macros.hpp"
-
 // Define a folded vector of reals.
 #include "realv.hpp"
 
@@ -96,7 +96,7 @@ IN THE SOFTWARE.
  
 // macro for debug message when _generic_context ptr is defined.
 #define TRACE_MSG3(msg) TRACE_MSG0(_generic_context->get_ostr(), msg)
- 
+
 // Cluster sizes in vectors.
 // This are defaults for those not defined by the stencil compiler.
 #ifndef CMULT_T
@@ -153,7 +153,7 @@ extern yask::Cache cache_model;
  #endif
 #endif
 
-// Memory-accessing code.
+// Layouts and indices.
 namespace yask {
 #include "yask_layouts.hpp"
 }

@@ -27,7 +27,7 @@ IN THE SOFTWARE.
 // with no spatial offsets.
 // The radius controls how many reads are done.
 
-#include "StencilBase.hpp"
+#include "Soln.hpp"
 
 class StreamStencil : public StencilRadiusBase {
 

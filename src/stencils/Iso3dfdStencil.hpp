@@ -26,7 +26,7 @@ IN THE SOFTWARE.
 // Implement isotropic 3D finite-difference (FD) stencil, nth-order accurate in
 // space (where n = 2 * radius) and 2nd-order accurate in time.
 
-#include "StencilBase.hpp"
+#include "Soln.hpp"
 
 class Iso3dfdStencil : public StencilRadiusBase {
 

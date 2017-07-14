@@ -27,7 +27,7 @@ IN THE SOFTWARE.
 // http://hpgeoc.sdsc.edu/AWPODC
 // http://www.sdsc.edu/News%20Items/PR20160209_earthquake_center.html
 
-#include "StencilBase.hpp"
+#include "Soln.hpp"
 
 class AwpStencil : public StencilBase {
 

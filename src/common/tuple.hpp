@@ -135,12 +135,6 @@ namespace yask {
             _updateMap();
         }
 
-        // Return an upper-case string.
-        static std::string _allCaps(std::string str) {
-            transform(str.begin(), str.end(), str.begin(), ::toupper);
-            return str;
-        }
-    
     public:
         Tuple() {}
         virtual ~Tuple() {}
@@ -728,55 +722,12 @@ namespace yask {
                 auto& tval = i.getVal();
                 if (n) oss << separator;
                 oss << prefix << tdim;
-                if (tval > 0) oss << "+" << tval;
-                else if (tval < 0) oss << tval; // includes '-';
+                if (tval > 0)
+                    oss << "+" << tval;
+                else if (tval < 0)
+                    oss << tval; // includes '-';
                 oss << suffix;
 
-                n++;
-            }
-            return oss.str();
-        }
-
-        // make string like "xv+(4/2), yv, zv-(2/2)".
-        // this object has numerators; norm object has denominators.
-        virtual std::string makeDimValNormOffsetStr(const Tuple& norm,
-                                                    std::string separator=", ",
-                                                    std::string prefix="",
-                                                    std::string suffix="") const {
-            std::ostringstream oss;
-            int n = 0;
-            for (auto i : _q) {
-                auto& tdim = i.getName();
-                auto& tval = i.getVal();
-                if (n) oss << separator;
-                oss << prefix << tdim << "v"; // e.g., 'xv'.
-
-                // offset value.
-                if (tval != 0) {
-
-                    // Is there a divisor in this dim?
-                    const T* p = norm.lookup(tdim);
-                    if (p) {
-
-                        // Positive offset, e.g., 'xv + (4 / VLEN_X)'.
-                        if (tval > 0) oss << " + (" << tval;
-
-                        // Neg offset, e.g., 'xv - (4 / VLEN_X)'.
-                        // Put '-' sign outside division to fix truncated division problem.
-                        else if (tval < 0) oss << " - (" << -tval;
-                    
-                        // add divisor.
-                        oss << " / VLEN_" << _allCaps(tdim) << ")";
-                    }
-                    else {
-
-                        // No divisior, e.g., 'tv + 2';
-                        if (tval > 0)
-                            oss << "+";
-                        oss << tval;
-                    }
-                }
-                oss << suffix;
                 n++;
             }
             return oss.str();

@@ -59,6 +59,15 @@ namespace yask {
             MPI_Barrier(comm);
         }
     };
+
+    // Dimensions for a solution.
+    // Similar to that in the YASK compiler.
+    struct Dims {
+        std::string _stepDim;
+        IdxTuple _domainDims;
+        IdxTuple _stencilDims;
+        IdxTuple _miscDims;
+    };
     
     // MPI buffers for *one* grid.
     struct MPIBufs {

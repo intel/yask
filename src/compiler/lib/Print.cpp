@@ -43,8 +43,7 @@ namespace yask {
 
     // An index expression.
     void PrintVisitorTopDown::visit(IndexExpr* ie) {
-
-        _exprStr += ie->format();
+        _exprStr += ie->format(_varMap);
         _numCommon += _ph.getNumCommon(ie);
     }
 
@@ -388,7 +387,7 @@ namespace yask {
 
         // Write temp var to grid.
         GridPointPtr gpp = ee->getLhs();
-        _os << "\n // Define value at " << gpp->makeStr() << ".\n";
+        _os << "\n // Update value at " << gpp->makeStr() << ".\n";
         _os << _ph.getLinePrefix() << _ph.writeToPoint(_os, *gpp, tmp) << _ph.getLineSuffix();
 
         // note: _exprStr is now empty.
@@ -688,23 +687,22 @@ namespace yask {
                 string typeName;
             
                 // Use vector-folded layout if possible.
-                //bool folded = gp->is_foldable();
+                bool folded = gp->isFoldable();
 
                 // Name in kernel is 'Grid_' followed by dimensions, e.g., "Grid_TXYZ".
-                typeName = "Grid_";
-                for (auto dim : gp->getDims()) {
-                    auto& dname = dim->getName();
-                    
-                    // Add dim suffix.
-                    string ucDim = allCaps(dname);
-                    typeName += ucDim;
+                if (folded) {
+                    typeName = "Grid_";
+                    for (auto dim : gp->getDims()) {
+                        auto& dname = dim->getName();
+                        
+                        // Add dim suffix.
+                        string ucDim = allCaps(dname);
+                        typeName += ucDim;
+                    }
                 }
 
-                // TODO: redo when YASK generalized.
-                bool folded = typeName == "Grid_XYZ" || typeName == "Grid_TXYZ";
-
                 // Use 'normal' layout if not foldable.
-                if (!folded) {
+                else {
 
                     // Type-name in kernel is 'GenericGridNd<real_t, LAYOUT>'.
                     ostringstream oss;
@@ -712,7 +710,7 @@ namespace yask {
                     if (ndims) {
                         oss << ", Layout_";
 
-                        // Traditional C layout, e.g., 321.
+                        // C row-major layout, e.g., 321.
                         for (size_t dn = ndims; dn > 0; dn--)
                             oss << dn;
                     }
@@ -784,6 +782,8 @@ namespace yask {
                         }
 
                         else {
+
+                            // TODO: remove this restriction.
                             assert("misc index in foldable grid not expected" && 0);
                         }
                     }
@@ -791,13 +791,35 @@ namespace yask {
 
                 // not folded.
                 else {
-                    if (ndims) {
 
-                        // TODO: change when all dim sizes need not be known.
-                        assert(gp->getMinIndices().size() == int(ndims));
-                        assert(gp->getMaxIndices().size() == int(ndims));
-                        string dimArg = gp->getMaxIndices().makeValStr(", ", "", "+1"); // FIXME.
-                        ctorCode += " " + grid + "->set_dim_sizes(" + dimArg + ");\n";
+                    for (size_t di = 0; di < gp->getDims().size(); di++) {
+                        auto dim = gp->getDims().at(di);
+                        auto& dname = dim->getName();
+                        auto dtype = dim->getType();
+
+                        // step dimension.
+                        if (dtype == STEP_INDEX) {
+                            // FIXME.
+                        }
+                    
+                        // non-step dimension.
+                        else if (dtype == DOMAIN_INDEX) {
+                            // FIXME.
+                        }
+
+                        else {
+
+                            // Known size?
+                            auto* minp = gp->getMinIndices().lookup(dname);
+                            auto* maxp = gp->getMaxIndices().lookup(dname);
+                            if (minp && maxp) {
+                                ostringstream oss;
+                                oss << "set_d" << (di + 1) << "(" << (*maxp - *minp + 1) << ")";
+                                ctorCode += " " + grid + "->" + oss.str() + ";\n";
+
+                                // TODO: also set offset to minp.
+                            }
+                        }
                     }
                     ctorCode +=
                         " paramPtrs.push_back(" + grid + ");\n"
@@ -879,7 +901,7 @@ namespace yask {
                 if (eq.getInputGrids().size()) {
                     os << "\n // The following grids are read by " << egsName << endl;
                     for (auto gp : eq.getInputGrids())
-                        if (gp->getDims().size() > 1) // FIXME: remove this temp hack!
+                        if (gp->isFoldable()) // FIXME: remove this temp condition.
                         os << "  inputGridPtrs.push_back(_context->" << gp->getName() << "_ptr);" << endl;
                 }
                 os << " } // Ctor." << endl;

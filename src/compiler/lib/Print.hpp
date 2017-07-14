@@ -29,7 +29,8 @@ IN THE SOFTWARE.
 #define PRINT_HPP
 
 #include "ExprUtils.hpp"
-#include "StencilBase.hpp"
+#include "Eqs.hpp"
+#include "Soln.hpp"
 
 namespace yask {
 
@@ -108,7 +109,7 @@ namespace yask {
             return gp.makeStr();
         }
 
-        // Update a grid point.
+        // Return code to update a grid point.
         // The 'os' parameter is provided for derived types that
         // need to write intermediate code to a stream.
         virtual string writeToPoint(ostream& os, const GridPoint& gp, const string& val) {
@@ -123,14 +124,18 @@ namespace yask {
         ostream& _os;               // used for printing intermediate results as needed.
         PrintHelper& _ph;           // used to format items for printing.
 
+        // Make these substitutions to indices in expressions.
+        const VarMap* _varMap = 0;
+        
         // After visiting an expression, the part of the result not written to _os
         // is stored in _exprStr.
         string _exprStr;
 
     public:
         // os is used for printing intermediate results as needed.
-        PrintVisitorBase(ostream& os, PrintHelper& ph) :
-            _os(os), _ph(ph) { }
+        PrintVisitorBase(ostream& os, PrintHelper& ph,
+                         const VarMap* varMap = 0) :
+            _os(os), _ph(ph), _varMap(varMap) { }
 
         virtual ~PrintVisitorBase() { }
 
@@ -153,10 +158,11 @@ namespace yask {
     // and anything 'left over' will be left in '_exprStr'.
     class PrintVisitorTopDown : public PrintVisitorBase {
         int _numCommon;
-    
+
     public:
-        PrintVisitorTopDown(ostream& os, PrintHelper& ph) :
-            PrintVisitorBase(os, ph), _numCommon(0) { }
+        PrintVisitorTopDown(ostream& os, PrintHelper& ph,
+                            const VarMap* varMap = 0) :
+            PrintVisitorBase(os, ph, varMap), _numCommon(0) { }
 
         // Get the number of shared nodes found after this visitor
         // has been accepted.
@@ -219,8 +225,9 @@ namespace yask {
     public:
         // os is used for printing intermediate results as needed.
         PrintVisitorBottomUp(ostream& os, PrintHelper& ph,
-                             CompilerSettings settings) :
-            PrintVisitorBase(os, ph),
+                             CompilerSettings settings,
+                             const VarMap* varMap = 0) :
+            PrintVisitorBase(os, ph, varMap),
             _settings(settings) { }
 
         // make a new top-down visitor with the same print helper.
@@ -396,18 +403,13 @@ namespace yask {
     // A PrinterBase uses one or more PrintHelpers and ExprVisitors to
     // do this.
     class PrinterBase {
+
     protected:
         StencilSolution& _stencil;
         Grids& _grids;
         EqGroups& _eqGroups;
         CompilerSettings& _settings;
         
-        // Return an upper-case string.
-        string allCaps(string str) {
-            transform(str.begin(), str.end(), str.begin(), ::toupper);
-            return str;
-        }
-    
     public:
         PrinterBase(StencilSolution& stencil,
                     EqGroups& eqGroups) :
@@ -433,6 +435,12 @@ namespace yask {
             ostringstream oss;
             print(oss);
             return oss.str();
+        }
+
+        // Return an upper-case string.
+        static string allCaps(string str) {
+            transform(str.begin(), str.end(), str.begin(), ::toupper);
+            return str;
         }
     };
 

@@ -27,6 +27,7 @@ IN THE SOFTWARE.
 
 // Generation code.
 #include "ExprUtils.hpp"
+#include "Grid.hpp"
 #include "CppIntrin.hpp"
 #include "Parse.hpp"
 

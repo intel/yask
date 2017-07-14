@@ -27,7 +27,7 @@ IN THE SOFTWARE.
 // http://hpgeoc.sdsc.edu/AWPODC
 // http://www.sdsc.edu/News%20Items/PR20160209_earthquake_center.html
 
-#include "StencilBase.hpp"
+#include "Soln.hpp"
 
 class AwpElasticStencil : public StencilBase {
 
@@ -59,7 +59,13 @@ protected:
 
     // Sponge coefficients.
     // (Most of these will be 1.0.)
+#ifdef FULL_SPONGE_GRID
     MAKE_GRID(sponge, x, y, z);
+#else
+    MAKE_GRID(cr_x, x);
+    MAKE_GRID(cr_y, y);
+    MAKE_GRID(cr_z, z);
+#endif
 
     // Spatial FD coefficients.
     const double c1 = 9.0/8.0;
@@ -84,7 +90,11 @@ public:
         // blocks at the sub-domain intervals would likely be broken into
         // smaller pieces, affecting performance.
 
+#ifdef FULL_SPONGE_GRID
         val *= sponge(x, y, z);
+#else
+        val *= cr_x(x) * cr_y(y) * cr_z(z);
+#endif        
     }
 
     // Velocity-grid define functions.  For each D in x, y, z, define vel_D

@@ -32,11 +32,29 @@ namespace yask {
     // Called when a grid point is read in a stencil function.
     void VecInfoVisitor::visit(GridPoint* gp) {
 
-        // FIXME: handle non-vectorizable dims.
+        // Nothing to do if this grid-point is not vectorizable.
+        if (gp->getVecType() == GridPoint::VEC_NONE) {
+#ifdef DEBUG_VV
+            cout << "cannot vectorize scalar-access " << gp->makeQuotedStr() << endl;
+#endif
+            _scalarPoints.insert(*gp);
+            return;
+        }
+        else if (gp->getVecType() == GridPoint::VEC_PARTIAL) {
+#ifdef DEBUG_VV
+            cout << "cannot vectorize non-standard-access " << gp->makeQuotedStr() << endl;
+#endif
+            _nonVecPoints.insert(*gp);
+            return;
+        }
+        assert(gp->getVecType() == GridPoint::VEC_FULL);
 
         // Already seen this point?
-        if (_vblk2elemLists.count(*gp) > 0)
+        if (_vecPoints.count(*gp) > 0) {
+            assert(_vblk2elemLists.count(*gp) > 0);
+            assert(_vblk2avblks.count(*gp) > 0);
             return;
+        }
 
         // Vec of points to calculate.
 #ifdef DEBUG_VV
@@ -49,6 +67,8 @@ namespace yask {
 
                 // Final offset in each dim is offset of grid point plus
                 // fold offset.
+                // This works because we know this grid point is accessed
+                // only by simple offsets in each foldable dim.
                 // Note: there may be more or fewer dims in vecPoint than in grid point.
                 auto offsets = gp->getArgOffsets().addElements(vecPoint, false);
 
@@ -101,6 +121,9 @@ namespace yask {
 
                 pelem++;
             });                  // end of vector lambda-function.
+
+        // Mark as done.
+        _vecPoints.insert(*gp);
     }                   // end of visit() method.
 
     // Get the set of aligned vectors on the leading edge
@@ -146,23 +169,34 @@ namespace yask {
         }
     }
 
-    // Print any needed memory reads and/or constructions.
-    // Return var name.
+    // Return code containing a vector of grid points, e.g., code fragment
+    // or var name.  Optionally print memory reads and/or constructions to
+    // 'os' as needed.
     string VecPrintHelper::readFromPoint(ostream& os, const GridPoint& gp) {
 
-        string varName;
+        string codeStr;
 
-        // Already done.
-        if (_reuseVars && _readyPoints.count(gp))
-            varName = _readyPoints[gp]; // do nothing.
+        // Already done and saved.
+        if (_reuseVars && _vecVars.count(gp))
+            codeStr = _vecVars[gp]; // do nothing.
+
+        // Scalar GP?
+        else if (gp.getVecType() == GridPoint::VEC_NONE)
+            codeStr = readFromScalarPoint(os, gp);
+
+        // Non-scalar but non-vectorizable GP?
+        else if (gp.getVecType() == GridPoint::VEC_PARTIAL)
+            codeStr = printNonVecRead(os, gp);
+
+        // Everything below this should be VEC_FULL.
 
         // An aligned vector block?
         else if (_vv._alignedVecs.count(gp))
-            varName = printAlignedVecRead(os, gp);
+            codeStr = printAlignedVecRead(os, gp);
 
         // Unaligned loads allowed?
         else if (_allowUnalignedLoads)
-            varName = printUnalignedVecRead(os, gp);
+            codeStr = printUnalignedVecRead(os, gp);
 
         // Need to construct an unaligned vector block?
         else if (_vv._vblk2elemLists.count(gp)) {
@@ -175,7 +209,7 @@ namespace yask {
             }
 
             // output this construction.
-            varName = printUnalignedVec(os, gp);
+            codeStr = printUnalignedVec(os, gp);
         }
 
         else {
@@ -183,11 +217,26 @@ namespace yask {
             assert("point type unknown");
         }
 
-        // Remember this point and return its name.
-        _readyPoints[gp] = varName;
-        return varName;
+        // Remember this point and return it.
+        if (codeStr.length())
+            _vecVars[gp] = codeStr;
+        return codeStr;
     }
 
+    // Print any immediate memory writes to 'os'.
+    // Return code to update a vector of grid points or null string
+    // if all writes were printed.
+    string VecPrintHelper::writeToPoint(ostream& os, const GridPoint& gp, const string& val) {
+
+        // NB: currently, all eqs must be vectorizable on LHS,
+        // so we only need to handle vectorized writes.
+        // TODO: relax this restriction.
+
+        printAlignedVecWrite(os, gp, val);
+        return "";
+    }
+
+    
     // Sort a commutative expression.
     void ExprReorderVisitor::visit(CommutativeExpr* ce) {
 

@@ -97,7 +97,7 @@ namespace yask {
                               const VecElemList& elems, 
                               set<size_t>& doneElems,
                               const GridPointSet& alignedVecs);
-    
+
     public:
         // Print construction for one unaligned vector pvName at gp.
         virtual void printUnalignedVecCtor(ostream& os,

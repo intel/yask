@@ -331,10 +331,10 @@ namespace yask {
     void RealVecGridBase::resize() {
 
         // Some checking.
-        assert(tdim >= 1);
-        assert(dx >= 1);
-        assert(dy >= 1);
-        assert(dz >= 1);
+        assert(_tdim >= 1);
+        assert(_dx >= 1);
+        assert(_dy >= 1);
+        assert(_dz >= 1);
         
         // Some rounding.
         _pxv = CEIL_DIV(_px, VLEN_X);

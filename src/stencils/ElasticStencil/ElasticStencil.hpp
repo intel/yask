@@ -27,7 +27,7 @@ IN THE SOFTWARE.
 
 #pragma once
 
-#include "StencilBase.hpp"
+#include "Soln.hpp"
 
 struct Node {};
 struct TL: public Node {};

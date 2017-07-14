@@ -25,8 +25,8 @@ IN THE SOFTWARE.
 
 // Base class for defining stencil equations.
 
-#ifndef STENCIL_BASE
-#define STENCIL_BASE
+#ifndef SOLN_HPP
+#define SOLN_HPP
 
 #include <map>
 using namespace std;
@@ -48,10 +48,10 @@ namespace yask {
         public virtual yc_solution {
     protected:
         
-        // Simple name for the stencil.
+        // Simple name for the stencil soln.
         string _name;
     
-        // A grid is an n-dimensional array.
+        // All vars accessible by the kernel.
         Grids _grids;       // keep track of all registered grids.
 
         // All equations defined in this solution.
@@ -213,6 +213,7 @@ namespace yask {
         virtual ~StencilBase() { }
 
         // Return a reference to the main stencil-solution object.
+        // For StencilBase, simply this object.
         virtual StencilSolution& get_stencil_solution() {
             return *this;
         }

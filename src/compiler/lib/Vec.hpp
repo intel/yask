@@ -38,18 +38,12 @@ namespace yask {
     class VecElem {
     public:
         GridPoint _vec;      // starting index of vector containing this element.
-        size_t _offset;            // 1-D offset in _vec.
-        IntTuple _offsets;         // n-D offsets 
+        size_t _offset;      // 1-D offset in _vec.
+        IntTuple _offsets;   // n-D offsets.
 
         VecElem(const GridPoint& vec, int offset, const IntTuple& offsets) :
             _vec(vec), _offset(offset), _offsets(offsets) { }
 
-        virtual VecElem& operator=(const VecElem& rhs) {
-            _vec = rhs._vec;
-            _offset = rhs._offset;
-            _offsets = rhs._offsets;
-            return *this;
-        }
         virtual bool operator==(const VecElem& rhs) const {
             return _vec == rhs._vec && _offset == rhs._offset;
         }
@@ -64,11 +58,11 @@ namespace yask {
     // the element can be found.
     typedef vector<VecElem> VecElemList;
 
-    // Layout of vector blocks to VecElemVecs.
-    typedef map<GridPoint, VecElemList> Point2VecElemLists;
-
-    // Layout of vector blocks to aligned blocks.
+    // Map of each vector block to aligned block(s) that contain its points.
     typedef map<GridPoint, GridPointSet> Point2Vecs;
+
+    // Map of each vector block to its elements.
+    typedef map<GridPoint, VecElemList> Point2VecElemLists;
 
     // This visitor determines the vector blocks needed to calculate the stencil.
     // It doesn't actually generate code; it just collects info from the AST.
@@ -82,31 +76,36 @@ namespace yask {
     
     public:
 
-        // Data on vector blocks.
+        // Data on vectorizable points.
         GridPointSet _alignedVecs; // set of aligned vectors, i.e., ones that need to be read from memory.
         Point2Vecs _vblk2avblks; // each vec block -> its constituent aligned vec blocks.
-        Point2VecElemLists _vblk2elemLists; // each vec block -> in-order list of its constituent aligned vec blocks' elements.
+        Point2VecElemLists _vblk2elemLists; // each vec block -> in-order list of its aligned vec blocks' elements.
+        GridPointSet _vecPoints;            // set of all vectorizable points.
 
         // NB: the above hold much of the same info, but arranged differently:
         // _alignedVecs contains only a set of aligned blocks.
-        // _vblk2avblks is used to quickly determine what aligned blocks contribute to a given block.
+        // _vblk2avblks is used to quickly determine which aligned blocks contribute to a given block.
         // _vblk2elemLists is used to find exactly where each element comes from.
-        // The keys are the same for both maps.
+        // The keys are the same for both maps: the vectorizable grid points.
 
+        // Data on non-vectorizable points.
+        GridPointSet _scalarPoints; // set of points that should be read as scalars and broadcast to vectors.
+        GridPointSet _nonVecPoints; // set of points that are not scalars or vectorizable.
+        
         VecInfoVisitor(const Dimensions& dims) :
             _dims(dims) {
             _vlen = dims._fold.product();
         }
 
-        const IntTuple& getFold() const {
+        virtual const IntTuple& getFold() const {
             return _dims._fold;
         }
     
-        size_t getNumPoints() const {
+        virtual size_t getNumPoints() const {
             return _vblk2elemLists.size();
         }
 
-        size_t getNumAlignedVecs() const {
+        virtual size_t getNumAlignedVecs() const {
             return _alignedVecs.size();
         }
 
@@ -205,14 +204,16 @@ namespace yask {
         bool _allowUnalignedLoads;
         bool _reuseVars; // if true, load to a local var; else, reload on every access.
         bool _definedNA;           // NA var defined.
-        map<GridPoint, string> _readyPoints; // points that are already constructed.
+        map<GridPoint, string> _vecVars; // vecs that are already constructed.
+        map<string, string> _elemVars; // elems that are already read (key is read stmt).
 
         // Print access to an aligned vector block.
         // Return var name.
         virtual string printAlignedVecRead(ostream& os, const GridPoint& gp) =0;
 
-        // Print unaliged memory read.
+        // Print unaligned vector memory read.
         // Assumes this results in same values as printUnalignedVec().
+        // Return var name.
         virtual string printUnalignedVecRead(ostream& os, const GridPoint& gp) =0;
     
         // Print write to an aligned vector block.
@@ -228,6 +229,14 @@ namespace yask {
         virtual void printUnalignedVecCtor(ostream& os, const GridPoint& gp,
                                            const string& pvName) =0;
 
+        // Read from a single point to be broadcast to a vector.
+        // Return code for read.
+        virtual string readFromScalarPoint(ostream& os, const GridPoint& gp) =0;
+
+        // Read from multiple points that are not vectorizable.
+        // Return var name.
+        virtual string printNonVecRead(ostream& os, const GridPoint& gp) =0;
+        
     public:
         VecPrintHelper(VecInfoVisitor& vv,
                        bool allowUnalignedLoads,
@@ -255,20 +264,17 @@ namespace yask {
             }
         }
     
-        // Print any needed memory reads and/or constructions.
-        // Return var name.
+        // Print any needed memory reads and/or constructions to 'os'.
+        // Return code containing a vector of grid points.
         virtual string readFromPoint(ostream& os, const GridPoint& gp);
 
-        // Update a grid point.
-        // The 'os' parameter is provided for derived types that
-        // need to write intermediate code to a stream.
-        virtual string writeToPoint(ostream& os, const GridPoint& gp, const string& val) {
-            printAlignedVecWrite(os, gp, val);
-            return "";
-        }
+        // Print any immediate memory writes to 'os'.
+        // Return code to update a vector of grid points or null string
+        // if all writes were printed.
+        virtual string writeToPoint(ostream& os, const GridPoint& gp, const string& val);
     };
 
-    // A visitor that reorders exprs.
+    // A visitor that reorders exprs based on vector info.
     class ExprReorderVisitor : public ExprVisitor {
     protected:
         VecInfoVisitor& _vv;

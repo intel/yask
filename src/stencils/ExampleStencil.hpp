@@ -26,7 +26,7 @@ IN THE SOFTWARE.
 // Implement various shapes of example 3D stencils that read and write from
 // only one 3D grid.
 
-#include "StencilBase.hpp"
+#include "Soln.hpp"
 
 class ExampleStencil : public StencilRadiusBase {
 

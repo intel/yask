@@ -109,6 +109,8 @@ api-all: api-docs api
 
 # Format API documents.
 api-docs: docs/api/html/index.html
+	@ echo 'Open the following file in a browser to view the API docs.'
+	@ ls -l $^
 
 # Build C++ and Python API libs.
 api:
@@ -119,7 +121,6 @@ api:
 docs/api/html/index.html: include/*.hpp docs/api/*.*
 	doxygen -v
 	cd docs/api; doxygen doxygen_config.txt
-	@ echo Open $@ 'in a browser to view the API docs.'
 
 #### API tests.
 
@@ -194,6 +195,8 @@ all:
 	$(MAKE) clean
 	$(MAKE) default
 	$(MAKE) api-all
+
+docs: api-docs
 
 tags:
 	rm -f TAGS ; find src include -name '*.[ch]pp' | xargs etags -C -a

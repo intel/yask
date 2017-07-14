@@ -26,7 +26,7 @@ IN THE SOFTWARE.
 // Stencil equations for FSG elastic numerics.
 // Contributed by Albert Farres from the Barcelona Supercomputing Center
 
-#include "StencilBase.hpp"
+#include "Soln.hpp"
 #include "ElasticStencil/ElasticStencil.hpp"
 
 namespace fsg {
