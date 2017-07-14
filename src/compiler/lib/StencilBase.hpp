@@ -138,6 +138,12 @@ namespace yask {
             assert(n >= 0 && n < get_num_grids());
             return _grids.at(n);
         }
+        virtual std::vector<yc_grid_ptr> get_grids() {
+            std::vector<yc_grid_ptr> gv;
+            for (int i = 0; i < get_num_grids(); i++)
+                gv.push_back(get_grid(i));
+            return gv;
+        }
         
         virtual int get_num_equations() const {
             return _eqs.getNumEqs();

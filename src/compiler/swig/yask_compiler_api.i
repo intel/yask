@@ -56,9 +56,8 @@ IN THE SOFTWARE.
 %}
 
 // All vector types used in API.
-namespace std {
-  %template(vector_int) vector<int>;
-  %template(vector_str) vector<string>;
-}
+%template(vector_int) std::vector<int>;
+%template(vector_str) std::vector<std::string>;
+%template(vector_grid) std::vector<yask::yc_grid*>;
     
 %include "yask_compiler_api.hpp"

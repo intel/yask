@@ -150,6 +150,11 @@ namespace yask {
                  const std::string& dim5 = "" /**< [in] Name of 5th dimension. */,
                  const std::string& dim6 = "" /**< [in] Name of 6th dimension. */ ) =0;
 
+        /// Get all the grids in the solution.
+        /** @returns Vector containing pointer to all grids. */
+        virtual std::vector<yc_grid_ptr>
+        get_grids() =0;
+        
         /// Get the number of grids in the solution.
         /** @returns Number of grids that have been created via new_grid(). */
         virtual int

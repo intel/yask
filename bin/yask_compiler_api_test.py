@@ -62,6 +62,10 @@ if __name__ == "__main__":
     print("Solution '" + soln.get_name() + "' contains " +
           str(soln.get_num_grids()) + " grid(s), and " +
           str(soln.get_num_equations()) + " equation(s).")
+    for grid in soln.get_grids() :
+        print("Grid " + grid.get_name() +
+              " has the following dim(s): " +
+              repr(grid.get_dim_names()));
 
     # Number of bytes in each FP value.
     soln.set_element_bytes(4)
