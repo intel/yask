@@ -208,6 +208,7 @@ clean:
 	$(YK_MAKE) $@
 
 # Remove files from old versions.
+# (This will eventually be removed.)
 clean-old:
 	rm -fv stencil*.exe stencil-tuner-summary.csh stencil-tuner.pl gen-layouts.pl gen-loops.pl get-loop-stats.pl
 	rm -fv src/foldBuilder/*pp

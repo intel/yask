@@ -184,6 +184,11 @@ namespace yask {
                  const yc_index_node_ptr dim5 = nullptr /**< [in] 5th dimension. */,
                  const yc_index_node_ptr dim6 = nullptr /**< [in] 6th dimension. */ ) =0;
 
+        /// Get all the grids in the solution.
+        /** @returns Vector containing pointer to all grids. */
+        virtual std::vector<yc_grid_ptr>
+        get_grids() =0;
+        
         /// Get the number of grids in the solution.
         /** @returns Number of grids that have been created via new_grid(). */
         virtual int

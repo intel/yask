@@ -96,10 +96,14 @@ namespace yask {
                 return false;
             if (get_alloc_size(dname) != op->get_alloc_size(dname))
                 return false;
-            if (get_rank_domain_size(dname) != op->get_rank_domain_size(dname))
-                return false;
-            if (get_pad_size(dname) != op->get_pad_size(dname))
-                return false;
+
+            // TODO: remove hard-coded step-dim name.
+            if (dname != "t") {
+                if (get_rank_domain_size(dname) != op->get_rank_domain_size(dname))
+                    return false;
+                if (get_pad_size(dname) != op->get_pad_size(dname))
+                    return false;
+            }
         }
         return true;
     }
@@ -112,7 +116,9 @@ namespace yask {
             exit_yask(1);
         }
         release_storage();
-        
+
+        // NB: requirements to successful share_storage() is not as strict as
+        // is_storage_layout_identical(). See note on pad & halo below and API docs.
         for (int i = 0; i < get_num_dims(); i++) {
             auto dname = get_dim_name(i);
             if (sp->get_num_dims() != get_num_dims() ||
@@ -124,25 +130,44 @@ namespace yask {
                 cerr << ".\n";
                 exit_yask(1);
             }
-            auto tdom = get_rank_domain_size(dname);
-            auto sdom = sp->get_rank_domain_size(dname);
-            if (tdom != sdom) {
-                cerr << "Error: attempt to share storage from grid '" << sp->get_name() <<
-                    "' with domain-size " << sdom << " with grid '" << get_name() <<
-                    "' with domain-size " << tdom << " in '" << dname << "' dim.\n";
-                exit_yask(1);
-            }
-            auto thalo = get_halo_size(dname);
-            auto spad = sp->get_pad_size(dname);
-            if (thalo > spad) {
-                cerr << "Error: attempt to share storage from grid '" << sp->get_name() <<
-                    "' with padding-size " << spad << " with grid '" << get_name() <<
-                    "' with halo-size " << thalo << " in '" << dname << "' dim.\n";
-                exit_yask(1);
+
+            // TODO: remove hard-coded step-dim name.
+            if (dname == "t") {
+                auto tas = get_alloc_size(dname);
+                auto sas = sp->get_alloc_size(dname);
+                if (tas != sas) {
+                    cerr << "Error: attempt to share storage from grid '" << sp->get_name() <<
+                        "' with alloc-size " << sas << " with grid '" << get_name() <<
+                        "' with alloc-size " << tas << " in '" << dname << "' dim.\n";
+                    exit_yask(1);
+                }
             }
 
-            // Copy settings in this dim.
-            set_pad_size(dname, spad);
+            // Not step-dim.
+            else {
+                auto tdom = get_rank_domain_size(dname);
+                auto sdom = sp->get_rank_domain_size(dname);
+                if (tdom != sdom) {
+                    cerr << "Error: attempt to share storage from grid '" << sp->get_name() <<
+                        "' with domain-size " << sdom << " with grid '" << get_name() <<
+                        "' with domain-size " << tdom << " in '" << dname << "' dim.\n";
+                exit_yask(1);
+                }
+
+                // Halo and pad sizes don't have to be the same.
+                // Requirement is that halo of target fits in pad of source.
+                auto thalo = get_halo_size(dname);
+                auto spad = sp->get_pad_size(dname);
+                if (thalo > spad) {
+                    cerr << "Error: attempt to share storage from grid '" << sp->get_name() <<
+                        "' with padding-size " << spad << " with grid '" << get_name() <<
+                        "' with halo-size " << thalo << " in '" << dname << "' dim.\n";
+                    exit_yask(1);
+                }
+
+                // Copy pad settings in this dim.
+                set_pad_size(dname, spad);
+            }
         }
 
         // Copy data.
