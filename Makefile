@@ -202,10 +202,10 @@ tags:
 # Should not trigger remake of stencil compiler.
 # Make this target before rebuilding YASK with any new parameters.
 clean:
-	$(YC_MAKE) $@
 	$(YK_MAKE) $@
 
 # Remove files from old versions.
+# (This will eventually be removed.)
 clean-old:
 	rm -fv stencil*.exe stencil-tuner-summary.csh stencil-tuner.pl gen-layouts.pl gen-loops.pl get-loop-stats.pl
 	rm -fv src/foldBuilder/*pp
