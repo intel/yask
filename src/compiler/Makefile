@@ -87,7 +87,7 @@ $(YC_LIB): $(YC_OBJS)
 	$(YC_CXX) $(YC_CXXFLAGS) -shared -o $@ $^
 
 $(YC_EXEC): main.cpp $(YC_LIB)
-	$(YC_LD) $(YC_CXXFLAGS) -O0 $(YC_LFLAGS) -o $@ $<
+	$(YC_LD) $(YC_CXXFLAGS) -O0 $< $(YC_LFLAGS) -o $@
 	$(MAKE) echo-settings
 
 # Generated files.
@@ -119,7 +119,7 @@ $(YC_PY_LIB): $(YC_OBJS) $(YC_SWIG_DIR)/yask_compiler_api_wrap.o
 
 # Build C++ compiler API test.
 $(YC_TEST_EXEC): ./tests/yask_compiler_api_test.cpp $(YC_LIB)
-	$(YC_CXX) $(YC_CXXFLAGS) $(YC_LFLAGS) -o $@ $<
+	$(YC_CXX) $(YC_CXXFLAGS) $< $(YC_LFLAGS) -o $@
 
 # Run Python compiler API test to create stencil-code file.
 # Also create .pdf rendering of stencil AST if Graphviz is installed.

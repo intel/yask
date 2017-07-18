@@ -491,7 +491,7 @@ $(YK_LIB): $(YK_OBJS)
 	$(YK_CXX) $(YK_CXXFLAGS) -shared -o $@ $^
 
 $(YK_EXEC): yask_main.cpp $(YK_LIB)
-	$(YK_LD) $(YK_CXXFLAGS) $(YK_LFLAGS) -o $@ $<
+	$(YK_LD) $(YK_CXXFLAGS) $< $(YK_LFLAGS) -o $@
 
 $(MAKE_REPORT_FILE): $(YK_EXEC)
 	@echo MAKEFLAGS="\"$(MAKEFLAGS)"\" > $@ 2>&1
@@ -570,7 +570,7 @@ $(YK_PY_LIB): $(YK_OBJS) $(YK_SWIG_DIR)/yask_kernel_api_wrap.o
 
 # Build C++ kernel API test.
 $(YK_TEST_EXEC): ./tests/yask_kernel_api_test.cpp $(YK_LIB)
-	$(YK_CXX) $(YK_CXXFLAGS) $(YK_LFLAGS) -o $@ $<
+	$(YK_CXX) $(YK_CXXFLAGS) $< $(YK_LFLAGS) -o $@
 
 # Run C++ kernel API test.
 cxx-yk-api-test: $(YK_TEST_EXEC)
