@@ -27,7 +27,7 @@ IN THE SOFTWARE.
 
 // This file uses SWIG markup for API generation.
 
-%module yask_kernel
+%module YK_MODULE
 
 // See http://www.swig.org/Doc3.0/Library.html
 %include <std_string.i>
@@ -50,10 +50,8 @@ IN THE SOFTWARE.
 %}
 
 // All vector types used in API.
-namespace std {
-  %template(vector_idx) vector<long int>;
-  %template(vector_str) vector<string>;
-  %template(vector_grid_ptr) vector<shared_ptr<yask::yk_grid>>;
-}
+%template(vector_idx) std::vector<long int>;
+%template(vector_str) std::vector<std::string>;
+%template(vector_grid_ptr) std::vector<std::shared_ptr<yask::yk_grid>>;
     
 %include "yask_kernel_api.hpp"

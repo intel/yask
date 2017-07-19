@@ -27,7 +27,7 @@ IN THE SOFTWARE.
 
 // This file uses SWIG markup for API generation.
 
-%module yask_compiler
+%module YC_MODULE
 
 // See http://www.swig.org/Doc3.0/Library.html
 %include <std_string.i>

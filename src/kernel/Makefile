@@ -321,13 +321,14 @@ BIN_DIR		:=	$(YASK_BASE)/bin
 
 # Output files and dirs.
 YK_BASE		:=	yask_kernel
+YK_MODULE	:=	$(YK_BASE)
 YK_TAG		:=	$(stencil).$(arch)
 YK_BASE2	:=	$(YK_BASE).$(YK_TAG)
 YK_EXEC		:=	$(BIN_DIR)/$(YK_BASE2).exe
 YK_TEST_EXEC	:=	$(BIN_DIR)/$(YK_BASE)_api_test.exe
 YK_LIB		:=	$(LIB_DIR)/lib$(YK_BASE2).so
-YK_PY_LIB	:=	$(LIB_DIR)/_$(YK_BASE).so
-YK_PY_MOD	:=	$(LIB_DIR)/$(YK_BASE).py
+YK_PY_LIB	:=	$(LIB_DIR)/_$(YK_MODULE).so
+YK_PY_MOD	:=	$(LIB_DIR)/$(YK_MODULE).py
 MAKE_REPORT_FILE:=	make-report.$(YK_TAG).txt
 
 # Source files and dirs.
@@ -382,8 +383,9 @@ YK_CXXFLAGS	+=	$(EXTRA_YK_CXXFLAGS)
 YK_LD		:=	$(YK_CXX)
 YK_LFLAGS	:=	-lrt -Wl,-rpath=$(LIB_DIR) -L$(LIB_DIR) -l$(YK_BASE2)
 
-# Python.
+# Tools.
 PYTHON		:=	python
+SWIG		:=	swig
 
 # Find include path needed for python interface.
 # NB: constructing string inside print() to work for python 2 or 3.
@@ -557,8 +559,8 @@ api: $(YK_LIB) $(YK_PY_LIB)
 # Build python kernel API lib.
 # TODO: consider adding $(YK_TAG) to [some of] these targets.
 $(YK_SWIG_DIR)/yask_kernel_api_wrap.cpp: $(YK_SWIG_DIR)/yask*.i $(INC_DIR)/*.hpp
-	swig -version
-	swig -v -cppext cpp -I$(INC_DIR) -c++ -python -outdir $(LIB_DIR) -builtin $<
+	$(SWIG) -version
+	$(SWIG) -v -DYK_MODULE=$(YK_MODULE) -cppext cpp -I$(INC_DIR) -c++ -python -outdir $(LIB_DIR) -builtin $<
 
 $(YK_SWIG_DIR)/yask_kernel_api_wrap.o: $(YK_SWIG_DIR)/yask_kernel_api_wrap.cpp
 	$(YK_CXX) $(YK_CXXFLAGS) $(PYINC) -fPIC -c -o $@ $<
@@ -622,8 +624,8 @@ yk-test-no-yc: kernel-only
 # NB: set arch var if applicable.
 # NB: save some time by using YK_CXXOPT=-O2.
 all-tests:
-	$(MAKE) clean; $(MAKE) stencil=iso3dfd test
-	$(MAKE) clean; $(MAKE) stencil=fsg_abc test
+	$(MAKE) clean; $(MAKE) stencil=iso3dfd yc-and-yk-test
+	$(MAKE) clean; $(MAKE) stencil=fsg_abc yc-and-yk-test
 	$(MAKE) clean; $(MAKE) stencil=iso3dfd cxx-yk-api-test
 	$(MAKE) clean; $(MAKE) stencil=iso3dfd py-yk-api-test
 
@@ -649,7 +651,6 @@ realclean: clean
 	rm -fv make-report.*.txt
 	find . -name '*.pyc' | xargs -r rm -v
 	find . -name '*~' | xargs -r rm -v
-	$(MAKE) -C $(YC_SRC_DIR) $@
 
 echo-settings:
 	@echo

@@ -34,11 +34,12 @@ BIN_DIR		:=	$(YASK_BASE)/bin
 
 # Output files and dirs.
 YC_BASE		:=	yask_compiler
+YC_MODULE	:=	$(YC_BASE)
 YC_EXEC		:=	$(BIN_DIR)/$(YC_BASE).exe
 YC_TEST_EXEC	:=	$(BIN_DIR)/$(YC_BASE)_api_test.exe
 YC_LIB		:=	$(LIB_DIR)/lib$(YC_BASE).so
-YC_PY_LIB	:=	$(LIB_DIR)/_$(YC_BASE).so
-YC_PY_MOD	:=	$(LIB_DIR)/$(YC_BASE).py
+YC_PY_LIB	:=	$(LIB_DIR)/_$(YC_MODULE).so
+YC_PY_MOD	:=	$(LIB_DIR)/$(YC_MODULE).py
 
 # Source files and dirs.
 YC_SWIG_DIR	:=	./swig
@@ -63,8 +64,9 @@ YC_CXXFLAGS	+=	$(EXTRA_YC_CXXFLAGS)
 YC_LD		:=	$(YC_CXX)
 YC_LFLAGS	:=	-lrt -Wl,-rpath=$(LIB_DIR) -L$(LIB_DIR) -l$(YC_BASE)
 
-# Python.
+# Tools.
 PYTHON		:=	python
+SWIG		:=	swig
 
 # Find include path needed for python interface.
 # NB: constructing string inside print() to work for python 2 or 3.
@@ -105,9 +107,10 @@ $(YC_STENCIL_LIST): ../stencils/*.hpp
 api: $(YC_LIB) $(YC_PY_LIB)
 
 # Build python compiler API lib.
+# Also builds $(YC_PY_MOD)
 $(YC_SWIG_DIR)/yask_compiler_api_wrap.cpp: $(YC_SWIG_DIR)/yask*.i $(INC_DIR)/*.hpp
-	swig -version
-	swig -v -cppext cpp -I$(INC_DIR) -c++ -python -outdir $(LIB_DIR) -builtin $<
+	$(SWIG) -version
+	$(SWIG) -v -DYC_MODULE=$(YC_MODULE) -cppext cpp -I$(INC_DIR) -c++ -python -outdir $(LIB_DIR) -builtin $<
 
 $(YC_SWIG_DIR)/yask_compiler_api_wrap.o: $(YC_SWIG_DIR)/yask_compiler_api_wrap.cpp
 	$(YC_CXX) $(YC_CXXFLAGS) $(PYINC) -fPIC -c -o $@ $<
