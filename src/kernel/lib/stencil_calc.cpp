@@ -299,6 +299,15 @@ namespace yask {
         idx_t step_dt = _opts->rt;
         TRACE_MSG("run_solution(t=" << first_step_index << ".." << last_step_index <<
                   " by " << step_dt << ")");
+        if (!bb_valid) {
+            cerr << "Error: attempt to run solution without preparing it first.\n";
+            exit_yask(1);
+        }
+        TRACE_MSG("rank-domain sizes: " <<
+                  "x: " << _opts->dx <<
+                  ", y: " << _opts->dy <<
+                  ", z: " << _opts->dz);
+        
         ostream& os = get_ostr();
 
 #ifdef MODEL_CACHE
@@ -318,6 +327,16 @@ namespace yask {
         idx_t end_dy = end_bby;
         idx_t end_dz = end_bbz;
 
+        TRACE_MSG("domain bounding-box before wave-front adjustment: " <<
+                  "x=" << begin_dx << ".." << (end_dx-1) <<
+                  ", y=" << begin_dy << ".." << (end_dy-1) <<
+                  ", z=" << begin_dz << ".." << (end_dz-1) <<
+                  ")");
+        if (bb_size < 1) {
+            TRACE_MSG("nothing to do in solution");
+            return;
+        }
+        
         // Steps are based on region sizes.
         idx_t step_dx = _opts->rx;
         idx_t step_dy = _opts->ry;
@@ -353,9 +372,8 @@ namespace yask {
         end_dx += angle_x * nshifts;
         end_dy += angle_y * nshifts;
         end_dz += angle_z * nshifts;
-        TRACE_MSG("extended domain after wave-front adjustment: " <<
-                  "t=" << begin_dt << ".." << (end_dt-1) <<
-                  ", x=" << begin_dx << ".." << (end_dx-1) <<
+        TRACE_MSG("extended domain bounding-box after wave-front adjustment: " <<
+                  "x=" << begin_dx << ".." << (end_dx-1) <<
                   ", y=" << begin_dy << ".." << (end_dy-1) <<
                   ", z=" << begin_dz << ".." << (end_dz-1) <<
                   ")");
