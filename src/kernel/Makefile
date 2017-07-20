@@ -333,16 +333,16 @@ MAKE_REPORT_FILE:=	make-report.$(YK_TAG).txt
 
 # Common source.
 COMM_DIR	:=	../common
-COMM_SRC_BASES	:=	output
-COMM_OBJS	:=	$(addprefix $(COMM_DIR)/,$(addsuffix .$(YK_TAG).o,$(COMM_SRC_BASES)))
+COMM_SRC_NAMES	:=	output
+COMM_SRC_BASES	:=	$(addprefix $(COMM_DIR)/,$(COMM_SRC_NAMES))
 
 # Kernel source files and dirs.
 YK_SWIG_DIR	:=	./swig
 YK_GEN_DIR	:=	./gen
 YK_LIB_DIR	:=	./lib
-YK_SRC_BASES	:=	stencil_calc realv_grids utils
-YK_OBJS		:=	$(addprefix $(YK_LIB_DIR)/,$(addsuffix .$(YK_TAG).o,$(YK_SRC_BASES)))
-YK_OBJS		+=	$(COMM_OBJS)
+YK_SRC_NAMES	:=	stencil_calc realv_grids utils
+YK_SRC_BASES	:=	$(addprefix $(YK_LIB_DIR)/,$(YK_SRC_NAMES))
+YK_OBJS		:=	$(addsuffix .$(YK_TAG).o,$(YK_SRC_BASES) $(COMM_SRC_BASES))
 YK_MACRO_FILE	:=	$(YK_GEN_DIR)/yask_macros.hpp
 YK_CODE_FILE	:=	$(YK_GEN_DIR)/yask_stencil_code.hpp
 YK_GEN_HEADERS	:=	$(addprefix $(YK_GEN_DIR)/, \
@@ -535,9 +535,6 @@ $(YK_GEN_DIR)/yask_layouts.hpp: $(GEN_LAYOUTS)
 	$(YK_MK_GEN_DIR)
 	$< -d > $@
 
-$(YC_EXEC):
-	$(MAKE) -C $(YC_SRC_DIR) $@
-
 $(YK_CODE_FILE): $(YC_EXEC)
 	$(YK_MK_GEN_DIR)
 	$< $(YC_FLAGS) $(EXTRA_YC_FLAGS) -p $(YC_TARGET) $@
@@ -646,17 +643,16 @@ all:
 # Should not trigger remake of stencil compiler.
 # Make this target before rebuilding YASK with any new parameters.
 clean:
-	rm -fv *.s $(MAKE_REPORT_FILE)
+	rm -fv *.s
 	rm -fr $(YK_SWIG_DIR)/build $(YK_GEN_DIR)
-	rm -fv $(YK_SWIG_DIR)/yask_kernel_api_wrap.{cpp,o}
+	rm -fv $(YK_SWIG_DIR)/*_api_wrap.*
 	rm -fv $(YK_OBJS)
 	find . -name '*.o' | xargs -r rm -v
 	find . $(BIN_DIR) $(LIB_DIR) -name '*.optrpt' | xargs -r rm -v
 
-# Remove executables, etc.
+# Remove executables, libs, etc.
 realclean: clean
 	rm -fv $(YK_LIB) $(YK_EXEC) $(YK_TEST_EXEC) $(YK_PY_MOD)* $(YK_PY_LIB)
-	rm -fv $(YK_SWIG_DIR)/*_api_wrap.{cpp,o}
 	rm -fv make-report.*.txt
 	find . -name '*.pyc' | xargs -r rm -v
 	find . -name '*~' | xargs -r rm -v

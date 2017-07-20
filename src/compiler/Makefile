@@ -43,16 +43,16 @@ YC_PY_MOD	:=	$(LIB_DIR)/$(YC_MODULE).py
 
 # Common source.
 COMM_DIR	:=	../common
-COMM_SRC_BASES	:=	output
-COMM_OBJS	:=	$(addprefix $(COMM_DIR)/,$(addsuffix .o,$(COMM_SRC_BASES)))
+COMM_SRC_NAMES	:=	output
+COMM_SRC_BASES	:=	$(addprefix $(COMM_DIR)/,$(COMM_SRC_NAMES))
 
 # Compiler source files and dirs.
 YC_SWIG_DIR	:=	./swig
 YC_GEN_DIR	:=	./gen
 YC_LIB_DIR	:=	./lib
-YC_SRC_BASES	:=	CppIntrin Expr ExprUtils Print
-YC_OBJS		:=	$(addprefix $(YC_LIB_DIR)/,$(addsuffix .o,$(YC_SRC_BASES)))
-YC_OBJS		+=	$(COMM_OBJS)
+YC_SRC_NAMES	:=	CppIntrin Expr ExprUtils Print
+YC_SRC_BASES	:=	$(addprefix $(YC_LIB_DIR)/,$(YC_SRC_NAMES))
+YC_OBJS		:=	$(addsuffix .o,$(YC_SRC_BASES) $(COMM_SRC_BASES))
 YC_STENCIL_LIST	:=	$(YC_GEN_DIR)/stencils.hpp
 YC_INC_DIRS	:=	$(INC_DIR) $(YC_LIB_DIR) $(COMM_DIR) ../stencils
 YC_INC_GLOB	:=	$(addsuffix /*.hpp,$(YC_INC_DIRS))
@@ -161,15 +161,16 @@ all:
 
 # Remove intermediate files.
 clean:
+	rm -fv *.s
 	rm -fr $(YC_SWIG_DIR)/build $(YC_GEN_DIR)
+	rm -fv $(YC_SWIG_DIR)/*_api_wrap.*
 	rm -fv $(YC_OBJS)
 	find . -name '*.o' | xargs -r rm -v
 	find . $(BIN_DIR) $(LIB_DIR) -name '*.optrpt' | xargs -r rm -v
 
-# Remove executables, etc.
+# Remove executables, libs, etc.
 realclean: clean
 	rm -fv $(YC_LIB) $(YC_EXEC) $(YC_TEST_EXEC) $(YC_PY_MOD)* $(YC_PY_LIB)
-	rm -fv $(YC_SWIG_DIR)/*_api_wrap.{cpp,o}
 	rm -fv *api-test*.dot* *api-test*.hpp*
 	find . -name '*.pyc' | xargs -r rm -v
 	find . -name '*~' | xargs -r rm -v
