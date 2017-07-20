@@ -51,7 +51,6 @@ PROJECT_BRIEF          = "Yet Another Stencil Kernel: a software framework for c
 # pixels and the maximum width should not exceed 200 pixels. Doxygen will copy
 # the logo to the output directory.
 
-#PROJECT_LOGO           = stencil-axes-order8-2x2x2-old2.png
 PROJECT_LOGO           =
 
 # The OUTPUT_DIRECTORY tag is used to specify the (relative or absolute) path

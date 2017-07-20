@@ -189,6 +189,8 @@ all-tests:
 	$(YK_MAKE) yc-and-yk-test
 	$(MAKE) api-tests
 
+docs: api-docs
+
 all:
 	$(MAKE) all-tests
 	$(MAKE) clean
@@ -214,6 +216,7 @@ clean-old:
 realclean: clean-old
 	rm -fv TAGS '*~'
 	find * -name '*~' | xargs -r rm -v
+	find * -name '*.optrpt' | xargs -r rm -v
 	rm -fr docs/api/{html,latex}
 	rm -rf $(BIN_DIR)/*.exe $(LIB_DIR)/*.so
 	$(YC_MAKE) $@

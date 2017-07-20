@@ -134,14 +134,17 @@ def init_grid(grid, timestep) :
 # Main script.
 if __name__ == "__main__":
 
-    # The factory from which all other kernel object are made.
+    # The factories from which all other kernel objects are made.
     kfac = yask_kernel.yk_factory()
+    ofac = yask_kernel.yask_output_factory()
 
     # Initalize MPI, etc.
     env = kfac.new_env()
 
     # Create solution.
     soln = kfac.new_solution(env)
+    debug_output = ofac.new_string_output()
+    soln.set_debug_output(debug_output)
     name = soln.get_name()
 
     # NB: At this point, the grids' meta-data exists, but the grids have no
@@ -262,4 +265,5 @@ if __name__ == "__main__":
     for grid in soln.get_grids() :
         read_grid(grid, 101)
 
+    print("Debug output captured:\n" + debug_output.get_string())
     print("End of YASK kernel API test.")

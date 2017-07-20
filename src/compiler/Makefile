@@ -41,14 +41,20 @@ YC_LIB		:=	$(LIB_DIR)/lib$(YC_BASE).so
 YC_PY_LIB	:=	$(LIB_DIR)/_$(YC_MODULE).so
 YC_PY_MOD	:=	$(LIB_DIR)/$(YC_MODULE).py
 
-# Source files and dirs.
+# Common source.
+COMM_DIR	:=	../common
+COMM_SRC_BASES	:=	output
+COMM_OBJS	:=	$(addprefix $(COMM_DIR)/,$(addsuffix .o,$(COMM_SRC_BASES)))
+
+# Compiler source files and dirs.
 YC_SWIG_DIR	:=	./swig
 YC_GEN_DIR	:=	./gen
 YC_LIB_DIR	:=	./lib
 YC_SRC_BASES	:=	CppIntrin Expr ExprUtils Print
 YC_OBJS		:=	$(addprefix $(YC_LIB_DIR)/,$(addsuffix .o,$(YC_SRC_BASES)))
+YC_OBJS		+=	$(COMM_OBJS)
 YC_STENCIL_LIST	:=	$(YC_GEN_DIR)/stencils.hpp
-YC_INC_DIRS	:=	$(INC_DIR) $(YC_LIB_DIR) ../common ../stencils
+YC_INC_DIRS	:=	$(INC_DIR) $(YC_LIB_DIR) $(COMM_DIR) ../stencils
 YC_INC_GLOB	:=	$(addsuffix /*.hpp,$(YC_INC_DIRS))
 YC_MK_GEN_DIR	:=	mkdir -p -v $(YC_GEN_DIR)
 
@@ -110,7 +116,9 @@ api: $(YC_LIB) $(YC_PY_LIB)
 # Also builds $(YC_PY_MOD)
 $(YC_SWIG_DIR)/yask_compiler_api_wrap.cpp: $(YC_SWIG_DIR)/yask*.i $(INC_DIR)/*.hpp
 	$(SWIG) -version
-	$(SWIG) -v -DYC_MODULE=$(YC_MODULE) -cppext cpp -I$(INC_DIR) -c++ -python -outdir $(LIB_DIR) -builtin $<
+	$(SWIG) -v -DYC_MODULE=$(YC_MODULE) -cppext cpp \
+	  -I$(INC_DIR) -I$(COMM_DIR) -I$(COMM_DIR)/swig \
+	  -c++ -python -outdir $(LIB_DIR) -builtin $<
 
 $(YC_SWIG_DIR)/yask_compiler_api_wrap.o: $(YC_SWIG_DIR)/yask_compiler_api_wrap.cpp
 	$(YC_CXX) $(YC_CXXFLAGS) $(PYINC) -fPIC -c -o $@ $<
@@ -154,6 +162,7 @@ all:
 # Remove intermediate files.
 clean:
 	rm -fr $(YC_SWIG_DIR)/build $(YC_GEN_DIR)
+	rm -fv $(YC_OBJS)
 	find . -name '*.o' | xargs -r rm -v
 	find . $(BIN_DIR) $(LIB_DIR) -name '*.optrpt' | xargs -r rm -v
 

@@ -50,6 +50,9 @@ namespace yask {
         
         // Simple name for the stencil.
         string _name;
+
+        // Debug output.
+        yask_output_ptr _debug_output;
     
         // A grid is an n-dimensional tensor that is indexed by grid indices.
         // Vectorization will be applied to grid accesses.
@@ -86,7 +89,10 @@ namespace yask {
 
     public:
         StencilSolution(const string& name) :
-            _name(name) { }
+            _name(name) {
+            yask_output_factory ofac;
+            _debug_output = ofac.new_stdout_output();
+        }
         virtual ~StencilSolution() {}
 
         // Identification.
@@ -114,6 +120,9 @@ namespace yask {
 
         // stencil_solution APIs.
         // See yask_stencil_api.hpp for documentation.
+        virtual void set_debug_output(yask_output_ptr debug) {
+            _debug_output = debug;
+        }
         virtual void set_name(std::string name) {
             _name = name;
         }
@@ -179,13 +188,8 @@ namespace yask {
                                           const std::string& dim5 = "");
         virtual void set_element_bytes(int nbytes) { _settings._elem_bytes = nbytes; }
         virtual int get_element_bytes() const { return _settings._elem_bytes; }
-        virtual std::string format(const std::string& format_type, ostream& msg_stream);
-        virtual std::string format(const std::string& format_type, bool debug) {
-            return format(format_type, debug? cout : _nullos);
-        }
-        virtual void write(const std::string& filename,
-                           const std::string& format_type,
-                           bool debug);
+        virtual void format(const std::string& format_type,
+                            yask_output_ptr output);
     };
 
     // A stencil solution that does not define any grids.

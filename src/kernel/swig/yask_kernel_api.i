@@ -35,6 +35,9 @@ IN THE SOFTWARE.
 %include <std_vector.i>
 %include <pybuffer.i>
 
+// Shared API.
+%include "yask_common_api.i"
+
 // Must declare shared_ptr for each one used in the API.
 %shared_ptr(yask::yk_env)
 %shared_ptr(yask::yk_settings)
@@ -54,4 +57,5 @@ IN THE SOFTWARE.
 %template(vector_str) std::vector<std::string>;
 %template(vector_grid_ptr) std::vector<std::shared_ptr<yask::yk_grid>>;
     
+%include "yask_common_api.hpp"
 %include "yask_kernel_api.hpp"

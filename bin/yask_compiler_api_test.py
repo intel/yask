@@ -31,13 +31,16 @@ import yask_compiler
 
 if __name__ == "__main__":
 
-    # Compiler 'bootstrap' factory.
+    # Compiler 'bootstrap' factories.
     cfac = yask_compiler.yc_factory()
+    ofac = yask_compiler.yask_output_factory()
 
     # Create a new stencil solution.
     soln = cfac.new_solution("api_py_test")
     soln.set_step_dim_name("t")
     soln.set_domain_dim_names(["x", "y", "z"])
+    stdos = ofac.new_stdout_output()
+    soln.set_debug_output(stdos)
 
     # Create a grid var.
     g1 = soln.new_grid("test_grid", ["t", "x", "y", "z"])
@@ -71,14 +74,14 @@ if __name__ == "__main__":
     soln.set_element_bytes(4)
 
     # Generate DOT output.
-    dot_file = "yc-api-test-py.dot"
-    soln.write(dot_file, "dot", True)
-    print("DOT-format written to '" + dot_file + "'.")
+    dot_file = ofac.new_file_output("yc-api-test-py.dot")
+    soln.format("dot", dot_file)
+    print("DOT-format written to '" + dot_file.get_filename() + "'.")
 
     # Generate YASK output.
-    yask_file = "yc-api-test-py.hpp"
-    soln.write(yask_file, "avx", True)
-    print("YASK-format written to '" + yask_file + "'.")
+    yask_file = ofac.new_file_output("yc-api-test-py.hpp")
+    soln.format("avx", yask_file)
+    print("YASK-format written to '" + yask_file.get_filename() + "'.")
 
     print("Equation after formatting: " + soln.get_equation(0).format_simple())
     print("End of YASK compiler API test.")

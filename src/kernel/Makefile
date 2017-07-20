@@ -331,12 +331,18 @@ YK_PY_LIB	:=	$(LIB_DIR)/_$(YK_MODULE).so
 YK_PY_MOD	:=	$(LIB_DIR)/$(YK_MODULE).py
 MAKE_REPORT_FILE:=	make-report.$(YK_TAG).txt
 
-# Source files and dirs.
+# Common source.
+COMM_DIR	:=	../common
+COMM_SRC_BASES	:=	output
+COMM_OBJS	:=	$(addprefix $(COMM_DIR)/,$(addsuffix .$(YK_TAG).o,$(COMM_SRC_BASES)))
+
+# Kernel source files and dirs.
 YK_SWIG_DIR	:=	./swig
 YK_GEN_DIR	:=	./gen
 YK_LIB_DIR	:=	./lib
 YK_SRC_BASES	:=	stencil_calc realv_grids utils
 YK_OBJS		:=	$(addprefix $(YK_LIB_DIR)/,$(addsuffix .$(YK_TAG).o,$(YK_SRC_BASES)))
+YK_OBJS		+=	$(COMM_OBJS)
 YK_MACRO_FILE	:=	$(YK_GEN_DIR)/yask_macros.hpp
 YK_CODE_FILE	:=	$(YK_GEN_DIR)/yask_stencil_code.hpp
 YK_GEN_HEADERS	:=	$(addprefix $(YK_GEN_DIR)/, \
@@ -560,7 +566,9 @@ api: $(YK_LIB) $(YK_PY_LIB)
 # TODO: consider adding $(YK_TAG) to [some of] these targets.
 $(YK_SWIG_DIR)/yask_kernel_api_wrap.cpp: $(YK_SWIG_DIR)/yask*.i $(INC_DIR)/*.hpp
 	$(SWIG) -version
-	$(SWIG) -v -DYK_MODULE=$(YK_MODULE) -cppext cpp -I$(INC_DIR) -c++ -python -outdir $(LIB_DIR) -builtin $<
+	$(SWIG) -v -DYK_MODULE=$(YK_MODULE) -cppext cpp \
+	  -I$(INC_DIR) -I$(COMM_DIR) -I$(COMM_DIR)/swig \
+	  -c++ -python -outdir $(LIB_DIR) -builtin $<
 
 $(YK_SWIG_DIR)/yask_kernel_api_wrap.o: $(YK_SWIG_DIR)/yask_kernel_api_wrap.cpp
 	$(YK_CXX) $(YK_CXXFLAGS) $(PYINC) -fPIC -c -o $@ $<
@@ -641,6 +649,7 @@ clean:
 	rm -fv *.s $(MAKE_REPORT_FILE)
 	rm -fr $(YK_SWIG_DIR)/build $(YK_GEN_DIR)
 	rm -fv $(YK_SWIG_DIR)/yask_kernel_api_wrap.{cpp,o}
+	rm -fv $(YK_OBJS)
 	find . -name '*.o' | xargs -r rm -v
 	find . $(BIN_DIR) $(LIB_DIR) -name '*.optrpt' | xargs -r rm -v
 
