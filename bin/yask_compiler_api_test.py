@@ -37,10 +37,10 @@ if __name__ == "__main__":
 
     # Create a new stencil solution.
     soln = cfac.new_solution("api_py_test")
+    do = ofac.new_string_output()
+    soln.set_debug_output(do)
     soln.set_step_dim_name("t")
     soln.set_domain_dim_names(["x", "y", "z"])
-    stdos = ofac.new_stdout_output()
-    soln.set_debug_output(stdos)
 
     # Create a grid var.
     g1 = soln.new_grid("test_grid", ["t", "x", "y", "z"])
@@ -84,4 +84,6 @@ if __name__ == "__main__":
     print("YASK-format written to '" + yask_file.get_filename() + "'.")
 
     print("Equation after formatting: " + soln.get_equation(0).format_simple())
+
+    print("Debug output captured:\n" + do.get_string())
     print("End of YASK compiler API test.")

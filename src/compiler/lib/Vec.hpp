@@ -241,7 +241,7 @@ namespace yask {
 
             // Vec of points to calculate.
 #ifdef DEBUG_VV
-            cout << "vec @ " << gp->makeDimValStr() << " => " << endl;
+            cout << " //** vec @ " << gp->makeDimValStr() << " => " << endl;
 #endif
 
             // Loop through all points in the vector at this cluster point.
@@ -270,7 +270,7 @@ namespace yask {
                         vecLocation.addDimBack(dname, vecIndex * len);
                     }
 #ifdef DEBUG_VV
-                    cout << " element @ " << offsets.makeDimValStr() << " => " <<
+                    cout << "  //** element @ " << offsets.makeDimValStr() << " => " <<
                         " vec-location @ " << vecLocation.makeDimValStr() <<
                         " & vec-offsets @ " << vecOffsets.makeDimValStr() <<
                         " => " << endl;
@@ -284,7 +284,7 @@ namespace yask {
                     assert(alignedElem >= 0);
                     assert(alignedElem < _vlen);
 #ifdef DEBUG_VV
-                    cout << "  general-" << gp->makeStr() << "[" << pelem << "] = aligned-" <<
+                    cout << "   //** general-" << gp->makeStr() << "[" << pelem << "] = aligned-" <<
                         alignedVec.makeStr() << "[" << alignedElem << "]" << endl;
 #endif
 
@@ -438,7 +438,7 @@ namespace yask {
             for (size_t i = 0; i < oev.size(); i++) {
 
 #ifdef DEBUG_SORT
-                cout << "  Looking for expr #" << i << "..." << endl;
+                cout << "  //** Looking for expr #" << i << "..." << endl;
 #endif
 
                 // Scan unused exprs.
@@ -464,13 +464,13 @@ namespace yask {
                             // new vector needed?
                             if (alignedVecs.count(av) == 0) {
 #ifdef DEBUG_SORT
-                                cout << " Vec " << av.makeStr("tmp") << " is new" << endl;
+                                cout << " //** Vec " << av.makeStr("tmp") << " is new" << endl;
 #endif
                                 cost++; 
                             }
                         }
 #ifdef DEBUG_SORT
-                        cout << " Cost of expr " << j << " = " << cost << endl;
+                        cout << " //** Cost of expr " << j << " = " << cost << endl;
 #endif
                         // Best so far?
                         if (cost < jBestCost) {
@@ -478,7 +478,7 @@ namespace yask {
                             jBest = j;
                             jBestAlignedVecs = tmpAlignedVecs;
 #ifdef DEBUG_SORT
-                            cout << "  Best so far has " << jBestAlignedVecs.size() << " aligned vecs" << endl;
+                            cout << "  //** Best so far has " << jBestAlignedVecs.size() << " aligned vecs" << endl;
 #endif
                         }
                     }

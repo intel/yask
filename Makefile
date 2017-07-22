@@ -186,12 +186,13 @@ yc-and-yk-test:
 	$(YK_MAKE) $@
 
 all-tests:
-	$(YK_MAKE) yc-and-yk-test
+	$(MAKE) yc-and-yk-test
 	$(MAKE) api-tests
 
 docs: api-docs
 
 all:
+	$(MAKE) default
 	$(MAKE) all-tests
 	$(MAKE) clean
 	$(MAKE) default

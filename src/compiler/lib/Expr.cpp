@@ -129,12 +129,11 @@ namespace yask {
 
     // Create the intermediate data for printing.
     void StencilSolution::analyze_solution(int vlen,
-                                           bool is_folding_efficient,
-                                           ostream& os) {
+                                           bool is_folding_efficient) {
 
         // Find all the stencil dimensions from the grids.
         // Create the final folds and clusters from the cmd-line options.
-        _dims.setDims(_grids, _settings, vlen, is_folding_efficient, os);
+        _dims.setDims(_grids, _settings, vlen, is_folding_efficient, *_dos);
 
         // Call the stencil 'define' method to create ASTs.
         // All grid points will be relative to origin (0,0,...,0).
@@ -143,36 +142,36 @@ namespace yask {
 
         // Check for illegal dependencies within equations for scalar size.
         if (_settings._find_deps) {
-            os << "Checking equation(s) with scalar operations...\n"
+            *_dos << "Checking equation(s) with scalar operations...\n"
                 " If this fails, review stencil equation(s) for illegal dependencies.\n";
-            _eqs.checkDeps(_dims._scalar, _dims._stepDim);
+            _eqs.checkDeps(_dims._scalar, _dims._stepDim, *_dos);
         }
 
         // Check for illegal dependencies within equations for vector size.
         if (_settings._find_deps) {
-            os << "Checking equation(s) with folded-vector operations...\n"
+            *_dos << "Checking equation(s) with folded-vector operations...\n"
                 " If this fails, the fold dimensions are not compatible with all equations.\n";
-            _eqs.checkDeps(_dims._fold, _dims._stepDim);
+            _eqs.checkDeps(_dims._fold, _dims._stepDim, *_dos);
         }
 
         // Check for illegal dependencies within equations for cluster size and
         // also create equation groups based on legal dependencies.
-        os << "Checking equation(s) with clusters of vectors...\n"
+        *_dos << "Checking equation(s) with clusters of vectors...\n"
             " If this fails, the cluster dimensions are not compatible with all equations.\n";
         _eqGroups.set_basename_default(_settings._eq_group_basename_default);
         _eqGroups.set_dims(_dims);
         _eqGroups.makeEqGroups(_eqs, _settings._eqGroupTargets,
-                               _dims._clusterPts, _settings._find_deps);
-        _eqGroups.optimizeEqGroups(_settings, "scalar & vector", false, os);
+                               _dims._clusterPts, _settings._find_deps, *_dos);
+        _eqGroups.optimizeEqGroups(_settings, "scalar & vector", false, *_dos);
 
         // Make a copy of each equation at each cluster offset.
         // We will use these for inter-cluster optimizations and code generation.
-        os << "Constructing cluster of equations containing " <<
+        *_dos << "Constructing cluster of equations containing " <<
             _dims._clusterMults.product() << " vector(s)...\n";
         _clusterEqGroups = _eqGroups;
         _clusterEqGroups.replicateEqsInCluster(_dims);
         if (_settings._doOptCluster)
-            _clusterEqGroups.optimizeEqGroups(_settings, "cluster", true, cout);
+            _clusterEqGroups.optimizeEqGroups(_settings, "cluster", true, *_dos);
     }
 
     // Format in given format-type.
@@ -210,11 +209,10 @@ namespace yask {
         bool is_folding_efficient = printer->is_folding_efficient();
 
         // Set data for equation groups, dims, etc.
-        ostream& ds = _debug_output->get_ostream();
-        analyze_solution(vlen, is_folding_efficient, ds);
+        analyze_solution(vlen, is_folding_efficient);
 
         // Create the output.
-        ds << "Generating '" << format_type << "' output.\n";
+        *_dos << "Generating '" << format_type << "' output.\n";
         printer->print(output->get_ostream());
         delete printer;
     }
@@ -971,11 +969,12 @@ namespace yask {
     // library.
     void Eqs::findDeps(IntTuple& pts,
                        const string& stepDim,
-                       EqDepMap* eq_deps) {
+                       EqDepMap* eq_deps,
+                       ostream& os) {
 
         // Gather points from all eqs in all grids.
         PointVisitor pt_vis(pts);
-        cout << " Scanning " << getEqs().size() << " equations(s)...\n";
+        os << " Scanning " << getEqs().size() << " equations(s)...\n";
 
         // Gather initial stats from all eqs.
         for (auto eq1 : getEqs())
@@ -1041,7 +1040,7 @@ namespace yask {
             // TODO: check to make sure cond1 doesn't depend on stepDim.
             
 #ifdef DEBUG_DEP
-            cout << " Checking dependencies *within* equation " <<
+            cout << " //** Checking dependencies *within* equation " <<
                 eq1->makeQuotedStr() << "...\n";
 #endif
 
@@ -1140,11 +1139,11 @@ namespace yask {
 
         // Resolve indirect dependencies.
         if (eq_deps) {
-            cout << "  Resolving indirect dependencies...\n";
+            os << "  Resolving indirect dependencies...\n";
             for (DepType dt = certain_dep; dt < num_deps; dt = DepType(dt+1))
                 (*eq_deps)[dt].analyze();
         }
-        cout << " Done.\n";
+        os << " Done.\n";
     }
 
     // Get the full name of an eq-group.
@@ -1182,7 +1181,7 @@ namespace yask {
     void EqGroup::addEq(EqualsExprPtr ee, bool update_stats)
     {
 #ifdef DEBUG_EQ_GROUP
-        cout << "EqGroup: adding " << ee->makeQuotedStr() << endl;
+        cout << " //** EqGroup: adding " << ee->makeQuotedStr() << endl;
 #endif
         _eqs.insert(ee);
 
@@ -1315,7 +1314,7 @@ namespace yask {
         if (size() < 2)
             return;
 
-        cout << " Sorting " << size() << " eq-group(s)...\n";
+        cout << " //** Sorting " << size() << " eq-group(s)...\n";
 
         // Want to keep original order as much as possible.
         // Only reorder if dependencies are in conflict.
@@ -1397,7 +1396,7 @@ namespace yask {
                     for (DepType dt = certain_dep; dt < num_deps; dt = DepType(dt+1)) {
                         if (eq_deps[dt].is_dep(eq, eq2)) {
 #if DEBUG_ADD_EXPRS
-                            cout << "addExprsFromGrid: not adding equation " <<
+                            cout << " //** addExprsFromGrid: not adding equation " <<
                                 eq->makeQuotedStr() << " to " << eg.getDescription() <<
                                 " because of dependency w/equation " <<
                                 eq2->makeQuotedStr() << endl;
@@ -1430,14 +1429,14 @@ namespace yask {
             newGroup = true;
         
 #if DEBUG_ADD_EXPRS
-            cout << "Creating new " << target->getDescription() << endl;
+            cout << " //** Creating new " << target->getDescription() << endl;
 #endif
         }
 
         // Add eq to target eq-group.
         assert(target);
 #if DEBUG_ADD_EXPRS
-        cout << "Adding " << eq->makeQuotedStr() <<
+        cout << " //** Adding " << eq->makeQuotedStr() <<
             " to " << target->getDescription() << endl;
 #endif
         target->addEq(eq);
@@ -1454,7 +1453,8 @@ namespace yask {
     // 'eq_deps': pre-computed dependencies between equations.
     void EqGroups::makeEqGroups(Eqs& allEqs,
                                 const string& targets,
-                                EqDepMap& eq_deps)
+                                EqDepMap& eq_deps,
+                                ostream& os)
     {
         //auto& stepDim = _dims->_stepDim;
     
@@ -1490,13 +1490,13 @@ namespace yask {
 
         // Find dependencies between eq-groups based on deps between their eqs.
         for (auto& eg1 : *this) {
-            cout << " Checking dependencies of " <<
+            os << " Checking dependencies of " <<
                 eg1.getDescription() << "...\n";
-            cout << "  Updating the following grid(s) with " <<
+            os << "  Updating the following grid(s) with " <<
                 eg1.getNumEqs() << " equation(s):";
             for (auto* g : eg1.getOutputGrids())
-                cout << " " << g->getName();
-            cout << endl;
+                os << " " << g->getName();
+            os << endl;
 
             // Check to see if eg1 depends on other eq-groups.
             for (auto& eg2 : *this) {
@@ -1506,9 +1506,9 @@ namespace yask {
                     continue;
 
                 if (eg1.setDepOn(certain_dep, eq_deps, eg2))
-                    cout << "  Is dependent on " << eg2.getDescription(false) << endl;
+                    os << "  Is dependent on " << eg2.getDescription(false) << endl;
                 else if (eg1.setDepOn(possible_dep, eq_deps, eg2))
-                    cout << "  May be dependent on " << eg2.getDescription(false) << endl;
+                    os << "  May be dependent on " << eg2.getDescription(false) << endl;
             }
         }
 

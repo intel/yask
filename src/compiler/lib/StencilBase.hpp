@@ -53,6 +53,7 @@ namespace yask {
 
         // Debug output.
         yask_output_ptr _debug_output;
+        ostream* _dos = &std::cout;
     
         // A grid is an n-dimensional tensor that is indexed by grid indices.
         // Vectorization will be applied to grid accesses.
@@ -80,18 +81,16 @@ namespace yask {
         Dimensions _dims;       // various dimensions.
         EqGroups _eqGroups;     // eq-groups for scalar and vector.
         EqGroups _clusterEqGroups; // eq-groups for scalar and vector.
-        ofstream _nullos;        // Dummy output stream.
 
         // Create the intermediate data.
         void analyze_solution(int vlen,
-                              bool is_folding_efficient,
-                              ostream& os);
+                              bool is_folding_efficient);
 
     public:
         StencilSolution(const string& name) :
             _name(name) {
             yask_output_factory ofac;
-            _debug_output = ofac.new_stdout_output();
+            set_debug_output(ofac.new_stdout_output());
         }
         virtual ~StencilSolution() {}
 
@@ -122,6 +121,7 @@ namespace yask {
         // See yask_stencil_api.hpp for documentation.
         virtual void set_debug_output(yask_output_ptr debug) {
             _debug_output = debug;
+            _dos = &_debug_output->get_ostream();
         }
         virtual void set_name(std::string name) {
             _name = name;
