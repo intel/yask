@@ -72,6 +72,8 @@
 # def_thread_divisor: Divide number of OpenMP threads by this factor by default.
 # def_*_args: Default cmd-line args for specific settings.
 # more_def_args: Additional default cmd-line args.
+#
+# max_dims: max number of dimensions supported in a grid.
 
 # This is mostly wrapper for building several parts of YASK via src/*/Makefile.
 # See those specific files for many more settings.

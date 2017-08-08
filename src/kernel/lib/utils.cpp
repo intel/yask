@@ -63,18 +63,19 @@ namespace yask {
         void* p = 0;
         int ret = posix_memalign(&p, align, nbytes);
         if (ret) {
-            std::cerr << "error: cannot allocate " << printWithPow2Multiplier(nbytes) << "B.\n";
+            std::cerr << "error: cannot allocate " << makeByteStr(nbytes) << ".\n";
             exit_yask(1);
         }
         return static_cast<char*>(p);
     }
 
-    // Return num with SI multiplier.
-    // Use this one for bytes, etc.
-    string printWithPow2Multiplier(double num)
+    // Return num with SI multiplier and "iB" suffix,
+    // e.g., 412KiB.
+    string makeByteStr(size_t nbytes)
     {
         ostringstream os;
-        const double oneK = 1024.;
+        double num = double(nbytes);
+        const double oneK = 1024;
         const double oneM = oneK * oneK;
         const double oneG = oneK * oneM;
         const double oneT = oneK * oneG;
@@ -88,12 +89,13 @@ namespace yask {
             os << (num / oneK) << "Ki";
         else
             os << num;
+        os << "B";
         return os.str();
     }
 
     // Return num with SI multiplier.
     // Use this one for rates, etc.
-    string printWithPow10Multiplier(double num)
+    string makeNumStr(double num)
     {
         ostringstream os;
         const double oneK = 1e3;
@@ -129,35 +131,6 @@ namespace yask {
         return res;
     }
     
-    // If 'finalize' and 'inner_size' is zero, make it equal to 'outer_size'.
-    // Round up 'inner_size' to be a multiple of 'mult'.
-    // If 'finalize', output info to 'os' using '*_name' and 'dim'.
-    // Return number of blocks.
-    idx_t findNumSubsets(ostream& os,
-                         idx_t& inner_size, const string& inner_name,
-                         idx_t outer_size, const string& outer_name,
-                         idx_t mult, const string& dim,
-                         bool finalize) {
-        if (finalize && inner_size <= 0)
-            inner_size = outer_size; // 0 => use full size as default.
-        if (mult)
-            inner_size = ROUND_UP(inner_size, mult);
-        idx_t ninner = (inner_size <= 0) ? 0 :
-            (outer_size + inner_size - 1) / inner_size; // full or partial.
-        if (finalize) {
-            idx_t rem = outer_size % inner_size;                       // size of remainder.
-            idx_t nfull = rem ? (ninner - 1) : ninner; // full only.
-
-            os << " In '" << dim << "' dimension, " << outer_name << " of size " <<
-                outer_size << " contains " << nfull << " " <<
-                inner_name << "(s) of size " << inner_size;
-            if (rem)
-                os << " plus 1 remainder " << inner_name << " of size " << rem;
-            os << "." << endl;
-        }
-        return ninner;
-    }
-
     // Find sum of rank_vals over all ranks.
     idx_t sumOverRanks(idx_t rank_val, MPI_Comm comm) {
         idx_t sum_val = rank_val;

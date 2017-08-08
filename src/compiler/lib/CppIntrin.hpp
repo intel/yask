@@ -193,7 +193,7 @@ namespace yask {
         virtual CppVecPrintHelper* newPrintHelper(VecInfoVisitor& vv,
                                                   CounterVisitor& cv) {
             return new CppKncPrintHelper(vv, _settings._allowUnalignedLoads, &cv,
-                                         "temp_vec", "real_vec_t", " ", ";\n");
+                                         "temp", "real_vec_t", " ", ";\n");
         }
 
     public:
@@ -216,7 +216,7 @@ namespace yask {
         virtual CppVecPrintHelper* newPrintHelper(VecInfoVisitor& vv,
                                                   CounterVisitor& cv) {
             return new CppAvx256PrintHelper(vv, _settings._allowUnalignedLoads, &cv,
-                                            "temp_vec", "real_vec_t", " ", ";\n");
+                                            "temp", "real_vec_t", " ", ";\n");
         }
 
     public:
@@ -236,7 +236,7 @@ namespace yask {
         virtual CppVecPrintHelper* newPrintHelper(VecInfoVisitor& vv,
                                                   CounterVisitor& cv) {
             return new CppAvx512PrintHelper(vv, _settings._allowUnalignedLoads, &cv,
-                                            "temp_vec", "real_vec_t", " ", ";\n");
+                                            "temp", "real_vec_t", " ", ";\n");
         }
 
     public:

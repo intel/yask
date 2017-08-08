@@ -175,8 +175,6 @@ namespace yask {
         EqGroups& _clusterEqGroups;
         Dimensions& _dims;
         string _context, _context_base;
-        IntTuple _yask_dims;        // spatial dims in yask.
-        string _yask_step;          // step dim in yask.
 
         // Print an expression as a one-line C++ comment.
         void addComment(ostream& os, EqGroup& eq);
@@ -187,13 +185,16 @@ namespace yask {
         virtual CppVecPrintHelper* newPrintHelper(VecInfoVisitor& vv,
                                                   CounterVisitor& cv) {
             return new CppVecPrintHelper(vv, _settings._allowUnalignedLoads, &cv,
-                                         "temp_vec", "real_vec_t", " ", ";\n");
+                                         "temp", "real_vec_t", " ", ";\n");
         }
 
+        // Print extraction of indices.
+        virtual void printIndices(ostream& os) const;
+        
         // Print a shim function to map hard-coded YASK vars to actual dims.
-        virtual void printShim(ostream& os, const string& fname,
-                               bool use_template = false,
-                               const string& dim = "");
+        virtual void printShim(ostream& os,
+                               const string& fname,
+                               bool use_template = false);
 
         // Print YASK macros.
         virtual void printMacros(ostream& os);
@@ -210,13 +211,6 @@ namespace yask {
             // name of C++ struct.
             _context = "StencilContext_" + _stencil.getName();
             _context_base = _context + "_data";
-
-            // YASK dims are hard-coded.
-            // TODO: fix YASK kernel code.
-            _yask_step = "t";
-            _yask_dims.addDimBack("x", 1);
-            _yask_dims.addDimBack("y", 1);
-            _yask_dims.addDimBack("z", 1);
         }
         virtual ~YASKCppPrinter() { }
 

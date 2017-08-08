@@ -115,7 +115,7 @@ namespace yask {
 
         // Dimensions and values for this Tuple.
         std::deque<Scalar<T>> _q;             // dirs and values in order.
-        std::map<const std::string*, T*> _map;        // ptr to values indexed by name.
+        std::map<const std::string*, int> _map;  // ptr to positions keyed by name.
 
         // First-inner vars control ordering. Example: dims x, y, z.
         // If _firstInner == true, x is unit stride.
@@ -123,10 +123,10 @@ namespace yask {
         // This setting affects layout() and visitAllPoints().
         bool _firstInner = true; // whether first dim is used for inner loop.
 
-        // Update the map after values are added.
+        // Update _map after values are added to _q.
         void _updateMap() {
-            for (auto& i : _q)
-                _map[i._name] = i.getValPtr();
+            for (size_t i = 0; i < _q.size(); i++)
+                _map[_q[i]._name] = int(i);
         }
 
         // Completely redo the map from scratch.
@@ -138,20 +138,6 @@ namespace yask {
     public:
         Tuple() {}
         virtual ~Tuple() {}
-
-        // Copy ctor.
-        Tuple(const Tuple& rhs) :
-            _q(rhs._q),
-            _firstInner(rhs._firstInner) {
-            _resetMap();
-        }
-
-        // Copy operator.
-        virtual void operator=(const Tuple& rhs) {
-            _q = rhs._q;
-            _firstInner = rhs._firstInner;
-            _resetMap();
-        }
 
         // first-inner (first dim is unit stride) accessors.
         virtual bool isFirstInner() const { return _firstInner; }
@@ -166,7 +152,7 @@ namespace yask {
         }
 
         // Return pointer to scalar pair or null if it doesn't exist.
-        // Lookup by dim index.
+        // Lookup by dim posn.
         // No non-const version because name shouldn't be modified
         // outside of this class.
         virtual const Scalar<T>* getDimPtr(int i) const {
@@ -179,6 +165,14 @@ namespace yask {
             auto* p = getDimPtr(i);
             assert(p);
             return p->getName();
+        }
+        
+        // Return all dim names.
+        virtual const std::vector<std::string> getDimNames() const {
+            std::vector<std::string> names;
+            for (auto& i : _q)
+                names.push_back(i.getName());
+            return names;
         }
         
         // Return scalar pair at index (must exist).
@@ -202,7 +196,7 @@ namespace yask {
         }
         
         // Return pointer to value or null if it doesn't exist.
-        // Lookup by dim index.
+        // Lookup by dim posn.
         virtual const T* lookup(int i) const {
             return (i >= 0 && i < int(_q.size())) ?
                 _q.at(i).getValPtr() : NULL;
@@ -217,12 +211,12 @@ namespace yask {
         virtual const T* lookup(const std::string& dim) const {
             auto* sp = Scalar<T>::_getNamePtr(dim);
             auto i = _map.find(sp);
-            return (i == _map.end()) ? NULL : i->second;
+            return (i == _map.end()) ? NULL : &_q[i->second]._val;
         }
         virtual T* lookup(const std::string& dim) {
             auto* sp = Scalar<T>::_getNamePtr(dim);
             auto i = _map.find(sp);
-            return (i == _map.end()) ? NULL : i->second;
+            return (i == _map.end()) ? NULL : &_q[i->second]._val;
         }
         virtual const T* lookup(const std::string* dim) const {
             return lookup(*dim);
@@ -231,7 +225,26 @@ namespace yask {
             return lookup(*dim);
         }
 
-        // Lookup and return value by dim index (must exist).
+        // Return dim posn or -1 if it doesn't exist.
+        // Lookup by name.
+        virtual int lookup_posn(const std::string& dim) const {
+            auto* sp = Scalar<T>::_getNamePtr(dim);
+            auto i = _map.find(sp);
+            return (i == _map.end()) ? -1 : int(i->second);
+        }
+        virtual int lookup_posn(const std::string& dim) {
+            auto* sp = Scalar<T>::_getNamePtr(dim);
+            auto i = _map.find(sp);
+            return (i == _map.end()) ? -1 : int(i->second);
+        }
+        virtual int lookup_posn(const std::string* dim) const {
+            return lookup_posn(*dim);
+        }
+        virtual int lookup_posn(const std::string* dim) {
+            return lookup_posn(*dim);
+        }
+
+        // Lookup and return value by dim posn (must exist).
         virtual const T& getVal(int i) const {
             auto* p = lookup(i);
             assert(p);
@@ -241,6 +254,12 @@ namespace yask {
             auto* p = lookup(i);
             assert(p);
             return *p;
+        }
+        virtual const T& operator[](int i) const {
+            return getVal(i);
+        }
+        virtual T& operator[](int i) {
+            return getVal(i);
         }
 
         // Lookup and return value by dim name (must exist).
@@ -253,6 +272,12 @@ namespace yask {
             auto* p = lookup(dim);
             assert(p);
             return *p;
+        }
+        virtual const T& operator[](const std::string& dim) const {
+            return getVal(dim);
+        }
+        virtual T& operator[](const std::string& dim) {
+            return getVal(dim);
         }
         virtual const T& getVal(const std::string* dim) const {
             return getVal(*dim);
@@ -316,7 +341,7 @@ namespace yask {
             setVal(*dim, val);
         }
 
-        // Set value by dim index (must exist).
+        // Set value by dim posn (must exist).
         virtual void setVal(int i, const T& val) {
             T* p = lookup(i);
             assert(p);
@@ -352,6 +377,8 @@ namespace yask {
         // Set values from 'src' Tuple, leaving non-matching ones in this
         // unchanged. Add dimensions in 'src' that are not in 'this' iff
         // addMissing==true.
+        // Different than the copy operator because this method does
+        // not change the order of *this or remove any existing dims.
         virtual void setVals(const Tuple& src, bool addMissing) {
             for (auto& i : src.getDims()) {
                 auto& dim = i.getName();
@@ -402,22 +429,29 @@ namespace yask {
         }
     
         // Check whether dims are the same.
-        // (Don't have to be in same order.)
-        virtual bool areDimsSame(const Tuple& rhs) const {
+        // Don't have to be in same order unless 'sameOrder' is true.
+        virtual bool areDimsSame(const Tuple& rhs, bool sameOrder = false) const {
             if (size() != rhs.size())
                 return false;
-            for (auto& i : _q) {
-                auto& dim = i.getName();
-                if (!rhs.lookup(dim))
-                    return false;
+            if (sameOrder) {
+                for (size_t i = 0; i < _q.size(); i++)
+                    if (_q[i].getName() != rhs._q[i].getName())
+                        return false;
+            }
+            else {
+                for (auto& i : _q) {
+                    auto& dim = i.getName();
+                    if (!rhs.lookup(dim))
+                        return false;
+                }
             }
             return true;
         }
     
         // Equality is true if all dimensions and values are same.
-        // Dimensions don't have to be in same order.
+        // Dimensions must be in same order.
         virtual bool operator==(const Tuple& rhs) const {
-            if (!areDimsSame(rhs))
+            if (!areDimsSame(rhs, true))
                 return false;
             for (auto& i : _q) {
                 auto& dim = i.getName();
@@ -436,7 +470,7 @@ namespace yask {
             else if (size() > rhs.size()) return false;
 
             // if dims are same, compare values.
-            if (areDimsSame(rhs)) {
+            if (areDimsSame(rhs, true)) {
                 for (auto i : _q) {
                     auto& dim = i.getName();
                     auto& val = i.getVal();
@@ -505,6 +539,36 @@ namespace yask {
             return idx;
         }
 
+        // Convert 1D 'offset' to nD offsets using values in 'this' as sizes of nD space.
+        virtual Tuple unlayout(size_t offset) const {
+            Tuple res = *this;
+            size_t prevSize = 1;
+            
+            // Loop thru dims.
+            int startDim = _firstInner ? 0 : size()-1;
+            int beyondLastDim = _firstInner ? size() : -1;
+            int stepDim = _firstInner ? 1 : -1;
+            for (int di = startDim; di != beyondLastDim; di += stepDim) {
+                auto& i = _q.at(di);
+                auto& dim = i.getName();
+                size_t dsize = size_t(i.getVal());
+                assert (dsize >= 0);
+
+                // Div offset by product of previous dims.
+                size_t dofs = offset / prevSize;
+
+                // Wrap within size of this dim.
+                dofs %= dsize;
+
+                // Save in result.
+                res[di] = dofs;
+                
+                prevSize *= dsize;
+                assert(prevSize <= size_t(product()));
+            }
+            return res;
+        }
+        
         // Get value from 'this' in same dim as in 'dir'.
         virtual T getValInDir(const Scalar<T>& dir) const {
             auto& dim = dir.getName();
@@ -586,7 +650,7 @@ namespace yask {
             return reduce([&](T lhs, T rhs){ return lhs + rhs; });
         }
         virtual T product() const {
-            return _map.size() ?
+            return _q.size() ?
                 reduce([&](T lhs, T rhs){ return lhs * rhs; }) : 1;
         }
         virtual T max() const {
@@ -621,6 +685,10 @@ namespace yask {
             return combineElements([&](T lhs, T rhs){ return lhs + rhs; },
                                    rhs, strictRhs);
         }
+        virtual Tuple subElements(const Tuple& rhs, bool strictRhs=true) const {
+            return combineElements([&](T lhs, T rhs){ return lhs - rhs; },
+                                   rhs, strictRhs);
+        }
         virtual Tuple multElements(const Tuple& rhs, bool strictRhs=true) const {
             return combineElements([&](T lhs, T rhs){ return lhs * rhs; },
                                    rhs, strictRhs);
@@ -647,6 +715,10 @@ namespace yask {
         }
         virtual Tuple addElements(T rhs) const {
             return mapElements([&](T lhs, T rhs){ return lhs + rhs; },
+                               rhs);
+        }
+        virtual Tuple subElements(T rhs) const {
+            return mapElements([&](T lhs, T rhs){ return lhs - rhs; },
                                rhs);
         }
         virtual Tuple multElements(T rhs) const {
@@ -737,13 +809,14 @@ namespace yask {
         // Visitation order is with first dimension in unit stride, i.e., a conceptual
         // "outer loop" iterates through last dimension, ..., and an "inner loop" iterates
         // through first dimension. If '_firstInner' is false, it is done the opposite way.
-        virtual void visitAllPoints(std::function<void (const Tuple&)> visitor) const {
+        // Visitor should return 'true' to keep going or 'false' to stop.
+        virtual void visitAllPoints(std::function<bool (const Tuple&)> visitor) const {
 
             // Init lambda fn arg with *this to get dim names.
             Tuple tp = *this;
 
             // 0-D?
-            if (!_map.size())
+            if (!_q.size())
                 visitor(tp);
             
             // Call recursive version.
@@ -756,12 +829,12 @@ namespace yask {
     protected:
 
         // Handle recursion for public visitAllPoints(visitor).
-        virtual void visitAllPoints(std::function<void (const Tuple&)> visitor,
+        virtual bool visitAllPoints(std::function<bool (const Tuple&)> visitor,
                                     int curDimNum, int step, Tuple& tp) const {
 
             // Ready to call visitor, i.e., have we recursed beyond final dimension?
             if (curDimNum < 0 || curDimNum >= size())
-                visitor(tp);
+                return visitor(tp);
         
             // Iterate along current dimension, and recurse to next/prev dimension.
             else {
@@ -770,9 +843,12 @@ namespace yask {
                 auto& dsize = sc.getVal();
                 for (T i = 0; i < dsize; i++) {
                     tp.setVal(tdim, i);
-                    visitAllPoints(visitor, curDimNum + step, step, tp);
+                    bool ok = visitAllPoints(visitor, curDimNum + step, step, tp);
+                    if (!ok)
+                        return false;
                 }
             }
+            return true;
         }
     };
 

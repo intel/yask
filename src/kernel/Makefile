@@ -24,8 +24,8 @@
 # Makefile for the YASK stencil kernel.
 # Type 'make help' for usage.
 
-# See ../../Makefile for vars commonly set via the command-line that
-#   control kernel configuration and performance.
+# See top-level YASK Makefile for explanation of vars commonly set via the
+#   command-line that control kernel configuration and performance.
 
 # Initial defaults.
 stencil		=	iso3dfd
@@ -33,6 +33,7 @@ arch		=	snb
 mpi		=	1
 real_bytes	=	4
 radius		=	1
+scan_dims	=	4	# Includes step dim; TODO: move to compiler.
 
 # Defaults based on stencil type (and arch for some stencils).
 ifeq ($(stencil),)
@@ -70,14 +71,14 @@ else ifeq ($(stencil),iso3dfd)
   def_block_threads		=	1
   def_block_args		=	-bx 296 -by 5 -bz 290
   cluster			=	z=2
-  SUB_BLOCK_LOOP_INNER_MODS	=
+  prefetch			=
  else ifeq ($(arch),skx)
   fold_4byte			=	x=4,y=4
   def_thread_divisor		=	1
   def_block_threads		=	2
   def_block_args		=	-b 64
   cluster			=	z=2
-  SUB_BLOCK_LOOP_INNER_MODS	=	prefetch(L1)
+  prefetch			=	prefetch(L1)
  endif
 
 else ifneq ($(findstring awp,$(stencil)),)
@@ -94,7 +95,7 @@ else ifneq ($(findstring awp,$(stencil)),)
   def_block_threads		=	4
   def_block_args		=	-b 48 -bx 112
  else ifeq ($(arch),hsw)
-  SUB_BLOCK_LOOP_INNER_MODS	=	prefetch(L1,L2)
+  prefetch			=	prefetch(L1,L2)
   omp_block_schedule		=	dynamic,1
   fold_4byte			=	x=8
   cluster			=	y=2
@@ -104,7 +105,7 @@ else ifneq ($(findstring awp,$(stencil)),)
  else ifeq ($(arch),skx)
   fold_4byte			=	x=2,y=8
   def_block_args		=	-b 32 -bx 96
-  SUB_BLOCK_LOOP_INNER_MODS	=	prefetch(L1)
+  prefetch			=	prefetch(L1)
  endif
 
 else ifneq ($(findstring ssg,$(stencil)),)
@@ -119,7 +120,7 @@ else ifneq ($(findstring fsg,$(stencil)),)
   def_block_args  	=	-b 16
   def_thread_divisor	=	4
   def_block_threads	=	1
-  SUB_BLOCK_LOOP_INNER_MODS  =	prefetch(L2)
+  prefetch		=	prefetch(L2)
  endif
 
 else ifeq ($(stencil),stream)
@@ -137,7 +138,7 @@ ifeq ($(arch),knc)
  MACROS		+=	USE_INTRIN512
  YC_TARGET  	?=	knc
  def_block_threads  ?=	4
- SUB_BLOCK_LOOP_INNER_MODS  ?=	prefetch(L1,L2)
+ prefetch	?=	prefetch(L1,L2)
 
 else ifeq ($(arch),knl)
 
@@ -147,7 +148,7 @@ else ifeq ($(arch),knl)
  YC_TARGET  	?=	avx512
  def_block_args	?=	-b 96
  def_block_threads ?=	8
- SUB_BLOCK_LOOP_INNER_MODS  ?=	prefetch(L1)
+ prefetch	?=	prefetch(L1)
 
 else ifeq ($(arch),skx)
 
@@ -194,7 +195,8 @@ streaming_stores	?= 	0
 omp_par_for		?=	omp parallel for
 omp_region_schedule	?=	dynamic,1
 omp_block_schedule	?=	static,1
-omp_halo_schedule	?=	static
+omp_gen_schedule	?=	static
+prefetch		?=	prefetch(L2)
 def_thread_divisor	?=	1
 def_block_threads	?=	2
 real_bytes		?=	4
@@ -206,6 +208,7 @@ def_pad_args		?=	-ep 1
 cluster			?=	x=1
 pfd_l1			?=	1
 pfd_l2			?=	2
+max_dims		?=	6  # max grid dims >= scan_dims.
 
 # default folding depends on HW vector size.
 ifneq ($(findstring INTRIN512,$(MACROS)),)  # 512 bits.
@@ -230,67 +233,65 @@ endif # not 512 bits.
 fold	= 	$(fold_$(real_bytes)byte) # e.g., fold_4byte
 
 ######## Loop-compiler configuration:
+# The loop indices range from 0..N-1, where N=scan_dims.
+# 0 is the step dimension, usually time.
+# The step loop is handled outside of the generated loops,
+# so the following loop codes do not scan over dim 0.
+# N-1 is the inner-most dim.
 
 # Rank loops break up the whole rank into smaller regions.  In order for
 # temporal wavefronts to operate properly, the order of spatial dimensions
 # may be changed, but the scanning paths must have strictly incrementing
 # indices. Those that do not (e.g., grouped, serpentine, square-wave) may
 # *not* be used here when using temporal wavefronts. The time loop may be
-# found in StencilEquations::calc_rank().
-RANK_LOOP_OPTS		?=	-dims 'dx,dy,dz'
-RANK_LOOP_OUTER_VARS	?=	dx,dy,dz
-RANK_LOOP_CODE		?=	$(RANK_LOOP_OUTER_MODS) loop($(RANK_LOOP_OUTER_VARS)) \
-				{ $(RANK_LOOP_INNER_MODS) calc(region(start_dt, stop_dt, eqGroup_ptr)); }
+# found in StencilEquations::run_solution().
+RANK_LOOP_OPTS		?=	-ndims $(scan_dims) -inVar rank_idxs
+RANK_LOOP_CODE		?=	$(RANK_LOOP_OUTER_MODS) loop(1 .. N-1) \
+				{ $(RANK_LOOP_INNER_MODS) calc(region(eqGroup_ptr)); }
 
 # Region loops break up a region using OpenMP threading into blocks.  The
 # 'omp' modifier creates an outer OpenMP loop so that each block is assigned
 # to a top-level OpenMP thread.  The region time loops are not coded here to
 # allow for proper spatial skewing for temporal wavefronts. The time loop
 # may be found in StencilEquations::calc_region().
-REGION_LOOP_OPTS	?=     	-dims 'rx,ry,rz' \
+REGION_LOOP_OPTS	?=     	-ndims $(scan_dims) -inVar region_idxs \
 				-ompConstruct '$(omp_par_for) schedule($(omp_region_schedule)) proc_bind(spread)' \
 				-calcPrefix 'eg->calc_'
-REGION_LOOP_OUTER_VARS	?=	rx,ry,rz
 REGION_LOOP_OUTER_MODS	?=	grouped
-REGION_LOOP_CODE	?=	omp $(REGION_LOOP_OUTER_MODS) loop($(REGION_LOOP_OUTER_VARS)) { \
-				$(REGION_LOOP_INNER_MODS) calc(block(rt)); }
+REGION_LOOP_CODE	?=	omp $(REGION_LOOP_OUTER_MODS) loop(1 .. N-1) { \
+				$(REGION_LOOP_INNER_MODS) calc(block()); }
 
 # Block loops break up a block into sub-blocks.  The 'omp' modifier creates
-# a nested OpenMP loop so that each sub-block is assigned to a nested OpenMP
-# thread.  There is no time loop here because threaded temporal blocking is
+# a *nested* OpenMP loop so that each sub-block is assigned to a nested OpenMP
+# thread.  There is no time loop because threaded temporal blocking is
 # not yet supported.
-BLOCK_LOOP_OPTS		=     	-dims 'bx,by,bz' \
+BLOCK_LOOP_OPTS		=     	-ndims $(scan_dims) -inVar block_idxs \
 				-ompConstruct '$(omp_par_for) schedule($(omp_block_schedule)) proc_bind(close)'
-BLOCK_LOOP_OUTER_VARS	?=	bx,by,bz
 BLOCK_LOOP_OUTER_MODS	?=	grouped
-BLOCK_LOOP_CODE		?=	omp $(BLOCK_LOOP_OUTER_MODS) loop($(BLOCK_LOOP_OUTER_VARS)) { \
-				$(BLOCK_LOOP_INNER_MODS) calc(sub_block(bt)); }
+BLOCK_LOOP_CODE		?=	omp $(BLOCK_LOOP_OUTER_MODS) loop(1 .. N-1) { \
+				$(BLOCK_LOOP_INNER_MODS) calc(sub_block()); }
 
-# Sub-block loops break up a sub-block into vector clusters.  The indices at
-# this level are by vector instead of element.
-# The innermost loop here is the final innermost loop. There is
-# no time loop here because threaded temporal blocking is not yet supported.
-SUB_BLOCK_LOOP_OPTS		=     	-dims 'sbx,sby,sbz'
+# Sub-block loops break up a sub-block into vector clusters.  The innermost
+# loop here is the final innermost loop and is run by a single OMP
+# thread. There is no time loop because threaded temporal blocking is not
+# yet supported.
+SUB_BLOCK_LOOP_OPTS		=     	-ndims $(scan_dims) -inVar sub_block_idxs
 ifeq ($(split_L2),1)
  SUB_BLOCK_LOOP_OPTS		+=     	-splitL2
 endif
-SUB_BLOCK_LOOP_OUTER_VARS	?=	sbx,sby
 SUB_BLOCK_LOOP_OUTER_MODS	?=	square_wave serpentine
-SUB_BLOCK_LOOP_INNER_VARS	?=	sbz
-SUB_BLOCK_LOOP_INNER_MODS	?=	prefetch(L2)
-SUB_BLOCK_LOOP_CODE		?=	$(SUB_BLOCK_LOOP_OUTER_MODS) loop($(SUB_BLOCK_LOOP_OUTER_VARS)) { \
-					$(SUB_BLOCK_LOOP_INNER_MODS) loop($(SUB_BLOCK_LOOP_INNER_VARS)) { \
-					calc(cluster(begin_sbt)); } }
+SUB_BLOCK_LOOP_CODE		?=	$(SUB_BLOCK_LOOP_OUTER_MODS) loop(1 .. N-2) { \
+					$(SUB_BLOCK_LOOP_INNER_MODS) $(prefetch) loop(N-1) { \
+					calc(cluster()); } }
 
-# Halo pack/unpack loops break up a region face, edge, or corner into vectors.
+# General-purpose parallel loop.
 # Nested OpenMP is not used here because there is no sharing between threads.
 # TODO: Consider using nested OpenMP to hide more latency.
-HALO_LOOP_OPTS		=     	-dims 'hx,hy,hz' \
-				-ompConstruct '$(omp_par_for) schedule($(omp_halo_schedule)) proc_bind(spread)'
-HALO_LOOP_OUTER_MODS	?=	omp
-HALO_LOOP_OUTER_VARS	?=	hx,hy,hz
-HALO_LOOP_CODE		?=	$(HALO_LOOP_OUTER_MODS) loop($(HALO_LOOP_OUTER_VARS)) \
-				$(HALO_LOOP_INNER_MODS) { calc(halo(ht)); }
+GEN_LOOP_OPTS		=     	-ndims $(scan_dims) -inVar gen_idxs \
+				-ompConstruct '$(omp_par_for) schedule($(omp_gen_schedule)) proc_bind(spread)'
+GEN_LOOP_OUTER_MODS	?=	omp
+GEN_LOOP_CODE		?=	$(GEN_LOOP_OUTER_MODS) loop(1 .. N-1) \
+				$(GEN_LOOP_INNER_MODS) { calc(gen()); }
 
 ######## End of vars that control the function and performance of the kernel.
 
@@ -343,7 +344,7 @@ YK_GEN_HEADERS	:=	$(addprefix $(YK_GEN_DIR)/, \
 				yask_region_loops.hpp \
 				yask_block_loops.hpp \
 				yask_sub_block_loops.hpp \
-				yask_halo_loops.hpp \
+				yask_gen_loops.hpp \
 				yask_layout_macros.hpp \
 				yask_layouts.hpp) \
 				$(YK_MACRO_FILE) \
@@ -396,6 +397,7 @@ RUN_PYTHON	:= 	env PYTHONPATH=$(LIB_DIR) $(PYTHON)
 MACROS		+=	LAYOUT_XYZ=$(layout_xyz)
 MACROS		+=	LAYOUT_TXYZ=$(layout_txyz)
 MACROS		+=	PFDL1=$(pfd_l1) PFDL2=$(pfd_l2)
+MACROS		+=	MAX_DIMS=$(max_dims)
 ifeq ($(streaming_stores),1)
  MACROS		+=	USE_STREAMING_STORE
 endif
@@ -515,17 +517,23 @@ $(YK_GEN_DIR)/yask_sub_block_loops.hpp: $(GEN_LOOPS)
 	$(YK_MK_GEN_DIR)
 	$< -output $@ $(SUB_BLOCK_LOOP_OPTS) $(EXTRA_LOOP_OPTS) $(EXTRA_SUB_BLOCK_LOOP_OPTS) "$(SUB_BLOCK_LOOP_CODE)"
 
-$(YK_GEN_DIR)/yask_halo_loops.hpp: $(GEN_LOOPS)
+$(YK_GEN_DIR)/yask_gen_loops.hpp: $(GEN_LOOPS)
 	$(YK_MK_GEN_DIR)
-	$< -output $@ $(HALO_LOOP_OPTS) $(EXTRA_LOOP_OPTS) $(EXTRA_HALO_LOOP_OPTS) "$(HALO_LOOP_CODE)"
+	$< -output $@ $(GEN_LOOP_OPTS) $(EXTRA_LOOP_OPTS) $(EXTRA_GEN_LOOP_OPTS) "$(GEN_LOOP_CODE)"
 
 $(YK_GEN_DIR)/yask_layout_macros.hpp: $(GEN_LAYOUTS)
 	$(YK_MK_GEN_DIR)
-	$< -m > $@
+	$< -m $(max_dims) > $@
+	@- gindent -fca $@ || \
+	  indent -fca $@ ||   \
+	  echo "note:" $@ "is not properly indented because no indent program was found."
 
 $(YK_GEN_DIR)/yask_layouts.hpp: $(GEN_LAYOUTS)
 	$(YK_MK_GEN_DIR)
-	$< -d > $@
+	$< -d $(max_dims) > $@
+	@- gindent -fca $@ || \
+	  indent -fca $@ ||   \
+	  echo "note:" $@ "is not properly indented because no indent program was found."
 
 $(YC_EXEC):
 	$(MAKE) -C $(YC_SRC_DIR) $@
@@ -545,7 +553,7 @@ $(YK_MACRO_FILE):
 	  echo '#define' $$macro | sed 's/=/ /' >> $@; \
 	done
 
-headers: $(GEN_HEADERS)
+headers: $(YK_GEN_HEADERS)
 	@ echo 'Header files generated.'
 
 ######## API targets
@@ -676,7 +684,7 @@ echo-settings:
 	@echo streaming_stores=$(streaming_stores)
 	@echo omp_region_schedule=$(omp_region_schedule)
 	@echo omp_block_schedule=$(omp_block_schedule)
-	@echo omp_halo_schedule=$(omp_halo_schedule)
+	@echo omp_gen_schedule=$(omp_gen_schedule)
 	@echo YC_TARGET="\"$(YC_TARGET)\""
 	@echo YC_FLAGS="\"$(YC_FLAGS)\""
 	@echo EXTRA_YC_FLAGS="\"$(EXTRA_YC_FLAGS)\""
@@ -710,11 +718,11 @@ echo-settings:
 	@echo SUB_BLOCK_LOOP_INNER_MODS="\"$(SUB_BLOCK_LOOP_INNER_MODS)\""
 	@echo SUB_BLOCK_LOOP_INNER_VARS="\"$(SUB_BLOCK_LOOP_INNER_VARS)\""
 	@echo SUB_BLOCK_LOOP_CODE="\"$(SUB_BLOCK_LOOP_CODE)\""
-	@echo HALO_LOOP_OPTS="\"$(HALO_LOOP_OPTS)\""
-	@echo HALO_LOOP_OUTER_MODS="\"$(HALO_LOOP_OUTER_MODS)\""
-	@echo HALO_LOOP_OUTER_VARS="\"$(HALO_LOOP_OUTER_VARS)\""
-	@echo HALO_LOOP_INNER_MODS="\"$(HALO_LOOP_INNER_MODS)\""
-	@echo HALO_LOOP_CODE="\"$(HALO_LOOP_CODE)\""
+	@echo GEN_LOOP_OPTS="\"$(GEN_LOOP_OPTS)\""
+	@echo GEN_LOOP_OUTER_MODS="\"$(GEN_LOOP_OUTER_MODS)\""
+	@echo GEN_LOOP_OUTER_VARS="\"$(GEN_LOOP_OUTER_VARS)\""
+	@echo GEN_LOOP_INNER_MODS="\"$(GEN_LOOP_INNER_MODS)\""
+	@echo GEN_LOOP_CODE="\"$(GEN_LOOP_CODE)\""
 
 code-stats:
 	@echo
@@ -726,7 +734,7 @@ help:
 	@echo "% $(MAKE) clean; $(MAKE) -j arch=knl stencil=iso3dfd"
 	@echo "% $(MAKE) clean; $(MAKE) -j arch=knl stencil=awp"
 	@echo "% $(MAKE) clean; $(MAKE) -j arch=skx stencil=3axis fold='x=1,y=2,z=4' cluster='x=2'"
-	@echo "% $(MAKE) clean; $(MAKE) -j arch=hsw stencil=3axis radius=4 SUB_BLOCK_LOOP_INNER_MODS='prefetch(L1,L2)' pfd_l2=3"
+	@echo "% $(MAKE) clean; $(MAKE) -j arch=hsw stencil=3axis radius=4 prefetch='prefetch(L1,L2)' pfd_l2=3"
 	@echo " "
 	@echo "Example performance builds of kernel API for C++ and Python apps:"
 	@echo "% $(MAKE) clean; $(MAKE) -j arch=knl stencil=iso3dfd yk-api"

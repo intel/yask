@@ -120,6 +120,7 @@ namespace yask {
                 assert(_vblk2elemLists[*gp].size() == pelem+1); // verify at pelem index.
 
                 pelem++;
+                return true;
             });                  // end of vector lambda-function.
 
         // Mark as done.

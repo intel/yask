@@ -37,7 +37,7 @@ namespace yask {
                                           const std::vector<yc_index_node_ptr>& dims) {
         
         // Make new grid and add to solution.
-        // FIXME: mem leak--make smart ptr.
+        // TODO: fix this mem leak--make smart ptr.
 
         // Copy pointers to concrete type.
         IndexExprPtrVec dims2;

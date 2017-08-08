@@ -40,7 +40,9 @@ namespace yask {
                                              const yk_solution_ptr source) const {
         auto ep = dynamic_pointer_cast<KernelEnv>(env);
         assert(ep);
-        auto op = make_shared<KernelSettings>();
+        auto dp = YASK_STENCIL_CONTEXT::new_dims();
+        assert(dp);
+        auto op = make_shared<KernelSettings>(dp);
         assert(op);
 
         // Copy settings from source.
@@ -53,11 +55,13 @@ namespace yask {
         }
         
         // Create problem-specific object defined by stencil compiler.
+        // TODO: allow more than one type of solution to be created.
         auto sp = make_shared<YASK_STENCIL_CONTEXT>(ep, op);
         assert(sp);
 
         // Set time-domain size because it's not really used in the API.
-        op->dt = 1;
+        auto& step_dim = op->_dims->_step_dim;
+        op->_rank_sizes[step_dim] = 1;
 
         return sp;
     }
@@ -65,82 +69,83 @@ namespace yask {
         return new_solution(env, nullptr);
     }
 
-#define GET_SOLUTION_API(api_name, var_prefix, adj, t_ok, t_val)        \
+#define GET_SOLUTION_API(api_name, expr, step_ok, domain_ok, misc_ok)   \
     idx_t StencilContext::api_name(const string& dim) const {           \
-        if (t_ok && dim == "t") return t_val;                           \
-        else if (dim == "x") return var_prefix ## x + adj;              \
-        else if (dim == "y") return var_prefix ## y + adj;              \
-        else if (dim == "z") return var_prefix ## z + adj;              \
-        else {                                                          \
-            cerr << "Error: " #api_name "(): bad dimension '" << dim << "'\n"; \
-            exit_yask(1);                                               \
-            return 0;                                                   \
-        }                                                               \
+        checkDimType(dim, #api_name, step_ok, domain_ok, misc_ok);      \
+        return expr;                                                    \
     }
-    GET_SOLUTION_API(get_first_rank_domain_index, begin_bb, 0, false, 0)
-    GET_SOLUTION_API(get_last_rank_domain_index, end_bb, -1, false, 0)
-    GET_SOLUTION_API(get_overall_domain_size, tot_, 0, false, 0)
-    GET_SOLUTION_API(get_rank_domain_size, _opts->d, 0, false, 0)
-    GET_SOLUTION_API(get_min_pad_size, _opts->mp, 0, false, 0)
-    GET_SOLUTION_API(get_block_size, _opts->b, 0, false, 0)
-    GET_SOLUTION_API(get_num_ranks, _opts->nr, 0, false, 0)
-    GET_SOLUTION_API(get_rank_index, _opts->ri, 0, false, 0)
+    GET_SOLUTION_API(get_first_rank_domain_index, bb_begin[dim], false, true, false)
+    GET_SOLUTION_API(get_last_rank_domain_index, bb_end[dim] - 1, false, true, false)
+    GET_SOLUTION_API(get_overall_domain_size, overall_domain_sizes[dim], false, true, false)
+    GET_SOLUTION_API(get_rank_domain_size, _opts->_rank_sizes[dim], false, true, false)
+    GET_SOLUTION_API(get_min_pad_size, _opts->_min_pad_sizes[dim], false, true, false)
+    GET_SOLUTION_API(get_block_size, _opts->_block_sizes[dim], false, true, false)
+    GET_SOLUTION_API(get_num_ranks, _opts->_num_ranks[dim], false, true, false)
+    GET_SOLUTION_API(get_rank_index, _opts->_rank_indices[dim], false, true, false)
 
-#define SET_SOLUTION_API(api_name, var_prefix, t_ok, t_stmt)            \
+#define SET_SOLUTION_API(api_name, expr, step_ok, domain_ok, misc_ok)   \
     void StencilContext::api_name(const string& dim, idx_t n) {         \
-        assert(n >= 0);                                                 \
-        if (t_ok && dim == "t") t_stmt;                                 \
-        else if (dim == "x") var_prefix ## x = n;                       \
-        else if (dim == "y") var_prefix ## y = n;                       \
-        else if (dim == "z") var_prefix ## z = n;                       \
-        else {                                                          \
-            cerr << "Error: " #api_name "(): bad dimension '" <<        \
-                dim << "'\n";                                           \
-            exit_yask(1);                                               \
-        }                                                               \
-        set_grids();                                                    \
+        checkDimType(dim, #api_name, step_ok, domain_ok, misc_ok);      \
+        expr;                                                           \
     }
-    SET_SOLUTION_API(set_rank_domain_size, _opts->d, false, (void)0)
-    SET_SOLUTION_API(set_min_pad_size, _opts->mp, false, (void)0)
-    SET_SOLUTION_API(set_block_size, _opts->b, false, (void)0)
-    SET_SOLUTION_API(set_num_ranks, _opts->nr, false, (void)0)
+    SET_SOLUTION_API(set_rank_domain_size, _opts->_rank_sizes[dim] = n, false, true, false)
+    SET_SOLUTION_API(set_min_pad_size, _opts->_min_pad_sizes[dim] = n, false, true, false)
+    SET_SOLUTION_API(set_block_size, _opts->_block_sizes[dim] = n, false, true, false)
+    SET_SOLUTION_API(set_num_ranks, _opts->_num_ranks[dim] = n, false, true, false)
     
     string StencilContext::get_domain_dim_name(int n) const {
-
-        // TODO: remove hard-coded names.
-        switch (n) {
-        case 0: return "x";
-        case 1: return "y";
-        case 2: return "z";
-        default:
+        auto* p = _dims->_domain_dims.lookup(n);
+        if (!p) {
             cerr << "Error: get_domain_dim_name(): bad index '" << n << "'\n";
             exit_yask(1);
-            return 0;
         }
+        return _dims->_domain_dims.getDimName(n);
     }
 
-    yk_grid_ptr StencilContext::new_grid(const std::string& name,
-                                         const std::vector<std::string>& dims) {
-        RealVecGridPtr gp;
-        
-        // TODO: get rid of hard-coded dims.
-        // For now, only works with very limited combo of dims.
-        if (dims.size() == 3 &&
-            dims[0] == "x" && dims[1] == "y" && dims[2] == "z") {
-            gp = make_shared<Grid_XYZ>(name);
-            addGrid(gp, false);
-        }
-        else if (dims.size() == 4 &&
-                 dims[0] == "t" && dims[1] == "x" &&
-                 dims[2] == "y" && dims[3] == "z") {
-            gp = make_shared<Grid_TXYZ>(name);
-            addGrid(gp, false);
-        }
-        else {
-            cerr << "Error: dims on new_grid(\"" << name <<
-                "\", ...) are not currently supported.\n";
+    YkGridPtr StencilContext::newGrid(const std::string& name,
+                                      const GridDimNames& dims) {
+        YkGridPtr gp;
+
+#warning FIXME: make folded grids.
+        switch (dims.size()) {
+        case 0:
+            gp = make_shared<YkElemGrid<Layout_0d>>(name, dims);
+            break;
+        case 1:
+            gp = make_shared<YkElemGrid<Layout_1>>(name, dims);
+            break;
+        case 2:
+            gp = make_shared<YkElemGrid<Layout_12>>(name, dims);
+            break;
+        case 3:
+            gp = make_shared<YkElemGrid<Layout_123>>(name, dims);
+            break;
+        case 4:
+            gp = make_shared<YkElemGrid<Layout_1234>>(name, dims);
+            break;
+#if MAX_DIMS >= 5
+        case 5:
+            gp = make_shared<YkElemGrid<Layout_12345>>(name, dims);
+            break;
+#endif
+#if MAX_DIMS >= 6
+        case 6:
+            gp = make_shared<YkElemGrid<Layout_123456>>(name, dims);
+            break;
+#endif
+#if MAX_DIMS >= 7
+        case 7:
+            gp = make_shared<YkElemGrid<Layout_1234567>>(name, dims);
+            break;
+#endif
+        default:
+            cerr << "Error in new_grid: cannot create grid '" << name <<
+                "' with " << dims.size() << " dimensions.\n";
             exit_yask(1);
         }
+
+        // Add to context.
+        addGrid(gp, false);     // marked as input grid. TODO: is this ok?
 
         // Set default sizes from settings and get offset, if set.
         set_grids();
@@ -153,31 +158,20 @@ namespace yask {
                                          const std::string& dim4,
                                          const std::string& dim5,
                                          const std::string& dim6) {
-        RealVecGridPtr gp;
-        
-        // TODO: get rid of hard-coded dims.
-        // For now, only works with very limited combo of dims.
-        if (dim1 == "x" && dim2 == "y" &&
-            dim3 == "z" && dim4 == "") {
-            gp = make_shared<Grid_XYZ>(name);
-            addGrid(gp, false);
-        }
-        else if (dim1 == "t" && dim2 == "x" &&
-                 dim3 == "y" && dim4 == "z" &&
-                 dim5 == "") {
-            gp = make_shared<Grid_TXYZ>(name);
-            addGrid(gp, false);
-        }
-        else {
-            cerr << "Error: new_grid(\"" << name << "\", " << dim1 << ", " <<
-                dim2 << ", " << dim3 << ", " << dim4 << ", " << dim5 << ", " <<
-                dim6 << ") is not currently supported.\n";
-            exit_yask(1);
-        }
-
-        // Set default sizes from settings and get offset, if set.
-        set_grids();
-        return gp;
+        GridDimNames dims;
+        if (dim1.length())
+            dims.push_back(dim1);
+        if (dim2.length())
+            dims.push_back(dim2);
+        if (dim3.length())
+            dims.push_back(dim3);
+        if (dim4.length())
+            dims.push_back(dim4);
+        if (dim5.length())
+            dims.push_back(dim5);
+        if (dim6.length())
+            dims.push_back(dim6);
+        return newGrid(name, dims);
     }
     
     void StencilContext::share_grid_storage(yk_solution_ptr source) {
@@ -250,35 +244,58 @@ namespace yask {
     // Eval stencil equation group(s) over grid(s) using scalar code.
     void StencilContext::calc_rank_ref()
     {
-        idx_t begin_dt = ofs_t;
-        idx_t end_dt = begin_dt + _opts->dt;
-        TRACE_MSG("calc_rank_ref(t=" << begin_dt << ".." << (end_dt-1) << ")");
-        
-        // Time steps.
-        // TODO: check that scalar version actually does CPTS_T time steps.
-        // (At this point, CPTS_T == 1 for all existing stencil examples.)
-        for(idx_t t = begin_dt; t < end_dt; t += CPTS_T) {
+        auto& step_dim = _dims->_step_dim;
+        idx_t begin_t = 0;
+        idx_t end_t = _opts->_rank_sizes[step_dim];
+        idx_t step_t = 1;
 
+        // Begin, end, step, group-size tuples.
+        IdxTuple begin(_dims->_stencil_dims);
+        begin.setVals(bb_begin, false);
+        begin[step_dim] = begin_t;
+        IdxTuple end(_dims->_stencil_dims);
+        end.setVals(bb_end, false);
+        end[step_dim] = end_t;
+
+        TRACE_MSG("calc_rank_ref: " << begin.makeDimValStr() << " ... " <<
+                  end.subElements(1).makeDimValStr());
+
+        // Indices needed for the 'general' loops.
+        ScanIndices gen_idxs;
+        gen_idxs.begin = begin;
+        gen_idxs.end = end;
+
+        // Number of iterations to get from begin_t to end_t-1,
+        // stepping by step_t.
+        const idx_t num_t = ((end_t - begin_t) + (step_t - 1)) / step_t;
+        for (idx_t index_t = 0; index_t < num_t; index_t++)
+        {
+            // This value of index_t steps from start_t to stop_t-1.
+            const idx_t start_t = begin_t + (index_t * step_t);
+            const idx_t stop_t = min(start_t + step_t, end_t);
+
+            // Set indices that will pass through generated code
+            // because the step loop is coded here.
+            gen_idxs.index[_step_posn] = index_t;
+            gen_idxs.start[_step_posn] = start_t;
+            gen_idxs.stop[_step_posn] = stop_t;
+        
             // Loop thru eq-groups.
             for (auto* eg : eqGroups) {
 
                 // Halo exchange(s) needed for this eq-group.
-                exchange_halos(t, t + CPTS_T, *eg);
+                exchange_halos(start_t, stop_t, *eg);
 
-                // Loop through 3D space within the bounding-box of this
-                // equation set.
-#pragma omp parallel for collapse(3)
-                for (idx_t x = eg->begin_bbx; x < eg->end_bbx; x++)
-                    for (idx_t y = eg->begin_bby; y < eg->end_bby; y++)
-                        for (idx_t z = eg->begin_bbz; z < eg->end_bbz; z++) {
-                            
-                            // Update only if point is in sub-domain for this eq group.
-                            if (eg->is_in_valid_domain(t, x, y, z)) {
-                                
-                                // Evaluate the reference scalar code.
-                                eg->calc_scalar(t, x, y, z);
-                            }
-                        }
+                // Define general calc function.  Since step is always 1, we
+                // ignore gen_stop.  If point is in sub-domain for this eq
+                // group, then evaluate the reference scalar code.
+#define calc_gen(gen_idxs) \
+                if (eg->is_in_valid_domain(gen_idxs.start)) \
+                    eg->calc_scalar(gen_idxs.start)
+                
+                // Scan through n-D space.
+#include "yask_gen_loops.hpp"
+#undef calc_gen
                 
                 // Remember grids that have been written to by this eq-group.
                 mark_grids_dirty(*eg);
@@ -294,40 +311,32 @@ namespace yask {
     void StencilContext::run_solution(idx_t first_step_index,
                                       idx_t last_step_index)
     {
-        idx_t begin_dt = first_step_index;
-        idx_t end_dt = last_step_index + 1; // end is 1 past last.
-        idx_t step_dt = _opts->rt;
-        TRACE_MSG("run_solution(t=" << first_step_index << ".." << last_step_index <<
-                  " by " << step_dt << ")");
-        ostream& os = get_ostr();
+        auto& step_dim = _dims->_step_dim;
+        idx_t begin_t = first_step_index;
+        idx_t end_t = last_step_index + 1; // end is 1 past last.
+        idx_t step_t = _opts->_region_sizes[step_dim];
+
+        // Begin, end, and step tuples.
+        IdxTuple begin(_dims->_stencil_dims);
+        begin.setVals(bb_begin, false);
+        begin[step_dim] = begin_t;
+        IdxTuple end(_dims->_stencil_dims);
+        end.setVals(bb_end, false);
+        end[step_dim] = end_t;
+        IdxTuple step(_dims->_stencil_dims);
+        step.setVals(_opts->_region_sizes, false); // step by region sizes.
+
+        TRACE_MSG("run_solution: " << begin.makeDimValStr() << " ... " <<
+                  end.subElements(1).makeDimValStr());
 
 #ifdef MODEL_CACHE
+        ostream& os = get_ostr();
         if (context.my_rank != context.msg_rank)
             cache_model.disable();
         if (cache_model.isEnabled())
             os << "Modeling cache...\n";
 #endif
         
-        // Domain begin points.
-        idx_t begin_dx = begin_bbx;
-        idx_t begin_dy = begin_bby;
-        idx_t begin_dz = begin_bbz;
-    
-        // Domain end-points.
-        idx_t end_dx = end_bbx;
-        idx_t end_dy = end_bby;
-        idx_t end_dz = end_bbz;
-
-        // Steps are based on region sizes.
-        idx_t step_dx = _opts->rx;
-        idx_t step_dy = _opts->ry;
-        idx_t step_dz = _opts->rz;
-
-        // Groups in rank loops are set to smallest size.
-        const idx_t group_size_dx = 1;
-        const idx_t group_size_dy = 1;
-        const idx_t group_size_dz = 1;
-
         // Extend end points for overlapping regions due to wavefront angle.
         // For each subsequent time step in a region, the spatial location
         // of each block evaluation is shifted by the angle for each
@@ -338,50 +347,59 @@ namespace yask {
         // extension may be less, but this will just result in some calls to
         // calc_region() that do nothing.
         //
-        // Conceptually (4 regions in t and x dims):
+        // Conceptually (showing 4 regions in t and x dims):
         // -----------------------------  t = rt
-        //  \    |\     \     \ |   \
-        //   \   | \     \     \|    \
-        //    \  |  \     \     |     \
-        //     \ |   \     \    |\     \
-        //      \|    \     \   | \     \
-        //  ----------------------------- t = 0
+        //  \    |\     \     \ |   \     .
+        //   \   | \     \     \|    \    .
+        //    \  |  \     \     |     \   .
+        //     \ |r0 \  r1 \ r2 |\ r3  \  .
+        //      \|    \     \   | \     \ .
+        // ------------------------------ t = 0
         // x = begin_dx       end_dx   end_dx
         //                    (orig)   (after extension)
         //
-        idx_t nshifts = (idx_t(eqGroups.size()) * _opts->rt) - 1;
-        end_dx += angle_x * nshifts;
-        end_dy += angle_y * nshifts;
-        end_dz += angle_z * nshifts;
-        TRACE_MSG("extended domain after wave-front adjustment: " <<
-                  "t=" << begin_dt << ".." << (end_dt-1) <<
-                  ", x=" << begin_dx << ".." << (end_dx-1) <<
-                  ", y=" << begin_dy << ".." << (end_dy-1) <<
-                  ", z=" << begin_dz << ".." << (end_dz-1) <<
-                  ")");
+        idx_t nshifts = (idx_t(eqGroups.size()) * step_t) - 1;
+        for (auto& dim : _dims->_domain_dims.getDims()) {
+            auto& dname = dim.getName();
+            end[dname] += angles[dname] * nshifts;
+        }
+        TRACE_MSG("after wave-front adjustment: " <<
+                  begin.makeDimValStr() << " ... " <<
+                  end.subElements(1).makeDimValStr());
+
+        // Indices needed for the 'rank' loops.
+        ScanIndices rank_idxs;
+        rank_idxs.begin = begin;
+        rank_idxs.end = end;
+        rank_idxs.step = step;
 
         // Set number of threads for a region.
         set_region_threads();
 
-        // Number of iterations to get from begin_dt to (but not including) end_dt,
-        // stepping by step_dt.
-        const idx_t num_dt = ((end_dt - begin_dt) + (step_dt - 1)) / step_dt;
-        for (idx_t index_dt = 0; index_dt < num_dt; index_dt++)
+        // Number of iterations to get from begin_t to end_t-1,
+        // stepping by step_t.
+        const idx_t num_t = ((end_t - begin_t) + (step_t - 1)) / step_t;
+        for (idx_t index_t = 0; index_t < num_t; index_t++)
         {
-            // This value of index_dt covers dt from start_dt to stop_dt-1.
-            const idx_t start_dt = begin_dt + (index_dt * step_dt);
-            const idx_t stop_dt = min(start_dt + step_dt, end_dt);
+            // This value of index_t steps from start_t to stop_t-1.
+            const idx_t start_t = begin_t + (index_t * step_t);
+            const idx_t stop_t = min(start_t + step_t, end_t);
+
+            // Set indices that will pass through generated code.
+            rank_idxs.index[_step_posn] = index_t;
+            rank_idxs.start[_step_posn] = start_t;
+            rank_idxs.stop[_step_posn] = stop_t;
             
             // If doing only one time step in a region (default), loop
             // through equations here, and do only one equation group at a
             // time in calc_region(). This is similar to loop in
             // calc_rank_ref().
-            if (step_dt == 1) {
+            if (step_t == 1) {
 
                 for (auto* eg : eqGroups) {
 
                     // Halo exchange(s) needed for this eq-group.
-                    exchange_halos(start_dt, stop_dt, *eg);
+                    exchange_halos(start_t, stop_t, *eg);
 
                     // Eval this eq-group in calc_region().
                     EqGroupSet eqGroup_set;
@@ -433,65 +451,68 @@ namespace yask {
 #endif
     }
 
-    // Apply solution for 'dt' time-steps.
+    // Apply solution for time-steps specified in _rank_sizes.
     void StencilContext::calc_rank_opt()
     {
-        idx_t begin_dt = ofs_t;
-        idx_t end_dt = begin_dt + _opts->dt;
+        auto& step_dim = _dims->_step_dim;
+        idx_t first_t = 0;
+        idx_t last_t = _opts->_rank_sizes[step_dim] - 1;
 
-        run_solution(begin_dt, end_dt - 1);
+        run_solution(first_t, last_t);
     }
 
     // Calculate results within a region.
     // Each region is typically computed in a separate OpenMP 'for' region.
     // In it, we loop over the time steps and the stencil
     // equations and evaluate the blocks in the region.
-    // Boundaries are named start_d* and stop_d* because region loops are nested
-    // inside the rank-domain loops.
-    void StencilContext::calc_region(idx_t start_dt, idx_t stop_dt,
-                                     EqGroupSet* eqGroup_set,
-                                     idx_t start_dx, idx_t start_dy, idx_t start_dz,
-                                     idx_t stop_dx, idx_t stop_dy, idx_t stop_dz)
-    {
-        TRACE_MSG("calc_region(t=" << start_dt << ".." << (stop_dt-1) <<
-                  ", x=" << start_dx << ".." << (stop_dx-1) <<
-                  ", y=" << start_dy << ".." << (stop_dy-1) <<
-                  ", z=" << start_dz << ".." << (stop_dz-1) <<
-                  ")");
+    void StencilContext::calc_region(EqGroupSet* eqGroup_set,
+                                     const ScanIndices& rank_idxs) {
 
-        // Steps within a region are based on block sizes.
-        const idx_t step_rt = _opts->bt;
-        const idx_t step_rx = _opts->bx;
-        const idx_t step_ry = _opts->by;
-        const idx_t step_rz = _opts->bz;
+        int ndims = _dims->_stencil_dims.size();
+        auto& step_dim = _dims->_step_dim;
+        TRACE_MSG("calc_region: " << rank_idxs.start.makeValStr(ndims) <<
+                  " ... " << rank_idxs.stop.addElements(-1).makeValStr(ndims));
 
-        // Groups in region loops are based on block-group sizes.
-        const idx_t group_size_rx = _opts->bgx;
-        const idx_t group_size_ry = _opts->bgy;
-        const idx_t group_size_rz = _opts->bgz;
+        // Init region begin & end from rank start & stop indices.
+        ScanIndices region_idxs;
+        region_idxs.initFromOuter(rank_idxs);
+
+        // Make a copy of the original start and stop indices because
+        // we will be shifting these for temporal wavefronts.
+        Indices rank_start(rank_idxs.start);
+        Indices rank_stop(rank_idxs.stop);
 
         // Not yet supporting temporal blocking.
-        if (step_rt != 1) {
+        if (_opts->_block_sizes[step_dim] != 1) {
             cerr << "Error: temporal blocking not yet supported." << endl;
             exit_yask(1);
         }
-
-        // Number of iterations to get from start_dt to (but not including) stop_dt,
-        // stepping by step_rt.
-        const idx_t num_rt = ((stop_dt - start_dt) + (step_rt - 1)) / step_rt;
-    
-        // Step through time steps in this region. This is the temporal size
-        // of a wave-front tile.
-        for (idx_t index_rt = 0; index_rt < num_rt; index_rt++) {
         
-            // This value of index_rt covers rt from start_rt to stop_rt-1.
-            const idx_t start_rt = start_dt + (index_rt * step_rt);
-            const idx_t stop_rt = min (start_rt + step_rt, stop_dt);
+        // Steps within a region are based on block sizes.
+        region_idxs.step = _opts->_block_sizes;
+
+        // Groups in region loops are based on block-group sizes.
+        region_idxs.group_size = _opts->_block_group_sizes;
+
+        // Time loop.
+        idx_t begin_t = region_idxs.begin[_step_posn];
+        idx_t end_t = region_idxs.end[_step_posn];
+        idx_t step_t = region_idxs.step[_step_posn];
+        const idx_t num_t = ((end_t - begin_t) + (step_t - 1)) / step_t;
+        for (idx_t index_t = 0; index_t < num_t; index_t++)
+        {
+            // This value of index_t steps from start_t to stop_t-1.
+            const idx_t start_t = begin_t + (index_t * step_t);
+            const idx_t stop_t = min(start_t + step_t, end_t);
 
             // TODO: remove this when temporal blocking is implemented.
-            assert(stop_rt == start_rt + 1);
-            const idx_t rt = start_rt; // only one time value needed for block.
+            assert(stop_t == start_t + 1);
 
+            // Set indices that will pass through generated code.
+            region_idxs.index[_step_posn] = index_t;
+            region_idxs.start[_step_posn] = start_t;
+            region_idxs.stop[_step_posn] = stop_t;
+            
             // equations to evaluate at this time step.
             for (auto* eg : eqGroups) {
                 if (!eqGroup_set || eqGroup_set->count(eg)) {
@@ -504,22 +525,22 @@ namespace yask {
                     // based on the BB.
                     
                     // Actual region boundaries must stay within BB for this eq group.
-                    idx_t begin_rx = max<idx_t>(start_dx, eg->begin_bbx);
-                    idx_t end_rx = min<idx_t>(stop_dx, eg->end_bbx);
-                    idx_t begin_ry = max<idx_t>(start_dy, eg->begin_bby);
-                    idx_t end_ry = min<idx_t>(stop_dy, eg->end_bby);
-                    idx_t begin_rz = max<idx_t>(start_dz, eg->begin_bbz);
-                    idx_t end_rz = min<idx_t>(stop_dz, eg->end_bbz);
-
+                    bool ok = true;
+                    for (int i = _step_posn + 1; i < ndims; i++) {
+                        auto& dname = _dims->_stencil_dims.getDimName(i);
+                        region_idxs.begin[i] = max<idx_t>(rank_start[i], eg->bb_begin[dname]);
+                        region_idxs.end[i] = min<idx_t>(rank_stop[i], eg->bb_end[dname]);
+                        if (region_idxs.end[i] <= region_idxs.begin[i])
+                            ok = false;
+                    }
+                    
                     // Only need to loop through the spatial extent of the
                     // region if any of its blocks are at least partly
                     // inside the domain. For overlapping regions, they may
                     // start outside the domain but enter the domain as time
                     // progresses and their boundaries shift. So, we don't
                     // want to return if this condition isn't met.
-                    if (end_rx > begin_rx &&
-                        end_ry > begin_ry &&
-                        end_rz > begin_rz) {
+                    if (ok) {
 
                         // Include automatically-generated loop code that
                         // calls calc_block() for each block in this region.
@@ -535,39 +556,36 @@ namespace yask {
                     // backward, so region loops must increment. They may do
                     // so in any order.  TODO: shift only what is needed by
                     // this eq-group, not the global max.
-                    start_dx -= angle_x;
-                    stop_dx -= angle_x;
-                    start_dy -= angle_y;
-                    stop_dy -= angle_y;
-                    start_dz -= angle_z;
-                    stop_dz -= angle_z;
-
+                    for (int i = _step_posn + 1; i < ndims; i++) {
+                        auto& dname = _dims->_stencil_dims.getDimName(i);
+                        auto angle = angles[dname];
+                        rank_start[i] -= angle;
+                        rank_stop[i] -= angle;
+                    }
                 }            
             } // stencil equations.
         } // time.
     }
 
     // Calculate results within a block.
-    void EqGroupBase::calc_block(idx_t bt,
-                                 idx_t begin_bx, idx_t begin_by, idx_t begin_bz,
-                                 idx_t end_bx, idx_t end_by, idx_t end_bz)
-    {
-        TRACE_MSG3(get_name() << ".calc_block(t=" << bt <<
-                  ", x=" << begin_bx << ".." << (end_bx-1) <<
-                  ", y=" << begin_by << ".." << (end_by-1) <<
-                  ", z=" << begin_bz << ".." << (end_bz-1) <<
-                  ").");
+    void EqGroupBase::calc_block(const ScanIndices& region_idxs) {
+
         auto opts = _generic_context->get_settings();
+        auto dims = _generic_context->get_dims();
+        int ndims = dims->_stencil_dims.size();
+        auto& step_dim = dims->_step_dim;
+        TRACE_MSG("calc_block: " << region_idxs.start.makeValStr(ndims) <<
+                  " ... " << region_idxs.stop.addElements(-1).makeValStr(ndims));
+
+        // Init block begin & end from region start & stop indices.
+        ScanIndices block_idxs;
+        block_idxs.initFromOuter(region_idxs);
 
         // Steps within a block are based on sub-block sizes.
-        const idx_t step_bx = opts->sbx;
-        const idx_t step_by = opts->sby;
-        const idx_t step_bz = opts->sbz;
+        block_idxs.step = opts->_sub_block_sizes;
 
         // Groups in block loops are based on sub-block-group sizes.
-        const idx_t group_size_bx = opts->sbgx;
-        const idx_t group_size_by = opts->sbgy;
-        const idx_t group_size_bz = opts->sbgz;
+        block_idxs.group_size = opts->_sub_block_group_sizes;
 
         // Set number of threads for a block.
         // This should be nested within a top-level OpenMP task.
@@ -583,74 +601,81 @@ namespace yask {
     // Calculate results for one sub-block.
     // Each block is typically computed in a separate OpenMP thread.
     // The begin/end_sb* vars are the start/stop_b* vars from the block loops.
-    void EqGroupBase::calc_sub_block(idx_t sbt,
-                                     idx_t begin_sbx, idx_t begin_sby, idx_t begin_sbz,
-                                     idx_t end_sbx, idx_t end_sby, idx_t end_sbz)
-    {
-        TRACE_MSG3(get_name() << ".calc_sub_block(t=" << sbt <<
-                   ", x=" << begin_sbx << ".." << (end_sbx-1) <<
-                   ", y=" << begin_sby << ".." << (end_sby-1) <<
-                   ", z=" << begin_sbz << ".." << (end_sbz-1) <<
-                   ")...");
+    void EqGroupBase::calc_sub_block(const ScanIndices& block_idxs) {
+
+        auto* cp = _generic_context;
+        auto opts = cp->get_settings();
+        auto dims = cp->get_dims();
+        int ndims = dims->_stencil_dims.size();
+        auto& step_dim = dims->_step_dim;
+        TRACE_MSG("calc_sub_block: " << block_idxs.start.makeValStr(ndims) <<
+                  " ... " << block_idxs.stop.addElements(-1).makeValStr(ndims));
+
+        // Init sub-block begin & end from block start & stop indices.
+        ScanIndices sub_block_idxs;
+        sub_block_idxs.initFromOuter(block_idxs);
         
         // If not a 'simple' domain, use scalar code.  TODO: this
         // is very inefficient--need to vectorize as much as possible.
         if (!bb_simple) {
+            bool full_bb = true;
             
-            // Are there holes in the BB?
-            if (bb_num_points != bb_size) {
-                TRACE_MSG3("...using scalar code with sub-domain checking.");
-
-                for (idx_t x = begin_sbx; x < end_sbx; x++)
-                    for (idx_t y = begin_sby; y < end_sby; y++)
-                        for (idx_t z = begin_sbz; z < end_sbz; z++) {
-                            
-                            // Update only if point is in sub-domain for this eq group.
-                            if (is_in_valid_domain(sbt, x, y, z))
-                                calc_scalar(sbt, x, y, z);
-                        }
-            }
-
             // If no holes, don't need to check domain.
-            else {
+            if (bb_num_points == bb_size)
                 TRACE_MSG3("...using scalar code without sub-domain checking.");
-
-                for (idx_t x = begin_sbx; x < end_sbx; x++)
-                    for (idx_t y = begin_sby; y < end_sby; y++)
-                        for (idx_t z = begin_sbz; z < end_sbz; z++) {
-                            calc_scalar(sbt, x, y, z);
-                        }
+            
+            else {
+                TRACE_MSG3("...using scalar code with sub-domain checking.");
+                full_bb = false;
             }
+
+            // Use the 'general' loop. The OMP will be ignored because we're already in
+            // a nested OMP region.
+            ScanIndices gen_idxs(sub_block_idxs);
+
+            // Define general calc function.  Since step is always 1, we
+            // ignore gen_stop.  If point is in sub-domain for this eq
+            // group, then evaluate the reference scalar code.
+#define calc_gen(gen_idxs)                                      \
+            if (full_bb || is_in_valid_domain(gen_idxs.start))  \
+                calc_scalar(gen_idxs.start)
+                
+            // Scan through n-D space.
+#include "yask_gen_loops.hpp"
+#undef calc_gen
         }
 
         // Full rectangular polytope of aligned vectors: use optimized code.
         else {
             TRACE_MSG3("...using vector code without sub-domain checking.");
 
-            StencilContext* cp = _generic_context;
-
-            assert((end_sbx - begin_sbx) % CPTS_X == 0);
-            assert((end_sby - begin_sby) % CPTS_Y == 0);
-            assert((end_sbz - begin_sbz) % CPTS_Z == 0);
+            // Make sure we're doing a multiple of clusters.
+            for (int i = cp->_step_posn + 1; i < ndims; i++) {
+                auto& dname = dims->_stencil_dims.getDimName(i);
+                assert((sub_block_idxs.end[i] - sub_block_idxs.begin[i]) % 
+                       dims->_cluster_pts[dname] == 0);
+            }
 
             // Subtract rank offset and divide indices by vector lengths as
             // needed by read/writeVecNorm().  Use idiv_flr() instead of '/'
             // because begin/end vars may be negative (if in halo).
-            const idx_t begin_sbtv = sbt - cp->ofs_t;
-            const idx_t begin_sbxv = idiv_flr<idx_t>(begin_sbx - cp->ofs_x, VLEN_X);
-            const idx_t begin_sbyv = idiv_flr<idx_t>(begin_sby - cp->ofs_y, VLEN_Y);
-            const idx_t begin_sbzv = idiv_flr<idx_t>(begin_sbz - cp->ofs_z, VLEN_Z);
-            const idx_t end_sbtv = sbt - cp->ofs_t + CPTS_T;
-            const idx_t end_sbxv = idiv_flr<idx_t>(end_sbx - cp->ofs_x, VLEN_X);
-            const idx_t end_sbyv = idiv_flr<idx_t>(end_sby - cp->ofs_y, VLEN_Y);
-            const idx_t end_sbzv = idiv_flr<idx_t>(end_sbz - cp->ofs_z, VLEN_Z);
+            for (int i = cp->_step_posn + 1; i < ndims; i++) {
+                auto& dname = dims->_stencil_dims.getDimName(i);
+                sub_block_idxs.begin[i] =
+                    idiv_flr<idx_t>(sub_block_idxs.begin[i] -
+                                    cp->rank_domain_offsets[dname],
+                                    dims->_fold_pts[dname]);
+                sub_block_idxs.end[i] =
+                    idiv_flr<idx_t>(sub_block_idxs.end[i] -
+                                    cp->rank_domain_offsets[dname],
+                                    dims->_fold_pts[dname]);
+            }
 
             // Evaluate sub-block of clusters.
-            calc_sub_block_of_clusters(begin_sbtv, begin_sbxv, begin_sbyv, begin_sbzv,
-                                       end_sbtv, end_sbxv, end_sbyv, end_sbzv);
+            calc_sub_block_of_clusters(sub_block_idxs);
         }
         
-        // Make sure stores are visible for later loads.
+        // Make sure streaming stores are visible for later loads.
         make_stores_visible();
     }
 
@@ -661,44 +686,41 @@ namespace yask {
     void StencilContext::setupRank()
     {
         ostream& os = get_ostr();
+        auto& step_dim = _dims->_step_dim;
 
         // Check ranks.
-        idx_t req_ranks = _opts->nrx * _opts->nry * _opts->nrz;
+        idx_t req_ranks = _opts->_num_ranks.product();
         if (req_ranks != _env->num_ranks) {
-            cerr << "error: " << req_ranks << " rank(s) requested, but " <<
+            cerr << "error: " << req_ranks << " rank(s) requested (" <<
+                _opts->_num_ranks.makeDimValStr(" * ") << "), but " <<
                 _env->num_ranks << " rank(s) are active." << endl;
             exit_yask(1);
         }
-        assertEqualityOverRanks(_opts->dt, _env->comm, "time-step");
+        assertEqualityOverRanks(_opts->_rank_sizes[step_dim], _env->comm, "num steps");
 
         // Determine my coordinates if not provided already.
         // TODO: do this more intelligently based on proximity.
-        if (_opts->find_loc) {
-            Layout_321 rank_layout(_opts->nrx, _opts->nry, _opts->nrz);
-            rank_layout.unlayout((idx_t)_env->my_rank,
-                                 _opts->rix, _opts->riy, _opts->riz);
-        }
+        if (_opts->find_loc)
+            _opts->_rank_indices = _opts->_num_ranks.unlayout(_env->my_rank);
         os << "Logical coordinates of this rank: " <<
-            _opts->rix << ", " <<
-            _opts->riy << ", " <<
-            _opts->riz << endl;
+            _opts->_rank_indices.makeDimValStr() << endl;
 
         // A table of rank-coordinates for everyone.
-        const int num_dims = 3;
+        auto num_dims = _opts->_rank_indices.size(); // domain-dims only!
         idx_t coords[_env->num_ranks][num_dims];
 
         // Init coords for this rank.
-        coords[_env->my_rank][0] = _opts->rix;
-        coords[_env->my_rank][1] = _opts->riy;
-        coords[_env->my_rank][2] = _opts->riz;
+        for (int i = 0; i < num_dims; i++)
+            coords[_env->my_rank][i] = _opts->_rank_indices[i];
 
         // A table of rank-sizes for everyone.
         idx_t rsizes[_env->num_ranks][num_dims];
 
         // Init sizes for this rank.
-        rsizes[_env->my_rank][0] = _opts->dx;
-        rsizes[_env->my_rank][1] = _opts->dy;
-        rsizes[_env->my_rank][2] = _opts->dz;
+        for (int di = 0; di < num_dims; di++) {
+            auto& dname = _opts->_rank_indices.getDimName(di);
+            rsizes[_env->my_rank][di] = _opts->_rank_sizes[dname];
+        }
 
 #ifdef USE_MPI
         // Exchange coord and size info between all ranks.
@@ -708,55 +730,63 @@ namespace yask {
             MPI_Bcast(&rsizes[rn][0], num_dims, MPI_INTEGER8,
                       rn, _env->comm);
         }
+        // Now, the tables are filled in for all ranks.
 #endif
-        
-        ofs_x = ofs_y = ofs_z = 0; // TODO: allow user to specify starting overall offset.
-        tot_x = tot_y = tot_z = 0;
+
+        // Init offsets and total sizes.
+        rank_domain_offsets.setValsSame(0);
+        overall_domain_sizes.setValsSame(0);
+
+        // Loop over all ranks.
         int num_neighbors = 0, num_exchanges = 0;
         for (int rn = 0; rn < _env->num_ranks; rn++) {
 
-            // Get coordinates of rn.
-            idx_t rnx = coords[rn][0];
-            idx_t rny = coords[rn][1];
-            idx_t rnz = coords[rn][2];
-
             // Coord offset of rn from me: prev => negative, self => 0, next => positive.
-            idx_t rdx = rnx - _opts->rix;
-            idx_t rdy = rny - _opts->riy;
-            idx_t rdz = rnz - _opts->riz;
-
-            // Get sizes of rn;
-            idx_t rsx = rsizes[rn][0];
-            idx_t rsy = rsizes[rn][1];
-            idx_t rsz = rsizes[rn][2];
+            IdxTuple rcoords(_dims->_domain_dims);
+            Indices rdeltas;
+            for (int di = 0; di < num_dims; di++) {
+                rcoords[di] = coords[rn][di];
+                rdeltas[di] = coords[rn][di] - _opts->_rank_indices[di];
+            }
         
-            // Accumulate total problem size in each dim for ranks that
-            // intersect with this rank, including myself.
-            // Adjust my offset in the global problem by adding all domain
-            // sizes from prev ranks only.
-            if (rdy == 0 && rdz == 0) {
-                tot_x += rsx;
-                if (rdx < 0)
-                    ofs_x += rsx;
+            for (int di = 0; di < num_dims; di++) {
+                auto& dname = _opts->_rank_indices.getDimName(di);
+
+                // Does this rank "intersect" mine?
+                // Rank rn intersects when deltas in other dims are zero.
+                bool intersect = true;
+                for (int dj = 0; dj < num_dims; dj++) {
+                    if (di != dj && rdeltas[dj] != 0) {
+                        intersect = false;
+                        break;
+                    }
+                }
+                if (intersect) {
+                    
+                    // Accumulate total problem size in each dim for ranks that
+                    // intersect with this rank, including myself.
+                    overall_domain_sizes[dname] += rsizes[rn][di];
+
+                    // Adjust my offset in the global problem by adding all domain
+                    // sizes from prev ranks only.
+                    if (rdeltas[di] < 0)
+                        overall_domain_sizes[dname] += rsizes[rn][di];
+                }
             }
-            if (rdx == 0 && rdz == 0) {
-                tot_y += rsy;
-                if (rdy < 0)
-                    ofs_y += rsy;
+
+            // Manhattan distance from rn (sum of abs deltas in all dims).
+            // Max distance in any dim.
+            int mandist = 0;
+            int maxdist = 0;
+            for (int di = 0; di < num_dims; di++) {
+                mandist += abs(rdeltas[di]);
+                maxdist = max(maxdist, abs(int(rdeltas[di])));
             }
-            if (rdx == 0 && rdy == 0) {
-                tot_z += rsz;
-                if (rdz < 0)
-                    ofs_z += rsz;
-            }
-            
-            // Manhattan distance.
-            int mdist = abs(rdx) + abs(rdy) + abs(rdz);
             
             // Myself.
             if (rn == _env->my_rank) {
-                if (mdist != 0) {
-                    cerr << "internal error: distance to own rank == " << mdist << endl;
+                if (mandist != 0) {
+                    cerr << "Internal error: distance to own rank == " << mandist << endl;
                     exit_yask(1);
                 }
                 continue; // nothing else to do for self.
@@ -764,8 +794,8 @@ namespace yask {
 
             // Someone else.
             else {
-                if (mdist == 0) {
-                    cerr << "error: ranks " << _env->my_rank <<
+                if (mandist == 0) {
+                    cerr << "Error: ranks " << _env->my_rank <<
                         " and " << rn << " at same coordinates." << endl;
                     exit_yask(1);
                 }
@@ -775,16 +805,22 @@ namespace yask {
             // every dim.  Assume we do not need to exchange halos except
             // with immediate neighbor. TODO: validate domain size is larger
             // than halo.
-            if (abs(rdx) > 1 || abs(rdy) > 1 || abs(rdz) > 1)
+            if (maxdist > 1)
                 continue;
 
-            // Save rank of this neighbor.
             // Add one to -1..+1 dist to get 0..2 range for my_neighbors indices.
-            my_neighbors[rdx+1][rdy+1][rdz+1] = rn;
+            Indices rposns = rdeltas.addElements(1);
+            IdxTuple roffsets(_dims->_domain_dims);
+            rposns.setTupleVals(roffsets);
+
+            // Save rank of this neighbor into the MPI info object.
+            auto mpiInfo = get_mpi_info();
+            auto rn_ofs = mpiInfo->neighbor_offsets.layout(roffsets);
+            assert(rn_ofs < _env->num_ranks);
+            mpiInfo->my_neighbors.at(rn_ofs) = rn;
             num_neighbors++;
-            os << "Neighbor #" << num_neighbors << " at " <<
-                rnx << ", " << rny << ", " << rnz <<
-                " is rank " << rn << endl;
+            os << "Neighbor #" << num_neighbors << " at indices " <<
+                rcoords.makeDimValStr() << " is rank " << rn << endl;
                     
             // Check against max dist needed.  TODO: determine max dist
             // automatically from stencil equations; may not be same for all
@@ -795,7 +831,7 @@ namespace yask {
 
             // Is buffer needed?
             // TODO: calculate and use exch dist for each grid.
-            if (mdist > MAX_EXCH_DIST) {
+            if (mandist > MAX_EXCH_DIST) {
                 os << " No halo exchange with rank " << rn << '.' << endl;
                 continue;
             }
@@ -805,14 +841,18 @@ namespace yask {
             for (auto gp : gridPtrs) {
                 auto& gname = gp->get_name();
                 
-                // Size of buffer in each direction: if dist to neighbor is
+                // Size of MPI buffer in each direction: if dist to neighbor is
                 // zero in given direction (i.e., is perpendicular to this
-                // rank), use domain size; otherwise, use halo size.
-                idx_t bsx = ROUND_UP((rdx == 0) ? _opts->dx : gp->get_halo_x(), VLEN_X);
-                idx_t bsy = ROUND_UP((rdy == 0) ? _opts->dy : gp->get_halo_y(), VLEN_Y);
-                idx_t bsz = ROUND_UP((rdz == 0) ? _opts->dz : gp->get_halo_z(), VLEN_Z);
+                // rank), use rank size; otherwise, use halo size for this grid.
+                IdxTuple bufsizes(_dims->_domain_dims);
+                for (int di = 0; di < num_dims; di++) {
+                    auto& dname = _opts->_rank_indices.getDimName(di);
+#warning FIXME: use different dim name for halo size
+                    bufsizes[di] = (rdeltas[di] == 0) ? _opts->_rank_sizes[dname] :
+                        gp->get_halo_size(dname);
+                }
 
-                if (bsx * bsy * bsz == 0) {
+                if (bufsizes.product() == 0) {
                     os << " No halo exchange needed for grid '" << gname <<
                         "' with rank " << rn << '.' << endl;
                 }
@@ -827,29 +867,34 @@ namespace yask {
                             oss << "_send_halo_from_" << _env->my_rank << "_to_" << rn;
                         else
                             oss << "_get_halo_to_" << _env->my_rank << "_from_" << rn;
-                        
-                        Grid_XYZ* bp = mpiBufs[gname].makeBuf(bd,
-                                                              rdx+1, rdy+1, rdz+1,
-                                                              bsx, bsy, bsz,
-                                                              oss.str());
-                        num_bytes += bp->get_num_bytes();
+                        string bufname = oss.str();
+
+                        // Buffers for this grid.
+                        auto gbp = mpiBufs.emplace(gname, _mpiInfo);
+                        auto gbi = gbp.first; // iterator from pair returned by emplace().
+                        auto gbv = gbi->second; // value from iterator.
+                        auto bp = gbv.makeBuf(MPIBufs::BufDir(bd),
+                                              roffsets,
+                                              bufsizes,
+                                              bufname,
+                                              *this);
+                        num_bytes += bp->get_num_storage_bytes();
                         num_exchanges++;
                     }
 
-                    os << " Halo exchange of " << printWithPow2Multiplier(num_bytes) <<
-                        "B enabled for grid '" << gname << "' with rank " << rn << '.' << endl;
+                    os << " Halo exchange of " << makeByteStr(num_bytes) <<
+                        " enabled for grid '" << gname << "' with rank " << rn << '.' << endl;
                 }
             }
         }
         os << "Number of halo exchanges from this rank: " << num_exchanges << endl;
-        os << "Problem-domain offsets of this rank: " <<
-            ofs_x << ", " << ofs_y << ", " << ofs_z << endl;
+        os << "Problem-domain offsets of this rank: " << rank_domain_offsets.makeDimValStr() << endl;
 
         // Set offsets in grids.
         set_grids();
     }
 
-    // Allocate memory for grids, params, and MPI bufs that do not
+    // Allocate memory for grids that do not
     // already have storage.
     // TODO: allow different types of memory for different grids, MPI bufs, etc.
     void StencilContext::allocData()
@@ -868,8 +913,10 @@ namespace yask {
         
             // Grids.
             for (auto gp : gridPtrs) {
-                if (!gp) continue;
-                if (gp->get_storage()) continue; // already has storage.
+                if (!gp)
+                    continue;
+                if (gp->is_storage_allocated())
+                    continue; // already has storage.
 
                 // Set storage if buffer has been allocated.
                 if (pass == 1) {
@@ -879,30 +926,15 @@ namespace yask {
                 }
 
                 // Determine size used (also offset to next location).
-                gbytes += gp->get_num_bytes();
-                nbytes += ROUND_UP(gp->get_num_bytes() + _data_buf_pad,
+                gbytes += gp->get_num_storage_bytes();
+                nbytes += ROUND_UP(gp->get_num_storage_bytes() + _data_buf_pad,
                                    CACHELINE_BYTES);
                 TRACE_MSG("grid '" << gp->get_name() << "' needs " <<
                           gp->get_num_bytes() << " bytes");
             }
 
-            // Params.
-            for (auto pp : paramPtrs) {
-                if (!pp) continue;
-                if (pp->get_storage()) continue; // already has storage.
-
-                // Set storage if buffer has been allocated.
-                if (pass == 1)
-                    pp->set_storage(_data_buf, nbytes);
-
-                // determine size used (also offset to next location).
-                pbytes += pp->get_num_bytes();
-                nbytes += ROUND_UP(pp->get_num_bytes() + _data_buf_pad,
-                                   CACHELINE_BYTES);
-                TRACE_MSG("param needs " <<
-                          pp->get_num_bytes() << " bytes");
-            }
-
+#warning FIXME: is this needed?
+#if 0
             // MPI buffers.
             for (auto gp : gridPtrs) {
                 if (!gp) continue;
@@ -912,35 +944,37 @@ namespace yask {
 
                 // Visit buffers for each neighbor for this grid.
                 mpiBufs[gname].visitNeighbors
-                    (*this, false,
-                     [&](idx_t nx, idx_t ny, idx_t nz,
-                         int rank,
-                         Grid_XYZ* sendBuf,
-                         Grid_XYZ* rcvBuf)
+                    ([&](const IdxTuple& offsets,
+                         int rank, int idx,
+                         YkGridPtr sendBuf,
+                         YkGridPtr recvBuf)
                      {
                          // Send.
-                         if (!sendBuf->get_storage()) {
+                         if (sendBuf && !sendBuf->is_storage_allocated()) {
                              if (pass == 1)
                                  sendBuf->set_storage(_data_buf, nbytes);
-                             bbytes += sendBuf->get_num_bytes();
-                             nbytes += ROUND_UP(sendBuf->get_num_bytes() + _data_buf_pad,
+                             auto sbytes = sendBuf->get_num_storage_bytes();
+                             bbytes += sbytes;
+                             nbytes += ROUND_UP(sbytes + _data_buf_pad,
                                                 CACHELINE_BYTES);
                              TRACE_MSG("send buf '" << sendBuf->get_name() << "' needs " <<
-                                       sendBuf->get_num_bytes() << " bytes");
+                                       sbytes << " bytes");
                          }
 
                          // Recv.
-                         if (!rcvBuf->get_storage()) {
+                         if (recvBuf && !recvBuf->is_storage_allocated()) {
                              if (pass == 1)
-                                 rcvBuf->set_storage(_data_buf, nbytes);
-                             bbytes += rcvBuf->get_num_bytes();
-                             nbytes += ROUND_UP(rcvBuf->get_num_bytes() + _data_buf_pad,
+                                 recvBuf->set_storage(_data_buf, nbytes);
+                             auto rbytes = recvBuf->get_num_storage_bytes();
+                             bbytes += rbytes;
+                             nbytes += ROUND_UP(rbytes + _data_buf_pad,
                                                 CACHELINE_BYTES);
-                             TRACE_MSG("rcv buf '" << rcvBuf->get_name() << "' needs " <<
-                                       rcvBuf->get_num_bytes() << " bytes");
+                             TRACE_MSG("rcv buf '" << recvBuf->get_name() << "' needs " <<
+                                       rbytes<< " bytes");
                          }
                      } );
             }
+#endif
 
             // Don't need pad after last one.
             if (nbytes >= _data_buf_pad)
@@ -948,21 +982,21 @@ namespace yask {
 
             // Allocate data.
             if (pass == 0 && nbytes > 0) {
-                os << "Allocating " << printWithPow2Multiplier(nbytes) <<
-                    "B for all grids, parameters, and other buffers...\n" << flush;
+                os << "Allocating " << makeByteStr(nbytes) <<
+                    " for all grids, parameters, and other buffers...\n" << flush;
 
                 _data_buf = shared_ptr<char>(alignedAlloc(nbytes), AlignedDeleter());
                 
-                os << "  " << printWithPow2Multiplier(gbytes) << "B for grid(s).\n" <<
-                    "  " << printWithPow2Multiplier(pbytes) << "B for parameters(s).\n" <<
-                    "  " << printWithPow2Multiplier(bbytes) << "B for MPI buffers(s).\n" <<
-                    "  " << printWithPow2Multiplier(nbytes - gbytes - pbytes - bbytes) <<
-                    "B for inter-data padding.\n";
+                os << "  " << makeByteStr(gbytes) << " for grid(s).\n" <<
+                    "  " << makeByteStr(pbytes) << " for parameters(s).\n" <<
+                    "  " << makeByteStr(bbytes) << " for MPI buffers(s).\n" <<
+                    "  " << makeByteStr(nbytes - gbytes - pbytes - bbytes) <<
+                    " for inter-data padding.\n";
             }
         }
     }
 
-    // Set grid sizes and offsets.
+    // Set grid sizes and offsets based on settings.
     // This should be called anytime a setting or rank offset is changed.
     void StencilContext::set_grids()
     {
@@ -970,26 +1004,25 @@ namespace yask {
         
         // Round-up any settings as needed.
         _opts->adjustSettings(get_ostr(), false);
-        
+
+        auto num_dims = _dims->_domain_dims.size();
         for (auto gp : gridPtrs) {
 
-            // Domains.
-            gp->set_dx(_opts->dx);
-            gp->set_dy(_opts->dy);
-            gp->set_dz(_opts->dz);
+            
+            for (int di = 0; di < num_dims; di++) {
+                auto& dname = _opts->_rank_indices.getDimName(di);
 
-            // Pads.
-            gp->set_extra_pad_x(_opts->epx);
-            gp->set_extra_pad_y(_opts->epy);
-            gp->set_extra_pad_z(_opts->epz);
-            gp->set_min_pad_x(_opts->mpx);
-            gp->set_min_pad_y(_opts->mpy);
-            gp->set_min_pad_z(_opts->mpz);
+                // Rank domains.
+                gp->set_domain_size(dname, _opts->_rank_sizes[dname]);
 
-            // Offsets.
-            gp->set_ofs_x(ofs_x);
-            gp->set_ofs_y(ofs_y);
-            gp->set_ofs_z(ofs_z);
+                // Pads.
+                // Set via both 'extra' and 'min'.
+                gp->set_extra_pad_size(dname, _opts->_extra_pad_sizes[dname]);
+                gp->set_min_pad_size(dname, _opts->_min_pad_sizes[dname]);
+
+                // Offsets.
+                gp->set_offset(dname, rank_domain_offsets[dname]);
+            }
         }
     }
     
@@ -1040,7 +1073,8 @@ namespace yask {
         set_all_threads(); // Back to normal.
 
         // TODO: enable multi-rank wave-front tiling.
-        if (_opts->rt > 1 && _env->num_ranks > 1) {
+        auto& step_dim = _dims->_step_dim;
+        if (_opts->_region_sizes[step_dim] > 1 && _env->num_ranks > 1) {
             cerr << "MPI communication is not currently enabled with wave-front tiling." << endl;
             exit_yask(1);
         }
@@ -1060,39 +1094,26 @@ namespace yask {
         allocData();
 
         // Report some stats.
-        idx_t dt = _opts->dt;
-        os << "\nSizes in points per grid (w*x*y*z):\n"
-            " vector-size:          " <<
-            VLEN_T << '*' << VLEN_X << '*' << VLEN_Y << '*' << VLEN_Z << endl <<
-            " cluster-size:         " <<
-            CPTS_T << '*' << CPTS_X << '*' << CPTS_Y << '*' << CPTS_Z << endl <<
-            " sub-block-size:       " <<
-            _opts->sbt << '*' << _opts->sbx << '*' << _opts->sby << '*' << _opts->sbz << endl <<
-            " sub-block-group-size: 1*" <<
-            _opts->sbgx << '*' << _opts->sbgy << '*' << _opts->sbgz << endl <<
-            " block-size:           " <<
-            _opts->bt << '*' << _opts->bx << '*' << _opts->by << '*' << _opts->bz << endl <<
-            " block-group-size:     1*" <<
-            _opts->bgx << '*' << _opts->bgy << '*' << _opts->bgz << endl <<
-            " region-size:          " <<
-            _opts->rt << '*' << _opts->rx << '*' << _opts->ry << '*' << _opts->rz << endl <<
-            " rank-domain-size:     " <<
-            dt << '*' << _opts->dx << '*' << _opts->dy << '*' << _opts->dz << endl <<
-            " overall-problem-size: " <<
-            dt << '*' << tot_x << '*' << tot_y << '*' << tot_z << endl <<
+        idx_t dt = _opts->_rank_sizes[step_dim];
+        os << "\nProblem sizes in points (from smallest to largest):\n"
+            " vector-size:          " << _dims->_fold_pts.makeDimValStr(" * ") << endl <<
+            " cluster-size:         " << _dims->_cluster_pts.makeDimValStr(" * ") << endl <<
+            " sub-block-size:       " << _opts->_sub_block_sizes.makeDimValStr(" * ") << endl <<
+            " sub-block-group-size: " << _opts->_sub_block_group_sizes.makeDimValStr(" * ") << endl <<
+            " block-size:           " << _opts->_block_sizes.makeDimValStr(" * ") << endl <<
+            " block-group-size:     " << _opts->_block_group_sizes.makeDimValStr(" * ") << endl <<
+            " region-size:          " << _opts->_region_sizes.makeDimValStr(" * ") << endl <<
+            " rank-domain-size:     " << _opts->_rank_sizes.makeDimValStr(" * ") << endl <<
+            " overall-problem-size: " << overall_domain_sizes.makeDimValStr(" * ") << endl <<
             endl <<
             "Other settings:\n"
-            " stencil-name: " YASK_STENCIL_NAME << endl << 
-            " num-ranks: " <<
-            _opts->nrx << '*' << _opts->nry << '*' << _opts->nrz << endl <<
-            " vector-len: " << VLEN << endl <<
-            " extra-padding: " <<
-            _opts->epx << ", " << _opts->epy << ", " << _opts->epz << endl <<
-            " minimum-padding: " <<
-            _opts->mpx << ", " << _opts->mpy << ", " << _opts->mpz << endl <<
-            " max-wave-front-angles: " <<
-            angle_x << ", " << angle_y << ", " << angle_z << endl <<
-            " max-halos: " << hx << ", " << hy << ", " << hz << endl <<
+            " stencil-name:         " << get_name() << endl << 
+            " num-ranks:            " << _opts->_num_ranks.makeDimValStr(" * ") << endl <<
+            " vector-len:           " << VLEN << endl <<
+            " extra-padding:        " << _opts->_extra_pad_sizes.makeDimValStr() << endl <<
+            " minimum-padding:      " << _opts->_min_pad_sizes.makeDimValStr() << endl <<
+            " wave-front-angles:    " << angles.makeDimValStr() << endl <<
+            " max-halos:            " << max_halos.makeDimValStr() << endl <<
             " manual-L1-prefetch-distance: " << PFDL1 << endl <<
             " manual-L2-prefetch-distance: " << PFDL2 << endl <<
             endl;
@@ -1112,23 +1133,23 @@ namespace yask {
             idx_t fpops_domain = fpops1 * eg->bb_num_points;
             rank_numFpOps_1t += fpops_domain;
             os << "Stats for equation-group '" << eg->get_name() << "':\n" <<
-                " sub-domain size:            " << eg->len_bbx << '*' << eg->len_bby << '*' << eg->len_bbz << endl <<
-                " valid points in sub domain: " << printWithPow10Multiplier(eg->bb_num_points) << endl <<
+                " sub-domain size:            " << eg->bb_len.makeDimValStr(" * ") << endl <<
+                " valid points in sub domain: " << makeNumStr(eg->bb_num_points) << endl <<
                 " grid-updates per point:     " << updates1 << endl <<
-                " grid-updates in sub-domain: " << printWithPow10Multiplier(updates_domain) << endl <<
+                " grid-updates in sub-domain: " << makeNumStr(updates_domain) << endl <<
                 " grid-reads per point:       " << reads1 << endl <<
-                " grid-reads in sub-domain:   " << printWithPow10Multiplier(reads_domain) << endl <<
+                " grid-reads in sub-domain:   " << makeNumStr(reads_domain) << endl <<
                 " est FP-ops per point:       " << fpops1 << endl <<
-                " est FP-ops in sub-domain:   " << printWithPow10Multiplier(fpops_domain) << endl;
+                " est FP-ops in sub-domain:   " << makeNumStr(fpops_domain) << endl;
         }
 
         // Report total allocation.
         rank_nbytes = get_num_bytes();
         os << "Total allocation in this rank: " <<
-            printWithPow2Multiplier(rank_nbytes) << "B\n";
+            makeByteStr(rank_nbytes) << "\n";
         tot_nbytes = sumOverRanks(rank_nbytes, _env->comm);
         os << "Total overall allocation in " << _env->num_ranks << " rank(s): " <<
-            printWithPow2Multiplier(tot_nbytes) << "B\n";
+            makeByteStr(tot_nbytes) << "\n";
     
         // Various metrics for amount of work.
         rank_numpts_dt = rank_numpts_1t * dt;
@@ -1143,8 +1164,8 @@ namespace yask {
         tot_numFpOps_1t = sumOverRanks(rank_numFpOps_1t, _env->comm);
         tot_numFpOps_dt = tot_numFpOps_1t * dt;
 
-        rank_domain_1t = _opts->dx * _opts->dy * _opts->dz;
-        rank_domain_dt = rank_domain_1t * dt;
+        rank_domain_dt = _opts->_rank_sizes.product();
+        rank_domain_1t = rank_domain_dt / dt;
         tot_domain_1t = sumOverRanks(rank_domain_1t, _env->comm);
         tot_domain_dt = tot_domain_1t * dt;
     
@@ -1152,40 +1173,40 @@ namespace yask {
         os << endl <<
             "Amount-of-work stats:\n" <<
             " domain-size in this rank, for one time-step: " <<
-            printWithPow10Multiplier(rank_domain_1t) << endl <<
+            makeNumStr(rank_domain_1t) << endl <<
             " overall-problem-size in all ranks, for one time-step: " <<
-            printWithPow10Multiplier(tot_domain_1t) << endl <<
+            makeNumStr(tot_domain_1t) << endl <<
             " domain-size in this rank, for all time-steps: " <<
-            printWithPow10Multiplier(rank_domain_dt) << endl <<
+            makeNumStr(rank_domain_dt) << endl <<
             " overall-problem-size in all ranks, for all time-steps: " <<
-            printWithPow10Multiplier(tot_domain_dt) << endl <<
+            makeNumStr(tot_domain_dt) << endl <<
             endl <<
             " grid-point-updates in this rank, for one time-step: " <<
-            printWithPow10Multiplier(rank_numpts_1t) << endl <<
+            makeNumStr(rank_numpts_1t) << endl <<
             " grid-point-updates in all ranks, for one time-step: " <<
-            printWithPow10Multiplier(tot_numpts_1t) << endl <<
+            makeNumStr(tot_numpts_1t) << endl <<
             " grid-point-updates in this rank, for all time-steps: " <<
-            printWithPow10Multiplier(rank_numpts_dt) << endl <<
+            makeNumStr(rank_numpts_dt) << endl <<
             " grid-point-updates in all ranks, for all time-steps: " <<
-            printWithPow10Multiplier(tot_numpts_dt) << endl <<
+            makeNumStr(tot_numpts_dt) << endl <<
             endl <<
             " grid-point-reads in this rank, for one time-step: " <<
-            printWithPow10Multiplier(rank_reads_1t) << endl <<
+            makeNumStr(rank_reads_1t) << endl <<
             " grid-point-reads in all ranks, for one time-step: " <<
-            printWithPow10Multiplier(tot_reads_1t) << endl <<
+            makeNumStr(tot_reads_1t) << endl <<
             " grid-point-reads in this rank, for all time-steps: " <<
-            printWithPow10Multiplier(rank_reads_dt) << endl <<
+            makeNumStr(rank_reads_dt) << endl <<
             " grid-point-reads in all ranks, for all time-steps: " <<
-            printWithPow10Multiplier(tot_reads_dt) << endl <<
+            makeNumStr(tot_reads_dt) << endl <<
             endl <<
             " est-FP-ops in this rank, for one time-step: " <<
-            printWithPow10Multiplier(rank_numFpOps_1t) << endl <<
+            makeNumStr(rank_numFpOps_1t) << endl <<
             " est-FP-ops in all ranks, for one time-step: " <<
-            printWithPow10Multiplier(tot_numFpOps_1t) << endl <<
+            makeNumStr(tot_numFpOps_1t) << endl <<
             " est-FP-ops in this rank, for all time-steps: " <<
-            printWithPow10Multiplier(rank_numFpOps_dt) << endl <<
+            makeNumStr(rank_numFpOps_dt) << endl <<
             " est-FP-ops in all ranks, for all time-steps: " <<
-            printWithPow10Multiplier(tot_numFpOps_dt) << endl <<
+            makeNumStr(tot_numFpOps_dt) << endl <<
             endl << 
             "Notes:\n"
             " Domain-sizes and overall-problem-sizes are based on rank-domain sizes (dw * dx * dy * dz)\n"
@@ -1197,24 +1218,14 @@ namespace yask {
     }
 
     // Init all grids & params by calling initFn.
-    void StencilContext::initValues(function<void (RealVecGridPtr gp, 
-                                                   real_t seed)> realVecInitFn,
-                                    function<void (RealGrid* gp,
-                                                   real_t seed)> realInitFn)
-    {
+    void StencilContext::initValues(function<void (YkGridPtr gp, 
+                                                   real_t seed)> realInitFn) {
         ostream& os = get_ostr();
         real_t v = 0.1;
         os << "Initializing grids..." << endl;
         for (auto gp : gridPtrs) {
-            realVecInitFn(gp, v);
+            realInitFn(gp, v);
             v += 0.01;
-        }
-        if (paramPtrs.size()) {
-            os << "Initializing parameters..." << endl;
-            for (auto pp : paramPtrs) {
-                realInitFn(pp, v);
-                v += 0.01;
-            }
         }
     }
 
@@ -1231,16 +1242,7 @@ namespace yask {
         idx_t errs = 0;
         for (size_t gi = 0; gi < gridPtrs.size(); gi++) {
             os << "Grid '" << ref.gridPtrs[gi]->get_name() << "'..." << endl;
-            errs += gridPtrs[gi]->compare(*ref.gridPtrs[gi]);
-        }
-
-        os << "Comparing parameter(s) in '" << name << "' to '" << ref.name << "'..." << endl;
-        if (paramPtrs.size() != ref.paramPtrs.size()) {
-            cerr << "** number of params not equal." << endl;
-            return 1;
-        }
-        for (size_t pi = 0; pi < paramPtrs.size(); pi++) {
-            errs += paramPtrs[pi]->compare(ref.paramPtrs[pi], EPSILON);
+            errs += gridPtrs[gi]->compare(ref.gridPtrs[gi].get());
         }
 
         return errs;
@@ -1251,10 +1253,11 @@ namespace yask {
                                 const string& name,
                                 StencilContext& context,
                                 bool force_full) {
-        len_bbx = end_bbx - begin_bbx;
-        len_bby = end_bby - begin_bby;
-        len_bbz = end_bbz - begin_bbz;
-        bb_size = len_bbx * len_bby * len_bbz;
+
+        auto dims = context.get_dims();
+        auto& domain_dims = dims->_domain_dims;
+        bb_len = bb_end.subElements(bb_begin);
+        bb_size = bb_len.product();
         if (force_full)
             bb_num_points = bb_size;
         bb_simple = true;       // assume ok.
@@ -1262,31 +1265,50 @@ namespace yask {
         // Solid rectangle?
         if (bb_num_points != bb_size) {
             os << "Warning: '" << name << "' domain has only " <<
-                printWithPow10Multiplier(bb_num_points) <<
+                makeNumStr(bb_num_points) <<
                 " valid point(s) inside its bounding-box of " <<
-                printWithPow10Multiplier(bb_size) <<
+                makeNumStr(bb_size) <<
                 " point(s); slower scalar calculations will be used.\n";
             bb_simple = false;
         }
 
-        // Lengths are cluster-length multiples?
-        else if (len_bbx % CPTS_X ||
-                 len_bby % CPTS_Y ||
-                 len_bbz % CPTS_Z) {
-            os << "Warning: '" << name << "' domain"
-                " has one or more sizes that are not vector-cluster multiples;"
-                " slower scalar calculations will be used.\n";
-            bb_simple = false;
-        }
+        else {
 
-        // Begin on cluster-length multiples in rank?
-        else if ((begin_bbx - context.ofs_x) % CPTS_X ||
-                 (begin_bby - context.ofs_y) % CPTS_Y ||
-                 (begin_bbz - context.ofs_z) % CPTS_Z) {
-            os << "Warning: '" << name << "' domain"
-                " has one or more starting edges not on vector-cluster boundaries;"
-                " slower scalar calculations will be used.\n";
-            bb_simple = false;
+            // Lengths are cluster-length multiples?
+            bool is_cluster_mult = true;
+            for (auto dim : domain_dims.getDims()) {
+                auto& dname = dim.getName();
+                if (bb_len[dname] % dims->_cluster_pts[dname]) {
+                    is_cluster_mult = false;
+                    break;
+                }
+            }
+            if (!is_cluster_mult) {
+                os << "Warning: '" << name << "' domain"
+                    " has one or more sizes that are not vector-cluster multiples;"
+                    " slower scalar calculations will be used.\n";
+                bb_simple = false;
+            }
+
+            else {
+
+                // Does everything start on a vector-length boundary?
+                bool is_aligned = true;
+                for (auto dim : domain_dims.getDims()) {
+                    auto& dname = dim.getName();
+                    if ((bb_begin[dname] - context.rank_domain_offsets[dname]) %
+                        dims->_fold_pts[dname]) {
+                        is_aligned = false;
+                        break;
+                    }
+                }
+                if (!is_aligned) {
+                    os << "Warning: '" << name << "' domain"
+                        " has one or more starting edges not on vector boundaries;"
+                        " slower scalar calculations will be used.\n";
+                    bb_simple = false;
+                }
+            }
         }
 
         // All done.
@@ -1304,12 +1326,8 @@ namespace yask {
             eg->find_bounding_box();
 
         // Overall BB based on rank offsets and rank domain sizes.
-        begin_bbx = ofs_x;
-        end_bbx = ofs_x + _opts->dx;
-        begin_bby = ofs_y;
-        end_bby = ofs_y + _opts->dy;
-        begin_bbz = ofs_z;
-        end_bbz = ofs_z + _opts->dz;
+        bb_begin = rank_domain_offsets;
+        bb_end = rank_domain_offsets.addElements(_opts->_rank_sizes, false);
         update_bb(os, "rank", *this, true);
 
         // Determine the max spatial skewing angles for temporal wavefronts
@@ -1318,9 +1336,11 @@ namespace yask {
         // if the region size is less than the rank size, i.e., if the
         // region covers the whole rank in a given dimension, no wave-front
         // is needed in thar dim.
-        angle_x = (_opts->rx < len_bbx) ? ROUND_UP(hx, CPTS_X) : 0;
-        angle_y = (_opts->ry < len_bby) ? ROUND_UP(hy, CPTS_Y) : 0;
-        angle_z = (_opts->rz < len_bbz) ? ROUND_UP(hz, CPTS_Z) : 0;
+        for (auto dim : _dims->_domain_dims.getDims()) {
+            auto& dname = dim.getName();
+            angles[dname] = (_opts->_region_sizes[dname] < bb_len[dname]) ?
+                ROUND_UP(max_halos[dname], _dims->_cluster_pts[dname]) : 0;
+        }
     }
 
     // Set the bounding-box vars for this eq group in this rank.
@@ -1330,51 +1350,49 @@ namespace yask {
         assert(optsp);
         auto opts = *optsp.get();
         ostream& os = context.get_ostr();
+        auto& domain_dims = context.get_dims()->_domain_dims;
+        auto& step_dim = context.get_dims()->_step_dim;
 
         // Init min vars w/max val and vice-versa.
-        idx_t minx = idx_max, maxx = idx_min;
-        idx_t miny = idx_max, maxy = idx_min;
-        idx_t minz = idx_max, maxz = idx_min;
+        Indices min_pts(idx_max);
+        Indices max_pts(idx_min);
         idx_t npts = 0;
-        
-        // Assume bounding-box is same for all time steps.
-        // TODO: consider adding time to domain.
-        idx_t t = 0;
 
-        // Loop through 4D space.
+        // Tuple of rank sizes w/one step.
+        auto rank_sizes = context.get_settings()->_rank_sizes;
+        rank_sizes.setVal(step_dim, 1);
+        idx_t rsz = rank_sizes.product();
+
+        // Loop through rank domain.
+        // Assume result is valid for all step-dim values.
         // Find the min and max valid points in this space.
-#pragma omp parallel for collapse(3)       \
-    reduction(min:minx,miny,minz)          \
-    reduction(max:maxx,maxy,maxz)          \
+        // Count all the valid points.
+#pragma omp parallel for                        \
+    reduction(min_idxs:min_pts)                 \
+    reduction(max_idxs:max_pts)                 \
     reduction(+:npts)
-        for(idx_t x = context.ofs_x; x < context.ofs_x + opts.dx; x++)
-            for(idx_t y = context.ofs_y; y < context.ofs_y + opts.dy; y++)
-                for(idx_t z = context.ofs_z; z < context.ofs_z + opts.dz; z++) {
+        for (idx_t i = 0; i < rsz; i++) {
 
-                    // Update only if point in domain for this eq group.
-                    if (is_in_valid_domain(t, x, y, z)) {
-                        minx = min(minx, x);
-                        maxx = max(maxx, x);
-                        miny = min(miny, y);
-                        maxy = max(maxy, y);
-                        minz = min(minz, z);
-                        maxz = max(maxz, z);
-                        npts++;
-                    }
-                }
+            // Get n-D indices.
+            auto pt = rank_sizes.unlayout(i);
+            Indices idxs(pt);
+                
+            // Update only if point in domain for this eq group.
+            if (is_in_valid_domain(idxs)) {
+                min_pts = min_pts.minElements(idxs);
+                max_pts = max_pts.maxElements(idxs);
+                npts++;
+            }
+        }
 
         // Set begin vars to min indices and end vars to one beyond max indices.
         if (npts) {
-            begin_bbx = minx;
-            end_bbx = maxx + 1;
-            begin_bby = miny;
-            end_bby = maxy + 1;
-            begin_bbz = minz;
-            end_bbz = maxz + 1;
+            min_pts.setTupleVals(bb_begin);
+            max_pts.setTupleVals(bb_end);
+            bb_end = bb_end.addElements(1);
         } else {
-            begin_bbx = end_bbx = 0;
-            begin_bby = end_bby = 0;
-            begin_bbz = end_bbz = 0;
+            bb_begin.setValsSame(0);
+            bb_end.setValsSame(0);
         }
         bb_num_points = npts;
 
@@ -1384,13 +1402,14 @@ namespace yask {
     
     // Exchange halo data needed by eq-group 'eg' at the given time.
     // Data is needed for input grids that have not already been updated.
-    // TODO: overlap halo exchange with computation.
+    // [BIG] TODO: overlap halo exchange with computation.
     void StencilContext::exchange_halos(idx_t start_dt, idx_t stop_dt, EqGroupBase& eg)
     {
         auto opts = get_settings();
-        TRACE_MSG("exchange_halos(t=" << start_dt << ".." << (stop_dt-1) <<
-                  ", needed for eq-group '" << eg.get_name() << "')");
+        TRACE_MSG("exchange_halos(" << start_dt << " ... " << (stop_dt-1) <<
+                  ", as needed for eq-group '" << eg.get_name() << "')");
 
+#warning FIXME
 #ifdef USE_MPI
         double start_time = getTimeInSecs();
 
@@ -1692,86 +1711,115 @@ namespace yask {
             TRACE_MSG("grid '" << gp->get_name() << "' is modified");
         }
     }
+
+    // Apply a function to each neighbor rank.
+    void MPIInfo::visitNeighbors(std::function<void
+                                 (const IdxTuple& offsets, // NeighborOffset vals.
+                                  int rank, // MPI rank.
+                                  int index)> visitor) {
+
+        for (int i = 0; i < neighborhood_size; i++) {
+            auto offsets = neighbor_offsets.unlayout(i);
+            int rank = my_neighbors.at(i);
+            visitor(offsets, rank, i);
+        }
+    }
     
     // Apply a function to each neighbor rank.
     // Called visitor function will contain the rank index of the neighbor.
     // The send and receive buffer pointers may be null if 'null_ok' is true.
-    void MPIBufs::visitNeighbors(StencilContext& context,
-                                 bool null_ok,
-                                 std::function<void (idx_t nx, idx_t ny, idx_t nz,
-                                                     int rank,
-                                                     Grid_XYZ* sendBuf,
-                                                     Grid_XYZ* rcvBuf)> visitor)
-    {
-        for (idx_t nx = 0; nx < num_neighbors; nx++)
-            for (idx_t ny = 0; ny < num_neighbors; ny++)
-                for (idx_t nz = 0; nz < num_neighbors; nz++)
-                    if (context.my_neighbors[nx][ny][nz] != MPI_PROC_NULL) {
-                        Grid_XYZ* sendBuf = bufs[bufSend][nx][ny][nz];
-                        Grid_XYZ* rcvBuf = bufs[bufRec][nx][ny][nz];
-                        if (null_ok || (sendBuf && rcvBuf)) {
-                            visitor(nx, ny, nz,
-                                    context.my_neighbors[nx][ny][nz],
-                                    sendBuf, rcvBuf);
-                        }
-                    }
+    void MPIBufs::visitNeighbors(std::function<void
+                                 (const IdxTuple& offsets, // NeighborOffset.
+                                  int rank,
+                                  int index,
+                                  YkGridPtr sendBuf,
+                                  YkGridPtr recvBuf)> visitor) {
+
+        _mpiInfo->visitNeighbors
+            ([&](const IdxTuple& offsets,
+                 int rank, int i) {
+
+                if (rank != MPI_PROC_NULL) {
+                    auto sendBuf = send_bufs.at(i);
+                    auto recvBuf = recv_bufs.at(i);
+                    visitor(offsets, rank, i, sendBuf, recvBuf);
+                }
+            });
     }
 
     // Create new buffer in given direction and size.
     // Does not yet allocate space in it.
-    Grid_XYZ* MPIBufs::makeBuf(int bd,
-                               idx_t nx, idx_t ny, idx_t nz,
-                               idx_t dx, idx_t dy, idx_t dz,
-                                const std::string& name)
-    {
+    YkGridPtr MPIBufs::makeBuf(BufDir bd,
+                               const IdxTuple& offsets,
+                               const IdxTuple& sizes,
+                               const std::string& name,
+                               StencilContext& context) {
+        
         TRACE_MSG0(cout, "making MPI buffer '" << name << "' at " <<
-                   nx << ", " << ny << ", " << nz << " with size " <<
-                   dx << " * " << dy << " * " << dz);
-        auto** gp = getBuf(bd, nx, ny, nz);
-        *gp = new Grid_XYZ(name);
-        assert(*gp);
-        (*gp)->set_dx(dx);
-        (*gp)->set_dy(dy);
-        (*gp)->set_dz(dz);
+                   offsets.makeDimValStr() << " with size " <<
+                   sizes.makeDimValStr(" * "));
+        auto& gp = getBuf(bd, offsets);
+        gp = context.newGrid(name, sizes.getDimNames());
+        assert(gp);
+        for (auto& dim : sizes.getDims()) {
+            auto& dname = dim.getName();
+            auto sz = dim.getVal();
+            gp->set_domain_size(dname, sz);
+        }
         TRACE_MSG0(cout, "MPI buffer '" << name << "' size: " <<
-                   (*gp)->get_num_bytes());
-        return *gp;
+                   gp->get_num_storage_bytes());
+        return gp;
     }
 
-    // TODO: get rid of all these macros after making a more general
-    // mechanism for handling dimensions.
-#define ADD_1_OPTION(name, help1, help2, var, dim)                      \
-    parser.add_option(new CommandLineParser::IdxOption                  \
-                      (name #dim,                                       \
-                       help1 " in '" #dim "' dimension" help2 ".",      \
-                       var ## dim))
-#define ADD_XYZ_OPTION(name, help, var) \
-    ADD_1_OPTION(name, help, "", var, x); \
-    ADD_1_OPTION(name, help, "", var, y);                               \
-    ADD_1_OPTION(name, help, "", var, z);                               \
-    parser.add_option(new CommandLineParser::MultiIdxOption             \
-                      (name,                                            \
-                       "Shorthand for -" name "x <integer> -" name      \
-                       "y <integer> -" name "z <integer>.",             \
-                       var ## x, var ## y, var ## z))
-#define ADD_TXYZ_OPTION(name, help, var)                         \
-    ADD_XYZ_OPTION(name, help, var);                             \
-    ADD_1_OPTION(name, help, " (number of time steps)", var, t)
+    // Add options to set one domain var to a cmd-line parser.
+    void KernelSettings::_add_domain_option(CommandLineParser& parser,
+                                            const std::string& prefix,
+                                            const std::string& descrip,
+                                            IdxTuple& var) {
 
+        // Add step + domain vars.
+        vector<idx_t*> multi_vars;
+        string multi_help;
+        for (auto dim : var.getDims()) {
+            auto& dname = dim.getName();
+            auto* dptr = dim.getValPtr();
+
+            // Option for individual dim.
+            parser.add_option(new CommandLineParser::IdxOption
+                              (prefix + dname,
+                               descrip + " in '" + dname + "' dimension.",
+                               *dptr));
+
+            // Add to domain list if not step var.
+            if (dname != _dims->_step_dim) {
+                multi_vars.push_back(dptr);
+                multi_help += " -" + prefix + dname + " <integer>";
+            }
+        }
+
+        // Option for all domain dims.
+        if (multi_vars.size() > 1) {
+            parser.add_option(new CommandLineParser::MultiIdxOption
+                              (prefix,
+                               "Shorthand for" + multi_help,
+                               multi_vars));
+        }
+    }
+    
     // Add these settigns to a cmd-line parser.
     void KernelSettings::add_options(CommandLineParser& parser)
     {
-        ADD_TXYZ_OPTION("d", "Rank-domain size", d);
-        ADD_TXYZ_OPTION("r", "Region size", r);
-        ADD_XYZ_OPTION("b", "Block size", b);
-        ADD_XYZ_OPTION("bg", "Block-group size", bg);
-        ADD_XYZ_OPTION("sb", "Sub-block size", sb);
-        ADD_XYZ_OPTION("sbg", "Sub-block-group size", sbg);
-        ADD_XYZ_OPTION("mp", "Minimum grid-padding size (including halo)", mp);
-        ADD_XYZ_OPTION("ep", "Extra grid-padding size (beyond halo)", ep);
+        _add_domain_option(parser, "d", "Rank-domain size", _rank_sizes);
+        _add_domain_option(parser, "r", "Region size", _region_sizes);
+        _add_domain_option(parser, "bg", "Block-group size", _block_group_sizes);
+        _add_domain_option(parser, "b", "Block size", _block_sizes);
+        _add_domain_option(parser, "sbg", "Sub-block-group size", _sub_block_group_sizes);
+        _add_domain_option(parser, "sb", "Sub-block size", _sub_block_sizes);
+        _add_domain_option(parser, "mp", "Minimum grid-padding size (including halo)", _min_pad_sizes);
+        _add_domain_option(parser, "ep", "Extra grid-padding size (beyond halo)", _extra_pad_sizes);
 #ifdef USE_MPI
-        ADD_XYZ_OPTION("nr", "Num ranks", nr);
-        ADD_XYZ_OPTION("ri", "This rank's logical index", ri);
+        _add_domain_option(parser, "nr", "Num ranks", _num_ranks);
+        _add_domain_option(parser, "ri", "This rank's logical index", _rank_indices);
         parser.add_option(new CommandLineParser::IntOption
                           ("msg_rank",
                            "Index of MPI rank that will print informational messages.",
@@ -1893,6 +1941,47 @@ namespace yask {
             os << " " << pgmName << " " << ae << endl;
         os << flush;
     }
+
+    // If 'finalize' and one of 'inner_sizes' is zero,
+    // make it equal to corresponding one in 'outer_sizes'.
+    // Round up each of 'inner_sizes' to be a multiple of corresponding one in 'mults'.
+    // If 'finalize', output info to 'os' using '*_name' and dim names.
+    // Return product of number of inner subsets.
+    idx_t  KernelSettings::findNumSubsets(ostream& os,
+                                          IdxTuple& inner_sizes, const string& inner_name,
+                                          const IdxTuple& outer_sizes, const string& outer_name,
+                                          const IdxTuple& mults,
+                                          bool finalize) {
+
+        idx_t prod = 1;
+        for (auto dim : inner_sizes.getDims()) {
+            auto& dname = dim.getName();
+            auto* dptr = dim.getValPtr();
+
+            idx_t outer_size = outer_sizes[dname];
+            if (finalize && *dptr <= 0)
+                *dptr = outer_size; // 0 => use full size as default.
+            if (mults.lookup(dname))
+                *dptr = ROUND_UP(*dptr, mults[dname]);
+            idx_t inner_size = *dptr;
+            idx_t ninner = (inner_size <= 0) ? 0 :
+                (outer_size + inner_size - 1) / inner_size; // full or partial.
+            if (finalize) {
+                idx_t rem = outer_size % inner_size;                       // size of remainder.
+                idx_t nfull = rem ? (ninner - 1) : ninner; // full only.
+
+                os << " In '" << dname << "' dimension, " << outer_name << " of size " <<
+                    outer_size << " contains " << nfull << " " <<
+                    inner_name << "(s) of size " << inner_size;
+                if (rem)
+                    os << " plus 1 remainder " << inner_name << " of size " << rem;
+                os << "." << endl;
+            }
+            prod *= ninner;
+        }
+        return prod;
+    }
+
     
     // Make sure all user-provided settings are valid and finish setting up some
     // other vars before allocating memory.
@@ -1903,22 +1992,15 @@ namespace yask {
         if (finalize && max_threads <= 0)
             max_threads = omp_get_max_threads();
         
-        // Check domain sizes.
-        assert(dt > 0);
-        assert(dx > 0);
-        assert(dy > 0);
-        assert(dz > 0);
-
         // Determine num regions.
         // Also fix up region sizes as needed.
         // Default region size (if 0) will be size of rank-domain.
         if (finalize)
             os << "\nRegions:" << endl;
-        idx_t nrt = findNumRegionsInDomain(os, rt, dt, CPTS_T, "t", finalize);
-        idx_t nrx = findNumRegionsInDomain(os, rx, dx, CPTS_X, "x", finalize);
-        idx_t nry = findNumRegionsInDomain(os, ry, dy, CPTS_Y, "y", finalize);
-        idx_t nrz = findNumRegionsInDomain(os, rz, dz, CPTS_Z, "z", finalize);
-        idx_t nr = nrt * nrx * nry * nrz;
+        auto nr = findNumSubsets(os, _region_sizes, "region",
+                                 _rank_sizes, "rank-domain",
+                                 _dims->_cluster_pts, finalize);
+        auto rt = _rank_sizes[_dims->_step_dim];
         if (finalize) {
             os << " num-regions-per-rank-domain: " << nr << endl;
             os << " Since the temporal region size is " << rt <<
@@ -1932,34 +2014,35 @@ namespace yask {
         // Default block size (if 0) will be size of region.
         if (finalize)
             os << "\nBlocks:" << endl;
-        idx_t nbt = findNumBlocksInRegion(os, bt, rt, CPTS_T, "t", finalize);
-        idx_t nbx = findNumBlocksInRegion(os, bx, rx, CPTS_X, "x", finalize);
-        idx_t nby = findNumBlocksInRegion(os, by, ry, CPTS_Y, "y", finalize);
-        idx_t nbz = findNumBlocksInRegion(os, bz, rz, CPTS_Z, "z", finalize);
-        idx_t nb = nbt * nbx * nby * nbz;
+        auto nb = findNumSubsets(os, _block_sizes, "block",
+                                 _region_sizes, "region",
+                                 _dims->_cluster_pts, finalize);
         if (finalize) {
             os << " num-blocks-per-region: " << nb << endl;
             os << " num-blocks-per-rank-domain: " << (nb * nr) << endl;
         }
 
-        // Adjust defaults for sub-blocks to be y-z slab.
-        // Otherwise, findNumSubBlocksInBlock() would set default
+        // Adjust defaults for sub-blocks to be slab.
+        // Otherwise, findNumSubsets() would set default
         // to entire block.
         if (finalize) {
-            if (!sbx) sbx = CPTS_X; // min size in 'x'.
-            if (!sby) sby = by;     // max size in 'y'.
-            if (!sbz) sbz = bz;     // max size in 'z'.
+            for (auto dim : _dims->_domain_dims.getDims()) {
+                auto& dname = dim.getName();
+                if (_sub_block_sizes[dname] == 0)
+                    _sub_block_sizes[dname] = 1; // will be rounded up to min size.
+
+                // only want to set 1st dim; others will be set to max.
+                break;
+            }
         }
 
         // Determine num sub-blocks.
         // Also fix up sub-block sizes as needed.
         if (finalize)
             os << "\nSub-blocks:" << endl;
-        idx_t nsbt = findNumSubBlocksInBlock(os, sbt, bt, CPTS_T, "t", finalize);
-        idx_t nsbx = findNumSubBlocksInBlock(os, sbx, bx, CPTS_X, "x", finalize);
-        idx_t nsby = findNumSubBlocksInBlock(os, sby, by, CPTS_Y, "y", finalize);
-        idx_t nsbz = findNumSubBlocksInBlock(os, sbz, bz, CPTS_Z, "z", finalize);
-        idx_t nsb = nsbt * nsbx * nsby * nsbz;
+        auto nsb = findNumSubsets(os, _sub_block_sizes, "sub-block",
+                                 _block_sizes, "block",
+                                 _dims->_cluster_pts, finalize);
         if (finalize)
             os << " num-sub-blocks-per-block: " << nsb << endl;
 
@@ -1969,54 +2052,46 @@ namespace yask {
         if (finalize)
             os << "\nGroups:" << endl;
         
-        // Adjust defaults for block-groups to be size of block.
+        // Adjust defaults for groups to be min size.
         // Otherwise, findNumBlockGroupsInRegion() would set default
         // to entire region.
         if (finalize) {
-            if (!bgx) bgx = bx;
-            if (!bgy) bgy = by;
-            if (!bgz) bgz = bz;
+            for (auto dim : _dims->_domain_dims.getDims()) {
+                auto& dname = dim.getName();
+                if (_block_group_sizes[dname] == 0)
+                    _block_group_sizes[dname] = 1; // will be rounded up to min size.
+                if (_sub_block_group_sizes[dname] == 0)
+                    _sub_block_group_sizes[dname] = 1; // will be rounded up to min size.
+            }
         }
 
         // Determine num block-groups.
         // Also fix up block-group sizes as needed.
         // TODO: only print this if block-grouping is enabled.
-        idx_t nbgx = findNumBlockGroupsInRegion(os, bgx, rx, bx, "x", finalize);
-        idx_t nbgy = findNumBlockGroupsInRegion(os, bgy, ry, by, "y", finalize);
-        idx_t nbgz = findNumBlockGroupsInRegion(os, bgz, rz, bz, "z", finalize);
-        idx_t nbg = nbt * nbgx * nbgy * nbgz;
+        auto nbg = findNumSubsets(os, _block_group_sizes, "block-group",
+                                 _region_sizes, "region",
+                                 _block_sizes, finalize);
         if (finalize)
             os << " num-block-groups-per-region: " << nbg << endl;
-        nbx = findNumBlocksInBlockGroup(os, bx, bgx, CPTS_X, "x", finalize);
-        nby = findNumBlocksInBlockGroup(os, by, bgy, CPTS_Y, "y", finalize);
-        nbz = findNumBlocksInBlockGroup(os, bz, bgz, CPTS_Z, "z", finalize);
-        nb = nbx * nby * nbz;
+        auto nb_g = findNumSubsets(os, _block_sizes, "block",
+                                   _block_group_sizes, "block-group",
+                                   _dims->_cluster_pts, finalize);
         if (finalize)
-            os << " num-blocks-per-block-group: " << nb << endl;
-
-        // Adjust defaults for sub-block-groups to be size of sub-block.
-        // Otherwise, findNumSubBlockGroupsInBlock() would set default
-        // to entire block.
-        if (finalize) {
-            if (!sbgx) sbgx = sbx;
-            if (!sbgy) sbgy = sby;
-            if (!sbgz) sbgz = sbz;
-        }
+            os << " num-blocks-per-block-group: " << nb_g << endl;
 
         // Determine num sub-block-groups.
         // Also fix up sub-block-group sizes as needed.
         // TODO: only print this if sub-block-grouping is enabled.
-        idx_t nsbgx = findNumSubBlockGroupsInBlock(os, sbgx, bx, sbx, "x", finalize);
-        idx_t nsbgy = findNumSubBlockGroupsInBlock(os, sbgy, by, sby, "y", finalize);
-        idx_t nsbgz = findNumSubBlockGroupsInBlock(os, sbgz, bz, sbz, "z", finalize);
-        idx_t nsbg = nsbgx * nsbgy * nsbgz;
+        auto nsbg = findNumSubsets(os, _sub_block_group_sizes, "sub-block-group",
+                                   _block_sizes, "block",
+                                   _sub_block_sizes, finalize);
         if (finalize)
             os << " num-sub-block-groups-per-block: " << nsbg << endl;
-        nsbx = findNumSubBlocksInSubBlockGroup(os, sbx, sbgx, CPTS_X, "x", finalize);
-        nsby = findNumSubBlocksInSubBlockGroup(os, sby, sbgy, CPTS_Y, "y", finalize);
-        nsbz = findNumSubBlocksInSubBlockGroup(os, sbz, sbgz, CPTS_Z, "z", finalize);
+        auto nsb_g = findNumSubsets(os, _sub_block_sizes, "block",
+                                   _sub_block_group_sizes, "sub-block-group",
+                                   _dims->_cluster_pts, finalize);
         if (finalize)
-            os << " num-sub-blocks-per-sub-block-group: " << nsb << endl;
+            os << " num-sub-blocks-per-sub-block-group: " << nsb_g << endl;
     }
 
 } // namespace yask.

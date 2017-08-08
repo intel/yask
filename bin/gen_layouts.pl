@@ -26,26 +26,103 @@
 # Purpose: Generate 1D<->nD layout macros.
 
 sub usage {
-  die "usage: $0 <option>\n".
+  die "usage: $0 <option> <max-size>\n".
+    "options:\n".
     " -p    generate perl lists of permutes\n".
     " -d    generate C++ class definitions\n".
     " -m    generate CPP layout/unlayout macros\n";
 }
 
-usage() if !defined $ARGV[0];
+usage() if @ARGV != 2;
 my $opt = $ARGV[0];
-my @sizes = (1..5);
+my $max_size = $ARGV[1];
+my @sizes = (1..$max_size);
 
 use strict;
 use File::Basename;
 use lib dirname($0)."/lib";
 use lib dirname($0)."/../lib";
 
-print "// Automatically generated; do not edit.\n";
-print "#include <stddef.h>\n" if ($opt eq '-d');
+print "// Automatically generated; do not edit.\n\n" if $opt ne '-p';
+
+if ($opt eq '-d') {
+  print "#ifndef LAYOUTS_H\n".
+    "#define LAYOUTS_H\n".
+    "namespace yask {\n";
+  print <<"END";
+
+ // Layout base class.
+ class Layout {
+
+ protected:
+  int _nsizes = 0;  // How many elements in _sizes to use (rank).
+  Indices _sizes;   // Size of each dimension.
+
+ public:
+  Layout(int nsizes) : _nsizes(nsizes) {}
+  Layout(int nsizes, const Indices& sizes) :
+   _nsizes(nsizes), _sizes(sizes) { }
+  virtual ~Layout() {}
+
+  // Access sizes.
+  const Indices& get_sizes() const { return _sizes; }
+  void set_sizes(const Indices& sizes) { _sizes = sizes; }
+  idx_t get_size(int i) const {
+    assert(i >= 0);
+    assert(i < _nsizes);
+    return _sizes[i]; 
+  }
+  void set_size(int i, idx_t size) {
+    assert(i >= 0);
+    assert(i < _nsizes);
+    _sizes[i] = size; 
+  }
+  virtual int get_num_sizes() const {
+    return _nsizes; 
+  }
+
+  // Product of valid sizes.
+  virtual idx_t get_num_elements() const {
+    idx_t nelems = 1;
+    for (int i = 0; i < _nsizes; i++)
+      nelems *= _sizes[i];
+    return nelems;
+  }
+
+  // Return 1-D offset from n-D 'j' indices.
+  virtual idx_t layout(const Indices& j) const =0;
+
+  // Return n indices based on 1-D 'ai' input.
+  virtual Indices unlayout(idx_t ai) const =0;
+ };
+
+ // 0-D <-> 1-D layout class.
+ // (Trivial layout.)
+ class Layout_0d : public Layout {
+ public:
+  Layout_0d() : Layout(0) { }
+  Layout_0d(const Indices& sizes) : Layout(0, sizes) { }
+  virtual int get_num_sizes() const final {
+    return 0;
+  }
+
+  // Return 1-D offset from 0-D 'j' indices.
+  virtual idx_t layout(const Indices& j) const final {
+    return 0; 
+  }
+
+  // Return 0 indices based on 1-D 'ai' input.
+  virtual Indices unlayout(idx_t ai) const final {
+    Indices j;
+    return j;
+  }
+ };
+
+END
+}
 
 # permute items in a list.
-# args: block of code and a list.
+# args: block of code to run on each permutation and list to permute.
 sub permute(&@) {
   my $code = shift;
 
@@ -142,47 +219,51 @@ for my $n (@sizes) {
     my $sz = join(' * ', map { "_d$_" } @a);
     my $basename = "Layout_${n}d";
 
-    print "\n// $n-D <-> 1-D layout base class.\n",
-      "class ${basename} {\n",
-      "protected:\n",
-      "  idx_t $dvars;\n\n",
-      "public:\n\n",
-      "  ${basename}() { }\n",
-      "  ${basename}($cargs) : $cinit { }\n\n";
-    for my $a (@a) {
-      print "  // Dimension $a.\n",
-        "  virtual idx_t get_d$a() const { return _d$a; };\n",
-        "  virtual void set_d$a(idx_t d$a) { _d$a = d$a; };\n\n";
-    }
-    print "  // Return overall number of elements.\n",
-      "  virtual idx_t get_size() const { return $sz; };\n\n",
-      "  // Return 1-D offset from $n-D 'j' indices.\n",
-      "  virtual idx_t layout($margs) const =0;\n\n",
-      "  // Set $n 'j' indices based on 1-D 'ai' input.\n",
-      "  virtual void unlayout(idx_t ai, $uargs) const =0;\n",
-      "};\n";
+  print <<"END";
+
+ // $n-D <-> 1-D layout base class.
+ class ${basename} : public Layout {
+ public:
+  ${basename}() : Layout($n) { }
+  ${basename}(const Indices& sizes) : Layout($n, sizes) { }
+ };
+END
 
     permute {
       my @p = @_;
+      my @pm1 = map { $_ - 1; } @p;
       my $name = join('', @p);
-      my @jvars = map { "j$_" } @p;
-      my @dvars = map { "_d$_" } @p;
+      my @jvars = map { "j[$_]" } @pm1;
+      my @dvars = map { "_sizes[$_]" } @pm1;
       my $dims = join(', ', map { "d$_" } @p);
+      my $layout = makeLayout(\@p, \@jvars, \@dvars);
+      my $unlayout = makeUnlayout(\@p, \@jvars, \@dvars, "; ");
 
-      print "\n// $n-D <-> 1-D layout class with dimensions in $dims order,\n",
-        "// meaning d$p[$#p] is stored with unit stride.\n",
-        "class Layout_$name : public ${basename} {\n",
-        "public:\n\n",
-        "  Layout_$name() { }\n\n",
-        "  Layout_$name($cargs) : ${basename}($cvars) { }\n\n",
-        "  // Return 1-D offset from $n-D 'j' indices.\n",
-        "  virtual idx_t layout($margs) const final\n",
-        "    { return ", makeLayout(\@p, \@jvars, \@dvars), "; }\n\n",
-        "  // set $n 'j' indices based on 1-D 'ai' input.\n",
-        "  virtual void unlayout(idx_t ai, $uargs) const final\n",
-        "    { ", makeUnlayout(\@p, \@jvars, \@dvars, "; "), "; }\n",
-        "};\n";
+      print <<"END";
 
+ // $n-D <-> 1-D layout class with dimensions in $dims order,
+ // meaning d$p[$#p] is stored with unit stride.
+ class Layout_$name : public ${basename} {
+ public:
+  Layout_$name() { }
+  Layout_$name(const Indices& sizes) : ${basename}(sizes) { }
+  virtual int get_num_sizes() const final {
+    return $n;
+  }
+
+  // Return 1-D offset from $n-D 'j' indices.
+  virtual idx_t layout(const Indices& j) const final {
+    return $layout;
+  }
+
+  // Return $n index(indices) based on 1-D 'ai' input.
+  virtual Indices unlayout(idx_t ai) const final {
+    Indices j;
+    $unlayout;
+    return j;
+  }
+ };
+END
     } @a;
   }
 
@@ -224,4 +305,9 @@ for my $n (@sizes) {
     usage();
   }
 
+}
+
+if ($opt eq '-d') {
+  print "} // namespace yask.\n".
+    "#endif\n";
 }

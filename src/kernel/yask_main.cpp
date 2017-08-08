@@ -38,7 +38,8 @@ struct AppSettings : public KernelSettings {
     bool validate;              // whether to do validation run.
     int pre_trial_sleep_time;   // sec to sleep before each trial.
 
-    AppSettings() :
+    AppSettings(DimsPtr dims) :
+        KernelSettings(dims),
         help(false),
         doWarmup(true),
         num_trials(3),
@@ -63,9 +64,12 @@ struct AppSettings : public KernelSettings {
                 _as.validate = true;
                 _as.doWarmup = false;
                 _as.num_trials = 1;
-                _as.dt = 1;
-                _as.dx = _as.dy = _as.dz = 64;
-                _as.bx = _as.by = _as.bz = 24;
+                _as._rank_sizes[_as._dims->_step_dim] = 1;
+                for (auto dim : _as._dims->_domain_dims.getDims()) {
+                    auto& dname = dim.getName();
+                    _as._rank_sizes[dname] = 64;
+                    _as._block_sizes[dname] = 24;
+                }
                 return true;
             }
             return false;
@@ -167,9 +171,12 @@ int main(int argc, char** argv)
     // Set up the environment (mostly MPI).
     auto kenv = kfac.new_env();
 
+    // Problem dimensions.
+    auto dims = YASK_STENCIL_CONTEXT::new_dims();
+
     // Parse cmd-line options.
     // TODO: do this through APIs.
-    auto opts = make_shared<AppSettings>();
+    auto opts = make_shared<AppSettings>(dims);
     opts->parse(argc, argv);
 
     // Object containing data and parameters for stencil eval.
@@ -212,17 +219,11 @@ int main(int argc, char** argv)
     // warmup caches, threading, etc.
     if (opts->doWarmup) {
 
-        // Temporarily set dt to a temp value for warmup.
-        idx_t dt = opts->dt;
-        idx_t tmp_dt = min<idx_t>(opts->dt, 1);
-        opts->dt = tmp_dt;
-
+        idx_t dt = 1;
         os << endl << divLine <<
-            "Running " << opts->dt << " time step(s) for warm-up...\n" << flush;
-        context->calc_rank_opt();
+            "Running " << dt << " step(s) for warm-up...\n" << flush;
+        context->run_solution(0, dt);
 
-        // Replace temp setting with correct value.
-        opts->dt = dt;
         kenv->global_barrier();
     }
 
@@ -231,9 +232,10 @@ int main(int argc, char** argv)
     float best_elapsed_time=0.0f, best_apps=0.0f, best_dpps=0.0f, best_flops=0.0f;
 
     // Performance runs.
+    idx_t dt = opts->_rank_sizes[opts->_dims->_step_dim];
     os << endl << divLine <<
         "Running " << opts->num_trials << " performance trial(s) of " <<
-        opts->dt << " time step(s) each...\n";
+        dt << " step(s) each...\n";
     for (idx_t tr = 0; tr < opts->num_trials; tr++) {
         os << divLine;
 
@@ -265,13 +267,13 @@ int main(int argc, char** argv)
         float dpps = float(context->tot_domain_dt) / elapsed_time;
         float flops = float(context->tot_numFpOps_dt) / elapsed_time;
         os << 
-            "time (sec):                             " << printWithPow10Multiplier(elapsed_time) << endl <<
-            "throughput (prob-size-points/sec):      " << printWithPow10Multiplier(dpps) << endl <<
-            "throughput (point-updates/sec):         " << printWithPow10Multiplier(apps) << endl <<
-            "throughput (est-FLOPS):                 " << printWithPow10Multiplier(flops) << endl;
+            "time (sec):                             " << makeNumStr(elapsed_time) << endl <<
+            "throughput (prob-size-points/sec):      " << makeNumStr(dpps) << endl <<
+            "throughput (point-updates/sec):         " << makeNumStr(apps) << endl <<
+            "throughput (est-FLOPS):                 " << makeNumStr(flops) << endl;
 #ifdef USE_MPI
         os <<
-            "time in halo exch (sec):                " << printWithPow10Multiplier(context->mpi_time) << endl;
+            "time in halo exch (sec):                " << makeNumStr(context->mpi_time) << endl;
 #endif
 
         if (apps > best_apps) {
@@ -283,10 +285,10 @@ int main(int argc, char** argv)
     }
 
     os << divLine <<
-        "best-time (sec):                        " << printWithPow10Multiplier(best_elapsed_time) << endl <<
-        "best-throughput (prob-size-points/sec): " << printWithPow10Multiplier(best_dpps) << endl <<
-        "best-throughput (point-updates/sec):    " << printWithPow10Multiplier(best_apps) << endl <<
-        "best-throughput (est-FLOPS):            " << printWithPow10Multiplier(best_flops) << endl <<
+        "best-time (sec):                        " << makeNumStr(best_elapsed_time) << endl <<
+        "best-throughput (prob-size-points/sec): " << makeNumStr(best_dpps) << endl <<
+        "best-throughput (point-updates/sec):    " << makeNumStr(best_apps) << endl <<
+        "best-throughput (est-FLOPS):            " << makeNumStr(best_flops) << endl <<
         divLine <<
         "Notes:\n" <<
         " prob-size-points/sec is based on problem-size as described above.\n" <<
@@ -326,7 +328,7 @@ int main(int argc, char** argv)
 
         // Ref trial.
         os << endl << divLine <<
-            "Running " << opts->dt << " time step(s) for validation...\n" << flush;
+            "Running " << dt << " time step(s) for validation...\n" << flush;
         ref_context->calc_rank_ref();
 
         // check for equality.

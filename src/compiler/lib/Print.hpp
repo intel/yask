@@ -37,7 +37,7 @@ namespace yask {
     // A PrintHelper is used by a PrintVisitor to format certain
     // common items like variables, reads, and writes.
     class PrintHelper {
-        int _varNum;                // current var number.
+        int _varNum;                // current temp var number.
 
     protected:
         const CounterVisitor* _cv;  // counter info.
@@ -71,7 +71,7 @@ namespace yask {
             return _cv->getCount(ep);
         }
 
-        // Return number of times this node is shared.
+        // Return number of times 'ep' node is shared.
         int getNumCommon(Expr* ep) {
             if (!_cv)
                 return 0;

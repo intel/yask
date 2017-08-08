@@ -30,10 +30,8 @@ namespace yask {
 
     // Forward defns.
     struct StencilContext;
-    struct KernelEnv;
 
     // Environmental settings.
-    typedef std::shared_ptr<KernelEnv> KernelEnvPtr;
     struct KernelEnv :
         public virtual yk_env {
 
@@ -59,95 +57,153 @@ namespace yask {
             MPI_Barrier(comm);
         }
     };
+    typedef std::shared_ptr<KernelEnv> KernelEnvPtr;
 
     // Dimensions for a solution.
     // Similar to that in the YASK compiler.
     struct Dims {
-        std::string _stepDim;
-        IdxTuple _domainDims;
-        IdxTuple _stencilDims;
-        IdxTuple _miscDims;
-    };
-    
-    // MPI buffers for *one* grid.
-    struct MPIBufs {
 
-        // A type to store ranks of all possible neighbors in all
-        // directions, including diagonals.
-        enum NeighborOffset { rank_prev, rank_self, rank_next, num_neighbors };
-        typedef int Neighbors[num_neighbors][num_neighbors][num_neighbors];
+        static const int max_domain_dims = MAX_DIMS - 1; // 1 reserved for step dim.
+
+        // Dimensions with unused values.
+        std::string _step_dim;
+        IdxTuple _domain_dims;
+        IdxTuple _stencil_dims;
+        IdxTuple _misc_dims;
+
+        // Dimensions and sizes.
+        IdxTuple _fold_pts;
+        IdxTuple _cluster_pts;
+        IdxTuple _cluster_mults;
+    };
+    typedef std::shared_ptr<Dims> DimsPtr;
+
+    // MPI neighbor info.
+    class MPIInfo {
+
+    public:
+        // Problem dimensions.
+        DimsPtr _dims;
+
+        // Each rank can have up to 3 neighbors in each dim, including self.
+        // Example for 2D:
+        //   +------+------+------+
+        //   |x=prev|x=self|x=next|
+        //   |y=next|y=next|y=next|
+        //   +------+------+------+
+        //   |x=prev|x=self|x=next|
+        //   |y=self|y=self|y=self| Center rank is self.
+        //   +------+------+------+
+        // ^ |x=prev|x=self|x=next|
+        // | |y=prev|y=prev|y=prev|
+        // y +------+------+------+
+        //   x-->
+        enum NeighborOffset { rank_prev, rank_self, rank_next, num_offsets };
+        
+        // Number of possible neighbors in all domain dimensions.
+        // Used to describe the n-D space of neighbors.
+        IdxTuple neighbor_offsets;
 
         // Neighborhood size includes self.
-        static const int neighborhood_size = num_neighbors * num_neighbors * num_neighbors;
+        // Number of points in n-D space of neighbors.
+        int neighborhood_size = 0;
+
+        // MPI rank of each neighbor.
+        // MPI_PROC_NULL => no neighbor.
+        typedef std::vector<int> Neighbors;
+        Neighbors my_neighbors;
         
-        // Need one buf for send and one for receive for each neighbor.
-        enum BufDir { bufSend, bufRec, nBufDirs };
+        // Ctor based on pre-set problem dimensions.
+        MPIInfo(DimsPtr dims) : _dims(dims) {
 
-        // A type to store buffers for all possible neighbors.
-        typedef Grid_XYZ* NeighborBufs[nBufDirs][num_neighbors][num_neighbors][num_neighbors];
-        NeighborBufs bufs;
+            // Max neighbors.
+            neighbor_offsets = dims->_domain_dims; // copy dims from domain.
+            neighbor_offsets.setValsSame(num_offsets); // set sizes in each domain dim.
+            neighborhood_size = neighbor_offsets.product(); // neighbors in all dims.
 
-        MPIBufs() {
-            memset(bufs, 0, sizeof(bufs));
+            // Init array to store all rank numbers.
+            my_neighbors.insert(my_neighbors.begin(), neighborhood_size, MPI_PROC_NULL);
         }
 
-        // Access a buffer by direction and 3D neighbor indices.
-        Grid_XYZ** getBuf(int bd, idx_t nx, idx_t ny, idx_t nz) {
-            assert(bd >= 0);
-            assert(bd < nBufDirs);
-            assert(nx >= 0);
-            assert(nx < num_neighbors);
-            assert(ny >= 0);
-            assert(ny < num_neighbors);
-            assert(nz >= 0);
-            assert(nz < num_neighbors);
-            return &bufs[bd][nx][ny][nz];
+        // Visit all neighbors.
+        virtual void visitNeighbors(std::function<void
+                                    (const IdxTuple& offsets, // NeighborOffset vals.
+                                     int rank, // MPI rank.
+                                     int index // simple counter from 0.
+                                     )> visitor);
+    };
+    typedef std::shared_ptr<MPIInfo> MPIInfoPtr;
+
+    // MPI buffers for *one* grid: a send and receive buffer for each neighbor.
+    struct MPIBufs {
+
+        MPIInfoPtr _mpiInfo;
+        
+        // Need one buf for send and one for receive for each neighbor.
+        enum BufDir { bufSend, bufRecv, nBufDirs };
+
+        // A type to store buffers for all possible neighbors.
+        typedef std::vector<YkGridPtr> NeighborBufs;
+        NeighborBufs send_bufs, recv_bufs;
+
+        MPIBufs(MPIInfoPtr mpiInfo) :
+            _mpiInfo(mpiInfo) {
+
+            // Init buffer pointers.
+            send_bufs.insert(send_bufs.begin(), _mpiInfo->neighborhood_size, NULL);
+            recv_bufs.insert(recv_bufs.begin(), _mpiInfo->neighborhood_size, NULL);
         }
 
         // Apply a function to each neighbor rank.
         // Called visitor function will contain the rank index of the neighbor.
-        // The send and receive buffer pointers may be null if 'null_ok' is true.
-        // TODO: remove 'null_ok' when non-symmetrical halos are supported.
-        virtual void visitNeighbors(StencilContext& context,
-                                    bool null_ok,
-                                    std::function<void (idx_t nx, idx_t ny, idx_t nz,
+        virtual void visitNeighbors(std::function<void (const IdxTuple& offsets, // NeighborOffset.
                                                         int rank,
-                                                        Grid_XYZ* sendBuf,
-                                                        Grid_XYZ* rcvBuf)> visitor);
+                                                        int index, // simple counter from 0.
+                                                        YkGridPtr sendBuf,
+                                                        YkGridPtr recvBuf)> visitor);
             
+        // Access a buffer by direction and neighbor offsets.
+        YkGridPtr& getBuf(BufDir bd, const IdxTuple& offsets) {
+            auto i = _mpiInfo->neighbor_offsets.layout(offsets); // 1D index.
+            assert(i < _mpiInfo->neighborhood_size);
+            assert(int(bd) < int(nBufDirs));
+            return (bd == bufSend) ? send_bufs.at(i) : recv_bufs.at(i);
+        }
+
         // Create new buffer in given direction and size.
-        virtual Grid_XYZ* makeBuf(int bd,
-                                   idx_t nx, idx_t ny, idx_t nz,
-                                   idx_t dx, idx_t dy, idx_t dz,
-                                   const std::string& name);
+        virtual YkGridPtr makeBuf(BufDir bd,
+                                  const IdxTuple& offsets,
+                                  const IdxTuple& sizes,
+                                  const std::string& name,
+                                  StencilContext& context);
     };
 
     // Application settings to control size and perf of stencil code.
     class KernelSettings {
 
     protected:
-        const static idx_t def_steps = 50;
-        const static idx_t def_rank = 128;
-        const static idx_t def_block = 32;
+        idx_t def_steps = 50;
+        idx_t def_rank = 128;
+        idx_t def_block = 32;
 
     public:
+
+        // problem dimensions.
+        DimsPtr _dims;
+        
         // Sizes in elements (points).
-        // - time sizes (t) are in steps to be done.
-        // - spatial sizes (x, y, z) are in elements (not vectors).
-        // Sizes are the same for all grids.
-        idx_t dt=def_steps;
-        idx_t dx=def_rank, dy=def_rank, dz=def_rank; // rank size (without halos).
-        idx_t rt=1, rx=0, ry=0, rz=0; // region size (used for wave-front tiling).
-        idx_t bgx=0, bgy=0, bgz=0; // block-group size (only used for 'grouped' region loops).
-        idx_t bt=1, bx=def_block, by=def_block, bz=def_block; // block size (used for each outer thread).
-        idx_t sbgx=0, sbgy=0, sbgz=0; // sub-block-group size (only used for 'grouped' block loops).
-        idx_t sbt=1, sbx=0, sby=0, sbz=0; // sub-block size (used for each nested thread).
-        idx_t mpx=0, mpy=0, mpz=0;     // minimum spatial padding.
-        idx_t epx=0, epy=0, epz=0;     // extra spatial padding.
+        IdxTuple _rank_sizes;     // number of steps and this rank's domain sizes.
+        IdxTuple _region_sizes;   // region size (used for wave-front tiling).
+        IdxTuple _block_group_sizes; // block-group size (only used for 'grouped' region loops).
+        IdxTuple _block_sizes;       // block size (used for each outer thread).
+        IdxTuple _sub_block_group_sizes; // sub-block-group size (only used for 'grouped' block loops).
+        IdxTuple _sub_block_sizes;       // sub-block size (used for each nested thread).
+        IdxTuple _min_pad_sizes;         // minimum spatial padding.
+        IdxTuple _extra_pad_sizes;       // extra spatial padding.
 
         // MPI settings.
-        idx_t nrx=1, nry=1, nrz=1; // number of ranks in each dim.
-        idx_t rix=0, riy=0, riz=0; // my rank index in each dim.
+        IdxTuple _num_ranks;       // number of ranks in each dim.
+        IdxTuple _rank_indices;    // my rank index in each dim.
         bool find_loc=true;            // whether my rank index needs to be calculated.
         int msg_rank=0;             // rank that prints informational messages.
 
@@ -157,10 +213,66 @@ namespace yask {
         int num_block_threads=1; // Number of threads to use for a block.
 
         // Ctor.
-        KernelSettings() { }
+        KernelSettings(DimsPtr dims) : _dims(dims) {
+
+            // Use both step and domain dims for all size tuples.
+            _rank_sizes = dims->_stencil_dims;
+            _rank_sizes.setValsSame(def_rank);             // size of rank.
+            _rank_sizes.setVal(dims->_step_dim, def_steps); // num steps.
+
+            _region_sizes = dims->_stencil_dims;
+            _region_sizes.setValsSame(0);          // 0 => full rank.
+            _rank_sizes.setVal(dims->_step_dim, 1); // 1 => no wave-front tiling.
+
+            _block_group_sizes = dims->_stencil_dims;
+            _block_group_sizes.setValsSame(0); // 0 => min size.
+
+            _block_sizes = dims->_stencil_dims;
+            _block_sizes.setValsSame(def_block); // size of block.
+            _block_sizes.setVal(dims->_step_dim, 1); // 1 => no temporal blocking.
+
+            _sub_block_group_sizes = dims->_stencil_dims;
+            _sub_block_group_sizes.setValsSame(0); // 0 => min size.
+
+            _sub_block_sizes = dims->_stencil_dims;
+            _sub_block_sizes.setValsSame(0);            // 0 => default settings.
+            _sub_block_sizes.setVal(dims->_step_dim, 1); // 1 => no temporal blocking.
+
+            _min_pad_sizes = dims->_stencil_dims;
+            _min_pad_sizes.setValsSame(0);
+
+            _extra_pad_sizes = dims->_stencil_dims;
+            _extra_pad_sizes.setValsSame(0);
+
+            // Use domain dims only for MPI tuples.
+            _num_ranks = dims->_domain_dims;
+            _num_ranks.setValsSame(1);
+            
+            _rank_indices = dims->_domain_dims;
+            _rank_indices.setValsSame(0);
+        }
         virtual ~KernelSettings() { }
-        
-        // Add these settigns to a cmd-line parser.
+
+    protected:
+        // Add options to set one domain var to a cmd-line parser.
+        virtual void _add_domain_option(CommandLineParser& parser,
+                                        const std::string& prefix,
+                                        const std::string& descrip,
+                                        IdxTuple& var);
+
+        // If 'finalize' and one of 'inner_sizes' is zero,
+        // make it equal to corresponding one in 'outer_sizes'.
+        // Round up each of 'inner_sizes' to be a multiple of corresponding one in 'mults'.
+        // If 'finalize', output info to 'os' using '*_name' and dim names.
+        // Return product of number of inner subsets.
+        idx_t findNumSubsets(std::ostream& os,
+                             IdxTuple& inner_sizes, const std::string& inner_name,
+                             const IdxTuple& outer_sizes, const std::string& outer_name,
+                             const IdxTuple& mults,
+                             bool finalize);
+
+    public:
+        // Add options to set all settings to a cmd-line parser.
         virtual void add_options(CommandLineParser& parser);
 
         // Print usage message.
@@ -179,20 +291,20 @@ namespace yask {
     };
     typedef std::shared_ptr<KernelSettings> KernelSettingsPtr;
     
-    // A 3D bounding-box.
+    // An n-D bounding-box in domain dims.
     struct BoundingBox {
 
         // Boundaries around all points.
-        idx_t begin_bbx=0, begin_bby=0, begin_bbz=0;
-        idx_t end_bbx=1, end_bby=1, end_bbz=1; // one past last value.
+        IdxTuple bb_begin;   // first indices.
+        IdxTuple bb_end;     // one past last indices.
         idx_t bb_num_points=1;  // valid points within the box.
 
         // Following values are calculated from the above ones.
-        idx_t len_bbx=1, len_bby=1, len_bbz=1;
-        idx_t bb_size=1;        // points in the entire box.
-        bool bb_simple=true;    // full box with aligned vectors only.
-        bool bb_valid=false;    // lengths and sizes have been calculated.
-        
+        IdxTuple bb_len;       // size in each dim.
+        idx_t bb_size=1;       // points in the entire box >= bb_num_points.
+        bool bb_simple=true;   // full box with aligned vectors only.
+        bool bb_valid=false;   // lengths and sizes have been calculated.
+
         // Calc values and set valid to true.
         // If 'force_full', set 'bb_num_points' as well as 'bb_size'.
         void update_bb(std::ostream& os,
@@ -205,12 +317,7 @@ namespace yask {
     class EqGroupBase;
     typedef std::vector<EqGroupBase*> EqGroupList;
     typedef std::set<EqGroupBase*> EqGroupSet;
-    typedef std::shared_ptr<RealVecGridBase> RealVecGridPtr;
-    typedef std::vector<RealVecGridPtr> GridPtrs;
-    typedef std::set<RealVecGridPtr> GridPtrSet;
-    typedef std::vector<RealGrid*> ParamPtrs;
-    typedef std::map<std::string, RealVecGridPtr> GridPtrMap;
-    typedef std::map<std::string, RealGrid*> ParamPtrMap;
+    typedef std::map<std::string, YkGridPtr> GridPtrMap;
     
     // Data and hierarchical sizes.
     // This is a pure-virtual class that must be implemented
@@ -221,17 +328,8 @@ namespace yask {
         public BoundingBox,
         public virtual yk_solution {
 
-    private:
-        // Disallow copying.
-        StencilContext(const StencilContext& src) {
-            exit_yask(1);
-        }
-        void operator=(const StencilContext& src) {
-            exit_yask(1);
-        }
-        
     protected:
-        
+
         // Output stream for messages.
         std::ostream* _ostr;
 
@@ -241,17 +339,30 @@ namespace yask {
         // Command-line and env parameters.
         KernelSettingsPtr _opts;
 
+        // Problem dims.
+        DimsPtr _dims;
+
+        // MPI info.
+        MPIInfoPtr _mpiInfo;
+        
         // Bytes between each buffer to help avoid aliasing
         // in the HW.
         size_t _data_buf_pad = (YASK_PAD * CACHELINE_BYTES);
 
-        // TODO: move vars into private or protected sections and
-        // add accessor methods.
+        // Check whether dim is appropriate type.
+        virtual void checkDimType(const std::string& dim,
+                                  const std::string& fn_name,
+                                  bool step_ok,
+                                  bool domain_ok,
+                                  bool misc_ok) const;
     public:
 
         // Name.
         std::string name;
 
+        // Step dim is always in [0] of an Indices type.
+        static const int _step_posn = 0;
+        
         // List of all stencil equations in the order in which
         // they should be evaluated. Current assumption is that
         // later ones are dependent on their predecessors.
@@ -268,18 +379,14 @@ namespace yask {
         GridPtrs outputGridPtrs;
         GridPtrMap outputGridMap;
 
-        // Non-grid parameters.
-        ParamPtrs paramPtrs;
-        ParamPtrMap paramMap;
-
-        // Some calculated sizes.
-        idx_t ofs_t=0, ofs_x=0, ofs_y=0, ofs_z=0; // Index offsets for this rank.
-        idx_t tot_x=0, tot_y=0, tot_z=0; // Total of rank domains over all ranks.
+        // Some calculated domain sizes.
+        IdxTuple rank_domain_offsets;       // Domain index offsets for this rank.
+        IdxTuple overall_domain_sizes;       // Total of rank domains over all ranks.
 
         // Maximum halos and skewing angles over all grids and
         // equations. Used for calculating worst-case minimum regions.
-        idx_t hx=0, hy=0, hz=0;                     // spatial halos.
-        idx_t angle_x=0, angle_y=0, angle_z=0; // temporal skewing angles.
+        IdxTuple max_halos;  // spatial halos.
+        IdxTuple angles;     // temporal skewing angles.
 
         // Various metrics calculated in prepare_solution().
         // 'rank_' prefix indicates for this rank.
@@ -299,29 +406,31 @@ namespace yask {
         
         // MPI settings.
         double mpi_time=0.0;          // time spent doing MPI.
-        MPIBufs::Neighbors my_neighbors;   // neighbor ranks.
 
         // Actual MPI buffers.
         // MPI buffers are tagged by their grid names.
         std::map<std::string, MPIBufs> mpiBufs;
         
         // Constructor.
-        StencilContext(KernelEnvPtr env, KernelSettingsPtr settings) :
+        StencilContext(KernelEnvPtr env,
+                       KernelSettingsPtr settings) :
             _ostr(&std::cout),
             _env(env),
-            _opts(settings)
+            _opts(settings),
+            _dims(settings->_dims)
         {
+            _mpiInfo = std::make_shared<MPIInfo>(settings->_dims);
             
-            // Set output to msg-rank.
+            rank_domain_offsets = _dims->_domain_dims;
+            overall_domain_sizes = _dims->_domain_dims;
+            max_halos = _dims->_domain_dims;
+            angles = _dims->_domain_dims;
+            
+            // Set output to msg-rank per settings.
             set_ostr();
 
             // Round-up any settings as needed at this point.
             _opts->adjustSettings(get_ostr(), false);
-            
-            // Init my_neighbors to indicate no neighbor.
-            int *p = (int *)my_neighbors;
-            for (int i = 0; i < MPIBufs::neighborhood_size; i++)
-                p[i] = MPI_PROC_NULL;
         }
 
         // Destructor.
@@ -338,7 +447,7 @@ namespace yask {
             return *_ostr;
         }
 
-        // Get access to settings.
+        // Access to settings.
         virtual KernelSettingsPtr get_settings() {
             assert(_opts);
             return _opts;
@@ -347,8 +456,16 @@ namespace yask {
             _opts = opts;
         }
 
+        // Access to dims and MPI info.
+        virtual DimsPtr get_dims() {
+            return _dims;
+        }
+        virtual MPIInfoPtr get_mpi_info() {
+            return _mpiInfo;
+        }
+
         // Add a new grid to the containers.
-        virtual void addGrid(RealVecGridPtr gp, bool is_output) {
+        virtual void addGrid(YkGridPtr gp, bool is_output) {
             gridPtrs.push_back(gp);
             gridMap[gp->get_name()] = gp;
             if (is_output) {
@@ -378,35 +495,29 @@ namespace yask {
         
         // Get total memory allocation required by grids.
         // Does not include MPI buffers.
+        // TODO: add MPI buffers.
         virtual size_t get_num_bytes() {
             size_t sz = 0;
             for (auto gp : gridPtrs)
                 if (gp)
-                    sz += gp->get_num_bytes() + _data_buf_pad;
-            for (auto pp : paramPtrs)
-                if (pp)
-                    sz += pp->get_num_bytes() + _data_buf_pad;
+                    sz += gp->get_num_storage_bytes() + _data_buf_pad;
             return sz;
         }
 
         // Init all grids & params by calling initFn.
-        virtual void initValues(std::function<void (RealVecGridPtr gp, 
-                                                    real_t seed)> realVecInitFn,
-                                std::function<void (RealGrid* gp,
+        virtual void initValues(std::function<void (YkGridPtr gp,
                                                     real_t seed)> realInitFn);
 
         // Init all grids & params to same value within grids,
         // but different for each grid.
         virtual void initSame() {
-            initValues([&](RealVecGridPtr gp, real_t seed){ gp->set_same(seed); },
-                       [&](RealGrid* gp, real_t seed){ gp->set_same(seed); });
+            initValues([&](YkGridPtr gp, real_t seed){ gp->set_all_elements_same(seed); });
         }
 
         // Init all grids & params to different values within grids,
         // and different for each grid.
         virtual void initDiff() {
-            initValues([&](RealVecGridPtr gp, real_t seed){ gp->set_diff(seed); },
-                       [&](RealGrid* gp, real_t seed){ gp->set_diff(seed); });
+            initValues([&](YkGridPtr gp, real_t seed){ gp->set_all_elements_in_seq(seed); });
         }
 
         // Init all grids & params.
@@ -478,10 +589,8 @@ namespace yask {
         // rank-domain loops; the actual begin_r* and end_r* values for the
         // region are derived from these.  TODO: create a public interface
         // w/a more logical index ordering.
-        virtual void calc_region(idx_t start_dt, idx_t stop_dt,
-                                 EqGroupSet* eqGroup_set,
-                                 idx_t start_dx, idx_t start_dy, idx_t start_dz,
-                                 idx_t stop_dx, idx_t stop_dy, idx_t stop_dz);
+        virtual void calc_region(EqGroupSet* eqGroup_set,
+                                 const ScanIndices& rank_idxs);
 
         // Exchange halo data needed by eq-group 'eg' at the given time.
         virtual void exchange_halos(idx_t start_dt, idx_t stop_dt, EqGroupBase& eg);
@@ -492,6 +601,8 @@ namespace yask {
         // Set the bounding-box around all eq groups.
         virtual void find_bounding_boxes();
 
+        virtual YkGridPtr newGrid(const std::string& name,
+                                  const std::vector<std::string>& dims);
 
         // APIs.
         // See yask_kernel_api.hpp.
@@ -509,7 +620,7 @@ namespace yask {
         virtual yk_grid_ptr get_grid(int n) {
             assert (n >= 0);
             assert (n < get_num_grids());
-            auto new_ptr = RealVecGridPtr(gridPtrs.at(n)); // shares ownership.
+            auto new_ptr = YkGridPtr(gridPtrs.at(n)); // shares ownership.
             return new_ptr;
         }
         virtual std::vector<yk_grid_ptr> get_grids() {
@@ -520,7 +631,9 @@ namespace yask {
         }
         virtual yk_grid_ptr
         new_grid(const std::string& name,
-                 const std::vector<std::string>& dims);
+                 const std::vector<std::string>& dims) {
+            return newGrid(name, dims);
+        }
         virtual yk_grid_ptr
         new_grid(const std::string& name,
                  const std::string& dim1 = "",
@@ -531,7 +644,7 @@ namespace yask {
                  const std::string& dim6 = "");
 
         virtual std::string get_step_dim_name() const {
-            return STEP_INDEX;
+            return _dims->_step_dim;
         }
         virtual int get_num_domain_dims() const {
 
@@ -639,24 +752,20 @@ namespace yask {
 
         // Determine whether indices are in [sub-]domain.
         virtual bool
-        is_in_valid_domain(idx_t t, idx_t x, idx_t y, idx_t z) =0;
+        is_in_valid_domain(const Indices& idxs) =0;
 
         // Calculate one scalar result at time t.
         virtual void
-        calc_scalar(idx_t t, idx_t x, idx_t y, idx_t z) =0;
+        calc_scalar(const Indices& idxs) =0;
 
         // Calculate results within a block.
         virtual void
-        calc_block(idx_t bt,
-                   idx_t begin_bx, idx_t begin_by, idx_t begin_bz,
-                   idx_t end_bx, idx_t end_by, idx_t end_bz);
+        calc_block(const ScanIndices& region_idxs);
 
         // Calculate one sub-block of results from begin to end-1 on each dimension.
         // In the 't' dimension, evaluation is at 'sbt' only.
         virtual void
-        calc_sub_block(idx_t sbt,
-                       idx_t begin_sbx, idx_t begin_sby, idx_t begin_sbz,
-                       idx_t end_sbx, idx_t end_sby, idx_t end_sbz);
+        calc_sub_block(const ScanIndices& block_idxs);
 
         // Calculate one sub-block of results in whole clusters from
         // 'begin_sb*' to 'end_sb*'-1 on each spatial dimension.  In the
@@ -666,10 +775,7 @@ namespace yask {
         // vectors, i.e., element indices dividied
         // by 'VLEN_*'.
         virtual void
-        calc_sub_block_of_clusters(idx_t begin_sbt,
-                                   idx_t begin_sbx, idx_t begin_sby, idx_t begin_sbz,
-                                   idx_t end_sbt,
-                                   idx_t end_sbx, idx_t end_sby, idx_t end_sbz) =0;
+        calc_sub_block_of_clusters(const ScanIndices& block_idxs);
     };
 
 } // yask namespace.

@@ -86,6 +86,8 @@ namespace yask {
                         auto pt1 = pt0.addElements(ptofs, false);
                         auto* p = _add_pt(*gpt0, pt1);
                         pt_map[_eq].insert(p);
+
+                        return true;
                     });
             }
 
@@ -597,6 +599,7 @@ namespace yask {
                         addEq(eq2, false);
                     }
                 }
+                return true;
             });
 
         // Ensure the expected number of equations now exist.

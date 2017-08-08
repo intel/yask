@@ -132,16 +132,28 @@ for my $arg (@ARGV) {
           # src stats.
           $fstats{$srcFile}++;
 
+          # instr suffix.
+          my $itype = 'non-FP';
+          if ($instr =~ /ss/) {
+            $itype = 'scalar SP';
+          }
+          elsif ($instr =~ /sd/) {
+            $itype = 'scalar DP';
+          }
+          elsif ($instr =~ /ps/) {
+            $itype = 'packed SP';
+          }
+          elsif ($instr =~ /pd/) {
+            $itype = 'packed DP';
+          }
+
           # reg stats.
           if ($args =~ /[xyz]mm(\d+)/) {
             $rstats{$1}++;
           }
           
           # arg stats. (dest is last arg.)
-          my $type = ($args =~ /zmm/) ? '512-bit SIMD' :
-            ($args =~ /ymm/) ? '128-bit SIMD' :
-            ($args =~ /xmm/) ? '64-bit SIMD' :
-            ($instr =~ /^v/) ? 'SIMD' : 'non-SIMD';
+          my $type = ($args =~ /[xyz]mm/) ? $& : 'non-SIMD';
           #$type .= ' "spill"' if $comment =~ /spill/;
           if ($args =~ /\(.*r[bs]p.*\).*,/) {
             $astats{"$type stack load"}++;
@@ -157,47 +169,47 @@ for my $arg (@ARGV) {
 
           # instr stats.
           if ($instr =~ /vbroadcast/) {
-            $istats{'SIMD broadcast'}++;
+            $istats{"$itype broadcast"}++;
           } elsif ($instr =~ /vp?align/) {
-            $istats{'SIMD align'}++;
+            $istats{"$itype align"}++;
           } elsif ($instr =~ /vperm\w*2/) {
-            $istats{'SIMD perm2'}++;
+            $istats{"$itype perm2"}++;
           } elsif ($instr =~ /vperm/) {
-            $istats{'SIMD perm'}++;
+            $istats{"$itype perm"}++;
           } elsif ($instr =~ /vfn?m[as]/) {
-            $istats{'SIMD FMA'}++;
-            $istats{'SIMD FLOP'} += 2;
+            $istats{"$itype FMA"}++;
+            $istats{"$itype FLOP"} += 2;
           } elsif ($instr =~ /vadd/) {
-            $istats{'SIMD add'}++;
-            $istats{'SIMD FLOP'}++;
+            $istats{"$itype add"}++;
+            $istats{"$itype FLOP"}++;
           } elsif ($instr =~ /vsub/) {
-            $istats{'SIMD sub'}++;
-            $istats{'SIMD FLOP'}++;
+            $istats{"$itype sub"}++;
+            $istats{"$itype FLOP"}++;
           } elsif ($instr =~ /vmul/) {
-            $istats{'SIMD mul'}++;
-            $istats{'SIMD FLOP'}++;
+            $istats{"$itype mul"}++;
+            $istats{"$itype FLOP"}++;
           } elsif ($instr =~ /vdiv/) {
-            $istats{'SIMD div'}++;
-            $istats{'SIMD FLOP'}++;
+            $istats{"$itype div"}++;
+            $istats{"$itype FLOP"}++;
           } elsif ($instr =~ /vrcp/) {
-            $istats{'SIMD rcp'}++;
-            $istats{'SIMD FLOP'}++;
+            $istats{"$itype rcp"}++;
+            $istats{"$itype FLOP"}++;
           } elsif ($instr =~ /gather/) {
-            $istats{'SIMD gather'}++;
+            $istats{"$itype gather"}++;
           } elsif ($instr =~ /scatter/) {
-            $istats{'SIMD scatter'}++;
+            $istats{"$itype scatter"}++;
           } elsif ($instr =~ /^vmov/) {
-            $istats{'SIMD move'}++;
+            $istats{"$itype move"}++;
           } elsif ($instr =~ /prefetch/) {
-            $istats{'prefetch'}++;
+            $istats{"prefetch"}++;
           } elsif ($instr =~ /^v/) {
-            $istats{'SIMD other'}++;
+            $istats{"$itype other"}++;
           } elsif ($instr =~ /^j/) {
-            $istats{'jump'}++;
+            $istats{"jump"}++;
           } elsif ($instr =~ /^cmp/) {
-            $istats{'compare'}++;
+            $istats{"compare"}++;
           } else {
-            $istats{'other instr'}++;
+            $istats{"other instr"}++;
           }
         }
 
@@ -217,7 +229,7 @@ for my $arg (@ARGV) {
             # 2nd pass: print results under certain conditions.
             if ($pass &&
                 $dist > $minInstrs &&
-                $istats{'SIMD FLOP'} &&
+                scalar keys %rstats &&
                 (!$targetLabel || $lab =~ /$targetLabel/) &&
                 (!$targetText || grep(/$targetText/, @lines))) {
               print "\nSIMD loop $lab:\n";

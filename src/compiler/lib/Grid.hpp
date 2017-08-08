@@ -328,9 +328,9 @@ namespace yask {
     
     // Stencil dimensions.
     struct Dimensions {
-        string _stepDim;         // step dimension.
-        IntTuple _domainDims;    // domain dims with zero value.
-        IntTuple _stencilDims;   // step and domain dims.
+        string _stepDim;         // step dimension, usually time.
+        IntTuple _domainDims;    // domain dims, usually spatial (with zero value).
+        IntTuple _stencilDims;   // both step and domain dims.
         IntTuple _miscDims;      // misc dims that are not the step or domain.
 
         // Following contain only domain dims.

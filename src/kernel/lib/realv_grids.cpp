@@ -30,61 +30,169 @@ using namespace std;
 
 namespace yask {
 
-    // APIs.
-    // TODO: remove hard-coded dimensions.
-#define GET_GRID_API(api_name, fn_prefix, t_ok, t_fn)                   \
-    idx_t RealVecGridBase::api_name(const string& dim) const {          \
-        if (t_ok && dim == "t" && got_t()) return t_fn;                 \
-        else if (dim == "x" && got_x()) return fn_prefix ## x();        \
-        else if (dim == "y" && got_x()) return fn_prefix ## y();        \
-        else if (dim == "z" && got_x()) return fn_prefix ## z();        \
-        else {                                                          \
-            cerr << "Error: " #api_name "(): bad dimension '" << dim << "'\n"; \
-            exit_yask(1);                                               \
-            return 0;                                                   \
-        }                                                               \
+    // Convenience function to format indices like
+    // "x=5, y=3".
+    std::string YkGridBase::makeIndexString(const Indices& idxs,
+                                            std::string separator,
+                                            std::string infix,
+                                            std::string prefix,
+                                            std::string suffix) const {
+        IdxTuple tmp = _ggb->get_dims(); // copy dim names from grid.
+        idxs.setTupleVals(tmp);         // set vals from idxs.
+        return tmp.makeDimValStr(separator, infix, prefix, suffix);
     }
-    GET_GRID_API(get_rank_domain_size, get_d, false, 0)
-    GET_GRID_API(get_first_rank_domain_index, get_first_, false, 0)
-    GET_GRID_API(get_last_rank_domain_index, get_last_, false, 0)
-    GET_GRID_API(get_first_rank_alloc_index, get_first_alloc_, false, 0)
-    GET_GRID_API(get_last_rank_alloc_index, get_last_alloc_, false, 0)
-    GET_GRID_API(get_halo_size, get_halo_, false, 0)
-    GET_GRID_API(get_extra_pad_size, get_extra_pad_, false, 0)
-    GET_GRID_API(get_pad_size, get_pad_, false, 0)
-    GET_GRID_API(get_alloc_size, get_alloc_, true, get_alloc_t())
-
-#define SET_GRID_API(api_name, fn_prefix, t_ok, t_fn)                   \
-    void RealVecGridBase::api_name(const string& dim, idx_t n) {        \
-        if (t_ok && dim == "t" && got_t()) t_fn;                        \
-        else if (dim == "x" && got_x()) fn_prefix ## x(n);              \
-        else if (dim == "y" && got_x()) fn_prefix ## y(n);              \
-        else if (dim == "z" && got_x()) fn_prefix ## z(n);              \
-        else {                                                          \
-            cerr << "Error: " #api_name "(): bad dimension '" << dim << "'\n"; \
-            exit_yask(1);                                               \
-        }                                                               \
+    
+    // Print one element to 'os' like
+    // "message: mygrid[x=4, y=7] = 3.14 at line 35".
+    void YkGridBase::printElem(std::ostream& os,
+                               const std::string& msg,
+                               const Indices& idxs,
+                               real_t e,
+                               int line,
+                               bool newline) const {
+        if (msg.length())
+            os << msg << ": ";
+        os << get_name() << "[" <<
+            makeIndexString(idxs) << "] = " << e;
+        if (line)
+            os << " at line " << line;
+        if (newline)
+            os << std::endl << std::flush;
     }
-    SET_GRID_API(set_min_pad_size, set_min_pad_, false, (void)0)
-    SET_GRID_API(set_pad_size, set_pad_, false, (void)0)
-    SET_GRID_API(set_halo_size, set_halo_, false, (void)0)
 
-    // Not using SET_GRID_API macro because *only* 't' is allowed.
-    void RealVecGridBase::set_alloc_size(const string& dim, idx_t tdim) {
+    // Lookup position by dim name.
+    // Return -1 or die if not found, depending on flag.
+    int YkGridBase::get_dim_posn(const std::string& dim,
+                                 bool die_on_failure,
+                                 const std::string& die_msg) const {
+        auto& dims = _ggb->get_dims();
+        int posn = dims.lookup_posn(dim);
+        if (posn < 0 && die_on_failure) {
+            cerr << "Error: " << die_msg << ": dimension '" <<
+                dim << "' not used in grid '" << get_name() << ".\n";
+            exit_yask(1);
+        }
+        return posn;
+    }
+        
+    // Checked resize: fails if mem different and already alloc'd.
+    // Otherwise, resizes the underlying generic grid.
+    void YkGridBase::resize() {
 
-        // TODO: remove hard-coded dimensions.
-        if (dim == "t" && got_t()) return set_alloc_t(tdim);
-        else {
-            cerr << "Error: set_alloc_size(): bad dim '" << dim << "'\n";
+#warning FIXME
+        // TODO: add padding for cache-line alignment.
+        
+#if SAVE_FOR_VEC_GRID
+        // Some rounding.
+        _pxv = CEIL_DIV(_px, VLEN_X);
+        _pyv = CEIL_DIV(_py, VLEN_Y);
+        _pzv = CEIL_DIV(_pz, VLEN_Z);
+        _px = _pxv * VLEN_X;
+        _py = _pyv * VLEN_Y;
+        _pz = _pzv * VLEN_Z;
+
+        // Alloc.
+        _axv = CEIL_DIV(_dx + 2 * _px, VLEN_X);
+        _ayv = CEIL_DIV(_dy + 2 * _py, VLEN_Y);
+        _azv = CEIL_DIV(_dz + 2 * _pz, VLEN_Z);
+#endif
+
+        // Original size.
+        size_t old_size = get_num_storage_bytes();
+        
+        // New allocation in each dim.
+        Indices allocs;
+        size_t new_size = 1;
+        for (int i = 0; i < get_num_dims(); i++) {
+            allocs[i] = _domains[i] + 2 * _pads[i];
+            new_size *= allocs[i];
+        }
+
+        // Attempt to change?
+        auto p = get_raw_storage_buffer();
+        if (p && old_size != new_size) {
+            cerr << "Error: attempt to change required grid size from " <<
+                makeByteStr(old_size) << " to " <<
+                makeByteStr(new_size) << " after storage has been allocated.\n";
+            exit_yask(1);
+        }
+
+        // Do the resize.
+        for (int i = 0; i < get_num_dims(); i++)
+            _ggb->set_dim_size(i, allocs[i]);
+    }
+    
+    // Check whether dim is of allowed type.
+    void YkGridBase::checkDimType(const std::string& dim,
+                              const std::string& fn_name,
+                              bool domain_ok, bool non_domain_ok) const {
+        if (!domain_ok && is_domain_dim(dim)) {
+            cerr << "Error in " << fn_name << "(): dimension '" <<
+                dim << "' is a domain dimension.\n";
+            exit_yask(1);
+        }
+        if (!non_domain_ok && !is_domain_dim(dim)) {
+            cerr << "Error in " << fn_name << "(): dimension '" <<
+                dim << "' is not a domain dimension.\n";
             exit_yask(1);
         }
     }
-    bool RealVecGridBase::is_storage_layout_identical(const yk_grid_ptr other) const {
-        auto op = dynamic_pointer_cast<RealVecGridBase>(other);
+    
+    // APIs to get info from vars.
+#define GET_GRID_API(api_name, expr, domain_ok, non_domain_ok)          \
+    idx_t YkGridBase::api_name(const string& dim) const {               \
+        int posn = get_dim_posn(dim, true, #api_name);                  \
+        checkDimType(dim, #api_name, domain_ok, non_domain_ok);         \
+        return expr;                                                    \
+    }
+    GET_GRID_API(get_rank_domain_size, _domains[posn], true, false)
+    GET_GRID_API(get_pad_size, _pads[posn], true, false)
+    GET_GRID_API(get_halo_size, _halos[posn], true, false)
+    GET_GRID_API(get_first_index, _offsets[posn], false, true)
+    GET_GRID_API(get_last_index, _offsets[posn] + _domains[posn] - 1, false, true)
+    GET_GRID_API(get_offset, _offsets[posn], true, true)
+    GET_GRID_API(get_first_rank_domain_index, _offsets[posn], true, false)
+    GET_GRID_API(get_last_rank_domain_index, _offsets[posn] + _domains[posn] - 1, true, false)
+    GET_GRID_API(get_first_rank_alloc_index, _offsets[posn] - _pads[posn], true, false)
+    GET_GRID_API(get_last_rank_alloc_index, _offsets[posn] + _domains[posn] + _pads[posn] - 1, true, false)
+    GET_GRID_API(get_extra_pad_size, _pads[posn] - _halos[posn], true, false)
+    GET_GRID_API(get_alloc_size, _ggb->get_dim_size(posn), true, true)
+
+    // APIs to set vars.
+#define COMMA ,
+#define SET_GRID_API(api_name, expr, domain_ok, non_domain_ok)          \
+    void YkGridBase::api_name(const string& dim, idx_t n) {             \
+        int posn = get_dim_posn(dim, true, #api_name);                  \
+        checkDimType(dim, #api_name, domain_ok, non_domain_ok);         \
+        expr;                                                           \
+    }
+    SET_GRID_API(set_domain_size, _domains[posn] = n; resize(), true, false)
+    SET_GRID_API(set_halo_size, _halos[posn] = n; set_pad_size(dim, _pads[posn]), true, false)
+    SET_GRID_API(set_min_pad_size, if (n < _pads[posn]) set_pad_size(dim, n), true, false)
+    SET_GRID_API(set_extra_pad_size, set_pad_size(dim COMMA _halos[posn] + n), true, false)
+    SET_GRID_API(set_pad_size, _pads[posn] = std::max(n COMMA _halos[posn]); resize(), true, false)
+    SET_GRID_API(set_offset, _offsets[posn] = n, true, true)
+    SET_GRID_API(set_first_index, _offsets[posn] = n, false, true)
+#undef COMMA
+    
+    // Not using SET_GRID_API macro because only non-domain vars are allowed.
+    void YkGridBase::set_alloc_size(const string& dim, idx_t n) {
+        int posn = get_dim_posn(dim, true, "set_alloc_size");
+        if (is_domain_dim(dim)) {
+            cerr << "Error: set_alloc_size: dimension '" <<
+                dim << "' is a domain dimension.\n";
+            exit_yask(1);
+        }
+        _ggb->set_dim_size(posn, n);
+        resize();
+    }
+    
+    bool YkGridBase::is_storage_layout_identical(const yk_grid_ptr other) const {
+        auto op = dynamic_pointer_cast<YkGridBase>(other);
         assert(op);
 
         // Same size?
-        if (get_num_bytes() != op->get_num_bytes())
+        if (get_num_storage_bytes() != op->get_num_storage_bytes())
             return false;
 
         // Same dims?
@@ -94,11 +202,11 @@ namespace yask {
             auto dname = get_dim_name(i);
             if (dname != op->get_dim_name(i))
                 return false;
+
+            // Same sizes?
             if (get_alloc_size(dname) != op->get_alloc_size(dname))
                 return false;
-
-            // TODO: remove hard-coded step-dim name.
-            if (dname != "t") {
+            if (is_domain_dim(dname)) {
                 if (get_rank_domain_size(dname) != op->get_rank_domain_size(dname))
                     return false;
                 if (get_pad_size(dname) != op->get_pad_size(dname))
@@ -107,15 +215,15 @@ namespace yask {
         }
         return true;
     }
-    void RealVecGridBase::share_storage(yk_grid_ptr source) {
-        auto sp = dynamic_pointer_cast<RealVecGridBase>(source);
+
+    void YkGridBase::share_storage(yk_grid_ptr source) {
+        auto sp = dynamic_pointer_cast<YkGridBase>(source);
         assert(sp);
 
-        if (!sp->get_storage()) {
+        if (!sp->get_raw_storage_buffer()) {
             cerr << "Error: share_storage() called without source storage allocated.\n";
             exit_yask(1);
         }
-        release_storage();
 
         // NB: requirements to successful share_storage() is not as strict as
         // is_storage_layout_identical(). See note on pad & halo below and API docs.
@@ -131,8 +239,7 @@ namespace yask {
                 exit_yask(1);
             }
 
-            // TODO: remove hard-coded step-dim name.
-            if (dname == "t") {
+            if (!is_domain_dim(dname)) {
                 auto tas = get_alloc_size(dname);
                 auto sas = sp->get_alloc_size(dname);
                 if (tas != sas) {
@@ -143,7 +250,7 @@ namespace yask {
                 }
             }
 
-            // Not step-dim.
+            // Domain dim.
             else {
                 auto tdom = get_rank_domain_size(dname);
                 auto sdom = sp->get_rank_domain_size(dname);
@@ -155,7 +262,7 @@ namespace yask {
                 }
 
                 // Halo and pad sizes don't have to be the same.
-                // Requirement is that halo of target fits in pad of source.
+                // Requirement is that halo of target fits inside of pad of source.
                 auto thalo = get_halo_size(dname);
                 auto spad = sp->get_pad_size(dname);
                 if (thalo > spad) {
@@ -171,237 +278,74 @@ namespace yask {
         }
 
         // Copy data.
+        release_storage();
         if (!share_data(sp.get())) {
             cerr << "Error: unexpected failure in data sharing.\n";
             exit_yask(1);
         }
     }
 
-    double RealVecGridBase::get_element(idx_t dim1_index, idx_t dim2_index,
-                                        idx_t dim3_index, idx_t dim4_index,
-                                        idx_t dim5_index, idx_t dim6_index) const {
-        GridIndices idx = {dim1_index, dim2_index, dim3_index};
-        if (got_t())
-            idx.push_back(dim4_index);
-        return get_element(idx);
-    }
-    idx_t RealVecGridBase::set_element(double val,
-                                       idx_t dim1_index, idx_t dim2_index,
-                                       idx_t dim3_index, idx_t dim4_index,
-                                       idx_t dim5_index, idx_t dim6_index) {
-        GridIndices idx = {dim1_index, dim2_index, dim3_index};
-        if (got_t())
-            idx.push_back(dim4_index);
-        return set_element(val, idx, false);
-    }
+    // Check for equality.
+    // Return number of mismatches greater than epsilon.
+    idx_t YkGridBase::compare(const YkGridBase* ref,
+                              real_t epsilon,
+                              int maxPrint,
+                              std::ostream& os) const {
+        if (!ref)
+            return get_num_storage_elements();
 
-    // Use the 'halo' loop for reading and writing elements.
-#define SET_HALO_LOOP_VARS(first, last)         \
-    int i = 0;                                  \
-    idx_t begin_ht = 0, end_ht = 1;             \
-    if (got_t()) {                              \
-        begin_ht = first[i];                    \
-        end_ht = last[i++] + 1;                 \
-    }                                           \
-    idx_t begin_hx = first[i];                  \
-    idx_t end_hx = last[i++] + 1;               \
-    idx_t begin_hy = first[i];                  \
-    idx_t end_hy = last[i++] + 1;               \
-    idx_t begin_hz = first[i];                  \
-    idx_t end_hz = last[i++] + 1;               \
-    const idx_t step_hx = 1;                    \
-    const idx_t step_hy = 1;                    \
-    const idx_t step_hz = 1;                    \
-    const idx_t group_size_hx = 1;              \
-    const idx_t group_size_hy = 1;              \
-    const idx_t group_size_hz = 1;              \
-    idx_t num_ht = end_ht - begin_ht;           \
-    idx_t num_hx = end_hx - begin_hx;           \
-    idx_t num_hy = end_hy - begin_hy;           \
-    idx_t num_hz = end_hz - begin_hz;                           \
-    idx_t num_htxyz = num_ht * num_hx * num_hy * num_hz;        \
-    Layout_1234 buf_layout(num_ht, num_hx, num_hy, num_hz)
-    
-    double RealVecGridBase::get_element(const GridIndices& indices) const {
-        if (!get_storage()) {
-            cerr << "Error: call to 'get_element' with no data allocated for grid '" <<
-                get_name() << "'.\n";
-            exit_yask(1);
-        }
-        checkIndices(indices, "get_element", true);
-        SET_HALO_LOOP_VARS(indices, indices);
-        real_t val = readElem_TXYZ(begin_ht, begin_hx, begin_hy, begin_hz, __LINE__);
-        return double(val);
-    }
-    idx_t RealVecGridBase::set_element(double val,
-                                       const GridIndices& indices,
-                                       bool strict_indices) {
-        idx_t nup = 0;
-        if (get_storage() &&
-            checkIndices(indices, "set_element", strict_indices)) {
-            SET_HALO_LOOP_VARS(indices, indices);
-            writeElem_TXYZ(real_t(val),
-                           begin_ht, begin_hx, begin_hy, begin_hz, __LINE__);
-            nup++;
-            set_updated(false);
-        }
-        return nup;
-    }
-    
-    idx_t RealVecGridBase::get_elements_in_slice(void* buffer_ptr,
-                                                 const GridIndices& first_indices,
-                                                 const GridIndices& last_indices) const {
-        if (!get_storage()) {
-            cerr << "Error: call to 'get_elements_in_slice' with no data allocated for grid '" <<
-                get_name() << "'.\n";
-            exit_yask(1);
-        }
-        checkIndices(first_indices, "get_elements_in_slice", true);
-        checkIndices(last_indices, "get_elements_in_slice", true);
-
-        SET_HALO_LOOP_VARS(first_indices, last_indices);
-
-        // Define calc func inside OMP loop.
-        // 'index_h*' vars are 0-based indices for each dim.
-        // Ignoring 'stop_h*' vars because all 'step_h*' vars are 1.
-#define calc_halo(ht,                                                   \
-                  start_hx, start_hy, start_hz,                         \
-                  stop_hx, stop_hy, stop_hz)  do {                      \
-            real_t v = readElem_TXYZ(ht, start_hx, start_hy, start_hz, __LINE__); \
-            idx_t bi = buf_layout.layout(index_ht, index_hx, index_hy, index_hz); \
-            ((real_t*)buffer_ptr)[bi] = v;                            \
-        } while(0)
-
-        // Outer time loop.
-        for (idx_t ht = begin_ht; ht < end_ht; ht++) {
-            idx_t index_ht = ht - begin_ht;
+        // Dims & sizes same?
+        if (_ggb->are_dims_and_sizes_same(*ref->_ggb))
+            return get_num_storage_elements();
         
-            // Include auto-generated loops to invoke calc_halo() from
-            // begin_h* to end_h* by step_h*.
-#include "yask_halo_loops.hpp"
-#undef calc_halo
-        }
-        return num_htxyz;
-    }
-    idx_t RealVecGridBase::set_elements_in_slice_same(double val,
-                                                      const GridIndices& first_indices,
-                                                      const GridIndices& last_indices,
-                                                      bool strict_indices) {
-        if (!get_storage())
+        // Quick check for errors, assuming same layout.
+        // TODO: check layout.
+        idx_t errs = _ggb->count_diffs(ref->_ggb, epsilon);
+        if (!errs)
             return 0;
         
-        // 'Fixed' copy of indices.
-        GridIndices first, last;
-        checkIndices(first_indices, "set_elements_in_slice_same", strict_indices, &first);
-        checkIndices(last_indices, "set_elements_in_slice_same", strict_indices, &last);
+        // Run detailed comparison if any errors found.
+        errs = 0;
+        auto& allocs = _ggb->get_dims();
 
-        SET_HALO_LOOP_VARS(first, last);
-        real_t v = real_t(val);
-        
-        // Define calc func inside OMP loop.
-        // 'index_h*' vars are 0-based indices for each dim.
-        // Ignoring 'stop_h*' vars because all 'step_h*' vars are 1.
-#define calc_halo(ht,                                                   \
-                  start_hx, start_hy, start_hz,                         \
-                  stop_hx, stop_hy, stop_hz)  do {                      \
-            writeElem_TXYZ(v, ht, start_hx, start_hy, start_hz, __LINE__); \
-        } while(0)
+        // This will loop over the entire allocation.
+        // Indices of 'pt' will be relative to allocation.
+        allocs.visitAllPoints([&](const IdxTuple& pt) {
+                auto te = readElem(pt, __LINE__);
+                auto re = ref->readElem(pt, __LINE__);
+                if (!within_tolerance(te, re, epsilon)) {
+                    errs++;
+                    if (errs < maxPrint) {
 
-        // Outer time loop.
-        for (idx_t ht = begin_ht; ht < end_ht; ht++) {
-            idx_t index_ht = ht - begin_ht;
-        
-            // Include auto-generated loops to invoke calc_halo() from
-            // begin_h* to end_h* by step_h*.
-#include "yask_halo_loops.hpp"
-#undef calc_halo
-        }
-        return num_htxyz;
+                        // Adjust alloc indices to overall indices.
+                        IdxTuple opt;
+                        for (int i = 0; i < pt.getNumDims(); i++) {
+                            auto dname = pt.getDimName(i);
+                            auto val = pt.getVal(i);
+                            opt.addDimBack(dname, _offsets[i] - _pads[i] + val);
+                        }
+                        os << "** mismatch at " << get_name() <<
+                            "(" << opt.makeDimValStr() << "): " <<
+                            te << " != " << re << std::endl;
+                    }
+                    else if (errs == maxPrint)
+                        os << "** Additional errors not printed." << std::endl;
+                    else {
+                        // errs > maxPrint.
+                        return false;
+                    }
+                }
+                return true;
+            });
+        return errs;
     }
-    idx_t RealVecGridBase::set_elements_in_slice(const void* buffer_ptr,
-                                                 const GridIndices& first_indices,
-                                                 const GridIndices& last_indices) {
-        if (!get_storage())
-            return 0;
-        
-        checkIndices(first_indices, "get_elements_in_slice", true);
-        checkIndices(last_indices, "get_elements_in_slice", true);
 
-        SET_HALO_LOOP_VARS(first_indices, last_indices);
-
-        // Define calc func inside OMP loop.
-        // 'index_h*' vars are 0-based indices for each dim.
-        // Ignoring 'stop_h*' vars because all 'step_h*' vars are 1.
-#define calc_halo(ht,                                                   \
-                  start_hx, start_hy, start_hz,                         \
-                  stop_hx, stop_hy, stop_hz)  do {                      \
-            idx_t bi = buf_layout.layout(index_ht, index_hx, index_hy, index_hz); \
-            real_t v = ((real_t*)buffer_ptr)[bi];                       \
-            writeElem_TXYZ(v, ht, start_hx, start_hy, start_hz, __LINE__); \
-        } while(0)
-
-        // Outer time loop.
-        for (idx_t ht = begin_ht; ht < end_ht; ht++) {
-            idx_t index_ht = ht - begin_ht;
-        
-            // Include auto-generated loops to invoke calc_halo() from
-            // begin_h* to end_h* by step_h*.
-#include "yask_halo_loops.hpp"
-#undef calc_halo
-        }
-        return num_htxyz;
-    }
-    
-    // Checked resize: fails if mem different and already alloc'd.
-    void RealVecGridBase::resize() {
-
-        // Some checking.
-        assert(_tdim >= 1);
-        assert(_dx >= 1);
-        assert(_dy >= 1);
-        assert(_dz >= 1);
-        
-        // Some rounding.
-        _pxv = CEIL_DIV(_px, VLEN_X);
-        _pyv = CEIL_DIV(_py, VLEN_Y);
-        _pzv = CEIL_DIV(_pz, VLEN_Z);
-        _px = _pxv * VLEN_X;
-        _py = _pyv * VLEN_Y;
-        _pz = _pzv * VLEN_Z;
-
-        // Alloc.
-        _axv = CEIL_DIV(_dx + 2 * _px, VLEN_X);
-        _ayv = CEIL_DIV(_dy + 2 * _py, VLEN_Y);
-        _azv = CEIL_DIV(_dz + 2 * _pz, VLEN_Z);
-        
-        // Just resize grid if not alloc'd.
-        auto p = get_storage();
-        if (!p)
-            resize_g();
-            
-        else {
-            // Original size.
-            size_t nb1 = get_num_bytes();
-        
-            // Resize the underlying grid.
-            resize_g();
-
-            // Changed?
-            size_t nb2 = get_num_bytes();
-            if (nb1 != nb2) {
-                cerr << "Error: attempt to change required grid size from " <<
-                    printWithPow2Multiplier(nb1) << "B to " <<
-                    printWithPow2Multiplier(nb2) << "B after storage has been allocated.\n";
-                exit_yask(1);
-            }
-        }
-    }
-    
     // Make sure indices are in range.
-    bool RealVecGridBase::checkIndices(const GridIndices& indices,
-                                       const string& fn,
-                                       bool strict_indices,
-                                       GridIndices* fixed_indices) const {
+    // Side-effect: If fixed_indices is not NULL, set them to in-range if out-of-range.
+    bool YkGridBase::checkIndices(const GridIndices& indices,
+                                  const string& fn,
+                                  bool strict_indices, // die if out-of-range.
+                                  GridIndices* fixed_indices) const {
         if (indices.size() != size_t(get_num_dims())) {
             cerr << "Error: '" << fn << "' called with " << indices.size() <<
                 " indices instead of " << get_num_dims() << ".\n";
@@ -415,26 +359,194 @@ namespace yask {
             if (fixed_indices)
                 fixed_indices->push_back(idx);
             auto dname = get_dim_name(i);
-            if (dname == "t") continue; // any time index is ok.
+
+            // Any step index is ok because it wraps around.
+            if (is_step_dim(dname))
+                continue;
+
+            // Within first..last indices?
             auto first_ok = get_first_rank_alloc_index(dname);
             auto last_ok = get_last_rank_alloc_index(dname);
             if (idx < first_ok || idx > last_ok) {
                 if (strict_indices) {
-                    cerr << "Error: '" << fn << "' index in dim '" << dname <<
+                    cerr << "Error: " << fn << ": index in dim '" << dname <<
                         "' is " << idx << ", which is not in [" << first_ok <<
                         "..." << last_ok << "].\n";
                     exit_yask(1);
                 }
-                if (fixed_indices && idx < first_ok)
-                    fixed_indices->at(i) = first_ok;
-                if (fixed_indices && idx > last_ok)
-                    fixed_indices->at(i) = last_ok;
+                if (fixed_indices) {
+                    if (idx < first_ok)
+                        fixed_indices->at(i) = first_ok;
+                    if (idx > last_ok)
+                        fixed_indices->at(i) = last_ok;
+                }
                 ok = false;
             }
         }
         return ok;
     }
+
+    // API get/set.
+    double YkGridBase::get_element(const GridIndices& indices) const {
+        if (!is_storage_allocated()) {
+            cerr << "Error: call to 'get_element' with no data allocated for grid '" <<
+                get_name() << "'.\n";
+            exit_yask(1);
+        }
+        checkIndices(indices, "get_element", true);
+        real_t val = readElem(indices, __LINE__);
+        return double(val);
+    }
+    idx_t YkGridBase::set_element(double val,
+                                  const GridIndices& indices,
+                                  bool strict_indices) {
+        idx_t nup = 0;
+        if (get_raw_storage_buffer() &&
+            checkIndices(indices, "set_element", strict_indices)) {
+            writeElem(real_t(val), indices, __LINE__);
+            nup++;
+            set_updated(false);
+        }
+        return nup;
+    }
+    
+    // Convenience API wrappers w/up to 6 dims.
+    double YkGridBase::get_element(idx_t dim1_index, idx_t dim2_index,
+                                   idx_t dim3_index, idx_t dim4_index,
+                                   idx_t dim5_index, idx_t dim6_index) const {
+        GridIndices idx;
+        int nd = get_num_dims();
+        if (nd >= 1)
+            idx.push_back(dim1_index);
+        if (nd >= 2)
+            idx.push_back(dim2_index);
+        if (nd >= 3)
+            idx.push_back(dim3_index);
+        if (nd >= 4)
+            idx.push_back(dim4_index);
+        if (nd >= 5)
+            idx.push_back(dim5_index);
+        if (nd >= 6)
+            idx.push_back(dim6_index);
+        return get_element(idx);
+    }
+    idx_t YkGridBase::set_element(double val,
+                                  idx_t dim1_index, idx_t dim2_index,
+                                  idx_t dim3_index, idx_t dim4_index,
+                                  idx_t dim5_index, idx_t dim6_index) {
+        GridIndices idx;
+        int nd = get_num_dims();
+        if (nd >= 1)
+            idx.push_back(dim1_index);
+        if (nd >= 2)
+            idx.push_back(dim2_index);
+        if (nd >= 3)
+            idx.push_back(dim3_index);
+        if (nd >= 4)
+            idx.push_back(dim4_index);
+        if (nd >= 5)
+            idx.push_back(dim5_index);
+        if (nd >= 6)
+            idx.push_back(dim6_index);
+        return set_element(val, idx, false);
+    }
+
+    idx_t YkGridBase::get_elements_in_slice(void* buffer_ptr,
+                                            const GridIndices& first_indices,
+                                            const GridIndices& last_indices) const {
+        if (!is_storage_allocated()) {
+            cerr << "Error: call to 'get_elements_in_slice' with no data allocated for grid '" <<
+                get_name() << "'.\n";
+            exit_yask(1);
+        }
+        checkIndices(first_indices, "get_elements_in_slice", true);
+        checkIndices(last_indices, "get_elements_in_slice", true);
+
+        // Find ranges.
+        IdxTuple firstTuple = _ggb->get_dims();
+        firstTuple.setVals(first_indices);
+        IdxTuple lastTuple = _ggb->get_dims();
+        lastTuple.setVals(last_indices);
+        IdxTuple numElemsTuple = lastTuple.addElements(1).subElements(firstTuple);
+
+        // Visit points in slice.
+        // TODO: parallelize.
+        idx_t i = 0;
+        numElemsTuple.visitAllPoints([&](const IdxTuple& ofs) {
+                IdxTuple pt = firstTuple.addElements(ofs);
+                real_t val = readElem(pt, __LINE__);
+                ((real_t*)buffer_ptr)[i] = val;
+                i++;
+                return true;    // keep going.
+            });
+        return i;
+    }
+    idx_t YkGridBase::set_elements_in_slice_same(double val,
+                                                 const GridIndices& first_indices,
+                                                 const GridIndices& last_indices,
+                                                 bool strict_indices) {
+        if (!is_storage_allocated())
+            return 0;
         
+        // 'Fixed' copy of indices.
+        GridIndices first, last;
+        checkIndices(first_indices, "set_elements_in_slice_same", strict_indices, &first);
+        checkIndices(last_indices, "set_elements_in_slice_same", strict_indices, &last);
+
+        // Find ranges.
+        IdxTuple firstTuple = _ggb->get_dims();
+        firstTuple.setVals(first_indices);
+        IdxTuple lastTuple = _ggb->get_dims();
+        lastTuple.setVals(last_indices);
+        IdxTuple numElemsTuple = lastTuple.addElements(1).subElements(firstTuple);
+
+        // Visit points in slice.
+        // TODO: parallelize.
+        idx_t i = 0;
+        numElemsTuple.visitAllPoints([&](const IdxTuple& ofs) {
+                IdxTuple pt = firstTuple.addElements(ofs);
+                writeElem(real_t(val), pt, __LINE__);
+                i++;
+                return true;    // keep going.
+            });
+        return i;
+    }
+    idx_t YkGridBase::set_elements_in_slice(const void* buffer_ptr,
+                                            const GridIndices& first_indices,
+                                            const GridIndices& last_indices) {
+        if (!is_storage_allocated())
+            return 0;
+        
+        checkIndices(first_indices, "get_elements_in_slice", true);
+        checkIndices(last_indices, "get_elements_in_slice", true);
+
+        // Find ranges.
+        IdxTuple firstTuple = _ggb->get_dims();
+        firstTuple.setVals(first_indices);
+        IdxTuple lastTuple = _ggb->get_dims();
+        lastTuple.setVals(last_indices);
+        IdxTuple numElemsTuple = lastTuple.addElements(1).subElements(firstTuple);
+
+        // Visit points in slice.
+        // TODO: parallelize.
+        idx_t i = 0;
+        numElemsTuple.visitAllPoints([&](const IdxTuple& ofs) {
+                IdxTuple pt = firstTuple.addElements(ofs);
+                real_t val = ((real_t*)buffer_ptr)[i];
+                writeElem(val, pt, __LINE__);
+                i++;
+                return true;    // keep going.
+            });
+        return i;
+    }
+
+#warning FIXME
+#if 0
+    // Print some info.
+    void YkGridBase::print_info(std::ostream& os) {
+        _gp->print_info(os, "SIMD vector");
+    }
+
     // Initialize memory to incrementing values based on val.
     void RealVecGridBase::set_diff(real_t val) {
 
@@ -444,80 +556,6 @@ namespace yask {
             rn[i] = real_t(i * VLEN + 1) * val / VLEN;
         
         _gp->set_diff(rn);
-    }
-
-    // Print some info.
-    void RealVecGridBase::print_info(std::ostream& os) {
-        _gp->print_info(os, "SIMD vector");
-    }
-    
-    // Check for equality.
-    // Return number of mismatches greater than epsilon.
-    idx_t RealVecGridBase::compare(const RealVecGridBase& ref,
-                                   real_t epsilon,
-                                   int maxPrint,
-                                   std::ostream& os) const {
-        real_vec_t ev;
-        ev = epsilon;           // broadcast to real_vec_t elements.
-
-        // Quick check for errors.
-        idx_t errs = _gp->count_diffs(*ref._gp, epsilon);
-
-        // Run detailed comparison if any errors found.
-        if (errs > 0 && maxPrint) {
-
-            // Need to recount errors by element.
-            errs = 0;
-            
-            for (int ti = 0; ti <= get_alloc_t(); ti++) {
-                for (int xi = get_first_x(); xi <= get_last_x(); xi++) {
-                    for (int yi = get_first_y(); yi <= get_last_y(); yi++) {
-                        for (int zi = get_first_z(); zi <= get_last_z(); zi++) {
-
-                            real_t te = readElem_TXYZ(ti, xi, yi, zi, __LINE__);
-                            real_t re = ref.readElem_TXYZ(ti, xi, yi, zi, __LINE__);
-
-                            if (!within_tolerance(te, re, epsilon)) {
-                                errs++;
-                                if (errs < maxPrint) {
-                                    printElem_TXYZ(os, "** mismatch",
-                                                    ti, xi, yi, zi,
-                                                    te, 0, false);
-                                    printElem_TXYZ(os, " != reference",
-                                                    ti, xi, yi, zi,
-                                                    re, 0, true);
-                                }
-                                else if (errs == maxPrint)
-                                    os << "** Additional errors not printed." << std::endl;
-                            }
-                        }
-                    }
-                }
-            }
-        }
-        return errs;
-    }
-
-    // Print one element.
-    void  RealVecGridBase::printElem_TXYZ(std::ostream& os, const std::string& m,
-                                           idx_t t, idx_t x, idx_t y, idx_t z,
-                                           real_t e,
-                                           int line,
-                                           bool newline) const {
-
-        // TODO: make commas look ok w/o z dim.
-        if (m.length())
-            os << m << ": ";
-        os << get_name() << "[";
-        if (got_t()) os << "t=" << t << ", ";
-        if (got_x()) os << "x=" << x << ", ";
-        if (got_y()) os << "y=" << y << ", ";
-        if (got_z()) os << "z=" << z;
-        os << "] = " << e;
-        if (line)
-            os << " at line " << line;
-        if (newline)
-            os << std::endl << std::flush;
     }
 
     // Print one vector at *vector* offset.
@@ -552,4 +590,5 @@ namespace yask {
             }
         }
     }
+#endif
 }

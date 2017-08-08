@@ -154,7 +154,7 @@ namespace yask {
         /**
            The domain dimensions are those over which the stencil is 
            applied in each step.
-           Does *not* include the step dimension.
+           Does *not* include the step dimension or any miscellaneous dimensions.
            @returns Number of dimensions that define the problem domain.
         */
         virtual int
@@ -197,8 +197,7 @@ namespace yask {
         virtual void
         set_rank_domain_size(const std::string& dim
                              /**< [in] Name of dimension to set.  Must be one of
-                                the names from
-                                yk_solution::get_domain_dim_name(). */,
+                                the names from get_domain_dim_names(). */,
                              idx_t size /**< [in] Points in the domain in this `dim`. */ ) =0;
 
         /// Get the domain size for this rank.
@@ -208,8 +207,7 @@ namespace yask {
         virtual idx_t
         get_rank_domain_size(const std::string& dim
                              /**< [in] Name of dimension to get.  Must be one of
-                                the names from
-                                yk_solution::get_domain_dim_name(). */) const =0;
+                                the names from get_domain_dim_names(). */) const =0;
 
         /// Set the minimum amount of grid padding for all grids.
         /**
@@ -236,8 +234,7 @@ namespace yask {
         virtual void
         set_min_pad_size(const std::string& dim
                          /**< [in] Name of dimension to set.  Must
-                            be one of the names from
-                            yk_solution::get_domain_dim_name(). */,
+                            be one of the names from get_domain_dim_names(). */,
                          idx_t size
                          /**< [in] Points in this `dim` applied
                             to both sides of the domain. */ ) =0;
@@ -249,8 +246,7 @@ namespace yask {
         virtual idx_t
         get_min_pad_size(const std::string& dim
                          /**< [in] Name of dimension to get.  Must be one of
-                            the names from
-                            yk_solution::get_domain_dim_name(). */) const =0;
+                            the names from get_domain_dim_names(). */) const =0;
 
         /// Set the block size in the given dimension.
         /**
@@ -269,8 +265,7 @@ namespace yask {
         virtual void
         set_block_size(const std::string& dim
                        /**< [in] Name of dimension to set.  Must be one of
-                          the names from
-                          yk_solution::get_domain_dim_name(). */,
+                          the names from get_domain_dim_names(). */,
                        idx_t size /**< [in] Points in a block in this `dim`. */ ) =0;
 
         /// Get the block size.
@@ -282,8 +277,7 @@ namespace yask {
         virtual idx_t
         get_block_size(const std::string& dim
                         /**< [in] Name of dimension to get.  Must be one of
-                           the names from
-                           yk_solution::get_domain_dim_name(). */) const =0;
+                           the names from get_domain_dim_names(). */) const =0;
 
         /// Set the number of MPI ranks in the given dimension.
         /**
@@ -301,8 +295,7 @@ namespace yask {
         virtual void
         set_num_ranks(const std::string& dim
                       /**< [in] Name of dimension to set.  Must be one of
-                         the names from
-                         yk_solution::get_domain_dim_name(). */,
+                         the names from get_domain_dim_names(). */,
                       idx_t num /**< [in] Number of ranks in `dim`. */ ) =0;
 
         /// Get the number of MPI ranks in the given dimension.
@@ -312,8 +305,7 @@ namespace yask {
         virtual idx_t
         get_num_ranks(const std::string& dim
                       /**< [in] Name of dimension to get.  Must be one of
-                         the names from
-                         yk_solution::get_domain_dim_name(). */) const =0;
+                         the names from get_domain_dim_names(). */) const =0;
 
         /// Get the rank index in the specified dimension.
         /**
@@ -323,8 +315,8 @@ namespace yask {
         */
         virtual idx_t
         get_rank_index(const std::string& dim
-                       /**< [in] Name of dimension from get_domain_dim_name().
-                          Cannot be the step dimension. */ ) const =0;
+                       /**< [in] Name of dimension to get.  Must be one of
+                         the names from get_domain_dim_names(). */ ) const =0;
 
         /// Get the number of grids in the solution.
         /**
@@ -358,18 +350,20 @@ namespace yask {
            However, a grid may be created explicitly via this function
            in order to use it for purposes other than by the
            pre-defined stencils within the current solution.
-           A new grid's domain size will be the same as that returned by
-           get_rank_domain_size().
-           A new grid's initial padding size will be the same as that returned by
+           For each dimension of the grid that is returned by
+           yk_solution::get_domain_dim_names(),
+           the new grid's domain size will be the same as that returned by
+           get_rank_domain_size(), and its
+           initial padding size will be the same as that returned by
            get_min_pad_size().
            After creating a new grid, you can increase its padding
-           sizes via yk_grid::set_min_pad_size().
-           A new grid contains only the meta-data for the grid; data storage
+           sizes in the domain dimensions via yk_grid::set_min_pad_size().
+           For other dimensions, you can set its allocation via
+           yk_grid::set_alloc().
+           @note A new grid contains only the meta-data for the grid; data storage
            is not yet allocated.
            Storage may be allocated in any of the methods listed
            in the "Detailed Description" for \ref yk_grid.
-           @warning Only grids supported at this time are those with
-           dimensions 'x, y, z,' and 't, x, y, z'.
            @returns Pointer to the new grid.
         */
         virtual yk_grid_ptr
@@ -383,23 +377,8 @@ namespace yask {
 
         /// **[Advanced]** Add a new grid to the solution.
         /**
-           This is typically not needed because grids are usually pre-defined
-           by the solution itself via the stencil compiler.
-           However, a grid may be created explicitly via this function
-           in order to use it for purposes other than by the
-           pre-defined stencils within the current solution.
-           A new grid's domain size will be the same as that returned by
-           get_rank_domain_size().
-           A new grid's initial padding size will be the same as that returned by
-           get_min_pad_size().
-           After creating a new grid, you can increase its padding
-           sizes via yk_grid::set_min_pad_size().
-           A new grid contains only the meta-data for the grid; data storage
-           is not yet allocated.
-           Storage may be allocated in any of the methods listed
-           in the "Detailed Description" for \ref yk_grid.
-           @warning Only grids supported at this time are those with
-           dimensions 'x, y, z,' and 't, x, y, z'.
+           See documentation for the version with a vector of dimension names
+           as a parameter.
            @returns Pointer to the new grid.
         */
         virtual yk_grid_ptr
@@ -436,14 +415,14 @@ namespace yask {
            If there is only one MPI rank, this is typically zero (0).
            If there is more than one MPI rank, the value depends
            on the the rank's position within the overall problem domain.
-           This function should be called only *after* calling prepare_solution()
+           @warning This function should be called only *after* calling prepare_solution()
            because prepare_solution() assigns this rank's position in the problem domain.
            @returns First domain index in this rank. 
         */
         virtual idx_t
         get_first_rank_domain_index(const std::string& dim
-                                    /**< [in] Name of dimension from get_domain_dim_name().
-                                       Cannot be the step dimension. */ ) const =0;
+                                    /**< [in] Name of dimension to get.  Must be one of
+                                       the names from get_domain_dim_names(). */ ) const =0;
 
         /// Get the last index of the sub-domain in this rank the specified dimension.
         /**
@@ -460,8 +439,8 @@ namespace yask {
         */
         virtual idx_t
         get_last_rank_domain_index(const std::string& dim
-                                   /**< [in] Name of dimension from get_domain_dim_name().
-                                      Cannot be the step dimension. */ ) const =0;
+                                   /**< [in] Name of dimension to get.  Must be one of
+                                      the names from get_domain_dim_names(). */ ) const =0;
 
         /// Get the overall problem size in the specified dimension.
         /**
@@ -475,8 +454,8 @@ namespace yask {
         */
         virtual idx_t
         get_overall_domain_size(const std::string& dim
-                                /**< [in] Name of dimension from get_domain_dim_name().
-                                   Cannot be the step dimension. */ ) const =0;
+                                /**< [in] Name of dimension to get.  Must be one of
+                                   the names from get_domain_dim_names(). */ ) const =0;
 
         /// Run the stencil solution for one step.
         /**
@@ -523,8 +502,14 @@ namespace yask {
        Typically, access to each grid is obtained via yk_solution::get_grid().
        You may also use yk_solution::new_grid() if you need a grid that is not part
        of the pre-defined solution.
+
+       Each dimension of a grid is one of the following:
+       - A *domain* dimension as identified via yk_solution:get_domain_dim_names().
+       - The *step* dimension, typically time ("t").
+       - A *miscellaneous* dimension, which is any dimension that is not a domain or step dimension.
        
-       In each dimension, grid sizes include the following components:
+       In each domain dimension,
+       grid sizes include the following components:
        - The *domain* is the points to which the stencils are applied.
        - The *padding* is the points outside the domain on either side
        and includes the halo.
@@ -534,24 +519,47 @@ namespace yask {
        either side and thus does not include the halo.
        - The *allocation* includes the domain and the padding.
        
-       All sizes are expressed in numbers of elements, which may be 4-byte (single precision)
-       or 8-byte (double precision) floating-point values as returned by
-       yk_solution::get_element_bytes().
-       
-       Visually, in each of the non-step dimensions, these sizes are related as follows
-       in each MPI rank:
+       Domain sizes specified via yk_solution::set_rank_domain_size() apply to each MPI rank.
+       Visually, in each of the domain dimensions, these sizes are related as follows
+       in each rank:
        <table>
        <tr><td>extra padding <td>halo <td rowspan="2">domain <td>halo <td>extra padding
        <tr><td colspan="2"><center>padding</center> <td colspan="2"><center>padding</center>
        <tr><td colspan="5"><center>allocation</center>
        </table>
-       In the step dimension (usually "t"), there is no fixed domain size.
+
+       If MPI is not enabled, a rank's domain is equivalent to the entire problem size.
+       If MPI is enabled, the domains of the ranks are logically abutted to create the 
+       overall problem domain in each dimension:
+       <table>
+       <tr><td>extra padding of rank A <td>halo of rank A <td>domain of rank A <td>domain of rank B
+         <td>... <td>domain of rank Z <td>halo of rank Z <td>extra padding of rank Z
+       <tr><td colspan="2"><center>padding of rank A</center>
+         <td colspan="4"><center>overall problem domain</center>
+         <td colspan="2"><center>padding of rank Z</center>
+       </table>
+       The intermediate halos and paddings also exist, but are not shown in the above diagram.
+       The halos overlap the domains of adjacent ranks.
+       For example, the left halo of rank B in the diagram would overlap the domain of rank A.
+       Data in these overlapped regions is exchanged as needed during stencil application
+       to maintain a consistent values as if there was only one rank.
+
+       In the step dimension, there is no fixed domain size.
        But there is an allocation size, which is the number of values in the step
        dimension that are stored in memory. 
        Step-dimension indices "wrap-around" within this allocation to reuse memory.
        For example, if the step dimension is "t", and the t-dimension allocation size is 3,
        then t=-2, t=0, t=3, t=6, ..., t=303, etc. would all alias to the same spatial values in memory.
 
+       In each miscellaneous dimension, there is only an allocation size,
+       and there is no wrap-around as above.
+       Each index must be between zero and one less than the its allocation size in that dimension.
+
+       All sizes are expressed in numbers of elements.
+       Each element may be a 4-byte (single precision)
+       or 8-byte (double precision) floating-point value as returned by
+       yk_solution::get_element_bytes().
+       
        Initially, a grid is not assigned any allocated storage.
        This is done to allow modification of domain, padding, and other allocation sizes
        before allocation.
@@ -565,24 +573,7 @@ namespace yask {
        - **[Advanced]** Storage for a specific grid may be shared with another grid with
        existing storage via yk_grid::share_storage().
        
-       Domain sizes specified via yk_solution::set_rank_domain_size() apply to each process or *rank*.
-       If MPI is not enabled, a rank's domain is the entire problem size.
-       If MPI is enabled, the domains of the ranks are logically abutted to create the 
-       overall problem domain in each dimension:
-       <table>
-       <tr><td>extra padding of rank A <td>halo of rank A <td>domain of rank A <td>domain of rank B
-         <td>... <td>domain of rank Z <td>halo of rank Z <td>extra padding of rank Z
-       <tr><td colspan="2"><center>padding of rank A</center>
-         <td colspan="4"><center>overall problem domain</center>
-         <td colspan="2"><center>padding of rank Z</center>
-       </table>
-       The intermediate halos and paddings also exist, but are not shown in the above diagram.
-       They overlap the domains of adjacent ranks.
-       For example, the left halo of rank B in the diagram would overlap the domain of rank A.
-       Data in these overlapped regions is exchanged as needed during stencil application
-       to maintain a consistent values as if there was only one rank.
-
-       @note The index arguments to the \ref yk_grid functions that require indices
+       @note The domain index arguments to the \ref yk_grid functions that require indices
        are *always* relative to the overall problem; they are *not* relative to the current rank.
        The first and last overall-problem index that lies within a rank can be
        retrieved via yk_solution::get_first_rank_domain_index() and 
@@ -607,15 +598,15 @@ namespace yask {
 
         /// Get the number of dimensions used in this grid.
         /**
-           Includes step dimension if it is a dimension of this grid.
-           May be different than value returned from yk_solution::get_num_domain_dims().
-           @returns Number of dimensions created via yc_solution::new_grid().
+           This may include domain, step, and/or miscellaneous dimensions.
+           @returns Number of dimensions created via yc_solution::new_grid()
+           or yk_solution::new_grid().
         */
         virtual int get_num_dims() const =0;
 
         /// Get the name of the specified dimension in this grid.
         /**
-           Includes step dimension if it is a dimension of this grid.
+           This may include domain, step, and/or miscellaneous dimensions.
            @note Domain dimensions are not necessarily in the same order as
            those returned via yk_solution::get_domain_dim_name().
            @returns String containing name of dimension created via new_grid().
@@ -626,8 +617,7 @@ namespace yask {
 
         /// Get all the dimensions in this grid.
         /**
-           Includes step dimension if it is a dimension of this grid.
-           May be different than values returned from yk_solution::get_domain_dim_names().
+           This may include domain, step, and/or miscellaneous dimensions.
            @returns List of names of all the dimensions.
         */
         virtual std::vector<std::string>
@@ -649,7 +639,7 @@ namespace yask {
         virtual idx_t
         get_halo_size(const std::string& dim
                       /**< [in] Name of dimension from get_dim_name().
-                         Cannot be the step dimension. */ ) const =0;
+                         Must be a domain dimension. */ ) const =0;
         
         /// **[Advanced]** Set the halo size in the specified dimension.
         /**
@@ -665,7 +655,7 @@ namespace yask {
         virtual void
         set_halo_size(const std::string& dim
                       /**< [in] Name of dimension from get_dim_name().
-                         Cannot be the step dimension. */,
+                         Must be a domain dimension. */,
                       idx_t size
                       /**< [in] Number of points in the halo. */ ) =0;
 
@@ -684,7 +674,7 @@ namespace yask {
         virtual idx_t
         get_pad_size(const std::string& dim
                      /**< [in] Name of dimension from get_dim_name().
-                        Cannot be the step dimension. */ ) const =0;
+                         Must be a domain dimension. */ ) const =0;
 
         /// Get the extra padding in the specified dimension.
         /**
@@ -696,7 +686,7 @@ namespace yask {
         virtual idx_t
         get_extra_pad_size(const std::string& dim
                            /**< [in] Name of dimension from get_dim_name().
-                              Cannot be the step dimension. */ ) const =0;
+                              Must be a domain dimension. */ ) const =0;
 
         /// Set the padding in the specified dimension.
         /**
@@ -722,7 +712,7 @@ namespace yask {
         virtual void
         set_min_pad_size(const std::string& dim
                          /**< [in] Name of dimension from get_dim_name().
-                            Cannot be the step dimension. */,
+                            Must be a domain dimension. */,
                          idx_t size
                          /**< [in] Minimum number of points to allocate beyond the domain size. */ ) =0;
         
@@ -752,7 +742,7 @@ namespace yask {
         virtual void
         set_alloc_size(const std::string& dim
                        /**< [in] Name of dimension from get_dim_name().
-                          Must be the step dimension. */,
+                          Must *not* be a domain dimension. */,
                        idx_t size /**< [in] Number of points to allocate. */ ) =0;
 
         /// Get the first accessible index in this grid in this rank in the specified dimension.
@@ -764,7 +754,7 @@ namespace yask {
         virtual idx_t
         get_first_rank_alloc_index(const std::string& dim
                                    /**< [in] Name of dimension from get_domain_dim_name().
-                                      Cannot be the step dimension. */ ) const =0;
+                                      Must be a domain dimension. */ ) const =0;
 
         /// Get the last accessible index in this grid in this rank in the specified dimension.
         /**
@@ -775,7 +765,7 @@ namespace yask {
         virtual idx_t
         get_last_rank_alloc_index(const std::string& dim
                                   /**< [in] Name of dimension from get_domain_dim_name().
-                                     Cannot be the step dimension. */ ) const =0;
+                                      Must be a domain dimension. */ ) const =0;
 
         /// Get the value of one grid point.
         /**
@@ -997,8 +987,8 @@ namespace yask {
            - Number of dimensions.
            - Name of each dimension, in the same order.
            - Allocation size in each dimension.
-           - Rank domain size in each dimension.
-           - Padding size in each dimension.
+           - Rank domain size in each domain dimension.
+           - Padding size in each domain dimension.
 
            The following do not have to be identical:
            - Halo size.
@@ -1019,13 +1009,13 @@ namespace yask {
            - The source grid must already have storage allocated.
            - The two grids must have the same dimensions in the same order.
            - The two grids must have the same domain sizes in all dimensions.
-           - The two grids must have the same step-dimension allocation.
+           - The two grids must have the same allocation in non-domain dimensions.
            - The halo size of this grid must be less than or equal to the padding
-           size of the source grid in all dimensions. In other words, the halo
+           size of the source grid in all domain dimensions. In other words, the halo
            of this grid must be able to "fit inside" the source padding.
 
            Any pre-existing storage will be released before allocation as via release_storage().
-           The padding size of this grid will be set to that of the source grid.
+           The padding size(s) of this grid will be set to that of the source grid.
            After calling share_storage(), changes in one grid via set_all_elements()
            or set_element() will be visible in the other grid.
 

@@ -119,8 +119,13 @@ namespace yask {
 
     // Some utility functions.
     extern double getTimeInSecs();
-    extern std::string printWithPow2Multiplier(double num);
-    extern std::string printWithPow10Multiplier(double num);
+
+    // Return num with SI multiplier and "iB" suffix,
+    // e.g., 41.2KiB.
+    extern std::string makeByteStr(size_t nbytes);
+
+    // Return num with SI multiplier, e.g., 4.23M.
+    extern std::string makeNumStr(double num);
 
     // Find sum of rank_vals over all ranks.
     extern idx_t sumOverRanks(idx_t rank_val, MPI_Comm comm);
@@ -133,56 +138,6 @@ namespace yask {
     // Print a message if rounding is done and do_print is set.
     extern idx_t roundUp(std::ostream& os, idx_t val, idx_t mult,
                          const std::string& name, bool do_print);
-
-    // Fix inner_size to be a multiple of mult.
-    // Set defaults and print info if 'finalize'.
-    // Return number of inner_sized things.
-    extern idx_t findNumSubsets(std::ostream& os,
-                                idx_t& inner_size, const std::string& inner_name,
-                                idx_t outer_size, const std::string& outer_name,
-                                idx_t mult,
-                                const std::string& dim,
-                                bool finalize);
-    inline idx_t findNumSubBlocksInBlock(std::ostream& os, idx_t& sbsize, idx_t bsize,
-                                         idx_t mult, const std::string& dim,
-                                         bool finalize) {
-        return findNumSubsets(os, sbsize, "sub-block", bsize, "block", mult, dim, finalize);
-    }
-    inline idx_t findNumSubBlocksInSubBlockGroup(std::ostream& os, idx_t& sbsize, idx_t sbgsize,
-                                                 idx_t mult, const std::string& dim,
-                                                 bool finalize) {
-        return findNumSubsets(os, sbsize, "sub-block", sbgsize, "sub-block-group", mult, dim, finalize);
-    }
-    inline idx_t findNumSubBlockGroupsInBlock(std::ostream& os, idx_t& sbgsize, idx_t bsize,
-                                              idx_t mult, const std::string& dim,
-                                              bool finalize) {
-        return findNumSubsets(os, sbgsize, "sub-block-group", bsize, "block", mult, dim, finalize);
-    }
-    inline idx_t findNumBlocksInDomain(std::ostream& os, idx_t& bsize, idx_t dsize,
-                                       idx_t mult, const std::string& dim,
-                                       bool finalize) {
-        return findNumSubsets(os, bsize, "block", dsize, "rank-domain", mult, dim, finalize);
-    }
-    inline idx_t findNumBlocksInRegion(std::ostream& os, idx_t& bsize, idx_t rsize,
-                                       idx_t mult, const std::string& dim,
-                                       bool finalize) {
-        return findNumSubsets(os, bsize, "block", rsize, "region", mult, dim, finalize);
-    }
-    inline idx_t findNumBlocksInBlockGroup(std::ostream& os, idx_t& bsize, idx_t gsize,
-                                      idx_t mult, const std::string& dim,
-                                           bool finalize) {
-        return findNumSubsets(os, bsize, "block", gsize, "block-group", mult, dim, finalize);
-    }
-    inline idx_t findNumBlockGroupsInRegion(std::ostream& os, idx_t& gsize, idx_t rsize,
-                               idx_t mult, const std::string& dim,
-                                            bool finalize) {
-        return findNumSubsets(os, gsize, "block-group", rsize, "region", mult, dim, finalize);
-    }
-    inline idx_t findNumRegionsInDomain(std::ostream& os, idx_t& rsize, idx_t dsize,
-                                idx_t mult, const std::string& dim,
-                                        bool finalize) {
-        return findNumSubsets(os, rsize, "region", dsize, "rank-domain", mult, dim, finalize);
-    }
 
     // Helpers for shared and aligned malloc and free.
     // Use like this:
@@ -304,15 +259,6 @@ namespace yask {
                            std::vector<idx_t*> vals) :
                 OptionBase(name, help_msg), _vals(vals) {
                 _current_value_str = "Current values = ";
-            }
-            MultiIdxOption(const std::string& name,
-                      const std::string& help_msg,
-                      idx_t& val0, idx_t& val1, idx_t& val2) :
-                OptionBase(name, help_msg) {
-                _current_value_str = "Current values = ";
-                _vals.push_back(&val0);
-                _vals.push_back(&val1);
-                _vals.push_back(&val2);
             }
 
             virtual void print_help(std::ostream& os,
