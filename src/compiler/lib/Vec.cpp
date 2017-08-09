@@ -35,14 +35,14 @@ namespace yask {
         // Nothing to do if this grid-point is not vectorizable.
         if (gp->getVecType() == GridPoint::VEC_NONE) {
 #ifdef DEBUG_VV
-            cout << "cannot vectorize scalar-access " << gp->makeQuotedStr() << endl;
+            cout << " //** cannot vectorize scalar-access " << gp->makeQuotedStr() << endl;
 #endif
             _scalarPoints.insert(*gp);
             return;
         }
         else if (gp->getVecType() == GridPoint::VEC_PARTIAL) {
 #ifdef DEBUG_VV
-            cout << "cannot vectorize non-standard-access " << gp->makeQuotedStr() << endl;
+            cout << " //** cannot vectorize non-standard-access " << gp->makeQuotedStr() << endl;
 #endif
             _nonVecPoints.insert(*gp);
             return;
@@ -58,7 +58,7 @@ namespace yask {
 
         // Vec of points to calculate.
 #ifdef DEBUG_VV
-        cout << "vec @ " << gp->makeQuotedStr() << " => " << endl;
+        cout << " //** vec @ " << gp->makeQuotedStr() << " => " << endl;
 #endif
 
         // Loop through all points in the vector fold.
@@ -89,7 +89,7 @@ namespace yask {
                     vecLocation.addDimBack(dname, vecIndex * len);
                 }
 #ifdef DEBUG_VV
-                cout << " element @ " << offsets.makeDimValStr() << " => " <<
+                cout << "  //** element @ " << offsets.makeDimValStr() << " => " <<
                     " vec-location @ " << vecLocation.makeDimValStr() <<
                     " & vec-offsets @ " << vecOffsets.makeDimValStr() <<
                     " => " << endl;
@@ -104,7 +104,7 @@ namespace yask {
                 assert(alignedElem >= 0);
                 assert(alignedElem < _vlen);
 #ifdef DEBUG_VV
-                cout << "  general-" << gp->makeStr() << "[" << pelem << "] = aligned-" <<
+                cout << "   //** general-" << gp->makeStr() << "[" << pelem << "] = aligned-" <<
                     alignedVec.makeStr() << "[" << alignedElem << "]" << endl;
 #endif
 

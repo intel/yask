@@ -92,8 +92,7 @@ namespace yask {
 
     // Create the intermediate data for printing.
     void StencilSolution::analyze_solution(int vlen,
-                                           bool is_folding_efficient,
-                                           ostream& os) {
+                                           bool is_folding_efficient) {
 
         // Call the stencil 'define' method to create ASTs.
         // ASTs can also be created via the APIs.
@@ -101,7 +100,7 @@ namespace yask {
 
         // Find all the stencil dimensions from the grids.
         // Create the final folds and clusters from the cmd-line options.
-        _dims.setDims(_grids, _settings, vlen, is_folding_efficient, os);
+        _dims.setDims(_grids, _settings, vlen, is_folding_efficient, *_dos);
 
         // Determine which grids can be folded.
         _grids.setFolding(_dims);
@@ -111,36 +110,36 @@ namespace yask {
         
         // Check for illegal dependencies within equations for scalar size.
         if (_settings._find_deps) {
-            os << "Checking equation(s) with scalar operations...\n"
+            *_dos << "Checking equation(s) with scalar operations...\n"
                 " If this fails, review stencil equation(s) for illegal dependencies.\n";
-            _eqs.checkDeps(_dims._scalar, _dims._stepDim);
+            _eqs.checkDeps(_dims._scalar, _dims._stepDim, *_dos);
         }
 
         // Check for illegal dependencies within equations for vector size.
         if (_settings._find_deps) {
-            os << "Checking equation(s) with folded-vector operations...\n"
+            *_dos << "Checking equation(s) with folded-vector operations...\n"
                 " If this fails, the fold dimensions are not compatible with all equations.\n";
-            _eqs.checkDeps(_dims._fold, _dims._stepDim);
+            _eqs.checkDeps(_dims._fold, _dims._stepDim, *_dos);
         }
 
         // Check for illegal dependencies within equations for cluster size and
         // also create equation groups based on legal dependencies.
-        os << "Checking equation(s) with clusters of vectors...\n"
+        *_dos << "Checking equation(s) with clusters of vectors...\n"
             " If this fails, the cluster dimensions are not compatible with all equations.\n";
         _eqGroups.set_basename_default(_settings._eq_group_basename_default);
         _eqGroups.set_dims(_dims);
         _eqGroups.makeEqGroups(_eqs, _settings._eqGroupTargets,
                                _dims._clusterPts, _settings._find_deps);
-        _eqGroups.optimizeEqGroups(_settings, "scalar & vector", false, os);
+        _eqGroups.optimizeEqGroups(_settings, "scalar & vector", false, *_dos);
 
         // Make a copy of each equation at each cluster offset.
         // We will use these for inter-cluster optimizations and code generation.
-        os << "Constructing cluster of equations containing " <<
+        *_dos << "Constructing cluster of equations containing " <<
             _dims._clusterMults.product() << " vector(s)...\n";
         _clusterEqGroups = _eqGroups;
         _clusterEqGroups.replicateEqsInCluster(_dims);
         if (_settings._doOptCluster)
-            _clusterEqGroups.optimizeEqGroups(_settings, "cluster", true, cout);
+            _clusterEqGroups.optimizeEqGroups(_settings, "cluster", true, *_dos);
     }
 
     // Format in given format-type.
@@ -179,7 +178,7 @@ namespace yask {
         analyze_solution(vlen, is_folding_efficient, os);
 
         // Create the output.
-        os << "Generating '" << format_type << "' output...\n";
+        *_dos << "Generating '" << format_type << "' output...\n";
         string res = printer->format();
         delete printer;
 

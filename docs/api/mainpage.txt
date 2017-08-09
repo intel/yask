@@ -146,7 +146,7 @@ this distinguishes them from the 'yk_'-prefixed types used in the "YASK kernel" 
   This should be 4 or 8.
 - Optionally specify the vector-folding and/or vector-clustering via 
   yc_solution::set_fold_len() and/or yc_solution::set_cluster_mult().
-- Format the equations for additional processing via yc_solution::format() or yc_solution::write().
+- Format the equations for additional processing via yc_solution::format().
 
 @section yk YASK Stencil Kernel API
 

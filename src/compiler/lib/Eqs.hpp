@@ -160,13 +160,15 @@ namespace yask {
         // set, save dependencies between eqs.
         virtual void findDeps(IntTuple& pts,
                               const string& stepDim,
-                              EqDepMap* eq_deps);
+                              EqDepMap* eq_deps,
+                              std::ostream& os);
 
         // Check for illegal dependencies in all equations.
         // Exit with error if any found.
         virtual void checkDeps(IntTuple& pts,
-                               const string& stepDim) {
-            findDeps(pts, stepDim, NULL);
+                               const string& stepDim,
+                               std::ostream& os) {
+            findDeps(pts, stepDim, NULL, os);
         }
 
         // Determine which grid points can be vectorized.
@@ -331,11 +333,12 @@ namespace yask {
         void makeEqGroups(Eqs& eqs,
                           const string& targets,
                           IntTuple& pts,
-                          bool find_deps) {
+                          bool find_deps,
+                          std::ostream& os) {
             EqDepMap eq_deps;
             if (find_deps)
-                eqs.findDeps(pts, _dims->_stepDim, &eq_deps);
-            makeEqGroups(eqs, targets, eq_deps);
+                eqs.findDeps(pts, _dims->_stepDim, &eq_deps, os);
+            makeEqGroups(eqs, targets, eq_deps, os);
         }
 
         virtual const Grids& getOutputGrids() const {

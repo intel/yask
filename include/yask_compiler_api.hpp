@@ -34,6 +34,7 @@ IN THE SOFTWARE.
 #include <string>
 #include <vector>
 #include <memory>
+#include "yask_common_api.hpp"
 
 namespace yask {
 
@@ -94,6 +95,12 @@ namespace yask {
     class yc_solution {
     public:
         virtual ~yc_solution() {}
+
+        /// Set object to receive debug output.
+        virtual void
+        set_debug_output(yask_output_ptr debug
+                         /**< [out] Pointer to object to receive debug output. 
+                            See \ref yask_output_factory. */ ) =0;
 
         /// Get the name of the solution.
         /**
@@ -266,7 +273,7 @@ namespace yask {
         virtual void
         clear_clustering() =0;
         
-        /// Format the current equation(s).
+        /// Format the current equation(s) and write to given output object.
         /** Currently supported format types:
             Type    | Output
             --------|--------
@@ -279,22 +286,18 @@ namespace yask {
             dot-lite| DOT-language description of grid accesses only.
             pseudo  | Human-readable pseudo-code (for debug).
 
+            Progress text will be written to the output stream set via set_debug_output().
+
             @warning *Side effect:* Applies optimizations to the equation(s), so some pointers
             to nodes in the original equations may refer to modified nodes or nodes
             that have been optimized away after calling format().
-            @returns String containing formatted output. 
-            The YASK or DOT strings are typically then written to a file.
          */
-        virtual std::string
-        format(const std::string& format_type /**< [in] Name of type from above table. */,
-               bool debug = false /**< [in] Print diagnostic info to stdout. */ ) =0;
-
-        /// Format the current equation(s) and write to given file.
-        /** See format() for supported format types and side-effects. */
         virtual void
-        write(const std::string& filename /**< [in] Name of output file. */,
-              const std::string& format_type /**< [in] Name of type from format() table. */,
-              bool debug = false /**< [in] Print diagnostic info to stdout. */ ) =0;
+        format(const std::string& format_type
+               /**< [in] Name of type from above table. */,
+               yask_output_ptr output
+               /**< [out] Pointer to object to receive formatted output. 
+                  See \ref yask_output_factory. */) =0;
     };
 
     /// A compile-time grid.

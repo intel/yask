@@ -33,13 +33,16 @@ using namespace yask;
 
 int main() {
 
-    // Compiler 'bootstrap' factory.
+    // Compiler 'bootstrap' factories.
     yc_factory cfac;
+    yask_output_factory ofac;
 
     // Create a new stencil solution.
     auto soln = cfac.new_solution("api_cxx_test");
     soln->set_step_dim_name("t");
     soln->set_domain_dim_names("x", "y", "z");
+    auto stdos = ofac.new_stdout_output();
+    soln->set_debug_output(stdos);
     
     // Create a grid var.
     auto g1 = soln->new_grid("test_grid", "t", "x", "y", "z");
@@ -80,14 +83,14 @@ int main() {
     soln->set_element_bytes(4);
 
     // Generate DOT output.
-    string dot_file = "yc-api-test-cxx.dot";
-    soln->write(dot_file, "dot", true);
-    cout << "DOT-format written to '" << dot_file << "'.\n";
+    auto dot_file = ofac.new_file_output("yc-api-test-cxx.dot");
+    soln->format("dot", dot_file);
+    cout << "DOT-format written to '" << dot_file->get_filename() << "'.\n";
 
     // Generate YASK output.
-    string yask_file = "yc-api-test-cxx.hpp";
-    soln->write(yask_file, "avx", true);
-    cout << "YASK-format written to '" << yask_file << "'.\n";
+    auto yask_file = ofac.new_file_output("yc-api-test-cxx.hpp");
+    soln->format("avx", yask_file);
+    cout << "YASK-format written to '" << yask_file->get_filename() << "'.\n";
     
     cout << "End of YASK compiler API test.\n";
     return 0;

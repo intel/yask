@@ -328,7 +328,15 @@ namespace yask {
 
         TRACE_MSG("run_solution: " << begin.makeDimValStr() << " ... " <<
                   end.subElements(1).makeDimValStr());
-
+        if (!bb_valid) {
+            cerr << "Error: attempt to run solution without preparing it first.\n";
+            exit_yask(1);
+        }
+        if (bb_size < 1) {
+            TRACE_MSG("nothing to do in solution");
+            return;
+        }
+        
 #ifdef MODEL_CACHE
         ostream& os = get_ostr();
         if (context.my_rank != context.msg_rank)

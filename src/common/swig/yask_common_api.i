@@ -23,46 +23,14 @@ IN THE SOFTWARE.
 
 *****************************************************************************/
 
-///////// API for the YASK stencil compiler. ////////////
+///////// Common APIs for the YASK stencil compiler and kernel. ////////////
 
 // This file uses SWIG markup for API generation.
+// Only declarations are here, no actual definitions.
 
-%module YC_MODULE
-
-// See http://www.swig.org/Doc3.0/Library.html
-%include <std_string.i>
-%include <std_shared_ptr.i>
-%include <std_vector.i>
-
-// Shared API.
-%include "yask_common_api.i"
-
-// Must declare shared_ptrs for the entire expr_node hierarchy!
-%shared_ptr(yask::yc_solution)
-%shared_ptr(yask::yc_grid)
-%shared_ptr(yask::yc_expr_node)
-%shared_ptr(yask::yc_index_node)
-%shared_ptr(yask::yc_equation_node)
-%shared_ptr(yask::yc_number_node)
-%shared_ptr(yask::yc_grid_point_node)
-%shared_ptr(yask::yc_const_number_node)
-%shared_ptr(yask::yc_negate_node)
-%shared_ptr(yask::yc_commutative_number_node)
-%shared_ptr(yask::yc_add_node)
-%shared_ptr(yask::yc_multiply_node)
-%shared_ptr(yask::yc_subtract_node)
-%shared_ptr(yask::yc_divide_node)
-%shared_ptr(yask::yc_bool_node)
-
-%{
-#define SWIG_FILE_WITH_INIT
-#include "yask_compiler_api.hpp"
-%}
-
-// All vector types used in API.
-%template(vector_int) std::vector<int>;
-%template(vector_str) std::vector<std::string>;
-%template(vector_grid) std::vector<yask::yc_grid*>;
-    
-%include "yask_common_api.hpp"
-%include "yask_compiler_api.hpp"
+// Must declare shared_ptrs.
+%shared_ptr(yask::yask_output)
+%shared_ptr(yask::yask_file_output)
+%shared_ptr(yask::yask_string_output)
+%shared_ptr(yask::yask_stdout_output)
+%shared_ptr(yask::yask_null_output)

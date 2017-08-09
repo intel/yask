@@ -606,6 +606,9 @@ namespace yask {
 
         // APIs.
         // See yask_kernel_api.hpp.
+        virtual void set_debug_output(yask_output_ptr debug) {
+            set_ostr(&debug->get_ostream());
+        }
         virtual const std::string& get_name() const {
             return name;
         }

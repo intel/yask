@@ -35,6 +35,7 @@ IN THE SOFTWARE.
 #include <vector>
 #include <memory>
 #include <cinttypes>
+#include "yask_common_api.hpp"
 
 namespace yask {
 
@@ -128,6 +129,12 @@ namespace yask {
     class yk_solution {
     public:
         virtual ~yk_solution() {}
+
+        /// Set object to receive debug output.
+        virtual void
+        set_debug_output(yask_output_ptr debug
+                         /**< [out] Pointer to object to receive debug output. 
+                            See \ref yask_output_factory. */ ) =0;
 
         /// Get the name of the solution.
         /**

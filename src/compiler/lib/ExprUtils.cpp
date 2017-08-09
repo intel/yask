@@ -74,13 +74,13 @@ namespace yask {
     // Else, return false.
     bool CseVisitor::findMatchTo(NumExprPtr& ep) {
 #if DEBUG_CSE >= 1
-        cout << "- checking '" << ep->makeStr() << "'@" << ep << endl;
+        cout << " //** checking '" << ep->makeStr() << "'@" << ep << endl;
 #endif
         
         // Already visited this node?
         if (_seen.count(ep)) {
 #if DEBUG_CSE >= 2
-            cout << " - already seen '" << ep->makeStr() << "'@" << ep << endl;
+            cout << "  //** already seen '" << ep->makeStr() << "'@" << ep << endl;
 #endif
             return true;
         }
@@ -88,14 +88,14 @@ namespace yask {
         // Loop through nodes already seen.
         for (auto& oep : _seen) {
 #if DEBUG_CSE >= 3
-            cout << " - comparing '" << ep->makeStr() << "'@" << ep <<
+            cout << "  //** comparing '" << ep->makeStr() << "'@" << ep <<
                 " to '" << oep->makeStr() << "'@" << oep << endl;
 #endif
             
             // Match?
             if (ep->isSame(oep.get())) {
 #if DEBUG_CSE >= 1
-                cout << "  - found match: '" << ep->makeStr() << "'@" << ep <<
+                cout << "   //** found match: '" << ep->makeStr() << "'@" << ep <<
                     " to '" << oep->makeStr() << "'@" << oep << endl;
 #endif
                 
@@ -108,7 +108,7 @@ namespace yask {
 
         // Mark as seen.
 #if DEBUG_CSE >= 2
-        cout << " - no match to " << ep->makeStr() << endl;
+        cout << "  //** no match to " << ep->makeStr() << endl;
 #endif
         _seen.insert(ep);
         return false;

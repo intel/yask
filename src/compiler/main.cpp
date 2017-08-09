@@ -312,7 +312,13 @@ int main(int argc, const char* argv[]) {
         auto& type = i.first;
         auto& fname = i.second;
 
-        stencilSoln->write(fname, type, true);
+        yask_output_factory ofac;
+        yask_output_ptr os;
+        if (fname == "-")
+            os = ofac.new_stdout_output();
+        else
+            os = ofac.new_file_output(fname);
+        stencilSoln->format(type, os);
     }
 
     cout << "YASK Stencil Compiler done.\n";

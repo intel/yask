@@ -139,7 +139,7 @@ namespace yask {
         // Visits are considered unique by address, not semantic equivalence.
         virtual bool alreadyVisited(Expr* ep) {
 #if DEBUG_TRACKING >= 1
-            cout << "- tracking '" << ep->makeStr() << "'@" << ep << endl;
+            cout << " //** tracking '" << ep->makeStr() << "'@" << ep << endl;
 #endif
             bool seen = _counts.count(ep) > 0;
             _counts[ep]++;
@@ -272,7 +272,6 @@ namespace yask {
             if (alreadyVisited(ce)) return;
             _numNodes++;
             auto& ops = ce->getOps();
-            //cout << "counting ce " << ce << ":"; for (auto& ep : ops) cout << ' ' << ep; cout << endl;
             _numOps += ops.size() - 1;
             for (auto& ep : ops) {
                 ep->accept(this);

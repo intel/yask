@@ -204,13 +204,14 @@ namespace yask {
     // library.
     void Eqs::findDeps(IntTuple& pts,
                        const string& stepDim,
-                       EqDepMap* eq_deps) {
+                       EqDepMap* eq_deps,
+                       ostream& os) {
 
         // Gather points from all eqs in all grids.
         PointVisitor pt_vis(pts);
 
         // Gather initial stats from all eqs.
-        cout << " Scanning " << getEqs().size() << " equations(s)...\n";
+        os << " Scanning " << getEqs().size() << " equations(s)...\n";
         for (auto eq1 : getEqs())
             eq1->accept(&pt_vis);
         auto& outGrids = pt_vis.getOutputGrids();
@@ -382,11 +383,11 @@ namespace yask {
 
         // Resolve indirect dependencies.
         if (eq_deps) {
-            cout << "  Resolving indirect dependencies...\n";
+            os << "  Resolving indirect dependencies...\n";
             for (DepType dt = certain_dep; dt < num_deps; dt = DepType(dt+1))
                 (*eq_deps)[dt].analyze();
         }
-        cout << " Done.\n";
+        os << " Done.\n";
     }
 
     // Visitor for determining vectorization of grid points.
@@ -751,7 +752,8 @@ namespace yask {
     // 'eq_deps': pre-computed dependencies between equations.
     void EqGroups::makeEqGroups(Eqs& allEqs,
                                 const string& targets,
-                                EqDepMap& eq_deps)
+                                EqDepMap& eq_deps,
+                                ostream& os)
     {
         //auto& stepDim = _dims->_stepDim;
     
@@ -787,13 +789,13 @@ namespace yask {
 
         // Find dependencies between eq-groups based on deps between their eqs.
         for (auto& eg1 : *this) {
-            cout << " Checking dependencies of " <<
+            os << " Checking dependencies of " <<
                 eg1.getDescription() << "...\n";
-            cout << "  Updating the following grid(s) with " <<
+            os << "  Updating the following grid(s) with " <<
                 eg1.getNumEqs() << " equation(s):";
             for (auto* g : eg1.getOutputGrids())
-                cout << " " << g->getName();
-            cout << endl;
+                os << " " << g->getName();
+            os << endl;
 
             // Check to see if eg1 depends on other eq-groups.
             for (auto& eg2 : *this) {
@@ -803,9 +805,9 @@ namespace yask {
                     continue;
 
                 if (eg1.setDepOn(certain_dep, eq_deps, eg2))
-                    cout << "  Is dependent on " << eg2.getDescription(false) << endl;
+                    os << "  Is dependent on " << eg2.getDescription(false) << endl;
                 else if (eg1.setDepOn(possible_dep, eq_deps, eg2))
-                    cout << "  May be dependent on " << eg2.getDescription(false) << endl;
+                    os << "  May be dependent on " << eg2.getDescription(false) << endl;
             }
         }
 

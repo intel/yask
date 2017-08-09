@@ -322,21 +322,28 @@ BIN_DIR		:=	$(YASK_BASE)/bin
 
 # Output files and dirs.
 YK_BASE		:=	yask_kernel
+YK_MODULE	:=	$(YK_BASE)
 YK_TAG		:=	$(stencil).$(arch)
 YK_BASE2	:=	$(YK_BASE).$(YK_TAG)
 YK_EXEC		:=	$(BIN_DIR)/$(YK_BASE2).exe
 YK_TEST_EXEC	:=	$(BIN_DIR)/$(YK_BASE)_api_test.exe
 YK_LIB		:=	$(LIB_DIR)/lib$(YK_BASE2).so
-YK_PY_LIB	:=	$(LIB_DIR)/_$(YK_BASE).so
-YK_PY_MOD	:=	$(LIB_DIR)/$(YK_BASE).py
+YK_PY_LIB	:=	$(LIB_DIR)/_$(YK_MODULE).so
+YK_PY_MOD	:=	$(LIB_DIR)/$(YK_MODULE).py
 MAKE_REPORT_FILE:=	make-report.$(YK_TAG).txt
 
-# Source files and dirs.
+# Common source.
+COMM_DIR	:=	../common
+COMM_SRC_NAMES	:=	output
+COMM_SRC_BASES	:=	$(addprefix $(COMM_DIR)/,$(COMM_SRC_NAMES))
+
+# Kernel source files and dirs.
 YK_SWIG_DIR	:=	./swig
 YK_GEN_DIR	:=	./gen
 YK_LIB_DIR	:=	./lib
-YK_SRC_BASES	:=	stencil_calc realv_grids utils
-YK_OBJS		:=	$(addprefix $(YK_LIB_DIR)/,$(addsuffix .$(YK_TAG).o,$(YK_SRC_BASES)))
+YK_SRC_NAMES	:=	stencil_calc realv_grids utils
+YK_SRC_BASES	:=	$(addprefix $(YK_LIB_DIR)/,$(YK_SRC_NAMES))
+YK_OBJS		:=	$(addsuffix .$(YK_TAG).o,$(YK_SRC_BASES) $(COMM_SRC_BASES))
 YK_MACRO_FILE	:=	$(YK_GEN_DIR)/yask_macros.hpp
 YK_CODE_FILE	:=	$(YK_GEN_DIR)/yask_stencil_code.hpp
 YK_GEN_HEADERS	:=	$(addprefix $(YK_GEN_DIR)/, \
@@ -383,8 +390,9 @@ YK_CXXFLAGS	+=	$(EXTRA_YK_CXXFLAGS)
 YK_LD		:=	$(YK_CXX)
 YK_LFLAGS	:=	-lrt -Wl,-rpath=$(LIB_DIR) -L$(LIB_DIR) -l$(YK_BASE2)
 
-# Python.
+# Tools.
 PYTHON		:=	python
+SWIG		:=	swig
 
 # Find include path needed for python interface.
 # NB: constructing string inside print() to work for python 2 or 3.
@@ -493,7 +501,7 @@ $(YK_LIB): $(YK_OBJS)
 	$(YK_CXX) $(YK_CXXFLAGS) -shared -o $@ $^
 
 $(YK_EXEC): yask_main.cpp $(YK_LIB)
-	$(YK_LD) $(YK_CXXFLAGS) $(YK_LFLAGS) -o $@ $<
+	$(YK_LD) $(YK_CXXFLAGS) $< $(YK_LFLAGS) -o $@
 
 $(MAKE_REPORT_FILE): $(YK_EXEC)
 	@echo MAKEFLAGS="\"$(MAKEFLAGS)"\" > $@ 2>&1
@@ -535,9 +543,6 @@ $(YK_GEN_DIR)/yask_layouts.hpp: $(GEN_LAYOUTS)
 	  indent -fca $@ ||   \
 	  echo "note:" $@ "is not properly indented because no indent program was found."
 
-$(YC_EXEC):
-	$(MAKE) -C $(YC_SRC_DIR) $@
-
 $(YK_CODE_FILE): $(YC_EXEC)
 	$(YK_MK_GEN_DIR)
 	$< $(YC_FLAGS) $(EXTRA_YC_FLAGS) -p $(YC_TARGET) $@
@@ -565,8 +570,10 @@ api: $(YK_LIB) $(YK_PY_LIB)
 # Build python kernel API lib.
 # TODO: consider adding $(YK_TAG) to [some of] these targets.
 $(YK_SWIG_DIR)/yask_kernel_api_wrap.cpp: $(YK_SWIG_DIR)/yask*.i $(INC_DIR)/*.hpp
-	swig -version
-	swig -v -cppext cpp -I$(INC_DIR) -c++ -python -outdir $(LIB_DIR) -builtin $<
+	$(SWIG) -version
+	$(SWIG) -v -DYK_MODULE=$(YK_MODULE) -cppext cpp \
+	  -I$(INC_DIR) -I$(COMM_DIR) -I$(COMM_DIR)/swig \
+	  -c++ -python -outdir $(LIB_DIR) -builtin $<
 
 $(YK_SWIG_DIR)/yask_kernel_api_wrap.o: $(YK_SWIG_DIR)/yask_kernel_api_wrap.cpp
 	$(YK_CXX) $(YK_CXXFLAGS) $(PYINC) -fPIC -c -o $@ $<
@@ -578,7 +585,7 @@ $(YK_PY_LIB): $(YK_OBJS) $(YK_SWIG_DIR)/yask_kernel_api_wrap.o
 
 # Build C++ kernel API test.
 $(YK_TEST_EXEC): ./tests/yask_kernel_api_test.cpp $(YK_LIB)
-	$(YK_CXX) $(YK_CXXFLAGS) $(YK_LFLAGS) -o $@ $<
+	$(YK_CXX) $(YK_CXXFLAGS) $< $(YK_LFLAGS) -o $@
 
 # Run C++ kernel API test.
 cxx-yk-api-test: $(YK_TEST_EXEC)
@@ -645,20 +652,19 @@ all:
 # Should not trigger remake of stencil compiler.
 # Make this target before rebuilding YASK with any new parameters.
 clean:
-	rm -fv *.s $(MAKE_REPORT_FILE)
+	rm -fv *.s
 	rm -fr $(YK_SWIG_DIR)/build $(YK_GEN_DIR)
-	rm -fv $(YK_SWIG_DIR)/yask_kernel_api_wrap.{cpp,o}
+	rm -fv $(YK_SWIG_DIR)/*_api_wrap.*
+	rm -fv $(YK_OBJS)
 	find . -name '*.o' | xargs -r rm -v
 	find . $(BIN_DIR) $(LIB_DIR) -name '*.optrpt' | xargs -r rm -v
 
-# Remove executables, etc.
+# Remove executables, libs, etc.
 realclean: clean
 	rm -fv $(YK_LIB) $(YK_EXEC) $(YK_TEST_EXEC) $(YK_PY_MOD)* $(YK_PY_LIB)
-	rm -fv $(YK_SWIG_DIR)/*_api_wrap.{cpp,o}
 	rm -fv make-report.*.txt
 	find . -name '*.pyc' | xargs -r rm -v
 	find . -name '*~' | xargs -r rm -v
-	$(MAKE) -C $(YC_SRC_DIR) $@
 
 echo-settings:
 	@echo

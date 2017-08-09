@@ -924,7 +924,6 @@ namespace yask {
         return make_shared<NotExpr>(rhs);
     }
 
-
     typedef set<GridPoint> GridPointSet;
     typedef set<GridPointPtr> GridPointPtrSet;
     typedef vector<GridPoint> GridPointVec;

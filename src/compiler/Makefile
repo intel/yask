@@ -34,19 +34,27 @@ BIN_DIR		:=	$(YASK_BASE)/bin
 
 # Output files and dirs.
 YC_BASE		:=	yask_compiler
+YC_MODULE	:=	$(YC_BASE)
 YC_EXEC		:=	$(BIN_DIR)/$(YC_BASE).exe
 YC_TEST_EXEC	:=	$(BIN_DIR)/$(YC_BASE)_api_test.exe
 YC_LIB		:=	$(LIB_DIR)/lib$(YC_BASE).so
-YC_PY_LIB	:=	$(LIB_DIR)/_$(YC_BASE).so
-YC_PY_MOD	:=	$(LIB_DIR)/$(YC_BASE).py
+YC_PY_LIB	:=	$(LIB_DIR)/_$(YC_MODULE).so
+YC_PY_MOD	:=	$(LIB_DIR)/$(YC_MODULE).py
 
-# Source files and dirs.
+# Common source.
+COMM_DIR	:=	../common
+COMM_SRC_NAMES	:=	output
+COMM_SRC_BASES	:=	$(addprefix $(COMM_DIR)/,$(COMM_SRC_NAMES))
+
+# Compiler source files and dirs.
 YC_SWIG_DIR	:=	./swig
 YC_GEN_DIR	:=	./gen
 YC_LIB_DIR	:=	./lib
-YC_SRC_BASES	:=	Expr ExprUtils Grid Eqs Print Vec Cpp CppIntrin Soln
-YC_OBJS		:=	$(addprefix $(YC_LIB_DIR)/,$(addsuffix .o,$(YC_SRC_BASES)))
-YC_INC_DIRS	:=	$(INC_DIR) $(YC_LIB_DIR) ../common
+YC_SRC_NAMES	:=	Expr ExprUtils Grid Eqs Print Vec Cpp CppIntrin Soln
+YC_SRC_BASES	:=	$(addprefix $(YC_LIB_DIR)/,$(YC_SRC_NAMES))
+YC_OBJS		:=	$(addsuffix .o,$(YC_SRC_BASES) $(COMM_SRC_BASES))
+YC_STENCIL_LIST	:=	$(YC_GEN_DIR)/stencils.hpp
+YC_INC_DIRS	:=	$(INC_DIR) $(YC_LIB_DIR) $(COMM_DIR) ../stencils
 YC_INC_GLOB	:=	$(addsuffix /*.hpp,$(YC_INC_DIRS))
 YC_STENCIL_DIR	:= 	../stencils
 YC_STENCIL_LIST	:=	$(YC_GEN_DIR)/stencils.hpp
@@ -64,8 +72,9 @@ YC_CXXFLAGS	+=	$(EXTRA_YC_CXXFLAGS)
 YC_LD		:=	$(YC_CXX)
 YC_LFLAGS	:=	-lrt -Wl,-rpath=$(LIB_DIR) -L$(LIB_DIR) -l$(YC_BASE)
 
-# Python.
+# Tools.
 PYTHON		:=	python
+SWIG		:=	swig
 
 # Find include path needed for python interface.
 # NB: constructing string inside print() to work for python 2 or 3.
@@ -87,8 +96,8 @@ compiler: $(YC_EXEC)
 $(YC_LIB): $(YC_OBJS)
 	$(YC_CXX) $(YC_CXXFLAGS) -shared -o $@ $^
 
-$(YC_EXEC): main.cpp $(YC_LIB) $(YC_INC_GLOB) $(YC_STENCIL_LIST)
-	$(YC_LD) $(YC_CXXFLAGS) -O0 $(YC_LFLAGS) -o $@ main.cpp $(YC_LIB)
+$(YC_EXEC): main.cpp $(YC_LIB)
+	$(YC_LD) $(YC_CXXFLAGS) -O0 $< $(YC_LFLAGS) -o $@
 	$(MAKE) echo-settings
 
 # Generated files.
@@ -106,9 +115,12 @@ $(YC_STENCIL_LIST): $(YC_STENCIL_DIR)/*.hpp
 api: $(YC_LIB) $(YC_PY_LIB)
 
 # Build python compiler API lib.
+# Also builds $(YC_PY_MOD)
 $(YC_SWIG_DIR)/yask_compiler_api_wrap.cpp: $(YC_SWIG_DIR)/yask*.i $(INC_DIR)/*.hpp
-	swig -version
-	swig -v -cppext cpp -I$(INC_DIR) -c++ -python -outdir $(LIB_DIR) -builtin $<
+	$(SWIG) -version
+	$(SWIG) -v -DYC_MODULE=$(YC_MODULE) -cppext cpp \
+	  -I$(INC_DIR) -I$(COMM_DIR) -I$(COMM_DIR)/swig \
+	  -c++ -python -outdir $(LIB_DIR) -builtin $<
 
 $(YC_SWIG_DIR)/yask_compiler_api_wrap.o: $(YC_SWIG_DIR)/yask_compiler_api_wrap.cpp
 	$(YC_CXX) $(YC_CXXFLAGS) $(PYINC) -fPIC -c -o $@ $<
@@ -120,7 +132,7 @@ $(YC_PY_LIB): $(YC_OBJS) $(YC_SWIG_DIR)/yask_compiler_api_wrap.o
 
 # Build C++ compiler API test.
 $(YC_TEST_EXEC): ./tests/yask_compiler_api_test.cpp $(YC_LIB)
-	$(YC_CXX) $(YC_CXXFLAGS) $(YC_LFLAGS) -o $@ $<
+	$(YC_CXX) $(YC_CXXFLAGS) $< $(YC_LFLAGS) -o $@
 
 # Run Python compiler API test to create stencil-code file.
 # Also create .pdf rendering of stencil AST if Graphviz is installed.
@@ -151,14 +163,16 @@ all:
 
 # Remove intermediate files.
 clean:
+	rm -fv *.s
 	rm -fr $(YC_SWIG_DIR)/build $(YC_GEN_DIR)
+	rm -fv $(YC_SWIG_DIR)/*_api_wrap.*
+	rm -fv $(YC_OBJS)
 	find . -name '*.o' | xargs -r rm -v
 	find . $(BIN_DIR) $(LIB_DIR) -name '*.optrpt' | xargs -r rm -v
 
-# Remove executables, etc.
+# Remove executables, libs, etc.
 realclean: clean
 	rm -fv $(YC_LIB) $(YC_EXEC) $(YC_TEST_EXEC) $(YC_PY_MOD)* $(YC_PY_LIB)
-	rm -fv $(YC_SWIG_DIR)/*_api_wrap.{cpp,o}
 	rm -fv *api-test*.dot* *api-test*.hpp*
 	find . -name '*.pyc' | xargs -r rm -v
 	find . -name '*~' | xargs -r rm -v

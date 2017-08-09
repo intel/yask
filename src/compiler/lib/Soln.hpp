@@ -50,6 +50,10 @@ namespace yask {
         
         // Simple name for the stencil soln.
         string _name;
+
+        // Debug output.
+        yask_output_ptr _debug_output;
+        ostream* _dos = &std::cout;
     
         // All vars accessible by the kernel.
         Grids _grids;       // keep track of all registered grids.
@@ -70,16 +74,17 @@ namespace yask {
         Dimensions _dims;       // various dimensions.
         EqGroups _eqGroups;     // eq-groups for scalar and vector.
         EqGroups _clusterEqGroups; // eq-groups for scalar and vector.
-        ofstream _nullos;        // Dummy output stream.
 
         // Create the intermediate data.
         void analyze_solution(int vlen,
-                              bool is_folding_efficient,
-                              ostream& os);
+                              bool is_folding_efficient);
 
     public:
         StencilSolution(const string& name) :
-            _name(name) { }
+            _name(name) {
+            yask_output_factory ofac;
+            set_debug_output(ofac.new_stdout_output());
+        }
         virtual ~StencilSolution() {}
 
         // Identification.
@@ -106,6 +111,10 @@ namespace yask {
 
         // stencil_solution APIs.
         // See yask_stencil_api.hpp for documentation.
+        virtual void set_debug_output(yask_output_ptr debug) {
+            _debug_output = debug;
+            _dos = &_debug_output->get_ostream();
+        }
         virtual void set_name(std::string name) {
             _name = name;
         }
@@ -167,13 +176,8 @@ namespace yask {
         virtual void clear_clustering() { _settings._clusterOptions.clear(); }
         virtual void set_element_bytes(int nbytes) { _settings._elem_bytes = nbytes; }
         virtual int get_element_bytes() const { return _settings._elem_bytes; }
-        virtual std::string format(const std::string& format_type, ostream& msg_stream);
-        virtual std::string format(const std::string& format_type, bool debug) {
-            return format(format_type, debug? cout : _nullos);
-        }
-        virtual void write(const std::string& filename,
-                           const std::string& format_type,
-                           bool debug);
+        virtual void format(const std::string& format_type,
+                            yask_output_ptr output);
     };
 
     // A stencil solution that does not define any grids.

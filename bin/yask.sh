@@ -183,7 +183,7 @@ echo $invo > $logfile
 tag=$stencil.$arch
 bindir=`dirname $0`
 exe="$bindir/yask_kernel.$tag.exe"
-make_report=make-report.$tag.txt
+make_report=src/kernel/make-report.$tag.txt
 
 # Try to build exe if needed.
 if [[ ! -x $exe ]]; then
