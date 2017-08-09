@@ -329,7 +329,8 @@ namespace yask {
         // each remaining eq goes in an eqGroup named after its grid.
         void makeEqGroups(Eqs& eqs,
                           const string& targets,
-                          EqDepMap& eq_deps);
+                          EqDepMap& eq_deps,
+                          std::ostream& os);
         void makeEqGroups(Eqs& eqs,
                           const string& targets,
                           IntTuple& pts,

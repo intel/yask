@@ -129,7 +129,7 @@ namespace yask {
         _eqGroups.set_basename_default(_settings._eq_group_basename_default);
         _eqGroups.set_dims(_dims);
         _eqGroups.makeEqGroups(_eqs, _settings._eqGroupTargets,
-                               _dims._clusterPts, _settings._find_deps);
+                               _dims._clusterPts, _settings._find_deps, *_dos);
         _eqGroups.optimizeEqGroups(_settings, "scalar & vector", false, *_dos);
 
         // Make a copy of each equation at each cluster offset.
@@ -143,8 +143,9 @@ namespace yask {
     }
 
     // Format in given format-type.
-    string StencilSolution::format(const string& format_type,
-                                   ostream& os) {
+    void StencilSolution::format(const string& format_type,
+                                 yask_output_ptr output) {
+
         // Look for format match.
         // Most args to the printers just set references to data.
         // Data itself will be created in analyze_solution().
@@ -175,48 +176,12 @@ namespace yask {
         bool is_folding_efficient = printer->is_folding_efficient();
 
         // Set data for equation groups, dims, etc.
-        analyze_solution(vlen, is_folding_efficient, os);
+        analyze_solution(vlen, is_folding_efficient);
 
         // Create the output.
         *_dos << "Generating '" << format_type << "' output...\n";
-        string res = printer->format();
+        printer->print(output->get_ostream());
         delete printer;
-
-        return res;
-    }
-    void StencilSolution::write(const std::string& filename,
-                                const std::string& format_type,
-                                bool debug) {
-
-        // Get file stream.
-        ostream* os = 0;
-        ofstream* ofs = 0;
-
-        // Use '-' for stdout.
-        if (filename == "-")
-            os = &cout;
-        else {
-            ofs = new ofstream(filename, ofstream::out | ofstream::trunc);
-            if (!ofs || !ofs->is_open()) {
-                cerr << "Error: cannot open '" << filename <<
-                    "' for output.\n";
-                exit(1);
-            }
-            os = ofs;
-        }
-        assert(os);
-
-        // Create output.
-        string res = format(format_type, debug);
-
-        // Send to stream.
-        *os << res;
-
-        // Close file if needed.
-        if (ofs) {
-            ofs->close();
-            delete ofs;
-        }
     }
 
 } // namespace yask.

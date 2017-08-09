@@ -53,7 +53,6 @@ YC_LIB_DIR	:=	./lib
 YC_SRC_NAMES	:=	Expr ExprUtils Grid Eqs Print Vec Cpp CppIntrin Soln
 YC_SRC_BASES	:=	$(addprefix $(YC_LIB_DIR)/,$(YC_SRC_NAMES))
 YC_OBJS		:=	$(addsuffix .o,$(YC_SRC_BASES) $(COMM_SRC_BASES))
-YC_STENCIL_LIST	:=	$(YC_GEN_DIR)/stencils.hpp
 YC_INC_DIRS	:=	$(INC_DIR) $(YC_LIB_DIR) $(COMM_DIR) ../stencils
 YC_INC_GLOB	:=	$(addsuffix /*.hpp,$(YC_INC_DIRS))
 YC_STENCIL_DIR	:= 	../stencils
@@ -90,7 +89,7 @@ default: compiler
 compiler: $(YC_EXEC)
 	@echo "Binary" $(YC_EXEC) "has been built."
 
-%.o: %.cpp $(YC_INC_GLOB)
+%.o: %.cpp $(YC_STENCIL_LIST) $(YC_INC_GLOB)
 	$(YC_CXX) $(YC_CXXFLAGS) -fPIC -c -o $@ $<
 
 $(YC_LIB): $(YC_OBJS)
