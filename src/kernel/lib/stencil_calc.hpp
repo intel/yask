@@ -59,25 +59,6 @@ namespace yask {
     };
     typedef std::shared_ptr<KernelEnv> KernelEnvPtr;
 
-    // Dimensions for a solution.
-    // Similar to that in the YASK compiler.
-    struct Dims {
-
-        static const int max_domain_dims = MAX_DIMS - 1; // 1 reserved for step dim.
-
-        // Dimensions with unused values.
-        std::string _step_dim;
-        IdxTuple _domain_dims;
-        IdxTuple _stencil_dims;
-        IdxTuple _misc_dims;
-
-        // Dimensions and sizes.
-        IdxTuple _fold_pts;
-        IdxTuple _cluster_pts;
-        IdxTuple _cluster_mults;
-    };
-    typedef std::shared_ptr<Dims> DimsPtr;
-
     // MPI neighbor info.
     class MPIInfo {
 
@@ -260,16 +241,10 @@ namespace yask {
                                         const std::string& descrip,
                                         IdxTuple& var);
 
-        // If 'finalize' and one of 'inner_sizes' is zero,
-        // make it equal to corresponding one in 'outer_sizes'.
-        // Round up each of 'inner_sizes' to be a multiple of corresponding one in 'mults'.
-        // If 'finalize', output info to 'os' using '*_name' and dim names.
-        // Return product of number of inner subsets.
         idx_t findNumSubsets(std::ostream& os,
                              IdxTuple& inner_sizes, const std::string& inner_name,
                              const IdxTuple& outer_sizes, const std::string& outer_name,
-                             const IdxTuple& mults,
-                             bool finalize);
+                             const IdxTuple& mults);
 
     public:
         // Add options to set all settings to a cmd-line parser.
@@ -284,9 +259,9 @@ namespace yask {
         
         // Make sure all user-provided settings are valid by rounding-up
         // values as needed.
-        // If 'finalize' is true, also set defaults and print info.
         // Called from prepare_solution(), so it doesn't normally need to be called from user code.
-        virtual void adjustSettings(std::ostream& os, bool finalize);
+        // Prints informational info to 'os'.
+        virtual void adjustSettings(std::ostream& os);
 
     };
     typedef std::shared_ptr<KernelSettings> KernelSettingsPtr;
@@ -354,7 +329,10 @@ namespace yask {
                                   const std::string& fn_name,
                                   bool step_ok,
                                   bool domain_ok,
-                                  bool misc_ok) const;
+                                  bool misc_ok) const {
+            _dims->checkDimType(dim, fn_name, step_ok, domain_ok, misc_ok);
+        }
+        
     public:
 
         // Name.
@@ -420,7 +398,8 @@ namespace yask {
             _dims(settings->_dims)
         {
             _mpiInfo = std::make_shared<MPIInfo>(settings->_dims);
-            
+
+            // Init various tuples to make sure they have the correct dims.
             rank_domain_offsets = _dims->_domain_dims;
             overall_domain_sizes = _dims->_domain_dims;
             max_halos = _dims->_domain_dims;
@@ -428,9 +407,6 @@ namespace yask {
             
             // Set output to msg-rank per settings.
             set_ostr();
-
-            // Round-up any settings as needed at this point.
-            _opts->adjustSettings(get_ostr(), false);
         }
 
         // Destructor.
@@ -491,7 +467,7 @@ namespace yask {
 
         // Set grid sizes and offsets.
         // This should be called anytime a setting or offset is changed.
-        virtual void set_grids();
+        virtual void update_grids();
         
         // Get total memory allocation required by grids.
         // Does not include MPI buffers.
@@ -657,8 +633,14 @@ namespace yask {
         virtual std::string get_domain_dim_name(int n) const;
         virtual std::vector<std::string> get_domain_dim_names() const {
             std::vector<std::string> dims;
-            for (int i = 0; i < get_num_domain_dims(); i++)
-                dims.push_back(get_domain_dim_name(i));
+            for (auto& dim : _dims->_domain_dims.getDims())
+                dims.push_back(dim.getName());
+            return dims;
+        }
+        virtual std::vector<std::string> get_misc_dim_names() const {
+            std::vector<std::string> dims;
+            for (auto& dim : _dims->_misc_dims.getDims())
+                dims.push_back(dim.getName());
             return dims;
         }
 
@@ -765,20 +747,16 @@ namespace yask {
         virtual void
         calc_block(const ScanIndices& region_idxs);
 
-        // Calculate one sub-block of results from begin to end-1 on each dimension.
-        // In the 't' dimension, evaluation is at 'sbt' only.
+        // Calculate results within a sub-block.
+        // Each block is typically computed in a separate OpenMP thread.
         virtual void
         calc_sub_block(const ScanIndices& block_idxs);
 
-        // Calculate one sub-block of results in whole clusters from
-        // 'begin_sb*' to 'end_sb*'-1 on each spatial dimension.  In the
-        // time dimension, evaluation is at 'begin_sbt' only.  All indices
-        // are relative to the current rank, i.e., the rank offset is
-        // subtracted from the overall index.  Also, all indices are in
-        // vectors, i.e., element indices dividied
-        // by 'VLEN_*'.
+        // Calculate whole-cluster results within a sub-block.
+        // Indices must be rank-relative.
+        // Indices must be normalized, i.e., already divided by VLEN_*.
         virtual void
-        calc_sub_block_of_clusters(const ScanIndices& block_idxs);
+        calc_sub_block_of_clusters(const ScanIndices& block_idxs) =0;
     };
 
 } // yask namespace.

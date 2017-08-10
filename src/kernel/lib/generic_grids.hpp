@@ -87,7 +87,6 @@ namespace yask {
         }
 
         // Get size in bytes.
-        // Get size in bytes.
         virtual size_t get_num_bytes() const =0;
 
         // Get number of dimensions.
@@ -170,14 +169,14 @@ namespace yask {
         // Check for equality, assuming same layout.
         // Return number of mismatches greater than epsilon.
         virtual idx_t count_diffs(const GenericGridBase* ref,
-                                  double epsilon) const;
+                                  double epsilon) const =0;
 
         // Check for equality.
         // Return number of mismatches greater than epsilon up to 'maxPrint'+1.
         virtual idx_t compare(const GenericGridBase* ref,
                               double epsilon,
                               int maxPrint = 0,
-                              std::ostream& os = std::cerr) const;
+                              std::ostream& os = std::cerr) const =0;
     };
     
     // A base class for a generic n-D grid of elements of arithmetic type T.
@@ -235,10 +234,12 @@ namespace yask {
                     _dims.makeDimValStr(" * ") << ")";
             os << " '" << _name << "'";
             if (_elems)
-                os << ", data at " << _elems << ", containing " <<
-                    makeNumStr(get_num_elems()) << " " <<
+                os << " with data at " << _elems << " containing ";
+            else
+                os << " with data not allocated for ";
+            os << makeNumStr(get_num_elems()) << " " <<
                     elem_name << " element(s) of " <<
-                    sizeof(T) << " byte(s) each, " <<
+                    sizeof(T) << " byte(s) each = " <<
                     makeByteStr(get_num_bytes());
         }
 
@@ -253,7 +254,7 @@ namespace yask {
         }
 
         // Initialize memory using 'seed' as a starting point.
-        virtual void set_elems_diff(T seed) {
+        virtual void set_elems_in_seq(T seed) {
             if (_elems) {
                 const idx_t wrap = 71; // prime number is good to use.
 
@@ -452,4 +453,12 @@ namespace yask {
 
 }
 
+#if GRID_TEST
+    // Dummy vars to test template compiles.
+    GridDimNames dummyDims;
+    GenericGrid<idx_t, Layout_123> dummy1("d1", dummyDims);
+    GenericGrid<real_t, Layout_123> dummy2("d2", dummyDims);
+    GenericGrid<real_vec_t, Layout_123> dummy3("d3", dummyDims);
+#endif
+    
 #endif

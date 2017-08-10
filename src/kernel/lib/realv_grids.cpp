@@ -124,68 +124,55 @@ namespace yask {
     
     // Check whether dim is of allowed type.
     void YkGridBase::checkDimType(const std::string& dim,
-                              const std::string& fn_name,
-                              bool domain_ok, bool non_domain_ok) const {
-        if (!domain_ok && is_domain_dim(dim)) {
+                                  const std::string& fn_name,
+                                  bool step_ok,
+                                  bool domain_ok,
+                                  bool misc_ok) const {
+        if (!is_dim_used(dim)) {
             cerr << "Error in " << fn_name << "(): dimension '" <<
-                dim << "' is a domain dimension.\n";
+                dim << "' is not used in grid '" << get_name() << "'.\n";
             exit_yask(1);
         }
-        if (!non_domain_ok && !is_domain_dim(dim)) {
-            cerr << "Error in " << fn_name << "(): dimension '" <<
-                dim << "' is not a domain dimension.\n";
-            exit_yask(1);
-        }
+        _dims->checkDimType(dim, fn_name, step_ok, domain_ok, misc_ok);
     }
     
     // APIs to get info from vars.
-#define GET_GRID_API(api_name, expr, domain_ok, non_domain_ok)          \
+#define GET_GRID_API(api_name, expr, step_ok, domain_ok, misc_ok)       \
     idx_t YkGridBase::api_name(const string& dim) const {               \
         int posn = get_dim_posn(dim, true, #api_name);                  \
-        checkDimType(dim, #api_name, domain_ok, non_domain_ok);         \
+        checkDimType(dim, #api_name, step_ok, domain_ok, misc_ok);      \
         return expr;                                                    \
     }
-    GET_GRID_API(get_rank_domain_size, _domains[posn], true, false)
-    GET_GRID_API(get_pad_size, _pads[posn], true, false)
-    GET_GRID_API(get_halo_size, _halos[posn], true, false)
-    GET_GRID_API(get_first_index, _offsets[posn], false, true)
-    GET_GRID_API(get_last_index, _offsets[posn] + _domains[posn] - 1, false, true)
-    GET_GRID_API(get_offset, _offsets[posn], true, true)
-    GET_GRID_API(get_first_rank_domain_index, _offsets[posn], true, false)
-    GET_GRID_API(get_last_rank_domain_index, _offsets[posn] + _domains[posn] - 1, true, false)
-    GET_GRID_API(get_first_rank_alloc_index, _offsets[posn] - _pads[posn], true, false)
-    GET_GRID_API(get_last_rank_alloc_index, _offsets[posn] + _domains[posn] + _pads[posn] - 1, true, false)
-    GET_GRID_API(get_extra_pad_size, _pads[posn] - _halos[posn], true, false)
-    GET_GRID_API(get_alloc_size, _ggb->get_dim_size(posn), true, true)
+    GET_GRID_API(get_rank_domain_size, _domains[posn], false, true, false)
+    GET_GRID_API(get_pad_size, _pads[posn], false, true, false)
+    GET_GRID_API(get_halo_size, _halos[posn], false, true, false)
+    GET_GRID_API(get_first_index, _offsets[posn], false, false, true)
+    GET_GRID_API(get_last_index, _offsets[posn] + _domains[posn] - 1, false, false, true)
+    GET_GRID_API(get_first_rank_domain_index, _offsets[posn], false, true, false)
+    GET_GRID_API(get_last_rank_domain_index, _offsets[posn] + _domains[posn] - 1, false, true, false)
+    GET_GRID_API(get_first_rank_alloc_index, _offsets[posn] - _pads[posn], false, true, false)
+    GET_GRID_API(get_last_rank_alloc_index, _offsets[posn] + _domains[posn] + _pads[posn] - 1, false, true, false)
+    GET_GRID_API(get_extra_pad_size, _pads[posn] - _halos[posn], false, true, false)
+    GET_GRID_API(get_alloc_size, _ggb->get_dim_size(posn), true, true, true)
+    GET_GRID_API(_get_offset, _offsets[posn], true, true, true)
 
     // APIs to set vars.
 #define COMMA ,
-#define SET_GRID_API(api_name, expr, domain_ok, non_domain_ok)          \
+#define SET_GRID_API(api_name, expr, step_ok, domain_ok, misc_ok)       \
     void YkGridBase::api_name(const string& dim, idx_t n) {             \
         int posn = get_dim_posn(dim, true, #api_name);                  \
-        checkDimType(dim, #api_name, domain_ok, non_domain_ok);         \
+        checkDimType(dim, #api_name, step_ok, domain_ok, misc_ok);      \
         expr;                                                           \
     }
-    SET_GRID_API(set_domain_size, _domains[posn] = n; resize(), true, false)
-    SET_GRID_API(set_halo_size, _halos[posn] = n; set_pad_size(dim, _pads[posn]), true, false)
-    SET_GRID_API(set_min_pad_size, if (n < _pads[posn]) set_pad_size(dim, n), true, false)
-    SET_GRID_API(set_extra_pad_size, set_pad_size(dim COMMA _halos[posn] + n), true, false)
-    SET_GRID_API(set_pad_size, _pads[posn] = std::max(n COMMA _halos[posn]); resize(), true, false)
-    SET_GRID_API(set_offset, _offsets[posn] = n, true, true)
-    SET_GRID_API(set_first_index, _offsets[posn] = n, false, true)
+    SET_GRID_API(set_halo_size, _halos[posn] = n; _set_pad_size(dim, _pads[posn]), false, true, false)
+    SET_GRID_API(set_min_pad_size, if (n < _pads[posn]) _set_pad_size(dim, n), false, true, false)
+    SET_GRID_API(set_extra_pad_size, _set_pad_size(dim, _halos[posn] + n), false, true, false)
+    SET_GRID_API(set_first_index, _offsets[posn] = n, false, false, true)
+    SET_GRID_API(set_alloc_size, _set_domain_size(dim, n); resize(), true, false, true)
+    SET_GRID_API(_set_domain_size, _domains[posn] = n; resize(), true, true, true)
+    SET_GRID_API(_set_pad_size, _pads[posn] = std::max(n COMMA _halos[posn]); resize(), true, true, true)
+    SET_GRID_API(_set_offset, _offsets[posn] = n, true, true, true)
 #undef COMMA
-    
-    // Not using SET_GRID_API macro because only non-domain vars are allowed.
-    void YkGridBase::set_alloc_size(const string& dim, idx_t n) {
-        int posn = get_dim_posn(dim, true, "set_alloc_size");
-        if (is_domain_dim(dim)) {
-            cerr << "Error: set_alloc_size: dimension '" <<
-                dim << "' is a domain dimension.\n";
-            exit_yask(1);
-        }
-        _ggb->set_dim_size(posn, n);
-        resize();
-    }
     
     bool YkGridBase::is_storage_layout_identical(const yk_grid_ptr other) const {
         auto op = dynamic_pointer_cast<YkGridBase>(other);
@@ -200,18 +187,18 @@ namespace yask {
             return false;
         for (int i = 0; i < get_num_dims(); i++) {
             auto dname = get_dim_name(i);
+
+            // Same dims?
             if (dname != op->get_dim_name(i))
                 return false;
 
             // Same sizes?
             if (get_alloc_size(dname) != op->get_alloc_size(dname))
                 return false;
-            if (is_domain_dim(dname)) {
-                if (get_rank_domain_size(dname) != op->get_rank_domain_size(dname))
-                    return false;
-                if (get_pad_size(dname) != op->get_pad_size(dname))
-                    return false;
-            }
+            if (_domains[i] != op->_domains[i])
+                return false;
+            if (_pads[i] != op->_pads[i])
+                return false;
         }
         return true;
     }
@@ -229,6 +216,8 @@ namespace yask {
         // is_storage_layout_identical(). See note on pad & halo below and API docs.
         for (int i = 0; i < get_num_dims(); i++) {
             auto dname = get_dim_name(i);
+
+            // Same dims?
             if (sp->get_num_dims() != get_num_dims() ||
                 sp->get_dim_name(i) != dname) {
                 cerr << "Error: share_storage() called with incompatible grids: ";
@@ -239,7 +228,8 @@ namespace yask {
                 exit_yask(1);
             }
 
-            if (!is_domain_dim(dname)) {
+            // Not a domain dim?
+            if (!_dims->_domain_dims.lookup(dname)) {
                 auto tas = get_alloc_size(dname);
                 auto sas = sp->get_alloc_size(dname);
                 if (tas != sas) {
@@ -267,16 +257,21 @@ namespace yask {
                 auto spad = sp->get_pad_size(dname);
                 if (thalo > spad) {
                     cerr << "Error: attempt to share storage from grid '" << sp->get_name() <<
-                        "' with padding-size " << spad << " with grid '" << get_name() <<
+                        "' with padding-size " << spad <<
+                        ", which is insufficient for grid '" << get_name() <<
                         "' with halo-size " << thalo << " in '" << dname << "' dim.\n";
                     exit_yask(1);
                 }
-
-                // Copy pad settings in this dim.
-                set_pad_size(dname, spad);
             }
         }
 
+        // Copy pad sizes.
+        for (int i = 0; i < get_num_dims(); i++) {
+            auto dname = get_dim_name(i);
+            auto spad = sp->get_pad_size(dname);
+            _set_pad_size(dname, spad);
+        }
+        
         // Copy data.
         release_storage();
         if (!share_data(sp.get())) {
@@ -361,7 +356,7 @@ namespace yask {
             auto dname = get_dim_name(i);
 
             // Any step index is ok because it wraps around.
-            if (is_step_dim(dname))
+            if (dname == _dims->_step_dim)
                 continue;
 
             // Within first..last indices?

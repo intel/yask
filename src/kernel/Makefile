@@ -506,7 +506,7 @@ $(YK_EXEC): yask_main.cpp $(YK_LIB)
 $(MAKE_REPORT_FILE): $(YK_EXEC)
 	@echo MAKEFLAGS="\"$(MAKEFLAGS)"\" > $@ 2>&1
 	$(MAKE) echo-settings >> $@ 2>&1
-	$(MAKE) code-stats | tee -a $@
+#$(MAKE) code-stats | tee -a $@
 
 # Generated files.
 $(YK_GEN_DIR)/yask_rank_loops.hpp: $(GEN_LOOPS)

@@ -670,7 +670,7 @@ namespace yask {
             if (strictRhs)
                 assert(areDimsSame(rhs));
             Tuple newt = *this;
-            for (auto i : _q) {
+            for (auto& i : _q) {
                 auto& tdim = i.getName();
                 auto& tval = i.getVal();
                 auto* rp = rhs.lookup(tdim);
@@ -706,10 +706,11 @@ namespace yask {
         virtual Tuple mapElements(std::function<T (T lhs, T rhs)> func,
                                   T rhs) const {
             Tuple newt = *this;
-            for (auto i : newt._q) {
-                //auto& tdim = i.getName();
+            for (auto& i : newt._q) {
+                auto& tdim = i.getName();
                 auto& tval = i.getVal();
-                tval = func(tval, rhs);
+                T newv = func(tval, rhs);
+                newt.setVal(tdim, newv);
             }
             return newt;
         }

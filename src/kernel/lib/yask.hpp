@@ -136,8 +136,37 @@ namespace yask {
     typedef std::vector<idx_t> GridIndices;
     typedef std::vector<std::string> GridDimNames;
 
+    // Dimensions for a solution.
+    // Similar to that in the YASK compiler.
+    struct Dims {
+
+        static const int max_domain_dims = MAX_DIMS - 1; // 1 reserved for step dim.
+
+        // Dimensions with unused values.
+        std::string _step_dim;
+        IdxTuple _domain_dims;
+        IdxTuple _stencil_dims;
+        IdxTuple _misc_dims;
+
+        // Dimensions and sizes.
+        IdxTuple _fold_pts;
+        IdxTuple _cluster_pts;
+        IdxTuple _cluster_mults;
+
+        // Check whether dim exists and is of allowed type.
+        // If not, abort with error, reporting 'fn_name'.
+        void checkDimType(const std::string& dim,
+                          const std::string& fn_name,
+                          bool step_ok,
+                          bool domain_ok,
+                          bool misc_ok) const;
+
+    };
+    typedef std::shared_ptr<Dims> DimsPtr;
+    
     // A class to hold up to a given number of sizes or indices efficiently.
     // Similar to a Tuple, but less overhead and doesn't keep names.
+    // Make sure this stays non-virtual.
     class Indices {
         
     public:
@@ -266,7 +295,7 @@ namespace yask {
         }
         
         // Make string like "x=4, y=8".
-        virtual std::string makeDimValStr(const GridDimNames& names,
+        std::string makeDimValStr(const GridDimNames& names,
                                           std::string separator=", ",
                                           std::string infix="=",
                                           std::string prefix="",
@@ -281,7 +310,7 @@ namespace yask {
         }
         
         // Make string like "4, 3, 2".
-        virtual std::string makeValStr(int nvals,
+        std::string makeValStr(int nvals,
                                        std::string separator=", ",
                                        std::string prefix="",
                                        std::string suffix="") const {
@@ -306,6 +335,7 @@ namespace yask {
     // A group of Indices needed for generated loops.
     // See the help message from gen_loops.pl for the
     // documentation of the indices.
+    // Make sure this stays non-virtual.
     struct ScanIndices {
         Indices begin, end, step, group_size;
         Indices start, stop, index;

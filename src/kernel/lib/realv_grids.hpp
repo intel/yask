@@ -42,20 +42,16 @@ namespace yask {
         // doesn't have stencil features like padding, halos, offsets, etc.
         // Holds name of grid, names of dims, sizes of dims, memory layout,
         // actual data.
-        GenericGridBase* _ggb;
+        GenericGridBase* _ggb = 0;
 
-        // Positions of step and domain dims.
-        // Indexed by name.
-        // Either may be empty.
-        // Remaining dims are "misc" dims.
-        IdxTuple _step_dim_posn;
-        IdxTuple _domain_dim_posns;
-        
+        // Problem dimensions.
+        DimsPtr _dims;
+
         // Settings for domain dims | non-domain dims.
-        Indices _domains;       // values copied from the solution | alloc size.
+        Indices _domains;       // rank domain sizes copied from the solution | alloc size.
         Indices _pads;          // extra space around domains | zero.
         Indices _halos;         // space within pads for halo exchange | zero.
-        Indices _offsets;       // offsets of this rank's domain within overall domain | zero.
+        Indices _offsets;       // offsets of this rank in overall domain | first index.
 
         // Data has been received from neighbors' halos, if applicable.
         bool _is_updated = false;
@@ -68,10 +64,35 @@ namespace yask {
                                             std::string prefix="",
                                             std::string suffix="") const;
 
-        // Check whether dim is of allowed type.
+        // Adjust logical time index to 0-based index
+        // using temporal allocation size.
+        inline idx_t wrap_index(idx_t t, idx_t tdim) const {
+
+            // Index wraps in tdim.
+            // Examples based on tdim == 2:
+            //  t => return value.
+            // ---  -------------
+            // -2 => 0.
+            // -1 => 1.
+            //  0 => 0.
+            //  1 => 1.
+            //  2 => 0.
+
+            // Avoid discontinuity caused by dividing negative numbers by
+            // adding a large offset to the t index.  So, t can be negative,
+            // but not so much that it would still be negative after adding
+            // the offset.  This should not be a practical restriction.
+            t += 0x1000;
+            assert(t >= 0);
+            return t % tdim;
+        }
+        
+        // Check whether dim exists and is of allowed type.
         virtual void checkDimType(const std::string& dim,
                                   const std::string& fn_name,
-                                  bool domain_ok, bool non_domain_ok) const;
+                                  bool step_ok,
+                                  bool domain_ok,
+                                  bool misc_ok) const;
         
         // Share data from source grid.
         template<typename GT>
@@ -88,9 +109,10 @@ namespace yask {
         virtual bool share_data(YkGridBase* src) =0;
 
     public:
-        YkGridBase(GenericGridBase* ggb) :
-            _ggb(ggb) {
+        YkGridBase(GenericGridBase* ggb, DimsPtr dims) :
+            _ggb(ggb), _dims(dims) {
             assert(ggb);
+            assert(dims.get());
         }
         virtual ~YkGridBase() { }
 
@@ -125,7 +147,7 @@ namespace yask {
 
         // Set elements to a sequence of values using seed.
         // Cf. set_all_elements_same().
-        virtual void set_all_elements_in_seq(double seed);
+        virtual void set_all_elements_in_seq(double seed) =0;
         
         // Get a pointer to one element.
         // Indices are relative to overall problem domain.
@@ -166,6 +188,13 @@ namespace yask {
                                int line,
                                bool newline = true) const;
 
+        // Settings that should never be exposed as APIs because
+        // they can break the usage model.
+        virtual idx_t _get_offset(const std::string& dim) const; // not exposed.
+        virtual void _set_domain_size(const std::string& dim, idx_t size); // not exposed.
+        virtual void _set_pad_size(const std::string& dim, idx_t size); // not exposed.
+        virtual void _set_offset(const std::string& dim, idx_t size); // not exposed.
+        
         // APIs not defined above.
         // See yask_kernel_api.hpp.
         virtual const std::string& get_name() const {
@@ -176,12 +205,6 @@ namespace yask {
         }
         virtual bool is_dim_used(const std::string& dim) const {
             return _ggb->is_dim_used(dim);
-        }
-        virtual bool is_step_dim(const std::string& dim) const {
-            return _step_dim_posn.lookup(dim) != NULL;
-        }
-        virtual bool is_domain_dim(const std::string& dim) const {
-            return _domain_dim_posns.lookup(dim) != NULL;
         }
         virtual const std::string& get_dim_name(int n) const {
             assert(n >= 0);
@@ -195,10 +218,9 @@ namespace yask {
             return dims;
         }
 
-        virtual idx_t get_rank_domain_size(const std::string& dim) const; // not exposed.
-        virtual idx_t get_first_rank_domain_index(const std::string& dim) const; // not exposed.
-        virtual idx_t get_last_rank_domain_index(const std::string& dim) const; // not exposed.
-        virtual idx_t get_offset(const std::string& dim) const; // not exposed.
+        virtual idx_t get_rank_domain_size(const std::string& dim) const;
+        virtual idx_t get_first_rank_domain_index(const std::string& dim) const;
+        virtual idx_t get_last_rank_domain_index(const std::string& dim) const;
         virtual idx_t get_halo_size(const std::string& dim) const;
         virtual idx_t get_extra_pad_size(const std::string& dim) const;
         virtual idx_t get_pad_size(const std::string& dim) const;
@@ -208,16 +230,13 @@ namespace yask {
         virtual idx_t get_first_index(const std::string& dim) const;
         virtual idx_t get_last_index(const std::string& dim) const;
 
-        virtual void set_domain_size(const std::string& dim, idx_t size); // not exposed.
-        virtual void set_pad_size(const std::string& dim, idx_t size); // not exposed.
-        virtual void set_offset(const std::string& dim, idx_t size); // not exposed.
         virtual void set_halo_size(const std::string& dim, idx_t size);
         virtual void set_min_pad_size(const std::string& dim, idx_t size);
         virtual void set_extra_pad_size(const std::string& dim, idx_t size);
         virtual void set_alloc_size(const std::string& dim, idx_t size);
         virtual void set_first_index(const std::string& dim, idx_t size);
 
-        virtual void set_all_elements_same(double val);
+        virtual void set_all_elements_same(double val) =0;
         virtual double get_element(idx_t dim1_index, idx_t dim2_index,
                                    idx_t dim3_index, idx_t dim4_index,
                                    idx_t dim5_index, idx_t dim6_index) const;
@@ -270,8 +289,8 @@ namespace yask {
     typedef std::set<YkGridPtr> GridPtrSet;
     
     // YASK grid of real elements.
-    // Used for grids that do not contain all the folded dims.
-    template <typename LayoutFn>
+    // Used for grids that do not contain folded vectors.
+    template <typename LayoutFn, bool _wrap_1st_idx>
     class YkElemGrid : public YkGridBase {
 
     protected:
@@ -284,12 +303,23 @@ namespace yask {
         }
 
     public:
-        YkElemGrid(std::string name,
+        YkElemGrid(DimsPtr dims,
+                   std::string name,
                    const GridDimNames& dimNames) :
-            YkGridBase(&_data), _data(name, dimNames) { }
+            YkGridBase(&_data, dims), _data(name, dimNames) { }
 
         // Print some info to 'os'.
-        virtual void print_info(std::ostream& os) const;
+        virtual void print_info(std::ostream& os) const {
+            _data.print_info(os, "FP");
+        }
+
+        // Init data.
+        virtual void set_all_elements_same(double seed) {
+            _data.set_elems_same(seed);
+        }
+        virtual void set_all_elements_in_seq(double seed) {
+            _data.set_elems_in_seq(seed);
+        }
   
         // Get a pointer to given element.
         virtual const real_t* getElemPtr(const Indices& idxs,
@@ -301,20 +331,23 @@ namespace yask {
 #endif
         
             // Adjust for offset and padding.
-            // FIXME: handle step idx.
-            Indices idxs2;
+            Indices adj_idxs;
             #pragma unroll
             for (int i = 0; i < _data.get_num_dims(); i++)
-                idxs2[i] = idxs[i] - _offsets[i] + _pads[i];
+                adj_idxs[i] = idxs[i] - _offsets[i] + _pads[i];
+
+            // Special handling for 1st index.
+            if (_wrap_1st_idx)
+                adj_idxs[0] = wrap_index(idxs[0], _domains[0]);
 
 #ifdef TRACE_MEM
             if (checkBounds)
-                std::cout << " => " << _data.get_index(idxs2);
+                std::cout << " => " << _data.get_index(adj_idxs);
             std::cout << std::endl << flush;
 #endif
 
             // Get pointer via layout in _data.
-            return &_data(idxs2, checkBounds);
+            return &_data(adj_idxs, checkBounds);
         }
 
         // Non-const version.
@@ -349,8 +382,10 @@ namespace yask {
     public:
         
         // Print some info to 'os'.
-        virtual void print_info(std::ostream& os) const;
-
+        virtual void print_info(std::ostream& os) const {
+            _data.print_info(os, "SIMD FP");
+        }
+        
 #warning FIXME
 #if 0
         
@@ -377,29 +412,6 @@ namespace yask {
             elem_ofs = padded_index % vec_len;
         }
 
-        // Adjust logical time index to 0-based index
-        // using temporal allocation size.
-        ALWAYS_INLINE
-        idx_t get_index_t(idx_t t) const {
-
-            // Index wraps in tdim.
-            // Examples based on tdim == 2:
-            //  t => return value.
-            // ---  -------------
-            // -2 => 0.
-            // -1 => 1.
-            //  0 => 0.
-            //  1 => 1.
-            //  2 => 0.
-
-            // Avoid discontinuity caused by dividing negative numbers by
-            // adding a large offset to the t index.  So, t can be negative,
-            // but not so much that it would still be negative after adding
-            // the offset.  This should not be a practical restriction.
-            t += 0x1000;
-            assert(t >= 0);
-            return t % _tdim;
-        }
 
     public:
         RealVecGrid(RealVecGrid* gp) :
@@ -954,14 +966,5 @@ namespace yask {
     };
 #endif
 
-#if GRID_TEST
-    // Dummy vars to test template compiles.
-    GridDimNames dummyDims;
-    GenericGrid<idx_t, Layout_123> dummy1("d1", dummyDims);
-    GenericGrid<real_t, Layout_123> dummy2("d2", dummyDims);
-    GenericGrid<real_vec_t, Layout_123> dummy3("d3", dummyDims);
-    YkElemGrid<Layout_123> dummy4("d4", dummyDims);
-#endif
-    
 }
 #endif

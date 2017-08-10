@@ -182,6 +182,14 @@ namespace yask {
         virtual std::vector<std::string>
         get_domain_dim_names() const =0;
 
+        /// Get all the miscellaneous dimension names.
+        /**
+           @returns List of all dimension names used in the solution
+           that are not step or domain dimensions.
+        */
+        virtual std::vector<std::string>
+        get_misc_dim_names() const =0;
+
         /// Set the size of the solution domain for this rank.
         /**
            The domain defines the number of points that will be evaluated with the stencil(s). 
@@ -638,6 +646,36 @@ namespace yask {
         virtual bool
         is_dim_used(const std::string& dim) const =0;
 
+        /// Get the domain size for this rank.
+        /**
+           This is a convenience function.
+           @returns The same value as yk_solution::get_rank_domain_size().
+        */
+        virtual idx_t
+        get_rank_domain_size(const std::string& dim
+                             /**< [in] Name of dimension to get.  Must be one of
+                                the names from yk_solution::get_domain_dim_names(). */) const =0;
+
+        /// Get the first index of the sub-domain in this rank in the specified dimension.
+        /**
+           This is a convenience function.
+           @returns The same value as yk_solution::get_first_rank_domain_index().
+        */
+        virtual idx_t
+        get_first_rank_domain_index(const std::string& dim
+                                    /**< [in] Name of dimension to get.  Must be one of
+                                       the names from yk_solution::get_domain_dim_names(). */ ) const =0;
+        
+        /// Get the first index of the sub-domain in this rank in the specified dimension.
+        /**
+           This is a convenience function.
+           @returns The same value as yk_solution::get_last_rank_domain_index().
+        */
+        virtual idx_t
+        get_last_rank_domain_index(const std::string& dim
+                                    /**< [in] Name of dimension to get.  Must be one of
+                                       the names from yk_solution::get_domain_dim_names(). */ ) const =0;
+        
         /// Get the halo size in the specified dimension.
         /**
            This value is typically set by the stencil compiler.
@@ -646,7 +684,8 @@ namespace yask {
         virtual idx_t
         get_halo_size(const std::string& dim
                       /**< [in] Name of dimension from get_dim_name().
-                         Must be a domain dimension. */ ) const =0;
+                         Must be one of
+                         the names from yk_solution::get_domain_dim_names(). */ ) const =0;
         
         /// **[Advanced]** Set the halo size in the specified dimension.
         /**
@@ -662,7 +701,8 @@ namespace yask {
         virtual void
         set_halo_size(const std::string& dim
                       /**< [in] Name of dimension from get_dim_name().
-                         Must be a domain dimension. */,
+                         Must be one of
+                         the names from yk_solution::get_domain_dim_names(). */,
                       idx_t size
                       /**< [in] Number of points in the halo. */ ) =0;
 
@@ -681,7 +721,8 @@ namespace yask {
         virtual idx_t
         get_pad_size(const std::string& dim
                      /**< [in] Name of dimension from get_dim_name().
-                         Must be a domain dimension. */ ) const =0;
+                         Must be one of
+                         the names from yk_solution::get_domain_dim_names(). */ ) const =0;
 
         /// Get the extra padding in the specified dimension.
         /**
@@ -693,7 +734,8 @@ namespace yask {
         virtual idx_t
         get_extra_pad_size(const std::string& dim
                            /**< [in] Name of dimension from get_dim_name().
-                              Must be a domain dimension. */ ) const =0;
+                              Must be one of
+                              the names from yk_solution::get_domain_dim_names(). */ ) const =0;
 
         /// Set the padding in the specified dimension.
         /**
@@ -719,7 +761,8 @@ namespace yask {
         virtual void
         set_min_pad_size(const std::string& dim
                          /**< [in] Name of dimension from get_dim_name().
-                            Must be a domain dimension. */,
+                            Must be one of
+                            the names from yk_solution::get_domain_dim_names(). */,
                          idx_t size
                          /**< [in] Minimum number of points to allocate beyond the domain size. */ ) =0;
         
@@ -749,7 +792,8 @@ namespace yask {
         virtual void
         set_alloc_size(const std::string& dim
                        /**< [in] Name of dimension from get_dim_name().
-                          Must *not* be a domain dimension. */,
+                          Must *not* be one of
+                          the names from yk_solution::get_domain_dim_names(). */,
                        idx_t size /**< [in] Number of points to allocate. */ ) =0;
 
         /// Get the first accessible index in this grid in this rank in the specified dimension.
@@ -761,7 +805,8 @@ namespace yask {
         virtual idx_t
         get_first_rank_alloc_index(const std::string& dim
                                    /**< [in] Name of dimension from get_domain_dim_name().
-                                      Must be a domain dimension. */ ) const =0;
+                                      Must be one of
+                                      the names from yk_solution::get_domain_dim_names(). */ ) const =0;
 
         /// Get the last accessible index in this grid in this rank in the specified dimension.
         /**
@@ -772,7 +817,8 @@ namespace yask {
         virtual idx_t
         get_last_rank_alloc_index(const std::string& dim
                                   /**< [in] Name of dimension from get_domain_dim_name().
-                                      Must be a domain dimension. */ ) const =0;
+                                     Must be one of
+                                     the names from yk_solution::get_domain_dim_names(). */ ) const =0;
 
         /// Get the value of one grid point.
         /**

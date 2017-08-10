@@ -379,7 +379,7 @@ namespace yask {
                 string typeName;
             
                 // Use vector-folded layout if possible.
-#warning FIXME
+#warning FIXME: enable folding.
                 bool folded = false; // FIXME: gp->isFoldable();
 
                 // Folded layout.
@@ -390,9 +390,10 @@ namespace yask {
                 // Use 'normal' layout if not foldable.
                 else {
 
-                    // Type-name in kernel is 'YkElemGrid<LAYOUT>'.
+                    // Type-name in kernel is 'YkElemGrid<LAYOUT, wrap_1st_idx>'.
                     ostringstream oss;
                     oss << "YkElemGrid<Layout_";
+                    bool got_step = false;
 
                     // 1-D or more.
                     if (ndims) {
@@ -400,14 +401,34 @@ namespace yask {
                         // By default, last dim is unit-stride, e.g.,
                         // 'Layout_1234'.
                         // TODO: do something smarter depending on dims.
-                        for (size_t dn = 0; dn < ndims; dn++)
+                        for (size_t dn = 0; dn < ndims; dn++) {
                             oss << (dn + 1);
+
+                            // Step dim?
+                            auto& dim = gp->getDims()[dn];
+                            auto& dname = dim->getName();
+                            auto dtype = dim->getType();
+                            if (dtype == STEP_INDEX) {
+                                if (dn == 0)
+                                    got_step = true;
+                                else {
+                                    cerr << "Error: cannot create grid '" << grid <<
+                                        "' with dimension '" << dname << "' in position " <<
+                                        dn << "; step dimension must be in position 0.\n";
+                                    exit(1);
+                                }
+                            }
+                        }
                     }
 
                     // Scalar.
                     else
                         oss << "0d"; // Trivial scalar layout.
 
+                    if (got_step)
+                        oss << ", true /* wrap 1st index */";
+                    else
+                        oss << ", false /* do not wrap 1st index */";
                     oss << ">";
                     typeName = oss.str();
                 }
@@ -420,7 +441,7 @@ namespace yask {
                 ctorCode += "\n // Init grid '" + grid + "'.\n";
                 ctorCode += " GridDimNames " + grid + "_dim_names = {\n";
                 int ndn = 0;
-                for (auto dim : gp->getDims()) {
+                for (auto& dim : gp->getDims()) {
                     auto& dname = dim->getName();
                     if (ndn) ctorCode += ", ";
                     ctorCode += "\"" + dname + "\""; // add dim name.
@@ -428,7 +449,7 @@ namespace yask {
                 }
                 ctorCode += "};\n";
                 ctorCode += " " + grid + "_ptr = std::make_shared<" + typeName +
-                    ">(\"" + grid + "\", " + grid + "_dim_names);\n";
+                    ">(_dims, \"" + grid + "\", " + grid + "_dim_names);\n";
                 ctorCode += " " + grid + " = " + grid + "_ptr.get();\n";
                 ctorCode += " addGrid(" + grid + "_ptr, ";
                 if (_eqGroups.getOutputGrids().count(gp))
@@ -438,7 +459,7 @@ namespace yask {
                 ctorCode += ");\n";
                 
                 // Alloc-setting code.
-                for (auto dim : gp->getDims()) {
+                for (auto& dim : gp->getDims()) {
                     auto& dname = dim->getName();
                     auto dtype = dim->getType();
 
@@ -493,6 +514,7 @@ namespace yask {
                 }
             }
 
+#warning FIXME: should adapt to halo resize.
             // Max halos.
             os << endl << " // Max halos across all grids." << endl;
             for (auto& dim : maxHalos.getDims()) {
@@ -509,8 +531,11 @@ namespace yask {
                     " {\n  name = \"" << _stencil.getName() << "\";\n";
 
                 os << "\n // Create grids (but do not allocate data in them).\n" <<
-                    ctorCode;
+                    ctorCode <<
+                    "\n // Update grids with context info.\n"
+                    " update_grids();\n";
             
+#warning FIXME: should adapt to halo resize.
                 // Init halo sizes.
                 os << "\n  // Rounded halo sizes.\n";
                 int i = 0;
