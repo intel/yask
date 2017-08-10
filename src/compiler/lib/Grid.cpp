@@ -308,7 +308,7 @@ namespace yask {
                         exit(1);
                     }
                     _stepDim = dname;
-                    _stencilDims.addDimBack(dname, 0);
+                    _stencilDims.addDimFront(dname, 0); // must be first!
                     break;
 
                 case DOMAIN_INDEX:

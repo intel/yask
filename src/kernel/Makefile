@@ -30,10 +30,9 @@
 # Initial defaults.
 stencil		=	iso3dfd
 arch		=	snb
-mpi		=	1
+mpi		=	0	# FIXME: re-enable this.
 real_bytes	=	4
 radius		=	1
-scan_dims	=	4	# Includes step dim; TODO: move to compiler.
 
 # Defaults based on stencil type (and arch for some stencils).
 ifeq ($(stencil),)
@@ -208,7 +207,7 @@ def_pad_args		?=	-ep 1
 cluster			?=	x=1
 pfd_l1			?=	1
 pfd_l2			?=	2
-max_dims		?=	6  # max grid dims >= scan_dims.
+max_dims		?=	6  # max grid dims >= max stencil dims.
 
 # default folding depends on HW vector size.
 ifneq ($(findstring INTRIN512,$(MACROS)),)  # 512 bits.
@@ -233,11 +232,17 @@ endif # not 512 bits.
 fold	= 	$(fold_$(real_bytes)byte) # e.g., fold_4byte
 
 ######## Loop-compiler configuration:
-# The loop indices range from 0..N-1, where N=scan_dims.
-# 0 is the step dimension, usually time.
+# The loop indices range from 0..N-1.
+# Dim 0 is the step dim, usually time.
 # The step loop is handled outside of the generated loops,
 # so the following loop codes do not scan over dim 0.
-# N-1 is the inner-most dim.
+# Dims 1..N-1 are the domain dims, usually spatial.
+# Thus, N-1 is the inner-most dim.
+# For best perf, this should be the unit-stride dim in the grids.
+
+# Extract number of dims from file created from YASK compiler output.
+YK_DIMS_FILE		:=	num_dims.$(stencil).txt
+NDIMS_OPT		:=	`cat $(YK_DIMS_FILE)`
 
 # Rank loops break up the whole rank into smaller regions.  In order for
 # temporal wavefronts to operate properly, the order of spatial dimensions
@@ -245,7 +250,7 @@ fold	= 	$(fold_$(real_bytes)byte) # e.g., fold_4byte
 # indices. Those that do not (e.g., grouped, serpentine, square-wave) may
 # *not* be used here when using temporal wavefronts. The time loop may be
 # found in StencilEquations::run_solution().
-RANK_LOOP_OPTS		?=	-ndims $(scan_dims) -inVar rank_idxs
+RANK_LOOP_OPTS		?=	$(NDIMS_OPT) -inVar rank_idxs
 RANK_LOOP_CODE		?=	$(RANK_LOOP_OUTER_MODS) loop(1 .. N-1) \
 				{ $(RANK_LOOP_INNER_MODS) calc(region(eqGroup_ptr)); }
 
@@ -254,7 +259,7 @@ RANK_LOOP_CODE		?=	$(RANK_LOOP_OUTER_MODS) loop(1 .. N-1) \
 # to a top-level OpenMP thread.  The region time loops are not coded here to
 # allow for proper spatial skewing for temporal wavefronts. The time loop
 # may be found in StencilEquations::calc_region().
-REGION_LOOP_OPTS	?=     	-ndims $(scan_dims) -inVar region_idxs \
+REGION_LOOP_OPTS	?=     	$(NDIMS_OPT) -inVar region_idxs \
 				-ompConstruct '$(omp_par_for) schedule($(omp_region_schedule)) proc_bind(spread)' \
 				-calcPrefix 'eg->calc_'
 REGION_LOOP_OUTER_MODS	?=	grouped
@@ -265,7 +270,7 @@ REGION_LOOP_CODE	?=	omp $(REGION_LOOP_OUTER_MODS) loop(1 .. N-1) { \
 # a *nested* OpenMP loop so that each sub-block is assigned to a nested OpenMP
 # thread.  There is no time loop because threaded temporal blocking is
 # not yet supported.
-BLOCK_LOOP_OPTS		=     	-ndims $(scan_dims) -inVar block_idxs \
+BLOCK_LOOP_OPTS		=     	$(NDIMS_OPT) -inVar block_idxs \
 				-ompConstruct '$(omp_par_for) schedule($(omp_block_schedule)) proc_bind(close)'
 BLOCK_LOOP_OUTER_MODS	?=	grouped
 BLOCK_LOOP_CODE		?=	omp $(BLOCK_LOOP_OUTER_MODS) loop(1 .. N-1) { \
@@ -275,7 +280,7 @@ BLOCK_LOOP_CODE		?=	omp $(BLOCK_LOOP_OUTER_MODS) loop(1 .. N-1) { \
 # loop here is the final innermost loop and is run by a single OMP
 # thread. There is no time loop because threaded temporal blocking is not
 # yet supported.
-SUB_BLOCK_LOOP_OPTS		=     	-ndims $(scan_dims) -inVar sub_block_idxs
+SUB_BLOCK_LOOP_OPTS		=     	$(NDIMS_OPT) -inVar sub_block_idxs
 ifeq ($(split_L2),1)
  SUB_BLOCK_LOOP_OPTS		+=     	-splitL2
 endif
@@ -287,7 +292,7 @@ SUB_BLOCK_LOOP_CODE		?=	$(SUB_BLOCK_LOOP_OUTER_MODS) loop(1 .. N-2) { \
 # General-purpose parallel loop.
 # Nested OpenMP is not used here because there is no sharing between threads.
 # TODO: Consider using nested OpenMP to hide more latency.
-GEN_LOOP_OPTS		=     	-ndims $(scan_dims) -inVar gen_idxs \
+GEN_LOOP_OPTS		=     	$(NDIMS_OPT) -inVar gen_idxs \
 				-ompConstruct '$(omp_par_for) schedule($(omp_gen_schedule)) proc_bind(spread)'
 GEN_LOOP_OUTER_MODS	?=	omp
 GEN_LOOP_CODE		?=	$(GEN_LOOP_OUTER_MODS) loop(1 .. N-1) \
@@ -509,23 +514,23 @@ $(MAKE_REPORT_FILE): $(YK_EXEC)
 #$(MAKE) code-stats | tee -a $@
 
 # Generated files.
-$(YK_GEN_DIR)/yask_rank_loops.hpp: $(GEN_LOOPS)
+$(YK_GEN_DIR)/yask_rank_loops.hpp: $(GEN_LOOPS) $(YK_CODE_FILE)
 	$(YK_MK_GEN_DIR)
 	$< -output $@ $(RANK_LOOP_OPTS) $(EXTRA_LOOP_OPTS) $(EXTRA_RANK_LOOP_OPTS) "$(RANK_LOOP_CODE)"
 
-$(YK_GEN_DIR)/yask_region_loops.hpp: $(GEN_LOOPS)
+$(YK_GEN_DIR)/yask_region_loops.hpp: $(GEN_LOOPS) $(YK_CODE_FILE)
 	$(YK_MK_GEN_DIR)
 	$< -output $@ $(REGION_LOOP_OPTS) $(EXTRA_LOOP_OPTS) $(EXTRA_REGION_LOOP_OPTS) "$(REGION_LOOP_CODE)"
 
-$(YK_GEN_DIR)/yask_block_loops.hpp: $(GEN_LOOPS)
+$(YK_GEN_DIR)/yask_block_loops.hpp: $(GEN_LOOPS) $(YK_CODE_FILE)
 	$(YK_MK_GEN_DIR)
 	$< -output $@ $(BLOCK_LOOP_OPTS) $(EXTRA_LOOP_OPTS) $(EXTRA_BLOCK_LOOP_OPTS) "$(BLOCK_LOOP_CODE)"
 
-$(YK_GEN_DIR)/yask_sub_block_loops.hpp: $(GEN_LOOPS)
+$(YK_GEN_DIR)/yask_sub_block_loops.hpp: $(GEN_LOOPS) $(YK_CODE_FILE)
 	$(YK_MK_GEN_DIR)
 	$< -output $@ $(SUB_BLOCK_LOOP_OPTS) $(EXTRA_LOOP_OPTS) $(EXTRA_SUB_BLOCK_LOOP_OPTS) "$(SUB_BLOCK_LOOP_CODE)"
 
-$(YK_GEN_DIR)/yask_gen_loops.hpp: $(GEN_LOOPS)
+$(YK_GEN_DIR)/yask_gen_loops.hpp: $(GEN_LOOPS) $(YK_CODE_FILE)
 	$(YK_MK_GEN_DIR)
 	$< -output $@ $(GEN_LOOP_OPTS) $(EXTRA_LOOP_OPTS) $(EXTRA_GEN_LOOP_OPTS) "$(GEN_LOOP_CODE)"
 
@@ -546,6 +551,7 @@ $(YK_GEN_DIR)/yask_layouts.hpp: $(GEN_LAYOUTS)
 $(YK_CODE_FILE): $(YC_EXEC)
 	$(YK_MK_GEN_DIR)
 	$< $(YC_FLAGS) $(EXTRA_YC_FLAGS) -p $(YC_TARGET) $@
+	awk '/NUM_STENCIL_DIMS/ {print "-ndims",$$NF}' $@ > $(YK_DIMS_FILE)
 	@- gindent -fca $@ || \
 	  indent -fca $@ ||   \
 	  echo "note:" $@ "is not properly indented because no indent program was found."
@@ -653,11 +659,12 @@ all:
 # Make this target before rebuilding YASK with any new parameters.
 clean:
 	rm -fv *.s
+	rm -fv num_dims.*.txt
 	rm -fr $(YK_SWIG_DIR)/build $(YK_GEN_DIR)
 	rm -fv $(YK_SWIG_DIR)/*_api_wrap.*
 	rm -fv $(YK_OBJS)
-	find . -name '*.o' | xargs -r rm -v
-	find . $(BIN_DIR) $(LIB_DIR) -name '*.optrpt' | xargs -r rm -v
+	find . $(COMM_DIR) -name '*.o' | xargs -r rm -v
+	find . $(COMM_DIR) $(BIN_DIR) $(LIB_DIR) -name '*.optrpt' | xargs -r rm -v
 
 # Remove executables, libs, etc.
 realclean: clean

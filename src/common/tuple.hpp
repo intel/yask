@@ -433,11 +433,15 @@ namespace yask {
         virtual bool areDimsSame(const Tuple& rhs, bool sameOrder = false) const {
             if (size() != rhs.size())
                 return false;
+
+            // Dims must be in same order.
             if (sameOrder) {
                 for (size_t i = 0; i < _q.size(); i++)
                     if (_q[i].getName() != rhs._q[i].getName())
                         return false;
             }
+
+            // Dims can be in any order.
             else {
                 for (auto& i : _q) {
                     auto& dim = i.getName();
@@ -451,8 +455,12 @@ namespace yask {
         // Equality is true if all dimensions and values are same.
         // Dimensions must be in same order.
         virtual bool operator==(const Tuple& rhs) const {
+
+            // Check dims.
             if (!areDimsSame(rhs, true))
                 return false;
+
+            // Check values.
             for (auto& i : _q) {
                 auto& dim = i.getName();
                 auto& val = i.getVal();

@@ -144,7 +144,7 @@ namespace yask {
                 else {
                     cerr << "Error: cannot create grid '" << name <<
                         "' with dimension '" << dims[i] << "' in position " <<
-                        i << "; step dimension must be in position 0.\n";
+                        i << "; step dimension must be first dimension.\n";
                     exit_yask(1);
                 }
             }
@@ -709,7 +709,7 @@ namespace yask {
         if (!bb_simple) {
             bool full_bb = true;
             
-            // If no holes, don't need to check domain.
+            // If no holes, don't need to check each point in domain.
             if (bb_num_points == bb_size)
                 TRACE_MSG3("...using scalar code without sub-domain checking.");
             
@@ -1400,6 +1400,13 @@ namespace yask {
             }
         }
 
+#warning FIXME: re-enable vectorization.
+        if (bb_simple) {
+            os << "Warning: vectorization disabled for this alpha version;"
+                " slower scalar calculations will be used.\n";
+            bb_simple = false;
+        }
+        
         // All done.
         bb_valid = true;
     }

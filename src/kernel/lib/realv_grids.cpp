@@ -75,8 +75,8 @@ namespace yask {
         return posn;
     }
         
-    // Checked resize: fails if mem different and already alloc'd.
-    // Otherwise, resizes the underlying generic grid.
+    // Resizes the underlying generic grid.
+    // Fails if mem different and already alloc'd.
     void YkGridBase::resize() {
 
 #warning FIXME
@@ -286,12 +286,20 @@ namespace yask {
                               real_t epsilon,
                               int maxPrint,
                               std::ostream& os) const {
-        if (!ref)
+        if (!ref) {
+            os << "** mismatch: no reference grid.\n";
             return get_num_storage_elements();
+        }
 
         // Dims & sizes same?
-        if (_ggb->are_dims_and_sizes_same(*ref->_ggb))
+        if (!_ggb->are_dims_and_sizes_same(*ref->_ggb)) {
+            os << "** mismatch due to incompatible grids: ";
+            print_info(os);
+            os << "; and ";
+            ref->print_info(os);
+            os << ".\n";
             return get_num_storage_elements();
+        }
         
         // Quick check for errors, assuming same layout.
         // TODO: check layout.

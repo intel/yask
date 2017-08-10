@@ -433,9 +433,13 @@ namespace yask {
                     typeName = oss.str();
                 }
 
+                // Typedef.
+                string typeDef = grid + "_type";
+                os << " typedef " << typeName << " " << typeDef << ";\n"; 
+                
                 // Actual grid declaration.
-                os << " std::shared_ptr<" << typeName << "> " << grid << "_ptr;\n" <<
-                    " " << typeName << "* " << grid << ";\n";
+                os << " std::shared_ptr<" << typeDef << "> " << grid << "_ptr;\n" <<
+                    " " << typeDef << "* " << grid << ";\n";
 
                 // Grid init.
                 ctorCode += "\n // Init grid '" + grid + "'.\n";
@@ -448,7 +452,7 @@ namespace yask {
                     ndn++;
                 }
                 ctorCode += "};\n";
-                ctorCode += " " + grid + "_ptr = std::make_shared<" + typeName +
+                ctorCode += " " + grid + "_ptr = std::make_shared<" + typeDef +
                     ">(_dims, \"" + grid + "\", " + grid + "_dim_names);\n";
                 ctorCode += " " + grid + " = " + grid + "_ptr.get();\n";
                 ctorCode += " addGrid(" + grid + "_ptr, ";
@@ -779,7 +783,7 @@ namespace yask {
                 for (auto& dim : _dims._stencilDims.getDims()) {
                     auto& dname = dim.getName();
                     string ucDim = allCaps(dname);
-                    if (i > 0)
+                    if (dname != _dims._stepDim)
                         os << " sub_block_idxs.step[" << i << "] = CMULT_" << ucDim << ";\n";
                     i++;
                 }
@@ -904,6 +908,9 @@ namespace yask {
 
         os << "\n// FP precision:\n"
             "#define REAL_BYTES " << _settings._elem_bytes << endl;
+
+        os << "\n// Number of stencil dimensions (step and domain):\n"
+            "#define NUM_STENCIL_DIMS " << _dims._stencilDims.size() << endl;
         
         // Vec/cluster lengths.
         os << "\n// One vector fold: " << _dims._fold.makeDimValStr(" * ") << endl;

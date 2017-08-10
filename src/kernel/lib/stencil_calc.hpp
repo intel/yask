@@ -277,7 +277,7 @@ namespace yask {
         // Following values are calculated from the above ones.
         IdxTuple bb_len;       // size in each dim.
         idx_t bb_size=1;       // points in the entire box >= bb_num_points.
-        bool bb_simple=true;   // full box with aligned vectors only.
+        bool bb_simple=false;  // full box with aligned vectors only.
         bool bb_valid=false;   // lengths and sizes have been calculated.
 
         // Calc values and set valid to true.
