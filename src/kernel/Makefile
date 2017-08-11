@@ -240,7 +240,7 @@ fold	= 	$(fold_$(real_bytes)byte) # e.g., fold_4byte
 # Thus, N-1 is the inner-most dim.
 # For best perf, this should be the unit-stride dim in the grids.
 
-# Extract number of dims from file created from YASK compiler output.
+# File with number of dims extracted from YASK compiler output.
 YK_DIMS_FILE		:=	num_dims.$(stencil).txt
 NDIMS_OPT		:=	`cat $(YK_DIMS_FILE)`
 
@@ -514,23 +514,23 @@ $(MAKE_REPORT_FILE): $(YK_EXEC)
 #$(MAKE) code-stats | tee -a $@
 
 # Generated files.
-$(YK_GEN_DIR)/yask_rank_loops.hpp: $(GEN_LOOPS) $(YK_CODE_FILE)
+$(YK_GEN_DIR)/yask_rank_loops.hpp: $(GEN_LOOPS) $(YK_DIMS_FILE)
 	$(YK_MK_GEN_DIR)
 	$< -output $@ $(RANK_LOOP_OPTS) $(EXTRA_LOOP_OPTS) $(EXTRA_RANK_LOOP_OPTS) "$(RANK_LOOP_CODE)"
 
-$(YK_GEN_DIR)/yask_region_loops.hpp: $(GEN_LOOPS) $(YK_CODE_FILE)
+$(YK_GEN_DIR)/yask_region_loops.hpp: $(GEN_LOOPS) $(YK_DIMS_FILE)
 	$(YK_MK_GEN_DIR)
 	$< -output $@ $(REGION_LOOP_OPTS) $(EXTRA_LOOP_OPTS) $(EXTRA_REGION_LOOP_OPTS) "$(REGION_LOOP_CODE)"
 
-$(YK_GEN_DIR)/yask_block_loops.hpp: $(GEN_LOOPS) $(YK_CODE_FILE)
+$(YK_GEN_DIR)/yask_block_loops.hpp: $(GEN_LOOPS) $(YK_DIMS_FILE)
 	$(YK_MK_GEN_DIR)
 	$< -output $@ $(BLOCK_LOOP_OPTS) $(EXTRA_LOOP_OPTS) $(EXTRA_BLOCK_LOOP_OPTS) "$(BLOCK_LOOP_CODE)"
 
-$(YK_GEN_DIR)/yask_sub_block_loops.hpp: $(GEN_LOOPS) $(YK_CODE_FILE)
+$(YK_GEN_DIR)/yask_sub_block_loops.hpp: $(GEN_LOOPS) $(YK_DIMS_FILE)
 	$(YK_MK_GEN_DIR)
 	$< -output $@ $(SUB_BLOCK_LOOP_OPTS) $(EXTRA_LOOP_OPTS) $(EXTRA_SUB_BLOCK_LOOP_OPTS) "$(SUB_BLOCK_LOOP_CODE)"
 
-$(YK_GEN_DIR)/yask_gen_loops.hpp: $(GEN_LOOPS) $(YK_CODE_FILE)
+$(YK_GEN_DIR)/yask_gen_loops.hpp: $(GEN_LOOPS) $(YK_DIMS_FILE)
 	$(YK_MK_GEN_DIR)
 	$< -output $@ $(GEN_LOOP_OPTS) $(EXTRA_LOOP_OPTS) $(EXTRA_GEN_LOOP_OPTS) "$(GEN_LOOP_CODE)"
 
@@ -548,10 +548,14 @@ $(YK_GEN_DIR)/yask_layouts.hpp: $(GEN_LAYOUTS)
 	  indent -fca $@ ||   \
 	  echo "note:" $@ "is not properly indented because no indent program was found."
 
+# Extract the number of stencil dims from the compiler output.
+# Use this to create an option to pass to the loop generator script.
+$(YK_DIMS_FILE): $(YK_CODE_FILE)
+	awk '/NUM_STENCIL_DIMS/ {print "-ndims",$$NF}' $@ > $(YK_DIMS_FILE)
+
 $(YK_CODE_FILE): $(YC_EXEC)
 	$(YK_MK_GEN_DIR)
 	$< $(YC_FLAGS) $(EXTRA_YC_FLAGS) -p $(YC_TARGET) $@
-	awk '/NUM_STENCIL_DIMS/ {print "-ndims",$$NF}' $@ > $(YK_DIMS_FILE)
 	@- gindent -fca $@ || \
 	  indent -fca $@ ||   \
 	  echo "note:" $@ "is not properly indented because no indent program was found."
@@ -642,12 +646,15 @@ yk-test-no-yc: kernel-only
 
 # NB: set arch var if applicable.
 # NB: save some time by using YK_CXXOPT=-O2.
+# These tests are focused on the kernel and not the compiler.
+# For testing both the kernel and compiler in various combinations,
+# run the tests from the top-level Makefile.
 all-tests:
 	$(MAKE) clean; $(MAKE) stencil=iso3dfd yc-and-yk-test
-	$(MAKE) clean; $(MAKE) stencil=awp yc-and-yk-test
-	$(MAKE) clean; $(MAKE) stencil=fsg_abc yc-and-yk-test
 	$(MAKE) clean; $(MAKE) stencil=iso3dfd cxx-yk-api-test
 	$(MAKE) clean; $(MAKE) stencil=iso3dfd py-yk-api-test
+	$(MAKE) clean; $(MAKE) stencil=awp_elastic yc-and-yk-test
+	$(MAKE) clean; $(MAKE) stencil=fsg_abc yc-and-yk-test
 
 all:
 	$(MAKE) kernel

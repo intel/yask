@@ -48,7 +48,10 @@ int main() {
     for (auto dim_name : soln->get_domain_dim_names()) {
 
         // Set domain size in each dim.
-        soln->set_rank_domain_size(dim_name, 150);
+        soln->set_rank_domain_size(dim_name, 128);
+
+        // Ensure some minimal padding on all grids.
+        soln->set_min_pad_size(dim_name, 1);
 
         // Set block size to 64 in z dim and 32 in other dims.
         if (dim_name == "z")
@@ -83,6 +86,12 @@ int main() {
         for (auto dname : grid->get_dim_names())
             cout << " '" << dname << "'";
         cout << " )\n";
+        for (auto dname : grid->get_dim_names()) {
+            if (domain_dim_set.count(dname))
+                cout << "      '" << dname << "' allowed index range on this rank: " <<
+                    grid->get_first_rank_alloc_index(dname) << " ... " <<
+                    grid->get_last_rank_alloc_index(dname) << endl;
+        }
 
         // First, just init all the elements to the same value.
         grid->set_all_elements_same(0.1);

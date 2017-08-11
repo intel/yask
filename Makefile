@@ -195,6 +195,7 @@ all-tests: compiler
 docs: api-docs
 
 all:
+	$(MAKE) realclean
 	$(MAKE) default
 	$(MAKE) all-tests
 	$(MAKE) clean

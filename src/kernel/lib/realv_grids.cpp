@@ -157,7 +157,8 @@ namespace yask {
     GET_GRID_API(_get_offset, _offsets[posn], true, true, true)
     GET_GRID_API(_get_first_allowed_index, _offsets[posn] - _pads[posn], true, true, true)
     GET_GRID_API(_get_last_allowed_index, _offsets[posn] + _domains[posn] + _pads[posn] - 1, true, true, true)
-
+#undef GET_GRID_API
+    
     // APIs to set vars.
 #define COMMA ,
 #define SET_GRID_API(api_name, expr, step_ok, domain_ok, misc_ok)       \
@@ -167,14 +168,15 @@ namespace yask {
         expr;                                                           \
     }
     SET_GRID_API(set_halo_size, _halos[posn] = n; _set_pad_size(dim, _pads[posn]), false, true, false)
-    SET_GRID_API(set_min_pad_size, if (n < _pads[posn]) _set_pad_size(dim, n), false, true, false)
-    SET_GRID_API(set_extra_pad_size, _set_pad_size(dim, _halos[posn] + n), false, true, false)
+    SET_GRID_API(set_min_pad_size, if (n > _pads[posn]) _set_pad_size(dim, n), false, true, false)
+    SET_GRID_API(set_extra_pad_size, set_min_pad_size(dim, _halos[posn] + n), false, true, false)
     SET_GRID_API(set_first_misc_index, _offsets[posn] = n, false, false, true)
     SET_GRID_API(set_alloc_size, _set_domain_size(dim, n); resize(), true, false, true)
     SET_GRID_API(_set_domain_size, _domains[posn] = n; resize(), true, true, true)
     SET_GRID_API(_set_pad_size, _pads[posn] = std::max(n COMMA _halos[posn]); resize(), true, true, true)
     SET_GRID_API(_set_offset, _offsets[posn] = n, true, true, true)
 #undef COMMA
+#undef SET_GRID_API
     
     bool YkGridBase::is_storage_layout_identical(const yk_grid_ptr other) const {
         auto op = dynamic_pointer_cast<YkGridBase>(other);

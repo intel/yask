@@ -152,8 +152,8 @@ cxx-yc-api-test: $(YC_TEST_EXEC)
 ######## Misc targets
 
 all-tests:
-	$(MAKE) py-yc-api-test
 	$(MAKE) cxx-yc-api-test
+	$(MAKE) py-yc-api-test
 
 all:
 	$(MAKE) compiler

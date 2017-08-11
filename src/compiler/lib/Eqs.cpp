@@ -390,7 +390,7 @@ namespace yask {
         os << " Done.\n";
     }
 
-    // Visitor for determining vectorization of grid points.
+    // Visitor for determining vectorization potential of grid points.
     class SetVecVisitor : public ExprVisitor {
         const Dimensions& _dims;
         
@@ -401,36 +401,34 @@ namespace yask {
         // Check each grid point in expr.
         virtual void visit(GridPoint* gp) {
 
-            // Amount of vectorization primarily depends on number of folded
-            // dimensions accessed.
+            // Amount of vectorization allowed primarily depends on number
+            // of folded dimensions in the grid accessed at this point.
             auto* grid = gp->getGrid();
-            int nfd = grid->getNumFoldableDims();
+            int grid_nfd = grid->getNumFoldableDims();
+            int soln_nfd = _dims._foldGT1.size();
+            assert(grid_nfd <= soln_nfd);
 
-            // Uses no folded dims, so scalar only.
-            if (nfd == 0)
-                gp->setVecType(GridPoint::VEC_NONE);
-
-            // Uses a subset of folded dims, so can only
-            // do partial vectorization via permutation-type accesses.
-            else if (nfd < _dims._foldGT1.size())
-                gp->setVecType(GridPoint::VEC_PARTIAL);
-
-            // If all folded dims are used, we need to determine
-            // if all accesses are using simple offsets.
-            // Only then can full vectorization be used.
-            else {
-                assert (nfd == _dims._foldGT1.size());
-                int fdoffsets = 0;
-                for (auto fdim : _dims._foldGT1.getDims()) {
-                    auto& fdname = fdim.getName();
-                    if (gp->getArgOffsets().lookup(fdname))
-                        fdoffsets++;
-                }
-                if (fdoffsets == _dims._foldGT1.size())
-                    gp->setVecType(GridPoint::VEC_FULL); // all good.
-                else
-                    gp->setVecType(GridPoint::VEC_PARTIAL); // fallback.
+            // Vectorization is only possible if each access
+            // is a simple offset.
+            int fdoffsets = 0;
+            for (auto fdim : _dims._foldGT1.getDims()) {
+                auto& fdname = fdim.getName();
+                if (gp->getArgOffsets().lookup(fdname))
+                    fdoffsets++;
             }
+            assert(fdoffsets <= grid_nfd);
+
+            // All folded dims are vectorizable.
+            if (fdoffsets == soln_nfd)
+                gp->setVecType(GridPoint::VEC_FULL); // all good.
+
+            // Some dims are vectorizable.
+            else if (fdoffsets > 0)
+                gp->setVecType(GridPoint::VEC_PARTIAL);
+            
+            // Uses no folded dims, so scalar only.
+            else
+                gp->setVecType(GridPoint::VEC_NONE);
         }
     };
     

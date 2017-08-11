@@ -39,11 +39,15 @@ if __name__ == "__main__":
     soln = cfac.new_solution("api_py_test")
     do = ofac.new_string_output()
     soln.set_debug_output(do)
-    soln.set_step_dim_name("t")
-    soln.set_domain_dim_names(["x", "y", "z"])
+
+    # Define the problem dimensions.
+    t = soln.new_step_index("t");
+    x = soln.new_domain_index("x");
+    y = soln.new_domain_index("y");
+    z = soln.new_domain_index("z");
 
     # Create a grid var.
-    g1 = soln.new_grid("test_grid", ["t", "x", "y", "z"])
+    g1 = soln.new_grid("test_grid", [t, x, y, z])
 
     # Create an expression for the new value.
     # This will average some of the neighboring points around the

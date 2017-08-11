@@ -99,29 +99,31 @@ namespace yask {
         return new_solution(env, nullptr);
     }
 
-#define GET_SOLUTION_API(api_name, expr, step_ok, domain_ok, misc_ok)   \
+#define GET_SOLN_API(api_name, expr, step_ok, domain_ok, misc_ok)   \
     idx_t StencilContext::api_name(const string& dim) const {           \
         checkDimType(dim, #api_name, step_ok, domain_ok, misc_ok);      \
         return expr;                                                    \
     }
-    GET_SOLUTION_API(get_first_rank_domain_index, bb_begin[dim], false, true, false)
-    GET_SOLUTION_API(get_last_rank_domain_index, bb_end[dim] - 1, false, true, false)
-    GET_SOLUTION_API(get_overall_domain_size, overall_domain_sizes[dim], false, true, false)
-    GET_SOLUTION_API(get_rank_domain_size, _opts->_rank_sizes[dim], false, true, false)
-    GET_SOLUTION_API(get_min_pad_size, _opts->_min_pad_sizes[dim], false, true, false)
-    GET_SOLUTION_API(get_block_size, _opts->_block_sizes[dim], false, true, false)
-    GET_SOLUTION_API(get_num_ranks, _opts->_num_ranks[dim], false, true, false)
-    GET_SOLUTION_API(get_rank_index, _opts->_rank_indices[dim], false, true, false)
+    GET_SOLN_API(get_first_rank_domain_index, bb_begin[dim], false, true, false)
+    GET_SOLN_API(get_last_rank_domain_index, bb_end[dim] - 1, false, true, false)
+    GET_SOLN_API(get_overall_domain_size, overall_domain_sizes[dim], false, true, false)
+    GET_SOLN_API(get_rank_domain_size, _opts->_rank_sizes[dim], false, true, false)
+    GET_SOLN_API(get_min_pad_size, _opts->_min_pad_sizes[dim], false, true, false)
+    GET_SOLN_API(get_block_size, _opts->_block_sizes[dim], false, true, false)
+    GET_SOLN_API(get_num_ranks, _opts->_num_ranks[dim], false, true, false)
+    GET_SOLN_API(get_rank_index, _opts->_rank_indices[dim], false, true, false)
+#undef GET_SOLN_API
 
-#define SET_SOLUTION_API(api_name, expr, step_ok, domain_ok, misc_ok)   \
+#define SET_SOLN_API(api_name, expr, step_ok, domain_ok, misc_ok)       \
     void StencilContext::api_name(const string& dim, idx_t n) {         \
         checkDimType(dim, #api_name, step_ok, domain_ok, misc_ok);      \
         expr;                                                           \
     }
-    SET_SOLUTION_API(set_rank_domain_size, _opts->_rank_sizes[dim] = n, false, true, false)
-    SET_SOLUTION_API(set_min_pad_size, _opts->_min_pad_sizes[dim] = n, false, true, false)
-    SET_SOLUTION_API(set_block_size, _opts->_block_sizes[dim] = n, false, true, false)
-    SET_SOLUTION_API(set_num_ranks, _opts->_num_ranks[dim] = n, false, true, false)
+    SET_SOLN_API(set_rank_domain_size, _opts->_rank_sizes[dim] = n, false, true, false)
+    SET_SOLN_API(set_min_pad_size, _opts->_min_pad_sizes[dim] = n, false, true, false)
+    SET_SOLN_API(set_block_size, _opts->_block_sizes[dim] = n, false, true, false)
+    SET_SOLN_API(set_num_ranks, _opts->_num_ranks[dim] = n, false, true, false)
+#undef SET_SOLN_API
     
     string StencilContext::get_domain_dim_name(int n) const {
         auto* p = _dims->_domain_dims.lookup(n);

@@ -481,7 +481,7 @@ namespace yask {
     };
 
     /// A reference to a point in a grid.
-    class yc_grid_point_node : public virtual yc_number_node {
+   class yc_grid_point_node : public virtual yc_number_node {
     public:
 
         /// Get the grid this point is in.

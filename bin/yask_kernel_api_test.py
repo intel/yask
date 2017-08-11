@@ -70,8 +70,8 @@ def read_grid(grid, timestep) :
         else :
 
             # Read first index only.
-            first_indices += [grid.get_first_misc_index()]
-            last_indices += [grid.get_first_misc_index()]
+            first_indices += [grid.get_first_misc_index(dname)]
+            last_indices += [grid.get_first_misc_index(dname)]
 
     # Create a NumPy ndarray to hold the extracted data.
     ndarray1 = np.empty(shape, dtype, 'C');
@@ -135,8 +135,8 @@ def init_grid(grid, timestep) :
         else :
 
             # Write first index only.
-            first_indices += [grid.get_first_misc_index()]
-            last_indices += [grid.get_first_misc_index()]
+            first_indices += [grid.get_first_misc_index(dname)]
+            last_indices += [grid.get_first_misc_index(dname)]
 
     # Create a NumPy ndarray to hold the data.
     ndarray = np.zeros(shape, dtype, 'C');
@@ -181,10 +181,11 @@ if __name__ == "__main__":
         # Set domain size in each dim.
         soln.set_rank_domain_size(dim_name, 128)
 
-        # Add some padding to all grids.
-        soln.set_min_pad_size(dim_name, 16)
+        # Ensure some minimal padding on all grids.
+        soln.set_min_pad_size(dim_name, 1)
 
         # Set block size to 64 in z dim and 32 in other dims.
+        # (Not necessarily useful, just as an example.)
         if dim_name == "z" :
             soln.set_block_size(dim_name, 64)
         else :
@@ -207,6 +208,15 @@ if __name__ == "__main__":
     print("  Grids:")
     for grid in soln.get_grids() :
         print("    " + grid.get_name() + repr(grid.get_dim_names()))
+        for dname in grid.get_dim_names() :
+            if dname in soln.get_domain_dim_names() :
+                print("      '" + dname + "' allowed index range in this rank: " +
+                      repr(grid.get_first_rank_alloc_index(dname)) + " ... " +
+                      repr(grid.get_last_rank_alloc_index(dname)))
+            elif dname in soln.get_misc_dim_names() :
+                print("      '" + dname + "' allowed index range: " +
+                      repr(grid.get_first_misc_index(dname)) + " ... " +
+                      repr(grid.get_last_misc_index(dname)))
 
     # Init the grids.
     for grid in soln.get_grids() :
