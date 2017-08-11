@@ -519,10 +519,20 @@ namespace yask {
        of the pre-defined solution.
 
        Each dimension of a grid is one of the following:
-       - A *domain* dimension as identified via yk_solution:get_domain_dim_names().
-       - The *step* dimension, typically time ("t").
-       - A *miscellaneous* dimension, which is any dimension that is not a domain or step dimension.
+       - The *step* dimension, typically time ("t"), as identified via yk_solution::get_step_dim_name().
+       - A *domain* dimension, typically a spatial dimension such as "x" or "y",
+       as identified via yk_solution:get_domain_dim_names().
+       - A *miscellaneous* dimension, which is any dimension that is not a domain or step dimension,
+       as identified via yk_solution:get_misc_dim_names().
        
+       In the step dimension, there is no fixed domain size, and no
+       specified first or last index.
+       However, there is an allocation size, which is the number of values in the step
+       dimension that are stored in memory.
+       Step-dimension indices "wrap-around" within this allocation to reuse memory.
+       For example, if the step dimension is "t", and the t-dimension allocation size is 3,
+       then t=-2, t=0, t=3, t=6, ..., t=303, etc. would all alias to the same spatial values in memory.
+
        In each domain dimension,
        grid sizes include the following components:
        - The *domain* is the points to which the stencils are applied.
@@ -559,16 +569,9 @@ namespace yask {
        Data in these overlapped regions is exchanged as needed during stencil application
        to maintain a consistent values as if there was only one rank.
 
-       In the step dimension, there is no fixed domain size.
-       But there is an allocation size, which is the number of values in the step
-       dimension that are stored in memory. 
-       Step-dimension indices "wrap-around" within this allocation to reuse memory.
-       For example, if the step dimension is "t", and the t-dimension allocation size is 3,
-       then t=-2, t=0, t=3, t=6, ..., t=303, etc. would all alias to the same spatial values in memory.
-
        In each miscellaneous dimension, there is only an allocation size,
-       and there is no wrap-around as above.
-       Each index must be between zero and one less than the its allocation size in that dimension.
+       and there is no wrap-around as in the step dimension.
+       Each index must be between its first and last allowed value.
 
        All sizes are expressed in numbers of elements.
        Each element may be a 4-byte (single precision)
@@ -683,7 +686,7 @@ namespace yask {
         */
         virtual idx_t
         get_halo_size(const std::string& dim
-                      /**< [in] Name of dimension from get_dim_name().
+                      /**< [in] Name of dimension to get.
                          Must be one of
                          the names from yk_solution::get_domain_dim_names(). */ ) const =0;
         
@@ -700,7 +703,7 @@ namespace yask {
         */
         virtual void
         set_halo_size(const std::string& dim
-                      /**< [in] Name of dimension from get_dim_name().
+                      /**< [in] Name of dimension to get.
                          Must be one of
                          the names from yk_solution::get_domain_dim_names(). */,
                       idx_t size
@@ -720,7 +723,7 @@ namespace yask {
         */
         virtual idx_t
         get_pad_size(const std::string& dim
-                     /**< [in] Name of dimension from get_dim_name().
+                     /**< [in] Name of dimension to get.
                          Must be one of
                          the names from yk_solution::get_domain_dim_names(). */ ) const =0;
 
@@ -733,7 +736,7 @@ namespace yask {
         */
         virtual idx_t
         get_extra_pad_size(const std::string& dim
-                           /**< [in] Name of dimension from get_dim_name().
+                           /**< [in] Name of dimension to get.
                               Must be one of
                               the names from yk_solution::get_domain_dim_names(). */ ) const =0;
 
@@ -760,7 +763,7 @@ namespace yask {
         */
         virtual void
         set_min_pad_size(const std::string& dim
-                         /**< [in] Name of dimension from get_dim_name().
+                         /**< [in] Name of dimension to set.
                             Must be one of
                             the names from yk_solution::get_domain_dim_names(). */,
                          idx_t size
@@ -776,7 +779,7 @@ namespace yask {
         */
         virtual idx_t
         get_alloc_size(const std::string& dim
-                       /**< [in] Name of dimension from get_dim_name(). */ ) const =0;
+                       /**< [in] Name of dimension to get. */ ) const =0;
 
         /// **[Advanced]** Set the number of points to allocate in the specified dimension.
         /** 
@@ -791,20 +794,23 @@ namespace yask {
         */
         virtual void
         set_alloc_size(const std::string& dim
-                       /**< [in] Name of dimension from get_dim_name().
+                       /**< [in] Name of dimension to set.
                           Must *not* be one of
                           the names from yk_solution::get_domain_dim_names(). */,
-                       idx_t size /**< [in] Number of points to allocate. */ ) =0;
+                       idx_t size /**< [in] Number of elements to allocate. */ ) =0;
 
         /// Get the first accessible index in this grid in this rank in the specified dimension.
         /**
            This returns the first *overall* index allowed in this grid.
            This point may be in the domain, halo, or extra padding area.
+           This function is only for checking the legality of an index.
+           It should not be used to find a useful index; use a combination of
+           get_first_rank_domain_index() and get_halo_size() instead.
            @returns First allowed index in this grid.
         */
         virtual idx_t
         get_first_rank_alloc_index(const std::string& dim
-                                   /**< [in] Name of dimension from get_domain_dim_name().
+                                   /**< [in] Name of dimension to get.
                                       Must be one of
                                       the names from yk_solution::get_domain_dim_names(). */ ) const =0;
 
@@ -812,14 +818,49 @@ namespace yask {
         /**
            This returns the last *overall* index allowed in this grid.
            This point may be in the domain, halo, or extra padding area.
+           This function is only for checking the legality of an index.
+           It should not be used to find a useful index; use a combination of
+           get_last_rank_domain_index() and get_halo_size() instead.
            @returns Last allowed index in this grid.
         */
         virtual idx_t
         get_last_rank_alloc_index(const std::string& dim
-                                  /**< [in] Name of dimension from get_domain_dim_name().
+                                  /**< [in] Name of dimension to get.
                                      Must be one of
                                      the names from yk_solution::get_domain_dim_names(). */ ) const =0;
 
+        /// Get the first index of a specified miscellaneous dimension.
+        /**
+           @returns the first allowed index in a non-step and non-domain dimension.
+        */
+        virtual idx_t
+        get_first_misc_index(const std::string& dim
+                             /**< [in] Name of dimension to get.  Must be one of
+                                the names from yk_solution::get_misc_dim_names(). */ ) const =0;
+        
+        /// Set the first index of a specified miscellaneous dimension.
+        /**
+           Sets the first allowed index in a non-step and non-domain dimension.
+           After calling this function, the last allowed index will be the first index
+           as set by this function plus the allocation size set by set_alloc_size()
+           minus one.
+        */
+        virtual void
+        set_first_misc_index(const std::string& dim
+                             /**< [in] Name of dimension to get.  Must be one of
+                                the names from yk_solution::get_misc_dim_names(). */,
+                             idx_t idx /**< [in] New value for first index.
+                                        May be negative. */ ) =0;
+        
+        /// Get the last index of a specified miscellaneous dimension.
+        /**
+           @returns the last allowed index in a non-step and non-domain dimension.
+        */
+        virtual idx_t
+        get_last_misc_index(const std::string& dim
+                            /**< [in] Name of dimension to get.  Must be one of
+                               the names from yk_solution::get_misc_dim_names(). */ ) const =0;
+        
         /// Get the value of one grid point.
         /**
            Provide indices in a list in the same order returned by get_dim_names().

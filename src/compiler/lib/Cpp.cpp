@@ -511,7 +511,7 @@ namespace yask {
                         if (oval) {
                             os << " const idx_t " << ovar << " = " << oval <<
                                 "; // first index in '" << dname << "' dimension.\n";
-                        ctorCode += " " + grid + "->set_first_index(\"" + dname +
+                        ctorCode += " " + grid + "->set_first_misc_index(\"" + dname +
                             "\", " + ovar + ");\n";
                         }
                     }

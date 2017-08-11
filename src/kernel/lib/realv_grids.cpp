@@ -146,8 +146,8 @@ namespace yask {
     GET_GRID_API(get_rank_domain_size, _domains[posn], false, true, false)
     GET_GRID_API(get_pad_size, _pads[posn], false, true, false)
     GET_GRID_API(get_halo_size, _halos[posn], false, true, false)
-    GET_GRID_API(get_first_index, _offsets[posn], false, false, true)
-    GET_GRID_API(get_last_index, _offsets[posn] + _domains[posn] - 1, false, false, true)
+    GET_GRID_API(get_first_misc_index, _offsets[posn], false, false, true)
+    GET_GRID_API(get_last_misc_index, _offsets[posn] + _domains[posn] - 1, false, false, true)
     GET_GRID_API(get_first_rank_domain_index, _offsets[posn], false, true, false)
     GET_GRID_API(get_last_rank_domain_index, _offsets[posn] + _domains[posn] - 1, false, true, false)
     GET_GRID_API(get_first_rank_alloc_index, _offsets[posn] - _pads[posn], false, true, false)
@@ -155,6 +155,8 @@ namespace yask {
     GET_GRID_API(get_extra_pad_size, _pads[posn] - _halos[posn], false, true, false)
     GET_GRID_API(get_alloc_size, _ggb->get_dim_size(posn), true, true, true)
     GET_GRID_API(_get_offset, _offsets[posn], true, true, true)
+    GET_GRID_API(_get_first_allowed_index, _offsets[posn] - _pads[posn], true, true, true)
+    GET_GRID_API(_get_last_allowed_index, _offsets[posn] + _domains[posn] + _pads[posn] - 1, true, true, true)
 
     // APIs to set vars.
 #define COMMA ,
@@ -167,7 +169,7 @@ namespace yask {
     SET_GRID_API(set_halo_size, _halos[posn] = n; _set_pad_size(dim, _pads[posn]), false, true, false)
     SET_GRID_API(set_min_pad_size, if (n < _pads[posn]) _set_pad_size(dim, n), false, true, false)
     SET_GRID_API(set_extra_pad_size, _set_pad_size(dim, _halos[posn] + n), false, true, false)
-    SET_GRID_API(set_first_index, _offsets[posn] = n, false, false, true)
+    SET_GRID_API(set_first_misc_index, _offsets[posn] = n, false, false, true)
     SET_GRID_API(set_alloc_size, _set_domain_size(dim, n); resize(), true, false, true)
     SET_GRID_API(_set_domain_size, _domains[posn] = n; resize(), true, true, true)
     SET_GRID_API(_set_pad_size, _pads[posn] = std::max(n COMMA _halos[posn]); resize(), true, true, true)
@@ -368,8 +370,8 @@ namespace yask {
                 continue;
 
             // Within first..last indices?
-            auto first_ok = get_first_rank_alloc_index(dname);
-            auto last_ok = get_last_rank_alloc_index(dname);
+            auto first_ok = _get_first_allowed_index(dname);
+            auto last_ok = _get_last_allowed_index(dname);
             if (idx < first_ok || idx > last_ok) {
                 if (strict_indices) {
                     cerr << "Error: " << fn << ": index in dim '" << dname <<

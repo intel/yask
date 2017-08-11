@@ -42,6 +42,7 @@ def read_grid(grid, timestep) :
     shape = []
     nelems = 1
     for dname in grid.get_dim_names() :
+
         if dname == soln.get_step_dim_name() :
 
             # Read one timestep only.
@@ -49,7 +50,8 @@ def read_grid(grid, timestep) :
             first_indices += [timestep]
             last_indices += [timestep]
 
-        else :
+        # Domain dim?
+        elif dname in soln.get_domain_dim_names() :
 
             # Full domain in this rank.
             first_idx = soln.get_first_rank_domain_index(dname)
@@ -63,6 +65,13 @@ def read_grid(grid, timestep) :
             last_indices += [last_idx]
             shape += [last_idx - first_idx + 1]
             nelems *= last_idx - first_idx + 1
+
+        # Misc dim?
+        else :
+
+            # Read first index only.
+            first_indices += [grid.get_first_misc_index()]
+            last_indices += [grid.get_first_misc_index()]
 
     # Create a NumPy ndarray to hold the extracted data.
     ndarray1 = np.empty(shape, dtype, 'C');
@@ -93,6 +102,7 @@ def init_grid(grid, timestep) :
     point = ()
     nelems = 1
     for dname in grid.get_dim_names() :
+
         if dname == soln.get_step_dim_name() :
 
             # Write one timestep only.
@@ -100,7 +110,8 @@ def init_grid(grid, timestep) :
             first_indices += [timestep]
             last_indices += [timestep]
 
-        else :
+        # Domain dim?
+        elif dname in soln.get_domain_dim_names() :
 
             # Full domain in this rank.
             first_idx = soln.get_first_rank_domain_index(dname)
@@ -119,6 +130,13 @@ def init_grid(grid, timestep) :
             # starting at 0,..,0, 1,..,1 is the first point in the
             # computable domain.
             point += (1,)
+
+        # Misc dim?
+        else :
+
+            # Write first index only.
+            first_indices += [grid.get_first_misc_index()]
+            last_indices += [grid.get_first_misc_index()]
 
     # Create a NumPy ndarray to hold the data.
     ndarray = np.zeros(shape, dtype, 'C');
@@ -218,14 +236,17 @@ if __name__ == "__main__":
         last_indices = []
             
         for dname in grid.get_dim_names() :
+
+            # Step dim?
             if dname == soln.get_step_dim_name() :
 
-                # Add index for initial timestep only.
+                # Add index for timestep zero (0) only.
+                one_indices += [0]
                 first_indices += [0]
                 last_indices += [0]
-                one_indices += [0]
 
-            else :
+            # Domain dim?
+            elif dname in soln.get_domain_dim_names() :
 
                 # Simple index for one point.
                 one_indices += [one_index]
@@ -236,6 +257,15 @@ if __name__ == "__main__":
                 # Create indices a small amount before and after the midpoint.
                 first_indices += [midpt - cube_radius]
                 last_indices += [midpt + cube_radius]
+
+            # Misc dim?
+            else :
+
+                # Add indices to set all allowed values.
+                # (This isn't really meaningful; it's just illustrative.)
+                one_indices += [grid.get_first_misc_index(dname)]
+                first_indices += [grid.get_first_misc_index(dname)]
+                last_indices += [grid.get_last_misc_index(dname)]
 
         # Init value at one point.
         nset = grid.set_element(15.0, one_indices)

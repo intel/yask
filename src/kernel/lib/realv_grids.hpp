@@ -190,10 +190,12 @@ namespace yask {
 
         // Settings that should never be exposed as APIs because
         // they can break the usage model.
-        virtual idx_t _get_offset(const std::string& dim) const; // not exposed.
-        virtual void _set_domain_size(const std::string& dim, idx_t size); // not exposed.
-        virtual void _set_pad_size(const std::string& dim, idx_t size); // not exposed.
-        virtual void _set_offset(const std::string& dim, idx_t size); // not exposed.
+        virtual idx_t _get_offset(const std::string& dim) const;
+        virtual idx_t _get_first_allowed_index(const std::string& dim) const;
+        virtual idx_t _get_last_allowed_index(const std::string& dim) const;
+        virtual void _set_domain_size(const std::string& dim, idx_t size);
+        virtual void _set_pad_size(const std::string& dim, idx_t size);
+        virtual void _set_offset(const std::string& dim, idx_t size);
         
         // APIs not defined above.
         // See yask_kernel_api.hpp.
@@ -227,14 +229,14 @@ namespace yask {
         virtual idx_t get_alloc_size(const std::string& dim) const;
         virtual idx_t get_first_rank_alloc_index(const std::string& dim) const;
         virtual idx_t get_last_rank_alloc_index(const std::string& dim) const;
-        virtual idx_t get_first_index(const std::string& dim) const;
-        virtual idx_t get_last_index(const std::string& dim) const;
+        virtual idx_t get_first_misc_index(const std::string& dim) const;
+        virtual idx_t get_last_misc_index(const std::string& dim) const;
 
         virtual void set_halo_size(const std::string& dim, idx_t size);
         virtual void set_min_pad_size(const std::string& dim, idx_t size);
         virtual void set_extra_pad_size(const std::string& dim, idx_t size);
         virtual void set_alloc_size(const std::string& dim, idx_t size);
-        virtual void set_first_index(const std::string& dim, idx_t size);
+        virtual void set_first_misc_index(const std::string& dim, idx_t size);
 
         virtual void set_all_elements_same(double val) =0;
         virtual double get_element(idx_t dim1_index, idx_t dim2_index,
