@@ -1167,7 +1167,7 @@ sub main() {
 
     my(@KNOBS) = (
         # knob,        description,   optional default
-        [ "ndims=i", "Value of N.", 3],
+        [ "ndims=i", "Value of N.", 1],
         [ "inVar=s", "Input index vars.", 'scanVars'],
         [ "comArgs=s", "Common arguments to all calls (after L1/L2 for prefetch).", ''],
         [ "calcPrefix=s", "Prefix for calculation call.", 'calc_'],

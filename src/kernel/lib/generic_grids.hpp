@@ -307,6 +307,8 @@ namespace yask {
             release_storage();
             
             // Share ownership of base.
+            // This ensures that last grid to use a shared allocation
+            // will trigger dealloc.
             _base = base;
             
             // Set plain pointer to new data.

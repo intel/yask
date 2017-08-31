@@ -298,12 +298,12 @@ if __name__ == "__main__":
     for grid in soln.get_grids() :
         read_grid(grid, 1)
 
-    print("Running the solution for 100 more steps...")
-    soln.run_solution(1, 100)
+    print("Running the solution for 10 more steps...")
+    soln.run_solution(1, 10)
 
-    # Print final result at timestep 101.
+    # Print final result at timestep 11.
     for grid in soln.get_grids() :
-        read_grid(grid, 101)
+        read_grid(grid, 11)
 
     print("Debug output captured:\n" + debug_output.get_string())
     print("End of YASK kernel API test.")

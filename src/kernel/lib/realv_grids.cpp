@@ -308,6 +308,7 @@ namespace yask {
         // Quick check for errors, assuming same layout.
         // TODO: check layout.
         idx_t errs = _ggb->count_diffs(ref->_ggb, epsilon);
+        TRACE_MSG0(os, "count_diffs() returned " << errs);
         if (!errs)
             return 0;
         
@@ -318,19 +319,20 @@ namespace yask {
         // This will loop over the entire allocation.
         // Indices of 'pt' will be relative to allocation.
         allocs.visitAllPoints([&](const IdxTuple& pt) {
-                auto te = readElem(pt, __LINE__);
-                auto re = ref->readElem(pt, __LINE__);
+
+                // Adjust alloc indices to overall indices.
+                IdxTuple opt;
+                for (int i = 0; i < pt.getNumDims(); i++) {
+                    auto dname = pt.getDimName(i);
+                    auto val = pt.getVal(i);
+                    opt.addDimBack(dname, _offsets[i] - _pads[i] + val);
+                }
+
+                auto te = readElem(opt, __LINE__);
+                auto re = ref->readElem(opt, __LINE__);
                 if (!within_tolerance(te, re, epsilon)) {
                     errs++;
                     if (errs < maxPrint) {
-
-                        // Adjust alloc indices to overall indices.
-                        IdxTuple opt;
-                        for (int i = 0; i < pt.getNumDims(); i++) {
-                            auto dname = pt.getDimName(i);
-                            auto val = pt.getVal(i);
-                            opt.addDimBack(dname, _offsets[i] - _pads[i] + val);
-                        }
                         os << "** mismatch at " << get_name() <<
                             "(" << opt.makeDimValStr() << "): " <<
                             te << " != " << re << std::endl;
@@ -339,10 +341,10 @@ namespace yask {
                         os << "** Additional errors not printed." << std::endl;
                     else {
                         // errs > maxPrint.
-                        return false;
+                        return false; // stop visits.
                     }
                 }
-                return true;
+                return true;    // keep visiting.
             });
         return errs;
     }

@@ -551,7 +551,7 @@ $(YK_GEN_DIR)/yask_layouts.hpp: $(GEN_LAYOUTS)
 # Extract the number of stencil dims from the compiler output.
 # Use this to create an option to pass to the loop generator script.
 $(YK_DIMS_FILE): $(YK_CODE_FILE)
-	awk '/NUM_STENCIL_DIMS/ {print "-ndims",$$NF}' $@ > $(YK_DIMS_FILE)
+	awk '/NUM_STENCIL_DIMS/ {print "-ndims",$$NF}' $< > $@
 
 $(YK_CODE_FILE): $(YC_EXEC)
 	$(YK_MK_GEN_DIR)

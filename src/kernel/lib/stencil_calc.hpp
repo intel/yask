@@ -441,14 +441,7 @@ namespace yask {
         }
 
         // Add a new grid to the containers.
-        virtual void addGrid(YkGridPtr gp, bool is_output) {
-            gridPtrs.push_back(gp);
-            gridMap[gp->get_name()] = gp;
-            if (is_output) {
-                outputGridPtrs.push_back(gp);
-                outputGridMap[gp->get_name()] = gp;
-            }
-        }
+        virtual void addGrid(YkGridPtr gp, bool is_output);
         
         // Set vars related to this rank's role in global problem.
         // Allocate MPI buffers as needed.
@@ -578,7 +571,8 @@ namespace yask {
         virtual void find_bounding_boxes();
 
         virtual YkGridPtr newGrid(const std::string& name,
-                                  const std::vector<std::string>& dims);
+                                  const std::vector<std::string>& dims,
+                                  bool is_visible = true);
 
         // APIs.
         // See yask_kernel_api.hpp.
@@ -698,7 +692,8 @@ namespace yask {
         // Grids that are written to by these stencil equations.
         GridPtrs outputGridPtrs;
 
-        // Grids that are read by these stencil equations.
+        // Grids that are read by these stencil equations (not necessarify
+        // read-only, i.e., a grid can be input and output).
         GridPtrs inputGridPtrs;
 
         // ctor, dtor.

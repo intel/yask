@@ -150,8 +150,8 @@ int main() {
     env->global_barrier();
     cout << "Running the solution for 1 step...\n";
     soln->run_solution(0);
-    cout << "Running the solution for 100 more steps...\n";
-    soln->run_solution(1, 100);
+    cout << "Running the solution for 10 more steps...\n";
+    soln->run_solution(1, 10);
 
     cout << "End of YASK kernel API test.\n";
     return 0;

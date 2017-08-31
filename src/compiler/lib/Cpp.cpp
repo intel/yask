@@ -351,9 +351,6 @@ namespace yask {
             CounterVisitor cve;
             _eqGroups.visitEqs(&cve);
 
-            // TODO: get rid of global max-halo concept by using grid-specific halos.
-            IntTuple maxHalos;
-
             os << endl << " ////// Stencil-specific data //////" << endl <<
                 "struct " << _context_base << " : public StencilContext {" << endl;
 
@@ -379,7 +376,7 @@ namespace yask {
                 string typeName;
             
                 // Use vector-folded layout if possible.
-#warning FIXME: enable folding.
+#warning FIXME: reenable folding.
                 bool folded = false; // FIXME: gp->isFoldable();
 
                 // Folded layout.
@@ -479,12 +476,6 @@ namespace yask {
                         ctorCode += " " + grid + "->set_halo_size(\"" + dname +
                             "\", " + hvar + ");\n";
 
-                        // Update max halo across grids.
-                        int* mh = maxHalos.lookup(dname);
-                        if (mh)
-                            *mh = max(*mh, hval);
-                        else
-                            maxHalos.addDimBack(dname, hval);
                     }
 
                     // non-domain dimension.
@@ -518,15 +509,6 @@ namespace yask {
                 }
             }
 
-#warning FIXME: should adapt to halo resize.
-            // Max halos.
-            os << endl << " // Max halos across all grids." << endl;
-            for (auto& dim : maxHalos.getDims()) {
-                auto& dname = dim.getName();
-                os << " const idx_t max_halo_" << dname << " = " <<
-                    maxHalos.getVal(dname) << ";" << endl;
-            }
-            
             // Ctor.
             {
                 os << "\n // Constructor.\n" <<
@@ -538,17 +520,6 @@ namespace yask {
                     ctorCode <<
                     "\n // Update grids with context info.\n"
                     " update_grids();\n";
-            
-#warning FIXME: should adapt to halo resize.
-                // Init halo sizes.
-                os << "\n  // Rounded halo sizes.\n";
-                int i = 0;
-                for (auto& dim : maxHalos.getDims()) {
-                    auto& dname = dim.getName();
-                    os << "  max_halos[" << i << "] = ROUND_UP(max_halo_" << dname <<
-                        ", VLEN_" << allCaps(dname) << ");" << endl;
-                    i++;
-                }
             
                 // end of ctor.
                 os << " }" << endl;
@@ -690,7 +661,7 @@ namespace yask {
                     " inline void calc_cluster(const Indices& idxs) {\n";
                 printIndices(os);
 
-#warning FIXME
+#warning FIXME: reenable vectorization
 #if VEC_WORKING
                 // Code generator visitor.
                 // The visitor is accepted at all nodes in the cluster AST;
@@ -752,7 +723,7 @@ namespace yask {
                         "(const Indices& idxs) {\n";
                     printIndices(os);
 
-#warning FIXME
+#warning FIXME: reenable prefetching
 #if PREFETCH_WORKING
                     // C++ prefetch code.
                     vp->printPrefetches(os, dir);

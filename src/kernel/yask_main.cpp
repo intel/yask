@@ -320,7 +320,7 @@ int main(int argc, char** argv)
                 os << "INIT CHECK PASSED." << endl;
                 exit_yask(0);
             } else {
-                cerr << "INIT CHECK FAILED: " << errs << " mismatch(es)." << endl;
+                cerr << "INIT CHECK FAILED: " << errs << " or more mismatch(es)." << endl;
                 exit_yask(1);
             }
         }

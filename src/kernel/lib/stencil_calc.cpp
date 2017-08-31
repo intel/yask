@@ -134,95 +134,6 @@ namespace yask {
         return _dims->_domain_dims.getDimName(n);
     }
 
-    YkGridPtr StencilContext::newGrid(const std::string& name,
-                                      const GridDimNames& dims) {
-
-        // Check for step dim.
-        bool got_step = false;
-        for (size_t i = 0; i < dims.size(); i++) {
-            if (dims[i] == _dims->_step_dim) {
-                if (i == 0)
-                    got_step = true;
-                else {
-                    cerr << "Error: cannot create grid '" << name <<
-                        "' with dimension '" << dims[i] << "' in position " <<
-                        i << "; step dimension must be first dimension.\n";
-                    exit_yask(1);
-                }
-            }
-        }
-        
-        // NB: the behavior of this algorithm must follow that in the
-        // YASK compiler to allow grids created via new_grid() to share
-        // storage with those created via the compiler.
-#warning FIXME: make folded grids.
-        YkGridPtr gp;
-        switch (dims.size()) {
-        case 0:
-            gp = make_shared<YkElemGrid<Layout_0d, false>>(_dims, name, dims);
-            break;
-        case 1:
-            if (got_step)
-                gp = make_shared<YkElemGrid<Layout_1, true>>(_dims, name, dims);
-            else
-                gp = make_shared<YkElemGrid<Layout_1, false>>(_dims, name, dims);
-            break;
-        case 2:
-            if (got_step)
-                gp = make_shared<YkElemGrid<Layout_12, true>>(_dims, name, dims);
-            else
-                gp = make_shared<YkElemGrid<Layout_12, false>>(_dims, name, dims);
-            break;
-        case 3:
-            if (got_step)
-                gp = make_shared<YkElemGrid<Layout_123, true>>(_dims, name, dims);
-            else
-                gp = make_shared<YkElemGrid<Layout_123, false>>(_dims, name, dims);
-            break;
-        case 4:
-            if (got_step)
-                gp = make_shared<YkElemGrid<Layout_1234, true>>(_dims, name, dims);
-            else
-                gp = make_shared<YkElemGrid<Layout_1234, false>>(_dims, name, dims);
-            break;
-#if MAX_DIMS >= 5
-        case 5:
-            if (got_step)
-                gp = make_shared<YkElemGrid<Layout_12345, true>>(_dims, name, dims);
-            else
-                gp = make_shared<YkElemGrid<Layout_12345, false>>(_dims, name, dims);
-            break;
-#endif
-#if MAX_DIMS >= 6
-        case 6:
-            if (got_step)
-                gp = make_shared<YkElemGrid<Layout_123456, true>>(_dims, name, dims);
-            else
-                gp = make_shared<YkElemGrid<Layout_123456, false>>(_dims, name, dims);
-            break;
-#endif
-#if MAX_DIMS >= 7
-        case 7:
-            if (got_step)
-                gp = make_shared<YkElemGrid<Layout_1234567, true>>(_dims, name, dims);
-            else
-                gp = make_shared<YkElemGrid<Layout_1234567, false>>(_dims, name, dims);
-            break;
-#endif
-        default:
-            cerr << "Error in new_grid: cannot create grid '" << name <<
-                "' with " << dims.size() << " dimensions.\n";
-            exit_yask(1);
-        }
-
-        // Add to context.
-        addGrid(gp, false);     // marked as input grid. TODO: is this ok?
-
-        // Set default sizes from settings and get offset, if set.
-        update_grids();
-
-        return gp;
-    }
     yk_grid_ptr StencilContext::new_grid(const std::string& name,
                                          const std::string& dim1,
                                          const std::string& dim2,
@@ -770,6 +681,121 @@ namespace yask {
         make_stores_visible();
     }
 
+    // Add a new grid to the containers.
+    void StencilContext::addGrid(YkGridPtr gp, bool is_output) {
+        auto& gname = gp->get_name();
+        if (gridMap.count(gname)) {
+            cerr << "Error: grid '" << gname << "' already exists.\n";
+            exit_yask(1);
+        }
+
+        // Add to list and map.
+        gridPtrs.push_back(gp);
+        gridMap[gname] = gp;
+
+        // Add to output list and map if 'is_output'.
+        if (is_output) {
+            outputGridPtrs.push_back(gp);
+            outputGridMap[gname] = gp;
+        }
+    }
+        
+    
+    // Make a new grid.
+    YkGridPtr StencilContext::newGrid(const std::string& name,
+                                      const GridDimNames& dims,
+                                      bool is_visible) {
+
+        // Check for step dim.
+        bool got_step = false;
+        for (size_t i = 0; i < dims.size(); i++) {
+            if (dims[i] == _dims->_step_dim) {
+                if (i == 0)
+                    got_step = true;
+                else {
+                    cerr << "Error: cannot create grid '" << name <<
+                        "' with dimension '" << dims[i] << "' in position " <<
+                        i << "; step dimension must be first dimension.\n";
+                    exit_yask(1);
+                }
+            }
+        }
+        
+        // NB: the behavior of this algorithm must follow that in the
+        // YASK compiler to allow grids created via new_grid() to share
+        // storage with those created via the compiler.
+        // TODO: auto-gen this code.
+#warning FIXME: make folded grids.
+        YkGridPtr gp;
+        switch (dims.size()) {
+        case 0:
+            gp = make_shared<YkElemGrid<Layout_0d, false>>(_dims, name, dims);
+            break;
+        case 1:
+            if (got_step)
+                gp = make_shared<YkElemGrid<Layout_1, true>>(_dims, name, dims);
+            else
+                gp = make_shared<YkElemGrid<Layout_1, false>>(_dims, name, dims);
+            break;
+        case 2:
+            if (got_step)
+                gp = make_shared<YkElemGrid<Layout_12, true>>(_dims, name, dims);
+            else
+                gp = make_shared<YkElemGrid<Layout_12, false>>(_dims, name, dims);
+            break;
+        case 3:
+            if (got_step)
+                gp = make_shared<YkElemGrid<Layout_123, true>>(_dims, name, dims);
+            else
+                gp = make_shared<YkElemGrid<Layout_123, false>>(_dims, name, dims);
+            break;
+        case 4:
+            if (got_step)
+                gp = make_shared<YkElemGrid<Layout_1234, true>>(_dims, name, dims);
+            else
+                gp = make_shared<YkElemGrid<Layout_1234, false>>(_dims, name, dims);
+            break;
+#if MAX_DIMS >= 5
+        case 5:
+            if (got_step)
+                gp = make_shared<YkElemGrid<Layout_12345, true>>(_dims, name, dims);
+            else
+                gp = make_shared<YkElemGrid<Layout_12345, false>>(_dims, name, dims);
+            break;
+#endif
+#if MAX_DIMS >= 6
+        case 6:
+            if (got_step)
+                gp = make_shared<YkElemGrid<Layout_123456, true>>(_dims, name, dims);
+            else
+                gp = make_shared<YkElemGrid<Layout_123456, false>>(_dims, name, dims);
+            break;
+#endif
+#if MAX_DIMS >= 7
+        case 7:
+            if (got_step)
+                gp = make_shared<YkElemGrid<Layout_1234567, true>>(_dims, name, dims);
+            else
+                gp = make_shared<YkElemGrid<Layout_1234567, false>>(_dims, name, dims);
+            break;
+#endif
+        default:
+            cerr << "Error in new_grid: cannot create grid '" << name <<
+                "' with " << dims.size() << " dimensions.\n";
+            exit_yask(1);
+        }
+
+        // Add to context.
+        if (is_visible)
+            addGrid(gp, false);     // mark as non-output grid; TODO: determine if this is ok.
+
+        // Set default sizes from settings and get offset, if set.
+        if (is_visible)
+            update_grids();
+
+        return gp;
+    }
+
     // Init MPI-related vars and other vars related to my rank's place in
     // the global problem: rank index, offset, etc.  Need to call this even
     // if not using MPI to properly init these vars.  Called from
@@ -928,28 +954,31 @@ namespace yask {
             }
 
             // Determine size of MPI buffers between rn and my rank.
-            // Need send and receive for each updated grid.
+            // Create send and receive for each updated grid.
             for (auto gp : gridPtrs) {
                 auto& gname = gp->get_name();
                 
                 // Size of MPI buffer in each direction: if dist to neighbor is
                 // zero in given direction (i.e., is perpendicular to this
-                // rank), use rank size; otherwise, use halo size for this grid.
-                IdxTuple bufsizes(_dims->_domain_dims);
+                // rank), use full rank size; otherwise, use halo size for this grid.
+                IdxTuple bufsizes;
                 for (int di = 0; di < num_dims; di++) {
                     auto& dname = _opts->_rank_indices.getDimName(di);
-#warning FIXME: use different dim name for halo size
-                    bufsizes[di] = (rdeltas[di] == 0) ? _opts->_rank_sizes[dname] :
-                        gp->get_halo_size(dname);
+                    if (gp->is_dim_used(dname)) {
+                        idx_t dsize = (rdeltas[di] == 0) ?
+                            _opts->_rank_sizes[dname] :
+                            gp->get_halo_size(dname);
+                        bufsizes.addDimBack(dname, dsize);
+                    }
                 }
 
-                if (bufsizes.product() == 0) {
+                if (bufsizes.size() == 0 || bufsizes.product() == 0) {
                     os << " No halo exchange needed for grid '" << gname <<
                         "' with rank " << rn << '.' << endl;
                 }
                 else {
 
-                    // Make a buffer in each direction (send & receive).
+                    // Make a buffer in both directions (send & receive).
                     size_t num_bytes = 0;
                     for (int bd = 0; bd < MPIBufs::nBufDirs; bd++) {
                         ostringstream oss;
@@ -973,7 +1002,8 @@ namespace yask {
                         num_exchanges++;
                     }
 
-                    os << " Halo exchange of " << makeByteStr(num_bytes) <<
+                    os << " Halo exchange of shape " << bufsizes.makeDimValStr(" * ") <<
+                        " and size " << makeByteStr(num_bytes) <<
                         " enabled for grid '" << gname << "' with rank " << rn << '.' << endl;
                 }
             }
@@ -992,106 +1022,118 @@ namespace yask {
     {
         ostream& os = get_ostr();
 
-        // Base ptr for all data.
-        shared_ptr<char> _data_buf;
+        // Base ptrs for all default-alloc'd data.
+        // These pointers will be shared by the ones in the grid
+        // objects, which will take over ownership when these go
+        // out of scope.
+        shared_ptr<char> _grid_data_buf;
+        shared_ptr<char> _mpi_data_buf;
+
+        // TODO: release old MPI buffers.
         
         // Pass 0: count required size, allocate memory.
         // Pass 1: distribute already-allocated memory.
         for (int pass = 0; pass < 2; pass++) {
+            TRACE_MSG("allocData pass " << pass);
         
-            // Determine how many bytes are needed.
-            size_t nbytes = 0, gbytes = 0, pbytes = 0, bbytes = 0;
+            // Determine how many bytes are needed and actually alloc'd.
+            size_t gbytes = 0, agbytes = 0;
+            size_t bbytes = 0, abbytes = 0;
         
             // Grids.
             for (auto gp : gridPtrs) {
                 if (!gp)
                     continue;
-                if (gp->is_storage_allocated())
-                    continue; // already has storage.
-
-                // Set storage if buffer has been allocated.
-                if (pass == 1) {
-                    gp->set_storage(_data_buf, nbytes);
-                    gp->print_info(os);
-                    os << endl;
-                }
-
-                // Determine size used (also offset to next location).
-                gbytes += gp->get_num_storage_bytes();
-                nbytes += ROUND_UP(gp->get_num_storage_bytes() + _data_buf_pad,
-                                   CACHELINE_BYTES);
-                TRACE_MSG("grid '" << gp->get_name() << "' needs " <<
-                          gp->get_num_storage_bytes() << " bytes");
-            }
-
-#warning FIXME: is this needed?
-#if 0
-            // MPI buffers.
-            for (auto gp : gridPtrs) {
-                if (!gp) continue;
                 auto& gname = gp->get_name();
-                if (mpiBufs.count(gname) == 0)
-                    continue;
 
-                // Visit buffers for each neighbor for this grid.
-                mpiBufs[gname].visitNeighbors
-                    ([&](const IdxTuple& offsets,
-                         int rank, int idx,
-                         YkGridPtr sendBuf,
-                         YkGridPtr recvBuf)
-                     {
-                         // Send.
-                         if (sendBuf && !sendBuf->is_storage_allocated()) {
-                             if (pass == 1)
-                                 sendBuf->set_storage(_data_buf, nbytes);
-                             auto sbytes = sendBuf->get_num_storage_bytes();
-                             bbytes += sbytes;
-                             nbytes += ROUND_UP(sbytes + _data_buf_pad,
-                                                CACHELINE_BYTES);
-                             TRACE_MSG("send buf '" << sendBuf->get_name() << "' needs " <<
-                                       sbytes << " bytes");
-                         }
+                // Grid data.
+                // Don't alloc if already done.
+                if (!gp->is_storage_allocated()) {
 
-                         // Recv.
-                         if (recvBuf && !recvBuf->is_storage_allocated()) {
-                             if (pass == 1)
-                                 recvBuf->set_storage(_data_buf, nbytes);
-                             auto rbytes = recvBuf->get_num_storage_bytes();
-                             bbytes += rbytes;
-                             nbytes += ROUND_UP(rbytes + _data_buf_pad,
-                                                CACHELINE_BYTES);
-                             TRACE_MSG("rcv buf '" << recvBuf->get_name() << "' needs " <<
-                                       rbytes<< " bytes");
-                         }
-                     } );
+                    // Set storage if buffer has been allocated.
+                    if (pass == 1) {
+                        gp->set_storage(_grid_data_buf, agbytes);
+                        gp->print_info(os);
+                        os << endl;
+                    }
+
+                    // Determine size used (also offset to next location).
+                    gbytes += gp->get_num_storage_bytes();
+                    agbytes += ROUND_UP(gp->get_num_storage_bytes() + _data_buf_pad,
+                                        CACHELINE_BYTES);
+                    TRACE_MSG(" grid '" << gname << "' needs " <<
+                              gp->get_num_storage_bytes() << " bytes");
+                }
+                
+                // MPI bufs for this grid.
+                if (mpiBufs.count(gname)) {
+
+                    // Visit buffers for each neighbor for this grid.
+                    // Don't check whether grid has allocated storage, because 
+                    // we want to replace old MPI data.
+                    mpiBufs.at(gname).visitNeighbors
+                        ([&](const IdxTuple& offsets,
+                             int rank, int idx,
+                             YkGridPtr sendBuf,
+                             YkGridPtr recvBuf)
+                         {
+                             // Send.
+                             if (sendBuf) {
+                                 if (pass == 1)
+                                     sendBuf->set_storage(_mpi_data_buf, abbytes);
+                                 auto sbytes = sendBuf->get_num_storage_bytes();
+                                 bbytes += sbytes;
+                                 abbytes += ROUND_UP(sbytes + _data_buf_pad,
+                                                     CACHELINE_BYTES);
+                                 TRACE_MSG("  send buf '" << sendBuf->get_name() << "' needs " <<
+                                           sbytes << " bytes");
+                             }
+
+                             // Recv.
+                             if (recvBuf) {
+                                 if (pass == 1)
+                                     recvBuf->set_storage(_mpi_data_buf, abbytes);
+                                 auto rbytes = recvBuf->get_num_storage_bytes();
+                                 bbytes += rbytes;
+                                 abbytes += ROUND_UP(rbytes + _data_buf_pad,
+                                                     CACHELINE_BYTES);
+                                 TRACE_MSG("  rcv buf '" << recvBuf->get_name() << "' needs " <<
+                                           rbytes<< " bytes");
+                             }
+                         } );
+                }
             }
-#endif
 
             // Don't need pad after last one.
-            if (nbytes >= _data_buf_pad)
-                nbytes -= _data_buf_pad;
+            if (agbytes >= _data_buf_pad)
+                agbytes -= _data_buf_pad;
+            if (abbytes >= _data_buf_pad)
+                abbytes -= _data_buf_pad;
 
             // Allocate data.
-            if (pass == 0 && nbytes > 0) {
-                os << "Allocating " << makeByteStr(nbytes) <<
-                    " for all grids, parameters, and other buffers...\n" << flush;
+            if (pass == 0) {
+                os << "Allocating " << makeByteStr(agbytes) <<
+                    " for grid(s)...\n" << flush;
+                _grid_data_buf = shared_ptr<char>(alignedAlloc(agbytes), AlignedDeleter());
 
-                _data_buf = shared_ptr<char>(alignedAlloc(nbytes), AlignedDeleter());
-                
-                os << "  " << makeByteStr(gbytes) << " for grid(s).\n" <<
-                    "  " << makeByteStr(pbytes) << " for parameters(s).\n" <<
-                    "  " << makeByteStr(bbytes) << " for MPI buffers(s).\n" <<
-                    "  " << makeByteStr(nbytes - gbytes - pbytes - bbytes) <<
-                    " for inter-data padding.\n";
+#ifdef USE_MPI
+                os << "Allocating " << makeByteStr(abbytes) <<
+                    " for MPI buffers...\n" << flush;
+                _mpi_data_buf = shared_ptr<char>(alignedAlloc(abbytes), AlignedDeleter());
+#endif
             }
         }
     }
 
     // Set grid sizes and offsets based on settings.
+    // Set max halos across grids.
     // This should be called anytime a setting or rank offset is changed.
     void StencilContext::update_grids()
     {
         assert(_opts);
+
+        // Reset halos.
+        max_halos = _dims->_domain_dims;
         
         // Loop through each grid.
         for (auto gp : gridPtrs) {
@@ -1112,12 +1154,16 @@ namespace yask {
                     
                     // Offsets.
                     gp->_set_offset(dname, rank_domain_offsets[dname]);
+
+                    // Update max halo across grids, used for wavefront angles.
+                    auto hsz = gp->get_halo_size(dname);
+                    max_halos[dname] = max(max_halos[dname], hsz);
                 }
             }
         }
     }
     
-    // Allocate grids, params, and MPI bufs.
+    // Allocate grids and MPI bufs.
     // Initialize some data structures.
     void StencilContext::prepare_solution()
     {
@@ -1181,7 +1227,7 @@ namespace yask {
         // Determine bounding-boxes for all eq-groups.
         find_bounding_boxes();
 
-        // Alloc grids, params, and MPI bufs.
+        // Alloc grids and MPI bufs.
         allocData();
 
         // Report some stats.
@@ -1567,7 +1613,7 @@ namespace yask {
 
                 // Visit all this rank's neighbors.
                 int ni = 0;
-                mpiBufs[gname].visitNeighbors
+                mpiBufs.at(gname).visitNeighbors
                     (*this, false,
                      [&](idx_t nx, idx_t ny, idx_t nz,
                          int neighbor_rank,
@@ -1867,7 +1913,7 @@ namespace yask {
                    offsets.makeDimValStr() << " with size " <<
                    sizes.makeDimValStr(" * "));
         auto& gp = getBuf(bd, offsets);
-        gp = context.newGrid(name, sizes.getDimNames());
+        gp = context.newGrid(name, sizes.getDimNames(), false);
         assert(gp);
         for (auto& dim : sizes.getDims()) {
             auto& dname = dim.getName();
