@@ -32,20 +32,15 @@ using namespace yask;
 // Add some command-line options for this application in addition to the
 // default ones provided by YASK.
 struct AppSettings : public KernelSettings {
-    bool help;                  // help requested.
-    bool doWarmup;              // whether to do warmup run.
-    int num_trials;             // number of trials.
-    bool validate;              // whether to do validation run.
-    int pre_trial_sleep_time;   // sec to sleep before each trial.
+    bool help = false;          // help requested.
+    bool doWarmup = true;       // whether to do warmup run.
+    int num_trials = 3;         // number of trials.
+    bool validate = false;      // whether to do validation run.
+    int pre_trial_sleep_time = 1; // sec to sleep before each trial.
+    int debug_sleep = 0;          // sec to sleep for debug attach.
 
     AppSettings(DimsPtr dims) :
-        KernelSettings(dims),
-        help(false),
-        doWarmup(true),
-        num_trials(3),
-        validate(false),
-        pre_trial_sleep_time(1)
-    { }
+        KernelSettings(dims) { }
 
     // A custom option-handler for validation.
     class ValOption : public CommandLineParser::OptionBase {
@@ -104,6 +99,9 @@ struct AppSettings : public KernelSettings {
         parser.add_option(new CommandLineParser::IntOption("sleep",
                                         "Number of seconds to sleep before each performance trial.",
                                         pre_trial_sleep_time));
+        parser.add_option(new CommandLineParser::IntOption("debug_sleep",
+                                        "Number of seconds to sleep for debug attach.",
+                                        debug_sleep));
         parser.add_option(new CommandLineParser::BoolOption("validate",
                                          "Run validation iteration(s) after performance trial(s).",
                                          validate));
@@ -155,6 +153,14 @@ struct AppSettings : public KernelSettings {
         for (int argi = 0; argi < argc; argi++)
             os << " " << argv[argi];
         os << endl;
+        
+        os << "PID: " << getpid() << endl;
+        if (debug_sleep) {
+            os << "Sleeping " << debug_sleep <<
+                " second(s) to allow debug attach...\n";
+            sleep(debug_sleep);
+            os << "Resuming...\n";
+        }
     }
 };
 
@@ -185,7 +191,7 @@ int main(int argc, char** argv)
     auto context = dynamic_pointer_cast<StencilContext>(ksoln);
     assert(context.get());
     context->set_settings(opts);
-    ostream& os = context->get_ostr();
+    ostream& os = context->set_ostr();
     
     // Make sure any MPI/OMP debug data is dumped from all ranks before continuing.
     kenv->global_barrier();
@@ -310,26 +316,20 @@ int main(int argc, char** argv)
 
         // init to same value used in context.
         ref_context->initDiff();
+        
+#ifdef CHECK_INIT
 
-        // Debug code to determine if data immediately after init matches.
-#if CHECK_INIT
-        {
-            context->initDiff();
-            idx_t errs = context->compareData(ref_context);
-            if( errs == 0 ) {
-                os << "INIT CHECK PASSED." << endl;
-                exit_yask(0);
-            } else {
-                cerr << "INIT CHECK FAILED: " << errs << " or more mismatch(es)." << endl;
-                exit_yask(1);
-            }
-        }
-#endif
+        // Debug code to determine if data compares immediately after init matches.
+        os << endl << divLine <<
+            "Reinitializing data for minimal validation...\n" << flush;
+        context->initDiff();
+#else
 
         // Ref trial.
         os << endl << divLine <<
             "Running " << dt << " time step(s) for validation...\n" << flush;
         ref_context->calc_rank_ref();
+#endif
 
         // check for equality.
         os << "Checking results..." << endl;
@@ -337,7 +337,7 @@ int main(int argc, char** argv)
         if( errs == 0 ) {
             os << "TEST PASSED." << endl;
         } else {
-            cerr << "TEST FAILED: " << errs << " mismatch(es)." << endl;
+            cerr << "TEST FAILED: >= " << errs << " mismatch(es)." << endl;
             if (REAL_BYTES < 8)
                 cerr << "This is not uncommon for low-precision FP; try with 8-byte reals." << endl;
             exit_yask(1);

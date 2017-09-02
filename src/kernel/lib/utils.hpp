@@ -99,7 +99,7 @@ inline void omp_set_nested(int n) { }
 
 // Default alignment and padding.
 #define CACHELINE_BYTES  (64)
-#define YASK_PAD (17) // cache-lines between data buffers.
+#define YASK_PAD (7) // cache-lines between data buffers.
 #define YASK_ALIGNMENT (2 * 1024 * 1024) // 2MiB-page
 
 namespace yask {

@@ -42,14 +42,14 @@ namespace yask {
         return tmp.makeDimValStr(separator, infix, prefix, suffix);
     }
     
-    // Print one element to 'os' like
+    // Print one element like
     // "message: mygrid[x=4, y=7] = 3.14 at line 35".
-    void YkGridBase::printElem(std::ostream& os,
-                               const std::string& msg,
+    void YkGridBase::printElem(const std::string& msg,
                                const Indices& idxs,
                                real_t e,
                                int line,
                                bool newline) const {
+        ostream& os = _ggb->get_ostr();
         if (msg.length())
             os << msg << ": ";
         os << get_name() << "[" <<
@@ -308,7 +308,7 @@ namespace yask {
         // Quick check for errors, assuming same layout.
         // TODO: check layout.
         idx_t errs = _ggb->count_diffs(ref->_ggb, epsilon);
-        TRACE_MSG0(os, "count_diffs() returned " << errs);
+        TRACE_MSG0(get_ostr(), "count_diffs() returned " << errs);
         if (!errs)
             return 0;
         

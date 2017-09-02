@@ -129,8 +129,13 @@ namespace yask {
         // Resize only if not allocated.
         virtual void resize();
 
-        // Print some info to 'os'.
-        virtual void print_info(std::ostream& os) const =0;
+        // Get the messsage output stream.
+        virtual std::ostream& get_ostr() const {
+            return _ggb->get_ostr();
+        }
+
+        // Print some info.
+        virtual void print_info(std::ostream& ostr) const =0;
   
         // Check for equality.
         // Return number of mismatches greater than epsilon.
@@ -163,7 +168,7 @@ namespace yask {
             const real_t* ep = getElemPtr(idxs);
             real_t e = *ep;
 #ifdef TRACE_MEM
-            printElem(std::cout, "readElem", idxs, e, line);
+            printElem("readElem", idxs, e, line);
 #endif
             return e;
         }
@@ -176,13 +181,12 @@ namespace yask {
             real_t* ep = getElemPtr(idxs);
             *ep = val;
 #ifdef TRACE_MEM
-            printElem(std::cout, "writeElem", idxs, val, line);
+            printElem("writeElem", idxs, val, line);
 #endif
         }
 
         // Print one element.
-        virtual void printElem(std::ostream& os,
-                               const std::string& msg,
+        virtual void printElem(const std::string& msg,
                                const Indices& idxs,
                                real_t e,
                                int line,
@@ -307,8 +311,10 @@ namespace yask {
     public:
         YkElemGrid(DimsPtr dims,
                    std::string name,
-                   const GridDimNames& dimNames) :
-            YkGridBase(&_data, dims), _data(name, dimNames) { }
+                   const GridDimNames& dimNames,
+                   std::ostream** ostr) :
+            YkGridBase(&_data, dims),
+            _data(name, dimNames, ostr) { }
 
         // Print some info to 'os'.
         virtual void print_info(std::ostream& os) const {
@@ -328,13 +334,13 @@ namespace yask {
                                          bool checkBounds=true) const final {
 
 #ifdef TRACE_MEM
-            std::cout << get_name() << "." << "YkElemGrid::getElemPtr(" <<
+            _data.get_ostr() << get_name() << "." << "YkElemGrid::getElemPtr(" <<
                 idxs.makeValStr(get_num_dims()) << ")";
 #endif
         
             // Adjust for offset and padding.
             Indices adj_idxs;
-            #pragma unroll
+#pragma unroll
             for (int i = 0; i < _data.get_num_dims(); i++)
                 adj_idxs[i] = idxs[i] - _offsets[i] + _pads[i];
 
@@ -344,8 +350,8 @@ namespace yask {
 
 #ifdef TRACE_MEM
             if (checkBounds)
-                std::cout << " => " << _data.get_index(adj_idxs);
-            std::cout << std::endl << flush;
+                _data.get_ostr() << " => " << _data.get_index(adj_idxs);
+            _data.get_ostr() << std::endl << flush;
 #endif
 
             // Get pointer via layout in _data.

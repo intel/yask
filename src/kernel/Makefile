@@ -30,7 +30,7 @@
 # Initial defaults.
 stencil		=	iso3dfd
 arch		=	snb
-mpi		=	0	# FIXME: re-enable this.
+mpi		=	1
 real_bytes	=	4
 radius		=	1
 

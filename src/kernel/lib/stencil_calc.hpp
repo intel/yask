@@ -81,12 +81,15 @@ namespace yask {
         //   x-->
         enum NeighborOffset { rank_prev, rank_self, rank_next, num_offsets };
         
-        // Number of possible neighbors in all domain dimensions.
+        // Max number of neighbors in all domain dimensions.
         // Used to describe the n-D space of neighbors.
+        // This object is effectively a constant used to convert between
+        // n-D and 1-D indices.
         IdxTuple neighbor_offsets;
 
         // Neighborhood size includes self.
         // Number of points in n-D space of neighbors.
+        // NB: this is the *max* number of neighbors, not necessarily the actual number.
         int neighborhood_size = 0;
 
         // MPI rank of each neighbor.
@@ -144,12 +147,7 @@ namespace yask {
                                                         YkGridPtr recvBuf)> visitor);
             
         // Access a buffer by direction and neighbor offsets.
-        YkGridPtr& getBuf(BufDir bd, const IdxTuple& offsets) {
-            auto i = _mpiInfo->neighbor_offsets.layout(offsets); // 1D index.
-            assert(i < _mpiInfo->neighborhood_size);
-            assert(int(bd) < int(nBufDirs));
-            return (bd == bufSend) ? send_bufs.at(i) : recv_bufs.at(i);
-        }
+        virtual YkGridPtr& getBuf(BufDir bd, const IdxTuple& offsets);
 
         // Create new buffer in given direction and size.
         virtual YkGridPtr makeBuf(BufDir bd,
@@ -306,7 +304,7 @@ namespace yask {
     protected:
 
         // Output stream for messages.
-        std::ostream* _ostr;
+        std::ostream* _ostr = 0;
 
         // Env.
         KernelEnvPtr _env;
@@ -417,7 +415,7 @@ namespace yask {
         // or a null stream otherwise.
         virtual std::ostream& set_ostr(std::ostream* os = NULL);
 
-        // Get the default output stream.
+        // Get the messsage output stream.
         virtual std::ostream& get_ostr() const {
             assert(_ostr);
             return *_ostr;
@@ -577,6 +575,7 @@ namespace yask {
         // APIs.
         // See yask_kernel_api.hpp.
         virtual void set_debug_output(yask_output_ptr debug) {
+#warning FIXME: keep copy of shared ptr
             set_ostr(&debug->get_ostream());
         }
         virtual const std::string& get_name() const {

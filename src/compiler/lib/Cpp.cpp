@@ -450,7 +450,7 @@ namespace yask {
                 }
                 ctorCode += "};\n";
                 ctorCode += " " + grid + "_ptr = std::make_shared<" + typeDef +
-                    ">(_dims, \"" + grid + "\", " + grid + "_dim_names);\n";
+                    ">(_dims, \"" + grid + "\", " + grid + "_dim_names, &_ostr);\n";
                 ctorCode += " " + grid + " = " + grid + "_ptr.get();\n";
                 ctorCode += " addGrid(" + grid + "_ptr, ";
                 if (_eqGroups.getOutputGrids().count(gp))
