@@ -305,6 +305,7 @@ namespace yask {
 
         // Output stream for messages.
         std::ostream* _ostr = 0;
+        yask_output_ptr _debug;
 
         // Env.
         KernelEnvPtr _env;
@@ -575,7 +576,7 @@ namespace yask {
         // APIs.
         // See yask_kernel_api.hpp.
         virtual void set_debug_output(yask_output_ptr debug) {
-#warning FIXME: keep copy of shared ptr
+            _debug = debug;     // to share ownership of referent.
             set_ostr(&debug->get_ostream());
         }
         virtual const std::string& get_name() const {

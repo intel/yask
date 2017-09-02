@@ -112,7 +112,7 @@ namespace yask {
         // stencil_solution APIs.
         // See yask_stencil_api.hpp for documentation.
         virtual void set_debug_output(yask_output_ptr debug) {
-            _debug_output = debug;
+            _debug_output = debug;     // to share ownership of referent.
             _dos = &_debug_output->get_ostream();
         }
         virtual void set_name(std::string name) {
