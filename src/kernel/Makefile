@@ -653,8 +653,8 @@ all-tests:
 	$(MAKE) clean; $(MAKE) stencil=iso3dfd yc-and-yk-test
 	$(MAKE) clean; $(MAKE) stencil=iso3dfd cxx-yk-api-test
 	$(MAKE) clean; $(MAKE) stencil=iso3dfd py-yk-api-test
-	$(MAKE) clean; $(MAKE) stencil=awp_elastic yc-and-yk-test
-	$(MAKE) clean; $(MAKE) stencil=fsg_abc yc-and-yk-test
+	$(MAKE) clean; $(MAKE) stencil=awp_elastic yc-and-yk-test real_bytes=8
+	$(MAKE) clean; $(MAKE) stencil=fsg_abc yc-and-yk-test real_bytes=8
 
 all:
 	$(MAKE) kernel

@@ -109,6 +109,15 @@ namespace yask {
             my_neighbors.insert(my_neighbors.begin(), neighborhood_size, MPI_PROC_NULL);
         }
 
+        // Get a 1D index for a neighbor.
+        // Input 'offsets': tuple of NeighborOffset vals.
+        virtual idx_t getNeighborIndex(const IdxTuple& offsets) const {
+            auto i = neighbor_offsets.layout(offsets); // 1D index.
+            assert(i >= 0);
+            assert(i < neighborhood_size);
+            return i;
+        }
+
         // Visit all neighbors.
         virtual void visitNeighbors(std::function<void
                                     (const IdxTuple& offsets, // NeighborOffset vals.
@@ -126,16 +135,26 @@ namespace yask {
         // Need one buf for send and one for receive for each neighbor.
         enum BufDir { bufSend, bufRecv, nBufDirs };
 
-        // A type to store buffers for all possible neighbors.
+        // Buffers for all possible neighbors.
         typedef std::vector<YkGridPtr> NeighborBufs;
         NeighborBufs send_bufs, recv_bufs;
+
+        // Copy starting points.
+        typedef std::vector<IdxTuple> TupleList;
+        TupleList send_begins, recv_begins;
 
         MPIBufs(MPIInfoPtr mpiInfo) :
             _mpiInfo(mpiInfo) {
 
             // Init buffer pointers.
-            send_bufs.insert(send_bufs.begin(), _mpiInfo->neighborhood_size, NULL);
-            recv_bufs.insert(recv_bufs.begin(), _mpiInfo->neighborhood_size, NULL);
+            auto n = _mpiInfo->neighborhood_size;
+            send_bufs.insert(send_bufs.begin(), n, NULL);
+            recv_bufs.insert(recv_bufs.begin(), n, NULL);
+
+            // Init begin points.
+            IdxTuple emptyTuple;
+            send_begins.insert(send_begins.begin(), n, emptyTuple);
+            recv_begins.insert(recv_begins.begin(), n, emptyTuple);
         }
 
         // Apply a function to each neighbor rank.
@@ -144,7 +163,9 @@ namespace yask {
                                                         int rank,
                                                         int index, // simple counter from 0.
                                                         YkGridPtr sendBuf,
-                                                        YkGridPtr recvBuf)> visitor);
+                                                        IdxTuple& sendBegin,
+                                                        YkGridPtr recvBuf,
+                                                        IdxTuple& recvBegin)> visitor);
             
         // Access a buffer by direction and neighbor offsets.
         virtual YkGridPtr& getBuf(BufDir bd, const IdxTuple& offsets);
