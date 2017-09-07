@@ -75,6 +75,16 @@ IN THE SOFTWARE.
 #include "yask_stencil_code.hpp"
 #undef DEFINE_MACROS
 
+// rounding macros for integer types.
+#define CEIL_DIV(numer, denom) (((numer) + (denom) - 1) / (denom))
+#define ROUND_UP(n, mult) (CEIL_DIV(n, mult) * (mult))
+
+// Default alignment and padding.
+#define CACHELINE_BYTES  (64)
+#define YASK_PAD (7) // cache-lines between data buffers.
+#define YASK_ALIGNMENT (2 * 1024 * 1024) // 2MiB-page for large allocs.
+#define CACHE_ALIGNED __attribute__ ((aligned (CACHELINE_BYTES)))
+
 // Define a folded vector of reals.
 #include "realv.hpp"
 
@@ -190,8 +200,8 @@ namespace yask {
         Indices(int nelems, const idx_t src[]) {
             setFromArray(nelems, src);
         }
-        Indices(idx_t val) {
-            setFromConst(val);
+        Indices(idx_t src) {
+            setFromConst(src);
         }
         
         // Default copy ctor, copy operator should be okay.
@@ -273,13 +283,27 @@ namespace yask {
         }
 
         // Some element-wise operators.
-        Indices minElements(const Indices& other) {
+        // These all return a new set of Indices rather
+        // than modifying this object.
+        Indices addElements(const Indices& other) const {
+            Indices res;
+            for (int i = 0; i < max_idxs; i++)
+                res._idxs[i] = _idxs[i] + other._idxs[i];
+            return res;
+        }
+        Indices multElements(const Indices& other) const {
+            Indices res;
+            for (int i = 0; i < max_idxs; i++)
+                res._idxs[i] = _idxs[i] * other._idxs[i];
+            return res;
+        }
+        Indices minElements(const Indices& other) const {
             Indices res;
             for (int i = 0; i < max_idxs; i++)
                 res._idxs[i] = std::min(_idxs[i], other._idxs[i]);
             return res;
         }
-        Indices maxElements(const Indices& other) {
+        Indices maxElements(const Indices& other) const {
             Indices res;
             for (int i = 0; i < max_idxs; i++)
                 res._idxs[i] = std::max(_idxs[i], other._idxs[i]);
@@ -287,10 +311,30 @@ namespace yask {
         }
 
         // Operate on all elements.
-        Indices addElements(idx_t n) const {
+        Indices addConst(idx_t n) const {
             Indices res;
             for (int i = 0; i < max_idxs; i++)
                 res._idxs[i] = _idxs[i] + n;
+            return res;
+        }
+        Indices multConst(idx_t n) const {
+            Indices res;
+            for (int i = 0; i < max_idxs; i++)
+                res._idxs[i] = _idxs[i] * n;
+            return res;
+        }
+
+        // Reduce over all elements.
+        idx_t sum() const {
+            idx_t res = 0;
+            for (int i = 0; i < max_idxs; i++)
+                res += _idxs[i];
+            return res;
+        }
+        idx_t product() const {
+            idx_t res = 1;
+            for (int i = 0; i < max_idxs; i++)
+                res *= _idxs[i];
             return res;
         }
         
@@ -337,21 +381,30 @@ namespace yask {
     // documentation of the indices.
     // Make sure this stays non-virtual.
     struct ScanIndices {
-        Indices begin, end, step, group_size;
-        Indices start, stop, index;
+
+        // Values set at beginning of scan.
+        Indices begin, end;     // first and last+1 range of each index.
+        Indices step;           // step value within range.
+        Indices group_size;     // priority grouping within range.
+
+        // Values updated at each point in scan.
+        Indices start, stop;    // first and last+1 range at current point.
+        Indices index;          // 0-based unique index for current point.
 
         // Default init.
         ScanIndices() {
-            begin = 0;
-            end = 0;
-            step = 1;
-            group_size = 1;
-            start = 0;
-            stop = 0;
-            index = 0;
+            begin.setFromConst(0);
+            end.setFromConst(0);
+            step.setFromConst(1);
+            group_size.setFromConst(1);
+            start.setFromConst(0);
+            stop.setFromConst(0);
+            index.setFromConst(0);
         }
         
         // Init from outer-loop indices.
+        // Start..stop from point in outer loop become begin..end
+        // for this loop.
         void initFromOuter(const ScanIndices& outer) {
 
             // Begin & end set from start & stop of outer loop.

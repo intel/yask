@@ -51,8 +51,7 @@ namespace yask {
         oss << "_context->" << gp.getGridName() << "->" << fname << "(";
         if (optArg.length()) oss << optArg << ", ";
         string args = gp.makeArgStr();
-        oss << "{" << args << "}, ";
-        //if (args.length()) oss << args << ", ";
+        oss << "{" << args << "}, "; // use Indices initializer-list ctor.
         oss << "__LINE__)";
         return oss.str();
     }
@@ -79,7 +78,7 @@ namespace yask {
         // Specify that any indices should use element vars.
         string str = "_context->" + gp.getGridName() + "->readElem(";
         string args = gp.makeArgStr(&_varMap);
-        if (args.length()) str += args + ", ";
+        str += "{" + args + "}, ";
         str += "__LINE__)";
         return str;
     }
@@ -154,10 +153,8 @@ namespace yask {
         os << " _context->" << gp.getGridName() << "->" << funcName << "(";
         if (firstArg.length())
             os << firstArg << ", ";
-        if (isNorm)
-            os << gp.makeNormArgStr(getFold());
-        else
-            os << gp.makeArgStr();
+        string args = isNorm ? gp.makeNormArgStr(getFold()) : gp.makeArgStr();
+        os << "{" << args << "}"; // use Indices initializer-list ctor.
         if (lastArg.length()) 
             os << ", " << lastArg;
         os << ")";
@@ -372,63 +369,54 @@ namespace yask {
                 else
                     os << "not updated by any equation (read-only).\n";
 
-                // Type name.
+                // Type name for grid.
                 string typeName;
             
                 // Use vector-folded layout if possible.
-#warning FIXME: reenable folding.
-                bool folded = false; // FIXME: gp->isFoldable();
+                bool folded = gp->isFoldable();
+                string gtype = folded ? "YkVecGrid" : "YkElemGrid";
 
-                // Folded layout.
-                if (folded) {
-                    os << "FIXME\n";
-                }
+                // Type-name in kernel is 'GRID_TYPE<LAYOUT, WRAP_1ST_IDX>'.
+                ostringstream oss;
+                oss << gtype << "<Layout_";
+                bool got_step = false;
 
-                // Use 'normal' layout if not foldable.
-                else {
+                // 1-D or more.
+                if (ndims) {
 
-                    // Type-name in kernel is 'YkElemGrid<LAYOUT, wrap_1st_idx>'.
-                    ostringstream oss;
-                    oss << "YkElemGrid<Layout_";
-                    bool got_step = false;
-
-                    // 1-D or more.
-                    if (ndims) {
-
-                        // By default, last dim is unit-stride, e.g.,
-                        // 'Layout_1234'.
-                        // TODO: do something smarter depending on dims.
-                        for (size_t dn = 0; dn < ndims; dn++) {
-                            oss << (dn + 1);
-
-                            // Step dim?
-                            auto& dim = gp->getDims()[dn];
-                            auto& dname = dim->getName();
-                            auto dtype = dim->getType();
-                            if (dtype == STEP_INDEX) {
-                                if (dn == 0)
-                                    got_step = true;
-                                else {
-                                    cerr << "Error: cannot create grid '" << grid <<
-                                        "' with dimension '" << dname << "' in position " <<
-                                        dn << "; step dimension must be in position 0.\n";
-                                    exit(1);
-                                }
+                    // By default, last dim is unit-stride, e.g.,
+                    // 'Layout_1234'.
+                    // TODO: do something smarter depending on dims.
+                    for (size_t dn = 0; dn < ndims; dn++) {
+                        oss << (dn + 1);
+                        
+                        // Step dim?
+                        auto& dim = gp->getDims()[dn];
+                        auto& dname = dim->getName();
+                        auto dtype = dim->getType();
+                        if (dtype == STEP_INDEX) {
+                            if (dn == 0)
+                                got_step = true;
+                            else {
+                                cerr << "Error: cannot create grid '" << grid <<
+                                    "' with dimension '" << dname << "' in position " <<
+                                    dn << "; step dimension must be in first position.\n";
+                                exit(1);
                             }
                         }
                     }
-
-                    // Scalar.
-                    else
-                        oss << "0d"; // Trivial scalar layout.
-
-                    if (got_step)
-                        oss << ", true /* wrap 1st index */";
-                    else
-                        oss << ", false /* do not wrap 1st index */";
-                    oss << ">";
-                    typeName = oss.str();
                 }
+
+                // Scalar.
+                else
+                    oss << "0d"; // Trivial scalar layout.
+
+                if (got_step)
+                    oss << ", true /* wrap 1st index */";
+                else
+                    oss << ", false /* do not wrap 1st index */";
+                oss << ">";
+                typeName = oss.str();
 
                 // Typedef.
                 string typeDef = grid + "_type";
@@ -475,7 +463,6 @@ namespace yask {
                             "; // default halo size in '" << dname << "' dimension.\n";
                         ctorCode += " " + grid + "->set_halo_size(\"" + dname +
                             "\", " + hvar + ");\n";
-
                     }
 
                     // non-domain dimension.
@@ -661,8 +648,6 @@ namespace yask {
                     " inline void calc_cluster(const Indices& idxs) {\n";
                 printIndices(os);
 
-#warning FIXME: reenable vectorization
-#if VEC_WORKING
                 // Code generator visitor.
                 // The visitor is accepted at all nodes in the cluster AST;
                 // for each node in the AST, code is generated and
@@ -672,7 +657,6 @@ namespace yask {
                 // Generate the code.
                 // Visit all expressions to cover the whole cluster.
                 ceq.visitEqs(&pcv);
-#endif
                 
                 // End of function.
                 os << "} // calc_cluster." << endl;

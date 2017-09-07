@@ -93,15 +93,6 @@ inline void omp_set_num_threads(int n) { }
 inline void omp_set_nested(int n) { }
 #endif
 
-// rounding macros for integer types.
-#define CEIL_DIV(numer, denom) (((numer) + (denom) - 1) / (denom))
-#define ROUND_UP(n, mult) (CEIL_DIV(n, mult) * (mult))
-
-// Default alignment and padding.
-#define CACHELINE_BYTES  (64)
-#define YASK_PAD (7) // cache-lines between data buffers.
-#define YASK_ALIGNMENT (2 * 1024 * 1024) // 2MiB-page
-
 namespace yask {
 
     inline void exit_yask(int code) {

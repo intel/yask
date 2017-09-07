@@ -90,7 +90,7 @@ namespace yask {
         // Neighborhood size includes self.
         // Number of points in n-D space of neighbors.
         // NB: this is the *max* number of neighbors, not necessarily the actual number.
-        int neighborhood_size = 0;
+        idx_t neighborhood_size = 0;
 
         // MPI rank of each neighbor.
         // MPI_PROC_NULL => no neighbor.
@@ -112,7 +112,7 @@ namespace yask {
         // Get a 1D index for a neighbor.
         // Input 'offsets': tuple of NeighborOffset vals.
         virtual idx_t getNeighborIndex(const IdxTuple& offsets) const {
-            auto i = neighbor_offsets.layout(offsets); // 1D index.
+            idx_t i = neighbor_offsets.layout(offsets); // 1D index.
             assert(i >= 0);
             assert(i < neighborhood_size);
             return i;
@@ -182,7 +182,7 @@ namespace yask {
     class KernelSettings {
 
     protected:
-        idx_t def_steps = 50;
+        idx_t def_steps = 1;
         idx_t def_rank = 128;
         idx_t def_block = 32;
 

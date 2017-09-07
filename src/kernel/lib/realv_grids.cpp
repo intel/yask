@@ -37,29 +37,11 @@ namespace yask {
                                             std::string infix,
                                             std::string prefix,
                                             std::string suffix) const {
-        IdxTuple tmp = _ggb->get_dims(); // copy dim names from grid.
-        idxs.setTupleVals(tmp);         // set vals from idxs.
+        IdxTuple tmp = get_allocs(); // get dims.
+        idxs.setTupleVals(tmp);      // set vals from idxs.
         return tmp.makeDimValStr(separator, infix, prefix, suffix);
     }
     
-    // Print one element like
-    // "message: mygrid[x=4, y=7] = 3.14 at line 35".
-    void YkGridBase::printElem(const std::string& msg,
-                               const Indices& idxs,
-                               real_t e,
-                               int line,
-                               bool newline) const {
-        ostream& os = _ggb->get_ostr();
-        if (msg.length())
-            os << msg << ": ";
-        os << get_name() << "[" <<
-            makeIndexString(idxs) << "] = " << e;
-        if (line)
-            os << " at line " << line;
-        if (newline)
-            os << std::endl << std::flush;
-    }
-
     // Lookup position by dim name.
     // Return -1 or die if not found, depending on flag.
     int YkGridBase::get_dim_posn(const std::string& dim,
@@ -76,36 +58,26 @@ namespace yask {
     }
         
     // Resizes the underlying generic grid.
+    // Modifies _pads and _allocs.
     // Fails if mem different and already alloc'd.
     void YkGridBase::resize() {
-
-#warning FIXME
-        // TODO: add padding for cache-line alignment.
         
-#if SAVE_FOR_VEC_GRID
-        // Some rounding.
-        _pxv = CEIL_DIV(_px, VLEN_X);
-        _pyv = CEIL_DIV(_py, VLEN_Y);
-        _pzv = CEIL_DIV(_pz, VLEN_Z);
-        _px = _pxv * VLEN_X;
-        _py = _pyv * VLEN_Y;
-        _pz = _pzv * VLEN_Z;
-
-        // Alloc.
-        _axv = CEIL_DIV(_dx + 2 * _px, VLEN_X);
-        _ayv = CEIL_DIV(_dy + 2 * _py, VLEN_Y);
-        _azv = CEIL_DIV(_dz + 2 * _pz, VLEN_Z);
-#endif
-
         // Original size.
-        size_t old_size = get_num_storage_bytes();
+        IdxTuple old_allocs = get_allocs();
+        idx_t old_size = old_allocs.product();
+
+        // Round up padding.
+        for (int i = 0; i < get_num_dims(); i++) {
+            _pads[i] = ROUND_UP(_pads[i], _vec_lens[i]);
+            _vec_pads[i] = _pads[i] / _vec_lens[i];
+        }
         
         // New allocation in each dim.
-        Indices allocs;
-        size_t new_size = 1;
+        Indices new_allocs(1);
+        idx_t new_size = 1;
         for (int i = 0; i < get_num_dims(); i++) {
-            allocs[i] = _domains[i] + 2 * _pads[i];
-            new_size *= allocs[i];
+            new_allocs[i] = ROUND_UP(_domains[i] + (2 * _pads[i]), _vec_lens[i]);
+            new_size *= new_allocs[i];
         }
 
         // Attempt to change?
@@ -118,8 +90,11 @@ namespace yask {
         }
 
         // Do the resize.
-        for (int i = 0; i < get_num_dims(); i++)
-            _ggb->set_dim_size(i, allocs[i]);
+        _allocs = new_allocs;
+        for (int i = 0; i < get_num_dims(); i++) {
+            _vec_allocs[i] = _allocs[i] / _vec_lens[i];
+            _ggb->set_dim_size(i, _vec_allocs[i]);
+        }
     }
     
     // Check whether dim is of allowed type.
@@ -151,12 +126,12 @@ namespace yask {
     GET_GRID_API(get_first_rank_domain_index, _offsets[posn], false, true, false)
     GET_GRID_API(get_last_rank_domain_index, _offsets[posn] + _domains[posn] - 1, false, true, false)
     GET_GRID_API(get_first_rank_alloc_index, _offsets[posn] - _pads[posn], false, true, false)
-    GET_GRID_API(get_last_rank_alloc_index, _offsets[posn] + _domains[posn] + _pads[posn] - 1, false, true, false)
+    GET_GRID_API(get_last_rank_alloc_index, _offsets[posn] - _pads[posn] + _allocs[posn] - 1, false, true, false)
     GET_GRID_API(get_extra_pad_size, _pads[posn] - _halos[posn], false, true, false)
-    GET_GRID_API(get_alloc_size, _ggb->get_dim_size(posn), true, true, true)
+    GET_GRID_API(get_alloc_size, _allocs[posn], true, true, true)
     GET_GRID_API(_get_offset, _offsets[posn], true, true, true)
     GET_GRID_API(_get_first_allowed_index, _offsets[posn] - _pads[posn], true, true, true)
-    GET_GRID_API(_get_last_allowed_index, _offsets[posn] + _domains[posn] + _pads[posn] - 1, true, true, true)
+    GET_GRID_API(_get_last_allowed_index, _offsets[posn] - _pads[posn] + _allocs[posn] - 1, true, true, true)
 #undef GET_GRID_API
     
     // APIs to set vars.
@@ -171,7 +146,7 @@ namespace yask {
     SET_GRID_API(set_min_pad_size, if (n > _pads[posn]) _set_pad_size(dim, n), false, true, false)
     SET_GRID_API(set_extra_pad_size, set_min_pad_size(dim, _halos[posn] + n), false, true, false)
     SET_GRID_API(set_first_misc_index, _offsets[posn] = n, false, false, true)
-    SET_GRID_API(set_alloc_size, _set_domain_size(dim, n); resize(), true, false, true)
+    SET_GRID_API(set_alloc_size, _set_domain_size(dim, n), true, false, true)
     SET_GRID_API(_set_domain_size, _domains[posn] = n; resize(), true, true, true)
     SET_GRID_API(_set_pad_size, _pads[posn] = std::max(n COMMA _halos[posn]); resize(), true, true, true)
     SET_GRID_API(_set_offset, _offsets[posn] = n, true, true, true)
@@ -197,7 +172,7 @@ namespace yask {
                 return false;
 
             // Same sizes?
-            if (get_alloc_size(dname) != op->get_alloc_size(dname))
+            if (_allocs[i] != op->_allocs[i])
                 return false;
             if (_domains[i] != op->_domains[i])
                 return false;
@@ -314,7 +289,7 @@ namespace yask {
         
         // Run detailed comparison if any errors found.
         errs = 0;
-        auto& allocs = _ggb->get_dims();
+        auto allocs = get_allocs();
 
         // This will loop over the entire allocation.
         // Indices of 'pt' will be relative to allocation.
@@ -370,6 +345,7 @@ namespace yask {
             auto dname = get_dim_name(i);
 
             // Any step index is ok because it wraps around.
+            // TODO: check that it's < magic added value in wrap_index().
             if (dname == _dims->_step_dim)
                 continue;
 
@@ -472,9 +448,9 @@ namespace yask {
         checkIndices(last_indices, "get_elements_in_slice", true);
 
         // Find ranges.
-        IdxTuple firstTuple = _ggb->get_dims();
+        IdxTuple firstTuple = get_allocs();
+        IdxTuple lastTuple = firstTuple;
         firstTuple.setVals(first_indices);
-        IdxTuple lastTuple = _ggb->get_dims();
         lastTuple.setVals(last_indices);
         IdxTuple numElemsTuple = lastTuple.addElements(1).subElements(firstTuple);
 
@@ -503,9 +479,9 @@ namespace yask {
         checkIndices(last_indices, "set_elements_in_slice_same", strict_indices, &last);
 
         // Find ranges.
-        IdxTuple firstTuple = _ggb->get_dims();
+        IdxTuple firstTuple = get_allocs();
+        IdxTuple lastTuple = firstTuple;
         firstTuple.setVals(first_indices);
-        IdxTuple lastTuple = _ggb->get_dims();
         lastTuple.setVals(last_indices);
         IdxTuple numElemsTuple = lastTuple.addElements(1).subElements(firstTuple);
 
@@ -530,9 +506,9 @@ namespace yask {
         checkIndices(last_indices, "get_elements_in_slice", true);
 
         // Find ranges.
-        IdxTuple firstTuple = _ggb->get_dims();
+        IdxTuple firstTuple = get_allocs();
+        IdxTuple lastTuple = firstTuple;
         firstTuple.setVals(first_indices);
-        IdxTuple lastTuple = _ggb->get_dims();
         lastTuple.setVals(last_indices);
         IdxTuple numElemsTuple = lastTuple.addElements(1).subElements(firstTuple);
 
@@ -549,55 +525,23 @@ namespace yask {
         return i;
     }
 
-#warning FIXME
-#if 0
-    // Print some info.
-    void YkGridBase::print_info(std::ostream& os) {
-        _gp->print_info(os, "SIMD vector");
+    // Print one element like
+    // "message: mygrid[x=4, y=7] = 3.14 at line 35".
+    void YkGridBase::printElem(const std::string& msg,
+                               const Indices& idxs,
+                               real_t e,
+                               int line,
+                               bool newline) const {
+        ostream& os = _ggb->get_ostr();
+        if (msg.length())
+            os << msg << ": ";
+        os << get_name() << "[" <<
+            makeIndexString(idxs) << "] = " << e;
+        if (line)
+            os << " at line " << line;
+        if (newline)
+            os << std::endl << std::flush;
     }
 
-    // Initialize memory to incrementing values based on val.
-    void RealVecGridBase::set_diff(real_t val) {
+} // namespace.
 
-        // make a real_vec_t pattern.
-        real_vec_t rn;
-        for (int i = 0; i < VLEN; i++)
-            rn[i] = real_t(i * VLEN + 1) * val / VLEN;
-        
-        _gp->set_diff(rn);
-    }
-
-    // Print one vector at *vector* offset.
-    // Indices must be relative to rank, i.e., offset is already subtracted.
-    // Indices must be normalized, i.e., already divided by VLEN_*.
-    void RealVecGridBase::printVecNorm_TXYZ(std::ostream& os, const std::string& m,
-                                             idx_t t, idx_t xv, idx_t yv, idx_t zv,
-                                             const real_vec_t& v,
-                                             int line) const {
-        idx_t x = xv * VLEN_X + _ox;
-        idx_t y = yv * VLEN_Y + _oy;
-        idx_t z = zv * VLEN_Z + _oz;
-
-        // Print each element.
-        for (int zi = 0; zi < VLEN_Z; zi++) {
-            for (int yi = 0; yi < VLEN_Y; yi++) {
-                for (int xi = 0; xi < VLEN_X; xi++) {
-                    real_t e = v(xi, yi, zi);
-#ifdef CHECK_VEC_ELEMS
-                    real_t e2 = readElem_TXYZ(t, x+xi, y+yi, z+zi, line);
-#endif
-                    printElem_TXYZ(os, m, t, x+xi, y+yi, z+zi, e, line);
-#ifdef CHECK_VEC_ELEMS
-                    // compare to per-element read.
-                    if (e == e2)
-                        os << " (same as readElem())";
-                    else
-                        os << " != " << e2 << " from readElem() <<<< ERROR";
-#endif
-                    os << std::endl << std::flush;
-                }
-            }
-        }
-    }
-#endif
-}

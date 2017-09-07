@@ -27,8 +27,8 @@ IN THE SOFTWARE.
 // T: type stored in grid.
 // LayoutFn: class that transforms N dimensions to 1.
 
-#ifndef GENERIC_GRIDS
-#define GENERIC_GRIDS
+#ifndef _GENERIC_GRIDS
+#define _GENERIC_GRIDS
 
 #include "tuple.hpp"
 
@@ -269,10 +269,11 @@ namespace yask {
         // Initialize memory using 'seed' as a starting point.
         virtual void set_elems_in_seq(T seed) {
             if (_elems) {
-                const idx_t wrap = 71; // prime number is good to use.
+                const idx_t wrap = 71; // TODO: avoid multiple of any dim size.
 
+                auto n = get_num_elems();
 #pragma omp parallel for
-                for (idx_t ai = 0; ai < get_num_elems(); ai++)
+                for (idx_t ai = 0; ai < n; ai++)
                     _elems[ai] = seed * T(ai % wrap + 1);
             }
         }
@@ -423,7 +424,7 @@ namespace yask {
                     const GridDimNames& dimNames,
                     std::ostream** ostr) :
             GenericGridTemplate<T>(name, _layout, dimNames, ostr) {
-            assert(dimNames.size() == _layout.get_num_sizes());
+            assert(int(dimNames.size()) == _layout.get_num_sizes());
         }
 
         // Get number of dims.

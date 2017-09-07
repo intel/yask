@@ -120,7 +120,7 @@ namespace yask {
         // First-inner vars control ordering. Example: dims x, y, z.
         // If _firstInner == true, x is unit stride.
         // If _firstInner == false, z is unit stride.
-        // This setting affects layout() and visitAllPoints().
+        // This setting affects [un]layout() and visitAllPoints().
         bool _firstInner = true; // whether first dim is used for inner loop.
 
         // Update _map after values are added to _q.

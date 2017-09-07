@@ -331,7 +331,8 @@ YK_MODULE	:=	$(YK_BASE)
 YK_TAG		:=	$(stencil).$(arch)
 YK_BASE2	:=	$(YK_BASE).$(YK_TAG)
 YK_EXEC		:=	$(BIN_DIR)/$(YK_BASE2).exe
-YK_TEST_EXEC	:=	$(BIN_DIR)/$(YK_BASE)_api_test.exe
+YK_API_TEST_EXEC :=	$(BIN_DIR)/$(YK_BASE)_api_test.exe
+YK_GRID_TEST_EXEC :=	$(BIN_DIR)/$(YK_BASE)_grid_test.exe
 YK_LIB		:=	$(LIB_DIR)/lib$(YK_BASE2).so
 YK_PY_LIB	:=	$(LIB_DIR)/_$(YK_MODULE).so
 YK_PY_MOD	:=	$(LIB_DIR)/$(YK_MODULE).py
@@ -358,7 +359,8 @@ YK_GEN_HEADERS	:=	$(addprefix $(YK_GEN_DIR)/, \
 				yask_sub_block_loops.hpp \
 				yask_gen_loops.hpp \
 				yask_layout_macros.hpp \
-				yask_layouts.hpp) \
+				yask_layouts.hpp \
+				yask_grid_code.hpp) \
 				$(YK_MACRO_FILE) \
 				$(YK_CODE_FILE)
 YK_INC_DIRS	:=	$(INC_DIR) $(YK_LIB_DIR) ../common
@@ -548,6 +550,10 @@ $(YK_GEN_DIR)/yask_layouts.hpp: $(GEN_LAYOUTS)
 	  indent -fca $@ ||   \
 	  echo "note:" $@ "is not properly indented because no indent program was found."
 
+$(YK_GEN_DIR)/yask_grid_code.hpp: $(GEN_LAYOUTS)
+	$(YK_MK_GEN_DIR)
+	$< -g $(max_dims) > $@
+
 # Extract the number of stencil dims from the compiler output.
 # Use this to create an option to pass to the loop generator script.
 $(YK_DIMS_FILE): $(YK_CODE_FILE)
@@ -593,13 +599,20 @@ $(YK_PY_LIB): $(YK_OBJS) $(YK_SWIG_DIR)/yask_kernel_api_wrap.o
 
 #### API tests.
 
-# Build C++ kernel API test.
-$(YK_TEST_EXEC): ./tests/yask_kernel_api_test.cpp $(YK_LIB)
+# Build C++ kernel tests.
+$(YK_API_TEST_EXEC): ./tests/yask_kernel_api_test.cpp $(YK_LIB)
 	$(YK_CXX) $(YK_CXXFLAGS) $< $(YK_LFLAGS) -o $@
 
-# Run C++ kernel API test.
-cxx-yk-api-test: $(YK_TEST_EXEC)
+$(YK_GRID_TEST_EXEC): ./tests/grid_test.cpp $(YK_LIB)
+	$(YK_CXX) $(YK_CXXFLAGS) $< $(YK_LFLAGS) -o $@
+
+# Run C++ kernel tests.
+cxx-yk-api-test: $(YK_API_TEST_EXEC)
 	@echo '*** Running the C++ YASK kernel API test...'
+	$<
+
+cxx-yk-grid-test: $(YK_GRID_TEST_EXEC)
+	@echo '*** Running the C++ YASK grid test...'
 	$<
 
 # Run Python kernel API test.
@@ -650,6 +663,7 @@ yk-test-no-yc: kernel-only
 # For testing both the kernel and compiler in various combinations,
 # run the tests from the top-level Makefile.
 all-tests:
+	$(MAKE) clean; $(MAKE) stencil=iso3dfd cxx-yk-grid-test
 	$(MAKE) clean; $(MAKE) stencil=iso3dfd yc-and-yk-test
 	$(MAKE) clean; $(MAKE) stencil=iso3dfd cxx-yk-api-test
 	$(MAKE) clean; $(MAKE) stencil=iso3dfd py-yk-api-test
@@ -670,12 +684,12 @@ clean:
 	rm -fr $(YK_SWIG_DIR)/build $(YK_GEN_DIR)
 	rm -fv $(YK_SWIG_DIR)/*_api_wrap.*
 	rm -fv $(YK_OBJS)
-	find . $(COMM_DIR) -name '*.o' | xargs -r rm -v
+	find . $(COMM_DIR) -name '*.*.o' | xargs -r rm -v
 	find . $(COMM_DIR) $(BIN_DIR) $(LIB_DIR) -name '*.optrpt' | xargs -r rm -v
 
 # Remove executables, libs, etc.
 realclean: clean
-	rm -fv $(YK_LIB) $(YK_EXEC) $(YK_TEST_EXEC) $(YK_PY_MOD)* $(YK_PY_LIB)
+	rm -fv $(YK_LIB) $(YK_EXEC) $(YK_API_TEST_EXEC) $(YK_PY_MOD)* $(YK_PY_LIB)
 	rm -fv make-report.*.txt
 	find . -name '*.pyc' | xargs -r rm -v
 	find . -name '*~' | xargs -r rm -v
@@ -763,4 +777,4 @@ help:
 	@echo "Example debug builds of kernel cmd-line tool:"
 	@echo "% $(MAKE) clean; $(MAKE) -j stencil=iso3dfd mpi=0 OMPFLAGS='-qopenmp-stubs' YK_CXXOPT='-O0' EXTRA_MACROS='DEBUG'"
 	@echo "% $(MAKE) clean; $(MAKE) -j arch=intel64 stencil=3axis mpi=0 OMPFLAGS='-qopenmp-stubs' YK_CXXOPT='-O0' EXTRA_MACROS='DEBUG' model_cache=2"
-	@echo "% $(MAKE) clean; $(MAKE) -j arch=intel64 stencil=3axis radius=0 fold='x=1,y=1,z=1' mpi=0 OMPFLAGS='-qopenmp-stubs' YK_CXXOPT='-O0' EXTRA_MACROS='DEBUG TRACE TRACE_MEM TRACE_INTRINSICS'"
+	@echo "% $(MAKE) clean; $(MAKE) -j arch=intel64 stencil=3axis radius=0 fold='x=1,y=1,z=1' mpi=0 YK_CXX=g++ OMPFLAGS='' YK_CXXOPT='-O0' EXTRA_MACROS='DEBUG TRACE TRACE_MEM TRACE_INTRINSICS'"

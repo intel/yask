@@ -79,6 +79,10 @@ struct AppSettings : public KernelSettings {
     // Exit with message on error or request for help.
     void parse(int argc, char** argv) {
 
+        // Set default for time-domain size.
+        auto& step_dim = _dims->_step_dim;
+        _rank_sizes[step_dim] = 50;
+
         // Create a parser and add base options to it.
         CommandLineParser parser;
         add_options(parser);
@@ -237,8 +241,9 @@ int main(int argc, char** argv)
     double wstart, wstop;
     float best_elapsed_time=0.0f, best_apps=0.0f, best_dpps=0.0f, best_flops=0.0f;
 
-    // Performance runs.
-    idx_t dt = opts->_rank_sizes[opts->_dims->_step_dim];
+    /////// Performance run(s).
+    auto& step_dim = opts->_dims->_step_dim;
+    idx_t dt = opts->_rank_sizes[step_dim];
     os << endl << divLine <<
         "Running " << opts->num_trials << " performance trial(s) of " <<
         dt << " step(s) each...\n";
@@ -302,6 +307,7 @@ int main(int argc, char** argv)
         " est-FLOPS is based on est-FP-ops as described above.\n" <<
         endl;
     
+    /////// Validation run.
     if (opts->validate) {
         kenv->global_barrier();
         os << endl << divLine <<

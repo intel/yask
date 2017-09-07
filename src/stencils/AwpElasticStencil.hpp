@@ -29,6 +29,9 @@ IN THE SOFTWARE.
 
 #include "Soln.hpp"
 
+// Set the following macro to use a sponge grid instead of 3 sponge arrays.
+//#define FULL_SPONGE_GRID
+
 class AwpElasticStencil : public StencilBase {
 
 protected:

@@ -30,6 +30,7 @@ sub usage {
     "options:\n".
     " -p    generate perl lists of permutes\n".
     " -d    generate C++ class definitions\n".
+    " -g    generate C++ grid-creation code\n".
     " -m    generate CPP layout/unlayout macros\n";
 }
 
@@ -267,6 +268,30 @@ END
     } @a;
   }
 
+  # grid-creation code.
+  elsif ($opt eq '-g') {
+
+    my $layout = "Layout_".join('', 1..$n);
+    print <<"END";
+
+        // $n-D grid.
+        case $n:
+            if (got_step) {
+                if (do_fold)
+                    gp = make_shared<YkVecGrid<$layout, true>>(_dims, name, dims, &_ostr);
+                else
+                    gp = make_shared<YkElemGrid<$layout, true>>(_dims, name, dims, &_ostr);
+            }
+            else {
+                if (do_fold)
+                    gp = make_shared<YkVecGrid<$layout, false>>(_dims, name, dims, &_ostr);
+                else
+                    gp = make_shared<YkElemGrid<$layout, false>>(_dims, name, dims, &_ostr);
+            }
+            break;
+END
+  }
+  
   # just list permutes.
   elsif ($opt eq '-p') {
 

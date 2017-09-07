@@ -189,6 +189,11 @@ namespace yask {
             operator=(val);
         }
 
+        // get length.
+        inline int get_num_elems() const {
+            return VLEN;
+        }
+        
         // copy whole vector.
         ALWAYS_INLINE real_vec_t& operator=(const real_vec_t& rhs) {
 #ifdef NO_INTRINSICS
@@ -452,9 +457,9 @@ namespace yask {
 #ifdef TRACE_INTRINSICS
         std::cout << "real_vec_align w/count=" << count << ":" << std::endl;
         std::cout << " a: ";
-        a.print_reals(cout);
+        a.print_reals(std::cout);
         std::cout << " b: ";
-        b.print_reals(cout);
+        b.print_reals(std::cout);
 #endif
 
 #if defined(NO_INTRINSICS)
@@ -469,10 +474,12 @@ namespace yask {
         // Not really an intrinsic, but not element-wise, either.
         // Put the 2 parts in a local array, then extract the desired part
         // using an unaligned load.
-        real_t r2[VLEN * 2];
+        typedef real_t R2[VLEN * 2] CACHE_ALIGNED;
+        R2 r2;
         *((real_vec_t*)(&r2[0])) = b;
         *((real_vec_t*)(&r2[VLEN])) = a;
-        res = *((real_vec_t*)(&r2[count]));
+        real_vec_t* p = (real_vec_t*)(&r2[count]); // not usually aligned.
+        res.u.mr = INAME(loadu)((imem_t const*)p);
     
 #elif REAL_BYTES == 8 && defined(ARCH_KNC) && defined(USE_INTRIN512)
         // For KNC, for 64-bit align, use the 32-bit op w/2x count.
@@ -484,7 +491,7 @@ namespace yask {
 
 #ifdef TRACE_INTRINSICS
         std::cout << " res: ";
-        res.print_reals(cout);
+        res.print_reals(std::cout);
 #endif
     }
 
@@ -497,12 +504,12 @@ namespace yask {
 #ifdef TRACE_INTRINSICS
         std::cout << "real_vec_align w/count=" << count << " w/mask:" << std::endl;
         std::cout << " a: ";
-        a.print_reals(cout);
+        a.print_reals(std::cout);
         std::cout << " b: ";
-        b.print_reals(cout);
+        b.print_reals(std::cout);
         std::cout << " res(before): ";
-        res.print_reals(cout);
-        std::cout << " mask: 0x" << hex << k1 << std::endl;
+        res.print_reals(std::cout);
+        std::cout << " mask: 0x" << std::hex << k1 << std::endl;
 #endif
 
 #if defined(NO_INTRINSICS) || !defined(USE_INTRIN512)
@@ -520,7 +527,7 @@ namespace yask {
 
 #ifdef TRACE_INTRINSICS
         std::cout << " res(after): ";
-        res.print_reals(cout);
+        res.print_reals(std::cout);
 #endif
     }
 
@@ -530,9 +537,9 @@ namespace yask {
 #ifdef TRACE_INTRINSICS
         std::cout << "real_vec_permute:" << std::endl;
         std::cout << " ctrl: ";
-        ctrl.print_ctrls(cout);
+        ctrl.print_ctrls(std::cout);
         std::cout << " a: ";
-        a.print_reals(cout);
+        a.print_reals(std::cout);
 #endif
 
 #if defined(NO_INTRINSICS) || !defined(USE_INTRIN512)
@@ -546,7 +553,7 @@ namespace yask {
 
 #ifdef TRACE_INTRINSICS
         std::cout << " res: ";
-        res.print_reals(cout);
+        res.print_reals(std::cout);
 #endif
     }
 
@@ -557,12 +564,12 @@ namespace yask {
 #ifdef TRACE_INTRINSICS
         std::cout << "real_vec_permute w/mask:" << std::endl;
         std::cout << " ctrl: ";
-        ctrl.print_ctrls(cout);
+        ctrl.print_ctrls(std::cout);
         std::cout << " a: ";
-        a.print_reals(cout);
-        std::cout << " mask: 0x" << hex << k1 << std::endl;
+        a.print_reals(std::cout);
+        std::cout << " mask: 0x" << std::hex << k1 << std::endl;
         std::cout << " res(before): ";
-        res.print_reals(cout);
+        res.print_reals(std::cout);
 #endif
 
 #if defined(NO_INTRINSICS) || !defined(USE_INTRIN512)
@@ -578,7 +585,7 @@ namespace yask {
 
 #ifdef TRACE_INTRINSICS
         std::cout << " res(after): ";
-        res.print_reals(cout);
+        res.print_reals(std::cout);
 #endif
     }
 
@@ -590,11 +597,11 @@ namespace yask {
 #ifdef TRACE_INTRINSICS
         std::cout << "real_vec_permute2:" << std::endl;
         std::cout << " ctrl: ";
-        ctrl.print_ctrls(cout);
+        ctrl.print_ctrls(std::cout);
         std::cout << " a: ";
-        a.print_reals(cout);
+        a.print_reals(std::cout);
         std::cout << " b: ";
-        b.print_reals(cout);
+        b.print_reals(std::cout);
 #endif
 
 #if defined(NO_INTRINSICS) || !defined(USE_INTRIN512)
@@ -615,7 +622,7 @@ namespace yask {
 
 #ifdef TRACE_INTRINSICS
         std::cout << " res: ";
-        res.print_reals(cout);
+        res.print_reals(std::cout);
 #endif
     }
 

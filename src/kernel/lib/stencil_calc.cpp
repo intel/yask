@@ -89,10 +89,6 @@ namespace yask {
         auto sp = make_shared<YASK_STENCIL_CONTEXT>(ep, op);
         assert(sp);
 
-        // Set time-domain size because it's not really used in the API.
-        auto& step_dim = op->_dims->_step_dim;
-        op->_rank_sizes[step_dim] = 1;
-
         return sp;
     }
     yk_solution_ptr yk_factory::new_solution(yk_env_ptr env) const {
@@ -463,7 +459,7 @@ namespace yask {
         int ndims = _dims->_stencil_dims.size();
         auto& step_dim = _dims->_step_dim;
         TRACE_MSG("calc_region: " << rank_idxs.start.makeValStr(ndims) <<
-                  " ... " << rank_idxs.stop.addElements(-1).makeValStr(ndims));
+                  " ... " << rank_idxs.stop.addConst(-1).makeValStr(ndims));
 
         // Init region begin & end from rank start & stop indices.
         ScanIndices region_idxs;
@@ -532,7 +528,7 @@ namespace yask {
                     }
                     TRACE_MSG("calc_region, after trimming: " <<
                               region_idxs.begin.makeValStr(ndims) <<
-                              " ... " << region_idxs.end.addElements(-1).makeValStr(ndims));
+                              " ... " << region_idxs.end.addConst(-1).makeValStr(ndims));
                     
                     // Only need to loop through the spatial extent of the
                     // region if any of its blocks are at least partly
@@ -576,7 +572,7 @@ namespace yask {
         int ndims = dims->_stencil_dims.size();
         auto& step_dim = dims->_step_dim;
         TRACE_MSG3("calc_block: " << region_idxs.start.makeValStr(ndims) <<
-                  " ... " << region_idxs.stop.addElements(-1).makeValStr(ndims));
+                  " ... " << region_idxs.stop.addConst(-1).makeValStr(ndims));
 
         // Init block begin & end from region start & stop indices.
         ScanIndices block_idxs;
@@ -609,7 +605,7 @@ namespace yask {
         int ndims = dims->_stencil_dims.size();
         auto& step_dim = dims->_step_dim;
         TRACE_MSG3("calc_sub_block: " << block_idxs.start.makeValStr(ndims) <<
-                  " ... " << block_idxs.stop.addElements(-1).makeValStr(ndims));
+                  " ... " << block_idxs.stop.addConst(-1).makeValStr(ndims));
 
         // Init sub-block begin & end from block start & stop indices.
         ScanIndices sub_block_idxs;
@@ -656,23 +652,30 @@ namespace yask {
                        dims->_cluster_pts[dname] == 0);
             }
 
-            // Subtract rank offset and divide indices by vector lengths as
-            // needed by read/writeVecNorm().  Use idiv_flr() instead of '/'
-            // because begin/end vars may be negative (if in halo).
+            // Indices to calc_sub_block_of_clusters() must be in vec-norm
+            // format, i.e., vector lengths and rank-relative.
+            ScanIndices norm_sub_block_idxs = sub_block_idxs;
             for (int i = cp->_step_posn + 1; i < ndims; i++) {
                 auto& dname = dims->_stencil_dims.getDimName(i);
-                sub_block_idxs.begin[i] =
-                    idiv_flr<idx_t>(sub_block_idxs.begin[i] -
-                                    cp->rank_domain_offsets[dname],
-                                    dims->_fold_pts[dname]);
-                sub_block_idxs.end[i] =
-                    idiv_flr<idx_t>(sub_block_idxs.end[i] -
-                                    cp->rank_domain_offsets[dname],
-                                    dims->_fold_pts[dname]);
+
+                // Subtract rank offset and divide indices by fold lengths
+                // as needed by read/writeVecNorm().  Use idiv_flr() instead
+                // of '/' because begin/end vars may be negative (if in
+                // halo).
+                idx_t nbegin = idiv_flr<idx_t>(sub_block_idxs.begin[i] -
+                                               cp->rank_domain_offsets[dname],
+                                               dims->_fold_pts[dname]);
+                norm_sub_block_idxs.begin[i] = nbegin;
+                norm_sub_block_idxs.start[i] = nbegin;
+                idx_t nend = idiv_flr<idx_t>(sub_block_idxs.end[i] -
+                                             cp->rank_domain_offsets[dname],
+                                             dims->_fold_pts[dname]);
+                norm_sub_block_idxs.end[i] = nend;
+                norm_sub_block_idxs.stop[i] = nend;
             }
 
             // Evaluate sub-block of clusters.
-            calc_sub_block_of_clusters(sub_block_idxs);
+            calc_sub_block_of_clusters(norm_sub_block_idxs);
         }
         
         // Make sure streaming stores are visible for later loads.
@@ -698,15 +701,34 @@ namespace yask {
         }
     }
         
-    
     // Make a new grid.
     YkGridPtr StencilContext::newGrid(const std::string& name,
                                       const GridDimNames& dims,
                                       bool is_visible) {
 
-        // Check for step dim.
+        // Which dims are vectorized (>1 pts in fold)?
+        set<string> vecDims;
+        for (auto& dim : _dims->_fold_pts.getDims()) {
+            auto& dname = dim.getName();
+            auto dval = dim.getVal();
+            if (dval > 1)
+                vecDims.insert(dname);
+        }
+
+        // Check dims.
         bool got_step = false;
+        size_t num_vec_dims = 0;
+        set<string> seenDims;
         for (size_t i = 0; i < dims.size(); i++) {
+
+            // Already used?
+            if (seenDims.count(dims[i])) {
+                cerr << "Error: cannot create grid '" << name <<
+                    "': dimension '" << dims[i] << "' used more than once.\n";
+                exit_yask(1);
+            }
+            
+            // Step dim?
             if (dims[i] == _dims->_step_dim) {
                 if (i == 0)
                     got_step = true;
@@ -717,69 +739,32 @@ namespace yask {
                     exit_yask(1);
                 }
             }
+
+            // Vec dim?
+            else if (vecDims.count(dims[i]))
+                num_vec_dims++;
         }
+
+        // It's ok to use a folded grid iff all vectorized dims are
+        // used in this grid.
+        bool do_fold = (num_vec_dims == vecDims.size());
         
         // NB: the behavior of this algorithm must follow that in the
         // YASK compiler to allow grids created via new_grid() to share
         // storage with those created via the compiler.
-        // TODO: auto-gen this code.
-#warning FIXME: make folded grids.
         YkGridPtr gp;
         switch (dims.size()) {
         case 0:
             gp = make_shared<YkElemGrid<Layout_0d, false>>(_dims, name, dims, &_ostr);
             break;
-        case 1:
-            if (got_step)
-                gp = make_shared<YkElemGrid<Layout_1, true>>(_dims, name, dims, &_ostr);
-            else
-                gp = make_shared<YkElemGrid<Layout_1, false>>(_dims, name, dims, &_ostr);
-            break;
-        case 2:
-            if (got_step)
-                gp = make_shared<YkElemGrid<Layout_12, true>>(_dims, name, dims, &_ostr);
-            else
-                gp = make_shared<YkElemGrid<Layout_12, false>>(_dims, name, dims, &_ostr);
-            break;
-        case 3:
-            if (got_step)
-                gp = make_shared<YkElemGrid<Layout_123, true>>(_dims, name, dims, &_ostr);
-            else
-                gp = make_shared<YkElemGrid<Layout_123, false>>(_dims, name, dims, &_ostr);
-            break;
-        case 4:
-            if (got_step)
-                gp = make_shared<YkElemGrid<Layout_1234, true>>(_dims, name, dims, &_ostr);
-            else
-                gp = make_shared<YkElemGrid<Layout_1234, false>>(_dims, name, dims, &_ostr);
-            break;
-#if MAX_DIMS >= 5
-        case 5:
-            if (got_step)
-                gp = make_shared<YkElemGrid<Layout_12345, true>>(_dims, name, dims, &_ostr);
-            else
-                gp = make_shared<YkElemGrid<Layout_12345, false>>(_dims, name, dims, &_ostr);
-            break;
-#endif
-#if MAX_DIMS >= 6
-        case 6:
-            if (got_step)
-                gp = make_shared<YkElemGrid<Layout_123456, true>>(_dims, name, dims, &_ostr);
-            else
-                gp = make_shared<YkElemGrid<Layout_123456, false>>(_dims, name, dims, &_ostr);
-            break;
-#endif
-#if MAX_DIMS >= 7
-        case 7:
-            if (got_step)
-                gp = make_shared<YkElemGrid<Layout_1234567, true>>(_dims, name, dims, &_ostr);
-            else
-                gp = make_shared<YkElemGrid<Layout_1234567, false>>(_dims, name, dims, &_ostr);
-            break;
-#endif
+
+            // Include auto-gen code.
+#include "yask_grid_code.hpp"
+            
         default:
             cerr << "Error in new_grid: cannot create grid '" << name <<
-                "' with " << dims.size() << " dimensions.\n";
+                "' with " << dims.size() << " dimensions; only up to " << MAX_DIMS <<
+                " dimensions supported.\n";
             exit_yask(1);
         }
 
@@ -930,7 +915,7 @@ namespace yask {
             TRACE_MSG("neighbor_offsets = " << _mpiInfo->neighbor_offsets.makeDimValStr() <<
                       " & roffsets of rank " << rn << " = " << roffsets.makeDimValStr() <<
                       " => " << rn_ofs);
-            assert(rn_ofs < _mpiInfo->neighborhood_size);
+            assert(idx_t(rn_ofs) < _mpiInfo->neighborhood_size);
 
             // Save rank of this neighbor into the MPI info object.
             _mpiInfo->my_neighbors.at(rn_ofs) = rn;
@@ -1588,13 +1573,6 @@ namespace yask {
             }
         }
 
-#warning FIXME: re-enable vectorization.
-        if (bb_simple) {
-            os << "Warning: vectorization disabled for this alpha version;"
-                " slower scalar calculations will be used.\n";
-            bb_simple = false;
-        }
-        
         // All done.
         bb_valid = true;
     }
@@ -1778,17 +1756,6 @@ namespace yask {
                          TRACE_MSG("  with rank " << neighbor_rank << " at relative position " <<
                                    offsets.subElements(1).makeDimValOffsetStr() << "...");
                          
-                         // Get buffer sizes.
-                         // This is how much needs to be copied.
-                         // TODO: do this separately for send/recv for asymm halos.
-                         assert(sendBuf->get_num_storage_bytes() ==
-                                recvBuf->get_num_storage_bytes());
-                         IdxTuple buf_sizes;
-                         for (auto& dname : sendBuf->get_dim_names()) {
-                             auto dsize = sendBuf->get_alloc_size(dname);
-                             buf_sizes.addDimBack(dname, dsize);
-                         }
-
                          // Submit async request to receive data from neighbor.
                          if (hi == halo_irecv) {
                              auto nbytes = recvBuf->get_num_storage_bytes();
@@ -1800,6 +1767,7 @@ namespace yask {
 
                          // Pack data, then send to neighbor.
                          else if (hi == halo_isend) {
+                             IdxTuple buf_sizes = sendBuf->get_allocs();
                          
                              // Adjust start based on time index.
                              IdxTuple start = sendBegin.addElements(toffset, false);
@@ -1830,8 +1798,9 @@ namespace yask {
                                        &send_reqs[num_send_reqs++]);
                          }
 
-                         // Wair for data from neighbor, then unpack it.
+                         // Wait for data from neighbor, then unpack it.
                          else if (hi == halo_unpack) {
+                             IdxTuple buf_sizes = recvBuf->get_allocs();
 
                              // Wait for data from neighbor before unpacking it.
                              TRACE_MSG("   waiting for data...");
@@ -1950,7 +1919,7 @@ namespace yask {
                    offsets.subElements(1).makeDimValStr() << " with size " <<
                    sizes.makeDimValStr(" * "));
         auto& gp = getBuf(bd, offsets);
-        gp = context.newGrid(name, sizes.getDimNames(), false);
+        gp = context.newGrid(name, sizes.getDimNames(), false); // don't make it visible.
         assert(gp);
         for (auto& dim : sizes.getDims()) {
             auto& dname = dim.getName();
