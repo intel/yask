@@ -344,6 +344,11 @@ namespace yask {
             YkGridBase(&_data, dims),
             _data(name, dimNames, ostr) { }
 
+        // Get num dims from compile-time const.
+        virtual int get_num_dims() const final {
+            return _data.get_num_dims();
+        }
+
         // Print some info to 'os'.
         virtual void print_info(std::ostream& os) const {
             _data.print_info(os, "FP");
@@ -368,7 +373,7 @@ namespace yask {
         
             Indices adj_idxs;
 #pragma unroll
-            for (int i = 0; i < idxs.max_idxs; i++) {
+            for (int i = 0; i < _data.get_num_dims(); i++) {
 
                 // Adjust for offset and padding.
                 // This gives a 0-based local element index.
@@ -432,6 +437,11 @@ namespace yask {
             }
         }
         
+        // Get num dims from compile-time const.
+        virtual int get_num_dims() const final {
+            return _data.get_num_dims();
+        }
+
         // Print some info to 'os'.
         virtual void print_info(std::ostream& os) const {
             _data.print_info(os, "SIMD FP");
@@ -465,7 +475,7 @@ namespace yask {
         
             Indices vec_idxs, elem_ofs;
 #pragma unroll
-            for (int i = 0; i < idxs.max_idxs; i++) {
+            for (int i = 0; i < _data.get_num_dims(); i++) {
 
                 // Adjust for offset and padding.
                 // This gives a 0-based local element index.
@@ -519,7 +529,7 @@ namespace yask {
         
             Indices adj_idxs;
 #pragma unroll
-            for (int i = 0; i < idxs.max_idxs; i++) {
+            for (int i = 0; i < _data.get_num_dims(); i++) {
 
                 // Adjust for padding.
                 // This gives a 0-based local *vector* index.
@@ -558,9 +568,9 @@ namespace yask {
             IdxTuple eofs = get_allocs(); // get dims for this grid.
             elem_ofs.setTupleVals(eofs);  // set vals from elem_ofs.
 
-            IdxTuple& folds = _dims->_fold_pts; // get fold dims.
+            IdxTuple& folds = _dims->_vec_fold_pts; // get req'd fold dims.
             IdxTuple fofs = folds;
-            fofs.setVals(eofs, false); // get only fold offsets.
+            fofs.setVals(eofs, false); // get only fold offsets from eofs.
             
             // Set layout scheme.
 #if VLEN_FIRST_INDEX_IS_UNIT_STRIDE
@@ -569,7 +579,7 @@ namespace yask {
             folds.setFirstInner(false);
 #endif
 
-            // Use fold layout to find index.
+            // Use fold layout to find vector index.
             auto i = folds.layout(fofs, false);
             return i;
         }
@@ -633,10 +643,11 @@ namespace yask {
             eidxs.setTupleVals(idxs2);      // set vals from eidxs.
 
             // Visit every point in fold.
-            IdxTuple& folds = _dims->_fold_pts;
+            IdxTuple& folds = _dims->_vec_fold_pts;
             folds.visitAllPoints([&](const IdxTuple& fofs) {
 
                     // Get element from vec val.
+                    // TODO: simplify this.
                     IdxTuple fofs2 = get_allocs(); // get grid dims.
                     fofs2.setValsSame(0);
                     fofs2.setVals(fofs, false); // set just fold ofs dims.
@@ -645,7 +656,7 @@ namespace yask {
                     real_t ev = val[i];
 
                     // Add fold offsets to elem indices for printing.
-                    IdxTuple pt2 = idxs2.addElements(fofs2);
+                    IdxTuple pt2 = idxs2.addElements(fofs, false);
                     Indices pt3(pt2);
 
                     printElem(msg, pt3, ev, line, newline);

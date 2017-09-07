@@ -822,6 +822,11 @@ namespace yask {
                 auto& dval = dim.getVal();
                 os << "    p->_fold_pts.addDimBack(\"" << dname << "\", " << dval << ");\n";
             }
+            for (auto& dim : _dims._foldGT1.getDims()) {
+                auto& dname = dim.getName();
+                auto& dval = dim.getVal();
+                os << "    p->_vec_fold_pts.addDimBack(\"" << dname << "\", " << dval << ");\n";
+            }
             for (auto& dim : _dims._clusterPts.getDims()) {
                 auto& dname = dim.getName();
                 auto& dval = dim.getVal();

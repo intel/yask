@@ -657,6 +657,7 @@ namespace yask {
             ScanIndices norm_sub_block_idxs = sub_block_idxs;
             for (int i = cp->_step_posn + 1; i < ndims; i++) {
                 auto& dname = dims->_stencil_dims.getDimName(i);
+                assert(dims->_domain_dims.lookup(dname));
 
                 // Subtract rank offset and divide indices by fold lengths
                 // as needed by read/writeVecNorm().  Use idiv_flr() instead
@@ -706,15 +707,6 @@ namespace yask {
                                       const GridDimNames& dims,
                                       bool is_visible) {
 
-        // Which dims are vectorized (>1 pts in fold)?
-        set<string> vecDims;
-        for (auto& dim : _dims->_fold_pts.getDims()) {
-            auto& dname = dim.getName();
-            auto dval = dim.getVal();
-            if (dval > 1)
-                vecDims.insert(dname);
-        }
-
         // Check dims.
         bool got_step = false;
         size_t num_vec_dims = 0;
@@ -741,13 +733,13 @@ namespace yask {
             }
 
             // Vec dim?
-            else if (vecDims.count(dims[i]))
+            else if (_dims->_vec_fold_pts.lookup(dims[i]))
                 num_vec_dims++;
         }
 
         // It's ok to use a folded grid iff all vectorized dims are
         // used in this grid.
-        bool do_fold = (num_vec_dims == vecDims.size());
+        bool do_fold = (num_vec_dims == _dims->_vec_fold_pts.getNumDims());
         
         // NB: the behavior of this algorithm must follow that in the
         // YASK compiler to allow grids created via new_grid() to share
@@ -1503,7 +1495,7 @@ namespace yask {
         }
         idx_t errs = 0;
         for (size_t gi = 0; gi < gridPtrs.size(); gi++) {
-            os << "Grid '" << ref.gridPtrs[gi]->get_name() << "'..." << endl;
+            TRACE_MSG("Grid '" << ref.gridPtrs[gi]->get_name() << "'...");
             errs += gridPtrs[gi]->compare(ref.gridPtrs[gi].get());
         }
 
