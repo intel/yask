@@ -66,17 +66,17 @@ int main(int argc, char** argv) {
         YkGridPtr g0 = make_shared<YkElemGrid<Layout_0d, false>>(dims, name, gdims, &osp);
         g0->alloc_storage();
         g0->print_info(os); os << endl;
-        YkGridPtr g0f = make_shared<YkVecGrid<Layout_0d, false>>(dims, name, gdims, &osp);
-        g0f->alloc_storage();
-        g0f->print_info(os); os << endl;
+        YkGridPtr g1 = make_shared<YkElemGrid<Layout_0d, false>>(dims, name, gdims, &osp);
+        g1->alloc_storage();
+        g1->print_info(os); os << endl;
 
         double val = 3.14;
         os << "Testing with " << val << endl;
         g0->set_element(val);
-        g0f->set_element(val);
+        g1->set_element(val);
         auto v0 = g0->get_element();
-        auto v0f = g0f->get_element();
-        assert(v0 == v0f);
+        auto v1 = g1->get_element();
+        assert(v0 == v1);
     }
     
     // 3D test.

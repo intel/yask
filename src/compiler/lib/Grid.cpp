@@ -159,6 +159,8 @@ namespace yask {
     }
 
     // Determine whether grid can be folded.
+    // This must match the algorithm used in StencilContext::newGrid()
+    // in the YASK kernel.
     void Grid::setFolding(const Dimensions& dims) {
 
         _numFoldableDims = 0;
@@ -178,8 +180,10 @@ namespace yask {
                 _numFoldableDims++;
         }
 
-        // Can fold if ALL fold dims >1 are used in this grid.
-        _isFoldable = _numFoldableDims == dims._foldGT1.size();
+        // Can fold if there is >=1 folded dim and ALL fold dims >1 are used
+        // in this grid.
+        _isFoldable = (_numFoldableDims > 0) &&
+            (_numFoldableDims == dims._foldGT1.size());
     }
     
     // Update halos based on each value in 'offsets' in some

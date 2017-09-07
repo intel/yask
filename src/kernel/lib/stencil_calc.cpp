@@ -709,7 +709,7 @@ namespace yask {
 
         // Check dims.
         bool got_step = false;
-        size_t num_vec_dims = 0;
+        int num_vec_dims = 0;
         set<string> seenDims;
         for (size_t i = 0; i < dims.size(); i++) {
 
@@ -737,9 +737,10 @@ namespace yask {
                 num_vec_dims++;
         }
 
-        // It's ok to use a folded grid iff all vectorized dims are
-        // used in this grid.
-        bool do_fold = (num_vec_dims == _dims->_vec_fold_pts.getNumDims());
+        // Use a folded grid iff all vectorized dims are
+        // used in this grid (and there is at least one).
+        bool do_fold = (num_vec_dims >= 1) &&
+            (num_vec_dims == _dims->_vec_fold_pts.getNumDims());
         
         // NB: the behavior of this algorithm must follow that in the
         // YASK compiler to allow grids created via new_grid() to share
