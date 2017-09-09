@@ -708,10 +708,12 @@ namespace yask {
                                       bool is_visible) {
 
         // Check dims.
-        bool got_step = false;
+        int ndims = dims.size();
+        int step_posn = 0;      // 0 => not used.
+        int inner_posn = 0;     // 0 => not used.
         int num_vec_dims = 0;
         set<string> seenDims;
-        for (size_t i = 0; i < dims.size(); i++) {
+        for (int i = 0; i < ndims; i++) {
 
             // Already used?
             if (seenDims.count(dims[i])) {
@@ -722,19 +724,23 @@ namespace yask {
             
             // Step dim?
             if (dims[i] == _dims->_step_dim) {
-                if (i == 0)
-                    got_step = true;
-                else {
+                step_posn = i + 1;
+                if (i > 0) {
                     cerr << "Error: cannot create grid '" << name <<
-                        "' with dimension '" << dims[i] << "' in position " <<
-                        i << "; step dimension must be first dimension.\n";
+                        "' because step dimension '" << dims[i] <<
+                        "' must be first dimension.\n";
                     exit_yask(1);
                 }
             }
 
             // Vec dim?
-            else if (_dims->_vec_fold_pts.lookup(dims[i]))
+            else if (_dims->_vec_fold_pts.lookup(dims[i])) {
                 num_vec_dims++;
+
+                // Inner dim?
+                if (dims[i] == _dims->_inner_dim)
+                    inner_posn = i + 1;
+            }
         }
 
         // Use a folded grid iff all vectorized dims are
@@ -746,15 +752,13 @@ namespace yask {
         // YASK compiler to allow grids created via new_grid() to share
         // storage with those created via the compiler.
         YkGridPtr gp;
-        switch (dims.size()) {
-        case 0:
+        if (ndims == 0)
             gp = make_shared<YkElemGrid<Layout_0d, false>>(_dims, name, dims, &_ostr);
-            break;
 
-            // Include auto-gen code.
+            // Include auto-gen code for all other caes.
 #include "yask_grid_code.hpp"
             
-        default:
+        else {
             cerr << "Error in new_grid: cannot create grid '" << name <<
                 "' with " << dims.size() << " dimensions; only up to " << MAX_DIMS <<
                 " dimensions supported.\n";

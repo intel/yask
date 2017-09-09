@@ -153,7 +153,8 @@ namespace yask {
         static const int max_domain_dims = MAX_DIMS - 1; // 1 reserved for step dim.
 
         // Dimensions with unused values.
-        std::string _step_dim;
+        std::string _step_dim;  // usually time, 't'.
+        std::string _inner_dim; // the domain dim used in the inner loop.
         IdxTuple _domain_dims;
         IdxTuple _stencil_dims;
         IdxTuple _misc_dims;

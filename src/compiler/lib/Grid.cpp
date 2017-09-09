@@ -341,6 +341,10 @@ namespace yask {
             cerr << "Error: no domain dimensions defined.\n";
             exit(1);
         }
+
+        // Use last domain dim as inner one.
+        // TODO: make this selectable.
+        _innerDim = _domainDims.getDimName(_domainDims.getNumDims() - 1);
         
         // Layout of fold.
         _fold.setFirstInner(settings._firstInner);

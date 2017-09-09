@@ -271,25 +271,43 @@ END
   # grid-creation code.
   elsif ($opt eq '-g') {
 
-    my $layout = "Layout_".join('', 1..$n);
-    print <<"END";
+    for my $fold (0 .. 1) {
+      my $type = $fold ? "YkVecGrid" : "YkElemGrid";
+      my $ftest = $fold ? "do_fold" : "!do_fold";
 
-        // $n-D grid.
-        case $n:
-            if (got_step) {
-                if (do_fold)
-                    gp = make_shared<YkVecGrid<$layout, true>>(_dims, name, dims, &_ostr);
-                else
-                    gp = make_shared<YkElemGrid<$layout, true>>(_dims, name, dims, &_ostr);
+      # Positions are 0 if they don't exist.
+      # If they do,
+      # - step posn is always 1.
+      # - inner posn can be anywhere.
+
+      for my $sp (0 .. 1) {
+        my $wrap = $sp ? "true /* wrap step dim */" : "false /* no wrap */";
+
+        for my $ip (0 .. $n) {
+
+          # can't have step and inner at same posn.
+          next if $sp && $ip && $sp == $ip;
+
+          # Make type name.
+          # Step posn and inner posn are always at end.
+          my $layout = "Layout_";
+          for my $i (1 .. $n) {
+            if ($i != $sp && $i != $ip) {
+              $layout .= $i;
             }
-            else {
-                if (do_fold)
-                    gp = make_shared<YkVecGrid<$layout, false>>(_dims, name, dims, &_ostr);
-                else
-                    gp = make_shared<YkElemGrid<$layout, false>>(_dims, name, dims, &_ostr);
-            }
-            break;
-END
+          }
+          if ($sp) {
+            $layout .= $sp;
+          }
+          if ($ip) {
+            $layout .= $ip;
+          }
+
+          print " else if (ndims == $n && $ftest && step_posn == $sp && inner_posn == $ip)\n",
+            "  gp = make_shared<$type<$layout, $wrap>>(_dims, name, dims, &_ostr);\n";
+        }
+      }
+    }
   }
   
   # just list permutes.

@@ -356,7 +356,7 @@ namespace yask {
             os << "\n ///// Grid(s)." << endl;
             for (auto gp : _grids) {
                 string grid = gp->getName();
-                size_t ndims = gp->getDims().size();
+                int ndims = gp->get_num_dims();
 
                 os << "\n // The ";
                 if (ndims)
@@ -379,42 +379,56 @@ namespace yask {
                 // Type-name in kernel is 'GRID_TYPE<LAYOUT, WRAP_1ST_IDX>'.
                 ostringstream oss;
                 oss << gtype << "<Layout_";
-                bool got_step = false;
+                int step_posn = 0;
+                int inner_posn = 0;
 
                 // 1-D or more.
                 if (ndims) {
-
-                    // By default, last dim is unit-stride, e.g.,
-                    // 'Layout_1234'.
-                    // TODO: do something smarter depending on dims.
-                    for (size_t dn = 0; dn < ndims; dn++) {
-                        oss << (dn + 1);
-                        
-                        // Step dim?
+                    for (int dn = 0; dn < ndims; dn++) {
                         auto& dim = gp->getDims()[dn];
                         auto& dname = dim->getName();
                         auto dtype = dim->getType();
+                        
+                        // Step dim?
                         if (dtype == STEP_INDEX) {
-                            if (dn == 0)
-                                got_step = true;
-                            else {
+                            assert(dname == _dims._stepDim);
+                            step_posn = dn + 1;
+                            if (dn > 0) {
                                 cerr << "Error: cannot create grid '" << grid <<
                                     "' with dimension '" << dname << "' in position " <<
                                     dn << "; step dimension must be in first position.\n";
                                 exit(1);
                             }
                         }
+
+                        // Inner dim?
+                        else if (dname == _dims._innerDim) {
+                            assert(dtype == DOMAIN_INDEX);
+                            inner_posn = dn + 1;
+                        }
+
+                        // Something else.
+                        else {
+                            int other_posn = dn + 1;
+                            oss << other_posn;
+                        }
                     }
+
+                    // Add step and inner posns at end.
+                    if (step_posn)
+                        oss << step_posn;
+                    if (inner_posn)
+                        oss << inner_posn;
                 }
 
                 // Scalar.
                 else
                     oss << "0d"; // Trivial scalar layout.
 
-                if (got_step)
-                    oss << ", true /* wrap 1st index */";
+                if (step_posn)
+                    oss << ", true /* wrap step index */";
                 else
-                    oss << ", false /* do not wrap 1st index */";
+                    oss << ", false /* no wrap */";
                 oss << ">";
                 typeName = oss.str();
 
@@ -801,7 +815,8 @@ namespace yask {
             os << "\n  // Create Dims object.\n"
                 "  static DimsPtr new_dims() {\n"
                 "    auto p = std::make_shared<Dims>();\n"
-                "    p->_step_dim = \"" << _dims._stepDim << "\";\n";
+                "    p->_step_dim = \"" << _dims._stepDim << "\";\n"
+                "    p->_inner_dim = \"" << _dims._innerDim << "\";\n";
             for (auto& dim : _dims._domainDims.getDims()) {
                 auto& dname = dim.getName();
                 os << "    p->_domain_dims.addDimBack(\"" << dname << "\", 0);\n";
