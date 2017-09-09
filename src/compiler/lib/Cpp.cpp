@@ -707,11 +707,8 @@ namespace yask {
                         "(const Indices& idxs) {\n";
                     printIndices(os);
 
-#warning FIXME: reenable prefetching
-#if PREFETCH_WORKING
                     // C++ prefetch code.
                     vp->printPrefetches(os, dir);
-#endif
 
                     // End of function.
                     os << "} // " << fname << "." << endl;

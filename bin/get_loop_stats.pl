@@ -208,6 +208,8 @@ for my $arg (@ARGV) {
             $istats{"jump"}++;
           } elsif ($instr =~ /^cmp/) {
             $istats{"compare"}++;
+          } elsif ($instr =~ /^call/) {
+            $istats{"call"}++;
           } else {
             $istats{"other instr"}++;
           }

@@ -464,6 +464,31 @@ namespace yask {
             _data.set_elems_in_seq(seedv);
         }
   
+        // Get linear index into a vector given 'elem_ofs', the
+        // element offsets in every grid dim.
+        // TODO: make this much more
+        // efficient by creating a custom function from the stencil
+        // compiler.
+        inline idx_t getVecIndex(const Indices& elem_ofs) const {
+            IdxTuple eofs = get_allocs(); // get dims for this grid.
+            elem_ofs.setTupleVals(eofs);  // set vals from elem_ofs.
+
+            IdxTuple& folds = _dims->_vec_fold_pts; // get req'd fold dims.
+            IdxTuple fofs = folds;
+            fofs.setVals(eofs, false); // get only fold offsets from eofs.
+            
+            // Set layout scheme.
+#if VLEN_FIRST_INDEX_IS_UNIT_STRIDE
+            folds.setFirstInner(true);
+#else
+            folds.setFirstInner(false);
+#endif
+
+            // Use fold layout to find vector index.
+            auto i = folds.layout(fofs, false);
+            return i;
+        }
+        
         // Get a pointer to given element.
         virtual const real_t* getElemPtr(const Indices& idxs,
                                          bool checkBounds=true) const final {
@@ -500,9 +525,11 @@ namespace yask {
             _data.get_ostr() << std::endl << std::flush;
 #endif
 
+            // Get pointer to vector.
+            const real_vec_t* vp = _data.getPtr(vec_idxs, checkBounds);
+
             // Get pointer to element.
-            const real_vec_t& vp = _data(vec_idxs, checkBounds);
-            const real_t* ep = &vp[i];
+            const real_t* ep = &(*vp)[i];
             return ep;
         }
 
@@ -546,8 +573,8 @@ namespace yask {
             _data.get_ostr() << std::endl << std::flush;
 #endif
 
-            // Get pointer via layout in _data.
-            return &_data(adj_idxs, checkBounds);
+            // Get ptr via layout in _data.
+            return _data.getPtr(adj_idxs, checkBounds);
         }
 
         // Non-const version.
@@ -559,31 +586,6 @@ namespace yask {
             return const_cast<real_vec_t*>(p);
         }
 
-        // Get linear index into a vector given 'elem_ofs', the
-        // element offsets in every grid dim.
-        // TODO: make this much more
-        // efficient by creating a custom function from the stencil
-        // compiler.
-        inline idx_t getVecIndex(const Indices& elem_ofs) const {
-            IdxTuple eofs = get_allocs(); // get dims for this grid.
-            elem_ofs.setTupleVals(eofs);  // set vals from elem_ofs.
-
-            IdxTuple& folds = _dims->_vec_fold_pts; // get req'd fold dims.
-            IdxTuple fofs = folds;
-            fofs.setVals(eofs, false); // get only fold offsets from eofs.
-            
-            // Set layout scheme.
-#if VLEN_FIRST_INDEX_IS_UNIT_STRIDE
-            folds.setFirstInner(true);
-#else
-            folds.setFirstInner(false);
-#endif
-
-            // Use fold layout to find vector index.
-            auto i = folds.layout(fofs, false);
-            return i;
-        }
-        
         // Read one vector.
         // Indices must be normalized and rank-relative.
         inline real_vec_t readVecNorm(const Indices& idxs,

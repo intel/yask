@@ -41,7 +41,9 @@ namespace yask {
     protected:
         std::string _name;      // name for grid.
 
-        std::shared_ptr<char> _base; // base address of malloc'd memory.
+        // Base address of malloc'd memory.
+        // Not necessarily the address at which the data is stored.
+        std::shared_ptr<char> _base; 
 
         // Note that both _dims and *_layout_base hold dimensions unless this
         // is a scalar. For a scalar, _dims is empty and _layout_base = 0.
@@ -278,7 +280,7 @@ namespace yask {
             }
         }
 
-        // Return given element.
+        // Return ref to given element.
         const T& operator()(const Indices& pt, bool check=true) const {
             idx_t ai = get_index(pt, check);
             return _elems[ai];
@@ -449,6 +451,17 @@ namespace yask {
             return ai;
 #endif
         }
+
+        // Pointer to given element.
+        const T* getPtr(const Indices& pt, bool check=true) const {
+            idx_t ai = GenericGrid::get_index(pt, check);
+            return &this->_elems[ai];
+        }
+        T* getPtr(const Indices& pt, bool check=true) {
+            idx_t ai = GenericGrid::get_index(pt, check);
+            return &this->_elems[ai];
+        }
+        
     };
 
     // A generic 0-D grid (scalar) of elements of type T.

@@ -82,21 +82,21 @@ sub inVar {
     return "$inputVar$part".idx(@_);
 }
 
-# locVar("foo", 5) => "arg_vars.foo[5]".
+# locVar("foo", 5) => "calc_vars.foo[5]".
 sub locVar {
     my $vname = shift;
     my $part = (defined $vname) ? ".$vname" : "";
-    return "arg_vars$part".idx(@_);
+    return "calc_vars$part".idx(@_);
 }
 
-# pfVar("foo", 5) => "pfL#_arg_vars.foo[5]".
+# pfVar("foo", 5) => "pfL#_vars.foo[5]".
 sub pfVar {
     my $vname = shift;
     my $part = (defined $vname) ? ".$vname" : "";
-    return "pf${cacheLvl}_arg_vars$part".idx(@_);
+    return "pf${cacheLvl}_vars$part".idx(@_);
 }
 
-# Extract values from input.
+# Access values in input struct.
 sub beginVar {
     return inVar("begin", @_);
 }
@@ -186,7 +186,6 @@ sub makeArgs {
     my @loopDims = @_;
 
     my @stmts;
-    push @stmts, " ScanIndices ".locVar()."(".inVar().");";
     map {
         push @stmts,
             " ".locVar("start", $_)." = ".startVar($_).";",
@@ -198,16 +197,24 @@ sub makeArgs {
 
 # make args for a prefetch call.
 sub makePfArgs {
+    my $numNormVars = shift;      # at beginning of list.
     my @loopDims = @_;
 
     my @stmts;
-    push @stmts, " ScanIndices ".pfVar()."(".locVar().");";
-    map {
-        push @stmts,
-            " ".pfVar("start", $_)." = ".pfStartVar($_).";",
-            " ".pfVar("stop", $_)." = ".pfStopVar($_).";",
-            " ".pfVar("index", $_)." = ".pfIndexVar($_).";",
-    } @loopDims;
+    for my $i (0 .. $#loopDims) {
+        my $ld = $loopDims[$i];
+        if ($i < $numNormVars) {
+            push @stmts,
+                " ".pfVar("start", $ld)." = ".startVar($ld).";",
+                " ".pfVar("stop", $ld)." = ".stopVar($ld).";",
+                " ".pfVar("index", $ld)." = ".indexVar($ld).";",
+        } else {
+            push @stmts,
+                " ".pfVar("start", $ld)." = ".pfStartVar($ld).";",
+                " ".pfVar("stop", $ld)." = ".pfStopVar($ld).";",
+                " ".pfVar("index", $ld)." = ".pfIndexVar($ld).";",
+        }
+    };
     return @stmts;
 }
 
@@ -228,9 +235,9 @@ sub indexType {
 }
 
 # Create and init vars *before* beginning of simple or collapsed loop.
-sub addIndexVars($$$) {
+sub addIndexVars1($$$) {
     my $code = shift;           # ref to list of code lines.
-    my $loopDims = shift;           # ref to list of dimensions.
+    my $loopDims = shift;       # ref to list of dimensions.
     my $features = shift;       # bits for path types.
 
     push @$code,
@@ -626,10 +633,10 @@ sub isInInner($$) {
 
       my $tok = $toks->[$i];
       if ($tok eq '{') {
-          return 0;             # starting another loop.
+          return 0;             # starting another loop, so not inner.
       }
       elsif ($tok eq '}') {
-          return 1;             # end of loop.
+          return 1;             # end of loop, so is inner.
       }
   }
   return 0;                     # should not get here.
@@ -724,8 +731,8 @@ sub processCode($) {
     # set at beginning of loop() statements.
     my @loopStack;              # current nesting of dimensions.
     my @loopCounts;             # number of dimensions in each loop.
-    my $curInnerDim;            # iteration dimension of inner loop (undef if not in inner loop).
     my @loopDims;               # dimension(s) of current loop.
+    my $curInnerDim;            # iteration dimension of inner loop (undef if not in inner loop).
 
     # modifiers before loop() statements.
     my @loopPrefix;             # string(s) to put before loop body.
@@ -739,10 +746,27 @@ sub processCode($) {
     my @pfStmtsEdgeHere;        # edge prefetch statements at current start.
     my @pfStmtsEdgeAhead;       # edge prefetch statements at pf start.
 
-    # final lines of code to output.
-    # set at beginning and/or end of loop() statements.
+    # Lines of code to output.
     my @code;
 
+    # Other.
+    my @scanVars;               # scan-index vars.
+    
+    # Front matter.
+    push @code,
+        "// 'ScanIndices $inputVar' must be set before the following code.",
+        "{",
+        " // Indices for calculation and prefetch calls.",
+        " ScanIndices ".locVar()."($inputVar);";
+    push @scanVars, locVar();
+    for my $pfl (1..2) {
+        my @pfVars = ( pfVar() );
+        specifyCache(\@pfVars, $pfl);
+        push @code, map { " ScanIndices $_($inputVar);"; } @pfVars;
+        push @scanVars, @pfVars;
+    }
+    
+    # loop thru all the tokens ni the input.
     for (my $ti = 0; $ti <= $#toks; ) {
         my $tok = checkToken($toks[$ti++], '.*', 1);
 
@@ -755,7 +779,11 @@ sub processCode($) {
 
         # use OpenMP on next loop.
         elsif (lc $tok eq 'omp') {
-            my $loopPragma = "_Pragma(\"$OPT{ompConstruct}\")";
+
+            # make local copies of scan index vars.
+            my $priv = "lastprivate(".join(',',@scanVars).")";
+            
+            my $loopPragma = "_Pragma(\"$OPT{ompConstruct} $priv\")";
             push @loopPrefix, " // Distribute iterations among OpenMP threads.", 
             $loopPragma;
             warn "info: using OpenMP on following loop.\n";
@@ -826,8 +854,9 @@ sub processCode($) {
             @loopDims = getArgs(\@toks, \$ti);
             die "error: no args for '$tok'.\n" if @loopDims == 0;
             checkToken($toks[$ti++], '\{', 1); # eat the '{'.
-            push @loopStack, @loopDims;
-            push @loopCounts, scalar(@loopDims);
+
+            push @loopStack, @loopDims;          # all dims including outer loops.
+            push @loopCounts, scalar(@loopDims); # number of dims in this loop.
 
             # check for existence of all vars.
             for my $ld (@loopDims) {
@@ -858,11 +887,11 @@ sub processCode($) {
             warn "info: generating scan over ".dimStr(@loopDims)."...\n";
 
             # add initial code for index vars, but don't start loop body yet.
-            addIndexVars(\@code, \@loopDims, $features);
+            addIndexVars1(\@code, \@loopDims, $features);
             
-            # if not the inner loop, start the loop body.
+            # if *not* the inner loop, start the loop body.
             # if it is the inner loop, we might need more than one loop body, so
-            # it will be generated when the '}' is seen.
+            # it will not be generated until the '}' is seen.
             if (!defined $curInnerDim) {
                 beginLoop(\@code, \@loopDims, \@loopPrefix, 0, undef, $features, \@loopStack);
 
@@ -909,7 +938,8 @@ sub processCode($) {
                         my @pfArgs = makeArgs(@loopStack);
                         push @pfStmtsFullHere, @pfArgs;
                         push @pfStmtsEdgeHere, @pfArgs;
-                        @pfArgs = makePfArgs(@loopDims);
+                        my $numNormVars = $#loopStack - $#loopDims;
+                        @pfArgs = makePfArgs($numNormVars, @loopStack);
                         push @pfStmtsFullAhead, @pfArgs;
                         push @pfStmtsEdgeAhead, @pfArgs;
                     }
@@ -931,7 +961,7 @@ sub processCode($) {
                 }
 
                 # add pipe prefix and direction suffix to function name.
-                # e.g., pipe_fn_z.
+                # e.g., pipe_fn_2.
                 if ($features & $bPipe) {
                     $arg = $OPT{pipePrefix}.$arg.'_'.$curInnerDim;
                 }
@@ -966,13 +996,12 @@ sub processCode($) {
             # - end it.
             else {
                 
-                my $ucDir = uc($curInnerDim);
                 my $pfd = "PFD$cacheLvl";
                 my $nVar = numItersVar(@loopDims);
                 my $doSplitL2 = ($features & $bPrefetchL2) && $OPT{splitL2};
 
                 # declare pipeline vars.
-                push @code, " // Pipeline accumulators.", " MAKE_PIPE_$ucDir;"
+                push @code, " // Pipeline accumulators.", " MAKE_PIPE_$curInnerDim;"
                     if ($features & $bPipe);
 
                 # check prefetch settings.
@@ -1139,7 +1168,7 @@ sub processCode($) {
         " *\n",
         " * N = ",$#dims,";\n";
 
-    # format input.
+    # format input to show in the header.
     my $cmd2 = "echo '$codeString'";
     $cmd2 .= " | $indent -" if (defined $indent);
     open IN, "$cmd2 |" or die "error: cannot run '$cmd2'.\n";
@@ -1147,11 +1176,9 @@ sub processCode($) {
         print OUT " * $_";
     }
     close IN;
-    print OUT " *\n */\n\n";
+    print OUT " *\n */";
 
     # print out code.
-    print OUT "// 'ScanIndices $inputVar' must be set before the following code.\n",
-        "{\n";
     for my $line (@code) {
         print OUT "\n" if $line =~ m=^\s*//=; # blank line before comment.
         print OUT " $line\n";
