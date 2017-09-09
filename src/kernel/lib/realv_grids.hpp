@@ -621,8 +621,8 @@ namespace yask {
                 makeIndexString(idxs.multElements(_vec_lens)) <<
                 ")" << std::endl;
 #endif
-            const char* p = (const char*)getVecPtrNorm(idxs, false);
-            _mm_prefetch (p, level);
+            auto p = getVecPtrNorm(idxs, false);
+            prefetch<level>(p);
 #ifdef MODEL_CACHE
             cache_model.prefetch(p, level, line);
 #endif

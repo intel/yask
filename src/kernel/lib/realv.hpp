@@ -626,6 +626,16 @@ namespace yask {
 #endif
     }
 
+    // Prefetch wrapper.
+    template <int level>
+    inline void prefetch(const void* p) {
+#if defined(__INTEL_COMPILER)
+        _mm_prefetch((const char*)p, level);
+#else
+        _mm_prefetch(p, (enum _mm_hint)level);
+#endif
+    }
+    
     // default max abs difference in validation.
 #ifndef EPSILON
 #define EPSILON (1e-3)
