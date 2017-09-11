@@ -105,8 +105,9 @@ namespace yask {
         // Determine which grids can be folded.
         _grids.setFolding(_dims);
 
-        // Determine which grid points can be vectorized.
-        _eqs.setVec(_dims);
+        // Determine which grid points can be vectorized and analyze loop accesses.
+        _eqs.analyzeVec(_dims);
+        _eqs.analyzeLoop(_dims);
         
         // Check for illegal dependencies within equations for scalar size.
         if (_settings._find_deps) {

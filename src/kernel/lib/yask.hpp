@@ -220,24 +220,32 @@ namespace yask {
             return _idxs[i];
         }
 
-        // Sync with IdxTuple.
-        void setFromTuple(const IdxTuple& src) {
-            assert(src.size() < max_idxs);
-            for (int i = 0; i < max_idxs; i++)
-                _idxs[i] = (i < src.size()) ? src.getVal(i) : 0;
-        }
+        // Write to an IdxTuple.
         void setTupleVals(IdxTuple& tgt) const {
             assert(tgt.size() < max_idxs);
             for (int i = 0; i < max_idxs; i++)
                 if (i < tgt.size())
                     tgt.setVal(i, _idxs[i]);
         }
+
+        // Read from an IdxTuple.
+        void setFromTuple(const IdxTuple& src) {
+            assert(src.size() < max_idxs);
+            if (src.size() == 0)
+                setFromConst(0);
+            else
+                for (int i = 0; i < max_idxs; i++)
+                    _idxs[i] = (i < src.size()) ? src.getVal(i) : 0;
+        }
         
         // Other inits.
         void setFromVec(const GridIndices& src) {
             assert(src.size() < max_idxs);
-            for (int i = 0; i < max_idxs; i++)
-                _idxs[i] = (i < int(src.size())) ? src[i] : 0;
+            if (src.size() == 0)
+                setFromConst(0);
+            else
+                for (int i = 0; i < max_idxs; i++)
+                    _idxs[i] = (i < int(src.size())) ? src[i] : 0;
         }
         void setFromInitList(const std::initializer_list<idx_t>& src) {
             assert(src.size() < max_idxs);
@@ -247,8 +255,11 @@ namespace yask {
         }
         void setFromArray(int nelems, const idx_t src[]) {
             assert(nelems < max_idxs);
-            for (int i = 0; i < max_idxs; i++)
-                _idxs[i] = (i < nelems) ? src[i] : 0;
+            if (nelems == 0)
+                setFromConst(0);
+            else
+                for (int i = 0; i < max_idxs; i++)
+                    _idxs[i] = (i < nelems) ? src[i] : 0;
         }
         void setFromConst(idx_t val) {
             for (int i = 0; i < max_idxs; i++)
@@ -384,15 +395,23 @@ namespace yask {
     // Make sure this stays non-virtual.
     struct ScanIndices {
 
-        // Values set at beginning of scan.
+        // Values that remain the same for each sub-range.
         Indices begin, end;     // first and last+1 range of each index.
         Indices step;           // step value within range.
         Indices group_size;     // priority grouping within range.
 
-        // Values updated at each point in scan.
-        Indices start, stop;    // first and last+1 range at current point.
-        Indices index;          // 0-based unique index for current point.
+        // Values that differ for each sub-range.
+        Indices start, stop;    // first and last+1 for this sub-range.
+        Indices index;          // 0-based unique index for each sub-range.
 
+        // Example w/3 sub-ranges in overall range:
+        // begin                                         end
+        //   |--------------------------------------------|
+        //   |------------------|------------------|------|
+        // start               stop  (index = 0)
+        //                    start               stop (index = 1)
+        //                                       start   stop (index = 2)
+        
         // Default init.
         ScanIndices() {
             begin.setFromConst(0);

@@ -379,7 +379,8 @@ namespace yask {
             exit_yask(1);
         }
         checkIndices(indices, "get_element", true);
-        real_t val = readElem(indices, __LINE__);
+        Indices idxs(indices);
+        real_t val = readElem(idxs, __LINE__);
         return double(val);
     }
     idx_t YkGridBase::set_element(double val,
@@ -388,7 +389,8 @@ namespace yask {
         idx_t nup = 0;
         if (get_raw_storage_buffer() &&
             checkIndices(indices, "set_element", strict_indices)) {
-            writeElem(real_t(val), indices, __LINE__);
+            Indices idxs(indices);
+            writeElem(real_t(val), idxs, __LINE__);
             nup++;
             set_updated(false);
         }

@@ -673,19 +673,41 @@ namespace yask {
     public:
 
         // What kind of vectorization can be done on this point.
-        // Set via setVec().
+        // Set via Eqs::analyzeVec().
         enum VecType { VEC_UNSET,
-                       VEC_FULL,
-                       VEC_PARTIAL,
-                       VEC_NONE };
+                       VEC_FULL, // vectorizable in all folded dims.
+                       VEC_PARTIAL, // vectorizable in some folded dims.
+                       VEC_NONE  // vectorizable in no folded dims.
+        };
+
+        // Analysis of this point for accesses via loops through the inner dim.
+        // Set via Eqs::analyzeLoop().
+        enum LoopType { LOOP_UNSET,
+                        LOOP_INVARIANT, // not dependent on inner dim.
+                        LOOP_OFFSET,    // only dep on inner dim +/- const in inner-dim posn.
+                        LOOP_OTHER      // dep on inner dim in another way.
+        };
 
     protected:
         Grid* _grid = 0;        // the grid this point is from.
-        NumExprPtrVec _args;    // index exprs for each dim.
-        IntTuple _offsets;      // simple offset for each expr that is dim +/- offset.
-        IntTuple _consts;       // simple value for each expr that is a const.
-        VecType _vecType = VEC_UNSET; // allowed vectorization.
 
+        // Index exprs for each dim, e.g.,
+        // "3, x-5, y*2, z+4" for dims "n, x, y, z".
+        NumExprPtrVec _args;
+
+        // Simple offset for each expr that is dim +/- offset, e.g.,
+        // "x=-5, z=4" from above example.
+        // Set in ctor and modified via setArgOffset/Const().
+        IntTuple _offsets;
+
+        // Simple value for each expr that is a const, e.g.,
+        // "n=3" from above example.
+        // Set in ctor and modified via setArgOffset/Const().
+        IntTuple _consts;
+
+        VecType _vecType = VEC_UNSET; // allowed vectorization.
+        LoopType _loopType = LOOP_UNSET; // analysis for looping.
+        
     public:
         
         // Construct a point given a grid and an arg for each dim.
@@ -711,6 +733,13 @@ namespace yask {
         virtual void setVecType(VecType vt) {
             _vecType = vt;
         }
+        virtual LoopType getLoopType() const {
+            assert(_loopType != LOOP_UNSET);
+            return _loopType;
+        }
+        virtual void setLoopType(LoopType vt) {
+            _loopType = vt;
+        }
 
         // Set given arg to given offset; ignore if not in step or domain grid dims.
         virtual void setArgOffset(const IntScalar& offset);
@@ -720,6 +749,9 @@ namespace yask {
             for (auto ofs : offsets.getDims())
                 setArgOffset(ofs);
         }
+
+        // Set given arg to given const.
+        virtual void setArgConst(const IntScalar& val);
 
         // Some comparisons.
         bool operator==(const GridPoint& rhs) const;
@@ -743,10 +775,18 @@ namespace yask {
         virtual string makeArgStr(const VarMap* varMap = 0) const;
 
         // String v/vec-normalized args, e.g., 'x, y+(2/VLEN_Y)'.
+        // This object has numerators; 'fold' object has denominators.
         // Apply substitutions to indices using 'varMap' if provided.
         virtual string makeNormArgStr(const IntTuple& fold,
                                       const VarMap* varMap = 0) const;
             
+        // Make string like "x+(4/VLEN_X)" from original arg "x+4" in 'dname' dim.
+        // This object has numerators; 'fold' object has denominators.
+        // Apply substitutions to indices using 'varMap' if provided.
+        virtual string makeNormArgStr(const string& dname,
+                                      const IntTuple& fold,
+                                      const VarMap* varMap = 0) const;
+
         // Create a deep copy of this expression,
         // except pointed-to grid is not copied.
         virtual NumExprPtr clone() const { return make_shared<GridPoint>(*this); }

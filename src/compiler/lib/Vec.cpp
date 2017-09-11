@@ -220,7 +220,7 @@ namespace yask {
 
         // Remember this point and return it.
         if (codeStr.length())
-            _vecVars[gp] = codeStr;
+            savePointVar(gp, codeStr);
         return codeStr;
     }
 

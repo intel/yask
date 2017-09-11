@@ -250,8 +250,10 @@ void CppIntrinPrintHelper::tryPerm1(ostream& os,
             // Create control if needed.
             if (definedCtrls.count(nameStr) == 0) {
                 definedCtrls.insert(nameStr);
-                os << _linePrefix << "static const " << getVarType() <<
-                    " ctrl_" << nameStr << " = " << ctrlStr << _lineSuffix;
+                os << _linePrefix << "const " << getVarType() <<
+                    "_data ctrl_data_" << nameStr << " = " << ctrlStr << _lineSuffix;
+                os << _linePrefix << "const " << getVarType() <<
+                    " ctrl_" << nameStr << "(ctrl_data_" << nameStr << ")" << _lineSuffix;
             }
                 
             // Permute command.
@@ -376,15 +378,10 @@ void CppIntrinPrintHelper::tryPerm2(ostream& os,
                 // Create control if needed.
                 if (definedCtrls.count(nameStr) == 0) {
                     definedCtrls.insert(nameStr);
-#if 1
                     os << _linePrefix << "const " << getVarType() <<
                         "_data ctrl_data_" << nameStr << " = " << ctrlStr << _lineSuffix;
                     os << _linePrefix << "const " << getVarType() <<
                         " ctrl_" << nameStr << "(ctrl_data_" << nameStr << ")" << _lineSuffix;
-#else
-                    os << _linePrefix << "const " << getVarType() <<
-                        "_data ctrl_" << nameStr << " = " << ctrlStr << _lineSuffix;
-#endif
                 }
                 
                 // Permute command.

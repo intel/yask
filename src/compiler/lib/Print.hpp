@@ -124,6 +124,9 @@ namespace yask {
         ostream& _os;               // used for printing intermediate results as needed.
         PrintHelper& _ph;           // used to format items for printing.
 
+        // Ref to compiler settings.
+        CompilerSettings& _settings;
+
         // Make these substitutions to indices in expressions.
         const VarMap* _varMap = 0;
         
@@ -131,11 +134,25 @@ namespace yask {
         // is stored in _exprStr.
         string _exprStr;
 
+        // map sub-expressions to var names.
+        map<Expr*, string> _tempVars;
+
+        // Declare a new temp var.
+        // Set _exprStr to it.
+        // Print LHS of assignment to it.
+        // If 'ex' is non-null, it is used as key to save name of temp var and
+        // to write a comment.
+        // If 'comment' is set, use it for the comment.
+        // Return stream to continue w/RHS.
+        virtual ostream& makeNextTempVar(Expr* ex, string comment = "");
+    
     public:
         // os is used for printing intermediate results as needed.
-        PrintVisitorBase(ostream& os, PrintHelper& ph,
+        PrintVisitorBase(ostream& os,
+                         PrintHelper& ph,
+                         CompilerSettings& settings,
                          const VarMap* varMap = 0) :
-            _os(os), _ph(ph), _varMap(varMap) { }
+            _os(os), _ph(ph), _settings(settings), _varMap(varMap) { }
 
         virtual ~PrintVisitorBase() { }
 
@@ -153,22 +170,22 @@ namespace yask {
         }
     };
 
-    // Outputs a simple, human-readable version of the AST
-    // in a top-down fashion. Expressions will be written to 'os',
-    // and anything 'left over' will be left in '_exprStr'.
+    // Outputs an AST traversed in a top-down fashion. Expressions will be
+    // written to 'os', and anything 'left over' will be left in '_exprStr'.
     class PrintVisitorTopDown : public PrintVisitorBase {
         int _numCommon;
 
     public:
         PrintVisitorTopDown(ostream& os, PrintHelper& ph,
+                            CompilerSettings& settings,
                             const VarMap* varMap = 0) :
-            PrintVisitorBase(os, ph, varMap), _numCommon(0) { }
+            PrintVisitorBase(os, ph, settings, varMap), _numCommon(0) { }
 
         // Get the number of shared nodes found after this visitor
         // has been accepted.
         int getNumCommon() const { return _numCommon; }
     
-        // A grid read.
+        // A grid access.
         virtual void visit(GridPoint* gp);
 
         // A grid index.
@@ -200,39 +217,22 @@ namespace yask {
         virtual void visit(EqualsExpr* ee);
     };
 
-    // Outputs a simple, human-readable version of the AST in a bottom-up
-    // fashion with multiple sub-expressions, each assigned to a temp var.
-    // The min/maxExprSize vars in CompilerSettings control when and where
-    // expressions are sub-divided. Within each sub-expression, a top-down
-    // visitor is used.
+    // Outputs an AST traversed in a bottom-up fashion with multiple
+    // sub-expressions, each assigned to a temp var.  The min/maxExprSize
+    // vars in CompilerSettings control when and where expressions are
+    // sub-divided. Within each sub-expression, a top-down visitor is used.
     class PrintVisitorBottomUp : public PrintVisitorBase {
 
-    protected:
-        CompilerSettings& _settings;
-
-        // map sub-expressions to var names.
-        map<Expr*, string> _tempVars;
-
-        // Declare a new temp var.
-        // Set _exprStr to it.
-        // Print LHS of assignment to it.
-        // If 'ex' is non-null, it is used as key to save name of temp var and
-        // to write a comment.
-        // If 'comment' is set, use it for the comment.
-        // Return stream to continue w/RHS.
-        virtual ostream& makeNextTempVar(Expr* ex, string comment = "");
-    
     public:
         // os is used for printing intermediate results as needed.
         PrintVisitorBottomUp(ostream& os, PrintHelper& ph,
-                             CompilerSettings settings,
+                             CompilerSettings& settings,
                              const VarMap* varMap = 0) :
-            PrintVisitorBase(os, ph, varMap),
-            _settings(settings) { }
+            PrintVisitorBase(os, ph, settings, varMap) {}
 
         // make a new top-down visitor with the same print helper.
         virtual PrintVisitorTopDown* newPrintVisitorTopDown() {
-            return new PrintVisitorTopDown(_os, _ph);
+            return new PrintVisitorTopDown(_os, _ph, _settings);
         }
 
         // Try some simple printing techniques.
@@ -448,7 +448,8 @@ namespace yask {
     class PseudoPrinter : public PrinterBase {
         
     public:
-        PseudoPrinter(StencilSolution& stencil, EqGroups& eqGroups) :
+        PseudoPrinter(StencilSolution& stencil,
+                      EqGroups& eqGroups) :
             PrinterBase(stencil, eqGroups) { }
         virtual ~PseudoPrinter() { }
 

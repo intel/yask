@@ -81,6 +81,7 @@ namespace yask {
         Point2Vecs _vblk2avblks; // each vec block -> its constituent aligned vec blocks.
         Point2VecElemLists _vblk2elemLists; // each vec block -> in-order list of its aligned vec blocks' elements.
         GridPointSet _vecPoints;            // set of all vectorizable points.
+        GridPointSet _vecWrites;            // set of vectors written to.
 
         // NB: the above hold much of the same info, but arranged differently:
         // _alignedVecs contains only a set of aligned blocks.
@@ -186,11 +187,15 @@ namespace yask {
         // Pre-requisite: visitor has been accepted.
         virtual void getLeadingEdge(GridPointSet& edge, const IntScalar& dir) const;
 
-        // Only want to visit the RHS of an eqGroup.
-        // Assumes LHS is aligned.
-        // TODO: validate this.
+        // Equality.
         virtual void visit(EqualsExpr* ee) {
-            ee->getRhs()->accept(this);      
+
+            // Only want to continue visit on RHS of an eqGroup.
+            ee->getRhs()->accept(this);
+
+            // For LHS, just save point.
+            auto lhs = ee->getLhs();
+            _vecWrites.insert(*lhs);
         }
     
         // Called when a grid point is read in a stencil function.
@@ -202,6 +207,7 @@ namespace yask {
     protected:
         VecInfoVisitor& _vv;
         bool _allowUnalignedLoads;
+        Dimensions& _dims;
         bool _reuseVars; // if true, load to a local var; else, reload on every access.
         bool _definedNA;           // NA var defined.
         map<GridPoint, string> _vecVars; // vecs that are already constructed.
@@ -240,6 +246,7 @@ namespace yask {
     public:
         VecPrintHelper(VecInfoVisitor& vv,
                        bool allowUnalignedLoads,
+                       Dimensions& dims,
                        const CounterVisitor* cv,
                        const string& varPrefix,
                        const string& varType,
@@ -248,6 +255,7 @@ namespace yask {
                        bool reuseVars = true) :
             PrintHelper(cv, varPrefix, varType, linePrefix, lineSuffix),
             _vv(vv), _allowUnalignedLoads(allowUnalignedLoads),
+            _dims(dims),
             _reuseVars(reuseVars), _definedNA(false) { }
         virtual ~VecPrintHelper() {}
 
@@ -256,12 +264,32 @@ namespace yask {
             return _vv.getFold();
         }
 
+        // get dims.
+        virtual const Dimensions& getDims() const {
+            return _dims;
+        }
+
         // Add a N/A var, just for readability.
         virtual void makeNA(ostream& os) {
             if (!_definedNA) {
                 os << _linePrefix << "const int NA = 0; // indicates element not used." << endl;
                 _definedNA = true;
             }
+        }
+
+        // Return point info.
+        virtual bool isAligned(const GridPoint& gp) {
+            return _vv._alignedVecs.count(gp) > 0;
+        }
+        
+        // Access cached values.
+        virtual void savePointVar(const GridPoint& gp, string var) {
+            _vecVars[gp] = var;
+        }
+        virtual string* lookupPointVar(const GridPoint& gp) {
+            if (_vecVars.count(gp))
+                return &_vecVars.at(gp);
+            return 0;
         }
     
         // Print any needed memory reads and/or constructions to 'os'.

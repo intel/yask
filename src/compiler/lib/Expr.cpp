@@ -454,6 +454,47 @@ namespace yask {
         return str;
     }
 
+    // Make string like "x+(4/VLEN_X)" from
+    // original arg "x+4" in 'dname' dim.
+    // This object has numerators; 'fold' object has denominators.
+    // Args w/o simple offset are not modified.
+    string GridPoint::makeNormArgStr(const string& dname,
+                                     const IntTuple& fold,
+                                     const VarMap* varMap) const {
+        ostringstream oss;
+
+        // Non-0 offset and exists in fold?
+        auto* ofs = _offsets.lookup(dname);
+        if (ofs && *ofs && fold.lookup(dname)) {
+            oss << "(" << dname;
+
+            // Positive offset, e.g., 'xv + (4 / VLEN_X)'.
+            if (*ofs > 0)
+                oss << " + (" << *ofs;
+
+            // Neg offset, e.g., 'xv - (4 / VLEN_X)'.
+            // Put '-' sign outside division to fix truncated division problem.
+            else
+                oss << " - (" << (- *ofs);
+                    
+            // add divisor.
+            string cap_dname = PrinterBase::allCaps(dname);
+            oss << " / VLEN_" << cap_dname << "))";
+        }
+
+        // Otherise, just find and format arg.
+        else {
+            auto& gdims = _grid->getDims();
+            for (size_t i = 0; i < gdims.size(); i++) {
+                auto gdname = gdims[i]->getName();
+                if (gdname == dname)
+                    oss << _args.at(i)->makeStr(varMap);
+            }
+        }
+
+        return oss.str();
+    }    
+    
     // Make string like "x+(4/VLEN_X), y, z-(2/VLEN_Z)" from
     // original args "x+4, y, z-2".
     // This object has numerators; norm object has denominators.
@@ -462,34 +503,12 @@ namespace yask {
                                      const VarMap* varMap) const {
 
         ostringstream oss;
-        auto gd = getGrid()->getDims();
+        auto& gd = getGrid()->getDims();
         for (size_t i = 0; i < gd.size(); i++) {
             if (i)
                 oss << ", ";
             auto dname = gd[i]->getName();
-            
-            // Non-0 offset and exists in fold?
-            auto* ofs = _offsets.lookup(dname);
-            if (ofs && *ofs && fold.lookup(dname)) {
-                oss << "(" << dname;
-
-                // Positive offset, e.g., 'xv + (4 / VLEN_X)'.
-                if (*ofs > 0)
-                    oss << " + (" << *ofs;
-
-                // Neg offset, e.g., 'xv - (4 / VLEN_X)'.
-                // Put '-' sign outside division to fix truncated division problem.
-                else
-                    oss << " - (" << (- *ofs);
-                    
-                // add divisor.
-                string cap_dname = PrinterBase::allCaps(dname);
-                oss << " / VLEN_" << cap_dname << "))";
-            }
-
-            // Otherise, just use given arg.
-            else
-                oss << _args.at(i)->makeStr(varMap);
+            oss << makeNormArgStr(dname, fold, varMap);
         }
         return oss.str();
     }
@@ -532,6 +551,35 @@ namespace yask {
 
                 // Remove const.
                 _consts = _consts.removeDim(dname);
+
+                break;
+            }
+        }
+    }
+    
+    // Set given arg to given const;
+    void GridPoint::setArgConst(const IntScalar& val) {
+
+        // Find dim in grid.
+        auto gdims = _grid->getDims();
+        for (size_t i = 0; i < gdims.size(); i++) {
+            auto gdim = gdims[i];
+
+            auto dname = gdim->getName();
+            if (val.getName() == dname) {
+
+                // Make const expr.
+                int v = val.getVal();
+                auto vp = constNum(v);
+
+                // Replace in args.
+                _args[i] = vp;
+
+                // Set const
+                _consts.addDimBack(dname, v);
+
+                // Remove offset.
+                _offsets = _offsets.removeDim(dname);
 
                 break;
             }
@@ -606,8 +654,9 @@ namespace yask {
         ostringstream oss;
     
         // Use a print visitor to make a string.
-        PrintHelper ph(NULL, "temp", "", "", "");
-        PrintVisitorTopDown pv(oss, ph, varMap);
+        PrintHelper ph(NULL, "temp", "", "", ""); // default helper.
+        CompilerSettings settings; // default settings.
+        PrintVisitorTopDown pv(oss, ph, settings, varMap);
         accept(&pv);
 
         // Return anything written to the stream

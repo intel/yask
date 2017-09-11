@@ -82,15 +82,17 @@ namespace yask {
     public:
         CppVecPrintHelper(VecInfoVisitor& vv,
                           bool allowUnalignedLoads,
+                          Dimensions& dims,
                           const CounterVisitor* cv,
                           const string& varPrefix,
                           const string& varType,
                           const string& linePrefix,
                           const string& lineSuffix) :
-            VecPrintHelper(vv, allowUnalignedLoads, cv,
+            VecPrintHelper(vv, allowUnalignedLoads, dims, cv,
                            varPrefix, varType, linePrefix, lineSuffix) { }
 
     protected:
+        map<GridPoint, string> _vecPtrs;  // pointers to grid vecs.
 
         // Element indices.
         string _elemSuffix = "_elem";
@@ -159,16 +161,68 @@ namespace yask {
         virtual void printUnalignedVecCtor(ostream& os, const GridPoint& gp, const string& pvName) {
             printUnalignedVecSimple(os, gp, pvName, _linePrefix);
         }
-
+        
     public:
 
+        // Print code to set pointers of aligned reads.
+        virtual void printBasePtrs(ostream& os);
+
+        // Make base point (inner-dim index = 0).
+        virtual GridPointPtr makeBasePoint(const GridPoint& gp) {
+            GridPointPtr bgp = gp.cloneGridPoint();
+            IntScalar idi(getDims()._innerDim, 0);
+            bgp->setArgConst(idi);
+            return bgp;
+        }
+        
+        // Print any needed memory reads and/or constructions to 'os'.
+        // Return code containing a vector of grid points.
+        virtual string readFromPoint(ostream& os, const GridPoint& gp);
+        
+        // Print any immediate memory writes to 'os'.
+        // Return code to update a vector of grid points or null string
+        // if all writes were printed.
+        virtual string writeToPoint(ostream& os, const GridPoint& gp,
+                                    const string& val);
+        
         // print init of un-normalized indices.
         virtual void printElemIndices(ostream& os);
 
         // Print body of prefetch function.
         virtual void printPrefetches(ostream& os, const IntScalar& dir) const;
+
+        // Print code to calculate a pointer.
+        // Return code for value.
+        virtual string printPointPtr(ostream& os, const GridPoint& gp);
+        
+        // Access cached values.
+        virtual void savePointPtr(const GridPoint& gp, string var) {
+            _vecPtrs[gp] = var;
+        }
+        virtual string* lookupPointPtr(const GridPoint& gp) {
+            if (_vecPtrs.count(gp))
+                return &_vecPtrs.at(gp);
+            return 0;
+        }
     };
 
+    // Outputs the variables needed for an inner loop.
+    class CppLoopVarPrintVisitor : public PrintVisitorBase {
+    protected:
+        CppVecPrintHelper& _cvph;
+        
+    public:
+        CppLoopVarPrintVisitor(ostream& os,
+                               CppVecPrintHelper& ph,
+                               CompilerSettings& settings,
+                               const VarMap* varMap = 0) :
+            PrintVisitorBase(os, ph, settings, varMap),
+            _cvph(ph) { }
+
+        // A grid access.
+        virtual void visit(GridPoint* gp);
+    };
+    
     // Print out a stencil in C++ form for YASK.
     class YASKCppPrinter : public PrinterBase {
     protected:
@@ -182,9 +236,9 @@ namespace yask {
         // A factory method to create a new PrintHelper.
         // This can be overridden in derived classes to provide
         // alternative PrintHelpers.
-        virtual CppVecPrintHelper* newPrintHelper(VecInfoVisitor& vv,
-                                                  CounterVisitor& cv) {
-            return new CppVecPrintHelper(vv, _settings._allowUnalignedLoads, &cv,
+        virtual CppVecPrintHelper* newCppVecPrintHelper(VecInfoVisitor& vv,
+                                                        CounterVisitor& cv) {
+            return new CppVecPrintHelper(vv, _settings._allowUnalignedLoads, _dims, &cv,
                                          "temp", "real_vec_t", " ", ";\n");
         }
 

@@ -140,7 +140,7 @@ namespace yask {
             }); // end of lambda.
         return mvName;
     }
-    
+
     // Print call for a point.
     // This is a utility function used for reads, writes, and prefetches.
     void CppVecPrintHelper::printVecPointCall(ostream& os,
@@ -159,7 +159,117 @@ namespace yask {
             os << ", " << lastArg;
         os << ")";
     }
+
+    // Print code to set pointers of aligned reads.
+    void CppVecPrintHelper::printBasePtrs(ostream& os) {
+
+        // Gather points.
+        GridPointSet gps;
+
+        // Aligned reads as determined by VecInfoVisitor.
+        gps = _vv._alignedVecs;
+
+        // Writes (assume aligned).
+        gps.insert(_vv._vecWrites.begin(), _vv._vecWrites.end());
+        
+        for (auto& gp : gps) {
+        
+            // Make base point (inner-dim index = 0).
+            auto bgp = makeBasePoint(gp);
+
+            // Not already saved?
+            if (!lookupPointPtr(*bgp)) {
+
+                // Print code to calculate pointer.
+                string expr = printPointPtr(os, *bgp);
+
+                // Save for future use.
+                savePointPtr(*bgp, expr);
+            }
+        }
+    }
+
+    // Print calculation of pointer to a grid point.
+    // Return name of pointer.
+    string CppVecPrintHelper::printPointPtr(ostream& os, const GridPoint& gp) {
+        printPointComment(os, gp, "Calculate pointer to ");
+
+        // Calc ptr.
+        string mvName = makeVarName();
+        os << _linePrefix << getVarType() << "* " << mvName << " = ";
+        printVecPointCall(os, gp, "getVecPtrNorm", "", "__LINE__", true);
+        os << _lineSuffix;
+        return mvName;
+    }
     
+    // Print any needed memory reads and/or constructions to 'os'.
+    // Return code containing a vector of grid points.
+    string CppVecPrintHelper::readFromPoint(ostream& os, const GridPoint& gp) {
+        string codeStr;
+
+        // Already done and saved.
+        if (_reuseVars && _vecVars.count(gp))
+            codeStr = _vecVars[gp]; // do nothing.
+
+        // Can we use a pointer?
+        else if (gp.getLoopType() == GridPoint::LOOP_OFFSET) {
+        
+            // Got a pointer to the base addr?
+            auto bgp = makeBasePoint(gp);
+            auto* p = lookupPointPtr(*bgp);
+            if (p) {
+
+                // Offset.
+                string idim = _dims._innerDim;
+                string ofs = gp.makeNormArgStr(idim, getFold());
+                
+                // Output read using base addr.
+                printPointComment(os, gp, "Read aligned");
+                codeStr = makeVarName();
+                os << _linePrefix << getVarType() << " " << codeStr << " = " <<
+                    *p << "[" << ofs << "]" << _lineSuffix;
+            }
+        }
+
+        // Remember this point and return it.
+        if (codeStr.length()) {
+            savePointVar(gp, codeStr);
+            return codeStr;
+        }
+
+        // If not done, use parent method.
+        return VecPrintHelper::readFromPoint(os, gp);
+    }
+
+    // Print any immediate memory writes to 'os'.
+    // Return code to update a vector of grid points or null string
+    // if all writes were printed.
+    string CppVecPrintHelper::writeToPoint(ostream& os, const GridPoint& gp,
+                                           const string& val) {
+
+        // Can we use a pointer?
+        if (gp.getLoopType() == GridPoint::LOOP_OFFSET) {
+        
+            // Got a pointer to the base addr?
+            auto bgp = makeBasePoint(gp);
+            auto* p = lookupPointPtr(*bgp);
+            if (p) {
+
+                // Offset.
+                string idim = _dims._innerDim;
+                string ofs = gp.makeNormArgStr(idim, getFold());
+                
+                // Output write using base addr.
+                printPointComment(os, gp, "Write aligned");
+                os << _linePrefix << *p << "[" << ofs << "] = " << val << _lineSuffix;
+                return "";
+            }
+        }
+
+        // If not done, use parent method.
+        return VecPrintHelper::writeToPoint(os, gp, val);
+    }
+
     // Print aligned memory read.
     string CppVecPrintHelper::printAlignedVecRead(ostream& os, const GridPoint& gp) {
         printPointComment(os, gp, "Read aligned");
@@ -286,15 +396,35 @@ namespace yask {
         }
     }
 
-    ///// YASK.
+    // Print a grid-access vars for a loop.
+    void CppLoopVarPrintVisitor::visit(GridPoint* gp) {
 
+        // Retrieve prior analysis.
+        //auto vecType = gp->getVecType();
+        auto loopType = gp->getLoopType();
+        
+        // If invariant, we can load now.
+        if (loopType == GridPoint::LOOP_INVARIANT) {
+
+            // Not already loaded?
+            if (!_cvph.lookupPointVar(*gp)) {
+                string expr = _ph.readFromPoint(_os, *gp);
+                makeNextTempVar(gp) << expr << _ph.getLineSuffix();
+                
+                // Save for future use.
+                string res = getExprStrAndClear();
+                _cvph.savePointVar(*gp, res);
+            }
+        }
+    }
+    
     // Print extraction of indices.
     void YASKCppPrinter::printIndices(ostream& os) const {
         os << endl << " // Extract individual indices.\n";
         int i = 0;
         for (auto& dim : _dims._stencilDims.getDims()) {
             auto& dname = dim.getName();
-            os << " const idx_t " << dname << " = idxs[" << i << "];\n";
+            os << " idx_t " << dname << " = idxs[" << i << "];\n";
             i++;
         }
     }
@@ -304,7 +434,7 @@ namespace yask {
         
         // Use a simple human-readable visitor to create a comment.
         PrintHelper ph(0, "temp", "", " // ", ".\n");
-        PrintVisitorTopDown commenter(os, ph);
+        PrintVisitorTopDown commenter(os, ph, _settings);
         eq.visitEqs(&commenter);
     }
 
@@ -591,11 +721,6 @@ namespace yask {
         
             // Scalar code.
             {
-                // C++ scalar print assistant.
-                CounterVisitor cv;
-                eq.visitEqs(&cv);
-                CppPrintHelper* sp = new CppPrintHelper(&cv, "temp", "real_t", " ", ";\n");
-            
                 // Stencil-calculation code.
                 // Function header.
                 os << endl << " // Calculate one scalar result relative to indices " <<
@@ -605,13 +730,13 @@ namespace yask {
                     " virtual void calc_scalar(const Indices& idxs) {\n";
                 printIndices(os);
 
-                // C++ code generator.
-                // The visitor is accepted at all nodes in the scalar AST;
-                // for each node in the AST, code is generated and
-                // stored in the expression-string in the visitor.
-                PrintVisitorBottomUp pcv(os, *sp, _settings);
-
+                // C++ scalar print assistant.
+                CounterVisitor cv;
+                eq.visitEqs(&cv);
+                CppPrintHelper* sp = new CppPrintHelper(&cv, "temp", "real_t", " ", ";\n");
+            
                 // Generate the code.
+                PrintVisitorBottomUp pcv(os, *sp, _settings);
                 eq.visitEqs(&pcv);
 
                 // End of function.
@@ -622,7 +747,7 @@ namespace yask {
 
             // Cluster/Vector code.
             {
-                // Cluster eqGroup at same index.
+                // Cluster eqGroup at same 'ei' index.
                 // This should be the same eq-group because it was copied from the
                 // scalar one.
                 auto& ceq = _clusterEqGroups.at(ei);
@@ -635,46 +760,48 @@ namespace yask {
                 VecInfoVisitor vv(_dims);
                 ceq.visitEqs(&vv);
 
-                // Reorder based on vector info.
+                // Reorder some equations based on vector info.
                 ExprReorderVisitor erv(vv);
                 ceq.visitEqs(&erv);
-            
-                // C++ vector print assistant.
+
+                // Collect stats.
                 CounterVisitor cv;
                 ceq.visitEqs(&cv);
-                CppVecPrintHelper* vp = newPrintHelper(vv, cv);
-            
-                // Stencil-calculation code.
-                // Function header.
                 int numResults = _dims._clusterPts.product();
-                os << endl << " // Calculate " << numResults <<
-                    " result(s) relative to indices " << _dims._stencilDims.makeDimStr() <<
-                    " in a '" << _dims._clusterPts.makeDimValStr(" * ") <<
-                    "'-point cluster containing " << _dims._clusterMults.product() << " '" <<
-                    _dims._fold.makeDimValStr(" * ") << "' vector(s).\n"
-                    " // Indices must be rank-relative.\n"
-                    " // Indices must be normalized, i.e., already divided by VLEN_*.\n"
-                    " // SIMD calculations use " << vv.getNumPoints() <<
-                    " vector block(s) created from " << vv.getNumAlignedVecs() <<
-                    " aligned vector-block(s).\n"
-                    " // There are approximately " << (stats.getNumOps() * numResults) <<
-                    " FP operation(s) per invocation.\n"
-                    " inline void calc_cluster(const Indices& idxs) {\n";
-                printIndices(os);
 
-                // Code generator visitor.
-                // The visitor is accepted at all nodes in the cluster AST;
-                // for each node in the AST, code is generated and
-                // stored in the expression-string in the visitor.
-                PrintVisitorBottomUp pcv(os, *vp, _settings);
+#if 0
+                // Cluster-calculation code.
+                {
+                    
+                    // Function header.
+                    os << endl << " // Calculate " << numResults <<
+                        " result(s) relative to indices " << _dims._stencilDims.makeDimStr() <<
+                        " in a '" << _dims._clusterPts.makeDimValStr(" * ") <<
+                        "'-point cluster containing " << _dims._clusterMults.product() << " '" <<
+                        _dims._fold.makeDimValStr(" * ") << "' vector(s).\n"
+                        " // Indices must be rank-relative.\n"
+                        " // Indices must be normalized, i.e., already divided by VLEN_*.\n"
+                        " // SIMD calculations use " << vv.getNumPoints() <<
+                        " vector block(s) created from " << vv.getNumAlignedVecs() <<
+                        " aligned vector-block(s).\n"
+                        " // There are approximately " << (stats.getNumOps() * numResults) <<
+                        " FP operation(s) per invocation.\n"
+                        " inline void calc_cluster(const Indices& idxs) {\n";
+                    printIndices(os);
 
-                // Generate the code.
-                // Visit all expressions to cover the whole cluster.
-                ceq.visitEqs(&pcv);
+                    // C++ vector print assistant.
+                    CppVecPrintHelper* vp = newCppVecPrintHelper(vv, cv);
+            
+                    // Generate the code.
+                    // Visit all expressions to cover the whole cluster.
+                    PrintVisitorBottomUp pcv(os, *vp, _settings);
+                    ceq.visitEqs(&pcv);
                 
-                // End of function.
-                os << "} // calc_cluster." << endl;
-
+                    // End of function.
+                    os << "} // calc_cluster." << endl;
+                    delete vp;
+                }
+                
                 // Insert shim function.
                 printShim(os, "calc_cluster");
             
@@ -721,6 +848,9 @@ namespace yask {
                         "(const Indices& idxs) {\n";
                     printIndices(os);
 
+                    // C++ vector print assistant.
+                    CppVecPrintHelper* vp = newCppVecPrintHelper(vv, cv);
+            
                     // C++ prefetch code.
                     vp->printPrefetches(os, dir);
 
@@ -729,39 +859,106 @@ namespace yask {
 
                     // Insert shim function.
                     printShim(os, fname, true);
+                    delete(vp);
 
                 } // direction.
 
-                delete vp;
-
                 // Sub-block.
-                os << endl <<
-                    " // Calculate one sub-block of whole clusters.\n"
-                    " // Indices must be rank-relative.\n"
-                    " // Indices must be normalized, i.e., already divided by VLEN_*.\n"
-                    " virtual void calc_sub_block_of_clusters("
-                    "const ScanIndices& block_idxs) {\n"
-                    "\n"
-                    " ScanIndices sub_block_idxs;\n"
-                    " sub_block_idxs.initFromOuter(block_idxs);\n"
-                    " // Step sizes are based on cluster lengths.\n";
-                int i = 0;
-                for (auto& dim : _dims._stencilDims.getDims()) {
-                    auto& dname = dim.getName();
-                    string ucDim = allCaps(dname);
-                    if (dname != _dims._stepDim)
-                        os << " sub_block_idxs.step[" << i << "] = CMULT_" << ucDim << ";\n";
-                    i++;
+                {
+                    os << endl <<
+                        " // Calculate one sub-block of whole clusters.\n"
+                        " // Indices must be rank-relative.\n"
+                        " // Indices must be normalized, i.e., already divided by VLEN_*.\n"
+                        " virtual void calc_sub_block_of_clusters("
+                        "const ScanIndices& block_idxs) {\n"
+                        "\n"
+                        " ScanIndices sub_block_idxs;\n"
+                        " sub_block_idxs.initFromOuter(block_idxs);\n"
+                        " // Step sizes are based on cluster lengths.\n";
+                    int i = 0;
+                    for (auto& dim : _dims._stencilDims.getDims()) {
+                        auto& dname = dim.getName();
+                        string ucDim = allCaps(dname);
+                        if (dname != _dims._stepDim)
+                            os << " sub_block_idxs.step[" << i << "] = CMULT_" << ucDim << ";\n";
+                        i++;
+                    }
+                    os << " #if !defined(DEBUG) && defined(__INTEL_COMPILER)\n"
+                        " #pragma forceinline recursive\n"
+                        " #endif\n"
+                        " {\n"
+                        "  // Include automatically-generated loop code that calls calc_cluster()"
+                        "  and optionally, the prefetch function(s).\n"
+                        "  #include \"yask_sub_block_loops.hpp\"\n"
+                        " }\n"
+                        "} // calc_sub_block_of_clusters\n";
                 }
-                os << " #if !defined(DEBUG) && defined(__INTEL_COMPILER)\n"
-                    " #pragma forceinline recursive\n"
-                    " #endif\n"
-                    " {\n"
-                    "  // Include automatically-generated loop code that calls calc_cluster()"
-                    "  and optionally, the prefetch function(s).\n"
-                    "  #include \"yask_sub_block_loops.hpp\"\n"
-                    " }\n"
-                    "} // calc_sub_block_of_clusters\n";
+#endif
+                
+                // Loop-calculation code.
+                {
+
+                    // Function header.
+                    string idim = _dims._innerDim;
+                    string istart = "start_" + idim;
+                    string istop = "stop_" + idim;
+                    string istep = "step_" + idim;
+                    os << endl << " // Calculate a series of clusters iterating in '" << idim <<
+                        "' direction from " << _dims._stencilDims.makeDimStr() <<
+                        " indices in 'idxs' to '" << istop << "' by '" << istep << "'.\n" <<
+                        " // Each cluster calculates '" << _dims._clusterPts.makeDimValStr(" * ") <<
+                        "' points containing " << _dims._clusterMults.product() << " '" <<
+                        _dims._fold.makeDimValStr(" * ") << "' vector(s).\n"
+                        " // Indices must be rank-relative.\n"
+                        " // Indices must be normalized, i.e., already divided by VLEN_*.\n"
+                        " // SIMD calculations use " << vv.getNumPoints() <<
+                        " vector block(s) created from " << vv.getNumAlignedVecs() <<
+                        " aligned vector-block(s).\n"
+                        " // There are approximately " << (stats.getNumOps() * numResults) <<
+                        " FP operation(s) per loop iteration.\n"
+                        " void calc_loop_of_clusters(const Indices& idxs, idx_t " <<
+                        istop << ", idx_t " << istep << ") {\n";
+                    printIndices(os);
+                    os << " idx_t " << istart << " = " << idim << ";\n";
+
+                    // C++ vector print assistant.
+                    CppVecPrintHelper* vp = newCppVecPrintHelper(vv, cv);
+
+                    // Start forced-inline code.
+                    os << "\n // Force inlining if possible.\n"
+                        "#if !defined(DEBUG) && defined(__INTEL_COMPILER)\n"
+                        "#pragma forceinline recursive\n"
+                        "#endif\n"
+                        " {\n";
+                    
+                    // Print invariants.
+                    CppLoopVarPrintVisitor lvv(os, *vp, _settings);
+                    ceq.visitEqs(&lvv);
+
+                    // Print pointers.
+                    vp->printBasePtrs(os);
+
+                    // Actual Loop.
+                    os << "\n // Inner loop.\n"
+                        " for (idx_t " << idim << " = " << istart << "; " <<
+                        idim << " < " << istop << "; " <<
+                        idim << " += " << istep << ") {\n";
+            
+                    // Generate loop body using vars stored in print helper.
+                    // Visit all expressions to cover the whole cluster.
+                    PrintVisitorBottomUp pcv(os, *vp, _settings);
+                    ceq.visitEqs(&pcv);
+
+                    // End of loop.
+                    os << " } // '" << idim << "' loop.\n";
+
+                    // End forced-inline code.
+                    os << " } // Forced-inline block.\n";
+                    
+                    // End of function.
+                    os << "} // calc_loop_of_clusters.\n";
+                    delete vp;
+                }
             }
 
             os << "}; // " << egsName << ".\n"; // end of class.

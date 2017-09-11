@@ -43,12 +43,13 @@ namespace yask {
         // Ctor.
         CppIntrinPrintHelper(VecInfoVisitor& vv,
                              bool allowUnalignedLoads,
+                             Dimensions& dims,
                              const CounterVisitor* cv,
                              const string& varPrefix,
                              const string& varType,
                              const string& linePrefix,
                              const string& lineSuffix) :
-            CppVecPrintHelper(vv, allowUnalignedLoads, cv,
+            CppVecPrintHelper(vv, allowUnalignedLoads, dims, cv,
                               varPrefix, varType, linePrefix, lineSuffix) { }
 
         // Dtor.
@@ -124,12 +125,13 @@ namespace yask {
     public:
         CppKncPrintHelper(VecInfoVisitor& vv,
                           bool allowUnalignedLoads,
+                          Dimensions& dims,
                           const CounterVisitor* cv,
                           const string& varPrefix,
                           const string& varType,
                           const string& linePrefix,
                           const string& lineSuffix) :
-            CppIntrinPrintHelper(vv, allowUnalignedLoads, cv,
+            CppIntrinPrintHelper(vv, allowUnalignedLoads, dims, cv,
                                  varPrefix, varType, linePrefix, lineSuffix) { }
     };
 
@@ -152,12 +154,13 @@ namespace yask {
     public:
         CppAvx512PrintHelper(VecInfoVisitor& vv,
                              bool allowUnalignedLoads,
+                             Dimensions& dims,
                              const CounterVisitor* cv,
                              const string& varPrefix,
                              const string& varType,
                              const string& linePrefix,
                              const string& lineSuffix) :
-            CppIntrinPrintHelper(vv, allowUnalignedLoads, cv,
+            CppIntrinPrintHelper(vv, allowUnalignedLoads, dims, cv,
                                  varPrefix, varType, linePrefix, lineSuffix) { }
     };
 
@@ -178,21 +181,22 @@ namespace yask {
     public:
         CppAvx256PrintHelper(VecInfoVisitor& vv,
                              bool allowUnalignedLoads,
+                             Dimensions& dims,
                              const CounterVisitor* cv,
                              const string& varPrefix,
                              const string& varType,
                              const string& linePrefix,
                              const string& lineSuffix) :
-            CppIntrinPrintHelper(vv, allowUnalignedLoads, cv,
+            CppIntrinPrintHelper(vv, allowUnalignedLoads, dims, cv,
                                  varPrefix, varType, linePrefix, lineSuffix) { }
     };
 
     // Print KNC intrinsic code.
     class YASKKncPrinter : public YASKCppPrinter {
     protected:
-        virtual CppVecPrintHelper* newPrintHelper(VecInfoVisitor& vv,
-                                                  CounterVisitor& cv) {
-            return new CppKncPrintHelper(vv, _settings._allowUnalignedLoads, &cv,
+        virtual CppVecPrintHelper* newCppVecPrintHelper(VecInfoVisitor& vv,
+                                                        CounterVisitor& cv) {
+            return new CppKncPrintHelper(vv, _settings._allowUnalignedLoads, _dims, &cv,
                                          "temp", "real_vec_t", " ", ";\n");
         }
 
@@ -213,9 +217,9 @@ namespace yask {
     // Print 256-bit AVX intrinsic code.
     class YASKAvx256Printer : public YASKCppPrinter {
     protected:
-        virtual CppVecPrintHelper* newPrintHelper(VecInfoVisitor& vv,
-                                                  CounterVisitor& cv) {
-            return new CppAvx256PrintHelper(vv, _settings._allowUnalignedLoads, &cv,
+        virtual CppVecPrintHelper* newCppVecPrintHelper(VecInfoVisitor& vv,
+                                                        CounterVisitor& cv) {
+            return new CppAvx256PrintHelper(vv, _settings._allowUnalignedLoads, _dims, &cv,
                                             "temp", "real_vec_t", " ", ";\n");
         }
 
@@ -233,9 +237,9 @@ namespace yask {
     // Print 512-bit AVX intrinsic code.
     class YASKAvx512Printer : public YASKCppPrinter {
     protected:
-        virtual CppVecPrintHelper* newPrintHelper(VecInfoVisitor& vv,
-                                                  CounterVisitor& cv) {
-            return new CppAvx512PrintHelper(vv, _settings._allowUnalignedLoads, &cv,
+        virtual CppVecPrintHelper* newCppVecPrintHelper(VecInfoVisitor& vv,
+                                                        CounterVisitor& cv) {
+            return new CppAvx512PrintHelper(vv, _settings._allowUnalignedLoads, _dims, &cv,
                                             "temp", "real_vec_t", " ", ";\n");
         }
 

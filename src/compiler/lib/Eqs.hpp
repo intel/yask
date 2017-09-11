@@ -172,7 +172,10 @@ namespace yask {
         }
 
         // Determine which grid points can be vectorized.
-        virtual void setVec(const Dimensions& dims);
+        virtual void analyzeVec(const Dimensions& dims);
+
+        // Determine how grid points are accessed in a loop.
+        virtual void analyzeLoop(const Dimensions& dims);
     };
 
     // A named equation group, which contains one or more grid-update equations.

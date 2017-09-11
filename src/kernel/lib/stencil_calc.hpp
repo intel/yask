@@ -728,6 +728,14 @@ namespace yask {
         }
         virtual ~EqGroupBase() { }
 
+        // Access to dims and MPI info.
+        virtual DimsPtr get_dims() {
+            return _generic_context->get_dims();
+        }
+        virtual MPIInfoPtr get_mpi_info() {
+            return _generic_context->get_mpi_info();
+        }
+
         // Get name of this equation set.
         virtual const std::string& get_name() { return _name; }
 
@@ -768,11 +776,52 @@ namespace yask {
         virtual void
         calc_sub_block(const ScanIndices& block_idxs);
 
+#if 0
         // Calculate whole-cluster results within a sub-block.
         // Indices must be rank-relative.
         // Indices must be normalized, i.e., already divided by VLEN_*.
         virtual void
         calc_sub_block_of_clusters(const ScanIndices& block_idxs) =0;
+#endif
+        
+        // Calculate a series of cluster results within an inner loop.
+        // All indices start at 'start_idxs'. Inner loop iterates to
+        // 'stop_inner' by 'step_inner'.
+        // Indices must be rank-relative.
+        // Indices must be normalized, i.e., already divided by VLEN_*.
+        virtual void
+        calc_loop_of_clusters(const Indices& start_idxs,
+                              idx_t stop_inner, idx_t step_inner) =0;
+
+        // Calculate a series of cluster results within an inner loop.
+        // The 'loop_idxs' must specify a range only in the inner dim.
+        // Indices must be rank-relative.
+        // Indices must be normalized, i.e., already divided by VLEN_*.
+        virtual void
+        calc_loop_of_clusters(const ScanIndices& loop_idxs) {
+
+            // Find index posn of inner loop.
+            // TODO: do this once earlier.
+            auto dims = get_dims();
+            int iposn = 0;
+            int ndims = dims->_stencil_dims.getNumDims();
+            for (int i = 0; i < ndims; i++){
+                auto& dname = dims->_stencil_dims.getDimName(i);
+                if (dname == dims->_inner_dim)
+                    iposn = i;
+                else
+                    assert(loop_idxs.start[i] == loop_idxs.stop[i] - 1);
+            }
+
+            // Need all starting indices.
+            const Indices& start_idxs = loop_idxs.start;
+
+            // Need stop & step only for inner loop.
+            idx_t stop_inner = loop_idxs.stop[iposn];
+            idx_t step_inner = loop_idxs.step[iposn];
+
+            calc_loop_of_clusters(start_idxs, stop_inner, step_inner);
+        }
     };
 
 } // yask namespace.

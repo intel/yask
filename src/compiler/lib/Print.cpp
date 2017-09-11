@@ -32,6 +32,26 @@ namespace yask {
 
     ////////////// Print visitors ///////////////
 
+    // Declare a new temp var.
+    // Set _exprStr to it.
+    // Print LHS of assignment to it.
+    // If 'ex' is non-null, it is used as key to save name of temp var and
+    // to write a comment.
+    // If 'comment' is set, use it for the comment.
+    // Return stream to continue w/RHS.
+    ostream& PrintVisitorBase::makeNextTempVar(Expr* ex, string comment) {
+        _exprStr = _ph.makeVarName();
+        if (ex) {
+            _tempVars[ex] = _exprStr;
+            if (comment.length() == 0)
+                _os << endl << " // " << _exprStr << " = " << ex->makeStr() << "." << endl;
+        }
+        if (comment.length())
+            _os << endl << " // " << _exprStr << " = " << comment << "." << endl;
+        _os << _ph.getLinePrefix() << _ph.getVarType() << " " << _exprStr << " = ";
+        return _os;
+    }
+
     /////// Top-down
 
     // A grid read.
@@ -156,21 +176,6 @@ namespace yask {
     }
 
     /////// Bottom-up
-
-    // If 'comment' is set, use it for the comment.
-    // Return stream to continue w/RHS.
-    ostream& PrintVisitorBottomUp::makeNextTempVar(Expr* ex, string comment) {
-        _exprStr = _ph.makeVarName();
-        if (ex) {
-            _tempVars[ex] = _exprStr;
-            if (comment.length() == 0)
-                _os << endl << " // " << _exprStr << " = " << ex->makeStr() << "." << endl;
-        }
-        if (comment.length())
-            _os << endl << " // " << _exprStr << " = " << comment << "." << endl;
-        _os << _ph.getLinePrefix() << _ph.getVarType() << " " << _exprStr << " = ";
-        return _os;
-    }
 
     // Try some simple printing techniques.
     // Return true if printing is done.
@@ -553,7 +558,7 @@ namespace yask {
                 os << endl << " // Valid under the default condition." << endl;
 
             os << endl << " // Top-down stencil calculation:" << endl;
-            PrintVisitorTopDown pv1(os, ph);
+            PrintVisitorTopDown pv1(os, ph, _settings);
             eq.visitEqs(&pv1);
             
             os << endl << " // Bottom-up stencil calculation:" << endl;

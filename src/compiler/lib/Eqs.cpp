@@ -391,6 +391,8 @@ namespace yask {
     }
 
     // Visitor for determining vectorization potential of grid points.
+    // Vectorization depends not only on the dims of the grid itself
+    // but also on how the grid is indexed at each point.
     class SetVecVisitor : public ExprVisitor {
         const Dimensions& _dims;
         
@@ -408,8 +410,9 @@ namespace yask {
             int soln_nfd = _dims._foldGT1.size();
             assert(grid_nfd <= soln_nfd);
 
-            // Vectorization is only possible if each access
-            // is a simple offset.
+            // Vectorization is only possible if each access to a vectorized
+            // dim is a simple offset.  For example, in grid dim 'x', the
+            // index in the corresponding posn must be 'x', 'x+n', or 'x-n'.
             int fdoffsets = 0;
             for (auto fdim : _dims._foldGT1.getDims()) {
                 auto& fdname = fdim.getName();
@@ -418,11 +421,11 @@ namespace yask {
             }
             assert(fdoffsets <= grid_nfd);
 
-            // All folded dims are vectorizable.
+            // All folded dims are vectorizable?
             if (fdoffsets == soln_nfd)
                 gp->setVecType(GridPoint::VEC_FULL); // all good.
 
-            // Some dims are vectorizable.
+            // Some dims are vectorizable?
             else if (fdoffsets > 0)
                 gp->setVecType(GridPoint::VEC_PARTIAL);
             
@@ -433,9 +436,90 @@ namespace yask {
     };
     
     // Determine which grid points can be vectorized.
-    void Eqs::setVec(const Dimensions& dims) {
+    void Eqs::analyzeVec(const Dimensions& dims) {
+
+        // Send a 'SetVecVisitor' to each point in
+        // the current equations.
         SetVecVisitor svv(dims);
         visitEqs(&svv);
+    }
+
+    // Visitor to find referenced vars.
+    class FindVarsVisitor : public ExprVisitor {
+
+    public:
+        set<string> vars_used;
+
+        // Check each index expr;
+        virtual void visit(IndexExpr* ie) {
+            vars_used.insert(ie->getName());
+        }
+    };
+    
+    // Visitor for determining inner-loop accesses of grid points.
+    class SetLoopVisitor : public ExprVisitor {
+        const Dimensions& _dims;
+        
+    public:
+        SetLoopVisitor(const Dimensions& dims) :
+            _dims(dims) { }
+
+        // Check each grid point in expr.
+        virtual void visit(GridPoint* gp) {
+
+            // Info from grid.
+            auto* grid = gp->getGrid();
+            auto gdims = grid->get_dim_names();
+
+            // Check loop in this dim.
+            auto idim = _dims._innerDim;
+
+            // Access type.
+            GridPoint::LoopType lt = GridPoint::LOOP_INVARIANT;
+            
+            // Check every point arg.
+            auto& args = gp->getArgs();
+            for (size_t ai = 0; ai < args.size(); ai++) {
+                auto& arg = args.at(ai);
+                assert(ai < gdims.size());
+
+                // Get set of vars used.
+                FindVarsVisitor fvv;
+                arg->accept(&fvv);
+                
+                // Does this arg refer to idim?
+                if (fvv.vars_used.count(idim)) {
+
+                    // Is it in the idim posn and a simple offset?
+                    int offset = 0;
+                    if (gdims.at(ai) == idim &&
+                        arg->isOffsetFrom(idim, offset)) {
+                        lt = GridPoint::LOOP_OFFSET;
+                    }
+
+                    // Otherwise, this arg uses idim, but not
+                    // in a simple way.
+                    else {
+                        lt = GridPoint::LOOP_OTHER;
+                        break;  // no need to continue.
+                    }
+                }
+            }
+            gp->setLoopType(lt);
+#if 0
+            cout << "GridPoint " << gp->makeStr() <<
+                " has loop-access type " << lt << endl;
+#endif
+        }
+    };
+    
+    // Determine loop access behavior of grid points.
+    void Eqs::analyzeLoop(const Dimensions& dims) {
+
+        // Send a 'SetLoopVisitor' to each point in
+        // the current equations.
+        SetLoopVisitor slv(dims);
+        visitEqs(&slv);
     }
 
     // Get the full name of an eq-group.
@@ -454,7 +538,7 @@ namespace yask {
         return oss.str();
     }
 
-    // Make a description.
+    // Make a human-readable description of this eq group.
     string EqGroup::getDescription(bool show_cond,
                                    string quote) const
     {

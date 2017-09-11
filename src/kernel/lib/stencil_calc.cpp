@@ -608,6 +608,7 @@ namespace yask {
                   " ... " << block_idxs.stop.addConst(-1).makeValStr(ndims));
 
         // Init sub-block begin & end from block start & stop indices.
+        // These indices are in element units.
         ScanIndices sub_block_idxs;
         sub_block_idxs.initFromOuter(block_idxs);
         
@@ -652,7 +653,7 @@ namespace yask {
                        dims->_cluster_pts[dname] == 0);
             }
 
-            // Indices to calc_sub_block_of_clusters() must be in vec-norm
+            // Indices to sub-block loop must be in vec-norm
             // format, i.e., vector lengths and rank-relative.
             ScanIndices norm_sub_block_idxs = sub_block_idxs;
             for (int i = cp->_step_posn + 1; i < ndims; i++) {
@@ -667,16 +668,18 @@ namespace yask {
                                                cp->rank_domain_offsets[dname],
                                                dims->_fold_pts[dname]);
                 norm_sub_block_idxs.begin[i] = nbegin;
-                norm_sub_block_idxs.start[i] = nbegin;
                 idx_t nend = idiv_flr<idx_t>(sub_block_idxs.end[i] -
                                              cp->rank_domain_offsets[dname],
                                              dims->_fold_pts[dname]);
                 norm_sub_block_idxs.end[i] = nend;
-                norm_sub_block_idxs.stop[i] = nend;
+
+                // Step sizes are based on cluster lengths (in vector units).
+                norm_sub_block_idxs.step[i] = dims->_cluster_mults[dname];
             }
 
-            // Evaluate sub-block of clusters.
-            calc_sub_block_of_clusters(norm_sub_block_idxs);
+            // Include automatically-generated loop code that calls
+            // calc_loop_of_clusters().
+#include "yask_sub_block_loops.hpp"
         }
         
         // Make sure streaming stores are visible for later loads.
