@@ -27,10 +27,7 @@ IN THE SOFTWARE.
 // T: type stored in grid.
 // LayoutFn: class that transforms N dimensions to 1.
 
-#ifndef _GENERIC_GRIDS
-#define _GENERIC_GRIDS
-
-#include "tuple.hpp"
+#pragma once
 
 namespace yask {
 
@@ -43,7 +40,9 @@ namespace yask {
 
         // Base address of malloc'd memory.
         // Not necessarily the address at which the data is stored.
-        std::shared_ptr<char> _base; 
+        std::shared_ptr<char> _base;
+
+        void* _elems = 0;          // actual data, which may be offset from _base.
 
         // Note that both _dims and *_layout_base hold dimensions unless this
         // is a scalar. For a scalar, _dims is empty and _layout_base = 0.
@@ -69,17 +68,15 @@ namespace yask {
         GenericGridBase(std::string name,
                         Layout& layout_base,
                         const GridDimNames& dimNames,
-                        std::ostream** ostr) :
-            _name(name), _layout_base(&layout_base), _ostr(ostr) {
-            for (auto& dn : dimNames)
-                _dims.addDimBack(dn, 1);
-            _sync_layout_with_dims();
-        }
+                        std::ostream** ostr);
 
         virtual ~GenericGridBase() { }
 
         // Perform default allocation.
-        virtual void default_alloc() =0;
+        // For other options,
+        // programmer should call get_num_elems() or get_num_bytes() and
+        // then provide allocated memory via set_storage().
+        virtual void default_alloc();
 
         // Access name.
         const std::string& get_name() const { return _name; }
@@ -99,6 +96,9 @@ namespace yask {
         virtual idx_t get_num_elems() const {
             return _dims.product();
         }
+
+        // Get size of one element.
+        virtual size_t get_elem_bytes() const =0;
 
         // Get size in bytes.
         virtual size_t get_num_bytes() const =0;
@@ -145,161 +145,16 @@ namespace yask {
 
         // Print some descriptive info.
         virtual void print_info(std::ostream& os,
-                                const std::string& elem_name) const =0;
+                                const std::string& elem_name) const;
 
-        // Get 1D index.
-        // Should be overridden by derived classes for efficiency.
-        virtual idx_t get_index(const Indices& idxs, bool check=true) const {
-            if (check) {
-                for (int i = 0; i < _dims.size(); i++) {
-                    idx_t j = idxs[i];
-                    assert(j >= 0);
-                    assert(j < _dims.getVal(i));
-                }
-            }
-            idx_t ai = _layout_base->layout(idxs);
-            if (check)
-                assert(ai < get_num_elems());
-            return ai;
-        }
+        // Get linear index.
+        virtual idx_t get_index(const Indices& idxs, bool check=true) const =0;
         virtual idx_t get_index(const IdxTuple& pt, bool check=true) const {
             assert(_dims.areDimsSame(pt));
             Indices idxs(pt);
             return get_index(idxs, check);
         }
 
-        // Direct access to data.
-        virtual void* get_storage() =0;
-        virtual const void* get_storage() const =0;
-
-        // Release storage.
-        virtual void release_storage() =0;
-        
-        // Set pointer to storage.
-        // Free old storage.
-        // 'base' should provide get_num_bytes() bytes at offset bytes.
-        virtual void set_storage(std::shared_ptr<char>& base, size_t offset) =0;
-
-        // Check for equality, assuming same layout.
-        // Return number of mismatches greater than epsilon.
-        virtual idx_t count_diffs(const GenericGridBase* ref,
-                                  double epsilon) const =0;
-
-        // Check for equality.
-        // Return number of mismatches greater than epsilon up to 'maxPrint'+1.
-        virtual idx_t compare(const GenericGridBase* ref,
-                              double epsilon,
-                              int maxPrint = 0,
-                              std::ostream& os = std::cerr) const =0;
-    };
-    
-    // A base class for a generic n-D grid of elements of arithmetic type T.
-    // This class defines the type but does not define the memory layout.
-    template <typename T>
-    class GenericGridTemplate : public GenericGridBase {
-
-    protected:
-        T* _elems = 0;          // actual data, which may be offset from _base.
-
-    public:
-
-        // Ctor. No allocation is done. See notes on default_alloc().
-        GenericGridTemplate(std::string name,
-                            Layout& layout_base,
-                            const GridDimNames& dimNames,
-                            std::ostream** ostr) :
-            GenericGridBase(name, layout_base, dimNames, ostr) { }
-
-        // Dealloc _base when last pointer to it is destructed.
-        virtual ~GenericGridTemplate() {
-
-            // Release data.
-            release_storage();
-        }
-
-        // Perform default allocation.
-        // For other options,
-        // programmer should call get_num_elems() or get_num_bytes() and
-        // then provide allocated memory via set_storage().
-        virtual void default_alloc() {
-
-            // Release any old data if last owner.
-            release_storage();
-
-            // Alloc required number of bytes.
-            size_t sz = get_num_bytes();
-            _base = std::shared_ptr<char>(alignedAlloc(sz), AlignedDeleter());
-
-            // No offset.
-            _elems = (T*)_base.get();
-        }
-        
-        // Get size in bytes.
-        virtual size_t get_num_bytes() const {
-            return sizeof(T) * get_num_elems();
-        }
-
-        // Print some descriptive info to 'os'.
-        virtual void print_info(std::ostream& os,
-                                const std::string& elem_name) const {
-            if (_dims.getNumDims() == 0)
-                os << "scalar";
-            else
-                os << _dims.getNumDims() << "-D grid (" <<
-                    _dims.makeDimValStr(" * ") << ")";
-            os << " '" << _name << "'";
-            if (_elems)
-                os << " with data at " << _elems << " containing ";
-            else
-                os << " with data not allocated for ";
-            os << makeNumStr(get_num_elems()) << " " <<
-                    elem_name << " element(s) of " <<
-                    sizeof(T) << " byte(s) each = " <<
-                    makeByteStr(get_num_bytes());
-        }
-
-        // Initialize all elements to the same given value.
-        virtual void set_elems_same(T val) {
-            if (_elems) {
-
-#pragma omp parallel for
-                for (idx_t ai = 0; ai < get_num_elems(); ai++)
-                    _elems[ai] = val;
-            }
-        }
-
-        // Initialize memory using 'seed' as a starting point.
-        virtual void set_elems_in_seq(T seed) {
-            if (_elems) {
-                const idx_t wrap = 71; // TODO: avoid multiple of any dim size.
-
-                auto n = get_num_elems();
-#pragma omp parallel for
-                for (idx_t ai = 0; ai < n; ai++)
-                    _elems[ai] = seed * T(ai % wrap + 1);
-            }
-        }
-
-        // Return ref to given element.
-        const T& operator()(const Indices& pt, bool check=true) const {
-            idx_t ai = get_index(pt, check);
-            return _elems[ai];
-        }
-        const T& operator()(const IdxTuple& pt, bool check=true) const {
-            idx_t ai = get_index(pt, check);
-            return _elems[ai];
-        }
-
-        // Non-const access to given element.
-        T& operator()(const Indices& pt, bool check=true) {
-            idx_t ai = get_index(pt, check);
-            return _elems[ai];
-        }
-        T& operator()(const IdxTuple& pt, bool check=true) {
-            idx_t ai = get_index(pt, check);
-            return _elems[ai];
-        }
-        
         // Direct access to data.
         virtual void* get_storage() {
             return (void*)_elems;
@@ -317,23 +172,86 @@ namespace yask {
         // Set pointer to storage.
         // Free old storage.
         // 'base' should provide get_num_bytes() bytes at offset bytes.
-        virtual void set_storage(std::shared_ptr<char>& base, size_t offset) {
+        virtual void set_storage(std::shared_ptr<char>& base, size_t offset);
 
-            // Release any old data if last owner.
+        // Check for equality, assuming same layout.
+        // Return number of mismatches greater than epsilon.
+        virtual idx_t count_diffs(const GenericGridBase* ref,
+                                  double epsilon) const =0;
+
+    };
+    
+    // A base class for a generic n-D grid of elements of arithmetic type T.
+    // This class defines the type but does not define the memory layout.
+    template <typename T>
+    class GenericGridTemplate : public GenericGridBase {
+
+    public:
+
+        // Ctor. No allocation is done. See notes on default_alloc().
+        GenericGridTemplate(std::string name,
+                            Layout& layout_base,
+                            const GridDimNames& dimNames,
+                            std::ostream** ostr) :
+            GenericGridBase(name, layout_base, dimNames, ostr) { }
+
+        // Dealloc _base when last pointer to it is destructed.
+        virtual ~GenericGridTemplate() {
+
+            // Release data.
             release_storage();
-            
-            // Share ownership of base.
-            // This ensures that last grid to use a shared allocation
-            // will trigger dealloc.
-            _base = base;
-            
-            // Set plain pointer to new data.
-            if (base.get()) {
-                char* p = _base.get() + offset;
-                _elems = (T*)p;
-            } else {
-                _elems = 0;
+        }
+
+        // Get size of one element.
+        virtual size_t get_elem_bytes() const {
+            return sizeof(T);
+        }
+
+        // Get size in bytes.
+        virtual size_t get_num_bytes() const {
+            return sizeof(T) * get_num_elems();
+        }
+
+        // Initialize all elements to the same given value.
+        virtual void set_elems_same(T val) {
+            if (_elems) {
+
+#pragma omp parallel for
+                for (idx_t ai = 0; ai < get_num_elems(); ai++)
+                    ((T*)_elems)[ai] = val;
             }
+        }
+
+        // Initialize memory using 'seed' as a starting point.
+        virtual void set_elems_in_seq(T seed) {
+            if (_elems) {
+                const idx_t wrap = 71; // TODO: avoid multiple of any dim size.
+
+                auto n = get_num_elems();
+#pragma omp parallel for
+                for (idx_t ai = 0; ai < n; ai++)
+                    ((T*)_elems)[ai] = seed * T(ai % wrap + 1);
+            }
+        }
+
+        // Return ref to given element.
+        const T& operator()(const Indices& pt, bool check=true) const {
+            idx_t ai = get_index(pt, check);
+            return ((T*)_elems)[ai];
+        }
+        const T& operator()(const IdxTuple& pt, bool check=true) const {
+            idx_t ai = get_index(pt, check);
+            return ((T*)_elems)[ai];
+        }
+
+        // Non-const access to given element.
+        T& operator()(const Indices& pt, bool check=true) {
+            idx_t ai = get_index(pt, check);
+            return ((T*)_elems)[ai];
+        }
+        T& operator()(const IdxTuple& pt, bool check=true) {
+            idx_t ai = get_index(pt, check);
+            return ((T*)_elems)[ai];
         }
 
         // Check for equality, assuming same layout.
@@ -356,57 +274,13 @@ namespace yask {
             idx_t errs = 0;
 #pragma omp parallel for reduction(+:errs)
             for (idx_t ai = 0; ai < get_num_elems(); ai++) {
-                if (!within_tolerance(_elems[ai], p->_elems[ai], ep))
+                if (!within_tolerance(((T*)_elems)[ai], ((T*)p->_elems)[ai], ep))
                     errs++;
             }
 
             return errs;
         }
-
-        // Check for equality.
-        // Return number of mismatches greater than epsilon up to 'maxPrint'+1.
-        virtual idx_t compare(const GenericGridBase* ref,
-                              double epsilon,
-                              int maxPrint = 0,
-                              std::ostream& os = std::cerr) const {
-
-            if (!ref)
-                return get_num_elems();
-            auto* p = dynamic_cast<const GenericGridTemplate<T>*>(ref);
-            if (!p)
-                return get_num_elems();
-            
-            // Dims & sizes same?
-            if (_dims != p->_dims)
-                return get_num_elems();
-
-            // Quick check for errors, assuming same layout.
-            idx_t errs = count_diffs(p, epsilon);
-            if (!errs)
-                return 0;
-
-            // Run detailed comparison if any errors found.
-            errs = 0;
-            T ep = epsilon;
-            _dims.visitAllPoints([&](const IdxTuple& pt){
-                    auto& te = (*this)(pt);
-                    auto& re = (*p)(pt);
-                    if (!within_tolerance(te, re, ep)) {
-                        errs++;
-                        if (errs < maxPrint)
-                                os << "** mismatch at (" << pt.makeDimValStr() << "): " <<
-                                    te << " != " << re << std::endl;
-                        else if (errs == maxPrint)
-                            os << "** Additional errors not printed." << std::endl;
-                        else {
-                            // errs > maxPrint.
-                            return false;
-                        }
-                    }
-                    return true;
-                });
-            return errs;
-        }
+        
     };
 
     // A generic n-D grid of elements of type T.
@@ -441,25 +315,33 @@ namespace yask {
             return _layout.get_sizes();
         }
         
-        // Get 1D index.
-        // More efficient version overriding base method because layout is known.
+        // Get 1D index using layout.
         virtual idx_t get_index(const Indices& idxs, bool check=true) const final {
 #ifdef DEBUG
-            return GenericGridTemplate<T>::get_index(idxs, check);
-#else
-            idx_t ai = _layout.layout(idxs);
-            return ai;
+            if (check) {
+                for (int i = 0; i < this->_dims.size(); i++) {
+                    idx_t j = idxs[i];
+                    assert(j >= 0);
+                    assert(j < this->_dims.getVal(i));
+                }
+            }
 #endif
+            idx_t ai = _layout.layout(idxs);
+#ifdef DEBUG
+            if (check)
+                assert(ai < this->get_num_elems());
+#endif
+            return ai;
         }
 
         // Pointer to given element.
         const T* getPtr(const Indices& pt, bool check=true) const {
             idx_t ai = GenericGrid::get_index(pt, check);
-            return &this->_elems[ai];
+            return &((T*)this->_elems)[ai];
         }
         T* getPtr(const Indices& pt, bool check=true) {
             idx_t ai = GenericGrid::get_index(pt, check);
-            return &this->_elems[ai];
+            return &((T*)this->_elems)[ai];
         }
         
     };
@@ -481,14 +363,4 @@ namespace yask {
             GenericGrid<T, Layout_0d>(name, _dimNames) { }
     };
 
-}
-
-#if GRID_TEST
-    // Dummy vars to test template compiles.
-    GridDimNames dummyDims;
-    GenericGrid<idx_t, Layout_123> dummy1("d1", dummyDims);
-    GenericGrid<real_t, Layout_123> dummy2("d2", dummyDims);
-    GenericGrid<real_vec_t, Layout_123> dummy3("d3", dummyDims);
-#endif
-    
-#endif
+} // namespace yask.

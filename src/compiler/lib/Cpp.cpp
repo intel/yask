@@ -1036,6 +1036,9 @@ namespace yask {
                 auto& dval = dim.getVal();
                 os << "    p->_vec_fold_pts.addDimBack(\"" << dname << "\", " << dval << ");\n";
             }
+            string ffi = (_dims._fold.isFirstInner()) ? "true" : "false";
+            os << "    p->_fold_pts.setFirstInner(" << ffi << ");\n"
+                "    p->_vec_fold_pts.setFirstInner(" << ffi << ");\n";
             for (auto& dim : _dims._clusterPts.getDims()) {
                 auto& dname = dim.getName();
                 auto& dval = dim.getVal();

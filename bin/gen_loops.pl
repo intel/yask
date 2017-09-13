@@ -754,6 +754,12 @@ sub processCode($) {
     
     # Front matter.
     push @code,
+        "#ifndef OMP_PRAGMA_PREFIX",
+        "#define OMP_PRAGMA_PREFIX $OPT{ompConstruct}",
+        "#endif",
+        "#ifndef OMP_PRAGMA_SUFFIX",
+        "#define OMP_PRAGMA_SUFFIX",
+        "#endif",
         "// 'ScanIndices $inputVar' must be set before the following code.",
         "{",
         " // Indices for calculation and prefetch calls.",
@@ -783,9 +789,9 @@ sub processCode($) {
             # make local copies of scan index vars.
             my $priv = "lastprivate(".join(',',@scanVars).")";
             
-            my $loopPragma = "_Pragma(\"$OPT{ompConstruct} $priv\")";
-            push @loopPrefix, " // Distribute iterations among OpenMP threads.", 
-            $loopPragma;
+            push @loopPrefix,
+                " // Distribute iterations among OpenMP threads.", 
+                "#pragma OMP_PRAGMA_PREFIX $priv OMP_PRAGMA_SUFFIX";
             warn "info: using OpenMP on following loop.\n";
         }
 

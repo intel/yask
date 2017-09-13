@@ -545,5 +545,40 @@ namespace yask {
             os << std::endl << std::flush;
     }
 
+    // Print one vector.
+    // Indices must be normalized and rank-relative.
+    void YkGridBase::printVecNorm(const std::string& msg,
+                                          const Indices& idxs,
+                                          const real_vec_t& val,
+                                          int line,
+                                          bool newline) const {
+
+        // Convert to elem indices.
+        Indices eidxs = idxs.multElements(_vec_lens);
+
+        // Add offsets, i.e., convert to overall indices.
+        eidxs = eidxs.addElements(_offsets);
+
+        IdxTuple idxs2 = get_allocs(); // get dims.
+        eidxs.setTupleVals(idxs2);      // set vals from eidxs.
+
+        // Visit every point in fold.
+        IdxTuple folds = _dims->_fold_pts;
+        folds.visitAllPoints([&](const IdxTuple& fofs) {
+                
+                // Get element from vec val.
+                auto i = _dims->getElemIndexInVec(fofs);
+                real_t ev = val[i];
+                
+                // Add fold offsets to elem indices for printing.
+                IdxTuple pt2 = idxs2.addElements(fofs, false);
+                Indices pt3(pt2);
+                
+                printElem(msg, pt3, ev, line, newline);
+                return true; // keep visiting.
+            });
+    }
+
+    
 } // namespace.
 

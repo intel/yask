@@ -23,8 +23,7 @@ IN THE SOFTWARE.
 
 *****************************************************************************/
 
-#ifndef _REAL_GRIDS
-#define _REAL_GRIDS
+#pragma once
 
 namespace yask {
 
@@ -217,6 +216,14 @@ namespace yask {
                                int line,
                                bool newline = true) const;
 
+        // Print one vector.
+        // Indices must be normalized and rank-relative.
+        virtual void printVecNorm(const std::string& msg,
+                                  const Indices& idxs,
+                                  const real_vec_t& val,
+                                  int line,
+                                  bool newline = true) const;
+        
         // Settings that should never be exposed as APIs because
         // they can break the usage model.
         // They are not protected because they are used from outside
@@ -316,11 +323,6 @@ namespace yask {
         }
     };
 
-    // Some derivations.
-    typedef std::shared_ptr<YkGridBase> YkGridPtr;
-    typedef std::vector<YkGridPtr> GridPtrs;
-    typedef std::set<YkGridPtr> GridPtrSet;
-    
     // YASK grid of real elements.
     // Used for grids that do not contain folded vectors.
     // If '_wrap_1st_idx', then index to 1st dim will wrap around.
@@ -466,27 +468,11 @@ namespace yask {
   
         // Get linear index into a vector given 'elem_ofs', the
         // element offsets in every grid dim.
-        // TODO: make this much more
-        // efficient by creating a custom function from the stencil
-        // compiler.
-        inline idx_t getVecIndex(const Indices& elem_ofs) const {
+        virtual idx_t getElemIndexInVec(const Indices& elem_ofs) const {
             IdxTuple eofs = get_allocs(); // get dims for this grid.
             elem_ofs.setTupleVals(eofs);  // set vals from elem_ofs.
 
-            IdxTuple& folds = _dims->_vec_fold_pts; // get req'd fold dims.
-            IdxTuple fofs = folds;
-            fofs.setVals(eofs, false); // get only fold offsets from eofs.
-            
-            // Set layout scheme.
-#if VLEN_FIRST_INDEX_IS_UNIT_STRIDE
-            folds.setFirstInner(true);
-#else
-            folds.setFirstInner(false);
-#endif
-
-            // Use fold layout to find vector index.
-            auto i = folds.layout(fofs, false);
-            return i;
+            return _dims->getElemIndexInVec(eofs);
         }
         
         // Get a pointer to given element.
@@ -516,7 +502,7 @@ namespace yask {
                 vec_idxs[0] = wrap_index(idxs[0], _domains[0]);
 
             // Get 1D element index into vector.
-            auto i = getVecIndex(elem_ofs);
+            auto i = getElemIndexInVec(elem_ofs);
 
 #ifdef TRACE_MEM
             if (checkBounds)
@@ -555,7 +541,8 @@ namespace yask {
 #endif
         
             Indices adj_idxs;
-#pragma unroll
+            //#pragma vector unroll
+#pragma omp simd
             for (int i = 0; i < _data.get_num_dims(); i++) {
 
                 // Adjust for padding.
@@ -628,45 +615,6 @@ namespace yask {
 #endif
         }
 
-        // Print one vector.
-        // Indices must be normalized and rank-relative.
-        virtual void printVecNorm(const std::string& msg,
-                                  const Indices& idxs,
-                                  const real_vec_t& val,
-                                  int line,
-                                  bool newline = true) const {
-            // Convert to elem indices.
-            Indices eidxs = idxs.multElements(_vec_lens);
-
-            // Add offsets, i.e., convert to overall indices.
-            eidxs = eidxs.addElements(_offsets);
-
-            IdxTuple idxs2 = get_allocs(); // get dims.
-            eidxs.setTupleVals(idxs2);      // set vals from eidxs.
-
-            // Visit every point in fold.
-            IdxTuple& folds = _dims->_vec_fold_pts;
-            folds.visitAllPoints([&](const IdxTuple& fofs) {
-
-                    // Get element from vec val.
-                    // TODO: simplify this.
-                    IdxTuple fofs2 = get_allocs(); // get grid dims.
-                    fofs2.setValsSame(0);
-                    fofs2.setVals(fofs, false); // set just fold ofs dims.
-                    Indices fofs3(fofs2);
-                    auto i = getVecIndex(fofs3);
-                    real_t ev = val[i];
-
-                    // Add fold offsets to elem indices for printing.
-                    IdxTuple pt2 = idxs2.addElements(fofs, false);
-                    Indices pt3(pt2);
-
-                    printElem(msg, pt3, ev, line, newline);
-                    return true; // keep visiting.
-                });
-        }
-
     };                          // YkVecGrid.
 
 }                               // namespace.
-#endif

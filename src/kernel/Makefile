@@ -194,7 +194,7 @@ streaming_stores	?= 	0
 omp_par_for		?=	omp parallel for
 omp_region_schedule	?=	dynamic,1
 omp_block_schedule	?=	static,1
-omp_gen_schedule	?=	static
+omp_gen_schedule	?=	guided
 prefetch		?=	prefetch(L2)
 def_thread_divisor	?=	1
 def_block_threads	?=	2
@@ -207,7 +207,7 @@ def_pad_args		?=	-ep 1
 cluster			?=	x=1
 pfd_l1			?=	1
 pfd_l2			?=	2
-max_dims		?=	6  # max grid dims >= max stencil dims.
+max_dims		?=	5  # max grid dims >= max stencil dims.
 
 # default folding depends on HW vector size.
 ifneq ($(findstring INTRIN512,$(MACROS)),)  # 512 bits.
@@ -262,8 +262,8 @@ RANK_LOOP_CODE		?=	$(RANK_LOOP_OUTER_MODS) loop(1 .. N-1) \
 REGION_LOOP_OPTS	?=     	$(NDIMS_OPT) -inVar region_idxs \
 				-ompConstruct '$(omp_par_for) schedule($(omp_region_schedule)) proc_bind(spread)' \
 				-calcPrefix 'eg->calc_'
-REGION_LOOP_OUTER_MODS	?=	grouped
-REGION_LOOP_CODE	?=	omp $(REGION_LOOP_OUTER_MODS) loop(1 .. N-1) { \
+REGION_LOOP_OUTER_MODS	?=	grouped omp
+REGION_LOOP_CODE	?=	$(REGION_LOOP_OUTER_MODS) loop(1 .. N-1) { \
 				$(REGION_LOOP_INNER_MODS) calc(block); }
 
 # Block loops break up a block into sub-blocks.  The 'omp' modifier creates
@@ -272,8 +272,8 @@ REGION_LOOP_CODE	?=	omp $(REGION_LOOP_OUTER_MODS) loop(1 .. N-1) { \
 # not yet supported.
 BLOCK_LOOP_OPTS		?=     	$(NDIMS_OPT) -inVar block_idxs \
 				-ompConstruct '$(omp_par_for) schedule($(omp_block_schedule)) proc_bind(close)'
-BLOCK_LOOP_OUTER_MODS	?=	grouped
-BLOCK_LOOP_CODE		?=	omp $(BLOCK_LOOP_OUTER_MODS) loop(1 .. N-1) { \
+BLOCK_LOOP_OUTER_MODS	?=	grouped omp
+BLOCK_LOOP_CODE		?=	$(BLOCK_LOOP_OUTER_MODS) loop(1 .. N-1) { \
 				$(BLOCK_LOOP_INNER_MODS) calc(sub_block); }
 
 # Sub-block loops break up a sub-block into vector clusters.  These loops
@@ -344,7 +344,7 @@ COMM_SRC_BASES	:=	$(addprefix $(COMM_DIR)/,$(COMM_SRC_NAMES))
 YK_SWIG_DIR	:=	./swig
 YK_GEN_DIR	:=	./gen
 YK_LIB_DIR	:=	./lib
-YK_SRC_NAMES	:=	stencil_calc realv_grids utils
+YK_SRC_NAMES	:=	factory generic_grids realv_grids utils settings context stencil_calc
 YK_SRC_BASES	:=	$(addprefix $(YK_LIB_DIR)/,$(YK_SRC_NAMES))
 YK_OBJS		:=	$(addsuffix .$(YK_TAG).o,$(YK_SRC_BASES) $(COMM_SRC_BASES))
 YK_MACRO_FILE	:=	$(YK_GEN_DIR)/yask_macros.hpp
@@ -499,13 +499,13 @@ kernel:	$(YK_EXEC) $(MAKE_REPORT_FILE)
 	@echo "Run command:" $(BIN_DIR)"/yask.sh -stencil" $(stencil) "-arch" $(arch) "[options]"
 
 %.$(YK_TAG).o: %.cpp $(YK_GEN_HEADERS) $(YK_INC_GLOB)
-	$(YK_CXX) $(YK_CXXFLAGS) -fPIC -c -o $@ $<
+	time $(YK_CXX) $(YK_CXXFLAGS) -fPIC -c -o $@ $<
 
 $(YK_LIB): $(YK_OBJS)
-	$(YK_CXX) $(YK_CXXFLAGS) -shared -o $@ $^
+	time $(YK_CXX) $(YK_CXXFLAGS) -shared -o $@ $^
 
 $(YK_EXEC): yask_main.cpp $(YK_LIB)
-	$(YK_LD) $(YK_CXXFLAGS) $< $(YK_LFLAGS) -o $@
+	time $(YK_LD) $(YK_CXXFLAGS) $< $(YK_LFLAGS) -o $@
 
 $(MAKE_REPORT_FILE): $(YK_EXEC)
 	@echo MAKEFLAGS="\"$(MAKEFLAGS)"\" > $@ 2>&1

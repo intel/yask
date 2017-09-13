@@ -558,7 +558,7 @@ namespace yask {
             int stepDim = _firstInner ? 1 : -1;
             for (int di = startDim; di != beyondLastDim; di += stepDim) {
                 auto& i = _q.at(di);
-                auto& dim = i.getName();
+                //auto& dim = i.getName();
                 size_t dsize = size_t(i.getVal());
                 assert (dsize >= 0);
 

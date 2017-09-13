@@ -145,36 +145,6 @@ namespace yask {
     typedef Tuple<idx_t> IdxTuple;
     typedef std::vector<idx_t> GridIndices;
     typedef std::vector<std::string> GridDimNames;
-
-    // Dimensions for a solution.
-    // Similar to that in the YASK compiler.
-    struct Dims {
-
-        static const int max_domain_dims = MAX_DIMS - 1; // 1 reserved for step dim.
-
-        // Dimensions with unused values.
-        std::string _step_dim;  // usually time, 't'.
-        std::string _inner_dim; // the domain dim used in the inner loop.
-        IdxTuple _domain_dims;
-        IdxTuple _stencil_dims;
-        IdxTuple _misc_dims;
-
-        // Dimensions and sizes.
-        IdxTuple _fold_pts;     // all domain dims.
-        IdxTuple _vec_fold_pts; // just those with >1 pts.
-        IdxTuple _cluster_pts;
-        IdxTuple _cluster_mults;
-
-        // Check whether dim exists and is of allowed type.
-        // If not, abort with error, reporting 'fn_name'.
-        void checkDimType(const std::string& dim,
-                          const std::string& fn_name,
-                          bool step_ok,
-                          bool domain_ok,
-                          bool misc_ok) const;
-
-    };
-    typedef std::shared_ptr<Dims> DimsPtr;
     
     // A class to hold up to a given number of sizes or indices efficiently.
     // Similar to a Tuple, but less overhead and doesn't keep names.
@@ -440,6 +410,7 @@ namespace yask {
     };
 } // namespace yask.
 
+#include "settings.hpp"
 #include "yask_layouts.hpp"
 #include "generic_grids.hpp"
 #include "realv_grids.hpp"
@@ -450,6 +421,7 @@ namespace yask {
 #define LAST_INDEX(dim) (_context->overall_domain_sizes[#dim] - 1)
 
 // Base types for stencil context, etc.
+#include "context.hpp"
 #include "stencil_calc.hpp"
 
 // Auto-generated stencil code that extends base types.
