@@ -123,14 +123,12 @@ namespace yask {
         }
 
         virtual yc_grid_ptr new_grid(const std::string& name,
-                                     const yc_index_node_ptr dim1 = nullptr,
-                                     const yc_index_node_ptr dim2 = nullptr,
-                                     const yc_index_node_ptr dim3 = nullptr,
-                                     const yc_index_node_ptr dim4 = nullptr,
-                                     const yc_index_node_ptr dim5 = nullptr,
-                                     const yc_index_node_ptr dim6 = nullptr);
-        virtual yc_grid_ptr new_grid(const std::string& name,
                                      const std::vector<yc_index_node_ptr>& dims);
+        virtual yc_grid_ptr new_grid(const std::string& name,
+                                     const std::initializer_list<yc_index_node_ptr>& dims) {
+            std::vector<yc_index_node_ptr> dim_vec(dims);
+            return new_grid(name, dim_vec);
+        }
         virtual int get_num_grids() const {
             return int(_grids.size());
         }

@@ -390,25 +390,22 @@ namespace yask {
                  /**< [in] List of names of all dimensions. Names must
                     be valid C++ identifiers and unique within this grid. */ ) =0;
 
+#ifdef SWIG
         /// **[Advanced]** Add a new grid to the solution.
         /**
            See documentation for the version with a vector of dimension names
            as a parameter.
+           @note This version is not available (or needed) in SWIG-based APIs, e.g., Python.
            @returns Pointer to the new grid.
         */
         virtual yk_grid_ptr
         new_grid(const std::string& name /**< [in] Unique name of the grid; must be
                                             a valid C++ identifier and unique
                                             across grids. */,
-                 const std::string& dim1 = "" /**< [in] Name of 1st dimension. All
-                                                 dimension names must be valid C++
-                                                 identifiers and unique within this
-                                                 grid. */,
-                 const std::string& dim2 = "" /**< [in] Name of 2nd dimension. */,
-                 const std::string& dim3 = "" /**< [in] Name of 3rd dimension. */,
-                 const std::string& dim4 = "" /**< [in] Name of 4th dimension. */,
-                 const std::string& dim5 = "" /**< [in] Name of 5th dimension. */,
-                 const std::string& dim6 = "" /**< [in] Name of 6th dimension. */ ) =0;
+                 const std::initializer_list<std::string>& dims
+                 /**< [in] List of names of all dimensions. Names must
+                    be valid C++ identifiers and unique within this grid. */ ) =0;
+#endif
 
         /// Prepare the solution for stencil application.
         /**
@@ -874,10 +871,10 @@ namespace yask {
         get_element(const std::vector<idx_t>& indices
                     /**< [in] List of indices, one for each grid dimension. */ ) const =0;
 
+#ifdef SWIG
         /// Get the value of one grid point.
         /**
-           Provide the number of indices equal to the number of dimensions in the grid.
-           Indices beyond that will be ignored.
+           Provide indices in a list in the same order returned by get_dim_names().
            Indices are relative to the *overall* problem domain.
            Index values must fall within the allocated space as returned by
            get_first_rank_alloc_index() and get_last_rank_alloc_index() for
@@ -885,15 +882,13 @@ namespace yask {
            @note The return value is a double-precision floating-point value, but
            it will be converted from a single-precision if 
            yk_solution::get_element_bytes() returns 4.
+           @note This version is not available (or needed) in SWIG-based APIs, e.g., Python.
            @returns value in grid at given multi-dimensional location.
         */
         virtual double
-        get_element(idx_t dim1_index=0 /**< [in] Index in dimension 1. */,
-                    idx_t dim2_index=0 /**< [in] Index in dimension 2. */,
-                    idx_t dim3_index=0 /**< [in] Index in dimension 3. */,
-                    idx_t dim4_index=0 /**< [in] Index in dimension 4. */,
-                    idx_t dim5_index=0 /**< [in] Index in dimension 5. */,
-                    idx_t dim6_index=0 /**< [in] Index in dimension 6. */ ) const =0;
+        get_element(const std::initializer_list<idx_t>& indices
+                    /**< [in] List of indices, one for each grid dimension. */ ) const =0;
+#endif
 
         /// Get grid points within specified subset of the grid.
         /**
@@ -942,6 +937,7 @@ namespace yask {
                        If false, indices outside of domain and padding result
                        in no change to grid. */ ) =0;
 
+#ifdef SWIG        
         /// Set the value of one grid point.
         /**
            Provide the number of indices equal to the number of dimensions in the grid.
@@ -954,17 +950,19 @@ namespace yask {
            it will be converted to single-precision if
            yk_solution::get_element_bytes() returns 4.
            If storage has not been allocated for this grid, this will have no effect.
+           @note This version is not available (or needed) in SWIG-based APIs, e.g., Python.
            @returns Number of elements set.
         */
         virtual idx_t
         set_element(double val /**< [in] Point in grid will be set to this. */,
-                    idx_t dim1_index=0 /**< [in] Index in dimension 1. */,
-                    idx_t dim2_index=0 /**< [in] Index in dimension 2. */,
-                    idx_t dim3_index=0 /**< [in] Index in dimension 3. */,
-                    idx_t dim4_index=0 /**< [in] Index in dimension 4. */,
-                    idx_t dim5_index=0 /**< [in] Index in dimension 5. */,
-                    idx_t dim6_index=0 /**< [in] Index in dimension 6. */ ) =0;
-
+                    const std::initializer_list<idx_t>& indices
+                    /**< [in] List of indices, one for each grid dimension. */,
+                    bool strict_indices = false
+                    /**< [in] If true, indices must be within domain or padding.
+                       If false, indices outside of domain and padding result
+                       in no change to grid. */ ) =0;
+#endif
+        
         /// Initialize all grid points to the same value.
         /**
            Sets all allocated elements, including those in the domain and padding

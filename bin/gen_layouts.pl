@@ -277,7 +277,7 @@ END
 
       # Positions are 0 if they don't exist.
       # If they do,
-      # - step posn is always 1.
+      # - step posn is always 1st.
       # - inner posn can be anywhere.
 
       for my $sp (0 .. 1) {
@@ -289,16 +289,21 @@ END
           next if $sp && $ip && $sp == $ip;
 
           # Make type name.
-          # Step posn and inner posn are always at end.
           my $layout = "Layout_";
           for my $i (1 .. $n) {
+
+            # Add step and inner ones below.
             if ($i != $sp && $i != $ip) {
               $layout .= $i;
             }
           }
+
+          # Step posn is always last or 2nd from last.
           if ($sp) {
             $layout .= $sp;
           }
+
+          # Inner posn is always at end.
           if ($ip) {
             $layout .= $ip;
           }

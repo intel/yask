@@ -372,12 +372,10 @@ namespace yask {
         }
         virtual yk_grid_ptr
         new_grid(const std::string& name,
-                 const std::string& dim1 = "",
-                 const std::string& dim2 = "",
-                 const std::string& dim3 = "",
-                 const std::string& dim4 = "",
-                 const std::string& dim5 = "",
-                 const std::string& dim6 = "");
+                 const std::initializer_list<std::string>& dims) {
+            std::vector<std::string> dims2(dims);
+            return new_grid(name, dims2);
+        }
 
         virtual std::string get_step_dim_name() const {
             return _dims->_step_dim;

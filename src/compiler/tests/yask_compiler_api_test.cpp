@@ -49,7 +49,7 @@ int main() {
     auto z = soln->new_domain_index("z");
     
     // Create a grid var.
-    auto g1 = soln->new_grid("test_grid", t, x, y, z);
+    auto g1 = soln->new_grid("test_grid", {t, x, y, z});
 
     // Create an equation for the grid.
     yc_node_factory fac;
@@ -60,20 +60,20 @@ int main() {
     auto n2 = fac.new_negate_node(n1);
     cout << n2->format_simple() << endl;
 
-    auto n3 = g1->new_relative_grid_point(0, +1, 0, -2);
+    auto n3 = g1->new_relative_grid_point({0, +1, 0, -2});
     cout << n3->format_simple() << endl;
 
     auto n4a = fac.new_add_node(n2, n3);
     auto n4b = fac.new_add_node(n4a, n1);
     cout << n4b->format_simple() << endl;
 
-    auto n5 = g1->new_relative_grid_point(0, +1, -1, 0);
+    auto n5 = g1->new_relative_grid_point({0, +1, -1, 0});
     cout << n5->format_simple() << endl;
 
     auto n6 = fac.new_multiply_node(n4b, n5);
     cout << n6->format_simple() << endl;
 
-    auto n_lhs = g1->new_relative_grid_point(+1, 0, 0, 0);
+    auto n_lhs = g1->new_relative_grid_point({+1, 0, 0, 0});
     cout << n_lhs->format_simple() << endl;
 
     auto n_eq = fac.new_equation_node(n_lhs, n6);

@@ -397,47 +397,6 @@ namespace yask {
         return nup;
     }
     
-    // Convenience API wrappers w/up to 6 dims.
-    double YkGridBase::get_element(idx_t dim1_index, idx_t dim2_index,
-                                   idx_t dim3_index, idx_t dim4_index,
-                                   idx_t dim5_index, idx_t dim6_index) const {
-        GridIndices idx;
-        int nd = get_num_dims();
-        if (nd >= 1)
-            idx.push_back(dim1_index);
-        if (nd >= 2)
-            idx.push_back(dim2_index);
-        if (nd >= 3)
-            idx.push_back(dim3_index);
-        if (nd >= 4)
-            idx.push_back(dim4_index);
-        if (nd >= 5)
-            idx.push_back(dim5_index);
-        if (nd >= 6)
-            idx.push_back(dim6_index);
-        return get_element(idx);
-    }
-    idx_t YkGridBase::set_element(double val,
-                                  idx_t dim1_index, idx_t dim2_index,
-                                  idx_t dim3_index, idx_t dim4_index,
-                                  idx_t dim5_index, idx_t dim6_index) {
-        GridIndices idx;
-        int nd = get_num_dims();
-        if (nd >= 1)
-            idx.push_back(dim1_index);
-        if (nd >= 2)
-            idx.push_back(dim2_index);
-        if (nd >= 3)
-            idx.push_back(dim3_index);
-        if (nd >= 4)
-            idx.push_back(dim4_index);
-        if (nd >= 5)
-            idx.push_back(dim5_index);
-        if (nd >= 6)
-            idx.push_back(dim6_index);
-        return set_element(val, idx, false);
-    }
-
     idx_t YkGridBase::get_elements_in_slice(void* buffer_ptr,
                                             const GridIndices& first_indices,
                                             const GridIndices& last_indices) const {

@@ -75,33 +75,6 @@ namespace yask {
         return gpp;
     }
 
-    yc_grid_point_node_ptr
-    Grid::new_relative_grid_point(int dim1_offset,
-                                  int dim2_offset,
-                                  int dim3_offset,
-                                  int dim4_offset,
-                                  int dim5_offset,
-                                  int dim6_offset) {
-        std::vector<int> dim_offsets;
-        auto n = _dims.size();
-        if (n >= 1)
-            dim_offsets.push_back(dim1_offset);
-        if (n >= 2)
-            dim_offsets.push_back(dim2_offset);
-        if (n >= 3)
-            dim_offsets.push_back(dim3_offset);
-        if (n >= 4)
-            dim_offsets.push_back(dim4_offset);
-        if (n >= 5)
-            dim_offsets.push_back(dim5_offset);
-        if (n >= 6)
-            dim_offsets.push_back(dim6_offset);
-        if (n >= 7) {
-            cerr << "Error: " << n << "-D grid not supported.\n";
-            exit(1);
-        }
-        return new_relative_grid_point(dim_offsets);
-    }
     vector<string> Grid::get_dim_names() const {
         vector<string> ret;
         for (auto dn : getDims())

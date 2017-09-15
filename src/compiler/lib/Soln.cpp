@@ -53,32 +53,6 @@ namespace yask {
     }
 
     // Stencil-solution APIs.
-    yc_grid_ptr StencilSolution::new_grid(const std::string& name,
-                                          const yc_index_node_ptr dim1,
-                                          const yc_index_node_ptr dim2,
-                                          const yc_index_node_ptr dim3,
-                                          const yc_index_node_ptr dim4,
-                                          const yc_index_node_ptr dim5,
-                                          const yc_index_node_ptr dim6) {
-
-        // Add dims that are not null ptrs.
-        vector<yc_index_node_ptr> dims;
-        if (dim1)
-            dims.push_back(dim1);
-        if (dim2)
-            dims.push_back(dim2);
-        if (dim3)
-            dims.push_back(dim3);
-        if (dim4)
-            dims.push_back(dim4);
-        if (dim5)
-            dims.push_back(dim5);
-        if (dim6)
-            dims.push_back(dim6);
-
-        return new_grid(name, dims);
-    }
-
     void StencilSolution::set_fold_len(const yc_index_node_ptr dim,
                                        int len) {
         auto& fold = _settings._foldOptions;

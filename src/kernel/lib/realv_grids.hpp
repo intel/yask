@@ -271,20 +271,23 @@ namespace yask {
         virtual void set_first_misc_index(const std::string& dim, idx_t size);
 
         virtual void set_all_elements_same(double val) =0;
-        virtual double get_element(idx_t dim1_index=0, idx_t dim2_index=0,
-                                   idx_t dim3_index=0, idx_t dim4_index=0,
-                                   idx_t dim5_index=0, idx_t dim6_index=0) const;
         virtual double get_element(const GridIndices& indices) const;
+        virtual double get_element(const std::initializer_list<idx_t>& indices) const {
+            const GridIndices indices2(indices);
+            return get_element(indices2);
+        }
         virtual idx_t get_elements_in_slice(void* buffer_ptr,
                                             const GridIndices& first_indices,
                                             const GridIndices& last_indices) const;
         virtual idx_t set_element(double val,
-                                  idx_t dim1_index=0, idx_t dim2_index=0,
-                                  idx_t dim3_index=0, idx_t dim4_index=0,
-                                  idx_t dim5_index=0, idx_t dim6_index=0);
-        virtual idx_t set_element(double val,
                                   const GridIndices& indices,
-                                  bool strict_indices);
+                                  bool strict_indices = false);
+        virtual idx_t set_element(double val,
+                                  const std::initializer_list<idx_t>& indices,
+                                  bool strict_indices = false) {
+            const GridIndices indices2(indices);
+            return set_element(val, indices2, strict_indices);
+        }
         virtual idx_t set_elements_in_slice_same(double val,
                                                  const GridIndices& first_indices,
                                                  const GridIndices& last_indices,

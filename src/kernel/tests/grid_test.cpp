@@ -73,10 +73,10 @@ int main(int argc, char** argv) {
 
         double val = 3.14;
         os << "Testing with " << val << endl;
-        g0->set_element(val);
-        g1->set_element(val);
-        auto v0 = g0->get_element();
-        auto v1 = g1->get_element();
+        g0->set_element(val, {});
+        g1->set_element(val, {});
+        auto v0 = g0->get_element({});
+        auto v1 = g1->get_element({});
         assert(v0 == v1);
     }
     

@@ -49,7 +49,7 @@ struct AppSettings : public KernelSettings {
     public:
         ValOption(AppSettings& as) :
                 OptionBase("v",
-                           "Shortcut for '-validate -no-warmup -t 1 -dt 1 -d 64 -b 24'."),
+                           "Shortcut for '-validate -no-warmup -t 1 -dt 1 -d 64 -b 32'."),
                 _as(as) { }
 
         // Set multiple vars.

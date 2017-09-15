@@ -158,8 +158,6 @@ namespace yask {
            "Grid" is a generic term for any n-dimensional variable.  A 0-dim
            grid is a scalar, a 1-dim grid is a vector, a 2-dim grid is a
            matrix, etc.
-           @warning Only grids supported at this time are those with
-           dimensions 'x, y, z,' and 't, x, y, z'.
            @returns Pointer to the new grid. 
         */
         virtual yc_grid_ptr
@@ -170,27 +168,24 @@ namespace yask {
                  /**< [in] Dimensions of the grid.
                   Each dimension is identified by an associated index. */ ) =0;
 
+#ifdef SWIG        
         /// Create an n-dimensional grid variable in the solution.
         /**
            "Grid" is a generic term for any n-dimensional variable.  A 0-dim
            grid is a scalar, a 1-dim grid is a vector, a 2-dim grid is a
-           matrix, etc.  Specify the name of each dimension that is needed
-           via this interface, starting with 'dim1'.
-           @warning Only grids supported at this time are those with
-           dimensions 'x, y, z,' and 't, x, y, z'.
+           matrix, etc.
+           @note This version is not available (or needed) in SWIG-based APIs, e.g., Python.
            @returns Pointer to the new grid. 
         */
         virtual yc_grid_ptr
         new_grid(const std::string& name /**< [in] Unique name of the grid; must be
                                             a valid C++ identifier and unique
                                             across grids. */,
-                 const yc_index_node_ptr dim1 = nullptr /**< [in] 1st dimension. */,
-                 const yc_index_node_ptr dim2 = nullptr /**< [in] 2nd dimension. */,
-                 const yc_index_node_ptr dim3 = nullptr /**< [in] 3rd dimension. */,
-                 const yc_index_node_ptr dim4 = nullptr /**< [in] 4th dimension. */,
-                 const yc_index_node_ptr dim5 = nullptr /**< [in] 5th dimension. */,
-                 const yc_index_node_ptr dim6 = nullptr /**< [in] 6th dimension. */ ) =0;
-
+                 const std::initializer_list<yc_index_node_ptr>& dims
+                 /**< [in] Dimensions of the grid.
+                    Each dimension is identified by an associated index. */ ) =0;
+#endif
+        
         /// Get all the grids in the solution.
         /** @returns Vector containing pointer to all grids. */
         virtual std::vector<yc_grid_ptr>
@@ -338,7 +333,7 @@ namespace yask {
         /** The indices are specified relative to the stencil-evaluation
             index.  Each offset refers to the dimensions defined when the
             grid was created via stencil_solution::new_grid(). 
-            Example: if g = new_grid("heat", "t", "x", "y"), then
+            Example: if g = new_grid("heat", {"t", "x", "y"}), then
             g->new_relative_grid_point(1, -1, 0) refers to heat(t+1, x-1, y)
             for some point t, x, y during stencil evaluation.
             @warning This convenience function can only be used when every
@@ -349,24 +344,22 @@ namespace yask {
         new_relative_grid_point(std::vector<int> dim_offsets
                                 /**< [in] offset from evaluation index in each dim. */ ) =0;
 
+#ifdef SWIG        
         /// Create a reference to a point in a grid.
         /** The indices are specified relative to the stencil-evaluation
             index.  Each offset refers to the dimensions defined when the
             grid was created via stencil_solution::new_grid(). 
-            Example: if g = new_grid("heat", "t", "x", "y"), then
-            g->new_relative_grid_point(1, -1, 0) refers to heat(t+1, x-1, y)
+            Example: if g = new_grid("heat", {"t", "x", "y"}), then
+            g->new_relative_grid_point({1, -1, 0}) refers to heat(t+1, x-1, y)
             for some point t, x, y during stencil evaluation.
             @note Offsets beyond the dimensions in the grid will be ignored.
+            @note This version is not available (or needed) in SWIG-based APIs, e.g., Python.
             @returns Pointer to AST node used to read or write from point in grid. */
         virtual yc_grid_point_node_ptr
-        new_relative_grid_point(int dim1_offset=0 /**< [in] offset from dim1 index. */,
-                                int dim2_offset=0 /**< [in] offset from dim2 index. */,
-                                int dim3_offset=0 /**< [in] offset from dim3 index. */,
-                                int dim4_offset=0 /**< [in] offset from dim4 index. */,
-                                int dim5_offset=0 /**< [in] offset from dim5 index. */,
-                                int dim6_offset=0 /**< [in] offset from dim6 index. */ ) =0;
+        new_relative_grid_point(const std::initializer_list<int>& dim_offsets) = 0;
+#endif
     };
-
+    
     /// Factory to create AST nodes.
     /** @note Grid-point reference nodes are created from a `yc_grid` object
         instead of from this factory. */

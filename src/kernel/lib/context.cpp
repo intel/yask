@@ -66,29 +66,6 @@ namespace yask {
         return _dims->_domain_dims.getDimName(n);
     }
 
-    yk_grid_ptr StencilContext::new_grid(const std::string& name,
-                                         const std::string& dim1,
-                                         const std::string& dim2,
-                                         const std::string& dim3,
-                                         const std::string& dim4,
-                                         const std::string& dim5,
-                                         const std::string& dim6) {
-        GridDimNames dims;
-        if (dim1.length())
-            dims.push_back(dim1);
-        if (dim2.length())
-            dims.push_back(dim2);
-        if (dim3.length())
-            dims.push_back(dim3);
-        if (dim4.length())
-            dims.push_back(dim4);
-        if (dim5.length())
-            dims.push_back(dim5);
-        if (dim6.length())
-            dims.push_back(dim6);
-        return newGrid(name, dims);
-    }
-    
     void StencilContext::share_grid_storage(yk_solution_ptr source) {
         auto sp = dynamic_pointer_cast<StencilContext>(source);
         assert(sp);
