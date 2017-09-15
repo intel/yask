@@ -61,6 +61,7 @@ int main(int argc, char** argv) {
     
     // 0D test.
     {
+        os << "0-D test...\n";
         GridDimNames gdims;
         string name = "test grid";
         YkGridPtr g0 = make_shared<YkElemGrid<Layout_0d, false>>(dims, name, gdims, &osp);
@@ -81,6 +82,7 @@ int main(int argc, char** argv) {
     
     // 3D test.
     {
+        os << "3-D test...\n";
         GridDimNames gdims = {"x", "y", "z"};
         string name = "test grid";
         YkGridPtr g3 = make_shared<YkElemGrid<Layout_321, false>>(dims, name, gdims, &osp);

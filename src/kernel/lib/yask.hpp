@@ -155,7 +155,7 @@ namespace yask {
         static const int max_idxs = MAX_DIMS;
         
     protected:
-        idx_t _idxs[max_idxs] = {0};
+        idx_t _idxs[max_idxs];
         
     public:
         // Ctors.

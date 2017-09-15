@@ -230,5 +230,5 @@ realclean: clean-old
 	$(YK_MAKE) $@
 
 help:
-	$(YC_MAKE) $@
-	$(YK_MAKE) $@
+	@ $(YC_MAKE) $@
+	@ $(YK_MAKE) $@

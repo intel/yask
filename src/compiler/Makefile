@@ -185,8 +185,8 @@ echo-settings:
 
 help:
 	@echo "Example YASK-compiler make commands:"
-	@echo $(MAKE) "-j compiler"
-	@echo $(MAKE) "-j api"
-	@echo $(MAKE) "-j all-tests"
-	@echo $(MAKE) "clean"
-	@echo $(MAKE) "realclean"
+	@echo " $(MAKE) -j compiler"
+	@echo " $(MAKE) -j api"
+	@echo " $(MAKE) -j all-tests"
+	@echo " $(MAKE) clean"
+	@echo " $(MAKE) realclean"

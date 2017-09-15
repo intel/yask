@@ -49,16 +49,16 @@ namespace yask {
         // The following indices have values for all dims in the grid.
         // All values are in units of reals, not underlying elements, if different.
         // Settings for domain dims | non-domain dims.
-        Indices _domains;       // rank domain sizes copied from the solution | alloc size.
-        Indices _pads;          // extra space around domains | zero.
-        Indices _halos;         // space within pads for halo exchange | zero.
-        Indices _offsets;       // offsets of this rank in overall domain | first index.
-        Indices _vec_lens;      // num reals in each elem | one.
-        Indices _allocs;        // actual grid allocation in reals | same.
+        Indices _domains = 0;   // rank domain sizes copied from the solution | alloc size.
+        Indices _pads = 0;      // extra space around domains | zero.
+        Indices _halos = 0;     // space within pads for halo exchange | zero.
+        Indices _offsets = 0;   // offsets of this rank in overall domain | first index.
+        Indices _vec_lens = 1;  // num reals in each elem | one.
+        Indices _allocs = 1;    // actual grid allocation in reals | as domain dims.
 
         // Indices in vectors for sizes that are always vec lens (to avoid division).
-        Indices _vec_pads;
-        Indices _vec_allocs;
+        Indices _vec_pads = 1;
+        Indices _vec_allocs = 1;
         
         // Data has been received from neighbors' halos, if applicable.
         bool _is_updated = false;
@@ -89,7 +89,7 @@ namespace yask {
             // adding a large offset to the t index.  So, t can be negative,
             // but not so much that it would still be negative after adding
             // the offset.  This should not be a practical restriction.
-            t += 0x1000;
+            t += idx_t(0x1000);
             assert(t >= 0);
             return t % tdim;
         }
@@ -125,12 +125,6 @@ namespace yask {
             _ggb(ggb), _dims(dims) {
             assert(ggb);
             assert(dims.get());
-
-            // Init indices.
-            // Most are ok using default of all zeros.
-            _vec_lens.setFromConst(1);
-            _allocs.setFromConst(1);
-            _vec_allocs.setFromConst(1);
         }
         virtual ~YkGridBase() { }
 
@@ -377,15 +371,16 @@ namespace yask {
 #pragma unroll
             for (int i = 0; i < _data.get_num_dims(); i++) {
 
+                // Special handling for 1st index.
+                if (_wrap_1st_idx && i == 0)
+                    adj_idxs[0] = wrap_index(idxs[0], _domains[0]);
+
                 // Adjust for offset and padding.
                 // This gives a 0-based local element index.
-                adj_idxs[i] = idxs[i] - _offsets[i] + _pads[i];
+                else
+                    adj_idxs[i] = idxs[i] - _offsets[i] + _pads[i];
             }
             
-            // Special handling for 1st index.
-            if (_wrap_1st_idx)
-                adj_idxs[0] = wrap_index(idxs[0], _domains[0]);
-
 #ifdef TRACE_MEM
             if (checkBounds)
                 _data.get_ostr() << " => " << _data.get_index(adj_idxs);
@@ -488,18 +483,23 @@ namespace yask {
 #pragma unroll
             for (int i = 0; i < _data.get_num_dims(); i++) {
 
-                // Adjust for offset and padding.
-                // This gives a 0-based local element index.
-                idx_t adj_idx = idxs[i] - _offsets[i] + _pads[i];
+                // Special handling for 1st index.
+                if (_wrap_1st_idx && i == 0) {
+                    vec_idxs[0] = wrap_index(idxs[0], _domains[0]);
+                    elem_ofs[0] = 0;
+                }
 
-                // Get vector index and offset.
-                vec_idxs[i] = adj_idx / _vec_lens[i];
-                elem_ofs[i] = adj_idx % _vec_lens[i];
+                else {
+
+                    // Adjust for offset and padding.
+                    // This gives a 0-based local element index.
+                    idx_t adj_idx = idxs[i] - _offsets[i] + _pads[i];
+                    
+                    // Get vector index and offset.
+                    vec_idxs[i] = adj_idx / _vec_lens[i];
+                    elem_ofs[i] = adj_idx % _vec_lens[i];
+                }
             }
-
-            // Special handling for 1st index.
-            if (_wrap_1st_idx)
-                vec_idxs[0] = wrap_index(idxs[0], _domains[0]);
 
             // Get 1D element index into vector.
             auto i = getElemIndexInVec(elem_ofs);
@@ -541,18 +541,18 @@ namespace yask {
 #endif
         
             Indices adj_idxs;
-            //#pragma vector unroll
-#pragma omp simd
+#pragma unroll
             for (int i = 0; i < _data.get_num_dims(); i++) {
+
+                // Special handling for 1st index.
+                if (_wrap_1st_idx && i == 0)
+                    adj_idxs[0] = wrap_index(idxs[0], _domains[0]);
 
                 // Adjust for padding.
                 // This gives a 0-based local *vector* index.
-                adj_idxs[i] = idxs[i] + _vec_pads[i];
+                else
+                    adj_idxs[i] = idxs[i] + _vec_pads[i];
             }
-
-            // Special handling for 1st index.
-            if (_wrap_1st_idx)
-                adj_idxs[0] = wrap_index(idxs[0], _domains[0]);
 
 #ifdef TRACE_MEM
             if (checkBounds)

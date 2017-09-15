@@ -91,10 +91,17 @@ namespace yask {
                           bool domain_ok,
                           bool misc_ok) const;
 
-        // Get linear index into a vector given 'elem_ofs', the element offsets
-        // from a grid's dims.
-        idx_t getElemIndexInVec(const IdxTuple& elem_ofs) const;
+        // Get linear index into a vector given 'elem_ofs', which are
+        // element offsets that may include other dimensions.
+        idx_t getElemIndexInVec(const IdxTuple& elem_ofs) const {
+            
+            // Use fold layout to find element index.
+            // TODO: make this more efficient.
+            auto i = _fold_pts.layout(elem_ofs, false);
+            return i;
+        }
     };
+        
     typedef std::shared_ptr<Dims> DimsPtr;
     
     // MPI neighbor info.

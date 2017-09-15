@@ -578,7 +578,7 @@ namespace yask {
             // update halo info in grids.
             auto& outPts = pv.getOutputPts().at(ee.get());
             auto& inPts = pv.getInputPts().at(ee.get());
-            auto& stepDim = _dims->_stepDim;
+            //auto& stepDim = _dims->_stepDim;
 
             // Output points.
             for (auto* op : outPts) {

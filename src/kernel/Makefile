@@ -397,6 +397,7 @@ YK_LFLAGS	:=	-lrt -Wl,-rpath=$(LIB_DIR) -L$(LIB_DIR) -l$(YK_BASE2)
 # Tools.
 PYTHON		:=	python
 SWIG		:=	swig
+CXX_PREFIX	:=	time
 
 # Find include path needed for python interface.
 # NB: constructing string inside print() to work for python 2 or 3.
@@ -499,13 +500,16 @@ kernel:	$(YK_EXEC) $(MAKE_REPORT_FILE)
 	@echo "Run command:" $(BIN_DIR)"/yask.sh -stencil" $(stencil) "-arch" $(arch) "[options]"
 
 %.$(YK_TAG).o: %.cpp $(YK_GEN_HEADERS) $(YK_INC_GLOB)
-	time $(YK_CXX) $(YK_CXXFLAGS) -fPIC -c -o $@ $<
+	$(CXX_PREFIX) $(YK_CXX) $(YK_CXXFLAGS) -fPIC -c -o $@ $<
+	ls -l $@
 
 $(YK_LIB): $(YK_OBJS)
-	time $(YK_CXX) $(YK_CXXFLAGS) -shared -o $@ $^
+	$(CXX_PREFIX) $(YK_CXX) $(YK_CXXFLAGS) -shared -o $@ $^
+	ls -l $@
 
 $(YK_EXEC): yask_main.cpp $(YK_LIB)
-	time $(YK_LD) $(YK_CXXFLAGS) $< $(YK_LFLAGS) -o $@
+	$(CXX_PREFIX) $(YK_LD) $(YK_CXXFLAGS) $< $(YK_LFLAGS) -o $@
+	ls -l $@
 
 $(MAKE_REPORT_FILE): $(YK_EXEC)
 	@echo MAKEFLAGS="\"$(MAKEFLAGS)"\" > $@ 2>&1
@@ -759,24 +763,24 @@ echo-settings:
 code-stats:
 	@echo
 	@echo "Code stats for stencil computation:"
-	$(GET_LOOP_STATS) -t=yask_stencil_code *.s
+	$(GET_LOOP_STATS) -t=$(YK_CODE_FILE) factory.s
 
 help:
 	@echo "Example performance builds of kernel cmd-line tool:"
-	@echo "% $(MAKE) clean; $(MAKE) -j arch=knl stencil=iso3dfd"
-	@echo "% $(MAKE) clean; $(MAKE) -j arch=knl stencil=awp"
-	@echo "% $(MAKE) clean; $(MAKE) -j arch=skx stencil=3axis fold='x=1,y=2,z=4' cluster='x=2'"
-	@echo "% $(MAKE) clean; $(MAKE) -j arch=hsw stencil=3axis radius=4
+	@echo " $(MAKE) clean; $(MAKE) -j arch=knl stencil=iso3dfd"
+	@echo " $(MAKE) clean; $(MAKE) -j arch=knl stencil=awp"
+	@echo " $(MAKE) clean; $(MAKE) -j arch=skx stencil=3axis fold='x=1,y=2,z=4' cluster='x=2'"
+	@echo " $(MAKE) clean; $(MAKE) -j arch=hsw stencil=3axis radius=4"
 	@echo " "
 	@echo "Example performance builds of kernel API for C++ and Python apps:"
-	@echo "% $(MAKE) clean; $(MAKE) -j arch=knl stencil=iso3dfd yk-api"
-	@echo "% $(MAKE) clean; $(MAKE) -j arch=skx stencil=awp yk-api"
+	@echo " $(MAKE) clean; $(MAKE) -j arch=knl stencil=iso3dfd yk-api"
+	@echo " $(MAKE) clean; $(MAKE) -j arch=skx stencil=awp yk-api"
 	@echo " "
 	@echo "Example debug builds of kernel cmd-line tool:"
-	@echo "% $(MAKE) clean; $(MAKE) -j stencil=iso3dfd mpi=0 OMPFLAGS='-qopenmp-stubs' YK_CXXOPT='-O0' EXTRA_MACROS='DEBUG'"
-	@echo "% $(MAKE) clean; $(MAKE) -j arch=intel64 stencil=3axis mpi=0 OMPFLAGS='-qopenmp-stubs' YK_CXXOPT='-O0' EXTRA_MACROS='DEBUG' model_cache=2"
-	@echo "% $(MAKE) clean; $(MAKE) -j arch=intel64 stencil=3axis radius=0 fold='x=1,y=1,z=1' mpi=0 YK_CXX=g++ OMPFLAGS='' YK_CXXOPT='-O0' EXTRA_MACROS='DEBUG TRACE TRACE_MEM TRACE_INTRINSICS'"
+	@echo " $(MAKE) clean; $(MAKE) -j stencil=iso3dfd mpi=0 OMPFLAGS='-qopenmp-stubs' YK_CXXOPT='-O0' EXTRA_MACROS='DEBUG'"
+	@echo " $(MAKE) clean; $(MAKE) -j arch=intel64 stencil=3axis mpi=0 OMPFLAGS='-qopenmp-stubs' YK_CXXOPT='-O0' EXTRA_MACROS='DEBUG' model_cache=2"
+	@echo " $(MAKE) clean; $(MAKE) -j arch=intel64 stencil=3axis radius=0 fold='x=1,y=1,z=1' mpi=0 YK_CXX=g++ OMPFLAGS='' YK_CXXOPT='-O0' EXTRA_MACROS='DEBUG TRACE TRACE_MEM TRACE_INTRINSICS'"
 	@echo " "
 	@echo "Example builds with testing:"
-	@echo "make -j all"
-	@echo "make -j all YK_CXX=g++ YK_CXXOPT=-O2 mpi=0"
+	@echo " $(MAKE) -j all"
+	@echo " $(MAKE) -j all YK_CXX=g++ YK_CXXOPT=-O2 mpi=0"

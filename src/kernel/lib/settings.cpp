@@ -58,21 +58,6 @@ namespace yask {
         }
     }
 
-    // Get linear index into a vector given 'elem_ofs', the element offsets
-    // from a grid's dims.  TODO: make this much more efficient by creating a
-    // custom function from the stencil compiler.
-    idx_t Dims::getElemIndexInVec(const IdxTuple& elem_ofs) const {
-
-        const IdxTuple& folds = _fold_pts; // req'd fold dims.
-        IdxTuple fofs = folds;
-        fofs.setValsSame(0);
-        fofs.setVals(elem_ofs, false); // get only fold offsets from elem_ofs.
-            
-        // Use fold layout to find element index.
-        auto i = folds.layout(fofs, false);
-        return i;
-    }
-    
     // APIs.
     // See yask_kernel_api.hpp.
     yk_env_ptr yk_factory::new_env() const {
