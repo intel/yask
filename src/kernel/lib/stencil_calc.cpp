@@ -138,6 +138,7 @@ namespace yask {
                 norm_sub_block_idxs.end[i] = nend;
 
                 // Step sizes are based on cluster lengths (in vector units).
+                // The step in the inner loop is hard-coded in the generated code.
                 norm_sub_block_idxs.step[i] = dims->_cluster_mults[dname];
             }
 
@@ -168,12 +169,11 @@ namespace yask {
         // Need all starting indices.
         const Indices& start_idxs = loop_idxs.start;
 
-        // Need stop & step only for inner loop.
+        // Need stop for inner loop only.
         idx_t stop_inner = loop_idxs.stop[_inner_posn];
-        idx_t step_inner = loop_idxs.step[_inner_posn];
 
         // Call code from stencil compiler.
-        calc_loop_of_clusters(start_idxs, stop_inner, step_inner);
+        calc_loop_of_clusters(start_idxs, stop_inner);
     }
 
     // Set the bounding-box vars for this eq group in this rank.

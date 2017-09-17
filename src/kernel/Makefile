@@ -344,7 +344,7 @@ COMM_SRC_BASES	:=	$(addprefix $(COMM_DIR)/,$(COMM_SRC_NAMES))
 YK_SWIG_DIR	:=	./swig
 YK_GEN_DIR	:=	./gen
 YK_LIB_DIR	:=	./lib
-YK_SRC_NAMES	:=	factory generic_grids realv_grids utils settings context stencil_calc
+YK_SRC_NAMES	:=	factory new_grid generic_grids realv_grids utils settings context stencil_calc
 YK_SRC_BASES	:=	$(addprefix $(YK_LIB_DIR)/,$(YK_SRC_NAMES))
 YK_OBJS		:=	$(addsuffix .$(YK_TAG).o,$(YK_SRC_BASES) $(COMM_SRC_BASES))
 YK_MACRO_FILE	:=	$(YK_GEN_DIR)/yask_macros.hpp
@@ -501,15 +501,15 @@ kernel:	$(YK_EXEC) $(MAKE_REPORT_FILE)
 
 %.$(YK_TAG).o: %.cpp $(YK_GEN_HEADERS) $(YK_INC_GLOB)
 	$(CXX_PREFIX) $(YK_CXX) $(YK_CXXFLAGS) -fPIC -c -o $@ $<
-	ls -l $@
+	@ls -l $@
 
 $(YK_LIB): $(YK_OBJS)
 	$(CXX_PREFIX) $(YK_CXX) $(YK_CXXFLAGS) -shared -o $@ $^
-	ls -l $@
+	@ls -l $@
 
 $(YK_EXEC): yask_main.cpp $(YK_LIB)
 	$(CXX_PREFIX) $(YK_LD) $(YK_CXXFLAGS) $< $(YK_LFLAGS) -o $@
-	ls -l $@
+	@ls -l $@
 
 $(MAKE_REPORT_FILE): $(YK_EXEC)
 	@echo MAKEFLAGS="\"$(MAKEFLAGS)"\" > $@ 2>&1
@@ -554,6 +554,9 @@ $(YK_GEN_DIR)/yask_layouts.hpp: $(GEN_LAYOUTS)
 $(YK_GEN_DIR)/yask_grid_code.hpp: $(GEN_LAYOUTS)
 	$(YK_MK_GEN_DIR)
 	$< -g $(max_dims) > $@
+	@- gindent -fca $@ || \
+	  indent -fca $@ ||   \
+	  echo "note:" $@ "is not properly indented because no indent program was found."
 
 # Extract the number of stencil dims from the compiler output.
 # Use this to create an option to pass to the loop generator script.

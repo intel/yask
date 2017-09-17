@@ -1152,6 +1152,13 @@ sub processCode($) {
     die "error: ".(scalar @loopStack)." loop(s) not closed.\n"
         if @loopStack;
 
+    # Back matter.
+    push @code,
+        "}",
+        "#undef OMP_PRAGMA_PREFIX",
+        "#undef OMP_PRAGMA_SUFFIX",
+        "// End of generated code.";
+    
     # indent program avail?
     my $indent = 'indent';
     if (system("which $indent &> /dev/null")) {
@@ -1189,8 +1196,6 @@ sub processCode($) {
         print OUT "\n" if $line =~ m=^\s*//=; # blank line before comment.
         print OUT " $line\n";
     }
-    print OUT "}\n",
-        "// End of generated code.\n";
     close OUT;
     print "info: output in '$OPT{output}'.\n";
 }

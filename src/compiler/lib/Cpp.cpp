@@ -905,7 +905,7 @@ namespace yask {
                     string istep = "step_" + idim;
                     os << endl << " // Calculate a series of clusters iterating in '" << idim <<
                         "' direction from " << _dims._stencilDims.makeDimStr() <<
-                        " indices in 'idxs' to '" << istop << "' by '" << istep << "'.\n" <<
+                        " indices in 'idxs' to '" << istop << "'.\n" <<
                         " // Each cluster calculates '" << _dims._clusterPts.makeDimValStr(" * ") <<
                         "' points containing " << _dims._clusterMults.product() << " '" <<
                         _dims._fold.makeDimValStr(" * ") << "' vector(s).\n"
@@ -917,9 +917,10 @@ namespace yask {
                         " // There are approximately " << (stats.getNumOps() * numResults) <<
                         " FP operation(s) per loop iteration.\n"
                         " void calc_loop_of_clusters(const Indices& idxs, idx_t " <<
-                        istop << ", idx_t " << istep << ") {\n";
+                        istop << ") {\n";
                     printIndices(os);
                     os << " idx_t " << istart << " = " << idim << ";\n";
+                    os << " idx_t " << istep << " = CMULT_" << allCaps(idim) << "; // number of vectors.\n";
 
                     // C++ vector print assistant.
                     CppVecPrintHelper* vp = newCppVecPrintHelper(vv, cv);

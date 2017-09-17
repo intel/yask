@@ -277,10 +277,8 @@ namespace yask {
                 if (!within_tolerance(((T*)_elems)[ai], ((T*)p->_elems)[ai], ep))
                     errs++;
             }
-
             return errs;
         }
-        
     };
 
     // A generic n-D grid of elements of type T.

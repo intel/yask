@@ -271,17 +271,20 @@ END
   # grid-creation code.
   elsif ($opt eq '-g') {
 
+    print " else if (ndims == $n) {\n";
+    
     for my $fold (0 .. 1) {
       my $type = $fold ? "YkVecGrid" : "YkElemGrid";
       my $ftest = $fold ? "do_fold" : "!do_fold";
-
+      print " if ($ftest) {\n";
+      
       # Positions are 0 if they don't exist.
       # If they do,
       # - step posn is always 1st.
       # - inner posn can be anywhere.
 
       for my $sp (0 .. 1) {
-        my $wrap = $sp ? "true /* wrap step dim */" : "false /* no wrap */";
+        my $wrap = $sp ? "true" : "false";
 
         for my $ip (0 .. $n) {
 
@@ -308,11 +311,13 @@ END
             $layout .= $ip;
           }
 
-          print " else if (ndims == $n && $ftest && step_posn == $sp && inner_posn == $ip)\n",
+          print " if (step_posn == $sp && inner_posn == $ip)\n",
             "  gp = make_shared<$type<$layout, $wrap>>(_dims, name, dims, &_ostr);\n";
         }
       }
+      print " } // $ftest\n";
     }
+    print " } // ndims == $n\n";
   }
   
   # just list permutes.

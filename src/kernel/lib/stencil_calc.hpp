@@ -139,8 +139,7 @@ namespace yask {
         // Indices must be rank-relative.
         // Indices must be normalized, i.e., already divided by VLEN_*.
         virtual void
-        calc_loop_of_clusters(const Indices& start_idxs,
-                              idx_t stop_inner, idx_t step_inner) =0;
+        calc_loop_of_clusters(const Indices& start_idxs, idx_t stop_inner) =0;
 
         // Calculate a series of cluster results within an inner loop.
         // The 'loop_idxs' must specify a range only in the inner dim.

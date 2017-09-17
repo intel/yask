@@ -49,16 +49,16 @@ namespace yask {
         // The following indices have values for all dims in the grid.
         // All values are in units of reals, not underlying elements, if different.
         // Settings for domain dims | non-domain dims.
-        Indices _domains = 0;   // rank domain sizes copied from the solution | alloc size.
-        Indices _pads = 0;      // extra space around domains | zero.
-        Indices _halos = 0;     // space within pads for halo exchange | zero.
-        Indices _offsets = 0;   // offsets of this rank in overall domain | first index.
-        Indices _vec_lens = 1;  // num reals in each elem | one.
-        Indices _allocs = 1;    // actual grid allocation in reals | as domain dims.
+        Indices _domains;   // rank domain sizes copied from the solution | alloc size.
+        Indices _pads;      // extra space around domains | zero.
+        Indices _halos;     // space within pads for halo exchange | zero.
+        Indices _offsets;   // offsets of this rank in overall domain | first index.
+        Indices _vec_lens;  // num reals in each elem | one.
+        Indices _allocs;    // actual grid allocation in reals | as domain dims.
 
         // Indices in vectors for sizes that are always vec lens (to avoid division).
-        Indices _vec_pads = 1;
-        Indices _vec_allocs = 1;
+        Indices _vec_pads;
+        Indices _vec_allocs;
         
         // Data has been received from neighbors' halos, if applicable.
         bool _is_updated = false;
@@ -125,6 +125,17 @@ namespace yask {
             _ggb(ggb), _dims(dims) {
             assert(ggb);
             assert(dims.get());
+
+            // Init the Indices.
+            // (In-place initializers triger icc failure.)
+            _domains = 0;
+            _pads = 0;
+            _halos = 0;
+            _offsets = 0;
+            _vec_lens = 1;
+            _allocs = 1;
+            _vec_pads = 1;
+            _vec_allocs = 1;
         }
         virtual ~YkGridBase() { }
 

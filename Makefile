@@ -188,6 +188,9 @@ api-tests:
 yc-and-yk-test:
 	$(YK_MAKE) $@
 
+code-stats:
+	$(YK_MAKE) $@
+
 all-tests: compiler
 	$(YK_MAKE) $@
 	$(MAKE) api-tests
