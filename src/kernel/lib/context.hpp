@@ -332,6 +332,12 @@ namespace yask {
         // Set the bounding-box around all eq groups.
         virtual void find_bounding_boxes();
 
+        // Make a new grid iff its dims match any in the stencil.
+        // Returns pointer to the new grid or nullptr if no match.
+        virtual YkGridPtr newStencilGrid (const std::string & name,
+                                          const GridDimNames & dims) =0;
+
+        // Make new grids.
         virtual YkGridPtr newGrid(const std::string& name,
                                   const std::vector<std::string>& dims,
                                   bool is_visible = true);

@@ -271,86 +271,30 @@ END
   # grid-creation code.
   elsif ($opt eq '-g') {
 
-    print " else if (ndims == $n) {\n";
+    # Make type name.
+    my $layout = "Layout_" . join('', 1 .. $n);
+
+    for my $w (0 .. 1) {
+      my $wrap = $w ? "true" : "false";
     
-    for my $fold (0 .. 1) {
-      my $type = $fold ? "YkVecGrid" : "YkElemGrid";
-      my $ftest = $fold ? "do_fold" : "!do_fold";
-      print " if ($ftest) {\n";
-      
-      # Positions are 0 if they don't exist.
-      # If they do,
-      # - step posn is always 1st.
-      # - inner posn can be anywhere.
-
-      for my $sp (0 .. 1) {
-        my $wrap = $sp ? "true" : "false";
-
-        for my $ip (0 .. $n) {
-
-          # can't have step and inner at same posn.
-          next if $sp && $ip && $sp == $ip;
-
-          # Make type name.
-          my $layout = "Layout_";
-          for my $i (1 .. $n) {
-
-            # Add step and inner ones below.
-            if ($i != $sp && $i != $ip) {
-              $layout .= $i;
-            }
-          }
-
-          # Step posn is always last or 2nd from last.
-          if ($sp) {
-            $layout .= $sp;
-          }
-
-          # Inner posn is always at end.
-          if ($ip) {
-            $layout .= $ip;
-          }
-
-          print " if (step_posn == $sp && inner_posn == $ip)\n",
-            "  gp = make_shared<$type<$layout, $wrap>>(_dims, name, dims, &_ostr);\n";
-        }
-      }
-      print " } // $ftest\n";
+      # Creation.
+      print " else if (ndims == $n && do_wrap == $wrap)\n",
+        "  gp = make_shared<YkElemGrid<$layout, $wrap>>(_dims, name, dims, &_ostr);\n";
     }
-    print " } // ndims == $n\n";
   }
   
   # just list permutes.
   elsif ($opt eq '-p') {
 
-    print "# Permutations for $n dimensions.\n";
+    my @strs;
+    permute {
+      my @p = @_;
+      my $ns = join('', @p);
+      push @strs, "'$ns'";
+    } @a;
 
-    for my $i (0..1) {
-      my @b;
-      if ($i == 0) {
-        @b = @a;
-      } else {
-        @b = map { my $b = $_;
-                   if (@a == 4) {
-                     $b =~ tr/1234/nxyz/;
-                   } elsif (@a == 3) {
-                     $b =~ tr/123/xyz/;
-                   } elsif (@a == 2) {
-                     $b =~ tr/12/xy/;
-                   } else {
-                     $b =~ tr/1/x/;
-                   }
-                   $b } @a;
-      }
-      
-      print "(";
-      permute {
-        my @p = @_;
-        my $ns = join('', @p);
-        print "'$ns', ";
-      } @b;
-      print ")\n";
-    }
+    print "\n# Permutations for $n dimensions.\n",
+      "my \@perm$n = (", join(', ', @strs), ");\n";
   }
 
   # bad option.

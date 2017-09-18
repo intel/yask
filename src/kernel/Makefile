@@ -199,8 +199,6 @@ prefetch		?=	prefetch(L2)
 def_thread_divisor	?=	1
 def_block_threads	?=	2
 real_bytes		?=	4
-layout_xyz		?=	Layout_123
-layout_txyz		?=	Layout_2314
 def_rank_args		?=	-d 128
 def_block_args		?=	-b 64
 def_pad_args		?=	-ep 1
@@ -407,8 +405,6 @@ RUN_PYTHON	:= 	env PYTHONPATH=$(LIB_DIR) $(PYTHON)
 
 # Set MACROS based on individual makefile vars.
 # MACROS and EXTRA_MACROS will be written to a header file.
-MACROS		+=	LAYOUT_XYZ=$(layout_xyz)
-MACROS		+=	LAYOUT_TXYZ=$(layout_txyz)
 MACROS		+=	PFDL1=$(pfd_l1) PFDL2=$(pfd_l2)
 MACROS		+=	MAX_DIMS=$(max_dims)
 ifeq ($(streaming_stores),1)
@@ -542,21 +538,18 @@ $(YK_GEN_DIR)/yask_layout_macros.hpp: $(GEN_LAYOUTS)
 	$< -m $(max_dims) > $@
 	@- gindent -fca $@ || \
 	  indent -fca $@ ||   \
-	  echo "note:" $@ "is not properly indented because no indent program was found."
+	  echo "note:" $@ "is not properly indented because indent program failed or was not found."
 
 $(YK_GEN_DIR)/yask_layouts.hpp: $(GEN_LAYOUTS)
 	$(YK_MK_GEN_DIR)
 	$< -d $(max_dims) > $@
 	@- gindent -fca $@ || \
 	  indent -fca $@ ||   \
-	  echo "note:" $@ "is not properly indented because no indent program was found."
+	  echo "note:" $@ "is not properly indented because indent program failed or was not found."
 
 $(YK_GEN_DIR)/yask_grid_code.hpp: $(GEN_LAYOUTS)
 	$(YK_MK_GEN_DIR)
 	$< -g $(max_dims) > $@
-	@- gindent -fca $@ || \
-	  indent -fca $@ ||   \
-	  echo "note:" $@ "is not properly indented because no indent program was found."
 
 # Extract the number of stencil dims from the compiler output.
 # Use this to create an option to pass to the loop generator script.
@@ -716,8 +709,6 @@ echo-settings:
 	@echo cluster=$(cluster)
 	@echo radius=$(radius)
 	@echo real_bytes=$(real_bytes)
-	@echo layout_xyz=$(layout_xyz)
-	@echo layout_txyz=$(layout_txyz)
 	@echo pfd_l1=$(pfd_l1)
 	@echo pfd_l2=$(pfd_l2)
 	@echo streaming_stores=$(streaming_stores)

@@ -250,8 +250,12 @@ namespace yask {
                                const string& fname,
                                bool use_template = false);
 
-        // Print YASK macros.
+        // Print pieces of YASK output.
         virtual void printMacros(ostream& os);
+        virtual void printData(ostream& os);
+        virtual void printEqGroups(ostream& os);
+        virtual void printContext(ostream& os);
+        
         
     public:
         YASKCppPrinter(StencilSolution& stencil,

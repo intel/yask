@@ -318,4 +318,33 @@ namespace yask {
         oev.swap(nev);
     }
 
+    // TODO: fix this old code and make it available as an output.
+#if 0
+    // Print stats for various folding options.
+    if (vlenForStats) {
+        string separator(",");
+        VecInfoVisitor::printStatsHeader(cout, separator);
+
+        // Loop through all grids.
+        for (auto gp : grids) {
+
+            // Loop through possible folds of given length.
+            for (int xlen = vlenForStats; xlen > 0; xlen--) {
+                for (int ylen = vlenForStats / xlen; ylen > 0; ylen--) {
+                    int zlen = vlenForStats / xlen / ylen;
+                    if (vlenForStats == xlen * ylen * zlen) {
+                        
+                        // Create vectors needed to implement RHS.
+                        VecInfoVisitor vv(xlen, ylen, zlen);
+                        gp->visitExprs(&vv);
+                        
+                        // Print stats.
+                        vv.printStats(cout, gp->getName(), separator);
+                    }
+                }
+            }
+        }
+    }
+#endif
+
 } // namespace yask.
