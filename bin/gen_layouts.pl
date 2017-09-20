@@ -47,9 +47,7 @@ use lib dirname($0)."/../lib";
 print "// Automatically generated; do not edit.\n\n" if $opt ne '-p';
 
 if ($opt eq '-d') {
-  print "#ifndef LAYOUTS_H\n".
-    "#define LAYOUTS_H\n".
-    "namespace yask {\n";
+  print "#pragma once\n";
   print <<"END";
 
  // Layout base class.
@@ -304,7 +302,3 @@ END
 
 }
 
-if ($opt eq '-d') {
-  print "} // namespace yask.\n".
-    "#endif\n";
-}

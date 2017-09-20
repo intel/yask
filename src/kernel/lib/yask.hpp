@@ -199,7 +199,6 @@ extern yask::Cache cache_model;
 
 #include "tuple.hpp"
 #include "settings.hpp"
-#include "yask_layouts.hpp"
 #include "generic_grids.hpp"
 #include "realv_grids.hpp"
 

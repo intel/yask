@@ -522,9 +522,9 @@ namespace yask {
 
             // Loop thru dims.
             int startDim = _firstInner ? 0 : size()-1;
-            int beyondLastDim = _firstInner ? size() : -1;
+            int endDim = _firstInner ? size() : -1;
             int stepDim = _firstInner ? 1 : -1;
-            for (int di = startDim; di != beyondLastDim; di += stepDim) {
+            for (int di = startDim; di != endDim; di += stepDim) {
                 auto& i = _q.at(di);
                 auto& dim = i.getName();
                 size_t dsize = size_t(i.getVal());
@@ -554,9 +554,9 @@ namespace yask {
             
             // Loop thru dims.
             int startDim = _firstInner ? 0 : size()-1;
-            int beyondLastDim = _firstInner ? size() : -1;
+            int endDim = _firstInner ? size() : -1;
             int stepDim = _firstInner ? 1 : -1;
-            for (int di = startDim; di != beyondLastDim; di += stepDim) {
+            for (int di = startDim; di != endDim; di += stepDim) {
                 auto& i = _q.at(di);
                 //auto& dim = i.getName();
                 size_t dsize = size_t(i.getVal());

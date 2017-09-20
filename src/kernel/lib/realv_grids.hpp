@@ -425,6 +425,9 @@ namespace yask {
         typedef GenericGrid<real_vec_t, LayoutFn> _grid_type;
         _grid_type _data;
 
+        // Positions of grid dims in vector fold dims.
+        Indices _vec_fold_posns;
+
         // Share data from source grid.
         virtual bool share_data(YkGridBase* src) {
             return _share_data<_grid_type>(src);
@@ -439,12 +442,24 @@ namespace yask {
             _data(name, dimNames, ostr) {
 
             // Init vec sizes.
+            // For each dim in the grid, use the number of vector
+            // fold points or 1 if not set.
             for (size_t i = 0; i < dimNames.size(); i++) {
                 auto& dname = dimNames.at(i);
-                auto* p = dims->_fold_pts.lookup(dname);
+                auto* p = dims->_vec_fold_pts.lookup(dname);
                 idx_t dval = p ? *p : 1;
                 _vec_lens[i] = dval;
                 _vec_allocs[i] = dval;
+            }
+
+            // Init grid positions of fold dims.
+            assert(dims->_vec_fold_pts.getNumDims() == NUM_VEC_FOLD_DIMS);
+            for (int i = 0; i < NUM_VEC_FOLD_DIMS; i++) {
+                auto& fdim = dims->_vec_fold_pts.getDimName(i);
+                int j = get_dim_posn(fdim, true,
+                                     "internal error: folded grid missing folded dim");
+                assert(j >= 0);
+                _vec_fold_posns[i] = j;
             }
         }
         
@@ -475,15 +490,6 @@ namespace yask {
             _data.set_elems_in_seq(seedv);
         }
   
-        // Get linear index into a vector given 'elem_ofs', the
-        // element offsets in every grid dim.
-        virtual idx_t getElemIndexInVec(const Indices& elem_ofs) const {
-            IdxTuple eofs = get_allocs(); // get dims for this grid.
-            elem_ofs.setTupleVals(eofs);  // set vals from elem_ofs.
-
-            return _dims->getElemIndexInVec(eofs);
-        }
-        
         // Get a pointer to given element.
         virtual const real_t* getElemPtr(const Indices& idxs,
                                          bool checkBounds=true) const final {
@@ -515,8 +521,24 @@ namespace yask {
                 }
             }
 
+            // Get only the vectorized fold offsets.
+            Indices fold_ofs;
+#pragma unroll
+            for (int i = 0; i < NUM_VEC_FOLD_DIMS; i++) {
+                int j = _vec_fold_posns[i];
+                fold_ofs[i] = elem_ofs[j];
+            }
+            
             // Get 1D element index into vector.
-            auto i = getElemIndexInVec(elem_ofs);
+            auto i = _dims->getElemIndexInVec(fold_ofs);
+
+#ifdef DEBUG_LAYOUT
+            // Compare to more explicit offset extraction.
+            IdxTuple eofs = get_allocs(); // get dims for this grid.
+            elem_ofs.setTupleVals(eofs);  // set vals from elem_ofs.
+            auto i2 = getElemIndexInVec(eofs);
+            assert(i == i2);
+#endif
 
 #ifdef TRACE_MEM
             if (checkBounds)

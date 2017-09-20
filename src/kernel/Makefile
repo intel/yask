@@ -326,11 +326,13 @@ YK_MODULE	:=	$(YK_BASE)
 YK_TAG		:=	$(stencil).$(arch)
 YK_BASE2	:=	$(YK_BASE).$(YK_TAG)
 YK_EXEC		:=	$(BIN_DIR)/$(YK_BASE2).exe
-YK_API_TEST_EXEC :=	$(BIN_DIR)/$(YK_BASE)_api_test.exe
-YK_GRID_TEST_EXEC :=	$(BIN_DIR)/$(YK_BASE)_grid_test.exe
 YK_LIB		:=	$(LIB_DIR)/lib$(YK_BASE2).so
 YK_PY_LIB	:=	$(LIB_DIR)/_$(YK_MODULE).so
 YK_PY_MOD	:=	$(LIB_DIR)/$(YK_MODULE).py
+YK_API_TEST_EXEC :=	$(BIN_DIR)/$(YK_BASE)_api_test.exe
+YK_GRID_TEST_EXEC :=	$(BIN_DIR)/$(YK_BASE)_grid_test.exe
+YK_TUPLE_TEST_EXEC :=	$(BIN_DIR)/$(YK_BASE)_tuple_test.exe
+
 MAKE_REPORT_FILE:=	make-report.$(YK_TAG).txt
 
 # Common source.
@@ -594,13 +596,18 @@ $(YK_SWIG_DIR)/yask_kernel_api_wrap.o: $(YK_SWIG_DIR)/yask_kernel_api_wrap.cpp
 $(YK_PY_LIB): $(YK_OBJS) $(YK_SWIG_DIR)/yask_kernel_api_wrap.o
 	$(YK_CXX) $(YK_CXXFLAGS) -shared -o $@ $^
 
+# Simple tests
+
+$(YK_GRID_TEST_EXEC): ./tests/grid_test.cpp $(YK_LIB)
+	$(YK_CXX) $(YK_CXXFLAGS) $< $(YK_LFLAGS) -o $@
+
+$(YK_TUPLE_TEST_EXEC): ./tests/tuple_test.cpp $(YK_LIB)
+	$(YK_CXX) $(YK_CXXFLAGS) $< $(YK_LFLAGS) -o $@
+
 #### API tests.
 
 # Build C++ kernel tests.
 $(YK_API_TEST_EXEC): ./tests/yask_kernel_api_test.cpp $(YK_LIB)
-	$(YK_CXX) $(YK_CXXFLAGS) $< $(YK_LFLAGS) -o $@
-
-$(YK_GRID_TEST_EXEC): ./tests/grid_test.cpp $(YK_LIB)
 	$(YK_CXX) $(YK_CXXFLAGS) $< $(YK_LFLAGS) -o $@
 
 # Run C++ kernel tests.
@@ -610,6 +617,10 @@ cxx-yk-api-test: $(YK_API_TEST_EXEC)
 
 cxx-yk-grid-test: $(YK_GRID_TEST_EXEC)
 	@echo '*** Running the C++ YASK grid test...'
+	$<
+
+cxx-yk-tuple-test: $(YK_TUPLE_TEST_EXEC)
+	@echo '*** Running the C++ YASK tuple test...'
 	$<
 
 # Run Python kernel API test.
@@ -660,8 +671,9 @@ yk-test-no-yc: kernel-only
 # For testing both the kernel and compiler in various combinations,
 # run the tests from the top-level Makefile.
 all-tests:
-	$(MAKE) clean; $(MAKE) stencil=3axis cxx-yk-grid-test
-	$(MAKE) clean; $(MAKE) stencil=iso3dfd yc-and-yk-test
+	$(MAKE) clean; $(MAKE) cxx-yk-tuple-test
+	$(MAKE) clean; $(MAKE) stencil=3axis fold=x=4,y=2 cxx-yk-grid-test
+	$(MAKE) clean; $(MAKE) stencil=iso3dfd fold=x=4,y=2 yc-and-yk-test
 	$(MAKE) clean; $(MAKE) stencil=awp_elastic yc-and-yk-test real_bytes=8
 	$(MAKE) clean; $(MAKE) stencil=fsg_abc yc-and-yk-test real_bytes=8
 	$(MAKE) clean; $(MAKE) stencil=cube yc-and-yk-test real_bytes=8

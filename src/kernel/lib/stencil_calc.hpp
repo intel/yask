@@ -46,7 +46,7 @@ namespace yask {
         int _scalar_points_read = 0;
         int _scalar_points_written = 0;
 
-        // Position of inner dim in stencil-dims.
+        // Position of inner dim in stencil-dims tuple.
         int _inner_posn = 0;
 
         // Eq-groups that this one depends on.

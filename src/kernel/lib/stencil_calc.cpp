@@ -162,7 +162,8 @@ namespace yask {
         int ndims = get_dims()->_stencil_dims.getNumDims();
         for (int i = 0; i < ndims; i++) {
             if (i != _inner_posn)
-                assert(loop_idxs.start[i] == loop_idxs.stop[i] - 1);
+                assert(loop_idxs.start[i] + get_dims()->_cluster_mults[i] >=
+                       loop_idxs.stop[i]);
         }
 #endif
 

@@ -111,6 +111,7 @@ namespace yask {
             "#define NUM_STENCIL_DIMS " << _dims._stencilDims.size() << endl;
         
         // Vec/cluster lengths.
+        auto nvec = _dims._foldGT1.getNumDims();
         os << "\n// One vector fold: " << _dims._fold.makeDimValStr(" * ") << endl;
         for (auto& dim : _dims._fold.getDims()) {
             auto& dname = dim.getName();
@@ -118,11 +119,29 @@ namespace yask {
             os << "#define VLEN_" << ucDim << " (" << dim.getVal() << ")" << endl;
         }
         os << "#define VLEN (" << _dims._fold.product() << ")" << endl;
-        os << "#define VLEN_FIRST_INDEX_IS_UNIT_STRIDE (" <<
+        os << "#define FIRST_FOLD_INDEX_IS_UNIT_STRIDE (" <<
             (_dims._fold.isFirstInner() ? 1 : 0) << ")" << endl;
+        os << "#define NUM_VEC_FOLD_DIMS (" << nvec << ")" << endl;
+
+        // Layout for folding.
+        ostringstream oss;
+        oss << "Layout_";
+        if (nvec) {
+            if (_dims._foldGT1.isFirstInner())
+                for (int i = nvec; i > 0; i--)
+                    oss << i;       // e.g., 321
+            else
+                for (int i = 1; i <= nvec; i++)
+                    oss << i;       // e.g., 123
+        }
+        else
+            oss << "0d";         // no folding; scalar layout
+        string layout = oss.str();
+        os << "#define VEC_FOLD_LAYOUT " << layout << endl;
+
         os << "#define USING_UNALIGNED_LOADS (" <<
             (_settings._allowUnalignedLoads ? 1 : 0) << ")" << endl;
-
+        
         os << endl;
         os << "// Cluster multipliers of vector folds: " <<
             _dims._clusterMults.makeDimValStr(" * ") << endl;
@@ -715,7 +734,11 @@ namespace yask {
         // Dims creator.
         os << "\n  // Create Dims object.\n"
             "  static DimsPtr new_dims() {\n"
-            "    auto p = std::make_shared<Dims>();\n"
+            "    auto p = std::make_shared<Dims>();\n";
+        for (int i = 0; i < _dims._foldGT1.getNumDims(); i++)
+            os << "    p->_vec_fold_layout.set_size(" << i << ", " <<
+                _dims._foldGT1[i] << "); // '" << _dims._foldGT1.getDimName(i) << "'\n";
+        os <<
             "    p->_step_dim = \"" << _dims._stepDim << "\";\n"
             "    p->_inner_dim = \"" << _dims._innerDim << "\";\n";
         for (auto& dim : _dims._domainDims.getDims()) {

@@ -37,6 +37,11 @@ namespace yask {
     class Indices {
         
     public:
+
+        // Max number of indices that can be held.
+        // Note use of "+max_idxs" in code below to avoid compiler
+        // trying to take a reference to it, resulting in a undefined
+        // symbol (sometimes).
         static const int max_idxs = MAX_DIMS;
         
     protected:
@@ -66,58 +71,64 @@ namespace yask {
         // Access indices.
         inline idx_t& operator[](int i) {
             assert(i >= 0);
-            assert(i < max_idxs);
+            assert(i < +max_idxs);
             return _idxs[i];
         }
         inline idx_t operator[](int i) const {
             assert(i >= 0);
-            assert(i < max_idxs);
+            assert(i < +max_idxs);
             return _idxs[i];
         }
 
         // Write to an IdxTuple.
         void setTupleVals(IdxTuple& tgt) const {
-            assert(tgt.size() < max_idxs);
-            for (int i = 0; i < max_idxs; i++)
+            assert(tgt.size() < +max_idxs);
+            for (int i = 0; i < +max_idxs; i++)
                 if (i < tgt.size())
                     tgt.setVal(i, _idxs[i]);
         }
 
         // Read from an IdxTuple.
         void setFromTuple(const IdxTuple& src) {
-            assert(src.size() < max_idxs);
+            assert(src.size() < +max_idxs);
             if (src.size() == 0)
                 setFromConst(0);
-            else
-                for (int i = 0; i < max_idxs; i++)
-                    _idxs[i] = (i < src.size()) ? src.getVal(i) : 0;
+            else {
+                int n = std::min(int(src.size()), +max_idxs);
+                for (int i = 0; i < n; i++)
+                    _idxs[i] = src.getVal(i);
+            }
         }
         
         // Other inits.
         void setFromVec(const GridIndices& src) {
-            assert(src.size() < max_idxs);
+            assert(src.size() < +max_idxs);
             if (src.size() == 0)
                 setFromConst(0);
-            else
-                for (int i = 0; i < max_idxs; i++)
-                    _idxs[i] = (i < int(src.size())) ? src[i] : 0;
+            else {
+                int n = std::min(int(src.size()), +max_idxs);
+                for (int i = 0; i < n; i++)
+                    _idxs[i] = src[i];
+            }
+        }
+        void setFromArray(int nelems, const idx_t src[]) {
+            assert(nelems < +max_idxs);
+            if (nelems == 0)
+                setFromConst(0);
+            else {
+                int n = std::min(nelems, +max_idxs);
+                for (int i = 0; i < n; i++)
+                    _idxs[i] = src[i];
+            }
         }
         void setFromInitList(const std::initializer_list<idx_t>& src) {
-            assert(src.size() < max_idxs);
+            assert(src.size() < +max_idxs);
             int i = 0;
             for (auto idx : src)
                 _idxs[i++] = idx;
         }
-        void setFromArray(int nelems, const idx_t src[]) {
-            assert(nelems < max_idxs);
-            if (nelems == 0)
-                setFromConst(0);
-            else
-                for (int i = 0; i < max_idxs; i++)
-                    _idxs[i] = (i < nelems) ? src[i] : 0;
-        }
         void setFromConst(idx_t val) {
-            for (int i = 0; i < max_idxs; i++)
+            for (int i = 0; i < +max_idxs; i++)
                 _idxs[i] = val;
         }
         
@@ -125,7 +136,7 @@ namespace yask {
         // These assume all the indices are valid or
         // initialized to the same value.
         bool operator==(const Indices& rhs) const {
-            for (int i = 0; i < max_idxs; i++)
+            for (int i = 0; i < +max_idxs; i++)
                 if (_idxs[i] != rhs._idxs[i])
                     return false;
             return true;
@@ -134,7 +145,7 @@ namespace yask {
             return !operator==(rhs);
         }
         bool operator<(const Indices& rhs) const {
-            for (int i = 0; i < max_idxs; i++)
+            for (int i = 0; i < +max_idxs; i++)
                 if (_idxs[i] < rhs._idxs[i])
                     return true;
                 else if (_idxs[i] > rhs._idxs[i])
@@ -142,7 +153,7 @@ namespace yask {
             return false;       // equal, so not less than.
         }
         bool operator>(const Indices& rhs) const {
-            for (int i = 0; i < max_idxs; i++)
+            for (int i = 0; i < +max_idxs; i++)
                 if (_idxs[i] > rhs._idxs[i])
                     return true;
                 else if (_idxs[i] < rhs._idxs[i])
@@ -243,7 +254,10 @@ namespace yask {
 #pragma omp declare reduction(max_idxs : Indices : \
                               omp_out = omp_out.maxElements(omp_in) )   \
     initializer (omp_priv = idx_min)
-        
+
+    // Layout algorithms using Indices.
+#include "yask_layouts.hpp"
+    
     // A group of Indices needed for generated loops.
     // See the help message from gen_loops.pl for the
     // documentation of the indices.
@@ -263,9 +277,9 @@ namespace yask {
         // begin                                         end
         //   |--------------------------------------------|
         //   |------------------|------------------|------|
-        // start               stop  (index = 0)
-        //                    start               stop (index = 1)
-        //                                       start   stop (index = 2)
+        // start               stop                            (index = 0)
+        //                    start               stop         (index = 1)
+        //                                       start   stop  (index = 2)
         
         // Default init.
         ScanIndices() {
@@ -335,9 +349,10 @@ namespace yask {
     // Similar to that in the YASK compiler.
     struct Dims {
 
-        static const int max_domain_dims = MAX_DIMS - 1; // 1 reserved for step dim.
+        // Algorithm for vec dims in fold layout.
+        VEC_FOLD_LAYOUT _vec_fold_layout;
 
-        // Dimensions with unused values.
+        // Dimensions with 0 values.
         std::string _step_dim;  // usually time, 't'.
         std::string _inner_dim; // the domain dim used in the inner loop.
         IdxTuple _domain_dims;
@@ -358,13 +373,36 @@ namespace yask {
                           bool domain_ok,
                           bool misc_ok) const;
 
+        // Get linear index into a vector given 'fold_ofs', which are
+        // element offsets that must be *exactly* those in _vec_fold_pts.
+        idx_t getElemIndexInVec(const Indices& fold_ofs) const {
+
+            // Use compiler-generated fold layout.
+            idx_t i = _vec_fold_layout.layout(fold_ofs);
+            return i;
+        }
+        
         // Get linear index into a vector given 'elem_ofs', which are
         // element offsets that may include other dimensions.
         idx_t getElemIndexInVec(const IdxTuple& elem_ofs) const {
-            
+            assert(_vec_fold_pts.getNumDims() == NUM_VEC_FOLD_DIMS);
+            if (NUM_VEC_FOLD_DIMS == 0)
+                return 0;
+
+            // Get required offsets into an Indices obj.
+            IdxTuple fold_ofs(_vec_fold_pts);
+            fold_ofs.setValsSame(0);
+            fold_ofs.setVals(elem_ofs, false); // copy only fold offsets.
+            Indices fofs(fold_ofs);
+
+            // Call version that requires vec-fold offsets only.
+            idx_t i = getElemIndexInVec(fofs);
+
             // Use fold layout to find element index.
-            // TODO: make this more efficient.
-            auto i = _fold_pts.layout(elem_ofs, false);
+#ifdef DEBUG_LAYOUT
+            idx_t i2 = _vec_fold_pts.layout(fold_ofs, false);
+            assert(i == i2);
+#endif
             return i;
         }
     };
