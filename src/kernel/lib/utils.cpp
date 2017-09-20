@@ -93,7 +93,7 @@ namespace yask {
         return os.str();
     }
 
-    // Return num with SI multiplier.
+    // Return num with SI multiplier, e.g. "3.14M".
     // Use this one for rates, etc.
     string makeNumStr(double num)
     {

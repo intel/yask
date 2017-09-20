@@ -246,7 +246,7 @@ int main(int argc, char** argv)
     idx_t dt = opts->_rank_sizes[step_dim];
     os << endl << divLine <<
         "Running " << opts->num_trials << " performance trial(s) of " <<
-        dt << " step(s) each...\n";
+        dt << " step(s) each...\n" << flush;
     for (idx_t tr = 0; tr < opts->num_trials; tr++) {
         os << divLine;
 

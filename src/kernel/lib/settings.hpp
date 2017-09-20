@@ -27,6 +27,273 @@ IN THE SOFTWARE.
 
 namespace yask {
 
+    typedef Tuple<idx_t> IdxTuple;
+    typedef std::vector<idx_t> GridIndices;
+    typedef std::vector<std::string> GridDimNames;
+    
+    // A class to hold up to a given number of sizes or indices efficiently.
+    // Similar to a Tuple, but less overhead and doesn't keep names.
+    // Make sure this stays non-virtual.
+    class Indices {
+        
+    public:
+        static const int max_idxs = MAX_DIMS;
+        
+    protected:
+        idx_t _idxs[max_idxs];
+        
+    public:
+        // Ctors.
+        Indices() { }
+        Indices(const IdxTuple& src) {
+            setFromTuple(src);
+        }
+        Indices(const GridIndices& src) {
+            setFromVec(src);
+        }
+        Indices(const std::initializer_list<idx_t>& src) {
+            setFromInitList(src);
+        }
+        Indices(int nelems, const idx_t src[]) {
+            setFromArray(nelems, src);
+        }
+        Indices(idx_t src) {
+            setFromConst(src);
+        }
+        
+        // Default copy ctor, copy operator should be okay.
+
+        // Access indices.
+        inline idx_t& operator[](int i) {
+            assert(i >= 0);
+            assert(i < max_idxs);
+            return _idxs[i];
+        }
+        inline idx_t operator[](int i) const {
+            assert(i >= 0);
+            assert(i < max_idxs);
+            return _idxs[i];
+        }
+
+        // Write to an IdxTuple.
+        void setTupleVals(IdxTuple& tgt) const {
+            assert(tgt.size() < max_idxs);
+            for (int i = 0; i < max_idxs; i++)
+                if (i < tgt.size())
+                    tgt.setVal(i, _idxs[i]);
+        }
+
+        // Read from an IdxTuple.
+        void setFromTuple(const IdxTuple& src) {
+            assert(src.size() < max_idxs);
+            if (src.size() == 0)
+                setFromConst(0);
+            else
+                for (int i = 0; i < max_idxs; i++)
+                    _idxs[i] = (i < src.size()) ? src.getVal(i) : 0;
+        }
+        
+        // Other inits.
+        void setFromVec(const GridIndices& src) {
+            assert(src.size() < max_idxs);
+            if (src.size() == 0)
+                setFromConst(0);
+            else
+                for (int i = 0; i < max_idxs; i++)
+                    _idxs[i] = (i < int(src.size())) ? src[i] : 0;
+        }
+        void setFromInitList(const std::initializer_list<idx_t>& src) {
+            assert(src.size() < max_idxs);
+            int i = 0;
+            for (auto idx : src)
+                _idxs[i++] = idx;
+        }
+        void setFromArray(int nelems, const idx_t src[]) {
+            assert(nelems < max_idxs);
+            if (nelems == 0)
+                setFromConst(0);
+            else
+                for (int i = 0; i < max_idxs; i++)
+                    _idxs[i] = (i < nelems) ? src[i] : 0;
+        }
+        void setFromConst(idx_t val) {
+            for (int i = 0; i < max_idxs; i++)
+                _idxs[i] = val;
+        }
+        
+        // Some comparisons.
+        // These assume all the indices are valid or
+        // initialized to the same value.
+        bool operator==(const Indices& rhs) const {
+            for (int i = 0; i < max_idxs; i++)
+                if (_idxs[i] != rhs._idxs[i])
+                    return false;
+            return true;
+        }
+        bool operator!=(const Indices& rhs) const {
+            return !operator==(rhs);
+        }
+        bool operator<(const Indices& rhs) const {
+            for (int i = 0; i < max_idxs; i++)
+                if (_idxs[i] < rhs._idxs[i])
+                    return true;
+                else if (_idxs[i] > rhs._idxs[i])
+                    return false;
+            return false;       // equal, so not less than.
+        }
+        bool operator>(const Indices& rhs) const {
+            for (int i = 0; i < max_idxs; i++)
+                if (_idxs[i] > rhs._idxs[i])
+                    return true;
+                else if (_idxs[i] < rhs._idxs[i])
+                    return false;
+            return false;       // equal, so not greater than.
+        }
+
+        // Some element-wise operators.
+        // These all return a new set of Indices rather
+        // than modifying this object.
+        Indices addElements(const Indices& other) const {
+            Indices res;
+            for (int i = 0; i < max_idxs; i++)
+                res._idxs[i] = _idxs[i] + other._idxs[i];
+            return res;
+        }
+        Indices multElements(const Indices& other) const {
+            Indices res;
+            for (int i = 0; i < max_idxs; i++)
+                res._idxs[i] = _idxs[i] * other._idxs[i];
+            return res;
+        }
+        Indices minElements(const Indices& other) const {
+            Indices res;
+            for (int i = 0; i < max_idxs; i++)
+                res._idxs[i] = std::min(_idxs[i], other._idxs[i]);
+            return res;
+        }
+        Indices maxElements(const Indices& other) const {
+            Indices res;
+            for (int i = 0; i < max_idxs; i++)
+                res._idxs[i] = std::max(_idxs[i], other._idxs[i]);
+            return res;
+        }
+
+        // Operate on all elements.
+        Indices addConst(idx_t n) const {
+            Indices res;
+            for (int i = 0; i < max_idxs; i++)
+                res._idxs[i] = _idxs[i] + n;
+            return res;
+        }
+        Indices multConst(idx_t n) const {
+            Indices res;
+            for (int i = 0; i < max_idxs; i++)
+                res._idxs[i] = _idxs[i] * n;
+            return res;
+        }
+
+        // Reduce over all elements.
+        idx_t sum() const {
+            idx_t res = 0;
+            for (int i = 0; i < max_idxs; i++)
+                res += _idxs[i];
+            return res;
+        }
+        idx_t product() const {
+            idx_t res = 1;
+            for (int i = 0; i < max_idxs; i++)
+                res *= _idxs[i];
+            return res;
+        }
+        
+        // Make string like "x=4, y=8".
+        std::string makeDimValStr(const GridDimNames& names,
+                                          std::string separator=", ",
+                                          std::string infix="=",
+                                          std::string prefix="",
+                                          std::string suffix="") const {
+            assert(names.size() <= max_idxs);
+
+            // Make a Tuple from names.
+            IdxTuple tmp;
+            for (int i = 0; i < int(names.size()); i++)
+                tmp.addDimBack(names[i], _idxs[i]);
+            return tmp.makeDimValStr(separator, infix, prefix, suffix);
+        }
+        
+        // Make string like "4, 3, 2".
+        std::string makeValStr(int nvals,
+                                       std::string separator=", ",
+                                       std::string prefix="",
+                                       std::string suffix="") const {
+            assert(nvals <= max_idxs);
+
+            // Make a Tuple w/o useful names.
+            IdxTuple tmp;
+            for (int i = 0; i < nvals; i++)
+                tmp.addDimBack(std::string(1, '0' + char(i)), _idxs[i]);
+            return tmp.makeValStr(separator, prefix, suffix);
+        }
+    };
+
+    // Define OMP reductions on Indices.
+#pragma omp declare reduction(min_idxs : Indices : \
+                              omp_out = omp_out.minElements(omp_in) )   \
+    initializer (omp_priv = idx_max)
+#pragma omp declare reduction(max_idxs : Indices : \
+                              omp_out = omp_out.maxElements(omp_in) )   \
+    initializer (omp_priv = idx_min)
+        
+    // A group of Indices needed for generated loops.
+    // See the help message from gen_loops.pl for the
+    // documentation of the indices.
+    // Make sure this stays non-virtual.
+    struct ScanIndices {
+
+        // Values that remain the same for each sub-range.
+        Indices begin, end;     // first and last+1 range of each index.
+        Indices step;           // step value within range.
+        Indices group_size;     // priority grouping within range.
+
+        // Values that differ for each sub-range.
+        Indices start, stop;    // first and last+1 for this sub-range.
+        Indices index;          // 0-based unique index for each sub-range.
+
+        // Example w/3 sub-ranges in overall range:
+        // begin                                         end
+        //   |--------------------------------------------|
+        //   |------------------|------------------|------|
+        // start               stop  (index = 0)
+        //                    start               stop (index = 1)
+        //                                       start   stop (index = 2)
+        
+        // Default init.
+        ScanIndices() {
+            begin.setFromConst(0);
+            end.setFromConst(0);
+            step.setFromConst(1);
+            group_size.setFromConst(1);
+            start.setFromConst(0);
+            stop.setFromConst(0);
+            index.setFromConst(0);
+        }
+        
+        // Init from outer-loop indices.
+        // Start..stop from point in outer loop become begin..end
+        // for this loop.
+        void initFromOuter(const ScanIndices& outer) {
+
+            // Begin & end set from start & stop of outer loop.
+            begin = outer.start;
+            end = outer.stop;
+
+            // Pass other values through by default.
+            start = outer.start;
+            stop = outer.stop;
+            index = outer.index;
+        }
+    };
+
     // Forward defns.
     struct StencilContext;
     class YkGridBase;

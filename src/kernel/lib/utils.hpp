@@ -26,75 +26,10 @@ IN THE SOFTWARE.
 #ifndef YASK_UTILS
 #define YASK_UTILS
 
-#include <assert.h>
-#include <stddef.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <malloc.h>
-#include <stdlib.h>
-#include <string.h>
-#include <math.h>
-#include <time.h>
-#include <limits.h>
-
-#include <stdexcept>
-#include <map>
-#include <set>
-#include <vector>
-#include <string>
-#include <iostream>
-#include <fstream>
-#include <sstream>
-#include <cstdlib>
-
-#ifdef WIN32
-#define _Pragma(x)
-#endif
-
-#if defined(__GNUC__) && !defined(__ICC)
-#define __assume(x) ((void)0)
-#define __declspec(x)
-#endif
-
-#if (defined(__GNUC__) && !defined(__ICC)) || defined(WIN32)
-#define restrict
-#define __assume_aligned(p,n) ((void)0)
-#endif
-
-// VTune or stubs.
-#ifdef USE_VTUNE
-#include "ittnotify.h"
-#define VTUNE_PAUSE  __itt_pause()
-#define VTUNE_RESUME __itt_resume()
-#else
-#define VTUNE_PAUSE ((void)0)
-#define VTUNE_RESUME ((void)0)
-#endif
-
-// MPI or stubs.
-#ifdef USE_MPI
-#include "mpi.h"
-#else
-#define MPI_PROC_NULL (-1)
-#define MPI_Barrier(comm) ((void)0)
-#define MPI_Comm int
-#define MPI_Finalize() ((void)0)
-#endif
-
-// OpenMP or stubs.
-#ifdef _OPENMP
-#include <omp.h>
-#else
-inline int omp_get_num_procs() { return 1; }
-inline int omp_get_num_threads() { return 1; }
-inline int omp_get_max_threads() { return 1; }
-inline int omp_get_thread_num() { return 0; }
-inline void omp_set_num_threads(int n) { }
-inline void omp_set_nested(int n) { }
-#endif
-
 namespace yask {
 
+    // Fatal error.
+    // TODO: enable exception throwing that works w/SWIG.
     inline void exit_yask(int code) {
 #ifdef USE_MPI
         int flag;
