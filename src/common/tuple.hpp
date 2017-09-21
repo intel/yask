@@ -25,9 +25,9 @@ IN THE SOFTWARE.
 
 ///////// Stencil support.
 
-#ifndef TUPLE_HPP
-#define TUPLE_HPP
+#pragma once
 
+#include <assert.h>
 #include <math.h>
 #include <iostream>
 #include <iomanip>
@@ -43,6 +43,11 @@ IN THE SOFTWARE.
 
 namespace yask {
 
+    // A shared global pool for names.
+    // This saves space and allows us to compare pointers
+    // instead of strings.
+	extern std::set<std::string> _allNames;
+ 
     template <typename T>
     class Tuple;
     
@@ -57,10 +62,6 @@ namespace yask {
         const std::string* _name = 0;
         T _val = 0;
 
-        // A shared global pool for names.
-        // This saves space and allows us to compare pointers
-        // instead of strings.
-        static std::set<std::string> _allNames;
         static const std::string* _getNamePtr(const std::string& name) {
             auto i = _allNames.insert(name);
             auto& i2 = *i.first;
@@ -861,10 +862,4 @@ namespace yask {
         }
     };
 
-    // Static members.
-    template <typename T>
-    std::set<std::string> Scalar<T>::_allNames;
-
 } // namespace yask.
-    
-#endif

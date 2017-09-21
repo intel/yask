@@ -90,6 +90,18 @@ LIB_DIR		:=	$(YASK_BASE)/lib
 INC_DIR		:=	$(YASK_BASE)/include
 BIN_DIR		:=	$(YASK_BASE)/bin
 
+# OS-specific
+ifeq ($(shell uname -o),Cygwin)
+  SO_SUFFIX	:=	.dll
+  RUN_PREFIX	:=	env PATH="${PATH}:$(LIB_DIR)"
+  PYTHON		:= python3
+else
+  SO_SUFFIX	:=	.so
+  RUN_PREFIX	:=
+  PYTHON		:=	python
+  CXX_PREFIX	:=	time
+endif
+
 ######## Primary targets & rules
 # NB: must set stencil and arch to generate the desired kernel.
 
@@ -228,7 +240,7 @@ realclean: clean-old
 	find * -name '*~' | xargs -r rm -v
 	find * -name '*.optrpt' | xargs -r rm -v
 	rm -fr docs/api/{html,latex}
-	rm -rf $(BIN_DIR)/*.exe $(LIB_DIR)/*.so
+	rm -rf $(BIN_DIR)/*.exe $(LIB_DIR)/*$(SO_SUFFIX)
 	$(YC_MAKE) $@
 	$(YK_MAKE) $@
 

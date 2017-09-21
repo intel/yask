@@ -79,7 +79,7 @@ IN THE SOFTWARE.
 
 #if defined(__GNUC__) && !defined(__ICC)
 #define __assume(x) ((void)0)
-#define __declspec(x)
+//#define __declspec(x)
 #endif
 
 #if (defined(__GNUC__) && !defined(__ICC)) || defined(WIN32)

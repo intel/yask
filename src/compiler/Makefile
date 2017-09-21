@@ -32,18 +32,30 @@ LIB_DIR		:=	$(YASK_BASE)/lib
 INC_DIR		:=	$(YASK_BASE)/include
 BIN_DIR		:=	$(YASK_BASE)/bin
 
+# OS-specific
+ifeq ($(shell uname -o),Cygwin)
+  SO_SUFFIX	:=	.dll
+  RUN_PREFIX	:=	env PATH="${PATH}:$(LIB_DIR)"
+  PYTHON		:= python3
+else
+  SO_SUFFIX	:=	.so
+  RUN_PREFIX	:=
+  PYTHON		:=	python
+  CXX_PREFIX	:=	time
+endif
+
 # Output files and dirs.
 YC_BASE		:=	yask_compiler
 YC_MODULE	:=	$(YC_BASE)
 YC_EXEC		:=	$(BIN_DIR)/$(YC_BASE).exe
 YC_TEST_EXEC	:=	$(BIN_DIR)/$(YC_BASE)_api_test.exe
-YC_LIB		:=	$(LIB_DIR)/lib$(YC_BASE).so
-YC_PY_LIB	:=	$(LIB_DIR)/_$(YC_MODULE).so
+YC_LIB		:=	$(LIB_DIR)/lib$(YC_BASE)$(SO_SUFFIX)
+YC_PY_LIB	:=	$(LIB_DIR)/_$(YC_MODULE)$(SO_SUFFIX)
 YC_PY_MOD	:=	$(LIB_DIR)/$(YC_MODULE).py
 
 # Common source.
 COMM_DIR	:=	../common
-COMM_SRC_NAMES	:=	output
+COMM_SRC_NAMES	:=	output tuple
 COMM_SRC_BASES	:=	$(addprefix $(COMM_DIR)/,$(COMM_SRC_NAMES))
 
 # Compiler source files and dirs.
@@ -72,7 +84,6 @@ YC_LD		:=	$(YC_CXX)
 YC_LFLAGS	:=	-lrt -Wl,-rpath=$(LIB_DIR) -L$(LIB_DIR) -l$(YC_BASE)
 
 # Tools.
-PYTHON		:=	python
 SWIG		:=	swig
 
 # Find include path needed for python interface.
@@ -90,13 +101,13 @@ compiler: $(YC_EXEC)
 	@echo "Binary" $(YC_EXEC) "has been built."
 
 %.o: %.cpp $(YC_STENCIL_LIST) $(YC_INC_GLOB)
-	$(YC_CXX) $(YC_CXXFLAGS) -fPIC -c -o $@ $<
+	$(CXX_PREFIX) $(YC_CXX) $(YC_CXXFLAGS) -fPIC -c -o $@ $<
 
 $(YC_LIB): $(YC_OBJS)
-	$(YC_CXX) $(YC_CXXFLAGS) -shared -o $@ $^
+	$(CXX_PREFIX) $(YC_CXX) $(YC_CXXFLAGS) -shared -o $@ $^
 
 $(YC_EXEC): main.cpp $(YC_LIB)
-	$(YC_LD) $(YC_CXXFLAGS) -O0 $< $(YC_LFLAGS) -o $@
+	$(CXX_PREFIX) $(YC_LD) $(YC_CXXFLAGS) -O0 $< $(YC_LFLAGS) -o $@
 	$(MAKE) echo-settings
 
 # Generated files.

@@ -60,9 +60,8 @@ namespace yask {
 
         size_t align = (nbytes >= _def_big_alignment) ?
             _def_big_alignment : _def_alignment;
-        void* p = 0;
-        int ret = posix_memalign(&p, align, nbytes);
-        if (ret) {
+        void* p = aligned_alloc(align, nbytes);
+        if (!p) {
             std::cerr << "error: cannot allocate " << makeByteStr(nbytes) << ".\n";
             exit_yask(1);
         }

@@ -320,14 +320,26 @@ LIB_DIR		:=	$(YASK_BASE)/lib
 INC_DIR		:=	$(YASK_BASE)/include
 BIN_DIR		:=	$(YASK_BASE)/bin
 
+# OS-specific
+ifeq ($(shell uname -o),Cygwin)
+  SO_SUFFIX	:=	.dll
+  RUN_PREFIX	:=	env PATH="${PATH}:$(LIB_DIR)"
+  PYTHON		:= python3
+else
+  SO_SUFFIX	:=	.so
+  RUN_PREFIX	:=
+  PYTHON		:=	python
+  CXX_PREFIX	:=	time
+endif
+
 # Output files and dirs.
 YK_BASE		:=	yask_kernel
 YK_MODULE	:=	$(YK_BASE)
 YK_TAG		:=	$(stencil).$(arch)
 YK_BASE2	:=	$(YK_BASE).$(YK_TAG)
 YK_EXEC		:=	$(BIN_DIR)/$(YK_BASE2).exe
-YK_LIB		:=	$(LIB_DIR)/lib$(YK_BASE2).so
-YK_PY_LIB	:=	$(LIB_DIR)/_$(YK_MODULE).so
+YK_LIB		:=	$(LIB_DIR)/lib$(YK_BASE2)$(SO_SUFFIX)
+YK_PY_LIB	:=	$(LIB_DIR)/_$(YK_MODULE)$(SO_SUFFIX)
 YK_PY_MOD	:=	$(LIB_DIR)/$(YK_MODULE).py
 YK_API_TEST_EXEC :=	$(BIN_DIR)/$(YK_BASE)_api_test.exe
 YK_GRID_TEST_EXEC :=	$(BIN_DIR)/$(YK_BASE)_grid_test.exe
@@ -337,7 +349,7 @@ MAKE_REPORT_FILE:=	make-report.$(YK_TAG).txt
 
 # Common source.
 COMM_DIR	:=	../common
-COMM_SRC_NAMES	:=	output
+COMM_SRC_NAMES	:=	output tuple
 COMM_SRC_BASES	:=	$(addprefix $(COMM_DIR)/,$(COMM_SRC_NAMES))
 
 # Kernel source files and dirs.
@@ -395,15 +407,13 @@ YK_LD		:=	$(YK_CXX)
 YK_LFLAGS	:=	-lrt -Wl,-rpath=$(LIB_DIR) -L$(LIB_DIR) -l$(YK_BASE2)
 
 # Tools.
-PYTHON		:=	python
 SWIG		:=	swig
-CXX_PREFIX	:=	time
 
 # Find include path needed for python interface.
 # NB: constructing string inside print() to work for python 2 or 3.
 PYINC		:= 	$(addprefix -I,$(shell $(PYTHON) -c 'import distutils.sysconfig; print(distutils.sysconfig.get_python_inc() + " " + distutils.sysconfig.get_python_inc(plat_specific=1))'))
 
-RUN_PYTHON	:= 	env PYTHONPATH=$(LIB_DIR) $(PYTHON)
+RUN_PYTHON	:= 	$(RUN_PREFIX) env PYTHONPATH=$(LIB_DIR) $(PYTHON)
 
 # Set MACROS based on individual makefile vars.
 # MACROS and EXTRA_MACROS will be written to a header file.
@@ -560,7 +570,7 @@ $(YK_DIMS_FILE): $(YK_CODE_FILE)
 
 $(YK_CODE_FILE): $(YC_EXEC)
 	$(YK_MK_GEN_DIR)
-	$< $(YC_FLAGS) $(EXTRA_YC_FLAGS) -p $(YC_TARGET) $@
+	$(RUN_PREFIX) $< $(YC_FLAGS) $(EXTRA_YC_FLAGS) -p $(YC_TARGET) $@
 	@- gindent -fca $@ || \
 	  indent -fca $@ ||   \
 	  echo "note:" $@ "is not properly indented because no indent program was found."
@@ -613,15 +623,15 @@ $(YK_API_TEST_EXEC): ./tests/yask_kernel_api_test.cpp $(YK_LIB)
 # Run C++ kernel tests.
 cxx-yk-api-test: $(YK_API_TEST_EXEC)
 	@echo '*** Running the C++ YASK kernel API test...'
-	$<
+	$(RUN_PREFIX) $<
 
 cxx-yk-grid-test: $(YK_GRID_TEST_EXEC)
 	@echo '*** Running the C++ YASK grid test...'
-	$<
+	$(RUN_PREFIX) $<
 
 cxx-yk-tuple-test: $(YK_TUPLE_TEST_EXEC)
 	@echo '*** Running the C++ YASK tuple test...'
-	$<
+	$(RUN_PREFIX) $<
 
 # Run Python kernel API test.
 py-yk-api-test: $(BIN_DIR)/yask_kernel_api_test.py $(YK_PY_LIB)
