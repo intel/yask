@@ -670,6 +670,8 @@ namespace yask {
                     PrintVisitorBottomUp pcv(os, *vp, _settings);
                     ceq.visitEqs(&pcv);
 
+                    // TODO: add prefetches!!!
+
                     // End of loop.
                     os << " } // '" << idim << "' loop.\n";
 
