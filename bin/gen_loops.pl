@@ -26,22 +26,13 @@
 
 # Purpose: Create loop code.
 
-BEGIN {
-    if ($0 =~ m{/}) { ($MYHOME) = $0 =~ m{(.*)/} }
-    else { $MYHOME = '.' }
-    #print "$MYHOME\n";
-}
-use lib $MYHOME;
-use lib "$MYHOME/lib";
-use lib "$MYHOME/../lib";
-
-use 5.010;                      # for smart compare.
 use strict;
-use warnings;
-no warnings qw(portable); # allow 64-bit hex ints.
-no if $] >= 5.017011, warnings => 'experimental::smartmatch';
-
 use File::Basename;
+use File::Path;
+use lib dirname($0)."/lib";
+use lib dirname($0)."/../lib";
+
+use File::Which;
 use Text::ParseWords;
 use FileHandle;
 use CmdLine;
@@ -1161,10 +1152,10 @@ sub processCode($) {
     
     # indent program avail?
     my $indent = 'indent';
-    if (system("which $indent &> /dev/null")) {
+    if (!defined which($indent)) {
         $indent = 'gindent';
-        if (system("which $indent &> /dev/null")) {
-            warn "note: cannot find an indent utility--output will be unformatted.\n";
+        if (!defined which($indent)) {
+            warn "note: cannot find [g]indent utility--output will be unformatted.\n";
             undef $indent;
         }
     }
