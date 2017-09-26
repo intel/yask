@@ -462,7 +462,7 @@ YK_LFLAGS	+=	$(VTUNE_DIR)/lib64/libittnotify.a
 endif
 
 # compiler-specific settings
-ifneq ($(findstring ic,$(notdir $(YK_CXX))),)  # Intel compiler
+ifneq ($(findstring icpc,$(notdir $(YK_CXX))),)  # Intel compiler
 
  YK_CXXFLAGS	+=      $(ISA) -debug extended -Fa -restrict -ansi-alias -fno-alias
  YK_CXXFLAGS	+=	-fimf-precision=low -fast-transcendentals -no-prec-sqrt \

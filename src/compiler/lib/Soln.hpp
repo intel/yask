@@ -143,16 +143,6 @@ namespace yask {
             return gv;
         }
 
-        virtual yc_index_node_ptr new_step_index(const std::string& name) {
-            return make_shared<IndexExpr>(name, STEP_INDEX);
-        }
-        virtual yc_index_node_ptr new_domain_index(const std::string& name) {
-            return make_shared<IndexExpr>(name, DOMAIN_INDEX);
-        }
-        virtual yc_index_node_ptr new_misc_index(const std::string& name) {
-            return make_shared<IndexExpr>(name, MISC_INDEX);
-        }
-        
         virtual int get_num_equations() const {
             return _eqs.getNumEqs();
         }

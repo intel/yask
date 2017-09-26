@@ -117,47 +117,19 @@ namespace yask {
         set_name(std::string name
                  /**< [in] Name; must be a valid C++ identifier. */ ) =0;
 
-        /// Create a solution step index, also naming the step dimension.
-        /**
-           Create an variable to be used to index grids in the
-           solution-step dimension.
-           There must be exactly one step dimension.
-           It is usually time, e.g. "t". 
-        */
-        virtual yc_index_node_ptr
-        new_step_index(const std::string& name
-                     /**< [in] Step dimension name. */ ) =0;
-
-        /// Create a new domain index, also naming a domain dimension.
-        /**
-           Create an variable to be used to index grids in the
-           solution-domain dimension.
-           This should *not* include the step dimension, which is specified via
-           new_step_index().
-           The number of unique domain indices created described the 
-           dimensionality of the stencil problem being solved.
-           There must be at least one one domain dimension.
-           Typical domain indices are "x", "y" and "z".
-         */
-        virtual yc_index_node_ptr
-        new_domain_index(const std::string& name
-                     /**< [in] Domain index name. */ ) =0;
-        
-        /// Create a new miscellaneous index.
-        /**
-           Create an variable to be used to index grids in the
-           some dimension that is not the step dimension
-           or a domain dimension. Example: index into an array.
-         */
-        virtual yc_index_node_ptr
-        new_misc_index(const std::string& name
-                       /**< [in] Index name. */ ) =0;
-        
         /// Create an n-dimensional grid variable in the solution.
         /**
            "Grid" is a generic term for any n-dimensional variable.  A 0-dim
            grid is a scalar, a 1-dim grid is a vector, a 2-dim grid is a
            matrix, etc.
+
+           At least one grid must be defined with a step-index
+           node, and it must be the first dimension listed.
+           If more than one grid uses a step-index node, the step-indices
+           must have the same name across all such grids.
+
+           At least one grid must be defined with at least one domain-index node.
+
            @returns Pointer to the new grid. 
         */
         virtual yc_grid_ptr
@@ -367,6 +339,38 @@ namespace yask {
     public:
         virtual ~yc_node_factory() {}
 
+        /// Create a step-index node.
+        /**
+           Create a variable to be used to index grids in the
+           solution-step dimension.
+           The name usually describes time, e.g. "t". 
+        */
+        virtual yc_index_node_ptr
+        new_step_index(const std::string& name
+                     /**< [in] Step dimension name. */ ) =0;
+
+        /// Create a domain-index node.
+        /**
+           Create a variable to be used to index grids in the
+           solution-domain dimension.
+           The name usually describes spatial dimensions, e.g. "x" or "y". 
+           This should *not* include the step dimension, which is specified via
+           new_step_index().
+         */
+        virtual yc_index_node_ptr
+        new_domain_index(const std::string& name
+                     /**< [in] Domain index name. */ ) =0;
+        
+        /// Create a new miscellaneous index.
+        /**
+           Create an variable to be used to index grids in the
+           some dimension that is not the step dimension
+           or a domain dimension. Example: index into an array.
+         */
+        virtual yc_index_node_ptr
+        new_misc_index(const std::string& name
+                       /**< [in] Index name. */ ) =0;
+        
         /// Create an equation node.
         /** Indicates grid point on LHS is equivalent to expression on
             RHS. This is NOT a test for equality.  When an equation is
