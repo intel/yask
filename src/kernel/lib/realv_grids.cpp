@@ -208,7 +208,8 @@ namespace yask {
             }
 
             // Not a domain dim?
-            if (!_dims->_domain_dims.lookup(dname)) {
+            bool is_domain = _dims->_domain_dims.lookup(dname) != 0;
+            if (!is_domain) {
                 auto tas = get_alloc_size(dname);
                 auto sas = sp->get_alloc_size(dname);
                 if (tas != sas) {
@@ -247,8 +248,11 @@ namespace yask {
         // Copy pad sizes.
         for (int i = 0; i < get_num_dims(); i++) {
             auto dname = get_dim_name(i);
-            auto spad = sp->get_pad_size(dname);
-            _set_pad_size(dname, spad);
+            bool is_domain = _dims->_domain_dims.lookup(dname) != 0;
+            if (is_domain) {
+                auto spad = sp->get_pad_size(dname);
+                _set_pad_size(dname, spad);
+            }
         }
         
         // Copy data.
