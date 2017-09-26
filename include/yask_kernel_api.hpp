@@ -390,7 +390,7 @@ namespace yask {
                  /**< [in] List of names of all dimensions. Names must
                     be valid C++ identifiers and unique within this grid. */ ) =0;
 
-#ifdef SWIG
+#ifndef SWIG
         /// **[Advanced]** Add a new grid to the solution.
         /**
            See documentation for the version with a vector of dimension names
@@ -871,7 +871,7 @@ namespace yask {
         get_element(const std::vector<idx_t>& indices
                     /**< [in] List of indices, one for each grid dimension. */ ) const =0;
 
-#ifdef SWIG
+#ifndef SWIG
         /// Get the value of one grid point.
         /**
            Provide indices in a list in the same order returned by get_dim_names().
@@ -937,7 +937,7 @@ namespace yask {
                        If false, indices outside of domain and padding result
                        in no change to grid. */ ) =0;
 
-#ifdef SWIG        
+#ifndef SWIG        
         /// Set the value of one grid point.
         /**
            Provide the number of indices equal to the number of dimensions in the grid.

@@ -140,7 +140,7 @@ namespace yask {
                  /**< [in] Dimensions of the grid.
                   Each dimension is identified by an associated index. */ ) =0;
 
-#ifdef SWIG        
+#ifndef SWIG        
         /// Create an n-dimensional grid variable in the solution.
         /**
            "Grid" is a generic term for any n-dimensional variable.  A 0-dim
@@ -316,7 +316,7 @@ namespace yask {
         new_relative_grid_point(std::vector<int> dim_offsets
                                 /**< [in] offset from evaluation index in each dim. */ ) =0;
 
-#ifdef SWIG        
+#ifndef SWIG        
         /// Create a reference to a point in a grid.
         /** The indices are specified relative to the stencil-evaluation
             index.  Each offset refers to the dimensions defined when the
