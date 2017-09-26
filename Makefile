@@ -127,6 +127,12 @@ api-docs: docs/api/html/index.html
 	@ ls -l $^
 
 # Build C++ and Python API libs.
+compiler-api:
+	$(YC_MAKE) api
+
+kernel-api:
+	$(YK_MAKE) api
+
 api:
 	$(YC_MAKE) $@
 	$(YK_MAKE) $@
