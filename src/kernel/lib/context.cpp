@@ -50,6 +50,7 @@ namespace yask {
     void StencilContext::api_name(const string& dim, idx_t n) {         \
         checkDimType(dim, #api_name, step_ok, domain_ok, misc_ok);      \
         expr;                                                           \
+        update_grids();                                                 \
     }
     SET_SOLN_API(set_rank_domain_size, _opts->_rank_sizes[dim] = n, false, true, false)
     SET_SOLN_API(set_min_pad_size, _opts->_min_pad_sizes[dim] = n, false, true, false)
