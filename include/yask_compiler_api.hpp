@@ -347,7 +347,7 @@ namespace yask {
         */
         virtual yc_index_node_ptr
         new_step_index(const std::string& name
-                     /**< [in] Step dimension name. */ ) =0;
+                     /**< [in] Step dimension name. */ );
 
         /// Create a domain-index node.
         /**
@@ -359,7 +359,7 @@ namespace yask {
          */
         virtual yc_index_node_ptr
         new_domain_index(const std::string& name
-                     /**< [in] Domain index name. */ ) =0;
+                     /**< [in] Domain index name. */ );
         
         /// Create a new miscellaneous index.
         /**
@@ -369,7 +369,7 @@ namespace yask {
          */
         virtual yc_index_node_ptr
         new_misc_index(const std::string& name
-                       /**< [in] Index name. */ ) =0;
+                       /**< [in] Index name. */ );
         
         /// Create an equation node.
         /** Indicates grid point on LHS is equivalent to expression on

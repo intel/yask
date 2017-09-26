@@ -34,6 +34,7 @@ if __name__ == "__main__":
     # Compiler 'bootstrap' factories.
     cfac = yask_compiler.yc_factory()
     ofac = yask_compiler.yask_output_factory()
+    fac = yask_compiler.yc_node_factory()
 
     # Create a new stencil solution.
     soln = cfac.new_solution("api_py_test")
@@ -41,10 +42,10 @@ if __name__ == "__main__":
     soln.set_debug_output(do)
 
     # Define the problem dimensions.
-    t = soln.new_step_index("t");
-    x = soln.new_domain_index("x");
-    y = soln.new_domain_index("y");
-    z = soln.new_domain_index("z");
+    t = fac.new_step_index("t");
+    x = fac.new_domain_index("x");
+    y = fac.new_domain_index("y");
+    z = fac.new_domain_index("z");
 
     # Create a grid var.
     g1 = soln.new_grid("test_grid", [t, x, y, z])
@@ -52,7 +53,6 @@ if __name__ == "__main__":
     # Create an expression for the new value.
     # This will average some of the neighboring points around the
     # current stencil application point in the current timestep.
-    fac = yask_compiler.yc_node_factory()
     n0 = g1.new_relative_grid_point([0, 0, 0, 0])  # center-point at this timestep.
     n1 = fac.new_add_node(n0, g1.new_relative_grid_point([0, -1,  0,  0])) # left.
     n1 = fac.new_add_node(n1, g1.new_relative_grid_point([0,  1,  0,  0])) # right.

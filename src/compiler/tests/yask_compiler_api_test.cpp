@@ -36,6 +36,7 @@ int main() {
     // Compiler 'bootstrap' factories.
     yc_factory cfac;
     yask_output_factory ofac;
+    yc_node_factory fac;
 
     // Create a new stencil solution.
     auto soln = cfac.new_solution("api_cxx_test");
@@ -43,16 +44,15 @@ int main() {
     soln->set_debug_output(stdos);
 
     // Define the problem dimensions.
-    auto t = soln->new_step_index("t");
-    auto x = soln->new_domain_index("x");
-    auto y = soln->new_domain_index("y");
-    auto z = soln->new_domain_index("z");
+    auto t = fac.new_step_index("t");
+    auto x = fac.new_domain_index("x");
+    auto y = fac.new_domain_index("y");
+    auto z = fac.new_domain_index("z");
     
     // Create a grid var.
     auto g1 = soln->new_grid("test_grid", {t, x, y, z});
 
     // Create an equation for the grid.
-    yc_node_factory fac;
 
     auto n1 = fac.new_const_number_node(3.14);
     cout << n1->format_simple() << endl;
