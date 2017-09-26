@@ -97,7 +97,7 @@ namespace yask {
         }
     }
     
-    // Check whether dim is of allowed type.
+    // Check whether dim is used and of allowed type.
     void YkGridBase::checkDimType(const std::string& dim,
                                   const std::string& fn_name,
                                   bool step_ok,

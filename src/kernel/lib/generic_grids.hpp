@@ -46,7 +46,7 @@ namespace yask {
 
         // Note that both _dims and *_layout_base hold dimensions unless this
         // is a scalar. For a scalar, _dims is empty and _layout_base = 0.
-        IdxTuple _dims;         // names and lengths of dimensions.
+        IdxTuple _dims;         // names and lengths of grid dimensions.
         Layout* _layout_base = 0; // memory layout.
 
         // Output stream for messages.
