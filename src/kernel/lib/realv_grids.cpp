@@ -105,7 +105,9 @@ namespace yask {
                                   bool misc_ok) const {
         if (!is_dim_used(dim)) {
             cerr << "Error in " << fn_name << "(): dimension '" <<
-                dim << "' is not used in grid '" << get_name() << "'.\n";
+                dim << "' not found in ";
+            print_info(cerr);
+            cerr << ".\n";
             exit_yask(1);
         }
         _dims->checkDimType(dim, fn_name, step_ok, domain_ok, misc_ok);
