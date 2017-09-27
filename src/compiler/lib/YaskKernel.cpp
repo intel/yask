@@ -212,27 +212,34 @@ namespace yask {
                     auto& dim = gp->getDims()[dn];
                     auto& dname = dim->getName();
                     auto dtype = dim->getType();
+                    bool defer = false; // add dim later.
                         
                     // Step dim?
                     if (dtype == STEP_INDEX) {
                         assert(dname == _dims._stepDim);
-                        step_posn = dn + 1;
                         if (dn > 0) {
                             cerr << "Error: cannot create grid '" << grid <<
                                 "' with dimensions '" << gdims.makeDimStr() <<
                                 "' because '" << dname << "' must be first dimension.\n";
                             exit(1);
                         }
+                        if (folded) {
+                            step_posn = dn + 1;
+                            defer = true;
+                        }
                     }
 
                     // Inner dim?
                     else if (dname == _dims._innerDim) {
                         assert(dtype == DOMAIN_INDEX);
-                        inner_posn = dn + 1;
+                        if (folded) {
+                            inner_posn = dn + 1;
+                            defer = true;
+                        }
                     }
 
-                    // Something else.
-                    else {
+                    // Add index position to layout.
+                    if (!defer) {
                         int other_posn = dn + 1;
                         oss << other_posn;
                     }
