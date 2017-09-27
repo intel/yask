@@ -245,7 +245,8 @@ realclean: clean-old
 	rm -fv TAGS '*~'
 	find * -name '*~' | xargs -r rm -v
 	find * -name '*.optrpt' | xargs -r rm -v
-	rm -fr docs/api/{html,latex}
+	rm -fr docs/api/html
+	rm -fr docs/api/latex
 	rm -rf $(BIN_DIR)/*.exe $(LIB_DIR)/*$(SO_SUFFIX)
 	$(YC_MAKE) $@
 	$(YK_MAKE) $@
