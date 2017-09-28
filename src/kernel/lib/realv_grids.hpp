@@ -103,19 +103,39 @@ namespace yask {
         
         // Share data from source grid of type GT.
         template<typename GT>
-        bool _share_data(YkGridBase* src) {
+        bool _share_data(YkGridBase* src,
+                         bool die_on_failure) {
             auto* tp = dynamic_cast<GT*>(_ggb);
-            if (!tp) return false;
+            if (!tp) {
+                if (die_on_failure) {
+                    std::cerr << "Error in share_data(): "
+                        "target grid not of expected type (internal inconsistency).\n";
+                    exit_yask(1);
+                }
+                return false;
+            }
             auto* sp = dynamic_cast<GT*>(src->_ggb);
-            if (!sp) return false;
-            *tp = *sp; // shallow copy.
+            if (!sp) {
+                if (die_on_failure) {
+                    std::cerr << "Error in share_data(): source grid ";
+                    src->print_info(std::cerr);
+                    std::cerr << " not of same type as target grid ";
+                    print_info(std::cerr);
+                    std::cerr << ".\n";
+                    exit_yask(1);
+                }
+                return false;
+            }
+
+            // shallow copy.
+            *tp = *sp;
             return true;
         }
 
         // Share data from source grid.
         // Must be implemented by a concrete class
         // using the templated function above.
-        virtual bool share_data(YkGridBase* src) =0;
+        virtual bool share_data(YkGridBase* src, bool die_on_failure) =0;
 
         // Resize or fail if already allocated.
         virtual void resize();
@@ -127,7 +147,7 @@ namespace yask {
             assert(dims.get());
 
             // Init the Indices.
-            // (In-place initializers triger icc failure.)
+            // (In-place initializers triger icc 18.0 failure--bug report submitted.)
             _domains = 0;
             _pads = 0;
             _halos = 0;
@@ -342,8 +362,8 @@ namespace yask {
         _grid_type _data;
         
         // Share data from source grid.
-        virtual bool share_data(YkGridBase* src) {
-            return _share_data<_grid_type>(src);
+        virtual bool share_data(YkGridBase* src, bool die_on_failure) {
+            return _share_data<_grid_type>(src, die_on_failure);
         }
 
     public:
@@ -429,8 +449,8 @@ namespace yask {
         Indices _vec_fold_posns;
 
         // Share data from source grid.
-        virtual bool share_data(YkGridBase* src) {
-            return _share_data<_grid_type>(src);
+        virtual bool share_data(YkGridBase* src, bool die_on_failure) {
+            return _share_data<_grid_type>(src, die_on_failure);
         }
 
     public:

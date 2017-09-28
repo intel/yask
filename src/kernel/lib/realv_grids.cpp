@@ -218,8 +218,8 @@ namespace yask {
                 auto sas = sp->get_alloc_size(dname);
                 if (tas != sas) {
                     cerr << "Error: attempt to share storage from grid '" << sp->get_name() <<
-                        "' with alloc-size " << sas << " with grid '" << get_name() <<
-                        "' with alloc-size " << tas << " in '" << dname << "' dim.\n";
+                        "' of alloc-size " << sas << " with grid '" << get_name() <<
+                        "' of alloc-size " << tas << " in '" << dname << "' dim.\n";
                     exit_yask(1);
                 }
             }
@@ -230,9 +230,9 @@ namespace yask {
                 auto sdom = sp->get_rank_domain_size(dname);
                 if (tdom != sdom) {
                     cerr << "Error: attempt to share storage from grid '" << sp->get_name() <<
-                        "' with domain-size " << sdom << " with grid '" << get_name() <<
-                        "' with domain-size " << tdom << " in '" << dname << "' dim.\n";
-                exit_yask(1);
+                        "' of domain-size " << sdom << " with grid '" << get_name() <<
+                        "' of domain-size " << tdom << " in '" << dname << "' dim.\n";
+                    exit_yask(1);
                 }
 
                 // Halo and pad sizes don't have to be the same.
@@ -241,11 +241,19 @@ namespace yask {
                 auto spad = sp->get_pad_size(dname);
                 if (thalo > spad) {
                     cerr << "Error: attempt to share storage from grid '" << sp->get_name() <<
-                        "' with padding-size " << spad <<
+                        "' of padding-size " << spad <<
                         ", which is insufficient for grid '" << get_name() <<
-                        "' with halo-size " << thalo << " in '" << dname << "' dim.\n";
+                        "' of halo-size " << thalo << " in '" << dname << "' dim.\n";
                     exit_yask(1);
                 }
+            }
+
+            // Check folding.
+            if (_vec_lens[i] != sp->_vec_lens[i]) {
+                cerr << "Error: attempt to share storage from grid '" << sp->get_name() <<
+                    "' of fold-length " << sp->_vec_lens[i] << " with grid '" << get_name() <<
+                    "' of fold-length " << _vec_lens[i] << " in '" << dname << "' dim.\n";
+                exit_yask(1);
             }
         }
 
@@ -261,7 +269,7 @@ namespace yask {
         
         // Copy data.
         release_storage();
-        if (!share_data(sp.get())) {
+        if (!share_data(sp.get(), true)) {
             cerr << "Error: unexpected failure in data sharing.\n";
             exit_yask(1);
         }
