@@ -169,10 +169,9 @@ namespace yask {
         get_num_grids() const =0;
         
         /// Get the specified grid.
-        /** @returns Pointer to the nth grid. */
+        /** @returns Pointer to the specified grid or null pointer if it does not exist. */
         virtual yc_grid_ptr
-        get_grid(int n /**< [in] Index of grid between zero (0)
-                              and get_num_grids()-1. */ ) =0;
+        get_grid(const std::string& name /**< [in] Name of the grid. */ ) =0;
         
         /// Get the number of equations in the solution.
         /** Equations are added when equation_nodes are created via new_equation_node().

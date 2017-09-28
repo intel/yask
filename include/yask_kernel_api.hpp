@@ -345,11 +345,10 @@ namespace yask {
         
         /// Get the specified grid.
         /**
-           @returns Pointer to the nth grid.
+           @returns Pointer to the specified grid or null pointer if it does not exist.
         */
         virtual yk_grid_ptr
-        get_grid(int n /**< [in] Index of grid between zero (0)
-                              and get_num_grids()-1. */ ) =0;
+        get_grid(const std::string& name /**< [in] Name of the grid. */ ) =0;
 
         /// Get all the grids.
         /**

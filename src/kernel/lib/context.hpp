@@ -359,16 +359,17 @@ namespace yask {
             return int(gridPtrs.size());
         }
 
-        virtual yk_grid_ptr get_grid(int n) {
-            assert (n >= 0);
-            assert (n < get_num_grids());
-            auto new_ptr = YkGridPtr(gridPtrs.at(n)); // shares ownership.
-            return new_ptr;
+        virtual yk_grid_ptr get_grid(const std::string& name) {
+            for (int i = 0; i < get_num_grids(); i++) {
+                if (gridPtrs.at(i)->get_name() == name)
+                    return gridPtrs.at(i);
+            }
+            return nullptr;
         }
         virtual std::vector<yk_grid_ptr> get_grids() {
             std::vector<yk_grid_ptr> grids;
             for (int i = 0; i < get_num_grids(); i++)
-                grids.push_back(get_grid(i));
+                grids.push_back(gridPtrs.at(i));
             return grids;
         }
         virtual yk_grid_ptr
