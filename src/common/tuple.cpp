@@ -32,6 +32,6 @@ using namespace std;
 namespace yask {
 
     // A shared global pool for names.
-	std::set<std::string> _allNames;
+    std::set<std::string> _allNames;
 
 } // namespace yask.

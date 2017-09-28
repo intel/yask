@@ -46,7 +46,7 @@ namespace yask {
     // A shared global pool for names.
     // This saves space and allows us to compare pointers
     // instead of strings.
-	extern std::set<std::string> _allNames;
+    extern std::set<std::string> _allNames;
  
     template <typename T>
     class Tuple;
@@ -59,26 +59,31 @@ namespace yask {
     protected:
 
         // Name and value for this object.
-        const std::string* _name = 0;
+        const char* _name = 0;  // from the _allNames pool.
+        std::string _str;       // string made from _name.
         T _val = 0;
 
-        static const std::string* _getNamePtr(const std::string& name) {
+        // TODO: put in same scope as _allNames.
+        static const char* _getNamePtr(const std::string& name) {
             auto i = _allNames.insert(name);
             auto& i2 = *i.first;
-            return &i2;
+            return i2.c_str();
         }
 
     public:
         Scalar(const std::string& name, const T& val) {
             auto* sp = _getNamePtr(name);
             _name = sp;
+            _str = name;
             _val = val;
         }
         Scalar(const std::string& name) : Scalar(name, 0) { }
         Scalar() : Scalar("", 0) { }
 
         // Access name.
-        inline const std::string& getName() const { return *_name; }
+        inline const std::string& getName() const {
+            return _str;
+        }
         inline void setName(const std::string& name) {
             auto* sp = _getNamePtr(name);
             _name = sp;
@@ -116,7 +121,7 @@ namespace yask {
 
         // Dimensions and values for this Tuple.
         std::deque<Scalar<T>> _q;             // dirs and values in order.
-        std::map<const std::string*, int> _map;  // positions in _q keyed by name.
+        std::map<const char*, int> _map;  // positions in _q keyed by name.
 
         // First-inner vars control ordering. Example: dims x, y, z.
         // If _firstInner == true, x is unit stride.
