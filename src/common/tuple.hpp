@@ -127,8 +127,8 @@ namespace yask {
         std::map<const char*, int> _map;  // positions in _q keyed by name.
 
         // First-inner vars control ordering. Example: dims x, y, z.
-        // If _firstInner == true, x is unit stride.
-        // If _firstInner == false, z is unit stride.
+        // If _firstInner == true, x is unit stride (col major).
+        // If _firstInner == false, z is unit stride (row major).
         // This setting affects [un]layout() and visitAllPoints().
         bool _firstInner = true; // whether first dim is used for inner loop.
 

@@ -430,6 +430,7 @@ namespace yask {
         firstTuple.setVals(first_indices);
         lastTuple.setVals(last_indices);
         IdxTuple numElemsTuple = lastTuple.addElements(1).subElements(firstTuple);
+        numElemsTuple.setFirstInner(_is_col_major);
 
         // Visit points in slice.
         // TODO: parallelize.
@@ -461,6 +462,7 @@ namespace yask {
         firstTuple.setVals(first_indices);
         lastTuple.setVals(last_indices);
         IdxTuple numElemsTuple = lastTuple.addElements(1).subElements(firstTuple);
+        numElemsTuple.setFirstInner(_is_col_major);
 
         // Visit points in slice.
         // TODO: parallelize.
@@ -488,6 +490,7 @@ namespace yask {
         firstTuple.setVals(first_indices);
         lastTuple.setVals(last_indices);
         IdxTuple numElemsTuple = lastTuple.addElements(1).subElements(firstTuple);
+        numElemsTuple.setFirstInner(_is_col_major);
 
         // Visit points in slice.
         // TODO: parallelize.

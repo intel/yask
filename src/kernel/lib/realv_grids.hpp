@@ -63,6 +63,9 @@ namespace yask {
         // Data has been received from neighbors' halos, if applicable.
         bool _is_updated = false;
 
+        // Data layout for slice APIs.
+        bool _is_col_major = false;
+
         // Convenience function to format indices like
         // "x=5, y=3".
         virtual std::string makeIndexString(const Indices& idxs,
