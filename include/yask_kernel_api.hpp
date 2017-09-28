@@ -485,6 +485,12 @@ namespace yask {
            The stencil(s) in the solution are applied from
            the first to last step index, inclusive,
            across the entire domain as returned by yk_solution::get_overall_domain_size().
+           If the stencil equations were defined with dependencies on lower-valued steps,
+           e.g., _t+1_ depends on _t_, 'last_step_index' should be greater than or equal to
+           'first_step_index' (forward solution).
+           If the stencil equations were defined with dependencies on higher-valued steps,
+           e.g., _t-1_ depends on _t_, 'last_step_index' should be less than or equal to
+           'first_step_index' (reverse solution).
            MPI halo exchanges will occur as necessary.
            Since this function initiates MPI communication, it must be called
            on all MPI ranks, and it will block until all ranks have completed.
