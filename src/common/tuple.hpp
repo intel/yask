@@ -63,7 +63,10 @@ namespace yask {
         std::string _str;       // string made from _name.
         T _val = 0;
 
-        // TODO: put in same scope as _allNames.
+        // A shared global pool for names.
+        static std::set<std::string> _allNames;
+
+        // Look up names in the pool.
         static const char* _getNamePtr(const std::string& name) {
             auto i = _allNames.insert(name);
             auto& i2 = *i.first;
@@ -859,4 +862,8 @@ namespace yask {
         }
     };
 
+    // Declare static member.
+    template <typename T>
+    std::set<std::string> Scalar<T>::_allNames;
+    
 } // namespace yask.
