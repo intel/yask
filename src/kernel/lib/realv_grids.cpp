@@ -51,7 +51,9 @@ namespace yask {
         int posn = dims.lookup_posn(dim);
         if (posn < 0 && die_on_failure) {
             cerr << "Error: " << die_msg << ": dimension '" <<
-                dim << "' not used in grid '" << get_name() << ".\n";
+                dim << "' not found in ";
+            print_info(cerr);
+            cerr << ".\n";
             exit_yask(1);
         }
         return posn;
@@ -116,8 +118,8 @@ namespace yask {
     // APIs to get info from vars.
 #define GET_GRID_API(api_name, expr, step_ok, domain_ok, misc_ok)       \
     idx_t YkGridBase::api_name(const string& dim) const {               \
-        int posn = get_dim_posn(dim, true, #api_name);                  \
         checkDimType(dim, #api_name, step_ok, domain_ok, misc_ok);      \
+        int posn = get_dim_posn(dim, true, #api_name);                  \
         return expr;                                                    \
     }
     GET_GRID_API(get_rank_domain_size, _domains[posn], false, true, false)
@@ -140,8 +142,8 @@ namespace yask {
 #define COMMA ,
 #define SET_GRID_API(api_name, expr, step_ok, domain_ok, misc_ok)       \
     void YkGridBase::api_name(const string& dim, idx_t n) {             \
-        int posn = get_dim_posn(dim, true, #api_name);                  \
         checkDimType(dim, #api_name, step_ok, domain_ok, misc_ok);      \
+        int posn = get_dim_posn(dim, true, #api_name);                  \
         expr;                                                           \
     }
     SET_GRID_API(set_halo_size, _halos[posn] = n; _set_pad_size(dim, _pads[posn]), false, true, false)

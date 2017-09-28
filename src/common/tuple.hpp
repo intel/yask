@@ -116,7 +116,7 @@ namespace yask {
 
         // Dimensions and values for this Tuple.
         std::deque<Scalar<T>> _q;             // dirs and values in order.
-        std::map<const std::string*, int> _map;  // ptr to positions keyed by name.
+        std::map<const std::string*, int> _map;  // positions in _q keyed by name.
 
         // First-inner vars control ordering. Example: dims x, y, z.
         // If _firstInner == true, x is unit stride.
@@ -231,17 +231,9 @@ namespace yask {
         virtual int lookup_posn(const std::string& dim) const {
             auto* sp = Scalar<T>::_getNamePtr(dim);
             auto i = _map.find(sp);
-            return (i == _map.end()) ? -1 : int(i->second);
-        }
-        virtual int lookup_posn(const std::string& dim) {
-            auto* sp = Scalar<T>::_getNamePtr(dim);
-            auto i = _map.find(sp);
-            return (i == _map.end()) ? -1 : int(i->second);
+            return (i == _map.end()) ? -1 : i->second;
         }
         virtual int lookup_posn(const std::string* dim) const {
-            return lookup_posn(*dim);
-        }
-        virtual int lookup_posn(const std::string* dim) {
             return lookup_posn(*dim);
         }
 
