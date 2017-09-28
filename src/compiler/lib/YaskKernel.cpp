@@ -785,6 +785,7 @@ namespace yask {
             auto& dval = dim.getVal();
             os << "    p->_cluster_mults.addDimBack(\"" << dname << "\", " << dval << ");\n";
         }
+        os << "    p->_step_dir = " << _dims._stepDir << ";\n";
             
         os << "    return p;\n"
             "  }\n";

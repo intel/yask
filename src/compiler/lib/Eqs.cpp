@@ -200,13 +200,15 @@ namespace yask {
 
     // Find dependencies based on all eqs.
     // If 'eq_deps' is set, save dependencies between eqs.
+    // Side effect: sets _stepDir in dims.
     // [BIG]TODO: replace dependency algorithms with integration of a polyhedral
     // library.
     void Eqs::findDeps(IntTuple& pts,
-                       const string& stepDim,
+                       Dimensions& dims,
                        EqDepMap* eq_deps,
                        ostream& os) {
-
+        auto& stepDim = dims._stepDim;
+        
         // Gather points from all eqs in all grids.
         PointVisitor pt_vis(pts);
 
@@ -268,14 +270,20 @@ namespace yask {
                 if (rsi1p) {
                     int rsi1 = *rsi1p;
 
-                    // Cannot depend on future value in this dim.
-                    if (rsi1 > si1) {
-                        cerr << "Error: equation " << eq1->makeQuotedStr() <<
-                            " contains an illegal dependence from offset " << rsi1 <<
-                            " to " << si1 << " relative to step-dimension index var '" <<
-                            stepDim << "'.\n";
-                        exit(1);
-                    }
+                    // Past or future step dep.
+                    int stepDir = (rsi1 < si1) ? +1 : (rsi1 > si1) ? -1 : 0;
+
+                    // Already set?
+                    if (dims._stepDir) {
+                        if (dims._stepDir != stepDir) {
+                            cerr << "Error: equation " << eq1->makeQuotedStr() <<
+                                " contains a dependence from offset " << rsi1 <<
+                                " to " << si1 << " relative to step-dimension index var '" <<
+                                stepDim << "' that is not in the same direction as a previous equation.\n";
+                            exit(1);
+                        }
+                    } else
+                        dims._stepDir = stepDir;
 
                     // TODO: should make some dependency checks when rsi1 == si1.
                 }

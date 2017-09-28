@@ -339,6 +339,9 @@ namespace yask {
         IntTuple _clusterPts;    // cluster size in points.
         IntTuple _clusterMults;  // cluster size in vectors.
 
+        // Direction of stepping.
+        int _stepDir = 0;       // 0: undetermined, +1: forward, -1: backward.
+        
         Dimensions() {}
         virtual ~Dimensions() {}
     

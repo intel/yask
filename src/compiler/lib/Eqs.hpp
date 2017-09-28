@@ -159,16 +159,16 @@ namespace yask {
         // Find dependencies based on all eqs.  If 'eq_deps' is
         // set, save dependencies between eqs.
         virtual void findDeps(IntTuple& pts,
-                              const string& stepDim,
+                              Dimensions& dims,
                               EqDepMap* eq_deps,
                               std::ostream& os);
 
         // Check for illegal dependencies in all equations.
         // Exit with error if any found.
         virtual void checkDeps(IntTuple& pts,
-                               const string& stepDim,
+                               Dimensions& dims,
                                std::ostream& os) {
-            findDeps(pts, stepDim, NULL, os);
+            findDeps(pts, dims, NULL, os);
         }
 
         // Determine which grid points can be vectorized.
@@ -288,7 +288,7 @@ namespace yask {
 
         // Copy of some global data.
         string _basename_default;
-        const Dimensions* _dims = 0;
+        Dimensions* _dims = 0;
 
         // Track grids that are udpated.
         Grids _outGrids;
@@ -311,7 +311,7 @@ namespace yask {
 
     public:
         EqGroups() {}
-        EqGroups(const string& basename_default, const Dimensions& dims) :
+        EqGroups(const string& basename_default, Dimensions& dims) :
             _basename_default(basename_default),
             _dims(&dims) {}
         virtual ~EqGroups() {}
@@ -319,7 +319,7 @@ namespace yask {
         virtual void set_basename_default(const string& basename_default) {
             _basename_default = basename_default;
         }
-        virtual void set_dims(const Dimensions& dims) {
+        virtual void set_dims(Dimensions& dims) {
             _dims = &dims;
         }
         
@@ -341,7 +341,7 @@ namespace yask {
                           std::ostream& os) {
             EqDepMap eq_deps;
             if (find_deps)
-                eqs.findDeps(pts, _dims->_stepDim, &eq_deps, os);
+                eqs.findDeps(pts, *_dims, &eq_deps, os);
             makeEqGroups(eqs, targets, eq_deps, os);
         }
 

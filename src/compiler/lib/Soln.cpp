@@ -87,14 +87,14 @@ namespace yask {
         if (_settings._find_deps) {
             *_dos << "Checking equation(s) with scalar operations...\n"
                 " If this fails, review stencil equation(s) for illegal dependencies.\n";
-            _eqs.checkDeps(_dims._scalar, _dims._stepDim, *_dos);
+            _eqs.checkDeps(_dims._scalar, _dims, *_dos);
         }
 
         // Check for illegal dependencies within equations for vector size.
         if (_settings._find_deps) {
             *_dos << "Checking equation(s) with folded-vector operations...\n"
                 " If this fails, the fold dimensions are not compatible with all equations.\n";
-            _eqs.checkDeps(_dims._fold, _dims._stepDim, *_dos);
+            _eqs.checkDeps(_dims._fold, _dims, *_dos);
         }
 
         // Check for illegal dependencies within equations for cluster size and

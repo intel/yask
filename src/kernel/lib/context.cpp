@@ -105,38 +105,50 @@ namespace yask {
         auto& step_dim = _dims->_step_dim;
         idx_t begin_t = 0;
         idx_t end_t = _opts->_rank_sizes[step_dim];
-        idx_t step_t = 1;
+        idx_t step_t = _dims->_step_dir;
 
-        // Begin, end tuples.
+        // backward?
+        if (step_t < 0) {
+            begin_t = end_t + step_t;
+            end_t = step_t;
+        }
+
+        // Begin, end, last tuples.
         IdxTuple begin(_dims->_stencil_dims);
         begin.setVals(bb_begin, false);
         begin[step_dim] = begin_t;
         IdxTuple end(_dims->_stencil_dims);
         end.setVals(bb_end, false);
         end[step_dim] = end_t;
-
+        IdxTuple last = end.subElements(1);
+        if (step_t < 0)
+            last[step_dim] = 0;
+        
         TRACE_MSG("calc_rank_ref: " << begin.makeDimValStr() << " ... " <<
-                  end.subElements(1).makeDimValStr());
+                  last.makeDimValStr());
 
         // Indices needed for the 'general' loops.
         ScanIndices gen_idxs;
         gen_idxs.begin = begin;
         gen_idxs.end = end;
 
-        // Number of iterations to get from begin_t to end_t-1,
+        // Number of iterations to get from begin_t, stopping before end_t,
         // stepping by step_t.
-        const idx_t num_t = ((end_t - begin_t) + (step_t - 1)) / step_t;
+        const idx_t num_t = (abs(end_t - begin_t) + (abs(step_t) - 1)) / abs(step_t);
         for (idx_t index_t = 0; index_t < num_t; index_t++)
         {
             // This value of index_t steps from start_t to stop_t-1.
             const idx_t start_t = begin_t + (index_t * step_t);
-            const idx_t stop_t = min(start_t + step_t, end_t);
+            const idx_t stop_t = (step_t > 0) ?
+                min(start_t + step_t, end_t) :
+                max(start_t + step_t, end_t);
 
             // Set indices that will pass through generated code
             // because the step loop is coded here.
             gen_idxs.index[_step_posn] = index_t;
             gen_idxs.start[_step_posn] = start_t;
             gen_idxs.stop[_step_posn] = stop_t;
+            gen_idxs.step[_step_posn] = step_t;
         
             // Loop thru eq-groups.
             for (auto* eg : eqGroups) {
@@ -171,10 +183,10 @@ namespace yask {
     {
         auto& step_dim = _dims->_step_dim;
         idx_t begin_t = first_step_index;
-        idx_t end_t = last_step_index + 1; // end is 1 past last.
-        idx_t step_t = _opts->_region_sizes[step_dim];
+        idx_t step_t = _opts->_region_sizes[step_dim] * _dims->_step_dir;
+        idx_t end_t = last_step_index + _dims->_step_dir; // end is beyond last.
 
-        // Begin, end, and step tuples.
+        // Begin, end, step, last tuples.
         IdxTuple begin(_dims->_stencil_dims);
         begin.setVals(bb_begin, false);
         begin[step_dim] = begin_t;
@@ -183,9 +195,12 @@ namespace yask {
         end[step_dim] = end_t;
         IdxTuple step(_dims->_stencil_dims);
         step.setVals(_opts->_region_sizes, false); // step by region sizes.
+        step[step_dim] = step_t;
+        IdxTuple last = end.subElements(1);
+        last[step_dim] = last_step_index;
 
         TRACE_MSG("run_solution: " << begin.makeDimValStr() << " ... " <<
-                  end.subElements(1).makeDimValStr());
+                  last.makeDimValStr());
         if (!bb_valid) {
             cerr << "Error: attempt to run solution without preparing it first.\n";
             exit_yask(1);
@@ -225,7 +240,7 @@ namespace yask {
         // x = begin_dx      end_dx end_dx
         //                   (orig) (after extension)
         //
-        idx_t nshifts = (idx_t(eqGroups.size()) * step_t) - 1;
+        idx_t nshifts = (idx_t(eqGroups.size()) * abs(step_t)) - 1;
         for (auto& dim : _dims->_domain_dims.getDims()) {
             auto& dname = dim.getName();
             end[dname] += angles[dname] * nshifts;
@@ -245,23 +260,26 @@ namespace yask {
 
         // Number of iterations to get from begin_t to end_t-1,
         // stepping by step_t.
-        const idx_t num_t = ((end_t - begin_t) + (step_t - 1)) / step_t;
+        const idx_t num_t = (abs(end_t - begin_t) + (abs(step_t) - 1)) / abs(step_t);
         for (idx_t index_t = 0; index_t < num_t; index_t++)
         {
             // This value of index_t steps from start_t to stop_t-1.
             const idx_t start_t = begin_t + (index_t * step_t);
-            const idx_t stop_t = min(start_t + step_t, end_t);
+            const idx_t stop_t = (step_t > 0) ?
+                min(start_t + step_t, end_t) :
+                max(start_t + step_t, end_t);
 
             // Set indices that will pass through generated code.
             rank_idxs.index[_step_posn] = index_t;
             rank_idxs.start[_step_posn] = start_t;
             rank_idxs.stop[_step_posn] = stop_t;
+            rank_idxs.step[_step_posn] = step_t;
             
             // If doing only one time step in a region (default), loop
             // through equations here, and do only one equation group at a
             // time in calc_region(). This is similar to loop in
             // calc_rank_ref().
-            if (step_t == 1) {
+            if (abs(step_t) == 1) {
 
                 for (auto* eg : eqGroups) {
 
@@ -285,6 +303,12 @@ namespace yask {
             // If doing more than one time step in a region (temporal wave-front),
             // must loop through all eq-groups in calc_region().
             else {
+
+                // TODO: enable reverse time w/wave-fronts.
+                if (step_t < 0) {
+                    cerr << "Error: reverse time with wave-fronts not yet supported.\n";
+                    exit_yask(1);
+                }
 
                 // TODO: enable halo exchange for wave-fronts.
                 if (_env->num_ranks > 1) {
@@ -339,6 +363,7 @@ namespace yask {
         auto& step_dim = _dims->_step_dim;
         TRACE_MSG("calc_region: " << rank_idxs.start.makeValStr(ndims) <<
                   " ... " << rank_idxs.stop.addConst(-1).makeValStr(ndims));
+
 
         // Init region begin & end from rank start & stop indices.
         ScanIndices region_idxs;

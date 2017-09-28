@@ -365,6 +365,9 @@ namespace yask {
         IdxTuple _cluster_pts;
         IdxTuple _cluster_mults;
 
+        // Direction of step.
+        int _step_dir = 0;    // 0: undetermined, +1: forward, -1: backward.
+
         // Check whether dim exists and is of allowed type.
         // If not, abort with error, reporting 'fn_name'.
         void checkDimType(const std::string& dim,
