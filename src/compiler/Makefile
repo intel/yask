@@ -31,6 +31,7 @@ YASK_BASE	:=	$(shell cd ../..; pwd)
 LIB_DIR		:=	$(YASK_BASE)/lib
 INC_DIR		:=	$(YASK_BASE)/include
 BIN_DIR		:=	$(YASK_BASE)/bin
+YASK_DIR	:=	$(YASK_BASE)/yask
 
 # OS-specific
 ifeq ($(shell uname -o),Cygwin)
@@ -50,8 +51,8 @@ YC_MODULE	:=	$(YC_BASE)
 YC_EXEC		:=	$(BIN_DIR)/$(YC_BASE).exe
 YC_TEST_EXEC	:=	$(BIN_DIR)/$(YC_BASE)_api_test.exe
 YC_LIB		:=	$(LIB_DIR)/lib$(YC_BASE)$(SO_SUFFIX)
-YC_PY_LIB	:=	$(LIB_DIR)/_$(YC_MODULE)$(SO_SUFFIX)
-YC_PY_MOD	:=	$(LIB_DIR)/$(YC_MODULE).py
+YC_PY_LIB	:=	$(YASK_DIR)/_$(YC_MODULE)$(SO_SUFFIX)
+YC_PY_MOD	:=	$(YASK_DIR)/$(YC_MODULE).py
 
 # Common source.
 COMM_DIR	:=	../common
@@ -130,7 +131,7 @@ $(YC_SWIG_DIR)/yask_compiler_api_wrap.cpp: $(YC_SWIG_DIR)/yask*.i $(INC_DIR)/*.h
 	$(SWIG) -version
 	$(SWIG) -v -DYC_MODULE=$(YC_MODULE) -cppext cpp \
 	  -I$(INC_DIR) -I$(COMM_DIR) -I$(COMM_DIR)/swig \
-	  -c++ -python -outdir $(LIB_DIR) -builtin $<
+	  -c++ -python -outdir $(YASK_DIR) -builtin $<
 
 $(YC_SWIG_DIR)/yask_compiler_api_wrap.o: $(YC_SWIG_DIR)/yask_compiler_api_wrap.cpp
 	$(YC_CXX) $(YC_CXXFLAGS) $(PYINC) -fPIC -c -o $@ $<

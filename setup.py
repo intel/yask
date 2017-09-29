@@ -26,7 +26,7 @@ setup(
     url='https://01.org/yask',
     author='Intel Corporation',
     license='MIT',
-    package_dir = {'': 'lib'},
+    packages = ['yask'],
     cmdclass={
         'install': Install,
     }
