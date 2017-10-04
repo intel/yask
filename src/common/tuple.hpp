@@ -43,11 +43,6 @@ IN THE SOFTWARE.
 
 namespace yask {
 
-    // A shared global pool for names.
-    // This saves space and allows us to compare pointers
-    // instead of strings.
-    extern std::set<std::string> _allNames;
- 
     template <typename T>
     class Tuple;
     
@@ -59,25 +54,12 @@ namespace yask {
     protected:
 
         // Name and value for this object.
-        const char* _name = 0;  // from the _allNames pool.
-        std::string _str;       // string made from _name.
+        std::string _name;
         T _val = 0;
-
-        // A shared global pool for names.
-        static std::set<std::string> _allNames;
-
-        // Look up names in the pool.
-        static const char* _getNamePtr(const std::string& name) {
-            auto i = _allNames.insert(name);
-            auto& i2 = *i.first;
-            return i2.c_str();
-        }
 
     public:
         Scalar(const std::string& name, const T& val) {
-            auto* sp = _getNamePtr(name);
-            _name = sp;
-            _str = name;
+            _name = name;
             _val = val;
         }
         Scalar(const std::string& name) : Scalar(name, 0) { }
@@ -85,11 +67,10 @@ namespace yask {
 
         // Access name.
         inline const std::string& getName() const {
-            return _str;
+            return _name;
         }
         inline void setName(const std::string& name) {
-            auto* sp = _getNamePtr(name);
-            _name = sp;
+            _name = name;
         }
 
         // Access value.
@@ -123,8 +104,8 @@ namespace yask {
     protected:
 
         // Dimensions and values for this Tuple.
-        std::deque<Scalar<T>> _q;             // dirs and values in order.
-        std::map<const char*, int> _map;  // positions in _q keyed by name.
+        std::deque<Scalar<T>> _q;        // dirs and values in order.
+        std::map<std::string, int> _map; // positions in _q keyed by name.
 
         // First-inner vars control ordering. Example: dims x, y, z.
         // If _firstInner == true, x is unit stride (col major).
@@ -218,14 +199,12 @@ namespace yask {
         // Return pointer to value or null if it doesn't exist.
         // Lookup by name.
         virtual const T* lookup(const std::string& dim) const {
-            auto* sp = Scalar<T>::_getNamePtr(dim);
-            auto i = _map.find(sp);
-            return (i == _map.end()) ? NULL : &_q[i->second]._val;
+            int i = lookup_posn(dim);
+            return (i >= 0) ? &_q[i]._val : NULL;
         }
         virtual T* lookup(const std::string& dim) {
-            auto* sp = Scalar<T>::_getNamePtr(dim);
-            auto i = _map.find(sp);
-            return (i == _map.end()) ? NULL : &_q[i->second]._val;
+            int i = lookup_posn(dim);
+            return (i >= 0) ? &_q[i]._val : NULL;
         }
         virtual const T* lookup(const std::string* dim) const {
             return lookup(*dim);
@@ -237,8 +216,7 @@ namespace yask {
         // Return dim posn or -1 if it doesn't exist.
         // Lookup by name.
         virtual int lookup_posn(const std::string& dim) const {
-            auto* sp = Scalar<T>::_getNamePtr(dim);
-            auto i = _map.find(sp);
+            auto i = _map.find(dim);
             return (i == _map.end()) ? -1 : i->second;
         }
         virtual int lookup_posn(const std::string* dim) const {
@@ -862,8 +840,4 @@ namespace yask {
         }
     };
 
-    // Declare static member.
-    template <typename T>
-    std::set<std::string> Scalar<T>::_allNames;
-    
 } // namespace yask.
