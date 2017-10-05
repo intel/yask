@@ -324,7 +324,7 @@ YASK_DIR	:=	$(YASK_BASE)/yask
 # OS-specific
 ifeq ($(shell uname -o),Cygwin)
   SO_SUFFIX	:=	.dll
-  RUN_PREFIX	:=	env PATH="${PATH}:$(LIB_DIR)"
+  RUN_PREFIX	:=	env PATH="${PATH}:$(LIB_DIR):$(YASK_DIR)"
   PYTHON		:= python3
 else
   SO_SUFFIX	:=	.so
@@ -414,7 +414,7 @@ SWIG		:=	swig
 # NB: constructing string inside print() to work for python 2 or 3.
 PYINC		:= 	$(addprefix -I,$(shell $(PYTHON) -c 'import distutils.sysconfig; print(distutils.sysconfig.get_python_inc() + " " + distutils.sysconfig.get_python_inc(plat_specific=1))'))
 
-RUN_PYTHON	:= 	$(RUN_PREFIX) env PYTHONPATH=$(LIB_DIR) $(PYTHON)
+RUN_PYTHON	:= 	$(RUN_PREFIX) env PYTHONPATH=$(LIB_DIR):$(YASK_DIR) $(PYTHON)
 
 # Set MACROS based on individual makefile vars.
 # MACROS and EXTRA_MACROS will be written to a header file.
