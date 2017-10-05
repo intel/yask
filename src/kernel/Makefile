@@ -471,7 +471,7 @@ ifneq ($(findstring icpc,$(notdir $(YK_CXX))),)  # Intel compiler
 			-fma -fimf-domain-exclusion=none -qopt-assume-safe-padding
  #YK_CXXFLAGS	+=	-qoverride-limits
  YK_CXXFLAGS	+=	-vec-threshold0
- YK_CXXFLAGS	+=      -qopt-report=5
+ #YK_CXXFLAGS	+=      -qopt-report=5
  #YK_CXXFLAGS	+=	-qopt-report-phase=VEC,PAR,OPENMP,IPO,LOOP
  YK_CXXFLAGS	+=	-no-diag-message-catalog
  YK_CXX_VER_CMD	:=	$(YK_CXX) -V

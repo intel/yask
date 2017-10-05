@@ -120,12 +120,9 @@ namespace yask {
         IdxTuple end(_dims->_stencil_dims);
         end.setVals(bb_end, false);
         end[step_dim] = end_t;
-        IdxTuple last = end.subElements(1);
-        if (step_t < 0)
-            last[step_dim] = 0;
         
-        TRACE_MSG("calc_rank_ref: " << begin.makeDimValStr() << " ... " <<
-                  last.makeDimValStr());
+        TRACE_MSG("calc_rank_ref: " << begin.makeDimValStr() << " ... (end before) " <<
+                  end.makeDimValStr());
 
         // Indices needed for the 'general' loops.
         ScanIndices gen_idxs;
@@ -196,11 +193,9 @@ namespace yask {
         IdxTuple step(_dims->_stencil_dims);
         step.setVals(_opts->_region_sizes, false); // step by region sizes.
         step[step_dim] = step_t;
-        IdxTuple last = end.subElements(1);
-        last[step_dim] = last_step_index;
 
-        TRACE_MSG("run_solution: " << begin.makeDimValStr() << " ... " <<
-                  last.makeDimValStr());
+        TRACE_MSG("run_solution: " << begin.makeDimValStr() << " ... (end before) " <<
+                  end.makeDimValStr() << " by " << step.makeDimValStr());
         if (!bb_valid) {
             cerr << "Error: attempt to run solution without preparing it first.\n";
             exit_yask(1);
@@ -246,8 +241,8 @@ namespace yask {
             end[dname] += angles[dname] * nshifts;
         }
         TRACE_MSG("after wave-front adjustment: " <<
-                  begin.makeDimValStr() << " ... " <<
-                  end.subElements(1).makeDimValStr());
+                  begin.makeDimValStr() << " ... (end before) " <<
+                  end.makeDimValStr());
 
         // Indices needed for the 'rank' loops.
         ScanIndices rank_idxs;
@@ -348,6 +343,10 @@ namespace yask {
         auto& step_dim = _dims->_step_dim;
         idx_t first_t = 0;
         idx_t last_t = _opts->_rank_sizes[step_dim] - 1;
+        if (_dims->_step_dir < 0) {
+            first_t = last_t;
+            last_t = 0;
+        }
 
         run_solution(first_t, last_t);
     }
@@ -362,8 +361,7 @@ namespace yask {
         int ndims = _dims->_stencil_dims.size();
         auto& step_dim = _dims->_step_dim;
         TRACE_MSG("calc_region: " << rank_idxs.start.makeValStr(ndims) <<
-                  " ... " << rank_idxs.stop.addConst(-1).makeValStr(ndims));
-
+                  " ... (end before) " << rank_idxs.stop.makeValStr(ndims));
 
         // Init region begin & end from rank start & stop indices.
         ScanIndices region_idxs;
@@ -390,15 +388,14 @@ namespace yask {
         idx_t begin_t = region_idxs.begin[_step_posn];
         idx_t end_t = region_idxs.end[_step_posn];
         idx_t step_t = region_idxs.step[_step_posn];
-        const idx_t num_t = ((end_t - begin_t) + (step_t - 1)) / step_t;
+        const idx_t num_t = (abs(end_t - begin_t) + (abs(step_t) - 1)) / abs(step_t);
         for (idx_t index_t = 0; index_t < num_t; index_t++)
         {
             // This value of index_t steps from start_t to stop_t-1.
             const idx_t start_t = begin_t + (index_t * step_t);
-            const idx_t stop_t = min(start_t + step_t, end_t);
-
-            // TODO: remove this when temporal blocking is implemented.
-            assert(stop_t == start_t + 1);
+            const idx_t stop_t = (step_t > 0) ?
+                min(start_t + step_t, end_t) :
+                max(start_t + step_t, end_t);
 
             // Set indices that will pass through generated code.
             region_idxs.index[_step_posn] = index_t;
@@ -409,8 +406,8 @@ namespace yask {
             for (auto* eg : eqGroups) {
                 if (!eqGroup_set || eqGroup_set->count(eg)) {
                     TRACE_MSG("calc_region: eq-group '" << eg->get_name() << "' w/BB " <<
-                              eg->bb_begin.makeDimValStr() << " ... " <<
-                              eg->bb_end.subElements(1).makeDimValStr());
+                              eg->bb_begin.makeDimValStr() << " ... (end before) " <<
+                              eg->bb_end.makeDimValStr());
 
                     // For wavefront adjustments, see conceptual diagram in
                     // calc_rank_opt().  In this function, 1 of the 4
@@ -432,7 +429,7 @@ namespace yask {
                     }
                     TRACE_MSG("calc_region, after trimming: " <<
                               region_idxs.begin.makeValStr(ndims) <<
-                              " ... " << region_idxs.end.addConst(-1).makeValStr(ndims));
+                              " ... (end before) " << region_idxs.end.makeValStr(ndims));
                     
                     // Only need to loop through the spatial extent of the
                     // region if any of its blocks are at least partly
@@ -1320,7 +1317,7 @@ namespace yask {
     void StencilContext::exchange_halos(idx_t start_dt, idx_t stop_dt, EqGroupBase& eg)
     {
         auto opts = get_settings();
-        TRACE_MSG("exchange_halos: " << start_dt << " ... " << (stop_dt-1) <<
+        TRACE_MSG("exchange_halos: " << start_dt << " ... (end before) " << stop_dt <<
                   " for eq-group '" << eg.get_name() << "'");
 
 #ifdef USE_MPI
@@ -1370,8 +1367,7 @@ namespace yask {
                 // assume only one time-step to exchange.  TODO: fix this
                 // when MPI + wave-front is enabled, and fix it in setupRank
                 // also.
-                assert(stop_dt = start_dt + 1);
-                idx_t ht = start_dt;
+                idx_t ht = stop_dt; // assume this value was calculated.
                 IdxTuple toffset;
                 auto& tdim = _dims->_step_dim;
                 if (gp->is_dim_used(tdim))

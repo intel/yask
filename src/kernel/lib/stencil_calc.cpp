@@ -36,7 +36,7 @@ namespace yask {
         int ndims = dims->_stencil_dims.size();
         auto& step_dim = dims->_step_dim;
         TRACE_MSG3("calc_block: " << region_idxs.start.makeValStr(ndims) <<
-                  " ... " << region_idxs.stop.addConst(-1).makeValStr(ndims));
+                  " ... (end before) " << region_idxs.stop.makeValStr(ndims));
 
         // Init block begin & end from region start & stop indices.
         ScanIndices block_idxs;
@@ -69,7 +69,7 @@ namespace yask {
         int ndims = dims->_stencil_dims.size();
         auto& step_dim = dims->_step_dim;
         TRACE_MSG3("calc_sub_block: " << block_idxs.start.makeValStr(ndims) <<
-                  " ... " << block_idxs.stop.addConst(-1).makeValStr(ndims));
+                  " ... (end before) " << block_idxs.stop.makeValStr(ndims));
 
         // Init sub-block begin & end from block start & stop indices.
         // These indices are in element units.

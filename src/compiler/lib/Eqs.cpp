@@ -243,9 +243,9 @@ namespace yask {
             
                 // LHS of an equation must use step dim w/a simple offset.
                 auto* si1p = i1->getArgOffsets().lookup(stepDim);
-                if (!si1p) {
+                if (!si1p || abs(*si1p) != 1) {
                     cerr << "Error: equation " << eq1->makeQuotedStr() <<
-                        " does not use simple offset from step-dimension index var '" <<
+                        " does not use offset +/- 1 from step-dimension index var '" <<
                         stepDim << "' on LHS.\n";
                     exit(1);
                 }

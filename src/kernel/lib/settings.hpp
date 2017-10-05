@@ -575,7 +575,7 @@ namespace yask {
 
             _region_sizes = dims->_stencil_dims;
             _region_sizes.setValsSame(0);          // 0 => full rank.
-            _rank_sizes.setVal(dims->_step_dim, 1); // 1 => no wave-front tiling.
+            _region_sizes.setVal(dims->_step_dim, 1); // 1 => no wave-front tiling.
 
             _block_group_sizes = dims->_stencil_dims;
             _block_group_sizes.setValsSame(0); // 0 => min size.
