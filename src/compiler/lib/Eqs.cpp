@@ -252,6 +252,17 @@ namespace yask {
                 assert(si1p);
                 si1 = *si1p;
 
+                // Step direction already set?
+                if (dims._stepDir) {
+                    if (dims._stepDir != si1) {
+                        cerr << "Error: equation " << eq1->makeQuotedStr() <<
+                            " LHS has offset " << si1 << " from step-dimesion index var, "
+                            "which is different than a previous equation with offset " << dims._stepDir << ".\n";
+                        exit(1);
+                    }
+                } else
+                    dims._stepDir = si1;
+
                 // LHS of an equation must be vectorizable.
                 // TODO: relax this restriction.
                 if (i1->getVecType() != GridPoint::VEC_FULL) {
@@ -270,20 +281,14 @@ namespace yask {
                 if (rsi1p) {
                     int rsi1 = *rsi1p;
 
-                    // Past or future step dep.
-                    int stepDir = (rsi1 < si1) ? +1 : (rsi1 > si1) ? -1 : 0;
-
-                    // Already set?
-                    if (dims._stepDir) {
-                        if (dims._stepDir != stepDir) {
-                            cerr << "Error: equation " << eq1->makeQuotedStr() <<
-                                " contains a dependence from offset " << rsi1 <<
-                                " to " << si1 << " relative to step-dimension index var '" <<
-                                stepDim << "' that is not in the same direction as a previous equation.\n";
-                            exit(1);
-                        }
-                    } else
-                        dims._stepDir = stepDir;
+                    // Must be in proper relation to LHS.
+                    if ((si1 > 0 && rsi1 > si1) ||
+                        (si1 < 0 && rsi1 < si1)) {
+                        cerr << "Error: equation " << eq1->makeQuotedStr() <<
+                            " RHS has offset " << rsi1 << " from step-dimesion index var, "
+                            "which is incompatible with LHS offset " << si1 << ".\n";
+                        exit(1);
+                    }
 
                     // TODO: should make some dependency checks when rsi1 == si1.
                 }
