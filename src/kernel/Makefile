@@ -319,6 +319,7 @@ YASK_BASE	:=	$(shell cd ../..; pwd)
 LIB_DIR		:=	$(YASK_BASE)/lib
 INC_DIR		:=	$(YASK_BASE)/include
 BIN_DIR		:=	$(YASK_BASE)/bin
+YASK_DIR	:=	$(YASK_BASE)/yask
 
 # OS-specific
 ifeq ($(shell uname -o),Cygwin)
@@ -339,8 +340,8 @@ YK_TAG		:=	$(stencil).$(arch)
 YK_BASE2	:=	$(YK_BASE).$(YK_TAG)
 YK_EXEC		:=	$(BIN_DIR)/$(YK_BASE2).exe
 YK_LIB		:=	$(LIB_DIR)/lib$(YK_BASE2)$(SO_SUFFIX)
-YK_PY_LIB	:=	$(LIB_DIR)/_$(YK_MODULE)$(SO_SUFFIX)
-YK_PY_MOD	:=	$(LIB_DIR)/$(YK_MODULE).py
+YK_PY_LIB	:=	$(YASK_DIR)/_$(YK_MODULE)$(SO_SUFFIX)
+YK_PY_MOD	:=	$(YASK_DIR)/$(YK_MODULE).py
 YK_API_TEST_EXEC :=	$(BIN_DIR)/$(YK_BASE)_api_test.exe
 YK_GRID_TEST_EXEC :=	$(BIN_DIR)/$(YK_BASE)_grid_test.exe
 YK_TUPLE_TEST_EXEC :=	$(BIN_DIR)/$(YK_BASE)_tuple_test.exe
@@ -598,7 +599,7 @@ $(YK_SWIG_DIR)/yask_kernel_api_wrap.cpp: $(YK_SWIG_DIR)/yask*.i $(INC_DIR)/*.hpp
 	$(SWIG) -version
 	$(SWIG) -v -DYK_MODULE=$(YK_MODULE) -cppext cpp \
 	  -I$(INC_DIR) -I$(COMM_DIR) -I$(COMM_DIR)/swig \
-	  -c++ -python -outdir $(LIB_DIR) -builtin $<
+	  -c++ -python -outdir $(YASK_DIR) -builtin $<
 
 $(YK_SWIG_DIR)/yask_kernel_api_wrap.o: $(YK_SWIG_DIR)/yask_kernel_api_wrap.cpp
 	$(YK_CXX) $(YK_CXXFLAGS) $(PYINC) -fPIC -c -o $@ $<
