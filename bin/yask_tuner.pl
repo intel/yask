@@ -41,9 +41,9 @@ use POSIX;
 # constants.
 my @dirs = qw(x y z);           # not including t and n.
 my $oneKi = 1024;
-my $oneMi = 1024 * $oneKi;
-my $oneGi = 1024 * $oneMi;
-my $oneTi = 1024 * $oneGi;
+my $oneMi = $oneKi * $oneKi;
+my $oneGi = $oneKi * $oneMi;
+my $oneTi = $oneKi * $oneGi;
 my $oneK = 1e3;
 my $oneM = 1e6;
 my $oneG = 1e9;
@@ -61,8 +61,6 @@ my $host;                      # set to run on a different host.
 my $sde = 0;                   # run under sde (for testing).
 my $sim = 0;                   # run under any simulator/emulator.
 my $radius;                    # stencil radius.
-my $zLoop = 0;                 # Force inner loop in 'z' direction.
-my $zLayout = 0;               # Force inner memory layout in 'z' direction.
 my $zVec = 0;                  # Force 1D vectorization in 'z' direction.
 my $folding = 1;               # 2D & 3D folding allowed.
 my $dp;                        # double precision.
@@ -85,24 +83,24 @@ sub usage {
   warn
       "usage: $0 [options]\n".
       "\nhigh-level control options:\n".
-      " -check             Print the settings, sanity-check the initial population and exit.\n".
-      " -test              Run search with dummy fitness values.\n".
-      " -debugCheck        Print detailed results of sanity-checks.\n".
+      " -noBuild           Do not compile kernel; kernel binary must already exist.\n".
       " -sweep             Use exhausitive search instead of GA.\n".
-      " -noBuild           Do not compile or modify any compiler genes; binary must already exist.\n".
       " -val               Run validation before each performance test.\n".
       " -outDir            Directory to write output into (default is '$outDir').\n".
+      " -check             Print the settings, sanity-check the initial population, and exit.\n".
+      " -test              Run search with dummy fitness values.\n".
+      " -debugCheck        Print detailed results of sanity-checks.\n".
       "\ntarget options:\n".
       " -arch=<ARCH>       Specify target architecture: knc, knl, hsw, ... (required).\n".
-      " -mic=<N>           Set hostname to current hostname appended with -mic<N>; sets arch to 'knc'.\n".
       " -host=<NAME>       Run binary on host <NAME> using ssh.\n".
+      " -mic=<N>           Set hostname to current hostname appended with -mic<N>; sets arch to 'knc'.\n".
       " -sde               Run binary on SDE (for testing only).\n".
       " -makePrefix=<CMD>  Prefix make command with <CMD>.\n".
       " -makeArgs=<ARGS>   Pass additional <ARGS> to make command.\n".
       " -runArgs=<ARGS>    Pass additional <ARGS> to bin/yask.sh command.\n".
       " -ranks=<N>         Number of ranks to use on host (x-dimension only).\n".
       "\nstencil options:\n".
-      " -stencil=<NAME>    Specify stencil: iso3dfd, 3axis, 9axis, 3plane, cube, awp, ... (required).\n".
+      " -stencil=<NAME>    Specify stencil: iso3dfd, awp, etc. (required).\n".
       " -dp|-sp            Specify FP precision (default is SP).\n".
       " -radius=<N>        Specify stencil radius for stencils that use this option (default is 8).\n".
       "\nsearch-space options:\n".
@@ -123,13 +121,10 @@ sub usage {
       " -maxVecsInCluster=<N>  Maximum vectors allowed in cluster (default is $maxVecsInCluster).\n".
       " -noPrefetch        Disable any prefetching (shortcut for '-pfd_l1=0 -pfd_l2=0').\n".
       " -noFolding         Allow only 1D vectorization (in any direction).\n".
-      " -zLoop             Force inner loop in 'z' direction.\n".
-      " -zLayout           Force inner memory layout in 'z' direction.\n".
-      " -zVec              Force 1D vectorization in 'z' direction.\n".
-      " -zAll              Traditional 'inline' code (shortcut for -zLoop -zLayout -zVec).\n".
+      " -zVec              Force 1D vectorization in 'z' direction (traditional 'inline' style).\n".
       "\n".
       "examples:\n".
-      " $0 -stencil=iso3dfd -arch=knl -mem=14-16\n".
+      " $0 -stencil=iso3dfd -arch=knl -d=768 -r=0 -noPrefetch\n".
       " $0 -stencil=awp -arch=knl -dx=512 -dy=512 -dz=256\n".
       " $0 -stencil=3axis -arch=snb -mem=8-10 -noBuild\n";
 
@@ -215,18 +210,6 @@ for my $origOpt (@ARGV) {
   }
   elsif ($opt =~ '^-maxvecsincluster=(\d+)$') {
     $maxVecsInCluster = $1;
-  }
-  elsif ($opt eq '-zall') {
-    $zLoop = 1;
-    $zLayout = 1;
-    $zVec = 1;
-    $folding = 0;
-  }
-  elsif ($opt eq '-zloop') {
-    $zLoop = 1;
-  }
-  elsif ($opt eq '-zlayout') {
-    $zLayout = 1;
   }
   elsif ($opt eq '-zvec') {
     $zVec = 1;
@@ -372,23 +355,9 @@ my $maxThreadDivisorExp = 2; # 2^2 = 4.
 my $minBlockThreadsExp = 0; # 2^0 = 1.
 my $maxBlockThreadsExp = 6; # 2^6 = 64.
 
-# list of 4D->1D layouts.
-# 1234 => txyz.
-my @layouts =
-  ('1234', '1243', '1324', '1342', '1423', '1432',
-   '2134', '2143', '2314', '2341', '2413', '2431',
-   '3124', '3142', '3214', '3241', '3412', '3421',
-   '4123', '4132', '4213', '4231', '4312', '4321');
-
-# only allow z (dim 4) in last mem dimension if requested.
-@layouts = grep /4$/, @layouts if $zLayout;
-
 # List of possible loop orders.
 my @loopOrders =
-  ('xyz', 'xzy', 'yxz', 'yzx', 'zxy', 'zyx');
-
-# Only allow z in inner loop if requested.
-@loopOrders = grep /z$/, @loopOrders if $zLoop;
+  ('123', '132', '213', '231', '312', '321');
 
 # Possible space-filling curve modifiers.
 my @pathNames =
@@ -430,9 +399,9 @@ my @schedules =
 my @rangesAll = 
   (
    # rank size.
-   [ $minDim, $maxDim, 1, 'dx' ],
-   [ $minDim, $maxDim, 1, 'dy' ],
-   [ $minDim, $maxDim, 1, 'dz' ],
+   [ $minDim, $maxDim, 16, 'dx' ],
+   [ $minDim, $maxDim, 16, 'dy' ],
+   [ $minDim, $maxDim, 16, 'dz' ],
 
    # region size.
    [ 0, $maxDim, 1, 'rx' ],
@@ -490,9 +459,6 @@ if ($doBuild) {
      [ 1, $maxCluster, 1, 'cx' ],
      [ 1, $maxCluster, 1, 'cy' ],
      [ 1, $maxCluster, 1, 'cz' ],
-
-     # 4D->1D layout, from the list above.
-     [ 0, $#layouts, 1, 'layout' ],
 
      # prefetch distances for l1 and l2.
      # all non-pos numbers => no prefetching, so ~50% chance of being enabled.
@@ -725,7 +691,7 @@ sub getMakeCmd($$) {
   my $margs = shift;
 
   my $makeCmd = "$makePrefix make clean; ".
-    "$makePrefix make -j all EXTRA_MACROS='$macros' ".
+    "$makePrefix make -j EXTRA_MACROS='$macros' ".
     "stencil=$stencil arch=$arch real_bytes=$realBytes radius=$radius $margs $makeArgs";
   $makeCmd = "echo 'build disabled'" if !$doBuild;
   return $makeCmd;
@@ -757,7 +723,7 @@ sub calcSize($$$) {
   # need to determine how many XYZ grids will be allocated for this stencil.
   if (!$numSpatialGrids) {
 
-    my $makeCmd = getMakeCmd('', 'EXTRA_CXXFLAGS=-O0');
+    my $makeCmd = getMakeCmd('', 'EXTRA_CXXFLAGS=-O1');
     my $runCmd = getRunCmd();
     $runCmd .= ' -t 0 -d 1';
     my $cmd = "$makeCmd 2>&1 && $runCmd";
@@ -775,12 +741,13 @@ sub calcSize($$$) {
         push @cmdOut, $_;
 
         # E.g.,
-        # 4D grid (t=2 * x=522 * y=132 * z=1042) 'pressure', data at 0x7fdc9e400000, containing 143.596MSIMD vector element(s) of 64 byte(s) each, 8.55898GiB
-        # 3D grid (x=522 * y=132 * z=1042) 'vel', data at 0x7fdec2066c40, containing 71.798MSIMD vector element(s) of 64 byte(s) each, 4.27949GiB
-        if (/4D grid.*t=(\d+)/) {
+        # 4-D grid (t=2 * x=5 * y=19 * z=19) 'pressure' with data at 0x65cbc0 containing 112.812KiB (3.61K SIMD FP element(s) of 32 byte(s) each)
+        # 3-D grid (x=3 * y=3 * z=3) 'vel' with data at 0x6790c0 containing 864B (27 SIMD FP element(s) of 32 byte(s) each)
+        # 1-D grid (r=9) 'coeff' with data at 0x679600 containing 36B (9 FP element(s) of 4 byte(s) each)
+        if (/4-?D grid.*t=(\d+).*x=.*y=.*z=/) {
           $numSpatialGrids += $1; # txyz.
         }
-        elsif (/3D grid/) {
+        elsif (/3-?D grid.*x=.*y=.*z=/) {
           $numSpatialGrids += 1;  # xyz.
         }
       }
@@ -788,7 +755,7 @@ sub calcSize($$$) {
     }
     if (!$numSpatialGrids) {
       map { print ">> $_"; } @cmdOut;
-      die "error: no grids defined in '$cmd'.\n";
+      die "error: no relevant grid allocations found in '$cmd'; $0 only works with 'x, y, z' 3-D stencils.\n";
     }
     print "Determined that $numSpatialGrids XYZ grids are allocated.\n";
   }
@@ -1052,38 +1019,28 @@ sub evalIndiv($$$$$$$) {
 # return loop-ctrl vars.
 sub makeLoopVars($$$$$) {
   my $h = shift;
-  my $makePrefix = shift;       # e.g., 'BLOCK'
-  my $tunerPrefix = shift;      # e.g., 'block'
-  my $varPrefix = shift;        # e.g., 'b'
-  my $varSuffix = shift;        # e.g., 'v'
+  my $makePrefix = shift;       # e.g., 'BLOCK'.
+  my $tunerPrefix = shift;      # e.g., 'block'.
+  my $reqdMods = shift;         # e.g., 'omp'.
+  my $lastDim = shift;          # e.g., 2 or 3.
 
   my $order = readHash($h, $tunerPrefix."Order", 1);
-  my $orderStr = $loopOrders[$order];           # e.g., 'wxzy'.
+  my $orderStr = $loopOrders[$order];           # e.g., '231'.
   my $path = readHash($h, $tunerPrefix."Path", 1);
   my $pathStr = @pathNames[$path];                # e.g., 'grouped'.
 
   # dimension vars.
-  my @dims = split '',$orderStr;      # e.g., ('w', 'y', 'x', 'z');
-  for my $ld (0..$#dims) {
-    $dims[$ld] = "$varPrefix$dims[$ld]$varSuffix"; # e.g., 'bxv'.
-  }
+  my @dims = split '',$orderStr;      # e.g., ('2', '3', '1).
+  @dims = grep { $_ <= $lastDim } @dims; # e.g., ('2', '1).
 
   # vars to create.
-  my $outerVars = '';
-  my $innerVars = '';
+  my $order = join(',', @dims);  # e.g., '2, 1'.
+  my $outerMods = "$pathStr $reqdMods";
+  my $innerMods = '';
 
-  # special-case for sub-blocks.
-  if ($makePrefix eq 'SUB_BLOCK') {
-    $outerVars = join(',',@dims[0..$#dims-1]); # all but last one.
-    $innerVars = $dims[$#dims];                # just last one.
-  } else {
-    $outerVars = join(',',@dims); # all vars.
-  }
-  my $outerMods = $pathStr;
-
-  my $loopVars = " ".$makePrefix."_LOOP_OUTER_VARS='$outerVars'";
+  my $loopVars = " ".$makePrefix."_LOOP_ORDER='$order'";
   $loopVars .= " ".$makePrefix."_LOOP_OUTER_MODS='$outerMods'";
-  $loopVars .= " ".$makePrefix."_LOOP_INNER_VARS='$innerVars'";
+  $loopVars .= " ".$makePrefix."_LOOP_INNER_MODS='$innerMods'";
   return $loopVars;
 }
 
@@ -1192,7 +1149,6 @@ sub fitness {
   my $exprSize = readHash($h, 'exprSize', 1);
   my $thread_divisor_exp = readHash($h, 'thread_divisor_exp', 0);
   my $bthreads_exp = readHash($h, 'bthreads_exp', 0);
-  my $layout = readHash($h, 'layout', 1);
   my $pfdl1 = readHash($h, 'pfd_l1', 1);
   my $pfdl2 = readHash($h, 'pfd_l2', 1);
   my $ompRegionSchedule = readHash($h, 'ompRegionSchedule', 1);
@@ -1325,16 +1281,6 @@ sub fitness {
   my $macros = '';              # string of macros.
   my $mvars = '';               # other make vars.
 
-  # layouts. 4D layout is selected by GA; then the corresponding 3D layout is
-  # created from it by removing 't' and shifting the other 3 dims.
-  my $g4d = $layouts[$layout];
-  my $g3d = $g4d;
-  $g3d =~ s/1//;                # remove 1st ('t') dim.
-  $g3d =~ s/2/1/;               # move 'x' from posn 2 to 1.
-  $g3d =~ s/3/2/;               # move 'y' from posn 3 to 2.
-  $g3d =~ s/4/3/;               # move 'z' from posn 4 to 3.
-  $mvars .= " layout_xyz=Layout_$g3d layout_txyz=Layout_$g4d";
-
   # prefetch distances.
   if ($pfdl1 > 0 && $pfdl2 > 0) {
 
@@ -1349,20 +1295,9 @@ sub fitness {
   $mvars .= " fold=x=$fs[0],y=$fs[1],z=$fs[2]";
 
   # gen-loops vars.
-  $mvars .= makeLoopVars($h, 'REGION', 'region', 'r', '');
-  $mvars .= makeLoopVars($h, 'BLOCK', 'block', 'b', '');
-  $mvars .= makeLoopVars($h, 'SUB_BLOCK', 'subBlock', 'sb', 'v');
-
-  # sub-block loops.
-  my $subBlockMods = '';
-  if ($pfdl1 > 0 && $pfdl2 > 0) {
-    $subBlockMods .= 'prefetch(L1,L2)';
-  } elsif ($pfdl1 > 0) {
-    $subBlockMods .= 'prefetch(L1)';
-  } elsif ($pfdl2 > 0) {
-    $subBlockMods .= 'prefetch(L2)';
-  }
-  $mvars .= " SUB_BLOCK_LOOP_INNER_MODS='$subBlockMods'";
+  $mvars .= makeLoopVars($h, 'REGION', 'region', 'omp', 3);
+  $mvars .= makeLoopVars($h, 'BLOCK', 'block', 'omp', 3);
+  $mvars .= makeLoopVars($h, 'SUB_BLOCK', 'subBlock', '', 2);
 
   # other vars.
   $mvars .= " omp_region_schedule=$regionScheduleStr omp_block_schedule=$blockScheduleStr expr_size=$exprSize";

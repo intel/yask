@@ -249,7 +249,8 @@ NDIMS_OPT		:=	`cat $(YK_DIMS_FILE)`
 # *not* be used here when using temporal wavefronts. The time loop may be
 # found in StencilEquations::run_solution().
 RANK_LOOP_OPTS		?=	$(NDIMS_OPT) -inVar rank_idxs
-RANK_LOOP_CODE		?=	$(RANK_LOOP_OUTER_MODS) loop(1 .. N-1) \
+RANK_LOOP_ORDER		?=	1 .. N-1
+RANK_LOOP_CODE		?=	$(RANK_LOOP_OUTER_MODS) loop($(RANK_LOOP_ORDER)) \
 				{ $(RANK_LOOP_INNER_MODS) calc(region(eqGroup_ptr)); }
 
 # Region loops break up a region using OpenMP threading into blocks.  The
@@ -261,7 +262,8 @@ REGION_LOOP_OPTS	?=     	$(NDIMS_OPT) -inVar region_idxs \
 				-ompConstruct '$(omp_par_for) schedule($(omp_region_schedule)) proc_bind(spread)' \
 				-calcPrefix 'eg->calc_'
 REGION_LOOP_OUTER_MODS	?=	grouped omp
-REGION_LOOP_CODE	?=	$(REGION_LOOP_OUTER_MODS) loop(1 .. N-1) { \
+REGION_LOOP_ORDER	?=	1 .. N-1
+REGION_LOOP_CODE	?=	$(REGION_LOOP_OUTER_MODS) loop($(REGION_LOOP_ORDER)) { \
 				$(REGION_LOOP_INNER_MODS) calc(block); }
 
 # Block loops break up a block into sub-blocks.  The 'omp' modifier creates
@@ -271,7 +273,8 @@ REGION_LOOP_CODE	?=	$(REGION_LOOP_OUTER_MODS) loop(1 .. N-1) { \
 BLOCK_LOOP_OPTS		?=     	$(NDIMS_OPT) -inVar block_idxs \
 				-ompConstruct '$(omp_par_for) schedule($(omp_block_schedule)) proc_bind(close)'
 BLOCK_LOOP_OUTER_MODS	?=	grouped omp
-BLOCK_LOOP_CODE		?=	$(BLOCK_LOOP_OUTER_MODS) loop(1 .. N-1) { \
+BLOCK_LOOP_ORDER	?=	1 .. N-1
+BLOCK_LOOP_CODE		?=	$(BLOCK_LOOP_OUTER_MODS) loop($(BLOCK_LOOP_ORDER)) { \
 				$(BLOCK_LOOP_INNER_MODS) calc(sub_block); }
 
 # Sub-block loops break up a sub-block into vector clusters.  These loops
@@ -281,7 +284,8 @@ BLOCK_LOOP_CODE		?=	$(BLOCK_LOOP_OUTER_MODS) loop(1 .. N-1) { \
 # i.e., vector units and rank-relative.
 SUB_BLOCK_LOOP_OPTS		?=     	$(NDIMS_OPT) -inVar norm_sub_block_idxs
 SUB_BLOCK_LOOP_OUTER_MODS	?=	square_wave serpentine
-SUB_BLOCK_LOOP_CODE		?=	$(SUB_BLOCK_LOOP_OUTER_MODS) loop(1 .. N-2) { \
+SUB_BLOCK_LOOP_ORDER		?=	1 .. N-2
+SUB_BLOCK_LOOP_CODE		?=	$(SUB_BLOCK_LOOP_OUTER_MODS) loop($(SUB_BLOCK_LOOP_ORDER)) { \
 					$(SUB_BLOCK_LOOP_INNER_MODS) calc(loop_of_clusters); }
 
 # General-purpose parallel loop.
@@ -290,7 +294,8 @@ SUB_BLOCK_LOOP_CODE		?=	$(SUB_BLOCK_LOOP_OUTER_MODS) loop(1 .. N-2) { \
 GEN_LOOP_OPTS		?=     	$(NDIMS_OPT) -inVar gen_idxs \
 				-ompConstruct '$(omp_par_for) schedule($(omp_gen_schedule)) proc_bind(spread)'
 GEN_LOOP_OUTER_MODS	?=	omp
-GEN_LOOP_CODE		?=	$(GEN_LOOP_OUTER_MODS) loop(1 .. N-1) \
+GEN_LOOP_ORDER		?=	1 .. N-1
+GEN_LOOP_CODE		?=	$(GEN_LOOP_OUTER_MODS) loop($(GEN_LOOP_ORDER)) \
 				$(GEN_LOOP_INNER_MODS) { calc(gen()); }
 
 ######## End of vars that control the function and performance of the kernel.
@@ -751,27 +756,32 @@ echo-settings:
 	@echo YK_CXXOPT=$(YK_CXXOPT)
 	@echo YK_CXXFLAGS="\"$(YK_CXXFLAGS)\""
 	@echo RANK_LOOP_OPTS="\"$(RANK_LOOP_OPTS)\""
+	@echo RANK_LOOP_ORDER="\"$(RANK_LOOP_ORDER)\""
 	@echo RANK_LOOP_OUTER_MODS="\"$(RANK_LOOP_OUTER_MODS)\""
 	@echo RANK_LOOP_OUTER_VARS="\"$(RANK_LOOP_OUTER_VARS)\""
 	@echo RANK_LOOP_INNER_MODS="\"$(RANK_LOOP_INNER_MODS)\""
 	@echo RANK_LOOP_CODE="\"$(RANK_LOOP_CODE)\""
 	@echo REGION_LOOP_OPTS="\"$(REGION_LOOP_OPTS)\""
+	@echo REGION_LOOP_ORDER="\"$(REGION_LOOP_ORDER)\""
 	@echo REGION_LOOP_OUTER_MODS="\"$(REGION_LOOP_OUTER_MODS)\""
 	@echo REGION_LOOP_OUTER_VARS="\"$(REGION_LOOP_OUTER_VARS)\""
 	@echo REGION_LOOP_INNER_MODS="\"$(REGION_LOOP_INNER_MODS)\""
 	@echo REGION_LOOP_CODE="\"$(REGION_LOOP_CODE)\""
 	@echo BLOCK_LOOP_OPTS="\"$(BLOCK_LOOP_OPTS)\""
+	@echo BLOCK_LOOP_ORDER="\"$(BLOCK_LOOP_ORDER)\""
 	@echo BLOCK_LOOP_OUTER_MODS="\"$(BLOCK_LOOP_OUTER_MODS)\""
 	@echo BLOCK_LOOP_OUTER_VARS="\"$(BLOCK_LOOP_OUTER_VARS)\""
 	@echo BLOCK_LOOP_INNER_MODS="\"$(BLOCK_LOOP_INNER_MODS)\""
 	@echo BLOCK_LOOP_CODE="\"$(BLOCK_LOOP_CODE)\""
 	@echo SUB_BLOCK_LOOP_OPTS="\"$(SUB_BLOCK_LOOP_OPTS)\""
+	@echo SUB_BLOCK_LOOP_ORDER="\"$(SUB_BLOCK_LOOP_ORDER)\""
 	@echo SUB_BLOCK_LOOP_OUTER_MODS="\"$(SUB_BLOCK_LOOP_OUTER_MODS)\""
 	@echo SUB_BLOCK_LOOP_OUTER_VARS="\"$(SUB_BLOCK_LOOP_OUTER_VARS)\""
 	@echo SUB_BLOCK_LOOP_INNER_MODS="\"$(SUB_BLOCK_LOOP_INNER_MODS)\""
 	@echo SUB_BLOCK_LOOP_INNER_VARS="\"$(SUB_BLOCK_LOOP_INNER_VARS)\""
 	@echo SUB_BLOCK_LOOP_CODE="\"$(SUB_BLOCK_LOOP_CODE)\""
 	@echo GEN_LOOP_OPTS="\"$(GEN_LOOP_OPTS)\""
+	@echo GEN_LOOP_ORDER="\"$(GEN_LOOP_ORDER)\""
 	@echo GEN_LOOP_OUTER_MODS="\"$(GEN_LOOP_OUTER_MODS)\""
 	@echo GEN_LOOP_OUTER_VARS="\"$(GEN_LOOP_OUTER_VARS)\""
 	@echo GEN_LOOP_INNER_MODS="\"$(GEN_LOOP_INNER_MODS)\""
