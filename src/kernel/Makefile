@@ -470,15 +470,16 @@ endif
 # compiler-specific settings
 ifneq ($(findstring icpc,$(notdir $(YK_CXX))),)  # Intel compiler
 
- YK_CXXFLAGS	+=      $(ISA) -debug extended -Fa -restrict -ansi-alias -fno-alias
+ YK_CXXFLAGS	+=      $(ISA) -debug extended -restrict -ansi-alias -fno-alias
  YK_CXXFLAGS	+=	-fimf-precision=low -fast-transcendentals -no-prec-sqrt \
 			-no-prec-div -fp-model fast=2 -fno-protect-parens -rcd -ftz \
 			-fma -fimf-domain-exclusion=none -qopt-assume-safe-padding
- #YK_CXXFLAGS	+=	-qoverride-limits
+ YK_CXXFLAGS	+=	-no-diag-message-catalog
  YK_CXXFLAGS	+=	-vec-threshold0
+ #YK_CXXFLAGS	+=	-qoverride-limits
+ #YK_CXXFLAGS	+=	-Fa
  #YK_CXXFLAGS	+=      -qopt-report=5
  #YK_CXXFLAGS	+=	-qopt-report-phase=VEC,PAR,OPENMP,IPO,LOOP
- YK_CXXFLAGS	+=	-no-diag-message-catalog
  YK_CXX_VER_CMD	:=	$(YK_CXX) -V
 
  # work around an optimization anomaly.

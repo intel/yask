@@ -95,14 +95,14 @@ sub usage {
       " -host=<NAME>       Run binary on host <NAME> using ssh.\n".
       " -mic=<N>           Set hostname to current hostname appended with -mic<N>; sets arch to 'knc'.\n".
       " -sde               Run binary on SDE (for testing only).\n".
-      " -makePrefix=<CMD>  Prefix make command with <CMD>.\n".
-      " -makeArgs=<ARGS>   Pass additional <ARGS> to make command.\n".
+      " -makePrefix=<CMD>  Prefix make command with <CMD>.*\n".
+      " -makeArgs=<ARGS>   Pass additional <ARGS> to make command.*\n".
       " -runArgs=<ARGS>    Pass additional <ARGS> to bin/yask.sh command.\n".
       " -ranks=<N>         Number of ranks to use on host (x-dimension only).\n".
       "\nstencil options:\n".
       " -stencil=<NAME>    Specify stencil: iso3dfd, awp, etc. (required).\n".
-      " -dp|-sp            Specify FP precision (default is SP).\n".
-      " -radius=<N>        Specify stencil radius for stencils that use this option (default is 8).\n".
+      " -dp|-sp            Specify FP precision (default is SP).*\n".
+      " -radius=<N>        Specify stencil radius for stencils that use this option (default is 8).*\n".
       "\nsearch-space options:\n".
       " -<gene_name>=<N>   Force <gene_name> to value <N>.\n".
       "                    Run with -check for list of genes and default ranges.\n".
@@ -114,14 +114,16 @@ sub usage {
       "                              '-r=0'        Allow only one OpenMP region (region size=0 => rank size).\n".
       " -<gene_name>=<N>-<M>   Restrict <gene_name> between <N> and <M>.\n".
       "                        See the notes above on <gene_name> specification.\n".
-      " -folds=<list>      Comma separated list of folds to use.\n".
+      " -folds=<list>      Comma separated list of folds to use.*\n".
       "                    Examples: '-folds=4 4 1', '-folds=1 1 16, 4 4 1, 1 4 4'.\n".
       "                    Can only specify 3D folds.\n".
       " -mem=<N>-<M>           Set allowable est. memory usage between <N> and <M> GiB (default is $minGB-$maxGB).\n".
-      " -maxVecsInCluster=<N>  Maximum vectors allowed in cluster (default is $maxVecsInCluster).\n".
-      " -noPrefetch        Disable any prefetching (shortcut for '-pfd_l1=0 -pfd_l2=0').\n".
-      " -noFolding         Allow only 1D vectorization (in any direction).\n".
-      " -zVec              Force 1D vectorization in 'z' direction (traditional 'inline' style).\n".
+      " -maxVecsInCluster=<N>  Maximum vectors allowed in cluster (default is $maxVecsInCluster).*\n".
+      " -noPrefetch        Disable any prefetching (shortcut for '-pfd_l1=0 -pfd_l2=0').*\n".
+      " -noFolding         Allow only 1D vectorization (in any direction).*\n".
+      " -zVec              Force 1D vectorization in 'z' direction (traditional 'inline' style).*\n".
+      "\n".
+      "* indicates options that are invalid if -noBuild is used.\n".
       "\n".
       "examples:\n".
       " $0 -stencil=iso3dfd -arch=knl -d=768 -r=0 -noPrefetch\n".
@@ -243,18 +245,13 @@ for my $origOpt (@ARGV) {
     usage("min value $min for '$key' > max value $max.")
       if ($min > $max);
 
-    # special case for problem size: also set upper block & region sizes.
+    # special case for problem size: also set other max sizes.
     if ($key =~ /^d[xyz]?$/ && $max > 0) {
-      $key =~ s/^d/b/;
-      $geneRanges{$autoKey.$key} = [ 1, $max ];
-      $key =~ s/^b/r/;
-      $geneRanges{$autoKey.$key} = [ 1, $max ];
-    }
-
-    # special case for region size: also set upper block size.
-    elsif ($key =~ /^r[xyz]?$/ && $max > 0) {
-      $key =~ s/^r/b/;
-      $geneRanges{$autoKey.$key} = [ 1, $max ];
+      for my $i (qw(r bg b sbg sb)) {
+        my $key2 = $key;
+        $key2 =~ s/^d/$i/;
+        $geneRanges{$autoKey.$key2} = [ 1, $max ];
+      }
     }
   }
   else {
@@ -746,9 +743,11 @@ sub calcSize($$$) {
         # 1-D grid (r=9) 'coeff' with data at 0x679600 containing 36B (9 FP element(s) of 4 byte(s) each)
         if (/4-?D grid.*t=(\d+).*x=.*y=.*z=/) {
           $numSpatialGrids += $1; # txyz.
+          print;
         }
         elsif (/3-?D grid.*x=.*y=.*z=/) {
           $numSpatialGrids += 1;  # xyz.
+          print;
         }
       }
       close CMD;
@@ -1083,33 +1082,18 @@ sub adjSizes($$) {
   my $os = shift;               # ref to outer sizes.
   
   # let inner size 'wrap around' within outer size.
-  # then, optionally adjust to be close to a fraction.
   map {
 
-    # wrap around.
+    # Wrap around.
     # TODO: change from abrupt wrap-around function to
     # one w/o discontinuities, e.g., /\/\/\/\ instead of /|/|/|/|/|.
     $is->[$_] = (($is->[$_] - 1) % $os->[$_]) + 1;
 
-    # heuristics to bump sizes to something that seems
-    # more reasonable.
-    if (0) {
-      
-      # bump up to outer size if close.
-      if ($is->[$_] > $os->[$_] * 0.8) {
-        $is->[$_] = $os->[$_];
-      }
-
-      # otherwise, bump down to a close fraction
-      # if above 1/10 of outer size.
-      else {
-        for my $n (2..10) {
-          if ($is->[$_] > $os->[$_] / $n) {
-            $is->[$_] = ceil($os->[$_] / $n);
-            last;
-          }
-        }
-      }
+    # Bump up to outer size if close.  This is a heuristic to avoid tiny
+    # remainders.  It also gives a higher probability of exactly matching
+    # the outer size.
+    if ($is->[$_] > $os->[$_] * 0.9) {
+      $is->[$_] = $os->[$_];
     }
 
   } 0..$#dirs;
@@ -1170,11 +1154,11 @@ sub fitness {
   my @cs = map { $fs[$_] * $cvs[$_] } 0..$#dirs;
 
   # adjust inner sizes to fit in their enclosing sizes.
-  adjSizes(\@rs, \@ds);
-  adjSizes(\@bgs, \@rs);
-  adjSizes(\@bs, \@rs);     # use region because groups are rounded up.
-  adjSizes(\@sbgs, \@bs);
-  adjSizes(\@sbs, \@bs);    # use block because groups are rounded up.
+  adjSizes(\@rs, \@ds);         # region <= domain.
+  adjSizes(\@bgs, \@rs);        # block-group <= region.
+  adjSizes(\@bs, \@rs);         # block <= region.
+  adjSizes(\@sbgs, \@bs);       # sub-block-group <= block.
+  adjSizes(\@sbs, \@bs);        # sub-block <= block.
 
   # 3d sizes in points.
   my $dPts = mult(@ds);
