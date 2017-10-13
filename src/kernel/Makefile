@@ -405,9 +405,6 @@ YK_CXXFLAGS	+=	$(addprefix -I,$(YK_INC_DIRS) $(YK_GEN_DIR))
 OMPFLAGS	+=	-fopenmp
 YK_CXXOPT	?=	-O3
 
-# Add user-defined flags.
-YK_CXXFLAGS	+=	$(EXTRA_YK_CXXFLAGS)
-
 # Linker.
 YK_LD		:=	$(YK_CXX)
 YK_LFLAGS	:=	-lrt -Wl,-rpath=$(LIB_DIR) -L$(LIB_DIR) -l$(YK_BASE2)
@@ -526,12 +523,12 @@ $(YK_EXEC): yask_main.cpp $(YK_LIB)
 	$(CXX_PREFIX) $(YK_LD) $(YK_CXXFLAGS) $< $(YK_LFLAGS) -o $@
 	@ls -l $@
 
-$(MAKE_REPORT_FILE): $(YK_EXEC)
+$(MAKE_REPORT_FILE): $(YK_LIB)
 	@echo MAKEFLAGS="\"$(MAKEFLAGS)"\" > $@ 2>&1
 	$(MAKE) echo-settings >> $@ 2>&1
 #$(MAKE) code-stats | tee -a $@
 
-# Generated files.
+# Generated source files.
 $(YK_GEN_DIR)/yask_rank_loops.hpp: $(GEN_LOOPS) $(YK_DIMS_FILE)
 	$(YK_MK_GEN_DIR)
 	$< -output $@ $(RANK_LOOP_OPTS) $(EXTRA_LOOP_OPTS) $(EXTRA_RANK_LOOP_OPTS) "$(RANK_LOOP_CODE)"
@@ -597,7 +594,7 @@ headers: $(YK_GEN_HEADERS)
 # NB: must set stencil and arch to generate the desired kernel API.
 
 # Build C++ and Python kernel API libs.
-api: $(YK_LIB) $(YK_PY_LIB)
+api: $(YK_LIB) $(YK_PY_LIB) $(MAKE_REPORT_FILE)
 
 # Build python kernel API lib.
 # TODO: consider adding $(YK_TAG) to [some of] these targets.
