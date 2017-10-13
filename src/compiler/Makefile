@@ -74,7 +74,7 @@ YC_MK_GEN_DIR	:=	mkdir -p -v $(YC_GEN_DIR)
 
 # Compiler and default flags.
 YC_CXX    	?=	g++  # usually faster than icpc for building the compiler.
-YC_CXXFLAGS 	+=	-g -std=c++11 -Wall -O2
+YC_CXXFLAGS 	:=	-g -std=c++11 -Wall -O2
 YC_CXXFLAGS	+=	$(addprefix -I,$(YC_INC_DIRS) $(YC_GEN_DIR) $(YC_STENCIL_DIR))
 
 # Add user-defined flags.
@@ -123,7 +123,9 @@ $(YC_STENCIL_LIST): $(YC_STENCIL_DIR)/*.hpp
 ######## API targets
 
 # Build C++ and Python compiler API libs.
-api: $(YC_LIB) $(YC_PY_LIB)
+# (Makes sure the compiler exists also, to avoid problems
+# when trying to build the kernel w/o a compiler binary.)
+api: compiler $(YC_PY_LIB)
 
 # Build python compiler API lib.
 # Also builds $(YC_PY_MOD)

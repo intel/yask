@@ -400,7 +400,7 @@ ifeq ($(mpi),1)
 else
  YK_CXX		:=	icpc
 endif
-YK_CXXFLAGS	+=   	-g -std=c++11 -Wall
+YK_CXXFLAGS	:=   	-g -std=c++11 -Wall
 YK_CXXFLAGS	+=	$(addprefix -I,$(YK_INC_DIRS) $(YK_GEN_DIR))
 OMPFLAGS	+=	-fopenmp
 YK_CXXOPT	?=	-O3
