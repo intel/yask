@@ -778,7 +778,7 @@ sub processCode($) {
         elsif (lc $tok eq 'omp') {
 
             # make local copies of scan index vars.
-            my $priv = "lastprivate(".join(',',@scanVars).")";
+            my $priv = "firstprivate(".join(',',@scanVars).")";
             
             push @loopPrefix,
                 " // Distribute iterations among OpenMP threads.", 
