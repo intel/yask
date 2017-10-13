@@ -106,6 +106,7 @@ namespace yask {
         idx_t begin_t = 0;
         idx_t end_t = _opts->_rank_sizes[step_dim];
         idx_t step_t = _dims->_step_dir;
+        assert(abs(step_t) == 1);
 
         // backward?
         if (step_t < 0) {
@@ -151,7 +152,9 @@ namespace yask {
             for (auto* eg : eqGroups) {
 
                 // Halo exchange(s) needed for this eq-group.
-                exchange_halos(start_t, stop_t, *eg);
+                // TODO: do overall problem here w/o halos to catch
+                // halo bugs during validation.
+                exchange_halos_all();
 
                 // Define general calc function.  Since step is always 1, we
                 // ignore gen_stop.  If point is in sub-domain for this eq
@@ -164,8 +167,9 @@ namespace yask {
 #include "yask_gen_loops.hpp"
 #undef calc_gen
                 
-                // Remember grids that have been written to by this eq-group.
-                mark_grids_dirty(*eg);
+                // Remember grids that have been written to by this eq-group,
+                // updated at step 'start_t + step_t'.
+                mark_grids_dirty(*eg, start_t + step_t);
                 
             } // eq-groups.
         } // iterations.
@@ -253,6 +257,9 @@ namespace yask {
         // Set number of threads for a region.
         set_region_threads();
 
+        // Initial halo exchange.
+        exchange_halos_all();
+
         // Number of iterations to get from begin_t to end_t-1,
         // stepping by step_t.
         const idx_t num_t = (abs(end_t - begin_t) + (abs(step_t) - 1)) / abs(step_t);
@@ -290,8 +297,9 @@ namespace yask {
                     // calc_region() for each region.
 #include "yask_rank_loops.hpp"
 
-                    // Remember grids that have been written to by this eq-group.
-                    mark_grids_dirty(*eg);
+                    // Remember grids that have been written to by this eq-group,
+                    // updated at step 'start_t + step_t'.
+                    mark_grids_dirty(*eg, start_t + step_t);
                 }
             }
 
@@ -492,6 +500,9 @@ namespace yask {
     {
         ostream& os = get_ostr();
         auto& step_dim = _dims->_step_dim;
+
+        // reset time keeper.
+        mpi_time = 0;
 
         // Check ranks.
         idx_t req_ranks = _opts->_num_ranks.product();
@@ -989,8 +1000,8 @@ namespace yask {
     
     // Allocate grids and MPI bufs.
     // Initialize some data structures.
-    void StencilContext::prepare_solution()
-    {
+    void StencilContext::prepare_solution() {
+
         // Don't continue until all ranks are this far.
         _env->global_barrier();
 
@@ -1087,7 +1098,7 @@ namespace yask {
         rank_numpts_1t = 0;
         rank_reads_1t = 0;
         rank_numFpOps_1t = 0;
-        for (auto eg : eqGroups) {
+        for (auto* eg : eqGroups) {
             idx_t updates1 = eg->get_scalar_points_written();
             idx_t updates_domain = updates1 * eg->bb_num_points;
             rank_numpts_1t += updates_domain;
@@ -1182,6 +1193,7 @@ namespace yask {
             " Grid-point-reads are based on sum of grid-reads in sub-domain across equation-group(s).\n"
             " Est-FP-ops are based on sum of est-FP-ops in sub-domain across equation-group(s).\n"
             "\n";
+
     }
 
     // Init all grids & params by calling initFn.
@@ -1311,13 +1323,38 @@ namespace yask {
         }
     }
 
+    // Exchange all dirty halo data.
+    void StencilContext::exchange_halos_all() {
+
+#ifdef USE_MPI
+        TRACE_MSG("exchange_halos_all()...");
+
+        // Find max steps stored in grids.
+        auto& sd = _dims->_step_dim;
+        idx_t start = 0, stop = 1;
+        for (auto gp : gridPtrs) {
+            if (gp->is_dim_used(sd)) {
+                start = min(start, gp->_get_first_allowed_index(sd));
+                stop = max(stop, gp->_get_last_allowed_index(sd) + 1);
+            }
+        }
+        
+        // Initial halo exchange for each eq-group.
+        for (auto* eg : eqGroups) {
+
+            // Do exchange over max steps.
+            exchange_halos(start, stop, *eg);
+        }
+#endif
+    }
+    
     // Exchange halo data needed by eq-group 'eg' at the given time.
     // Data is needed for input grids that have not already been updated.
     // [BIG] TODO: overlap halo exchange with computation.
-    void StencilContext::exchange_halos(idx_t start_dt, idx_t stop_dt, EqGroupBase& eg)
+    void StencilContext::exchange_halos(idx_t start, idx_t stop, EqGroupBase& eg)
     {
         auto opts = get_settings();
-        TRACE_MSG("exchange_halos: " << start_dt << " ... (end before) " << stop_dt <<
+        TRACE_MSG("exchange_halos: " << start << " ... (end before) " << stop <<
                   " for eq-group '" << eg.get_name() << "'");
 
 #ifdef USE_MPI
@@ -1332,142 +1369,151 @@ namespace yask {
         // We use a 2D array to simplify individual indexing.
         MPI_Request recv_reqs[eg.inputGridPtrs.size()][_mpiInfo->neighborhood_size];
 
-        // Sequence of things to do for each grid's neighbors
-        // (isend includes packing).
-        enum halo_steps { halo_irecv, halo_isend, halo_unpack, halo_nsteps };
-        for (int hi = 0; hi < halo_nsteps; hi++) {
+        // Loop through steps.
+        // This loop has to be outside halo-step loop because we only have one
+        // buffer per step.
+        assert(start != stop);
+        idx_t step = (start < stop) ? 1 : -1;
+        for (idx_t t = start; t != stop; t += step) {
 
-            if (hi == halo_irecv)
-                TRACE_MSG("exchange_halos: requesting data...");
-            else if (hi == halo_isend)
-                TRACE_MSG("exchange_halos: packing and sending data...");
-            else if (hi == halo_unpack)
-                TRACE_MSG("exchange_halos: unpacking data...");
+            // Sequence of things to do for each grid's neighbors
+            // (isend includes packing).
+            enum halo_steps { halo_irecv, halo_isend, halo_unpack, halo_nsteps };
+            for (int hi = 0; hi < halo_nsteps; hi++) {
+
+                if (hi == halo_irecv)
+                    TRACE_MSG("exchange_halos: requesting data for step " << t << "...");
+                else if (hi == halo_isend)
+                    TRACE_MSG("exchange_halos: packing and sending data for step " << t << "...");
+                else if (hi == halo_unpack)
+                    TRACE_MSG("exchange_halos: unpacking data for step " << t << "...");
             
-            // Loop thru all input grids in this group.
-            for (size_t gi = 0; gi < eg.inputGridPtrs.size(); gi++) {
-                auto gp = eg.inputGridPtrs[gi];
-                MPI_Request* grid_recv_reqs = recv_reqs[gi];
+                // Loop thru all input grids in this group.
+                for (size_t gi = 0; gi < eg.inputGridPtrs.size(); gi++) {
+                    auto gp = eg.inputGridPtrs[gi];
+                    MPI_Request* grid_recv_reqs = recv_reqs[gi];
 
-                // Only need to swap grids whose halos are not up-to-date.
-                if (gp->is_updated())
-                    continue;
+                    // Only need to swap grids whose halos are not up-to-date
+                    // for this step.
+                    if (!gp->is_dirty(t))
+                        continue;
 
-                // Only need to swap grids that have MPI buffers.
-                auto& gname = gp->get_name();
-                if (mpiBufs.count(gname) == 0)
-                    continue;
-                TRACE_MSG(" for grid '" << gname << "'...");
+                    // Only need to swap grids that have MPI buffers.
+                    auto& gname = gp->get_name();
+                    if (mpiBufs.count(gname) == 0)
+                        continue;
+                    TRACE_MSG(" for grid '" << gname << "'...");
 
-                // The code in setupRank() pre-calculated the size and
-                // starting points of each buffer, except for the starting
-                // point of the time-step, which is an argument to this
-                // function.  So, we need to create a tuple containing just
-                // the step var for grids that have that dim.  For now,
-                // assume only one time-step to exchange.  TODO: fix this
-                // when MPI + wave-front is enabled, and fix it in setupRank
-                // also.
-                idx_t ht = stop_dt; // assume this value was calculated.
-                IdxTuple toffset;
-                auto& tdim = _dims->_step_dim;
-                if (gp->is_dim_used(tdim))
-                    toffset.addDimBack(tdim, ht);
+                    // The code in setupRank() pre-calculated the size and
+                    // starting points of each buffer, except for the starting
+                    // point of the time-step, which is an argument to this
+                    // function.  So, we need to create a tuple containing just
+                    // the step var for grids that have that dim.  For now,
+                    // assume only one time-step to exchange.  TODO: fix this
+                    // when MPI + wave-front is enabled, and fix it in setupRank
+                    // also.
+                    IdxTuple toffset;
+                    auto& tdim = _dims->_step_dim;
+                    if (gp->is_dim_used(tdim))
+                        toffset.addDimBack(tdim, t);
 
-                // Visit all this rank's neighbors.
-                mpiBufs.at(gname).visitNeighbors
-                    ([&](const IdxTuple& offsets, // NeighborOffset.
-                         int neighbor_rank,
-                         int ni, // 1D index.
-                         YkGridPtr sendBuf,
-                         IdxTuple& sendBegin,
-                         YkGridPtr recvBuf,
-                         IdxTuple& recvBegin)
-                     {
-                         // Nothing to do if there are no buffers.
-                         if (sendBuf.get() == 0 ||
-                             recvBuf.get() == 0)
-                             return;
-                         TRACE_MSG("  with rank " << neighbor_rank << " at relative position " <<
-                                   offsets.subElements(1).makeDimValOffsetStr() << "...");
+                    // Visit all this rank's neighbors.
+                    mpiBufs.at(gname).visitNeighbors
+                        ([&](const IdxTuple& offsets, // NeighborOffset.
+                             int neighbor_rank,
+                             int ni, // 1D index.
+                             YkGridPtr sendBuf,
+                             IdxTuple& sendBegin,
+                             YkGridPtr recvBuf,
+                             IdxTuple& recvBegin)
+                         {
+                             // Nothing to do if there are no buffers.
+                             if (sendBuf.get() == 0 ||
+                                 recvBuf.get() == 0)
+                                 return;
+                             TRACE_MSG("  with rank " << neighbor_rank << " at relative position " <<
+                                       offsets.subElements(1).makeDimValOffsetStr() << "...");
                          
-                         // Submit async request to receive data from neighbor.
-                         if (hi == halo_irecv) {
-                             auto nbytes = recvBuf->get_num_storage_bytes();
-                             void* buf = recvBuf->get_raw_storage_buffer();
-                             TRACE_MSG("   requesting " << makeByteStr(nbytes) << "...");
-                             MPI_Irecv(buf, nbytes, MPI_BYTE,
-                                       neighbor_rank, int(gi), _env->comm, &grid_recv_reqs[ni]);
-                         }
+                             // Submit async request to receive data from neighbor.
+                             if (hi == halo_irecv) {
+                                 auto nbytes = recvBuf->get_num_storage_bytes();
+                                 void* buf = recvBuf->get_raw_storage_buffer();
+                                 TRACE_MSG("   requesting " << makeByteStr(nbytes) << "...");
+                                 MPI_Irecv(buf, nbytes, MPI_BYTE,
+                                           neighbor_rank, int(gi), _env->comm, &grid_recv_reqs[ni]);
+                             }
 
-                         // Pack data, then send to neighbor.
-                         else if (hi == halo_isend) {
-                             IdxTuple buf_sizes = sendBuf->get_allocs();
+                             // Pack data, then send to neighbor.
+                             else if (hi == halo_isend) {
+                                 IdxTuple buf_sizes = sendBuf->get_allocs();
                          
-                             // Adjust start based on time index.
-                             IdxTuple start = sendBegin.addElements(toffset, false);
-                             TRACE_MSG("   packing " << buf_sizes.makeDimValStr(" * ") <<
-                                       " block starting at " <<
-                                       start.makeDimValStr() << "...");
+                                 // Adjust start based on time index.
+                                 IdxTuple start = sendBegin.addElements(toffset, false);
+                                 TRACE_MSG("   packing " << buf_sizes.makeDimValStr(" * ") <<
+                                           " block starting at " <<
+                                           start.makeDimValStr() << "...");
 
-                             // Visit every point to copy.
-                             // TODO: parallelize.
-                             buf_sizes.visitAllPoints([&](const IdxTuple& bpt) {
-                                     Indices bidxs(bpt);
-                                     IdxTuple gpt = bpt.addElements(start);
-                                     Indices gidxs(gpt);
+                                 // Visit every point to copy.
+                                 // TODO: parallelize.
+                                 buf_sizes.visitAllPoints([&](const IdxTuple& bpt) {
+                                         Indices bidxs(bpt);
+                                         IdxTuple gpt = bpt.addElements(start);
+                                         Indices gidxs(gpt);
                                      
-                                     // Copy this point from grid to buffer.
-                                     real_t hval = gp->readElem(gidxs, __LINE__);
-                                     sendBuf->writeElem(hval, bidxs, __LINE__);
+                                         // Copy this point from grid to buffer.
+                                         real_t hval = gp->readElem(gidxs, __LINE__);
+                                         sendBuf->writeElem(hval, bidxs, __LINE__);
 
-                                     return true; // keep visiting.
-                                 });
+                                         return true; // keep visiting.
+                                     });
 
-                             // Send packed buffer to neighbor.
-                             auto nbytes = sendBuf->get_num_storage_bytes();
-                             const void* buf = (const void*)(sendBuf->get_raw_storage_buffer());
-                             TRACE_MSG("   sending " << makeByteStr(nbytes) << "...");
-                             MPI_Isend(buf, nbytes, MPI_BYTE,
-                                       neighbor_rank, int(gi), _env->comm,
-                                       &send_reqs[num_send_reqs++]);
-                         }
+                                 // Send packed buffer to neighbor.
+                                 auto nbytes = sendBuf->get_num_storage_bytes();
+                                 const void* buf = (const void*)(sendBuf->get_raw_storage_buffer());
+                                 TRACE_MSG("   sending " << makeByteStr(nbytes) << "...");
+                                 MPI_Isend(buf, nbytes, MPI_BYTE,
+                                           neighbor_rank, int(gi), _env->comm,
+                                           &send_reqs[num_send_reqs++]);
+                             }
 
-                         // Wait for data from neighbor, then unpack it.
-                         else if (hi == halo_unpack) {
-                             IdxTuple buf_sizes = recvBuf->get_allocs();
+                             // Wait for data from neighbor, then unpack it.
+                             else if (hi == halo_unpack) {
+                                 IdxTuple buf_sizes = recvBuf->get_allocs();
 
-                             // Wait for data from neighbor before unpacking it.
-                             TRACE_MSG("   waiting for data...");
-                             MPI_Wait(&grid_recv_reqs[ni], MPI_STATUS_IGNORE);
+                                 // Wait for data from neighbor before unpacking it.
+                                 TRACE_MSG("   waiting for data...");
+                                 MPI_Wait(&grid_recv_reqs[ni], MPI_STATUS_IGNORE);
 
-                             // Adjust start based on time index.
-                             IdxTuple start = recvBegin.addElements(toffset, false);
-                             TRACE_MSG("   got data; unpacking " << buf_sizes.makeDimValStr(" * ") <<
-                                       " block starting at " <<
-                                       start.makeDimValStr() << "...");
+                                 // Adjust start based on time index.
+                                 IdxTuple start = recvBegin.addElements(toffset, false);
+                                 TRACE_MSG("   got data; unpacking " << buf_sizes.makeDimValStr(" * ") <<
+                                           " block starting at " <<
+                                           start.makeDimValStr() << "...");
                          
-                             // Visit every point to copy.
-                             // TODO: parallelize.
-                             buf_sizes.visitAllPoints([&](const IdxTuple& bpt) {
-                                     Indices bidxs(bpt);
-                                     IdxTuple gpt = bpt.addElements(start);
-                                     Indices gidxs(gpt);
+                                 // Visit every point to copy.
+                                 // TODO: parallelize.
+                                 buf_sizes.visitAllPoints([&](const IdxTuple& bpt) {
+                                         Indices bidxs(bpt);
+                                         IdxTuple gpt = bpt.addElements(start);
+                                         Indices gidxs(gpt);
 
-                                     // Copy this point from buffer to grid.
-                                     real_t hval = recvBuf->readElem(bidxs, __LINE__);
-                                     gp->writeElem(hval, gidxs, __LINE__);
+                                         // Copy this point from buffer to grid.
+                                         real_t hval = recvBuf->readElem(bidxs, __LINE__);
+                                         gp->writeElem(hval, gidxs, __LINE__);
 
-                                     return true; // keep visiting.
-                                 }); // visit points.
+                                         return true; // keep visiting.
+                                     }); // visit points.
 
-                             // Mark this grid as up-to-date.
-                             gp->set_updated(true);
-                             TRACE_MSG("   grid '" << gp->get_name() << "' marked as updated");
-                         }
-                     }); // visit neighbors.
-                
-            } // grids.
-        } // exchange sequence.
+                                 // Mark this grid as up-to-date.
+                                 gp->set_dirty(false, t);
+                                 TRACE_MSG("   grid '" << gp->get_name() <<
+                                           "' marked as clean at step " << t);
+                             }
+                         }); // visit neighbors.
+
+                } // grids.
+            } // exchange sequence.
+        } // steps.
 
         // Wait for all send requests to complete.
         // TODO: delay this until next attempted halo exchange.
@@ -1485,11 +1531,12 @@ namespace yask {
 
     // Mark grids that have been written to by eq-group 'eg'.
     // TODO: only mark grids that are written to in their halo-read area.
-    void StencilContext::mark_grids_dirty(EqGroupBase& eg)
+    void StencilContext::mark_grids_dirty(EqGroupBase& eg, idx_t step_idx)
     {
         for (auto gp : eg.outputGridPtrs) {
-            gp->set_updated(false);
-            TRACE_MSG("grid '" << gp->get_name() << "' marked as modified");
+            gp->set_dirty(true, step_idx);
+            TRACE_MSG("grid '" << gp->get_name() <<
+                      "' marked as dirty at step " << step_idx);
         }
     }
 

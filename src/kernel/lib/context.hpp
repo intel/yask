@@ -323,11 +323,14 @@ namespace yask {
         virtual void calc_region(EqGroupSet* eqGroup_set,
                                  const ScanIndices& rank_idxs);
 
-        // Exchange halo data needed by eq-group 'eg' at the given time.
-        virtual void exchange_halos(idx_t start_dt, idx_t stop_dt, EqGroupBase& eg);
+        // Exchange all dirty halo data.
+        virtual void exchange_halos_all();
+
+        // Exchange halo data needed by eq-group 'eg' at the given step(s).
+        virtual void exchange_halos(idx_t start, idx_t stop, EqGroupBase& eg);
 
         // Mark grids that have been written to by eq-group 'eg'.
-        virtual void mark_grids_dirty(EqGroupBase& eg);
+        virtual void mark_grids_dirty(EqGroupBase& eg, idx_t step_idx);
         
         // Set the bounding-box around all eq groups.
         virtual void find_bounding_boxes();

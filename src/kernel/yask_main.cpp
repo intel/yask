@@ -250,7 +250,7 @@ int main(int argc, char** argv)
     for (idx_t tr = 0; tr < opts->num_trials; tr++) {
         os << divLine;
 
-        // init data befor each trial for comparison if validating.
+        // init data before each trial for comparison if validating.
         if (opts->validate)
             context->initDiff();
 
@@ -284,7 +284,12 @@ int main(int argc, char** argv)
             "throughput (est-FLOPS):                 " << makeNumStr(flops) << endl;
 #ifdef USE_MPI
         os <<
-            "time in halo exch (sec):                " << makeNumStr(context->mpi_time) << endl;
+            "time in halo exch (sec):                " << makeNumStr(context->mpi_time);
+        if (elapsed_time > 0.f) {
+            float pct = 100.f * context->mpi_time / elapsed_time;
+            os << " (" << pct << "%)";
+        }
+        os << endl;
 #endif
 
         if (apps > best_apps) {

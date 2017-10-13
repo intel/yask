@@ -41,6 +41,38 @@ namespace yask {
         idxs.setTupleVals(tmp);      // set vals from idxs.
         return tmp.makeDimValStr(separator, infix, prefix, suffix);
     }
+
+    // Halo-exchange flag accessors.
+    bool YkGridBase::is_dirty(idx_t step_idx) const {
+        if (!is_dim_used(_dims->_step_dim))
+            step_idx = 0;
+        return _dirty_steps.count(step_idx) > 0;
+    }
+    void YkGridBase::set_dirty(bool dirty, idx_t step_idx) {
+        if (!is_dim_used(_dims->_step_dim))
+            step_idx = 0;
+        if (dirty) {
+            _dirty_steps.insert(step_idx);
+            assert(is_dirty(step_idx));
+        }            
+        else {
+            _dirty_steps.erase(step_idx);
+            assert(is_dirty(step_idx) == false);
+        }
+    }
+    void YkGridBase::set_dirty_all(bool dirty) {
+        _dirty_steps.clear();
+        if (dirty) {
+            if (is_dim_used(_dims->_step_dim)) {
+                auto& sd = _dims->_step_dim;
+                for (idx_t i = _get_first_allowed_index(sd);
+                     i <= _get_last_allowed_index(sd); i++)
+                    YkGridBase::set_dirty(dirty, i);
+            }
+            else
+                YkGridBase::set_dirty(dirty, 0);
+        }
+    }
     
     // Lookup position by dim name.
     // Return -1 or die if not found, depending on flag.
@@ -408,7 +440,7 @@ namespace yask {
             Indices idxs(indices);
             writeElem(real_t(val), idxs, __LINE__);
             nup++;
-            set_updated(false);
+            set_dirty_all(true); // TODO: set only specified step-val, if relevant.
         }
         return nup;
     }
@@ -473,6 +505,8 @@ namespace yask {
                 i++;
                 return true;    // keep going.
             });
+
+        set_dirty_all(true); // TODO: set only specified step-val(s), if relevant.
         return i;
     }
     idx_t YkGridBase::set_elements_in_slice(const void* buffer_ptr,
@@ -502,6 +536,8 @@ namespace yask {
                 i++;
                 return true;    // keep going.
             });
+
+        set_dirty_all(true); // TODO: set only specified step-val(s), if relevant.
         return i;
     }
 

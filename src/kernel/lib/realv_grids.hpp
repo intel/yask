@@ -60,8 +60,10 @@ namespace yask {
         Indices _vec_pads;
         Indices _vec_allocs;
         
-        // Data has been received from neighbors' halos, if applicable.
-        bool _is_updated = false;
+        // Data that needs to be copied to neighbor's halos if using MPI.
+        // If this grid has the step dim, the values in the set are the step values.
+        // Otherwise, the set should either be empty (not dirty) or not empty (dirty). 
+        std::set<idx_t> _dirty_steps;
 
         // Data layout for slice APIs.
         bool _is_col_major = false;
@@ -163,8 +165,9 @@ namespace yask {
         virtual ~YkGridBase() { }
 
         // Halo-exchange flag accessors.
-        bool is_updated() { return _is_updated; }
-        void set_updated(bool is_updated) { _is_updated = is_updated; }
+        virtual bool is_dirty(idx_t step_idx) const;
+        virtual void set_dirty(bool dirty, idx_t step_idx);
+        virtual void set_dirty_all(bool dirty);
         
         // Lookup position by dim name.
         // Return -1 or die if not found, depending on flag.
@@ -382,6 +385,18 @@ namespace yask {
             return _data.get_num_dims();
         }
 
+        // Halo-exchange flag accessors.
+        virtual bool is_dirty(idx_t step_idx) const {
+            if (_wrap_1st_idx)
+                step_idx = wrap_index(step_idx, _domains[0]);
+            return YkGridBase::is_dirty(step_idx);
+        }
+        virtual void set_dirty(bool dirty, idx_t step_idx) {
+            if (_wrap_1st_idx)
+                step_idx = wrap_index(step_idx, _domains[0]);
+            YkGridBase::set_dirty(dirty, step_idx);
+        }
+        
         // Print some info to 'os'.
         virtual void print_info(std::ostream& os) const {
             _data.print_info(os, "FP");
@@ -390,9 +405,11 @@ namespace yask {
         // Init data.
         virtual void set_all_elements_same(double seed) {
             _data.set_elems_same(seed);
+            set_dirty_all(true);
         }
         virtual void set_all_elements_in_seq(double seed) {
             _data.set_elems_in_seq(seed);
+            set_dirty_all(true);
         }
   
         // Get a pointer to given element.
@@ -486,6 +503,18 @@ namespace yask {
             }
         }
         
+        // Halo-exchange flag accessors.
+        virtual bool is_dirty(idx_t step_idx) const {
+            if (_wrap_1st_idx)
+                step_idx = wrap_index(step_idx, _domains[0]);
+            return YkGridBase::is_dirty(step_idx);
+        }
+        virtual void set_dirty(bool dirty, idx_t step_idx) {
+            if (_wrap_1st_idx)
+                step_idx = wrap_index(step_idx, _domains[0]);
+            YkGridBase::set_dirty(dirty, step_idx);
+        }
+        
         // Get num dims from compile-time const.
         virtual int get_num_dims() const final {
             return _data.get_num_dims();
@@ -500,6 +529,7 @@ namespace yask {
         virtual void set_all_elements_same(double seed) {
             real_vec_t seedv = seed; // bcast.
             _data.set_elems_same(seedv);
+            set_dirty_all(true);
         }
         virtual void set_all_elements_in_seq(double seed) {
             real_vec_t seedv;
@@ -511,6 +541,7 @@ namespace yask {
             for (int i = 0; i < n; i++)
                 seedv[i] = seed * (1.0 + double(i) / n);
             _data.set_elems_in_seq(seedv);
+            set_dirty_all(true);
         }
   
         // Get a pointer to given element.
