@@ -1,1 +1,1 @@
-import yask_compiler as compiler  # noqa
+from yask.yask_compiler import *  # noqa
