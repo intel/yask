@@ -855,7 +855,9 @@ namespace yask {
 
             // Iterate along last dimension in parallel.
             if (last_dim && parallel) {
+#ifdef _OPENMP
 #pragma omp parallel for firstprivate(tp)
+#endif
                 for (T i = 0; i < dsize; i++) {
                     tp.setVal(curDimNum, i);
                     visitor(tp, idx0 + i);
