@@ -93,8 +93,8 @@ namespace yask {
         os << _linePrefix << getVarType() << " " << mvName << _lineSuffix;
 
         // Loop through all points in the vector fold.
-        size_t pelem = 0;
-        getFold().visitAllPoints([&](const IntTuple& vecPoint){
+        getFold().visitAllPoints([&](const IntTuple& vecPoint,
+                                     size_t pelem){
 
                 // Example: vecPoint contains x=0, y=2, z=1, where
                 // each val is the offset in the given fold dim.
@@ -133,8 +133,6 @@ namespace yask {
                 os << _linePrefix << mvName << "[" << pelem << "] = " <<
                     varname << "; // for offset " << vecPoint.makeDimValStr() <<
                     _lineSuffix;
-
-                pelem++;
 
                 return true;
             }); // end of lambda.

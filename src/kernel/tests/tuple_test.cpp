@@ -44,8 +44,10 @@ int main(int argc, char** argv) {
     if (!t1.isFirstInner()) os << "NOT ";
     os << "first-inner layout.\n";
 
+    os << "loop test...\n";
+    size_t j = 0;
     for (int y = 0; y < t1["y"]; y++) {
-        for (int x = 0; x < t1["x"]; x++) {
+        for (int x = 0; x < t1["x"]; x++, j++) {
 
             IdxTuple ofs;
             ofs.addDimBack("x", x);
@@ -56,8 +58,41 @@ int main(int argc, char** argv) {
 
             IdxTuple ofs2 = t1.unlayout(i);
             assert(ofs == ofs2);
+            assert(i == j);
         }
     }
+
+    os << "sequential visit test...\n";
+    j = 0;
+    t1.visitAllPoints
+        ([&](const IdxTuple& ofs, size_t k) {
+
+            auto i = t1.layout(ofs);
+            os << " offset at " << ofs.makeDimValStr() << " = " << i << endl;
+
+            assert(i == j);
+            assert(i == k);
+            j++;
+            return true;
+        });
+    assert(j == t1.product());
+
+    os << "parallel visit test...\n";
+    j = 0;
+    t1.visitAllPointsInParallel
+        ([&](const IdxTuple& ofs, size_t k) {
+
+            auto i = t1.layout(ofs);
+#pragma omp critical
+            {
+                os << " offset at " << ofs.makeDimValStr() << " = " << i << endl;
+                j++;
+            }
+
+            assert(i == k);
+            return true;
+        });
+    assert(j == t1.product());
     
     os << "End of YASK tuple test.\n";
     return 0;

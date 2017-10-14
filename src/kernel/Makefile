@@ -624,17 +624,17 @@ $(YK_TUPLE_TEST_EXEC): ./tests/tuple_test.cpp $(YK_LIB)
 $(YK_API_TEST_EXEC): ./tests/yask_kernel_api_test.cpp $(YK_LIB)
 	$(YK_CXX) $(YK_CXXFLAGS) $< $(YK_LFLAGS) -o $@
 
-# Run C++ kernel tests.
-cxx-yk-api-test: $(YK_API_TEST_EXEC)
-	@echo '*** Running the C++ YASK kernel API test...'
+# Run C++ tests.
+cxx-yk-tuple-test: $(YK_TUPLE_TEST_EXEC)
+	@echo '*** Running the C++ YASK tuple test...'
 	$(RUN_PREFIX) $<
 
 cxx-yk-grid-test: $(YK_GRID_TEST_EXEC)
 	@echo '*** Running the C++ YASK grid test...'
 	$(RUN_PREFIX) $<
 
-cxx-yk-tuple-test: $(YK_TUPLE_TEST_EXEC)
-	@echo '*** Running the C++ YASK tuple test...'
+cxx-yk-api-test: $(YK_API_TEST_EXEC)
+	@echo '*** Running the C++ YASK kernel API test...'
 	$(RUN_PREFIX) $<
 
 # Run Python kernel API test.

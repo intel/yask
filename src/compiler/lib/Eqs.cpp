@@ -79,7 +79,7 @@ namespace yask {
 
             // Visit each point in _pts.
             if (_pts) {
-                _pts->visitAllPoints([&](const IntTuple& ptofs){
+                _pts->visitAllPoints([&](const IntTuple& ptofs, size_t idx){
 
                         // Add offset to gpt0.
                         auto& pt0 = gpt0->getArgOffsets();
@@ -668,7 +668,8 @@ namespace yask {
         EqList eqs(_eqs);
 
         // Loop thru points in cluster.
-        dims._clusterMults.visitAllPoints([&](const IntTuple& clusterIndex) {
+        dims._clusterMults.visitAllPoints([&](const IntTuple& clusterIndex,
+                                              size_t idx) {
 
                 // Don't need copy of one at origin.
                 if (clusterIndex.sum() > 0) {

@@ -1334,8 +1334,8 @@ namespace yask {
         idx_t start = 0, stop = 1;
         for (auto gp : gridPtrs) {
             if (gp->is_dim_used(sd)) {
-                start = min(start, gp->_get_first_allowed_index(sd));
-                stop = max(stop, gp->_get_last_allowed_index(sd) + 1);
+                start = min(start, gp->_get_first_alloc_index(sd));
+                stop = max(stop, gp->_get_last_alloc_index(sd) + 1);
             }
         }
         
@@ -1454,9 +1454,11 @@ namespace yask {
                                            start.makeDimValStr() << "...");
 
                                  // Visit every point to copy.
-                                 // TODO: parallelize.
-                                 buf_sizes.visitAllPoints([&](const IdxTuple& bpt) {
+                                 buf_sizes.visitAllPointsInParallel([&](const IdxTuple& bpt,
+                                                                        size_t idx) {
                                          Indices bidxs(bpt);
+
+                                         // TODO: optimize this by removing tuple.
                                          IdxTuple gpt = bpt.addElements(start);
                                          Indices gidxs(gpt);
                                      
@@ -1491,9 +1493,11 @@ namespace yask {
                                            start.makeDimValStr() << "...");
                          
                                  // Visit every point to copy.
-                                 // TODO: parallelize.
-                                 buf_sizes.visitAllPoints([&](const IdxTuple& bpt) {
+                                 buf_sizes.visitAllPointsInParallel
+                                     ([&](const IdxTuple& bpt, size_t idx) {
                                          Indices bidxs(bpt);
+
+                                         // TODO: optimize this by removing tuple.
                                          IdxTuple gpt = bpt.addElements(start);
                                          Indices gidxs(gpt);
 

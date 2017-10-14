@@ -495,7 +495,7 @@ namespace yask {
         // If '_firstInner', first dim varies most quickly; else last dim does.
         virtual size_t layout(const Tuple& offsets, bool strictRhs=true) const {
             if (strictRhs)
-                assert(areDimsSame(offsets));
+                assert(areDimsSame(offsets, true));
             size_t idx = 0;
             size_t prevSize = 1;
 
@@ -654,16 +654,25 @@ namespace yask {
         virtual Tuple combineElements(std::function<T (T lhs, T rhs)> combiner,
                                       const Tuple& rhs,
                                       bool strictRhs=true) const {
-            if (strictRhs)
-                assert(areDimsSame(rhs));
             Tuple newt = *this;
-            for (auto& i : _q) {
-                auto& tdim = i.getName();
-                auto& tval = i.getVal();
-                auto* rp = rhs.lookup(tdim);
-                if (rp) {
-                    T newv = combiner(tval, *rp);
-                    newt.setVal(tdim, newv);
+            if (strictRhs) {
+                assert(areDimsSame(rhs, true));
+                for (size_t i = 0; i < _q.size(); i++) {
+                    auto& tval = _q[i].getVal();
+                    auto& rval = rhs[i];
+                    T newv = combiner(tval, rval);
+                    newt[i] = newv;
+                }
+            }
+            else {
+                for (auto& i : _q) {
+                    auto& tdim = i.getName();
+                    auto& tval = i.getVal();
+                    auto* rp = rhs.lookup(tdim);
+                    if (rp) {
+                        T newv = combiner(tval, *rp);
+                        newt.setVal(tdim, newv);
+                    }
                 }
             }
             return newt;
@@ -693,11 +702,10 @@ namespace yask {
         virtual Tuple mapElements(std::function<T (T lhs, T rhs)> func,
                                   T rhs) const {
             Tuple newt = *this;
-            for (auto& i : newt._q) {
-                auto& tdim = i.getName();
-                auto& tval = i.getVal();
+            for (size_t i = 0; i < _q.size(); i++) {
+                auto& tval = _q[i].getVal();
                 T newv = func(tval, rhs);
-                newt.setVal(tdim, newv);
+                newt[i] = newv;
             }
             return newt;
         }
@@ -794,44 +802,82 @@ namespace yask {
         }
 
         // Call the 'visitor' lambda function at every point in the space defined by 'this'.
+        // 'idx' parameter contains sequentially-numbered index.
+        // For non-parallel:
         // Visitation order is with first dimension in unit stride, i.e., a conceptual
         // "outer loop" iterates through last dimension, ..., and an "inner loop" iterates
         // through first dimension. If '_firstInner' is false, it is done the opposite way.
         // Visitor should return 'true' to keep going or 'false' to stop.
-        virtual void visitAllPoints(std::function<bool (const Tuple&)> visitor) const {
+        // For parallel:
+        // Visitation order is not predictable.
+        // Visitor return value is ignored.
+        virtual void
+        visitAllPoints(std::function<bool (const Tuple&, size_t idx)> visitor,
+                       bool parallel = false) const {
 
             // Init lambda fn arg with *this to get dim names.
+            // Values will get set during scan.
             Tuple tp = *this;
 
             // 0-D?
             if (!_q.size())
-                visitor(tp);
+                visitor(tp, 0);
             
             // Call recursive version.
             else if (_firstInner)
-                visitAllPoints(visitor, size()-1, -1, tp);
+                _visitAllPoints(visitor, size()-1, -1, tp, parallel);
             else
-                visitAllPoints(visitor, 0, 1, tp);
+                _visitAllPoints(visitor, 0, 1, tp, parallel);
+        }
+        virtual void
+        visitAllPointsInParallel(std::function<bool (const Tuple&, size_t idx)> visitor) const {
+            visitAllPoints(visitor, true);
         }
     
     protected:
 
         // Handle recursion for public visitAllPoints(visitor).
-        virtual bool visitAllPoints(std::function<bool (const Tuple&)> visitor,
-                                    int curDimNum, int step, Tuple& tp) const {
+        virtual bool
+        _visitAllPoints(std::function<bool (const Tuple&, size_t idx)> visitor,
+                        int curDimNum, int step, Tuple& tp,
+                        bool parallel) const {
 
-            // Ready to call visitor, i.e., have we recursed beyond final dimension?
-            if (curDimNum < 0 || curDimNum >= size())
-                return visitor(tp);
-        
+            auto& sc = _q.at(curDimNum);
+            auto& dsize = sc.getVal();
+            bool last_dim = curDimNum + step < 0 || curDimNum + step >= size();
+
+            // Get unique index to first position if at last dim.
+            size_t idx0 = 0;
+            if (last_dim) {
+                tp.setVal(curDimNum, 0);
+                idx0 = layout(tp);
+            }
+
+            // Iterate along last dimension in parallel.
+            if (last_dim && parallel) {
+#pragma omp parallel for firstprivate(tp)
+                for (T i = 0; i < dsize; i++) {
+                    tp.setVal(curDimNum, i);
+                    visitor(tp, idx0 + i);
+                }
+            }
+
             // Iterate along current dimension, and recurse to next/prev dimension.
             else {
-                auto& sc = _q.at(curDimNum);
-                auto& tdim = sc.getName();
-                auto& dsize = sc.getVal();
+                bool ok = true;
+
                 for (T i = 0; i < dsize; i++) {
-                    tp.setVal(tdim, i);
-                    bool ok = visitAllPoints(visitor, curDimNum + step, step, tp);
+                    tp.setVal(curDimNum, i);
+
+                    // Call visitor if no more dims.
+                    if (last_dim)
+                        ok = visitor(tp, idx0 + i);
+                    
+                    // Otherwise, recurse.
+                    else
+                        ok = _visitAllPoints(visitor, curDimNum + step, step, tp, parallel);
+                    
+                    // Leave sequential visit if visitor returns false.
                     if (!ok)
                         return false;
                 }

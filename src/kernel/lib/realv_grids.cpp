@@ -30,6 +30,48 @@ using namespace std;
 
 namespace yask {
 
+    // APIs to get info from vars.
+#define GET_GRID_API(api_name, expr, step_ok, domain_ok, misc_ok)       \
+    idx_t YkGridBase::api_name(const string& dim) const {               \
+        checkDimType(dim, #api_name, step_ok, domain_ok, misc_ok);      \
+        int posn = get_dim_posn(dim, true, #api_name);                  \
+        return expr;                                                    \
+    }
+    GET_GRID_API(get_rank_domain_size, _domains[posn], false, true, false)
+    GET_GRID_API(get_pad_size, _pads[posn], false, true, false)
+    GET_GRID_API(get_halo_size, _halos[posn], false, true, false)
+    GET_GRID_API(get_first_misc_index, _offsets[posn], false, false, true)
+    GET_GRID_API(get_last_misc_index, _offsets[posn] + _domains[posn] - 1, false, false, true)
+    GET_GRID_API(get_first_rank_domain_index, _offsets[posn], false, true, false)
+    GET_GRID_API(get_last_rank_domain_index, _offsets[posn] + _domains[posn] - 1, false, true, false)
+    GET_GRID_API(get_first_rank_alloc_index, _offsets[posn] - _pads[posn], false, true, false)
+    GET_GRID_API(get_last_rank_alloc_index, _offsets[posn] - _pads[posn] + _allocs[posn] - 1, false, true, false)
+    GET_GRID_API(get_extra_pad_size, _pads[posn] - _halos[posn], false, true, false)
+    GET_GRID_API(get_alloc_size, _allocs[posn], true, true, true)
+    GET_GRID_API(_get_offset, _offsets[posn], true, true, true)
+    GET_GRID_API(_get_first_alloc_index, _offsets[posn] - _pads[posn], true, true, true)
+    GET_GRID_API(_get_last_alloc_index, _offsets[posn] - _pads[posn] + _allocs[posn] - 1, true, true, true)
+#undef GET_GRID_API
+    
+    // APIs to set vars.
+#define COMMA ,
+#define SET_GRID_API(api_name, expr, step_ok, domain_ok, misc_ok)       \
+    void YkGridBase::api_name(const string& dim, idx_t n) {             \
+        checkDimType(dim, #api_name, step_ok, domain_ok, misc_ok);      \
+        int posn = get_dim_posn(dim, true, #api_name);                  \
+        expr;                                                           \
+    }
+    SET_GRID_API(set_halo_size, _halos[posn] = n; _set_pad_size(dim, _pads[posn]), false, true, false)
+    SET_GRID_API(set_min_pad_size, if (n > _pads[posn]) _set_pad_size(dim, n), false, true, false)
+    SET_GRID_API(set_extra_pad_size, set_min_pad_size(dim, _halos[posn] + n), false, true, false)
+    SET_GRID_API(set_first_misc_index, _offsets[posn] = n, false, false, true)
+    SET_GRID_API(set_alloc_size, _set_domain_size(dim, n), true, false, true)
+    SET_GRID_API(_set_domain_size, _domains[posn] = n; resize(), true, true, true)
+    SET_GRID_API(_set_pad_size, _pads[posn] = std::max(n COMMA _halos[posn]); resize(), true, true, true)
+    SET_GRID_API(_set_offset, _offsets[posn] = n, true, true, true)
+#undef COMMA
+#undef SET_GRID_API
+    
     // Convenience function to format indices like
     // "x=5, y=3".
     std::string YkGridBase::makeIndexString(const Indices& idxs,
@@ -65,8 +107,8 @@ namespace yask {
         if (dirty) {
             if (is_dim_used(_dims->_step_dim)) {
                 auto& sd = _dims->_step_dim;
-                for (idx_t i = _get_first_allowed_index(sd);
-                     i <= _get_last_allowed_index(sd); i++)
+                for (idx_t i = _get_first_alloc_index(sd);
+                     i <= _get_last_alloc_index(sd); i++)
                     YkGridBase::set_dirty(dirty, i);
             }
             else
@@ -146,48 +188,6 @@ namespace yask {
         }
         _dims->checkDimType(dim, fn_name, step_ok, domain_ok, misc_ok);
     }
-    
-    // APIs to get info from vars.
-#define GET_GRID_API(api_name, expr, step_ok, domain_ok, misc_ok)       \
-    idx_t YkGridBase::api_name(const string& dim) const {               \
-        checkDimType(dim, #api_name, step_ok, domain_ok, misc_ok);      \
-        int posn = get_dim_posn(dim, true, #api_name);                  \
-        return expr;                                                    \
-    }
-    GET_GRID_API(get_rank_domain_size, _domains[posn], false, true, false)
-    GET_GRID_API(get_pad_size, _pads[posn], false, true, false)
-    GET_GRID_API(get_halo_size, _halos[posn], false, true, false)
-    GET_GRID_API(get_first_misc_index, _offsets[posn], false, false, true)
-    GET_GRID_API(get_last_misc_index, _offsets[posn] + _domains[posn] - 1, false, false, true)
-    GET_GRID_API(get_first_rank_domain_index, _offsets[posn], false, true, false)
-    GET_GRID_API(get_last_rank_domain_index, _offsets[posn] + _domains[posn] - 1, false, true, false)
-    GET_GRID_API(get_first_rank_alloc_index, _offsets[posn] - _pads[posn], false, true, false)
-    GET_GRID_API(get_last_rank_alloc_index, _offsets[posn] - _pads[posn] + _allocs[posn] - 1, false, true, false)
-    GET_GRID_API(get_extra_pad_size, _pads[posn] - _halos[posn], false, true, false)
-    GET_GRID_API(get_alloc_size, _allocs[posn], true, true, true)
-    GET_GRID_API(_get_offset, _offsets[posn], true, true, true)
-    GET_GRID_API(_get_first_allowed_index, _offsets[posn] - _pads[posn], true, true, true)
-    GET_GRID_API(_get_last_allowed_index, _offsets[posn] - _pads[posn] + _allocs[posn] - 1, true, true, true)
-#undef GET_GRID_API
-    
-    // APIs to set vars.
-#define COMMA ,
-#define SET_GRID_API(api_name, expr, step_ok, domain_ok, misc_ok)       \
-    void YkGridBase::api_name(const string& dim, idx_t n) {             \
-        checkDimType(dim, #api_name, step_ok, domain_ok, misc_ok);      \
-        int posn = get_dim_posn(dim, true, #api_name);                  \
-        expr;                                                           \
-    }
-    SET_GRID_API(set_halo_size, _halos[posn] = n; _set_pad_size(dim, _pads[posn]), false, true, false)
-    SET_GRID_API(set_min_pad_size, if (n > _pads[posn]) _set_pad_size(dim, n), false, true, false)
-    SET_GRID_API(set_extra_pad_size, set_min_pad_size(dim, _halos[posn] + n), false, true, false)
-    SET_GRID_API(set_first_misc_index, _offsets[posn] = n, false, false, true)
-    SET_GRID_API(set_alloc_size, _set_domain_size(dim, n), true, false, true)
-    SET_GRID_API(_set_domain_size, _domains[posn] = n; resize(), true, true, true)
-    SET_GRID_API(_set_pad_size, _pads[posn] = std::max(n COMMA _halos[posn]); resize(), true, true, true)
-    SET_GRID_API(_set_offset, _offsets[posn] = n, true, true, true)
-#undef COMMA
-#undef SET_GRID_API
     
     bool YkGridBase::is_storage_layout_identical(const yk_grid_ptr other) const {
         auto op = dynamic_pointer_cast<YkGridBase>(other);
@@ -341,7 +341,8 @@ namespace yask {
 
         // This will loop over the entire allocation.
         // Indices of 'pt' will be relative to allocation.
-        allocs.visitAllPoints([&](const IdxTuple& pt) {
+        allocs.visitAllPoints([&](const IdxTuple& pt,
+                                  size_t idx) {
 
                 // Adjust alloc indices to overall indices.
                 IdxTuple opt;
@@ -398,8 +399,8 @@ namespace yask {
                 continue;
 
             // Within first..last indices?
-            auto first_ok = _get_first_allowed_index(dname);
-            auto last_ok = _get_last_allowed_index(dname);
+            auto first_ok = _get_first_alloc_index(dname);
+            auto last_ok = _get_last_alloc_index(dname);
             if (idx < first_ok || idx > last_ok) {
                 if (strict_indices) {
                     cerr << "Error: " << fn << ": index in dim '" << dname <<
@@ -440,7 +441,14 @@ namespace yask {
             Indices idxs(indices);
             writeElem(real_t(val), idxs, __LINE__);
             nup++;
-            set_dirty_all(true); // TODO: set only specified step-val, if relevant.
+
+            // Set appropriate dirty flag.
+            auto& dims = _ggb->get_dims();
+            int posn = dims.lookup_posn(_dims->_step_dim);
+            if (posn < 0)
+                _dirty_steps.insert(0);
+            else
+                _dirty_steps.insert(indices[posn]);
         }
         return nup;
     }
@@ -465,16 +473,14 @@ namespace yask {
         numElemsTuple.setFirstInner(_is_col_major);
 
         // Visit points in slice.
-        // TODO: parallelize.
-        idx_t i = 0;
-        numElemsTuple.visitAllPoints([&](const IdxTuple& ofs) {
+        numElemsTuple.visitAllPointsInParallel([&](const IdxTuple& ofs,
+                                                   size_t idx) {
                 IdxTuple pt = firstTuple.addElements(ofs);
                 real_t val = readElem(pt, __LINE__);
-                ((real_t*)buffer_ptr)[i] = val;
-                i++;
+                ((real_t*)buffer_ptr)[idx] = val;
                 return true;    // keep going.
             });
-        return i;
+        return numElemsTuple.product();
     }
     idx_t YkGridBase::set_elements_in_slice_same(double val,
                                                  const GridIndices& first_indices,
@@ -497,17 +503,15 @@ namespace yask {
         numElemsTuple.setFirstInner(_is_col_major);
 
         // Visit points in slice.
-        // TODO: parallelize.
-        idx_t i = 0;
-        numElemsTuple.visitAllPoints([&](const IdxTuple& ofs) {
+        numElemsTuple.visitAllPointsInParallel([&](const IdxTuple& ofs,
+                                                   size_t idx) {
                 IdxTuple pt = firstTuple.addElements(ofs);
                 writeElem(real_t(val), pt, __LINE__);
-                i++;
                 return true;    // keep going.
             });
 
         set_dirty_all(true); // TODO: set only specified step-val(s), if relevant.
-        return i;
+        return numElemsTuple.product();
     }
     idx_t YkGridBase::set_elements_in_slice(const void* buffer_ptr,
                                             const GridIndices& first_indices,
@@ -527,18 +531,16 @@ namespace yask {
         numElemsTuple.setFirstInner(_is_col_major);
 
         // Visit points in slice.
-        // TODO: parallelize.
-        idx_t i = 0;
-        numElemsTuple.visitAllPoints([&](const IdxTuple& ofs) {
+        numElemsTuple.visitAllPointsInParallel([&](const IdxTuple& ofs,
+                                                   size_t idx) {
                 IdxTuple pt = firstTuple.addElements(ofs);
-                real_t val = ((real_t*)buffer_ptr)[i];
+                real_t val = ((real_t*)buffer_ptr)[idx];
                 writeElem(val, pt, __LINE__);
-                i++;
                 return true;    // keep going.
             });
 
         set_dirty_all(true); // TODO: set only specified step-val(s), if relevant.
-        return i;
+        return numElemsTuple.product();
     }
 
     // Print one element like
@@ -578,11 +580,11 @@ namespace yask {
 
         // Visit every point in fold.
         IdxTuple folds = _dims->_fold_pts;
-        folds.visitAllPoints([&](const IdxTuple& fofs) {
+        folds.visitAllPoints([&](const IdxTuple& fofs,
+                                 size_t idx) {
                 
                 // Get element from vec val.
-                auto i = _dims->getElemIndexInVec(fofs);
-                real_t ev = val[i];
+                real_t ev = val[idx];
                 
                 // Add fold offsets to elem indices for printing.
                 IdxTuple pt2 = idxs2.addElements(fofs, false);

@@ -104,7 +104,8 @@ int main(int argc, char** argv) {
         os << "Copying seq of vals\n";
         g3->set_all_elements_in_seq(1.0);
         auto sizes = g3->get_allocs();
-        sizes.visitAllPoints([&](const IdxTuple& pt) {
+        sizes.visitAllPointsInParallel([&](const IdxTuple& pt,
+                                           size_t idx) {
                 IdxTuple pt2 = pt;
                 for (auto dname : gdims)
                     pt2[dname] += g3->get_first_rank_alloc_index(dname);
@@ -114,7 +115,8 @@ int main(int argc, char** argv) {
                 return true;
             });
         os << "Checking seq of vals\n";
-        sizes.visitAllPoints([&](const IdxTuple& pt) {
+        sizes.visitAllPoints([&](const IdxTuple& pt,
+                                 size_t idx) {
                 IdxTuple pt2 = pt;
                 for (auto dname : gdims)
                     pt2[dname] += g3->get_first_rank_alloc_index(dname);

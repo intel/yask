@@ -62,8 +62,8 @@ namespace yask {
 #endif
 
         // Loop through all points in the vector fold.
-        size_t pelem = 0;
-        _dims._fold.visitAllPoints([&](const IntTuple& vecPoint){
+        _dims._fold.visitAllPoints([&](const IntTuple& vecPoint,
+                                       size_t pelem){
 
                 // Final offset in each dim is offset of grid point plus
                 // fold offset.
@@ -119,7 +119,6 @@ namespace yask {
                 _vblk2elemLists[*gp].push_back(ve); // should be at pelem index.
                 assert(_vblk2elemLists[*gp].size() == pelem+1); // verify at pelem index.
 
-                pelem++;
                 return true;
             });                  // end of vector lambda-function.
 

@@ -43,7 +43,7 @@ namespace yask {
         // actual data, message stream.
         GenericGridBase* _ggb = 0;
 
-        // Problem dimensions.
+        // Problem dimensions. (NOT grid dims.)
         DimsPtr _dims;
 
         // The following indices have values for all dims in the grid.
@@ -260,8 +260,8 @@ namespace yask {
         // They are not protected because they are used from outside
         // this class hierarchy.
         virtual idx_t _get_offset(const std::string& dim) const;
-        virtual idx_t _get_first_allowed_index(const std::string& dim) const;
-        virtual idx_t _get_last_allowed_index(const std::string& dim) const;
+        virtual idx_t _get_first_alloc_index(const std::string& dim) const;
+        virtual idx_t _get_last_alloc_index(const std::string& dim) const;
         virtual void _set_domain_size(const std::string& dim, idx_t size);
         virtual void _set_pad_size(const std::string& dim, idx_t size);
         virtual void _set_offset(const std::string& dim, idx_t size);
