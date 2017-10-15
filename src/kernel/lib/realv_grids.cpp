@@ -86,34 +86,22 @@ namespace yask {
 
     // Halo-exchange flag accessors.
     bool YkGridBase::is_dirty(idx_t step_idx) const {
-        if (!is_dim_used(_dims->_step_dim))
+        if (_has_step_dim)
+            step_idx = wrap_step(step_idx);
+        else
             step_idx = 0;
-        return _dirty_steps.count(step_idx) > 0;
+        return _dirty_steps[step_idx];
     }
     void YkGridBase::set_dirty(bool dirty, idx_t step_idx) {
-        if (!is_dim_used(_dims->_step_dim))
+        if (_has_step_dim)
+            step_idx = wrap_step(step_idx);
+        else
             step_idx = 0;
-        if (dirty) {
-            _dirty_steps.insert(step_idx);
-            assert(is_dirty(step_idx));
-        }            
-        else {
-            _dirty_steps.erase(step_idx);
-            assert(is_dirty(step_idx) == false);
-        }
+        _dirty_steps[step_idx] = true;
     }
     void YkGridBase::set_dirty_all(bool dirty) {
-        _dirty_steps.clear();
-        if (dirty) {
-            if (is_dim_used(_dims->_step_dim)) {
-                auto& sd = _dims->_step_dim;
-                for (idx_t i = _get_first_alloc_index(sd);
-                     i <= _get_last_alloc_index(sd); i++)
-                    YkGridBase::set_dirty(dirty, i);
-            }
-            else
-                YkGridBase::set_dirty(dirty, 0);
-        }
+        for (auto i : _dirty_steps)
+            i = dirty;
     }
     
     // Lookup position by dim name.
@@ -167,10 +155,18 @@ namespace yask {
 
         // Do the resize.
         _allocs = new_allocs;
+        int num_dirty = 1;      // default if no step dim.
         for (int i = 0; i < get_num_dims(); i++) {
             _vec_allocs[i] = _allocs[i] / _vec_lens[i];
             _ggb->set_dim_size(i, _vec_allocs[i]);
+
+            // Steps.
+            if (_has_step_dim && i == Indices::step_posn)
+                num_dirty = _allocs[i];
         }
+
+        // Resize dirty flags, too.
+        _dirty_steps.resize(num_dirty, true); // init all new dirty flags to true;
     }
     
     // Check whether dim is used and of allowed type.
@@ -443,12 +439,10 @@ namespace yask {
             nup++;
 
             // Set appropriate dirty flag.
-            auto& dims = _ggb->get_dims();
-            int posn = dims.lookup_posn(_dims->_step_dim);
-            if (posn < 0)
-                _dirty_steps.insert(0);
+            if (_has_step_dim)
+                set_dirty(indices[Indices::step_posn], true);
             else
-                _dirty_steps.insert(indices[posn]);
+                set_dirty(0, true);
         }
         return nup;
     }
@@ -510,7 +504,14 @@ namespace yask {
                 return true;    // keep going.
             });
 
-        set_dirty_all(true); // TODO: set only specified step-val(s), if relevant.
+        // Set appropriate dirty flag(s).
+        if (_has_step_dim) {
+            for (idx_t i = first[Indices::step_posn];
+                 i <= last[Indices::step_posn]; i++)
+                set_dirty(i, true);
+        } else
+            set_dirty(0, true);
+
         return numElemsTuple.product();
     }
     idx_t YkGridBase::set_elements_in_slice(const void* buffer_ptr,
@@ -539,7 +540,14 @@ namespace yask {
                 return true;    // keep going.
             });
 
-        set_dirty_all(true); // TODO: set only specified step-val(s), if relevant.
+        // Set appropriate dirty flag(s).
+        if (_has_step_dim) {
+            for (idx_t i = first_indices[Indices::step_posn];
+                 i <= last_indices[Indices::step_posn]; i++)
+                set_dirty(i, true);
+        } else
+            set_dirty(0, true);
+
         return numElemsTuple.product();
     }
 

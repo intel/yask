@@ -59,11 +59,15 @@ namespace yask {
         // Indices in vectors for sizes that are always vec lens (to avoid division).
         Indices _vec_pads;
         Indices _vec_allocs;
+
+        // Whether step dim is used.
+        // If true, will always be in Indices::step_posn.
+        bool _has_step_dim = false;
         
         // Data that needs to be copied to neighbor's halos if using MPI.
-        // If this grid has the step dim, the values in the set are the step values.
-        // Otherwise, the set should either be empty (not dirty) or not empty (dirty). 
-        std::set<idx_t> _dirty_steps;
+        // If this grid has the step dim, there is one bit per alloc'd step.
+        // Otherwise, only bit 0 is used.
+        std::vector<bool> _dirty_steps;
 
         // Data layout for slice APIs.
         bool _is_col_major = false;
@@ -78,7 +82,7 @@ namespace yask {
 
         // Adjust logical time index to 0-based index
         // using temporal allocation size.
-        inline idx_t wrap_index(idx_t t, idx_t tdim) const {
+        inline idx_t wrap_step(idx_t t) const {
 
             // Index wraps in tdim.
             // Examples based on tdim == 2:
@@ -96,7 +100,7 @@ namespace yask {
             // the offset.  This should not be a practical restriction.
             t += idx_t(0x1000);
             assert(t >= 0);
-            return t % tdim;
+            return t % _domains[Indices::step_posn];
         }
         
         // Check whether dim exists and is of allowed type.
@@ -378,25 +382,16 @@ namespace yask {
                    const GridDimNames& dimNames,
                    std::ostream** ostr) :
             YkGridBase(&_data, dims),
-            _data(name, dimNames, ostr) { }
+            _data(name, dimNames, ostr) {
+            _has_step_dim = _wrap_1st_idx;
+            resize();
+        }
 
         // Get num dims from compile-time const.
         virtual int get_num_dims() const final {
             return _data.get_num_dims();
         }
 
-        // Halo-exchange flag accessors.
-        virtual bool is_dirty(idx_t step_idx) const {
-            if (_wrap_1st_idx)
-                step_idx = wrap_index(step_idx, _domains[0]);
-            return YkGridBase::is_dirty(step_idx);
-        }
-        virtual void set_dirty(bool dirty, idx_t step_idx) {
-            if (_wrap_1st_idx)
-                step_idx = wrap_index(step_idx, _domains[0]);
-            YkGridBase::set_dirty(dirty, step_idx);
-        }
-        
         // Print some info to 'os'.
         virtual void print_info(std::ostream& os) const {
             _data.print_info(os, "FP");
@@ -427,7 +422,7 @@ namespace yask {
 
                 // Special handling for 1st index.
                 if (_wrap_1st_idx && i == 0)
-                    adj_idxs[0] = wrap_index(idxs[0], _domains[0]);
+                    adj_idxs[0] = wrap_step(idxs[0]);
 
                 // Adjust for offset and padding.
                 // This gives a 0-based local element index.
@@ -480,6 +475,7 @@ namespace yask {
                   std::ostream** ostr) :
             YkGridBase(&_data, dims),
             _data(name, dimNames, ostr) {
+            _has_step_dim = _wrap_1st_idx;
 
             // Init vec sizes.
             // For each dim in the grid, use the number of vector
@@ -501,18 +497,8 @@ namespace yask {
                 assert(j >= 0);
                 _vec_fold_posns[i] = j;
             }
-        }
-        
-        // Halo-exchange flag accessors.
-        virtual bool is_dirty(idx_t step_idx) const {
-            if (_wrap_1st_idx)
-                step_idx = wrap_index(step_idx, _domains[0]);
-            return YkGridBase::is_dirty(step_idx);
-        }
-        virtual void set_dirty(bool dirty, idx_t step_idx) {
-            if (_wrap_1st_idx)
-                step_idx = wrap_index(step_idx, _domains[0]);
-            YkGridBase::set_dirty(dirty, step_idx);
+
+            resize();
         }
         
         // Get num dims from compile-time const.
@@ -557,10 +543,10 @@ namespace yask {
 #pragma unroll
             for (int i = 0; i < _data.get_num_dims(); i++) {
 
-                // Special handling for 1st index.
-                if (_wrap_1st_idx && i == 0) {
-                    vec_idxs[0] = wrap_index(idxs[0], _domains[0]);
-                    elem_ofs[0] = 0;
+                // Special handling for step index.
+                if (_wrap_1st_idx && i == Indices::step_posn) {
+                    vec_idxs[i] = wrap_step(idxs[i]);
+                    elem_ofs[i] = 0;
                 }
 
                 else {
@@ -635,8 +621,8 @@ namespace yask {
             for (int i = 0; i < _data.get_num_dims(); i++) {
 
                 // Special handling for 1st index.
-                if (_wrap_1st_idx && i == 0)
-                    adj_idxs[0] = wrap_index(idxs[0], _domains[0]);
+                if (_wrap_1st_idx && i == Indices::step_posn)
+                    adj_idxs[i] = wrap_step(idxs[i]);
 
                 // Adjust for padding.
                 // This gives a 0-based local *vector* index.

@@ -111,7 +111,8 @@ namespace yask {
             TRACE_MSG3("...using vector code without sub-domain checking.");
 
             // Make sure we're doing a multiple of clusters.
-            for (int i = cp->_step_posn + 1; i < ndims; i++) {
+            auto step_posn = Indices::step_posn;
+            for (int i = step_posn + 1; i < ndims; i++) {
                 auto& dname = dims->_stencil_dims.getDimName(i);
                 assert((sub_block_idxs.end[i] - sub_block_idxs.begin[i]) % 
                        dims->_cluster_pts[dname] == 0);
@@ -120,7 +121,7 @@ namespace yask {
             // Indices to sub-block loop must be in vec-norm
             // format, i.e., vector lengths and rank-relative.
             ScanIndices norm_sub_block_idxs = sub_block_idxs;
-            for (int i = cp->_step_posn + 1; i < ndims; i++) {
+            for (int i = step_posn + 1; i < ndims; i++) {
                 auto& dname = dims->_stencil_dims.getDimName(i);
                 assert(dims->_domain_dims.lookup(dname));
 

@@ -103,6 +103,7 @@ namespace yask {
     void StencilContext::calc_rank_ref()
     {
         auto& step_dim = _dims->_step_dim;
+        auto step_posn = Indices::step_posn;
         idx_t begin_t = 0;
         idx_t end_t = _opts->_rank_sizes[step_dim];
         idx_t step_t = _dims->_step_dir;
@@ -130,6 +131,10 @@ namespace yask {
         gen_idxs.begin = begin;
         gen_idxs.end = end;
 
+        // Initial halo exchange.
+        // (Needed in case there are 0 time-steps).
+        exchange_halos_all();
+
         // Number of iterations to get from begin_t, stopping before end_t,
         // stepping by step_t.
         const idx_t num_t = (abs(end_t - begin_t) + (abs(step_t) - 1)) / abs(step_t);
@@ -143,10 +148,10 @@ namespace yask {
 
             // Set indices that will pass through generated code
             // because the step loop is coded here.
-            gen_idxs.index[_step_posn] = index_t;
-            gen_idxs.start[_step_posn] = start_t;
-            gen_idxs.stop[_step_posn] = stop_t;
-            gen_idxs.step[_step_posn] = step_t;
+            gen_idxs.index[step_posn] = index_t;
+            gen_idxs.start[step_posn] = start_t;
+            gen_idxs.stop[step_posn] = stop_t;
+            gen_idxs.step[step_posn] = step_t;
         
             // Loop thru eq-groups.
             for (auto* eg : eqGroups) {
@@ -164,6 +169,7 @@ namespace yask {
                     eg->calc_scalar(gen_idxs.start)
                 
                 // Scan through n-D space.
+                TRACE_MSG("calc_rank_ref: step " << start_t);
 #include "yask_gen_loops.hpp"
 #undef calc_gen
                 
@@ -183,6 +189,7 @@ namespace yask {
                                       idx_t last_step_index)
     {
         auto& step_dim = _dims->_step_dim;
+        auto step_posn = Indices::step_posn;
         idx_t begin_t = first_step_index;
         idx_t step_t = _opts->_region_sizes[step_dim] * _dims->_step_dir;
         idx_t end_t = last_step_index + _dims->_step_dir; // end is beyond last.
@@ -272,10 +279,10 @@ namespace yask {
                 max(start_t + step_t, end_t);
 
             // Set indices that will pass through generated code.
-            rank_idxs.index[_step_posn] = index_t;
-            rank_idxs.start[_step_posn] = start_t;
-            rank_idxs.stop[_step_posn] = stop_t;
-            rank_idxs.step[_step_posn] = step_t;
+            rank_idxs.index[step_posn] = index_t;
+            rank_idxs.start[step_posn] = start_t;
+            rank_idxs.stop[step_posn] = stop_t;
+            rank_idxs.step[step_posn] = step_t;
             
             // If doing only one time step in a region (default), loop
             // through equations here, and do only one equation group at a
@@ -295,6 +302,7 @@ namespace yask {
 
                     // Include automatically-generated loop code that calls
                     // calc_region() for each region.
+                    TRACE_MSG("run_solution: step " << start_t);
 #include "yask_rank_loops.hpp"
 
                     // Remember grids that have been written to by this eq-group,
@@ -323,6 +331,7 @@ namespace yask {
                 EqGroupSet* eqGroup_ptr = NULL;
                 
                 // Include automatically-generated loop code that calls calc_region() for each region.
+                TRACE_MSG("run_solution: steps " << start_t << " ... (end before) " << stop_t);
 #include "yask_rank_loops.hpp"
             }
 
@@ -351,6 +360,8 @@ namespace yask {
         auto& step_dim = _dims->_step_dim;
         idx_t first_t = 0;
         idx_t last_t = _opts->_rank_sizes[step_dim] - 1;
+
+        // backward?
         if (_dims->_step_dir < 0) {
             first_t = last_t;
             last_t = 0;
@@ -368,6 +379,7 @@ namespace yask {
 
         int ndims = _dims->_stencil_dims.size();
         auto& step_dim = _dims->_step_dim;
+        auto step_posn = Indices::step_posn;
         TRACE_MSG("calc_region: " << rank_idxs.start.makeValStr(ndims) <<
                   " ... (end before) " << rank_idxs.stop.makeValStr(ndims));
 
@@ -393,9 +405,9 @@ namespace yask {
         region_idxs.group_size = _opts->_block_group_sizes;
 
         // Time loop.
-        idx_t begin_t = region_idxs.begin[_step_posn];
-        idx_t end_t = region_idxs.end[_step_posn];
-        idx_t step_t = region_idxs.step[_step_posn];
+        idx_t begin_t = region_idxs.begin[step_posn];
+        idx_t end_t = region_idxs.end[step_posn];
+        idx_t step_t = region_idxs.step[step_posn];
         const idx_t num_t = (abs(end_t - begin_t) + (abs(step_t) - 1)) / abs(step_t);
         for (idx_t index_t = 0; index_t < num_t; index_t++)
         {
@@ -406,9 +418,9 @@ namespace yask {
                 max(start_t + step_t, end_t);
 
             // Set indices that will pass through generated code.
-            region_idxs.index[_step_posn] = index_t;
-            region_idxs.start[_step_posn] = start_t;
-            region_idxs.stop[_step_posn] = stop_t;
+            region_idxs.index[step_posn] = index_t;
+            region_idxs.start[step_posn] = start_t;
+            region_idxs.stop[step_posn] = stop_t;
             
             // equations to evaluate at this time step.
             for (auto* eg : eqGroups) {
@@ -426,7 +438,7 @@ namespace yask {
                     // Actual region boundaries must stay within BB for this eq group.
                     // Note that i-loop is over domain vars only (skipping over step var).
                     bool ok = true;
-                    for (int i = _step_posn + 1; i < ndims; i++) {
+                    for (int i = step_posn + 1; i < ndims; i++) {
                         auto& dname = _dims->_stencil_dims.getDimName(i);
                         assert(eg->bb_begin.lookup(dname));
                         region_idxs.begin[i] = max<idx_t>(rank_start[i], eg->bb_begin[dname]);
@@ -462,7 +474,7 @@ namespace yask {
                     // so in any order.  TODO: shift only what is needed by
                     // this eq-group, not the global max.
                     // Note that i-loop is over domain vars only (skipping over step var).
-                    for (int i = _step_posn + 1; i < ndims; i++) {
+                    for (int i = step_posn + 1; i < ndims; i++) {
                         auto& dname = _dims->_stencil_dims.getDimName(i);
                         auto angle = angles[dname];
                         rank_start[i] -= angle;
@@ -772,7 +784,7 @@ namespace yask {
                         else {
                             dsize = gp->get_alloc_size(dname);
                             copy_begin.addDimBack(dname, gp->get_first_misc_index(dname));
-                            copy_end.addDimBack(dname, gp->get_last_misc_index(dname));
+                            copy_end.addDimBack(dname, gp->get_last_misc_index(dname) + 1);
                         }
 
                         buf_sizes.addDimBack(dname, dsize);
@@ -802,6 +814,7 @@ namespace yask {
                         string bufname = oss.str();
 
                         // Make buffer for this grid.
+                        // (But don't allocate storage yet.)
                         auto gbp = mpiBufs.emplace(gname, _mpiInfo);
                         auto& gbi = gbp.first; // iterator from pair returned by emplace().
                         auto& gbv = gbi->second; // value from iterator.
@@ -1142,8 +1155,8 @@ namespace yask {
         tot_numFpOps_1t = sumOverRanks(rank_numFpOps_1t, _env->comm);
         tot_numFpOps_dt = tot_numFpOps_1t * dt;
 
-        rank_domain_dt = _opts->_rank_sizes.product();
-        rank_domain_1t = rank_domain_dt / dt;
+        rank_domain_1t = bb_num_points;
+        rank_domain_dt = rank_domain_1t * dt; // same as _opts->_rank_sizes.product();
         tot_domain_1t = sumOverRanks(rank_domain_1t, _env->comm);
         tot_domain_dt = tot_domain_1t * dt;
     
@@ -1323,13 +1336,14 @@ namespace yask {
         }
     }
 
-    // Exchange all dirty halo data.
+    // Exchange dirty halo data for all grids, regardless
+    // of their eq-group.
     void StencilContext::exchange_halos_all() {
 
 #ifdef USE_MPI
         TRACE_MSG("exchange_halos_all()...");
 
-        // Find max steps stored in grids.
+        // Find max steps stored over all grids.
         auto& sd = _dims->_step_dim;
         idx_t start = 0, stop = 1;
         for (auto gp : gridPtrs) {
@@ -1527,6 +1541,8 @@ namespace yask {
             MPI_Waitall(num_send_reqs, send_reqs, MPI_STATUS_IGNORE);
             TRACE_MSG(" done waiting for MPI send request(s)");
         }
+        else
+            TRACE_MSG("exchange_halos: no MPI send requests to wait for");
         
         double end_time = getTimeInSecs();
         mpi_time += end_time - start_time;

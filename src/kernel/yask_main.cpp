@@ -211,8 +211,8 @@ int main(int argc, char** argv)
         cerr << "Exiting because no trials are specified." << endl;
         exit_yask(1);
     }
-    if (context->tot_numpts_dt < 1) {
-        cerr << "Exiting because there are zero points to evaluate." << endl;
+    if (context->bb_num_points < 1) {
+        cerr << "Exiting because there are no points in the domain." << endl;
         exit_yask(1);
     }
 
@@ -274,6 +274,8 @@ int main(int argc, char** argv)
             
         // Calc and report perf.
         float elapsed_time = (float)(wstop - wstart);
+        if (elapsed_time <= 0.f)
+            elapsed_time = 1e-9;
         float apps = float(context->tot_numpts_dt) / elapsed_time;
         float dpps = float(context->tot_domain_dt) / elapsed_time;
         float flops = float(context->tot_numFpOps_dt) / elapsed_time;
@@ -285,11 +287,8 @@ int main(int argc, char** argv)
 #ifdef USE_MPI
         os <<
             "time in halo exch (sec):                " << makeNumStr(context->mpi_time);
-        if (elapsed_time > 0.f) {
-            float pct = 100.f * context->mpi_time / elapsed_time;
-            os << " (" << pct << "%)";
-        }
-        os << endl;
+        float pct = 100.f * context->mpi_time / elapsed_time;
+        os << " (" << pct << "%)" << endl;
 #endif
 
         if (apps > best_apps) {
@@ -313,6 +312,7 @@ int main(int argc, char** argv)
         endl;
     
     /////// Validation run.
+    bool ok = true;
     if (opts->validate) {
         kenv->global_barrier();
         os << endl << divLine <<
@@ -345,21 +345,25 @@ int main(int argc, char** argv)
         // check for equality.
         os << "Checking results..." << endl;
         idx_t errs = context->compareData(*ref_context);
+        auto ri = kenv->get_rank_index();
         if( errs == 0 ) {
-            os << "TEST PASSED." << endl;
+            os << "TEST PASSED on rank " << ri << ".\n" << flush;
         } else {
-            cerr << "TEST FAILED: >= " << errs << " mismatch(es)." << endl;
+            cerr << "TEST FAILED on rank " << ri << ": >= " << errs << " mismatch(es).\n" << flush;
             if (REAL_BYTES < 8)
                 cerr << "This is not uncommon for low-precision FP; try with 8-byte reals." << endl;
-            exit_yask(1);
+            ok = false;
         }
     }
     else
         os << "\nRESULTS NOT VERIFIED.\n";
 
     kenv->global_barrier();
+    if (!ok)
+        exit_yask(1);
+
     MPI_Finalize();
-    os << "YASK DONE." << endl << divLine;
+    os << "YASK DONE." << endl << divLine << flush;
     
     return 0;
 }

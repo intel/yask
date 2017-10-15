@@ -42,7 +42,7 @@ namespace yask {
 
             // Check dims.
             int ndims = dims.size();
-            int step_posn = 0;      // 0 => not used.
+            int step_posn = -1;      // -1 => not used.
             set<string> seenDims;
             for (int i = 0; i < ndims; i++) {
 
@@ -55,7 +55,7 @@ namespace yask {
             
                 // Step dim?
                 if (dims[i] == _dims->_step_dim) {
-                    step_posn = i + 1;
+                    step_posn = i;
                     if (i > 0) {
                         cerr << "Error: cannot create grid '" << name <<
                             "' because step dimension '" << dims[i] <<
@@ -64,7 +64,7 @@ namespace yask {
                     }
                 }
             }
-            bool do_wrap = step_posn;
+            bool do_wrap = step_posn >= 0;
 
             // Scalar?
             if (ndims == 0)

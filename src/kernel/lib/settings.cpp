@@ -161,6 +161,8 @@ namespace yask {
                    offsets.subElements(1).makeDimValStr() << " with size " <<
                    sizes.makeDimValStr(" * "));
         auto& gp = getBuf(bd, offsets);
+
+#warning FIXME: MPI buffer should be a generic grid w/o padding, rounding, etc.
         gp = context.newGrid(name, sizes.getDimNames(), false); // don't make it visible.
         assert(gp);
         for (auto& dim : sizes.getDims()) {

@@ -43,6 +43,9 @@ namespace yask {
         // trying to take a reference to it, resulting in a undefined
         // symbol (sometimes).
         static const int max_idxs = MAX_DIMS;
+
+        // Step dim is always in [0] of an Indices type (if it is used).
+        static const int step_posn = 0;
         
     protected:
         idx_t _idxs[max_idxs];

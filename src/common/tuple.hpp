@@ -803,17 +803,12 @@ namespace yask {
 
         // Call the 'visitor' lambda function at every point in the space defined by 'this'.
         // 'idx' parameter contains sequentially-numbered index.
-        // For non-parallel:
         // Visitation order is with first dimension in unit stride, i.e., a conceptual
         // "outer loop" iterates through last dimension, ..., and an "inner loop" iterates
         // through first dimension. If '_firstInner' is false, it is done the opposite way.
         // Visitor should return 'true' to keep going or 'false' to stop.
-        // For parallel:
-        // Visitation order is not predictable.
-        // Visitor return value is ignored.
         virtual void
-        visitAllPoints(std::function<bool (const Tuple&, size_t idx)> visitor,
-                       bool parallel = false) const {
+        visitAllPoints(std::function<bool (const Tuple&, size_t idx)> visitor) const {
 
             // Init lambda fn arg with *this to get dim names.
             // Values will get set during scan.
@@ -825,13 +820,31 @@ namespace yask {
             
             // Call recursive version.
             else if (_firstInner)
-                _visitAllPoints(visitor, size()-1, -1, tp, parallel);
+                _visitAllPoints(visitor, size()-1, -1, tp);
             else
-                _visitAllPoints(visitor, 0, 1, tp, parallel);
+                _visitAllPoints(visitor, 0, 1, tp);
         }
+
+        // Call the 'visitor' lambda function at every point in the space defined by 'this'.
+        // 'idx' parameter contains sequentially-numbered index.
+        // Visitation order is not predictable.
+        // Visitor return value only stops visit on one thread.
         virtual void
         visitAllPointsInParallel(std::function<bool (const Tuple&, size_t idx)> visitor) const {
-            visitAllPoints(visitor, true);
+
+            // Init lambda fn arg with *this to get dim names.
+            // Values will get set during scan.
+            Tuple tp = *this;
+
+            // 0-D?
+            if (!_q.size())
+                visitor(tp, 0);
+            
+            // Call recursive version.
+            else if (_firstInner)
+                _visitAllPointsInPar(visitor, size()-1, -1, tp);
+            else
+                _visitAllPointsInPar(visitor, 0, 1, tp);
         }
     
     protected:
@@ -839,52 +852,72 @@ namespace yask {
         // Handle recursion for public visitAllPoints(visitor).
         virtual bool
         _visitAllPoints(std::function<bool (const Tuple&, size_t idx)> visitor,
-                        int curDimNum, int step, Tuple& tp,
-                        bool parallel) const {
+                        int curDimNum, int step, Tuple& tp) const {
 
             auto& sc = _q.at(curDimNum);
             auto& dsize = sc.getVal();
             bool last_dim = curDimNum + step < 0 || curDimNum + step >= size();
 
-            // Get unique index to first position if at last dim.
-            size_t idx0 = 0;
+            // If no more dims, iterate along current dimension and call
+            // visitor.
             if (last_dim) {
-                tp.setVal(curDimNum, 0);
-                idx0 = layout(tp);
-            }
 
-            // Iterate along last dimension in parallel.
-            if (last_dim && parallel) {
-#ifdef _OPENMP
-#pragma omp parallel for firstprivate(tp)
-#endif
+                // Get unique index to first position.
+                tp.setVal(curDimNum, 0);
+                size_t idx0 = layout(tp);
+
+                // Loop through points.
                 for (T i = 0; i < dsize; i++) {
                     tp.setVal(curDimNum, i);
-                    visitor(tp, idx0 + i);
+                    bool ok = visitor(tp, idx0 + i);
+
+                    // Leave if visitor returns false.
+                    if (!ok)
+                        return false;
                 }
             }
 
-            // Iterate along current dimension, and recurse to next/prev dimension.
+            // Else, iterate along current dimension and recurse to
+            // next/prev dimension.
             else {
-                bool ok = true;
-
                 for (T i = 0; i < dsize; i++) {
                     tp.setVal(curDimNum, i);
-
-                    // Call visitor if no more dims.
-                    if (last_dim)
-                        ok = visitor(tp, idx0 + i);
-                    
-                    // Otherwise, recurse.
-                    else
-                        ok = _visitAllPoints(visitor, curDimNum + step, step, tp, parallel);
-                    
-                    // Leave sequential visit if visitor returns false.
+                    bool ok = _visitAllPoints(visitor, curDimNum + step, step, tp);
+                        
+                    // Leave if visitor returns false.
                     if (!ok)
                         return false;
                 }
             }
             return true;
+        }
+
+        // Handle recursion for public visitAllPointsInParallel(visitor).
+        virtual bool
+        _visitAllPointsInPar(std::function<bool (const Tuple&, size_t idx)> visitor,
+                             int curDimNum, int step, Tuple& tp) const {
+
+#ifdef _OPENMP
+            auto& sc = _q.at(curDimNum);
+            auto& dsize = sc.getVal();
+            bool first_dim = curDimNum - step < 0 || curDimNum - step >= size();
+            bool last_dim = curDimNum + step < 0 || curDimNum + step >= size();
+
+            // If first dim, iterate in parallel w/copies of 'tp'.
+            // TODO: collapse parallelism across all but last dim.
+            // TODO: provide parallelism for 1-D grids.
+            if (first_dim && !last_dim) {
+#pragma omp parallel for firstprivate(tp)
+                for (T i = 0; i < dsize; i++) {
+                    tp.setVal(curDimNum, i);
+                    _visitAllPoints(visitor, curDimNum + step, step, tp);
+                }
+                return true;
+            }
+
+            else
+#endif
+                return _visitAllPoints(visitor, curDimNum, step, tp);
         }
     };
 

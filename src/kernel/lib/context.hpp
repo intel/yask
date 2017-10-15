@@ -100,9 +100,6 @@ namespace yask {
         // Name.
         std::string name;
 
-        // Step dim is always in [0] of an Indices type.
-        static const int _step_posn = 0;
-        
         // List of all stencil equations in the order in which
         // they should be evaluated. Current assumption is that
         // later ones are dependent on their predecessors.
