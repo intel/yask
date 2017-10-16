@@ -102,6 +102,18 @@ else
   CXX_PREFIX	:=	time
 endif
 
+# Misc dirs & files.
+COMM_DIR	:=	src/common
+TUPLE_TEST_EXEC :=	$(BIN_DIR)/yask_tuple_test.exe
+
+# Compiler and default flags--used only for targets in this Makefile.
+# For compiler, use YC_CXX*.
+# For kernel, use YK_CXX*.
+CXX		:=	g++
+CXXFLAGS 	:=	-g -std=c++11 -Wall -O2
+CXXFLAGS	+=	$(addprefix -I,$(COMM_DIR))
+CXXFLAGS	+=	-fopenmp
+
 ######## Primary targets & rules
 # NB: must set stencil and arch to generate the desired kernel.
 
@@ -209,7 +221,15 @@ yc-and-yk-test:
 code-stats:
 	$(YK_MAKE) $@
 
+$(TUPLE_TEST_EXEC): src/common/tuple.cpp src/common/tests/tuple_test.cpp
+	$(CXX) $(CXXFLAGS) $(LFLAGS) -o $@ $^
+
+tuple-test: $(TUPLE_TEST_EXEC)
+	@echo '*** Running the C++ YASK tuple test...'
+	$(RUN_PREFIX) $<
+
 all-tests: compiler
+	$(MAKE) tuple-test
 	$(YK_MAKE) $@
 	$(MAKE) api-tests
 

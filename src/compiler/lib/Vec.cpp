@@ -55,6 +55,8 @@ namespace yask {
             assert(_vblk2avblks.count(*gp) > 0);
             return;
         }
+        assert(_vblk2elemLists.count(*gp) == 0);
+        assert(_vblk2avblks.count(*gp) == 0);
 
         // Vec of points to calculate.
 #ifdef DEBUG_VV

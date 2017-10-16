@@ -349,7 +349,6 @@ YK_PY_LIB	:=	$(YASK_DIR)/_$(YK_MODULE)$(SO_SUFFIX)
 YK_PY_MOD	:=	$(YASK_DIR)/$(YK_MODULE).py
 YK_API_TEST_EXEC :=	$(BIN_DIR)/$(YK_BASE)_api_test.exe
 YK_GRID_TEST_EXEC :=	$(BIN_DIR)/$(YK_BASE)_grid_test.exe
-YK_TUPLE_TEST_EXEC :=	$(BIN_DIR)/$(YK_BASE)_tuple_test.exe
 
 MAKE_REPORT_FILE:=	make-report.$(YK_TAG).txt
 
@@ -615,9 +614,6 @@ $(YK_PY_LIB): $(YK_OBJS) $(YK_SWIG_DIR)/yask_kernel_api_wrap.o
 $(YK_GRID_TEST_EXEC): ./tests/grid_test.cpp $(YK_LIB)
 	$(YK_CXX) $(YK_CXXFLAGS) $< $(YK_LFLAGS) -o $@
 
-$(YK_TUPLE_TEST_EXEC): ./tests/tuple_test.cpp $(YK_LIB)
-	$(YK_CXX) $(YK_CXXFLAGS) $< $(YK_LFLAGS) -o $@
-
 #### API tests.
 
 # Build C++ kernel tests.
@@ -625,10 +621,6 @@ $(YK_API_TEST_EXEC): ./tests/yask_kernel_api_test.cpp $(YK_LIB)
 	$(YK_CXX) $(YK_CXXFLAGS) $< $(YK_LFLAGS) -o $@
 
 # Run C++ tests.
-cxx-yk-tuple-test: $(YK_TUPLE_TEST_EXEC)
-	@echo '*** Running the C++ YASK tuple test...'
-	$(RUN_PREFIX) $<
-
 cxx-yk-grid-test: $(YK_GRID_TEST_EXEC)
 	@echo '*** Running the C++ YASK grid test...'
 	$(RUN_PREFIX) $<
@@ -685,7 +677,6 @@ yk-test-no-yc: kernel-only
 # For testing both the kernel and compiler in various combinations,
 # run the tests from the top-level Makefile.
 all-tests:
-	$(MAKE) clean; $(MAKE) cxx-yk-tuple-test
 	$(MAKE) clean; $(MAKE) stencil=3axis fold=x=4,y=2 cxx-yk-grid-test
 	$(MAKE) clean; $(MAKE) stencil=iso3dfd fold=x=4,y=2 yc-and-yk-test
 	$(MAKE) clean; $(MAKE) stencil=awp_elastic yc-and-yk-test real_bytes=8
