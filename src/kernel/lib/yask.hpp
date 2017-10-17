@@ -132,7 +132,12 @@ inline void omp_set_nested(int n) { }
 #include "yask_stencil_code.hpp"
 #undef DEFINE_MACROS
 
-// rounding macros for integer types.
+// Default cmd-line arguments.
+#ifndef DEF_ARGS
+#define DEF_ARGS ""
+#endif
+    
+// Rounding macros for integer types.
 #define CEIL_DIV(numer, denom) (((numer) + (denom) - 1) / (denom))
 #define ROUND_UP(n, mult) (CEIL_DIV(n, mult) * (mult))
 

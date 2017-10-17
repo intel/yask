@@ -622,7 +622,7 @@ namespace yask {
                              const IdxTuple& mults);
 
     public:
-        // Add options to set all settings to a cmd-line parser.
+        // Add options to a cmd-line parser to set the settings.
         virtual void add_options(CommandLineParser& parser);
 
         // Print usage message.

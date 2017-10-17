@@ -431,6 +431,7 @@ namespace yask {
         virtual idx_t get_block_size(const std::string& dim) const;
         virtual idx_t get_num_ranks(const std::string& dim) const;
         virtual idx_t get_rank_index(const std::string& dim) const;
+        virtual std::string apply_command_line_options(const std::string& args);
     };
 
 } // yask namespace.

@@ -240,7 +240,8 @@ namespace yask {
            - Value provided by yk_grid::set_min_pad_size().
            
            The padding size cannot be changed after data storage
-           has been allocated for a given grid.
+           has been allocated for a given grid; attempted changes to the pad size for such
+           grids will be ignored.
            In addition, once a grid's padding is set, it cannot be reduced, only increased.
            Call yk_grid::get_pad_size() to determine the actual padding size for a given grid.
            See the "Detailed Description" for \ref yk_grid for more information on grid sizes.
@@ -293,6 +294,21 @@ namespace yask {
         get_block_size(const std::string& dim
                         /**< [in] Name of dimension to get.  Must be one of
                            the names from get_domain_dim_names(). */) const =0;
+
+        /// Set performance parameters from an option string.
+        /**
+           Parses the string for options as if from a command-line.
+           Example: "-bx 64 -block_threads 4" sets the block-size in the 'x'
+           dimension to 64 and the number of threads used to process each
+           block to 4.
+           See the help message from the YASK kernel binary for documentation
+           on the command-line options.
+
+           @returns Any strings that were not recognized by the parser as options.
+        */
+        virtual std::string
+        apply_command_line_options(const std::string& args
+                                   /**< [in] String of arguments to parse. */ ) =0;
 
         /// Set the number of MPI ranks in the given dimension.
         /**
@@ -758,7 +774,8 @@ namespace yask {
            - Value provided by this function, set_min_pad_size().
            
            The padding size cannot be changed after data storage
-           has been allocated for this grid.
+           has been allocated for this grid; attempted changes to the pad size
+           will be ignored.
            In addition, once a grid's padding is set, it cannot be reduced, only increased.
            Call get_pad_size() to determine the actual padding size for the grid.
            See the "Detailed Description" for \ref yk_grid for information on grid sizes.

@@ -71,10 +71,6 @@ struct AppSettings : public KernelSettings {
         }
     };
 
-#ifndef DEF_ARGS
-#define DEF_ARGS ""
-#endif
-    
     // Parse options from the command-line and set corresponding vars.
     // Exit with message on error or request for help.
     void parse(int argc, char** argv) {
@@ -111,10 +107,12 @@ struct AppSettings : public KernelSettings {
                                          validate));
         parser.add_option(new ValOption(*this));
         
-        // Parse cmd-line options, which sets values.
-        // Any remaining strings will be left in args.
+        // Tokenize default args.
         vector<string> args;
         parser.set_args(DEF_ARGS, args);
+
+        // Parse cmd-line options, which sets values.
+        // Any remaining strings will be left in args.
         parser.parse_args(argc, argv, args);
 
         if (help) {

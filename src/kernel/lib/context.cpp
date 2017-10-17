@@ -81,6 +81,29 @@ namespace yask {
         }
     }
 
+    string StencilContext::apply_command_line_options(const string& args) {
+
+        // Create a parser and add base options to it.
+        CommandLineParser parser;
+        _opts->add_options(parser);
+
+        // Tokenize default args.
+        vector<string> argsv;
+        parser.set_args(DEF_ARGS, argsv);
+
+        // Parse cmd-line options, which sets values in settings.
+        parser.parse_args("YASK", argsv);
+
+        // Return any left-over strings.
+        string rem;
+        for (auto r : argsv) {
+            if (rem.length())
+                rem += " ";
+            rem += r;
+        }
+        return rem;
+    }
+    
     ///// StencilContext functions:
 
     // Set ostr to given stream if provided.
@@ -1200,8 +1223,8 @@ namespace yask {
             makeNumStr(tot_numFpOps_dt) << endl <<
             endl << 
             "Notes:\n"
-            " Domain-sizes and overall-problem-sizes are based on rank-domain sizes (dw * dx * dy * dz)\n"
-            "  and number of ranks (nrw * nrx * nry * nrz) regardless of number of grids or sub-domains.\n"
+            " Domain-sizes and overall-problem-sizes are based on rank-domain sizes\n"
+            "  and number of ranks regardless of number of grids or sub-domains.\n"
             " Grid-point-updates are based on sum of grid-updates in sub-domain across equation-group(s).\n"
             " Grid-point-reads are based on sum of grid-reads in sub-domain across equation-group(s).\n"
             " Est-FP-ops are based on sum of est-FP-ops in sub-domain across equation-group(s).\n"

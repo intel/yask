@@ -62,7 +62,7 @@ namespace yask {
         expr;                                                           \
     }
     SET_GRID_API(set_halo_size, _halos[posn] = n; _set_pad_size(dim, _pads[posn]), false, true, false)
-    SET_GRID_API(set_min_pad_size, if (n > _pads[posn]) _set_pad_size(dim, n), false, true, false)
+    SET_GRID_API(set_min_pad_size, if (!get_raw_storage_buffer() && n > _pads[posn]) _set_pad_size(dim, n), false, true, false)
     SET_GRID_API(set_extra_pad_size, set_min_pad_size(dim, _halos[posn] + n), false, true, false)
     SET_GRID_API(set_first_misc_index, _offsets[posn] = n, false, false, true)
     SET_GRID_API(set_alloc_size, _set_domain_size(dim, n), true, false, true)
@@ -86,6 +86,8 @@ namespace yask {
 
     // Halo-exchange flag accessors.
     bool YkGridBase::is_dirty(idx_t step_idx) const {
+        if (_dirty_steps.size() == 0)
+            return false;
         if (_has_step_dim)
             step_idx = wrap_step(step_idx);
         else
@@ -93,6 +95,8 @@ namespace yask {
         return _dirty_steps[step_idx];
     }
     void YkGridBase::set_dirty(bool dirty, idx_t step_idx) {
+        if (_dirty_steps.size() == 0)
+            resize();
         if (_has_step_dim)
             step_idx = wrap_step(step_idx);
         else
@@ -100,6 +104,8 @@ namespace yask {
         _dirty_steps[step_idx] = true;
     }
     void YkGridBase::set_dirty_all(bool dirty) {
+        if (_dirty_steps.size() == 0)
+            resize();
         for (auto i : _dirty_steps)
             i = dirty;
     }
@@ -127,8 +133,8 @@ namespace yask {
     void YkGridBase::resize() {
         
         // Original size.
+        auto p = get_raw_storage_buffer();
         IdxTuple old_allocs = get_allocs();
-        idx_t old_size = old_allocs.product();
 
         // Round up padding.
         for (int i = 0; i < get_num_dims(); i++) {
@@ -138,19 +144,17 @@ namespace yask {
         
         // New allocation in each dim.
         Indices new_allocs(1);
-        idx_t new_size = 1;
         for (int i = 0; i < get_num_dims(); i++) {
             new_allocs[i] = ROUND_UP(_domains[i] + (2 * _pads[i]), _vec_lens[i]);
-            new_size *= new_allocs[i];
-        }
 
-        // Attempt to change?
-        auto p = get_raw_storage_buffer();
-        if (p && old_size != new_size) {
-            cerr << "Error: attempt to change required grid size from " <<
-                makeByteStr(old_size) << " to " <<
-                makeByteStr(new_size) << " after storage has been allocated.\n";
-            exit_yask(1);
+            // Attempt to change?
+            if (p && old_allocs[i] != new_allocs[i]) {
+                cerr << "Error: attempt to change allocation size of grid '" <<
+                    get_name() << "' from " << old_allocs[i] << " to " <<
+                    new_allocs[i] << " in '" << get_dim_name(i) <<
+                    "' dim after storage has been allocated.\n";
+                exit_yask(1);
+            }
         }
 
         // Do the resize.
