@@ -89,7 +89,7 @@ namespace yask {
 
         // Tokenize default args.
         vector<string> argsv;
-        parser.set_args(DEF_ARGS, argsv);
+        parser.set_args(args, argsv);
 
         // Parse cmd-line options, which sets values in settings.
         parser.parse_args("YASK", argsv);
