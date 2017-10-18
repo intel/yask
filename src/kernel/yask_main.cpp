@@ -34,6 +34,7 @@ using namespace yask;
 struct AppSettings : public KernelSettings {
     bool help = false;          // help requested.
     bool doWarmup = true;       // whether to do warmup run.
+    int step_alloc = 0;         // if >0, override number of steps to alloc.
     int num_trials = 3;         // number of trials.
     bool validate = false;      // whether to do validation run.
     int pre_trial_sleep_time = 1; // sec to sleep before each trial.
@@ -93,6 +94,10 @@ struct AppSettings : public KernelSettings {
         parser.add_option(new CommandLineParser::BoolOption("warmup",
                                          "Run warmup iteration(s) before performance trial(s).",
                                          doWarmup));
+        parser.add_option(new CommandLineParser::IntOption("step_alloc",
+                                         "Number of steps to allocate in relevant grids, "
+                                                           "overriding default value from YASK compiler.",
+                                         step_alloc));
         parser.add_option(new CommandLineParser::IntOption("t",
                                         "Number of performance trials.",
                                         num_trials));
@@ -166,6 +171,22 @@ struct AppSettings : public KernelSettings {
     }
 };
 
+// Override step allocation.
+void alloc_steps(yk_solution_ptr soln, const AppSettings& opts) {
+    if (opts.step_alloc <= 0)
+        return;
+
+    // Find grids with steps.
+    auto step_dim = soln->get_step_dim_name();
+    auto grids = soln->get_grids();
+    for (auto grid : grids) {
+        if (grid->is_dim_used(step_dim))
+
+            // override num steps.
+            grid->set_alloc_size(step_dim, opts.step_alloc);
+    }
+}
+
 // Parse command-line args, run kernel, run validation if requested.
 int main(int argc, char** argv)
 {
@@ -201,6 +222,9 @@ int main(int argc, char** argv)
     // Print splash banner and related info.
     opts->splash(os, argc, argv);
 
+    // Override alloc if requested.
+    alloc_steps(ksoln, *opts);
+    
     // Alloc memory, etc.
     ksoln->prepare_solution();
 
@@ -321,6 +345,7 @@ int main(int argc, char** argv)
         auto ref_context = dynamic_pointer_cast<StencilContext>(ref_soln);
         assert(ref_context.get());
         ref_context->name += "-reference";
+        alloc_steps(ref_soln, *opts);
         ref_soln->prepare_solution();
 
         // init to same value used in context.
