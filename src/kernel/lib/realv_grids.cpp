@@ -151,7 +151,7 @@ namespace yask {
         }
         
         // New allocation in each dim.
-        Indices new_allocs(1);
+        Indices new_allocs(old_allocs);
         for (int i = 0; i < get_num_dims(); i++) {
             new_allocs[i] = ROUND_UP(_domains[i] + (2 * _pads[i]), _vec_lens[i]);
 
@@ -383,22 +383,21 @@ namespace yask {
 
     // Make sure indices are in range.
     // Side-effect: If fixed_indices is not NULL, set them to in-range if out-of-range.
-    bool YkGridBase::checkIndices(const GridIndices& indices,
+    bool YkGridBase::checkIndices(const Indices& indices,
                                   const string& fn,
                                   bool strict_indices, // die if out-of-range.
-                                  GridIndices* fixed_indices) const {
-        if (indices.size() != size_t(get_num_dims())) {
-            cerr << "Error: '" << fn << "' called with " << indices.size() <<
-                " indices instead of " << get_num_dims() << ".\n";
+                                  Indices* fixed_indices) const {
+        auto n = get_num_dims();
+        if (indices.getNumDims() != n) {
+            cerr << "Error: '" << fn << "' called with " << indices.getNumDims() <<
+                " indices instead of " << n << ".\n";
             exit_yask(1);
         }
         if (fixed_indices)
-            fixed_indices->clear();
+            fixed_indices->setFromConst(0, n);
         bool ok = true;
-        for (int i = 0; i < get_num_dims(); i++) {
+        for (int i = 0; i < n; i++) {
             idx_t idx = indices[i];
-            if (fixed_indices)
-                fixed_indices->push_back(idx);
             auto& dname = get_dim_name(i);
 
             // Any step index is ok because it wraps around.
@@ -418,9 +417,9 @@ namespace yask {
                 }
                 if (fixed_indices) {
                     if (idx < first_ok)
-                        fixed_indices->at(i) = first_ok;
+                        (*fixed_indices)[i] = first_ok;
                     if (idx > last_ok)
-                        fixed_indices->at(i) = last_ok;
+                        (*fixed_indices)[i] = last_ok;
                 }
                 ok = false;
             }
@@ -429,25 +428,23 @@ namespace yask {
     }
 
     // API get/set.
-    double YkGridBase::get_element(const GridIndices& indices) const {
+    double YkGridBase::get_element(const Indices& indices) const {
         if (!is_storage_allocated()) {
             cerr << "Error: call to 'get_element' with no data allocated for grid '" <<
                 get_name() << "'.\n";
             exit_yask(1);
         }
         checkIndices(indices, "get_element", true);
-        Indices idxs(indices);
-        real_t val = readElem(idxs, __LINE__);
+        real_t val = readElem(indices, __LINE__);
         return double(val);
     }
     idx_t YkGridBase::set_element(double val,
-                                  const GridIndices& indices,
+                                  const Indices& indices,
                                   bool strict_indices) {
         idx_t nup = 0;
         if (get_raw_storage_buffer() &&
             checkIndices(indices, "set_element", strict_indices)) {
-            Indices idxs(indices);
-            writeElem(real_t(val), idxs, __LINE__);
+            writeElem(real_t(val), indices, __LINE__);
             nup++;
 
             // Set appropriate dirty flag.
@@ -460,8 +457,8 @@ namespace yask {
     }
     
     idx_t YkGridBase::get_elements_in_slice(void* buffer_ptr,
-                                            const GridIndices& first_indices,
-                                            const GridIndices& last_indices) const {
+                                            const Indices& first_indices,
+                                            const Indices& last_indices) const {
         if (!is_storage_allocated()) {
             cerr << "Error: call to 'get_elements_in_slice' with no data allocated for grid '" <<
                 get_name() << "'.\n";
@@ -471,17 +468,16 @@ namespace yask {
         checkIndices(last_indices, "get_elements_in_slice", true);
 
         // Find ranges.
-        IdxTuple firstTuple = get_allocs();
-        IdxTuple lastTuple = firstTuple;
-        firstTuple.setVals(first_indices);
-        lastTuple.setVals(last_indices);
-        IdxTuple numElemsTuple = lastTuple.addElements(1).subElements(firstTuple);
+        Indices numElems = last_indices.addConst(1).subElements(first_indices);
+        IdxTuple numElemsTuple = get_allocs();
+        numElems.setTupleVals(numElemsTuple);
         numElemsTuple.setFirstInner(_is_col_major);
-
+        
         // Visit points in slice.
-        numElemsTuple.visitAllPointsInParallel([&](const IdxTuple& ofs,
-                                                   size_t idx) {
-                IdxTuple pt = firstTuple.addElements(ofs);
+        numElemsTuple.visitAllPointsInParallel
+            ([&](const IdxTuple& ofs,
+                 size_t idx) {
+                Indices pt = first_indices.addElements(ofs);
                 real_t val = readElem(pt, __LINE__);
                 ((real_t*)buffer_ptr)[idx] = val;
                 return true;    // keep going.
@@ -489,29 +485,27 @@ namespace yask {
         return numElemsTuple.product();
     }
     idx_t YkGridBase::set_elements_in_slice_same(double val,
-                                                 const GridIndices& first_indices,
-                                                 const GridIndices& last_indices,
+                                                 const Indices& first_indices,
+                                                 const Indices& last_indices,
                                                  bool strict_indices) {
         if (!is_storage_allocated())
             return 0;
         
         // 'Fixed' copy of indices.
-        GridIndices first, last;
+        Indices first, last;
         checkIndices(first_indices, "set_elements_in_slice_same", strict_indices, &first);
         checkIndices(last_indices, "set_elements_in_slice_same", strict_indices, &last);
 
         // Find ranges.
-        IdxTuple firstTuple = get_allocs();
-        IdxTuple lastTuple = firstTuple;
-        firstTuple.setVals(first_indices);
-        lastTuple.setVals(last_indices);
-        IdxTuple numElemsTuple = lastTuple.addElements(1).subElements(firstTuple);
+        Indices numElems = last_indices.addConst(1).subElements(first_indices);
+        IdxTuple numElemsTuple = get_allocs();
+        numElems.setTupleVals(numElemsTuple);
         numElemsTuple.setFirstInner(_is_col_major);
 
         // Visit points in slice.
         numElemsTuple.visitAllPointsInParallel([&](const IdxTuple& ofs,
                                                    size_t idx) {
-                IdxTuple pt = firstTuple.addElements(ofs);
+                Indices pt = first_indices.addElements(ofs);
                 writeElem(real_t(val), pt, __LINE__);
                 return true;    // keep going.
             });
@@ -527,8 +521,8 @@ namespace yask {
         return numElemsTuple.product();
     }
     idx_t YkGridBase::set_elements_in_slice(const void* buffer_ptr,
-                                            const GridIndices& first_indices,
-                                            const GridIndices& last_indices) {
+                                            const Indices& first_indices,
+                                            const Indices& last_indices) {
         if (!is_storage_allocated())
             return 0;
         
@@ -536,17 +530,15 @@ namespace yask {
         checkIndices(last_indices, "get_elements_in_slice", true);
 
         // Find ranges.
-        IdxTuple firstTuple = get_allocs();
-        IdxTuple lastTuple = firstTuple;
-        firstTuple.setVals(first_indices);
-        lastTuple.setVals(last_indices);
-        IdxTuple numElemsTuple = lastTuple.addElements(1).subElements(firstTuple);
+        Indices numElems = last_indices.addConst(1).subElements(first_indices);
+        IdxTuple numElemsTuple = get_allocs();
+        numElems.setTupleVals(numElemsTuple);
         numElemsTuple.setFirstInner(_is_col_major);
 
         // Visit points in slice.
         numElemsTuple.visitAllPointsInParallel([&](const IdxTuple& ofs,
                                                    size_t idx) {
-                IdxTuple pt = firstTuple.addElements(ofs);
+                Indices pt = first_indices.addElements(ofs);
                 real_t val = ((real_t*)buffer_ptr)[idx];
                 writeElem(val, pt, __LINE__);
                 return true;    // keep going.

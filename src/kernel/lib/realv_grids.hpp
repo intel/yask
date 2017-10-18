@@ -150,21 +150,23 @@ namespace yask {
         virtual void resize();
 
     public:
-        YkGridBase(GenericGridBase* ggb, DimsPtr dims) :
+        YkGridBase(GenericGridBase* ggb, size_t ndims, DimsPtr dims) :
             _ggb(ggb), _dims(dims) {
+
             assert(ggb);
             assert(dims.get());
 
-            // Init the Indices.
-            // (In-place initializers triger icc 18.0 failure--bug report submitted.)
-            _domains = 0;
-            _pads = 0;
-            _halos = 0;
-            _offsets = 0;
-            _vec_lens = 1;
-            _allocs = 1;
-            _vec_pads = 1;
-            _vec_allocs = 1;
+            // Init indices.
+            int n = int(ndims);
+            _domains.setFromConst(0, n);
+            _pads.setFromConst(0, n);
+            _halos.setFromConst(0, n);
+            _offsets.setFromConst(0, n);
+            _vec_lens.setFromConst(1, n);
+            _allocs.setFromConst(1, n);
+            _vec_pads.setFromConst(1, n);
+            _vec_allocs.setFromConst(1, n);
+            
         }
         virtual ~YkGridBase() { }
 
@@ -203,10 +205,10 @@ namespace yask {
 
         // Make sure indices are in range.
         // Optionally fix them to be in range and return in 'fixed_indices'.
-        virtual bool checkIndices(const GridIndices& indices,
+        virtual bool checkIndices(const Indices& indices,
                                   const std::string& fn,
                                   bool strict_indices,
-                                  GridIndices* fixed_indices = NULL) const;
+                                  Indices* fixed_indices = NULL) const;
 
         // Set elements to a sequence of values using seed.
         // Cf. set_all_elements_same().
@@ -323,30 +325,62 @@ namespace yask {
 #undef SET_GRID_API
         
         virtual void set_all_elements_same(double val) =0;
-        virtual double get_element(const GridIndices& indices) const;
+        virtual double get_element(const Indices& indices) const;
+        virtual double get_element(const GridIndices& indices) const {
+            const Indices indices2(indices);
+            return get_element(indices2);
+        }
         virtual double get_element(const std::initializer_list<idx_t>& indices) const {
-            const GridIndices indices2(indices);
+            const Indices indices2(indices);
             return get_element(indices2);
         }
         virtual idx_t get_elements_in_slice(void* buffer_ptr,
+                                            const Indices& first_indices,
+                                            const Indices& last_indices) const;
+        virtual idx_t get_elements_in_slice(void* buffer_ptr,
                                             const GridIndices& first_indices,
-                                            const GridIndices& last_indices) const;
+                                            const GridIndices& last_indices) const {
+            const Indices first(first_indices);
+            const Indices last(last_indices);
+            return get_elements_in_slice(buffer_ptr, first, last);
+        }
+        virtual idx_t set_element(double val,
+                                  const Indices& indices,
+                                  bool strict_indices = false);
         virtual idx_t set_element(double val,
                                   const GridIndices& indices,
-                                  bool strict_indices = false);
+                                  bool strict_indices = false) {
+            const Indices indices2(indices);
+            return set_element(val, indices2, strict_indices);
+        }
         virtual idx_t set_element(double val,
                                   const std::initializer_list<idx_t>& indices,
                                   bool strict_indices = false) {
-            const GridIndices indices2(indices);
+            const Indices indices2(indices);
             return set_element(val, indices2, strict_indices);
         }
         virtual idx_t set_elements_in_slice_same(double val,
+                                                 const Indices& first_indices,
+                                                 const Indices& last_indices,
+                                                 bool strict_indices);
+        virtual idx_t set_elements_in_slice_same(double val,
                                                  const GridIndices& first_indices,
                                                  const GridIndices& last_indices,
-                                                 bool strict_indices);
+                                                 bool strict_indices) {
+            const Indices first(first_indices);
+            const Indices last(last_indices);
+            return set_elements_in_slice_same(val, first, last, strict_indices);
+        }
+        virtual idx_t set_elements_in_slice(const void* buffer_ptr,
+                                            const Indices& first_indices,
+                                            const Indices& last_indices);
         virtual idx_t set_elements_in_slice(const void* buffer_ptr,
                                             const GridIndices& first_indices,
-                                            const GridIndices& last_indices);
+                                            const GridIndices& last_indices) {
+            const Indices first(first_indices);
+            const Indices last(last_indices);
+            return set_elements_in_slice(buffer_ptr, first, last);
+        }
         virtual void alloc_storage() {
             _ggb->default_alloc();
         }
@@ -392,7 +426,7 @@ namespace yask {
                    std::string name,
                    const GridDimNames& dimNames,
                    std::ostream** ostr) :
-            YkGridBase(&_data, dims),
+            YkGridBase(&_data, dimNames.size(), dims),
             _data(name, dimNames, ostr) {
             _has_step_dim = _wrap_1st_idx;
             resize();
@@ -426,10 +460,11 @@ namespace yask {
             _data.get_ostr() << get_name() << "." << "YkElemGrid::getElemPtr(" <<
                 idxs.makeValStr(get_num_dims()) << ")";
 #endif
-        
-            Indices adj_idxs;
+
+            const auto n = _data.get_num_dims();
+            Indices adj_idxs(n);
 #pragma unroll
-            for (int i = 0; i < _data.get_num_dims(); i++) {
+            for (int i = 0; i < n; i++) {
 
                 // Special handling for 1st index.
                 if (_wrap_1st_idx && i == 0)
@@ -481,11 +516,12 @@ namespace yask {
 
     public:
         YkVecGrid(DimsPtr dims,
-                  std::string name,
+                  const std::string& name,
                   const GridDimNames& dimNames,
                   std::ostream** ostr) :
-            YkGridBase(&_data, dims),
-            _data(name, dimNames, ostr) {
+            YkGridBase(&_data, dimNames.size(), dims),
+            _data(name, dimNames, ostr),
+            _vec_fold_posns(idx_t(0), int(dimNames.size())) {
             _has_step_dim = _wrap_1st_idx;
 
             // Init vec sizes.
@@ -549,10 +585,11 @@ namespace yask {
             _data.get_ostr() << get_name() << "." << "YkVecGrid::getElemPtr(" <<
                 idxs.makeValStr(get_num_dims()) << ")";
 #endif
-        
-            Indices vec_idxs, elem_ofs;
+
+            const auto n = _data.get_num_dims();
+            Indices vec_idxs(n), elem_ofs(n);
 #pragma unroll
-            for (int i = 0; i < _data.get_num_dims(); i++) {
+            for (int i = 0; i < n; i++) {
 
                 // Special handling for step index.
                 if (_wrap_1st_idx && i == Indices::step_posn) {
@@ -573,7 +610,7 @@ namespace yask {
             }
 
             // Get only the vectorized fold offsets.
-            Indices fold_ofs;
+            Indices fold_ofs(n);
 #pragma unroll
             for (int i = 0; i < NUM_VEC_FOLD_DIMS; i++) {
                 int j = _vec_fold_posns[i];
@@ -626,10 +663,11 @@ namespace yask {
             _data.get_ostr() << get_name() << "." << "YkVecGrid::getVecPtrNorm(" <<
                 idxs.makeValStr(get_num_dims()) << ")";
 #endif
-        
-            Indices adj_idxs;
+
+            const auto n = _data.get_num_dims();
+            Indices adj_idxs(n);
 #pragma unroll
-            for (int i = 0; i < _data.get_num_dims(); i++) {
+            for (int i = 0; i < n; i++) {
 
                 // Special handling for 1st index.
                 if (_wrap_1st_idx && i == Indices::step_posn)

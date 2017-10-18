@@ -54,7 +54,7 @@ namespace yask {
         std::ostream** _ostr = 0;
 
         void _sync_dims_with_layout() {
-            Indices idxs = _layout_base->get_sizes();
+            Indices idxs(_layout_base->get_sizes());
             idxs.setTupleVals(_dims);
         }
         void _sync_layout_with_dims() {
@@ -128,7 +128,7 @@ namespace yask {
         }
 
         // Access all dim sizes.
-        virtual Indices get_dim_sizes() const {
+        virtual const Indices& get_dim_sizes() const {
             return _layout_base->get_sizes();
         }
         void set_dim_sizes(const Indices& sizes) {
@@ -309,7 +309,7 @@ namespace yask {
 
         // Get sizes of dims.
         // More efficient version overriding base method because layout is known.
-        virtual Indices get_dim_sizes() const final {
+        virtual const Indices& get_dim_sizes() const final {
             return _layout.get_sizes();
         }
         

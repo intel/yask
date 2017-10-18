@@ -39,7 +39,7 @@ namespace yask {
                   " ... (end before) " << region_idxs.stop.makeValStr(ndims));
 
         // Init block begin & end from region start & stop indices.
-        ScanIndices block_idxs;
+        ScanIndices block_idxs(ndims);
         block_idxs.initFromOuter(region_idxs);
 
         // Steps within a block are based on sub-block sizes.
@@ -73,7 +73,7 @@ namespace yask {
 
         // Init sub-block begin & end from block start & stop indices.
         // These indices are in element units.
-        ScanIndices sub_block_idxs;
+        ScanIndices sub_block_idxs(ndims);
         sub_block_idxs.initFromOuter(block_idxs);
         
         // If not a 'simple' domain, use scalar code.  TODO: this
@@ -120,7 +120,7 @@ namespace yask {
 
             // Indices to sub-block loop must be in vec-norm
             // format, i.e., vector lengths and rank-relative.
-            ScanIndices norm_sub_block_idxs = sub_block_idxs;
+            ScanIndices norm_sub_block_idxs(sub_block_idxs);
             for (int i = step_posn + 1; i < ndims; i++) {
                 auto& dname = dims->_stencil_dims.getDimName(i);
                 assert(dims->_domain_dims.lookup(dname));
@@ -183,13 +183,15 @@ namespace yask {
         StencilContext& context = *_generic_context;
         ostream& os = context.get_ostr();
         auto settings = context.get_settings();
-        auto& domain_dims = context.get_dims()->_domain_dims;
-        auto& step_dim = context.get_dims()->_step_dim;
-        auto& stencil_dims = context.get_dims()->_stencil_dims;
+        auto dims = context.get_dims();
+        auto& domain_dims = dims->_domain_dims;
+        auto& step_dim = dims->_step_dim;
+        auto& stencil_dims = dims->_stencil_dims;
+        auto ndims = stencil_dims.size();
 
         // Init min vars w/max val and vice-versa.
-        Indices min_pts(idx_max);
-        Indices max_pts(idx_min);
+        Indices min_pts(idx_max, ndims);
+        Indices max_pts(idx_min, ndims);
         idx_t npts = 0;
 
         // Begin, end tuples.
@@ -201,7 +203,7 @@ namespace yask {
         end[step_dim] = 1;      // one time-step only.
 
         // Indices needed for the 'general' loops.
-        ScanIndices gen_idxs;
+        ScanIndices gen_idxs(ndims);
         gen_idxs.begin = begin;
         gen_idxs.end = end;
 

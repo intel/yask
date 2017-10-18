@@ -54,36 +54,36 @@ if ($opt eq '-d') {
  class Layout {
 
  protected:
-  int _nsizes = 0;  // How many elements in _sizes to use (rank).
   Indices _sizes;   // Size of each dimension.
+  Layout(int n, const Indices& sizes) :
+   _sizes(sizes) { _sizes.setNumDims(n); }
 
  public:
-  Layout(int nsizes) : _nsizes(nsizes) {}
-  Layout(int nsizes, const Indices& sizes) :
-   _nsizes(nsizes), _sizes(sizes) { }
-  virtual ~Layout() {}
+  Layout(int nsizes) :
+   _sizes(idx_t(0), nsizes) { }
+  virtual ~Layout() { }
 
   // Access sizes.
   const Indices& get_sizes() const { return _sizes; }
   void set_sizes(const Indices& sizes) { _sizes = sizes; }
   idx_t get_size(int i) const {
     assert(i >= 0);
-    assert(i < _nsizes);
+    assert(i < _sizes.getNumDims());
     return _sizes[i]; 
   }
   void set_size(int i, idx_t size) {
     assert(i >= 0);
-    assert(i < _nsizes);
+    assert(i < _sizes.getNumDims());
     _sizes[i] = size; 
   }
   virtual int get_num_sizes() const {
-    return _nsizes; 
+    return _sizes.getNumDims(); 
   }
 
   // Product of valid sizes.
   virtual idx_t get_num_elements() const {
     idx_t nelems = 1;
-    for (int i = 0; i < _nsizes; i++)
+    for (int i = 0; i < _sizes.getNumDims(); i++)
       nelems *= _sizes[i];
     return nelems;
   }
@@ -112,7 +112,7 @@ if ($opt eq '-d') {
 
   // Return 0 indices based on 1-D 'ai' input.
   virtual Indices unlayout(idx_t ai) const final {
-    Indices j;
+    Indices j(idx_t(0), 0);
     return j;
   }
  };
@@ -257,7 +257,7 @@ END
 
   // Return $n index(indices) based on 1-D 'ai' input.
   virtual Indices unlayout(idx_t ai) const final {
-    Indices j;
+    Indices j(_sizes);
     $unlayout;
     return j;
   }

@@ -127,6 +127,7 @@ namespace yask {
     {
         auto& step_dim = _dims->_step_dim;
         auto step_posn = Indices::step_posn;
+        int ndims = _dims->_stencil_dims.getNumDims();
         idx_t begin_t = 0;
         idx_t end_t = _opts->_rank_sizes[step_dim];
         idx_t step_t = _dims->_step_dir;
@@ -150,7 +151,7 @@ namespace yask {
                   end.makeDimValStr());
 
         // Indices needed for the 'general' loops.
-        ScanIndices gen_idxs;
+        ScanIndices gen_idxs(ndims);
         gen_idxs.begin = begin;
         gen_idxs.end = end;
 
@@ -216,6 +217,7 @@ namespace yask {
         idx_t begin_t = first_step_index;
         idx_t step_t = _opts->_region_sizes[step_dim] * _dims->_step_dir;
         idx_t end_t = last_step_index + _dims->_step_dir; // end is beyond last.
+        int ndims = _dims->_stencil_dims.size();
 
         // Begin, end, step, last tuples.
         IdxTuple begin(_dims->_stencil_dims);
@@ -279,7 +281,7 @@ namespace yask {
                   end.makeDimValStr());
 
         // Indices needed for the 'rank' loops.
-        ScanIndices rank_idxs;
+        ScanIndices rank_idxs(ndims);
         rank_idxs.begin = begin;
         rank_idxs.end = end;
         rank_idxs.step = step;
@@ -407,7 +409,7 @@ namespace yask {
                   " ... (end before) " << rank_idxs.stop.makeValStr(ndims));
 
         // Init region begin & end from rank start & stop indices.
-        ScanIndices region_idxs;
+        ScanIndices region_idxs(ndims);
         region_idxs.initFromOuter(rank_idxs);
 
         // Make a copy of the original start and stop indices because

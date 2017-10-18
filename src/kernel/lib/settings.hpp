@@ -49,10 +49,12 @@ namespace yask {
         
     protected:
         idx_t _idxs[max_idxs];
+        int _ndims;
         
     public:
         // Ctors.
-        Indices() { }
+        Indices() : _ndims(0) { }
+        Indices(int ndims) : _ndims(ndims) { } // NB: _idxs remain uninit!
         Indices(const IdxTuple& src) {
             setFromTuple(src);
         }
@@ -62,31 +64,39 @@ namespace yask {
         Indices(const std::initializer_list<idx_t>& src) {
             setFromInitList(src);
         }
-        Indices(int nelems, const idx_t src[]) {
-            setFromArray(nelems, src);
+        Indices(const idx_t src[], int ndims) {
+            setFromArray(src, ndims);
         }
-        Indices(idx_t src) {
-            setFromConst(src);
+        Indices(idx_t src, int ndims) {
+            setFromConst(src, ndims);
         }
         
         // Default copy ctor, copy operator should be okay.
 
+        // Access size.
+        inline int getNumDims() const {
+            return _ndims;
+        }
+        inline void setNumDims(int n) {
+            _ndims = n;
+        }
+        
         // Access indices.
         inline idx_t& operator[](int i) {
             assert(i >= 0);
-            assert(i < +max_idxs);
+            assert(i < _ndims);
             return _idxs[i];
         }
         inline idx_t operator[](int i) const {
             assert(i >= 0);
-            assert(i < +max_idxs);
+            assert(i < _ndims);
             return _idxs[i];
         }
 
         // Write to an IdxTuple.
         void setTupleVals(IdxTuple& tgt) const {
-            assert(tgt.size() < +max_idxs);
-            for (int i = 0; i < +max_idxs; i++)
+            assert(tgt.size() == _ndims);
+            for (int i = 0; i < _ndims; i++)
                 if (i < tgt.size())
                     tgt.setVal(i, _idxs[i]);
         }
@@ -94,52 +104,55 @@ namespace yask {
         // Read from an IdxTuple.
         void setFromTuple(const IdxTuple& src) {
             assert(src.size() < +max_idxs);
-            if (src.size() == 0)
-                setFromConst(0);
-            else {
-                int n = std::min(int(src.size()), +max_idxs);
-                for (int i = 0; i < n; i++)
-                    _idxs[i] = src.getVal(i);
-            }
+            int n = int(src.size());
+            for (int i = 0; i < n; i++)
+                _idxs[i] = src.getVal(i);
+            _ndims = n;
         }
         
         // Other inits.
         void setFromVec(const GridIndices& src) {
             assert(src.size() < +max_idxs);
-            if (src.size() == 0)
-                setFromConst(0);
-            else {
-                int n = std::min(int(src.size()), +max_idxs);
-                for (int i = 0; i < n; i++)
-                    _idxs[i] = src[i];
-            }
+            int n = int(src.size());
+            for (int i = 0; i < n; i++)
+                _idxs[i] = src[i];
+            _ndims = n;
         }
-        void setFromArray(int nelems, const idx_t src[]) {
-            assert(nelems < +max_idxs);
-            if (nelems == 0)
-                setFromConst(0);
-            else {
-                int n = std::min(nelems, +max_idxs);
-                for (int i = 0; i < n; i++)
-                    _idxs[i] = src[i];
-            }
+
+        // default n => don't change _ndims.
+        void setFromArray(const idx_t src[], int n = -1) {
+            if (n < 0)
+                n = _ndims;
+            assert(n < +max_idxs);
+            for (int i = 0; i < n; i++)
+                _idxs[i] = src[i];
+            _ndims = n;
         }
         void setFromInitList(const std::initializer_list<idx_t>& src) {
             assert(src.size() < +max_idxs);
             int i = 0;
             for (auto idx : src)
                 _idxs[i++] = idx;
+            _ndims = i;
         }
-        void setFromConst(idx_t val) {
-            for (int i = 0; i < +max_idxs; i++)
+
+        // default n => don't change _ndims.
+        void setFromConst(idx_t val, int n = -1) {
+            if (n < 0)
+                n = _ndims;
+            assert(n < +max_idxs);
+            for (int i = 0; i < n; i++)
                 _idxs[i] = val;
+            _ndims = n;
         }
         
         // Some comparisons.
         // These assume all the indices are valid or
         // initialized to the same value.
         bool operator==(const Indices& rhs) const {
-            for (int i = 0; i < +max_idxs; i++)
+            if (_ndims != rhs._ndims)
+                return false;
+            for (int i = 0; i < _ndims; i++)
                 if (_idxs[i] != rhs._idxs[i])
                     return false;
             return true;
@@ -148,7 +161,11 @@ namespace yask {
             return !operator==(rhs);
         }
         bool operator<(const Indices& rhs) const {
-            for (int i = 0; i < +max_idxs; i++)
+            if (_ndims < rhs._ndims)
+                return true;
+            else if (_ndims > rhs._ndims)
+                return false;
+            for (int i = 0; i < _ndims; i++)
                 if (_idxs[i] < rhs._idxs[i])
                     return true;
                 else if (_idxs[i] > rhs._idxs[i])
@@ -156,7 +173,11 @@ namespace yask {
             return false;       // equal, so not less than.
         }
         bool operator>(const Indices& rhs) const {
-            for (int i = 0; i < +max_idxs; i++)
+            if (_ndims > rhs._ndims)
+                return true;
+            else if (_ndims < rhs._ndims)
+                return false;
+            for (int i = 0; i < _ndims; i++)
                 if (_idxs[i] > rhs._idxs[i])
                     return true;
                 else if (_idxs[i] < rhs._idxs[i])
@@ -168,65 +189,71 @@ namespace yask {
         // These all return a new set of Indices rather
         // than modifying this object.
         Indices addElements(const Indices& other) const {
-            Indices res;
-            for (int i = 0; i < max_idxs; i++)
-                res._idxs[i] = _idxs[i] + other._idxs[i];
+            Indices res(*this);
+            for (int i = 0; i < _ndims; i++)
+                res._idxs[i] += other._idxs[i];
+            return res;
+        }
+        Indices subElements(const Indices& other) const {
+            Indices res(*this);
+            for (int i = 0; i < _ndims; i++)
+                res._idxs[i] -= other._idxs[i];
             return res;
         }
         Indices multElements(const Indices& other) const {
-            Indices res;
-            for (int i = 0; i < max_idxs; i++)
-                res._idxs[i] = _idxs[i] * other._idxs[i];
+            Indices res(*this);
+            for (int i = 0; i < _ndims; i++)
+                res._idxs[i] *= other._idxs[i];
             return res;
         }
         Indices minElements(const Indices& other) const {
-            Indices res;
-            for (int i = 0; i < max_idxs; i++)
+            Indices res(*this);
+            for (int i = 0; i < _ndims; i++)
                 res._idxs[i] = std::min(_idxs[i], other._idxs[i]);
             return res;
         }
         Indices maxElements(const Indices& other) const {
-            Indices res;
-            for (int i = 0; i < max_idxs; i++)
+            Indices res(*this);
+            for (int i = 0; i < _ndims; i++)
                 res._idxs[i] = std::max(_idxs[i], other._idxs[i]);
             return res;
         }
 
         // Operate on all elements.
         Indices addConst(idx_t n) const {
-            Indices res;
-            for (int i = 0; i < max_idxs; i++)
-                res._idxs[i] = _idxs[i] + n;
+            Indices res(*this);
+            for (int i = 0; i < _ndims; i++)
+                res._idxs[i] += n;
             return res;
         }
         Indices multConst(idx_t n) const {
-            Indices res;
-            for (int i = 0; i < max_idxs; i++)
-                res._idxs[i] = _idxs[i] * n;
+            Indices res(*this);
+            for (int i = 0; i < _ndims; i++)
+                res._idxs[i] *= n;
             return res;
         }
 
         // Reduce over all elements.
         idx_t sum() const {
             idx_t res = 0;
-            for (int i = 0; i < max_idxs; i++)
+            for (int i = 0; i < _ndims; i++)
                 res += _idxs[i];
             return res;
         }
         idx_t product() const {
             idx_t res = 1;
-            for (int i = 0; i < max_idxs; i++)
+            for (int i = 0; i < _ndims; i++)
                 res *= _idxs[i];
             return res;
         }
         
         // Make string like "x=4, y=8".
         std::string makeDimValStr(const GridDimNames& names,
-                                          std::string separator=", ",
-                                          std::string infix="=",
-                                          std::string prefix="",
-                                          std::string suffix="") const {
-            assert(names.size() <= max_idxs);
+                                  std::string separator=", ",
+                                  std::string infix="=",
+                                  std::string prefix="",
+                                  std::string suffix="") const {
+            assert(names.size() == _ndims);
 
             // Make a Tuple from names.
             IdxTuple tmp;
@@ -237,10 +264,10 @@ namespace yask {
         
         // Make string like "4, 3, 2".
         std::string makeValStr(int nvals,
-                                       std::string separator=", ",
-                                       std::string prefix="",
-                                       std::string suffix="") const {
-            assert(nvals <= max_idxs);
+                               std::string separator=", ",
+                               std::string prefix="",
+                               std::string suffix="") const {
+            assert(nvals == _ndims);
 
             // Make a Tuple w/o useful names.
             IdxTuple tmp;
@@ -253,10 +280,10 @@ namespace yask {
     // Define OMP reductions on Indices.
 #pragma omp declare reduction(min_idxs : Indices : \
                               omp_out = omp_out.minElements(omp_in) )   \
-    initializer (omp_priv = idx_max)
+    initializer (omp_priv = omp_orig)
 #pragma omp declare reduction(max_idxs : Indices : \
                               omp_out = omp_out.maxElements(omp_in) )   \
-    initializer (omp_priv = idx_min)
+    initializer (omp_priv = omp_orig)
 
     // Layout algorithms using Indices.
 #include "yask_layouts.hpp"
@@ -285,15 +312,14 @@ namespace yask {
         //                                       start   stop  (index = 2)
         
         // Default init.
-        ScanIndices() {
-            begin.setFromConst(0);
-            end.setFromConst(0);
-            step.setFromConst(1);
-            group_size.setFromConst(1);
-            start.setFromConst(0);
-            stop.setFromConst(0);
-            index.setFromConst(0);
-        }
+        ScanIndices(int ndims) :
+            begin(idx_t(0), ndims),
+            end(idx_t(0), ndims),
+            step(idx_t(1), ndims),
+            group_size(idx_t(1), ndims),
+            start(idx_t(0), ndims),
+            stop(idx_t(0), ndims),
+            index(idx_t(0), ndims) { }
         
         // Init from outer-loop indices.
         // Start..stop from point in outer loop become begin..end
