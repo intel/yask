@@ -259,17 +259,6 @@ namespace yask {
                                   int line,
                                   bool newline = true) const;
         
-        // Settings that should never be exposed as APIs because
-        // they can break the usage model.
-        // They are not protected because they are used from outside
-        // this class hierarchy.
-        virtual idx_t _get_offset(const std::string& dim) const;
-        virtual idx_t _get_first_alloc_index(const std::string& dim) const;
-        virtual idx_t _get_last_alloc_index(const std::string& dim) const;
-        virtual void _set_domain_size(const std::string& dim, idx_t size);
-        virtual void _set_pad_size(const std::string& dim, idx_t size);
-        virtual void _set_offset(const std::string& dim, idx_t size);
-        
         // APIs not defined above.
         // See yask_kernel_api.hpp.
         virtual const std::string& get_name() const {
@@ -293,24 +282,46 @@ namespace yask {
             return dims;
         }
 
-        virtual idx_t get_rank_domain_size(const std::string& dim) const;
-        virtual idx_t get_first_rank_domain_index(const std::string& dim) const;
-        virtual idx_t get_last_rank_domain_index(const std::string& dim) const;
-        virtual idx_t get_halo_size(const std::string& dim) const;
-        virtual idx_t get_extra_pad_size(const std::string& dim) const;
-        virtual idx_t get_pad_size(const std::string& dim) const;
-        virtual idx_t get_alloc_size(const std::string& dim) const;
-        virtual idx_t get_first_rank_alloc_index(const std::string& dim) const;
-        virtual idx_t get_last_rank_alloc_index(const std::string& dim) const;
-        virtual idx_t get_first_misc_index(const std::string& dim) const;
-        virtual idx_t get_last_misc_index(const std::string& dim) const;
+#define GET_GRID_API(api_name)                                      \
+        virtual idx_t api_name(const std::string& dim) const;       \
+        virtual idx_t api_name(int posn) const;
+#define SET_GRID_API(api_name)                                      \
+        virtual void api_name(const std::string& dim, idx_t n);     \
+        virtual void api_name(int posn, idx_t n);
+        
+        // Settings that should never be exposed as APIs because
+        // they can break the usage model.
+        // They are not protected because they are used from outside
+        // this class hierarchy.
+        GET_GRID_API(_get_offset)
+        GET_GRID_API(_get_first_alloc_index)
+        GET_GRID_API(_get_last_alloc_index)
+        SET_GRID_API(_set_domain_size)
+        SET_GRID_API(_set_pad_size)
+        SET_GRID_API(_set_offset)
 
-        virtual void set_halo_size(const std::string& dim, idx_t size);
-        virtual void set_min_pad_size(const std::string& dim, idx_t size);
-        virtual void set_extra_pad_size(const std::string& dim, idx_t size);
-        virtual void set_alloc_size(const std::string& dim, idx_t size);
-        virtual void set_first_misc_index(const std::string& dim, idx_t size);
+        // Exposed APIs.
+        GET_GRID_API(get_rank_domain_size)
+        GET_GRID_API(get_first_rank_domain_index)
+        GET_GRID_API(get_last_rank_domain_index)
+        GET_GRID_API(get_halo_size)
+        GET_GRID_API(get_extra_pad_size)
+        GET_GRID_API(get_pad_size)
+        GET_GRID_API(get_alloc_size)
+        GET_GRID_API(get_first_rank_alloc_index)
+        GET_GRID_API(get_last_rank_alloc_index)
+        GET_GRID_API(get_first_misc_index)
+        GET_GRID_API(get_last_misc_index)
 
+        SET_GRID_API(set_halo_size)
+        SET_GRID_API(set_min_pad_size)
+        SET_GRID_API(set_extra_pad_size)
+        SET_GRID_API(set_alloc_size)
+        SET_GRID_API(set_first_misc_index)
+
+#undef GET_GRID_API
+#undef SET_GRID_API
+        
         virtual void set_all_elements_same(double val) =0;
         virtual double get_element(const GridIndices& indices) const;
         virtual double get_element(const std::initializer_list<idx_t>& indices) const {

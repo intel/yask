@@ -34,24 +34,23 @@ namespace yask {
                             bool step_ok,
                             bool domain_ok,
                             bool misc_ok) const {
-        if (dim != _step_dim &&
-            !_domain_dims.lookup(dim) &&
-            !_misc_dims.lookup(dim)) {
-            cerr << "Error in " << fn_name << "(): dimension '" <<
-                dim << "' is not recognized in this solution.\n";
-            exit_yask(1);
+        if (step_ok && domain_ok && misc_ok)
+            return;
+        if (dim == _step_dim) {
+            if (!step_ok) {
+                cerr << "Error in " << fn_name << "(): dimension '" <<
+                    dim << "' is the step dimension, which is not allowed.\n";
+                exit_yask(1);
+            }
         }
-        if (!step_ok && dim == _step_dim) {
-            cerr << "Error in " << fn_name << "(): dimension '" <<
-                dim << "' is the step dimension, which is not allowed.\n";
-            exit_yask(1);
+        else if (_domain_dims.lookup(dim)) {
+            if (!domain_ok) {
+                cerr << "Error in " << fn_name << "(): dimension '" <<
+                    dim << "' is a domain dimension, which is not allowed.\n";
+                exit_yask(1);
+            }
         }
-        if (!domain_ok && _domain_dims.lookup(dim)) {
-            cerr << "Error in " << fn_name << "(): dimension '" <<
-                dim << "' is a domain dimension, which is not allowed.\n";
-            exit_yask(1);
-        }
-        if (!misc_ok && _misc_dims.lookup(dim)) {
+        else if (!misc_ok) {
             cerr << "Error in " << fn_name << "(): dimension '" <<
                 dim << "' is a misc dimension, which is not allowed.\n";
             exit_yask(1);

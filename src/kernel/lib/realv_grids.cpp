@@ -36,6 +36,9 @@ namespace yask {
         checkDimType(dim, #api_name, step_ok, domain_ok, misc_ok);      \
         int posn = get_dim_posn(dim, true, #api_name);                  \
         return expr;                                                    \
+    }                                                                   \
+    idx_t YkGridBase::api_name(int posn) const {                        \
+        return expr;                                                    \
     }
     GET_GRID_API(get_rank_domain_size, _domains[posn], false, true, false)
     GET_GRID_API(get_pad_size, _pads[posn], false, true, false)
@@ -60,9 +63,14 @@ namespace yask {
         checkDimType(dim, #api_name, step_ok, domain_ok, misc_ok);      \
         int posn = get_dim_posn(dim, true, #api_name);                  \
         expr;                                                           \
+    }                                                                   \
+    void YkGridBase::api_name(int posn, idx_t n) {                      \
+        int dim = posn;                                                 \
+        expr;                                                           \
     }
     SET_GRID_API(set_halo_size, _halos[posn] = n; _set_pad_size(dim, _pads[posn]), false, true, false)
-    SET_GRID_API(set_min_pad_size, if (!get_raw_storage_buffer() && n > _pads[posn]) _set_pad_size(dim, n), false, true, false)
+    SET_GRID_API(set_min_pad_size, if (!get_raw_storage_buffer() && n > _pads[posn])
+                                       _set_pad_size(dim, n), false, true, false)
     SET_GRID_API(set_extra_pad_size, set_min_pad_size(dim, _halos[posn] + n), false, true, false)
     SET_GRID_API(set_first_misc_index, _offsets[posn] = n, false, false, true)
     SET_GRID_API(set_alloc_size, _set_domain_size(dim, n), true, false, true)
@@ -391,16 +399,16 @@ namespace yask {
             idx_t idx = indices[i];
             if (fixed_indices)
                 fixed_indices->push_back(idx);
-            auto dname = get_dim_name(i);
+            auto& dname = get_dim_name(i);
 
             // Any step index is ok because it wraps around.
             // TODO: check that it's < magic added value in wrap_index().
-            if (dname == _dims->_step_dim)
+            if (_has_step_dim && i == Indices::step_posn)
                 continue;
 
             // Within first..last indices?
-            auto first_ok = _get_first_alloc_index(dname);
-            auto last_ok = _get_last_alloc_index(dname);
+            auto first_ok = _get_first_alloc_index(i);
+            auto last_ok = _get_last_alloc_index(i);
             if (idx < first_ok || idx > last_ok) {
                 if (strict_indices) {
                     cerr << "Error: " << fn << ": index in dim '" << dname <<
