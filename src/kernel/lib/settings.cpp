@@ -95,6 +95,14 @@ namespace yask {
         comm = 0;
 #endif
 
+        // Set env vars needed by OMP.
+        // TODO: make this visible to the user.
+        int ret = setenv("OMP_PLACES", "cores", 0); // default placement for outer loop.
+        assert(ret == 0);
+        ret = setenv("KMP_HOT_TEAMS_MODE", "1", 0); // more efficient nesting.
+        assert(ret == 0);
+        ret = setenv("KMP_HOT_TEAMS_MAX_LEVEL", "2", 0); // 2-level nesting.
+        
         // There is no specific call to init OMP, but we make a gratuitous
         // OMP call to trigger any debug output.
         omp_get_num_procs();

@@ -27,10 +27,12 @@
 invo="Invocation: $0 $@"
 echo $invo
 
-# Env vars to set.
-envs="OMP_DISPLAY_ENV=VERBOSE OMP_PLACES=cores"
-envs="$envs KMP_VERSION=1 KMP_HOT_TEAMS_MODE=1 KMP_HOT_TEAMS_MAX_LEVEL=2"
+# Default env vars to print debug info.
+envs="OMP_DISPLAY_ENV=VERBOSE"
+envs="$envs KMP_VERSION=1"
 envs="$envs I_MPI_PRINT_VERSION=1 I_MPI_DEBUG=5"
+
+# On Cygwin, need to put lib dir in path to load .dll's.
 if [[ `uname -o` == "Cygwin" ]]; then
 	envs="$envs PATH='$PATH':"`dirname $0`/../lib
 fi
