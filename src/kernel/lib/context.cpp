@@ -150,10 +150,10 @@ namespace yask {
         TRACE_MSG("calc_rank_ref: " << begin.makeDimValStr() << " ... (end before) " <<
                   end.makeDimValStr());
 
-        // Indices needed for the 'general' loops.
-        ScanIndices gen_idxs(ndims);
-        gen_idxs.begin = begin;
-        gen_idxs.end = end;
+        // Indices needed for the generated misc loops.
+        ScanIndices misc_idxs(ndims);
+        misc_idxs.begin = begin;
+        misc_idxs.end = end;
 
         // Initial halo exchange.
         // (Needed in case there are 0 time-steps).
@@ -172,10 +172,10 @@ namespace yask {
 
             // Set indices that will pass through generated code
             // because the step loop is coded here.
-            gen_idxs.index[step_posn] = index_t;
-            gen_idxs.start[step_posn] = start_t;
-            gen_idxs.stop[step_posn] = stop_t;
-            gen_idxs.step[step_posn] = step_t;
+            misc_idxs.index[step_posn] = index_t;
+            misc_idxs.start[step_posn] = start_t;
+            misc_idxs.stop[step_posn] = stop_t;
+            misc_idxs.step[step_posn] = step_t;
         
             // Loop thru eq-groups.
             for (auto* eg : eqGroups) {
@@ -185,17 +185,17 @@ namespace yask {
                 // halo bugs during validation.
                 exchange_halos_all();
 
-                // Define general calc function.  Since step is always 1, we
-                // ignore gen_stop.  If point is in sub-domain for this eq
+                // Define misc-loop function.  Since step is always 1, we
+                // ignore misc_stop.  If point is in sub-domain for this eq
                 // group, then evaluate the reference scalar code.
-#define calc_gen(gen_idxs)                                  \
-                if (eg->is_in_valid_domain(gen_idxs.start)) \
-                    eg->calc_scalar(gen_idxs.start)
+#define misc_fn(misc_idxs)                                  \
+                if (eg->is_in_valid_domain(misc_idxs.start)) \
+                    eg->calc_scalar(misc_idxs.start)
                 
                 // Scan through n-D space.
                 TRACE_MSG("calc_rank_ref: step " << start_t);
-#include "yask_gen_loops.hpp"
-#undef calc_gen
+#include "yask_misc_loops.hpp"
+#undef misc_fn
                 
                 // Remember grids that have been written to by this eq-group,
                 // updated at step 'start_t + step_t'.

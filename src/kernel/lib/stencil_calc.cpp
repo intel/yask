@@ -90,20 +90,20 @@ namespace yask {
                 full_bb = false;
             }
 
-            // Use the 'general' loop. The OMP will be ignored because we're already in
+            // Use the 'misc' loop. The OMP will be ignored because we're already in
             // a nested OMP region.
-            ScanIndices gen_idxs(sub_block_idxs);
+            ScanIndices misc_idxs(sub_block_idxs);
 
-            // Define general calc function.  Since step is always 1, we
-            // ignore gen_stop.  If point is in sub-domain for this eq
+            // Define misc-loop function.  Since step is always 1, we
+            // ignore misc_stop.  If point is in sub-domain for this eq
             // group, then evaluate the reference scalar code.
-#define calc_gen(gen_idxs)                                      \
-            if (full_bb || is_in_valid_domain(gen_idxs.start))  \
-                calc_scalar(gen_idxs.start)
+#define misc_fn(misc_idxs)                                      \
+            if (full_bb || is_in_valid_domain(misc_idxs.start))  \
+                calc_scalar(misc_idxs.start)
                 
             // Scan through n-D space.
-#include "yask_gen_loops.hpp"
-#undef calc_gen
+#include "yask_misc_loops.hpp"
+#undef misc_fn
         }
 
         // Full rectangular polytope of aligned vectors: use optimized code.
@@ -202,17 +202,17 @@ namespace yask {
         IdxTuple end = begin.addElements(settings->_rank_sizes);
         end[step_dim] = 1;      // one time-step only.
 
-        // Indices needed for the 'general' loops.
-        ScanIndices gen_idxs(ndims);
-        gen_idxs.begin = begin;
-        gen_idxs.end = end;
+        // Indices needed for the generated 'misc' loops.
+        ScanIndices misc_idxs(ndims);
+        misc_idxs.begin = begin;
+        misc_idxs.end = end;
 
-        // Define general calc function.  Since step is always 1, we ignore
-        // gen_stop.  Update only if point is in domain for this eq group.
-#define calc_gen(gen_idxs)                                      \
-        if (is_in_valid_domain(gen_idxs.start)) {               \
-            min_pts = min_pts.minElements(gen_idxs.start);      \
-            max_pts = max_pts.maxElements(gen_idxs.start);      \
+        // Define misc-loop function.  Since step is always 1, we ignore
+        // misc_stop.  Update only if point is in domain for this eq group.
+#define misc_fn(misc_idxs)                                        \
+        if (is_in_valid_domain(misc_idxs.start)) {               \
+            min_pts = min_pts.minElements(misc_idxs.start);      \
+            max_pts = max_pts.maxElements(misc_idxs.start);      \
             npts++; \
         }
 
@@ -227,8 +227,8 @@ namespace yask {
         // Scan through n-D space.  This scan sets min_pts & max_pts for all
         // stencil dims (including step dim) and npts to the number of valid
         // points.
-#include "yask_gen_loops.hpp"
-#undef calc_gen
+#include "yask_misc_loops.hpp"
+#undef misc_fn
 #undef OMP_PRAGMA_SUFFIX
 
         // Init bb vars to ensure they contain correct dims.

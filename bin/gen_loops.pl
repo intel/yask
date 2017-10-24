@@ -43,16 +43,12 @@ $| = 1;                         # autoflush.
 my %OPT;                        # cmd-line options.
 my @dims;                       # indices of dimensions.
 my $inputVar;                   # input var.
-my $cacheLvl = "L#";            # a string placeholder for L1 or L2.
 
 # loop-feature bit fields.
 my $bSerp = 0x1;                # serpentine path
 my $bSquare = 0x2;              # square_wave path
 my $bGroup = 0x4;               # group path
 my $bSimd = 0x8;                # simd prefix
-my $bPrefetchL1 = 0x10;         # prefetch L1
-my $bPrefetchL2 = 0x20;         # prefetch L2
-my $bPipe = 0x100;              # pipeline
 
 ##########
 # Function to make names of variables based on dimension string(s).
@@ -73,18 +69,11 @@ sub inVar {
     return "$inputVar$part".idx(@_);
 }
 
-# locVar("foo", 5) => "calc_vars.foo[5]".
+# locVar("foo", 5) => "local_indices.foo[5]".
 sub locVar {
     my $vname = shift;
     my $part = (defined $vname) ? ".$vname" : "";
-    return "calc_vars$part".idx(@_);
-}
-
-# pfVar("foo", 5) => "pfL#_vars.foo[5]".
-sub pfVar {
-    my $vname = shift;
-    my $part = (defined $vname) ? ".$vname" : "";
-    return "pf${cacheLvl}_vars$part".idx(@_);
+    return "local_indices$part".idx(@_);
 }
 
 # Access values in input struct.
@@ -140,23 +129,6 @@ sub startVar {
 sub stopVar {
     return join('_', 'stop', @_);
 }
-sub pfIndexVar {
-    return indexVar(@_)."_pf$cacheLvl";
-}
-sub pfLoopIndexVar {
-    return loopIndexVar(@_)."_pf$cacheLvl";
-}
-sub pfStartVar {
-  return startVar(@_)."_pf$cacheLvl";
-}
-sub pfStopVar {
-  return stopVar(@_)."_pf$cacheLvl";
-}
-
-# this is generated between 0 and numItersVar when prefetching.
-sub midVar {
-    return join('_', 'midpoint', @_);
-}
 
 # return string of all non-empty args separated by commas.
 sub joinArgs {
@@ -184,36 +156,6 @@ sub makeArgs {
             " ".locVar("index", $_)." = ".indexVar($_).";",
     } @loopDims;
     return @stmts;
-}
-
-# make args for a prefetch call.
-sub makePfArgs {
-    my $numNormVars = shift;      # at beginning of list.
-    my @loopDims = @_;
-
-    my @stmts;
-    for my $i (0 .. $#loopDims) {
-        my $ld = $loopDims[$i];
-        if ($i < $numNormVars) {
-            push @stmts,
-                " ".pfVar("start", $ld)." = ".startVar($ld).";",
-                " ".pfVar("stop", $ld)." = ".stopVar($ld).";",
-                " ".pfVar("index", $ld)." = ".indexVar($ld).";",
-        } else {
-            push @stmts,
-                " ".pfVar("start", $ld)." = ".pfStartVar($ld).";",
-                " ".pfVar("stop", $ld)." = ".pfStopVar($ld).";",
-                " ".pfVar("index", $ld)." = ".pfIndexVar($ld).";",
-        }
-    };
-    return @stmts;
-}
-
-# convert strings from/a generic to specific (L1/L2) cache.
-sub specifyCache($$) {
-    my $strs = shift;           # ref to list.
-    my $cache = shift;
-    map { s/$cacheLvl/L$cache/g; } @$strs;
 }
 
 ###########
@@ -290,24 +232,20 @@ sub addIndexVars1($$$) {
 }
 
 # Add index variables *inside* the loop.
-sub addIndexVars2($$$$$) {
+sub addIndexVars2($$$$) {
     my $code = shift;           # ref to list of code lines.
     my $loopDims = shift;       # ref to list of dimensions in loop.
-    my $isPrefetch = shift;     # true if for prefetch vars.
     my $features = shift;       # bits for path types.
     my $loopStack = shift;      # whole stack, including enclosing dims.
 
     my $itype = indexType(@$loopDims);
     my $civar = loopIndexVar(@$loopDims);     # collapsed index var; everything based on this.
-    my $pfcivar = pfLoopIndexVar(@$loopDims); # collapsed prefetch index var.
     my $outerDim = $loopDims->[0];            # outer dim of these loops.
     my $innerDim = $loopDims->[$#$loopDims];  # inner dim of these loops.
 
     # Grouping.
     if ($features & $bGroup) {
 
-        die "error: prefetching not compatible with grouping.\n"
-            if $isPrefetch;
         die "error: serpentine not compatible with grouping.\n"
             if $features & $bSerp;
         die "error: square-wave not compatible with grouping.\n"
@@ -423,12 +361,6 @@ sub addIndexVars2($$$$$) {
     # No grouping.
     else {
 
-        # prefetch is offset from main index.
-        if ($isPrefetch) {
-            push @$code, " // Prefetch loop index var.",
-            " $itype $pfcivar = $civar + PFD$cacheLvl;";
-        }
-
         # find enclosing dim outside of these loops if avail.
         my $encDim;
         map { $encDim = $loopStack->[$_]
@@ -440,7 +372,7 @@ sub addIndexVars2($$$$$) {
         # computed 0-based index var value for each dim.
         my $prevDim = $encDim;
         my $prevNvar;
-        my $innerDivar = $isPrefetch ? pfIndexVar($innerDim) : indexVar($innerDim);
+        my $innerDivar = indexVar($innerDim);
         my $innerNvar = numItersVar($innerDim);
 
         # loop through each dim, outer to inner.
@@ -450,9 +382,8 @@ sub addIndexVars2($$$$$) {
             my $isInner = ($i == $#$loopDims);
 
             # Goal is to compute $divar from 1D $ivar.
-            # note that $pfcivar might be >= numItersVar(@$loopDims).
-            my $ivar = $isPrefetch ? $pfcivar : $civar;
-            my $divar = $isPrefetch ? pfIndexVar($dim) : indexVar($dim);
+            my $ivar = $civar;
+            my $divar = indexVar($dim);
 
             # Determine $divar value: actual index in this dimension.
             my $dival = $ivar;
@@ -471,8 +402,7 @@ sub addIndexVars2($$$$$) {
 
             # output $divar.
             push @$code,
-            " // Zero-based, unit-stride ".($isPrefetch ? 'prefetch ' : '').
-                "index for ".dimStr($dim).".",
+            " // Zero-based, unit-stride index for ".dimStr($dim).".",
             " idx_t $divar = $dival;";
 
             # apply square-wave to inner 2 dimensions if requested.
@@ -517,9 +447,9 @@ sub addIndexVars2($$$$$) {
     
     # start and stop vars based on individual begin, end, step, and index vars.
     for my $dim (@$loopDims) {
-        my $divar = $isPrefetch ? pfIndexVar($dim) : indexVar($dim);
-        my $stvar = $isPrefetch ? pfStartVar($dim) : startVar($dim);
-        my $spvar = $isPrefetch ? pfStopVar($dim) : stopVar($dim);
+        my $divar = indexVar($dim);
+        my $stvar = startVar($dim);
+        my $spvar = stopVar($dim);
         my $bvar = beginVar($dim);
         my $evar = endVar($dim);
         my $svar = stepVar($dim);
@@ -547,7 +477,7 @@ sub beginLoop($$$$$$$) {
     push @$code, " for ($itype $ivar = $beginVal; $ivar < $endVal; $ivar++) {";
 
     # add inner index vars.
-    addIndexVars2($code, $loopDims, 0, $features, $loopStack);
+    addIndexVars2($code, $loopDims, $features, $loopStack);
 }
 
 # end simple or collapsed loop body.
@@ -729,12 +659,8 @@ sub processCode($) {
     my $features = 0;           # bits for loop features.
 
     # lists of code parts to be output.
-    # set at calc() statements.
-    my @calcStmts;              # calculation statements.
-    my @pfStmtsFullHere;        # full prefetch statement at current start.
-    my @pfStmtsFullAhead;       # full prefetch statement at pf start.
-    my @pfStmtsEdgeHere;        # edge prefetch statements at current start.
-    my @pfStmtsEdgeAhead;       # edge prefetch statements at pf start.
+    # set at call() statements.
+    my @callStmts;              # calculation statements.
 
     # Lines of code to output.
     my @code;
@@ -752,29 +678,16 @@ sub processCode($) {
         "#endif",
         "// 'ScanIndices $inputVar' must be set before the following code.",
         "{",
-        " // Indices for calculation and prefetch calls.",
+        " // Indices for function calls.",
         " ScanIndices ".locVar()."($inputVar);";
     push @scanVars, locVar();
-    for my $pfl (1..2) {
-        my @pfVars = ( pfVar() );
-        specifyCache(\@pfVars, $pfl);
-        push @code, map { " ScanIndices $_($inputVar);"; } @pfVars;
-        push @scanVars, @pfVars;
-    }
     
     # loop thru all the tokens ni the input.
     for (my $ti = 0; $ti <= $#toks; ) {
         my $tok = checkToken($toks[$ti++], '.*', 1);
 
-        # use Intel crew on next loop.
-        if (lc $tok eq 'crew') {
-            push @loopPrefix, "  // Distribute iterations among HW threads.",
-            "CREW_FOR_LOOP";
-            warn "info: using Intel crew on following loop.\n";
-        }
-
         # use OpenMP on next loop.
-        elsif (lc $tok eq 'omp') {
+        if (lc $tok eq 'omp') {
 
             # make local copies of scan index vars.
             my $priv = "firstprivate(".join(',',@scanVars).")";
@@ -785,34 +698,6 @@ sub processCode($) {
             warn "info: using OpenMP on following loop.\n";
         }
 
-        # generate prefetch in next loop.
-        elsif (lc $tok eq 'prefetch') {
-
-            # get optional args from input.
-            my @pfargs;
-            if (checkToken($toks[$ti], '\(', 0)) {
-                $ti++;
-                @pfargs = getArgs(\@toks, \$ti);
-                for my $i (0..$#pfargs) {
-                    if ($pfargs[$i] =~ /^l([12])$/i) {
-                        $features |= ($1 == 1) ? $bPrefetchL1 : $bPrefetchL2;
-                    } else {
-                        die "error: argument to 'prefetch' must be 'L1' or 'L2'\n";
-                    }
-                }
-            }
-
-            # if no args, prefetch L1 and L2.
-            if (@pfargs == 0) {
-                $features |= $bPrefetchL1;
-                $features |= $bPrefetchL2;
-            }
-            
-            # turn off compiler prefetch if we are generating prefetch.
-            push @loopPrefix, '_Pragma("noprefetch")';
-            warn "info: generating prefetching in following loop.\n";
-        }
-
         # generate simd in next loop.
         elsif (lc $tok eq 'simd') {
 
@@ -821,11 +706,6 @@ sub processCode($) {
             warn "info: generating SIMD in following loop.\n";
         }
 
-        # use pipelining in next loop if possible.
-        elsif (lc $tok eq 'pipeline') {
-            $features |= $bPipe;
-        }
-        
         # use grouped path in next loop if possible.
         elsif (lc $tok eq 'grouped') {
             $features |= $bGroup;
@@ -866,19 +746,6 @@ sub processCode($) {
                 $curInnerDim = $loopDims[$#loopDims];
             }
 
-            # check for piping legality.
-            if ($features & $bPipe) {
-                if (@loopDims == 1) {
-                    warn "info: pipelining following loop.\n";
-                } else {
-                    warn "warning: pipeline requested, but it is not possible because there are ".
-                        scalar(@loopDims). " dimensions in following loop.\n";
-                    $features &= ~$bPipe;
-                }
-            }
-
-            # TODO: check for conflicting features like omp with prefetch.
-
             # print more info.
             warn "info: generating scan over ".dimStr(@loopDims)."...\n";
 
@@ -898,83 +765,44 @@ sub processCode($) {
             }
         }
 
-        # thing(s) to calculate.
-        # set @*Stmts* vars.
-        elsif (lc $tok eq 'calc') {
+        # Function(s) to call.
+        # Set @*Stmts* vars.
+        elsif (lc $tok eq 'call') {
 
             die "error: '$tok' attempted outside of inner loop.\n"
                 if !defined $curInnerDim;
 
-            # process things to calculate (args to calc).
+            # Process funcs (args to call).
             checkToken($toks[$ti++], '\(', 1);
-            my $ncalc = 0;
+            my $ncall = 0;
             while (1) {
                 my $arg = getNextArg(\@toks, \$ti);
                 last if !defined($arg);
-                $ncalc++;
-
-                # Edge suffix for simple (non-collapsed) loops.
-                my $edgeSuf = '';
-                $edgeSuf = '_dir_'.$curInnerDim if @loopDims == 1;
+                $ncall++;
 
                 # standard args to functions.
-                my $calcArgs = $OPT{comArgs};
+                my $callArgs = $OPT{comArgs};
 
                 # get optional args from input.
                 if (checkToken($toks[$ti], '\(', 0)) {
                     $ti++;
                     my @oargs = getArgs(\@toks, \$ti);
-                    $calcArgs = joinArgs($calcArgs, @oargs) if (@oargs);
+                    $callArgs = joinArgs($callArgs, @oargs) if (@oargs);
                 }
                 
-                # generic code for prefetches.
-                # e.g., prefetch_fn<L#>(...); prefetch_fn_dir_3<L#>(...);
-                if ($features & ($bPrefetchL1 | $bPrefetchL2)) {
-                    if ($ncalc == 1) {
-                        my @pfArgs = makeArgs(@loopStack);
-                        push @pfStmtsFullHere, @pfArgs;
-                        push @pfStmtsEdgeHere, @pfArgs;
-                        my $numNormVars = $#loopStack - $#loopDims;
-                        @pfArgs = makePfArgs($numNormVars, @loopStack);
-                        push @pfStmtsFullAhead, @pfArgs;
-                        push @pfStmtsEdgeAhead, @pfArgs;
-                    }
-                    push @pfStmtsFullHere, 
-                        "  $OPT{pfPrefix}$arg<$cacheLvl>(".
-                        joinArgs($calcArgs, locVar()). ");";
-                    push @pfStmtsEdgeHere, 
-                        "  $OPT{pfPrefix}$arg$edgeSuf<$cacheLvl>(".
-                        joinArgs($calcArgs, locVar). ");";
-                    push @pfStmtsFullAhead,
-                        "  $OPT{pfPrefix}$arg<$cacheLvl>(".
-                        joinArgs($calcArgs, pfVar()). ");";
-                    push @pfStmtsEdgeAhead,
-                        "  $OPT{pfPrefix}$arg$edgeSuf<$cacheLvl>(".
-                        joinArgs($calcArgs, pfVar()). ");";
-                    warn "info: generating prefetch instructions.\n";
-                } else {
-                    warn "info: not generating prefetch instructions.\n";
-                }
-
-                # add pipe prefix and direction suffix to function name.
-                # e.g., pipe_fn_2.
-                if ($features & $bPipe) {
-                    $arg = $OPT{pipePrefix}.$arg.'_'.$curInnerDim;
-                }
-
-                # code for calculations.
-                # e.g., calc_fn(...); calc_pipe_fn_z();
-                push @calcStmts, makeArgs(@loopStack)
-                    if $ncalc == 1;
-                push @calcStmts,
-                    "  $OPT{calcPrefix}$arg(".
-                    joinArgs($calcArgs, locVar()). ");";
+                # Code for calls.
+                # e.g., prefix_fn(...);
+                push @callStmts, makeArgs(@loopStack)
+                    if $ncall == 1;
+                push @callStmts,
+                    "  $OPT{callPrefix}$arg(".
+                    joinArgs($callArgs, locVar()). ");";
 
             }                   # args
-        }                       # calc
+        }                       # call
 
-        # end of loop.
-        # this is where most of @code is created.
+        # End of loop.
+        # This is where most of @code is created for inner loops.
         elsif ($tok eq '}') {
             die "error: attempt to end loop w/o beginning\n" if !@loopStack;
 
@@ -991,125 +819,24 @@ sub processCode($) {
             # - add to @code,
             # - end it.
             else {
-                
-                my $pfd = "PFD$cacheLvl";
-                my $nVar = numItersVar(@loopDims);
-                my $doSplitL2 = ($features & $bPrefetchL2) && $OPT{splitL2};
+                my $beginVal = 0;
+                my $endVal = numItersVar(@loopDims);
+                my $comment = " // Inner loop.";
 
-                # declare pipeline vars.
-                push @code, " // Pipeline accumulators.", " MAKE_PIPE_$curInnerDim;"
-                    if ($features & $bPipe);
+                # beginning of loop.
+                push @code, $comment;
+                push @code, $OPT{innerMod};
+                beginLoop(\@code, \@loopDims, \@loopPrefix, 
+                          $beginVal, $endVal, $features, \@loopStack);
 
-                # check prefetch settings.
-                if (($features & $bPrefetchL1) && ($features & $bPrefetchL2)) {
-                    push @code, " // Check prefetch settings.",
-                    "#if PFDL2 <= PFDL1",
-                    '#error "PFDL2 <= PFDL1"',
-                    "#endif";
-                }
-                
-                # prefetch-starting loop(s).
-                # TODO: generate full prefetch once, then edge ones.
-                for my $i (0..1) {
-                    my $cache = ($i==0) ? 2 : 1; # fetch to L2 first.
-                    if (($cache == 1 && ($features & $bPrefetchL1)) ||
-                        ($cache == 2 && ($features & $bPrefetchL2))) {
+                # loop body.
+                push @code, @callStmts;
 
-                        my @pfCode;
-                        push @pfCode, " // Prime prefetch to $cacheLvl.";
-                        
-                        # prefetch loop.
-                        beginLoop(\@pfCode, \@loopDims, \@loopPrefix, 0, $pfd, $features, \@loopStack);
-                        push @pfCode, " // Prefetch to $cacheLvl.", @pfStmtsFullHere;
-                        endLoop(\@pfCode);
-                        
-                        # convert to specific cache.
-                        specifyCache(\@pfCode, $cache);
-                        push @code, @pfCode;
-                    }
-                }           # PF.
-
-                # pipeline-priming loop.
-                if ($features & $bPipe) {
-
-                    # start the loop STENCIL_ORDER before 0.
-                    # TODO: make this more general.
-                    push @code, " // Prime the calculation pipeline.";
-                    beginLoop(\@code, \@loopDims, \@loopPrefix, "-STENCIL_ORDER", 0, $features, \@loopStack);
-
-                    # select only pipe instructions, change calc to prime prefix.
-                    my @primeStmts = grep(m=//|$OPT{pipePrefix}=, @calcStmts);
-                    map { s/$OPT{calcPrefix}/$OPT{primePrefix}/ } @primeStmts;
-                    push @code, @primeStmts;
-
-                    endLoop(\@code);
-                }
-
-                # midpoint calculation for L2 prefetch only.
-                if ($doSplitL2) {
-                    my $ofs = ($features & $bPrefetchL1) ? "(PFDL2-PFDL1)" : "PFDL2";
-                    push @code, " // Point where L2-prefetch policy changes.";
-                    push @code, " // This covers all L1 fetches, even unneeded one(s) beyond end."
-                        if ($features & $bPrefetchL1);
-                    push @code, " const ".indexType(@loopDims)." ".midVar(@loopDims).
-                        " = std::max($nVar-$ofs, $nVar);";
-                }
-
-                # 1 or 2 computation loop(s):
-                # if L2 prefetch:
-                #  loop 0: w/L2 prefetch from start to midpoint.
-                #  loop 1: w/o L2 prefetch from midpoint to end.
-                # if no L2 prefetch:
-                #  loop 0: no L2 prefetch from start to end.
-                my $lastLoop = $doSplitL2 ? 1 : 0;
-                for my $loop (0 .. $lastLoop) {
-
-                    my $name = "Computation";
-                    my $endVal = ($loop == $lastLoop) ?
-                        numItersVar(@loopDims) : midVar(@loopDims);
-                    my $beginVal = ($lastLoop > 0 && $loop == $lastLoop) ?
-                        midVar(@loopDims) : 0;
-
-                    my $comment = " // $name loop.";
-                    $comment .= " Same as previous loop, except no L2 prefetch." if $loop==1;
-                    push @code, $comment;
-                    push @code, $OPT{innerMod};
-                    beginLoop(\@code, \@loopDims, \@loopPrefix, 
-                              $beginVal, $endVal, $features, \@loopStack);
-
-                    # loop body.
-                    push @code, " // $name.", @calcStmts;
-
-                    # prefetch for future iterations.
-                    for my $i (0..1) {
-                        my $cache = ($i==0) ? 2 : 1; # fetch to L2 first.
-                        if (($cache == 1 && ($features & $bPrefetchL1)) ||
-                            ($cache == 2 && ($features & $bPrefetchL2))) {
-                            
-                            my @pfCode;
-
-                            if ($cache == 2 && $loop == 1) {
-                                push @pfCode, " // Not prefetching to $cacheLvl in this loop.";
-                            } else {
-                                addIndexVars2(\@pfCode, \@loopDims, 1, $features, \@loopStack);
-                                push @pfCode, " // Prefetch to $cacheLvl.", @pfStmtsEdgeAhead;
-                            }
-
-                            # convert to specific cache.
-                            specifyCache(\@pfCode, $cache);
-                            push @code, @pfCode;
-                        }
-                    }       # PF.
-
-                    endLoop(\@code);
-                }
+                # end of loop.
+                endLoop(\@code);
 
                 # clear code buffers.
-                undef @pfStmtsFullHere;
-                undef @pfStmtsFullAhead;
-                undef @pfStmtsEdgeHere;
-                undef @pfStmtsEdgeAhead;
-                undef @calcStmts;
+                undef @callStmts;
 
                 # clear other data for this loop.
                 undef $curInnerDim;
@@ -1196,16 +923,11 @@ sub main() {
     my(@KNOBS) = (
         # knob,        description,   optional default
         [ "ndims=i", "Value of N.", 1],
-        [ "inVar=s", "Input index vars.", 'scanVars'],
-        [ "comArgs=s", "Common arguments to all calls (after L1/L2 for prefetch).", ''],
-        [ "calcPrefix=s", "Prefix for calculation call.", 'calc_'],
-        #[ "pfPrefix=s", "Prefix for prefetch call.", 'prefetch_'],
-        #[ "primePrefix=s", "Prefix for pipeline-priming call.", 'prime_'],
-        #[ "pipePrefix=s", "Additional prefix for pipeline call.", 'pipe_'],
+        [ "inVar=s", "Name of input index vars.", 'scanVars'],
+        [ "comArgs=s", "Common arguments to all calls.", ''],
+        [ "callPrefix=s", "Common prefix for function call(s).", ''],
         [ "ompConstruct=s", "Pragma to use before 'omp' loop(s).", "omp parallel for"],
-        [ "innerMod=s", "Code to insert before inner computation loops.",
-          '_Pragma("nounroll_and_jam") _Pragma("nofusion")'],
-        #[ "splitL2!", "Split inner loops with/without L2 prefetching.", 0],
+        [ "innerMod=s", "Code to insert before inner loops.", ''],
         [ "output=s", "Name of output file.", 'loops.h'],
         );
     my($command_line) = process_command_line(\%OPT, \@KNOBS);
@@ -1219,19 +941,13 @@ sub main() {
             "  indices between 0 and N-1 indicated by 'loop(<indices>)'\n",
             "Indices may be specified as a comma-separated list or <first..last> range,\n",
             "  using the variable 'N' as needed.\n",
-            "Inner loops should contain calc statements that generate calls to calculation functions.\n",
+            "Inner loops should contain call statements that generate calls to calculation functions.\n",
             "A loop statement with more than one argument will generate a single collapsed loop.\n",
             "Optional loop modifiers:\n",
             "  omp:             generate an OpenMP for loop (distribute work across SW threads).\n",
-            #"  crew:            generate an Intel crew loop (distribute work across HW threads).\n",
-            #"  prefetch:        generate calls to SW L1 & L2 prefetch functions in addition to calc functions.\n",
-            #"  prefetch(L1,L2): generate calls to SW L1 & L2 prefetch functions in addition to calc functions.\n",
-            #"  prefetch(L1):    generate calls to SW L1 prefetch functions in addition to calc functions.\n",
-            #"  prefetch(L2):    generate calls to SW L2 prefetch functions in addition to calc functions.\n",
-            "  grouped:         generate grouped path within a collapsed loop.\n",
-            "  serpentine:      generate reverse path when enclosing loop dimension is odd.\n",
-            "  square_wave:     generate 2D square-wave path for two innermost dimensions of a collapsed loop.\n",
-            #"  pipeline:        generate calls to pipeline versions of calculation functions (deprecated).\n",
+            "  grouped:         generate grouped scan within a collapsed loop.\n",
+            "  serpentine:      generate reverse scan when enclosing loop dimension is odd.\n",
+            "  square_wave:     generate 2D square-wave scan for two innermost dimensions of a collapsed loop.\n",
             "A 'ScanIndices' var must be defined in C++ code prior to including the generated code.\n",
             "  This struct contains the following 'Indices' elements:\n",
             "  'begin':       [in] first index to scan in each dim.\n",
@@ -1249,13 +965,12 @@ sub main() {
             "Options:\n";
         print_options_help(\@KNOBS);
         print "Examples:\n",
-            "  $script -ndims 2 'loop(0,1) { calc(f); }'\n",
-            "  $script -ndims 3 'omp loop(0,1) { loop(2) { calc(f); } }'\n",
-            "  $script -ndims 3 'omp loop(0,1) { prefetch loop(2) { calc(f); } }'\n",
-            "  $script -ndims 3 'omp loop(0) { loop(1) { prefetch loop(2) { calc(f); } } }'\n",
-            "  $script -ndims 3 'grouped omp loop(0..N-1) { calc(f); }'\n",
-            "  $script -ndims 3 'omp loop(0) { serpentine loop(1..N-1) { calc(f); } }'\n",
-            "  $script -ndims 4 'omp loop(0..N+1) { serpentine loop(N+2,N-1) { calc(f); } }'\n";
+            "  $script -ndims 2 'loop(0,1) { call(f); }'\n",
+            "  $script -ndims 3 'omp loop(0,1) { loop(2) { call(f); } }'\n",
+            "  $script -ndims 3 'omp loop(0) { loop(1,2) { call(f); } }'\n",
+            "  $script -ndims 3 'grouped omp loop(0..N-1) { call(f); }'\n",
+            "  $script -ndims 3 'omp loop(0) { serpentine loop(1..N-1) { call(f); } }'\n",
+            "  $script -ndims 4 'omp loop(0..N+1) { serpentine loop(N+2,N-1) { call(f); } }'\n";
         exit 1;
     }
 
