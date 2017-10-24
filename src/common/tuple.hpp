@@ -590,54 +590,6 @@ namespace yask {
             }
             return newt;
         }
-        inline Tuple removeDim(const Scalar<T>& dir) const {
-            return removeDim(dir.getName());
-        }
-
-        // Get value from 'this' in same dim as in 'dir'.
-        inline T getValInDir(const Scalar<T>& dir) const {
-            auto& dim = dir.getName();
-            return getVal(dim);
-        }
-
-        // Create new Scalar containing only value in given direction.
-        inline Scalar<T> getDirInDim(const std::string& dim) const {
-            auto* p = lookup(dim);
-            assert(p);
-            Scalar<T> s(dim, *p);
-            return s;
-        }
-    
-        // Determine whether this is inline with t2 along
-        // given direction. This means that all values in this
-        // are the same as those in t2, ignoring value in dir.
-        inline bool isInlineInDir(const Tuple& t2, const Scalar<T>& dir) const {
-            assert(areDimsSame(t2));
-            auto& dname = dir.getName();
-            for (auto i : _q) {
-                auto& tdim = i.getName();
-                auto& tval = i.getVal();
-                auto& val2 = t2.getVal(tdim);
-
-                // if not in given direction, values must be equal.
-                if (tdim != dname && tval != val2)
-                    return false;
-            }
-            return true;
-        }
-
-        // Determine whether this is 'ahead of' 't2' along
-        // given direction in 'dir'.
-        inline bool isAheadOfInDir(const Tuple& t2, const Scalar<T>& dir) const {
-            assert(areDimsSame(t2));
-            auto& dn = dir.getName();
-            auto& dv = dir.getVal();
-            auto& tv = getVal(dn);
-            auto& v2 = t2.getVal(dn);
-            return isInlineInDir(t2, dir) &&
-                (((dv > 0) && tv > v2) ||  // in front going forward.
-                 ((dv < 0) && tv < v2));   // behind going backward.
-        }
 
         // reductions.
         inline T reduce(std::function<T (T lhs, T rhs)> reducer) const {

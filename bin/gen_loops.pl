@@ -290,7 +290,6 @@ sub addIndexVars1($$$) {
 }
 
 # Add index variables *inside* the loop.
-# TODO: add prefetch for grouping.
 sub addIndexVars2($$$$$) {
     my $code = shift;           # ref to list of code lines.
     my $loopDims = shift;       # ref to list of dimensions in loop.
@@ -1200,13 +1199,13 @@ sub main() {
         [ "inVar=s", "Input index vars.", 'scanVars'],
         [ "comArgs=s", "Common arguments to all calls (after L1/L2 for prefetch).", ''],
         [ "calcPrefix=s", "Prefix for calculation call.", 'calc_'],
-        [ "pfPrefix=s", "Prefix for prefetch call.", 'prefetch_'],
+        #[ "pfPrefix=s", "Prefix for prefetch call.", 'prefetch_'],
         #[ "primePrefix=s", "Prefix for pipeline-priming call.", 'prime_'],
         #[ "pipePrefix=s", "Additional prefix for pipeline call.", 'pipe_'],
         [ "ompConstruct=s", "Pragma to use before 'omp' loop(s).", "omp parallel for"],
         [ "innerMod=s", "Code to insert before inner computation loops.",
           '_Pragma("nounroll_and_jam") _Pragma("nofusion")'],
-        [ "splitL2!", "Split inner loops with/without L2 prefetching.", 0],
+        #[ "splitL2!", "Split inner loops with/without L2 prefetching.", 0],
         [ "output=s", "Name of output file.", 'loops.h'],
         );
     my($command_line) = process_command_line(\%OPT, \@KNOBS);
@@ -1225,10 +1224,10 @@ sub main() {
             "Optional loop modifiers:\n",
             "  omp:             generate an OpenMP for loop (distribute work across SW threads).\n",
             #"  crew:            generate an Intel crew loop (distribute work across HW threads).\n",
-            "  prefetch:        generate calls to SW L1 & L2 prefetch functions in addition to calc functions.\n",
-            "  prefetch(L1,L2): generate calls to SW L1 & L2 prefetch functions in addition to calc functions.\n",
-            "  prefetch(L1):    generate calls to SW L1 prefetch functions in addition to calc functions.\n",
-            "  prefetch(L2):    generate calls to SW L2 prefetch functions in addition to calc functions.\n",
+            #"  prefetch:        generate calls to SW L1 & L2 prefetch functions in addition to calc functions.\n",
+            #"  prefetch(L1,L2): generate calls to SW L1 & L2 prefetch functions in addition to calc functions.\n",
+            #"  prefetch(L1):    generate calls to SW L1 prefetch functions in addition to calc functions.\n",
+            #"  prefetch(L2):    generate calls to SW L2 prefetch functions in addition to calc functions.\n",
             "  grouped:         generate grouped path within a collapsed loop.\n",
             "  serpentine:      generate reverse path when enclosing loop dimension is odd.\n",
             "  square_wave:     generate 2D square-wave path for two innermost dimensions of a collapsed loop.\n",

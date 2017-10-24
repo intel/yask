@@ -182,11 +182,6 @@ namespace yask {
         }
 #endif
         
-        // Get the set of aligned vectors on the leading edge
-        // in the given direction and magnitude in dir.
-        // Pre-requisite: visitor has been accepted.
-        virtual void getLeadingEdge(GridPointSet& edge, const IntScalar& dir) const;
-
         // Equality.
         virtual void visit(EqualsExpr* ee) {
 
@@ -235,9 +230,10 @@ namespace yask {
         virtual void printUnalignedVecCtor(ostream& os, const GridPoint& gp,
                                            const string& pvName) =0;
 
-        // Read from a single point to be broadcast to a vector.
+        // Read from a single point.
         // Return code for read.
-        virtual string readFromScalarPoint(ostream& os, const GridPoint& gp) =0;
+        virtual string readFromScalarPoint(ostream& os, const GridPoint& gp,
+                                           const VarMap* vMap=0) =0;
 
         // Read from multiple points that are not vectorizable.
         // Return var name.

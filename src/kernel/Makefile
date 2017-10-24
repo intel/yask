@@ -64,20 +64,24 @@ else ifeq ($(stencil),iso3dfd)
   fold_4byte			=	x=2,y=8
   cluster			=	x=2
   def_block_args		=	-b 96 -bx 192
+  pfd_l1			=	1
+  pfd_l2			=	0
  else ifeq ($(arch),hsw)
   fold_4byte			=	x=8
   def_thread_divisor		=	2
   def_block_threads		=	1
   def_block_args		=	-bx 296 -by 5 -bz 290
   cluster			=	z=2
-  prefetch			=
+  pfd_l1			=	0
+  pfd_l2			=	0
  else ifeq ($(arch),skx)
   fold_4byte			=	x=4,y=4
   def_thread_divisor		=	1
   def_block_threads		=	2
   def_block_args		=	-b 64
   cluster			=	z=2
-  prefetch			=	prefetch(L1)
+  pfd_l1			=	1
+  pfd_l2			=	0
  endif
 
 else ifneq ($(findstring awp,$(stencil)),)
@@ -93,18 +97,22 @@ else ifneq ($(findstring awp,$(stencil)),)
   def_thread_divisor		=	2
   def_block_threads		=	4
   def_block_args		=	-b 48 -bx 112
+  pfd_l1			=	1
+  pfd_l2			=	0
  else ifeq ($(arch),hsw)
-  prefetch			=	prefetch(L1,L2)
   omp_block_schedule		=	dynamic,1
   fold_4byte			=	x=8
   cluster			=	y=2
   def_pad_args			=	-epx 1 -epy 1 -epz 0
   def_block_args		=	-bx 128 -by 16 -bz 32 
   more_def_args			+=	-sbx 32 -sby 2 -sbz 32
+  pfd_l1			=	1
+  pfd_l2			=	2
  else ifeq ($(arch),skx)
   fold_4byte			=	x=2,y=8
   def_block_args		=	-b 32 -bx 96
-  prefetch			=	prefetch(L1)
+  pfd_l1			=	1
+  pfd_l2			=	0
  endif
 
 else ifneq ($(findstring ssg,$(stencil)),)
@@ -119,7 +127,8 @@ else ifneq ($(findstring fsg,$(stencil)),)
   def_block_args  	=	-b 16
   def_thread_divisor	=	4
   def_block_threads	=	1
-  prefetch		=	prefetch(L2)
+  pfd_l1		=	0
+  pfd_l2		=	2
  endif
 
 else ifeq ($(stencil),stream)
@@ -137,7 +146,8 @@ ifeq ($(arch),knc)
  MACROS		+=	USE_INTRIN512
  YC_TARGET  	?=	knc
  def_block_threads  ?=	4
- prefetch	?=	prefetch(L1,L2)
+ pfd_l1		?=	1
+ pfd_l2		?=	2
 
 else ifeq ($(arch),knl)
 
@@ -147,7 +157,8 @@ else ifeq ($(arch),knl)
  YC_TARGET  	?=	avx512
  def_block_args	?=	-b 96
  def_block_threads ?=	8
- prefetch	?=	prefetch(L1)
+ pfd_l1		?=	1
+ pfd_l2		?=	0
 
 else ifeq ($(arch),skx)
 
@@ -195,7 +206,6 @@ omp_par_for		?=	omp parallel for
 omp_region_schedule	?=	dynamic,1
 omp_block_schedule	?=	static,1
 omp_gen_schedule	?=	guided
-prefetch		?=	prefetch(L2)
 def_thread_divisor	?=	1
 def_block_threads	?=	2
 real_bytes		?=	4
@@ -203,7 +213,7 @@ def_rank_args		?=	-d 128
 def_block_args		?=	-b 64
 def_pad_args		?=	-ep 1
 cluster			?=	x=1
-pfd_l1			?=	1
+pfd_l1			?=	0
 pfd_l2			?=	2
 max_dims		?=	5  # max grid dims >= max stencil dims.
 
@@ -419,7 +429,7 @@ RUN_PYTHON	:= 	$(RUN_PREFIX) env PYTHONPATH=$(LIB_DIR):$(YASK_DIR) $(PYTHON)
 
 # Set MACROS based on individual makefile vars.
 # MACROS and EXTRA_MACROS will be written to a header file.
-MACROS		+=	PFDL1=$(pfd_l1) PFDL2=$(pfd_l2)
+MACROS		+=	PFD_L1=$(pfd_l1) PFD_L2=$(pfd_l2)
 MACROS		+=	MAX_DIMS=$(max_dims)
 ifeq ($(streaming_stores),1)
  MACROS		+=	USE_STREAMING_STORE
@@ -776,6 +786,7 @@ echo-settings:
 	@echo GEN_LOOP_INNER_MODS="\"$(GEN_LOOP_INNER_MODS)\""
 	@echo GEN_LOOP_CODE="\"$(GEN_LOOP_CODE)\""
 
+# To get code stats, compiler with EXTRA_YK_CXXFLAGS=-Fa
 code-stats:
 	@echo
 	@echo "Code stats for stencil computation:"

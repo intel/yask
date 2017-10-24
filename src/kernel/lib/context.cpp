@@ -1128,8 +1128,8 @@ namespace yask {
             " minimum-padding:      " << _opts->_min_pad_sizes.makeDimValStr() << endl <<
             " wave-front-angles:    " << angles.makeDimValStr() << endl <<
             " max-halos:            " << max_halos.makeDimValStr() << endl <<
-            " manual-L1-prefetch-distance: " << PFDL1 << endl <<
-            " manual-L2-prefetch-distance: " << PFDL2 << endl <<
+            " L1-prefetch-distance: " << PFD_L1 << endl <<
+            " L2-prefetch-distance: " << PFD_L2 << endl <<
             endl;
         
         // sums across eqs for this rank.

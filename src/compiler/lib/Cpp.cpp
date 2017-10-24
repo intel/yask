@@ -69,15 +69,24 @@ namespace yask {
 
     /////////// Vector code /////////////
 
-    // Read from a single point to be broadcast to a vector.
+    // Read from a single point.
     // Return code for read.
-    string CppVecPrintHelper::readFromScalarPoint(ostream& os, const GridPoint& gp) {
+    string CppVecPrintHelper::readFromScalarPoint(ostream& os, const GridPoint& gp,
+                                                  const VarMap* vMap) {
 
+        // Use default var-map if not provided.
+        if (!vMap)
+            vMap = &_varMap;
+        
+        // Determine type to avoid virtual call.
+        bool folded = gp.isGridFoldable();
+        string gtype = folded ? "YkVecGrid" : "YkElemGrid";
+        
         // Assume that broadcast will be handled automatically by
         // operator overloading in kernel code.
         // Specify that any indices should use element vars.
-        string str = "_context->" + gp.getGridName() + "->readElem(";
-        string args = gp.makeArgStr(&_varMap);
+        string str = "_context->" + gp.getGridName() + "->" + gtype + "::readElem(";
+        string args = gp.makeArgStr(vMap);
         str += "{" + args + "}, ";
         str += "__LINE__)";
         return str;
@@ -112,12 +121,8 @@ namespace yask {
                 }
 
                 // Read or reuse.
+                string stmt = readFromScalarPoint(os, gp, &vMap);
                 string varname;
-                string args = gp.makeArgStr(&vMap);
-                string stmt = "_context->" + gp.getGridName() + "->readElem(";
-                if (args.length())
-                    stmt += args + ", ";
-                stmt += "__LINE__)";
                 if (_elemVars.count(stmt))
                     varname = _elemVars.at(stmt);
                 else {
@@ -151,7 +156,7 @@ namespace yask {
         os << " _context->" << gp.getGridName() << "->" << funcName << "(";
         if (firstArg.length())
             os << firstArg << ", ";
-        string args = isNorm ? gp.makeNormArgStr(getFold()) : gp.makeArgStr();
+        string args = isNorm ? gp.makeNormArgStr(_dims) : gp.makeArgStr();
         os << "{" << args << "}"; // use Indices initializer-list ctor.
         if (lastArg.length()) 
             os << ", " << lastArg;
@@ -160,8 +165,9 @@ namespace yask {
 
     // Print code to set pointers of aligned reads.
     void CppVecPrintHelper::printBasePtrs(ostream& os) {
+        const string& idim = _dims._innerDim;
 
-        // Gather points.
+        // A set for the aligned reads & writes.
         GridPointSet gps;
 
         // Aligned reads as determined by VecInfoVisitor.
@@ -169,7 +175,8 @@ namespace yask {
 
         // Writes (assume aligned).
         gps.insert(_vv._vecWrites.begin(), _vv._vecWrites.end());
-        
+
+        // Loop through all aligned read & write points.
         for (auto& gp : gps) {
         
             // Make base point (inner-dim index = 0).
@@ -178,26 +185,118 @@ namespace yask {
             // Not already saved?
             if (!lookupPointPtr(*bgp)) {
 
-                // Print code to calculate pointer.
-                string expr = printPointPtr(os, *bgp);
+                // Get temp var for ptr.
+                string ptrName = makeVarName();
 
                 // Save for future use.
-                savePointPtr(*bgp, expr);
+                savePointPtr(*bgp, ptrName);
+            }
+
+            // Collect some stats for reads using this ptr.
+            if (_vv._alignedVecs.count(gp)) {
+                auto* p = lookupPointPtr(*bgp);
+                assert(p);
+
+                // Get const offsets.
+                auto& offsets = gp.getArgOffsets();
+                auto* ofs = offsets.lookup(idim);
+
+                // Remember lowest one.
+                if (ofs && (!_ptrOfsLo.count(*p) || _ptrOfsLo[*p] > *ofs))
+                    _ptrOfsLo[*p] = *ofs;
+
+                // Remember highest one.
+                if (ofs && (!_ptrOfsHi.count(*p) || _ptrOfsHi[*p] < *ofs))
+                    _ptrOfsHi[*p] = *ofs;
+            }
+        }
+
+        // Loop through all aligned read & write points.
+        set<string> done;
+        for (auto& gp : gps) {
+        
+            // Make base point (inner-dim index = 0).
+            auto bgp = makeBasePoint(gp);
+            auto* p = lookupPointPtr(*bgp);
+            assert(p);
+            if (!done.count(*p)) {
+
+                // Print pointer creation.
+                printPointPtr(os, *p, *bgp);
+                
+                // Print prefetch(es) for this ptr if a read.
+                if (_vv._alignedVecs.count(gp))
+                    printPrefetches(os, false, *p);
+
+                done.insert(*p);
             }
         }
     }
 
-    // Print calculation of pointer to a grid point.
-    // Return name of pointer.
-    string CppVecPrintHelper::printPointPtr(ostream& os, const GridPoint& gp) {
+    // Print prefetches for each base pointer.
+    // 'level': cache level.
+    // 'ahead': prefetch PF distance ahead instead of up to PF dist.
+    void CppVecPrintHelper::printPrefetches(ostream& os,
+                                            bool ahead, string ptrVar) {
+
+        // cluster mult in inner dim.
+        const string& idim = _dims._innerDim;
+        string imult = "CMULT_" + PrinterBase::allCaps(idim);
+
+        for (int level = 1; level <= 2; level++) {
+        
+            os << "\n // Prefetch to L" << level << " cache if enabled.\n";
+                os << _linePrefix << "#if PFD_L" << level << " > 0\n";
+
+                // Loop thru vec ptrs.
+                for (auto vp : _vecPtrs) {
+                    auto& ptr = vp.second; // ptr var name.
+
+                    // Filter by ptrVar if provided.
+                    if (ptrVar.length() && ptrVar != ptr)
+                        continue;
+
+                    // _ptrOfs{Lo,Hi} contain first and last offsets in idim,
+                    // NOT normalized to vector len.
+                    string lo = _dims.makeNormStr(_ptrOfsLo[ptr], idim);
+                    if (lo.length() == 0) lo = "0";
+                    string hi = _dims.makeNormStr(_ptrOfsHi[ptr], idim);
+            
+                    // Start loop of prefetches.
+                    os << "#pragma unroll\n" <<
+                        _linePrefix << " for (int ofs = ";
+
+                    // First offset.
+                    if (ahead)
+                        os << "(PFD_L" << level << "*" << imult << ")" << hi;
+                    else
+                        os << lo;
+
+                    // End of offsets.
+                    os << "; ofs < ";
+                    if (ahead)
+                        os << "((PFD_L" << level << "+1)*" << imult << ")" << hi;
+                    else
+                        os << "(PFD_L" << level << "*" << imult << ")" << hi;
+
+                    // Continue loop.
+                    os << "; ofs++)\n" <<
+                        _linePrefix << "  prefetch<L" << level << "_HINT>(&" << ptr <<
+                        "[" << idim << " + ofs])" << _lineSuffix;
+                }
+                os << _linePrefix << "#endif // L" << level << " prefetch.\n";
+        }
+    }
+    
+    // Print code to set ptrName to gp.
+    void CppVecPrintHelper::printPointPtr(ostream& os, const string& ptrName,
+                                          const GridPoint& gp) {
         printPointComment(os, gp, "Calculate pointer to ");
 
         // Calc ptr.
-        string mvName = makeVarName();
-        os << _linePrefix << getVarType() << "* " << mvName << " = ";
+        os << _linePrefix << getVarType() << "* " << ptrName << " = ";
         printVecPointCall(os, gp, "getVecPtrNorm", "", "__LINE__", true);
         os << _lineSuffix;
-        return mvName;
     }
     
     // Print any needed memory reads and/or constructions to 'os'.
@@ -217,15 +316,15 @@ namespace yask {
             auto* p = lookupPointPtr(*bgp);
             if (p) {
 
-                // Offset.
+                // Offset in inner-dim direction.
                 string idim = _dims._innerDim;
-                string ofs = gp.makeNormArgStr(idim, getFold());
+                string ofsStr = gp.makeNormArgStr(idim, _dims);
                 
                 // Output read using base addr.
                 printPointComment(os, gp, "Read aligned");
                 codeStr = makeVarName();
                 os << _linePrefix << getVarType() << " " << codeStr << " = " <<
-                    *p << "[" << ofs << "]" << _lineSuffix;
+                    *p << "[" << ofsStr << "]" << _lineSuffix;
             }
         }
 
@@ -255,7 +354,7 @@ namespace yask {
 
                 // Offset.
                 string idim = _dims._innerDim;
-                string ofs = gp.makeNormArgStr(idim, getFold());
+                string ofs = gp.makeNormArgStr(idim, _dims);
                 
                 // Output write using base addr.
                 printPointComment(os, gp, "Write aligned");
@@ -368,36 +467,10 @@ namespace yask {
         }
     }
 
-    // Print body of prefetch function.
-    void CppVecPrintHelper::printPrefetches(ostream& os, const IntScalar& dir) const {
-
-        // Points to prefetch.
-        GridPointSet* pfPts = NULL;
-
-        // Prefetch leading points only if dir name is set.
-        GridPointSet edge;
-        if (dir.getName().length()) {
-            _vv.getLeadingEdge(edge, dir);
-            pfPts = &edge;
-        }
-
-        // if dir is not set, prefetch all aligned vectors.
-        else
-            pfPts = &_vv._alignedVecs;
-
-        for (auto gp : *pfPts) {
-            printPointComment(os, gp, "Prefetch aligned");
-            
-            // Prefetch memory.
-            printVecPointCall(os, gp, "prefetchVecNorm<level>", "", "__LINE__", true);
-            os << ";" << endl;
-        }
-    }
-
-    // Print a grid-access vars for a loop.
+    // Print grid-access vars for a loop.
     void CppLoopVarPrintVisitor::visit(GridPoint* gp) {
 
-        // Retrieve prior analysis.
+        // Retrieve prior analysis of this grid point.
         //auto vecType = gp->getVecType();
         auto loopType = gp->getLoopType();
         

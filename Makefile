@@ -61,8 +61,8 @@
 #   this can provide the ability to fine-tune which grids use
 #   HBW and which use default memory.
 #
-# pfd_l1: L1 prefetch distance (only if enabled in sub-block loop).
-# pfd_l2: L2 prefetch distance (only if enabled in sub-block loop).
+# pfd_l1: L1 prefetch distance (0 => disabled).
+# pfd_l2: L2 prefetch distance (0 => disabled).
 #
 # omp_region_schedule: OMP schedule policy for region loop.
 # omp_block_schedule: OMP schedule policy for nested OpenMP block loop.
@@ -237,6 +237,7 @@ docs: api-docs
 
 all:
 	$(MAKE) realclean
+	$(MAKE) tags
 	$(MAKE) default
 	$(MAKE) all-tests
 	$(MAKE) clean

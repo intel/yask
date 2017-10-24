@@ -351,6 +351,10 @@ namespace yask {
                      int vlen,
                      bool is_folding_efficient,
                      ostream& os);
+
+        // Make string like "+(4/VLEN_X)" or "-(2/VLEN_Y)"
+        // given signed offset and direction.
+        string makeNormStr(int offset, string dim) const;
     };
 
 } // namespace yask.

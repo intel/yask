@@ -333,6 +333,7 @@ namespace yask {
         }
 
         // Pointer to given element.
+        // Calling this helps the compiler avoid virtual function calls.
         const T* getPtr(const Indices& pt, bool check=true) const {
             idx_t ai = GenericGrid::get_index(pt, check);
             return &((T*)this->_elems)[ai];

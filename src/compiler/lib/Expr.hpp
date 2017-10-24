@@ -72,6 +72,7 @@ namespace yask {
     class GridPoint;
     typedef shared_ptr<GridPoint> GridPointPtr;
     class StencilSolution;
+    struct Dimensions;
 
     typedef map<string, string> VarMap; // map used when substituting vars.
     
@@ -777,14 +778,14 @@ namespace yask {
         // String v/vec-normalized args, e.g., 'x, y+(2/VLEN_Y)'.
         // This object has numerators; 'fold' object has denominators.
         // Apply substitutions to indices using 'varMap' if provided.
-        virtual string makeNormArgStr(const IntTuple& fold,
+        virtual string makeNormArgStr(const Dimensions& dims,
                                       const VarMap* varMap = 0) const;
             
         // Make string like "x+(4/VLEN_X)" from original arg "x+4" in 'dname' dim.
         // This object has numerators; 'fold' object has denominators.
         // Apply substitutions to indices using 'varMap' if provided.
         virtual string makeNormArgStr(const string& dname,
-                                      const IntTuple& fold,
+                                      const Dimensions& dims,
                                       const VarMap* varMap = 0) const;
 
         // Create a deep copy of this expression,
@@ -792,9 +793,6 @@ namespace yask {
         virtual NumExprPtr clone() const { return make_shared<GridPoint>(*this); }
         virtual GridPointPtr cloneGridPoint() const { return make_shared<GridPoint>(*this); }
     
-        // Determine whether this is 'ahead of' rhs in given direction.
-        virtual bool isAheadOfInDir(const GridPoint& rhs, const IntScalar& dir) const;
-
         // APIs.
         virtual yc_grid* get_grid();
     };

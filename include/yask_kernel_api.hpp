@@ -45,6 +45,7 @@ namespace yask {
     typedef long int idx_t;     // SWIG doesn't seem to understand int64_t.
 #else
     typedef std::int64_t idx_t;
+    typedef std::uint64_t uidx_t;
 #endif
 
     // Forward declarations of classes and pointers.

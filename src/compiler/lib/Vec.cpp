@@ -128,49 +128,6 @@ namespace yask {
         _vecPoints.insert(*gp);
     }                   // end of visit() method.
 
-    // Get the set of aligned vectors on the leading edge
-    // in the given direction and magnitude in dir.
-    // Pre-requisite: visitor has been accepted.
-    void VecInfoVisitor::getLeadingEdge(GridPointSet& edge,
-                                        const IntScalar& dir) const {
-        edge.clear();
-        auto& dname = dir.getName();
-
-        // Repeat based on magnitude (cluster step in given dir).
-        for (int i = 0; i < dir.getVal(); i++) {
-        
-            // loop over aligned vectors.
-            for (auto avi : _alignedVecs) {
-
-                // ignore values already found.
-                if (edge.count(avi))
-                    continue;
-
-                // ignore if this vector doesn't have an offset dimension in dir.
-                if (!avi.getArgOffsets().lookup(dname))
-                    continue;
-
-                // compare to all points.
-                bool best = true;
-                for (auto avj : _alignedVecs) {
-
-                    // ignore values already found.
-                    if (edge.count(avj))
-                        continue;
-
-                    // Determine if avj is ahead of avi in given direction.
-                    // (A point won't be ahead of itself.)
-                    if (avj.isAheadOfInDir(avi, dir))
-                        best = false;
-                }
-
-                // keep only if farthest.
-                if (best)
-                    edge.insert(avi);
-            }
-        }
-    }
-
     // Return code containing a vector of grid points, e.g., code fragment
     // or var name.  Optionally print memory reads and/or constructions to
     // 'os' as needed.

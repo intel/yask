@@ -314,8 +314,8 @@ my @metrics = ( $fitnessMetric,
                 'max-halos',
                 'extra-padding',
                 'minimum-padding',
-                'manual-L1-prefetch-distance',
-                'manual-L2-prefetch-distance',
+                'L1-prefetch-distance',
+                'L2-prefetch-distance',
                 'overall-problem-size in all ranks, for all time-steps',
                 'grid-point-updates in all ranks, for all time-steps',
                 'grid-point-reads in all ranks, for all time-steps',
@@ -333,8 +333,8 @@ my $maxFlatGens = 4;          # stop when this many generations do not improve t
 my $secPerTrial = 60;           # used to estimate time required.
 
 # prefetching.
-my $maxPfdl1 = 4;
-my $maxPfdl2 = 50;
+my $maxPfd_l1 = 4;
+my $maxPfd_l2 = 12;
 
 # dimension-related vars.
 my $minDim = 128;        # min dimension on any axis.
@@ -459,8 +459,8 @@ if ($doBuild) {
 
      # prefetch distances for l1 and l2.
      # all non-pos numbers => no prefetching, so ~50% chance of being enabled.
-     [ -$maxPfdl1, $maxPfdl1, 1, 'pfd_l1' ],
-     [ -$maxPfdl2, $maxPfdl2, 1, 'pfd_l2' ],
+     [ -$maxPfd_l1, $maxPfd_l1, 1, 'pfd_l1' ],
+     [ -$maxPfd_l2, $maxPfd_l2, 1, 'pfd_l2' ],
 
      # other build options.
      [ 0, 100, 1, 'exprSize' ],          # expression-size threshold.
@@ -1133,8 +1133,8 @@ sub fitness {
   my $exprSize = readHash($h, 'exprSize', 1);
   my $thread_divisor_exp = readHash($h, 'thread_divisor_exp', 0);
   my $bthreads_exp = readHash($h, 'bthreads_exp', 0);
-  my $pfdl1 = readHash($h, 'pfd_l1', 1);
-  my $pfdl2 = readHash($h, 'pfd_l2', 1);
+  my $pfd_l1 = readHash($h, 'pfd_l1', 1);
+  my $pfd_l2 = readHash($h, 'pfd_l2', 1);
   my $ompRegionSchedule = readHash($h, 'ompRegionSchedule', 1);
   my $ompBlockSchedule = readHash($h, 'ompBlockSchedule', 1);
 
@@ -1266,13 +1266,14 @@ sub fitness {
   my $mvars = '';               # other make vars.
 
   # prefetch distances.
-  if ($pfdl1 > 0 && $pfdl2 > 0) {
+  $pfd_l1 = 0 if $pfd_l1 < 0;
+  $pfd_l2 = 0 if $pfd_l2 < 0;
+  if ($pfd_l1 > 0 && $pfd_l2 > 0) {
 
     # make sure pfld2 > pfld1.
-    $pfdl2 = $pfdl1 + 1 if $pfdl1 >= $pfdl2;
+    $pfd_l2 = $pfd_l1 + 1 if $pfd_l1 >= $pfd_l2;
   }
-  $mvars .= " pfd_l1=$pfdl1" if $pfdl1 > 0;
-  $mvars .= " pfd_l2=$pfdl2" if $pfdl2 > 0;
+  $mvars .= " pfd_l1=$pfd_l1 pfd_l2=$pfd_l2";
 
   # cluster & fold.
   $mvars .= " cluster=x=$cvs[0],y=$cvs[1],z=$cvs[2]";

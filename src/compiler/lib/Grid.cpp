@@ -442,4 +442,36 @@ namespace yask {
             os << "Misc dimension(s): " << _miscDims.makeDimStr() << endl;
     }
 
+    // Make string like "+(4/VLEN_X)" or "-(2/VLEN_Y)" or "" if ofs==zero.
+    // given signed offset and direction.
+    string Dimensions::makeNormStr(int ofs, string dname) const {
+        ostringstream oss;
+
+        if (ofs == 0)
+            return "";
+        
+        if (_fold.lookup(dname)) {
+
+            // Positive offset, e.g., '+(4 / VLEN_X)'.
+            if (ofs > 0)
+                oss << "+(" << ofs;
+            
+            // Neg offset, e.g., '-(4 / VLEN_X)'.
+            // Put '-' sign outside division to fix truncated division problem.
+            else
+                oss << "-(" << (-ofs);
+                    
+            // add divisor.
+            string cap_dname = PrinterBase::allCaps(dname);
+            oss << " / VLEN_" << cap_dname << ")";
+        }
+
+        // No fold const avail.
+        else
+            oss << ofs;
+
+        return oss.str();
+    }
+    
+
 } // namespace yask.

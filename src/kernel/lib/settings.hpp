@@ -375,7 +375,8 @@ namespace yask {
     typedef std::shared_ptr<KernelEnv> KernelEnvPtr;
 
     // Dimensions for a solution.
-    // Similar to that in the YASK compiler.
+    // Similar to the Dimensions class in the YASK compiler
+    // from which these values are set.
     struct Dims {
 
         // Algorithm for vec dims in fold layout.
@@ -593,6 +594,11 @@ namespace yask {
         int max_threads=0;      // Initial number of threads to use overall; 0=>OMP default.
         int thread_divisor=1;   // Reduce number of threads by this amount.
         int num_block_threads=1; // Number of threads to use for a block.
+
+        // Prefetch distances.
+        // Prefetching must be enabled via YASK_PREFETCH_L[12] macros.
+        int _prefetch_L1_dist=1;
+        int _prefetch_L2_dist=2;
 
         // Ctor.
         KernelSettings(DimsPtr dims) : _dims(dims) {

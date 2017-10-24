@@ -447,11 +447,6 @@ namespace yask {
             (_consts > rhs._consts) ? false :
             makeStr() < rhs.makeStr(); // TODO: make more efficient.
     }
-    bool GridPoint::isAheadOfInDir(const GridPoint& rhs, const IntScalar& dir) const {
-        return _grid == rhs._grid && // must be same var.
-            _offsets.areDimsSame(rhs._offsets) &&
-            _offsets.isAheadOfInDir(rhs._offsets, dir);
-    }
     string GridPoint::makeArgStr(const VarMap* varMap) const {
         string str;
         int i = 0;
@@ -472,30 +467,17 @@ namespace yask {
     // This object has numerators; 'fold' object has denominators.
     // Args w/o simple offset are not modified.
     string GridPoint::makeNormArgStr(const string& dname,
-                                     const IntTuple& fold,
+                                     const Dimensions& dims,
                                      const VarMap* varMap) const {
         ostringstream oss;
 
-        // Non-0 offset and exists in fold?
+        // Non-0 const offset and dname exists in fold?
         auto* ofs = _offsets.lookup(dname);
-        if (ofs && *ofs && fold.lookup(dname)) {
-            oss << "(" << dname;
-
-            // Positive offset, e.g., 'xv + (4 / VLEN_X)'.
-            if (*ofs > 0)
-                oss << " + (" << *ofs;
-
-            // Neg offset, e.g., 'xv - (4 / VLEN_X)'.
-            // Put '-' sign outside division to fix truncated division problem.
-            else
-                oss << " - (" << (- *ofs);
-                    
-            // add divisor.
-            string cap_dname = PrinterBase::allCaps(dname);
-            oss << " / VLEN_" << cap_dname << "))";
+        if (ofs && *ofs && dims._fold.lookup(dname)) {
+            oss << "(" << dname << dims.makeNormStr(*ofs, dname) << ")";
         }
 
-        // Otherise, just find and format arg.
+        // Otherwise, just find and format arg as-is.
         else {
             auto& gdims = _grid->getDims();
             for (size_t i = 0; i < gdims.size(); i++) {
@@ -512,7 +494,7 @@ namespace yask {
     // original args "x+4, y, z-2".
     // This object has numerators; norm object has denominators.
     // Args w/o simple offset are not modified.
-    string GridPoint::makeNormArgStr(const IntTuple& fold,
+    string GridPoint::makeNormArgStr(const Dimensions& dims,
                                      const VarMap* varMap) const {
 
         ostringstream oss;
@@ -521,7 +503,7 @@ namespace yask {
             if (i)
                 oss << ", ";
             auto dname = gd[i]->getName();
-            oss << makeNormArgStr(dname, fold, varMap);
+            oss << makeNormArgStr(dname, dims, varMap);
         }
         return oss.str();
     }

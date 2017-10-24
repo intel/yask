@@ -496,132 +496,6 @@ namespace yask {
                 ceq.visitEqs(&cv);
                 int numResults = _dims._clusterPts.product();
 
-#if 0
-                // Cluster-calculation code.
-                {
-                    
-                    // Function header.
-                    os << endl << " // Calculate " << numResults <<
-                        " result(s) relative to indices " << _dims._stencilDims.makeDimStr() <<
-                        " in a '" << _dims._clusterPts.makeDimValStr(" * ") <<
-                        "'-point cluster containing " << _dims._clusterMults.product() << " '" <<
-                        _dims._fold.makeDimValStr(" * ") << "' vector(s).\n"
-                        " // Indices must be rank-relative.\n"
-                        " // Indices must be normalized, i.e., already divided by VLEN_*.\n"
-                        " // SIMD calculations use " << vv.getNumPoints() <<
-                        " vector block(s) created from " << vv.getNumAlignedVecs() <<
-                        " aligned vector-block(s).\n"
-                        " // There are approximately " << (stats.getNumOps() * numResults) <<
-                        " FP operation(s) per invocation.\n"
-                        " inline void calc_cluster(const Indices& idxs) {\n";
-                    printIndices(os);
-
-                    // C++ vector print assistant.
-                    CppVecPrintHelper* vp = newCppVecPrintHelper(vv, cv);
-            
-                    // Generate the code.
-                    // Visit all expressions to cover the whole cluster.
-                    PrintVisitorBottomUp pcv(os, *vp, _settings);
-                    ceq.visitEqs(&pcv);
-                
-                    // End of function.
-                    os << "} // calc_cluster." << endl;
-                    delete vp;
-                }
-                
-                // Insert shim function.
-                printShim(os, "calc_cluster");
-            
-                // Generate prefetch code for no specific direction and then each
-                // orthogonal direction.
-                for (int diri = 0; diri < _dims._stencilDims.size(); diri++) {
-
-                    // Create a direction object.
-                    // If diri == 0, no direction.
-                    // If diri > 0, add a direction.
-                    IntScalar dir;
-                    if (diri > 0) {
-                        auto& dim = _dims._stencilDims.getDim(diri);
-                        auto& dname = dim.getName();
-
-                        // Magnitude of dimension is based on cluster.
-                        const int* p = _dims._clusterMults.lookup(dname);
-                        int m = p ? *p : 1;
-                        dir.setName(dname);
-                        dir.setVal(m);
-                    }
-
-                    // Function header.
-                    os << endl << " // Prefetch cache line(s) ";
-                    if (dir.getName().length())
-                        os << "for leading edge of stencil advancing by " <<
-                            dir.getVal() << " vector(s) in '+" <<
-                            dir.getName() << "' direction ";
-                    else
-                        os << "for entire stencil ";
-                    os << "relative to indices " << _dims._stencilDims.makeDimStr() <<
-                        " in a '" << _dims._clusterPts.makeDimValStr(" * ") <<
-                        "'-point cluster containing " << _dims._clusterMults.product() << " '" <<
-                        _dims._fold.makeDimValStr(" * ") << "' vector(s).\n"
-                        " // Indices must be rank-relative.\n"
-                        " // Indices must be normalized, i.e., already divided by VLEN_*.\n";
-
-                    ostringstream oss;
-                    oss << "prefetch_cluster";
-                    if (diri > 0)
-                        oss << "_dir_" << diri;
-                    string fname = oss.str();
-                    os << " template<int level> inline void " << fname <<
-                        "(const Indices& idxs) {\n";
-                    printIndices(os);
-
-                    // C++ vector print assistant.
-                    CppVecPrintHelper* vp = newCppVecPrintHelper(vv, cv);
-            
-                    // C++ prefetch code.
-                    vp->printPrefetches(os, dir);
-
-                    // End of function.
-                    os << "} // " << fname << "." << endl;
-
-                    // Insert shim function.
-                    printShim(os, fname, true);
-                    delete(vp);
-
-                } // direction.
-
-                // Sub-block.
-                {
-                    os << endl <<
-                        " // Calculate one sub-block of whole clusters.\n"
-                        " // Indices must be rank-relative.\n"
-                        " // Indices must be normalized, i.e., already divided by VLEN_*.\n"
-                        " virtual void calc_sub_block_of_clusters("
-                        "const ScanIndices& block_idxs) {\n"
-                        "\n"
-                        " ScanIndices sub_block_idxs;\n"
-                        " sub_block_idxs.initFromOuter(block_idxs);\n"
-                        " // Step sizes are based on cluster lengths.\n";
-                    int i = 0;
-                    for (auto& dim : _dims._stencilDims.getDims()) {
-                        auto& dname = dim.getName();
-                        string ucDim = allCaps(dname);
-                        if (dname != _dims._stepDim)
-                            os << " sub_block_idxs.step[" << i << "] = CMULT_" << ucDim << ";\n";
-                        i++;
-                    }
-                    os << " #if !defined(DEBUG) && defined(__INTEL_COMPILER)\n"
-                        " #pragma forceinline recursive\n"
-                        " #endif\n"
-                        " {\n"
-                        "  // Include automatically-generated loop code that calls calc_cluster()"
-                        "  and optionally, the prefetch function(s).\n"
-                        "  #include \"yask_sub_block_loops.hpp\"\n"
-                        " }\n"
-                        "} // calc_sub_block_of_clusters\n";
-                }
-#endif
-                
                 // Loop-calculation code.
                 {
 
@@ -630,13 +504,13 @@ namespace yask {
                     string istart = "start_" + idim;
                     string istop = "stop_" + idim;
                     string istep = "step_" + idim;
-                    os << endl << " // Calculate a series of clusters iterating in '" << idim <<
+                    os << endl << " // Calculate a series of clusters iterating in +'" << idim <<
                         "' direction from " << _dims._stencilDims.makeDimStr() <<
                         " indices in 'idxs' to '" << istop << "'.\n" <<
                         " // Each cluster calculates '" << _dims._clusterPts.makeDimValStr(" * ") <<
                         "' points containing " << _dims._clusterMults.product() << " '" <<
                         _dims._fold.makeDimValStr(" * ") << "' vector(s).\n"
-                        " // Indices must be rank-relative.\n"
+                        " // Indices must be rank-relative (not global).\n"
                         " // Indices must be normalized, i.e., already divided by VLEN_*.\n"
                         " // SIMD calculations use " << vv.getNumPoints() <<
                         " vector block(s) created from " << vv.getNumAlignedVecs() <<
@@ -659,11 +533,11 @@ namespace yask {
                         "#endif\n"
                         " {\n";
                     
-                    // Print invariants.
+                    // Print loop-invariants.
                     CppLoopVarPrintVisitor lvv(os, *vp, _settings);
                     ceq.visitEqs(&lvv);
 
-                    // Print pointers.
+                    // Print pointers and prefetches.
                     vp->printBasePtrs(os);
 
                     // Actual Loop.
@@ -677,7 +551,8 @@ namespace yask {
                     PrintVisitorBottomUp pcv(os, *vp, _settings);
                     ceq.visitEqs(&pcv);
 
-#warning FIXME: re-enable prefetching
+                    // Insert prefetches using vars stored in print helper for next iteration.
+                    vp->printPrefetches(os, true);
 
                     // End of loop.
                     os << " } // '" << idim << "' loop.\n";

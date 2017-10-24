@@ -92,7 +92,11 @@ namespace yask {
                            varPrefix, varType, linePrefix, lineSuffix) { }
 
     protected:
-        map<GridPoint, string> _vecPtrs;  // pointers to grid vecs.
+
+        // Vars for tracking pointers to grid values.
+        map<GridPoint, string> _vecPtrs; // pointers to grid vecs. value: ptr-var name.
+        map<string, int> _ptrOfsLo; // lowest read offset from _vecPtrs in inner dim.
+        map<string, int> _ptrOfsHi; // highest read offset from _vecPtrs in inner dim.
 
         // Element indices.
         string _elemSuffix = "_elem";
@@ -149,7 +153,8 @@ namespace yask {
 
         // Read from a single point to be broadcast to a vector.
         // Return code for read.
-        virtual string readFromScalarPoint(ostream& os, const GridPoint& gp);
+        virtual string readFromScalarPoint(ostream& os, const GridPoint& gp,
+                                           const VarMap* vMap=0);
 
         // Read from multiple points that are not vectorizable.
         // Return var name.
@@ -170,11 +175,15 @@ namespace yask {
         // Make base point (inner-dim index = 0).
         virtual GridPointPtr makeBasePoint(const GridPoint& gp) {
             GridPointPtr bgp = gp.cloneGridPoint();
-            IntScalar idi(getDims()._innerDim, 0);
+            IntScalar idi(getDims()._innerDim, 0); // set inner-dim index to 0.
             bgp->setArgConst(idi);
             return bgp;
         }
-        
+
+        // Print prefetches for each base pointer.
+        // Print only 'ptrVar' if provided.
+        virtual void printPrefetches(ostream& os, bool ahead, string ptrVar = "");
+
         // Print any needed memory reads and/or constructions to 'os'.
         // Return code containing a vector of grid points.
         virtual string readFromPoint(ostream& os, const GridPoint& gp);
@@ -188,12 +197,8 @@ namespace yask {
         // print init of un-normalized indices.
         virtual void printElemIndices(ostream& os);
 
-        // Print body of prefetch function.
-        virtual void printPrefetches(ostream& os, const IntScalar& dir) const;
-
-        // Print code to calculate a pointer.
-        // Return code for value.
-        virtual string printPointPtr(ostream& os, const GridPoint& gp);
+        // Print code to set ptrName to gp.
+        virtual void printPointPtr(ostream& os, const string& ptrName, const GridPoint& gp);
         
         // Access cached values.
         virtual void savePointPtr(const GridPoint& gp, string var) {

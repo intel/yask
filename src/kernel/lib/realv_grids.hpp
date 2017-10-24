@@ -98,9 +98,12 @@ namespace yask {
             // adding a large offset to the t index.  So, t can be negative,
             // but not so much that it would still be negative after adding
             // the offset.  This should not be a practical restriction.
-            t += idx_t(0x1000);
+            t += idx_t(0x10000);
             assert(t >= 0);
-            return t % _domains[Indices::step_posn];
+
+            // Do MOD with unsigned ints--simpler generated code.
+            uidx_t res = uidx_t(t) % uidx_t(_domains[Indices::step_posn]);
+            return idx_t(res);
         }
         
         // Check whether dim exists and is of allowed type.
@@ -224,15 +227,8 @@ namespace yask {
 
         // Read one element.
         // Indices are relative to overall problem domain.
-        inline real_t readElem(const Indices& idxs,
-                                int line) const {
-            const real_t* ep = getElemPtr(idxs);
-            real_t e = *ep;
-#ifdef TRACE_MEM
-            printElem("readElem", idxs, e, line);
-#endif
-            return e;
-        }
+        virtual real_t readElem(const Indices& idxs,
+                                int line) const =0;
 
         // Write one element.
         // Indices are relative to overall problem domain.
@@ -483,7 +479,7 @@ namespace yask {
 #endif
 
             // Get pointer via layout in _data.
-            return &_data(adj_idxs, checkBounds);
+            return _data.getPtr(adj_idxs, checkBounds);
         }
 
         // Non-const version.
@@ -494,6 +490,19 @@ namespace yask {
                 const_cast<const YkElemGrid*>(this)->getElemPtr(idxs, checkBounds);
             return const_cast<real_t*>(p);
         }
+
+        // Read one element.
+        // Indices are relative to overall problem domain.
+        virtual real_t readElem(const Indices& idxs,
+                                int line) const final {
+            const real_t* ep = YkElemGrid::getElemPtr(idxs);
+            real_t e = *ep;
+#ifdef TRACE_MEM
+            printElem("readElem", idxs, e, line);
+#endif
+            return e;
+        }
+
     };                          // YkElemGrid.
     
     // YASK grid of real vectors.
@@ -650,6 +659,18 @@ namespace yask {
             const real_t* p =
                 const_cast<const YkVecGrid*>(this)->getElemPtr(idxs, checkBounds);
             return const_cast<real_t*>(p);
+        }
+
+        // Read one element.
+        // Indices are relative to overall problem domain.
+        virtual real_t readElem(const Indices& idxs,
+                                int line) const final {
+            const real_t* ep = YkVecGrid::getElemPtr(idxs);
+            real_t e = *ep;
+#ifdef TRACE_MEM
+            printElem("readElem", idxs, e, line);
+#endif
+            return e;
         }
 
         // Get a pointer to given vector.

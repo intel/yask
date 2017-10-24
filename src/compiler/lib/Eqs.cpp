@@ -519,10 +519,6 @@ namespace yask {
                 }
             }
             gp->setLoopType(lt);
-#if 0
-            cout << "GridPoint " << gp->makeStr() <<
-                " has loop-access type " << lt << endl;
-#endif
         }
     };
     
@@ -538,12 +534,6 @@ namespace yask {
     // Get the full name of an eq-group.
     // Must be unique.
     string EqGroup::getName() const {
-
-#if 0
-        // Just use base name if zero index.
-        if (!index)
-            return baseName;
-#endif
 
         // Add index to base name.
         ostringstream oss;
