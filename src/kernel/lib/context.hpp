@@ -146,7 +146,7 @@ namespace yask {
 
         // Actual MPI buffers.
         // MPI buffers are tagged by their grid names.
-        std::map<std::string, MPIBufs> mpiBufs;
+        std::map<std::string, MPIData> mpiData;
         
         // Constructor.
         StencilContext(KernelEnvPtr env,

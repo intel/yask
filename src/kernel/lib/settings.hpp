@@ -464,11 +464,11 @@ namespace yask {
         //   x-->
         enum NeighborOffset { rank_prev, rank_self, rank_next, num_offsets };
         
-        // Max number of neighbors in all domain dimensions.
+        // Max number of immediate neighbors in all domain dimensions.
         // Used to describe the n-D space of neighbors.
         // This object is effectively a constant used to convert between
         // n-D and 1-D indices.
-        IdxTuple neighbor_offsets;
+        IdxTuple neighborhood_sizes;
 
         // Neighborhood size includes self.
         // Number of points in n-D space of neighbors.
@@ -479,23 +479,27 @@ namespace yask {
         // MPI_PROC_NULL => no neighbor.
         typedef std::vector<int> Neighbors;
         Neighbors my_neighbors;
+
+        // Manhattan distance to each neighbor.
+        std::vector<int> man_dists;
         
         // Ctor based on pre-set problem dimensions.
         MPIInfo(DimsPtr dims) : _dims(dims) {
 
             // Max neighbors.
-            neighbor_offsets = dims->_domain_dims; // copy dims from domain.
-            neighbor_offsets.setValsSame(num_offsets); // set sizes in each domain dim.
-            neighborhood_size = neighbor_offsets.product(); // neighbors in all dims.
+            neighborhood_sizes = dims->_domain_dims; // copy dims from domain.
+            neighborhood_sizes.setValsSame(num_offsets); // set sizes in each domain dim.
+            neighborhood_size = neighborhood_sizes.product(); // neighbors in all dims.
 
-            // Init array to store all rank numbers.
-            my_neighbors.insert(my_neighbors.begin(), neighborhood_size, MPI_PROC_NULL);
+            // Init arrays.
+            my_neighbors.resize(neighborhood_size, MPI_PROC_NULL);
+            man_dists.resize(neighborhood_size);
         }
 
         // Get a 1D index for a neighbor.
         // Input 'offsets': tuple of NeighborOffset vals.
         virtual idx_t getNeighborIndex(const IdxTuple& offsets) const {
-            idx_t i = neighbor_offsets.layout(offsets); // 1D index.
+            idx_t i = neighborhood_sizes.layout(offsets); // 1D index.
             assert(i >= 0);
             assert(i < neighborhood_size);
             return i;
@@ -504,61 +508,101 @@ namespace yask {
         // Visit all neighbors.
         virtual void visitNeighbors(std::function<void
                                     (const IdxTuple& offsets, // NeighborOffset vals.
-                                     int rank, // MPI rank.
+                                     int rank, // MPI rank; might be MPI_PROC_NULL.
                                      int index // simple counter from 0.
                                      )> visitor);
     };
     typedef std::shared_ptr<MPIInfo> MPIInfoPtr;
 
-    // MPI buffers for *one* grid: a send and receive buffer for each neighbor.
+    // MPI data for one buffer for one neighbor of one grid.
+    struct MPIBuf {
+
+        // Name for trace output.
+        std::string name;
+        
+        // Send or receive buffer.
+        std::shared_ptr<char> _base;
+        real_t* _elems = 0;
+
+        // Range to copy to/from grid.
+        // NB: step index not set properly for grids with step dim.
+        IdxTuple begin_pt, last_pt;
+
+        // Number of points to copy to/from grid in each dim.
+        IdxTuple num_pts;
+
+        // Number of points overall.
+        idx_t get_size() const {
+            if (num_pts.size() == 0)
+                return 0;
+            return num_pts.product();
+        }
+        idx_t get_bytes() const {
+            return get_size() * sizeof(real_t);
+        }
+
+        // Set pointer to storage.
+        // Free old storage.
+        // 'base' should provide get_num_bytes() bytes at offset bytes.
+        void set_storage(std::shared_ptr<char>& base, size_t offset);
+
+        // Release storage.
+        void release_storage() {
+            _base.reset();
+            _elems = 0;
+        }
+
+        // Reset.
+        void clear() {
+            name.clear();
+            begin_pt.clear();
+            last_pt.clear();
+            num_pts.clear();
+            release_storage();
+        }
+        ~MPIBuf() {
+            clear();
+        }
+    };
+
+    // MPI data for both buffers for one neighbor of one grid.
     struct MPIBufs {
 
-        MPIInfoPtr _mpiInfo;
-        
         // Need one buf for send and one for receive for each neighbor.
         enum BufDir { bufSend, bufRecv, nBufDirs };
 
+        MPIBuf bufs[nBufDirs];
+    };
+    
+    // MPI data for one grid.
+    // Contains a send and receive buffer for each neighbor
+    // and some meta-data.
+    struct MPIData {
+
+        MPIInfoPtr _mpiInfo;
+        
         // Buffers for all possible neighbors.
-        typedef std::vector<YkGridPtr> NeighborBufs;
-        NeighborBufs send_bufs, recv_bufs;
+        typedef std::vector<MPIBufs> NeighborBufs;
+        NeighborBufs bufs;
 
-        // Copy starting points.
-        typedef std::vector<IdxTuple> TupleList;
-        TupleList send_begins, recv_begins;
-
-        MPIBufs(MPIInfoPtr mpiInfo) :
+        MPIData(MPIInfoPtr mpiInfo) :
             _mpiInfo(mpiInfo) {
 
-            // Init buffer pointers.
+            // Init vector of buffers.
             auto n = _mpiInfo->neighborhood_size;
-            send_bufs.insert(send_bufs.begin(), n, NULL);
-            recv_bufs.insert(recv_bufs.begin(), n, NULL);
-
-            // Init begin points.
-            IdxTuple emptyTuple;
-            send_begins.insert(send_begins.begin(), n, emptyTuple);
-            recv_begins.insert(recv_begins.begin(), n, emptyTuple);
+            MPIBufs emptyBufs;
+            bufs.resize(n, emptyBufs);
         }
 
         // Apply a function to each neighbor rank.
         // Called visitor function will contain the rank index of the neighbor.
-        virtual void visitNeighbors(std::function<void (const IdxTuple& offsets, // NeighborOffset.
+        virtual void visitNeighbors(std::function<void (const IdxTuple& neighbor_offsets, // NeighborOffset.
                                                         int rank,
                                                         int index, // simple counter from 0.
-                                                        YkGridPtr sendBuf,
-                                                        IdxTuple& sendBegin,
-                                                        YkGridPtr recvBuf,
-                                                        IdxTuple& recvBegin)> visitor);
+                                                        MPIBufs& bufs)> visitor);
             
         // Access a buffer by direction and neighbor offsets.
-        virtual YkGridPtr& getBuf(BufDir bd, const IdxTuple& offsets);
-
-        // Create new buffer in given direction and size.
-        virtual YkGridPtr makeBuf(BufDir bd,
-                                  const IdxTuple& offsets,
-                                  const IdxTuple& sizes,
-                                  const std::string& name,
-                                  StencilContext& context);
+        virtual MPIBuf& getBuf(MPIBufs::BufDir bd, const IdxTuple& neighbor_offsets);
     };
 
     // Application settings to control size and perf of stencil code.

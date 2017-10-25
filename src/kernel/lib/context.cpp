@@ -589,7 +589,7 @@ namespace yask {
         overall_domain_sizes.setValsSame(0);
 
         // Loop over all ranks, including myself.
-        int num_neighbors = 0, num_exchanges = 0;
+        int num_neighbors = 0;
         for (int rn = 0; rn < _env->num_ranks; rn++) {
 
             // Coord offset of rn from me: prev => negative, self => 0, next => positive.
@@ -662,10 +662,14 @@ namespace yask {
             // At this point, rdeltas contains only -1..+1 for each domain dim.
             // Add one to -1..+1 to get 0..2 range for my_neighbors indices.
             IdxTuple roffsets = rdeltas.addElements(1);
+            assert(rdeltas.min() >= -1);
+            assert(rdeltas.max() <= 1);
+            assert(roffsets.min() >= 0);
+            assert(roffsets.max() <= 2);
 
             // Convert these nD offsets into a 1D index.
-            auto rn_ofs = _mpiInfo->neighbor_offsets.layout(roffsets);
-            TRACE_MSG("neighbor_offsets = " << _mpiInfo->neighbor_offsets.makeDimValStr() <<
+            auto rn_ofs = _mpiInfo->neighborhood_sizes.layout(roffsets);
+            TRACE_MSG("neighborhood size = " << _mpiInfo->neighborhood_sizes.makeDimValStr() <<
                       " & roffsets of rank " << rn << " = " << roffsets.makeDimValStr() <<
                       " => " << rn_ofs);
             assert(idx_t(rn_ofs) < _mpiInfo->neighborhood_size);
@@ -677,203 +681,11 @@ namespace yask {
                 " at absolute rank indices " << rcoords.makeDimValStr() <<
                 " (" << rdeltas.makeDimValOffsetStr() << " relative to rank " <<
                 _env->my_rank << ")\n";
-                    
-            // Check against max dist needed.  TODO: determine max dist
-            // automatically from stencil equations; may not be same for all
-            // grids.
-#ifndef MAX_EXCH_DIST
-#define MAX_EXCH_DIST 3
-#endif
 
-            // Is buffer needed?
-            // TODO: calculate and use exch dist for each grid.
-            if (mandist > MAX_EXCH_DIST) {
-                os << " no halo exchanges needed with rank " << rn << '.' << endl;
-                continue;
-            }
-
-            // Determine size of MPI buffers between rn and my rank.
-            // Create send and receive buffers for each grid that has a halo
-            // between rn and me.
-            // TODO: move this code to another method.
-            for (auto gp : gridPtrs) {
-                auto& gname = gp->get_name();
-
-                // Lookup first & last domain indices and halo sizes
-                // for this grid.
-                IdxTuple halo_sizes, first_idx, last_idx;
-                for (auto& dim : _dims->_domain_dims.getDims()) {
-                    auto& dname = dim.getName();
-                    if (gp->is_dim_used(dname)) {
-                        halo_sizes.addDimBack(dname, gp->get_halo_size(dname));
-                        first_idx.addDimBack(dname, gp->get_first_rank_domain_index(dname));
-                        last_idx.addDimBack(dname, gp->get_last_rank_domain_index(dname));
-                    }
-                }
-
-                // Make a buffer in both directions (send & receive).
-                for (int bd = 0; bd < MPIBufs::nBufDirs; bd++) {
-
-                    // Begin/end vars to indicate what part
-                    // of main grid to read from or write to based on
-                    // the current neighbor being processed.
-                    IdxTuple copy_begin, copy_end;
-                    for (auto& dim : halo_sizes.getDims()) {
-                        auto& dname = dim.getName();
-
-                        // Init range to whole rank domain (inside halos).
-                        // These may be changed below depending on the
-                        // neighbor's direction.
-                        copy_begin.addDimBack(dname, first_idx[dname]);
-                        copy_end.addDimBack(dname, last_idx[dname] + 1); // end = last + 1.
-
-                        // Neighbor direction in this dim.
-                        auto neigh_ofs = roffsets[dname];
-                                 
-                        // Region to read from, i.e., data from inside
-                        // this rank's halo to be put into receiver's
-                        // halo.
-                        if (bd == MPIBufs::bufSend) {
-
-                            // Is this neighbor 'before' me in this dim?
-                            if (neigh_ofs == idx_t(MPIInfo::rank_prev)) {
-
-                                // Only read slice as wide as halo from beginning.
-                                copy_end[dname] = first_idx[dname] + halo_sizes[dname];
-                            }
-                            
-                            // Is this neighbor 'after' me in this dim?
-                            else if (neigh_ofs == idx_t(MPIInfo::rank_next)) {
-
-                                // Only read slice as wide as halo before end.
-                                copy_begin[dname] = last_idx[dname] + 1 - halo_sizes[dname];
-                            }
-                            
-                            // Else, this neighbor is in same posn as I am in this dim,
-                            // so we leave the default begin/end settings.
-                        }
-                        
-                        // Region to write to, i.e., into this rank's halo.
-                        else if (bd == MPIBufs::bufRecv) {
-
-                            // Is this neighbor 'before' me in this dim?
-                            if (neigh_ofs == idx_t(MPIInfo::rank_prev)) {
-
-                                // Only read slice as wide as halo before beginning.
-                                copy_begin[dname] = first_idx[dname] - halo_sizes[dname];
-                                copy_end[dname] = first_idx[dname];
-                            }
-                            
-                            // Is this neighbor 'after' me in this dim?
-                            else if (neigh_ofs == idx_t(MPIInfo::rank_next)) {
-                                
-                                // Only read slice as wide as halo after end.
-                                copy_begin[dname] = last_idx[dname] + 1;
-                                copy_end[dname] = last_idx[dname] + 1 + halo_sizes[dname];
-                            }
-                            
-                            // Else, this neighbor is in same posn as I am in this dim,
-                            // so we leave the default begin/end settings.
-                        }
-                    } // domain dims in this grid.
-
-                    // Sizes of buffer in all dims of this grid.
-                    IdxTuple buf_sizes;
-                    bool found_delta = false;
-                    for (auto& dname : gp->get_dim_names()) {
-                        idx_t dsize = 1;
-
-                        // domain dim?
-                        if (halo_sizes.lookup(dname)) {
-                            dsize = copy_end[dname] - copy_begin[dname];
-                            if (rdeltas[dname] != 0)
-                                found_delta = true; // halo exists in this direction.
-
-                            // Adjust for rank offset.
-                            auto ofs = rank_domain_offsets[dname];
-                            copy_begin[dname] += ofs;
-                            copy_end[dname] += ofs;
-                        }
-
-                        // step dim?
-                        // Assume only one time-step to exchange.
-                        // TODO: fix this when MPI + wave-front is enabled.
-                        else if (dname == _dims->_step_dim) {
-                            dsize = 1;
-                            copy_begin.addDimFront(dname, 0); // Placeholder value.
-                            copy_end.addDimFront(dname, dsize);
-                        }
-
-                        // misc?
-                        // Copy over entire range.
-                        else {
-                            dsize = gp->get_alloc_size(dname);
-                            copy_begin.addDimBack(dname, gp->get_first_misc_index(dname));
-                            copy_end.addDimBack(dname, gp->get_last_misc_index(dname) + 1);
-                        }
-
-                        buf_sizes.addDimBack(dname, dsize);
-                    } // all dims in this grid.
-
-                    // At this point, buf_sizes, copy_begin, and copy_end
-                    // should be set for each dim in this grid.
-
-                    // Is buffer needed?
-                    if (!found_delta || buf_sizes.size() == 0 || buf_sizes.product() == 0) {
-                        os << " no halo exchanges needed for grid '" << gname <<
-                            "' with rank " << rn << '.' << endl;
-
-                        // don't need to check both send and recv. TODO:
-                        // change for asymmetrical halos.
-                        break;  
-                    }
-                    else {
-
-                        // Name for buffer.
-                        ostringstream oss;
-                        oss << gname;
-                        if (bd == MPIBufs::bufSend)
-                            oss << "_send_halo_from_" << _env->my_rank << "_to_" << rn;
-                        else if (bd == MPIBufs::bufRecv)
-                            oss << "_get_halo_to_" << _env->my_rank << "_from_" << rn;
-                        string bufname = oss.str();
-
-                        // Make buffer for this grid.
-                        // (But don't allocate storage yet.)
-                        auto gbp = mpiBufs.emplace(gname, _mpiInfo);
-                        auto& gbi = gbp.first; // iterator from pair returned by emplace().
-                        auto& gbv = gbi->second; // value from iterator.
-                        auto bp = gbv.makeBuf(MPIBufs::BufDir(bd),
-                                              roffsets,
-                                              buf_sizes,
-                                              bufname,
-                                              *this);
-
-                        // Save begin points.  (We don't need copy_end
-                        // anymore, because copy_end = copy_begin +
-                        // buf_sizes.)
-                        auto i = _mpiInfo->getNeighborIndex(roffsets);
-                        if (bd == MPIBufs::bufSend) {
-                            gbv.send_begins.at(i) = copy_begin;
-                            TRACE_MSG("send copying starts at " << copy_begin.makeDimValStr());
-                        }
-                        else if (bd == MPIBufs::bufRecv) {
-                            gbv.recv_begins.at(i) = copy_begin;
-                            TRACE_MSG("recv copying starts at " << copy_begin.makeDimValStr());
-                        }
-                        
-                        num_exchanges++;
-                    }
-
-                    // TODO: print this separately for asymm halos.
-                    if (bd == MPIBufs::bufRecv) {
-                        os << " 2 halo-exchange buffers of shape " << buf_sizes.makeDimValStr(" * ") <<
-                            " enabled for grid '" << gname << "' with rank " << rn << '.' << endl;
-                    }
-                } // send, recv.
-            } // grids.
+            // Save manhattan dist.
+            _mpiInfo->man_dists.at(rn_ofs) = mandist;
+            
         } // ranks.
-        os << "Number of halo-exchange buffers enabled on this rank: " << num_exchanges << endl;
 
         // Set offsets in grids.
         update_grids();
@@ -886,6 +698,222 @@ namespace yask {
     {
         ostream& os = get_ostr();
 
+        // Need to determine the size and shape of all MPI buffers.
+        // Remove any old MPI data.
+        mpiData.clear();
+        int num_exchanges = 0;
+        
+        // Visit all neighbors.
+        _mpiInfo->visitNeighbors
+            ([&](const IdxTuple& noffsets, int nrank, int nidx) {
+                if (nrank == MPI_PROC_NULL)
+                    return;
+
+                // Manhattan dist.
+                int mandist = _mpiInfo->man_dists.at(nidx);
+                    
+                // Check against max dist needed.  TODO: determine max dist
+                // automatically from stencil equations; may not be same for all
+                // grids.
+#ifndef MAX_EXCH_DIST
+#define MAX_EXCH_DIST 3
+#endif
+
+                // Check distance.
+                // TODO: calculate and use exch dist for each grid.
+                if (mandist > MAX_EXCH_DIST) {
+                    TRACE_MSG("no halo exchange needed with rank " << nrank <<
+                              " because L1-norm = " << mandist);
+                    return;     // from lambda fn.
+                }
+        
+                // Determine size of MPI buffers between nrank and my rank.
+                // Create send and receive buffers for each grid that has a halo
+                // between rn and me.
+                for (auto gp : gridPtrs) {
+                    if (!gp)
+                        continue;
+                    auto& gname = gp->get_name();
+
+                    // Lookup first & last domain indices and halo sizes
+                    // for this grid.
+                    bool found_delta = false;
+                    IdxTuple halo_sizes, first_idx, last_idx;
+                    for (auto& dim : _dims->_domain_dims.getDims()) {
+                        auto& dname = dim.getName();
+                        if (gp->is_dim_used(dname)) {
+
+                            // Get domain stats for this grid.
+                            halo_sizes.addDimBack(dname, gp->get_halo_size(dname));
+                            first_idx.addDimBack(dname, gp->get_first_rank_domain_index(dname));
+                            last_idx.addDimBack(dname, gp->get_last_rank_domain_index(dname));
+
+                            // Is there a neighbor in this domain direction?
+                            if (noffsets[dname] != MPIInfo::rank_self)
+                                found_delta = true;
+                        }
+                    }
+
+                    // Is buffer needed?
+                    if (!found_delta) {
+                        TRACE_MSG("no halo exchange needed for grid '" << gname <<
+                                  "' with rank " << nrank <<
+                                  " because there are no neighbors in a relevant direction");
+                        continue;
+                    }
+
+                    // Make a buffer in both directions (send & receive).
+                    for (int bd = 0; bd < MPIBufs::nBufDirs; bd++) {
+
+                        // Begin/end vars to indicate what part
+                        // of main grid to read from or write to based on
+                        // the current neighbor being processed.
+                        IdxTuple copy_begin = gp->get_allocs();
+                        IdxTuple copy_end = gp->get_allocs();
+
+                        // Adjust along domain dims in this grid.
+                        for (auto& dim : halo_sizes.getDims()) {
+                            auto& dname = dim.getName();
+
+                            // Init range to whole rank domain (inside halos).
+                            // These may be changed below depending on the
+                            // neighbor's direction.
+                            copy_begin[dname] = first_idx[dname];
+                            copy_end[dname] = last_idx[dname] + 1; // end = last + 1.
+
+                            // Neighbor direction in this dim.
+                            auto neigh_ofs = noffsets[dname];
+                            
+                            // Region to read from, i.e., data from inside
+                            // this rank's halo to be put into receiver's
+                            // halo.
+                            if (bd == MPIBufs::bufSend) {
+
+                                // Is this neighbor 'before' me in this dim?
+                                if (neigh_ofs == idx_t(MPIInfo::rank_prev)) {
+
+                                    // Only read slice as wide as halo from beginning.
+                                    copy_end[dname] = first_idx[dname] + halo_sizes[dname];
+                                }
+                            
+                                // Is this neighbor 'after' me in this dim?
+                                else if (neigh_ofs == idx_t(MPIInfo::rank_next)) {
+                                    
+                                    // Only read slice as wide as halo before end.
+                                    copy_begin[dname] = last_idx[dname] + 1 - halo_sizes[dname];
+                                }
+                            
+                                // Else, this neighbor is in same posn as I am in this dim,
+                                // so we leave the default begin/end settings.
+                            }
+                        
+                            // Region to write to, i.e., into this rank's halo.
+                            else if (bd == MPIBufs::bufRecv) {
+
+                                // Is this neighbor 'before' me in this dim?
+                                if (neigh_ofs == idx_t(MPIInfo::rank_prev)) {
+
+                                    // Only read slice as wide as halo before beginning.
+                                    copy_begin[dname] = first_idx[dname] - halo_sizes[dname];
+                                    copy_end[dname] = first_idx[dname];
+                                }
+                            
+                                // Is this neighbor 'after' me in this dim?
+                                else if (neigh_ofs == idx_t(MPIInfo::rank_next)) {
+                                    
+                                    // Only read slice as wide as halo after end.
+                                    copy_begin[dname] = last_idx[dname] + 1;
+                                    copy_end[dname] = last_idx[dname] + 1 + halo_sizes[dname];
+                                }
+                                
+                                // Else, this neighbor is in same posn as I am in this dim,
+                                // so we leave the default begin/end settings.
+                            }
+                        } // domain dims in this grid.
+
+                        // Sizes of buffer in all dims of this grid.
+                        // Also, set begin/end value for non-domain dims.
+                        IdxTuple buf_sizes = gp->get_allocs();
+                        for (auto& dname : gp->get_dim_names()) {
+                            idx_t dsize = 1;
+
+                            // domain dim?
+                            if (halo_sizes.lookup(dname)) {
+                                dsize = copy_end[dname] - copy_begin[dname];
+                            }
+
+                            // step dim?
+                            // Assume only one time-step to exchange.
+                            // TODO: fix this when MPI + wave-front is enabled.
+                            else if (dname == _dims->_step_dim) {
+
+                                // Use 0..1 as a place-holder range.
+                                // The actual values will be supplied during
+                                // halo exchange.
+                                copy_begin[dname] = 0;
+                                copy_end[dname] = 1;
+                            }
+
+                            // misc?
+                            // Copy over entire range.
+                            // TODO: make dirty flags for misc dims in grids.
+                            else {
+                                dsize = gp->get_alloc_size(dname);
+                                copy_begin[dname] = gp->get_first_misc_index(dname);
+                                copy_end[dname] = gp->get_last_misc_index(dname) + 1;
+                            }
+
+                            // Save computed size.
+                            buf_sizes[dname] = dsize;
+                        } // all dims in this grid.
+
+                        // Does buffer have non-zero size?
+                        if (buf_sizes.size() == 0 || buf_sizes.product() == 0) {
+                            TRACE_MSG("no halo exchange needed for grid '" << gname <<
+                                      "' with rank " << nrank << " because there is no data to exchange");
+                            continue;
+                        }
+
+                        // At this point, buf_sizes, copy_begin, and copy_end
+                        // should be set for each dim in this grid.
+                        // Convert end to last.
+                        IdxTuple copy_last = copy_end.subElements(1);
+
+                        // Unique name for buffer based on grid name, direction, and ranks.
+                        ostringstream oss;
+                        oss << gname;
+                        if (bd == MPIBufs::bufSend)
+                            oss << "_send_halo_from_" << _env->my_rank << "_to_" << nrank;
+                        else if (bd == MPIBufs::bufRecv)
+                            oss << "_recv_halo_at_" << _env->my_rank << "_from_" << nrank;
+                        string bufname = oss.str();
+
+                        // Make MPI data entry for this grid.
+                        auto gbp = mpiData.emplace(gname, _mpiInfo);
+                        auto& gbi = gbp.first; // iterator from pair returned by emplace().
+                        auto& gbv = gbi->second; // value from iterator.
+                        auto& buf = gbv.getBuf(MPIBufs::BufDir(bd), noffsets);
+
+                        // Config buffer for this grid.
+                        // (But don't allocate storage yet.)
+                        buf.begin_pt = copy_begin;
+                        buf.last_pt = copy_last;
+                        buf.num_pts = buf_sizes;
+                        buf.name = bufname;
+                        
+                        TRACE_MSG("configured MPI buffer object '" << buf.name <<
+                                  "' for rank at relative offsets " <<
+                                  noffsets.subElements(1).makeDimValStr() << " with " <<
+                                  buf.num_pts.makeDimValStr(" * ") << " = " << buf.get_size() <<
+                                  " element(s) to be copied from " << buf.begin_pt.makeDimValStr() <<
+                                  " to " << buf.last_pt.makeDimValStr());
+                        num_exchanges++;
+
+                    } // send, recv.
+                } // grids.
+            });   // neighbors.
+        TRACE_MSG("number of halo-exchanges needed on this rank: " << num_exchanges);
+        
         // Base ptrs for all default-alloc'd data.
         // These pointers will be shared by the ones in the grid
         // objects, which will take over ownership when these go
@@ -893,17 +921,15 @@ namespace yask {
         shared_ptr<char> _grid_data_buf;
         shared_ptr<char> _mpi_data_buf;
 
-        // TODO: release old MPI buffers.
-        
-        // Pass 0: count required size, allocate memory.
+        // Pass 0: count required size, dealloc MPI buffers, allocate memory.
         // Pass 1: distribute already-allocated memory.
         for (int pass = 0; pass < 2; pass++) {
             TRACE_MSG("allocData pass " << pass << "; " << gridPtrs.size() <<
-                      " grid(s) and " << mpiBufs.size() << " MPI buffer pair(s)");
+                      " grid(s) and " << mpiData.size() << " MPI data set(s)");
         
             // Determine how many bytes are needed and actually alloc'd.
-            size_t gbytes = 0, agbytes = 0;
-            size_t bbytes = 0, abbytes = 0;
+            size_t gbytes = 0, agbytes = 0; // for grids.
+            size_t bbytes = 0, abbytes = 0; // for MPI buffers.
             int ngrids = 0, nbufs = 0;
         
             // Grids.
@@ -929,51 +955,42 @@ namespace yask {
                                         CACHELINE_BYTES);
                     ngrids++;
                     TRACE_MSG(" grid '" << gname << "' needs " <<
-                              gp->get_num_storage_bytes() << " bytes");
+                              makeByteStr(gp->get_num_storage_bytes()));
                 }
                 
                 // MPI bufs for this grid.
-                if (mpiBufs.count(gname)) {
+                if (mpiData.count(gname)) {
+                    auto& grid_mpi_data = mpiData.at(gname);
 
                     // Visit buffers for each neighbor for this grid.  Don't
                     // check whether grid has allocated storage, because we
                     // want to replace old MPI buffers in case the size has
                     // changed.
-                    mpiBufs.at(gname).visitNeighbors
-                        ([&](const IdxTuple& offsets,
+                    grid_mpi_data.visitNeighbors
+                        ([&](const IdxTuple& roffsets,
                              int rank,
                              int idx,
-                             YkGridPtr sendBuf,
-                             IdxTuple& sendBegin,
-                             YkGridPtr recvBuf,
-                             IdxTuple& recvBegin)
-                         {
-                             // Send.
-                             if (sendBuf) {
-                                 if (pass == 1)
-                                     sendBuf->set_storage(_mpi_data_buf, abbytes);
-                                 auto sbytes = sendBuf->get_num_storage_bytes();
-                                 bbytes += sbytes;
-                                 abbytes += ROUND_UP(sbytes + _data_buf_pad,
-                                                     CACHELINE_BYTES);
-                                 nbufs++;
-                                 TRACE_MSG("  send buf '" << sendBuf->get_name() << "' needs " <<
-                                           sbytes << " bytes");
-                             }
+                             MPIBufs& bufs) {
 
-                             // Recv.
-                             if (recvBuf) {
-                                 if (pass == 1)
-                                     recvBuf->set_storage(_mpi_data_buf, abbytes);
-                                 auto rbytes = recvBuf->get_num_storage_bytes();
-                                 bbytes += rbytes;
-                                 abbytes += ROUND_UP(rbytes + _data_buf_pad,
-                                                     CACHELINE_BYTES);
-                                 nbufs++;
-                                 TRACE_MSG("  recv buf '" << recvBuf->get_name() << "' needs " <<
-                                           rbytes<< " bytes");
-                             }
-                         } );
+                            for (int bd = 0; bd < MPIBufs::nBufDirs; bd++) {
+                                auto& buf = grid_mpi_data.getBuf(MPIBufs::BufDir(bd), roffsets);
+                                if (buf.get_size() == 0)
+                                    continue;
+
+                                if (pass == 0)
+                                    buf.release_storage();
+                                else
+                                    buf.set_storage(_mpi_data_buf, abbytes);
+
+                                auto sbytes = buf.get_bytes();
+                                bbytes += sbytes;
+                                abbytes += ROUND_UP(sbytes + _data_buf_pad,
+                                                    CACHELINE_BYTES);
+                                nbufs++;
+                                TRACE_MSG("  MPI buf '" << buf.name << "' needs " <<
+                                          makeByteStr(sbytes));
+                            }
+                        } );
                 }
             }
 
@@ -1402,18 +1419,18 @@ namespace yask {
         // 1D array to store send request handles.
         // We use a 1D array so we can call MPI_Waitall().
         MPI_Request send_reqs[eg.inputGridPtrs.size() * _mpiInfo->neighborhood_size];
-        int num_send_reqs = 0;
 
         // 2D array for receive request handles.
         // We use a 2D array to simplify individual indexing.
         MPI_Request recv_reqs[eg.inputGridPtrs.size()][_mpiInfo->neighborhood_size];
 
-        // Loop through steps.
-        // This loop has to be outside halo-step loop because we only have one
-        // buffer per step.
+        // Loop through steps.  This loop has to be outside halo-step loop
+        // because we only have one buffer per step. Normally, we only
+        // exchange one step; in that case, it doesn't matter.
         assert(start != stop);
         idx_t step = (start < stop) ? 1 : -1;
         for (idx_t t = start; t != stop; t += step) {
+            int num_send_reqs = 0;
 
             // Sequence of things to do for each grid's neighbors
             // (isend includes packing).
@@ -1439,7 +1456,7 @@ namespace yask {
 
                     // Only need to swap grids that have MPI buffers.
                     auto& gname = gp->get_name();
-                    if (mpiBufs.count(gname) == 0)
+                    if (mpiData.count(gname) == 0)
                         continue;
                     TRACE_MSG(" for grid '" << gname << "'...");
 
@@ -1457,117 +1474,95 @@ namespace yask {
                         toffset.addDimBack(tdim, t);
 
                     // Visit all this rank's neighbors.
-                    mpiBufs.at(gname).visitNeighbors
+                    auto& grid_mpi_data = mpiData.at(gname);
+                    grid_mpi_data.visitNeighbors
                         ([&](const IdxTuple& offsets, // NeighborOffset.
                              int neighbor_rank,
                              int ni, // 1D index.
-                             YkGridPtr sendBuf,
-                             IdxTuple& sendBegin,
-                             YkGridPtr recvBuf,
-                             IdxTuple& recvBegin)
-                         {
-                             // Nothing to do if there are no buffers.
-                             if (sendBuf.get() == 0 ||
-                                 recvBuf.get() == 0)
-                                 return;
-                             TRACE_MSG("  with rank " << neighbor_rank << " at relative position " <<
-                                       offsets.subElements(1).makeDimValOffsetStr() << "...");
+                             MPIBufs& bufs) {
+                            auto& sendBuf = bufs.bufs[MPIBufs::bufSend];
+                            auto& recvBuf = bufs.bufs[MPIBufs::bufRecv];
+                            
+                            // Nothing to do if there are no buffers.
+                            if (sendBuf.get_size() == 0)
+                                return;
+                            assert(recvBuf.get_size() != 0);
+                            assert(sendBuf._elems != 0);
+                            assert(recvBuf._elems != 0);
+                            TRACE_MSG("  with rank " << neighbor_rank << " at relative position " <<
+                                      offsets.subElements(1).makeDimValOffsetStr() << "...");
                          
-                             // Submit async request to receive data from neighbor.
-                             if (hi == halo_irecv) {
-                                 auto nbytes = recvBuf->get_num_storage_bytes();
-                                 void* buf = recvBuf->get_raw_storage_buffer();
-                                 TRACE_MSG("   requesting " << makeByteStr(nbytes) << "...");
-                                 MPI_Irecv(buf, nbytes, MPI_BYTE,
-                                           neighbor_rank, int(gi), _env->comm, &grid_recv_reqs[ni]);
-                             }
+                            // Submit async request to receive data from neighbor.
+                            if (hi == halo_irecv) {
+                                auto nbytes = recvBuf.get_bytes();
+                                void* buf = (void*)recvBuf._elems;
+                                TRACE_MSG("   requesting " << makeByteStr(nbytes) << "...");
+                                MPI_Irecv(buf, nbytes, MPI_BYTE,
+                                          neighbor_rank, int(gi), _env->comm, &grid_recv_reqs[ni]);
+                            }
 
-                             // Pack data, then send to neighbor.
-                             else if (hi == halo_isend) {
-                                 IdxTuple buf_sizes = sendBuf->get_allocs();
-                         
-                                 // Adjust start based on time index.
-                                 IdxTuple start = sendBegin.addElements(toffset, false);
-                                 TRACE_MSG("   packing " << buf_sizes.makeDimValStr(" * ") <<
-                                           " block starting at " <<
-                                           start.makeDimValStr() << "...");
+                            // Pack data into send buffer, then send to neighbor.
+                            else if (hi == halo_isend) {
 
-                                 // Visit every point to copy.
-                                 buf_sizes.visitAllPointsInParallel([&](const IdxTuple& bpt,
-                                                                        size_t idx) {
-                                         Indices bidxs(bpt);
+                                // Adjust indices based on time index.
+                                IdxTuple first = sendBuf.begin_pt.addElements(toffset, false);
+                                IdxTuple last = sendBuf.last_pt.addElements(toffset, false);
+                                TRACE_MSG("   packing " << sendBuf.num_pts.makeDimValStr(" * ") <<
+                                          " points from " << first.makeDimValStr() <<
+                                          " to " << last.makeDimValStr() << "...");
 
-                                         // TODO: optimize this by removing tuple.
-                                         IdxTuple gpt = bpt.addElements(start);
-                                         Indices gidxs(gpt);
-                                     
-                                         // Copy this point from grid to buffer.
-                                         real_t hval = gp->readElem(gidxs, __LINE__);
-                                         sendBuf->writeElem(hval, bidxs, __LINE__);
+                                // Copy data from grid to buffer.
+                                void* buf = (void*)sendBuf._elems;
+                                gp->get_elements_in_slice(buf, first, last);
 
-                                         return true; // keep visiting.
-                                     });
+                                // Send packed buffer to neighbor.
+                                auto nbytes = sendBuf.get_bytes();
+                                TRACE_MSG("   sending " << makeByteStr(nbytes) << "...");
+                                MPI_Isend(buf, nbytes, MPI_BYTE,
+                                          neighbor_rank, int(gi), _env->comm,
+                                          &send_reqs[num_send_reqs++]);
+                            }
 
-                                 // Send packed buffer to neighbor.
-                                 auto nbytes = sendBuf->get_num_storage_bytes();
-                                 const void* buf = (const void*)(sendBuf->get_raw_storage_buffer());
-                                 TRACE_MSG("   sending " << makeByteStr(nbytes) << "...");
-                                 MPI_Isend(buf, nbytes, MPI_BYTE,
-                                           neighbor_rank, int(gi), _env->comm,
-                                           &send_reqs[num_send_reqs++]);
-                             }
+                            // Wait for data from neighbor, then unpack it.
+                            else if (hi == halo_unpack) {
 
-                             // Wait for data from neighbor, then unpack it.
-                             else if (hi == halo_unpack) {
-                                 IdxTuple buf_sizes = recvBuf->get_allocs();
+                                // Wait for data from neighbor before unpacking it.
+                                TRACE_MSG("   waiting for MPI data...");
+                                MPI_Wait(&grid_recv_reqs[ni], MPI_STATUS_IGNORE);
 
-                                 // Wait for data from neighbor before unpacking it.
-                                 TRACE_MSG("   waiting for data...");
-                                 MPI_Wait(&grid_recv_reqs[ni], MPI_STATUS_IGNORE);
+                                // Adjust indices based on time index.
+                                IdxTuple first = recvBuf.begin_pt.addElements(toffset, false);
+                                IdxTuple last = recvBuf.last_pt.addElements(toffset, false);
+                                TRACE_MSG("   got data; unpacking " << recvBuf.num_pts.makeDimValStr(" * ") <<
+                                          " points from " << first.makeDimValStr() <<
+                                          " to " << last.makeDimValStr() << "...");
 
-                                 // Adjust start based on time index.
-                                 IdxTuple start = recvBegin.addElements(toffset, false);
-                                 TRACE_MSG("   got data; unpacking " << buf_sizes.makeDimValStr(" * ") <<
-                                           " block starting at " <<
-                                           start.makeDimValStr() << "...");
-                         
-                                 // Visit every point to copy.
-                                 buf_sizes.visitAllPointsInParallel
-                                     ([&](const IdxTuple& bpt, size_t idx) {
-                                         Indices bidxs(bpt);
+                                // Copy data from buffer to grid.
+                                void* buf = (void*)recvBuf._elems;
+                                idx_t n = gp->set_elements_in_slice(buf, first, last);
+                                assert(n == recvBuf.get_size());
 
-                                         // TODO: optimize this by removing tuple.
-                                         IdxTuple gpt = bpt.addElements(start);
-                                         Indices gidxs(gpt);
-
-                                         // Copy this point from buffer to grid.
-                                         real_t hval = recvBuf->readElem(bidxs, __LINE__);
-                                         gp->writeElem(hval, gidxs, __LINE__);
-
-                                         return true; // keep visiting.
-                                     }); // visit points.
-
-                                 // Mark this grid as up-to-date.
-                                 gp->set_dirty(false, t);
-                                 TRACE_MSG("   grid '" << gp->get_name() <<
-                                           "' marked as clean at step " << t);
-                             }
-                         }); // visit neighbors.
+                                // Mark this grid as up-to-date.
+                                gp->set_dirty(false, t);
+                                TRACE_MSG("   grid '" << gp->get_name() <<
+                                          "' marked as clean at step " << t);
+                            }
+                        }); // visit neighbors.
 
                 } // grids.
             } // exchange sequence.
-        } // steps.
 
-        // Wait for all send requests to complete.
-        // TODO: delay this until next attempted halo exchange.
-        if (num_send_reqs) {
-            TRACE_MSG("exchange_halos: waiting for " << num_send_reqs <<
-                      " MPI send request(s) to complete...");
-            MPI_Waitall(num_send_reqs, send_reqs, MPI_STATUS_IGNORE);
-            TRACE_MSG(" done waiting for MPI send request(s)");
-        }
-        else
-            TRACE_MSG("exchange_halos: no MPI send requests to wait for");
+            // Wait for all send requests to complete.
+            // TODO: delay this until next attempted halo exchange.
+            if (num_send_reqs) {
+                TRACE_MSG("exchange_halos: waiting for " << num_send_reqs <<
+                          " MPI send request(s) to complete...");
+                MPI_Waitall(num_send_reqs, send_reqs, MPI_STATUS_IGNORE);
+                TRACE_MSG(" done waiting for MPI send request(s)");
+            }
+            else
+                TRACE_MSG("exchange_halos: no MPI send requests to wait for");
+        } // steps.
         
         double end_time = getTimeInSecs();
         mpi_time += end_time - start_time;

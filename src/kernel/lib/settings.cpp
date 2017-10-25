@@ -115,72 +115,58 @@ namespace yask {
                                   int index)> visitor) {
 
         for (int i = 0; i < neighborhood_size; i++) {
-            auto offsets = neighbor_offsets.unlayout(i);
+            auto offsets = neighborhood_sizes.unlayout(i);
             int rank = my_neighbors.at(i);
             visitor(offsets, rank, i);
+            assert(i == getNeighborIndex(offsets));
+        }
+    }
+
+    // Set pointer to storage.
+    // Free old storage.
+    // 'base' should provide get_num_bytes() bytes at offset bytes.
+    void MPIBuf::set_storage(std::shared_ptr<char>& base, size_t offset) {
+
+        // Release any old data if last owner.
+        release_storage();
+            
+        // Share ownership of base.
+        // This ensures that last grid to use a shared allocation
+        // will trigger dealloc.
+        _base = base;
+        
+        // Set plain pointer to new data.
+        if (base.get()) {
+            char* p = _base.get() + offset;
+            _elems = (real_t*)p;
+        } else {
+            _elems = 0;
         }
     }
     
     // Apply a function to each neighbor rank.
     // Called visitor function will contain the rank index of the neighbor.
-    void MPIBufs::visitNeighbors(std::function<void
+    void MPIData::visitNeighbors(std::function<void
                                  (const IdxTuple& offsets, // NeighborOffset.
                                   int rank,
                                   int index,
-                                  YkGridPtr sendBuf,
-                                  IdxTuple& sendBegin,
-                                  YkGridPtr recvBuf,
-                                  IdxTuple& recvBegin)> visitor) {
+                                  MPIBufs& bufs)> visitor) {
 
         _mpiInfo->visitNeighbors
             ([&](const IdxTuple& offsets,
                  int rank, int i) {
 
-                if (rank != MPI_PROC_NULL) {
-                    auto sendBuf = send_bufs.at(i);
-                    auto& sendBegin = send_begins.at(i);
-                    auto recvBuf = recv_bufs.at(i);
-                    auto& recvBegin = recv_begins.at(i);
-                    visitor(offsets, rank, i,
-                            sendBuf, sendBegin,
-                            recvBuf, recvBegin);
-                }
+                if (rank != MPI_PROC_NULL)
+                    visitor(offsets, rank, i, bufs[i]);
             });
     }
 
     // Access a buffer by direction and neighbor offsets.
-    YkGridPtr& MPIBufs::getBuf(BufDir bd, const IdxTuple& offsets) {
+    MPIBuf& MPIData::getBuf(MPIBufs::BufDir bd, const IdxTuple& offsets) {
+        assert(int(bd) < int(MPIBufs::nBufDirs));
         auto i = _mpiInfo->getNeighborIndex(offsets); // 1D index.
-        assert(int(bd) < int(nBufDirs));
-        return (bd == bufSend) ? send_bufs.at(i) : recv_bufs.at(i);
-    }
-
-    // Create new buffer in given direction and size.
-    // Does not yet allocate space in it.
-    YkGridPtr MPIBufs::makeBuf(BufDir bd,               // send or recv.
-                               const IdxTuple& offsets, // offset of this neighbor.
-                               const IdxTuple& sizes,   // size in each grid dim.
-                               const std::string& name, // name for this buffer.
-                               StencilContext& context) {
-
-        ostream& os = context.get_ostr();
-        TRACE_MSG0(os, "making MPI buffer '" << name << "' for rank at " <<
-                   offsets.subElements(1).makeDimValStr() << " with size " <<
-                   sizes.makeDimValStr(" * "));
-        auto& gp = getBuf(bd, offsets);
-
-#warning FIXME: MPI buffer should be a generic grid w/o padding, rounding, etc.
-        gp = context.newGrid(name, sizes.getDimNames(), false); // don't make it visible.
-        assert(gp);
-        for (auto& dim : sizes.getDims()) {
-            auto& dname = dim.getName();
-            auto sz = dim.getVal();
-            gp->_set_domain_size(dname, sz);
-        }
-        TRACE_MSG0(os, " buffer '" << name << "' has " <<
-                   gp->get_num_storage_elements() << " element(s)");
-        assert(getBuf(bd, offsets) == gp);
-        return gp;
+        assert(i < _mpiInfo->neighborhood_size);
+        return bufs[i].bufs[bd];
     }
 
     // Add options to set one domain var to a cmd-line parser.
