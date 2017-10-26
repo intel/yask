@@ -76,7 +76,7 @@ while true; do
         echo "     Add <command> prefix before the executable."
         echo "  -ranks <N>"
         echo "     Simplified MPI run (x-dimension partition only)."
-        echo "     'mpirun -n <N> -ppn <N>' is prepended to the exe_prefix command,"
+        echo "     'mpirun -np <N>' is prepended to the exe_prefix command,"
         echo "     and '-nrx' <N> is passed to the executable."
         echo "     If a different MPI command or config is needed, use -exe_prefix <command>"
         echo "     explicitly and -nr* options as needed instead."
@@ -170,7 +170,7 @@ fi
 
 # Simplified MPI in x-dim only.
 if [[ -n "$nranks" ]]; then
-    exe_prefix="mpirun -n $nranks -ppn $nranks $exe_prefix"
+    exe_prefix="mpirun -np $nranks $exe_prefix"
 fi
 
 # Bail on errors past this point.

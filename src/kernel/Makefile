@@ -492,7 +492,7 @@ ifneq ($(findstring icpc,$(notdir $(YK_CXX))),)  # Intel compiler
  MACROS		+=	NO_STORE_INTRINSICS
 
 else # not Intel compiler
- YK_CXXFLAGS	+=	$(GCXX_ISA) -Wno-unknown-pragmas -Wno-unused-variable
+ YK_CXXFLAGS	+=	$(GCXX_ISA) -Wno-unknown-pragmas -Wno-unused-variable -Wno-unused-but-set-variable
 
 endif # compiler.
 
