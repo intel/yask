@@ -709,15 +709,15 @@ clean:
 	rm -fr $(YK_SWIG_DIR)/build $(YK_GEN_DIR)
 	rm -fv $(YK_SWIG_DIR)/*_api_wrap.*
 	rm -fv $(YK_OBJS)
-	find . $(COMM_DIR) -name '*.*.o' | xargs -r rm -v
-	find . $(COMM_DIR) $(BIN_DIR) $(LIB_DIR) -name '*.optrpt' | xargs -r rm -v
+	find . $(COMM_DIR) -name '*.*.o' -print -delete
+	find . $(COMM_DIR) $(BIN_DIR) $(LIB_DIR) -name '*.optrpt' -print -delete
 
 # Remove executables, libs, etc.
 realclean: clean
 	rm -fv $(YK_LIB) $(YK_EXEC) $(YK_API_TEST_EXEC) $(YK_PY_MOD)* $(YK_PY_LIB)
 	rm -fv make-report.*.txt
-	find . -name '*.pyc' | xargs -r rm -v
-	find . -name '*~' | xargs -r rm -v
+	find . -name '*.pyc' -print -delete
+	find . -name '*~' -print -delete
 
 echo-settings:
 	@echo

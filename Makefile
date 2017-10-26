@@ -264,11 +264,13 @@ clean-old:
 # Remove executables, documentation, etc. (not logs).
 realclean: clean-old
 	rm -fv TAGS '*~'
-	find * -name '*~' | xargs -r rm -v
-	find * -name '*.optrpt' | xargs -r rm -v
+	find * -name '*~' -print -delete
+	find * -name '*.optrpt' -print -delete
 	rm -fr docs/api/html
 	rm -fr docs/api/latex
 	rm -rf $(BIN_DIR)/*.exe $(LIB_DIR)/*$(SO_SUFFIX)
+	find yask -mindepth 1 '!' -name __init__.py -print -delete
+	find * -name __pycache__ -print -delete
 	$(YC_MAKE) $@
 	$(YK_MAKE) $@
 
