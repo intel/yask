@@ -26,8 +26,10 @@ IN THE SOFTWARE.
 // This file defines functions, types, and macros needed for the stencil
 // kernel.
 
-#ifndef YASK_HPP
-#define YASK_HPP
+#pragma once
+
+// Choose features
+#define _POSIX_C_SOURCE 200809L
 
 // Include the API first. This helps to ensure that it will stand alone.
 #include "yask_kernel_api.hpp"
@@ -221,4 +223,4 @@ extern yask::Cache cache_model;
 #include "yask_stencil_code.hpp"
 #undef DEFINE_CONTEXT
 
-#endif
+
