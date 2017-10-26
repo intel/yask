@@ -483,7 +483,7 @@ ifneq ($(findstring icpc,$(notdir $(YK_CXX))),)  # Intel compiler
  YK_CXXFLAGS	+=	-no-diag-message-catalog
  YK_CXXFLAGS	+=	-vec-threshold0
  #YK_CXXFLAGS	+=	-qoverride-limits
- #YK_CXXFLAGS	+=	-Fa
+ YK_CXXFLAGS	+=	-Fa
  #YK_CXXFLAGS	+=      -qopt-report=5
  #YK_CXXFLAGS	+=	-qopt-report-phase=VEC,PAR,OPENMP,IPO,LOOP
  YK_CXX_VER_CMD	:=	$(YK_CXX) -V
@@ -795,7 +795,7 @@ code-stats:
 help:
 	@echo "Example performance builds of kernel cmd-line tool:"
 	@echo " $(MAKE) clean; $(MAKE) -j arch=knl stencil=iso3dfd"
-	@echo " $(MAKE) clean; $(MAKE) -j arch=knl stencil=awp"
+	@echo " $(MAKE) clean; $(MAKE) -j arch=knl stencil=awp EXTRA_YK_CXXFLAGS=-qopt-report"
 	@echo " $(MAKE) clean; $(MAKE) -j arch=skx stencil=3axis fold='x=1,y=2,z=4' cluster='x=2'"
 	@echo " $(MAKE) clean; $(MAKE) -j arch=hsw stencil=3axis radius=4"
 	@echo " "
