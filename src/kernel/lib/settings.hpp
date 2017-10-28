@@ -380,7 +380,7 @@ namespace yask {
     struct Dims {
 
         // Algorithm for vec dims in fold layout.
-        VEC_FOLD_LAYOUT _vec_fold_layout;
+        VEC_FOLD_LAYOUT_CLASS _vec_fold_layout;
 
         // Dimensions with 0 values.
         std::string _step_dim;  // usually time, 't'.
@@ -409,9 +409,17 @@ namespace yask {
         // Get linear index into a vector given 'fold_ofs', which are
         // element offsets that must be *exactly* those in _vec_fold_pts.
         idx_t getElemIndexInVec(const Indices& fold_ofs) const {
+            assert(fold_ofs.getNumDims() == NUM_VEC_FOLD_DIMS);
 
-            // Use compiler-generated fold layout.
-            idx_t i = _vec_fold_layout.layout(fold_ofs);
+            // Use compiler-generated fold macro.
+            idx_t i = VEC_FOLD_LAYOUT(fold_ofs);
+            
+#ifdef DEBUG_LAYOUT
+            // Use compiler-generated fold layout class.
+            idx_t j = _vec_fold_layout.layout(fold_ofs);
+            assert(i == j);
+#endif
+            
             return i;
         }
         

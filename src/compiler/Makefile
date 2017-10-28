@@ -180,15 +180,15 @@ clean:
 	rm -fr $(YC_SWIG_DIR)/build $(YC_GEN_DIR)
 	rm -fv $(YC_SWIG_DIR)/*_api_wrap.*
 	rm -fv $(YC_OBJS)
-	find . -name '*.o' -print -delete
-	find . $(BIN_DIR) $(LIB_DIR) -name '*.optrpt' -print -delete
+	- find . -name '*.o' -print -delete
+	- find . $(BIN_DIR) $(LIB_DIR) -name '*.optrpt' -print -delete
 
 # Remove executables, libs, etc.
 realclean: clean
 	rm -fv $(YC_LIB) $(YC_EXEC) $(YC_TEST_EXEC) $(YC_PY_MOD)* $(YC_PY_LIB)
 	rm -fv *api-test*.dot* *api-test*.hpp*
-	find . -name '*.pyc' -print -delete
-	find . -name '*~' -print -delete
+	- find . -name '*.pyc' -print -delete
+	- find . -name '*~' -print -delete
 
 echo-settings:
 	@echo "Build environment for" $(YC_EXEC) on `date`

@@ -125,19 +125,30 @@ namespace yask {
 
         // Layout for folding.
         ostringstream oss;
-        oss << "Layout_";
-        if (nvec) {
-            if (_dims._foldGT1.isFirstInner())
-                for (int i = nvec; i > 0; i--)
-                    oss << i;       // e.g., 321
-            else
-                for (int i = 1; i <= nvec; i++)
-                    oss << i;       // e.g., 123
-        }
+        if (_dims._foldGT1.isFirstInner())
+            for (int i = nvec; i > 0; i--)
+                oss << i;       // e.g., 321
         else
-            oss << "0d";         // no folding; scalar layout
+            for (int i = 1; i <= nvec; i++)
+                oss << i;       // e.g., 123
         string layout = oss.str();
-        os << "#define VEC_FOLD_LAYOUT " << layout << endl;
+        os << "#define VEC_FOLD_LAYOUT_CLASS Layout_";
+        if (nvec)
+            os << layout << endl;
+        else
+            os << "0d\n";         // no folding; scalar layout
+        os << "#define VEC_FOLD_LAYOUT(idxs) ";
+        if (nvec) {
+            os << "LAYOUT_" << layout << "(";
+            for (int i = 0; i < nvec; i++) {
+                if (i) os << ", ";
+                os << "idxs[" << i << "]";
+            }
+            for (int i = 0; i < nvec; i++)
+                os << ", " << _dims._foldGT1[i]; // fold lengths.
+            os << ")\n";
+        } else
+            os << "(0)\n";
 
         os << "#define USING_UNALIGNED_LOADS (" <<
             (_settings._allowUnalignedLoads ? 1 : 0) << ")" << endl;
@@ -200,11 +211,12 @@ namespace yask {
             bool folded = gp->isFoldable();
             string gtype = folded ? "YkVecGrid" : "YkElemGrid";
 
-            // Type-name in kernel is 'GRID_TYPE<LAYOUT, WRAP_1ST_IDX>'.
+            // Type-name in kernel is 'GRID_TYPE<LAYOUT, WRAP_1ST_IDX, VEC_LENGTHS...>'.
             ostringstream oss;
             oss << gtype << "<Layout_";
             int step_posn = 0;
             int inner_posn = 0;
+            vector<int> vlens;
 
             // 1-D or more.
             if (ndims) {
@@ -243,6 +255,13 @@ namespace yask {
                         int other_posn = dn + 1;
                         oss << other_posn;
                     }
+
+                    // Add vector len to list.
+                    if (folded) {
+                        auto* p = _dims._fold.lookup(dname);
+                        int dval = p ? *p : 1;
+                        vlens.push_back(dval);
+                    }
                 }
 
                 // Add step and inner posns at end.
@@ -256,10 +275,18 @@ namespace yask {
             else
                 oss << "0d"; // Trivial scalar layout.
 
+            // Add wrapping flag.
             if (step_posn)
-                oss << ", true /* wrap step index */";
+                oss << ", true";
             else
-                oss << ", false /* no wrap */";
+                oss << ", false";
+
+            // Add vec lens.
+            if (folded) {
+                for (auto i : vlens)
+                    oss << ", " << i;
+            }
+            
             oss << ">";
             typeName = oss.str();
 

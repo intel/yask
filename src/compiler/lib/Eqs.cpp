@@ -415,10 +415,16 @@ namespace yask {
 
         // Check each grid point in expr.
         virtual void visit(GridPoint* gp) {
+            auto* grid = gp->getGrid();
 
+            // Never vectorize scalars.
+            if (grid->get_num_dims() == 0) {
+                gp->setVecType(GridPoint::VEC_NONE);
+                return;
+            }
+            
             // Amount of vectorization allowed primarily depends on number
             // of folded dimensions in the grid accessed at this point.
-            auto* grid = gp->getGrid();
             int grid_nfd = grid->getNumFoldableDims();
             int soln_nfd = _dims._foldGT1.size();
             assert(grid_nfd <= soln_nfd);

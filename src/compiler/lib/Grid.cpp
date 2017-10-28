@@ -135,6 +135,14 @@ namespace yask {
     void Grid::setFolding(const Dimensions& dims) {
 
         _numFoldableDims = 0;
+        
+        // Never fold scalars, even if there is no vectorization.
+        if (get_num_dims() == 0) {
+            _isFoldable = false;
+            return;
+        }
+
+        // Find the number of folded dims used in this grid.
         for (auto fdim : dims._foldGT1.getDims()) {
             auto& fdname = fdim.getName();
 
@@ -152,8 +160,14 @@ namespace yask {
         }
 
         // Can fold if ALL fold dims >1 are used in this grid.
+
+#if 1
         // NB: this will always be true if there is no vectorization.
+        // We do this because the compiler expects stencils to be vectorizable.
         _isFoldable = _numFoldableDims == dims._foldGT1.size();
+#else
+        _isFoldable = (_numFoldableDims > 0 ) && (_numFoldableDims == dims._foldGT1.size());
+#endif
     }
     
     // Update halos based on each value in 'offsets' in some

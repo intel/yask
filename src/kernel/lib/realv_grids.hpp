@@ -508,7 +508,9 @@ namespace yask {
     // YASK grid of real vectors.
     // Used for grids that contain all the folded dims.
     // If '_wrap_1st_idx', then index to 1st dim will wrap around.
-    template <typename LayoutFn, bool _wrap_1st_idx>
+    // The '_templ_vec_lens' arguments must contain a list of vector lengths
+    // corresponding to each dim in the grid.
+    template <typename LayoutFn, bool _wrap_1st_idx, idx_t... _templ_vec_lens>
     class YkVecGrid : public YkGridBase {
 
     protected:
@@ -533,6 +535,11 @@ namespace yask {
             _vec_fold_posns(idx_t(0), int(dimNames.size())) {
             _has_step_dim = _wrap_1st_idx;
 
+            // Template vec lengths.
+            const int nvls = sizeof...(_templ_vec_lens);
+            const idx_t vls[nvls] { _templ_vec_lens... };
+            assert(nvls == dimNames.size());
+            
             // Init vec sizes.
             // For each dim in the grid, use the number of vector
             // fold points or 1 if not set.
@@ -542,9 +549,12 @@ namespace yask {
                 idx_t dval = p ? *p : 1;
                 _vec_lens[i] = dval;
                 _vec_allocs[i] = dval;
+
+                // Compare to template parameter pack.
+                assert(dval == vls[i]);
             }
 
-            // Init grid positions of fold dims.
+            // Init grid-dim positions of fold dims.
             assert(dims->_vec_fold_pts.getNumDims() == NUM_VEC_FOLD_DIMS);
             for (int i = 0; i < NUM_VEC_FOLD_DIMS; i++) {
                 auto& fdim = dims->_vec_fold_pts.getDimName(i);
@@ -594,32 +604,52 @@ namespace yask {
             _data.get_ostr() << get_name() << "." << "YkVecGrid::getElemPtr(" <<
                 idxs.makeValStr(get_num_dims()) << ")";
 #endif
+            // Use template vec lengths instead of run-time values for
+            // efficiency.
+            static constexpr int nvls = sizeof...(_templ_vec_lens);
+            static constexpr uidx_t vls[nvls] { _templ_vec_lens... };
+            Indices vec_idxs(nvls), elem_ofs(nvls);
+#ifdef DEBUG_LAYOUT
+            const auto nd = _data.get_num_dims();
+            assert(nd == nvls);
+#endif
 
-            const auto n = _data.get_num_dims();
-            Indices vec_idxs(n), elem_ofs(n);
+            // Special handling for step index.
+            auto sp = Indices::step_posn;
+            if (_wrap_1st_idx) {
+                vec_idxs[sp] = wrap_step(idxs[sp]);
+                elem_ofs[sp] = 0;
+            }
+
+            // Try to force compiler to use shifts instead of DIV and MOD
+            // when the vec-lengths are 2^n.
 #pragma unroll
-            for (int i = 0; i < n; i++) {
-
-                // Special handling for step index.
-                if (_wrap_1st_idx && i == Indices::step_posn) {
-                    vec_idxs[i] = wrap_step(idxs[i]);
-                    elem_ofs[i] = 0;
-                }
-
-                else {
+#pragma novector
+            // All other indices.
+            for (int i = 0; i < nvls; i++) {
+                if (!(_wrap_1st_idx && i == sp)) {
 
                     // Adjust for offset and padding.
-                    // This gives a 0-based local element index.
-                    idx_t adj_idx = idxs[i] - _offsets[i] + _pads[i];
+                    // This gives a positive 0-based local element index.
+                    idx_t ai = idxs[i] - _offsets[i] + _pads[i];
+                    assert(ai >= 0);
+                    uidx_t adj_idx = uidx_t(ai);
                     
                     // Get vector index and offset.
-                    vec_idxs[i] = adj_idx / _vec_lens[i];
-                    elem_ofs[i] = adj_idx % _vec_lens[i];
+                    // Use unsigned DIV and MOD to avoid compiler having to
+                    // emit code for preserving sign when using shifts.
+                    vec_idxs[i] = idx_t(adj_idx / vls[i]);
+                    elem_ofs[i] = idx_t(adj_idx % vls[i]);
+                    assert(vec_idxs[i] == adj_idx / _vec_lens[i]);
+                    assert(elem_ofs[i] == adj_idx % _vec_lens[i]);
                 }
             }
 
-            // Get only the vectorized fold offsets.
-            Indices fold_ofs(n);
+            // Get only the vectorized fold offsets, i.e., those
+            // with vec-lengths > 1.
+            // And, they need to be in the original folding order,
+            // which might be different than the grid-dim order.
+            Indices fold_ofs(NUM_VEC_FOLD_DIMS);
 #pragma unroll
             for (int i = 0; i < NUM_VEC_FOLD_DIMS; i++) {
                 int j = _vec_fold_posns[i];
@@ -633,7 +663,7 @@ namespace yask {
             // Compare to more explicit offset extraction.
             IdxTuple eofs = get_allocs(); // get dims for this grid.
             elem_ofs.setTupleVals(eofs);  // set vals from elem_ofs.
-            auto i2 = getElemIndexInVec(eofs);
+            auto i2 = _dims->getElemIndexInVec(eofs);
             assert(i == i2);
 #endif
 
@@ -685,19 +715,27 @@ namespace yask {
                 idxs.makeValStr(get_num_dims()) << ")";
 #endif
 
-            const auto n = _data.get_num_dims();
-            Indices adj_idxs(n);
+            static constexpr int nvls = sizeof...(_templ_vec_lens);
+#ifdef DEBUG_LAYOUT
+            const auto nd = _data.get_num_dims();
+            assert(nd == nvls);
+#endif
+            Indices adj_idxs(nvls);
+
+            // Special handling for 1st index.
+            auto sp = Indices::step_posn;
+            if (_wrap_1st_idx)
+                adj_idxs[sp] = wrap_step(idxs[sp]);
+
 #pragma unroll
-            for (int i = 0; i < n; i++) {
+            // All other indices.
+            for (int i = 0; i < nvls; i++) {
+                if (!(_wrap_1st_idx && i == sp)) {
 
-                // Special handling for 1st index.
-                if (_wrap_1st_idx && i == Indices::step_posn)
-                    adj_idxs[i] = wrap_step(idxs[i]);
-
-                // Adjust for padding.
-                // This gives a 0-based local *vector* index.
-                else
+                    // Adjust for padding.
+                    // This gives a 0-based local *vector* index.
                     adj_idxs[i] = idxs[i] + _vec_pads[i];
+                }
             }
 
 #ifdef TRACE_MEM

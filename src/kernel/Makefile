@@ -226,13 +226,18 @@ ifneq ($(findstring INTRIN512,$(MACROS)),)  # 512 bits.
  # 8 DP floats.
  fold_8byte	?=	x=4,y=2
 
-else  # not 512 bits (assume 256).
+else ifneq ($(findstring INTRIN256,$(MACROS)),)  # 256 bits.
 
  # 8 SP floats.
  fold_4byte	?=	x=8
 
  # 4 DP floats.
  fold_8byte	?=	x=4
+
+else
+
+ fold_4byte	?=	x=1
+ fold_8byte	?=	x=1
 
 endif # not 512 bits.
 
@@ -709,15 +714,15 @@ clean:
 	rm -fr $(YK_SWIG_DIR)/build $(YK_GEN_DIR)
 	rm -fv $(YK_SWIG_DIR)/*_api_wrap.*
 	rm -fv $(YK_OBJS)
-	find . $(COMM_DIR) -name '*.*.o' -print -delete
-	find . $(COMM_DIR) $(BIN_DIR) $(LIB_DIR) -name '*.optrpt' -print -delete
+	- find . $(COMM_DIR) -name '*.*.o' -print -delete
+	- find . $(COMM_DIR) $(BIN_DIR) $(LIB_DIR) -name '*.optrpt' -print -delete
 
 # Remove executables, libs, etc.
 realclean: clean
 	rm -fv $(YK_LIB) $(YK_EXEC) $(YK_API_TEST_EXEC) $(YK_PY_MOD)* $(YK_PY_LIB)
 	rm -fv make-report.*.txt
-	find . -name '*.pyc' -print -delete
-	find . -name '*~' -print -delete
+	- find . -name '*.pyc' -print -delete
+	- find . -name '*~' -print -delete
 
 echo-settings:
 	@echo
