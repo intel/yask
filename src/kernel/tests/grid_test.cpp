@@ -86,7 +86,7 @@ int main(int argc, char** argv) {
         GridDimNames gdims = {"x", "y", "z"};
         string name = "test grid";
         YkGridPtr g3 = make_shared<YkElemGrid<Layout_321, false>>(dims, name, gdims, &osp);
-        YkGridPtr g3f = make_shared<YkVecGrid<Layout_123, false>>(dims, name, gdims, &osp);
+        YkGridPtr g3f = make_shared<YkVecGrid<Layout_123, false, VLEN_X, VLEN_Y, VLEN_Z>>(dims, name, gdims, &osp);
         int i = 0;
         int min_pad = 3;
         for (auto dname : gdims) {

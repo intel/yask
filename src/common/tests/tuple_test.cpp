@@ -34,12 +34,13 @@ using namespace yask;
 
 typedef Tuple<int> IntTuple;
 
-int main(int argc, char** argv) {
 
+void ttest(bool firstInner) {
+    
     ostream& os = cout;
     
     IntTuple t1;
-    t1.setFirstInner(true);
+    t1.setFirstInner(firstInner);
     t1.addDimBack("x", 3);
     t1.addDimBack("y", 4);
     assert(t1.getNumDims() == 2);
@@ -83,7 +84,9 @@ int main(int argc, char** argv) {
 
             IntTuple ofs2 = t1.unlayout(i);
             assert(ofs == ofs2);
-            assert(i == j);
+
+            if (firstInner)
+                assert(i == j);
         }
     }
 
@@ -95,8 +98,10 @@ int main(int argc, char** argv) {
             auto i = t1.layout(ofs);
             os << " offset at " << ofs.makeDimValStr() << " = " << i << endl;
 
-            assert(i == j);
-            assert(i == k);
+            if (firstInner) {
+                assert(i == j);
+                assert(i == k);
+            }
             j++;
             return true;
         });
@@ -114,11 +119,35 @@ int main(int argc, char** argv) {
                 j++;
             }
 
-            assert(i == k);
+            if (firstInner)
+                assert(i == k);
             return true;
         });
     assert(int(j) == t1.product());
-    
-    os << "End of YASK tuple test.\n";
+
+    os << "3-d parallel visit test...\n";
+    j = 0;
+    t1.addDimBack("z", 3);
+    t1.visitAllPointsInParallel
+        ([&](const IntTuple& ofs, size_t k) {
+
+            auto i = t1.layout(ofs);
+#pragma omp critical
+            {
+                os << " offset at " << ofs.makeDimValStr() << " = " << i << endl;
+                j++;
+            }
+
+            if (firstInner)
+                assert(i == k);
+            return true;
+        });
+    assert(int(j) == t1.product());
+}
+
+int main(int argc, char** argv) {
+    ttest(true);
+    ttest(false);
+    cout << "End of YASK tuple test.\n";
     return 0;
 }

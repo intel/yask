@@ -813,7 +813,7 @@ namespace yask {
             if (!_q.size())
                 visitor(tp, 0);
             
-            // Call recursive version.
+            // Call order-independent version.
             else if (_firstInner)
                 _visitAllPointsInPar(visitor, size()-1, -1, tp);
             else
@@ -855,6 +855,8 @@ namespace yask {
             else {
                 for (T i = 0; i < dsize; i++) {
                     tp.setVal(curDimNum, i);
+
+                    // Recurse.
                     bool ok = _visitAllPoints(visitor, curDimNum + step, step, tp);
                         
                     // Leave if visitor returns false.
@@ -865,23 +867,44 @@ namespace yask {
             return true;
         }
 
-        // Handle recursion for public visitAllPointsInParallel(visitor).
+        // First call from public visitAllPointsInParallel(visitor).
         inline bool
         _visitAllPointsInPar(std::function<bool (const Tuple&, size_t idx)> visitor,
                              int curDimNum, int step, Tuple& tp) const {
 
 #ifdef _OPENMP
+            auto nd = getNumDims();
             auto& sc = _q.at(curDimNum);
             auto& dsize = sc.getVal();
-            bool first_dim = curDimNum - step < 0 || curDimNum - step >= size();
-            bool last_dim = curDimNum + step < 0 || curDimNum + step >= size();
 
-            // If first dim, iterate in parallel w/copies of 'tp'.
-            // TODO: collapse parallelism across all but last dim.
-            // TODO: provide parallelism for 1-D grids.
-            if (first_dim && !last_dim) {
+            // If more than 2 dims, collapse across 1st 2.
+            // TODO: generalize this to collapse over outer n-1 dims.
+            if (nd > 2) {
 
+                auto& sc2 = _q.at(curDimNum + step);
+                auto& dsize2 = sc2.getVal();
+                
+                // Non-reference copy of 'tp' so we can use it in
+                // 'firstprivate()'.
                 Tuple tp2(tp);
+
+#pragma omp parallel for firstprivate(tp2) collapse(2)
+                for (T i = 0; i < dsize; i++)
+                    for (T j = 0; j < dsize2; j++) {
+                        tp2.setVal(curDimNum, i);
+                        tp2.setVal(curDimNum + step, j);
+                        _visitAllPoints(visitor, curDimNum + 2*step, step, tp2);
+                    }
+                return true;
+            }
+            
+            // If 2 dims, parallelize across outer.
+            else if (nd > 1) {
+
+                // Non-reference copy of 'tp' so we can use it in
+                // 'firstprivate()'.
+                Tuple tp2(tp);
+
 #pragma omp parallel for firstprivate(tp2)
                 for (T i = 0; i < dsize; i++) {
                     tp2.setVal(curDimNum, i);
@@ -890,8 +913,10 @@ namespace yask {
                 return true;
             }
 
+            // TODO: provide parallelism for 1-D grids.
             else
 #endif
+                // Call recursive version to handle all dims.
                 return _visitAllPoints(visitor, curDimNum, step, tp);
         }
     };
