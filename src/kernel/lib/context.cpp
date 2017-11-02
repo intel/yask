@@ -731,9 +731,11 @@ namespace yask {
                         vlen_mults = false;
                     }
 
-                    // Is domain size at least as large as halo?
-                    if (rnsz < max_halos[di]) {
-                        cerr << "Error: rank-domain size of " << rnsz << " in rank " << rn <<
+                    // Is domain size at least as large as halo in direction
+                    // with multiple ranks?
+                    if (_opts->_num_ranks[dname] > 1 && rnsz < max_halos[di]) {
+                        cerr << "Error: rank-domain size of " << rnsz << " in '" <<
+                            dname << "' in rank " << rn <<
                             " is less than largest halo size of " << max_halos[di] << endl;
                         exit_yask(1);
                     }

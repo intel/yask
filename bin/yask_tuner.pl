@@ -722,7 +722,7 @@ sub calcSize($$$) {
 
     my $makeCmd = getMakeCmd('', 'EXTRA_CXXFLAGS=-O1');
     my $runCmd = getRunCmd();
-    $runCmd .= ' -t 0 -d 1';
+    $runCmd .= ' -t 0 -d 32';
     my $cmd = "$makeCmd 2>&1 && $runCmd";
 
     my $timeDim = 0;
