@@ -58,15 +58,6 @@ namespace yask {
     SET_SOLN_API(set_num_ranks, _opts->_num_ranks[dim] = n, false, true, false)
 #undef SET_SOLN_API
     
-    string StencilContext::get_domain_dim_name(int n) const {
-        auto* p = _dims->_domain_dims.lookup(n);
-        if (!p) {
-            cerr << "Error: get_domain_dim_name(): bad index '" << n << "'\n";
-            exit_yask(1);
-        }
-        return _dims->_domain_dims.getDimName(n);
-    }
-
     void StencilContext::share_grid_storage(yk_solution_ptr source) {
         auto sp = dynamic_pointer_cast<StencilContext>(source);
         assert(sp);

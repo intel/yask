@@ -168,14 +168,6 @@ namespace yask {
         virtual int
         get_num_domain_dims() const =0;
 
-        /// Get the name of the specified domain dimension.
-        /**
-            @returns String containing name of domain dimension. 
-        */
-        virtual std::string
-        get_domain_dim_name(int n /**< [in] Index of dimension between zero (0)
-                                     and get_num_domain_dims()-1. */ ) const =0;
-
         /// Get all the domain dimension names.
         /**
            @returns List of all domain-dimension names.
@@ -640,17 +632,6 @@ namespace yask {
            or yk_solution::new_grid().
         */
         virtual int get_num_dims() const =0;
-
-        /// Get the name of the specified dimension in this grid.
-        /**
-           This may include domain, step, and/or miscellaneous dimensions.
-           @note Domain dimensions are not necessarily in the same order as
-           those returned via yk_solution::get_domain_dim_name().
-           @returns String containing name of dimension created via new_grid().
-        */
-        virtual const std::string&
-        get_dim_name(int n /**< [in] Index of dimension between zero (0)
-                              and get_num_dims()-1. */ ) const =0;
 
         /// Get all the dimensions in this grid.
         /**

@@ -389,11 +389,8 @@ namespace yask {
             return _dims->_step_dim;
         }
         virtual int get_num_domain_dims() const {
-
-            // TODO: remove hard-coded assumptions.
-            return 3;
+            return _dims->_domain_dims.getNumDims();
         }
-        virtual std::string get_domain_dim_name(int n) const;
         virtual std::vector<std::string> get_domain_dim_names() const {
             std::vector<std::string> dims;
             for (auto& dim : _dims->_domain_dims.getDims())

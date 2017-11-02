@@ -191,6 +191,13 @@ namespace yask {
                                  bool die_on_failure = false,
                                  const std::string& die_msg = "") const;
 
+        // Get dim name by posn.
+        virtual const std::string& get_dim_name(int n) const {
+            assert(n >= 0);
+            assert(n < get_num_dims());
+            return _ggb->get_dim_name(n);
+        }
+
         // Get grid dims with allocations in number of reals.
         virtual IdxTuple get_allocs() const {
             IdxTuple allocs = _ggb->get_dims();
@@ -276,11 +283,6 @@ namespace yask {
         }
         virtual int get_num_dims() const {
             return _ggb->get_num_dims();
-        }
-        virtual const std::string& get_dim_name(int n) const {
-            assert(n >= 0);
-            assert(n < get_num_dims());
-            return _ggb->get_dim_name(n);
         }
         virtual GridDimNames get_dim_names() const {
             std::vector<std::string> dims;
