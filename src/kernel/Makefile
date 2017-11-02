@@ -66,7 +66,7 @@ else ifeq ($(stencil),iso3dfd)
   def_block_args		=	-bx 160 -by 256 -bz 96
   pfd_l1			=	1
   pfd_l2			=	0
- else ifeq ($(arch),hsw)
+ else ifneq ($(filter $(arch),hsw bdw),)
   fold_4byte			=	x=8
   def_thread_divisor		=	2
   def_block_threads		=	1
@@ -74,7 +74,7 @@ else ifeq ($(stencil),iso3dfd)
   cluster			=	z=2
   pfd_l1			=	0
   pfd_l2			=	0
- else ifeq ($(arch),skx)
+ else ifneq ($(filter $(arch),skx skl),)
   fold_4byte			=	x=4,y=4
   def_thread_divisor		=	1
   def_block_threads		=	2
@@ -99,7 +99,7 @@ else ifneq ($(findstring awp,$(stencil)),)
   def_block_args		=	-b 48 -bx 112
   pfd_l1			=	1
   pfd_l2			=	0
- else ifeq ($(arch),hsw)
+ else ifneq ($(filter $(arch),hsw bdw),)
   omp_block_schedule		=	dynamic,1
   fold_4byte			=	x=8
   cluster			=	y=2
@@ -108,7 +108,7 @@ else ifneq ($(findstring awp,$(stencil)),)
   more_def_args			+=	-sbx 32 -sby 2 -sbz 32
   pfd_l1			=	1
   pfd_l2			=	2
- else ifeq ($(arch),skx)
+ else ifneq ($(filter $(arch),skx skl),)
   fold_4byte			=	x=2,y=8
   def_block_args		=	-b 32 -bx 96
   pfd_l1			=	1
@@ -160,14 +160,14 @@ else ifeq ($(arch),knl)
  pfd_l1		?=	1
  pfd_l2		?=	0
 
-else ifeq ($(arch),skx)
+else ifneq ($(filter $(arch),skx skl),)
 
  ISA		?=	-xCORE-AVX512
  GCXX_ISA	?=	-march=knl -mno-avx512er -mno-avx512pf
  MACROS		+=	USE_INTRIN512
  YC_TARGET  	?=	avx512
 
-else ifeq ($(arch),hsw)
+else ifneq ($(filter $(arch),hsw bdw),)
 
  ISA		?=	-xCORE-AVX2
  GCXX_ISA	?=	-march=haswell
@@ -196,7 +196,7 @@ else ifeq ($(arch),intel64)
 
 else
 
-$(error Architecture not recognized; use arch=knl, knc, skx, hsw, ivb, snb, or intel64 (no explicit vectorization))
+$(error Architecture not recognized; use arch=knl, knc, skl, hsw, bdw, ivb, snb, or intel64 (no explicit vectorization))
 
 endif # arch-specific.
 
@@ -369,7 +369,7 @@ MAKE_REPORT_FILE:=	make-report.$(YK_TAG).txt
 
 # Common source.
 COMM_DIR	:=	../common
-COMM_SRC_NAMES	:=	output tuple
+COMM_SRC_NAMES	:=	output
 COMM_SRC_BASES	:=	$(addprefix $(COMM_DIR)/,$(COMM_SRC_NAMES))
 
 # Kernel source files and dirs.
@@ -801,12 +801,12 @@ help:
 	@echo "Example performance builds of kernel cmd-line tool:"
 	@echo " $(MAKE) clean; $(MAKE) -j arch=knl stencil=iso3dfd"
 	@echo " $(MAKE) clean; $(MAKE) -j arch=knl stencil=awp EXTRA_YK_CXXFLAGS=-qopt-report"
-	@echo " $(MAKE) clean; $(MAKE) -j arch=skx stencil=3axis fold='x=1,y=2,z=4' cluster='x=2'"
+	@echo " $(MAKE) clean; $(MAKE) -j arch=skl stencil=3axis fold='x=1,y=2,z=4' cluster='x=2'"
 	@echo " $(MAKE) clean; $(MAKE) -j arch=hsw stencil=3axis radius=4"
 	@echo " "
 	@echo "Example performance builds of kernel API for C++ and Python apps:"
 	@echo " $(MAKE) clean; $(MAKE) -j arch=knl stencil=iso3dfd yk-api"
-	@echo " $(MAKE) clean; $(MAKE) -j arch=skx stencil=awp yk-api"
+	@echo " $(MAKE) clean; $(MAKE) -j arch=skl stencil=awp yk-api"
 	@echo " "
 	@echo "Example debug builds of kernel cmd-line tool:"
 	@echo " $(MAKE) clean; $(MAKE) -j stencil=iso3dfd mpi=0 OMPFLAGS='-qopenmp-stubs' YK_CXXOPT='-O0' EXTRA_MACROS='DEBUG'"

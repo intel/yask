@@ -74,7 +74,8 @@ YC_MK_GEN_DIR	:=	mkdir -p -v $(YC_GEN_DIR)
 
 # Compiler and default flags.
 YC_CXX    	?=	g++  # usually faster than icpc for building the compiler.
-YC_CXXFLAGS 	:=	-g -std=c++11 -Wall -O2
+YC_CXXOPT	:= 	-O2
+YC_CXXFLAGS 	:=	-g -std=c++11 -Wall $(YC_CXXOPT)
 YC_CXXFLAGS	+=	$(addprefix -I,$(YC_INC_DIRS) $(YC_GEN_DIR) $(YC_STENCIL_DIR))
 
 # Add user-defined flags.

@@ -109,6 +109,7 @@ namespace yask {
     }
 
     // Apply a function to each neighbor rank.
+    // Does NOT visit self.
     void MPIInfo::visitNeighbors(std::function<void
                                  (const IdxTuple& offsets, // NeighborOffset vals.
                                   int rank, // MPI rank.
@@ -117,8 +118,10 @@ namespace yask {
         for (int i = 0; i < neighborhood_size; i++) {
             auto offsets = neighborhood_sizes.unlayout(i);
             int rank = my_neighbors.at(i);
-            visitor(offsets, rank, i);
             assert(i == getNeighborIndex(offsets));
+
+            if (i != my_neighbor_index)
+                visitor(offsets, rank, i);
         }
     }
 

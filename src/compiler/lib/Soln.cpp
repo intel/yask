@@ -131,7 +131,7 @@ namespace yask {
             printer = new YASKKncPrinter(*this, _eqGroups, _clusterEqGroups, _dims);
         else if (format_type == "avx" || format_type == "avx2")
             printer = new YASKAvx256Printer(*this, _eqGroups, _clusterEqGroups, _dims);
-        else if (format_type == "avx512")
+        else if (format_type == "avx512" || format_type == "avx512f")
             printer = new YASKAvx512Printer(*this, _eqGroups, _clusterEqGroups, _dims);
         else if (format_type == "dot")
             printer = new DOTPrinter(*this, _clusterEqGroups, false);

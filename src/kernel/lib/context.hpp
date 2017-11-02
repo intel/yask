@@ -142,7 +142,8 @@ namespace yask {
         idx_t rank_nbytes=0, tot_nbytes=0;
         
         // MPI settings.
-        double mpi_time=0.0;          // time spent doing MPI.
+        double mpi_time = 0.0;          // time spent doing MPI.
+        bool allow_vec_exchange = true; // allow vectorized halo exchange.
 
         // Actual MPI buffers.
         // MPI buffers are tagged by their grid names.

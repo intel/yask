@@ -101,9 +101,8 @@ namespace yask {
             t += idx_t(0x10000);
             assert(t >= 0);
 
-            // Do MOD with unsigned ints--simpler generated code.
-            uidx_t res = uidx_t(t) % uidx_t(_domains[Indices::step_posn]);
-            return idx_t(res);
+            idx_t res = t % _domains[Indices::step_posn];
+            return res;
         }
         
         // Check whether dim exists and is of allowed type.
@@ -152,6 +151,14 @@ namespace yask {
         // Resize or fail if already allocated.
         virtual void resize();
 
+        // Set dirty flags in range.
+        void set_dirty_in_slice(const Indices& first_indices,
+                                const Indices& last_indices);
+
+        // Make tuple needed for slicing.
+        IdxTuple get_slice_range(const Indices& first_indices,
+                                 const Indices& last_indices) const;
+        
     public:
         YkGridBase(GenericGridBase* ggb, size_t ndims, DimsPtr dims) :
             _ggb(ggb), _dims(dims) {
@@ -208,9 +215,11 @@ namespace yask {
 
         // Make sure indices are in range.
         // Optionally fix them to be in range and return in 'fixed_indices'.
+        // If 'normalize', make rank-relative, divide by vlen and return in 'fixed_indices'.
         virtual bool checkIndices(const Indices& indices,
                                   const std::string& fn,
                                   bool strict_indices,
+                                  bool normalize,
                                   Indices* fixed_indices = NULL) const;
 
         // Set elements to a sequence of values using seed.
@@ -278,6 +287,18 @@ namespace yask {
             for (int i = 0; i < get_num_dims(); i++)
                 dims.push_back(get_dim_name(i));
             return dims;
+        }
+
+        // Possibly vectorized version of set/get_elements_in_slice().
+        virtual idx_t set_vecs_in_slice(const void* buffer_ptr,
+                                        const Indices& first_indices,
+                                        const Indices& last_indices) {
+            return set_elements_in_slice(buffer_ptr, first_indices, last_indices);
+        }
+        virtual idx_t get_vecs_in_slice(void* buffer_ptr,
+                                        const Indices& first_indices,
+                                        const Indices& last_indices) const {
+            return get_elements_in_slice(buffer_ptr, first_indices, last_indices);
         }
 
 #define GET_GRID_API(api_name)                                      \
@@ -456,20 +477,23 @@ namespace yask {
             _data.get_ostr() << get_name() << "." << "YkElemGrid::getElemPtr(" <<
                 idxs.makeValStr(get_num_dims()) << ")";
 #endif
-
             const auto n = _data.get_num_dims();
             Indices adj_idxs(n);
+
+            // Special handling for step index.
+            auto sp = Indices::step_posn;
+            if (_wrap_1st_idx)
+                adj_idxs[sp] = wrap_step(idxs[sp]);
+
 #pragma unroll
+            // All other indices.
             for (int i = 0; i < n; i++) {
+                if (!(_wrap_1st_idx && i == sp)) {
 
-                // Special handling for 1st index.
-                if (_wrap_1st_idx && i == 0)
-                    adj_idxs[0] = wrap_step(idxs[0]);
-
-                // Adjust for offset and padding.
-                // This gives a 0-based local element index.
-                else
+                    // Adjust for offset and padding.
+                    // This gives a 0-based local element index.
                     adj_idxs[i] = idxs[i] - _offsets[i] + _pads[i];
+                }
             }
             
 #ifdef TRACE_MEM
@@ -595,7 +619,7 @@ namespace yask {
             _data.set_elems_in_seq(seedv);
             set_dirty_all(true);
         }
-  
+        
         // Get a pointer to given element.
         virtual const real_t* getElemPtr(const Indices& idxs,
                                          bool checkBounds=true) const final {
@@ -760,7 +784,7 @@ namespace yask {
         // Read one vector.
         // Indices must be normalized and rank-relative.
         inline real_vec_t readVecNorm(const Indices& idxs,
-                                  int line) const {
+                                      int line) const {
             const real_vec_t* vp = getVecPtrNorm(idxs);
             real_vec_t v = *vp;
 #ifdef TRACE_MEM
@@ -799,6 +823,69 @@ namespace yask {
 #endif
         }
 
+        // Vectorized version of set/get_elements_in_slice().
+        virtual idx_t set_vecs_in_slice(const void* buffer_ptr,
+                                        const Indices& first_indices,
+                                        const Indices& last_indices) {
+            if (!is_storage_allocated())
+                return 0;
+            Indices firstv, lastv;
+            checkIndices(first_indices, "set_vecs_in_slice", true, true, &firstv);
+            checkIndices(last_indices, "set_vecs_in_slice", true, true, &lastv);
+
+            // Find range.
+            IdxTuple numVecsTuple = get_slice_range(firstv, lastv);
+            TRACE_MSG0(get_ostr(), "set_vecs_in_slice: setting " <<
+                       numVecsTuple.makeDimValStr(" * ") << " vecs from " <<
+                       makeIndexString(firstv) << " to " <<
+                       makeIndexString(lastv));
+
+            // Visit points in slice.
+            numVecsTuple.visitAllPointsInParallel
+                ([&](const IdxTuple& ofs,
+                     size_t idx) {
+                    Indices pt = firstv.addElements(ofs);
+                    real_vec_t val = ((real_vec_t*)buffer_ptr)[idx];
+                    writeVecNorm(val, pt, __LINE__);
+                    return true;    // keep going.
+                });
+
+            // Set appropriate dirty flag(s).
+            set_dirty_in_slice(first_indices, last_indices);
+
+            return numVecsTuple.product() * VLEN;
+        }
+        virtual idx_t get_vecs_in_slice(void* buffer_ptr,
+                                        const Indices& first_indices,
+                                        const Indices& last_indices) const {
+            if (!is_storage_allocated()) {
+                std::cerr << "Error: call to 'get_vecs_in_slice' with no data allocated for grid '" <<
+                    get_name() << "'.\n";
+                exit_yask(1);
+            }
+            Indices firstv, lastv;
+            checkIndices(first_indices, "get_vecs_in_slice", true, true, &firstv);
+            checkIndices(last_indices, "get_vecs_in_slice", true, true, &lastv);
+
+            // Find range.
+            IdxTuple numVecsTuple = get_slice_range(firstv, lastv);
+            TRACE_MSG0(get_ostr(), "get_vecs_in_slice: getting " <<
+                       numVecsTuple.makeDimValStr(" * ") << " vecs from " <<
+                       makeIndexString(firstv) << " to " <<
+                       makeIndexString(lastv));
+        
+            // Visit points in slice.
+            numVecsTuple.visitAllPointsInParallel
+                ([&](const IdxTuple& ofs,
+                     size_t idx) {
+                    Indices pt = firstv.addElements(ofs);
+                    real_vec_t val = readVecNorm(pt, __LINE__);
+                    ((real_vec_t*)buffer_ptr)[idx] = val;
+                    return true;    // keep going.
+                });
+            return numVecsTuple.product() * VLEN;
+        }
+        
     };                          // YkVecGrid.
 
 }                               // namespace.

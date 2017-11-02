@@ -90,59 +90,48 @@ void ttest(bool firstInner) {
         }
     }
 
-    os << "sequential visit test...\n";
-    j = 0;
-    t1.visitAllPoints
-        ([&](const IntTuple& ofs, size_t k) {
+    for (int d = 0; d <= 3; d++) {
 
-            auto i = t1.layout(ofs);
-            os << " offset at " << ofs.makeDimValStr() << " = " << i << endl;
+        IntTuple t2;
+        if (d > 0) t2.addDimBack("x", 3);
+        if (d > 1) t2.addDimBack("y", 4);
+        if (d > 2) t2.addDimBack("z", 3);
 
-            if (firstInner) {
-                assert(i == j);
-                assert(i == k);
-            }
-            j++;
-            return true;
-        });
-    assert(int(j) == t1.product());
+        os << d << "-d sequential visit test...\n";
+        j = 0;
+        t2.visitAllPoints
+            ([&](const IntTuple& ofs, size_t k) {
 
-    os << "parallel visit test...\n";
-    j = 0;
-    t1.visitAllPointsInParallel
-        ([&](const IntTuple& ofs, size_t k) {
-
-            auto i = t1.layout(ofs);
-#pragma omp critical
-            {
+                auto i = t2.layout(ofs);
                 os << " offset at " << ofs.makeDimValStr() << " = " << i << endl;
+
+                if (firstInner) {
+                    assert(i == j);
+                    assert(i == k);
+                }
                 j++;
-            }
+                return true;
+            });
+        assert(int(j) == t2.product());
 
-            if (firstInner)
-                assert(i == k);
-            return true;
-        });
-    assert(int(j) == t1.product());
+        os << d << "-d parallel visit test...\n";
+        j = 0;
+        t2.visitAllPointsInParallel
+            ([&](const IntTuple& ofs, size_t k) {
 
-    os << "3-d parallel visit test...\n";
-    j = 0;
-    t1.addDimBack("z", 3);
-    t1.visitAllPointsInParallel
-        ([&](const IntTuple& ofs, size_t k) {
-
-            auto i = t1.layout(ofs);
+                auto i = t2.layout(ofs);
 #pragma omp critical
-            {
-                os << " offset at " << ofs.makeDimValStr() << " = " << i << endl;
-                j++;
-            }
+                {
+                    os << " offset at " << ofs.makeDimValStr() << " = " << i << endl;
+                    j++;
+                }
 
-            if (firstInner)
-                assert(i == k);
-            return true;
-        });
-    assert(int(j) == t1.product());
+                if (firstInner)
+                    assert(i == k);
+                return true;
+            });
+        assert(int(j) == t2.product());
+    }
 }
 
 int main(int argc, char** argv) {

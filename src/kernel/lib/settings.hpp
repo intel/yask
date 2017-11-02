@@ -42,10 +42,10 @@ namespace yask {
         // Note use of "+max_idxs" in code below to avoid compiler
         // trying to take a reference to it, resulting in a undefined
         // symbol (sometimes).
-        static const int max_idxs = MAX_DIMS;
+        static constexpr int max_idxs = MAX_DIMS;
 
         // Step dim is always in [0] of an Indices type (if it is used).
-        static const int step_posn = 0;
+        static constexpr int step_posn = 0;
         
     protected:
         idx_t _idxs[max_idxs];
@@ -87,7 +87,7 @@ namespace yask {
             assert(i < _ndims);
             return _idxs[i];
         }
-        inline idx_t operator[](int i) const {
+        inline const idx_t& operator[](int i) const {
             assert(i >= 0);
             assert(i < _ndims);
             return _idxs[i];
@@ -185,52 +185,94 @@ namespace yask {
             return false;       // equal, so not greater than.
         }
 
+        // Generic element-wise operator.
+        // Returns a new object.
+        inline Indices combineElements(std::function<void (idx_t& lhs, idx_t rhs)> func,
+                                       const Indices& other) const {
+            Indices res(*this);
+
+#if EXACT_INDICES
+            // Use just the used elements.
+            for (int i = 0; i < _ndims; i++)
+#else
+            // Use all to allow unroll and avoid jumps.
+#pragma unroll
+            for (int i = 0; i < max_idxs; i++)
+#endif
+                func(res._idxs[i], other._idxs[i]);
+            return res;
+        }
+        
         // Some element-wise operators.
         // These all return a new set of Indices rather
         // than modifying this object.
-        Indices addElements(const Indices& other) const {
-            Indices res(*this);
-            for (int i = 0; i < _ndims; i++)
-                res._idxs[i] += other._idxs[i];
-            return res;
+        inline Indices addElements(const Indices& other) const {
+            return combineElements([&](idx_t& lhs, idx_t rhs) { lhs += rhs; },
+                                   other);
         }
-        Indices subElements(const Indices& other) const {
-            Indices res(*this);
-            for (int i = 0; i < _ndims; i++)
-                res._idxs[i] -= other._idxs[i];
-            return res;
+        inline Indices subElements(const Indices& other) const {
+            return combineElements([&](idx_t& lhs, idx_t rhs) { lhs -= rhs; },
+                                   other);
         }
-        Indices multElements(const Indices& other) const {
-            Indices res(*this);
-            for (int i = 0; i < _ndims; i++)
-                res._idxs[i] *= other._idxs[i];
-            return res;
+        inline Indices mulElements(const Indices& other) const {
+            return combineElements([&](idx_t& lhs, idx_t rhs) { lhs *= rhs; },
+                                   other);
         }
-        Indices minElements(const Indices& other) const {
-            Indices res(*this);
-            for (int i = 0; i < _ndims; i++)
-                res._idxs[i] = std::min(_idxs[i], other._idxs[i]);
-            return res;
+        inline Indices divElements(const Indices& other) const {
+            return combineElements([&](idx_t& lhs, idx_t rhs) { lhs /= rhs; },
+                                   other);
         }
-        Indices maxElements(const Indices& other) const {
+        inline Indices minElements(const Indices& other) const {
+            return combineElements([&](idx_t& lhs, idx_t rhs) { lhs = std::min(lhs, rhs); },
+                                   other);
+        }
+        inline Indices maxElements(const Indices& other) const {
+            return combineElements([&](idx_t& lhs, idx_t rhs) { lhs = std::max(lhs, rhs); },
+                                   other);
+        }
+
+        // Generic element-wise operator with RHS const.
+        // Returns a new object.
+        inline Indices mapElements(std::function<void (idx_t& lhs, idx_t rhs)> func,
+                                   idx_t crhs) const {
             Indices res(*this);
+
+#if EXACT_INDICES
+            // Use just the used elements.
             for (int i = 0; i < _ndims; i++)
-                res._idxs[i] = std::max(_idxs[i], other._idxs[i]);
+#else
+            // Use all to allow unroll and avoid jumps.
+#pragma unroll
+            for (int i = 0; i < max_idxs; i++)
+#endif
+                func(res._idxs[i], crhs);
             return res;
         }
 
         // Operate on all elements.
-        Indices addConst(idx_t n) const {
-            Indices res(*this);
-            for (int i = 0; i < _ndims; i++)
-                res._idxs[i] += n;
-            return res;
+        Indices addConst(idx_t crhs) const {
+            return mapElements([&](idx_t& lhs, idx_t rhs) { lhs += rhs; },
+                               crhs);
         }
-        Indices multConst(idx_t n) const {
-            Indices res(*this);
-            for (int i = 0; i < _ndims; i++)
-                res._idxs[i] *= n;
-            return res;
+        Indices subConst(idx_t crhs) const {
+            return mapElements([&](idx_t& lhs, idx_t rhs) { lhs -= rhs; },
+                               crhs);
+        }
+        Indices mulConst(idx_t crhs) const {
+            return mapElements([&](idx_t& lhs, idx_t rhs) { lhs *= rhs; },
+                               crhs);
+        }
+        Indices divConst(idx_t crhs) const {
+            return mapElements([&](idx_t& lhs, idx_t rhs) { lhs /= rhs; },
+                               crhs);
+        }
+        Indices minConst(idx_t crhs) const {
+            return mapElements([&](idx_t& lhs, idx_t rhs) { lhs = std::min(lhs, rhs); },
+                               crhs);
+        }
+        Indices maxConst(idx_t crhs) const {
+            return mapElements([&](idx_t& lhs, idx_t rhs) { lhs = std::max(lhs, rhs); },
+                               crhs);
         }
 
         // Reduce over all elements.
@@ -447,7 +489,6 @@ namespace yask {
             return i;
         }
     };
-        
     typedef std::shared_ptr<Dims> DimsPtr;
     
     // MPI neighbor info.
@@ -483,13 +524,22 @@ namespace yask {
         // NB: this is the *max* number of neighbors, not necessarily the actual number.
         idx_t neighborhood_size = 0;
 
+        // What getNeighborIndex() returns for myself.
+        int my_neighbor_index;
+        
         // MPI rank of each neighbor.
         // MPI_PROC_NULL => no neighbor.
+        // Vector index is per getNeighborIndex().
         typedef std::vector<int> Neighbors;
         Neighbors my_neighbors;
 
         // Manhattan distance to each neighbor.
+        // Vector index is per getNeighborIndex().
         std::vector<int> man_dists;
+
+        // Whether each neighbor has all its rank-domain
+        // sizes as a multiple of the vector length.
+        std::vector<bool> has_all_vlen_mults;
         
         // Ctor based on pre-set problem dimensions.
         MPIInfo(DimsPtr dims) : _dims(dims) {
@@ -499,9 +549,15 @@ namespace yask {
             neighborhood_sizes.setValsSame(num_offsets); // set sizes in each domain dim.
             neighborhood_size = neighborhood_sizes.product(); // neighbors in all dims.
 
+            // Myself.
+            IdxTuple noffsets(neighborhood_sizes);
+            noffsets.setValsSame(rank_self);
+            my_neighbor_index = getNeighborIndex(noffsets);
+
             // Init arrays.
             my_neighbors.resize(neighborhood_size, MPI_PROC_NULL);
-            man_dists.resize(neighborhood_size);
+            man_dists.resize(neighborhood_size, 0);
+            has_all_vlen_mults.resize(neighborhood_size, false);
         }
 
         // Get a 1D index for a neighbor.
@@ -514,6 +570,7 @@ namespace yask {
         }
 
         // Visit all neighbors.
+        // Does NOT visit self.
         virtual void visitNeighbors(std::function<void
                                     (const IdxTuple& offsets, // NeighborOffset vals.
                                      int rank, // MPI rank; might be MPI_PROC_NULL.
@@ -538,6 +595,10 @@ namespace yask {
 
         // Number of points to copy to/from grid in each dim.
         IdxTuple num_pts;
+
+        // Whether the number of points is a multiple of the
+        // vector length in all dims.
+        bool has_all_vlen_mults = false;
 
         // Number of points overall.
         idx_t get_size() const {

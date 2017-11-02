@@ -95,7 +95,7 @@ namespace yask {
     // Halo-exchange flag accessors.
     bool YkGridBase::is_dirty(idx_t step_idx) const {
         if (_dirty_steps.size() == 0)
-            return false;
+            const_cast<YkGridBase*>(this)->resize();
         if (_has_step_dim)
             step_idx = wrap_step(step_idx);
         else
@@ -109,7 +109,7 @@ namespace yask {
             step_idx = wrap_step(step_idx);
         else
             step_idx = 0;
-        _dirty_steps[step_idx] = true;
+        _dirty_steps[step_idx] = dirty;
     }
     void YkGridBase::set_dirty_all(bool dirty) {
         if (_dirty_steps.size() == 0)
@@ -151,34 +151,43 @@ namespace yask {
         }
         
         // New allocation in each dim.
-        Indices new_allocs(old_allocs);
-        for (int i = 0; i < get_num_dims(); i++) {
+        IdxTuple new_allocs(old_allocs);
+        for (int i = 0; i < get_num_dims(); i++)
             new_allocs[i] = ROUND_UP(_domains[i] + (2 * _pads[i]), _vec_lens[i]);
 
-            // Attempt to change?
-            if (p && old_allocs[i] != new_allocs[i]) {
-                cerr << "Error: attempt to change allocation size of grid '" <<
-                    get_name() << "' from " << old_allocs[i] << " to " <<
-                    new_allocs[i] << " in '" << get_dim_name(i) <<
-                    "' dim after storage has been allocated.\n";
+        // Attempt to change alloc with existing storage?
+        if (p && old_allocs != new_allocs) {
+            cerr << "Error: attempt to change allocation size of grid '" <<
+                get_name() << "' from " << 
+                makeIndexString(old_allocs, " * ") << " to " <<
+                makeIndexString(new_allocs, " * ") <<
+                " after storage has been allocated.\n";
                 exit_yask(1);
-            }
         }
 
         // Do the resize.
         _allocs = new_allocs;
-        int num_dirty = 1;      // default if no step dim.
+        size_t new_dirty = 1;      // default if no step dim.
         for (int i = 0; i < get_num_dims(); i++) {
             _vec_allocs[i] = _allocs[i] / _vec_lens[i];
             _ggb->set_dim_size(i, _vec_allocs[i]);
 
             // Steps.
-            if (_has_step_dim && i == Indices::step_posn)
-                num_dirty = _allocs[i];
+            if (get_dim_name(i) == _dims->_step_dim)
+                new_dirty = _allocs[i];
         }
 
         // Resize dirty flags, too.
-        _dirty_steps.resize(num_dirty, true); // init all new dirty flags to true;
+        size_t old_dirty = _dirty_steps.size();
+        if (old_dirty != new_dirty)
+            _dirty_steps.assign(new_dirty, true); // set all as dirty.
+
+        if (old_allocs != new_allocs || old_dirty != new_dirty) {
+            TRACE_MSG0(get_ostr(), "grid '" << get_name() << "' resized from " <<
+                       makeIndexString(old_allocs, " * ") << " to " <<
+                       makeIndexString(new_allocs, " * ") << " with " <<
+                       _dirty_steps.size() << " dirty flags");
+        }
     }
     
     // Check whether dim is used and of allowed type.
@@ -349,16 +358,28 @@ namespace yask {
 
         // This will loop over the entire allocation.
         // Indices of 'pt' will be relative to allocation.
-        allocs.visitAllPoints([&](const IdxTuple& pt,
-                                  size_t idx) {
+        allocs.visitAllPoints
+            ([&](const IdxTuple& pt, size_t idx) {
 
                 // Adjust alloc indices to overall indices.
-                IdxTuple opt;
+                IdxTuple opt(pt);
+                bool ok = true;
                 for (int i = 0; i < pt.getNumDims(); i++) {
-                    auto dname = pt.getDimName(i);
                     auto val = pt.getVal(i);
-                    opt.addDimBack(dname, _offsets[i] - _pads[i] + val);
+                    opt[i] = _offsets[i] - _pads[i] + val;
+
+                    // Don't compare points in the extra padding area.
+                    auto& dname = pt.getDimName(i);
+                    if (_dims->_domain_dims.lookup(dname)) {
+                        auto halo_sz = get_halo_size(dname);
+                        auto first_ok = get_first_rank_domain_index(dname) - halo_sz;
+                        auto last_ok = get_last_rank_domain_index(dname) + halo_sz;
+                        if (opt[i] < first_ok || opt[i] > last_ok)
+                            ok = false;
+                    }
                 }
+                if (!ok)
+                    return true; // stop processing this point, but keep going.
 
                 auto te = readElem(opt, __LINE__);
                 auto re = ref->readElem(opt, __LINE__);
@@ -378,6 +399,7 @@ namespace yask {
                 }
                 return true;    // keep visiting.
             });
+        TRACE_MSG0(get_ostr(), "detailed compare returned " << errs);
         return errs;
     }
 
@@ -386,6 +408,7 @@ namespace yask {
     bool YkGridBase::checkIndices(const Indices& indices,
                                   const string& fn,
                                   bool strict_indices, // die if out-of-range.
+                                  bool normalize,      // div by vec lens.
                                   Indices* fixed_indices) const {
         auto n = get_num_dims();
         if (indices.getNumDims() != n) {
@@ -394,39 +417,75 @@ namespace yask {
             exit_yask(1);
         }
         if (fixed_indices)
-            fixed_indices->setFromConst(0, n);
+            *fixed_indices = indices;
         bool ok = true;
         for (int i = 0; i < n; i++) {
             idx_t idx = indices[i];
             auto& dname = get_dim_name(i);
+            bool ok = false;
 
             // Any step index is ok because it wraps around.
             // TODO: check that it's < magic added value in wrap_index().
             if (_has_step_dim && i == Indices::step_posn)
-                continue;
+                ok = true;
 
             // Within first..last indices?
-            auto first_ok = _get_first_alloc_index(i);
-            auto last_ok = _get_last_alloc_index(i);
-            if (idx < first_ok || idx > last_ok) {
-                if (strict_indices) {
-                    cerr << "Error: " << fn << ": index in dim '" << dname <<
-                        "' is " << idx << ", which is not in [" << first_ok <<
-                        "..." << last_ok << "].\n";
-                    exit_yask(1);
+            else {
+                auto first_ok = _get_first_alloc_index(i);
+                auto last_ok = _get_last_alloc_index(i);
+                if (idx >= first_ok && idx <= last_ok)
+                    ok = true;
+
+                // Handle outliers.
+                if (!ok) {
+                    if (strict_indices) {
+                        cerr << "Error: " << fn << ": index in dim '" << dname <<
+                            "' is " << idx << ", which is not in [" << first_ok <<
+                            "..." << last_ok << "].\n";
+                        exit_yask(1);
+                    }
+                    if (fixed_indices) {
+                        if (idx < first_ok)
+                            (*fixed_indices)[i] = first_ok;
+                        if (idx > last_ok)
+                            (*fixed_indices)[i] = last_ok;
+                    }
+                    ok = false;
                 }
-                if (fixed_indices) {
-                    if (idx < first_ok)
-                        (*fixed_indices)[i] = first_ok;
-                    if (idx > last_ok)
-                        (*fixed_indices)[i] = last_ok;
-                }
-                ok = false;
+            }
+
+            // Normalize?
+            if (fixed_indices && normalize) {
+                (*fixed_indices)[i] -= _offsets[i];
+                (*fixed_indices)[i] = idiv_flr((*fixed_indices)[i], _vec_lens[i]);
             }
         }
         return ok;
     }
 
+    // Set dirty flags between indices.
+    void YkGridBase::set_dirty_in_slice(const Indices& first_indices,
+                                        const Indices& last_indices) {
+        if (_has_step_dim) {
+            for (idx_t i = first_indices[Indices::step_posn];
+                 i <= last_indices[Indices::step_posn]; i++)
+                set_dirty(true, i);
+        } else
+            set_dirty(true, 0);
+    }
+     
+    // Make tuple needed for slicing.
+    IdxTuple YkGridBase::get_slice_range(const Indices& first_indices,
+                                         const Indices& last_indices) const {
+        // Find ranges.
+        Indices numElems = last_indices.addConst(1).subElements(first_indices);
+        IdxTuple numElemsTuple = get_allocs();
+        numElems.setTupleVals(numElemsTuple);
+        numElemsTuple.setFirstInner(_is_col_major);
+
+        return numElemsTuple;
+    }
+    
     // API get/set.
     double YkGridBase::get_element(const Indices& indices) const {
         if (!is_storage_allocated()) {
@@ -434,7 +493,7 @@ namespace yask {
                 get_name() << "'.\n";
             exit_yask(1);
         }
-        checkIndices(indices, "get_element", true);
+        checkIndices(indices, "get_element", true, false);
         real_t val = readElem(indices, __LINE__);
         return double(val);
     }
@@ -443,15 +502,12 @@ namespace yask {
                                   bool strict_indices) {
         idx_t nup = 0;
         if (get_raw_storage_buffer() &&
-            checkIndices(indices, "set_element", strict_indices)) {
+            checkIndices(indices, "set_element", strict_indices, false)) {
             writeElem(real_t(val), indices, __LINE__);
             nup++;
 
             // Set appropriate dirty flag.
-            if (_has_step_dim)
-                set_dirty(indices[Indices::step_posn], true);
-            else
-                set_dirty(0, true);
+            set_dirty_in_slice(indices, indices);
         }
         return nup;
     }
@@ -464,14 +520,11 @@ namespace yask {
                 get_name() << "'.\n";
             exit_yask(1);
         }
-        checkIndices(first_indices, "get_elements_in_slice", true);
-        checkIndices(last_indices, "get_elements_in_slice", true);
+        checkIndices(first_indices, "get_elements_in_slice", true, false);
+        checkIndices(last_indices, "get_elements_in_slice", true, false);
 
-        // Find ranges.
-        Indices numElems = last_indices.addConst(1).subElements(first_indices);
-        IdxTuple numElemsTuple = get_allocs();
-        numElems.setTupleVals(numElemsTuple);
-        numElemsTuple.setFirstInner(_is_col_major);
+        // Find range.
+        IdxTuple numElemsTuple = get_slice_range(first_indices, last_indices);
         
         // Visit points in slice.
         numElemsTuple.visitAllPointsInParallel
@@ -493,14 +546,13 @@ namespace yask {
         
         // 'Fixed' copy of indices.
         Indices first, last;
-        checkIndices(first_indices, "set_elements_in_slice_same", strict_indices, &first);
-        checkIndices(last_indices, "set_elements_in_slice_same", strict_indices, &last);
+        checkIndices(first_indices, "set_elements_in_slice_same",
+                     strict_indices, false, &first);
+        checkIndices(last_indices, "set_elements_in_slice_same",
+                     strict_indices, false, &last);
 
-        // Find ranges.
-        Indices numElems = last_indices.addConst(1).subElements(first_indices);
-        IdxTuple numElemsTuple = get_allocs();
-        numElems.setTupleVals(numElemsTuple);
-        numElemsTuple.setFirstInner(_is_col_major);
+        // Find range.
+        IdxTuple numElemsTuple = get_slice_range(first, last);
 
         // Visit points in slice.
         numElemsTuple.visitAllPointsInParallel([&](const IdxTuple& ofs,
@@ -511,12 +563,7 @@ namespace yask {
             });
 
         // Set appropriate dirty flag(s).
-        if (_has_step_dim) {
-            for (idx_t i = first[Indices::step_posn];
-                 i <= last[Indices::step_posn]; i++)
-                set_dirty(i, true);
-        } else
-            set_dirty(0, true);
+        set_dirty_in_slice(first, last);
 
         return numElemsTuple.product();
     }
@@ -525,19 +572,16 @@ namespace yask {
                                             const Indices& last_indices) {
         if (!is_storage_allocated())
             return 0;
-        
-        checkIndices(first_indices, "get_elements_in_slice", true);
-        checkIndices(last_indices, "get_elements_in_slice", true);
+        checkIndices(first_indices, "set_elements_in_slice", true, false);
+        checkIndices(last_indices, "set_elements_in_slice", true, false);
 
-        // Find ranges.
-        Indices numElems = last_indices.addConst(1).subElements(first_indices);
-        IdxTuple numElemsTuple = get_allocs();
-        numElems.setTupleVals(numElemsTuple);
-        numElemsTuple.setFirstInner(_is_col_major);
+        // Find range.
+        IdxTuple numElemsTuple = get_slice_range(first_indices, last_indices);
 
         // Visit points in slice.
-        numElemsTuple.visitAllPointsInParallel([&](const IdxTuple& ofs,
-                                                   size_t idx) {
+        numElemsTuple.visitAllPointsInParallel
+            ([&](const IdxTuple& ofs,
+                 size_t idx) {
                 Indices pt = first_indices.addElements(ofs);
                 real_t val = ((real_t*)buffer_ptr)[idx];
                 writeElem(val, pt, __LINE__);
@@ -545,12 +589,7 @@ namespace yask {
             });
 
         // Set appropriate dirty flag(s).
-        if (_has_step_dim) {
-            for (idx_t i = first_indices[Indices::step_posn];
-                 i <= last_indices[Indices::step_posn]; i++)
-                set_dirty(i, true);
-        } else
-            set_dirty(0, true);
+        set_dirty_in_slice(first_indices, last_indices);
 
         return numElemsTuple.product();
     }
@@ -582,7 +621,7 @@ namespace yask {
                                           bool newline) const {
 
         // Convert to elem indices.
-        Indices eidxs = idxs.multElements(_vec_lens);
+        Indices eidxs = idxs.mulElements(_vec_lens);
 
         // Add offsets, i.e., convert to overall indices.
         eidxs = eidxs.addElements(_offsets);

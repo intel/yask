@@ -254,6 +254,7 @@ namespace yask {
 
             Progress text will be written to the output stream set via set_debug_output().
 
+            @note "avx512f" is allowed as an alias for "avx512".
             @warning *Side effect:* Applies optimizations to the equation(s), so some pointers
             to nodes in the original equations may refer to modified nodes or nodes
             that have been optimized away after calling format().

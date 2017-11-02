@@ -60,20 +60,21 @@ namespace yask {
     }
     
     // Calculate results for one sub-block.
-    // Each block is typically computed in a separate OpenMP thread.
+    // Each sub-block is typically computed in a separate OpenMP thread.
     void EqGroupBase::calc_sub_block(const ScanIndices& block_idxs) {
 
         auto* cp = _generic_context;
         auto opts = cp->get_settings();
         auto dims = cp->get_dims();
-        int ndims = dims->_stencil_dims.size();
+        int nddims = dims->_domain_dims.size();
+        int nsdims = dims->_stencil_dims.size();
         auto& step_dim = dims->_step_dim;
-        TRACE_MSG3("calc_sub_block: " << block_idxs.start.makeValStr(ndims) <<
-                  " ... (end before) " << block_idxs.stop.makeValStr(ndims));
+        TRACE_MSG3("calc_sub_block: " << block_idxs.start.makeValStr(nsdims) <<
+                  " ... (end before) " << block_idxs.stop.makeValStr(nsdims));
 
         // Init sub-block begin & end from block start & stop indices.
         // These indices are in element units.
-        ScanIndices sub_block_idxs(ndims);
+        ScanIndices sub_block_idxs(nsdims);
         sub_block_idxs.initFromOuter(block_idxs);
         
         // If not a 'simple' domain, use scalar code.  TODO: this
@@ -109,42 +110,56 @@ namespace yask {
         // Full rectangular polytope of aligned vectors: use optimized code.
         else {
             TRACE_MSG3("...using vector code without sub-domain checking.");
-
-            // Make sure we're doing a multiple of clusters.
             auto step_posn = Indices::step_posn;
-            for (int i = step_posn + 1; i < ndims; i++) {
-                auto& dname = dims->_stencil_dims.getDimName(i);
-                assert((sub_block_idxs.end[i] - sub_block_idxs.begin[i]) % 
-                       dims->_cluster_pts[dname] == 0);
+
+#ifdef DEBUG
+            // Make sure we're doing a multiple of clusters.
+            for (int i = 0; i < nsdims; i++) {
+                if (i != step_posn) {
+                    auto& dname = dims->_stencil_dims.getDimName(i);
+                    assert((sub_block_idxs.end[i] - sub_block_idxs.begin[i]) % 
+                           dims->_cluster_pts[dname] == 0);
+                }
             }
+#endif
 
             // Indices to sub-block loop must be in vec-norm
             // format, i.e., vector lengths and rank-relative.
             ScanIndices norm_sub_block_idxs(sub_block_idxs);
-            for (int i = step_posn + 1; i < ndims; i++) {
-                auto& dname = dims->_stencil_dims.getDimName(i);
-                assert(dims->_domain_dims.lookup(dname));
+            int j = 0;          // domain dim index.
+            for (int i = 0; i < nsdims; i++) {
+                if (i != step_posn) {
+                    auto& dname = dims->_stencil_dims.getDimName(i);
+                    assert(dims->_domain_dims.lookup(dname));
 
-                // Subtract rank offset and divide indices by fold lengths
-                // as needed by read/writeVecNorm().  Use idiv_flr() instead
-                // of '/' because begin/end vars may be negative (if in
-                // halo).
-                idx_t nbegin = idiv_flr<idx_t>(sub_block_idxs.begin[i] -
-                                               cp->rank_domain_offsets[dname],
-                                               dims->_fold_pts[dname]);
-                norm_sub_block_idxs.begin[i] = nbegin;
-                idx_t nend = idiv_flr<idx_t>(sub_block_idxs.end[i] -
-                                             cp->rank_domain_offsets[dname],
-                                             dims->_fold_pts[dname]);
-                norm_sub_block_idxs.end[i] = nend;
+                    // Subtract rank offset and divide indices by fold lengths
+                    // as needed by read/writeVecNorm().  Use idiv_flr() instead
+                    // of '/' because begin/end vars may be negative (if in
+                    // halo).
+                    // Set both begin/end and start/stop to ensure start/stop
+                    // vars get passed through to calc_loop_of_clusters()
+                    // for the inner loop.
+                    idx_t nbegin = idiv_flr<idx_t>(sub_block_idxs.begin[i] -
+                                                   cp->rank_domain_offsets[j],
+                                                   dims->_fold_pts[j]);
+                    norm_sub_block_idxs.begin[i] = nbegin;
+                    norm_sub_block_idxs.start[i] = nbegin;
+                    idx_t nend = idiv_flr<idx_t>(sub_block_idxs.end[i] -
+                                                 cp->rank_domain_offsets[j],
+                                                 dims->_fold_pts[j]);
+                    norm_sub_block_idxs.end[i] = nend;
+                    norm_sub_block_idxs.stop[i] = nend;
 
-                // Step sizes are based on cluster lengths (in vector units).
-                // The step in the inner loop is hard-coded in the generated code.
-                norm_sub_block_idxs.step[i] = dims->_cluster_mults[dname];
+                    // Step sizes are based on cluster lengths (in vector units).
+                    // The step in the inner loop is hard-coded in the generated code.
+                    norm_sub_block_idxs.step[i] = dims->_cluster_mults[j];
+                    j++;
+                }
             }
 
             // Include automatically-generated loop code that calls
-            // calc_loop_of_clusters().
+            // calc_loop_of_clusters() but does not modify the step or inner
+            // loop indices.
 #include "yask_sub_block_loops.hpp"
         }
         

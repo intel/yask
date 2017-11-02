@@ -221,8 +221,8 @@ yc-and-yk-test:
 code-stats:
 	$(YK_MAKE) $@
 
-$(TUPLE_TEST_EXEC): src/common/tuple.cpp src/common/tests/tuple_test.cpp
-	$(CXX) $(CXXFLAGS) $(LFLAGS) -o $@ $^
+$(TUPLE_TEST_EXEC): src/common/tests/tuple_test.cpp src/common/tuple.hpp
+	$(CXX) $(CXXFLAGS) $(LFLAGS) -o $@ $<
 
 tuple-test: $(TUPLE_TEST_EXEC)
 	@echo '*** Running the C++ YASK tuple test...'

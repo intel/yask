@@ -581,12 +581,17 @@ namespace yask {
         // if dim is found, new Tuple will have one fewer dim than 'this'.
         // If dim is not found, it will be a copy of 'this'.
         inline Tuple removeDim(const std::string& dim) const {
+            auto p = lookup_posn(dim);
+            Tuple newt = removeDim(p);
+            return newt;
+        }
+
+        // Create a new Tuple with the given dimension removed.
+        inline Tuple removeDim(int posn) const {
             Tuple newt;
-            for (auto i : _q) {
-                auto& tdim = i.getName();
-                auto& val = i.getVal();
-                if (dim != tdim)
-                    newt.addDimBack(tdim, val);
+            for (int i = 0; i < size(); i++) {
+                if (i != posn)
+                    newt.addDimBack(getDimName(i), getVal(i));
             }
             return newt;
         }
@@ -785,13 +790,14 @@ namespace yask {
 
             // Init lambda fn arg with *this to get dim names.
             // Values will get set during scan.
-            Tuple tp = *this;
+            Tuple tp(*this);
 
             // 0-D?
             if (!_q.size())
                 visitor(tp, 0);
             
             // Call recursive version.
+            // Set begin/step dims depending on nesting.
             else if (_firstInner)
                 _visitAllPoints(visitor, size()-1, -1, tp);
             else
@@ -805,35 +811,35 @@ namespace yask {
         inline void
         visitAllPointsInParallel(std::function<bool (const Tuple&, size_t idx)> visitor) const {
 
-            // Init lambda fn arg with *this to get dim names.
-            // Values will get set during scan.
-            Tuple tp = *this;
-
             // 0-D?
-            if (!_q.size())
+            if (!_q.size()) {
+                Tuple tp(*this);
                 visitor(tp, 0);
+            }
             
             // Call order-independent version.
+            // Set begin/end/step dims depending on nesting.
+            // TODO: set this depending on dim sizes.
             else if (_firstInner)
-                _visitAllPointsInPar(visitor, size()-1, -1, tp);
+                _visitAllPointsInPar(visitor, size()-1, -1);
             else
-                _visitAllPointsInPar(visitor, 0, 1, tp);
+                _visitAllPointsInPar(visitor, 0, 1);
         }
     
     protected:
 
-        // Handle recursion for public visitAllPoints(visitor).
+        // Visit elements recursively.
         inline bool
         _visitAllPoints(std::function<bool (const Tuple&, size_t idx)> visitor,
                         int curDimNum, int step, Tuple& tp) const {
 
             auto& sc = _q.at(curDimNum);
             auto& dsize = sc.getVal();
-            bool last_dim = curDimNum + step < 0 || curDimNum + step >= size();
+            int lastDimNum = (step > 0) ? size()-1 : 0;
 
             // If no more dims, iterate along current dimension and call
             // visitor.
-            if (last_dim) {
+            if (curDimNum == lastDimNum) {
 
                 // Get unique index to first position.
                 tp.setVal(curDimNum, 0);
@@ -870,54 +876,53 @@ namespace yask {
         // First call from public visitAllPointsInParallel(visitor).
         inline bool
         _visitAllPointsInPar(std::function<bool (const Tuple&, size_t idx)> visitor,
-                             int curDimNum, int step, Tuple& tp) const {
+                             int curDimNum, int step) const {
 
 #ifdef _OPENMP
             auto nd = getNumDims();
-            auto& sc = _q.at(curDimNum);
-            auto& dsize = sc.getVal();
 
-            // If more than 2 dims, collapse across 1st 2.
-            // TODO: generalize this to collapse over outer n-1 dims.
-            if (nd > 2) {
-
-                auto& sc2 = _q.at(curDimNum + step);
-                auto& dsize2 = sc2.getVal();
+            // If one dim, parallelize across it.
+            if (nd == 1) {
+                assert(curDimNum == 0);
+                auto dsize = getVal(curDimNum);
+                Tuple tp(*this);
                 
-                // Non-reference copy of 'tp' so we can use it in
-                // 'firstprivate()'.
-                Tuple tp2(tp);
-
-#pragma omp parallel for firstprivate(tp2) collapse(2)
-                for (T i = 0; i < dsize; i++)
-                    for (T j = 0; j < dsize2; j++) {
-                        tp2.setVal(curDimNum, i);
-                        tp2.setVal(curDimNum + step, j);
-                        _visitAllPoints(visitor, curDimNum + 2*step, step, tp2);
-                    }
-                return true;
+                // Loop through points.
+#pragma omp parallel for firstprivate(tp)
+                for (T i = 0; i < dsize; i++) {
+                    tp.setVal(curDimNum, i);
+                    visitor(tp, i);
+                }
             }
             
-            // If 2 dims, parallelize across outer.
-            else if (nd > 1) {
+            // If >1 dim, parallelize over outer dims.
+            else {
 
-                // Non-reference copy of 'tp' so we can use it in
-                // 'firstprivate()'.
-                Tuple tp2(tp);
+                // Total number of elements to visit.
+                T ne = product();
 
-#pragma omp parallel for firstprivate(tp2)
-                for (T i = 0; i < dsize; i++) {
-                    tp2.setVal(curDimNum, i);
-                    _visitAllPoints(visitor, curDimNum + step, step, tp2);
+                // Number of elements in last dim.
+                int lastDimNum = (step > 0) ? nd-1 : 0;
+                T nel = getVal(lastDimNum);
+                
+                // Parallel loop over elements, skipping by size of last dim.
+#pragma omp parallel for
+                for (T i = 0; i < ne; i += nel) {
+
+                    // Get indices at this position.
+                    Tuple tp = unlayout(i);
+
+                    // Visit points in last dim.
+                    _visitAllPoints(visitor, lastDimNum, step, tp);
                 }
-                return true;
             }
-
-            // TODO: provide parallelism for 1-D grids.
-            else
+            return true;
+#else
+                
+            // Call recursive version to handle all dims.
+            Tuple tp(*this);
+            return _visitAllPoints(visitor, curDimNum, step, tp);
 #endif
-                // Call recursive version to handle all dims.
-                return _visitAllPoints(visitor, curDimNum, step, tp);
         }
     };
 

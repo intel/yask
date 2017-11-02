@@ -345,6 +345,7 @@ int main(int argc, char** argv)
         auto ref_context = dynamic_pointer_cast<StencilContext>(ref_soln);
         assert(ref_context.get());
         ref_context->name += "-reference";
+        ref_context->allow_vec_exchange = false;
         alloc_steps(ref_soln, *opts);
         ref_soln->prepare_solution();
 

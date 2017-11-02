@@ -573,7 +573,7 @@ namespace yask {
                 // Set const
                 _consts.addDimBack(dname, v);
 
-                // Remove offset.
+                // Remove offset if it exists.
                 _offsets = _offsets.removeDim(dname);
 
                 break;
