@@ -40,7 +40,6 @@ namespace yask {
     typedef ::uint32_t ctrl_t;
     const ctrl_t ctrl_idx_mask = 0xf;
     const ctrl_t ctrl_sel_bit = 0x10;
-    typedef __mmask16 real_mask_t;
 #ifdef USE_INTRIN256
     const idx_t vec_elems = 8;
     typedef float imem_t;
@@ -50,6 +49,7 @@ namespace yask {
 #elif defined(USE_INTRIN512)
     const idx_t vec_elems = 16;
     typedef void imem_t;
+    typedef __mmask16 real_mask_t;
 #define VEC_ELEMS 16
 #define INAME(op) _mm512_ ## op ## _ps
 #define INAMEI(op) _mm512_ ## op ## _epi32
@@ -61,7 +61,6 @@ namespace yask {
     typedef ::uint64_t ctrl_t;
     const ctrl_t ctrl_idx_mask = 0x7;
     const ctrl_t ctrl_sel_bit = 0x8;
-    typedef __mmask8 real_mask_t;
 #ifdef USE_INTRIN256
     const idx_t vec_elems = 4;
     typedef double imem_t;
@@ -71,6 +70,7 @@ namespace yask {
 #elif defined(USE_INTRIN512)
     const idx_t vec_elems = 8;
     typedef void imem_t;
+    typedef __mmask8 real_mask_t;
 #define VEC_ELEMS 8
 #define INAME(op) _mm512_ ## op ## _pd
 #define INAMEI(op) _mm512_ ## op ## _epi64
