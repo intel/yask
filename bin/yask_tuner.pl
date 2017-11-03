@@ -1081,19 +1081,26 @@ sub adjSizes($$) {
   my $is = shift;               # ref to inner sizes.
   my $os = shift;               # ref to outer sizes.
   
-  # let inner size 'wrap around' within outer size.
+  # adjust each dim.
   map {
+
+    # If size is zero, set to max of outer.
+    if ($is->[$_] == 0) {
+      $is->[$_] = $os->[$_];
+    }
 
     # Wrap around.
     # TODO: change from abrupt wrap-around function to
     # one w/o discontinuities, e.g., /\/\/\/\ instead of /|/|/|/|/|.
-    $is->[$_] = (($is->[$_] - 1) % $os->[$_]) + 1;
+    else {
+      $is->[$_] = (($is->[$_] - 1) % $os->[$_]) + 1;
 
-    # Bump up to outer size if close.  This is a heuristic to avoid tiny
-    # remainders.  It also gives a higher probability of exactly matching
-    # the outer size.
-    if ($is->[$_] > $os->[$_] * 0.9) {
-      $is->[$_] = $os->[$_];
+      # Bump up to outer size if close.  This is a heuristic to avoid tiny
+      # remainders.  It also gives a higher probability of exactly matching
+      # the outer size.
+      if ($is->[$_] > $os->[$_] * 0.9) {
+        $is->[$_] = $os->[$_];
+      }
     }
 
   } 0..$#dirs;
