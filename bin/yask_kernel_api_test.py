@@ -174,7 +174,8 @@ if __name__ == "__main__":
         dtype = np.float64
         
     # Init global settings.
-    for dim_name in soln.get_domain_dim_names() :
+    soln_dims = soln.get_domain_dim_names()
+    for dim_name in soln_dims :
 
         # Set domain size in each dim.
         soln.set_rank_domain_size(dim_name, 128)
@@ -192,7 +193,7 @@ if __name__ == "__main__":
     # Simple rank configuration in 1st dim only.
     # In production runs, the ranks would be distributed along
     # all domain dimensions.
-    ddim1 = soln.get_domain_dim_name(0) # name of 1st dim.
+    ddim1 = soln_dims[0] # name of 1st dim.
     soln.set_num_ranks(ddim1, env.get_num_ranks()) # num ranks in this dim.
 
     # Allocate memory for any grids that do not have storage set.

@@ -45,7 +45,8 @@ int main() {
     auto soln = kfac.new_solution(env);
 
     // Init global settings.
-    for (auto dim_name : soln->get_domain_dim_names()) {
+    auto soln_dims = soln->get_domain_dim_names();
+    for (auto dim_name : soln_dims) {
 
         // Set domain size in each dim.
         soln->set_rank_domain_size(dim_name, 128);
@@ -61,7 +62,7 @@ int main() {
     }
 
     // Simple rank configuration in 1st dim only.
-    auto ddim1 = soln->get_domain_dim_name(0);
+    auto ddim1 = soln_dims[0];
     soln->set_num_ranks(ddim1, env->get_num_ranks());
 
     // Allocate memory for any grids that do not have storage set.
