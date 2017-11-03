@@ -141,6 +141,10 @@ namespace yask {
         TRACE_MSG("calc_rank_ref: " << begin.makeDimValStr() << " ... (end before) " <<
                   end.makeDimValStr());
 
+        // Use the number of threads for a region to help avoid expensive
+        // thread-number changing.
+        set_region_threads();
+        
         // Indices needed for the generated misc loops.
         ScanIndices misc_idxs(ndims);
         misc_idxs.begin = begin;
@@ -280,7 +284,7 @@ namespace yask {
         rank_idxs.end = end;
         rank_idxs.step = step;
 
-        // Set number of threads for a region.
+        // Make sure threads are set properly for a region.
         set_region_threads();
 
         // Initial halo exchange.
@@ -358,9 +362,6 @@ namespace yask {
 
         // Final halo exchange.
         exchange_halos_all();
-
-        // Reset threads back to max.
-        set_all_threads();
 
         // Make sure all ranks are done.
         _env->global_barrier();
@@ -1195,8 +1196,24 @@ namespace yask {
         os << "  Num threads per region: " << omp_get_max_threads() << endl;
         set_block_threads(); // Temporary; just for reporting.
         os << "  Num threads per block: " << omp_get_max_threads() << endl;
-        set_all_threads(); // Back to normal.
 
+        // Set the number of threads for a region to help avoid expensive
+        // thread-number changing.
+        set_region_threads();
+
+        // Run a dummy nested OMP loop to make sure nested threading is
+        // initialized.
+#pragma omp parallel for
+        for (int i = 0; i < omp_get_max_threads() * 100; i++) {
+
+            idx_t dummy = 0;
+            set_block_threads();
+#pragma omp parallel for reduction(+:dummy)
+            for (int j = 0; j < i * 100; j++) {
+                dummy += j;
+            }
+        }
+        
         // TODO: enable multi-rank wave-front tiling.
         auto& step_dim = _dims->_step_dim;
         if (_opts->_region_sizes[step_dim] > 1 && _env->num_ranks > 1) {
