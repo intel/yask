@@ -34,23 +34,6 @@ Cache cache_model(MODEL_CACHE);
 using namespace std;
 namespace yask {
 
-    double getTimeInSecs() {
-
-#if defined(_OPENMP)
-        return omp_get_wtime();
-
-#elif defined(WIN32)
-        return 1e-3 * (double)GetTickCount64();
-
-#else
-        struct timespec ts;
-        clock_gettime(CLOCK_REALTIME, &ts);
-
-        return ((double)(ts.tv_sec) + 
-                1e-9 * (double)(ts.tv_nsec));
-#endif
-    }
-
     // Alligned allocation.
     char* alignedAlloc(std::size_t nbytes) {
 

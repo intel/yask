@@ -260,8 +260,7 @@ int main(int argc, char** argv)
     }
 
     // variables for measuring performance.
-    double wstart, wstop;
-    float best_elapsed_time=0.0f, best_apps=0.0f, best_dpps=0.0f, best_flops=0.0f;
+    double best_elapsed_time=0., best_apps=0., best_dpps=0., best_flops=0.;
 
     /////// Performance run(s).
     auto& step_dim = opts->_dims->_step_dim;
@@ -270,67 +269,49 @@ int main(int argc, char** argv)
         "Running " << opts->num_trials << " performance trial(s) of " <<
         dt << " step(s) each...\n" << flush;
     for (idx_t tr = 0; tr < opts->num_trials; tr++) {
-        os << divLine;
+        os << divLine << flush;
 
         // init data before each trial for comparison if validating.
         if (opts->validate)
             context->initDiff();
 
         // Stabilize.
-        os << flush;
         if (opts->pre_trial_sleep_time > 0)
             sleep(opts->pre_trial_sleep_time);
         kenv->global_barrier();
 
-        // Start timing.
+        // Start vtune collection.
         VTUNE_RESUME;
-        context->mpi_time = 0.0;
-        wstart = getTimeInSecs();
 
         // Actual work.
+        context->clear_timers();
         context->calc_rank_opt();
 
-        // Stop timing.
-        wstop =  getTimeInSecs();
+        // Stop vtune collection.
         VTUNE_PAUSE;
             
         // Calc and report perf.
-        float elapsed_time = (float)(wstop - wstart);
-        if (elapsed_time <= 0.f)
-            elapsed_time = 1e-9;
-        float apps = float(context->tot_numpts_dt) / elapsed_time;
-        float dpps = float(context->tot_domain_dt) / elapsed_time;
-        float flops = float(context->tot_numFpOps_dt) / elapsed_time;
-        os << 
-            "time (sec):                             " << makeNumStr(elapsed_time) << endl <<
-            "throughput (prob-size-points/sec):      " << makeNumStr(dpps) << endl <<
-            "throughput (point-updates/sec):         " << makeNumStr(apps) << endl <<
-            "throughput (est-FLOPS):                 " << makeNumStr(flops) << endl;
-#ifdef USE_MPI
-        os <<
-            "time in halo exch (sec):                " << makeNumStr(context->mpi_time);
-        float pct = 100.f * context->mpi_time / elapsed_time;
-        os << " (" << pct << "%)" << endl;
-#endif
+        auto stats = context->get_stats();
 
-        if (apps > best_apps) {
-            best_apps = apps;
-            best_dpps = dpps;
-            best_elapsed_time = elapsed_time;
-            best_flops = flops;
+        // Remember best.
+        if (context->domain_pts_ps > best_dpps) {
+            best_dpps = context->domain_pts_ps;
+            best_apps = context->writes_ps;
+            best_flops = context->flops;
+            best_elapsed_time = stats->get_elapsed_run_secs();
         }
     }
 
     os << divLine <<
-        "best-time (sec):                        " << makeNumStr(best_elapsed_time) << endl <<
-        "best-throughput (prob-size-points/sec): " << makeNumStr(best_dpps) << endl <<
-        "best-throughput (point-updates/sec):    " << makeNumStr(best_apps) << endl <<
-        "best-throughput (est-FLOPS):            " << makeNumStr(best_flops) << endl <<
+        "best-elapsed-time (sec):           " << makeNumStr(best_elapsed_time) << endl <<
+        "best-throughput (num-points/sec):  " << makeNumStr(best_dpps) << endl <<
+        "best-throughput (num-writes/sec):  " << makeNumStr(best_apps) << endl <<
+        "best-throughput (est-FLOPS):       " << makeNumStr(best_flops) << endl <<
         divLine <<
         "Notes:\n" <<
-        " prob-size-points/sec is based on problem-size as described above.\n" <<
-        " point-updates/sec is based on grid-point-updates as described above.\n" <<
-        " est-FLOPS is based on est-FP-ops as described above.\n" <<
+        " Num-points is based on overall-problem-size as described above.\n" <<
+        " Num-writes is based on num-writes-required as described above.\n" <<
+        " Est-FLOPS is based on est-FP-ops as described above.\n" <<
         endl;
     
     /////// Validation run.

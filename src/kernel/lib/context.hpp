@@ -49,6 +49,48 @@ namespace yask {
                        bool force_full = false);
     };
 
+    // Stats.
+    class Stats : public virtual yk_stats {
+    public:
+        idx_t npts = 0;
+        idx_t nwrites = 0;
+        idx_t nfpops = 0;
+        idx_t nsteps = 0;
+        double run_time = 0.;
+        double mpi_time = 0.;
+
+        Stats() {}
+        virtual ~Stats() {}
+
+        void clear() {
+            npts = nwrites = nfpops = nsteps = 0;
+            run_time = mpi_time = 0.;
+        }
+        
+        // APIs.
+        
+        /// Get the number of points in the overall domain.
+        virtual idx_t
+        get_num_points() { return npts; }
+
+        /// Get the number of points written in each step.
+        virtual idx_t
+        get_num_writes() { return nwrites; }
+
+        /// Get the estimated number of floating-point operations required for each step.
+        virtual idx_t
+        get_est_fp_ops() { return nfpops; }
+
+        /// Get the number of steps calculated via run_solution().
+        virtual idx_t
+        get_num_steps_done() { return nsteps; }
+
+        /// Get the number of seconds elapsed during calls to run_solution().
+        virtual double
+        get_elapsed_run_secs() { return run_time; }
+        
+    };
+    
     // Collections of things in a context.
     class EqGroupBase;
     typedef std::vector<EqGroupBase*> EqGroupList;
@@ -125,7 +167,7 @@ namespace yask {
         IdxTuple max_halos;  // spatial halos.
         IdxTuple angles;     // temporal skewing angles.
 
-        // Various metrics calculated in prepare_solution().
+        // Various amount-of-work metrics calculated in prepare_solution().
         // 'rank_' prefix indicates for this rank.
         // 'tot_' prefix indicates over all ranks.
         // 'domain' indicates points in domain-size specified on cmd-line.
@@ -136,17 +178,25 @@ namespace yask {
         // '_1t' suffix indicates work for one time-step.
         // '_dt' suffix indicates work for all time-steps.
         idx_t rank_domain_1t=0, rank_domain_dt=0, tot_domain_1t=0, tot_domain_dt=0;
-        idx_t rank_numpts_1t=0, rank_numpts_dt=0, tot_numpts_1t=0, tot_numpts_dt=0;
+        idx_t rank_numWrites_1t=0, rank_numWrites_dt=0, tot_numWrites_1t=0, tot_numWrites_dt=0;
         idx_t rank_reads_1t=0, rank_reads_dt=0, tot_reads_1t=0, tot_reads_dt=0;
         idx_t rank_numFpOps_1t=0, rank_numFpOps_dt=0, tot_numFpOps_1t=0, tot_numFpOps_dt=0;
         idx_t rank_nbytes=0, tot_nbytes=0;
+
+        // Elapsed-time tracking.
+        YaskTimer run_time;     // time in run_solution(), including MPI.
+        YaskTimer mpi_time;     // time spent just doing MPI.
+        idx_t steps_done = 0;   // number of steps that have been run.
+        double domain_pts_ps = 0.; // points-per-sec in domain.
+        double writes_ps = 0.;     // writes-per-sec.
+        double flops = 0.;      // est. FLOPS.
         
         // MPI settings.
-        double mpi_time = 0.0;          // time spent doing MPI.
+        // TODO: move to settings or MPI info object.
         bool allow_vec_exchange = true; // allow vectorized halo exchange.
 
-        // Actual MPI buffers.
-        // MPI buffers are tagged by their grid names.
+        // MPI data for each grid.
+        // Map key: grid name.
         std::map<std::string, MPIData> mpiData;
         
         // Constructor.
@@ -170,7 +220,15 @@ namespace yask {
         }
 
         // Destructor.
-        virtual ~StencilContext() { }
+        virtual ~StencilContext() {
+
+            // Dump stats if get_stats() hasn't been called yet.
+            if (steps_done)
+                get_stats();
+
+            // Free mem.
+            end_solution();
+        }
 
         // Set ostr to given stream if provided.
         // If not provided, set to cout if my_rank == msg_rank
@@ -181,6 +239,13 @@ namespace yask {
         virtual std::ostream& get_ostr() const {
             assert(_ostr);
             return *_ostr;
+        }
+
+        // Reset elapsed times to zero.
+        virtual void clear_timers() {
+            run_time.clear();
+            mpi_time.clear();
+            steps_done = 0;
         }
 
         // Access to settings.
@@ -217,6 +282,17 @@ namespace yask {
         // Initialize some other data structures.
         // Print lots of stats.
         virtual void prepare_solution();
+
+
+        /// Get statistics associated with preceding calls to run_solution().
+        /**
+           Resets all timers and step counters.
+           @returns Pointer to statistics object.
+        */
+        virtual yk_stats_ptr get_stats();
+
+        // Dealloc grids, etc.
+        virtual void end_solution();
 
         // Set grid sizes and offsets.
         // This should be called anytime a setting or offset is changed.

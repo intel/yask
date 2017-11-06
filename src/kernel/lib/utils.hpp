@@ -43,9 +43,6 @@ namespace yask {
 #endif
     }
 
-    // Some utility functions.
-    extern double getTimeInSecs();
-
     // Return num with SI multiplier and "iB" suffix,
     // e.g., 41.2KiB.
     extern std::string makeByteStr(size_t nbytes);
@@ -67,7 +64,7 @@ namespace yask {
 
     // Helpers for shared and aligned malloc and free.
     // Use like this:
-    // shared_ptr<char> sp(alignedAlloc(nbytes), AlignedDeleter());
+    // shared_ptr<char> p(alignedAlloc(nbytes), AlignedDeleter());
     extern char* alignedAlloc(std::size_t nbytes);
     struct AlignedDeleter {
         void operator()(char* p) {
@@ -75,6 +72,53 @@ namespace yask {
         }
     };
 
+    // A class for maintaining elapsed time.
+    class YaskTimer {
+
+        /* struct timespec {
+           time_t   tv_sec;        // seconds
+           long     tv_nsec;       // nanoseconds
+           };
+        */
+        struct timespec _begin, _end, _elapsed;
+
+    public:
+        YaskTimer() { clear(); }
+        virtual ~YaskTimer() { }
+
+        // Reset elapsed time to zero.
+        virtual void clear() {
+            _begin.tv_sec = _end.tv_sec = _elapsed.tv_sec = 0;
+            _begin.tv_nsec = _end.tv_nsec = _elapsed.tv_nsec = 0;
+        }
+
+        // Start a timed region.
+        // start() and stop() can be called multiple times in
+        // pairs before calling get_elapsed_secs(), which
+        // will return the cumulative time over all timed regions.
+        virtual void start() {
+            clock_gettime(CLOCK_REALTIME, &_begin);
+        }
+
+        // End a timed region.
+        virtual void stop() {
+            clock_gettime(CLOCK_REALTIME, &_end);
+
+            // Elapsed time is just end - begin times.
+            _elapsed.tv_sec += _end.tv_sec - _begin.tv_sec;
+
+            // No need to check for sign or to normalize, because tv_nsec is
+            // signed and 64-bit.
+            _elapsed.tv_nsec += _end.tv_nsec - _begin.tv_nsec;
+        }
+
+        // Get elapsed time in sec.
+        // Does not reset value, so it may be used for cumulative time.
+        virtual double get_elapsed_secs() {
+            return double(_elapsed.tv_sec) + double(_elapsed.tv_nsec) * 1e-9;
+        }
+    };
+    
     // A class to parse command-line args.
     class CommandLineParser {
 

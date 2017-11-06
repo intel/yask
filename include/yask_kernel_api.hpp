@@ -55,6 +55,8 @@ namespace yask {
     typedef std::shared_ptr<yk_solution> yk_solution_ptr;
     class yk_grid;
     typedef std::shared_ptr<yk_grid> yk_grid_ptr;
+    class yk_stats;
+    typedef std::shared_ptr<yk_stats> yk_stats_ptr;
 
     /// Factory to create a stencil solution.
     class yk_factory {
@@ -517,8 +519,75 @@ namespace yask {
         virtual void
         share_grid_storage(yk_solution_ptr source
                            /**< [in] Solution from which grid storage will be shared. */) =0;
+
+        /// Get statistics associated with preceding calls to run_solution().
+        /**
+           Resets all timers and step counters.
+           @returns Pointer to statistics object.
+        */
+        virtual yk_stats_ptr
+        get_stats() =0;
+
+        /// Finish using a solution.
+        /**
+           Releases shared ownership of memory used by the grids.  This will
+           result in deallocating each memory block whose ownership is not
+           shared by another shared pointer.
+        */
+        virtual void
+        end_solution() =0;
     };
 
+    /// Statistics from calls to run_solution().
+    /**
+       A throughput rate may be calculated by multiplying an
+       amount-of-work-per-step quantity by the number of steps done and
+       dividing by the number of seconds elapsed.
+    */
+    class yk_stats {
+    public:
+
+        /// Get the number of points in the overall domain.
+        /**
+           @returns Product of all the overal domain sizes across all domain dimensions.
+        */
+        virtual idx_t
+        get_num_points() =0;
+
+        /// Get the number of points written in each step.
+        /**
+           @returns Number of points written to each output grid.
+           This is the same value as get_num_points() if there is only one output grid.
+        */
+        virtual idx_t
+        get_num_writes() =0;
+
+        /// Get the estimated number of floating-point operations required for each step.
+        /**
+           @returns Number of FP ops created by the stencil compiler.
+           It may be slightly more or less than the actual number of FP ops executed 
+           by the CPU due to C++ compiler transformations.
+        */
+        virtual idx_t
+        get_est_fp_ops() =0;
+
+        /// Get the number of steps calculated via run_solution().
+        /**
+           @returns A positive number, regardless of whether run_solution() steps were executed
+           forward or backward.
+        */
+        virtual idx_t
+        get_num_steps_done() =0;
+
+        /// Get the number of seconds elapsed during calls to run_solution().
+        /**
+           @returns Only the time spent in run_solution(), not in any other code in your
+           application between calls.
+        */
+        virtual double
+        get_elapsed_run_secs() =0;
+    };
+    
     /// A run-time grid.
     /**
        "Grid" is a generic term for any n-dimensional array.  A 0-dim grid

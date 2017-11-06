@@ -292,13 +292,13 @@ open OUTFILE, ">$outFile" or die "error: cannot write to '$outFile'\n"
   unless $checking;
 
 # things to get from the run.
-my $fitnessMetric = 'best-throughput (point-updates/sec)';
-my $timeMetric = 'best-time (sec)';
+my $fitnessMetric = 'best-throughput (num-points/sec)';
+my $timeMetric = 'best-elapsed-time (sec)';
 my $dimsMetric = 'rank-domain-size';
 my @metrics = ( $fitnessMetric,
                 $timeMetric,
                 $dimsMetric,
-                'best-throughput (prob-size-points/sec)',
+                'best-throughput (num-writes/sec)',
                 'best-throughput (est-FLOPS)',
                 'Num OpenMP threads',
                 'region-size',
@@ -316,9 +316,9 @@ my @metrics = ( $fitnessMetric,
                 'minimum-padding',
                 'L1-prefetch-distance',
                 'L2-prefetch-distance',
-                'overall-problem-size in all ranks, for all time-steps',
-                'grid-point-updates in all ranks, for all time-steps',
-                'grid-point-reads in all ranks, for all time-steps',
+                'overall-problem-size in all ranks for one time-step',
+                'num-writes-required in all ranks for one time-step',
+                'num-reads-required in all ranks for one time-step',
                 'Total overall allocation',
               );
 

@@ -116,6 +116,8 @@ namespace yask {
     // Eval stencil equation group(s) over grid(s) using scalar code.
     void StencilContext::calc_rank_ref()
     {
+        run_time.start();
+
         auto& step_dim = _dims->_step_dim;
         auto step_posn = Indices::step_posn;
         int ndims = _dims->_stencil_dims.getNumDims();
@@ -123,6 +125,7 @@ namespace yask {
         idx_t end_t = _opts->_rank_sizes[step_dim];
         idx_t step_t = _dims->_step_dir;
         assert(abs(step_t) == 1);
+        steps_done += abs(end_t - begin_t);
 
         // backward?
         if (step_t < 0) {
@@ -204,18 +207,23 @@ namespace yask {
 
         // Make sure all ranks are done.
         _env->global_barrier();
+
+        run_time.stop();
     }
 
     // Eval equation group(s) over grid(s) using optimized code.
     void StencilContext::run_solution(idx_t first_step_index,
                                       idx_t last_step_index)
     {
+        run_time.start();
+        
         auto& step_dim = _dims->_step_dim;
         auto step_posn = Indices::step_posn;
         idx_t begin_t = first_step_index;
         idx_t step_t = _opts->_region_sizes[step_dim] * _dims->_step_dir;
         idx_t end_t = last_step_index + _dims->_step_dir; // end is beyond last.
         int ndims = _dims->_stencil_dims.size();
+        steps_done += abs(end_t - begin_t);
 
         // Begin, end, step, last tuples.
         IdxTuple begin(_dims->_stencil_dims);
@@ -375,6 +383,7 @@ namespace yask {
             cache_model.disable();
         }
 #endif
+        run_time.stop();
     }
 
     // Apply solution for time-steps specified in _rank_sizes.
@@ -536,9 +545,6 @@ namespace yask {
         ostream& os = get_ostr();
         auto& step_dim = _dims->_step_dim;
         auto me = _env->my_rank;
-
-        // reset MPI time keeper.
-        mpi_time = 0;
 
         // Check ranks.
         idx_t req_ranks = _opts->_num_ranks.product();
@@ -1156,6 +1162,9 @@ namespace yask {
     // Initialize some data structures.
     void StencilContext::prepare_solution() {
 
+        // reset time keepers.
+        clear_timers();
+
         // Don't continue until all ranks are this far.
         _env->global_barrier();
 
@@ -1265,13 +1274,13 @@ namespace yask {
             endl;
         
         // sums across eqs for this rank.
-        rank_numpts_1t = 0;
+        rank_numWrites_1t = 0;
         rank_reads_1t = 0;
         rank_numFpOps_1t = 0;
         for (auto* eg : eqGroups) {
             idx_t updates1 = eg->get_scalar_points_written();
             idx_t updates_domain = updates1 * eg->bb_num_points;
-            rank_numpts_1t += updates_domain;
+            rank_numWrites_1t += updates_domain;
             idx_t reads1 = eg->get_scalar_points_read();
             idx_t reads_domain = reads1 * eg->bb_num_points;
             rank_reads_1t += reads_domain;
@@ -1300,9 +1309,9 @@ namespace yask {
             makeByteStr(tot_nbytes) << "\n";
     
         // Various metrics for amount of work.
-        rank_numpts_dt = rank_numpts_1t * dt;
-        tot_numpts_1t = sumOverRanks(rank_numpts_1t, _env->comm);
-        tot_numpts_dt = tot_numpts_1t * dt;
+        rank_numWrites_dt = rank_numWrites_1t * dt;
+        tot_numWrites_1t = sumOverRanks(rank_numWrites_1t, _env->comm);
+        tot_numWrites_dt = tot_numWrites_1t * dt;
 
         rank_reads_dt = rank_reads_1t * dt;
         tot_reads_1t = sumOverRanks(rank_reads_1t, _env->comm);
@@ -1320,50 +1329,119 @@ namespace yask {
         // Print some more stats.
         os << endl <<
             "Amount-of-work stats:\n" <<
-            " domain-size in this rank, for one time-step: " <<
+            " domain-size in this rank for one time-step: " <<
             makeNumStr(rank_domain_1t) << endl <<
-            " overall-problem-size in all ranks, for one time-step: " <<
+            " overall-problem-size in all ranks for one time-step: " <<
             makeNumStr(tot_domain_1t) << endl <<
-            " domain-size in this rank, for all time-steps: " <<
-            makeNumStr(rank_domain_dt) << endl <<
-            " overall-problem-size in all ranks, for all time-steps: " <<
-            makeNumStr(tot_domain_dt) << endl <<
             endl <<
-            " grid-point-updates in this rank, for one time-step: " <<
-            makeNumStr(rank_numpts_1t) << endl <<
-            " grid-point-updates in all ranks, for one time-step: " <<
-            makeNumStr(tot_numpts_1t) << endl <<
-            " grid-point-updates in this rank, for all time-steps: " <<
-            makeNumStr(rank_numpts_dt) << endl <<
-            " grid-point-updates in all ranks, for all time-steps: " <<
-            makeNumStr(tot_numpts_dt) << endl <<
+            " num-writes-required in this rank for one time-step: " <<
+            makeNumStr(rank_numWrites_1t) << endl <<
+            " num-writes-required in all ranks for one time-step: " <<
+            makeNumStr(tot_numWrites_1t) << endl <<
             endl <<
-            " grid-point-reads in this rank, for one time-step: " <<
+            " num-reads-required in this rank for one time-step: " <<
             makeNumStr(rank_reads_1t) << endl <<
-            " grid-point-reads in all ranks, for one time-step: " <<
+            " num-reads-required in all ranks for one time-step: " <<
             makeNumStr(tot_reads_1t) << endl <<
-            " grid-point-reads in this rank, for all time-steps: " <<
-            makeNumStr(rank_reads_dt) << endl <<
-            " grid-point-reads in all ranks, for all time-steps: " <<
-            makeNumStr(tot_reads_dt) << endl <<
             endl <<
-            " est-FP-ops in this rank, for one time-step: " <<
+            " est-FP-ops in this rank for one time-step: " <<
             makeNumStr(rank_numFpOps_1t) << endl <<
-            " est-FP-ops in all ranks, for one time-step: " <<
+            " est-FP-ops in all ranks for one time-step: " <<
             makeNumStr(tot_numFpOps_1t) << endl <<
-            " est-FP-ops in this rank, for all time-steps: " <<
-            makeNumStr(rank_numFpOps_dt) << endl <<
-            " est-FP-ops in all ranks, for all time-steps: " <<
-            makeNumStr(tot_numFpOps_dt) << endl <<
-            endl << 
+            endl;
+
+        if (dt > 1) {
+            os <<
+                " domain-size in this rank for all time-steps: " <<
+                makeNumStr(rank_domain_dt) << endl <<
+                " overall-problem-size in all ranks for all time-steps: " <<
+                makeNumStr(tot_domain_dt) << endl <<
+                endl <<
+                " num-writes-required in this rank for all time-steps: " <<
+                makeNumStr(rank_numWrites_dt) << endl <<
+                " num-writes-required in all ranks for all time-steps: " <<
+                makeNumStr(tot_numWrites_dt) << endl <<
+                endl <<
+                " num-reads-required in this rank for all time-steps: " <<
+                makeNumStr(rank_reads_dt) << endl <<
+                " num-reads-required in all ranks for all time-steps: " <<
+                makeNumStr(tot_reads_dt) << endl <<
+                endl <<
+                " est-FP-ops in this rank for all time-steps: " <<
+                makeNumStr(rank_numFpOps_dt) << endl <<
+                " est-FP-ops in all ranks for all time-steps: " <<
+                makeNumStr(tot_numFpOps_dt) << endl <<
+                endl;
+        }
+        os <<
             "Notes:\n"
             " Domain-sizes and overall-problem-sizes are based on rank-domain sizes\n"
             "  and number of ranks regardless of number of grids or sub-domains.\n"
-            " Grid-point-updates are based on sum of grid-updates in sub-domain across equation-group(s).\n"
-            " Grid-point-reads are based on sum of grid-reads in sub-domain across equation-group(s).\n"
+            " Num-writes-required is based on sum of grid-updates in sub-domain across equation-group(s).\n"
+            " Num-reads-required is based on sum of grid-reads in sub-domain across equation-group(s).\n"
             " Est-FP-ops are based on sum of est-FP-ops in sub-domain across equation-group(s).\n"
             "\n";
+    }
 
+    /// Get statistics associated with preceding calls to run_solution().
+    yk_stats_ptr StencilContext::get_stats() {
+        ostream& os = get_ostr();
+
+        // Calc and report perf.
+        double rtime = run_time.get_elapsed_secs();
+        double mtime = mpi_time.get_elapsed_secs();
+        if (rtime > 0.) {
+            domain_pts_ps = double(tot_domain_1t * steps_done) / rtime;
+            writes_ps= double(tot_numWrites_1t * steps_done) / rtime;
+            flops = double(tot_numFpOps_1t * steps_done) / rtime;
+        }
+        else
+            domain_pts_ps = writes_ps = flops = 0.;
+        if (steps_done > 0) {
+            os <<
+                "num-points-per-step:                    " << makeNumStr(tot_domain_1t) << endl <<
+                "num-writes-per-step:                    " << makeNumStr(tot_numWrites_1t) << endl <<
+                "num-est-FP-ops-per-step:                " << makeNumStr(tot_numFpOps_1t) << endl <<
+                "num-steps-done:                         " << makeNumStr(steps_done) << endl <<
+                "elapsed-time (sec):                     " << makeNumStr(rtime) << endl <<
+                "throughput (num-points/sec):            " << makeNumStr(domain_pts_ps) << endl <<
+                "throughput (num-writes/sec):            " << makeNumStr(writes_ps) << endl <<
+                "throughput (est-FLOPS):                 " << makeNumStr(flops) << endl;
+#ifdef USE_MPI
+            os <<
+                "time in halo exch (sec):                " << makeNumStr(mtime);
+            float pct = 100. * mtime / rtime;
+            os << " (" << pct << "%)" << endl;
+#endif
+        }
+
+        // Fill in return object.
+        auto p = make_shared<Stats>();
+        p->npts = tot_domain_1t;
+        p->nwrites = tot_numWrites_1t;
+        p->nfpops = tot_numFpOps_1t;
+        p->nsteps = steps_done;
+        p->run_time = rtime;
+        p->mpi_time = mtime;
+
+        // Clear counters.
+        clear_timers();
+
+        return p;
+    }
+    
+    // Dealloc grids, etc.
+    void StencilContext::end_solution() {
+
+        // Release any MPI data.
+        mpiData.clear();
+
+        // Release grid data.
+        for (auto gp : gridPtrs) {
+            if (!gp)
+                continue;
+            gp->release_storage();
+        }            
     }
 
     // Init all grids & params by calling initFn.
@@ -1524,11 +1602,13 @@ namespace yask {
     // [BIG] TODO: overlap halo exchange with computation.
     void StencilContext::exchange_halos(idx_t start, idx_t stop, EqGroupBase& eg)
     {
-        auto opts = get_settings();
+#ifdef USE_MPI
+        if (_env->num_ranks < 2)
+            return;
+        mpi_time.start();
         TRACE_MSG("exchange_halos: " << start << " ... (end before) " << stop <<
                   " for eq-group '" << eg.get_name() << "'");
-#ifdef USE_MPI
-        double start_time = getTimeInSecs();
+        auto opts = get_settings();
         auto& sd = _dims->_step_dim;
 
         // 1D array to store send request handles.
@@ -1715,8 +1795,7 @@ namespace yask {
                 TRACE_MSG("exchange_halos: no MPI send requests to wait for");
         } // steps.
         
-        double end_time = getTimeInSecs();
-        mpi_time += end_time - start_time;
+        mpi_time.stop();
 #endif
     }
 
