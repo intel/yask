@@ -95,6 +95,15 @@ namespace yask {
         comm = 0;
 #endif
 
+        // Turn off denormals unless the USE_DENORMALS 
+#ifndef USE_DENORMALS
+        // Enable FTZ
+        _MM_SET_FLUSH_ZERO_MODE(_MM_FLUSH_ZERO_ON);
+
+        //Enable DAZ
+        _MM_SET_DENORMALS_ZERO_MODE(_MM_DENORMALS_ZERO_ON);
+#endif
+        
         // Set env vars needed by OMP.
         // TODO: make this visible to the user.
         int ret = setenv("OMP_PLACES", "cores", 0); // default placement for outer loop.
