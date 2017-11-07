@@ -41,8 +41,8 @@ ifeq ($(shell uname -o),Cygwin)
 else
   SO_SUFFIX	:=	.so
   RUN_PREFIX	:=
-  PYTHON		:=	python
-  CXX_PREFIX	:=	time
+  PYTHON	:=	python
+  CXX_PREFIX	:=	
 endif
 
 # Output files and dirs.

@@ -349,8 +349,8 @@ ifeq ($(shell uname -o),Cygwin)
 else
   SO_SUFFIX	:=	.so
   RUN_PREFIX	:=
-  PYTHON		:=	python
-  CXX_PREFIX	:=	time
+  PYTHON	:=	python
+  CXX_PREFIX	:=
 endif
 
 # Output files and dirs.
@@ -425,6 +425,7 @@ YK_LFLAGS	:=	-lrt -Wl,-rpath=$(LIB_DIR) -L$(LIB_DIR) -l$(YK_BASE2)
 
 # Tools.
 SWIG		:=	swig
+PERL		:=	perl
 
 # Find include path needed for python interface.
 # NB: constructing string inside print() to work for python 2 or 3.
@@ -545,19 +546,19 @@ $(MAKE_REPORT_FILE): $(YK_LIB)
 # Generated source files.
 $(YK_GEN_DIR)/yask_rank_loops.hpp: $(GEN_LOOPS) $(YK_DIMS_FILE)
 	$(YK_MK_GEN_DIR)
-	$< -output $@ $(RANK_LOOP_OPTS) $(EXTRA_LOOP_OPTS) $(EXTRA_RANK_LOOP_OPTS) "$(RANK_LOOP_CODE)"
+	$(PERL) $< -output $@ $(RANK_LOOP_OPTS) $(EXTRA_LOOP_OPTS) $(EXTRA_RANK_LOOP_OPTS) "$(RANK_LOOP_CODE)"
 
 $(YK_GEN_DIR)/yask_region_loops.hpp: $(GEN_LOOPS) $(YK_DIMS_FILE)
 	$(YK_MK_GEN_DIR)
-	$< -output $@ $(REGION_LOOP_OPTS) $(EXTRA_LOOP_OPTS) $(EXTRA_REGION_LOOP_OPTS) "$(REGION_LOOP_CODE)"
+	$(PERL) $< -output $@ $(REGION_LOOP_OPTS) $(EXTRA_LOOP_OPTS) $(EXTRA_REGION_LOOP_OPTS) "$(REGION_LOOP_CODE)"
 
 $(YK_GEN_DIR)/yask_block_loops.hpp: $(GEN_LOOPS) $(YK_DIMS_FILE)
 	$(YK_MK_GEN_DIR)
-	$< -output $@ $(BLOCK_LOOP_OPTS) $(EXTRA_LOOP_OPTS) $(EXTRA_BLOCK_LOOP_OPTS) "$(BLOCK_LOOP_CODE)"
+	$(PERL) $< -output $@ $(BLOCK_LOOP_OPTS) $(EXTRA_LOOP_OPTS) $(EXTRA_BLOCK_LOOP_OPTS) "$(BLOCK_LOOP_CODE)"
 
 $(YK_GEN_DIR)/yask_sub_block_loops.hpp: $(GEN_LOOPS) $(YK_DIMS_FILE)
 	$(YK_MK_GEN_DIR)
-	$< -output $@ $(SUB_BLOCK_LOOP_OPTS) $(EXTRA_LOOP_OPTS) $(EXTRA_SUB_BLOCK_LOOP_OPTS) "$(SUB_BLOCK_LOOP_CODE)"
+	$(PERL) $< -output $@ $(SUB_BLOCK_LOOP_OPTS) $(EXTRA_LOOP_OPTS) $(EXTRA_SUB_BLOCK_LOOP_OPTS) "$(SUB_BLOCK_LOOP_CODE)"
 
 $(YK_GEN_DIR)/yask_misc_loops.hpp: $(GEN_LOOPS) $(YK_DIMS_FILE)
 	$(YK_MK_GEN_DIR)
@@ -565,21 +566,21 @@ $(YK_GEN_DIR)/yask_misc_loops.hpp: $(GEN_LOOPS) $(YK_DIMS_FILE)
 
 $(YK_GEN_DIR)/yask_layout_macros.hpp: $(GEN_LAYOUTS)
 	$(YK_MK_GEN_DIR)
-	$< -m $(max_dims) > $@
+	$(PERL) $< -m $(max_dims) > $@
 	@- gindent -fca $@ || \
 	  indent -fca $@ ||   \
 	  echo "note:" $@ "is not properly indented because indent program failed or was not found."
 
 $(YK_GEN_DIR)/yask_layouts.hpp: $(GEN_LAYOUTS)
 	$(YK_MK_GEN_DIR)
-	$< -d $(max_dims) > $@
+	$(PERL) $< -d $(max_dims) > $@
 	@- gindent -fca $@ || \
 	  indent -fca $@ ||   \
 	  echo "note:" $@ "is not properly indented because indent program failed or was not found."
 
 $(YK_GEN_DIR)/yask_grid_code.hpp: $(GEN_LAYOUTS)
 	$(YK_MK_GEN_DIR)
-	$< -g $(max_dims) > $@
+	$(PERL) $< -g $(max_dims) > $@
 
 # Extract the number of stencil dims from the compiler output.
 # Use this to create an option to pass to the loop generator script.
@@ -795,7 +796,7 @@ echo-settings:
 code-stats:
 	@echo
 	@echo "Code stats for stencil computation:"
-	$(GET_LOOP_STATS) -t=$(YK_CODE_FILE) factory.s
+	$(PERL) $(GET_LOOP_STATS) -t=$(YK_CODE_FILE) factory.s
 
 help:
 	@echo "Example performance builds of kernel cmd-line tool:"
