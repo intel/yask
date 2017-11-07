@@ -1212,6 +1212,7 @@ namespace yask {
 
         // Run a dummy nested OMP loop to make sure nested threading is
         // initialized.
+#ifdef _OPENMP
 #pragma omp parallel for
         for (int i = 0; i < omp_get_max_threads() * 100; i++) {
 
@@ -1222,6 +1223,7 @@ namespace yask {
                 dummy += j;
             }
         }
+#endif
         
         // TODO: enable multi-rank wave-front tiling.
         auto& step_dim = _dims->_step_dim;

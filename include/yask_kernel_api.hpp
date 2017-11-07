@@ -514,15 +514,16 @@ namespace yask {
         /**
            Calls yk_grid::share_storage() for each pair of grids that have the same name
            in this solution and the source solution.
-           All conditions listed in yk_grid::share_storage() must hold for each of the pairs.
+           All conditions listed in yk_grid::share_storage() must hold for each pair.
         */
         virtual void
         share_grid_storage(yk_solution_ptr source
                            /**< [in] Solution from which grid storage will be shared. */) =0;
 
-        /// Get statistics associated with preceding calls to run_solution().
+        /// Get performance statistics associated with preceding calls to run_solution().
         /**
-           Resets all timers and step counters.
+           Side effect: resets all statistics, so a subsequent call will
+           measure performance after the current call.
            @returns Pointer to statistics object.
         */
         virtual yk_stats_ptr
