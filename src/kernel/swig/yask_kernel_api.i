@@ -43,6 +43,7 @@ IN THE SOFTWARE.
 %shared_ptr(yask::yk_settings)
 %shared_ptr(yask::yk_solution)
 %shared_ptr(yask::yk_grid)
+%shared_ptr(yask::yk_stats)
 
 // Mutable buffer to access raw data.
 %pybuffer_mutable_string(void* buffer_ptr)
