@@ -32,54 +32,28 @@ class SSGElasticStencil : public ElasticStencilBase {
 protected:
 
     // Time-varying 3D-spatial velocity grids.
-    Grid v_bl_w;
-    Grid v_tl_v;
-    Grid v_tr_u;
+    MAKE_GRID(v_bl_w, t, x, y, z);
+    MAKE_GRID(v_tl_v, t, x, y, z);
+    MAKE_GRID(v_tr_u, t, x, y, z);
 
     // Time-varying 3D-spatial Stress grids.
-    Grid s_tl_xx, s_tl_yy, s_tl_zz;
-    Grid s_bl_yz;
-    Grid s_br_xz;
-    Grid s_tr_xy;
+    MAKE_GRID(s_bl_yz, t, x, y, z);
+    MAKE_GRID(s_br_xz, t, x, y, z);
+    MAKE_GRID(s_tl_xx, t, x, y, z);
+    MAKE_GRID(s_tl_yy, t, x, y, z);
+    MAKE_GRID(s_tl_zz, t, x, y, z);
+    MAKE_GRID(s_tr_xy, t, x, y, z);
 
     // 3D-spatial coefficients.
-    Grid mu;
-    Grid lambda;
-    Grid lambdamu2;
+    MAKE_GRID(mu, x, y, z);
+    MAKE_GRID(lambda, x, y, z);
+    MAKE_GRID(lambdamu2, x, y, z);
 
 public:
 
     SSGElasticStencil( StencilList& stencils) :
         ElasticStencilBase("ssg", stencils)
     {
-        // Specify the dimensions of each grid.
-        // (This names the dimensions; it does not specify their sizes.)
-        INIT_GRID_4D(v_bl_w, t, x, y, z);
-        INIT_GRID_4D(v_tl_v, t, x, y, z);
-        INIT_GRID_4D(v_tr_u, t, x, y, z);
-        INIT_GRID_4D(s_bl_yz, t, x, y, z);
-        INIT_GRID_4D(s_br_xz, t, x, y, z);
-        INIT_GRID_4D(s_tl_xx, t, x, y, z);
-        INIT_GRID_4D(s_tl_yy, t, x, y, z);
-        INIT_GRID_4D(s_tl_zz, t, x, y, z);
-        INIT_GRID_4D(s_tr_xy, t, x, y, z);
-        INIT_GRID_3D(rho, x, y, z);
-        INIT_GRID_3D(mu, x, y, z);
-        INIT_GRID_3D(lambda, x, y, z);
-        INIT_GRID_3D(lambdamu2, x, y, z);
-
-        // Initialize the parameters (both are scalars).
-        //INIT_PARAM(delta_t);
-        //INIT_PARAM(dxi);
-        //INIT_PARAM(dyi);
-        //INIT_PARAM(dzi);
-
-        // StencilContex specific code
-        REGISTER_STENCIL_CONTEXT_EXTENSION(
-           virtual void initData() {
-               initDiff();
-           }
-        );
     }
 
     GridValue interp_mu( GridIndex x, GridIndex y, GridIndex z, const BR )
@@ -123,7 +97,7 @@ public:
 
     template<typename N, typename DA, typename SA, typename DB, typename SB>
     void define_str(GridIndex t, GridIndex x, GridIndex y, GridIndex z, 
-            Grid &s, Grid &va, Grid &vb) {
+                    Grid &s, Grid &va, Grid &vb) {
 
         GridValue lcoeff = interp_mu<N>( x, y, z );
 
@@ -149,14 +123,14 @@ public:
         GridValue vtz    = stencil_O8<Z,B>( t, x, y, z, v_bl_w );
 
         GridValue next_xx = s_tl_xx(t, x, y, z) + ilambdamu2 * vtx * delta_t
-                                                + ilambda    * vty * delta_t
-                                                + ilambda    * vtz * delta_t;
+            + ilambda    * vty * delta_t
+            + ilambda    * vtz * delta_t;
         GridValue next_yy = s_tl_yy(t, x, y, z) + ilambda    * vtx * delta_t
-                                                + ilambdamu2 * vty * delta_t
-                                                + ilambda    * vtz * delta_t;
+            + ilambdamu2 * vty * delta_t
+            + ilambda    * vtz * delta_t;
         GridValue next_zz = s_tl_zz(t, x, y, z) + ilambda    * vtx * delta_t
-                                                + ilambda    * vty * delta_t
-                                                + ilambdamu2 * vtz * delta_t;
+            + ilambda    * vty * delta_t
+            + ilambdamu2 * vtz * delta_t;
 
         // define the value at t+1.
         s_tl_xx(t+1, x, y, z) == next_xx;
@@ -165,11 +139,7 @@ public:
     }
 
     // Call all the define_* functions.
-    virtual void define(const IntTuple& offsets) {
-        GET_OFFSET(t);
-        GET_OFFSET(x);
-        GET_OFFSET(y);
-        GET_OFFSET(z);
+    virtual void define() {
 
         // Define velocity components.
         define_vel<BL, F, B, B>(t, x, y, z, v_bl_w, s_bl_yz, s_br_xz, s_tl_zz);

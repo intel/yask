@@ -26,84 +26,10 @@ IN THE SOFTWARE.
 #ifndef YASK_UTILS
 #define YASK_UTILS
 
-#include <assert.h>
-#include <stddef.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <malloc.h>
-#include <stdlib.h>
-#include <string.h>
-#include <math.h>
-#include <time.h>
-#include <limits.h>
-
-#include <stdexcept>
-#include <map>
-#include <set>
-#include <vector>
-#include <string>
-#include <iostream>
-#include <fstream>
-#include <sstream>
-#include <cstdlib>
-
-#ifdef WIN32
-#define _Pragma(x)
-#endif
-
-#if defined(__GNUC__) && !defined(__ICC)
-#define __assume(x) ((void)0)
-#define __declspec(x)
-#endif
-
-#if (defined(__GNUC__) && !defined(__ICC)) || defined(WIN32)
-#define restrict
-#define __assume_aligned(p,n) ((void)0)
-#endif
-
-// VTune or stubs.
-#ifdef USE_VTUNE
-#include "ittnotify.h"
-#define VTUNE_PAUSE  __itt_pause()
-#define VTUNE_RESUME __itt_resume()
-#else
-#define VTUNE_PAUSE ((void)0)
-#define VTUNE_RESUME ((void)0)
-#endif
-
-// MPI or stubs.
-#ifdef USE_MPI
-#include "mpi.h"
-#else
-#define MPI_PROC_NULL (-1)
-#define MPI_Barrier(comm) ((void)0)
-#define MPI_Comm int
-#define MPI_Finalize() ((void)0)
-#endif
-
-// OpenMP or stubs.
-#ifdef _OPENMP
-#include <omp.h>
-#else
-inline int omp_get_num_procs() { return 1; }
-inline int omp_get_num_threads() { return 1; }
-inline int omp_get_max_threads() { return 1; }
-inline int omp_get_thread_num() { return 0; }
-inline void omp_set_num_threads(int n) { }
-inline void omp_set_nested(int n) { }
-#endif
-
-// rounding macros for integer types.
-#define CEIL_DIV(numer, denom) (((numer) + (denom) - 1) / (denom))
-#define ROUND_UP(n, mult) (CEIL_DIV(n, mult) * (mult))
-
-// Default alignment and padding.
-#define CACHELINE_BYTES  (64)
-#define YASK_PAD (17) // cache-lines between data buffers.
-#define YASK_ALIGNMENT (2 * 1024 * 1024) // 2MiB-page
-
 namespace yask {
 
+    // Fatal error.
+    // TODO: enable exception throwing that works w/SWIG.
     inline void exit_yask(int code) {
 #ifdef USE_MPI
         int flag;
@@ -117,10 +43,12 @@ namespace yask {
 #endif
     }
 
-    // Some utility functions.
-    extern double getTimeInSecs();
-    extern std::string printWithPow2Multiplier(double num);
-    extern std::string printWithPow10Multiplier(double num);
+    // Return num with SI multiplier and "iB" suffix,
+    // e.g., 41.2KiB.
+    extern std::string makeByteStr(size_t nbytes);
+
+    // Return num with SI multiplier, e.g., 4.23M.
+    extern std::string makeNumStr(double num);
 
     // Find sum of rank_vals over all ranks.
     extern idx_t sumOverRanks(idx_t rank_val, MPI_Comm comm);
@@ -134,59 +62,9 @@ namespace yask {
     extern idx_t roundUp(std::ostream& os, idx_t val, idx_t mult,
                          const std::string& name, bool do_print);
 
-    // Fix inner_size to be a multiple of mult.
-    // Set defaults and print info if 'finalize'.
-    // Return number of inner_sized things.
-    extern idx_t findNumSubsets(std::ostream& os,
-                                idx_t& inner_size, const std::string& inner_name,
-                                idx_t outer_size, const std::string& outer_name,
-                                idx_t mult,
-                                const std::string& dim,
-                                bool finalize);
-    inline idx_t findNumSubBlocksInBlock(std::ostream& os, idx_t& sbsize, idx_t bsize,
-                                         idx_t mult, const std::string& dim,
-                                         bool finalize) {
-        return findNumSubsets(os, sbsize, "sub-block", bsize, "block", mult, dim, finalize);
-    }
-    inline idx_t findNumSubBlocksInSubBlockGroup(std::ostream& os, idx_t& sbsize, idx_t sbgsize,
-                                                 idx_t mult, const std::string& dim,
-                                                 bool finalize) {
-        return findNumSubsets(os, sbsize, "sub-block", sbgsize, "sub-block-group", mult, dim, finalize);
-    }
-    inline idx_t findNumSubBlockGroupsInBlock(std::ostream& os, idx_t& sbgsize, idx_t bsize,
-                                              idx_t mult, const std::string& dim,
-                                              bool finalize) {
-        return findNumSubsets(os, sbgsize, "sub-block-group", bsize, "block", mult, dim, finalize);
-    }
-    inline idx_t findNumBlocksInDomain(std::ostream& os, idx_t& bsize, idx_t dsize,
-                                       idx_t mult, const std::string& dim,
-                                       bool finalize) {
-        return findNumSubsets(os, bsize, "block", dsize, "rank-domain", mult, dim, finalize);
-    }
-    inline idx_t findNumBlocksInRegion(std::ostream& os, idx_t& bsize, idx_t rsize,
-                                       idx_t mult, const std::string& dim,
-                                       bool finalize) {
-        return findNumSubsets(os, bsize, "block", rsize, "region", mult, dim, finalize);
-    }
-    inline idx_t findNumBlocksInBlockGroup(std::ostream& os, idx_t& bsize, idx_t gsize,
-                                      idx_t mult, const std::string& dim,
-                                           bool finalize) {
-        return findNumSubsets(os, bsize, "block", gsize, "block-group", mult, dim, finalize);
-    }
-    inline idx_t findNumBlockGroupsInRegion(std::ostream& os, idx_t& gsize, idx_t rsize,
-                               idx_t mult, const std::string& dim,
-                                            bool finalize) {
-        return findNumSubsets(os, gsize, "block-group", rsize, "region", mult, dim, finalize);
-    }
-    inline idx_t findNumRegionsInDomain(std::ostream& os, idx_t& rsize, idx_t dsize,
-                                idx_t mult, const std::string& dim,
-                                        bool finalize) {
-        return findNumSubsets(os, rsize, "region", dsize, "rank-domain", mult, dim, finalize);
-    }
-
     // Helpers for shared and aligned malloc and free.
     // Use like this:
-    // shared_ptr<char> sp(alignedAlloc(nbytes), AlignedDeleter());
+    // shared_ptr<char> p(alignedAlloc(nbytes), AlignedDeleter());
     extern char* alignedAlloc(std::size_t nbytes);
     struct AlignedDeleter {
         void operator()(char* p) {
@@ -194,6 +72,53 @@ namespace yask {
         }
     };
 
+    // A class for maintaining elapsed time.
+    class YaskTimer {
+
+        /* struct timespec {
+           time_t   tv_sec;        // seconds
+           long     tv_nsec;       // nanoseconds
+           };
+        */
+        struct timespec _begin, _end, _elapsed;
+
+    public:
+        YaskTimer() { clear(); }
+        virtual ~YaskTimer() { }
+
+        // Reset elapsed time to zero.
+        virtual void clear() {
+            _begin.tv_sec = _end.tv_sec = _elapsed.tv_sec = 0;
+            _begin.tv_nsec = _end.tv_nsec = _elapsed.tv_nsec = 0;
+        }
+
+        // Start a timed region.
+        // start() and stop() can be called multiple times in
+        // pairs before calling get_elapsed_secs(), which
+        // will return the cumulative time over all timed regions.
+        virtual void start() {
+            clock_gettime(CLOCK_REALTIME, &_begin);
+        }
+
+        // End a timed region.
+        virtual void stop() {
+            clock_gettime(CLOCK_REALTIME, &_end);
+
+            // Elapsed time is just end - begin times.
+            _elapsed.tv_sec += _end.tv_sec - _begin.tv_sec;
+
+            // No need to check for sign or to normalize, because tv_nsec is
+            // signed and 64-bit.
+            _elapsed.tv_nsec += _end.tv_nsec - _begin.tv_nsec;
+        }
+
+        // Get elapsed time in sec.
+        // Does not reset value, so it may be used for cumulative time.
+        virtual double get_elapsed_secs() {
+            return double(_elapsed.tv_sec) + double(_elapsed.tv_nsec) * 1e-9;
+        }
+    };
+    
     // A class to parse command-line args.
     class CommandLineParser {
 
@@ -304,15 +229,6 @@ namespace yask {
                            std::vector<idx_t*> vals) :
                 OptionBase(name, help_msg), _vals(vals) {
                 _current_value_str = "Current values = ";
-            }
-            MultiIdxOption(const std::string& name,
-                      const std::string& help_msg,
-                      idx_t& val0, idx_t& val1, idx_t& val2) :
-                OptionBase(name, help_msg) {
-                _current_value_str = "Current values = ";
-                _vals.push_back(&val0);
-                _vals.push_back(&val1);
-                _vals.push_back(&val2);
             }
 
             virtual void print_help(std::ostream& os,

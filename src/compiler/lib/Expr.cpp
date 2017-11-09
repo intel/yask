@@ -35,259 +35,25 @@ IN THE SOFTWARE.
 
 namespace yask {
 
-    // Stencil-solution APIs.
-    yc_grid_ptr StencilSolution::new_grid(const std::string& name,
-                                          const std::vector<std::string>& dims) {
-
-        // Make new grid and add to solution.
-        auto* gp = new Grid();  // FIXME: mem leak--delete this in dtor or make smart ptr.
-        assert(gp);
-        gp->setEqs(&_eqs);      // Save equation access in grid.
-        _grids.insert(gp);      // Add to solution.
-
-        // Set name.
-        // TODO: validate that name is legal C++ var name.
-        gp->setName(name);
-
-        // Set dimsl
-        // TODO: validate that names are legal C++ var names.
-        for (auto dn : dims)
-            gp->addDimBack(dn, 1);
-
-        return gp;
-    }
-
-    // Stencil-solution APIs.
-    yc_grid_ptr StencilSolution::new_grid(const std::string& name,
-                                          const std::string& dim1,
-                                          const std::string& dim2,
-                                          const std::string& dim3,
-                                          const std::string& dim4,
-                                          const std::string& dim5,
-                                          const std::string& dim6) {
-        vector<string> dims;
-
-        // Add dims that are not null strings.
-        if (dim1.length())
-            dims.push_back(dim1);
-        if (dim2.length())
-            dims.push_back(dim2);
-        if (dim3.length())
-            dims.push_back(dim3);
-        if (dim4.length())
-            dims.push_back(dim4);
-        if (dim5.length())
-            dims.push_back(dim5);
-        if (dim6.length())
-            dims.push_back(dim6);
-
-        return new_grid(name, dims);
-    }
-
-    void StencilSolution::set_fold_len(const std::string& dim, int len) {
-        auto& fold = _settings._foldOptions;
-        auto* p = fold.lookup(dim);
-        if (p)
-            *p = len;
-        else
-            fold.addDimBack(dim, len);
-    }
-    void StencilSolution::set_cluster_mult(const std::string& dim, int mult) {
-        auto& cluster = _settings._clusterOptions;
-        auto* p = cluster.lookup(dim);
-        if (p)
-            *p = mult;
-        else
-            cluster.addDimBack(dim, mult);
-    }
-    void StencilSolution::set_domain_dim_names(const std::string& dim1,
-                                               const std::string& dim2,
-                                               const std::string& dim3,
-                                               const std::string& dim4,
-                                               const std::string& dim5) {
-        auto& ddims = _settings._domainDims;
-        ddims.clear();
-        if (dim1.length()) ddims.addDimBack(dim1, 0);
-        if (dim2.length()) ddims.addDimBack(dim2, 0);
-        if (dim3.length()) ddims.addDimBack(dim3, 0);
-        if (dim4.length()) ddims.addDimBack(dim4, 0);
-        if (dim5.length()) ddims.addDimBack(dim5, 0);
-    }
-    void StencilSolution::set_domain_dim_names(const vector<string>& dims) {
-        auto& ddims = _settings._domainDims;
-        ddims.clear();
-        for (auto dn : dims)
-            ddims.addDimBack(dn, 0);
-    }
-    vector<string> StencilSolution::get_domain_dim_names() const {
-        vector<string> ret;
-        auto& ddims = _settings._domainDims;
-        for (auto dd : ddims.getDims())
-            ret.push_back(dd.getName());
-        return ret;
-    }
-
-    // Create the intermediate data for printing.
-    void StencilSolution::analyze_solution(int vlen,
-                                           bool is_folding_efficient) {
-
-        // Find all the stencil dimensions from the grids.
-        // Create the final folds and clusters from the cmd-line options.
-        _dims.setDims(_grids, _settings, vlen, is_folding_efficient, *_dos);
-
-        // Call the stencil 'define' method to create ASTs.
-        // All grid points will be relative to origin (0,0,...,0).
-        // ASTs can also be created via the APIs.
-        define(_dims._allDims);
-
-        // Check for illegal dependencies within equations for scalar size.
-        if (_settings._find_deps) {
-            *_dos << "Checking equation(s) with scalar operations...\n"
-                " If this fails, review stencil equation(s) for illegal dependencies.\n";
-            _eqs.checkDeps(_dims._scalar, _dims._stepDim, *_dos);
-        }
-
-        // Check for illegal dependencies within equations for vector size.
-        if (_settings._find_deps) {
-            *_dos << "Checking equation(s) with folded-vector operations...\n"
-                " If this fails, the fold dimensions are not compatible with all equations.\n";
-            _eqs.checkDeps(_dims._fold, _dims._stepDim, *_dos);
-        }
-
-        // Check for illegal dependencies within equations for cluster size and
-        // also create equation groups based on legal dependencies.
-        *_dos << "Checking equation(s) with clusters of vectors...\n"
-            " If this fails, the cluster dimensions are not compatible with all equations.\n";
-        _eqGroups.set_basename_default(_settings._eq_group_basename_default);
-        _eqGroups.set_dims(_dims);
-        _eqGroups.makeEqGroups(_eqs, _settings._eqGroupTargets,
-                               _dims._clusterPts, _settings._find_deps, *_dos);
-        _eqGroups.optimizeEqGroups(_settings, "scalar & vector", false, *_dos);
-
-        // Make a copy of each equation at each cluster offset.
-        // We will use these for inter-cluster optimizations and code generation.
-        *_dos << "Constructing cluster of equations containing " <<
-            _dims._clusterMults.product() << " vector(s)...\n";
-        _clusterEqGroups = _eqGroups;
-        _clusterEqGroups.replicateEqsInCluster(_dims);
-        if (_settings._doOptCluster)
-            _clusterEqGroups.optimizeEqGroups(_settings, "cluster", true, *_dos);
-    }
-
-    // Format in given format-type.
-    void StencilSolution::format(const string& format_type,
-                                 yask_output_ptr output) {
-
-        // Look for format match.
-        // Most args to the printers just set references to data.
-        // Data itself will be created in analyze_solution().
-        // TODO: make this OO.
-        PrinterBase* printer = 0;
-        if (format_type == "cpp")
-            printer = new YASKCppPrinter(*this, _eqGroups, _clusterEqGroups, _dims);
-        else if (format_type == "knc")
-            printer = new YASKKncPrinter(*this, _eqGroups, _clusterEqGroups, _dims);
-        else if (format_type == "avx" || format_type == "avx2")
-            printer = new YASKAvx256Printer(*this, _eqGroups, _clusterEqGroups, _dims);
-        else if (format_type == "avx512")
-            printer = new YASKAvx512Printer(*this, _eqGroups, _clusterEqGroups, _dims);
-        else if (format_type == "dot")
-            printer = new DOTPrinter(*this, _clusterEqGroups, false);
-        else if (format_type == "dot-lite")
-            printer = new DOTPrinter(*this, _clusterEqGroups, true);
-        else if (format_type == "pseudo")
-            printer = new PseudoPrinter(*this, _clusterEqGroups);
-        else if (format_type == "pov-ray") // undocumented.
-            printer = new POVRayPrinter(*this, _clusterEqGroups);
-        else {
-            cerr << "Error: format-type '" << format_type <<
-                "' is not recognized." << endl;
-            exit(1);
-        }
-        assert(printer);
-        int vlen = printer->num_vec_elems();
-        bool is_folding_efficient = printer->is_folding_efficient();
-
-        // Set data for equation groups, dims, etc.
-        analyze_solution(vlen, is_folding_efficient);
-
-        // Create the output.
-        *_dos << "Generating '" << format_type << "' output.\n";
-        printer->print(output->get_ostream());
-        delete printer;
-    }
-
-    // grid APIs.
-    yc_grid_point_node_ptr
-    Grid::new_relative_grid_point(std::vector<int> dim_offsets) {
-
-        // Check for correct number of indices.
-        if (getNumDims() != int(dim_offsets.size())) {
-            cerr << "Error: attempt to create a relative grid point in " <<
-                getNumDims() << "D grid '" << _name << "' with " <<
-                dim_offsets.size() << " indices.\n";
-            exit(1);
-        }
-
-        // Copy the names from the grid to a new tuple.
-        IntTuple pt = *this;
-
-        // Set the values in the tuple.
-        pt.setVals(dim_offsets);
-
-        // Create a point from the tuple.
-        GridPointPtr gpp = make_shared<GridPoint>(this, pt);
-        return gpp;
-    }
-    yc_grid_point_node_ptr
-    Grid::new_relative_grid_point(int dim1_offset,
-                                  int dim2_offset,
-                                  int dim3_offset,
-                                  int dim4_offset,
-                                  int dim5_offset,
-                                  int dim6_offset) {
-        switch (getNumDims()) {
-        case 0:
-            return makePoint(0);
-        case 1:
-            return makePoint(1, dim1_offset);
-        case 2:
-            return makePoint(2, dim1_offset, dim2_offset);
-        case 3:
-            return makePoint(3, dim1_offset, dim2_offset, dim3_offset);
-        case 4:
-            return makePoint(4, dim1_offset, dim2_offset, dim3_offset,
-                             dim4_offset);
-        case 5:
-            return makePoint(5, dim1_offset, dim2_offset, dim3_offset,
-                             dim4_offset, dim5_offset);
-        case 6:
-            return makePoint(6, dim1_offset, dim2_offset, dim3_offset,
-                             dim4_offset, dim5_offset, dim6_offset);
-        default:
-            cerr << "Error: " << getNumDims() << "D grid not supported.\n";
-            exit(1);
-        }
-    }
-    vector<string> Grid::get_dim_names() const {
-        vector<string> ret;
-        for (auto dn : getDims())
-            ret.push_back(dn.getName());
-        return ret;
-    }
-
     // grid_point APIs.
     yc_grid* GridPoint::get_grid() {
         return _grid;
     }
     
-    // yask_compiler_factory API methods.
-    yc_solution_ptr
-    yc_factory::new_solution(const std::string& name) const {
-        return make_shared<EmptyStencil>(name);
-    }
-    
     //node_factory API methods.
+    yc_index_node_ptr
+    yc_node_factory::new_step_index(const std::string& name) {
+        return make_shared<IndexExpr>(name, STEP_INDEX);
+    }
+    yc_index_node_ptr
+    yc_node_factory::new_domain_index(const std::string& name) {
+        return make_shared<IndexExpr>(name, DOMAIN_INDEX);
+    }
+    yc_index_node_ptr
+    yc_node_factory::new_misc_index(const std::string& name) {
+        return make_shared<IndexExpr>(name, MISC_INDEX);
+    }
+        
     yc_equation_node_ptr
     yc_node_factory::new_equation_node(yc_grid_point_node_ptr lhs,
                                        yc_number_node_ptr rhs) {
@@ -359,27 +125,28 @@ namespace yask {
         return e1->isSame(e2);
     }
 
-    // Expr functions.
-    NumExprPtr constNum(double rhs) {
-        return make_shared<ConstExpr>(rhs);
-    }
-    NumExprPtr first_index(const NumExprPtr dim) {
-        return make_shared<IndexExpr>(dim, FIRST_INDEX);
-    }
-    NumExprPtr last_index(const NumExprPtr dim) {
-        return make_shared<IndexExpr>(dim, LAST_INDEX);
-    }
-
     // Unary.
     NumExprPtr operator-(const NumExprPtr rhs) {
         return make_shared<NegExpr>(rhs);
     }
-    BoolExprPtr operator!(const BoolExprPtr rhs) {
-        return make_shared<NotExpr>(rhs);
+
+    // A free function to create a constant expression.
+    NumExprPtr constNum(double rhs) {
+        return make_shared<ConstExpr>(rhs);
     }
 
+    // Free functions to create boundary indices, e.g., 'first_index(x)'.
+    NumExprPtr first_index(IndexExprPtr dim) {
+        assert(dim->getType() == DOMAIN_INDEX);
+        return make_shared<IndexExpr>(dim->getName(), FIRST_INDEX);
+    }
+    NumExprPtr last_index(IndexExprPtr dim) {
+        assert(dim->getType() == DOMAIN_INDEX);
+        return make_shared<IndexExpr>(dim->getName(), LAST_INDEX);
+    }
+    
     // Commutative.
-    // If one side is nothing, return other side;
+    // If one side is nothing, just return other side;
     // This allows us to start with an uninitialized GridValue
     // and do the right thing.
     // Start with an empty expression.
@@ -470,47 +237,23 @@ namespace yask {
         lhs = lhs / rhs;
     }
 
-    BoolExprPtr operator==(const NumExprPtr lhs, const NumExprPtr rhs) {
-        return make_shared<IsEqualExpr>(lhs, rhs);
-    }
-    BoolExprPtr operator!=(const NumExprPtr lhs, const NumExprPtr rhs) {
-        return make_shared<NotEqualExpr>(lhs, rhs);
-    }
-    BoolExprPtr operator<(const NumExprPtr lhs, const NumExprPtr rhs) {
-        return make_shared<IsLessExpr>(lhs, rhs);
-    }
-    BoolExprPtr operator>(const NumExprPtr lhs, const NumExprPtr rhs) {
-        return make_shared<IsGreaterExpr>(lhs, rhs);
-    }
-    BoolExprPtr operator<=(const NumExprPtr lhs, const NumExprPtr rhs) {
-        return make_shared<NotGreaterExpr>(lhs, rhs);
-    }
-    BoolExprPtr operator>=(const NumExprPtr lhs, const NumExprPtr rhs) {
-        return make_shared<NotLessExpr>(lhs, rhs);
-    }
-    BoolExprPtr operator&&(const BoolExprPtr lhs, const BoolExprPtr rhs) {
-        return make_shared<AndExpr>(lhs, rhs);
-    }
-    BoolExprPtr operator||(const BoolExprPtr lhs, const BoolExprPtr rhs) {
-        return make_shared<OrExpr>(lhs, rhs);
-    }
-
     // Define a conditional.
     IfExprPtr operator IF_OPER(EqualsExprPtr expr, const BoolExprPtr cond) {
 
-        // Get grid referenced by the expr.
+        // Get to list of equations.
         auto gpp = expr->getLhs();
         assert(gpp);
         Grid* gp = gpp->getGrid();
         assert(gp);
-        auto* eqs = gp->getEqs();
-        assert(eqs);
+        auto* soln = gp->getSoln();
+        assert(soln);
+        auto& eqs = soln->getEqs();
     
         // Make if-expression node.
         auto ifp = make_shared<IfExpr>(expr, cond);
 
         // Save expr and if-cond.
-        eqs->addCondEq(expr, cond);
+        eqs.addCondEq(expr, cond);
 
         return ifp;
     }
@@ -519,25 +262,20 @@ namespace yask {
     // Add this equation to the list of eqs for this stencil.
     EqualsExprPtr operator EQUALS_OPER(GridPointPtr gpp, const NumExprPtr rhs) {
 
-        // Get grid referenced by the expr.
-        assert(gpp);
-        auto* gp = gpp->getGrid();
+        // Get to list of equations.
+        Grid* gp = gpp->getGrid();
         assert(gp);
-        auto* eqs = gp->getEqs();
-        assert(eqs);
+        auto* soln = gp->getSoln();
+        assert(soln);
+        auto& eqs = soln->getEqs();
     
-        // Make sure this is a grid.
-        if (gp->isParam()) {
-            cerr << "Error: parameter '" << gpp->getName() <<
-                "' cannot appear on LHS of a grid-value equation." << endl;
-            exit(1);
-        }
-    
+        // TODO: check validity of LHS (gpp).
+        
         // Make expression node.
         auto expr = make_shared<EqualsExpr>(gpp, rhs);
 
         // Save the expression.
-        eqs->addEq(expr);
+        eqs.addEq(expr);
 
         return expr;
     }
@@ -582,9 +320,6 @@ namespace yask {
     void GridPoint::accept(ExprVisitor* ev) {
         ev->visit(this);
     }
-    void IntScalarExpr::accept(ExprVisitor* ev) {
-        ev->visit(this);
-    }
     void EqualsExpr::accept(ExprVisitor* ev) {
         ev->visit(this);
     }
@@ -593,13 +328,6 @@ namespace yask {
     }
     void IndexExpr::accept(ExprVisitor* ev) {
         ev->visit(this);
-    }
-
-    // Index methods.
-    IndexExpr::IndexExpr(NumExprPtr dim, IndexType type) :
-        _type(type) {
-        auto dp = castExpr<IntScalarExpr>(dim, "dimension");
-        _dirName = dp->getName();
     }
 
     // EqualsExpr methods.
@@ -654,39 +382,276 @@ namespace yask {
     }
 
     // GridPoint methods.
-    const string& GridPoint::getName() const {
+    GridPoint::GridPoint(Grid* grid, const NumExprPtrVec& args) :
+        _grid(grid), _args(args) {
+
+        // Check for correct number of args.
+        size_t nd = grid->getDims().size();
+        if (nd != args.size()) {
+            cerr << "Error: attempt to create a grid point in " <<
+                nd << "-D grid '" << getGridName() << "' with " <<
+                args.size() << " indices.\n";
+            exit(1);
+        }
+
+        // Eval each arg.
+#ifdef DEBUG_GP
+        cout << "Creating grid point " << makeQuotedStr() << "...\n";
+#endif
+        auto dims = grid->getDims();
+        for (size_t i = 0; i < nd; i++) {
+            auto dim = dims.at(i);
+            auto dname = dim->getName();
+            auto arg = args.at(i);
+#ifdef DEBUG_GP
+            cout << " Arg " << arg->makeQuotedStr() <<
+                " at dim '" << dname << "'\n";
+#endif
+            int offset = 0;
+
+            // A compile-time const?
+            if (arg->isConstVal()) {
+                _consts.addDimBack(dname, arg->getIntVal());
+#ifdef DEBUG_GP
+                cout << "  is const val " << arg->getIntVal() << endl;
+#endif
+            }
+
+            // A simple offset?
+            else if (arg->isOffsetFrom(dname, offset)) {
+                _offsets.addDimBack(dname, offset);
+#ifdef DEBUG_GP
+                cout << "  has offset " << offset << endl;
+#endif
+            }
+        }
+    }
+    const string& GridPoint::getGridName() const {
         return _grid->getName();
     }
-    bool GridPoint::isParam() const {
-        return _grid->isParam();
+    bool GridPoint::isGridFoldable() const {
+        return _grid->isFoldable();
     }
     bool GridPoint::operator==(const GridPoint& rhs) const {
-        return (_grid == rhs._grid) &&
-            IntTuple::operator==(rhs);
+        return _grid == rhs._grid &&
+            _offsets == rhs._offsets &&
+            _consts == rhs._consts &&
+            makeStr() == rhs.makeStr(); // TODO: make more efficient.
     }
     bool GridPoint::operator<(const GridPoint& rhs) const {
         return (_grid < rhs._grid) ? true :
             (_grid > rhs._grid) ? false :
-            IntTuple::operator<(rhs);
+            (_offsets < rhs._offsets) ? true :
+            (_offsets > rhs._offsets) ? false :
+            (_consts < rhs._consts) ? true :
+            (_consts > rhs._consts) ? false :
+            makeStr() < rhs.makeStr(); // TODO: make more efficient.
     }
-    bool GridPoint::isAheadOfInDir(const GridPoint& rhs, const IntScalar& dir) const {
-        return _grid == rhs._grid && // must be same var.
-            IntTuple::isAheadOfInDir(rhs, dir);
+    string GridPoint::makeArgStr(const VarMap* varMap) const {
+        string str;
+        int i = 0;
+        for (auto arg : _args) {
+            if (i++) str += ", ";
+            str += arg->makeStr(varMap);
+        }
+        return str;
     }
-    string GridPoint::makeStr() const {
-        string str = _grid->getName() + "(";
-        str += isParam() ? makeValStr() : makeDimValOffsetStr();
-        str += ")";
+    string GridPoint::makeStr(const VarMap* varMap) const {
+        string str = _grid->getName() + "(" +
+                             makeArgStr(varMap) + ")";
         return str;
     }
 
+    // Make string like "x+(4/VLEN_X)" from
+    // original arg "x+4" in 'dname' dim.
+    // This object has numerators; 'fold' object has denominators.
+    // Args w/o simple offset are not modified.
+    string GridPoint::makeNormArgStr(const string& dname,
+                                     const Dimensions& dims,
+                                     const VarMap* varMap) const {
+        ostringstream oss;
+
+        // Non-0 const offset and dname exists in fold?
+        auto* ofs = _offsets.lookup(dname);
+        if (ofs && *ofs && dims._fold.lookup(dname)) {
+            oss << "(" << dname << dims.makeNormStr(*ofs, dname) << ")";
+        }
+
+        // Otherwise, just find and format arg as-is.
+        else {
+            auto& gdims = _grid->getDims();
+            for (size_t i = 0; i < gdims.size(); i++) {
+                auto gdname = gdims[i]->getName();
+                if (gdname == dname)
+                    oss << _args.at(i)->makeStr(varMap);
+            }
+        }
+
+        return oss.str();
+    }    
+    
+    // Make string like "x+(4/VLEN_X), y, z-(2/VLEN_Z)" from
+    // original args "x+4, y, z-2".
+    // This object has numerators; norm object has denominators.
+    // Args w/o simple offset are not modified.
+    string GridPoint::makeNormArgStr(const Dimensions& dims,
+                                     const VarMap* varMap) const {
+
+        ostringstream oss;
+        auto& gd = getGrid()->getDims();
+        for (size_t i = 0; i < gd.size(); i++) {
+            if (i)
+                oss << ", ";
+            auto dname = gd[i]->getName();
+            oss << makeNormArgStr(dname, dims, varMap);
+        }
+        return oss.str();
+    }
+    
+    // Set given arg to given offset; ignore if not in step or domain grid dims.
+    void GridPoint::setArgOffset(const IntScalar& offset) {
+
+        // Find dim in grid.
+        auto gdims = _grid->getDims();
+        for (size_t i = 0; i < gdims.size(); i++) {
+            auto gdim = gdims[i];
+
+            // Must be domain or step dim.
+            if (gdim->getType() == MISC_INDEX)
+                continue;
+            
+            auto dname = gdim->getName();
+            if (offset.getName() == dname) {
+
+                // Make offset equation.
+                int ofs = offset.getVal();
+                auto ie = gdim->clone();
+                NumExprPtr nep;
+                if (ofs > 0) {
+                    auto op = constNum(ofs);
+                    nep = make_shared<AddExpr>(ie, op);
+                }
+                else if (ofs < 0) {
+                    auto op = constNum(-ofs);
+                    nep = make_shared<SubExpr>(ie, op);
+                }
+                else                // 0 offset.
+                    nep = ie;
+
+                // Replace in args.
+                _args[i] = nep;
+
+                // Set offset.
+                _offsets.addDimBack(dname, ofs);
+
+                // Remove const.
+                _consts = _consts.removeDim(dname);
+
+                break;
+            }
+        }
+    }
+    
+    // Set given arg to given const;
+    void GridPoint::setArgConst(const IntScalar& val) {
+
+        // Find dim in grid.
+        auto gdims = _grid->getDims();
+        for (size_t i = 0; i < gdims.size(); i++) {
+            auto gdim = gdims[i];
+
+            auto dname = gdim->getName();
+            if (val.getName() == dname) {
+
+                // Make const expr.
+                int v = val.getVal();
+                auto vp = constNum(v);
+
+                // Replace in args.
+                _args[i] = vp;
+
+                // Set const
+                _consts.addDimBack(dname, v);
+
+                // Remove offset if it exists.
+                _offsets = _offsets.removeDim(dname);
+
+                break;
+            }
+        }
+    }
+    
+    // Is this expr a simple offset?
+    bool IndexExpr::isOffsetFrom(string dim, int& offset) {
+
+        // An index expr is an offset if it's a step or domain dim and the
+        // dims are the same.
+        if (_type != MISC_INDEX && _dimName == dim) {
+            offset = 0;
+            return true;
+        }
+        return false;
+    }
+    bool DivExpr::isOffsetFrom(string dim, int& offset) {
+
+        // Could allow 'dim / 1', but seems silly.
+        return false;
+    }
+    bool MultExpr::isOffsetFrom(string dim, int& offset) {
+
+        // Could allow 'dim * 1', but seems silly.
+        return false;
+    }
+    bool SubExpr::isOffsetFrom(string dim, int& offset) {
+
+        // Is this of the form 'dim - offset'?
+        int tmp = 0;
+        if (_lhs->isOffsetFrom(dim, tmp) &&
+            _rhs->isConstVal()) {
+            offset = tmp - _rhs->getIntVal();
+            return true;
+        }
+        return false;
+    }
+    bool AddExpr::isOffsetFrom(string dim, int& offset) {
+
+        // Is this of the form 'dim + offset'?
+        // Allow any similar form, e.g., '-5 + dim + 2'.
+        int sum = 0;
+        int num_dims = 0;
+        int tmp = 0;
+        for (auto op : _ops) {
+
+            // Is this operand 'dim'?
+            if (op->isOffsetFrom(dim, tmp))
+                num_dims++;
+
+            // Is this operand a const int?
+            else if (op->isConstVal())
+                sum += op->getIntVal();
+
+            // Anything else isn't allowed.
+            else
+                return false;
+        }
+        // Must be exactly one 'dim'.
+        // Don't allow silly forms like 'dim - dim + dim + 2'.
+        if (num_dims == 1) {
+            offset = tmp + sum;
+            return true;
+        }
+        return false;
+    }
+    
+    
     // Make a readable string from an expression.
-    string Expr::makeStr() const {
+    string Expr::makeStr(const VarMap* varMap) const {
         ostringstream oss;
     
         // Use a print visitor to make a string.
-        PrintHelper ph(NULL, "temp", "", "", "");
-        PrintVisitorTopDown pv(oss, ph);
+        PrintHelper ph(NULL, "temp", "", "", ""); // default helper.
+        CompilerSettings settings; // default settings.
+        PrintVisitorTopDown pv(oss, ph, settings, varMap);
         accept(&pv);
 
         // Return anything written to the stream
@@ -710,1064 +675,4 @@ namespace yask {
         const_cast<Expr*>(this)->accept(ev);
     }
 
-    // Create an expression to a specific point in this grid.
-    // Note that this doesn't actually 'read' or 'write' a value;
-    // it's just a node in an expression.
-    GridPointPtr Grid::makePoint(int count, ...) {
-
-        // Check for correct number of indices.
-        if (count != size()) {
-            cerr << "Error: attempt to access " << size() <<
-                "D grid '" << _name << "' with " << count << " indices.\n";
-            exit(1);
-        }
-
-        // Copy the names from the grid to a new tuple.
-        IntTuple pt = *this;
-
-        // Set the values in the tuple using the var args.
-        va_list args;
-        va_start(args, count);
-        pt.setVals<int>(count, args);
-        va_end(args);
-
-        // Create a point from the tuple.
-        GridPointPtr gpp = make_shared<GridPoint>(this, pt);
-        return gpp;
-    }
-
-    // Update halos based on each value in 'vals' given the step-dim 'stepDim'.
-    void Grid::updateHalo(const string& stepDim, const IntTuple& vals)
-    {
-        // set and/or check step dim.
-        if (_stepDim.length() == 0)
-            _stepDim = stepDim;
-        else assert(_stepDim == stepDim);
-    
-        // Find step value or use 0 if none.
-        int stepVal = 0;
-        auto* p = vals.lookup(stepDim);
-        if (p)
-            stepVal = *p;
-        auto& halos = _halos[stepVal];
-
-        // Update halo vals.
-        for (auto& dim : vals.getDims()) {
-            auto& dname = dim.getName();
-            if (dname == stepDim)
-                continue;
-
-            auto* p = halos.lookup(dname);
-            int val = abs(vals.getVal(dname));
-            if (!p)
-                halos.addDimBack(dname, val);
-            else if (*p < val)
-                *p = val;
-            // else, current value is larger than val, so don't update.
-        }
-    }
-
-    // Determine how many values in step-dim are needed.
-    int Grid::getStepDimSize() const
-    {
-        // Only need one value if no step-dim index used.
-        if (_stepDim.length() == 0)
-            return 1;
-
-        // Nothing stored?
-        if (_halos.size() == 0)
-            return 1;
-
-        // Find halos at min and max step-dim points.
-        // These should correspond to the read and write points.
-        auto first_i = _halos.cbegin(); // begin == first.
-        auto last_i = _halos.crbegin(); // reverse-begin == last.
-        int first_ofs = first_i->first;
-        int last_ofs = last_i->first;
-        auto& first_halo = first_i->second;
-        auto& last_halo = last_i->second;
-
-        // Default step-dim size is range of offsets.
-        assert(last_ofs >= first_ofs);
-        int sz = last_ofs - first_ofs + 1;
-    
-        // If first and last halos are zero, we can further optimize storage by
-        // immediately reusing memory location.
-        if (sz > 1 &&
-            first_halo.max() == 0 &&
-            last_halo.max() == 0)
-            sz--;
-
-        // TODO: recognize that reading in one equation and then writing in
-        // another can also reuse storage.
-
-        return sz;
-    }
-
-    // A visitor to collect grids and points visited in a set of eqs.
-    class PointVisitor : public ExprVisitor {
-
-        // A set of all points to ensure pointers to each
-        // unique point have same value.
-        set<GridPoint> _all_pts;
-
-        // A type to hold a mapping of equations to a set of grids in each.
-        typedef unordered_set<Grid*> GridSet;
-        typedef unordered_map<EqualsExpr*, GridSet> GridMap;
-
-        GridMap _lhs_grids; // outputs of eqs.
-        GridMap _rhs_grids; // inputs of eqs.
-    
-        // A type to hold a mapping of equations to a set of points in each.
-        typedef unordered_set<const GridPoint*> PointSet;
-        typedef unordered_map<EqualsExpr*, PointSet> PointMap;
-
-        PointMap _lhs_pts; // outputs of eqs.
-        PointMap _rhs_pts; // inputs of eqs.
-
-        IntTuple* _pts=0;    // Points to visit from each index.
-        EqualsExpr* _eq=0;   // Current equation.
-
-        // Add a point to _all_pts and get a pointer to it.
-        // If matching point exists, get a pointer to existing one.
-        const GridPoint* _add_pt(Grid* g, IntTuple& offsets) {
-            GridPoint gp(g, offsets);
-            auto i = _all_pts.insert(gp);
-            auto& gp2 = *i.first;
-            return &gp2;
-        }
-
-        // Add all points with _pts offsets from pt0 to 'pt_map'.
-        // Add grid from pt0 to 'grid_map'.
-        void _add_pts(GridPoint* pt0, GridMap& grid_map, PointMap& pt_map) {
-
-            // Add grid.
-            auto* g = pt0->getGrid();
-            grid_map[_eq].insert(g);
-
-            // Visit each point in pts.
-            if (_pts) {
-                _pts->visitAllPoints([&](const IntTuple& pt){
-
-                        // Add offset to pt0.
-                        auto pt1 = pt0->addElements(pt, false);
-                        auto* p = _add_pt(g, pt1);
-                        pt_map[_eq].insert(p);
-                    });
-            }
-
-            // Visit one point.
-            else {
-                pt_map[_eq].insert(pt0);
-            }
-        }   
-    
-    public:
-    
-        // Ctor.
-        // 'pts' contains offsets from each point to create.
-        PointVisitor() :
-            _pts(0) {}
-        PointVisitor(IntTuple& pts) :
-            _pts(&pts) {}
-        virtual ~PointVisitor() {}
-
-        GridMap& getOutputGrids() { return _lhs_grids; }
-        GridMap& getInputGrids() { return _rhs_grids; }
-        PointMap& getOutputPts() { return _lhs_pts; }
-        PointMap& getInputPts() { return _rhs_pts; }
-        int getNumEqs() const { return (int)_lhs_pts.size(); }
-
-        // Determine whether 2 sets have any common points.
-        virtual bool do_sets_intersect(const GridSet& a,
-                                       const GridSet& b) {
-            for (auto ai : a) {
-                if (b.count(ai) > 0)
-                    return true;
-            }
-            return false;
-        }
-        virtual bool do_sets_intersect(const PointSet& a,
-                                       const PointSet& b) {
-            for (auto ai : a) {
-                if (b.count(ai) > 0)
-                    return true;
-            }
-            return false;
-        }
-    
-        // Callback at an equality.
-        virtual void visit(EqualsExpr* ee) {
-
-            // Remember this equation.
-            _eq = ee;
-
-            // Make sure map entries exist.
-            _lhs_grids[_eq];
-            _rhs_grids[_eq];
-            _lhs_pts[_eq];
-            _rhs_pts[_eq];
-
-            // Store all LHS points.
-            auto* lhs = ee->getLhs().get();
-            _add_pts(lhs, _lhs_grids, _lhs_pts);
-
-            // visit RHS.
-            NumExprPtr rhs = ee->getRhs();
-            rhs->accept(this);
-
-            // Don't visit LHS because we've already saved it.
-        }
-
-        // Callback at a grid point on the RHS.
-        virtual void visit(GridPoint* gp) {
-            assert(_eq);
-
-            // Store all RHS points.
-            _add_pts(gp, _rhs_grids, _rhs_pts);
-        }
-    };
-
-    // Recursive search starting at 'a'.
-    // Fill in _full_deps.
-    bool EqDeps::_analyze(EqualsExprPtr a, SeenSet* seen)
-    {
-        // 'a' already visited?
-        bool was_seen = (seen && seen->count(a));
-        if (was_seen)
-            return true;
-    
-        // any dependencies?
-        if (_deps.count(a)) {
-            auto& adeps = _deps.at(a);
-    
-            // make new seen-set adding 'a'.
-            SeenSet seen1;
-            if (seen)
-                seen1 = *seen; // copy nodes already seen.
-            seen1.insert(a);   // add this one.
-        
-            // loop thru dependences 'a' -> 'b'.
-            for (auto b : adeps) {
-
-                // whole path up to and including 'a' depends on 'b'.
-                for (auto p : seen1)
-                    _full_deps[p].insert(b);
-            
-                // follow path.
-                _analyze(b, &seen1);
-            }
-        }
-
-        // no dependence; make an empty entry.
-        return false;
-    }
-
-    // Find dependencies based on all eqs.
-    // If 'eq_deps' is set, save dependencies between eqs.
-    // TODO: replace dependency algorithms with integration of a polyhedral
-    // library.
-    void Eqs::findDeps(IntTuple& pts,
-                       const string& stepDim,
-                       EqDepMap* eq_deps,
-                       ostream& os) {
-
-        // Gather points from all eqs in all grids.
-        PointVisitor pt_vis(pts);
-        os << " Scanning " << getEqs().size() << " equations(s)...\n";
-
-        // Gather initial stats from all eqs.
-        for (auto eq1 : getEqs())
-            eq1->accept(&pt_vis);
-        auto& outGrids = pt_vis.getOutputGrids();
-        auto& inGrids = pt_vis.getInputGrids();
-        auto& outPts = pt_vis.getOutputPts();
-        auto& inPts = pt_vis.getInputPts();
-        
-        // Check dependencies on all eqs.
-        for (auto eq1 : getEqs()) {
-            auto* eq1p = eq1.get();
-            assert(outGrids.count(eq1p));
-            assert(inGrids.count(eq1p));
-            auto& og1 = outGrids.at(eq1p);
-            //auto& ig1 = inGrids.at(eq1p);
-            auto& op1 = outPts.at(eq1p);
-            auto& ip1 = inPts.at(eq1p);
-            auto cond1 = getCond(eq1p);
-
-            // An equation must update one grid only.
-            assert(og1.size() == 1);
-            auto* g1 = eq1->getGrid();
-            assert(og1.count(g1));
-
-            // Scan output (LHS) points.
-            int si1 = 0;        // step index for LHS of eq1.
-            for (auto i1 : op1) {
-            
-                // LHS of an equation must use step index.
-                auto* si1p = i1->lookup(stepDim);
-                if (!si1p) {
-                    cerr << "Error: equation " << eq1->makeQuotedStr() <<
-                        " does not reference step-dimension index '" << stepDim <<
-                        "' on LHS.\n";
-                    exit(1);
-                }
-                assert(si1p);
-                si1 = *si1p;
-            }
-
-            // Scan input (RHS) points.
-            for (auto i1 : ip1) {
-
-                // Check RHS of an equation that uses step index.
-                auto* rsi1p = i1->lookup(stepDim);
-                if (rsi1p) {
-                    int rsi1 = *rsi1p;
-
-                    // Cannot depend on future value in this dim.
-                    if (rsi1 > si1) {
-                        cerr << "Error: equation " << eq1->makeQuotedStr() <<
-                            " contains an illegal dependence from offset " << rsi1 <<
-                            " to " << si1 << " relative to step-dimension index '" <<
-                            stepDim << "'.\n";
-                        exit(1);
-                    }
-
-                    // TODO: should make some dependency checks when rsi1 == si1.
-                }
-            }
-
-            // TODO: check to make sure cond1 doesn't depend on stepDim.
-            
-#ifdef DEBUG_DEP
-            cout << " //** Checking dependencies *within* equation " <<
-                eq1->makeQuotedStr() << "...\n";
-#endif
-
-            // Find other eqs that depend on eq1.
-            for (auto eq2 : getEqs()) {
-                auto* eq2p = eq2.get();
-                //auto& og2 = outGrids.at(eq2p);
-                auto& ig2 = inGrids.at(eq2p);
-                auto& op2 = outPts.at(eq2p);
-                auto& ip2 = inPts.at(eq2p);
-                auto cond2 = getCond(eq2p);
-
-                bool same_eq = eq1 == eq2;
-                bool same_cond = areExprsSame(cond1, cond2);
-
-                // If two different eqs have the same condition, they
-                // cannot update the exact same point.
-                if (!same_eq && same_cond &&
-                    pt_vis.do_sets_intersect(op1, op2)) {
-                    cerr << "Error: two equations with condition " <<
-                        cond1->makeQuotedStr() << " update the same point: " <<
-                        eq1->makeQuotedStr() << " and " <<
-                        eq2->makeQuotedStr() << endl;
-                    exit(1);
-                }
-
-                // eq2 dep on eq1 => some output of eq1 is an input to eq2.
-                // If the two eqs have the same condition, detect certain
-                // dependencies by looking for exact matches.
-                if (same_cond &&
-                    pt_vis.do_sets_intersect(op1, ip2)) {
-
-                    // Eq depends on itself?
-                    if (same_eq) {
-                                    
-                        // Exit with error.
-                        cerr << "Error: illegal dependency between LHS and RHS of equation " <<
-                            eq1->makeQuotedStr() <<
-                            " within offsets in range " << pts.makeDimValStr(" * ") << ".\n";
-                        exit(1);
-                    }
-
-                    // Save dependency.
-                    // Flag as both certain and possible because we need to follow
-                    // certain ones when resolving indirect possible ones.
-                    if (eq_deps) {
-                        (*eq_deps)[certain_dep].set_dep_on(eq2, eq1);
-                        (*eq_deps)[possible_dep].set_dep_on(eq2, eq1);
-                    }
-                        
-                    // Move along to next eq2.
-                    continue;
-                }
-
-                // Check more only if saving dependencies.
-                if (!eq_deps)
-                    continue;
-
-                // Only check between different equations.
-                if (same_eq)
-                    continue;
-
-                // Does eq1 define *any* point in a grid that eq2 inputs
-                // at the same step index?  If so, they *might* have a
-                // dependency. Some of these may not be real
-                // dependencies due to conditions. Those that are real
-                // may or may not be legal.
-                //
-                // Example:
-                //  eq1: a(t+1, x, ...) EQUALS ... IF ... 
-                //  eq2: b(t+1, x, ...) EQUALS a(t+1, x+5, ...) ... IF ...
-                //
-                // TODO: be much smarter about this and find only real
-                // dependencies--use a polyhedral library?
-                if (pt_vis.do_sets_intersect(og1, ig2)) {
-
-                    // detailed check of g1 input points from eq2.
-                    for (auto* i2 : ip2) {
-                        if (i2->getGrid() != g1) continue;
-
-                        // From same step index, e.g., same time?
-                        auto* si2p = i2->lookup(stepDim);
-                        if (si2p && (*si2p == si1)) {
-
-                            // Save dependency.
-                            if (eq_deps)
-                                (*eq_deps)[possible_dep].set_dep_on(eq2, eq1);
-                                
-                            // Move along to next equation.
-                            break;
-                        }
-                    }
-                }
-            }
-        }
-
-        // Resolve indirect dependencies.
-        if (eq_deps) {
-            os << "  Resolving indirect dependencies...\n";
-            for (DepType dt = certain_dep; dt < num_deps; dt = DepType(dt+1))
-                (*eq_deps)[dt].analyze();
-        }
-        os << " Done.\n";
-    }
-
-    // Get the full name of an eq-group.
-    // Must be unique.
-    string EqGroup::getName() const {
-
-#if 0
-        // Just use base name if zero index.
-        if (!index)
-            return baseName;
-#endif
-
-        // Add index to base name.
-        ostringstream oss;
-        oss << baseName << "_" << index;
-        return oss.str();
-    }
-
-    // Make a description.
-    string EqGroup::getDescription(bool show_cond,
-                                   string quote) const
-    {
-        string des = "equation-group " + quote + getName() + quote;
-        if (show_cond) {
-            if (cond.get())
-                des += " w/condition " + cond->makeQuotedStr(quote);
-            else
-                des += " w/no condition";
-        }
-        return des;
-    }
-
-    // Add an equation to an EqGroup
-    // If 'update_stats', update grid and halo data.
-    void EqGroup::addEq(EqualsExprPtr ee, bool update_stats)
-    {
-#ifdef DEBUG_EQ_GROUP
-        cout << " //** EqGroup: adding " << ee->makeQuotedStr() << endl;
-#endif
-        _eqs.insert(ee);
-
-        if (update_stats) {
-    
-            // Get I/O point data.
-            PointVisitor pv;
-            ee->accept(&pv);
-
-            // update list of input and output grids.
-            auto& outGrids = pv.getOutputGrids().at(ee.get());
-            for (auto* g : outGrids)
-                _outGrids.insert(g);
-            auto& inGrids = pv.getInputGrids().at(ee.get());
-            for (auto* g : inGrids)
-                _inGrids.insert(g);
-
-            // update halo info in grids.
-            auto& outPts = pv.getOutputPts().at(ee.get());
-            auto& inPts = pv.getInputPts().at(ee.get());
-            auto& stepDim = _dims->_stepDim;
-
-            // Output points.
-            for (auto* op : outPts) {
-                auto* g = op->getGrid();
-                auto* g2 = const_cast<Grid*>(g); // need to update grid.
-                g2->updateHalo(stepDim, *op);
-            }
-    
-            // Input points.
-            for (auto* ip : inPts) {
-                auto* g = ip->getGrid();
-                auto* g2 = const_cast<Grid*>(g); // need to update grid.
-                g2->updateHalo(stepDim, *ip);
-            }
-        }
-    }
-
-    // Set dependency on eg2 if this eq-group is dependent on it.
-    // Return whether dependent.
-    bool EqGroup::setDepOn(DepType dt, EqDepMap& eq_deps, const EqGroup& eg2)
-    {
-
-        // Eqs in this.
-        for (auto& eq1 : getEqs()) {
-
-            // Eqs in eg2.
-            for (auto& eq2 : eg2.getEqs()) {
-
-                if (eq_deps[dt].is_dep_on(eq1, eq2)) {
-
-                    _dep_on[dt].insert(eg2.getName());
-                    return true;
-                }
-            }
-        }
-        return false;
-    }
-
-
-    // Print stats from eqGroup.
-    void EqGroup::printStats(ostream& os, const string& msg)
-    {
-        CounterVisitor cv;
-        visitEqs(&cv);
-        cv.printStats(os, msg);
-    }
-
-    // Visitor that will shift each grid point by an offset.
-    class OffsetVisitor: public ExprVisitor {
-        IntTuple _ofs;
-    
-    public:
-        OffsetVisitor(const IntTuple& ofs) :
-            _ofs(ofs) {}
-
-        // Visit a grid point.
-        virtual void visit(GridPoint* gp) {
-
-            // Shift grid _ofs points.
-            IntTuple new_loc = gp->addElements(_ofs, false);
-            gp->setVals(new_loc, false);
-        }
-    };
-
-    // Replicate each equation at the non-zero offsets for
-    // each vector in a cluster.
-    void EqGroup::replicateEqsInCluster(Dimensions& dims)
-    {
-        // Make a copy of the original equations so we can iterate through
-        // them while adding to the group.
-        EqList eqs(_eqs);
-
-        // Loop thru points in cluster.
-        dims._clusterMults.visitAllPoints([&](const IntTuple& clusterIndex) {
-
-                // Don't need copy of one at origin.
-                if (clusterIndex.sum() > 0) {
-            
-                    // Get offset of cluster, which is each cluster index multipled
-                    // by corresponding vector size.  Example: for a 4x4 fold in a
-                    // 1x2 cluster, the 2nd cluster index will be (0,1) and the
-                    // corresponding cluster offset will be (0,4).
-                    auto clusterOffset = clusterIndex.multElements(dims._fold);
-
-                    // Loop thru eqs.
-                    for (auto eq : eqs) {
-                        assert(eq.get());
-            
-                        // Make a copy.
-                        auto eq2 = eq->cloneEquals();
-
-                        // Add offsets to each grid point.
-                        OffsetVisitor ov(clusterOffset);
-                        eq2->accept(&ov);
-
-                        // Put new equation into group.
-                        addEq(eq2, false);
-                    }
-                }
-            });
-
-        // Ensure the expected number of equations now exist.
-        assert(_eqs.size() == eqs.size() * dims._clusterMults.product());
-    }
-
-    // Reorder groups based on dependencies.
-    void EqGroups::sort()
-    {
-        if (size() < 2)
-            return;
-
-        cout << " //** Sorting " << size() << " eq-group(s)...\n";
-
-        // Want to keep original order as much as possible.
-        // Only reorder if dependencies are in conflict.
-
-        // Scan from beginning to end.
-        for (size_t i = 0; i < size(); i++) {
-
-            bool done = false;
-            while (!done) {
-        
-                // Does eq-group[i] depend on any eq-group after it?
-                auto& egi = at(i);
-                for (size_t j = i+1; j < size(); j++) {
-                
-                    auto& egj = at(j);
-                    bool do_swap = false;
-
-                    // Must swap on certain deps.
-                    if (egi.isDepOn(certain_dep, egj)) {
-                        if (egj.isDepOn(certain_dep, egi)) {
-                            cerr << "Error: circular dependency between eq-groups " <<
-                                egi.getDescription() << " and " <<
-                                egj.getDescription() << endl;
-                            exit(1);
-                        }
-                        do_swap = true;
-                    }
-
-                    // Swap on possible deps if one-way.
-                    else if (egi.isDepOn(possible_dep, egj) && 
-                             !egj.isDepOn(possible_dep, egi) &&
-                             !egj.isDepOn(certain_dep, egi)) {
-                        do_swap = true;
-                    }
-
-                    if (do_swap) {
-
-                        // Swap them.
-                        EqGroup temp(egi);
-                        egi = egj;
-                        egj = temp;
-
-                        // Start over at index i.
-                        done = false;
-                        break;
-                    }
-                }
-                done = true;
-            }
-        }
-    }
-
-    // Add expression 'eq' with condition 'cond' to eq-group with 'baseName'
-    // unless alread added.  The corresponding index in '_indices' will be
-    // incremented if a new group is created.
-    // 'eq_deps': pre-computed dependencies between equations.
-    // Returns whether a new group was created.
-    bool EqGroups::addExprToGroup(EqualsExprPtr eq,
-                                  BoolExprPtr cond,
-                                  const string& baseName,
-                                  EqDepMap& eq_deps)
-    {
-        // Equation already added?
-        if (_eqs_in_groups.count(eq))
-            return false;
-
-        // Look for existing group matching base-name and condition.
-        EqGroup* target = 0;
-        for (auto& eg : *this) {
-
-            if (eg.baseName == baseName &&
-                areExprsSame(eg.cond, cond)) {
-
-                // Look for any dependencies that would prevent adding
-                // eq to eg.
-                bool is_dep = false;
-                for (auto& eq2 : eg.getEqs()) {
-
-                    for (DepType dt = certain_dep; dt < num_deps; dt = DepType(dt+1)) {
-                        if (eq_deps[dt].is_dep(eq, eq2)) {
-#if DEBUG_ADD_EXPRS
-                            cout << " //** addExprsFromGrid: not adding equation " <<
-                                eq->makeQuotedStr() << " to " << eg.getDescription() <<
-                                " because of dependency w/equation " <<
-                                eq2->makeQuotedStr() << endl;
-#endif
-                            is_dep = true;
-                            break;
-                        }
-                    }
-                    if (is_dep)
-                        break;
-                }
-
-                // Remember target group if found and no deps.
-                if (!is_dep) {
-                    target = &eg;
-                    break;
-                }
-            }
-        }
-        
-        // Make new group if needed.
-        bool newGroup = false;
-        if (!target) {
-            EqGroup ne(*_dims);
-            push_back(ne);
-            target = &back();
-            target->baseName = baseName;
-            target->index = _indices[baseName]++;
-            target->cond = cond;
-            newGroup = true;
-        
-#if DEBUG_ADD_EXPRS
-            cout << " //** Creating new " << target->getDescription() << endl;
-#endif
-        }
-
-        // Add eq to target eq-group.
-        assert(target);
-#if DEBUG_ADD_EXPRS
-        cout << " //** Adding " << eq->makeQuotedStr() <<
-            " to " << target->getDescription() << endl;
-#endif
-        target->addEq(eq);
-    
-        // Remember eq and updated grid.
-        _eqs_in_groups.insert(eq);
-        _outGrids.insert(eq->getGrid());
-
-        return newGroup;
-    }
-
-    // Divide all equations into eqGroups.
-    // 'targets': string provided by user to specify grouping.
-    // 'eq_deps': pre-computed dependencies between equations.
-    void EqGroups::makeEqGroups(Eqs& allEqs,
-                                const string& targets,
-                                EqDepMap& eq_deps,
-                                ostream& os)
-    {
-        //auto& stepDim = _dims->_stepDim;
-    
-        // Handle each key-value pair in 'targets' string.
-        ArgParser ap;
-        ap.parseKeyValuePairs
-            (targets, [&](const string& key, const string& value) {
-
-                // Search allEqs for matches to current value.
-                for (auto eq : allEqs.getEqs()) {
-
-                    // Get name of updated grid.
-                    auto gp = eq->getGrid();
-                    assert(gp);
-                    string gname = gp->getName();
-
-                    // Does value appear in the grid name?
-                    size_t np = gname.find(value);
-                    if (np != string::npos) {
-
-                        // Add equation.
-                        addExprToGroup(eq, allEqs.getCond(eq), key, eq_deps);
-                    }
-                }
-            });
-
-        // Add all remaining equations.
-        for (auto eq : allEqs.getEqs()) {
-
-            // Add equation.
-            addExprToGroup(eq, allEqs.getCond(eq), _basename_default, eq_deps);
-        }
-
-        // Find dependencies between eq-groups based on deps between their eqs.
-        for (auto& eg1 : *this) {
-            os << " Checking dependencies of " <<
-                eg1.getDescription() << "...\n";
-            os << "  Updating the following grid(s) with " <<
-                eg1.getNumEqs() << " equation(s):";
-            for (auto* g : eg1.getOutputGrids())
-                os << " " << g->getName();
-            os << endl;
-
-            // Check to see if eg1 depends on other eq-groups.
-            for (auto& eg2 : *this) {
-
-                // Don't check against self.
-                if (eg1.getName() == eg2.getName())
-                    continue;
-
-                if (eg1.setDepOn(certain_dep, eq_deps, eg2))
-                    os << "  Is dependent on " << eg2.getDescription(false) << endl;
-                else if (eg1.setDepOn(possible_dep, eq_deps, eg2))
-                    os << "  May be dependent on " << eg2.getDescription(false) << endl;
-            }
-        }
-
-        // Resort them based on dependencies.
-        sort();
-    }
-
-    // Print stats from eqGroups.
-    void EqGroups::printStats(ostream& os, const string& msg) {
-        CounterVisitor cv;
-        for (auto& eq : *this) {
-            CounterVisitor ecv;
-            eq.visitEqs(&ecv);
-            cv += ecv;
-        }
-        cv.printStats(os, msg);
-    }
-
-    // Apply optimizations according to the 'settings'.
-    void EqGroups::optimizeEqGroups(CompilerSettings& settings,
-                                    const string& descr,
-                                    bool printSets,
-                                    ostream& os) {
-        // print stats.
-        string edescr = "for " + descr + " equation-group(s)";
-        printStats(os, edescr);
-    
-        // Make a list of optimizations to apply to eqGroups.
-        vector<OptVisitor*> opts;
-
-        // CSE.
-        if (settings._doCse)
-            opts.push_back(new CseVisitor);
-
-        // Operator combination.
-        if (settings._doComb) {
-            opts.push_back(new CombineVisitor);
-
-            // Do CSE again after combination.
-            // TODO: do this only if the combination did something.
-            if (settings._doCse)
-                opts.push_back(new CseVisitor);
-        }
-
-        // Apply opts.
-        for (auto optimizer : opts) {
-
-            visitEqs(optimizer);
-            int numChanges = optimizer->getNumChanges();
-            string odescr = "after applying " + optimizer->getName() + " to " +
-                descr + " equation-group(s)";
-
-            // Get new stats.
-            if (numChanges)
-                printStats(os, odescr);
-            else
-                os << "No changes " << odescr << '.' << endl;
-        }
-
-        // Final stats per equation group.
-        if (printSets && size() > 1) {
-            os << "Stats per equation-group:\n";
-            for (auto eg : *this)
-                eg.printStats(os, "for " + eg.getDescription());
-        }
-    }
-
-    // Find the dimensions to be used.
-    void Dimensions::setDims(Grids& grids,
-                             CompilerSettings& settings,
-                             int vlen,
-                             bool is_folding_efficient,
-                             ostream& os)
-    {
-        _allDims.clear();
-        _scalar.clear();
-        _fold.clear();
-        _clusterPts.clear();
-        _clusterMults.clear();
-        _miscDims.clear();
-
-        // Get domain dims from grids if no domain vars created.
-        // TODO: consider getting rid of this and forcing
-        // domain-dim specification.
-        if (settings._domainDims.size() == 0) {
-            for (auto gp : grids) {
-                
-                // Dimensions in this grid.
-                for (auto& dim : gp->getDims()) {
-                    auto& dname = dim.getName();
-                    
-                    // non-step dims.
-                    if (dname != _stepDim)
-                        settings._domainDims.addDimBack(dname, 0);
-                }
-            }
-        }
-        
-        // Dims from settings.
-        _stepDim = settings._stepDim;
-        _allDims.addDimBack(_stepDim, 0);
-        _fold.setFirstInner(settings._firstInner);
-        for (auto& dim : settings._domainDims.getDims()) {
-            auto& dname = dim.getName();
-            _allDims.addDimBack(dname, 0);
-            _scalar.addDimBack(dname, 1);
-            _fold.addDimBack(dname, 1);
-            _clusterMults.addDimBack(dname, 1);
-        }
-        if (_allDims.getNumDims() < 2) {
-            cerr << "Error: no domain dimensions defined.\n";
-            exit(1);
-        }
-        
-        os << "Number of SIMD elements: " << vlen << endl;
-        os << "Step dimension: " << _stepDim << endl;
-        os << "Domain dimension(s): " << _scalar.makeDimStr() << endl;
-    
-        // Set fold lengths based on cmd-line options.
-        IntTuple foldGT1;    // fold dimensions > 1.
-        for (auto& dim : settings._foldOptions.getDims()) {
-            auto& dname = dim.getName();
-            int sz = dim.getVal();
-
-            // Does it exist anywhere?
-            if (!_allDims.lookup(dname)) {
-                os << "Warning: fold in '" << dname <<
-                    "' dimension ignored because dimension is not used.\n";
-                continue;
-            }
-
-            // Nothing to do for fold < 2.
-            if (sz <= 1)
-                continue;
-
-            // Check that it's legal to fold this dim.
-            int* p = _fold.lookup(dname);
-            if (!p) {
-                os << "Warning: fold-length of " << sz << " in '" << dname <<
-                    "' dimension not allowed because '" << dname << "' ";
-                if (dname == _stepDim)
-                    os << "is the step dimension";
-                else
-                    os << "doesn't exist in all grids";
-                os << "; ignored.\n";
-                continue;
-            }
-
-            // Set size.
-            *p = sz;
-            foldGT1.addDimBack(dname, sz);
-        }
-
-        // Make sure folds cover vlen (unless vlen is 1).
-        if (vlen > 1 && _fold.product() != vlen) {
-            if (_fold.product() > 1)
-                os << "Notice: adjusting requested fold to achieve SIMD length of " <<
-                    vlen << ".\n";
-
-            // Heuristics to determine which dims to modify.
-            IntTuple targets = foldGT1; // start with specified ones >1.
-            const int nTargets = is_folding_efficient ? 2 : 1; // desired num targets.
-            int fdims = _fold.getNumDims();
-            if (targets.getNumDims() < nTargets && fdims > 1)
-                targets.addDimBack(_fold.getDim(fdims - 2)); // 2nd from last.
-            if (targets.getNumDims() < nTargets && fdims > 2)
-                targets.addDimBack(_fold.getDim(fdims - 3)); // 3rd from last.
-            if (targets.getNumDims() < nTargets)
-                targets = _fold; // all.
-
-            // Heuristic: incrementally increase targets by powers of 2.
-            _fold.setValsSame(1);
-            for (int n = 1; _fold.product() < vlen; n++) {
-                for (auto i : targets.getDims()) {
-                    auto& dname = i.getName();
-                    if (_fold.product() < vlen)
-                        _fold.setVal(dname, 1 << n);
-                }
-            }
-
-            // Still wrong?
-            if (_fold.product() != vlen) {
-                _fold.setValsSame(1);
-
-                // Heuristic: set first target to vlen.
-                if (targets.getNumDims()) {
-                    auto& dname = targets.getDim(0).getName();
-                    _fold.setVal(dname, vlen);
-                }
-            }
-
-            // Still wrong?
-            if (_fold.product() != vlen) {
-                _fold.setValsSame(1);
-                os << "Warning: not able to adjust fold.\n";
-            }
-
-            // Fix foldGT1.
-            foldGT1.clear();
-            for (auto i : _fold.getDims()) {
-                auto& dname = i.getName();
-                auto& val = i.getVal();
-                if (val > 1)
-                    foldGT1.addDimBack(dname, val);
-            }
-        }
-        os << "Vector-fold dimension(s) and size(s): " <<
-            _fold.makeDimValStr(" * ") << endl;
-
-        // Checks for unaligned loads.
-        if (settings._allowUnalignedLoads) {
-            if (foldGT1.size() > 1) {
-                cerr << "Error: attempt to allow unaligned loads when there are " <<
-                    foldGT1.size() << " dimensions in the vector-fold that are > 1." << endl;
-                exit(1);
-            }
-            else if (foldGT1.size() > 0)
-                cerr << "Notice: memory layout MUST have unit-stride in " <<
-                    foldGT1.makeDimStr() << " dimension!" << endl;
-        }
-
-        // Create final cluster lengths based on cmd-line options.
-        for (auto& dim : settings._clusterOptions.getDims()) {
-            auto& dname = dim.getName();
-            int mult = dim.getVal();
-
-            // Does it exist anywhere?
-            if (!_allDims.lookup(dname)) {
-                os << "Warning: cluster-multiplier in '" << dname <<
-                    "' dimension ignored because dimension is not used.\n";
-                continue;
-            }
-
-            // Nothing to do for mult < 2.
-            if (mult <= 1)
-                continue;
-
-            int* p = _clusterMults.lookup(dname);
-            if (!p) {
-                cerr << "Warning: cluster-multiplier of " << mult << " in '" << dname <<
-                    "' dimension not allowed because '" << dname << "' ";
-                if (dname == _stepDim)
-                    cerr << "is the step dimension";
-                else
-                    cerr << "doesn't exist in all grids";
-                os << "; ignored.\n";
-                continue;
-            }
-
-            // Set the size.
-            *p = mult;
-        }
-        _clusterPts = _fold.multElements(_clusterMults);
-    
-        os << "Cluster dimension(s) and multiplier(s): " <<
-            _clusterMults.makeDimValStr(" * ") << endl;
-        os << "Cluster dimension(s) and size(s) in points: " <<
-            _clusterPts.makeDimValStr(" * ") << endl;
-        if (_miscDims.getNumDims())
-            os << "Other dimension(s): " << _miscDims.makeDimStr() << endl;
-    }
 } // namespace yask.

@@ -61,8 +61,8 @@
 #   this can provide the ability to fine-tune which grids use
 #   HBW and which use default memory.
 #
-# pfd_l1: L1 prefetch distance (only if enabled in sub-block loop).
-# pfd_l2: L2 prefetch distance (only if enabled in sub-block loop).
+# pfd_l1: L1 prefetch distance (0 => disabled).
+# pfd_l2: L2 prefetch distance (0 => disabled).
 #
 # omp_region_schedule: OMP schedule policy for region loop.
 # omp_block_schedule: OMP schedule policy for nested OpenMP block loop.
@@ -72,6 +72,8 @@
 # def_thread_divisor: Divide number of OpenMP threads by this factor by default.
 # def_*_args: Default cmd-line args for specific settings.
 # more_def_args: Additional default cmd-line args.
+#
+# max_dims: max number of dimensions supported in a grid.
 
 # This is mostly wrapper for building several parts of YASK via src/*/Makefile.
 # See those specific files for many more settings.
@@ -87,6 +89,30 @@ YASK_BASE	:=	$(shell pwd)
 LIB_DIR		:=	$(YASK_BASE)/lib
 INC_DIR		:=	$(YASK_BASE)/include
 BIN_DIR		:=	$(YASK_BASE)/bin
+
+# OS-specific
+ifeq ($(shell uname -o),Cygwin)
+  SO_SUFFIX	:=	.dll
+  RUN_PREFIX	:=	env PATH="${PATH}:$(LIB_DIR)"
+  PYTHON		:= python3
+else
+  SO_SUFFIX	:=	.so
+  RUN_PREFIX	:=
+  PYTHON		:=	python
+  CXX_PREFIX	:=	time
+endif
+
+# Misc dirs & files.
+COMM_DIR	:=	src/common
+TUPLE_TEST_EXEC :=	$(BIN_DIR)/yask_tuple_test.exe
+
+# Compiler and default flags--used only for targets in this Makefile.
+# For compiler, use YC_CXX*.
+# For kernel, use YK_CXX*.
+CXX		:=	g++
+CXXFLAGS 	:=	-g -std=c++11 -Wall -O2
+CXXFLAGS	+=	$(addprefix -I,$(COMM_DIR))
+CXXFLAGS	+=	-fopenmp
 
 ######## Primary targets & rules
 # NB: must set stencil and arch to generate the desired kernel.
@@ -109,8 +135,16 @@ api-all: api-docs api
 
 # Format API documents.
 api-docs: docs/api/html/index.html
+	@ echo 'Open the following file in a browser to view the API docs.'
+	@ ls -l $^
 
 # Build C++ and Python API libs.
+compiler-api:
+	$(YC_MAKE) api
+
+kernel-api:
+	$(YK_MAKE) api
+
 api:
 	$(YC_MAKE) $@
 	$(YK_MAKE) $@
@@ -119,7 +153,6 @@ api:
 docs/api/html/index.html: include/*.hpp docs/api/*.*
 	doxygen -v
 	cd docs/api; doxygen doxygen_config.txt
-	@ echo Open $@ 'in a browser to view the API docs.'
 
 #### API tests.
 
@@ -185,24 +218,39 @@ api-tests:
 yc-and-yk-test:
 	$(YK_MAKE) $@
 
-all-tests:
-	$(MAKE) yc-and-yk-test
+code-stats:
+	$(YK_MAKE) $@
+
+$(TUPLE_TEST_EXEC): src/common/tests/tuple_test.cpp src/common/tuple.hpp
+	$(CXX) $(CXXFLAGS) $(LFLAGS) -o $@ $<
+
+tuple-test: $(TUPLE_TEST_EXEC)
+	@echo '*** Running the C++ YASK tuple test...'
+	$(RUN_PREFIX) $<
+
+all-tests: compiler
+	$(MAKE) tuple-test
+	$(YK_MAKE) $@
 	$(MAKE) api-tests
 
 docs: api-docs
 
 all:
+	$(MAKE) realclean
+	$(MAKE) tags
 	$(MAKE) default
 	$(MAKE) all-tests
 	$(MAKE) clean
 	$(MAKE) default
 	$(MAKE) api-all
 
+docs: api-docs
+
 tags:
 	rm -f TAGS ; find src include -name '*.[ch]pp' | xargs etags -C -a
 
 # Remove intermediate files.
-# Should not trigger remake of stencil compiler.
+# Should not trigger remake of stencil compiler, so does not invoke clean in compiler dir.
 # Make this target before rebuilding YASK with any new parameters.
 clean:
 	$(YK_MAKE) $@
@@ -216,13 +264,16 @@ clean-old:
 # Remove executables, documentation, etc. (not logs).
 realclean: clean-old
 	rm -fv TAGS '*~'
-	find * -name '*~' | xargs -r rm -v
-	find * -name '*.optrpt' | xargs -r rm -v
-	rm -fr docs/api/{html,latex}
-	rm -rf $(BIN_DIR)/*.exe $(LIB_DIR)/*.so
+	rm -fr docs/api/html
+	rm -fr docs/api/latex
+	rm -rf $(BIN_DIR)/*.exe $(LIB_DIR)/*$(SO_SUFFIX)
+	- find * -name '*~' -print -delete
+	- find * -name '*.optrpt' -print -delete
+	- find * -name __pycache__ -print -delete
+	- find yask -mindepth 1 '!' -name __init__.py -print -delete
 	$(YC_MAKE) $@
 	$(YK_MAKE) $@
 
 help:
-	$(YC_MAKE) $@
-	$(YK_MAKE) $@
+	@ $(YC_MAKE) $@
+	@ $(YK_MAKE) $@

@@ -23,87 +23,71 @@ IN THE SOFTWARE.
 
 *****************************************************************************/
 
-#ifndef REAL_VEC_GRIDS
-#define REAL_VEC_GRIDS
+#pragma once
 
 namespace yask {
 
-    typedef GenericGridBase<real_t> RealGrid;
-    typedef GenericGridBase<real_vec_t> RealVecGrid;
+    // Underlying storage.
+    typedef GenericGridTemplate<real_t> RealElemGrid;
+    typedef GenericGridTemplate<real_vec_t> RealVecGrid;
 
-    // Pure-virtual base class for real_vec_t grids.  Supports 3
-    // spatial dims and one temporal dim.  Indices used to access
-    // points are global and logical.  Example: if there are two ranks in
-    // the x-dim, each of which has domain-size of 100 and a pad-size of 10,
-    // the 1st rank's x indices will be -10..110, and the 2nd rank's x
-    // indices will be 90..210.  TODO: allow different pos and neg-side
-    // halos and/or padding.
-    class RealVecGridBase :
+    // Base class implementing all yk_grids. Can be used for grids
+    // that contain either individual elements or vectors.
+    class YkGridBase :
         public virtual yk_grid {
 
     protected:
-        RealVecGrid* _gp;
+        // Underlying storage.  A GenericGrid is similar to a YkGrid, but it
+        // doesn't have stencil features like padding, halos, offsets, etc.
+        // Holds name of grid, names of dims, sizes of dims, memory layout,
+        // actual data, message stream.
+        GenericGridBase* _ggb = 0;
 
-        // Allocation in time domain.
-        idx_t _tdim = 1;
+        // Problem dimensions. (NOT grid dims.)
+        DimsPtr _dims;
 
-        // real_t sizes for 3 spatial dims.
-        idx_t _dx=1, _dy=1, _dz=1; // domain sizes.
-        idx_t _hx=0, _hy=0, _hz=0; // halo sizes.
-        idx_t _px=0, _py=0, _pz=0; // pad sizes, which include halos.
-        idx_t _ox=0, _oy=0, _oz=0; // offsets into global problem domain.
+        // The following indices have values for all dims in the grid.
+        // All values are in units of reals, not underlying elements, if different.
+        // Settings for domain dims | non-domain dims.
+        Indices _domains;   // rank domain sizes copied from the solution | alloc size.
+        Indices _pads;      // extra space around domains | zero.
+        Indices _halos;     // space within pads for halo exchange | zero.
+        Indices _offsets;   // offsets of this rank in overall domain | first index.
+        Indices _vec_lens;  // num reals in each elem | one.
+        Indices _allocs;    // actual grid allocation in reals | as domain dims.
 
-        // real_vec_t sizes for 3 spatial dims.
-        idx_t _axv=1, _ayv=1, _azv=1; // alloc size.
-        idx_t _pxv=0, _pyv=0, _pzv=0; // padding before domain.
+        // Indices in vectors for sizes that are always vec lens (to avoid division).
+        Indices _vec_pads;
+        Indices _vec_allocs;
 
-        // Dynamic data.
-        bool _is_updated = false; // data has been received from neighbors' halos.
-
-        // Share data from source grid.
-        virtual bool share_data(RealVecGridBase* src) =0;
-
-        // Share data from source grid.
-        template<typename GT>
-        bool _share_data(RealVecGridBase* src) {
-            auto* tp = dynamic_cast<GT*>(_gp);
-            if (!tp) return false;
-            auto* sp = dynamic_cast<GT*>(src->_gp);
-            if (!sp) return false;
-            *tp = *sp; // shallow copy.
-            return true;
-        }
+        // Whether step dim is used.
+        // If true, will always be in Indices::step_posn.
+        bool _has_step_dim = false;
         
-        // Normalize element indices to rank-relative vector indices and
-        // element offsets.
-        ALWAYS_INLINE
-        void normalize(idx_t elem_index,
-                       idx_t& vec_index,
-                       idx_t& elem_ofs,
-                       idx_t vec_len,
-                       idx_t vec_pad,
-                       idx_t rank_ofs) const {
+        // Data that needs to be copied to neighbor's halos if using MPI.
+        // If this grid has the step dim, there is one bit per alloc'd step.
+        // Otherwise, only bit 0 is used.
+        std::vector<bool> _dirty_steps;
 
-            // Remove offset to make rank-relative.
-            // Add padding before division to ensure negative
-            // indices work under truncated division.
-            idx_t padded_index = elem_index - rank_ofs + (vec_pad * vec_len);
+        // Data layout for slice APIs.
+        bool _is_col_major = false;
 
-            // Normalize and remove added padding.
-            vec_index = (padded_index / vec_len) - vec_pad;
-
-            // Divide values with padding in numerator to avoid negative indices to get offsets.
-            elem_ofs = padded_index % vec_len;
-        }
+        // Convenience function to format indices like
+        // "x=5, y=3".
+        virtual std::string makeIndexString(const Indices& idxs,
+                                            std::string separator=", ",
+                                            std::string infix="=",
+                                            std::string prefix="",
+                                            std::string suffix="") const;
 
         // Adjust logical time index to 0-based index
         // using temporal allocation size.
-        ALWAYS_INLINE
-        idx_t get_index_t(idx_t t) const {
+        inline idx_t wrap_step(idx_t t) const {
 
             // Index wraps in tdim.
             // Examples based on tdim == 2:
-            // t_idx => return value.
+            //  t => return value.
+            // ---  -------------
             // -2 => 0.
             // -1 => 1.
             //  0 => 0.
@@ -114,767 +98,796 @@ namespace yask {
             // adding a large offset to the t index.  So, t can be negative,
             // but not so much that it would still be negative after adding
             // the offset.  This should not be a practical restriction.
-            assert(t % CPTS_T == 0);
-            t += 0x1000 * idx_t(CPTS_T);
+            t += idx_t(0x10000);
             assert(t >= 0);
-            idx_t t_idx = t / idx_t(CPTS_T);
-            return t_idx % _tdim;
+
+            idx_t res = t % _domains[Indices::step_posn];
+            return res;
+        }
+        
+        // Check whether dim exists and is of allowed type.
+        virtual void checkDimType(const std::string& dim,
+                                  const std::string& fn_name,
+                                  bool step_ok,
+                                  bool domain_ok,
+                                  bool misc_ok) const;
+        
+        // Share data from source grid of type GT.
+        template<typename GT>
+        bool _share_data(YkGridBase* src,
+                         bool die_on_failure) {
+            auto* tp = dynamic_cast<GT*>(_ggb);
+            if (!tp) {
+                if (die_on_failure) {
+                    std::cerr << "Error in share_data(): "
+                        "target grid not of expected type (internal inconsistency).\n";
+                    exit_yask(1);
+                }
+                return false;
+            }
+            auto* sp = dynamic_cast<GT*>(src->_ggb);
+            if (!sp) {
+                if (die_on_failure) {
+                    std::cerr << "Error in share_data(): source grid ";
+                    src->print_info(std::cerr);
+                    std::cerr << " not of same type as target grid ";
+                    print_info(std::cerr);
+                    std::cerr << ".\n";
+                    exit_yask(1);
+                }
+                return false;
+            }
+
+            // shallow copy.
+            *tp = *sp;
+            return true;
         }
 
-        // Resize only if not allocated.
+        // Share data from source grid.
+        // Must be implemented by a concrete class
+        // using the templated function above.
+        virtual bool share_data(YkGridBase* src, bool die_on_failure) =0;
+
+        // Resize or fail if already allocated.
         virtual void resize();
 
-        // Resize the underlying grid based on the current settings.
-        virtual void resize_g() =0;
+        // Set dirty flags in range.
+        void set_dirty_in_slice(const Indices& first_indices,
+                                const Indices& last_indices);
 
-        // Make sure indices are in range.
-        virtual bool checkIndices(const GridIndices& indices,
-                                  const std::string& fn,
-                                  bool strict_indices,
-                                  GridIndices* fixed_indices = NULL) const;
-
+        // Make tuple needed for slicing.
+        IdxTuple get_slice_range(const Indices& first_indices,
+                                 const Indices& last_indices) const;
+        
     public:
-        RealVecGridBase(RealVecGrid* gp) :
-            _gp(gp) { }
-        virtual ~RealVecGridBase() { }
+        YkGridBase(GenericGridBase* ggb, size_t ndims, DimsPtr dims) :
+            _ggb(ggb), _dims(dims) {
 
-        // Get name.
-        const std::string& get_name() const { return _gp->get_name(); }
+            assert(ggb);
+            assert(dims.get());
 
-        // Determine what dims are actually used for derived type.
-        virtual bool got_t() const { return false; }
-        virtual bool got_x() const { return false; }
-        virtual bool got_y() const { return false; }
-        virtual bool got_z() const { return false; }
-        virtual int get_num_dims() const {
-            return (got_t() ? 1 : 0) +
-                (got_x() ? 1 : 0) +
-                (got_y() ? 1 : 0) +
-                (got_z() ? 1 : 0);
+            // Init indices.
+            int n = int(ndims);
+            _domains.setFromConst(0, n);
+            _pads.setFromConst(0, n);
+            _halos.setFromConst(0, n);
+            _offsets.setFromConst(0, n);
+            _vec_lens.setFromConst(1, n);
+            _allocs.setFromConst(1, n);
+            _vec_pads.setFromConst(1, n);
+            _vec_allocs.setFromConst(1, n);
+            
         }
+        virtual ~YkGridBase() { }
 
-        // Get storage allocation in number of points.
-        inline idx_t get_alloc_t() const { return _tdim; }
-        inline idx_t get_alloc_x() const { return _axv * VLEN_X; }
-        inline idx_t get_alloc_y() const { return _ayv * VLEN_Y; }
-        inline idx_t get_alloc_z() const { return _azv * VLEN_Z; }
+        // Halo-exchange flag accessors.
+        virtual bool is_dirty(idx_t step_idx) const;
+        virtual void set_dirty(bool dirty, idx_t step_idx);
+        virtual void set_dirty_all(bool dirty);
         
-        // Get domain-size for this rank.
-        inline idx_t get_dx() const { return _dx; }
-        inline idx_t get_dy() const { return _dy; }
-        inline idx_t get_dz() const { return _dz; }
+        // Lookup position by dim name.
+        // Return -1 or die if not found, depending on flag.
+        virtual int get_dim_posn(const std::string& dim,
+                                 bool die_on_failure = false,
+                                 const std::string& die_msg = "") const;
 
-        // Get halo-size.
-        inline idx_t get_halo_x() const { return _hx; }
-        inline idx_t get_halo_y() const { return _hy; }
-        inline idx_t get_halo_z() const { return _hz; }
+        // Get dim name by posn.
+        virtual const std::string& get_dim_name(int n) const {
+            assert(n >= 0);
+            assert(n < get_num_dims());
+            return _ggb->get_dim_name(n);
+        }
 
-        // Get padding-size after round-up.
-        // This includes the halo.
-        inline idx_t get_pad_x() const { return _px; }
-        inline idx_t get_pad_y() const { return _py; }
-        inline idx_t get_pad_z() const { return _pz; }
-
-        // Get extra-padding-size after round-up.
-        // Since the extra pad is in addition to the halo, these
-        // values may not be multiples of the vector lengths.
-        inline idx_t get_extra_pad_x() const { return _px - _hx; }
-        inline idx_t get_extra_pad_y() const { return _py - _hy; }
-        inline idx_t get_extra_pad_z() const { return _pz - _hz; }
-
-        // Get first logical index in domain on this rank.
-        inline idx_t get_first_x() const { return _ox; }
-        inline idx_t get_first_y() const { return _oy; }
-        inline idx_t get_first_z() const { return _oz; }
-
-        // Get last logical index in domain on this rank.
-        inline idx_t get_last_x() const { return _ox + _dx - 1; }
-        inline idx_t get_last_y() const { return _oy + _dy - 1; }
-        inline idx_t get_last_z() const { return _oz + _dz - 1; }
-
-        // Get first allocated index in this rank.
-        inline idx_t get_first_alloc_x() const { return _ox - _px; }
-        inline idx_t get_first_alloc_y() const { return _oy - _py; }
-        inline idx_t get_first_alloc_z() const { return _oz - _pz; }
-
-        // Get last allocated index in this rank.
-        inline idx_t get_last_alloc_x() const { return get_first_alloc_x() + get_alloc_x() - 1; }
-        inline idx_t get_last_alloc_y() const { return get_first_alloc_y() + get_alloc_y() - 1; }
-        inline idx_t get_last_alloc_z() const { return get_first_alloc_z() + get_alloc_z() - 1; }
-
-        // Set temporal storage allocation.
-        void set_alloc_t(idx_t tdim) { _tdim = tdim; resize(); }
-
-        // Set domain-size for this rank.
-        void set_dx(idx_t dx) { _dx = dx; resize(); }
-        void set_dy(idx_t dy) { _dy = dy; resize(); }
-        void set_dz(idx_t dz) { _dz = dz; resize(); }
-
-        // Set halo sizes.
-        // Automatically increase padding if less than halo.
-        // Halo sizes are not rounded up.
-        void set_halo_x(idx_t hx) { _hx = hx; set_pad_x(_px); }
-        void set_halo_y(idx_t hy) { _hy = hy; set_pad_y(_py); }
-        void set_halo_z(idx_t hz) { _hz = hz; set_pad_z(_pz); }
-
-        // Set padding and round-up.
-        // Padding will be increased to size of halo if needed.
-        void set_pad_x(idx_t px) { _px = std::max(px, _hx); resize(); }
-        void set_pad_y(idx_t py) { _py = std::max(py, _hy); resize(); }
-        void set_pad_z(idx_t pz) { _pz = std::max(pz, _hz); resize(); }
-
-        // Set padding after halo.
-        void set_extra_pad_x(idx_t px) { set_pad_x(_hx + px); }
-        void set_extra_pad_y(idx_t py) { set_pad_y(_hy + py); }
-        void set_extra_pad_z(idx_t pz) { set_pad_z(_hz + pz); }
-
-        // Increase padding if below minimum.
-        void set_min_pad_x(idx_t mpx) { if (_px < mpx) set_pad_x(mpx); }
-        void set_min_pad_y(idx_t mpy) { if (_py < mpy) set_pad_y(mpy); }
-        void set_min_pad_z(idx_t mpz) { if (_pz < mpz) set_pad_z(mpz); }
+        // Get grid dims with allocations in number of reals.
+        virtual IdxTuple get_allocs() const {
+            IdxTuple allocs = _ggb->get_dims();
+            _allocs.setTupleVals(allocs);
+            return allocs;
+        }
         
-        // Set offset for current rank.
-        void set_ofs_x(idx_t ox) { _ox = ox; }
-        void set_ofs_y(idx_t oy) { _oy = oy; }
-        void set_ofs_z(idx_t oz) { _oz = oz; }
-
-        // Dynamic data accessors.
-        bool is_updated() { return _is_updated; }
-        void set_updated(bool is_updated) { _is_updated = is_updated; }
-        
-        // Initialize memory to a given value.
-        virtual void set_same(real_t val) {
-            real_vec_t rn;
-            rn = val;               // broadcast thru vector.
-            _gp->set_same(rn);
+        // Get the messsage output stream.
+        virtual std::ostream& get_ostr() const {
+            return _ggb->get_ostr();
         }
 
-        // Initialize memory to incrementing values based on val.
-        virtual void set_diff(real_t val);
-
-        // Get number of real_vecs, including halos & padding.
-        virtual idx_t get_num_real_vecs() const {
-            return _gp->get_num_elems();
-        }
-
-        // Get number of elements.
-        virtual idx_t get_num_elems() const {
-            return _gp->get_num_bytes() / sizeof(real_t);
-        }
-
-        // Get size in bytes.
-        virtual size_t get_num_bytes() const {
-            return _gp->get_num_bytes();
-        }
-
-        // Print some info
-        virtual void print_info(std::ostream& os);
+        // Print some info to 'os'.
+        virtual void print_info(std::ostream& os) const =0;
   
         // Check for equality.
         // Return number of mismatches greater than epsilon.
-        virtual idx_t compare(const RealVecGridBase& ref,
+        virtual idx_t compare(const YkGridBase* ref,
                               real_t epsilon = EPSILON,
                               int maxPrint = 20,
                               std::ostream& os = std::cerr) const;
 
-        // Normalize element indices to vector indices and element offsets.
-        ALWAYS_INLINE
-        void normalize_x(idx_t x, idx_t& vec_index, idx_t& elem_ofs) const {
-            normalize(x, vec_index, elem_ofs, VLEN_X, _pxv, _ox);
-        }
-        ALWAYS_INLINE
-        void normalize_y(idx_t y, idx_t& vec_index, idx_t& elem_ofs) const {
-            normalize(y, vec_index, elem_ofs, VLEN_Y, _pyv, _oy);
-        }
-        ALWAYS_INLINE
-        void normalize_z(idx_t z, idx_t& vec_index, idx_t& elem_ofs) const {
-            normalize(z, vec_index, elem_ofs, VLEN_Z, _pzv, _oz);
-        }
+        // Make sure indices are in range.
+        // Optionally fix them to be in range and return in 'fixed_indices'.
+        // If 'normalize', make rank-relative, divide by vlen and return in 'fixed_indices'.
+        virtual bool checkIndices(const Indices& indices,
+                                  const std::string& fn,
+                                  bool strict_indices,
+                                  bool normalize,
+                                  Indices* fixed_indices = NULL) const;
+
+        // Set elements to a sequence of values using seed.
+        // Cf. set_all_elements_same().
+        virtual void set_all_elements_in_seq(double seed) =0;
+        
+        // Get a pointer to one element.
+        // Indices are relative to overall problem domain.
+        // Implemented in concrete classes for efficiency.
+        virtual const real_t* getElemPtr(const Indices& idxs,
+                                         bool checkBounds=true) const =0;
+        virtual real_t* getElemPtr(const Indices& idxs,
+                                   bool checkBounds=true) =0;
 
         // Read one element.
-        virtual real_t readElem_TXYZ(idx_t t, idx_t x, idx_t y, idx_t z,
-                                     int line) const =0;
+        // Indices are relative to overall problem domain.
+        virtual real_t readElem(const Indices& idxs,
+                                int line) const =0;
 
         // Write one element.
-        virtual void writeElem_TXYZ(real_t val,
-                                     idx_t t, idx_t x, idx_t y, idx_t z,                               
-                                     int line) =0;
-
-        // Read one vector at *vector* offset.
-        // Indices must be relative to rank, i.e., offset is already subtracted.
-        // Indices must be normalized, i.e., already divided by VLEN_*.
-        virtual real_vec_t readVecNorm_TXYZ(idx_t t, idx_t xv, idx_t yv, idx_t zv,
-                                             int line) const =0;
-        
-        // Write one vector at *vector* offset.
-        // Indices must be relative to rank, i.e., offset is already subtracted.
-        // Indices must be normalized, i.e., already divided by VLEN_*.
-        virtual void writeVecNorm_TXYZ(const real_vec_t& v,
-                                        idx_t t, idx_t xv, idx_t yv, idx_t zv,
-                                        int line) =0;
+        // Indices are relative to overall problem domain.
+        inline void writeElem(real_t val,
+                              const Indices& idxs,
+                              int line) {
+            real_t* ep = getElemPtr(idxs);
+            *ep = val;
+#ifdef TRACE_MEM
+            printElem("writeElem", idxs, val, line);
+#endif
+        }
 
         // Print one element.
-        virtual void printElem_TXYZ(std::ostream& os, const std::string& m,
-                                     idx_t t, idx_t x, idx_t y, idx_t z,
-                                     real_t e, int line, bool newline = true) const;
+        virtual void printElem(const std::string& msg,
+                               const Indices& idxs,
+                               real_t e,
+                               int line,
+                               bool newline = true) const;
 
-        // Print one vector at *vector* offset.
-        // Indices must be relative to rank, i.e., offset is already subtracted.
-        // Indices must be normalized, i.e., already divided by VLEN_*.
-        virtual void printVecNorm_TXYZ(std::ostream& os, const std::string& m,
-                                        idx_t t, idx_t xv, idx_t yv, idx_t zv,
-                                        const real_vec_t& v,
-                                        int line) const;
-
-        // Direct access to data.
-        real_vec_t* get_storage() {
-            return _gp->get_storage();
-        }
-        const real_vec_t* get_storage() const {
-            return _gp->get_storage();
-        }
-        void set_storage(std::shared_ptr<char> base, size_t offset) {
-            _gp->set_storage(base, offset);
-        }
-        RealVecGrid* getGenericGrid() {
-            return _gp;
-        }
-        const RealVecGrid* getGenericGrid() const {
-            return _gp;
-        }
-
+        // Print one vector.
+        // Indices must be normalized and rank-relative.
+        virtual void printVecNorm(const std::string& msg,
+                                  const Indices& idxs,
+                                  const real_vec_t& val,
+                                  int line,
+                                  bool newline = true) const;
+        
         // APIs not defined above.
         // See yask_kernel_api.hpp.
+        virtual const std::string& get_name() const {
+            return _ggb->get_name();
+        }
         virtual bool is_dim_used(const std::string& dim) const {
-            return _gp->is_dim_used(dim);
+            return _ggb->is_dim_used(dim);
         }
-        virtual const std::string& get_dim_name(int n) const {
-            assert(n >= 0);
-            assert(n < get_num_dims());
-            return _gp->get_dim_name(n);
+        virtual int get_num_dims() const {
+            return _ggb->get_num_dims();
         }
-        virtual std::vector<std::string> get_dim_names() const {
+        virtual GridDimNames get_dim_names() const {
             std::vector<std::string> dims;
             for (int i = 0; i < get_num_dims(); i++)
                 dims.push_back(get_dim_name(i));
             return dims;
         }
-        virtual idx_t get_rank_domain_size(const std::string& dim) const; // not exposed.
-        virtual idx_t get_first_rank_domain_index(const std::string& dim) const; // not exposed.
-        virtual idx_t get_last_rank_domain_index(const std::string& dim) const; // not exposed.
-        virtual idx_t get_halo_size(const std::string& dim) const;
-        virtual idx_t get_extra_pad_size(const std::string& dim) const;
-        virtual idx_t get_pad_size(const std::string& dim) const;
-        virtual idx_t get_alloc_size(const std::string& dim) const;
-        virtual idx_t get_first_rank_alloc_index(const std::string& dim) const;
-        virtual idx_t get_last_rank_alloc_index(const std::string& dim) const;
-        virtual void set_halo_size(const std::string& dim, idx_t size);
-        virtual void set_pad_size(const std::string& dim, idx_t size); // not exposed.
-        virtual void set_min_pad_size(const std::string& dim, idx_t size);
-        virtual void set_alloc_size(const std::string& dim, idx_t size);
-        virtual void set_all_elements_same(double val) {
-            set_same(real_t(val));
+
+        // Possibly vectorized version of set/get_elements_in_slice().
+        virtual idx_t set_vecs_in_slice(const void* buffer_ptr,
+                                        const Indices& first_indices,
+                                        const Indices& last_indices) {
+            return set_elements_in_slice(buffer_ptr, first_indices, last_indices);
         }
-        virtual double get_element(idx_t dim1_index, idx_t dim2_index,
-                                   idx_t dim3_index, idx_t dim4_index,
-                                   idx_t dim5_index, idx_t dim6_index) const;
-        virtual double get_element(const GridIndices& indices) const;
+        virtual idx_t get_vecs_in_slice(void* buffer_ptr,
+                                        const Indices& first_indices,
+                                        const Indices& last_indices) const {
+            return get_elements_in_slice(buffer_ptr, first_indices, last_indices);
+        }
+
+#define GET_GRID_API(api_name)                                      \
+        virtual idx_t api_name(const std::string& dim) const;       \
+        virtual idx_t api_name(int posn) const;
+#define SET_GRID_API(api_name)                                      \
+        virtual void api_name(const std::string& dim, idx_t n);     \
+        virtual void api_name(int posn, idx_t n);
+        
+        // Settings that should never be exposed as APIs because
+        // they can break the usage model.
+        // They are not protected because they are used from outside
+        // this class hierarchy.
+        GET_GRID_API(_get_offset)
+        GET_GRID_API(_get_first_alloc_index)
+        GET_GRID_API(_get_last_alloc_index)
+        SET_GRID_API(_set_domain_size)
+        SET_GRID_API(_set_pad_size)
+        SET_GRID_API(_set_offset)
+
+        // Exposed APIs.
+        GET_GRID_API(get_rank_domain_size)
+        GET_GRID_API(get_first_rank_domain_index)
+        GET_GRID_API(get_last_rank_domain_index)
+        GET_GRID_API(get_halo_size)
+        GET_GRID_API(get_extra_pad_size)
+        GET_GRID_API(get_pad_size)
+        GET_GRID_API(get_alloc_size)
+        GET_GRID_API(get_first_rank_alloc_index)
+        GET_GRID_API(get_last_rank_alloc_index)
+        GET_GRID_API(get_first_misc_index)
+        GET_GRID_API(get_last_misc_index)
+
+        SET_GRID_API(set_halo_size)
+        SET_GRID_API(set_min_pad_size)
+        SET_GRID_API(set_extra_pad_size)
+        SET_GRID_API(set_alloc_size)
+        SET_GRID_API(set_first_misc_index)
+
+#undef GET_GRID_API
+#undef SET_GRID_API
+        
+        virtual void set_all_elements_same(double val) =0;
+        virtual double get_element(const Indices& indices) const;
+        virtual double get_element(const GridIndices& indices) const {
+            const Indices indices2(indices);
+            return get_element(indices2);
+        }
+        virtual double get_element(const std::initializer_list<idx_t>& indices) const {
+            const Indices indices2(indices);
+            return get_element(indices2);
+        }
+        virtual idx_t get_elements_in_slice(void* buffer_ptr,
+                                            const Indices& first_indices,
+                                            const Indices& last_indices) const;
         virtual idx_t get_elements_in_slice(void* buffer_ptr,
                                             const GridIndices& first_indices,
-                                            const GridIndices& last_indices) const;
+                                            const GridIndices& last_indices) const {
+            const Indices first(first_indices);
+            const Indices last(last_indices);
+            return get_elements_in_slice(buffer_ptr, first, last);
+        }
         virtual idx_t set_element(double val,
-                                  idx_t dim1_index, idx_t dim2_index,
-                                  idx_t dim3_index, idx_t dim4_index,
-                                  idx_t dim5_index, idx_t dim6_index);
+                                  const Indices& indices,
+                                  bool strict_indices = false);
         virtual idx_t set_element(double val,
                                   const GridIndices& indices,
-                                  bool strict_indices);
+                                  bool strict_indices = false) {
+            const Indices indices2(indices);
+            return set_element(val, indices2, strict_indices);
+        }
+        virtual idx_t set_element(double val,
+                                  const std::initializer_list<idx_t>& indices,
+                                  bool strict_indices = false) {
+            const Indices indices2(indices);
+            return set_element(val, indices2, strict_indices);
+        }
+        virtual idx_t set_elements_in_slice_same(double val,
+                                                 const Indices& first_indices,
+                                                 const Indices& last_indices,
+                                                 bool strict_indices);
         virtual idx_t set_elements_in_slice_same(double val,
                                                  const GridIndices& first_indices,
                                                  const GridIndices& last_indices,
-                                                 bool strict_indices);
+                                                 bool strict_indices) {
+            const Indices first(first_indices);
+            const Indices last(last_indices);
+            return set_elements_in_slice_same(val, first, last, strict_indices);
+        }
+        virtual idx_t set_elements_in_slice(const void* buffer_ptr,
+                                            const Indices& first_indices,
+                                            const Indices& last_indices);
         virtual idx_t set_elements_in_slice(const void* buffer_ptr,
                                             const GridIndices& first_indices,
-                                            const GridIndices& last_indices);
+                                            const GridIndices& last_indices) {
+            const Indices first(first_indices);
+            const Indices last(last_indices);
+            return set_elements_in_slice(buffer_ptr, first, last);
+        }
         virtual void alloc_storage() {
-            _gp->default_alloc();
+            _ggb->default_alloc();
         }
         virtual void release_storage() {
-            _gp->release_storage();
-        }            
+            _ggb->release_storage();
+        }
         virtual void share_storage(yk_grid_ptr source);
         virtual bool is_storage_allocated() const {
-            return get_storage() != 0;
+            return _ggb->get_storage() != 0;
         }
         virtual idx_t get_num_storage_bytes() const {
-            return idx_t(get_num_bytes());
+            return idx_t(_ggb->get_num_bytes());
         }
         virtual idx_t get_num_storage_elements() const {
-            return get_num_elems();
+            return _allocs.product();
         }
         virtual bool is_storage_layout_identical(const yk_grid_ptr other) const;
         virtual void* get_raw_storage_buffer() {
-            return (void*)get_storage();
+            return _ggb->get_storage();
+        }
+        virtual void set_storage(std::shared_ptr<char> base, size_t offset) {
+            _ggb->set_storage(base, offset);
         }
     };
-    
-    // A 3D (x, y, z) collection of real_vec_t elements.
-    // Supports symmetric padding in each dimension.
-    template <typename LayoutFn> class RealVecGrid_XYZ :
-        public RealVecGridBase {
+
+    // YASK grid of real elements.
+    // Used for grids that do not contain folded vectors.
+    // If '_wrap_1st_idx', then index to 1st dim will wrap around.
+    template <typename LayoutFn, bool _wrap_1st_idx>
+    class YkElemGrid : public YkGridBase {
 
     protected:
-
-        typedef GenericGrid3d<real_vec_t, LayoutFn> _grid_type;
+        typedef GenericGrid<real_t, LayoutFn> _grid_type;
         _grid_type _data;
-
+        
         // Share data from source grid.
-        virtual bool share_data(RealVecGridBase* src) {
-            return _share_data<_grid_type>(src);
+        virtual bool share_data(YkGridBase* src, bool die_on_failure) {
+            return _share_data<_grid_type>(src, die_on_failure);
         }
-        
-        virtual void resize_g() {
-            _data.set_d1(_axv);
-            _data.set_d2(_ayv);
-            _data.set_d3(_azv);
-        }
-        
+
     public:
+        YkElemGrid(DimsPtr dims,
+                   std::string name,
+                   const GridDimNames& dimNames,
+                   std::ostream** ostr) :
+            YkGridBase(&_data, dimNames.size(), dims),
+            _data(name, dimNames, ostr) {
+            _has_step_dim = _wrap_1st_idx;
+            resize();
+        }
 
-        // Ctor.
-        RealVecGrid_XYZ(const std::string& name) :
-            RealVecGridBase(&_data),
-            _data(name, "x", "y", "z") { }
+        // Get num dims from compile-time const.
+        virtual int get_num_dims() const final {
+            return _data.get_num_dims();
+        }
 
-        // Determine what dims are defined.
-        virtual bool got_x() const { return true; }
-        virtual bool got_y() const { return true; }
-        virtual bool got_z() const { return true; }
+        // Print some info to 'os'.
+        virtual void print_info(std::ostream& os) const {
+            _data.print_info(os, "FP");
+        }
 
-        // Get pointer to the real_vec_t at vector offset xv, yv, zv.
-        // Indices must be relative to rank, i.e., offset is already subtracted.
-        // Indices must be normalized, i.e., already divided by VLEN_*.
-        ALWAYS_INLINE
-        const real_vec_t* getVecPtrNorm(idx_t xv, idx_t yv, idx_t zv,
-                                        bool checkBounds=true) const {
+        // Init data.
+        virtual void set_all_elements_same(double seed) {
+            _data.set_elems_same(seed);
+            set_dirty_all(true);
+        }
+        virtual void set_all_elements_in_seq(double seed) {
+            _data.set_elems_in_seq(seed);
+            set_dirty_all(true);
+        }
+  
+        // Get a pointer to given element.
+        virtual const real_t* getElemPtr(const Indices& idxs,
+                                         bool checkBounds=true) const final {
 
 #ifdef TRACE_MEM
-            std::cout << get_name() << "." << "RealVecGrid_XYZ::getVecPtrNorm(" <<
-                xv << "," << yv << "," << zv << ")";
+            _data.get_ostr() << get_name() << "." << "YkElemGrid::getElemPtr(" <<
+                idxs.makeValStr(get_num_dims()) << ")";
 #endif
-        
-            // adjust for padding.
-            xv += _pxv;
-            yv += _pyv;
-            zv += _pzv;
+            const auto n = _data.get_num_dims();
+            Indices adj_idxs(n);
 
+            // Special handling for step index.
+            auto sp = Indices::step_posn;
+            if (_wrap_1st_idx)
+                adj_idxs[sp] = wrap_step(idxs[sp]);
+
+#pragma unroll
+            // All other indices.
+            for (int i = 0; i < n; i++) {
+                if (!(_wrap_1st_idx && i == sp)) {
+
+                    // Adjust for offset and padding.
+                    // This gives a 0-based local element index.
+                    adj_idxs[i] = idxs[i] - _offsets[i] + _pads[i];
+                }
+            }
+            
 #ifdef TRACE_MEM
             if (checkBounds)
-                std::cout << " => " << _data.get_index(xv, yv, zv);
-            std::cout << std::endl << flush;
+                _data.get_ostr() << " => " << _data.get_index(adj_idxs);
+            _data.get_ostr() << std::endl << std::flush;
 #endif
 
             // Get pointer via layout in _data.
-            return &_data(xv, yv, zv, checkBounds);
+            return _data.getPtr(adj_idxs, checkBounds);
         }
 
         // Non-const version.
-        ALWAYS_INLINE
-        real_vec_t* getVecPtrNorm(idx_t xv, idx_t yv, idx_t zv,
-                                  bool checkBounds=true) {
+        virtual real_t* getElemPtr(const Indices& idxs,
+                                   bool checkBounds=true) final {
 
-            const real_vec_t* vp =
-                const_cast<const RealVecGrid_XYZ*>(this)->getVecPtrNorm(xv, yv, zv,
-                                                                        checkBounds);
-            return const_cast<real_vec_t*>(vp);
-        }
-    
-        // Get a pointer to one real_t.
-        ALWAYS_INLINE
-        const real_t* getElemPtr(idx_t x, idx_t y, idx_t z,
-                                 bool checkBounds=true) const {
-            idx_t xv, xe, yv, ye, zv, ze;
-            normalize_x(x, xv, xe);
-            normalize_y(y, yv, ye);
-            normalize_z(z, zv, ze);
-
-            // Get vector.
-            const real_vec_t* vp = getVecPtrNorm(xv, yv, zv, checkBounds);
-
-            // Extract point from vector.
-            return &(*vp)(xe, ye, ze);
-        }
-
-        // non-const version.
-        ALWAYS_INLINE
-        real_t* getElemPtr(idx_t x, idx_t y, idx_t z,
-                           bool checkBounds=true) {
-            const real_t* p = const_cast<const RealVecGrid_XYZ*>(this)->getElemPtr(x, y, z,
-                                                                               checkBounds);
+            const real_t* p =
+                const_cast<const YkElemGrid*>(this)->getElemPtr(idxs, checkBounds);
             return const_cast<real_t*>(p);
         }
 
         // Read one element.
-        ALWAYS_INLINE
-        real_t readElem(idx_t x, idx_t y, idx_t z,
-                        int line) const {
-            const real_t* ep = getElemPtr(x, y, z);
+        // Indices are relative to overall problem domain.
+        virtual real_t readElem(const Indices& idxs,
+                                int line) const final {
+            const real_t* ep = YkElemGrid::getElemPtr(idxs);
             real_t e = *ep;
 #ifdef TRACE_MEM
-            printElem(std::cout, "readElem", x, y, z, e, line);
+            printElem("readElem", idxs, e, line);
 #endif
             return e;
         }
 
-        // Write one element.
-        ALWAYS_INLINE
-        void writeElem(real_t val, idx_t x, idx_t y, idx_t z,
-                       int line) {
-            real_t* ep = getElemPtr(x, y, z);
-            *ep = val;
-#ifdef TRACE_MEM
-            printElem(std::cout, "writeElem", x, y, z, val, line);
-#endif
-        }
-
-        // Read one vector at vector offset xv, yv, zv.
-        // Indices must be relative to rank, i.e., offset is already subtracted.
-        // Indices must be normalized, i.e., already divided by VLEN_*.
-        ALWAYS_INLINE
-        real_vec_t readVecNorm(idx_t xv, idx_t yv, idx_t zv,
-                               int line) const {
-#ifdef TRACE_MEM
-            std::cout << "readVecNorm(" << xv << "," << yv << "," << zv << ")..." << std::endl;
-#endif        
-            const real_vec_t* p = getVecPtrNorm(xv, yv, zv);
-            __assume_aligned(p, CACHELINE_BYTES);
-            real_vec_t v;
-            v.loadFrom(p);
-#ifdef TRACE_MEM
-            printVecNorm(std::cout, "readVec", xv, yv, zv, v, line);
-#endif
-#ifdef MODEL_CACHE
-            cache_model.read(p, line);
-#endif
-            return v;
-        }
-
-        // Write one vector at vector offset xv, yv, zv.
-        // Indices must be relative to rank, i.e., offset is already subtracted.
-        // Indices must be normalized, i.e., already divided by VLEN_*.
-        ALWAYS_INLINE
-        void writeVecNorm(const real_vec_t& v, idx_t xv, idx_t yv, idx_t zv,
-                          int line) {
-            real_vec_t* p = getVecPtrNorm(xv, yv, zv);
-            __assume_aligned(p, CACHELINE_BYTES);
-            v.storeTo(p);
-#ifdef TRACE_MEM
-            printVecNorm(std::cout, "writeVec", xv, yv, zv, v, line);
-#endif
-#ifdef MODEL_CACHE
-            cache_model.write(p, line);
-#endif
-        }
-
-        // Prefetch one vector at vector offset xv, yv, zv.
-        // Indices must be relative to rank, i.e., offset is already subtracted.
-        // Indices must be normalized, i.e., already divided by VLEN_*.
-        template <int level>
-        ALWAYS_INLINE
-        void prefetchVecNorm(idx_t xv, idx_t yv, idx_t zv,
-                             int line) const {
-#ifdef TRACE_MEM
-            std::cout << "prefetchVecNorm<" << level << ">(" <<
-                xv << "," << yv << "," << zv << ")..." << std::endl;
-#endif        
-            const char* p = (const char*)getVecPtrNorm(xv, yv, zv, false);
-            __assume_aligned(p, CACHELINE_BYTES);
-            _mm_prefetch (p, level);
-#ifdef MODEL_CACHE
-            cache_model.prefetch(p, level, line);
-#endif
-        }
-
-        // Read one element.
-        virtual real_t readElem_TXYZ(idx_t t, idx_t x, idx_t y, idx_t z,
-                                      int line) const {
-            assert(t == 0);
-            return readElem(x, y, z, line);
-        }
-
-        // Write one element.
-        virtual void writeElem_TXYZ(real_t val,
-                                     idx_t t, idx_t x, idx_t y, idx_t z,                               
-                                     int line) {
-            assert(t == 0);
-            writeElem(val, x, y, z, line);
-        }
-        
-        // Read one vector at *vector* offset.
-        // Indices must be relative to rank, i.e., offset is already subtracted.
-        // Indices must be normalized, i.e., already divided by VLEN_*.
-        virtual real_vec_t readVecNorm_TXYZ(idx_t t, idx_t xv, idx_t yv, idx_t zv,
-                                             int line) const {
-            assert(t == 0);
-            return readVecNorm(xv, yv, zv, line);
-        }
-        
-        // Write one vector at *vector* offset.
-        // Indices must be relative to rank, i.e., offset is already subtracted.
-        // Indices must be normalized, i.e., already divided by VLEN_*.
-        virtual void writeVecNorm_TXYZ(const real_vec_t& val,
-                                        idx_t t, idx_t xv, idx_t yv, idx_t zv,
-                                        int line) {
-            assert(t == 0);
-            writeVecNorm(val, xv, yv, zv, line);
-        }
-
-        // Print one vector.
-        void printVecNorm(std::ostream& os, const std::string& m,
-                      idx_t xv, idx_t yv, idx_t zv, const real_vec_t& v,
-                      int line) const {
-            printVecNorm_TXYZ(os, m, 0, xv, yv, zv, v, line);
-        }
-
-        // Print one element.
-        void printElem(std::ostream& os, const std::string& m,
-                       idx_t x, idx_t y, idx_t z, real_t e,
-                       int line) const {
-            printElem_TXYZ(os, m, 0, x, y, z, e, line);
-        }
-    };
-
-
-    // A 4D (t, x, y, z) collection of real_vec_t elements.
-    // Supports symmetric padding in each spatial dimension.
-    template <typename LayoutFn> class RealVecGrid_TXYZ :
-        public RealVecGridBase {
+    };                          // YkElemGrid.
     
-    protected:
+    // YASK grid of real vectors.
+    // Used for grids that contain all the folded dims.
+    // If '_wrap_1st_idx', then index to 1st dim will wrap around.
+    // The '_templ_vec_lens' arguments must contain a list of vector lengths
+    // corresponding to each dim in the grid.
+    template <typename LayoutFn, bool _wrap_1st_idx, idx_t... _templ_vec_lens>
+    class YkVecGrid : public YkGridBase {
 
-        typedef GenericGrid4d<real_vec_t, LayoutFn> _grid_type;
+    protected:
+        typedef GenericGrid<real_vec_t, LayoutFn> _grid_type;
         _grid_type _data;
 
+        // Positions of grid dims in vector fold dims.
+        Indices _vec_fold_posns;
+
         // Share data from source grid.
-        virtual bool share_data(RealVecGridBase* src) {
-            return _share_data<_grid_type>(src);
+        virtual bool share_data(YkGridBase* src, bool die_on_failure) {
+            return _share_data<_grid_type>(src, die_on_failure);
         }
-        
-        virtual void resize_g() {
-            _data.set_d1(_tdim);
-            _data.set_d2(_axv);
-            _data.set_d3(_ayv);
-            _data.set_d4(_azv);
-        }
-        
+
     public:
+        YkVecGrid(DimsPtr dims,
+                  const std::string& name,
+                  const GridDimNames& dimNames,
+                  std::ostream** ostr) :
+            YkGridBase(&_data, dimNames.size(), dims),
+            _data(name, dimNames, ostr),
+            _vec_fold_posns(idx_t(0), int(dimNames.size())) {
+            _has_step_dim = _wrap_1st_idx;
 
-        // Ctor.
-        RealVecGrid_TXYZ(const std::string& name) :
-            RealVecGridBase(&_data),
-            _data(name, "t", "x", "y", "z") { }
+            // Template vec lengths.
+            const int nvls = sizeof...(_templ_vec_lens);
+            const idx_t vls[nvls] { _templ_vec_lens... };
+            assert(nvls == dimNames.size());
+            
+            // Init vec sizes.
+            // For each dim in the grid, use the number of vector
+            // fold points or 1 if not set.
+            for (size_t i = 0; i < dimNames.size(); i++) {
+                auto& dname = dimNames.at(i);
+                auto* p = dims->_vec_fold_pts.lookup(dname);
+                idx_t dval = p ? *p : 1;
+                _vec_lens[i] = dval;
+                _vec_allocs[i] = dval;
 
-        // Determine what dims are defined.
-        virtual bool got_t() const { return true; }
-        virtual bool got_x() const { return true; }
-        virtual bool got_y() const { return true; }
-        virtual bool got_z() const { return true; }
+                // Compare to template parameter pack.
+                assert(dval == vls[i]);
+            }
+
+            // Init grid-dim positions of fold dims.
+            assert(dims->_vec_fold_pts.getNumDims() == NUM_VEC_FOLD_DIMS);
+            for (int i = 0; i < NUM_VEC_FOLD_DIMS; i++) {
+                auto& fdim = dims->_vec_fold_pts.getDimName(i);
+                int j = get_dim_posn(fdim, true,
+                                     "internal error: folded grid missing folded dim");
+                assert(j >= 0);
+                _vec_fold_posns[i] = j;
+            }
+
+            resize();
+        }
         
-        // Get pointer to the real_vec_t at vector offset t, xv, yv, zv.
-        // Indices must be relative to rank, i.e., offset is already subtracted.
-        // Indices must be normalized, i.e., already divided by VLEN_*.
-        ALWAYS_INLINE
-        const real_vec_t* getVecPtrNorm(idx_t t, idx_t xv, idx_t yv, idx_t zv,
-                                        bool checkBounds=true) const {
+        // Get num dims from compile-time const.
+        virtual int get_num_dims() const final {
+            return _data.get_num_dims();
+        }
+
+        // Print some info to 'os'.
+        virtual void print_info(std::ostream& os) const {
+            _data.print_info(os, "SIMD FP");
+        }
+        
+        // Init data.
+        virtual void set_all_elements_same(double seed) {
+            real_vec_t seedv = seed; // bcast.
+            _data.set_elems_same(seedv);
+            set_dirty_all(true);
+        }
+        virtual void set_all_elements_in_seq(double seed) {
+            real_vec_t seedv;
+            auto n = seedv.get_num_elems();
+
+            // Init elements to values between seed and 2*seed.
+            // For example if n==4, init to
+            // seed * 1.0, seed * 1.25, seed * 1.5, seed * 1.75.
+            for (int i = 0; i < n; i++)
+                seedv[i] = seed * (1.0 + double(i) / n);
+            _data.set_elems_in_seq(seedv);
+            set_dirty_all(true);
+        }
+        
+        // Get a pointer to given element.
+        virtual const real_t* getElemPtr(const Indices& idxs,
+                                         bool checkBounds=true) const final {
 
 #ifdef TRACE_MEM
-            std::cout << get_name() << "." << "RealVecGrid_TXYZ::getVecPtrNorm(" <<
-                t << "," << xv << "," << yv << "," << zv << ")";
+            _data.get_ostr() << get_name() << "." << "YkVecGrid::getElemPtr(" <<
+                idxs.makeValStr(get_num_dims()) << ")";
+#endif
+            // Use template vec lengths instead of run-time values for
+            // efficiency.
+            static constexpr int nvls = sizeof...(_templ_vec_lens);
+            static constexpr uidx_t vls[nvls] { _templ_vec_lens... };
+            Indices vec_idxs(nvls), elem_ofs(nvls);
+#ifdef DEBUG_LAYOUT
+            const auto nd = _data.get_num_dims();
+            assert(nd == nvls);
 #endif
 
-            // Wrap time index.
-            t = get_index_t(t);
+            // Special handling for step index.
+            auto sp = Indices::step_posn;
+            if (_wrap_1st_idx) {
+                vec_idxs[sp] = wrap_step(idxs[sp]);
+                elem_ofs[sp] = 0;
+            }
 
-            // adjust for padding.
-            xv += _pxv;
-            yv += _pyv;
-            zv += _pzv;
+            // Try to force compiler to use shifts instead of DIV and MOD
+            // when the vec-lengths are 2^n.
+#pragma unroll
+#pragma novector
+            // All other indices.
+            for (int i = 0; i < nvls; i++) {
+                if (!(_wrap_1st_idx && i == sp)) {
+
+                    // Adjust for offset and padding.
+                    // This gives a positive 0-based local element index.
+                    idx_t ai = idxs[i] - _offsets[i] + _pads[i];
+                    assert(ai >= 0);
+                    uidx_t adj_idx = uidx_t(ai);
+                    
+                    // Get vector index and offset.
+                    // Use unsigned DIV and MOD to avoid compiler having to
+                    // emit code for preserving sign when using shifts.
+                    vec_idxs[i] = idx_t(adj_idx / vls[i]);
+                    elem_ofs[i] = idx_t(adj_idx % vls[i]);
+                    assert(vec_idxs[i] == adj_idx / _vec_lens[i]);
+                    assert(elem_ofs[i] == adj_idx % _vec_lens[i]);
+                }
+            }
+
+            // Get only the vectorized fold offsets, i.e., those
+            // with vec-lengths > 1.
+            // And, they need to be in the original folding order,
+            // which might be different than the grid-dim order.
+            Indices fold_ofs(NUM_VEC_FOLD_DIMS);
+#pragma unroll
+            for (int i = 0; i < NUM_VEC_FOLD_DIMS; i++) {
+                int j = _vec_fold_posns[i];
+                fold_ofs[i] = elem_ofs[j];
+            }
+            
+            // Get 1D element index into vector.
+            auto i = _dims->getElemIndexInVec(fold_ofs);
+
+#ifdef DEBUG_LAYOUT
+            // Compare to more explicit offset extraction.
+            IdxTuple eofs = get_allocs(); // get dims for this grid.
+            elem_ofs.setTupleVals(eofs);  // set vals from elem_ofs.
+            auto i2 = _dims->getElemIndexInVec(eofs);
+            assert(i == i2);
+#endif
 
 #ifdef TRACE_MEM
             if (checkBounds)
-                std::cout << " => " << _data.get_index(t, xv, yv, zv);
-            std::cout << std::endl << flush;
+                _data.get_ostr() << " => " << _data.get_index(vec_idxs) <<
+                    "[" << i << "]";
+            _data.get_ostr() << std::endl << std::flush;
 #endif
-            return &_data(t, xv, yv, zv, checkBounds);
+
+            // Get pointer to vector.
+            const real_vec_t* vp = _data.getPtr(vec_idxs, checkBounds);
+
+            // Get pointer to element.
+            const real_t* ep = &(*vp)[i];
+            return ep;
         }
 
         // Non-const version.
-        ALWAYS_INLINE
-        real_vec_t* getVecPtrNorm(idx_t t, idx_t xv, idx_t yv, idx_t zv,
-                                  bool checkBounds=true) {
+        virtual real_t* getElemPtr(const Indices& idxs,
+                                   bool checkBounds=true) final {
 
-            const real_vec_t* vp =
-                const_cast<const RealVecGrid_TXYZ*>(this)->getVecPtrNorm(t, xv, yv, zv,
-                                                                          checkBounds);
-            return const_cast<real_vec_t*>(vp);
-        }
-    
-        // Get a pointer to one real_t.
-        ALWAYS_INLINE
-        const real_t* getElemPtr(idx_t t, idx_t x, idx_t y, idx_t z,
-                                 bool checkBounds=true) const {
-            idx_t xv, xe, yv, ye, zv, ze;
-            normalize_x(x, xv, xe);
-            normalize_y(y, yv, ye);
-            normalize_z(z, zv, ze);
-
-            // Get vector.
-            const real_vec_t* vp = getVecPtrNorm(t, xv, yv, zv, checkBounds);
-
-            // Extract point from vector.
-            return &(*vp)(xe, ye, ze);
-        }
-
-        // non-const version.
-        ALWAYS_INLINE
-        real_t* getElemPtr(idx_t t, idx_t x, idx_t y, idx_t z,
-                           bool checkBounds=true) {
             const real_t* p =
-                const_cast<const RealVecGrid_TXYZ*>(this)->getElemPtr(t, x, y, z,
-                                                                       checkBounds);
+                const_cast<const YkVecGrid*>(this)->getElemPtr(idxs, checkBounds);
             return const_cast<real_t*>(p);
         }
 
         // Read one element.
-        ALWAYS_INLINE
-        real_t readElem(idx_t t, idx_t x, idx_t y, idx_t z,
-                        int line) const {
-            const real_t* ep = getElemPtr(t, x, y, z);
+        // Indices are relative to overall problem domain.
+        virtual real_t readElem(const Indices& idxs,
+                                int line) const final {
+            const real_t* ep = YkVecGrid::getElemPtr(idxs);
             real_t e = *ep;
 #ifdef TRACE_MEM
-            printElem(std::cout, "readElem", t, x, y, z, e, line);
+            printElem("readElem", idxs, e, line);
 #endif
             return e;
         }
 
-        // Write one element.
-        ALWAYS_INLINE
-        void writeElem(real_t val,
-                       idx_t t, idx_t x, idx_t y, idx_t z,
-                       int line) {
-            real_t* ep = getElemPtr(t, x, y, z);
-            *ep = val;
+        // Get a pointer to given vector.
+        // Indices must be normalized and rank-relative.
+        // It's important that this function be efficient, since
+        // it's indiectly used from the stencil kernel.
+        inline const real_vec_t* getVecPtrNorm(const Indices& idxs,
+                                               bool checkBounds=true) const {
+
 #ifdef TRACE_MEM
-            printElem(std::cout, "writeElem", t, x, y, z, val, line);
+            _data.get_ostr() << get_name() << "." << "YkVecGrid::getVecPtrNorm(" <<
+                idxs.makeValStr(get_num_dims()) << ")";
 #endif
+
+            static constexpr int nvls = sizeof...(_templ_vec_lens);
+#ifdef DEBUG_LAYOUT
+            const auto nd = _data.get_num_dims();
+            assert(nd == nvls);
+#endif
+            Indices adj_idxs(nvls);
+
+            // Special handling for 1st index.
+            auto sp = Indices::step_posn;
+            if (_wrap_1st_idx)
+                adj_idxs[sp] = wrap_step(idxs[sp]);
+
+#pragma unroll
+            // All other indices.
+            for (int i = 0; i < nvls; i++) {
+                if (!(_wrap_1st_idx && i == sp)) {
+
+                    // Adjust for padding.
+                    // This gives a 0-based local *vector* index.
+                    adj_idxs[i] = idxs[i] + _vec_pads[i];
+                }
+            }
+
+#ifdef TRACE_MEM
+            if (checkBounds)
+                _data.get_ostr() << " => " << _data.get_index(adj_idxs);
+            _data.get_ostr() << std::endl << std::flush;
+#endif
+
+            // Get ptr via layout in _data.
+            return _data.getPtr(adj_idxs, checkBounds);
         }
 
-        // Read one vector at vector offset t, xv, yv, zv.
-        // Indices must be relative to rank, i.e., offset is already subtracted.
-        // Indices must be normalized, i.e., already divided by VLEN_*.
-        ALWAYS_INLINE
-        real_vec_t readVecNorm(idx_t t, idx_t xv, idx_t yv, idx_t zv,
-                               int line) const {
+        // Non-const version.
+        inline real_vec_t* getVecPtrNorm(const Indices& idxs,
+                                         bool checkBounds=true) {
+
+            const real_vec_t* p =
+                const_cast<const YkVecGrid*>(this)->getVecPtrNorm(idxs, checkBounds);
+            return const_cast<real_vec_t*>(p);
+        }
+
+        // Read one vector.
+        // Indices must be normalized and rank-relative.
+        inline real_vec_t readVecNorm(const Indices& idxs,
+                                      int line) const {
+            const real_vec_t* vp = getVecPtrNorm(idxs);
+            real_vec_t v = *vp;
 #ifdef TRACE_MEM
-            std::cout << "readVecNorm(" << t << "," << xv <<
-                "," << yv << "," << zv << ")..." << std::endl;
-#endif        
-            const real_vec_t* p = getVecPtrNorm(t, xv, yv, zv);
-            __assume_aligned(p, CACHELINE_BYTES);
-            real_vec_t v;
-            v.loadFrom(p);
-#ifdef TRACE_MEM
-            printVecNorm(std::cout, "readVec", t, xv, yv, zv, v, line);
-#endif
-#ifdef MODEL_CACHE
-            cache_model.read(p, line);
+            printVecNorm("readVecNorm", idxs, v, line);
 #endif
             return v;
         }
 
-        // Write one vector at vector offset t, xv, yv, zv.
-        // Indices must be relative to rank, i.e., offset is already subtracted.
-        // Indices must be normalized, i.e., already divided by VLEN_*.
-        ALWAYS_INLINE void
-        writeVecNorm(const real_vec_t& v,
-                     idx_t t, idx_t xv, idx_t yv, idx_t zv,
-                     int line) {
-            real_vec_t* p = getVecPtrNorm(t, xv, yv, zv);
-            __assume_aligned(p, CACHELINE_BYTES);
-            v.storeTo(p);
+        // Write one vector.
+        // Indices must be normalized and rank-relative.
+        inline void writeVecNorm(real_vec_t val,
+                                 const Indices& idxs,
+                                 int line) {
+            real_vec_t* vp = getVecPtrNorm(idxs);
+            *vp = val;
 #ifdef TRACE_MEM
-            printVecNorm(std::cout, "writeVec", t, xv, yv, zv, v, line);
-#endif
-#ifdef MODEL_CACHE
-            cache_model.write(p, line);
+            printVecNorm("writeVecNorm", idxs, val, line);
 #endif
         }
 
-        // Prefetch one vector at vector offset t, xv, yv, zv.
-        // Indices must be relative to rank, i.e., offset is already subtracted.
-        // Indices must be normalized, i.e., already divided by VLEN_*.
+        // Prefetch one vector.
+        // Indices must be normalized and rank-relative.
         template <int level>
         ALWAYS_INLINE
-        void prefetchVecNorm(idx_t t, idx_t xv, idx_t yv, idx_t zv,
+        void prefetchVecNorm(const Indices& idxs,
                              int line) const {
 #ifdef TRACE_MEM
-            std::cout << "prefetchVecNorm<" << level << ">(" << t << "," <<
-                xv << "," << yv << "," << zv << ")..." << std::endl;
+            std::cout << "prefetchVecNorm<" << level << ">(" <<
+                makeIndexString(idxs.multElements(_vec_lens)) <<
+                ")" << std::endl;
 #endif
-            const char* p = (const char*)getVecPtrNorm(t, xv, yv, zv, false);
-            __assume_aligned(p, CACHELINE_BYTES);
-            _mm_prefetch (p, level);
+            auto p = getVecPtrNorm(idxs, false);
+            prefetch<level>(p);
 #ifdef MODEL_CACHE
             cache_model.prefetch(p, level, line);
 #endif
         }
 
-        // Read one element.
-        virtual real_t readElem_TXYZ(idx_t t, idx_t x, idx_t y, idx_t z,
-                                      int line) const {
-            return readElem(t, x, y, z, line);
+        // Vectorized version of set/get_elements_in_slice().
+        virtual idx_t set_vecs_in_slice(const void* buffer_ptr,
+                                        const Indices& first_indices,
+                                        const Indices& last_indices) {
+            if (!is_storage_allocated())
+                return 0;
+            Indices firstv, lastv;
+            checkIndices(first_indices, "set_vecs_in_slice", true, true, &firstv);
+            checkIndices(last_indices, "set_vecs_in_slice", true, true, &lastv);
+
+            // Find range.
+            IdxTuple numVecsTuple = get_slice_range(firstv, lastv);
+            TRACE_MSG0(get_ostr(), "set_vecs_in_slice: setting " <<
+                       numVecsTuple.makeDimValStr(" * ") << " vecs from " <<
+                       makeIndexString(firstv) << " to " <<
+                       makeIndexString(lastv));
+
+            // Visit points in slice.
+            numVecsTuple.visitAllPointsInParallel
+                ([&](const IdxTuple& ofs,
+                     size_t idx) {
+                    Indices pt = firstv.addElements(ofs);
+                    real_vec_t val = ((real_vec_t*)buffer_ptr)[idx];
+                    writeVecNorm(val, pt, __LINE__);
+                    return true;    // keep going.
+                });
+
+            // Set appropriate dirty flag(s).
+            set_dirty_in_slice(first_indices, last_indices);
+
+            return numVecsTuple.product() * VLEN;
+        }
+        virtual idx_t get_vecs_in_slice(void* buffer_ptr,
+                                        const Indices& first_indices,
+                                        const Indices& last_indices) const {
+            if (!is_storage_allocated()) {
+                std::cerr << "Error: call to 'get_vecs_in_slice' with no data allocated for grid '" <<
+                    get_name() << "'.\n";
+                exit_yask(1);
+            }
+            Indices firstv, lastv;
+            checkIndices(first_indices, "get_vecs_in_slice", true, true, &firstv);
+            checkIndices(last_indices, "get_vecs_in_slice", true, true, &lastv);
+
+            // Find range.
+            IdxTuple numVecsTuple = get_slice_range(firstv, lastv);
+            TRACE_MSG0(get_ostr(), "get_vecs_in_slice: getting " <<
+                       numVecsTuple.makeDimValStr(" * ") << " vecs from " <<
+                       makeIndexString(firstv) << " to " <<
+                       makeIndexString(lastv));
+        
+            // Visit points in slice.
+            numVecsTuple.visitAllPointsInParallel
+                ([&](const IdxTuple& ofs,
+                     size_t idx) {
+                    Indices pt = firstv.addElements(ofs);
+                    real_vec_t val = readVecNorm(pt, __LINE__);
+                    ((real_vec_t*)buffer_ptr)[idx] = val;
+                    return true;    // keep going.
+                });
+            return numVecsTuple.product() * VLEN;
         }
         
-        // Write one element.
-        virtual void writeElem_TXYZ(real_t val,
-                                     idx_t t, idx_t x, idx_t y, idx_t z,                               
-                                     int line) {
-            writeElem(val, t, x, y, z, line);
-        }
+    };                          // YkVecGrid.
 
-        // Read one vector at *vector* offset.
-        // Indices must be relative to rank, i.e., offset is already subtracted.
-        // Indices must be normalized, i.e., already divided by VLEN_*.
-        virtual real_vec_t readVecNorm_TXYZ(idx_t t, idx_t xv, idx_t yv, idx_t zv,
-                                             int line) const {
-            return readVecNorm(t, xv, yv, zv, line);
-        }
-        
-        // Write one vector at *vector* offset.
-        // Indices must be relative to rank, i.e., offset is already subtracted.
-        // Indices must be normalized, i.e., already divided by VLEN_*.
-        virtual void writeVecNorm_TXYZ(const real_vec_t& val,
-                                        idx_t t, idx_t xv, idx_t yv, idx_t zv,
-                                        int line) {
-            writeVecNorm(val, t, xv, yv, zv, line);
-        }
-
-        // Print one vector.
-        void printVecNorm(std::ostream& os, const std::string& m,
-                          idx_t t, idx_t xv, idx_t yv, idx_t zv,
-                          const real_vec_t& v,
-                          int line) const {
-            printVecNorm_TXYZ(os, m, t, xv, yv, zv, v, line);
-        }
-
-        // Print one element.
-        void printElem(std::ostream& os, const std::string& m,
-                       idx_t t, idx_t x, idx_t y, idx_t z,
-                       real_t e,
-                       int line) const {
-            printElem_TXYZ(os, m, t, x, y, z, e, line);
-        }
-    };
-
-}
-#endif
+}                               // namespace.

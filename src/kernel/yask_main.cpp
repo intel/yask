@@ -32,28 +32,27 @@ using namespace yask;
 // Add some command-line options for this application in addition to the
 // default ones provided by YASK.
 struct AppSettings : public KernelSettings {
-    bool help;                  // help requested.
-    bool doWarmup;              // whether to do warmup run.
-    int num_trials;             // number of trials.
-    bool validate;              // whether to do validation run.
-    int pre_trial_sleep_time;   // sec to sleep before each trial.
+    bool help = false;          // help requested.
+    bool doWarmup = true;       // whether to do warmup run.
+    bool doAutoTune = true;     // whether to do auto-tuning.
+    int step_alloc = 0;         // if >0, override number of steps to alloc.
+    int num_trials = 3;         // number of trials.
+    bool validate = false;      // whether to do validation run.
+    int pre_trial_sleep_time = 1; // sec to sleep before each trial.
+    int debug_sleep = 0;          // sec to sleep for debug attach.
 
-    AppSettings() :
-        help(false),
-        doWarmup(true),
-        num_trials(3),
-        validate(false),
-        pre_trial_sleep_time(1)
-    { }
+    AppSettings(DimsPtr dims) :
+        KernelSettings(dims) { }
 
-    // A custom option-handler for validation.
+    // A custom option-handler for '-v'.
     class ValOption : public CommandLineParser::OptionBase {
         AppSettings& _as;
 
     public:
+
         ValOption(AppSettings& as) :
                 OptionBase("v",
-                           "Shortcut for '-validate -no-warmup -t 1 -dt 1 -d 64 -b 24'."),
+                           "Shortcut for '-validate -no-auto_tune -no-warmup -t 1 -dt 1 -d 64 -b 32'."),
                 _as(as) { }
 
         // Set multiple vars.
@@ -61,54 +60,83 @@ struct AppSettings : public KernelSettings {
                                int& argi) {
             if (_check_arg(args, argi, _name)) {
                 _as.validate = true;
+                _as.doAutoTune = false;
                 _as.doWarmup = false;
                 _as.num_trials = 1;
-                _as.dt = 1;
-                _as.dx = _as.dy = _as.dz = 64;
-                _as.bx = _as.by = _as.bz = 24;
+                _as._rank_sizes[_as._dims->_step_dim] = 1;
+                for (auto dim : _as._dims->_domain_dims.getDims()) {
+                    auto& dname = dim.getName();
+                    _as._rank_sizes[dname] = 64;
+                    _as._block_sizes[dname] = 24;
+                }
                 return true;
             }
             return false;
         }
     };
 
-#ifndef DEF_ARGS
-#define DEF_ARGS ""
-#endif
-    
     // Parse options from the command-line and set corresponding vars.
     // Exit with message on error or request for help.
     void parse(int argc, char** argv) {
+
+        // Set default for time-domain size.
+        auto& step_dim = _dims->_step_dim;
+        _rank_sizes[step_dim] = 50;
 
         // Create a parser and add base options to it.
         CommandLineParser parser;
         add_options(parser);
 
         // Add more options for this app.
-        parser.add_option(new CommandLineParser::BoolOption("h",
-                                         "Print help message.",
-                                         help));
-        parser.add_option(new CommandLineParser::BoolOption("help",
-                                         "Print help message.",
-                                         help));
-        parser.add_option(new CommandLineParser::BoolOption("warmup",
-                                         "Run warmup iteration(s) before performance trial(s).",
-                                         doWarmup));
-        parser.add_option(new CommandLineParser::IntOption("t",
-                                        "Number of performance trials.",
-                                        num_trials));
-        parser.add_option(new CommandLineParser::IntOption("sleep",
-                                        "Number of seconds to sleep before each performance trial.",
-                                        pre_trial_sleep_time));
-        parser.add_option(new CommandLineParser::BoolOption("validate",
-                                         "Run validation iteration(s) after performance trial(s).",
-                                         validate));
+        parser.add_option(new CommandLineParser::BoolOption
+                          ("h",
+                           "Print help message.",
+                           help));
+        parser.add_option(new CommandLineParser::BoolOption
+                          ("help",
+                           "Print help message.",
+                           help));
+        parser.add_option(new CommandLineParser::BoolOption
+                          ("auto_tune",
+                           "Run iteration(s) before performance trial(s) to find good-performing "
+                           "values for block sizes. "
+                           "Uses default values or command-line-provided values as a starting point. "
+                           "Disabled if there is more than one MPI rank.",
+                           doAutoTune));
+        parser.add_option(new CommandLineParser::BoolOption
+                          ("warmup",
+                           "Run warmup iteration(s) before performance "
+                           "trial(s) and after auto-tuning iterations, if enabled.",
+                           doWarmup));
+        parser.add_option(new CommandLineParser::IntOption
+                          ("step_alloc",
+                           "Number of steps to allocate in relevant grids, "
+                           "overriding default value from YASK compiler.",
+                           step_alloc));
+        parser.add_option(new CommandLineParser::IntOption
+                          ("t",
+                           "Number of performance trials.",
+                           num_trials));
+        parser.add_option(new CommandLineParser::IntOption
+                          ("sleep",
+                           "Number of seconds to sleep before each performance trial.",
+                           pre_trial_sleep_time));
+        parser.add_option(new CommandLineParser::IntOption
+                          ("debug_sleep",
+                           "Number of seconds to sleep for debug attach.",
+                           debug_sleep));
+        parser.add_option(new CommandLineParser::BoolOption
+                          ("validate",
+                           "Run validation iteration(s) after performance trial(s).",
+                           validate));
         parser.add_option(new ValOption(*this));
         
-        // Parse cmd-line options, which sets values.
-        // Any remaining strings will be left in args.
+        // Tokenize default args.
         vector<string> args;
         parser.set_args(DEF_ARGS, args);
+
+        // Parse cmd-line options, which sets values.
+        // Any remaining strings will be left in args.
         parser.parse_args(argc, argv, args);
 
         if (help) {
@@ -151,8 +179,32 @@ struct AppSettings : public KernelSettings {
         for (int argi = 0; argi < argc; argi++)
             os << " " << argv[argi];
         os << endl;
+        
+        os << "PID: " << getpid() << endl;
+        if (debug_sleep) {
+            os << "Sleeping " << debug_sleep <<
+                " second(s) to allow debug attach...\n";
+            sleep(debug_sleep);
+            os << "Resuming...\n";
+        }
     }
 };
+
+// Override step allocation.
+void alloc_steps(yk_solution_ptr soln, const AppSettings& opts) {
+    if (opts.step_alloc <= 0)
+        return;
+
+    // Find grids with steps.
+    auto step_dim = soln->get_step_dim_name();
+    auto grids = soln->get_grids();
+    for (auto grid : grids) {
+        if (grid->is_dim_used(step_dim))
+
+            // override num steps.
+            grid->set_alloc_size(step_dim, opts.step_alloc);
+    }
+}
 
 // Parse command-line args, run kernel, run validation if requested.
 int main(int argc, char** argv)
@@ -167,9 +219,12 @@ int main(int argc, char** argv)
     // Set up the environment (mostly MPI).
     auto kenv = kfac.new_env();
 
+    // Problem dimensions.
+    auto dims = YASK_STENCIL_CONTEXT::new_dims();
+
     // Parse cmd-line options.
     // TODO: do this through APIs.
-    auto opts = make_shared<AppSettings>();
+    auto opts = make_shared<AppSettings>(dims);
     opts->parse(argc, argv);
 
     // Object containing data and parameters for stencil eval.
@@ -178,7 +233,7 @@ int main(int argc, char** argv)
     auto context = dynamic_pointer_cast<StencilContext>(ksoln);
     assert(context.get());
     context->set_settings(opts);
-    ostream& os = context->get_ostr();
+    ostream& os = context->set_ostr();
     
     // Make sure any MPI/OMP debug data is dumped from all ranks before continuing.
     kenv->global_barrier();
@@ -186,6 +241,9 @@ int main(int argc, char** argv)
     // Print splash banner and related info.
     opts->splash(os, argc, argv);
 
+    // Override alloc if requested.
+    alloc_steps(ksoln, *opts);
+    
     // Alloc memory, etc.
     ksoln->prepare_solution();
 
@@ -194,8 +252,8 @@ int main(int argc, char** argv)
         cerr << "Exiting because no trials are specified." << endl;
         exit_yask(1);
     }
-    if (context->tot_numpts_dt < 1) {
-        cerr << "Exiting because there are zero points to evaluate." << endl;
+    if (context->bb_num_points < 1) {
+        cerr << "Exiting because there are no points in the domain." << endl;
         exit_yask(1);
     }
 
@@ -208,92 +266,79 @@ int main(int argc, char** argv)
     for (int i = 0; i < 60; i++)
         divLine += "─";
     divLine += "\n";
-    
+
+    // Invoke auto-tuner.
+    if (opts->doAutoTune && kenv->get_num_ranks() == 1)
+        context->tune_settings();
+
     // warmup caches, threading, etc.
     if (opts->doWarmup) {
 
-        // Temporarily set dt to a temp value for warmup.
-        idx_t dt = opts->dt;
-        idx_t tmp_dt = min<idx_t>(opts->dt, 1);
-        opts->dt = tmp_dt;
-
+        idx_t dt = 1;
         os << endl << divLine <<
-            "Running " << opts->dt << " time step(s) for warm-up...\n" << flush;
-        context->calc_rank_opt();
+            "Running " << dt << " step(s) for warm-up...\n" << flush;
+        context->run_solution(0, dt);
 
-        // Replace temp setting with correct value.
-        opts->dt = dt;
-        kenv->global_barrier();
     }
+    kenv->global_barrier();
 
     // variables for measuring performance.
-    double wstart, wstop;
-    float best_elapsed_time=0.0f, best_apps=0.0f, best_dpps=0.0f, best_flops=0.0f;
+    double best_elapsed_time=0., best_apps=0., best_dpps=0., best_flops=0.;
 
-    // Performance runs.
+    /////// Performance run(s).
+    auto& step_dim = opts->_dims->_step_dim;
+    idx_t dt = opts->_rank_sizes[step_dim];
     os << endl << divLine <<
         "Running " << opts->num_trials << " performance trial(s) of " <<
-        opts->dt << " time step(s) each...\n";
+        dt << " step(s) each...\n" << flush;
     for (idx_t tr = 0; tr < opts->num_trials; tr++) {
-        os << divLine;
+        os << divLine << flush;
 
-        // init data befor each trial for comparison if validating.
+        // init data before each trial for comparison if validating.
         if (opts->validate)
             context->initDiff();
 
         // Stabilize.
-        os << flush;
         if (opts->pre_trial_sleep_time > 0)
             sleep(opts->pre_trial_sleep_time);
         kenv->global_barrier();
 
-        // Start timing.
+        // Start vtune collection.
         VTUNE_RESUME;
-        context->mpi_time = 0.0;
-        wstart = getTimeInSecs();
 
         // Actual work.
+        context->clear_timers();
         context->calc_rank_opt();
 
-        // Stop timing.
-        wstop =  getTimeInSecs();
+        // Stop vtune collection.
         VTUNE_PAUSE;
             
         // Calc and report perf.
-        float elapsed_time = (float)(wstop - wstart);
-        float apps = float(context->tot_numpts_dt) / elapsed_time;
-        float dpps = float(context->tot_domain_dt) / elapsed_time;
-        float flops = float(context->tot_numFpOps_dt) / elapsed_time;
-        os << 
-            "time (sec):                             " << printWithPow10Multiplier(elapsed_time) << endl <<
-            "throughput (prob-size-points/sec):      " << printWithPow10Multiplier(dpps) << endl <<
-            "throughput (point-updates/sec):         " << printWithPow10Multiplier(apps) << endl <<
-            "throughput (est-FLOPS):                 " << printWithPow10Multiplier(flops) << endl;
-#ifdef USE_MPI
-        os <<
-            "time in halo exch (sec):                " << printWithPow10Multiplier(context->mpi_time) << endl;
-#endif
+        auto stats = context->get_stats();
 
-        if (apps > best_apps) {
-            best_apps = apps;
-            best_dpps = dpps;
-            best_elapsed_time = elapsed_time;
-            best_flops = flops;
+        // Remember best.
+        if (context->domain_pts_ps > best_dpps) {
+            best_dpps = context->domain_pts_ps;
+            best_apps = context->writes_ps;
+            best_flops = context->flops;
+            best_elapsed_time = stats->get_elapsed_run_secs();
         }
     }
 
     os << divLine <<
-        "best-time (sec):                        " << printWithPow10Multiplier(best_elapsed_time) << endl <<
-        "best-throughput (prob-size-points/sec): " << printWithPow10Multiplier(best_dpps) << endl <<
-        "best-throughput (point-updates/sec):    " << printWithPow10Multiplier(best_apps) << endl <<
-        "best-throughput (est-FLOPS):            " << printWithPow10Multiplier(best_flops) << endl <<
+        "best-elapsed-time (sec):           " << makeNumStr(best_elapsed_time) << endl <<
+        "best-throughput (num-points/sec):  " << makeNumStr(best_dpps) << endl <<
+        "best-throughput (num-writes/sec):  " << makeNumStr(best_apps) << endl <<
+        "best-throughput (est-FLOPS):       " << makeNumStr(best_flops) << endl <<
         divLine <<
         "Notes:\n" <<
-        " prob-size-points/sec is based on problem-size as described above.\n" <<
-        " point-updates/sec is based on grid-point-updates as described above.\n" <<
-        " est-FLOPS is based on est-FP-ops as described above.\n" <<
+        " Num-points is based on overall-problem-size as described above.\n" <<
+        " Num-writes is based on num-writes-required as described above.\n" <<
+        " Est-FLOPS is based on est-FP-ops as described above.\n" <<
         endl;
     
+    /////// Validation run.
+    bool ok = true;
     if (opts->validate) {
         kenv->global_barrier();
         os << endl << divLine <<
@@ -304,49 +349,49 @@ int main(int argc, char** argv)
         auto ref_context = dynamic_pointer_cast<StencilContext>(ref_soln);
         assert(ref_context.get());
         ref_context->name += "-reference";
+        ref_context->allow_vec_exchange = false;
+        alloc_steps(ref_soln, *opts);
         ref_soln->prepare_solution();
 
         // init to same value used in context.
         ref_context->initDiff();
+        
+#ifdef CHECK_INIT
 
-        // Debug code to determine if data immediately after init matches.
-#if CHECK_INIT
-        {
-            context->initDiff();
-            idx_t errs = context->compareData(ref_context);
-            if( errs == 0 ) {
-                os << "INIT CHECK PASSED." << endl;
-                exit_yask(0);
-            } else {
-                cerr << "INIT CHECK FAILED: " << errs << " mismatch(es)." << endl;
-                exit_yask(1);
-            }
-        }
-#endif
+        // Debug code to determine if data compares immediately after init matches.
+        os << endl << divLine <<
+            "Reinitializing data for minimal validation...\n" << flush;
+        context->initDiff();
+#else
 
         // Ref trial.
         os << endl << divLine <<
-            "Running " << opts->dt << " time step(s) for validation...\n" << flush;
+            "Running " << dt << " time step(s) for validation...\n" << flush;
         ref_context->calc_rank_ref();
+#endif
 
         // check for equality.
         os << "Checking results..." << endl;
         idx_t errs = context->compareData(*ref_context);
+        auto ri = kenv->get_rank_index();
         if( errs == 0 ) {
-            os << "TEST PASSED." << endl;
+            os << "TEST PASSED on rank " << ri << ".\n" << flush;
         } else {
-            cerr << "TEST FAILED: " << errs << " mismatch(es)." << endl;
+            cerr << "TEST FAILED on rank " << ri << ": >= " << errs << " mismatch(es).\n" << flush;
             if (REAL_BYTES < 8)
                 cerr << "This is not uncommon for low-precision FP; try with 8-byte reals." << endl;
-            exit_yask(1);
+            ok = false;
         }
     }
     else
         os << "\nRESULTS NOT VERIFIED.\n";
 
     kenv->global_barrier();
+    if (!ok)
+        exit_yask(1);
+
     MPI_Finalize();
-    os << "YASK DONE." << endl << divLine;
+    os << "YASK DONE." << endl << divLine << flush;
     
     return 0;
 }

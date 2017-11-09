@@ -28,8 +28,6 @@
 import numpy as np
 import ctypes as ct
 import argparse
-import sys
-sys.path.append('lib')
 import yask_kernel
 
 # Read data from grid using NumPy ndarray.
@@ -42,6 +40,7 @@ def read_grid(grid, timestep) :
     shape = []
     nelems = 1
     for dname in grid.get_dim_names() :
+
         if dname == soln.get_step_dim_name() :
 
             # Read one timestep only.
@@ -49,7 +48,8 @@ def read_grid(grid, timestep) :
             first_indices += [timestep]
             last_indices += [timestep]
 
-        else :
+        # Domain dim?
+        elif dname in soln.get_domain_dim_names() :
 
             # Full domain in this rank.
             first_idx = soln.get_first_rank_domain_index(dname)
@@ -63,6 +63,13 @@ def read_grid(grid, timestep) :
             last_indices += [last_idx]
             shape += [last_idx - first_idx + 1]
             nelems *= last_idx - first_idx + 1
+
+        # Misc dim?
+        else :
+
+            # Read first index only.
+            first_indices += [grid.get_first_misc_index(dname)]
+            last_indices += [grid.get_first_misc_index(dname)]
 
     # Create a NumPy ndarray to hold the extracted data.
     ndarray1 = np.empty(shape, dtype, 'C');
@@ -93,6 +100,7 @@ def init_grid(grid, timestep) :
     point = ()
     nelems = 1
     for dname in grid.get_dim_names() :
+
         if dname == soln.get_step_dim_name() :
 
             # Write one timestep only.
@@ -100,7 +108,8 @@ def init_grid(grid, timestep) :
             first_indices += [timestep]
             last_indices += [timestep]
 
-        else :
+        # Domain dim?
+        elif dname in soln.get_domain_dim_names() :
 
             # Full domain in this rank.
             first_idx = soln.get_first_rank_domain_index(dname)
@@ -119,6 +128,13 @@ def init_grid(grid, timestep) :
             # starting at 0,..,0, 1,..,1 is the first point in the
             # computable domain.
             point += (1,)
+
+        # Misc dim?
+        else :
+
+            # Write first index only.
+            first_indices += [grid.get_first_misc_index(dname)]
+            last_indices += [grid.get_first_misc_index(dname)]
 
     # Create a NumPy ndarray to hold the data.
     ndarray = np.zeros(shape, dtype, 'C');
@@ -158,15 +174,17 @@ if __name__ == "__main__":
         dtype = np.float64
         
     # Init global settings.
-    for dim_name in soln.get_domain_dim_names() :
+    soln_dims = soln.get_domain_dim_names()
+    for dim_name in soln_dims :
 
         # Set domain size in each dim.
         soln.set_rank_domain_size(dim_name, 128)
 
-        # Add some padding to all grids.
-        soln.set_min_pad_size(dim_name, 16)
+        # Ensure some minimal padding on all grids.
+        soln.set_min_pad_size(dim_name, 1)
 
         # Set block size to 64 in z dim and 32 in other dims.
+        # (Not necessarily useful, just as an example.)
         if dim_name == "z" :
             soln.set_block_size(dim_name, 64)
         else :
@@ -175,7 +193,7 @@ if __name__ == "__main__":
     # Simple rank configuration in 1st dim only.
     # In production runs, the ranks would be distributed along
     # all domain dimensions.
-    ddim1 = soln.get_domain_dim_name(0) # name of 1st dim.
+    ddim1 = soln_dims[0] # name of 1st dim.
     soln.set_num_ranks(ddim1, env.get_num_ranks()) # num ranks in this dim.
 
     # Allocate memory for any grids that do not have storage set.
@@ -189,6 +207,15 @@ if __name__ == "__main__":
     print("  Grids:")
     for grid in soln.get_grids() :
         print("    " + grid.get_name() + repr(grid.get_dim_names()))
+        for dname in grid.get_dim_names() :
+            if dname in soln.get_domain_dim_names() :
+                print("      '" + dname + "' allowed index range in this rank: " +
+                      repr(grid.get_first_rank_alloc_index(dname)) + " ... " +
+                      repr(grid.get_last_rank_alloc_index(dname)))
+            elif dname in soln.get_misc_dim_names() :
+                print("      '" + dname + "' allowed index range: " +
+                      repr(grid.get_first_misc_index(dname)) + " ... " +
+                      repr(grid.get_last_misc_index(dname)))
 
     # Init the grids.
     for grid in soln.get_grids() :
@@ -218,14 +245,17 @@ if __name__ == "__main__":
         last_indices = []
             
         for dname in grid.get_dim_names() :
+
+            # Step dim?
             if dname == soln.get_step_dim_name() :
 
-                # Add index for initial timestep only.
+                # Add index for timestep zero (0) only.
+                one_indices += [0]
                 first_indices += [0]
                 last_indices += [0]
-                one_indices += [0]
 
-            else :
+            # Domain dim?
+            elif dname in soln.get_domain_dim_names() :
 
                 # Simple index for one point.
                 one_indices += [one_index]
@@ -236,6 +266,15 @@ if __name__ == "__main__":
                 # Create indices a small amount before and after the midpoint.
                 first_indices += [midpt - cube_radius]
                 last_indices += [midpt + cube_radius]
+
+            # Misc dim?
+            else :
+
+                # Add indices to set all allowed values.
+                # (This isn't really meaningful; it's just illustrative.)
+                one_indices += [grid.get_first_misc_index(dname)]
+                first_indices += [grid.get_first_misc_index(dname)]
+                last_indices += [grid.get_last_misc_index(dname)]
 
         # Init value at one point.
         nset = grid.set_element(15.0, one_indices)
@@ -258,12 +297,12 @@ if __name__ == "__main__":
     for grid in soln.get_grids() :
         read_grid(grid, 1)
 
-    print("Running the solution for 100 more steps...")
-    soln.run_solution(1, 100)
+    print("Running the solution for 10 more steps...")
+    soln.run_solution(1, 10)
 
-    # Print final result at timestep 101.
+    # Print final result at timestep 11.
     for grid in soln.get_grids() :
-        read_grid(grid, 101)
+        read_grid(grid, 11)
 
     print("Debug output captured:\n" + debug_output.get_string())
     print("End of YASK kernel API test.")

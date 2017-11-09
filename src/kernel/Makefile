@@ -24,8 +24,8 @@
 # Makefile for the YASK stencil kernel.
 # Type 'make help' for usage.
 
-# See ../../Makefile for vars commonly set via the command-line that
-#   control kernel configuration and performance.
+# See top-level YASK Makefile for explanation of vars commonly set via the
+#   command-line that control kernel configuration and performance.
 
 # Initial defaults.
 stencil		=	iso3dfd
@@ -63,21 +63,25 @@ else ifeq ($(stencil),iso3dfd)
   def_rank_args			=	-d 1024 # assume 1 rank/node.
   fold_4byte			=	x=2,y=8
   cluster			=	x=2
-  def_block_args		=	-b 96 -bx 192
- else ifeq ($(arch),hsw)
+  def_block_args		=	-bx 160 -by 256 -bz 96
+  pfd_l1			=	1
+  pfd_l2			=	0
+ else ifneq ($(filter $(arch),hsw bdw),)
   fold_4byte			=	x=8
   def_thread_divisor		=	2
   def_block_threads		=	1
   def_block_args		=	-bx 296 -by 5 -bz 290
   cluster			=	z=2
-  SUB_BLOCK_LOOP_INNER_MODS	=
- else ifeq ($(arch),skx)
+  pfd_l1			=	0
+  pfd_l2			=	0
+ else ifneq ($(filter $(arch),skx skl),)
   fold_4byte			=	x=4,y=4
   def_thread_divisor		=	1
   def_block_threads		=	2
   def_block_args		=	-b 64
   cluster			=	z=2
-  SUB_BLOCK_LOOP_INNER_MODS	=	prefetch(L1)
+  pfd_l1			=	1
+  pfd_l2			=	0
  endif
 
 else ifneq ($(findstring awp,$(stencil)),)
@@ -93,18 +97,22 @@ else ifneq ($(findstring awp,$(stencil)),)
   def_thread_divisor		=	2
   def_block_threads		=	4
   def_block_args		=	-b 48 -bx 112
- else ifeq ($(arch),hsw)
-  SUB_BLOCK_LOOP_INNER_MODS	=	prefetch(L1,L2)
+  pfd_l1			=	1
+  pfd_l2			=	0
+ else ifneq ($(filter $(arch),hsw bdw),)
   omp_block_schedule		=	dynamic,1
   fold_4byte			=	x=8
   cluster			=	y=2
   def_pad_args			=	-epx 1 -epy 1 -epz 0
   def_block_args		=	-bx 128 -by 16 -bz 32 
   more_def_args			+=	-sbx 32 -sby 2 -sbz 32
- else ifeq ($(arch),skx)
+  pfd_l1			=	1
+  pfd_l2			=	2
+ else ifneq ($(filter $(arch),skx skl),)
   fold_4byte			=	x=2,y=8
   def_block_args		=	-b 32 -bx 96
-  SUB_BLOCK_LOOP_INNER_MODS	=	prefetch(L1)
+  pfd_l1			=	1
+  pfd_l2			=	0
  endif
 
 else ifneq ($(findstring ssg,$(stencil)),)
@@ -119,7 +127,8 @@ else ifneq ($(findstring fsg,$(stencil)),)
   def_block_args  	=	-b 16
   def_thread_divisor	=	4
   def_block_threads	=	1
-  SUB_BLOCK_LOOP_INNER_MODS  =	prefetch(L2)
+  pfd_l1		=	0
+  pfd_l2		=	2
  endif
 
 else ifeq ($(stencil),stream)
@@ -137,7 +146,8 @@ ifeq ($(arch),knc)
  MACROS		+=	USE_INTRIN512
  YC_TARGET  	?=	knc
  def_block_threads  ?=	4
- SUB_BLOCK_LOOP_INNER_MODS  ?=	prefetch(L1,L2)
+ pfd_l1		?=	1
+ pfd_l2		?=	2
 
 else ifeq ($(arch),knl)
 
@@ -147,16 +157,17 @@ else ifeq ($(arch),knl)
  YC_TARGET  	?=	avx512
  def_block_args	?=	-b 96
  def_block_threads ?=	8
- SUB_BLOCK_LOOP_INNER_MODS  ?=	prefetch(L1)
+ pfd_l1		?=	1
+ pfd_l2		?=	0
 
-else ifeq ($(arch),skx)
+else ifneq ($(filter $(arch),skx skl),)
 
  ISA		?=	-xCORE-AVX512
  GCXX_ISA	?=	-march=knl -mno-avx512er -mno-avx512pf
  MACROS		+=	USE_INTRIN512
  YC_TARGET  	?=	avx512
 
-else ifeq ($(arch),hsw)
+else ifneq ($(filter $(arch),hsw bdw),)
 
  ISA		?=	-xCORE-AVX2
  GCXX_ISA	?=	-march=haswell
@@ -185,7 +196,7 @@ else ifeq ($(arch),intel64)
 
 else
 
-$(error Architecture not recognized; use arch=knl, knc, skx, hsw, ivb, snb, or intel64 (no explicit vectorization))
+$(error Architecture not recognized; use arch=knl, knc, skl, hsw, bdw, ivb, snb, or intel64 (no explicit vectorization))
 
 endif # arch-specific.
 
@@ -194,18 +205,17 @@ streaming_stores	?= 	0
 omp_par_for		?=	omp parallel for
 omp_region_schedule	?=	dynamic,1
 omp_block_schedule	?=	static,1
-omp_halo_schedule	?=	static
+omp_misc_schedule	?=	guided
 def_thread_divisor	?=	1
 def_block_threads	?=	2
 real_bytes		?=	4
-layout_xyz		?=	Layout_123
-layout_txyz		?=	Layout_2314
 def_rank_args		?=	-d 128
 def_block_args		?=	-b 64
 def_pad_args		?=	-ep 1
 cluster			?=	x=1
-pfd_l1			?=	1
+pfd_l1			?=	0
 pfd_l2			?=	2
+max_dims		?=	5  # max grid dims >= max stencil dims.
 
 # default folding depends on HW vector size.
 ifneq ($(findstring INTRIN512,$(MACROS)),)  # 512 bits.
@@ -216,7 +226,7 @@ ifneq ($(findstring INTRIN512,$(MACROS)),)  # 512 bits.
  # 8 DP floats.
  fold_8byte	?=	x=4,y=2
 
-else  # not 512 bits (assume 256).
+else ifneq ($(findstring INTRIN256,$(MACROS)),)  # 256 bits.
 
  # 8 SP floats.
  fold_4byte	?=	x=8
@@ -224,73 +234,84 @@ else  # not 512 bits (assume 256).
  # 4 DP floats.
  fold_8byte	?=	x=4
 
+else
+
+ fold_4byte	?=	x=1
+ fold_8byte	?=	x=1
+
 endif # not 512 bits.
 
 # Select fold based on size of reals.
 fold	= 	$(fold_$(real_bytes)byte) # e.g., fold_4byte
 
 ######## Loop-compiler configuration:
+# The loop indices range from 0..N-1.
+# Dim 0 is the step dim, usually time.
+# The step loop is handled outside of the generated loops,
+# so the following loop codes do not scan over dim 0.
+# Dims 1..N-1 are the domain dims, usually spatial.
+# Thus, N-1 is the inner-most dim.
+# For best perf, this should be the unit-stride dim in the grids.
+
+# File with number of dims extracted from YASK compiler output.
+YK_DIMS_FILE		:=	num_dims.$(stencil).txt
+NDIMS_OPT		:=	`cat $(YK_DIMS_FILE)`
 
 # Rank loops break up the whole rank into smaller regions.  In order for
 # temporal wavefronts to operate properly, the order of spatial dimensions
 # may be changed, but the scanning paths must have strictly incrementing
 # indices. Those that do not (e.g., grouped, serpentine, square-wave) may
 # *not* be used here when using temporal wavefronts. The time loop may be
-# found in StencilEquations::calc_rank().
-RANK_LOOP_OPTS		?=	-dims 'dx,dy,dz'
-RANK_LOOP_OUTER_VARS	?=	dx,dy,dz
-RANK_LOOP_CODE		?=	$(RANK_LOOP_OUTER_MODS) loop($(RANK_LOOP_OUTER_VARS)) \
-				{ $(RANK_LOOP_INNER_MODS) calc(region(start_dt, stop_dt, eqGroup_ptr)); }
+# found in StencilEquations::run_solution().
+RANK_LOOP_OPTS		?=	$(NDIMS_OPT) -inVar rank_idxs
+RANK_LOOP_ORDER		?=	1 .. N-1
+RANK_LOOP_CODE		?=	$(RANK_LOOP_OUTER_MODS) loop($(RANK_LOOP_ORDER)) \
+				{ $(RANK_LOOP_INNER_MODS) call(calc_region(eqGroup_ptr)); }
 
 # Region loops break up a region using OpenMP threading into blocks.  The
 # 'omp' modifier creates an outer OpenMP loop so that each block is assigned
 # to a top-level OpenMP thread.  The region time loops are not coded here to
 # allow for proper spatial skewing for temporal wavefronts. The time loop
 # may be found in StencilEquations::calc_region().
-REGION_LOOP_OPTS	?=     	-dims 'rx,ry,rz' \
+REGION_LOOP_OPTS	?=     	$(NDIMS_OPT) -inVar region_idxs \
 				-ompConstruct '$(omp_par_for) schedule($(omp_region_schedule)) proc_bind(spread)' \
-				-calcPrefix 'eg->calc_'
-REGION_LOOP_OUTER_VARS	?=	rx,ry,rz
-REGION_LOOP_OUTER_MODS	?=	grouped
-REGION_LOOP_CODE	?=	omp $(REGION_LOOP_OUTER_MODS) loop($(REGION_LOOP_OUTER_VARS)) { \
-				$(REGION_LOOP_INNER_MODS) calc(block(rt)); }
+				-callPrefix 'eg->'
+REGION_LOOP_OUTER_MODS	?=	grouped omp
+REGION_LOOP_ORDER	?=	1 .. N-1
+REGION_LOOP_CODE	?=	$(REGION_LOOP_OUTER_MODS) loop($(REGION_LOOP_ORDER)) { \
+				$(REGION_LOOP_INNER_MODS) call(calc_block); }
 
 # Block loops break up a block into sub-blocks.  The 'omp' modifier creates
-# a nested OpenMP loop so that each sub-block is assigned to a nested OpenMP
-# thread.  There is no time loop here because threaded temporal blocking is
+# a *nested* OpenMP loop so that each sub-block is assigned to a nested OpenMP
+# thread.  There is no time loop because threaded temporal blocking is
 # not yet supported.
-BLOCK_LOOP_OPTS		=     	-dims 'bx,by,bz' \
+BLOCK_LOOP_OPTS		?=     	$(NDIMS_OPT) -inVar block_idxs \
 				-ompConstruct '$(omp_par_for) schedule($(omp_block_schedule)) proc_bind(close)'
-BLOCK_LOOP_OUTER_VARS	?=	bx,by,bz
-BLOCK_LOOP_OUTER_MODS	?=	grouped
-BLOCK_LOOP_CODE		?=	omp $(BLOCK_LOOP_OUTER_MODS) loop($(BLOCK_LOOP_OUTER_VARS)) { \
-				$(BLOCK_LOOP_INNER_MODS) calc(sub_block(bt)); }
+BLOCK_LOOP_OUTER_MODS	?=	grouped omp
+BLOCK_LOOP_ORDER	?=	1 .. N-1
+BLOCK_LOOP_CODE		?=	$(BLOCK_LOOP_OUTER_MODS) loop($(BLOCK_LOOP_ORDER)) { \
+				$(BLOCK_LOOP_INNER_MODS) call(calc_sub_block); }
 
-# Sub-block loops break up a sub-block into vector clusters.  The indices at
-# this level are by vector instead of element; this is indicated by the 'v'
-# suffix. The innermost loop here is the final innermost loop. There is
-# no time loop here because threaded temporal blocking is not yet supported.
-SUB_BLOCK_LOOP_OPTS		=     	-dims 'sbxv,sbyv,sbzv'
-ifeq ($(split_L2),1)
- SUB_BLOCK_LOOP_OPTS		+=     	-splitL2
-endif
-SUB_BLOCK_LOOP_OUTER_VARS	?=	sbxv,sbyv
+# Sub-block loops break up a sub-block into vector clusters.  These loops
+# are run by a single OMP thread.  The N-1 (inner) loop is generated by the
+# stencil compiler.  There is no time loop because threaded temporal
+# blocking is not yet supported.  The indexes in this loop are 'normalized',
+# i.e., vector units and rank-relative.
+SUB_BLOCK_LOOP_OPTS		?=     	$(NDIMS_OPT) -inVar norm_sub_block_idxs
 SUB_BLOCK_LOOP_OUTER_MODS	?=	square_wave serpentine
-SUB_BLOCK_LOOP_INNER_VARS	?=	sbzv
-SUB_BLOCK_LOOP_INNER_MODS	?=	prefetch(L2)
-SUB_BLOCK_LOOP_CODE		?=	$(SUB_BLOCK_LOOP_OUTER_MODS) loop($(SUB_BLOCK_LOOP_OUTER_VARS)) { \
-					$(SUB_BLOCK_LOOP_INNER_MODS) loop($(SUB_BLOCK_LOOP_INNER_VARS)) { \
-					calc(cluster(begin_sbtv)); } }
+SUB_BLOCK_LOOP_ORDER		?=	1 .. N-2
+SUB_BLOCK_LOOP_CODE		?=	$(SUB_BLOCK_LOOP_OUTER_MODS) loop($(SUB_BLOCK_LOOP_ORDER)) { \
+					$(SUB_BLOCK_LOOP_INNER_MODS) call(calc_loop_of_clusters); }
 
-# Halo pack/unpack loops break up a region face, edge, or corner into vectors.
+# General-purpose parallel loop.
 # Nested OpenMP is not used here because there is no sharing between threads.
 # TODO: Consider using nested OpenMP to hide more latency.
-HALO_LOOP_OPTS		=     	-dims 'hx,hy,hz' \
-				-ompConstruct '$(omp_par_for) schedule($(omp_halo_schedule)) proc_bind(spread)'
-HALO_LOOP_OUTER_MODS	?=	omp
-HALO_LOOP_OUTER_VARS	?=	hx,hy,hz
-HALO_LOOP_CODE		?=	$(HALO_LOOP_OUTER_MODS) loop($(HALO_LOOP_OUTER_VARS)) \
-				$(HALO_LOOP_INNER_MODS) { calc(halo(ht)); }
+MISC_LOOP_OPTS		?=     	$(NDIMS_OPT) -inVar misc_idxs \
+				-ompConstruct '$(omp_par_for) schedule($(omp_misc_schedule)) proc_bind(spread)'
+MISC_LOOP_OUTER_MODS	?=	omp
+MISC_LOOP_ORDER		?=	1 .. N-1
+MISC_LOOP_CODE		?=	$(MISC_LOOP_OUTER_MODS) loop($(MISC_LOOP_ORDER)) \
+				$(MISC_LOOP_INNER_MODS) { call(misc_fn()); }
 
 ######## End of vars that control the function and performance of the kernel.
 
@@ -318,6 +339,19 @@ YASK_BASE	:=	$(shell cd ../..; pwd)
 LIB_DIR		:=	$(YASK_BASE)/lib
 INC_DIR		:=	$(YASK_BASE)/include
 BIN_DIR		:=	$(YASK_BASE)/bin
+YASK_DIR	:=	$(YASK_BASE)/yask
+
+# OS-specific
+ifeq ($(shell uname -o),Cygwin)
+  SO_SUFFIX	:=	.dll
+  RUN_PREFIX	:=	env PATH="${PATH}:$(LIB_DIR):$(YASK_DIR)"
+  PYTHON		:= python3
+else
+  SO_SUFFIX	:=	.so
+  RUN_PREFIX	:=
+  PYTHON	:=	python
+  CXX_PREFIX	:=
+endif
 
 # Output files and dirs.
 YK_BASE		:=	yask_kernel
@@ -325,10 +359,12 @@ YK_MODULE	:=	$(YK_BASE)
 YK_TAG		:=	$(stencil).$(arch)
 YK_BASE2	:=	$(YK_BASE).$(YK_TAG)
 YK_EXEC		:=	$(BIN_DIR)/$(YK_BASE2).exe
-YK_TEST_EXEC	:=	$(BIN_DIR)/$(YK_BASE)_api_test.exe
-YK_LIB		:=	$(LIB_DIR)/lib$(YK_BASE2).so
-YK_PY_LIB	:=	$(LIB_DIR)/_$(YK_MODULE).so
-YK_PY_MOD	:=	$(LIB_DIR)/$(YK_MODULE).py
+YK_LIB		:=	$(LIB_DIR)/lib$(YK_BASE2)$(SO_SUFFIX)
+YK_PY_LIB	:=	$(YASK_DIR)/_$(YK_MODULE)$(SO_SUFFIX)
+YK_PY_MOD	:=	$(YASK_DIR)/$(YK_MODULE).py
+YK_API_TEST_EXEC :=	$(BIN_DIR)/$(YK_BASE)_api_test.exe
+YK_GRID_TEST_EXEC :=	$(BIN_DIR)/$(YK_BASE)_grid_test.exe
+
 MAKE_REPORT_FILE:=	make-report.$(YK_TAG).txt
 
 # Common source.
@@ -340,7 +376,7 @@ COMM_SRC_BASES	:=	$(addprefix $(COMM_DIR)/,$(COMM_SRC_NAMES))
 YK_SWIG_DIR	:=	./swig
 YK_GEN_DIR	:=	./gen
 YK_LIB_DIR	:=	./lib
-YK_SRC_NAMES	:=	stencil_calc realv_grids utils
+YK_SRC_NAMES	:=	factory new_grid generic_grids realv_grids utils settings context stencil_calc
 YK_SRC_BASES	:=	$(addprefix $(YK_LIB_DIR)/,$(YK_SRC_NAMES))
 YK_OBJS		:=	$(addsuffix .$(YK_TAG).o,$(YK_SRC_BASES) $(COMM_SRC_BASES))
 YK_MACRO_FILE	:=	$(YK_GEN_DIR)/yask_macros.hpp
@@ -350,9 +386,10 @@ YK_GEN_HEADERS	:=	$(addprefix $(YK_GEN_DIR)/, \
 				yask_region_loops.hpp \
 				yask_block_loops.hpp \
 				yask_sub_block_loops.hpp \
-				yask_halo_loops.hpp \
+				yask_misc_loops.hpp \
 				yask_layout_macros.hpp \
-				yask_layouts.hpp) \
+				yask_layouts.hpp \
+				yask_grid_code.hpp) \
 				$(YK_MACRO_FILE) \
 				$(YK_CODE_FILE)
 YK_INC_DIRS	:=	$(INC_DIR) $(YK_LIB_DIR) ../common
@@ -377,33 +414,29 @@ ifeq ($(mpi),1)
 else
  YK_CXX		:=	icpc
 endif
-YK_CXXFLAGS	+=   	-g -std=c++11 -Wall
+YK_CXXFLAGS	:=   	-g -std=c++11 -Wall
 YK_CXXFLAGS	+=	$(addprefix -I,$(YK_INC_DIRS) $(YK_GEN_DIR))
 OMPFLAGS	+=	-fopenmp
 YK_CXXOPT	?=	-O3
-
-# Add user-defined flags.
-YK_CXXFLAGS	+=	$(EXTRA_YK_CXXFLAGS)
 
 # Linker.
 YK_LD		:=	$(YK_CXX)
 YK_LFLAGS	:=	-lrt -Wl,-rpath=$(LIB_DIR) -L$(LIB_DIR) -l$(YK_BASE2)
 
 # Tools.
-PYTHON		:=	python
 SWIG		:=	swig
+PERL		:=	perl
 
 # Find include path needed for python interface.
 # NB: constructing string inside print() to work for python 2 or 3.
 PYINC		:= 	$(addprefix -I,$(shell $(PYTHON) -c 'import distutils.sysconfig; print(distutils.sysconfig.get_python_inc() + " " + distutils.sysconfig.get_python_inc(plat_specific=1))'))
 
-RUN_PYTHON	:= 	env PYTHONPATH=$(LIB_DIR) $(PYTHON)
+RUN_PYTHON	:= 	$(RUN_PREFIX) env PYTHONPATH=$(LIB_DIR):$(YASK_DIR) $(PYTHON)
 
 # Set MACROS based on individual makefile vars.
 # MACROS and EXTRA_MACROS will be written to a header file.
-MACROS		+=	LAYOUT_XYZ=$(layout_xyz)
-MACROS		+=	LAYOUT_TXYZ=$(layout_txyz)
-MACROS		+=	PFDL1=$(pfd_l1) PFDL2=$(pfd_l2)
+MACROS		+=	PFD_L1=$(pfd_l1) PFD_L2=$(pfd_l2)
+MACROS		+=	MAX_DIMS=$(max_dims)
 ifeq ($(streaming_stores),1)
  MACROS		+=	USE_STREAMING_STORE
 endif
@@ -447,24 +480,25 @@ YK_LFLAGS	+=	$(VTUNE_DIR)/lib64/libittnotify.a
 endif
 
 # compiler-specific settings
-ifneq ($(findstring ic,$(notdir $(YK_CXX))),)  # Intel compiler
+ifneq ($(findstring icpc,$(notdir $(YK_CXX))),)  # Intel compiler
 
- YK_CXXFLAGS	+=      $(ISA) -debug extended -Fa -restrict -ansi-alias -fno-alias
+ YK_CXXFLAGS	+=      $(ISA) -debug extended -restrict -ansi-alias -fno-alias
  YK_CXXFLAGS	+=	-fimf-precision=low -fast-transcendentals -no-prec-sqrt \
 			-no-prec-div -fp-model fast=2 -fno-protect-parens -rcd -ftz \
 			-fma -fimf-domain-exclusion=none -qopt-assume-safe-padding
- #YK_CXXFLAGS	+=	-qoverride-limits
- YK_CXXFLAGS	+=	-vec-threshold0
- YK_CXXFLAGS	+=      -qopt-report=5
- #YK_CXXFLAGS	+=	-qopt-report-phase=VEC,PAR,OPENMP,IPO,LOOP
  YK_CXXFLAGS	+=	-no-diag-message-catalog
+ YK_CXXFLAGS	+=	-vec-threshold0
+ #YK_CXXFLAGS	+=	-qoverride-limits
+ YK_CXXFLAGS	+=	-Fa
+ #YK_CXXFLAGS	+=      -qopt-report=5
+ #YK_CXXFLAGS	+=	-qopt-report-phase=VEC,PAR,OPENMP,IPO,LOOP
  YK_CXX_VER_CMD	:=	$(YK_CXX) -V
 
  # work around an optimization anomaly.
  MACROS		+=	NO_STORE_INTRINSICS
 
 else # not Intel compiler
- YK_CXXFLAGS	+=	$(GCXX_ISA) -Wno-unknown-pragmas -Wno-unused-variable
+ YK_CXXFLAGS	+=	$(GCXX_ISA) -Wno-unknown-pragmas -Wno-unused-variable -Wno-unused-but-set-variable
 
 endif # compiler.
 
@@ -493,51 +527,69 @@ kernel:	$(YK_EXEC) $(MAKE_REPORT_FILE)
 	@echo "Run command:" $(BIN_DIR)"/yask.sh -stencil" $(stencil) "-arch" $(arch) "[options]"
 
 %.$(YK_TAG).o: %.cpp $(YK_GEN_HEADERS) $(YK_INC_GLOB)
-	$(YK_CXX) $(YK_CXXFLAGS) -fPIC -c -o $@ $<
+	$(CXX_PREFIX) $(YK_CXX) $(YK_CXXFLAGS) -fPIC -c -o $@ $<
+	@ls -l $@
 
 $(YK_LIB): $(YK_OBJS)
-	$(YK_CXX) $(YK_CXXFLAGS) -shared -o $@ $^
+	$(CXX_PREFIX) $(YK_CXX) $(YK_CXXFLAGS) -shared -o $@ $^
+	@ls -l $@
 
 $(YK_EXEC): yask_main.cpp $(YK_LIB)
-	$(YK_LD) $(YK_CXXFLAGS) $< $(YK_LFLAGS) -o $@
+	$(CXX_PREFIX) $(YK_LD) $(YK_CXXFLAGS) $< $(YK_LFLAGS) -o $@
+	@ls -l $@
 
-$(MAKE_REPORT_FILE): $(YK_EXEC)
+$(MAKE_REPORT_FILE): $(YK_LIB)
 	@echo MAKEFLAGS="\"$(MAKEFLAGS)"\" > $@ 2>&1
 	$(MAKE) echo-settings >> $@ 2>&1
-	$(MAKE) code-stats >> $@ 2>&1
+#$(MAKE) code-stats | tee -a $@
 
-# Generated files.
-$(YK_GEN_DIR)/yask_rank_loops.hpp: $(GEN_LOOPS)
+# Generated source files.
+$(YK_GEN_DIR)/yask_rank_loops.hpp: $(GEN_LOOPS) $(YK_DIMS_FILE)
 	$(YK_MK_GEN_DIR)
-	$< -output $@ $(RANK_LOOP_OPTS) $(EXTRA_LOOP_OPTS) $(EXTRA_RANK_LOOP_OPTS) "$(RANK_LOOP_CODE)"
+	$(PERL) $< -output $@ $(RANK_LOOP_OPTS) $(EXTRA_LOOP_OPTS) $(EXTRA_RANK_LOOP_OPTS) "$(RANK_LOOP_CODE)"
 
-$(YK_GEN_DIR)/yask_region_loops.hpp: $(GEN_LOOPS)
+$(YK_GEN_DIR)/yask_region_loops.hpp: $(GEN_LOOPS) $(YK_DIMS_FILE)
 	$(YK_MK_GEN_DIR)
-	$< -output $@ $(REGION_LOOP_OPTS) $(EXTRA_LOOP_OPTS) $(EXTRA_REGION_LOOP_OPTS) "$(REGION_LOOP_CODE)"
+	$(PERL) $< -output $@ $(REGION_LOOP_OPTS) $(EXTRA_LOOP_OPTS) $(EXTRA_REGION_LOOP_OPTS) "$(REGION_LOOP_CODE)"
 
-$(YK_GEN_DIR)/yask_block_loops.hpp: $(GEN_LOOPS)
+$(YK_GEN_DIR)/yask_block_loops.hpp: $(GEN_LOOPS) $(YK_DIMS_FILE)
 	$(YK_MK_GEN_DIR)
-	$< -output $@ $(BLOCK_LOOP_OPTS) $(EXTRA_LOOP_OPTS) $(EXTRA_BLOCK_LOOP_OPTS) "$(BLOCK_LOOP_CODE)"
+	$(PERL) $< -output $@ $(BLOCK_LOOP_OPTS) $(EXTRA_LOOP_OPTS) $(EXTRA_BLOCK_LOOP_OPTS) "$(BLOCK_LOOP_CODE)"
 
-$(YK_GEN_DIR)/yask_sub_block_loops.hpp: $(GEN_LOOPS)
+$(YK_GEN_DIR)/yask_sub_block_loops.hpp: $(GEN_LOOPS) $(YK_DIMS_FILE)
 	$(YK_MK_GEN_DIR)
-	$< -output $@ $(SUB_BLOCK_LOOP_OPTS) $(EXTRA_LOOP_OPTS) $(EXTRA_SUB_BLOCK_LOOP_OPTS) "$(SUB_BLOCK_LOOP_CODE)"
+	$(PERL) $< -output $@ $(SUB_BLOCK_LOOP_OPTS) $(EXTRA_LOOP_OPTS) $(EXTRA_SUB_BLOCK_LOOP_OPTS) "$(SUB_BLOCK_LOOP_CODE)"
 
-$(YK_GEN_DIR)/yask_halo_loops.hpp: $(GEN_LOOPS)
+$(YK_GEN_DIR)/yask_misc_loops.hpp: $(GEN_LOOPS) $(YK_DIMS_FILE)
 	$(YK_MK_GEN_DIR)
-	$< -output $@ $(HALO_LOOP_OPTS) $(EXTRA_LOOP_OPTS) $(EXTRA_HALO_LOOP_OPTS) "$(HALO_LOOP_CODE)"
+	$< -output $@ $(MISC_LOOP_OPTS) $(EXTRA_LOOP_OPTS) $(EXTRA_MISC_LOOP_OPTS) "$(MISC_LOOP_CODE)"
 
 $(YK_GEN_DIR)/yask_layout_macros.hpp: $(GEN_LAYOUTS)
 	$(YK_MK_GEN_DIR)
-	$< -m > $@
+	$(PERL) $< -m $(max_dims) > $@
+	@- gindent -fca $@ || \
+	  indent -fca $@ ||   \
+	  echo "note:" $@ "is not properly indented because indent program failed or was not found."
 
 $(YK_GEN_DIR)/yask_layouts.hpp: $(GEN_LAYOUTS)
 	$(YK_MK_GEN_DIR)
-	$< -d > $@
+	$(PERL) $< -d $(max_dims) > $@
+	@- gindent -fca $@ || \
+	  indent -fca $@ ||   \
+	  echo "note:" $@ "is not properly indented because indent program failed or was not found."
+
+$(YK_GEN_DIR)/yask_grid_code.hpp: $(GEN_LAYOUTS)
+	$(YK_MK_GEN_DIR)
+	$(PERL) $< -g $(max_dims) > $@
+
+# Extract the number of stencil dims from the compiler output.
+# Use this to create an option to pass to the loop generator script.
+$(YK_DIMS_FILE): $(YK_CODE_FILE)
+	awk '/NUM_STENCIL_DIMS/ {print "-ndims",$$NF}' $< > $@
 
 $(YK_CODE_FILE): $(YC_EXEC)
 	$(YK_MK_GEN_DIR)
-	$< $(YC_FLAGS) $(EXTRA_YC_FLAGS) -p $(YC_TARGET) $@
+	$(RUN_PREFIX) $< $(YC_FLAGS) $(EXTRA_YC_FLAGS) -p $(YC_TARGET) $@
 	@- gindent -fca $@ || \
 	  indent -fca $@ ||   \
 	  echo "note:" $@ "is not properly indented because no indent program was found."
@@ -550,14 +602,14 @@ $(YK_MACRO_FILE):
 	  echo '#define' $$macro | sed 's/=/ /' >> $@; \
 	done
 
-headers: $(GEN_HEADERS)
+headers: $(YK_GEN_HEADERS)
 	@ echo 'Header files generated.'
 
 ######## API targets
 # NB: must set stencil and arch to generate the desired kernel API.
 
 # Build C++ and Python kernel API libs.
-api: $(YK_LIB) $(YK_PY_LIB)
+api: $(YK_LIB) $(YK_PY_LIB) $(MAKE_REPORT_FILE)
 
 # Build python kernel API lib.
 # TODO: consider adding $(YK_TAG) to [some of] these targets.
@@ -565,7 +617,7 @@ $(YK_SWIG_DIR)/yask_kernel_api_wrap.cpp: $(YK_SWIG_DIR)/yask*.i $(INC_DIR)/*.hpp
 	$(SWIG) -version
 	$(SWIG) -v -DYK_MODULE=$(YK_MODULE) -cppext cpp \
 	  -I$(INC_DIR) -I$(COMM_DIR) -I$(COMM_DIR)/swig \
-	  -c++ -python -outdir $(LIB_DIR) -builtin $<
+	  -c++ -python -outdir $(YASK_DIR) -builtin $<
 
 $(YK_SWIG_DIR)/yask_kernel_api_wrap.o: $(YK_SWIG_DIR)/yask_kernel_api_wrap.cpp
 	$(YK_CXX) $(YK_CXXFLAGS) $(PYINC) -fPIC -c -o $@ $<
@@ -573,16 +625,25 @@ $(YK_SWIG_DIR)/yask_kernel_api_wrap.o: $(YK_SWIG_DIR)/yask_kernel_api_wrap.cpp
 $(YK_PY_LIB): $(YK_OBJS) $(YK_SWIG_DIR)/yask_kernel_api_wrap.o
 	$(YK_CXX) $(YK_CXXFLAGS) -shared -o $@ $^
 
-#### API tests.
+# Simple tests
 
-# Build C++ kernel API test.
-$(YK_TEST_EXEC): ./tests/yask_kernel_api_test.cpp $(YK_LIB)
+$(YK_GRID_TEST_EXEC): ./tests/grid_test.cpp $(YK_LIB)
 	$(YK_CXX) $(YK_CXXFLAGS) $< $(YK_LFLAGS) -o $@
 
-# Run C++ kernel API test.
-cxx-yk-api-test: $(YK_TEST_EXEC)
+#### API tests.
+
+# Build C++ kernel tests.
+$(YK_API_TEST_EXEC): ./tests/yask_kernel_api_test.cpp $(YK_LIB)
+	$(YK_CXX) $(YK_CXXFLAGS) $< $(YK_LFLAGS) -o $@
+
+# Run C++ tests.
+cxx-yk-grid-test: $(YK_GRID_TEST_EXEC)
+	@echo '*** Running the C++ YASK grid test...'
+	$(RUN_PREFIX) $<
+
+cxx-yk-api-test: $(YK_API_TEST_EXEC)
 	@echo '*** Running the C++ YASK kernel API test...'
-	$<
+	$(RUN_PREFIX) $<
 
 # Run Python kernel API test.
 py-yk-api-test: $(BIN_DIR)/yask_kernel_api_test.py $(YK_PY_LIB)
@@ -628,9 +689,15 @@ yk-test-no-yc: kernel-only
 
 # NB: set arch var if applicable.
 # NB: save some time by using YK_CXXOPT=-O2.
+# These tests are focused on the kernel and not the compiler.
+# For testing both the kernel and compiler in various combinations,
+# run the tests from the top-level Makefile.
 all-tests:
-	$(MAKE) clean; $(MAKE) stencil=iso3dfd yc-and-yk-test
-	$(MAKE) clean; $(MAKE) stencil=fsg_abc yc-and-yk-test
+	$(MAKE) clean; $(MAKE) stencil=3axis fold=x=4,y=2 cxx-yk-grid-test
+	$(MAKE) clean; $(MAKE) stencil=iso3dfd fold=x=4,y=2 yc-and-yk-test
+	$(MAKE) clean; $(MAKE) stencil=awp_elastic yc-and-yk-test real_bytes=8
+	$(MAKE) clean; $(MAKE) stencil=fsg_abc yc-and-yk-test real_bytes=8
+	$(MAKE) clean; $(MAKE) stencil=cube yc-and-yk-test real_bytes=8
 	$(MAKE) clean; $(MAKE) stencil=iso3dfd cxx-yk-api-test
 	$(MAKE) clean; $(MAKE) stencil=iso3dfd py-yk-api-test
 
@@ -644,18 +711,19 @@ all:
 # Make this target before rebuilding YASK with any new parameters.
 clean:
 	rm -fv *.s
+	rm -fv num_dims.*.txt
 	rm -fr $(YK_SWIG_DIR)/build $(YK_GEN_DIR)
 	rm -fv $(YK_SWIG_DIR)/*_api_wrap.*
 	rm -fv $(YK_OBJS)
-	find . -name '*.o' | xargs -r rm -v
-	find . $(BIN_DIR) $(LIB_DIR) -name '*.optrpt' | xargs -r rm -v
+	- find . $(COMM_DIR) -name '*.*.o' -print -delete
+	- find . $(COMM_DIR) $(BIN_DIR) $(LIB_DIR) -name '*.optrpt' -print -delete
 
 # Remove executables, libs, etc.
 realclean: clean
-	rm -fv $(YK_LIB) $(YK_EXEC) $(YK_TEST_EXEC) $(YK_PY_MOD)* $(YK_PY_LIB)
+	rm -fv $(YK_LIB) $(YK_EXEC) $(YK_API_TEST_EXEC) $(YK_PY_MOD)* $(YK_PY_LIB)
 	rm -fv make-report.*.txt
-	find . -name '*.pyc' | xargs -r rm -v
-	find . -name '*~' | xargs -r rm -v
+	- find . -name '*.pyc' -print -delete
+	- find . -name '*~' -print -delete
 
 echo-settings:
 	@echo
@@ -674,14 +742,12 @@ echo-settings:
 	@echo cluster=$(cluster)
 	@echo radius=$(radius)
 	@echo real_bytes=$(real_bytes)
-	@echo layout_xyz=$(layout_xyz)
-	@echo layout_txyz=$(layout_txyz)
 	@echo pfd_l1=$(pfd_l1)
 	@echo pfd_l2=$(pfd_l2)
 	@echo streaming_stores=$(streaming_stores)
 	@echo omp_region_schedule=$(omp_region_schedule)
 	@echo omp_block_schedule=$(omp_block_schedule)
-	@echo omp_halo_schedule=$(omp_halo_schedule)
+	@echo omp_misc_schedule=$(omp_misc_schedule)
 	@echo YC_TARGET="\"$(YC_TARGET)\""
 	@echo YC_FLAGS="\"$(YC_FLAGS)\""
 	@echo EXTRA_YC_FLAGS="\"$(EXTRA_YC_FLAGS)\""
@@ -695,49 +761,59 @@ echo-settings:
 	@echo YK_CXXOPT=$(YK_CXXOPT)
 	@echo YK_CXXFLAGS="\"$(YK_CXXFLAGS)\""
 	@echo RANK_LOOP_OPTS="\"$(RANK_LOOP_OPTS)\""
+	@echo RANK_LOOP_ORDER="\"$(RANK_LOOP_ORDER)\""
 	@echo RANK_LOOP_OUTER_MODS="\"$(RANK_LOOP_OUTER_MODS)\""
 	@echo RANK_LOOP_OUTER_VARS="\"$(RANK_LOOP_OUTER_VARS)\""
 	@echo RANK_LOOP_INNER_MODS="\"$(RANK_LOOP_INNER_MODS)\""
 	@echo RANK_LOOP_CODE="\"$(RANK_LOOP_CODE)\""
 	@echo REGION_LOOP_OPTS="\"$(REGION_LOOP_OPTS)\""
+	@echo REGION_LOOP_ORDER="\"$(REGION_LOOP_ORDER)\""
 	@echo REGION_LOOP_OUTER_MODS="\"$(REGION_LOOP_OUTER_MODS)\""
 	@echo REGION_LOOP_OUTER_VARS="\"$(REGION_LOOP_OUTER_VARS)\""
 	@echo REGION_LOOP_INNER_MODS="\"$(REGION_LOOP_INNER_MODS)\""
 	@echo REGION_LOOP_CODE="\"$(REGION_LOOP_CODE)\""
 	@echo BLOCK_LOOP_OPTS="\"$(BLOCK_LOOP_OPTS)\""
+	@echo BLOCK_LOOP_ORDER="\"$(BLOCK_LOOP_ORDER)\""
 	@echo BLOCK_LOOP_OUTER_MODS="\"$(BLOCK_LOOP_OUTER_MODS)\""
 	@echo BLOCK_LOOP_OUTER_VARS="\"$(BLOCK_LOOP_OUTER_VARS)\""
 	@echo BLOCK_LOOP_INNER_MODS="\"$(BLOCK_LOOP_INNER_MODS)\""
 	@echo BLOCK_LOOP_CODE="\"$(BLOCK_LOOP_CODE)\""
 	@echo SUB_BLOCK_LOOP_OPTS="\"$(SUB_BLOCK_LOOP_OPTS)\""
+	@echo SUB_BLOCK_LOOP_ORDER="\"$(SUB_BLOCK_LOOP_ORDER)\""
 	@echo SUB_BLOCK_LOOP_OUTER_MODS="\"$(SUB_BLOCK_LOOP_OUTER_MODS)\""
 	@echo SUB_BLOCK_LOOP_OUTER_VARS="\"$(SUB_BLOCK_LOOP_OUTER_VARS)\""
 	@echo SUB_BLOCK_LOOP_INNER_MODS="\"$(SUB_BLOCK_LOOP_INNER_MODS)\""
 	@echo SUB_BLOCK_LOOP_INNER_VARS="\"$(SUB_BLOCK_LOOP_INNER_VARS)\""
 	@echo SUB_BLOCK_LOOP_CODE="\"$(SUB_BLOCK_LOOP_CODE)\""
-	@echo HALO_LOOP_OPTS="\"$(HALO_LOOP_OPTS)\""
-	@echo HALO_LOOP_OUTER_MODS="\"$(HALO_LOOP_OUTER_MODS)\""
-	@echo HALO_LOOP_OUTER_VARS="\"$(HALO_LOOP_OUTER_VARS)\""
-	@echo HALO_LOOP_INNER_MODS="\"$(HALO_LOOP_INNER_MODS)\""
-	@echo HALO_LOOP_CODE="\"$(HALO_LOOP_CODE)\""
+	@echo MISC_LOOP_OPTS="\"$(MISC_LOOP_OPTS)\""
+	@echo MISC_LOOP_ORDER="\"$(MISC_LOOP_ORDER)\""
+	@echo MISC_LOOP_OUTER_MODS="\"$(MISC_LOOP_OUTER_MODS)\""
+	@echo MISC_LOOP_OUTER_VARS="\"$(MISC_LOOP_OUTER_VARS)\""
+	@echo MISC_LOOP_INNER_MODS="\"$(MISC_LOOP_INNER_MODS)\""
+	@echo MISC_LOOP_CODE="\"$(MISC_LOOP_CODE)\""
 
+# To get code stats, compiler with EXTRA_YK_CXXFLAGS=-Fa
 code-stats:
 	@echo
 	@echo "Code stats for stencil computation:"
-	$(GET_LOOP_STATS) -t='sub_block_loops' *.s
+	$(PERL) $(GET_LOOP_STATS) -t=$(YK_CODE_FILE) factory.s
 
 help:
 	@echo "Example performance builds of kernel cmd-line tool:"
-	@echo "% $(MAKE) clean; $(MAKE) -j arch=knl stencil=iso3dfd"
-	@echo "% $(MAKE) clean; $(MAKE) -j arch=knl stencil=awp"
-	@echo "% $(MAKE) clean; $(MAKE) -j arch=skx stencil=3axis fold='x=1,y=2,z=4' cluster='x=2'"
-	@echo "% $(MAKE) clean; $(MAKE) -j arch=hsw stencil=3axis radius=4 SUB_BLOCK_LOOP_INNER_MODS='prefetch(L1,L2)' pfd_l2=3"
+	@echo " $(MAKE) clean; $(MAKE) -j arch=knl stencil=iso3dfd"
+	@echo " $(MAKE) clean; $(MAKE) -j arch=knl stencil=awp EXTRA_YK_CXXFLAGS=-qopt-report"
+	@echo " $(MAKE) clean; $(MAKE) -j arch=skl stencil=3axis fold='x=1,y=2,z=4' cluster='x=2'"
+	@echo " $(MAKE) clean; $(MAKE) -j arch=hsw stencil=3axis radius=4"
 	@echo " "
 	@echo "Example performance builds of kernel API for C++ and Python apps:"
-	@echo "% $(MAKE) clean; $(MAKE) -j arch=knl stencil=iso3dfd yk-api"
-	@echo "% $(MAKE) clean; $(MAKE) -j arch=skx stencil=awp yk-api"
+	@echo " $(MAKE) clean; $(MAKE) -j arch=knl stencil=iso3dfd yk-api"
+	@echo " $(MAKE) clean; $(MAKE) -j arch=skl stencil=awp yk-api"
 	@echo " "
 	@echo "Example debug builds of kernel cmd-line tool:"
-	@echo "% $(MAKE) clean; $(MAKE) -j stencil=iso3dfd mpi=0 OMPFLAGS='-qopenmp-stubs' YK_CXXOPT='-O0' EXTRA_MACROS='DEBUG'"
-	@echo "% $(MAKE) clean; $(MAKE) -j arch=intel64 stencil=3axis mpi=0 OMPFLAGS='-qopenmp-stubs' YK_CXXOPT='-O0' EXTRA_MACROS='DEBUG' model_cache=2"
-	@echo "% $(MAKE) clean; $(MAKE) -j arch=intel64 stencil=3axis radius=0 fold='x=1,y=1,z=1' mpi=0 OMPFLAGS='-qopenmp-stubs' YK_CXXOPT='-O0' EXTRA_MACROS='DEBUG TRACE TRACE_MEM TRACE_INTRINSICS'"
+	@echo " $(MAKE) clean; $(MAKE) -j stencil=iso3dfd mpi=0 OMPFLAGS='-qopenmp-stubs' YK_CXXOPT='-O0' EXTRA_MACROS='DEBUG'"
+	@echo " $(MAKE) clean; $(MAKE) -j arch=intel64 stencil=3axis mpi=0 OMPFLAGS='-qopenmp-stubs' YK_CXXOPT='-O0' EXTRA_MACROS='DEBUG' model_cache=2"
+	@echo " $(MAKE) clean; $(MAKE) -j arch=intel64 stencil=3axis radius=0 fold='x=1,y=1,z=1' mpi=0 YK_CXX=g++ OMPFLAGS='' YK_CXXOPT='-O0' EXTRA_MACROS='DEBUG TRACE TRACE_MEM TRACE_INTRINSICS'"
+	@echo " "
+	@echo "Example builds with testing:"
+	@echo " $(MAKE) -j all"
+	@echo " $(MAKE) -j all YK_CXX=g++ YK_CXXOPT=-O2 mpi=0"

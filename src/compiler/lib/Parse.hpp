@@ -23,7 +23,7 @@ IN THE SOFTWARE.
 
 *****************************************************************************/
 
-///////// String-parsing support.
+///////// String-parsing support for cmd-line options.
 
 #ifndef PARSE_HPP
 #define PARSE_HPP

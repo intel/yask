@@ -25,8 +25,8 @@ IN THE SOFTWARE.
 
 // Base class for defining stencil equations.
 
-#ifndef STENCIL_BASE
-#define STENCIL_BASE
+#ifndef SOLN_HPP
+#define SOLN_HPP
 
 #include <map>
 using namespace std;
@@ -48,32 +48,25 @@ namespace yask {
         public virtual yc_solution {
     protected:
         
-        // Simple name for the stencil.
+        // Simple name for the stencil soln.
         string _name;
 
         // Debug output.
         yask_output_ptr _debug_output;
         ostream* _dos = &std::cout;
     
-        // A grid is an n-dimensional tensor that is indexed by grid indices.
-        // Vectorization will be applied to grid accesses.
+        // All vars accessible by the kernel.
         Grids _grids;       // keep track of all registered grids.
-
-        // A parameter is an n-dimensional tensor that is NOT indexed by grid indices.
-        // It is used to pass some sort of index-invarant setting to a stencil function.
-        // Its indices must be resolved when define() is called.
-        // At this time, this is not checked, so be careful!!
-        Params _params;     // keep track of all registered non-grid vars.
-
-        // Code extensions that overload default functions from YASK in the
-        // generated code for this solution.
-        ExtensionsList _extensions;
 
         // All equations defined in this solution.
         Eqs _eqs;
 
         // Settings for the solution.
         CompilerSettings _settings;
+
+        // Code extensions that overload default functions from YASK in the
+        // generated code for this solution.
+        ExtensionsList _extensions;
 
     private:
 
@@ -99,7 +92,6 @@ namespace yask {
     
         // Simple accessors.
         virtual Grids& getGrids() { return _grids; }
-        virtual Grids& getParams() { return _params; }
         virtual Eqs& getEqs() { return _eqs; }
         virtual CompilerSettings& getSettings() { return _settings; }
 
@@ -113,14 +105,14 @@ namespace yask {
             return NULL;
         }
 
-        // Define grid values relative to given offsets in each dimension.
+        // Define grid values relative to current domain indices in each dimension.
         // This must be implemented by each concrete stencil solution.
-        virtual void define(const IntTuple& offsets) = 0;
+        virtual void define() = 0;
 
         // stencil_solution APIs.
         // See yask_stencil_api.hpp for documentation.
         virtual void set_debug_output(yask_output_ptr debug) {
-            _debug_output = debug;
+            _debug_output = debug;     // to share ownership of referent.
             _dos = &_debug_output->get_ostream();
         }
         virtual void set_name(std::string name) {
@@ -131,29 +123,28 @@ namespace yask {
         }
 
         virtual yc_grid_ptr new_grid(const std::string& name,
-                                     const std::string& dim1 = "",
-                                     const std::string& dim2 = "",
-                                     const std::string& dim3 = "",
-                                     const std::string& dim4 = "",
-                                     const std::string& dim5 = "",
-                                     const std::string& dim6 = "");
+                                     const std::vector<yc_index_node_ptr>& dims);
         virtual yc_grid_ptr new_grid(const std::string& name,
-                                     const std::vector<std::string>& dims);
-
+                                     const std::initializer_list<yc_index_node_ptr>& dims) {
+            std::vector<yc_index_node_ptr> dim_vec(dims);
+            return new_grid(name, dim_vec);
+        }
         virtual int get_num_grids() const {
             return int(_grids.size());
         }
-        virtual yc_grid_ptr get_grid(int n) {
-            assert(n >= 0 && n < get_num_grids());
-            return _grids.at(n);
+        virtual yc_grid_ptr get_grid(const std::string& name) {
+            for (int i = 0; i < get_num_grids(); i++)
+                if (_grids.at(i)->getName() == name)
+                    return _grids.at(i);
+            return nullptr;
         }
         virtual std::vector<yc_grid_ptr> get_grids() {
             std::vector<yc_grid_ptr> gv;
             for (int i = 0; i < get_num_grids(); i++)
-                gv.push_back(get_grid(i));
+                gv.push_back(_grids.at(i));
             return gv;
         }
-        
+
         virtual int get_num_equations() const {
             return _eqs.getNumEqs();
         }
@@ -169,23 +160,10 @@ namespace yask {
             else
                 fold.addDimBack(dim, len);
         }
-        virtual void set_fold_len(const std::string& dim, int len);
+        virtual void set_fold_len(const yc_index_node_ptr, int len);
         virtual void clear_folding() { _settings._foldOptions.clear(); }
-        virtual void set_cluster_mult(const std::string& dim, int mult);
+        virtual void set_cluster_mult(const yc_index_node_ptr, int mult);
         virtual void clear_clustering() { _settings._clusterOptions.clear(); }
-        virtual void set_step_dim_name(const std::string& dim) {
-            _settings._stepDim = dim;
-        }
-        virtual std::string get_step_dim_name() const {
-            return _settings._stepDim;
-        }
-        virtual std::vector<std::string> get_domain_dim_names() const;
-        virtual void set_domain_dim_names(const std::vector<std::string>& dims);
-        virtual void set_domain_dim_names(const std::string& dim1,
-                                          const std::string& dim2 = "",
-                                          const std::string& dim3 = "",
-                                          const std::string& dim4 = "",
-                                          const std::string& dim5 = "");
         virtual void set_element_bytes(int nbytes) { _settings._elem_bytes = nbytes; }
         virtual int get_element_bytes() const { return _settings._elem_bytes; }
         virtual void format(const std::string& format_type,
@@ -196,10 +174,16 @@ namespace yask {
     // This is used by a program via the compiler API to add grids
     // programmatically.
     class EmptyStencil : public StencilSolution {
+
+        // Do not define any dims.
+        // Do not define any grids.
+        
     public:
         EmptyStencil(std::string name) :
             StencilSolution(name) { }
-        virtual void define(const IntTuple& offsets) { }
+
+        // Do not define any equations.
+        virtual void define() { }
     };
     
     // An interface for all objects that participate in stencil definitions.
@@ -229,6 +213,7 @@ namespace yask {
         virtual ~StencilBase() { }
 
         // Return a reference to the main stencil-solution object.
+        // For StencilBase, simply this object.
         virtual StencilSolution& get_stencil_solution() {
             return *this;
         }
@@ -269,53 +254,20 @@ namespace yask {
 #define REGISTER_STENCIL(Class) static Class registered_ ## Class(stencils)
 
 // Convenience macros for adding 'extension' code to a stencil.
-#define REGISTER_CODE_EXTENSION(section,code) _extensions[section].push_back(code);
-#define REGISTER_STENCIL_CONTEXT_EXTENSION(...) REGISTER_CODE_EXTENSION(STENCIL_CONTEXT,#__VA_ARGS__)
+#define REGISTER_CODE_EXTENSION(section, code) _extensions[section].push_back(code);
+#define REGISTER_STENCIL_CONTEXT_EXTENSION(...) REGISTER_CODE_EXTENSION(STENCIL_CONTEXT, #__VA_ARGS__)
 
-// Convenience macros for initializing existing grids from a class
-// implementing StencilPart.  Each names the grid according to the 'gvar'
-// parameter and adds it to the stencil solution object.  The dimensions are
-// named according to the remaining parameters.
-#define INIT_GRID_0D(gvar)                              \
-    get_stencil_solution().getGrids().insert(&gvar);    \
-    gvar.setName(#gvar);                                \
-    gvar.setEqs(&get_stencil_solution().getEqs())
-#define INIT_GRID_1D(gvar, d1)                  \
-    INIT_GRID_0D(gvar); gvar.addDimBack(#d1, 1)
-#define INIT_GRID_2D(gvar, d1, d2)                      \
-    INIT_GRID_1D(gvar, d1); gvar.addDimBack(#d2, 1)
-#define INIT_GRID_3D(gvar, d1, d2, d3)                  \
-    INIT_GRID_2D(gvar, d1, d2); gvar.addDimBack(#d3, 1)
-#define INIT_GRID_4D(gvar, d1, d2, d3, d4)                      \
-    INIT_GRID_3D(gvar, d1, d2, d3); gvar.addDimBack(#d4, 1)
-#define INIT_GRID_5D(gvar, d1, d2, d3, d4, d5)                  \
-    INIT_GRID_4D(gvar, d1, d2, d3, d4); gvar.addDimBack(#d5, 1)
-#define INIT_GRID_6D(gvar, d1, d2, d3, d4, d5, d6)                      \
-    INIT_GRID_5D(gvar, d1, d2, d3, d4, d5); gvar.addDimBack(#d6, 1)
+// Convenience macro for declaring dims.
+#define MAKE_STEP_INDEX(d) IndexExprPtr d = make_shared<IndexExpr>(#d, STEP_INDEX);
+#define MAKE_DOMAIN_INDEX(d) IndexExprPtr d = make_shared<IndexExpr>(#d, DOMAIN_INDEX);
+#define MAKE_MISC_INDEX(d) IndexExprPtr d = make_shared<IndexExpr>(#d, MISC_INDEX);
 
-// Convenience macros for initializing parameters from a class implementing StencilPart.
-// Each names the param according to the 'pvar' parameter and adds it
-// to the stencil solution object.
-// The dimensions are named and sized according to the remaining parameters.
-#define INIT_PARAM(pvar)                                \
-    get_stencil_solution().getParams().insert(&pvar);   \
-    pvar.setName(#pvar);                                \
-    pvar.setParam(true)
-#define INIT_PARAM_1D(pvar, d1, s1)             \
-    INIT_PARAM(pvar); pvar.addDimBack(#d1, s1)
-#define INIT_PARAM_2D(pvar, d1, s1, d2, s2)                     \
-    INIT_PARAM_1D(pvar, d1, s1); pvar.addDimBack(#d2, s2)
-#define INIT_PARAM_3D(pvar, d1, s1, d2, s2, d3, s3)                     \
-    INIT_PARAM_2D(pvar, d1, s1, d2, s2); pvar.addDimBack(#d3, s3)
-#define INIT_PARAM_4D(pvar, d1, s1, d2, s2, d3, s3, d4, s4)             \
-    INIT_PARAM_3D(pvar, d1, s1, d2, s2, d3, s3); pvar.addDimBack(#d4, d4)
-#define INIT_PARAM_5D(pvar, d1, s1, d2, s2, d3, s3, d4, s4, d5, s5)     \
-    INIT_PARAM_4D(pvar, d1, s1, d2, s2, d3, s3, d4, s4); pvar.addDimBack(#d5, d5)
-#define INIT_PARAM_6D(pvar, d1, s1, d2, s2, d3, s3, d4, s4, d5, s5, d6, s6) \
-    INIT_PARAM_4D(pvar, d1, s1, d2, s2, d3, s3, d4, s4, d5, s5); pvar.addDimBack(#d6, d6)
+// Convenience macros for creating grids in a class implementing StencilPart.
+// The 'gvar' arg is the var name and the grid name.
+// The remaining args are the dimension names.
+#define MAKE_GRID(gvar, ...)                                            \
+    Grid gvar = Grid(#gvar, &get_stencil_solution(), ##__VA_ARGS__)
+#define MAKE_SCALAR(gvar) MAKE_GRID(gvar)
+#define MAKE_ARRAY(gvar, d1) MAKE_GRID(gvar, d1)
 
-// Convenience macro for getting one offset from the 'offsets' tuple.
-#define GET_OFFSET(ovar)                                                \
-    NumExprPtr ovar = make_shared<IntScalarExpr>(offsets.getDim(#ovar))
- 
 #endif

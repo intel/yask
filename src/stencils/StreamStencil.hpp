@@ -27,38 +27,39 @@ IN THE SOFTWARE.
 // with no spatial offsets.
 // The radius controls how many reads are done.
 
-#include "StencilBase.hpp"
+#include "Soln.hpp"
 
 class StreamStencil : public StencilRadiusBase {
 
 protected:
-    Grid grid;
+
+    // Indices & dimensions.
+    MAKE_STEP_INDEX(t);           // step in time dim.
+    MAKE_DOMAIN_INDEX(x);         // spatial dim.
+    MAKE_DOMAIN_INDEX(y);         // spatial dim.
+    MAKE_DOMAIN_INDEX(z);         // spatial dim.
+
+    // Vars.
+    MAKE_GRID(data, t, x, y, z); // time-varying 3D grid.
     
 public:
 
     StreamStencil(StencilList& stencils, int radius=8) :
-        StencilRadiusBase("stream", stencils, radius)
-    {
-        INIT_GRID_4D(grid, t, x, y, z);
-    }
+        StencilRadiusBase("stream", stencils, radius) { }
     virtual ~StreamStencil() { }
 
     // Define equation to read '_radius' values and write one.
-    virtual void define(const IntTuple& offsets) {
-        GET_OFFSET(t);
-        GET_OFFSET(x);
-        GET_OFFSET(y);
-        GET_OFFSET(z);
+    virtual void define() {
 
         GridValue v = constNum(1.0);
 
         // Add '_radius' values from past time-steps to ensure no spatial locality.
         for (int r = 0; r < _radius; r++) {
-            v += grid(t-r, x, y, z);
+            v += data(t-r, x, y, z);
         }
 
         // define the value at t+1 to be equivalent to v.
-        grid(t+1, x, y, z) EQUALS v;
+        data(t+1, x, y, z) EQUALS v;
     }
 };
 

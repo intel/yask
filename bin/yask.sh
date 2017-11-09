@@ -27,10 +27,15 @@
 invo="Invocation: $0 $@"
 echo $invo
 
-# Env vars to set.
-envs="OMP_DISPLAY_ENV=VERBOSE OMP_PLACES=cores"
-envs="$envs KMP_VERSION=1 KMP_HOT_TEAMS_MODE=1 KMP_HOT_TEAMS_MAX_LEVEL=2"
+# Default env vars to print debug info.
+envs="OMP_DISPLAY_ENV=VERBOSE"
+envs="$envs KMP_VERSION=1"
 envs="$envs I_MPI_PRINT_VERSION=1 I_MPI_DEBUG=5"
+
+# On Cygwin, need to put lib dir in path to load .dll's.
+if [[ `uname -o` == "Cygwin" ]]; then
+	envs="$envs PATH='$PATH':"`dirname $0`/../lib
+fi
 
 # Extra options for exe.
 opts=""
@@ -44,17 +49,19 @@ while true; do
     elif [[ "$1" == "-h" || "$1" == "-help" ]]; then
         opts="$opts -h"
         shift
-        echo "$0 is a wrapper around the stencil executable to set up the proper environment."
-        echo "usage: $0 -stencil <stencil> -arch <arch> [script-options] [--] [exe-options]"
-        echo "required parameters to specify the executable:"
+        echo "$0 is a wrapper around the YASK executable to set up the proper environment."
+        echo "Usage: $0 -stencil <stencil> -arch <arch> [script-options] [--] [exe-options]"
+        echo " "
+        echo "Required parameters to specify the executable:"
         echo "  -stencil <stencil>"
         echo "     Corresponds to stencil=<stencil> used during compilation"
         echo "  -arch <arch>"
         echo "     Corresponds to arch=<arch> used during compilation"
-        echo "script-options:"
+        echo " "
+        echo "Script options:"
         echo "  -h"
         echo "     Print this help."
-        echo "     To get executable help, run '$0 -stencil <stencil> -arch <arch> -- -help'"
+        echo "     To get YASK executable help, run '$0 -stencil <stencil> -arch <arch> -- -help'"
         echo "  -host <hostname>|-mic <N>"
         echo "     Specify host to run executable on."
         echo "     'ssh <hostname>' will be pre-pended to the sh_prefix command."
@@ -64,15 +71,15 @@ while true; do
         echo "       -arch 'knc'"
         echo "       -host "`hostname`"-mic<N>"
         echo "  -sh_prefix <command>"
-        echo "     Add command-prefix before the sub-shell."
+        echo "     Add <command> prefix before the sub-shell."
         echo "  -exe_prefix <command>"
-        echo "     Add command-prefix before the executable."
+        echo "     Add <command> prefix before the executable."
         echo "  -ranks <N>"
         echo "     Simplified MPI run (x-dimension partition only)."
-        echo "     'mpirun -n <N> -ppn <N>' is prepended to the exe_prefix command,"
+        echo "     'mpirun -np <N>' is prepended to the exe_prefix command,"
         echo "     and '-nrx' <N> is passed to the executable."
         echo "     If a different MPI command or config is needed, use -exe_prefix <command>"
-        echo "     explicitly and -nr* options as needed (and do not use '-ranks')."
+        echo "     explicitly and -nr* options as needed instead."
         echo "  -log <file>"
         echo "     Write copy of output to <file>."
         echo "     Default is based on stencil, arch, host-name, and time-stamp."
@@ -80,7 +87,6 @@ while true; do
         echo "  <env-var=value>"
         echo "     Set environment variable <env-var> to <value>."
         echo "     Repeat as necessary to set multiple vars."
-        echo " "
         exit 1
 
     elif [[ "$1" == "-stencil" && -n ${2+set} ]]; then
@@ -164,7 +170,7 @@ fi
 
 # Simplified MPI in x-dim only.
 if [[ -n "$nranks" ]]; then
-    exe_prefix="mpirun -n $nranks -ppn $nranks $exe_prefix"
+    exe_prefix="mpirun -np $nranks $exe_prefix"
 fi
 
 # Bail on errors past this point.

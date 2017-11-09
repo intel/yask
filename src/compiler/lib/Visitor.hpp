@@ -41,8 +41,7 @@ namespace yask {
         virtual void visit(ConstExpr* ce) { }
         virtual void visit(CodeExpr* ce) { }
         virtual void visit(IndexExpr* ie) { }
-        virtual void visit(IntScalarExpr* ite) { }
-        virtual void visit(GridPoint* gp) { }
+        virtual void visit(GridPoint* gp) { } // does NOT visit arg exprs by default.
 
         // By default, a unary visitor just visits its operand.
         virtual void visit(UnaryNumExpr* ue) {

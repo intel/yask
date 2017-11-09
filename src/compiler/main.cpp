@@ -27,6 +27,7 @@ IN THE SOFTWARE.
 
 // Generation code.
 #include "ExprUtils.hpp"
+#include "Grid.hpp"
 #include "CppIntrin.hpp"
 #include "Parse.hpp"
 
@@ -51,9 +52,11 @@ int radius = 1;
 void usage(const string& cmd) {
 
     cout << "Options:\n"
-        " -h                 print this help message.\n"
+        " -h\n"
+        "     Print this help message.\n"
         "\n"
-        " -stencil <name>         set stencil solution (required); supported solutions:\n";
+        " -stencil <name>\n"
+        "     Set stencil solution (required); supported solutions:\n";
     for (auto si : stencils) {
         auto name = si.first;
         auto sp = si.second;
@@ -85,9 +88,6 @@ void usage(const string& cmd) {
         "      Example: '-eq a=foo,b=bar' creates one or more eq-groups with base-name 'a'\n"
         "        containing updates to grids whose name contains 'foo' and one or more eq-groups\n"
         "        with base-name 'b' containing updates to grids whose name contains 'bar'.\n"
-        " -step <dim>\n"
-        "    Specify stepping dimension <dim> (default='" << settings._stepDim << "').\n"
-        "      This is used for dependence calculation and memory allocation.\n"
         " -step-alloc <size>\n"
         "    Specify the size of the step-dimension memory allocation.\n"
         "      By default, allocations are calculated automatically for each grid.\n"
@@ -103,7 +103,7 @@ void usage(const string& cmd) {
         " [-no]-ul\n"
         "    Do [not] generate simple unaligned loads (default=" <<
         settings._allowUnalignedLoads << ").\n"
-        "      To use this correctly, only 1D folds are allowed, and\n"
+        "      [Advanced] To use this correctly, only 1D folds are allowed, and\n"
         "        the memory layout used by YASK must have that same dimension in unit stride.\n"
         " [-no]-opt-comb\n"
         "    Do [not] combine commutative operations (default=" << settings._doComb << ").\n"
@@ -197,8 +197,6 @@ void parseOpts(int argc, const char* argv[])
                 // options w/a string value.
                 if (opt == "-stencil")
                     solutionName = argop;
-                else if (opt == "-step")
-                    settings._stepDim = argop;
                 else if (opt == "-eq")
                     settings._eqGroupTargets = argop;
                 else if (opt == "-fold" || opt == "-cluster") {

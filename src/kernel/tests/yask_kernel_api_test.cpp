@@ -27,6 +27,8 @@ IN THE SOFTWARE.
 
 #include "yask_kernel_api.hpp"
 #include <iostream>
+#include <vector>
+#include <set>
 
 using namespace std;
 using namespace yask;
@@ -43,10 +45,14 @@ int main() {
     auto soln = kfac.new_solution(env);
 
     // Init global settings.
-    for (auto dim_name : soln->get_domain_dim_names()) {
+    auto soln_dims = soln->get_domain_dim_names();
+    for (auto dim_name : soln_dims) {
 
-        // Set min. domain size in each dim.
-        soln->set_rank_domain_size(dim_name, 150);
+        // Set domain size in each dim.
+        soln->set_rank_domain_size(dim_name, 128);
+
+        // Ensure some minimal padding on all grids.
+        soln->set_min_pad_size(dim_name, 1);
 
         // Set block size to 64 in z dim and 32 in other dims.
         if (dim_name == "z")
@@ -56,51 +62,79 @@ int main() {
     }
 
     // Simple rank configuration in 1st dim only.
-    auto ddim1 = soln->get_domain_dim_name(0);
+    auto ddim1 = soln_dims[0];
     soln->set_num_ranks(ddim1, env->get_num_ranks());
 
     // Allocate memory for any grids that do not have storage set.
     // Set other data structures needed for stencil application.
     soln->prepare_solution();
 
-    // Print some info about the solution and init the grids.
+    // Print some info about the solution.
     auto name = soln->get_name();
     cout << "Stencil-solution '" << name << "':\n";
     cout << "  Step dimension: '" << soln->get_step_dim_name() << "'\n";
     cout << "  Domain dimensions:";
-    for (auto dname : soln->get_domain_dim_names())
+    set<string> domain_dim_set;
+    for (auto dname : soln->get_domain_dim_names()) {
         cout << " '" << dname << "'";
+        domain_dim_set.insert(dname);
+    }
     cout << endl;
+
+    // Print out some info about the grids and init their data.
     for (auto grid : soln->get_grids()) {
         cout << "    " << grid->get_name() << "(";
         for (auto dname : grid->get_dim_names())
             cout << " '" << dname << "'";
-        cout << ")\n";
+        cout << " )\n";
+        for (auto dname : grid->get_dim_names()) {
+            if (domain_dim_set.count(dname))
+                cout << "      '" << dname << "' allowed index range on this rank: " <<
+                    grid->get_first_rank_alloc_index(dname) << " ... " <<
+                    grid->get_last_rank_alloc_index(dname) << endl;
+        }
 
-        // Subset of domain.
+        // First, just init all the elements to the same value.
+        grid->set_all_elements_same(0.1);
+        
+        // Create indices describing a subset of the overall domain.
         vector<idx_t> first_indices, last_indices;
         for (auto dname : grid->get_dim_names()) {
-            if (dname == soln->get_step_dim_name()) {
 
-                // Add index for initial timestep.
-                first_indices.push_back(0); 
-                last_indices.push_back(0);
+            // Is this a domain dim?
+            if (domain_dim_set.count(dname)) {
 
-            } else {
-
-                // small cube in center of overall problem.
+                // Set indices to creaete a small cube (assuming 3D)
+                // in center of overall problem.
                 idx_t psize = soln->get_overall_domain_size(dname);
                 idx_t first_idx = psize/2 - 10;
                 idx_t last_idx = psize/2 + 10;
                 first_indices.push_back(first_idx);
                 last_indices.push_back(last_idx);
             }
+
+            // Step dim?
+            else if (dname == soln->get_step_dim_name()) {
+
+                // Add indices for timestep zero (0) only.
+                first_indices.push_back(0); 
+                last_indices.push_back(0);
+
+            }
+
+            // Misc dim?
+            else {
+
+                // Add indices to set all allowed values.
+                // (This isn't really meaningful; it's just illustrative.)
+                first_indices.push_back(grid->get_first_misc_index(dname));
+                last_indices.push_back(grid->get_last_misc_index(dname));
+            }
         }
         
-        // Init the values in a 'hat' function.
-        grid->set_all_elements_same(0.1);
+        // Init the values using the indices created above.
         idx_t nset = grid->set_elements_in_slice_same(0.9, first_indices, last_indices);
-        cout << "      " << nset << " element(s) set to 1.0.\n";
+        cout << "      " << nset << " element(s) set.\n";
 
         // Raw access to this grid.
         auto raw_p = grid->get_raw_storage_buffer();
@@ -117,8 +151,8 @@ int main() {
     env->global_barrier();
     cout << "Running the solution for 1 step...\n";
     soln->run_solution(0);
-    cout << "Running the solution for 100 more steps...\n";
-    soln->run_solution(1, 100);
+    cout << "Running the solution for 10 more steps...\n";
+    soln->run_solution(1, 10);
 
     cout << "End of YASK kernel API test.\n";
     return 0;

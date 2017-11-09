@@ -23,6 +23,8 @@ Pre-requisites:
 * Intel(R) MPI Library, https://software.intel.com/en-us/intel-mpi-library,
   or equivalent (optional: for multi-core and multi-node operation).
 * Perl (5.010 or later).
+* Awk.
+* Gnu make.
 * The 'indent' or 'gindent' utility (optional: to make the generated code easier for humans to read).
 * SWIG (3.0.12 or later),
   http://www.swig.org (optional: for creating the Python interface).

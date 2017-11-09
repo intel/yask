@@ -31,37 +31,52 @@ YASK_BASE	:=	$(shell cd ../..; pwd)
 LIB_DIR		:=	$(YASK_BASE)/lib
 INC_DIR		:=	$(YASK_BASE)/include
 BIN_DIR		:=	$(YASK_BASE)/bin
+YASK_DIR	:=	$(YASK_BASE)/yask
+
+# OS-specific
+ifeq ($(shell uname -o),Cygwin)
+  SO_SUFFIX	:=	.dll
+  RUN_PREFIX	:=	env PATH="${PATH}:$(LIB_DIR):$(YASK_DIR)"
+  PYTHON		:= python3
+else
+  SO_SUFFIX	:=	.so
+  RUN_PREFIX	:=
+  PYTHON	:=	python
+  CXX_PREFIX	:=	
+endif
 
 # Output files and dirs.
 YC_BASE		:=	yask_compiler
 YC_MODULE	:=	$(YC_BASE)
 YC_EXEC		:=	$(BIN_DIR)/$(YC_BASE).exe
 YC_TEST_EXEC	:=	$(BIN_DIR)/$(YC_BASE)_api_test.exe
-YC_LIB		:=	$(LIB_DIR)/lib$(YC_BASE).so
-YC_PY_LIB	:=	$(LIB_DIR)/_$(YC_MODULE).so
-YC_PY_MOD	:=	$(LIB_DIR)/$(YC_MODULE).py
+YC_LIB		:=	$(LIB_DIR)/lib$(YC_BASE)$(SO_SUFFIX)
+YC_PY_LIB	:=	$(YASK_DIR)/_$(YC_MODULE)$(SO_SUFFIX)
+YC_PY_MOD	:=	$(YASK_DIR)/$(YC_MODULE).py
 
 # Common source.
 COMM_DIR	:=	../common
-COMM_SRC_NAMES	:=	output
+COMM_SRC_NAMES	:=	output tuple
 COMM_SRC_BASES	:=	$(addprefix $(COMM_DIR)/,$(COMM_SRC_NAMES))
 
 # Compiler source files and dirs.
 YC_SWIG_DIR	:=	./swig
 YC_GEN_DIR	:=	./gen
 YC_LIB_DIR	:=	./lib
-YC_SRC_NAMES	:=	CppIntrin Expr ExprUtils Print
+YC_SRC_NAMES	:=	Expr ExprUtils Grid Eqs Print Vec Cpp CppIntrin YaskKernel Soln
 YC_SRC_BASES	:=	$(addprefix $(YC_LIB_DIR)/,$(YC_SRC_NAMES))
 YC_OBJS		:=	$(addsuffix .o,$(YC_SRC_BASES) $(COMM_SRC_BASES))
-YC_STENCIL_LIST	:=	$(YC_GEN_DIR)/stencils.hpp
 YC_INC_DIRS	:=	$(INC_DIR) $(YC_LIB_DIR) $(COMM_DIR) ../stencils
 YC_INC_GLOB	:=	$(addsuffix /*.hpp,$(YC_INC_DIRS))
+YC_STENCIL_DIR	:= 	../stencils
+YC_STENCIL_LIST	:=	$(YC_GEN_DIR)/stencils.hpp
 YC_MK_GEN_DIR	:=	mkdir -p -v $(YC_GEN_DIR)
 
 # Compiler and default flags.
 YC_CXX    	?=	g++  # usually faster than icpc for building the compiler.
-YC_CXXFLAGS 	+=	-g -std=c++11 -Wall -O2
-YC_CXXFLAGS	+=	$(addprefix -I,$(YC_INC_DIRS) $(YC_GEN_DIR))
+YC_CXXOPT	:= 	-O2
+YC_CXXFLAGS 	:=	-g -std=c++11 -Wall $(YC_CXXOPT)
+YC_CXXFLAGS	+=	$(addprefix -I,$(YC_INC_DIRS) $(YC_GEN_DIR) $(YC_STENCIL_DIR))
 
 # Add user-defined flags.
 YC_CXXFLAGS	+=	$(EXTRA_YC_CXXFLAGS)
@@ -71,14 +86,13 @@ YC_LD		:=	$(YC_CXX)
 YC_LFLAGS	:=	-lrt -Wl,-rpath=$(LIB_DIR) -L$(LIB_DIR) -l$(YC_BASE)
 
 # Tools.
-PYTHON		:=	python
 SWIG		:=	swig
 
 # Find include path needed for python interface.
 # NB: constructing string inside print() to work for python 2 or 3.
 PYINC		:= 	$(addprefix -I,$(shell $(PYTHON) -c 'import distutils.sysconfig; print(distutils.sysconfig.get_python_inc() + " " + distutils.sysconfig.get_python_inc(plat_specific=1))'))
 
-RUN_PYTHON	:= 	env PYTHONPATH=$(LIB_DIR) $(PYTHON)
+RUN_PYTHON	:= 	env PYTHONPATH=$(LIB_DIR):$(YASK_DIR) $(PYTHON)
 
 ######## Primary targets & rules
 
@@ -88,18 +102,18 @@ default: compiler
 compiler: $(YC_EXEC)
 	@echo "Binary" $(YC_EXEC) "has been built."
 
-%.o: %.cpp $(YC_STENCIL_LIST) $(YC_INC_GLOB) 
-	$(YC_CXX) $(YC_CXXFLAGS) -fPIC -c -o $@ $<
+%.o: %.cpp $(YC_STENCIL_LIST) $(YC_INC_GLOB)
+	$(CXX_PREFIX) $(YC_CXX) $(YC_CXXFLAGS) -fPIC -c -o $@ $<
 
 $(YC_LIB): $(YC_OBJS)
-	$(YC_CXX) $(YC_CXXFLAGS) -shared -o $@ $^
+	$(CXX_PREFIX) $(YC_CXX) $(YC_CXXFLAGS) -shared -o $@ $^
 
 $(YC_EXEC): main.cpp $(YC_LIB)
-	$(YC_LD) $(YC_CXXFLAGS) -O0 $< $(YC_LFLAGS) -o $@
+	$(CXX_PREFIX) $(YC_LD) $(YC_CXXFLAGS) -O0 $< $(YC_LFLAGS) -o $@
 	$(MAKE) echo-settings
 
 # Generated files.
-$(YC_STENCIL_LIST): ../stencils/*.hpp
+$(YC_STENCIL_LIST): $(YC_STENCIL_DIR)/*.hpp
 	$(YC_MK_GEN_DIR)
 	echo '// Stencil-definition files.' > $@
 	echo '// Automatically-generated code; do not edit.' >> $@
@@ -110,7 +124,9 @@ $(YC_STENCIL_LIST): ../stencils/*.hpp
 ######## API targets
 
 # Build C++ and Python compiler API libs.
-api: $(YC_LIB) $(YC_PY_LIB)
+# (Makes sure the compiler exists also, to avoid problems
+# when trying to build the kernel w/o a compiler binary.)
+api: compiler $(YC_PY_LIB)
 
 # Build python compiler API lib.
 # Also builds $(YC_PY_MOD)
@@ -118,7 +134,7 @@ $(YC_SWIG_DIR)/yask_compiler_api_wrap.cpp: $(YC_SWIG_DIR)/yask*.i $(INC_DIR)/*.h
 	$(SWIG) -version
 	$(SWIG) -v -DYC_MODULE=$(YC_MODULE) -cppext cpp \
 	  -I$(INC_DIR) -I$(COMM_DIR) -I$(COMM_DIR)/swig \
-	  -c++ -python -outdir $(LIB_DIR) -builtin $<
+	  -c++ -python -outdir $(YASK_DIR) -builtin $<
 
 $(YC_SWIG_DIR)/yask_compiler_api_wrap.o: $(YC_SWIG_DIR)/yask_compiler_api_wrap.cpp
 	$(YC_CXX) $(YC_CXXFLAGS) $(PYINC) -fPIC -c -o $@ $<
@@ -151,8 +167,8 @@ cxx-yc-api-test: $(YC_TEST_EXEC)
 ######## Misc targets
 
 all-tests:
-	$(MAKE) py-yc-api-test
 	$(MAKE) cxx-yc-api-test
+	$(MAKE) py-yc-api-test
 
 all:
 	$(MAKE) compiler
@@ -165,15 +181,15 @@ clean:
 	rm -fr $(YC_SWIG_DIR)/build $(YC_GEN_DIR)
 	rm -fv $(YC_SWIG_DIR)/*_api_wrap.*
 	rm -fv $(YC_OBJS)
-	find . -name '*.o' | xargs -r rm -v
-	find . $(BIN_DIR) $(LIB_DIR) -name '*.optrpt' | xargs -r rm -v
+	- find . -name '*.o' -print -delete
+	- find . $(BIN_DIR) $(LIB_DIR) -name '*.optrpt' -print -delete
 
 # Remove executables, libs, etc.
 realclean: clean
 	rm -fv $(YC_LIB) $(YC_EXEC) $(YC_TEST_EXEC) $(YC_PY_MOD)* $(YC_PY_LIB)
 	rm -fv *api-test*.dot* *api-test*.hpp*
-	find . -name '*.pyc' | xargs -r rm -v
-	find . -name '*~' | xargs -r rm -v
+	- find . -name '*.pyc' -print -delete
+	- find . -name '*~' -print -delete
 
 echo-settings:
 	@echo "Build environment for" $(YC_EXEC) on `date`
@@ -184,8 +200,8 @@ echo-settings:
 
 help:
 	@echo "Example YASK-compiler make commands:"
-	@echo $(MAKE) "-j compiler"
-	@echo $(MAKE) "-j api"
-	@echo $(MAKE) "-j all-tests"
-	@echo $(MAKE) "clean"
-	@echo $(MAKE) "realclean"
+	@echo " $(MAKE) -j compiler"
+	@echo " $(MAKE) -j api"
+	@echo " $(MAKE) -j all-tests"
+	@echo " $(MAKE) clean"
+	@echo " $(MAKE) realclean"

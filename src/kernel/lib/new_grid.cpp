@@ -1,0 +1,94 @@
+/*****************************************************************************
+
+YASK: Yet Another Stencil Kernel
+Copyright (c) 2014-2017, Intel Corporation
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to
+deal in the Software without restriction, including without limitation the
+rights to use, copy, modify, merge, publish, distribute, sublicense, and/or
+sell copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+* The above copyright notice and this permission notice shall be included in
+  all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
+IN THE SOFTWARE.
+
+*****************************************************************************/
+
+#include "yask.hpp"
+using namespace std;
+
+namespace yask {
+
+    // Make a new grid.
+    YkGridPtr StencilContext::newGrid(const std::string& name,
+                                      const GridDimNames& dims,
+                                      bool is_visible) {
+
+        // First, try to make a grid that matches the layout in
+        // the stencil.
+        YkGridPtr gp = newStencilGrid(name, dims);
+
+        // If there was no match, use default layout.
+        if (!gp) {
+
+            // Check dims.
+            int ndims = dims.size();
+            int step_posn = -1;      // -1 => not used.
+            set<string> seenDims;
+            for (int i = 0; i < ndims; i++) {
+
+                // Already used?
+                if (seenDims.count(dims[i])) {
+                    cerr << "Error: cannot create grid '" << name <<
+                        "': dimension '" << dims[i] << "' used more than once.\n";
+                    exit_yask(1);
+                }
+            
+                // Step dim?
+                if (dims[i] == _dims->_step_dim) {
+                    step_posn = i;
+                    if (i > 0) {
+                        cerr << "Error: cannot create grid '" << name <<
+                            "' because step dimension '" << dims[i] <<
+                            "' must be first dimension.\n";
+                        exit_yask(1);
+                    }
+                }
+            }
+            bool do_wrap = step_posn >= 0;
+
+            // Scalar?
+            if (ndims == 0)
+                gp = make_shared<YkElemGrid<Layout_0d, false>>(_dims, name, dims, &_ostr);
+            
+            // Include auto-gen code for all other cases.
+#include "yask_grid_code.hpp"
+            
+            if (!gp) {
+                cerr << "Error in new_grid: cannot create grid '" << name <<
+                    "' with " << ndims << " dimensions; only up to " << MAX_DIMS <<
+                    " dimensions supported.\n";
+                exit_yask(1);
+            }
+        }
+
+        // Add to context.
+        if (is_visible)
+            addGrid(gp, false);     // mark as non-output grid; TODO: determine if this is ok.
+
+        // Set default sizes from settings and get offset, if set.
+        if (is_visible)
+            update_grids();
+
+        return gp;
+    }
+} // namespace yask.

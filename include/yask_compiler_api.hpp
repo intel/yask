@@ -38,13 +38,17 @@ IN THE SOFTWARE.
 
 namespace yask {
 
-    // Forward declarations of class-pointers.
+    // Forward declarations of classes and their pointers.
     class yc_solution;
     typedef std::shared_ptr<yc_solution> yc_solution_ptr;
     class yc_grid;
     typedef yc_grid* yc_grid_ptr;
+
+    // Forward declarations of expression nodes and their pointers.
     class yc_expr_node;
     typedef std::shared_ptr<yc_expr_node> yc_expr_node_ptr;
+    class yc_index_node;
+    typedef std::shared_ptr<yc_index_node> yc_index_node_ptr;
     class yc_equation_node;
     typedef std::shared_ptr<yc_equation_node> yc_equation_node_ptr;
     class yc_number_node;
@@ -115,48 +119,45 @@ namespace yask {
 
         /// Create an n-dimensional grid variable in the solution.
         /**
-           "Grid" is a generic term for any n-dimensional array.  A 0-dim
+           "Grid" is a generic term for any n-dimensional variable.  A 0-dim
            grid is a scalar, a 1-dim grid is a vector, a 2-dim grid is a
            matrix, etc.
-           @warning Only grids supported at this time are those with
-           dimensions 'x, y, z,' and 't, x, y, z'.
+
+           At least one grid must be defined with a step-index
+           node, and it must be the first dimension listed.
+           If more than one grid uses a step-index node, the step-indices
+           must have the same name across all such grids.
+
+           At least one grid must be defined with at least one domain-index node.
+
            @returns Pointer to the new grid. 
         */
         virtual yc_grid_ptr
         new_grid(const std::string& name
                  /**< [in] Unique name of the grid; must be a valid C++
                     identifier and unique across grids. */,
-                 const std::vector<std::string>& dims
-                 /**< [in] Names of the dimensions of the grid. All
-                    dimension names must be valid C++ identifiers and unique
-                    within this grid. */ ) =0;
+                 const std::vector<yc_index_node_ptr>& dims
+                 /**< [in] Dimensions of the grid.
+                  Each dimension is identified by an associated index. */ ) =0;
 
+#ifndef SWIG        
         /// Create an n-dimensional grid variable in the solution.
         /**
-           "Grid" is a generic term for any n-dimensional array.  A 0-dim
+           "Grid" is a generic term for any n-dimensional variable.  A 0-dim
            grid is a scalar, a 1-dim grid is a vector, a 2-dim grid is a
-           matrix, etc.  Specify the name of each dimension that is needed
-           via this interface, starting with 'dim1'. Example:
-           new_grid("heat", "t", "x", "y") will create a 3D grid with one
-           temporal dimension and two spatial dimensions.
-           @warning Only grids supported at this time are those with
-           dimensions 'x, y, z,' and 't, x, y, z'.
+           matrix, etc.
+           @note This version is not available (or needed) in SWIG-based APIs, e.g., Python.
            @returns Pointer to the new grid. 
         */
         virtual yc_grid_ptr
         new_grid(const std::string& name /**< [in] Unique name of the grid; must be
                                             a valid C++ identifier and unique
                                             across grids. */,
-                 const std::string& dim1 = "" /**< [in] Name of 1st dimension. All
-                                                 dimension names must be valid C++
-                                                 identifiers and unique within this
-                                                 grid. */,
-                 const std::string& dim2 = "" /**< [in] Name of 2nd dimension. */,
-                 const std::string& dim3 = "" /**< [in] Name of 3rd dimension. */,
-                 const std::string& dim4 = "" /**< [in] Name of 4th dimension. */,
-                 const std::string& dim5 = "" /**< [in] Name of 5th dimension. */,
-                 const std::string& dim6 = "" /**< [in] Name of 6th dimension. */ ) =0;
-
+                 const std::initializer_list<yc_index_node_ptr>& dims
+                 /**< [in] Dimensions of the grid.
+                    Each dimension is identified by an associated index. */ ) =0;
+#endif
+        
         /// Get all the grids in the solution.
         /** @returns Vector containing pointer to all grids. */
         virtual std::vector<yc_grid_ptr>
@@ -168,10 +169,9 @@ namespace yask {
         get_num_grids() const =0;
         
         /// Get the specified grid.
-        /** @returns Pointer to the nth grid. */
+        /** @returns Pointer to the specified grid or null pointer if it does not exist. */
         virtual yc_grid_ptr
-        get_grid(int n /**< [in] Index of grid between zero (0)
-                              and get_num_grids()-1. */ ) =0;
+        get_grid(const std::string& name /**< [in] Name of the grid. */ ) =0;
         
         /// Get the number of equations in the solution.
         /** Equations are added when equation_nodes are created via new_equation_node().
@@ -185,63 +185,12 @@ namespace yask {
         get_equation(int n /**< [in] Index of equation between zero (0)
                               and get_num_equations()-1. */ ) =0;
 
-        /// Set the solution step dimension name.
-        /**
-           Default is "t" for time. 
-           @warning Only step dimension supported at this time is 't'.
-        */
-        virtual void
-        set_step_dim_name(const std::string& dim
-                          /**< [in] Step dimension, e.g., "t". */ ) =0;
-
-        /// Get the solution step dimension.
-        /** @returns String containing the current step-dimension name. */
-        virtual std::string
-        get_step_dim_name() const =0;
-
-        /// Get the domain dimensions.
-        /**
-           @returns Names set via set_domain_dim_names().
-        */
-        virtual std::vector<std::string>
-        get_domain_dim_names() const =0;
-        
-        /// Set the domain dimensions.
-        /**
-           Name all the dimensions that describe the domain of the 
-           problem *except* the step dimension, which is specified via
-           set_step_dim_name().
-           @warning Only domain supported at this time is with
-           dimensions 'x, y, z,'.
-         */
-        virtual void
-        set_domain_dim_names(const std::vector<std::string>& dims
-                             /**< [in] List of names of dimensions. */) =0;
-        
-        /// Set the domain dimensions.
-        /**
-           Name all the dimensions that describe the domain of the 
-           problem *except* the step dimension, which is specified via
-           set_step_dim_name().
-           @warning Only domain supported at this time is with
-           dimensions 'x, y, z,'.
-         */
-        virtual void
-        set_domain_dim_names(const std::string& dim1 /**< [in] Name of 1st dimension. All
-                                                        dimension names must be valid C++
-                                                        identifiers and unique within this
-                                                        grid. */,
-                             const std::string& dim2 = "" /**< [in] Name of 2nd dimension. */,
-                             const std::string& dim3 = "" /**< [in] Name of 3rd dimension. */,
-                             const std::string& dim4 = "" /**< [in] Name of 4th dimension. */,
-                             const std::string& dim5 = "" /**< [in] Name of 5th dimension. */ ) =0;
-        
         /// Set the vectorization length in given dimension.
         /** For YASK-code generation, the product of the fold lengths should
             be equal to the number of elements in a HW SIMD register.
             The number of elements in a HW SIMD register is
             determined by the number of bytes in an element and the print
-            format.  
+            format.
             Example: For SP FP elements in AVX-512 vectors, the product of
             the fold lengths should be 16, e.g., x=4 and y=4.
             @note If the product
@@ -249,10 +198,12 @@ namespace yask {
             register, the fold lengths will be adjusted based on an internal
             heuristic. In this heuristic, any fold length that is >1 is
             used as a hint to indicate where to apply folding.
-            @note A fold length >1 cannot be applied to the step dimension.
-            @note Default length is one (1) in each dimension. */
+            @note A fold can only be applied in a domain dimension.
+            @note Default length is one (1) in each domain dimension. */
         virtual void
-        set_fold_len(const std::string& dim /**< [in] Dimension of fold, e.g., "x". */,
+        set_fold_len(const yc_index_node_ptr dim
+                     /**< [in] Dimension of fold, e.g., "x".
+                      This must be an index created by new_domain_index(). */,
                      int len /**< [in] Length of vectorization in 'dim' */ ) =0;
 
         /// Reset all vector-folding settings.
@@ -278,7 +229,9 @@ namespace yask {
             the step dimension. 
             @note Default is one (1) in each dimension. */
         virtual void
-        set_cluster_mult(const std::string& dim /**< [in] Direction of unroll, e.g., "y". */,
+        set_cluster_mult(const yc_index_node_ptr dim
+                         /**< [in] Direction of unroll, e.g., "y".
+                            This must be an index created by new_domain_index().  */,
                          int mult /**< [in] Number of vectors in 'dim' */ ) =0;
 
         /// Reset all vector-clustering settings.
@@ -301,6 +254,7 @@ namespace yask {
 
             Progress text will be written to the output stream set via set_debug_output().
 
+            @note "avx512f" is allowed as an alias for "avx512".
             @warning *Side effect:* Applies optimizations to the equation(s), so some pointers
             to nodes in the original equations may refer to modified nodes or nodes
             that have been optimized away after calling format().
@@ -351,33 +305,33 @@ namespace yask {
         /** The indices are specified relative to the stencil-evaluation
             index.  Each offset refers to the dimensions defined when the
             grid was created via stencil_solution::new_grid(). 
-            Example: if g = new_grid("heat", "t", "x", "y"), then
+            Example: if g = new_grid("heat", {"t", "x", "y"}), then
             g->new_relative_grid_point(1, -1, 0) refers to heat(t+1, x-1, y)
             for some point t, x, y during stencil evaluation.
+            @warning This convenience function can only be used when every
+            dimension of the grid is either the step dimension or a domain dimension.
             @note Offsets beyond the dimensions in the grid will be ignored.
-            @returns Pointer to AST node used to read or write from point in grid. */
+            @returns Pointer to AST node used to read from or write to point in grid. */
         virtual yc_grid_point_node_ptr
         new_relative_grid_point(std::vector<int> dim_offsets
                                 /**< [in] offset from evaluation index in each dim. */ ) =0;
 
+#ifndef SWIG        
         /// Create a reference to a point in a grid.
         /** The indices are specified relative to the stencil-evaluation
             index.  Each offset refers to the dimensions defined when the
             grid was created via stencil_solution::new_grid(). 
-            Example: if g = new_grid("heat", "t", "x", "y"), then
-            g->new_relative_grid_point(1, -1, 0) refers to heat(t+1, x-1, y)
+            Example: if g = new_grid("heat", {"t", "x", "y"}), then
+            g->new_relative_grid_point({1, -1, 0}) refers to heat(t+1, x-1, y)
             for some point t, x, y during stencil evaluation.
             @note Offsets beyond the dimensions in the grid will be ignored.
+            @note This version is not available (or needed) in SWIG-based APIs, e.g., Python.
             @returns Pointer to AST node used to read or write from point in grid. */
         virtual yc_grid_point_node_ptr
-        new_relative_grid_point(int dim1_offset=0 /**< [in] offset from dim1 index. */,
-                                int dim2_offset=0 /**< [in] offset from dim2 index. */,
-                                int dim3_offset=0 /**< [in] offset from dim3 index. */,
-                                int dim4_offset=0 /**< [in] offset from dim4 index. */,
-                                int dim5_offset=0 /**< [in] offset from dim5 index. */,
-                                int dim6_offset=0 /**< [in] offset from dim6 index. */ ) =0;
+        new_relative_grid_point(const std::initializer_list<int>& dim_offsets) = 0;
+#endif
     };
-
+    
     /// Factory to create AST nodes.
     /** @note Grid-point reference nodes are created from a `yc_grid` object
         instead of from this factory. */
@@ -385,6 +339,38 @@ namespace yask {
     public:
         virtual ~yc_node_factory() {}
 
+        /// Create a step-index node.
+        /**
+           Create a variable to be used to index grids in the
+           solution-step dimension.
+           The name usually describes time, e.g. "t". 
+        */
+        virtual yc_index_node_ptr
+        new_step_index(const std::string& name
+                     /**< [in] Step dimension name. */ );
+
+        /// Create a domain-index node.
+        /**
+           Create a variable to be used to index grids in the
+           solution-domain dimension.
+           The name usually describes spatial dimensions, e.g. "x" or "y". 
+           This should *not* include the step dimension, which is specified via
+           new_step_index().
+         */
+        virtual yc_index_node_ptr
+        new_domain_index(const std::string& name
+                     /**< [in] Domain index name. */ );
+        
+        /// Create a new miscellaneous index.
+        /**
+           Create an variable to be used to index grids in the
+           some dimension that is not the step dimension
+           or a domain dimension. Example: index into an array.
+         */
+        virtual yc_index_node_ptr
+        new_misc_index(const std::string& name
+                       /**< [in] Index name. */ );
+        
         /// Create an equation node.
         /** Indicates grid point on LHS is equivalent to expression on
             RHS. This is NOT a test for equality.  When an equation is
@@ -480,8 +466,19 @@ namespace yask {
     /** An object of this abstract type cannot be created. */
     class yc_bool_node : public virtual yc_expr_node { };
 
+    /// A dimension or an index in that dimension.
+    /** This is a leaf node in an AST.
+        Use a yask_solution object to create an object of this type. */
+    class yc_index_node : public virtual yc_number_node {
+    public:
+
+        /// Get the dimension's name.
+        /** @returns Name given at creation. */
+        virtual const std::string& get_name() const =0;
+    };
+
     /// A reference to a point in a grid.
-    class yc_grid_point_node : public virtual yc_number_node {
+   class yc_grid_point_node : public virtual yc_number_node {
     public:
 
         /// Get the grid this point is in.

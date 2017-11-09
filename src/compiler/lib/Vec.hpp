@@ -38,18 +38,12 @@ namespace yask {
     class VecElem {
     public:
         GridPoint _vec;      // starting index of vector containing this element.
-        size_t _offset;            // 1-D offset in _vec.
-        IntTuple _offsets;         // n-D offsets 
+        size_t _offset;      // 1-D offset in _vec.
+        IntTuple _offsets;   // n-D offsets.
 
         VecElem(const GridPoint& vec, int offset, const IntTuple& offsets) :
             _vec(vec), _offset(offset), _offsets(offsets) { }
 
-        virtual VecElem& operator=(const VecElem& rhs) {
-            _vec = rhs._vec;
-            _offset = rhs._offset;
-            _offsets = rhs._offsets;
-            return *this;
-        }
         virtual bool operator==(const VecElem& rhs) const {
             return _vec == rhs._vec && _offset == rhs._offset;
         }
@@ -64,11 +58,11 @@ namespace yask {
     // the element can be found.
     typedef vector<VecElem> VecElemList;
 
-    // Layout of vector blocks to VecElemVecs.
-    typedef map<GridPoint, VecElemList> Point2VecElemLists;
-
-    // Layout of vector blocks to aligned blocks.
+    // Map of each vector block to aligned block(s) that contain its points.
     typedef map<GridPoint, GridPointSet> Point2Vecs;
+
+    // Map of each vector block to its elements.
+    typedef map<GridPoint, VecElemList> Point2VecElemLists;
 
     // This visitor determines the vector blocks needed to calculate the stencil.
     // It doesn't actually generate code; it just collects info from the AST.
@@ -82,31 +76,37 @@ namespace yask {
     
     public:
 
-        // Data on vector blocks.
+        // Data on vectorizable points.
         GridPointSet _alignedVecs; // set of aligned vectors, i.e., ones that need to be read from memory.
         Point2Vecs _vblk2avblks; // each vec block -> its constituent aligned vec blocks.
-        Point2VecElemLists _vblk2elemLists; // each vec block -> in-order list of its constituent aligned vec blocks' elements.
+        Point2VecElemLists _vblk2elemLists; // each vec block -> in-order list of its aligned vec blocks' elements.
+        GridPointSet _vecPoints;            // set of all vectorizable points.
+        GridPointSet _vecWrites;            // set of vectors written to.
 
         // NB: the above hold much of the same info, but arranged differently:
         // _alignedVecs contains only a set of aligned blocks.
-        // _vblk2avblks is used to quickly determine what aligned blocks contribute to a given block.
+        // _vblk2avblks is used to quickly determine which aligned blocks contribute to a given block.
         // _vblk2elemLists is used to find exactly where each element comes from.
-        // The keys are the same for both maps.
+        // The keys are the same for both maps: the vectorizable grid points.
 
+        // Data on non-vectorizable points.
+        GridPointSet _scalarPoints; // set of points that should be read as scalars and broadcast to vectors.
+        GridPointSet _nonVecPoints; // set of points that are not scalars or vectorizable.
+        
         VecInfoVisitor(const Dimensions& dims) :
             _dims(dims) {
             _vlen = dims._fold.product();
         }
 
-        const IntTuple& getFold() const {
+        virtual const IntTuple& getFold() const {
             return _dims._fold;
         }
     
-        size_t getNumPoints() const {
+        virtual size_t getNumPoints() const {
             return _vblk2elemLists.size();
         }
 
-        size_t getNumAlignedVecs() const {
+        virtual size_t getNumAlignedVecs() const {
             return _alignedVecs.size();
         }
 
@@ -127,6 +127,7 @@ namespace yask {
             }
         }
 
+#if 0
         // Print stats header.
         virtual void printStatsHeader(ostream& os, string separator) const {
             os << "destination grid" <<
@@ -171,7 +172,7 @@ namespace yask {
             
             os << destGrid <<
                 separator << _vlen <<
-                separator << _dims._fold.makeValStr("x") <<
+                separator << _dims._fold.makeValStr("*") <<
                 separator << getNumPoints() <<
                 separator << getNumAlignedVecs() <<
                 separator << numBlends;
@@ -179,129 +180,21 @@ namespace yask {
                 os << separator << footprints[dim.getName()];
             os << endl;
         }
-
-        // Get the set of aligned vectors on the leading edge
-        // in the given direction and magnitude in dir.
-        // Pre-requisite: visitor has been accepted.
-        virtual void getLeadingEdge(GridPointSet& edge, const IntScalar& dir) const {
-            edge.clear();
-
-            // Repeat based on magnitude (cluster step in given dir).
-            for (int i = 0; i < dir.getVal(); i++) {
+#endif
         
-                // loop over aligned vectors.
-                for (auto avi : _alignedVecs) {
-
-                    // ignore values already found.
-                    if (edge.count(avi))
-                        continue;
-
-                    // ignore if this vector doesn't have a dimension in dir.
-                    if (!avi.lookup(dir.getName()))
-                        continue;
-
-                    // compare to all points.
-                    bool best = true;
-                    for (auto avj : _alignedVecs) {
-
-                        // ignore values already found.
-                        if (edge.count(avj))
-                            continue;
-
-                        // Determine if avj is ahead of avi in given direction.
-                        // (A point won't be ahead of itself.)
-                        if (avj.isAheadOfInDir(avi, dir))
-                            best = false;
-                    }
-
-                    // keep only if farthest.
-                    if (best)
-                        edge.insert(avi);
-                }
-            }
-        }
-
-        // Only want to visit the RHS of an eqGroup.
-        // Assumes LHS is aligned.
-        // TODO: validate this.
+        // Equality.
         virtual void visit(EqualsExpr* ee) {
-            ee->getRhs()->accept(this);      
+
+            // Only want to continue visit on RHS of an eqGroup.
+            ee->getRhs()->accept(this);
+
+            // For LHS, just save point.
+            auto lhs = ee->getLhs();
+            _vecWrites.insert(*lhs);
         }
     
         // Called when a grid point is read in a stencil function.
-        virtual void visit(GridPoint* gp) {
-
-            // Don't vectorize parameters.
-            if (gp->isParam())
-                return;
-
-            // Already seen this point?
-            if (_vblk2elemLists.count(*gp) > 0)
-                return;
-
-            // Vec of points to calculate.
-#ifdef DEBUG_VV
-            cout << " //** vec @ " << gp->makeDimValStr() << " => " << endl;
-#endif
-
-            // Loop through all points in the vector at this cluster point.
-            size_t pelem = 0;
-            _dims._fold.visitAllPoints([&](const IntTuple& vecPoint){
-
-                    // Offset in each dim is starting point of grid point plus
-                    // offset in this vector.
-                    // Note: there may be more or fewer dims in vecPoint than in grid point.
-                    auto offsets = gp->addElements(vecPoint, false);
-
-                    // Find aligned vector indices and offsets
-                    // for this one point.
-                    IntTuple vecOffsets, vecLocation;
-                    for (auto& dim : offsets.getDims()) {
-                        auto& dname = dim.getName();
-
-                        // length of this dimension in fold, if it exists.
-                        const int* p = _dims._fold.lookup(dname);
-                        int len = p ? *p : 1;
-
-                        // convert this offset to vector index and vector offset.
-                        int vecIndex, vecOffset;
-                        fixIndexOffset(0, dim.getVal(), vecIndex, vecOffset, len);
-                        vecOffsets.addDimBack(dname, vecOffset);
-                        vecLocation.addDimBack(dname, vecIndex * len);
-                    }
-#ifdef DEBUG_VV
-                    cout << "  //** element @ " << offsets.makeDimValStr() << " => " <<
-                        " vec-location @ " << vecLocation.makeDimValStr() <<
-                        " & vec-offsets @ " << vecOffsets.makeDimValStr() <<
-                        " => " << endl;
-#endif
-                    
-                    // Create aligned vector block that contains this point.
-                    GridPoint alignedVec(gp, vecLocation);
-
-                    // Find linear offset within this aligned vector block.
-                    int alignedElem = _dims._fold.layout(vecOffsets, false);
-                    assert(alignedElem >= 0);
-                    assert(alignedElem < _vlen);
-#ifdef DEBUG_VV
-                    cout << "   //** general-" << gp->makeStr() << "[" << pelem << "] = aligned-" <<
-                        alignedVec.makeStr() << "[" << alignedElem << "]" << endl;
-#endif
-
-                    // Update set of all aligned vec-blocks.
-                    _alignedVecs.insert(alignedVec);
-
-                    // Update set of aligned vec-blocks and elements needed for this vec-block element.
-                    _vblk2avblks[*gp].insert(alignedVec);
-
-                    // Save which aligned vec-block's element is needed for this vec-block element.
-                    VecElem ve(alignedVec, alignedElem, offsets);
-                    _vblk2elemLists[*gp].push_back(ve); // should be at pelem index.
-                    assert(_vblk2elemLists[*gp].size() == pelem+1); // verify at pelem index.
-
-                    pelem++;
-                });                  // end of vector lambda-function.
-        }                   // end of visit() method.
+        virtual void visit(GridPoint* gp);
     };
 
     // Define methods for printing a vectorized version of the stencil.
@@ -309,16 +202,19 @@ namespace yask {
     protected:
         VecInfoVisitor& _vv;
         bool _allowUnalignedLoads;
+        Dimensions& _dims;
         bool _reuseVars; // if true, load to a local var; else, reload on every access.
         bool _definedNA;           // NA var defined.
-        map<GridPoint, string> _readyPoints; // points that are already constructed.
+        map<GridPoint, string> _vecVars; // vecs that are already constructed.
+        map<string, string> _elemVars; // elems that are already read (key is read stmt).
 
         // Print access to an aligned vector block.
         // Return var name.
         virtual string printAlignedVecRead(ostream& os, const GridPoint& gp) =0;
 
-        // Print unaliged memory read.
+        // Print unaligned vector memory read.
         // Assumes this results in same values as printUnalignedVec().
+        // Return var name.
         virtual string printUnalignedVecRead(ostream& os, const GridPoint& gp) =0;
     
         // Print write to an aligned vector block.
@@ -334,9 +230,19 @@ namespace yask {
         virtual void printUnalignedVecCtor(ostream& os, const GridPoint& gp,
                                            const string& pvName) =0;
 
+        // Read from a single point.
+        // Return code for read.
+        virtual string readFromScalarPoint(ostream& os, const GridPoint& gp,
+                                           const VarMap* vMap=0) =0;
+
+        // Read from multiple points that are not vectorizable.
+        // Return var name.
+        virtual string printNonVecRead(ostream& os, const GridPoint& gp) =0;
+        
     public:
         VecPrintHelper(VecInfoVisitor& vv,
                        bool allowUnalignedLoads,
+                       Dimensions& dims,
                        const CounterVisitor* cv,
                        const string& varPrefix,
                        const string& varType,
@@ -345,12 +251,18 @@ namespace yask {
                        bool reuseVars = true) :
             PrintHelper(cv, varPrefix, varType, linePrefix, lineSuffix),
             _vv(vv), _allowUnalignedLoads(allowUnalignedLoads),
+            _dims(dims),
             _reuseVars(reuseVars), _definedNA(false) { }
         virtual ~VecPrintHelper() {}
 
         // get fold info.
         virtual const IntTuple& getFold() const {
             return _vv.getFold();
+        }
+
+        // get dims.
+        virtual const Dimensions& getDims() const {
+            return _dims;
         }
 
         // Add a N/A var, just for readability.
@@ -360,59 +272,33 @@ namespace yask {
                 _definedNA = true;
             }
         }
+
+        // Return point info.
+        virtual bool isAligned(const GridPoint& gp) {
+            return _vv._alignedVecs.count(gp) > 0;
+        }
+        
+        // Access cached values.
+        virtual void savePointVar(const GridPoint& gp, string var) {
+            _vecVars[gp] = var;
+        }
+        virtual string* lookupPointVar(const GridPoint& gp) {
+            if (_vecVars.count(gp))
+                return &_vecVars.at(gp);
+            return 0;
+        }
     
-        // Print any needed memory reads and/or constructions.
-        // Return var name.
-        virtual string readFromPoint(ostream& os, const GridPoint& gp) {
+        // Print any needed memory reads and/or constructions to 'os'.
+        // Return code containing a vector of grid points.
+        virtual string readFromPoint(ostream& os, const GridPoint& gp);
 
-            string varName;
-
-            // Already done.
-            if (_reuseVars && _readyPoints.count(gp))
-                varName = _readyPoints[gp]; // do nothing.
-
-            // An aligned vector block?
-            else if (_vv._alignedVecs.count(gp))
-                varName = printAlignedVecRead(os, gp);
-
-            // Unaligned loads allowed?
-            else if (_allowUnalignedLoads)
-                varName = printUnalignedVecRead(os, gp);
-
-            // Need to construct an unaligned vector block?
-            else if (_vv._vblk2elemLists.count(gp)) {
-
-                // make sure prerequisites exist by recursing.
-                auto avbs = _vv._vblk2avblks[gp];
-                for (auto pi = avbs.begin(); pi != avbs.end(); pi++) {
-                    auto& p = *pi;
-                    readFromPoint(os, p);
-                }
-
-                // output this construction.
-                varName = printUnalignedVec(os, gp);
-            }
-
-            else {
-                cerr << "Error: on point " << gp.makeStr() << endl;
-                assert("point type unknown");
-            }
-
-            // Remember this point and return its name.
-            _readyPoints[gp] = varName;
-            return varName;
-        }
-
-        // Update a grid point.
-        // The 'os' parameter is provided for derived types that
-        // need to write intermediate code to a stream.
-        virtual string writeToPoint(ostream& os, const GridPoint& gp, const string& val) {
-            printAlignedVecWrite(os, gp, val);
-            return "";
-        }
+        // Print any immediate memory writes to 'os'.
+        // Return code to update a vector of grid points or null string
+        // if all writes were printed.
+        virtual string writeToPoint(ostream& os, const GridPoint& gp, const string& val);
     };
 
-    // A visitor that reorders exprs.
+    // A visitor that reorders exprs based on vector info.
     class ExprReorderVisitor : public ExprVisitor {
     protected:
         VecInfoVisitor& _vv;
@@ -423,84 +309,7 @@ namespace yask {
         virtual ~ExprReorderVisitor() {}
                        
         // Sort a commutative expression.
-        virtual void visit(CommutativeExpr* ce) {
-
-            auto& oev = ce->getOps(); // old exprs.
-            NumExprPtrVec nev; // new exprs.
-
-            // Simple, greedy algorithm:
-            // Select first element that needs the fewest new aligned vecs.
-            // Repeat until done.
-            // TODO: sort based on all reused exprs, not just grid reads.
-
-            GridPointSet alignedVecs; // aligned vecs needed so far.
-            set<size_t> usedExprs; // expressions used.
-            for (size_t i = 0; i < oev.size(); i++) {
-
-#ifdef DEBUG_SORT
-                cout << "  //** Looking for expr #" << i << "..." << endl;
-#endif
-
-                // Scan unused exprs.
-                size_t jBest = 0;
-                size_t jBestCost = size_t(-1);
-                GridPointSet jBestAlignedVecs;
-                for (size_t j = 0; j < oev.size(); j++) {
-                    if (usedExprs.count(j) == 0) {
-
-                        // This unused expr.
-                        auto& expr = oev[j];
-
-                        // Get aligned vecs needed for this expr.
-                        VecInfoVisitor tmpvv(_vv);
-                        expr->accept(&tmpvv);
-                        auto& tmpAlignedVecs = tmpvv._alignedVecs;
-
-                        // Calculate cost.
-                        size_t cost = 0;
-                        for (auto k = tmpAlignedVecs.begin(); k != tmpAlignedVecs.end(); k++) {
-                            auto& av = *k;
-
-                            // new vector needed?
-                            if (alignedVecs.count(av) == 0) {
-#ifdef DEBUG_SORT
-                                cout << " //** Vec " << av.makeStr("tmp") << " is new" << endl;
-#endif
-                                cost++; 
-                            }
-                        }
-#ifdef DEBUG_SORT
-                        cout << " //** Cost of expr " << j << " = " << cost << endl;
-#endif
-                        // Best so far?
-                        if (cost < jBestCost) {
-                            jBestCost = cost;
-                            jBest = j;
-                            jBestAlignedVecs = tmpAlignedVecs;
-#ifdef DEBUG_SORT
-                            cout << "  //** Best so far has " << jBestAlignedVecs.size() << " aligned vecs" << endl;
-#endif
-                        }
-                    }
-                }
-
-                // Must have a best one.
-                assert(jBestCost != size_t(-1));
-
-                // Add it.
-                nev.push_back(oev[jBest]);
-                usedExprs.insert(jBest);
-
-                // Remember used vectors.
-                for (auto k = jBestAlignedVecs.begin(); k != jBestAlignedVecs.end(); k++) {
-                    alignedVecs.insert(*k);
-                }
-            }
-
-            // Replace the old vector w/the new one.
-            assert(nev.size() == oev.size());
-            oev.swap(nev);
-        }
+        virtual void visit(CommutativeExpr* ce);
     };
 
 } // namespace yask.

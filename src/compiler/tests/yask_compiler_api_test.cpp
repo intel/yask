@@ -36,19 +36,23 @@ int main() {
     // Compiler 'bootstrap' factories.
     yc_factory cfac;
     yask_output_factory ofac;
+    yc_node_factory fac;
 
     // Create a new stencil solution.
     auto soln = cfac.new_solution("api_cxx_test");
-    soln->set_step_dim_name("t");
-    soln->set_domain_dim_names("x", "y", "z");
     auto stdos = ofac.new_stdout_output();
     soln->set_debug_output(stdos);
+
+    // Define the problem dimensions.
+    auto t = fac.new_step_index("t");
+    auto x = fac.new_domain_index("x");
+    auto y = fac.new_domain_index("y");
+    auto z = fac.new_domain_index("z");
     
     // Create a grid var.
-    auto g1 = soln->new_grid("test_grid", "t", "x", "y", "z");
+    auto g1 = soln->new_grid("test_grid", {t, x, y, z});
 
     // Create an equation for the grid.
-    yc_node_factory fac;
 
     auto n1 = fac.new_const_number_node(3.14);
     cout << n1->format_simple() << endl;
@@ -56,24 +60,24 @@ int main() {
     auto n2 = fac.new_negate_node(n1);
     cout << n2->format_simple() << endl;
 
-    auto n3 = g1->new_relative_grid_point(0, 1, 0, -2);
+    auto n3 = g1->new_relative_grid_point({0, +1, 0, -2});
     cout << n3->format_simple() << endl;
 
     auto n4a = fac.new_add_node(n2, n3);
     auto n4b = fac.new_add_node(n4a, n1);
     cout << n4b->format_simple() << endl;
 
-    auto n5 = g1->new_relative_grid_point(0, 1, -1, 0);
+    auto n5 = g1->new_relative_grid_point({0, +1, -1, 0});
     cout << n5->format_simple() << endl;
 
-    auto n6 = fac.new_divide_node(n4b, n5);
+    auto n6 = fac.new_multiply_node(n4b, n5);
     cout << n6->format_simple() << endl;
 
-    auto n7 = g1->new_relative_grid_point(1, 0, 0, 0);
-    cout << n7->format_simple() << endl;
+    auto n_lhs = g1->new_relative_grid_point({+1, 0, 0, 0});
+    cout << n_lhs->format_simple() << endl;
 
-    auto n8 = fac.new_equation_node(n7, n6);
-    cout << n8->format_simple() << endl;
+    auto n_eq = fac.new_equation_node(n_lhs, n6);
+    cout << n_eq->format_simple() << endl;
 
     cout << "Solution '" << soln->get_name() << "' contains " <<
         soln->get_num_grids() << " grid(s), and " <<

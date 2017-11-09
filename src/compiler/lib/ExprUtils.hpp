@@ -184,11 +184,11 @@ namespace yask {
     // Doesn't count things in condition exprs.
     class CounterVisitor : public TrackingVisitor {
     protected:
-        int _numOps, _numNodes, _numReads, _numWrites, _numParamReads;
+        int _numOps, _numNodes, _numReads, _numWrites;
 
     public:
         CounterVisitor() :
-            _numOps(0), _numNodes(0), _numReads(0), _numWrites(0), _numParamReads(0) { }
+            _numOps(0), _numNodes(0), _numReads(0), _numWrites(0) { }
         virtual ~CounterVisitor() {}
 
         virtual CounterVisitor& operator+=(const CounterVisitor& rhs) {
@@ -197,7 +197,6 @@ namespace yask {
             _numNodes += rhs._numNodes;
             _numReads += rhs._numReads;
             _numWrites += rhs._numWrites;
-            _numParamReads += rhs._numParamReads;
             return *this;
         }
     
@@ -206,14 +205,12 @@ namespace yask {
             os << 
                 "  " << getNumReads() << " grid read(s)." << endl <<
                 "  " << getNumWrites() << " grid write(s)." << endl <<
-                "  " << getNumParamReads() << " parameter read(s)." << endl <<
                 "  " << getNumOps() << " FP math operation(s)." << endl;
         }
     
         int getNumNodes() const { return _numNodes; }
         int getNumReads() const { return _numReads; }
         int getNumWrites() const { return _numWrites; }
-        int getNumParamReads() const { return _numParamReads; }
         int getNumOps() const { return _numOps; }
 
         // Leaf nodes.
@@ -228,10 +225,7 @@ namespace yask {
         virtual void visit(GridPoint* gp) {
             if (alreadyVisited(gp)) return;
             _numNodes++;
-            if (gp->isParam())
-                _numParamReads++;
-            else
-                _numReads++;
+            _numReads++;
         }
     
         // Unary: Count as one op if num type and visit operand.
