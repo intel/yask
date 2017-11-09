@@ -94,6 +94,7 @@ namespace yask {
         }
 
         // Write to an IdxTuple.
+        // The 'tgt' must have the same number of dims.
         void setTupleVals(IdxTuple& tgt) const {
             assert(tgt.size() == _ndims);
             for (int i = 0; i < _ndims; i++)
@@ -103,7 +104,7 @@ namespace yask {
 
         // Read from an IdxTuple.
         void setFromTuple(const IdxTuple& src) {
-            assert(src.size() < +max_idxs);
+            assert(src.size() <= +max_idxs);
             int n = int(src.size());
             for (int i = 0; i < n; i++)
                 _idxs[i] = src.getVal(i);
@@ -112,7 +113,7 @@ namespace yask {
         
         // Other inits.
         void setFromVec(const GridIndices& src) {
-            assert(src.size() < +max_idxs);
+            assert(src.size() <= +max_idxs);
             int n = int(src.size());
             for (int i = 0; i < n; i++)
                 _idxs[i] = src[i];
@@ -123,13 +124,13 @@ namespace yask {
         void setFromArray(const idx_t src[], int n = -1) {
             if (n < 0)
                 n = _ndims;
-            assert(n < +max_idxs);
+            assert(n <= +max_idxs);
             for (int i = 0; i < n; i++)
                 _idxs[i] = src[i];
             _ndims = n;
         }
         void setFromInitList(const std::initializer_list<idx_t>& src) {
-            assert(src.size() < +max_idxs);
+            assert(src.size() <= +max_idxs);
             int i = 0;
             for (auto idx : src)
                 _idxs[i++] = idx;
@@ -140,7 +141,7 @@ namespace yask {
         void setFromConst(idx_t val, int n = -1) {
             if (n < 0)
                 n = _ndims;
-            assert(n < +max_idxs);
+            assert(n <= +max_idxs);
             for (int i = 0; i < n; i++)
                 _idxs[i] = val;
             _ndims = n;
