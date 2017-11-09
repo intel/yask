@@ -700,8 +700,8 @@ namespace yask {
         // MPI settings.
         IdxTuple _num_ranks;       // number of ranks in each dim.
         IdxTuple _rank_indices;    // my rank index in each dim.
-        bool find_loc=true;            // whether my rank index needs to be calculated.
-        int msg_rank=0;             // rank that prints informational messages.
+        bool find_loc=true;        // whether my rank index needs to be calculated.
+        int msg_rank=0;            // rank that prints informational messages.
 
         // OpenMP settings.
         int max_threads=0;      // Initial number of threads to use overall; 0=>OMP default.

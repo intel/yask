@@ -34,6 +34,7 @@ using namespace yask;
 struct AppSettings : public KernelSettings {
     bool help = false;          // help requested.
     bool doWarmup = true;       // whether to do warmup run.
+    bool doAutoTune = true;     // whether to do auto-tuning.
     int step_alloc = 0;         // if >0, override number of steps to alloc.
     int num_trials = 3;         // number of trials.
     bool validate = false;      // whether to do validation run.
@@ -43,14 +44,15 @@ struct AppSettings : public KernelSettings {
     AppSettings(DimsPtr dims) :
         KernelSettings(dims) { }
 
-    // A custom option-handler for validation.
+    // A custom option-handler for '-v'.
     class ValOption : public CommandLineParser::OptionBase {
         AppSettings& _as;
 
     public:
+
         ValOption(AppSettings& as) :
                 OptionBase("v",
-                           "Shortcut for '-validate -no-warmup -t 1 -dt 1 -d 64 -b 32'."),
+                           "Shortcut for '-validate -no-auto_tune -no-warmup -t 1 -dt 1 -d 64 -b 32'."),
                 _as(as) { }
 
         // Set multiple vars.
@@ -58,6 +60,7 @@ struct AppSettings : public KernelSettings {
                                int& argi) {
             if (_check_arg(args, argi, _name)) {
                 _as.validate = true;
+                _as.doAutoTune = false;
                 _as.doWarmup = false;
                 _as.num_trials = 1;
                 _as._rank_sizes[_as._dims->_step_dim] = 1;
@@ -85,31 +88,47 @@ struct AppSettings : public KernelSettings {
         add_options(parser);
 
         // Add more options for this app.
-        parser.add_option(new CommandLineParser::BoolOption("h",
-                                         "Print help message.",
-                                         help));
-        parser.add_option(new CommandLineParser::BoolOption("help",
-                                         "Print help message.",
-                                         help));
-        parser.add_option(new CommandLineParser::BoolOption("warmup",
-                                         "Run warmup iteration(s) before performance trial(s).",
-                                         doWarmup));
-        parser.add_option(new CommandLineParser::IntOption("step_alloc",
-                                         "Number of steps to allocate in relevant grids, "
-                                                           "overriding default value from YASK compiler.",
-                                         step_alloc));
-        parser.add_option(new CommandLineParser::IntOption("t",
-                                        "Number of performance trials.",
-                                        num_trials));
-        parser.add_option(new CommandLineParser::IntOption("sleep",
-                                        "Number of seconds to sleep before each performance trial.",
-                                        pre_trial_sleep_time));
-        parser.add_option(new CommandLineParser::IntOption("debug_sleep",
-                                        "Number of seconds to sleep for debug attach.",
-                                        debug_sleep));
-        parser.add_option(new CommandLineParser::BoolOption("validate",
-                                         "Run validation iteration(s) after performance trial(s).",
-                                         validate));
+        parser.add_option(new CommandLineParser::BoolOption
+                          ("h",
+                           "Print help message.",
+                           help));
+        parser.add_option(new CommandLineParser::BoolOption
+                          ("help",
+                           "Print help message.",
+                           help));
+        parser.add_option(new CommandLineParser::BoolOption
+                          ("auto_tune",
+                           "Run iteration(s) before performance trial(s) to find good-performing "
+                           "values for block sizes. "
+                           "Uses default values or command-line-provided values as a starting point. "
+                           "Disabled if there is more than one MPI rank.",
+                           doAutoTune));
+        parser.add_option(new CommandLineParser::BoolOption
+                          ("warmup",
+                           "Run warmup iteration(s) before performance "
+                           "trial(s) and after auto-tuning iterations, if enabled.",
+                           doWarmup));
+        parser.add_option(new CommandLineParser::IntOption
+                          ("step_alloc",
+                           "Number of steps to allocate in relevant grids, "
+                           "overriding default value from YASK compiler.",
+                           step_alloc));
+        parser.add_option(new CommandLineParser::IntOption
+                          ("t",
+                           "Number of performance trials.",
+                           num_trials));
+        parser.add_option(new CommandLineParser::IntOption
+                          ("sleep",
+                           "Number of seconds to sleep before each performance trial.",
+                           pre_trial_sleep_time));
+        parser.add_option(new CommandLineParser::IntOption
+                          ("debug_sleep",
+                           "Number of seconds to sleep for debug attach.",
+                           debug_sleep));
+        parser.add_option(new CommandLineParser::BoolOption
+                          ("validate",
+                           "Run validation iteration(s) after performance trial(s).",
+                           validate));
         parser.add_option(new ValOption(*this));
         
         // Tokenize default args.
@@ -247,7 +266,11 @@ int main(int argc, char** argv)
     for (int i = 0; i < 60; i++)
         divLine += "─";
     divLine += "\n";
-    
+
+    // Invoke auto-tuner.
+    if (opts->doAutoTune && kenv->get_num_ranks() == 1)
+        context->tune_settings();
+
     // warmup caches, threading, etc.
     if (opts->doWarmup) {
 
@@ -256,8 +279,8 @@ int main(int argc, char** argv)
             "Running " << dt << " step(s) for warm-up...\n" << flush;
         context->run_solution(0, dt);
 
-        kenv->global_barrier();
     }
+    kenv->global_barrier();
 
     // variables for measuring performance.
     double best_elapsed_time=0., best_apps=0., best_dpps=0., best_flops=0.;

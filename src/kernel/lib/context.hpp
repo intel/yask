@@ -207,6 +207,9 @@ namespace yask {
             _opts(settings),
             _dims(settings->_dims)
         {
+            yask_output_factory yof;
+            set_debug_output(yof.new_stdout_output());
+
             _mpiInfo = std::make_shared<MPIInfo>(settings->_dims);
 
             // Init various tuples to make sure they have the correct dims.
@@ -230,10 +233,9 @@ namespace yask {
             end_solution();
         }
 
-        // Set ostr to given stream if provided.
-        // If not provided, set to cout if my_rank == msg_rank
+        // Set debug output to cout if my_rank == msg_rank
         // or a null stream otherwise.
-        virtual std::ostream& set_ostr(std::ostream* os = NULL);
+        virtual std::ostream& set_ostr();
 
         // Get the messsage output stream.
         virtual std::ostream& get_ostr() const {
@@ -419,11 +421,16 @@ namespace yask {
                                   const std::vector<std::string>& dims,
                                   bool is_visible = true);
 
+        // Get output object.
+        virtual yask_output_ptr get_debug_output() const {
+            return _debug;
+        }
+        
         // APIs.
         // See yask_kernel_api.hpp.
         virtual void set_debug_output(yask_output_ptr debug) {
             _debug = debug;     // to share ownership of referent.
-            set_ostr(&debug->get_ostream());
+            _ostr = &debug->get_ostream();
         }
         virtual const std::string& get_name() const {
             return name;
@@ -506,6 +513,7 @@ namespace yask {
         virtual idx_t get_num_ranks(const std::string& dim) const;
         virtual idx_t get_rank_index(const std::string& dim) const;
         virtual std::string apply_command_line_options(const std::string& args);
+        virtual void tune_settings();
     };
 
 } // yask namespace.

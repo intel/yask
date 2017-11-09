@@ -124,6 +124,7 @@ namespace yask {
                                   int rank, // MPI rank.
                                   int index)> visitor) {
 
+        // TODO: convert to use visitAllPoints().
         for (int i = 0; i < neighborhood_size; i++) {
             auto offsets = neighborhood_sizes.unlayout(i);
             int rank = my_neighbors.at(i);
@@ -430,7 +431,8 @@ namespace yask {
             if (_sub_block_sizes[dname] == 0)
                 _sub_block_sizes[dname] = 1; // will be rounded up to min size.
             
-            // only want to set 1st dim; others will be set to max.
+            // Only want to set 1st dim; others will be set to max.
+            // TODO: make sure we're not setting inner dim.
             break;
         }
 

@@ -487,6 +487,7 @@ namespace yask {
            MPI halo exchanges will occur as necessary.
            Since this function initiates MPI communication, it must be called
            on all MPI ranks, and it will block until all ranks have completed.
+           This function should be called only *after* calling prepare_solution().
         */
         virtual void
         run_solution(idx_t step_index /**< [in] Index in the step dimension */ ) =0;
@@ -505,11 +506,26 @@ namespace yask {
            MPI halo exchanges will occur as necessary.
            Since this function initiates MPI communication, it must be called
            on all MPI ranks, and it will block until all ranks have completed.
+           This function should be called only *after* calling prepare_solution().
         */
         virtual void
         run_solution(idx_t first_step_index /**< [in] First index in the step dimension */,
                      idx_t last_step_index /**< [in] Last index in the step dimension */ ) =0;
 
+        /// Automatically tune some of the settings.
+        /**
+           Executes a search algorithm to find [locally] optimum values for some of the
+           settings. 
+           Currently, only the block size is set, and the search begins from the 
+           sizes set via set_block_size() or the default size if set_block_size() has
+           not been called.
+           This function should be called only *after* calling prepare_solution().
+           This function should not be called if there is more than one MPI rank.
+           @warning Invokes run_solution(), thus it modifies the contents of the grids.
+           See run_solution() for other restrictions and warnings.
+        */
+        virtual void tune_settings() =0;
+        
         /// **[Advanced]** Use data-storage from existing grids in specified solution.
         /**
            Calls yk_grid::share_storage() for each pair of grids that have the same name

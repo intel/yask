@@ -97,16 +97,14 @@ namespace yask {
     
     ///// StencilContext functions:
 
-    // Set ostr to given stream if provided.
-    // If not provided, set to cout if my_rank == msg_rank
+    // Set debug output to cout if my_rank == msg_rank
     // or a null stream otherwise.
-    ostream& StencilContext::set_ostr(std::ostream* os) {
-        if (os)
-            _ostr = os;
-        else if (_env->my_rank == _opts->msg_rank)
-            _ostr = &cout;
+    ostream& StencilContext::set_ostr() {
+        yask_output_factory yof;
+        if (_env->my_rank == _opts->msg_rank)
+            set_debug_output(yof.new_stdout_output());
         else
-            _ostr = new ofstream;    // null stream (unopened ofstream). TODO: fix leak.
+            set_debug_output(yof.new_null_output());
         assert(_ostr);
         return *_ostr;
     }
@@ -239,7 +237,7 @@ namespace yask {
         TRACE_MSG("run_solution: " << begin.makeDimValStr() << " ... (end before) " <<
                   end.makeDimValStr() << " by " << step.makeDimValStr());
         if (!bb_valid) {
-            cerr << "Error: attempt to run solution without preparing it first.\n";
+            cerr << "Error: run_solution() called without calling prepare_solution() first.\n";
             exit_yask(1);
         }
         if (bb_size < 1) {
@@ -517,6 +515,170 @@ namespace yask {
         } // time.
     }
 
+    // Apply auto-tuning to some of the settings.
+    void StencilContext::tune_settings() {
+        if (!bb_valid) {
+            cerr << "Error: run_solution() called without calling prepare_solution() first.\n";
+            exit_yask(1);
+        }
+        if (_env->get_num_ranks() != 1) {
+            cerr << "Error: run_solution() called with more than one MPI rank.\n";
+            exit_yask(1);
+        }
+        ostream& os = get_ostr();
+        os << "Auto-tuning...\n" << flush;
+        YaskTimer at_timer;
+        at_timer.start();
+
+        // Results.
+        map<IdxTuple, double> run_times;
+
+        // AT parameters.
+        double min_secs = 0.1;
+        idx_t min_step = 4;
+        idx_t max_radius = 64;
+
+        // Null stream to throw away debug info.
+        yask_output_factory yof;
+        auto nullop = yof.new_null_output();
+        auto nullosp = &nullop->get_ostream();
+
+        // Best so far.
+        int nat = 0;
+        IdxTuple best_block(_opts->_block_sizes);
+
+        // Loop through decreasing radius for gradient-descent neighbors.
+        for (idx_t r = max_radius; r >= 1; r /= 2) {
+            os << "  auto-tuner search-radius " << r << "...\n";
+        
+            // Gradient-descent algorithm loop.
+            while (1) {
+                idx_t nat0 = nat;
+        
+                // Explore immediately-neighboring settings.
+                // Use the neighborhood tuple from MPI to do this.
+                // TODO: move that tuple to a more general place.
+                _mpiInfo->neighborhood_sizes.visitAllPoints
+                    ([&](const IdxTuple& ofs, size_t idx) {
+
+                        // Convert offset (0..2) to new block size.
+                        bool ok = true;
+                        IdxTuple bsize(best_block);
+                        for (auto odim : ofs.getDims()) {
+                            auto& dname = odim.getName();
+                            auto& dofs = odim.getVal();
+
+                            // Determine distance of GD neighbors.
+                            auto step = _dims->_cluster_pts[dname]; // step by cluster size.
+                            step = max(step, min_step);
+                            step *= r;
+
+                            auto sz = best_block[dname];
+                            switch (dofs) {
+                            case 0:
+                                sz -= step;
+                                break;
+                            case 1:
+                                break;
+                            case 2:
+                                sz += step;
+                                break;
+                            default:
+                                assert(false && "internal error in tune_settings()");
+                            }
+                            bsize[dname] = sz;
+
+                            // Too far?
+                            // TODO: saturate on first excursion outside region.
+                            if (sz <= 0 || sz > _opts->_region_sizes[dname])
+                                ok = false;
+                        }
+
+                        // Not enough for each thread?
+                        if (ok) {
+                            idx_t nblks = _opts->_region_sizes.product() / bsize.product();
+                            if (nblks < omp_get_max_threads())
+                                ok = false;
+                        }
+
+                        // Bad size or already got these results?
+                        if (!ok || run_times.count(bsize))
+                            return true; // keep visiting.
+                        nat++;
+                
+                        // Set the size in the settings.
+                        _opts->_block_sizes = bsize;
+
+                        // Change sub-block size to 0 so adjustSettings()
+                        // will set it to the default.
+                        _opts->_sub_block_sizes.setValsSame(0);
+                
+                        // Make sure everything is resized.
+                        _opts->adjustSettings(*nullosp);
+
+                        // Run steps until the min time is reached.
+                        // Run a few dummy steps the first time for warmup.
+                        int nruns = (nat == 1) ? 3 : 1;
+                        for (int i = 0; i < nruns; i++) {
+                            clear_timers();
+                            double rtime = 0.;
+                            bool done = false;
+                            idx_t t = 0;
+                            do {
+                                run_solution(t);
+                                rtime = run_time.get_elapsed_secs();
+                                t++;
+                            } while (rtime < min_secs);
+
+                            // save and print results on last run.
+                            if (i == nruns - 1) {
+                                run_times[bsize] = rtime / t; // time per step.
+                            }
+                        }
+
+                        // Print results.
+                        os << "  auto-tuner experiment # " << nat <<
+                            " with block-size " << bsize.makeDimValStr(" * ") << ": " <<
+                            run_times[bsize] << " sec/step\n" << flush;
+                
+                        return true;    // keep visiting.
+                    });
+
+                // Has everything around this point been explored?
+                if (nat == nat0)
+                    break;
+
+                // Find new best.
+                double best_time = 0.;
+                for (auto i : run_times) {
+                    auto& bsize = i.first;
+                    auto& rtime = i.second;
+                    if (best_time == 0. || rtime < best_time) {
+                        best_time = rtime;
+                        best_block = bsize;
+                    }
+                }
+            } // gradient.
+        } // radius.
+
+        at_timer.stop();
+        os << "Auto-tuner done in " << at_timer.get_elapsed_secs() << " secs; "
+            "best block size: " << best_block.makeDimValStr(" * ") << endl;
+
+        // Set the size in the settings.
+        _opts->_block_sizes = best_block;
+
+        // Change sub-block size to 0 so adjustSettings()
+        // will set it to the default.
+        _opts->_sub_block_sizes.setValsSame(0);
+                
+        // Make sure everything is resized.
+        _opts->adjustSettings(os);
+
+        // Reset timers a final time for 'real' work.
+        clear_timers();
+    }
+    
     // Add a new grid to the containers.
     void StencilContext::addGrid(YkGridPtr gp, bool is_output) {
         auto& gname = gp->get_name();

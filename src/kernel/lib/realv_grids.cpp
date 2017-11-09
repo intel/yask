@@ -528,8 +528,7 @@ namespace yask {
         
         // Visit points in slice.
         numElemsTuple.visitAllPointsInParallel
-            ([&](const IdxTuple& ofs,
-                 size_t idx) {
+            ([&](const IdxTuple& ofs, size_t idx) {
                 Indices pt = first_indices.addElements(ofs);
                 real_t val = readElem(pt, __LINE__);
                 ((real_t*)buffer_ptr)[idx] = val;
