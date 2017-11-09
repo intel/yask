@@ -532,20 +532,36 @@ namespace yask {
 
         // Results.
         map<IdxTuple, double> run_times;
+        int n2big = 0, n2small = 0;
 
         // AT parameters.
         double min_secs = 0.1;
+        double first_min_secs = 1.;
         idx_t min_step = 4;
         idx_t max_radius = 64;
+        idx_t min_pts = 512; // 8^3.
+        idx_t min_blks = 4;
 
         // Null stream to throw away debug info.
         yask_output_factory yof;
         auto nullop = yof.new_null_output();
         auto nullosp = &nullop->get_ostream();
 
-        // Best so far.
+        // Best so far; start with current setting.
         int nat = 0;
         IdxTuple best_block(_opts->_block_sizes);
+
+        // If the starting block is already very big, reduce it.
+        for (auto dim : best_block.getDims()) {
+            auto& dname = dim.getName();
+            auto& dval = dim.getVal();
+
+            auto dmax = max(idx_t(1), _opts->_region_sizes[dname] / 2);
+            if (dval > dmax)
+                best_block[dname] = dmax;
+        }
+        TRACE_MSG("tune_settings: starting block-size "  <<
+                  best_block.makeDimValStr(" * "));
 
         // Loop through decreasing radius for gradient-descent neighbors.
         for (idx_t r = max_radius; r >= 1; r /= 2) {
@@ -568,8 +584,12 @@ namespace yask {
                             auto& dname = odim.getName();
                             auto& dofs = odim.getVal();
 
+                            // Min and max sizes of this dim.
+                            auto dmin = _dims->_cluster_pts[dname];
+                            auto dmax = _opts->_region_sizes[dname];
+                            
                             // Determine distance of GD neighbors.
-                            auto step = _dims->_cluster_pts[dname]; // step by cluster size.
+                            auto step = dmin; // step by cluster size.
                             step = max(step, min_step);
                             step *= r;
 
@@ -586,25 +606,42 @@ namespace yask {
                             default:
                                 assert(false && "internal error in tune_settings()");
                             }
-                            bsize[dname] = sz;
 
-                            // Too far?
-                            // TODO: saturate on first excursion outside region.
-                            if (sz <= 0 || sz > _opts->_region_sizes[dname])
+                            // Too small?
+                            if (sz < dmin) {
                                 ok = false;
+                                n2small++;
+                                break;
+                            }
+                            
+                            // Adjustments.
+                            sz = min(sz, dmax);
+                            sz = ROUND_UP(sz, dmin);
+
+                            // Save.
+                            bsize[dname] = sz;
+                        }
+                        TRACE_MSG("tune_settings: checking block-size "  <<
+                                  bsize.makeDimValStr(" * "));
+
+                        // Too small?
+                        if (ok && bsize.product() < min_pts) {
+                            ok = false;
+                            n2small++;
                         }
 
-                        // Not enough for each thread?
-                        if (ok) {
+                        // Too few?
+                        else if (ok) {
                             idx_t nblks = _opts->_region_sizes.product() / bsize.product();
-                            if (nblks < omp_get_max_threads())
+                            if (nblks < min_blks) {
                                 ok = false;
+                                n2big++;
+                            }
                         }
 
                         // Bad size or already got these results?
                         if (!ok || run_times.count(bsize))
                             return true; // keep visiting.
-                        nat++;
                 
                         // Set the size in the settings.
                         _opts->_block_sizes = bsize;
@@ -612,28 +649,31 @@ namespace yask {
                         // Change sub-block size to 0 so adjustSettings()
                         // will set it to the default.
                         _opts->_sub_block_sizes.setValsSame(0);
+                        _opts->_sub_block_group_sizes.setValsSame(0);
                 
                         // Make sure everything is resized.
                         _opts->adjustSettings(*nullosp);
 
                         // Run steps until the min time is reached.
                         // Run a few dummy steps the first time for warmup.
-                        int nruns = (nat == 1) ? 3 : 1;
+                        nat++;
+                        int nruns = (nat == 1) ? 2 : 1;
                         for (int i = 0; i < nruns; i++) {
                             clear_timers();
                             double rtime = 0.;
-                            bool done = false;
-                            idx_t t = 0;
+                            bool last = i == nruns - 1;
+                            double mtime = last ? min_secs : first_min_secs;
+                            int ndone = 0;
                             do {
-                                run_solution(t);
+                                TRACE_MSG("tune_settings: running step " << ndone <<
+                                          " with block-size "  << bsize.makeDimValStr(" * "));
+                                run_solution(ndone);
                                 rtime = run_time.get_elapsed_secs();
-                                t++;
-                            } while (rtime < min_secs);
+                                ndone++;
+                            } while (rtime < mtime);
 
-                            // save and print results on last run.
-                            if (i == nruns - 1) {
-                                run_times[bsize] = rtime / t; // time per step.
-                            }
+                            // save perf results.
+                            run_times[bsize] = rtime / ndone; // time per step.
                         }
 
                         // Print results.
@@ -662,21 +702,27 @@ namespace yask {
         } // radius.
 
         at_timer.stop();
-        os << "Auto-tuner done in " << at_timer.get_elapsed_secs() << " secs; "
-            "best block size: " << best_block.makeDimValStr(" * ") << endl;
+        os << "Auto-tuner done in " << at_timer.get_elapsed_secs() << " secs.\n";
+        if (!nat)
+            os << "  No block-size alternatives found (" << n2small << " too small, " <<
+            n2big << " too large).\n";
+        else {
+            os << "  Best block-size: " << best_block.makeDimValStr(" * ") << endl;
 
-        // Set the size in the settings.
-        _opts->_block_sizes = best_block;
+            // Set the size in the settings.
+            _opts->_block_sizes = best_block;
+            
+            // Change sub-block size to 0 so adjustSettings()
+            // will set it to the default.
+            _opts->_sub_block_sizes.setValsSame(0);
+            _opts->_sub_block_group_sizes.setValsSame(0);
+            
+            // Make sure everything is resized.
+            _opts->adjustSettings(os);
 
-        // Change sub-block size to 0 so adjustSettings()
-        // will set it to the default.
-        _opts->_sub_block_sizes.setValsSame(0);
-                
-        // Make sure everything is resized.
-        _opts->adjustSettings(os);
-
-        // Reset timers a final time for 'real' work.
-        clear_timers();
+            // Reset timers a final time for 'real' work.
+            clear_timers();
+        }
     }
     
     // Add a new grid to the containers.
