@@ -78,10 +78,10 @@ else ifeq ($(stencil),iso3dfd)
   fold_4byte			=	x=4,y=4
   def_thread_divisor		=	1
   def_block_threads		=	2
-  def_block_args		=	-b 64
-  cluster			=	z=2
-  pfd_l1			=	1
-  pfd_l2			=	0
+  def_block_args		=	-bx 104  -by 28 -bz 132
+  cluster			=	x=1
+  pfd_l1			=	0
+  pfd_l2			=	2
  endif
 
 else ifneq ($(findstring awp,$(stencil)),)

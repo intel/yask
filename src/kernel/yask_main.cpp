@@ -100,8 +100,7 @@ struct AppSettings : public KernelSettings {
                           ("auto_tune",
                            "Run iteration(s) before performance trial(s) to find good-performing "
                            "values for block sizes. "
-                           "Uses default values or command-line-provided values as a starting point. "
-                           "Disabled if there is more than one MPI rank.",
+                           "Uses default values or command-line-provided values as a starting point.",
                            doAutoTune));
         parser.add_option(new CommandLineParser::BoolOption
                           ("warmup",
@@ -268,7 +267,7 @@ int main(int argc, char** argv)
     divLine += "\n";
 
     // Invoke auto-tuner.
-    if (opts->doAutoTune && kenv->get_num_ranks() == 1)
+    if (opts->doAutoTune)
         context->tune_settings();
 
     // warmup caches, threading, etc.
@@ -328,8 +327,8 @@ int main(int argc, char** argv)
     os << divLine <<
         "best-elapsed-time (sec):           " << makeNumStr(best_elapsed_time) << endl <<
         "best-throughput (num-points/sec):  " << makeNumStr(best_dpps) << endl <<
-        "best-throughput (num-writes/sec):  " << makeNumStr(best_apps) << endl <<
         "best-throughput (est-FLOPS):       " << makeNumStr(best_flops) << endl <<
+        "best-throughput (num-writes/sec):  " << makeNumStr(best_apps) << endl <<
         divLine <<
         "Notes:\n" <<
         " Num-points is based on overall-problem-size as described above.\n" <<

@@ -520,7 +520,6 @@ namespace yask {
            sizes set via set_block_size() or the default size if set_block_size() has
            not been called.
            This function should be called only *after* calling prepare_solution().
-           This function should not be called if there is more than one MPI rank.
            @warning Invokes run_solution(), thus it modifies the contents of the grids.
            See run_solution() for other restrictions and warnings.
         */

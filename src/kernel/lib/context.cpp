@@ -203,9 +203,6 @@ namespace yask {
         // Final halo exchange.
         exchange_halos_all();
 
-        // Make sure all ranks are done.
-        _env->global_barrier();
-
         run_time.stop();
     }
 
@@ -369,9 +366,6 @@ namespace yask {
         // Final halo exchange.
         exchange_halos_all();
 
-        // Make sure all ranks are done.
-        _env->global_barrier();
-
 #ifdef MODEL_CACHE
         // Print cache stats, then disable.
         // Thus, cache is only modeled for first call.
@@ -521,15 +515,14 @@ namespace yask {
             cerr << "Error: run_solution() called without calling prepare_solution() first.\n";
             exit_yask(1);
         }
-        if (_env->get_num_ranks() != 1) {
-            cerr << "Error: run_solution() called with more than one MPI rank.\n";
-            exit_yask(1);
-        }
         ostream& os = get_ostr();
         os << "Auto-tuning...\n" << flush;
         YaskTimer at_timer;
         at_timer.start();
 
+        // Temporarily disable halo exchange because tuning is intra-rank.
+        enable_halo_exchange = false;
+        
         // Results.
         map<IdxTuple, double> run_times;
         int n2big = 0, n2small = 0;
@@ -723,6 +716,9 @@ namespace yask {
             // Reset timers a final time for 'real' work.
             clear_timers();
         }
+
+        // reenable halo exchange.
+        enable_halo_exchange = true;
     }
     
     // Add a new grid to the containers.
@@ -1615,8 +1611,8 @@ namespace yask {
                 "num-steps-done:                         " << makeNumStr(steps_done) << endl <<
                 "elapsed-time (sec):                     " << makeNumStr(rtime) << endl <<
                 "throughput (num-points/sec):            " << makeNumStr(domain_pts_ps) << endl <<
-                "throughput (num-writes/sec):            " << makeNumStr(writes_ps) << endl <<
-                "throughput (est-FLOPS):                 " << makeNumStr(flops) << endl;
+                "throughput (est-FLOPS):                 " << makeNumStr(flops) << endl <<
+                "throughput (num-writes/sec):            " << makeNumStr(writes_ps) << endl;
 #ifdef USE_MPI
             os <<
                 "time in halo exch (sec):                " << makeNumStr(mtime);
@@ -1813,7 +1809,7 @@ namespace yask {
     void StencilContext::exchange_halos(idx_t start, idx_t stop, EqGroupBase& eg)
     {
 #ifdef USE_MPI
-        if (_env->num_ranks < 2)
+        if (!enable_halo_exchange || _env->num_ranks < 2)
             return;
         mpi_time.start();
         TRACE_MSG("exchange_halos: " << start << " ... (end before) " << stop <<
