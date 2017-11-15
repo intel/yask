@@ -512,7 +512,7 @@ namespace yask {
     // Apply auto-tuning to some of the settings.
     void StencilContext::tune_settings() {
         if (!bb_valid) {
-            cerr << "Error: run_solution() called without calling prepare_solution() first.\n";
+            cerr << "Error: tune_settings() called without calling prepare_solution() first.\n";
             exit_yask(1);
         }
         ostream& os = get_ostr();
@@ -541,8 +541,8 @@ namespace yask {
         auto nullosp = &nullop->get_ostream();
 
         // Best so far; start with current setting.
-        int nat = 0;
         IdxTuple best_block(_opts->_block_sizes);
+        double best_time = 0.;
 
         // If the starting block is already very big, reduce it.
         for (auto dim : best_block.getDims()) {
@@ -557,12 +557,14 @@ namespace yask {
                   best_block.makeDimValStr(" * "));
 
         // Loop through decreasing radius for gradient-descent neighbors.
+        int nat = 0;
         for (idx_t r = max_radius; r >= 1; r /= 2) {
             os << "  auto-tuner search-radius " << r << "...\n";
         
             // Gradient-descent algorithm loop.
-            while (1) {
-                idx_t nat0 = nat;
+            bool found;
+            do {
+                found = false;
         
                 // Explore immediately-neighboring settings.
                 // Use the neighborhood tuple from MPI to do this.
@@ -651,11 +653,12 @@ namespace yask {
                         // Run a few dummy steps the first time for warmup.
                         nat++;
                         int nruns = (nat == 1) ? 2 : 1;
+                        double rrate = 0.;
                         for (int i = 0; i < nruns; i++) {
                             clear_timers();
                             double rtime = 0.;
-                            bool last = i == nruns - 1;
-                            double mtime = last ? min_secs : first_min_secs;
+                            bool is_last = i == nruns - 1;
+                            double mtime = is_last ? min_secs : first_min_secs;
                             int ndone = 0;
                             do {
                                 TRACE_MSG("tune_settings: running step " << ndone <<
@@ -666,33 +669,31 @@ namespace yask {
                             } while (rtime < mtime);
 
                             // save perf results.
-                            run_times[bsize] = rtime / ndone; // time per step.
+                            rrate = rtime / ndone; // time per step.
+                            run_times[bsize] = rrate;
                         }
 
+                        // Better than previous best?
+                        bool is_best = best_time == 0. || rrate < best_time;
+                        if (is_best) {
+                            best_time = rrate;
+                            best_block = bsize;
+                            found = true;
+                        }
+                        
                         // Print results.
                         os << "  auto-tuner experiment # " << nat <<
                             " with block-size " << bsize.makeDimValStr(" * ") << ": " <<
-                            run_times[bsize] << " sec/step\n" << flush;
+                            run_times[bsize] << " sec/step";
+                        if (is_best)
+                            os << ", best";
+                        os << endl << flush;
                 
                         return true;    // keep visiting.
-                    });
 
-                // Has everything around this point been explored?
-                if (nat == nat0)
-                    break;
-
-                // Find new best.
-                double best_time = 0.;
-                for (auto i : run_times) {
-                    auto& bsize = i.first;
-                    auto& rtime = i.second;
-                    if (best_time == 0. || rtime < best_time) {
-                        best_time = rtime;
-                        best_block = bsize;
-                    }
-                }
-            } // gradient.
-        } // radius.
+                    });         // neighbors of best point.
+            } while (found); // stop GD when no new best is found.
+        } // GD radius.
 
         at_timer.stop();
         os << "Auto-tuner done in " << at_timer.get_elapsed_secs() << " secs.\n";
