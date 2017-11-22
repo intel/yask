@@ -72,6 +72,9 @@ namespace yask {
         // Data layout for slice APIs.
         bool _is_col_major = false;
 
+        // Whether to resize this grid based on solution parameters.
+        bool _do_resize = true;
+
         // Convenience function to format indices like
         // "x=5, y=3".
         virtual std::string makeIndexString(const Indices& idxs,
@@ -184,6 +187,10 @@ namespace yask {
         virtual bool is_dirty(idx_t step_idx) const;
         virtual void set_dirty(bool dirty, idx_t step_idx);
         virtual void set_dirty_all(bool dirty);
+
+        // Resize flag accessors.
+        virtual bool is_fixed_size() const { return !_do_resize; }
+        virtual void set_resize(bool resize) { _do_resize = resize; }
         
         // Lookup position by dim name.
         // Return -1 or die if not found, depending on flag.

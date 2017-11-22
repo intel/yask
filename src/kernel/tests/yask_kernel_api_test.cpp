@@ -61,6 +61,12 @@ int main() {
             soln->set_block_size(dim_name, 32);
     }
 
+    // Make a test fixed-size grid.
+    vector<idx_t> fgrid_sizes;
+    for (auto dim_name : soln_dims)
+        fgrid_sizes.push_back(5);
+    auto fgrid = soln->new_fixed_size_grid("fgrid", soln_dims, fgrid_sizes);
+
     // Simple rank configuration in 1st dim only.
     auto ddim1 = soln_dims[0];
     soln->set_num_ranks(ddim1, env->get_num_ranks());
@@ -88,14 +94,22 @@ int main() {
             cout << " '" << dname << "'";
         cout << " )\n";
         for (auto dname : grid->get_dim_names()) {
-            if (domain_dim_set.count(dname))
+            if (domain_dim_set.count(dname)) {
+                cout << "      '" << dname << "' domain index range on this rank: " <<
+                    grid->get_first_rank_domain_index(dname) << " ... " <<
+                    grid->get_last_rank_domain_index(dname) << endl;
                 cout << "      '" << dname << "' allowed index range on this rank: " <<
                     grid->get_first_rank_alloc_index(dname) << " ... " <<
                     grid->get_last_rank_alloc_index(dname) << endl;
+            }
         }
 
         // First, just init all the elements to the same value.
         grid->set_all_elements_same(0.1);
+
+        // Done with fixed-size grids.
+        if (grid->is_fixed_size())
+            continue;
         
         // Create indices describing a subset of the overall domain.
         vector<idx_t> first_indices, last_indices;

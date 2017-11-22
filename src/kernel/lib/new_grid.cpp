@@ -31,7 +31,18 @@ namespace yask {
     // Make a new grid.
     YkGridPtr StencilContext::newGrid(const std::string& name,
                                       const GridDimNames& dims,
-                                      bool is_visible) {
+                                      const GridDimSizes* sizes) {
+
+        // Check parameters.
+        bool got_sizes = sizes != NULL;
+        if (got_sizes) {
+            if (dims.size() != sizes->size()) {
+                cerr << "Error: attempt to create grid '" << name << "' with " <<
+                    dims.size() << " dimension names but " << sizes->size() <<
+                    " dimension sizes.\n";
+                exit_yask(1);
+            }
+        }
 
         // First, try to make a grid that matches the layout in
         // the stencil.
@@ -81,12 +92,21 @@ namespace yask {
             }
         }
 
-        // Add to context.
-        if (is_visible)
-            addGrid(gp, false);     // mark as non-output grid; TODO: determine if this is ok.
+        // Mark as non-resizable if sizes provided.
+        gp->set_resize(!got_sizes);
 
-        // Set default sizes from settings and get offset, if set.
-        if (is_visible)
+        // Add to context.
+        addGrid(gp, false);     // mark as non-output grid.
+
+        // Set sizes as provided or via solution settings.
+        if (got_sizes) {
+            int ndims = dims.size();
+            for (int i = 0; i < ndims; i++) {
+                gp->_set_domain_size(i, sizes->at(i));
+            }
+        }
+
+        else
             update_grids();
 
         return gp;

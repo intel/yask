@@ -32,6 +32,11 @@ import yask_kernel
 
 # Read data from grid using NumPy ndarray.
 def read_grid(grid, timestep) :
+
+    # Ignore with fixed-sized grids.
+    if grid.is_fixed_size():
+        return
+
     print("Reading grid '" + grid.get_name() + "' at time " + repr(timestep) + "...")
 
     # Create indices for YASK and shape for NumPy.
@@ -175,6 +180,7 @@ if __name__ == "__main__":
         
     # Init global settings.
     soln_dims = soln.get_domain_dim_names()
+    
     for dim_name in soln_dims :
 
         # Set domain size in each dim.
@@ -190,12 +196,18 @@ if __name__ == "__main__":
         else :
             soln.set_block_size(dim_name, 32)
 
+    # Make a test fixed-size grid.
+    fgrid_sizes = ()
+    for dim_name in soln_dims :
+        fgrid_sizes += (5,)
+    fgrid = soln.new_fixed_size_grid("fgrid", soln_dims, fgrid_sizes)
+
     # Simple rank configuration in 1st dim only.
     # In production runs, the ranks would be distributed along
     # all domain dimensions.
     ddim1 = soln_dims[0] # name of 1st dim.
     soln.set_num_ranks(ddim1, env.get_num_ranks()) # num ranks in this dim.
-
+    
     # Allocate memory for any grids that do not have storage set.
     # Set other data structures needed for stencil application.
     soln.prepare_solution()
@@ -219,10 +231,14 @@ if __name__ == "__main__":
 
     # Init the grids.
     for grid in soln.get_grids() :
-        
+
         # Init all values including padding.
         grid.set_all_elements_same(-9.0)
 
+        # Done with fixed-sized grids.
+        if grid.is_fixed_size():
+            continue
+        
         # Init timestep 0 using NumPy.
         # This will set one point in each rank.
         init_grid(grid, 0)

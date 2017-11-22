@@ -29,6 +29,7 @@ namespace yask {
 
     typedef Tuple<idx_t> IdxTuple;
     typedef std::vector<idx_t> GridIndices;
+    typedef std::vector<idx_t> GridDimSizes;
     typedef std::vector<std::string> GridDimNames;
     
     // A class to hold up to a given number of sizes or indices efficiently.

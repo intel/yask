@@ -71,7 +71,7 @@ namespace yask {
         
         /// Get the number of points in the overall domain.
         virtual idx_t
-        get_num_points() { return npts; }
+        get_num_elements() { return npts; }
 
         /// Get the number of points written in each step.
         virtual idx_t
@@ -485,8 +485,8 @@ namespace yask {
 
         // Make new grids.
         virtual YkGridPtr newGrid(const std::string& name,
-                                  const std::vector<std::string>& dims,
-                                  bool is_visible = true);
+                                  const GridDimNames& dims,
+                                  const GridDimSizes* sizes);
 
         // Get output object.
         virtual yask_output_ptr get_debug_output() const {
@@ -511,10 +511,9 @@ namespace yask {
         }
 
         virtual yk_grid_ptr get_grid(const std::string& name) {
-            for (int i = 0; i < get_num_grids(); i++) {
-                if (gridPtrs.at(i)->get_name() == name)
-                    return gridPtrs.at(i);
-            }
+            auto i = gridMap.find(name);
+            if (i != gridMap.end())
+                return i->second;
             return nullptr;
         }
         virtual std::vector<yk_grid_ptr> get_grids() {
@@ -525,14 +524,28 @@ namespace yask {
         }
         virtual yk_grid_ptr
         new_grid(const std::string& name,
-                 const std::vector<std::string>& dims) {
-            return newGrid(name, dims);
+                 const GridDimNames& dims) {
+            return newGrid(name, dims, NULL);
         }
         virtual yk_grid_ptr
         new_grid(const std::string& name,
                  const std::initializer_list<std::string>& dims) {
-            std::vector<std::string> dims2(dims);
+            GridDimNames dims2(dims);
             return new_grid(name, dims2);
+        }
+        virtual yk_grid_ptr
+        new_fixed_size_grid(const std::string& name,
+                             const GridDimNames& dims,
+                             const GridDimSizes& dim_sizes) {
+            return newGrid(name, dims, &dim_sizes);
+        }
+        virtual yk_grid_ptr
+        new_fixed_size_grid(const std::string& name,
+                             const std::initializer_list<std::string>& dims,
+                             const std::initializer_list<idx_t>& dim_sizes) {
+            GridDimNames dims2(dims);
+            GridDimSizes sizes2(dim_sizes);
+            return new_fixed_size_grid(name, dims2, sizes2);
         }
 
         virtual std::string get_step_dim_name() const {

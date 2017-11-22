@@ -1410,6 +1410,11 @@ namespace yask {
         
         // Loop through each grid.
         for (auto gp : gridPtrs) {
+            assert(gp);
+
+            // Ignore manually-sized grid.
+            if (gp->is_fixed_size())
+                continue;
 
             // Loop through each domain dim.
             for (auto& dim : _dims->_domain_dims.getDims()) {

@@ -69,7 +69,7 @@ namespace yask {
            Environment info is kept in a separate object to factilitate
            initializing the environment before creating a solution
            and sharing an environment among multiple solutions.
-           @returns Pointer to new env object.
+           @returns Elementer to new env object.
         */
         virtual yk_env_ptr
         new_env() const;
@@ -78,10 +78,10 @@ namespace yask {
         /**
            A stencil solution contains all the grids and equations
            that were created during stencil compilation.
-           @returns Pointer to new solution object. 
+           @returns Elementer to new solution object. 
         */
         virtual yk_solution_ptr
-        new_solution(yk_env_ptr env /**< [in] Pointer to env info. */) const;
+        new_solution(yk_env_ptr env /**< [in] Elementer to env info. */) const;
 
         /// Create a stencil solution by copying the settings from another.
         /**
@@ -89,12 +89,12 @@ namespace yask {
            functions in the source solution will be copied to the new solution.
            This does *not* copy any grids, grid settings, or grid data;
            see yk_solution::share_grid_storage().
-           @returns Pointer to new solution object. 
+           @returns Elementer to new solution object. 
         */
         virtual yk_solution_ptr
-        new_solution(yk_env_ptr env /**< [in] Pointer to env info. */,
+        new_solution(yk_env_ptr env /**< [in] Elementer to env info. */,
                      const yk_solution_ptr source
-                     /**< [in] Pointer to existing \ref yk_solution from which
+                     /**< [in] Elementer to existing \ref yk_solution from which
                         the settings will be copied. */ ) const;
     };
 
@@ -115,7 +115,7 @@ namespace yask {
         */
         virtual int get_rank_index() const =0;
 
-        /// Wait until all ranks have reached this point.
+        /// Wait until all ranks have reached this element.
         /**
            If MPI is enabled, calls MPI_Barrier().
            Otherwise, has no effect.
@@ -187,7 +187,7 @@ namespace yask {
 
         /// Set the size of the solution domain for this rank.
         /**
-           The domain defines the number of points that will be evaluated with the stencil(s). 
+           The domain defines the number of elements that will be evaluated with the stencil(s). 
            If MPI is not enabled, this is the entire problem domain.
            If MPI is enabled, this is the domain for the current rank only,
            and the problem domain consists of the sum of all rank domains
@@ -198,7 +198,7 @@ namespace yask {
            and so forth, for each domain dimension.
            The domain size does *not* include the halo region or any padding.
            For best performance, set the rank domain
-           size to a multiple of the number of points in a vector-cluster in
+           size to a multiple of the number of elements in a vector-cluster in
            each dimension whenever possible.
            See the "Detailed Description" for \ref yk_grid for more information on grid sizes.
            There is no domain-size setting allowed in the
@@ -208,7 +208,7 @@ namespace yask {
         set_rank_domain_size(const std::string& dim
                              /**< [in] Name of dimension to set.  Must be one of
                                 the names from get_domain_dim_names(). */,
-                             idx_t size /**< [in] Points in the domain in this `dim`. */ ) =0;
+                             idx_t size /**< [in] Elements in the domain in this `dim`. */ ) =0;
 
         /// Get the domain size for this rank.
         /**
@@ -221,7 +221,7 @@ namespace yask {
 
         /// Set the minimum amount of grid padding for all grids.
         /**
-           This sets the minimum number of points in each grid that is
+           This sets the minimum number of elements in each grid that is
            reserved outside of the rank domain in the given dimension.
            This padding area can be used for required halo regions.  At
            least the specified number of elements will be added to both
@@ -247,7 +247,7 @@ namespace yask {
                          /**< [in] Name of dimension to set.  Must
                             be one of the names from get_domain_dim_names(). */,
                          idx_t size
-                         /**< [in] Points in this `dim` applied
+                         /**< [in] Elements in this `dim` applied
                             to both sides of the domain. */ ) =0;
 
         /// Get the minimum amount of grid padding for all grids.
@@ -261,14 +261,14 @@ namespace yask {
 
         /// Set the block size in the given dimension.
         /**
-           This sets the approximate number of points that are evaluated in
+           This sets the approximate number of elements that are evaluated in
            each "block".
            This is a performance setting and should not affect the functional
-           correctness or total number of points evaluated.
+           correctness or total number of elements evaluated.
            A block is typically the unit of work done by a
-           top-level OpenMP thread.  The actual number of points evaluated
+           top-level OpenMP thread.  The actual number of elements evaluated
            in a block may be greater than the specified size due to rounding
-           up to fold-cluster sizes.  The number of points in a block may
+           up to fold-cluster sizes.  The number of elements in a block may
            also be smaller than the specified size when the block is at the
            edge of the domain. The block size cannot be set in the
            solution-step dimension (because temporal blocking is not yet enabled).
@@ -277,7 +277,7 @@ namespace yask {
         set_block_size(const std::string& dim
                        /**< [in] Name of dimension to set.  Must be one of
                           the names from get_domain_dim_names(). */,
-                       idx_t size /**< [in] Points in a block in this `dim`. */ ) =0;
+                       idx_t size /**< [in] Elements in a block in this `dim`. */ ) =0;
 
         /// Get the block size.
         /**
@@ -370,21 +370,31 @@ namespace yask {
 
         /// **[Advanced]** Add a new grid to the solution.
         /**
-           This is typically not needed because grids are usually pre-defined
+           This is typically not needed because grids used by the stencils are pre-defined
            by the solution itself via the stencil compiler.
            However, a grid may be created explicitly via this function
            in order to use it for purposes other than by the
            pre-defined stencils within the current solution.
-           For each dimension of the grid that is returned by
-           yk_solution::get_domain_dim_names(),
+
+           Grids created by this function will be treated like a pre-defined grid.
+           For example,
+           - For each domain dimension of the grid,
            the new grid's domain size will be the same as that returned by
-           get_rank_domain_size(), and its
-           initial padding size will be the same as that returned by
+           get_rank_domain_size().
+           - Calls to set_rank_domain_size() will resize the corresponding domain 
+           size in this grid.
+           - This grid's first domain index in this rank will be determined
+           by the position of this rank.
+           - This grid's initial padding size will be the same as that returned by
            get_min_pad_size().
-           After creating a new grid, you can increase its padding
+           - After creating a new grid, you can increase its padding
            sizes in the domain dimensions via yk_grid::set_min_pad_size().
-           For other dimensions, you can set its allocation via
-           yk_grid::set_alloc().
+           - For step and misc dimensions, you can change the allocation via
+           yk_grid::set_alloc_size().
+
+           If you want a grid that is not automatically resized based on the
+           solution settings, use new_fixed_size_grid() instead.
+
            @note A new grid contains only the meta-data for the grid; data storage
            is not yet allocated.
            Storage may be allocated in any of the methods listed
@@ -393,28 +403,90 @@ namespace yask {
         */
         virtual yk_grid_ptr
         new_grid(const std::string& name
-                 /**< [in] Unique name of the grid; must be
-                    a valid C++ identifier and unique
-                    across grids. */,
+                 /**< [in] Name of the grid; must be unique
+                    within the solution. */,
                  const std::vector<std::string>& dims
-                 /**< [in] List of names of all dimensions. Names must
-                    be valid C++ identifiers and unique within this grid. */ ) =0;
+                 /**< [in] List of names of all dimensions. 
+                    Names must be valid C++ identifiers and 
+                    not repeated within this grid. */ ) =0;
 
 #ifndef SWIG
         /// **[Advanced]** Add a new grid to the solution.
         /**
-           See documentation for the version with a vector of dimension names
+           See documentation for the version of new_grid() with a vector of dimension names
            as a parameter.
            @note This version is not available (or needed) in SWIG-based APIs, e.g., Python.
            @returns Pointer to the new grid.
         */
         virtual yk_grid_ptr
-        new_grid(const std::string& name /**< [in] Unique name of the grid; must be
-                                            a valid C++ identifier and unique
-                                            across grids. */,
+        new_grid(const std::string& name
+                 /**< [in] Name of the grid; must be unique
+                    within the solution. */,
                  const std::initializer_list<std::string>& dims
-                 /**< [in] List of names of all dimensions. Names must
-                    be valid C++ identifiers and unique within this grid. */ ) =0;
+                 /**< [in] List of names of all dimensions. 
+                    Names must be valid C++ identifiers and 
+                    not repeated within this grid. */ ) =0;
+#endif
+
+        /// **[Advanced]** Add a new grid to the solution with a specified size.
+        /**
+           This is typically not needed because grids used by the stencils are pre-defined
+           by the solution itself via the stencil compiler.
+           However, a grid may be created explicitly via this function
+           in order to use it for purposes other than by the
+           pre-defined stencils within the current solution.
+
+           Unlike new_grid(),
+           grids created by this function will *not* be treated like a pre-defined grid.
+           For example,
+           - For each domain dimension of the grid,
+           the new grid's domain size is provided during creation and cannot be changed.
+           - Calls to set_rank_domain_size() will *not* resize the corresponding domain 
+           size in this grid.
+           - This grid's first domain index in this rank will be fixed at zero (0)
+           regardless of this rank's position.
+           - This grid's padding size will be affected only by calls to 
+           yk_grid::set_min_pad_size().
+           - For step and misc dimensions, you can still change the allocation via
+           yk_grid::set_alloc_size().
+
+           @note A new grid contains only the meta-data for the grid; data storage
+           is not yet allocated.
+           Storage may be allocated in any of the methods listed
+           in the "Detailed Description" for \ref yk_grid.
+           @returns Pointer to the new grid.
+        */
+        virtual yk_grid_ptr
+        new_fixed_size_grid(const std::string& name
+                       /**< [in] Name of the grid; must be unique
+                          within the solution. */,
+                       const std::vector<std::string>& dims
+                       /**< [in] List of names of all dimensions. 
+                          Names must be valid C++ identifiers and 
+                          not repeated within this grid. */,
+                       const std::vector<idx_t>& dim_sizes
+                       /**< [in] Initial allocation in each dimension.
+                          Must be exatly one size for each dimension. */ ) =0;
+
+#ifndef SWIG
+        /// **[Advanced]** Add a new grid to the solution with a specified size.
+        /**
+           See documentation for the version of new_fixed_size_grid() with a vector of dimension names
+           as a parameter.
+           @note This version is not available (or needed) in SWIG-based APIs, e.g., Python.
+           @returns Pointer to the new grid.
+        */
+        virtual yk_grid_ptr
+        new_fixed_size_grid(const std::string& name
+                       /**< [in] Name of the grid; must be unique
+                          within the solution. */,
+                       const std::initializer_list<std::string>& dims
+                       /**< [in] List of names of all dimensions. 
+                          Names must be valid C++ identifiers and 
+                          not repeated within this grid. */,
+                       const std::initializer_list<idx_t>& dim_sizes
+                       /**< [in] Initial allocation in each dimension.
+                          Must be exatly one size for each dimension. */ ) =0;
 #endif
 
         /// Prepare the solution for stencil application.
@@ -432,7 +504,7 @@ namespace yask {
         /// Get the first index of the sub-domain in this rank in the specified dimension.
         /**
            This returns the first *overall* index at the beginning of the domain.
-           Points within the domain in this rank lie between the values returned by
+           Elements within the domain in this rank lie between the values returned by
            get_first_rank_domain_index() and get_last_rank_domain_index(), inclusive.
            If there is only one MPI rank, this is typically zero (0).
            If there is more than one MPI rank, the value depends
@@ -597,17 +669,17 @@ namespace yask {
     class yk_stats {
     public:
 
-        /// Get the number of points in the overall domain.
+        /// Get the number of elements in the overall domain.
         /**
            @returns Product of all the overal domain sizes across all domain dimensions.
         */
         virtual idx_t
-        get_num_points() =0;
+        get_num_elements() =0;
 
-        /// Get the number of points written in each step.
+        /// Get the number of elements written in each step.
         /**
-           @returns Number of points written to each output grid.
-           This is the same value as get_num_points() if there is only one output grid.
+           @returns Number of elements written to each output grid.
+           This is the same value as get_num_elements() if there is only one output grid.
         */
         virtual idx_t
         get_num_writes() =0;
@@ -645,8 +717,8 @@ namespace yask {
        data, unlike yc_grid, a compile-time grid variable.  
        
        Typically, access to each grid is obtained via yk_solution::get_grid().
-       You may also use yk_solution::new_grid() if you need a grid that is not part
-       of the pre-defined solution.
+       You may also use yk_solution::new_grid() or yk_solution::new_fixed_size_grid() 
+       if you need a grid that is not part of the pre-defined solution.
 
        Each dimension of a grid is one of the following:
        - The *step* dimension, typically time ("t"), as identified via yk_solution::get_step_dim_name().
@@ -665,12 +737,12 @@ namespace yask {
 
        In each domain dimension,
        grid sizes include the following components:
-       - The *domain* is the points to which the stencils are applied.
-       - The *padding* is the points outside the domain on either side
+       - The *domain* is the elements to which the stencils are applied.
+       - The *padding* is the elements outside the domain on either side
        and includes the halo.
-       - The *halo* is the points just outside the domain which must be
+       - The *halo* is the elements just outside the domain which must be
        copied between ranks during halo exchanges. The halo is contained within the padding.
-       - The *extra padding* is the points outside the domain and halo on
+       - The *extra padding* is the elements outside the domain and halo on
        either side and thus does not include the halo.
        - The *allocation* includes the domain and the padding.
        
@@ -744,11 +816,18 @@ namespace yask {
         */
         virtual const std::string& get_name() const =0;
 
+        /// Determine whether this grid is automatically resized based on the solution.
+        /**
+           @returns 'true' if this grid was created via yk_solution::new_fixed_size_grid()
+           or 'false' otherwise.
+        */
+        virtual bool is_fixed_size() const =0;
+
         /// Get the number of dimensions used in this grid.
         /**
            This may include domain, step, and/or miscellaneous dimensions.
-           @returns Number of dimensions created via yc_solution::new_grid()
-           or yk_solution::new_grid().
+           @returns Number of dimensions created via yc_solution::new_grid(),
+           yk_solution::new_grid(), or yk_solution::new_fixed_size_grid().
         */
         virtual int get_num_dims() const =0;
 
@@ -770,8 +849,9 @@ namespace yask {
 
         /// Get the domain size for this rank.
         /**
-           This is a convenience function.
-           @returns The same value as yk_solution::get_rank_domain_size().
+           @returns The same value as yk_solution::get_rank_domain_size() if
+           is_fixed_size() returns 'false' or the fixed sized provided via
+           yk_solution::new_fixed_size_grid() otherwise.
         */
         virtual idx_t
         get_rank_domain_size(const std::string& dim
@@ -780,18 +860,19 @@ namespace yask {
 
         /// Get the first index of the sub-domain in this rank in the specified dimension.
         /**
-           This is a convenience function.
-           @returns The same value as yk_solution::get_first_rank_domain_index().
+           @returns The same value as yk_solution::get_first_rank_domain_index() if
+           is_fixed_size() returns 'false' or zero (0) otherwise.
         */
         virtual idx_t
         get_first_rank_domain_index(const std::string& dim
                                     /**< [in] Name of dimension to get.  Must be one of
                                        the names from yk_solution::get_domain_dim_names(). */ ) const =0;
         
-        /// Get the first index of the sub-domain in this rank in the specified dimension.
+        /// Get the last index of the sub-domain in this rank in the specified dimension.
         /**
-           This is a convenience function.
-           @returns The same value as yk_solution::get_last_rank_domain_index().
+           @returns The same value as yk_solution::get_last_rank_domain_index() if
+           is_fixed_size() returns 'false' or one less than the fixed sized provided via
+           yk_solution::new_fixed_size_grid() otherwise.
         */
         virtual idx_t
         get_last_rank_domain_index(const std::string& dim
@@ -801,7 +882,7 @@ namespace yask {
         /// Get the halo size in the specified dimension.
         /**
            This value is typically set by the stencil compiler.
-           @returns Points in halo in given dimension both before and after the domain.
+           @returns Elements in halo in given dimension both before and after the domain.
         */
         virtual idx_t
         get_halo_size(const std::string& dim
@@ -818,7 +899,7 @@ namespace yask {
            @note After data storage has been allocated, the halo size
            can only be set to a value less than or equal to the padding size
            in the given dimension.
-           @returns Points in halo in given dimension both before and after the domain.
+           @returns Elements in halo in given dimension both before and after the domain.
         */
         virtual void
         set_halo_size(const std::string& dim
@@ -826,7 +907,7 @@ namespace yask {
                          Must be one of
                          the names from yk_solution::get_domain_dim_names(). */,
                       idx_t size
-                      /**< [in] Number of points in the halo. */ ) =0;
+                      /**< [in] Number of elements in the halo. */ ) =0;
 
         /// Get the padding in the specified dimension.
         /**
@@ -836,8 +917,8 @@ namespace yask {
            The value may be slightly
            larger than that provided via set_min_pad_size()
            or yk_solution::set_min_pad_size() due to rounding.
-           @returns Points in padding in given dimension before the
-           domain. The number of points after the domain will be
+           @returns Elements in padding in given dimension before the
+           domain. The number of elements after the domain will be
            equal to or greater than this.
         */
         virtual idx_t
@@ -849,8 +930,8 @@ namespace yask {
         /// Get the extra padding in the specified dimension.
         /**
            The *extra* padding size is the padding size minus the halo size.
-           @returns Points in padding in given dimension before the
-           halo region. The number of points after the halo will be
+           @returns Elements in padding in given dimension before the
+           halo region. The number of elements after the halo will be
            equal to or greater than this.
         */
         virtual idx_t
@@ -861,10 +942,10 @@ namespace yask {
 
         /// Set the padding in the specified dimension.
         /**
-           This sets the minimum number of points in this grid that is
+           This sets the minimum number of elements in this grid that is
            reserved both before and after the rank domain in the given dimension.
            This padding area can be used for required halo regions.
-           The specified number of points is added to both sides, i.e., both "before" and
+           The specified number of elements is added to both sides, i.e., both "before" and
            "after" the domain.
            
            The *actual* padding size will be the largest of the following values,
@@ -887,7 +968,7 @@ namespace yask {
                             Must be one of
                             the names from yk_solution::get_domain_dim_names(). */,
                          idx_t size
-                         /**< [in] Minimum number of points to allocate beyond the domain size. */ ) =0;
+                         /**< [in] Minimum number of elements to allocate beyond the domain size. */ ) =0;
         
         /// Get the storage allocation in the specified dimension.
         /**
@@ -895,13 +976,13 @@ namespace yask {
            does not typically depend on the number of steps evaluated.
            For the non-step dimensions, this includes the domain and padding sizes.
            See the "Detailed Description" for \ref yk_grid for information on grid sizes.
-           @returns allocation in number of points (not bytes).
+           @returns allocation in number of elements (not bytes).
         */
         virtual idx_t
         get_alloc_size(const std::string& dim
                        /**< [in] Name of dimension to get. */ ) const =0;
 
-        /// **[Advanced]** Set the number of points to allocate in the specified dimension.
+        /// **[Advanced]** Set the number of elements to allocate in the specified dimension.
         /** 
            This setting is only allowed in the step dimension.
            Typically, the allocation in the step dimension is determined by the
@@ -919,10 +1000,10 @@ namespace yask {
                           the names from yk_solution::get_domain_dim_names(). */,
                        idx_t size /**< [in] Number of elements to allocate. */ ) =0;
 
-        /// Get the first accessible index in this grid in this rank in the specified dimension.
+        /// **[Advanced]** Get the first accessible index in this grid in this rank in the specified dimension.
         /**
            This returns the first *overall* index allowed in this grid.
-           This point may be in the domain, halo, or extra padding area.
+           This element may be in the domain, halo, or extra padding area.
            This function is only for checking the legality of an index.
            It should not be used to find a useful index; use a combination of
            get_first_rank_domain_index() and get_halo_size() instead.
@@ -934,10 +1015,10 @@ namespace yask {
                                       Must be one of
                                       the names from yk_solution::get_domain_dim_names(). */ ) const =0;
 
-        /// Get the last accessible index in this grid in this rank in the specified dimension.
+        /// **[Advanced]** Get the last accessible index in this grid in this rank in the specified dimension.
         /**
            This returns the last *overall* index allowed in this grid.
-           This point may be in the domain, halo, or extra padding area.
+           This element may be in the domain, halo, or extra padding area.
            This function is only for checking the legality of an index.
            It should not be used to find a useful index; use a combination of
            get_last_rank_domain_index() and get_halo_size() instead.
@@ -981,7 +1062,7 @@ namespace yask {
                             /**< [in] Name of dimension to get.  Must be one of
                                the names from yk_solution::get_misc_dim_names(). */ ) const =0;
         
-        /// Get the value of one grid point.
+        /// Get the value of one grid element.
         /**
            Provide indices in a list in the same order returned by get_dim_names().
            Indices are relative to the *overall* problem domain.
@@ -995,7 +1076,7 @@ namespace yask {
                     /**< [in] List of indices, one for each grid dimension. */ ) const =0;
 
 #ifndef SWIG
-        /// Get the value of one grid point.
+        /// Get the value of one grid element.
         /**
            Provide indices in a list in the same order returned by get_dim_names().
            Indices are relative to the *overall* problem domain.
@@ -1013,14 +1094,14 @@ namespace yask {
                     /**< [in] List of indices, one for each grid dimension. */ ) const =0;
 #endif
 
-        /// Get grid points within specified subset of the grid.
+        /// Get grid elements within specified subset of the grid.
         /**
            Reads all elements from 'first' to 'last' indices in each dimension
            and writes them to consecutive memory locations in the buffer.
            Indices in the buffer progress in row-major order.
            The buffer pointed to must contain the number of bytes equal to
            yk_solution::get_element_bytes() multiplied by the number of
-           points in the specified slice.
+           elements in the specified slice.
            Since the reads proceed in row-major order, the last index is "unit-stride"
            in the buffer.
            Provide indices in two lists in the same order returned by get_dim_names().
@@ -1038,7 +1119,7 @@ namespace yask {
                               const std::vector<idx_t>& last_indices
                               /**< [in] List of final indices, one for each grid dimension. */ ) const =0;
         
-        /// Set the value of one grid point.
+        /// Set the value of one grid element.
         /**
            Provide indices in a list in the same order returned by get_dim_names().
            Indices are relative to the *overall* problem domain.
@@ -1052,7 +1133,7 @@ namespace yask {
            @returns Number of elements set.
         */
         virtual idx_t
-        set_element(double val /**< [in] Point in grid will be set to this. */,
+        set_element(double val /**< [in] Element in grid will be set to this. */,
                     const std::vector<idx_t>& indices
                     /**< [in] List of indices, one for each grid dimension. */,
                     bool strict_indices = false
@@ -1061,7 +1142,7 @@ namespace yask {
                        in no change to grid. */ ) =0;
 
 #ifndef SWIG        
-        /// Set the value of one grid point.
+        /// Set the value of one grid element.
         /**
            Provide the number of indices equal to the number of dimensions in the grid.
            Indices beyond that will be ignored.
@@ -1077,7 +1158,7 @@ namespace yask {
            @returns Number of elements set.
         */
         virtual idx_t
-        set_element(double val /**< [in] Point in grid will be set to this. */,
+        set_element(double val /**< [in] Element in grid will be set to this. */,
                     const std::initializer_list<idx_t>& indices
                     /**< [in] List of indices, one for each grid dimension. */,
                     bool strict_indices = false
@@ -1086,7 +1167,7 @@ namespace yask {
                        in no change to grid. */ ) =0;
 #endif
         
-        /// Initialize all grid points to the same value.
+        /// Initialize all grid elements to the same value.
         /**
            Sets all allocated elements, including those in the domain and padding
            area to the same specified value.
@@ -1097,9 +1178,9 @@ namespace yask {
            this will have no effect.
         */
         virtual void
-        set_all_elements_same(double val /**< [in] All points will be set to this. */ ) =0;
+        set_all_elements_same(double val /**< [in] All elements will be set to this. */ ) =0;
 
-        /// Initialize grid points within specified subset of the grid to the same value.
+        /// Initialize grid elements within specified subset of the grid to the same value.
         /**
            Sets all elements from 'first' to 'last' indices in each dimension to the
            specified value.
@@ -1113,23 +1194,23 @@ namespace yask {
            @returns Number of elements set.
         */
         virtual idx_t
-        set_elements_in_slice_same(double val /**< [in] All points in the slice will be set to this. */,
+        set_elements_in_slice_same(double val /**< [in] All elements in the slice will be set to this. */,
                                    const std::vector<idx_t>& first_indices
                                    /**< [in] List of initial indices, one for each grid dimension. */,
                                    const std::vector<idx_t>& last_indices
                                    /**< [in] List of final indices, one for each grid dimension. */,
                                    bool strict_indices = false
                                    /**< [in] If true, indices must be within domain or padding.
-                                      If false, only points within the allocation of this grid
-                                      will be set, and points outside will be ignored. */ ) =0;
+                                      If false, only elements within the allocation of this grid
+                                      will be set, and elements outside will be ignored. */ ) =0;
 
-        /// Set grid points within specified subset of the grid.
+        /// Set grid elements within specified subset of the grid.
         /**
            Reads elements from consecutive memory locations,
            starting at 'buffer_ptr'
            and writes them from 'first' to 'last' indices in each dimension.
            Indices in the buffer progress in row-major order.
-           The buffer pointed to must contain either 4 or 8 byte FP values per point in the 
+           The buffer pointed to must contain either 4 or 8 byte FP values per element in the 
            subset, depending on the FP precision of the solution.
            The buffer pointed to must contain the number of FP values in the specified slice,
            where each FP value is the size of yk_solution::get_element_bytes().
