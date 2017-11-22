@@ -218,7 +218,6 @@ namespace yask {
         idx_t step_t = _opts->_region_sizes[step_dim] * _dims->_step_dir;
         idx_t end_t = last_step_index + _dims->_step_dir; // end is beyond last.
         int ndims = _dims->_stencil_dims.size();
-        steps_done += abs(end_t - begin_t);
 
         // Begin, end, step, last tuples.
         IdxTuple begin(_dims->_stencil_dims);
@@ -298,6 +297,9 @@ namespace yask {
         const idx_t num_t = (abs(end_t - begin_t) + (abs(step_t) - 1)) / abs(step_t);
         for (idx_t index_t = 0; index_t < num_t; index_t++)
         {
+            YaskTimer rtime;   // just for these step_t steps.
+            rtime.start();
+            
             // This value of index_t steps from start_t to stop_t-1.
             const idx_t start_t = begin_t + (index_t * step_t);
             const idx_t stop_t = (step_t > 0) ?
@@ -361,7 +363,15 @@ namespace yask {
 #include "yask_rank_loops.hpp"
             }
 
-        }
+            steps_done += abs(step_t);
+            rtime.stop();   // for these steps.
+
+            // Call the auto-tuner to evaluate these steps.
+            // TODO: remove MPI time.
+            auto elapsed_time = rtime.get_elapsed_secs();
+            _at.eval(abs(step_t), elapsed_time);
+            
+        } // step loop.
 
         // Final halo exchange.
         exchange_halos_all();
@@ -509,8 +519,237 @@ namespace yask {
         } // time.
     }
 
+    // Reset the auto-tuner.
+    void StencilContext::AT::clear(bool mark_done) {
+
+        // Null stream to throw away debug info.
+        yask_output_factory yof;
+        nullop = yof.new_null_output();
+
+        // Apply the best known settings, if any.
+        auto _opts = _context->_opts;
+        if (best_rate > 0.) {
+            _opts->_block_sizes = best_block;
+            apply();
+            TRACE_MSG2("auto-tuner: applying block-size "  <<
+                       best_block.makeDimValStr(" * "));
+        }
+        
+        // Reset all vars.
+        results.clear();
+        n2big = n2small = 0;
+        best_block = _context->_opts->_block_sizes;
+        best_rate = 0.;
+        center_block = best_block;
+        radius = max_radius;
+        done = mark_done;
+        neigh_idx = 0;
+        better_neigh_found = false;
+        ctime = 0.;
+        csteps = 0;
+        in_warmup = true;
+        
+        // Adjust starting block if needed.
+        for (auto dim : center_block.getDims()) {
+            auto& dname = dim.getName();
+            auto& dval = dim.getVal();
+                    
+            auto dmax = max(idx_t(1), _opts->_region_sizes[dname] / 2);
+            if (dval > dmax || dval < 1)
+                center_block[dname] = dmax;
+        }
+        if (!done) {
+            TRACE_MSG2("auto-tuner: starting block-size "  <<
+                       center_block.makeDimValStr(" * "));
+        }
+    }
+
+    // Evaluate the previous run and take next auto-tuner step.
+    void StencilContext::AT::eval(idx_t steps, double etime) {
+        
+        // Leave if done.
+        if (done)
+            return;
+
+        // Setup not done? If not, do it.
+        if (!nullop)
+            clear();
+
+        // Handy ptrs.
+        auto _opts = _context->_opts;
+        auto _mpiInfo = _context->_mpiInfo;
+        auto _dims = _context->_dims;
+
+        // Cumulative stats.
+        csteps += steps;
+        ctime += etime;
+
+        // Still in warmup?
+        if (in_warmup) {
+
+            // Warmup not done?
+            if (ctime < warmup_secs && csteps < warmup_steps)
+                return;
+
+            // Done.
+            TRACE_MSG2("auto-tuner: in warmup for " << ctime << " secs");
+                in_warmup = false;
+
+            // Measure this step only.
+            csteps = steps;
+            ctime = etime;
+        }
+            
+        // Need more steps to get a good measurement?
+        if (ctime < min_secs && csteps < min_steps)
+            return;
+
+        // Calc perf and reset vars for next time.
+        double rate = double(csteps) / ctime;
+        TRACE_MSG2("auto-tuner: " << csteps << " steps(s) at " << rate <<
+                  " steps/sec with block-size" << _opts->_block_sizes.makeDimValStr(" * "));
+        csteps = 0;
+        ctime = 0.;
+
+        // Save result.
+        results[_opts->_block_sizes] = rate;
+        bool is_better = rate > best_rate;
+        if (is_better) {
+            best_block = _opts->_block_sizes;
+            best_rate = rate;
+            better_neigh_found = true;
+        }
+
+        // At this point, we have gathered perf info on the current settings.
+        // Now, we need to determine next unevaluated point in search space.
+        while (true) {
+
+            // Gradient-descent(GD) search:
+            // Use the neighborhood info from MPI to track neighbors.
+            // TODO: move to a more general place.
+            // Valid neighbor index?
+            if (neigh_idx < _mpiInfo->neighborhood_size) {
+
+                // Convert index to offsets in each dim.
+                auto ofs = _mpiInfo->neighborhood_sizes.unlayout(neigh_idx);
+
+                // Next neighbor of center point.
+                neigh_idx++;
+                
+                // Determine new block size.
+                IdxTuple bsize(center_block);
+                bool ok = true;
+                for (auto odim : ofs.getDims()) {
+                    auto& dname = odim.getName(); // a domain-dim name.
+                    auto& dofs = odim.getVal(); // always [0..2].
+
+                    // Min and max sizes of this dim.
+                    auto dmin = _dims->_cluster_pts[dname];
+                    auto dmax = _opts->_region_sizes[dname];
+                            
+                    // Determine distance of GD neighbors.
+                    auto step = dmin; // step by cluster size.
+                    step = max(step, min_step);
+                    step *= radius;
+
+                    auto sz = center_block[dname];
+                    switch (dofs) {
+                    case 0:
+                        sz -= step;
+                        break;
+                    case 1:
+                        break;
+                    case 2:
+                        sz += step;
+                        break;
+                    default:
+                        assert(false && "internal error in tune_settings()");
+                    }
+
+                    // Too small?
+                    if (sz < dmin) {
+                        n2small++;
+                        ok = false;
+                        break;  // out of dim-loop.
+                    }
+                            
+                    // Adjustments.
+                    sz = min(sz, dmax);
+                    sz = ROUND_UP(sz, dmin);
+
+                    // Save.
+                    bsize[dname] = sz;
+
+                } // domain dims.
+                TRACE_MSG2("auto-tuner: checking block-size "  <<
+                          bsize.makeDimValStr(" * "));
+
+                // Too small?
+                if (ok && bsize.product() < min_pts) {
+                    n2small++;
+                    ok = false;
+                }
+
+                // Too few?
+                else if (ok) {
+                    idx_t nblks = _opts->_region_sizes.product() / bsize.product();
+                    if (nblks < min_blks) {
+                        ok = false;
+                        n2big++;
+                    }
+                }
+            
+                // Valid size and not already checked?
+                if (ok && !results.count(bsize)) {
+
+                    // Run next step with this size.
+                    _opts->_block_sizes = bsize;
+                    break;      // out of block-search loop.
+                }
+                
+            } // valid neighbor index.
+
+            // Beyond last neighbor of current center?
+            else {
+
+                // Should GD continue?
+                bool stop_gd = !better_neigh_found;
+
+                // Make new center at best block so far.
+                center_block = best_block;
+
+                // Reset search vars.
+                neigh_idx = 0;
+                better_neigh_found = false;
+
+                // No new best point, so this is the end of this
+                // GD search.
+                if (stop_gd) {
+
+                    // Move to next radius.
+                    radius /= 2;
+
+                    // Done?
+                    if (radius < 1) {
+
+                        // Reset AT and disable.
+                        clear(true);
+                        TRACE_MSG2("auto-tuner: done");
+                        return;
+                    }
+                    TRACE_MSG2("auto-tuner: continuing with radius " << radius);
+                }
+            } // beyond next neighbor of center.
+        } // search for new setting to try.
+
+        // Fix settings for next step.
+        apply();
+        TRACE_MSG2("auto-tuner: next block-size "  <<
+                  _opts->_block_sizes.makeDimValStr(" * "));
+    }
+    
     // Apply auto-tuning to some of the settings.
-    void StencilContext::tune_settings() {
+    void StencilContext::run_auto_tuner_now() {
         if (!bb_valid) {
             cerr << "Error: tune_settings() called without calling prepare_solution() first.\n";
             exit_yask(1);
@@ -520,206 +759,40 @@ namespace yask {
         YaskTimer at_timer;
         at_timer.start();
 
-        // Temporarily disable halo exchange because tuning is intra-rank.
+        // Temporarily disable halo exchange to tune intra-rank.
         enable_halo_exchange = false;
         
-        // Results.
-        map<IdxTuple, double> run_times;
-        int n2big = 0, n2small = 0;
+        // Init tuner.
+        _at.clear();
 
-        // AT parameters.
-        double min_secs = 0.1;
-        double first_min_secs = 1.;
-        idx_t min_step = 4;
-        idx_t max_radius = 64;
-        idx_t min_pts = 512; // 8^3.
-        idx_t min_blks = 4;
+        // Reset stats.
+        clear_timers();
 
-        // Null stream to throw away debug info.
-        yask_output_factory yof;
-        auto nullop = yof.new_null_output();
-        auto nullosp = &nullop->get_ostream();
+        // Run time-steps until AT converges.
+        bool done = false;
+        for (idx_t t = 0; !done; t++) {
 
-        // Best so far; start with current setting.
-        IdxTuple best_block(_opts->_block_sizes);
-        double best_time = 0.;
+            // Run a time-step.
+            run_solution(t);
 
-        // If the starting block is already very big, reduce it.
-        for (auto dim : best_block.getDims()) {
-            auto& dname = dim.getName();
-            auto& dval = dim.getVal();
-
-            auto dmax = max(idx_t(1), _opts->_region_sizes[dname] / 2);
-            if (dval > dmax)
-                best_block[dname] = dmax;
+            // done on this rank?
+            done = _at.is_done();
         }
-        TRACE_MSG("tune_settings: starting block-size "  <<
-                  best_block.makeDimValStr(" * "));
 
-        // Loop through decreasing radius for gradient-descent neighbors.
-        int nat = 0;
-        for (idx_t r = max_radius; r >= 1; r /= 2) {
-            os << "  auto-tuner search-radius " << r << "...\n";
-        
-            // Gradient-descent algorithm loop.
-            bool found;
-            do {
-                found = false;
-        
-                // Explore immediately-neighboring settings.
-                // Use the neighborhood tuple from MPI to do this.
-                // TODO: move that tuple to a more general place.
-                _mpiInfo->neighborhood_sizes.visitAllPoints
-                    ([&](const IdxTuple& ofs, size_t idx) {
-
-                        // Convert offset (0..2) to new block size.
-                        bool ok = true;
-                        IdxTuple bsize(best_block);
-                        for (auto odim : ofs.getDims()) {
-                            auto& dname = odim.getName();
-                            auto& dofs = odim.getVal();
-
-                            // Min and max sizes of this dim.
-                            auto dmin = _dims->_cluster_pts[dname];
-                            auto dmax = _opts->_region_sizes[dname];
-                            
-                            // Determine distance of GD neighbors.
-                            auto step = dmin; // step by cluster size.
-                            step = max(step, min_step);
-                            step *= r;
-
-                            auto sz = best_block[dname];
-                            switch (dofs) {
-                            case 0:
-                                sz -= step;
-                                break;
-                            case 1:
-                                break;
-                            case 2:
-                                sz += step;
-                                break;
-                            default:
-                                assert(false && "internal error in tune_settings()");
-                            }
-
-                            // Too small?
-                            if (sz < dmin) {
-                                ok = false;
-                                n2small++;
-                                break;
-                            }
-                            
-                            // Adjustments.
-                            sz = min(sz, dmax);
-                            sz = ROUND_UP(sz, dmin);
-
-                            // Save.
-                            bsize[dname] = sz;
-                        }
-                        TRACE_MSG("tune_settings: checking block-size "  <<
-                                  bsize.makeDimValStr(" * "));
-
-                        // Too small?
-                        if (ok && bsize.product() < min_pts) {
-                            ok = false;
-                            n2small++;
-                        }
-
-                        // Too few?
-                        else if (ok) {
-                            idx_t nblks = _opts->_region_sizes.product() / bsize.product();
-                            if (nblks < min_blks) {
-                                ok = false;
-                                n2big++;
-                            }
-                        }
-
-                        // Bad size or already got these results?
-                        if (!ok || run_times.count(bsize))
-                            return true; // keep visiting.
-                
-                        // Set the size in the settings.
-                        _opts->_block_sizes = bsize;
-
-                        // Change sub-block size to 0 so adjustSettings()
-                        // will set it to the default.
-                        _opts->_sub_block_sizes.setValsSame(0);
-                        _opts->_sub_block_group_sizes.setValsSame(0);
-                
-                        // Make sure everything is resized.
-                        _opts->adjustSettings(*nullosp);
-
-                        // Run steps until the min time is reached.
-                        // Run a few dummy steps the first time for warmup.
-                        nat++;
-                        int nruns = (nat == 1) ? 2 : 1;
-                        double rrate = 0.;
-                        for (int i = 0; i < nruns; i++) {
-                            clear_timers();
-                            double rtime = 0.;
-                            bool is_last = i == nruns - 1;
-                            double mtime = is_last ? min_secs : first_min_secs;
-                            int ndone = 0;
-                            do {
-                                TRACE_MSG("tune_settings: running step " << ndone <<
-                                          " with block-size "  << bsize.makeDimValStr(" * "));
-                                run_solution(ndone);
-                                rtime = run_time.get_elapsed_secs();
-                                ndone++;
-                            } while (rtime < mtime);
-
-                            // save perf results.
-                            rrate = rtime / ndone; // time per step.
-                            run_times[bsize] = rrate;
-                        }
-
-                        // Better than previous best?
-                        bool is_best = best_time == 0. || rrate < best_time;
-                        if (is_best) {
-                            best_time = rrate;
-                            best_block = bsize;
-                            found = true;
-                        }
-                        
-                        // Print results.
-                        os << "  auto-tuner experiment # " << nat <<
-                            " with block-size " << bsize.makeDimValStr(" * ") << ": " <<
-                            run_times[bsize] << " sec/step";
-                        if (is_best)
-                            os << ", best";
-                        os << endl << flush;
-                
-                        return true;    // keep visiting.
-
-                    });         // neighbors of best point.
-            } while (found); // stop GD when no new best is found.
-        } // GD radius.
-
-        at_timer.stop();
-        os << "Auto-tuner done in " << at_timer.get_elapsed_secs() << " secs.\n";
-        if (!nat)
-            os << "  No block-size alternatives found (" << n2small << " too small, " <<
-            n2big << " too large).\n";
-        else {
-            os << "  Best block-size: " << best_block.makeDimValStr(" * ") << endl;
-
-            // Set the size in the settings.
-            _opts->_block_sizes = best_block;
-            
-            // Change sub-block size to 0 so adjustSettings()
-            // will set it to the default.
-            _opts->_sub_block_sizes.setValsSame(0);
-            _opts->_sub_block_group_sizes.setValsSame(0);
-            
-            // Make sure everything is resized.
-            _opts->adjustSettings(os);
-
-            // Reset timers a final time for 'real' work.
-            clear_timers();
-        }
+        // Wait for all ranks to finish.
+        _env->global_barrier();
 
         // reenable halo exchange.
         enable_halo_exchange = true;
+        
+        // Report results.
+        at_timer.stop();
+        os << "Auto-tuner done after " << steps_done << " step(s) in " <<
+            at_timer.get_elapsed_secs() << " secs.\n";
+        os << "best-block-size: " << _opts->_block_sizes.makeDimValStr(" * ") << endl;
+
+        // Reset stats.
+        clear_timers();
     }
     
     // Add a new grid to the containers.
@@ -1367,9 +1440,6 @@ namespace yask {
     // Initialize some data structures.
     void StencilContext::prepare_solution() {
 
-        // reset time keepers.
-        clear_timers();
-
         // Don't continue until all ranks are this far.
         _env->global_barrier();
 
@@ -1390,6 +1460,12 @@ namespace yask {
         os << "*** WARNING: YASK compiled with TRACE_INTRINSICS; ignore performance results.\n";
 #endif
         
+        // reset time keepers.
+        clear_timers();
+
+        // Init auto-tuner.
+        _at.clear();
+
         // Adjust all settings before setting MPI buffers or sizing grids.
         // Prints out final settings.
         _opts->adjustSettings(os);

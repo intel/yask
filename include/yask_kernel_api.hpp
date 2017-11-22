@@ -512,18 +512,52 @@ namespace yask {
         run_solution(idx_t first_step_index /**< [in] First index in the step dimension */,
                      idx_t last_step_index /**< [in] Last index in the step dimension */ ) =0;
 
-        /// Automatically tune some of the settings.
+        /// **[Advanced]** Restart or disable the auto-tuner on this rank.
         /**
-           Executes a search algorithm to find [locally] optimum values for some of the
-           settings. 
-           Currently, only the block size is set, and the search begins from the 
+           Under normal operation, an auto-tuner is invoked automatically during calls to
+           run_solution().
+           Currently, only the block size is set by the auto-tuner, and the search begins from the 
            sizes set via set_block_size() or the default size if set_block_size() has
            not been called.
-           This function should be called only *after* calling prepare_solution().
-           @warning Invokes run_solution(), thus it modifies the contents of the grids.
-           See run_solution() for other restrictions and warnings.
+           This function is used to apply the current best-known settings if the tuner has
+           been running, reset the state of the auto-tuner, and either
+           restart its search or disable it from running.
+           This call must be made on each rank where the change is desired.
         */
-        virtual void tune_settings() =0;
+        virtual void
+        reset_auto_tuner(bool enable /**< [in] If _true_, start or restart the auto-tuner search.
+                                        If _false_, disable the auto-tuner from running. */ ) =0;
+
+        /// Determine whether the auto-tuner is enabled on this rank.
+        /**
+           The auto-tuner is enabled by default.
+           It will become disabled after it has converged or after reset_auto_tuner(false) has been called.
+           @returns Whether the auto-tuner is still searching.
+        */
+        virtual bool
+        is_auto_tuner_enabled() =0;
+        
+        /// **[Advanced]** Automatically tune selected settings immediately.
+        /**
+           Executes a search algorithm to find [locally] optimum values for some of the
+           settings.
+           Under normal operation, an auto-tuner is invoked during calls to
+           run_solution().
+           See reset_auto_tuner() for more information.
+           This function causes the stencil solution to be run immediately
+           until the auto-tuner converges on all ranks.
+           It is useful for benchmarking, where performance is to be timed
+           for a given number of steps after the best settings are found.
+           This function should be called only *after* calling prepare_solution().
+           This call must be made on each rank.
+           @warning Modifies the contents of the grids by calling run_solution()
+           an arbitrary number of times, but without halo exchange.
+           (See run_solution() for other restrictions and warnings.)
+           Thus, grid data should be set *after* calling this function when
+           used in a production or test setting where correct results are expected.
+        */
+        virtual void
+        run_auto_tuner_now() =0;
         
         /// **[Advanced]** Use data-storage from existing grids in specified solution.
         /**

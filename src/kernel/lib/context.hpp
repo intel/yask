@@ -199,6 +199,71 @@ namespace yask {
         // MPI data for each grid.
         // Map key: grid name.
         std::map<std::string, MPIData> mpiData;
+
+        // Auto-tuner state.
+        class AT {
+            StencilContext* _context = 0;
+            
+            // Null stream to throw away debug info.
+            yask_output_ptr nullop;
+            
+            // AT parameters.
+            double warmup_steps = 100;
+            double warmup_secs = 1.;
+            idx_t min_steps = 50;
+            double min_secs = 0.1;
+            idx_t min_step = 4;
+            idx_t max_radius = 64;
+            idx_t min_pts = 512; // 8^3.
+            idx_t min_blks = 4;
+
+            // Results.
+            std::map<IdxTuple, double> results;
+            int n2big = 0, n2small = 0;
+
+            // Best so far.
+            IdxTuple best_block;
+            double best_rate = 0.;
+
+            // Current point in search.
+            IdxTuple center_block;
+            idx_t radius = 0;
+            bool done = false;
+            idx_t neigh_idx = 0;
+            bool better_neigh_found = false;
+
+            // Cumulative vars.
+            double ctime = 0.;
+            idx_t csteps = 0;
+            bool in_warmup = true;
+
+        public:
+            AT(StencilContext* ctx) :
+                _context(ctx) { }
+            
+            // Reset all state to beginning.
+            void clear(bool mark_done = false);
+
+            // Evaluate the previous run and take next auto-tuner step.
+            void eval(idx_t steps, double elapsed_time);
+
+            // Apply settings.
+            void apply() {
+                auto _opts = _context->_opts;
+
+                // Change sub-block size to 0 so adjustSettings()
+                // will set it to the default.
+                _opts->_sub_block_sizes.setValsSame(0);
+                _opts->_sub_block_group_sizes.setValsSame(0);
+                
+                // Make sure everything is resized based on block size.
+                _opts->adjustSettings(nullop->get_ostream());
+            }
+
+            // Done?
+            bool is_done() { return done; }
+        };
+        AT _at;
         
         // Constructor.
         StencilContext(KernelEnvPtr env,
@@ -206,7 +271,8 @@ namespace yask {
             _ostr(&std::cout),
             _env(env),
             _opts(settings),
-            _dims(settings->_dims)
+            _dims(settings->_dims),
+            _at(this)
         {
             yask_output_factory yof;
             set_debug_output(yof.new_stdout_output());
@@ -514,7 +580,14 @@ namespace yask {
         virtual idx_t get_num_ranks(const std::string& dim) const;
         virtual idx_t get_rank_index(const std::string& dim) const;
         virtual std::string apply_command_line_options(const std::string& args);
-        virtual void tune_settings();
+
+        virtual void reset_auto_tuner(bool enable) {
+            _at.clear(!enable);
+        }
+        virtual void run_auto_tuner_now();
+        virtual bool is_auto_tuner_enabled() {
+            return !_at.is_done();
+        }
     };
 
 } // yask namespace.

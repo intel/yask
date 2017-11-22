@@ -114,7 +114,7 @@ namespace yask {
 
         // Get elapsed time in sec.
         // Does not reset value, so it may be used for cumulative time.
-        virtual double get_elapsed_secs() {
+        virtual double get_elapsed_secs() const {
             return double(_elapsed.tv_sec) + double(_elapsed.tv_nsec) * 1e-9;
         }
     };
