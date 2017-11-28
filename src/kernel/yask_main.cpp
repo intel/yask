@@ -309,8 +309,10 @@ int main(int argc, char** argv)
             context->initDiff();
 
         // Stabilize.
-        if (opts->pre_trial_sleep_time > 0)
+        if (opts->pre_trial_sleep_time > 0) {
+            os << flush;
             sleep(opts->pre_trial_sleep_time);
+        }
         kenv->global_barrier();
 
         // Start vtune collection.

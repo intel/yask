@@ -242,7 +242,7 @@ namespace yask {
                 _context(ctx) { }
             
             // Reset all state to beginning.
-            void clear(bool mark_done = false);
+            void clear(bool mark_done);
 
             // Evaluate the previous run and take next auto-tuner step.
             void eval(idx_t steps, double elapsed_time);

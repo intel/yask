@@ -526,7 +526,7 @@ namespace yask {
         yask_output_factory yof;
         nullop = yof.new_null_output();
 
-        // Apply the best known settings, if any.
+        // Apply the best known settings from existing data, if any.
         auto _opts = _context->_opts;
         if (best_rate > 0.) {
             _opts->_block_sizes = best_block;
@@ -538,7 +538,7 @@ namespace yask {
         // Reset all vars.
         results.clear();
         n2big = n2small = 0;
-        best_block = _context->_opts->_block_sizes;
+        best_block = _opts->_block_sizes;
         best_rate = 0.;
         center_block = best_block;
         radius = max_radius;
@@ -573,7 +573,7 @@ namespace yask {
 
         // Setup not done? If not, do it.
         if (!nullop)
-            clear();
+            clear(false);
 
         // Handy ptrs.
         auto _opts = _context->_opts;
@@ -593,7 +593,7 @@ namespace yask {
 
             // Done.
             TRACE_MSG2("auto-tuner: in warmup for " << ctime << " secs");
-                in_warmup = false;
+            in_warmup = false;
 
             // Measure this step only.
             csteps = steps;
@@ -737,8 +737,11 @@ namespace yask {
                         TRACE_MSG2("auto-tuner: done");
                         return;
                     }
-                    TRACE_MSG2("auto-tuner: continuing with radius " << radius);
+                    TRACE_MSG2("auto-tuner: continuing search with radius " << radius);
                 }
+                else
+                    TRACE_MSG2("auto-tuner: continuing search from block " <<
+                               center_block..makeDimValStr(" * "));
             } // beyond next neighbor of center.
         } // search for new setting to try.
 
@@ -763,7 +766,7 @@ namespace yask {
         enable_halo_exchange = false;
         
         // Init tuner.
-        _at.clear();
+        _at.clear(false);
 
         // Reset stats.
         clear_timers();
@@ -789,7 +792,8 @@ namespace yask {
         at_timer.stop();
         os << "Auto-tuner done after " << steps_done << " step(s) in " <<
             at_timer.get_elapsed_secs() << " secs.\n";
-        os << "best-block-size: " << _opts->_block_sizes.makeDimValStr(" * ") << endl;
+        os << "best-block-size: " << _opts->_block_sizes.makeDimValStr(" * ") << endl << flush;
+        os << "best-sub-block-size: " << _opts->_sub_block_sizes.makeDimValStr(" * ") << endl << flush;
 
         // Reset stats.
         clear_timers();
@@ -1469,7 +1473,7 @@ namespace yask {
         clear_timers();
 
         // Init auto-tuner.
-        _at.clear();
+        _at.clear(false);
 
         // Adjust all settings before setting MPI buffers or sizing grids.
         // Prints out final settings.
