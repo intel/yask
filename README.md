@@ -39,5 +39,3 @@ Pre-requisites:
 * The YASK source code via 'git clone https://github.com/intel/yask'.
 
 To continue with building and running, see YASK-intro.pdf in the docs directory.
-
-Notice: If you are attempting to reproduce the example results from the "Intel Software Momentum Guide of July 26, 2016" marketing document, you will need the archived source from https://01.org/sites/default/files/downloads/yask/yask-20160526.tar_0.gz. This source package is not recommended for any other purpose because it does not contain many improvements and features in the current release.
