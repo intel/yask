@@ -15,19 +15,27 @@ Supported Platforms
 * Intel(R) Xeon Phi(TM) coprocessor supporting the Knights-Corner instruction set.
 
 Pre-requisites:
-* Intel(R) C++ compiler,
+* Intel(R) C++ compiler (17.0.2 or later recommended),
   https://software.intel.com/en-us/intel-parallel-studio-xe.
 * Intel(R) Software Development Emulator,
   https://software.intel.com/en-us/articles/intel-software-development-emulator
   (optional: for functional testing if you don't have native ISA support).
 * Intel(R) MPI Library, https://software.intel.com/en-us/intel-mpi-library,
-  or equivalent (optional: for multi-socket and multi-node operation).
-* Perl 5.010 or later.
+  or equivalent (optional: for multi-core and multi-node operation).
+* Perl (5.010 or later).
+* Awk.
+* Gnu make.
 * The 'indent' or 'gindent' utility (optional: to make the generated code easier for humans to read).
+* SWIG (3.0.12 or later),
+  http://www.swig.org (optional: for creating the Python interface).
+* Python 2 (2.7.5 or later) or 3 (3.6.1 or later),
+  https://www.python.org/downloads (optional: for creating and using the Python interface).
+* Doxygen (1.8.11 or later),
+  http://doxygen.org (optional: for creating API documentation).
+* Graphviz (2.30.1 or later),
+  http://www.graphviz.org (optional: for rendering stencil diagrams).
 * Install all these pre-requisites and ensure that all
   tool and library paths are included in the proper environment variables.
-* The YASK source code via 'git clone https://github.com/01org/yask'.
+* The YASK source code via 'git clone https://github.com/intel/yask'.
 
 To continue with building and running, see YASK-intro.pdf in the docs directory.
-
-Notice: If you are attempting to reproduce the example results from the "Intel Software Momentum Guide of July 26, 2016" marketing document, you will need the archived source from https://01.org/sites/default/files/downloads/yask/yask-20160526.tar_0.gz. This source package is not recommended for any other purpose because it does not contain many improvements and features in the current release.
