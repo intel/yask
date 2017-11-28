@@ -51,16 +51,6 @@
 #
 # cluster: How many folded vectors to evaluate simultaneously.
 #
-# eqs: comma-separated name=substr pairs used to group
-#   grid update equations into sets.
-#
-# streaming_stores: 0, 1: Whether to use streaming stores.
-#
-# hbw: 0, 1: whether to use memkind lib.
-#   If hbw=1, the memkind lib will be used to allocate grids;
-#   this can provide the ability to fine-tune which grids use
-#   HBW and which use default memory.
-#
 # pfd_l1: L1 prefetch distance (0 => disabled).
 # pfd_l2: L2 prefetch distance (0 => disabled).
 #
@@ -73,9 +63,12 @@
 # def_*_args: Default cmd-line args for specific settings.
 # more_def_args: Additional default cmd-line args.
 #
-# max_dims: max number of dimensions supported in a grid.
+# max_dims: max number of dimensions allowed in a grid.
+#
+# eqs: comma-separated name=substr pairs used to manually group
+#   grid-update equations into sets.
 
-# This is mostly wrapper for building several parts of YASK via src/*/Makefile.
+# This is mostly a wrapper for building several parts of YASK via src/*/Makefile.
 # See those specific files for many more settings.
 # Convention: when useful for distinction,
 # - vars starting with 'YK_' apply to the YASK stencil kernel.
