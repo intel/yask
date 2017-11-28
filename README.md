@@ -36,7 +36,7 @@ Pre-requisites:
   http://www.graphviz.org (optional: for rendering stencil diagrams).
 * Install all these pre-requisites and ensure that all
   tool and library paths are included in the proper environment variables.
-* The YASK source code via 'git clone https://github.com/01org/yask'.
+* The YASK source code via 'git clone https://github.com/intel/yask'.
 
 To continue with building and running, see YASK-intro.pdf in the docs directory.
 
