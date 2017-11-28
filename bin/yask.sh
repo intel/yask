@@ -71,14 +71,17 @@ while true; do
         echo "       -arch 'knc'"
         echo "       -host "`hostname`"-mic<N>"
         echo "  -sh_prefix <command>"
-        echo "     Add <command> prefix before the sub-shell."
+        echo "     Add <command> before the sub-shell."
         echo "  -exe_prefix <command>"
-        echo "     Add <command> prefix before the executable."
+        echo "     Add <command> before the executable."
+        echo "  -mpi_cmd <command>"
+        echo "     Run <command> before the executable (and before the -exe_prefix argument)."
         echo "  -ranks <N>"
         echo "     Simplified MPI run (x-dimension partition only)."
-        echo "     'mpirun -np <N>' is prepended to the exe_prefix command,"
-        echo "     and '-nrx' <N> is passed to the executable."
-        echo "     If a different MPI command or config is needed, use -exe_prefix <command>"
+        echo "     Implies the following:"
+        echo "       -mpi_cmd mpirun -np <N>"
+        echo "     The option '-nrx' <N> is passed to the executable."
+        echo "     If a different MPI command or config is needed, use -mpi_cmd <command>"
         echo "     explicitly and -nr* options as needed instead."
         echo "  -log <file>"
         echo "     Write copy of output to <file>."
@@ -101,6 +104,11 @@ while true; do
 
     elif [[ "$1" == "-sh_prefix" && -n ${2+set} ]]; then
         sh_prefix=$2
+        shift
+        shift
+
+    elif [[ "$1" == "-mpi_cmd" && -n ${2+set} ]]; then
+        mpi_cmd=$2
         shift
         shift
 
@@ -170,7 +178,7 @@ fi
 
 # Simplified MPI in x-dim only.
 if [[ -n "$nranks" ]]; then
-    exe_prefix="mpirun -np $nranks $exe_prefix"
+    true ${mpi_cmd="mpirun -np $nranks"}
 fi
 
 # Bail on errors past this point.
@@ -238,7 +246,7 @@ else
 fi
 
 # Command sequence.
-cmds="cd $dir; uname -a; lscpu; numactl -H; ldd $exe; env $envs $exe_prefix $exe $opts $@"
+cmds="cd $dir; uname -a; lscpu; numactl -H; ldd $exe; env $envs $mpi_cmd $exe_prefix $exe $opts $@"
 
 date | tee -a $logfile
 echo "===================" | tee -a $logfile
