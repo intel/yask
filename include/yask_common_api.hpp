@@ -27,6 +27,7 @@ IN THE SOFTWARE.
 
 // This file uses Doxygen 1.8 markup for API documentation-generation.
 // See http://www.stack.nl/~dimitri/doxygen.
+/** @file yask_common_api.hpp */ 
 
 #ifndef YASK_COMMON_API
 #define YASK_COMMON_API
@@ -45,15 +46,25 @@ namespace yask {
     std::string yask_get_version_string();
     
     // Forward declarations of class-pointers.
+
     class yask_output;
+    /// Shared pointer to \ref yask_output
     typedef std::shared_ptr<yask_output> yask_output_ptr;
+
     class yask_file_output;
+    /// Shared pointer to \ref yask_file_output
     typedef std::shared_ptr<yask_file_output> yask_file_output_ptr;
+
     class yask_string_output;
+    /// Shared pointer to \ref yask_string_output
     typedef std::shared_ptr<yask_string_output> yask_string_output_ptr;
+
     class yask_stdout_output;
+    /// Shared pointer to \ref yask_stdout_output
     typedef std::shared_ptr<yask_stdout_output> yask_stdout_output_ptr;
+
     class yask_null_output;
+    /// Shared pointer to \ref yask_null_output
     typedef std::shared_ptr<yask_null_output> yask_null_output_ptr;
 
     /// Factory to create output objects.

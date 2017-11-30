@@ -34,6 +34,9 @@ IN THE SOFTWARE.
 // Include the API first. This helps to ensure that it will stand alone.
 #include "yask_kernel_api.hpp"
 
+// Additional type for unsigned indices.
+typedef std::uint64_t uidx_t;
+
 // Settings from makefile.
 #include "yask_macros.hpp"
 
