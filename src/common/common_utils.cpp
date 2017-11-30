@@ -23,12 +23,39 @@ IN THE SOFTWARE.
 
 *****************************************************************************/
 
-///////// Stencil support.
+//////// Methods for output object. //////////
 
-#include "tuple.hpp"
+#include "yask_common_api.hpp"
+#include <sstream>
+#include <assert.h>
 
 using namespace std;
 
 namespace yask {
 
-} // namespace yask.
+    // Release process:
+    // - Update version if needed.
+    // - Set is_alpha to false.
+    // - Push changes to 'develop' branch.
+    // - Merge into 'master' branch.
+    // - Create release on github.
+    // - Increment last digit in version.
+    // - Set is_alpha to true;
+    // - Push changes to 'develop' branch.
+    
+    const string version = "2.00.01";
+    const bool is_alpha = true;
+
+    string yask_get_version_string() {
+
+        // Version should be in a form that will
+        // allow proper sorting for numbers up to 99
+        // after the major version.
+        string ver = version;
+
+        if (is_alpha)
+            ver += "_alpha";
+        return ver;
+    }
+}
+

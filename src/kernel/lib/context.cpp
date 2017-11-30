@@ -1568,12 +1568,13 @@ namespace yask {
             " overall-problem-size: " << overall_domain_sizes.makeDimValStr(" * ") << endl <<
             endl <<
             "Other settings:\n"
+            " yask-version:         " << yask_get_version_string() << endl <<
+            " stencil-name:         " << get_name() << endl << 
 #ifdef USE_MPI
             " num-ranks:            " << _opts->_num_ranks.makeDimValStr(" * ") << endl <<
             " rank-indices:         " << _opts->_rank_indices.makeDimValStr() << endl <<
             " rank-domain-offsets:  " << rank_domain_offsets.makeDimValOffsetStr() << endl <<
 #endif
-            " stencil-name:         " << get_name() << endl << 
             " vector-len:           " << VLEN << endl <<
             " extra-padding:        " << _opts->_extra_pad_sizes.makeDimValStr() << endl <<
             " minimum-padding:      " << _opts->_min_pad_sizes.makeDimValStr() << endl <<

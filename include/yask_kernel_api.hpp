@@ -31,11 +31,9 @@ IN THE SOFTWARE.
 #ifndef YASK_KERNEL_API
 #define YASK_KERNEL_API
 
-#include <string>
-#include <vector>
-#include <memory>
-#include <cinttypes>
 #include "yask_common_api.hpp"
+#include <vector>
+#include <cinttypes>
 
 namespace yask {
 

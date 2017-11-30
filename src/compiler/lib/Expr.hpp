@@ -27,8 +27,9 @@ IN THE SOFTWARE.
 
 // TODO: break this up into several smaller files.
 
-#ifndef EXPR_HPP
-#define EXPR_HPP
+#pragma once
+
+#include "yask_compiler_api.hpp"
 
 #include <set>
 #include <map>
@@ -40,7 +41,6 @@ IN THE SOFTWARE.
 #include <fstream>
 
 #include "tuple.hpp"
-#include "yask_compiler_api.hpp"
 
 using namespace std;
 
@@ -1004,4 +1004,3 @@ namespace yask {
     
 } // namespace yask.
     
-#endif

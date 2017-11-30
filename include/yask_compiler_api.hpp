@@ -31,10 +31,8 @@ IN THE SOFTWARE.
 #ifndef YASK_COMPILER_API
 #define YASK_COMPILER_API
 
-#include <string>
-#include <vector>
-#include <memory>
 #include "yask_common_api.hpp"
+#include <vector>
 
 namespace yask {
 

@@ -38,6 +38,12 @@ IN THE SOFTWARE.
 
 namespace yask {
 
+    /// Version information.
+    /**
+       @returns String describing the current version.
+    */
+    std::string yask_get_version_string();
+    
     // Forward declarations of class-pointers.
     class yask_output;
     typedef std::shared_ptr<yask_output> yask_output_ptr;

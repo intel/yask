@@ -369,7 +369,7 @@ MAKE_REPORT_FILE:=	make-report.$(YK_TAG).txt
 
 # Common source.
 COMM_DIR	:=	../common
-COMM_SRC_NAMES	:=	output
+COMM_SRC_NAMES	:=	output common_utils
 COMM_SRC_BASES	:=	$(addprefix $(COMM_DIR)/,$(COMM_SRC_NAMES))
 
 # Kernel source files and dirs.

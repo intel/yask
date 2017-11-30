@@ -178,7 +178,9 @@ struct AppSettings : public KernelSettings {
             "│            https://01.org/yask           │\n"
             "│    Intel Corporation, copyright 2017     │\n"
             "└──────────────────────────────────────────┘\n"
-            "\nStencil name: " YASK_STENCIL_NAME << endl;
+            "\n"
+            "Version: " << yask_get_version_string() << endl <<
+            "Stencil name: " YASK_STENCIL_NAME << endl;
 
         // Echo invocation parameters for record-keeping.
         os << "Default arguments: " DEF_ARGS << endl;
