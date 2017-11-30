@@ -597,8 +597,12 @@ namespace yask {
            This call must be made on each rank where the change is desired.
         */
         virtual void
-        reset_auto_tuner(bool enable /**< [in] If _true_, start or restart the auto-tuner search.
-                                        If _false_, disable the auto-tuner from running. */ ) =0;
+        reset_auto_tuner(bool enable
+                         /**< [in] If _true_, start or restart the auto-tuner search.
+                            If _false_, disable the auto-tuner from running. */,
+                         bool verbose = false
+                         /**< [in] If _true_, print progress information to the debug object
+                            set via set_debug_output(). */ ) =0;
 
         /// Determine whether the auto-tuner is enabled on this rank.
         /**
@@ -629,7 +633,9 @@ namespace yask {
            used in a production or test setting where correct results are expected.
         */
         virtual void
-        run_auto_tuner_now() =0;
+        run_auto_tuner_now(bool verbose = true
+                           /**< [in] If _true_, print progress information to the debug object
+                              set via set_debug_output(). */ ) =0;
         
         /// **[Advanced]** Use data-storage from existing grids in specified solution.
         /**

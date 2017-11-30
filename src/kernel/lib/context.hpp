@@ -206,12 +206,15 @@ namespace yask {
             
             // Null stream to throw away debug info.
             yask_output_ptr nullop;
+
+            // Whether to print progress.
+            bool verbose = false;
             
             // AT parameters.
             double warmup_steps = 100;
             double warmup_secs = 1.;
             idx_t min_steps = 50;
-            double min_secs = 0.1;
+            double min_secs = 0.1; // eval when either min_steps or min_secs is reached.
             idx_t min_step = 4;
             idx_t max_radius = 64;
             idx_t min_pts = 512; // 8^3.
@@ -242,7 +245,7 @@ namespace yask {
                 _context(ctx) { }
             
             // Reset all state to beginning.
-            void clear(bool mark_done);
+            void clear(bool mark_done, bool verbose = false);
 
             // Evaluate the previous run and take next auto-tuner step.
             void eval(idx_t steps, double elapsed_time);
@@ -594,10 +597,10 @@ namespace yask {
         virtual idx_t get_rank_index(const std::string& dim) const;
         virtual std::string apply_command_line_options(const std::string& args);
 
-        virtual void reset_auto_tuner(bool enable) {
-            _at.clear(!enable);
+        virtual void reset_auto_tuner(bool enable, bool verbose = false) {
+            _at.clear(!enable, verbose);
         }
-        virtual void run_auto_tuner_now();
+        virtual void run_auto_tuner_now(bool verbose = true);
         virtual bool is_auto_tuner_enabled() {
             return !_at.is_done();
         }

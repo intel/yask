@@ -308,6 +308,10 @@ int main(int argc, char** argv)
         if (opts->validate)
             context->initDiff();
 
+        // Warn if tuning.
+        if (ksoln->is_auto_tuner_enabled())
+            os << "auto-tuner is active during this trial, so results may not be representative.\n";
+
         // Stabilize.
         if (opts->pre_trial_sleep_time > 0) {
             os << flush;
@@ -327,8 +331,6 @@ int main(int argc, char** argv)
             
         // Calc and report perf.
         auto stats = context->get_stats();
-        if (opts->doAutoTune && ksoln->is_auto_tuner_enabled())
-            os << "auto-tuner has not yet converged.\n";
 
         // Remember best.
         if (context->domain_pts_ps > best_dpps) {
