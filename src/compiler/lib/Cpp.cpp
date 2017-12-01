@@ -76,7 +76,7 @@ namespace yask {
 
         // Use default var-map if not provided.
         if (!vMap)
-            vMap = &_varMap;
+            vMap = &_vec2elemMap;
         
         // Determine type to avoid virtual call.
         bool folded = gp.isGridFoldable();
@@ -105,17 +105,21 @@ namespace yask {
         getFold().visitAllPoints([&](const IntTuple& vecPoint,
                                      size_t pelem){
 
-                // Example: vecPoint contains x=0, y=2, z=1, where
-                // each val is the offset in the given fold dim.
-                // We want to map y=>(y+2), z=>(z+1) in
-                // grid-point index args.
+                // Example: vecPoint contains x=0, y=2, z=1, where each val
+                // is the offset in the given fold dim.  We want to map
+                // x=>x_elem, y=>(y_elem+2), z=>(z_elem+1) in grid-point
+                // index args.
                 VarMap vMap;
                 for (auto& dim : vecPoint.getDims()) {
                     auto& dname = dim.getName();
                     int dofs = dim.getVal();
-                    if (dofs != 0) {
+
+                    auto& ename = _vec2elemMap.at(dname);
+                    if (dofs == 0)
+                        vMap[dname] = ename;
+                    else {
                         ostringstream oss;
-                        oss << "(" << dname << "+" << dofs << ")";
+                        oss << "(" << ename << "+" << dofs << ")";
                         vMap[dname] = oss.str();
                     }
                 }
@@ -178,6 +182,10 @@ namespace yask {
 
         // Loop through all aligned read & write points.
         for (auto& gp : gps) {
+
+            // Can we use a pointer?
+            if (gp.getLoopType() != GridPoint::LOOP_OFFSET)
+                continue;
         
             // Make base point (inner-dim index = 0).
             auto bgp = makeBasePoint(gp);
@@ -199,6 +207,8 @@ namespace yask {
 
                 // Get const offsets.
                 auto& offsets = gp.getArgOffsets();
+                
+                // Get offset in inner dim.
                 auto* ofs = offsets.lookup(idim);
 
                 // Remember lowest one.
@@ -217,8 +227,13 @@ namespace yask {
         
             // Make base point (inner-dim index = 0).
             auto bgp = makeBasePoint(gp);
+
+            // Got a pointer?
             auto* p = lookupPointPtr(*bgp);
-            assert(p);
+            if (!p)
+                continue;
+
+            // Make code for pointer and prefetches.
             if (!done.count(*p)) {
 
                 // Print pointer creation.
@@ -308,13 +323,19 @@ namespace yask {
         if (_reuseVars && _vecVars.count(gp))
             codeStr = _vecVars[gp]; // do nothing.
 
-        // Can we use a pointer?
-        else if (gp.getLoopType() == GridPoint::LOOP_OFFSET) {
-        
+        // Can we use a vec pointer?
+        // Read must be aligned, and we must have a pointer.
+        else if (_vv._alignedVecs.count(gp) &&
+                 gp.getVecType() == GridPoint::VEC_FULL &&
+                 gp.getLoopType() == GridPoint::LOOP_OFFSET) {
+                
             // Got a pointer to the base addr?
             auto bgp = makeBasePoint(gp);
             auto* p = lookupPointPtr(*bgp);
             if (p) {
+#ifdef DEBUG_GP
+                cout << " //** reading from point " << gp.makeStr() << " using pointer.\n";
+#endif
 
                 // Offset in inner-dim direction.
                 string idim = _dims._innerDim;
@@ -328,8 +349,10 @@ namespace yask {
             }
         }
 
-        // Remember this point and return it.
+        // Did we make some code to read the point?
         if (codeStr.length()) {
+
+            // Remember this point and return it.
             savePointVar(gp, codeStr);
             return codeStr;
         }
@@ -453,17 +476,20 @@ namespace yask {
     }
 
     // Print init of element indices.
-    // Fill _varMap as side-effect.
+    // Fill _vec2elemMap as side-effect.
     void CppVecPrintHelper::printElemIndices(ostream& os) {
         auto& fold = getFold();
-        os << endl << " // Element indices derived from vector indices." << endl;
+        os << "\n // Element indices derived from vector indices.\n";
+        int i = 0;
         for (auto& dim : fold.getDims()) {
             auto& dname = dim.getName();
             string ename = dname + _elemSuffix;
             string cap_dname = PrinterBase::allCaps(dname);
-            os << " const idx_t " << ename << " = " <<
-                dname << " * VLEN_" << cap_dname << ";" << endl;
-            _varMap[dname] = ename;
+            os << " idx_t " << ename <<
+                " = _context->rank_domain_offsets[" << i << "] + (" <<
+                dname << " * VLEN_" << cap_dname << ");\n";
+            _vec2elemMap[dname] = ename;
+            i++;
         }
     }
 

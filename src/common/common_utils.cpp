@@ -33,29 +33,19 @@ using namespace std;
 
 namespace yask {
 
-    // Release process:
-    // - Update version if needed.
-    // - Set is_alpha to false.
-    // - Push changes to 'develop' branch.
-    // - Merge into 'master' branch.
-    // - Create release on github.
-    // - Increment last digit in version.
-    // - Set is_alpha to true;
-    // - Push changes to 'develop' branch.
-    
-    const string version = "2.00.01";
-    const bool is_alpha = true;
+    // Update this version string anytime changes are
+    // pushed to github to master or that will be
+    // merged into master.
+    // Also update the version anytime changes are
+    // pushed to develop, esp. the first push
+    // after a merge into master.
+    // Version should be in a form that will
+    // allow proper alphanumeric sorting for minor revisions
+    // and patches up to 99.
+    // Format: "major.minor.patch".
+    const string version = "2.01.00";
 
     string yask_get_version_string() {
-
-        // Version should be in a form that will
-        // allow proper sorting for numbers up to 99
-        // after the major version.
-        string ver = version;
-
-        if (is_alpha)
-            ver += "_alpha";
-        return ver;
+        return version;
     }
 }
-
