@@ -1,4 +1,4 @@
-YASK--Yet Another Stencil Kernel: A framework to facilitate exploration of the HPC stencil-performance design space, including any optimizations such as
+YASK--Yet Another Stencil Kernel: A framework to facilitate exploration of the HPC stencil-performance design space, including optimizations such as
 * Vector folding,
 * Cache blocking,
 * Memory layout,
