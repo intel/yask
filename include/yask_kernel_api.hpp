@@ -27,35 +27,41 @@ IN THE SOFTWARE.
 
 // This file uses Doxygen 1.8 markup for API documentation-generation.
 // See http://www.stack.nl/~dimitri/doxygen.
+/** @file yask_kernel_api.hpp */ 
 
 #ifndef YASK_KERNEL_API
 #define YASK_KERNEL_API
 
-#include <string>
-#include <vector>
-#include <memory>
-#include <cinttypes>
 #include "yask_common_api.hpp"
+#include <vector>
+#include <cinttypes>
 
 namespace yask {
 
     /// Type to use for indexing grids.
-    /** Index types are signed to allow negative indices in halos. */
+    /** Index types are signed to allow negative indices in padding/halos. */
 #ifdef SWIG
     typedef long int idx_t;     // SWIG doesn't seem to understand int64_t.
 #else
     typedef std::int64_t idx_t;
-    typedef std::uint64_t uidx_t;
 #endif
 
     // Forward declarations of classes and pointers.
+
     class yk_env;
+    /// Shared pointer to \ref yk_env
     typedef std::shared_ptr<yk_env> yk_env_ptr;
+
     class yk_solution;
+    /// Shared pointer to \ref yk_solution
     typedef std::shared_ptr<yk_solution> yk_solution_ptr;
+
     class yk_grid;
+    /// Shared pointer to \ref yk_grid
     typedef std::shared_ptr<yk_grid> yk_grid_ptr;
+
     class yk_stats;
+    /// Shared pointer to \ref yk_stats
     typedef std::shared_ptr<yk_stats> yk_stats_ptr;
 
     /// Factory to create a stencil solution.
@@ -597,8 +603,12 @@ namespace yask {
            This call must be made on each rank where the change is desired.
         */
         virtual void
-        reset_auto_tuner(bool enable /**< [in] If _true_, start or restart the auto-tuner search.
-                                        If _false_, disable the auto-tuner from running. */ ) =0;
+        reset_auto_tuner(bool enable
+                         /**< [in] If _true_, start or restart the auto-tuner search.
+                            If _false_, disable the auto-tuner from running. */,
+                         bool verbose = false
+                         /**< [in] If _true_, print progress information to the debug object
+                            set via set_debug_output(). */ ) =0;
 
         /// Determine whether the auto-tuner is enabled on this rank.
         /**
@@ -629,7 +639,9 @@ namespace yask {
            used in a production or test setting where correct results are expected.
         */
         virtual void
-        run_auto_tuner_now() =0;
+        run_auto_tuner_now(bool verbose = true
+                           /**< [in] If _true_, print progress information to the debug object
+                              set via set_debug_output(). */ ) =0;
         
         /// **[Advanced]** Use data-storage from existing grids in specified solution.
         /**

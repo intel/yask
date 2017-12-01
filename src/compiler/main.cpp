@@ -302,7 +302,8 @@ int main(int argc, const char* argv[]) {
 
     cout << "YASK -- Yet Another Stencil Kernel\n"
         "YASK Stencil Compiler\n"
-        "Copyright 2017, Intel Corporation.\n";
+        "Copyright 2017, Intel Corporation.\n"
+        "Version: " << yask_get_version_string() << endl;
     
     // Parse options and create the stencil-solution object.
     parseOpts(argc, argv);

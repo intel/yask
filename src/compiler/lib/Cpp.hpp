@@ -100,7 +100,7 @@ namespace yask {
 
         // Element indices.
         string _elemSuffix = "_elem";
-        VarMap _varMap; // maps vector indices to elem indices; filled by printElemIndices.
+        VarMap _vec2elemMap; // maps vector indices to elem indices; filled by printElemIndices.
         
         // A simple constant.
         virtual string addConstExpr(ostream& os, double v) {
@@ -196,6 +196,11 @@ namespace yask {
         
         // print init of un-normalized indices.
         virtual void printElemIndices(ostream& os);
+
+        // get un-normalized index.
+        virtual const string& getElemIndex(const string& dname) const {
+            return _vec2elemMap.at(dname);
+        }
 
         // Print code to set ptrName to gp.
         virtual void printPointPtr(ostream& os, const string& ptrName, const GridPoint& gp);

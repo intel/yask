@@ -27,49 +27,78 @@ IN THE SOFTWARE.
 
 // This file uses Doxygen 1.8 markup for API documentation-generation.
 // See http://www.stack.nl/~dimitri/doxygen.
+/** @file yask_compiler_api.hpp */ 
 
 #ifndef YASK_COMPILER_API
 #define YASK_COMPILER_API
 
-#include <string>
-#include <vector>
-#include <memory>
 #include "yask_common_api.hpp"
+#include <vector>
 
 namespace yask {
 
     // Forward declarations of classes and their pointers.
+
     class yc_solution;
+    /// Shared pointer to \ref yc_solution
     typedef std::shared_ptr<yc_solution> yc_solution_ptr;
+
     class yc_grid;
+    /// Shared pointer to \ref yc_grid
     typedef yc_grid* yc_grid_ptr;
 
     // Forward declarations of expression nodes and their pointers.
+
     class yc_expr_node;
+    /// Shared pointer to \ref yc_expr_node
     typedef std::shared_ptr<yc_expr_node> yc_expr_node_ptr;
+
     class yc_index_node;
+    /// Shared pointer to \ref yc_index_node
     typedef std::shared_ptr<yc_index_node> yc_index_node_ptr;
+
     class yc_equation_node;
+    /// Shared pointer to \ref yc_equation_node
     typedef std::shared_ptr<yc_equation_node> yc_equation_node_ptr;
+
     class yc_number_node;
+    /// Shared pointer to \ref yc_number_node
     typedef std::shared_ptr<yc_number_node> yc_number_node_ptr;
+
     class yc_grid_point_node;
+    /// Shared pointer to \ref yc_grid_point_node
     typedef std::shared_ptr<yc_grid_point_node> yc_grid_point_node_ptr;
+
     class yc_const_number_node;
+    /// Shared pointer to \ref yc_const_number_node
     typedef std::shared_ptr<yc_const_number_node> yc_const_number_node_ptr;
+
     class yc_negate_node;
+    /// Shared pointer to \ref yc_negate_node
     typedef std::shared_ptr<yc_negate_node> yc_negate_node_ptr;
+
     class yc_commutative_number_node;
+    /// Shared pointer to \ref yc_commutative_number_node
     typedef std::shared_ptr<yc_commutative_number_node> yc_commutative_number_node_ptr;
+
     class yc_add_node;
+    /// Shared pointer to \ref yc_add_node
     typedef std::shared_ptr<yc_add_node> yc_add_node_ptr;
+
     class yc_multiply_node;
+    /// Shared pointer to \ref yc_multiply_node
     typedef std::shared_ptr<yc_multiply_node> yc_multiply_node_ptr;
+
     class yc_subtract_node;
+    /// Shared pointer to \ref yc_subtract_node
     typedef std::shared_ptr<yc_subtract_node> yc_subtract_node_ptr;
+
     class yc_divide_node;
+    /// Shared pointer to \ref yc_divide_node
     typedef std::shared_ptr<yc_divide_node> yc_divide_node_ptr;
+
     class yc_bool_node;
+    /// Shared pointer to \ref yc_bool_node
     typedef std::shared_ptr<yc_bool_node> yc_bool_node_ptr;
 
     /// Factory to create objects needed to define a stencil solution.

@@ -520,7 +520,15 @@ namespace yask {
     }
 
     // Reset the auto-tuner.
-    void StencilContext::AT::clear(bool mark_done) {
+    void StencilContext::AT::clear(bool mark_done, bool verbose) {
+
+        // Output.
+        ostream& os = _context->get_ostr();
+#ifdef TRACE
+        this->verbose = true;
+#else
+        this->verbose = verbose;
+#endif
 
         // Null stream to throw away debug info.
         yask_output_factory yof;
@@ -531,8 +539,8 @@ namespace yask {
         if (best_rate > 0.) {
             _opts->_block_sizes = best_block;
             apply();
-            TRACE_MSG2("auto-tuner: applying block-size "  <<
-                       best_block.makeDimValStr(" * "));
+            os << "auto-tuner: applying block-size "  <<
+                best_block.makeDimValStr(" * ") << endl;
         }
         
         // Reset all vars.
@@ -559,21 +567,23 @@ namespace yask {
                 center_block[dname] = dmax;
         }
         if (!done) {
-            TRACE_MSG2("auto-tuner: starting block-size "  <<
-                       center_block.makeDimValStr(" * "));
+            os << "auto-tuner: starting block-size: "  <<
+                center_block.makeDimValStr(" * ") << endl;
+            os << "auto-tuner: starting search radius: " << radius << endl;
         }
     }
 
     // Evaluate the previous run and take next auto-tuner step.
     void StencilContext::AT::eval(idx_t steps, double etime) {
+        ostream& os = _context->get_ostr();
         
         // Leave if done.
         if (done)
             return;
 
-        // Setup not done? If not, do it.
+        // Setup not done?
         if (!nullop)
-            clear(false);
+            return;
 
         // Handy ptrs.
         auto _opts = _context->_opts;
@@ -592,7 +602,7 @@ namespace yask {
                 return;
 
             // Done.
-            TRACE_MSG2("auto-tuner: in warmup for " << ctime << " secs");
+            os << "auto-tuner: in warmup for " << ctime << " secs" << endl;
             in_warmup = false;
 
             // Measure this step only.
@@ -606,8 +616,9 @@ namespace yask {
 
         // Calc perf and reset vars for next time.
         double rate = double(csteps) / ctime;
-        TRACE_MSG2("auto-tuner: " << csteps << " steps(s) at " << rate <<
-                  " steps/sec with block-size" << _opts->_block_sizes.makeDimValStr(" * "));
+        os << "auto-tuner: " << csteps << " steps(s) at " << rate <<
+            " steps/sec with block-size " <<
+            _opts->_block_sizes.makeDimValStr(" * ") << endl;
         csteps = 0;
         ctime = 0.;
 
@@ -734,14 +745,15 @@ namespace yask {
 
                         // Reset AT and disable.
                         clear(true);
-                        TRACE_MSG2("auto-tuner: done");
+                        os << "auto-tuner: done" << endl;
                         return;
                     }
-                    TRACE_MSG2("auto-tuner: continuing search with radius " << radius);
+                    os << "auto-tuner: new search radius: " << radius << endl;
                 }
-                else
+                else {
                     TRACE_MSG2("auto-tuner: continuing search from block " <<
-                               center_block..makeDimValStr(" * "));
+                               center_block.makeDimValStr(" * "));
+                }
             } // beyond next neighbor of center.
         } // search for new setting to try.
 
@@ -752,7 +764,7 @@ namespace yask {
     }
     
     // Apply auto-tuning to some of the settings.
-    void StencilContext::run_auto_tuner_now() {
+    void StencilContext::run_auto_tuner_now(bool verbose) {
         if (!bb_valid) {
             cerr << "Error: tune_settings() called without calling prepare_solution() first.\n";
             exit_yask(1);
@@ -766,17 +778,23 @@ namespace yask {
         enable_halo_exchange = false;
         
         // Init tuner.
-        _at.clear(false);
+        _at.clear(false, verbose);
 
         // Reset stats.
         clear_timers();
 
+        // Determine number of sets to run.
+        // If wave-fronts are enabled, run a max number of these steps.
+        // TODO: only run one region during AT.
+        idx_t region_steps = _opts->_region_sizes[_dims->_step_dim];
+        idx_t step_t = min(region_steps, idx_t(3));
+        
         // Run time-steps until AT converges.
         bool done = false;
-        for (idx_t t = 0; !done; t++) {
+        for (idx_t t = 0; !done; t += step_t) {
 
             // Run a time-step.
-            run_solution(t);
+            run_solution(t, t + step_t - 1);
 
             // done on this rank?
             done = _at.is_done();
@@ -1472,8 +1490,8 @@ namespace yask {
         // reset time keepers.
         clear_timers();
 
-        // Init auto-tuner.
-        _at.clear(false);
+        // Init auto-tuner to run silently during normal operation.
+        _at.clear(false, false);
 
         // Adjust all settings before setting MPI buffers or sizing grids.
         // Prints out final settings.
@@ -1550,12 +1568,13 @@ namespace yask {
             " overall-problem-size: " << overall_domain_sizes.makeDimValStr(" * ") << endl <<
             endl <<
             "Other settings:\n"
+            " yask-version:         " << yask_get_version_string() << endl <<
+            " stencil-name:         " << get_name() << endl << 
 #ifdef USE_MPI
             " num-ranks:            " << _opts->_num_ranks.makeDimValStr(" * ") << endl <<
             " rank-indices:         " << _opts->_rank_indices.makeDimValStr() << endl <<
             " rank-domain-offsets:  " << rank_domain_offsets.makeDimValOffsetStr() << endl <<
 #endif
-            " stencil-name:         " << get_name() << endl << 
             " vector-len:           " << VLEN << endl <<
             " extra-padding:        " << _opts->_extra_pad_sizes.makeDimValStr() << endl <<
             " minimum-padding:      " << _opts->_min_pad_sizes.makeDimValStr() << endl <<

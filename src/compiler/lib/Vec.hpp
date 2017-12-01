@@ -80,7 +80,7 @@ namespace yask {
         GridPointSet _alignedVecs; // set of aligned vectors, i.e., ones that need to be read from memory.
         Point2Vecs _vblk2avblks; // each vec block -> its constituent aligned vec blocks.
         Point2VecElemLists _vblk2elemLists; // each vec block -> in-order list of its aligned vec blocks' elements.
-        GridPointSet _vecPoints;            // set of all vectorizable points.
+        GridPointSet _vecPoints;            // set of all vectorizable points read from, aligned and unaligned.
         GridPointSet _vecWrites;            // set of vectors written to.
 
         // NB: the above hold much of the same info, but arranged differently:

@@ -56,7 +56,7 @@ YC_PY_MOD	:=	$(YASK_DIR)/$(YC_MODULE).py
 
 # Common source.
 COMM_DIR	:=	../common
-COMM_SRC_NAMES	:=	output tuple
+COMM_SRC_NAMES	:=	output common_utils
 COMM_SRC_BASES	:=	$(addprefix $(COMM_DIR)/,$(COMM_SRC_NAMES))
 
 # Compiler source files and dirs.

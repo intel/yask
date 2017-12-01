@@ -531,6 +531,7 @@ namespace yask {
                     string istart = "start_" + idim;
                     string istop = "stop_" + idim;
                     string istep = "step_" + idim;
+                    string iestep = "step_" + idim + "_elem";
                     os << endl << " // Calculate a series of clusters iterating in +'" << idim <<
                         "' direction from " << _dims._stencilDims.makeDimStr() <<
                         " indices in 'idxs' to '" << istop << "'.\n" <<
@@ -548,10 +549,14 @@ namespace yask {
                         istop << ") {\n";
                     printIndices(os);
                     os << " idx_t " << istart << " = " << idim << ";\n";
-                    os << " idx_t " << istep << " = CMULT_" << allCaps(idim) << "; // number of vectors.\n";
+                    os << " idx_t " << istep << " = CMULT_" <<
+                        allCaps(idim) << "; // number of vectors.\n";
+                    os << " idx_t " << iestep << " = " <<
+                        istep << " * VLEN_" << allCaps(idim) << "; // number of elements.\n";
 
                     // C++ vector print assistant.
                     CppVecPrintHelper* vp = newCppVecPrintHelper(vv, cv);
+                    vp->printElemIndices(os);
 
                     // Start forced-inline code.
                     os << "\n // Force inlining if possible.\n"
@@ -571,8 +576,9 @@ namespace yask {
                     os << "\n // Inner loop.\n"
                         " for (idx_t " << idim << " = " << istart << "; " <<
                         idim << " < " << istop << "; " <<
-                        idim << " += " << istep << ") {\n";
-            
+                        idim << " += " << istep << ", " <<
+                        vp->getElemIndex(idim) << " += " << iestep << ") {\n";
+
                     // Generate loop body using vars stored in print helper.
                     // Visit all expressions to cover the whole cluster.
                     PrintVisitorBottomUp pcv(os, *vp, _settings);

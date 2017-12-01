@@ -23,12 +23,29 @@ IN THE SOFTWARE.
 
 *****************************************************************************/
 
-///////// Stencil support.
+//////// Methods for output object. //////////
 
-#include "tuple.hpp"
+#include "yask_common_api.hpp"
+#include <sstream>
+#include <assert.h>
 
 using namespace std;
 
 namespace yask {
 
-} // namespace yask.
+    // Update this version string anytime changes are
+    // pushed to github to master or that will be
+    // merged into master.
+    // Also update the version anytime changes are
+    // pushed to develop, esp. the first push
+    // after a merge into master.
+    // Version should be in a form that will
+    // allow proper alphanumeric sorting for minor revisions
+    // and patches up to 99.
+    // Format: "major.minor.patch".
+    const string version = "2.01.00";
+
+    string yask_get_version_string() {
+        return version;
+    }
+}

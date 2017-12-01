@@ -29,6 +29,7 @@ IN THE SOFTWARE.
 
 namespace yask {
 
+    // Determine vectorizability information about this grid point.
     // Called when a grid point is read in a stencil function.
     void VecInfoVisitor::visit(GridPoint* gp) {
 
@@ -106,7 +107,7 @@ namespace yask {
                 assert(alignedElem >= 0);
                 assert(alignedElem < _vlen);
 #ifdef DEBUG_VV
-                cout << "   //** general-" << gp->makeStr() << "[" << pelem << "] = aligned-" <<
+                cout << "   //** " << gp->makeStr() << "[" << pelem << "] = aligned-" <<
                     alignedVec.makeStr() << "[" << alignedElem << "]" << endl;
 #endif
 
@@ -140,25 +141,44 @@ namespace yask {
             codeStr = _vecVars[gp]; // do nothing.
 
         // Scalar GP?
-        else if (gp.getVecType() == GridPoint::VEC_NONE)
+        else if (gp.getVecType() == GridPoint::VEC_NONE) {
+#ifdef DEBUG_GP
+            cout << " //** reading from point " << gp.makeStr() << " as scalar.\n";
+#endif
             codeStr = readFromScalarPoint(os, gp);
+        }
 
         // Non-scalar but non-vectorizable GP?
-        else if (gp.getVecType() == GridPoint::VEC_PARTIAL)
+        else if (gp.getVecType() == GridPoint::VEC_PARTIAL) {
+#ifdef DEBUG_GP
+            cout << " //** reading from point " << gp.makeStr() << " as partially vectorized.\n";
+#endif
             codeStr = printNonVecRead(os, gp);
+        }
 
         // Everything below this should be VEC_FULL.
 
         // An aligned vector block?
-        else if (_vv._alignedVecs.count(gp))
+        else if (_vv._alignedVecs.count(gp)) {
+#ifdef DEBUG_GP
+            cout << " //** reading from point " << gp.makeStr() << " as fully vectorized and aligned.\n";
+#endif
             codeStr = printAlignedVecRead(os, gp);
-
+        }
+        
         // Unaligned loads allowed?
-        else if (_allowUnalignedLoads)
+        else if (_allowUnalignedLoads) {
+#ifdef DEBUG_GP
+            cout << " //** reading from point " << gp.makeStr() << " as fully vectorized and unaligned.\n";
+#endif
             codeStr = printUnalignedVecRead(os, gp);
+        }
 
         // Need to construct an unaligned vector block?
         else if (_vv._vblk2elemLists.count(gp)) {
+#ifdef DEBUG_GP
+            cout << " //** reading from point " << gp.makeStr() << " as fully vectorized and unaligned.\n";
+#endif
 
             // make sure prerequisites exist by recursing.
             auto avbs = _vv._vblk2avblks[gp];
@@ -173,7 +193,7 @@ namespace yask {
 
         else {
             cerr << "Error: on point " << gp.makeStr() << endl;
-            assert("point type unknown");
+            assert(false && "point type unknown");
         }
 
         // Remember this point and return it.

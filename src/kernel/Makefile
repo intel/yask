@@ -54,7 +54,7 @@ else ifeq ($(stencil),cube)
  MACROS		+=	MAX_EXCH_DIST=3
  radius		=	2
 
-else ifeq ($(stencil),iso3dfd)
+else ifneq ($(findstring iso3dfd,$(stencil)),)
  MACROS				+=	MAX_EXCH_DIST=1
  radius				=	8
  def_rank_args			=	-d 1024 -dx 512 # assume 2 ranks/node in 'x'.
@@ -369,7 +369,7 @@ MAKE_REPORT_FILE:=	make-report.$(YK_TAG).txt
 
 # Common source.
 COMM_DIR	:=	../common
-COMM_SRC_NAMES	:=	output
+COMM_SRC_NAMES	:=	output common_utils
 COMM_SRC_BASES	:=	$(addprefix $(COMM_DIR)/,$(COMM_SRC_NAMES))
 
 # Kernel source files and dirs.
@@ -484,7 +484,7 @@ ifneq ($(findstring icpc,$(notdir $(YK_CXX))),)  # Intel compiler
 
  YK_CXXFLAGS	+=      $(ISA) -debug extended -restrict -ansi-alias -fno-alias
  YK_CXXFLAGS	+=	-fimf-precision=low -fast-transcendentals -no-prec-sqrt \
-			-no-prec-div -fp-model fast=2 -fno-protect-parens -rcd -ftz \
+			-no-prec-div -fp-model fast=2 -fno-protect-parens -ftz \
 			-fma -fimf-domain-exclusion=none -qopt-assume-safe-padding
  YK_CXXFLAGS	+=	-no-diag-message-catalog
  YK_CXXFLAGS	+=	-vec-threshold0
@@ -694,10 +694,12 @@ yk-test-no-yc: kernel-only
 # run the tests from the top-level Makefile.
 all-tests:
 	$(MAKE) clean; $(MAKE) stencil=3axis fold=x=4,y=2 cxx-yk-grid-test
+	$(MAKE) clean; $(MAKE) stencil=9axis fold=z=2 cxx-yk-grid-test
+	$(MAKE) clean; $(MAKE) stencil=3plane fold=y=2,z=4 cxx-yk-grid-test
+	$(MAKE) clean; $(MAKE) stencil=cube fold=x=2,y=2,z=2 cxx-yk-grid-test
 	$(MAKE) clean; $(MAKE) stencil=iso3dfd fold=x=4,y=2 yc-and-yk-test
 	$(MAKE) clean; $(MAKE) stencil=awp_elastic yc-and-yk-test real_bytes=8
 	$(MAKE) clean; $(MAKE) stencil=fsg_abc yc-and-yk-test real_bytes=8
-	$(MAKE) clean; $(MAKE) stencil=cube yc-and-yk-test real_bytes=8
 	$(MAKE) clean; $(MAKE) stencil=iso3dfd cxx-yk-api-test
 	$(MAKE) clean; $(MAKE) stencil=iso3dfd py-yk-api-test
 
