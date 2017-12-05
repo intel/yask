@@ -42,7 +42,7 @@ protected:
     // Grids.
     MAKE_GRID(pressure, t, x, y, z); // time-varying 3D pressure grid.
     MAKE_GRID(vel, x, y, z);         // constant 3D vel grid.
-    MAKE_GRID(coeff, r);             // array of FD coefficients.
+    MAKE_ARRAY(coeff, r);            // FD coefficients.
     
 public:
 
@@ -122,9 +122,9 @@ protected:
     // In practice, the interior values would be set to 1.0,
     // and values nearer the boundary would be set to values
     // increasingly approaching 0.0.
-    MAKE_GRID(cr_x, x);
-    MAKE_GRID(cr_y, y);
-    MAKE_GRID(cr_z, z);
+    MAKE_ARRAY(cr_x, x);
+    MAKE_ARRAY(cr_y, y);
+    MAKE_ARRAY(cr_z, z);
     
 public:
     Iso3dfdSpongeStencil(StencilList& stencils, int radius=8) :

@@ -23,8 +23,8 @@ IN THE SOFTWARE.
 
 *****************************************************************************/
 
-// Implement various shapes of example 3D stencils that read and write from
-// only one 3D grid.
+// Implement various example symmetric 3D stencil shapes that read and
+// write from only one 3D grid.
 
 #include "Soln.hpp"
 
