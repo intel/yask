@@ -494,8 +494,10 @@ ifneq ($(findstring icpc,$(notdir $(YK_CXX))),)  # Intel compiler
  #YK_CXXFLAGS	+=	-qopt-report-phase=VEC,PAR,OPENMP,IPO,LOOP
  YK_CXX_VER_CMD	:=	$(YK_CXX) -V
 
- # work around an optimization anomaly.
- MACROS		+=	NO_STORE_INTRINSICS
+# use 512-bit code on SKL
+ifneq ($(filter $(arch),skx skl),)
+ YK_CXXFLAGS	+=	-qopt-zmm-usage=high
+endif
 
 else # not Intel compiler
  YK_CXXFLAGS	+=	$(GCXX_ISA) -Wno-unknown-pragmas -Wno-unused-variable -Wno-unused-but-set-variable
