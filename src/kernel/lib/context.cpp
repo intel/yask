@@ -111,7 +111,7 @@ namespace yask {
     
     ///// Top-level methods for evaluating reference and optimized stencils.
 
-    // Eval stencil equation group(s) over grid(s) using scalar code.
+    // Eval stencil group(s) over grid(s) using scalar code.
     void StencilContext::calc_rank_ref()
     {
         run_time.start();
@@ -173,31 +173,31 @@ namespace yask {
             misc_idxs.stop[step_posn] = stop_t;
             misc_idxs.step[step_posn] = step_t;
         
-            // Loop thru eq-groups.
-            for (auto* eg : eqGroups) {
+            // Loop thru groups.
+            for (auto* sg : stGroups) {
 
-                // Halo exchange(s) needed for this eq-group.
+                // Halo exchange(s) needed for this group.
                 // TODO: do overall problem here w/o halos to catch
                 // halo bugs during validation.
                 exchange_halos_all();
 
                 // Define misc-loop function.  Since step is always 1, we
-                // ignore misc_stop.  If point is in sub-domain for this eq
+                // ignore misc_stop.  If point is in sub-domain for this
                 // group, then evaluate the reference scalar code.
 #define misc_fn(misc_idxs)                                  \
-                if (eg->is_in_valid_domain(misc_idxs.start)) \
-                    eg->calc_scalar(misc_idxs.start)
+                if (sg->is_in_valid_domain(misc_idxs.start)) \
+                    sg->calc_scalar(misc_idxs.start)
                 
                 // Scan through n-D space.
                 TRACE_MSG("calc_rank_ref: step " << start_t);
 #include "yask_misc_loops.hpp"
 #undef misc_fn
                 
-                // Remember grids that have been written to by this eq-group,
+                // Remember grids that have been written to by this group,
                 // updated at step 'start_t + step_t'.
-                mark_grids_dirty(*eg, start_t + step_t);
+                mark_grids_dirty(*sg, start_t + step_t);
                 
-            } // eq-groups.
+            } // groups.
         } // iterations.
 
         // Final halo exchange.
@@ -206,7 +206,7 @@ namespace yask {
         run_time.stop();
     }
 
-    // Eval equation group(s) over grid(s) using optimized code.
+    // Eval stencil group(s) over grid(s) using optimized code.
     void StencilContext::run_solution(idx_t first_step_index,
                                       idx_t last_step_index)
     {
@@ -252,9 +252,9 @@ namespace yask {
         // Extend end points for overlapping regions due to wavefront angle.
         // For each subsequent time step in a region, the spatial location
         // of each block evaluation is shifted by the angle for each
-        // eq-group. So, the total shift in a region is the angle * num
+        // stencil-group. So, the total shift in a region is the angle * num
         // stencils * num timesteps. Thus, the number of overlapping regions
-        // is ceil(total shift / region size). This assumes all eq-groups
+        // is ceil(total shift / region size). This assumes all groups
         // are inter-dependent to find minimum extension. Actual required
         // extension may be less, but this will just result in some calls to
         // calc_region() that do nothing.
@@ -271,7 +271,7 @@ namespace yask {
         // x = begin_dx      end_dx end_dx
         //                   (orig) (after extension)
         //
-        idx_t nshifts = (idx_t(eqGroups.size()) * abs(step_t)) - 1;
+        idx_t nshifts = (idx_t(stGroups.size()) * abs(step_t)) - 1;
         for (auto& dim : _dims->_domain_dims.getDims()) {
             auto& dname = dim.getName();
             end[dname] += angles[dname] * nshifts;
@@ -313,34 +313,34 @@ namespace yask {
             rank_idxs.step[step_posn] = step_t;
             
             // If doing only one time step in a region (default), loop
-            // through equations here, and do only one equation group at a
+            // through groups here, and do only one group at a
             // time in calc_region(). This is similar to loop in
             // calc_rank_ref().
             if (abs(step_t) == 1) {
 
-                for (auto* eg : eqGroups) {
+                for (auto* sg : stGroups) {
 
-                    // Halo exchange(s) needed for this eq-group.
-                    exchange_halos(start_t, stop_t, *eg);
+                    // Halo exchange(s) needed for this group.
+                    exchange_halos(start_t, stop_t, *sg);
 
-                    // Eval this eq-group in calc_region().
-                    EqGroupSet eqGroup_set;
-                    eqGroup_set.insert(eg);
-                    EqGroupSet* eqGroup_ptr = &eqGroup_set;
+                    // Eval this group in calc_region().
+                    StencilGroupSet stGroup_set;
+                    stGroup_set.insert(sg);
+                    StencilGroupSet* stGroup_ptr = &stGroup_set;
 
                     // Include automatically-generated loop code that calls
                     // calc_region() for each region.
                     TRACE_MSG("run_solution: step " << start_t);
 #include "yask_rank_loops.hpp"
 
-                    // Remember grids that have been written to by this eq-group,
+                    // Remember grids that have been written to by this group,
                     // updated at step 'start_t + step_t'.
-                    mark_grids_dirty(*eg, start_t + step_t);
+                    mark_grids_dirty(*sg, start_t + step_t);
                 }
             }
 
             // If doing more than one time step in a region (temporal wave-front),
-            // must loop through all eq-groups in calc_region().
+            // must loop through all groups in calc_region().
             else {
 
                 // TODO: enable reverse time w/wave-fronts.
@@ -355,8 +355,8 @@ namespace yask {
                     exit_yask(1);
                 }
                 
-                // Eval all equation groups.
-                EqGroupSet* eqGroup_ptr = NULL;
+                // Eval all stencil groups.
+                StencilGroupSet* stGroup_ptr = NULL;
                 
                 // Include automatically-generated loop code that calls calc_region() for each region.
                 TRACE_MSG("run_solution: steps " << start_t << " ... (end before) " << stop_t);
@@ -406,9 +406,9 @@ namespace yask {
 
     // Calculate results within a region.
     // Each region is typically computed in a separate OpenMP 'for' region.
-    // In it, we loop over the time steps and the stencil
-    // equations and evaluate the blocks in the region.
-    void StencilContext::calc_region(EqGroupSet* eqGroup_set,
+    // In it, we loop over the time steps and the stencils
+    // and evaluate the blocks in the region.
+    void StencilContext::calc_region(StencilGroupSet* stGroup_set,
                                      const ScanIndices& rank_idxs) {
 
         int ndims = _dims->_stencil_dims.size();
@@ -456,28 +456,28 @@ namespace yask {
             region_idxs.start[step_posn] = start_t;
             region_idxs.stop[step_posn] = stop_t;
             
-            // equations to evaluate at this time step.
-            for (auto* eg : eqGroups) {
-                if (!eqGroup_set || eqGroup_set->count(eg)) {
-                    TRACE_MSG("calc_region: eq-group '" << eg->get_name() << "' w/BB " <<
-                              eg->bb_begin.makeDimValStr() << " ... (end before) " <<
-                              eg->bb_end.makeDimValStr());
+            // Stencil groups to evaluate at this time step.
+            for (auto* sg : stGroups) {
+                if (!stGroup_set || stGroup_set->count(sg)) {
+                    TRACE_MSG("calc_region: stencil-group '" << sg->get_name() << "' w/BB " <<
+                              sg->bb_begin.makeDimValStr() << " ... (end before) " <<
+                              sg->bb_end.makeDimValStr());
 
                     // For wavefront adjustments, see conceptual diagram in
-                    // calc_rank_opt().  In this function, 1 of the 4
+                    // run_solution().  In this function, 1 of the 4
                     // parallelogram-shaped regions is being evaluated.  At
                     // each time-step, the parallelogram may be trimmed
                     // based on the BB.
                     
-                    // Actual region boundaries must stay within BB for this eq group.
+                    // Actual region boundaries must stay within BB for this group.
                     // Note that i-loop is over domain vars only (skipping over step var).
                     bool ok = true;
                     for (int i = step_posn + 1; i < ndims; i++) {
                         auto& dname = _dims->_stencil_dims.getDimName(i);
-                        assert(eg->bb_begin.lookup(dname));
-                        region_idxs.begin[i] = max<idx_t>(rank_start[i], eg->bb_begin[dname]);
-                        assert(eg->bb_end.lookup(dname));
-                        region_idxs.end[i] = min<idx_t>(rank_stop[i], eg->bb_end[dname]);
+                        assert(sg->bb_begin.lookup(dname));
+                        region_idxs.begin[i] = max<idx_t>(rank_start[i], sg->bb_begin[dname]);
+                        assert(sg->bb_end.lookup(dname));
+                        region_idxs.end[i] = min<idx_t>(rank_stop[i], sg->bb_end[dname]);
                         if (region_idxs.end[i] <= region_idxs.begin[i])
                             ok = false;
                     }
@@ -506,7 +506,7 @@ namespace yask {
                     // implement temporal wavefront.  We only shift
                     // backward, so region loops must increment. They may do
                     // so in any order.  TODO: shift only what is needed by
-                    // this eq-group, not the global max.
+                    // this group, not the global max.
                     // Note that i-loop is over domain vars only (skipping over step var).
                     for (int i = step_posn + 1; i < ndims; i++) {
                         auto& dname = _dims->_stencil_dims.getDimName(i);
@@ -515,7 +515,7 @@ namespace yask {
                         rank_stop[i] -= angle;
                     }
                 }            
-            } // stencil equations.
+            } // stencil groups.
         } // time.
     }
 
@@ -556,6 +556,9 @@ namespace yask {
         ctime = 0.;
         csteps = 0;
         in_warmup = true;
+
+        // Set min blocks to number of region threads.
+        min_blks = _context->set_region_threads();
         
         // Adjust starting block if needed.
         for (auto dim : center_block.getDims()) {
@@ -1132,7 +1135,7 @@ namespace yask {
                 int mandist = _mpiInfo->man_dists.at(nidx);
                     
                 // Check against max dist needed.  TODO: determine max dist
-                // automatically from stencil equations; may not be same for all
+                // automatically from stencils; may not be same for all
                 // grids.
 #ifndef MAX_EXCH_DIST
 #define MAX_EXCH_DIST 3
@@ -1495,7 +1498,7 @@ namespace yask {
 
         // Adjust all settings before setting MPI buffers or sizing grids.
         // Prints out final settings.
-        _opts->adjustSettings(os);
+        _opts->adjustSettings(os, _env);
 
         // Size grids based on finalized settings.
         update_grids();
@@ -1516,13 +1519,13 @@ namespace yask {
 
         // Set the number of threads for a region to help avoid expensive
         // thread-number changing.
-        set_region_threads();
+        int rthreads = set_region_threads();
 
         // Run a dummy nested OMP loop to make sure nested threading is
         // initialized.
 #ifdef _OPENMP
 #pragma omp parallel for
-        for (int i = 0; i < omp_get_max_threads() * 100; i++) {
+        for (int i = 0; i < rthreads * 100; i++) {
 
             idx_t dummy = 0;
             set_block_threads();
@@ -1543,12 +1546,12 @@ namespace yask {
         os << endl;
         os << "Num grids: " << gridPtrs.size() << endl;
         os << "Num grids to be updated: " << outputGridPtrs.size() << endl;
-        os << "Num stencil equation-groups: " << eqGroups.size() << endl;
+        os << "Num stencil groups: " << stGroups.size() << endl;
         
         // Set up data based on MPI rank, including grid positions.
         setupRank();
 
-        // Determine bounding-boxes for all eq-groups.
+        // Determine bounding-boxes for all groups.
         find_bounding_boxes();
 
         // Alloc grids and MPI bufs.
@@ -1584,25 +1587,25 @@ namespace yask {
             " L2-prefetch-distance: " << PFD_L2 << endl <<
             endl;
         
-        // sums across eqs for this rank.
+        // sums across groups for this rank.
         rank_numWrites_1t = 0;
         rank_reads_1t = 0;
         rank_numFpOps_1t = 0;
-        for (auto* eg : eqGroups) {
-            idx_t updates1 = eg->get_scalar_points_written();
-            idx_t updates_domain = updates1 * eg->bb_num_points;
+        for (auto* sg : stGroups) {
+            idx_t updates1 = sg->get_scalar_points_written();
+            idx_t updates_domain = updates1 * sg->bb_num_points;
             rank_numWrites_1t += updates_domain;
-            idx_t reads1 = eg->get_scalar_points_read();
-            idx_t reads_domain = reads1 * eg->bb_num_points;
+            idx_t reads1 = sg->get_scalar_points_read();
+            idx_t reads_domain = reads1 * sg->bb_num_points;
             rank_reads_1t += reads_domain;
-            idx_t fpops1 = eg->get_scalar_fp_ops();
-            idx_t fpops_domain = fpops1 * eg->bb_num_points;
+            idx_t fpops1 = sg->get_scalar_fp_ops();
+            idx_t fpops_domain = fpops1 * sg->bb_num_points;
             rank_numFpOps_1t += fpops_domain;
-            os << "Stats for equation-group '" << eg->get_name() << "':\n" <<
-                " sub-domain:                 " << eg->bb_begin.makeDimValStr() <<
-                " ... " << eg->bb_end.subElements(1).makeDimValStr() << endl <<
-                " sub-domain size:            " << eg->bb_len.makeDimValStr(" * ") << endl <<
-                " valid points in sub domain: " << makeNumStr(eg->bb_num_points) << endl <<
+            os << "Stats for equation-group '" << sg->get_name() << "':\n" <<
+                " sub-domain:                 " << sg->bb_begin.makeDimValStr() <<
+                " ... " << sg->bb_end.subElements(1).makeDimValStr() << endl <<
+                " sub-domain size:            " << sg->bb_len.makeDimValStr(" * ") << endl <<
+                " valid points in sub domain: " << makeNumStr(sg->bb_num_points) << endl <<
                 " grid-updates per point:     " << updates1 << endl <<
                 " grid-updates in sub-domain: " << makeNumStr(updates_domain) << endl <<
                 " grid-reads per point:       " << reads1 << endl <<
@@ -1688,9 +1691,9 @@ namespace yask {
             "Notes:\n"
             " Domain-sizes and overall-problem-sizes are based on rank-domain sizes\n"
             "  and number of ranks regardless of number of grids or sub-domains.\n"
-            " Num-writes-required is based on sum of grid-updates in sub-domain across equation-group(s).\n"
-            " Num-reads-required is based on sum of grid-reads in sub-domain across equation-group(s).\n"
-            " Est-FP-ops are based on sum of est-FP-ops in sub-domain across equation-group(s).\n"
+            " Num-writes-required is based on sum of grid-updates in sub-domain across stencil-group(s).\n"
+            " Num-reads-required is based on sum of grid-reads in sub-domain across stencil-group(s).\n"
+            " Est-FP-ops are based on sum of est-FP-ops in sub-domain across stencil-group(s).\n"
             "\n";
     }
 
@@ -1798,54 +1801,43 @@ namespace yask {
         bb_size = bb_len.product();
         if (force_full)
             bb_num_points = bb_size;
-        bb_simple = true;       // assume ok.
 
         // Solid rectangle?
+        bb_is_full = true;
         if (bb_num_points != bb_size) {
             os << "Warning: '" << name << "' domain has only " <<
                 makeNumStr(bb_num_points) <<
                 " valid point(s) inside its bounding-box of " <<
                 makeNumStr(bb_size) <<
                 " point(s); slower scalar calculations will be used.\n";
-            bb_simple = false;
+            bb_is_full = false;
         }
 
-        else {
-
-            // Lengths are cluster-length multiples?
-            bool is_cluster_mult = true;
-            for (auto& dim : domain_dims.getDims()) {
-                auto& dname = dim.getName();
-                if (bb_len[dname] % dims->_cluster_pts[dname]) {
-                    is_cluster_mult = false;
-                    break;
-                }
-            }
-            if (!is_cluster_mult) {
+        // Does everything start on a vector-length boundary?
+        bb_is_aligned = true;
+        for (auto& dim : domain_dims.getDims()) {
+            auto& dname = dim.getName();
+            if ((bb_begin[dname] - context.rank_domain_offsets[dname]) %
+                dims->_fold_pts[dname] != 0) {
                 os << "Warning: '" << name << "' domain"
-                    " has one or more sizes that are not vector-cluster multiples;"
+                    " has one or more starting edges not on vector boundaries;"
                     " slower scalar calculations will be used.\n";
-                bb_simple = false;
+                bb_is_aligned = false;
+                break;
             }
+        }
 
-            else {
-
-                // Does everything start on a vector-length boundary?
-                bool is_aligned = true;
-                for (auto& dim : domain_dims.getDims()) {
-                    auto& dname = dim.getName();
-                    if ((bb_begin[dname] - context.rank_domain_offsets[dname]) %
-                        dims->_fold_pts[dname]) {
-                        is_aligned = false;
-                        break;
-                    }
-                }
-                if (!is_aligned) {
+        // Lengths are cluster-length multiples?
+        bb_is_cluster_mult = true;
+        for (auto& dim : domain_dims.getDims()) {
+            auto& dname = dim.getName();
+            if (bb_len[dname] % dims->_cluster_pts[dname] != 0) {
+                if (bb_is_full && bb_is_aligned)
                     os << "Warning: '" << name << "' domain"
-                        " has one or more starting edges not on vector boundaries;"
-                        " slower scalar calculations will be used.\n";
-                    bb_simple = false;
-                }
+                        " has one or more sizes that are not vector-cluster multiples;"
+                        " slower scalar calculations will be used in remainder sub-blocks.\n";
+                bb_is_cluster_mult = false;
+                break;
             }
         }
 
@@ -1853,15 +1845,15 @@ namespace yask {
         bb_valid = true;
     }
     
-    // Set the bounding-box for each eq-group and whole domain.
+    // Set the bounding-box for each stencil-group and whole domain.
     // Also sets wave-front angles.
     void StencilContext::find_bounding_boxes()
     {
         ostream& os = get_ostr();
 
-        // Find BB for each eq group.
-        for (auto eg : eqGroups)
-            eg->find_bounding_box();
+        // Find BB for each group.
+        for (auto sg : stGroups)
+            sg->find_bounding_box();
 
         // Overall BB based only on rank offsets and rank domain sizes.
         bb_begin = rank_domain_offsets;
@@ -1883,7 +1875,7 @@ namespace yask {
     }
 
     // Exchange dirty halo data for all grids, regardless
-    // of their eq-group.
+    // of their stencil-group.
     void StencilContext::exchange_halos_all() {
 
 #ifdef USE_MPI
@@ -1899,36 +1891,36 @@ namespace yask {
             }
         }
         
-        // Initial halo exchange for each eq-group.
-        for (auto* eg : eqGroups) {
+        // Initial halo exchange for each group.
+        for (auto* sg : stGroups) {
 
             // Do exchange over max steps.
-            exchange_halos(start, stop, *eg);
+            exchange_halos(start, stop, *sg);
         }
 #endif
     }
     
-    // Exchange halo data needed by eq-group 'eg' at the given time.
+    // Exchange halo data needed by stencil-group 'sg' at the given time.
     // Data is needed for input grids that have not already been updated.
     // [BIG] TODO: overlap halo exchange with computation.
-    void StencilContext::exchange_halos(idx_t start, idx_t stop, EqGroupBase& eg)
+    void StencilContext::exchange_halos(idx_t start, idx_t stop, StencilGroupBase& sg)
     {
 #ifdef USE_MPI
         if (!enable_halo_exchange || _env->num_ranks < 2)
             return;
         mpi_time.start();
         TRACE_MSG("exchange_halos: " << start << " ... (end before) " << stop <<
-                  " for eq-group '" << eg.get_name() << "'");
+                  " for eq-group '" << sg.get_name() << "'");
         auto opts = get_settings();
         auto& sd = _dims->_step_dim;
 
         // 1D array to store send request handles.
         // We use a 1D array so we can call MPI_Waitall().
-        MPI_Request send_reqs[eg.inputGridPtrs.size() * _mpiInfo->neighborhood_size];
+        MPI_Request send_reqs[sg.inputGridPtrs.size() * _mpiInfo->neighborhood_size];
 
         // 2D array for receive request handles.
         // We use a 2D array to simplify individual indexing.
-        MPI_Request recv_reqs[eg.inputGridPtrs.size()][_mpiInfo->neighborhood_size];
+        MPI_Request recv_reqs[sg.inputGridPtrs.size()][_mpiInfo->neighborhood_size];
 
         // Loop through steps.  This loop has to be outside halo-step loop
         // because we only have one buffer per step. Normally, we only
@@ -1952,8 +1944,8 @@ namespace yask {
                     TRACE_MSG("exchange_halos: unpacking data for step " << t << "...");
             
                 // Loop thru all input grids in this group.
-                for (size_t gi = 0; gi < eg.inputGridPtrs.size(); gi++) {
-                    auto gp = eg.inputGridPtrs[gi];
+                for (size_t gi = 0; gi < sg.inputGridPtrs.size(); gi++) {
+                    auto gp = sg.inputGridPtrs[gi];
                     MPI_Request* grid_recv_reqs = recv_reqs[gi];
 
                     // Only need to swap grids whose halos are not up-to-date
@@ -2086,8 +2078,8 @@ namespace yask {
             } // exchange sequence.
             
             // Mark grids as up-to-date.
-            for (size_t gi = 0; gi < eg.inputGridPtrs.size(); gi++) {
-                auto gp = eg.inputGridPtrs[gi];
+            for (size_t gi = 0; gi < sg.inputGridPtrs.size(); gi++) {
+                auto gp = sg.inputGridPtrs[gi];
                 if (gp->is_dirty(t)) {
                     gp->set_dirty(false, t);
                     TRACE_MSG("grid '" << gp->get_name() <<
@@ -2110,12 +2102,12 @@ namespace yask {
 #endif
     }
 
-    // Mark grids that have been written to by eq-group 'eg'.
+    // Mark grids that have been written to by stencil-group 'sg'.
     // TODO: only mark grids that are written to in their halo-read area.
     // TODO: add index for misc dim(s).
-    void StencilContext::mark_grids_dirty(EqGroupBase& eg, idx_t step_idx)
+    void StencilContext::mark_grids_dirty(StencilGroupBase& sg, idx_t step_idx)
     {
-        for (auto gp : eg.outputGridPtrs) {
+        for (auto gp : sg.outputGridPtrs) {
             gp->set_dirty(true, step_idx);
             TRACE_MSG("grid '" << gp->get_name() <<
                       "' marked as dirty at step " << step_idx);

@@ -693,7 +693,7 @@ namespace yask {
         Grid* _grid = 0;        // the grid this point is from.
 
         // Index exprs for each dim, e.g.,
-        // "3, x-5, y*2, z+4" for dims "n, x, y, z".
+        // "3, x-5, y*2, z+4" for dims "w, x, y, z".
         NumExprPtrVec _args;
 
         // Simple offset for each expr that is dim +/- offset, e.g.,
@@ -702,7 +702,7 @@ namespace yask {
         IntTuple _offsets;
 
         // Simple value for each expr that is a const, e.g.,
-        // "n=3" from above example.
+        // "w=3" from above example.
         // Set in ctor and modified via setArgOffset/Const().
         IntTuple _consts;
 
@@ -787,6 +787,10 @@ namespace yask {
         virtual string makeNormArgStr(const string& dname,
                                       const Dimensions& dims,
                                       const VarMap* varMap = 0) const;
+
+        // Make string like "g->_wrap_step(t+1)" from original arg "t+1"
+        // if grid uses step dim, "0" otherwise.
+        virtual string makeStepArgStr(const string& gridPtr, const Dimensions& dims) const;
 
         // Create a deep copy of this expression,
         // except pointed-to grid is not copied.

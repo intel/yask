@@ -27,8 +27,8 @@ IN THE SOFTWARE.
 
 namespace yask {
     
-    /// Classes that support evaluation of one stencil equation-group.
-    /// A context contains of one or more equation-groups.
+    /// Classes that support evaluation of one stencil group.
+    /// A context contains of one or more groups.
 
     // Types of dependencies.
     enum DepType {
@@ -37,8 +37,8 @@ namespace yask {
         num_deps
     };
 
-    // A pure-virtual class base for a stencil equation-set.
-    class EqGroupBase : public BoundingBox {
+    // A pure-virtual class base for a stencil group.
+    class StencilGroupBase : public BoundingBox {
     protected:
         StencilContext* _generic_context = 0;
         std::string _name;
@@ -49,20 +49,20 @@ namespace yask {
         // Position of inner dim in stencil-dims tuple.
         int _inner_posn = 0;
 
-        // Eq-groups that this one depends on.
-        std::map<DepType, EqGroupSet> _depends_on;
+        // Groups that this one depends on.
+        std::map<DepType, StencilGroupSet> _depends_on;
         
     public:
 
-        // Grids that are written to by these stencil equations.
+        // Grids that are written to by these stencils.
         GridPtrs outputGridPtrs;
 
-        // Grids that are read by these stencil equations (not necessarify
+        // Grids that are read by these stencils (not necessarify
         // read-only, i.e., a grid can be input and output).
         GridPtrs inputGridPtrs;
 
         // ctor, dtor.
-        EqGroupBase(StencilContext* context) :
+        StencilGroupBase(StencilContext* context) :
             _generic_context(context) {
 
             // Make sure map entries exist.
@@ -82,7 +82,7 @@ namespace yask {
             }
         }
 
-        virtual ~EqGroupBase() { }
+        virtual ~StencilGroupBase() { }
 
         // Access to dims and MPI info.
         virtual DimsPtr get_dims() {
@@ -92,7 +92,7 @@ namespace yask {
             return _generic_context->get_mpi_info();
         }
 
-        // Get name of this equation set.
+        // Get name of this group.
         virtual const std::string& get_name() { return _name; }
 
         // Get estimated number of FP ops done for one scalar eval.
@@ -103,16 +103,16 @@ namespace yask {
         virtual int get_scalar_points_written() const { return _scalar_points_written; }
 
         // Add dependency.
-        virtual void add_dep(DepType dt, EqGroupBase* eg) {
+        virtual void add_dep(DepType dt, StencilGroupBase* eg) {
             _depends_on.at(dt).insert(eg);
         }
 
         // Get dependencies.
-        virtual const EqGroupSet& get_deps(DepType dt) const {
+        virtual const StencilGroupSet& get_deps(DepType dt) const {
             return _depends_on.at(dt);
         }
     
-        // Set the bounding-box vars for this eq group in this rank.
+        // Set the bounding-box vars for this group in this rank.
         virtual void find_bounding_box();
 
         // Determine whether indices are in [sub-]domain.

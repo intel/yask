@@ -29,7 +29,7 @@ using namespace std;
 namespace yask {
 
     // Calculate results within a block.
-    void EqGroupBase::calc_block(const ScanIndices& region_idxs) {
+    void StencilGroupBase::calc_block(const ScanIndices& region_idxs) {
 
         auto opts = _generic_context->get_settings();
         auto dims = _generic_context->get_dims();
@@ -61,7 +61,7 @@ namespace yask {
     
     // Calculate results for one sub-block.
     // Each sub-block is typically computed in a separate OpenMP thread.
-    void EqGroupBase::calc_sub_block(const ScanIndices& block_idxs) {
+    void StencilGroupBase::calc_sub_block(const ScanIndices& block_idxs) {
 
         auto* cp = _generic_context;
         auto opts = cp->get_settings();
@@ -69,6 +69,7 @@ namespace yask {
         int nddims = dims->_domain_dims.size();
         int nsdims = dims->_stencil_dims.size();
         auto& step_dim = dims->_step_dim;
+        auto step_posn = Indices::step_posn;
         TRACE_MSG3("calc_sub_block: " << block_idxs.start.makeValStr(nsdims) <<
                   " ... (end before) " << block_idxs.stop.makeValStr(nsdims));
 
@@ -76,56 +77,75 @@ namespace yask {
         // These indices are in element units.
         ScanIndices sub_block_idxs(nsdims);
         sub_block_idxs.initFromOuter(block_idxs);
+
+        // Portion of sub-block that is full clusters.
+        // These indices are in element units.
+        ScanIndices sub_block_cidxs(sub_block_idxs);
         
-        // If not a 'simple' domain, use scalar code.  TODO: this
-        // is very inefficient--need to vectorize as much as possible.
-        if (!bb_simple) {
-            bool full_bb = true;
-            
-            // If no holes, don't need to check each point in domain.
-            if (bb_num_points == bb_size)
-                TRACE_MSG3("...using scalar code without sub-domain checking.");
-            
-            else {
-                TRACE_MSG3("...using scalar code with sub-domain checking.");
-                full_bb = false;
-            }
+        // Determine what part of this sub-block can be done with full clusters.
+        bool do_clusters = true; // any cluster to do?
+        bool do_scalars = false; // any scalars to do?
+        bool do_rem = false;     // scalar code is for partial remainders?
+        if (!bb_is_full || !bb_is_aligned) {
 
-            // Use the 'misc' loop. The OMP will be ignored because we're already in
-            // a nested OMP region.
-            ScanIndices misc_idxs(sub_block_idxs);
-
-            // Define misc-loop function.  Since step is always 1, we
-            // ignore misc_stop.  If point is in sub-domain for this eq
-            // group, then evaluate the reference scalar code.
-#define misc_fn(misc_idxs)                                      \
-            if (full_bb || is_in_valid_domain(misc_idxs.start))  \
-                calc_scalar(misc_idxs.start)
-                
-            // Scan through n-D space.
-#include "yask_misc_loops.hpp"
-#undef misc_fn
+            // Do whole block with scalar code.
+            // We should only get here when using sub-domains.
+            // TODO: do as much vectorization as possible.
+            do_clusters = false;
+            do_scalars = true;
+            do_rem = false;
+            sub_block_cidxs.begin.setFromConst(0);
+            sub_block_cidxs.end.setFromConst(0);
         }
+        else if (!bb_is_cluster_mult) {
 
-        // Full rectangular polytope of aligned vectors: use optimized code.
-        else {
-            TRACE_MSG3("...using vector code without sub-domain checking.");
-            auto step_posn = Indices::step_posn;
-
-#ifdef DEBUG
-            // Make sure we're doing a multiple of clusters.
-            for (int i = 0; i < nsdims; i++) {
+            // Whole BB is not a cluster mult.
+            // Determine the subset of this sub-block that is.
+            // (i: index for stencil dims, j: index for domain dims).
+            for (int i = 0, j = 0; i < nsdims; i++) {
                 if (i != step_posn) {
-                    auto& dname = dims->_stencil_dims.getDimName(i);
-                    assert((sub_block_idxs.end[i] - sub_block_idxs.begin[i]) % 
-                           dims->_cluster_pts[dname] == 0);
+
+                    // Find end of whole clusters.
+                    auto cpts = dims->_cluster_pts[j];
+                    auto cend = ROUND_DOWN(sub_block_idxs.end[i], cpts);
+
+                    // Any leftover points?
+                    if (sub_block_idxs.end[i] != cend) {
+
+                        // Set ending of cluster indices.
+                        sub_block_cidxs.end[i] = cend;
+
+                        // If no clusters in this dim, do whole
+                        // sub-block with scalar.
+                        auto sbcpts = cend - sub_block_idxs.begin[i];
+                        if (sbcpts == 0) {
+                            do_clusters = false;
+                            do_scalars = true;
+                            do_rem = false;
+                            sub_block_cidxs.begin.setFromConst(0);
+                            sub_block_cidxs.end.setFromConst(0);
+                            break;
+                        }
+                        else {
+                            do_clusters = true;
+                            do_scalars = true;
+                            do_rem = true;
+                        }
+                    }
+                    j++;
                 }
             }
-#endif
+        }
+        
+        // Full rectangular polytope of aligned vectors: use optimized code.
+        if (do_clusters) {
+            TRACE_MSG3("calc_sub_block: using vector code for " <<
+                       sub_block_cidxs.begin.makeValStr(nsdims) <<
+                       " ... (end before) " << sub_block_cidxs.end.makeValStr(nsdims));
 
             // Indices to sub-block loop must be in vec-norm
             // format, i.e., vector lengths and rank-relative.
-            ScanIndices norm_sub_block_idxs(sub_block_idxs);
+            ScanIndices norm_sub_block_idxs(sub_block_cidxs);
             int j = 0;          // domain dim index.
             for (int i = 0; i < nsdims; i++) {
                 if (i != step_posn) {
@@ -139,12 +159,12 @@ namespace yask {
                     // Set both begin/end and start/stop to ensure start/stop
                     // vars get passed through to calc_loop_of_clusters()
                     // for the inner loop.
-                    idx_t nbegin = idiv_flr<idx_t>(sub_block_idxs.begin[i] -
+                    idx_t nbegin = idiv_flr<idx_t>(sub_block_cidxs.begin[i] -
                                                    cp->rank_domain_offsets[j],
                                                    dims->_fold_pts[j]);
                     norm_sub_block_idxs.begin[i] = nbegin;
                     norm_sub_block_idxs.start[i] = nbegin;
-                    idx_t nend = idiv_flr<idx_t>(sub_block_idxs.end[i] -
+                    idx_t nend = idiv_flr<idx_t>(sub_block_cidxs.end[i] -
                                                  cp->rank_domain_offsets[j],
                                                  dims->_fold_pts[j]);
                     norm_sub_block_idxs.end[i] = nend;
@@ -158,11 +178,47 @@ namespace yask {
             }
 
             // Include automatically-generated loop code that calls
-            // calc_loop_of_clusters() but does not modify the step or inner
-            // loop indices.
+            // calc_loop_of_clusters().
 #include "yask_sub_block_loops.hpp"
         }
         
+        // If not a 'perfect' sub-block, use scalar code.
+        if (do_scalars) {
+
+#ifdef TRACE
+            string msg = "calc_sub_block: using scalar code for ";
+            msg += do_rem ? "remainder of" : "entire";
+            msg += " sub-block ";
+            msg += bb_is_full ? "without" : "with";
+            msg += " sub-domain checking";
+            TRACE_MSG3(msg);
+#endif
+
+            // Use the 'misc' loop. The OMP will be ignored because we're already in
+            // a nested OMP region. TODO: check this if there is only one block thread.
+            ScanIndices misc_idxs(sub_block_idxs);
+
+            // Define misc-loop function.  Since step is always 1, we
+            // ignore misc_stop.  If point is in sub-domain for this
+            // group, then evaluate the reference scalar code.
+            // If no holes, don't need to check each point in domain.
+#define misc_fn(misc_idxs)                                              \
+            bool ok = true;                                             \
+            if (do_rem) { ok = false;                                   \
+                for (int i = 0; i < nsdims; i++)                        \
+                    if (i != step_posn &&                               \
+                        misc_idxs.start[i] >= sub_block_cidxs.end[i]) { \
+                        ok = true; break;                               \
+                    }                                                   \
+            }                                                           \
+            if (ok && (bb_is_full || is_in_valid_domain(misc_idxs.start))) \
+                calc_scalar(misc_idxs.start)
+                
+            // Scan through n-D space.
+#include "yask_misc_loops.hpp"
+#undef misc_fn
+        }
+
         // Make sure streaming stores are visible for later loads.
         make_stores_visible();
     }
@@ -171,7 +227,7 @@ namespace yask {
     // The 'loop_idxs' must specify a range only in the inner dim.
     // Indices must be rank-relative.
     // Indices must be normalized, i.e., already divided by VLEN_*.
-    void EqGroupBase::calc_loop_of_clusters(const ScanIndices& loop_idxs) {
+    void StencilGroupBase::calc_loop_of_clusters(const ScanIndices& loop_idxs) {
 
 #ifdef DEBUG
         // Check that only the inner dim has a range.
@@ -193,8 +249,8 @@ namespace yask {
         calc_loop_of_clusters(start_idxs, stop_inner);
     }
 
-    // Set the bounding-box vars for this eq group in this rank.
-    void EqGroupBase::find_bounding_box() {
+    // Set the bounding-box vars for this group in this rank.
+    void StencilGroupBase::find_bounding_box() {
         StencilContext& context = *_generic_context;
         ostream& os = context.get_ostr();
         auto settings = context.get_settings();
@@ -223,7 +279,7 @@ namespace yask {
         misc_idxs.end = end;
 
         // Define misc-loop function.  Since step is always 1, we ignore
-        // misc_stop.  Update only if point is in domain for this eq group.
+        // misc_stop.  Update only if point is in domain for this group.
 #define misc_fn(misc_idxs)                                        \
         if (is_in_valid_domain(misc_idxs.start)) {               \
             min_pts = min_pts.minElements(misc_idxs.start);      \

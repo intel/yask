@@ -498,7 +498,7 @@ namespace yask {
                                      const VarMap* varMap) const {
 
         ostringstream oss;
-        auto& gd = getGrid()->getDims();
+        auto& gd = _grid->getDims();
         for (size_t i = 0; i < gd.size(); i++) {
             if (i)
                 oss << ", ";
@@ -506,6 +506,20 @@ namespace yask {
             oss << makeNormArgStr(dname, dims, varMap);
         }
         return oss.str();
+    }
+
+    // Make string like "g->_wrap_step(t+1)" from original arg "t+1"
+    // if grid uses step dim, "0" otherwise.
+    string GridPoint::makeStepArgStr(const string& gridPtr, const Dimensions& dims) const {
+        ostringstream oss;
+        auto& gd = _grid->getDims();
+        for (size_t i = 0; i < gd.size(); i++) {
+            auto dname = gd[i]->getName();
+            auto& arg = _args.at(i);
+            if (dname == dims._stepDim)
+                return gridPtr + "->_wrap_step(" + arg->makeStr() + ")";
+        }
+        return "0";
     }
     
     // Set given arg to given offset; ignore if not in step or domain grid dims.
@@ -649,7 +663,7 @@ namespace yask {
         ostringstream oss;
     
         // Use a print visitor to make a string.
-        PrintHelper ph(NULL, "temp", "", "", ""); // default helper.
+        PrintHelper ph(NULL, NULL, "temp", "", "", ""); // default helper.
         CompilerSettings settings; // default settings.
         PrintVisitorTopDown pv(oss, ph, settings, varMap);
         accept(&pv);

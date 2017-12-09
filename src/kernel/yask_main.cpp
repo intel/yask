@@ -280,19 +280,19 @@ int main(int argc, char** argv)
     if (opts->doPreAutoTune)
         ksoln->run_auto_tuner_now();
 
+    // Enable/disable further auto-tuning.
+    ksoln->reset_auto_tuner(opts->doAutoTune);
+
     // warmup caches, threading, etc.
     if (opts->doWarmup) {
 
         idx_t dt = 1;
         os << endl << divLine <<
             "Running " << dt << " step(s) for warm-up...\n" << flush;
-        ksoln->run_solution(0, dt);
+        ksoln->run_solution(0, dt-1);
 
     }
     kenv->global_barrier();
-
-    // Enable further auto-tuning.
-    ksoln->reset_auto_tuner(opts->doAutoTune);
 
     // variables for measuring performance.
     double best_elapsed_time=0., best_apps=0., best_dpps=0., best_flops=0.;

@@ -97,7 +97,7 @@ namespace yask {
         if (_dirty_steps.size() == 0)
             const_cast<YkGridBase*>(this)->resize();
         if (_has_step_dim)
-            step_idx = wrap_step(step_idx);
+            step_idx = _wrap_step(step_idx);
         else
             step_idx = 0;
         return _dirty_steps[step_idx];
@@ -106,7 +106,7 @@ namespace yask {
         if (_dirty_steps.size() == 0)
             resize();
         if (_has_step_dim)
-            step_idx = wrap_step(step_idx);
+            step_idx = _wrap_step(step_idx);
         else
             step_idx = 0;
         _dirty_steps[step_idx] = dirty;
@@ -381,8 +381,9 @@ namespace yask {
                 if (!ok)
                     return true; // stop processing this point, but keep going.
 
-                auto te = readElem(opt, __LINE__);
-                auto re = ref->readElem(opt, __LINE__);
+                idx_t asi = get_alloc_step_index(pt[Indices::step_posn]);
+                auto te = readElem(opt, asi, __LINE__);
+                auto re = ref->readElem(opt, asi, __LINE__);
                 if (!within_tolerance(te, re, epsilon)) {
                     errs++;
                     if (errs < maxPrint) {
@@ -494,7 +495,8 @@ namespace yask {
             exit_yask(1);
         }
         checkIndices(indices, "get_element", true, false);
-        real_t val = readElem(indices, __LINE__);
+        idx_t asi = get_alloc_step_index(indices[Indices::step_posn]);
+        real_t val = readElem(indices, asi, __LINE__);
         return double(val);
     }
     idx_t YkGridBase::set_element(double val,
@@ -503,7 +505,8 @@ namespace yask {
         idx_t nup = 0;
         if (get_raw_storage_buffer() &&
             checkIndices(indices, "set_element", strict_indices, false)) {
-            writeElem(real_t(val), indices, __LINE__);
+            idx_t asi = get_alloc_step_index(indices[Indices::step_posn]);
+            writeElem(real_t(val), indices, asi, __LINE__);
             nup++;
 
             // Set appropriate dirty flag.
@@ -530,7 +533,11 @@ namespace yask {
         numElemsTuple.visitAllPointsInParallel
             ([&](const IdxTuple& ofs, size_t idx) {
                 Indices pt = first_indices.addElements(ofs);
-                real_t val = readElem(pt, __LINE__);
+
+                // TODO: move this outside of loop for const step index.
+                idx_t asi = get_alloc_step_index(pt[Indices::step_posn]);
+                
+                real_t val = readElem(pt, asi, __LINE__);
                 ((real_t*)buffer_ptr)[idx] = val;
                 return true;    // keep going.
             });
@@ -557,7 +564,11 @@ namespace yask {
         numElemsTuple.visitAllPointsInParallel([&](const IdxTuple& ofs,
                                                    size_t idx) {
                 Indices pt = first_indices.addElements(ofs);
-                writeElem(real_t(val), pt, __LINE__);
+
+                // TODO: move this outside of loop for const step index.
+                idx_t asi = get_alloc_step_index(pt[Indices::step_posn]);
+
+                writeElem(real_t(val), pt, asi, __LINE__);
                 return true;    // keep going.
             });
 
@@ -582,8 +593,12 @@ namespace yask {
             ([&](const IdxTuple& ofs,
                  size_t idx) {
                 Indices pt = first_indices.addElements(ofs);
+
+                // TODO: move this outside of loop for const step index.
+                idx_t asi = get_alloc_step_index(pt[Indices::step_posn]);
+
                 real_t val = ((real_t*)buffer_ptr)[idx];
-                writeElem(val, pt, __LINE__);
+                writeElem(val, pt, asi, __LINE__);
                 return true;    // keep going.
             });
 

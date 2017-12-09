@@ -266,7 +266,7 @@ NDIMS_OPT		:=	`cat $(YK_DIMS_FILE)`
 RANK_LOOP_OPTS		?=	$(NDIMS_OPT) -inVar rank_idxs
 RANK_LOOP_ORDER		?=	1 .. N-1
 RANK_LOOP_CODE		?=	$(RANK_LOOP_OUTER_MODS) loop($(RANK_LOOP_ORDER)) \
-				{ $(RANK_LOOP_INNER_MODS) call(calc_region(eqGroup_ptr)); }
+				{ $(RANK_LOOP_INNER_MODS) call(calc_region(stGroup_ptr)); }
 
 # Region loops break up a region using OpenMP threading into blocks.  The
 # 'omp' modifier creates an outer OpenMP loop so that each block is assigned
@@ -275,7 +275,7 @@ RANK_LOOP_CODE		?=	$(RANK_LOOP_OUTER_MODS) loop($(RANK_LOOP_ORDER)) \
 # may be found in StencilEquations::calc_region().
 REGION_LOOP_OPTS	?=     	$(NDIMS_OPT) -inVar region_idxs \
 				-ompConstruct '$(omp_par_for) schedule($(omp_region_schedule)) proc_bind(spread)' \
-				-callPrefix 'eg->'
+				-callPrefix 'sg->'
 REGION_LOOP_OUTER_MODS	?=	grouped omp
 REGION_LOOP_ORDER	?=	1 .. N-1
 REGION_LOOP_CODE	?=	$(REGION_LOOP_OUTER_MODS) loop($(REGION_LOOP_ORDER)) { \
@@ -468,8 +468,8 @@ endif
 # VTUNE settings.
 ifeq ($(vtune),1)
  MACROS		+=	USE_VTUNE
-ifneq ($(VTUNE_AMPLIFIER_XE_2018_DIR),)
- VTUNE_DIR	=	$(VTUNE_AMPLIFIER_XE_2018_DIR)
+ifneq ($(VTUNE_AMPLIFIER_2018_DIR),)
+ VTUNE_DIR	=	$(VTUNE_AMPLIFIER_2018_DIR)
 else ifneq ($(VTUNE_AMPLIFIER_XE_2017_DIR),)
  VTUNE_DIR	=	$(VTUNE_AMPLIFIER_XE_2017_DIR)
 else
