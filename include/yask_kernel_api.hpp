@@ -560,21 +560,34 @@ namespace yask {
         /// Run the stencil solution for the specified steps.
         /**
            The stencil(s) in the solution are applied to the grid data, setting the
-           index variables as folllows:
-           * The step index (often `t` for "time") will be sequentially set to values
-           from `first_step_index` to `last_step_index`, inclusive.
-            + If the stencil equations were defined with dependencies on lower-valued steps,
-           e.g., `t+1` depends on `t`, then `last_step_index` should be greater than or equal to
-           `first_step_index` (forward solution).
-            + If the stencil equations were defined with dependencies on higher-valued steps,
-           e.g., `t-1` depends on `t`, then `last_step_index` should be less than or equal to
-           `first_step_index` (reverse solution).
-           * For each step index, the domain indices will iteratively (but not necessarily sequentially)
-           be set to values across the entire domain as returned by yk_solution::get_overall_domain_size().
+           index variables as follows:
+           1. If temporal wave-fronts are *not* used (the default):
+            - The step index (e.g., `t` for "time") will be sequentially set to values
+            from `first_step_index` to `last_step_index`, inclusive.
+             + If the stencil equations were defined with dependencies on lower-valued steps,
+             e.g., `t+1` depends on `t`, then `last_step_index` should be greater than or equal to
+             `first_step_index` (forward solution).
+             + If the stencil equations were defined with dependencies on higher-valued steps,
+             e.g., `t-1` depends on `t`, then `last_step_index` should be less than or equal to
+             `first_step_index` (reverse solution).
+            - For each step index, the domain indices will be set
+            to values across the entire domain as returned by yk_solution::get_overall_domain_size()
+            (not necessarily sequentially).
+            - MPI halo exchanges will occur as necessary before, after, or during a step.
+            - Since this function initiates MPI communication, it must be called
+              on all MPI ranks, and it will block until all ranks have completed.
+           2. **[Advanced]** If temporal wave-fronts *are* enabled (currently only possible via apply_command_line_options()):
+            - The step index (e.g., `t` for "time") will be sequentially set to values
+            from `first_step_index` to `last_step_index`, inclusive, within each wave-front tile.
+             + The number of steps in a wave-front tile may also be restricted by the size
+             of the tile in the step dimension. In that case, tiles will be done in slices of that size.
+             + Reverse solutions are not allowed with wave-front tiling.
+            - For each step index within each wave-front tile, the domain indices will be set
+            to values across the entire tile (not necessarily sequentially).
+            - Ultimately, the stencil(s) will be applied to same the elements in both the step 
+            and domain dimensions as when wave-front tiling is not used.
+            - MPI is not supported with wave-front tiling.
 
-           MPI halo exchanges will occur as necessary before, after, or during a step.
-           Since this function initiates MPI communication, it must be called
-           on all MPI ranks, and it will block until all ranks have completed.
            This function should be called only *after* calling prepare_solution().
         */
         virtual void
@@ -585,9 +598,11 @@ namespace yask {
         /**
            This function is simply an alias for `run_solution(step_index, step_index)`, i.e.,
            the solution will be applied for exactly one step across the domain.
-
            For example, `run_solution(0); run_solution(1);` effects the same data changes as
            `run_solution(0, 1);`.
+
+           Since only one step is taken per call, using this function effectively disables
+           wave-front tiling.
         */
         virtual void
         run_solution(idx_t step_index /**< [in] Index in the step dimension */ ) =0;

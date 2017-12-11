@@ -405,7 +405,7 @@ namespace yask {
         auto nr = findNumSubsets(os, _region_sizes, "region",
                                  _rank_sizes, "rank-domain",
                                  _dims->_cluster_pts);
-        auto rt = _rank_sizes[_dims->_step_dim];
+        auto rt = _region_sizes[_dims->_step_dim];
         os << " num-regions-per-rank-domain: " << nr << endl;
         os << " Since the temporal region size is " << rt <<
             ", temporal wave-front tiling is ";
