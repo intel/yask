@@ -75,7 +75,7 @@ namespace yask {
            Environment info is kept in a separate object to factilitate
            initializing the environment before creating a solution
            and sharing an environment among multiple solutions.
-           @returns Elementer to new env object.
+           @returns Pointer to new env object.
         */
         virtual yk_env_ptr
         new_env() const;
@@ -84,10 +84,10 @@ namespace yask {
         /**
            A stencil solution contains all the grids and equations
            that were created during stencil compilation.
-           @returns Elementer to new solution object. 
+           @returns Pointer to new solution object. 
         */
         virtual yk_solution_ptr
-        new_solution(yk_env_ptr env /**< [in] Elementer to env info. */) const;
+        new_solution(yk_env_ptr env /**< [in] Pointer to env info. */) const;
 
         /// Create a stencil solution by copying the settings from another.
         /**
@@ -95,12 +95,12 @@ namespace yask {
            functions in the source solution will be copied to the new solution.
            This does *not* copy any grids, grid settings, or grid data;
            see yk_solution::share_grid_storage().
-           @returns Elementer to new solution object. 
+           @returns Pointer to new solution object. 
         */
         virtual yk_solution_ptr
-        new_solution(yk_env_ptr env /**< [in] Elementer to env info. */,
+        new_solution(yk_env_ptr env /**< [in] Pointer to env info. */,
                      const yk_solution_ptr source
-                     /**< [in] Elementer to existing \ref yk_solution from which
+                     /**< [in] Pointer to existing \ref yk_solution from which
                         the settings will be copied. */ ) const;
     };
 
@@ -123,7 +123,7 @@ namespace yask {
 
         /// Wait until all ranks have reached this element.
         /**
-           If MPI is enabled, calls MPI_Barrier().
+           If MPI is enabled, calls `MPI_Barrier()`.
            Otherwise, has no effect.
          */
         virtual void
@@ -299,7 +299,7 @@ namespace yask {
         /// Set performance parameters from an option string.
         /**
            Parses the string for options as if from a command-line.
-           Example: "-bx 64 -block_threads 4" sets the block-size in the 'x'
+           Example: "-bx 64 -block_threads 4" sets the block-size in the *x*
            dimension to 64 and the number of threads used to process each
            block to 4.
            See the help message from the YASK kernel binary for documentation
@@ -550,38 +550,29 @@ namespace yask {
            to find the subset of this domain in each rank.
            This function should be called only *after* calling prepare_solution()
            because prepare_solution() obtains the sub-domain sizes from other ranks.
-           @returns Sum of the ranks' domain sizes in the given dimension.
+           @returns Sum of all ranks' domain sizes in the given dimension.
         */
         virtual idx_t
         get_overall_domain_size(const std::string& dim
                                 /**< [in] Name of dimension to get.  Must be one of
                                    the names from get_domain_dim_names(). */ ) const =0;
 
-        /// Run the stencil solution for one step.
+        /// Run the stencil solution for the specified steps.
         /**
-           The stencil(s) in the solution are applied
-           at the given step index
-           across the entire domain as returned by yk_solution::get_overall_domain_size().
-           MPI halo exchanges will occur as necessary.
-           Since this function initiates MPI communication, it must be called
-           on all MPI ranks, and it will block until all ranks have completed.
-           This function should be called only *after* calling prepare_solution().
-        */
-        virtual void
-        run_solution(idx_t step_index /**< [in] Index in the step dimension */ ) =0;
+           The stencil(s) in the solution are applied to the grid data, setting the
+           index variables as folllows:
+           * The step index (often `t` for "time") will be sequentially set to values
+           from `first_step_index` to `last_step_index`, inclusive.
+            + If the stencil equations were defined with dependencies on lower-valued steps,
+           e.g., `t+1` depends on `t`, then `last_step_index` should be greater than or equal to
+           `first_step_index` (forward solution).
+            + If the stencil equations were defined with dependencies on higher-valued steps,
+           e.g., `t-1` depends on `t`, then `last_step_index` should be less than or equal to
+           `first_step_index` (reverse solution).
+           * For each step index, the domain indices will iteratively (but not necessarily sequentially)
+           be set to values across the entire domain as returned by yk_solution::get_overall_domain_size().
 
-        /// Run the stencil solution for the specified number of steps.
-        /**
-           The stencil(s) in the solution are applied from
-           the first to last step index, inclusive,
-           across the entire domain as returned by yk_solution::get_overall_domain_size().
-           If the stencil equations were defined with dependencies on lower-valued steps,
-           e.g., _t+1_ depends on _t_, 'last_step_index' should be greater than or equal to
-           'first_step_index' (forward solution).
-           If the stencil equations were defined with dependencies on higher-valued steps,
-           e.g., _t-1_ depends on _t_, 'last_step_index' should be less than or equal to
-           'first_step_index' (reverse solution).
-           MPI halo exchanges will occur as necessary.
+           MPI halo exchanges will occur as necessary before, after, or during a step.
            Since this function initiates MPI communication, it must be called
            on all MPI ranks, and it will block until all ranks have completed.
            This function should be called only *after* calling prepare_solution().
@@ -589,6 +580,17 @@ namespace yask {
         virtual void
         run_solution(idx_t first_step_index /**< [in] First index in the step dimension */,
                      idx_t last_step_index /**< [in] Last index in the step dimension */ ) =0;
+
+        /// Run the stencil solution for the specified step.
+        /**
+           This function is simply an alias for `run_solution(step_index, step_index)`, i.e.,
+           the solution will be applied for exactly one step across the domain.
+
+           For example, `run_solution(0); run_solution(1);` effects the same data changes as
+           `run_solution(0, 1);`.
+        */
+        virtual void
+        run_solution(idx_t step_index /**< [in] Index in the step dimension */ ) =0;
 
         /// **[Advanced]** Restart or disable the auto-tuner on this rank.
         /**
@@ -830,8 +832,8 @@ namespace yask {
 
         /// Determine whether this grid is automatically resized based on the solution.
         /**
-           @returns 'true' if this grid was created via yk_solution::new_fixed_size_grid()
-           or 'false' otherwise.
+           @returns `true` if this grid was created via yk_solution::new_fixed_size_grid()
+           or `false` otherwise.
         */
         virtual bool is_fixed_size() const =0;
 
@@ -853,8 +855,8 @@ namespace yask {
         
         /// Determine whether specified dimension exists in this grid.
         /**
-           @returns 'true' if dimension exists (including step-dimension),
-           'false' otherwise.
+           @returns `true` if dimension exists (including step-dimension),
+           `false` otherwise.
         */
         virtual bool
         is_dim_used(const std::string& dim) const =0;
@@ -862,7 +864,7 @@ namespace yask {
         /// Get the domain size for this rank.
         /**
            @returns The same value as yk_solution::get_rank_domain_size() if
-           is_fixed_size() returns 'false' or the fixed sized provided via
+           is_fixed_size() returns `false` or the fixed sized provided via
            yk_solution::new_fixed_size_grid() otherwise.
         */
         virtual idx_t
@@ -873,7 +875,7 @@ namespace yask {
         /// Get the first index of the sub-domain in this rank in the specified dimension.
         /**
            @returns The same value as yk_solution::get_first_rank_domain_index() if
-           is_fixed_size() returns 'false' or zero (0) otherwise.
+           is_fixed_size() returns `false` or zero (0) otherwise.
         */
         virtual idx_t
         get_first_rank_domain_index(const std::string& dim
@@ -883,7 +885,7 @@ namespace yask {
         /// Get the last index of the sub-domain in this rank in the specified dimension.
         /**
            @returns The same value as yk_solution::get_last_rank_domain_index() if
-           is_fixed_size() returns 'false' or one less than the fixed sized provided via
+           is_fixed_size() returns `false` or one less than the fixed sized provided via
            yk_solution::new_fixed_size_grid() otherwise.
         */
         virtual idx_t
@@ -1108,7 +1110,7 @@ namespace yask {
 
         /// Get grid elements within specified subset of the grid.
         /**
-           Reads all elements from 'first' to 'last' indices in each dimension
+           Reads all elements from `first_indices` to `last_indices` in each dimension
            and writes them to consecutive memory locations in the buffer.
            Indices in the buffer progress in row-major order.
            The buffer pointed to must contain the number of bytes equal to
@@ -1194,7 +1196,7 @@ namespace yask {
 
         /// Initialize grid elements within specified subset of the grid to the same value.
         /**
-           Sets all elements from 'first' to 'last' indices in each dimension to the
+           Sets all elements from `first_indices` to `last_indices` in each dimension to the
            specified value.
            Provide indices in two lists in the same order returned by get_dim_names().
            Indices are relative to the *overall* problem domain.
@@ -1219,8 +1221,8 @@ namespace yask {
         /// Set grid elements within specified subset of the grid.
         /**
            Reads elements from consecutive memory locations,
-           starting at 'buffer_ptr'
-           and writes them from 'first' to 'last' indices in each dimension.
+           starting at `buffer_ptr`
+           and writes them from `first_indices` to `last_indices` in each dimension.
            Indices in the buffer progress in row-major order.
            The buffer pointed to must contain either 4 or 8 byte FP values per element in the 
            subset, depending on the FP precision of the solution.
@@ -1267,8 +1269,8 @@ namespace yask {
 
         /// Determine whether storage has been allocated.
         /**
-           @returns 'true' if storage has been allocated,
-           'false' otherwise.
+           @returns `true` if storage has been allocated,
+           `false` otherwise.
         */
         virtual bool
         is_storage_allocated() const =0;
@@ -1301,8 +1303,8 @@ namespace yask {
            The following do not have to be identical:
            - Halo size.
 
-           @returns 'true' if storage for this grid has the same layout as
-           'other' or 'false' otherwise.
+           @returns `true` if storage for this grid has the same layout as
+           `other` or `false` otherwise.
         */
         virtual bool
         is_storage_layout_identical(const yk_grid_ptr other) const =0;
@@ -1346,7 +1348,7 @@ namespace yask {
            bytes from the beginning of the buffer.
            - A call to set_all_elements_same() will initialize all elements
            within get_num_storage_bytes() bytes from the beginning of the buffer.
-           - If is_storage_layout_identical() returns 'true' between this
+           - If is_storage_layout_identical() returns `true` between this
            and some other grid, any given element index applied to both grids
            will refer to an element at the same offset into their respective
            data buffers. 
@@ -1372,7 +1374,7 @@ namespace yask {
            multiply.
 
            @returns Pointer to raw data storage if is_storage_allocated()
-           returns 'true' or NULL otherwise.
+           returns `true` or NULL otherwise.
         */
         virtual void* get_raw_storage_buffer() =0;
     };
