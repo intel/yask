@@ -24,6 +24,7 @@ IN THE SOFTWARE.
 *****************************************************************************/
 
 // Test the YASK grids.
+// This must be compiled with a kernel lib containing 'x', 'y', and 'z' dims.
 
 // enable assert().
 #define DEBUG

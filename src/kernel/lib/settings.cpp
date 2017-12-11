@@ -209,13 +209,11 @@ namespace yask {
             }
         }
 
-        // Option for all domain dims.
-        if (multi_vars.size() > 1) {
-            parser.add_option(new CommandLineParser::MultiIdxOption
-                              (prefix,
-                               "Shorthand for" + multi_help,
-                               multi_vars));
-        }
+        // Option for setting all domain dims.
+        parser.add_option(new CommandLineParser::MultiIdxOption
+                          (prefix,
+                           "Shorthand for" + multi_help,
+                           multi_vars));
     }
     
     // Add these settigns to a cmd-line parser.

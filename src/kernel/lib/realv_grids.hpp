@@ -741,7 +741,7 @@ namespace yask {
                                    bool checkBounds=true) final {
 
             const real_t* p =
-                const_cast<const YkVecGrid*>(this)->getElemPtr(idxs, checkBounds);
+                const_cast<const YkVecGrid*>(this)->getElemPtr(idxs, alloc_step_idx, checkBounds);
             return const_cast<real_t*>(p);
         }
 
