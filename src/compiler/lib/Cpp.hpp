@@ -42,12 +42,13 @@ namespace yask {
     class CppPrintHelper : public PrintHelper {
 
     public:
-        CppPrintHelper(const CounterVisitor* cv,
+        CppPrintHelper(const Dimensions* dims,
+                       const CounterVisitor* cv,
                        const string& varPrefix,
                        const string& varType,
                        const string& linePrefix,
                        const string& lineSuffix) :
-            PrintHelper(cv, varPrefix, varType,
+            PrintHelper(dims, cv, varPrefix, varType,
                         linePrefix, lineSuffix) { }
         virtual ~CppPrintHelper() { }
 
@@ -62,9 +63,10 @@ namespace yask {
 
         // Make call for a point.
         // This is a utility function used for both reads and writes.
-        virtual string makePointCall(const GridPoint& gp,
+        virtual string makePointCall(ostream& os,
+                                     const GridPoint& gp,
                                      const string& fname,
-                                     string optArg = "") const;
+                                     string optArg = "");
     
         // Return a grid-point reference.
         virtual string readFromPoint(ostream& os, const GridPoint& gp);
@@ -82,7 +84,7 @@ namespace yask {
     public:
         CppVecPrintHelper(VecInfoVisitor& vv,
                           bool allowUnalignedLoads,
-                          Dimensions& dims,
+                          const Dimensions* dims,
                           const CounterVisitor* cv,
                           const string& varPrefix,
                           const string& varType,
@@ -121,14 +123,14 @@ namespace yask {
                 gp.makeStr() << "." << endl;
         }
 
-        // Print call for a vectorized point.
+        // Return code for a vectorized point.
         // This is a utility function used for both reads and writes.
-        virtual void printVecPointCall(ostream& os,
-                                       const GridPoint& gp,
-                                       const string& funcName,
-                                       const string& firstArg,
-                                       const string& lastArg,
-                                       bool isNorm) const;
+        virtual string printVecPointCall(ostream& os,
+                                         const GridPoint& gp,
+                                         const string& funcName,
+                                         const string& firstArg,
+                                         const string& lastArg,
+                                         bool isNorm);
     
         // Print aligned memory read.
         virtual string printAlignedVecRead(ostream& os, const GridPoint& gp);
@@ -175,7 +177,7 @@ namespace yask {
         // Make base point (inner-dim index = 0).
         virtual GridPointPtr makeBasePoint(const GridPoint& gp) {
             GridPointPtr bgp = gp.cloneGridPoint();
-            IntScalar idi(getDims()._innerDim, 0); // set inner-dim index to 0.
+            IntScalar idi(getDims()->_innerDim, 0); // set inner-dim index to 0.
             bgp->setArgConst(idi);
             return bgp;
         }
@@ -237,7 +239,7 @@ namespace yask {
     class YASKCppPrinter : public PrinterBase {
     protected:
         EqGroups& _clusterEqGroups;
-        Dimensions& _dims;
+        const Dimensions* _dims;
         string _context, _context_base;
 
         // Print an expression as a one-line C++ comment.
@@ -271,7 +273,7 @@ namespace yask {
         YASKCppPrinter(StencilSolution& stencil,
                        EqGroups& eqGroups,
                        EqGroups& clusterEqGroups,
-                       Dimensions& dims) :
+                       const Dimensions* dims) :
             PrinterBase(stencil, eqGroups),
             _clusterEqGroups(clusterEqGroups),
             _dims(dims)

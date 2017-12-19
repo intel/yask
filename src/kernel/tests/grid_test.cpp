@@ -24,6 +24,7 @@ IN THE SOFTWARE.
 *****************************************************************************/
 
 // Test the YASK grids.
+// This must be compiled with a kernel lib containing 'x', 'y', and 'z' dims.
 
 // enable assert().
 #define DEBUG
@@ -110,8 +111,8 @@ int main(int argc, char** argv) {
                 for (auto dname : gdims)
                     pt2[dname] += g3->get_first_rank_alloc_index(dname);
                 Indices ipt(pt2);
-                auto val = g3->readElem(ipt, __LINE__);
-                g3f->writeElem(val, ipt, __LINE__);
+                auto val = g3->readElem(ipt, 0, __LINE__);
+                g3f->writeElem(val, ipt, 0, __LINE__);
                 return true;
             });
         os << "Checking seq of vals\n";
@@ -122,8 +123,8 @@ int main(int argc, char** argv) {
                     pt2[dname] += g3->get_first_rank_alloc_index(dname);
                 Indices ipt(pt2);
                 ipt.addConst(-min_pad);
-                auto val = g3->readElem(ipt, __LINE__);
-                auto valf = g3f->readElem(ipt, __LINE__);
+                auto val = g3->readElem(ipt, 0, __LINE__);
+                auto valf = g3f->readElem(ipt, 0, __LINE__);
                 assert(val == valf);
                 return true;
             });

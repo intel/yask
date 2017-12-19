@@ -37,22 +37,25 @@ namespace yask {
     // A PrintHelper is used by a PrintVisitor to format certain
     // common items like variables, reads, and writes.
     class PrintHelper {
-        int _varNum;                // current temp var number.
+        int _varNum;                // current temp-var number.
 
     protected:
+        const Dimensions* _dims;    // problem dims.
         const CounterVisitor* _cv;  // counter info.
         string _varPrefix;          // first part of var name.
         string _varType;            // type, if any, of var.
         string _linePrefix;         // prefix for each line.
         string _lineSuffix;         // suffix for each line.
+        VarMap _localVars;          // map from expression strings to local var names.
 
     public:
-        PrintHelper(const CounterVisitor* cv,
+        PrintHelper(const Dimensions* dims,
+                    const CounterVisitor* cv,
                     const string& varPrefix,
                     const string& varType,
                     const string& linePrefix,
                     const string& lineSuffix) :
-            _varNum(1), _cv(cv),
+            _varNum(1), _dims(dims), _cv(cv),
             _varPrefix(varPrefix), _varType(varType),
             _linePrefix(linePrefix), _lineSuffix(lineSuffix) { }
 
@@ -63,6 +66,12 @@ namespace yask {
         virtual const string& getLinePrefix() const { return _linePrefix; }
         virtual const string& getLineSuffix() const { return _lineSuffix; }
         const CounterVisitor* getCounters() const { return _cv; }
+        virtual void forgetLocalVars() { _localVars.clear(); }
+
+        // get dims.
+        virtual const Dimensions* getDims() const {
+            return _dims;
+        }
 
         // Return count from counter visitor.
         int getCount(Expr* ep) {
@@ -86,6 +95,24 @@ namespace yask {
             return oss.str();
         }
 
+        // If var exists for 'expr', return it.
+        // If not, create var of 'type' in 'os' and return it.
+        virtual string getLocalVar(ostream& os, const string& expr,
+                                   string type = "") {
+
+            if (_localVars.count(expr))
+                return _localVars.at(expr);
+
+            // Make a var.
+            if (!type.length())
+                type = _varType;
+            string vName = makeVarName();
+            os << _linePrefix << type << " " << vName <<
+                " = " << expr << _lineSuffix;
+            _localVars[expr] = vName;
+            return vName;
+        }
+        
         // Return any code expression.
         // The 'os' parameter is provided for derived types that
         // need to write intermediate code to a stream.
@@ -127,14 +154,14 @@ namespace yask {
         // Ref to compiler settings.
         CompilerSettings& _settings;
 
-        // Make these substitutions to indices in expressions.
-        const VarMap* _varMap = 0;
-        
         // After visiting an expression, the part of the result not written to _os
         // is stored in _exprStr.
         string _exprStr;
 
-        // map sub-expressions to var names.
+        // Make these substitutions to indices in expressions.
+        const VarMap* _varMap = 0;
+        
+        // Map sub-expressions to var names.
         map<Expr*, string> _tempVars;
 
         // Declare a new temp var.

@@ -44,27 +44,32 @@ namespace yask {
     
     // Make call for a point.
     // This is a utility function used for both reads and writes.
-    string CppPrintHelper::makePointCall(const GridPoint& gp,
+    string CppPrintHelper::makePointCall(ostream& os,
+                                         const GridPoint& gp,
                                          const string& fname,
-                                         string optArg) const {
+                                         string optArg) {
+
+        // Get/set local vars.
+        string gridPtr = getLocalVar(os, "_context->" + gp.getGridName(), "auto");
+        string stepArgVar = getLocalVar(os, gp.makeStepArgStr(gridPtr, *_dims), "auto");
+        
         ostringstream oss;
-        oss << "_context->" << gp.getGridName() << "->" << fname << "(";
+        oss << gridPtr << "->" << fname << "(";
         if (optArg.length()) oss << optArg << ", ";
         string args = gp.makeArgStr();
-        oss << "{" << args << "}, "; // use Indices initializer-list ctor.
-        oss << "__LINE__)";
+        oss << "{" << args << "}, " << stepArgVar << ", __LINE__)";
         return oss.str();
     }
     
     // Return a grid-point reference.
     string CppPrintHelper::readFromPoint(ostream& os, const GridPoint& gp) {
-        return makePointCall(gp, "readElem");
+        return makePointCall(os, gp, "readElem");
     }
 
     // Return code to update a grid point.
     string CppPrintHelper::writeToPoint(ostream& os, const GridPoint& gp,
                                         const string& val) {
-        return makePointCall(gp, "writeElem", val);
+        return makePointCall(os, gp, "writeElem", val);
     }
 
     /////////// Vector code /////////////
@@ -81,14 +86,17 @@ namespace yask {
         // Determine type to avoid virtual call.
         bool folded = gp.isGridFoldable();
         string gtype = folded ? "YkVecGrid" : "YkElemGrid";
+
+        // Get/set local vars.
+        string gridPtr = getLocalVar(os, "_context->" + gp.getGridName(), "auto");
+        string stepArgVar = getLocalVar(os, gp.makeStepArgStr(gridPtr, *_dims), "auto");
         
         // Assume that broadcast will be handled automatically by
         // operator overloading in kernel code.
         // Specify that any indices should use element vars.
-        string str = "_context->" + gp.getGridName() + "->" + gtype + "::readElem(";
+        string str = gridPtr + "->" + gtype + "::readElem(";
         string args = gp.makeArgStr(vMap);
-        str += "{" + args + "}, ";
-        str += "__LINE__)";
+        str += "{" + args + "}, " + stepArgVar + ",__LINE__)";
         return str;
     }
 
@@ -150,26 +158,32 @@ namespace yask {
 
     // Print call for a point.
     // This is a utility function used for reads, writes, and prefetches.
-    void CppVecPrintHelper::printVecPointCall(ostream& os,
-                                              const GridPoint& gp,
-                                              const string& funcName,
-                                              const string& firstArg,
-                                              const string& lastArg,
-                                              bool isNorm) const {
+    string CppVecPrintHelper::printVecPointCall(ostream& os,
+                                                const GridPoint& gp,
+                                                const string& funcName,
+                                                const string& firstArg,
+                                                const string& lastArg,
+                                                bool isNorm) {
 
-        os << " _context->" << gp.getGridName() << "->" << funcName << "(";
+        // Get/set local vars.
+        string gridPtr = getLocalVar(os, "_context->" + gp.getGridName(), "auto");
+        string stepArgVar = getLocalVar(os, gp.makeStepArgStr(gridPtr, *_dims), "auto");
+
+        ostringstream oss;
+        oss << gridPtr << "->" << funcName << "(";
         if (firstArg.length())
-            os << firstArg << ", ";
-        string args = isNorm ? gp.makeNormArgStr(_dims) : gp.makeArgStr();
-        os << "{" << args << "}"; // use Indices initializer-list ctor.
+            oss << firstArg << ", ";
+        string args = isNorm ? gp.makeNormArgStr(*_dims) : gp.makeArgStr();
+        oss << "{" << args << "} ," << stepArgVar;
         if (lastArg.length()) 
-            os << ", " << lastArg;
-        os << ")";
+            oss << ", " << lastArg;
+        oss << ")";
+        return oss.str();
     }
 
     // Print code to set pointers of aligned reads.
     void CppVecPrintHelper::printBasePtrs(ostream& os) {
-        const string& idim = _dims._innerDim;
+        const string& idim = _dims->_innerDim;
 
         // A set for the aligned reads & writes.
         GridPointSet gps;
@@ -255,7 +269,7 @@ namespace yask {
                                             bool ahead, string ptrVar) {
 
         // cluster mult in inner dim.
-        const string& idim = _dims._innerDim;
+        const string& idim = _dims->_innerDim;
         string imult = "CMULT_" + PrinterBase::allCaps(idim);
 
         for (int level = 1; level <= 2; level++) {
@@ -273,9 +287,9 @@ namespace yask {
 
                     // _ptrOfs{Lo,Hi} contain first and last offsets in idim,
                     // NOT normalized to vector len.
-                    string lo = _dims.makeNormStr(_ptrOfsLo[ptr], idim);
+                    string lo = _dims->makeNormStr(_ptrOfsLo[ptr], idim);
                     if (lo.length() == 0) lo = "0";
-                    string hi = _dims.makeNormStr(_ptrOfsHi[ptr], idim);
+                    string hi = _dims->makeNormStr(_ptrOfsHi[ptr], idim);
             
                     // Start loop of prefetches.
                     os << "#pragma unroll\n" <<
@@ -307,11 +321,8 @@ namespace yask {
     void CppVecPrintHelper::printPointPtr(ostream& os, const string& ptrName,
                                           const GridPoint& gp) {
         printPointComment(os, gp, "Calculate pointer to ");
-
-        // Calc ptr.
-        os << _linePrefix << getVarType() << "* " << ptrName << " = ";
-        printVecPointCall(os, gp, "getVecPtrNorm", "", "__LINE__", true);
-        os << _lineSuffix;
+        auto vp = printVecPointCall(os, gp, "getVecPtrNorm", "", "__LINE__", true);
+        os << _linePrefix << getVarType() << "* " << ptrName << " = " << vp << _lineSuffix;
     }
     
     // Print any needed memory reads and/or constructions to 'os'.
@@ -338,8 +349,8 @@ namespace yask {
 #endif
 
                 // Offset in inner-dim direction.
-                string idim = _dims._innerDim;
-                string ofsStr = gp.makeNormArgStr(idim, _dims);
+                string idim = _dims->_innerDim;
+                string ofsStr = gp.makeNormArgStr(idim, *_dims);
                 
                 // Output read using base addr.
                 printPointComment(os, gp, "Read aligned");
@@ -376,8 +387,8 @@ namespace yask {
             if (p) {
 
                 // Offset.
-                string idim = _dims._innerDim;
-                string ofs = gp.makeNormArgStr(idim, _dims);
+                string idim = _dims->_innerDim;
+                string ofs = gp.makeNormArgStr(idim, *_dims);
                 
                 // Output write using base addr.
                 printPointComment(os, gp, "Write aligned");
@@ -392,13 +403,13 @@ namespace yask {
 
     // Print aligned memory read.
     string CppVecPrintHelper::printAlignedVecRead(ostream& os, const GridPoint& gp) {
+
         printPointComment(os, gp, "Read aligned");
+        auto rvn = printVecPointCall(os, gp, "readVecNorm", "", "__LINE__", true);
 
         // Read memory.
         string mvName = makeVarName();
-        os << _linePrefix << getVarType() << " " << mvName << " = ";
-        printVecPointCall(os, gp, "readVecNorm", "", "__LINE__", true);
-        os << _lineSuffix;
+        os << _linePrefix << getVarType() << " " << mvName << " = " << rvn << _lineSuffix;
         return mvName;
     }
 
@@ -411,11 +422,11 @@ namespace yask {
         // Make a var.
         string mvName = makeVarName();
         os << _linePrefix << getVarType() << " " << mvName << _lineSuffix;
+        auto vp = printVecPointCall(os, gp, "getElemPtr", "", "true", false);
         
         // Read memory.
-        os << _linePrefix << mvName << ".loadUnalignedFrom((const " << getVarType() << "*)";
-        printVecPointCall(os, gp, "getElemPtr", "", "true", false);
-        os << ")" << _lineSuffix;
+        os << _linePrefix << mvName <<
+            ".loadUnalignedFrom((const " << getVarType() << "*)" << vp << ")" << _lineSuffix;
         return mvName;
     }
 
@@ -423,9 +434,10 @@ namespace yask {
     string CppVecPrintHelper::printAlignedVecWrite(ostream& os, const GridPoint& gp,
                                                    const string& val) {
         printPointComment(os, gp, "Write aligned");
+        auto vn = printVecPointCall(os, gp, "writeVecNorm", val, "__LINE__", true);
 
         // Write temp var to memory.
-        printVecPointCall(os, gp, "writeVecNorm", val, "__LINE__", true);
+        os << vn;
         return val;
     }
     

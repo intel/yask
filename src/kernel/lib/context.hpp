@@ -38,7 +38,9 @@ namespace yask {
         // Following values are calculated from the above ones.
         IdxTuple bb_len;       // size in each dim.
         idx_t bb_size=1;       // points in the entire box >= bb_num_points.
-        bool bb_simple=false;  // full box with aligned vectors only.
+        bool bb_is_full=false; // all points in box are calculated.
+        bool bb_is_aligned=false; // starting points are aligned in all dims.
+        bool bb_is_cluster_mult=false; // num points are cluster multiples in all dims.
         bool bb_valid=false;   // lengths and sizes have been calculated.
 
         // Calc values and set valid to true.
@@ -92,16 +94,16 @@ namespace yask {
     };
     
     // Collections of things in a context.
-    class EqGroupBase;
-    typedef std::vector<EqGroupBase*> EqGroupList;
-    typedef std::set<EqGroupBase*> EqGroupSet;
+    class StencilGroupBase;
+    typedef std::vector<StencilGroupBase*> StencilGroupList;
+    typedef std::set<StencilGroupBase*> StencilGroupSet;
     typedef std::map<std::string, YkGridPtr> GridPtrMap;
     
     // Data and hierarchical sizes.
     // This is a pure-virtual class that must be implemented
     // for a specific problem.
-    // Each eq group is valid within its bounding box (BB).
-    // The context's BB encompasses all eq-group BBs.
+    // Each stencil group is valid within its bounding box (BB).
+    // The context's BB encompasses all stencil-group BBs.
     class StencilContext :
         public BoundingBox,
         public virtual yk_solution {
@@ -142,19 +144,19 @@ namespace yask {
         // Name.
         std::string name;
 
-        // List of all stencil equations in the order in which
+        // List of all stencil groups in the order in which
         // they should be evaluated. Current assumption is that
         // later ones are dependent on their predecessors.
-        // TODO: relax this assumption, determining which eqGroups
+        // TODO: relax this assumption, determining which groups
         // are actually dependent on which others, allowing
         // more parallelism.
-        EqGroupList eqGroups;
+        StencilGroupList stGroups;
 
         // All grids.
         GridPtrs gridPtrs;
         GridPtrMap gridMap;
 
-        // Only grids that are updated by the stencil equations.
+        // Only grids that are updated by the stencils.
         GridPtrs outputGridPtrs;
         GridPtrMap outputGridMap;
 
@@ -163,7 +165,7 @@ namespace yask {
         IdxTuple overall_domain_sizes;       // Total of rank domains over all ranks.
 
         // Maximum halos and skewing angles over all grids and
-        // equations. Used for calculating worst-case minimum regions.
+        // groups. Used for calculating worst-case minimum regions.
         IdxTuple max_halos;  // spatial halos.
         IdxTuple angles;     // temporal skewing angles.
 
@@ -172,7 +174,7 @@ namespace yask {
         // 'tot_' prefix indicates over all ranks.
         // 'domain' indicates points in domain-size specified on cmd-line.
         // 'numpts' indicates points actually calculated in sub-domains.
-        // 'reads' indicates points actually read by eq-groups.
+        // 'reads' indicates points actually read by stencil-groups.
         // 'numFpOps' indicates est. number of FP ops.
         // 'nbytes' indicates number of bytes allocated.
         // '_1t' suffix indicates work for one time-step.
@@ -253,6 +255,7 @@ namespace yask {
             // Apply settings.
             void apply() {
                 auto _opts = _context->_opts;
+                auto _env = _context->_env;
 
                 // Change sub-block size to 0 so adjustSettings()
                 // will set it to the default.
@@ -260,7 +263,7 @@ namespace yask {
                 _opts->_sub_block_group_sizes.setValsSame(0);
                 
                 // Make sure everything is resized based on block size.
-                _opts->adjustSettings(nullop->get_ostream());
+                _opts->adjustSettings(nullop->get_ostream(), _env);
             }
 
             // Done?
@@ -413,13 +416,11 @@ namespace yask {
 
             // Get max number of threads.
             int mt = _opts->max_threads;
-            if (!mt)
-                mt = omp_get_max_threads();
+            int nt = mt / _opts->thread_divisor;
+            nt = std::max(nt, 1);
             
             // Reset number of OMP threads to max allowed.
-            int nt = _opts->max_threads / _opts->thread_divisor;
-            nt = std::max(nt, 1);
-            TRACE_MSG("set_all_threads: omp_set_num_threads=" << nt);
+            //TRACE_MSG("set_all_threads: omp_set_num_threads=" << nt);
             omp_set_num_threads(nt);
             return nt;
         }
@@ -429,7 +430,9 @@ namespace yask {
         virtual int set_region_threads() {
 
             // Start with "all" threads.
-            int nt = _opts->max_threads / _opts->thread_divisor;
+            int mt = _opts->max_threads;
+            int nt = mt / _opts->thread_divisor;
+            nt = std::max(nt, 1);
 
             // Limit outer nesting to allow num_block_threads per nested
             // block loop.
@@ -438,7 +441,7 @@ namespace yask {
             if (_opts->num_block_threads > 1)
                 omp_set_nested(1);
 
-            TRACE_MSG("set_region_threads: omp_set_num_threads=" << nt);
+            //TRACE_MSG("set_region_threads: omp_set_num_threads=" << nt);
             omp_set_num_threads(nt);
             return nt;
         }
@@ -450,7 +453,7 @@ namespace yask {
             // This should be a nested OMP region.
             int nt = _opts->num_block_threads;
             nt = std::max(nt, 1);
-            TRACE_MSG("set_block_threads: omp_set_num_threads=" << nt);
+            //TRACE_MSG("set_block_threads: omp_set_num_threads=" << nt);
             omp_set_num_threads(nt);
             return nt;
         }
@@ -466,17 +469,17 @@ namespace yask {
         // rank-domain loops; the actual begin_r* and end_r* values for the
         // region are derived from these.  TODO: create a public interface
         // w/a more logical index ordering.
-        virtual void calc_region(EqGroupSet* eqGroup_set,
+        virtual void calc_region(StencilGroupSet* stGroup_set,
                                  const ScanIndices& rank_idxs);
 
         // Exchange all dirty halo data.
         virtual void exchange_halos_all();
 
-        // Exchange halo data needed by eq-group 'eg' at the given step(s).
-        virtual void exchange_halos(idx_t start, idx_t stop, EqGroupBase& eg);
+        // Exchange halo data needed by stencil-group 'sg' at the given step(s).
+        virtual void exchange_halos(idx_t start, idx_t stop, StencilGroupBase& sg);
 
-        // Mark grids that have been written to by eq-group 'eg'.
-        virtual void mark_grids_dirty(EqGroupBase& eg, idx_t step_idx);
+        // Mark grids that have been written to by group 'sg'.
+        virtual void mark_grids_dirty(StencilGroupBase& sg, idx_t step_idx);
         
         // Set the bounding-box around all eq groups.
         virtual void find_bounding_boxes();

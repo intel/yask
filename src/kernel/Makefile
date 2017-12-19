@@ -266,7 +266,7 @@ NDIMS_OPT		:=	`cat $(YK_DIMS_FILE)`
 RANK_LOOP_OPTS		?=	$(NDIMS_OPT) -inVar rank_idxs
 RANK_LOOP_ORDER		?=	1 .. N-1
 RANK_LOOP_CODE		?=	$(RANK_LOOP_OUTER_MODS) loop($(RANK_LOOP_ORDER)) \
-				{ $(RANK_LOOP_INNER_MODS) call(calc_region(eqGroup_ptr)); }
+				{ $(RANK_LOOP_INNER_MODS) call(calc_region(stGroup_ptr)); }
 
 # Region loops break up a region using OpenMP threading into blocks.  The
 # 'omp' modifier creates an outer OpenMP loop so that each block is assigned
@@ -275,7 +275,7 @@ RANK_LOOP_CODE		?=	$(RANK_LOOP_OUTER_MODS) loop($(RANK_LOOP_ORDER)) \
 # may be found in StencilEquations::calc_region().
 REGION_LOOP_OPTS	?=     	$(NDIMS_OPT) -inVar region_idxs \
 				-ompConstruct '$(omp_par_for) schedule($(omp_region_schedule)) proc_bind(spread)' \
-				-callPrefix 'eg->'
+				-callPrefix 'sg->'
 REGION_LOOP_OUTER_MODS	?=	grouped omp
 REGION_LOOP_ORDER	?=	1 .. N-1
 REGION_LOOP_CODE	?=	$(REGION_LOOP_OUTER_MODS) loop($(REGION_LOOP_ORDER)) { \
@@ -468,8 +468,8 @@ endif
 # VTUNE settings.
 ifeq ($(vtune),1)
  MACROS		+=	USE_VTUNE
-ifneq ($(VTUNE_AMPLIFIER_XE_2018_DIR),)
- VTUNE_DIR	=	$(VTUNE_AMPLIFIER_XE_2018_DIR)
+ifneq ($(VTUNE_AMPLIFIER_2018_DIR),)
+ VTUNE_DIR	=	$(VTUNE_AMPLIFIER_2018_DIR)
 else ifneq ($(VTUNE_AMPLIFIER_XE_2017_DIR),)
  VTUNE_DIR	=	$(VTUNE_AMPLIFIER_XE_2017_DIR)
 else
@@ -494,8 +494,10 @@ ifneq ($(findstring icpc,$(notdir $(YK_CXX))),)  # Intel compiler
  #YK_CXXFLAGS	+=	-qopt-report-phase=VEC,PAR,OPENMP,IPO,LOOP
  YK_CXX_VER_CMD	:=	$(YK_CXX) -V
 
- # work around an optimization anomaly.
- MACROS		+=	NO_STORE_INTRINSICS
+# use 512-bit code on SKL
+ifneq ($(filter $(arch),skx skl),)
+ YK_CXXFLAGS	+=	-qopt-zmm-usage=high
+endif
 
 else # not Intel compiler
  YK_CXXFLAGS	+=	$(GCXX_ISA) -Wno-unknown-pragmas -Wno-unused-variable -Wno-unused-but-set-variable
@@ -693,13 +695,16 @@ yk-test-no-yc: kernel-only
 # For testing both the kernel and compiler in various combinations,
 # run the tests from the top-level Makefile.
 all-tests:
-	$(MAKE) clean; $(MAKE) stencil=3axis fold=x=4,y=2 cxx-yk-grid-test
-	$(MAKE) clean; $(MAKE) stencil=9axis fold=z=2 cxx-yk-grid-test
-	$(MAKE) clean; $(MAKE) stencil=3plane fold=y=2,z=4 cxx-yk-grid-test
-	$(MAKE) clean; $(MAKE) stencil=cube fold=x=2,y=2,z=2 cxx-yk-grid-test
+	$(MAKE) clean; $(MAKE) stencil=test_3d fold=x=4,y=2 cxx-yk-grid-test
+	$(MAKE) clean; $(MAKE) stencil=test_1d yc-and-yk-test
+	$(MAKE) clean; $(MAKE) stencil=3axis fold=x=4,y=2 yc-and-yk-test
+	$(MAKE) clean; $(MAKE) stencil=9axis fold=z=2 yc-and-yk-test
+	$(MAKE) clean; $(MAKE) stencil=3plane fold=y=2,z=4 yc-and-yk-test
+	$(MAKE) clean; $(MAKE) stencil=cube fold=x=2,y=2,z=2 yc-and-yk-test
+	$(MAKE) clean; $(MAKE) stencil=test_4d fold=w=2,x=2,y=2,z=2 yc-and-yk-test
 	$(MAKE) clean; $(MAKE) stencil=iso3dfd fold=x=4,y=2 yc-and-yk-test
-	$(MAKE) clean; $(MAKE) stencil=awp_elastic yc-and-yk-test real_bytes=8
-	$(MAKE) clean; $(MAKE) stencil=fsg_abc yc-and-yk-test real_bytes=8
+	$(MAKE) clean; $(MAKE) stencil=awp_elastic real_bytes=8 yc-and-yk-test
+	$(MAKE) clean; $(MAKE) stencil=fsg_abc real_bytes=8 yc-and-yk-test
 	$(MAKE) clean; $(MAKE) stencil=iso3dfd cxx-yk-api-test
 	$(MAKE) clean; $(MAKE) stencil=iso3dfd py-yk-api-test
 

@@ -547,7 +547,7 @@ namespace yask {
 
             CounterVisitor cv;
             eq.visitEqs(&cv);
-            PrintHelper ph(&cv, "temp", "real", " ", ".\n");
+            PrintHelper ph(NULL, &cv, "temp", "real", " ", ".\n");
 
             if (eq.cond.get()) {
                 string condStr = eq.cond->makeStr();

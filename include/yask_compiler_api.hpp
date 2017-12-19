@@ -233,7 +233,7 @@ namespace yask {
         set_fold_len(const yc_index_node_ptr dim
                      /**< [in] Dimension of fold, e.g., "x".
                       This must be an index created by new_domain_index(). */,
-                     int len /**< [in] Length of vectorization in 'dim' */ ) =0;
+                     int len /**< [in] Length of vectorization in `dim` */ ) =0;
 
         /// Reset all vector-folding settings.
         /** All fold lengths will return to the default of one (1). */
@@ -261,7 +261,7 @@ namespace yask {
         set_cluster_mult(const yc_index_node_ptr dim
                          /**< [in] Direction of unroll, e.g., "y".
                             This must be an index created by new_domain_index().  */,
-                         int mult /**< [in] Number of vectors in 'dim' */ ) =0;
+                         int mult /**< [in] Number of vectors in `dim` */ ) =0;
 
         /// Reset all vector-clustering settings.
         /** All cluster multipliers will return to the default of one (1). */

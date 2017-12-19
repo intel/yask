@@ -399,6 +399,9 @@ namespace yask {
         int num_ranks=1;        // total number of ranks.
         int my_rank=0;          // MPI-assigned index.
 
+        // OMP vars.
+        int max_threads=0;      // initial value from OMP.
+
         virtual ~KernelEnv() {}
         
         // Init MPI, OMP, etc.
@@ -430,14 +433,14 @@ namespace yask {
         std::string _step_dim;  // usually time, 't'.
         std::string _inner_dim; // the domain dim used in the inner loop.
         IdxTuple _domain_dims;
-        IdxTuple _stencil_dims;
+        IdxTuple _stencil_dims; // step & domain dims.
         IdxTuple _misc_dims;
 
         // Dimensions and sizes.
         IdxTuple _fold_pts;     // all domain dims.
         IdxTuple _vec_fold_pts; // just those with >1 pts.
-        IdxTuple _cluster_pts;
-        IdxTuple _cluster_mults;
+        IdxTuple _cluster_pts;  // all domain dims.
+        IdxTuple _cluster_mults; // all domain dims.
 
         // Direction of step.
         int _step_dir = 0;    // 0: undetermined, +1: forward, -1: backward.
@@ -783,7 +786,7 @@ namespace yask {
         // values as needed.
         // Called from prepare_solution(), so it doesn't normally need to be called from user code.
         // Prints informational info to 'os'.
-        virtual void adjustSettings(std::ostream& os);
+        virtual void adjustSettings(std::ostream& os, KernelEnvPtr env);
 
     };
     typedef std::shared_ptr<KernelSettings> KernelSettingsPtr;

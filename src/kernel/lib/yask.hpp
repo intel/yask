@@ -145,6 +145,7 @@ inline void omp_set_nested(int n) { }
 // Rounding macros for integer types.
 #define CEIL_DIV(numer, denom) (((numer) + (denom) - 1) / (denom))
 #define ROUND_UP(n, mult) (CEIL_DIV(n, mult) * (mult))
+#define ROUND_DOWN(n, mult) (((n) / (mult)) * (mult))
 
 // Default alignment and padding.
 #define CACHELINE_BYTES  (64)

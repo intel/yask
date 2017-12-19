@@ -34,16 +34,14 @@ using namespace std;
 namespace yask {
 
     // Update this version string anytime changes are
-    // pushed to github to master or that will be
-    // merged into master.
-    // Also update the version anytime changes are
-    // pushed to develop, esp. the first push
-    // after a merge into master.
-    // Version should be in a form that will
-    // allow proper alphanumeric sorting for minor revisions
-    // and patches up to 99.
+    // committed to a repository, especially when
+    // affecting master or develop branches.
+    // Be sure to keep 2 digits in minor and patch
+    // fields to allow proper alphanumeric sorting
+    // for numbers above 9 (at least up to 99).
+
     // Format: "major.minor.patch".
-    const string version = "2.01.00";
+    const string version = "2.01.03";
 
     string yask_get_version_string() {
         return version;

@@ -111,10 +111,11 @@ namespace yask {
         ret = setenv("KMP_HOT_TEAMS_MODE", "1", 0); // more efficient nesting.
         assert(ret == 0);
         ret = setenv("KMP_HOT_TEAMS_MAX_LEVEL", "2", 0); // 2-level nesting.
-        
-        // There is no specific call to init OMP, but we make a gratuitous
-        // OMP call to trigger any debug output.
-        omp_get_num_procs();
+
+        // Save initial value of OMP max threads.
+        // Side effect: causes OMP to dump debug info if env var set.
+        if (!max_threads)
+            max_threads = omp_get_max_threads();
     }
 
     // Apply a function to each neighbor rank.
@@ -208,13 +209,11 @@ namespace yask {
             }
         }
 
-        // Option for all domain dims.
-        if (multi_vars.size() > 1) {
-            parser.add_option(new CommandLineParser::MultiIdxOption
-                              (prefix,
-                               "Shorthand for" + multi_help,
-                               multi_vars));
-        }
+        // Option for setting all domain dims.
+        parser.add_option(new CommandLineParser::MultiIdxOption
+                          (prefix,
+                           "Shorthand for" + multi_help,
+                           multi_vars));
     }
     
     // Add these settigns to a cmd-line parser.
@@ -393,11 +392,11 @@ namespace yask {
     // Make sure all user-provided settings are valid and finish setting up some
     // other vars before allocating memory.
     // Called from prepare_solution(), so it doesn't normally need to be called from user code.
-    void KernelSettings::adjustSettings(std::ostream& os) {
+    void KernelSettings::adjustSettings(std::ostream& os, KernelEnvPtr env) {
         
         // Set max number of threads.
         if (max_threads <= 0)
-            max_threads = omp_get_max_threads();
+            max_threads = env->max_threads;
         
         // Determine num regions.
         // Also fix up region sizes as needed.
@@ -406,7 +405,7 @@ namespace yask {
         auto nr = findNumSubsets(os, _region_sizes, "region",
                                  _rank_sizes, "rank-domain",
                                  _dims->_cluster_pts);
-        auto rt = _rank_sizes[_dims->_step_dim];
+        auto rt = _region_sizes[_dims->_step_dim];
         os << " num-regions-per-rank-domain: " << nr << endl;
         os << " Since the temporal region size is " << rt <<
             ", temporal wave-front tiling is ";
