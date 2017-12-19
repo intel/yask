@@ -1755,7 +1755,10 @@ namespace yask {
             if (!gp)
                 continue;
             gp->release_storage();
-        }            
+        }
+
+	// Reset threads to original value.
+	set_max_threads();
     }
 
     // Init all grids & params by calling initFn.

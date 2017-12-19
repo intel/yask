@@ -719,7 +719,8 @@ namespace yask {
         int _prefetch_L2_dist=2;
 
         // Ctor.
-        KernelSettings(DimsPtr dims) : _dims(dims) {
+        KernelSettings(DimsPtr dims, KernelEnvPtr env) : 
+            _dims(dims), max_threads(env->max_threads) {
 
             // Use both step and domain dims for all size tuples.
             _rank_sizes = dims->_stencil_dims;

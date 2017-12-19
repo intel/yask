@@ -394,10 +394,6 @@ namespace yask {
     // Called from prepare_solution(), so it doesn't normally need to be called from user code.
     void KernelSettings::adjustSettings(std::ostream& os, KernelEnvPtr env) {
         
-        // Set max number of threads.
-        if (max_threads <= 0)
-            max_threads = env->max_threads;
-        
         // Determine num regions.
         // Also fix up region sizes as needed.
         // Default region size (if 0) will be size of rank-domain.

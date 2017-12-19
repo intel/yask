@@ -42,8 +42,8 @@ struct AppSettings : public KernelSettings {
     int pre_trial_sleep_time = 1; // sec to sleep before each trial.
     int debug_sleep = 0;          // sec to sleep for debug attach.
 
-    AppSettings(DimsPtr dims) :
-        KernelSettings(dims) { }
+    AppSettings(DimsPtr dims, KernelEnvPtr env) :
+        KernelSettings(dims, env) { }
 
     // A custom option-handler for '-v'.
     class ValOption : public CommandLineParser::OptionBase {
@@ -227,13 +227,14 @@ int main(int argc, char** argv)
 
     // Set up the environment (mostly MPI).
     auto kenv = kfac.new_env();
+    auto ep = dynamic_pointer_cast<KernelEnv>(kenv);
 
     // Problem dimensions.
     auto dims = YASK_STENCIL_CONTEXT::new_dims();
 
     // Parse cmd-line options.
     // TODO: do this through APIs.
-    auto opts = make_shared<AppSettings>(dims);
+    auto opts = make_shared<AppSettings>(dims, ep);
     opts->parse(argc, argv);
 
     // Object containing data and parameters for stencil eval.
