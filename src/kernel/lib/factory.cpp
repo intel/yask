@@ -36,7 +36,7 @@ namespace yask {
         assert(ep);
         auto dp = YASK_STENCIL_CONTEXT::new_dims();
         assert(dp);
-        auto op = make_shared<KernelSettings>(dp);
+        auto op = make_shared<KernelSettings>(dp, ep);
         assert(op);
 
         // Copy settings from source.

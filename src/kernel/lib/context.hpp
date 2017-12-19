@@ -302,7 +302,7 @@ namespace yask {
             if (steps_done)
                 get_stats();
 
-            // Free mem.
+            // Free mem, reset threads, etc.
             end_solution();
         }
 
@@ -411,11 +411,31 @@ namespace yask {
         // Return number of mis-compares.
         virtual idx_t compareData(const StencilContext& ref) const;
         
+        // Set number of threads w/o using thread-divisor.
+        // Return number of threads.
+        // Do nothing and return 0 if not properly initialized.
+        virtual int set_max_threads() {
+
+            // Get max number of threads.
+            int mt = _opts->max_threads;
+	    if (!mt)
+	      return 0;
+            
+            // Reset number of OMP threads to max allowed.
+            //TRACE_MSG("set_max_threads: omp_set_num_threads=" << nt);
+            omp_set_num_threads(mt);
+            return mt;
+        }
+
         // Set number of threads to use for something other than a region.
+        // Return number of threads.
+        // Do nothing and return 0 if not properly initialized.
         virtual int set_all_threads() {
 
             // Get max number of threads.
             int mt = _opts->max_threads;
+	    if (!mt)
+	      return 0;
             int nt = mt / _opts->thread_divisor;
             nt = std::max(nt, 1);
             
@@ -426,11 +446,14 @@ namespace yask {
         }
 
         // Set number of threads to use for a region.
-        // Return that number.
+        // Return number of threads.
+        // Do nothing and return 0 if not properly initialized.
         virtual int set_region_threads() {
 
             // Start with "all" threads.
             int mt = _opts->max_threads;
+	    if (!mt)
+	      return 0;
             int nt = mt / _opts->thread_divisor;
             nt = std::max(nt, 1);
 
@@ -447,7 +470,8 @@ namespace yask {
         }
 
         // Set number of threads for a block.
-        // Return that number.
+        // Return number of threads.
+        // Do nothing and return 0 if not properly initialized.
         virtual int set_block_threads() {
 
             // This should be a nested OMP region.
