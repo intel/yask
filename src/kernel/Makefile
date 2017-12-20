@@ -494,9 +494,10 @@ ifneq ($(findstring icpc,$(notdir $(YK_CXX))),)  # Intel compiler
  #YK_CXXFLAGS	+=	-qopt-report-phase=VEC,PAR,OPENMP,IPO,LOOP
  YK_CXX_VER_CMD	:=	$(YK_CXX) -V
 
-# use 512-bit code on SKL
+# Use 512-bit code on SKL.
+# (Commented out because it doesn't help performance, and it breaks Devito.)
 ifneq ($(filter $(arch),skx skl),)
- YK_CXXFLAGS	+=	-qopt-zmm-usage=high
+ #YK_CXXFLAGS	+=	-qopt-zmm-usage=high
 endif
 
 else # not Intel compiler
