@@ -19,7 +19,7 @@ There are two sets of APIs provided by YASK corresponding to these tasks:
 -# The YASK Stencil Compiler API (available in C++ and Python).
 -# The YASK Stencil Kernel API (available in C++ and Python).
 
-For each of the tasks, you can either use use the YASK-provided application
+For each of the tasks, you can either use the YASK-provided application
 or create your own application built with the corresponding API.
 
 These alternatives may be mixed-or-matched in all combinations.
@@ -59,7 +59,7 @@ A new stencil solution may be defined in one of the following ways:
   - See \ref yc for documentation on the compiler API.
 
 In either case, the resulting generated code should written to the C++ stencil-code file,
-src/kernel/gen/yask_stencil_code.hpp`.
+`src/kernel/gen/yask_stencil_code.hpp`.
 
 @subsection yk_intro Create a Stencil Kernel Library and Stencil-based Application
 
@@ -140,9 +140,10 @@ this distinguishes them from the 'yk_'-prefixed types used in the "YASK kernel" 
   - To complete each equation, use yc_node_factory::new_equation_node() to specify an expression
     on the right-hand side (RHS) and the grid point that is defined to be equal
     to it on the left-hand side (LHS).
-- Specify the solution step dimension via yc_solution::set_step_dim().
-  (This is usually "t" for time.)
-- Specify the number of bytes in a floating-point element via yc_solution::set_elem_bytes().
+  - Specify the solution domain dimension via yc_node_factory::new_domain_index().
+  - Specify the solution step dimension via yc_node_factory::new_step_index().
+    (This is usually "t" for time.)
+- Specify the number of bytes in a floating-point element via yc_solution::set_element_bytes().
   This should be 4 or 8.
 - Optionally specify the vector-folding and/or vector-clustering via 
   yc_solution::set_fold_len() and/or yc_solution::set_cluster_mult().
@@ -171,9 +172,9 @@ this distinguishes them from the 'yc_'-prefixed types used in the "YASK compiler
   Be sure to modify any settings before calling yk_solution::prepare_solution().
 - Access the solution grids via yk_solution::get_grid().
   Various properties of each grid may be retrieved or set.
-  In particular, you should initialize the data in each grid via yk_grid::set_all_elements()
+  In particular, you should initialize the data in each grid via yk_grid::set_all_elements_same()
   and yk_grid::set_element().
-- Apply the stencil(s) to the grids via yk_solution::apply_solution().
+- Apply the stencil(s) to the grids via yk_solution::run_solution().
   There are versions for advancing one or more steps.
 - Retrieve the final results via yk_grid::get_element().
 */
