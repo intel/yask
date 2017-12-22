@@ -132,6 +132,8 @@ namespace yask {
                     // Find end of whole vectors.
                     auto vpts = dims->_fold_pts[j];
                     auto vend = ROUND_DOWN(send, vpts);
+                    if (i == _inner_posn)
+                        vend = cend; // don't do vectors in inner dim.
                     sub_block_vidxs.end[i] = vend;
 
                     // Next domain index.
@@ -245,8 +247,8 @@ namespace yask {
                     ok = true; break; }                                 \
             }                                                           \
             if (ok) calc_loop_of_vectors(loop_idxs, idx_t(-1));
-#warning FIXME: handle inner-loop remainder.
-            
+            // TODO: handle inner-loop vector remainder.
+
             // Include automatically-generated loop code that calls
             // calc_inner_loop(). This is different from the higher-level
             // loops because it does not scan the inner dim.
