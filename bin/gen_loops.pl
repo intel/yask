@@ -695,7 +695,7 @@ sub processCode($) {
             push @loopPrefix,
                 " // Distribute iterations among OpenMP threads.", 
                 "#pragma OMP_PRAGMA_PREFIX $priv OMP_PRAGMA_SUFFIX";
-            warn "info: using OpenMP on following loop.\n";
+            print "info: using OpenMP on following loop.\n";
         }
 
         # generate simd in next loop.
@@ -703,7 +703,7 @@ sub processCode($) {
 
             push @loopPrefix, '_Pragma("simd")';
             $features |= $bSimd;
-            warn "info: generating SIMD in following loop.\n";
+            print "info: generating SIMD in following loop.\n";
         }
 
         # use grouped path in next loop if possible.
@@ -747,7 +747,7 @@ sub processCode($) {
             }
 
             # print more info.
-            warn "info: generating scan over ".dimStr(@loopDims)."...\n";
+            print "info: generating scan over ".dimStr(@loopDims)."...\n";
 
             # add initial code for index vars, but don't start loop body yet.
             addIndexVars1(\@code, \@loopDims, $features);
@@ -881,7 +881,7 @@ sub processCode($) {
     if (!defined which($indent)) {
         $indent = 'gindent';
         if (!defined which($indent)) {
-            warn "note: cannot find [g]indent utility--output will be unformatted.\n";
+            print "note: cannot find [g]indent utility--output will be unformatted.\n";
             undef $indent;
         }
     }
@@ -975,7 +975,7 @@ sub main() {
     }
 
     @dims = 0 .. ($OPT{ndims} - 1);
-    warn "info: generating scanning code for ".scalar(@dims)."-D grids...\n";
+    print "info: generating scanning code for ".scalar(@dims)."-D grids...\n";
     $inputVar = $OPT{inVar};
 
     my $codeString = join(' ', @ARGV); # just concat all non-options params together.
