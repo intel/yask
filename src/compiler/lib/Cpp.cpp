@@ -392,7 +392,10 @@ namespace yask {
                 
                 // Output write using base addr.
                 printPointComment(os, gp, "Write aligned");
-                os << _linePrefix << *p << "[" << ofs << "] = " << val << _lineSuffix;
+
+                os << _linePrefix << val << ".storeTo_masked(" << *p << "+" << ofs << ", write_mask)" << _lineSuffix;
+                // without mask: os << _linePrefix << *p << "[" << ofs << "] = " << val << _lineSuffix;
+
                 return "";
             }
         }
@@ -434,7 +437,8 @@ namespace yask {
     string CppVecPrintHelper::printAlignedVecWrite(ostream& os, const GridPoint& gp,
                                                    const string& val) {
         printPointComment(os, gp, "Write aligned");
-        auto vn = printVecPointCall(os, gp, "writeVecNorm", val, "__LINE__", true);
+        auto vn = printVecPointCall(os, gp, "writeVecNorm_masked", val, "write_mask, __LINE__", true);
+        // without mask: auto vn = printVecPointCall(os, gp, "writeVecNorm", val, "__LINE__", true);
 
         // Write temp var to memory.
         os << vn;

@@ -111,7 +111,7 @@ namespace yask {
     
     ///// Top-level methods for evaluating reference and optimized stencils.
 
-    // Eval stencil group(s) over grid(s) using scalar code.
+    // Eval stencil group(s) over grid(s) using reference scalar code.
     void StencilContext::calc_rank_ref()
     {
         run_time.start();
