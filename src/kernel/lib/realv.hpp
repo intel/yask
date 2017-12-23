@@ -132,19 +132,16 @@ namespace yask {
     // so no user-provided ctors, copy operator, virtual member functions, etc.
     // These features are in real_vec_t, which contains a real_vec_t_data.
     union real_vec_t_data {
+
+        // Real array overlay.
         real_t r[VLEN];
+
+        // Integer array overlay with ctrl_t same size as real_t.
         ctrl_t ci[VLEN];
 
 #ifndef NO_INTRINSICS
     
-        // 32-bit integer vector overlay.
-#if defined(USE_INTRIN256)
-        __m256i mi;
-#elif defined(USE_INTRIN512)
-        __m512i mi;
-#endif
-
-        // real vector.
+        // Real SIMD-type overlay.
 #if REAL_BYTES == 4 && defined(USE_INTRIN256)
         __m256  mr;
 #elif REAL_BYTES == 4 && defined(USE_INTRIN512)
@@ -154,6 +151,14 @@ namespace yask {
 #elif REAL_BYTES == 8 && defined(USE_INTRIN512)
         __m512d mr;
 #endif
+
+        // Integer SIMD-type overlay.
+#if defined(USE_INTRIN256)
+        __m256i mi;
+#elif defined(USE_INTRIN512)
+        __m512i mi;
+#endif
+
 #endif
     };
   
@@ -404,6 +409,33 @@ namespace yask {
 #endif
         }
 
+        // masked store.
+        ALWAYS_INLINE void storeTo_masked(real_vec_t* __restrict__ to, uidx_t k1) const {
+
+            // Using an explicit loop here instead of a store intrinsic may
+            // allow the compiler to do more optimizations.  This is true
+            // for icc 2016 r2--it may change for later versions. Try
+            // defining and not defining NO_STORE_INTRINSICS and comparing
+            // the sizes of the stencil computation loop and the overall
+            // performance.
+#if defined(NO_INTRINSICS) || defined(NO_STORE_INTRINSICS)
+#if defined(__INTEL_COMPILER) && (VLEN > 1) && defined(USE_STREAMING_STORE)
+            _Pragma("vector nontemporal")
+#endif
+                REAL_VEC_LOOP(i) if ((k1 >> i) & 1) (*to)[i] = u.r[i];
+
+            // No masked streaming store intrinsic.
+#elif defined USE_INTRIN256
+
+            // Need to set [at least] upper bit in a SIMD reg to mask bit.
+            real_vec_t_data mask;
+            REAL_VEC_LOOP(i) mask.ci[i] = ((k1 >> i) & 1) ? ctrl_t(-1) : ctrl_t(0);
+            INAME(maskstore)((imem_t*)to, mask.mi, u.mr);
+#else
+            INAME(mask_store)((imem_t*)to, real_mask_t(k1), u.mr);
+#endif
+        }
+
         // Output.
         void print_ctrls(std::ostream& os, bool doEnd=true) const {
             for (int j = 0; j < VLEN; j++) {
@@ -500,7 +532,7 @@ namespace yask {
     // Elements in res corresponding to 0 bits in k1 are unchanged.
     template<int count>
     ALWAYS_INLINE void real_vec_align_masked(real_vec_t& res, const real_vec_t& a, const real_vec_t& b,
-                                             unsigned int k1) {
+                                             uidx_t k1) {
 #ifdef TRACE_INTRINSICS
         std::cout << "real_vec_align w/count=" << count << " w/mask:" << std::endl;
         std::cout << " a: ";
@@ -560,7 +592,7 @@ namespace yask {
     // Rearrange elements in a vector w/masking.
     // Elements in res corresponding to 0 bits in k1 are unchanged.
     ALWAYS_INLINE void real_vec_permute_masked(real_vec_t& res, const real_vec_t& ctrl, const real_vec_t& a,
-                                               unsigned int k1) {
+                                               uidx_t k1) {
 #ifdef TRACE_INTRINSICS
         std::cout << "real_vec_permute w/mask:" << std::endl;
         std::cout << " ctrl: ";

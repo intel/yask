@@ -51,6 +51,10 @@ namespace yask {
 
         // Groups that this one depends on.
         std::map<DepType, StencilGroupSet> _depends_on;
+
+        // Normalize the indices, i.e., subtract the rank offset
+        // and divide by vector len in each dim.
+        void normalize_indices(const Indices& orig, Indices& norm) const;
         
     public:
 
@@ -147,6 +151,25 @@ namespace yask {
         // Indices must be normalized, i.e., already divided by VLEN_*.
         virtual void
         calc_loop_of_clusters(const ScanIndices& loop_idxs);
+
+        // Calculate a series of vector results within an inner loop.
+        // All indices start at 'start_idxs'. Inner loop iterates to
+        // 'stop_inner' by 'step_inner'.
+        // Indices must be rank-relative.
+        // Indices must be normalized, i.e., already divided by VLEN_*.
+        // Each vector write is masked by 'write_mask'.
+        virtual void
+        calc_loop_of_vectors(const Indices& start_idxs, idx_t stop_inner,
+                             idx_t write_mask) =0;
+
+        // Calculate a series of vector results within an inner loop.
+        // The 'loop_idxs' must specify a range only in the inner dim.
+        // Indices must be rank-relative.
+        // Indices must be normalized, i.e., already divided by VLEN_*.
+        // Each vector write is masked by 'write_mask'.
+        virtual void
+        calc_loop_of_vectors(const ScanIndices& loop_idxs,
+                             idx_t write_mask);
     };
 
 } // yask namespace.

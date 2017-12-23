@@ -499,104 +499,114 @@ namespace yask {
                 delete sp;
             }
 
-            // Cluster/Vector code.
-            {
+            // Vector/Cluster code.
+            for (int do_cluster = 0; do_cluster <= 1; do_cluster++) {
+
                 // Cluster eqGroup at same 'ei' index.
                 // This should be the same eq-group because it was copied from the
                 // scalar one.
-                auto& ceq = _clusterEqGroups.at(ei);
-                assert(egDesc == ceq.getDescription());
+                auto& vceq = do_cluster ? _clusterEqGroups.at(ei) : _eqGroups.at(ei);
+                assert(egDesc == vceq.getDescription());
 
                 // Create vector info for this eqGroup.
                 // The visitor is accepted at all nodes in the cluster AST;
                 // for each grid access node in the AST, the vectors
                 // needed are determined and saved in the visitor.
                 VecInfoVisitor vv(*_dims);
-                ceq.visitEqs(&vv);
+                vceq.visitEqs(&vv);
 
                 // Reorder some equations based on vector info.
                 ExprReorderVisitor erv(vv);
-                ceq.visitEqs(&erv);
+                vceq.visitEqs(&erv);
 
                 // Collect stats.
                 CounterVisitor cv;
-                ceq.visitEqs(&cv);
-                int numResults = _dims->_clusterPts.product();
+                vceq.visitEqs(&cv);
+                int numResults = do_cluster ? _dims->_clusterPts.product() : _dims->_fold.product();
 
+                // Vector/cluster vars.
+                string idim = _dims->_innerDim;
+                string vcstr = do_cluster ? "cluster" : "vector";
+                string funcstr = "calc_loop_of_" + vcstr + "s";
+                string nvecs = do_cluster ? "CMULT_" + allCaps(idim) : "1";
+                string nelems = (do_cluster ? nvecs + " * ": "") + "VLEN_" + allCaps(idim);
+                
                 // Loop-calculation code.
-                {
+                // Function header.
+                string istart = "start_" + idim;
+                string istop = "stop_" + idim;
+                string istep = "step_" + idim;
+                string iestep = "step_" + idim + "_elem";
+                os << endl << " // Calculate a series of " << vcstr << "s iterating in +'" << idim <<
+                    "' direction from " << _dims->_stencilDims.makeDimStr() <<
+                    " indices in 'idxs' to '" << istop << "'.\n";
+                if (do_cluster)
+                    os << " // Each cluster calculates '" << _dims->_clusterPts.makeDimValStr(" * ") <<
+                        "' point(s) containing " << _dims->_clusterMults.product() << " '" <<
+                        _dims->_fold.makeDimValStr(" * ") << "' vector(s).\n";
+                else
+                    os << " // Each vector calculates '" << _dims->_fold.makeDimValStr(" * ") <<
+                        "' point(s).\n";
+                os << " // Indices must be rank-relative (not global).\n"
+                    " // Indices must be normalized, i.e., already divided by VLEN_*.\n"
+                    " // SIMD calculations use " << vv.getNumPoints() <<
+                    " vector block(s) created from " << vv.getNumAlignedVecs() <<
+                    " aligned vector-block(s).\n"
+                    " // There are approximately " << (stats.getNumOps() * numResults) <<
+                    " FP operation(s) per iteration.\n" <<
+                    " void " << funcstr << "(const Indices& idxs, idx_t " << istop;
+                if (!do_cluster)
+                    os << ", idx_t write_mask";
+                os << ") {\n";
+                printIndices(os);
+                os << " idx_t " << istart << " = " << idim << ";\n";
+                os << " idx_t " << istep << " = " << nvecs << "; // number of vectors per iter.\n";
+                os << " idx_t " << iestep << " = " << nelems << "; // number of elements per iter.\n";
+                if (do_cluster)
+                    os << " idx_t write_mask = idx_t(-1); // no masking for clusters.\n";
 
-                    // Function header.
-                    string idim = _dims->_innerDim;
-                    string istart = "start_" + idim;
-                    string istop = "stop_" + idim;
-                    string istep = "step_" + idim;
-                    string iestep = "step_" + idim + "_elem";
-                    os << endl << " // Calculate a series of clusters iterating in +'" << idim <<
-                        "' direction from " << _dims->_stencilDims.makeDimStr() <<
-                        " indices in 'idxs' to '" << istop << "'.\n" <<
-                        " // Each cluster calculates '" << _dims->_clusterPts.makeDimValStr(" * ") <<
-                        "' points containing " << _dims->_clusterMults.product() << " '" <<
-                        _dims->_fold.makeDimValStr(" * ") << "' vector(s).\n"
-                        " // Indices must be rank-relative (not global).\n"
-                        " // Indices must be normalized, i.e., already divided by VLEN_*.\n"
-                        " // SIMD calculations use " << vv.getNumPoints() <<
-                        " vector block(s) created from " << vv.getNumAlignedVecs() <<
-                        " aligned vector-block(s).\n"
-                        " // There are approximately " << (stats.getNumOps() * numResults) <<
-                        " FP operation(s) per loop iteration.\n"
-                        " void calc_loop_of_clusters(const Indices& idxs, idx_t " <<
-                        istop << ") {\n";
-                    printIndices(os);
-                    os << " idx_t " << istart << " = " << idim << ";\n";
-                    os << " idx_t " << istep << " = CMULT_" <<
-                        allCaps(idim) << "; // number of vectors.\n";
-                    os << " idx_t " << iestep << " = " <<
-                        istep << " * VLEN_" << allCaps(idim) << "; // number of elements.\n";
+                // C++ vector print assistant.
+                CppVecPrintHelper* vp = newCppVecPrintHelper(vv, cv);
+                vp->printElemIndices(os);
 
-                    // C++ vector print assistant.
-                    CppVecPrintHelper* vp = newCppVecPrintHelper(vv, cv);
-                    vp->printElemIndices(os);
-
-                    // Start forced-inline code.
-                    os << "\n // Force inlining if possible.\n"
-                        "#if !defined(DEBUG) && defined(__INTEL_COMPILER)\n"
-                        "#pragma forceinline recursive\n"
-                        "#endif\n"
-                        " {\n";
+                // Start forced-inline code.
+                os << "\n // Force inlining if possible.\n"
+                    "#if !defined(DEBUG) && defined(__INTEL_COMPILER)\n"
+                    "#pragma forceinline recursive\n"
+                    "#endif\n"
+                    " {\n";
                     
-                    // Print loop-invariants.
-                    CppLoopVarPrintVisitor lvv(os, *vp, _settings);
-                    ceq.visitEqs(&lvv);
+                // Print loop-invariants.
+                CppLoopVarPrintVisitor lvv(os, *vp, _settings);
+                vceq.visitEqs(&lvv);
 
-                    // Print pointers and prefetches.
-                    vp->printBasePtrs(os);
+                // Print pointers and prefetches.
+                vp->printBasePtrs(os);
 
-                    // Actual Loop.
-                    os << "\n // Inner loop.\n"
-                        " for (idx_t " << idim << " = " << istart << "; " <<
-                        idim << " < " << istop << "; " <<
-                        idim << " += " << istep << ", " <<
-                        vp->getElemIndex(idim) << " += " << iestep << ") {\n";
+                // Actual Loop.
+                os << "\n // Inner loop.\n"
+                    " for (idx_t " << idim << " = " << istart << "; " <<
+                    idim << " < " << istop << "; " <<
+                    idim << " += " << istep << ", " <<
+                    vp->getElemIndex(idim) << " += " << iestep << ") {\n";
 
-                    // Generate loop body using vars stored in print helper.
-                    // Visit all expressions to cover the whole cluster.
-                    PrintVisitorBottomUp pcv(os, *vp, _settings);
-                    ceq.visitEqs(&pcv);
+                // Generate loop body using vars stored in print helper.
+                // Visit all expressions to cover the whole vector/cluster.
+                PrintVisitorBottomUp pcv(os, *vp, _settings);
+                vceq.visitEqs(&pcv);
 
-                    // Insert prefetches using vars stored in print helper for next iteration.
-                    vp->printPrefetches(os, true);
+                // Insert prefetches using vars stored in print helper for next iteration.
+                vp->printPrefetches(os, true);
 
-                    // End of loop.
-                    os << " } // '" << idim << "' loop.\n";
+                // End of loop.
+                os << " } // '" << idim << "' loop.\n";
 
-                    // End forced-inline code.
-                    os << " } // Forced-inline block.\n";
+                // End forced-inline code.
+                os << " } // Forced-inline block.\n";
                     
-                    // End of function.
-                    os << "} // calc_loop_of_clusters.\n";
-                    delete vp;
-                }
+                // End of function.
+                os << "} // " << funcstr << ".\n";
+                delete vp;
             }
 
             os << "}; // " << egsName << ".\n"; // end of class.

@@ -693,8 +693,8 @@ namespace yask {
                     // emit code for preserving sign when using shifts.
                     vec_idxs[i] = idx_t(adj_idx / vls[i]);
                     elem_ofs[i] = idx_t(adj_idx % vls[i]);
-                    assert(vec_idxs[i] == adj_idx / _vec_lens[i]);
-                    assert(elem_ofs[i] == adj_idx % _vec_lens[i]);
+                    assert(vec_idxs[i] == idx_t(adj_idx / _vec_lens[i]));
+                    assert(elem_ofs[i] == idx_t(adj_idx % _vec_lens[i]));
                 }
             }
 
