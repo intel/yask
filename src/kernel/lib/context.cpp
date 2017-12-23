@@ -1836,9 +1836,9 @@ namespace yask {
             auto& dname = dim.getName();
             if (bb_len[dname] % dims->_cluster_pts[dname] != 0) {
                 if (bb_is_full && bb_is_aligned)
-                    os << "Warning: '" << name << "' domain"
+                    os << "Note: '" << name << "' domain"
                         " has one or more sizes that are not vector-cluster multiples;"
-                        " slower scalar calculations will be used in remainder sub-blocks.\n";
+                        " masked calculations will be used in remainder sub-blocks.\n";
                 bb_is_cluster_mult = false;
                 break;
             }

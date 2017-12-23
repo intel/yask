@@ -51,6 +51,10 @@ namespace yask {
 
         // Groups that this one depends on.
         std::map<DepType, StencilGroupSet> _depends_on;
+
+        // Normalize the indices, i.e., subtract the rank offset
+        // and divide by vector len in each dim.
+        void normalize_indices(const Indices& orig, Indices& norm) const;
         
     public:
 
