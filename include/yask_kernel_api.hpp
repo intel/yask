@@ -914,7 +914,7 @@ namespace yask {
         get_last_rank_domain_index(const std::string& dim
                                     /**< [in] Name of dimension to get.  Must be one of
                                        the names from yk_solution::get_domain_dim_names(). */ ) const =0;
-        
+
         /// Get the halo size in the specified dimension.
         /**
            This value is typically set by the stencil compiler.
@@ -944,6 +944,28 @@ namespace yask {
                          the names from yk_solution::get_domain_dim_names(). */,
                       idx_t size
                       /**< [in] Number of elements in the halo. */ ) =0;
+
+        /// Get the first index of the halo in this rank in the specified dimension.
+		/**
+		   @returns The first index of halo in this rank or
+		   the same value as yk_grid::get_first_rank_domain_index()
+		   if the rank does not contain halo.
+		*/
+		virtual idx_t
+		get_first_rank_halo_index(const std::string& dim
+									/**< [in] Name of dimension to get.  Must be one of
+									   the names from yk_solution::get_domain_dim_names(). */ ) const =0;
+
+		/// Get the last index of the halo in this rank in the specified dimension.
+		/**
+		   @returns The last index of halo in this rank or
+		   the same value as yk_grid::get_last_rank_domain_index()
+		   if the rank does not contain halo.
+		*/
+		virtual idx_t
+		get_last_rank_halo_index(const std::string& dim
+									/**< [in] Name of dimension to get.  Must be one of
+									   the names from yk_solution::get_domain_dim_names(). */ ) const =0;
 
         /// Get the padding in the specified dimension.
         /**
