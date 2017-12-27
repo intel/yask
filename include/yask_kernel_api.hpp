@@ -69,6 +69,13 @@ namespace yask {
     public:
         virtual ~yk_factory() {}
 
+        /// Version information.
+        /**
+           @returns String describing the current version.
+        */
+        virtual std::string
+		get_version_string();
+
         /// Create an object to hold environment information.
         /**
            Initializes MPI if MPI is enabled.
