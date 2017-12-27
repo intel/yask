@@ -346,6 +346,8 @@ namespace yask {
         GET_GRID_API(get_first_rank_domain_index)
         GET_GRID_API(get_last_rank_domain_index)
         GET_GRID_API(get_halo_size)
+        GET_GRID_API(get_first_rank_halo_index)
+        GET_GRID_API(get_last_rank_halo_index)
         GET_GRID_API(get_extra_pad_size)
         GET_GRID_API(get_pad_size)
         GET_GRID_API(get_alloc_size)

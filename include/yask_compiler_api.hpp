@@ -106,6 +106,13 @@ namespace yask {
     public:
         virtual ~yc_factory() {}
 
+        /// Version information.
+        /**
+           @returns String describing the current version.
+        */
+        virtual std::string
+		get_version_string();
+
         /// Create a stencil solution.
         /**
            A stencil solution contains all the grids and equations.
