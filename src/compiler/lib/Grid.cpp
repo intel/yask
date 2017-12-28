@@ -83,8 +83,11 @@ namespace yask {
     }
 
     // yask_compiler_factory API methods.
-    yc_solution_ptr
-    yc_factory::new_solution(const std::string& name) const {
+    // See yask_compiler_api.hpp.
+    std::string yc_factory::get_version_string() {
+    	return yask_get_version_string();
+    }
+    yc_solution_ptr yc_factory::new_solution(const std::string& name) const {
         return make_shared<EmptyStencil>(name);
     }
     

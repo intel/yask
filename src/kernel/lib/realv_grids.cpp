@@ -43,6 +43,8 @@ namespace yask {
     GET_GRID_API(get_rank_domain_size, _domains[posn], false, true, false)
     GET_GRID_API(get_pad_size, _pads[posn], false, true, false)
     GET_GRID_API(get_halo_size, _halos[posn], false, true, false)
+    GET_GRID_API(get_first_rank_halo_index, _offsets[posn] - _halos[posn], false, false, true)
+    GET_GRID_API(get_last_rank_halo_index, _offsets[posn] + _domains[posn] + _halos[posn] - 1, false, false, true)
     GET_GRID_API(get_first_misc_index, _offsets[posn], false, false, true)
     GET_GRID_API(get_last_misc_index, _offsets[posn] + _domains[posn] - 1, false, false, true)
     GET_GRID_API(get_first_rank_domain_index, _offsets[posn], false, true, false)
