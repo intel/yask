@@ -1,7 +1,7 @@
 /*****************************************************************************
 
 YASK: Yet Another Stencil Kernel
-Copyright (c) 2014-2017, Intel Corporation
+Copyright (c) 2014-2018, Intel Corporation
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to
@@ -174,11 +174,11 @@ struct AppSettings : public KernelSettings {
     void splash(ostream& os, int argc, char** argv)
     {
         os <<
-            "┌──────────────────────────────────────────┐\n"
-            "│  Y.A.S.K. ── Yet Another Stencil Kernel  │\n"
-            "│            https://01.org/yask           │\n"
-            "│    Intel Corporation, copyright 2017     │\n"
-            "└──────────────────────────────────────────┘\n"
+            "┌────────────────────────────────────────────┐\n"
+            "│   Y.A.S.K. ── Yet Another Stencil Kernel   │\n"
+            "│             https://01.org/yask            │\n"
+            "│ Copyright (c) 2014-2018, Intel Corporation │\n"
+            "└────────────────────────────────────────────┘\n"
             "\n"
             "Version: " << yask_get_version_string() << endl <<
             "Stencil name: " YASK_STENCIL_NAME << endl;
