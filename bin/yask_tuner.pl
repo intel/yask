@@ -266,7 +266,7 @@ usage("must specify arch.") if !defined $arch;
 my $realBytes = $dp ? 8 : 4;
 
 # vector.
-my $vbits = ($arch =~ /^(k|skx)/) ? 512 : 256;
+my $vbits = ($arch =~ /^(k|sk)/) ? 512 : 256;
 my $velems = $vbits / 8 / $realBytes;
 
 # radius.
@@ -361,8 +361,9 @@ my @pathNames =
   ('', 'serpentine', 'square_wave serpentine', 'grouped');
 
 # List of folds.
-# Start with inline in z only.
 if ( !@folds ) {
+
+  # start with inline in z only.
   @folds = "1 1 $velems";
 
   # add more 1D options if not z-vec.
@@ -735,19 +736,27 @@ sub calcSize($$$) {
       print "Running '$cmd' to determine number of grids...\n";
       open CMD, "$cmd 2>&1 |" or die "error: cannot run '$cmd'\n";
       while (<CMD>) {
-        push @cmdOut, $_;
+        chomp;
+        my $line = $_;
+        push @cmdOut, $line;
 
         # E.g.,
+        # 5-D grid (t=2 * tidx=2 * x=12 * y=12 * z=42) 't_grids' with data at 0x7fa476600000 containing 1.47656MiB (24.192K SIMD FP element(s) of 64 byte(s) each)
         # 4-D grid (t=2 * x=5 * y=19 * z=19) 'pressure' with data at 0x65cbc0 containing 112.812KiB (3.61K SIMD FP element(s) of 32 byte(s) each)
         # 3-D grid (x=3 * y=3 * z=3) 'vel' with data at 0x6790c0 containing 864B (27 SIMD FP element(s) of 32 byte(s) each)
         # 1-D grid (r=9) 'coeff' with data at 0x679600 containing 36B (9 FP element(s) of 4 byte(s) each)
-        if (/4-?D grid.*t=(\d+).*x=.*y=.*z=/) {
-          $numSpatialGrids += $1; # txyz.
-          print;
-        }
-        elsif (/3-?D grid.*x=.*y=.*z=/) {
-          $numSpatialGrids += 1;  # xyz.
-          print;
+        my $ngrids = 1;
+        if (/^\d-?D grid.*x=.*y=.*z=/) {
+          for my $w (split ' ',$line) {
+            if ($w =~ /(\w+)=(\d+)/) {
+              my ($dim, $sz) = ($1, $2);
+              if ($dim !~ /^[xyz]/) {
+                $ngrids *= $sz;
+              }
+            }
+          }
+          $numSpatialGrids += $ngrids;
+          print "$line => $ngrids XYZ grids\n";
         }
       }
       close CMD;
