@@ -66,6 +66,7 @@ my $folding = 1;               # 2D & 3D folding allowed.
 my $dp;                        # double precision.
 my $makeArgs = '';             # extra make arguments.
 my $makePrefix = '';           # prefix for make.
+my $makeTimeout = 60 * 10;     # max secs for make to run.
 my $runArgs = '';              # extra run arguments.
 my $maxGB = 16;                # max mem usage.
 my $minGB = 0;                 # min mem usage.
@@ -75,6 +76,7 @@ my $doBuild = 1;               # do compiles.
 my $doVal = 0;                 # do validation runs.
 my $maxVecsInCluster = 4;      # max vectors in a cluster.
 my @folds = ();                # folding variations to explore.
+my $killCmd = '/usr/bin/timeout'; # command to kill runaway jobs.
 
 sub usage {
   my $msg = shift;              # error message or undef.
@@ -90,6 +92,7 @@ sub usage {
       " -check             Print the settings, sanity-check the initial population, and exit.\n".
       " -test              Run search with dummy fitness values.\n".
       " -debugCheck        Print detailed results of sanity-checks.\n".
+      " -killCmd=<PATH>    Command to kill runaway jobs (default is '$killCmd').\n".
       "\ntarget options:\n".
       " -arch=<ARCH>       Specify target architecture: knc, knl, hsw, ... (required).\n".
       " -host=<NAME>       Run binary on host <NAME> using ssh.\n".
@@ -97,6 +100,7 @@ sub usage {
       " -sde               Run binary on SDE (for testing only).\n".
       " -makePrefix=<CMD>  Prefix make command with <CMD>.*\n".
       " -makeArgs=<ARGS>   Pass additional <ARGS> to make command.*\n".
+      " -makeTimeout=<N>   Max secs to allow make to run (default is $makeTimeout).\n".
       " -runArgs=<ARGS>    Pass additional <ARGS> to bin/yask.sh command.\n".
       " -ranks=<N>         Number of ranks to use on host (x-dimension only).\n".
       "\nstencil options:\n".
@@ -160,6 +164,9 @@ for my $origOpt (@ARGV) {
   elsif ($opt eq '-debugcheck') {
     $debugCheck = 1;
   }
+  elsif ($origOpt =~ /^-killcmd=(.*)$/i) {
+    $killCmd = $1;
+  }
   elsif ($origOpt =~ /^-outdir=(.*)$/i) {
     $outDir = $1;
   }
@@ -168,6 +175,9 @@ for my $origOpt (@ARGV) {
   }
   elsif ($origOpt =~ /^-makeprefix=(.*)$/i) {
     $makePrefix = $1;
+  }
+  elsif ($opt =~ '^-maketimeout=(\d+)$') {
+    $makeTimeout = $1;
   }
   elsif ($origOpt =~ /^-runargs=(.*)$/i) {
     $runArgs = $1;
@@ -308,6 +318,8 @@ my @metrics = ( $fitnessMetric,
                 'sub-block-size',
                 'cluster-size',
                 'vector-size',
+                'best-block-size',
+                'best-sub-block-size',
                 'num-regions',
                 'num-blocks-per-region',
                 'num-block-groups-per-region',
@@ -696,8 +708,9 @@ sub getMakeCmd($$) {
 }
 
 # create the basic run command.
+my $timeCmd = 'time';
 sub getRunCmd() {
-  my $exePrefix = 'time';
+  my $exePrefix = $timeCmd;
   $exePrefix .= " sde -$arch --" if $sde;
 
   my $runCmd = "bin/yask.sh -log $outDir/yask.$stencil.$arch.run".sprintf("%06d",$run).".log";
@@ -985,37 +998,43 @@ sub evalIndiv($$$$$$$) {
 
       # bail if not passed.
       if (!$passed) {
-        print " stopping because test did not pass\n";
+        print "stopping because test did not pass\n";
         last;
       }
 
       # checks for short run.
       if ($N == 1) {
 
-        # keep best rate.
-        if (defined $secs && $secs > 0) {
-          my $rate = $pts / $secs;
-          if (!defined $bestRate || $rate > $bestRate) {
-            print "new best rate is $rate pts/sec.\n";
-            $bestRate = $rate;
-          }
-        }
+        # bail for simulation.
+        last if $sim;
 
         # bail if fitness not close to best.
         if ($fitness < $bestFit * 0.9) {
-          print " stopping after short run due to non-promising fitness\n";
+          print "stopping after short run due to non-promising fitness\n";
           last;
         } else {
-          print " short run looks promising; continuing with long run...\n";
-        }
 
-        # also bail for simulation.
-        last if $sim;
+          # keep best rate.
+          if (defined $secs && $secs > 0) {
+            my $rate = $pts / $secs;
+            if (!defined $bestRate || $rate > $bestRate) {
+              print "new best rate is $rate pts/sec.\n";
+              $bestRate = $rate;
+            }
+          }
+
+          print "short run looks promising; continuing with long run...\n";
+        }
       }
     } # N
 
-    print "running '$cleanCmd' ...\n";
-    system($cleanCmd);
+    my $cmd = $cleanCmd;
+    print "running '$cmd' ...\n";
+    open CMD, "$cmd 2>&1 |" or die "error: cannot run '$cmd'\n";
+    while (<CMD>) {
+      print ">> $_";
+    }
+    close CMD;
   }
 
   $testCache{$tkey} = $passed;
@@ -1336,13 +1355,22 @@ sub fitness {
   my $cleanCmd = "make clean";
 
   # add kill command to prevent runaway code.
-  my $killCmd = './timeout3.sh';
-  if (!$sde && defined $bestRate && -x $killCmd) {
-    my $mult = ($gen < 10) ? 10 : ($gen < 20) ? 7 : 5; # multiplier.
-    my $killTime = int($dPts / $bestRate * $mult) + 10;
-    print "max runtime is $killTime secs (based on $dPts pts / $bestRate pts/sec * $mult).\n";
-    my $exePrefix .= " $killCmd -t $killTime";
-    $shortRunCmd =~ s/time /time $exePrefix /;
+  if (-x $killCmd) {
+
+    # for the make command.
+    $makeCmd = "$killCmd $makeTimeout $makeCmd";
+    
+    # for the short run command.
+    if (!$sde && defined $bestRate) {
+
+      # runtime limit is based on the number of points, the best rate so far, and a decreasing multiplier.
+      my $mult = ($gen < 4) ? 10 : ($gen < 8) ? 7 : 5; # multiplier.
+      my $killTime = int($dPts / $bestRate * $mult) + 10;
+
+      print "max runtime is $killTime secs (based on $dPts pts / $bestRate pts/sec * $mult).\n";
+      my $exePrefix = "$killCmd $killTime";
+      $shortRunCmd =~ s/$timeCmd/$timeCmd $exePrefix/;
+    }
   }
 
   # do actual fitness eval if sanity check passed.
@@ -1381,7 +1409,8 @@ sub fitness {
   }
   push @cols, @$values, '"'.$makeCmd.'"', '"'.$longRunCmd.'"';
   for my $m (@metrics) {
-    my $r = $results->{$m} || '';
+    my $r = $results->{$m};
+    $r = '' if !defined $r;
     push @cols, ($r =~ /,/) ? '"'.$r.'"' : $r; # add quotes if there is a comma.
   }
   push @cols, $fitness, $bestGen, $bestFit, $isBest ? 'TRUE':'FALSE';
