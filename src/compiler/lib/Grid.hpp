@@ -63,8 +63,8 @@ namespace yask {
         
         // Max abs-value of domain-index halos required by all eqs at
         // various step-index values.
-        // TODO: keep separate pos and neg halos.
-        // TODO: keep separate halos for each equation.
+        // TODO: keep separate 'before' and 'after' halos.
+        // TODO: keep separate halos for each equation group.
         map<int, IntTuple> _halos;  // key: step-dim offset.
     
     public:

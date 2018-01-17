@@ -218,6 +218,7 @@ namespace yask {
         lhs = lhs - rhs;
     }
 
+    // TODO: truncate (or round?) division results for indices.
     NumExprPtr operator/(const NumExprPtr lhs, const NumExprPtr rhs) {
         return make_shared<DivExpr>(lhs, rhs);
     }
