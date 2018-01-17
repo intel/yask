@@ -56,14 +56,6 @@ public:
         StencilRadiusBase("iso3dfd" + suffix, stencils, radius) { }
     virtual ~Iso3dfdStencil() { }
 
-    // Set radius.
-    // Return true if successful.
-    virtual bool setRadius(int radius) {
-        if (!StencilRadiusBase::setRadius(radius))
-            return false;
-        return true;
-    }
-
     // Define RHS expression for pressure at t+1 based on values from vel and pressure at t.
     virtual GridValue get_next_p() {
 
