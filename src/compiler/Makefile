@@ -50,6 +50,7 @@ YC_BASE		:=	yask_compiler
 YC_MODULE	:=	$(YC_BASE)
 YC_EXEC		:=	$(BIN_DIR)/$(YC_BASE).exe
 YC_TEST_EXEC	:=	$(BIN_DIR)/$(YC_BASE)_api_test.exe
+YC_TEST_EXEC_WITH_EXCEPTION	:=	$(BIN_DIR)/$(YC_BASE)_api_exception_test.exe
 YC_LIB		:=	$(LIB_DIR)/lib$(YC_BASE)$(SO_SUFFIX)
 YC_PY_LIB	:=	$(YASK_DIR)/_$(YC_MODULE)$(SO_SUFFIX)
 YC_PY_MOD	:=	$(YASK_DIR)/$(YC_MODULE).py
@@ -134,8 +135,10 @@ $(YC_SWIG_DIR)/yask_compiler_api_wrap.cpp: $(YC_SWIG_DIR)/yask*.i $(INC_DIR)/*.h
 	$(SWIG) -version
 	$(SWIG) -v -DYC_MODULE=$(YC_MODULE) -cppext cpp \
 	  -I$(INC_DIR) -I$(COMM_DIR) -I$(COMM_DIR)/swig \
-	  -c++ -python -outdir $(YASK_DIR) -builtin $<
-
+	  -c++ -python -outdir $(YASK_DIR) $<
+# TODO: '-builtin' flag prevents to handle exception correctly, so disable for now
+#	  -c++ -python -outdir $(YASK_DIR) -builtin $<
+	  
 $(YC_SWIG_DIR)/yask_compiler_api_wrap.o: $(YC_SWIG_DIR)/yask_compiler_api_wrap.cpp
 	$(YC_CXX) $(YC_CXXFLAGS) $(PYINC) -fPIC -c -o $@ $<
 
@@ -164,11 +167,35 @@ cxx-yc-api-test: $(YC_TEST_EXEC)
 	- dot -Tpdf -O yc-api-test-cxx.dot
 	ls -l yc-api-test-cxx.*
 
+# Build C++ compiler API test with exception.
+$(YC_TEST_EXEC_WITH_EXCEPTION): ./tests/yask_compiler_api_exception_test.cpp $(YC_LIB)
+	$(YC_CXX) $(YC_CXXFLAGS) $< $(YC_LFLAGS) -o $@
+	
+# Run Python compiler API test with exceptions to create stencil-code file.
+# Also create .pdf rendering of stencil AST if Graphviz is installed.
+py-yc-api-test-with-exception: $(BIN_DIR)/yask_compiler_api_exception_test.py $(YC_PY_LIB)
+	chmod 440 yc-api-test-with-exception-py-readonly
+	@echo '*** Running the Python YASK compiler API test with exception...'
+	$(RUN_PYTHON) $<
+	- dot -Tpdf -O yc-api-test-with-exception-py.dot
+	ls -l yc-api-test-with-exception-py.*
+
+# Run C++ compiler API test with exceptions to create stencil-code file.
+# Also create .pdf rendering of stencil AST if Graphviz is installed.
+cxx-yc-api-test-with-exception: $(YC_TEST_EXEC_WITH_EXCEPTION)
+	chmod 440 yc-api-test-with-exception-cxx-readonly
+	@echo '*** Running the C++ YASK compiler API test with exception...'
+	$<
+	- dot -Tpdf -O yc-api-test-with-exception-cxx.dot
+	ls -l yc-api-test-with-exception-cxx.*
+	
 ######## Misc targets
 
 all-tests:
 	$(MAKE) cxx-yc-api-test
 	$(MAKE) py-yc-api-test
+	$(MAKE) cxx-yc-api-test-with-exception
+	$(MAKE) py-yc-api-test-with-exception
 
 all:
 	$(MAKE) compiler
@@ -186,7 +213,7 @@ clean:
 
 # Remove executables, libs, etc.
 realclean: clean
-	rm -fv $(YC_LIB) $(YC_EXEC) $(YC_TEST_EXEC) $(YC_PY_MOD)* $(YC_PY_LIB)
+	rm -fv $(YC_LIB) $(YC_EXEC) $(YC_TEST_EXEC) $(YC_TEST_EXEC_WITH_EXCEPTION) $(YC_PY_MOD)* $(YC_PY_LIB)
 	rm -fv *api-test*.dot* *api-test*.hpp*
 	- find . -name '*.pyc' -print -delete
 	- find . -name '*~' -print -delete

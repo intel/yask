@@ -244,10 +244,14 @@ namespace yask {
                 // LHS of an equation must use step dim w/a simple offset.
                 auto* si1p = i1->getArgOffsets().lookup(stepDim);
                 if (!si1p || abs(*si1p) != 1) {
-                    cerr << "Error: equation " << eq1->makeQuotedStr() <<
+                    yask_exception e;
+                    stringstream err;
+                    err << "Error: equation " << eq1->makeQuotedStr() <<
                         " does not use offset +/- 1 from step-dimension index var '" <<
                         stepDim << "' on LHS.\n";
-                    exit(1);
+                    e.add_message(err.str());
+                    throw e;
+                    //exit(1);
                 }
                 assert(si1p);
                 si1 = *si1p;
@@ -255,10 +259,14 @@ namespace yask {
                 // Step direction already set?
                 if (dims._stepDir) {
                     if (dims._stepDir != si1) {
-                        cerr << "Error: equation " << eq1->makeQuotedStr() <<
+                        yask_exception e;
+                        stringstream err;
+                        err << "Error: equation " << eq1->makeQuotedStr() <<
                             " LHS has offset " << si1 << " from step-dimesion index var, "
                             "which is different than a previous equation with offset " << dims._stepDir << ".\n";
-                        exit(1);
+                        e.add_message(err.str());
+                        throw e;
+                        //exit(1);
                     }
                 } else
                     dims._stepDir = si1;
@@ -266,10 +274,14 @@ namespace yask {
                 // LHS of an equation must be vectorizable.
                 // TODO: relax this restriction.
                 if (i1->getVecType() != GridPoint::VEC_FULL) {
-                    cerr << "Error: equation " << eq1->makeQuotedStr() <<
+                	yask_exception e;
+                	stringstream err;
+                    err << "Error: equation " << eq1->makeQuotedStr() <<
                         " is not fully vectorizable on LHS because not all folded"
                         " dimensions are accessed via simple offsets from their respective indices.\n";
-                    exit(1);
+                    e.add_message(err.str());
+                    throw e;
+                    //exit(1);
                 }
             }
 
@@ -284,10 +296,14 @@ namespace yask {
                     // Must be in proper relation to LHS.
                     if ((si1 > 0 && rsi1 > si1) ||
                         (si1 < 0 && rsi1 < si1)) {
-                        cerr << "Error: equation " << eq1->makeQuotedStr() <<
+                        yask_exception e;
+                        stringstream err;
+                        err << "Error: equation " << eq1->makeQuotedStr() <<
                             " RHS has offset " << rsi1 << " from step-dimesion index var, "
                             "which is incompatible with LHS offset " << si1 << ".\n";
-                        exit(1);
+                        e.add_message(err.str());
+                        throw e;
+                        //exit(1);
                     }
 
                     // TODO: should make some dependency checks when rsi1 == si1.
@@ -317,11 +333,15 @@ namespace yask {
                 // cannot update the exact same point.
                 if (!same_eq && same_cond &&
                     pt_vis.do_sets_intersect(op1, op2)) {
-                    cerr << "Error: two equations with condition " <<
+                    yask_exception e;
+                    stringstream err;
+                    err << "Error: two equations with condition " <<
                         cond1->makeQuotedStr() << " update the same point: " <<
                         eq1->makeQuotedStr() << " and " <<
                         eq2->makeQuotedStr() << endl;
-                    exit(1);
+                    e.add_message(err.str());
+                    throw e;
+                    //exit(1);
                 }
 
                 // eq2 dep on eq1 => some output of eq1 is an input to eq2.
@@ -334,10 +354,14 @@ namespace yask {
                     if (same_eq) {
                                     
                         // Exit with error.
-                        cerr << "Error: illegal dependency between LHS and RHS of equation " <<
+                    	yask_exception e;
+                    	stringstream err;
+                        err << "Error: illegal dependency between LHS and RHS of equation " <<
                             eq1->makeQuotedStr() <<
                             " within offsets in range " << pts.makeDimValStr(" * ") << ".\n";
-                        exit(1);
+                        e.add_message(err.str());
+                        throw e;
+                        //exit(1);
                     }
 
                     // Save dependency.
@@ -726,10 +750,14 @@ namespace yask {
                     // Must swap on certain deps.
                     if (egi.isDepOn(certain_dep, egj)) {
                         if (egj.isDepOn(certain_dep, egi)) {
-                            cerr << "Error: circular dependency between eq-groups " <<
+                            yask_exception e;
+                            stringstream err;
+                            err << "Error: circular dependency between eq-groups " <<
                                 egi.getDescription() << " and " <<
                                 egj.getDescription() << endl;
-                            exit(1);
+                            e.add_message(err.str());
+                            throw e;
+                            //exit(1);
                         }
                         do_swap = true;
                     }

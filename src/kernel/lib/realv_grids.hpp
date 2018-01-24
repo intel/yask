@@ -97,21 +97,29 @@ namespace yask {
             auto* tp = dynamic_cast<GT*>(_ggb);
             if (!tp) {
                 if (die_on_failure) {
-                    std::cerr << "Error in share_data(): "
+                    yask_exception e;
+                    std::stringstream err;
+                    err << "Error in share_data(): "
                         "target grid not of expected type (internal inconsistency).\n";
-                    exit_yask(1);
+                    e.add_message(err.str());
+                    throw e;
+                    //exit_yask(1);
                 }
                 return false;
             }
             auto* sp = dynamic_cast<GT*>(src->_ggb);
             if (!sp) {
                 if (die_on_failure) {
-                    std::cerr << "Error in share_data(): source grid ";
-                    src->print_info(std::cerr);
-                    std::cerr << " not of same type as target grid ";
-                    print_info(std::cerr);
-                    std::cerr << ".\n";
-                    exit_yask(1);
+                    yask_exception e;
+                    std::stringstream err;
+                    err << "Error in share_data(): source grid ";
+                    src->print_info(err);
+                    err << " not of same type as target grid ";
+                    print_info(err);
+                    err << ".\n";
+                    e.add_message(err.str());
+                    throw e;
+                    //exit_yask(1);
                 }
                 return false;
             }
@@ -367,7 +375,7 @@ namespace yask {
         
         virtual void set_all_elements_same(double val) =0;
         virtual double get_element(const Indices& indices) const;
-        virtual double get_element(const GridIndices& indices) const {
+        virtual double get_element(const GridIndices& indices) const throw(yask_exception) {
             const Indices indices2(indices);
             return get_element(indices2);
         }
@@ -904,9 +912,13 @@ namespace yask {
                                         const Indices& first_indices,
                                         const Indices& last_indices) const {
             if (!is_storage_allocated()) {
-                std::cerr << "Error: call to 'get_vecs_in_slice' with no data allocated for grid '" <<
+                yask_exception e;
+                std::stringstream err;
+                err << "Error: call to 'get_vecs_in_slice' with no data allocated for grid '" <<
                     get_name() << "'.\n";
-                exit_yask(1);
+                e.add_message(err.str());
+                throw e;
+                //exit_yask(1);
             }
             Indices firstv, lastv;
             checkIndices(first_indices, "get_vecs_in_slice", true, true, &firstv);

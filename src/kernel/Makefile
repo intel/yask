@@ -364,6 +364,7 @@ YK_PY_LIB	:=	$(YASK_DIR)/_$(YK_MODULE)$(SO_SUFFIX)
 YK_PY_MOD	:=	$(YASK_DIR)/$(YK_MODULE).py
 YK_API_TEST_EXEC :=	$(BIN_DIR)/$(YK_BASE)_api_test.exe
 YK_GRID_TEST_EXEC :=	$(BIN_DIR)/$(YK_BASE)_grid_test.exe
+YK_API_TEST_EXEC_WITH_EXCEPTION :=	$(BIN_DIR)/$(YK_BASE)_api_exception_test.exe
 
 MAKE_REPORT_FILE:=	make-report.$(YK_TAG).txt
 
@@ -621,7 +622,9 @@ $(YK_SWIG_DIR)/yask_kernel_api_wrap.cpp: $(YK_SWIG_DIR)/yask*.i $(INC_DIR)/*.hpp
 	$(SWIG) -version
 	$(SWIG) -v -DYK_MODULE=$(YK_MODULE) -cppext cpp \
 	  -I$(INC_DIR) -I$(COMM_DIR) -I$(COMM_DIR)/swig \
-	  -c++ -python -outdir $(YASK_DIR) -builtin $<
+	  -c++ -python -outdir $(YASK_DIR) $<
+# TODO: '-builtin' flag prevents to handle exception correctly, so disable for now
+#	  -c++ -python -outdir $(YASK_DIR) -builtin $<
 
 $(YK_SWIG_DIR)/yask_kernel_api_wrap.o: $(YK_SWIG_DIR)/yask_kernel_api_wrap.cpp
 	$(YK_CXX) $(YK_CXXFLAGS) $(PYINC) -fPIC -c -o $@ $<
@@ -654,6 +657,20 @@ py-yk-api-test: $(BIN_DIR)/yask_kernel_api_test.py $(YK_PY_LIB)
 	@echo '*** Running the Python YASK kernel API test...'
 	$(RUN_PYTHON) $<
 
+# Build C++ kernel tests with exceptions.
+$(YK_API_TEST_EXEC_WITH_EXCEPTION): ./tests/yask_kernel_api_exception_test.cpp $(YK_LIB)
+	$(YK_CXX) $(YK_CXXFLAGS) $< $(YK_LFLAGS) -o $@
+
+# Run C++ tests with exceptions.
+cxx-yk-api-test-with-exception: $(YK_API_TEST_EXEC_WITH_EXCEPTION)
+	@echo '*** Running the C++ YASK kernel API test with exception...'
+	$(RUN_PREFIX) $<
+
+# Run Python kernel API test with exceptions.
+py-yk-api-test-with-exception: $(BIN_DIR)/yask_kernel_api_exception_test.py $(YK_PY_LIB)
+	@echo '*** Running the Python YASK kernel API test with exception...'
+	$(RUN_PYTHON) $<
+
 ### API tests for the compiler.
 # These targets run the tests in the compiler directory,
 # then they move the output files into the correct location
@@ -670,6 +687,18 @@ cxx-yc-api-test:
 	$(MAKE) -C $(YC_SRC_DIR) $@
 	$(YK_MK_GEN_DIR)
 	mv $(YC_SRC_DIR)/yc-api-test-cxx.hpp $(YK_CODE_FILE)
+	
+# Run Python compiler API test with exceptions to create stencil-code file.
+py-yc-api-test-with-exception:
+	$(MAKE) -C $(YC_SRC_DIR) $@
+	$(YK_MK_GEN_DIR)
+	mv $(YC_SRC_DIR)/yc-api-test-with-exception-py.hpp $(YK_CODE_FILE)
+
+# Run C++ compiler API test with exceptions to create stencil-code file.
+cxx-yc-api-test-with-exception:
+	$(MAKE) -C $(YC_SRC_DIR) $@
+	$(YK_MK_GEN_DIR)
+	mv $(YC_SRC_DIR)/yc-api-test-with-exception-cxx.hpp $(YK_CODE_FILE)
 
 ######## Misc targets
 
@@ -729,7 +758,7 @@ clean:
 
 # Remove executables, libs, etc.
 realclean: clean
-	rm -fv $(YK_LIB) $(YK_EXEC) $(YK_API_TEST_EXEC) $(YK_PY_MOD)* $(YK_PY_LIB)
+	rm -fv $(YK_LIB) $(YK_EXEC) $(YK_API_TEST_EXEC) $(YK_API_TEST_EXEC_WITH_EXCEPTION) $(YK_PY_MOD)* $(YK_PY_LIB)
 	rm -fv make-report.*.txt
 	- find . -name '*.pyc' -print -delete
 	- find . -name '*~' -print -delete

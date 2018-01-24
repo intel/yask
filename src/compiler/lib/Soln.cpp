@@ -119,7 +119,7 @@ namespace yask {
 
     // Format in given format-type.
     void StencilSolution::format(const string& format_type,
-                                 yask_output_ptr output) {
+                                 yask_output_ptr output) throw(yask_exception) {
 
         // Look for format match.
         // Most args to the printers just set references to data.
@@ -142,9 +142,13 @@ namespace yask {
         else if (format_type == "pov-ray") // undocumented.
             printer = new POVRayPrinter(*this, _clusterEqGroups);
         else {
-            cerr << "Error: format-type '" << format_type <<
+            yask_exception e;
+            stringstream err;
+            err << "Error: format-type '" << format_type <<
                 "' is not recognized." << endl;
-            exit(1);
+            e.add_message(err.str());
+            throw e;
+            //exit(1);
         }
         assert(printer);
         int vlen = printer->num_vec_elems();

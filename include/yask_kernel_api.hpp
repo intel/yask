@@ -599,7 +599,7 @@ namespace yask {
         */
         virtual void
         run_solution(idx_t first_step_index /**< [in] First index in the step dimension */,
-                     idx_t last_step_index /**< [in] Last index in the step dimension */ ) =0;
+                     idx_t last_step_index /**< [in] Last index in the step dimension */ ) throw(yask_exception) =0;
 
         /// Run the stencil solution for the specified step.
         /**
@@ -612,7 +612,7 @@ namespace yask {
            wave-front tiling.
         */
         virtual void
-        run_solution(idx_t step_index /**< [in] Index in the step dimension */ ) =0;
+        run_solution(idx_t step_index /**< [in] Index in the step dimension */ ) throw(yask_exception) =0;
 
         /// **[Advanced]** Restart or disable the auto-tuner on this rank.
         /**
@@ -665,7 +665,7 @@ namespace yask {
         virtual void
         run_auto_tuner_now(bool verbose = true
                            /**< [in] If _true_, print progress information to the debug object
-                              set via set_debug_output(). */ ) =0;
+                              set via set_debug_output(). */ ) throw(yask_exception) =0;
         
         /// **[Advanced]** Use data-storage from existing grids in specified solution.
         /**

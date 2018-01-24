@@ -37,14 +37,18 @@ namespace yask {
 
     // grid APIs.
     yc_grid_point_node_ptr
-    Grid::new_relative_grid_point(std::vector<int> dim_offsets) {
+    Grid::new_relative_grid_point(std::vector<int> dim_offsets) throw(yask_exception) {
 
         // Check for correct number of indices.
         if (_dims.size() != dim_offsets.size()) {
-            cerr << "Error: attempt to create a relative grid point in " <<
+            yask_exception e;
+            stringstream err;
+            err << "Error: attempt to create a relative grid point in " <<
                 _dims.size() << "D grid '" << _name << "' with " <<
                 dim_offsets.size() << " indices.\n";
-            exit(1);
+            e.add_message(err.str());
+            throw e;
+            //exit(1);
         }
 
         // Check dim types.
@@ -53,11 +57,15 @@ namespace yask {
         for (size_t i = 0; i < _dims.size(); i++) {
             auto dim = _dims.at(i);
             if (dim->getType() == MISC_INDEX) {
-                cerr << "Error: attempt to create a relative grid point in " <<
+                yask_exception e;
+                stringstream err;
+                err << "Error: attempt to create a relative grid point in " <<
                     _dims.size() << "D grid '" << _name <<
                     "' containing non-step or non-domain dim '" <<
                     dim->getName() << "'.\n";
-                exit(1);
+                e.add_message(err.str());
+                throw e;
+                //exit(1);
             }
             auto ie = dim->clone();
             args.push_back(ie);
@@ -294,9 +302,13 @@ namespace yask {
 
                 case STEP_INDEX:
                     if (_stepDim.length() && _stepDim != dname) {
-                        cerr << "Error: step dimensions '" << _stepDim <<
+                        yask_exception e;
+                        stringstream err;
+                        err << "Error: step dimensions '" << _stepDim <<
                             "' and '" << dname << "' found; only one allowed.\n";
-                        exit(1);
+                        e.add_message(err.str());
+                        throw e;
+                        //exit(1);
                     }
                     _stepDim = dname;
                     _stencilDims.addDimFront(dname, 0); // must be first!
@@ -315,18 +327,30 @@ namespace yask {
                     break;
 
                 default:
-                    cerr << "Error: unexpected dim type " << type << ".\n";
-                    exit(1);
+                    yask_exception e;
+                    stringstream err;
+                    err << "Error: unexpected dim type " << type << ".\n";
+                    e.add_message(err.str());
+                    throw e;
+                    //exit(1);
                 }
             }
         }
         if (_stepDim.length() == 0) {
-            cerr << "Error: no step dimension defined.\n";
-            exit(1);
+            yask_exception e;
+            stringstream err;
+            err << "Error: no step dimension defined.\n";
+            e.add_message(err.str());
+            throw e;
+            //exit(1);
         }
         if (!_domainDims.getNumDims()) {
-            cerr << "Error: no domain dimensions defined.\n";
-            exit(1);
+            yask_exception e;
+            stringstream err;
+            err << "Error: no domain dimensions defined.\n";
+            e.add_message(err.str());
+            throw e;
+            //exit(1);
         }
 
         // Use last domain dim as inner one.
@@ -421,9 +445,13 @@ namespace yask {
         // Checks for unaligned loads.
         if (settings._allowUnalignedLoads) {
             if (_foldGT1.size() > 1) {
-                cerr << "Error: attempt to allow unaligned loads when there are " <<
+                yask_exception e;
+                stringstream err;
+                err << "Error: attempt to allow unaligned loads when there are " <<
                     _foldGT1.size() << " dimensions in the vector-fold that are > 1." << endl;
-                exit(1);
+                e.add_message(err.str());
+                throw e;
+                //exit(1);
             }
             else if (_foldGT1.size() > 0)
                 cerr << "Notice: memory layout MUST have unit-stride in " <<

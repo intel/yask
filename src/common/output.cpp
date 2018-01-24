@@ -66,11 +66,13 @@ namespace yask {
             _fname = file_name;
             _ofs.open(file_name, ofstream::out | ofstream::trunc);
             if (!_ofs.is_open()) {
-
-                // TODO: throw exception.
-                cerr << "Error: cannot open '" << file_name <<
+                yask_exception e;
+                stringstream err;
+                err << "Error: cannot open '" << file_name <<
                     "' for output.\n";
-                exit(1);
+                e.add_message(err.str());
+                throw e;
+                //exit(1);
             }
         }
 
@@ -116,7 +118,7 @@ namespace yask {
     
     // See yask_common_api.hpp for documentation.
     yask_file_output_ptr
-    yask_output_factory::new_file_output(const string& file_name) const {
+    yask_output_factory::new_file_output(const string& file_name) const throw(yask_exception) {
         auto p = make_shared<FileOutput>();
         assert(p.get());
         p->open(file_name);

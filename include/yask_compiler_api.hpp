@@ -300,7 +300,7 @@ namespace yask {
                /**< [in] Name of type from above table. */,
                yask_output_ptr output
                /**< [out] Pointer to object to receive formatted output. 
-                  See \ref yask_output_factory. */) =0;
+                  See \ref yask_output_factory. */) throw(yask_exception) =0;
     };
 
     /// A compile-time grid.
@@ -350,7 +350,7 @@ namespace yask {
             @returns Pointer to AST node used to read from or write to point in grid. */
         virtual yc_grid_point_node_ptr
         new_relative_grid_point(std::vector<int> dim_offsets
-                                /**< [in] offset from evaluation index in each dim. */ ) =0;
+                                /**< [in] offset from evaluation index in each dim. */ ) throw(yask_exception) =0;
 
 #ifndef SWIG        
         /// Create a reference to a point in a grid.

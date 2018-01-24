@@ -356,7 +356,7 @@ namespace yask {
         // Calculate rank position in problem.
         // Initialize some other data structures.
         // Print lots of stats.
-        virtual void prepare_solution();
+        virtual void prepare_solution() throw(yask_exception);
 
 
         /// Get statistics associated with preceding calls to run_solution().
@@ -566,7 +566,7 @@ namespace yask {
         virtual yk_grid_ptr
         new_fixed_size_grid(const std::string& name,
                              const GridDimNames& dims,
-                             const GridDimSizes& dim_sizes) {
+                             const GridDimSizes& dim_sizes) throw(yask_exception) {
             return newGrid(name, dims, &dim_sizes);
         }
         virtual yk_grid_ptr
@@ -602,8 +602,8 @@ namespace yask {
         virtual idx_t get_overall_domain_size(const std::string& dim) const;
 
         virtual void run_solution(idx_t first_step_index,
-                                  idx_t last_step_index);
-        virtual void run_solution(idx_t step_index) {
+                                  idx_t last_step_index) throw(yask_exception);
+        virtual void run_solution(idx_t step_index) throw(yask_exception) {
             run_solution(step_index, step_index);
         }
         virtual void share_grid_storage(yk_solution_ptr source);
@@ -627,7 +627,7 @@ namespace yask {
         virtual void reset_auto_tuner(bool enable, bool verbose = false) {
             _at.clear(!enable, verbose);
         }
-        virtual void run_auto_tuner_now(bool verbose = true);
+        virtual void run_auto_tuner_now(bool verbose = true) throw(yask_exception);
         virtual bool is_auto_tuner_enabled() {
             return !_at.is_done();
         }

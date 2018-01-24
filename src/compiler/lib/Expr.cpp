@@ -389,10 +389,14 @@ namespace yask {
         // Check for correct number of args.
         size_t nd = grid->getDims().size();
         if (nd != args.size()) {
-            cerr << "Error: attempt to create a grid point in " <<
+            yask_exception e;
+            stringstream err;
+            err << "Error: attempt to create a grid point in " <<
                 nd << "-D grid '" << getGridName() << "' with " <<
                 args.size() << " indices.\n";
-            exit(1);
+            e.add_message(err.str());
+            throw e;
+            //exit(1);
         }
 
         // Eval each arg.

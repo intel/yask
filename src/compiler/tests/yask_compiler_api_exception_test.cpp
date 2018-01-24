@@ -33,6 +33,9 @@ using namespace yask;
 
 int main() {
 
+	// Counter for exception test
+	int num_exception = 0;
+
     // Compiler 'bootstrap' factories.
     yc_factory cfac;
     yask_output_factory ofac;
@@ -60,24 +63,35 @@ int main() {
     auto n2 = fac.new_negate_node(n1);
     cout << n2->format_simple() << endl;
 
-    auto n3 = g1->new_relative_grid_point({0, +1, 0, -2});
-    cout << n3->format_simple() << endl;
+    // Exception test
+    cout << "Exception Test: Call 'new_relative_grid_point' with wrong argument.\n";
+    try {
+    	auto n3 = g1->new_relative_grid_point({0, +1, 0, -2, 1});
+    } catch (yask_exception e) {
+		cout << "YASK throws an exception.\n";
+		cout << e.get_message();
+	    cout << "Exception Test: Catch exception correctly.\n";
+		num_exception++;
+	}
 
-    auto n4a = fac.new_add_node(n2, n3);
-    auto n4b = fac.new_add_node(n4a, n1);
-    cout << n4b->format_simple() << endl;
+	auto n3 = g1->new_relative_grid_point({0, +1, 0, -2});
+	cout << n3->format_simple() << endl;
 
-    auto n5 = g1->new_relative_grid_point({0, +1, -1, 0});
-    cout << n5->format_simple() << endl;
+	auto n4a = fac.new_add_node(n2, n3);
+	auto n4b = fac.new_add_node(n4a, n1);
+	cout << n4b->format_simple() << endl;
 
-    auto n6 = fac.new_multiply_node(n4b, n5);
-    cout << n6->format_simple() << endl;
+	auto n5 = g1->new_relative_grid_point({0, +1, -1, 0});
+	cout << n5->format_simple() << endl;
 
-    auto n_lhs = g1->new_relative_grid_point({+1, 0, 0, 0});
-    cout << n_lhs->format_simple() << endl;
+	auto n6 = fac.new_multiply_node(n4b, n5);
+	cout << n6->format_simple() << endl;
 
-    auto n_eq = fac.new_equation_node(n_lhs, n6);
-    cout << n_eq->format_simple() << endl;
+	auto n_lhs = g1->new_relative_grid_point({+1, 0, 0, 0});
+	cout << n_lhs->format_simple() << endl;
+
+	auto n_eq = fac.new_equation_node(n_lhs, n6);
+	cout << n_eq->format_simple() << endl;
 
     cout << "Solution '" << soln->get_name() << "' contains " <<
         soln->get_num_grids() << " grid(s), and " <<
@@ -86,16 +100,55 @@ int main() {
     // Number of bytes in each FP value.
     soln->set_element_bytes(4);
 
+    // Exception test
+    cout << "Exception Test: Call 'new_file_output' with read-only file name.\n";
+    try {
+    	auto dot_file = ofac.new_file_output("yc-api-test-with-exception-cxx-readonly");
+    } catch (yask_exception e) {
+		cout << "YASK throws an exception.\n";
+		cout << e.get_message();
+	    cout << "Exception Test: Catch exception correctly.\n";
+		num_exception++;
+	}
+
     // Generate DOT output.
-    auto dot_file = ofac.new_file_output("yc-api-test-cxx.dot");
+    auto dot_file = ofac.new_file_output("yc-api-test-with-exception-cxx.dot");
     soln->format("dot", dot_file);
     cout << "DOT-format written to '" << dot_file->get_filename() << "'.\n";
 
     // Generate YASK output.
-    auto yask_file = ofac.new_file_output("yc-api-test-cxx.hpp");
+    auto yask_file = ofac.new_file_output("yc-api-test-with-exception-cxx.hpp");
     soln->format("avx", yask_file);
     cout << "YASK-format written to '" << yask_file->get_filename() << "'.\n";
     
-    cout << "End of YASK compiler API test.\n";
+    // Exception test
+    cout << "Exception Test: Call 'format' with wrong format.\n";
+    try {
+    	soln->format("wrong_format", dot_file);
+    } catch (yask_exception e) {
+		cout << "YASK throws an exception.\n";
+		cout << e.get_message();
+	    cout << "Exception Test: Catch exception correctly.\n";
+		num_exception++;
+	}
+
+    // TODO: better to have exception test for the methods below
+    // Eqs::findDeps (<-EqGroups::makeEqGroups<-StencilSolution::analyze_solution<-StencilSolution::format())
+    // EqGroups::sort (<-EqGroups::makeEqGroups<-StencilSolution::analyze_solution<-StencilSolution::format())
+    // GridPoint::GridPoint
+    // castExpr
+    // NumExpr::getNumVal, NumExpr::getIntVal, NumExpr::getBoolVal
+    // Dimensions::setDims (<-StencilSolution::analyze_solution<-StencilSolution::format)
+    // ArgParser::parseKeyValuePairs
+    // YASKCppPrinter::printData (<-YASKCppPrinter::print<-StencilSolution::format)
+
+    // Check whether program handles exceptions or not.
+    if (num_exception != 3) {
+        cout << "There is a problem in exception test.\n";
+        exit(1);
+    }
+    else
+    	cout << "End of YASK compiler API test with exception.\n";
+
     return 0;
 }

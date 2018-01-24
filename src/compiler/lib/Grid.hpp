@@ -233,7 +233,7 @@ namespace yask {
         }
         virtual std::vector<std::string> get_dim_names() const;
         virtual yc_grid_point_node_ptr
-        new_relative_grid_point(std::vector<int> dim_offsets);
+        new_relative_grid_point(std::vector<int> dim_offsets) throw(yask_exception);
         virtual yc_grid_point_node_ptr
         new_relative_grid_point(const std::initializer_list<int>& dim_offsets) {
             std::vector<int> dim_ofs_vec(dim_offsets);

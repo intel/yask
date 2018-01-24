@@ -136,9 +136,13 @@ namespace yask {
     template<typename T> shared_ptr<T> castExpr(ExprPtr ep, const string& descrip) {
         auto tp = dynamic_pointer_cast<T>(ep);
         if (!tp) {
-            cerr << "Error: expression '" << ep->makeStr() << "' is not a " <<
+            yask_exception e;
+            stringstream err;
+            err << "Error: expression '" << ep->makeStr() << "' is not a " <<
                 descrip << "." << endl;
-            exit(1);
+            e.add_message(err.str());
+            throw e;
+            //exit(1);
         }
         return tp;
     }
@@ -168,9 +172,13 @@ namespace yask {
         // Get the current value.
         // Exit with error if not known.
         virtual double getNumVal() const {
-            cerr << "Error: cannot evaluate '" << makeStr() <<
+            yask_exception e;
+            stringstream err;
+            err << "Error: cannot evaluate '" << makeStr() <<
                 "' for a known numerical value.\n";
-            exit(1);
+            e.add_message(err.str());
+            throw e;
+            //exit(1);
         }
 
         // Get the value as an integer.
@@ -179,9 +187,13 @@ namespace yask {
             double val = getNumVal();
             int ival = int(val);
             if (val != double(ival)) {
-                cerr << "Error: '" << makeStr() <<
+                yask_exception e;
+                stringstream err;
+                err << "Error: '" << makeStr() <<
                     "' does not evaluate to an integer.\n";
-                exit(1);
+                e.add_message(err.str());
+                throw e;
+                //exit(1);
             }
             return ival;
         }
@@ -285,9 +297,13 @@ namespace yask {
         // Get the current value.
         // Exit with error if not known.
         virtual bool getBoolVal() const {
-            cerr << "Error: cannot evaluate '" << makeStr() <<
+            yask_exception e;
+            stringstream err;
+            err << "Error: cannot evaluate '" << makeStr() <<
                 "' for a known boolean value.\n";
-            exit(1);
+            e.add_message(err.str());
+            throw e;
+            //exit(1);
         }
 
         // Create a deep copy of this expression.

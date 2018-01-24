@@ -230,10 +230,14 @@ namespace yask {
                     if (dtype == STEP_INDEX) {
                         assert(dname == _dims->_stepDim);
                         if (dn > 0) {
-                            cerr << "Error: cannot create grid '" << grid <<
+                            yask_exception e;
+                            stringstream err;
+                            err << "Error: cannot create grid '" << grid <<
                                 "' with dimensions '" << gdims.makeDimStr() <<
                                 "' because '" << dname << "' must be first dimension.\n";
-                            exit(1);
+                            e.add_message(err.str());
+                            throw e;
+                            //exit(1);
                         }
                         if (folded) {
                             step_posn = dn + 1;
@@ -722,4 +726,3 @@ namespace yask {
     }
 
 } // namespace yask.
-

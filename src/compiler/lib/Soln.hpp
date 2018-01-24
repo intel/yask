@@ -167,7 +167,7 @@ namespace yask {
         virtual void set_element_bytes(int nbytes) { _settings._elem_bytes = nbytes; }
         virtual int get_element_bytes() const { return _settings._elem_bytes; }
         virtual void format(const std::string& format_type,
-                            yask_output_ptr output);
+                            yask_output_ptr output) throw(yask_exception) ;
     };
 
     // A stencil solution that does not define any grids.

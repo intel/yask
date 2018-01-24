@@ -38,22 +38,34 @@ namespace yask {
             return;
         if (dim == _step_dim) {
             if (!step_ok) {
-                cerr << "Error in " << fn_name << "(): dimension '" <<
+                yask_exception e;
+                stringstream err;
+                err << "Error in " << fn_name << "(): dimension '" <<
                     dim << "' is the step dimension, which is not allowed.\n";
-                exit_yask(1);
+                e.add_message(err.str());
+                throw e;
+                //exit_yask(1);
             }
         }
         else if (_domain_dims.lookup(dim)) {
             if (!domain_ok) {
-                cerr << "Error in " << fn_name << "(): dimension '" <<
+                yask_exception e;
+                stringstream err;
+                err << "Error in " << fn_name << "(): dimension '" <<
                     dim << "' is a domain dimension, which is not allowed.\n";
-                exit_yask(1);
+                e.add_message(err.str());
+                throw e;
+                //exit_yask(1);
             }
         }
         else if (!misc_ok) {
-            cerr << "Error in " << fn_name << "(): dimension '" <<
+            yask_exception e;
+            stringstream err;
+            err << "Error in " << fn_name << "(): dimension '" <<
                 dim << "' is a misc dimension, which is not allowed.\n";
-            exit_yask(1);
+            e.add_message(err.str());
+            throw e;
+            //exit_yask(1);
         }
     }
 
@@ -83,8 +95,12 @@ namespace yask {
             int provided = 0;
             MPI_Init_thread(argc, argv, MPI_THREAD_SERIALIZED, &provided);
             if (provided < MPI_THREAD_SERIALIZED) {
-                cerr << "error: MPI_THREAD_SERIALIZED not provided.\n";
-                exit_yask(1);
+                yask_exception e;
+                stringstream err;
+                err << "error: MPI_THREAD_SERIALIZED not provided.\n";
+                e.add_message(err.str());
+                throw e;
+                //exit_yask(1);
             }
             is_init = true;
         }

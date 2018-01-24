@@ -46,4 +46,17 @@ namespace yask {
     string yask_get_version_string() {
         return version;
     }
+
+    // See yask_common_api.hpp for documentation.
+    const char* yask_exception::what() noexcept {
+    	return msg.c_str();
+    }
+
+    void yask_exception::add_message(string arg_msg) {
+    	msg.append(arg_msg);
+    }
+
+    string yask_exception::get_message() {
+    	return msg;
+    }
 }

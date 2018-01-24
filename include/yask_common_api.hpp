@@ -67,6 +67,29 @@ namespace yask {
     /// Shared pointer to \ref yask_null_output
     typedef std::shared_ptr<yask_null_output> yask_null_output_ptr;
 
+    /// Exception from yask framework
+    /** Objects of this exception contain additional message from yask framework */
+    class yask_exception: public std::exception {
+    private:
+    	/// Additional message container
+    	std::string msg;
+
+    public:
+    	virtual ~yask_exception() {};
+
+        /// Get default message.
+        /** Returns a C-style character string describing the general cause of the current error.
+            @returns default message of the exception. */
+    	virtual const char* what() noexcept;
+
+    	/// Add additional message to this exception.
+    	void add_message(std::string message /**< [in] Additional message as string. */ );
+
+        /// Get additional message.
+        /** @returns additional message as string */
+    	std::string get_message();
+    };
+
     /// Factory to create output objects.
     class yask_output_factory {
     public:
@@ -81,7 +104,7 @@ namespace yask {
         virtual yask_file_output_ptr
         new_file_output(const std::string& file_name
                         /**< [in] Name of file to open.
-                           Any existing file will be truncated. */ ) const;
+                           Any existing file will be truncated. */ ) const throw(yask_exception);
 
         /// Create a string output object.
         /**
