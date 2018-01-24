@@ -32,12 +32,12 @@ namespace yask {
 
     // APIs to get info from vars.
 #define GET_GRID_API(api_name, expr, step_ok, domain_ok, misc_ok)       \
-    idx_t YkGridBase::api_name(const string& dim) const {               \
+    idx_t YkGridBase::api_name(const string& dim) const throw(yask_exception) {               \
         checkDimType(dim, #api_name, step_ok, domain_ok, misc_ok);      \
         int posn = get_dim_posn(dim, true, #api_name);                  \
         return expr;                                                    \
     }                                                                   \
-    idx_t YkGridBase::api_name(int posn) const {                        \
+    idx_t YkGridBase::api_name(int posn) const throw(yask_exception) {                        \
         return expr;                                                    \
     }
     GET_GRID_API(get_rank_domain_size, _domains[posn], false, true, false)
@@ -61,12 +61,12 @@ namespace yask {
     // APIs to set vars.
 #define COMMA ,
 #define SET_GRID_API(api_name, expr, step_ok, domain_ok, misc_ok)       \
-    void YkGridBase::api_name(const string& dim, idx_t n) {             \
+    void YkGridBase::api_name(const string& dim, idx_t n) throw(yask_exception) {             \
         checkDimType(dim, #api_name, step_ok, domain_ok, misc_ok);      \
         int posn = get_dim_posn(dim, true, #api_name);                  \
         expr;                                                           \
     }                                                                   \
-    void YkGridBase::api_name(int posn, idx_t n) {                      \
+    void YkGridBase::api_name(int posn, idx_t n) throw(yask_exception) {                      \
         int dim = posn;                                                 \
         expr;                                                           \
     }
@@ -220,7 +220,7 @@ namespace yask {
         _dims->checkDimType(dim, fn_name, step_ok, domain_ok, misc_ok);
     }
     
-    bool YkGridBase::is_storage_layout_identical(const yk_grid_ptr other) const {
+    bool YkGridBase::is_storage_layout_identical(const yk_grid_ptr other) const throw(yask_exception) {
         auto op = dynamic_pointer_cast<YkGridBase>(other);
         assert(op);
 
@@ -249,7 +249,7 @@ namespace yask {
         return true;
     }
 
-    void YkGridBase::share_storage(yk_grid_ptr source) {
+    void YkGridBase::share_storage(yk_grid_ptr source) throw(yask_exception) {
         auto sp = dynamic_pointer_cast<YkGridBase>(source);
         assert(sp);
 
@@ -538,7 +538,7 @@ namespace yask {
     }
     
     // API get/set.
-    double YkGridBase::get_element(const Indices& indices) const {
+    double YkGridBase::get_element(const Indices& indices) const throw(yask_exception) {
         if (!is_storage_allocated()) {
             yask_exception e;
             stringstream err;
@@ -555,7 +555,7 @@ namespace yask {
     }
     idx_t YkGridBase::set_element(double val,
                                   const Indices& indices,
-                                  bool strict_indices) {
+                                  bool strict_indices) throw(yask_exception) {
         idx_t nup = 0;
         if (get_raw_storage_buffer() &&
             checkIndices(indices, "set_element", strict_indices, false)) {
@@ -571,7 +571,7 @@ namespace yask {
     
     idx_t YkGridBase::get_elements_in_slice(void* buffer_ptr,
                                             const Indices& first_indices,
-                                            const Indices& last_indices) const {
+                                            const Indices& last_indices) const throw(yask_exception) {
         if (!is_storage_allocated()) {
             yask_exception e;
             stringstream err;
@@ -604,7 +604,7 @@ namespace yask {
     idx_t YkGridBase::set_elements_in_slice_same(double val,
                                                  const Indices& first_indices,
                                                  const Indices& last_indices,
-                                                 bool strict_indices) {
+                                                 bool strict_indices) throw(yask_exception) {
         if (!is_storage_allocated())
             return 0;
         
@@ -637,7 +637,7 @@ namespace yask {
     }
     idx_t YkGridBase::set_elements_in_slice(const void* buffer_ptr,
                                             const Indices& first_indices,
-                                            const Indices& last_indices) {
+                                            const Indices& last_indices) throw(yask_exception) {
         if (!is_storage_allocated())
             return 0;
         checkIndices(first_indices, "set_elements_in_slice", true, false);

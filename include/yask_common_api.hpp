@@ -112,7 +112,7 @@ namespace yask {
            @returns Pointer to new output object.
         */
         virtual yask_string_output_ptr
-        new_string_output() const;
+        new_string_output() const throw(yask_exception);
 
         /// Create a stdout output object.
         /**
@@ -120,7 +120,7 @@ namespace yask {
            @returns Pointer to new output object.
         */
         virtual yask_stdout_output_ptr
-        new_stdout_output() const;
+        new_stdout_output() const throw(yask_exception);
 
         /// Create a null output object.
         /**
@@ -128,7 +128,7 @@ namespace yask {
            @returns Pointer to new output object.
         */
         virtual yask_null_output_ptr
-        new_null_output() const;
+        new_null_output() const throw(yask_exception);
     };
 
     /// Base interface for output.

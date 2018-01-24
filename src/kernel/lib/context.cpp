@@ -32,7 +32,7 @@ namespace yask {
     // See yask_kernel_api.hpp.
 
 #define GET_SOLN_API(api_name, expr, step_ok, domain_ok, misc_ok)   \
-    idx_t StencilContext::api_name(const string& dim) const {           \
+    idx_t StencilContext::api_name(const string& dim) const throw(yask_exception) {           \
         checkDimType(dim, #api_name, step_ok, domain_ok, misc_ok);      \
         return expr;                                                    \
     }
@@ -47,7 +47,7 @@ namespace yask {
 #undef GET_SOLN_API
 
 #define SET_SOLN_API(api_name, expr, step_ok, domain_ok, misc_ok)       \
-    void StencilContext::api_name(const string& dim, idx_t n) {         \
+    void StencilContext::api_name(const string& dim, idx_t n) throw(yask_exception) {         \
         checkDimType(dim, #api_name, step_ok, domain_ok, misc_ok);      \
         expr;                                                           \
         update_grids();                                                 \
@@ -58,7 +58,7 @@ namespace yask {
     SET_SOLN_API(set_num_ranks, _opts->_num_ranks[dim] = n, false, true, false)
 #undef SET_SOLN_API
     
-    void StencilContext::share_grid_storage(yk_solution_ptr source) {
+    void StencilContext::share_grid_storage(yk_solution_ptr source) throw(yask_exception) {
         auto sp = dynamic_pointer_cast<StencilContext>(source);
         assert(sp);
         
@@ -72,7 +72,7 @@ namespace yask {
         }
     }
 
-    string StencilContext::apply_command_line_options(const string& args) {
+    string StencilContext::apply_command_line_options(const string& args) throw(yask_exception) {
 
         // Create a parser and add base options to it.
         CommandLineParser parser;
@@ -1746,7 +1746,7 @@ namespace yask {
     }
 
     /// Get statistics associated with preceding calls to run_solution().
-    yk_stats_ptr StencilContext::get_stats() {
+    yk_stats_ptr StencilContext::get_stats() throw(yask_exception) {
         ostream& os = get_ostr();
 
         // Calc and report perf.
@@ -1793,7 +1793,7 @@ namespace yask {
     }
     
     // Dealloc grids, etc.
-    void StencilContext::end_solution() {
+    void StencilContext::end_solution() throw(yask_exception) {
 
         // Release any MPI data.
         mpiData.clear();

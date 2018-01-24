@@ -95,7 +95,7 @@ namespace yask {
     std::string yc_factory::get_version_string() {
     	return yask_get_version_string();
     }
-    yc_solution_ptr yc_factory::new_solution(const std::string& name) const {
+    yc_solution_ptr yc_factory::new_solution(const std::string& name) const throw(yask_exception) {
         return make_shared<EmptyStencil>(name);
     }
     

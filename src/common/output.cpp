@@ -125,19 +125,19 @@ namespace yask {
         return p;
     }
     yask_string_output_ptr
-    yask_output_factory::new_string_output() const {
+    yask_output_factory::new_string_output() const throw(yask_exception){
         auto p = make_shared<StringOutput>();
         assert(p.get());
         return p;
     }
     yask_stdout_output_ptr
-    yask_output_factory::new_stdout_output() const {
+    yask_output_factory::new_stdout_output() const throw(yask_exception){
         auto p = make_shared<StdoutOutput>();
         assert(p.get());
         return p;
     }
     yask_null_output_ptr
-    yask_output_factory::new_null_output() const {
+    yask_output_factory::new_null_output() const throw(yask_exception){
         auto p = make_shared<NullOutput>();
         assert(p.get());
         return p;

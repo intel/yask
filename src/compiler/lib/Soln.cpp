@@ -34,7 +34,7 @@ namespace yask {
 
     // Stencil-solution APIs.
     yc_grid_ptr StencilSolution::new_grid(const std::string& name,
-                                          const std::vector<yc_index_node_ptr>& dims) {
+                                          const std::vector<yc_index_node_ptr>& dims) throw(yask_exception) {
         
         // Make new grid and add to solution.
         // TODO: fix this mem leak--make smart ptr.
@@ -54,12 +54,12 @@ namespace yask {
 
     // Stencil-solution APIs.
     void StencilSolution::set_fold_len(const yc_index_node_ptr dim,
-                                       int len) {
+                                       int len) throw(yask_exception) {
         auto& fold = _settings._foldOptions;
         fold.addDimBack(dim->get_name(), len);
     }
     void StencilSolution::set_cluster_mult(const yc_index_node_ptr dim,
-                                           int mult) {
+                                           int mult) throw(yask_exception) {
         auto& cluster = _settings._clusterOptions;
         cluster.addDimBack(dim->get_name(), mult);
     }

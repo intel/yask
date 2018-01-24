@@ -85,7 +85,7 @@ namespace yask {
            @returns Pointer to new env object.
         */
         virtual yk_env_ptr
-        new_env() const;
+        new_env() const throw(yask_exception);
 
         /// Create a stencil solution.
         /**
@@ -94,7 +94,7 @@ namespace yask {
            @returns Pointer to new solution object. 
         */
         virtual yk_solution_ptr
-        new_solution(yk_env_ptr env /**< [in] Pointer to env info. */) const;
+        new_solution(yk_env_ptr env /**< [in] Pointer to env info. */) const throw(yask_exception);
 
         /// Create a stencil solution by copying the settings from another.
         /**
@@ -108,7 +108,7 @@ namespace yask {
         new_solution(yk_env_ptr env /**< [in] Pointer to env info. */,
                      const yk_solution_ptr source
                      /**< [in] Pointer to existing \ref yk_solution from which
-                        the settings will be copied. */ ) const;
+                        the settings will be copied. */ ) const throw(yask_exception);
     };
 
     /// Kernel environment.
@@ -221,7 +221,7 @@ namespace yask {
         set_rank_domain_size(const std::string& dim
                              /**< [in] Name of dimension to set.  Must be one of
                                 the names from get_domain_dim_names(). */,
-                             idx_t size /**< [in] Elements in the domain in this `dim`. */ ) =0;
+                             idx_t size /**< [in] Elements in the domain in this `dim`. */ ) throw(yask_exception) =0;
 
         /// Get the domain size for this rank.
         /**
@@ -230,7 +230,7 @@ namespace yask {
         virtual idx_t
         get_rank_domain_size(const std::string& dim
                              /**< [in] Name of dimension to get.  Must be one of
-                                the names from get_domain_dim_names(). */) const =0;
+                                the names from get_domain_dim_names(). */) const throw(yask_exception) =0;
 
         /// Set the minimum amount of grid padding for all grids.
         /**
@@ -261,7 +261,7 @@ namespace yask {
                             be one of the names from get_domain_dim_names(). */,
                          idx_t size
                          /**< [in] Elements in this `dim` applied
-                            to both sides of the domain. */ ) =0;
+                            to both sides of the domain. */ ) throw(yask_exception) =0;
 
         /// Get the minimum amount of grid padding for all grids.
         /**
@@ -270,7 +270,7 @@ namespace yask {
         virtual idx_t
         get_min_pad_size(const std::string& dim
                          /**< [in] Name of dimension to get.  Must be one of
-                            the names from get_domain_dim_names(). */) const =0;
+                            the names from get_domain_dim_names(). */) const throw(yask_exception) =0;
 
         /// Set the block size in the given dimension.
         /**
@@ -290,7 +290,7 @@ namespace yask {
         set_block_size(const std::string& dim
                        /**< [in] Name of dimension to set.  Must be one of
                           the names from get_domain_dim_names(). */,
-                       idx_t size /**< [in] Elements in a block in this `dim`. */ ) =0;
+                       idx_t size /**< [in] Elements in a block in this `dim`. */ ) throw(yask_exception) =0;
 
         /// Get the block size.
         /**
@@ -301,7 +301,7 @@ namespace yask {
         virtual idx_t
         get_block_size(const std::string& dim
                         /**< [in] Name of dimension to get.  Must be one of
-                           the names from get_domain_dim_names(). */) const =0;
+                           the names from get_domain_dim_names(). */) const throw(yask_exception) =0;
 
         /// Set performance parameters from an option string.
         /**
@@ -316,7 +316,7 @@ namespace yask {
         */
         virtual std::string
         apply_command_line_options(const std::string& args
-                                   /**< [in] String of arguments to parse. */ ) =0;
+                                   /**< [in] String of arguments to parse. */ ) throw(yask_exception) =0;
 
         /// Set the number of MPI ranks in the given dimension.
         /**
@@ -335,7 +335,7 @@ namespace yask {
         set_num_ranks(const std::string& dim
                       /**< [in] Name of dimension to set.  Must be one of
                          the names from get_domain_dim_names(). */,
-                      idx_t num /**< [in] Number of ranks in `dim`. */ ) =0;
+                      idx_t num /**< [in] Number of ranks in `dim`. */ ) throw(yask_exception) =0;
 
         /// Get the number of MPI ranks in the given dimension.
         /**
@@ -344,7 +344,7 @@ namespace yask {
         virtual idx_t
         get_num_ranks(const std::string& dim
                       /**< [in] Name of dimension to get.  Must be one of
-                         the names from get_domain_dim_names(). */) const =0;
+                         the names from get_domain_dim_names(). */) const throw(yask_exception) =0;
 
         /// Get the rank index in the specified dimension.
         /**
@@ -355,7 +355,7 @@ namespace yask {
         virtual idx_t
         get_rank_index(const std::string& dim
                        /**< [in] Name of dimension to get.  Must be one of
-                         the names from get_domain_dim_names(). */ ) const =0;
+                         the names from get_domain_dim_names(). */ ) const throw(yask_exception) =0;
 
         /// Get the number of grids in the solution.
         /**
@@ -372,7 +372,7 @@ namespace yask {
            @returns Pointer to the specified grid or null pointer if it does not exist.
         */
         virtual yk_grid_ptr
-        get_grid(const std::string& name /**< [in] Name of the grid. */ ) =0;
+        get_grid(const std::string& name /**< [in] Name of the grid. */ ) throw(yask_exception) =0;
 
         /// Get all the grids.
         /**
@@ -421,7 +421,7 @@ namespace yask {
                  const std::vector<std::string>& dims
                  /**< [in] List of names of all dimensions. 
                     Names must be valid C++ identifiers and 
-                    not repeated within this grid. */ ) =0;
+                    not repeated within this grid. */ ) throw(yask_exception) =0;
 
 #ifndef SWIG
         /// **[Advanced]** Add a new grid to the solution.
@@ -438,7 +438,7 @@ namespace yask {
                  const std::initializer_list<std::string>& dims
                  /**< [in] List of names of all dimensions. 
                     Names must be valid C++ identifiers and 
-                    not repeated within this grid. */ ) =0;
+                    not repeated within this grid. */ ) throw(yask_exception) =0;
 #endif
 
         /// **[Advanced]** Add a new grid to the solution with a specified size.
@@ -479,7 +479,7 @@ namespace yask {
                           not repeated within this grid. */,
                        const std::vector<idx_t>& dim_sizes
                        /**< [in] Initial allocation in each dimension.
-                          Must be exatly one size for each dimension. */ ) =0;
+                          Must be exatly one size for each dimension. */ ) throw(yask_exception) =0;
 
 #ifndef SWIG
         /// **[Advanced]** Add a new grid to the solution with a specified size.
@@ -499,7 +499,7 @@ namespace yask {
                           not repeated within this grid. */,
                        const std::initializer_list<idx_t>& dim_sizes
                        /**< [in] Initial allocation in each dimension.
-                          Must be exatly one size for each dimension. */ ) =0;
+                          Must be exatly one size for each dimension. */ ) throw(yask_exception) =0;
 #endif
 
         /// Prepare the solution for stencil application.
@@ -512,7 +512,7 @@ namespace yask {
            Must be called before applying any stencils.
         */
         virtual void
-        prepare_solution() =0;
+        prepare_solution() throw(yask_exception) =0;
 
         /// Get the first index of the sub-domain in this rank in the specified dimension.
         /**
@@ -529,7 +529,7 @@ namespace yask {
         virtual idx_t
         get_first_rank_domain_index(const std::string& dim
                                     /**< [in] Name of dimension to get.  Must be one of
-                                       the names from get_domain_dim_names(). */ ) const =0;
+                                       the names from get_domain_dim_names(). */ ) const throw(yask_exception) =0;
 
         /// Get the last index of the sub-domain in this rank the specified dimension.
         /**
@@ -547,7 +547,7 @@ namespace yask {
         virtual idx_t
         get_last_rank_domain_index(const std::string& dim
                                    /**< [in] Name of dimension to get.  Must be one of
-                                      the names from get_domain_dim_names(). */ ) const =0;
+                                      the names from get_domain_dim_names(). */ ) const throw(yask_exception) =0;
 
         /// Get the overall problem size in the specified dimension.
         /**
@@ -562,7 +562,7 @@ namespace yask {
         virtual idx_t
         get_overall_domain_size(const std::string& dim
                                 /**< [in] Name of dimension to get.  Must be one of
-                                   the names from get_domain_dim_names(). */ ) const =0;
+                                   the names from get_domain_dim_names(). */ ) const throw(yask_exception) =0;
 
         /// Run the stencil solution for the specified steps.
         /**
@@ -632,7 +632,7 @@ namespace yask {
                             If _false_, disable the auto-tuner from running. */,
                          bool verbose = false
                          /**< [in] If _true_, print progress information to the debug object
-                            set via set_debug_output(). */ ) =0;
+                            set via set_debug_output(). */ ) throw(yask_exception) =0;
 
         /// Determine whether the auto-tuner is enabled on this rank.
         /**
@@ -675,7 +675,7 @@ namespace yask {
         */
         virtual void
         share_grid_storage(yk_solution_ptr source
-                           /**< [in] Solution from which grid storage will be shared. */) =0;
+                           /**< [in] Solution from which grid storage will be shared. */) throw(yask_exception) =0;
 
         /// Get performance statistics associated with preceding calls to run_solution().
         /**
@@ -684,7 +684,7 @@ namespace yask {
            @returns Pointer to statistics object.
         */
         virtual yk_stats_ptr
-        get_stats() =0;
+        get_stats() throw(yask_exception) =0;
 
         /// Finish using a solution.
         /**
@@ -693,7 +693,7 @@ namespace yask {
            shared by another shared pointer.
         */
         virtual void
-        end_solution() =0;
+        end_solution() throw(yask_exception) =0;
     };
 
     /// Statistics from calls to run_solution().
@@ -704,6 +704,7 @@ namespace yask {
     */
     class yk_stats {
     public:
+    	virtual ~yk_stats() {}
 
         /// Get the number of elements in the overall domain.
         /**
@@ -892,7 +893,7 @@ namespace yask {
         virtual idx_t
         get_rank_domain_size(const std::string& dim
                              /**< [in] Name of dimension to get.  Must be one of
-                                the names from yk_solution::get_domain_dim_names(). */) const =0;
+                                the names from yk_solution::get_domain_dim_names(). */) const throw(yask_exception) =0;
 
         /// Get the first index of the sub-domain in this rank in the specified dimension.
         /**
@@ -902,7 +903,7 @@ namespace yask {
         virtual idx_t
         get_first_rank_domain_index(const std::string& dim
                                     /**< [in] Name of dimension to get.  Must be one of
-                                       the names from yk_solution::get_domain_dim_names(). */ ) const =0;
+                                       the names from yk_solution::get_domain_dim_names(). */ ) const throw(yask_exception) =0;
         
         /// Get the last index of the sub-domain in this rank in the specified dimension.
         /**
@@ -913,7 +914,7 @@ namespace yask {
         virtual idx_t
         get_last_rank_domain_index(const std::string& dim
                                     /**< [in] Name of dimension to get.  Must be one of
-                                       the names from yk_solution::get_domain_dim_names(). */ ) const =0;
+                                       the names from yk_solution::get_domain_dim_names(). */ ) const throw(yask_exception) =0;
 
         /// Get the halo size in the specified dimension.
         /**
@@ -924,7 +925,7 @@ namespace yask {
         get_halo_size(const std::string& dim
                       /**< [in] Name of dimension to get.
                          Must be one of
-                         the names from yk_solution::get_domain_dim_names(). */ ) const =0;
+                         the names from yk_solution::get_domain_dim_names(). */ ) const throw(yask_exception) =0;
         
         /// **[Advanced]** Set the halo size in the specified dimension.
         /**
@@ -943,7 +944,7 @@ namespace yask {
                          Must be one of
                          the names from yk_solution::get_domain_dim_names(). */,
                       idx_t size
-                      /**< [in] Number of elements in the halo. */ ) =0;
+                      /**< [in] Number of elements in the halo. */ ) throw(yask_exception) =0;
 
         /// Get the first index of the halo in this rank in the specified dimension.
         /**
@@ -954,7 +955,7 @@ namespace yask {
         virtual idx_t
         get_first_rank_halo_index(const std::string& dim
                                     /**< [in] Name of dimension to get.  Must be one of
-                                       the names from yk_solution::get_domain_dim_names(). */ ) const =0;
+                                       the names from yk_solution::get_domain_dim_names(). */ ) const throw(yask_exception) =0;
 
         /// Get the last index of the halo in this rank in the specified dimension.
         /**
@@ -965,7 +966,7 @@ namespace yask {
         virtual idx_t
         get_last_rank_halo_index(const std::string& dim
                                     /**< [in] Name of dimension to get.  Must be one of
-                                       the names from yk_solution::get_domain_dim_names(). */ ) const =0;
+                                       the names from yk_solution::get_domain_dim_names(). */ ) const throw(yask_exception) =0;
 
         /// Get the padding in the specified dimension.
         /**
@@ -983,7 +984,7 @@ namespace yask {
         get_pad_size(const std::string& dim
                      /**< [in] Name of dimension to get.
                          Must be one of
-                         the names from yk_solution::get_domain_dim_names(). */ ) const =0;
+                         the names from yk_solution::get_domain_dim_names(). */ ) const throw(yask_exception) =0;
 
         /// Get the extra padding in the specified dimension.
         /**
@@ -996,7 +997,7 @@ namespace yask {
         get_extra_pad_size(const std::string& dim
                            /**< [in] Name of dimension to get.
                               Must be one of
-                              the names from yk_solution::get_domain_dim_names(). */ ) const =0;
+                              the names from yk_solution::get_domain_dim_names(). */ ) const throw(yask_exception) =0;
 
         /// Set the padding in the specified dimension.
         /**
@@ -1026,7 +1027,7 @@ namespace yask {
                             Must be one of
                             the names from yk_solution::get_domain_dim_names(). */,
                          idx_t size
-                         /**< [in] Minimum number of elements to allocate beyond the domain size. */ ) =0;
+                         /**< [in] Minimum number of elements to allocate beyond the domain size. */ ) throw(yask_exception) =0;
         
         /// Get the storage allocation in the specified dimension.
         /**
@@ -1038,7 +1039,7 @@ namespace yask {
         */
         virtual idx_t
         get_alloc_size(const std::string& dim
-                       /**< [in] Name of dimension to get. */ ) const =0;
+                       /**< [in] Name of dimension to get. */ ) const throw(yask_exception) =0;
 
         /// **[Advanced]** Set the number of elements to allocate in the specified dimension.
         /** 
@@ -1056,7 +1057,7 @@ namespace yask {
                        /**< [in] Name of dimension to set.
                           Must *not* be one of
                           the names from yk_solution::get_domain_dim_names(). */,
-                       idx_t size /**< [in] Number of elements to allocate. */ ) =0;
+                       idx_t size /**< [in] Number of elements to allocate. */ ) throw(yask_exception) =0;
 
         /// **[Advanced]** Get the first accessible index in this grid in this rank in the specified dimension.
         /**
@@ -1071,7 +1072,7 @@ namespace yask {
         get_first_rank_alloc_index(const std::string& dim
                                    /**< [in] Name of dimension to get.
                                       Must be one of
-                                      the names from yk_solution::get_domain_dim_names(). */ ) const =0;
+                                      the names from yk_solution::get_domain_dim_names(). */ ) const throw(yask_exception) =0;
 
         /// **[Advanced]** Get the last accessible index in this grid in this rank in the specified dimension.
         /**
@@ -1086,7 +1087,7 @@ namespace yask {
         get_last_rank_alloc_index(const std::string& dim
                                   /**< [in] Name of dimension to get.
                                      Must be one of
-                                     the names from yk_solution::get_domain_dim_names(). */ ) const =0;
+                                     the names from yk_solution::get_domain_dim_names(). */ ) const throw(yask_exception) =0;
 
         /// Get the first index of a specified miscellaneous dimension.
         /**
@@ -1095,7 +1096,7 @@ namespace yask {
         virtual idx_t
         get_first_misc_index(const std::string& dim
                              /**< [in] Name of dimension to get.  Must be one of
-                                the names from yk_solution::get_misc_dim_names(). */ ) const =0;
+                                the names from yk_solution::get_misc_dim_names(). */ ) const throw(yask_exception) =0;
         
         /// Set the first index of a specified miscellaneous dimension.
         /**
@@ -1109,7 +1110,7 @@ namespace yask {
                              /**< [in] Name of dimension to get.  Must be one of
                                 the names from yk_solution::get_misc_dim_names(). */,
                              idx_t idx /**< [in] New value for first index.
-                                        May be negative. */ ) =0;
+                                        May be negative. */ ) throw(yask_exception) =0;
         
         /// Get the last index of a specified miscellaneous dimension.
         /**
@@ -1118,7 +1119,7 @@ namespace yask {
         virtual idx_t
         get_last_misc_index(const std::string& dim
                             /**< [in] Name of dimension to get.  Must be one of
-                               the names from yk_solution::get_misc_dim_names(). */ ) const =0;
+                               the names from yk_solution::get_misc_dim_names(). */ ) const throw(yask_exception) =0;
         
         /// Get the value of one grid element.
         /**
@@ -1127,11 +1128,11 @@ namespace yask {
            Index values must fall within the allocated space as returned by
            get_first_rank_alloc_index() and get_last_rank_alloc_index() for
            each dimension.
-           @returns value in grid at given multi-dimensional location. 
+           @returns value in grid at given multi-dimensional location.  throw(yask_exception)
         */
         virtual double
         get_element(const std::vector<idx_t>& indices
-                    /**< [in] List of indices, one for each grid dimension. */ ) const =0;
+                    /**< [in] List of indices, one for each grid dimension. */ ) const throw(yask_exception) =0;
 
 #ifndef SWIG
         /// Get the value of one grid element.
@@ -1149,7 +1150,7 @@ namespace yask {
         */
         virtual double
         get_element(const std::initializer_list<idx_t>& indices
-                    /**< [in] List of indices, one for each grid dimension. */ ) const =0;
+                    /**< [in] List of indices, one for each grid dimension. */ ) const throw(yask_exception) =0;
 #endif
 
         /// Get grid elements within specified subset of the grid.
@@ -1175,7 +1176,7 @@ namespace yask {
                               const std::vector<idx_t>& first_indices
                               /**< [in] List of initial indices, one for each grid dimension. */,
                               const std::vector<idx_t>& last_indices
-                              /**< [in] List of final indices, one for each grid dimension. */ ) const =0;
+                              /**< [in] List of final indices, one for each grid dimension. */ ) const throw(yask_exception) =0;
         
         /// Set the value of one grid element.
         /**
@@ -1197,7 +1198,7 @@ namespace yask {
                     bool strict_indices = false
                     /**< [in] If true, indices must be within domain or padding.
                        If false, indices outside of domain and padding result
-                       in no change to grid. */ ) =0;
+                       in no change to grid. */ ) throw(yask_exception) =0;
 
 #ifndef SWIG        
         /// Set the value of one grid element.
@@ -1222,7 +1223,7 @@ namespace yask {
                     bool strict_indices = false
                     /**< [in] If true, indices must be within domain or padding.
                        If false, indices outside of domain and padding result
-                       in no change to grid. */ ) =0;
+                       in no change to grid. */ ) throw(yask_exception) =0;
 #endif
         
         /// Initialize all grid elements to the same value.
@@ -1236,7 +1237,7 @@ namespace yask {
            this will have no effect.
         */
         virtual void
-        set_all_elements_same(double val /**< [in] All elements will be set to this. */ ) =0;
+        set_all_elements_same(double val /**< [in] All elements will be set to this. */ ) throw(yask_exception) =0;
 
         /// Initialize grid elements within specified subset of the grid to the same value.
         /**
@@ -1260,7 +1261,7 @@ namespace yask {
                                    bool strict_indices = false
                                    /**< [in] If true, indices must be within domain or padding.
                                       If false, only elements within the allocation of this grid
-                                      will be set, and elements outside will be ignored. */ ) =0;
+                                      will be set, and elements outside will be ignored. */ ) throw(yask_exception) =0;
 
         /// Set grid elements within specified subset of the grid.
         /**
@@ -1289,7 +1290,7 @@ namespace yask {
                               const std::vector<idx_t>& first_indices
                               /**< [in] List of initial indices, one for each grid dimension. */,
                               const std::vector<idx_t>& last_indices
-                              /**< [in] List of final indices, one for each grid dimension. */ ) =0;
+                              /**< [in] List of final indices, one for each grid dimension. */ ) throw(yask_exception) =0;
         
         /// **[Advanced]** Explicitly allocate data-storage memory for this grid.
         /**
@@ -1299,7 +1300,7 @@ namespace yask {
            See allocation options in the "Detailed Description" for \ref yk_grid.
          */
         virtual void
-        alloc_storage() =0;
+        alloc_storage() throw(yask_exception) =0;
 
         /// **[Advanced]** Explicitly release any allocated data-storage for this grid.
         /**
@@ -1309,7 +1310,7 @@ namespace yask {
            be retained by the remaining grids.
         */
         virtual void
-        release_storage() =0;
+        release_storage() throw(yask_exception) =0;
 
         /// Determine whether storage has been allocated.
         /**
@@ -1351,7 +1352,7 @@ namespace yask {
            `other` or `false` otherwise.
         */
         virtual bool
-        is_storage_layout_identical(const yk_grid_ptr other) const =0;
+        is_storage_layout_identical(const yk_grid_ptr other) const throw(yask_exception) =0;
         
         /// **[Advanced]** Use existing data-storage from specified grid.
         /**
@@ -1381,7 +1382,7 @@ namespace yask {
         */
         virtual void
         share_storage(yk_grid_ptr source
-                      /**< [in] Grid from which storage will be shared. */) =0;
+                      /**< [in] Grid from which storage will be shared. */) throw(yask_exception) =0;
 
         /// **[Advanced]** Get pointer to raw data storage buffer.
         /**

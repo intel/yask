@@ -332,11 +332,11 @@ namespace yask {
         }
 
 #define GET_GRID_API(api_name)                                      \
-        virtual idx_t api_name(const std::string& dim) const;       \
-        virtual idx_t api_name(int posn) const;
+        virtual idx_t api_name(const std::string& dim) const throw(yask_exception);       \
+        virtual idx_t api_name(int posn) const throw(yask_exception);
 #define SET_GRID_API(api_name)                                      \
-        virtual void api_name(const std::string& dim, idx_t n);     \
-        virtual void api_name(int posn, idx_t n);
+        virtual void api_name(const std::string& dim, idx_t n) throw(yask_exception);     \
+        virtual void api_name(int posn, idx_t n) throw(yask_exception);
         
         // Settings that should never be exposed as APIs because
         // they can break the usage model.
@@ -373,70 +373,70 @@ namespace yask {
 #undef GET_GRID_API
 #undef SET_GRID_API
         
-        virtual void set_all_elements_same(double val) =0;
-        virtual double get_element(const Indices& indices) const;
+        virtual void set_all_elements_same(double val) throw(yask_exception) =0;
+        virtual double get_element(const Indices& indices) const throw(yask_exception);
         virtual double get_element(const GridIndices& indices) const throw(yask_exception) {
             const Indices indices2(indices);
             return get_element(indices2);
         }
-        virtual double get_element(const std::initializer_list<idx_t>& indices) const {
+        virtual double get_element(const std::initializer_list<idx_t>& indices) const throw(yask_exception) {
             const Indices indices2(indices);
             return get_element(indices2);
         }
         virtual idx_t get_elements_in_slice(void* buffer_ptr,
                                             const Indices& first_indices,
-                                            const Indices& last_indices) const;
+                                            const Indices& last_indices) const throw(yask_exception);
         virtual idx_t get_elements_in_slice(void* buffer_ptr,
                                             const GridIndices& first_indices,
-                                            const GridIndices& last_indices) const {
+                                            const GridIndices& last_indices) const throw(yask_exception) {
             const Indices first(first_indices);
             const Indices last(last_indices);
             return get_elements_in_slice(buffer_ptr, first, last);
         }
         virtual idx_t set_element(double val,
                                   const Indices& indices,
-                                  bool strict_indices = false);
+                                  bool strict_indices = false) throw(yask_exception);
         virtual idx_t set_element(double val,
                                   const GridIndices& indices,
-                                  bool strict_indices = false) {
+                                  bool strict_indices = false) throw(yask_exception) {
             const Indices indices2(indices);
             return set_element(val, indices2, strict_indices);
         }
         virtual idx_t set_element(double val,
                                   const std::initializer_list<idx_t>& indices,
-                                  bool strict_indices = false) {
+                                  bool strict_indices = false) throw(yask_exception) {
             const Indices indices2(indices);
             return set_element(val, indices2, strict_indices);
         }
         virtual idx_t set_elements_in_slice_same(double val,
                                                  const Indices& first_indices,
                                                  const Indices& last_indices,
-                                                 bool strict_indices);
+                                                 bool strict_indices) throw(yask_exception);
         virtual idx_t set_elements_in_slice_same(double val,
                                                  const GridIndices& first_indices,
                                                  const GridIndices& last_indices,
-                                                 bool strict_indices) {
+                                                 bool strict_indices) throw(yask_exception) {
             const Indices first(first_indices);
             const Indices last(last_indices);
             return set_elements_in_slice_same(val, first, last, strict_indices);
         }
         virtual idx_t set_elements_in_slice(const void* buffer_ptr,
                                             const Indices& first_indices,
-                                            const Indices& last_indices);
+                                            const Indices& last_indices) throw(yask_exception);
         virtual idx_t set_elements_in_slice(const void* buffer_ptr,
                                             const GridIndices& first_indices,
-                                            const GridIndices& last_indices) {
+                                            const GridIndices& last_indices) throw(yask_exception) {
             const Indices first(first_indices);
             const Indices last(last_indices);
             return set_elements_in_slice(buffer_ptr, first, last);
         }
-        virtual void alloc_storage() {
+        virtual void alloc_storage() throw(yask_exception) {
             _ggb->default_alloc();
         }
-        virtual void release_storage() {
+        virtual void release_storage() throw(yask_exception) {
             _ggb->release_storage();
         }
-        virtual void share_storage(yk_grid_ptr source);
+        virtual void share_storage(yk_grid_ptr source) throw(yask_exception);
         virtual bool is_storage_allocated() const {
             return _ggb->get_storage() != 0;
         }
@@ -446,7 +446,7 @@ namespace yask {
         virtual idx_t get_num_storage_elements() const {
             return _allocs.product();
         }
-        virtual bool is_storage_layout_identical(const yk_grid_ptr other) const;
+        virtual bool is_storage_layout_identical(const yk_grid_ptr other) const throw(yask_exception);
         virtual void* get_raw_storage_buffer() {
             return _ggb->get_storage();
         }
@@ -492,7 +492,7 @@ namespace yask {
         }
 
         // Init data.
-        virtual void set_all_elements_same(double seed) {
+        virtual void set_all_elements_same(double seed) throw(yask_exception) {
             _data.set_elems_same(seed);
             set_dirty_all(true);
         }
@@ -639,7 +639,7 @@ namespace yask {
         }
         
         // Init data.
-        virtual void set_all_elements_same(double seed) {
+        virtual void set_all_elements_same(double seed) throw(yask_exception) {
             real_vec_t seedv = seed; // bcast.
             _data.set_elems_same(seedv);
             set_dirty_all(true);

@@ -71,7 +71,7 @@ namespace yask {
 
     // APIs.
     // See yask_kernel_api.hpp.
-    yk_env_ptr yk_factory::new_env() const {
+    yk_env_ptr yk_factory::new_env() const throw(yask_exception) {
         auto ep = make_shared<KernelEnv>();
         assert(ep);
         ep->initEnv(0, 0);

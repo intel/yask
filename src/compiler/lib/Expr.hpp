@@ -124,10 +124,10 @@ namespace yask {
         }
 
         // APIs.
-        virtual string format_simple() const {
+        virtual string format_simple() const throw(yask_exception) {
             return makeStr();
         }
-        virtual int get_num_nodes() const {
+        virtual int get_num_nodes() const throw(yask_exception) {
             return getNumNodes();
         }
     };
@@ -631,14 +631,14 @@ namespace yask {
         virtual int get_num_operands() {
             return _ops.size();
         }
-        virtual yc_number_node_ptr get_operand(int i) {
+        virtual yc_number_node_ptr get_operand(int i) throw(yask_exception) {
             if (i >= 0 &&
                 size_t(i) < _ops.size())
                 return _ops.at(size_t(i));
             else
                 return nullptr;
         }
-        virtual void add_operand(yc_number_node_ptr node) {
+        virtual void add_operand(yc_number_node_ptr node) throw(yask_exception) {
             auto p = dynamic_pointer_cast<NumExpr>(node);
             assert(p);
             appendOp(p);

@@ -34,7 +34,7 @@ namespace yask {
 		return yask_get_version_string();
 	}
     yk_solution_ptr yk_factory::new_solution(yk_env_ptr env,
-                                             const yk_solution_ptr source) const {
+                                             const yk_solution_ptr source) const throw(yask_exception) {
         auto ep = dynamic_pointer_cast<KernelEnv>(env);
         assert(ep);
         auto dp = YASK_STENCIL_CONTEXT::new_dims();
@@ -62,7 +62,7 @@ namespace yask {
         
         return sp;
     }
-    yk_solution_ptr yk_factory::new_solution(yk_env_ptr env) const {
+    yk_solution_ptr yk_factory::new_solution(yk_env_ptr env) const throw(yask_exception) {
         return new_solution(env, nullptr);
     }
 
