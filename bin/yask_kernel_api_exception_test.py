@@ -215,9 +215,9 @@ if __name__ == "__main__":
     print("Exception Test: Call 'run_solution' without calling prepare_solution().")
     try:
         soln.run_solution(0)
-    except yask_kernel.yask_exception, e:
+    except yask_kernel.yask_exception as e:
         print ("YASK throws an exception.")
-        print e.get_message()
+        print (e.get_message())
         print ("Exception Test: Catch exception correctly.")
         num_exception = num_exception + 1 
 
@@ -225,9 +225,9 @@ if __name__ == "__main__":
     print("Exception Test: Call 'run_auto-tuner_now' without calling prepare_solution().")
     try:
         soln.run_auto_tuner_now(False)
-    except yask_kernel.yask_exception, e:
+    except yask_kernel.yask_exception as e:
         print ("YASK throws an exception.")
-        print e.get_message()
+        print (e.get_message())
         print ("Exception Test: Catch exception correctly.")
         num_exception = num_exception + 1 
     

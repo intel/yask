@@ -93,7 +93,7 @@ SWIG		:=	swig
 # NB: constructing string inside print() to work for python 2 or 3.
 PYINC		:= 	$(addprefix -I,$(shell $(PYTHON) -c 'import distutils.sysconfig; print(distutils.sysconfig.get_python_inc() + " " + distutils.sysconfig.get_python_inc(plat_specific=1))'))
 
-RUN_PYTHON	:= 	env PYTHONPATH=$(LIB_DIR):$(YASK_DIR) $(PYTHON)
+RUN_PYTHON	:= 	env PYTHONPATH=$(LIB_DIR):$(YASK_DIR):$(PYTHONPATH) $(PYTHON)
 
 ######## Primary targets & rules
 
