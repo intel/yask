@@ -90,14 +90,6 @@ namespace yask {
     	const char* get_message();
     };
 
-    /// MACRO for throw yask_exception
-#define THROW_YASK_EXCEPTION(message)                               \
-    yask_exception e;                                               \
-    stringstream err;                                               \
-    err << message;                                                 \
-    e.add_message(err.str());                                       \
-    throw e;                                                        \
-
     /// Factory to create output objects.
     class yask_output_factory {
     public:

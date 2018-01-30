@@ -80,12 +80,7 @@ namespace yask {
             int provided = 0;
             MPI_Init_thread(argc, argv, MPI_THREAD_SERIALIZED, &provided);
             if (provided < MPI_THREAD_SERIALIZED) {
-                yask_exception e;
-                stringstream err;
-                err << "error: MPI_THREAD_SERIALIZED not provided.\n";
-                e.add_message(err.str());
-                throw e;
-                //exit_yask(1);
+                THROW_YASK_EXCEPTION("error: MPI_THREAD_SERIALIZED not provided.\n");
             }
             is_init = true;
         }

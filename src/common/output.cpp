@@ -26,6 +26,10 @@ IN THE SOFTWARE.
 //////// Methods for output object. //////////
 
 #include "yask_common_api.hpp"
+
+// Common utilities.
+#include "common_utils.hpp"
+
 #include <sstream>
 #include <iostream>
 #include <fstream>

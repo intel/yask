@@ -40,6 +40,8 @@ IN THE SOFTWARE.
 #include <assert.h>
 #include <fstream>
 
+// Common utilities.
+#include "common_utils.hpp"
 #include "tuple.hpp"
 
 using namespace std;

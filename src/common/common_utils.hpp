@@ -22,41 +22,20 @@ FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
 IN THE SOFTWARE.
 
 *****************************************************************************/
-
-//////// Methods for output object. //////////
-
-#include "yask_common_api.hpp"
-#include <sstream>
-#include <assert.h>
-
-using namespace std;
+#ifndef COMMON_UTILS_HPP
+#define COMMON_UTILS_HPP
 
 namespace yask {
 
-    // Update this version string anytime changes are
-    // committed to a repository, especially when
-    // affecting master or develop branches.
-    // Be sure to keep 2 digits in minor and patch
-    // fields to allow proper alphanumeric sorting
-    // for numbers above 9 (at least up to 99).
+// MACRO for throw yask_exception
+#define THROW_YASK_EXCEPTION(message)                               \
+    yask_exception e;                                               \
+    stringstream err;                                               \
+    err << message;                                                 \
+    e.add_message(err.str());                                       \
+    throw e;                                                        \
 
-    // Format: "major.minor.patch".
-    const string version = "2.02.00";
 
-    string yask_get_version_string() {
-        return version;
-    }
+} // namespace yask.
 
-    // See yask_common_api.hpp for documentation.
-    const char* yask_exception::what() noexcept {
-        return "yask::yask_exception\n";
-    }
-
-    void yask_exception::add_message(string arg_msg) {
-        msg.append(arg_msg);
-    }
-
-    const char* yask_exception::get_message() {
-        return msg.c_str();
-    }
-}
+#endif /* SRC_COMMON_COMMON_UTILS_HPP_ */
