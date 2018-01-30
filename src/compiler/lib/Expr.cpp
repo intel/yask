@@ -42,21 +42,21 @@ namespace yask {
     
     //node_factory API methods.
     yc_index_node_ptr
-    yc_node_factory::new_step_index(const std::string& name) throw(yask_exception) {
+    yc_node_factory::new_step_index(const std::string& name) {
         return make_shared<IndexExpr>(name, STEP_INDEX);
     }
     yc_index_node_ptr
-    yc_node_factory::new_domain_index(const std::string& name) throw(yask_exception) {
+    yc_node_factory::new_domain_index(const std::string& name) {
         return make_shared<IndexExpr>(name, DOMAIN_INDEX);
     }
     yc_index_node_ptr
-    yc_node_factory::new_misc_index(const std::string& name) throw(yask_exception) {
+    yc_node_factory::new_misc_index(const std::string& name) {
         return make_shared<IndexExpr>(name, MISC_INDEX);
     }
         
     yc_equation_node_ptr
     yc_node_factory::new_equation_node(yc_grid_point_node_ptr lhs,
-                                       yc_number_node_ptr rhs) throw(yask_exception) {
+                                       yc_number_node_ptr rhs) {
         auto lp = dynamic_pointer_cast<GridPoint>(lhs);
         assert(lp);
         auto rp = dynamic_pointer_cast<NumExpr>(rhs);
@@ -64,18 +64,18 @@ namespace yask {
         return operator EQUALS_OPER(lp, rp);
     }
     yc_const_number_node_ptr
-    yc_node_factory::new_const_number_node(double val) throw(yask_exception) {
+    yc_node_factory::new_const_number_node(double val) {
         return make_shared<ConstExpr>(val);
     }
     yc_negate_node_ptr
-    yc_node_factory::new_negate_node(yc_number_node_ptr rhs) throw(yask_exception) {
+    yc_node_factory::new_negate_node(yc_number_node_ptr rhs) {
         auto p = dynamic_pointer_cast<NumExpr>(rhs);
         assert(p);
         return make_shared<NegExpr>(p);
     }
     yc_add_node_ptr
     yc_node_factory::new_add_node(yc_number_node_ptr lhs,
-                                  yc_number_node_ptr rhs) throw(yask_exception) {
+                                  yc_number_node_ptr rhs) {
         auto lp = dynamic_pointer_cast<NumExpr>(lhs);
         assert(lp);
         auto rp = dynamic_pointer_cast<NumExpr>(rhs);
@@ -84,7 +84,7 @@ namespace yask {
     }
     yc_multiply_node_ptr
     yc_node_factory::new_multiply_node(yc_number_node_ptr lhs,
-                                       yc_number_node_ptr rhs) throw(yask_exception) {
+                                       yc_number_node_ptr rhs) {
         auto lp = dynamic_pointer_cast<NumExpr>(lhs);
         assert(lp);
         auto rp = dynamic_pointer_cast<NumExpr>(rhs);
@@ -93,7 +93,7 @@ namespace yask {
     }
     yc_subtract_node_ptr
     yc_node_factory::new_subtract_node(yc_number_node_ptr lhs,
-                                       yc_number_node_ptr rhs) throw(yask_exception) {
+                                       yc_number_node_ptr rhs) {
         auto lp = dynamic_pointer_cast<NumExpr>(lhs);
         assert(lp);
         auto rp = dynamic_pointer_cast<NumExpr>(rhs);
@@ -102,7 +102,7 @@ namespace yask {
     }
     yc_divide_node_ptr
     yc_node_factory::new_divide_node(yc_number_node_ptr lhs,
-                                     yc_number_node_ptr rhs) throw(yask_exception) {
+                                     yc_number_node_ptr rhs) {
         auto lp = dynamic_pointer_cast<NumExpr>(lhs);
         assert(lp);
         auto rp = dynamic_pointer_cast<NumExpr>(rhs);
@@ -389,14 +389,9 @@ namespace yask {
         // Check for correct number of args.
         size_t nd = grid->getDims().size();
         if (nd != args.size()) {
-            yask_exception e;
-            stringstream err;
-            err << "Error: attempt to create a grid point in " <<
+            THROW_YASK_EXCEPTION("Error: attempt to create a grid point in " <<
                 nd << "-D grid '" << getGridName() << "' with " <<
-                args.size() << " indices.\n";
-            e.add_message(err.str());
-            throw e;
-            //exit(1);
+                args.size() << " indices.\n");
         }
 
         // Eval each arg.

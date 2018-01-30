@@ -32,12 +32,12 @@ namespace yask {
 
     // APIs to get info from vars.
 #define GET_GRID_API(api_name, expr, step_ok, domain_ok, misc_ok)       \
-    idx_t YkGridBase::api_name(const string& dim) const throw(yask_exception) {               \
+    idx_t YkGridBase::api_name(const string& dim) const {               \
         checkDimType(dim, #api_name, step_ok, domain_ok, misc_ok);      \
         int posn = get_dim_posn(dim, true, #api_name);                  \
         return expr;                                                    \
     }                                                                   \
-    idx_t YkGridBase::api_name(int posn) const throw(yask_exception) {                        \
+    idx_t YkGridBase::api_name(int posn) const {                        \
         return expr;                                                    \
     }
     GET_GRID_API(get_rank_domain_size, _domains[posn], false, true, false)
@@ -61,12 +61,12 @@ namespace yask {
     // APIs to set vars.
 #define COMMA ,
 #define SET_GRID_API(api_name, expr, step_ok, domain_ok, misc_ok)       \
-    void YkGridBase::api_name(const string& dim, idx_t n) throw(yask_exception) {             \
+    void YkGridBase::api_name(const string& dim, idx_t n) {             \
         checkDimType(dim, #api_name, step_ok, domain_ok, misc_ok);      \
         int posn = get_dim_posn(dim, true, #api_name);                  \
         expr;                                                           \
     }                                                                   \
-    void YkGridBase::api_name(int posn, idx_t n) throw(yask_exception) {                      \
+    void YkGridBase::api_name(int posn, idx_t n) {                      \
         int dim = posn;                                                 \
         expr;                                                           \
     }
@@ -128,15 +128,10 @@ namespace yask {
         auto& dims = _ggb->get_dims();
         int posn = dims.lookup_posn(dim);
         if (posn < 0 && die_on_failure) {
-            yask_exception e;
-            stringstream err;
-            err << "Error: " << die_msg << ": dimension '" <<
+            THROW_YASK_EXCEPTION("Error: " << die_msg << ": dimension '" <<
                 dim << "' not found in ";
             print_info(cerr);
-            err << ".\n";
-            e.add_message(err.str());
-            throw e;
-            //exit_yask(1);
+            err << ".\n");
         }
         return posn;
     }
@@ -163,16 +158,11 @@ namespace yask {
 
         // Attempt to change alloc with existing storage?
         if (p && old_allocs != new_allocs) {
-            yask_exception e;
-            stringstream err;
-            err << "Error: attempt to change allocation size of grid '" <<
+            THROW_YASK_EXCEPTION("Error: attempt to change allocation size of grid '" <<
                 get_name() << "' from " << 
                 makeIndexString(old_allocs, " * ") << " to " <<
                 makeIndexString(new_allocs, " * ") <<
-                " after storage has been allocated.\n";
-            e.add_message(err.str());
-            throw e;
-            //exit_yask(1);
+                " after storage has been allocated.\n");
         }
 
         // Do the resize.
@@ -207,20 +197,15 @@ namespace yask {
                                   bool domain_ok,
                                   bool misc_ok) const {
         if (!is_dim_used(dim)) {
-            yask_exception e;
-            stringstream err;
-            err << "Error in " << fn_name << "(): dimension '" <<
+            THROW_YASK_EXCEPTION("Error in " << fn_name << "(): dimension '" <<
                 dim << "' not found in ";
             print_info(cerr);
-            err << ".\n";
-            e.add_message(err.str());
-            throw e;
-            //exit_yask(1);
+            err << ".\n");
         }
         _dims->checkDimType(dim, fn_name, step_ok, domain_ok, misc_ok);
     }
     
-    bool YkGridBase::is_storage_layout_identical(const yk_grid_ptr other) const throw(yask_exception) {
+    bool YkGridBase::is_storage_layout_identical(const yk_grid_ptr other) const {
         auto op = dynamic_pointer_cast<YkGridBase>(other);
         assert(op);
 
@@ -249,17 +234,12 @@ namespace yask {
         return true;
     }
 
-    void YkGridBase::share_storage(yk_grid_ptr source) throw(yask_exception) {
+    void YkGridBase::share_storage(yk_grid_ptr source) {
         auto sp = dynamic_pointer_cast<YkGridBase>(source);
         assert(sp);
 
         if (!sp->get_raw_storage_buffer()) {
-            yask_exception e;
-            stringstream err;
-            err << "Error: share_storage() called without source storage allocated.\n";
-            e.add_message(err.str());
-            throw e;
-            //exit_yask(1);
+            THROW_YASK_EXCEPTION("Error: share_storage() called without source storage allocated.\n");
         }
 
         // NB: requirements to successful share_storage() is not as strict as
@@ -270,16 +250,11 @@ namespace yask {
             // Same dims?
             if (sp->get_num_dims() != get_num_dims() ||
                 sp->get_dim_name(i) != dname) {
-                yask_exception e;
-                stringstream err;
-                err << "Error: share_storage() called with incompatible grids: ";
+                THROW_YASK_EXCEPTION("Error: share_storage() called with incompatible grids: ";
                 print_info(cerr);
                 err << "; and ";
                 sp->print_info(cerr);
-                err << ".\n";
-                e.add_message(err.str());
-                throw e;
-                //exit_yask(1);
+                err << ".\n");
             }
 
             // Not a domain dim?
@@ -288,14 +263,9 @@ namespace yask {
                 auto tas = get_alloc_size(dname);
                 auto sas = sp->get_alloc_size(dname);
                 if (tas != sas) {
-                    yask_exception e;
-                    stringstream err;
-                    err << "Error: attempt to share storage from grid '" << sp->get_name() <<
+                    THROW_YASK_EXCEPTION("Error: attempt to share storage from grid '" << sp->get_name() <<
                         "' of alloc-size " << sas << " with grid '" << get_name() <<
-                        "' of alloc-size " << tas << " in '" << dname << "' dim.\n";
-                    e.add_message(err.str());
-                    throw e;
-                    //exit_yask(1);
+                        "' of alloc-size " << tas << " in '" << dname << "' dim.\n");
                 }
             }
 
@@ -304,14 +274,9 @@ namespace yask {
                 auto tdom = get_rank_domain_size(dname);
                 auto sdom = sp->get_rank_domain_size(dname);
                 if (tdom != sdom) {
-                    yask_exception e;
-                    stringstream err;
-                    err << "Error: attempt to share storage from grid '" << sp->get_name() <<
+                    THROW_YASK_EXCEPTION("Error: attempt to share storage from grid '" << sp->get_name() <<
                         "' of domain-size " << sdom << " with grid '" << get_name() <<
-                        "' of domain-size " << tdom << " in '" << dname << "' dim.\n";
-                    e.add_message(err.str());
-                    throw e;
-                    //exit_yask(1);
+                        "' of domain-size " << tdom << " in '" << dname << "' dim.\n");
                 }
 
                 // Halo and pad sizes don't have to be the same.
@@ -319,28 +284,18 @@ namespace yask {
                 auto thalo = get_halo_size(dname);
                 auto spad = sp->get_pad_size(dname);
                 if (thalo > spad) {
-                    yask_exception e;
-                    stringstream err;
-                    err << "Error: attempt to share storage from grid '" << sp->get_name() <<
+                    THROW_YASK_EXCEPTION("Error: attempt to share storage from grid '" << sp->get_name() <<
                         "' of padding-size " << spad <<
                         ", which is insufficient for grid '" << get_name() <<
-                        "' of halo-size " << thalo << " in '" << dname << "' dim.\n";
-                    e.add_message(err.str());
-                    throw e;
-                    //exit_yask(1);
+                        "' of halo-size " << thalo << " in '" << dname << "' dim.\n");
                 }
             }
 
             // Check folding.
             if (_vec_lens[i] != sp->_vec_lens[i]) {
-                yask_exception e;
-                stringstream err;
-                err << "Error: attempt to share storage from grid '" << sp->get_name() <<
+                THROW_YASK_EXCEPTION("Error: attempt to share storage from grid '" << sp->get_name() <<
                     "' of fold-length " << sp->_vec_lens[i] << " with grid '" << get_name() <<
-                    "' of fold-length " << _vec_lens[i] << " in '" << dname << "' dim.\n";
-                e.add_message(err.str());
-                throw e;
-                //exit_yask(1);
+                    "' of fold-length " << _vec_lens[i] << " in '" << dname << "' dim.\n");
             }
         }
 
@@ -357,12 +312,7 @@ namespace yask {
         // Copy data.
         release_storage();
         if (!share_data(sp.get(), true)) {
-            yask_exception e;
-            stringstream err;
-            err << "Error: unexpected failure in data sharing.\n";
-            e.add_message(err.str());
-            throw e;
-            //exit_yask(1);
+            THROW_YASK_EXCEPTION("Error: unexpected failure in data sharing.\n");
         }
     }
 
@@ -455,13 +405,8 @@ namespace yask {
                                   Indices* fixed_indices) const {
         auto n = get_num_dims();
         if (indices.getNumDims() != n) {
-            yask_exception e;
-            stringstream err;
-            err << "Error: '" << fn << "' called with " << indices.getNumDims() <<
-                " indices instead of " << n << ".\n";
-            e.add_message(err.str());
-            throw e;
-            //exit_yask(1);
+            THROW_YASK_EXCEPTION("Error: '" << fn << "' called with " << indices.getNumDims() <<
+                " indices instead of " << n << ".\n");
         }
         if (fixed_indices)
             *fixed_indices = indices;
@@ -486,14 +431,9 @@ namespace yask {
                 // Handle outliers.
                 if (!ok) {
                     if (strict_indices) {
-                        yask_exception e;
-                        stringstream err;
-                        err << "Error: " << fn << ": index in dim '" << dname <<
+                        THROW_YASK_EXCEPTION("Error: " << fn << ": index in dim '" << dname <<
                             "' is " << idx << ", which is not in [" << first_ok <<
-                            "..." << last_ok << "].\n";
-                        e.add_message(err.str());
-                        throw e;
-                        //exit_yask(1);
+                            "..." << last_ok << "].\n");
                     }
                     if (fixed_indices) {
                         if (idx < first_ok)
@@ -538,15 +478,10 @@ namespace yask {
     }
     
     // API get/set.
-    double YkGridBase::get_element(const Indices& indices) const throw(yask_exception) {
+    double YkGridBase::get_element(const Indices& indices) const {
         if (!is_storage_allocated()) {
-            yask_exception e;
-            stringstream err;
-            err << "Error: call to 'get_element' with no data allocated for grid '" <<
-                get_name() << "'.\n";
-            e.add_message(err.str());
-            throw e;
-            //exit_yask(1);
+            THROW_YASK_EXCEPTION("Error: call to 'get_element' with no data allocated for grid '" <<
+                get_name() << "'.\n");
         }
         checkIndices(indices, "get_element", true, false);
         idx_t asi = get_alloc_step_index(indices[Indices::step_posn]);
@@ -555,7 +490,7 @@ namespace yask {
     }
     idx_t YkGridBase::set_element(double val,
                                   const Indices& indices,
-                                  bool strict_indices) throw(yask_exception) {
+                                  bool strict_indices) {
         idx_t nup = 0;
         if (get_raw_storage_buffer() &&
             checkIndices(indices, "set_element", strict_indices, false)) {
@@ -571,15 +506,10 @@ namespace yask {
     
     idx_t YkGridBase::get_elements_in_slice(void* buffer_ptr,
                                             const Indices& first_indices,
-                                            const Indices& last_indices) const throw(yask_exception) {
+                                            const Indices& last_indices) const {
         if (!is_storage_allocated()) {
-            yask_exception e;
-            stringstream err;
-            err << "Error: call to 'get_elements_in_slice' with no data allocated for grid '" <<
-                get_name() << "'.\n";
-            e.add_message(err.str());
-            throw e;
-            //exit_yask(1);
+            THROW_YASK_EXCEPTION("Error: call to 'get_elements_in_slice' with no data allocated for grid '" <<
+                get_name() << "'.\n");
         }
         checkIndices(first_indices, "get_elements_in_slice", true, false);
         checkIndices(last_indices, "get_elements_in_slice", true, false);
@@ -604,7 +534,7 @@ namespace yask {
     idx_t YkGridBase::set_elements_in_slice_same(double val,
                                                  const Indices& first_indices,
                                                  const Indices& last_indices,
-                                                 bool strict_indices) throw(yask_exception) {
+                                                 bool strict_indices) {
         if (!is_storage_allocated())
             return 0;
         
@@ -637,7 +567,7 @@ namespace yask {
     }
     idx_t YkGridBase::set_elements_in_slice(const void* buffer_ptr,
                                             const Indices& first_indices,
-                                            const Indices& last_indices) throw(yask_exception) {
+                                            const Indices& last_indices) {
         if (!is_storage_allocated())
             return 0;
         checkIndices(first_indices, "set_elements_in_slice", true, false);

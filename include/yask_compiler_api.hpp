@@ -120,7 +120,7 @@ namespace yask {
         */
         virtual yc_solution_ptr
         new_solution(const std::string& name /**< [in] Name of the solution; 
-                                                must be a valid C++ identifier. */ ) const throw(yask_exception);
+                                                must be a valid C++ identifier. */ ) const;
     };
             
     /// Stencil solution.
@@ -174,7 +174,7 @@ namespace yask {
                     identifier and unique across grids. */,
                  const std::vector<yc_index_node_ptr>& dims
                  /**< [in] Dimensions of the grid.
-                  Each dimension is identified by an associated index. */ ) throw(yask_exception) =0;
+                  Each dimension is identified by an associated index. */ ) =0;
 
 #ifndef SWIG        
         /// Create an n-dimensional grid variable in the solution.
@@ -191,7 +191,7 @@ namespace yask {
                                             across grids. */,
                  const std::initializer_list<yc_index_node_ptr>& dims
                  /**< [in] Dimensions of the grid.
-                    Each dimension is identified by an associated index. */ ) throw(yask_exception) =0;
+                    Each dimension is identified by an associated index. */ ) =0;
 #endif
         
         /// Get all the grids in the solution.
@@ -207,7 +207,7 @@ namespace yask {
         /// Get the specified grid.
         /** @returns Pointer to the specified grid or null pointer if it does not exist. */
         virtual yc_grid_ptr
-        get_grid(const std::string& name /**< [in] Name of the grid. */ ) throw(yask_exception) =0;
+        get_grid(const std::string& name /**< [in] Name of the grid. */ ) =0;
         
         /// Get the number of equations in the solution.
         /** Equations are added when equation_nodes are created via new_equation_node().
@@ -219,7 +219,7 @@ namespace yask {
         /** @returns Pointer to equation_node of nth equation. */
         virtual yc_equation_node_ptr
         get_equation(int n /**< [in] Index of equation between zero (0)
-                              and get_num_equations()-1. */ ) throw(yask_exception) =0;
+                              and get_num_equations()-1. */ ) =0;
 
         /// Set the vectorization length in given dimension.
         /** For YASK-code generation, the product of the fold lengths should
@@ -240,7 +240,7 @@ namespace yask {
         set_fold_len(const yc_index_node_ptr dim
                      /**< [in] Dimension of fold, e.g., "x".
                       This must be an index created by new_domain_index(). */,
-                     int len /**< [in] Length of vectorization in `dim` */ ) throw(yask_exception) =0;
+                     int len /**< [in] Length of vectorization in `dim` */ ) =0;
 
         /// Reset all vector-folding settings.
         /** All fold lengths will return to the default of one (1). */
@@ -268,7 +268,7 @@ namespace yask {
         set_cluster_mult(const yc_index_node_ptr dim
                          /**< [in] Direction of unroll, e.g., "y".
                             This must be an index created by new_domain_index().  */,
-                         int mult /**< [in] Number of vectors in `dim` */ ) throw(yask_exception) =0;
+                         int mult /**< [in] Number of vectors in `dim` */ ) =0;
 
         /// Reset all vector-clustering settings.
         /** All cluster multipliers will return to the default of one (1). */
@@ -300,7 +300,7 @@ namespace yask {
                /**< [in] Name of type from above table. */,
                yask_output_ptr output
                /**< [out] Pointer to object to receive formatted output. 
-                  See \ref yask_output_factory. */) throw(yask_exception) =0;
+                  See \ref yask_output_factory. */) =0;
     };
 
     /// A compile-time grid.
@@ -326,7 +326,7 @@ namespace yask {
         /** @returns String containing name of dimension created via new_grid(). */
         virtual const std::string&
         get_dim_name(int n /**< [in] Index of dimension between zero (0)
-                              and get_num_dims()-1. */ ) const throw(yask_exception) =0;
+                              and get_num_dims()-1. */ ) const =0;
 
         /// Get all the dimensions in this grid.
         /**
@@ -350,7 +350,7 @@ namespace yask {
             @returns Pointer to AST node used to read from or write to point in grid. */
         virtual yc_grid_point_node_ptr
         new_relative_grid_point(std::vector<int> dim_offsets
-                                /**< [in] offset from evaluation index in each dim. */ ) throw(yask_exception) =0;
+                                /**< [in] offset from evaluation index in each dim. */ ) =0;
 
 #ifndef SWIG        
         /// Create a reference to a point in a grid.
@@ -364,7 +364,7 @@ namespace yask {
             @note This version is not available (or needed) in SWIG-based APIs, e.g., Python.
             @returns Pointer to AST node used to read or write from point in grid. */
         virtual yc_grid_point_node_ptr
-        new_relative_grid_point(const std::initializer_list<int>& dim_offsets) throw(yask_exception) = 0;
+        new_relative_grid_point(const std::initializer_list<int>& dim_offsets) = 0;
 #endif
     };
     
@@ -383,7 +383,7 @@ namespace yask {
         */
         virtual yc_index_node_ptr
         new_step_index(const std::string& name
-                     /**< [in] Step dimension name. */ ) throw(yask_exception);
+                     /**< [in] Step dimension name. */ );
 
         /// Create a domain-index node.
         /**
@@ -395,7 +395,7 @@ namespace yask {
          */
         virtual yc_index_node_ptr
         new_domain_index(const std::string& name
-                     /**< [in] Domain index name. */ ) throw(yask_exception);
+                     /**< [in] Domain index name. */ );
         
         /// Create a new miscellaneous index.
         /**
@@ -405,7 +405,7 @@ namespace yask {
          */
         virtual yc_index_node_ptr
         new_misc_index(const std::string& name
-                       /**< [in] Index name. */ ) throw(yask_exception);
+                       /**< [in] Index name. */ );
         
         /// Create an equation node.
         /** Indicates grid point on LHS is equivalent to expression on
@@ -416,19 +416,19 @@ namespace yask {
             @returns Pointer to new node. */
         virtual yc_equation_node_ptr
         new_equation_node(yc_grid_point_node_ptr lhs /**< [in] Grid-point before EQUALS operator. */,
-                        yc_number_node_ptr rhs /**< [in] Expression after EQUALS operator. */ ) throw(yask_exception);
+                        yc_number_node_ptr rhs /**< [in] Expression after EQUALS operator. */ );
 
         /// Create a constant numerical value node.
         /** This is unary negation.
              Use new_subtraction_node() for binary '-'.
             @returns Pointer to new node. */
         virtual yc_const_number_node_ptr
-        new_const_number_node(double val /**< [in] Value to store in node. */ ) throw(yask_exception);
+        new_const_number_node(double val /**< [in] Value to store in node. */ );
 
         /// Create a numerical negation operator node.
         /** @returns Pointer to new node. */
         virtual yc_negate_node_ptr
-        new_negate_node(yc_number_node_ptr rhs /**< [in] Expression after '-' sign. */ ) throw(yask_exception);
+        new_negate_node(yc_number_node_ptr rhs /**< [in] Expression after '-' sign. */ );
 
         /// Create an addition node.
         /** Nodes must be created with at least two operands, and more can
@@ -436,7 +436,7 @@ namespace yask {
             @returns Pointer to new node. */
         virtual yc_add_node_ptr
         new_add_node(yc_number_node_ptr lhs /**< [in] Expression before '+' sign. */,
-                     yc_number_node_ptr rhs /**< [in] Expression after '+' sign. */ ) throw(yask_exception);
+                     yc_number_node_ptr rhs /**< [in] Expression after '+' sign. */ );
 
         /// Create a multiplication node.
         /** Nodes must be created with at least two operands, and more can
@@ -444,7 +444,7 @@ namespace yask {
             @returns Pointer to new node. */
         virtual yc_multiply_node_ptr
         new_multiply_node(yc_number_node_ptr lhs /**< [in] Expression before '*' sign. */,
-                          yc_number_node_ptr rhs /**< [in] Expression after '*' sign. */ ) throw(yask_exception);
+                          yc_number_node_ptr rhs /**< [in] Expression after '*' sign. */ );
 
         /// Create a subtraction node.
         /** This is binary subtraction.
@@ -452,13 +452,13 @@ namespace yask {
             @returns Pointer to new node. */
         virtual yc_subtract_node_ptr
         new_subtract_node(yc_number_node_ptr lhs /**< [in] Expression before '-' sign. */,
-                          yc_number_node_ptr rhs /**< [in] Expression after '-' sign. */ ) throw(yask_exception);
+                          yc_number_node_ptr rhs /**< [in] Expression after '-' sign. */ );
 
         /// Create a division node.
         /** @returns Pointer to new node. */
         virtual yc_divide_node_ptr
         new_divide_node(yc_number_node_ptr lhs /**< [in] Expression before '/' sign. */,
-                        yc_number_node_ptr rhs /**< [in] Expression after '/' sign. */ ) throw(yask_exception);
+                        yc_number_node_ptr rhs /**< [in] Expression after '/' sign. */ );
     };
 
     /// Base class for all AST nodes.
@@ -471,12 +471,12 @@ namespace yask {
         /** Formats the expression starting at this node.
             @returns String containing a single-line human-readable version of the expression.
          */
-        virtual std::string format_simple() const throw(yask_exception) =0;
+        virtual std::string format_simple() const =0;
 
         /// Count the size of the AST.
         /** @returns Number of nodes in this tree,
             including this node and all its descendants. */
-        virtual int get_num_nodes() const throw(yask_exception) =0;
+        virtual int get_num_nodes() const =0;
     };
 
     /// Equation node.
@@ -570,11 +570,11 @@ namespace yask {
         /** @returns Pointer to node at given position or null pointer if out of bounds. */
         virtual yc_number_node_ptr
         get_operand(int i /**< [in] Index between zero (0)
-                             and get_num_operands()-1. */ ) throw(yask_exception) =0;
+                             and get_num_operands()-1. */ ) =0;
 
         /// Add an operand.
         virtual void
-        add_operand(yc_number_node_ptr node /**< [in] Top node of AST to add. */ ) throw(yask_exception) =0;
+        add_operand(yc_number_node_ptr node /**< [in] Top node of AST to add. */ ) =0;
     };
 
     /// An addition node.

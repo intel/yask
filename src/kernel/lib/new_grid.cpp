@@ -37,14 +37,9 @@ namespace yask {
         bool got_sizes = sizes != NULL;
         if (got_sizes) {
             if (dims.size() != sizes->size()) {
-                yask_exception e;
-                stringstream err;
-                err << "Error: attempt to create grid '" << name << "' with " <<
+                THROW_YASK_EXCEPTION("Error: attempt to create grid '" << name << "' with " <<
                     dims.size() << " dimension names but " << sizes->size() <<
-                    " dimension sizes.\n";
-                e.add_message(err.str());
-                throw e;
-                //exit_yask(1);
+                    " dimension sizes.\n");
             }
         }
 
@@ -63,27 +58,17 @@ namespace yask {
 
                 // Already used?
                 if (seenDims.count(dims[i])) {
-                    yask_exception e;
-                    stringstream err;
-                    err << "Error: cannot create grid '" << name <<
-                        "': dimension '" << dims[i] << "' used more than once.\n";
-                    e.add_message(err.str());
-                    throw e;
-                    //exit_yask(1);
+                    THROW_YASK_EXCEPTION("Error: cannot create grid '" << name <<
+                        "': dimension '" << dims[i] << "' used more than once.\n");
                 }
             
                 // Step dim?
                 if (dims[i] == _dims->_step_dim) {
                     step_posn = i;
                     if (i > 0) {
-                        yask_exception e;
-                        stringstream err;
-                        err << "Error: cannot create grid '" << name <<
+                        THROW_YASK_EXCEPTION("Error: cannot create grid '" << name <<
                             "' because step dimension '" << dims[i] <<
-                            "' must be first dimension.\n";
-                        e.add_message(err.str());
-                        throw e;
-                        //exit_yask(1);
+                            "' must be first dimension.\n");
                     }
                 }
             }
@@ -97,14 +82,9 @@ namespace yask {
 #include "yask_grid_code.hpp"
             
             if (!gp) {
-                yask_exception e;
-                stringstream err;
-                err << "Error in new_grid: cannot create grid '" << name <<
+                THROW_YASK_EXCEPTION("Error in new_grid: cannot create grid '" << name <<
                     "' with " << ndims << " dimensions; only up to " << MAX_DIMS <<
-                    " dimensions supported.\n";
-                e.add_message(err.str());
-                throw e;
-                //exit_yask(1);
+                    " dimensions supported.\n");
             }
         }
 

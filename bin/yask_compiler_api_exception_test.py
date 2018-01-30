@@ -60,9 +60,9 @@ if __name__ == "__main__":
     print("Exception Test: Call 'new_relative_grid_point' with wrong argument.")
     try:
         n1 = nfac.new_add_node(n0, g1.new_relative_grid_point([0, -1,  0,  0,  1])) # left.
-    except yask_compiler.yask_exception as e:
+    except RuntimeError as e:
         print ("YASK throws an exception.")
-        print (e.get_message())
+        print (format(e))
         print ("Exception Test: Catch exception correctly.")
         num_exception = num_exception + 1
 
@@ -93,9 +93,9 @@ if __name__ == "__main__":
     print("Exception Test: Call 'new_file_output' with read-only file name.")
     try:
         dot_file = ofac.new_file_output("yc-api-test-with-exception-py-readonly")
-    except yask_compiler.yask_exception as e:
+    except RuntimeError as e:
         print ("YASK throws an exception.")
-        print (e.get_message())
+        print (format(e))
         print ("Exception Test: Catch exception correctly.")
         num_exception = num_exception + 1
 
@@ -112,9 +112,9 @@ if __name__ == "__main__":
     # Exception test
     try:
         soln.format("wrong_format", dot_file)
-    except yask_compiler.yask_exception as e:
+    except RuntimeError as e:
         print ("YASK throws an exception.")
-        print (e.get_message())
+        print (format(e))
         print ("Exception Test: Catch exception correctly.")
         num_exception = num_exception + 1
 
@@ -127,4 +127,4 @@ if __name__ == "__main__":
         print("There is a problem in exception test.")
         exit(1)
     else:
-        print("End of YASK compiler API test.")
+        print("End of YASK compiler API test with exception.")

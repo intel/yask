@@ -38,40 +38,25 @@ namespace yask {
             return;
         if (dim == _step_dim) {
             if (!step_ok) {
-                yask_exception e;
-                stringstream err;
-                err << "Error in " << fn_name << "(): dimension '" <<
-                    dim << "' is the step dimension, which is not allowed.\n";
-                e.add_message(err.str());
-                throw e;
-                //exit_yask(1);
+                THROW_YASK_EXCEPTION("Error in " << fn_name << "(): dimension '" <<
+                    dim << "' is the step dimension, which is not allowed.\n");
             }
         }
         else if (_domain_dims.lookup(dim)) {
             if (!domain_ok) {
-                yask_exception e;
-                stringstream err;
-                err << "Error in " << fn_name << "(): dimension '" <<
-                    dim << "' is a domain dimension, which is not allowed.\n";
-                e.add_message(err.str());
-                throw e;
-                //exit_yask(1);
+                THROW_YASK_EXCEPTION("Error in " << fn_name << "(): dimension '" <<
+                    dim << "' is a domain dimension, which is not allowed.\n");
             }
         }
         else if (!misc_ok) {
-            yask_exception e;
-            stringstream err;
-            err << "Error in " << fn_name << "(): dimension '" <<
-                dim << "' is a misc dimension, which is not allowed.\n";
-            e.add_message(err.str());
-            throw e;
-            //exit_yask(1);
+            THROW_YASK_EXCEPTION("Error in " << fn_name << "(): dimension '" <<
+                dim << "' is a misc dimension, which is not allowed.\n");
         }
     }
 
     // APIs.
     // See yask_kernel_api.hpp.
-    yk_env_ptr yk_factory::new_env() const throw(yask_exception) {
+    yk_env_ptr yk_factory::new_env() const {
         auto ep = make_shared<KernelEnv>();
         assert(ep);
         ep->initEnv(0, 0);

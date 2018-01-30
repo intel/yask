@@ -32,7 +32,7 @@ namespace yask {
     // See yask_kernel_api.hpp.
 
 #define GET_SOLN_API(api_name, expr, step_ok, domain_ok, misc_ok)   \
-    idx_t StencilContext::api_name(const string& dim) const throw(yask_exception) {           \
+    idx_t StencilContext::api_name(const string& dim) const {           \
         checkDimType(dim, #api_name, step_ok, domain_ok, misc_ok);      \
         return expr;                                                    \
     }
@@ -47,7 +47,7 @@ namespace yask {
 #undef GET_SOLN_API
 
 #define SET_SOLN_API(api_name, expr, step_ok, domain_ok, misc_ok)       \
-    void StencilContext::api_name(const string& dim, idx_t n) throw(yask_exception) {         \
+    void StencilContext::api_name(const string& dim, idx_t n) {         \
         checkDimType(dim, #api_name, step_ok, domain_ok, misc_ok);      \
         expr;                                                           \
         update_grids();                                                 \
@@ -58,7 +58,7 @@ namespace yask {
     SET_SOLN_API(set_num_ranks, _opts->_num_ranks[dim] = n, false, true, false)
 #undef SET_SOLN_API
     
-    void StencilContext::share_grid_storage(yk_solution_ptr source) throw(yask_exception) {
+    void StencilContext::share_grid_storage(yk_solution_ptr source) {
         auto sp = dynamic_pointer_cast<StencilContext>(source);
         assert(sp);
         
@@ -72,7 +72,7 @@ namespace yask {
         }
     }
 
-    string StencilContext::apply_command_line_options(const string& args) throw(yask_exception) {
+    string StencilContext::apply_command_line_options(const string& args) {
 
         // Create a parser and add base options to it.
         CommandLineParser parser;
@@ -208,7 +208,7 @@ namespace yask {
 
     // Eval stencil group(s) over grid(s) using optimized code.
     void StencilContext::run_solution(idx_t first_step_index,
-                                      idx_t last_step_index) throw(yask_exception)
+                                      idx_t last_step_index)
     {
         run_time.start();
         
@@ -233,12 +233,7 @@ namespace yask {
         TRACE_MSG("run_solution: " << begin.makeDimValStr() << " ... (end before) " <<
                   end.makeDimValStr() << " by " << step.makeDimValStr());
         if (!bb_valid) {
-            yask_exception e;
-            stringstream err;
-            err << "Error: run_solution() called without calling prepare_solution() first.\n";
-            e.add_message(err.str());
-            throw e;
-            //exit_yask(1);
+            THROW_YASK_EXCEPTION("Error: run_solution() called without calling prepare_solution() first.\n");
         }
         if (bb_size < 1) {
             TRACE_MSG("nothing to do in solution");
@@ -349,22 +344,12 @@ namespace yask {
 
                 // TODO: enable reverse time w/wave-fronts.
                 if (step_t < 0) {
-                    yask_exception e;
-                    stringstream err;
-                    err << "Error: reverse time with wave-fronts not yet supported.\n";
-                    e.add_message(err.str());
-                    throw e;
-                    //exit_yask(1);
+                    THROW_YASK_EXCEPTION("Error: reverse time with wave-fronts not yet supported.\n");
                 }
 
                 // TODO: enable halo exchange for wave-fronts.
                 if (_env->num_ranks > 1) {
-                    yask_exception e;
-                    stringstream err;
-                    err << "Error: halo exchange with wave-fronts not yet supported.\n";
-                    e.add_message(err.str());
-                    throw e;
-                    //exit_yask(1);
+                    THROW_YASK_EXCEPTION("Error: halo exchange with wave-fronts not yet supported.\n");
                 }
                 
                 // Eval all stencil groups.
@@ -440,12 +425,7 @@ namespace yask {
 
         // Not yet supporting temporal blocking.
         if (_opts->_block_sizes[step_dim] != 1) {
-            yask_exception e;
-            stringstream err;
-            err << "Error: temporal blocking not yet supported." << endl;
-            e.add_message(err.str());
-            throw e;
-            //exit_yask(1);
+            THROW_YASK_EXCEPTION("Error: temporal blocking not yet supported." << endl);
         }
         
         // Steps within a region are based on block sizes.
@@ -783,14 +763,9 @@ namespace yask {
     }
     
     // Apply auto-tuning to some of the settings.
-    void StencilContext::run_auto_tuner_now(bool verbose) throw(yask_exception) {
+    void StencilContext::run_auto_tuner_now(bool verbose) {
         if (!bb_valid) {
-            yask_exception e;
-            stringstream err;
-            err << "Error: tune_settings() called without calling prepare_solution() first.\n";
-            e.add_message(err.str());
-            throw e;
-            //exit_yask(1);
+            THROW_YASK_EXCEPTION("Error: tune_settings() called without calling prepare_solution() first.\n");
         }
         ostream& os = get_ostr();
         os << "Auto-tuning...\n" << flush;
@@ -844,12 +819,7 @@ namespace yask {
     void StencilContext::addGrid(YkGridPtr gp, bool is_output) {
         auto& gname = gp->get_name();
         if (gridMap.count(gname)) {
-            yask_exception e;
-            stringstream err;
-            err << "Error: grid '" << gname << "' already exists.\n";
-            e.add_message(err.str());
-            throw e;
-            //exit_yask(1);
+            THROW_YASK_EXCEPTION("Error: grid '" << gname << "' already exists.\n");
         }
 
         // Add to list and map.
@@ -876,14 +846,9 @@ namespace yask {
         // Check ranks.
         idx_t req_ranks = _opts->_num_ranks.product();
         if (req_ranks != _env->num_ranks) {
-            yask_exception e;
-            stringstream err;
-            err << "error: " << req_ranks << " rank(s) requested (" <<
+            THROW_YASK_EXCEPTION("error: " << req_ranks << " rank(s) requested (" <<
                 _opts->_num_ranks.makeDimValStr(" * ") << "), but " <<
-                _env->num_ranks << " rank(s) are active." << endl;
-            e.add_message(err.str());
-            throw e;
-            //exit_yask(1);
+                _env->num_ranks << " rank(s) are active." << endl);
         }
         assertEqualityOverRanks(_opts->_rank_sizes[step_dim], _env->comm, "num steps");
 
@@ -948,25 +913,15 @@ namespace yask {
             // Myself.
             if (rn == me) {
                 if (mandist != 0) {
-                    yask_exception e;
-                    stringstream err;
-                    err << "Internal error: distance to own rank == " << mandist << endl;
-                    e.add_message(err.str());
-                    throw e;
-                    //exit_yask(1);
+                    THROW_YASK_EXCEPTION("Internal error: distance to own rank == " << mandist << endl);
                 }
             }
 
             // Someone else.
             else {
                 if (mandist == 0) {
-                    yask_exception e;
-                    stringstream err;
-                    err << "Error: ranks " << me <<
-                        " and " << rn << " at same coordinates." << endl;
-                    e.add_message(err.str());
-                    throw e;
-                    //exit_yask(1);
+                    THROW_YASK_EXCEPTION("Error: ranks " << me <<
+                        " and " << rn << " at same coordinates." << endl);
                 }
             }
 
@@ -1005,18 +960,13 @@ namespace yask {
                             auto rnsz = rsizes[rn][dj];
                             if (mysz != rnsz) {
                                 auto& dnamej = _opts->_rank_indices.getDimName(dj);
-                                yask_exception e;
-                                stringstream err;
-                                err << "Error: rank " << rn << " and " << me <<
+                                THROW_YASK_EXCEPTION("Error: rank " << rn << " and " << me <<
                                     " are both at rank-index " << coords[me][di] <<
                                     " in the '" << dname <<
                                     "' dimension , but their rank-domain sizes are " <<
                                     rnsz << " and " << mysz <<
                                     " (resp.) in the '" << dj <<
-                                    "' dimension, making them unaligned.\n";
-                                e.add_message(err.str());
-                                throw e;
-                                //exit_yask(1);
+                                    "' dimension, making them unaligned.\n");
                             }
                         }
                     }
@@ -1075,14 +1025,9 @@ namespace yask {
                     // Is domain size at least as large as halo in direction
                     // with multiple ranks?
                     if (_opts->_num_ranks[dname] > 1 && rnsz < max_halos[di]) {
-                        yask_exception e;
-                        stringstream err;
-                        err << "Error: rank-domain size of " << rnsz << " in '" <<
+                        THROW_YASK_EXCEPTION("Error: rank-domain size of " << rnsz << " in '" <<
                             dname << "' in rank " << rn <<
-                            " is less than largest halo size of " << max_halos[di] << endl;
-                        e.add_message(err.str());
-                        throw e;
-                        //exit_yask(1);
+                            " is less than largest halo size of " << max_halos[di] << endl);
                     }
                 }
 
@@ -1512,7 +1457,7 @@ namespace yask {
     
     // Allocate grids and MPI bufs.
     // Initialize some data structures.
-    void StencilContext::prepare_solution() throw(yask_exception) {
+    void StencilContext::prepare_solution() {
 
         // Don't continue until all ranks are this far.
         _env->global_barrier();
@@ -1583,12 +1528,7 @@ namespace yask {
         // TODO: enable multi-rank wave-front tiling.
         auto& step_dim = _dims->_step_dim;
         if (_opts->_region_sizes[step_dim] > 1 && _env->num_ranks > 1) {
-            yask_exception e;
-            stringstream err;
-            err << "MPI communication is not currently enabled with wave-front tiling." << endl;
-            e.add_message(err.str());
-            throw e;
-            //exit_yask(1);
+            THROW_YASK_EXCEPTION("MPI communication is not currently enabled with wave-front tiling." << endl);
         }
 
         os << endl;
@@ -1746,7 +1686,7 @@ namespace yask {
     }
 
     /// Get statistics associated with preceding calls to run_solution().
-    yk_stats_ptr StencilContext::get_stats() throw(yask_exception) {
+    yk_stats_ptr StencilContext::get_stats() {
         ostream& os = get_ostr();
 
         // Calc and report perf.
@@ -1793,7 +1733,7 @@ namespace yask {
     }
     
     // Dealloc grids, etc.
-    void StencilContext::end_solution() throw(yask_exception) {
+    void StencilContext::end_solution() {
 
         // Release any MPI data.
         mpiData.clear();

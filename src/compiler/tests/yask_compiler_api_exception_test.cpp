@@ -66,13 +66,13 @@ int main() {
     // Exception test
     cout << "Exception Test: Call 'new_relative_grid_point' with wrong argument.\n";
     try {
-    	auto n3 = g1->new_relative_grid_point({0, +1, 0, -2, 1});
+        auto n3 = g1->new_relative_grid_point({0, +1, 0, -2, 1});
     } catch (yask_exception e) {
-		cout << "YASK throws an exception.\n";
-		cout << e.get_message();
-	    cout << "Exception Test: Catch exception correctly.\n";
-		num_exception++;
-	}
+        cout << "YASK throws an exception.\n";
+        cout << e.get_message();
+        cout << "Exception Test: Catch exception correctly.\n";
+        num_exception++;
+    }
 
 	auto n3 = g1->new_relative_grid_point({0, +1, 0, -2});
 	cout << n3->format_simple() << endl;
@@ -103,13 +103,13 @@ int main() {
     // Exception test
     cout << "Exception Test: Call 'new_file_output' with read-only file name.\n";
     try {
-    	auto dot_file = ofac.new_file_output("yc-api-test-with-exception-cxx-readonly");
+        auto dot_file = ofac.new_file_output("yc-api-test-with-exception-cxx-readonly");
     } catch (yask_exception e) {
-		cout << "YASK throws an exception.\n";
-		cout << e.get_message();
-	    cout << "Exception Test: Catch exception correctly.\n";
-		num_exception++;
-	}
+        cout << "YASK throws an exception.\n";
+        cout << e.get_message();
+        cout << "Exception Test: Catch exception correctly.\n";
+        num_exception++;
+    }
 
     // Generate DOT output.
     auto dot_file = ofac.new_file_output("yc-api-test-with-exception-cxx.dot");
@@ -124,13 +124,13 @@ int main() {
     // Exception test
     cout << "Exception Test: Call 'format' with wrong format.\n";
     try {
-    	soln->format("wrong_format", dot_file);
+        soln->format("wrong_format", dot_file);
     } catch (yask_exception e) {
-		cout << "YASK throws an exception.\n";
-		cout << e.get_message();
-	    cout << "Exception Test: Catch exception correctly.\n";
-		num_exception++;
-	}
+        cout << "YASK throws an exception.\n";
+        cout << e.get_message();
+        cout << "Exception Test: Catch exception correctly.\n";
+        num_exception++;
+    }
 
     // TODO: better to have exception test for the methods below
     // Eqs::findDeps (<-EqGroups::makeEqGroups<-StencilSolution::analyze_solution<-StencilSolution::format())
@@ -148,7 +148,7 @@ int main() {
         exit(1);
     }
     else
-    	cout << "End of YASK compiler API test with exception.\n";
+        cout << "End of YASK compiler API test with exception.\n";
 
     return 0;
 }

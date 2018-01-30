@@ -622,9 +622,7 @@ $(YK_SWIG_DIR)/yask_kernel_api_wrap.cpp: $(YK_SWIG_DIR)/yask*.i $(INC_DIR)/*.hpp
 	$(SWIG) -version
 	$(SWIG) -v -DYK_MODULE=$(YK_MODULE) -cppext cpp \
 	  -I$(INC_DIR) -I$(COMM_DIR) -I$(COMM_DIR)/swig \
-	  -c++ -python -outdir $(YASK_DIR) $<
-# TODO: '-builtin' flag prevents to handle exception correctly, so disable for now
-#	  -c++ -python -outdir $(YASK_DIR) -builtin $<
+	  -c++ -python -outdir $(YASK_DIR) -builtin $<
 
 $(YK_SWIG_DIR)/yask_kernel_api_wrap.o: $(YK_SWIG_DIR)/yask_kernel_api_wrap.cpp
 	$(YK_CXX) $(YK_CXXFLAGS) $(PYINC) -fPIC -c -o $@ $<

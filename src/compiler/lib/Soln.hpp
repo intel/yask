@@ -123,16 +123,16 @@ namespace yask {
         }
 
         virtual yc_grid_ptr new_grid(const std::string& name,
-                                     const std::vector<yc_index_node_ptr>& dims) throw(yask_exception);
+                                     const std::vector<yc_index_node_ptr>& dims);
         virtual yc_grid_ptr new_grid(const std::string& name,
-                                     const std::initializer_list<yc_index_node_ptr>& dims) throw(yask_exception) {
+                                     const std::initializer_list<yc_index_node_ptr>& dims) {
             std::vector<yc_index_node_ptr> dim_vec(dims);
             return new_grid(name, dim_vec);
         }
         virtual int get_num_grids() const {
             return int(_grids.size());
         }
-        virtual yc_grid_ptr get_grid(const std::string& name) throw(yask_exception) {
+        virtual yc_grid_ptr get_grid(const std::string& name) {
             for (int i = 0; i < get_num_grids(); i++)
                 if (_grids.at(i)->getName() == name)
                     return _grids.at(i);
@@ -148,7 +148,7 @@ namespace yask {
         virtual int get_num_equations() const {
             return _eqs.getNumEqs();
         }
-        virtual yc_equation_node_ptr get_equation(int n) throw(yask_exception) {
+        virtual yc_equation_node_ptr get_equation(int n) {
             assert(n >= 0 && n < get_num_equations());
             return _eqs.getEqs().at(n);
         }
@@ -160,14 +160,14 @@ namespace yask {
             else
                 fold.addDimBack(dim, len);
         }
-        virtual void set_fold_len(const yc_index_node_ptr, int len) throw(yask_exception);
+        virtual void set_fold_len(const yc_index_node_ptr, int len);
         virtual void clear_folding() { _settings._foldOptions.clear(); }
-        virtual void set_cluster_mult(const yc_index_node_ptr, int mult) throw(yask_exception);
+        virtual void set_cluster_mult(const yc_index_node_ptr, int mult);
         virtual void clear_clustering() { _settings._clusterOptions.clear(); }
         virtual void set_element_bytes(int nbytes) { _settings._elem_bytes = nbytes; }
         virtual int get_element_bytes() const { return _settings._elem_bytes; }
         virtual void format(const std::string& format_type,
-                            yask_output_ptr output) throw(yask_exception) ;
+                            yask_output_ptr output) ;
     };
 
     // A stencil solution that does not define any grids.

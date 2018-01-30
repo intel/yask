@@ -356,7 +356,7 @@ namespace yask {
         // Calculate rank position in problem.
         // Initialize some other data structures.
         // Print lots of stats.
-        virtual void prepare_solution() throw(yask_exception);
+        virtual void prepare_solution();
 
 
         /// Get statistics associated with preceding calls to run_solution().
@@ -364,10 +364,10 @@ namespace yask {
            Resets all timers and step counters.
            @returns Pointer to statistics object.
         */
-        virtual yk_stats_ptr get_stats() throw(yask_exception);
+        virtual yk_stats_ptr get_stats();
 
         // Dealloc grids, etc.
-        virtual void end_solution() throw(yask_exception);
+        virtual void end_solution();
 
         // Set grid sizes and offsets.
         // This should be called anytime a setting or offset is changed.
@@ -540,7 +540,7 @@ namespace yask {
             return int(gridPtrs.size());
         }
 
-        virtual yk_grid_ptr get_grid(const std::string& name) throw(yask_exception) {
+        virtual yk_grid_ptr get_grid(const std::string& name) {
             auto i = gridMap.find(name);
             if (i != gridMap.end())
                 return i->second;
@@ -554,25 +554,25 @@ namespace yask {
         }
         virtual yk_grid_ptr
         new_grid(const std::string& name,
-                 const GridDimNames& dims) throw(yask_exception) {
+                 const GridDimNames& dims) {
             return newGrid(name, dims, NULL);
         }
         virtual yk_grid_ptr
         new_grid(const std::string& name,
-                 const std::initializer_list<std::string>& dims) throw(yask_exception) {
+                 const std::initializer_list<std::string>& dims) {
             GridDimNames dims2(dims);
             return new_grid(name, dims2);
         }
         virtual yk_grid_ptr
         new_fixed_size_grid(const std::string& name,
                              const GridDimNames& dims,
-                             const GridDimSizes& dim_sizes) throw(yask_exception) {
+                             const GridDimSizes& dim_sizes) {
             return newGrid(name, dims, &dim_sizes);
         }
         virtual yk_grid_ptr
         new_fixed_size_grid(const std::string& name,
                              const std::initializer_list<std::string>& dims,
-                             const std::initializer_list<idx_t>& dim_sizes) throw(yask_exception) {
+                             const std::initializer_list<idx_t>& dim_sizes) {
             GridDimNames dims2(dims);
             GridDimSizes sizes2(dim_sizes);
             return new_fixed_size_grid(name, dims2, sizes2);
@@ -597,37 +597,37 @@ namespace yask {
             return dims;
         }
 
-        virtual idx_t get_first_rank_domain_index(const std::string& dim) const throw(yask_exception);
-        virtual idx_t get_last_rank_domain_index(const std::string& dim) const throw(yask_exception);
-        virtual idx_t get_overall_domain_size(const std::string& dim) const throw(yask_exception);
+        virtual idx_t get_first_rank_domain_index(const std::string& dim) const;
+        virtual idx_t get_last_rank_domain_index(const std::string& dim) const;
+        virtual idx_t get_overall_domain_size(const std::string& dim) const;
 
         virtual void run_solution(idx_t first_step_index,
-                                  idx_t last_step_index) throw(yask_exception);
-        virtual void run_solution(idx_t step_index) throw(yask_exception) {
+                                  idx_t last_step_index);
+        virtual void run_solution(idx_t step_index) {
             run_solution(step_index, step_index);
         }
-        virtual void share_grid_storage(yk_solution_ptr source) throw(yask_exception);
+        virtual void share_grid_storage(yk_solution_ptr source);
 
         // APIs that access settings.
         virtual void set_rank_domain_size(const std::string& dim,
-                                     idx_t size) throw(yask_exception);
+                                     idx_t size);
         virtual void set_min_pad_size(const std::string& dim,
-                                      idx_t size) throw(yask_exception);
+                                      idx_t size);
         virtual void set_block_size(const std::string& dim,
-                                    idx_t size) throw(yask_exception);
+                                    idx_t size);
         virtual void set_num_ranks(const std::string& dim,
-                                   idx_t size) throw(yask_exception);
-        virtual idx_t get_rank_domain_size(const std::string& dim) const throw(yask_exception);
-        virtual idx_t get_min_pad_size(const std::string& dim) const throw(yask_exception);
-        virtual idx_t get_block_size(const std::string& dim) const throw(yask_exception);
-        virtual idx_t get_num_ranks(const std::string& dim) const throw(yask_exception);
-        virtual idx_t get_rank_index(const std::string& dim) const throw(yask_exception);
-        virtual std::string apply_command_line_options(const std::string& args) throw(yask_exception);
+                                   idx_t size);
+        virtual idx_t get_rank_domain_size(const std::string& dim) const;
+        virtual idx_t get_min_pad_size(const std::string& dim) const;
+        virtual idx_t get_block_size(const std::string& dim) const;
+        virtual idx_t get_num_ranks(const std::string& dim) const;
+        virtual idx_t get_rank_index(const std::string& dim) const;
+        virtual std::string apply_command_line_options(const std::string& args);
 
-        virtual void reset_auto_tuner(bool enable, bool verbose = false) throw(yask_exception) {
+        virtual void reset_auto_tuner(bool enable, bool verbose = false) {
             _at.clear(!enable, verbose);
         }
-        virtual void run_auto_tuner_now(bool verbose = true) throw(yask_exception);
+        virtual void run_auto_tuner_now(bool verbose = true);
         virtual bool is_auto_tuner_enabled() {
             return !_at.is_done();
         }

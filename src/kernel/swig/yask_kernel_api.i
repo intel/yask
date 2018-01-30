@@ -57,6 +57,15 @@ IN THE SOFTWARE.
 %template(vector_idx) std::vector<long int>;
 %template(vector_str) std::vector<std::string>;
 %template(vector_grid_ptr) std::vector<std::shared_ptr<yask::yk_grid>>;
-    
+
+%exception {
+  try {
+    $action
+  } catch (yask::yask_exception &e) {
+    PyErr_SetString(PyExc_RuntimeError, const_cast<char*>(e.get_message()));
+    SWIG_fail;
+  }
+}
+
 %include "yask_common_api.hpp"
 %include "yask_kernel_api.hpp"

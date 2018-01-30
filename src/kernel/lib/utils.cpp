@@ -54,12 +54,7 @@ namespace yask {
 #endif
 
         if (!p) {
-            yask_exception e;
-            stringstream err;
-            err << "error: cannot allocate " << makeByteStr(nbytes) << ".\n";
-            e.add_message(err.str());
-            throw e;
-            //exit_yask(1);
+            THROW_YASK_EXCEPTION("error: cannot allocate " << makeByteStr(nbytes) << ".\n");
         }
         return static_cast<char*>(p);
     }
@@ -147,13 +142,8 @@ namespace yask {
 #endif
 
         if (min_val != rank_val || max_val != rank_val) {
-            yask_exception e;
-            stringstream err;
-            err << "error: " << descr << " values range from " << min_val << " to " <<
-                max_val << " across the ranks. They should all be identical." << endl;
-            e.add_message(err.str());
-            throw e;
-            //exit_yask(1);
+            THROW_YASK_EXCEPTION("error: " << descr << " values range from " << min_val << " to " <<
+                max_val << " across the ranks. They should all be identical." << endl);
         }
     }
 
@@ -219,24 +209,14 @@ namespace yask {
                                                   int& argi)
     {
         if (size_t(argi) >= args.size() || args[argi].length() == 0) {
-            yask_exception e;
-            stringstream err;
-            err << "Error: no argument for option '" << args[argi - 1] << "'." << endl;
-            e.add_message(err.str());
-            throw e;
-            //exit_yask(1);
+            THROW_YASK_EXCEPTION("Error: no argument for option '" << args[argi - 1] << "'." << endl);
         }
 
         const char* nptr = args[argi].c_str();
         char* endptr = 0;
         long long int val = strtoll(nptr, &endptr, 0);
         if (val == LLONG_MIN || val == LLONG_MAX || *endptr != '\0') {
-            yask_exception e;
-            stringstream err;
-            err << "Error: argument for option '" << args[argi - 1] << "' is not an integer." << endl;
-            e.add_message(err.str());
-            throw e;
-            //exit_yask(1);
+            THROW_YASK_EXCEPTION("Error: argument for option '" << args[argi - 1] << "' is not an integer." << endl);
         }
 
         argi++;

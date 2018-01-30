@@ -34,7 +34,7 @@ namespace yask {
 
     // Stencil-solution APIs.
     yc_grid_ptr StencilSolution::new_grid(const std::string& name,
-                                          const std::vector<yc_index_node_ptr>& dims) throw(yask_exception) {
+                                          const std::vector<yc_index_node_ptr>& dims) {
         
         // Make new grid and add to solution.
         // TODO: fix this mem leak--make smart ptr.
@@ -54,12 +54,12 @@ namespace yask {
 
     // Stencil-solution APIs.
     void StencilSolution::set_fold_len(const yc_index_node_ptr dim,
-                                       int len) throw(yask_exception) {
+                                       int len) {
         auto& fold = _settings._foldOptions;
         fold.addDimBack(dim->get_name(), len);
     }
     void StencilSolution::set_cluster_mult(const yc_index_node_ptr dim,
-                                           int mult) throw(yask_exception) {
+                                           int mult) {
         auto& cluster = _settings._clusterOptions;
         cluster.addDimBack(dim->get_name(), mult);
     }
@@ -119,7 +119,7 @@ namespace yask {
 
     // Format in given format-type.
     void StencilSolution::format(const string& format_type,
-                                 yask_output_ptr output) throw(yask_exception) {
+                                 yask_output_ptr output) {
 
         // Look for format match.
         // Most args to the printers just set references to data.
@@ -142,13 +142,8 @@ namespace yask {
         else if (format_type == "pov-ray") // undocumented.
             printer = new POVRayPrinter(*this, _clusterEqGroups);
         else {
-            yask_exception e;
-            stringstream err;
-            err << "Error: format-type '" << format_type <<
-                "' is not recognized." << endl;
-            e.add_message(err.str());
-            throw e;
-            //exit(1);
+            THROW_YASK_EXCEPTION("Error: format-type '" << format_type <<
+                "' is not recognized." << endl);
         }
         assert(printer);
         int vlen = printer->num_vec_elems();

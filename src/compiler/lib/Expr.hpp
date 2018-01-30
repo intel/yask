@@ -124,10 +124,10 @@ namespace yask {
         }
 
         // APIs.
-        virtual string format_simple() const throw(yask_exception) {
+        virtual string format_simple() const {
             return makeStr();
         }
-        virtual int get_num_nodes() const throw(yask_exception) {
+        virtual int get_num_nodes() const {
             return getNumNodes();
         }
     };
@@ -136,13 +136,8 @@ namespace yask {
     template<typename T> shared_ptr<T> castExpr(ExprPtr ep, const string& descrip) {
         auto tp = dynamic_pointer_cast<T>(ep);
         if (!tp) {
-            yask_exception e;
-            stringstream err;
-            err << "Error: expression '" << ep->makeStr() << "' is not a " <<
-                descrip << "." << endl;
-            e.add_message(err.str());
-            throw e;
-            //exit(1);
+            THROW_YASK_EXCEPTION("Error: expression '" << ep->makeStr() << "' is not a " <<
+                descrip << "." << endl);
         }
         return tp;
     }
@@ -172,13 +167,8 @@ namespace yask {
         // Get the current value.
         // Exit with error if not known.
         virtual double getNumVal() const {
-            yask_exception e;
-            stringstream err;
-            err << "Error: cannot evaluate '" << makeStr() <<
-                "' for a known numerical value.\n";
-            e.add_message(err.str());
-            throw e;
-            //exit(1);
+            THROW_YASK_EXCEPTION("Error: cannot evaluate '" << makeStr() <<
+                "' for a known numerical value.\n");
         }
 
         // Get the value as an integer.
@@ -187,13 +177,8 @@ namespace yask {
             double val = getNumVal();
             int ival = int(val);
             if (val != double(ival)) {
-                yask_exception e;
-                stringstream err;
-                err << "Error: '" << makeStr() <<
-                    "' does not evaluate to an integer.\n";
-                e.add_message(err.str());
-                throw e;
-                //exit(1);
+                THROW_YASK_EXCEPTION("Error: '" << makeStr() <<
+                    "' does not evaluate to an integer.\n");
             }
             return ival;
         }
@@ -297,13 +282,8 @@ namespace yask {
         // Get the current value.
         // Exit with error if not known.
         virtual bool getBoolVal() const {
-            yask_exception e;
-            stringstream err;
-            err << "Error: cannot evaluate '" << makeStr() <<
-                "' for a known boolean value.\n";
-            e.add_message(err.str());
-            throw e;
-            //exit(1);
+            THROW_YASK_EXCEPTION("Error: cannot evaluate '" << makeStr() <<
+                "' for a known boolean value.\n");
         }
 
         // Create a deep copy of this expression.
@@ -631,14 +611,14 @@ namespace yask {
         virtual int get_num_operands() {
             return _ops.size();
         }
-        virtual yc_number_node_ptr get_operand(int i) throw(yask_exception) {
+        virtual yc_number_node_ptr get_operand(int i) {
             if (i >= 0 &&
                 size_t(i) < _ops.size())
                 return _ops.at(size_t(i));
             else
                 return nullptr;
         }
-        virtual void add_operand(yc_number_node_ptr node) throw(yask_exception) {
+        virtual void add_operand(yc_number_node_ptr node) {
             auto p = dynamic_pointer_cast<NumExpr>(node);
             assert(p);
             appendOp(p);

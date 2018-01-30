@@ -66,13 +66,8 @@ namespace yask {
             _fname = file_name;
             _ofs.open(file_name, ofstream::out | ofstream::trunc);
             if (!_ofs.is_open()) {
-                yask_exception e;
-                stringstream err;
-                err << "Error: cannot open '" << file_name <<
-                    "' for output.\n";
-                e.add_message(err.str());
-                throw e;
-                //exit(1);
+                THROW_YASK_EXCEPTION("Error: cannot open '" << file_name <<
+                    "' for output.\n");
             }
         }
 
@@ -118,26 +113,26 @@ namespace yask {
     
     // See yask_common_api.hpp for documentation.
     yask_file_output_ptr
-    yask_output_factory::new_file_output(const string& file_name) const throw(yask_exception) {
+    yask_output_factory::new_file_output(const string& file_name) const {
         auto p = make_shared<FileOutput>();
         assert(p.get());
         p->open(file_name);
         return p;
     }
     yask_string_output_ptr
-    yask_output_factory::new_string_output() const throw(yask_exception){
+    yask_output_factory::new_string_output() const{
         auto p = make_shared<StringOutput>();
         assert(p.get());
         return p;
     }
     yask_stdout_output_ptr
-    yask_output_factory::new_stdout_output() const throw(yask_exception){
+    yask_output_factory::new_stdout_output() const{
         auto p = make_shared<StdoutOutput>();
         assert(p.get());
         return p;
     }
     yask_null_output_ptr
-    yask_output_factory::new_null_output() const throw(yask_exception){
+    yask_output_factory::new_null_output() const{
         auto p = make_shared<NullOutput>();
         assert(p.get());
         return p;

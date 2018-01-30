@@ -215,21 +215,21 @@ if __name__ == "__main__":
     print("Exception Test: Call 'run_solution' without calling prepare_solution().")
     try:
         soln.run_solution(0)
-    except yask_kernel.yask_exception as e:
+    except RuntimeError as e:
         print ("YASK throws an exception.")
-        print (e.get_message())
+        print (format(e))
         print ("Exception Test: Catch exception correctly.")
-        num_exception = num_exception + 1 
+        num_exception = num_exception + 1
 
     # Exception test
     print("Exception Test: Call 'run_auto-tuner_now' without calling prepare_solution().")
     try:
         soln.run_auto_tuner_now(False)
-    except yask_kernel.yask_exception as e:
+    except RuntimeError as e:
         print ("YASK throws an exception.")
-        print (e.get_message())
+        print (format(e))
         print ("Exception Test: Catch exception correctly.")
-        num_exception = num_exception + 1 
+        num_exception = num_exception + 1
     
     # Allocate memory for any grids that do not have storage set.
     # Set other data structures needed for stencil application.
@@ -349,4 +349,4 @@ if __name__ == "__main__":
         print("There is a problem in exception test.")
         exit(1)
     else:
-        print("End of YASK kernel API test.")
+        print("End of YASK kernel API test with exception.")

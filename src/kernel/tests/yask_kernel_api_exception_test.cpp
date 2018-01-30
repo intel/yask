@@ -77,24 +77,24 @@ int main() {
     // Exception test
     cout << "Exception Test: Call 'run_solution' without calling prepare_solution().\n";
     try {
-    	soln->run_solution(0);
+        soln->run_solution(0);
     } catch (yask_exception e) {
-		cout << "YASK throws an exception.\n";
-		cout << e.get_message();
-	    cout << "Exception Test: Catch exception correctly.\n";
-		num_exception++;
-	}
+        cout << "YASK throws an exception.\n";
+        cout << e.get_message();
+        cout << "Exception Test: Catch exception correctly.\n";
+        num_exception++;
+    }
 
     // Exception test
     cout << "Exception Test: Call 'run_auto_tuner_now' without calling prepare_solution().\n";
     try {
-    	soln->run_auto_tuner_now(false);
+        soln->run_auto_tuner_now(false);
     } catch (yask_exception e) {
-		cout << "YASK throws an exception.\n";
-		cout << e.get_message();
-	    cout << "Exception Test: Catch exception correctly.\n";
-		num_exception++;
-	}
+        cout << "YASK throws an exception.\n";
+        cout << e.get_message();
+        cout << "Exception Test: Catch exception correctly.\n";
+        num_exception++;
+    }
 
 
     // Allocate memory for any grids that do not have storage set.
@@ -223,7 +223,7 @@ int main() {
         exit(1);
     }
     else
-    	cout << "End of YASK kernel API test with exception.\n";
+        cout << "End of YASK kernel API test with exception.\n";
 
     return 0;
 }

@@ -224,7 +224,7 @@ namespace yask {
         virtual int get_num_dims() const {
             return int(_dims.size());
         }
-        virtual const string& get_dim_name(int n) const throw(yask_exception) {
+        virtual const string& get_dim_name(int n) const {
             assert(n >= 0);
             assert(n < get_num_dims());
             auto dp = _dims.at(n);
@@ -233,9 +233,9 @@ namespace yask {
         }
         virtual std::vector<std::string> get_dim_names() const;
         virtual yc_grid_point_node_ptr
-        new_relative_grid_point(std::vector<int> dim_offsets) throw(yask_exception);
+        new_relative_grid_point(std::vector<int> dim_offsets);
         virtual yc_grid_point_node_ptr
-        new_relative_grid_point(const std::initializer_list<int>& dim_offsets) throw(yask_exception) {
+        new_relative_grid_point(const std::initializer_list<int>& dim_offsets) {
             std::vector<int> dim_ofs_vec(dim_offsets);
             return new_relative_grid_point(dim_ofs_vec);
         }

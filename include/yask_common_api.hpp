@@ -87,8 +87,16 @@ namespace yask {
 
         /// Get additional message.
         /** @returns additional message as string */
-    	std::string get_message();
+    	const char* get_message();
     };
+
+    /// MACRO for throw yask_exception
+#define THROW_YASK_EXCEPTION(message)                               \
+    yask_exception e;                                               \
+    stringstream err;                                               \
+    err << message;                                                 \
+    e.add_message(err.str());                                       \
+    throw e;                                                        \
 
     /// Factory to create output objects.
     class yask_output_factory {
@@ -104,7 +112,7 @@ namespace yask {
         virtual yask_file_output_ptr
         new_file_output(const std::string& file_name
                         /**< [in] Name of file to open.
-                           Any existing file will be truncated. */ ) const throw(yask_exception);
+                           Any existing file will be truncated. */ ) const;
 
         /// Create a string output object.
         /**
@@ -112,7 +120,7 @@ namespace yask {
            @returns Pointer to new output object.
         */
         virtual yask_string_output_ptr
-        new_string_output() const throw(yask_exception);
+        new_string_output() const;
 
         /// Create a stdout output object.
         /**
@@ -120,7 +128,7 @@ namespace yask {
            @returns Pointer to new output object.
         */
         virtual yask_stdout_output_ptr
-        new_stdout_output() const throw(yask_exception);
+        new_stdout_output() const;
 
         /// Create a null output object.
         /**
@@ -128,7 +136,7 @@ namespace yask {
            @returns Pointer to new output object.
         */
         virtual yask_null_output_ptr
-        new_null_output() const throw(yask_exception);
+        new_null_output() const;
     };
 
     /// Base interface for output.
@@ -180,7 +188,6 @@ namespace yask {
     public:
         virtual ~yask_null_output() {}
     };
-    
 
 } // namespace yask.
 
