@@ -142,9 +142,8 @@ namespace yask {
         else if (format_type == "pov-ray") // undocumented.
             printer = new POVRayPrinter(*this, _clusterEqGroups);
         else {
-            cerr << "Error: format-type '" << format_type <<
-                "' is not recognized." << endl;
-            exit(1);
+            THROW_YASK_EXCEPTION("Error: format-type '" << format_type <<
+                "' is not recognized." << endl);
         }
         assert(printer);
         int vlen = printer->num_vec_elems();

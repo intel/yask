@@ -22,50 +22,20 @@ FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
 IN THE SOFTWARE.
 
 *****************************************************************************/
+#ifndef COMMON_UTILS_HPP
+#define COMMON_UTILS_HPP
 
-///////// API for the YASK stencil kernel. ////////////
+namespace yask {
 
-// This file uses SWIG markup for API generation.
+// MACRO for throw yask_exception
+#define THROW_YASK_EXCEPTION(message)                               \
+    yask_exception e;                                               \
+    stringstream err;                                               \
+    err << message;                                                 \
+    e.add_message(err.str());                                       \
+    throw e;                                                        \
 
-%module YK_MODULE
 
-// See http://www.swig.org/Doc3.0/Library.html
-%include <std_string.i>
-%include <std_shared_ptr.i>
-%include <std_vector.i>
-%include <pybuffer.i>
+} // namespace yask.
 
-// Shared API.
-%include "yask_common_api.i"
-
-// Must declare shared_ptr for each one used in the API.
-%shared_ptr(yask::yk_env)
-%shared_ptr(yask::yk_settings)
-%shared_ptr(yask::yk_solution)
-%shared_ptr(yask::yk_grid)
-%shared_ptr(yask::yk_stats)
-
-// Mutable buffer to access raw data.
-%pybuffer_mutable_string(void* buffer_ptr)
-
-%{
-#define SWIG_FILE_WITH_INIT
-#include "yask_kernel_api.hpp"
-%}
-
-// All vector types used in API.
-%template(vector_idx) std::vector<long int>;
-%template(vector_str) std::vector<std::string>;
-%template(vector_grid_ptr) std::vector<std::shared_ptr<yask::yk_grid>>;
-
-%exception {
-  try {
-    $action
-  } catch (yask::yask_exception &e) {
-    PyErr_SetString(PyExc_RuntimeError, const_cast<char*>(e.get_message()));
-    SWIG_fail;
-  }
-}
-
-%include "yask_common_api.hpp"
-%include "yask_kernel_api.hpp"
+#endif /* SRC_COMMON_COMMON_UTILS_HPP_ */

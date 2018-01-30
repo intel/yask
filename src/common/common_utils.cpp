@@ -41,9 +41,22 @@ namespace yask {
     // for numbers above 9 (at least up to 99).
 
     // Format: "major.minor.patch".
-    const string version = "2.01.09";
+    const string version = "2.02.00";
 
     string yask_get_version_string() {
         return version;
+    }
+
+    // See yask_common_api.hpp for documentation.
+    const char* yask_exception::what() noexcept {
+        return "yask::yask_exception\n";
+    }
+
+    void yask_exception::add_message(string arg_msg) {
+        msg.append(arg_msg);
+    }
+
+    const char* yask_exception::get_message() {
+        return msg.c_str();
     }
 }
