@@ -704,6 +704,7 @@ namespace yask {
     */
     class yk_stats {
     public:
+    	virtual ~yk_stats() {}
 
         /// Get the number of elements in the overall domain.
         /**
@@ -1127,7 +1128,7 @@ namespace yask {
            Index values must fall within the allocated space as returned by
            get_first_rank_alloc_index() and get_last_rank_alloc_index() for
            each dimension.
-           @returns value in grid at given multi-dimensional location. 
+           @returns value in grid at given multi-dimensional location.
         */
         virtual double
         get_element(const std::vector<idx_t>& indices

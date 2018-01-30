@@ -48,7 +48,7 @@ int main() {
     auto x = fac.new_domain_index("x");
     auto y = fac.new_domain_index("y");
     auto z = fac.new_domain_index("z");
-    
+
     // Create a grid var.
     auto g1 = soln->new_grid("test_grid", {t, x, y, z});
 
