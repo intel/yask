@@ -46,6 +46,7 @@ namespace yask {
     protected:
         string _name;           // name of this grid.
         IndexExprPtrVec _dims;  // dimensions of this grid.
+        bool _isScratch = false; // true if a temp grid.
 
         // Ptr to solution that this grid belongs to (its parent).
         StencilSolution* _soln = 0;
@@ -69,9 +70,13 @@ namespace yask {
     
     public:
         // Ctors.
-        Grid(string name, StencilSolution* soln,
+        Grid(string name,
+             bool isScratch,
+             StencilSolution* soln,
              const IndexExprPtrVec& dims);
-        Grid(string name, StencilSolution* soln,
+        Grid(string name,
+             bool isScratch,
+             StencilSolution* soln,
              IndexExprPtr dim1 = nullptr,
              IndexExprPtr dim2 = nullptr,
              IndexExprPtr dim3 = nullptr,
@@ -97,6 +102,9 @@ namespace yask {
             return nullptr;
         }
 
+        // Temp grid?
+        virtual bool isScratch() const { return _isScratch; }
+        
         // Access to solution.
         virtual StencilSolution* getSoln() { return _soln; }
         virtual void setSoln(StencilSolution* soln) { _soln = soln; }

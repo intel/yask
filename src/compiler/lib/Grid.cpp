@@ -100,7 +100,9 @@ namespace yask {
     }
 
     // Ctor for Grid.
-    Grid::Grid(string name, StencilSolution* soln,
+    Grid::Grid(string name,
+               bool isScratch,
+               StencilSolution* soln,
                IndexExprPtr dim1,
                IndexExprPtr dim2,
                IndexExprPtr dim3,
@@ -108,11 +110,23 @@ namespace yask {
                IndexExprPtr dim5,
                IndexExprPtr dim6) :
             _name(name),       // TODO: validate that name is legal C++ var.
-            _soln(soln) {
-
+            _isScratch(isScratch),
+            _soln(soln)
+    {
+        assert(soln);
+        
+        // Name already used?
+        auto& grids = soln->getGrids();
+        for (auto gp : grids) {
+            if (gp->getName() == _name) {
+                cerr << "Error: grid name '" << _name << "' already used.\n";
+                exit(1);
+            }
+        }
+        
         // Register in soln.
         if (soln)
-            soln->getGrids().insert(this);
+            grids.insert(this);
 
         // Add dims that are not null.
         if (dim1)
@@ -128,9 +142,11 @@ namespace yask {
         if (dim6)
             _dims.push_back(dim6);
     }
-    Grid::Grid(string name, StencilSolution* soln,
+    Grid::Grid(string name,
+               bool isScratch,
+               StencilSolution* soln,
                const IndexExprPtrVec& dims) :
-        Grid(name, soln) {
+        Grid(name, isScratch, soln) {
         _dims = dims;
     }
 
@@ -176,6 +192,7 @@ namespace yask {
     // Update halos based on each value in 'offsets' in some
     // read or write to this grid.
     void Grid::updateHalo(const IntTuple& offsets) {
+
         // Find step value or use 0 if none.
         int stepVal = 0;
         auto stepDim = getStepDim();
@@ -284,6 +301,7 @@ namespace yask {
 
         // Get dims from grids.
         for (auto gp : grids) {
+            auto& gname = gp->getName();
                 
             // Dimensions in this grid.
             for (auto dim : gp->getDims()) {
@@ -300,6 +318,13 @@ namespace yask {
                     }
                     _stepDim = dname;
                     _stencilDims.addDimFront(dname, 0); // must be first!
+
+                    // Scratch grids cannot use step dim.
+                    if (gp->isScratch()) {
+                        cerr << "Error: scratch grid '" << gname <<
+                            "' cannot use step dimension '" << dname << "'.\n";
+                        exit(1);
+                    }
                     break;
 
                 case DOMAIN_INDEX:

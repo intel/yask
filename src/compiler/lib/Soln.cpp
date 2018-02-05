@@ -47,7 +47,7 @@ namespace yask {
             dims2.push_back(d2);
         }
         
-        auto* gp = new Grid(name, this, dims2);
+        auto* gp = new Grid(name, false, this, dims2);
         assert(gp);
         return gp;
     }

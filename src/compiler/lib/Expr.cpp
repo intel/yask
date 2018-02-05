@@ -262,19 +262,17 @@ namespace yask {
     // Add this equation to the list of eqs for this stencil.
     EqualsExprPtr operator EQUALS_OPER(GridPointPtr gpp, const NumExprPtr rhs) {
 
-        // Get to list of equations.
+        // Get to list of equations indirectly thru grid.
         Grid* gp = gpp->getGrid();
         assert(gp);
         auto* soln = gp->getSoln();
         assert(soln);
         auto& eqs = soln->getEqs();
     
-        // TODO: check validity of LHS (gpp).
-        
         // Make expression node.
         auto expr = make_shared<EqualsExpr>(gpp, rhs);
 
-        // Save the expression.
+        // Save the expression in list of equations.
         eqs.addEq(expr);
 
         return expr;

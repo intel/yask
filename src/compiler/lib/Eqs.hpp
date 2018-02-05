@@ -45,20 +45,17 @@ namespace yask {
     };
 
     // Dependencies between equations.
-    // eq_deps[A].count(B) > 0 => A depends on B.
     class EqDeps {
     protected:
+
+        // dep_map[A].count(B) > 0 => A depends on B.
         typedef unordered_map<EqualsExprPtr, unordered_set<EqualsExprPtr>> DepMap;
-        typedef set<EqualsExprPtr> SeenSet;
+        typedef set<EqualsExprPtr> EqSet;
 
         DepMap _deps;               // direct dependencies.
         DepMap _full_deps;          // direct and indirect dependencies.
-        SeenSet _all;               // all expressions.
+        EqSet _all;                 // all expressions.
         bool _done;                 // indirect dependencies added?
-    
-        // Recursive search starting at 'a'.
-        // Fill in _full_deps.
-        virtual bool _analyze(EqualsExprPtr a, SeenSet* seen);
     
     public:
 
@@ -84,18 +81,19 @@ namespace yask {
             return is_dep_on(a, b) || is_dep_on(b, a);
         }
 
+        // Visit all dependencies of 'a'.
+        // At each dependent eq 'b', 'visitor(b, path)' is called, where 'path' is
+        // set of all nodes seen so far including 'a' but not 'b'.
+        virtual void visitDeps(EqualsExprPtr a,
+                               std::function<void (EqualsExprPtr b, EqSet& path)> visitor,
+                               EqSet* seen = NULL) const;
+
         // Does recursive analysis to turn all indirect dependencies to direct
         // ones.
-        virtual void analyze() {
-            if (_done)
-                return;
-            for (auto a : _all)
-                if (_full_deps.count(a) == 0)
-                    _analyze(a, NULL);
-            _done = true;
-        }
+        virtual void analyze();
     };
 
+    // A collection of deps by dep type.
     typedef map<DepType, EqDeps> EqDepMap;
 
     // A list of unique equation ptrs.
@@ -157,7 +155,7 @@ namespace yask {
         }
 
         // Find dependencies based on all eqs.  If 'eq_deps' is
-        // set, save dependencies between eqs.
+        // set, save dependencies between eqs in referent.
         virtual void findDeps(IntTuple& pts,
                               Dimensions& dims,
                               EqDepMap* eq_deps,
@@ -168,6 +166,9 @@ namespace yask {
         virtual void checkDeps(IntTuple& pts,
                                Dimensions& dims,
                                std::ostream& os) {
+
+            // Call findDeps() for its side-effect of checking
+            // for illegal deps, but don't keep results.
             findDeps(pts, dims, NULL, os);
         }
 
@@ -176,6 +177,9 @@ namespace yask {
 
         // Determine how grid points are accessed in a loop.
         virtual void analyzeLoop(const Dimensions& dims);
+
+        // Update grid access stats.
+        virtual void updateGridStats(EqDepMap& eq_deps);
     };
 
     // A named equation group, which contains one or more grid-update equations.
@@ -209,9 +213,8 @@ namespace yask {
         }
         virtual ~EqGroup() {}
 
-        // Add an equation.
-        // If 'update_stats', update grid and halo data.
-        virtual void addEq(EqualsExprPtr ee, bool update_stats = true);
+        // Add an equation to this group.
+        virtual void addEq(EqualsExprPtr ee);
     
         // Visit all the equations.
         virtual void visitEqs(ExprVisitor* ev) {
@@ -339,9 +342,16 @@ namespace yask {
                           IntTuple& pts,
                           bool find_deps,
                           std::ostream& os) {
+
+            // Find deps between eqs.
             EqDepMap eq_deps;
             if (find_deps)
                 eqs.findDeps(pts, *_dims, &eq_deps, os);
+
+            // Update access stats for the grids.
+            eqs.updateGridStats(eq_deps);
+
+            // Separate eqs into groups using targets and/or deps.
             makeEqGroups(eqs, targets, eq_deps, os);
         }
 

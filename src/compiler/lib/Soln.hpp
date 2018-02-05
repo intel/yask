@@ -266,7 +266,9 @@ namespace yask {
 // The 'gvar' arg is the var name and the grid name.
 // The remaining args are the dimension names.
 #define MAKE_GRID(gvar, ...)                                            \
-    Grid gvar = Grid(#gvar, &get_stencil_solution(), ##__VA_ARGS__)
+    Grid gvar = Grid(#gvar, false, &get_stencil_solution(), ##__VA_ARGS__)
+#define MAKE_SCRATCH_GRID(gvar, ...)                                    \
+    Grid gvar = Grid(#gvar, true, &get_stencil_solution(), ##__VA_ARGS__)
 #define MAKE_SCALAR(gvar) MAKE_GRID(gvar)
 #define MAKE_ARRAY(gvar, d1) MAKE_GRID(gvar, d1)
 

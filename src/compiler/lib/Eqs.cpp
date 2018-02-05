@@ -132,9 +132,10 @@ namespace yask {
         }
     
         // Callback at an equality.
+        // Handles LHS grid pt explicitly, then visits RHS.
         virtual void visit(EqualsExpr* ee) {
 
-            // Remember this equation.
+            // Set this equation as current one.
             _eq = ee;
 
             // Make sure map entries exist.
@@ -163,41 +164,59 @@ namespace yask {
         }
     };
 
-    // Recursive search starting at 'a'.
-    // Fill in _full_deps.
-    bool EqDeps::_analyze(EqualsExprPtr a, SeenSet* seen)
-    {
-        // 'a' already visited?
-        bool was_seen = (seen && seen->count(a));
-        if (was_seen)
-            return true;
-    
+    // Visit all dependencies of 'a'.
+    // At each dependent node 'b', 'visitor(b, path)' is called, where 'path' is
+    // set of all nodes seen since and including 'a' but not 'b'.
+    void EqDeps::visitDeps(EqualsExprPtr a,
+                           std::function<void (EqualsExprPtr b, EqSet& path)> visitor,
+                           EqSet* seen) const {
+        
         // any dependencies?
         if (_deps.count(a)) {
             auto& adeps = _deps.at(a);
     
             // make new seen-set adding 'a'.
-            SeenSet seen1;
+            EqSet seen1;
             if (seen)
                 seen1 = *seen; // copy nodes already seen.
             seen1.insert(a);   // add this one.
         
-            // loop thru dependences 'a' -> 'b'.
+            // loop thru deps of 'a', i.e., each 'b' deps on 'a'.
             for (auto b : adeps) {
 
-                // whole path up to and including 'a' depends on 'b'.
-                for (auto p : seen1)
-                    _full_deps[p].insert(b);
-            
-                // follow path.
-                _analyze(b, &seen1);
+                // Already visited, i.e., a loop?
+                bool was_seen = (seen1.count(b));
+                if (!was_seen) {
+
+                    // Call lambda fn.
+                    visitor(b, seen1);
+                    
+                    // Recurse to deps of 'b'.
+                    visitDeps(b, visitor, &seen1);
+                }
             }
         }
 
-        // no dependence; make an empty entry.
-        return false;
+        // no dependence.
+        return;
     }
 
+    // Does recursive analysis to turn all indirect dependencies to direct
+    // ones.
+    void EqDeps::analyze() {
+        if (_done)
+            return;
+        for (auto a : _all)
+            if (_full_deps.count(a) == 0)
+                visitDeps(a, [&](EqualsExprPtr b, EqSet& path) {
+                            
+                        // everything in 'path' depends on 'b'.
+                        for (auto p : path)
+                            _full_deps[p].insert(b);
+                    });
+        _done = true;
+    }
+    
     // Find dependencies based on all eqs.
     // If 'eq_deps' is set, save dependencies between eqs.
     // Side effect: sets _stepDir in dims.
@@ -213,7 +232,7 @@ namespace yask {
         PointVisitor pt_vis(pts);
 
         // Gather initial stats from all eqs.
-        os << " Scanning " << getEqs().size() << " equations(s)...\n";
+        os << " Scanning " << getEqs().size() << " equation(s)...\n";
         for (auto eq1 : getEqs())
             eq1->accept(&pt_vis);
         auto& outGrids = pt_vis.getOutputGrids();
@@ -221,7 +240,7 @@ namespace yask {
         auto& outPts = pt_vis.getOutputPts();
         auto& inPts = pt_vis.getInputPts();
         
-        // Check dependencies on all eqs.
+        // Check each eq.
         for (auto eq1 : getEqs()) {
             auto* eq1p = eq1.get();
             assert(outGrids.count(eq1p));
@@ -232,6 +251,11 @@ namespace yask {
             auto& ip1 = inPts.at(eq1p);
             auto cond1 = getCond(eq1p);
 
+#ifdef DEBUG_DEP
+            cout << " Checking internal consistency of equation " <<
+                eq1->makeQuotedStr() << "...\n";
+#endif
+
             // An equation must update one grid only.
             assert(og1.size() == 1);
             auto* g1 = eq1->getGrid();
@@ -240,28 +264,31 @@ namespace yask {
             // Scan output (LHS) points.
             int si1 = 0;        // step index offset for LHS of eq1.
             for (auto i1 : op1) {
-            
-                // LHS of an equation must use step dim w/a simple offset.
-                auto* si1p = i1->getArgOffsets().lookup(stepDim);
-                if (!si1p || abs(*si1p) != 1) {
-                    cerr << "Error: equation " << eq1->makeQuotedStr() <<
-                        " does not use offset +/- 1 from step-dimension index var '" <<
-                        stepDim << "' on LHS.\n";
-                    exit(1);
-                }
-                assert(si1p);
-                si1 = *si1p;
 
-                // Step direction already set?
-                if (dims._stepDir) {
-                    if (dims._stepDir != si1) {
+                // LHS of a non-scratch equation must use step dim w/a simple offset.
+                if (!g1->isScratch()) {
+                    auto* si1p = i1->getArgOffsets().lookup(stepDim);
+                    if (!si1p || abs(*si1p) != 1) {
                         cerr << "Error: equation " << eq1->makeQuotedStr() <<
-                            " LHS has offset " << si1 << " from step-dimesion index var, "
-                            "which is different than a previous equation with offset " << dims._stepDir << ".\n";
+                            " does not use offset +/- 1 from step-dimension index var '" <<
+                            stepDim << "' on LHS.\n";
                         exit(1);
                     }
-                } else
-                    dims._stepDir = si1;
+                    assert(si1p);
+                    si1 = *si1p;
+
+                    // Step direction already set?
+                    if (dims._stepDir) {
+                        if (dims._stepDir != si1) {
+                            cerr << "Error: equation " << eq1->makeQuotedStr() <<
+                                " LHS has offset " << si1 << " from step-dimesion index var, "
+                                "which is different than a previous equation with offset " <<
+                                dims._stepDir << ".\n";
+                            exit(1);
+                        }
+                    } else
+                        dims._stepDir = si1;
+                }
 
                 // LHS of an equation must be vectorizable.
                 // TODO: relax this restriction.
@@ -284,27 +311,27 @@ namespace yask {
                     // Must be in proper relation to LHS.
                     if ((si1 > 0 && rsi1 > si1) ||
                         (si1 < 0 && rsi1 < si1)) {
-                        cerr << "Error: equation " << eq1->makeQuotedStr() <<
-                            " RHS has offset " << rsi1 << " from step-dimesion index var, "
-                            "which is incompatible with LHS offset " << si1 << ".\n";
+                        cerr << "Error: RHS of equation " << eq1->makeQuotedStr() <<
+                            " contains '" << stepDim << "+" << rsi1 << 
+                            "', which is incompatible with '" << stepDim << "+" << si1 << 
+                            "' on LHS.\n";
                         exit(1);
                     }
-
-                    // TODO: should make some dependency checks when rsi1 == si1.
                 }
             }
 
-            // TODO: check to make sure cond1 doesn't depend on stepDim.
+            // TODO: check to make sure cond1 depends only on indices.
             
 #ifdef DEBUG_DEP
-            cout << " Checking dependencies *within* equation " <<
+            cout << " Checking dependencies on equation " <<
                 eq1->makeQuotedStr() << "...\n";
 #endif
 
-            // Find other eqs that depend on eq1.
+            // Check each 'eq2' to see if it depends on 'eq1'.
             for (auto eq2 : getEqs()) {
                 auto* eq2p = eq2.get();
                 //auto& og2 = outGrids.at(eq2p);
+                auto* g2 = eq2->getGrid();
                 auto& ig2 = inGrids.at(eq2p);
                 auto& op2 = outPts.at(eq2p);
                 auto& ip2 = inPts.at(eq2p);
@@ -312,21 +339,32 @@ namespace yask {
 
                 bool same_eq = eq1 == eq2;
                 bool same_cond = areExprsSame(cond1, cond2);
+                bool same_og = g1 == g2;
 
                 // If two different eqs have the same condition, they
-                // cannot update the exact same point.
-                if (!same_eq && same_cond &&
-                    pt_vis.do_sets_intersect(op1, op2)) {
-                    cerr << "Error: two equations with condition " <<
-                        cond1->makeQuotedStr() << " update the same point: " <<
+                // cannot update the same grid.
+                if (!same_eq && same_cond && same_og) {
+                    if (cond1)
+                        cerr << "Error: two equations with condition " <<
+                            cond1->makeQuotedStr();
+                    else
+                        cerr << "Error: two equations without conditions";
+                    cerr << " have the same LHS grid '" << g1->getName() << "': " <<
                         eq1->makeQuotedStr() << " and " <<
                         eq2->makeQuotedStr() << endl;
                     exit(1);
                 }
 
+                // First dep check: exact matches on LHS of eq1 to RHS of eq2.
                 // eq2 dep on eq1 => some output of eq1 is an input to eq2.
                 // If the two eqs have the same condition, detect certain
                 // dependencies by looking for exact matches.
+                // We do this check first because it's quicker than the
+                // detailed scan done later if this one doesn't find a dep.
+                //
+                // Example:
+                //  eq1: a(t+1, x, ...) EQUALS ...
+                //  eq2: b(t+1, x, ...) EQUALS a(t+1, x, ...) ...
                 if (same_cond &&
                     pt_vis.do_sets_intersect(op1, ip2)) {
 
@@ -334,9 +372,8 @@ namespace yask {
                     if (same_eq) {
                                     
                         // Exit with error.
-                        cerr << "Error: illegal dependency between LHS and RHS of equation " <<
-                            eq1->makeQuotedStr() <<
-                            " within offsets in range " << pts.makeDimValStr(" * ") << ".\n";
+                        cerr << "Error: illegal dependency: LHS of equation " <<
+                            eq1->makeQuotedStr() << " also appears on its RHS.\n";
                         exit(1);
                     }
 
@@ -356,10 +393,7 @@ namespace yask {
                 if (!eq_deps)
                     continue;
 
-                // Only check between different equations.
-                if (same_eq)
-                    continue;
-
+                // Next dep check: inexact matches on LHS of eq1 to RHS of eq2.
                 // Does eq1 define *any* point in a grid that eq2 inputs
                 // at the same step index?  If so, they *might* have a
                 // dependency. Some of these may not be real
@@ -370,29 +404,61 @@ namespace yask {
                 //  eq1: a(t+1, x, ...) EQUALS ... IF ... 
                 //  eq2: b(t+1, x, ...) EQUALS a(t+1, x+5, ...) ... IF ...
                 //
+                // Example:
+                //  eq1: tmp(x, ...) EQUALS ...
+                //  eq2: b(t+1, x, ...) EQUALS tmp(x+2, ...)
+                //
                 // TODO: be much smarter about this and find only real
                 // dependencies--use a polyhedral library?
                 if (pt_vis.do_sets_intersect(og1, ig2)) {
 
-                    // detailed check of g1 input points from eq2.
+                    // detailed check of g1 input points on RHS of eq2.
                     for (auto* i2 : ip2) {
-                        if (i2->getGrid() != g1) continue;
+
+                        // Same grid?
+                        auto* i2g = i2->getGrid();
+                        if (i2g != g1) continue;
 
                         // From same step index, e.g., same time?
+                        // Or, passing data thru a temp var?
+                        // TODO: check that constant indices are same.
                         auto* si2p = i2->getArgOffsets().lookup(stepDim);
-                        if (si2p && (*si2p == si1)) {
+                        bool same_step = si2p && si1 && (*si2p == si1);
+                        if (same_step || g1->isScratch()) {
+
+                            // Eq depends on itself?
+                            if (same_eq) {
+                                
+                                // Exit with error.
+                                cerr << "Error: disallowed dependency: grid on LHS of equation " <<
+                                    eq1->makeQuotedStr() << " also appears on its RHS";
+                                if (same_step)
+                                    cerr << " at '" << stepDim << "+" << si1 << "'";
+                                cerr << ".\n";
+                                exit(1);
+                            }
 
                             // Save dependency.
-                            if (eq_deps)
+                            if (eq_deps) {
+
+                                // Even if conditions are different, this
+                                // might be a dep.
                                 (*eq_deps)[possible_dep].set_dep_on(eq2, eq1);
-                                
+
+                                // If conditions are same, this is most likely a real dep
+                                // unless inputs are always outside of sub-domain.
+                                // TODO: check for this.
+                                if (same_cond)
+                                    (*eq_deps)[certain_dep].set_dep_on(eq2, eq1);
+                            }
+
                             // Move along to next equation.
                             break;
                         }
                     }
                 }
-            }
-        }
+            } // for all eqs (eq2).
+        } // for all eqs (eq1).
 
         // Resolve indirect dependencies.
         if (eq_deps) {
@@ -537,6 +603,36 @@ namespace yask {
         visitEqs(&slv);
     }
 
+    // Update access stats for the grids.
+    void Eqs::updateGridStats(EqDepMap& eq_deps) {
+
+        for (auto& ee : _eqs) {
+        
+            // Get sets of points for this eq.
+            PointVisitor pv;
+            ee->accept(&pv);
+            auto& outPts = pv.getOutputPts().at(ee.get());
+            auto& inPts = pv.getInputPts().at(ee.get());
+
+            // Output point (only 1 per eq).
+            for (auto* op : outPts) {
+                auto* g = op->getGrid();         // grid written to.
+                auto* g2 = const_cast<Grid*>(g); // need to update grid.
+                g2->updateHalo(op->getArgOffsets());
+                g2->updateConstIndices(op->getArgConsts());
+            }
+
+            // Input point(s).
+            for (auto* ip : inPts) {
+                auto* g = ip->getGrid();         // grid read from.
+                auto* g2 = const_cast<Grid*>(g); // need to update grid.
+                g2->updateHalo(ip->getArgOffsets());
+                g2->updateConstIndices(ip->getArgConsts());
+            }
+        }
+    }
+   
+   
     // Get the full name of an eq-group.
     // Must be unique.
     string EqGroup::getName() const {
@@ -561,52 +657,27 @@ namespace yask {
         return des;
     }
 
-    // Add an equation to an EqGroup
-    // If 'update_stats', update grid and halo data.
-    void EqGroup::addEq(EqualsExprPtr ee, bool update_stats)
+    // Add an equation to an EqGroup.
+    void EqGroup::addEq(EqualsExprPtr ee)
     {
 #ifdef DEBUG_EQ_GROUP
         cout << "EqGroup: adding " << ee->makeQuotedStr() << endl;
 #endif
         _eqs.insert(ee);
 
-        if (update_stats) {
-    
-            // Get I/O point data.
-            PointVisitor pv;
-            ee->accept(&pv);
-
-            // update list of input and output grids.
-            auto& outGrids = pv.getOutputGrids().at(ee.get());
-            for (auto* g : outGrids)
-                _outGrids.insert(g);
-            auto& inGrids = pv.getInputGrids().at(ee.get());
-            for (auto* g : inGrids)
-                _inGrids.insert(g);
-
-            // update halo info in grids.
-            auto& outPts = pv.getOutputPts().at(ee.get());
-            auto& inPts = pv.getInputPts().at(ee.get());
-            //auto& stepDim = _dims->_stepDim;
-
-            // Output points.
-            for (auto* op : outPts) {
-                auto* g = op->getGrid();
-                auto* g2 = const_cast<Grid*>(g); // need to update grid.
-                g2->updateHalo(op->getArgOffsets());
-                g2->updateConstIndices(op->getArgConsts());
-            }
-    
-            // Input points.
-            for (auto* ip : inPts) {
-                auto* g = ip->getGrid();
-                auto* g2 = const_cast<Grid*>(g); // need to update grid.
-                g2->updateHalo(ip->getArgOffsets());
-                g2->updateConstIndices(ip->getArgConsts());
-            }
-        }
+        // Get I/O point data from eq 'ee'.
+        PointVisitor pv;
+        ee->accept(&pv);
+        
+        // update list of input and output grids for this group.
+        auto& outGrids = pv.getOutputGrids().at(ee.get());
+        for (auto* g : outGrids)
+            _outGrids.insert(g);
+        auto& inGrids = pv.getInputGrids().at(ee.get());
+        for (auto* g : inGrids)
+            _inGrids.insert(g);
     }
-    
+
     // Set dependency on eg2 if this eq-group is dependent on it.
     // Return whether dependent.
     bool EqGroup::setDepOn(DepType dt, EqDepMap& eq_deps, const EqGroup& eg2)
@@ -688,8 +759,7 @@ namespace yask {
                         eq2->accept(&ov);
 
                         // Put new equation into group.
-                        // Don't need to update grids because eq isn't new.
-                        addEq(eq2, false);
+                        addEq(eq2);
                     }
                 }
                 return true;
