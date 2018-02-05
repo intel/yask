@@ -1,7 +1,7 @@
 /*****************************************************************************
 
 YASK: Yet Another Stencil Kernel
-Copyright (c) 2014-2017, Intel Corporation
+Copyright (c) 2014-2018, Intel Corporation
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to
@@ -55,14 +55,6 @@ public:
     Iso3dfdStencil(StencilList& stencils, string suffix="", int radius=8) :
         StencilRadiusBase("iso3dfd" + suffix, stencils, radius) { }
     virtual ~Iso3dfdStencil() { }
-
-    // Set radius.
-    // Return true if successful.
-    virtual bool setRadius(int radius) {
-        if (!StencilRadiusBase::setRadius(radius))
-            return false;
-        return true;
-    }
 
     // Define RHS expression for pressure at t+1 based on values from vel and pressure at t.
     virtual GridValue get_next_p() {

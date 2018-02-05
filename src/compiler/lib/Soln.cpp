@@ -1,7 +1,7 @@
 /*****************************************************************************
 
 YASK: Yet Another Stencil Kernel
-Copyright (c) 2014-2017, Intel Corporation
+Copyright (c) 2014-2018, Intel Corporation
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to
@@ -79,7 +79,7 @@ namespace yask {
         // Determine which grids can be folded.
         _grids.setFolding(_dims);
 
-        // Determine which grid points can be vectorized and analyze loop accesses.
+        // Determine which grid points can be vectorized and analyze inner-loop accesses.
         _eqs.analyzeVec(_dims);
         _eqs.analyzeLoop(_dims);
         
@@ -142,9 +142,8 @@ namespace yask {
         else if (format_type == "pov-ray") // undocumented.
             printer = new POVRayPrinter(*this, _clusterEqGroups);
         else {
-            cerr << "Error: format-type '" << format_type <<
-                "' is not recognized." << endl;
-            exit(1);
+            THROW_YASK_EXCEPTION("Error: format-type '" << format_type <<
+                "' is not recognized." << endl);
         }
         assert(printer);
         int vlen = printer->num_vec_elems();

@@ -22,11 +22,20 @@ FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
 IN THE SOFTWARE.
 
 *****************************************************************************/
+#ifndef COMMON_UTILS_HPP
+#define COMMON_UTILS_HPP
 
-// Finite-differences coefficients code.
-// Contributed by Jeremy Tillay.
+namespace yask {
 
-#ifndef HEADER_COEFF
-#define HEADER_COEFF
-void fd_coeff(float *coeff, const float eval_point, const int order, float *points, const int num_points);
-#endif
+// MACRO for throw yask_exception
+#define THROW_YASK_EXCEPTION(message)                               \
+    yask_exception e;                                               \
+    stringstream err;                                               \
+    err << message;                                                 \
+    e.add_message(err.str());                                       \
+    throw e;                                                        \
+
+
+} // namespace yask.
+
+#endif /* SRC_COMMON_COMMON_UTILS_HPP_ */

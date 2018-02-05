@@ -1,7 +1,7 @@
 /*****************************************************************************
 
 YASK: Yet Another Stencil Kernel
-Copyright (c) 2014-2017, Intel Corporation
+Copyright (c) 2014-2018, Intel Corporation
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to
@@ -218,6 +218,7 @@ namespace yask {
         lhs = lhs - rhs;
     }
 
+    // TODO: truncate (or round?) division results for indices.
     NumExprPtr operator/(const NumExprPtr lhs, const NumExprPtr rhs) {
         return make_shared<DivExpr>(lhs, rhs);
     }
@@ -386,10 +387,9 @@ namespace yask {
         // Check for correct number of args.
         size_t nd = grid->getDims().size();
         if (nd != args.size()) {
-            cerr << "Error: attempt to create a grid point in " <<
+            THROW_YASK_EXCEPTION("Error: attempt to create a grid point in " <<
                 nd << "-D grid '" << getGridName() << "' with " <<
-                args.size() << " indices.\n";
-            exit(1);
+                args.size() << " indices.\n");
         }
 
         // Eval each arg.

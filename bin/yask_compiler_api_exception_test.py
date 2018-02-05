@@ -29,6 +29,9 @@ import yask_compiler
 
 if __name__ == "__main__":
 
+    # Counter for exception test
+    num_exception = 0;
+
     # Compiler 'bootstrap' factories.
     cfac = yask_compiler.yc_factory()
     ofac = yask_compiler.yask_output_factory()
@@ -52,6 +55,17 @@ if __name__ == "__main__":
     # This will average some of the neighboring points around the
     # current stencil application point in the current timestep.
     n0 = g1.new_relative_grid_point([0, 0, 0, 0])  # center-point at this timestep.
+
+    # Exception test
+    print("Exception Test: Call 'new_relative_grid_point' with wrong argument.")
+    try:
+        n1 = nfac.new_add_node(n0, g1.new_relative_grid_point([0, -1,  0,  0,  1])) # left.
+    except RuntimeError as e:
+        print ("YASK throws an exception.")
+        print (format(e))
+        print ("Exception Test: Catch exception correctly.")
+        num_exception = num_exception + 1
+
     n1 = nfac.new_add_node(n0, g1.new_relative_grid_point([0, -1,  0,  0])) # left.
     n1 = nfac.new_add_node(n1, g1.new_relative_grid_point([0,  1,  0,  0])) # right.
     n1 = nfac.new_add_node(n1, g1.new_relative_grid_point([0,  0, -1,  0])) # above.
@@ -75,17 +89,42 @@ if __name__ == "__main__":
     # Number of bytes in each FP value.
     soln.set_element_bytes(4)
 
+    # Exception test
+    print("Exception Test: Call 'new_file_output' with read-only file name.")
+    try:
+        dot_file = ofac.new_file_output("yc-api-test-with-exception-py-readonly")
+    except RuntimeError as e:
+        print ("YASK throws an exception.")
+        print (format(e))
+        print ("Exception Test: Catch exception correctly.")
+        num_exception = num_exception + 1
+
     # Generate DOT output.
-    dot_file = ofac.new_file_output("yc-api-test-py.dot")
+    dot_file = ofac.new_file_output("yc-api-test-with-exception-py.dot")
     soln.format("dot", dot_file)
     print("DOT-format written to '" + dot_file.get_filename() + "'.")
 
     # Generate YASK output.
-    yask_file = ofac.new_file_output("yc-api-test-py.hpp")
+    yask_file = ofac.new_file_output("yc-api-test-with-exception-py.hpp")
     soln.format("avx", yask_file)
     print("YASK-format written to '" + yask_file.get_filename() + "'.")
+
+    # Exception test
+    try:
+        soln.format("wrong_format", dot_file)
+    except RuntimeError as e:
+        print ("YASK throws an exception.")
+        print (format(e))
+        print ("Exception Test: Catch exception correctly.")
+        num_exception = num_exception + 1
 
     print("Equation after formatting: " + soln.get_equation(0).format_simple())
 
     print("Debug output captured:\n" + do.get_string())
-    print("End of YASK compiler API test.")
+
+    # Check whether program handles exceptions or not.
+    if num_exception != 3:
+        print("There is a problem in exception test.")
+        exit(1)
+    else:
+        print("End of YASK compiler API test with exception.")

@@ -1,7 +1,7 @@
 /*****************************************************************************
 
 YASK: Yet Another Stencil Kernel
-Copyright (c) 2014-2017, Intel Corporation
+Copyright (c) 2014-2018, Intel Corporation
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to
@@ -41,9 +41,22 @@ namespace yask {
     // for numbers above 9 (at least up to 99).
 
     // Format: "major.minor.patch".
-    const string version = "2.01.06";
+    const string version = "2.02.00";
 
     string yask_get_version_string() {
         return version;
+    }
+
+    // See yask_common_api.hpp for documentation.
+    const char* yask_exception::what() noexcept {
+        return "yask::yask_exception\n";
+    }
+
+    void yask_exception::add_message(string arg_msg) {
+        msg.append(arg_msg);
+    }
+
+    const char* yask_exception::get_message() {
+        return msg.c_str();
     }
 }

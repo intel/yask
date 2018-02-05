@@ -1,7 +1,7 @@
 /*****************************************************************************
 
 YASK: Yet Another Stencil Kernel
-Copyright (c) 2014-2017, Intel Corporation
+Copyright (c) 2014-2018, Intel Corporation
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to
@@ -302,24 +302,30 @@ int main(int argc, const char* argv[]) {
 
     cout << "YASK -- Yet Another Stencil Kernel\n"
         "YASK Stencil Compiler\n"
-        "Copyright 2017, Intel Corporation.\n"
+        "Copyright (c) 2014-2018, Intel Corporation.\n"
         "Version: " << yask_get_version_string() << endl;
     
-    // Parse options and create the stencil-solution object.
-    parseOpts(argc, argv);
+    try {
+		// Parse options and create the stencil-solution object.
+		parseOpts(argc, argv);
 
-    // Create the requested output...
-    for (auto i : outfiles) {
-        auto& type = i.first;
-        auto& fname = i.second;
+		// Create the requested output...
+		for (auto i : outfiles) {
+			auto& type = i.first;
+			auto& fname = i.second;
 
-        yask_output_factory ofac;
-        yask_output_ptr os;
-        if (fname == "-")
-            os = ofac.new_stdout_output();
-        else
-            os = ofac.new_file_output(fname);
-        stencilSoln->format(type, os);
+			yask_output_factory ofac;
+			yask_output_ptr os;
+			if (fname == "-")
+				os = ofac.new_stdout_output();
+			else
+				os = ofac.new_file_output(fname);
+			stencilSoln->format(type, os);
+		}
+    } catch (yask_exception e) {
+		cout << "YASK throws an exception.\n";
+		cout << e.get_message();
+		exit(1);
     }
 
     cout << "YASK Stencil Compiler done.\n";

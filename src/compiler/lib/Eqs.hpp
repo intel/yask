@@ -1,7 +1,7 @@
 /*****************************************************************************
 
 YASK: Yet Another Stencil Kernel
-Copyright (c) 2014-2017, Intel Corporation
+Copyright (c) 2014-2018, Intel Corporation
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to
@@ -332,7 +332,7 @@ namespace yask {
         // "eqGroup1=foo,eqGroup2=bar".
         // In this example, all eqs updating grid names containing 'foo' go in eqGroup1,
         // all eqs updating grid names containing 'bar' go in eqGroup2, and
-        // each remaining eq goes in an eqGroup named after its grid.
+        // each remaining eq goes into a separate eqGroup.
         void makeEqGroups(Eqs& eqs,
                           const string& targets,
                           EqDepMap& eq_deps,

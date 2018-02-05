@@ -1,7 +1,7 @@
 /*****************************************************************************
 
 YASK: Yet Another Stencil Kernel
-Copyright (c) 2014-2017, Intel Corporation
+Copyright (c) 2014-2018, Intel Corporation
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to
@@ -48,7 +48,7 @@ int main() {
     auto x = fac.new_domain_index("x");
     auto y = fac.new_domain_index("y");
     auto z = fac.new_domain_index("z");
-    
+
     // Create a grid var.
     auto g1 = soln->new_grid("test_grid", {t, x, y, z});
 

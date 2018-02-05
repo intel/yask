@@ -1,7 +1,7 @@
 /*****************************************************************************
 
 YASK: Yet Another Stencil Kernel
-Copyright (c) 2014-2017, Intel Corporation
+Copyright (c) 2014-2018, Intel Corporation
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to
@@ -26,6 +26,10 @@ IN THE SOFTWARE.
 //////// Methods for output object. //////////
 
 #include "yask_common_api.hpp"
+
+// Common utilities.
+#include "common_utils.hpp"
+
 #include <sstream>
 #include <iostream>
 #include <fstream>
@@ -66,11 +70,8 @@ namespace yask {
             _fname = file_name;
             _ofs.open(file_name, ofstream::out | ofstream::trunc);
             if (!_ofs.is_open()) {
-
-                // TODO: throw exception.
-                cerr << "Error: cannot open '" << file_name <<
-                    "' for output.\n";
-                exit(1);
+                THROW_YASK_EXCEPTION("Error: cannot open '" << file_name <<
+                    "' for output.\n");
             }
         }
 
@@ -123,19 +124,19 @@ namespace yask {
         return p;
     }
     yask_string_output_ptr
-    yask_output_factory::new_string_output() const {
+    yask_output_factory::new_string_output() const{
         auto p = make_shared<StringOutput>();
         assert(p.get());
         return p;
     }
     yask_stdout_output_ptr
-    yask_output_factory::new_stdout_output() const {
+    yask_output_factory::new_stdout_output() const{
         auto p = make_shared<StdoutOutput>();
         assert(p.get());
         return p;
     }
     yask_null_output_ptr
-    yask_output_factory::new_null_output() const {
+    yask_output_factory::new_null_output() const{
         auto p = make_shared<NullOutput>();
         assert(p.get());
         return p;

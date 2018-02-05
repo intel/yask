@@ -155,6 +155,9 @@ def init_grid(grid, timestep) :
 # Main script.
 if __name__ == "__main__":
 
+    # Counter for exception test
+    num_exception = 0;
+
     # The factories from which all other kernel objects are made.
     kfac = yask_kernel.yk_factory()
     ofac = yask_kernel.yask_output_factory()
@@ -207,6 +210,26 @@ if __name__ == "__main__":
     # all domain dimensions.
     ddim1 = soln_dims[0] # name of 1st dim.
     soln.set_num_ranks(ddim1, env.get_num_ranks()) # num ranks in this dim.
+
+    # Exception test
+    print("Exception Test: Call 'run_solution' without calling prepare_solution().")
+    try:
+        soln.run_solution(0)
+    except RuntimeError as e:
+        print ("YASK throws an exception.")
+        print (format(e))
+        print ("Exception Test: Catch exception correctly.")
+        num_exception = num_exception + 1
+
+    # Exception test
+    print("Exception Test: Call 'run_auto-tuner_now' without calling prepare_solution().")
+    try:
+        soln.run_auto_tuner_now(False)
+    except RuntimeError as e:
+        print ("YASK throws an exception.")
+        print (format(e))
+        print ("Exception Test: Catch exception correctly.")
+        num_exception = num_exception + 1
     
     # Allocate memory for any grids that do not have storage set.
     # Set other data structures needed for stencil application.
@@ -321,4 +344,9 @@ if __name__ == "__main__":
         read_grid(grid, 11)
 
     print("Debug output captured:\n" + debug_output.get_string())
-    print("End of YASK kernel API test.")
+
+    if num_exception != 2:
+        print("There is a problem in exception test.")
+        exit(1)
+    else:
+        print("End of YASK kernel API test with exception.")

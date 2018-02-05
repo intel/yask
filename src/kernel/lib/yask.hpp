@@ -1,7 +1,7 @@
 /*****************************************************************************
 
 YASK: Yet Another Stencil Kernel
-Copyright (c) 2014-2017, Intel Corporation
+Copyright (c) 2014-2018, Intel Corporation
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to
@@ -33,6 +33,9 @@ IN THE SOFTWARE.
 
 // Include the API first. This helps to ensure that it will stand alone.
 #include "yask_kernel_api.hpp"
+
+// Common utilities.
+#include "common_utils.hpp"
 
 // Additional type for unsigned indices.
 typedef std::uint64_t uidx_t;

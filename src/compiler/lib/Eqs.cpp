@@ -1,7 +1,7 @@
 /*****************************************************************************
 
 YASK: Yet Another Stencil Kernel
-Copyright (c) 2014-2017, Intel Corporation
+Copyright (c) 2014-2018, Intel Corporation
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to
@@ -269,22 +269,18 @@ namespace yask {
                 if (!g1->isScratch()) {
                     auto* si1p = i1->getArgOffsets().lookup(stepDim);
                     if (!si1p || abs(*si1p) != 1) {
-                        cerr << "Error: equation " << eq1->makeQuotedStr() <<
-                            " does not use offset +/- 1 from step-dimension index var '" <<
-                            stepDim << "' on LHS.\n";
-                        exit(1);
+                        THROW_YASK_EXCEPTION("Error: equation " << eq1->makeQuotedStr() <<
+                                             " does not use offset +/- 1 from step-dimension index var '" <<
+                                             stepDim << "' on LHS.\n");
                     }
-                    assert(si1p);
-                    si1 = *si1p;
 
                     // Step direction already set?
                     if (dims._stepDir) {
                         if (dims._stepDir != si1) {
-                            cerr << "Error: equation " << eq1->makeQuotedStr() <<
-                                " LHS has offset " << si1 << " from step-dimesion index var, "
-                                "which is different than a previous equation with offset " <<
-                                dims._stepDir << ".\n";
-                            exit(1);
+                            THROW_YASK_EXCEPTION("Error: equation " << eq1->makeQuotedStr() <<
+                                                 " LHS has offset " << si1 << " from step-dimesion index var, "
+                                                 "which is different than a previous equation with offset " <<
+                                                 dims._stepDir << ".\n");
                         }
                     } else
                         dims._stepDir = si1;
@@ -293,10 +289,9 @@ namespace yask {
                 // LHS of an equation must be vectorizable.
                 // TODO: relax this restriction.
                 if (i1->getVecType() != GridPoint::VEC_FULL) {
-                    cerr << "Error: equation " << eq1->makeQuotedStr() <<
+                    THROW_YASK_EXCEPTION("Error: equation " << eq1->makeQuotedStr() <<
                         " is not fully vectorizable on LHS because not all folded"
-                        " dimensions are accessed via simple offsets from their respective indices.\n";
-                    exit(1);
+                        " dimensions are accessed via simple offsets from their respective indices.\n");
                 }
             }
 
@@ -311,11 +306,11 @@ namespace yask {
                     // Must be in proper relation to LHS.
                     if ((si1 > 0 && rsi1 > si1) ||
                         (si1 < 0 && rsi1 < si1)) {
-                        cerr << "Error: RHS of equation " << eq1->makeQuotedStr() <<
-                            " contains '" << stepDim << "+" << rsi1 << 
-                            "', which is incompatible with '" << stepDim << "+" << si1 << 
-                            "' on LHS.\n";
-                        exit(1);
+                        THROW_YASK_EXCEPTION("Error: RHS of equation " <<
+                                             eq1->makeQuotedStr() <<
+                                             " contains '" << stepDim << "+" << rsi1 << 
+                                             "', which is incompatible with '" << stepDim << "+" << si1 << 
+                                             "' on LHS.\n");
                     }
                 }
             }
@@ -340,19 +335,16 @@ namespace yask {
                 bool same_eq = eq1 == eq2;
                 bool same_cond = areExprsSame(cond1, cond2);
                 bool same_og = g1 == g2;
-
+                
                 // If two different eqs have the same condition, they
                 // cannot update the same grid.
                 if (!same_eq && same_cond && same_og) {
-                    if (cond1)
-                        cerr << "Error: two equations with condition " <<
-                            cond1->makeQuotedStr();
-                    else
-                        cerr << "Error: two equations without conditions";
-                    cerr << " have the same LHS grid '" << g1->getName() << "': " <<
-                        eq1->makeQuotedStr() << " and " <<
-                        eq2->makeQuotedStr() << endl;
-                    exit(1);
+                    string cdesc = cond1 ? "with condition " + cond1->makeQuotedStr() :
+                        "without conditions";
+                    THROW_YASK_EXCEPTION("Error: two equations " << cdesc <<
+                                         " have the same LHS grid '" << g1->getName() << "': " <<
+                                         eq1->makeQuotedStr() << " and " <<
+                                         eq2->makeQuotedStr() << ".\n");
                 }
 
                 // First dep check: exact matches on LHS of eq1 to RHS of eq2.
@@ -372,9 +364,8 @@ namespace yask {
                     if (same_eq) {
                                     
                         // Exit with error.
-                        cerr << "Error: illegal dependency: LHS of equation " <<
-                            eq1->makeQuotedStr() << " also appears on its RHS.\n";
-                        exit(1);
+                        THROW_YASK_EXCEPTION("Error: illegal dependency: LHS of equation " <<
+                                             eq1->makeQuotedStr() << " also appears on its RHS.\n");
                     }
 
                     // Save dependency.
@@ -796,10 +787,9 @@ namespace yask {
                     // Must swap on certain deps.
                     if (egi.isDepOn(certain_dep, egj)) {
                         if (egj.isDepOn(certain_dep, egi)) {
-                            cerr << "Error: circular dependency between eq-groups " <<
+                            THROW_YASK_EXCEPTION("Error: circular dependency between eq-groups " <<
                                 egi.getDescription() << " and " <<
-                                egj.getDescription() << endl;
-                            exit(1);
+                                egj.getDescription() << "\n.");
                         }
                         do_swap = true;
                     }

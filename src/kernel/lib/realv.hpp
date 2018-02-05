@@ -1,7 +1,7 @@
 /*****************************************************************************
 
 YASK: Yet Another Stencil Kernel
-Copyright (c) 2014-2017, Intel Corporation
+Copyright (c) 2014-2018, Intel Corporation
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to
@@ -646,8 +646,12 @@ namespace yask {
         }
 
 #elif defined(ARCH_KNC)
-        std::cerr << "error: 2-input permute not supported on KNC" << std::endl;
-        exit_yask(1);
+        yask_exception e;
+        std::stringstream err;
+        err << "error: 2-input permute not supported on KNC" << std::endl;
+        e.add_message(err.str());
+        throw e;
+        //exit_yask(1);
 #else
         res.u.mi = INAMEI(permutex2var)(a.u.mi, ctrl.u.mi, b.u.mi);
 #endif

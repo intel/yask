@@ -1,7 +1,7 @@
 /*****************************************************************************
 
 YASK: Yet Another Stencil Kernel
-Copyright (c) 2014-2017, Intel Corporation
+Copyright (c) 2014-2018, Intel Corporation
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to
@@ -54,8 +54,7 @@ namespace yask {
 #endif
 
         if (!p) {
-            std::cerr << "error: cannot allocate " << makeByteStr(nbytes) << ".\n";
-            exit_yask(1);
+            THROW_YASK_EXCEPTION("error: cannot allocate " << makeByteStr(nbytes) << ".\n");
         }
         return static_cast<char*>(p);
     }
@@ -143,9 +142,8 @@ namespace yask {
 #endif
 
         if (min_val != rank_val || max_val != rank_val) {
-            cerr << "error: " << descr << " values range from " << min_val << " to " <<
-                max_val << " across the ranks. They should all be identical." << endl;
-            exit_yask(1);
+            THROW_YASK_EXCEPTION("error: " << descr << " values range from " << min_val << " to " <<
+                max_val << " across the ranks. They should all be identical." << endl);
         }
     }
 
@@ -211,16 +209,14 @@ namespace yask {
                                                   int& argi)
     {
         if (size_t(argi) >= args.size() || args[argi].length() == 0) {
-            cerr << "Error: no argument for option '" << args[argi - 1] << "'." << endl;
-            exit_yask(1);
+            THROW_YASK_EXCEPTION("Error: no argument for option '" << args[argi - 1] << "'." << endl);
         }
 
         const char* nptr = args[argi].c_str();
         char* endptr = 0;
         long long int val = strtoll(nptr, &endptr, 0);
         if (val == LLONG_MIN || val == LLONG_MAX || *endptr != '\0') {
-            cerr << "Error: argument for option '" << args[argi - 1] << "' is not an integer." << endl;
-            exit_yask(1);
+            THROW_YASK_EXCEPTION("Error: argument for option '" << args[argi - 1] << "' is not an integer." << endl);
         }
 
         argi++;

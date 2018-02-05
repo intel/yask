@@ -1,7 +1,7 @@
 /*****************************************************************************
 
 YASK: Yet Another Stencil Kernel
-Copyright (c) 2014-2017, Intel Corporation
+Copyright (c) 2014-2018, Intel Corporation
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to
@@ -45,7 +45,8 @@ namespace yask {
 
     class ArgParser {
     public:
-    
+    	virtual ~ArgParser() {}
+
         // For strings like x=4,y=2, call the lambda function for
         // each key, value pair.
         virtual void parseKeyValuePairs(const string& argStr,
@@ -73,8 +74,7 @@ namespace yask {
                 // split by equal sign.
                 size_t ep = pStr.find("=");
                 if (ep == string::npos) {
-                    cerr << "Error: no equal sign in '" << pStr << "'." << endl;
-                    exit(1);
+                    THROW_YASK_EXCEPTION("Error: no equal sign in '" << pStr << "'." << endl);
                 }
                 string key = pStr.substr(0, ep);
                 string value = pStr.substr(ep+1);

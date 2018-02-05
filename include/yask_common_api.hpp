@@ -1,7 +1,7 @@
 /*****************************************************************************
 
 YASK: Yet Another Stencil Kernel
-Copyright (c) 2014-2017, Intel Corporation
+Copyright (c) 2014-2018, Intel Corporation
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to
@@ -66,6 +66,29 @@ namespace yask {
     class yask_null_output;
     /// Shared pointer to \ref yask_null_output
     typedef std::shared_ptr<yask_null_output> yask_null_output_ptr;
+
+    /// Exception from yask framework
+    /** Objects of this exception contain additional message from yask framework */
+    class yask_exception: public std::exception {
+    private:
+    	/// Additional message container
+    	std::string msg;
+
+    public:
+    	virtual ~yask_exception() {};
+
+        /// Get default message.
+        /** Returns a C-style character string describing the general cause of the current error.
+            @returns default message of the exception. */
+    	virtual const char* what() noexcept;
+
+    	/// Add additional message to this exception.
+    	void add_message(std::string message /**< [in] Additional message as string. */ );
+
+        /// Get additional message.
+        /** @returns additional message as string */
+    	const char* get_message();
+    };
 
     /// Factory to create output objects.
     class yask_output_factory {
@@ -157,7 +180,6 @@ namespace yask {
     public:
         virtual ~yask_null_output() {}
     };
-    
 
 } // namespace yask.
 

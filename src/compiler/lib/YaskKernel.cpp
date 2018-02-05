@@ -1,7 +1,7 @@
 /*****************************************************************************
 
 YASK: Yet Another Stencil Kernel
-Copyright (c) 2014-2017, Intel Corporation
+Copyright (c) 2014-2018, Intel Corporation
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to
@@ -230,10 +230,9 @@ namespace yask {
                     if (dtype == STEP_INDEX) {
                         assert(dname == _dims->_stepDim);
                         if (dn > 0) {
-                            cerr << "Error: cannot create grid '" << grid <<
+                            THROW_YASK_EXCEPTION("Error: cannot create grid '" << grid <<
                                 "' with dimensions '" << gdims.makeDimStr() <<
-                                "' because '" << dname << "' must be first dimension.\n";
-                            exit(1);
+                                "' because '" << dname << "' must be first dimension.\n");
                         }
                         if (folded) {
                             step_posn = dn + 1;
@@ -722,4 +721,3 @@ namespace yask {
     }
 
 } // namespace yask.
-

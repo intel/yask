@@ -1,7 +1,7 @@
 /*****************************************************************************
 
 YASK: Yet Another Stencil Kernel
-Copyright (c) 2014-2017, Intel Corporation
+Copyright (c) 2014-2018, Intel Corporation
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to
@@ -64,8 +64,8 @@ namespace yask {
         
         // Max abs-value of domain-index halos required by all eqs at
         // various step-index values.
-        // TODO: keep separate pos and neg halos.
-        // TODO: keep separate halos for each equation.
+        // TODO: keep separate 'before' and 'after' halos.
+        // TODO: keep separate halos for each equation group.
         map<int, IntTuple> _halos;  // key: step-dim offset.
     
     public:

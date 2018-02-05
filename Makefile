@@ -1,6 +1,6 @@
 ##############################################################################
 ## YASK: Yet Another Stencil Kernel
-## Copyright (c) 2014-2017, Intel Corporation
+## Copyright (c) 2014-2018, Intel Corporation
 ## 
 ## Permission is hereby granted, free of charge, to any person obtaining a copy
 ## of this software and associated documentation files (the "Software"), to
@@ -193,6 +193,26 @@ py-yc-api-and-cxx-yk-api-test:
 	$(YK_MAKE) py-yc-api-test
 	$(YK_MAKE) cxx-yk-api-test
 
+# Run C++ compiler API test with exception, then run C++ kernel API test with exception.
+cxx-yc-api-and-cxx-yk-api-test-with-exception:
+	$(YK_MAKE) cxx-yc-api-test-with-exception
+	$(YK_MAKE) cxx-yk-api-test-with-exception
+
+# Run python compiler API test with exception, then run python kernel API test with exception.
+py-yc-api-and-py-yk-api-test-with-exception:
+	$(YK_MAKE) py-yc-api-test-with-exception
+	$(YK_MAKE) py-yk-api-test-with-exception
+
+# Run C++ compiler API test with exception, then run python kernel API test with exception.
+cxx-yc-api-and-py-yk-api-test-with-exception:
+	$(YK_MAKE) cxx-yc-api-test-with-exception
+	$(YK_MAKE) py-yk-api-test-with-exception
+
+# Run python compiler API test with exception, then run C++ kernel API test with exception.
+py-yc-api-and-cxx-yk-api-test-with-exception:
+	$(YK_MAKE) py-yc-api-test-with-exception
+	$(YK_MAKE) cxx-yk-api-test-with-exception
+
 api-tests:
 	$(MAKE) yc-and-cxx-yk-api-test
 	$(MAKE) yc-and-py-yk-api-test
@@ -202,6 +222,10 @@ api-tests:
 	$(MAKE) stencil=test py-yc-api-and-py-yk-api-test
 	$(MAKE) stencil=test cxx-yc-api-and-py-yk-api-test
 	$(MAKE) stencil=test py-yc-api-and-cxx-yk-api-test
+	$(MAKE) stencil=test cxx-yc-api-and-cxx-yk-api-test-with-exception
+	$(MAKE) stencil=test py-yc-api-and-py-yk-api-test-with-exception
+	$(MAKE) stencil=test cxx-yc-api-and-py-yk-api-test-with-exception
+	$(MAKE) stencil=test py-yc-api-and-cxx-yk-api-test-with-exception
 
 ######## Misc targets
 

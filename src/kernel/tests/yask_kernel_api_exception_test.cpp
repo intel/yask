@@ -35,6 +35,9 @@ using namespace yask;
 
 int main() {
 
+	// Counter for exception test
+	int num_exception = 0;
+
     // The factory from which all other kernel objects are made.
     yk_factory kfac;
 
@@ -70,6 +73,29 @@ int main() {
     // Simple rank configuration in 1st dim only.
     auto ddim1 = soln_dims[0];
     soln->set_num_ranks(ddim1, env->get_num_ranks());
+
+    // Exception test
+    cout << "Exception Test: Call 'run_solution' without calling prepare_solution().\n";
+    try {
+        soln->run_solution(0);
+    } catch (yask_exception e) {
+        cout << "YASK throws an exception.\n";
+        cout << e.get_message();
+        cout << "Exception Test: Catch exception correctly.\n";
+        num_exception++;
+    }
+
+    // Exception test
+    cout << "Exception Test: Call 'run_auto_tuner_now' without calling prepare_solution().\n";
+    try {
+        soln->run_auto_tuner_now(false);
+    } catch (yask_exception e) {
+        cout << "YASK throws an exception.\n";
+        cout << e.get_message();
+        cout << "Exception Test: Catch exception correctly.\n";
+        num_exception++;
+    }
+
 
     // Allocate memory for any grids that do not have storage set.
     // Set other data structures needed for stencil application.
@@ -168,6 +194,36 @@ int main() {
     cout << "Running the solution for 10 more steps...\n";
     soln->run_solution(1, 10);
 
-    cout << "End of YASK kernel API test.\n";
+    // TODO: better to have exception test for the methods below
+    // StencilContext::calc_region
+    // StencilContext::addGrid
+    // StencilContext::setupRank
+    // StencilContext::prepare_solution
+    // StencilContext::newGrid
+    // YkGridBase::get_dim_posn
+    // YkGridBase::resize
+    // YkGridBase::checkDimType
+    // YkGridBase::share_storage
+    // YkGridBase::checkIndices
+    // YkGridBase::get_element
+    // YkGridBase::get_elements_in_slice
+    // YkGridBase::_share_data
+    // YkGridBase::get_vecs_in_slice
+    // real_vec_permute2
+    // Dims::checkDimType
+    // KernelEnv::initEnv
+    // alignedAlloc
+    // assertEqualityOverRanks
+    // CommandLineParser::OptionBase::_idx_val
+
+
+    // Check whether program handles exceptions or not.
+    if (num_exception != 2) {
+        cout << "There is a problem in exception test.\n";
+        exit(1);
+    }
+    else
+        cout << "End of YASK kernel API test with exception.\n";
+
     return 0;
 }

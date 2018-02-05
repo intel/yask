@@ -1,7 +1,7 @@
 /*****************************************************************************
 
 YASK: Yet Another Stencil Kernel
-Copyright (c) 2014-2017, Intel Corporation
+Copyright (c) 2014-2018, Intel Corporation
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to
@@ -704,6 +704,7 @@ namespace yask {
     */
     class yk_stats {
     public:
+    	virtual ~yk_stats() {}
 
         /// Get the number of elements in the overall domain.
         /**
@@ -1127,7 +1128,7 @@ namespace yask {
            Index values must fall within the allocated space as returned by
            get_first_rank_alloc_index() and get_last_rank_alloc_index() for
            each dimension.
-           @returns value in grid at given multi-dimensional location. 
+           @returns value in grid at given multi-dimensional location.
         */
         virtual double
         get_element(const std::vector<idx_t>& indices

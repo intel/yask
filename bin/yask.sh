@@ -2,7 +2,7 @@
 
 ##############################################################################
 ## YASK: Yet Another Stencil Kernel
-## Copyright (c) 2014-2017, Intel Corporation
+## Copyright (c) 2014-2018, Intel Corporation
 ## 
 ## Permission is hereby granted, free of charge, to any person obtaining a copy
 ## of this software and associated documentation files (the "Software"), to
@@ -40,6 +40,10 @@ fi
 # Extra options for exe.
 opts=""
 
+# Other defaults.
+pre_cmd=true
+post_cmd=true
+
 unset arch                      # Don't want to inherit from env.
 while true; do
 
@@ -71,9 +75,13 @@ while true; do
         echo "       -arch 'knc'"
         echo "       -host "`hostname`"-mic<N>"
         echo "  -sh_prefix <command>"
-        echo "     Add <command> before the sub-shell."
+        echo "     Run sub-shell under <command>, e.g., a custom ssh command."
         echo "  -exe_prefix <command>"
-        echo "     Add <command> before the executable."
+        echo "     Run YASK executable under <command>."
+        echo "  -pre_cmd <command(s)>"
+        echo "     One or more commands to run before YASK executable."
+        echo "  -post_cmd <command(s)>"
+        echo "     One or more commands to run after YASK executable."
         echo "  -mpi_cmd <command>"
         echo "     Run <command> before the executable (and before the -exe_prefix argument)."
         echo "  -ranks <N>"
@@ -109,6 +117,16 @@ while true; do
 
     elif [[ "$1" == "-mpi_cmd" && -n ${2+set} ]]; then
         mpi_cmd=$2
+        shift
+        shift
+
+    elif [[ "$1" == "-pre_cmd" && -n ${2+set} ]]; then
+        pre_cmd=$2
+        shift
+        shift
+
+    elif [[ "$1" == "-post_cmd" && -n ${2+set} ]]; then
+        post_cmd=$2
         shift
         shift
 
@@ -246,9 +264,8 @@ else
 fi
 
 # Command sequence.
-cmds="cd $dir; uname -a; lscpu; numactl -H; ldd $exe; env $envs $mpi_cmd $exe_prefix $exe $opts $@"
+cmds="cd $dir; uname -a; lscpu; numactl -H; ldd $exe; date; $pre_cmd; env $envs $mpi_cmd $exe_prefix $exe $opts $@; $post_cmd; date"
 
-date | tee -a $logfile
 echo "===================" | tee -a $logfile
 
 if [[ -z "$sh_prefix" ]]; then
@@ -258,5 +275,4 @@ else
     $sh_prefix "sh -c -x '$cmds'" 2>&1 | tee -a $logfile
 fi
 
-date | tee -a $logfile
 echo "Log saved in '$logfile'."
