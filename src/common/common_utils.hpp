@@ -25,16 +25,16 @@ IN THE SOFTWARE.
 #ifndef COMMON_UTILS_HPP
 #define COMMON_UTILS_HPP
 
-namespace yask {
-
 // MACRO for throw yask_exception
-#define THROW_YASK_EXCEPTION(message)                               \
-    yask_exception e;                                               \
-    stringstream err;                                               \
-    err << message;                                                 \
-    e.add_message(err.str());                                       \
-    throw e;                                                        \
+#define THROW_YASK_EXCEPTION(message) do {                          \
+        yask_exception e;                                           \
+        stringstream err;                                           \
+        err << message;                                             \
+        e.add_message(err.str());                                   \
+        throw e;                                                    \
+    } while(0)
 
+namespace yask {
 
 } // namespace yask.
 

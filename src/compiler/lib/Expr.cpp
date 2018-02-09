@@ -263,7 +263,13 @@ namespace yask {
     // Add this equation to the list of eqs for this stencil.
     EqualsExprPtr operator EQUALS_OPER(GridPointPtr gpp, const NumExprPtr rhs) {
 
-        // Get to list of equations indirectly thru grid.
+        if (!gpp)
+            THROW_YASK_EXCEPTION("Error: empty LHS of equation");
+        if (!rhs)
+            THROW_YASK_EXCEPTION("Error: empty RHS of " <<
+                                 gpp->makeQuotedStr() << " equation");
+        
+        // Get to list of equations in soln indirectly thru grid.
         Grid* gp = gpp->getGrid();
         assert(gp);
         auto* soln = gp->getSoln();

@@ -49,23 +49,6 @@ namespace yask {
         eq.visitEqs(&commenter);
     }
 
-    // Print a shim function to map hard-coded YASK vars to actual dims.
-    void YASKCppPrinter::printShim(ostream& os,
-                                   const string& fname,
-                                   bool use_template) {
-    
-        os << "\n // Simple shim function to use start vars and ignore others.\n";
-        if (use_template)
-            os << " template <int level>";
-        os << " inline void " << fname <<
-            "(const ScanIndices& scan_idxs) {\n"
-            " " << fname;
-        if (use_template)
-            os << "<level>";
-        os << "(scan_idxs.start);\n"
-            "}\n";
-    }
-
     // Print YASK code in new stencil context class.
     void YASKCppPrinter::print(ostream& os) {
 
@@ -300,7 +283,7 @@ namespace yask {
 
             // Grid init.
             ctorCode += "\n // Init grid '" + grid + "'.\n";
-            ctorCode += " " + grid + "_dim_names = {\n" +
+            ctorCode += " " + grid + "_dim_names = {" +
                 gdims.makeDimStr(", ", "\"", "\"") + "};\n";
             ctorCode += " " + grid + "_ptr = std::make_shared<" + typeDef +
                 ">(_dims, \"" + grid + "\", " + grid + "_dim_names, &_ostr);\n";
@@ -337,14 +320,17 @@ namespace yask {
                 // domain dimension.
                 if (dtype == DOMAIN_INDEX) {
 
-                    // Halo for this dimension.
-                    string hvar = grid + "_halo_" + dname;
-                    int hval = _settings._haloSize > 0 ?
-                        _settings._haloSize : gp->getHaloSize(dname);
-                    os << " const idx_t " << hvar << " = " << hval <<
-                        "; // default halo size in '" << dname << "' dimension.\n";
-                    ctorCode += " " + grid + "->set_halo_size(\"" + dname +
-                        "\", " + hvar + ");\n";
+                    // Halos for this dimension.
+                    for (bool lo : { true, false }) {
+                        string bstr = lo ? "_lo_halo_" : "_hi_halo_";
+                        string hvar = grid + bstr + dname;
+                        int hval = _settings._haloSize > 0 ?
+                            _settings._haloSize : gp->getHaloSize(dname, lo);
+                        os << " const idx_t " << hvar << " = " << hval <<
+                            "; // default halo size in '" << dname << "' dimension.\n";
+                        ctorCode += " " + grid + "->set" + bstr + "size(\"" + dname +
+                            "\", " + hvar + ");\n";
+                    }
                 }
 
                 // non-domain dimension.

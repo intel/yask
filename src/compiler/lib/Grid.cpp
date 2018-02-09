@@ -199,23 +199,33 @@ namespace yask {
             if (p)
                 stepVal = *p;
         }
-        auto& halos = _halos[stepVal];
 
         // Update halo vals.
         for (auto& dim : offsets.getDims()) {
             auto& dname = dim.getName();
-            int val = abs(dim.getVal());
+            int val = dim.getVal();
+            bool lo = val <= 0;
+            auto& halos = _halos[lo][stepVal];
 
             // Don't keep halo in step dim.
             if (stepDim && dname == stepDim->getName())
                 continue;
 
+            // Store abs value.
+            val = abs(val);
+            
+            // Any existing value?
             auto* p = halos.lookup(dname);
+
+            // If not, add this one.
             if (!p)
                 halos.addDimBack(dname, val);
+
+            // Keep larger value.
             else if (val > *p)
                 *p = val;
-            // else, current value is larger than val, so don't update.
+            
+            // Else, current value is larger than val, so don't update.
         }
     }
 
@@ -254,27 +264,47 @@ namespace yask {
         if (_halos.size() == 0)
             return 1;
 
-        // Find halos at min and max step-dim points.
-        // These should correspond to the 1st read and only write points.
-        auto first_i = _halos.cbegin(); // begin == first.
-        auto last_i = _halos.crbegin(); // reverse-begin == last.
-        int first_ofs = first_i->first;
-        int last_ofs = last_i->first;
-        auto& first_halo = first_i->second;
-        auto& last_halo = last_i->second;
+        // First and last step-dim.
+        int first_ofs = 0, last_ofs = 0;
 
+        // lo and hi.
+        for (auto& i : _halos) {
+            //auto lo = i.first;
+            auto& h2 = i.second; // map of step-dims to halos.
+
+            // Step-dim ofs.
+            for (auto& j : h2) {
+                auto ofs = j.first;
+                //auto& halo = j.second; // halo tuple at step-val 'ofs'.
+
+                // Update vars.
+                first_ofs = min(first_ofs, ofs);
+                last_ofs = max(last_ofs, ofs);
+            }
+        }
+
+        // First and last largest halos.
+        int first_max_halo = 0, last_max_halo = 0;
+        for (auto& i : _halos) {
+            //auto lo = i.first;
+            auto& h2 = i.second; // map of step-dims to halos.
+
+            if (h2.count(first_ofs))
+                first_max_halo = max(first_max_halo, h2.at(first_ofs).max());
+            if (h2.count(last_ofs))
+                last_max_halo = max(last_max_halo, h2.at(last_ofs).max());
+        }
+        
         // Default step-dim size is range of offsets.
         assert(last_ofs >= first_ofs);
         int sz = last_ofs - first_ofs + 1;
     
         // If first and last halos are zero, we can further optimize storage by
         // immediately reusing memory location.
-        if (sz > 1 &&
-            first_halo.max() == 0 &&
-            last_halo.max() == 0)
+        if (sz > 1 && first_max_halo == 0 && last_max_halo == 0)
             sz--;
 
-        // TODO: recognize that reading in one equation and then writing in
+        // TODO: recognize that reading in one eq-group and then writing in
         // another can also reuse storage.
 
         return sz;
@@ -508,5 +538,11 @@ namespace yask {
         return oss.str();
     }
     
+    // Make string like "t+1" or "t-1".
+    string Dimensions::makeStepStr(int offset) const {
+        IntTuple step;
+        step.addDimBack(_stepDim, offset);
+        return step.makeDimValOffsetStr();
+    }
 
 } // namespace yask.

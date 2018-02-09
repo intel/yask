@@ -408,7 +408,8 @@ namespace yask {
 
         // Copy 'this', then add dims and values from 'rhs' that are NOT
         // in 'this'. Return resulting union.
-        // Basically like setVals(rhs, true), but makes a new Tuple.
+        // Similar to setVals(rhs, true), but does not change existing
+        // values and makes a new Tuple.
         inline Tuple makeUnionWith(const Tuple& rhs) const {
             Tuple u = *this;    // copy.
             for (auto& i : rhs._q) {
@@ -687,6 +688,15 @@ namespace yask {
             }
             return newt;
         }
+        inline Tuple mapElements(std::function<T (T in)> func) const {
+            Tuple newt = *this;
+            for (size_t i = 0; i < _q.size(); i++) {
+                auto& tval = _q[i].getVal();
+                T newv = func(tval);
+                newt[i] = newv;
+            }
+            return newt;
+        }
         inline Tuple addElements(T rhs) const {
             return mapElements([&](T lhs, T rhs){ return lhs + rhs; },
                                rhs);
@@ -706,6 +716,9 @@ namespace yask {
         inline Tuple minElements(T rhs) const {
             return mapElements([&](T lhs, T rhs){ return std::min(lhs, rhs); },
                                rhs);
+        }
+        inline Tuple negElements() const {
+            return mapElements([&](T in){ return -in; });
         }
 
         // make string like "4x3x2" or "4, 3, 2".

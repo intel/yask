@@ -218,7 +218,49 @@ REGISTER_STENCIL(TestReverseStencil);
 
 // Test the use of scratch-pad grids.
 
-class TestScratchStencil : public StencilRadiusBase {
+class TestScratchStencil1 : public StencilRadiusBase {
+
+protected:
+
+    // Indices & dimensions.
+    MAKE_STEP_INDEX(t);           // step in time dim.
+    MAKE_DOMAIN_INDEX(x);         // spatial dim.
+
+    // Vars.
+    MAKE_GRID(data, t, x); // time-varying grid.
+
+    // Temporary storage.
+    MAKE_SCRATCH_GRID(t1, x);
+    
+public:
+
+    TestScratchStencil1(StencilList& stencils, int radius=2) :
+        StencilRadiusBase("test_scratch1", stencils, radius) { }
+
+    // Define equation to apply to all points in 'data' grid.
+    virtual void define() {
+
+        // Set scratch var.
+        GridValue ix = data(t, x);
+        for (int r = 1; r <= _radius; r++)
+            ix += data(t, x-r);
+        for (int r = 1; r <= _radius + 1; r++)
+            ix += data(t, x+r);
+        t1(x) EQUALS ix / (_radius * 2 + 3);
+
+        // Update data from scratch vars.
+        GridValue v = t1(x);
+        for (int r = 1; r <= _radius + 3; r++)
+            v += t1(x-r);
+        for (int r = 1; r <= _radius + 4; r++)
+            v += t1(x+r);
+        data(t+1, x) EQUALS v / (_radius * 2 + 8);;
+    }
+};
+
+REGISTER_STENCIL(TestScratchStencil1);
+
+class TestScratchStencil2 : public StencilRadiusBase {
 
 protected:
 
@@ -238,15 +280,16 @@ protected:
     
 public:
 
-    TestScratchStencil(StencilList& stencils, int radius=2) :
-        StencilRadiusBase("test_scratch", stencils, radius) { }
-    virtual ~TestScratchStencil() { }
+    TestScratchStencil2(StencilList& stencils, int radius=2) :
+        StencilRadiusBase("test_scratch2", stencils, radius) { }
 
     // Define equation to apply to all points in 'data' grid.
     virtual void define() {
 
         // Set scratch vars.
-        GridValue ix, iy, iz;
+        GridValue ix = constNum(1.0);
+        GridValue iy = constNum(2.0);
+        GridValue iz = constNum(3.0);
         for (int r = 1; r <= _radius; r++) {
             ix += data(t, x-r, y, z);
             iy += data(t, x, y+r, z);
@@ -259,7 +302,7 @@ public:
         t3(x, y, z) EQUALS t1(x-1, y+1, z) + t2(x, y, z-1);
 
         // Update data from scratch vars.
-        GridValue v;
+        GridValue v = constNum(4.0);
         for (int r = 1; r <= _radius; r++) {
             v += t1(x-r, y, z) - t1(x+r, y, z);
             v += t2(x, y, z-r) - t2(x, y, z);
@@ -269,4 +312,4 @@ public:
     }
 };
 
-REGISTER_STENCIL(TestScratchStencil);
+REGISTER_STENCIL(TestScratchStencil2);

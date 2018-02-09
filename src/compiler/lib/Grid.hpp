@@ -64,9 +64,10 @@ namespace yask {
         
         // Max abs-value of domain-index halos required by all eqs at
         // various step-index values.
-        // TODO: keep separate 'before' and 'after' halos.
+        // bool key: true=lo, false=hi.
+        // int key: step-dim offset or 0 if no step-dim.
         // TODO: keep separate halos for each equation group.
-        map<int, IntTuple> _halos;  // key: step-dim offset.
+        map<bool, map<int, IntTuple>> _halos;  
     
     public:
         // Ctors.
@@ -123,14 +124,29 @@ namespace yask {
         virtual const IntTuple& getMinIndices() const { return _minIndices; }
         virtual const IntTuple& getMaxIndices() const { return _maxIndices; }
 
-        // Get the max size in 'dim' of halo across all step dims.
-        virtual int getHaloSize(const string& dim) const {
+        // Get the max sizes of halo across all steps.
+        virtual IntTuple getHaloSizes(bool lo) const {
+            IntTuple halo;
+            if (_halos.count(lo)) {
+                for (auto i : _halos.at(lo)) {
+                    auto& hi = i.second; // halo at step-val 'i'.
+                    halo = halo.makeUnionWith(hi);
+                    halo = halo.maxElements(hi, false);
+                }
+            }
+            return halo;
+        }
+
+        // Get the max size in 'dim' of halo across all steps.
+        virtual int getHaloSize(const string& dim, bool lo) const {
             int h = 0;
-            for (auto i : _halos) {
-                auto& hi = i.second; // halo at step-val 'i'.
-                auto* p = hi.lookup(dim);
-                if (p)
-                    h = std::max(h, *p);
+            if (_halos.count(lo)) {
+                for (auto i : _halos.at(lo)) {
+                    auto& hi = i.second; // halo at step-val 'i'.
+                    auto* p = hi.lookup(dim);
+                    if (p)
+                        h = std::max(h, *p);
+                }
             }
             return h;
         }
@@ -249,48 +265,6 @@ namespace yask {
         }
     };
 
-    // Set that retains order of things added.
-    // Or, vector that allows insertion if element doesn't exist.
-    // Keeps two copies of everything, so don't put large things in it.
-    // TODO: hide vector inside class and provide proper accessor methods.
-    template <typename T>
-    class vector_set : public vector<T> {
-        map<T, size_t> _posn;
-
-    public:
-        vector_set() {}
-        virtual ~vector_set() {}
-
-        // Copy ctor.
-        vector_set(const vector_set& src) :
-            vector<T>(src), _posn(src._posn) {}
-    
-        virtual size_t count(const T& val) const {
-            return _posn.count(val);
-        }
-        virtual void insert(const T& val) {
-            if (_posn.count(val) == 0) {
-                vector<T>::push_back(val);
-                _posn[val] = vector<T>::size() - 1;
-            }
-        }
-        virtual void erase(const T& val) {
-            if (_posn.count(val) > 0) {
-                size_t op = _posn.at(val);
-                vector<T>::erase(vector<T>::begin() + op);
-                for (auto pi : _posn) {
-                    auto& p = pi.second;
-                    if (p > op)
-                        p--;
-                }
-            }
-        }
-        virtual void clear() {
-            vector<T>::clear();
-            _posn.clear();
-        }
-    };
-
     // A list of grids.  This holds pointers to grids defined by the stencil
     // class in the order in which they are added via the INIT_GRID_* macros.
     class Grids : public vector_set<Grid*> {
@@ -328,7 +302,6 @@ namespace yask {
         bool _doCse = true;      // do common-subexpr elim.
         bool _doComb = true;    // combine commutative operations.
         bool _doOptCluster = true; // apply optimizations also to cluster.
-        bool _find_deps = true;  // find dependencies between equations.
         string _eqGroupTargets;  // how to group equations.
     };
     
@@ -363,6 +336,9 @@ namespace yask {
         // Make string like "+(4/VLEN_X)" or "-(2/VLEN_Y)"
         // given signed offset and direction.
         string makeNormStr(int offset, string dim) const;
+
+        // Make string like "t+1" or "t-1".
+        string makeStepStr(int offset) const;
     };
 
 } // namespace yask.

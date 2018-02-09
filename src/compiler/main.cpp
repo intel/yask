@@ -117,8 +117,6 @@ void usage(const string& cmd) {
         " -min-es <num-nodes>\n"
         "    Set heuristic for min expression-size for reuse (default=" <<
         settings._minExprSize << ").\n"
-        " [-no]-find-deps\n"
-        "    Automatically find dependencies between equations (default=" << settings._find_deps << ").\n"
         "\n"
         " -p <format-type> <filename>\n"
         "    Format output per <format-type> and write to <filename>.\n"
@@ -165,10 +163,6 @@ void parseOpts(int argc, const char* argv[])
                 settings._allowUnalignedLoads = true;
             else if (opt == "-no-ul")
                 settings._allowUnalignedLoads = false;
-            else if (opt == "-find-deps")
-                settings._find_deps = true;
-            else if (opt == "-no-find-deps")
-                settings._find_deps = false;
             else if (opt == "-opt-comb")
                 settings._doComb = true;
             else if (opt == "-no-opt-comb")
@@ -323,11 +317,10 @@ int main(int argc, const char* argv[]) {
 			stencilSoln->format(type, os);
 		}
     } catch (yask_exception e) {
-		cout << "YASK throws an exception.\n";
-		cout << e.get_message();
-		exit(1);
+        cerr << "YASK Stencil Compiler: " << e.get_message() << ".\n";
+        exit(1);
     }
 
-    cout << "YASK Stencil Compiler done.\n";
+    cout << "YASK Stencil Compiler: done.\n";
     return 0;
 }

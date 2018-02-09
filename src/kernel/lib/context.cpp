@@ -216,6 +216,7 @@ namespace yask {
         auto step_posn = Indices::step_posn;
         idx_t begin_t = first_step_index;
         idx_t step_t = _opts->_region_sizes[step_dim] * _dims->_step_dir;
+        assert(step_t);
         idx_t end_t = last_step_index + _dims->_step_dir; // end is beyond last.
         int ndims = _dims->_stencil_dims.size();
 

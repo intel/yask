@@ -46,17 +46,24 @@ namespace yask {
 
     // Dependencies between equations.
     class EqDeps {
-    protected:
 
+    public:
         // dep_map[A].count(B) > 0 => A depends on B.
         typedef unordered_map<EqualsExprPtr, unordered_set<EqualsExprPtr>> DepMap;
         typedef set<EqualsExprPtr> EqSet;
+        typedef vector_set<EqualsExprPtr> EqVecSet;
 
+    protected:
         DepMap _deps;               // direct dependencies.
         DepMap _full_deps;          // direct and indirect dependencies.
         EqSet _all;                 // all expressions.
         bool _done;                 // indirect dependencies added?
     
+        // Recursive helper for visitDeps().
+        virtual void _visitDeps(EqualsExprPtr a,
+                               std::function<void (EqualsExprPtr b, EqVecSet& path)> visitor,
+                               EqVecSet* seen) const;
+
     public:
 
         EqDeps() : _done(false) {}
@@ -81,13 +88,14 @@ namespace yask {
             return is_dep_on(a, b) || is_dep_on(b, a);
         }
 
-        // Visit all dependencies of 'a'.
-        // At each dependent eq 'b', 'visitor(b, path)' is called, where 'path' is
-        // set of all nodes seen so far including 'a' but not 'b'.
+        // Visit 'a' and all its dependencies.
+        // At each node 'b', 'visitor(b, path)' is called, where 'path' contains
+        // all nodes from 'a' thru 'b'.
         virtual void visitDeps(EqualsExprPtr a,
-                               std::function<void (EqualsExprPtr b, EqSet& path)> visitor,
-                               EqSet* seen = NULL) const;
-
+                               std::function<void (EqualsExprPtr b, EqVecSet& path)> visitor) {
+            _visitDeps(a, visitor, NULL);
+        }
+        
         // Does recursive analysis to turn all indirect dependencies to direct
         // ones.
         virtual void analyze();
@@ -156,21 +164,9 @@ namespace yask {
 
         // Find dependencies based on all eqs.  If 'eq_deps' is
         // set, save dependencies between eqs in referent.
-        virtual void findDeps(IntTuple& pts,
-                              Dimensions& dims,
+        virtual void findDeps(Dimensions& dims,
                               EqDepMap* eq_deps,
                               std::ostream& os);
-
-        // Check for illegal dependencies in all equations.
-        // Exit with error if any found.
-        virtual void checkDeps(IntTuple& pts,
-                               Dimensions& dims,
-                               std::ostream& os) {
-
-            // Call findDeps() for its side-effect of checking
-            // for illegal deps, but don't keep results.
-            findDeps(pts, dims, NULL, os);
-        }
 
         // Determine which grid points can be vectorized.
         virtual void analyzeVec(const Dimensions& dims);
@@ -337,24 +333,7 @@ namespace yask {
                           const string& targets,
                           EqDepMap& eq_deps,
                           std::ostream& os);
-        void makeEqGroups(Eqs& eqs,
-                          const string& targets,
-                          IntTuple& pts,
-                          bool find_deps,
-                          std::ostream& os) {
-
-            // Find deps between eqs.
-            EqDepMap eq_deps;
-            if (find_deps)
-                eqs.findDeps(pts, *_dims, &eq_deps, os);
-
-            // Update access stats for the grids.
-            eqs.updateGridStats(eq_deps);
-
-            // Separate eqs into groups using targets and/or deps.
-            makeEqGroups(eqs, targets, eq_deps, os);
-        }
-
+        
         virtual const Grids& getOutputGrids() const {
             return _outGrids;
         }
