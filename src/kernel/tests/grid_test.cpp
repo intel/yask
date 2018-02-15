@@ -67,10 +67,10 @@ int main(int argc, char** argv) {
         string name = "test grid";
         YkGridPtr g0 = make_shared<YkElemGrid<Layout_0d, false>>(dims, name, gdims, &osp);
         g0->alloc_storage();
-        g0->print_info(os); os << endl;
+        os << g0->make_info_string() << endl;
         YkGridPtr g1 = make_shared<YkElemGrid<Layout_0d, false>>(dims, name, gdims, &osp);
         g1->alloc_storage();
-        g1->print_info(os); os << endl;
+        os << g1->make_info_string() << endl;
 
         double val = 3.14;
         os << "Testing with " << val << endl;
@@ -98,9 +98,9 @@ int main(int argc, char** argv) {
             i++;
         }
         g3->alloc_storage();
-        g3->print_info(os); os << endl;
+        os << g3->make_info_string() << endl;
         g3f->alloc_storage();
-        g3f->print_info(os); os << endl;
+        os << g3f->make_info_string() << endl;
 
         os << "Copying seq of vals\n";
         g3->set_all_elements_in_seq(1.0);

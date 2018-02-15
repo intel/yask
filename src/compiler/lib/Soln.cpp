@@ -33,8 +33,9 @@ using namespace std;
 namespace yask {
 
     // Stencil-solution APIs.
-    yc_grid_ptr StencilSolution::new_grid(const std::string& name,
-                                          const std::vector<yc_index_node_ptr>& dims) {
+    yc_grid_ptr StencilSolution::newGrid(const std::string& name,
+                                         bool isScratch,
+                                         const std::vector<yc_index_node_ptr>& dims) {
         
         // Make new grid and add to solution.
         // TODO: fix this mem leak--make smart ptr.
@@ -47,7 +48,7 @@ namespace yask {
             dims2.push_back(d2);
         }
         
-        auto* gp = new Grid(name, false, this, dims2);
+        auto* gp = new Grid(name, isScratch, this, dims2);
         assert(gp);
         return gp;
     }
