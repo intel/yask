@@ -96,7 +96,6 @@ namespace yask {
         _eqGroups.set_dims(_dims);
         _eqGroups.makeEqGroups(_eqs, _settings._eqGroupTargets, eq_deps, *_dos);
         _eqGroups.optimizeEqGroups(_settings, "scalar & vector", false, *_dos);
-        assert(_dims._stepDir);
 
         // Make a copy of each equation at each cluster offset.
         // We will use these for inter-cluster optimizations and code generation.
