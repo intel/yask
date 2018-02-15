@@ -203,7 +203,8 @@ namespace yask {
            other intermediate scratch-grids.
            - Scratch grids cannot use the step-index as a dimension.
 
-           See `test_scratch*()` in `src/stencils/SimpleTestStencils.hpp` for usage examples.
+           See `TestScratchStencil*` classes in
+           `src/stencils/SimpleTestStencils.hpp` for usage examples.
 
            @returns Pointer to the new grid. 
         */
