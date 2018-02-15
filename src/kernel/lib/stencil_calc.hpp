@@ -28,14 +28,7 @@ IN THE SOFTWARE.
 namespace yask {
     
     /// Classes that support evaluation of one stencil group.
-    /// A context contains of one or more groups.
-
-    // Types of dependencies.
-    enum DepType {
-        certain_dep,
-        possible_dep,
-        num_deps
-    };
+    /// A stencil context contains one or more groups.
 
     // A pure-virtual class base for a stencil group.
     class StencilGroupBase : public BoundingBox {
@@ -49,8 +42,15 @@ namespace yask {
         // Position of inner dim in stencil-dims tuple.
         int _inner_posn = 0;
 
-        // Groups that this one depends on.
+        // Other groups that this one depends on.
         std::map<DepType, StencilGroupSet> _depends_on;
+
+        // List of scratch-grid groups that need to be evaluated
+        // before this group. Listed in eval order first-to-last.
+        StencilGroupList _scratch_deps;
+
+        // Whether this is updates scratch grid(s);
+        bool _is_scratch = false;
 
         // Normalize the indices, i.e., subtract the rank offset
         // and divide by vector len in each dim.
@@ -65,12 +65,16 @@ namespace yask {
         // read-only, i.e., a grid can be input and output).
         GridPtrs inputGridPtrs;
 
+        // Vectors of scratch grids that are written to/read from.
+        ScratchVecs outputScratchVecs;
+        ScratchVecs inputScratchVecs;
+        
         // ctor, dtor.
         StencilGroupBase(StencilContext* context) :
             _generic_context(context) {
 
             // Make sure map entries exist.
-            for (DepType dt = certain_dep; dt < num_deps; dt = DepType(dt+1)) {
+            for (DepType dt = DepType(0); dt < num_deps; dt = DepType(dt+1)) {
                 _depends_on[dt];
             }
 
@@ -89,7 +93,7 @@ namespace yask {
         virtual ~StencilGroupBase() { }
 
         // Access to dims and MPI info.
-        virtual DimsPtr get_dims() {
+        virtual DimsPtr get_dims() const {
             return _generic_context->get_dims();
         }
         virtual MPIInfoPtr get_mpi_info() {
@@ -97,15 +101,19 @@ namespace yask {
         }
 
         // Get name of this group.
-        virtual const std::string& get_name() { return _name; }
+        virtual const std::string& get_name() const { return _name; }
 
         // Get estimated number of FP ops done for one scalar eval.
-        virtual int get_scalar_fp_ops() { return _scalar_fp_ops; }
+        virtual int get_scalar_fp_ops() const { return _scalar_fp_ops; }
 
         // Get number of points read and written for one scalar eval.
         virtual int get_scalar_points_read() const { return _scalar_points_read; }
         virtual int get_scalar_points_written() const { return _scalar_points_written; }
 
+        // Scratch accessors.
+        virtual bool is_scratch() const { return _is_scratch; }
+        virtual void set_scratch(bool is_scratch) { _is_scratch = is_scratch; }
+        
         // Add dependency.
         virtual void add_dep(DepType dt, StencilGroupBase* eg) {
             _depends_on.at(dt).insert(eg);
@@ -115,7 +123,22 @@ namespace yask {
         virtual const StencilGroupSet& get_deps(DepType dt) const {
             return _depends_on.at(dt);
         }
-    
+
+        // Add needed scratch-group.
+        virtual void add_scratch_dep(StencilGroupBase* eg) {
+            _scratch_deps.push_back(eg);
+        }
+
+        // Get needed scratch-group(s).
+        virtual const StencilGroupList& get_scratch_deps() const {
+            return _scratch_deps;
+        }
+
+        // If this group is updating scratch grid(s),
+        // expand indices to calculate values in halo.
+        // Return whether adjusted.
+        virtual bool adjust_scan(ScanIndices& misc_idxs) const;
+        
         // Set the bounding-box vars for this group in this rank.
         virtual void find_bounding_box();
 
@@ -125,7 +148,7 @@ namespace yask {
 
         // Calculate one scalar result at time t.
         virtual void
-        calc_scalar(const Indices& idxs) =0;
+        calc_scalar(int thread_idx, const Indices& idxs) =0;
 
         // Calculate results within a block.
         // Each block is typically computed in a separate OpenMP thread team.
@@ -135,7 +158,7 @@ namespace yask {
         // Calculate results within a sub-block.
         // Each sub-block is typically computed in a separate nested OpenMP thread.
         virtual void
-        calc_sub_block(const ScanIndices& block_idxs);
+        calc_sub_block(int thread_idx, const ScanIndices& block_idxs);
 
         // Calculate a series of cluster results within an inner loop.
         // All indices start at 'start_idxs'. Inner loop iterates to
@@ -143,14 +166,17 @@ namespace yask {
         // Indices must be rank-relative.
         // Indices must be normalized, i.e., already divided by VLEN_*.
         virtual void
-        calc_loop_of_clusters(const Indices& start_idxs, idx_t stop_inner) =0;
+        calc_loop_of_clusters(int thread_idx,
+                              const Indices& start_idxs,
+                              idx_t stop_inner) =0;
 
         // Calculate a series of cluster results within an inner loop.
         // The 'loop_idxs' must specify a range only in the inner dim.
         // Indices must be rank-relative.
         // Indices must be normalized, i.e., already divided by VLEN_*.
         virtual void
-        calc_loop_of_clusters(const ScanIndices& loop_idxs);
+        calc_loop_of_clusters(int thread_idx,
+                              const ScanIndices& loop_idxs);
 
         // Calculate a series of vector results within an inner loop.
         // All indices start at 'start_idxs'. Inner loop iterates to
@@ -159,7 +185,9 @@ namespace yask {
         // Indices must be normalized, i.e., already divided by VLEN_*.
         // Each vector write is masked by 'write_mask'.
         virtual void
-        calc_loop_of_vectors(const Indices& start_idxs, idx_t stop_inner,
+        calc_loop_of_vectors(int thread_idx,
+                             const Indices& start_idxs,
+                             idx_t stop_inner,
                              idx_t write_mask) =0;
 
         // Calculate a series of vector results within an inner loop.
@@ -168,7 +196,8 @@ namespace yask {
         // Indices must be normalized, i.e., already divided by VLEN_*.
         // Each vector write is masked by 'write_mask'.
         virtual void
-        calc_loop_of_vectors(const ScanIndices& loop_idxs,
+        calc_loop_of_vectors(int thread_idx,
+                             const ScanIndices& loop_idxs,
                              idx_t write_mask);
     };
 

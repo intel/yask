@@ -36,28 +36,60 @@ namespace yask {
         auto dims = _generic_context->get_dims();
         int ndims = dims->_stencil_dims.size();
         auto& step_dim = dims->_step_dim;
-        TRACE_MSG3("calc_block: " << region_idxs.start.makeValStr(ndims) <<
-                  " ... (end before) " << region_idxs.stop.makeValStr(ndims));
+        int thread_idx = omp_get_thread_num();
+        TRACE_MSG3("calc_block:" <<
+                   " in non-scratch group '" << get_name() << "': " <<
+                   region_idxs.start.makeValStr(ndims) <<
+                   " ... (end before) " << region_idxs.stop.makeValStr(ndims) <<
+                   " with thread " << thread_idx);
+        assert(!is_scratch());
 
         // Init block begin & end from region start & stop indices.
-        ScanIndices block_idxs(ndims);
-        block_idxs.initFromOuter(region_idxs);
+        ScanIndices def_block_idxs(ndims);
+        def_block_idxs.initFromOuter(region_idxs);
 
         // Steps within a block are based on sub-block sizes.
-        block_idxs.step = opts->_sub_block_sizes;
+        def_block_idxs.step = opts->_sub_block_sizes;
 
         // Groups in block loops are based on sub-block-group sizes.
-        block_idxs.group_size = opts->_sub_block_group_sizes;
+        def_block_idxs.group_size = opts->_sub_block_group_sizes;
+
+        // Indices needed for the generated loops.  Will normally be a copy
+        // of def_block_idxs except when updating scratch-grids.
+        ScanIndices block_idxs(ndims);
+        
+        // Define the groups that need to be processed in
+        // this block. This will be the prerequisite scratch-grid
+        // groups plus this non-scratch group.
+        auto sg_list = get_scratch_deps();
+        sg_list.push_back(this);
 
         // Set number of threads for a block.
         // This should be nested within a top-level OpenMP task.
         _generic_context->set_block_threads();
 
-        // Include automatically-generated loop code that calls
-        // calc_sub_block() for each sub-block in this block.  Loops through
-        // x from begin_bx to end_bx-1; similar for y and z.  This
-        // code typically contains the nested OpenMP loop(s).
+        // Loop through all the needed groups.
+        for (auto* sg : sg_list) {
+
+            // Copy of default indices for generated loop.
+            block_idxs = def_block_idxs;
+        
+            // If this group is updating scratch grid(s),
+            // expand indices to calculate values in halo.
+            sg->adjust_scan(block_idxs);
+
+            TRACE_MSG3("calc_block: " <<
+                       " in group '" << sg->get_name() << "': " <<
+                       block_idxs.begin.makeValStr(ndims) <<
+                       " ... (end before) " << block_idxs.end.makeValStr(ndims) <<
+                       " with thread " << thread_idx);
+            
+            // Include automatically-generated loop code that calls
+            // calc_sub_block() for each sub-block in this block.  Loops through
+            // x from begin_bx to end_bx-1; similar for y and z.  This
+            // code typically contains the nested OpenMP loop(s).
 #include "yask_block_loops.hpp"
+        }
     }
 
     // Normalize the indices, i.e., subtract the rank offset
@@ -93,7 +125,8 @@ namespace yask {
     
     // Calculate results for one sub-block.
     // Typically called by a single OMP thread.
-    void StencilGroupBase::calc_sub_block(const ScanIndices& block_idxs) {
+    void StencilGroupBase::calc_sub_block(int thread_idx,
+                                          const ScanIndices& block_idxs) {
 
         auto* cp = _generic_context;
         auto opts = cp->get_settings();
@@ -102,8 +135,10 @@ namespace yask {
         int nsdims = dims->_stencil_dims.size();
         auto& step_dim = dims->_step_dim;
         auto step_posn = Indices::step_posn;
-        TRACE_MSG3("calc_sub_block: " << block_idxs.start.makeValStr(nsdims) <<
-                  " ... (end before) " << block_idxs.stop.makeValStr(nsdims));
+        TRACE_MSG3("calc_sub_block:" <<
+                   " in group '" << get_name() << "': " <<
+                   block_idxs.start.makeValStr(nsdims) <<
+                   " ... (end before) " << block_idxs.stop.makeValStr(nsdims));
 
         // Init sub-block begin & end from block start & stop indices.
         // These indices are in element units.
@@ -133,12 +168,11 @@ namespace yask {
         bool do_scalars = false; // any scalars to do? (assume not)
         bool do_rem = false;     // check scalar code for partial remainders?
 
-        // If BB is not full or not aligned, do whole block with scalar code.
-        // We should only get here when using sub-domains.
-        // TODO: do as much vectorization as possible--
-        // this current code is functionally correct but very
-        // poor perf.
-        if (!bb_is_full || !bb_is_aligned) {
+        // If not full or not aligned, do whole block with
+        // scalar code.  We should only get here when using sub-domains.
+        // TODO: do as much vectorization as possible-- this current code is
+        // functionally correct but very poor perf.
+        if (is_scratch() || !bb_is_full || !bb_is_aligned) {
 
             do_clusters = false;
             do_vectors = false;
@@ -152,8 +186,12 @@ namespace yask {
             sub_block_vidxs.end.setFromConst(0);
         }
 
-        // If whole BB is not a cluster mult, determine the subset of this
+        // If it isn't guaranteed that this block is cluster mults
+        // in all dims, determine the subset of this
         // sub-block that is clusters/vectors.
+        // Currently only allows partial clusters/vectors on right sides (remainder).
+        // TODO: allow partial clusters/vectors on left sides (peel).
+        // TODO: pre-calc this info for each block.
         else if (!bb_is_cluster_mult) {
 
             // (i: index for stencil dims, j: index for domain dims).
@@ -239,7 +277,7 @@ namespace yask {
         
         // Full rectangular polytope of aligned clusters: use optimized code.
         if (do_clusters) {
-            TRACE_MSG3("calc_sub_block: using cluster code for " <<
+            TRACE_MSG3("calc_sub_block:  using cluster code for " <<
                        sub_block_fcidxs.begin.makeValStr(nsdims) <<
                        " ... (end before) " << sub_block_fcidxs.end.makeValStr(nsdims));
 
@@ -263,7 +301,7 @@ namespace yask {
 
             // Define the function called from the generated loops
             // to simply call the loop-of-clusters functions.
-#define calc_inner_loop(loop_idxs) calc_loop_of_clusters(loop_idxs)
+#define calc_inner_loop(thread_idx, loop_idxs) calc_loop_of_clusters(thread_idx, loop_idxs)
 
             // Include automatically-generated loop code that calls
             // calc_inner_loop(). This is different from the higher-level
@@ -274,7 +312,7 @@ namespace yask {
         
         // Full and partial remainder vectors.
         if (do_vectors) {
-            TRACE_MSG3("calc_sub_block: using vector code for " <<
+            TRACE_MSG3("calc_sub_block:  using vector code for " <<
                        sub_block_vidxs.begin.makeValStr(nsdims) <<
                        " ... (end before) " << sub_block_vidxs.end.makeValStr(nsdims) <<
                        " remaining after clusters in " <<
@@ -315,7 +353,7 @@ namespace yask {
             // determine whether a loop of vectors is within the remainder
             // range, i.e., after the clusters. If so, call the
             // loop-of-vectors function w/appropriate mask.
-#define calc_inner_loop(loop_idxs) \
+#define calc_inner_loop(thread_idx, loop_idxs) \
             bool ok = false;                                            \
             idx_t mask = idx_t(-1);                                     \
             for (int i = 0; i < nsdims; i++) {                          \
@@ -327,7 +365,7 @@ namespace yask {
                         mask &= masks[i];                               \
                 }                                                       \
             }                                                           \
-            if (ok) calc_loop_of_vectors(loop_idxs, mask);
+            if (ok) calc_loop_of_vectors(thread_idx, loop_idxs, mask);
 
             // Include automatically-generated loop code that calls
             // calc_inner_loop(). This is different from the higher-level
@@ -340,7 +378,7 @@ namespace yask {
         if (do_scalars) {
 
 #ifdef TRACE
-            string msg = "calc_sub_block: using scalar code for ";
+            string msg = "calc_sub_block:  using scalar code for ";
             msg += do_rem ? "remainder of" : "entire";
             msg += " sub-block ";
             msg += bb_is_full ? "without" : "with";
@@ -356,7 +394,7 @@ namespace yask {
             // ignore misc_stop.  If point is in sub-domain for this
             // group, then evaluate the reference scalar code.
             // If no holes, don't need to check each point in domain.
-#define misc_fn(misc_idxs)                                              \
+#define misc_fn(misc_idxs)  do {                                        \
             bool ok = true;                                             \
             if (do_rem) {                                               \
                 ok = false;                                             \
@@ -365,8 +403,11 @@ namespace yask {
                         misc_idxs.start[i] >= sub_block_vidxs.end[i]) { \
                         ok = true; break; }                             \
             }                                                           \
-            if (ok && (bb_is_full || is_in_valid_domain(misc_idxs.start))) \
-                calc_scalar(misc_idxs.start)
+            if (ok && (bb_is_full || is_in_valid_domain(misc_idxs.start))) { \
+                int thread_idx = omp_get_thread_num();                  \
+                calc_scalar(thread_idx, misc_idxs.start);               \
+            }                                                           \
+            } while(0)
                 
             // Scan through n-D space.
 #include "yask_misc_loops.hpp"
@@ -375,13 +416,15 @@ namespace yask {
 
         // Make sure streaming stores are visible for later loads.
         make_stores_visible();
-    }
+
+    } // calc_sub_block.
 
     // Calculate a series of cluster results within an inner loop.
     // The 'loop_idxs' must specify a range only in the inner dim.
     // Indices must be rank-relative.
     // Indices must be normalized, i.e., already divided by VLEN_*.
-    void StencilGroupBase::calc_loop_of_clusters(const ScanIndices& loop_idxs) {
+    void StencilGroupBase::calc_loop_of_clusters(int thread_idx,
+                                                 const ScanIndices& loop_idxs) {
         auto* cp = _generic_context;
         auto dims = cp->get_dims();
         int nsdims = dims->_stencil_dims.size();
@@ -409,14 +452,16 @@ namespace yask {
         idx_t stop_inner = loop_idxs.stop[_inner_posn];
 
         // Call code from stencil compiler.
-        calc_loop_of_clusters(start_idxs, stop_inner);
+        calc_loop_of_clusters(thread_idx, start_idxs, stop_inner);
     }
 
     // Calculate a series of vector results within an inner loop.
     // The 'loop_idxs' must specify a range only in the inner dim.
     // Indices must be rank-relative.
     // Indices must be normalized, i.e., already divided by VLEN_*.
-    void StencilGroupBase::calc_loop_of_vectors(const ScanIndices& loop_idxs, idx_t write_mask) {
+void StencilGroupBase::calc_loop_of_vectors(int thread_idx,
+                                            const ScanIndices& loop_idxs,
+                                            idx_t write_mask) {
         auto* cp = _generic_context;
         auto dims = cp->get_dims();
         int nsdims = dims->_stencil_dims.size();
@@ -441,9 +486,47 @@ namespace yask {
         idx_t stop_inner = loop_idxs.stop[_inner_posn];
 
         // Call code from stencil compiler.
-        calc_loop_of_vectors(start_idxs, stop_inner, write_mask);
+        calc_loop_of_vectors(thread_idx, start_idxs, stop_inner, write_mask);
     }
 
+    // If this group is updating scratch grid(s),
+    // expand indices to calculate values in halo.
+    bool StencilGroupBase::adjust_scan(ScanIndices& idxs) const {
+
+        // Adjust scan based on first grid's halo.
+        for (auto* sv : outputScratchVecs) {
+            for (auto gp : *sv) {
+
+                assert(gp->is_scratch());
+
+                // Loop thru dims.
+                // TODO: cache these values in the object so we don't need to
+                // do this expensive scan.
+                auto dims = get_dims();
+                int i = 0;
+                for (auto& dim : dims->_stencil_dims.getDims()) {
+                    auto& dname = dim.getName();
+
+                    // Get halo from grid in this dim.
+                    int posn = gp->get_dim_posn(dname);
+                    if (posn >= 0) {
+                        idx_t lh = gp->get_left_halo_size(posn);
+                        idx_t rh = gp->get_right_halo_size(posn);
+
+                        // Adjust scan indices.
+                        idxs.begin[i] -= lh;
+                        idxs.end[i] += rh;
+                    }
+                    i++;
+                }
+
+                // Only need data for first grid since all halos should be same.
+                return true;
+            }
+        }
+        return false;
+    }
+    
     // Set the bounding-box vars for this group in this rank.
     void StencilGroupBase::find_bounding_box() {
         StencilContext& context = *_generic_context;
@@ -475,12 +558,12 @@ namespace yask {
 
         // Define misc-loop function.  Since step is always 1, we ignore
         // misc_stop.  Update only if point is in domain for this group.
-#define misc_fn(misc_idxs)                                        \
+#define misc_fn(misc_idxs) do {                                  \
         if (is_in_valid_domain(misc_idxs.start)) {               \
             min_pts = min_pts.minElements(misc_idxs.start);      \
             max_pts = max_pts.maxElements(misc_idxs.start);      \
             npts++; \
-        }
+        } } while(0)
 
         // Define OMP reductions to be used in generated code.
 #ifdef OMP_PRAGMA_SUFFIX

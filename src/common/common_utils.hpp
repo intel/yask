@@ -28,13 +28,20 @@ IN THE SOFTWARE.
 // MACRO for throw yask_exception
 #define THROW_YASK_EXCEPTION(message) do {                          \
         yask_exception e;                                           \
-        stringstream err;                                           \
+        std::stringstream err;                                      \
         err << message;                                             \
         e.add_message(err.str());                                   \
         throw e;                                                    \
     } while(0)
 
 namespace yask {
+
+    // Types of dependencies.
+    enum DepType {
+        cur_step_dep,
+        prev_step_dep,          // not yet used.
+        num_deps
+    };
 
 } // namespace yask.
 

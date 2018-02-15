@@ -223,212 +223,199 @@ void alloc_steps(yk_solution_ptr soln, const AppSettings& opts) {
 // Parse command-line args, run kernel, run validation if requested.
 int main(int argc, char** argv)
 {
-	// just a line.
-	string divLine;
-	for (int i = 0; i < 60; i++)
-		divLine += "─";
-	divLine += "\n";
+    // just a line.
+    string divLine;
+    for (int i = 0; i < 60; i++)
+        divLine += "─";
+    divLine += "\n";
 
     try {
         // Stop collecting VTune data.
         // Even better to use -start-paused option.
         VTUNE_PAUSE;
 
-		// Bootstrap factory from kernel API.
-		yk_factory kfac;
+        // Bootstrap factory from kernel API.
+        yk_factory kfac;
 
-		// Set up the environment (mostly MPI).
-		auto kenv = kfac.new_env();
-		auto ep = dynamic_pointer_cast<KernelEnv>(kenv);
+        // Set up the environment (mostly MPI).
+        auto kenv = kfac.new_env();
+        auto ep = dynamic_pointer_cast<KernelEnv>(kenv);
 
-		// Problem dimensions.
-		auto dims = YASK_STENCIL_CONTEXT::new_dims();
+        // Problem dimensions.
+        auto dims = YASK_STENCIL_CONTEXT::new_dims();
 
-		// Parse cmd-line options.
-		// TODO: do this through APIs.
-		auto opts = make_shared<AppSettings>(dims, ep);
-		opts->parse(argc, argv);
+        // Parse cmd-line options.
+        // TODO: do this through APIs.
+        auto opts = make_shared<AppSettings>(dims, ep);
+        opts->parse(argc, argv);
 
-		// Object containing data and parameters for stencil eval.
-		// TODO: do everything through API without cast to StencilContext.
-		auto ksoln = kfac.new_solution(kenv);
-		auto context = dynamic_pointer_cast<StencilContext>(ksoln);
-		assert(context.get());
-		context->set_settings(opts);
-		ostream& os = context->set_ostr();
+        // Object containing data and parameters for stencil eval.
+        // TODO: do everything through API without cast to StencilContext.
+        auto ksoln = kfac.new_solution(kenv);
+        auto context = dynamic_pointer_cast<StencilContext>(ksoln);
+        assert(context.get());
+        context->set_settings(opts);
+        ostream& os = context->set_ostr();
 
-		// Make sure any MPI/OMP debug data is dumped from all ranks before continuing.
-		kenv->global_barrier();
+        // Make sure any MPI/OMP debug data is dumped from all ranks before continuing.
+        kenv->global_barrier();
 
-		// Print splash banner and related info.
-		opts->splash(os, argc, argv);
+        // Print splash banner and related info.
+        opts->splash(os, argc, argv);
 
-		// Override alloc if requested.
-		alloc_steps(ksoln, *opts);
+        // Override alloc if requested.
+        alloc_steps(ksoln, *opts);
 
-		// Alloc memory, etc.
-		ksoln->prepare_solution();
+        // Alloc memory, etc.
+        ksoln->prepare_solution();
 
-		// Exit if nothing to do.
-		if (opts->num_trials < 1) {
-        	yask_exception e;
-        	stringstream err;
-			err << "Exiting because no trials are specified." << endl;
-            e.add_message(err.str());
-            throw e;
-			//exit_yask(1);
-		}
-		if (context->bb_num_points < 1) {
-        	yask_exception e;
-        	stringstream err;
-			err << "Exiting because there are no points in the domain." << endl;
-            e.add_message(err.str());
-            throw e;
-			//exit_yask(1);
-		}
+        // Exit if nothing to do.
+        if (opts->num_trials < 1)
+            THROW_YASK_EXCEPTION("Exiting because no trials are specified");
+        if (context->bb_num_points < 1) 
+            THROW_YASK_EXCEPTION("Exiting because there are no points in the domain");
 
-		// init data in grids and params.
-		if (opts->doWarmup || !opts->validate)
-			context->initData();
+        // init data in grids and params.
+        if (opts->doWarmup || !opts->validate)
+            context->initData();
 
-		// Invoke auto-tuner.
-		if (opts->doPreAutoTune)
-			ksoln->run_auto_tuner_now();
+        // Invoke auto-tuner.
+        if (opts->doPreAutoTune)
+            ksoln->run_auto_tuner_now();
 
-		// Enable/disable further auto-tuning.
-		ksoln->reset_auto_tuner(opts->doAutoTune);
+        // Enable/disable further auto-tuning.
+        ksoln->reset_auto_tuner(opts->doAutoTune);
 
-		// warmup caches, threading, etc.
-		if (opts->doWarmup) {
+        // warmup caches, threading, etc.
+        if (opts->doWarmup) {
 
-			idx_t dt = 1;
-			os << endl << divLine <<
-				"Running " << dt << " step(s) for warm-up...\n" << flush;
-			ksoln->run_solution(0, dt-1);
+            idx_t dt = 1;
+            os << endl << divLine <<
+                "Running " << dt << " step(s) for warm-up...\n" << flush;
+            ksoln->run_solution(0, dt-1);
 
-		}
-		kenv->global_barrier();
+        }
+        kenv->global_barrier();
 
-		// variables for measuring performance.
-		double best_elapsed_time=0., best_apps=0., best_dpps=0., best_flops=0.;
+        // variables for measuring performance.
+        double best_elapsed_time=0., best_apps=0., best_dpps=0., best_flops=0.;
 
-		/////// Performance run(s).
-		auto& step_dim = opts->_dims->_step_dim;
-		idx_t dt = opts->_rank_sizes[step_dim];
-		os << endl << divLine <<
-			"Running " << opts->num_trials << " performance trial(s) of " <<
-			dt << " step(s) each...\n" << flush;
-		for (idx_t tr = 0; tr < opts->num_trials; tr++) {
-			os << divLine << flush;
+        /////// Performance run(s).
+        auto& step_dim = opts->_dims->_step_dim;
+        idx_t dt = opts->_rank_sizes[step_dim];
+        os << endl << divLine <<
+            "Running " << opts->num_trials << " performance trial(s) of " <<
+            dt << " step(s) each...\n" << flush;
+        for (idx_t tr = 0; tr < opts->num_trials; tr++) {
+            os << divLine << flush;
 
-			// init data before each trial for comparison if validating.
-			if (opts->validate)
-				context->initDiff();
+            // init data before each trial for comparison if validating.
+            if (opts->validate)
+                context->initDiff();
 
-			// Warn if tuning.
-			if (ksoln->is_auto_tuner_enabled())
-				os << "auto-tuner is active during this trial, so results may not be representative.\n";
+            // Warn if tuning.
+            if (ksoln->is_auto_tuner_enabled())
+                os << "auto-tuner is active during this trial, so results may not be representative.\n";
 
-			// Stabilize.
-			if (opts->pre_trial_sleep_time > 0) {
-				os << flush;
-				sleep(opts->pre_trial_sleep_time);
-			}
-			kenv->global_barrier();
+            // Stabilize.
+            if (opts->pre_trial_sleep_time > 0) {
+                os << flush;
+                sleep(opts->pre_trial_sleep_time);
+            }
+            kenv->global_barrier();
 
-			// Start vtune collection.
-			VTUNE_RESUME;
+            // Start vtune collection.
+            VTUNE_RESUME;
 
-			// Actual work.
-			context->clear_timers();
-			context->calc_rank_opt();
+            // Actual work.
+            context->clear_timers();
+            context->calc_rank_opt();
 
-			// Stop vtune collection.
-			VTUNE_PAUSE;
+            // Stop vtune collection.
+            VTUNE_PAUSE;
 
-			// Calc and report perf.
-			auto stats = context->get_stats();
+            // Calc and report perf.
+            auto stats = context->get_stats();
 
-			// Remember best.
-			if (context->domain_pts_ps > best_dpps) {
-				best_dpps = context->domain_pts_ps;
-				best_apps = context->writes_ps;
-				best_flops = context->flops;
-				best_elapsed_time = stats->get_elapsed_run_secs();
-			}
-		}
+            // Remember best.
+            if (context->domain_pts_ps > best_dpps) {
+                best_dpps = context->domain_pts_ps;
+                best_apps = context->writes_ps;
+                best_flops = context->flops;
+                best_elapsed_time = stats->get_elapsed_run_secs();
+            }
+        }
 
-		os << divLine <<
-			"best-elapsed-time (sec):           " << makeNumStr(best_elapsed_time) << endl <<
-			"best-throughput (num-points/sec):  " << makeNumStr(best_dpps) << endl <<
-			"best-throughput (est-FLOPS):       " << makeNumStr(best_flops) << endl <<
-			"best-throughput (num-writes/sec):  " << makeNumStr(best_apps) << endl <<
-			divLine <<
-			"Notes:\n" <<
-			" Num-points is based on overall-problem-size as described above.\n" <<
-			" Num-writes is based on num-writes-required as described above.\n" <<
-			" Est-FLOPS is based on est-FP-ops as described above.\n" <<
-			endl;
+        os << divLine <<
+            "best-elapsed-time (sec):           " << makeNumStr(best_elapsed_time) << endl <<
+            "best-throughput (num-points/sec):  " << makeNumStr(best_dpps) << endl <<
+            "best-throughput (est-FLOPS):       " << makeNumStr(best_flops) << endl <<
+            "best-throughput (num-writes/sec):  " << makeNumStr(best_apps) << endl <<
+            divLine <<
+            "Notes:\n" <<
+            " Num-points is based on overall-problem-size as described above.\n" <<
+            " Num-writes is based on num-writes-required as described above.\n" <<
+            " Est-FLOPS is based on est-FP-ops as described above.\n" <<
+            endl;
 
-		/////// Validation run.
-		bool ok = true;
-		if (opts->validate) {
-			kenv->global_barrier();
-			os << endl << divLine <<
-				"Setup for validation...\n";
+        /////// Validation run.
+        bool ok = true;
+        if (opts->validate) {
+            kenv->global_barrier();
+            os << endl << divLine <<
+                "Setup for validation...\n";
 
-			// Make a reference context for comparisons w/new grids.
-			auto ref_soln = kfac.new_solution(kenv, ksoln);
-			auto ref_context = dynamic_pointer_cast<StencilContext>(ref_soln);
-			assert(ref_context.get());
-			ref_context->name += "-reference";
-			ref_context->allow_vec_exchange = false;
-			alloc_steps(ref_soln, *opts);
-			ref_soln->prepare_solution();
+            // Make a reference context for comparisons w/new grids.
+            auto ref_soln = kfac.new_solution(kenv, ksoln);
+            auto ref_context = dynamic_pointer_cast<StencilContext>(ref_soln);
+            assert(ref_context.get());
+            ref_context->name += "-reference";
+            ref_context->allow_vec_exchange = false;
+            alloc_steps(ref_soln, *opts);
+            ref_soln->prepare_solution();
 
-			// init to same value used in context.
-			ref_context->initDiff();
+            // init to same value used in context.
+            ref_context->initDiff();
 
-	#ifdef CHECK_INIT
+#ifdef CHECK_INIT
 
-			// Debug code to determine if data compares immediately after init matches.
-			os << endl << divLine <<
-				"Reinitializing data for minimal validation...\n" << flush;
-			context->initDiff();
-	#else
+            // Debug code to determine if data compares immediately after init matches.
+            os << endl << divLine <<
+                "Reinitializing data for minimal validation...\n" << flush;
+            context->initDiff();
+#else
 
-			// Ref trial.
-			os << endl << divLine <<
-				"Running " << dt << " time step(s) for validation...\n" << flush;
-			ref_context->calc_rank_ref();
-	#endif
+            // Ref trial.
+            os << endl << divLine <<
+                "Running " << dt << " step(s) for validation...\n" << flush;
+            ref_context->calc_rank_ref();
+#endif
 
-			// check for equality.
-			os << "Checking results..." << endl;
-			idx_t errs = context->compareData(*ref_context);
-			auto ri = kenv->get_rank_index();
-			if( errs == 0 ) {
-				os << "TEST PASSED on rank " << ri << ".\n" << flush;
-			} else {
-				cerr << "TEST FAILED on rank " << ri << ": >= " << errs << " mismatch(es).\n" << flush;
-				if (REAL_BYTES < 8)
-					cerr << "This is not uncommon for low-precision FP; try with 8-byte reals." << endl;
-				ok = false;
-			}
-		}
-		else
-			os << "\nRESULTS NOT VERIFIED.\n";
+            // check for equality.
+            os << "Checking results..." << endl;
+            idx_t errs = context->compareData(*ref_context);
+            auto ri = kenv->get_rank_index();
+            if( errs == 0 ) {
+                os << "TEST PASSED on rank " << ri << ".\n" << flush;
+            } else {
+                cerr << "TEST FAILED on rank " << ri << ": >= " << errs << " mismatch(es).\n" << flush;
+                if (REAL_BYTES < 8)
+                    cerr << "This is not uncommon for low-precision FP; try with 8-byte reals." << endl;
+                ok = false;
+            }
+        }
+        else
+            os << "\nRESULTS NOT VERIFIED.\n";
 
-		kenv->global_barrier();
-		if (!ok)
-			exit_yask(1);
+        kenv->global_barrier();
+        if (!ok)
+            exit_yask(1);
     } catch (yask_exception e) {
-		cout << "YASK throws an exception.\n";
-		cout << e.get_message();
-		exit_yask(1);
+        cerr << "YASK Kernel: " << e.get_message() << ".\n";
+        exit_yask(1);
     }
 
-	MPI_Finalize();
+    MPI_Finalize();
     cout << "YASK DONE." << endl << divLine << flush;
     
     return 0;

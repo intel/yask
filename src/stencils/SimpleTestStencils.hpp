@@ -240,21 +240,21 @@ public:
     // Define equation to apply to all points in 'data' grid.
     virtual void define() {
 
-        // Set scratch var.
-        GridValue ix = data(t, x);
+        // Set scratch var w/an asymmetrical stencil.
+        GridValue u = data(t, x);
         for (int r = 1; r <= _radius; r++)
-            ix += data(t, x-r);
+            u += data(t, x-r);
         for (int r = 1; r <= _radius + 1; r++)
-            ix += data(t, x+r);
-        t1(x) EQUALS ix / (_radius * 2 + 3);
+            u += data(t, x+r);
+        t1(x) EQUALS u / (_radius * 2 + 2);
 
-        // Update data from scratch vars.
+        // Set data from scratch vars w/an asymmetrical stencil.
         GridValue v = t1(x);
-        for (int r = 1; r <= _radius + 3; r++)
+        for (int r = 1; r <= _radius + 2; r++)
             v += t1(x-r);
-        for (int r = 1; r <= _radius + 4; r++)
+        for (int r = 1; r <= _radius + 3; r++)
             v += t1(x+r);
-        data(t+1, x) EQUALS v / (_radius * 2 + 8);;
+        data(t+1, x) EQUALS v / (_radius * 2 + 6);
     }
 };
 

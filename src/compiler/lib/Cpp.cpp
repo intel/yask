@@ -50,7 +50,7 @@ namespace yask {
                                          string optArg) {
 
         // Get/set local vars.
-        string gridPtr = getLocalVar(os, "_context->" + gp.getGridName(), "auto");
+        string gridPtr = getLocalVar(os, gp.getGridPtr(), "auto");
         string stepArgVar = getLocalVar(os, gp.makeStepArgStr(gridPtr, *_dims), "auto");
         
         ostringstream oss;
@@ -88,7 +88,7 @@ namespace yask {
         string gtype = folded ? "YkVecGrid" : "YkElemGrid";
 
         // Get/set local vars.
-        string gridPtr = getLocalVar(os, "_context->" + gp.getGridName(), "auto");
+        string gridPtr = getLocalVar(os, gp.getGridPtr(), "auto");
         string stepArgVar = getLocalVar(os, gp.makeStepArgStr(gridPtr, *_dims), "auto");
         
         // Assume that broadcast will be handled automatically by
@@ -166,7 +166,7 @@ namespace yask {
                                                 bool isNorm) {
 
         // Get/set local vars.
-        string gridPtr = getLocalVar(os, "_context->" + gp.getGridName(), "auto");
+        string gridPtr = getLocalVar(os, gp.getGridPtr(), "auto");
         string stepArgVar = getLocalVar(os, gp.makeStepArgStr(gridPtr, *_dims), "auto");
 
         ostringstream oss;
@@ -287,9 +287,9 @@ namespace yask {
 
                     // _ptrOfs{Lo,Hi} contain first and last offsets in idim,
                     // NOT normalized to vector len.
-                    string lo = _dims->makeNormStr(_ptrOfsLo[ptr], idim);
-                    if (lo.length() == 0) lo = "0";
-                    string hi = _dims->makeNormStr(_ptrOfsHi[ptr], idim);
+                    string left = _dims->makeNormStr(_ptrOfsLo[ptr], idim);
+                    if (left.length() == 0) left = "0";
+                    string right = _dims->makeNormStr(_ptrOfsHi[ptr], idim);
             
                     // Start loop of prefetches.
                     os << "#pragma unroll\n" <<
@@ -297,16 +297,16 @@ namespace yask {
 
                     // First offset.
                     if (ahead)
-                        os << "(PFD_L" << level << "*" << imult << ")" << hi;
+                        os << "(PFD_L" << level << "*" << imult << ")" << right;
                     else
-                        os << lo;
+                        os << left;
 
                     // End of offsets.
                     os << "; ofs < ";
                     if (ahead)
-                        os << "((PFD_L" << level << "+1)*" << imult << ")" << hi;
+                        os << "((PFD_L" << level << "+1)*" << imult << ")" << right;
                     else
-                        os << "(PFD_L" << level << "*" << imult << ")" << hi;
+                        os << "(PFD_L" << level << "*" << imult << ")" << right;
 
                     // Continue loop.
                     os << "; ofs++)\n" <<

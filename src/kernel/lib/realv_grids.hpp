@@ -50,14 +50,14 @@ namespace yask {
         // All values are in units of reals, not underlying elements, if different.
         // Settings for domain dims | non-domain dims.
         Indices _domains;   // rank domain sizes copied from the solution | alloc size.
-        Indices _pads;      // extra space around domains | zero.
-        Indices _halos;     // space within pads for halo exchange | zero.
+        Indices _left_pads, _right_pads; // extra space around domains | zero.
+        Indices _left_halos, _right_halos; // space within pads for halo exchange | zero.
         Indices _offsets;   // offsets of this rank in overall domain | first index.
         Indices _vec_lens;  // num reals in each elem | one.
         Indices _allocs;    // actual grid allocation in reals | as domain dims.
 
         // Indices in vectors for sizes that are always vec lens (to avoid division).
-        Indices _vec_pads;
+        Indices _vec_left_pads;
         Indices _vec_allocs;
 
         // Whether step dim is used.
@@ -73,7 +73,10 @@ namespace yask {
         bool _is_col_major = false;
 
         // Whether to resize this grid based on solution parameters.
-        bool _do_resize = true;
+        bool _fixed_size = false;
+
+        // Whether this is a scratch grid;
+        bool _is_scratch = false;
 
         // Convenience function to format indices like
         // "x=5, y=3".
@@ -96,31 +99,18 @@ namespace yask {
                          bool die_on_failure) {
             auto* tp = dynamic_cast<GT*>(_ggb);
             if (!tp) {
-                if (die_on_failure) {
-                    //TODO: Use THROW_YASK_EXCEPTION MACRO
-                    yask_exception e;
-                    std::stringstream err;
-                    err << "Error in share_data(): "
-                        "target grid not of expected type (internal inconsistency).\n";
-                    e.add_message(err.str());
-                    throw e;
-                }
+                if (die_on_failure)
+                    THROW_YASK_EXCEPTION("Error in share_data(): "
+                                         "target grid not of expected type (internal inconsistency)");
                 return false;
             }
             auto* sp = dynamic_cast<GT*>(src->_ggb);
             if (!sp) {
-                if (die_on_failure) {
-                    //TODO: Use THROW_YASK_EXCEPTION MACRO
-                    yask_exception e;
-                    std::stringstream err;
-                    err << "Error in share_data(): source grid ";
-                    src->print_info(err);
-                    err << " not of same type as target grid ";
-                    print_info(err);
-                    err << ".\n";
-                    e.add_message(err.str());
-                    throw e;
-                }
+                if (die_on_failure)
+                    THROW_YASK_EXCEPTION("Error in share_data(): source grid " <<
+                                         src->make_info_string() <<
+                                         " not of same type as target grid ";
+                                         make_info_string());
                 return false;
             }
 
@@ -155,12 +145,14 @@ namespace yask {
             // Init indices.
             int n = int(ndims);
             _domains.setFromConst(0, n);
-            _pads.setFromConst(0, n);
-            _halos.setFromConst(0, n);
+            _left_pads.setFromConst(0, n);
+            _right_pads.setFromConst(0, n);
+            _left_halos.setFromConst(0, n);
+            _right_halos.setFromConst(0, n);
             _offsets.setFromConst(0, n);
             _vec_lens.setFromConst(1, n);
             _allocs.setFromConst(1, n);
-            _vec_pads.setFromConst(1, n);
+            _vec_left_pads.setFromConst(1, n);
             _vec_allocs.setFromConst(1, n);
             
         }
@@ -172,8 +164,12 @@ namespace yask {
         virtual void set_dirty_all(bool dirty);
 
         // Resize flag accessors.
-        virtual bool is_fixed_size() const { return !_do_resize; }
-        virtual void set_resize(bool resize) { _do_resize = resize; }
+        virtual bool is_fixed_size() const { return _fixed_size; }
+        virtual void set_fixed_size(bool is_fixed) { _fixed_size = is_fixed; }
+
+        // Scratch accessors.
+        virtual bool is_scratch() const { return _is_scratch; }
+        virtual void set_scratch(bool is_scratch) { _is_scratch = is_scratch; }
         
         // Lookup position by dim name.
         // Return -1 or die if not found, depending on flag.
@@ -232,8 +228,8 @@ namespace yask {
             return _ggb->get_ostr();
         }
 
-        // Print some info to 'os'.
-        virtual void print_info(std::ostream& os) const =0;
+        // Make a human-readable description.
+        virtual std::string make_info_string() const =0;
   
         // Check for equality.
         // Return number of mismatches greater than epsilon.
@@ -346,17 +342,24 @@ namespace yask {
         GET_GRID_API(_get_first_alloc_index)
         GET_GRID_API(_get_last_alloc_index)
         SET_GRID_API(_set_domain_size)
-        SET_GRID_API(_set_pad_size)
+        SET_GRID_API(_set_left_pad_size)
+        SET_GRID_API(_set_right_pad_size)
         SET_GRID_API(_set_offset)
 
         // Exposed APIs.
         GET_GRID_API(get_rank_domain_size)
         GET_GRID_API(get_first_rank_domain_index)
         GET_GRID_API(get_last_rank_domain_index)
+        GET_GRID_API(get_left_halo_size)
+        GET_GRID_API(get_right_halo_size)
         GET_GRID_API(get_halo_size)
         GET_GRID_API(get_first_rank_halo_index)
         GET_GRID_API(get_last_rank_halo_index)
+        GET_GRID_API(get_left_extra_pad_size)
+        GET_GRID_API(get_right_extra_pad_size)
         GET_GRID_API(get_extra_pad_size)
+        GET_GRID_API(get_left_pad_size)
+        GET_GRID_API(get_right_pad_size)
         GET_GRID_API(get_pad_size)
         GET_GRID_API(get_alloc_size)
         GET_GRID_API(get_first_rank_alloc_index)
@@ -364,8 +367,14 @@ namespace yask {
         GET_GRID_API(get_first_misc_index)
         GET_GRID_API(get_last_misc_index)
 
+        SET_GRID_API(set_left_halo_size)
+        SET_GRID_API(set_right_halo_size)
         SET_GRID_API(set_halo_size)
+        SET_GRID_API(set_left_min_pad_size)
+        SET_GRID_API(set_right_min_pad_size)
         SET_GRID_API(set_min_pad_size)
+        SET_GRID_API(set_left_extra_pad_size)
+        SET_GRID_API(set_right_extra_pad_size)
         SET_GRID_API(set_extra_pad_size)
         SET_GRID_API(set_alloc_size)
         SET_GRID_API(set_first_misc_index)
@@ -486,9 +495,9 @@ namespace yask {
             return _data.get_num_dims();
         }
 
-        // Print some info to 'os'.
-        virtual void print_info(std::ostream& os) const {
-            _data.print_info(os, "FP");
+        // Make a human-readable description.
+        virtual std::string make_info_string() const {
+            return _data.make_info_string("FP");
         }
 
         // Init data.
@@ -527,7 +536,7 @@ namespace yask {
 
                     // Adjust for offset and padding.
                     // This gives a 0-based local element index.
-                    adj_idxs[i] = idxs[i] - _offsets[i] + _pads[i];
+                    adj_idxs[i] = idxs[i] - _offsets[i] + _left_pads[i];
                 }
             }
             
@@ -633,9 +642,9 @@ namespace yask {
             return _data.get_num_dims();
         }
 
-        // Print some info to 'os'.
-        virtual void print_info(std::ostream& os) const {
-            _data.print_info(os, "SIMD FP");
+        // Make a human-readable description.
+        virtual std::string make_info_string() const {
+            return _data.make_info_string("SIMD FP");
         }
         
         // Init data.
@@ -694,7 +703,7 @@ namespace yask {
 
                     // Adjust for offset and padding.
                     // This gives a positive 0-based local element index.
-                    idx_t ai = idxs[i] - _offsets[i] + _pads[i];
+                    idx_t ai = idxs[i] - _offsets[i] + _left_pads[i];
                     assert(ai >= 0);
                     uidx_t adj_idx = uidx_t(ai);
                     
@@ -802,7 +811,7 @@ namespace yask {
 
                     // Adjust for padding.
                     // This gives a 0-based local *vector* index.
-                    adj_idxs[i] = idxs[i] + _vec_pads[i];
+                    adj_idxs[i] = idxs[i] + _vec_left_pads[i];
                 }
             }
 

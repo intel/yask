@@ -186,8 +186,8 @@ namespace yask {
     template<typename T> shared_ptr<T> castExpr(ExprPtr ep, const string& descrip) {
         auto tp = dynamic_pointer_cast<T>(ep);
         if (!tp) {
-            THROW_YASK_EXCEPTION("Error: expression '" << ep->makeStr() << "' is not a " <<
-                descrip << "." << endl);
+            THROW_YASK_EXCEPTION("Error: expression '" << ep->makeStr() <<
+                                 "' is not a " << descrip);
         }
         return tp;
     }
@@ -333,7 +333,7 @@ namespace yask {
         // Exit with error if not known.
         virtual bool getBoolVal() const {
             THROW_YASK_EXCEPTION("Error: cannot evaluate '" << makeStr() <<
-                "' for a known boolean value.\n");
+                                 "' for a known boolean value");
         }
 
         // Create a deep copy of this expression.
@@ -767,6 +767,7 @@ namespace yask {
         const Grid* getGrid() const { return _grid; }
         Grid* getGrid() { return _grid; }
         virtual const string& getGridName() const;
+        virtual string getGridPtr() const;
         virtual bool isGridFoldable() const;
 
         // Accessors.

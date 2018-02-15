@@ -151,8 +151,8 @@ namespace yask {
         visitor(a, seen1);
                     
         // any dependencies?
-        if (_deps.count(a)) {
-            auto& adeps = _deps.at(a);
+        if (_imm_deps.count(a)) {
+            auto& adeps = _imm_deps.at(a);
     
             // loop thru deps of 'a', i.e., each 'b' deps on 'a'.
             for (auto b : adeps) {
@@ -165,7 +165,7 @@ namespace yask {
 
     // Does recursive analysis to turn all indirect dependencies to direct
     // ones.
-    void EqDeps::analyze() {
+    void EqDeps::find_all_deps() {
         if (_done)
             return;
         for (auto a : _all)
@@ -268,7 +268,7 @@ namespace yask {
                 if (!lofsp || abs(*lofsp) != 1) {
                     THROW_YASK_EXCEPTION("Error: LHS of equation " << eq1->makeQuotedStr() <<
                                          " does not contain '" << dims.makeStepStr(1) <<
-                                         "' or '" << dims.makeStepStr(-1) << "'.\n");
+                                         "' or '" << dims.makeStepStr(-1) << "'");
                 }
                 lofs = *lofsp;
 
@@ -278,7 +278,7 @@ namespace yask {
                         THROW_YASK_EXCEPTION("Error: LHS of equation " << eq1->makeQuotedStr() <<
                                              " contains '" << dims.makeStepStr(lofs) <<
                                              "', which is different than a previous equation with '" <<
-                                             dims.makeStepStr(dims._stepDir) << "'.\n");
+                                             dims.makeStepStr(dims._stepDir) << "'");
                     }
                 } else
                     
@@ -291,7 +291,7 @@ namespace yask {
             if (op1->getVecType() != GridPoint::VEC_FULL) {
                 THROW_YASK_EXCEPTION("Error: LHS of equation " << eq1->makeQuotedStr() <<
                                      " is not fully vectorizable because not all folded"
-                                     " dimensions are accessed via simple offsets from their respective indices.\n");
+                                     " dimensions are accessed via simple offsets from their respective indices");
             }
 
             // Scan input (RHS) points.
@@ -309,7 +309,7 @@ namespace yask {
                                              eq1->makeQuotedStr() <<
                                              " contains '" << dims.makeStepStr(rsi1) << 
                                              "', which is incompatible with '" << dims.makeStepStr(lofs) << 
-                                             "' on LHS.\n");
+                                             "' on LHS");
                     }
                 }
             }
@@ -343,12 +343,12 @@ namespace yask {
                     THROW_YASK_EXCEPTION("Error: two equations " << cdesc <<
                                          " have the same LHS grid '" << og1->getName() << "': " <<
                                          eq1->makeQuotedStr() << " and " <<
-                                         eq2->makeQuotedStr() << ".\n");
+                                         eq2->makeQuotedStr());
                 }
 
                 // First dep check: exact matches on LHS of eq1 to RHS of eq2.
                 // eq2 dep on eq1 => some output of eq1 is an input to eq2.
-                // If the two eqs have the same condition, detect certain
+                // If the two eqs have the same condition, detect
                 // dependencies by looking for exact matches.
                 // We do this check first because it's quicker than the
                 // detailed scan done later if this one doesn't find a dep.
@@ -363,16 +363,12 @@ namespace yask {
                                     
                         // Exit with error.
                         THROW_YASK_EXCEPTION("Error: illegal dependency: LHS of equation " <<
-                                             eq1->makeQuotedStr() << " also appears on its RHS.\n");
+                                             eq1->makeQuotedStr() << " also appears on its RHS");
                     }
 
                     // Save dependency.
-                    // Flag as both certain and possible because we need to follow
-                    // certain ones when resolving indirect possible ones.
-                    if (eq_deps) {
-                        (*eq_deps)[certain_dep].set_dep_on(eq2, eq1);
-                        (*eq_deps)[possible_dep].set_dep_on(eq2, eq1);
-                    }
+                    if (eq_deps)
+                        (*eq_deps)[cur_step_dep].set_imm_dep_on(eq2, eq1);
                         
                     // Move along to next eq2.
                     continue;
@@ -422,22 +418,12 @@ namespace yask {
                                 string stepmsg = same_step ? " at '" + dims.makeStepStr(lofs) + "'" : "";
                                 THROW_YASK_EXCEPTION("Error: disallowed dependency: grid on LHS of equation " <<
                                                      eq1->makeQuotedStr() << " also appears on its RHS" <<
-                                                     stepmsg << ".\n");
+                                                     stepmsg);
                             }
 
                             // Save dependency.
-                            if (eq_deps) {
-
-                                // Even if conditions are different, this
-                                // might be a dep.
-                                (*eq_deps)[possible_dep].set_dep_on(eq2, eq1);
-
-                                // If conditions are same, this is most likely a real dep
-                                // unless inputs are always outside of sub-domain.
-                                // TODO: check for this.
-                                if (same_cond)
-                                    (*eq_deps)[certain_dep].set_dep_on(eq2, eq1);
-                            }
+                            if (eq_deps)
+                                (*eq_deps)[cur_step_dep].set_imm_dep_on(eq2, eq1);
 
                             // Move along to next equation.
                             break;
@@ -450,8 +436,8 @@ namespace yask {
         // Resolve indirect dependencies.
         if (eq_deps) {
             os << " Resolving indirect dependencies...\n";
-            for (DepType dt = certain_dep; dt < num_deps; dt = DepType(dt+1))
-                (*eq_deps)[dt].analyze();
+            for (DepType dt = DepType(0); dt < num_deps; dt = DepType(dt+1))
+                (*eq_deps)[dt].find_all_deps();
         }
         os << " Done with dependency analysis.\n";
     }
@@ -591,6 +577,7 @@ namespace yask {
     }
 
     // Update access stats for the grids.
+    // Also finds scratch-grid eqs needed for each non-scratch eq.
     void Eqs::updateGridStats(EqDepMap& eq_deps) {
 
         // Find all LHS and RHS points and grids for all eqs.
@@ -618,42 +605,85 @@ namespace yask {
                 g->updateConstIndices(ap->getArgConsts());
             }
 
-            // If 'eq1' defines a non-scratch grid point,
-            // visit all dependency paths of 'eq1'.
+            // If 'eq1' has a non-scratch output, visit all dependencies of
+            // 'eq1'.  It's important to visit the eqs in dep order to
+            // properly propagate halos sizes thru chains of scratch grids.
             if (!og1->isScratch()) {
-                eq_deps[certain_dep].visitDeps
+                eq_deps[cur_step_dep].visitDeps
+
+                    // 'eq1' is 'b' or depends on 'b', immediately or indirectly.
                     (eq1, [&](EqualsExprPtr b, EqDeps::EqVecSet& path) {
+
+                        // Only check if conditions are same.
+                        auto cond1 = getCond(eq1);
+                        auto cond2 = getCond(b);
+                        bool same_cond = areExprsSame(cond1, cond2);
                         
-                        // Walk path from 'eq1' back to eq 'b'.
-                        // 'eq1' depends on every 'eq2' in path after 'eq1'.
-                        // Every 'eq2' in 'path' before 'b' depends on 'b'.
+                        // Does 'b' have a scratch-grid output?
+                        auto* og2 = pv.getOutputGrids().at(b.get());
+                        if (same_cond && og2->isScratch()) {
+
+                            // Get halos from the output scratch grid.
+                            // These are the points that are read from
+                            // in dependent eq(s).
+                            // For scratch grids, the halo areas must also be written to.
+                            auto _left_ohalo = og2->getHaloSizes(true);
+                            auto _right_ohalo = og2->getHaloSizes(false);
+
+                            // Expand halos of all input grids by size of output-grid halo.
+                            auto& inPts2 = pv.getInputPts().at(b.get());
+                            for (auto ip2 : inPts2) {
+                                auto* ig2 = ip2->getGrid();
+                                auto& ao2 = ip2->getArgOffsets();
+
+                                // Increase range by subtracing left halos and
+                                // adding right halos.
+                                auto _left_ihalo = ao2.subElements(_left_ohalo, false);
+                                ig2->updateHalo(_left_ihalo);
+                                auto _right_ihalo = ao2.addElements(_right_ohalo, false);
+                                ig2->updateHalo(_right_ihalo);
+                            }
+                        }
+
+                        // Find scratch-grid eqs in this dep path that are
+                        // needed for 'eq1'. Walk dep path from 'eq1' to 'b'.
                         EqualsExprPtr prev;
                         for (auto eq2 : path) {
 
-                            // Is there a scratch-grid output?
-                            auto* og2 = pv.getOutputGrids().at(eq2.get());
-                            if (og2->isScratch()) {
+                            // Only continue if conditions are same.
+                            auto cond1 = getCond(eq1);
+                            auto cond2 = getCond(eq2);
+                            if (!areExprsSame(cond1, cond2))
+                                break;
 
-                                // Get halos from this grid.
-                                // For scratch grids, the halo areas must be written to.
-                                auto lo_ohalo = og2->getHaloSizes(true);
-                                auto hi_ohalo = og2->getHaloSizes(false);
+                            // Look for scratch-grid dep from 'prev' to 'eq2'.
+                            if (prev) {
 
-                                // Expand all input halos by size of output halo.
-                                auto& inPts2 = pv.getInputPts().at(eq2.get());
+                                // Find any scratch-grid inputs of 'prev'.
+                                set<Grid*> targets;
+                                auto& inPts2 = pv.getInputPts().at(prev.get());
                                 for (auto ip2 : inPts2) {
                                     auto* ig2 = ip2->getGrid();
-                                    auto& ao2 = ip2->getArgOffsets();
-
-                                    // Increase range by subtracing lo halos and
-                                    // adding hi halos.
-                                    auto lo_ihalo = ao2.subElements(lo_ohalo, false);
-                                    ig2->updateHalo(lo_ihalo);
-                                    auto hi_ihalo = ao2.addElements(hi_ohalo, false);
-                                    ig2->updateHalo(hi_ihalo);
+                                    if (ig2->isScratch())
+                                        targets.insert(ig2);
                                 }
+
+                                // If there are none, we are done.
+                                if (targets.empty())
+                                    break;
+                            
+                                // If 'eq2' output-grid is one of the
+                                // scratch-grid targets, add it to the set
+                                // needed for 'eq1'.
+                                auto* og2 = pv.getOutputGrids().at(eq2.get());
+                                if (targets.count(og2))
+                                    _scratch_deps[eq1].insert(eq2);
+                                else
+                                    break;
                             }
+                            prev = eq2;
                         }
+                        
                     });
             }
         }
@@ -704,25 +734,35 @@ namespace yask {
             _inGrids.insert(g);
     }
 
-    // Set dependency on eg2 if this eq-group is dependent on it.
-    // Return whether dependent.
-    bool EqGroup::setDepOn(DepType dt, EqDepMap& eq_deps, const EqGroup& eg2)
+    // Check for and set dependencies on eg2.
+    void EqGroup::checkDeps(Eqs& allEqs, EqDepMap& eq_deps, const EqGroup& eg2)
     {
-
         // Eqs in this.
         for (auto& eq1 : getEqs()) {
+            auto& sdeps1 = allEqs.getScratchDeps(eq1);
 
             // Eqs in eg2.
             for (auto& eq2 : eg2.getEqs()) {
 
-                if (eq_deps[dt].is_dep_on(eq1, eq2)) {
+                for (DepType dt = DepType(0); dt < num_deps; dt = DepType(dt+1)) {
 
-                    _dep_on[dt].insert(eg2.getName());
-                    return true;
+                    // Immediate dep.
+                    if (eq_deps[dt].is_imm_dep_on(eq1, eq2)) {
+                        _imm_dep_on[dt].insert(eg2.getName());
+                        _dep_on[dt].insert(eg2.getName());
+                    }
+
+                    // Indirect dep.
+                    else if (eq_deps[dt].is_dep_on(eq1, eq2)) {
+                        _dep_on[dt].insert(eg2.getName());
+                    }
                 }
+
+                // Scratch-grid dep.
+                if (sdeps1.count(eq2))
+                    _scratch_deps.insert(eg2.getName());
             }
         }
-        return false;
     }
 
 
@@ -817,26 +857,16 @@ namespace yask {
                 for (size_t j = i+1; j < size(); j++) {
                 
                     auto& egj = at(j);
-                    bool do_swap = false;
 
-                    // Must swap on certain deps.
-                    if (egi.isDepOn(certain_dep, egj)) {
-                        if (egj.isDepOn(certain_dep, egi)) {
+                    // Must swap if dependent.
+                    if (egi.isDepOn(cur_step_dep, egj)) {
+
+                        // Error if also back-dep.
+                        if (egj.isDepOn(cur_step_dep, egi)) {
                             THROW_YASK_EXCEPTION("Error: circular dependency between eq-groups " <<
                                 egi.getDescription() << " and " <<
-                                egj.getDescription() << "\n.");
+                                egj.getDescription());
                         }
-                        do_swap = true;
-                    }
-
-                    // Swap on possible deps if one-way.
-                    else if (egi.isDepOn(possible_dep, egj) && 
-                             !egj.isDepOn(possible_dep, egi) &&
-                             !egj.isDepOn(certain_dep, egi)) {
-                        do_swap = true;
-                    }
-
-                    if (do_swap) {
 
                         // Swap them.
                         EqGroup temp(egi);
@@ -861,25 +891,28 @@ namespace yask {
     bool EqGroups::addExprToGroup(EqualsExprPtr eq,
                                   BoolExprPtr cond,
                                   const string& baseName,
+                                  bool is_scratch,
                                   EqDepMap& eq_deps)
     {
         // Equation already added?
         if (_eqs_in_groups.count(eq))
             return false;
 
-        // Look for existing group matching base-name and condition.
+        // Loop through existing groups, looking for one that
+        // 'eq' can be added to.
         EqGroup* target = 0;
         for (auto& eg : *this) {
 
+            // Must match name and condition.
             if (eg.baseName == baseName &&
                 areExprsSame(eg.cond, cond)) {
 
                 // Look for any dependencies that would prevent adding
-                // eq to eg.
+                // 'eq' to 'eg'.
                 bool is_dep = false;
                 for (auto& eq2 : eg.getEqs()) {
 
-                    for (DepType dt = certain_dep; dt < num_deps; dt = DepType(dt+1)) {
+                    for (DepType dt = DepType(0); dt < num_deps; dt = DepType(dt+1)) {
                         if (eq_deps[dt].is_dep(eq, eq2)) {
 #if DEBUG_ADD_EXPRS
                             cout << "addExprsFromGrid: not adding equation " <<
@@ -903,10 +936,10 @@ namespace yask {
             }
         }
         
-        // Make new group if needed.
+        // Make new group if no target group found.
         bool newGroup = false;
         if (!target) {
-            EqGroup ne(*_dims);
+            EqGroup ne(*_dims, is_scratch);
             push_back(ne);
             target = &back();
             target->baseName = baseName;
@@ -944,7 +977,22 @@ namespace yask {
     {
         os << "Partitioning " << allEqs.getNumEqs() << " equation(s) into groups...\n";
         //auto& stepDim = _dims->_stepDim;
-    
+
+        // Add each scratch equation to a separate group.
+        // TODO: Allow multiple scratch eqs in a group with same conds & halos.
+        for (auto eq : allEqs.getEqs()) {
+
+            // Get updated grid.
+            auto gp = eq->getGrid();
+            assert(gp);
+            if (gp->isScratch()) {
+                string gname = gp->getName();
+
+                // Add equation.
+                addExprToGroup(eq, allEqs.getCond(eq), gname, true, eq_deps);
+            }
+        }
+        
         // Handle each key-value pair in 'targets' string.
         ArgParser ap;
         ap.parseKeyValuePairs
@@ -963,7 +1011,7 @@ namespace yask {
                     if (np != string::npos) {
 
                         // Add equation.
-                        addExprToGroup(eq, allEqs.getCond(eq), key, eq_deps);
+                        addExprToGroup(eq, allEqs.getCond(eq), key, false, eq_deps);
                     }
                 }
             });
@@ -972,19 +1020,18 @@ namespace yask {
         for (auto eq : allEqs.getEqs()) {
 
             // Add equation.
-            addExprToGroup(eq, allEqs.getCond(eq), _basename_default, eq_deps);
+            addExprToGroup(eq, allEqs.getCond(eq), _basename_default, false, eq_deps);
         }
-        os << " Created " << size() << " equation group(s).\n";
+        os << "Created " << size() << " equation group(s):\n";
 
         // Find dependencies between eq-groups based on deps between their eqs.
         for (auto& eg1 : *this) {
-            os << " Checking dependencies of " <<
-                eg1.getDescription() << "...\n";
-            os << "  Updating the following grid(s) with " <<
-                eg1.getNumEqs() << " equation(s):";
+            os << " " << eg1.getDescription() << ":\n"
+                "  Contains " << eg1.getNumEqs() << " equation(s).\n"
+                "  Updates the following grid(s):";
             for (auto* g : eg1.getOutputGrids())
                 os << " " << g->getName();
-            os << endl;
+            os << ".\n";
 
             // Check to see if eg1 depends on other eq-groups.
             for (auto& eg2 : *this) {
@@ -993,10 +1040,21 @@ namespace yask {
                 if (eg1.getName() == eg2.getName())
                     continue;
 
-                if (eg1.setDepOn(certain_dep, eq_deps, eg2))
-                    os << "  Is dependent on " << eg2.getDescription(false) << endl;
-                else if (eg1.setDepOn(possible_dep, eq_deps, eg2))
-                    os << "  May be dependent on " << eg2.getDescription(false) << endl;
+                eg1.checkDeps(allEqs, eq_deps, eg2);
+                DepType dt = cur_step_dep;
+                if (eg1.isImmDepOn(dt, eg2))
+                    os << "  Immediately dependent on group " <<
+                        eg2.getName() << ".\n";
+                else if (eg1.isDepOn(dt, eg2))
+                    os << "  Indirectly dependent on group " <<
+                        eg2.getName() << ".\n";
+            }
+            auto& sdeps = eg1.getScratchDeps();
+            if (sdeps.size()) {
+                os << "  Requires evaluation of the following scratch-grid group(s):";
+                for (auto& sname : sdeps)
+                    os << " " << sname;
+                os << ".\n";
             }
         }
 

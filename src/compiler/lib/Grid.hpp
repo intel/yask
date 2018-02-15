@@ -64,7 +64,7 @@ namespace yask {
         
         // Max abs-value of domain-index halos required by all eqs at
         // various step-index values.
-        // bool key: true=lo, false=hi.
+        // bool key: true=left, false=right.
         // int key: step-dim offset or 0 if no step-dim.
         // TODO: keep separate halos for each equation group.
         map<bool, map<int, IntTuple>> _halos;  
@@ -125,25 +125,25 @@ namespace yask {
         virtual const IntTuple& getMaxIndices() const { return _maxIndices; }
 
         // Get the max sizes of halo across all steps.
-        virtual IntTuple getHaloSizes(bool lo) const {
+        virtual IntTuple getHaloSizes(bool left) const {
             IntTuple halo;
-            if (_halos.count(lo)) {
-                for (auto i : _halos.at(lo)) {
-                    auto& hi = i.second; // halo at step-val 'i'.
-                    halo = halo.makeUnionWith(hi);
-                    halo = halo.maxElements(hi, false);
+            if (_halos.count(left)) {
+                for (auto i : _halos.at(left)) {
+                    auto& right = i.second; // halo at step-val 'i'.
+                    halo = halo.makeUnionWith(right);
+                    halo = halo.maxElements(right, false);
                 }
             }
             return halo;
         }
 
         // Get the max size in 'dim' of halo across all steps.
-        virtual int getHaloSize(const string& dim, bool lo) const {
+        virtual int getHaloSize(const string& dim, bool left) const {
             int h = 0;
-            if (_halos.count(lo)) {
-                for (auto i : _halos.at(lo)) {
-                    auto& hi = i.second; // halo at step-val 'i'.
-                    auto* p = hi.lookup(dim);
+            if (_halos.count(left)) {
+                for (auto i : _halos.at(left)) {
+                    auto& right = i.second; // halo at step-val 'i'.
+                    auto* p = right.lookup(dim);
                     if (p)
                         h = std::max(h, *p);
                 }

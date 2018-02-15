@@ -38,7 +38,7 @@ int main(int argc, char** argv) {
     // Bootstrap factory from kernel API.
     yk_factory kfac;
 
-    // Set up the environment (mostly MPI).
+    // Set up the environment (e.g., OpenMP & MPI).
     auto kenv = kfac.new_env();
 
     // Object containing data and parameters for stencil eval.

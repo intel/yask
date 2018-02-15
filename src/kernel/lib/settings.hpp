@@ -297,7 +297,7 @@ namespace yask {
                                   std::string infix="=",
                                   std::string prefix="",
                                   std::string suffix="") const {
-            assert(names.size() == _ndims);
+            assert((int)names.size() == _ndims);
 
             // Make a Tuple from names.
             IdxTuple tmp;
@@ -385,10 +385,11 @@ namespace yask {
     struct StencilContext;
     class YkGridBase;
 
-    // Some derivations.
+    // Some derivations from grid types.
     typedef std::shared_ptr<YkGridBase> YkGridPtr;
-    typedef std::vector<YkGridPtr> GridPtrs;
     typedef std::set<YkGridPtr> GridPtrSet;
+    typedef std::vector<YkGridPtr> GridPtrs;
+    typedef std::vector<GridPtrs*> ScratchVecs;
     
     // Environmental settings.
     struct KernelEnv :

@@ -145,11 +145,8 @@ namespace yask {
         std::string name;
 
         // List of all stencil groups in the order in which
-        // they should be evaluated. Current assumption is that
-        // later ones are dependent on their predecessors.
-        // TODO: relax this assumption, determining which groups
-        // are actually dependent on which others, allowing
-        // more parallelism.
+        // they should be evaluated within a step.
+        // TODO: use dependency info, allowing more parallelism.
         StencilGroupList stGroups;
 
         // All grids.
@@ -159,6 +156,9 @@ namespace yask {
         // Only grids that are updated by the stencils.
         GridPtrs outputGridPtrs;
         GridPtrMap outputGridMap;
+
+        // Scratch grids.
+        ScratchVecs scratchVecs;
 
         // Some calculated domain sizes.
         IdxTuple rank_domain_offsets;       // Domain index offsets for this rank.
@@ -264,6 +264,9 @@ namespace yask {
                 
                 // Make sure everything is resized based on block size.
                 _opts->adjustSettings(nullop->get_ostream(), _env);
+
+                // Reallocate scratch data based on block size.
+                _context->allocScratchData(nullop->get_ostream());
             }
 
             // Done?
@@ -342,15 +345,19 @@ namespace yask {
 
         // Add a new grid to the containers.
         virtual void addGrid(YkGridPtr gp, bool is_output);
+        virtual void addScratch(GridPtrs& scratch_vec) {
+            scratchVecs.push_back(&scratch_vec);
+        }
         
         // Set vars related to this rank's role in global problem.
         // Allocate MPI buffers as needed.
-        // Called from prepare_solution(), so it doesn't normally need to be called from user code.
         virtual void setupRank();
 
-        // Allocate grid, param, and MPI memory.
-        // Called from prepare_solution(), so it doesn't normally need to be called from user code.
-        virtual void allocData();
+        // Allocate grid and MPI memory.
+        virtual void allocData(std::ostream& os);
+
+        // Allocate scratch-grid memory.
+        virtual void allocScratchData(std::ostream& os);
 
         // Allocate grids, params, MPI bufs, etc.
         // Calculate rank position in problem.
@@ -384,7 +391,7 @@ namespace yask {
             return sz;
         }
 
-        // Init all grids & params by calling initFn.
+        // Init all grids & params by calling realInitFn.
         virtual void initValues(std::function<void (YkGridPtr gp,
                                                     real_t seed)> realInitFn);
 
@@ -508,12 +515,16 @@ namespace yask {
         // Set the bounding-box around all eq groups.
         virtual void find_bounding_boxes();
 
+        // Make new scratch grids.
+        virtual void makeScratchGrids (int num_threads) =0;
+        
         // Make a new grid iff its dims match any in the stencil.
         // Returns pointer to the new grid or nullptr if no match.
         virtual YkGridPtr newStencilGrid (const std::string & name,
                                           const GridDimNames & dims) =0;
 
-        // Make new grids.
+        // Make a new grid with 'name' and 'dims'.
+        // Set sizes if 'sizes' is non-null.
         virtual YkGridPtr newGrid(const std::string& name,
                                   const GridDimNames& dims,
                                   const GridDimSizes* sizes);

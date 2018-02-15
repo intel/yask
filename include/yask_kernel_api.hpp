@@ -244,8 +244,7 @@ namespace yask {
            additionally rounded up based on the vector-folding dimensions
            and/or cache-line alignment:
            - Halo size.
-           - Value provided by this function, set_min_pad_size().
-           - Value provided by yk_grid::set_min_pad_size().
+           - Value provided by any of the pad-size setting functions.
            
            The padding size cannot be changed after data storage
            has been allocated for a given grid; attempted changes to the pad size for such
@@ -369,6 +368,7 @@ namespace yask {
         
         /// Get the specified grid.
         /**
+           This cannot be used to access scratch grids.
            @returns Pointer to the specified grid or null pointer if it does not exist.
         */
         virtual yk_grid_ptr
@@ -376,11 +376,212 @@ namespace yask {
 
         /// Get all the grids.
         /**
-           @returns List of all grids in the solution.
+           @returns List of all non-scratch grids in the solution.
         */
         virtual std::vector<yk_grid_ptr>
         get_grids() =0;
 
+        /// Prepare the solution for stencil application.
+        /**
+           Allocates data in grids that do not already have storage allocated.
+           Calculates the position of each rank in the overall problem domain.
+           Sets many other data structures needed for proper stencil application.
+           Since this function initiates MPI communication, it must be called
+           on all MPI ranks, and it will block until all ranks have completed.
+           Must be called before applying any stencils.
+        */
+        virtual void
+        prepare_solution() =0;
+
+        /// Get the first index of the sub-domain in this rank in the specified dimension.
+        /**
+           This returns the first *overall* index at the beginning of the domain.
+           Elements within the domain in this rank lie between the values returned by
+           get_first_rank_domain_index() and get_last_rank_domain_index(), inclusive.
+           If there is only one MPI rank, this is typically zero (0).
+           If there is more than one MPI rank, the value depends
+           on the the rank's position within the overall problem domain.
+
+           @note This function should be called only *after* calling prepare_solution()
+           because prepare_solution() assigns this rank's position in the problem domain.
+           @returns First domain index in this rank. 
+        */
+        virtual idx_t
+        get_first_rank_domain_index(const std::string& dim
+                                    /**< [in] Name of dimension to get.  Must be one of
+                                       the names from get_domain_dim_names(). */ ) const =0;
+
+        /// Get the last index of the sub-domain in this rank the specified dimension.
+        /**
+           This returns the last *overall* index within the domain in this rank
+           (*not* one past the end).
+           If there is only one MPI rank, this is typically one less than the value
+           provided by set_rank_domain_size().
+           If there is more than one MPI rank, the value depends
+           on the the rank's position within the overall problem domain.
+           See get_first_rank_domain_index() for more information.
+
+           @note This function should be called only *after* calling prepare_solution()
+           because prepare_solution() assigns this rank's position in the problem domain.
+           @returns Last index in this rank.
+        */
+        virtual idx_t
+        get_last_rank_domain_index(const std::string& dim
+                                   /**< [in] Name of dimension to get.  Must be one of
+                                      the names from get_domain_dim_names(). */ ) const =0;
+
+        /// Get the overall problem size in the specified dimension.
+        /**
+           The overall domain indices in the specified dimension will range from
+           zero (0) to get_overall_domain_size() - 1, inclusive.
+           Call get_first_rank_domain_index() and get_last_rank_domain_index()
+           to find the subset of this domain in each rank.
+
+           @note This function should be called only *after* calling prepare_solution()
+           because prepare_solution() obtains the sub-domain sizes from other ranks.
+           @returns Sum of all ranks' domain sizes in the given dimension.
+        */
+        virtual idx_t
+        get_overall_domain_size(const std::string& dim
+                                /**< [in] Name of dimension to get.  Must be one of
+                                   the names from get_domain_dim_names(). */ ) const =0;
+
+        /// Run the stencil solution for the specified steps.
+        /**
+           The stencil(s) in the solution are applied to the grid data, setting the
+           index variables as follows:
+           1. If temporal wave-fronts are *not* used (the default):
+            - The step index (e.g., `t` for "time") will be sequentially set to values
+            from `first_step_index` to `last_step_index`, inclusive.
+             + If the stencil equations were defined with dependencies on lower-valued steps,
+             e.g., `t+1` depends on `t`, then `last_step_index` should be greater than or equal to
+             `first_step_index` (forward solution).
+             + If the stencil equations were defined with dependencies on higher-valued steps,
+             e.g., `t-1` depends on `t`, then `last_step_index` should be less than or equal to
+             `first_step_index` (reverse solution).
+            - For each step index, the domain indices will be set
+            to values across the entire domain as returned by yk_solution::get_overall_domain_size()
+            (not necessarily sequentially).
+            - MPI halo exchanges will occur as necessary before, after, or during a step.
+            - Since this function initiates MPI communication, it must be called
+              on all MPI ranks, and it will block until all ranks have completed.
+           2. **[Advanced]** If temporal wave-fronts *are* enabled (currently only possible via apply_command_line_options()):
+            - The step index (e.g., `t` for "time") will be sequentially set to values
+            from `first_step_index` to `last_step_index`, inclusive, within each wave-front tile.
+             + The number of steps in a wave-front tile may also be restricted by the size
+             of the tile in the step dimension. In that case, tiles will be done in slices of that size.
+             + Reverse solutions are not allowed with wave-front tiling.
+            - For each step index within each wave-front tile, the domain indices will be set
+            to values across the entire tile (not necessarily sequentially).
+            - Ultimately, the stencil(s) will be applied to same the elements in both the step 
+            and domain dimensions as when wave-front tiling is not used.
+            - MPI is not supported with wave-front tiling.
+
+           This function should be called only *after* calling prepare_solution().
+        */
+        virtual void
+        run_solution(idx_t first_step_index /**< [in] First index in the step dimension */,
+                     idx_t last_step_index /**< [in] Last index in the step dimension */ ) =0;
+
+        /// Run the stencil solution for the specified step.
+        /**
+           This function is simply an alias for `run_solution(step_index, step_index)`, i.e.,
+           the solution will be applied for exactly one step across the domain.
+
+           Typical C++ usage:
+
+           ~~~{.cpp}
+           for (idx_t t = 1; t <= num_steps; t++)
+               run_solution(t);
+           ~~~
+
+           As written, the above loop is identical to
+
+           ~~~{.cpp}
+           run_solution(1, num_steps);
+           ~~~
+
+           @note The parameter is *not* the number of steps to run.
+           @note Since only one step is taken per call, using this function effectively disables
+           wave-front tiling.
+        */
+        virtual void
+        run_solution(idx_t step_index /**< [in] Index in the step dimension */ ) =0;
+
+        /// Finish using a solution.
+        /**
+           Releases shared ownership of memory used by the grids.  This will
+           result in deallocating each memory block whose ownership is not
+           shared by another shared pointer.
+        */
+        virtual void
+        end_solution() =0;
+
+
+        /// Get performance statistics associated with preceding calls to run_solution().
+        /**
+           Side effect: resets all statistics, so a subsequent call will
+           measure performance after the current call.
+           @returns Pointer to statistics object.
+        */
+        virtual yk_stats_ptr
+        get_stats() =0;
+
+        /// Determine whether the auto-tuner is enabled on this rank.
+        /**
+           The auto-tuner is enabled by default.
+           It will become disabled after it has converged or after reset_auto_tuner(false) has been called.
+           @returns Whether the auto-tuner is still searching.
+        */
+        virtual bool
+        is_auto_tuner_enabled() =0;
+
+        /* Advanced APIs for yk_solution found below are not needed for most applications. */
+        
+        /// **[Advanced]** Restart or disable the auto-tuner on this rank.
+        /**
+           Under normal operation, an auto-tuner is invoked automatically during calls to
+           run_solution().
+           Currently, only the block size is set by the auto-tuner, and the search begins from the 
+           sizes set via set_block_size() or the default size if set_block_size() has
+           not been called.
+           This function is used to apply the current best-known settings if the tuner has
+           been running, reset the state of the auto-tuner, and either
+           restart its search or disable it from running.
+           This call must be made on each rank where the change is desired.
+        */
+        virtual void
+        reset_auto_tuner(bool enable
+                         /**< [in] If _true_, start or restart the auto-tuner search.
+                            If _false_, disable the auto-tuner from running. */,
+                         bool verbose = false
+                         /**< [in] If _true_, print progress information to the debug object
+                            set via set_debug_output(). */ ) =0;
+
+        /// **[Advanced]** Automatically tune selected settings immediately.
+        /**
+           Executes a search algorithm to find [locally] optimum values for some of the
+           settings.
+           Under normal operation, an auto-tuner is invoked during calls to
+           run_solution().
+           See reset_auto_tuner() for more information.
+           This function causes the stencil solution to be run immediately
+           until the auto-tuner converges on all ranks.
+           It is useful for benchmarking, where performance is to be timed
+           for a given number of steps after the best settings are found.
+           This function should be called only *after* calling prepare_solution().
+           This call must be made on each rank.
+           @warning Modifies the contents of the grids by calling run_solution()
+           an arbitrary number of times, but without halo exchange.
+           (See run_solution() for other restrictions and warnings.)
+           Thus, grid data should be set *after* calling this function when
+           used in a production or test setting where correct results are expected.
+        */
+        virtual void
+        run_auto_tuner_now(bool verbose = true
+                           /**< [in] If _true_, print progress information to the debug object
+                              set via set_debug_output(). */ ) =0;
+        
         /// **[Advanced]** Add a new grid to the solution.
         /**
            This is typically not needed because grids used by the stencils are pre-defined
@@ -401,7 +602,7 @@ namespace yask {
            - This grid's initial padding size will be the same as that returned by
            get_min_pad_size().
            - After creating a new grid, you can increase its padding
-           sizes in the domain dimensions via yk_grid::set_min_pad_size().
+           sizes in the domain dimensions via yk_grid::set_min_pad_size(), etc.
            - For step and misc dimensions, you can change the allocation via
            yk_grid::set_alloc_size().
 
@@ -459,7 +660,7 @@ namespace yask {
            - This grid's first domain index in this rank will be fixed at zero (0)
            regardless of this rank's position.
            - This grid's padding size will be affected only by calls to 
-           yk_grid::set_min_pad_size().
+           yk_grid::set_min_pad_size(), etc.
            - For step and misc dimensions, you can still change the allocation via
            yk_grid::set_alloc_size().
 
@@ -502,171 +703,6 @@ namespace yask {
                           Must be exatly one size for each dimension. */ ) =0;
 #endif
 
-        /// Prepare the solution for stencil application.
-        /**
-           Allocates data in grids that do not already have storage allocated.
-           Calculates the position of each rank in the overall problem domain.
-           Sets many other data structures needed for proper stencil application.
-           Since this function initiates MPI communication, it must be called
-           on all MPI ranks, and it will block until all ranks have completed.
-           Must be called before applying any stencils.
-        */
-        virtual void
-        prepare_solution() =0;
-
-        /// Get the first index of the sub-domain in this rank in the specified dimension.
-        /**
-           This returns the first *overall* index at the beginning of the domain.
-           Elements within the domain in this rank lie between the values returned by
-           get_first_rank_domain_index() and get_last_rank_domain_index(), inclusive.
-           If there is only one MPI rank, this is typically zero (0).
-           If there is more than one MPI rank, the value depends
-           on the the rank's position within the overall problem domain.
-           @warning This function should be called only *after* calling prepare_solution()
-           because prepare_solution() assigns this rank's position in the problem domain.
-           @returns First domain index in this rank. 
-        */
-        virtual idx_t
-        get_first_rank_domain_index(const std::string& dim
-                                    /**< [in] Name of dimension to get.  Must be one of
-                                       the names from get_domain_dim_names(). */ ) const =0;
-
-        /// Get the last index of the sub-domain in this rank the specified dimension.
-        /**
-           This returns the last *overall* index within the domain in this rank
-           (*not* one past the end).
-           If there is only one MPI rank, this is typically one less than the value
-           provided by set_rank_domain_size().
-           If there is more than one MPI rank, the value depends
-           on the the rank's position within the overall problem domain.
-           See get_first_rank_domain_index() for more information.
-           This function should be called only *after* calling prepare_solution()
-           because prepare_solution() assigns this rank's position in the problem domain.
-           @returns Last index in this rank.
-        */
-        virtual idx_t
-        get_last_rank_domain_index(const std::string& dim
-                                   /**< [in] Name of dimension to get.  Must be one of
-                                      the names from get_domain_dim_names(). */ ) const =0;
-
-        /// Get the overall problem size in the specified dimension.
-        /**
-           The overall domain indices in the specified dimension will range from
-           zero (0) to get_overall_domain_size() - 1, inclusive.
-           Call get_first_rank_domain_index() and get_last_rank_domain_index()
-           to find the subset of this domain in each rank.
-           This function should be called only *after* calling prepare_solution()
-           because prepare_solution() obtains the sub-domain sizes from other ranks.
-           @returns Sum of all ranks' domain sizes in the given dimension.
-        */
-        virtual idx_t
-        get_overall_domain_size(const std::string& dim
-                                /**< [in] Name of dimension to get.  Must be one of
-                                   the names from get_domain_dim_names(). */ ) const =0;
-
-        /// Run the stencil solution for the specified steps.
-        /**
-           The stencil(s) in the solution are applied to the grid data, setting the
-           index variables as follows:
-           1. If temporal wave-fronts are *not* used (the default):
-            - The step index (e.g., `t` for "time") will be sequentially set to values
-            from `first_step_index` to `last_step_index`, inclusive.
-             + If the stencil equations were defined with dependencies on lower-valued steps,
-             e.g., `t+1` depends on `t`, then `last_step_index` should be greater than or equal to
-             `first_step_index` (forward solution).
-             + If the stencil equations were defined with dependencies on higher-valued steps,
-             e.g., `t-1` depends on `t`, then `last_step_index` should be less than or equal to
-             `first_step_index` (reverse solution).
-            - For each step index, the domain indices will be set
-            to values across the entire domain as returned by yk_solution::get_overall_domain_size()
-            (not necessarily sequentially).
-            - MPI halo exchanges will occur as necessary before, after, or during a step.
-            - Since this function initiates MPI communication, it must be called
-              on all MPI ranks, and it will block until all ranks have completed.
-           2. **[Advanced]** If temporal wave-fronts *are* enabled (currently only possible via apply_command_line_options()):
-            - The step index (e.g., `t` for "time") will be sequentially set to values
-            from `first_step_index` to `last_step_index`, inclusive, within each wave-front tile.
-             + The number of steps in a wave-front tile may also be restricted by the size
-             of the tile in the step dimension. In that case, tiles will be done in slices of that size.
-             + Reverse solutions are not allowed with wave-front tiling.
-            - For each step index within each wave-front tile, the domain indices will be set
-            to values across the entire tile (not necessarily sequentially).
-            - Ultimately, the stencil(s) will be applied to same the elements in both the step 
-            and domain dimensions as when wave-front tiling is not used.
-            - MPI is not supported with wave-front tiling.
-
-           This function should be called only *after* calling prepare_solution().
-        */
-        virtual void
-        run_solution(idx_t first_step_index /**< [in] First index in the step dimension */,
-                     idx_t last_step_index /**< [in] Last index in the step dimension */ ) =0;
-
-        /// Run the stencil solution for the specified step.
-        /**
-           This function is simply an alias for `run_solution(step_index, step_index)`, i.e.,
-           the solution will be applied for exactly one step across the domain.
-           For example, `run_solution(0); run_solution(1);` effects the same data changes as
-           `run_solution(0, 1);`.
-
-           Since only one step is taken per call, using this function effectively disables
-           wave-front tiling.
-        */
-        virtual void
-        run_solution(idx_t step_index /**< [in] Index in the step dimension */ ) =0;
-
-        /// **[Advanced]** Restart or disable the auto-tuner on this rank.
-        /**
-           Under normal operation, an auto-tuner is invoked automatically during calls to
-           run_solution().
-           Currently, only the block size is set by the auto-tuner, and the search begins from the 
-           sizes set via set_block_size() or the default size if set_block_size() has
-           not been called.
-           This function is used to apply the current best-known settings if the tuner has
-           been running, reset the state of the auto-tuner, and either
-           restart its search or disable it from running.
-           This call must be made on each rank where the change is desired.
-        */
-        virtual void
-        reset_auto_tuner(bool enable
-                         /**< [in] If _true_, start or restart the auto-tuner search.
-                            If _false_, disable the auto-tuner from running. */,
-                         bool verbose = false
-                         /**< [in] If _true_, print progress information to the debug object
-                            set via set_debug_output(). */ ) =0;
-
-        /// Determine whether the auto-tuner is enabled on this rank.
-        /**
-           The auto-tuner is enabled by default.
-           It will become disabled after it has converged or after reset_auto_tuner(false) has been called.
-           @returns Whether the auto-tuner is still searching.
-        */
-        virtual bool
-        is_auto_tuner_enabled() =0;
-        
-        /// **[Advanced]** Automatically tune selected settings immediately.
-        /**
-           Executes a search algorithm to find [locally] optimum values for some of the
-           settings.
-           Under normal operation, an auto-tuner is invoked during calls to
-           run_solution().
-           See reset_auto_tuner() for more information.
-           This function causes the stencil solution to be run immediately
-           until the auto-tuner converges on all ranks.
-           It is useful for benchmarking, where performance is to be timed
-           for a given number of steps after the best settings are found.
-           This function should be called only *after* calling prepare_solution().
-           This call must be made on each rank.
-           @warning Modifies the contents of the grids by calling run_solution()
-           an arbitrary number of times, but without halo exchange.
-           (See run_solution() for other restrictions and warnings.)
-           Thus, grid data should be set *after* calling this function when
-           used in a production or test setting where correct results are expected.
-        */
-        virtual void
-        run_auto_tuner_now(bool verbose = true
-                           /**< [in] If _true_, print progress information to the debug object
-                              set via set_debug_output(). */ ) =0;
-        
         /// **[Advanced]** Use data-storage from existing grids in specified solution.
         /**
            Calls yk_grid::share_storage() for each pair of grids that have the same name
@@ -676,24 +712,6 @@ namespace yask {
         virtual void
         share_grid_storage(yk_solution_ptr source
                            /**< [in] Solution from which grid storage will be shared. */) =0;
-
-        /// Get performance statistics associated with preceding calls to run_solution().
-        /**
-           Side effect: resets all statistics, so a subsequent call will
-           measure performance after the current call.
-           @returns Pointer to statistics object.
-        */
-        virtual yk_stats_ptr
-        get_stats() =0;
-
-        /// Finish using a solution.
-        /**
-           Releases shared ownership of memory used by the grids.  This will
-           result in deallocating each memory block whose ownership is not
-           shared by another shared pointer.
-        */
-        virtual void
-        end_solution() =0;
     };
 
     /// Statistics from calls to run_solution().
@@ -775,20 +793,24 @@ namespace yask {
        In each domain dimension,
        grid sizes include the following components:
        - The *domain* is the elements to which the stencils are applied.
-       - The *padding* is the elements outside the domain on either side
-       and includes the halo.
-       - The *halo* is the elements just outside the domain which must be
-       copied between ranks during halo exchanges. The halo is contained within the padding.
-       - The *extra padding* is the elements outside the domain and halo on
-       either side and thus does not include the halo.
-       - The *allocation* includes the domain and the padding.
+       - The *left padding* is all the elements before the domain and includes the left halo.
+       - The *right padding* is all the elements before the domain and includes the right halo.
+       - The *left halo* is the elements just before the domain which must be
+       copied between preceding ranks during halo exchanges. The left halo is contained within the left padding.
+       - The *right halo* is the elements just after the domain which must be
+       copied between following ranks during halo exchanges. The right halo is contained within the right padding.
+       - The *extra left padding* is the elements before the domain and left halo
+       and thus does not include the left halo.
+       - The *extra right padding* is the elements after the domain and right halo
+       and thus does not include the right halo.
+       - The *allocation* includes the left padding, domain, and right padding.
        
        Domain sizes specified via yk_solution::set_rank_domain_size() apply to each MPI rank.
        Visually, in each of the domain dimensions, these sizes are related as follows
        in each rank:
        <table>
-       <tr><td>extra padding <td>halo <td rowspan="2">domain <td>halo <td>extra padding
-       <tr><td colspan="2"><center>padding</center> <td colspan="2"><center>padding</center>
+       <tr><td>extra left padding <td>left halo <td rowspan="2">domain <td>right halo <td>extra right padding
+       <tr><td colspan="2"><center>left padding</center> <td colspan="2"><center>right padding</center>
        <tr><td colspan="5"><center>allocation</center>
        </table>
 
@@ -796,11 +818,11 @@ namespace yask {
        If MPI is enabled, the domains of the ranks are logically abutted to create the 
        overall problem domain in each dimension:
        <table>
-       <tr><td>extra padding of rank A <td>halo of rank A <td>domain of rank A <td>domain of rank B
-         <td>... <td>domain of rank Z <td>halo of rank Z <td>extra padding of rank Z
-       <tr><td colspan="2"><center>padding of rank A</center>
+       <tr><td>extra left padding of rank A <td>halo of rank A <td>domain of rank A <td>domain of rank B
+         <td>... <td>domain of rank Z <td>halo of rank Z <td>extra right padding of rank Z
+       <tr><td colspan="2"><center>left padding of rank A</center>
          <td colspan="4"><center>overall problem domain</center>
-         <td colspan="2"><center>padding of rank Z</center>
+         <td colspan="2"><center>right padding of rank Z</center>
        </table>
        The intermediate halos and paddings also exist, but are not shown in the above diagram.
        The halos overlap the domains of adjacent ranks.
@@ -897,6 +919,8 @@ namespace yask {
 
         /// Get the first index of the sub-domain in this rank in the specified dimension.
         /**
+           @note This function should be called only *after* calling prepare_solution()
+           because prepare_solution() assigns this rank's position in the problem domain.
            @returns The same value as yk_solution::get_first_rank_domain_index() if
            is_fixed_size() returns `false` or zero (0) otherwise.
         */
@@ -907,6 +931,8 @@ namespace yask {
         
         /// Get the last index of the sub-domain in this rank in the specified dimension.
         /**
+           @note This function should be called only *after* calling prepare_solution()
+           because prepare_solution() assigns this rank's position in the problem domain.
            @returns The same value as yk_solution::get_last_rank_domain_index() if
            is_fixed_size() returns `false` or one less than the fixed sized provided via
            yk_solution::new_fixed_size_grid() otherwise.
@@ -916,103 +942,119 @@ namespace yask {
                                     /**< [in] Name of dimension to get.  Must be one of
                                        the names from yk_solution::get_domain_dim_names(). */ ) const =0;
 
-        /// Get the halo size in the specified dimension.
+        /// Get the left halo size in the specified dimension.
         /**
            This value is typically set by the stencil compiler.
-           @returns Elements in halo in given dimension both before and after the domain.
+           @returns Elements in halo in given dimension before the domain.
         */
         virtual idx_t
-        get_halo_size(const std::string& dim
+        get_left_halo_size(const std::string& dim
                       /**< [in] Name of dimension to get.
                          Must be one of
                          the names from yk_solution::get_domain_dim_names(). */ ) const =0;
         
-        /// **[Advanced]** Set the halo size in the specified dimension.
+        /// Get the right halo size in the specified dimension.
         /**
-           This value is typically set by the stencil compiler, but
-           this function allows you to override that value.
-           If the halo is set to a value larger than the padding size, the
-           padding size will be automatically increase to accomodate it.
-           @note After data storage has been allocated, the halo size
-           can only be set to a value less than or equal to the padding size
-           in the given dimension.
-           @returns Elements in halo in given dimension both before and after the domain.
+           This value is typically set by the stencil compiler.
+           @returns Elements in halo in given dimension after the domain.
         */
-        virtual void
-        set_halo_size(const std::string& dim
+        virtual idx_t
+        get_right_halo_size(const std::string& dim
                       /**< [in] Name of dimension to get.
                          Must be one of
-                         the names from yk_solution::get_domain_dim_names(). */,
-                      idx_t size
-                      /**< [in] Number of elements in the halo. */ ) =0;
-
-        /// Get the first index of the halo in this rank in the specified dimension.
+                         the names from yk_solution::get_domain_dim_names(). */ ) const =0;
+        
+        /// Get the first index of the left halo in this rank in the specified dimension.
         /**
-           @returns The first index of halo in this rank or
+           @note This function should be called only *after* calling prepare_solution()
+           because prepare_solution() assigns this rank's position in the problem domain.
+           @returns The first index of left halo in this rank or
            the same value as yk_grid::get_first_rank_domain_index()
-           if the rank does not contain halo.
+           if the left halo has zero size.
         */
         virtual idx_t
         get_first_rank_halo_index(const std::string& dim
                                     /**< [in] Name of dimension to get.  Must be one of
                                        the names from yk_solution::get_domain_dim_names(). */ ) const =0;
 
-        /// Get the last index of the halo in this rank in the specified dimension.
+        /// Get the last index of the right halo in this rank in the specified dimension.
         /**
-           @returns The last index of halo in this rank or
+           @note This function should be called only *after* calling prepare_solution()
+           because prepare_solution() assigns this rank's position in the problem domain.
+           @returns The last index of right halo in this rank or
            the same value as yk_grid::get_last_rank_domain_index()
-           if the rank does not contain halo.
+           if the right halo has zero size.
         */
         virtual idx_t
         get_last_rank_halo_index(const std::string& dim
                                     /**< [in] Name of dimension to get.  Must be one of
                                        the names from yk_solution::get_domain_dim_names(). */ ) const =0;
 
-        /// Get the padding in the specified dimension.
+        /// Get the left padding in the specified dimension.
         /**
-           The padding is the extra memory allocated before
-           and after the domain in a given dimension.
-           The padding size includes the halo size.
+           The left padding is the memory allocated before
+           the domain in a given dimension.
+           The left padding size includes the left halo size.
            The value may be slightly
-           larger than that provided via set_min_pad_size()
-           or yk_solution::set_min_pad_size() due to rounding.
-           @returns Elements in padding in given dimension before the
-           domain. The number of elements after the domain will be
-           equal to or greater than this.
+           larger than that provided via set_min_pad_size(), etc. due to rounding.
+           @returns Elements in left padding in given dimension.
         */
         virtual idx_t
-        get_pad_size(const std::string& dim
+        get_left_pad_size(const std::string& dim
                      /**< [in] Name of dimension to get.
                          Must be one of
                          the names from yk_solution::get_domain_dim_names(). */ ) const =0;
 
-        /// Get the extra padding in the specified dimension.
+        /// Get the right padding in the specified dimension.
         /**
-           The *extra* padding size is the padding size minus the halo size.
-           @returns Elements in padding in given dimension before the
-           halo region. The number of elements after the halo will be
-           equal to or greater than this.
+           The right padding is the memory allocated after
+           the domain in a given dimension.
+           The right padding size includes the right halo size.
+           The value may be slightly
+           larger than that provided via set_min_pad_size(), etc. due to rounding.
+           @returns Elements in right padding in given dimension.
         */
         virtual idx_t
-        get_extra_pad_size(const std::string& dim
+        get_right_pad_size(const std::string& dim
+                     /**< [in] Name of dimension to get.
+                         Must be one of
+                         the names from yk_solution::get_domain_dim_names(). */ ) const =0;
+
+        /// Get the extra left padding in the specified dimension.
+        /**
+           The *extra* padding size is the left padding size minus the left halo size.
+           @returns Elements in padding in given dimension before the
+           left halo region.
+        */
+        virtual idx_t
+        get_left_extra_pad_size(const std::string& dim
+                           /**< [in] Name of dimension to get.
+                              Must be one of
+                              the names from yk_solution::get_domain_dim_names(). */ ) const =0;
+
+        /// Get the extra right padding in the specified dimension.
+        /**
+           The *extra* padding size is the right padding size minus the right halo size.
+           @returns Elements in padding in given dimension after the
+           right halo region.
+        */
+        virtual idx_t
+        get_right_extra_pad_size(const std::string& dim
                            /**< [in] Name of dimension to get.
                               Must be one of
                               the names from yk_solution::get_domain_dim_names(). */ ) const =0;
 
         /// Set the padding in the specified dimension.
         /**
-           This sets the minimum number of elements in this grid that is
-           reserved both before and after the rank domain in the given dimension.
+           This sets the minimum number of elements in this grid 
+           in both left and right pads.
            This padding area can be used for required halo regions.
-           The specified number of elements is added to both sides, i.e., both "before" and
-           "after" the domain.
            
            The *actual* padding size will be the largest of the following values,
            additionally rounded up based on the vector-folding dimensions
            and/or cache-line alignment:
            - Halo size.
-           - Value provided by yk_solution::set_min_pad_size().
-           - Value provided by this function, set_min_pad_size().
+           - Value provided by any of the pad-size setting functions.
            
            The padding size cannot be changed after data storage
            has been allocated for this grid; attempted changes to the pad size
@@ -1040,54 +1082,6 @@ namespace yask {
         virtual idx_t
         get_alloc_size(const std::string& dim
                        /**< [in] Name of dimension to get. */ ) const =0;
-
-        /// **[Advanced]** Set the number of elements to allocate in the specified dimension.
-        /** 
-           This setting is only allowed in the step dimension.
-           Typically, the allocation in the step dimension is determined by the
-           stencil compiler, but
-           this function allows you to override that value.
-           Allocations in other dimensions should be set indirectly
-           via the domain and padding sizes.
-           The allocation size cannot be changed after data storage
-           has been allocated for this grid.
-        */
-        virtual void
-        set_alloc_size(const std::string& dim
-                       /**< [in] Name of dimension to set.
-                          Must *not* be one of
-                          the names from yk_solution::get_domain_dim_names(). */,
-                       idx_t size /**< [in] Number of elements to allocate. */ ) =0;
-
-        /// **[Advanced]** Get the first accessible index in this grid in this rank in the specified dimension.
-        /**
-           This returns the first *overall* index allowed in this grid.
-           This element may be in the domain, halo, or extra padding area.
-           This function is only for checking the legality of an index.
-           It should not be used to find a useful index; use a combination of
-           get_first_rank_domain_index() and get_halo_size() instead.
-           @returns First allowed index in this grid.
-        */
-        virtual idx_t
-        get_first_rank_alloc_index(const std::string& dim
-                                   /**< [in] Name of dimension to get.
-                                      Must be one of
-                                      the names from yk_solution::get_domain_dim_names(). */ ) const =0;
-
-        /// **[Advanced]** Get the last accessible index in this grid in this rank in the specified dimension.
-        /**
-           This returns the last *overall* index allowed in this grid.
-           This element may be in the domain, halo, or extra padding area.
-           This function is only for checking the legality of an index.
-           It should not be used to find a useful index; use a combination of
-           get_last_rank_domain_index() and get_halo_size() instead.
-           @returns Last allowed index in this grid.
-        */
-        virtual idx_t
-        get_last_rank_alloc_index(const std::string& dim
-                                  /**< [in] Name of dimension to get.
-                                     Must be one of
-                                     the names from yk_solution::get_domain_dim_names(). */ ) const =0;
 
         /// Get the first index of a specified miscellaneous dimension.
         /**
@@ -1292,26 +1286,6 @@ namespace yask {
                               const std::vector<idx_t>& last_indices
                               /**< [in] List of final indices, one for each grid dimension. */ ) =0;
         
-        /// **[Advanced]** Explicitly allocate data-storage memory for this grid.
-        /**
-           Amount of allocation is calculated based on domain, padding, and 
-           step-dimension allocation sizes.
-           Any pre-existing storage will be released before allocation as via release_storage().
-           See allocation options in the "Detailed Description" for \ref yk_grid.
-         */
-        virtual void
-        alloc_storage() =0;
-
-        /// **[Advanced]** Explicitly release any allocated data-storage for this grid.
-        /**
-           This will release storage allocated via any of the options
-           described in the "Detailed Description" for \ref yk_grid.
-           If the data was shared between two or more grids, the data will
-           be retained by the remaining grids.
-        */
-        virtual void
-        release_storage() =0;
-
         /// Determine whether storage has been allocated.
         /**
            @returns `true` if storage has been allocated,
@@ -1334,6 +1308,121 @@ namespace yask {
         */
         virtual idx_t
         get_num_storage_elements() const =0;
+
+        /* Advanced APIs for yk_grid found below are not needed for most applications. */
+        
+        /// **[Advanced]** Set the left halo size in the specified dimension.
+        /**
+           This value is typically set by the stencil compiler, but
+           this function allows you to override that value.
+           If the left halo is set to a value larger than the left padding size, the
+           left padding size will be automatically increase to accomodate it.
+           @note After data storage has been allocated, the left halo size
+           can only be set to a value less than or equal to the left padding size
+           in the given dimension.
+        */
+        virtual void
+        set_left_halo_size(const std::string& dim
+                      /**< [in] Name of dimension to get.
+                         Must be one of
+                         the names from yk_solution::get_domain_dim_names(). */,
+                      idx_t size
+                      /**< [in] Number of elements in the left halo. */ ) =0;
+
+        /// **[Advanced]** Set the right halo size in the specified dimension.
+        /**
+           This value is typically set by the stencil compiler, but
+           this function allows you to override that value.
+           If the right halo is set to a value larger than the right padding size, the
+           right padding size will be automatically increase to accomodate it.
+           @note After data storage has been allocated, the right halo size
+           can only be set to a value less than or equal to the right padding size
+           in the given dimension.
+        */
+        virtual void
+        set_right_halo_size(const std::string& dim
+                      /**< [in] Name of dimension to get.
+                         Must be one of
+                         the names from yk_solution::get_domain_dim_names(). */,
+                      idx_t size
+                      /**< [in] Number of elements in the right halo. */ ) =0;
+
+        /// **[Advanced]** Set the left and right halo sizes in the specified dimension.
+        /**
+           Alias for set_left_halo_size(dim, size); set_right_halo_size(dim, size).
+        */
+        virtual void
+        set_halo_size(const std::string& dim
+                      /**< [in] Name of dimension to get.
+                         Must be one of
+                         the names from yk_solution::get_domain_dim_names(). */,
+                      idx_t size
+                      /**< [in] Number of elements in the halo. */ ) =0;
+
+
+        /// **[Advanced]** Set the number of elements to allocate in the specified dimension.
+        /** 
+           This setting is only allowed in the step dimension.
+           Typically, the allocation in the step dimension is determined by the
+           stencil compiler, but
+           this function allows you to override that value.
+           Allocations in other dimensions should be set indirectly
+           via the domain and padding sizes.
+           The allocation size cannot be changed after data storage
+           has been allocated for this grid.
+        */
+        virtual void
+        set_alloc_size(const std::string& dim
+                       /**< [in] Name of dimension to set.
+                          Must *not* be one of
+                          the names from yk_solution::get_domain_dim_names(). */,
+                       idx_t size /**< [in] Number of elements to allocate. */ ) =0;
+
+        /// **[Advanced]** Get the first accessible index in this grid in this rank in the specified dimension.
+        /**
+           This returns the first *overall* index allowed in this grid.
+           This element may be in the domain, left halo, or extra left padding area.
+           This function is only for checking the legality of an index.
+           @returns First allowed index in this grid.
+        */
+        virtual idx_t
+        get_first_rank_alloc_index(const std::string& dim
+                                   /**< [in] Name of dimension to get.
+                                      Must be one of
+                                      the names from yk_solution::get_domain_dim_names(). */ ) const =0;
+
+        /// **[Advanced]** Get the last accessible index in this grid in this rank in the specified dimension.
+        /**
+           This returns the last *overall* index allowed in this grid.
+           This element may be in the domain, right halo, or extra right padding area.
+           This function is only for checking the legality of an index.
+           @returns Last allowed index in this grid.
+        */
+        virtual idx_t
+        get_last_rank_alloc_index(const std::string& dim
+                                  /**< [in] Name of dimension to get.
+                                     Must be one of
+                                     the names from yk_solution::get_domain_dim_names(). */ ) const =0;
+
+        /// **[Advanced]** Explicitly allocate data-storage memory for this grid.
+        /**
+           Amount of allocation is calculated based on domain, padding, and 
+           step-dimension allocation sizes.
+           Any pre-existing storage will be released before allocation as via release_storage().
+           See allocation options in the "Detailed Description" for \ref yk_grid.
+         */
+        virtual void
+        alloc_storage() =0;
+
+        /// **[Advanced]** Explicitly release any allocated data-storage for this grid.
+        /**
+           This will release storage allocated via any of the options
+           described in the "Detailed Description" for \ref yk_grid.
+           If the data was shared between two or more grids, the data will
+           be retained by the remaining grids.
+        */
+        virtual void
+        release_storage() =0;
 
         /// **[Advanced]** Determines whether storage layout is the same as another grid.
         /**
@@ -1407,7 +1496,7 @@ namespace yask {
            perform element-wise binary mathematical operations on them,
            e.g., add all elements from one grid to another.
 
-           The following assumptions are not safe: 
+           The following assumptions are not safe:
            - Any expectations regarding the relationship between an element
            index and that element's offset from the beginning of the buffer
            such as row-major or column-major layout.
@@ -1422,6 +1511,44 @@ namespace yask {
            returns `true` or NULL otherwise.
         */
         virtual void* get_raw_storage_buffer() =0;
+
+        /* Deprecated APIs for yk_grid found below should be avoided.
+           Use the more explicit form found in the documentation. */
+        
+        /// **[Deprecated]** Get the left halo size in the specified dimension.
+        /**
+           Alias for get_left_halo_size(dim, size).
+           @returns Elements in halo in given dimension before the domain.
+        */
+        virtual idx_t
+        get_halo_size(const std::string& dim
+                      /**< [in] Name of dimension to get.
+                         Must be one of
+                         the names from yk_solution::get_domain_dim_names(). */ ) const =0;
+        
+        /// **[Deprecated]** Get the left padding in the specified dimension.
+        /**
+           Alias for get_left_pad_size(dim).
+           @returns Elements in left padding in given dimension.
+        */
+        virtual idx_t
+        get_pad_size(const std::string& dim
+                     /**< [in] Name of dimension to get.
+                         Must be one of
+                         the names from yk_solution::get_domain_dim_names(). */ ) const =0;
+
+        /// **[Deprecated]** Get the extra left padding in the specified dimension.
+        /**
+           Alias for get_extra_left_pad_size(dim).
+           @returns Elements in padding in given dimension before the
+           left halo region.
+        */
+        virtual idx_t
+        get_extra_pad_size(const std::string& dim
+                           /**< [in] Name of dimension to get.
+                              Must be one of
+                              the names from yk_solution::get_domain_dim_names(). */ ) const =0;
+
     };
 
 

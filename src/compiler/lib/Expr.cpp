@@ -395,7 +395,7 @@ namespace yask {
         if (nd != args.size()) {
             THROW_YASK_EXCEPTION("Error: attempt to create a grid point in " <<
                 nd << "-D grid '" << getGridName() << "' with " <<
-                args.size() << " indices.\n");
+                args.size() << " indices");
         }
 
         // Eval each arg.
@@ -432,6 +432,14 @@ namespace yask {
     }
     const string& GridPoint::getGridName() const {
         return _grid->getName();
+    }
+    string GridPoint::getGridPtr() const {
+        string gname = _grid->getName();
+        string expr = "static_cast<_context_type::" + gname + "_type*>(_context->" + gname;
+        if (_grid->isScratch())
+            expr += "_list[thread_idx].get()";
+        expr += ")";
+        return expr;
     }
     bool GridPoint::isGridFoldable() const {
         return _grid->isFoldable();

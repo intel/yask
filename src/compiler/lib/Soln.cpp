@@ -133,7 +133,7 @@ namespace yask {
             printer = new POVRayPrinter(*this, _clusterEqGroups);
         else {
             THROW_YASK_EXCEPTION("Error: format-type '" << format_type <<
-                "' is not recognized." << endl);
+                                 "' is not recognized");
         }
         assert(printer);
         int vlen = printer->num_vec_elems();

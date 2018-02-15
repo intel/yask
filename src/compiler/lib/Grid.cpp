@@ -42,8 +42,8 @@ namespace yask {
         // Check for correct number of indices.
         if (_dims.size() != dim_offsets.size()) {
             THROW_YASK_EXCEPTION("Error: attempt to create a relative grid point in " <<
-                _dims.size() << "D grid '" << _name << "' with " <<
-                dim_offsets.size() << " indices.\n");
+                                 _dims.size() << "D grid '" << _name << "' with " <<
+                                 dim_offsets.size() << " indices");
         }
 
         // Check dim types.
@@ -53,9 +53,9 @@ namespace yask {
             auto dim = _dims.at(i);
             if (dim->getType() == MISC_INDEX) {
                 THROW_YASK_EXCEPTION("Error: attempt to create a relative grid point in " <<
-                    _dims.size() << "D grid '" << _name <<
-                    "' containing non-step or non-domain dim '" <<
-                    dim->getName() << "'.\n");
+                                     _dims.size() << "D grid '" << _name <<
+                                     "' containing non-step or non-domain dim '" <<
+                                     dim->getName() << "'");
             }
             auto ie = dim->clone();
             args.push_back(ie);
@@ -204,8 +204,8 @@ namespace yask {
         for (auto& dim : offsets.getDims()) {
             auto& dname = dim.getName();
             int val = dim.getVal();
-            bool lo = val <= 0;
-            auto& halos = _halos[lo][stepVal];
+            bool left = val <= 0;
+            auto& halos = _halos[left][stepVal];
 
             // Don't keep halo in step dim.
             if (stepDim && dname == stepDim->getName())
@@ -267,9 +267,9 @@ namespace yask {
         // First and last step-dim.
         int first_ofs = 0, last_ofs = 0;
 
-        // lo and hi.
+        // left and right.
         for (auto& i : _halos) {
-            //auto lo = i.first;
+            //auto left = i.first;
             auto& h2 = i.second; // map of step-dims to halos.
 
             // Step-dim ofs.
@@ -286,7 +286,7 @@ namespace yask {
         // First and last largest halos.
         int first_max_halo = 0, last_max_halo = 0;
         for (auto& i : _halos) {
-            //auto lo = i.first;
+            //auto left = i.first;
             auto& h2 = i.second; // map of step-dims to halos.
 
             if (h2.count(first_ofs))
@@ -341,7 +341,7 @@ namespace yask {
                 case STEP_INDEX:
                     if (_stepDim.length() && _stepDim != dname) {
                         THROW_YASK_EXCEPTION("Error: step dimensions '" << _stepDim <<
-                            "' and '" << dname << "' found; only one allowed.\n");
+                                             "' and '" << dname << "' found; only one allowed");
                     }
                     _stepDim = dname;
                     _stencilDims.addDimFront(dname, 0); // must be first!
@@ -367,15 +367,15 @@ namespace yask {
                     break;
 
                 default:
-                    THROW_YASK_EXCEPTION("Error: unexpected dim type " << type << ".\n");
+                    THROW_YASK_EXCEPTION("Error: unexpected dim type " << type);
                 }
             }
         }
         if (_stepDim.length() == 0) {
-            THROW_YASK_EXCEPTION("Error: no step dimension defined.\n");
+            THROW_YASK_EXCEPTION("Error: no step dimension defined");
         }
         if (!_domainDims.getNumDims()) {
-            THROW_YASK_EXCEPTION("Error: no domain dimensions defined.\n");
+            THROW_YASK_EXCEPTION("Error: no domain dimensions defined");
         }
 
         // Use last domain dim as inner one.
@@ -471,10 +471,10 @@ namespace yask {
         if (settings._allowUnalignedLoads) {
             if (_foldGT1.size() > 1) {
                 THROW_YASK_EXCEPTION("Error: attempt to allow unaligned loads when there are " <<
-                    _foldGT1.size() << " dimensions in the vector-fold that are > 1." << endl);
+                    _foldGT1.size() << " dimensions in the vector-fold that are > 1");
             }
             else if (_foldGT1.size() > 0)
-                cerr << "Notice: memory layout MUST have unit-stride in " <<
+                cout << "Notice: memory layout MUST have unit-stride in " <<
                     _foldGT1.makeDimStr() << " dimension!" << endl;
         }
 
