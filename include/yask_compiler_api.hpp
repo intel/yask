@@ -196,10 +196,14 @@ namespace yask {
         /**
            A scratch grid is a temporary variable used in the
            definition of a non-scratch grid.
-           - Scratch grid values must be initialized from non-scratch grid
-           contents.
            - Scratch grids are not accessible via kernel APIs.
+           Thus, they cannot be programmatically read from or written to.
+           - Scratch grid values must be defined from equations ultimately 
+           referencing only non-scratch grid values, optionally referencing
+           other intermediate scratch-grids.
            - Scratch grids cannot use the step-index as a dimension.
+
+           See `test_scratch*()` in `src/stencils/SimpleTestStencils.hpp` for usage examples.
 
            @returns Pointer to the new grid. 
         */
