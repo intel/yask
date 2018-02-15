@@ -33,8 +33,8 @@ using namespace yask;
 
 int main() {
 
-	// Counter for exception test
-	int num_exception = 0;
+    // Counter for exception test
+    int num_exception = 0;
 
     // Compiler 'bootstrap' factories.
     yc_factory cfac;
@@ -69,29 +69,29 @@ int main() {
         auto n3 = g1->new_relative_grid_point({0, +1, 0, -2, 1});
     } catch (yask_exception e) {
         cout << "YASK throws an exception.\n";
-        cout << e.get_message();
+        cout << e.get_message() << endl;
         cout << "Exception Test: Catch exception correctly.\n";
         num_exception++;
     }
 
-	auto n3 = g1->new_relative_grid_point({0, +1, 0, -2});
-	cout << n3->format_simple() << endl;
+    auto n3 = g1->new_relative_grid_point({0, +1, 0, -2});
+    cout << n3->format_simple() << endl;
 
-	auto n4a = fac.new_add_node(n2, n3);
-	auto n4b = fac.new_add_node(n4a, n1);
-	cout << n4b->format_simple() << endl;
+    auto n4a = fac.new_add_node(n2, n3);
+    auto n4b = fac.new_add_node(n4a, n1);
+    cout << n4b->format_simple() << endl;
 
-	auto n5 = g1->new_relative_grid_point({0, +1, -1, 0});
-	cout << n5->format_simple() << endl;
+    auto n5 = g1->new_relative_grid_point({0, +1, -1, 0});
+    cout << n5->format_simple() << endl;
 
-	auto n6 = fac.new_multiply_node(n4b, n5);
-	cout << n6->format_simple() << endl;
+    auto n6 = fac.new_multiply_node(n4b, n5);
+    cout << n6->format_simple() << endl;
 
-	auto n_lhs = g1->new_relative_grid_point({+1, 0, 0, 0});
-	cout << n_lhs->format_simple() << endl;
+    auto n_lhs = g1->new_relative_grid_point({+1, 0, 0, 0});
+    cout << n_lhs->format_simple() << endl;
 
-	auto n_eq = fac.new_equation_node(n_lhs, n6);
-	cout << n_eq->format_simple() << endl;
+    auto n_eq = fac.new_equation_node(n_lhs, n6);
+    cout << n_eq->format_simple() << endl;
 
     cout << "Solution '" << soln->get_name() << "' contains " <<
         soln->get_num_grids() << " grid(s), and " <<
@@ -106,7 +106,7 @@ int main() {
         auto dot_file = ofac.new_file_output("yc-api-test-with-exception-cxx-readonly");
     } catch (yask_exception e) {
         cout << "YASK throws an exception.\n";
-        cout << e.get_message();
+        cout << e.get_message() << endl;
         cout << "Exception Test: Catch exception correctly.\n";
         num_exception++;
     }
@@ -127,7 +127,7 @@ int main() {
         soln->format("wrong_format", dot_file);
     } catch (yask_exception e) {
         cout << "YASK throws an exception.\n";
-        cout << e.get_message();
+        cout << e.get_message() << endl;
         cout << "Exception Test: Catch exception correctly.\n";
         num_exception++;
     }
@@ -144,7 +144,7 @@ int main() {
 
     // Check whether program handles exceptions or not.
     if (num_exception != 3) {
-        cout << "There is a problem in exception test.\n";
+        cerr << "Error: unexpected number of exceptions: " << num_exception << endl;
         exit(1);
     }
     else
