@@ -404,7 +404,6 @@ namespace yask {
                         ok = true; break; }                             \
             }                                                           \
             if (ok && (bb_is_full || is_in_valid_domain(misc_idxs.start))) { \
-                int thread_idx = omp_get_thread_num();                  \
                 calc_scalar(thread_idx, misc_idxs.start);               \
             }                                                           \
             } while(0)

@@ -182,6 +182,9 @@ namespace yask {
             int thread_idx = 0;
             
             // Loop thru groups.
+            // For this reference-code implementation, we
+            // will do all stencil groups at this level,
+            // even scratch-grid ones.
             for (auto* sg : stGroups) {
 
                 // Halo exchange(s) needed for this group.
@@ -250,9 +253,8 @@ namespace yask {
 
         TRACE_MSG("run_solution: " << begin.makeDimValStr() << " ... (end before) " <<
                   end.makeDimValStr() << " by " << step.makeDimValStr());
-        if (!bb_valid) {
+        if (!bb_valid)
             THROW_YASK_EXCEPTION("Error: run_solution() called without calling prepare_solution() first");
-        }
         if (bb_size < 1) {
             TRACE_MSG("nothing to do in solution");
             return;
@@ -1411,8 +1413,10 @@ namespace yask {
                                 if (buf.get_size() == 0)
                                     continue;
 
-                                if (pass == 1)
+                                if (pass == 1) {
                                     buf.set_storage(_mpi_data_buf, abbytes);
+                                    TRACE_MSG(buf.make_info_string());
+                                }
 
                                 auto sbytes = buf.get_bytes();
                                 bbytes += sbytes;
@@ -1505,7 +1509,7 @@ namespace yask {
                     // Set storage if buffer has been allocated.
                     if (pass == 1) {
                         gp->set_storage(_scratch_data_buf, agbytes);
-                        os << gp->make_info_string() << endl;
+                        TRACE_MSG(gp->make_info_string());
                     }
 
                     // Determine size used (also offset to next location).
@@ -1627,8 +1631,8 @@ namespace yask {
         set_block_threads(); // Temporary; just for reporting.
         os << "  Num threads per block: " << omp_get_max_threads() << endl;
 
-        // Set the number of threads for a region to help avoid expensive
-        // thread-number changing.
+        // Set the number of threads for a region. It should stay this
+        // way for top-level OpenMP parallel sections.
         int rthreads = set_region_threads();
 
         // Run a dummy nested OMP loop to make sure nested threading is
@@ -1668,6 +1672,14 @@ namespace yask {
         allocData(os);
         allocScratchData(os);
 
+        // Report total allocation.
+        rank_nbytes = get_num_bytes();
+        os << "Total allocation in this rank: " <<
+            makeByteStr(rank_nbytes) << "\n";
+        tot_nbytes = sumOverRanks(rank_nbytes, _env->comm);
+        os << "Total overall allocation in " << _env->num_ranks << " rank(s): " <<
+            makeByteStr(tot_nbytes) << "\n";
+    
         // Report some stats.
         idx_t dt = _opts->_rank_sizes[step_dim];
         os << "\nProblem sizes in points (from smallest to largest):\n"
@@ -1725,14 +1737,6 @@ namespace yask {
                 " est FP-ops in sub-domain:   " << makeNumStr(fpops_domain) << endl;
         }
 
-        // Report total allocation.
-        rank_nbytes = get_num_bytes();
-        os << "Total allocation in this rank: " <<
-            makeByteStr(rank_nbytes) << "\n";
-        tot_nbytes = sumOverRanks(rank_nbytes, _env->comm);
-        os << "Total overall allocation in " << _env->num_ranks << " rank(s): " <<
-            makeByteStr(tot_nbytes) << "\n";
-    
         // Various metrics for amount of work.
         rank_numWrites_dt = rank_numWrites_1t * dt;
         tot_numWrites_1t = sumOverRanks(rank_numWrites_1t, _env->comm);

@@ -388,6 +388,11 @@ namespace yask {
             for (auto gp : gridPtrs)
                 if (gp)
                     sz += gp->get_num_storage_bytes() + _data_buf_pad;
+            for (auto gps : scratchVecs)
+                if (gps)
+                    for (auto gp : *gps)
+                        if (gp)
+                            sz += gp->get_num_storage_bytes() + _data_buf_pad;
             return sz;
         }
 
