@@ -50,11 +50,11 @@ namespace yask {
         // All values are in units of reals, not underlying elements, if different.
         // Settings for domain dims | non-domain dims.
         Indices _domains;   // rank domain sizes copied from the solution | alloc size.
-        Indices _left_pads, _right_pads; // extra space around domains | zero.
+        Indices _left_pads, _right_pads; // extra space around domains (left: actual, right: requested) | zero.
         Indices _left_halos, _right_halos; // space within pads for halo exchange | zero.
         Indices _offsets;   // offsets of this rank in overall domain | first index.
-        Indices _vec_lens;  // num reals in each elem | one.
         Indices _allocs;    // actual grid allocation in reals | as domain dims.
+        Indices _vec_lens;  // num reals in each elem | one.
 
         // Indices in vectors for sizes that are always vec lens (to avoid division).
         Indices _vec_left_pads;
@@ -85,6 +85,26 @@ namespace yask {
                                             std::string infix="=",
                                             std::string prefix="",
                                             std::string suffix="") const;
+
+        // Determine required padding from halos.
+        // Does not include user-specified min padding or
+        // final rounding for left pad.
+        virtual Indices getReqdPad(const Indices& halos) const {
+            Indices mp(halos);
+            for (int i = 0; i < get_num_dims(); i++) {
+
+                // For scratch grids, halo area must be written to.  Halo is sum
+                // of dependent's write halo and dependency's read halo, but
+                // these two components are not stored individually.  Write halo
+                // will be expanded to full vec len during computation,
+                // requiring load from read halo beyond full vec len.  Worst
+                // case is when write halo is one and rest is read halo.  So if
+                // halo >= 1, padding should be one full vec plus halo-1.
+                if (halos[i] >= 1)
+                    mp[i] = _vec_lens[i] + halos[i]-1;
+            }
+            return mp;
+        }
 
         // Check whether dim exists and is of allowed type.
         virtual void checkDimType(const std::string& dim,

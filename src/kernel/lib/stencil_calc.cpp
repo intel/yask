@@ -41,7 +41,7 @@ namespace yask {
                    " in non-scratch group '" << get_name() << "': " <<
                    region_idxs.start.makeValStr(ndims) <<
                    " ... (end before) " << region_idxs.stop.makeValStr(ndims) <<
-                   " with thread " << thread_idx);
+                   " by thread " << thread_idx);
         assert(!is_scratch());
 
         // Init block begin & end from region start & stop indices.
@@ -82,7 +82,7 @@ namespace yask {
                        " in group '" << sg->get_name() << "': " <<
                        block_idxs.begin.makeValStr(ndims) <<
                        " ... (end before) " << block_idxs.end.makeValStr(ndims) <<
-                       " with thread " << thread_idx);
+                       " by thread " << thread_idx);
             
             // Include automatically-generated loop code that calls
             // calc_sub_block() for each sub-block in this block.  Loops through
@@ -125,6 +125,9 @@ namespace yask {
     
     // Calculate results for one sub-block.
     // Typically called by a single OMP thread.
+    // The index ranges in 'block_idxs' are sub-divided
+    // into full vector-clusters, full vectors, and sub-vectors
+    // and finally evaluated by the YASK-compiler-generated loops.
     void StencilGroupBase::calc_sub_block(int thread_idx,
                                           const ScanIndices& block_idxs) {
 
@@ -145,39 +148,41 @@ namespace yask {
         ScanIndices sub_block_idxs(nsdims);
         sub_block_idxs.initFromOuter(block_idxs);
 
-        // Portion of sub-block that is full clusters.
+        // Subset of sub-block that is full clusters.
         // These indices are in element units.
         ScanIndices sub_block_fcidxs(sub_block_idxs);
 
-        // Portion of sub-block that is full vectors.
+        // Subset of sub-block that is full vectors.
         // These indices are in element units.
         ScanIndices sub_block_fvidxs(sub_block_idxs);
         
-        // Portion of sub-block that is full or partial vectors.
+        // Superset of sub-block that is full or partial vectors.
         // These indices are in element units.
         ScanIndices sub_block_vidxs(sub_block_idxs);
 
-        // Masks for computing partial vectors.
-        Indices masks(nsdims);
-        masks.setFromConst(-1);
+        // Masks for computing partial vectors in each dim.
+        // Init to all-ones (no masking).
+        Indices peel_masks(nsdims), rem_masks(nsdims);
+        peel_masks.setFromConst(-1);
+        rem_masks.setFromConst(-1);
         
         // Determine what part of this sub-block can be done with full clusters/vectors.
         // Init to full clusters only.
         bool do_clusters = true; // any clusters to do?
         bool do_vectors = false; // any vectors to do? (assume not)
         bool do_scalars = false; // any scalars to do? (assume not)
-        bool do_rem = false;     // check scalar code for partial remainders?
+        bool scalar_for_peel_rem = false; // using the scalar code for peel and/or remainder.
 
-        // If not full or not aligned, do whole block with
+        // If BB is not full, do whole block with
         // scalar code.  We should only get here when using sub-domains.
         // TODO: do as much vectorization as possible-- this current code is
         // functionally correct but very poor perf.
-        if (is_scratch() || !bb_is_full || !bb_is_aligned) {
+        if (!bb_is_full) {
 
             do_clusters = false;
             do_vectors = false;
             do_scalars = true;
-            do_rem = false;
+            scalar_for_peel_rem = false;
             sub_block_fcidxs.begin.setFromConst(0);
             sub_block_fcidxs.end.setFromConst(0);
             sub_block_fvidxs.begin.setFromConst(0);
@@ -186,49 +191,91 @@ namespace yask {
             sub_block_vidxs.end.setFromConst(0);
         }
 
-        // If it isn't guaranteed that this block is cluster mults
-        // in all dims, determine the subset of this
-        // sub-block that is clusters/vectors.
-        // Currently only allows partial clusters/vectors on right sides (remainder).
-        // TODO: allow partial clusters/vectors on left sides (peel).
-        // TODO: pre-calc this info for each block.
-        else if (!bb_is_cluster_mult) {
+        // If it isn't guaranteed that this block is only aligned cluster
+        // mults in all dims, determine the subset of this sub-block that is
+        // clusters/vectors.  TODO: pre-calc this info for each block.
+        else if (is_scratch() || !bb_is_cluster_mult || !bb_is_aligned) {
 
             // (i: index for stencil dims, j: index for domain dims).
             for (int i = 0, j = 0; i < nsdims; i++) {
                 if (i != step_posn) {
 
-                    // End of scalar elements in this dim.
+                    // Begin/end of scalar elements in this dim.
+                    auto ebgn = sub_block_idxs.begin[i];
                     auto eend = sub_block_idxs.end[i];
 
-                    // Find end of whole clusters.
+                    // Find range of whole clusters.
                     // Note that fcend <= eend because we round
                     // down to get whole clusters only.
                     auto cpts = dims->_cluster_pts[j];
-                    auto fcend = ROUND_DOWN(eend, cpts);
+                    auto fcbgn = round_up_flr(ebgn, cpts);
+                    auto fcend = round_down_flr(eend, cpts);
+                    sub_block_fcidxs.begin[i] = fcbgn;
                     sub_block_fcidxs.end[i] = fcend;
 
-                    // Find end of whole or partial vectors.
+                    // Find range of whole or partial vectors.
                     // Note that fvend <= eend because we round
                     // down to get whole vectors only.
                     // Note that vend >= eend because we round
                     // up to include partial vectors.
+                    // Similar but opposite for begin vars.
                     // We make a vector mask to pick the
                     // right elements.
                     auto vpts = dims->_fold_pts[j];
-                    auto fvend = ROUND_DOWN(eend, vpts);
-                    auto vend = ROUND_UP(eend, vpts);
+                    auto fvbgn = round_up_flr(ebgn, vpts);
+                    auto fvend = round_down_flr(eend, vpts);
+                    auto vbgn = round_down_flr(ebgn, vpts);
+                    auto vend = round_up_flr(eend, vpts);
                     if (i == _inner_posn) {
 
-                        // don't do any vectors in plane of inner dim.
+                        // Don't do any vectors in plane of inner dim.
+                        // We'll do these with scalars.
+                        // This is unusual because vector folding is
+                        // normally done in a plane perpendicular to
+                        // the inner dim for >= 2D domains.
+                        fvbgn = vbgn = fcbgn;
                         fvend = vend = fcend;
                     }
+                    sub_block_fvidxs.begin[i] = fvbgn;
                     sub_block_fvidxs.end[i] = fvend;
+                    sub_block_vidxs.begin[i] = vbgn;
                     sub_block_vidxs.end[i] = vend;
-                    if (vend > fcend)
+
+                    // Any vectors to do (full or partial)?
+                    if (vbgn < fcbgn || vend > fcend)
                         do_vectors = true;
 
-                    // Calculate mask in this dim for partial vector.
+                    // Calculate peel mask in this dim for partial vector.
+                    // All such masks will be ANDed together to form the
+                    // final mask over all domain dims.
+                    if (vbgn < fvbgn) {
+                        idx_t mask = 0;
+
+                        // Need to set upper bit.
+                        idx_t mbit = 0x1 << (dims->_fold_pts.product() - 1);
+                        
+                        // Visit points in a vec-fold.
+                        dims->_fold_pts.visitAllPoints
+                            ([&](const IdxTuple& pt, size_t idx) {
+
+                                // Shift mask to next posn.
+                                mask >>= 1;
+                                
+                                // If this point is within the sub-block,
+                                // set the next bit in the mask.
+                                idx_t pi = vbgn + pt[j];
+                                if (pi >= ebgn)
+                                    mask |= mbit;
+
+                                // Keep visiting.
+                                return true;
+                            });
+
+                        // Save mask.
+                        peel_masks[i] = mask;
+                    }
+
+                    // Calculate remainder mask in this dim for partial vector.
                     // All such masks will be ANDed together to form the
                     // final mask over all domain dims.
                     if (vend > fvend) {
@@ -255,15 +302,17 @@ namespace yask {
                             });
 
                         // Save mask.
-                        masks[i] = mask;
+                        rem_masks[i] = mask;
                     }
 
                     // Any remainder?
                     // This will only be needed in inner dim because we
                     // will do partial vectors in other dims.
-                    if (i == _inner_posn && eend > vend) {
+                    // Set 'scalar_for_peel_rem' to indicate we only want to
+                    // do peel and/or rem in scalar loop.
+                    if (i == _inner_posn && (ebgn < vbgn || eend > vend)) {
                         do_scalars = true;
-                        do_rem = true;
+                        scalar_for_peel_rem = true;
                     }
 
                     // Next domain index.
@@ -275,20 +324,21 @@ namespace yask {
         // Normalized indices needed for sub-block loop.
         ScanIndices norm_sub_block_idxs(sub_block_idxs);
         
+        // Normalize the cluster indices.
+        // These will be the bounds of the sub-block loops.
+        // Set both begin/end and start/stop to ensure start/stop
+        // vars get passed through to calc_loop_of_clusters()
+        // for the inner loop.
+        normalize_indices(sub_block_fcidxs.begin, norm_sub_block_idxs.begin);
+        norm_sub_block_idxs.start = norm_sub_block_idxs.begin;
+        normalize_indices(sub_block_fcidxs.end, norm_sub_block_idxs.end);
+        norm_sub_block_idxs.stop = norm_sub_block_idxs.end;
+        
         // Full rectangular polytope of aligned clusters: use optimized code.
         if (do_clusters) {
             TRACE_MSG3("calc_sub_block:  using cluster code for " <<
                        sub_block_fcidxs.begin.makeValStr(nsdims) <<
                        " ... (end before) " << sub_block_fcidxs.end.makeValStr(nsdims));
-
-            // Normalize the cluster indices.
-            // Set both begin/end and start/stop to ensure start/stop
-            // vars get passed through to calc_loop_of_clusters()
-            // for the inner loop.
-            normalize_indices(sub_block_fcidxs.begin, norm_sub_block_idxs.begin);
-            norm_sub_block_idxs.start = norm_sub_block_idxs.begin;
-            normalize_indices(sub_block_fcidxs.end, norm_sub_block_idxs.end);
-            norm_sub_block_idxs.stop = norm_sub_block_idxs.end;
 
             // Step sizes are based on cluster lengths (in vector units).
             // The step in the inner loop is hard-coded in the generated code.
@@ -310,22 +360,25 @@ namespace yask {
 #undef calc_inner_loop
         }
         
-        // Full and partial remainder vectors.
+        // Full and partial peel/remainder vectors.
         if (do_vectors) {
             TRACE_MSG3("calc_sub_block:  using vector code for " <<
                        sub_block_vidxs.begin.makeValStr(nsdims) <<
                        " ... (end before) " << sub_block_vidxs.end.makeValStr(nsdims) <<
-                       " remaining after clusters in " <<
+                       " before and/or after full vector-clusters in " <<
                        sub_block_fcidxs.begin.makeValStr(nsdims) <<
                        " ... (end before) " << sub_block_fcidxs.end.makeValStr(nsdims));
 
-            // Keep a copy of the normalized cluster indices.
-            // These will be used to determine the starting point
-            // in each dim.
-            assert(do_clusters);
+            // Keep a copy of the normalized cluster indices
+            // that were calculated above.
+            // The full clusters were already done above, so
+            // we only need to do vectors before or after the
+            // clusters in each dim.
+            // We'll exclude them below.
             ScanIndices norm_sub_block_fcidxs(norm_sub_block_idxs);
 
             // Normalize the vector indices.
+            // These will be the bounds of the sub-block loops.
             // Set both begin/end and start/stop to ensure start/stop
             // vars get passed through to calc_loop_of_clusters()
             // for the inner loop.
@@ -343,26 +396,32 @@ namespace yask {
                 }
             }
 
-            // Also normalize the full vector indices to determine if
+            // Also normalize the *full* vector indices to determine if
             // we need a mask at each vector index.
-            // We only need the end indices.
-            Indices norm_sub_block_fvidxs_end(norm_sub_block_idxs.end);
-            normalize_indices(sub_block_fvidxs.end, norm_sub_block_fvidxs_end);
+            // We don't need start, stop, or step for this.
+            ScanIndices norm_sub_block_fvidxs(sub_block_idxs);
+            normalize_indices(sub_block_fvidxs.begin, norm_sub_block_fvidxs.begin);
+            normalize_indices(sub_block_fvidxs.end, norm_sub_block_fvidxs.end);
 
             // Define the function called from the generated loops to
-            // determine whether a loop of vectors is within the remainder
-            // range, i.e., after the clusters. If so, call the
+            // determine whether a loop of vectors is within the peel
+            // range (before the cluster) or remainder
+            // range (after the clusters). If so, call the
             // loop-of-vectors function w/appropriate mask.
+            // Since step is always 1, we ignore loop_idxs.stop.
 #define calc_inner_loop(thread_idx, loop_idxs) \
             bool ok = false;                                            \
             idx_t mask = idx_t(-1);                                     \
             for (int i = 0; i < nsdims; i++) {                          \
                 if (i != step_posn &&                                   \
                     i != _inner_posn &&                                 \
-                    loop_idxs.start[i] >= norm_sub_block_fcidxs.end[i]) { \
-                    ok = true;                                          \
-                    if (loop_idxs.start[i] >= norm_sub_block_fvidxs_end[i]) \
-                        mask &= masks[i];                               \
+                    (loop_idxs.start[i] < norm_sub_block_fcidxs.begin[i] || \
+                     loop_idxs.start[i] >= norm_sub_block_fcidxs.end[i])) { \
+                        ok = true;                                      \
+                        if (loop_idxs.start[i] < norm_sub_block_fvidxs.begin[i]) \
+                            mask &= peel_masks[i];                      \
+                        if (loop_idxs.start[i] >= norm_sub_block_fvidxs.end[i]) \
+                            mask &= rem_masks[i];                       \
                 }                                                       \
             }                                                           \
             if (ok) calc_loop_of_vectors(thread_idx, loop_idxs, mask);
@@ -379,7 +438,7 @@ namespace yask {
 
 #ifdef TRACE
             string msg = "calc_sub_block:  using scalar code for ";
-            msg += do_rem ? "remainder of" : "entire";
+            msg += scalar_for_peel_rem ? "peel/remainder of" : "entire";
             msg += " sub-block ";
             msg += bb_is_full ? "without" : "with";
             msg += " sub-domain checking";
@@ -390,17 +449,19 @@ namespace yask {
             // a nested OMP region. TODO: check this if there is only one block thread.
             ScanIndices misc_idxs(sub_block_idxs);
 
-            // Define misc-loop function.  Since step is always 1, we
-            // ignore misc_stop.  If point is in sub-domain for this
+            // Define misc-loop function.
+            // If point is in sub-domain for this
             // group, then evaluate the reference scalar code.
             // If no holes, don't need to check each point in domain.
+            // Since step is always 1, we ignore misc_idxs._stop.
 #define misc_fn(misc_idxs)  do {                                        \
             bool ok = true;                                             \
-            if (do_rem) {                                               \
+            if (scalar_for_peel_rem) {                                  \
                 ok = false;                                             \
                 for (int i = 0; i < nsdims; i++)                        \
                     if (i != step_posn &&                               \
-                        misc_idxs.start[i] >= sub_block_vidxs.end[i]) { \
+                        (misc_idxs.start[i] < sub_block_vidxs.begin[i] || \
+                         misc_idxs.start[i] >= sub_block_vidxs.end[i])) { \
                         ok = true; break; }                             \
             }                                                           \
             if (ok && (bb_is_full || is_in_valid_domain(misc_idxs.start))) { \

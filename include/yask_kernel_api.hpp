@@ -1452,20 +1452,19 @@ namespace yask {
            In order to successfully share storage, the following conditions must hold:
            - The source grid must already have storage allocated.
            - The two grids must have the same dimensions in the same order.
-           - The two grids must have the same domain sizes in all dimensions.
-           - The two grids must have the same allocation in non-domain dimensions.
-           - The halo size of this grid must be less than or equal to the padding
-           size of the source grid in all domain dimensions. In other words, the halo
-           of this grid must be able to "fit inside" the source padding.
+           - The two grids must have the same domain sizes in all domain dimensions.
+           - The two grids must have the same allocation sizes in non-domain dimensions.
+           - The required padding size of this grid must be less than or
+           equal to the actual padding size of the source grid in all domain
+           dimensions. The required padding size of this grid will be equal to
+           or greater than its halo size. It is not strictly necessary that the
+           two grids have the same halo sizes, but that is a sufficient condition.
 
            Any pre-existing storage will be released before allocation as via release_storage().
            The padding size(s) of this grid will be set to that of the source grid.
            After calling share_storage(), changes in one grid via set_all_elements()
            or set_element() will be visible in the other grid.
 
-           The halo sizes of the two grids do not need to be equal, but (as usual)
-           they must remain less than or equal to the padding size after data storage is
-           allocated.
            See allocation options and more information about grid sizes
            in the "Detailed Description" for \ref yk_grid.
         */
