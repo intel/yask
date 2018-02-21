@@ -33,6 +33,7 @@ arch		=	snb
 mpi		=	1
 real_bytes	=	4
 radius		=	1
+ranks		= 	1
 
 # Defaults based on stencil type (and arch for some stencils).
 ifeq ($(stencil),)
@@ -703,7 +704,7 @@ cxx-yc-api-test-with-exception:
 
 # Run the default YASK compiler and kernel.
 yc-and-yk-test: $(YK_EXEC)
-	$(BIN_DIR)/yask.sh -stencil $(stencil) -arch $(arch) -v
+	$(BIN_DIR)/yask.sh -stencil $(stencil) -arch $(arch) -ranks $(ranks) -v
 
 # Generate the code file using the built-in compiler.
 code-file: $(YK_CODE_FILE)
@@ -855,4 +856,6 @@ help:
 	@echo " "
 	@echo "Example builds with test runs:"
 	@echo " $(MAKE) -j all"
+	@echo " $(MAKE) -j all ranks=2"
 	@echo " $(MAKE) -j all YK_CXX=g++ YK_CXXOPT=-O2 mpi=0"
+	@echo " $(MAKE) -j all YK_CXX=mpigxx YK_CXXOPT=-O2 ranks=2"
