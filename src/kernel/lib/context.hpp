@@ -366,6 +366,11 @@ namespace yask {
         // This should be called anytime a setting or offset is changed.
         virtual void update_grids();
         
+        // Adjust offsets of scratch grids based
+        // on thread and scan indices.
+        virtual void update_scratch_grids(int thread_idx,
+                                          const ScanIndices& idxs);
+
         // Get total memory allocation required by grids.
         // Does not include MPI buffers.
         // TODO: add MPI buffers.

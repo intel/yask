@@ -47,19 +47,21 @@ namespace yask {
     GET_GRID_API(get_left_halo_size, _left_halos[posn], false, true, false)
     GET_GRID_API(get_right_halo_size, _right_halos[posn], false, true, false)
     GET_GRID_API(get_halo_size, _left_halos[posn], false, true, false)
-    GET_GRID_API(get_first_rank_domain_index, _offsets[posn], false, true, false)
-    GET_GRID_API(get_last_rank_domain_index, _offsets[posn] + _domains[posn] - 1, false, true, false)
-    GET_GRID_API(get_first_rank_halo_index, _offsets[posn] - _left_halos[posn], false, false, true)
-    GET_GRID_API(get_last_rank_halo_index, _offsets[posn] + _domains[posn] + _right_halos[posn] - 1, false, false, true)
-    GET_GRID_API(get_first_rank_alloc_index, _offsets[posn] - _left_pads[posn], false, true, false)
-    GET_GRID_API(get_last_rank_alloc_index, _offsets[posn] - _left_pads[posn] + _allocs[posn] - 1, false, true, false)
     GET_GRID_API(get_first_misc_index, _offsets[posn], false, false, true)
     GET_GRID_API(get_last_misc_index, _offsets[posn] + _domains[posn] - 1, false, false, true)
     GET_GRID_API(get_left_extra_pad_size, _left_pads[posn] - _left_halos[posn], false, true, false)
     GET_GRID_API(get_right_extra_pad_size, (_allocs[posn] - _left_pads[posn]) - _right_halos[posn], false, true, false)
     GET_GRID_API(get_extra_pad_size, _left_pads[posn] - _left_halos[posn], false, true, false)
     GET_GRID_API(get_alloc_size, _allocs[posn], true, true, true)
+    GET_GRID_API(get_first_rank_domain_index, _offsets[posn] - _local_offsets[posn], false, true, false)
+    GET_GRID_API(get_last_rank_domain_index, _offsets[posn] - _local_offsets[posn] + _domains[posn] - 1;
+                 assert(!_is_scratch), false, true, false)
+    GET_GRID_API(get_first_rank_halo_index, _offsets[posn] - _left_halos[posn], false, false, true)
+    GET_GRID_API(get_last_rank_halo_index, _offsets[posn] + _domains[posn] + _right_halos[posn] - 1, false, false, true)
+    GET_GRID_API(get_first_rank_alloc_index, _offsets[posn] - _left_pads[posn], false, true, false)
+    GET_GRID_API(get_last_rank_alloc_index, _offsets[posn] - _left_pads[posn] + _allocs[posn] - 1, false, true, false)
     GET_GRID_API(_get_offset, _offsets[posn], true, true, true)
+    GET_GRID_API(_get_local_offset, _local_offsets[posn], true, true, true)
     GET_GRID_API(_get_first_alloc_index, _offsets[posn] - _left_pads[posn], true, true, true)
     GET_GRID_API(_get_last_alloc_index, _offsets[posn] - _left_pads[posn] + _allocs[posn] - 1, true, true, true)
 #undef GET_GRID_API
@@ -77,6 +79,8 @@ namespace yask {
         expr;                                                           \
     }
     SET_GRID_API(_set_offset, _offsets[posn] = n, true, true, true)
+    SET_GRID_API(_set_local_offset, _local_offsets[posn] = n;
+                 _vec_local_offsets[posn] = n / _vec_lens[posn], true, true, true)
     SET_GRID_API(_set_domain_size, _domains[posn] = n; resize(), true, true, true)
     SET_GRID_API(_set_left_pad_size, _left_pads[posn] = n; resize(), true, true, true)
     SET_GRID_API(_set_right_pad_size, _right_pads[posn] = n; resize(), true, true, true)

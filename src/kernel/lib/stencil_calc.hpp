@@ -137,8 +137,9 @@ namespace yask {
 
         // If this group is updating scratch grid(s),
         // expand indices to calculate values in halo.
-        // Return whether adjusted.
-        virtual bool adjust_scan(ScanIndices& misc_idxs) const;
+        // Adjust offsets in grids based on original idxs.
+        // Return adjusted indices.
+        virtual ScanIndices adjust_scan(int thread_idx, const ScanIndices& idxs) const;
         
         // Set the bounding-box vars for this group in this rank.
         virtual void find_bounding_box();

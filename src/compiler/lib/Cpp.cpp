@@ -321,7 +321,11 @@ namespace yask {
     void CppVecPrintHelper::printPointPtr(ostream& os, const string& ptrName,
                                           const GridPoint& gp) {
         printPointComment(os, gp, "Calculate pointer to ");
-        auto vp = printVecPointCall(os, gp, "getVecPtrNorm", "", "__LINE__", true);
+
+        // Get pointer to vector using normalized indices.
+        // Ignore out-of-range errors because we might get a base pointer to an
+        // element before the allocated range.
+        auto vp = printVecPointCall(os, gp, "getVecPtrNorm", "", "false", true);
         os << _linePrefix << getVarType() << "* " << ptrName << " = " << vp << _lineSuffix;
     }
     

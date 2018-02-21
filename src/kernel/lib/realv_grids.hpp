@@ -52,13 +52,15 @@ namespace yask {
         Indices _domains;   // rank domain sizes copied from the solution | alloc size.
         Indices _left_pads, _right_pads; // extra space around domains (left: actual, right: requested) | zero.
         Indices _left_halos, _right_halos; // space within pads for halo exchange | zero.
-        Indices _offsets;   // offsets of this rank in overall domain | first index.
+        Indices _offsets;   // offsets of this grid in overall domain | first index.
+        Indices _local_offsets; // offsets of this grid in this rank | first index.
         Indices _allocs;    // actual grid allocation in reals | as domain dims.
         Indices _vec_lens;  // num reals in each elem | one.
 
         // Indices in vectors for sizes that are always vec lens (to avoid division).
         Indices _vec_left_pads;
         Indices _vec_allocs;
+        Indices _vec_local_offsets;
 
         // Whether step dim is used.
         // If true, will always be in Indices::step_posn.
@@ -170,10 +172,12 @@ namespace yask {
             _left_halos.setFromConst(0, n);
             _right_halos.setFromConst(0, n);
             _offsets.setFromConst(0, n);
+            _local_offsets.setFromConst(0, n);
             _vec_lens.setFromConst(1, n);
             _allocs.setFromConst(1, n);
             _vec_left_pads.setFromConst(1, n);
             _vec_allocs.setFromConst(1, n);
+            _vec_local_offsets.setFromConst(0, n);
             
         }
         virtual ~YkGridBase() { }
@@ -359,12 +363,14 @@ namespace yask {
         // They are not protected because they are used from outside
         // this class hierarchy.
         GET_GRID_API(_get_offset)
+        GET_GRID_API(_get_local_offset)
         GET_GRID_API(_get_first_alloc_index)
         GET_GRID_API(_get_last_alloc_index)
         SET_GRID_API(_set_domain_size)
         SET_GRID_API(_set_left_pad_size)
         SET_GRID_API(_set_right_pad_size)
         SET_GRID_API(_set_offset)
+        SET_GRID_API(_set_local_offset)
 
         // Exposed APIs.
         GET_GRID_API(get_rank_domain_size)
@@ -780,7 +786,8 @@ namespace yask {
                                    bool checkBounds=true) final {
 
             const real_t* p =
-                const_cast<const YkVecGrid*>(this)->getElemPtr(idxs, alloc_step_idx, checkBounds);
+                const_cast<const YkVecGrid*>(this)->getElemPtr(idxs, alloc_step_idx,
+                                                               checkBounds);
             return const_cast<real_t*>(p);
         }
 
@@ -801,13 +808,13 @@ namespace yask {
         // Indices must be normalized and rank-relative.
         // It's important that this function be efficient, since
         // it's indiectly used from the stencil kernel.
-        inline const real_vec_t* getVecPtrNorm(const Indices& idxs,
+        inline const real_vec_t* getVecPtrNorm(const Indices& vec_idxs,
                                                idx_t alloc_step_idx,
                                                bool checkBounds=true) const {
 
 #ifdef TRACE_MEM
             _data.get_ostr() << get_name() << "." << "YkVecGrid::getVecPtrNorm(" <<
-                idxs.makeValStr(get_num_dims()) << ")";
+                vec_idxs.makeValStr(get_num_dims()) << ")";
 #endif
 
             static constexpr int nvls = sizeof...(_templ_vec_lens);
@@ -820,7 +827,7 @@ namespace yask {
             // Special handling for step index.
             auto sp = Indices::step_posn;
             if (_wrap_step_idx) {
-                assert(alloc_step_idx == _wrap_step(idxs[sp]));
+                assert(alloc_step_idx == _wrap_step(vec_idxs[sp]));
                 adj_idxs[sp] = alloc_step_idx;
             }
             
@@ -831,7 +838,7 @@ namespace yask {
 
                     // Adjust for padding.
                     // This gives a 0-based local *vector* index.
-                    adj_idxs[i] = idxs[i] + _vec_left_pads[i];
+                    adj_idxs[i] = vec_idxs[i] - _vec_local_offsets[i] + _vec_left_pads[i];
                 }
             }
 
@@ -846,24 +853,25 @@ namespace yask {
         }
 
         // Non-const version.
-        inline real_vec_t* getVecPtrNorm(const Indices& idxs,
+        inline real_vec_t* getVecPtrNorm(const Indices& vec_idxs,
                                          idx_t alloc_step_idx,
                                          bool checkBounds=true) {
 
             const real_vec_t* p =
-                const_cast<const YkVecGrid*>(this)->getVecPtrNorm(idxs, alloc_step_idx, checkBounds);
+                const_cast<const YkVecGrid*>(this)->getVecPtrNorm(vec_idxs,
+                                                                  alloc_step_idx, checkBounds);
             return const_cast<real_vec_t*>(p);
         }
 
         // Read one vector.
         // Indices must be normalized and rank-relative.
-        inline real_vec_t readVecNorm(const Indices& idxs,
+        inline real_vec_t readVecNorm(const Indices& vec_idxs,
                                       idx_t alloc_step_idx,
                                       int line) const {
-            const real_vec_t* vp = getVecPtrNorm(idxs, alloc_step_idx);
+            const real_vec_t* vp = getVecPtrNorm(vec_idxs, alloc_step_idx);
             real_vec_t v = *vp;
 #ifdef TRACE_MEM
-            printVecNorm("readVecNorm", idxs, v, line);
+            printVecNorm("readVecNorm", vec_idxs, v, line);
 #endif
             return v;
         }
@@ -871,13 +879,13 @@ namespace yask {
         // Write one vector.
         // Indices must be normalized and rank-relative.
         inline void writeVecNorm(real_vec_t val,
-                                 const Indices& idxs,
+                                 const Indices& vec_idxs,
                                  idx_t alloc_step_idx,
                                  int line) {
-            real_vec_t* vp = getVecPtrNorm(idxs, alloc_step_idx);
+            real_vec_t* vp = getVecPtrNorm(vec_idxs, alloc_step_idx);
             *vp = val;
 #ifdef TRACE_MEM
-            printVecNorm("writeVecNorm", idxs, val, line);
+            printVecNorm("writeVecNorm", vec_idxs, val, line);
 #endif
         }
 
@@ -885,15 +893,15 @@ namespace yask {
         // Indices must be normalized and rank-relative.
         template <int level>
         ALWAYS_INLINE
-        void prefetchVecNorm(const Indices& idxs,
+        void prefetchVecNorm(const Indices& vec_idxs,
                              idx_t alloc_step_idx,
                              int line) const {
 #ifdef TRACE_MEM
             std::cout << "prefetchVecNorm<" << level << ">(" <<
-                makeIndexString(idxs.multElements(_vec_lens)) <<
+                makeIndexString(vec_idxs.multElements(_vec_lens)) <<
                 ")" << std::endl;
 #endif
-            auto p = getVecPtrNorm(idxs, alloc_step_idx, false);
+            auto p = getVecPtrNorm(vec_idxs, alloc_step_idx, false);
             prefetch<level>(p);
 #ifdef MODEL_CACHE
             cache_model.prefetch(p, level, line);

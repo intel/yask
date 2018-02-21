@@ -144,16 +144,26 @@ namespace yask {
         TRACE_MSG("calc_rank_ref: " << begin.makeDimValStr() << " ... (end before) " <<
                   end.makeDimValStr());
 
+        // Force region & block sizes to whole rank size so that scratch
+        // grids will be large enough.
+        _opts->_region_sizes.setValsSame(0);
+        _opts->_block_sizes.setValsSame(0);
+        _at.apply();
+
+        // Only use one thread.
+        int thread_idx = 0;
+        
         // Indices to loop through.
         // Init from begin & end tuples.
         ScanIndices rank_idxs(ndims);
         rank_idxs.begin = begin;
         rank_idxs.end = end;
 
-        // Indices needed for the generated misc loops.  Will normally be a
-        // copy of rank_idxs except when updating scratch-grids.
-        ScanIndices misc_idxs(ndims);
-        
+        // Set offsets in scratch grids.
+        // Requires scratch grids to be allocated for whole
+        // rank instead of smaller grid size.
+        update_scratch_grids(thread_idx, rank_idxs);
+            
         // Initial halo exchange.
         // (Needed in case there are 0 time-steps).
         // TODO: get rid of all halo exchanges in this function,
@@ -178,9 +188,6 @@ namespace yask {
             rank_idxs.stop[step_posn] = stop_t;
             rank_idxs.step[step_posn] = step_t;
 
-            // Only use one thread.
-            int thread_idx = 0;
-            
             // Loop thru groups.
             // For this reference-code implementation, we
             // will do all stencil groups at this level,
@@ -190,12 +197,10 @@ namespace yask {
                 // Halo exchange(s) needed for this group.
                 exchange_halos_all();
 
-                // Copy of rank indices for generated loop.
-                misc_idxs = rank_idxs;
-
-                // If this group is updating scratch grid(s),
-                // expand indices to calculate values in halo.
-                sg->adjust_scan(misc_idxs);
+                // Indices needed for the generated misc loops.  Will normally be a
+                // copy of rank_idxs except when updating scratch-grids.
+                ScanIndices misc_idxs = sg->adjust_scan(thread_idx, rank_idxs);
+                misc_idxs.step.setFromConst(1); // ensure unit step.
                 
                 // Define misc-loop function.  Since step is always 1, we
                 // ignore misc_stop.  If point is in sub-domain for this
@@ -797,11 +802,12 @@ namespace yask {
         auto _opts = _context->_opts;
         auto _env = _context->_env;
 
-        // Change sub-block size to 0 so adjustSettings()
-        // will set it to the default.
+        // Change block-related sizes to 0 so adjustSettings()
+        // will set them to the default.
         // TODO: tune sub-block sizes also.
         _opts->_sub_block_sizes.setValsSame(0);
         _opts->_sub_block_group_sizes.setValsSame(0);
+        _opts->_block_group_sizes.setValsSame(0);
                 
         // Make sure everything is resized based on block size.
         _opts->adjustSettings(nullop->get_ostream(), _env);
@@ -1431,10 +1437,8 @@ namespace yask {
                                 if (buf.get_size() == 0)
                                     continue;
 
-                                if (pass == 1) {
+                                if (pass == 1)
                                     buf.set_storage(_mpi_data_buf, abbytes);
-                                    TRACE_MSG(buf.make_info_string());
-                                }
 
                                 auto sbytes = buf.get_bytes();
                                 bbytes += sbytes;
@@ -1513,9 +1517,7 @@ namespace yask {
                         if (gp->is_dim_used(dname)) {
 
                             // Set domain size of grid to block size.
-#pragma warning FIXME: use block size
-                            //gp->_set_domain_size(dname, _opts->_block_sizes[dname]);
-                            gp->_set_domain_size(dname, _opts->_rank_sizes[dname]);
+                            gp->_set_domain_size(dname, _opts->_block_sizes[dname]);
                     
                             // Pads.
                             // Set via both 'extra' and 'min'; larger result will be used.
@@ -1556,7 +1558,53 @@ namespace yask {
         } // scratch-grid passes.
     }
 
-    // Set grid sizes and offsets based on settings.
+    // Adjust offsets of scratch grids based
+    // on thread and scan indices.
+    void StencilContext::update_scratch_grids(int thread_idx,
+                                              const ScanIndices& idxs) {
+        auto dims = get_dims();
+        int nsdims = dims->_stencil_dims.size();
+        auto step_posn = Indices::step_posn;
+
+        // Loop thru vecs of scratch grids.
+        for (auto* sv : scratchVecs) {
+            assert(sv);
+
+            // Get the one for this thread.
+            auto gp = sv->at(thread_idx);
+            assert(gp);
+            assert(gp->is_scratch());
+
+            // i: index for stencil dims, j: index for domain dims.
+            for (int i = 0, j = 0; i < nsdims; i++) {
+                if (i != step_posn) {
+                    auto& dim = dims->_stencil_dims.getDim(i);
+                    auto& dname = dim.getName();
+
+                    // Is this dim used in this grid?
+                    int posn = gp->get_dim_posn(dname);
+                    if (posn >= 0) {
+
+                        // Set offset of grid based on starting point of block.
+                        // This is global, so it will include the rank offset.
+                        gp->_set_offset(posn, idxs.begin[i]);
+
+                        // Set local offset to diff between global offset
+                        // and rank offset. Must be vec-multiple.
+                        auto rofs = rank_domain_offsets[j];
+                        auto lofs = idxs.begin[i] - rofs;
+                        gp->_set_local_offset(posn, lofs);
+                        assert(lofs >= 0);
+                        assert(lofs % dims->_fold_pts[j] == 0);
+                    }
+                    j++;
+                }
+            }
+        }
+    }
+
+    
+    // Set non-scratch grid sizes and offsets based on settings.
     // Set max halos across grids.
     // This should be called anytime a setting or rank offset is changed.
     void StencilContext::update_grids()

@@ -46,7 +46,7 @@ namespace yask {
                    " by thread " << thread_idx);
         assert(!is_scratch());
 
-        // Init block begin & end from region start & stop indices.
+        // Init default block begin & end from region start & stop indices.
         ScanIndices def_block_idxs(ndims);
         def_block_idxs.initFromOuter(region_idxs);
 
@@ -56,9 +56,8 @@ namespace yask {
         // Groups in block loops are based on sub-block-group sizes.
         def_block_idxs.group_size = opts->_sub_block_group_sizes;
 
-        // Indices needed for the generated loops.  Will normally be a copy
-        // of def_block_idxs except when updating scratch-grids.
-        ScanIndices block_idxs(ndims);
+        // Update offsets of scratch grids based on group location.
+        _generic_context->update_scratch_grids(thread_idx, def_block_idxs);
         
         // Define the groups that need to be processed in
         // this block. This will be the prerequisite scratch-grid
@@ -67,18 +66,16 @@ namespace yask {
         sg_list.push_back(this);
 
         // Set number of threads for a block.
+        // Each of these threads will work on a sub-block.
         // This should be nested within a top-level OpenMP task.
         _generic_context->set_block_threads();
 
         // Loop through all the needed groups.
         for (auto* sg : sg_list) {
 
-            // Copy of default indices for generated loop.
-            block_idxs = def_block_idxs;
-        
-            // If this group is updating scratch grid(s),
-            // expand indices to calculate values in its halo.
-            sg->adjust_scan(block_idxs);
+            // Indices needed for the generated loops.  Will normally be a
+            // copy of def_block_idxs except when updating scratch-grids.
+            ScanIndices block_idxs = sg->adjust_scan(thread_idx, def_block_idxs);
 
             TRACE_MSG3("calc_block: " <<
                        " in group '" << sg->get_name() << "': " <<
@@ -87,8 +84,7 @@ namespace yask {
                        " by thread " << thread_idx);
             
             // Include automatically-generated loop code that calls
-            // calc_sub_block() for each sub-block in this block.  Loops through
-            // x from begin_bx to end_bx-1; similar for y and z.  This
+            // calc_sub_block() for each sub-block in this block. This
             // code typically contains the nested OpenMP loop(s).
 #include "yask_block_loops.hpp"
         }
@@ -196,6 +192,7 @@ namespace yask {
         // clusters, vectors, and partial vectors.  TODO: pre-calc this info
         // for each block.
         else if (is_scratch() || !bb_is_cluster_mult || !bb_is_aligned) {
+            do_clusters = false;
 
             // i: index for stencil dims, j: index for domain dims.
             for (int i = 0, j = 0; i < nsdims; i++) {
@@ -217,6 +214,10 @@ namespace yask {
                     sub_block_fcidxs.begin[i] = fcbgn;
                     sub_block_fcidxs.end[i] = fcend;
 
+                    // Any clusters to do?
+                    if (fcend > fcbgn)
+                        do_clusters = true;
+                    
                     // Find range of full and/or partial vectors.
                     // Note that fvend <= eend because we round
                     // down to get whole vectors only.
@@ -333,7 +334,8 @@ namespace yask {
 
             // Define the function called from the generated loops
             // to simply call the loop-of-clusters functions.
-#define calc_inner_loop(thread_idx, loop_idxs) calc_loop_of_clusters(thread_idx, loop_idxs)
+#define calc_inner_loop(thread_idx, loop_idxs) \
+            calc_loop_of_clusters(thread_idx, loop_idxs)
 
             // Include automatically-generated loop code that calls
             // calc_inner_loop(). This is different from the higher-level
@@ -427,7 +429,9 @@ namespace yask {
             TRACE_MSG3(msg);
 #endif
 
-            // Use the 'misc' loop. The OMP will be ignored because we're already in
+            // Use the 'misc' loops. Indices for these loops will be scalar and
+            // global rather than normalized as in the cluster and vector loops.
+            // The OMP will be ignored because we're already in
             // a nested OMP region. TODO: check this if there is only one block thread.
             ScanIndices misc_idxs(sub_block_idxs);
 
@@ -505,9 +509,9 @@ namespace yask {
     // The 'loop_idxs' must specify a range only in the inner dim.
     // Indices must be rank-relative.
     // Indices must be normalized, i.e., already divided by VLEN_*.
-void StencilGroupBase::calc_loop_of_vectors(int thread_idx,
-                                            const ScanIndices& loop_idxs,
-                                            idx_t write_mask) {
+    void StencilGroupBase::calc_loop_of_vectors(int thread_idx,
+                                                const ScanIndices& loop_idxs,
+                                                idx_t write_mask) {
         auto* cp = _generic_context;
         auto dims = cp->get_dims();
         int nsdims = dims->_stencil_dims.size();
@@ -537,40 +541,57 @@ void StencilGroupBase::calc_loop_of_vectors(int thread_idx,
 
     // If this group is updating scratch grid(s),
     // expand indices to calculate values in halo.
-    bool StencilGroupBase::adjust_scan(ScanIndices& idxs) const {
+    // This will often change vec-len aligned indices to non-aligned.
+    // Return adjusted indices.
+    ScanIndices StencilGroupBase::adjust_scan(int thread_idx, const ScanIndices& idxs) const {
 
-        // Adjust scan based on first grid's halo.
+        ScanIndices adj_idxs(idxs);
+        auto* cp = _generic_context;
+        auto dims = cp->get_dims();
+        int nsdims = dims->_stencil_dims.size();
+        auto step_posn = Indices::step_posn;
+
+        // Loop thru vecs of scratch grids for this group.
         for (auto* sv : outputScratchVecs) {
-            for (auto gp : *sv) {
+            assert(sv);
 
-                assert(gp->is_scratch());
+            // Get the one for this thread.
+            auto gp = sv->at(thread_idx);
+            assert(gp);
+            assert(gp->is_scratch());
 
-                // Loop thru dims.
-                // TODO: cache these values in the object so we don't need to
-                // do this expensive scan.
-                auto dims = get_dims();
-                int i = 0;
-                for (auto& dim : dims->_stencil_dims.getDims()) {
+            // i: index for stencil dims, j: index for domain dims.
+            for (int i = 0, j = 0; i < nsdims; i++) {
+                if (i != step_posn) {
+                    auto& dim = dims->_stencil_dims.getDim(i);
                     auto& dname = dim.getName();
 
-                    // Get halo from grid in this dim.
+                    // Is this dim used in this grid?
                     int posn = gp->get_dim_posn(dname);
                     if (posn >= 0) {
+
                         idx_t lh = gp->get_left_halo_size(posn);
                         idx_t rh = gp->get_right_halo_size(posn);
+                        
+                        // Adjust begin & end scan indices based on halos.
+                        adj_idxs.begin[i] = idxs.begin[i] - lh;
+                        adj_idxs.end[i] = idxs.end[i] + rh;
 
-                        // Adjust scan indices.
-                        idxs.begin[i] -= lh;
-                        idxs.end[i] += rh;
+                        // If existing step is >= whole tile, adjust it also.
+                        idx_t width = idxs.end[i] - idxs.begin[i];
+                        if (idxs.step[i] >= width) {
+                            idx_t adj_width = adj_idxs.end[i] - adj_idxs.begin[i];
+                            adj_idxs.step[i] = adj_width;
+                        }
                     }
-                    i++;
+                    j++;
                 }
-
-                // Only need data for first grid since all halos should be same.
-                return true;
             }
+
+            // Only need to check one grid.
+            break;
         }
-        return false;
+        return adj_idxs;
     }
     
     // Set the bounding-box vars for this group in this rank.
