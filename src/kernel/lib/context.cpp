@@ -543,7 +543,7 @@ namespace yask {
 
             } // stencil groups.
         } // time.
-    }
+    } // calc_region.
 
     // Reset the auto-tuner.
     void StencilContext::AT::clear(bool mark_done, bool verbose) {
@@ -600,7 +600,7 @@ namespace yask {
                 center_block.makeDimValStr(" * ") << endl;
             os << "auto-tuner: starting search radius: " << radius << endl;
         }
-    }
+    } // clear.
 
     // Evaluate the previous run and take next auto-tuner step.
     void StencilContext::AT::eval(idx_t steps, double etime) {
@@ -790,6 +790,24 @@ namespace yask {
         apply();
         TRACE_MSG2("auto-tuner: next block-size "  <<
                   _opts->_block_sizes.makeDimValStr(" * "));
+    } // eval.
+
+    // Apply auto-tuner settings.
+    void StencilContext::AT::apply() {
+        auto _opts = _context->_opts;
+        auto _env = _context->_env;
+
+        // Change sub-block size to 0 so adjustSettings()
+        // will set it to the default.
+        // TODO: tune sub-block sizes also.
+        _opts->_sub_block_sizes.setValsSame(0);
+        _opts->_sub_block_group_sizes.setValsSame(0);
+                
+        // Make sure everything is resized based on block size.
+        _opts->adjustSettings(nullop->get_ostream(), _env);
+
+        // Reallocate scratch data based on block size.
+        _context->allocScratchData(nullop->get_ostream());
     }
     
     // Apply auto-tuning to some of the settings.

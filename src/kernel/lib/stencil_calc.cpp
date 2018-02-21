@@ -92,9 +92,9 @@ namespace yask {
         }
     }
 
-    // Normalize the indices, i.e., subtract the rank offset
-    // and divide by vector len in each dim.
-    // Indices must contain all stencil dims.
+    // Normalize the indices, i.e., divide by vector len in each dim.
+    // Ranks offsets must already be subtracted.
+    // Each dim in 'orig' must be a multiple of corresponding vec len.
     void StencilGroupBase::normalize_indices(const Indices& orig, Indices& norm) const {
         auto* cp = _generic_context;
         auto dims = cp->get_dims();
@@ -106,16 +106,13 @@ namespace yask {
         for (int i = 0, j = 0; i < nsdims; i++) {
             if (i != step_posn) {
 
-                // Sub rank offset.
-                auto local_ofs = orig[i] - cp->rank_domain_offsets[j];
-                
                 // Divide indices by fold lengths as needed by
                 // read/writeVecNorm().  Use idiv_flr() instead of '/'
                 // because begin/end vars may be negative (if in halo).
-                norm[i] = idiv_flr<idx_t>(local_ofs, dims->_fold_pts[j]);
+                norm[i] = idiv_flr<idx_t>(orig[i], dims->_fold_pts[j]);
 
                 // Check for no remainder.
-                assert(imod_flr<idx_t>(local_ofs, dims->_fold_pts[j]) == 0);
+                assert(imod_flr<idx_t>(orig[i], dims->_fold_pts[j]) == 0);
 
                 // Next domain index.
                 j++;
@@ -130,7 +127,6 @@ namespace yask {
     // and finally evaluated by the YASK-compiler-generated loops.
     void StencilGroupBase::calc_sub_block(int thread_idx,
                                           const ScanIndices& block_idxs) {
-
         auto* cp = _generic_context;
         auto opts = cp->get_settings();
         auto dims = cp->get_dims();
@@ -144,20 +140,20 @@ namespace yask {
                    " ... (end before) " << block_idxs.stop.makeValStr(nsdims));
 
         // Init sub-block begin & end from block start & stop indices.
-        // These indices are in element units.
+        // These indices are in element units and rank-relative.
         ScanIndices sub_block_idxs(nsdims);
         sub_block_idxs.initFromOuter(block_idxs);
 
         // Subset of sub-block that is full clusters.
-        // These indices are in element units.
+        // These indices are in element units and rank-relative.
         ScanIndices sub_block_fcidxs(sub_block_idxs);
 
         // Subset of sub-block that is full vectors.
-        // These indices are in element units.
+        // These indices are in element units and rank-relative.
         ScanIndices sub_block_fvidxs(sub_block_idxs);
         
         // Superset of sub-block that is full or partial vectors.
-        // These indices are in element units.
+        // These indices are in element units and rank-relative.
         ScanIndices sub_block_vidxs(sub_block_idxs);
 
         // Masks for computing partial vectors in each dim.
@@ -183,6 +179,8 @@ namespace yask {
             do_vectors = false;
             do_scalars = true;
             scalar_for_peel_rem = false;
+
+            // None of these will be used.
             sub_block_fcidxs.begin.setFromConst(0);
             sub_block_fcidxs.end.setFromConst(0);
             sub_block_fvidxs.begin.setFromConst(0);
@@ -200,9 +198,12 @@ namespace yask {
             for (int i = 0, j = 0; i < nsdims; i++) {
                 if (i != step_posn) {
 
-                    // Begin/end of scalar elements in this dim.
-                    auto ebgn = sub_block_idxs.begin[i];
-                    auto eend = sub_block_idxs.end[i];
+                    // Rank offset.
+                    auto rofs = cp->rank_domain_offsets[j];
+                
+                    // Begin/end of rank-relative scalar elements in this dim.
+                    auto ebgn = sub_block_idxs.begin[i] - rofs;
+                    auto eend = sub_block_idxs.end[i] - rofs;
 
                     // Find range of whole clusters.
                     // Note that fcend <= eend because we round
@@ -453,22 +454,26 @@ namespace yask {
             // If point is in sub-domain for this
             // group, then evaluate the reference scalar code.
             // If no holes, don't need to check each point in domain.
-            // Since step is always 1, we ignore misc_idxs._stop.
+            // Since step is always 1, we ignore misc_idxs.stop.
 #define misc_fn(misc_idxs)  do {                                        \
             bool ok = true;                                             \
             if (scalar_for_peel_rem) {                                  \
                 ok = false;                                             \
-                for (int i = 0; i < nsdims; i++)                        \
-                    if (i != step_posn &&                               \
-                        (misc_idxs.start[i] < sub_block_vidxs.begin[i] || \
-                         misc_idxs.start[i] >= sub_block_vidxs.end[i])) { \
-                        ok = true; break; }                             \
+                for (int i = 0, j = 0; i < nsdims; i++) {               \
+                    if (i != step_posn) {                               \
+                        auto rofs = cp->rank_domain_offsets[j];         \
+                        if (misc_idxs.start[i] < rofs + sub_block_vidxs.begin[i] || \
+                            misc_idxs.start[i] >= rofs + sub_block_vidxs.end[i]) { \
+                            ok = true; break; }                         \
+                        j++;                                            \
+                    }                                                   \
+                }                                                       \
             }                                                           \
             if (ok && (bb_is_full || is_in_valid_domain(misc_idxs.start))) { \
                 calc_scalar(thread_idx, misc_idxs.start);               \
             }                                                           \
-            } while(0)
-                
+        } while(0)
+
             // Scan through n-D space.
 #include "yask_misc_loops.hpp"
 #undef misc_fn

@@ -52,8 +52,9 @@ namespace yask {
         // Whether this is updates scratch grid(s);
         bool _is_scratch = false;
 
-        // Normalize the indices, i.e., subtract the rank offset
-        // and divide by vector len in each dim.
+        // Normalize the indices, i.e., divide by vector len in each dim.
+        // Ranks offsets must already be subtracted.
+        // Each dim in 'orig' must be a multiple of corresponding vec len.
         void normalize_indices(const Indices& orig, Indices& norm) const;
         
     public:

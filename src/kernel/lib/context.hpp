@@ -253,24 +253,10 @@ namespace yask {
             void eval(idx_t steps, double elapsed_time);
 
             // Apply settings.
-            void apply() {
-                auto _opts = _context->_opts;
-                auto _env = _context->_env;
-
-                // Change sub-block size to 0 so adjustSettings()
-                // will set it to the default.
-                _opts->_sub_block_sizes.setValsSame(0);
-                _opts->_sub_block_group_sizes.setValsSame(0);
-                
-                // Make sure everything is resized based on block size.
-                _opts->adjustSettings(nullop->get_ostream(), _env);
-
-                // Reallocate scratch data based on block size.
-                _context->allocScratchData(nullop->get_ostream());
-            }
+            void apply();
 
             // Done?
-            bool is_done() { return done; }
+            bool is_done() const { return done; }
         };
         AT _at;
         
