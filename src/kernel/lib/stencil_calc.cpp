@@ -30,13 +30,15 @@ namespace yask {
 
     // Calculate results within a block.
     // Typically called by an OMP thread team.
+    // It is here that required scratch-grid stencils are evaluated
+    // before the non-scratch stencils in the stencil group.
     void StencilGroupBase::calc_block(const ScanIndices& region_idxs) {
 
         auto opts = _generic_context->get_settings();
         auto dims = _generic_context->get_dims();
         int ndims = dims->_stencil_dims.size();
         auto& step_dim = dims->_step_dim;
-        int thread_idx = omp_get_thread_num();
+        int thread_idx = omp_get_thread_num(); // used to index the scratch grids.
         TRACE_MSG3("calc_block:" <<
                    " in non-scratch group '" << get_name() << "': " <<
                    region_idxs.start.makeValStr(ndims) <<
@@ -75,7 +77,7 @@ namespace yask {
             block_idxs = def_block_idxs;
         
             // If this group is updating scratch grid(s),
-            // expand indices to calculate values in halo.
+            // expand indices to calculate values in its halo.
             sg->adjust_scan(block_idxs);
 
             TRACE_MSG3("calc_block: " <<
@@ -140,7 +142,7 @@ namespace yask {
                    " ... (end before) " << block_idxs.stop.makeValStr(nsdims));
 
         // Init sub-block begin & end from block start & stop indices.
-        // These indices are in element units and rank-relative.
+        // These indices are in element units and global (not rank-relative).
         ScanIndices sub_block_idxs(nsdims);
         sub_block_idxs.initFromOuter(block_idxs);
 
@@ -162,16 +164,16 @@ namespace yask {
         peel_masks.setFromConst(-1);
         rem_masks.setFromConst(-1);
         
-        // Determine what part of this sub-block can be done with full clusters/vectors.
+        // Flags that indicate what type of processing needs to be done.
         // Init to full clusters only.
         bool do_clusters = true; // any clusters to do?
         bool do_vectors = false; // any vectors to do? (assume not)
         bool do_scalars = false; // any scalars to do? (assume not)
         bool scalar_for_peel_rem = false; // using the scalar code for peel and/or remainder.
 
-        // If BB is not full, do whole block with
-        // scalar code.  We should only get here when using sub-domains.
-        // TODO: do as much vectorization as possible-- this current code is
+        // If BB is not full, do whole block with scalar code.  We should
+        // only get here when using sub-domains w/"holes" in them.  TODO: do
+        // as much vectorization as possible-- this current code is
         // functionally correct but very poor perf.
         if (!bb_is_full) {
 
@@ -191,10 +193,11 @@ namespace yask {
 
         // If it isn't guaranteed that this block is only aligned cluster
         // mults in all dims, determine the subset of this sub-block that is
-        // clusters/vectors.  TODO: pre-calc this info for each block.
+        // clusters, vectors, and partial vectors.  TODO: pre-calc this info
+        // for each block.
         else if (is_scratch() || !bb_is_cluster_mult || !bb_is_aligned) {
 
-            // (i: index for stencil dims, j: index for domain dims).
+            // i: index for stencil dims, j: index for domain dims.
             for (int i = 0, j = 0; i < nsdims; i++) {
                 if (i != step_posn) {
 
@@ -205,7 +208,7 @@ namespace yask {
                     auto ebgn = sub_block_idxs.begin[i] - rofs;
                     auto eend = sub_block_idxs.end[i] - rofs;
 
-                    // Find range of whole clusters.
+                    // Find range of full clusters.
                     // Note that fcend <= eend because we round
                     // down to get whole clusters only.
                     auto cpts = dims->_cluster_pts[j];
@@ -214,7 +217,7 @@ namespace yask {
                     sub_block_fcidxs.begin[i] = fcbgn;
                     sub_block_fcidxs.end[i] = fcend;
 
-                    // Find range of whole or partial vectors.
+                    // Find range of full and/or partial vectors.
                     // Note that fvend <= eend because we round
                     // down to get whole vectors only.
                     // Note that vend >= eend because we round
@@ -246,11 +249,11 @@ namespace yask {
                     if (vbgn < fcbgn || vend > fcend)
                         do_vectors = true;
 
-                    // Calculate peel mask in this dim for partial vector.
+                    // Calculate masks in this dim for partial vectors.
                     // All such masks will be ANDed together to form the
-                    // final mask over all domain dims.
-                    if (vbgn < fvbgn) {
-                        idx_t mask = 0;
+                    // final masks over all domain dims.
+                    if (vbgn < fvbgn || vend > fvend) {
+                        idx_t pmask = 0, rmask = 0;
 
                         // Need to set upper bit.
                         idx_t mbit = 0x1 << (dims->_fold_pts.product() - 1);
@@ -259,54 +262,32 @@ namespace yask {
                         dims->_fold_pts.visitAllPoints
                             ([&](const IdxTuple& pt, size_t idx) {
 
-                                // Shift mask to next posn.
-                                mask >>= 1;
+                                // Shift masks to next posn.
+                                pmask >>= 1;
+                                rmask >>= 1;
                                 
-                                // If this point is within the sub-block,
+                                // If the peel point is within the sub-block,
                                 // set the next bit in the mask.
                                 idx_t pi = vbgn + pt[j];
                                 if (pi >= ebgn)
-                                    mask |= mbit;
+                                    pmask |= mbit;
 
-                                // Keep visiting.
-                                return true;
-                            });
-
-                        // Save mask.
-                        peel_masks[i] = mask;
-                    }
-
-                    // Calculate remainder mask in this dim for partial vector.
-                    // All such masks will be ANDed together to form the
-                    // final mask over all domain dims.
-                    if (vend > fvend) {
-                        idx_t mask = 0;
-
-                        // Need to set upper bit.
-                        idx_t mbit = 0x1 << (dims->_fold_pts.product() - 1);
-                        
-                        // Visit points in a vec-fold.
-                        dims->_fold_pts.visitAllPoints
-                            ([&](const IdxTuple& pt, size_t idx) {
-
-                                // Shift mask to next posn.
-                                mask >>= 1;
-                                
-                                // If this point is within the sub-block,
+                                // If the rem point is within the sub-block,
                                 // put a 1 in the mask.
-                                idx_t pi = fvend + pt[j];
+                                pi = fvend + pt[j];
                                 if (pi < eend)
-                                    mask |= mbit;
-
+                                    rmask |= mbit;
+                                
                                 // Keep visiting.
                                 return true;
                             });
 
-                        // Save mask.
-                        rem_masks[i] = mask;
+                        // Save masks in this dim.
+                        peel_masks[i] = pmask;
+                        rem_masks[i] = rmask;
                     }
 
-                    // Any remainder?
+                    // Anything not covered?
                     // This will only be needed in inner dim because we
                     // will do partial vectors in other dims.
                     // Set 'scalar_for_peel_rem' to indicate we only want to
