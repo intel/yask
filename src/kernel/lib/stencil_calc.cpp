@@ -208,6 +208,9 @@ namespace yask {
         // clusters, vectors, and partial vectors.  TODO: pre-calc this info
         // for each block.
         else {
+            do_clusters = true;
+            do_vectors = false;
+            do_scalars = false;
 
             // i: index for stencil dims, j: index for domain dims.
             for (int i = 0, j = 0; i < nsdims; i++) {
@@ -232,13 +235,15 @@ namespace yask {
                     sub_block_fcidxs.end[i] = fcend;
 
                     // Any clusters to do?
-                    if (fcend > fcbgn)
-                        do_clusters = true;
+                    if (fcend <= fcbgn)
+                        do_clusters = false;
 
                     // If it isn't guaranteed that this block is only aligned cluster
                     // mults in all dims, continue with setting vector indices and
                     // peel/rem masks.
-                    if (is_scratch() || !bb_is_cluster_mult || !bb_is_aligned) {
+                    if (!is_scratch() && bb_is_cluster_mult && bb_is_aligned)
+                        do_vectors = false;
+                    else {
                         
                         // Find range of full and/or partial vectors.
                         // Note that fvend <= eend because we round
