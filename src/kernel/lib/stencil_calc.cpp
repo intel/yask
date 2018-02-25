@@ -29,9 +29,9 @@ using namespace std;
 namespace yask {
 
     // Calculate results within a block.
-    // Typically called by an OMP thread team.
-    // It is here that required scratch-grid stencils are evaluated
-    // before the non-scratch stencils in the stencil group.
+    // Typically called by a top-level OMP thread.
+    // It is here that any required scratch-grid stencils are evaluated
+    // first and then the non-scratch stencils in the stencil group.
     void StencilGroupBase::calc_block(const ScanIndices& region_idxs) {
 
         auto opts = _generic_context->get_settings();
@@ -47,7 +47,7 @@ namespace yask {
         assert(!is_scratch());
 
         // Init default block begin & end from region start & stop indices.
-        ScanIndices def_block_idxs(ndims);
+        ScanIndices def_block_idxs(*dims, true);
         def_block_idxs.initFromOuter(region_idxs);
 
         // Steps within a block are based on sub-block sizes.
@@ -56,7 +56,7 @@ namespace yask {
         // Groups in block loops are based on sub-block-group sizes.
         def_block_idxs.group_size = opts->_sub_block_group_sizes;
 
-        // Update offsets of scratch grids based on group location.
+        // Update offsets of scratch grids based on this group's location.
         _generic_context->update_scratch_grids(thread_idx, def_block_idxs);
         
         // Define the groups that need to be processed in
@@ -82,7 +82,7 @@ namespace yask {
                        block_idxs.begin.makeValStr(ndims) <<
                        " ... (end before) " << block_idxs.end.makeValStr(ndims) <<
                        " by thread " << thread_idx);
-            
+
             // Include automatically-generated loop code that calls
             // calc_sub_block() for each sub-block in this block. This
             // code typically contains the nested OpenMP loop(s).
@@ -101,6 +101,7 @@ namespace yask {
         assert(orig.getNumDims() == nsdims);
         assert(norm.getNumDims() == nsdims);
         
+        // i: index for stencil dims, j: index for domain dims.
         for (int i = 0, j = 0; i < nsdims; i++) {
             if (i != step_posn) {
 
@@ -154,7 +155,7 @@ namespace yask {
         
         // Init sub-block begin & end from block start & stop indices.
         // These indices are in element units and global (NOT rank-relative).
-        ScanIndices sub_block_idxs(nsdims);
+        ScanIndices sub_block_idxs(*dims, true);
         sub_block_idxs.initFromOuter(block_idxs);
 
         // Sub block indices in element units and rank-relative.
@@ -238,12 +239,9 @@ namespace yask {
                     if (fcend <= fcbgn)
                         do_clusters = false;
 
-                    // If it isn't guaranteed that this block is only aligned cluster
-                    // mults in all dims, continue with setting vector indices and
-                    // peel/rem masks.
-                    if (!is_scratch() && bb_is_cluster_mult && bb_is_aligned)
-                        do_vectors = false;
-                    else {
+                    // If anything before or after clusters, continue with
+                    // setting vector indices and peel/rem masks.
+                    if (fcbgn > ebgn || fcend < eend) {
                         
                         // Find range of full and/or partial vectors.
                         // Note that fvend <= eend because we round
@@ -344,6 +342,7 @@ namespace yask {
         norm_sub_block_idxs.start = norm_sub_block_idxs.begin;
         normalize_indices(sub_block_fcidxs.end, norm_sub_block_idxs.end);
         norm_sub_block_idxs.stop = norm_sub_block_idxs.end;
+        norm_sub_block_idxs.align.setFromConst(1); // one vector.
         
         // Full rectangular polytope of aligned clusters: use optimized code.
         if (do_clusters) {
@@ -414,6 +413,7 @@ namespace yask {
             ScanIndices norm_sub_block_fvidxs(sub_block_eidxs);
             normalize_indices(sub_block_fvidxs.begin, norm_sub_block_fvidxs.begin);
             normalize_indices(sub_block_fvidxs.end, norm_sub_block_fvidxs.end);
+            norm_sub_block_fvidxs.align.setFromConst(1); // one vector.
 
             // Define the function called from the generated loops to
             // determine whether a loop of vectors is within the peel
@@ -459,8 +459,6 @@ namespace yask {
 
             // Use the 'misc' loops. Indices for these loops will be scalar and
             // global rather than normalized as in the cluster and vector loops.
-            // The OMP will be ignored because we're already in
-            // a nested OMP region. TODO: check this if there is only one block thread.
             ScanIndices misc_idxs(sub_block_idxs);
 
             // Define misc-loop function.
@@ -488,6 +486,8 @@ namespace yask {
         } while(0)
 
             // Scan through n-D space.
+            // The OMP in the misc loops will be ignored if we're already in
+            // the max allowed nested OMP region.
 #include "yask_misc_loops.hpp"
 #undef misc_fn
         }
@@ -647,7 +647,7 @@ namespace yask {
         end[step_dim] = 1;      // one time-step only.
 
         // Indices needed for the generated 'misc' loops.
-        ScanIndices misc_idxs(ndims);
+        ScanIndices misc_idxs(*dims, false);
         misc_idxs.begin = begin;
         misc_idxs.end = end;
 

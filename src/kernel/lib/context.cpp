@@ -150,19 +150,19 @@ namespace yask {
         _opts->_block_sizes.setValsSame(0);
         _at.apply();
 
-        // Only use one thread.
-        int thread_idx = 0;
+        // Use only one set of scratch grids.
+        int scratch_grid_idx = 0;
         
         // Indices to loop through.
         // Init from begin & end tuples.
-        ScanIndices rank_idxs(ndims);
+        ScanIndices rank_idxs(*_dims, false);
         rank_idxs.begin = begin;
         rank_idxs.end = end;
 
         // Set offsets in scratch grids.
         // Requires scratch grids to be allocated for whole
         // rank instead of smaller grid size.
-        update_scratch_grids(thread_idx, rank_idxs);
+        update_scratch_grids(scratch_grid_idx, rank_idxs);
             
         // Initial halo exchange.
         // (Needed in case there are 0 time-steps).
@@ -199,7 +199,7 @@ namespace yask {
 
                 // Indices needed for the generated misc loops.  Will normally be a
                 // copy of rank_idxs except when updating scratch-grids.
-                ScanIndices misc_idxs = sg->adjust_scan(thread_idx, rank_idxs);
+                ScanIndices misc_idxs = sg->adjust_scan(scratch_grid_idx, rank_idxs);
                 misc_idxs.step.setFromConst(1); // ensure unit step.
                 
                 // Define misc-loop function.  Since step is always 1, we
@@ -207,7 +207,7 @@ namespace yask {
                 // group, then evaluate the reference scalar code.
 #define misc_fn(misc_idxs)   do {                                       \
                     if (sg->is_in_valid_domain(misc_idxs.start))        \
-                        sg->calc_scalar(thread_idx, misc_idxs.start);   \
+                        sg->calc_scalar(scratch_grid_idx, misc_idxs.start);   \
                 } while(0)
                 
                 // Scan through n-D space.
@@ -305,7 +305,7 @@ namespace yask {
                   end.makeDimValStr());
 
         // Indices needed for the 'rank' loops.
-        ScanIndices rank_idxs(ndims);
+        ScanIndices rank_idxs(*_dims, true);
         rank_idxs.begin = begin;
         rank_idxs.end = end;
         rank_idxs.step = step;
@@ -443,7 +443,7 @@ namespace yask {
                   " ... (end before) " << rank_idxs.stop.makeValStr(ndims));
 
         // Init region begin & end from rank start & stop indices.
-        ScanIndices region_idxs(ndims);
+        ScanIndices region_idxs(*_dims, true);
         region_idxs.initFromOuter(rank_idxs);
 
         // Make a copy of the original start and stop indices because
@@ -2003,9 +2003,9 @@ namespace yask {
             auto& dname = dim.getName();
             if ((bb_begin[dname] - context.rank_domain_offsets[dname]) %
                 dims->_fold_pts[dname] != 0) {
-                os << "Warning: '" << name << "' domain"
+                os << "Note: '" << name << "' domain"
                     " has one or more starting edges not on vector boundaries;"
-                    " slower scalar calculations will be used.\n";
+                    " masked calculations will be used in peel and remainder sub-blocks.\n";
                 bb_is_aligned = false;
                 break;
             }
@@ -2019,7 +2019,7 @@ namespace yask {
                 if (bb_is_full && bb_is_aligned)
                     os << "Note: '" << name << "' domain"
                         " has one or more sizes that are not vector-cluster multiples;"
-                        " masked calculations will be used in remainder sub-blocks.\n";
+                        " masked calculations will be used in peel and remainder sub-blocks.\n";
                 bb_is_cluster_mult = false;
                 break;
             }

@@ -332,55 +332,6 @@ namespace yask {
     // Layout algorithms using Indices.
 #include "yask_layouts.hpp"
     
-    // A group of Indices needed for generated loops.
-    // See the help message from gen_loops.pl for the
-    // documentation of the indices.
-    // Make sure this stays non-virtual.
-    struct ScanIndices {
-
-        // Values that remain the same for each sub-range.
-        Indices begin, end;     // first and last+1 range of each index.
-        Indices step;           // step value within range.
-        Indices group_size;     // priority grouping within range.
-
-        // Values that differ for each sub-range.
-        Indices start, stop;    // first and last+1 for this sub-range.
-        Indices index;          // 0-based unique index for each sub-range.
-
-        // Example w/3 sub-ranges in overall range:
-        // begin                                         end
-        //   |--------------------------------------------|
-        //   |------------------|------------------|------|
-        // start               stop                            (index = 0)
-        //                    start               stop         (index = 1)
-        //                                       start   stop  (index = 2)
-        
-        // Default init.
-        ScanIndices(int ndims) :
-            begin(idx_t(0), ndims),
-            end(idx_t(0), ndims),
-            step(idx_t(1), ndims),
-            group_size(idx_t(1), ndims),
-            start(idx_t(0), ndims),
-            stop(idx_t(0), ndims),
-            index(idx_t(0), ndims) { }
-        
-        // Init from outer-loop indices.
-        // Start..stop from point in outer loop become begin..end
-        // for this loop.
-        void initFromOuter(const ScanIndices& outer) {
-
-            // Begin & end set from start & stop of outer loop.
-            begin = outer.start;
-            end = outer.stop;
-
-            // Pass other values through by default.
-            start = outer.start;
-            stop = outer.stop;
-            index = outer.index;
-        }
-    };
-
     // Forward defns.
     struct StencilContext;
     class YkGridBase;
@@ -497,6 +448,72 @@ namespace yask {
     };
     typedef std::shared_ptr<Dims> DimsPtr;
     
+    // A group of Indices needed for generated loops.
+    // See the help message from gen_loops.pl for the
+    // documentation of the indices.
+    // Make sure this stays non-virtual.
+    struct ScanIndices {
+        int ndims = 0;
+
+        // Values that remain the same for each sub-range.
+        Indices begin, end;     // first and end (beyond last) range of each index.
+        Indices step;           // step value within range.
+        Indices align;          // alignment of steps after first one.
+        Indices group_size;     // proximity grouping within range.
+
+        // Values that differ for each sub-range.
+        Indices start, stop;    // first and last+1 for this sub-range.
+        Indices index;          // 0-based unique index for each sub-range.
+
+        // Example w/3 sub-ranges in overall range:
+        // begin                                         end
+        //   |--------------------------------------------|
+        //   |------------------|------------------|------|
+        // start               stop                            (index = 0)
+        //                    start               stop         (index = 1)
+        //                                       start   stop  (index = 2)
+        
+        // Default init.
+        ScanIndices(const Dims& dims, bool use_vec_align) :
+            ndims(dims._stencil_dims.size()),
+            begin(idx_t(0), ndims),
+            end(idx_t(0), ndims),
+            step(idx_t(1), ndims),
+            align(idx_t(1), ndims),
+            group_size(idx_t(1), ndims),
+            start(idx_t(0), ndims),
+            stop(idx_t(0), ndims),
+            index(idx_t(0), ndims) {
+
+            // Set alignment to vector lengths.
+            if (use_vec_align) {
+                
+                // i: index for stencil dims, j: index for domain dims.
+                for (int i = 0, j = 0; i < ndims; i++) {
+                    if (i != Indices::step_posn) {
+                        align[i] = dims._fold_pts[j];
+                        j++;
+                    }
+                }
+            }
+        }
+        
+        // Init from outer-loop indices.
+        // Start..stop from point in outer loop become begin..end
+        // for this loop.
+        void initFromOuter(const ScanIndices& outer) {
+
+            // Begin & end set from start & stop of outer loop.
+            begin = outer.start;
+            end = outer.stop;
+
+            // Pass output values through by default.
+            start = outer.start;
+            stop = outer.stop;
+            index = outer.index;
+        }
+    };
+
     // MPI neighbor info.
     class MPIInfo {
 

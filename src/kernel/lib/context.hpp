@@ -449,11 +449,13 @@ namespace yask {
         }
 
         // Set number of threads to use for a region.
+        // Enable nested OMP if there are >1 block threads,
+        // disable otherwise.
         // Return number of threads.
         // Do nothing and return 0 if not properly initialized.
         virtual int set_region_threads() {
 
-            // Start with "all" threads.
+            // Start with max allowed threads.
             int mt = _opts->max_threads;
 	    if (!mt)
 	      return 0;
@@ -466,6 +468,8 @@ namespace yask {
             nt = std::max(nt, 1);
             if (_opts->num_block_threads > 1)
                 omp_set_nested(1);
+            else
+                omp_set_nested(0);
 
             //TRACE_MSG("set_region_threads: omp_set_num_threads=" << nt);
             omp_set_num_threads(nt);
