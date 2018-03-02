@@ -318,7 +318,7 @@ namespace yask {
 
         // Number of iterations to get from begin_t to end_t-1,
         // stepping by step_t.
-        const idx_t num_t = (abs(end_t - begin_t) + (abs(step_t) - 1)) / abs(step_t);
+        const idx_t num_t = CEIL_DIV(abs(end_t - begin_t), abs(step_t));
         for (idx_t index_t = 0; index_t < num_t; index_t++)
         {
             YaskTimer rtime;   // just for these step_t steps.
@@ -329,6 +329,7 @@ namespace yask {
             const idx_t stop_t = (step_t > 0) ?
                 min(start_t + step_t, end_t) :
                 max(start_t + step_t, end_t);
+            idx_t this_num_t = abs(stop_t - start_t);
 
             // Set indices that will pass through generated code.
             rank_idxs.index[step_posn] = index_t;
@@ -340,7 +341,7 @@ namespace yask {
             // through groups here, and do only one group at a
             // time in calc_region(). This is similar to loop in
             // calc_rank_ref().
-            if (abs(step_t) == 1) {
+            if (this_num_t == 1) {
 
                 for (auto* sg : stGroups) {
 
@@ -388,13 +389,13 @@ namespace yask {
 #include "yask_rank_loops.hpp"
             }
 
-            steps_done += abs(step_t);
+            steps_done += this_num_t;
             rtime.stop();   // for these steps.
 
             // Call the auto-tuner to evaluate these steps.
             // TODO: remove MPI time.
             auto elapsed_time = rtime.get_elapsed_secs();
-            _at.eval(abs(step_t), elapsed_time);
+            _at.eval(this_num_t, elapsed_time);
             
         } // step loop.
 
@@ -465,7 +466,7 @@ namespace yask {
         idx_t begin_t = region_idxs.begin[step_posn];
         idx_t end_t = region_idxs.end[step_posn];
         idx_t step_t = region_idxs.step[step_posn];
-        const idx_t num_t = (abs(end_t - begin_t) + (abs(step_t) - 1)) / abs(step_t);
+        const idx_t num_t = CEIL_DIV(abs(end_t - begin_t), abs(step_t));
         for (idx_t index_t = 0; index_t < num_t; index_t++) {
             
             // This value of index_t steps from start_t to stop_t-1.
@@ -839,16 +840,16 @@ namespace yask {
         // If wave-fronts are enabled, run a max number of these steps.
         // TODO: only run one region during AT.
         idx_t region_steps = _opts->_region_sizes[_dims->_step_dim];
-        idx_t step_t = min(region_steps, idx_t(3));
+        idx_t step_t = min(region_steps, _at.max_step_t);
         
         // Run time-steps until AT converges.
         bool done = false;
         for (idx_t t = 0; !done; t += step_t) {
 
-            // Run a time-step.
+            // Run step_t time-step(s).
             run_solution(t, t + step_t - 1);
 
-            // done on this rank?
+            // AT done on this rank?
             done = _at.is_done();
         }
 

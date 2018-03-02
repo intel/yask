@@ -204,6 +204,7 @@ namespace yask {
 
         // Auto-tuner state.
         class AT {
+        protected:
             StencilContext* _context = 0;
             
             // Null stream to throw away debug info.
@@ -243,6 +244,8 @@ namespace yask {
             bool in_warmup = true;
 
         public:
+            const idx_t max_step_t = 4;
+
             AT(StencilContext* ctx) :
                 _context(ctx) { }
             
