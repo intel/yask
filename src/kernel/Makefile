@@ -32,7 +32,7 @@ stencil		=	iso3dfd
 arch		=	snb
 mpi		=	1
 real_bytes	=	4
-radius		=	1
+radius		=	2
 ranks		= 	1
 
 # Defaults based on stencil type (and arch for some stencils).
@@ -52,6 +52,10 @@ else ifeq ($(stencil),3plane)
  radius		=	3
 
 else ifeq ($(stencil),cube)
+ MACROS		+=	MAX_EXCH_DIST=3
+ radius		=	2
+
+else ifeq ($(stencil),tti)
  MACROS		+=	MAX_EXCH_DIST=3
  radius		=	2
 
