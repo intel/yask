@@ -38,22 +38,19 @@ namespace yask {
             return;
         if (dim == _step_dim) {
             if (!step_ok) {
-                cerr << "Error in " << fn_name << "(): dimension '" <<
-                    dim << "' is the step dimension, which is not allowed.\n";
-                exit_yask(1);
+                THROW_YASK_EXCEPTION("Error in " << fn_name << "(): dimension '" <<
+                    dim << "' is the step dimension, which is not allowed.\n");
             }
         }
         else if (_domain_dims.lookup(dim)) {
             if (!domain_ok) {
-                cerr << "Error in " << fn_name << "(): dimension '" <<
-                    dim << "' is a domain dimension, which is not allowed.\n";
-                exit_yask(1);
+                THROW_YASK_EXCEPTION("Error in " << fn_name << "(): dimension '" <<
+                    dim << "' is a domain dimension, which is not allowed.\n");
             }
         }
         else if (!misc_ok) {
-            cerr << "Error in " << fn_name << "(): dimension '" <<
-                dim << "' is a misc dimension, which is not allowed.\n";
-            exit_yask(1);
+            THROW_YASK_EXCEPTION("Error in " << fn_name << "(): dimension '" <<
+                dim << "' is a misc dimension, which is not allowed.\n");
         }
     }
 
@@ -83,8 +80,7 @@ namespace yask {
             int provided = 0;
             MPI_Init_thread(argc, argv, MPI_THREAD_SERIALIZED, &provided);
             if (provided < MPI_THREAD_SERIALIZED) {
-                cerr << "error: MPI_THREAD_SERIALIZED not provided.\n";
-                exit_yask(1);
+                THROW_YASK_EXCEPTION("error: MPI_THREAD_SERIALIZED not provided.\n");
             }
             is_init = true;
         }

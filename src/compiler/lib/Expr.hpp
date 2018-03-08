@@ -40,6 +40,8 @@ IN THE SOFTWARE.
 #include <assert.h>
 #include <fstream>
 
+// Common utilities.
+#include "common_utils.hpp"
 #include "tuple.hpp"
 
 using namespace std;
@@ -136,9 +138,8 @@ namespace yask {
     template<typename T> shared_ptr<T> castExpr(ExprPtr ep, const string& descrip) {
         auto tp = dynamic_pointer_cast<T>(ep);
         if (!tp) {
-            cerr << "Error: expression '" << ep->makeStr() << "' is not a " <<
-                descrip << "." << endl;
-            exit(1);
+            THROW_YASK_EXCEPTION("Error: expression '" << ep->makeStr() << "' is not a " <<
+                descrip << "." << endl);
         }
         return tp;
     }
@@ -168,9 +169,8 @@ namespace yask {
         // Get the current value.
         // Exit with error if not known.
         virtual double getNumVal() const {
-            cerr << "Error: cannot evaluate '" << makeStr() <<
-                "' for a known numerical value.\n";
-            exit(1);
+            THROW_YASK_EXCEPTION("Error: cannot evaluate '" << makeStr() <<
+                "' for a known numerical value.\n");
         }
 
         // Get the value as an integer.
@@ -179,9 +179,8 @@ namespace yask {
             double val = getNumVal();
             int ival = int(val);
             if (val != double(ival)) {
-                cerr << "Error: '" << makeStr() <<
-                    "' does not evaluate to an integer.\n";
-                exit(1);
+                THROW_YASK_EXCEPTION("Error: '" << makeStr() <<
+                    "' does not evaluate to an integer.\n");
             }
             return ival;
         }
@@ -285,9 +284,8 @@ namespace yask {
         // Get the current value.
         // Exit with error if not known.
         virtual bool getBoolVal() const {
-            cerr << "Error: cannot evaluate '" << makeStr() <<
-                "' for a known boolean value.\n";
-            exit(1);
+            THROW_YASK_EXCEPTION("Error: cannot evaluate '" << makeStr() <<
+                "' for a known boolean value.\n");
         }
 
         // Create a deep copy of this expression.

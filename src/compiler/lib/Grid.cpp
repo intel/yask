@@ -41,10 +41,9 @@ namespace yask {
 
         // Check for correct number of indices.
         if (_dims.size() != dim_offsets.size()) {
-            cerr << "Error: attempt to create a relative grid point in " <<
+            THROW_YASK_EXCEPTION("Error: attempt to create a relative grid point in " <<
                 _dims.size() << "D grid '" << _name << "' with " <<
-                dim_offsets.size() << " indices.\n";
-            exit(1);
+                dim_offsets.size() << " indices.\n");
         }
 
         // Check dim types.
@@ -53,11 +52,10 @@ namespace yask {
         for (size_t i = 0; i < _dims.size(); i++) {
             auto dim = _dims.at(i);
             if (dim->getType() == MISC_INDEX) {
-                cerr << "Error: attempt to create a relative grid point in " <<
+                THROW_YASK_EXCEPTION("Error: attempt to create a relative grid point in " <<
                     _dims.size() << "D grid '" << _name <<
                     "' containing non-step or non-domain dim '" <<
-                    dim->getName() << "'.\n";
-                exit(1);
+                    dim->getName() << "'.\n");
             }
             auto ie = dim->clone();
             args.push_back(ie);
@@ -294,9 +292,8 @@ namespace yask {
 
                 case STEP_INDEX:
                     if (_stepDim.length() && _stepDim != dname) {
-                        cerr << "Error: step dimensions '" << _stepDim <<
-                            "' and '" << dname << "' found; only one allowed.\n";
-                        exit(1);
+                        THROW_YASK_EXCEPTION("Error: step dimensions '" << _stepDim <<
+                            "' and '" << dname << "' found; only one allowed.\n");
                     }
                     _stepDim = dname;
                     _stencilDims.addDimFront(dname, 0); // must be first!
@@ -315,18 +312,15 @@ namespace yask {
                     break;
 
                 default:
-                    cerr << "Error: unexpected dim type " << type << ".\n";
-                    exit(1);
+                    THROW_YASK_EXCEPTION("Error: unexpected dim type " << type << ".\n");
                 }
             }
         }
         if (_stepDim.length() == 0) {
-            cerr << "Error: no step dimension defined.\n";
-            exit(1);
+            THROW_YASK_EXCEPTION("Error: no step dimension defined.\n");
         }
         if (!_domainDims.getNumDims()) {
-            cerr << "Error: no domain dimensions defined.\n";
-            exit(1);
+            THROW_YASK_EXCEPTION("Error: no domain dimensions defined.\n");
         }
 
         // Use last domain dim as inner one.
@@ -421,9 +415,8 @@ namespace yask {
         // Checks for unaligned loads.
         if (settings._allowUnalignedLoads) {
             if (_foldGT1.size() > 1) {
-                cerr << "Error: attempt to allow unaligned loads when there are " <<
-                    _foldGT1.size() << " dimensions in the vector-fold that are > 1." << endl;
-                exit(1);
+                THROW_YASK_EXCEPTION("Error: attempt to allow unaligned loads when there are " <<
+                    _foldGT1.size() << " dimensions in the vector-fold that are > 1." << endl);
             }
             else if (_foldGT1.size() > 0)
                 cerr << "Notice: memory layout MUST have unit-stride in " <<
