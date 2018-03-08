@@ -144,8 +144,7 @@ namespace yask {
         }
 
         // Print some descriptive info.
-        virtual void print_info(std::ostream& os,
-                                const std::string& elem_name) const;
+        virtual std::string make_info_string(const std::string& elem_name) const;
 
         // Get linear index.
         virtual idx_t get_index(const Indices& idxs, bool check=true) const =0;

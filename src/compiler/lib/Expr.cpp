@@ -263,19 +263,23 @@ namespace yask {
     // Add this equation to the list of eqs for this stencil.
     EqualsExprPtr operator EQUALS_OPER(GridPointPtr gpp, const NumExprPtr rhs) {
 
-        // Get to list of equations.
+        if (!gpp)
+            THROW_YASK_EXCEPTION("Error: empty LHS of equation");
+        if (!rhs)
+            THROW_YASK_EXCEPTION("Error: empty RHS of " <<
+                                 gpp->makeQuotedStr() << " equation");
+        
+        // Get to list of equations in soln indirectly thru grid.
         Grid* gp = gpp->getGrid();
         assert(gp);
         auto* soln = gp->getSoln();
         assert(soln);
         auto& eqs = soln->getEqs();
     
-        // TODO: check validity of LHS (gpp).
-        
         // Make expression node.
         auto expr = make_shared<EqualsExpr>(gpp, rhs);
 
-        // Save the expression.
+        // Save the expression in list of equations.
         eqs.addEq(expr);
 
         return expr;
@@ -391,7 +395,7 @@ namespace yask {
         if (nd != args.size()) {
             THROW_YASK_EXCEPTION("Error: attempt to create a grid point in " <<
                 nd << "-D grid '" << getGridName() << "' with " <<
-                args.size() << " indices.\n");
+                args.size() << " indices");
         }
 
         // Eval each arg.
@@ -428,6 +432,14 @@ namespace yask {
     }
     const string& GridPoint::getGridName() const {
         return _grid->getName();
+    }
+    string GridPoint::getGridPtr() const {
+        string gname = _grid->getName();
+        string expr = "static_cast<_context_type::" + gname + "_type*>(_context->" + gname;
+        if (_grid->isScratch())
+            expr += "_list[thread_idx].get()";
+        expr += ")";
+        return expr;
     }
     bool GridPoint::isGridFoldable() const {
         return _grid->isFoldable();

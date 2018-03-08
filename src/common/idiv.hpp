@@ -56,6 +56,21 @@ namespace yask {
     }
 
     template<typename T>
+    inline T ceil_idiv_flr(T a, T b) {
+        return idiv_flr(a + b - 1, b);
+    }
+    
+    template<typename T>
+    inline T round_up_flr(T a, T b) {
+        return (idiv_flr(a + b - 1, b) * b);
+    }
+    
+    template<typename T>
+    inline T round_down_flr(T a, T b) {
+        return (idiv_flr(a, b) * b);
+    }
+    
+    template<typename T>
     inline T imod_flr(T a, T b) {
         //return ((a % b) + b) % b;
         //return ((a < 0) ? ((a % b) + b) : a) % b;

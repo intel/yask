@@ -24,14 +24,15 @@ IN THE SOFTWARE.
 *****************************************************************************/
 
 #include "yask.hpp"
+using namespace std;
 
 namespace yask {
 
     // Ctor. No allocation is done. See notes on default_alloc().
-    GenericGridBase::GenericGridBase(std::string name,
+    GenericGridBase::GenericGridBase(string name,
                                      Layout& layout_base,
                                      const GridDimNames& dimNames,
-                                     std::ostream** ostr) :
+                                     ostream** ostr) :
         _name(name), _layout_base(&layout_base), _ostr(ostr) {
         for (auto& dn : dimNames)
             _dims.addDimBack(dn, 1);
@@ -49,35 +50,36 @@ namespace yask {
         
         // Alloc required number of bytes.
         size_t sz = get_num_bytes();
-        _base = std::shared_ptr<char>(alignedAlloc(sz), AlignedDeleter());
+        _base = shared_ptr<char>(alignedAlloc(sz), AlignedDeleter());
         
         // No offset.
         _elems = _base.get();
     }
 
-    // Print some descriptive info to 'os'.
-    void GenericGridBase::print_info(std::ostream& os,
-                                     const std::string& elem_name) const {
+    // Make some descriptive info.
+    string GenericGridBase::make_info_string(const string& elem_name) const {
+        stringstream oss;
         if (_dims.getNumDims() == 0)
-            os << "scalar";
+            oss << "scalar";
         else
-            os << _dims.getNumDims() << "-D grid (" <<
+            oss << _dims.getNumDims() << "-D grid (" <<
                 _dims.makeDimValStr(" * ") << ")";
-        os << " '" << _name << "'";
+        oss << " '" << _name << "'";
         if (_elems)
-            os << " with data at " << _elems << " containing ";
+            oss << " with data at " << _elems << " containing ";
         else
-            os << " with data not yet allocated for ";
-        os << makeByteStr(get_num_bytes()) << 
+            oss << " with data not yet allocated for ";
+        oss << makeByteStr(get_num_bytes()) << 
             " (" << makeNumStr(get_num_elems()) << " " <<
             elem_name << " element(s) of " <<
             get_elem_bytes() << " byte(s) each)";
+        return oss.str();
     }
     
     // Set pointer to storage.
     // Free old storage.
     // 'base' should provide get_num_bytes() bytes at offset bytes.
-    void GenericGridBase::set_storage(std::shared_ptr<char>& base, size_t offset) {
+    void GenericGridBase::set_storage(shared_ptr<char>& base, size_t offset) {
 
         // Release any old data if last owner.
         release_storage();

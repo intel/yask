@@ -52,6 +52,51 @@ namespace yask {
     typedef Scalar<int> IntScalar;
     typedef Tuple<int> IntTuple;
 
+    // Set that retains order of things added.
+    // Or, vector that allows insertion if element doesn't exist.
+    // Keeps two copies of everything, so don't put large things in it.
+    // TODO: hide vector inside class and provide proper accessor methods.
+    template <typename T>
+    class vector_set : public vector<T> {
+        map<T, size_t> _posn;
+
+    public:
+        vector_set() {}
+        virtual ~vector_set() {}
+
+        // Copy ctor.
+        vector_set(const vector_set& src) :
+            vector<T>(src), _posn(src._posn) {}
+    
+        virtual size_t count(const T& val) const {
+            return _posn.count(val);
+        }
+        virtual void insert(const T& val) {
+            if (_posn.count(val) == 0) {
+                vector<T>::push_back(val);
+                _posn[val] = vector<T>::size() - 1;
+            }
+        }
+        virtual void push_back(const T& val) {
+            insert(val);
+        }
+        virtual void erase(const T& val) {
+            if (_posn.count(val) > 0) {
+                size_t op = _posn.at(val);
+                vector<T>::erase(vector<T>::begin() + op);
+                for (auto pi : _posn) {
+                    auto& p = pi.second;
+                    if (p > op)
+                        p--;
+                }
+            }
+        }
+        virtual void clear() {
+            vector<T>::clear();
+            _posn.clear();
+        }
+    };
+    
     // Forward-decls of expressions.
     class Expr;
     typedef shared_ptr<Expr> ExprPtr;
@@ -97,6 +142,9 @@ namespace yask {
         // Does *not* check value equivalency except for
         // constants.
         virtual bool isSame(const Expr* other) const =0;
+        virtual bool isSame(const ExprPtr other) const {
+            return isSame(other.get());
+        }
 
         // Return a simple string expr.
         virtual string makeStr(const VarMap* varMap = 0) const;
@@ -138,8 +186,8 @@ namespace yask {
     template<typename T> shared_ptr<T> castExpr(ExprPtr ep, const string& descrip) {
         auto tp = dynamic_pointer_cast<T>(ep);
         if (!tp) {
-            THROW_YASK_EXCEPTION("Error: expression '" << ep->makeStr() << "' is not a " <<
-                descrip << "." << endl);
+            THROW_YASK_EXCEPTION("Error: expression '" << ep->makeStr() <<
+                                 "' is not a " << descrip);
         }
         return tp;
     }
@@ -170,7 +218,7 @@ namespace yask {
         // Exit with error if not known.
         virtual double getNumVal() const {
             THROW_YASK_EXCEPTION("Error: cannot evaluate '" << makeStr() <<
-                "' for a known numerical value.\n");
+                "' for a known numerical value");
         }
 
         // Get the value as an integer.
@@ -180,7 +228,7 @@ namespace yask {
             int ival = int(val);
             if (val != double(ival)) {
                 THROW_YASK_EXCEPTION("Error: '" << makeStr() <<
-                    "' does not evaluate to an integer.\n");
+                    "' does not evaluate to an integer");
             }
             return ival;
         }
@@ -285,7 +333,7 @@ namespace yask {
         // Exit with error if not known.
         virtual bool getBoolVal() const {
             THROW_YASK_EXCEPTION("Error: cannot evaluate '" << makeStr() <<
-                "' for a known boolean value.\n");
+                                 "' for a known boolean value");
         }
 
         // Create a deep copy of this expression.
@@ -719,6 +767,7 @@ namespace yask {
         const Grid* getGrid() const { return _grid; }
         Grid* getGrid() { return _grid; }
         virtual const string& getGridName() const;
+        virtual string getGridPtr() const;
         virtual bool isGridFoldable() const;
 
         // Accessors.

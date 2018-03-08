@@ -42,8 +42,8 @@ namespace yask {
         // Check for correct number of indices.
         if (_dims.size() != dim_offsets.size()) {
             THROW_YASK_EXCEPTION("Error: attempt to create a relative grid point in " <<
-                _dims.size() << "D grid '" << _name << "' with " <<
-                dim_offsets.size() << " indices.\n");
+                                 _dims.size() << "D grid '" << _name << "' with " <<
+                                 dim_offsets.size() << " indices");
         }
 
         // Check dim types.
@@ -53,9 +53,9 @@ namespace yask {
             auto dim = _dims.at(i);
             if (dim->getType() == MISC_INDEX) {
                 THROW_YASK_EXCEPTION("Error: attempt to create a relative grid point in " <<
-                    _dims.size() << "D grid '" << _name <<
-                    "' containing non-step or non-domain dim '" <<
-                    dim->getName() << "'.\n");
+                                     _dims.size() << "D grid '" << _name <<
+                                     "' containing non-step or non-domain dim '" <<
+                                     dim->getName() << "'");
             }
             auto ie = dim->clone();
             args.push_back(ie);
@@ -98,7 +98,9 @@ namespace yask {
     }
 
     // Ctor for Grid.
-    Grid::Grid(string name, StencilSolution* soln,
+    Grid::Grid(string name,
+               bool isScratch,
+               StencilSolution* soln,
                IndexExprPtr dim1,
                IndexExprPtr dim2,
                IndexExprPtr dim3,
@@ -106,11 +108,23 @@ namespace yask {
                IndexExprPtr dim5,
                IndexExprPtr dim6) :
             _name(name),       // TODO: validate that name is legal C++ var.
-            _soln(soln) {
-
+            _isScratch(isScratch),
+            _soln(soln)
+    {
+        assert(soln);
+        
+        // Name already used?
+        auto& grids = soln->getGrids();
+        for (auto gp : grids) {
+            if (gp->getName() == _name) {
+                cerr << "Error: grid name '" << _name << "' already used.\n";
+                exit(1);
+            }
+        }
+        
         // Register in soln.
         if (soln)
-            soln->getGrids().insert(this);
+            grids.insert(this);
 
         // Add dims that are not null.
         if (dim1)
@@ -126,9 +140,11 @@ namespace yask {
         if (dim6)
             _dims.push_back(dim6);
     }
-    Grid::Grid(string name, StencilSolution* soln,
+    Grid::Grid(string name,
+               bool isScratch,
+               StencilSolution* soln,
                const IndexExprPtrVec& dims) :
-        Grid(name, soln) {
+        Grid(name, isScratch, soln) {
         _dims = dims;
     }
 
@@ -174,6 +190,7 @@ namespace yask {
     // Update halos based on each value in 'offsets' in some
     // read or write to this grid.
     void Grid::updateHalo(const IntTuple& offsets) {
+
         // Find step value or use 0 if none.
         int stepVal = 0;
         auto stepDim = getStepDim();
@@ -182,23 +199,33 @@ namespace yask {
             if (p)
                 stepVal = *p;
         }
-        auto& halos = _halos[stepVal];
 
         // Update halo vals.
         for (auto& dim : offsets.getDims()) {
             auto& dname = dim.getName();
-            int val = abs(dim.getVal());
+            int val = dim.getVal();
+            bool left = val <= 0;
+            auto& halos = _halos[left][stepVal];
 
             // Don't keep halo in step dim.
             if (stepDim && dname == stepDim->getName())
                 continue;
 
+            // Store abs value.
+            val = abs(val);
+            
+            // Any existing value?
             auto* p = halos.lookup(dname);
+
+            // If not, add this one.
             if (!p)
                 halos.addDimBack(dname, val);
+
+            // Keep larger value.
             else if (val > *p)
                 *p = val;
-            // else, current value is larger than val, so don't update.
+            
+            // Else, current value is larger than val, so don't update.
         }
     }
 
@@ -237,27 +264,47 @@ namespace yask {
         if (_halos.size() == 0)
             return 1;
 
-        // Find halos at min and max step-dim points.
-        // These should correspond to the 1st read and only write points.
-        auto first_i = _halos.cbegin(); // begin == first.
-        auto last_i = _halos.crbegin(); // reverse-begin == last.
-        int first_ofs = first_i->first;
-        int last_ofs = last_i->first;
-        auto& first_halo = first_i->second;
-        auto& last_halo = last_i->second;
+        // First and last step-dim.
+        int first_ofs = 0, last_ofs = 0;
 
+        // left and right.
+        for (auto& i : _halos) {
+            //auto left = i.first;
+            auto& h2 = i.second; // map of step-dims to halos.
+
+            // Step-dim ofs.
+            for (auto& j : h2) {
+                auto ofs = j.first;
+                //auto& halo = j.second; // halo tuple at step-val 'ofs'.
+
+                // Update vars.
+                first_ofs = min(first_ofs, ofs);
+                last_ofs = max(last_ofs, ofs);
+            }
+        }
+
+        // First and last largest halos.
+        int first_max_halo = 0, last_max_halo = 0;
+        for (auto& i : _halos) {
+            //auto left = i.first;
+            auto& h2 = i.second; // map of step-dims to halos.
+
+            if (h2.count(first_ofs))
+                first_max_halo = max(first_max_halo, h2.at(first_ofs).max());
+            if (h2.count(last_ofs))
+                last_max_halo = max(last_max_halo, h2.at(last_ofs).max());
+        }
+        
         // Default step-dim size is range of offsets.
         assert(last_ofs >= first_ofs);
         int sz = last_ofs - first_ofs + 1;
     
         // If first and last halos are zero, we can further optimize storage by
         // immediately reusing memory location.
-        if (sz > 1 &&
-            first_halo.max() == 0 &&
-            last_halo.max() == 0)
+        if (sz > 1 && first_max_halo == 0 && last_max_halo == 0)
             sz--;
 
-        // TODO: recognize that reading in one equation and then writing in
+        // TODO: recognize that reading in one eq-group and then writing in
         // another can also reuse storage.
 
         return sz;
@@ -282,6 +329,7 @@ namespace yask {
 
         // Get dims from grids.
         for (auto gp : grids) {
+            auto& gname = gp->getName();
                 
             // Dimensions in this grid.
             for (auto dim : gp->getDims()) {
@@ -293,10 +341,17 @@ namespace yask {
                 case STEP_INDEX:
                     if (_stepDim.length() && _stepDim != dname) {
                         THROW_YASK_EXCEPTION("Error: step dimensions '" << _stepDim <<
-                            "' and '" << dname << "' found; only one allowed.\n");
+                                             "' and '" << dname << "' found; only one allowed");
                     }
                     _stepDim = dname;
                     _stencilDims.addDimFront(dname, 0); // must be first!
+
+                    // Scratch grids cannot use step dim.
+                    if (gp->isScratch()) {
+                        cerr << "Error: scratch grid '" << gname <<
+                            "' cannot use step dimension '" << dname << "'.\n";
+                        exit(1);
+                    }
                     break;
 
                 case DOMAIN_INDEX:
@@ -312,15 +367,15 @@ namespace yask {
                     break;
 
                 default:
-                    THROW_YASK_EXCEPTION("Error: unexpected dim type " << type << ".\n");
+                    THROW_YASK_EXCEPTION("Error: unexpected dim type " << type);
                 }
             }
         }
         if (_stepDim.length() == 0) {
-            THROW_YASK_EXCEPTION("Error: no step dimension defined.\n");
+            THROW_YASK_EXCEPTION("Error: no step dimension defined");
         }
         if (!_domainDims.getNumDims()) {
-            THROW_YASK_EXCEPTION("Error: no domain dimensions defined.\n");
+            THROW_YASK_EXCEPTION("Error: no domain dimensions defined");
         }
 
         // Use last domain dim as inner one.
@@ -416,10 +471,10 @@ namespace yask {
         if (settings._allowUnalignedLoads) {
             if (_foldGT1.size() > 1) {
                 THROW_YASK_EXCEPTION("Error: attempt to allow unaligned loads when there are " <<
-                    _foldGT1.size() << " dimensions in the vector-fold that are > 1." << endl);
+                    _foldGT1.size() << " dimensions in the vector-fold that are > 1");
             }
             else if (_foldGT1.size() > 0)
-                cerr << "Notice: memory layout MUST have unit-stride in " <<
+                cout << "Notice: memory layout MUST have unit-stride in " <<
                     _foldGT1.makeDimStr() << " dimension!" << endl;
         }
 
@@ -483,5 +538,11 @@ namespace yask {
         return oss.str();
     }
     
+    // Make string like "t+1" or "t-1".
+    string Dimensions::makeStepStr(int offset) const {
+        IntTuple step;
+        step.addDimBack(_stepDim, offset);
+        return step.makeDimValOffsetStr();
+    }
 
 } // namespace yask.

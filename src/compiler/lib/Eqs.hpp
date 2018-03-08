@@ -35,47 +35,52 @@ using namespace std;
 
 namespace yask {
 
-    // Types of dependencies.
-    // Must keep this consistent with list in stencil_calc.hpp.
-    // TODO: make this common code w/kernel.
-    enum DepType {
-        certain_dep,
-        possible_dep,
-        num_deps
-    };
-
     // Dependencies between equations.
-    // eq_deps[A].count(B) > 0 => A depends on B.
     class EqDeps {
-    protected:
-        typedef unordered_map<EqualsExprPtr, unordered_set<EqualsExprPtr>> DepMap;
-        typedef set<EqualsExprPtr> SeenSet;
 
-        DepMap _deps;               // direct dependencies.
-        DepMap _full_deps;          // direct and indirect dependencies.
-        SeenSet _all;               // all expressions.
-        bool _done;                 // indirect dependencies added?
+    public:
+        // dep_map[A].count(B) > 0 => A depends on B.
+        typedef unordered_set<EqualsExprPtr> EqSet;
+        typedef unordered_map<EqualsExprPtr, EqSet> DepMap;
+        typedef vector_set<EqualsExprPtr> EqVecSet;
+
+    protected:
+        DepMap _imm_deps;       // immediate (direct) dependencies only.
+        DepMap _full_deps;      // immediate and indirect dependencies.
+        EqSet _all;             // all expressions.
+        bool _done;             // indirect dependencies added?
     
-        // Recursive search starting at 'a'.
-        // Fill in _full_deps.
-        virtual bool _analyze(EqualsExprPtr a, SeenSet* seen);
-    
+        // Recursive helper for visitDeps().
+        virtual void _visitDeps(EqualsExprPtr a,
+                               std::function<void (EqualsExprPtr b, EqVecSet& path)> visitor,
+                               EqVecSet* seen) const;
+
     public:
 
         EqDeps() : _done(false) {}
         virtual ~EqDeps() {}
     
-        // Declare that eq a depends on b.
-        virtual void set_dep_on(EqualsExprPtr a, EqualsExprPtr b) {
-            _deps[a].insert(b);
+        // Declare that eq a depends directly on b.
+        virtual void set_imm_dep_on(EqualsExprPtr a, EqualsExprPtr b) {
+            _imm_deps[a].insert(b);
             _all.insert(a);
             _all.insert(b);
             _done = false;
         }
     
+        // Check whether eq a directly depends on b.
+        virtual bool is_imm_dep_on(EqualsExprPtr a, EqualsExprPtr b) const {
+            return _imm_deps.count(a) && _imm_deps.at(a).count(b) > 0;
+        }
+    
+        // Checks for immediate dependencies in either direction.
+        virtual bool is_imm_dep(EqualsExprPtr a, EqualsExprPtr b) const {
+            return is_imm_dep_on(a, b) || is_imm_dep_on(b, a);
+        }
+
         // Check whether eq a depends on b.
         virtual bool is_dep_on(EqualsExprPtr a, EqualsExprPtr b) const {
-            assert(_done || _deps.size() == 0);
+            assert(_done || _imm_deps.size() == 0);
             return _full_deps.count(a) && _full_deps.at(a).count(b) > 0;
         }
     
@@ -84,24 +89,26 @@ namespace yask {
             return is_dep_on(a, b) || is_dep_on(b, a);
         }
 
-        // Does recursive analysis to turn all indirect dependencies to direct
-        // ones.
-        virtual void analyze() {
-            if (_done)
-                return;
-            for (auto a : _all)
-                if (_full_deps.count(a) == 0)
-                    _analyze(a, NULL);
-            _done = true;
+        // Visit 'a' and all its immediate dependencies.
+        // At each node 'b', 'visitor(b, path)' is called, where 'path' contains
+        // all nodes from 'a' thru 'b'.
+        virtual void visitDeps(EqualsExprPtr a,
+                               std::function<void (EqualsExprPtr b, EqVecSet& path)> visitor) {
+            _visitDeps(a, visitor, NULL);
         }
+        
+        // Does recursive analysis to find indirect dependencies from direct
+        // ones.
+        virtual void find_all_deps();
     };
 
+    // A collection of deps by dep type.
     typedef map<DepType, EqDeps> EqDepMap;
 
     // A list of unique equation ptrs.
     typedef vector_set<EqualsExprPtr> EqList;
 
-    // Map of expressions: key = expression ptr, value = if-condition ptr.
+    // Map w/key = expr ptr, value = if-condition ptr.
     // We use this to simplify the process of replacing statements
     //  when an if-condition is encountered.
     // Example: key: grid(t,x)==grid(t,x+1); value: x>5;
@@ -116,6 +123,8 @@ namespace yask {
         EqList _eqs;          // just equations w/o conditions.
         CondMap _conds;       // map from equations to their conditions, if any.
 
+        EqDeps::DepMap _scratch_deps;   // dependencies through scratch grids.
+        
     public:
 
         Eqs() {}
@@ -124,9 +133,10 @@ namespace yask {
         // Equation accessors.
         virtual void addEq(EqualsExprPtr ep) {
             _eqs.insert(ep);
+            _scratch_deps[ep];
         }
         virtual void addCondEq(EqualsExprPtr ep, BoolExprPtr cond) {
-            _eqs.insert(ep);
+            addEq(ep);
             _conds[ep.get()] = cond;
         }
         virtual const EqList& getEqs() const {
@@ -148,6 +158,11 @@ namespace yask {
                 return nullptr;
         }
 
+        // Get the scratch-grid eqs that contribute to this eq.
+        virtual const EqDeps::EqSet& getScratchDeps(EqualsExprPtr ep) const {
+            return _scratch_deps.at(ep);
+        }
+
         // Visit all equations.
         // Will NOT visit conditions.
         virtual void visitEqs(ExprVisitor* ev) {
@@ -157,25 +172,19 @@ namespace yask {
         }
 
         // Find dependencies based on all eqs.  If 'eq_deps' is
-        // set, save dependencies between eqs.
-        virtual void findDeps(IntTuple& pts,
-                              Dimensions& dims,
+        // set, save dependencies between eqs in referent.
+        virtual void findDeps(Dimensions& dims,
                               EqDepMap* eq_deps,
                               std::ostream& os);
-
-        // Check for illegal dependencies in all equations.
-        // Exit with error if any found.
-        virtual void checkDeps(IntTuple& pts,
-                               Dimensions& dims,
-                               std::ostream& os) {
-            findDeps(pts, dims, NULL, os);
-        }
 
         // Determine which grid points can be vectorized.
         virtual void analyzeVec(const Dimensions& dims);
 
         // Determine how grid points are accessed in a loop.
         virtual void analyzeLoop(const Dimensions& dims);
+
+        // Update grid access stats.
+        virtual void updateGridStats(EqDepMap& eq_deps);
     };
 
     // A named equation group, which contains one or more grid-update equations.
@@ -188,30 +197,36 @@ namespace yask {
         Grids _outGrids;          // grids updated by this eqGroup.
         Grids _inGrids;          // grids read from by this eqGroup.
         const Dimensions* _dims = 0;
+        bool _isScratch = false; // true if updating temp grid(s).
 
         // Other eq-groups that this group depends on. This means that an
         // equation in this group has a grid value on the RHS that appears in
         // the LHS of the dependency.
-        map<DepType, set<string>> _dep_on;
+        map<DepType, set<string>> _imm_dep_on; // immediate deps.
+        map<DepType, set<string>> _dep_on;     // immediate and indirect deps.
+        set<string> _scratch_deps;             // scratch groups needed for this group.
 
     public:
+
+        // TODO: move these into protected section and make accessors.
         string baseName;            // base name of this eqGroup.
         int index;                  // index to distinguish repeated names.
         BoolExprPtr cond;           // condition (default is null).
 
         // Ctor.
-        EqGroup(const Dimensions& dims) : _dims(&dims) {
+        EqGroup(const Dimensions& dims, bool is_scratch) :
+            _dims(&dims), _isScratch(is_scratch) {
 
             // Create empty map entries.
-            for (DepType dt = certain_dep; dt < num_deps; dt = DepType(dt+1)) {
+            for (DepType dt = DepType(0); dt < num_deps; dt = DepType(dt+1)) {
+                _imm_dep_on[dt];
                 _dep_on[dt];
             }
         }
         virtual ~EqGroup() {}
 
-        // Add an equation.
-        // If 'update_stats', update grid and halo data.
-        virtual void addEq(EqualsExprPtr ee, bool update_stats = true);
+        // Add an equation to this group.
+        virtual void addEq(EqualsExprPtr ee);
     
         // Visit all the equations.
         virtual void visitEqs(ExprVisitor* ev) {
@@ -251,6 +266,9 @@ namespace yask {
             return _eqs.size();
         }
 
+        // Updating temp vars?
+        virtual bool isScratch() const { return _isScratch; }
+
         // Get grids output and input.
         virtual const Grids& getOutputGrids() const {
             return _outGrids;
@@ -260,19 +278,29 @@ namespace yask {
         }
 
         // Get whether this eq-group depends on eg2.
-        // Must have already been set via setDepOn().
+        // Must have already been set via checkDeps().
+        virtual bool isImmDepOn(DepType dt, const EqGroup& eq2) const {
+            return _imm_dep_on.at(dt).count(eq2.getName()) > 0;
+        }
         virtual bool isDepOn(DepType dt, const EqGroup& eq2) const {
             return _dep_on.at(dt).count(eq2.getName()) > 0;
         }
 
         // Get dependencies on this eq-group.
+        virtual const set<string>& getImmDeps(DepType dt) const {
+            return _imm_dep_on.at(dt);
+        }
         virtual const set<string>& getDeps(DepType dt) const {
             return _dep_on.at(dt);
         }
+
+        // Get scratch-group dependencies.
+        virtual const set<string>& getScratchDeps() const {
+            return _scratch_deps;
+        }
     
-        // Set dependency on eg2 if this eq-group is dependent on it.
-        // Return whether dependent.
-        virtual bool setDepOn(DepType dt, EqDepMap& eq_deps, const EqGroup& eg2);
+        // Check for and set dependencies on eg2.
+        virtual void checkDeps(Eqs& allEqs, EqDepMap& eq_deps, const EqGroup& eg2);
 
         // Replicate each equation at the non-zero offsets for
         // each vector in a cluster.
@@ -307,6 +335,7 @@ namespace yask {
         virtual bool addExprToGroup(EqualsExprPtr eq,
                                     BoolExprPtr cond, // may be nullptr.
                                     const string& baseName,
+                                    bool is_scratch,
                                     EqDepMap& eq_deps);
 
     public:
@@ -334,17 +363,7 @@ namespace yask {
                           const string& targets,
                           EqDepMap& eq_deps,
                           std::ostream& os);
-        void makeEqGroups(Eqs& eqs,
-                          const string& targets,
-                          IntTuple& pts,
-                          bool find_deps,
-                          std::ostream& os) {
-            EqDepMap eq_deps;
-            if (find_deps)
-                eqs.findDeps(pts, *_dims, &eq_deps, os);
-            makeEqGroups(eqs, targets, eq_deps, os);
-        }
-
+        
         virtual const Grids& getOutputGrids() const {
             return _outGrids;
         }

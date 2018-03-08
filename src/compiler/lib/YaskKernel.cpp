@@ -49,23 +49,6 @@ namespace yask {
         eq.visitEqs(&commenter);
     }
 
-    // Print a shim function to map hard-coded YASK vars to actual dims.
-    void YASKCppPrinter::printShim(ostream& os,
-                                   const string& fname,
-                                   bool use_template) {
-    
-        os << "\n // Simple shim function to use start vars and ignore others.\n";
-        if (use_template)
-            os << " template <int level>";
-        os << " inline void " << fname <<
-            "(const ScanIndices& scan_idxs) {\n"
-            " " << fname;
-        if (use_template)
-            os << "<level>";
-        os << "(scan_idxs.start);\n"
-            "}\n";
-    }
-
     // Print YASK code in new stencil context class.
     void YASKCppPrinter::print(ostream& os) {
 
@@ -173,10 +156,11 @@ namespace yask {
         _eqGroups.visitEqs(&cve);
 
         os << endl << " ////// Stencil-specific data //////" << endl <<
-            "struct " << _context_base << " : public StencilContext {" << endl;
+            "class " << _context_base << " : public StencilContext {\n"
+            "public:\n";
 
         // Save data for ctor and new-grid method.
-        string ctorCode, ctorList, newGridCode;
+        string ctorCode, ctorList, newGridCode, scratchCode;
         set<string> newGridDims;
         
         // Grids.
@@ -199,7 +183,9 @@ namespace yask {
             else
                 os << "scalar value";
             os << " '" << grid << "', which is ";
-            if (_eqGroups.getOutputGrids().count(gp))
+            if (gp->isScratch())
+                os << " a scratch variable.\n";
+            else if (_eqGroups.getOutputGrids().count(gp))
                 os << "updated by one or more equations.\n";
             else
                 os << "not updated by any equation (read-only).\n";
@@ -231,8 +217,8 @@ namespace yask {
                         assert(dname == _dims->_stepDim);
                         if (dn > 0) {
                             THROW_YASK_EXCEPTION("Error: cannot create grid '" << grid <<
-                                "' with dimensions '" << gdims.makeDimStr() <<
-                                "' because '" << dname << "' must be first dimension.\n");
+                                                 "' with dimensions '" << gdims.makeDimStr() <<
+                                                 "' because '" << dname << "' must be first dimension");
                         }
                         if (folded) {
                             step_posn = dn + 1;
@@ -291,44 +277,32 @@ namespace yask {
 
             // Typedef.
             string typeDef = grid + "_type";
-            os << " typedef " << typeName << " " << typeDef << ";\n";
-                
-            // Actual grid declaration.
-            os << " std::shared_ptr<" << typeDef << "> " << grid << "_ptr;\n" <<
-                " " << typeDef << "* " << grid << ";\n"
+            string ptrTypeDef = grid + "_ptr_type";
+            os << " typedef " << typeName << " " << typeDef << ";\n" <<
+                " typedef std::shared_ptr<" << typeDef << "> " << ptrTypeDef << ";\n"
                 " GridDimNames " + grid + "_dim_names;\n";
 
-            // Grid init.
-            ctorCode += "\n // Init grid '" + grid + "'.\n";
-            ctorCode += " " + grid + "_dim_names = {\n" +
+            ctorCode += "\n // Grid '" + grid + "'.\n";
+            ctorCode += " " + grid + "_dim_names = {" +
                 gdims.makeDimStr(", ", "\"", "\"") + "};\n";
-            ctorCode += " " + grid + "_ptr = std::make_shared<" + typeDef +
-                ">(_dims, \"" + grid + "\", " + grid + "_dim_names, &_ostr);\n";
+            string initCode = " " + grid + "_ptr = std::make_shared<" + typeDef +
+                ">(_dims, \"" + grid + "\", " + grid + "_dim_names, &_ostr);\n"
+                " assert(" + grid + "_ptr);\n";
 
-            // Make new grids via API.
-            string newGridKey = gdims.makeDimStr();
-            if (!newGridDims.count(newGridKey)) {
-                newGridDims.insert(newGridKey);
-                bool firstGrid = newGridCode.length() == 0;
-                if (gdims.getNumDims())
-                    newGridCode += "\n // Grids with '" + newGridKey + "' dim(s).\n";
-                else
-                    newGridCode += "\n // Scalar grids.\n";
-                if (!firstGrid)
-                    newGridCode += " else";
-                newGridCode += " if (dims == " + grid + "_dim_names) gp = std::make_shared<" +
-                    typeDef + ">(_dims, name, dims, &_ostr);\n";
+            // Grid vars.
+            if (gp->isScratch()) {
+
+                // Collection of scratch grids.
+                os << " GridPtrs " << grid << "_list;\n";
+                ctorCode += " addScratch(" + grid + "_list);\n";
             }
+            else {
 
-            // Finish grid init.
-            ctorCode += " " + grid + " = " + grid + "_ptr.get();\n";
-            ctorCode += " addGrid(" + grid + "_ptr, ";
-            if (_eqGroups.getOutputGrids().count(gp))
-                ctorCode += "true /* is an output grid */";
-            else
-                ctorCode += "false /* is not an output grid */";
-            ctorCode += ");\n";
-                
+                // Actual grid ptr declaration.
+                os << " " << ptrTypeDef << " " << grid << "_ptr;\n" <<
+                    " " << typeDef << "* " << grid << ";\n";
+            }
+            
             // Alloc-setting code.
             for (auto& dim : gp->getDims()) {
                 auto& dname = dim->getName();
@@ -337,14 +311,17 @@ namespace yask {
                 // domain dimension.
                 if (dtype == DOMAIN_INDEX) {
 
-                    // Halo for this dimension.
-                    string hvar = grid + "_halo_" + dname;
-                    int hval = _settings._haloSize > 0 ?
-                        _settings._haloSize : gp->getHaloSize(dname);
-                    os << " const idx_t " << hvar << " = " << hval <<
-                        "; // default halo size in '" << dname << "' dimension.\n";
-                    ctorCode += " " + grid + "->set_halo_size(\"" + dname +
-                        "\", " + hvar + ");\n";
+                    // Halos for this dimension.
+                    for (bool left : { true, false }) {
+                        string bstr = left ? "_left_halo_" : "_right_halo_";
+                        string hvar = grid + bstr + dname;
+                        int hval = _settings._haloSize > 0 ?
+                            _settings._haloSize : gp->getHaloSize(dname, left);
+                        os << " const idx_t " << hvar << " = " << hval <<
+                            "; // default halo size in '" << dname << "' dimension.\n";
+                        initCode += " " + grid + "_ptr->set" + bstr + "size(\"" + dname +
+                            "\", " + hvar + ");\n";
+                    }
                 }
 
                 // non-domain dimension.
@@ -366,17 +343,58 @@ namespace yask {
                     }
                     os << " const idx_t " << avar << " = " << aval <<
                         "; // default allocation in '" << dname << "' dimension.\n";
-                    ctorCode += " " + grid + "->set_alloc_size(\"" + dname +
+                    initCode += " " + grid + "_ptr->set_alloc_size(\"" + dname +
                         "\", " + avar + ");\n";
                     if (oval) {
                         os << " const idx_t " << ovar << " = " << oval <<
                             "; // first index in '" << dname << "' dimension.\n";
-                        ctorCode += " " + grid + "->set_first_misc_index(\"" + dname +
+                        initCode += " " + grid + "_ptr->set_first_misc_index(\"" + dname +
                             "\", " + ovar + ");\n";
                     }
                 }
+            } // dims.
+
+            // If not scratch, init grids in ctor.
+            if (!gp->isScratch()) {
+
+                // Grid init.
+                ctorCode += initCode;
+                ctorCode += " " + grid + " = " + grid + "_ptr.get();\n";
+                ctorCode += " addGrid(" + grid + "_ptr, ";
+                if (_eqGroups.getOutputGrids().count(gp))
+                    ctorCode += "true /* is an output grid */";
+                else
+                    ctorCode += "false /* is not an output grid */";
+                ctorCode += ");\n";
             }
-        }
+
+            // For scratch, make code for one vec element.
+            else {
+                scratchCode += " " + grid + "_list.clear();\n"
+                    " for (int i = 0; i < num_threads; i++) {\n"
+                    " " + ptrTypeDef + " " + grid + "_ptr;\n" +
+                    initCode +
+                    " " + grid + "_ptr->set_scratch(true);\n" +
+                    " " + grid + "_list.push_back(" + grid + "_ptr);\n"
+                    " }\n";
+            }
+
+            // Make new grids via API.
+            string newGridKey = gdims.makeDimStr();
+            if (!newGridDims.count(newGridKey)) {
+                newGridDims.insert(newGridKey);
+                bool firstGrid = newGridCode.length() == 0;
+                if (gdims.getNumDims())
+                    newGridCode += "\n // Grids with '" + newGridKey + "' dim(s).\n";
+                else
+                    newGridCode += "\n // Scalar grids.\n";
+                if (!firstGrid)
+                    newGridCode += " else";
+                newGridCode += " if (dims == " + grid + "_dim_names) gp = std::make_shared<" +
+                    typeDef + ">(_dims, name, dims, &_ostr);\n";
+            }
+                
+        } // grids.
 
         // Ctor.
         {
@@ -395,16 +413,20 @@ namespace yask {
         }
 
         // New-grid method.
-        {
-            os << "\n // Make a new grid iff its dims match any in the stencil.\n"
-                " // Returns pointer to the new grid or nullptr if no match.\n"
-                " virtual YkGridPtr newStencilGrid(const std::string& name,"
-                " const GridDimNames& dims) {\n"
-                " YkGridPtr gp;\n" <<
-                newGridCode <<
-                " return gp;\n"
-                " } // newStencilGrid\n";
-        }
+        os << "\n // Make a new grid iff its dims match any in the stencil.\n"
+            " // Returns pointer to the new grid or nullptr if no match.\n"
+            " virtual YkGridPtr newStencilGrid(const std::string& name,"
+            " const GridDimNames& dims) {\n"
+            " YkGridPtr gp;\n" <<
+            newGridCode <<
+            " return gp;\n"
+            " } // newStencilGrid\n";
+       
+        // Scratch-grids method.
+        os << "\n // Make new scratch grids.\n"
+            " virtual void makeScratchGrids(int num_threads) {\n" <<
+            scratchCode <<
+            " } // newScratchGrids\n";
         
         os << "}; // " << _context_base << endl;
     }
@@ -423,7 +445,8 @@ namespace yask {
             os << endl << " ////// Stencil " << egDesc << " //////\n" <<
                 "\n class " << egsName << " : public StencilGroupBase {\n"
                 " protected:\n"
-                " " << _context_base << "* _context = 0;\n"
+                " typedef " << _context_base << " _context_type;\n"
+                " _context_type* _context = 0;\n"
                 " public:\n";
 
             // Stats for this eqGroup.
@@ -442,18 +465,23 @@ namespace yask {
                     " _name = \"" << egName << "\";\n"
                     " _scalar_fp_ops = " << stats.getNumOps() << ";\n"
                     " _scalar_points_read = " << stats.getNumReads() << ";\n"
-                    " _scalar_points_written = " << stats.getNumWrites() << ";\n";
+                    " _scalar_points_written = " << stats.getNumWrites() << ";\n"
+                    " _is_scratch = " << (eq.isScratch() ? "true" : "false") << ";\n";
 
                 // I/O grids.
-                if (eq.getOutputGrids().size()) {
-                    os << "\n // The following grids are written by " << egsName << endl;
-                    for (auto gp : eq.getOutputGrids())
-                        os << "  outputGridPtrs.push_back(_context->" << gp->getName() << "_ptr);" << endl;
+                os << "\n // The following grids are read by " << egsName << endl;
+                for (auto gp : eq.getInputGrids()) {
+                    if (gp->isScratch())
+                        os << "  inputScratchVecs.push_back(&_context->" << gp->getName() << "_list);\n";
+                    else
+                        os << "  inputGridPtrs.push_back(_context->" << gp->getName() << "_ptr);\n";
                 }
-                if (eq.getInputGrids().size()) {
-                    os << "\n // The following grids are read by " << egsName << endl;
-                    for (auto gp : eq.getInputGrids())
-                        os << "  inputGridPtrs.push_back(_context->" << gp->getName() << "_ptr);" << endl;
+                os << "\n // The following grids are written by " << egsName << endl;
+                for (auto gp : eq.getOutputGrids()) {
+                    if (gp->isScratch())
+                        os << "  outputScratchVecs.push_back(&_context->" << gp->getName() << "_list);\n";
+                    else
+                        os << "  outputGridPtrs.push_back(_context->" << gp->getName() << "_ptr);\n";
                 }
                 os << " } // Ctor." << endl;
             }
@@ -480,7 +508,7 @@ namespace yask {
                     _dims->_stencilDims.makeDimStr() << ".\n"
                     " // There are approximately " << stats.getNumOps() <<
                     " FP operation(s) per invocation.\n"
-                    " virtual void calc_scalar(const Indices& idxs) {\n";
+                    " virtual void calc_scalar(int thread_idx, const Indices& idxs) {\n";
                 printIndices(os);
 
                 // C++ scalar print assistant.
@@ -553,7 +581,7 @@ namespace yask {
                     " aligned vector-block(s).\n"
                     " // There are approximately " << (stats.getNumOps() * numResults) <<
                     " FP operation(s) per iteration.\n" <<
-                    " void " << funcstr << "(const Indices& idxs, idx_t " << istop;
+                    " void " << funcstr << "(int thread_idx, const Indices& idxs, idx_t " << istop;
                 if (!do_cluster)
                     os << ", idx_t write_mask";
                 os << ") {\n";
@@ -623,8 +651,8 @@ namespace yask {
         os << endl << " // Stencil equation-groups." << endl;
         for (auto& eg : _eqGroups) {
             string egName = eg.getName();
-            string egsName = "StencilGroup_" + egName;
-            os << " " << egsName << " stencilGroup_" << egName << ";" << endl;
+            string sgName = "stencilGroup_" + egName;
+            os << " StencilGroup_" << egName << " " << sgName << ";" << endl;
         }
 
         // Ctor.
@@ -633,7 +661,8 @@ namespace yask {
             _context_base << "(env, settings)";
         for (auto& eg : _eqGroups) {
             string egName = eg.getName();
-            os << ",\n  stencilGroup_" << egName << "(this)";
+            string sgName = "stencilGroup_" + egName;
+            os << ",\n  " << sgName << "(this)";
         }
         os << " {\n";
         
@@ -641,20 +670,33 @@ namespace yask {
         os << "\n // Stencil groups.\n";
         for (auto& eg : _eqGroups) {
             string egName = eg.getName();
-            os << "  stGroups.push_back(&stencilGroup_" << egName << ");\n";
+            string sgName = "stencilGroup_" + egName;
+            os << "  stGroups.push_back(&" << sgName << ");\n";
 
-            // Add dependencies.
-            for (DepType dt = certain_dep; dt < num_deps; dt = DepType(dt+1)) {
-                for (auto dep : eg.getDeps(dt)) {
-                    string dtName = (dt == certain_dep) ? "certain_dep" :
-                        (dt == possible_dep) ? "possible_dep" :
+            // Add other-group deps.
+            for (DepType dt = DepType(0); dt < num_deps; dt = DepType(dt+1)) {
+                for (auto& dep : eg.getDeps(dt)) {
+                    string depName = "stencilGroup_" + dep;
+                    string dtName = (dt == cur_step_dep) ? "cur_step_dep" :
+                        (dt == prev_step_dep) ? "prev_step_dep" :
                         "internal_error";
-                    os << "  stencilGroup_" << egName <<
+                    os << "  " << sgName <<
                         ".add_dep(yask::" << dtName <<
-                        ", &stencilGroup_" << dep << ");\n";
+                        ", &" << depName << ");\n";
                 }
             }
-        }
+
+            // Add scratch-group deps in proper order.
+            auto& sdeps = eg.getScratchDeps();
+            for (auto& eg2 : _eqGroups) {
+                string eg2Name = eg2.getName();
+                string sg2Name = "stencilGroup_" + eg2Name;
+                if (sdeps.count(eg2Name))
+                    os << "  " << sgName <<
+                        ".add_scratch_dep(&" << sg2Name << ");\n";
+            }
+            
+        } // eq-groups.
         os << " } // Ctor.\n";
 
         // Dims creator.

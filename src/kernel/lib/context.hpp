@@ -145,11 +145,8 @@ namespace yask {
         std::string name;
 
         // List of all stencil groups in the order in which
-        // they should be evaluated. Current assumption is that
-        // later ones are dependent on their predecessors.
-        // TODO: relax this assumption, determining which groups
-        // are actually dependent on which others, allowing
-        // more parallelism.
+        // they should be evaluated within a step.
+        // TODO: use dependency info, allowing more parallelism.
         StencilGroupList stGroups;
 
         // All grids.
@@ -159,6 +156,9 @@ namespace yask {
         // Only grids that are updated by the stencils.
         GridPtrs outputGridPtrs;
         GridPtrMap outputGridMap;
+
+        // Scratch grids.
+        ScratchVecs scratchVecs;
 
         // Some calculated domain sizes.
         IdxTuple rank_domain_offsets;       // Domain index offsets for this rank.
@@ -204,6 +204,7 @@ namespace yask {
 
         // Auto-tuner state.
         class AT {
+        protected:
             StencilContext* _context = 0;
             
             // Null stream to throw away debug info.
@@ -243,6 +244,8 @@ namespace yask {
             bool in_warmup = true;
 
         public:
+            const idx_t max_step_t = 4;
+
             AT(StencilContext* ctx) :
                 _context(ctx) { }
             
@@ -253,21 +256,10 @@ namespace yask {
             void eval(idx_t steps, double elapsed_time);
 
             // Apply settings.
-            void apply() {
-                auto _opts = _context->_opts;
-                auto _env = _context->_env;
-
-                // Change sub-block size to 0 so adjustSettings()
-                // will set it to the default.
-                _opts->_sub_block_sizes.setValsSame(0);
-                _opts->_sub_block_group_sizes.setValsSame(0);
-                
-                // Make sure everything is resized based on block size.
-                _opts->adjustSettings(nullop->get_ostream(), _env);
-            }
+            void apply();
 
             // Done?
-            bool is_done() { return done; }
+            bool is_done() const { return done; }
         };
         AT _at;
         
@@ -342,15 +334,19 @@ namespace yask {
 
         // Add a new grid to the containers.
         virtual void addGrid(YkGridPtr gp, bool is_output);
+        virtual void addScratch(GridPtrs& scratch_vec) {
+            scratchVecs.push_back(&scratch_vec);
+        }
         
         // Set vars related to this rank's role in global problem.
         // Allocate MPI buffers as needed.
-        // Called from prepare_solution(), so it doesn't normally need to be called from user code.
         virtual void setupRank();
 
-        // Allocate grid, param, and MPI memory.
-        // Called from prepare_solution(), so it doesn't normally need to be called from user code.
-        virtual void allocData();
+        // Allocate grid and MPI memory.
+        virtual void allocData(std::ostream& os);
+
+        // Allocate scratch-grid memory.
+        virtual void allocScratchData(std::ostream& os);
 
         // Allocate grids, params, MPI bufs, etc.
         // Calculate rank position in problem.
@@ -373,6 +369,11 @@ namespace yask {
         // This should be called anytime a setting or offset is changed.
         virtual void update_grids();
         
+        // Adjust offsets of scratch grids based
+        // on thread and scan indices.
+        virtual void update_scratch_grids(int thread_idx,
+                                          const ScanIndices& idxs);
+
         // Get total memory allocation required by grids.
         // Does not include MPI buffers.
         // TODO: add MPI buffers.
@@ -381,10 +382,15 @@ namespace yask {
             for (auto gp : gridPtrs)
                 if (gp)
                     sz += gp->get_num_storage_bytes() + _data_buf_pad;
+            for (auto gps : scratchVecs)
+                if (gps)
+                    for (auto gp : *gps)
+                        if (gp)
+                            sz += gp->get_num_storage_bytes() + _data_buf_pad;
             return sz;
         }
 
-        // Init all grids & params by calling initFn.
+        // Init all grids & params by calling realInitFn.
         virtual void initValues(std::function<void (YkGridPtr gp,
                                                     real_t seed)> realInitFn);
 
@@ -446,11 +452,13 @@ namespace yask {
         }
 
         // Set number of threads to use for a region.
+        // Enable nested OMP if there are >1 block threads,
+        // disable otherwise.
         // Return number of threads.
         // Do nothing and return 0 if not properly initialized.
         virtual int set_region_threads() {
 
-            // Start with "all" threads.
+            // Start with max allowed threads.
             int mt = _opts->max_threads;
 	    if (!mt)
 	      return 0;
@@ -463,6 +471,8 @@ namespace yask {
             nt = std::max(nt, 1);
             if (_opts->num_block_threads > 1)
                 omp_set_nested(1);
+            else
+                omp_set_nested(0);
 
             //TRACE_MSG("set_region_threads: omp_set_num_threads=" << nt);
             omp_set_num_threads(nt);
@@ -508,12 +518,16 @@ namespace yask {
         // Set the bounding-box around all eq groups.
         virtual void find_bounding_boxes();
 
+        // Make new scratch grids.
+        virtual void makeScratchGrids (int num_threads) =0;
+        
         // Make a new grid iff its dims match any in the stencil.
         // Returns pointer to the new grid or nullptr if no match.
         virtual YkGridPtr newStencilGrid (const std::string & name,
                                           const GridDimNames & dims) =0;
 
-        // Make new grids.
+        // Make a new grid with 'name' and 'dims'.
+        // Set sizes if 'sizes' is non-null.
         virtual YkGridPtr newGrid(const std::string& name,
                                   const GridDimNames& dims,
                                   const GridDimSizes* sizes);

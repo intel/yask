@@ -38,8 +38,8 @@ namespace yask {
         if (got_sizes) {
             if (dims.size() != sizes->size()) {
                 THROW_YASK_EXCEPTION("Error: attempt to create grid '" << name << "' with " <<
-                    dims.size() << " dimension names but " << sizes->size() <<
-                    " dimension sizes.\n");
+                                     dims.size() << " dimension names but " << sizes->size() <<
+                                     " dimension sizes");
             }
         }
 
@@ -59,7 +59,7 @@ namespace yask {
                 // Already used?
                 if (seenDims.count(dims[i])) {
                     THROW_YASK_EXCEPTION("Error: cannot create grid '" << name <<
-                        "': dimension '" << dims[i] << "' used more than once.\n");
+                                         "': dimension '" << dims[i] << "' used more than once");
                 }
             
                 // Step dim?
@@ -67,8 +67,8 @@ namespace yask {
                     step_posn = i;
                     if (i > 0) {
                         THROW_YASK_EXCEPTION("Error: cannot create grid '" << name <<
-                            "' because step dimension '" << dims[i] <<
-                            "' must be first dimension.\n");
+                                             "' because step dimension '" << dims[i] <<
+                                             "' must be first dimension");
                     }
                 }
             }
@@ -83,13 +83,13 @@ namespace yask {
             
             if (!gp) {
                 THROW_YASK_EXCEPTION("Error in new_grid: cannot create grid '" << name <<
-                    "' with " << ndims << " dimensions; only up to " << MAX_DIMS <<
-                    " dimensions supported.\n");
+                                     "' with " << ndims << " dimensions; only up to " << MAX_DIMS <<
+                                     " dimensions supported");
             }
         }
 
         // Mark as non-resizable if sizes provided.
-        gp->set_resize(!got_sizes);
+        gp->set_fixed_size(got_sizes);
 
         // Add to context.
         addGrid(gp, false);     // mark as non-output grid.

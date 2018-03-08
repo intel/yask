@@ -263,8 +263,8 @@ else
     envs="$envs LD_LIBRARY_PATH=./lib:$LD_LIBRARY_PATH$libpath"
 fi
 
-# Command sequence.
-cmds="cd $dir; uname -a; lscpu; numactl -H; ldd $exe; date; $pre_cmd; env $envs $mpi_cmd $exe_prefix $exe $opts $@; $post_cmd; date"
+# Command sequence to be run in a shell.
+cmds="cd $dir; uname -a; sed '/^$/q' /proc/cpuinfo; lscpu; numactl -H; ldd $exe; date; $pre_cmd; env $envs $mpi_cmd $exe_prefix $exe $opts $@; $post_cmd; date"
 
 echo "===================" | tee -a $logfile
 
