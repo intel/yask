@@ -481,7 +481,7 @@ namespace yask {
     // TODO: make these methods in the real_vec_t union.
 
     // Get consecutive elements from two vectors.
-    // Concat a and b, shift right by count elements, keep rightmost elements.
+    // Concat a and b, shift right by count elements, keep _right_most elements.
     // Thus, shift of 0 returns b; shift of VLEN returns a.
     // Must be a template because count has to be known at compile-time.
     template<int count>
@@ -528,7 +528,7 @@ namespace yask {
     }
 
     // Get consecutive elements from two vectors w/masking.
-    // Concat a and b, shift right by count elements, keep rightmost elements.
+    // Concat a and b, shift right by count elements, keep _right_most elements.
     // Elements in res corresponding to 0 bits in k1 are unchanged.
     template<int count>
     ALWAYS_INLINE void real_vec_align_masked(real_vec_t& res, const real_vec_t& a, const real_vec_t& b,

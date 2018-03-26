@@ -33,8 +33,9 @@ using namespace std;
 namespace yask {
 
     // Stencil-solution APIs.
-    yc_grid_ptr StencilSolution::new_grid(const std::string& name,
-                                          const std::vector<yc_index_node_ptr>& dims) {
+    yc_grid_ptr StencilSolution::newGrid(const std::string& name,
+                                         bool isScratch,
+                                         const std::vector<yc_index_node_ptr>& dims) {
         
         // Make new grid and add to solution.
         // TODO: fix this mem leak--make smart ptr.
@@ -47,7 +48,7 @@ namespace yask {
             dims2.push_back(d2);
         }
         
-        auto* gp = new Grid(name, this, dims2);
+        auto* gp = new Grid(name, isScratch, this, dims2);
         assert(gp);
         return gp;
     }
@@ -82,29 +83,18 @@ namespace yask {
         // Determine which grid points can be vectorized and analyze inner-loop accesses.
         _eqs.analyzeVec(_dims);
         _eqs.analyzeLoop(_dims);
+
+        // Find dependencies between equations.
+        EqDepMap eq_deps;
+        _eqs.findDeps(_dims, &eq_deps, *_dos);
+
+        // Update access stats for the grids.
+        _eqs.updateGridStats(eq_deps);
         
-        // Check for illegal dependencies within equations for scalar size.
-        if (_settings._find_deps) {
-            *_dos << "Checking equation(s) with scalar operations...\n"
-                " If this fails, review stencil equation(s) for illegal dependencies.\n";
-            _eqs.checkDeps(_dims._scalar, _dims, *_dos);
-        }
-
-        // Check for illegal dependencies within equations for vector size.
-        if (_settings._find_deps) {
-            *_dos << "Checking equation(s) with folded-vector operations...\n"
-                " If this fails, the fold dimensions are not compatible with all equations.\n";
-            _eqs.checkDeps(_dims._fold, _dims, *_dos);
-        }
-
-        // Check for illegal dependencies within equations for cluster size and
-        // also create equation groups based on legal dependencies.
-        *_dos << "Checking equation(s) with clusters of vectors...\n"
-            " If this fails, the cluster dimensions are not compatible with all equations.\n";
+        // Create equation groups based on dependencies and/or target strings.
         _eqGroups.set_basename_default(_settings._eq_group_basename_default);
         _eqGroups.set_dims(_dims);
-        _eqGroups.makeEqGroups(_eqs, _settings._eqGroupTargets,
-                               _dims._clusterPts, _settings._find_deps, *_dos);
+        _eqGroups.makeEqGroups(_eqs, _settings._eqGroupTargets, eq_deps, *_dos);
         _eqGroups.optimizeEqGroups(_settings, "scalar & vector", false, *_dos);
 
         // Make a copy of each equation at each cluster offset.
@@ -143,7 +133,7 @@ namespace yask {
             printer = new POVRayPrinter(*this, _clusterEqGroups);
         else {
             THROW_YASK_EXCEPTION("Error: format-type '" << format_type <<
-                "' is not recognized." << endl);
+                                 "' is not recognized");
         }
         assert(printer);
         int vlen = printer->num_vec_elems();

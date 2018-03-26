@@ -257,11 +257,6 @@ namespace yask {
         // Print extraction of indices.
         virtual void printIndices(ostream& os) const;
         
-        // Print a shim function to map hard-coded YASK vars to actual dims.
-        virtual void printShim(ostream& os,
-                               const string& fname,
-                               bool use_template = false);
-
         // Print pieces of YASK output.
         virtual void printMacros(ostream& os);
         virtual void printData(ostream& os);

@@ -60,15 +60,18 @@ sub idx {
     return join('', map("[$_]", @_));
 }
 
-# inVar() => "$inputVar".
-# inVar("foo") => "$inputVar.foo".
-# inVar("foo", 5) => "$inputVar.foo[5]".
+# Accessors for input struct.
+# Examples if $inputVar == "block_idxs":
+# inVar() => "block_idxs".
+# inVar("foo") => "block_idxs.foo".
+# inVar("foo", 5) => "block_idxs.foo[5]".
 sub inVar {
     my $vname = shift;
     my $part = (defined $vname) ? ".$vname" : "";
     return "$inputVar$part".idx(@_);
 }
 
+# Accessors for local struct.
 # locVar("foo", 5) => "local_indices.foo[5]".
 sub locVar {
     my $vname = shift;
@@ -86,11 +89,20 @@ sub endVar {
 sub stepVar {
     return inVar("step", @_);
 }
+sub alignVar {
+    return inVar("align", @_);
+}
 sub groupSizeVar {
     return inVar("group_size", @_);
 }
 
 # These are generated scalars.
+sub adjAlignVar {
+    return join('_', 'adj_align', @_);
+}
+sub alignBeginVar {
+    return join('_', 'aligned_begin', @_);
+}
 sub numItersVar {
     return join('_', 'num_iters', @_);
 }
@@ -175,7 +187,7 @@ sub addIndexVars1($$$) {
 
     push @$code,
         " // ** Begin scan over ".dimStr(@$loopDims).". **";
-    
+
     my $itype = indexType(@$loopDims);
 
     for my $pass (0..1) {
@@ -185,33 +197,41 @@ sub addIndexVars1($$$) {
 
             # Pass 0: iterations.
             if ($pass == 0) {
-                my $nvar = numItersVar($dim);
                 my $bvar = beginVar($dim);
                 my $evar = endVar($dim);
                 my $svar = stepVar($dim);
+                my $avar = alignVar($dim);
+                my $aavar = adjAlignVar($dim);
+                my $abvar = alignBeginVar($dim);
+                my $nvar = numItersVar($dim);
                 my $ntvar = numGroupsVar($dim);
                 my $tsvar = groupSizeVar($dim);
                 my $ntivar = numFullGroupItersVar($dim);
 
-                push @$code, 
-                " // Number of iterations to get from $bvar to (but not including) $evar, stepping by $svar.".
-                " This value is rounded up because the last iteration may cover fewer than $svar steps.",
-                " const $itype $nvar = (($evar - $bvar) + ($svar - 1)) / $svar;";
+                push @$code,
+                    " // Alignment must be less than or equal to step size.",
+                    " const $itype $aavar = std::min($avar, $svar);",
+                    " // Aligned beginning point. May be at or before $bvar.",
+                    " const $itype $abvar = yask::round_down_flr($bvar, $aavar);",
+                    " // Number of iterations to get from $abvar to (but not including) $evar, stepping by $svar.".
+                    " This value is rounded up because the last iteration may cover fewer than $svar steps.",
+                    " const $itype $nvar = yask::ceil_idiv_flr($evar - $abvar, $svar);";
 
                 # For grouped loops.
                 if ($features & $bGroup) {
 
                     # loop iterations within one group.
                     push @$code,
-                    " // Number of iterations in one full group in $dim dimension.".
-                    " This value is rounded up, effectively increasing the group size if needed".
-                        " to a multiple of $svar.",
-                    " const $itype $ntivar = std::min(($tsvar + ($svar - 1)) / $svar, $nvar);";
+                        " // Number of iterations in one full group in dimension $dim.".
+                        " This value is rounded up, effectively increasing the group size if needed".
+                        " to a multiple of $svar.".
+                        " A group is considered 'full' if it has the max number of iterations.",
+                        " const $itype $ntivar = std::min(yask::ceil_idiv_flr($tsvar, $svar), $nvar);";
 
                     # number of full groups.
                     push @$code, 
-                    " // Number of *full* groups in $dim dimension.",
-                    " const $itype $ntvar = $nvar / $ntivar;";
+                        " // Number of full groups in dimension $dim.",
+                        " const $itype $ntvar = $nvar / $ntivar;";
                 }
             }
 
@@ -224,8 +244,8 @@ sub addIndexVars1($$$) {
                 my $snvar = numItersVar(@subDims);
                 my $snval = join(' * ', map { numItersVar($_) } @subDims);
                 push @$code,
-                " // Number of iterations in $loopStr",
-                " const $itype $snvar = $snval;";
+                    " // Number of iterations in $loopStr",
+                    " const $itype $snvar = $snval;";
             }
         }
     }
@@ -239,9 +259,9 @@ sub addIndexVars2($$$$) {
     my $loopStack = shift;      # whole stack, including enclosing dims.
 
     my $itype = indexType(@$loopDims);
-    my $civar = loopIndexVar(@$loopDims);     # collapsed index var; everything based on this.
-    my $outerDim = $loopDims->[0];            # outer dim of these loops.
-    my $innerDim = $loopDims->[$#$loopDims];  # inner dim of these loops.
+    my $civar = loopIndexVar(@$loopDims); # collapsed index var; everything based on this.
+    my $outerDim = $loopDims->[0];        # outer dim of these loops.
+    my $innerDim = $loopDims->[$#$loopDims]; # inner dim of these loops.
 
     # Grouping.
     if ($features & $bGroup) {
@@ -273,10 +293,10 @@ sub addIndexVars2($$$$) {
 
             # dims up to (outside of) $i (empty for outer dim)
             my @outDims = @$loopDims[0 .. $i - 1];
-            
+
             # dims up to (outside of) and including $i.
             my @dims = @$loopDims[0 .. $i];
-            
+
             # dims after (inside of) $i (empty for inner dim)
             my @inDims = @$loopDims[$i + 1 .. $ndims - 1];
             my $inStr = dimStr(@inDims);
@@ -289,30 +309,30 @@ sub addIndexVars2($$$$) {
             my $tgStr = @inDims ?
                 "the set of groups across $inStr" : "this group";
             push @$code,
-            " // Number of iterations in $tgStr.",
-            " $itype $tgvar = $tgval;";
+                " // Number of iterations in $tgStr.",
+                " $itype $tgvar = $tgval;";
 
             # Index of this group in this dim.
             my $tivar = groupIndexVar($dim);
             my $tival = "$prevOvar / $tgvar";
             push @$code,
-            " // Index of this group in $dim dimension.",
-            " $itype $tivar = $tival;";
-            
+                " // Index of this group in dimension $dim.",
+                " $itype $tivar = $tival;";
+
             # 1D offset within group set.
             my $ovar = groupSetOffsetVar(@inDims);
             my $oval = "$prevOvar % $tgvar";
             push @$code,
-            " // Linear offset within $tgStr.",
-            " $itype $ovar = $oval;";
-            
+                " // Linear offset within $tgStr.",
+                " $itype $ovar = $oval;";
+
             # Size of this group in this dim.
             my $ltvar = numLocalGroupItersVar($dim);
             my $ltval = numItersVar($dim).
                 " - (".numGroupsVar($dim)." * ".numFullGroupItersVar($dim).")";
             push @$code,
-            " // Adjust number of iterations in this group in $dim dimension.",
-            " if ($tivar >= ".numGroupsVar($dim).")".
+                " // Adjust number of iterations in this group in dimension $dim.",
+                " if ($tivar >= ".numGroupsVar($dim).")".
                 "  $ltvar = $ltval;";
 
             # for next dim.
@@ -328,7 +348,7 @@ sub addIndexVars2($$$$) {
 
             # dims after (inside of) $i (empty for inner dim)
             my @inDims = @$loopDims[$i + 1 .. $ndims - 1];
-            
+
             # Determine offset within this group.
             my $dovar = groupOffsetVar($dim);
             my $doval = $ovar;
@@ -346,15 +366,15 @@ sub addIndexVars2($$$$) {
 
             # output offset in this dim.
             push @$code,
-            " // Offset within this group in $dim dimension.",
-            " $itype $dovar = $doval;";
+                " // Offset within this group in dimension $dim.",
+                " $itype $dovar = $doval;";
 
             # final index in this dim.
             my $divar = indexVar($dim);
             my $dival = numFullGroupItersVar($dim)." * $tivar + $dovar";
             push @$code,
-            " // Zero-based, unit-stride index for ".dimStr($dim).".",
-            " $itype $divar = $dival;";
+                " // Zero-based, unit-stride index for ".dimStr($dim).".",
+                " $itype $divar = $dival;";
         }
     }
 
@@ -402,8 +422,8 @@ sub addIndexVars2($$$$) {
 
             # output $divar.
             push @$code,
-            " // Zero-based, unit-stride index for ".dimStr($dim).".",
-            " idx_t $divar = $dival;";
+                " // Zero-based, unit-stride index for ".dimStr($dim).".",
+                " idx_t $divar = $dival;";
 
             # apply square-wave to inner 2 dimensions if requested.
             my $isInnerSquare = @$loopDims >=2 && $isInner && ($features & $bSquare);
@@ -412,17 +432,17 @@ sub addIndexVars2($$$$) {
                 my $divar2 = "index_x2";
                 my $avar = "lsb";
                 push @$code, 
-                " // Modify $prevDivar and $divar for 'square_wave' path.",
-                " if (($innerNvar > 1) && ($prevDivar/2 < $prevNvar/2)) {",
-                "  // Compute extended index over 2 iterations of $prevDivar.",
-                "  idx_t $divar2 = $divar + ($nvar * ($prevDivar & 1));",
-                "  // Select $divar from 0,0,1,1,2,2,... sequence",
-                "  $divar = $divar2 / 2;",
-                "  // Select $prevDivar adjustment value from 0,1,1,0,0,1,1, ... sequence.",
-                "  idx_t $avar = ($divar2 & 0x1) ^ (($divar2 & 0x2) >> 1);",
-                "  // Adjust $prevDivar +/-1 by replacing bit 0.",
-                "  $prevDivar = ($prevDivar & (idx_t)-2) | $avar;",
-                " } // square-wave.";
+                    " // Modify $prevDivar and $divar for 'square_wave' path.",
+                    " if (($innerNvar > 1) && ($prevDivar/2 < $prevNvar/2)) {",
+                    "  // Compute extended index over 2 iterations of $prevDivar.",
+                    "  idx_t $divar2 = $divar + ($nvar * ($prevDivar & 1));",
+                    "  // Select $divar from 0,0,1,1,2,2,... sequence",
+                    "  $divar = $divar2 / 2;",
+                    "  // Select $prevDivar adjustment value from 0,1,1,0,0,1,1, ... sequence.",
+                    "  idx_t $avar = ($divar2 & 0x1) ^ (($divar2 & 0x2) >> 1);",
+                    "  // Adjust $prevDivar +/-1 by replacing bit 0.",
+                    "  $prevDivar = ($prevDivar & (idx_t)-2) | $avar;",
+                    " } // square-wave.";
             }
 
             # reverse order of every-other traversal if requested.
@@ -430,12 +450,12 @@ sub addIndexVars2($$$$) {
             if (($features & $bSerp) && defined $prevDivar) {
                 if ($isInnerSquare) {
                     push @$code,
-                    " // Reverse direction of $divar after every-other iteration of $prevDivar for 'square_wave serpentine' path.",
-                    " if (($prevDivar & 2) == 2) $divar = $nvar - $divar - 1;";
+                        " // Reverse direction of $divar after every-other iteration of $prevDivar for 'square_wave serpentine' path.",
+                        " if (($prevDivar & 2) == 2) $divar = $nvar - $divar - 1;";
                 } else {
                     push @$code,
-                    " // Reverse direction of $divar after every iteration of $prevDivar for  'serpentine' path.",
-                    " if (($prevDivar & 1) == 1) $divar = $nvar - $divar - 1;";
+                        " // Reverse direction of $divar after every iteration of $prevDivar for  'serpentine' path.",
+                        " if (($prevDivar & 1) == 1) $divar = $nvar - $divar - 1;";
                 }
             }
 
@@ -444,19 +464,20 @@ sub addIndexVars2($$$$) {
             $prevNvar = $nvar;
         }
     }
-    
+
     # start and stop vars based on individual begin, end, step, and index vars.
     for my $dim (@$loopDims) {
         my $divar = indexVar($dim);
         my $stvar = startVar($dim);
         my $spvar = stopVar($dim);
         my $bvar = beginVar($dim);
+        my $abvar = alignBeginVar($dim);
         my $evar = endVar($dim);
         my $svar = stepVar($dim);
         push @$code,
-        " // This value of $divar covers ".dimStr($dim)." from $stvar to $spvar-1.",
-        " idx_t $stvar = $bvar + ($divar * $svar);",
-        " idx_t $spvar = std::min($stvar + $svar, $evar);";
+            " // This value of $divar covers ".dimStr($dim)." from $stvar to (but not including) $spvar.",
+            " idx_t $stvar = std::max($abvar + ($divar * $svar), $bvar);",
+            " idx_t $spvar = std::min($stvar + $svar, $evar);";
     }
 }
 
@@ -951,8 +972,9 @@ sub main() {
             "A 'ScanIndices' var must be defined in C++ code prior to including the generated code.\n",
             "  This struct contains the following 'Indices' elements:\n",
             "  'begin':       [in] first index to scan in each dim.\n",
-            "  'end':         [in] one past last index to scan in each dim.\n",
+            "  'end':         [in] value beyond last index to scan in each dim.\n",
             "  'step':        [in] space between each scan point in each dim.\n",
+            "  'align':       [in] alignment of steps after first one.\n",
             "  'group_size':  [in] min size of each group of points visisted first in a multi-dim loop.\n",
             "  'start':       [out] set to first scan point in called function(s) in inner loop(s).\n",
             "  'stop':        [out] set to one past last scan point in called function(s) in inner loop(s).\n",

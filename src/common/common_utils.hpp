@@ -25,16 +25,23 @@ IN THE SOFTWARE.
 #ifndef COMMON_UTILS_HPP
 #define COMMON_UTILS_HPP
 
+// MACRO for throw yask_exception
+#define THROW_YASK_EXCEPTION(message) do {                          \
+        yask_exception e;                                           \
+        std::stringstream err;                                      \
+        err << message;                                             \
+        e.add_message(err.str());                                   \
+        throw e;                                                    \
+    } while(0)
+
 namespace yask {
 
-// MACRO for throw yask_exception
-#define THROW_YASK_EXCEPTION(message)                               \
-    yask_exception e;                                               \
-    stringstream err;                                               \
-    err << message;                                                 \
-    e.add_message(err.str());                                       \
-    throw e;                                                        \
-
+    // Types of dependencies.
+    enum DepType {
+        cur_step_dep,
+        prev_step_dep,          // not yet used.
+        num_deps
+    };
 
 } // namespace yask.
 

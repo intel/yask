@@ -215,3 +215,101 @@ public:
 };
 
 REGISTER_STENCIL(TestReverseStencil);
+
+// Test the use of scratch-pad grids.
+
+class TestScratchStencil1 : public StencilRadiusBase {
+
+protected:
+
+    // Indices & dimensions.
+    MAKE_STEP_INDEX(t);           // step in time dim.
+    MAKE_DOMAIN_INDEX(x);         // spatial dim.
+
+    // Vars.
+    MAKE_GRID(data, t, x); // time-varying grid.
+
+    // Temporary storage.
+    MAKE_SCRATCH_GRID(t1, x);
+    
+public:
+
+    TestScratchStencil1(StencilList& stencils, int radius=2) :
+        StencilRadiusBase("test_scratch1", stencils, radius) { }
+
+    // Define equation to apply to all points in 'data' grid.
+    virtual void define() {
+
+        // Set scratch var w/an asymmetrical stencil.
+        GridValue u = data(t, x);
+        for (int r = 1; r <= _radius; r++)
+            u += data(t, x-r);
+        for (int r = 1; r <= _radius + 1; r++)
+            u += data(t, x+r);
+        t1(x) EQUALS u / (_radius * 2 + 2);
+
+        // Set data from scratch vars w/an asymmetrical stencil.
+        GridValue v = t1(x);
+        for (int r = 1; r <= _radius + 2; r++)
+            v += t1(x-r);
+        for (int r = 1; r <= _radius + 3; r++)
+            v += t1(x+r);
+        data(t+1, x) EQUALS v / (_radius * 2 + 6);
+    }
+};
+
+REGISTER_STENCIL(TestScratchStencil1);
+
+class TestScratchStencil2 : public StencilRadiusBase {
+
+protected:
+
+    // Indices & dimensions.
+    MAKE_STEP_INDEX(t);           // step in time dim.
+    MAKE_DOMAIN_INDEX(x);         // spatial dim.
+    MAKE_DOMAIN_INDEX(y);         // spatial dim.
+    MAKE_DOMAIN_INDEX(z);         // spatial dim.
+
+    // Vars.
+    MAKE_GRID(data, t, x, y, z); // time-varying grid.
+
+    // Temporary storage.
+    MAKE_SCRATCH_GRID(t1, x, y, z);
+    MAKE_SCRATCH_GRID(t2, x, y, z);
+    MAKE_SCRATCH_GRID(t3, x, y, z);
+    
+public:
+
+    TestScratchStencil2(StencilList& stencils, int radius=2) :
+        StencilRadiusBase("test_scratch2", stencils, radius) { }
+
+    // Define equation to apply to all points in 'data' grid.
+    virtual void define() {
+
+        // Set scratch vars.
+        GridValue ix = constNum(1.0);
+        GridValue iy = constNum(2.0);
+        GridValue iz = constNum(3.0);
+        for (int r = 1; r <= _radius; r++) {
+            ix += data(t, x-r, y, z);
+            iy += data(t, x, y+r, z);
+            iz += data(t, x, y, z-r) + data(t, x, y, z+r);
+        }
+        t1(x, y, z) EQUALS ix;
+        t2(x, y, z) EQUALS iy - iz;
+
+        // Set a scratch var from other scratch vars.
+        t3(x, y, z) EQUALS t1(x-1, y+1, z) + t2(x, y, z-1);
+
+        // Update data from scratch vars.
+        GridValue v = constNum(4.0);
+        for (int r = 1; r <= _radius; r++) {
+            v += t1(x-r, y, z) - t1(x+r, y, z);
+            v += t2(x, y, z-r) - t2(x, y, z);
+            v += t3(x-r, y-r, z) - t3(x+r, y+r, z);
+        }
+        data(t+1, x, y, z) EQUALS data(t, x, y, z) + v;
+    }
+};
+
+REGISTER_STENCIL(TestScratchStencil2);

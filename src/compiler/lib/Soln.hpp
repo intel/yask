@@ -109,6 +109,11 @@ namespace yask {
         // This must be implemented by each concrete stencil solution.
         virtual void define() = 0;
 
+        // Make a new grid.
+        virtual yc_grid_ptr newGrid(const std::string& name,
+                                    bool isScratch,
+                                    const std::vector<yc_index_node_ptr>& dims);
+        
         // stencil_solution APIs.
         // See yask_stencil_api.hpp for documentation.
         virtual void set_debug_output(yask_output_ptr debug) {
@@ -123,11 +128,22 @@ namespace yask {
         }
 
         virtual yc_grid_ptr new_grid(const std::string& name,
-                                     const std::vector<yc_index_node_ptr>& dims);
+                                     const std::vector<yc_index_node_ptr>& dims) {
+            return newGrid(name, false, dims);
+        }
         virtual yc_grid_ptr new_grid(const std::string& name,
                                      const std::initializer_list<yc_index_node_ptr>& dims) {
             std::vector<yc_index_node_ptr> dim_vec(dims);
-            return new_grid(name, dim_vec);
+            return newGrid(name, false, dim_vec);
+        }
+        virtual yc_grid_ptr new_scratch_grid(const std::string& name,
+                                             const std::vector<yc_index_node_ptr>& dims) {
+            return newGrid(name, true, dims);
+        }
+        virtual yc_grid_ptr new_scratch_grid(const std::string& name,
+                                             const std::initializer_list<yc_index_node_ptr>& dims) {
+            std::vector<yc_index_node_ptr> dim_vec(dims);
+            return newGrid(name, true, dim_vec);
         }
         virtual int get_num_grids() const {
             return int(_grids.size());
@@ -266,7 +282,9 @@ namespace yask {
 // The 'gvar' arg is the var name and the grid name.
 // The remaining args are the dimension names.
 #define MAKE_GRID(gvar, ...)                                            \
-    Grid gvar = Grid(#gvar, &get_stencil_solution(), ##__VA_ARGS__)
+    Grid gvar = Grid(#gvar, false, &get_stencil_solution(), ##__VA_ARGS__)
+#define MAKE_SCRATCH_GRID(gvar, ...)                                    \
+    Grid gvar = Grid(#gvar, true, &get_stencil_solution(), ##__VA_ARGS__)
 #define MAKE_SCALAR(gvar) MAKE_GRID(gvar)
 #define MAKE_ARRAY(gvar, d1) MAKE_GRID(gvar, d1)
 

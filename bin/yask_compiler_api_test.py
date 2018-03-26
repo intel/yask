@@ -48,6 +48,9 @@ if __name__ == "__main__":
     # Create a grid var.
     g1 = soln.new_grid("test_grid", [t, x, y, z])
 
+    # Create a scratch-grid var.
+    sg1 = soln.new_scratch_grid("scratch_grid", [x, y, z]);
+    
     # Create an expression for the new value.
     # This will average some of the neighboring points around the
     # current stencil application point in the current timestep.
@@ -60,10 +63,20 @@ if __name__ == "__main__":
     n1 = nfac.new_add_node(n1, g1.new_relative_grid_point([0,  0,  0,  1])) # behind.
     n2 = nfac.new_divide_node(n1, nfac.new_const_number_node(7)) # div by 7.
 
+    # Define value in scratch grid.
+    sn0 = sg1.new_relative_grid_point([0, 0, 0]) # center-point.
+    sn1 = nfac.new_equation_node(sn0, n2) # equate to expr n2.
+    print("Scratch-grid equation before formatting: " + sn1.format_simple())
+
+    # Use values in scratch grid.
+    sn2 = sg1.new_relative_grid_point([1, 0, 0])
+    sn3 = nfac.new_add_node(sn2, sg1.new_relative_grid_point([0, 1, 0]))
+    sn4 = nfac.new_add_node(sn3, sg1.new_relative_grid_point([0, 0, 1]))
+    
     # Create an equation to define the value at the next timestep.
     n3 = g1.new_relative_grid_point([1, 0, 0, 0]) # center-point at next timestep.
-    n4 = nfac.new_equation_node(n3, n2) # equate to expr n2.
-    print("Equation before formatting: " + n4.format_simple())
+    n4 = nfac.new_equation_node(n3, sn4) # equate to expr from scratch grid.
+    print("Main-grid equation before formatting: " + n4.format_simple())
     print("Solution '" + soln.get_name() + "' contains " +
           str(soln.get_num_grids()) + " grid(s), and " +
           str(soln.get_num_equations()) + " equation(s).")

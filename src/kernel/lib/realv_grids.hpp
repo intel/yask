@@ -50,15 +50,17 @@ namespace yask {
         // All values are in units of reals, not underlying elements, if different.
         // Settings for domain dims | non-domain dims.
         Indices _domains;   // rank domain sizes copied from the solution | alloc size.
-        Indices _pads;      // extra space around domains | zero.
-        Indices _halos;     // space within pads for halo exchange | zero.
-        Indices _offsets;   // offsets of this rank in overall domain | first index.
-        Indices _vec_lens;  // num reals in each elem | one.
+        Indices _left_pads, _right_pads; // extra space around domains (left: actual, right: requested) | zero.
+        Indices _left_halos, _right_halos; // space within pads for halo exchange | zero.
+        Indices _offsets;   // offsets of this grid in overall domain | first index.
+        Indices _local_offsets; // offsets of this grid in this rank | first index.
         Indices _allocs;    // actual grid allocation in reals | as domain dims.
+        Indices _vec_lens;  // num reals in each elem | one.
 
         // Indices in vectors for sizes that are always vec lens (to avoid division).
-        Indices _vec_pads;
+        Indices _vec_left_pads;
         Indices _vec_allocs;
+        Indices _vec_local_offsets;
 
         // Whether step dim is used.
         // If true, will always be in Indices::step_posn.
@@ -73,7 +75,10 @@ namespace yask {
         bool _is_col_major = false;
 
         // Whether to resize this grid based on solution parameters.
-        bool _do_resize = true;
+        bool _fixed_size = false;
+
+        // Whether this is a scratch grid;
+        bool _is_scratch = false;
 
         // Convenience function to format indices like
         // "x=5, y=3".
@@ -82,6 +87,26 @@ namespace yask {
                                             std::string infix="=",
                                             std::string prefix="",
                                             std::string suffix="") const;
+
+        // Determine required padding from halos.
+        // Does not include user-specified min padding or
+        // final rounding for left pad.
+        virtual Indices getReqdPad(const Indices& halos) const {
+            Indices mp(halos);
+            for (int i = 0; i < get_num_dims(); i++) {
+
+                // For scratch grids, halo area must be written to.  Halo is sum
+                // of dependent's write halo and dependency's read halo, but
+                // these two components are not stored individually.  Write halo
+                // will be expanded to full vec len during computation,
+                // requiring load from read halo beyond full vec len.  Worst
+                // case is when write halo is one and rest is read halo.  So if
+                // halo >= 1, padding should be one full vec plus halo-1.
+                if (halos[i] >= 1)
+                    mp[i] = _vec_lens[i] + halos[i]-1;
+            }
+            return mp;
+        }
 
         // Check whether dim exists and is of allowed type.
         virtual void checkDimType(const std::string& dim,
@@ -96,31 +121,18 @@ namespace yask {
                          bool die_on_failure) {
             auto* tp = dynamic_cast<GT*>(_ggb);
             if (!tp) {
-                if (die_on_failure) {
-                    //TODO: Use THROW_YASK_EXCEPTION MACRO
-                    yask_exception e;
-                    std::stringstream err;
-                    err << "Error in share_data(): "
-                        "target grid not of expected type (internal inconsistency).\n";
-                    e.add_message(err.str());
-                    throw e;
-                }
+                if (die_on_failure)
+                    THROW_YASK_EXCEPTION("Error in share_data(): "
+                                         "target grid not of expected type (internal inconsistency)");
                 return false;
             }
             auto* sp = dynamic_cast<GT*>(src->_ggb);
             if (!sp) {
-                if (die_on_failure) {
-                    //TODO: Use THROW_YASK_EXCEPTION MACRO
-                    yask_exception e;
-                    std::stringstream err;
-                    err << "Error in share_data(): source grid ";
-                    src->print_info(err);
-                    err << " not of same type as target grid ";
-                    print_info(err);
-                    err << ".\n";
-                    e.add_message(err.str());
-                    throw e;
-                }
+                if (die_on_failure)
+                    THROW_YASK_EXCEPTION("Error in share_data(): source grid " <<
+                                         src->make_info_string() <<
+                                         " not of same type as target grid ";
+                                         make_info_string());
                 return false;
             }
 
@@ -155,13 +167,17 @@ namespace yask {
             // Init indices.
             int n = int(ndims);
             _domains.setFromConst(0, n);
-            _pads.setFromConst(0, n);
-            _halos.setFromConst(0, n);
+            _left_pads.setFromConst(0, n);
+            _right_pads.setFromConst(0, n);
+            _left_halos.setFromConst(0, n);
+            _right_halos.setFromConst(0, n);
             _offsets.setFromConst(0, n);
+            _local_offsets.setFromConst(0, n);
             _vec_lens.setFromConst(1, n);
             _allocs.setFromConst(1, n);
-            _vec_pads.setFromConst(1, n);
+            _vec_left_pads.setFromConst(1, n);
             _vec_allocs.setFromConst(1, n);
+            _vec_local_offsets.setFromConst(0, n);
             
         }
         virtual ~YkGridBase() { }
@@ -172,8 +188,12 @@ namespace yask {
         virtual void set_dirty_all(bool dirty);
 
         // Resize flag accessors.
-        virtual bool is_fixed_size() const { return !_do_resize; }
-        virtual void set_resize(bool resize) { _do_resize = resize; }
+        virtual bool is_fixed_size() const { return _fixed_size; }
+        virtual void set_fixed_size(bool is_fixed) { _fixed_size = is_fixed; }
+
+        // Scratch accessors.
+        virtual bool is_scratch() const { return _is_scratch; }
+        virtual void set_scratch(bool is_scratch) { _is_scratch = is_scratch; }
         
         // Lookup position by dim name.
         // Return -1 or die if not found, depending on flag.
@@ -232,8 +252,8 @@ namespace yask {
             return _ggb->get_ostr();
         }
 
-        // Print some info to 'os'.
-        virtual void print_info(std::ostream& os) const =0;
+        // Make a human-readable description.
+        virtual std::string make_info_string() const =0;
   
         // Check for equality.
         // Return number of mismatches greater than epsilon.
@@ -343,20 +363,29 @@ namespace yask {
         // They are not protected because they are used from outside
         // this class hierarchy.
         GET_GRID_API(_get_offset)
+        GET_GRID_API(_get_local_offset)
         GET_GRID_API(_get_first_alloc_index)
         GET_GRID_API(_get_last_alloc_index)
         SET_GRID_API(_set_domain_size)
-        SET_GRID_API(_set_pad_size)
+        SET_GRID_API(_set_left_pad_size)
+        SET_GRID_API(_set_right_pad_size)
         SET_GRID_API(_set_offset)
+        SET_GRID_API(_set_local_offset)
 
         // Exposed APIs.
         GET_GRID_API(get_rank_domain_size)
         GET_GRID_API(get_first_rank_domain_index)
         GET_GRID_API(get_last_rank_domain_index)
+        GET_GRID_API(get_left_halo_size)
+        GET_GRID_API(get_right_halo_size)
         GET_GRID_API(get_halo_size)
         GET_GRID_API(get_first_rank_halo_index)
         GET_GRID_API(get_last_rank_halo_index)
+        GET_GRID_API(get_left_extra_pad_size)
+        GET_GRID_API(get_right_extra_pad_size)
         GET_GRID_API(get_extra_pad_size)
+        GET_GRID_API(get_left_pad_size)
+        GET_GRID_API(get_right_pad_size)
         GET_GRID_API(get_pad_size)
         GET_GRID_API(get_alloc_size)
         GET_GRID_API(get_first_rank_alloc_index)
@@ -364,8 +393,14 @@ namespace yask {
         GET_GRID_API(get_first_misc_index)
         GET_GRID_API(get_last_misc_index)
 
+        SET_GRID_API(set_left_halo_size)
+        SET_GRID_API(set_right_halo_size)
         SET_GRID_API(set_halo_size)
+        SET_GRID_API(set_left_min_pad_size)
+        SET_GRID_API(set_right_min_pad_size)
         SET_GRID_API(set_min_pad_size)
+        SET_GRID_API(set_left_extra_pad_size)
+        SET_GRID_API(set_right_extra_pad_size)
         SET_GRID_API(set_extra_pad_size)
         SET_GRID_API(set_alloc_size)
         SET_GRID_API(set_first_misc_index)
@@ -486,9 +521,9 @@ namespace yask {
             return _data.get_num_dims();
         }
 
-        // Print some info to 'os'.
-        virtual void print_info(std::ostream& os) const {
-            _data.print_info(os, "FP");
+        // Make a human-readable description.
+        virtual std::string make_info_string() const {
+            return _data.make_info_string("FP");
         }
 
         // Init data.
@@ -527,7 +562,7 @@ namespace yask {
 
                     // Adjust for offset and padding.
                     // This gives a 0-based local element index.
-                    adj_idxs[i] = idxs[i] - _offsets[i] + _pads[i];
+                    adj_idxs[i] = idxs[i] - _offsets[i] + _left_pads[i];
                 }
             }
             
@@ -633,9 +668,9 @@ namespace yask {
             return _data.get_num_dims();
         }
 
-        // Print some info to 'os'.
-        virtual void print_info(std::ostream& os) const {
-            _data.print_info(os, "SIMD FP");
+        // Make a human-readable description.
+        virtual std::string make_info_string() const {
+            return _data.make_info_string("SIMD FP");
         }
         
         // Init data.
@@ -694,7 +729,7 @@ namespace yask {
 
                     // Adjust for offset and padding.
                     // This gives a positive 0-based local element index.
-                    idx_t ai = idxs[i] - _offsets[i] + _pads[i];
+                    idx_t ai = idxs[i] - _offsets[i] + _left_pads[i];
                     assert(ai >= 0);
                     uidx_t adj_idx = uidx_t(ai);
                     
@@ -751,7 +786,8 @@ namespace yask {
                                    bool checkBounds=true) final {
 
             const real_t* p =
-                const_cast<const YkVecGrid*>(this)->getElemPtr(idxs, alloc_step_idx, checkBounds);
+                const_cast<const YkVecGrid*>(this)->getElemPtr(idxs, alloc_step_idx,
+                                                               checkBounds);
             return const_cast<real_t*>(p);
         }
 
@@ -772,13 +808,13 @@ namespace yask {
         // Indices must be normalized and rank-relative.
         // It's important that this function be efficient, since
         // it's indiectly used from the stencil kernel.
-        inline const real_vec_t* getVecPtrNorm(const Indices& idxs,
+        inline const real_vec_t* getVecPtrNorm(const Indices& vec_idxs,
                                                idx_t alloc_step_idx,
                                                bool checkBounds=true) const {
 
 #ifdef TRACE_MEM
             _data.get_ostr() << get_name() << "." << "YkVecGrid::getVecPtrNorm(" <<
-                idxs.makeValStr(get_num_dims()) << ")";
+                vec_idxs.makeValStr(get_num_dims()) << ")";
 #endif
 
             static constexpr int nvls = sizeof...(_templ_vec_lens);
@@ -791,7 +827,7 @@ namespace yask {
             // Special handling for step index.
             auto sp = Indices::step_posn;
             if (_wrap_step_idx) {
-                assert(alloc_step_idx == _wrap_step(idxs[sp]));
+                assert(alloc_step_idx == _wrap_step(vec_idxs[sp]));
                 adj_idxs[sp] = alloc_step_idx;
             }
             
@@ -802,7 +838,7 @@ namespace yask {
 
                     // Adjust for padding.
                     // This gives a 0-based local *vector* index.
-                    adj_idxs[i] = idxs[i] + _vec_pads[i];
+                    adj_idxs[i] = vec_idxs[i] - _vec_local_offsets[i] + _vec_left_pads[i];
                 }
             }
 
@@ -817,24 +853,25 @@ namespace yask {
         }
 
         // Non-const version.
-        inline real_vec_t* getVecPtrNorm(const Indices& idxs,
+        inline real_vec_t* getVecPtrNorm(const Indices& vec_idxs,
                                          idx_t alloc_step_idx,
                                          bool checkBounds=true) {
 
             const real_vec_t* p =
-                const_cast<const YkVecGrid*>(this)->getVecPtrNorm(idxs, alloc_step_idx, checkBounds);
+                const_cast<const YkVecGrid*>(this)->getVecPtrNorm(vec_idxs,
+                                                                  alloc_step_idx, checkBounds);
             return const_cast<real_vec_t*>(p);
         }
 
         // Read one vector.
         // Indices must be normalized and rank-relative.
-        inline real_vec_t readVecNorm(const Indices& idxs,
+        inline real_vec_t readVecNorm(const Indices& vec_idxs,
                                       idx_t alloc_step_idx,
                                       int line) const {
-            const real_vec_t* vp = getVecPtrNorm(idxs, alloc_step_idx);
+            const real_vec_t* vp = getVecPtrNorm(vec_idxs, alloc_step_idx);
             real_vec_t v = *vp;
 #ifdef TRACE_MEM
-            printVecNorm("readVecNorm", idxs, v, line);
+            printVecNorm("readVecNorm", vec_idxs, v, line);
 #endif
             return v;
         }
@@ -842,13 +879,13 @@ namespace yask {
         // Write one vector.
         // Indices must be normalized and rank-relative.
         inline void writeVecNorm(real_vec_t val,
-                                 const Indices& idxs,
+                                 const Indices& vec_idxs,
                                  idx_t alloc_step_idx,
                                  int line) {
-            real_vec_t* vp = getVecPtrNorm(idxs, alloc_step_idx);
+            real_vec_t* vp = getVecPtrNorm(vec_idxs, alloc_step_idx);
             *vp = val;
 #ifdef TRACE_MEM
-            printVecNorm("writeVecNorm", idxs, val, line);
+            printVecNorm("writeVecNorm", vec_idxs, val, line);
 #endif
         }
 
@@ -856,15 +893,15 @@ namespace yask {
         // Indices must be normalized and rank-relative.
         template <int level>
         ALWAYS_INLINE
-        void prefetchVecNorm(const Indices& idxs,
+        void prefetchVecNorm(const Indices& vec_idxs,
                              idx_t alloc_step_idx,
                              int line) const {
 #ifdef TRACE_MEM
             std::cout << "prefetchVecNorm<" << level << ">(" <<
-                makeIndexString(idxs.multElements(_vec_lens)) <<
+                makeIndexString(vec_idxs.multElements(_vec_lens)) <<
                 ")" << std::endl;
 #endif
-            auto p = getVecPtrNorm(idxs, alloc_step_idx, false);
+            auto p = getVecPtrNorm(vec_idxs, alloc_step_idx, false);
             prefetch<level>(p);
 #ifdef MODEL_CACHE
             cache_model.prefetch(p, level, line);

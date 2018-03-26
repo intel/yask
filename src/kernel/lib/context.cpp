@@ -46,6 +46,7 @@ namespace yask {
     GET_SOLN_API(get_rank_index, _opts->_rank_indices[dim], false, true, false)
 #undef GET_SOLN_API
 
+    // The grid sizes updated any time these settings are changed.
 #define SET_SOLN_API(api_name, expr, step_ok, domain_ok, misc_ok)       \
     void StencilContext::api_name(const string& dim, idx_t n) {         \
         checkDimType(dim, #api_name, step_ok, domain_ok, misc_ok);      \
@@ -131,7 +132,8 @@ namespace yask {
             end_t = step_t;
         }
 
-        // Begin, end, last tuples.
+        // Begin & end tuples.
+        // Size based on overall context bounding box.
         IdxTuple begin(_dims->_stencil_dims);
         begin.setVals(bb_begin, false);
         begin[step_dim] = begin_t;
@@ -142,17 +144,30 @@ namespace yask {
         TRACE_MSG("calc_rank_ref: " << begin.makeDimValStr() << " ... (end before) " <<
                   end.makeDimValStr());
 
-        // Use the number of threads for a region to help avoid expensive
-        // thread-number changing.
-        set_region_threads();
-        
-        // Indices needed for the generated misc loops.
-        ScanIndices misc_idxs(ndims);
-        misc_idxs.begin = begin;
-        misc_idxs.end = end;
+        // Force region & block sizes to whole rank size so that scratch
+        // grids will be large enough.
+        _opts->_region_sizes.setValsSame(0);
+        _opts->_block_sizes.setValsSame(0);
+        _at.apply();
 
+        // Use only one set of scratch grids.
+        int scratch_grid_idx = 0;
+        
+        // Indices to loop through.
+        // Init from begin & end tuples.
+        ScanIndices rank_idxs(*_dims, false);
+        rank_idxs.begin = begin;
+        rank_idxs.end = end;
+
+        // Set offsets in scratch grids.
+        // Requires scratch grids to be allocated for whole
+        // rank instead of smaller grid size.
+        update_scratch_grids(scratch_grid_idx, rank_idxs);
+            
         // Initial halo exchange.
         // (Needed in case there are 0 time-steps).
+        // TODO: get rid of all halo exchanges in this function,
+        // and calculate overall problem in one rank.
         exchange_halos_all();
 
         // Number of iterations to get from begin_t, stopping before end_t,
@@ -168,28 +183,38 @@ namespace yask {
 
             // Set indices that will pass through generated code
             // because the step loop is coded here.
-            misc_idxs.index[step_posn] = index_t;
-            misc_idxs.start[step_posn] = start_t;
-            misc_idxs.stop[step_posn] = stop_t;
-            misc_idxs.step[step_posn] = step_t;
-        
+            rank_idxs.index[step_posn] = index_t;
+            rank_idxs.start[step_posn] = start_t;
+            rank_idxs.stop[step_posn] = stop_t;
+            rank_idxs.step[step_posn] = step_t;
+
             // Loop thru groups.
+            // For this reference-code implementation, we
+            // will do all stencil groups at this level,
+            // even scratch-grid ones.
             for (auto* sg : stGroups) {
 
                 // Halo exchange(s) needed for this group.
-                // TODO: do overall problem here w/o halos to catch
-                // halo bugs during validation.
                 exchange_halos_all();
 
+                // Indices needed for the generated misc loops.  Will normally be a
+                // copy of rank_idxs except when updating scratch-grids.
+                ScanIndices misc_idxs = sg->adjust_scan(scratch_grid_idx, rank_idxs);
+                misc_idxs.step.setFromConst(1); // ensure unit step.
+                
                 // Define misc-loop function.  Since step is always 1, we
                 // ignore misc_stop.  If point is in sub-domain for this
                 // group, then evaluate the reference scalar code.
-#define misc_fn(misc_idxs)                                  \
-                if (sg->is_in_valid_domain(misc_idxs.start)) \
-                    sg->calc_scalar(misc_idxs.start)
+#define misc_fn(misc_idxs)   do {                                       \
+                    if (sg->is_in_valid_domain(misc_idxs.start))        \
+                        sg->calc_scalar(scratch_grid_idx, misc_idxs.start);   \
+                } while(0)
                 
                 // Scan through n-D space.
-                TRACE_MSG("calc_rank_ref: step " << start_t);
+                TRACE_MSG("calc_rank_ref: step " << start_t <<
+                          " in group '" << sg->get_name() << "': " <<
+                          misc_idxs.begin.makeValStr(ndims) <<
+                          " ... (end before) " << misc_idxs.end.makeValStr(ndims));
 #include "yask_misc_loops.hpp"
 #undef misc_fn
                 
@@ -216,6 +241,7 @@ namespace yask {
         auto step_posn = Indices::step_posn;
         idx_t begin_t = first_step_index;
         idx_t step_t = _opts->_region_sizes[step_dim] * _dims->_step_dir;
+        assert(step_t);
         idx_t end_t = last_step_index + _dims->_step_dir; // end is beyond last.
         int ndims = _dims->_stencil_dims.size();
 
@@ -232,9 +258,8 @@ namespace yask {
 
         TRACE_MSG("run_solution: " << begin.makeDimValStr() << " ... (end before) " <<
                   end.makeDimValStr() << " by " << step.makeDimValStr());
-        if (!bb_valid) {
-            THROW_YASK_EXCEPTION("Error: run_solution() called without calling prepare_solution() first.\n");
-        }
+        if (!bb_valid)
+            THROW_YASK_EXCEPTION("Error: run_solution() called without calling prepare_solution() first");
         if (bb_size < 1) {
             TRACE_MSG("nothing to do in solution");
             return;
@@ -280,7 +305,7 @@ namespace yask {
                   end.makeDimValStr());
 
         // Indices needed for the 'rank' loops.
-        ScanIndices rank_idxs(ndims);
+        ScanIndices rank_idxs(*_dims, true);
         rank_idxs.begin = begin;
         rank_idxs.end = end;
         rank_idxs.step = step;
@@ -293,7 +318,7 @@ namespace yask {
 
         // Number of iterations to get from begin_t to end_t-1,
         // stepping by step_t.
-        const idx_t num_t = (abs(end_t - begin_t) + (abs(step_t) - 1)) / abs(step_t);
+        const idx_t num_t = CEIL_DIV(abs(end_t - begin_t), abs(step_t));
         for (idx_t index_t = 0; index_t < num_t; index_t++)
         {
             YaskTimer rtime;   // just for these step_t steps.
@@ -304,6 +329,7 @@ namespace yask {
             const idx_t stop_t = (step_t > 0) ?
                 min(start_t + step_t, end_t) :
                 max(start_t + step_t, end_t);
+            idx_t this_num_t = abs(stop_t - start_t);
 
             // Set indices that will pass through generated code.
             rank_idxs.index[step_posn] = index_t;
@@ -311,13 +337,17 @@ namespace yask {
             rank_idxs.stop[step_posn] = stop_t;
             rank_idxs.step[step_posn] = step_t;
             
-            // If doing only one time step in a region (default), loop
+            // If doing only one step in a region (default), loop
             // through groups here, and do only one group at a
             // time in calc_region(). This is similar to loop in
             // calc_rank_ref().
-            if (abs(step_t) == 1) {
+            if (this_num_t == 1) {
 
                 for (auto* sg : stGroups) {
+
+                    // Don't do scratch updates here.
+                    if (sg->is_scratch())
+                        continue;
 
                     // Halo exchange(s) needed for this group.
                     exchange_halos(start_t, stop_t, *sg);
@@ -329,7 +359,8 @@ namespace yask {
 
                     // Include automatically-generated loop code that calls
                     // calc_region() for each region.
-                    TRACE_MSG("run_solution: step " << start_t);
+                    TRACE_MSG("run_solution: step " << start_t <<
+                              " in group '" << sg->get_name() << "'");
 #include "yask_rank_loops.hpp"
 
                     // Remember grids that have been written to by this group,
@@ -338,19 +369,17 @@ namespace yask {
                 }
             }
 
-            // If doing more than one time step in a region (temporal wave-front),
+            // If doing more than one step in a region (temporal wave-front),
             // must loop through all groups in calc_region().
             else {
 
                 // TODO: enable reverse time w/wave-fronts.
-                if (step_t < 0) {
-                    THROW_YASK_EXCEPTION("Error: reverse time with wave-fronts not yet supported.\n");
-                }
+                if (step_t < 0)
+                    THROW_YASK_EXCEPTION("Error: reverse solution with wave-fronts not yet supported");
 
                 // TODO: enable halo exchange for wave-fronts.
-                if (_env->num_ranks > 1) {
-                    THROW_YASK_EXCEPTION("Error: halo exchange with wave-fronts not yet supported.\n");
-                }
+                if (_env->num_ranks > 1)
+                    THROW_YASK_EXCEPTION("Error: halo exchange with wave-fronts not yet supported");
                 
                 // Eval all stencil groups.
                 StencilGroupSet* stGroup_ptr = NULL;
@@ -360,13 +389,13 @@ namespace yask {
 #include "yask_rank_loops.hpp"
             }
 
-            steps_done += abs(step_t);
+            steps_done += this_num_t;
             rtime.stop();   // for these steps.
 
             // Call the auto-tuner to evaluate these steps.
             // TODO: remove MPI time.
             auto elapsed_time = rtime.get_elapsed_secs();
-            _at.eval(abs(step_t), elapsed_time);
+            _at.eval(this_num_t, elapsed_time);
             
         } // step loop.
 
@@ -415,7 +444,7 @@ namespace yask {
                   " ... (end before) " << rank_idxs.stop.makeValStr(ndims));
 
         // Init region begin & end from rank start & stop indices.
-        ScanIndices region_idxs(ndims);
+        ScanIndices region_idxs(*_dims, true);
         region_idxs.initFromOuter(rank_idxs);
 
         // Make a copy of the original start and stop indices because
@@ -424,9 +453,8 @@ namespace yask {
         Indices rank_stop(rank_idxs.stop);
 
         // Not yet supporting temporal blocking.
-        if (_opts->_block_sizes[step_dim] != 1) {
-            THROW_YASK_EXCEPTION("Error: temporal blocking not yet supported." << endl);
-        }
+        if (_opts->_block_sizes[step_dim] != 1)
+            THROW_YASK_EXCEPTION("Error: temporal blocking not yet supported");
         
         // Steps within a region are based on block sizes.
         region_idxs.step = _opts->_block_sizes;
@@ -438,9 +466,9 @@ namespace yask {
         idx_t begin_t = region_idxs.begin[step_posn];
         idx_t end_t = region_idxs.end[step_posn];
         idx_t step_t = region_idxs.step[step_posn];
-        const idx_t num_t = (abs(end_t - begin_t) + (abs(step_t) - 1)) / abs(step_t);
-        for (idx_t index_t = 0; index_t < num_t; index_t++)
-        {
+        const idx_t num_t = CEIL_DIV(abs(end_t - begin_t), abs(step_t));
+        for (idx_t index_t = 0; index_t < num_t; index_t++) {
+            
             // This value of index_t steps from start_t to stop_t-1.
             const idx_t start_t = begin_t + (index_t * step_t);
             const idx_t stop_t = (step_t > 0) ?
@@ -454,66 +482,74 @@ namespace yask {
             
             // Stencil groups to evaluate at this time step.
             for (auto* sg : stGroups) {
-                if (!stGroup_set || stGroup_set->count(sg)) {
-                    TRACE_MSG("calc_region: stencil-group '" << sg->get_name() << "' w/BB " <<
-                              sg->bb_begin.makeDimValStr() << " ... (end before) " <<
-                              sg->bb_end.makeDimValStr());
 
-                    // For wavefront adjustments, see conceptual diagram in
-                    // run_solution().  In this function, 1 of the 4
-                    // parallelogram-shaped regions is being evaluated.  At
-                    // each time-step, the parallelogram may be trimmed
-                    // based on the BB.
-                    
-                    // Actual region boundaries must stay within BB for this group.
-                    // Note that i-loop is over domain vars only (skipping over step var).
-                    bool ok = true;
-                    for (int i = step_posn + 1; i < ndims; i++) {
-                        auto& dname = _dims->_stencil_dims.getDimName(i);
-                        assert(sg->bb_begin.lookup(dname));
-                        region_idxs.begin[i] = max<idx_t>(rank_start[i], sg->bb_begin[dname]);
-                        assert(sg->bb_end.lookup(dname));
-                        region_idxs.end[i] = min<idx_t>(rank_stop[i], sg->bb_end[dname]);
-                        if (region_idxs.end[i] <= region_idxs.begin[i])
-                            ok = false;
-                    }
-                    TRACE_MSG("calc_region, after trimming: " <<
-                              region_idxs.begin.makeValStr(ndims) <<
-                              " ... (end before) " << region_idxs.end.makeValStr(ndims));
-                    
-                    // Only need to loop through the spatial extent of the
-                    // region if any of its blocks are at least partly
-                    // inside the domain. For overlapping regions, they may
-                    // start outside the domain but enter the domain as time
-                    // progresses and their boundaries shift. So, we don't
-                    // want to return if this condition isn't met.
-                    if (ok) {
+                // Don't do scratch updates here.
+                if (sg->is_scratch())
+                    continue;
 
-                        // Include automatically-generated loop code that
-                        // calls calc_block() for each block in this region.
-                        // Loops through x from begin_rx to end_rx-1;
-                        // similar for y and z.  This code typically
-                        // contains the outer OpenMP loop(s).
+                // Group not selected.
+                if (stGroup_set && !stGroup_set->count(sg))
+                    continue;
+                
+                TRACE_MSG("calc_region: stencil-group '" << sg->get_name() << "' w/BB " <<
+                          sg->bb_begin.makeDimValStr() << " ... (end before) " <<
+                          sg->bb_end.makeDimValStr());
+
+                // For wavefront adjustments, see conceptual diagram in
+                // run_solution().  In this function, one of the
+                // parallelogram-shaped regions is being evaluated.  At
+                // each time-step, the parallelogram may be trimmed
+                // based on the BB.
+                    
+                // Actual region boundaries must stay within BB for this group.
+                // Note that i-loop is over domain vars only (skipping over step var).
+                bool ok = true;
+                for (int i = step_posn + 1; i < ndims; i++) {
+                    auto& dname = _dims->_stencil_dims.getDimName(i);
+                    assert(sg->bb_begin.lookup(dname));
+                    region_idxs.begin[i] = max<idx_t>(rank_start[i], sg->bb_begin[dname]);
+                    assert(sg->bb_end.lookup(dname));
+                    region_idxs.end[i] = min<idx_t>(rank_stop[i], sg->bb_end[dname]);
+                    if (region_idxs.end[i] <= region_idxs.begin[i])
+                        ok = false;
+                }
+                TRACE_MSG("calc_region, after trimming: " <<
+                          region_idxs.begin.makeValStr(ndims) <<
+                          " ... (end before) " << region_idxs.end.makeValStr(ndims));
+                    
+                // Only need to loop through the spatial extent of the
+                // region if any of its blocks are at least partly
+                // inside the domain. For overlapping regions, they may
+                // start outside the domain but enter the domain as time
+                // progresses and their boundaries shift. So, we don't
+                // want to return if this condition isn't met.
+                if (ok) {
+
+                    // Include automatically-generated loop code that
+                    // calls calc_block() for each block in this region.
+                    // Loops through x from begin_rx to end_rx-1;
+                    // similar for y and z.  This code typically
+                    // contains the outer OpenMP loop(s).
 #include "yask_region_loops.hpp"
 
-                    }
+                }
             
-                    // Shift spatial region boundaries for next iteration to
-                    // implement temporal wavefront.  We only shift
-                    // backward, so region loops must increment. They may do
-                    // so in any order.  TODO: shift only what is needed by
-                    // this group, not the global max.
-                    // Note that i-loop is over domain vars only (skipping over step var).
-                    for (int i = step_posn + 1; i < ndims; i++) {
-                        auto& dname = _dims->_stencil_dims.getDimName(i);
-                        auto angle = angles[dname];
-                        rank_start[i] -= angle;
-                        rank_stop[i] -= angle;
-                    }
-                }            
+                // Shift spatial region boundaries for next iteration to
+                // implement temporal wavefront.  We only shift
+                // backward, so region loops must increment. They may do
+                // so in any order.  TODO: shift only what is needed by
+                // this group, not the global max.
+                // Note that i-loop is over domain vars only (skipping over step var).
+                for (int i = step_posn + 1; i < ndims; i++) {
+                    auto& dname = _dims->_stencil_dims.getDimName(i);
+                    auto angle = angles[dname];
+                    rank_start[i] -= angle;
+                    rank_stop[i] -= angle;
+                }
+
             } // stencil groups.
         } // time.
-    }
+    } // calc_region.
 
     // Reset the auto-tuner.
     void StencilContext::AT::clear(bool mark_done, bool verbose) {
@@ -570,7 +606,7 @@ namespace yask {
                 center_block.makeDimValStr(" * ") << endl;
             os << "auto-tuner: starting search radius: " << radius << endl;
         }
-    }
+    } // clear.
 
     // Evaluate the previous run and take next auto-tuner step.
     void StencilContext::AT::eval(idx_t steps, double etime) {
@@ -760,13 +796,32 @@ namespace yask {
         apply();
         TRACE_MSG2("auto-tuner: next block-size "  <<
                   _opts->_block_sizes.makeDimValStr(" * "));
+    } // eval.
+
+    // Apply auto-tuner settings.
+    void StencilContext::AT::apply() {
+        auto _opts = _context->_opts;
+        auto _env = _context->_env;
+
+        // Change block-related sizes to 0 so adjustSettings()
+        // will set them to the default.
+        // TODO: tune sub-block sizes also.
+        _opts->_sub_block_sizes.setValsSame(0);
+        _opts->_sub_block_group_sizes.setValsSame(0);
+        _opts->_block_group_sizes.setValsSame(0);
+                
+        // Make sure everything is resized based on block size.
+        _opts->adjustSettings(nullop->get_ostream(), _env);
+
+        // Reallocate scratch data based on block size.
+        _context->allocScratchData(nullop->get_ostream());
     }
     
     // Apply auto-tuning to some of the settings.
     void StencilContext::run_auto_tuner_now(bool verbose) {
-        if (!bb_valid) {
-            THROW_YASK_EXCEPTION("Error: tune_settings() called without calling prepare_solution() first.\n");
-        }
+        if (!bb_valid)
+            THROW_YASK_EXCEPTION("Error: tune_settings() called without calling prepare_solution() first");
+
         ostream& os = get_ostr();
         os << "Auto-tuning...\n" << flush;
         YaskTimer at_timer;
@@ -785,16 +840,16 @@ namespace yask {
         // If wave-fronts are enabled, run a max number of these steps.
         // TODO: only run one region during AT.
         idx_t region_steps = _opts->_region_sizes[_dims->_step_dim];
-        idx_t step_t = min(region_steps, idx_t(3));
+        idx_t step_t = min(region_steps, _at.max_step_t);
         
         // Run time-steps until AT converges.
         bool done = false;
         for (idx_t t = 0; !done; t += step_t) {
 
-            // Run a time-step.
+            // Run step_t time-step(s).
             run_solution(t, t + step_t - 1);
 
-            // done on this rank?
+            // AT done on this rank?
             done = _at.is_done();
         }
 
@@ -817,10 +872,10 @@ namespace yask {
     
     // Add a new grid to the containers.
     void StencilContext::addGrid(YkGridPtr gp, bool is_output) {
+        assert(gp);
         auto& gname = gp->get_name();
-        if (gridMap.count(gname)) {
-            THROW_YASK_EXCEPTION("Error: grid '" << gname << "' already exists.\n");
-        }
+        if (gridMap.count(gname))
+            THROW_YASK_EXCEPTION("Error: grid '" << gname << "' already exists");
 
         // Add to list and map.
         gridPtrs.push_back(gp);
@@ -848,7 +903,7 @@ namespace yask {
         if (req_ranks != _env->num_ranks) {
             THROW_YASK_EXCEPTION("error: " << req_ranks << " rank(s) requested (" <<
                 _opts->_num_ranks.makeDimValStr(" * ") << "), but " <<
-                _env->num_ranks << " rank(s) are active." << endl);
+                _env->num_ranks << " rank(s) are active");
         }
         assertEqualityOverRanks(_opts->_rank_sizes[step_dim], _env->comm, "num steps");
 
@@ -912,17 +967,15 @@ namespace yask {
             
             // Myself.
             if (rn == me) {
-                if (mandist != 0) {
-                    THROW_YASK_EXCEPTION("Internal error: distance to own rank == " << mandist << endl);
-                }
+                if (mandist != 0)
+                    THROW_YASK_EXCEPTION("Internal error: distance to own rank == " << mandist);
             }
 
             // Someone else.
             else {
-                if (mandist == 0) {
+                if (mandist == 0)
                     THROW_YASK_EXCEPTION("Error: ranks " << me <<
-                        " and " << rn << " at same coordinates." << endl);
-                }
+                                         " and " << rn << " at same coordinates");
             }
 
             // Loop through domain dims.
@@ -966,7 +1019,7 @@ namespace yask {
                                     "' dimension , but their rank-domain sizes are " <<
                                     rnsz << " and " << mysz <<
                                     " (resp.) in the '" << dj <<
-                                    "' dimension, making them unaligned.\n");
+                                    "' dimension, making them unaligned");
                             }
                         }
                     }
@@ -1026,8 +1079,8 @@ namespace yask {
                     // with multiple ranks?
                     if (_opts->_num_ranks[dname] > 1 && rnsz < max_halos[di]) {
                         THROW_YASK_EXCEPTION("Error: rank-domain size of " << rnsz << " in '" <<
-                            dname << "' in rank " << rn <<
-                            " is less than largest halo size of " << max_halos[di] << endl);
+                                             dname << "' in rank " << rn <<
+                                             " is less than largest halo size of " << max_halos[di]);
                     }
                 }
 
@@ -1045,11 +1098,10 @@ namespace yask {
     // Allocate memory for grids that do not already have storage.
     // Create MPI buffers.
     // TODO: allow different types of memory for different grids, MPI bufs, etc.
-    void StencilContext::allocData() {
-        ostream& os = get_ostr();
+    void StencilContext::allocData(ostream& os) {
 
-        // Remove any old MPI data. We do this early to give preference
-        // to grids for any HBM memory that might be available.
+        // Remove any old MPI data. We do this now to give
+        // preference to grids for any HBM memory that might be available.
         mpiData.clear();
 
         // Base ptrs for all default-alloc'd data.
@@ -1059,7 +1111,8 @@ namespace yask {
         shared_ptr<char> _grid_data_buf;
         shared_ptr<char> _mpi_data_buf;
 
-        // Alloc grid memory.
+        ///////// Main data grids.
+
         // Pass 0: count required size, allocate chunk of memory at end.
         // Pass 1: distribute parts of already-allocated memory chunk.
         for (int pass = 0; pass < 2; pass++) {
@@ -1083,8 +1136,7 @@ namespace yask {
                     // Set storage if buffer has been allocated.
                     if (pass == 1) {
                         gp->set_storage(_grid_data_buf, agbytes);
-                        gp->print_info(os);
-                        os << endl;
+                        os << gp->make_info_string() << endl;
                     }
 
                     // Determine size used (also offset to next location).
@@ -1106,15 +1158,18 @@ namespace yask {
                 os << "Allocating " << makeByteStr(agbytes) <<
                     " for " << ngrids << " grid(s)...\n" << flush;
                 _grid_data_buf = shared_ptr<char>(alignedAlloc(agbytes), AlignedDeleter());
+                assert(_grid_data_buf);
             }
-        }
-        
+        } // grid passes.
+
 #ifdef USE_MPI
+
+        ///////// MPI buffers.
         int num_exchanges = 0;
         auto me = _env->my_rank;
         
         // Need to determine the size and shape of all MPI buffers.
-        // Visit all neighbors.
+        // Visit all neighbors of this rank.
         _mpiInfo->visitNeighbors
             ([&](const IdxTuple& noffsets, int nrank, int nidx) {
                 if (nrank == MPI_PROC_NULL)
@@ -1354,7 +1409,7 @@ namespace yask {
         // Pass 1: distribute parts of already-allocated memory chunk.
         for (int pass = 0; pass < 2; pass++) {
             TRACE_MSG("allocData pass " << pass << " for " <<
-                      mpiData.size() << " MPI data set(s)");
+                      mpiData.size() << " MPI buffer set(s)");
         
             // Determine how many bytes are needed and actually alloc'd.
             size_t bbytes = 0, abbytes = 0; // for MPI buffers.
@@ -1407,12 +1462,150 @@ namespace yask {
                 os << "Allocating " << makeByteStr(abbytes) <<
                     " for " << nbufs << " MPI buffer(s)...\n" << flush;
                 _mpi_data_buf = shared_ptr<char>(alignedAlloc(abbytes), AlignedDeleter());
+                assert(_mpi_data_buf);
             }
-        }
+        } // MPI passes.
 #endif
     }
 
-    // Set grid sizes and offsets based on settings.
+    // Allocate memory for scratch grids based on number of threads and
+    // block sizes.
+    void StencilContext::allocScratchData(ostream& os) {
+
+        // Remove any old scratch data.
+        makeScratchGrids(0);
+
+        // Base ptrs for all default-alloc'd data.
+        // This pointer will be shared by the ones in the grid
+        // objects, which will take over ownership when it goes
+        // out of scope.
+        shared_ptr<char> _scratch_data_buf;
+
+        // Make sure the right number of threads are set so we
+        // have the right number of scratch grids.
+        int rthreads = set_region_threads();
+
+        // Delete any existing scratch grids.
+        // Create new scratch grids.
+        makeScratchGrids(rthreads);
+        
+        // Pass 0: count required size, allocate chunk of memory at end.
+        // Pass 1: distribute parts of already-allocated memory chunk.
+        for (int pass = 0; pass < 2; pass++) {
+            TRACE_MSG("allocScratchData pass " << pass << " for " <<
+                      scratchVecs.size() << " set(s) of scratch grids");
+        
+            // Determine how many bytes are needed and actually alloc'd.
+            size_t gbytes = 0, agbytes = 0;
+            int ngrids = 0;
+
+            // Loop through each scratch grid vector.
+            for (auto* sgv : scratchVecs) {
+                assert(sgv);
+
+                // Loop through each scratch grid in this vector.
+                // There will be one for each region thread.
+                assert(int(sgv->size()) == rthreads);
+                int thr_num = 0;
+                for (auto gp : *sgv) {
+                    assert(gp);
+                    auto& gname = gp->get_name();
+            
+                    // Loop through each domain dim.
+                    for (auto& dim : _dims->_domain_dims.getDims()) {
+                        auto& dname = dim.getName();
+
+                        if (gp->is_dim_used(dname)) {
+
+                            // Set domain size of grid to block size.
+                            gp->_set_domain_size(dname, _opts->_block_sizes[dname]);
+                    
+                            // Pads.
+                            // Set via both 'extra' and 'min'; larger result will be used.
+                            gp->set_extra_pad_size(dname, _opts->_extra_pad_sizes[dname]);
+                            gp->set_min_pad_size(dname, _opts->_min_pad_sizes[dname]);
+                        }
+                    } // dims.
+                
+                    // Set storage if buffer has been allocated.
+                    if (pass == 1) {
+                        gp->set_storage(_scratch_data_buf, agbytes);
+                        TRACE_MSG(gp->make_info_string());
+                    }
+
+                    // Determine size used (also offset to next location).
+                    gbytes += gp->get_num_storage_bytes();
+                    agbytes += ROUND_UP(gp->get_num_storage_bytes() + _data_buf_pad,
+                                        CACHELINE_BYTES);
+                    ngrids++;
+                    TRACE_MSG(" scratch grid '" << gname << "' for thread " <<
+                              thr_num << " needs " <<
+                              makeByteStr(gp->get_num_storage_bytes()));
+                    thr_num++;
+                } // scratch grids.
+            } // scratch-grid vecs.
+
+            // Don't need pad after last one.
+            if (agbytes >= _data_buf_pad)
+                agbytes -= _data_buf_pad;
+
+            // Allocate data.
+            if (pass == 0) {
+                os << "Allocating " << makeByteStr(agbytes) <<
+                    " for " << ngrids << " scratch grid(s)...\n" << flush;
+                _scratch_data_buf = shared_ptr<char>(alignedAlloc(agbytes), AlignedDeleter());
+                assert(_scratch_data_buf);
+            }
+        } // scratch-grid passes.
+    }
+
+    // Adjust offsets of scratch grids based
+    // on thread and scan indices.
+    void StencilContext::update_scratch_grids(int thread_idx,
+                                              const ScanIndices& idxs) {
+        auto dims = get_dims();
+        int nsdims = dims->_stencil_dims.size();
+        auto step_posn = Indices::step_posn;
+
+        // Loop thru vecs of scratch grids.
+        for (auto* sv : scratchVecs) {
+            assert(sv);
+
+            // Get the one for this thread.
+            auto gp = sv->at(thread_idx);
+            assert(gp);
+            assert(gp->is_scratch());
+
+            // i: index for stencil dims, j: index for domain dims.
+            for (int i = 0, j = 0; i < nsdims; i++) {
+                if (i != step_posn) {
+                    auto& dim = dims->_stencil_dims.getDim(i);
+                    auto& dname = dim.getName();
+
+                    // Is this dim used in this grid?
+                    int posn = gp->get_dim_posn(dname);
+                    if (posn >= 0) {
+
+                        // Set offset of grid based on starting point of block.
+                        // This is global, so it will include the rank offset.
+                        gp->_set_offset(posn, idxs.begin[i]);
+
+                        // Set local offset to diff between global offset
+                        // and rank offset. Must be vec-multiple.
+                        auto rofs = rank_domain_offsets[j];
+                        auto lofs = idxs.begin[i] - rofs;
+                        gp->_set_local_offset(posn, lofs);
+                        assert(lofs >= 0);
+                        assert(lofs % dims->_fold_pts[j] == 0);
+                    }
+                    j++;
+                }
+            }
+        }
+    }
+
+    
+    // Set non-scratch grid sizes and offsets based on settings.
     // Set max halos across grids.
     // This should be called anytime a setting or rank offset is changed.
     void StencilContext::update_grids()
@@ -1421,8 +1614,8 @@ namespace yask {
 
         // Reset halos.
         max_halos = _dims->_domain_dims;
-        
-        // Loop through each grid.
+
+        // Loop through each non-scratch grid.
         for (auto gp : gridPtrs) {
             assert(gp);
 
@@ -1452,7 +1645,8 @@ namespace yask {
                     max_halos[dname] = max(max_halos[dname], hsz);
                 }
             }
-        }
+        } // grids.
+
     }
     
     // Allocate grids and MPI bufs.
@@ -1486,12 +1680,10 @@ namespace yask {
         _at.clear(false, false);
 
         // Adjust all settings before setting MPI buffers or sizing grids.
-        // Prints out final settings.
+        // Prints final settings.
+        // TODO: print settings again after auto-tuning.
         _opts->adjustSettings(os, _env);
 
-        // Size grids based on finalized settings.
-        update_grids();
-        
         // Report ranks.
         os << endl;
         os << "Num ranks: " << _env->get_num_ranks() << endl;
@@ -1506,8 +1698,8 @@ namespace yask {
         set_block_threads(); // Temporary; just for reporting.
         os << "  Num threads per block: " << omp_get_max_threads() << endl;
 
-        // Set the number of threads for a region to help avoid expensive
-        // thread-number changing.
+        // Set the number of threads for a region. It should stay this
+        // way for top-level OpenMP parallel sections.
         int rthreads = set_region_threads();
 
         // Run a dummy nested OMP loop to make sure nested threading is
@@ -1527,24 +1719,34 @@ namespace yask {
         
         // TODO: enable multi-rank wave-front tiling.
         auto& step_dim = _dims->_step_dim;
-        if (_opts->_region_sizes[step_dim] > 1 && _env->num_ranks > 1) {
-            THROW_YASK_EXCEPTION("MPI communication is not currently enabled with wave-front tiling." << endl);
-        }
+        if (_opts->_region_sizes[step_dim] > 1 && _env->num_ranks > 1)
+            THROW_YASK_EXCEPTION("MPI communication is not currently enabled with wave-front tiling");
 
+        // Some grid stats.
         os << endl;
         os << "Num grids: " << gridPtrs.size() << endl;
         os << "Num grids to be updated: " << outputGridPtrs.size() << endl;
         os << "Num stencil groups: " << stGroups.size() << endl;
         
         // Set up data based on MPI rank, including grid positions.
+        // Update all the grid sizes.
         setupRank();
 
         // Determine bounding-boxes for all groups.
         find_bounding_boxes();
 
-        // Alloc grids and MPI bufs.
-        allocData();
+        // Alloc grids, MPI bufs, and scratch grids.
+        allocData(os);
+        allocScratchData(os);
 
+        // Report total allocation.
+        rank_nbytes = get_num_bytes();
+        os << "Total allocation in this rank: " <<
+            makeByteStr(rank_nbytes) << "\n";
+        tot_nbytes = sumOverRanks(rank_nbytes, _env->comm);
+        os << "Total overall allocation in " << _env->num_ranks << " rank(s): " <<
+            makeByteStr(tot_nbytes) << "\n";
+    
         // Report some stats.
         idx_t dt = _opts->_rank_sizes[step_dim];
         os << "\nProblem sizes in points (from smallest to largest):\n"
@@ -1602,14 +1804,6 @@ namespace yask {
                 " est FP-ops in sub-domain:   " << makeNumStr(fpops_domain) << endl;
         }
 
-        // Report total allocation.
-        rank_nbytes = get_num_bytes();
-        os << "Total allocation in this rank: " <<
-            makeByteStr(rank_nbytes) << "\n";
-        tot_nbytes = sumOverRanks(rank_nbytes, _env->comm);
-        os << "Total overall allocation in " << _env->num_ranks << " rank(s): " <<
-            makeByteStr(tot_nbytes) << "\n";
-    
         // Various metrics for amount of work.
         rank_numWrites_dt = rank_numWrites_1t * dt;
         tot_numWrites_1t = sumOverRanks(rank_numWrites_1t, _env->comm);
@@ -1810,9 +2004,9 @@ namespace yask {
             auto& dname = dim.getName();
             if ((bb_begin[dname] - context.rank_domain_offsets[dname]) %
                 dims->_fold_pts[dname] != 0) {
-                os << "Warning: '" << name << "' domain"
+                os << "Note: '" << name << "' domain"
                     " has one or more starting edges not on vector boundaries;"
-                    " slower scalar calculations will be used.\n";
+                    " masked calculations will be used in peel and remainder sub-blocks.\n";
                 bb_is_aligned = false;
                 break;
             }
@@ -1826,7 +2020,7 @@ namespace yask {
                 if (bb_is_full && bb_is_aligned)
                     os << "Note: '" << name << "' domain"
                         " has one or more sizes that are not vector-cluster multiples;"
-                        " masked calculations will be used in remainder sub-blocks.\n";
+                        " masked calculations will be used in peel and remainder sub-blocks.\n";
                 bb_is_cluster_mult = false;
                 break;
             }
@@ -1925,13 +2119,13 @@ namespace yask {
             // Sequence of things to do for each grid's neighbors
             // (isend includes packing).
             enum halo_steps { halo_irecv, halo_pack_isend, halo_unpack, halo_nsteps };
-            for (int hi = 0; hi < halo_nsteps; hi++) {
+            for (int right = 0; right < halo_nsteps; right++) {
 
-                if (hi == halo_irecv)
+                if (right == halo_irecv)
                     TRACE_MSG("exchange_halos: requesting data for step " << t << "...");
-                else if (hi == halo_pack_isend)
+                else if (right == halo_pack_isend)
                     TRACE_MSG("exchange_halos: packing and sending data for step " << t << "...");
-                else if (hi == halo_unpack)
+                else if (right == halo_unpack)
                     TRACE_MSG("exchange_halos: unpacking data for step " << t << "...");
             
                 // Loop thru all input grids in this group.
@@ -1980,7 +2174,7 @@ namespace yask {
                                 _mpiInfo->has_all_vlen_mults[ni];
                          
                             // Submit async request to receive data from neighbor.
-                            if (hi == halo_irecv) {
+                            if (right == halo_irecv) {
                                 auto nbytes = recvBuf.get_bytes();
                                 void* buf = (void*)recvBuf._elems;
                                 TRACE_MSG("   requesting " << makeByteStr(nbytes) << "...");
@@ -1989,7 +2183,7 @@ namespace yask {
                             }
 
                             // Pack data into send buffer, then send to neighbor.
-                            else if (hi == halo_pack_isend) {
+                            else if (right == halo_pack_isend) {
 
                                 // Vec ok?
                                 // Domain sizes must be ok, and buffer size must be ok
@@ -2030,7 +2224,7 @@ namespace yask {
                             }
 
                             // Wait for data from neighbor, then unpack it.
-                            else if (hi == halo_unpack) {
+                            else if (right == halo_unpack) {
 
                                 // Wait for data from neighbor before unpacking it.
                                 TRACE_MSG("   waiting for MPI data...");

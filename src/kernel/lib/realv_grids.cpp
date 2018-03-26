@@ -41,21 +41,29 @@ namespace yask {
         return expr;                                                    \
     }
     GET_GRID_API(get_rank_domain_size, _domains[posn], false, true, false)
-    GET_GRID_API(get_pad_size, _pads[posn], false, true, false)
-    GET_GRID_API(get_halo_size, _halos[posn], false, true, false)
-    GET_GRID_API(get_first_rank_halo_index, _offsets[posn] - _halos[posn], false, false, true)
-    GET_GRID_API(get_last_rank_halo_index, _offsets[posn] + _domains[posn] + _halos[posn] - 1, false, false, true)
+    GET_GRID_API(get_left_pad_size, _left_pads[posn], false, true, false) // _left_pads is actual size.
+    GET_GRID_API(get_right_pad_size, _allocs[posn] - _left_pads[posn], false, true, false) // _right_pads is request only.
+    GET_GRID_API(get_pad_size, _left_pads[posn], false, true, false)
+    GET_GRID_API(get_left_halo_size, _left_halos[posn], false, true, false)
+    GET_GRID_API(get_right_halo_size, _right_halos[posn], false, true, false)
+    GET_GRID_API(get_halo_size, _left_halos[posn], false, true, false)
     GET_GRID_API(get_first_misc_index, _offsets[posn], false, false, true)
     GET_GRID_API(get_last_misc_index, _offsets[posn] + _domains[posn] - 1, false, false, true)
-    GET_GRID_API(get_first_rank_domain_index, _offsets[posn], false, true, false)
-    GET_GRID_API(get_last_rank_domain_index, _offsets[posn] + _domains[posn] - 1, false, true, false)
-    GET_GRID_API(get_first_rank_alloc_index, _offsets[posn] - _pads[posn], false, true, false)
-    GET_GRID_API(get_last_rank_alloc_index, _offsets[posn] - _pads[posn] + _allocs[posn] - 1, false, true, false)
-    GET_GRID_API(get_extra_pad_size, _pads[posn] - _halos[posn], false, true, false)
+    GET_GRID_API(get_left_extra_pad_size, _left_pads[posn] - _left_halos[posn], false, true, false)
+    GET_GRID_API(get_right_extra_pad_size, (_allocs[posn] - _left_pads[posn]) - _right_halos[posn], false, true, false)
+    GET_GRID_API(get_extra_pad_size, _left_pads[posn] - _left_halos[posn], false, true, false)
     GET_GRID_API(get_alloc_size, _allocs[posn], true, true, true)
+    GET_GRID_API(get_first_rank_domain_index, _offsets[posn] - _local_offsets[posn], false, true, false)
+    GET_GRID_API(get_last_rank_domain_index, _offsets[posn] - _local_offsets[posn] + _domains[posn] - 1;
+                 assert(!_is_scratch), false, true, false)
+    GET_GRID_API(get_first_rank_halo_index, _offsets[posn] - _left_halos[posn], false, false, true)
+    GET_GRID_API(get_last_rank_halo_index, _offsets[posn] + _domains[posn] + _right_halos[posn] - 1, false, false, true)
+    GET_GRID_API(get_first_rank_alloc_index, _offsets[posn] - _left_pads[posn], false, true, false)
+    GET_GRID_API(get_last_rank_alloc_index, _offsets[posn] - _left_pads[posn] + _allocs[posn] - 1, false, true, false)
     GET_GRID_API(_get_offset, _offsets[posn], true, true, true)
-    GET_GRID_API(_get_first_alloc_index, _offsets[posn] - _pads[posn], true, true, true)
-    GET_GRID_API(_get_last_alloc_index, _offsets[posn] - _pads[posn] + _allocs[posn] - 1, true, true, true)
+    GET_GRID_API(_get_local_offset, _local_offsets[posn], true, true, true)
+    GET_GRID_API(_get_first_alloc_index, _offsets[posn] - _left_pads[posn], true, true, true)
+    GET_GRID_API(_get_last_alloc_index, _offsets[posn] - _left_pads[posn] + _allocs[posn] - 1, true, true, true)
 #undef GET_GRID_API
     
     // APIs to set vars.
@@ -70,15 +78,36 @@ namespace yask {
         int dim = posn;                                                 \
         expr;                                                           \
     }
-    SET_GRID_API(set_halo_size, _halos[posn] = n; _set_pad_size(dim, _pads[posn]), false, true, false)
-    SET_GRID_API(set_min_pad_size, if (!get_raw_storage_buffer() && n > _pads[posn])
-                                       _set_pad_size(dim, n), false, true, false)
-    SET_GRID_API(set_extra_pad_size, set_min_pad_size(dim, _halos[posn] + n), false, true, false)
-    SET_GRID_API(set_first_misc_index, _offsets[posn] = n, false, false, true)
-    SET_GRID_API(set_alloc_size, _set_domain_size(dim, n), true, false, true)
-    SET_GRID_API(_set_domain_size, _domains[posn] = n; resize(), true, true, true)
-    SET_GRID_API(_set_pad_size, _pads[posn] = std::max(n COMMA _halos[posn]); resize(), true, true, true)
     SET_GRID_API(_set_offset, _offsets[posn] = n, true, true, true)
+    SET_GRID_API(_set_local_offset, _local_offsets[posn] = n;
+                 _vec_local_offsets[posn] = n / _vec_lens[posn], true, true, true)
+    SET_GRID_API(_set_domain_size, _domains[posn] = n; resize(), true, true, true)
+    SET_GRID_API(_set_left_pad_size, _left_pads[posn] = n; resize(), true, true, true)
+    SET_GRID_API(_set_right_pad_size, _right_pads[posn] = n; resize(), true, true, true)
+    SET_GRID_API(set_left_halo_size, _left_halos[posn] = n; resize(), false, true, false)
+    SET_GRID_API(set_right_halo_size, _right_halos[posn] = n; resize(), false, true, false)
+    SET_GRID_API(set_halo_size, _left_halos[posn] = _right_halos[posn] = n; resize(), false, true, false)
+
+    SET_GRID_API(set_alloc_size, _set_domain_size(posn, n), true, false, true)
+    SET_GRID_API(set_left_min_pad_size,
+                 if (!get_raw_storage_buffer() && n > _left_pads[posn])
+                     _set_left_pad_size(posn, n),
+                 false, true, false)
+    SET_GRID_API(set_right_min_pad_size,
+                 if (!get_raw_storage_buffer() && n > _right_pads[posn])
+                     _set_right_pad_size(posn, n),
+                 false, true, false)
+    SET_GRID_API(set_min_pad_size,
+                 if (!get_raw_storage_buffer() && n > _left_pads[posn])
+                     _set_left_pad_size(posn, n);
+                 if (!get_raw_storage_buffer() && n > _right_pads[posn])
+                     _set_right_pad_size(posn, n),
+                 false, true, false)
+    SET_GRID_API(set_left_extra_pad_size, set_left_min_pad_size(posn, _left_halos[posn] + n), false, true, false)
+    SET_GRID_API(set_right_extra_pad_size, set_right_min_pad_size(posn, _right_halos[posn] + n), false, true, false)
+    SET_GRID_API(set_extra_pad_size, set_left_extra_pad_size(posn, n);
+                 set_right_extra_pad_size(posn, n), false, true, false)
+    SET_GRID_API(set_first_misc_index, _offsets[posn] = n, false, false, true)
 #undef COMMA
 #undef SET_GRID_API
     
@@ -129,9 +158,7 @@ namespace yask {
         int posn = dims.lookup_posn(dim);
         if (posn < 0 && die_on_failure) {
             THROW_YASK_EXCEPTION("Error: " << die_msg << ": dimension '" <<
-                dim << "' not found in ";
-            print_info(cerr);
-            err << ".\n");
+                                 dim << "' not found in " << make_info_string());
         }
         return posn;
     }
@@ -145,16 +172,42 @@ namespace yask {
         auto p = get_raw_storage_buffer();
         IdxTuple old_allocs = get_allocs();
 
-        // Round up padding.
+        // Check settings.
         for (int i = 0; i < get_num_dims(); i++) {
-            _pads[i] = ROUND_UP(_pads[i], _vec_lens[i]);
-            _vec_pads[i] = _pads[i] / _vec_lens[i];
+            if (_left_halos[i] < 0)
+                THROW_YASK_EXCEPTION("Error: negative left halo in grid '" << get_name() << "'");
+            if (_right_halos[i] < 0)
+                THROW_YASK_EXCEPTION("Error: negative right halo in grid '" << get_name() << "'");
+            if (_left_pads[i] < 0)
+                THROW_YASK_EXCEPTION("Error: negative left padding in grid '" << get_name() << "'");
+            if (_right_pads[i] < 0)
+                THROW_YASK_EXCEPTION("Error: negative right padding in grid '" << get_name() << "'");
+        }
+        
+        // Increase padding as needed.
+        // _left_pads contains actual padding and is always rounded up to vec len.
+        // _right_pads contains requested min padding; actual padding is calculated on-the-fly.
+        // TODO: maintain requested and actual padding for left and right.
+        Indices left_pads2 = getReqdPad(_left_halos);
+        Indices right_pads2 = getReqdPad(_right_halos);
+        for (int i = 0; i < get_num_dims(); i++) {
+
+            // Get max of existing pad and reqd pad.
+            left_pads2[i] = max(_left_pads[i], left_pads2[i]);
+            right_pads2[i] = max(_right_pads[i], right_pads2[i]);
+
+            // Round left pad up to vec len and store final setting.
+            // Keep final padding for left.
+            left_pads2[i] = ROUND_UP(left_pads2[i], _vec_lens[i]);
+            _left_pads[i] = left_pads2[i];
+            _vec_left_pads[i] = left_pads2[i] / _vec_lens[i];
         }
         
         // New allocation in each dim.
         IdxTuple new_allocs(old_allocs);
         for (int i = 0; i < get_num_dims(); i++)
-            new_allocs[i] = ROUND_UP(_domains[i] + (2 * _pads[i]), _vec_lens[i]);
+            new_allocs[i] = ROUND_UP(_left_pads[i] + _domains[i], _vec_lens[i]) +
+                ROUND_UP(right_pads2[i], _vec_lens[i]);
 
         // Attempt to change alloc with existing storage?
         if (p && old_allocs != new_allocs) {
@@ -162,7 +215,7 @@ namespace yask {
                 get_name() << "' from " << 
                 makeIndexString(old_allocs, " * ") << " to " <<
                 makeIndexString(new_allocs, " * ") <<
-                " after storage has been allocated.\n");
+                " after storage has been allocated");
         }
 
         // Do the resize.
@@ -196,12 +249,9 @@ namespace yask {
                                   bool step_ok,
                                   bool domain_ok,
                                   bool misc_ok) const {
-        if (!is_dim_used(dim)) {
+        if (!is_dim_used(dim))
             THROW_YASK_EXCEPTION("Error in " << fn_name << "(): dimension '" <<
-                dim << "' not found in ";
-            print_info(cerr);
-            err << ".\n");
-        }
+                                 dim << "' not found in " << make_info_string());
         _dims->checkDimType(dim, fn_name, step_ok, domain_ok, misc_ok);
     }
     
@@ -224,11 +274,13 @@ namespace yask {
                 return false;
 
             // Same sizes?
+            // NB: not checking right pads because actual values
+            // are determined as function of other 3.
             if (_allocs[i] != op->_allocs[i])
                 return false;
             if (_domains[i] != op->_domains[i])
                 return false;
-            if (_pads[i] != op->_pads[i])
+            if (_left_pads[i] != op->_left_pads[i])
                 return false;
         }
         return true;
@@ -239,8 +291,12 @@ namespace yask {
         assert(sp);
 
         if (!sp->get_raw_storage_buffer()) {
-            THROW_YASK_EXCEPTION("Error: share_storage() called without source storage allocated.\n");
+            THROW_YASK_EXCEPTION("Error: share_storage() called without source storage allocated");
         }
+
+        // Determine required padding from halos.
+        Indices left_pads2 = getReqdPad(_left_halos);
+        Indices right_pads2 = getReqdPad(_right_halos);
 
         // NB: requirements to successful share_storage() is not as strict as
         // is_storage_layout_identical(). See note on pad & halo below and API docs.
@@ -249,12 +305,16 @@ namespace yask {
 
             // Same dims?
             if (sp->get_num_dims() != get_num_dims() ||
-                sp->get_dim_name(i) != dname) {
-                THROW_YASK_EXCEPTION("Error: share_storage() called with incompatible grids: ";
-                print_info(cerr);
-                err << "; and ";
-                sp->print_info(cerr);
-                err << ".\n");
+                sp->get_dim_name(i) != dname)
+                THROW_YASK_EXCEPTION("Error: share_storage() called with incompatible grids: " <<
+                                     make_info_string() << " and " << sp->make_info_string());
+
+
+            // Check folding.
+            if (_vec_lens[i] != sp->_vec_lens[i]) {
+                THROW_YASK_EXCEPTION("Error: attempt to share storage from grid '" << sp->get_name() <<
+                                     "' of fold-length " << sp->_vec_lens[i] << " with grid '" << get_name() <<
+                                     "' of fold-length " << _vec_lens[i] << " in '" << dname << "' dim");
             }
 
             // Not a domain dim?
@@ -264,38 +324,37 @@ namespace yask {
                 auto sas = sp->get_alloc_size(dname);
                 if (tas != sas) {
                     THROW_YASK_EXCEPTION("Error: attempt to share storage from grid '" << sp->get_name() <<
-                        "' of alloc-size " << sas << " with grid '" << get_name() <<
-                        "' of alloc-size " << tas << " in '" << dname << "' dim.\n");
+                                         "' of alloc-size " << sas << " with grid '" << get_name() <<
+                                         "' of alloc-size " << tas << " in '" << dname << "' dim");
                 }
             }
 
             // Domain dim.
             else {
-                auto tdom = get_rank_domain_size(dname);
-                auto sdom = sp->get_rank_domain_size(dname);
+                auto tdom = get_rank_domain_size(i);
+                auto sdom = sp->get_rank_domain_size(i);
                 if (tdom != sdom) {
                     THROW_YASK_EXCEPTION("Error: attempt to share storage from grid '" << sp->get_name() <<
-                        "' of domain-size " << sdom << " with grid '" << get_name() <<
-                        "' of domain-size " << tdom << " in '" << dname << "' dim.\n");
+                                         "' of domain-size " << sdom << " with grid '" << get_name() <<
+                                         "' of domain-size " << tdom << " in '" << dname << "' dim");
                 }
 
                 // Halo and pad sizes don't have to be the same.
-                // Requirement is that halo of target fits inside of pad of source.
-                auto thalo = get_halo_size(dname);
-                auto spad = sp->get_pad_size(dname);
-                if (thalo > spad) {
+                // Requirement is that halo (reqd pad) of target fits inside of pad of source.
+                auto spad = sp->get_left_pad_size(i);
+                if (left_pads2[i] > spad) {
                     THROW_YASK_EXCEPTION("Error: attempt to share storage from grid '" << sp->get_name() <<
-                        "' of padding-size " << spad <<
-                        ", which is insufficient for grid '" << get_name() <<
-                        "' of halo-size " << thalo << " in '" << dname << "' dim.\n");
+                                         "' of left padding-size " << spad <<
+                                         ", which is insufficient for grid '" << get_name() <<
+                                         "' requiring " << left_pads2[i] << " in '" << dname << "' dim");
                 }
-            }
-
-            // Check folding.
-            if (_vec_lens[i] != sp->_vec_lens[i]) {
-                THROW_YASK_EXCEPTION("Error: attempt to share storage from grid '" << sp->get_name() <<
-                    "' of fold-length " << sp->_vec_lens[i] << " with grid '" << get_name() <<
-                    "' of fold-length " << _vec_lens[i] << " in '" << dname << "' dim.\n");
+                spad = sp->get_right_pad_size(i);
+                if (right_pads2[i] > spad) {
+                    THROW_YASK_EXCEPTION("Error: attempt to share storage from grid '" << sp->get_name() <<
+                                         "' of right padding-size " << spad <<
+                                         ", which is insufficient for grid '" << get_name() <<
+                                         "' requiring " << right_pads2[i] << " in '" << dname << "' dim");
+                }
             }
         }
 
@@ -304,15 +363,16 @@ namespace yask {
             auto dname = get_dim_name(i);
             bool is_domain = _dims->_domain_dims.lookup(dname) != 0;
             if (is_domain) {
-                auto spad = sp->get_pad_size(dname);
-                _set_pad_size(dname, spad);
+                _left_pads[i] = sp->_left_pads[i];
+                _right_pads[i] = sp->_right_pads[i];
             }
         }
         
         // Copy data.
         release_storage();
+        resize();
         if (!share_data(sp.get(), true)) {
-            THROW_YASK_EXCEPTION("Error: unexpected failure in data sharing.\n");
+            THROW_YASK_EXCEPTION("Error: unexpected failure in data sharing");
         }
     }
 
@@ -329,11 +389,8 @@ namespace yask {
 
         // Dims & sizes same?
         if (!_ggb->are_dims_and_sizes_same(*ref->_ggb)) {
-            os << "** mismatch due to incompatible grids: ";
-            print_info(os);
-            os << "; and ";
-            ref->print_info(os);
-            os << ".\n";
+            os << "** mismatch due to incompatible grids: " <<
+                make_info_string() << " and " << ref->make_info_string() << ".\n";
             return get_num_storage_elements();
         }
         
@@ -358,7 +415,7 @@ namespace yask {
                 bool ok = true;
                 for (int i = 0; i < pt.getNumDims(); i++) {
                     auto val = pt.getVal(i);
-                    opt[i] = _offsets[i] - _pads[i] + val;
+                    opt[i] = _offsets[i] - _left_pads[i] + val;
 
                     // Don't compare points in the extra padding area.
                     auto& dname = pt.getDimName(i);
@@ -406,7 +463,7 @@ namespace yask {
         auto n = get_num_dims();
         if (indices.getNumDims() != n) {
             THROW_YASK_EXCEPTION("Error: '" << fn << "' called with " << indices.getNumDims() <<
-                " indices instead of " << n << ".\n");
+                                 " indices instead of " << n);
         }
         if (fixed_indices)
             *fixed_indices = indices;
@@ -432,8 +489,8 @@ namespace yask {
                 if (!ok) {
                     if (strict_indices) {
                         THROW_YASK_EXCEPTION("Error: " << fn << ": index in dim '" << dname <<
-                            "' is " << idx << ", which is not in [" << first_ok <<
-                            "..." << last_ok << "].\n");
+                                             "' is " << idx << ", which is not in [" << first_ok <<
+                                             "..." << last_ok << "]");
                     }
                     if (fixed_indices) {
                         if (idx < first_ok)
@@ -481,7 +538,7 @@ namespace yask {
     double YkGridBase::get_element(const Indices& indices) const {
         if (!is_storage_allocated()) {
             THROW_YASK_EXCEPTION("Error: call to 'get_element' with no data allocated for grid '" <<
-                get_name() << "'.\n");
+                                 get_name() << "'");
         }
         checkIndices(indices, "get_element", true, false);
         idx_t asi = get_alloc_step_index(indices[Indices::step_posn]);
@@ -509,7 +566,7 @@ namespace yask {
                                             const Indices& last_indices) const {
         if (!is_storage_allocated()) {
             THROW_YASK_EXCEPTION("Error: call to 'get_elements_in_slice' with no data allocated for grid '" <<
-                get_name() << "'.\n");
+                                 get_name() << "'");
         }
         checkIndices(first_indices, "get_elements_in_slice", true, false);
         checkIndices(last_indices, "get_elements_in_slice", true, false);

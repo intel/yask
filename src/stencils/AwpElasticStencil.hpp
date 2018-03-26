@@ -35,7 +35,8 @@ IN THE SOFTWARE.
 //#define FULL_SPONGE_GRID
 
 // Set the following macro to calculate free-surface boundary values.
-#define DO_SURFACE
+// This feature is currently under development.
+//#define DO_SURFACE
 
 #include "Soln.hpp"
 
@@ -319,7 +320,6 @@ public:
 #else
         stress_zz(t+1, x, y, z) EQUALS next_stress_zz;
 #endif
-        stress_zz(t+1, x, y, z) EQUALS next_stress_zz;
     }
 
     // Free-surface boundary equations for stress.
