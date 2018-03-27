@@ -91,7 +91,6 @@ else ifneq ($(findstring iso3dfd,$(stencil)),)
 
 else ifneq ($(findstring awp,$(stencil)),)
  time_alloc			=	1
- eqs				=	velocity=vel,stress=str
  def_block_args			=	-b 32
  YC_FLAGS			+=	-min-es 1
  def_rank_args			=	-dx 512 -dy 1024 -dz 128 # assume 2 ranks/node in 'x'.
@@ -122,11 +121,10 @@ else ifneq ($(findstring awp,$(stencil)),)
 
 else ifneq ($(findstring ssg,$(stencil)),)
  time_alloc	=	1
- eqs		=	v_bl=v_bl,v_tr=v_tr,v_tl=v_tl,s_br=s_br,s_bl=s_bl,s_tr=s_tr,s_tl=s_tl
 
 else ifneq ($(findstring fsg,$(stencil)),)
  time_alloc	=	1
- eqs		=      v_br=v_br,v_bl=v_bl,v_tr=v_tr,v_tl=v_tl,s_br=s_br,s_bl=s_bl,s_tr=s_tr,s_tl=s_tl
+ eqs		=	'$$&=[a-z]_[a-z]+'  # match 1st and 2nd 'parts' of grid names.
  ifeq ($(arch),knl)
   omp_region_schedule  	=	guided
   def_block_args  	=	-b 16
@@ -328,7 +326,7 @@ MISC_LOOP_CODE		?=	$(MISC_LOOP_OUTER_MODS) loop($(MISC_LOOP_ORDER)) \
 # Flags passed to stencil compiler.
 YC_FLAGS   	+=	-stencil $(stencil) -elem-bytes $(real_bytes) -cluster $(cluster) -fold $(fold)
 ifneq ($(eqs),)
- YC_FLAGS   	+=	-eq $(eqs)
+ YC_FLAGS   	+=	-eq-groups $(eqs)
 endif
 ifneq ($(radius),)
  YC_FLAGS   	+=	-radius $(radius)
@@ -741,6 +739,7 @@ all-tests:
 	$(MAKE) clean; $(MAKE) stencil=test_scratch2 fold=x=2,y=2,z=2 yc-and-yk-test
 	$(MAKE) clean; $(MAKE) stencil=iso3dfd fold=x=4,y=2 yc-and-yk-test
 	$(MAKE) clean; $(MAKE) stencil=awp_elastic real_bytes=8 yc-and-yk-test
+	$(MAKE) clean; $(MAKE) stencil=ssg real_bytes=8 yc-and-yk-test
 	$(MAKE) clean; $(MAKE) stencil=fsg_abc real_bytes=8 yc-and-yk-test
 	$(MAKE) clean; $(MAKE) stencil=iso3dfd cxx-yk-api-test
 	$(MAKE) clean; $(MAKE) stencil=iso3dfd py-yk-api-test

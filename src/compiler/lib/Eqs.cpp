@@ -334,7 +334,12 @@ namespace yask {
                 bool same_eq = eq1 == eq2;
                 bool same_cond = areExprsSame(cond1, cond2);
                 bool same_og = og1 == og2;
-                
+
+#ifdef DEBUG_DEP
+                if (!same_eq)
+                    cout << "  ...from equation " << eq2->makeQuotedStr() << "...\n";
+#endif
+
                 // If two different eqs have the same condition, they
                 // cannot update the same grid.
                 if (!same_eq && same_cond && same_og) {
@@ -367,8 +372,12 @@ namespace yask {
                     }
 
                     // Save dependency.
-                    if (eq_deps)
+                    if (eq_deps) {
+#ifdef DEBUG_DEP
+                        cout << "  Exact match found to " << op1->makeQuotedStr() << ".\n";
+#endif                        
                         (*eq_deps)[cur_step_dep].set_imm_dep_on(eq2, eq1);
+                    }
                         
                     // Move along to next eq2.
                     continue;
@@ -422,14 +431,22 @@ namespace yask {
                             }
 
                             // Save dependency.
-                            if (eq_deps)
+                            if (eq_deps) {
+#ifdef DEBUG_DEP
+                                cout << "  Likely match found to " << op1->makeQuotedStr() << ".\n";
+#endif                        
                                 (*eq_deps)[cur_step_dep].set_imm_dep_on(eq2, eq1);
+                            }
 
                             // Move along to next equation.
                             break;
                         }
                     }
                 }
+#ifdef DEBUG_DEP
+                cout << "  No deps found.\n";
+#endif                        
+                
             } // for all eqs (eq2).
         } // for all eqs (eq1).
 
@@ -968,9 +985,11 @@ namespace yask {
     }
 
     // Divide all equations into eqGroups.
+    // Only process updates to grids in 'gridRegex'.
     // 'targets': string provided by user to specify grouping.
     // 'eq_deps': pre-computed dependencies between equations.
     void EqGroups::makeEqGroups(Eqs& allEqs,
+                                const string& gridRegex,
                                 const string& targets,
                                 EqDepMap& eq_deps,
                                 ostream& os)
@@ -980,6 +999,7 @@ namespace yask {
 
         // Add each scratch equation to a separate group.
         // TODO: Allow multiple scratch eqs in a group with same conds & halos.
+        // TODO: Only add scratch eqs that are needed by grids in 'gridRegex'.
         for (auto eq : allEqs.getEqs()) {
 
             // Get updated grid.
@@ -993,10 +1013,17 @@ namespace yask {
             }
         }
         
+        // Make a regex for the allowed grids.
+        regex gridx(gridRegex);
+    
         // Handle each key-value pair in 'targets' string.
+        // Key is eq-group name (with possible format strings); value is regex pattern.
         ArgParser ap;
         ap.parseKeyValuePairs
-            (targets, [&](const string& key, const string& value) {
+            (targets, [&](const string& egfmt, const string& pattern) {
+
+                // Make a regex for the pattern.
+                regex patx(pattern);
 
                 // Search allEqs for matches to current value.
                 for (auto eq : allEqs.getEqs()) {
@@ -1006,18 +1033,34 @@ namespace yask {
                     assert(gp);
                     string gname = gp->getName();
 
-                    // Does value appear in the grid name?
-                    size_t np = gname.find(value);
-                    if (np != string::npos) {
+                    // Match to gridx?
+                    if (!regex_search(gname, gridx))
+                        continue;
 
-                        // Add equation.
-                        addExprToGroup(eq, allEqs.getCond(eq), key, false, eq_deps);
-                    }
+                    // Match to patx?
+                    smatch mr;
+                    if (!regex_search(gname, mr, patx))
+                        continue;
+
+                    // Substitute special tokens with match.
+                    string egname = mr.format(egfmt);
+
+                    // Add equation.
+                    addExprToGroup(eq, allEqs.getCond(eq), egname, false, eq_deps);
                 }
             });
 
         // Add all remaining equations.
         for (auto eq : allEqs.getEqs()) {
+
+            // Get name of updated grid.
+            auto gp = eq->getGrid();
+            assert(gp);
+            string gname = gp->getName();
+
+            // Match to gridx?
+            if (!regex_search(gname, gridx))
+                continue;
 
             // Add equation.
             addExprToGroup(eq, allEqs.getCond(eq), _basename_default, false, eq_deps);

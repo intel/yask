@@ -94,7 +94,8 @@ namespace yask {
         // Create equation groups based on dependencies and/or target strings.
         _eqGroups.set_basename_default(_settings._eq_group_basename_default);
         _eqGroups.set_dims(_dims);
-        _eqGroups.makeEqGroups(_eqs, _settings._eqGroupTargets, eq_deps, *_dos);
+        _eqGroups.makeEqGroups(_eqs, _settings._gridRegex,
+                               _settings._eqGroupTargets, eq_deps, *_dos);
         _eqGroups.optimizeEqGroups(_settings, "scalar & vector", false, *_dos);
 
         // Make a copy of each equation at each cluster offset.

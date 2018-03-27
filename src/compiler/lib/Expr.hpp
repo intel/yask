@@ -39,6 +39,7 @@ IN THE SOFTWARE.
 #include <cstdarg>
 #include <assert.h>
 #include <fstream>
+#include <regex>
 
 // Common utilities.
 #include "common_utils.hpp"

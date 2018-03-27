@@ -17,6 +17,7 @@ Supported Platforms
 Pre-requisites:
 * Intel(R) C++ compiler (17.0.2 or later recommended),
   https://software.intel.com/en-us/intel-parallel-studio-xe.
+* Gnu C++ compiler, g++ (4.9.0 or later; 6.1.0 or later recommended).
 * Intel(R) Software Development Emulator,
   https://software.intel.com/en-us/articles/intel-software-development-emulator
   (optional: for functional testing if you don't have native ISA support).
