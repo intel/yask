@@ -34,6 +34,7 @@ mpi		=	1
 real_bytes	=	4
 radius		=	2
 ranks		= 	1
+v_args		=	-b 16 -r 32 -rt 2 -dt 2 -d 63
 
 # Defaults based on stencil type (and arch for some stencils).
 ifeq ($(stencil),)
@@ -706,7 +707,7 @@ cxx-yc-api-test-with-exception:
 
 # Run the default YASK compiler and kernel.
 yc-and-yk-test: $(YK_EXEC)
-	$(BIN_DIR)/yask.sh -stencil $(stencil) -arch $(arch) -ranks $(ranks) -v
+	$(BIN_DIR)/yask.sh -stencil $(stencil) -arch $(arch) -ranks $(ranks) -v $(v_args)
 
 # Generate the code file using the built-in compiler.
 code-file: $(YK_CODE_FILE)
@@ -720,7 +721,7 @@ kernel-only:
 
 # Run the YASK kernel test without implicity using the YASK compiler.
 yk-test-no-yc: kernel-only
-	$(BIN_DIR)/yask.sh -stencil $(stencil) -arch $(arch) -v
+	$(BIN_DIR)/yask.sh -stencil $(stencil) -arch $(arch) -ranks $(ranks) -v $(v_args)
 
 # NB: set arch var if applicable.
 # NB: save some time by using YK_CXXOPT=-O2.
@@ -854,11 +855,11 @@ help:
 	@echo " "
 	@echo "Example debug builds of kernel cmd-line tool:"
 	@echo " $(MAKE) clean; $(MAKE) -j stencil=iso3dfd mpi=0 OMPFLAGS='-qopenmp-stubs' YK_CXXOPT='-O0' EXTRA_MACROS='DEBUG'"
-	@echo " $(MAKE) clean; $(MAKE) -j arch=intel64 stencil=3axis mpi=0 OMPFLAGS='-qopenmp-stubs' YK_CXXOPT='-O0' EXTRA_MACROS='DEBUG'"
+	@echo " $(MAKE) clean; $(MAKE) -j arch=intel64 stencil=3axis mpi=0 OMPFLAGS='-qopenmp-stubs' YK_CXXOPT='-O0' EXTRA_MACROS='DEBUG TRACE'  # TRACE is a useful debug setting!"
 	@echo " $(MAKE) clean; $(MAKE) -j arch=intel64 stencil=3axis radius=0 fold='x=1,y=1,z=1' mpi=0 YK_CXX=g++ OMPFLAGS='' YK_CXXOPT='-O0' EXTRA_MACROS='DEBUG TRACE TRACE_MEM TRACE_INTRINSICS'"
 	@echo " "
 	@echo "Example builds with test runs:"
 	@echo " $(MAKE) -j all"
 	@echo " $(MAKE) -j all ranks=2"
 	@echo " $(MAKE) -j all YK_CXX=g++ YK_CXXOPT=-O2 mpi=0"
-	@echo " $(MAKE) -j all YK_CXX=mpigxx YK_CXXOPT=-O2 ranks=2"
+	@echo " $(MAKE) -j all YK_CXX=mpigxx YK_CXXOPT=-O2 ranks=3"

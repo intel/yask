@@ -166,10 +166,8 @@ struct AppSettings : public KernelSettings {
             err << "Error: extraneous parameter(s):";
             for (auto arg : args)
                 err << " '" << arg << "'";
-            err << ".\nRun with '-help' option for usage.\n" << flush;
-            e.add_message(err.str());
-            throw e;
-            //exit_yask(1);
+            err << "; run with '-help' option for usage";
+            THROW_YASK_EXCEPTION(err.str());
         }
     }
     
@@ -272,7 +270,7 @@ int main(int argc, char** argv)
         // Exit if nothing to do.
         if (opts->num_trials < 1)
             THROW_YASK_EXCEPTION("Exiting because no trials are specified");
-        if (context->bb_num_points < 1) 
+        if (context->rank_bb.bb_num_points < 1) 
             THROW_YASK_EXCEPTION("Exiting because there are no points in the domain");
 
         // init data in grids and params.
@@ -369,8 +367,12 @@ int main(int argc, char** argv)
             auto ref_soln = kfac.new_solution(kenv, ksoln);
             auto ref_context = dynamic_pointer_cast<StencilContext>(ref_soln);
             assert(ref_context.get());
+            auto ref_opts = ref_context->get_settings();
+
+            // Change some settings.
             ref_context->name += "-reference";
-            ref_context->allow_vec_exchange = false;
+            ref_context->allow_vec_exchange = false;   // exchange scalars in halos.
+            
             alloc_steps(ref_soln, *opts);
             ref_soln->prepare_solution();
 
@@ -410,13 +412,14 @@ int main(int argc, char** argv)
         kenv->global_barrier();
         if (!ok)
             exit_yask(1);
-    } catch (yask_exception e) {
+
+        MPI_Finalize();
+        os << "YASK DONE." << endl << divLine << flush;
+    }
+    catch (yask_exception e) {
         cerr << "YASK Kernel: " << e.get_message() << ".\n";
         exit_yask(1);
     }
-
-    MPI_Finalize();
-    cout << "YASK DONE." << endl << divLine << flush;
     
     return 0;
 }

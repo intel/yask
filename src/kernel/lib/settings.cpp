@@ -117,18 +117,18 @@ namespace yask {
     // Apply a function to each neighbor rank.
     // Does NOT visit self.
     void MPIInfo::visitNeighbors(std::function<void
-                                 (const IdxTuple& offsets, // NeighborOffset vals.
-                                  int rank, // MPI rank.
-                                  int index)> visitor) {
+                                 (const IdxTuple& neigh_offsets, // NeighborOffset vals.
+                                  int neigh_rank, // MPI rank.
+                                  int neigh_index)> visitor) {
 
         // TODO: convert to use visitAllPoints().
         for (int i = 0; i < neighborhood_size; i++) {
-            auto offsets = neighborhood_sizes.unlayout(i);
-            int rank = my_neighbors.at(i);
-            assert(i == getNeighborIndex(offsets));
+            auto neigh_offsets = neighborhood_sizes.unlayout(i);
+            int neigh_rank = my_neighbors.at(i);
+            assert(i == getNeighborIndex(neigh_offsets));
 
             if (i != my_neighbor_index)
-                visitor(offsets, rank, i);
+                visitor(neigh_offsets, neigh_rank, i);
         }
     }
 
@@ -155,19 +155,18 @@ namespace yask {
     }
     
     // Apply a function to each neighbor rank.
-    // Called visitor function will contain the rank index of the neighbor.
+    // Does NOT visit self or non-existent neighbors.
     void MPIData::visitNeighbors(std::function<void
-                                 (const IdxTuple& offsets, // NeighborOffset.
-                                  int rank,
-                                  int index,
+                                 (const IdxTuple& neigh_offsets, // NeighborOffset.
+                                  int neigh_rank,
+                                  int neigh_index,
                                   MPIBufs& bufs)> visitor) {
 
         _mpiInfo->visitNeighbors
-            ([&](const IdxTuple& offsets,
-                 int rank, int i) {
+            ([&](const IdxTuple& neigh_offsets, int neigh_rank, int i) {
 
-                if (rank != MPI_PROC_NULL)
-                    visitor(offsets, rank, i, bufs[i]);
+                if (neigh_rank != MPI_PROC_NULL)
+                    visitor(neigh_offsets, neigh_rank, i, bufs[i]);
             });
     }
 
@@ -366,12 +365,13 @@ namespace yask {
             idx_t outer_size = outer_sizes[dname];
             if (*dptr <= 0)
                 *dptr = outer_size; // 0 => use full size as default.
-            if (mults.lookup(dname))
+            if (mults.lookup(dname) && mults[dname] > 1)
                 *dptr = ROUND_UP(*dptr, mults[dname]);
             idx_t inner_size = *dptr;
             idx_t ninner = (inner_size <= 0) ? 0 :
                 (outer_size + inner_size - 1) / inner_size; // full or partial.
-            idx_t rem = outer_size % inner_size;                       // size of remainder.
+            idx_t rem = (inner_size <= 0) ? 0 :
+                outer_size % inner_size;                       // size of remainder.
             idx_t nfull = rem ? (ninner - 1) : ninner; // full only.
             
             os << " In '" << dname << "' dimension, " << outer_name << " of size " <<
@@ -389,7 +389,8 @@ namespace yask {
     // other vars before allocating memory.
     // Called from prepare_solution(), so it doesn't normally need to be called from user code.
     void KernelSettings::adjustSettings(std::ostream& os, KernelEnvPtr env) {
-        
+        auto& step_dim = _dims->_step_dim;
+    
         // Determine num regions.
         // Also fix up region sizes as needed.
         // Default region size (if 0) will be size of rank-domain.
@@ -397,10 +398,10 @@ namespace yask {
         auto nr = findNumSubsets(os, _region_sizes, "region",
                                  _rank_sizes, "rank-domain",
                                  _dims->_cluster_pts);
-        auto rt = _region_sizes[_dims->_step_dim];
+        auto rt = _region_sizes[step_dim];
         os << " num-regions-per-rank-domain: " << nr << endl;
-        os << " Since the temporal region size is " << rt <<
-            ", temporal wave-front tiling is ";
+        os << " Since the region size in the '" << step_dim <<
+            "' dim is " << rt << ", temporal wave-front tiling is ";
         if (rt <= 1) os << "NOT ";
         os << "enabled.\n";
 

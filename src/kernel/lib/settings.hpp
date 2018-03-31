@@ -807,6 +807,13 @@ namespace yask {
         // Prints informational info to 'os'.
         virtual void adjustSettings(std::ostream& os, KernelEnvPtr env);
 
+        // Determine if this is the first or last rank in given dim.
+        virtual bool is_first_rank(const std::string dim) {
+            return _rank_indices[dim] == 0;
+        }
+        virtual bool is_last_rank(const std::string dim) {
+            return _rank_indices[dim] == _num_ranks[dim] - 1;
+        }
     };
     typedef std::shared_ptr<KernelSettings> KernelSettingsPtr;
     

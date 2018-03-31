@@ -31,32 +31,35 @@ namespace yask {
     // APIs.
     // See yask_kernel_api.hpp.
 
-#define GET_SOLN_API(api_name, expr, step_ok, domain_ok, misc_ok)   \
+#define GET_SOLN_API(api_name, expr, step_ok, domain_ok, misc_ok, req_prep) \
     idx_t StencilContext::api_name(const string& dim) const {           \
+        if (req_prep && !rank_bb.bb_valid)                              \
+            THROW_YASK_EXCEPTION("Error: '" #api_name "()' called before 'prepare_solution()'"); \
         checkDimType(dim, #api_name, step_ok, domain_ok, misc_ok);      \
         return expr;                                                    \
     }
-    GET_SOLN_API(get_first_rank_domain_index, bb_begin[dim], false, true, false)
-    GET_SOLN_API(get_last_rank_domain_index, bb_end[dim] - 1, false, true, false)
-    GET_SOLN_API(get_overall_domain_size, overall_domain_sizes[dim], false, true, false)
-    GET_SOLN_API(get_rank_domain_size, _opts->_rank_sizes[dim], false, true, false)
-    GET_SOLN_API(get_min_pad_size, _opts->_min_pad_sizes[dim], false, true, false)
-    GET_SOLN_API(get_block_size, _opts->_block_sizes[dim], false, true, false)
-    GET_SOLN_API(get_num_ranks, _opts->_num_ranks[dim], false, true, false)
-    GET_SOLN_API(get_rank_index, _opts->_rank_indices[dim], false, true, false)
+    GET_SOLN_API(get_rank_domain_size, _opts->_rank_sizes[dim], false, true, false, false)
+    GET_SOLN_API(get_min_pad_size, _opts->_min_pad_sizes[dim], false, true, false, false)
+    GET_SOLN_API(get_block_size, _opts->_block_sizes[dim], false, true, false, false)
+    GET_SOLN_API(get_num_ranks, _opts->_num_ranks[dim], false, true, false, false)
+    GET_SOLN_API(get_first_rank_domain_index, rank_bb.bb_begin[dim], false, true, false, true)
+    GET_SOLN_API(get_last_rank_domain_index, rank_bb.bb_end[dim] - 1, false, true, false, true)
+    GET_SOLN_API(get_overall_domain_size, overall_domain_sizes[dim], false, true, false, true)
+    GET_SOLN_API(get_rank_index, _opts->_rank_indices[dim], false, true, false, true)
 #undef GET_SOLN_API
 
     // The grid sizes updated any time these settings are changed.
-#define SET_SOLN_API(api_name, expr, step_ok, domain_ok, misc_ok)       \
+#define SET_SOLN_API(api_name, expr, step_ok, domain_ok, misc_ok, reset_prep) \
     void StencilContext::api_name(const string& dim, idx_t n) {         \
         checkDimType(dim, #api_name, step_ok, domain_ok, misc_ok);      \
         expr;                                                           \
         update_grids();                                                 \
+        if (reset_prep) rank_bb.bb_valid = ext_bb.bb_valid = false;     \
     }
-    SET_SOLN_API(set_rank_domain_size, _opts->_rank_sizes[dim] = n, false, true, false)
-    SET_SOLN_API(set_min_pad_size, _opts->_min_pad_sizes[dim] = n, false, true, false)
-    SET_SOLN_API(set_block_size, _opts->_block_sizes[dim] = n, false, true, false)
-    SET_SOLN_API(set_num_ranks, _opts->_num_ranks[dim] = n, false, true, false)
+    SET_SOLN_API(set_min_pad_size, _opts->_min_pad_sizes[dim] = n, false, true, false, false)
+    SET_SOLN_API(set_block_size, _opts->_block_sizes[dim] = n, false, true, false, false)
+    SET_SOLN_API(set_rank_domain_size, _opts->_rank_sizes[dim] = n, false, true, false, true)
+    SET_SOLN_API(set_num_ranks, _opts->_num_ranks[dim] = n, false, true, false, true)
 #undef SET_SOLN_API
     
     void StencilContext::share_grid_storage(yk_solution_ptr source) {
@@ -133,12 +136,13 @@ namespace yask {
         }
 
         // Begin & end tuples.
-        // Size based on overall context bounding box.
+        // Based on rank bounding box, not extended
+        // BB because we don't use wave-fronts in the ref code.
         IdxTuple begin(_dims->_stencil_dims);
-        begin.setVals(bb_begin, false);
+        begin.setVals(rank_bb.bb_begin, false);
         begin[step_dim] = begin_t;
         IdxTuple end(_dims->_stencil_dims);
-        end.setVals(bb_end, false);
+        end.setVals(rank_bb.bb_end, false);
         end[step_dim] = end_t;
         
         TRACE_MSG("calc_rank_ref: " << begin.makeDimValStr() << " ... (end before) " <<
@@ -172,7 +176,7 @@ namespace yask {
 
         // Number of iterations to get from begin_t, stopping before end_t,
         // stepping by step_t.
-        const idx_t num_t = (abs(end_t - begin_t) + (abs(step_t) - 1)) / abs(step_t);
+        const idx_t num_t = abs(end_t - begin_t);
         for (idx_t index_t = 0; index_t < num_t; index_t++)
         {
             // This value of index_t steps from start_t to stop_t-1.
@@ -194,7 +198,7 @@ namespace yask {
             // even scratch-grid ones.
             for (auto* sg : stGroups) {
 
-                // Halo exchange(s) needed for this group.
+                // Exchange all dirty halos.
                 exchange_halos_all();
 
                 // Indices needed for the generated misc loops.  Will normally be a
@@ -219,8 +223,8 @@ namespace yask {
 #undef misc_fn
                 
                 // Remember grids that have been written to by this group,
-                // updated at step 'start_t + step_t'.
-                mark_grids_dirty(*sg, start_t + step_t);
+                // updated at next step (+/- 1).
+                mark_grids_dirty(start_t + step_t, stop_t + step_t, *sg);
                 
             } // groups.
         } // iterations.
@@ -239,18 +243,27 @@ namespace yask {
         
         auto& step_dim = _dims->_step_dim;
         auto step_posn = Indices::step_posn;
-        idx_t begin_t = first_step_index;
-        idx_t step_t = _opts->_region_sizes[step_dim] * _dims->_step_dir;
-        assert(step_t);
-        idx_t end_t = last_step_index + _dims->_step_dir; // end is beyond last.
+        auto step_dir = _dims->_step_dir;
         int ndims = _dims->_stencil_dims.size();
 
-        // Begin, end, step, last tuples.
+        // Find begin, step and end in step-dim.
+        idx_t begin_t = first_step_index;
+
+        // Step-size in step-dim is number of region steps.
+        // Then, it is multipled by +/-1 to get proper direction.
+        idx_t step_t = _opts->_region_sizes[step_dim];
+        step_t *= step_dir;
+        assert(step_t);
+        idx_t end_t = last_step_index + step_dir; // end is beyond last.
+
+        // Begin, end, step tuples.
+        // Based on overall bounding box, which includes
+        // any needed extensions for wave-fronts.
         IdxTuple begin(_dims->_stencil_dims);
-        begin.setVals(bb_begin, false);
+        begin.setVals(ext_bb.bb_begin, false);
         begin[step_dim] = begin_t;
         IdxTuple end(_dims->_stencil_dims);
-        end.setVals(bb_end, false);
+        end.setVals(ext_bb.bb_end, false);
         end[step_dim] = end_t;
         IdxTuple step(_dims->_stencil_dims);
         step.setVals(_opts->_region_sizes, false); // step by region sizes.
@@ -258,9 +271,9 @@ namespace yask {
 
         TRACE_MSG("run_solution: " << begin.makeDimValStr() << " ... (end before) " <<
                   end.makeDimValStr() << " by " << step.makeDimValStr());
-        if (!bb_valid)
+        if (!rank_bb.bb_valid)
             THROW_YASK_EXCEPTION("Error: run_solution() called without calling prepare_solution() first");
-        if (bb_size < 1) {
+        if (ext_bb.bb_size < 1) {
             TRACE_MSG("nothing to do in solution");
             return;
         }
@@ -277,32 +290,39 @@ namespace yask {
         // For each subsequent time step in a region, the spatial location
         // of each block evaluation is shifted by the angle for each
         // stencil-group. So, the total shift in a region is the angle * num
-        // stencils * num timesteps. Thus, the number of overlapping regions
-        // is ceil(total shift / region size). This assumes all groups
-        // are inter-dependent to find minimum extension. Actual required
+        // stencils * num timesteps. This assumes all groups
+        // are inter-dependent to find maximum extension. Actual required
         // extension may be less, but this will just result in some calls to
         // calc_region() that do nothing.
         //
-        // Conceptually (showing 4 regions in t and x dims):
-        // -----------------------------  t = rt
-        //  \    |\     \     \ |   \     .
-        //   \   | \     \     \|    \    .
-        //    \  |  \     \     |     \   .
-        //     \ |r0 \  r1 \ r2 |\ r3  \  .
-        //      \|    \     \   | \     \ .
-        // ------------------------------ t = 0
-        //       |              |     |
-        // x = begin_dx      end_dx end_dx
-        //                   (orig) (after extension)
+        // Conceptually (showing 2 ranks in t and x dims):
+        // -----------------------------  t = rt ------------------------------
+        //   \   | \     \     \|  \      .          / |  \     \     \|  \   |
+        //    \  |  \     \     |   \     .         / \|   \     \     |   \  |
+        //     \ |r0 \  r1 \ r2 |\ r3\    .        /r0 | r1 \  r2 \ r3 |\ r4\ |
+        //      \|    \     \   | \   \   .       /    |\    \     \   | \   \|
+        // ------------------------------ t = 0 -------------------------------
+        //       |   rank 0     |      |         |     |   rank 1      |      |
+        // x = begin_dx      end_dx end_dx    begin_dx begin_dx     end_dx end_dx
+        //     (rank)        (rank) (ext)     (ext)    (rank)       (rank) (adj)
         //
-        idx_t nshifts = (idx_t(stGroups.size()) * abs(step_t)) - 1;
-        for (auto& dim : _dims->_domain_dims.getDims()) {
-            auto& dname = dim.getName();
-            end[dname] += angles[dname] * nshifts;
+        //                      |XXXXXX|         |XXXXX|  <- redundant calculations.          
+        // XXXXXX|  <- areas outside of outer ranks not calculated ->  |XXXXXXX
+        //
+        if (abs(step_t) > 1) {
+            for (auto& dim : _dims->_domain_dims.getDims()) {
+                auto& dname = dim.getName();
+
+                // The end should be adjusted if there is not
+                // already an extension.
+                if (right_wf_exts[dname] == 0)
+                    end[dname] += wf_shifts[dname];
+            }
+            TRACE_MSG("after adjustment for " << num_wf_shifts <<
+                      " wave-front shift(s): " <<
+                      begin.makeDimValStr() << " ... (end before) " <<
+                      end.makeDimValStr());
         }
-        TRACE_MSG("after wave-front adjustment: " <<
-                  begin.makeDimValStr() << " ... (end before) " <<
-                  end.makeDimValStr());
 
         // Indices needed for the 'rank' loops.
         ScanIndices rank_idxs(*_dims, true);
@@ -337,11 +357,10 @@ namespace yask {
             rank_idxs.stop[step_posn] = stop_t;
             rank_idxs.step[step_posn] = step_t;
             
-            // If doing only one step in a region (default), loop
-            // through groups here, and do only one group at a
-            // time in calc_region(). This is similar to loop in
-            // calc_rank_ref().
-            if (this_num_t == 1) {
+            // If no wave-fronts (default), loop through groups here, and do
+            // only one group at a time in calc_region(). This is similar to
+            // loop in calc_rank_ref().
+            if (step_t == 1) {
 
                 for (auto* sg : stGroups) {
 
@@ -349,7 +368,7 @@ namespace yask {
                     if (sg->is_scratch())
                         continue;
 
-                    // Halo exchange(s) needed for this group.
+                    // Exchange halo(s) needed for this group.
                     exchange_halos(start_t, stop_t, *sg);
 
                     // Eval this group in calc_region().
@@ -362,24 +381,17 @@ namespace yask {
                     TRACE_MSG("run_solution: step " << start_t <<
                               " in group '" << sg->get_name() << "'");
 #include "yask_rank_loops.hpp"
-
-                    // Remember grids that have been written to by this group,
-                    // updated at step 'start_t + step_t'.
-                    mark_grids_dirty(*sg, start_t + step_t);
                 }
             }
 
-            // If doing more than one step in a region (temporal wave-front),
-            // must loop through all groups in calc_region().
+            // If doing wave-fronts, must loop through all groups in
+            // calc_region().
+            // TODO: make this the only case, allowing all groups to be done
+            // between MPI exchanges, even w/o wave-fronts.
             else {
 
-                // TODO: enable reverse time w/wave-fronts.
-                if (step_t < 0)
-                    THROW_YASK_EXCEPTION("Error: reverse solution with wave-fronts not yet supported");
-
-                // TODO: enable halo exchange for wave-fronts.
-                if (_env->num_ranks > 1)
-                    THROW_YASK_EXCEPTION("Error: halo exchange with wave-fronts not yet supported");
+                // Exchange all dirty halo(s).
+                exchange_halos_all();
                 
                 // Eval all stencil groups.
                 StencilGroupSet* stGroup_ptr = NULL;
@@ -449,8 +461,8 @@ namespace yask {
 
         // Make a copy of the original start and stop indices because
         // we will be shifting these for temporal wavefronts.
-        Indices rank_start(rank_idxs.start);
-        Indices rank_stop(rank_idxs.stop);
+        Indices start(rank_idxs.start);
+        Indices stop(rank_idxs.stop);
 
         // Not yet supporting temporal blocking.
         if (_opts->_block_sizes[step_dim] != 1)
@@ -499,21 +511,33 @@ namespace yask {
                 // run_solution().  In this function, one of the
                 // parallelogram-shaped regions is being evaluated.  At
                 // each time-step, the parallelogram may be trimmed
-                // based on the BB.
+                // based on the BB and WF extensions outside of the domain.
                     
-                // Actual region boundaries must stay within BB for this group.
-                // Note that i-loop is over domain vars only (skipping over step var).
+                // Actual region boundaries must stay within [extended] BB for this group.
                 bool ok = true;
-                for (int i = step_posn + 1; i < ndims; i++) {
+                for (int i = 0; i < ndims; i++) {
+                    if (i == step_posn) continue;
                     auto& dname = _dims->_stencil_dims.getDimName(i);
+                    auto angle = wf_angles[dname];
+                    idx_t dbegin = rank_bb.bb_begin[dname];
+                    idx_t dend = rank_bb.bb_end[dname];
+
                     assert(sg->bb_begin.lookup(dname));
-                    region_idxs.begin[i] = max<idx_t>(rank_start[i], sg->bb_begin[dname]);
+                    idx_t rbegin = max<idx_t>(start[i], sg->bb_begin[dname]);
+                    if (rbegin < dbegin) // in left WF ext?
+                        rbegin = max(rbegin, dbegin - left_wf_exts[dname] + index_t * angle);
+                    region_idxs.begin[i] = rbegin;
+
                     assert(sg->bb_end.lookup(dname));
-                    region_idxs.end[i] = min<idx_t>(rank_stop[i], sg->bb_end[dname]);
-                    if (region_idxs.end[i] <= region_idxs.begin[i])
+                    idx_t rend = min<idx_t>(stop[i], sg->bb_end[dname]);
+                    if (rend > dend) // in right WF ext?
+                        rend = min(rend, dend + right_wf_exts[dname] - index_t * angle);
+                    region_idxs.end[i] = rend;
+
+                    if (rend <= rbegin)
                         ok = false;
                 }
-                TRACE_MSG("calc_region, after trimming: " <<
+                TRACE_MSG("calc_region, after trimming for step " << start_t << ": " <<
                           region_idxs.begin.makeValStr(ndims) <<
                           " ... (end before) " << region_idxs.end.makeValStr(ndims));
                     
@@ -532,19 +556,23 @@ namespace yask {
                     // contains the outer OpenMP loop(s).
 #include "yask_region_loops.hpp"
 
+                    // Remember grids that have been written to by this group,
+                    // updated at next step (+/- 1).
+                    mark_grids_dirty(start_t + step_t, stop_t + step_t, *sg);
                 }
             
                 // Shift spatial region boundaries for next iteration to
-                // implement temporal wavefront.  We only shift
-                // backward, so region loops must increment. They may do
+                // implement temporal wavefront.  Between regions, we only shift
+                // backward, so region loops must strictly increment. They may do
                 // so in any order.  TODO: shift only what is needed by
                 // this group, not the global max.
-                // Note that i-loop is over domain vars only (skipping over step var).
-                for (int i = step_posn + 1; i < ndims; i++) {
+                for (int i = 0; i < ndims; i++) {
+                    if (i == step_posn) continue;
                     auto& dname = _dims->_stencil_dims.getDimName(i);
-                    auto angle = angles[dname];
-                    rank_start[i] -= angle;
-                    rank_stop[i] -= angle;
+                    auto angle = wf_angles[dname];
+
+                    start[i] -= angle;
+                    stop[i] -= angle;
                 }
 
             } // stencil groups.
@@ -819,7 +847,7 @@ namespace yask {
     
     // Apply auto-tuning to some of the settings.
     void StencilContext::run_auto_tuner_now(bool verbose) {
-        if (!bb_valid)
+        if (!rank_bb.bb_valid)
             THROW_YASK_EXCEPTION("Error: tune_settings() called without calling prepare_solution() first");
 
         ostream& os = get_ostr();
@@ -892,8 +920,7 @@ namespace yask {
     // the global problem: rank index, offset, etc.  Need to call this even
     // if not using MPI to properly init these vars.  Called from
     // prepare_solution(), so it doesn't normally need to be called from user code.
-    void StencilContext::setupRank()
-    {
+    void StencilContext::setupRank() {
         ostream& os = get_ostr();
         auto& step_dim = _dims->_step_dim;
         auto me = _env->my_rank;
@@ -1074,14 +1101,6 @@ namespace yask {
                                   " because its size in '" << dname << "' is " << rnsz);
                         vlen_mults = false;
                     }
-
-                    // Is domain size at least as large as halo in direction
-                    // with multiple ranks?
-                    if (_opts->_num_ranks[dname] > 1 && rnsz < max_halos[di]) {
-                        THROW_YASK_EXCEPTION("Error: rank-domain size of " << rnsz << " in '" <<
-                                             dname << "' in rank " << rn <<
-                                             " is less than largest halo size of " << max_halos[di]);
-                    }
                 }
 
                 // Save vec-mult flag.
@@ -1091,12 +1110,18 @@ namespace yask {
             
         } // ranks.
 
-        // Set offsets in grids.
+        // Set offsets in grids and find WF extensions
+        // based on the grids' halos.
         update_grids();
-    }
+
+        // Determine bounding-boxes for all groups.
+        // This must be done after finding WF extensions.
+        find_bounding_boxes();
+
+    } // setupRank.
 
     // Allocate memory for grids that do not already have storage.
-    // Create MPI buffers.
+    // Create MPI and allocate buffers.
     // TODO: allow different types of memory for different grids, MPI bufs, etc.
     void StencilContext::allocData(ostream& os) {
 
@@ -1171,48 +1196,77 @@ namespace yask {
         // Need to determine the size and shape of all MPI buffers.
         // Visit all neighbors of this rank.
         _mpiInfo->visitNeighbors
-            ([&](const IdxTuple& noffsets, int nrank, int nidx) {
-                if (nrank == MPI_PROC_NULL)
-                    return;
+            ([&](const IdxTuple& neigh_offsets, int neigh_rank, int neigh_idx) {
+                if (neigh_rank == MPI_PROC_NULL)
+                    return; // from lambda fn.
 
-                // Manhattan dist.
-                int mandist = _mpiInfo->man_dists.at(nidx);
-                    
-                // Check against max dist needed.  TODO: determine max dist
+                // Determine max dist needed.  TODO: determine max dist
                 // automatically from stencils; may not be same for all
                 // grids.
 #ifndef MAX_EXCH_DIST
-#define MAX_EXCH_DIST 3
+#define MAX_EXCH_DIST (NUM_STENCIL_DIMS - 1)
 #endif
+                // Always use max dist with WF.
+                // TODO: determine if this is overkill.
+                int maxdist = MAX_EXCH_DIST;
+                if (num_wf_shifts > 0)
+                    maxdist = NUM_STENCIL_DIMS - 1;
 
+                // Manhattan dist.
+                int mandist = _mpiInfo->man_dists.at(neigh_idx);
+                    
                 // Check distance.
                 // TODO: calculate and use exch dist for each grid.
-                if (mandist > MAX_EXCH_DIST) {
-                    TRACE_MSG("no halo exchange needed with rank " << nrank <<
+                if (mandist > maxdist) {
+                    TRACE_MSG("no halo exchange needed with rank " << neigh_rank <<
                               " because L1-norm = " << mandist);
                     return;     // from lambda fn.
                 }
         
-                // Determine size of MPI buffers between nrank and my rank.
-                // Create send and receive buffers for each grid that has a halo
-                // between rn and me.
+                // Determine size of MPI buffers between neigh_rank and my rank
+                // for each grid and create those that are needed.
                 for (auto gp : gridPtrs) {
                     if (!gp)
                         continue;
                     auto& gname = gp->get_name();
 
-                    // Lookup first & last domain indices and halo sizes
+                    // Lookup first & last domain indices and calc halo sizes
                     // for this grid.
                     bool found_delta = false;
-                    IdxTuple halo_sizes, first_idx, last_idx;
+                    IdxTuple halo_sizes;
+                    IdxTuple first_inner_idx, last_inner_idx;
+                    IdxTuple first_outer_idx, last_outer_idx;
                     for (auto& dim : _dims->_domain_dims.getDims()) {
                         auto& dname = dim.getName();
                         if (gp->is_dim_used(dname)) {
 
-                            // Get domain stats for this grid.
-                            first_idx.addDimBack(dname, gp->get_first_rank_domain_index(dname));
-                            last_idx.addDimBack(dname, gp->get_last_rank_domain_index(dname));
-                            auto halo_size = gp->get_halo_size(dname);
+                            // Get domain indices for this grid.
+                            // If there are no more ranks in the given direction, extend
+                            // the index into the outer halo to make sure all data are sync'd.
+                            // This is critical for WFs.
+                            idx_t fidx = gp->get_first_rank_domain_index(dname);
+                            idx_t lidx = gp->get_last_rank_domain_index(dname);
+                            first_inner_idx.addDimBack(dname, fidx);
+                            last_inner_idx.addDimBack(dname, lidx);
+                            if (_opts->is_first_rank(dname))
+                                fidx -= gp->get_left_halo_size(dname);
+                            if (_opts->is_last_rank(dname))
+                                lidx += gp->get_right_halo_size(dname);
+                            first_outer_idx.addDimBack(dname, fidx);
+                            last_outer_idx.addDimBack(dname, lidx);
+
+                            // Determine size of exchange. This will be the actual halo size
+                            // plus any wave-front extensions. In the current implementation,
+                            // we need the wave-front extensions regardless of whether there
+                            // is a halo on a given grid. This is because each stencil-group
+                            // gets shifted by the WF angles at each step in the WF.
+                            // TODO: use left or right halo, not max.
+                            auto halo_size = max(gp->get_left_halo_size(dname),
+                                                 gp->get_right_halo_size(dname));
+                            if (neigh_offsets[dname] == MPIInfo::rank_prev)
+                                halo_size += left_wf_exts[dname];
+                            else if (neigh_offsets[dname] == MPIInfo::rank_next)
+                                halo_size += right_wf_exts[dname];
                             halo_sizes.addDimBack(dname, halo_size);
 
                             // Vectorized exchange allowed based on domain sizes?
@@ -1220,7 +1274,7 @@ namespace yask {
                             // of vector multiples.
                             bool vec_ok = allow_vec_exchange &&
                                 _mpiInfo->has_all_vlen_mults[_mpiInfo->my_neighbor_index] &&
-                                _mpiInfo->has_all_vlen_mults[nidx];
+                                _mpiInfo->has_all_vlen_mults[neigh_idx];
                             
                             // Round up halo sizes if vectorized exchanges allowed.
                             // TODO: add a heuristic to avoid increasing by a large factor.
@@ -1229,19 +1283,21 @@ namespace yask {
                                 halo_sizes.setVal(dname, ROUND_UP(halo_size, vec_size));
                             }
                             
-                            // Is there a neighbor in this domain direction?
-                            if (noffsets[dname] != MPIInfo::rank_self)
+                            // Is this neighbor before or after me in this domain direction?
+                            if (neigh_offsets[dname] != MPIInfo::rank_self)
                                 found_delta = true;
                         }
                     }
 
                     // Is buffer needed?
+                    // Example: if this grid is 2D in y-z, but only neighbors are in
+                    // x-dim, we don't need any exchange.
                     if (!found_delta) {
                         TRACE_MSG("no halo exchange needed for grid '" << gname <<
-                                  "' with rank " << nrank <<
+                                  "' with rank " << neigh_rank <<
                                   " because the neighbor is not in a direction"
                                   " corresponding to a grid dim");
-                        continue;
+                        continue; // to next grid.
                     }
 
                     // Make a buffer in both directions (send & receive).
@@ -1257,14 +1313,14 @@ namespace yask {
                         for (auto& dim : halo_sizes.getDims()) {
                             auto& dname = dim.getName();
 
-                            // Init range to whole rank domain (inside halos).
-                            // These may be changed below depending on the
-                            // neighbor's direction.
-                            copy_begin[dname] = first_idx[dname];
-                            copy_end[dname] = last_idx[dname] + 1; // end = last + 1.
+                            // Init range to whole rank domain (including
+                            // outer halos).  These may be changed below
+                            // depending on the neighbor's direction.
+                            copy_begin[dname] = first_outer_idx[dname];
+                            copy_end[dname] = last_outer_idx[dname] + 1; // end = last + 1.
 
                             // Neighbor direction in this dim.
-                            auto neigh_ofs = noffsets[dname];
+                            auto neigh_ofs = neigh_offsets[dname];
                             
                             // Region to read from, i.e., data from inside
                             // this rank's halo to be put into receiver's
@@ -1275,14 +1331,14 @@ namespace yask {
                                 if (neigh_ofs == idx_t(MPIInfo::rank_prev)) {
 
                                     // Only read slice as wide as halo from beginning.
-                                    copy_end[dname] = first_idx[dname] + halo_sizes[dname];
+                                    copy_end[dname] = first_inner_idx[dname] + halo_sizes[dname];
                                 }
                             
                                 // Is this neighbor 'after' me in this dim?
                                 else if (neigh_ofs == idx_t(MPIInfo::rank_next)) {
                                     
                                     // Only read slice as wide as halo before end.
-                                    copy_begin[dname] = last_idx[dname] + 1 - halo_sizes[dname];
+                                    copy_begin[dname] = last_inner_idx[dname] + 1 - halo_sizes[dname];
                                 }
                             
                                 // Else, this neighbor is in same posn as I am in this dim,
@@ -1296,16 +1352,16 @@ namespace yask {
                                 if (neigh_ofs == idx_t(MPIInfo::rank_prev)) {
 
                                     // Only read slice as wide as halo before beginning.
-                                    copy_begin[dname] = first_idx[dname] - halo_sizes[dname];
-                                    copy_end[dname] = first_idx[dname];
+                                    copy_begin[dname] = first_inner_idx[dname] - halo_sizes[dname];
+                                    copy_end[dname] = first_inner_idx[dname];
                                 }
                             
                                 // Is this neighbor 'after' me in this dim?
                                 else if (neigh_ofs == idx_t(MPIInfo::rank_next)) {
                                     
                                     // Only read slice as wide as halo after end.
-                                    copy_begin[dname] = last_idx[dname] + 1;
-                                    copy_end[dname] = last_idx[dname] + 1 + halo_sizes[dname];
+                                    copy_begin[dname] = last_inner_idx[dname] + 1;
+                                    copy_end[dname] = last_inner_idx[dname] + 1 + halo_sizes[dname];
                                 }
                                 
                                 // Else, this neighbor is in same posn as I am in this dim,
@@ -1331,8 +1387,8 @@ namespace yask {
                             }
 
                             // step dim?
-                            // Assume only one time-step to exchange.
-                            // TODO: fix this when MPI + wave-front is enabled.
+                            // Allowing only one step to be exchanged.
+                            // TODO: consider exchanging mutiple steps at once for WFs.
                             else if (dname == _dims->_step_dim) {
 
                                 // Use 0..1 as a place-holder range.
@@ -1359,7 +1415,8 @@ namespace yask {
                         // Does buffer have non-zero size?
                         if (buf_sizes.size() == 0 || buf_sizes.product() == 0) {
                             TRACE_MSG("no halo exchange needed for grid '" << gname <<
-                                      "' with rank " << nrank << " because there is no data to exchange");
+                                      "' with rank " << neigh_rank <<
+                                      " because there is no data to exchange");
                             continue;
                         }
 
@@ -1372,16 +1429,16 @@ namespace yask {
                         ostringstream oss;
                         oss << gname;
                         if (bd == MPIBufs::bufSend)
-                            oss << "_send_halo_from_" << me << "_to_" << nrank;
+                            oss << "_send_halo_from_" << me << "_to_" << neigh_rank;
                         else if (bd == MPIBufs::bufRecv)
-                            oss << "_recv_halo_at_" << me << "_from_" << nrank;
+                            oss << "_recv_halo_from_" << neigh_rank << "_to_" << me;
                         string bufname = oss.str();
 
                         // Make MPI data entry for this grid.
                         auto gbp = mpiData.emplace(gname, _mpiInfo);
                         auto& gbi = gbp.first; // iterator from pair returned by emplace().
                         auto& gbv = gbi->second; // value from iterator.
-                        auto& buf = gbv.getBuf(MPIBufs::BufDir(bd), noffsets);
+                        auto& buf = gbv.getBuf(MPIBufs::BufDir(bd), neigh_offsets);
 
                         // Config buffer for this grid.
                         // (But don't allocate storage yet.)
@@ -1393,10 +1450,10 @@ namespace yask {
                         
                         TRACE_MSG("configured MPI buffer object '" << buf.name <<
                                   "' for rank at relative offsets " <<
-                                  noffsets.subElements(1).makeDimValStr() << " with " <<
+                                  neigh_offsets.subElements(1).makeDimValStr() << " with " <<
                                   buf.num_pts.makeDimValStr(" * ") << " = " << buf.get_size() <<
-                                  " element(s) to be copied from " << buf.begin_pt.makeDimValStr() <<
-                                  " to " << buf.last_pt.makeDimValStr());
+                                  " element(s) at " << buf.begin_pt.makeDimValStr() <<
+                                  " ... " << buf.last_pt.makeDimValStr());
                         num_exchanges++;
 
                     } // send, recv.
@@ -1606,13 +1663,13 @@ namespace yask {
 
     
     // Set non-scratch grid sizes and offsets based on settings.
-    // Set max halos across grids.
+    // Set wave-front settings.
     // This should be called anytime a setting or rank offset is changed.
     void StencilContext::update_grids()
     {
         assert(_opts);
 
-        // Reset halos.
+        // Reset halos to zero.
         max_halos = _dims->_domain_dims;
 
         // Loop through each non-scratch grid.
@@ -1641,17 +1698,84 @@ namespace yask {
                     gp->_set_offset(dname, rank_domain_offsets[dname]);
 
                     // Update max halo across grids, used for wavefront angles.
-                    auto hsz = gp->get_halo_size(dname);
-                    max_halos[dname] = max(max_halos[dname], hsz);
+                    max_halos[dname] = max(max_halos[dname], gp->get_left_halo_size(dname));
+                    max_halos[dname] = max(max_halos[dname], gp->get_right_halo_size(dname));
                 }
             }
         } // grids.
 
+        // Calculate wave-front settings based on max halos.
+        // See the wavefront diagram in run_solution() for description
+        // of angles and extensions.
+        auto& step_dim = _dims->_step_dim;
+        auto wf_steps = _opts->_region_sizes[step_dim];
+        num_wf_shifts = max((idx_t(stGroups.size()) * wf_steps) - 1, idx_t(0));
+        for (auto& dim : _dims->_domain_dims.getDims()) {
+            auto& dname = dim.getName();
+            auto rksize = _opts->_rank_sizes[dname];
+            auto nranks = _opts->_num_ranks[dname];
+
+            // Determine the max spatial skewing angles for temporal
+            // wave-fronts based on the max halos.  We only need non-zero
+            // angles if the region size is less than the rank size and
+            // there are no other ranks in this dim, i.e., if the region
+            // covers the global domain in a given dim, no wave-front is
+            // needed in that dim.  TODO: make rounding-up an option.
+            idx_t angle = 0;
+            if (_opts->_region_sizes[dname] < rksize || nranks > 0)
+                angle = ROUND_UP(max_halos[dname], _dims->_cluster_pts[dname]);
+            wf_angles[dname] = angle;
+
+            // Determine the total WF shift to be added in each dim.
+            idx_t shifts = angle * num_wf_shifts;
+            wf_shifts[dname] = shifts;
+
+            // Is domain size at least as large as halo + wf_ext in direction
+            // when there are multiple ranks?
+            auto min_size = max_halos[dname] + shifts;
+            if (_opts->_num_ranks[dname] > 1 && rksize < min_size) {
+                THROW_YASK_EXCEPTION("Error: rank-domain size of " << rksize << " in '" <<
+                                     dname << "' dim is less than minimum size of " << min_size <<
+                                     ", which is based on stencil halos and temporal wave-front sizes");
+            }
+
+            // If there is another rank to the left, set wave-front
+            // extension on the left.
+            left_wf_exts[dname] = _opts->is_first_rank(dname) ? 0 : shifts;
+
+            // If there is another rank to the right, set wave-front
+            // extension on the right.
+            right_wf_exts[dname] = _opts->is_last_rank(dname) ? 0 : shifts;
+        }            
+            
+        // Now that wave-front settings are known, we can push this info
+        // back to the grids. It's useful to store this redundant info
+        // in the grids, because there it's indexed by grid dims instead
+        // of domain dims. This makes it faster to do grid indexing.
+        for (auto gp : gridPtrs) {
+            assert(gp);
+
+            // Ignore manually-sized grid.
+            if (gp->is_fixed_size())
+                continue;
+
+            // Loop through each domain dim.
+            for (auto& dim : _dims->_domain_dims.getDims()) {
+                auto& dname = dim.getName();
+                if (gp->is_dim_used(dname)) {
+
+                    // Set extensions to be the same as the global ones.
+                    gp->_set_left_wf_ext(dname, left_wf_exts[dname]);
+                    gp->_set_right_wf_ext(dname, right_wf_exts[dname]);
+                }
+            }
+        }
     }
     
     // Allocate grids and MPI bufs.
     // Initialize some data structures.
     void StencilContext::prepare_solution() {
+        auto& step_dim = _dims->_step_dim;
 
         // Don't continue until all ranks are this far.
         _env->global_barrier();
@@ -1717,10 +1841,6 @@ namespace yask {
         }
 #endif
         
-        // TODO: enable multi-rank wave-front tiling.
-        auto& step_dim = _dims->_step_dim;
-        if (_opts->_region_sizes[step_dim] > 1 && _env->num_ranks > 1)
-            THROW_YASK_EXCEPTION("MPI communication is not currently enabled with wave-front tiling");
 
         // Some grid stats.
         os << endl;
@@ -1731,9 +1851,6 @@ namespace yask {
         // Set up data based on MPI rank, including grid positions.
         // Update all the grid sizes.
         setupRank();
-
-        // Determine bounding-boxes for all groups.
-        find_bounding_boxes();
 
         // Alloc grids, MPI bufs, and scratch grids.
         allocData(os);
@@ -1750,37 +1867,46 @@ namespace yask {
         // Report some stats.
         idx_t dt = _opts->_rank_sizes[step_dim];
         os << "\nProblem sizes in points (from smallest to largest):\n"
-            " vector-size:          " << _dims->_fold_pts.makeDimValStr(" * ") << endl <<
-            " cluster-size:         " << _dims->_cluster_pts.makeDimValStr(" * ") << endl <<
-            " sub-block-size:       " << _opts->_sub_block_sizes.makeDimValStr(" * ") << endl <<
-            " sub-block-group-size: " << _opts->_sub_block_group_sizes.makeDimValStr(" * ") << endl <<
-            " block-size:           " << _opts->_block_sizes.makeDimValStr(" * ") << endl <<
-            " block-group-size:     " << _opts->_block_group_sizes.makeDimValStr(" * ") << endl <<
-            " region-size:          " << _opts->_region_sizes.makeDimValStr(" * ") << endl <<
-            " rank-domain-size:     " << _opts->_rank_sizes.makeDimValStr(" * ") << endl <<
-            " overall-problem-size: " << overall_domain_sizes.makeDimValStr(" * ") << endl <<
+            " vector-size:           " << _dims->_fold_pts.makeDimValStr(" * ") << endl <<
+            " cluster-size:          " << _dims->_cluster_pts.makeDimValStr(" * ") << endl <<
+            " sub-block-size:        " << _opts->_sub_block_sizes.makeDimValStr(" * ") << endl <<
+            " sub-block-group-size:  " << _opts->_sub_block_group_sizes.makeDimValStr(" * ") << endl <<
+            " block-size:            " << _opts->_block_sizes.makeDimValStr(" * ") << endl <<
+            " block-group-size:      " << _opts->_block_group_sizes.makeDimValStr(" * ") << endl <<
+            " region-size:           " << _opts->_region_sizes.makeDimValStr(" * ") << endl <<
+            " rank-domain-size:      " << _opts->_rank_sizes.makeDimValStr(" * ") << endl <<
+            " overall-problem-size:  " << overall_domain_sizes.makeDimValStr(" * ") << endl <<
             endl <<
             "Other settings:\n"
-            " yask-version:         " << yask_get_version_string() << endl <<
-            " stencil-name:         " << get_name() << endl << 
+            " yask-version:          " << yask_get_version_string() << endl <<
+            " stencil-name:          " << get_name() << endl <<
+            " element-size:          " << makeByteStr(get_element_bytes()) << endl <<
 #ifdef USE_MPI
-            " num-ranks:            " << _opts->_num_ranks.makeDimValStr(" * ") << endl <<
-            " rank-indices:         " << _opts->_rank_indices.makeDimValStr() << endl <<
-            " rank-domain-offsets:  " << rank_domain_offsets.makeDimValOffsetStr() << endl <<
+            " num-ranks:             " << _opts->_num_ranks.makeDimValStr(" * ") << endl <<
+            " rank-indices:          " << _opts->_rank_indices.makeDimValStr() << endl <<
+            " rank-domain-offsets:   " << rank_domain_offsets.makeDimValOffsetStr() << endl <<
 #endif
-            " vector-len:           " << VLEN << endl <<
-            " extra-padding:        " << _opts->_extra_pad_sizes.makeDimValStr() << endl <<
-            " minimum-padding:      " << _opts->_min_pad_sizes.makeDimValStr() << endl <<
-            " wave-front-angles:    " << angles.makeDimValStr() << endl <<
-            " max-halos:            " << max_halos.makeDimValStr() << endl <<
-            " L1-prefetch-distance: " << PFD_L1 << endl <<
-            " L2-prefetch-distance: " << PFD_L2 << endl <<
-            endl;
+            " vector-len:            " << VLEN << endl <<
+            " extra-padding:         " << _opts->_extra_pad_sizes.makeDimValStr() << endl <<
+            " minimum-padding:       " << _opts->_min_pad_sizes.makeDimValStr() << endl <<
+            " L1-prefetch-distance:  " << PFD_L1 << endl <<
+            " L2-prefetch-distance:  " << PFD_L2 << endl <<
+            " max-halos:             " << max_halos.makeDimValStr() << endl;
+        if (num_wf_shifts > 0) {
+            os <<
+                " wave-front-angles:     " << wf_angles.makeDimValStr() << endl <<
+                " num-wave-front-shifts: " << num_wf_shifts << endl <<
+                " wave-front-shift-lens: " << wf_shifts.makeDimValStr() << endl <<
+                " left-wave-front-exts:  " << left_wf_exts.makeDimValStr() << endl <<
+                " right-wave-front-exts: " << right_wf_exts.makeDimValStr() << endl;
+        }
+        os << endl;
         
         // sums across groups for this rank.
         rank_numWrites_1t = 0;
         rank_reads_1t = 0;
         rank_numFpOps_1t = 0;
+        os << "Num equations-groups: " << stGroups.size() << endl;
         for (auto* sg : stGroups) {
             idx_t updates1 = sg->get_scalar_points_written();
             idx_t updates_domain = updates1 * sg->bb_num_points;
@@ -1817,7 +1943,7 @@ namespace yask {
         tot_numFpOps_1t = sumOverRanks(rank_numFpOps_1t, _env->comm);
         tot_numFpOps_dt = tot_numFpOps_1t * dt;
 
-        rank_domain_1t = bb_num_points;
+        rank_domain_1t = rank_bb.bb_num_points;
         rank_domain_dt = rank_domain_1t * dt; // same as _opts->_rank_sizes.product();
         tot_domain_1t = sumOverRanks(rank_domain_1t, _env->comm);
         tot_domain_dt = tot_domain_1t * dt;
@@ -2031,35 +2157,26 @@ namespace yask {
     }
     
     // Set the bounding-box for each stencil-group and whole domain.
-    // Also sets wave-front angles.
     void StencilContext::find_bounding_boxes()
     {
         ostream& os = get_ostr();
 
+        // Rank BB is based only on rank offsets and rank domain sizes.
+        rank_bb.bb_begin = rank_domain_offsets;
+        rank_bb.bb_end = rank_domain_offsets.addElements(_opts->_rank_sizes, false);
+        rank_bb.update_bb(os, "rank", *this, true);
+
+        // Overall BB may be extended for wave-fronts.
+        ext_bb.bb_begin = rank_bb.bb_begin.subElements(left_wf_exts);
+        ext_bb.bb_end = rank_bb.bb_end.addElements(right_wf_exts);
+        ext_bb.update_bb(os, "extended-rank", *this, true);
+
         // Find BB for each group.
         for (auto sg : stGroups)
             sg->find_bounding_box();
-
-        // Overall BB based only on rank offsets and rank domain sizes.
-        bb_begin = rank_domain_offsets;
-        bb_end = rank_domain_offsets.addElements(_opts->_rank_sizes, false);
-        update_bb(os, "rank", *this, true);
-
-        // Determine the max spatial skewing angles for temporal wavefronts
-        // based on the max halos.  This assumes the smallest granularity of
-        // calculation is CPTS_* in each dim.  We only need non-zero angles
-        // if the region size is less than the rank size, i.e., if the
-        // region covers the whole rank in a given dimension, no wave-front
-        // is needed in thar dim.
-        // TODO: make rounding-up an option.
-        for (auto& dim : _dims->_domain_dims.getDims()) {
-            auto& dname = dim.getName();
-            angles[dname] = (_opts->_region_sizes[dname] < bb_len[dname]) ?
-                ROUND_UP(max_halos[dname], _dims->_cluster_pts[dname]) : 0;
-        }
     }
 
-    // Exchange dirty halo data for all grids, regardless
+    // Exchange dirty halo data for all grids and all steps, regardless
     // of their stencil-group.
     void StencilContext::exchange_halos_all() {
 
@@ -2109,7 +2226,8 @@ namespace yask {
 
         // Loop through steps.  This loop has to be outside halo-step loop
         // because we only have one buffer per step. Normally, we only
-        // exchange one step; in that case, it doesn't matter.
+        // exchange one step; in that case, it doesn't matter. It would be more
+        // efficient to allow packing and unpacking multiple steps, esp. with WFs.
         // TODO: this will need to be addressed if/when comm/compute overlap is added.
         assert(start != stop);
         idx_t step = (start < stop) ? 1 : -1;
@@ -2119,13 +2237,13 @@ namespace yask {
             // Sequence of things to do for each grid's neighbors
             // (isend includes packing).
             enum halo_steps { halo_irecv, halo_pack_isend, halo_unpack, halo_nsteps };
-            for (int right = 0; right < halo_nsteps; right++) {
+            for (int halo_step = 0; halo_step < halo_nsteps; halo_step++) {
 
-                if (right == halo_irecv)
+                if (halo_step == halo_irecv)
                     TRACE_MSG("exchange_halos: requesting data for step " << t << "...");
-                else if (right == halo_pack_isend)
+                else if (halo_step == halo_pack_isend)
                     TRACE_MSG("exchange_halos: packing and sending data for step " << t << "...");
-                else if (right == halo_unpack)
+                else if (halo_step == halo_unpack)
                     TRACE_MSG("exchange_halos: unpacking data for step " << t << "...");
             
                 // Loop thru all input grids in this group.
@@ -2174,7 +2292,7 @@ namespace yask {
                                 _mpiInfo->has_all_vlen_mults[ni];
                          
                             // Submit async request to receive data from neighbor.
-                            if (right == halo_irecv) {
+                            if (halo_step == halo_irecv) {
                                 auto nbytes = recvBuf.get_bytes();
                                 void* buf = (void*)recvBuf._elems;
                                 TRACE_MSG("   requesting " << makeByteStr(nbytes) << "...");
@@ -2183,7 +2301,7 @@ namespace yask {
                             }
 
                             // Pack data into send buffer, then send to neighbor.
-                            else if (right == halo_pack_isend) {
+                            else if (halo_step == halo_pack_isend) {
 
                                 // Vec ok?
                                 // Domain sizes must be ok, and buffer size must be ok
@@ -2194,21 +2312,22 @@ namespace yask {
                                 IdxTuple first = sendBuf.begin_pt;
                                 IdxTuple last = sendBuf.last_pt;
 
-                                // The code in allocData() pre-calculated the size and
-                                // starting points of each buffer, except for the starting
-                                // point of the time-step, which is an argument to this
-                                // function.  So, we need to set that value now.
+                                // The code in allocData() pre-calculated the first and
+                                // last points of each buffer, except in the step dim.
+                                // So, we need to set that value now.
+                                // TODO: update this if we expand the buffers to hold
+                                // more than one step.
                                 if (gp->is_dim_used(sd)) {
                                     first.setVal(sd, t);
                                     last.setVal(sd, t);
                                 }
                                 TRACE_MSG("   packing " << sendBuf.num_pts.makeDimValStr(" * ") <<
                                           " points from " << first.makeDimValStr() <<
-                                          " to " << last.makeDimValStr() <<
+                                          " ... " << last.makeDimValStr() <<
                                           (send_vec_ok ? " with" : " without") <<
                                           " vector copy...");
 
-                                // Copy data from grid to buffer.
+                                // Copy (pack) data from grid to buffer.
                                 void* buf = (void*)sendBuf._elems;
                                 if (send_vec_ok)
                                     gp->get_vecs_in_slice(buf, first, last);
@@ -2224,7 +2343,7 @@ namespace yask {
                             }
 
                             // Wait for data from neighbor, then unpack it.
-                            else if (right == halo_unpack) {
+                            else if (halo_step == halo_unpack) {
 
                                 // Wait for data from neighbor before unpacking it.
                                 TRACE_MSG("   waiting for MPI data...");
@@ -2244,7 +2363,7 @@ namespace yask {
                                 }
                                 TRACE_MSG("   got data; unpacking " << recvBuf.num_pts.makeDimValStr(" * ") <<
                                           " points into " << first.makeDimValStr() <<
-                                          " to " << last.makeDimValStr() <<
+                                          " ... " << last.makeDimValStr() <<
                                           (recv_vec_ok ? " with" : " without") <<
                                           " vector copy...");
 
@@ -2290,12 +2409,13 @@ namespace yask {
     // Mark grids that have been written to by stencil-group 'sg'.
     // TODO: only mark grids that are written to in their halo-read area.
     // TODO: add index for misc dim(s).
-    void StencilContext::mark_grids_dirty(StencilGroupBase& sg, idx_t step_idx)
-    {
+    void StencilContext::mark_grids_dirty(idx_t start, idx_t stop, StencilGroupBase& sg) {
+        idx_t step = (start < stop) ? 1 : -1;
         for (auto gp : sg.outputGridPtrs) {
-            gp->set_dirty(true, step_idx);
-            TRACE_MSG("grid '" << gp->get_name() <<
-                      "' marked as dirty at step " << step_idx);
+            for (idx_t t = start; t != stop; t += step) {
+                gp->set_dirty(true, t);
+                TRACE_MSG("grid '" << gp->get_name() << "' marked as dirty at step " << t);
+            }
         }
     }
 
