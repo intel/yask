@@ -639,11 +639,13 @@ namespace yask {
         idx_t npts = 0;
 
         // Begin, end tuples.
-        // Scan across domain in this rank.
+        // Scan across domain in this rank including
+        // any extensions for wave-fronts.
         IdxTuple begin(stencil_dims);
-        begin.setVals(context.rank_domain_offsets, false);
+        begin.setVals(context.ext_bb.bb_begin, false);
         begin[step_dim] = 0;
-        IdxTuple end = begin.addElements(settings->_rank_sizes);
+        IdxTuple end(stencil_dims);
+        end.setVals(context.ext_bb.bb_end, false);
         end[step_dim] = 1;      // one time-step only.
 
         // Indices needed for the generated 'misc' loops.

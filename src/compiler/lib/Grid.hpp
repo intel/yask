@@ -303,6 +303,7 @@ namespace yask {
         bool _doComb = true;    // combine commutative operations.
         bool _doOptCluster = true; // apply optimizations also to cluster.
         string _eqGroupTargets;  // how to group equations.
+        string _gridRegex;       // grids to update.
     };
     
     // Stencil dimensions.

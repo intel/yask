@@ -34,6 +34,7 @@ mpi		=	1
 real_bytes	=	4
 radius		=	2
 ranks		= 	1
+v_args		=	-b 16 -r 32 -rt 2 -dt 2 -d 63
 
 # Defaults based on stencil type (and arch for some stencils).
 ifeq ($(stencil),)
@@ -91,7 +92,6 @@ else ifneq ($(findstring iso3dfd,$(stencil)),)
 
 else ifneq ($(findstring awp,$(stencil)),)
  time_alloc			=	1
- eqs				=	velocity=vel,stress=str
  def_block_args			=	-b 32
  YC_FLAGS			+=	-min-es 1
  def_rank_args			=	-dx 512 -dy 1024 -dz 128 # assume 2 ranks/node in 'x'.
@@ -122,11 +122,10 @@ else ifneq ($(findstring awp,$(stencil)),)
 
 else ifneq ($(findstring ssg,$(stencil)),)
  time_alloc	=	1
- eqs		=	v_bl=v_bl,v_tr=v_tr,v_tl=v_tl,s_br=s_br,s_bl=s_bl,s_tr=s_tr,s_tl=s_tl
 
 else ifneq ($(findstring fsg,$(stencil)),)
  time_alloc	=	1
- eqs		=      v_br=v_br,v_bl=v_bl,v_tr=v_tr,v_tl=v_tl,s_br=s_br,s_bl=s_bl,s_tr=s_tr,s_tl=s_tl
+ eqs		=	'$$&=[a-z]_[a-z]+'  # match 1st and 2nd 'parts' of grid names.
  ifeq ($(arch),knl)
   omp_region_schedule  	=	guided
   def_block_args  	=	-b 16
@@ -328,7 +327,7 @@ MISC_LOOP_CODE		?=	$(MISC_LOOP_OUTER_MODS) loop($(MISC_LOOP_ORDER)) \
 # Flags passed to stencil compiler.
 YC_FLAGS   	+=	-stencil $(stencil) -elem-bytes $(real_bytes) -cluster $(cluster) -fold $(fold)
 ifneq ($(eqs),)
- YC_FLAGS   	+=	-eq $(eqs)
+ YC_FLAGS   	+=	-eq-groups $(eqs)
 endif
 ifneq ($(radius),)
  YC_FLAGS   	+=	-radius $(radius)
@@ -708,7 +707,7 @@ cxx-yc-api-test-with-exception:
 
 # Run the default YASK compiler and kernel.
 yc-and-yk-test: $(YK_EXEC)
-	$(BIN_DIR)/yask.sh -stencil $(stencil) -arch $(arch) -ranks $(ranks) -v
+	$(BIN_DIR)/yask.sh -stencil $(stencil) -arch $(arch) -ranks $(ranks) -v $(v_args)
 
 # Generate the code file using the built-in compiler.
 code-file: $(YK_CODE_FILE)
@@ -722,7 +721,7 @@ kernel-only:
 
 # Run the YASK kernel test without implicity using the YASK compiler.
 yk-test-no-yc: kernel-only
-	$(BIN_DIR)/yask.sh -stencil $(stencil) -arch $(arch) -v
+	$(BIN_DIR)/yask.sh -stencil $(stencil) -arch $(arch) -ranks $(ranks) -v $(v_args)
 
 # NB: set arch var if applicable.
 # NB: save some time by using YK_CXXOPT=-O2.
@@ -741,6 +740,7 @@ all-tests:
 	$(MAKE) clean; $(MAKE) stencil=test_scratch2 fold=x=2,y=2,z=2 yc-and-yk-test
 	$(MAKE) clean; $(MAKE) stencil=iso3dfd fold=x=4,y=2 yc-and-yk-test
 	$(MAKE) clean; $(MAKE) stencil=awp_elastic real_bytes=8 yc-and-yk-test
+	$(MAKE) clean; $(MAKE) stencil=ssg real_bytes=8 yc-and-yk-test
 	$(MAKE) clean; $(MAKE) stencil=fsg_abc real_bytes=8 yc-and-yk-test
 	$(MAKE) clean; $(MAKE) stencil=iso3dfd cxx-yk-api-test
 	$(MAKE) clean; $(MAKE) stencil=iso3dfd py-yk-api-test
@@ -855,11 +855,11 @@ help:
 	@echo " "
 	@echo "Example debug builds of kernel cmd-line tool:"
 	@echo " $(MAKE) clean; $(MAKE) -j stencil=iso3dfd mpi=0 OMPFLAGS='-qopenmp-stubs' YK_CXXOPT='-O0' EXTRA_MACROS='DEBUG'"
-	@echo " $(MAKE) clean; $(MAKE) -j arch=intel64 stencil=3axis mpi=0 OMPFLAGS='-qopenmp-stubs' YK_CXXOPT='-O0' EXTRA_MACROS='DEBUG'"
+	@echo " $(MAKE) clean; $(MAKE) -j arch=intel64 stencil=3axis mpi=0 OMPFLAGS='-qopenmp-stubs' YK_CXXOPT='-O0' EXTRA_MACROS='DEBUG TRACE'  # TRACE is a useful debug setting!"
 	@echo " $(MAKE) clean; $(MAKE) -j arch=intel64 stencil=3axis radius=0 fold='x=1,y=1,z=1' mpi=0 YK_CXX=g++ OMPFLAGS='' YK_CXXOPT='-O0' EXTRA_MACROS='DEBUG TRACE TRACE_MEM TRACE_INTRINSICS'"
 	@echo " "
 	@echo "Example builds with test runs:"
 	@echo " $(MAKE) -j all"
 	@echo " $(MAKE) -j all ranks=2"
 	@echo " $(MAKE) -j all YK_CXX=g++ YK_CXXOPT=-O2 mpi=0"
-	@echo " $(MAKE) -j all YK_CXX=mpigxx YK_CXXOPT=-O2 ranks=2"
+	@echo " $(MAKE) -j all YK_CXX=mpigxx YK_CXXOPT=-O2 ranks=3"

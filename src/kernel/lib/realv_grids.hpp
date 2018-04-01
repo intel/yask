@@ -52,6 +52,7 @@ namespace yask {
         Indices _domains;   // rank domain sizes copied from the solution | alloc size.
         Indices _left_pads, _right_pads; // extra space around domains (left: actual, right: requested) | zero.
         Indices _left_halos, _right_halos; // space within pads for halo exchange | zero.
+        Indices _left_wf_exts, _right_wf_exts; // additional halos for wave-fronts | zero.
         Indices _offsets;   // offsets of this grid in overall domain | first index.
         Indices _local_offsets; // offsets of this grid in this rank | first index.
         Indices _allocs;    // actual grid allocation in reals | as domain dims.
@@ -91,8 +92,8 @@ namespace yask {
         // Determine required padding from halos.
         // Does not include user-specified min padding or
         // final rounding for left pad.
-        virtual Indices getReqdPad(const Indices& halos) const {
-            Indices mp(halos);
+        virtual Indices getReqdPad(const Indices& halos, const Indices& wf_exts) const {
+            Indices mp = halos.addElements(wf_exts);
             for (int i = 0; i < get_num_dims(); i++) {
 
                 // For scratch grids, halo area must be written to.  Halo is sum
@@ -101,9 +102,10 @@ namespace yask {
                 // will be expanded to full vec len during computation,
                 // requiring load from read halo beyond full vec len.  Worst
                 // case is when write halo is one and rest is read halo.  So if
-                // halo >= 1, padding should be one full vec plus halo-1.
-                if (halos[i] >= 1)
-                    mp[i] = _vec_lens[i] + halos[i]-1;
+                // there is a halo and/or wf-ext, padding should be that plus
+                // all but one element of a vector.
+                if (mp[i] >= 1)
+                    mp[i] += _vec_lens[i] - 1;
             }
             return mp;
         }
@@ -171,6 +173,8 @@ namespace yask {
             _right_pads.setFromConst(0, n);
             _left_halos.setFromConst(0, n);
             _right_halos.setFromConst(0, n);
+            _left_wf_exts.setFromConst(0, n);
+            _right_wf_exts.setFromConst(0, n);
             _offsets.setFromConst(0, n);
             _local_offsets.setFromConst(0, n);
             _vec_lens.setFromConst(1, n);
@@ -366,9 +370,13 @@ namespace yask {
         GET_GRID_API(_get_local_offset)
         GET_GRID_API(_get_first_alloc_index)
         GET_GRID_API(_get_last_alloc_index)
+        GET_GRID_API(_get_left_wf_ext)
+        GET_GRID_API(_get_right_wf_ext)
         SET_GRID_API(_set_domain_size)
         SET_GRID_API(_set_left_pad_size)
         SET_GRID_API(_set_right_pad_size)
+        SET_GRID_API(_set_left_wf_ext)
+        SET_GRID_API(_set_right_wf_ext)
         SET_GRID_API(_set_offset)
         SET_GRID_API(_set_local_offset)
 
@@ -921,8 +929,8 @@ namespace yask {
             // Find range.
             IdxTuple numVecsTuple = get_slice_range(firstv, lastv);
             TRACE_MSG0(get_ostr(), "set_vecs_in_slice: setting " <<
-                       numVecsTuple.makeDimValStr(" * ") << " vecs from " <<
-                       makeIndexString(firstv) << " to " <<
+                       numVecsTuple.makeDimValStr(" * ") << " vecs at " <<
+                       makeIndexString(firstv) << " ... " <<
                        makeIndexString(lastv));
 
             // Visit points in slice.
@@ -964,8 +972,8 @@ namespace yask {
             // Find range.
             IdxTuple numVecsTuple = get_slice_range(firstv, lastv);
             TRACE_MSG0(get_ostr(), "get_vecs_in_slice: getting " <<
-                       numVecsTuple.makeDimValStr(" * ") << " vecs from " <<
-                       makeIndexString(firstv) << " to " <<
+                       numVecsTuple.makeDimValStr(" * ") << " vecs at " <<
+                       makeIndexString(firstv) << " ... " <<
                        makeIndexString(lastv));
         
             // Visit points in slice.

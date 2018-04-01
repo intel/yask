@@ -360,6 +360,7 @@ namespace yask {
         // all eqs updating grid names containing 'bar' go in eqGroup2, and
         // each remaining eq goes into a separate eqGroup.
         void makeEqGroups(Eqs& eqs,
+                          const string& gridRegex,
                           const string& targets,
                           EqDepMap& eq_deps,
                           std::ostream& os);

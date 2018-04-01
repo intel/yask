@@ -78,16 +78,25 @@ void usage(const string& cmd) {
         "      formats with explicit lengths, lengths will adjusted as needed.\n"
         " -cluster <dim>=<size>,...\n"
         "    Set number of vectors to evaluate in each dimension.\n"
-        " -eq <name>=<substr>,...\n"
-        "    Put updates to grids containing <substr> in equation-groups with base-name <name>.\n"
-        "      By default, eq-groups are defined as needed based on dependencies with\n"
+        " -grids <regex>\n"
+        "    Only process updates to grids whose names match <regex>.\n"
+        "      This can be used to generate code for a subset of the stencil equations.\n"
+        " -eq-groups <name>=<regex>,...\n"
+        "    Put updates to grids matching <regex> in equation-group with base-name <name>.\n"
+        "      By default, eq-groups are created as needed based on dependencies between equations:\n"
+        "        equations that do not depend on each other are grouped together into groups with the\n"
         "        base-name '" << settings._eq_group_basename_default << "'.\n"
-        "      Eq-groups are created in the order in which they are specified.\n"
-        "        By default, they are created based on the order in which the grids are initialized.\n"
-        "      Each eq-group base-name is appended with a unique index number.\n"
-        "      Example: '-eq a=foo,b=bar' creates one or more eq-groups with base-name 'a'\n"
-        "        containing updates to grids whose name contains 'foo' and one or more eq-groups\n"
-        "        with base-name 'b' containing updates to grids whose name contains 'bar'.\n"
+        "      Each eq-group base-name is appended with a unique index number, so the default group\n"
+        "        names are '" << settings._eq_group_basename_default << "_0', " <<
+        settings._eq_group_basename_default << "_1', etc.\n"
+        "      This option allows more control over this grouping.\n"
+        "      Example: \"-eq-groups a=foo,b=b[aeiou]r\" creates one or more eq-groups named 'a_0', 'a_1', etc.\n"
+        "        containing updates to each grid whose name contains 'foo' and one or more eq-groups\n"
+        "        named 'b_0', 'b_1', etc. containing updates to each grid whose name matches 'b[aeiou]r'.\n"
+        "      Standard regex-format tokens in <name> will be replaced based on matches to <regex>.\n"
+        "      Example: \"-eq-groups 'g_$&=b[aeiou]r'\" with grids 'bar_x', 'bar_y', 'ber_x', and 'ber_y'\n"
+        "        would create eq-group 'g_bar_0' for grids 'bar_x' and 'bar_y' and eq-group 'g_ber_0' for\n"
+        "        grids 'ber_x' and 'ber_y' because '$&' is substituted by the string that matches the regex.\n"
         " -step-alloc <size>\n"
         "    Specify the size of the step-dimension memory allocation.\n"
         "      By default, allocations are calculated automatically for each grid.\n"
@@ -191,7 +200,9 @@ void parseOpts(int argc, const char* argv[])
                 // options w/a string value.
                 if (opt == "-stencil")
                     solutionName = argop;
-                else if (opt == "-eq")
+                else if (opt == "-grids")
+                    settings._gridRegex = argop;
+                else if (opt == "-eq-groups")
                     settings._eqGroupTargets = argop;
                 else if (opt == "-fold" || opt == "-cluster") {
 

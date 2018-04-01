@@ -29,7 +29,7 @@ IN THE SOFTWARE.
 
 // Simple tests to increment values in N spatial dims.
 
-class Test1dStencil : public StencilBase {
+class Test1dStencil : public StencilRadiusBase {
 
 protected:
 
@@ -42,21 +42,24 @@ protected:
     
 public:
 
-    Test1dStencil(StencilList& stencils) :
-        StencilBase("test_1d", stencils) { }
+    Test1dStencil(StencilList& stencils, int radius=2) :
+        StencilRadiusBase("test_1d", stencils, radius) { }
     virtual ~Test1dStencil() { }
 
     // Define equation to apply to all points in 'data' grid.
     virtual void define() {
 
         // define the value at t+1.
-        data(t+1, x) EQUALS data(t, x) + 1.0;
+        GridValue v = data(t, x) + 1.0;
+        for (int r = 1; r <= _radius; r++)
+            v += data(t, x + r) + data(t, x - r);
+        data(t+1, x) EQUALS v;
     }
 };
 
 REGISTER_STENCIL(Test1dStencil);
 
-class Test2dStencil : public StencilBase {
+class Test2dStencil : public StencilRadiusBase {
 
 protected:
 
@@ -70,15 +73,19 @@ protected:
     
 public:
 
-    Test2dStencil(StencilList& stencils) :
-        StencilBase("test_2d", stencils) { }
+    Test2dStencil(StencilList& stencils, int radius=2) :
+        StencilRadiusBase("test_2d", stencils, radius) { }
     virtual ~Test2dStencil() { }
 
     // Define equation to apply to all points in 'data' grid.
     virtual void define() {
 
         // define the value at t+1.
-        data(t+1, x, y) EQUALS data(t, x, y) + 1.0;
+        GridValue v = data(t, x, y) + 1.0;
+        for (int r = 1; r <= _radius; r++)
+            v += data(t, x + r, y) + data(t, x - r, y)
+                + data(t, x, y + r) + data(t, x, y - r);
+        data(t+1, x, y) EQUALS v;
     }
 };
 
@@ -175,9 +182,8 @@ public:
         GridValue v = constNum(1.0);
 
         // Add '_radius' values from past time-steps to ensure no spatial locality.
-        for (int r = 0; r < _radius; r++) {
+        for (int r = 0; r < _radius; r++)
             v += data(t-r, x, y, z);
-        }
 
         // define the value at t+1 to be equivalent to v.
         data(t+1, x, y, z) EQUALS v;

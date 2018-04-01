@@ -38,8 +38,8 @@ namespace yask {
         // Following values are calculated from the above ones.
         IdxTuple bb_len;       // size in each dim.
         idx_t bb_size=1;       // points in the entire box >= bb_num_points.
-        bool bb_is_full=false; // all points in box are calculated.
-        bool bb_is_aligned=false; // starting points are aligned in all dims.
+        bool bb_is_full=false; // all points in box are valid (bb_size == bb_num_points).
+        bool bb_is_aligned=false; // starting points are vector-aligned in all dims.
         bool bb_is_cluster_mult=false; // num points are cluster multiples in all dims.
         bool bb_valid=false;   // lengths and sizes have been calculated.
 
@@ -102,10 +102,7 @@ namespace yask {
     // Data and hierarchical sizes.
     // This is a pure-virtual class that must be implemented
     // for a specific problem.
-    // Each stencil group is valid within its bounding box (BB).
-    // The context's BB encompasses all stencil-group BBs.
     class StencilContext :
-        public BoundingBox,
         public virtual yk_solution {
 
     protected:
@@ -144,6 +141,14 @@ namespace yask {
         // Name.
         std::string name;
 
+        // BB without any extensions for wave-fronts.
+        // This is the BB for the domain in this rank only.
+        BoundingBox rank_bb;
+
+        // BB with any needed extensions for wave-fronts.
+        // If WFs are not used, this is the same as rank_bb;
+        BoundingBox ext_bb;
+        
         // List of all stencil groups in the order in which
         // they should be evaluated within a step.
         // TODO: use dependency info, allowing more parallelism.
@@ -164,10 +169,14 @@ namespace yask {
         IdxTuple rank_domain_offsets;       // Domain index offsets for this rank.
         IdxTuple overall_domain_sizes;       // Total of rank domains over all ranks.
 
-        // Maximum halos and skewing angles over all grids and
-        // groups. Used for calculating worst-case minimum regions.
+        // Maximum halos, skewing angles, and work extensions over all grids
+        // used for wave-fronts.
         IdxTuple max_halos;  // spatial halos.
-        IdxTuple angles;     // temporal skewing angles.
+        IdxTuple wf_angles;  // temporal skewing angles for each shift (in points).
+        idx_t num_wf_shifts = 0; // number of shifts required.
+        IdxTuple wf_shifts;    // total shift needed (angles * num-shifts).
+        IdxTuple left_wf_exts;    // WF extension needed on left side of rank.
+        IdxTuple right_wf_exts;    // WF extension needed on right side of rank.
 
         // Various amount-of-work metrics calculated in prepare_solution().
         // 'rank_' prefix indicates for this rank.
@@ -281,7 +290,10 @@ namespace yask {
             rank_domain_offsets = _dims->_domain_dims;
             overall_domain_sizes = _dims->_domain_dims;
             max_halos = _dims->_domain_dims;
-            angles = _dims->_domain_dims;
+            wf_angles = _dims->_domain_dims;
+            wf_shifts = _dims->_domain_dims;
+            left_wf_exts = _dims->_domain_dims;
+            right_wf_exts = _dims->_domain_dims;
             
             // Set output to msg-rank per settings.
             set_ostr();
@@ -506,14 +518,15 @@ namespace yask {
         virtual void calc_region(StencilGroupSet* stGroup_set,
                                  const ScanIndices& rank_idxs);
 
-        // Exchange all dirty halo data.
+        // Exchange all dirty halo data for all stencil groups
+        // and max number of steps for each grid.
         virtual void exchange_halos_all();
 
         // Exchange halo data needed by stencil-group 'sg' at the given step(s).
         virtual void exchange_halos(idx_t start, idx_t stop, StencilGroupBase& sg);
 
         // Mark grids that have been written to by group 'sg'.
-        virtual void mark_grids_dirty(StencilGroupBase& sg, idx_t step_idx);
+        virtual void mark_grids_dirty(idx_t start, idx_t stop, StencilGroupBase& sg);
         
         // Set the bounding-box around all eq groups.
         virtual void find_bounding_boxes();

@@ -101,12 +101,10 @@ public:
 
         GridValue lcoeff = interp_mu<N>( x, y, z );
 
-        GridValue vta    = stencil_O8<DA,SA>( t, x, y, z, va );
-        GridValue vtb    = stencil_O8<DB,SB>( t, x, y, z, vb );
+        GridValue vta    = stencil_O8<DA,SA>( t+1, x, y, z, va );
+        GridValue vtb    = stencil_O8<DB,SB>( t+1, x, y, z, vb );
 
         GridValue next_s = s(t, x, y, z) + ((vta + vtb) * lcoeff) * delta_t;
-
-        // TODO: stress update
 
         // define the value at t+1.
         s(t+1, x, y, z) == next_s;
@@ -118,9 +116,9 @@ public:
         GridValue ilambdamu2 = 1.0 / lambdamu2(x,y,z);
         GridValue ilambda    = 1.0 / lambda   (x,y,z);
 
-        GridValue vtx    = stencil_O8<X,F>( t, x, y, z, v_tr_u );
-        GridValue vty    = stencil_O8<Y,B>( t, x, y, z, v_tl_v );
-        GridValue vtz    = stencil_O8<Z,B>( t, x, y, z, v_bl_w );
+        GridValue vtx    = stencil_O8<X,F>( t+1, x, y, z, v_tr_u );
+        GridValue vty    = stencil_O8<Y,B>( t+1, x, y, z, v_tl_v );
+        GridValue vtz    = stencil_O8<Z,B>( t+1, x, y, z, v_bl_w );
 
         GridValue next_xx = s_tl_xx(t, x, y, z) + ilambdamu2 * vtx * delta_t
             + ilambda    * vty * delta_t

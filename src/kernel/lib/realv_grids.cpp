@@ -50,7 +50,8 @@ namespace yask {
     GET_GRID_API(get_first_misc_index, _offsets[posn], false, false, true)
     GET_GRID_API(get_last_misc_index, _offsets[posn] + _domains[posn] - 1, false, false, true)
     GET_GRID_API(get_left_extra_pad_size, _left_pads[posn] - _left_halos[posn], false, true, false)
-    GET_GRID_API(get_right_extra_pad_size, (_allocs[posn] - _left_pads[posn]) - _right_halos[posn], false, true, false)
+    GET_GRID_API(get_right_extra_pad_size, (_allocs[posn] - _left_pads[posn] - _domains[posn]) -
+                 _right_halos[posn], false, true, false)
     GET_GRID_API(get_extra_pad_size, _left_pads[posn] - _left_halos[posn], false, true, false)
     GET_GRID_API(get_alloc_size, _allocs[posn], true, true, true)
     GET_GRID_API(get_first_rank_domain_index, _offsets[posn] - _local_offsets[posn], false, true, false)
@@ -60,6 +61,8 @@ namespace yask {
     GET_GRID_API(get_last_rank_halo_index, _offsets[posn] + _domains[posn] + _right_halos[posn] - 1, false, false, true)
     GET_GRID_API(get_first_rank_alloc_index, _offsets[posn] - _left_pads[posn], false, true, false)
     GET_GRID_API(get_last_rank_alloc_index, _offsets[posn] - _left_pads[posn] + _allocs[posn] - 1, false, true, false)
+    GET_GRID_API(_get_left_wf_ext, _left_wf_exts[posn], true, true, true)
+    GET_GRID_API(_get_right_wf_ext, _right_wf_exts[posn], true, true, true)
     GET_GRID_API(_get_offset, _offsets[posn], true, true, true)
     GET_GRID_API(_get_local_offset, _local_offsets[posn], true, true, true)
     GET_GRID_API(_get_first_alloc_index, _offsets[posn] - _left_pads[posn], true, true, true)
@@ -70,6 +73,8 @@ namespace yask {
 #define COMMA ,
 #define SET_GRID_API(api_name, expr, step_ok, domain_ok, misc_ok)       \
     void YkGridBase::api_name(const string& dim, idx_t n) {             \
+        TRACE_MSG0(get_ostr(), "grid '" << get_name() << "'."           \
+                   #api_name "('" << dim << "', " << n << ")");          \
         checkDimType(dim, #api_name, step_ok, domain_ok, misc_ok);      \
         int posn = get_dim_posn(dim, true, #api_name);                  \
         expr;                                                           \
@@ -84,6 +89,8 @@ namespace yask {
     SET_GRID_API(_set_domain_size, _domains[posn] = n; resize(), true, true, true)
     SET_GRID_API(_set_left_pad_size, _left_pads[posn] = n; resize(), true, true, true)
     SET_GRID_API(_set_right_pad_size, _right_pads[posn] = n; resize(), true, true, true)
+    SET_GRID_API(_set_left_wf_ext, _left_wf_exts[posn] = n; resize(), true, true, true)
+    SET_GRID_API(_set_right_wf_ext, _right_wf_exts[posn] = n; resize(), true, true, true)
     SET_GRID_API(set_left_halo_size, _left_halos[posn] = n; resize(), false, true, false)
     SET_GRID_API(set_right_halo_size, _right_halos[posn] = n; resize(), false, true, false)
     SET_GRID_API(set_halo_size, _left_halos[posn] = _right_halos[posn] = n; resize(), false, true, false)
@@ -103,8 +110,10 @@ namespace yask {
                  if (!get_raw_storage_buffer() && n > _right_pads[posn])
                      _set_right_pad_size(posn, n),
                  false, true, false)
-    SET_GRID_API(set_left_extra_pad_size, set_left_min_pad_size(posn, _left_halos[posn] + n), false, true, false)
-    SET_GRID_API(set_right_extra_pad_size, set_right_min_pad_size(posn, _right_halos[posn] + n), false, true, false)
+    SET_GRID_API(set_left_extra_pad_size,
+                 set_left_min_pad_size(posn, _left_halos[posn] + _left_wf_exts[posn] + n), false, true, false)
+    SET_GRID_API(set_right_extra_pad_size,
+                 set_right_min_pad_size(posn, _right_halos[posn] + _right_wf_exts[posn] + n), false, true, false)
     SET_GRID_API(set_extra_pad_size, set_left_extra_pad_size(posn, n);
                  set_right_extra_pad_size(posn, n), false, true, false)
     SET_GRID_API(set_first_misc_index, _offsets[posn] = n, false, false, true)
@@ -178,6 +187,10 @@ namespace yask {
                 THROW_YASK_EXCEPTION("Error: negative left halo in grid '" << get_name() << "'");
             if (_right_halos[i] < 0)
                 THROW_YASK_EXCEPTION("Error: negative right halo in grid '" << get_name() << "'");
+            if (_left_wf_exts[i] < 0)
+                THROW_YASK_EXCEPTION("Error: negative left wave-front ext in grid '" << get_name() << "'");
+            if (_right_wf_exts[i] < 0)
+                THROW_YASK_EXCEPTION("Error: negative right wave-front ext in grid '" << get_name() << "'");
             if (_left_pads[i] < 0)
                 THROW_YASK_EXCEPTION("Error: negative left padding in grid '" << get_name() << "'");
             if (_right_pads[i] < 0)
@@ -188,8 +201,8 @@ namespace yask {
         // _left_pads contains actual padding and is always rounded up to vec len.
         // _right_pads contains requested min padding; actual padding is calculated on-the-fly.
         // TODO: maintain requested and actual padding for left and right.
-        Indices left_pads2 = getReqdPad(_left_halos);
-        Indices right_pads2 = getReqdPad(_right_halos);
+        Indices left_pads2 = getReqdPad(_left_halos, _left_wf_exts);
+        Indices right_pads2 = getReqdPad(_right_halos, _right_wf_exts);
         for (int i = 0; i < get_num_dims(); i++) {
 
             // Get max of existing pad and reqd pad.
@@ -218,7 +231,7 @@ namespace yask {
                 " after storage has been allocated");
         }
 
-        // Do the resize.
+        // Do the resize and calculate number of dirty bits needed.
         _allocs = new_allocs;
         size_t new_dirty = 1;      // default if no step dim.
         for (int i = 0; i < get_num_dims(); i++) {
@@ -235,11 +248,16 @@ namespace yask {
         if (old_dirty != new_dirty)
             _dirty_steps.assign(new_dirty, true); // set all as dirty.
 
+        // Report changes in TRACE mode.
         if (old_allocs != new_allocs || old_dirty != new_dirty) {
+            Indices first_allocs = _offsets.subElements(_left_pads);
+            Indices last_allocs = first_allocs.addElements(_allocs).subConst(1);
             TRACE_MSG0(get_ostr(), "grid '" << get_name() << "' resized from " <<
-                       makeIndexString(old_allocs, " * ") << " to " <<
-                       makeIndexString(new_allocs, " * ") << " with " <<
-                       _dirty_steps.size() << " dirty flags");
+                       makeIndexString(old_allocs, " * ") <<
+                       " to " << makeIndexString(new_allocs, " * ") <<
+                       " at " << makeIndexString(first_allocs) <<
+                       " ... " << makeIndexString(last_allocs) <<
+                       " with " << _dirty_steps.size() << " dirty flag(s)");
         }
     }
     
@@ -295,8 +313,8 @@ namespace yask {
         }
 
         // Determine required padding from halos.
-        Indices left_pads2 = getReqdPad(_left_halos);
-        Indices right_pads2 = getReqdPad(_right_halos);
+        Indices left_pads2 = getReqdPad(_left_halos, _left_wf_exts);
+        Indices right_pads2 = getReqdPad(_right_halos, _left_wf_exts);
 
         // NB: requirements to successful share_storage() is not as strict as
         // is_storage_layout_identical(). See note on pad & halo below and API docs.

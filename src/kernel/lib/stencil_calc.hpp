@@ -49,7 +49,7 @@ namespace yask {
         // before this group. Listed in eval order first-to-last.
         StencilGroupList _scratch_deps;
 
-        // Whether this is updates scratch grid(s);
+        // Whether this updates scratch grid(s);
         bool _is_scratch = false;
 
         // Normalize the indices, i.e., divide by vector len in each dim.
