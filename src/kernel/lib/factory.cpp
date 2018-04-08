@@ -30,14 +30,14 @@ namespace yask {
 
     // APIs.
     // See yask_kernel_api.hpp.
-	std::string yk_factory::get_version_string() {
-		return yask_get_version_string();
-	}
+    std::string yk_factory::get_version_string() {
+        return yask_get_version_string();
+    }
     yk_solution_ptr yk_factory::new_solution(yk_env_ptr env,
                                              const yk_solution_ptr source) const {
         auto ep = dynamic_pointer_cast<KernelEnv>(env);
         assert(ep);
-        auto dp = YASK_STENCIL_CONTEXT::new_dims();
+        auto dp = YASK_STENCIL_CONTEXT::new_dims(); // create Dims.
         assert(dp);
         auto op = make_shared<KernelSettings>(dp, ep);
         assert(op);

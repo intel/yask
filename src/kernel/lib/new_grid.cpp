@@ -45,7 +45,7 @@ namespace yask {
 
         // First, try to make a grid that matches the layout in
         // the stencil.
-        YkGridPtr gp = newStencilGrid(name, dims);
+        YkGridPtr gp = newStencilGrid(name, dims, _opts);
 
         // If there was no match, use default layout.
         if (!gp) {
@@ -76,7 +76,7 @@ namespace yask {
 
             // Scalar?
             if (ndims == 0)
-                gp = make_shared<YkElemGrid<Layout_0d, false>>(_dims, name, dims, &_ostr);
+                gp = make_shared<YkElemGrid<Layout_0d, false>>(_dims, name, dims, _opts, &_ostr);
             
             // Include auto-gen code for all other cases.
 #include "yask_grid_code.hpp"

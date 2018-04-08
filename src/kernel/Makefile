@@ -157,7 +157,7 @@ else ifeq ($(arch),knl)
 
  ISA		?=	-xMIC-AVX512
  GCXX_ISA	?=	-march=knl
- MACROS		+=	USE_INTRIN512 USE_RCP28
+ MACROS		+=	USE_INTRIN512 USE_RCP28 NUMA_PREF=1
  YC_TARGET  	?=	avx512
  def_block_args	?=	-b 96
  def_block_threads ?=	8
@@ -427,7 +427,7 @@ YK_CXXOPT	?=	-O3
 
 # Linker.
 YK_LD		:=	$(YK_CXX)
-YK_LFLAGS	:=	-lrt -Wl,-rpath=$(LIB_DIR) -L$(LIB_DIR) -l$(YK_BASE2)
+YK_LFLAGS	:=	-lrt -lnuma -Wl,-rpath=$(LIB_DIR) -L$(LIB_DIR) -l$(YK_BASE2)
 
 # Tools.
 SWIG		:=	swig
@@ -460,15 +460,6 @@ MACROS		+= 	ARCH_$(ARCH)
 # MPI settings.
 ifeq ($(mpi),1)
  MACROS		+=	USE_MPI
-endif
-
-# HBW settings.
-# TODO: change this to use OS-default location.
-ifeq ($(hbw),1)
- MACROS		+=	USE_HBW
- HBW_DIR 	=	$(HOME)/memkind_build
- YK_CXXFLAGS	+=	-I$(HBW_DIR)/include
- YK_LFLAGS	+= 	-lnuma $(HBW_DIR)/lib/libmemkind.a
 endif
 
 # VTUNE settings.

@@ -61,7 +61,36 @@ namespace yask {
     SET_SOLN_API(set_rank_domain_size, _opts->_rank_sizes[dim] = n, false, true, false, true)
     SET_SOLN_API(set_num_ranks, _opts->_num_ranks[dim] = n, false, true, false, true)
 #undef SET_SOLN_API
-    
+
+    // Constructor.
+    StencilContext::StencilContext(KernelEnvPtr env,
+                                   KernelSettingsPtr settings) :
+    _ostr(&std::cout),
+        _env(env),
+        _opts(settings),
+        _dims(settings->_dims),
+        _at(this)
+    {
+        // Set debug output object.
+        yask_output_factory yof;
+        set_debug_output(yof.new_stdout_output());
+
+        // Create MPI Info object.
+        _mpiInfo = std::make_shared<MPIInfo>(settings->_dims);
+
+        // Init various tuples to make sure they have the correct dims.
+        rank_domain_offsets = _dims->_domain_dims;
+        overall_domain_sizes = _dims->_domain_dims;
+        max_halos = _dims->_domain_dims;
+        wf_angles = _dims->_domain_dims;
+        wf_shifts = _dims->_domain_dims;
+        left_wf_exts = _dims->_domain_dims;
+        right_wf_exts = _dims->_domain_dims;
+            
+        // Set output to msg-rank per settings.
+        set_ostr();
+    }
+
     void StencilContext::share_grid_storage(yk_solution_ptr source) {
         auto sp = dynamic_pointer_cast<StencilContext>(source);
         assert(sp);
@@ -511,7 +540,7 @@ namespace yask {
                 // run_solution().  In this function, one of the
                 // parallelogram-shaped regions is being evaluated.  At
                 // each time-step, the parallelogram may be trimmed
-                // based on the BB and WF extensions outside of the domain.
+                // based on the BB and WF extensions outside of the rank-BB.
                     
                 // Actual region boundaries must stay within [extended] BB for this group.
                 bool ok = true;
@@ -841,7 +870,7 @@ namespace yask {
         // Make sure everything is resized based on block size.
         _opts->adjustSettings(nullop->get_ostream(), _env);
 
-        // Reallocate scratch data based on block size.
+        // Reallocate scratch data based on new block size.
         _context->allocScratchData(nullop->get_ostream());
     }
     
@@ -1120,33 +1149,65 @@ namespace yask {
 
     } // setupRank.
 
-    // Allocate memory for grids that do not already have storage.
-    // Create MPI and allocate buffers.
-    // TODO: allow different types of memory for different grids, MPI bufs, etc.
-    void StencilContext::allocData(ostream& os) {
+    // Alloc 'nbytes' on each requested NUMA node.
+    // Map keys are preferred NUMA nodes or -1 for local.
+    // Pointers are returned in '_data_buf'.
+    // 'ngrids' and 'type' are only used for debug msg.
+    void StencilContext::_alloc_data(const map <int, size_t>& nbytes,
+                                     const map <int, size_t>& ngrids,
+                                     map <int, shared_ptr<char>>& data_buf,
+                                     const std::string& type) {
+        ostream& os = get_ostr();
 
-        // Remove any old MPI data. We do this now to give
-        // preference to grids for any HBM memory that might be available.
-        mpiData.clear();
+        // Get default NUMA node from settings.
+        int numa_def = _opts->_numa_pref;
+        
+        for (const auto& i : nbytes) {
+            int np = i.first;
+            size_t nb = i.second;
+            size_t ng = ngrids.at(np);
+
+            // Don't need pad after last one.
+            if (nb >= _data_buf_pad)
+                nb -= _data_buf_pad;
+
+            // What node?
+            int numa_pref = (np >= 0) ? np : numa_def;
+            
+            // Allocate data.
+            os << "Allocating " << makeByteStr(nb) <<
+                " for " << ng << " " << type << "(s)";
+            if (numa_pref >= 0)
+                os << " preferring NUMA node " << numa_pref;
+            else
+                os << " on local NUMA node";
+            os << "...\n" << flush;
+            auto p = shared_numa_alloc<char>(nb, numa_pref);
+            TRACE_MSG("Got memory at " << static_cast<void*>(p.get()));
+
+            // Save using original key.
+            data_buf[np] = p;
+        }
+    }
+    
+    // Allocate memory for grids that do not already have storage.
+    void StencilContext::allocGridData(ostream& os) {
 
         // Base ptrs for all default-alloc'd data.
         // These pointers will be shared by the ones in the grid
         // objects, which will take over ownership when these go
         // out of scope.
-        shared_ptr<char> _grid_data_buf;
-        shared_ptr<char> _mpi_data_buf;
+        // Key is preferred numa node or -1 for local.
+        map <int, shared_ptr<char>> _grid_data_buf;
 
-        ///////// Main data grids.
-
-        // Pass 0: count required size, allocate chunk of memory at end.
+        // Pass 0: count required size for each NUMA node, allocate chunk of memory at end.
         // Pass 1: distribute parts of already-allocated memory chunk.
         for (int pass = 0; pass < 2; pass++) {
-            TRACE_MSG("allocData pass " << pass << " for " <<
+            TRACE_MSG("allocGridData pass " << pass << " for " <<
                       gridPtrs.size() << " grid(s)");
         
-            // Determine how many bytes are needed and actually alloc'd.
-            size_t gbytes = 0, agbytes = 0;
-            int ngrids = 0;
+            // Count bytes needed and number of grids for each NUMA node.
+            map <int, size_t> npbytes, ngrids;
         
             // Grids.
             for (auto gp : gridPtrs) {
@@ -1157,39 +1218,42 @@ namespace yask {
                 // Grid data.
                 // Don't alloc if already done.
                 if (!gp->is_storage_allocated()) {
+                    int numa_pref = gp->get_numa_preferred();
 
-                    // Set storage if buffer has been allocated.
+                    // Set storage if buffer has been allocated in pass 0.
                     if (pass == 1) {
-                        gp->set_storage(_grid_data_buf, agbytes);
+                        auto p = _grid_data_buf[numa_pref];
+                        assert(p);
+                        gp->set_storage(p, npbytes[numa_pref]);
                         os << gp->make_info_string() << endl;
                     }
 
-                    // Determine size used (also offset to next location).
-                    gbytes += gp->get_num_storage_bytes();
-                    agbytes += ROUND_UP(gp->get_num_storage_bytes() + _data_buf_pad,
-                                        CACHELINE_BYTES);
-                    ngrids++;
-                    TRACE_MSG(" grid '" << gname << "' needs " <<
-                              makeByteStr(gp->get_num_storage_bytes()));
+                    // Determine padded size (also offset to next location).
+                    size_t nbytes = gp->get_num_storage_bytes();
+                    npbytes[numa_pref] += ROUND_UP(nbytes + _data_buf_pad,
+                                                  CACHELINE_BYTES);
+                    ngrids[numa_pref]++;
+                    if (pass == 0)
+                        TRACE_MSG(" grid '" << gname << "' needs " << makeByteStr(nbytes) <<
+                                  " on NUMA node " << numa_pref);
                 }
             }
 
-            // Don't need pad after last one.
-            if (agbytes >= _data_buf_pad)
-                agbytes -= _data_buf_pad;
+            // Alloc for each node.
+            if (pass == 0)
+                _alloc_data(npbytes, ngrids, _grid_data_buf, "grid");
 
-            // Allocate data.
-            if (pass == 0) {
-                os << "Allocating " << makeByteStr(agbytes) <<
-                    " for " << ngrids << " grid(s)...\n" << flush;
-                _grid_data_buf = shared_ptr<char>(alignedAlloc(agbytes), AlignedDeleter());
-                assert(_grid_data_buf);
-            }
         } // grid passes.
+    };
+    
+    // Create MPI and allocate buffers.
+    void StencilContext::allocMpiData(ostream& os) {
+
+        // Remove any old MPI data.
+        freeMpiData(os);
 
 #ifdef USE_MPI
 
-        ///////// MPI buffers.
         int num_exchanges = 0;
         auto me = _env->my_rank;
         
@@ -1461,22 +1525,28 @@ namespace yask {
             });   // neighbors.
         TRACE_MSG("number of halo-exchanges needed on this rank: " << num_exchanges);
 
+        // Base ptrs for all alloc'd data.
+        // These pointers will be shared by the ones in the grid
+        // objects, which will take over ownership when these go
+        // out of scope.
+        map <int, shared_ptr<char>> _mpi_data_buf;
+
         // Allocate MPI buffers.
         // Pass 0: count required size, allocate chunk of memory at end.
         // Pass 1: distribute parts of already-allocated memory chunk.
         for (int pass = 0; pass < 2; pass++) {
-            TRACE_MSG("allocData pass " << pass << " for " <<
+            TRACE_MSG("allocMpiData pass " << pass << " for " <<
                       mpiData.size() << " MPI buffer set(s)");
         
-            // Determine how many bytes are needed and actually alloc'd.
-            size_t bbytes = 0, abbytes = 0; // for MPI buffers.
-            int nbufs = 0;
+            // Count bytes needed and number of buffers for each NUMA node.
+            map <int, size_t> npbytes, nbufs;
         
             // Grids.
             for (auto gp : gridPtrs) {
                 if (!gp)
                     continue;
                 auto& gname = gp->get_name();
+                int numa_pref = gp->get_numa_preferred();
 
                 // MPI bufs for this grid.
                 if (mpiData.count(gname)) {
@@ -1494,33 +1564,32 @@ namespace yask {
                                 auto& buf = grid_mpi_data.getBuf(MPIBufs::BufDir(bd), roffsets);
                                 if (buf.get_size() == 0)
                                     continue;
+                                
+                                // Set storage if buffer has been allocated in pass 0.
+                                if (pass == 1) {
+                                    auto p = _mpi_data_buf[numa_pref];
+                                    assert(p);
+                                    buf.set_storage(p, npbytes[numa_pref]);
+                                }
 
-                                if (pass == 1)
-                                    buf.set_storage(_mpi_data_buf, abbytes);
-
+                                // Determine padded size (also offset to next location).
                                 auto sbytes = buf.get_bytes();
-                                bbytes += sbytes;
-                                abbytes += ROUND_UP(sbytes + _data_buf_pad,
-                                                    CACHELINE_BYTES);
-                                nbufs++;
-                                TRACE_MSG("  MPI buf '" << buf.name << "' needs " <<
-                                          makeByteStr(sbytes));
+                                npbytes[numa_pref] += ROUND_UP(sbytes + _data_buf_pad,
+                                                               CACHELINE_BYTES);
+                                nbufs[numa_pref]++;
+                                if (pass == 0)
+                                    TRACE_MSG("  MPI buf '" << buf.name << "' needs " <<
+                                              makeByteStr(sbytes) <<
+                                              " on NUMA node " << numa_pref);
                             }
                         } );
                 }
             }
 
-            // Don't need pad after last one.
-            if (abbytes >= _data_buf_pad)
-                abbytes -= _data_buf_pad;
+            // Alloc for each node.
+            if (pass == 0)
+                _alloc_data(npbytes, nbufs, _mpi_data_buf, "MPI buffer");
 
-            // Allocate data.
-            if (pass == 0) {
-                os << "Allocating " << makeByteStr(abbytes) <<
-                    " for " << nbufs << " MPI buffer(s)...\n" << flush;
-                _mpi_data_buf = shared_ptr<char>(alignedAlloc(abbytes), AlignedDeleter());
-                assert(_mpi_data_buf);
-            }
         } // MPI passes.
 #endif
     }
@@ -1530,13 +1599,13 @@ namespace yask {
     void StencilContext::allocScratchData(ostream& os) {
 
         // Remove any old scratch data.
-        makeScratchGrids(0);
+        freeScratchData(os);
 
-        // Base ptrs for all default-alloc'd data.
+        // Base ptrs for all alloc'd data.
         // This pointer will be shared by the ones in the grid
         // objects, which will take over ownership when it goes
         // out of scope.
-        shared_ptr<char> _scratch_data_buf;
+        map <int, shared_ptr<char>> _scratch_data_buf;
 
         // Make sure the right number of threads are set so we
         // have the right number of scratch grids.
@@ -1552,9 +1621,8 @@ namespace yask {
             TRACE_MSG("allocScratchData pass " << pass << " for " <<
                       scratchVecs.size() << " set(s) of scratch grids");
         
-            // Determine how many bytes are needed and actually alloc'd.
-            size_t gbytes = 0, agbytes = 0;
-            int ngrids = 0;
+            // Count bytes needed and number of grids for each NUMA node.
+            map <int, size_t> npbytes, ngrids;
 
             // Loop through each scratch grid vector.
             for (auto* sgv : scratchVecs) {
@@ -1567,6 +1635,7 @@ namespace yask {
                 for (auto gp : *sgv) {
                     assert(gp);
                     auto& gname = gp->get_name();
+                    int numa_pref = gp->get_numa_preferred();
             
                     // Loop through each domain dim.
                     for (auto& dim : _dims->_domain_dims.getDims()) {
@@ -1586,33 +1655,29 @@ namespace yask {
                 
                     // Set storage if buffer has been allocated.
                     if (pass == 1) {
-                        gp->set_storage(_scratch_data_buf, agbytes);
+                        auto p = _scratch_data_buf[numa_pref];
+                        assert(p);
+                        gp->set_storage(p, npbytes[numa_pref]);
                         TRACE_MSG(gp->make_info_string());
                     }
 
                     // Determine size used (also offset to next location).
-                    gbytes += gp->get_num_storage_bytes();
-                    agbytes += ROUND_UP(gp->get_num_storage_bytes() + _data_buf_pad,
-                                        CACHELINE_BYTES);
-                    ngrids++;
-                    TRACE_MSG(" scratch grid '" << gname << "' for thread " <<
-                              thr_num << " needs " <<
-                              makeByteStr(gp->get_num_storage_bytes()));
+                    size_t nbytes = gp->get_num_storage_bytes();
+                    npbytes[numa_pref] += ROUND_UP(nbytes + _data_buf_pad,
+                                                   CACHELINE_BYTES);
+                    ngrids[numa_pref]++;
+                    if (pass == 0)
+                        TRACE_MSG(" scratch grid '" << gname << "' for thread " <<
+                                  thr_num << " needs " << makeByteStr(nbytes) <<
+                                  " on NUMA node " << numa_pref);
                     thr_num++;
                 } // scratch grids.
             } // scratch-grid vecs.
 
-            // Don't need pad after last one.
-            if (agbytes >= _data_buf_pad)
-                agbytes -= _data_buf_pad;
+            // Alloc for each node.
+            if (pass == 0)
+                _alloc_data(npbytes, ngrids, _scratch_data_buf, "scratch grid");
 
-            // Allocate data.
-            if (pass == 0) {
-                os << "Allocating " << makeByteStr(agbytes) <<
-                    " for " << ngrids << " scratch grid(s)...\n" << flush;
-                _scratch_data_buf = shared_ptr<char>(alignedAlloc(agbytes), AlignedDeleter());
-                assert(_scratch_data_buf);
-            }
         } // scratch-grid passes.
     }
 
@@ -1852,9 +1917,15 @@ namespace yask {
         // Update all the grid sizes.
         setupRank();
 
-        // Alloc grids, MPI bufs, and scratch grids.
-        allocData(os);
+        // Alloc grids, scratch grids, MPI bufs.
+        // This is the order in which preferred NUMA nodes (e.g., HBW mem)
+        // will be used.
+        // We free the scratch and MPI data first to give grids preference.
+        freeScratchData(os);
+        freeMpiData(os);
+        allocGridData(os);
         allocScratchData(os);
+        allocMpiData(os);
 
         // Report total allocation.
         rank_nbytes = get_num_bytes();

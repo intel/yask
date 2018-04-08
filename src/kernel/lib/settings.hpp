@@ -723,18 +723,21 @@ namespace yask {
         // MPI settings.
         IdxTuple _num_ranks;       // number of ranks in each dim.
         IdxTuple _rank_indices;    // my rank index in each dim.
-        bool find_loc=true;        // whether my rank index needs to be calculated.
-        int msg_rank=0;            // rank that prints informational messages.
+        bool find_loc = true;      // whether my rank index needs to be calculated.
+        int msg_rank = 0;          // rank that prints informational messages.
 
         // OpenMP settings.
-        int max_threads=0;      // Initial number of threads to use overall; 0=>OMP default.
-        int thread_divisor=1;   // Reduce number of threads by this amount.
-        int num_block_threads=1; // Number of threads to use for a block.
+        int max_threads = 0;      // Initial number of threads to use overall; 0=>OMP default.
+        int thread_divisor = 1;   // Reduce number of threads by this amount.
+        int num_block_threads = 1; // Number of threads to use for a block.
 
         // Prefetch distances.
         // Prefetching must be enabled via YASK_PREFETCH_L[12] macros.
-        int _prefetch_L1_dist=1;
-        int _prefetch_L2_dist=2;
+        int _prefetch_L1_dist = 1;
+        int _prefetch_L2_dist = 2;
+
+        // NUMA settings.
+        int _numa_pref = NUMA_PREF;
 
         // Ctor.
         KernelSettings(DimsPtr dims, KernelEnvPtr env) : 

@@ -242,6 +242,14 @@ namespace yask {
                           ("block_threads",
                            "Number of threads to use within each block.",
                            num_block_threads));
+        stringstream msg;
+        msg << "Preferred NUMA node on which to allocate data for "
+            "grids and MPI buffers. "
+            "Or, use " << yask_numa_local << " for local node. "
+            "Or, use " << yask_numa_interleave << " for all nodes.";
+        parser.add_option(new CommandLineParser::IntOption
+                          ("numa_pref", msg.str(),
+                           _numa_pref));
     }
     
     // Print usage message.

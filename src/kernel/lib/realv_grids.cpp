@@ -119,6 +119,34 @@ namespace yask {
     SET_GRID_API(set_first_misc_index, _offsets[posn] = n, false, false, true)
 #undef COMMA
 #undef SET_GRID_API
+
+    // Ctor.
+    YkGridBase::YkGridBase(GenericGridBase* ggb,
+                           size_t ndims,
+                           DimsPtr dims) :
+    _ggb(ggb), _dims(dims) {
+
+        assert(ggb);
+        assert(dims.get());
+        
+        // Init indices.
+        int n = int(ndims);
+        _domains.setFromConst(0, n);
+        _left_pads.setFromConst(0, n);
+        _right_pads.setFromConst(0, n);
+        _left_halos.setFromConst(0, n);
+        _right_halos.setFromConst(0, n);
+        _left_wf_exts.setFromConst(0, n);
+        _right_wf_exts.setFromConst(0, n);
+        _offsets.setFromConst(0, n);
+        _local_offsets.setFromConst(0, n);
+        _vec_lens.setFromConst(1, n);
+        _allocs.setFromConst(1, n);
+        _vec_left_pads.setFromConst(1, n);
+        _vec_allocs.setFromConst(1, n);
+        _vec_local_offsets.setFromConst(0, n);
+    }
+    
     
     // Convenience function to format indices like
     // "x=5, y=3".

@@ -150,11 +150,14 @@ inline void omp_set_nested(int n) { }
 #define ROUND_UP(n, mult) (CEIL_DIV(n, mult) * (mult))
 #define ROUND_DOWN(n, mult) (((n) / (mult)) * (mult))
 
-// Default alignment and padding.
+// Default alloc settings.
 #define CACHELINE_BYTES  (64)
 #define YASK_PAD (7) // cache-lines between data buffers.
-#define YASK_ALIGNMENT (2 * 1024 * 1024) // 2MiB-page for large allocs.
+#define YASK_HUGE_ALIGNMENT (2 * 1024 * 1024) // 2MiB-page for large allocs.
 #define CACHE_ALIGNED __attribute__ ((aligned (CACHELINE_BYTES)))
+#ifndef NUMA_PREF
+#define NUMA_PREF -1
+#endif
 
 // Define a folded vector of reals.
 #include "realv.hpp"

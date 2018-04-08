@@ -135,6 +135,12 @@ namespace yask {
                                   bool misc_ok) const {
             _dims->checkDimType(dim, fn_name, step_ok, domain_ok, misc_ok);
         }
+
+        // Alloc given bytes on each NUMA node.
+        virtual void _alloc_data(const std::map <int, size_t>& nbytes,
+                                 const std::map <int, size_t>& ngrids,
+                                 std::map <int, std::shared_ptr<char>>& _data_buf,
+                                 const std::string& type);
         
     public:
 
@@ -274,30 +280,7 @@ namespace yask {
         
         // Constructor.
         StencilContext(KernelEnvPtr env,
-                       KernelSettingsPtr settings) :
-            _ostr(&std::cout),
-            _env(env),
-            _opts(settings),
-            _dims(settings->_dims),
-            _at(this)
-        {
-            yask_output_factory yof;
-            set_debug_output(yof.new_stdout_output());
-
-            _mpiInfo = std::make_shared<MPIInfo>(settings->_dims);
-
-            // Init various tuples to make sure they have the correct dims.
-            rank_domain_offsets = _dims->_domain_dims;
-            overall_domain_sizes = _dims->_domain_dims;
-            max_halos = _dims->_domain_dims;
-            wf_angles = _dims->_domain_dims;
-            wf_shifts = _dims->_domain_dims;
-            left_wf_exts = _dims->_domain_dims;
-            right_wf_exts = _dims->_domain_dims;
-            
-            // Set output to msg-rank per settings.
-            set_ostr();
-        }
+                       KernelSettingsPtr settings);
 
         // Destructor.
         virtual ~StencilContext() {
@@ -354,11 +337,23 @@ namespace yask {
         // Allocate MPI buffers as needed.
         virtual void setupRank();
 
-        // Allocate grid and MPI memory.
-        virtual void allocData(std::ostream& os);
+        // Allocate grid memory for any grids that do not
+        // already have storage.
+        virtual void allocGridData(std::ostream& os);
 
-        // Allocate scratch-grid memory.
+        // Determine sizes of MPI buffers and allocate MPI buffer memory.
+        // Dealloc any existing MPI buffers first.
+        virtual void allocMpiData(std::ostream& os);
+        virtual void freeMpiData(std::ostream& os) {
+            mpiData.clear();
+        }
+
+        // Alloc scratch-grid memory.
+        // Dealloc any existing scratch-grids first.
         virtual void allocScratchData(std::ostream& os);
+        virtual void freeScratchData(std::ostream& os) {
+            makeScratchGrids(0);
+        }
 
         // Allocate grids, params, MPI bufs, etc.
         // Calculate rank position in problem.
@@ -537,7 +532,8 @@ namespace yask {
         // Make a new grid iff its dims match any in the stencil.
         // Returns pointer to the new grid or nullptr if no match.
         virtual YkGridPtr newStencilGrid (const std::string & name,
-                                          const GridDimNames & dims) =0;
+                                          const GridDimNames & dims,
+                                          KernelSettingsPtr settings) =0;
 
         // Make a new grid with 'name' and 'dims'.
         // Set sizes if 'sizes' is non-null.
@@ -650,7 +646,14 @@ namespace yask {
         virtual idx_t get_num_ranks(const std::string& dim) const;
         virtual idx_t get_rank_index(const std::string& dim) const;
         virtual std::string apply_command_line_options(const std::string& args);
+        virtual void set_default_numa_preferred(int numa_node) {
+            _opts->_numa_pref = numa_node;
+        }
+        virtual int get_default_numa_preferred() const {
+            return _opts->_numa_pref;
+        }
 
+        // Auto-tuner APIs.
         virtual void reset_auto_tuner(bool enable, bool verbose = false) {
             _at.clear(!enable, verbose);
         }

@@ -23,8 +23,14 @@ IN THE SOFTWARE.
 
 *****************************************************************************/
 
-#ifndef YASK_UTILS
-#define YASK_UTILS
+#pragma once
+
+#ifdef USE_NUMA_H
+#include <numa.h>
+#else
+#include <sys/mman.h>
+#include <numaif.h>
+#endif
 
 namespace yask {
 
@@ -71,6 +77,35 @@ namespace yask {
             std::free(p);
         }
     };
+    
+    // Helpers for shared and NUMA malloc and free.
+    // Use like this:
+    // shared_ptr<char> p(numaAlloc(nbytes, numa_pref), NumaDeleter(nbytes));
+    extern char* numaAlloc(std::size_t nbytes, int numa_pref);
+    struct NumaDeleter {
+        std::size_t _nbytes;
+        NumaDeleter(std::size_t nbytes): _nbytes(nbytes) {}
+        void operator()(char* p) {
+            if (p) {
+#ifdef USE_NUMA_H
+                if (numa_available() != -1)
+                    numa_free(p, _nbytes);
+#else
+                if (get_mempolicy(NULL, NULL, 0, 0, 0) == 0)
+                    munmap(p, _nbytes);
+#endif
+                else
+                    free(p);
+            }
+        }
+    };
+
+    // Allocate NUMA memory from preferred node.
+    template<typename T>
+    std::shared_ptr<T> shared_numa_alloc(size_t sz, int numa_pref) {
+        auto _base = std::shared_ptr<T>(numaAlloc(sz, numa_pref), NumaDeleter(sz));
+        return _base;
+    }
 
     // A class for maintaining elapsed time.
     class YaskTimer {
@@ -291,4 +326,3 @@ namespace yask {
     };
 }
 
-#endif
