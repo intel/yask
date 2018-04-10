@@ -1957,6 +1957,8 @@ namespace yask {
             " rank-indices:          " << _opts->_rank_indices.makeDimValStr() << endl <<
             " rank-domain-offsets:   " << rank_domain_offsets.makeDimValOffsetStr() << endl <<
 #endif
+            " rank-domain:           " << rank_bb.bb_begin.makeDimValStr() <<
+                " ... " << rank_bb.bb_end.subElements(1).makeDimValStr() << endl <<
             " vector-len:            " << VLEN << endl <<
             " extra-padding:         " << _opts->_extra_pad_sizes.makeDimValStr() << endl <<
             " minimum-padding:       " << _opts->_min_pad_sizes.makeDimValStr() << endl <<
@@ -1969,7 +1971,9 @@ namespace yask {
                 " num-wave-front-shifts: " << num_wf_shifts << endl <<
                 " wave-front-shift-lens: " << wf_shifts.makeDimValStr() << endl <<
                 " left-wave-front-exts:  " << left_wf_exts.makeDimValStr() << endl <<
-                " right-wave-front-exts: " << right_wf_exts.makeDimValStr() << endl;
+                " right-wave-front-exts: " << right_wf_exts.makeDimValStr() << endl <<
+                " ext-rank-domain:       " << ext_bb.bb_begin.makeDimValStr() <<
+                " ... " << ext_bb.bb_end.subElements(1).makeDimValStr() << endl;
         }
         os << endl;
         
@@ -1977,7 +1981,7 @@ namespace yask {
         rank_numWrites_1t = 0;
         rank_reads_1t = 0;
         rank_numFpOps_1t = 0;
-        os << "Num equations-groups: " << stGroups.size() << endl;
+        os << "Num equation-groups: " << stGroups.size() << endl;
         for (auto* sg : stGroups) {
             idx_t updates1 = sg->get_scalar_points_written();
             idx_t updates_domain = updates1 * sg->bb_num_points;

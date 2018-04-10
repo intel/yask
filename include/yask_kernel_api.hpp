@@ -714,10 +714,14 @@ namespace yask {
         */
         virtual void
         set_default_numa_preferred(int numa_node
-                                   /**< [in] Preferred NUMA node.
-                                      Or, use `yask_numa_local` for local node.
-                                      Or, use `yask_numa_interleave` for all nodes.
-                                      Or, use `yask_numa_none` for no NUMA policy. */) =0;
+                                   /**< [in] Preferred NUMA node for data
+                                      allocation.  Alternatively, use
+                                      `yask_numa_local` for explicit
+                                      local-node allocation,
+                                      `yask_numa_interleave` for
+                                      interleaving pages across all nodes,
+                                      or `yask_numa_none` for no NUMA
+                                      policy. */) =0;
 
         /// **[Advanced]** Get the default preferred NUMA node on which to allocate data.
         /**

@@ -189,7 +189,11 @@ namespace yask {
         // only get here when using sub-domains w/"holes" in them.  TODO: do
         // as much vectorization as possible-- this current code is
         // functionally correct but very poor perf.
-        if (!bb_is_full) {
+        bool scalar_only = !bb_is_full;
+#ifdef FORCE_SCALAR
+        scalar_only = true;
+#endif
+        if (scalar_only) {
 
             do_clusters = false;
             do_vectors = false;

@@ -268,3 +268,7 @@ else
 fi
 
 echo "Log saved in '$logfile'."
+
+if [[ `grep -c FAILED $logfile` > 0 ]]; then
+    exit 1;
+fi

@@ -477,7 +477,7 @@ sub addIndexVars2($$$$) {
         push @$code,
             " // This value of $divar covers ".dimStr($dim)." from $stvar to (but not including) $spvar.",
             " idx_t $stvar = std::max($abvar + ($divar * $svar), $bvar);",
-            " idx_t $spvar = std::min($stvar + $svar, $evar);";
+            " idx_t $spvar = std::min($abvar + (($divar+1) * $svar), $evar);";
     }
 }
 

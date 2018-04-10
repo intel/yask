@@ -727,8 +727,8 @@ all-tests:
 	$(MAKE) clean; $(MAKE) stencil=3plane fold=y=2,z=4 yc-and-yk-test
 	$(MAKE) clean; $(MAKE) stencil=cube fold=x=2,y=2,z=2 yc-and-yk-test
 	$(MAKE) clean; $(MAKE) stencil=test_4d fold=w=2,x=2,y=2,z=2 yc-and-yk-test
-	$(MAKE) clean; $(MAKE) stencil=test_scratch1 fold=x=4 yc-and-yk-test
-	$(MAKE) clean; $(MAKE) stencil=test_scratch2 fold=x=2,y=2,z=2 yc-and-yk-test
+	$(MAKE) clean; $(MAKE) stencil=test_scratch1 real_bytes=8 fold=x=4 yc-and-yk-test
+	$(MAKE) clean; $(MAKE) stencil=test_scratch2 real_bytes=8 fold=x=2,y=1,z=2 yc-and-yk-test
 	$(MAKE) clean; $(MAKE) stencil=iso3dfd fold=x=4,y=2 yc-and-yk-test
 	$(MAKE) clean; $(MAKE) stencil=awp_elastic real_bytes=8 yc-and-yk-test
 	$(MAKE) clean; $(MAKE) stencil=ssg real_bytes=8 yc-and-yk-test

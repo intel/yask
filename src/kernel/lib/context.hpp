@@ -210,8 +210,16 @@ namespace yask {
         
         // MPI settings.
         // TODO: move to settings or MPI info object.
+#ifdef NO_VEC_EXCHANGE
+        bool allow_vec_exchange = false;
+#else
         bool allow_vec_exchange = true; // allow vectorized halo exchange.
+#endif
+#ifdef NO_HALO_EXCHANGE
+        bool enable_halo_exchange = false;
+#else
         bool enable_halo_exchange = true;
+#endif
 
         // MPI data for each grid.
         // Map key: grid name.

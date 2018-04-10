@@ -245,8 +245,9 @@ namespace yask {
         stringstream msg;
         msg << "Preferred NUMA node on which to allocate data for "
             "grids and MPI buffers. "
-            "Or, use " << yask_numa_local << " for local node. "
-            "Or, use " << yask_numa_interleave << " for all nodes.";
+            "Alternatively, use " << yask_numa_local << " for explicit local-node allocation, " <<
+            yask_numa_interleave << " for interleaving pages across all nodes, or " <<
+            yask_numa_none << " for no NUMA policy.";
         parser.add_option(new CommandLineParser::IntOption
                           ("numa_pref", msg.str(),
                            _numa_pref));
