@@ -427,8 +427,25 @@ YK_CXXOPT	?=	-O3
 
 # Linker.
 YK_LD		:=	$(YK_CXX)
-YK_LIBS		:=	-lrt -lnuma
-YK_LFLAGS	:=	-Wl,-rpath=$(LIB_DIR) -L$(LIB_DIR) $(YK_LIBS) -l$(YK_BASE2)
+YK_LIBS		:=	-lrt
+YK_LFLAGS	:=	-Wl,-rpath=$(LIB_DIR) -L$(LIB_DIR) -l$(YK_BASE2)
+
+# Work-around missing numaif.h:
+# IF numaif.h is found in /usr/include,
+# THEN enable the macro to use it.
+ifneq ($(shell find /usr/include -name 'numaif.h' | wc -l),0)
+ MACROS		+=	USE_NUMAIF_H
+endif
+
+# Work-around missing libnuma.so:
+# IF libnuma.so.1 exists AND "normal" libnuma can't be found,
+# THEN use hard-coded libnuma.so.1,
+# ELSE use "normal" libnuma.
+ifeq ($(and $(wildcard /usr/lib64/libnuma.so.1),$(shell whereis libnuma |wc -w)),1)
+ YK_LIBS	+=	/usr/lib64/libnuma.so.1
+else
+ YK_LIBS	+=	-lnuma
+endif
 
 # Tools.
 SWIG		:=	swig
@@ -457,11 +474,6 @@ MACROS		+=	DEF_ARGS='"$(DEF_ARGS) $(EXTRA_DEF_ARGS)"'
 # arch.
 ARCH		:=	$(shell echo $(arch) | tr '[:lower:]' '[:upper:]')
 MACROS		+= 	ARCH_$(ARCH)
-
-# System-dependent settings.
-ifneq ($(shell find /usr/include -name 'numaif.h' | wc -l),0)
- MACROS		+=	USE_NUMAIF_H
-endif
 
 # MPI settings.
 ifeq ($(mpi),1)
@@ -542,7 +554,7 @@ $(YK_LIB): $(YK_OBJS)
 	@ls -l $@
 
 $(YK_EXEC): yask_main.cpp $(YK_LIB)
-	$(CXX_PREFIX) $(YK_LD) $(YK_CXXFLAGS) $< $(YK_LFLAGS) -o $@
+	$(CXX_PREFIX) $(YK_LD) $(YK_CXXFLAGS) $< $(YK_LIBS) $(YK_LFLAGS) -o $@
 	@ls -l $@
 
 $(MAKE_REPORT_FILE): $(YK_LIB)
