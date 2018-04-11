@@ -125,12 +125,12 @@ else ifneq ($(findstring ssg,$(stencil)),)
 
 else ifneq ($(findstring fsg,$(stencil)),)
  time_alloc	=	1
- eqs		=	'$$&=[a-z]_[a-z]+'  # match 1st and 2nd 'parts' of grid names.
+ eqs		=	#'$$&=[a-z]_[a-z]+'  # match 1st and 2nd 'parts' of grid names.
  ifeq ($(arch),knl)
   omp_region_schedule  	=	guided
   def_block_args  	=	-b 16
   def_thread_divisor	=	4
-  def_block_threads	=	1
+  def_block_threads	=	2
   pfd_l1		=	0
   pfd_l2		=	2
  endif
