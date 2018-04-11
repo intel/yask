@@ -427,7 +427,8 @@ YK_CXXOPT	?=	-O3
 
 # Linker.
 YK_LD		:=	$(YK_CXX)
-YK_LFLAGS	:=	-lrt -lnuma -Wl,-rpath=$(LIB_DIR) -L$(LIB_DIR) -l$(YK_BASE2)
+YK_LIBS		:=	-lrt -lnuma
+YK_LFLAGS	:=	-Wl,-rpath=$(LIB_DIR) -L$(LIB_DIR) $(YK_LIBS) -l$(YK_BASE2)
 
 # Tools.
 SWIG		:=	swig
@@ -457,6 +458,11 @@ MACROS		+=	DEF_ARGS='"$(DEF_ARGS) $(EXTRA_DEF_ARGS)"'
 ARCH		:=	$(shell echo $(arch) | tr '[:lower:]' '[:upper:]')
 MACROS		+= 	ARCH_$(ARCH)
 
+# System-dependent settings.
+ifneq ($(shell find /usr/include -name 'numaif.h' | wc -l),0)
+ MACROS		+=	USE_NUMAIF_H
+endif
+
 # MPI settings.
 ifeq ($(mpi),1)
  MACROS		+=	USE_MPI
@@ -473,7 +479,7 @@ else
  VTUNE_DIR	=	$(VTUNE_AMPLIFIER_XE_2016_DIR)
 endif
 YK_CXXFLAGS	+=	-I$(VTUNE_DIR)/include
-YK_LFLAGS	+=	$(VTUNE_DIR)/lib64/libittnotify.a
+YK_LIBS		+=	$(VTUNE_DIR)/lib64/libittnotify.a
 endif
 
 # compiler-specific settings
@@ -532,7 +538,7 @@ kernel:	$(YK_EXEC) $(MAKE_REPORT_FILE)
 	@ls -l $@
 
 $(YK_LIB): $(YK_OBJS)
-	$(CXX_PREFIX) $(YK_CXX) $(YK_CXXFLAGS) -shared -o $@ $^
+	$(CXX_PREFIX) $(YK_CXX) $(YK_CXXFLAGS) $(YK_LIBS) -shared -o $@ $^
 	@ls -l $@
 
 $(YK_EXEC): yask_main.cpp $(YK_LIB)
@@ -624,7 +630,7 @@ $(YK_SWIG_DIR)/yask_kernel_api_wrap.o: $(YK_SWIG_DIR)/yask_kernel_api_wrap.cpp
 	$(YK_CXX) $(YK_CXXFLAGS) $(PYINC) -fPIC -c -o $@ $<
 
 $(YK_PY_LIB): $(YK_OBJS) $(YK_SWIG_DIR)/yask_kernel_api_wrap.o
-	$(YK_CXX) $(YK_CXXFLAGS) -shared -o $@ $^
+	$(YK_CXX) $(YK_CXXFLAGS) $(YK_LIBS) -shared -o $@ $^
 
 # Simple tests
 
@@ -853,4 +859,4 @@ help:
 	@echo " $(MAKE) -j all"
 	@echo " $(MAKE) -j all ranks=2"
 	@echo " $(MAKE) -j all YK_CXX=g++ YK_CXXOPT=-O2 mpi=0"
-	@echo " $(MAKE) -j all YK_CXX=mpigxx YK_CXXOPT=-O2 ranks=3"
+	@echo " $(MAKE) -j all YK_CXX=mpigxx YK_CXXOPT=-O2 ranks=3 EXTRA_MACROS='DEBUG'"

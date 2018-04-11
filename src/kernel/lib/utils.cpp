@@ -68,7 +68,7 @@ namespace yask {
         
         void *p = 0;
 
-#ifdef USE_NUMA_H
+#ifdef USE_NUMA_POLICY_LIB
 #pragma omp single
         if (numa_available() != -1) {
             numa_set_bind_policy(0);

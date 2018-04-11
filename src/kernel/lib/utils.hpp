@@ -25,11 +25,34 @@ IN THE SOFTWARE.
 
 #pragma once
 
-#ifdef USE_NUMA_H
+// Use numa policy library?
+#ifdef USE_NUMA_POLICY_LIB
 #include <numa.h>
+
+// Use mmap and mbind directly?
 #else
 #include <sys/mman.h>
+
+// Use <numaif.h> if available.
+#ifdef USE_NUMAIF_H
 #include <numaif.h>
+
+// This is a hack, but some systems are missing <numaif.h>.
+#elif !defined(NUMAIF_H)
+extern "C" {
+    extern long get_mempolicy(int *policy, const unsigned long *nmask,
+                              unsigned long maxnode, void *addr, int flags);
+    extern long mbind(void *start, unsigned long len, int mode,
+                      const unsigned long *nmask, unsigned long maxnode, unsigned flags);
+}
+
+// Conservatively don't define MPOL_LOCAL.
+#define MPOL_DEFAULT     0
+#define MPOL_PREFERRED   1
+#define MPOL_BIND        2
+#define MPOL_INTERLEAVE  3
+
+#endif
 #endif
 
 namespace yask {
@@ -87,7 +110,7 @@ namespace yask {
         NumaDeleter(std::size_t nbytes): _nbytes(nbytes) {}
         void operator()(char* p) {
             if (p) {
-#ifdef USE_NUMA_H
+#ifdef USE_NUMA_POLICY_LIB
                 if (numa_available() != -1)
                     numa_free(p, _nbytes);
 #else
