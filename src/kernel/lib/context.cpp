@@ -2134,16 +2134,17 @@ namespace yask {
                 "num-writes-per-step:                    " << makeNumStr(tot_numWrites_1t) << endl <<
                 "num-est-FP-ops-per-step:                " << makeNumStr(tot_numFpOps_1t) << endl <<
                 "num-steps-done:                         " << makeNumStr(steps_done) << endl <<
-                "elapsed-time (sec):                     " << makeNumStr(rtime) << endl <<
-                "throughput (num-points/sec):            " << makeNumStr(domain_pts_ps) << endl <<
-                "throughput (est-FLOPS):                 " << makeNumStr(flops) << endl <<
-                "throughput (num-writes/sec):            " << makeNumStr(writes_ps) << endl;
+                "elapsed-time (sec):                     " << makeNumStr(rtime) << endl;
 #ifdef USE_MPI
             os <<
                 "time in halo exch (sec):                " << makeNumStr(mtime);
             float pct = 100. * mtime / rtime;
             os << " (" << pct << "%)" << endl;
 #endif
+            os <<
+                "throughput (num-writes/sec):            " << makeNumStr(writes_ps) << endl <<
+                "throughput (est-FLOPS):                 " << makeNumStr(flops) << endl <<
+                "throughput (num-points/sec):            " << makeNumStr(domain_pts_ps) << endl;
         }
 
         // Fill in return object.
