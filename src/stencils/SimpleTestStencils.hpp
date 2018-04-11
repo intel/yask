@@ -49,10 +49,12 @@ public:
     // Define equation to apply to all points in 'data' grid.
     virtual void define() {
 
-        // define the value at t+1.
+        // define the value at t+1 using asymmetric stencil.
         GridValue v = data(t, x) + 1.0;
         for (int r = 1; r <= _radius; r++)
-            v += data(t, x + r) + data(t, x - r);
+            v += data(t, x + r);
+        for (int r = 1; r <= _radius + 2; r++)
+            v += data(t, x - r);
         data(t+1, x) EQUALS v;
     }
 };

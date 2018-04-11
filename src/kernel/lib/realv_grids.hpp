@@ -219,12 +219,14 @@ namespace yask {
             idx_t res = t % _domains[Indices::step_posn];
             return res;
         }
-        
+
         // Convert logical step index to index in allocated range.
-        // If this grid doesn't use the step dim, returns the input.
+        // If this grid doesn't use the step dim, returns 0.
         inline idx_t get_alloc_step_index(idx_t logical_step_index) const {
-            return _has_step_dim ? _wrap_step(logical_step_index) :
-                logical_step_index;
+            return _has_step_dim ? _wrap_step(logical_step_index) : 0;
+        }
+        inline idx_t get_alloc_step_index(const Indices& indices) const {
+            return _has_step_dim ? _wrap_step(indices[Indices::step_posn]) : 0;
         }
         
         // Get grid dims with allocations in number of reals.
@@ -927,7 +929,7 @@ namespace yask {
 
                     // TODO: move this outside of parallel loop when
                     // step index is const.
-                    idx_t asi = get_alloc_step_index(pt[Indices::step_posn]);
+                    idx_t asi = get_alloc_step_index(pt);
 
                     writeVecNorm(val, pt, asi, __LINE__);
                     return true;    // keep going.
@@ -969,7 +971,7 @@ namespace yask {
 
                     // TODO: move this outside of parallel loop when
                     // step index is const.
-                    idx_t asi = get_alloc_step_index(pt[Indices::step_posn]);
+                    idx_t asi = get_alloc_step_index(pt);
 
                     real_vec_t val = readVecNorm(pt, asi, __LINE__);
                     ((real_vec_t*)buffer_ptr)[idx] = val;

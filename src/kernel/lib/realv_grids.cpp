@@ -476,7 +476,7 @@ namespace yask {
                 if (!ok)
                     return true; // stop processing this point, but keep going.
 
-                idx_t asi = get_alloc_step_index(pt[Indices::step_posn]);
+                idx_t asi = get_alloc_step_index(pt);
                 auto te = readElem(opt, asi, __LINE__);
                 auto re = ref->readElem(opt, asi, __LINE__);
                 if (!within_tolerance(te, re, epsilon)) {
@@ -587,7 +587,7 @@ namespace yask {
                                  get_name() << "'");
         }
         checkIndices(indices, "get_element", true, false);
-        idx_t asi = get_alloc_step_index(indices[Indices::step_posn]);
+        idx_t asi = get_alloc_step_index(indices);
         real_t val = readElem(indices, asi, __LINE__);
         return double(val);
     }
@@ -597,7 +597,7 @@ namespace yask {
         idx_t nup = 0;
         if (get_raw_storage_buffer() &&
             checkIndices(indices, "set_element", strict_indices, false)) {
-            idx_t asi = get_alloc_step_index(indices[Indices::step_posn]);
+            idx_t asi = get_alloc_step_index(indices);
             writeElem(real_t(val), indices, asi, __LINE__);
             nup++;
 
@@ -626,7 +626,7 @@ namespace yask {
                 Indices pt = first_indices.addElements(ofs);
 
                 // TODO: move this outside of loop for const step index.
-                idx_t asi = get_alloc_step_index(pt[Indices::step_posn]);
+                idx_t asi = get_alloc_step_index(pt);
                 
                 real_t val = readElem(pt, asi, __LINE__);
                 ((real_t*)buffer_ptr)[idx] = val;
@@ -657,7 +657,7 @@ namespace yask {
                 Indices pt = first_indices.addElements(ofs);
 
                 // TODO: move this outside of loop for const step index.
-                idx_t asi = get_alloc_step_index(pt[Indices::step_posn]);
+                idx_t asi = get_alloc_step_index(pt);
 
                 writeElem(real_t(val), pt, asi, __LINE__);
                 return true;    // keep going.
@@ -686,7 +686,7 @@ namespace yask {
                 Indices pt = first_indices.addElements(ofs);
 
                 // TODO: move this outside of loop for const step index.
-                idx_t asi = get_alloc_step_index(pt[Indices::step_posn]);
+                idx_t asi = get_alloc_step_index(pt);
 
                 real_t val = ((real_t*)buffer_ptr)[idx];
                 writeElem(val, pt, asi, __LINE__);
