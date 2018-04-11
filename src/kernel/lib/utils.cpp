@@ -34,12 +34,12 @@ Cache cache_model(MODEL_CACHE);
 using namespace std;
 namespace yask {
 
-    // Alligned allocation.
+    // Aligned allocation.
     char* alignedAlloc(std::size_t nbytes) {
 
         // Alignment to use based on size.
         const size_t _def_alignment = CACHELINE_BYTES;
-        const size_t _def_big_alignment = YASK_ALIGNMENT;
+        const size_t _def_big_alignment = YASK_HUGE_ALIGNMENT;
 
         size_t align = (nbytes >= _def_big_alignment) ?
             _def_big_alignment : _def_alignment;
@@ -53,9 +53,83 @@ namespace yask {
         p = aligned_alloc(align, nbytes);
 #endif
 
-        if (!p) {
+        if (!p)
             THROW_YASK_EXCEPTION("error: cannot allocate " << makeByteStr(nbytes));
+        return static_cast<char*>(p);
+    }
+
+    // NUMA allocation.
+    // 'numa_pref' >= 0: preferred NUMA node.
+    // 'numa_pref' < 0: use defined policy.
+    char* numaAlloc(std::size_t nbytes, int numa_pref) {
+
+        if (numa_pref == yask_numa_none)
+            return alignedAlloc(nbytes);
+        
+        void *p = 0;
+
+#ifdef USE_NUMA_POLICY_LIB
+#pragma omp single
+        if (numa_available() != -1) {
+            numa_set_bind_policy(0);
+            if (numa_pref >= 0 && numa_pref <= numa_max_node())
+                numa_alloc_onnode(nbytes, numa_pref);
+            else
+                numa_alloc_local(nbytes);
+            if ((size_t)p % CACHELINE_BYTES)
+                THROW_YASK_EXCEPTION("Error: numa_alloc_*(" << makeByteStr(nbytes) <<
+                                     ") returned unaligned addr " << p);
         }
+#else
+        if (get_mempolicy(NULL, NULL, 0, 0, 0) == 0) {
+
+            // Set mmap flags.
+            int mmprot = PROT_READ | PROT_WRITE;
+            int mmflags = MAP_PRIVATE | MAP_ANONYMOUS;
+
+            // Get an anonymous R/W memory map.
+            p = mmap(0, nbytes, mmprot, mmflags, -1, 0);
+
+            // If successful, apply the desired binding.
+            if (p && p != MAP_FAILED) {
+                if (numa_pref >= 0) {
+
+                    // Prefer given node.
+                    unsigned long nodemask = 0x1UL << numa_pref;
+                    mbind(p, nbytes, MPOL_PREFERRED, &nodemask, sizeof(nodemask) * 8, 0);
+                }
+                else if (numa_pref == yask_numa_interleave) {
+
+                    // Use all nodes.
+                    unsigned long nodemask = (unsigned long)-1;
+                    mbind(p, nbytes, MPOL_INTERLEAVE, &nodemask, sizeof(nodemask) * 8, 0);
+                }
+
+                else{
+
+                    // Use local node.
+                    // MPOL_LOCAL was defined in Linux 3.8, so use
+                    // MPOL_DEFAULT as backup on old systems.
+#ifdef MPOL_LOCAL
+                    mbind(p, nbytes, MPOL_LOCAL, 0, 0, 0);
+#else
+                    mbind(p, nbytes, MPOL_DEFAULT, 0, 0, 0);
+#endif
+                }
+            }
+            else
+                p = 0;
+        }
+#endif
+        // If NUMA not avail or mmap failed, use regular aligned malloc.
+        if (!p)
+            p = alignedAlloc(nbytes);
+
+        // If still bad, throw exception.
+        if (!p)
+            THROW_YASK_EXCEPTION("Error: cannot allocate " << makeByteStr(nbytes));
+
+        // Return as a char* as required for shared_ptr ctor.
         return static_cast<char*>(p);
     }
 

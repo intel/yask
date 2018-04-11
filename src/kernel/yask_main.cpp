@@ -346,15 +346,17 @@ int main(int argc, char** argv)
 
         os << divLine <<
             "best-elapsed-time (sec):           " << makeNumStr(best_elapsed_time) << endl <<
-            "best-throughput (num-points/sec):  " << makeNumStr(best_dpps) << endl <<
-            "best-throughput (est-FLOPS):       " << makeNumStr(best_flops) << endl <<
             "best-throughput (num-writes/sec):  " << makeNumStr(best_apps) << endl <<
+            "best-throughput (est-FLOPS):       " << makeNumStr(best_flops) << endl <<
+            "best-throughput (num-points/sec):  " << makeNumStr(best_dpps) << endl <<
             divLine <<
-            "Notes:\n" <<
-            " Num-points is based on overall-problem-size as described above.\n" <<
-            " Num-writes is based on num-writes-required as described above.\n" <<
-            " Est-FLOPS is based on est-FP-ops as described above.\n" <<
-            endl;
+            "Notes:\n"
+            " Num-writes/sec and FLOPS are metrics based on certain\n"
+            "  types of statements and can vary due to differences in\n"
+            "  implementations and optimizations.\n"
+            " Num-points/sec is based on overall problem size and is\n"
+            "  a more reliable performance metric, esp. when comparing\n"
+            "  across implementations.\n";
 
         /////// Validation run.
         bool ok = true;

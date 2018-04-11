@@ -160,30 +160,9 @@ namespace yask {
                                  const Indices& last_indices) const;
         
     public:
-        YkGridBase(GenericGridBase* ggb, size_t ndims, DimsPtr dims) :
-            _ggb(ggb), _dims(dims) {
-
-            assert(ggb);
-            assert(dims.get());
-
-            // Init indices.
-            int n = int(ndims);
-            _domains.setFromConst(0, n);
-            _left_pads.setFromConst(0, n);
-            _right_pads.setFromConst(0, n);
-            _left_halos.setFromConst(0, n);
-            _right_halos.setFromConst(0, n);
-            _left_wf_exts.setFromConst(0, n);
-            _right_wf_exts.setFromConst(0, n);
-            _offsets.setFromConst(0, n);
-            _local_offsets.setFromConst(0, n);
-            _vec_lens.setFromConst(1, n);
-            _allocs.setFromConst(1, n);
-            _vec_left_pads.setFromConst(1, n);
-            _vec_allocs.setFromConst(1, n);
-            _vec_local_offsets.setFromConst(0, n);
-            
-        }
+        YkGridBase(GenericGridBase* ggb,
+                   size_t ndims,
+                   DimsPtr dims);
         virtual ~YkGridBase() { }
 
         // Halo-exchange flag accessors.
@@ -198,6 +177,10 @@ namespace yask {
         // Scratch accessors.
         virtual bool is_scratch() const { return _is_scratch; }
         virtual void set_scratch(bool is_scratch) { _is_scratch = is_scratch; }
+
+        // NUMA accessors.
+        virtual int get_numa_preferred() const { return _ggb->get_numa_pref(); }
+        virtual void set_numa_preferred(int pref_numa_node) { _ggb->set_numa_pref(pref_numa_node); }
         
         // Lookup position by dim name.
         // Return -1 or die if not found, depending on flag.
@@ -236,12 +219,14 @@ namespace yask {
             idx_t res = t % _domains[Indices::step_posn];
             return res;
         }
-        
+
         // Convert logical step index to index in allocated range.
-        // If this grid doesn't use the step dim, returns the input.
+        // If this grid doesn't use the step dim, returns 0.
         inline idx_t get_alloc_step_index(idx_t logical_step_index) const {
-            return _has_step_dim ? _wrap_step(logical_step_index) :
-                logical_step_index;
+            return _has_step_dim ? _wrap_step(logical_step_index) : 0;
+        }
+        inline idx_t get_alloc_step_index(const Indices& indices) const {
+            return _has_step_dim ? _wrap_step(indices[Indices::step_posn]) : 0;
         }
         
         // Get grid dims with allocations in number of reals.
@@ -517,9 +502,10 @@ namespace yask {
         YkElemGrid(DimsPtr dims,
                    std::string name,
                    const GridDimNames& dimNames,
+                   KernelSettingsPtr settings,
                    std::ostream** ostr) :
             YkGridBase(&_data, dimNames.size(), dims),
-            _data(name, dimNames, ostr) {
+            _data(name, dimNames, settings, ostr) {
             _has_step_dim = _wrap_step_idx;
             resize();
         }
@@ -633,9 +619,10 @@ namespace yask {
         YkVecGrid(DimsPtr dims,
                   const std::string& name,
                   const GridDimNames& dimNames,
+                  KernelSettingsPtr settings,
                   std::ostream** ostr) :
             YkGridBase(&_data, dimNames.size(), dims),
-            _data(name, dimNames, ostr),
+            _data(name, dimNames, settings, ostr),
             _vec_fold_posns(idx_t(0), int(dimNames.size())) {
             _has_step_dim = _wrap_step_idx;
 
@@ -942,7 +929,7 @@ namespace yask {
 
                     // TODO: move this outside of parallel loop when
                     // step index is const.
-                    idx_t asi = get_alloc_step_index(pt[Indices::step_posn]);
+                    idx_t asi = get_alloc_step_index(pt);
 
                     writeVecNorm(val, pt, asi, __LINE__);
                     return true;    // keep going.
@@ -984,7 +971,7 @@ namespace yask {
 
                     // TODO: move this outside of parallel loop when
                     // step index is const.
-                    idx_t asi = get_alloc_step_index(pt[Indices::step_posn]);
+                    idx_t asi = get_alloc_step_index(pt);
 
                     real_vec_t val = readVecNorm(pt, asi, __LINE__);
                     ((real_vec_t*)buffer_ptr)[idx] = val;

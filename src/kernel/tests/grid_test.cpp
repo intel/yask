@@ -48,6 +48,7 @@ int main(int argc, char** argv) {
     assert(context.get());
     ostream& os = context->set_ostr();
     ostream* osp = &os;
+    auto settings = context->get_settings();
 
     // Problem dimensions.
     auto dims = YASK_STENCIL_CONTEXT::new_dims();
@@ -65,10 +66,10 @@ int main(int argc, char** argv) {
         os << "0-D test...\n";
         GridDimNames gdims;
         string name = "test grid";
-        YkGridPtr g0 = make_shared<YkElemGrid<Layout_0d, false>>(dims, name, gdims, &osp);
+        YkGridPtr g0 = make_shared<YkElemGrid<Layout_0d, false>>(dims, name, gdims, settings, &osp);
         g0->alloc_storage();
         os << g0->make_info_string() << endl;
-        YkGridPtr g1 = make_shared<YkElemGrid<Layout_0d, false>>(dims, name, gdims, &osp);
+        YkGridPtr g1 = make_shared<YkElemGrid<Layout_0d, false>>(dims, name, gdims, settings, &osp);
         g1->alloc_storage();
         os << g1->make_info_string() << endl;
 
@@ -86,8 +87,8 @@ int main(int argc, char** argv) {
         os << "3-D test...\n";
         GridDimNames gdims = {"x", "y", "z"};
         string name = "test grid";
-        YkGridPtr g3 = make_shared<YkElemGrid<Layout_321, false>>(dims, name, gdims, &osp);
-        YkGridPtr g3f = make_shared<YkVecGrid<Layout_123, false, VLEN_X, VLEN_Y, VLEN_Z>>(dims, name, gdims, &osp);
+        YkGridPtr g3 = make_shared<YkElemGrid<Layout_321, false>>(dims, name, gdims, settings, &osp);
+        YkGridPtr g3f = make_shared<YkVecGrid<Layout_123, false, VLEN_X, VLEN_Y, VLEN_Z>>(dims, name, gdims, settings, &osp);
         int i = 0;
         int min_pad = 3;
         for (auto dname : gdims) {

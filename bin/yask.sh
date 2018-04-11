@@ -69,8 +69,6 @@ while true; do
         echo "  -host <hostname>|-mic <N>"
         echo "     Specify host to run executable on."
         echo "     'ssh <hostname>' will be pre-pended to the sh_prefix command."
-        echo "     If -arch 'knl' is given, it implies the following (which can be overridden):"
-        echo "       -exe_prefix 'numactl --preferred=1'"
         echo "     If -mic <N> is given, it implies the following (which can be overridden):"
         echo "       -arch 'knc'"
         echo "       -host "`hostname`"-mic<N>"
@@ -188,12 +186,6 @@ if [[ -z ${arch:+ok} ]]; then
     exit 1
 fi
 
-# Set defaults for KNL.
-# TODO: run numactl [on host] to determine if in flat mode.
-if [[ "$arch" == "knl" ]]; then
-    true ${exe_prefix='numactl --preferred=1'}
-fi
-
 # Simplified MPI in x-dim only.
 if [[ -n "$nranks" ]]; then
     true ${mpi_cmd="mpirun -np $nranks"}
@@ -276,3 +268,7 @@ else
 fi
 
 echo "Log saved in '$logfile'."
+
+if [[ `grep -c FAILED $logfile` > 0 ]]; then
+    exit 1;
+fi

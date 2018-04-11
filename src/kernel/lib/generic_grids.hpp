@@ -40,14 +40,22 @@ namespace yask {
 
         // Base address of malloc'd memory.
         // Not necessarily the address at which the data is stored.
+        // Several grids may have the same base addr; then the last one
+        // to release it will free the mem.
         std::shared_ptr<char> _base;
 
         void* _elems = 0;          // actual data, which may be offset from _base.
+
+        // Preferred NUMA node.
+        int _numa_pref = -1;   // -1 => use default.
 
         // Note that both _dims and *_layout_base hold dimensions unless this
         // is a scalar. For a scalar, _dims is empty and _layout_base = 0.
         IdxTuple _dims;         // names and lengths of grid dimensions.
         Layout* _layout_base = 0; // memory layout.
+
+        // Command-line and env parameters.
+        KernelSettingsPtr _opts;
 
         // Output stream for messages.
         // Pointer-to-pointer to let it follow a parent's pointer.
@@ -68,6 +76,7 @@ namespace yask {
         GenericGridBase(std::string name,
                         Layout& layout_base,
                         const GridDimNames& dimNames,
+                        KernelSettingsPtr settings,
                         std::ostream** ostr);
 
         virtual ~GenericGridBase() { }
@@ -82,6 +91,10 @@ namespace yask {
         const std::string& get_name() const { return _name; }
         void set_name(const std::string& name) { _name = name; }
 
+        // NUMA accessors.
+        virtual int get_numa_pref() const { return _numa_pref; }
+        virtual void set_numa_pref(int pref_numa_node) { _numa_pref = pref_numa_node; }
+        
         // Access dims.
         const IdxTuple& get_dims() const { return _dims; }
 
@@ -191,8 +204,9 @@ namespace yask {
         GenericGridTemplate(std::string name,
                             Layout& layout_base,
                             const GridDimNames& dimNames,
+                            KernelSettingsPtr settings,
                             std::ostream** ostr) :
-            GenericGridBase(name, layout_base, dimNames, ostr) { }
+            GenericGridBase(name, layout_base, dimNames, settings, ostr) { }
 
         // Dealloc _base when last pointer to it is destructed.
         virtual ~GenericGridTemplate() {
@@ -295,8 +309,9 @@ namespace yask {
         // Construct an unallocated grid.
         GenericGrid(std::string name,
                     const GridDimNames& dimNames,
+                    KernelSettingsPtr settings,
                     std::ostream** ostr) :
-            GenericGridTemplate<T>(name, _layout, dimNames, ostr) {
+            GenericGridTemplate<T>(name, _layout, dimNames, settings, ostr) {
             assert(int(dimNames.size()) == _layout.get_num_sizes());
         }
 

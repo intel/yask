@@ -119,6 +119,34 @@ namespace yask {
     SET_GRID_API(set_first_misc_index, _offsets[posn] = n, false, false, true)
 #undef COMMA
 #undef SET_GRID_API
+
+    // Ctor.
+    YkGridBase::YkGridBase(GenericGridBase* ggb,
+                           size_t ndims,
+                           DimsPtr dims) :
+    _ggb(ggb), _dims(dims) {
+
+        assert(ggb);
+        assert(dims.get());
+        
+        // Init indices.
+        int n = int(ndims);
+        _domains.setFromConst(0, n);
+        _left_pads.setFromConst(0, n);
+        _right_pads.setFromConst(0, n);
+        _left_halos.setFromConst(0, n);
+        _right_halos.setFromConst(0, n);
+        _left_wf_exts.setFromConst(0, n);
+        _right_wf_exts.setFromConst(0, n);
+        _offsets.setFromConst(0, n);
+        _local_offsets.setFromConst(0, n);
+        _vec_lens.setFromConst(1, n);
+        _allocs.setFromConst(1, n);
+        _vec_left_pads.setFromConst(1, n);
+        _vec_allocs.setFromConst(1, n);
+        _vec_local_offsets.setFromConst(0, n);
+    }
+    
     
     // Convenience function to format indices like
     // "x=5, y=3".
@@ -448,7 +476,7 @@ namespace yask {
                 if (!ok)
                     return true; // stop processing this point, but keep going.
 
-                idx_t asi = get_alloc_step_index(pt[Indices::step_posn]);
+                idx_t asi = get_alloc_step_index(pt);
                 auto te = readElem(opt, asi, __LINE__);
                 auto re = ref->readElem(opt, asi, __LINE__);
                 if (!within_tolerance(te, re, epsilon)) {
@@ -559,7 +587,7 @@ namespace yask {
                                  get_name() << "'");
         }
         checkIndices(indices, "get_element", true, false);
-        idx_t asi = get_alloc_step_index(indices[Indices::step_posn]);
+        idx_t asi = get_alloc_step_index(indices);
         real_t val = readElem(indices, asi, __LINE__);
         return double(val);
     }
@@ -569,7 +597,7 @@ namespace yask {
         idx_t nup = 0;
         if (get_raw_storage_buffer() &&
             checkIndices(indices, "set_element", strict_indices, false)) {
-            idx_t asi = get_alloc_step_index(indices[Indices::step_posn]);
+            idx_t asi = get_alloc_step_index(indices);
             writeElem(real_t(val), indices, asi, __LINE__);
             nup++;
 
@@ -598,7 +626,7 @@ namespace yask {
                 Indices pt = first_indices.addElements(ofs);
 
                 // TODO: move this outside of loop for const step index.
-                idx_t asi = get_alloc_step_index(pt[Indices::step_posn]);
+                idx_t asi = get_alloc_step_index(pt);
                 
                 real_t val = readElem(pt, asi, __LINE__);
                 ((real_t*)buffer_ptr)[idx] = val;
@@ -629,7 +657,7 @@ namespace yask {
                 Indices pt = first_indices.addElements(ofs);
 
                 // TODO: move this outside of loop for const step index.
-                idx_t asi = get_alloc_step_index(pt[Indices::step_posn]);
+                idx_t asi = get_alloc_step_index(pt);
 
                 writeElem(real_t(val), pt, asi, __LINE__);
                 return true;    // keep going.
@@ -658,7 +686,7 @@ namespace yask {
                 Indices pt = first_indices.addElements(ofs);
 
                 // TODO: move this outside of loop for const step index.
-                idx_t asi = get_alloc_step_index(pt[Indices::step_posn]);
+                idx_t asi = get_alloc_step_index(pt);
 
                 real_t val = ((real_t*)buffer_ptr)[idx];
                 writeElem(val, pt, asi, __LINE__);

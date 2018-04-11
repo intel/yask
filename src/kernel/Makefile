@@ -157,7 +157,7 @@ else ifeq ($(arch),knl)
 
  ISA		?=	-xMIC-AVX512
  GCXX_ISA	?=	-march=knl
- MACROS		+=	USE_INTRIN512 USE_RCP28
+ MACROS		+=	USE_INTRIN512 USE_RCP28 NUMA_PREF=1
  YC_TARGET  	?=	avx512
  def_block_args	?=	-b 96
  def_block_threads ?=	8
@@ -427,7 +427,25 @@ YK_CXXOPT	?=	-O3
 
 # Linker.
 YK_LD		:=	$(YK_CXX)
-YK_LFLAGS	:=	-lrt -Wl,-rpath=$(LIB_DIR) -L$(LIB_DIR) -l$(YK_BASE2)
+YK_LIBS		:=	-lrt
+YK_LFLAGS	:=	-Wl,-rpath=$(LIB_DIR) -L$(LIB_DIR) -l$(YK_BASE2)
+
+# Work-around missing numaif.h:
+# IF numaif.h is found in /usr/include,
+# THEN enable the macro to use it.
+ifneq ($(shell find /usr/include -name 'numaif.h' | wc -l),0)
+ MACROS		+=	USE_NUMAIF_H
+endif
+
+# Work-around missing libnuma.so:
+# IF libnuma.so.1 exists AND "normal" libnuma can't be found,
+# THEN use hard-coded libnuma.so.1,
+# ELSE use "normal" libnuma.
+ifeq ($(and $(wildcard /usr/lib64/libnuma.so.1),$(shell whereis libnuma |wc -w)),1)
+ YK_LIBS	+=	/usr/lib64/libnuma.so.1
+else
+ YK_LIBS	+=	-lnuma
+endif
 
 # Tools.
 SWIG		:=	swig
@@ -462,15 +480,6 @@ ifeq ($(mpi),1)
  MACROS		+=	USE_MPI
 endif
 
-# HBW settings.
-# TODO: change this to use OS-default location.
-ifeq ($(hbw),1)
- MACROS		+=	USE_HBW
- HBW_DIR 	=	$(HOME)/memkind_build
- YK_CXXFLAGS	+=	-I$(HBW_DIR)/include
- YK_LFLAGS	+= 	-lnuma $(HBW_DIR)/lib/libmemkind.a
-endif
-
 # VTUNE settings.
 ifeq ($(vtune),1)
  MACROS		+=	USE_VTUNE
@@ -482,7 +491,7 @@ else
  VTUNE_DIR	=	$(VTUNE_AMPLIFIER_XE_2016_DIR)
 endif
 YK_CXXFLAGS	+=	-I$(VTUNE_DIR)/include
-YK_LFLAGS	+=	$(VTUNE_DIR)/lib64/libittnotify.a
+YK_LIBS		+=	$(VTUNE_DIR)/lib64/libittnotify.a
 endif
 
 # compiler-specific settings
@@ -541,11 +550,11 @@ kernel:	$(YK_EXEC) $(MAKE_REPORT_FILE)
 	@ls -l $@
 
 $(YK_LIB): $(YK_OBJS)
-	$(CXX_PREFIX) $(YK_CXX) $(YK_CXXFLAGS) -shared -o $@ $^
+	$(CXX_PREFIX) $(YK_CXX) $(YK_CXXFLAGS) $(YK_LIBS) -shared -o $@ $^
 	@ls -l $@
 
 $(YK_EXEC): yask_main.cpp $(YK_LIB)
-	$(CXX_PREFIX) $(YK_LD) $(YK_CXXFLAGS) $< $(YK_LFLAGS) -o $@
+	$(CXX_PREFIX) $(YK_LD) $(YK_CXXFLAGS) $< $(YK_LIBS) $(YK_LFLAGS) -o $@
 	@ls -l $@
 
 $(MAKE_REPORT_FILE): $(YK_LIB)
@@ -633,7 +642,7 @@ $(YK_SWIG_DIR)/yask_kernel_api_wrap.o: $(YK_SWIG_DIR)/yask_kernel_api_wrap.cpp
 	$(YK_CXX) $(YK_CXXFLAGS) $(PYINC) -fPIC -c -o $@ $<
 
 $(YK_PY_LIB): $(YK_OBJS) $(YK_SWIG_DIR)/yask_kernel_api_wrap.o
-	$(YK_CXX) $(YK_CXXFLAGS) -shared -o $@ $^
+	$(YK_CXX) $(YK_CXXFLAGS) $(YK_LIBS) -shared -o $@ $^
 
 # Simple tests
 
@@ -736,8 +745,8 @@ all-tests:
 	$(MAKE) clean; $(MAKE) stencil=3plane fold=y=2,z=4 yc-and-yk-test
 	$(MAKE) clean; $(MAKE) stencil=cube fold=x=2,y=2,z=2 yc-and-yk-test
 	$(MAKE) clean; $(MAKE) stencil=test_4d fold=w=2,x=2,y=2,z=2 yc-and-yk-test
-	$(MAKE) clean; $(MAKE) stencil=test_scratch1 fold=x=4 yc-and-yk-test
-	$(MAKE) clean; $(MAKE) stencil=test_scratch2 fold=x=2,y=2,z=2 yc-and-yk-test
+	$(MAKE) clean; $(MAKE) stencil=test_scratch1 real_bytes=8 fold=x=4 yc-and-yk-test
+	$(MAKE) clean; $(MAKE) stencil=test_scratch2 real_bytes=8 fold=x=2,y=1,z=2 yc-and-yk-test
 	$(MAKE) clean; $(MAKE) stencil=iso3dfd fold=x=4,y=2 yc-and-yk-test
 	$(MAKE) clean; $(MAKE) stencil=awp_elastic real_bytes=8 yc-and-yk-test
 	$(MAKE) clean; $(MAKE) stencil=ssg real_bytes=8 yc-and-yk-test
@@ -862,4 +871,4 @@ help:
 	@echo " $(MAKE) -j all"
 	@echo " $(MAKE) -j all ranks=2"
 	@echo " $(MAKE) -j all YK_CXX=g++ YK_CXXOPT=-O2 mpi=0"
-	@echo " $(MAKE) -j all YK_CXX=mpigxx YK_CXXOPT=-O2 ranks=3"
+	@echo " $(MAKE) -j all YK_CXX=mpigxx YK_CXXOPT=-O2 ranks=3 EXTRA_MACROS='DEBUG'"

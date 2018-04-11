@@ -61,7 +61,36 @@ namespace yask {
     SET_SOLN_API(set_rank_domain_size, _opts->_rank_sizes[dim] = n, false, true, false, true)
     SET_SOLN_API(set_num_ranks, _opts->_num_ranks[dim] = n, false, true, false, true)
 #undef SET_SOLN_API
-    
+
+    // Constructor.
+    StencilContext::StencilContext(KernelEnvPtr env,
+                                   KernelSettingsPtr settings) :
+    _ostr(&std::cout),
+        _env(env),
+        _opts(settings),
+        _dims(settings->_dims),
+        _at(this)
+    {
+        // Set debug output object.
+        yask_output_factory yof;
+        set_debug_output(yof.new_stdout_output());
+
+        // Create MPI Info object.
+        _mpiInfo = std::make_shared<MPIInfo>(settings->_dims);
+
+        // Init various tuples to make sure they have the correct dims.
+        rank_domain_offsets = _dims->_domain_dims;
+        overall_domain_sizes = _dims->_domain_dims;
+        max_halos = _dims->_domain_dims;
+        wf_angles = _dims->_domain_dims;
+        wf_shifts = _dims->_domain_dims;
+        left_wf_exts = _dims->_domain_dims;
+        right_wf_exts = _dims->_domain_dims;
+            
+        // Set output to msg-rank per settings.
+        set_ostr();
+    }
+
     void StencilContext::share_grid_storage(yk_solution_ptr source) {
         auto sp = dynamic_pointer_cast<StencilContext>(source);
         assert(sp);
@@ -511,7 +540,7 @@ namespace yask {
                 // run_solution().  In this function, one of the
                 // parallelogram-shaped regions is being evaluated.  At
                 // each time-step, the parallelogram may be trimmed
-                // based on the BB and WF extensions outside of the domain.
+                // based on the BB and WF extensions outside of the rank-BB.
                     
                 // Actual region boundaries must stay within [extended] BB for this group.
                 bool ok = true;
@@ -841,7 +870,7 @@ namespace yask {
         // Make sure everything is resized based on block size.
         _opts->adjustSettings(nullop->get_ostream(), _env);
 
-        // Reallocate scratch data based on block size.
+        // Reallocate scratch data based on new block size.
         _context->allocScratchData(nullop->get_ostream());
     }
     
@@ -1120,33 +1149,65 @@ namespace yask {
 
     } // setupRank.
 
-    // Allocate memory for grids that do not already have storage.
-    // Create MPI and allocate buffers.
-    // TODO: allow different types of memory for different grids, MPI bufs, etc.
-    void StencilContext::allocData(ostream& os) {
+    // Alloc 'nbytes' on each requested NUMA node.
+    // Map keys are preferred NUMA nodes or -1 for local.
+    // Pointers are returned in '_data_buf'.
+    // 'ngrids' and 'type' are only used for debug msg.
+    void StencilContext::_alloc_data(const map <int, size_t>& nbytes,
+                                     const map <int, size_t>& ngrids,
+                                     map <int, shared_ptr<char>>& data_buf,
+                                     const std::string& type) {
+        ostream& os = get_ostr();
 
-        // Remove any old MPI data. We do this now to give
-        // preference to grids for any HBM memory that might be available.
-        mpiData.clear();
+        // Get default NUMA node from settings.
+        int numa_def = _opts->_numa_pref;
+        
+        for (const auto& i : nbytes) {
+            int np = i.first;
+            size_t nb = i.second;
+            size_t ng = ngrids.at(np);
+
+            // Don't need pad after last one.
+            if (nb >= _data_buf_pad)
+                nb -= _data_buf_pad;
+
+            // What node?
+            int numa_pref = (np >= 0) ? np : numa_def;
+            
+            // Allocate data.
+            os << "Allocating " << makeByteStr(nb) <<
+                " for " << ng << " " << type << "(s)";
+            if (numa_pref >= 0)
+                os << " preferring NUMA node " << numa_pref;
+            else
+                os << " using NUMA policy " << numa_pref;
+            os << "...\n" << flush;
+            auto p = shared_numa_alloc<char>(nb, numa_pref);
+            TRACE_MSG("Got memory at " << static_cast<void*>(p.get()));
+
+            // Save using original key.
+            data_buf[np] = p;
+        }
+    }
+    
+    // Allocate memory for grids that do not already have storage.
+    void StencilContext::allocGridData(ostream& os) {
 
         // Base ptrs for all default-alloc'd data.
         // These pointers will be shared by the ones in the grid
         // objects, which will take over ownership when these go
         // out of scope.
-        shared_ptr<char> _grid_data_buf;
-        shared_ptr<char> _mpi_data_buf;
+        // Key is preferred numa node or -1 for local.
+        map <int, shared_ptr<char>> _grid_data_buf;
 
-        ///////// Main data grids.
-
-        // Pass 0: count required size, allocate chunk of memory at end.
+        // Pass 0: count required size for each NUMA node, allocate chunk of memory at end.
         // Pass 1: distribute parts of already-allocated memory chunk.
         for (int pass = 0; pass < 2; pass++) {
-            TRACE_MSG("allocData pass " << pass << " for " <<
+            TRACE_MSG("allocGridData pass " << pass << " for " <<
                       gridPtrs.size() << " grid(s)");
         
-            // Determine how many bytes are needed and actually alloc'd.
-            size_t gbytes = 0, agbytes = 0;
-            int ngrids = 0;
+            // Count bytes needed and number of grids for each NUMA node.
+            map <int, size_t> npbytes, ngrids;
         
             // Grids.
             for (auto gp : gridPtrs) {
@@ -1157,39 +1218,42 @@ namespace yask {
                 // Grid data.
                 // Don't alloc if already done.
                 if (!gp->is_storage_allocated()) {
+                    int numa_pref = gp->get_numa_preferred();
 
-                    // Set storage if buffer has been allocated.
+                    // Set storage if buffer has been allocated in pass 0.
                     if (pass == 1) {
-                        gp->set_storage(_grid_data_buf, agbytes);
+                        auto p = _grid_data_buf[numa_pref];
+                        assert(p);
+                        gp->set_storage(p, npbytes[numa_pref]);
                         os << gp->make_info_string() << endl;
                     }
 
-                    // Determine size used (also offset to next location).
-                    gbytes += gp->get_num_storage_bytes();
-                    agbytes += ROUND_UP(gp->get_num_storage_bytes() + _data_buf_pad,
-                                        CACHELINE_BYTES);
-                    ngrids++;
-                    TRACE_MSG(" grid '" << gname << "' needs " <<
-                              makeByteStr(gp->get_num_storage_bytes()));
+                    // Determine padded size (also offset to next location).
+                    size_t nbytes = gp->get_num_storage_bytes();
+                    npbytes[numa_pref] += ROUND_UP(nbytes + _data_buf_pad,
+                                                  CACHELINE_BYTES);
+                    ngrids[numa_pref]++;
+                    if (pass == 0)
+                        TRACE_MSG(" grid '" << gname << "' needs " << makeByteStr(nbytes) <<
+                                  " on NUMA node " << numa_pref);
                 }
             }
 
-            // Don't need pad after last one.
-            if (agbytes >= _data_buf_pad)
-                agbytes -= _data_buf_pad;
+            // Alloc for each node.
+            if (pass == 0)
+                _alloc_data(npbytes, ngrids, _grid_data_buf, "grid");
 
-            // Allocate data.
-            if (pass == 0) {
-                os << "Allocating " << makeByteStr(agbytes) <<
-                    " for " << ngrids << " grid(s)...\n" << flush;
-                _grid_data_buf = shared_ptr<char>(alignedAlloc(agbytes), AlignedDeleter());
-                assert(_grid_data_buf);
-            }
         } // grid passes.
+    };
+    
+    // Create MPI and allocate buffers.
+    void StencilContext::allocMpiData(ostream& os) {
+
+        // Remove any old MPI data.
+        freeMpiData(os);
 
 #ifdef USE_MPI
 
-        ///////// MPI buffers.
         int num_exchanges = 0;
         auto me = _env->my_rank;
         
@@ -1230,10 +1294,10 @@ namespace yask {
                         continue;
                     auto& gname = gp->get_name();
 
-                    // Lookup first & last domain indices and calc halo sizes
+                    // Lookup first & last domain indices and calc exchange sizes
                     // for this grid.
                     bool found_delta = false;
-                    IdxTuple halo_sizes;
+                    IdxTuple my_halo_sizes, neigh_halo_sizes;
                     IdxTuple first_inner_idx, last_inner_idx;
                     IdxTuple first_outer_idx, last_outer_idx;
                     for (auto& dim : _dims->_domain_dims.getDims()) {
@@ -1260,14 +1324,42 @@ namespace yask {
                             // we need the wave-front extensions regardless of whether there
                             // is a halo on a given grid. This is because each stencil-group
                             // gets shifted by the WF angles at each step in the WF.
-                            // TODO: use left or right halo, not max.
-                            auto halo_size = max(gp->get_left_halo_size(dname),
-                                                 gp->get_right_halo_size(dname));
-                            if (neigh_offsets[dname] == MPIInfo::rank_prev)
-                                halo_size += left_wf_exts[dname];
-                            else if (neigh_offsets[dname] == MPIInfo::rank_next)
-                                halo_size += right_wf_exts[dname];
-                            halo_sizes.addDimBack(dname, halo_size);
+
+                            // Neighbor is to the left.
+                            if (neigh_offsets[dname] == MPIInfo::rank_prev) {
+                                auto ext = left_wf_exts[dname];
+
+                                // my halo.
+                                auto halo_size = gp->get_left_halo_size(dname);
+                                halo_size += ext;
+                                my_halo_sizes.addDimBack(dname, halo_size);
+
+                                // neighbor halo.
+                                halo_size = gp->get_right_halo_size(dname); // their right is on my left.
+                                halo_size += ext;
+                                neigh_halo_sizes.addDimBack(dname, halo_size);
+                            }
+
+                            // Neighbor is to the right.
+                            else if (neigh_offsets[dname] == MPIInfo::rank_next) {
+                                auto ext = right_wf_exts[dname];
+
+                                // my halo.
+                                auto halo_size = gp->get_right_halo_size(dname);
+                                halo_size += ext;
+                                my_halo_sizes.addDimBack(dname, halo_size);
+
+                                // neighbor halo.
+                                halo_size = gp->get_left_halo_size(dname); // their left is on my right.
+                                halo_size += ext;
+                                neigh_halo_sizes.addDimBack(dname, halo_size);
+                            }
+
+                            // Neighbor in-line.
+                            else {
+                                my_halo_sizes.addDimBack(dname, 0);
+                                neigh_halo_sizes.addDimBack(dname, 0);
+                            }
 
                             // Vectorized exchange allowed based on domain sizes?
                             // Both my rank and neighbor rank must have all domain sizes
@@ -1280,7 +1372,8 @@ namespace yask {
                             // TODO: add a heuristic to avoid increasing by a large factor.
                             if (vec_ok) {
                                 auto vec_size = _dims->_fold_pts[dname];
-                                halo_sizes.setVal(dname, ROUND_UP(halo_size, vec_size));
+                                my_halo_sizes.setVal(dname, ROUND_UP(my_halo_sizes[dname], vec_size));
+                                neigh_halo_sizes.setVal(dname, ROUND_UP(neigh_halo_sizes[dname], vec_size));
                             }
                             
                             // Is this neighbor before or after me in this domain direction?
@@ -1310,7 +1403,7 @@ namespace yask {
                         IdxTuple copy_end = gp->get_allocs();
 
                         // Adjust along domain dims in this grid.
-                        for (auto& dim : halo_sizes.getDims()) {
+                        for (auto& dim : _dims->_domain_dims.getDims()) {
                             auto& dname = dim.getName();
 
                             // Init range to whole rank domain (including
@@ -1323,22 +1416,22 @@ namespace yask {
                             auto neigh_ofs = neigh_offsets[dname];
                             
                             // Region to read from, i.e., data from inside
-                            // this rank's halo to be put into receiver's
+                            // this rank's domain to be put into neighbor's
                             // halo.
                             if (bd == MPIBufs::bufSend) {
 
-                                // Is this neighbor 'before' me in this dim?
+                                // Neighbor is to the left.
                                 if (neigh_ofs == idx_t(MPIInfo::rank_prev)) {
 
                                     // Only read slice as wide as halo from beginning.
-                                    copy_end[dname] = first_inner_idx[dname] + halo_sizes[dname];
+                                    copy_end[dname] = first_inner_idx[dname] + neigh_halo_sizes[dname];
                                 }
                             
-                                // Is this neighbor 'after' me in this dim?
+                                // Neighbor is to the right.
                                 else if (neigh_ofs == idx_t(MPIInfo::rank_next)) {
                                     
                                     // Only read slice as wide as halo before end.
-                                    copy_begin[dname] = last_inner_idx[dname] + 1 - halo_sizes[dname];
+                                    copy_begin[dname] = last_inner_idx[dname] + 1 - neigh_halo_sizes[dname];
                                 }
                             
                                 // Else, this neighbor is in same posn as I am in this dim,
@@ -1348,20 +1441,20 @@ namespace yask {
                             // Region to write to, i.e., into this rank's halo.
                             else if (bd == MPIBufs::bufRecv) {
 
-                                // Is this neighbor 'before' me in this dim?
+                                // Neighbor is to the left.
                                 if (neigh_ofs == idx_t(MPIInfo::rank_prev)) {
 
                                     // Only read slice as wide as halo before beginning.
-                                    copy_begin[dname] = first_inner_idx[dname] - halo_sizes[dname];
+                                    copy_begin[dname] = first_inner_idx[dname] - my_halo_sizes[dname];
                                     copy_end[dname] = first_inner_idx[dname];
                                 }
                             
-                                // Is this neighbor 'after' me in this dim?
+                                // Neighbor is to the right.
                                 else if (neigh_ofs == idx_t(MPIInfo::rank_next)) {
                                     
                                     // Only read slice as wide as halo after end.
                                     copy_begin[dname] = last_inner_idx[dname] + 1;
-                                    copy_end[dname] = last_inner_idx[dname] + 1 + halo_sizes[dname];
+                                    copy_end[dname] = last_inner_idx[dname] + 1 + my_halo_sizes[dname];
                                 }
                                 
                                 // Else, this neighbor is in same posn as I am in this dim,
@@ -1377,7 +1470,7 @@ namespace yask {
                             idx_t dsize = 1;
 
                             // domain dim?
-                            if (halo_sizes.lookup(dname)) {
+                            if (_dims->_domain_dims.lookup(dname)) {
                                 dsize = copy_end[dname] - copy_begin[dname];
 
                                 // Check whether size is multiple of vlen.
@@ -1461,22 +1554,28 @@ namespace yask {
             });   // neighbors.
         TRACE_MSG("number of halo-exchanges needed on this rank: " << num_exchanges);
 
+        // Base ptrs for all alloc'd data.
+        // These pointers will be shared by the ones in the grid
+        // objects, which will take over ownership when these go
+        // out of scope.
+        map <int, shared_ptr<char>> _mpi_data_buf;
+
         // Allocate MPI buffers.
         // Pass 0: count required size, allocate chunk of memory at end.
         // Pass 1: distribute parts of already-allocated memory chunk.
         for (int pass = 0; pass < 2; pass++) {
-            TRACE_MSG("allocData pass " << pass << " for " <<
+            TRACE_MSG("allocMpiData pass " << pass << " for " <<
                       mpiData.size() << " MPI buffer set(s)");
         
-            // Determine how many bytes are needed and actually alloc'd.
-            size_t bbytes = 0, abbytes = 0; // for MPI buffers.
-            int nbufs = 0;
+            // Count bytes needed and number of buffers for each NUMA node.
+            map <int, size_t> npbytes, nbufs;
         
             // Grids.
             for (auto gp : gridPtrs) {
                 if (!gp)
                     continue;
                 auto& gname = gp->get_name();
+                int numa_pref = gp->get_numa_preferred();
 
                 // MPI bufs for this grid.
                 if (mpiData.count(gname)) {
@@ -1494,33 +1593,32 @@ namespace yask {
                                 auto& buf = grid_mpi_data.getBuf(MPIBufs::BufDir(bd), roffsets);
                                 if (buf.get_size() == 0)
                                     continue;
+                                
+                                // Set storage if buffer has been allocated in pass 0.
+                                if (pass == 1) {
+                                    auto p = _mpi_data_buf[numa_pref];
+                                    assert(p);
+                                    buf.set_storage(p, npbytes[numa_pref]);
+                                }
 
-                                if (pass == 1)
-                                    buf.set_storage(_mpi_data_buf, abbytes);
-
+                                // Determine padded size (also offset to next location).
                                 auto sbytes = buf.get_bytes();
-                                bbytes += sbytes;
-                                abbytes += ROUND_UP(sbytes + _data_buf_pad,
-                                                    CACHELINE_BYTES);
-                                nbufs++;
-                                TRACE_MSG("  MPI buf '" << buf.name << "' needs " <<
-                                          makeByteStr(sbytes));
+                                npbytes[numa_pref] += ROUND_UP(sbytes + _data_buf_pad,
+                                                               CACHELINE_BYTES);
+                                nbufs[numa_pref]++;
+                                if (pass == 0)
+                                    TRACE_MSG("  MPI buf '" << buf.name << "' needs " <<
+                                              makeByteStr(sbytes) <<
+                                              " on NUMA node " << numa_pref);
                             }
                         } );
                 }
             }
 
-            // Don't need pad after last one.
-            if (abbytes >= _data_buf_pad)
-                abbytes -= _data_buf_pad;
+            // Alloc for each node.
+            if (pass == 0)
+                _alloc_data(npbytes, nbufs, _mpi_data_buf, "MPI buffer");
 
-            // Allocate data.
-            if (pass == 0) {
-                os << "Allocating " << makeByteStr(abbytes) <<
-                    " for " << nbufs << " MPI buffer(s)...\n" << flush;
-                _mpi_data_buf = shared_ptr<char>(alignedAlloc(abbytes), AlignedDeleter());
-                assert(_mpi_data_buf);
-            }
         } // MPI passes.
 #endif
     }
@@ -1530,13 +1628,13 @@ namespace yask {
     void StencilContext::allocScratchData(ostream& os) {
 
         // Remove any old scratch data.
-        makeScratchGrids(0);
+        freeScratchData(os);
 
-        // Base ptrs for all default-alloc'd data.
+        // Base ptrs for all alloc'd data.
         // This pointer will be shared by the ones in the grid
         // objects, which will take over ownership when it goes
         // out of scope.
-        shared_ptr<char> _scratch_data_buf;
+        map <int, shared_ptr<char>> _scratch_data_buf;
 
         // Make sure the right number of threads are set so we
         // have the right number of scratch grids.
@@ -1552,9 +1650,8 @@ namespace yask {
             TRACE_MSG("allocScratchData pass " << pass << " for " <<
                       scratchVecs.size() << " set(s) of scratch grids");
         
-            // Determine how many bytes are needed and actually alloc'd.
-            size_t gbytes = 0, agbytes = 0;
-            int ngrids = 0;
+            // Count bytes needed and number of grids for each NUMA node.
+            map <int, size_t> npbytes, ngrids;
 
             // Loop through each scratch grid vector.
             for (auto* sgv : scratchVecs) {
@@ -1567,6 +1664,7 @@ namespace yask {
                 for (auto gp : *sgv) {
                     assert(gp);
                     auto& gname = gp->get_name();
+                    int numa_pref = gp->get_numa_preferred();
             
                     // Loop through each domain dim.
                     for (auto& dim : _dims->_domain_dims.getDims()) {
@@ -1586,38 +1684,36 @@ namespace yask {
                 
                     // Set storage if buffer has been allocated.
                     if (pass == 1) {
-                        gp->set_storage(_scratch_data_buf, agbytes);
+                        auto p = _scratch_data_buf[numa_pref];
+                        assert(p);
+                        gp->set_storage(p, npbytes[numa_pref]);
                         TRACE_MSG(gp->make_info_string());
                     }
 
                     // Determine size used (also offset to next location).
-                    gbytes += gp->get_num_storage_bytes();
-                    agbytes += ROUND_UP(gp->get_num_storage_bytes() + _data_buf_pad,
-                                        CACHELINE_BYTES);
-                    ngrids++;
-                    TRACE_MSG(" scratch grid '" << gname << "' for thread " <<
-                              thr_num << " needs " <<
-                              makeByteStr(gp->get_num_storage_bytes()));
+                    size_t nbytes = gp->get_num_storage_bytes();
+                    npbytes[numa_pref] += ROUND_UP(nbytes + _data_buf_pad,
+                                                   CACHELINE_BYTES);
+                    ngrids[numa_pref]++;
+                    if (pass == 0)
+                        TRACE_MSG(" scratch grid '" << gname << "' for thread " <<
+                                  thr_num << " needs " << makeByteStr(nbytes) <<
+                                  " on NUMA node " << numa_pref);
                     thr_num++;
                 } // scratch grids.
             } // scratch-grid vecs.
 
-            // Don't need pad after last one.
-            if (agbytes >= _data_buf_pad)
-                agbytes -= _data_buf_pad;
+            // Alloc for each node.
+            if (pass == 0)
+                _alloc_data(npbytes, ngrids, _scratch_data_buf, "scratch grid");
 
-            // Allocate data.
-            if (pass == 0) {
-                os << "Allocating " << makeByteStr(agbytes) <<
-                    " for " << ngrids << " scratch grid(s)...\n" << flush;
-                _scratch_data_buf = shared_ptr<char>(alignedAlloc(agbytes), AlignedDeleter());
-                assert(_scratch_data_buf);
-            }
         } // scratch-grid passes.
     }
 
     // Adjust offsets of scratch grids based
     // on thread and scan indices.
+    // Each scratch-grid is assigned to a thread, so it must
+    // "move around" as the thread is assigned to each block.
     void StencilContext::update_scratch_grids(int thread_idx,
                                               const ScanIndices& idxs) {
         auto dims = get_dims();
@@ -1652,8 +1748,7 @@ namespace yask {
                         auto rofs = rank_domain_offsets[j];
                         auto lofs = idxs.begin[i] - rofs;
                         gp->_set_local_offset(posn, lofs);
-                        assert(lofs >= 0);
-                        assert(lofs % dims->_fold_pts[j] == 0);
+                        assert(imod_flr(lofs, dims->_fold_pts[j]) == 0);
                     }
                     j++;
                 }
@@ -1709,7 +1804,11 @@ namespace yask {
         // of angles and extensions.
         auto& step_dim = _dims->_step_dim;
         auto wf_steps = _opts->_region_sizes[step_dim];
-        num_wf_shifts = max((idx_t(stGroups.size()) * wf_steps) - 1, idx_t(0));
+        num_wf_shifts = 0;
+        if (wf_steps > 1)
+
+            // TODO: don't shift for scratch grids.
+            num_wf_shifts = max((idx_t(stGroups.size()) * wf_steps) - 1, idx_t(0));
         for (auto& dim : _dims->_domain_dims.getDims()) {
             auto& dname = dim.getName();
             auto rksize = _opts->_rank_sizes[dname];
@@ -1852,9 +1951,15 @@ namespace yask {
         // Update all the grid sizes.
         setupRank();
 
-        // Alloc grids, MPI bufs, and scratch grids.
-        allocData(os);
+        // Alloc grids, scratch grids, MPI bufs.
+        // This is the order in which preferred NUMA nodes (e.g., HBW mem)
+        // will be used.
+        // We free the scratch and MPI data first to give grids preference.
+        freeScratchData(os);
+        freeMpiData(os);
+        allocGridData(os);
         allocScratchData(os);
+        allocMpiData(os);
 
         // Report total allocation.
         rank_nbytes = get_num_bytes();
@@ -1886,6 +1991,8 @@ namespace yask {
             " rank-indices:          " << _opts->_rank_indices.makeDimValStr() << endl <<
             " rank-domain-offsets:   " << rank_domain_offsets.makeDimValOffsetStr() << endl <<
 #endif
+            " rank-domain:           " << rank_bb.bb_begin.makeDimValStr() <<
+                " ... " << rank_bb.bb_end.subElements(1).makeDimValStr() << endl <<
             " vector-len:            " << VLEN << endl <<
             " extra-padding:         " << _opts->_extra_pad_sizes.makeDimValStr() << endl <<
             " minimum-padding:       " << _opts->_min_pad_sizes.makeDimValStr() << endl <<
@@ -1898,7 +2005,9 @@ namespace yask {
                 " num-wave-front-shifts: " << num_wf_shifts << endl <<
                 " wave-front-shift-lens: " << wf_shifts.makeDimValStr() << endl <<
                 " left-wave-front-exts:  " << left_wf_exts.makeDimValStr() << endl <<
-                " right-wave-front-exts: " << right_wf_exts.makeDimValStr() << endl;
+                " right-wave-front-exts: " << right_wf_exts.makeDimValStr() << endl <<
+                " ext-rank-domain:       " << ext_bb.bb_begin.makeDimValStr() <<
+                " ... " << ext_bb.bb_end.subElements(1).makeDimValStr() << endl;
         }
         os << endl;
         
@@ -1906,7 +2015,7 @@ namespace yask {
         rank_numWrites_1t = 0;
         rank_reads_1t = 0;
         rank_numFpOps_1t = 0;
-        os << "Num equations-groups: " << stGroups.size() << endl;
+        os << "Num equation-groups: " << stGroups.size() << endl;
         for (auto* sg : stGroups) {
             idx_t updates1 = sg->get_scalar_points_written();
             idx_t updates_domain = updates1 * sg->bb_num_points;
@@ -2025,16 +2134,17 @@ namespace yask {
                 "num-writes-per-step:                    " << makeNumStr(tot_numWrites_1t) << endl <<
                 "num-est-FP-ops-per-step:                " << makeNumStr(tot_numFpOps_1t) << endl <<
                 "num-steps-done:                         " << makeNumStr(steps_done) << endl <<
-                "elapsed-time (sec):                     " << makeNumStr(rtime) << endl <<
-                "throughput (num-points/sec):            " << makeNumStr(domain_pts_ps) << endl <<
-                "throughput (est-FLOPS):                 " << makeNumStr(flops) << endl <<
-                "throughput (num-writes/sec):            " << makeNumStr(writes_ps) << endl;
+                "elapsed-time (sec):                     " << makeNumStr(rtime) << endl;
 #ifdef USE_MPI
             os <<
                 "time in halo exch (sec):                " << makeNumStr(mtime);
             float pct = 100. * mtime / rtime;
             os << " (" << pct << "%)" << endl;
 #endif
+            os <<
+                "throughput (num-writes/sec):            " << makeNumStr(writes_ps) << endl <<
+                "throughput (est-FLOPS):                 " << makeNumStr(flops) << endl <<
+                "throughput (num-points/sec):            " << makeNumStr(domain_pts_ps) << endl;
         }
 
         // Fill in return object.
@@ -2271,13 +2381,6 @@ namespace yask {
                              MPIBufs& bufs) {
                             auto& sendBuf = bufs.bufs[MPIBufs::bufSend];
                             auto& recvBuf = bufs.bufs[MPIBufs::bufRecv];
-                            
-                            // Nothing to do if there are no buffers.
-                            if (sendBuf.get_size() == 0)
-                                return;
-                            assert(recvBuf.get_size() != 0);
-                            assert(sendBuf._elems != 0);
-                            assert(recvBuf._elems != 0);
                             TRACE_MSG("  with rank " << neighbor_rank << " at relative position " <<
                                       offsets.subElements(1).makeDimValOffsetStr() << "...");
 
@@ -2294,87 +2397,95 @@ namespace yask {
                             // Submit async request to receive data from neighbor.
                             if (halo_step == halo_irecv) {
                                 auto nbytes = recvBuf.get_bytes();
-                                void* buf = (void*)recvBuf._elems;
-                                TRACE_MSG("   requesting " << makeByteStr(nbytes) << "...");
-                                MPI_Irecv(buf, nbytes, MPI_BYTE,
-                                          neighbor_rank, int(gi), _env->comm, &grid_recv_reqs[ni]);
+                                if (nbytes) {
+                                    void* buf = (void*)recvBuf._elems;
+                                    TRACE_MSG("   requesting " << makeByteStr(nbytes) << "...");
+                                    MPI_Irecv(buf, nbytes, MPI_BYTE,
+                                              neighbor_rank, int(gi), _env->comm, &grid_recv_reqs[ni]);
+                                }
                             }
 
                             // Pack data into send buffer, then send to neighbor.
                             else if (halo_step == halo_pack_isend) {
-
-                                // Vec ok?
-                                // Domain sizes must be ok, and buffer size must be ok
-                                // as calculated when buffers were created.
-                                bool send_vec_ok = vec_ok && sendBuf.has_all_vlen_mults;
-
-                                // Get first and last ranges.
-                                IdxTuple first = sendBuf.begin_pt;
-                                IdxTuple last = sendBuf.last_pt;
-
-                                // The code in allocData() pre-calculated the first and
-                                // last points of each buffer, except in the step dim.
-                                // So, we need to set that value now.
-                                // TODO: update this if we expand the buffers to hold
-                                // more than one step.
-                                if (gp->is_dim_used(sd)) {
-                                    first.setVal(sd, t);
-                                    last.setVal(sd, t);
-                                }
-                                TRACE_MSG("   packing " << sendBuf.num_pts.makeDimValStr(" * ") <<
-                                          " points from " << first.makeDimValStr() <<
-                                          " ... " << last.makeDimValStr() <<
-                                          (send_vec_ok ? " with" : " without") <<
-                                          " vector copy...");
-
-                                // Copy (pack) data from grid to buffer.
-                                void* buf = (void*)sendBuf._elems;
-                                if (send_vec_ok)
-                                    gp->get_vecs_in_slice(buf, first, last);
-                                else
-                                    gp->get_elements_in_slice(buf, first, last);
-
-                                // Send packed buffer to neighbor.
                                 auto nbytes = sendBuf.get_bytes();
-                                TRACE_MSG("   sending " << makeByteStr(nbytes) << "...");
-                                MPI_Isend(buf, nbytes, MPI_BYTE,
-                                          neighbor_rank, int(gi), _env->comm,
-                                          &send_reqs[num_send_reqs++]);
+                                if (nbytes) {
+
+                                    // Vec ok?
+                                    // Domain sizes must be ok, and buffer size must be ok
+                                    // as calculated when buffers were created.
+                                    bool send_vec_ok = vec_ok && sendBuf.has_all_vlen_mults;
+
+                                    // Get first and last ranges.
+                                    IdxTuple first = sendBuf.begin_pt;
+                                    IdxTuple last = sendBuf.last_pt;
+
+                                    // The code in allocData() pre-calculated the first and
+                                    // last points of each buffer, except in the step dim.
+                                    // So, we need to set that value now.
+                                    // TODO: update this if we expand the buffers to hold
+                                    // more than one step.
+                                    if (gp->is_dim_used(sd)) {
+                                        first.setVal(sd, t);
+                                        last.setVal(sd, t);
+                                    }
+                                    TRACE_MSG("   packing " << sendBuf.num_pts.makeDimValStr(" * ") <<
+                                              " points from " << first.makeDimValStr() <<
+                                              " ... " << last.makeDimValStr() <<
+                                              (send_vec_ok ? " with" : " without") <<
+                                              " vector copy...");
+
+                                    // Copy (pack) data from grid to buffer.
+                                    void* buf = (void*)sendBuf._elems;
+                                    if (send_vec_ok)
+                                        gp->get_vecs_in_slice(buf, first, last);
+                                    else
+                                        gp->get_elements_in_slice(buf, first, last);
+
+                                    // Send packed buffer to neighbor.
+                                    auto nbytes = sendBuf.get_bytes();
+                                    TRACE_MSG("   sending " << makeByteStr(nbytes) << "...");
+                                    MPI_Isend(buf, nbytes, MPI_BYTE,
+                                              neighbor_rank, int(gi), _env->comm,
+                                              &send_reqs[num_send_reqs++]);
+                                }
                             }
 
                             // Wait for data from neighbor, then unpack it.
                             else if (halo_step == halo_unpack) {
+                                auto nbytes = recvBuf.get_bytes();
+                                if (nbytes) {
 
-                                // Wait for data from neighbor before unpacking it.
-                                TRACE_MSG("   waiting for MPI data...");
-                                MPI_Wait(&grid_recv_reqs[ni], MPI_STATUS_IGNORE);
+                                    // Wait for data from neighbor before unpacking it.
+                                    TRACE_MSG("   waiting for MPI data...");
+                                    MPI_Wait(&grid_recv_reqs[ni], MPI_STATUS_IGNORE);
 
-                                // Vec ok?
-                                bool recv_vec_ok = vec_ok && recvBuf.has_all_vlen_mults;
+                                    // Vec ok?
+                                    bool recv_vec_ok = vec_ok && recvBuf.has_all_vlen_mults;
 
-                                // Get first and last ranges.
-                                IdxTuple first = recvBuf.begin_pt;
-                                IdxTuple last = recvBuf.last_pt;
+                                    // Get first and last ranges.
+                                    IdxTuple first = recvBuf.begin_pt;
+                                    IdxTuple last = recvBuf.last_pt;
 
-                                // Set step val as above.
-                                if (gp->is_dim_used(sd)) {
-                                    first.setVal(sd, t);
-                                    last.setVal(sd, t);
+                                    // Set step val as above.
+                                    if (gp->is_dim_used(sd)) {
+                                        first.setVal(sd, t);
+                                        last.setVal(sd, t);
+                                    }
+                                    TRACE_MSG("   got data; unpacking " << recvBuf.num_pts.makeDimValStr(" * ") <<
+                                              " points into " << first.makeDimValStr() <<
+                                              " ... " << last.makeDimValStr() <<
+                                              (recv_vec_ok ? " with" : " without") <<
+                                              " vector copy...");
+
+                                    // Copy data from buffer to grid.
+                                    void* buf = (void*)recvBuf._elems;
+                                    idx_t n = 0;
+                                    if (recv_vec_ok)
+                                        n = gp->set_vecs_in_slice(buf, first, last);
+                                    else
+                                        n = gp->set_elements_in_slice(buf, first, last);
+                                    assert(n == recvBuf.get_size());
                                 }
-                                TRACE_MSG("   got data; unpacking " << recvBuf.num_pts.makeDimValStr(" * ") <<
-                                          " points into " << first.makeDimValStr() <<
-                                          " ... " << last.makeDimValStr() <<
-                                          (recv_vec_ok ? " with" : " without") <<
-                                          " vector copy...");
-
-                                // Copy data from buffer to grid.
-                                void* buf = (void*)recvBuf._elems;
-                                idx_t n = 0;
-                                if (recv_vec_ok)
-                                    n = gp->set_vecs_in_slice(buf, first, last);
-                                else
-                                    n = gp->set_elements_in_slice(buf, first, last);
-                                assert(n == recvBuf.get_size());
                             }
                         }); // visit neighbors.
 

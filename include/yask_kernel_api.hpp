@@ -46,6 +46,15 @@ namespace yask {
     typedef std::int64_t idx_t;
 #endif
 
+    /// Allocate grids on local NUMA node.
+    const int yask_numa_local = -1;
+
+    /// Allocate grids across all available NUMA nodes.
+    const int yask_numa_interleave = -2;
+
+    /// Do not specify any NUMA binding.
+    const int yask_numa_none = -9;
+
     // Forward declarations of classes and pointers.
 
     class yk_env;
@@ -96,7 +105,7 @@ namespace yask {
         virtual yk_solution_ptr
         new_solution(yk_env_ptr env /**< [in] Pointer to env info. */) const;
 
-        /// Create a stencil solution by copying the settings from another.
+        /// **[Advanced]** Create a stencil solution by copying the settings from another.
         /**
            All the settings that were specified via the `yk_solution::set_*()`
            functions in the source solution will be copied to the new solution.
@@ -284,12 +293,17 @@ namespace yask {
            also be smaller than the specified size when the block is at the
            edge of the domain. The block size cannot be set in the
            solution-step dimension (because temporal blocking is not yet enabled).
+
+           Unless auto-tuning is disabled, the block size will be used as
+           a starting point for an automated search for a higher-performing
+           block size.
         */
         virtual void
         set_block_size(const std::string& dim
                        /**< [in] Name of dimension to set.  Must be one of
                           the names from get_domain_dim_names(). */,
-                       idx_t size /**< [in] Elements in a block in this `dim`. */ ) =0;
+                       idx_t size
+                       /**< [in] Elements in a block in this `dim`. */ ) =0;
 
         /// Get the block size.
         /**
@@ -301,21 +315,6 @@ namespace yask {
         get_block_size(const std::string& dim
                         /**< [in] Name of dimension to get.  Must be one of
                            the names from get_domain_dim_names(). */) const =0;
-
-        /// Set performance parameters from an option string.
-        /**
-           Parses the string for options as if from a command-line.
-           Example: "-bx 64 -block_threads 4" sets the block-size in the *x*
-           dimension to 64 and the number of threads used to process each
-           block to 4.
-           See the help message from the YASK kernel binary for documentation
-           on the command-line options.
-
-           @returns Any strings that were not recognized by the parser as options.
-        */
-        virtual std::string
-        apply_command_line_options(const std::string& args
-                                   /**< [in] String of arguments to parse. */ ) =0;
 
         /// Set the number of MPI ranks in the given dimension.
         /**
@@ -702,6 +701,49 @@ namespace yask {
                        /**< [in] Initial allocation in each dimension.
                           Must be exatly one size for each dimension. */ ) =0;
 #endif
+
+        /// **[Advanced]** Set the default preferred NUMA node on which to allocate data.
+        /**
+           This value is used when allocating grids and MPI buffers.
+           The NUMA "preferred node allocation" policy is used, meaning that
+           memory will be allocated in an alternative node if the preferred one
+           doesn't have enough space available or is otherwise restricted.
+           Instead of specifying a NUMA node, a special value may be used
+           to specify another policy as listed.
+           This setting may be overridden for any specific grid.
+        */
+        virtual void
+        set_default_numa_preferred(int numa_node
+                                   /**< [in] Preferred NUMA node for data
+                                      allocation.  Alternatively, use
+                                      `yask_numa_local` for explicit
+                                      local-node allocation,
+                                      `yask_numa_interleave` for
+                                      interleaving pages across all nodes,
+                                      or `yask_numa_none` for no NUMA
+                                      policy. */) =0;
+
+        /// **[Advanced]** Get the default preferred NUMA node on which to allocate data.
+        /**
+           @returns Current setting of preferred NUMA node.
+        */
+        virtual int
+        get_default_numa_preferred() const =0;
+
+        /// **[Advanced]** Set performance parameters from an option string.
+        /**
+           Parses the string for options as if from a command-line.
+           Example: "-bx 64 -block_threads 4" sets the block-size in the *x*
+           dimension to 64 and the number of threads used to process each
+           block to 4.
+           See the help message from the YASK kernel binary for documentation
+           on the command-line options.
+
+           @returns Any strings that were not recognized by the parser as options.
+        */
+        virtual std::string
+        apply_command_line_options(const std::string& args
+                                   /**< [in] String of arguments to parse. */ ) =0;
 
         /// **[Advanced]** Use data-storage from existing grids in specified solution.
         /**
@@ -1310,7 +1352,23 @@ namespace yask {
         get_num_storage_elements() const =0;
 
         /* Advanced APIs for yk_grid found below are not needed for most applications. */
-        
+
+        /// **[Advanced]** Set the default preferred NUMA node on which to allocate data.
+        /**
+           This value is used when allocating data for this grid.
+        */
+        virtual void
+        set_numa_preferred(int numa_node
+                           /**< [in] Preferred NUMA node.
+                              See set_default_numa_preferred() for other options. */) =0;
+
+        /// **[Advanced]** Get the default preferred NUMA node on which to allocate data.
+        /**
+           @returns Current setting of preferred NUMA node for this grid.
+        */
+        virtual int
+        get_numa_preferred() const =0;
+
         /// **[Advanced]** Set the left halo size in the specified dimension.
         /**
            This value is typically set by the stencil compiler, but

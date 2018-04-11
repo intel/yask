@@ -32,11 +32,13 @@ namespace yask {
     GenericGridBase::GenericGridBase(string name,
                                      Layout& layout_base,
                                      const GridDimNames& dimNames,
+                                     KernelSettingsPtr settings,
                                      ostream** ostr) :
-        _name(name), _layout_base(&layout_base), _ostr(ostr) {
+        _name(name), _layout_base(&layout_base), _opts(settings), _ostr(ostr) {
         for (auto& dn : dimNames)
             _dims.addDimBack(dn, 1);
         _sync_layout_with_dims();
+
     }
 
     // Perform default allocation.
@@ -44,13 +46,27 @@ namespace yask {
     // programmer should call get_num_elems() or get_num_bytes() and
     // then provide allocated memory via set_storage().
     void GenericGridBase::default_alloc() {
+        auto& os = get_ostr();
         
         // Release any old data if last owner.
         release_storage();
+
+        // Get default NUMA node from settings.
+        int numa_def = _opts->_numa_pref;
         
+        // What node?
+        int numa_pref = (_numa_pref >= 0) ? _numa_pref : numa_def;
+            
         // Alloc required number of bytes.
         size_t sz = get_num_bytes();
-        _base = shared_ptr<char>(alignedAlloc(sz), AlignedDeleter());
+        os << "Allocating " << makeByteStr(sz) <<
+            " for grid '" << _name << "'";
+        if (numa_pref >= 0)
+            os << " preferring NUMA node " << numa_pref;
+        else
+            os << " on local NUMA node";
+        os << "...\n" << flush;
+        _base = shared_numa_alloc<char>(sz, _numa_pref);
         
         // No offset.
         _elems = _base.get();

@@ -277,7 +277,7 @@ END
     
       # Creation.
       print " else if (ndims == $n && do_wrap == $wrap)\n",
-        "  gp = make_shared<YkElemGrid<$layout, $wrap>>(_dims, name, dims, &_ostr);\n";
+        "  gp = make_shared<YkElemGrid<$layout, $wrap>>(_dims, name, dims, _opts, &_ostr);\n";
     }
   }
   
