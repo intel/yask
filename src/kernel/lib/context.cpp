@@ -1355,6 +1355,12 @@ namespace yask {
                                 neigh_halo_sizes.addDimBack(dname, halo_size);
                             }
 
+                            // Neighbor in-line.
+                            else {
+                                my_halo_sizes.addDimBack(dname, 0);
+                                neigh_halo_sizes.addDimBack(dname, 0);
+                            }
+
                             // Vectorized exchange allowed based on domain sizes?
                             // Both my rank and neighbor rank must have all domain sizes
                             // of vector multiples.
@@ -1397,7 +1403,7 @@ namespace yask {
                         IdxTuple copy_end = gp->get_allocs();
 
                         // Adjust along domain dims in this grid.
-                        for (auto& dim : my_halo_sizes.getDims()) {
+                        for (auto& dim : _dims->_domain_dims.getDims()) {
                             auto& dname = dim.getName();
 
                             // Init range to whole rank domain (including
@@ -1464,7 +1470,7 @@ namespace yask {
                             idx_t dsize = 1;
 
                             // domain dim?
-                            if (my_halo_sizes.lookup(dname)) {
+                            if (_dims->_domain_dims.lookup(dname)) {
                                 dsize = copy_end[dname] - copy_begin[dname];
 
                                 // Check whether size is multiple of vlen.
@@ -1800,6 +1806,8 @@ namespace yask {
         auto wf_steps = _opts->_region_sizes[step_dim];
         num_wf_shifts = 0;
         if (wf_steps > 1)
+
+            // TODO: don't shift for scratch grids.
             num_wf_shifts = max((idx_t(stGroups.size()) * wf_steps) - 1, idx_t(0));
         for (auto& dim : _dims->_domain_dims.getDims()) {
             auto& dname = dim.getName();
