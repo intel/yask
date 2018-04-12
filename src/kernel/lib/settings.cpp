@@ -293,12 +293,10 @@ namespace yask {
             " The vector and vector-cluster sizes are set at compile-time, so\n"
             "  there are no run-time options to set them.\n"
             " Set sub-block sizes to specify a unit of work done by each thread.\n"
-            "  A sub-block size of 0 in dimensions 'w' or 'x' =>\n"
-            "   sub-block size is set to vector-cluster size in that dimension.\n"
-            "  A sub-block size of 0 in dimensions 'y' or 'z' =>\n"
-            "   sub-block size is set to block size in that dimension.\n"
-            "  Thus, the default sub-block is a 'y-z' slab.\n"
-            "  Temporal tiling in sub-blocks is not yet supported, so effectively, sbt = 1.\n"
+            "  A sub-block size of 0 in a given dimension =>\n"
+            "   sub-block size is set to block size in that dimension;\n"
+            "   when there is more than one block-thread, the first dimension\n"
+            "   will instead be set to a small value to create \"slab\" shapes.\n"
             " Set sub-block-group sizes to control the ordering of sub-blocks within a block.\n"
             "  All sub-blocks that intersect a given sub-block-group are evaluated\n"
             "   before sub-blocks in the next sub-block-group.\n"
@@ -424,17 +422,20 @@ namespace yask {
         os << " num-blocks-per-region: " << nb << endl;
         os << " num-blocks-per-rank-domain: " << (nb * nr) << endl;
 
-        // Adjust defaults for sub-blocks to be slab.
+        // Adjust defaults for sub-blocks to be slab if
+        // we are using more than one block thread.
         // Otherwise, findNumSubsets() would set default
         // to entire block.
-        for (auto& dim : _dims->_domain_dims.getDims()) {
-            auto& dname = dim.getName();
-            if (_sub_block_sizes[dname] == 0)
-                _sub_block_sizes[dname] = 1; // will be rounded up to min size.
-            
-            // Only want to set 1st dim; others will be set to max.
-            // TODO: make sure we're not setting inner dim.
-            break;
+        if (num_block_threads > 1) {
+            for (auto& dim : _dims->_domain_dims.getDims()) {
+                auto& dname = dim.getName();
+                if (_sub_block_sizes[dname] == 0)
+                    _sub_block_sizes[dname] = 1; // will be rounded up to min size.
+                
+                // Only want to set 1st dim; others will be set to max.
+                // TODO: make sure we're not setting inner dim.
+                break;
+            }
         }
 
         // Determine num sub-blocks.

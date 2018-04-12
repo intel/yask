@@ -473,6 +473,12 @@ namespace yask {
                              makeArgStr(varMap) + ")";
         return str;
     }
+    string GridPoint::makeLogicalGridStr(const VarMap* varMap) const {
+        string str = _grid->getName();
+        if (_consts.size())
+            str += "(" + _consts.makeDimValStr() + ")";
+        return str;
+    }
 
     // Make string like "x+(4/VLEN_X)" from
     // original arg "x+4" in 'dname' dim.

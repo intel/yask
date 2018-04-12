@@ -125,7 +125,6 @@ else ifneq ($(findstring ssg,$(stencil)),)
 
 else ifneq ($(findstring fsg,$(stencil)),)
  time_alloc	=	1
- eqs		=	#'$$&=[a-z]_[a-z]+'  # match 1st and 2nd 'parts' of grid names.
  ifeq ($(arch),knl)
   omp_region_schedule  	=	guided
   def_block_args  	=	-b 16
@@ -303,7 +302,7 @@ BLOCK_LOOP_CODE		?=	$(BLOCK_LOOP_OUTER_MODS) loop($(BLOCK_LOOP_ORDER)) { \
 # blocking is not yet supported.  The indexes in this loop are 'normalized',
 # i.e., vector units and rank-relative.
 SUB_BLOCK_LOOP_OPTS		?=     	$(NDIMS_OPT) -inVar norm_sub_block_idxs
-SUB_BLOCK_LOOP_OUTER_MODS	?=	square_wave serpentine
+SUB_BLOCK_LOOP_OUTER_MODS	?=
 SUB_BLOCK_LOOP_ORDER		?=	1 .. N-2
 SUB_BLOCK_LOOP_CODE		?=	$(SUB_BLOCK_LOOP_OUTER_MODS) loop($(SUB_BLOCK_LOOP_ORDER)) { \
 					$(SUB_BLOCK_LOOP_INNER_MODS) call(calc_inner_loop(thread_idx)); }
@@ -751,6 +750,7 @@ all-tests:
 	$(MAKE) clean; $(MAKE) stencil=awp_elastic real_bytes=8 yc-and-yk-test
 	$(MAKE) clean; $(MAKE) stencil=ssg real_bytes=8 yc-and-yk-test
 	$(MAKE) clean; $(MAKE) stencil=fsg_abc real_bytes=8 yc-and-yk-test
+	$(MAKE) clean; $(MAKE) stencil=fsg2 real_bytes=8 yc-and-yk-test
 	$(MAKE) clean; $(MAKE) stencil=iso3dfd cxx-yk-api-test
 	$(MAKE) clean; $(MAKE) stencil=iso3dfd py-yk-api-test
 

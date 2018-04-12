@@ -228,6 +228,11 @@ namespace yask {
                 auto& dn = og1->get_dim_name(di);
                 auto argn = op1->getArgs().at(di);
 
+                // Scratch grid must not have a condition.
+                if (cond1 && og1->isScratch())
+                    THROW_YASK_EXCEPTION("Error: scratch-grid '" << og1->getName() <<
+                                         "' cannot have a condition");
+                
                 if (dn == stepDim) {
 
                     // Scratch grid must not use step dim.
@@ -326,14 +331,16 @@ namespace yask {
                 auto* eq2p = eq2.get();
                 auto& og2 = outGrids.at(eq2p);
                 assert(og2 == eq2->getGrid());
-                //auto& op2 = outPts.at(eq2p);
+                auto& op2 = outPts.at(eq2p);
                 auto& ig2 = inGrids.at(eq2p);
                 auto& ip2 = inPts.at(eq2p);
                 auto cond2 = getCond(eq2p);
 
                 bool same_eq = eq1 == eq2;
                 bool same_cond = areExprsSame(cond1, cond2);
-                bool same_og = og1 == og2;
+
+                // A separate grid is defined by its name and any const indices.
+                bool same_og = op1->isSameLogicalGrid(*op2);
 
 #ifdef DEBUG_DEP
                 if (!same_eq)
@@ -346,7 +353,8 @@ namespace yask {
                     string cdesc = cond1 ? "with condition " + cond1->makeQuotedStr() :
                         "without conditions";
                     THROW_YASK_EXCEPTION("Error: two equations " << cdesc <<
-                                         " have the same LHS grid '" << og1->getName() << "': " <<
+                                         " have the same LHS grid '" <<
+                                         op1->makeLogicalGridStr() << "': " <<
                                          eq1->makeQuotedStr() << " and " <<
                                          eq2->makeQuotedStr());
                 }
@@ -409,9 +417,12 @@ namespace yask {
                     // detailed check of g1 input points on RHS of eq2.
                     for (auto* i2 : ip2) {
 
-                        // Same grid?
-                        auto* i2g = i2->getGrid();
-                        if (i2g != og1) continue;
+                        // Same logical grid?
+                        bool same_grid = i2->isSameLogicalGrid(*op1);
+
+                        // If not same grid, no dependency.
+                        if (!same_grid)
+                            continue;
 
                         // From same step index, e.g., same time?
                         // Or, passing data thru a temp var?
@@ -425,7 +436,8 @@ namespace yask {
                                 
                                 // Exit with error.
                                 string stepmsg = same_step ? " at '" + dims.makeStepStr(lofs) + "'" : "";
-                                THROW_YASK_EXCEPTION("Error: disallowed dependency: grid on LHS of equation " <<
+                                THROW_YASK_EXCEPTION("Error: disallowed dependency: grid '" <<
+                                                     op1->makeLogicalGridStr() << "' on LHS of equation " <<
                                                      eq1->makeQuotedStr() << " also appears on its RHS" <<
                                                      stepmsg);
                             }
@@ -1071,9 +1083,13 @@ namespace yask {
         for (auto& eg1 : *this) {
             os << " " << eg1.getDescription() << ":\n"
                 "  Contains " << eg1.getNumEqs() << " equation(s).\n"
-                "  Updates the following grid(s):";
-            for (auto* g : eg1.getOutputGrids())
-                os << " " << g->getName();
+                "  Updates the following grid(s): ";
+            int i = 0;
+            for (auto* g : eg1.getOutputGrids()) {
+                if (i++)
+                    os << ", ";
+                os << g->getName();
+            }
             os << ".\n";
 
             // Check to see if eg1 depends on other eq-groups.
