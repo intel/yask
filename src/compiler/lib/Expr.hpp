@@ -814,10 +814,21 @@ namespace yask {
             auto p = dynamic_cast<const GridPoint*>(other);
             return p && *this == *p;
         }
+
+        // Check for same logical grid.
+        // A logical grid is defined by the grid itself
+        // and any const indices.
+        virtual bool isSameLogicalGrid(const GridPoint& rhs) const {
+            return _grid == rhs._grid && _consts == rhs._consts;
+        }
     
         // String w/name and parens around args, e.g., 'u(x, y+2)'.
         // Apply substitutions to indices using 'varMap' if provided.
         virtual string makeStr(const VarMap* varMap = 0) const;
+
+        // String w/name and parens around const args, e.g., 'u(n=4)'.
+        // Apply substitutions to indices using 'varMap' if provided.
+        virtual string makeLogicalGridStr(const VarMap* varMap = 0) const;
 
         // String w/just comma-sep args, e.g., 'x, y+2'.
         // Apply substitutions to indices using 'varMap' if provided.
