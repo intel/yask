@@ -31,42 +31,45 @@ using namespace std;
 namespace yask {
 
     // APIs to get info from vars.
-#define GET_GRID_API(api_name, expr, step_ok, domain_ok, misc_ok)       \
+#define GET_GRID_API(api_name, expr, step_ok, domain_ok, misc_ok, prep_req) \
     idx_t YkGridBase::api_name(const string& dim) const {               \
         checkDimType(dim, #api_name, step_ok, domain_ok, misc_ok);      \
         int posn = get_dim_posn(dim, true, #api_name);                  \
+        if (prep_req && _offsets[posn] < 0)                             \
+            THROW_YASK_EXCEPTION("Error: '" #api_name "()' called on grid '" << \
+                                 get_name() << "' before calling 'prepare_solution()'"); \
         return expr;                                                    \
     }                                                                   \
     idx_t YkGridBase::api_name(int posn) const {                        \
         return expr;                                                    \
     }
-    GET_GRID_API(get_rank_domain_size, _domains[posn], false, true, false)
-    GET_GRID_API(get_left_pad_size, _left_pads[posn], false, true, false) // _left_pads is actual size.
-    GET_GRID_API(get_right_pad_size, _allocs[posn] - _left_pads[posn], false, true, false) // _right_pads is request only.
-    GET_GRID_API(get_pad_size, _left_pads[posn], false, true, false)
-    GET_GRID_API(get_left_halo_size, _left_halos[posn], false, true, false)
-    GET_GRID_API(get_right_halo_size, _right_halos[posn], false, true, false)
-    GET_GRID_API(get_halo_size, _left_halos[posn], false, true, false)
-    GET_GRID_API(get_first_misc_index, _offsets[posn], false, false, true)
-    GET_GRID_API(get_last_misc_index, _offsets[posn] + _domains[posn] - 1, false, false, true)
-    GET_GRID_API(get_left_extra_pad_size, _left_pads[posn] - _left_halos[posn], false, true, false)
+    GET_GRID_API(get_rank_domain_size, _domains[posn], false, true, false, false)
+    GET_GRID_API(get_left_pad_size, _left_pads[posn], false, true, false, false) // _left_pads is actual size.
+    GET_GRID_API(get_right_pad_size, _allocs[posn] - _left_pads[posn], false, true, false, false) // _right_pads is request only.
+    GET_GRID_API(get_pad_size, _left_pads[posn], false, true, false, false)
+    GET_GRID_API(get_left_halo_size, _left_halos[posn], false, true, false, false)
+    GET_GRID_API(get_right_halo_size, _right_halos[posn], false, true, false, false)
+    GET_GRID_API(get_halo_size, _left_halos[posn], false, true, false, false)
+    GET_GRID_API(get_first_misc_index, _offsets[posn], false, false, true, false)
+    GET_GRID_API(get_last_misc_index, _offsets[posn] + _domains[posn] - 1, false, false, true, false)
+    GET_GRID_API(get_left_extra_pad_size, _left_pads[posn] - _left_halos[posn], false, true, false, false)
     GET_GRID_API(get_right_extra_pad_size, (_allocs[posn] - _left_pads[posn] - _domains[posn]) -
-                 _right_halos[posn], false, true, false)
-    GET_GRID_API(get_extra_pad_size, _left_pads[posn] - _left_halos[posn], false, true, false)
-    GET_GRID_API(get_alloc_size, _allocs[posn], true, true, true)
-    GET_GRID_API(get_first_rank_domain_index, _offsets[posn] - _local_offsets[posn], false, true, false)
+                 _right_halos[posn], false, true, false, false)
+    GET_GRID_API(get_extra_pad_size, _left_pads[posn] - _left_halos[posn], false, true, false, false)
+    GET_GRID_API(get_alloc_size, _allocs[posn], true, true, true, false)
+    GET_GRID_API(get_first_rank_domain_index, _offsets[posn] - _local_offsets[posn], false, true, false, true)
     GET_GRID_API(get_last_rank_domain_index, _offsets[posn] - _local_offsets[posn] + _domains[posn] - 1;
-                 assert(!_is_scratch), false, true, false)
-    GET_GRID_API(get_first_rank_halo_index, _offsets[posn] - _left_halos[posn], false, false, true)
-    GET_GRID_API(get_last_rank_halo_index, _offsets[posn] + _domains[posn] + _right_halos[posn] - 1, false, false, true)
-    GET_GRID_API(get_first_rank_alloc_index, _offsets[posn] - _left_pads[posn], false, true, false)
-    GET_GRID_API(get_last_rank_alloc_index, _offsets[posn] - _left_pads[posn] + _allocs[posn] - 1, false, true, false)
-    GET_GRID_API(_get_left_wf_ext, _left_wf_exts[posn], true, true, true)
-    GET_GRID_API(_get_right_wf_ext, _right_wf_exts[posn], true, true, true)
-    GET_GRID_API(_get_offset, _offsets[posn], true, true, true)
-    GET_GRID_API(_get_local_offset, _local_offsets[posn], true, true, true)
-    GET_GRID_API(_get_first_alloc_index, _offsets[posn] - _left_pads[posn], true, true, true)
-    GET_GRID_API(_get_last_alloc_index, _offsets[posn] - _left_pads[posn] + _allocs[posn] - 1, true, true, true)
+                 assert(!_is_scratch), false, true, false, true)
+    GET_GRID_API(get_first_rank_halo_index, _offsets[posn] - _left_halos[posn], false, false, true, true)
+    GET_GRID_API(get_last_rank_halo_index, _offsets[posn] + _domains[posn] + _right_halos[posn] - 1, false, false, true, true)
+    GET_GRID_API(get_first_rank_alloc_index, _offsets[posn] - _left_pads[posn], false, true, false, true)
+    GET_GRID_API(get_last_rank_alloc_index, _offsets[posn] - _left_pads[posn] + _allocs[posn] - 1, false, true, false, true)
+    GET_GRID_API(_get_left_wf_ext, _left_wf_exts[posn], true, true, true, false)
+    GET_GRID_API(_get_right_wf_ext, _right_wf_exts[posn], true, true, true, false)
+    GET_GRID_API(_get_offset, _offsets[posn], true, true, true, true)
+    GET_GRID_API(_get_local_offset, _local_offsets[posn], true, true, true, false)
+    GET_GRID_API(_get_first_alloc_index, _offsets[posn] - _left_pads[posn], true, true, true, true)
+    GET_GRID_API(_get_last_alloc_index, _offsets[posn] - _left_pads[posn] + _allocs[posn] - 1, true, true, true, true)
 #undef GET_GRID_API
     
     // APIs to set vars.
@@ -177,7 +180,7 @@ namespace yask {
             step_idx = _wrap_step(step_idx);
         else
             step_idx = 0;
-        _dirty_steps[step_idx] = dirty;
+        set_dirty_using_alloc_index(dirty, step_idx);
     }
     void YkGridBase::set_dirty_all(bool dirty) {
         if (_dirty_steps.size() == 0)
@@ -506,6 +509,7 @@ namespace yask {
                                   bool strict_indices, // die if out-of-range.
                                   bool normalize,      // div by vec lens.
                                   Indices* fixed_indices) const {
+        bool all_ok = true;
         auto n = get_num_dims();
         if (indices.getNumDims() != n) {
             THROW_YASK_EXCEPTION("Error: '" << fn << "' called with " << indices.getNumDims() <<
@@ -513,11 +517,10 @@ namespace yask {
         }
         if (fixed_indices)
             *fixed_indices = indices;
-        bool ok = true;
         for (int i = 0; i < n; i++) {
             idx_t idx = indices[i];
-            auto& dname = get_dim_name(i);
             bool ok = false;
+            auto& dname = get_dim_name(i);
 
             // Any step index is ok because it wraps around.
             // TODO: check that it's < magic added value in wrap_index().
@@ -535,18 +538,22 @@ namespace yask {
                 if (!ok) {
                     if (strict_indices) {
                         THROW_YASK_EXCEPTION("Error: " << fn << ": index in dim '" << dname <<
-                                             "' is " << idx << ", which is not in [" << first_ok <<
-                                             "..." << last_ok << "]");
+                                             "' is " << idx << ", which is not in allocated range [" <<
+                                             first_ok << "..." << last_ok << "] of grid '" <<
+                                             get_name() << "'");
                     }
+
+                    // Update the output indices.
                     if (fixed_indices) {
                         if (idx < first_ok)
                             (*fixed_indices)[i] = first_ok;
                         if (idx > last_ok)
                             (*fixed_indices)[i] = last_ok;
                     }
-                    ok = false;
                 }
             }
+            if (!ok)
+                all_ok = false;
 
             // Normalize?
             if (fixed_indices && normalize) {
@@ -554,7 +561,7 @@ namespace yask {
                 (*fixed_indices)[i] = idiv_flr((*fixed_indices)[i], _vec_lens[i]);
             }
         }
-        return ok;
+        return all_ok;
     }
 
     // Set dirty flags between indices.
@@ -565,7 +572,7 @@ namespace yask {
                  i <= last_indices[Indices::step_posn]; i++)
                 set_dirty(true, i);
         } else
-            set_dirty(true, 0);
+            set_dirty_using_alloc_index(true, 0);
     }
      
     // Make tuple needed for slicing.
@@ -580,7 +587,12 @@ namespace yask {
         return numElemsTuple;
     }
     
-    // API get/set.
+    // API get, set, setc.
+    bool YkGridBase::is_element_allocated(const Indices& indices) const {
+        if (!is_storage_allocated())
+            return false;
+        return checkIndices(indices, "is_element_allocated", false, false);
+    }
     double YkGridBase::get_element(const Indices& indices) const {
         if (!is_storage_allocated()) {
             THROW_YASK_EXCEPTION("Error: call to 'get_element' with no data allocated for grid '" <<
@@ -602,7 +614,22 @@ namespace yask {
             nup++;
 
             // Set appropriate dirty flag.
-            set_dirty_in_slice(indices, indices);
+            set_dirty_using_alloc_index(true, asi);
+        }
+        return nup;
+    }
+    idx_t YkGridBase::add_to_element(double val,
+                                     const Indices& indices,
+                                     bool strict_indices) {
+        idx_t nup = 0;
+        if (get_raw_storage_buffer() &&
+            checkIndices(indices, "add_to_element", strict_indices, false)) {
+            idx_t asi = get_alloc_step_index(indices);
+            addToElem(real_t(val), indices, asi, __LINE__);
+            nup++;
+
+            // Set appropriate dirty flag.
+            set_dirty_using_alloc_index(true, asi);
         }
         return nup;
     }
@@ -654,7 +681,7 @@ namespace yask {
         // Visit points in slice.
         numElemsTuple.visitAllPointsInParallel([&](const IdxTuple& ofs,
                                                    size_t idx) {
-                Indices pt = first_indices.addElements(ofs);
+                Indices pt = first.addElements(ofs);
 
                 // TODO: move this outside of loop for const step index.
                 idx_t asi = get_alloc_step_index(pt);

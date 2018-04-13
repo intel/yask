@@ -31,10 +31,11 @@ namespace yask {
     // APIs.
     // See yask_kernel_api.hpp.
 
-#define GET_SOLN_API(api_name, expr, step_ok, domain_ok, misc_ok, req_prep) \
+#define GET_SOLN_API(api_name, expr, step_ok, domain_ok, misc_ok, prep_req) \
     idx_t StencilContext::api_name(const string& dim) const {           \
-        if (req_prep && !rank_bb.bb_valid)                              \
-            THROW_YASK_EXCEPTION("Error: '" #api_name "()' called before 'prepare_solution()'"); \
+        if (prep_req && !rank_bb.bb_valid)                              \
+            THROW_YASK_EXCEPTION("Error: '" #api_name \
+                                 "()' called before calling 'prepare_solution()'"); \
         checkDimType(dim, #api_name, step_ok, domain_ok, misc_ok);      \
         return expr;                                                    \
     }
@@ -80,6 +81,7 @@ namespace yask {
 
         // Init various tuples to make sure they have the correct dims.
         rank_domain_offsets = _dims->_domain_dims;
+        rank_domain_offsets.setValsSame(-1); // indicates prepare_solution() not called.
         overall_domain_sizes = _dims->_domain_dims;
         max_halos = _dims->_domain_dims;
         wf_angles = _dims->_domain_dims;

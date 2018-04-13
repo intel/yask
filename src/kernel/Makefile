@@ -739,6 +739,8 @@ yk-test-no-yc: kernel-only
 all-tests:
 	$(MAKE) clean; $(MAKE) stencil=test_3d fold=x=4,y=2 cxx-yk-grid-test
 	$(MAKE) clean; $(MAKE) stencil=test_1d yc-and-yk-test
+	$(MAKE) clean; $(MAKE) stencil=iso3dfd real_bytes=8 cxx-yk-api-test
+	$(MAKE) clean; $(MAKE) stencil=iso3dfd py-yk-api-test
 	$(MAKE) clean; $(MAKE) stencil=3axis fold=x=4,y=2 yc-and-yk-test
 	$(MAKE) clean; $(MAKE) stencil=9axis fold=z=2 yc-and-yk-test
 	$(MAKE) clean; $(MAKE) stencil=3plane fold=y=2,z=4 yc-and-yk-test
@@ -751,8 +753,6 @@ all-tests:
 	$(MAKE) clean; $(MAKE) stencil=ssg real_bytes=8 yc-and-yk-test
 	$(MAKE) clean; $(MAKE) stencil=fsg_abc real_bytes=8 yc-and-yk-test
 	$(MAKE) clean; $(MAKE) stencil=fsg2 real_bytes=8 yc-and-yk-test
-	$(MAKE) clean; $(MAKE) stencil=iso3dfd cxx-yk-api-test
-	$(MAKE) clean; $(MAKE) stencil=iso3dfd py-yk-api-test
 
 all:
 	$(MAKE) kernel

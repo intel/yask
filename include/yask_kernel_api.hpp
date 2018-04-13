@@ -1134,20 +1134,6 @@ namespace yask {
                              /**< [in] Name of dimension to get.  Must be one of
                                 the names from yk_solution::get_misc_dim_names(). */ ) const =0;
         
-        /// Set the first index of a specified miscellaneous dimension.
-        /**
-           Sets the first allowed index in a non-step and non-domain dimension.
-           After calling this function, the last allowed index will be the first index
-           as set by this function plus the allocation size set by set_alloc_size()
-           minus one.
-        */
-        virtual void
-        set_first_misc_index(const std::string& dim
-                             /**< [in] Name of dimension to get.  Must be one of
-                                the names from yk_solution::get_misc_dim_names(). */,
-                             idx_t idx /**< [in] New value for first index.
-                                        May be negative. */ ) =0;
-        
         /// Get the last index of a specified miscellaneous dimension.
         /**
            @returns the last allowed index in a non-step and non-domain dimension.
@@ -1156,6 +1142,33 @@ namespace yask {
         get_last_misc_index(const std::string& dim
                             /**< [in] Name of dimension to get.  Must be one of
                                the names from yk_solution::get_misc_dim_names(). */ ) const =0;
+
+        /// Determine whether the given indices are allocated in this rank.
+        /**
+           Provide indices in a list in the same order returned by get_dim_names().
+           Indices are relative to the *overall* problem domain.
+           @returns `true` if index values fall within the allocated space as returned by
+           get_first_rank_alloc_index() and get_last_rank_alloc_index() for
+           each dimension; `false` otherwise.
+        */
+        virtual bool
+        is_element_allocated(const std::vector<idx_t>& indices
+                             /**< [in] List of indices, one for each grid dimension. */ ) const =0;
+        
+#ifndef SWIG
+        /// Determine whether the given indices are allocated in this rank.
+        /**
+           Provide indices in a list in the same order returned by get_dim_names().
+           Indices are relative to the *overall* problem domain.
+           @note This version is not available (or needed) in SWIG-based APIs, e.g., Python.
+           @returns `true` if index values fall within the allocated space as returned by
+           get_first_rank_alloc_index() and get_last_rank_alloc_index() for
+           each dimension; `false` otherwise.
+        */
+        virtual bool
+        is_element_allocated(const std::initializer_list<idx_t>& indices
+                             /**< [in] List of indices, one for each grid dimension. */ ) const =0;
+#endif
         
         /// Get the value of one grid element.
         /**
@@ -1261,6 +1274,57 @@ namespace yask {
                        If false, indices outside of domain and padding result
                        in no change to grid. */ ) =0;
 #endif
+        /// Atomically add to the value of one grid element.
+        /**
+           Provide indices in a list in the same order returned by get_dim_names().
+           Indices are relative to the *overall* problem domain.
+           Index values must fall within the allocated space as returned by
+           get_first_rank_alloc_index() and get_last_rank_alloc_index() for
+           each dimension if `strict_indices` is set to true.
+           Updates are OpenMP atomic, meaning that this function can be called by
+           several OpenMP threads without causing a race condition.
+           @note The parameter value is a double-precision floating-point value, but
+           it will be converted to single-precision if
+           yk_solution::get_element_bytes() returns 4.
+           If storage has not been allocated for this grid, this will have no effect.
+           @returns Number of elements updated.
+        */
+        virtual idx_t
+        add_to_element(double val /**< [in] This value will be added to element in grid. */,
+                       const std::vector<idx_t>& indices
+                       /**< [in] List of indices, one for each grid dimension. */,
+                       bool strict_indices = false
+                       /**< [in] If true, indices must be within domain or padding.
+                          If false, indices outside of domain and padding result
+                          in no change to grid. */ ) =0;
+
+#ifndef SWIG        
+        /// Atomically add to the value of one grid element.
+        /**
+           Provide the number of indices equal to the number of dimensions in the grid.
+           Indices beyond that will be ignored.
+           Indices are relative to the *overall* problem domain.
+           Index values must fall within the allocated space as returned by
+           get_first_rank_alloc_index() and get_last_rank_alloc_index() for
+           each dimension if `strict_indices` is set to true.
+           Updates are OpenMP atomic, meaning that this function can be called by
+           several OpenMP threads without causing a race condition.
+           @note The parameter value is a double-precision floating-point value, but
+           it will be converted to single-precision if
+           yk_solution::get_element_bytes() returns 4.
+           If storage has not been allocated for this grid, this will have no effect.
+           @note This version is not available (or needed) in SWIG-based APIs, e.g., Python.
+           @returns Number of elements set.
+        */
+        virtual idx_t
+        add_to_element(double val /**< [in] This value will be added to element in grid. */,
+                       const std::initializer_list<idx_t>& indices
+                       /**< [in] List of indices, one for each grid dimension. */,
+                       bool strict_indices = false
+                       /**< [in] If true, indices must be within domain or padding.
+                          If false, indices outside of domain and padding result
+                          in no change to grid. */ ) =0;
+#endif
         
         /// Initialize all grid elements to the same value.
         /**
@@ -1327,6 +1391,27 @@ namespace yask {
                               /**< [in] List of initial indices, one for each grid dimension. */,
                               const std::vector<idx_t>& last_indices
                               /**< [in] List of final indices, one for each grid dimension. */ ) =0;
+        
+        /// Format the indices for pretty-printing.
+        /**
+           Provide indices in a list in the same order returned by get_dim_names().
+           @returns A string containing the grid name and the index values.
+        */
+        virtual std::string
+        format_indices(const std::vector<idx_t>& indices
+                       /**< [in] List of indices, one for each grid dimension. */ ) const =0;
+        
+#ifndef SWIG
+        /// Format the indices for pretty-printing.
+        /**
+           Provide indices in a list in the same order returned by get_dim_names().
+           @note This version is not available (or needed) in SWIG-based APIs, e.g., Python.
+           @returns A string containing the grid name and the index values.
+        */
+        virtual std::string
+        format_indices(const std::initializer_list<idx_t>& indices
+                       /**< [in] List of indices, one for each grid dimension. */ ) const =0;
+#endif
         
         /// Determine whether storage has been allocated.
         /**
@@ -1436,6 +1521,20 @@ namespace yask {
                           the names from yk_solution::get_domain_dim_names(). */,
                        idx_t size /**< [in] Number of elements to allocate. */ ) =0;
 
+        /// **[Advanced]** Set the first index of a specified miscellaneous dimension.
+        /**
+           Sets the first allowed index in a non-step and non-domain dimension.
+           After calling this function, the last allowed index will be the first index
+           as set by this function plus the allocation size set by set_alloc_size()
+           minus one.
+        */
+        virtual void
+        set_first_misc_index(const std::string& dim
+                             /**< [in] Name of dimension to get.  Must be one of
+                                the names from yk_solution::get_misc_dim_names(). */,
+                             idx_t idx /**< [in] New value for first index.
+                                        May be negative. */ ) =0;
+        
         /// **[Advanced]** Get the first accessible index in this grid in this rank in the specified dimension.
         /**
            This returns the first *overall* index allowed in this grid.

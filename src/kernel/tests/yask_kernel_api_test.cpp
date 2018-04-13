@@ -25,10 +25,14 @@ IN THE SOFTWARE.
 
 // Test the YASK stencil kernel API for C++.
 
+#include <assert.h>
 #include "yask_kernel_api.hpp"
 #include <iostream>
 #include <vector>
 #include <set>
+#include <sys/types.h>
+#include <unistd.h>
+
 
 using namespace std;
 using namespace yask;
@@ -37,137 +41,194 @@ int main() {
 
     // The factory from which all other kernel objects are made.
     yk_factory kfac;
-
+    
     // Initalize MPI, etc.
     auto env = kfac.new_env();
 
-    // Create solution.
-    auto soln = kfac.new_solution(env);
+    try {
 
-    // Init global settings.
-    auto soln_dims = soln->get_domain_dim_names();
-    for (auto dim_name : soln_dims) {
+        // Create solution.
+        auto soln = kfac.new_solution(env);
 
-        // Set domain size in each dim.
-        soln->set_rank_domain_size(dim_name, 128);
-
-        // Ensure some minimal padding on all grids.
-        soln->set_min_pad_size(dim_name, 1);
-
-        // Set block size to 64 in z dim and 32 in other dims.
-        if (dim_name == "z")
-            soln->set_block_size(dim_name, 64);
+        // Show output only from last rank.
+        // This is an example of using the rank APIs,
+        // the yask_output_factory, and set_debug_output().
+        ostream* osp = &cout;
+        int rank_num = env->get_rank_index();
+        if (rank_num < env->get_num_ranks() - 1) {
+            yask_output_factory ofac;
+            auto null_out = ofac.new_null_output();
+            soln->set_debug_output(null_out);
+            osp = &null_out->get_ostream();
+            cout << "Suppressing output on rank " << rank_num << ".\n";
+        }
         else
-            soln->set_block_size(dim_name, 32);
-    }
+            cout << "Following information from rank " << rank_num << ".\n";
+        ostream& os = *osp;
 
-    // Make a test fixed-size grid.
-    vector<idx_t> fgrid_sizes;
-    for (auto dim_name : soln_dims)
-        fgrid_sizes.push_back(5);
-    auto fgrid = soln->new_fixed_size_grid("fgrid", soln_dims, fgrid_sizes);
+        // Init global settings.
+        auto soln_dims = soln->get_domain_dim_names();
+        for (auto dim_name : soln_dims) {
 
-    // Simple rank configuration in 1st dim only.
-    auto ddim1 = soln_dims[0];
-    soln->set_num_ranks(ddim1, env->get_num_ranks());
+            // Set domain size in each dim.
+            soln->set_rank_domain_size(dim_name, 128);
 
-    // Allocate memory for any grids that do not have storage set.
-    // Set other data structures needed for stencil application.
-    soln->prepare_solution();
+            // Ensure some minimal padding on all grids.
+            soln->set_min_pad_size(dim_name, 1);
 
-    // Print some info about the solution.
-    auto name = soln->get_name();
-    cout << "Stencil-solution '" << name << "':\n";
-    cout << "  Step dimension: '" << soln->get_step_dim_name() << "'\n";
-    cout << "  Domain dimensions:";
-    set<string> domain_dim_set;
-    for (auto dname : soln->get_domain_dim_names()) {
-        cout << " '" << dname << "'";
-        domain_dim_set.insert(dname);
-    }
-    cout << endl;
-
-    // Print out some info about the grids and init their data.
-    for (auto grid : soln->get_grids()) {
-        cout << "    " << grid->get_name() << "(";
-        for (auto dname : grid->get_dim_names())
-            cout << " '" << dname << "'";
-        cout << " )\n";
-        for (auto dname : grid->get_dim_names()) {
-            if (domain_dim_set.count(dname)) {
-                cout << "      '" << dname << "' domain index range on this rank: " <<
-                    grid->get_first_rank_domain_index(dname) << " ... " <<
-                    grid->get_last_rank_domain_index(dname) << endl;
-                cout << "      '" << dname << "' allowed index range on this rank: " <<
-                    grid->get_first_rank_alloc_index(dname) << " ... " <<
-                    grid->get_last_rank_alloc_index(dname) << endl;
-            }
+            // Set block size to 64 in z dim and 32 in other dims.
+            if (dim_name == "z")
+                soln->set_block_size(dim_name, 64);
+            else
+                soln->set_block_size(dim_name, 32);
         }
 
-        // First, just init all the elements to the same value.
-        grid->set_all_elements_same(0.1);
+        // Make a test fixed-size grid.
+        vector<idx_t> fgrid_sizes;
+        for (auto dim_name : soln_dims)
+            fgrid_sizes.push_back(5);
+        auto fgrid = soln->new_fixed_size_grid("fgrid", soln_dims, fgrid_sizes);
 
-        // Done with fixed-size grids.
-        if (grid->is_fixed_size())
-            continue;
-        
-        // Create indices describing a subset of the overall domain.
-        vector<idx_t> first_indices, last_indices;
-        for (auto dname : grid->get_dim_names()) {
+        // Simple rank configuration in 1st dim only.
+        auto ddim1 = soln_dims[0];
+        soln->set_num_ranks(ddim1, env->get_num_ranks());
 
-            // Is this a domain dim?
-            if (domain_dim_set.count(dname)) {
+        // Allocate memory for any grids that do not have storage set.
+        // Set other data structures needed for stencil application.
+        soln->prepare_solution();
 
-                // Set indices to creaete a small cube (assuming 3D)
-                // in center of overall problem.
-                idx_t psize = soln->get_overall_domain_size(dname);
-                idx_t first_idx = psize/2 - 10;
-                idx_t last_idx = psize/2 + 10;
-                first_indices.push_back(first_idx);
-                last_indices.push_back(last_idx);
-            }
-
-            // Step dim?
-            else if (dname == soln->get_step_dim_name()) {
-
-                // Add indices for timestep zero (0) only.
-                first_indices.push_back(0); 
-                last_indices.push_back(0);
-
-            }
-
-            // Misc dim?
-            else {
-
-                // Add indices to set all allowed values.
-                // (This isn't really meaningful; it's just illustrative.)
-                first_indices.push_back(grid->get_first_misc_index(dname));
-                last_indices.push_back(grid->get_last_misc_index(dname));
-            }
+        // Print some info about the solution.
+        auto name = soln->get_name();
+        os << "Stencil-solution '" << name << "':\n";
+        os << "  Step dimension: '" << soln->get_step_dim_name() << "'\n";
+        os << "  Domain dimensions:";
+        set<string> domain_dim_set;
+        for (auto dname : soln->get_domain_dim_names()) {
+            os << " '" << dname << "'";
+            domain_dim_set.insert(dname);
         }
+        os << endl;
+
+        // Print out some info about the grids and init their data.
+        for (auto grid : soln->get_grids()) {
+            os << "    " << grid->get_name() << "(";
+            for (auto dname : grid->get_dim_names())
+                os << " '" << dname << "'";
+            os << " )\n";
+            for (auto dname : grid->get_dim_names()) {
+                if (domain_dim_set.count(dname)) {
+                    os << "      '" << dname << "' domain index range on this rank: " <<
+                        grid->get_first_rank_domain_index(dname) << " ... " <<
+                        grid->get_last_rank_domain_index(dname) << endl;
+                    os << "      '" << dname << "' allowed index range on this rank: " <<
+                        grid->get_first_rank_alloc_index(dname) << " ... " <<
+                        grid->get_last_rank_alloc_index(dname) << endl;
+                }
+            }
+
+            // First, just init all the elements to the same value.
+            grid->set_all_elements_same(0.5);
+
+            // Done with fixed-size grids.
+            if (grid->is_fixed_size())
+                continue;
         
-        // Init the values using the indices created above.
-        idx_t nset = grid->set_elements_in_slice_same(0.9, first_indices, last_indices);
-        cout << "      " << nset << " element(s) set.\n";
+            // Create indices describing a subset of the overall domain.
+            vector<idx_t> first_indices, last_indices;
+            for (auto dname : grid->get_dim_names()) {
 
-        // Raw access to this grid.
-        auto raw_p = grid->get_raw_storage_buffer();
-        auto num_elems = grid->get_num_storage_elements();
-        cout << "      " << grid->get_num_storage_bytes() <<
-            " bytes of raw data at " << raw_p << ": ";
-        if (soln->get_element_bytes() == 4)
-            cout << ((float*)raw_p)[0] << ", ..., " << ((float*)raw_p)[num_elems-1] << "\n";
-        else
-            cout << ((double*)raw_p)[0] << ", ..., " << ((double*)raw_p)[num_elems-1] << "\n";
+                // Is this a domain dim?
+                if (domain_dim_set.count(dname)) {
+
+                    // Set indices to create a small cube (assuming 3D)
+                    // in center of overall problem.
+                    idx_t psize = soln->get_overall_domain_size(dname);
+                    idx_t first_idx = psize/2 - 30;
+                    idx_t last_idx = psize/2 + 30;
+                    first_indices.push_back(first_idx);
+                    last_indices.push_back(last_idx);
+                }
+
+                // Step dim?
+                else if (dname == soln->get_step_dim_name()) {
+
+                    // Add indices for timestep zero (0) only.
+                    first_indices.push_back(0); 
+                    last_indices.push_back(0);
+                }
+
+                // Misc dim?
+                else {
+
+                    // Add indices to set all allowed values.
+                    // (This isn't really meaningful; it's just illustrative.)
+                    first_indices.push_back(grid->get_first_misc_index(dname));
+                    last_indices.push_back(grid->get_last_misc_index(dname));
+                }
+            }
+        
+            // Init the values using the indices created above.
+            double val = 2.0;
+            idx_t nset = grid->set_elements_in_slice_same(val, first_indices, last_indices);
+            os << "      " << nset << " element(s) set in sub-range from " <<
+                grid->format_indices(first_indices) << " to " <<
+                grid->format_indices(last_indices) << ".\n";
+            if (grid->is_element_allocated(first_indices)) {
+                auto val2 = grid->get_element(first_indices);
+                os << "      first element == " << val2 << ".\n";
+                assert(val2 == val);
+            }
+            else
+                os << "      first element NOT in rank.\n";
+            if (grid->is_element_allocated(last_indices)) {
+                auto val2 = grid->get_element(last_indices);
+                os << "      last element == " << val2 << ".\n";
+                assert(val2 == val);
+            }
+            else
+                os << "      last element NOT in rank.\n";
+        
+            // Add to a couple of values if they're in this rank.
+            nset = grid->add_to_element(1.0, first_indices);
+            nset += grid->add_to_element(3.0, last_indices);
+            os << "      " << nset << " element(s) updated.\n";
+            if (grid->is_element_allocated(first_indices)) {
+                auto val2 = grid->get_element(first_indices);
+                os << "      first element == " << val2 << ".\n";
+                assert(val2 == val + 1.0);
+            }
+            if (grid->is_element_allocated(last_indices)) {
+                auto val2 = grid->get_element(last_indices);
+                os << "      last element == " << val2 << ".\n";
+                assert(val2 == val + 3.0);
+            }
+
+            // Raw access to this grid.
+            auto raw_p = grid->get_raw_storage_buffer();
+            auto num_elems = grid->get_num_storage_elements();
+            os << "      " << grid->get_num_storage_bytes() <<
+                " bytes of raw data at " << raw_p << ": ";
+            if (soln->get_element_bytes() == 4)
+                os << ((float*)raw_p)[0] << ", ..., " << ((float*)raw_p)[num_elems-1] << "\n";
+            else
+                os << ((double*)raw_p)[0] << ", ..., " << ((double*)raw_p)[num_elems-1] << "\n";
+        }
+
+        // Apply the stencil solution to the data.
+        env->global_barrier();
+        os << "Running the solution for 1 step...\n";
+        soln->run_solution(0);
+        os << "Running the solution for 10 more steps...\n";
+        soln->run_solution(1, 10);
+
+        soln->end_solution();
+    
+        os << "End of YASK kernel API test.\n";
+        return 0;
     }
-
-    // Apply the stencil solution to the data.
-    env->global_barrier();
-    cout << "Running the solution for 1 step...\n";
-    soln->run_solution(0);
-    cout << "Running the solution for 10 more steps...\n";
-    soln->run_solution(1, 10);
-
-    cout << "End of YASK kernel API test.\n";
-    return 0;
+    catch (yask_exception e) {
+        cerr << "YASK kernel API test: " << e.get_message() <<
+            " on rank " << env->get_rank_index() << ".\n";
+        return 1;
+    }
 }

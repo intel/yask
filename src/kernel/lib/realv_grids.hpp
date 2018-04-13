@@ -169,14 +169,25 @@ namespace yask {
         virtual bool is_dirty(idx_t step_idx) const;
         virtual void set_dirty(bool dirty, idx_t step_idx);
         virtual void set_dirty_all(bool dirty);
+        inline void set_dirty_using_alloc_index(bool dirty, idx_t alloc_idx) {
+            _dirty_steps[alloc_idx] = dirty;
+        }
 
         // Resize flag accessors.
         virtual bool is_fixed_size() const { return _fixed_size; }
-        virtual void set_fixed_size(bool is_fixed) { _fixed_size = is_fixed; }
+        virtual void set_fixed_size(bool is_fixed) {
+            _fixed_size = is_fixed;
+            if (is_fixed)
+                _offsets.setFromConst(0);
+        }
 
         // Scratch accessors.
         virtual bool is_scratch() const { return _is_scratch; }
-        virtual void set_scratch(bool is_scratch) { _is_scratch = is_scratch; }
+        virtual void set_scratch(bool is_scratch) {
+            _is_scratch = is_scratch;
+            if (is_scratch)
+                _offsets.setFromConst(0);
+        }
 
         // NUMA accessors.
         virtual int get_numa_preferred() const { return _ggb->get_numa_pref(); }
@@ -222,9 +233,6 @@ namespace yask {
 
         // Convert logical step index to index in allocated range.
         // If this grid doesn't use the step dim, returns 0.
-        inline idx_t get_alloc_step_index(idx_t logical_step_index) const {
-            return _has_step_dim ? _wrap_step(logical_step_index) : 0;
-        }
         inline idx_t get_alloc_step_index(const Indices& indices) const {
             return _has_step_dim ? _wrap_step(indices[Indices::step_posn]) : 0;
         }
@@ -292,6 +300,21 @@ namespace yask {
             *ep = val;
 #ifdef TRACE_MEM
             printElem("writeElem", idxs, val, line);
+#endif
+        }
+
+        // Update one element.
+        // Indices are relative to overall problem domain.
+        inline void addToElem(real_t val,
+                              const Indices& idxs,
+                              idx_t alloc_step_idx,
+                              int line) {
+            real_t* ep = getElemPtr(idxs, alloc_step_idx);
+
+#pragma omp atomic update
+            *ep += val;
+#ifdef TRACE_MEM
+            printElem("addToElem", idxs, *ep, line);
 #endif
         }
 
@@ -400,8 +423,30 @@ namespace yask {
 
 #undef GET_GRID_API
 #undef SET_GRID_API
+
+        virtual std::string format_indices(const Indices& indices) const {
+            std::string str = get_name() + "(" + makeIndexString(indices) + ")";
+            return str;
+        }
+        virtual std::string format_indices(const GridIndices& indices) const {
+            const Indices indices2(indices);
+            return format_indices(indices2);
+        }
+        virtual std::string format_indices(const std::initializer_list<idx_t>& indices) const {
+            const Indices indices2(indices);
+            return format_indices(indices2);
+        }
         
-        virtual void set_all_elements_same(double val) =0;
+        virtual bool is_element_allocated(const Indices& indices) const;
+        virtual bool is_element_allocated(const GridIndices& indices) const {
+            const Indices indices2(indices);
+            return is_element_allocated(indices2);
+        }
+        virtual bool is_element_allocated(const std::initializer_list<idx_t>& indices) const {
+            const Indices indices2(indices);
+            return is_element_allocated(indices2);
+        }
+
         virtual double get_element(const Indices& indices) const;
         virtual double get_element(const GridIndices& indices) const {
             const Indices indices2(indices);
@@ -436,6 +481,23 @@ namespace yask {
             const Indices indices2(indices);
             return set_element(val, indices2, strict_indices);
         }
+        virtual idx_t add_to_element(double val,
+                                  const Indices& indices,
+                                  bool strict_indices = false);
+        virtual idx_t add_to_element(double val,
+                                  const GridIndices& indices,
+                                  bool strict_indices = false) {
+            const Indices indices2(indices);
+            return add_to_element(val, indices2, strict_indices);
+        }
+        virtual idx_t add_to_element(double val,
+                                  const std::initializer_list<idx_t>& indices,
+                                  bool strict_indices = false) {
+            const Indices indices2(indices);
+            return add_to_element(val, indices2, strict_indices);
+        }
+
+        virtual void set_all_elements_same(double val) =0;
         virtual idx_t set_elements_in_slice_same(double val,
                                                  const Indices& first_indices,
                                                  const Indices& last_indices,
@@ -448,6 +510,7 @@ namespace yask {
             const Indices last(last_indices);
             return set_elements_in_slice_same(val, first, last, strict_indices);
         }
+
         virtual idx_t set_elements_in_slice(const void* buffer_ptr,
                                             const Indices& first_indices,
                                             const Indices& last_indices);
@@ -458,6 +521,7 @@ namespace yask {
             const Indices last(last_indices);
             return set_elements_in_slice(buffer_ptr, first, last);
         }
+
         virtual void alloc_storage() {
             _ggb->default_alloc();
         }
