@@ -549,11 +549,11 @@ kernel:	$(YK_EXEC) $(MAKE_REPORT_FILE)
 	@ls -l $@
 
 $(YK_LIB): $(YK_OBJS)
-	$(CXX_PREFIX) $(YK_CXX) $(YK_CXXFLAGS) $(YK_LIBS) -shared -o $@ $^
+	$(CXX_PREFIX) $(YK_CXX) $(YK_CXXFLAGS) -shared -o $@ $^ $(YK_LIBS)
 	@ls -l $@
 
 $(YK_EXEC): yask_main.cpp $(YK_LIB)
-	$(CXX_PREFIX) $(YK_LD) $(YK_CXXFLAGS) $< $(YK_LIBS) $(YK_LFLAGS) -o $@
+	$(CXX_PREFIX) $(YK_LD) $(YK_CXXFLAGS) $< $(YK_LFLAGS) -o $@ $(YK_LIBS)
 	@ls -l $@
 
 $(MAKE_REPORT_FILE): $(YK_LIB)
@@ -641,7 +641,7 @@ $(YK_SWIG_DIR)/yask_kernel_api_wrap.o: $(YK_SWIG_DIR)/yask_kernel_api_wrap.cpp
 	$(YK_CXX) $(YK_CXXFLAGS) $(PYINC) -fPIC -c -o $@ $<
 
 $(YK_PY_LIB): $(YK_OBJS) $(YK_SWIG_DIR)/yask_kernel_api_wrap.o
-	$(YK_CXX) $(YK_CXXFLAGS) $(YK_LIBS) -shared -o $@ $^
+	$(YK_CXX) $(YK_CXXFLAGS) -shared -o $@ $^ $(YK_LIBS)
 
 # Simple tests
 
