@@ -28,7 +28,7 @@
 import numpy as np
 import ctypes as ct
 import argparse
-import yask_kernel
+import yask_kernel as yk
 
 # Read data from grid using NumPy ndarray.
 def read_grid(grid, timestep) :
@@ -156,8 +156,8 @@ def init_grid(grid, timestep) :
 if __name__ == "__main__":
 
     # The factories from which all other kernel objects are made.
-    kfac = yask_kernel.yk_factory()
-    ofac = yask_kernel.yask_output_factory()
+    kfac = yk.yk_factory()
+    ofac = yk.yask_output_factory()
 
     # Initalize MPI, etc.
     env = kfac.new_env()
@@ -196,11 +196,12 @@ if __name__ == "__main__":
         else :
             soln.set_block_size(dim_name, 32)
 
-    # Make a test fixed-size grid.
+    # Make a test fixed-size grid and set its NUMA preference.
     fgrid_sizes = ()
     for dim_name in soln_dims :
         fgrid_sizes += (5,)
     fgrid = soln.new_fixed_size_grid("fgrid", soln_dims, fgrid_sizes)
+    fgrid.set_numa_preferred(yk.cvar.yask_numa_local)
 
     # Simple rank configuration in 1st dim only.
     # In production runs, the ranks would be distributed along

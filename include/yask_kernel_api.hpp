@@ -47,12 +47,27 @@ namespace yask {
 #endif
 
     /// Allocate grids on local NUMA node.
+    /**
+       This is used in yk_solution::set_default_numa_preferred
+       and yk_grid::set_numa_preferred.
+       In Python, specify as `yask_kernel.cvar.yask_numa_local`. 
+    */
     const int yask_numa_local = -1;
 
     /// Allocate grids across all available NUMA nodes.
+    /**
+       This is used in yk_solution::set_default_numa_preferred
+       and yk_grid::set_numa_preferred.
+       In Python, specify as `yask_kernel.cvar.yask_numa_interleave`. 
+    */
     const int yask_numa_interleave = -2;
 
     /// Do not specify any NUMA binding.
+    /**
+       This is used in yk_solution::set_default_numa_preferred
+       and yk_grid::set_numa_preferred.
+       In Python, specify as `yask_kernel.cvar.yask_numa_none`. 
+    */
     const int yask_numa_none = -9;
 
     // Forward declarations of classes and pointers.
@@ -720,8 +735,10 @@ namespace yask {
                                       local-node allocation,
                                       `yask_numa_interleave` for
                                       interleaving pages across all nodes,
-                                      or `yask_numa_none` for no NUMA
-                                      policy. */) =0;
+                                      or `yask_numa_none` for no explicit NUMA
+                                      policy. These constants are defined in 
+                                      the _Variable Documentation_ section of
+                                      \ref yask_kernel_api.hpp. */) =0;
 
         /// **[Advanced]** Get the default preferred NUMA node on which to allocate data.
         /**
@@ -1441,11 +1458,13 @@ namespace yask {
         /// **[Advanced]** Set the default preferred NUMA node on which to allocate data.
         /**
            This value is used when allocating data for this grid.
+           Thus, the desired NUMA policy must be set before calling alloc_data()
+           or yk_solution::prepare_solution().
         */
         virtual void
         set_numa_preferred(int numa_node
                            /**< [in] Preferred NUMA node.
-                              See set_default_numa_preferred() for other options. */) =0;
+                              See yk_solution::set_default_numa_preferred() for other options. */) =0;
 
         /// **[Advanced]** Get the default preferred NUMA node on which to allocate data.
         /**
