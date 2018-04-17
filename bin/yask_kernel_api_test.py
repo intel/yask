@@ -202,6 +202,7 @@ if __name__ == "__main__":
         fgrid_sizes += (5,)
     fgrid = soln.new_fixed_size_grid("fgrid", soln_dims, fgrid_sizes)
     fgrid.set_numa_preferred(yk.cvar.yask_numa_local)
+    fgrid.alloc_storage()
 
     # Simple rank configuration in 1st dim only.
     # In production runs, the ranks would be distributed along

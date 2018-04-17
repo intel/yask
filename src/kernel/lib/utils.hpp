@@ -25,6 +25,8 @@ IN THE SOFTWARE.
 
 #pragma once
 
+#ifdef USE_NUMA
+
 // Use numa policy library?
 #ifdef USE_NUMA_POLICY_LIB
 #include <numa.h>
@@ -52,6 +54,7 @@ extern "C" {
 #define MPOL_BIND        2
 #define MPOL_INTERLEAVE  3
 
+#endif
 #endif
 #endif
 
@@ -97,7 +100,10 @@ namespace yask {
     extern char* alignedAlloc(std::size_t nbytes);
     struct AlignedDeleter {
         void operator()(char* p) {
-            std::free(p);
+            if (p) {
+                std::free(p);
+                p = NULL;
+            }
         }
     };
     
@@ -109,16 +115,23 @@ namespace yask {
         std::size_t _nbytes;
         NumaDeleter(std::size_t nbytes): _nbytes(nbytes) {}
         void operator()(char* p) {
-            if (p) {
+
+#ifdef USE_NUMA
 #ifdef USE_NUMA_POLICY_LIB
-                if (numa_available() != -1)
-                    numa_free(p, _nbytes);
+            if (p && numa_available() != -1) {
+                numa_free(p, _nbytes);
+                p = NULL;
+            }
 #else
-                if (get_mempolicy(NULL, NULL, 0, 0, 0) == 0)
-                    munmap(p, _nbytes);
+            if (p && get_mempolicy(NULL, NULL, 0, 0, 0) == 0) {
+                munmap(p, _nbytes);
+                p = NULL;
+            }
 #endif
-                else
-                    free(p);
+#endif
+            if (p) {
+                free(p);
+                p = NULL;
             }
         }
     };

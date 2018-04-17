@@ -47,7 +47,8 @@ namespace yask {
         void* _elems = 0;          // actual data, which may be offset from _base.
 
         // Preferred NUMA node.
-        int _numa_pref = -1;   // -1 => use default.
+        const static int _numa_unset = -999;
+        int _numa_pref = _numa_unset; // use default from _opts.
 
         // Note that both _dims and *_layout_base hold dimensions unless this
         // is a scalar. For a scalar, _dims is empty and _layout_base = 0.
@@ -55,7 +56,7 @@ namespace yask {
         Layout* _layout_base = 0; // memory layout.
 
         // Command-line and env parameters.
-        KernelSettingsPtr _opts;
+        KernelSettingsPtr* _opts;
 
         // Output stream for messages.
         // Pointer-to-pointer to let it follow a parent's pointer.
@@ -76,7 +77,7 @@ namespace yask {
         GenericGridBase(std::string name,
                         Layout& layout_base,
                         const GridDimNames& dimNames,
-                        KernelSettingsPtr settings,
+                        KernelSettingsPtr* settings,
                         std::ostream** ostr);
 
         virtual ~GenericGridBase() { }
@@ -92,9 +93,20 @@ namespace yask {
         void set_name(const std::string& name) { _name = name; }
 
         // NUMA accessors.
-        virtual int get_numa_pref() const { return _numa_pref; }
-        virtual void set_numa_pref(int pref_numa_node) { _numa_pref = pref_numa_node; }
-        
+        virtual int get_numa_pref() const {
+            return (_numa_pref != _numa_unset) ?
+                _numa_pref : (*_opts)->_numa_pref;
+        }
+        virtual bool set_numa_pref(int numa_node) {
+#ifdef USE_NUMA
+            _numa_pref = numa_node;
+            return true;
+#else
+            _numa_pref = yask_numa_none;
+            return numa_node == yask_numa_none;
+#endif
+        }        
+
         // Access dims.
         const IdxTuple& get_dims() const { return _dims; }
 
@@ -204,7 +216,7 @@ namespace yask {
         GenericGridTemplate(std::string name,
                             Layout& layout_base,
                             const GridDimNames& dimNames,
-                            KernelSettingsPtr settings,
+                            KernelSettingsPtr* settings,
                             std::ostream** ostr) :
             GenericGridBase(name, layout_base, dimNames, settings, ostr) { }
 
@@ -309,7 +321,7 @@ namespace yask {
         // Construct an unallocated grid.
         GenericGrid(std::string name,
                     const GridDimNames& dimNames,
-                    KernelSettingsPtr settings,
+                    KernelSettingsPtr* settings,
                     std::ostream** ostr) :
             GenericGridTemplate<T>(name, _layout, dimNames, settings, ostr) {
             assert(int(dimNames.size()) == _layout.get_num_sizes());
