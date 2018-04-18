@@ -540,8 +540,7 @@ namespace yask {
         // Make a new grid iff its dims match any in the stencil.
         // Returns pointer to the new grid or nullptr if no match.
         virtual YkGridPtr newStencilGrid (const std::string & name,
-                                          const GridDimNames & dims,
-                                          KernelSettingsPtr settings) =0;
+                                          const GridDimNames & dims) =0;
 
         // Make a new grid with 'name' and 'dims'.
         // Set sizes if 'sizes' is non-null.
@@ -654,8 +653,14 @@ namespace yask {
         virtual idx_t get_num_ranks(const std::string& dim) const;
         virtual idx_t get_rank_index(const std::string& dim) const;
         virtual std::string apply_command_line_options(const std::string& args);
-        virtual void set_default_numa_preferred(int numa_node) {
+        virtual bool set_default_numa_preferred(int numa_node) {
+#ifdef USE_NUMA
             _opts->_numa_pref = numa_node;
+            return true;
+#else
+            _opts->_numa_pref = yask_numa_none;
+            return numa_node == yask_numa_none;
+#endif
         }
         virtual int get_default_numa_preferred() const {
             return _opts->_numa_pref;

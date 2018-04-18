@@ -155,8 +155,11 @@ inline void omp_set_nested(int n) { }
 #define YASK_PAD (7) // cache-lines between data buffers.
 #define YASK_HUGE_ALIGNMENT (2 * 1024 * 1024) // 2MiB-page for large allocs.
 #define CACHE_ALIGNED __attribute__ ((aligned (CACHELINE_BYTES)))
-#ifndef NUMA_PREF
-#define NUMA_PREF -1
+#ifndef USE_NUMA
+#undef NUMA_PREF
+#define NUMA_PREF yask_numa_none
+#elif !defined NUMA_PREF
+#define NUMA_PREF yask_numa_local
 #endif
 
 // Define a folded vector of reals.

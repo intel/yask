@@ -65,9 +65,14 @@ namespace yask {
 
         if (numa_pref == yask_numa_none)
             return alignedAlloc(nbytes);
+
+#ifndef USE_NUMA
+        THROW_YASK_EXCEPTION("Error: explicit NUMA policy allocation is not enabled");
+#endif
         
         void *p = 0;
 
+#ifdef USE_NUMA
 #ifdef USE_NUMA_POLICY_LIB
 #pragma omp single
         if (numa_available() != -1) {
@@ -80,6 +85,9 @@ namespace yask {
                 THROW_YASK_EXCEPTION("Error: numa_alloc_*(" << makeByteStr(nbytes) <<
                                      ") returned unaligned addr " << p);
         }
+        else
+            THROW_YASK_EXCEPTION("Error: explicit NUMA policy allocation is not available");
+
 #else
         if (get_mempolicy(NULL, NULL, 0, 0, 0) == 0) {
 
@@ -118,14 +126,14 @@ namespace yask {
                 }
             }
             else
-                p = 0;
+                THROW_YASK_EXCEPTION("Error: anonymous mmap of " << makeByteStr(nbytes) <<
+                                     " failed");
         }
+        else
+            THROW_YASK_EXCEPTION("Error: explicit NUMA policy allocation is not available");
 #endif
-        // If NUMA not avail or mmap failed, use regular aligned malloc.
-        if (!p)
-            p = alignedAlloc(nbytes);
-
-        // If still bad, throw exception.
+#endif
+        // Should not get here w/null p; throw exception.
         if (!p)
             THROW_YASK_EXCEPTION("Error: cannot allocate " << makeByteStr(nbytes));
 

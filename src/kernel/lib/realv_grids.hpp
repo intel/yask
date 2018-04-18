@@ -191,7 +191,9 @@ namespace yask {
 
         // NUMA accessors.
         virtual int get_numa_preferred() const { return _ggb->get_numa_pref(); }
-        virtual void set_numa_preferred(int pref_numa_node) { _ggb->set_numa_pref(pref_numa_node); }
+        virtual bool set_numa_preferred(int numa_node) {
+            return _ggb->set_numa_pref(numa_node);
+        }
         
         // Lookup position by dim name.
         // Return -1 or die if not found, depending on flag.
@@ -566,7 +568,7 @@ namespace yask {
         YkElemGrid(DimsPtr dims,
                    std::string name,
                    const GridDimNames& dimNames,
-                   KernelSettingsPtr settings,
+                   KernelSettingsPtr* settings,
                    std::ostream** ostr) :
             YkGridBase(&_data, dimNames.size(), dims),
             _data(name, dimNames, settings, ostr) {
@@ -683,7 +685,7 @@ namespace yask {
         YkVecGrid(DimsPtr dims,
                   const std::string& name,
                   const GridDimNames& dimNames,
-                  KernelSettingsPtr settings,
+                  KernelSettingsPtr* settings,
                   std::ostream** ostr) :
             YkGridBase(&_data, dimNames.size(), dims),
             _data(name, dimNames, settings, ostr),

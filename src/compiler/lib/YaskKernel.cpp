@@ -286,7 +286,7 @@ namespace yask {
             ctorCode += " " + grid + "_dim_names = {" +
                 gdims.makeDimStr(", ", "\"", "\"") + "};\n";
             string initCode = " " + grid + "_ptr = std::make_shared<" + typeDef +
-                ">(_dims, \"" + grid + "\", " + grid + "_dim_names, _opts, &_ostr);\n"
+                ">(_dims, \"" + grid + "\", " + grid + "_dim_names, &_opts, &_ostr);\n"
                 " assert(" + grid + "_ptr);\n";
 
             // Grid vars.
@@ -391,7 +391,7 @@ namespace yask {
                 if (!firstGrid)
                     newGridCode += " else";
                 newGridCode += " if (dims == " + grid + "_dim_names) gp = std::make_shared<" +
-                    typeDef + ">(_dims, name, dims, _opts, &_ostr);\n";
+                    typeDef + ">(_dims, name, dims, &_opts, &_ostr);\n";
             }
                 
         } // grids.
@@ -416,7 +416,7 @@ namespace yask {
         os << "\n // Make a new grid iff its dims match any in the stencil.\n"
             " // Returns pointer to the new grid or nullptr if no match.\n"
             " virtual YkGridPtr newStencilGrid(const std::string& name,"
-            " const GridDimNames& dims, KernelSettingsPtr settings) {\n"
+            " const GridDimNames& dims) {\n"
             " YkGridPtr gp;\n" <<
             newGridCode <<
             " return gp;\n"
