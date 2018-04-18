@@ -202,10 +202,10 @@ namespace yask {
 
     public:
         YASKKncPrinter(StencilSolution& stencil,
-                       EqGroups& eqGroups,
-                       EqGroups& clusterEqGroups,
+                       EqBundles& eqBundles,
+                       EqBundles& clusterEqBundles,
                        const Dimensions* dims) :
-            YASKCppPrinter(stencil, eqGroups, clusterEqGroups,
+            YASKCppPrinter(stencil, eqBundles, clusterEqBundles,
                            dims) { }
 
         virtual int num_vec_elems() const { return 64 / _settings._elem_bytes; }
@@ -225,10 +225,10 @@ namespace yask {
 
     public:
         YASKAvx256Printer(StencilSolution& stencil,
-                          EqGroups& eqGroups,
-                          EqGroups& clusterEqGroups,
+                          EqBundles& eqBundles,
+                          EqBundles& clusterEqBundles,
                           const Dimensions* dims) :
-            YASKCppPrinter(stencil, eqGroups, clusterEqGroups, dims) { }
+            YASKCppPrinter(stencil, eqBundles, clusterEqBundles, dims) { }
 
         virtual int num_vec_elems() const { return 32 / _settings._elem_bytes; }
     };
@@ -244,10 +244,10 @@ namespace yask {
 
     public:
         YASKAvx512Printer(StencilSolution& stencil,
-                          EqGroups& eqGroups,
-                          EqGroups& clusterEqGroups,
+                          EqBundles& eqBundles,
+                          EqBundles& clusterEqBundles,
                           const Dimensions* dims) :
-            YASKCppPrinter(stencil, eqGroups, clusterEqGroups,
+            YASKCppPrinter(stencil, eqBundles, clusterEqBundles,
                            dims) { }
 
         virtual int num_vec_elems() const { return 64 / _settings._elem_bytes; }

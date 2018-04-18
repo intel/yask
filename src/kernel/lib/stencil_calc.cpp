@@ -31,8 +31,8 @@ namespace yask {
     // Calculate results within a block.
     // Typically called by a top-level OMP thread.
     // It is here that any required scratch-grid stencils are evaluated
-    // first and then the non-scratch stencils in the stencil group.
-    void StencilGroupBase::calc_block(const ScanIndices& region_idxs) {
+    // first and then the non-scratch stencils in the stencil bundle.
+    void StencilBundleBase::calc_block(const ScanIndices& region_idxs) {
 
         auto opts = _generic_context->get_settings();
         auto dims = _generic_context->get_dims();
@@ -40,7 +40,7 @@ namespace yask {
         auto& step_dim = dims->_step_dim;
         int thread_idx = omp_get_thread_num(); // used to index the scratch grids.
         TRACE_MSG3("calc_block:" <<
-                   " in non-scratch group '" << get_name() << "': " <<
+                   " in non-scratch bundle '" << get_name() << "': " <<
                    region_idxs.start.makeValStr(ndims) <<
                    " ... (end before) " << region_idxs.stop.makeValStr(ndims) <<
                    " by thread " << thread_idx);
@@ -56,12 +56,12 @@ namespace yask {
         // Groups in block loops are based on sub-block-group sizes.
         def_block_idxs.group_size = opts->_sub_block_group_sizes;
 
-        // Update offsets of scratch grids based on this group's location.
+        // Update offsets of scratch grids based on this bundle's location.
         _generic_context->update_scratch_grids(thread_idx, def_block_idxs);
         
-        // Define the groups that need to be processed in
+        // Define the bundles that need to be processed in
         // this block. This will be the prerequisite scratch-grid
-        // groups plus this non-scratch group.
+        // bundles plus this non-scratch bundle.
         auto sg_list = get_scratch_deps();
         sg_list.push_back(this);
 
@@ -70,7 +70,7 @@ namespace yask {
         // This should be nested within a top-level OpenMP task.
         _generic_context->set_block_threads();
 
-        // Loop through all the needed groups.
+        // Loop through all the needed bundles.
         for (auto* sg : sg_list) {
 
             // Indices needed for the generated loops.  Will normally be a
@@ -78,7 +78,7 @@ namespace yask {
             ScanIndices block_idxs = sg->adjust_scan(thread_idx, def_block_idxs);
 
             TRACE_MSG3("calc_block: " <<
-                       " in group '" << sg->get_name() << "': " <<
+                       " in bundle '" << sg->get_name() << "': " <<
                        block_idxs.begin.makeValStr(ndims) <<
                        " ... (end before) " << block_idxs.end.makeValStr(ndims) <<
                        " by thread " << thread_idx);
@@ -93,7 +93,7 @@ namespace yask {
     // Normalize the indices, i.e., divide by vector len in each dim.
     // Ranks offsets must already be subtracted.
     // Each dim in 'orig' must be a multiple of corresponding vec len.
-    void StencilGroupBase::normalize_indices(const Indices& orig, Indices& norm) const {
+    void StencilBundleBase::normalize_indices(const Indices& orig, Indices& norm) const {
         auto* cp = _generic_context;
         auto dims = cp->get_dims();
         int nsdims = dims->_stencil_dims.size();
@@ -124,7 +124,7 @@ namespace yask {
     // The index ranges in 'block_idxs' are sub-divided
     // into full vector-clusters, full vectors, and sub-vectors
     // and finally evaluated by the YASK-compiler-generated loops.
-    void StencilGroupBase::calc_sub_block(int thread_idx,
+    void StencilBundleBase::calc_sub_block(int thread_idx,
                                           const ScanIndices& block_idxs) {
         auto* cp = _generic_context;
         auto opts = cp->get_settings();
@@ -134,7 +134,7 @@ namespace yask {
         auto& step_dim = dims->_step_dim;
         auto step_posn = Indices::step_posn;
         TRACE_MSG3("calc_sub_block:" <<
-                   " in group '" << get_name() << "': " <<
+                   " in bundle '" << get_name() << "': " <<
                    block_idxs.start.makeValStr(nsdims) <<
                    " ... (end before) " << block_idxs.stop.makeValStr(nsdims));
 
@@ -467,7 +467,7 @@ namespace yask {
 
             // Define misc-loop function.
             // If point is in sub-domain for this
-            // group, then evaluate the reference scalar code.
+            // bundle, then evaluate the reference scalar code.
             // If no holes, don't need to check each point in domain.
             // Since step is always 1, we ignore misc_idxs.stop.
 #define misc_fn(misc_idxs)  do {                                        \
@@ -505,7 +505,7 @@ namespace yask {
     // The 'loop_idxs' must specify a range only in the inner dim.
     // Indices must be rank-relative.
     // Indices must be normalized, i.e., already divided by VLEN_*.
-    void StencilGroupBase::calc_loop_of_clusters(int thread_idx,
+    void StencilBundleBase::calc_loop_of_clusters(int thread_idx,
                                                  const ScanIndices& loop_idxs) {
         auto* cp = _generic_context;
         auto dims = cp->get_dims();
@@ -541,7 +541,7 @@ namespace yask {
     // The 'loop_idxs' must specify a range only in the inner dim.
     // Indices must be rank-relative.
     // Indices must be normalized, i.e., already divided by VLEN_*.
-    void StencilGroupBase::calc_loop_of_vectors(int thread_idx,
+    void StencilBundleBase::calc_loop_of_vectors(int thread_idx,
                                                 const ScanIndices& loop_idxs,
                                                 idx_t write_mask) {
         auto* cp = _generic_context;
@@ -571,11 +571,11 @@ namespace yask {
         calc_loop_of_vectors(thread_idx, start_idxs, stop_inner, write_mask);
     }
 
-    // If this group is updating scratch grid(s),
+    // If this bundle is updating scratch grid(s),
     // expand indices to calculate values in halo.
     // This will often change vec-len aligned indices to non-aligned.
     // Return adjusted indices.
-    ScanIndices StencilGroupBase::adjust_scan(int thread_idx, const ScanIndices& idxs) const {
+    ScanIndices StencilBundleBase::adjust_scan(int thread_idx, const ScanIndices& idxs) const {
 
         ScanIndices adj_idxs(idxs);
         auto* cp = _generic_context;
@@ -583,7 +583,7 @@ namespace yask {
         int nsdims = dims->_stencil_dims.size();
         auto step_posn = Indices::step_posn;
 
-        // Loop thru vecs of scratch grids for this group.
+        // Loop thru vecs of scratch grids for this bundle.
         for (auto* sv : outputScratchVecs) {
             assert(sv);
 
@@ -626,8 +626,8 @@ namespace yask {
         return adj_idxs;
     }
     
-    // Set the bounding-box vars for this group in this rank.
-    void StencilGroupBase::find_bounding_box() {
+    // Set the bounding-box vars for this bundle in this rank.
+    void StencilBundleBase::find_bounding_box() {
         StencilContext& context = *_generic_context;
         ostream& os = context.get_ostr();
         auto settings = context.get_settings();
@@ -658,7 +658,7 @@ namespace yask {
         misc_idxs.end = end;
 
         // Define misc-loop function.  Since step is always 1, we ignore
-        // misc_stop.  Update only if point is in domain for this group.
+        // misc_stop.  Update only if point is in domain for this bundle.
 #define misc_fn(misc_idxs) do {                                  \
         if (is_in_valid_domain(misc_idxs.start)) {               \
             min_pts = min_pts.minElements(misc_idxs.start);      \

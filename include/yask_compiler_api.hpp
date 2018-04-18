@@ -47,6 +47,10 @@ namespace yask {
     /// Shared pointer to \ref yc_grid
     typedef yc_grid* yc_grid_ptr;
 
+    class yc_equation_group;
+    /// Shared pointer to \ref yc_equation_group;
+    typedef std::shared_ptr<yc_equation_group> yc_equation_group_ptr;
+
     // Forward declarations of expression nodes and their pointers.
 
     class yc_expr_node;
@@ -166,7 +170,7 @@ namespace yask {
 
            At least one grid must be defined with at least one domain-index node.
 
-           @returns Pointer to the new grid. 
+           @returns Pointer to the new \ref yc_grid object. 
         */
         virtual yc_grid_ptr
         new_grid(const std::string& name
@@ -181,7 +185,7 @@ namespace yask {
         /**
            C++ initializer-list version with same semantics as vector version.
            @note This version is not available (or needed) in SWIG-based APIs, e.g., Python.
-           @returns Pointer to the new grid. 
+           @returns Pointer to the new \ref yc_grid object. 
         */
         virtual yc_grid_ptr
         new_grid(const std::string& name /**< [in] Unique name of the grid; must be
@@ -206,7 +210,7 @@ namespace yask {
            See `TestScratchStencil*` classes in
            `src/stencils/SimpleTestStencils.hpp` for usage examples.
 
-           @returns Pointer to the new grid. 
+           @returns Pointer to the new \ref yc_grid object. 
         */
         virtual yc_grid_ptr
         new_scratch_grid(const std::string& name
@@ -221,7 +225,7 @@ namespace yask {
         /**
            C++ initializer-list version with same semantics as vector version.
            @note This version is not available (or needed) in SWIG-based APIs, e.g., Python.
-           @returns Pointer to the new grid. 
+           @returns Pointer to the new \ref yc_grid object. 
         */
         virtual yc_grid_ptr
         new_scratch_grid(const std::string& name
@@ -249,16 +253,47 @@ namespace yask {
         get_grid(const std::string& name /**< [in] Name of the grid. */ ) =0;
         
         /// Get the number of equations in the solution.
-        /** Equations are added when equation_nodes are created via new_equation_node().
+        /** Equations are added when yc_node_factory::new_equation_node() is called.
             @returns Number of equations that have been created. */
         virtual int
         get_num_equations() const =0;
 
         /// Get the specified equation.
-        /** @returns Pointer to equation_node of nth equation. */
+        /** @returns Pointer to \ref yc_equation_node of nth equation. */
         virtual yc_equation_node_ptr
         get_equation(int n /**< [in] Index of equation between zero (0)
                               and get_num_equations()-1. */ ) =0;
+
+        /// Create a new equation group.
+        /**
+           In normal usage, equation groups are created automatically when
+           format() is called.  Under automatic grouping, the YASK compiler
+           discovers dependencies between equations and places equations
+           together in a group if they do not depend upon one another.
+           Then, the YASK compiler schedules the resulting groups for
+           execution in the kernel based on the dependencies between groups.
+
+           A \ref yc_equation_group object allows manual grouping of equations.
+           Under manual grouping, the YASK compiler does _not_ check
+           for illegal dependencies within the group.
+           In addition, if `do_schedule` is `false`, the YASK compiler
+           will not check for dependencies with other groups and
+           will not schedule the group for execution in the kernel.
+           Then, it will be the programmer's responsibility to run the
+           stencil group via yk_solution::run_stencil_group().
+
+           This capability is useful for processing equations that
+           the YASK compiler cannot currently handle, like equations
+           with dependencies between different points of a grid
+           at the same step index.
+
+           @returns Pointer to the new \ref yc_equation_group object. 
+         */
+        virtual yc_equation_group_ptr
+        new_equation_group(const std::string& name
+                           /**< [in] Name of the group. */,
+                           bool do_schedule = true
+                           /**< [in] Schedule the group for execution in the kernel. */ ) =0;
 
         /// Set the vectorization length in given dimension.
         /** For YASK-code generation, the product of the fold lengths should
@@ -347,8 +382,8 @@ namespace yask {
         is a scalar, a 1-dim grid is an array, etc.
         A compile-time grid is a variable used for constructing equations.
         It does not contain any data.
-        Data is only stored during run-time, using a yk_grid.
-        Create new grids via yc_solution::new_grid(). */
+        Data is only stored during run-time, using a \ref yk_grid.
+        Created via yc_solution::new_grid(). */
     class yc_grid {
     public:
         virtual ~yc_grid() {}
@@ -380,9 +415,9 @@ namespace yask {
         /** The indices are specified relative to the stencil-evaluation
             index.  Each offset refers to the dimensions defined when the
             grid was created via stencil_solution::new_grid(). 
-            Example: if g = new_grid("heat", {"t", "x", "y"}), then
-            g->new_relative_grid_point(1, -1, 0) refers to heat(t+1, x-1, y)
-            for some point t, x, y during stencil evaluation.
+            Example: if `g = new_grid("heat", {"t", "x", "y"})`, then
+            `g->new_relative_grid_point(1, -1, 0)` refers to `heat(t+1, x-1, y)`
+            for some point `t, x, y` dynamically defined during stencil evaluation.
             @warning This convenience function can only be used when every
             dimension of the grid is either the step dimension or a domain dimension.
             @note Offsets beyond the dimensions in the grid will be ignored.
@@ -403,8 +438,8 @@ namespace yask {
     };
     
     /// Factory to create AST nodes.
-    /** @note Grid-point reference nodes are created from a `yc_grid` object
-        instead of from this factory. */
+    /** @note Grid-point reference nodes are created from a \ref yc_grid object
+        instead of from a \ref yc_node_factory. */
     class yc_node_factory {
     public:
         virtual ~yc_node_factory() {}
@@ -414,6 +449,7 @@ namespace yask {
            Create a variable to be used to index grids in the
            solution-step dimension.
            The name usually describes time, e.g. "t". 
+           @returns Pointer to new \ref yc_index_node object.
         */
         virtual yc_index_node_ptr
         new_step_index(const std::string& name
@@ -426,6 +462,7 @@ namespace yask {
            The name usually describes spatial dimensions, e.g. "x" or "y". 
            This should *not* include the step dimension, which is specified via
            new_step_index().
+           @returns Pointer to new \ref yc_index_node object.
          */
         virtual yc_index_node_ptr
         new_domain_index(const std::string& name
@@ -436,6 +473,7 @@ namespace yask {
            Create an variable to be used to index grids in the
            some dimension that is not the step dimension
            or a domain dimension. Example: index into an array.
+           @returns Pointer to new \ref yc_index_node object.
          */
         virtual yc_index_node_ptr
         new_misc_index(const std::string& name
@@ -447,49 +485,62 @@ namespace yask {
             created, it is automatically added to the list of equations for
             the yc_solution that contains the grid that is on the
             LHS.
-            @returns Pointer to new node. */
+            @returns Pointer to new \ref yc_equation_node object. 
+        */
         virtual yc_equation_node_ptr
         new_equation_node(yc_grid_point_node_ptr lhs /**< [in] Grid-point before EQUALS operator. */,
                         yc_number_node_ptr rhs /**< [in] Expression after EQUALS operator. */ );
 
         /// Create a constant numerical value node.
-        /** This is unary negation.
-             Use new_subtraction_node() for binary '-'.
-            @returns Pointer to new node. */
+        /** 
+            This is unary negation.
+            Use new_subtraction_node() for binary '-'.
+            @returns Pointer to new \ref yc_const_number_node object. 
+        */
         virtual yc_const_number_node_ptr
         new_const_number_node(double val /**< [in] Value to store in node. */ );
 
         /// Create a numerical negation operator node.
-        /** @returns Pointer to new node. */
+        /**
+           @returns Pointer to new \ref yc_negate_node object. 
+        */
         virtual yc_negate_node_ptr
         new_negate_node(yc_number_node_ptr rhs /**< [in] Expression after '-' sign. */ );
 
         /// Create an addition node.
-        /** Nodes must be created with at least two operands, and more can
-             be added by calling add_operand() on the returned node.
-            @returns Pointer to new node. */
+        /** 
+            Nodes must be created with at least two operands, and more can
+            be added by calling add_operand() on the returned node.
+            @returns Pointer to new \ref yc_add_node object. 
+        */
         virtual yc_add_node_ptr
         new_add_node(yc_number_node_ptr lhs /**< [in] Expression before '+' sign. */,
                      yc_number_node_ptr rhs /**< [in] Expression after '+' sign. */ );
 
         /// Create a multiplication node.
-        /** Nodes must be created with at least two operands, and more can
-             be added by calling add_operand() on the returned node.
-            @returns Pointer to new node. */
+        /**
+           Nodes must be created with at least two operands, and more can
+           be added by calling add_operand() on the returned node.
+           @returns Pointer to new \ref yc_multiply_node object. 
+        */
         virtual yc_multiply_node_ptr
         new_multiply_node(yc_number_node_ptr lhs /**< [in] Expression before '*' sign. */,
                           yc_number_node_ptr rhs /**< [in] Expression after '*' sign. */ );
 
         /// Create a subtraction node.
-        /** This is binary subtraction.
-             Use new_negation_node() for unary '-'.
-            @returns Pointer to new node. */
+        /**
+           This is binary subtraction.
+           Use new_negation_node() for unary '-'.
+           @returns Pointer to new \ref yc_subtract_node object. 
+        */
         virtual yc_subtract_node_ptr
         new_subtract_node(yc_number_node_ptr lhs /**< [in] Expression before '-' sign. */,
                           yc_number_node_ptr rhs /**< [in] Expression after '-' sign. */ );
 
         /// Create a division node.
-        /** @returns Pointer to new node. */
+        /**
+           @returns Pointer to new \ref yc_divide_node object. 
+        */
         virtual yc_divide_node_ptr
         new_divide_node(yc_number_node_ptr lhs /**< [in] Expression before '/' sign. */,
                         yc_number_node_ptr rhs /**< [in] Expression after '/' sign. */ );
@@ -502,20 +553,25 @@ namespace yask {
         virtual ~yc_expr_node() {}
 
         /// Create a simple human-readable string.
-        /** Formats the expression starting at this node.
-            @returns String containing a single-line human-readable version of the expression.
+        /**
+           Formats the expression starting at this node.
+           @returns String containing a single-line human-readable version of the expression.
          */
         virtual std::string format_simple() const =0;
 
         /// Count the size of the AST.
-        /** @returns Number of nodes in this tree,
-            including this node and all its descendants. */
+        /**
+           @returns Number of nodes in this tree,
+           including this node and all its descendants. 
+        */
         virtual int get_num_nodes() const =0;
     };
 
     /// Equation node.
     /** Indicates grid point on LHS is equivalent to expression
-        on RHS. This is NOT a test for equality. */
+        on RHS. This is NOT a test for equality.
+        Created via yc_node_factory::new_equation_node().
+    */
     class yc_equation_node : public virtual yc_expr_node {
     public:
 
@@ -537,45 +593,58 @@ namespace yask {
     class yc_bool_node : public virtual yc_expr_node { };
 
     /// A dimension or an index in that dimension.
-    /** This is a leaf node in an AST.
-        Use a yask_solution object to create an object of this type. */
+    /**
+       This is a leaf node in an AST.
+       Created via yc_node_factory::new_step_index(),
+       yc_node_factory::new_domain_index(), and
+       yc_node_factory::new_misc_index().
+    */
     class yc_index_node : public virtual yc_number_node {
     public:
 
         /// Get the dimension's name.
         /** @returns Name given at creation. */
-        virtual const std::string& get_name() const =0;
+        virtual const std::string&
+        get_name() const =0;
     };
 
     /// A reference to a point in a grid.
+    /**
+       Created via yc_grid::new_relative_grid_point().
+    */
    class yc_grid_point_node : public virtual yc_number_node {
     public:
 
         /// Get the grid this point is in.
-        /** @returns Pointer to grid. */
-        virtual yc_grid_ptr get_grid() =0;
+        /** @returns Pointer to a \ref yc_grid object. */
+        virtual yc_grid_ptr
+        get_grid() =0;
     };
     
     /// A constant numerical value.
     /** All values are stored as doubles.
         This is a leaf node in an AST.
-        Use a yask_compiler_factory object to create an object of this type. */
+        Created via yc_node_factory::new_const_number_node().
+    */
     class yc_const_number_node : public virtual yc_number_node {
     public:
 
         /// Set the value.
         /** The value is considered "constant" only when the 
             compiler output is created. It can be changed in the AST. */
-        virtual void set_value(double val /**< [in] Value to store in node. */ ) =0;
+        virtual void
+        set_value(double val /**< [in] Value to store in node. */ ) =0;
 
         /// Get the stored value.
         /** @returns Copy of stored value. */
-        virtual double get_value() const =0;
+        virtual double
+        get_value() const =0;
     };
 
     /// A numerical negation operator.
     /** Example: used to implement -(a*b).
-        Use a yask_compiler_factory object to create an object of this type. */
+        Created via yc_node_factory::new_negate_node().
+     */
     class yc_negate_node : public virtual yc_number_node {
     public:
 
@@ -583,7 +652,8 @@ namespace yask {
         /**  This node implements unary negation only, not subtraction, so there is
             never a left-hand-side.
             @returns Expression node on right-hand-side of '-' sign. */
-        virtual yc_number_node_ptr get_rhs() =0;
+        virtual yc_number_node_ptr
+        get_rhs() =0;
     };
 
     /// Base class for commutative numerical operators.
@@ -598,7 +668,8 @@ namespace yask {
             them. Example: for an add operator, if the operands are 'a',
             'b', and 'c', then the expression is 'a + b + c'.
             @returns Number of operands. */
-        virtual int get_num_operands() =0;
+        virtual int
+        get_num_operands() =0;
 
         /// Get the specified operand.
         /** @returns Pointer to node at given position or null pointer if out of bounds. */
@@ -612,35 +683,81 @@ namespace yask {
     };
 
     /// An addition node.
+    /** Created via yc_node_factory::new_negate_node(). */
     class yc_add_node : public virtual yc_commutative_number_node { };
 
     /// A multiplication node.
+    /** Created via yc_node_factory::new_multiply_node(). */
     class yc_multiply_node : public virtual yc_commutative_number_node { };
 
     /// A subtraction node.
+    /** Created via yc_node_factory::new_subtract_node(). */
     class yc_subtract_node : public virtual yc_number_node {
     public:
 
         /// Get the left-hand-side operand.
         /** @returns Pointer to expression node appearing before the '-' sign. */
-        virtual yc_number_node_ptr get_lhs() =0;
+        virtual yc_number_node_ptr
+        get_lhs() =0;
     
         /// Get the right-hand-side operand.
         /** @returns Pointer to expression node appearing after the '-' sign. */
-        virtual yc_number_node_ptr get_rhs() =0;
+        virtual yc_number_node_ptr
+        get_rhs() =0;
     };
 
     /// A division node.
+    /** Created via yc_node_factory::new_divide_node(). */
     class yc_divide_node : public virtual yc_number_node {
     public:
 
         /// Get the left-hand-side operand.
         /** @returns Pointer to expression node appearing before the '/' sign. */
-        virtual yc_number_node_ptr get_lhs() =0;
+        virtual yc_number_node_ptr
+        get_lhs() =0;
     
         /// Get the right-hand-side operand.
         /** @returns Pointer to expression node appearing after the '/' sign. */
-        virtual yc_number_node_ptr get_rhs() =0;
+        virtual yc_number_node_ptr
+        get_rhs() =0;
+    };
+
+    /// A manual grouping of stencil equations.
+    /**
+       Created via yc_solution::new_equation_group().
+       See yc_solution::new_equation_group() for a description of
+       automatic versus manual grouping.
+
+       After a \ref yc_equation_group is processed by the YASK
+       compiler and the resulting kernel is compiled,
+       it will be visible as a \ref yk_stencil_group
+       in the corresponding YASK kernel.
+    */
+    class yc_equation_group {
+    public:
+
+        /// Get the name of this group.
+        /**
+           @returns Name created via yc_solution::new_equation_group().
+        */
+        virtual const std::string&
+        get_name() const =0;
+
+        /// Determine whether this group will be automatically scheduled.
+        /**
+           @returns `true` if this group will be run via yk_solution::run_solution()
+           or `false` if this group must be run via yk_solution::run_stencil_group().
+           This is the `do_schedule` setting passed via yc_solution::new_equation_group().
+        */
+        virtual bool
+        get_do_schedule() const =0;
+
+        /// Add an equation to this group.
+        virtual void
+        add_equation(yc_equation_node_ptr equation
+                     /**< [in] Pointer to equation to be added. */ ) =0;
+                                  
+    public:
     };
 
 } // namespace yask.

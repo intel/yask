@@ -538,11 +538,11 @@ namespace yask {
 
         os << "Stencil '" << _stencil.getName() << "' pseudo-code:" << endl;
 
-        // Loop through all eqGroups.
-        for (auto& eq : _eqGroups) {
+        // Loop through all eqBundles.
+        for (auto& eq : _eqBundles) {
 
             string egName = eq.getName();
-            os << endl << " ////// Equation group '" << egName <<
+            os << endl << " ////// Equation bundle '" << egName <<
                 "' //////" << endl;
 
             CounterVisitor cv;
@@ -579,9 +579,9 @@ namespace yask {
         os << "digraph \"Stencil " << _stencil.getName() << "\" {\n"
             "rankdir=LR; ranksep=1.5;\n";
 
-        // Loop through all eqGroups.
-        for (auto& eq : _eqGroups) {
-            os << "subgraph \"Equation-group " << eq.getName() << "\" {" << endl;
+        // Loop through all eqBundles.
+        for (auto& eq : _eqBundles) {
+            os << "subgraph \"Equation-bundle " << eq.getName() << "\" {" << endl;
             eq.visitEqs(pv);
             os << "}" << endl;
         }
@@ -602,8 +602,8 @@ namespace yask {
             "  look_at <0, 0, 0>" << endl <<
             "}" << endl;
 
-        // Loop through all eqGroups.
-        for (auto& eq : _eqGroups) {
+        // Loop through all eqBundles.
+        for (auto& eq : _eqBundles) {
 
             // TODO: separate mutiple grids.
             POVRayPrintVisitor pv(os);

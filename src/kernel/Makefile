@@ -269,7 +269,7 @@ NDIMS_OPT		:=	`cat $(YK_DIMS_FILE)`
 RANK_LOOP_OPTS		?=	$(NDIMS_OPT) -inVar rank_idxs
 RANK_LOOP_ORDER		?=	1 .. N-1
 RANK_LOOP_CODE		?=	$(RANK_LOOP_OUTER_MODS) loop($(RANK_LOOP_ORDER)) \
-				{ $(RANK_LOOP_INNER_MODS) call(calc_region(stGroup_ptr)); }
+				{ $(RANK_LOOP_INNER_MODS) call(calc_region(stBundle_ptr)); }
 
 # Region loops break up a region using OpenMP threading into blocks.  The
 # 'omp' modifier creates an outer OpenMP loop so that each block is assigned
@@ -326,7 +326,7 @@ MISC_LOOP_CODE		?=	$(MISC_LOOP_OUTER_MODS) loop($(MISC_LOOP_ORDER)) \
 # Flags passed to stencil compiler.
 YC_FLAGS   	+=	-stencil $(stencil) -elem-bytes $(real_bytes) -cluster $(cluster) -fold $(fold)
 ifneq ($(eqs),)
- YC_FLAGS   	+=	-eq-groups $(eqs)
+ YC_FLAGS   	+=	-eq-bundles $(eqs)
 endif
 ifneq ($(radius),)
  YC_FLAGS   	+=	-radius $(radius)

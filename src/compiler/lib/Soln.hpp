@@ -72,8 +72,8 @@ namespace yask {
 
         // Intermediate data needed to format output.
         Dimensions _dims;       // various dimensions.
-        EqGroups _eqGroups;     // eq-groups for scalar and vector.
-        EqGroups _clusterEqGroups; // eq-groups for scalar and vector.
+        EqBundles _eqBundles;     // eq-bundles for scalar and vector.
+        EqBundles _clusterEqBundles; // eq-bundles for scalar and vector.
 
         // Create the intermediate data.
         void analyze_solution(int vlen,

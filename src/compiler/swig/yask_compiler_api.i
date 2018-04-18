@@ -40,6 +40,7 @@ IN THE SOFTWARE.
 // Must declare shared_ptrs for the entire expr_node hierarchy!
 %shared_ptr(yask::yc_solution)
  //%shared_ptr(yask::yc_grid)
+%shared_ptr(yask::yc_equation_group)
 %shared_ptr(yask::yc_expr_node)
 %shared_ptr(yask::yc_index_node)
 %shared_ptr(yask::yc_equation_node)

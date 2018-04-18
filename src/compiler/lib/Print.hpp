@@ -434,15 +434,15 @@ namespace yask {
     protected:
         StencilSolution& _stencil;
         Grids& _grids;
-        EqGroups& _eqGroups;
+        EqBundles& _eqBundles;
         CompilerSettings& _settings;
         
     public:
         PrinterBase(StencilSolution& stencil,
-                    EqGroups& eqGroups) :
+                    EqBundles& eqBundles) :
             _stencil(stencil), 
             _grids(stencil.getGrids()),
-            _eqGroups(eqGroups),
+            _eqBundles(eqBundles),
             _settings(stencil.getSettings())
         { }
         virtual ~PrinterBase() { }
@@ -476,8 +476,8 @@ namespace yask {
         
     public:
         PseudoPrinter(StencilSolution& stencil,
-                      EqGroups& eqGroups) :
-            PrinterBase(stencil, eqGroups) { }
+                      EqBundles& eqBundles) :
+            PrinterBase(stencil, eqBundles) { }
         virtual ~PseudoPrinter() { }
 
         virtual void print(ostream& os);
@@ -489,9 +489,9 @@ namespace yask {
         bool _isSimple;
         
     public:
-        DOTPrinter(StencilSolution& stencil, EqGroups& eqGroups,
+        DOTPrinter(StencilSolution& stencil, EqBundles& eqBundles,
                    bool isSimple) :
-            PrinterBase(stencil, eqGroups),
+            PrinterBase(stencil, eqBundles),
             _isSimple(isSimple) { }
         virtual ~DOTPrinter() { }
 
@@ -502,8 +502,8 @@ namespace yask {
     class POVRayPrinter : public PrinterBase {
         
     public:
-        POVRayPrinter(StencilSolution& stencil, EqGroups& eqGroups) :
-            PrinterBase(stencil, eqGroups) { }
+        POVRayPrinter(StencilSolution& stencil, EqBundles& eqBundles) :
+            PrinterBase(stencil, eqBundles) { }
         virtual ~POVRayPrinter() { }
 
         virtual void print(ostream& os);

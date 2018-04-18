@@ -27,11 +27,11 @@ IN THE SOFTWARE.
 
 namespace yask {
     
-    /// Classes that support evaluation of one stencil group.
-    /// A stencil context contains one or more groups.
+    /// Classes that support evaluation of one stencil bundle.
+    /// A stencil context contains one or more bundles.
 
-    // A pure-virtual class base for a stencil group.
-    class StencilGroupBase : public BoundingBox {
+    // A pure-virtual class base for a stencil bundle.
+    class StencilBundleBase : public BoundingBox {
     protected:
         StencilContext* _generic_context = 0;
         std::string _name;
@@ -42,12 +42,12 @@ namespace yask {
         // Position of inner dim in stencil-dims tuple.
         int _inner_posn = 0;
 
-        // Other groups that this one depends on.
-        std::map<DepType, StencilGroupSet> _depends_on;
+        // Other bundles that this one depends on.
+        std::map<DepType, StencilBundleSet> _depends_on;
 
-        // List of scratch-grid groups that need to be evaluated
-        // before this group. Listed in eval order first-to-last.
-        StencilGroupList _scratch_deps;
+        // List of scratch-grid bundles that need to be evaluated
+        // before this bundle. Listed in eval order first-to-last.
+        StencilBundleList _scratch_deps;
 
         // Whether this updates scratch grid(s);
         bool _is_scratch = false;
@@ -71,7 +71,7 @@ namespace yask {
         ScratchVecs inputScratchVecs;
         
         // ctor, dtor.
-        StencilGroupBase(StencilContext* context) :
+        StencilBundleBase(StencilContext* context) :
             _generic_context(context) {
 
             // Make sure map entries exist.
@@ -91,7 +91,7 @@ namespace yask {
             }
         }
 
-        virtual ~StencilGroupBase() { }
+        virtual ~StencilBundleBase() { }
 
         // Access to dims and MPI info.
         virtual DimsPtr get_dims() const {
@@ -101,7 +101,7 @@ namespace yask {
             return _generic_context->get_mpi_info();
         }
 
-        // Get name of this group.
+        // Get name of this bundle.
         virtual const std::string& get_name() const { return _name; }
 
         // Get estimated number of FP ops done for one scalar eval.
@@ -116,32 +116,32 @@ namespace yask {
         virtual void set_scratch(bool is_scratch) { _is_scratch = is_scratch; }
         
         // Add dependency.
-        virtual void add_dep(DepType dt, StencilGroupBase* eg) {
+        virtual void add_dep(DepType dt, StencilBundleBase* eg) {
             _depends_on.at(dt).insert(eg);
         }
 
         // Get dependencies.
-        virtual const StencilGroupSet& get_deps(DepType dt) const {
+        virtual const StencilBundleSet& get_deps(DepType dt) const {
             return _depends_on.at(dt);
         }
 
-        // Add needed scratch-group.
-        virtual void add_scratch_dep(StencilGroupBase* eg) {
+        // Add needed scratch-bundle.
+        virtual void add_scratch_dep(StencilBundleBase* eg) {
             _scratch_deps.push_back(eg);
         }
 
-        // Get needed scratch-group(s).
-        virtual const StencilGroupList& get_scratch_deps() const {
+        // Get needed scratch-bundle(s).
+        virtual const StencilBundleList& get_scratch_deps() const {
             return _scratch_deps;
         }
 
-        // If this group is updating scratch grid(s),
+        // If this bundle is updating scratch grid(s),
         // expand indices to calculate values in halo.
         // Adjust offsets in grids based on original idxs.
         // Return adjusted indices.
         virtual ScanIndices adjust_scan(int thread_idx, const ScanIndices& idxs) const;
         
-        // Set the bounding-box vars for this group in this rank.
+        // Set the bounding-box vars for this bundle in this rank.
         virtual void find_bounding_box();
 
         // Determine whether indices are in [sub-]domain.

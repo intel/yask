@@ -94,9 +94,9 @@ namespace yask {
     };
     
     // Collections of things in a context.
-    class StencilGroupBase;
-    typedef std::vector<StencilGroupBase*> StencilGroupList;
-    typedef std::set<StencilGroupBase*> StencilGroupSet;
+    class StencilBundleBase;
+    typedef std::vector<StencilBundleBase*> StencilBundleList;
+    typedef std::set<StencilBundleBase*> StencilBundleSet;
     typedef std::map<std::string, YkGridPtr> GridPtrMap;
     
     // Data and hierarchical sizes.
@@ -155,10 +155,10 @@ namespace yask {
         // If WFs are not used, this is the same as rank_bb;
         BoundingBox ext_bb;
         
-        // List of all stencil groups in the order in which
+        // List of all stencil bundles in the order in which
         // they should be evaluated within a step.
         // TODO: use dependency info, allowing more parallelism.
-        StencilGroupList stGroups;
+        StencilBundleList stBundles;
 
         // All grids.
         GridPtrs gridPtrs;
@@ -189,7 +189,7 @@ namespace yask {
         // 'tot_' prefix indicates over all ranks.
         // 'domain' indicates points in domain-size specified on cmd-line.
         // 'numpts' indicates points actually calculated in sub-domains.
-        // 'reads' indicates points actually read by stencil-groups.
+        // 'reads' indicates points actually read by stencil-bundles.
         // 'numFpOps' indicates est. number of FP ops.
         // 'nbytes' indicates number of bytes allocated.
         // '_1t' suffix indicates work for one time-step.
@@ -518,20 +518,20 @@ namespace yask {
         // rank-domain loops; the actual begin_r* and end_r* values for the
         // region are derived from these.  TODO: create a public interface
         // w/a more logical index ordering.
-        virtual void calc_region(StencilGroupSet* stGroup_set,
+        virtual void calc_region(StencilBundleSet* stBundle_set,
                                  const ScanIndices& rank_idxs);
 
-        // Exchange all dirty halo data for all stencil groups
+        // Exchange all dirty halo data for all stencil bundles
         // and max number of steps for each grid.
         virtual void exchange_halos_all();
 
-        // Exchange halo data needed by stencil-group 'sg' at the given step(s).
-        virtual void exchange_halos(idx_t start, idx_t stop, StencilGroupBase& sg);
+        // Exchange halo data needed by stencil-bundle 'sg' at the given step(s).
+        virtual void exchange_halos(idx_t start, idx_t stop, StencilBundleBase& sg);
 
-        // Mark grids that have been written to by group 'sg'.
-        virtual void mark_grids_dirty(idx_t start, idx_t stop, StencilGroupBase& sg);
+        // Mark grids that have been written to by bundle 'sg'.
+        virtual void mark_grids_dirty(idx_t start, idx_t stop, StencilBundleBase& sg);
         
-        // Set the bounding-box around all eq groups.
+        // Set the bounding-box around all stencil bundles.
         virtual void find_bounding_boxes();
 
         // Make new scratch grids.
