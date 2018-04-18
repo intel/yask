@@ -31,6 +31,7 @@
 stencil		=	iso3dfd
 arch		=	snb
 mpi		=	1
+numa		=	1
 real_bytes	=	4
 radius		=	2
 ranks		= 	1
@@ -429,6 +430,19 @@ YK_LD		:=	$(YK_CXX)
 YK_LIBS		:=	-lrt
 YK_LFLAGS	:=	-Wl,-rpath=$(LIB_DIR) -L$(LIB_DIR) -l$(YK_BASE2)
 
+# Add options for NUMA.
+ifeq ($(numa),1)
+
+# Look for libnuma.
+# TODO: make this more portable.
+ifneq ($(wildcard /usr/lib64/libnuma.so),)
+ YK_LIBS	+=	-lnuma
+ MACROS		+=	USE_NUMA
+else ifneq ($(wildcard /usr/lib64/libnuma.so.1),)
+ YK_LIBS	+=	/usr/lib64/libnuma.so.1
+ MACROS		+=	USE_NUMA
+endif
+
 # Work-around missing numaif.h:
 # IF numaif.h is found in /usr/include,
 # THEN enable the macro to use it.
@@ -436,14 +450,6 @@ ifneq ($(shell find /usr/include -name 'numaif.h' | wc -l),0)
  MACROS		+=	USE_NUMAIF_H
 endif
 
-# Work-around missing libnuma.so:
-# IF libnuma.so.1 exists AND "normal" libnuma can't be found,
-# THEN use hard-coded libnuma.so.1,
-# ELSE use "normal" libnuma.
-ifeq ($(and $(wildcard /usr/lib64/libnuma.so.1),$(shell whereis libnuma |wc -w)),1)
- YK_LIBS	+=	/usr/lib64/libnuma.so.1
-else
- YK_LIBS	+=	-lnuma
 endif
 
 # Tools.
@@ -738,9 +744,9 @@ yk-test-no-yc: kernel-only
 # run the tests from the top-level Makefile.
 all-tests:
 	$(MAKE) clean; $(MAKE) stencil=test_3d fold=x=4,y=2 cxx-yk-grid-test
-	$(MAKE) clean; $(MAKE) stencil=test_1d yc-and-yk-test
 	$(MAKE) clean; $(MAKE) stencil=iso3dfd real_bytes=8 cxx-yk-api-test
 	$(MAKE) clean; $(MAKE) stencil=iso3dfd py-yk-api-test
+	$(MAKE) clean; $(MAKE) stencil=test_1d yc-and-yk-test
 	$(MAKE) clean; $(MAKE) stencil=3axis fold=x=4,y=2 yc-and-yk-test
 	$(MAKE) clean; $(MAKE) stencil=9axis fold=z=2 yc-and-yk-test
 	$(MAKE) clean; $(MAKE) stencil=3plane fold=y=2,z=4 yc-and-yk-test

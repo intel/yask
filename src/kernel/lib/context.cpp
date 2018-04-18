@@ -1158,34 +1158,30 @@ namespace yask {
                                      const std::string& type) {
         ostream& os = get_ostr();
 
-        // Get default NUMA node from settings.
-        int numa_def = _opts->_numa_pref;
-        
         for (const auto& i : nbytes) {
-            int np = i.first;
+            int numa_pref = i.first;
             size_t nb = i.second;
-            size_t ng = ngrids.at(np);
+            size_t ng = ngrids.at(numa_pref);
 
             // Don't need pad after last one.
             if (nb >= _data_buf_pad)
                 nb -= _data_buf_pad;
 
-            // What node?
-            int numa_pref = (np >= 0) ? np : numa_def;
-            
             // Allocate data.
             os << "Allocating " << makeByteStr(nb) <<
                 " for " << ng << " " << type << "(s)";
+#ifdef USE_NUMA
             if (numa_pref >= 0)
                 os << " preferring NUMA node " << numa_pref;
             else
                 os << " using NUMA policy " << numa_pref;
+#endif
             os << "...\n" << flush;
             auto p = shared_numa_alloc<char>(nb, numa_pref);
             TRACE_MSG("Got memory at " << static_cast<void*>(p.get()));
 
             // Save using original key.
-            data_buf[np] = p;
+            data_buf[numa_pref] = p;
         }
     }
     

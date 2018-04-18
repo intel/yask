@@ -630,8 +630,10 @@ namespace yask {
            Instead of specifying a NUMA node, a special value may be used
            to specify another policy as listed.
            This setting may be overridden for any specific grid.
+           @returns `true` if NUMA preference was set;
+           `false` if NUMA preferences are not enabled.
         */
-        virtual void
+        virtual bool
         set_default_numa_preferred(int numa_node
                                    /**< [in] Preferred NUMA node for data
                                       allocation.  Alternatively, use
