@@ -668,80 +668,6 @@ namespace yask {
         apply_command_line_options(const std::string& args
                                    /**< [in] String of arguments to parse. */ ) =0;
 
-        /// **[Advanced]** Get the specified stencil group.
-        /**
-           @returns Pointer to the specified \ref yk_stencil_group
-           or null pointer if it does not exist.
-        */
-        virtual yk_stencil_group_ptr
-        get_stencil_group(const std::string& name
-                          /**< [in] Name of the group. */ ) =0;
-
-        /// **[Advanced]** Get all the stencil groups.
-        /**
-           @returns List of all stencil groups in the solution.
-        */
-        virtual std::vector<yk_stencil_group_ptr>
-        get_stencil_groups() =0;
-
-        /// **[Advanced]** Run the specified stencil group over the given sub-domain.
-        /**
-           Applies all the stencil kernels in the given group
-           from `first_domain_indices` at `first_step_index`
-           to `last_domain_indices` at `last_domain_index` (inclusive) in each dimension.
-           Each list of domain indices should contain the indices for the 
-           dimensions returned by get_domain_dim_names() in the same order.
-
-           Indices are relative to the *overall* problem domain and
-           need not be limited to fall within the domain of the current MPI rank.
-           The actual points to which the group is applied on each rank will be
-           limited internally as needed.
-
-           Example C++ usage:
-
-           \code{.cpp}
-           // Find my custom stencil group created in the YASK compiler.
-           auto my_group = soln->get_stencil_group("my_group");
-           ...
-           soln->prepare_solution();
-           ...
-           // Set first_indices and last_indices to apply my_group
-           // to only the first slice in the "z" dimension.
-           std::vector<idx_t> first_indices, last_indices;
-           for (auto dim : soln->get_domain_dim_names()) {
-             auto overall_size = soln->get_overall_domain_size(dim);
-             first_indices.push_back(0);
-             if (dim == "z")
-               last_indices.push_back(0);
-             else
-               last_indices.push_back(overall_size - 1);
-           }
-           ...
-           // Execute the time-steps.
-           for (idx_t t = 0; t < num_steps; t++) {
-
-               // Apply the automatically-scheduled stencils.
-               soln->run_solution(t);
-
-               // Apply my custom stencil group.
-               soln->run_stencil_group(my_group, 
-                                       t, first_indices,
-                                       t, last_indices);
-           }
-           soln->end_solution();
-           \endcode
-
-           @returns Number of points to which the group was applied.
-        */
-        virtual idx_t
-        run_stencil_group(yk_stencil_group_ptr stencil_group
-                          /**< [in] Pointer to the stencil group obtained from
-                             get_stencil_groups() or get_stencil_group(). */,
-                          const std::vector<idx_t>& first_domain_indices
-                          /**< [in] List of initial domain indices. */,
-                          const std::vector<idx_t>& last_domain_indices
-                          /**< [in] List of final domain indices. */ ) =0;
-
         /// **[Advanced]** Use data-storage from existing grids in specified solution.
         /**
            Calls yk_grid::share_storage() for each pair of grids that have the same name
@@ -804,35 +730,6 @@ namespace yask {
         get_elapsed_run_secs() =0;
     };
     
-    /// A group of stencil kernels.
-    /**
-       Groups of stencils are created automatically by the YASK stencil compiler
-       or manually via yc_solution::new_equation_group(). See the latter for
-       more information.
-    */
-    class yk_stencil_group {
-    public:
-    	virtual ~yk_stencil_group() {}
-
-        /// Get the name of this group.
-        /**
-           @returns Default name given by the YASK stencil compiler
-           or the name provided via yc_solution::new_equation_group().
-        */
-        virtual const std::string&
-        get_name() const =0;
-
-        /// Determine whether this group will be automatically scheduled.
-        /**
-           @returns `true` if this group will be run via yk_solution::run_solution()
-           or `false` if this group must be run via yk_solution::run_stencil_group().
-           This is the `do_schedule` setting passed via yc_solution::new_equation_group().
-        */
-        virtual bool
-        is_scheduled() const =0;
-
-    };
-
 } // namespace yask.
 
 #endif

@@ -164,9 +164,11 @@ namespace yask {
         virtual int get_num_equations() const {
             return _eqs.getNumEqs();
         }
-        virtual yc_equation_node_ptr get_equation(int n) {
-            assert(n >= 0 && n < get_num_equations());
-            return _eqs.getEqs().at(n);
+        virtual std::vector<yc_equation_node_ptr> get_equations() {
+            std::vector<yc_equation_node_ptr> ev;
+            for (int i = 0; i < get_num_equations(); i++)
+                ev.push_back(_eqs.getEqs().at(i));
+            return ev;
         }
         virtual void set_fold(const std::string& dim, int len) {
             auto& fold = _settings._foldOptions;

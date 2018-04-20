@@ -662,12 +662,11 @@ namespace yask {
         virtual int get_num_operands() {
             return _ops.size();
         }
-        virtual yc_number_node_ptr get_operand(int i) {
-            if (i >= 0 &&
-                size_t(i) < _ops.size())
-                return _ops.at(size_t(i));
-            else
-                return nullptr;
+        virtual std::vector<yc_number_node_ptr> get_operands() {
+            std::vector<yc_number_node_ptr> nv;
+            for (int i = 0; i < get_num_operands(); i++)
+                nv.push_back(_ops.at(i));
+            return nv;
         }
         virtual void add_operand(yc_number_node_ptr node) {
             auto p = dynamic_pointer_cast<NumExpr>(node);

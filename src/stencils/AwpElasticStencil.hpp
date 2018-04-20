@@ -188,6 +188,7 @@ public:
               (2.0 / mu(x, y, z) + 1.0 / lambda(x, y, z))));
 
         // Define equivalencies to be valid only when z == last value in domain.
+        // This writes into the halo region.
         vel_x(t+1, x, y, z+1) EQUALS plus1_vel_x
             IF at_last_z;
         vel_y(t+1, x, y, z+1) EQUALS plus1_vel_y
@@ -265,15 +266,12 @@ public:
             ((mu_val * delta_t / h) * (d_xz_val + d_zx_val));
         adjust_for_sponge(next_stress_xz);
 
-        // define the value at t+1 (special case: zero at surface).
-#ifdef DO_SURFACE
+        // define the value at t+1.
         stress_xz(t+1, x, y, z) EQUALS next_stress_xz
-            IF !at_last_z;
-        stress_xz(t+1, x, y, z) EQUALS 0.0
-            IF at_last_z;
-#else
-        stress_xz(t+1, x, y, z) EQUALS next_stress_xz;
+#ifdef DO_SURFACE
+            IF !at_last_z
 #endif
+            ;
     }
     void define_stress_yz(Condition at_last_z) {
 
@@ -292,15 +290,12 @@ public:
             ((mu_val * delta_t / h) * (d_yz_val + d_zy_val));
         adjust_for_sponge(next_stress_yz);
 
-        // define the value at t+1 (special case: zero at surface).
-#ifdef DO_SURFACE
+        // define the value at t+1.
         stress_yz(t+1, x, y, z) EQUALS next_stress_yz
-            IF !at_last_z;
-        stress_yz(t+1, x, y, z) EQUALS 0.0
-            IF at_last_z;
-#else
-        stress_yz(t+1, x, y, z) EQUALS next_stress_yz;
+#ifdef DO_SURFACE
+            IF !at_last_z
 #endif
+            ;
     }
     void define_stress_zz(Condition at_last_z,
                           GridValue lambda_val, GridValue mu_val,
@@ -311,33 +306,30 @@ public:
                               (lambda_val * (d_x_val + d_y_val + d_z_val))));
         adjust_for_sponge(next_stress_zz);
 
-        // define the value at t+1 (special case: zero at surface).
-#ifdef DO_SURFACE
-        stress_zz(t+1, x, y, z) EQUALS next_stress_zz
-            IF !at_last_z;
-        stress_zz(t+1, x, y, z) EQUALS 0.0
-            IF at_last_z;
-#else
+        // define the value at t+1 (no special case at surface).
         stress_zz(t+1, x, y, z) EQUALS next_stress_zz;
-#endif
     }
 
     // Free-surface boundary equations for stress.
     void define_free_surface_stress(Condition at_last_z) {
 
         // Define equivalencies to be valid only when z == last value in domain.
-        // Note that values beyond the last index are updated, i.e., in the halo.
+        // This writes into the halo region.
 
         stress_zz(t+1, x, y, z+1) EQUALS -stress_zz(t+1, x, y, z)
             IF at_last_z;
         stress_zz(t+1, x, y, z+2) EQUALS -stress_zz(t+1, x, y, z-1)
             IF at_last_z;
 
+        stress_xz(t+1, x, y, z) EQUALS 0.0
+            IF at_last_z;
         stress_xz(t+1, x, y, z+1) EQUALS -stress_xz(t+1, x, y, z-1)
             IF at_last_z;
         stress_xz(t+1, x, y, z+2) EQUALS -stress_xz(t+1, x, y, z-2)
             IF at_last_z;
 
+        stress_yz(t+1, x, y, z) EQUALS 0.0
+            IF at_last_z;
         stress_yz(t+1, x, y, z+1) EQUALS -stress_yz(t+1, x, y, z-1)
             IF at_last_z;
         stress_yz(t+1, x, y, z+2) EQUALS -stress_yz(t+1, x, y, z-2)

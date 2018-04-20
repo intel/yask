@@ -44,12 +44,8 @@ namespace yask {
     typedef std::shared_ptr<yc_solution> yc_solution_ptr;
 
     class yc_grid;
-    /// Shared pointer to \ref yc_grid
+    /// Pointer to \ref yc_grid
     typedef yc_grid* yc_grid_ptr;
-
-    class yc_equation_group;
-    /// Shared pointer to \ref yc_equation_group;
-    typedef std::shared_ptr<yc_equation_group> yc_equation_group_ptr;
 
     // Forward declarations of expression nodes and their pointers.
 
@@ -105,7 +101,7 @@ namespace yask {
     /// Shared pointer to \ref yc_bool_node
     typedef std::shared_ptr<yc_bool_node> yc_bool_node_ptr;
 
-    /// Factory to create objects needed to define a stencil solution.
+    /// Bootstrap factory to create objects needed to define a stencil solution.
     class yc_factory {
     public:
         virtual ~yc_factory() {}
@@ -156,6 +152,16 @@ namespace yask {
         virtual void
         set_name(std::string name
                  /**< [in] Name; must be a valid C++ identifier. */ ) =0;
+
+        /// Get current floating-point precision setting.
+        /** @returns Number of bytes in a FP number. */
+        virtual int
+        get_element_bytes() const =0;
+
+        /// Set floating-point precision.
+        virtual void
+        set_element_bytes(int nbytes /**< [in] Number of bytes in a FP number.
+                                        Should be 4 or 8. */ ) =0;
 
         /// Create an n-dimensional grid variable in the solution.
         /**
@@ -237,64 +243,21 @@ namespace yask {
                             Each dimension is identified by an associated index. */ ) =0;
 #endif
         
-        /// Get all the grids in the solution.
-        /** @returns Vector containing pointer to all grids. */
-        virtual std::vector<yc_grid_ptr>
-        get_grids() =0;
-        
         /// Get the number of grids in the solution.
         /** @returns Number of grids that have been created via new_grid(). */
         virtual int
         get_num_grids() const =0;
+        
+        /// Get all the grids in the solution.
+        /** @returns Vector containing pointer to all grids. */
+        virtual std::vector<yc_grid_ptr>
+        get_grids() =0;
         
         /// Get the specified grid.
         /** @returns Pointer to the specified grid or null pointer if it does not exist. */
         virtual yc_grid_ptr
         get_grid(const std::string& name /**< [in] Name of the grid. */ ) =0;
         
-        /// Get the number of equations in the solution.
-        /** Equations are added when yc_node_factory::new_equation_node() is called.
-            @returns Number of equations that have been created. */
-        virtual int
-        get_num_equations() const =0;
-
-        /// Get the specified equation.
-        /** @returns Pointer to \ref yc_equation_node of nth equation. */
-        virtual yc_equation_node_ptr
-        get_equation(int n /**< [in] Index of equation between zero (0)
-                              and get_num_equations()-1. */ ) =0;
-
-        /// Create a new equation group.
-        /**
-           In normal usage, equation groups are created automatically when
-           format() is called.  Under automatic grouping, the YASK compiler
-           discovers dependencies between equations and places equations
-           together in a group if they do not depend upon one another.
-           Then, the YASK compiler schedules the resulting groups for
-           execution in the kernel based on the dependencies between groups.
-
-           A \ref yc_equation_group object allows manual grouping of equations.
-           Under manual grouping, the YASK compiler does _not_ check
-           for illegal dependencies within the group.
-           In addition, if `do_schedule` is `false`, the YASK compiler
-           will not check for dependencies with other groups and
-           will not schedule the group for execution in the kernel.
-           Then, it will be the programmer's responsibility to run the
-           stencil group via yk_solution::run_stencil_group().
-
-           This capability is useful for processing equations that
-           the YASK compiler cannot currently handle, like equations
-           with dependencies between different points of a grid
-           at the same step index.
-
-           @returns Pointer to the new \ref yc_equation_group object. 
-         */
-        virtual yc_equation_group_ptr
-        new_equation_group(const std::string& name
-                           /**< [in] Name of the group. */,
-                           bool do_schedule = true
-                           /**< [in] Schedule the group for execution in the kernel. */ ) =0;
-
         /// Set the vectorization length in given dimension.
         /** For YASK-code generation, the product of the fold lengths should
             be equal to the number of elements in a HW SIMD register.
@@ -321,16 +284,6 @@ namespace yask {
         virtual void
         clear_folding() =0;
 
-        /// Get current floating-point precision setting.
-        /** @returns Number of bytes in a FP number. */
-        virtual int
-        get_element_bytes() const =0;
-
-        /// Set floating-point precision.
-        virtual void
-        set_element_bytes(int nbytes /**< [in] Number of bytes in a FP number.
-                                        Should be 4 or 8. */ ) =0;
-
         /// Set the cluster multiplier (unroll factor) in given dimension.
         /** For YASK-code generation, this will have the effect of creating
             N vectors of output for each equation, where N is the product of
@@ -349,6 +302,18 @@ namespace yask {
         virtual void
         clear_clustering() =0;
         
+        /// Get the number of equations in the solution.
+        /** Equations are added when yc_node_factory::new_equation_node() is called.
+            @returns Number of equations that have been created. */
+        virtual int
+        get_num_equations() const =0;
+
+        /// Get a list of all the defined equations.
+        /** @returns Vector of containing pointers to all 
+            equations that have been created. */
+        virtual std::vector<yc_equation_node_ptr>
+        get_equations() =0;
+
         /// Format the current equation(s) and write to given output object.
         /** Currently supported format types:
             Type    | Output
@@ -395,12 +360,6 @@ namespace yask {
         /// Get the number of dimensions.
         /** @returns Number of dimensions created via new_grid(). */
         virtual int get_num_dims() const =0;
-
-        /// Get the name of the specified dimension.
-        /** @returns String containing name of dimension created via new_grid(). */
-        virtual const std::string&
-        get_dim_name(int n /**< [in] Index of dimension between zero (0)
-                              and get_num_dims()-1. */ ) const =0;
 
         /// Get all the dimensions in this grid.
         /**
@@ -584,7 +543,7 @@ namespace yask {
         virtual yc_number_node_ptr get_rhs() =0;
     };
 
-    /// Base class for all real or integer AST nodes.
+    /// Base class for all numerical AST nodes.
     /** An object of this abstract type cannot be created. */
     class yc_number_node : public virtual yc_expr_node { };
 
@@ -671,11 +630,10 @@ namespace yask {
         virtual int
         get_num_operands() =0;
 
-        /// Get the specified operand.
-        /** @returns Pointer to node at given position or null pointer if out of bounds. */
-        virtual yc_number_node_ptr
-        get_operand(int i /**< [in] Index between zero (0)
-                             and get_num_operands()-1. */ ) =0;
+        /// Get a list of the operands.
+        /** @returns Vector of pointers to all operand nodes. */
+        virtual std::vector<yc_number_node_ptr>
+        get_operands() =0;
 
         /// Add an operand.
         virtual void
@@ -720,44 +678,6 @@ namespace yask {
         /** @returns Pointer to expression node appearing after the '/' sign. */
         virtual yc_number_node_ptr
         get_rhs() =0;
-    };
-
-    /// A manual grouping of stencil equations.
-    /**
-       Created via yc_solution::new_equation_group().
-       See yc_solution::new_equation_group() for a description of
-       automatic versus manual grouping.
-
-       After a \ref yc_equation_group is processed by the YASK
-       compiler and the resulting kernel is compiled,
-       it will be visible as a \ref yk_stencil_group
-       in the corresponding YASK kernel.
-    */
-    class yc_equation_group {
-    public:
-
-        /// Get the name of this group.
-        /**
-           @returns Name created via yc_solution::new_equation_group().
-        */
-        virtual const std::string&
-        get_name() const =0;
-
-        /// Determine whether this group will be automatically scheduled.
-        /**
-           @returns `true` if this group will be run via yk_solution::run_solution()
-           or `false` if this group must be run via yk_solution::run_stencil_group().
-           This is the `do_schedule` setting passed via yc_solution::new_equation_group().
-        */
-        virtual bool
-        get_do_schedule() const =0;
-
-        /// Add an equation to this group.
-        virtual void
-        add_equation(yc_equation_node_ptr equation
-                     /**< [in] Pointer to equation to be added. */ ) =0;
-                                  
-    public:
     };
 
 } // namespace yask.

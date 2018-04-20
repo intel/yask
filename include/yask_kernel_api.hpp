@@ -60,10 +60,6 @@ namespace yask {
     /// Shared pointer to \ref yk_grid.
     typedef std::shared_ptr<yk_grid> yk_grid_ptr;
 
-    class yk_stencil_group;
-    /// Shared pointer to \ref yk_stencil_group.
-    typedef std::shared_ptr<yk_stencil_group> yk_stencil_group;
-
     class yk_stats;
     /// Shared pointer to \ref yk_stats.
     typedef std::shared_ptr<yk_stats> yk_stats_ptr;
@@ -75,7 +71,7 @@ namespace yask {
 
 namespace yask {
 
-    /// Factory to create a stencil solution.
+    /// Bootstrap factory to create a stencil solution.
     class yk_factory {
     public:
         virtual ~yk_factory() {}

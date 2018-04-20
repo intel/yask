@@ -43,7 +43,6 @@ IN THE SOFTWARE.
 %shared_ptr(yask::yk_settings)
 %shared_ptr(yask::yk_solution)
 %shared_ptr(yask::yk_grid)
-%shared_ptr(yask::yk_stencil_group)
 %shared_ptr(yask::yk_stats)
 
 // Mutable buffer to access raw data.
@@ -70,3 +69,5 @@ IN THE SOFTWARE.
 
 %include "yask_common_api.hpp"
 %include "yask_kernel_api.hpp"
+%include "yk_solution_api.hpp"
+%include "yk_grid_api.hpp"

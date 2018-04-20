@@ -40,7 +40,6 @@ IN THE SOFTWARE.
 // Must declare shared_ptrs for the entire expr_node hierarchy!
 %shared_ptr(yask::yc_solution)
  //%shared_ptr(yask::yc_grid)
-%shared_ptr(yask::yc_equation_group)
 %shared_ptr(yask::yc_expr_node)
 %shared_ptr(yask::yc_index_node)
 %shared_ptr(yask::yc_equation_node)
@@ -63,7 +62,9 @@ IN THE SOFTWARE.
 // All vector types used in API.
 %template(vector_int) std::vector<int>;
 %template(vector_str) std::vector<std::string>;
-%template(vector_index_ptr) std::vector<std::shared_ptr<yask::yc_index_node>>;
+%template(vector_index) std::vector<std::shared_ptr<yask::yc_index_node>>;
+%template(vector_num) std::vector<std::shared_ptr<yask::yc_number_node>>;
+%template(vector_eq) std::vector<std::shared_ptr<yask::yc_equation_node>>;
 %template(vector_grid) std::vector<yask::yc_grid*>;
 
 %exception {
