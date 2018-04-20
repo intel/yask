@@ -121,7 +121,6 @@ namespace yask {
     
         // Equations(s) describing how values in this grid are computed.
         EqList _eqs;          // just equations w/o conditions.
-        CondMap _conds;       // map from equations to their conditions, if any.
 
         EqDepMap _eq_deps;            // dependencies between all eqs.
         EqDeps::DepMap _scratch_deps;   // dependencies through scratch grids.
@@ -136,27 +135,11 @@ namespace yask {
             _eqs.insert(ep);
             _scratch_deps[ep];
         }
-        virtual void addCondEq(EqualsExprPtr ep, BoolExprPtr cond) {
-            addEq(ep);
-            _conds[ep.get()] = cond;
-        }
         virtual const EqList& getEqs() const {
             return _eqs;
         }
         virtual int getNumEqs() const {
             return _eqs.size();
-        }
-
-        // Get the condition associated with an expression.
-        // If there is no condition, a null pointer is returned.
-        virtual const BoolExprPtr getCond(EqualsExprPtr ep) {
-            return getCond(ep.get());
-        }
-        virtual const BoolExprPtr getCond(EqualsExpr* ep) {
-            if (_conds.count(ep))
-                return _conds.at(ep);
-            else
-                return nullptr;
         }
 
         // Get all the deps.

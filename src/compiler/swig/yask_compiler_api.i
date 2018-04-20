@@ -53,6 +53,15 @@ IN THE SOFTWARE.
 %shared_ptr(yask::yc_subtract_node)
 %shared_ptr(yask::yc_divide_node)
 %shared_ptr(yask::yc_bool_node)
+%shared_ptr(yask::yc_not_node)
+%shared_ptr(yask::yc_equals_node)
+%shared_ptr(yask::yc_not_equals_node)
+%shared_ptr(yask::yc_less_than_node)
+%shared_ptr(yask::yc_greater_than_node)
+%shared_ptr(yask::yc_not_less_than_node)
+%shared_ptr(yask::yc_not_greater_than_node)
+%shared_ptr(yask::yc_and_node)
+%shared_ptr(yask::yc_or_node)
 
 %{
 #define SWIG_FILE_WITH_INIT
@@ -78,3 +87,4 @@ IN THE SOFTWARE.
 
 %include "yask_common_api.hpp"
 %include "yask_compiler_api.hpp"
+%include "yc_nodes.hpp"

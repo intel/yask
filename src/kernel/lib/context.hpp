@@ -97,7 +97,6 @@ namespace yask {
     class StencilBundleBase;
     typedef std::vector<StencilBundleBase*> StencilBundleList;
     typedef std::set<StencilBundleBase*> StencilBundleSet;
-    typedef std::map<std::string, YkGridPtr> GridPtrMap;
     
     // Data and hierarchical sizes.
     // This is a pure-virtual class that must be implemented

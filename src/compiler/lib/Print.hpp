@@ -237,9 +237,6 @@ namespace yask {
         // A commutative operator.
         virtual void visit(CommutativeExpr* ce);
 
-        // A conditional operator.
-        virtual void visit(IfExpr* ie);
-
         // An equals operator.
         virtual void visit(EqualsExpr* ee);
     };
@@ -291,9 +288,6 @@ namespace yask {
         // A commutative operator.
         virtual void visit(CommutativeExpr* ce);
 
-        // A conditional operator.
-        virtual void visit(IfExpr* ie);
-
         // An equality.
         virtual void visit(EqualsExpr* ee);
     };
@@ -329,12 +323,6 @@ namespace yask {
     
         // A point.
         virtual void visit(GridPoint* gp);
-
-        // A conditional operator.
-        // Only visit expression.
-        virtual void visit(IfExpr* ie) {
-            ie->getExpr()->accept(this);
-        }
     };
 
     // Outputs a full GraphViz input file.
@@ -379,12 +367,6 @@ namespace yask {
         // A commutative operator.
         virtual void visit(CommutativeExpr* ce);
 
-        // A conditional operator.
-        // Only visit expression.
-        virtual void visit(IfExpr* ie) {
-            ie->getExpr()->accept(this);
-        }
-
         // An equals operator.
         virtual void visit(EqualsExpr* ee);
     };
@@ -415,12 +397,6 @@ namespace yask {
 
         // A commutative operator.
         virtual void visit(CommutativeExpr* ce);
-
-        // A conditional operator.
-        // Only visit expression.
-        virtual void visit(IfExpr* ie) {
-            ie->getExpr()->accept(this);
-        }
 
         // An equals operator.
         virtual void visit(EqualsExpr* ee);

@@ -111,8 +111,6 @@ namespace yask {
     typedef shared_ptr<BoolExpr> BoolExprPtr;
     class EqualsExpr;
     typedef shared_ptr<EqualsExpr> EqualsExprPtr;
-    class IfExpr;
-    typedef shared_ptr<IfExpr> IfExprPtr;
 
     // More forward-decls.
     class ExprVisitor;
@@ -129,6 +127,8 @@ namespace yask {
     // StencilSolution::define() method is called.
 
     // The base class for all expression nodes.
+    // NB: there is no clone() method defined here; they
+    // are defined on immediate derived types.
     class Expr : public virtual yc_expr_node {
 
     public:
@@ -183,7 +183,7 @@ namespace yask {
         }
     };
 
-    // Convert pointer to the given ptr type or die w/an error.
+    // Convert pointer to the given ptr type or die trying.
     template<typename T> shared_ptr<T> castExpr(ExprPtr ep, const string& descrip) {
         auto tp = dynamic_pointer_cast<T>(ep);
         if (!tp) {
@@ -236,6 +236,7 @@ namespace yask {
 
         // Return 'true' and set offset if this expr is of the form 'dim',
         // 'dim+const', or 'dim-const'.
+        // TODO: make this more robust.
         virtual bool isOffsetFrom(string dim, int& offset) {
             return false;
         }
@@ -327,7 +328,8 @@ namespace yask {
     };
     
     // Boolean value.
-    class BoolExpr : public Expr, public virtual yc_bool_node  {
+    class BoolExpr : public Expr,
+                     public virtual yc_bool_node  {
     public:
 
         // Get the current value.
@@ -345,7 +347,8 @@ namespace yask {
 
     // A simple constant value.
     // This is an expression leaf-node.
-    class ConstExpr : public NumExpr, public virtual yc_const_number_node {
+    class ConstExpr : public NumExpr,
+                      public virtual yc_const_number_node {
     protected:
         double _f = 0.0;
 
@@ -465,7 +468,8 @@ namespace yask {
     };
 
     // Boolean inverse operator.
-    class NotExpr : public UnaryBoolExpr {
+    class NotExpr : public UnaryBoolExpr,
+                    public virtual yc_not_node {
     public:
         NotExpr(BoolExprPtr rhs) :
             UnaryBoolExpr(opStr(), rhs) { }
@@ -479,6 +483,9 @@ namespace yask {
         }
         virtual BoolExprPtr clone() const {
             return make_shared<NotExpr>(*this);
+        }
+        virtual yc_bool_node_ptr get_rhs() {
+            return getRhs();
         }
     };
 
@@ -552,8 +559,9 @@ namespace yask {
 
 // Boolean binary operators with numerical inputs.
 // TODO: redo this with a template.
-#define BIN_NUM2BOOL_EXPR(type, opstr, oper)            \
-    class type : public BinaryNum2BoolExpr {            \
+#define BIN_NUM2BOOL_EXPR(type, implType, opstr, oper)  \
+    class type : public BinaryNum2BoolExpr,             \
+                 public virtual implType {              \
     public:                                             \
     type(NumExprPtr lhs, NumExprPtr rhs) :              \
         BinaryNum2BoolExpr(lhs, opStr(), rhs) { }       \
@@ -568,19 +576,26 @@ namespace yask {
     virtual BoolExprPtr clone() const {                 \
         return make_shared<type>(*this);                \
     }                                                   \
+    virtual yc_number_node_ptr get_lhs() {              \
+        return getLhs();                                \
+    }                                                   \
+    virtual yc_number_node_ptr get_rhs() {              \
+        return getRhs();                                \
+    }                                                   \
     }
-    BIN_NUM2BOOL_EXPR(IsEqualExpr, "==", lhs == rhs);
-    BIN_NUM2BOOL_EXPR(NotEqualExpr, "!=", lhs != rhs);
-    BIN_NUM2BOOL_EXPR(IsLessExpr, "<", lhs < rhs);
-    BIN_NUM2BOOL_EXPR(NotLessExpr, ">=", lhs >= rhs);
-    BIN_NUM2BOOL_EXPR(IsGreaterExpr, ">", lhs > rhs);
-    BIN_NUM2BOOL_EXPR(NotGreaterExpr, "<=", lhs <= rhs);
+    BIN_NUM2BOOL_EXPR(IsEqualExpr, yc_equals_node, "==", lhs == rhs);
+    BIN_NUM2BOOL_EXPR(NotEqualExpr, yc_not_equals_node, "!=", lhs != rhs);
+    BIN_NUM2BOOL_EXPR(IsLessExpr, yc_less_than_node, "<", lhs < rhs);
+    BIN_NUM2BOOL_EXPR(NotLessExpr, yc_not_less_than_node, ">=", lhs >= rhs);
+    BIN_NUM2BOOL_EXPR(IsGreaterExpr, yc_greater_than_node, ">", lhs > rhs);
+    BIN_NUM2BOOL_EXPR(NotGreaterExpr, yc_not_greater_than_node, "<=", lhs <= rhs);
 #undef BIN_NUM2BOOL_EXPR
 
     // Boolean binary operators with boolean inputs.
     // TODO: redo this with a template.
-#define BIN_BOOL_EXPR(type, opstr, oper)                \
-    class type : public BinaryBoolExpr {                \
+#define BIN_BOOL_EXPR(type, implType, opstr, oper)      \
+    class type : public BinaryBoolExpr, \
+                 public virtual implType {              \
     public:                                             \
     type(BoolExprPtr lhs, BoolExprPtr rhs) :            \
         BinaryBoolExpr(lhs, opStr(), rhs) { }           \
@@ -595,15 +610,22 @@ namespace yask {
     virtual BoolExprPtr clone() const {                 \
         return make_shared<type>(*this);                \
     }                                                   \
+    virtual yc_bool_node_ptr get_lhs() {                \
+        return getLhs();                                \
+    }                                                   \
+    virtual yc_bool_node_ptr get_rhs() {                \
+        return getRhs();                                \
+    }                                                   \
     }
-    BIN_BOOL_EXPR(AndExpr, "&&", lhs && rhs);
-    BIN_BOOL_EXPR(OrExpr, "||", lhs || rhs);
+    BIN_BOOL_EXPR(AndExpr, yc_and_node, "&&", lhs && rhs);
+    BIN_BOOL_EXPR(OrExpr, yc_or_node, "||", lhs || rhs);
 #undef BIN_BOOL_EXPR
 
     // A list of exprs with a common operator that can be rearranged,
     // e.g., 'a * b * c' or 'a + b + c'.
     // Still pure virtual because clone() not implemented.
-    class CommutativeExpr : public NumExpr, public virtual yc_commutative_number_node {
+    class CommutativeExpr : public NumExpr,
+                            public virtual yc_commutative_number_node {
     protected:
         NumExprPtrVec _ops;
         string _opStr;
@@ -876,25 +898,33 @@ namespace yask {
     
     // Equality operator for a grid point.
     // This defines the LHS as equal to the RHS; it is NOT
-    // a comparison operator.
-    // (Not inherited from BinaryExpr because LHS is special.)
-    class EqualsExpr : public UnaryNumExpr,
+    // a comparison operator; it is NOT an assignment operator.
+    // It also holds an optional condition.
+    class EqualsExpr : public Expr,
                        public virtual yc_equation_node {
     protected:
         GridPointPtr _lhs;
+        NumExprPtr _rhs;
+        BoolExprPtr _cond;
 
     public:
-        EqualsExpr(GridPointPtr lhs, NumExprPtr rhs) :
-            UnaryNumExpr(opStr(), rhs),
-            _lhs(lhs) { }
+        EqualsExpr(GridPointPtr lhs, NumExprPtr rhs, BoolExprPtr cond = nullptr) :
+            _lhs(lhs), _rhs(rhs), _cond(cond) { }
         EqualsExpr(const EqualsExpr& src) :
-            UnaryNumExpr(src),
-            _lhs(src._lhs->cloneGridPoint()) { }
+            _lhs(src._lhs->cloneGridPoint()),
+            _rhs(src._rhs->clone()),
+            _cond(src._cond->clone()) { }
 
         GridPointPtr& getLhs() { return _lhs; }
         const GridPointPtr& getLhs() const { return _lhs; }
-        static string opStr() { return "=="; }
+        NumExprPtr& getRhs() { return _rhs; }
+        const NumExprPtr& getRhs() const { return _rhs; }
+        BoolExprPtr& getCond() { return _cond; }
+        const BoolExprPtr& getCond() const { return _cond; }
+        void setCond(BoolExprPtr cond) { _cond = cond; }
         virtual void accept(ExprVisitor* ev);
+        static string exprOpStr() { return "EQUALS"; }
+        static string condOpStr() { return "IF"; }
 
         // Get pointer to grid on LHS or NULL if not set.
         virtual Grid* getGrid() {
@@ -907,52 +937,27 @@ namespace yask {
         virtual bool isSame(const Expr* other) const;
 
         // Create a deep copy of this expression.
-        virtual NumExprPtr clone() const { return make_shared<EqualsExpr>(*this); }
-        virtual EqualsExprPtr cloneEquals() const { return make_shared<EqualsExpr>(*this); }
+        virtual EqualsExprPtr clone() const { return make_shared<EqualsExpr>(*this); }
 
         // APIs.
-        virtual yc_grid_point_node_ptr get_lhs() {
-            return _lhs;
+        virtual yc_grid_point_node_ptr get_lhs() { return _lhs; }
+        virtual yc_number_node_ptr get_rhs() { return _rhs; }
+        virtual yc_bool_node_ptr get_cond() { return _cond; }
+        virtual void set_cond(yc_bool_node_ptr cond) {
+            if (cond) {
+                auto p = dynamic_pointer_cast<BoolExpr>(cond);
+                assert(p);
+                _cond = p;
+            } else
+                _cond = nullptr;
         }
-        virtual yc_number_node_ptr get_rhs() {
-            return _rhs;
-        }
-    };
-
-    // Conditional operator.
-    // (Not inherited from BinaryExpr because LHS is special.)
-    // Condition (RHS) will be NULL if there is no condition.
-    class IfExpr : public UnaryBoolExpr {
-    protected:
-        EqualsExprPtr _expr;
-
-    public:
-        IfExpr(EqualsExprPtr expr, const BoolExprPtr cond) :
-            UnaryBoolExpr(opStr(), cond),
-            _expr(expr) { }
-        IfExpr(const IfExpr& src) :
-            UnaryBoolExpr(src),
-            _expr(src._expr->cloneEquals()) { }
-
-        EqualsExprPtr& getExpr() { return _expr; }
-        const EqualsExprPtr& getExpr() const { return _expr; }
-        BoolExprPtr& getCond() { return getRhs(); }
-        const BoolExprPtr& getCond() const { return getRhs(); }
-        static string opStr() { return "IF"; }
-        virtual void accept(ExprVisitor* ev);
-
-        // Check for equivalency.
-        virtual bool isSame(const Expr* other) const;
-
-        // Create a deep copy of this expression.
-        virtual BoolExprPtr clone() const { return make_shared<IfExpr>(*this); }
     };
 
     // A conditional evaluation.
     // We use an otherwise unneeded binary operator that has a low priority.
     // See http://en.cppreference.com/w/cpp/language/operator_precedence.
 #define IF_OPER ^=
-    IfExprPtr operator IF_OPER(EqualsExprPtr expr, const BoolExprPtr cond);
+    EqualsExprPtr operator IF_OPER(EqualsExprPtr expr, const BoolExprPtr cond);
 #define IF IF_OPER
 
     ///// The following are operators and functions used in stencil expressions.
@@ -996,7 +1001,7 @@ namespace yask {
     // Binary numerical-to-boolean operators.
     // Must provide explicit IndexExprPtr operands to keep compiler from
     // using built-in pointer comparison.
-#define BOOL_OPER(oper, type) \
+#define BOOL_OPER(oper, type, implType)                                          \
     inline BoolExprPtr operator oper(const NumExprPtr lhs, const NumExprPtr rhs) { \
         return make_shared<type>(lhs, rhs); } \
     inline BoolExprPtr operator oper(const IndexExprPtr lhs, const NumExprPtr rhs) { \
@@ -1006,12 +1011,12 @@ namespace yask {
     inline BoolExprPtr operator oper(const IndexExprPtr lhs, const IndexExprPtr rhs) { \
         return make_shared<type>(lhs, rhs); }
 
-    BOOL_OPER(==, IsEqualExpr)
-    BOOL_OPER(!=, NotEqualExpr)
-    BOOL_OPER(<, IsLessExpr)
-    BOOL_OPER(>, IsGreaterExpr)
-    BOOL_OPER(<=, NotGreaterExpr)
-    BOOL_OPER(>=, NotLessExpr)
+    BOOL_OPER(==, IsEqualExpr, yc_equals_node)
+    BOOL_OPER(!=, NotEqualExpr, yc_not_equals_node)
+    BOOL_OPER(<, IsLessExpr, yc_less_than_node)
+    BOOL_OPER(>, IsGreaterExpr, yc_greater_than_node)
+    BOOL_OPER(<=, NotGreaterExpr, yc_not_greater_than_node)
+    BOOL_OPER(>=, NotLessExpr, yc_not_less_than_node)
 
     // Logical operators.
     inline BoolExprPtr operator&&(const BoolExprPtr lhs, const BoolExprPtr rhs) {

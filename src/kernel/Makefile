@@ -743,22 +743,22 @@ yk-test-no-yc: kernel-only
 # For testing both the kernel and compiler in various combinations,
 # run the tests from the top-level Makefile.
 all-tests:
-	$(MAKE) clean; $(MAKE) stencil=test_3d fold=x=4,y=2 cxx-yk-grid-test
-	$(MAKE) clean; $(MAKE) stencil=iso3dfd real_bytes=8 cxx-yk-api-test
-	$(MAKE) clean; $(MAKE) stencil=iso3dfd py-yk-api-test
-	$(MAKE) clean; $(MAKE) stencil=test_1d yc-and-yk-test
-	$(MAKE) clean; $(MAKE) stencil=3axis fold=x=4,y=2 yc-and-yk-test
-	$(MAKE) clean; $(MAKE) stencil=9axis fold=z=2 yc-and-yk-test
-	$(MAKE) clean; $(MAKE) stencil=3plane fold=y=2,z=4 yc-and-yk-test
-	$(MAKE) clean; $(MAKE) stencil=cube fold=x=2,y=2,z=2 yc-and-yk-test
-	$(MAKE) clean; $(MAKE) stencil=test_4d fold=w=2,x=2,y=2,z=2 yc-and-yk-test
-	$(MAKE) clean; $(MAKE) stencil=test_scratch1 real_bytes=8 fold=x=4 yc-and-yk-test
-	$(MAKE) clean; $(MAKE) stencil=test_scratch2 real_bytes=8 fold=x=2,y=1,z=2 yc-and-yk-test
-	$(MAKE) clean; $(MAKE) stencil=iso3dfd fold=x=4,y=2 yc-and-yk-test
-	$(MAKE) clean; $(MAKE) stencil=awp_elastic real_bytes=8 yc-and-yk-test
-	$(MAKE) clean; $(MAKE) stencil=ssg real_bytes=8 yc-and-yk-test
-	$(MAKE) clean; $(MAKE) stencil=fsg_abc real_bytes=8 yc-and-yk-test
-	$(MAKE) clean; $(MAKE) stencil=fsg2 real_bytes=8 yc-and-yk-test
+	$(MAKE) clean; $(MAKE) cxx-yk-grid-test stencil=test_3d fold=x=4,y=2 
+	$(MAKE) clean; $(MAKE) cxx-yk-api-test real_bytes=8 stencil=iso3dfd
+	$(MAKE) clean; $(MAKE) py-yk-api-test stencil=iso3dfd
+	$(MAKE) clean; $(MAKE) yc-and-yk-test real_bytes=8 stencil=test_1d
+	$(MAKE) clean; $(MAKE) yc-and-yk-test real_bytes=8 stencil=3axis fold=x=2,y=2
+	$(MAKE) clean; $(MAKE) yc-and-yk-test real_bytes=8 stencil=9axis fold=x=2,z=2
+	$(MAKE) clean; $(MAKE) yc-and-yk-test real_bytes=8 stencil=3plane fold=y=2,z=2
+	$(MAKE) clean; $(MAKE) yc-and-yk-test real_bytes=8 stencil=cube fold=x=2,y=2
+	$(MAKE) clean; $(MAKE) yc-and-yk-test real_bytes=8 stencil=test_4d fold=w=2,x=2
+	$(MAKE) clean; $(MAKE) yc-and-yk-test real_bytes=8 stencil=test_scratch1 fold=x=4
+	$(MAKE) clean; $(MAKE) yc-and-yk-test real_bytes=8 stencil=test_scratch2 fold=x=2,z=2
+	$(MAKE) clean; $(MAKE) yc-and-yk-test real_bytes=8 stencil=iso3dfd fold=x=2,y=2
+	$(MAKE) clean; $(MAKE) yc-and-yk-test real_bytes=8 stencil=awp_elastic
+	$(MAKE) clean; $(MAKE) yc-and-yk-test real_bytes=8 stencil=ssg
+	$(MAKE) clean; $(MAKE) yc-and-yk-test real_bytes=8 stencil=fsg_abc
+	$(MAKE) clean; $(MAKE) yc-and-yk-test real_bytes=8 stencil=fsg2
 
 all:
 	$(MAKE) kernel

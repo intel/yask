@@ -98,7 +98,8 @@ if __name__ == "__main__":
     soln.format("avx", yask_file)
     print("YASK-format written to '" + yask_file.get_filename() + "'.")
 
-    print("Equation after formatting: " + soln.get_equation(0).format_simple())
+    for eq in soln.get_equations() :
+        print("Equation after formatting: " + eq.format_simple())
 
     print("Debug output captured:\n" + do.get_string())
     print("End of YASK compiler API test.")

@@ -340,6 +340,7 @@ namespace yask {
     typedef std::shared_ptr<YkGridBase> YkGridPtr;
     typedef std::set<YkGridPtr> GridPtrSet;
     typedef std::vector<YkGridPtr> GridPtrs;
+    typedef std::map<std::string, YkGridPtr> GridPtrMap;
     typedef std::vector<GridPtrs*> ScratchVecs;
     
     // Environmental settings.
