@@ -97,7 +97,6 @@ namespace yask {
     class StencilGroupBase;
     typedef std::vector<StencilGroupBase*> StencilGroupList;
     typedef std::set<StencilGroupBase*> StencilGroupSet;
-    typedef std::map<std::string, YkGridPtr> GridPtrMap;
     
     // Data and hierarchical sizes.
     // This is a pure-virtual class that must be implemented

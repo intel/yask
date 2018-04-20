@@ -35,8 +35,10 @@ IN THE SOFTWARE.
 //#define FULL_SPONGE_GRID
 
 // Set the following macro to calculate free-surface boundary values.
-// This feature is currently under development.
-//#define DO_SURFACE
+#define DO_ABOVE_SURFACE
+
+// Set the following macro to use intermediate scratch grids.
+#define USE_SCRATCH_GRIDS
 
 #include "Soln.hpp"
 
@@ -86,6 +88,25 @@ protected:
     MAKE_SCALAR(delta_t);
     MAKE_SCALAR(h);
 
+    // For the surface stress conditions, we need to write into 2 points
+    // above the surface.  Since we can only write into the "domain", we
+    // will define the surface index to be 2 points before the last domain
+    // index. Thus, there will be two layers in the domain above the surface.
+#define SURFACE_IDX (last_index(z) - 2)
+    
+    // Define some sub-domains related to the surface.
+#define IF_BELOW_SURFACE IF (z < SURFACE_IDX)
+#define IF_AT_SURFACE IF (z == SURFACE_IDX)
+#define IF_AT_OR_BELOW_SURFACE IF (z <= SURFACE_IDX)
+#define IF_ONE_ABOVE_SURFACE IF (z == SURFACE_IDX + 1)
+#define IF_TWO_ABOVE_SURFACE IF (z == SURFACE_IDX + 2)
+
+#ifdef USE_SCRATCH_GRIDS
+        MAKE_SCRATCH_GRID(tmp_vel_x, x, y, z);
+        MAKE_SCRATCH_GRID(tmp_vel_y, x, y, z);
+        MAKE_SCRATCH_GRID(tmp_vel_z, x, y, z);
+#endif
+    
 public:
 
     AwpElasticStencil(StencilList& stencils) :
@@ -107,7 +128,7 @@ public:
     // time or space, so half-steps due to staggered grids are adjusted
     // appropriately.
 
-    void define_vel_x(Condition at_last_z) {
+    GridValue get_next_vel_x(GridIndex x, GridIndex y, GridIndex z) {
         GridValue rho_val = (rho(x, y,   z  ) +
                              rho(x, y-1, z  ) +
                              rho(x, y,   z-1) +
@@ -122,10 +143,10 @@ public:
         GridValue next_vel_x = vel_x(t, x, y, z) + (delta_t / (h * rho_val)) * d_val;
         adjust_for_sponge(next_vel_x);
 
-        // define the value at t+1.
-        vel_x(t+1, x, y, z) EQUALS next_vel_x;
+        // Return the value at t+1.
+        return next_vel_x;
     }
-    void define_vel_y(Condition at_last_z) {
+    GridValue get_next_vel_y(GridIndex x, GridIndex y, GridIndex z) {
         GridValue rho_val = (rho(x,   y, z  ) +
                              rho(x+1, y, z  ) +
                              rho(x,   y, z-1) +
@@ -140,10 +161,10 @@ public:
         GridValue next_vel_y = vel_y(t, x, y, z) + (delta_t / (h * rho_val)) * d_val;
         adjust_for_sponge(next_vel_y);
 
-        // define the value at t+1.
-        vel_y(t+1, x, y, z) EQUALS next_vel_y;
+        // Return the value at t+1.
+        return next_vel_y;
     }
-    void define_vel_z(Condition at_last_z) {
+    GridValue get_next_vel_z(GridIndex x, GridIndex y, GridIndex z) {
         GridValue rho_val = (rho(x,   y,   z) +
                              rho(x+1, y,   z) +
                              rho(x,   y-1, z) +
@@ -158,42 +179,100 @@ public:
         GridValue next_vel_z = vel_z(t, x, y, z) + (delta_t / (h * rho_val)) * d_val;
         adjust_for_sponge(next_vel_z);
 
-        // define the value at t+1.
-        vel_z(t+1, x, y, z) EQUALS next_vel_z;
+        // Return the value at t+1.
+        return next_vel_z;
     }
 
     // Free-surface boundary equations for velocity.
-    void define_free_surface_vel(Condition at_last_z) {
+    void define_free_surface_vel() {
 
-        // Following expressions are valid only when z == last value in domain.
-        // Note that values beyond the last index are updated, i.e., in the halo.
-        
+        // Since we're defining points when z == surface + 1,
+        // the surface itself will be at z - 1;
+        GridIndex surf = z - 1;
+
+#ifdef USE_SCRATCH_GRIDS
+
+        // The values for velocity at t+1 will be needed
+        // in multiple free-surface calculations.
+        // Thus, it will reduce the number of FP ops
+        // required if we pre-compute them and store them
+        // in scratch grids.
+#define VEL_X tmp_vel_x
+#define VEL_Y tmp_vel_y
+#define VEL_Z tmp_vel_z
+        VEL_X(x, y, z) EQUALS get_next_vel_x(x, y, z);
+        VEL_Y(x, y, z) EQUALS get_next_vel_y(x, y, z);
+        VEL_Z(x, y, z) EQUALS get_next_vel_z(x, y, z);
+
+#else
+
+        // If not using scratch grids, just call the
+        // functions to calculate each value of velocity
+        // at t+1 every time it's needed.
+#define VEL_X get_next_vel_x
+#define VEL_Y get_next_vel_y
+#define VEL_Z get_next_vel_z
+#endif
+
         // A couple of intermediate values.
-        GridValue d_x_val = vel_x(t+1, x+1, y, z) -
-            (vel_z(t+1, x+1, y, z) - vel_z(t+1, x, y, z));
-        GridValue d_y_val = vel_y(t+1, x, y-1, z) -
-            (vel_z(t+1, x, y, z) - vel_z(t+1, x, y-1, z));
+        GridValue d_x_val = VEL_X(x+1, y, surf) -
+            (VEL_Z(x+1, y, surf) - VEL_Z(x, y, surf));
+        GridValue d_y_val = VEL_Y(x, y-1, surf) -
+            (VEL_Z(x, y, surf) - VEL_Z(x, y-1, surf));
         
-        // Following values are valid at the free surface.
-        GridValue plus1_vel_x = vel_x(t+1, x, y, z) -
-            (vel_z(t+1, x, y, z) - vel_z(t+1, x-1, y, z));
-        GridValue plus1_vel_y = vel_y(t+1, x, y, z) -
-            (vel_z(t+1, x, y+1, z) - vel_z(t+1, x, y, z));
-        GridValue plus1_vel_z = vel_z(t+1, x, y, z) -
+        // Following values are valid one layer above the free surface.
+        GridValue plus1_vel_x = VEL_X(x, y, surf) -
+            (VEL_Z(x, y, surf) - VEL_Z(x-1, y, surf));
+        GridValue plus1_vel_y = VEL_Y(x, y, surf) -
+            (VEL_Z(x, y+1, surf) - VEL_Z(x, y, surf));
+        GridValue plus1_vel_z = VEL_Z(x, y, surf) -
             ((d_x_val - plus1_vel_x) +
-             (vel_x(t+1, x+1, y, z) - vel_x(t+1, x, y, z)) +
+             (VEL_X(x+1, y, surf) - VEL_X(x, y, surf)) +
              (plus1_vel_y - d_y_val) +
-             (vel_y(t+1, x, y, z) - vel_y(t+1, x, y-1, z))) /
-            ((mu(x, y, z) *
-              (2.0 / mu(x, y, z) + 1.0 / lambda(x, y, z))));
+             (VEL_Y(x, y, surf) - VEL_Y(x, y-1, surf))) /
+            ((mu(x, y, surf) *
+              (2.0 / mu(x, y, surf) + 1.0 / lambda(x, y, surf))));
+#undef VEL_X
+#undef VEL_Y
+#undef VEL_Z
+        
+        // Define layer at one point above surface.
+        vel_x(t+1, x, y, z) EQUALS plus1_vel_x IF_ONE_ABOVE_SURFACE;
+        vel_y(t+1, x, y, z) EQUALS plus1_vel_y IF_ONE_ABOVE_SURFACE;
+        vel_z(t+1, x, y, z) EQUALS plus1_vel_z IF_ONE_ABOVE_SURFACE;
 
-        // Define equivalencies to be valid only when z == last value in domain.
-        vel_x(t+1, x, y, z+1) EQUALS plus1_vel_x
-            IF at_last_z;
-        vel_y(t+1, x, y, z+1) EQUALS plus1_vel_y
-            IF at_last_z;
-        vel_z(t+1, x, y, z+1) EQUALS plus1_vel_z
-            IF at_last_z;
+        // Define layer two points above surface for completeness, even
+        // though these aren't input to any stencils.
+        vel_x(t+1, x, y, z) EQUALS 0.0 IF_TWO_ABOVE_SURFACE;
+        vel_y(t+1, x, y, z) EQUALS 0.0 IF_TWO_ABOVE_SURFACE;
+        vel_z(t+1, x, y, z) EQUALS 0.0 IF_TWO_ABOVE_SURFACE;
+    }
+
+    // Compute average of 8 neighbors.
+    GridValue ave8(Grid& g, GridIndex x, GridIndex y, GridIndex z) {
+        
+        return 8.0 /
+            (g(x,   y,   z  ) + g(x+1, y,   z  ) +
+             g(x,   y-1, z  ) + g(x+1, y-1, z  ) +
+             g(x,   y,   z-1) + g(x+1, y,   z-1) +
+             g(x,   y-1, z-1) + g(x+1, y-1, z-1));
+    }
+
+    // Some common velocity calculations.
+    GridValue d_x_val(GridIndex x, GridIndex y, GridIndex z) {
+        return
+            c1 * (vel_x(t+1, x+1, y,   z  ) - vel_x(t+1, x,   y,   z  )) +
+            c2 * (vel_x(t+1, x+2, y,   z  ) - vel_x(t+1, x-1, y,   z  ));
+    }
+    GridValue d_y_val(GridIndex x, GridIndex y, GridIndex z) {
+        return
+            c1 * (vel_y(t+1, x,   y,   z  ) - vel_y(t+1, x,   y-1, z  )) +
+            c2 * (vel_y(t+1, x,   y+1, z  ) - vel_y(t+1, x,   y-2, z  ));
+    }
+    GridValue d_z_val(GridIndex x, GridIndex y, GridIndex z) {
+        return
+            c1 * (vel_z(t+1, x,   y,   z  ) - vel_z(t+1, x,   y,   z-1)) +
+            c2 * (vel_z(t+1, x,   y,   z+1) - vel_z(t+1, x,   y,   z-2));
     }
     
     // Stress-grid define functions.  For each D in xx, yy, zz, xy, xz, yz,
@@ -204,33 +283,43 @@ public:
     // space, so half-steps due to staggered grids are adjusted
     // appropriately.
 
-    void define_stress_xx(Condition at_last_z,
-                          GridValue lambda_val, GridValue mu_val,
-                          GridValue d_x_val, GridValue d_y_val, GridValue d_z_val) {
+    GridValue get_next_stress_xx(GridIndex x, GridIndex y, GridIndex z) {
 
         GridValue next_stress_xx = stress_xx(t, x, y, z) +
-            ((delta_t / h) * ((2 * mu_val * d_x_val) +
-                              (lambda_val * (d_x_val + d_y_val + d_z_val))));
+            ((delta_t / h) * ((2 * ave8(mu, x, y, z) * d_x_val(x, y, z)) +
+                              (ave8(lambda, x, y, z) *
+                               (d_x_val(x, y, z) + d_y_val(x, y, z) + d_z_val(x, y, z)))));
         adjust_for_sponge(next_stress_xx);
 
-        // define the value at t+1.
-        stress_xx(t+1, x, y, z) EQUALS next_stress_xx;
+        // Return the value at t+1.
+        return next_stress_xx;
     }
-    void define_stress_yy(Condition at_last_z,
-                          GridValue lambda_val, GridValue mu_val,
-                          GridValue d_x_val, GridValue d_y_val, GridValue d_z_val) {
+    GridValue get_next_stress_yy(GridIndex x, GridIndex y, GridIndex z) {
 
         GridValue next_stress_yy = stress_yy(t, x, y, z) +
-            ((delta_t / h) * ((2 * mu_val * d_y_val) +
-                              (lambda_val * (d_x_val + d_y_val + d_z_val))));
+            ((delta_t / h) * ((2 * ave8(mu, x, y, z) * d_y_val(x, y, z)) +
+                              (ave8(lambda, x, y, z) *
+                               (d_x_val(x, y, z) + d_y_val(x, y, z) + d_z_val(x, y, z)))));
         adjust_for_sponge(next_stress_yy);
 
-        // define the value at t+1.
-        stress_yy(t+1, x, y, z) EQUALS next_stress_yy;
+        // Return the value at t+1.
+        return next_stress_yy;
     }
-    void define_stress_xy(Condition at_last_z) {
+    GridValue get_next_stress_zz(GridIndex x, GridIndex y, GridIndex z) {
 
-        GridValue mu_val = 2.0 /
+        GridValue next_stress_zz = stress_zz(t, x, y, z) +
+            ((delta_t / h) * ((2 * ave8(mu, x, y, z) * d_z_val(x, y, z)) +
+                              (ave8(lambda, x, y, z) *
+                               (d_x_val(x, y, z) + d_y_val(x, y, z) + d_z_val(x, y, z)))));
+        adjust_for_sponge(next_stress_zz);
+
+        // return the value at t+1.
+        return next_stress_zz;
+    }
+    GridValue get_next_stress_xy(GridIndex x, GridIndex y, GridIndex z) {
+
+        // Compute average of 2 neighbors.
+        GridValue mu2 = 2.0 /
             (mu(x,   y,   z  ) + mu(x,   y,   z-1));
 
         // Note that we are using the velocity values at t+1.
@@ -242,15 +331,16 @@ public:
             c2 * (vel_y(t+1, x+1, y,   z  ) - vel_y(t+1, x-2, y,   z  ));
 
         GridValue next_stress_xy = stress_xy(t, x, y, z) +
-            ((mu_val * delta_t / h) * (d_xy_val + d_yx_val));
+            ((mu2 * delta_t / h) * (d_xy_val + d_yx_val));
         adjust_for_sponge(next_stress_xy);
 
-        // define the value at t+1.
-        stress_xy(t+1, x, y, z) EQUALS next_stress_xy;
+        // return the value at t+1.
+        return next_stress_xy;
     }
-    void define_stress_xz(Condition at_last_z) {
+    GridValue get_next_stress_xz(GridIndex x, GridIndex y, GridIndex z) {
 
-        GridValue mu_val = 2.0 /
+        // Compute average of 2 neighbors.
+        GridValue mu2 = 2.0 /
             (mu(x,   y,   z  ) + mu(x,   y-1, z  ));
 
         // Note that we are using the velocity values at t+1.
@@ -262,22 +352,16 @@ public:
             c2 * (vel_z(t+1, x+1, y,   z  ) - vel_z(t+1, x-2, y,   z  ));
 
         GridValue next_stress_xz = stress_xz(t, x, y, z) +
-            ((mu_val * delta_t / h) * (d_xz_val + d_zx_val));
+            ((mu2 * delta_t / h) * (d_xz_val + d_zx_val));
         adjust_for_sponge(next_stress_xz);
 
-        // define the value at t+1 (special case: zero at surface).
-#ifdef DO_SURFACE
-        stress_xz(t+1, x, y, z) EQUALS next_stress_xz
-            IF !at_last_z;
-        stress_xz(t+1, x, y, z) EQUALS 0.0
-            IF at_last_z;
-#else
-        stress_xz(t+1, x, y, z) EQUALS next_stress_xz;
-#endif
+        // return the value at t+1.
+        return next_stress_xz;
     }
-    void define_stress_yz(Condition at_last_z) {
+    GridValue get_next_stress_yz(GridIndex x, GridIndex y, GridIndex z) {
 
-        GridValue mu_val = 2.0 /
+        // Compute average of 2 neighbors.
+        GridValue mu2 = 2.0 /
             (mu(x,   y,   z  ) + mu(x+1, y,   z  ));
 
         // Note that we are using the velocity values at t+1.
@@ -289,122 +373,79 @@ public:
             c2 * (vel_z(t+1, x,   y+2, z  ) - vel_z(t+1, x,   y-1, z  ));
 
         GridValue next_stress_yz = stress_yz(t, x, y, z) +
-            ((mu_val * delta_t / h) * (d_yz_val + d_zy_val));
+            ((mu2 * delta_t / h) * (d_yz_val + d_zy_val));
         adjust_for_sponge(next_stress_yz);
 
-        // define the value at t+1 (special case: zero at surface).
-#ifdef DO_SURFACE
-        stress_yz(t+1, x, y, z) EQUALS next_stress_yz
-            IF !at_last_z;
-        stress_yz(t+1, x, y, z) EQUALS 0.0
-            IF at_last_z;
-#else
-        stress_yz(t+1, x, y, z) EQUALS next_stress_yz;
-#endif
-    }
-    void define_stress_zz(Condition at_last_z,
-                          GridValue lambda_val, GridValue mu_val,
-                          GridValue d_x_val, GridValue d_y_val, GridValue d_z_val) {
-
-        GridValue next_stress_zz = stress_zz(t, x, y, z) +
-            ((delta_t / h) * ((2 * mu_val * d_z_val) +
-                              (lambda_val * (d_x_val + d_y_val + d_z_val))));
-        adjust_for_sponge(next_stress_zz);
-
-        // define the value at t+1 (special case: zero at surface).
-#ifdef DO_SURFACE
-        stress_zz(t+1, x, y, z) EQUALS next_stress_zz
-            IF !at_last_z;
-        stress_zz(t+1, x, y, z) EQUALS 0.0
-            IF at_last_z;
-#else
-        stress_zz(t+1, x, y, z) EQUALS next_stress_zz;
-#endif
+        // return the value at t+1.
+        return next_stress_yz;
     }
 
     // Free-surface boundary equations for stress.
-    void define_free_surface_stress(Condition at_last_z) {
+    void define_free_surface_stress() {
 
-        // Define equivalencies to be valid only when z == last value in domain.
-        // Note that values beyond the last index are updated, i.e., in the halo.
+        // When z == surface + 1, the surface will be at z - 1;
+        GridIndex surf = z - 1;
 
-        stress_zz(t+1, x, y, z+1) EQUALS -stress_zz(t+1, x, y, z)
-            IF at_last_z;
-        stress_zz(t+1, x, y, z+2) EQUALS -stress_zz(t+1, x, y, z-1)
-            IF at_last_z;
+        stress_zz(t+1, x, y, z) EQUALS -get_next_stress_zz(x, y, surf) IF_ONE_ABOVE_SURFACE;
+        stress_xz(t+1, x, y, z) EQUALS -get_next_stress_xz(x, y, surf-1) IF_ONE_ABOVE_SURFACE;
+        stress_yz(t+1, x, y, z) EQUALS -get_next_stress_yz(x, y, surf-1) IF_ONE_ABOVE_SURFACE;
 
-        stress_xz(t+1, x, y, z+1) EQUALS -stress_xz(t+1, x, y, z-1)
-            IF at_last_z;
-        stress_xz(t+1, x, y, z+2) EQUALS -stress_xz(t+1, x, y, z-2)
-            IF at_last_z;
+        // Define other 3 stress values for completeness, even
+        // though these aren't input to any stencils.
+        stress_xx(t+1, x, y, z) EQUALS 0.0 IF_ONE_ABOVE_SURFACE;
+        stress_yy(t+1, x, y, z) EQUALS 0.0 IF_ONE_ABOVE_SURFACE;
+        stress_xy(t+1, x, y, z) EQUALS 0.0 IF_ONE_ABOVE_SURFACE;
+        
+        // When z == surface + 2, the surface will be at z - 2;
+        surf = z - 2;
 
-        stress_yz(t+1, x, y, z+1) EQUALS -stress_yz(t+1, x, y, z-1)
-            IF at_last_z;
-        stress_yz(t+1, x, y, z+2) EQUALS -stress_yz(t+1, x, y, z-2)
-            IF at_last_z;
+        stress_zz(t+1, x, y, z) EQUALS -get_next_stress_zz(x, y, surf-1) IF_TWO_ABOVE_SURFACE;
+        stress_xz(t+1, x, y, z) EQUALS -get_next_stress_xz(x, y, surf-2) IF_TWO_ABOVE_SURFACE;
+        stress_yz(t+1, x, y, z) EQUALS -get_next_stress_yz(x, y, surf-2) IF_TWO_ABOVE_SURFACE;
+
+        // Define other 3 stress values for completeness, even
+        // though these aren't input to any stencils.
+        stress_xx(t+1, x, y, z) EQUALS 0.0 IF_TWO_ABOVE_SURFACE;
+        stress_yy(t+1, x, y, z) EQUALS 0.0 IF_TWO_ABOVE_SURFACE;
+        stress_xy(t+1, x, y, z) EQUALS 0.0 IF_TWO_ABOVE_SURFACE;
     }
     
-    // Call all the define_* functions.
+    // Define the t+1 values for all velocity and stress grids.
     virtual void define() {
 
-        // A condition that is true when index 'z' is at the free-surface boundary.
-        Condition at_last_z = (z == last_index(z));
-        
         // Define velocity components.
-        define_vel_x(at_last_z);
-        define_vel_y(at_last_z);
-        define_vel_z(at_last_z);
+        vel_x(t+1, x, y, z) EQUALS get_next_vel_x(x, y, z) IF_AT_OR_BELOW_SURFACE;
+        vel_y(t+1, x, y, z) EQUALS get_next_vel_y(x, y, z) IF_AT_OR_BELOW_SURFACE;
+        vel_z(t+1, x, y, z) EQUALS get_next_vel_z(x, y, z) IF_AT_OR_BELOW_SURFACE;
+
+        // Define stress components.  Use non-overlapping sub-domains only,
+        // i.e. AT and BELOW but not AT_OR_BELOW, even though there are some
+        // repeated stencils. This allows the YASK compiler to bundle all
+        // the stress equations together.
+        stress_xx(t+1, x, y, z) EQUALS get_next_stress_xx(x, y, z) IF_BELOW_SURFACE;
+        stress_yy(t+1, x, y, z) EQUALS get_next_stress_yy(x, y, z) IF_BELOW_SURFACE;
+        stress_xy(t+1, x, y, z) EQUALS get_next_stress_xy(x, y, z) IF_BELOW_SURFACE;
+        stress_xz(t+1, x, y, z) EQUALS get_next_stress_xz(x, y, z) IF_BELOW_SURFACE;
+        stress_yz(t+1, x, y, z) EQUALS get_next_stress_yz(x, y, z) IF_BELOW_SURFACE;
+        stress_zz(t+1, x, y, z) EQUALS get_next_stress_zz(x, y, z) IF_BELOW_SURFACE;
+
+        stress_xx(t+1, x, y, z) EQUALS get_next_stress_xx(x, y, z) IF_AT_SURFACE;
+        stress_yy(t+1, x, y, z) EQUALS get_next_stress_yy(x, y, z) IF_AT_SURFACE;
+        stress_xy(t+1, x, y, z) EQUALS get_next_stress_xy(x, y, z) IF_AT_SURFACE;
+        stress_xz(t+1, x, y, z) EQUALS 0.0 IF_AT_SURFACE;
+        stress_yz(t+1, x, y, z) EQUALS 0.0 IF_AT_SURFACE;
+        stress_zz(t+1, x, y, z) EQUALS get_next_stress_zz(x, y, z) IF_AT_SURFACE;
 
         // Boundary conditions.
-#ifdef DO_SURFACE
-        define_free_surface_vel(at_last_z);
-#endif
-
-        // Define some values common to the diagonal stress equations.
-#ifdef PRECOMPUTED_LAMBDA
-        // Use this the lambda values are pre-computed once before
-        // all time-steps.
-        GridValue lambda_val = lambda(x, y, z);
-#else
-        GridValue lambda_val = 8.0 /
-            (lambda(x,   y,   z  ) + lambda(x+1, y,   z  ) +
-             lambda(x,   y-1, z  ) + lambda(x+1, y-1, z  ) +
-             lambda(x,   y,   z-1) + lambda(x+1, y,   z-1) +
-             lambda(x,   y-1, z-1) + lambda(x+1, y-1, z-1));
-#endif
-        GridValue mu_val = 8.0 /
-            (mu(x,   y,   z  ) + mu(x+1, y,   z  ) +
-             mu(x,   y-1, z  ) + mu(x+1, y-1, z  ) +
-             mu(x,   y,   z-1) + mu(x+1, y,   z-1) +
-             mu(x,   y-1, z-1) + mu(x+1, y-1, z-1));
-
-        // Note that we are using the velocity values at t+1.
-        GridValue d_x_val =
-            c1 * (vel_x(t+1, x+1, y,   z  ) - vel_x(t+1, x,   y,   z  )) +
-            c2 * (vel_x(t+1, x+2, y,   z  ) - vel_x(t+1, x-1, y,   z  ));
-        GridValue d_y_val =
-            c1 * (vel_y(t+1, x,   y,   z  ) - vel_y(t+1, x,   y-1, z  )) +
-            c2 * (vel_y(t+1, x,   y+1, z  ) - vel_y(t+1, x,   y-2, z  ));
-        GridValue d_z_val =
-            c1 * (vel_z(t+1, x,   y,   z  ) - vel_z(t+1, x,   y,   z-1)) +
-            c2 * (vel_z(t+1, x,   y,   z+1) - vel_z(t+1, x,   y,   z-2));
-
-        // Define stress components.
-        define_stress_xx(at_last_z,
-                         lambda_val, mu_val, d_x_val, d_y_val, d_z_val);
-        define_stress_yy(at_last_z,
-                         lambda_val, mu_val, d_x_val, d_y_val, d_z_val);
-        define_stress_zz(at_last_z,
-                         lambda_val, mu_val, d_x_val, d_y_val, d_z_val);
-        define_stress_xy(at_last_z);
-        define_stress_xz(at_last_z);
-        define_stress_yz(at_last_z);
-
-        // Boundary conditions.
-#ifdef DO_SURFACE
-        define_free_surface_stress(at_last_z);
+#ifdef DO_ABOVE_SURFACE
+        define_free_surface_vel();
+        define_free_surface_stress();
 #endif
     }
 };
 
 REGISTER_STENCIL(AwpElasticStencil);
+
+#undef DO_SURFACE
+#undef FULL_SPONGE_GRID
+#undef USE_SCRATCH_GRIDS

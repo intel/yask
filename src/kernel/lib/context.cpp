@@ -224,40 +224,56 @@ namespace yask {
             rank_idxs.step[step_posn] = step_t;
 
             // Loop thru groups.
-            // For this reference-code implementation, we
-            // will do all stencil groups at this level,
-            // even scratch-grid ones.
-            for (auto* sg : stGroups) {
+            for (auto* asg : stGroups) {
 
+                // Don't do scratch updates here.
+                if (asg->is_scratch())
+                    continue;
+
+                // Scan through n-D space.
+                TRACE_MSG("calc_rank_ref: step " << start_t <<
+                          " in non-scratch group '" << asg->get_name());
+                
                 // Exchange all dirty halos.
                 exchange_halos_all();
 
-                // Indices needed for the generated misc loops.  Will normally be a
-                // copy of rank_idxs except when updating scratch-grids.
-                ScanIndices misc_idxs = sg->adjust_scan(scratch_grid_idx, rank_idxs);
-                misc_idxs.step.setFromConst(1); // ensure unit step.
+                // Find the groups that need to be processed.
+                // This will be the prerequisite scratch-grid
+                // groups plus this non-scratch group.
+                auto sg_list = asg->get_scratch_deps();
+                sg_list.push_back(asg);
+
+                // Loop through all the needed groups.
+                for (auto* sg : sg_list) {
+
+                    // Indices needed for the generated misc loops.  Will normally be a
+                    // copy of rank_idxs except when updating scratch-grids.
+                    ScanIndices misc_idxs = sg->adjust_scan(scratch_grid_idx, rank_idxs);
+                    misc_idxs.step.setFromConst(1); // ensure unit step.
                 
-                // Define misc-loop function.  Since step is always 1, we
-                // ignore misc_stop.  If point is in sub-domain for this
-                // group, then evaluate the reference scalar code.
+                    // Define misc-loop function.  Since step is always 1, we
+                    // ignore misc_stop.  If point is in sub-domain for this
+                    // group, then evaluate the reference scalar code.
+                    // TODO: fix domain of scratch grids.
 #define misc_fn(misc_idxs)   do {                                       \
-                    if (sg->is_in_valid_domain(misc_idxs.start))        \
-                        sg->calc_scalar(scratch_grid_idx, misc_idxs.start);   \
-                } while(0)
+                        if (sg->is_in_valid_domain(misc_idxs.start))    \
+                            sg->calc_scalar(scratch_grid_idx, misc_idxs.start); \
+                    } while(0)
                 
-                // Scan through n-D space.
-                TRACE_MSG("calc_rank_ref: step " << start_t <<
-                          " in group '" << sg->get_name() << "': " <<
-                          misc_idxs.begin.makeValStr(ndims) <<
-                          " ... (end before) " << misc_idxs.end.makeValStr(ndims));
+                    // Scan through n-D space.
+                    TRACE_MSG("calc_rank_ref: step " << start_t <<
+                              " in group '" << sg->get_name() << "': " <<
+                              misc_idxs.begin.makeValStr(ndims) <<
+                              " ... (end before) " << misc_idxs.end.makeValStr(ndims));
 #include "yask_misc_loops.hpp"
 #undef misc_fn
-                
+                } // groups in chain.
+
                 // Remember grids that have been written to by this group,
                 // updated at next step (+/- 1).
-                mark_grids_dirty(start_t + step_t, stop_t + step_t, *sg);
+                mark_grids_dirty(start_t + step_t, stop_t + step_t, *asg);
                 
-            } // groups.
+            } // all groups.
         } // iterations.
 
         // Final halo exchange.
@@ -471,6 +487,9 @@ namespace yask {
         }
 
         run_solution(first_t, last_t);
+
+        // Final halo exchange.
+        exchange_halos_all();
     }
 
     // Calculate results within a region.
@@ -1403,62 +1422,64 @@ namespace yask {
                         // Adjust along domain dims in this grid.
                         for (auto& dim : _dims->_domain_dims.getDims()) {
                             auto& dname = dim.getName();
+                            if (gp->is_dim_used(dname)) {
 
-                            // Init range to whole rank domain (including
-                            // outer halos).  These may be changed below
-                            // depending on the neighbor's direction.
-                            copy_begin[dname] = first_outer_idx[dname];
-                            copy_end[dname] = last_outer_idx[dname] + 1; // end = last + 1.
+                                // Init range to whole rank domain (including
+                                // outer halos).  These may be changed below
+                                // depending on the neighbor's direction.
+                                copy_begin[dname] = first_outer_idx[dname];
+                                copy_end[dname] = last_outer_idx[dname] + 1; // end = last + 1.
 
-                            // Neighbor direction in this dim.
-                            auto neigh_ofs = neigh_offsets[dname];
+                                // Neighbor direction in this dim.
+                                auto neigh_ofs = neigh_offsets[dname];
                             
-                            // Region to read from, i.e., data from inside
-                            // this rank's domain to be put into neighbor's
-                            // halo.
-                            if (bd == MPIBufs::bufSend) {
+                                // Region to read from, i.e., data from inside
+                                // this rank's domain to be put into neighbor's
+                                // halo.
+                                if (bd == MPIBufs::bufSend) {
 
-                                // Neighbor is to the left.
-                                if (neigh_ofs == idx_t(MPIInfo::rank_prev)) {
+                                    // Neighbor is to the left.
+                                    if (neigh_ofs == idx_t(MPIInfo::rank_prev)) {
 
-                                    // Only read slice as wide as halo from beginning.
-                                    copy_end[dname] = first_inner_idx[dname] + neigh_halo_sizes[dname];
-                                }
+                                        // Only read slice as wide as halo from beginning.
+                                        copy_end[dname] = first_inner_idx[dname] + neigh_halo_sizes[dname];
+                                    }
                             
-                                // Neighbor is to the right.
-                                else if (neigh_ofs == idx_t(MPIInfo::rank_next)) {
+                                    // Neighbor is to the right.
+                                    else if (neigh_ofs == idx_t(MPIInfo::rank_next)) {
                                     
-                                    // Only read slice as wide as halo before end.
-                                    copy_begin[dname] = last_inner_idx[dname] + 1 - neigh_halo_sizes[dname];
-                                }
+                                        // Only read slice as wide as halo before end.
+                                        copy_begin[dname] = last_inner_idx[dname] + 1 - neigh_halo_sizes[dname];
+                                    }
                             
-                                // Else, this neighbor is in same posn as I am in this dim,
-                                // so we leave the default begin/end settings.
-                            }
+                                    // Else, this neighbor is in same posn as I am in this dim,
+                                    // so we leave the default begin/end settings.
+                                }
                         
-                            // Region to write to, i.e., into this rank's halo.
-                            else if (bd == MPIBufs::bufRecv) {
+                                // Region to write to, i.e., into this rank's halo.
+                                else if (bd == MPIBufs::bufRecv) {
 
-                                // Neighbor is to the left.
-                                if (neigh_ofs == idx_t(MPIInfo::rank_prev)) {
+                                    // Neighbor is to the left.
+                                    if (neigh_ofs == idx_t(MPIInfo::rank_prev)) {
 
-                                    // Only read slice as wide as halo before beginning.
-                                    copy_begin[dname] = first_inner_idx[dname] - my_halo_sizes[dname];
-                                    copy_end[dname] = first_inner_idx[dname];
-                                }
+                                        // Only read slice as wide as halo before beginning.
+                                        copy_begin[dname] = first_inner_idx[dname] - my_halo_sizes[dname];
+                                        copy_end[dname] = first_inner_idx[dname];
+                                    }
                             
-                                // Neighbor is to the right.
-                                else if (neigh_ofs == idx_t(MPIInfo::rank_next)) {
+                                    // Neighbor is to the right.
+                                    else if (neigh_ofs == idx_t(MPIInfo::rank_next)) {
                                     
-                                    // Only read slice as wide as halo after end.
-                                    copy_begin[dname] = last_inner_idx[dname] + 1;
-                                    copy_end[dname] = last_inner_idx[dname] + 1 + my_halo_sizes[dname];
-                                }
+                                        // Only read slice as wide as halo after end.
+                                        copy_begin[dname] = last_inner_idx[dname] + 1;
+                                        copy_end[dname] = last_inner_idx[dname] + 1 + my_halo_sizes[dname];
+                                    }
                                 
-                                // Else, this neighbor is in same posn as I am in this dim,
-                                // so we leave the default begin/end settings.
-                            }
-                        } // domain dims in this grid.
+                                    // Else, this neighbor is in same posn as I am in this dim,
+                                    // so we leave the default begin/end settings.
+                                }
+                            } // domain dims in this grid.
+                        } // domain dims.
 
                         // Sizes of buffer in all dims of this grid.
                         // Also, set begin/end value for non-domain dims.
@@ -2286,6 +2307,7 @@ namespace yask {
 
     // Exchange dirty halo data for all grids and all steps, regardless
     // of their stencil-group.
+    // TODO: loop through all grids in exchange_halos() instead.
     void StencilContext::exchange_halos_all() {
 
 #ifdef USE_MPI
@@ -2305,6 +2327,8 @@ namespace yask {
         for (auto* sg : stGroups) {
 
             // Do exchange over max steps.
+            // Steps that don't exist in a particular grid or
+            // steps that are clean will be skipped.
             exchange_halos(start, stop, *sg);
         }
 #endif
@@ -2318,19 +2342,16 @@ namespace yask {
 #ifdef USE_MPI
         if (!enable_halo_exchange || _env->num_ranks < 2)
             return;
+
+        // Don't exchange for scratch groups.
+        if (sg.is_scratch())
+            return;
+
         mpi_time.start();
         TRACE_MSG("exchange_halos: " << start << " ... (end before) " << stop <<
                   " for eq-group '" << sg.get_name() << "'");
         auto opts = get_settings();
         auto& sd = _dims->_step_dim;
-
-        // 1D array to store send request handles.
-        // We use a 1D array so we can call MPI_Waitall().
-        MPI_Request send_reqs[sg.inputGridPtrs.size() * _mpiInfo->neighborhood_size];
-
-        // 2D array for receive request handles.
-        // We use a 2D array to simplify individual indexing.
-        MPI_Request recv_reqs[sg.inputGridPtrs.size()][_mpiInfo->neighborhood_size];
 
         // Loop through steps.  This loop has to be outside halo-step loop
         // because we only have one buffer per step. Normally, we only
@@ -2340,25 +2361,28 @@ namespace yask {
         assert(start != stop);
         idx_t step = (start < stop) ? 1 : -1;
         for (idx_t t = start; t != stop; t += step) {
-            int num_send_reqs = 0;
 
-            // Sequence of things to do for each grid's neighbors
-            // (isend includes packing).
-            enum halo_steps { halo_irecv, halo_pack_isend, halo_unpack, halo_nsteps };
-            for (int halo_step = 0; halo_step < halo_nsteps; halo_step++) {
-
-                if (halo_step == halo_irecv)
-                    TRACE_MSG("exchange_halos: requesting data for step " << t << "...");
-                else if (halo_step == halo_pack_isend)
-                    TRACE_MSG("exchange_halos: packing and sending data for step " << t << "...");
-                else if (halo_step == halo_unpack)
-                    TRACE_MSG("exchange_halos: unpacking data for step " << t << "...");
+            // Get list of grids that need to be swapped.
+            // Use an ordered map to make sure grids are in
+            // same order on all ranks.
+            GridPtrMap gridsToSwap;
             
-                // Loop thru all input grids in this group.
-                for (size_t gi = 0; gi < sg.inputGridPtrs.size(); gi++) {
-                    auto gp = sg.inputGridPtrs[gi];
-                    MPI_Request* grid_recv_reqs = recv_reqs[gi];
+            // Find the groups that need to be processed.
+            // This will be the prerequisite scratch-grid
+            // groups plus this non-scratch group.
+            auto sg_list = sg.get_scratch_deps();
+            sg_list.push_back(&sg);
 
+            // Loop through all the needed groups.
+            for (auto* csg : sg_list) {
+
+                // Loop thru all *input* grids in this group.
+                for (auto gp : csg->inputGridPtrs) {
+
+                    // Don't swap scratch grids.
+                    if (gp->is_scratch())
+                        continue;
+                    
                     // Only need to swap grids whose halos are not up-to-date
                     // for this step.
                     if (!gp->is_dirty(t))
@@ -2368,6 +2392,44 @@ namespace yask {
                     auto& gname = gp->get_name();
                     if (mpiData.count(gname) == 0)
                         continue;
+
+                    // Swap this grid.
+                    gridsToSwap[gname] = gp;
+                }
+            }
+            TRACE_MSG("exchange_halos: need to exchange halos for " <<
+                      gridsToSwap.size() << " grid(s)");
+
+            // 1D array to store send request handles.
+            // We use a 1D array so we can call MPI_Waitall().
+            MPI_Request send_reqs[gridsToSwap.size() * _mpiInfo->neighborhood_size];
+            
+            // 2D array for receive request handles.
+            // We use a 2D array to simplify individual indexing.
+            MPI_Request recv_reqs[gridsToSwap.size()][_mpiInfo->neighborhood_size];
+
+            // Sequence of things to do for each grid's neighbors
+            // (isend includes packing).
+            int num_send_reqs = 0;
+            int num_recv_reqs = 0;
+            enum halo_steps { halo_irecv, halo_pack_isend, halo_unpack, halo_nsteps };
+            for (int halo_step = 0; halo_step < halo_nsteps; halo_step++) {
+
+                if (halo_step == halo_irecv)
+                    TRACE_MSG("exchange_halos: requesting data for step " << t << "...");
+                else if (halo_step == halo_pack_isend)
+                    TRACE_MSG("exchange_halos: packing and sending data for step " << t << "...");
+                else if (halo_step == halo_unpack)
+                    TRACE_MSG("exchange_halos: unpacking data for step " << t << "...");
+
+                // Loop thru all grids to swap.
+                // Use 'gi' as a unique MPI index.
+                int gi = -1;
+                for (auto gtsi : gridsToSwap) {
+                    auto& gname = gtsi.first;
+                    auto gp = gtsi.second;
+                    gi++;
+                    MPI_Request* grid_recv_reqs = recv_reqs[gi];
                     TRACE_MSG(" for grid '" << gname << "'...");
 
                     // Visit all this rank's neighbors.
@@ -2375,7 +2437,7 @@ namespace yask {
                     grid_mpi_data.visitNeighbors
                         ([&](const IdxTuple& offsets, // NeighborOffset.
                              int neighbor_rank,
-                             int ni, // 1D index.
+                             int ni, // unique neighbor index.
                              MPIBufs& bufs) {
                             auto& sendBuf = bufs.bufs[MPIBufs::bufSend];
                             auto& recvBuf = bufs.bufs[MPIBufs::bufRecv];
@@ -2400,6 +2462,7 @@ namespace yask {
                                     TRACE_MSG("   requesting " << makeByteStr(nbytes) << "...");
                                     MPI_Irecv(buf, nbytes, MPI_BYTE,
                                               neighbor_rank, int(gi), _env->comm, &grid_recv_reqs[ni]);
+                                    num_recv_reqs++;
                                 }
                             }
 
@@ -2454,7 +2517,7 @@ namespace yask {
                                 if (nbytes) {
 
                                     // Wait for data from neighbor before unpacking it.
-                                    TRACE_MSG("   waiting for MPI data...");
+                                    TRACE_MSG("   waiting for " << makeByteStr(nbytes) << "...");
                                     MPI_Wait(&grid_recv_reqs[ni], MPI_STATUS_IGNORE);
 
                                     // Vec ok?
@@ -2491,16 +2554,19 @@ namespace yask {
             } // exchange sequence.
             
             // Mark grids as up-to-date.
-            for (size_t gi = 0; gi < sg.inputGridPtrs.size(); gi++) {
-                auto gp = sg.inputGridPtrs[gi];
+            for (auto gtsi : gridsToSwap) {
+                auto& gname = gtsi.first;
+                auto gp = gtsi.second;
                 if (gp->is_dirty(t)) {
                     gp->set_dirty(false, t);
-                    TRACE_MSG("grid '" << gp->get_name() <<
+                    TRACE_MSG("grid '" << gname <<
                               "' marked as clean at step " << t);
                 }
             }
 
             // Wait for all send requests to complete.
+            TRACE_MSG("exchange_halos: " << num_recv_reqs <<
+                      " MPI receive request(s) completed");
             if (num_send_reqs) {
                 TRACE_MSG("exchange_halos: waiting for " << num_send_reqs <<
                           " MPI send request(s) to complete...");

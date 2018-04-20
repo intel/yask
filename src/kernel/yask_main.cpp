@@ -343,7 +343,7 @@ int main(int argc, char** argv)
                 best_elapsed_time = stats->get_elapsed_run_secs();
             }
         }
-
+        
         os << divLine <<
             "best-elapsed-time (sec):           " << makeNumStr(best_elapsed_time) << endl <<
             "best-throughput (num-writes/sec):  " << makeNumStr(best_apps) << endl <<
@@ -407,9 +407,11 @@ int main(int argc, char** argv)
                     cerr << "This is not uncommon for low-precision FP; try with 8-byte reals." << endl;
                 ok = false;
             }
+            ref_soln->end_solution();
         }
         else
             os << "\nRESULTS NOT VERIFIED.\n";
+        ksoln->end_solution();
 
         kenv->global_barrier();
         if (!ok)

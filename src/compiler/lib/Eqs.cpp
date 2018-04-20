@@ -634,6 +634,8 @@ namespace yask {
                 g->updateConstIndices(ap->getArgConsts());
             }
 
+            // We want to start with non-scratch eqs and walk the dep
+            // tree to find all dependent scratch eqs.
             // If 'eq1' has a non-scratch output, visit all dependencies of
             // 'eq1'.  It's important to visit the eqs in dep order to
             // properly propagate halos sizes thru chains of scratch grids.
@@ -643,18 +645,15 @@ namespace yask {
                     // 'eq1' is 'b' or depends on 'b', immediately or indirectly.
                     (eq1, [&](EqualsExprPtr b, EqDeps::EqVecSet& path) {
 
-                        // Only check if conditions are same.
-                        auto cond1 = getCond(eq1);
-                        auto cond2 = getCond(b);
-                        bool same_cond = areExprsSame(cond1, cond2);
-                        
                         // Does 'b' have a scratch-grid output?
+                        // NB: scratch eqs don't have conditions, so
+                        // we don't need to check them.
                         auto* og2 = pv.getOutputGrids().at(b.get());
-                        if (same_cond && og2->isScratch()) {
+                        if (og2->isScratch()) {
 
                             // Get halos from the output scratch grid.
                             // These are the points that are read from
-                            // in dependent eq(s).
+                            // the dependent eq(s).
                             // For scratch grids, the halo areas must also be written to.
                             auto _left_ohalo = og2->getHaloSizes(true);
                             auto _right_ohalo = og2->getHaloSizes(false);
@@ -678,12 +677,6 @@ namespace yask {
                         // needed for 'eq1'. Walk dep path from 'eq1' to 'b'.
                         EqualsExprPtr prev;
                         for (auto eq2 : path) {
-
-                            // Only continue if conditions are same.
-                            auto cond1 = getCond(eq1);
-                            auto cond2 = getCond(eq2);
-                            if (!areExprsSame(cond1, cond2))
-                                break;
 
                             // Look for scratch-grid dep from 'prev' to 'eq2'.
                             if (prev) {
