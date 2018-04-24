@@ -36,6 +36,11 @@ IN THE SOFTWARE.
 
 namespace yask {
 
+    /**
+     * \addtogroup yk
+     * @{
+     */
+
     /// Allocate grids on local NUMA node.
     /**
        This is used in yk_solution::set_default_numa_preferred
@@ -730,6 +735,7 @@ namespace yask {
         get_elapsed_run_secs() =0;
     };
     
+    /** @}*/
 } // namespace yask.
 
 #endif

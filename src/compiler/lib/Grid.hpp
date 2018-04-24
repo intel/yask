@@ -304,6 +304,7 @@ namespace yask {
         bool _doOptCluster = true; // apply optimizations also to cluster.
         string _eqBundleTargets;  // how to bundle equations.
         string _gridRegex;       // grids to update.
+        bool _findDeps = true;
     };
     
     // Stencil dimensions.

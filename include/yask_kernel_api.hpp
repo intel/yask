@@ -38,6 +38,12 @@ IN THE SOFTWARE.
 
 namespace yask {
 
+    /**
+     * \defgroup yk YASK Kernel
+     * Types, clases, and functions used in both the \ref sec_yk.
+     * @{
+     */
+
     /// Type to use for indexing grids.
     /** Index types are signed to allow negative indices in padding/halos. */
 #ifdef SWIG
@@ -64,12 +70,18 @@ namespace yask {
     /// Shared pointer to \ref yk_stats.
     typedef std::shared_ptr<yk_stats> yk_stats_ptr;
 
+    /** @}*/
 } // namespace yask.
 
 #include "yk_solution_api.hpp"
 #include "yk_grid_api.hpp"
 
 namespace yask {
+
+    /**
+     * \addtogroup yk
+     * @{
+     */
 
     /// Bootstrap factory to create a stencil solution.
     class yk_factory {
@@ -144,6 +156,7 @@ namespace yask {
         global_barrier() const =0;
     };
 
+    /** @}*/
 } // namespace yask.
 
 #endif

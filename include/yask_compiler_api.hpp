@@ -37,6 +37,12 @@ IN THE SOFTWARE.
 
 namespace yask {
 
+    /**
+     * \defgroup yc YASK Compiler
+     * Types, clases, and functions used in the \ref sec_yc.
+     * @{
+     */
+
     // Forward declarations of classes and their pointers.
     // See yask_compiler_api.hpp for more.
 
@@ -65,11 +71,18 @@ namespace yask {
     class yc_grid_point_node;
     /// Shared pointer to \ref yc_grid_point_node
     typedef std::shared_ptr<yc_grid_point_node> yc_grid_point_node_ptr;
+
+    /** @}*/
 }
 
-#include "yc_nodes.hpp"
+#include "yc_node_api.hpp"
 
 namespace yask {
+
+    /**
+     * \addtogroup yc
+     * @{
+     */
 
     /// Bootstrap factory to create objects needed to define a stencil solution.
     class yc_factory {
@@ -310,6 +323,27 @@ namespace yask {
                yask_output_ptr output
                /**< [out] Pointer to object to receive formatted output. 
                   See \ref yask_output_factory. */) =0;
+
+        /// **[Advanced]** Enable or disable automatic dependency checker.
+        /**
+           This should be used whenever the built-in dependency checker is
+           insufficient. Currently, the provided checker does not allow
+           stencils in which points in one sub-domain depend on points
+           in another sub-domain within the same value of the step index.
+
+           @warning If dependency checker is disabled, *all* dependencies
+           must be set via the APIs.
+         */
+        virtual void
+        set_dependency_checker_enabled(bool enable
+                                       /**< [in] `true` to enable or `false` to disable. */) =0;
+
+        /// **[Advanced]** Determine whether automatic dependency checker is enabled.
+        /**
+           @returns Current setting.
+        */
+        virtual bool
+        is_dependency_checker_enabled() const =0;
     };
 
     /// A compile-time grid.
@@ -366,6 +400,8 @@ namespace yask {
 #endif
     };
     
+    /** @}*/
+
 } // namespace yask.
 
 #endif

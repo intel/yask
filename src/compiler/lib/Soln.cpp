@@ -85,7 +85,7 @@ namespace yask {
         _eqs.analyzeLoop(_dims);
 
         // Find dependencies between equations.
-        _eqs.findDeps(_dims, *_dos);
+        _eqs.analyzeEqs(_settings, _dims, *_dos);
 
         // Update access stats for the grids.
         _eqs.updateGridStats();

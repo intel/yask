@@ -162,8 +162,9 @@ namespace yask {
 
         // Find dependencies based on all eqs.  If 'eq_deps' is
         // set, save dependencies between eqs in referent.
-        virtual void findDeps(Dimensions& dims,
-                              std::ostream& os);
+        virtual void analyzeEqs(CompilerSettings& settings,
+                                Dimensions& dims,
+                                std::ostream& os);
 
         // Determine which grid points can be vectorized.
         virtual void analyzeVec(const Dimensions& dims);

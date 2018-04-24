@@ -76,6 +76,7 @@ IN THE SOFTWARE.
 %template(vector_eq) std::vector<std::shared_ptr<yask::yc_equation_node>>;
 %template(vector_grid) std::vector<yask::yc_grid*>;
 
+// Tell SWIG how to catch a YASK exception and rethrow it in Python.
 %exception {
   try {
     $action
@@ -85,6 +86,66 @@ IN THE SOFTWARE.
   }
 }
 
+// Tell SWIG how to handle non-class overloaded operators in Python.
+%extend yask::yc_number_node {
+    yask::yc_number_node_ptr __neg__() {
+        auto p = $self->clone_ast();
+        return yask::operator-(p);
+    }
+ };
+%extend yask::yc_number_node {
+    yask::yc_number_node_ptr __add__(yask::yc_number_node* rhs) {
+        auto lp = $self->clone_ast();
+        auto rp = rhs->clone_ast();
+        return yask::operator+(lp, rp);
+    }
+ };
+%extend yask::yc_number_node {
+    yask::yc_number_node_ptr __add__(double rhs) {
+        auto lp = $self->clone_ast();
+        return yask::operator+(lp, rhs);
+    }
+ };
+%extend yask::yc_number_node {
+    yask::yc_number_node_ptr __truediv__(yask::yc_number_node* rhs) {
+        auto lp = $self->clone_ast();
+        auto rp = rhs->clone_ast();
+        return yask::operator/(lp, rp);
+    }
+ };
+%extend yask::yc_number_node {
+    yask::yc_number_node_ptr __truediv__(double rhs) {
+        auto lp = $self->clone_ast();
+        return yask::operator/(lp, rhs);
+    }
+ };
+%extend yask::yc_number_node {
+    yask::yc_number_node_ptr __mul__(yask::yc_number_node* rhs) {
+        auto lp = $self->clone_ast();
+        auto rp = rhs->clone_ast();
+        return yask::operator*(lp, rp);
+    }
+ };
+%extend yask::yc_number_node {
+    yask::yc_number_node_ptr __mul__(double rhs) {
+        auto lp = $self->clone_ast();
+        return yask::operator*(lp, rhs);
+    }
+ };
+%extend yask::yc_number_node {
+    yask::yc_number_node_ptr __sub__(yask::yc_number_node* rhs) {
+        auto lp = $self->clone_ast();
+        auto rp = rhs->clone_ast();
+        return yask::operator-(lp, rp);
+    }
+ };
+%extend yask::yc_number_node {
+    yask::yc_number_node_ptr __sub__(double rhs) {
+        auto lp = $self->clone_ast();
+        return yask::operator-(lp, rhs);
+    }
+ };
+
 %include "yask_common_api.hpp"
 %include "yask_compiler_api.hpp"
-%include "yc_nodes.hpp"
+%include "yc_node_api.hpp"

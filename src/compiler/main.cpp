@@ -25,6 +25,11 @@ IN THE SOFTWARE.
 
 /////////////// Main vector-folding code-generation code. /////////////
 
+// This macro blocks the operator overloads in the API.
+// This is temporary until the "internal DSL" gets completely
+// replaced by the APIs.
+#define USE_INTERNAL_DSL
+
 // Generation code.
 #include "ExprUtils.hpp"
 #include "Grid.hpp"
@@ -121,11 +126,11 @@ void usage(const string& cmd) {
         " [-no]-opt-cluster\n"
         "    Do [not] apply optimizations across the cluster (default=" << settings._doOptCluster << ").\n"
         " -max-es <num-nodes>\n"
-        "    Set heuristic for max single expression-size (default=" <<
-        settings._maxExprSize << ").\n"
+        "    Set heuristic for max single expression-size (default=" << settings._maxExprSize << ").\n"
         " -min-es <num-nodes>\n"
-        "    Set heuristic for min expression-size for reuse (default=" <<
-        settings._minExprSize << ").\n"
+        "    Set heuristic for min expression-size for reuse (default=" << settings._minExprSize << ").\n"
+        " [-no]-find-deps\n"
+        "    Find dependencies between stencil equations (default=" << settings._findDeps << ").\n"
         "\n"
         " -p <format-type> <filename>\n"
         "    Format output per <format-type> and write to <filename>.\n"
@@ -184,6 +189,10 @@ void parseOpts(int argc, const char* argv[])
                 settings._doOptCluster = true;
             else if (opt == "-no-opt-cluster")
                 settings._doOptCluster = false;
+            else if (opt == "-find-deps")
+                settings._findDeps = true;
+            else if (opt == "-no-find-deps")
+                settings._findDeps = false;
 
             // add any more options w/o values above.
 

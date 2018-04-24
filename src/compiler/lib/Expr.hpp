@@ -207,7 +207,8 @@ namespace yask {
     }
 
     // Real or int value.
-    class NumExpr : public Expr, public virtual yc_number_node {
+    class NumExpr : public Expr,
+                    public virtual yc_number_node {
     public:
 
         // Return 'true' if this is a compile-time constant.
@@ -245,6 +246,9 @@ namespace yask {
         // For this to work properly, each derived type
         // should also implement a deep-copy copy ctor.
         virtual NumExprPtr clone() const =0;
+        virtual yc_number_node_ptr clone_ast() const {
+            return clone();
+        }
     };
 
     // Grid index types.
@@ -306,7 +310,7 @@ namespace yask {
 
     // A free function to create a constant expression.
     // Usually not needed due to operator overloading.
-    NumExprPtr constNum(double rhs);
+    NumExprPtr constNum(double val);
 
     // Free functions to create boundary indices, e.g., 'first_index(x)'.
     NumExprPtr first_index(IndexExprPtr dim);

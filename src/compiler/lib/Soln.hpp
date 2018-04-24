@@ -184,6 +184,8 @@ namespace yask {
         virtual void clear_clustering() { _settings._clusterOptions.clear(); }
         virtual void set_element_bytes(int nbytes) { _settings._elem_bytes = nbytes; }
         virtual int get_element_bytes() const { return _settings._elem_bytes; }
+        virtual bool is_dependency_checker_enabled() const { return _settings._findDeps; }
+        virtual void set_dependency_checker_enabled(bool enable) { _settings._findDeps = enable; }
         virtual void format(const std::string& format_type,
                             yask_output_ptr output);
     };

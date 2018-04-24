@@ -54,28 +54,31 @@ if __name__ == "__main__":
     # Create an expression for the new value.
     # This will average some of the neighboring points around the
     # current stencil application point in the current timestep.
-    n0 = g1.new_relative_grid_point([0, 0, 0, 0])  # center-point at this timestep.
-    n1 = nfac.new_add_node(n0, g1.new_relative_grid_point([0, -1,  0,  0])) # left.
-    n1 = nfac.new_add_node(n1, g1.new_relative_grid_point([0,  1,  0,  0])) # right.
-    n1 = nfac.new_add_node(n1, g1.new_relative_grid_point([0,  0, -1,  0])) # above.
-    n1 = nfac.new_add_node(n1, g1.new_relative_grid_point([0,  0,  1,  0])) # below.
-    n1 = nfac.new_add_node(n1, g1.new_relative_grid_point([0,  0,  0, -1])) # in front.
-    n1 = nfac.new_add_node(n1, g1.new_relative_grid_point([0,  0,  0,  1])) # behind.
-    n2 = nfac.new_divide_node(n1, nfac.new_const_number_node(7)) # div by 7.
+    n1 = (g1.new_relative_grid_point([0, 0, 0, 0]) +  # center-point at this timestep.
+          g1.new_relative_grid_point([0, -1,  0,  0]) + # left.
+          g1.new_relative_grid_point([0,  1,  0,  0]) + # right.
+          g1.new_relative_grid_point([0,  0, -1,  0]) + # above.
+          g1.new_relative_grid_point([0,  0,  1,  0]) + # below.
+          g1.new_relative_grid_point([0,  0,  0, -1]) + # in front.
+          g1.new_relative_grid_point([0,  0,  0,  1])) # behind.
+    n2 = n1 / 7  # ave of the 7 points.
 
-    # Define value in scratch grid.
-    sn0 = sg1.new_relative_grid_point([0, 0, 0]) # center-point.
+    # Define value in scratch grid to be the above equation, i.e.,
+    # this is a temporary 3-D variable that holds the average
+    # values of each point.
+    sn0 = sg1.new_relative_grid_point([0, 0, 0]) # LHS of eq is just a point on scratch-grid
     sn1 = nfac.new_equation_node(sn0, n2) # equate to expr n2.
     print("Scratch-grid equation before formatting: " + sn1.format_simple())
 
-    # Use values in scratch grid.
-    sn2 = sg1.new_relative_grid_point([1, 0, 0])
-    sn3 = nfac.new_add_node(sn2, sg1.new_relative_grid_point([0, 1, 0]))
-    sn4 = nfac.new_add_node(sn3, sg1.new_relative_grid_point([0, 0, 1]))
+    # Use values in scratch grid to make a new eq.
+    sn2 = (sg1.new_relative_grid_point([1, 0, 0]) +
+           sg1.new_relative_grid_point([0, 1, 0]) +
+           sg1.new_relative_grid_point([0, 0, 1]))
+    sn5 = -sn2 * 2.5 - 9.1
     
     # Create an equation to define the value at the next timestep.
     n3 = g1.new_relative_grid_point([1, 0, 0, 0]) # center-point at next timestep.
-    n4 = nfac.new_equation_node(n3, sn4) # equate to expr from scratch grid.
+    n4 = nfac.new_equation_node(n3, sn5) # equate to expr from scratch grid.
     print("Main-grid equation before formatting: " + n4.format_simple())
     print("Solution '" + soln.get_name() + "' contains " +
           str(soln.get_num_grids()) + " grid(s), and " +

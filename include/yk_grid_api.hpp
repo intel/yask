@@ -36,6 +36,11 @@ IN THE SOFTWARE.
 
 namespace yask {
 
+    /**
+     * \addtogroup yk
+     * @{
+     */
+
     /// A run-time grid.
     /**
        "Grid" is a generic term for any n-dimensional array.  A 0-dim grid
@@ -935,10 +940,9 @@ namespace yask {
                            /**< [in] Name of dimension to get.
                               Must be one of
                               the names from yk_solution::get_domain_dim_names(). */ ) const =0;
-
     };
 
-
+    /** @}*/
 } // namespace yask.
 
 #endif

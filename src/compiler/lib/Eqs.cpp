@@ -180,22 +180,24 @@ namespace yask {
                     });
         _done = true;
     }
-    
-    // Find dependencies based on all eqs.
-    // Side effect: sets _stepDir in dims.
+
+    // Analyze group of equations.
+    // Sets _stepDir in dims.
+    // Finds dependencies based on all eqs if 'settings._findDeps'.
     // Throws exceptions on illegal dependencies.
     // TODO: split this into smaller functions.
     // BIG-TODO: replace dependency algorithms with integration of a polyhedral
     // library.
-    void Eqs::findDeps(Dimensions& dims,
-                       ostream& os) {
+    void Eqs::analyzeEqs(CompilerSettings& settings,
+                         Dimensions& dims,
+                         ostream& os) {
         auto& stepDim = dims._stepDim;
         
         // Gather points from all eqs in all grids.
         PointVisitor pt_vis;
 
         // Gather initial stats from all eqs.
-        os << "Scanning " << getEqs().size() << " equation(s) for dependencies...\n";
+        os << "Scanning " << getEqs().size() << " stencil equation(s) for dependencies...\n";
         for (auto eq1 : getEqs())
             eq1->accept(&pt_vis);
         auto& outGrids = pt_vis.getOutputGrids();
@@ -315,6 +317,9 @@ namespace yask {
                                              "' on LHS");
                     }
                 }
+
+                // TODO: check that domain indices are simple offsets and
+                // misc indices are consts.
             }
 
             // TODO: check to make sure cond1 depends only on indices.
@@ -363,6 +368,7 @@ namespace yask {
                 // dependencies by looking for exact matches.
                 // We do this check first because it's quicker than the
                 // detailed scan done later if this one doesn't find a dep.
+                // Also, this is always illegal, even if not finding deps.
                 //
                 // Example:
                 //  eq1: a(t+1, x, ...) EQUALS ...
@@ -380,13 +386,18 @@ namespace yask {
                     // Save dependency.
 #ifdef DEBUG_DEP
                     cout << "  Exact match found to " << op1->makeQuotedStr() << ".\n";
-#endif                        
-                    _eq_deps[cur_step_dep].set_imm_dep_on(eq2, eq1);
+#endif
+                    if (settings._findDeps)
+                        _eq_deps[cur_step_dep].set_imm_dep_on(eq2, eq1);
                         
                     // Move along to next eq2.
                     continue;
                 }
 
+                // Don't do more conservative checks if not looking for deps.
+                if (!settings._findDeps)
+                    continue;
+                
                 // Next dep check: inexact matches on LHS of eq1 to RHS of eq2.
                 // Does eq1 define *any* point in a grid that eq2 inputs
                 // at the same step index?  If so, they *might* have a
@@ -453,6 +464,8 @@ namespace yask {
         } // for all eqs (eq1).
 
         // Resolve indirect dependencies.
+        // Do this even if not finding deps because we want to
+        // resolve deps provided by the user.
         os << " Resolving indirect dependencies...\n";
         for (DepType dt = DepType(0); dt < num_deps; dt = DepType(dt+1))
             _eq_deps[dt].find_all_deps();
