@@ -51,6 +51,14 @@ namespace yask {
     */
     std::string yask_get_version_string();
     
+    /// Type to use for indexing grids.
+    /** Index types are signed to allow negative indices in padding/halos. */
+#ifdef SWIG
+    typedef long int idx_t;     // SWIG doesn't seem to understand int64_t.
+#else
+    typedef std::int64_t idx_t;
+#endif
+
     // Forward declarations of class-pointers.
 
     class yask_output;

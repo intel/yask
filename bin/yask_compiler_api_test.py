@@ -74,7 +74,7 @@ if __name__ == "__main__":
     sn2 = (sg1.new_relative_grid_point([1, 0, 0]) +
            sg1.new_relative_grid_point([0, 1, 0]) +
            sg1.new_relative_grid_point([0, 0, 1]))
-    sn5 = -sn2 * 2.5 - 9.1
+    sn5 = -sn2 * 2.5 - 9
     
     # Create an equation to define the value at the next timestep.
     n3 = g1.new_relative_grid_point([1, 0, 0, 0]) # center-point at next timestep.

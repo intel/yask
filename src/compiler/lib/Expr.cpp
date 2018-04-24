@@ -70,6 +70,10 @@ namespace yask {
     yc_node_factory::new_const_number_node(double val) {
         return make_shared<ConstExpr>(val);
     }
+    yc_const_number_node_ptr
+    yc_node_factory::new_const_number_node(idx_t val) {
+        return make_shared<ConstExpr>(val);
+    }
     yc_negate_node_ptr
     yc_node_factory::new_negate_node(yc_number_node_ptr rhs) {
         auto p = dynamic_pointer_cast<NumExpr>(rhs);

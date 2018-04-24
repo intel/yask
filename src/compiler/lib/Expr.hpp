@@ -358,6 +358,11 @@ namespace yask {
 
     public:
         ConstExpr(double f) : _f(f) { }
+        ConstExpr(idx_t i) : _f(i) {
+            if (idx_t(_f) != i)
+                THROW_YASK_EXCEPTION("Error: integer value " << i <<
+                                     " cannot be stored accurately as a double");
+        }
         ConstExpr(const ConstExpr& src) : _f(src._f) { }
         virtual ~ConstExpr() { }
 

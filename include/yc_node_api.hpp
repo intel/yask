@@ -190,6 +190,14 @@ namespace yask {
         virtual yc_const_number_node_ptr
         new_const_number_node(double val /**< [in] Value to store in node. */ );
 
+        ///
+        /**
+           Integer version of new_const_number_node(double).
+           @returns Pointer to new \ref yc_const_number_node object. 
+        */
+        virtual yc_const_number_node_ptr
+        new_const_number_node(idx_t val /**< [in] Value to store in node. */ );
+
         /// Create a numerical negation operator node.
         /**
             New negation nodes can also be created via the overloaded unary `-` operator.
