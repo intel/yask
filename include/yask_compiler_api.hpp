@@ -268,9 +268,10 @@ namespace yask {
         clear_folding() =0;
 
         /// Set the cluster multiplier (unroll factor) in given dimension.
-        /** For YASK-code generation, this will have the effect of creating
+        /** For YASK kernel-code generation, this will have the effect of creating
             N vectors of output for each equation, where N is the product of
             the cluster multipliers. 
+
             @note A multiplier >1 cannot be applied to
             the step dimension. 
             @note Default is one (1) in each dimension. */
@@ -326,13 +327,13 @@ namespace yask {
 
         /// **[Advanced]** Enable or disable automatic dependency checker.
         /**
-           This should be used whenever the built-in dependency checker is
-           insufficient. Currently, the provided checker does not allow
-           stencils in which points in one sub-domain depend on points
+           Disabling the built-in dependency checker may be done when it is
+           overly conservative. Currently, the provided checker does not
+           allow stencils in which points in one sub-domain depend on points
            in another sub-domain within the same value of the step index.
 
            @warning If dependency checker is disabled, *all* dependencies
-           must be set via the APIs.
+           must be set via add_flow_dependency().
          */
         virtual void
         set_dependency_checker_enabled(bool enable
@@ -344,6 +345,70 @@ namespace yask {
         */
         virtual bool
         is_dependency_checker_enabled() const =0;
+
+        /// **[Advanced]** Add a dependency between two equations.
+        /**
+           This function adds an arc in the data dependency graph `from` one
+           equation `to` another one,
+           indicating that the `from` equation depends on the `to` equation.
+           In other words, the `to` expression must be evaluated _before_
+           the `from` equation.
+           In compiler-theory terms, this is a _flow_ dependency, also 
+           known as a _true_ or _read-after-write_ (RAW) dependency.
+           (Strictly speaking, however, equations in the YASK compiler
+           are declarative instead of imperative, so they describe
+           equalities rather than assignments with reads and writes.)
+
+           Additional considerations:
+           - Only _immediate_ dependencies should be added.
+           For example, if **A** depends on **B** and **B** depends on **C**,
+           it is not necessary to add a derived dependence from **A** to **C**.
+
+           - Only dependencies at a given step-index value should
+           be added.
+           For example, given 
+           equation **A**: `A(t+1, x) EQUALS B(t+1, x) + 5` and
+           equation **B**: `B(t+1, x) EQUALS A(t, x) / 2`,
+           **A** depends on **B** at some value of the step-index `t`.
+           It is true that `B(t+2)` depends on `A(t+1)`, but that
+           inter-step dependency should not be added with this function.
+
+           - If a cycle of dependencies is created, the YASK compiler
+           will throw an exception containing an error message
+           about a circular dependency. This exception may not be
+           thrown until format() is called.
+
+           - If using scratch grids, dependencies among scratch grids
+           and between scratch-grid equations and non-scratch-grid
+           equations should also be added. Each scratch grid equation
+           should ultimately depend on non-scratch-grid values.
+
+           - This function can be used in cooperation with or instead of
+           the built-in automatic dependency checker.
+           When used in cooperation with the built-in checker,
+           both dependencies from this function and the built-in checker
+           will be considered.
+           When the built-in checker is diabled via
+           `set_dependency_checker_enabled(false)`, only dependencies
+           from this function will be considered.
+           In this case, it is imperative that all immediate
+           dependencies are added.
+           If the dependency graph is incomplete, the resulting generated
+           stencil code will contain illegal race conditions,
+           and it will most likely produce incorrect results.
+        */
+        virtual void
+        add_flow_dependency(yc_equation_node_ptr from
+                            /**< [in] Equation that must be evaluated _after_ `to`. */,
+                            yc_equation_node_ptr to
+                            /**< [in] Equation that must be evaluated _before_ `from`. */) =0;
+
+        /// **[Advanced]** Remove all existing dependencies.
+        /**
+           Removes dependencies added via add_flow_dependency().
+         */
+        virtual void
+        clear_dependencies() =0;
     };
 
     /// A compile-time grid.

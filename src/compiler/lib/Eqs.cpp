@@ -183,7 +183,8 @@ namespace yask {
 
     // Analyze group of equations.
     // Sets _stepDir in dims.
-    // Finds dependencies based on all eqs if 'settings._findDeps'.
+    // Finds dependencies based on all eqs if 'settings._findDeps', setting
+    // _imm_dep_on and _dep_on.
     // Throws exceptions on illegal dependencies.
     // TODO: split this into smaller functions.
     // BIG-TODO: replace dependency algorithms with integration of a polyhedral
@@ -606,7 +607,7 @@ namespace yask {
         visitEqs(&slv);
     }
 
-    // Update access stats for the grids.
+    // Update access stats for the grids, i.e., halos and const indices.
     // Also finds scratch-grid eqs needed for each non-scratch eq.
     void Eqs::updateGridStats() {
 
@@ -647,7 +648,7 @@ namespace yask {
                     (eq1, [&](EqualsExprPtr b, EqDeps::EqVecSet& path) {
 
                         // Does 'b' have a scratch-grid output?
-                        // NB: scratch eqs don't have conditions, so
+                        // NB: scratch eqs don't have their own conditions, so
                         // we don't need to check them.
                         auto* og2 = pv.getOutputGrids().at(b.get());
                         if (og2->isScratch()) {

@@ -70,7 +70,7 @@ namespace yask {
                                            bool is_folding_efficient) {
 
         // Call the stencil 'define' method to create ASTs.
-        // ASTs can also be created via the APIs.
+        // ASTs and grids can also be created via the APIs.
         define();
 
         // Find all the stencil dimensions from the grids.

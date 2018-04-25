@@ -136,8 +136,12 @@ namespace yask {
         /**
            Create a variable to be used to index grids in the
            solution-domain dimension.
-           The name usually describes spatial dimensions, e.g. "x" or "y". 
-           This should *not* include the step dimension, which is specified via
+           The name usually describes spatial dimensions, e.g. "x" or "y",
+           but it can be any dimension that is specified at run-time,
+           such as an index into a number of parallel problems
+           being solved simultaneously.
+
+           @note This should *not* include the step dimension, which is specified via
            new_step_index().
            @returns Pointer to new \ref yc_index_node object.
         */
@@ -149,7 +153,9 @@ namespace yask {
         /**
            Create an variable to be used to index grids in the
            some dimension that is not the step dimension
-           or a domain dimension. Example: index into an array.
+           or a domain dimension.
+           The value of these indices are normally compile-time
+           constants, e.g., a fixed index into an array.
            @returns Pointer to new \ref yc_index_node object.
         */
         virtual yc_index_node_ptr
@@ -164,12 +170,15 @@ namespace yask {
             LHS.
 
             An optional condition may be provided to define the sub-domain
-            to which this equation applies. Example: `x > 10`.
+            to which this equation applies. See new_first_domain_index()
+            for more information and an example.
             Conditions are always evaluated with respect to the overall
-            problem domain independent of any MPI domain decomposition
-            that might occur at run-time.
+            problem domain, i.e., independent of any specific
+            MPI domain decomposition that might occur at run-time.
             If a condition is not provided, the equation applies to the
             entire problem domain.
+            A condition can be added to an equation after its creation
+            via yc_equation_node.set_cond().
 
             @returns Pointer to new \ref yc_equation_node object. 
         */
@@ -179,7 +188,8 @@ namespace yask {
                           yc_number_node_ptr rhs
                           /**< [in] Expression after EQUALS operator. */,
                           yc_bool_node_ptr cond = nullptr
-                          /**< [in] Expression defining sub-domain. */ );
+                          /**< [in] Optional expression defining sub-domain
+                             where `lhs EQUALS rhs` is valid. */ );
 
         /// Create a constant numerical value node.
         /** 
@@ -261,15 +271,27 @@ namespace yask {
 
            \code{.cpp}
            auto x = node_fac.new_domain_index("x");
+
+           // Create boolean expression for the
+           // boundary sub-domain "x < first_x + 10".
            auto first_x = node_fac.new_first_domain_index(x);
+           auto left_bc_cond = node_fac.new_less_than_node(x, first_x + 10);
 
-           // Create expression for "first_x + 10".
-           auto left10 = node_fac.new_add_node(first_x,
-           node_fac.new_const_number_node(10));
-
-           // Create boolean expression for "x > first_x + 10".
-           auto expr = node_fac.new_greater_than_node(x, left10);
+           // Create a new equation that is valid in this range.
+           auto left_bc_eq = 
+             node_fac.new_equation_node(grid_pt_expr, left_bc_expr, left_bc_cond);
            \endcode
+
+           Specification of the "interior" part of a 2-D domain could be
+           represented by an expression similar to
+           `x >= new_first_domain_index(x) + 20 &&
+           x <= new_last_domain_index(x) - 20 &&
+           y >= new_first_domain_index(y) + 20 &&
+           y <= new_last_domain_index(y) - 20`.
+
+           @note The entire domain in dimension "x" would be represented by
+           `x >= new_first_domain_index(x) && x <= new_last_domain_index(x)`, but
+           that is the default condition so does not need to be specified.
 
            @returns Pointer to new \ref yc_index_node object.
         */
@@ -282,20 +304,6 @@ namespace yask {
            Create an expression that indicates the last value in the overall problem
            domain in `dim` dimension.
            The `dim` argument is created via new_domain_index().
-
-           Typical C++ usage:
-
-           \code{.cpp}
-           auto x = node_fac.new_domain_index("x");
-           auto last_x = node_fac.new_last_domain_index(x);
-
-           // Create expression for "last_x - 10".
-           auto right10 = node_fac.new_subtract_node(last_x,
-           node_fac.new_const_number_node(10));
-
-           // Create boolean expression for "x < first_x - 10".
-           auto expr = node_fac.new_less_than_node(x, right10);
-           \endcode
 
            @returns Pointer to new \ref yc_index_node object.
         */
@@ -734,34 +742,34 @@ namespace yask {
 
     /// Operator version of yc_node_factory::new_negation_node().
     yc_negate_node_ptr operator-(yc_number_node_ptr rhs);
-    
+
+    //@{
     /// Operator version of yc_node_factory::new_addition_node().
     yc_add_node_ptr operator+(yc_number_node_ptr lhs, yc_number_node_ptr rhs);
-    /// Operator version of yc_node_factory::new_addition_node().
     yc_add_node_ptr operator+(double lhs, yc_number_node_ptr rhs);
-    /// Operator version of yc_node_factory::new_addition_node().
     yc_add_node_ptr operator+(yc_number_node_ptr lhs, double rhs);
+    //@}
 
+    //@{
     /// Operator version of yc_node_factory::new_division_node().
     yc_divide_node_ptr operator/(yc_number_node_ptr lhs, yc_number_node_ptr rhs);
-    /// Operator version of yc_node_factory::new_division_node().
     yc_divide_node_ptr operator/(double lhs, yc_number_node_ptr rhs);
-    /// Operator version of yc_node_factory::new_division_node().
     yc_divide_node_ptr operator/(yc_number_node_ptr lhs, double rhs);
+    //@}
 
+    //@{
     /// Operator version of yc_node_factory::new_multiplication_node().
     yc_multiply_node_ptr operator*(yc_number_node_ptr lhs, yc_number_node_ptr rhs);
-    /// Operator version of yc_node_factory::new_multiplication_node().
     yc_multiply_node_ptr operator*(double lhs, yc_number_node_ptr rhs);
-    /// Operator version of yc_node_factory::new_multiplication_node().
     yc_multiply_node_ptr operator*(yc_number_node_ptr lhs, double rhs);
+    //@}
 
+    //@{
     /// Operator version of yc_node_factory::new_subtraction_node().
     yc_subtract_node_ptr operator-(yc_number_node_ptr lhs, yc_number_node_ptr rhs);
-    /// Operator version of yc_node_factory::new_subtraction_node().
     yc_subtract_node_ptr operator-(double lhs, yc_number_node_ptr rhs);
-    /// Operator version of yc_node_factory::new_subtraction_node().
     yc_subtract_node_ptr operator-(yc_number_node_ptr lhs, double rhs);
+    //@}
 #endif
     
     /** @}*/

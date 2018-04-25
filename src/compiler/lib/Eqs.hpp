@@ -67,6 +67,14 @@ namespace yask {
             _all.insert(b);
             _done = false;
         }
+
+        // Clear all deps.
+        virtual void clear_deps() {
+            _imm_deps.clear();
+            _full_deps.clear();
+            _all.clear();
+            _done = false;
+        }
     
         // Check whether eq a directly depends on b.
         virtual bool is_imm_dep_on(EqualsExprPtr a, EqualsExprPtr b) const {
@@ -120,14 +128,21 @@ namespace yask {
     protected:
     
         // Equations(s) describing how values in this grid are computed.
-        EqList _eqs;          // just equations w/o conditions.
+        EqList _eqs;
 
-        EqDepMap _eq_deps;            // dependencies between all eqs.
-        EqDeps::DepMap _scratch_deps;   // dependencies through scratch grids.
+        // Dependencies between all eqs.
+        EqDepMap _eq_deps;
+
+        // Dependencies through scratch grids.
+        EqDeps::DepMap _scratch_deps;
         
     public:
 
-        Eqs() {}
+        Eqs() {
+            // Make sure map keys exist.
+            for (DepType dt = DepType(0); dt < num_deps; dt = DepType(dt+1))
+                _eq_deps[dt];
+        }
         virtual ~Eqs() {}
 
         // Equation accessors.
@@ -144,6 +159,9 @@ namespace yask {
 
         // Get all the deps.
         virtual const EqDepMap& getDeps() const {
+            return _eq_deps;
+        }
+        virtual EqDepMap& getDeps() {
             return _eq_deps;
         }
         
@@ -176,10 +194,10 @@ namespace yask {
         virtual void updateGridStats();
     };
 
-    // A named equation bundle, which contains one or more grid-update equations.
-    // All equations in a bundle must have the same condition.
-    // Equations should not have inter-dependencies because they will be
-    // combined into a single expression.
+    // A named equation bundle, which contains one or more grid-update
+    // equations.  All equations in a bundle must have the same condition.
+    // Equations in a bundle should not have inter-dependencies because they
+    // will be combined into a single expression.
     class EqBundle {
     protected:
         EqList _eqs; // expressions in this eqBundle (not including conditions).
