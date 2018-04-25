@@ -140,6 +140,11 @@ inline void omp_set_nested(int n) { }
 #include "yask_stencil_code.hpp"
 #undef DEFINE_MACROS
 
+// Max number of dims allowed in grids.
+#ifndef MAX_DIMS
+#define MAX_DIMS NUM_STENCIL_DIMS
+#endif
+
 // Default cmd-line arguments.
 #ifndef DEF_ARGS
 #define DEF_ARGS ""
