@@ -917,8 +917,8 @@ namespace yask {
         _env->global_barrier();
 
         ostream& os = get_ostr();
-#ifdef DEBUG
-        os << "*** WARNING: YASK compiled with DEBUG; ignore performance results.\n";
+#ifdef CHECK
+        os << "*** WARNING: YASK compiled with CHECK; ignore performance results.\n";
 #endif
 #if defined(NO_INTRINSICS) && (VLEN > 1)
         os << "*** WARNING: YASK compiled with NO_INTRINSICS; ignore performance results.\n";

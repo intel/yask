@@ -515,7 +515,7 @@ namespace yask {
                    loop_idxs.start.makeValStr(nsdims) <<
                    " ... (end before) " << loop_idxs.stop.makeValStr(nsdims));
 
-#ifdef DEBUG
+#ifdef CHECK
         // Check that only the inner dim has a range greater than one cluster.
         for (int i = 0, j = 0; i < nsdims; i++) {
             if (i != step_posn) {
@@ -553,7 +553,7 @@ namespace yask {
                    " ... (end before) " << loop_idxs.stop.makeValStr(nsdims) <<
                    " w/write-mask = 0x" << hex << write_mask << dec);
 
-#ifdef DEBUG
+#ifdef CHECK
         // Check that only the inner dim has a range greater than one vector.
         for (int i = 0; i < nsdims; i++) {
             if (i != step_posn && i != _inner_posn)

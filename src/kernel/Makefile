@@ -398,6 +398,11 @@ ifneq ($(filter -O0 -O1,$(YK_CXXOPT)),)
  pfd_l2		=	0
 endif
 
+# Turn on checking at O0.
+ifneq ($(filter -O0,$(YK_CXXOPT)),)
+ MACROS		+=	CHECK
+endif
+
 # Set MACROS based on individual makefile vars.
 # MACROS and EXTRA_MACROS will be written to a header file.
 MACROS		+=	PFD_L1=$(pfd_l1) PFD_L2=$(pfd_l2)
@@ -639,6 +644,8 @@ headers: $(YK_GEN_HEADERS)
 # Build C++ and Python kernel API libs.
 api: $(YK_LIB) $(YK_PY_LIB)
 
+py-api: $(YK_PY_LIB)
+
 # Build python kernel API lib.
 # TODO: consider adding $(YK_TAG) to [some of] these targets.
 $(YK_SWIG_DIR)/yask_kernel_api_wrap.cpp: $(YK_SWIG_DIR)/yask*.i $(INC_DIR)/*.hpp
@@ -873,12 +880,12 @@ help:
 	@echo " $(MAKE) clean; $(MAKE) -j arch=skl stencil=awp yk-api"
 	@echo " "
 	@echo "Example debug builds of kernel cmd-line tool:"
-	@echo " $(MAKE) clean; $(MAKE) -j stencil=iso3dfd mpi=0 OMPFLAGS='-qopenmp-stubs' YK_CXXOPT='-O0' EXTRA_MACROS='DEBUG'"
-	@echo " $(MAKE) clean; $(MAKE) -j arch=intel64 stencil=3axis mpi=0 OMPFLAGS='-qopenmp-stubs' YK_CXXOPT='-O0' EXTRA_MACROS='DEBUG TRACE'  # TRACE is a useful debug setting!"
-	@echo " $(MAKE) clean; $(MAKE) -j arch=intel64 stencil=3axis radius=0 fold='x=1,y=1,z=1' mpi=0 YK_CXX=g++ OMPFLAGS='' YK_CXXOPT='-O0' EXTRA_MACROS='DEBUG TRACE TRACE_MEM TRACE_INTRINSICS'"
+	@echo " $(MAKE) clean; $(MAKE) -j stencil=iso3dfd mpi=0 OMPFLAGS='-qopenmp-stubs' YK_CXXOPT='-O0' EXTRA_MACROS='CHECK'"
+	@echo " $(MAKE) clean; $(MAKE) -j arch=intel64 stencil=3axis mpi=0 OMPFLAGS='-qopenmp-stubs' YK_CXXOPT='-O0' EXTRA_MACROS='CHECK TRACE'  # TRACE is a useful debug setting!"
+	@echo " $(MAKE) clean; $(MAKE) -j arch=intel64 stencil=3axis radius=0 fold='x=1,y=1,z=1' mpi=0 YK_CXX=g++ OMPFLAGS='' YK_CXXOPT='-O0' EXTRA_MACROS='CHECK TRACE TRACE_MEM TRACE_INTRINSICS'"
 	@echo " "
 	@echo "Example builds with test runs:"
 	@echo " $(MAKE) -j all"
 	@echo " $(MAKE) -j all ranks=2"
 	@echo " $(MAKE) -j all YK_CXX=g++ YK_CXXOPT=-O2 mpi=0"
-	@echo " $(MAKE) -j all YK_CXX=mpigxx YK_CXXOPT=-O2 ranks=3 EXTRA_MACROS='DEBUG'"
+	@echo " $(MAKE) -j all YK_CXX=mpigxx YK_CXXOPT=-O2 ranks=3 EXTRA_MACROS='CHECK'"

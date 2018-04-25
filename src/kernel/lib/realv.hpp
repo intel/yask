@@ -99,7 +99,7 @@ namespace yask {
 #undef VEC_ELEMS
 
     // Macro for looping through an aligned real_vec_t.
-#if defined(DEBUG) || (VLEN==1) || !defined(__INTEL_COMPILER) 
+#if defined(CHECK) || (VLEN==1) || !defined(__INTEL_COMPILER) 
 #define REAL_VEC_LOOP(i)                        \
     for (int i=0; i<VLEN; i++)
 #define REAL_VEC_LOOP_UNALIGNED(i)              \
@@ -121,7 +121,7 @@ namespace yask {
     }
     
     // conditional inlining
-#ifdef DEBUG
+#ifdef CHECK
 #define ALWAYS_INLINE inline
 #else
 #define ALWAYS_INLINE __attribute__((always_inline)) inline

@@ -43,9 +43,9 @@ typedef std::uint64_t uidx_t;
 // Settings from makefile.
 #include "yask_macros.hpp"
 
-// Control assert() by turning on with DEBUG instead of turning off with
+// Control assert() by turning on with CHECK instead of turning off with
 // NDEBUG. This makes it off by default.
-#ifndef DEBUG
+#ifndef CHECK
 #define NDEBUG
 #endif
 

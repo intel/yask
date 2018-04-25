@@ -138,6 +138,9 @@ compiler-api:
 kernel-api:
 	$(YK_MAKE) api
 
+py-kernel-api:
+	$(YK_MAKE) py-api
+
 api:
 	$(YC_MAKE) $@
 	$(YK_MAKE) $@
