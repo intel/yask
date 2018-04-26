@@ -39,6 +39,14 @@ IN THE SOFTWARE.
 #include <cstdarg>
 #include <assert.h>
 #include <fstream>
+
+// Need g++ >= 4.9 for regex.
+#define GCC_VERSION (__GNUC__ * 10000 \
+                     + __GNUC_MINOR__ * 100 \
+                     + __GNUC_PATCHLEVEL__)
+#if GCC_VERSION < 40900
+#error G++ 4.9.0 or later is required
+#endif
 #include <regex>
 
 // Common utilities.
