@@ -723,18 +723,6 @@ cxx-yc-api-test:
 	$(YK_MK_GEN_DIR)
 	mv $(YC_SRC_DIR)/yc-api-test-cxx.hpp $(YK_CODE_FILE)
 
-# Run Python compiler API test with exceptions to create stencil-code file.
-py-yc-api-test-with-exception:
-	$(MAKE) -C $(YC_SRC_DIR) $@
-	$(YK_MK_GEN_DIR)
-	mv $(YC_SRC_DIR)/yc-api-test-with-exception-py.hpp $(YK_CODE_FILE)
-
-# Run C++ compiler API test with exceptions to create stencil-code file.
-cxx-yc-api-test-with-exception:
-	$(MAKE) -C $(YC_SRC_DIR) $@
-	$(YK_MK_GEN_DIR)
-	mv $(YC_SRC_DIR)/yc-api-test-with-exception-cxx.hpp $(YK_CODE_FILE)
-
 ######## Misc targets
 
 # Run the default YASK compiler and kernel.
@@ -755,15 +743,20 @@ kernel-only:
 yk-test-no-yc: kernel-only
 	$(BIN_DIR)/yask.sh -stencil $(stencil) -arch $(arch) -ranks $(ranks) -v $(v_args)
 
+# Run the kernel API tests for C++ and Python with and w/o expected exceptions.
+api-tests:
+	$(MAKE) clean; $(MAKE) cxx-yk-api-test real_bytes=8 stencil=iso3dfd
+	$(MAKE) clean; $(MAKE) py-yk-api-test stencil=iso3dfd
+	$(MAKE) clean; $(MAKE) cxx-yk-api-test-with-exception real_bytes=8 stencil=iso3dfd
+	$(MAKE) clean; $(MAKE) py-yk-api-test-with-exception stencil=iso3dfd
+
+# Run several stencils using built-in validation.
 # NB: set arch var if applicable.
 # NB: save some time by using YK_CXXOPT=-O2.
 # These tests are focused on the kernel and not the compiler.
 # For testing both the kernel and compiler in various combinations,
 # run the tests from the top-level Makefile.
-all-tests:
-	$(MAKE) clean; $(MAKE) cxx-yk-grid-test stencil=test_3d fold=x=4,y=2 
-	$(MAKE) clean; $(MAKE) cxx-yk-api-test real_bytes=8 stencil=iso3dfd
-	$(MAKE) clean; $(MAKE) py-yk-api-test stencil=iso3dfd
+stencil-tests:
 	$(MAKE) clean; $(MAKE) yc-and-yk-test real_bytes=8 stencil=test_1d
 	$(MAKE) clean; $(MAKE) yc-and-yk-test real_bytes=8 stencil=3axis fold=x=2,y=2
 	$(MAKE) clean; $(MAKE) yc-and-yk-test real_bytes=8 stencil=9axis fold=x=2,z=2
@@ -777,6 +770,11 @@ all-tests:
 	$(MAKE) clean; $(MAKE) yc-and-yk-test real_bytes=8 stencil=ssg
 	$(MAKE) clean; $(MAKE) yc-and-yk-test real_bytes=8 stencil=fsg_abc
 	$(MAKE) clean; $(MAKE) yc-and-yk-test real_bytes=8 stencil=fsg2
+
+all-tests:
+	$(MAKE) clean; $(MAKE) cxx-yk-grid-test stencil=test_3d fold=x=4,y=2
+	$(MAKE) api-tests
+	$(MAKE) stencil-tests
 
 all:
 	$(MAKE) kernel
@@ -895,4 +893,4 @@ help:
 	@echo " $(MAKE) -j all"
 	@echo " $(MAKE) -j all ranks=2"
 	@echo " $(MAKE) -j all YK_CXX=g++ YK_CXXOPT=-O2 mpi=0"
-	@echo " $(MAKE) -j all YK_CXX=mpigxx YK_CXXOPT=-O2 ranks=3 EXTRA_MACROS='CHECK'"
+	@echo " $(MAKE) -j all YK_CXX=mpigxx YK_CXXOPT=-O1 ranks=3 EXTRA_MACROS='CHECK'"
