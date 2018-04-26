@@ -299,7 +299,8 @@ YK_PY_MOD	:=	$(YASK_DIR)/$(YK_MODULE).py
 YK_API_TEST_EXEC :=	$(BIN_DIR)/$(YK_BASE)_api_test.exe
 YK_GRID_TEST_EXEC :=	$(BIN_DIR)/$(YK_BASE)_grid_test.exe
 YK_API_TEST_EXEC_WITH_EXCEPTION :=	$(BIN_DIR)/$(YK_BASE)_api_exception_test.exe
-YK_DIMS_FILE	:=	num_dims.$(stencil).txt
+YK_STENCIL_DIMS_FILE	:=	num_stencil_dims.$(stencil).txt
+YK_GRID_DIMS_FILE	:=	num_grid_dims.$(stencil).txt
 
 MAKE_REPORT_FILE:=	make-report.$(YK_TAG).txt
 
@@ -479,8 +480,9 @@ endif
 # Add in final flags and user-added flags.
 YK_CXXFLAGS	+=	$(YK_CXXOPT) $(OMPFLAGS) $(EXTRA_YK_CXXFLAGS)
 
-# Number of dims extracted from YASK compiler output.
-NDIMS		:=	`cat $(YK_DIMS_FILE)`
+# Number of stencil/grid dims extracted from YASK compiler output.
+NSDIMS		:=	`cat $(YK_STENCIL_DIMS_FILE)`
+NGDIMS		:=	`cat $(YK_GRID_DIMS_FILE)`
 
 ######## Loop-compiler configuration:
 # The loop indices range from 0..N-1.
@@ -497,7 +499,7 @@ NDIMS		:=	`cat $(YK_DIMS_FILE)`
 # indices. Those that do not (e.g., grouped, serpentine, square-wave) may
 # *not* be used here when using temporal wavefronts. The time loop may be
 # found in StencilEquations::run_solution().
-RANK_LOOP_OPTS		?=	-ndims $(NDIMS) -inVar rank_idxs
+RANK_LOOP_OPTS		?=	-ndims $(NSDIMS) -inVar rank_idxs
 RANK_LOOP_ORDER		?=	1 .. N-1
 RANK_LOOP_CODE		?=	$(RANK_LOOP_OUTER_MODS) loop($(RANK_LOOP_ORDER)) \
 				{ $(RANK_LOOP_INNER_MODS) call(calc_region(stBundle_ptr)); }
@@ -507,7 +509,7 @@ RANK_LOOP_CODE		?=	$(RANK_LOOP_OUTER_MODS) loop($(RANK_LOOP_ORDER)) \
 # to a top-level OpenMP thread.  The region time loops are not coded here to
 # allow for proper spatial skewing for temporal wavefronts. The time loop
 # may be found in StencilEquations::calc_region().
-REGION_LOOP_OPTS	?=     	-ndims $(NDIMS) -inVar region_idxs \
+REGION_LOOP_OPTS	?=     	-ndims $(NSDIMS) -inVar region_idxs \
 				-ompConstruct '$(omp_par_for) schedule($(omp_region_schedule)) proc_bind(spread)' \
 				-callPrefix 'sg->'
 REGION_LOOP_OUTER_MODS	?=	grouped omp
@@ -519,7 +521,7 @@ REGION_LOOP_CODE	?=	$(REGION_LOOP_OUTER_MODS) loop($(REGION_LOOP_ORDER)) { \
 # a *nested* OpenMP loop so that each sub-block is assigned to a nested OpenMP
 # thread.  There is no time loop because threaded temporal blocking is
 # not yet supported.
-BLOCK_LOOP_OPTS		?=     	-ndims $(NDIMS) -inVar block_idxs \
+BLOCK_LOOP_OPTS		?=     	-ndims $(NSDIMS) -inVar block_idxs \
 				-ompConstruct '$(omp_par_for) schedule($(omp_block_schedule)) proc_bind(close)' \
 				-callPrefix 'sg->'
 BLOCK_LOOP_OUTER_MODS	?=	grouped omp
@@ -532,7 +534,7 @@ BLOCK_LOOP_CODE		?=	$(BLOCK_LOOP_OUTER_MODS) loop($(BLOCK_LOOP_ORDER)) { \
 # stencil compiler.  There is no time loop because threaded temporal
 # blocking is not yet supported.  The indexes in this loop are 'normalized',
 # i.e., vector units and rank-relative.
-SUB_BLOCK_LOOP_OPTS		?=     	-ndims $(NDIMS) -inVar norm_sub_block_idxs
+SUB_BLOCK_LOOP_OPTS		?=     	-ndims $(NSDIMS) -inVar norm_sub_block_idxs
 SUB_BLOCK_LOOP_OUTER_MODS	?=
 SUB_BLOCK_LOOP_ORDER		?=	1 .. N-2
 SUB_BLOCK_LOOP_CODE		?=	$(SUB_BLOCK_LOOP_OUTER_MODS) loop($(SUB_BLOCK_LOOP_ORDER)) { \
@@ -541,7 +543,7 @@ SUB_BLOCK_LOOP_CODE		?=	$(SUB_BLOCK_LOOP_OUTER_MODS) loop($(SUB_BLOCK_LOOP_ORDER
 # General-purpose parallel loop.
 # Nested OpenMP is not used here because there is no sharing between threads.
 # TODO: Consider using nested OpenMP to hide more latency.
-MISC_LOOP_OPTS		?=     	-ndims $(NDIMS) -inVar misc_idxs \
+MISC_LOOP_OPTS		?=     	-ndims $(NSDIMS) -inVar misc_idxs \
 				-ompConstruct '$(omp_par_for) schedule($(omp_misc_schedule)) proc_bind(spread)'
 MISC_LOOP_OUTER_MODS	?=	omp
 MISC_LOOP_ORDER		?=	1 .. N-1
@@ -577,48 +579,53 @@ $(MAKE_REPORT_FILE): $(YK_LIB)
 #$(MAKE) code-stats | tee -a $@
 
 # Generated source files.
-$(YK_GEN_DIR)/yask_rank_loops.hpp: $(GEN_LOOPS) $(YK_DIMS_FILE)
+$(YK_GEN_DIR)/yask_rank_loops.hpp: $(GEN_LOOPS) $(YK_STENCIL_DIMS_FILE)
 	$(YK_MK_GEN_DIR)
 	$(PERL) $< -output $@ $(RANK_LOOP_OPTS) $(EXTRA_LOOP_OPTS) $(EXTRA_RANK_LOOP_OPTS) "$(RANK_LOOP_CODE)"
 
-$(YK_GEN_DIR)/yask_region_loops.hpp: $(GEN_LOOPS) $(YK_DIMS_FILE)
+$(YK_GEN_DIR)/yask_region_loops.hpp: $(GEN_LOOPS) $(YK_STENCIL_DIMS_FILE)
 	$(YK_MK_GEN_DIR)
 	$(PERL) $< -output $@ $(REGION_LOOP_OPTS) $(EXTRA_LOOP_OPTS) $(EXTRA_REGION_LOOP_OPTS) "$(REGION_LOOP_CODE)"
 
-$(YK_GEN_DIR)/yask_block_loops.hpp: $(GEN_LOOPS) $(YK_DIMS_FILE)
+$(YK_GEN_DIR)/yask_block_loops.hpp: $(GEN_LOOPS) $(YK_STENCIL_DIMS_FILE)
 	$(YK_MK_GEN_DIR)
 	$(PERL) $< -output $@ $(BLOCK_LOOP_OPTS) $(EXTRA_LOOP_OPTS) $(EXTRA_BLOCK_LOOP_OPTS) "$(BLOCK_LOOP_CODE)"
 
-$(YK_GEN_DIR)/yask_sub_block_loops.hpp: $(GEN_LOOPS) $(YK_DIMS_FILE)
+$(YK_GEN_DIR)/yask_sub_block_loops.hpp: $(GEN_LOOPS) $(YK_STENCIL_DIMS_FILE)
 	$(YK_MK_GEN_DIR)
 	$(PERL) $< -output $@ $(SUB_BLOCK_LOOP_OPTS) $(EXTRA_LOOP_OPTS) $(EXTRA_SUB_BLOCK_LOOP_OPTS) "$(SUB_BLOCK_LOOP_CODE)"
 
-$(YK_GEN_DIR)/yask_misc_loops.hpp: $(GEN_LOOPS) $(YK_DIMS_FILE)
+$(YK_GEN_DIR)/yask_misc_loops.hpp: $(GEN_LOOPS) $(YK_STENCIL_DIMS_FILE)
 	$(YK_MK_GEN_DIR)
 	$< -output $@ $(MISC_LOOP_OPTS) $(EXTRA_LOOP_OPTS) $(EXTRA_MISC_LOOP_OPTS) "$(MISC_LOOP_CODE)"
 
-$(YK_GEN_DIR)/yask_layout_macros.hpp: $(GEN_LAYOUTS) $(YK_DIMS_FILE)
+$(YK_GEN_DIR)/yask_layout_macros.hpp: $(GEN_LAYOUTS) $(YK_GRID_DIMS_FILE)
 	$(YK_MK_GEN_DIR)
-	$(PERL) $< -m $(NDIMS) > $@
+	$(PERL) $< -m $(NGDIMS) > $@
 	@- gindent -fca $@ || \
 	  indent -fca $@ ||   \
 	  echo "note:" $@ "is not properly indented because indent program failed or was not found."
 
-$(YK_GEN_DIR)/yask_layouts.hpp: $(GEN_LAYOUTS) $(YK_DIMS_FILE)
+$(YK_GEN_DIR)/yask_layouts.hpp: $(GEN_LAYOUTS) $(YK_GRID_DIMS_FILE)
 	$(YK_MK_GEN_DIR)
-	$(PERL) $< -d $(NDIMS) > $@
+	$(PERL) $< -d $(NGDIMS) > $@
 	@- gindent -fca $@ || \
 	  indent -fca $@ ||   \
 	  echo "note:" $@ "is not properly indented because indent program failed or was not found."
 
-$(YK_GEN_DIR)/yask_grid_code.hpp: $(GEN_LAYOUTS) $(YK_DIMS_FILE)
+$(YK_GEN_DIR)/yask_grid_code.hpp: $(GEN_LAYOUTS) $(YK_GRID_DIMS_FILE)
 	$(YK_MK_GEN_DIR)
-	$(PERL) $< -g $(NDIMS) > $@
+	$(PERL) $< -g $(NGDIMS) > $@
 
 # Extract the number of stencil dims from the compiler output.
 # Use this to create an option to pass to the loop generator script.
-$(YK_DIMS_FILE): $(YK_CODE_FILE)
+$(YK_STENCIL_DIMS_FILE): $(YK_CODE_FILE)
 	awk '/NUM_STENCIL_DIMS/ {print $$NF}' $< > $@
+
+# Extract the number of grid dims from the compiler output.
+# Use this to create an option to pass to the layout generator script.
+$(YK_GRID_DIMS_FILE): $(YK_CODE_FILE)
+	awk '/NUM_GRID_DIMS/ {print $$NF}' $< > $@
 
 $(YK_CODE_FILE): $(YC_EXEC)
 	$(YK_MK_GEN_DIR)
@@ -781,7 +788,7 @@ all:
 # Make this target before rebuilding YASK with any new parameters.
 clean:
 	rm -fv *.s
-	rm -fv num_dims.*.txt
+	rm -fv num_*dims.*.txt
 	rm -fr $(YK_SWIG_DIR)/build $(YK_GEN_DIR)
 	rm -fv $(YK_SWIG_DIR)/*_api_wrap.*
 	rm -fv $(YK_OBJS)

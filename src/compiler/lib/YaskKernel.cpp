@@ -92,7 +92,15 @@ namespace yask {
 
         os << "\n// Number of stencil dimensions (step and domain):\n"
             "#define NUM_STENCIL_DIMS " << _dims->_stencilDims.size() << endl;
-        
+
+        int gdims = 0;
+        for (auto gp : _grids) {
+            int ndims = gp->get_num_dims();
+            gdims = max(gdims, ndims);
+        }
+        os << "\n// Max number of grid dimensions:\n"
+            "#define NUM_GRID_DIMS " << gdims << endl;
+
         // Vec/cluster lengths.
         auto nvec = _dims->_foldGT1.getNumDims();
         os << "\n// One vector fold: " << _dims->_fold.makeDimValStr(" * ") << endl;
