@@ -109,6 +109,36 @@ namespace yask {
         return posn;
     }
         
+    // Determine required padding from halos.
+    // Does not include user-specified min padding or
+    // final rounding for left pad.
+    Indices YkGridBase::getReqdPad(const Indices& halos, const Indices& wf_exts) const {
+
+        // Start with halos plus WF exts.
+        Indices mp = halos.addElements(wf_exts);
+            
+
+        // For scratch grids, halo area must be written to.  Halo is sum
+        // of dependent's write halo and depender's read halo, but these
+        // two components are not stored individually.  Write halo will
+        // be expanded to full vec len during computation, requiring
+        // load from read halo beyond full vec len.  Worst case is when
+        // write halo is one and rest is read halo.  So if there is a
+        // halo and/or wf-ext, padding should be that plus all but one
+        // element of a vector. In addition, this vec-len should be the
+        // global one, not the one for this grid to handle the case where
+        // this grid is not vectorized.
+        for (int i = 0; i < get_num_dims(); i++) {
+            if (mp[i] >= 1) {
+                auto& dname = get_dim_name(i);
+                auto* p = _dims->_domain_dims.lookup(dname);
+                if (p)
+                    mp[i] += *p - 1;
+            }
+        }
+        return mp;
+    }
+
     // Resizes the underlying generic grid.
     // Modifies _pads and _allocs.
     // Fails if mem different and already alloc'd.
@@ -151,6 +181,9 @@ namespace yask {
             left_pads2[i] = ROUND_UP(left_pads2[i], _vec_lens[i]);
             _left_pads[i] = left_pads2[i];
             _vec_left_pads[i] = left_pads2[i] / _vec_lens[i];
+
+            // For the right pad, we will round it up below when
+            // we calculate alloc.
         }
         
         // New allocation in each dim.

@@ -92,23 +92,7 @@ namespace yask {
         // Determine required padding from halos.
         // Does not include user-specified min padding or
         // final rounding for left pad.
-        virtual Indices getReqdPad(const Indices& halos, const Indices& wf_exts) const {
-            Indices mp = halos.addElements(wf_exts);
-            for (int i = 0; i < get_num_dims(); i++) {
-
-                // For scratch grids, halo area must be written to.  Halo is sum
-                // of dependent's write halo and dependency's read halo, but
-                // these two components are not stored individually.  Write halo
-                // will be expanded to full vec len during computation,
-                // requiring load from read halo beyond full vec len.  Worst
-                // case is when write halo is one and rest is read halo.  So if
-                // there is a halo and/or wf-ext, padding should be that plus
-                // all but one element of a vector.
-                if (mp[i] >= 1)
-                    mp[i] += _vec_lens[i] - 1;
-            }
-            return mp;
-        }
+        virtual Indices getReqdPad(const Indices& halos, const Indices& wf_exts) const;
 
         // Check whether dim exists and is of allowed type.
         virtual void checkDimType(const std::string& dim,
@@ -382,6 +366,7 @@ namespace yask {
         GET_GRID_API(_get_last_alloc_index)
         GET_GRID_API(_get_left_wf_ext)
         GET_GRID_API(_get_right_wf_ext)
+        GET_GRID_API(_get_vec_lens)
         SET_GRID_API(_set_domain_size)
         SET_GRID_API(_set_left_pad_size)
         SET_GRID_API(_set_right_pad_size)

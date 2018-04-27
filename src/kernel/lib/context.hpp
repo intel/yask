@@ -295,9 +295,6 @@ namespace yask {
             // Dump stats if get_stats() hasn't been called yet.
             if (steps_done)
                 get_stats();
-
-            // Free mem, reset threads, etc.
-            end_solution();
         }
 
         // Set debug output to cout if my_rank == msg_rank
@@ -386,7 +383,7 @@ namespace yask {
         // Adjust offsets of scratch grids based
         // on thread and scan indices.
         virtual void update_scratch_grids(int thread_idx,
-                                          const ScanIndices& idxs);
+                                          const Indices& idxs);
 
         // Get total memory allocation required by grids.
         // Does not include MPI buffers.

@@ -193,14 +193,14 @@ namespace yask {
         
         // Indices to loop through.
         // Init from begin & end tuples.
-        ScanIndices rank_idxs(*_dims, false);
+        ScanIndices rank_idxs(*_dims, false, &rank_domain_offsets);
         rank_idxs.begin = begin;
         rank_idxs.end = end;
 
         // Set offsets in scratch grids.
         // Requires scratch grids to be allocated for whole
         // rank instead of smaller grid size.
-        update_scratch_grids(scratch_grid_idx, rank_idxs);
+        update_scratch_grids(scratch_grid_idx, rank_idxs.begin);
             
         // Initial halo exchange.
         // (Needed in case there are 0 time-steps).
@@ -376,7 +376,7 @@ namespace yask {
         }
 
         // Indices needed for the 'rank' loops.
-        ScanIndices rank_idxs(*_dims, true);
+        ScanIndices rank_idxs(*_dims, true, &rank_domain_offsets);
         rank_idxs.begin = begin;
         rank_idxs.end = end;
         rank_idxs.step = step;
@@ -507,7 +507,7 @@ namespace yask {
                   " ... (end before) " << rank_idxs.stop.makeValStr(ndims));
 
         // Init region begin & end from rank start & stop indices.
-        ScanIndices region_idxs(*_dims, true);
+        ScanIndices region_idxs(*_dims, true, &rank_domain_offsets);
         region_idxs.initFromOuter(rank_idxs);
 
         // Make a copy of the original start and stop indices because
@@ -967,12 +967,13 @@ namespace yask {
         }
     }
 
-    // Adjust offsets of scratch grids based
-    // on thread and scan indices.
-    // Each scratch-grid is assigned to a thread, so it must
-    // "move around" as the thread is assigned to each block.
+    // Adjust offsets of scratch grids based on thread number 'thread_idx'
+    // and beginning point of block 'idxs'.  Each scratch-grid is assigned
+    // to a thread, so it must "move around" as the thread is assigned to
+    // each block.  This move is accomplished by changing the grids' global
+    // and local offsets.
     void StencilContext::update_scratch_grids(int thread_idx,
-                                              const ScanIndices& idxs) {
+                                              const Indices& idxs) {
         auto dims = get_dims();
         int nsdims = dims->_stencil_dims.size();
         auto step_posn = Indices::step_posn;
@@ -981,7 +982,7 @@ namespace yask {
         for (auto* sv : scratchVecs) {
             assert(sv);
 
-            // Get the one for this thread.
+            // Get ptr to the scratch grid for this thread.
             auto gp = sv->at(thread_idx);
             assert(gp);
             assert(gp->is_scratch());
@@ -996,16 +997,32 @@ namespace yask {
                     int posn = gp->get_dim_posn(dname);
                     if (posn >= 0) {
 
+                        // |        +------+       |
+                        // |  loc   |      |       | 
+                        // |  ofs   |      |       | 
+                        // |<------>|      |       | 
+                        // |        +------+       |
+                        // ^        ^
+                        // |        |
+                        // |        start of grid/0-idx of block
+                        // first rank-domain index
+                        
                         // Set offset of grid based on starting point of block.
-                        // This is global, so it will include the rank offset.
-                        gp->_set_offset(posn, idxs.begin[i]);
+                        // This is a global index, so it will include the rank offset.
+                        gp->_set_offset(posn, idxs[i]);
 
+                        // Local offset is the offset of this grid
+                        // relative to the current rank.
                         // Set local offset to diff between global offset
-                        // and rank offset. Must be vec-multiple.
+                        // and rank offset.
                         auto rofs = rank_domain_offsets[j];
-                        auto lofs = idxs.begin[i] - rofs;
+                        auto lofs = idxs[i] - rofs;
                         gp->_set_local_offset(posn, lofs);
-                        assert(imod_flr(lofs, dims->_fold_pts[j]) == 0);
+
+                        // For a vectorized grid, the local offset must
+                        // be a vector multiple. This is necessary for
+                        // vector and cluster operations to work properly.
+                        assert(imod_flr(lofs, gp->_get_vec_lens(posn)) == 0);
                     }
                     j++;
                 }
@@ -1148,10 +1165,14 @@ namespace yask {
             auto sg_list = sg.get_scratch_deps();
             sg_list.push_back(&sg);
 
-            // Loop through all the needed groups.
+            // Loop through all the needed bundles.
             for (auto* csg : sg_list) {
 
-                // Loop thru all *input* grids in this group.
+                TRACE_MSG("exchange_halos: checking " << csg->inputGridPtrs.size() <<
+                          " input grid(s) to bundle '" << csg->get_name() <<
+                          "' that is needed for bundle '" << sg.get_name() << "'");
+
+                // Loop thru all *input* grids in this bundle.
                 for (auto gp : csg->inputGridPtrs) {
 
                     // Don't swap scratch grids.
