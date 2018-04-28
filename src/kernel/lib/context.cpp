@@ -271,9 +271,13 @@ namespace yask {
 #include "yask_misc_loops.hpp"
 #undef misc_fn
                 
-                    // Remember grids that have been written to by this bundle,
+                    // Mark grids that [may] have been written to by this bundle,
                     // updated at next step (+/- 1).
-                    mark_grids_dirty(start_t + step_t, stop_t + step_t, *asg);
+                    // Mark grids as dirty even if not actually written by this
+                    // rank. This is needed because neighbors will not know what
+                    // grids are actually dirty, and all ranks must have the same
+                    // information about which grids are possibly dirty.
+                    mark_grids_dirty(start_t + step_t, stop_t + step_t, *sg);
                 
                 } // needed bundles.
             } // all bundles.
@@ -436,9 +440,9 @@ namespace yask {
             }
 
             // If doing wave-fronts, must loop through all bundles in
-            // calc_region().
-            // TODO: make this the only case, allowing all bundles to be done
-            // between MPI exchanges, even w/o wave-fronts.
+            // calc_region().  TODO: consider making this the only case,
+            // allowing all bundles to be done between MPI exchanges, even
+            // w/o wave-fronts.
             else {
 
                 // Exchange all dirty halo(s).
@@ -606,13 +610,18 @@ namespace yask {
                     // similar for y and z.  This code typically
                     // contains the outer OpenMP loop(s).
 #include "yask_region_loops.hpp"
-
-                    // Remember grids that have been written to by this bundle,
-                    // updated at next step (+/- 1).
-                    mark_grids_dirty(start_t + step_t, stop_t + step_t, *sg);
                 }
             
-                // Shift spatial region boundaries for next iteration to
+                // Mark grids that [may] have been written to by this bundle,
+                // updated at next step (+/- 1).
+                // Mark grids as dirty even if not actually written by this
+                // rank. This is needed because neighbors will not know what
+                // grids are actually dirty, and all ranks must have the same
+                // information about which grids are possibly dirty.
+                // TODO: make this smarter.
+                mark_grids_dirty(start_t + step_t, stop_t + step_t, *sg);
+
+                    // Shift spatial region boundaries for next iteration to
                 // implement temporal wavefront.  Between regions, we only shift
                 // backward, so region loops must strictly increment. They may do
                 // so in any order.  TODO: shift only what is needed by
@@ -1184,7 +1193,7 @@ namespace yask {
                     if (!gp->is_dirty(t))
                         continue;
 
-                    // Only need to swap grids that have MPI buffers.
+                    // Only need to swap grids that have any MPI buffers.
                     auto& gname = gp->get_name();
                     if (mpiData.count(gname) == 0)
                         continue;
@@ -1226,7 +1235,7 @@ namespace yask {
                     auto gp = gtsi.second;
                     gi++;
                     MPI_Request* grid_recv_reqs = recv_reqs[gi];
-                    TRACE_MSG(" for grid '" << gname << "'...");
+                    TRACE_MSG(" for grid #" << gi << ", '" << gname << "'...");
 
                     // Visit all this rank's neighbors.
                     auto& grid_mpi_data = mpiData.at(gname);
@@ -1260,6 +1269,8 @@ namespace yask {
                                               neighbor_rank, int(gi), _env->comm, &grid_recv_reqs[ni]);
                                     num_recv_reqs++;
                                 }
+                                else
+                                    TRACE_MSG("   0B to request");
                             }
 
                             // Pack data into send buffer, then send to neighbor.
@@ -1276,7 +1287,7 @@ namespace yask {
                                     IdxTuple first = sendBuf.begin_pt;
                                     IdxTuple last = sendBuf.last_pt;
 
-                                    // The code in allocData() pre-calculated the first and
+                                    // The code in allocMpiData() pre-calculated the first and
                                     // last points of each buffer, except in the step dim.
                                     // So, we need to set that value now.
                                     // TODO: update this if we expand the buffers to hold
@@ -1305,6 +1316,8 @@ namespace yask {
                                               neighbor_rank, int(gi), _env->comm,
                                               &send_reqs[num_send_reqs++]);
                                 }
+                                else
+                                    TRACE_MSG("   0B to send");
                             }
 
                             // Wait for data from neighbor, then unpack it.
@@ -1343,6 +1356,8 @@ namespace yask {
                                         n = gp->set_elements_in_slice(buf, first, last);
                                     assert(n == recvBuf.get_size());
                                 }
+                                else
+                                    TRACE_MSG("   0B to wait for");
                             }
                         }); // visit neighbors.
 

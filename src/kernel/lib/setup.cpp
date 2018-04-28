@@ -328,7 +328,7 @@ namespace yask {
         } // grid passes.
     };
     
-    // Create MPI and allocate buffers.
+    // Create MPI buffers and allocate them.
     void StencilContext::allocMpiData(ostream& os) {
 
         // Remove any old MPI data.
@@ -336,7 +336,8 @@ namespace yask {
 
 #ifdef USE_MPI
 
-        int num_exchanges = 0;
+        map<int, int> num_exchanges; // send/recv => count.
+        map<int, idx_t> num_elems; // send/recv => count.
         auto me = _env->my_rank;
         
         // Need to determine the size and shape of all MPI buffers.
@@ -369,10 +370,24 @@ namespace yask {
                     return;     // from lambda fn.
                 }
         
-                // Determine size of MPI buffers between neigh_rank and my rank
-                // for each grid and create those that are needed.
+                // Is vectorized exchange allowed based on domain sizes?
+                // Both my rank and neighbor rank must have all domain sizes
+                // of vector multiples.
+                bool vec_ok = allow_vec_exchange &&
+                    _mpiInfo->has_all_vlen_mults[_mpiInfo->my_neighbor_index] &&
+                    _mpiInfo->has_all_vlen_mults[neigh_idx];
+                
+                // Determine size of MPI buffers between neigh_rank and my
+                // rank for each grid and create those that are needed.  It
+                // is critical that the number, size, and shape of my
+                // send/receive buffers match those of the receive/send
+                // buffers of my neighbors.  Important: Current algorithm
+                // assumes my left neighbor's buffer sizes can be calculated
+                // by considering my rank's right side data and vice-versa.
+                // Thus, all ranks must have consistent data that contribute
+                // to these calculations.
                 for (auto gp : gridPtrs) {
-                    if (!gp)
+                    if (!gp || gp->is_scratch() || gp->is_fixed_size())
                         continue;
                     auto& gname = gp->get_name();
 
@@ -384,12 +399,15 @@ namespace yask {
                     IdxTuple first_outer_idx, last_outer_idx;
                     for (auto& dim : _dims->_domain_dims.getDims()) {
                         auto& dname = dim.getName();
+
+                        // Only consider domain dims that are used in this grid.
                         if (gp->is_dim_used(dname)) {
 
-                            // Get domain indices for this grid.
-                            // If there are no more ranks in the given direction, extend
-                            // the index into the outer halo to make sure all data are sync'd.
-                            // This is critical for WFs.
+                            // Get domain indices for this grid.  If there
+                            // are no more ranks in the given direction,
+                            // extend the "outer" index to include the halo
+                            // in that direction to make sure all data are
+                            // sync'd.  This is critical for WFs.
                             idx_t fidx = gp->get_first_rank_domain_index(dname);
                             idx_t lidx = gp->get_last_rank_domain_index(dname);
                             first_inner_idx.addDimBack(dname, fidx);
@@ -401,55 +419,57 @@ namespace yask {
                             first_outer_idx.addDimBack(dname, fidx);
                             last_outer_idx.addDimBack(dname, lidx);
 
-                            // Determine size of exchange. This will be the actual halo size
-                            // plus any wave-front extensions. In the current implementation,
-                            // we need the wave-front extensions regardless of whether there
-                            // is a halo on a given grid. This is because each stencil-bundle
-                            // gets shifted by the WF angles at each step in the WF.
+                            // Determine size of exchange in this dim. This
+                            // will be the actual halo size plus any
+                            // wave-front shifts. In the current
+                            // implementation, we need the wave-front shifts
+                            // regardless of whether there is a halo on a
+                            // given grid. This is because each
+                            // stencil-bundle gets shifted by the WF angles
+                            // at each step in the WF.
 
-                            // Neighbor is to the left.
+                            // Neighbor is to the left in this dim.
                             if (neigh_offsets[dname] == MPIInfo::rank_prev) {
-                                auto ext = left_wf_exts[dname];
+                                auto ext = wf_shifts[dname];
 
-                                // my halo.
+                                // my halo on my left.
                                 auto halo_size = gp->get_left_halo_size(dname);
                                 halo_size += ext;
                                 my_halo_sizes.addDimBack(dname, halo_size);
 
-                                // neighbor halo.
-                                halo_size = gp->get_right_halo_size(dname); // their right is on my left.
+                                // neighbor halo on their right.
+                                halo_size = gp->get_right_halo_size(dname); // assume their right == my right.
                                 halo_size += ext;
                                 neigh_halo_sizes.addDimBack(dname, halo_size);
+
+                                // Flag that this grid has a neighbor to left or right.
+                                found_delta = true;
                             }
 
-                            // Neighbor is to the right.
+                            // Neighbor is to the right in this dim.
                             else if (neigh_offsets[dname] == MPIInfo::rank_next) {
-                                auto ext = right_wf_exts[dname];
+                                auto ext = wf_shifts[dname];
 
-                                // my halo.
+                                // my halo on my right.
                                 auto halo_size = gp->get_right_halo_size(dname);
                                 halo_size += ext;
                                 my_halo_sizes.addDimBack(dname, halo_size);
 
-                                // neighbor halo.
-                                halo_size = gp->get_left_halo_size(dname); // their left is on my right.
+                                // neighbor halo on their left.
+                                halo_size = gp->get_left_halo_size(dname); // assume their left == my left.
                                 halo_size += ext;
                                 neigh_halo_sizes.addDimBack(dname, halo_size);
+
+                                // Flag that this grid has a neighbor to left or right.
+                                found_delta = true;
                             }
 
-                            // Neighbor in-line.
+                            // Neighbor in-line in this dim.
                             else {
                                 my_halo_sizes.addDimBack(dname, 0);
                                 neigh_halo_sizes.addDimBack(dname, 0);
                             }
 
-                            // Vectorized exchange allowed based on domain sizes?
-                            // Both my rank and neighbor rank must have all domain sizes
-                            // of vector multiples.
-                            bool vec_ok = allow_vec_exchange &&
-                                _mpiInfo->has_all_vlen_mults[_mpiInfo->my_neighbor_index] &&
-                                _mpiInfo->has_all_vlen_mults[neigh_idx];
-                            
                             // Round up halo sizes if vectorized exchanges allowed.
                             // TODO: add a heuristic to avoid increasing by a large factor.
                             if (vec_ok) {
@@ -457,12 +477,8 @@ namespace yask {
                                 my_halo_sizes.setVal(dname, ROUND_UP(my_halo_sizes[dname], vec_size));
                                 neigh_halo_sizes.setVal(dname, ROUND_UP(neigh_halo_sizes[dname], vec_size));
                             }
-                            
-                            // Is this neighbor before or after me in this domain direction?
-                            if (neigh_offsets[dname] != MPIInfo::rank_self)
-                                found_delta = true;
-                        }
-                    }
+                        } // domain dims in this grid.
+                    } // domain dims.
 
                     // Is buffer needed?
                     // Example: if this grid is 2D in y-z, but only neighbors are in
@@ -589,19 +605,6 @@ namespace yask {
                                 
                         } // all dims in this grid.
 
-                        // Does buffer have non-zero size?
-                        if (buf_sizes.size() == 0 || buf_sizes.product() == 0) {
-                            TRACE_MSG("no halo exchange needed for grid '" << gname <<
-                                      "' with rank " << neigh_rank <<
-                                      " because there is no data to exchange");
-                            continue;
-                        }
-
-                        // At this point, buf_sizes, copy_begin, and copy_end
-                        // should be set for each dim in this grid.
-                        // Convert end to last.
-                        IdxTuple copy_last = copy_end.subElements(1);
-
                         // Unique name for buffer based on grid name, direction, and ranks.
                         ostringstream oss;
                         oss << gname;
@@ -610,6 +613,18 @@ namespace yask {
                         else if (bd == MPIBufs::bufRecv)
                             oss << "_recv_halo_from_" << neigh_rank << "_to_" << me;
                         string bufname = oss.str();
+
+                        // Does buffer have non-zero size?
+                        if (buf_sizes.size() == 0 || buf_sizes.product() == 0) {
+                            TRACE_MSG("MPI buffer '" << bufname <<
+                                      "' not needed because there is no data to exchange");
+                            continue;
+                        }
+
+                        // At this point, buf_sizes, copy_begin, and copy_end
+                        // should be set for each dim in this grid.
+                        // Convert end to last.
+                        IdxTuple copy_last = copy_end.subElements(1);
 
                         // Make MPI data entry for this grid.
                         auto gbp = mpiData.emplace(gname, _mpiInfo);
@@ -625,18 +640,22 @@ namespace yask {
                         buf.name = bufname;
                         buf.has_all_vlen_mults = vlen_mults;
                         
-                        TRACE_MSG("configured MPI buffer object '" << buf.name <<
-                                  "' for rank at relative offsets " <<
+                        TRACE_MSG("MPI buffer '" << buf.name <<
+                                  "' configured for rank at relative offsets " <<
                                   neigh_offsets.subElements(1).makeDimValStr() << " with " <<
                                   buf.num_pts.makeDimValStr(" * ") << " = " << buf.get_size() <<
                                   " element(s) at " << buf.begin_pt.makeDimValStr() <<
                                   " ... " << buf.last_pt.makeDimValStr());
-                        num_exchanges++;
+                        num_exchanges[bd]++;
+                        num_elems[bd] += buf.get_size();
 
                     } // send, recv.
                 } // grids.
             });   // neighbors.
-        TRACE_MSG("number of halo-exchanges needed on this rank: " << num_exchanges);
+        TRACE_MSG("number of MPI send buffers on this rank: " << num_exchanges[int(MPIBufs::bufSend)]);
+        TRACE_MSG("number of elements in send buffers: " << makeNumStr(num_elems[int(MPIBufs::bufSend)]));
+        TRACE_MSG("number of MPI recv buffers on this rank: " << num_exchanges[int(MPIBufs::bufRecv)]);
+        TRACE_MSG("number of elements in recv buffers: " << makeNumStr(num_elems[int(MPIBufs::bufRecv)]));
 
         // Base ptrs for all alloc'd data.
         // These pointers will be shared by the ones in the grid
