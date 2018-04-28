@@ -30,6 +30,9 @@ using namespace std;
 
 namespace yask {
 
+#define DEPRECATED(api_name) cerr << "\n*** WARNING: deprecated YASK API '" \
+    #api_name "' will be removed in a future release ***\n"
+
     // APIs to get info from vars.
 #define GET_GRID_API(api_name, expr, step_ok, domain_ok, misc_ok, prep_req) \
     idx_t YkGridBase::api_name(const string& dim) const {               \
@@ -46,16 +49,13 @@ namespace yask {
     GET_GRID_API(get_rank_domain_size, _domains[posn], false, true, false, false)
     GET_GRID_API(get_left_pad_size, _left_pads[posn], false, true, false, false) // _left_pads is actual size.
     GET_GRID_API(get_right_pad_size, _allocs[posn] - _left_pads[posn], false, true, false, false) // _right_pads is request only.
-    GET_GRID_API(get_pad_size, _left_pads[posn], false, true, false, false)
     GET_GRID_API(get_left_halo_size, _left_halos[posn], false, true, false, false)
     GET_GRID_API(get_right_halo_size, _right_halos[posn], false, true, false, false)
-    GET_GRID_API(get_halo_size, _left_halos[posn], false, true, false, false)
     GET_GRID_API(get_first_misc_index, _offsets[posn], false, false, true, false)
     GET_GRID_API(get_last_misc_index, _offsets[posn] + _domains[posn] - 1, false, false, true, false)
     GET_GRID_API(get_left_extra_pad_size, _left_pads[posn] - _left_halos[posn], false, true, false, false)
     GET_GRID_API(get_right_extra_pad_size, (_allocs[posn] - _left_pads[posn] - _domains[posn]) -
                  _right_halos[posn], false, true, false, false)
-    GET_GRID_API(get_extra_pad_size, _left_pads[posn] - _left_halos[posn], false, true, false, false)
     GET_GRID_API(get_alloc_size, _allocs[posn], true, true, true, false)
     GET_GRID_API(get_first_rank_domain_index, _offsets[posn] - _local_offsets[posn], false, true, false, true)
     GET_GRID_API(get_last_rank_domain_index, _offsets[posn] - _local_offsets[posn] + _domains[posn] - 1;
@@ -71,6 +71,10 @@ namespace yask {
     GET_GRID_API(_get_local_offset, _local_offsets[posn], true, true, true, false)
     GET_GRID_API(_get_first_alloc_index, _offsets[posn] - _left_pads[posn], true, true, true, true)
     GET_GRID_API(_get_last_alloc_index, _offsets[posn] - _left_pads[posn] + _allocs[posn] - 1, true, true, true, true)
+
+    GET_GRID_API(get_pad_size, (DEPRECATED(get_pad_size), _left_pads[posn]), false, true, false, false)
+    GET_GRID_API(get_halo_size, (DEPRECATED(get_halo_size), _left_halos[posn]), false, true, false, false)
+    GET_GRID_API(get_extra_pad_size, (DEPRECATED(get_extra_pad_size), _left_pads[posn] - _left_halos[posn]), false, true, false, false)
 #undef GET_GRID_API
     
     // APIs to set vars.

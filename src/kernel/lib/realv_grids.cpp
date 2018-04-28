@@ -273,23 +273,26 @@ namespace yask {
         auto allocs = get_allocs();
 
         // This will loop over the entire allocation.
-        // Indices of 'pt' will be relative to allocation.
+        // We use this as a handy way to get offsets,
+        // but not all will be used.
         allocs.visitAllPoints
             ([&](const IdxTuple& pt, size_t idx) {
 
                 // Adjust alloc indices to overall indices.
                 IdxTuple opt(pt);
                 bool ok = true;
-                for (int i = 0; i < pt.getNumDims(); i++) {
+                for (int i = 0; ok && i < pt.getNumDims(); i++) {
                     auto val = pt.getVal(i);
-                    opt[i] = _offsets[i] - _left_pads[i] + val;
 
-                    // Don't compare points in the extra padding area.
+                    // Convert to global index.
+                    opt[i] = _offsets[i] + val;
+
+                    // Don't compare points outside the domain.
+                    // TODO: check points in halo.
                     auto& dname = pt.getDimName(i);
                     if (_dims->_domain_dims.lookup(dname)) {
-                        auto halo_sz = get_halo_size(dname);
-                        auto first_ok = get_first_rank_domain_index(dname) - halo_sz;
-                        auto last_ok = get_last_rank_domain_index(dname) + halo_sz;
+                        auto first_ok = get_first_rank_domain_index(dname);
+                        auto last_ok = get_last_rank_domain_index(dname);
                         if (opt[i] < first_ok || opt[i] > last_ok)
                             ok = false;
                     }
