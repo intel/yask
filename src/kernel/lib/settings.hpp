@@ -633,8 +633,8 @@ namespace yask {
         IdxTuple num_pts;
 
         // Whether the number of points is a multiple of the
-        // vector length in all dims.
-        bool has_all_vlen_mults = false;
+        // vector length in all dims and buffer is aligned.
+        bool vec_copy_ok = false;
 
         // Number of points overall.
         idx_t get_size() const {

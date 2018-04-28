@@ -371,7 +371,7 @@ namespace yask {
                 }
         
                 // Is vectorized exchange allowed based on domain sizes?
-                // Both my rank and neighbor rank must have all domain sizes
+                // Both my rank and neighbor rank must have *all* domain sizes
                 // of vector multiples.
                 bool vec_ok = allow_vec_exchange &&
                     _mpiInfo->has_all_vlen_mults[_mpiInfo->my_neighbor_index] &&
@@ -390,6 +390,7 @@ namespace yask {
                     if (!gp || gp->is_scratch() || gp->is_fixed_size())
                         continue;
                     auto& gname = gp->get_name();
+                    bool grid_vec_ok = vec_ok;
 
                     // Lookup first & last domain indices and calc exchange sizes
                     // for this grid.
@@ -402,6 +403,9 @@ namespace yask {
 
                         // Only consider domain dims that are used in this grid.
                         if (gp->is_dim_used(dname)) {
+                            auto vlen = _dims->_fold_pts[dname];
+                            auto lhalo = gp->get_left_halo_size(dname);
+                            auto rhalo = gp->get_right_halo_size(dname);
 
                             // Get domain indices for this grid.  If there
                             // are no more ranks in the given direction,
@@ -413,12 +417,25 @@ namespace yask {
                             first_inner_idx.addDimBack(dname, fidx);
                             last_inner_idx.addDimBack(dname, lidx);
                             if (_opts->is_first_rank(dname))
-                                fidx -= gp->get_left_halo_size(dname);
+                                fidx -= lhalo;
                             if (_opts->is_last_rank(dname))
-                                lidx += gp->get_right_halo_size(dname);
+                                lidx += rhalo;
                             first_outer_idx.addDimBack(dname, fidx);
                             last_outer_idx.addDimBack(dname, lidx);
 
+                            // Determine if it is possible to round the
+                            // outer indices to vec-multiples. This will
+                            // be required to allow full vec exchanges for
+                            // this grid. We won't do the actual rounding
+                            // yet, because we need to see if it's safe
+                            // in all dims.
+                            fidx = round_down_flr(fidx, vlen);
+                            lidx = round_up_flr(lidx, vlen);
+                            if (fidx < gp->get_first_rank_alloc_index(dname))
+                                grid_vec_ok = false;
+                            if (lidx > gp->get_last_rank_alloc_index(dname))
+                                grid_vec_ok = false;
+                            
                             // Determine size of exchange in this dim. This
                             // will be the actual halo size plus any
                             // wave-front shifts. In the current
@@ -432,15 +449,12 @@ namespace yask {
                             if (neigh_offsets[dname] == MPIInfo::rank_prev) {
                                 auto ext = wf_shifts[dname];
 
-                                // my halo on my left.
-                                auto halo_size = gp->get_left_halo_size(dname);
-                                halo_size += ext;
-                                my_halo_sizes.addDimBack(dname, halo_size);
+                                // My halo on my left.
+                                my_halo_sizes.addDimBack(dname, lhalo + ext);
 
-                                // neighbor halo on their right.
-                                halo_size = gp->get_right_halo_size(dname); // assume their right == my right.
-                                halo_size += ext;
-                                neigh_halo_sizes.addDimBack(dname, halo_size);
+                                // Neighbor halo on their right.
+                                // Assume my right is same as their right.
+                                neigh_halo_sizes.addDimBack(dname, rhalo + ext);
 
                                 // Flag that this grid has a neighbor to left or right.
                                 found_delta = true;
@@ -450,15 +464,12 @@ namespace yask {
                             else if (neigh_offsets[dname] == MPIInfo::rank_next) {
                                 auto ext = wf_shifts[dname];
 
-                                // my halo on my right.
-                                auto halo_size = gp->get_right_halo_size(dname);
-                                halo_size += ext;
-                                my_halo_sizes.addDimBack(dname, halo_size);
+                                // My halo on my right.
+                                my_halo_sizes.addDimBack(dname, rhalo + ext);
 
-                                // neighbor halo on their left.
-                                halo_size = gp->get_left_halo_size(dname); // assume their left == my left.
-                                halo_size += ext;
-                                neigh_halo_sizes.addDimBack(dname, halo_size);
+                                // Neighbor halo on their left.
+                                // Assume my left is same as their left.
+                                neigh_halo_sizes.addDimBack(dname, lhalo + ext);
 
                                 // Flag that this grid has a neighbor to left or right.
                                 found_delta = true;
@@ -470,13 +481,6 @@ namespace yask {
                                 neigh_halo_sizes.addDimBack(dname, 0);
                             }
 
-                            // Round up halo sizes if vectorized exchanges allowed.
-                            // TODO: add a heuristic to avoid increasing by a large factor.
-                            if (vec_ok) {
-                                auto vec_size = _dims->_fold_pts[dname];
-                                my_halo_sizes.setVal(dname, ROUND_UP(my_halo_sizes[dname], vec_size));
-                                neigh_halo_sizes.setVal(dname, ROUND_UP(neigh_halo_sizes[dname], vec_size));
-                            }
                         } // domain dims in this grid.
                     } // domain dims.
 
@@ -491,6 +495,31 @@ namespace yask {
                         continue; // to next grid.
                     }
 
+                    // Round halo sizes if vectorized exchanges allowed.
+                    // Both self and neighbor must be vec-multiples
+                    // and outer indices must be vec-mults or extendable
+                    // to be so.
+                    // TODO: add a heuristic to avoid increasing by a large factor.
+                    if (grid_vec_ok) {
+                        for (auto& dim : _dims->_domain_dims.getDims()) {
+                            auto& dname = dim.getName();
+                            if (gp->is_dim_used(dname)) {
+                                auto vlen = _dims->_fold_pts[dname];
+
+                                // first index rounded down.
+                                first_outer_idx.setVal(dname, round_down_flr(first_outer_idx[dname], vlen));
+
+                                // last index rounded up.
+                                last_outer_idx.setVal(dname, round_up_flr(last_outer_idx[dname], vlen));
+                                
+                                // sizes rounded up.
+                                my_halo_sizes.setVal(dname, ROUND_UP(my_halo_sizes[dname], vlen));
+                                neigh_halo_sizes.setVal(dname, ROUND_UP(neigh_halo_sizes[dname], vlen));
+                                    
+                            } // domain dims in this grid.
+                        } // domain dims.
+                    }
+                    
                     // Make a buffer in both directions (send & receive).
                     for (int bd = 0; bd < MPIBufs::nBufDirs; bd++) {
 
@@ -498,7 +527,7 @@ namespace yask {
                         // of main grid to read from or write to based on
                         // the current neighbor being processed.
                         IdxTuple copy_begin = gp->get_allocs();
-                        IdxTuple copy_end = gp->get_allocs();
+                        IdxTuple copy_end = gp->get_allocs(); // one past last!
 
                         // Adjust along domain dims in this grid.
                         for (auto& dim : _dims->_domain_dims.getDims()) {
@@ -516,13 +545,15 @@ namespace yask {
                             
                                 // Region to read from, i.e., data from inside
                                 // this rank's domain to be put into neighbor's
-                                // halo.
+                                // halo. So, use neighbor's halo sizes when
+                                // calculating buffer size.
                                 if (bd == MPIBufs::bufSend) {
 
                                     // Neighbor is to the left.
                                     if (neigh_ofs == idx_t(MPIInfo::rank_prev)) {
 
                                         // Only read slice as wide as halo from beginning.
+                                        copy_begin[dname] = first_inner_idx[dname];
                                         copy_end[dname] = first_inner_idx[dname] + neigh_halo_sizes[dname];
                                     }
                             
@@ -531,6 +562,7 @@ namespace yask {
                                     
                                         // Only read slice as wide as halo before end.
                                         copy_begin[dname] = last_inner_idx[dname] + 1 - neigh_halo_sizes[dname];
+                                        copy_end[dname] = last_inner_idx[dname] + 1;
                                     }
                             
                                     // Else, this neighbor is in same posn as I am in this dim,
@@ -538,6 +570,7 @@ namespace yask {
                                 }
                         
                                 // Region to write to, i.e., into this rank's halo.
+                                // So, use my halo sizes when calculating buffer sizes.
                                 else if (bd == MPIBufs::bufRecv) {
 
                                     // Neighbor is to the left.
@@ -573,9 +606,11 @@ namespace yask {
                             if (_dims->_domain_dims.lookup(dname)) {
                                 dsize = copy_end[dname] - copy_begin[dname];
 
-                                // Check whether size is multiple of vlen.
+                                // Check whether alignment and size are multiple of vlen.
                                 auto vlen = _dims->_fold_pts[dname];
                                 if (dsize % vlen != 0)
+                                    vlen_mults = false;
+                                if (imod_flr(copy_begin[dname], vlen) != 0)
                                     vlen_mults = false;
                             }
 
@@ -638,7 +673,7 @@ namespace yask {
                         buf.last_pt = copy_last;
                         buf.num_pts = buf_sizes;
                         buf.name = bufname;
-                        buf.has_all_vlen_mults = vlen_mults;
+                        buf.vec_copy_ok = vlen_mults;
                         
                         TRACE_MSG("MPI buffer '" << buf.name <<
                                   "' configured for rank at relative offsets " <<

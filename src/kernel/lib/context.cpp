@@ -1281,7 +1281,7 @@ namespace yask {
                                     // Vec ok?
                                     // Domain sizes must be ok, and buffer size must be ok
                                     // as calculated when buffers were created.
-                                    bool send_vec_ok = vec_ok && sendBuf.has_all_vlen_mults;
+                                    bool send_vec_ok = vec_ok && sendBuf.vec_copy_ok;
 
                                     // Get first and last ranges.
                                     IdxTuple first = sendBuf.begin_pt;
@@ -1330,7 +1330,7 @@ namespace yask {
                                     MPI_Wait(&grid_recv_reqs[ni], MPI_STATUS_IGNORE);
 
                                     // Vec ok?
-                                    bool recv_vec_ok = vec_ok && recvBuf.has_all_vlen_mults;
+                                    bool recv_vec_ok = vec_ok && recvBuf.vec_copy_ok;
 
                                     // Get first and last ranges.
                                     IdxTuple first = recvBuf.begin_pt;
