@@ -31,7 +31,7 @@ using namespace std;
 namespace yask {
 
 #define DEPRECATED(api_name) cerr << "\n*** WARNING: deprecated YASK API '" \
-    #api_name "' will be removed in a future release ***\n"
+    #api_name "' used that will be removed in a future release ***\n"
 
     // APIs to get info from vars.
 #define GET_GRID_API(api_name, expr, step_ok, domain_ok, misc_ok, prep_req) \
@@ -41,10 +41,12 @@ namespace yask {
         if (prep_req && _offsets[posn] < 0)                             \
             THROW_YASK_EXCEPTION("Error: '" #api_name "()' called on grid '" << \
                                  get_name() << "' before calling 'prepare_solution()'"); \
-        return expr;                                                    \
+        auto rtn = expr;                                                \
+        return rtn;                                                     \
     }                                                                   \
     idx_t YkGridBase::api_name(int posn) const {                        \
-        return expr;                                                    \
+        auto rtn = expr;                                                \
+        return rtn;                                                     \
     }
     GET_GRID_API(get_rank_domain_size, _domains[posn], false, true, false, false)
     GET_GRID_API(get_left_pad_size, _left_pads[posn], false, true, false, false) // _left_pads is actual size.
@@ -72,9 +74,9 @@ namespace yask {
     GET_GRID_API(_get_first_alloc_index, _offsets[posn] - _left_pads[posn], true, true, true, true)
     GET_GRID_API(_get_last_alloc_index, _offsets[posn] - _left_pads[posn] + _allocs[posn] - 1, true, true, true, true)
 
-    GET_GRID_API(get_pad_size, (DEPRECATED(get_pad_size), _left_pads[posn]), false, true, false, false)
-    GET_GRID_API(get_halo_size, (DEPRECATED(get_halo_size), _left_halos[posn]), false, true, false, false)
-    GET_GRID_API(get_extra_pad_size, (DEPRECATED(get_extra_pad_size), _left_pads[posn] - _left_halos[posn]), false, true, false, false)
+    GET_GRID_API(get_pad_size, _left_pads[posn]; DEPRECATED(get_pad_size), false, true, false, false)
+    GET_GRID_API(get_halo_size, _left_halos[posn]; DEPRECATED(get_halo_size), false, true, false, false)
+    GET_GRID_API(get_extra_pad_size, _left_pads[posn] - _left_halos[posn]; DEPRECATED(get_extra_pad_size), false, true, false, false)
 #undef GET_GRID_API
     
     // APIs to set vars.
