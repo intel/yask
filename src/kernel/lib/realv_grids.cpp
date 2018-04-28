@@ -132,7 +132,7 @@ namespace yask {
                 auto& dname = get_dim_name(i);
                 auto* p = _dims->_fold_pts.lookup(dname);
                 if (p) {
-                    assert (p >= 1);
+                    assert (*p >= 1);
                     mp[i] += *p - 1;
                 }
             }
