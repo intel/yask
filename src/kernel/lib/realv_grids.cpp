@@ -30,99 +30,6 @@ using namespace std;
 
 namespace yask {
 
-    // APIs to get info from vars.
-#define GET_GRID_API(api_name, expr, step_ok, domain_ok, misc_ok, prep_req) \
-    idx_t YkGridBase::api_name(const string& dim) const {               \
-        checkDimType(dim, #api_name, step_ok, domain_ok, misc_ok);      \
-        int posn = get_dim_posn(dim, true, #api_name);                  \
-        if (prep_req && _offsets[posn] < 0)                             \
-            THROW_YASK_EXCEPTION("Error: '" #api_name "()' called on grid '" << \
-                                 get_name() << "' before calling 'prepare_solution()'"); \
-        return expr;                                                    \
-    }                                                                   \
-    idx_t YkGridBase::api_name(int posn) const {                        \
-        return expr;                                                    \
-    }
-    GET_GRID_API(get_rank_domain_size, _domains[posn], false, true, false, false)
-    GET_GRID_API(get_left_pad_size, _left_pads[posn], false, true, false, false) // _left_pads is actual size.
-    GET_GRID_API(get_right_pad_size, _allocs[posn] - _left_pads[posn], false, true, false, false) // _right_pads is request only.
-    GET_GRID_API(get_pad_size, _left_pads[posn], false, true, false, false)
-    GET_GRID_API(get_left_halo_size, _left_halos[posn], false, true, false, false)
-    GET_GRID_API(get_right_halo_size, _right_halos[posn], false, true, false, false)
-    GET_GRID_API(get_halo_size, _left_halos[posn], false, true, false, false)
-    GET_GRID_API(get_first_misc_index, _offsets[posn], false, false, true, false)
-    GET_GRID_API(get_last_misc_index, _offsets[posn] + _domains[posn] - 1, false, false, true, false)
-    GET_GRID_API(get_left_extra_pad_size, _left_pads[posn] - _left_halos[posn], false, true, false, false)
-    GET_GRID_API(get_right_extra_pad_size, (_allocs[posn] - _left_pads[posn] - _domains[posn]) -
-                 _right_halos[posn], false, true, false, false)
-    GET_GRID_API(get_extra_pad_size, _left_pads[posn] - _left_halos[posn], false, true, false, false)
-    GET_GRID_API(get_alloc_size, _allocs[posn], true, true, true, false)
-    GET_GRID_API(get_first_rank_domain_index, _offsets[posn] - _local_offsets[posn], false, true, false, true)
-    GET_GRID_API(get_last_rank_domain_index, _offsets[posn] - _local_offsets[posn] + _domains[posn] - 1;
-                 assert(!_is_scratch), false, true, false, true)
-    GET_GRID_API(get_first_rank_halo_index, _offsets[posn] - _left_halos[posn], false, false, true, true)
-    GET_GRID_API(get_last_rank_halo_index, _offsets[posn] + _domains[posn] + _right_halos[posn] - 1, false, false, true, true)
-    GET_GRID_API(get_first_rank_alloc_index, _offsets[posn] - _left_pads[posn], false, true, false, true)
-    GET_GRID_API(get_last_rank_alloc_index, _offsets[posn] - _left_pads[posn] + _allocs[posn] - 1, false, true, false, true)
-    GET_GRID_API(_get_left_wf_ext, _left_wf_exts[posn], true, true, true, false)
-    GET_GRID_API(_get_right_wf_ext, _right_wf_exts[posn], true, true, true, false)
-    GET_GRID_API(_get_offset, _offsets[posn], true, true, true, true)
-    GET_GRID_API(_get_local_offset, _local_offsets[posn], true, true, true, false)
-    GET_GRID_API(_get_first_alloc_index, _offsets[posn] - _left_pads[posn], true, true, true, true)
-    GET_GRID_API(_get_last_alloc_index, _offsets[posn] - _left_pads[posn] + _allocs[posn] - 1, true, true, true, true)
-#undef GET_GRID_API
-    
-    // APIs to set vars.
-#define COMMA ,
-#define SET_GRID_API(api_name, expr, step_ok, domain_ok, misc_ok)       \
-    void YkGridBase::api_name(const string& dim, idx_t n) {             \
-        TRACE_MSG0(get_ostr(), "grid '" << get_name() << "'."           \
-                   #api_name "('" << dim << "', " << n << ")");          \
-        checkDimType(dim, #api_name, step_ok, domain_ok, misc_ok);      \
-        int posn = get_dim_posn(dim, true, #api_name);                  \
-        expr;                                                           \
-    }                                                                   \
-    void YkGridBase::api_name(int posn, idx_t n) {                      \
-        int dim = posn;                                                 \
-        expr;                                                           \
-    }
-    SET_GRID_API(_set_offset, _offsets[posn] = n, true, true, true)
-    SET_GRID_API(_set_local_offset, _local_offsets[posn] = n;
-                 _vec_local_offsets[posn] = n / _vec_lens[posn], true, true, true)
-    SET_GRID_API(_set_domain_size, _domains[posn] = n; resize(), true, true, true)
-    SET_GRID_API(_set_left_pad_size, _left_pads[posn] = n; resize(), true, true, true)
-    SET_GRID_API(_set_right_pad_size, _right_pads[posn] = n; resize(), true, true, true)
-    SET_GRID_API(_set_left_wf_ext, _left_wf_exts[posn] = n; resize(), true, true, true)
-    SET_GRID_API(_set_right_wf_ext, _right_wf_exts[posn] = n; resize(), true, true, true)
-    SET_GRID_API(set_left_halo_size, _left_halos[posn] = n; resize(), false, true, false)
-    SET_GRID_API(set_right_halo_size, _right_halos[posn] = n; resize(), false, true, false)
-    SET_GRID_API(set_halo_size, _left_halos[posn] = _right_halos[posn] = n; resize(), false, true, false)
-
-    SET_GRID_API(set_alloc_size, _set_domain_size(posn, n), true, false, true)
-    SET_GRID_API(set_left_min_pad_size,
-                 if (!get_raw_storage_buffer() && n > _left_pads[posn])
-                     _set_left_pad_size(posn, n),
-                 false, true, false)
-    SET_GRID_API(set_right_min_pad_size,
-                 if (!get_raw_storage_buffer() && n > _right_pads[posn])
-                     _set_right_pad_size(posn, n),
-                 false, true, false)
-    SET_GRID_API(set_min_pad_size,
-                 if (!get_raw_storage_buffer() && n > _left_pads[posn])
-                     _set_left_pad_size(posn, n);
-                 if (!get_raw_storage_buffer() && n > _right_pads[posn])
-                     _set_right_pad_size(posn, n),
-                 false, true, false)
-    SET_GRID_API(set_left_extra_pad_size,
-                 set_left_min_pad_size(posn, _left_halos[posn] + _left_wf_exts[posn] + n), false, true, false)
-    SET_GRID_API(set_right_extra_pad_size,
-                 set_right_min_pad_size(posn, _right_halos[posn] + _right_wf_exts[posn] + n), false, true, false)
-    SET_GRID_API(set_extra_pad_size, set_left_extra_pad_size(posn, n);
-                 set_right_extra_pad_size(posn, n), false, true, false)
-    SET_GRID_API(set_first_misc_index, _offsets[posn] = n, false, false, true)
-#undef COMMA
-#undef SET_GRID_API
-
     // Ctor.
     YkGridBase::YkGridBase(GenericGridBase* ggb,
                            size_t ndims,
@@ -149,7 +56,6 @@ namespace yask {
         _vec_allocs.setFromConst(1, n);
         _vec_local_offsets.setFromConst(0, n);
     }
-    
     
     // Convenience function to format indices like
     // "x=5, y=3".
@@ -203,6 +109,37 @@ namespace yask {
         return posn;
     }
         
+    // Determine required padding from halos.
+    // Does not include user-specified min padding or
+    // final rounding for left pad.
+    Indices YkGridBase::getReqdPad(const Indices& halos, const Indices& wf_exts) const {
+
+        // Start with halos plus WF exts.
+        Indices mp = halos.addElements(wf_exts);
+            
+        // For scratch grids, halo area must be written to.  Halo is sum
+        // of dependent's write halo and depender's read halo, but these
+        // two components are not stored individually.  Write halo will
+        // be expanded to full vec len during computation, requiring
+        // load from read halo beyond full vec len.  Worst case is when
+        // write halo is one and rest is read halo.  So if there is a
+        // halo and/or wf-ext, padding should be that plus all but one
+        // element of a vector. In addition, this vec-len should be the
+        // global one, not the one for this grid to handle the case where
+        // this grid is not vectorized.
+        for (int i = 0; i < get_num_dims(); i++) {
+            if (mp[i] >= 1) {
+                auto& dname = get_dim_name(i);
+                auto* p = _dims->_fold_pts.lookup(dname);
+                if (p) {
+                    assert (*p >= 1);
+                    mp[i] += *p - 1;
+                }
+            }
+        }
+        return mp;
+    }
+
     // Resizes the underlying generic grid.
     // Modifies _pads and _allocs.
     // Fails if mem different and already alloc'd.
@@ -245,6 +182,9 @@ namespace yask {
             left_pads2[i] = ROUND_UP(left_pads2[i], _vec_lens[i]);
             _left_pads[i] = left_pads2[i];
             _vec_left_pads[i] = left_pads2[i] / _vec_lens[i];
+
+            // For the right pad, we will round it up below when
+            // we calculate alloc.
         }
         
         // New allocation in each dim.
@@ -304,127 +244,6 @@ namespace yask {
         _dims->checkDimType(dim, fn_name, step_ok, domain_ok, misc_ok);
     }
     
-    bool YkGridBase::is_storage_layout_identical(const yk_grid_ptr other) const {
-        auto op = dynamic_pointer_cast<YkGridBase>(other);
-        assert(op);
-
-        // Same size?
-        if (get_num_storage_bytes() != op->get_num_storage_bytes())
-            return false;
-
-        // Same dims?
-        if (get_num_dims() != op->get_num_dims())
-            return false;
-        for (int i = 0; i < get_num_dims(); i++) {
-            auto dname = get_dim_name(i);
-
-            // Same dims?
-            if (dname != op->get_dim_name(i))
-                return false;
-
-            // Same sizes?
-            // NB: not checking right pads because actual values
-            // are determined as function of other 3.
-            if (_allocs[i] != op->_allocs[i])
-                return false;
-            if (_domains[i] != op->_domains[i])
-                return false;
-            if (_left_pads[i] != op->_left_pads[i])
-                return false;
-        }
-        return true;
-    }
-
-    void YkGridBase::share_storage(yk_grid_ptr source) {
-        auto sp = dynamic_pointer_cast<YkGridBase>(source);
-        assert(sp);
-
-        if (!sp->get_raw_storage_buffer()) {
-            THROW_YASK_EXCEPTION("Error: share_storage() called without source storage allocated");
-        }
-
-        // Determine required padding from halos.
-        Indices left_pads2 = getReqdPad(_left_halos, _left_wf_exts);
-        Indices right_pads2 = getReqdPad(_right_halos, _left_wf_exts);
-
-        // NB: requirements to successful share_storage() is not as strict as
-        // is_storage_layout_identical(). See note on pad & halo below and API docs.
-        for (int i = 0; i < get_num_dims(); i++) {
-            auto dname = get_dim_name(i);
-
-            // Same dims?
-            if (sp->get_num_dims() != get_num_dims() ||
-                sp->get_dim_name(i) != dname)
-                THROW_YASK_EXCEPTION("Error: share_storage() called with incompatible grids: " <<
-                                     make_info_string() << " and " << sp->make_info_string());
-
-
-            // Check folding.
-            if (_vec_lens[i] != sp->_vec_lens[i]) {
-                THROW_YASK_EXCEPTION("Error: attempt to share storage from grid '" << sp->get_name() <<
-                                     "' of fold-length " << sp->_vec_lens[i] << " with grid '" << get_name() <<
-                                     "' of fold-length " << _vec_lens[i] << " in '" << dname << "' dim");
-            }
-
-            // Not a domain dim?
-            bool is_domain = _dims->_domain_dims.lookup(dname) != 0;
-            if (!is_domain) {
-                auto tas = get_alloc_size(dname);
-                auto sas = sp->get_alloc_size(dname);
-                if (tas != sas) {
-                    THROW_YASK_EXCEPTION("Error: attempt to share storage from grid '" << sp->get_name() <<
-                                         "' of alloc-size " << sas << " with grid '" << get_name() <<
-                                         "' of alloc-size " << tas << " in '" << dname << "' dim");
-                }
-            }
-
-            // Domain dim.
-            else {
-                auto tdom = get_rank_domain_size(i);
-                auto sdom = sp->get_rank_domain_size(i);
-                if (tdom != sdom) {
-                    THROW_YASK_EXCEPTION("Error: attempt to share storage from grid '" << sp->get_name() <<
-                                         "' of domain-size " << sdom << " with grid '" << get_name() <<
-                                         "' of domain-size " << tdom << " in '" << dname << "' dim");
-                }
-
-                // Halo and pad sizes don't have to be the same.
-                // Requirement is that halo (reqd pad) of target fits inside of pad of source.
-                auto spad = sp->get_left_pad_size(i);
-                if (left_pads2[i] > spad) {
-                    THROW_YASK_EXCEPTION("Error: attempt to share storage from grid '" << sp->get_name() <<
-                                         "' of left padding-size " << spad <<
-                                         ", which is insufficient for grid '" << get_name() <<
-                                         "' requiring " << left_pads2[i] << " in '" << dname << "' dim");
-                }
-                spad = sp->get_right_pad_size(i);
-                if (right_pads2[i] > spad) {
-                    THROW_YASK_EXCEPTION("Error: attempt to share storage from grid '" << sp->get_name() <<
-                                         "' of right padding-size " << spad <<
-                                         ", which is insufficient for grid '" << get_name() <<
-                                         "' requiring " << right_pads2[i] << " in '" << dname << "' dim");
-                }
-            }
-        }
-
-        // Copy pad sizes.
-        for (int i = 0; i < get_num_dims(); i++) {
-            auto dname = get_dim_name(i);
-            bool is_domain = _dims->_domain_dims.lookup(dname) != 0;
-            if (is_domain) {
-                _left_pads[i] = sp->_left_pads[i];
-                _right_pads[i] = sp->_right_pads[i];
-            }
-        }
-        
-        // Copy data.
-        release_storage();
-        resize();
-        if (!share_data(sp.get(), true)) {
-            THROW_YASK_EXCEPTION("Error: unexpected failure in data sharing");
-        }
-    }
-
     // Check for equality.
     // Return number of mismatches greater than epsilon.
     idx_t YkGridBase::compare(const YkGridBase* ref,
@@ -455,23 +274,26 @@ namespace yask {
         auto allocs = get_allocs();
 
         // This will loop over the entire allocation.
-        // Indices of 'pt' will be relative to allocation.
+        // We use this as a handy way to get offsets,
+        // but not all will be used.
         allocs.visitAllPoints
             ([&](const IdxTuple& pt, size_t idx) {
 
                 // Adjust alloc indices to overall indices.
                 IdxTuple opt(pt);
                 bool ok = true;
-                for (int i = 0; i < pt.getNumDims(); i++) {
+                for (int i = 0; ok && i < pt.getNumDims(); i++) {
                     auto val = pt.getVal(i);
-                    opt[i] = _offsets[i] - _left_pads[i] + val;
 
-                    // Don't compare points in the extra padding area.
+                    // Convert to global index.
+                    opt[i] = _offsets[i] + val;
+
+                    // Don't compare points outside the domain.
+                    // TODO: check points in halo.
                     auto& dname = pt.getDimName(i);
                     if (_dims->_domain_dims.lookup(dname)) {
-                        auto halo_sz = get_halo_size(dname);
-                        auto first_ok = get_first_rank_domain_index(dname) - halo_sz;
-                        auto last_ok = get_last_rank_domain_index(dname) + halo_sz;
+                        auto first_ok = get_first_rank_domain_index(dname);
+                        auto last_ok = get_last_rank_domain_index(dname);
                         if (opt[i] < first_ok || opt[i] > last_ok)
                             ok = false;
                     }
@@ -587,145 +409,6 @@ namespace yask {
         return numElemsTuple;
     }
     
-    // API get, set, setc.
-    bool YkGridBase::is_element_allocated(const Indices& indices) const {
-        if (!is_storage_allocated())
-            return false;
-        return checkIndices(indices, "is_element_allocated", false, false);
-    }
-    double YkGridBase::get_element(const Indices& indices) const {
-        if (!is_storage_allocated()) {
-            THROW_YASK_EXCEPTION("Error: call to 'get_element' with no data allocated for grid '" <<
-                                 get_name() << "'");
-        }
-        checkIndices(indices, "get_element", true, false);
-        idx_t asi = get_alloc_step_index(indices);
-        real_t val = readElem(indices, asi, __LINE__);
-        return double(val);
-    }
-    idx_t YkGridBase::set_element(double val,
-                                  const Indices& indices,
-                                  bool strict_indices) {
-        idx_t nup = 0;
-        if (get_raw_storage_buffer() &&
-            checkIndices(indices, "set_element", strict_indices, false)) {
-            idx_t asi = get_alloc_step_index(indices);
-            writeElem(real_t(val), indices, asi, __LINE__);
-            nup++;
-
-            // Set appropriate dirty flag.
-            set_dirty_using_alloc_index(true, asi);
-        }
-        return nup;
-    }
-    idx_t YkGridBase::add_to_element(double val,
-                                     const Indices& indices,
-                                     bool strict_indices) {
-        idx_t nup = 0;
-        if (get_raw_storage_buffer() &&
-            checkIndices(indices, "add_to_element", strict_indices, false)) {
-            idx_t asi = get_alloc_step_index(indices);
-            addToElem(real_t(val), indices, asi, __LINE__);
-            nup++;
-
-            // Set appropriate dirty flag.
-            set_dirty_using_alloc_index(true, asi);
-        }
-        return nup;
-    }
-    
-    idx_t YkGridBase::get_elements_in_slice(void* buffer_ptr,
-                                            const Indices& first_indices,
-                                            const Indices& last_indices) const {
-        if (!is_storage_allocated()) {
-            THROW_YASK_EXCEPTION("Error: call to 'get_elements_in_slice' with no data allocated for grid '" <<
-                                 get_name() << "'");
-        }
-        checkIndices(first_indices, "get_elements_in_slice", true, false);
-        checkIndices(last_indices, "get_elements_in_slice", true, false);
-
-        // Find range.
-        IdxTuple numElemsTuple = get_slice_range(first_indices, last_indices);
-        
-        // Visit points in slice.
-        numElemsTuple.visitAllPointsInParallel
-            ([&](const IdxTuple& ofs, size_t idx) {
-                Indices pt = first_indices.addElements(ofs);
-
-                // TODO: move this outside of loop for const step index.
-                idx_t asi = get_alloc_step_index(pt);
-                
-                real_t val = readElem(pt, asi, __LINE__);
-                ((real_t*)buffer_ptr)[idx] = val;
-                return true;    // keep going.
-            });
-        return numElemsTuple.product();
-    }
-    idx_t YkGridBase::set_elements_in_slice_same(double val,
-                                                 const Indices& first_indices,
-                                                 const Indices& last_indices,
-                                                 bool strict_indices) {
-        if (!is_storage_allocated())
-            return 0;
-        
-        // 'Fixed' copy of indices.
-        Indices first, last;
-        checkIndices(first_indices, "set_elements_in_slice_same",
-                     strict_indices, false, &first);
-        checkIndices(last_indices, "set_elements_in_slice_same",
-                     strict_indices, false, &last);
-
-        // Find range.
-        IdxTuple numElemsTuple = get_slice_range(first, last);
-
-        // Visit points in slice.
-        numElemsTuple.visitAllPointsInParallel([&](const IdxTuple& ofs,
-                                                   size_t idx) {
-                Indices pt = first.addElements(ofs);
-
-                // TODO: move this outside of loop for const step index.
-                idx_t asi = get_alloc_step_index(pt);
-
-                writeElem(real_t(val), pt, asi, __LINE__);
-                return true;    // keep going.
-            });
-
-        // Set appropriate dirty flag(s).
-        set_dirty_in_slice(first, last);
-
-        return numElemsTuple.product();
-    }
-    idx_t YkGridBase::set_elements_in_slice(const void* buffer_ptr,
-                                            const Indices& first_indices,
-                                            const Indices& last_indices) {
-        if (!is_storage_allocated())
-            return 0;
-        checkIndices(first_indices, "set_elements_in_slice", true, false);
-        checkIndices(last_indices, "set_elements_in_slice", true, false);
-
-        // Find range.
-        IdxTuple numElemsTuple = get_slice_range(first_indices, last_indices);
-
-        // Visit points in slice.
-        numElemsTuple.visitAllPointsInParallel
-            ([&](const IdxTuple& ofs,
-                 size_t idx) {
-                Indices pt = first_indices.addElements(ofs);
-
-                // TODO: move this outside of loop for const step index.
-                idx_t asi = get_alloc_step_index(pt);
-
-                real_t val = ((real_t*)buffer_ptr)[idx];
-                writeElem(val, pt, asi, __LINE__);
-                return true;    // keep going.
-            });
-
-        // Set appropriate dirty flag(s).
-        set_dirty_in_slice(first_indices, last_indices);
-
-        return numElemsTuple.product();
-    }
-
     // Print one element like
     // "message: mygrid[x=4, y=7] = 3.14 at line 35".
     void YkGridBase::printElem(const std::string& msg,

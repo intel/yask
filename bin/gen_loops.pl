@@ -92,6 +92,9 @@ sub stepVar {
 sub alignVar {
     return inVar("align", @_);
 }
+sub alignOfsVar {
+    return inVar("align_ofs", @_);
+}
 sub groupSizeVar {
     return inVar("group_size", @_);
 }
@@ -201,6 +204,7 @@ sub addIndexVars1($$$) {
                 my $evar = endVar($dim);
                 my $svar = stepVar($dim);
                 my $avar = alignVar($dim);
+                my $aovar = alignOfsVar($dim);
                 my $aavar = adjAlignVar($dim);
                 my $abvar = alignBeginVar($dim);
                 my $nvar = numItersVar($dim);
@@ -208,11 +212,20 @@ sub addIndexVars1($$$) {
                 my $tsvar = groupSizeVar($dim);
                 my $ntivar = numFullGroupItersVar($dim);
 
+                # Example alignment:
+                # bvar = 20.
+                # svar = 8.
+                # avar = 4.
+                # aovar = 15.
+                # Then,
+                # aavar = min(4, 8) = 4.
+                # abvar = round_down_flr(20 - 15, 4) + 15 = 4 + 15 = 19.
+
                 push @$code,
                     " // Alignment must be less than or equal to step size.",
                     " const $itype $aavar = std::min($avar, $svar);",
-                    " // Aligned beginning point. May be at or before $bvar.",
-                    " const $itype $abvar = yask::round_down_flr($bvar, $aavar);",
+                    " // Aligned beginning point such that ($bvar - $svar) < $abvar <= $bvar.",
+                    " const $itype $abvar = yask::round_down_flr($bvar - $aovar, $aavar) + $aovar;",
                     " // Number of iterations to get from $abvar to (but not including) $evar, stepping by $svar.".
                     " This value is rounded up because the last iteration may cover fewer than $svar steps.",
                     " const $itype $nvar = yask::ceil_idiv_flr($evar - $abvar, $svar);";

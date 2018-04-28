@@ -304,7 +304,7 @@ namespace yask {
         if (sz > 1 && first_max_halo == 0 && last_max_halo == 0)
             sz--;
 
-        // TODO: recognize that reading in one eq-group and then writing in
+        // TODO: recognize that reading in one eq-bundle and then writing in
         // another can also reuse storage.
 
         return sz;

@@ -66,7 +66,7 @@ namespace yask {
         // various step-index values.
         // bool key: true=left, false=right.
         // int key: step-dim offset or 0 if no step-dim.
-        // TODO: keep separate halos for each equation group.
+        // TODO: keep separate halos for each equation bundle.
         map<bool, map<int, IntTuple>> _halos;  
     
     public:
@@ -293,7 +293,7 @@ namespace yask {
         IntTuple _foldOptions;    // vector fold.
         IntTuple _clusterOptions; // cluster multipliers.
         bool _firstInner = true; // first dimension of fold is unit step.
-        string _eq_group_basename_default = "stencil";
+        string _eq_bundle_basename_default = "stencil_bundle";
         bool _allowUnalignedLoads = false;
         int _haloSize = 0;      // 0 => calculate each halo separately and automatically.
         int _stepAlloc = 0;     // 0 => calculate step allocation automatically.
@@ -302,8 +302,9 @@ namespace yask {
         bool _doCse = true;      // do common-subexpr elim.
         bool _doComb = true;    // combine commutative operations.
         bool _doOptCluster = true; // apply optimizations also to cluster.
-        string _eqGroupTargets;  // how to group equations.
+        string _eqBundleTargets;  // how to bundle equations.
         string _gridRegex;       // grids to update.
+        bool _findDeps = true;
     };
     
     // Stencil dimensions.

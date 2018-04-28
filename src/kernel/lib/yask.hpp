@@ -43,9 +43,9 @@ typedef std::uint64_t uidx_t;
 // Settings from makefile.
 #include "yask_macros.hpp"
 
-// Control assert() by turning on with DEBUG instead of turning off with
+// Control assert() by turning on with CHECK instead of turning off with
 // NDEBUG. This makes it off by default.
-#ifndef DEBUG
+#ifndef CHECK
 #define NDEBUG
 #endif
 
@@ -139,6 +139,11 @@ inline void omp_set_nested(int n) { }
 #define DEFINE_MACROS
 #include "yask_stencil_code.hpp"
 #undef DEFINE_MACROS
+
+// Max number of dims allowed in grids.
+#ifndef MAX_DIMS
+#define MAX_DIMS NUM_STENCIL_DIMS
+#endif
 
 // Default cmd-line arguments.
 #ifndef DEF_ARGS

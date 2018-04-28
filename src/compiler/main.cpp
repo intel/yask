@@ -25,6 +25,11 @@ IN THE SOFTWARE.
 
 /////////////// Main vector-folding code-generation code. /////////////
 
+// This macro blocks the operator overloads in the API.
+// This is temporary until the "internal DSL" gets completely
+// replaced by the APIs.
+#define USE_INTERNAL_DSL
+
 // Generation code.
 #include "ExprUtils.hpp"
 #include "Grid.hpp"
@@ -81,21 +86,21 @@ void usage(const string& cmd) {
         " -grids <regex>\n"
         "    Only process updates to grids whose names match <regex>.\n"
         "      This can be used to generate code for a subset of the stencil equations.\n"
-        " -eq-groups <name>=<regex>,...\n"
-        "    Put updates to grids matching <regex> in equation-group with base-name <name>.\n"
-        "      By default, eq-groups are created as needed based on dependencies between equations:\n"
-        "        equations that do not depend on each other are grouped together into groups with the\n"
-        "        base-name '" << settings._eq_group_basename_default << "'.\n"
-        "      Each eq-group base-name is appended with a unique index number, so the default group\n"
-        "        names are '" << settings._eq_group_basename_default << "_0', " <<
-        settings._eq_group_basename_default << "_1', etc.\n"
-        "      This option allows more control over this grouping.\n"
-        "      Example: \"-eq-groups a=foo,b=b[aeiou]r\" creates one or more eq-groups named 'a_0', 'a_1', etc.\n"
-        "        containing updates to each grid whose name contains 'foo' and one or more eq-groups\n"
+        " -eq-bundles <name>=<regex>,...\n"
+        "    Put updates to grids matching <regex> in equation-bundle with base-name <name>.\n"
+        "      By default, eq-bundles are created as needed based on dependencies between equations:\n"
+        "        equations that do not depend on each other are bundled together into bundles with the\n"
+        "        base-name '" << settings._eq_bundle_basename_default << "'.\n"
+        "      Each eq-bundle base-name is appended with a unique index number, so the default bundle\n"
+        "        names are '" << settings._eq_bundle_basename_default << "_0', " <<
+        settings._eq_bundle_basename_default << "_1', etc.\n"
+        "      This option allows more control over this bundling.\n"
+        "      Example: \"-eq-bundles a=foo,b=b[aeiou]r\" creates one or more eq-bundles named 'a_0', 'a_1', etc.\n"
+        "        containing updates to each grid whose name contains 'foo' and one or more eq-bundles\n"
         "        named 'b_0', 'b_1', etc. containing updates to each grid whose name matches 'b[aeiou]r'.\n"
         "      Standard regex-format tokens in <name> will be replaced based on matches to <regex>.\n"
-        "      Example: \"-eq-groups 'g_$&=b[aeiou]r'\" with grids 'bar_x', 'bar_y', 'ber_x', and 'ber_y'\n"
-        "        would create eq-group 'g_bar_0' for grids 'bar_x' and 'bar_y' and eq-group 'g_ber_0' for\n"
+        "      Example: \"-eq-bundles 'g_$&=b[aeiou]r'\" with grids 'bar_x', 'bar_y', 'ber_x', and 'ber_y'\n"
+        "        would create eq-bundle 'g_bar_0' for grids 'bar_x' and 'bar_y' and eq-bundle 'g_ber_0' for\n"
         "        grids 'ber_x' and 'ber_y' because '$&' is substituted by the string that matches the regex.\n"
         " -step-alloc <size>\n"
         "    Specify the size of the step-dimension memory allocation.\n"
@@ -121,11 +126,11 @@ void usage(const string& cmd) {
         " [-no]-opt-cluster\n"
         "    Do [not] apply optimizations across the cluster (default=" << settings._doOptCluster << ").\n"
         " -max-es <num-nodes>\n"
-        "    Set heuristic for max single expression-size (default=" <<
-        settings._maxExprSize << ").\n"
+        "    Set heuristic for max single expression-size (default=" << settings._maxExprSize << ").\n"
         " -min-es <num-nodes>\n"
-        "    Set heuristic for min expression-size for reuse (default=" <<
-        settings._minExprSize << ").\n"
+        "    Set heuristic for min expression-size for reuse (default=" << settings._minExprSize << ").\n"
+        " [-no]-find-deps\n"
+        "    Find dependencies between stencil equations (default=" << settings._findDeps << ").\n"
         "\n"
         " -p <format-type> <filename>\n"
         "    Format output per <format-type> and write to <filename>.\n"
@@ -184,6 +189,10 @@ void parseOpts(int argc, const char* argv[])
                 settings._doOptCluster = true;
             else if (opt == "-no-opt-cluster")
                 settings._doOptCluster = false;
+            else if (opt == "-find-deps")
+                settings._findDeps = true;
+            else if (opt == "-no-find-deps")
+                settings._findDeps = false;
 
             // add any more options w/o values above.
 
@@ -202,8 +211,8 @@ void parseOpts(int argc, const char* argv[])
                     solutionName = argop;
                 else if (opt == "-grids")
                     settings._gridRegex = argop;
-                else if (opt == "-eq-groups")
-                    settings._eqGroupTargets = argop;
+                else if (opt == "-eq-bundles")
+                    settings._eqBundleTargets = argop;
                 else if (opt == "-fold" || opt == "-cluster") {
 
                     // example: x=4,y=2

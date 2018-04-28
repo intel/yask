@@ -113,17 +113,11 @@ namespace yask {
                     ep->accept(this);
             }
         }
-        virtual void visit(IfExpr* ie) {
-
-            // Only process RHS of expression.
-            // TODO: consider processing condition.
-            auto& ee = ie->getExpr();
-            visit(ee.get());        // compile-time binding ok for expr.
-        }
         virtual void visit(EqualsExpr* ee) {
 
             // Only process RHS.
             // TODO: process LHS to find dependencies.
+            // TODO: consider processing condition.
             auto& rhs = ee->getRhs();
             if (!findMatchTo(rhs))
                 rhs->accept(this);
@@ -278,15 +272,8 @@ namespace yask {
             }
         }
 
-        // Conditional: don't visit condition, and don't count as a node.
-        // TODO: add separate stats for conditions.
-        virtual void visit(IfExpr* ie) {
-            if (alreadyVisited(ie)) return;
-            ie->getExpr()->accept(this);
-        }
-
         // Equality: assume LHS is a write; don't visit it, and don't count
-        // equality as a node.
+        // equality as a node. Also, don't visit condition or count as nodes.
         virtual void visit(EqualsExpr* ee) {
             if (alreadyVisited(ee)) return;
             _numWrites++;

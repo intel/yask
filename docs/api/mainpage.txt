@@ -7,17 +7,22 @@ namespace yask {
 
 /** @mainpage
 
+\tableofcontents
+
 @section intro Introduction
 
 The typical high-level YASK workflow is as follows:
--# Define a stencil solution.
-  Use the YASK stencil compiler to generate C++ kernel code from the stencil solution.
--# Compile the generated kernel code to create a YASK kernel library.
-  Create and use a stencil-based application using the kernel library.
+-# \ref yc_intro
+  - Define a stencil solution using the YASK domain-specific language (DSL).
+  - Use the YASK stencil compiler to generate C++ kernel code from the stencil solution.
+-# \ref yk_intro
+  - Compile the generated C++ kernel code to create a YASK kernel library.
+  - Create and use a stencil-based application using the kernel library.
+-# Test and deploy your new YASK-enabled application.
 
-There are two sets of APIs provided by YASK corresponding to these tasks:
--# The YASK Stencil Compiler API (available in C++ and Python).
--# The YASK Stencil Kernel API (available in C++ and Python).
+There are two sets of APIs provided by YASK corresponding to the first two tasks:
+-# The \ref sec_yc (available in C++ and Python).
+-# The \ref sec_yk (available in C++ and Python).
 
 For each of the tasks, you can either use the YASK-provided application
 or create your own application built with the corresponding API.
@@ -48,15 +53,16 @@ A new stencil solution may be defined in one of the following ways:
   - See example stencils in `src/stencils`.
     These stencils are written as classes inherited from the `StencilBase` class.
 -# Use the YASK compiler API to create another application that defines stencils.
-  - This approach is typically taken when a front-end tool will be creating stencils
-    from a higher-level description, e.g., applying finite-difference methods to differential equations.
+  - This approach is typically taken when a 3rd-party front-end tool will be creating stencils
+    from another, possibly higher-level, description,
+    e.g., applying finite-difference methods to differential equations.
   - In this case, the equations are built up programmatically into an abstract syntax tree (AST).
   - The mechanism to generate the kernel code in this approach depends on the application
     created from the APIs. The application might be run from a command-prompt, or the user
     might control it interactively.
   - See `src/compiler/tests/yask_compiler_api_test.cpp` for an example stencil definition in C++.
   - See `bin/yask_compiler_api_test.py` for an example stencil definition in Python.
-  - See \ref yc for documentation on the compiler API.
+  - See \ref sec_yc for documentation on the compiler API.
 
 In either case, the resulting generated code should written to the C++ stencil-code file,
 `src/kernel/gen/yask_stencil_code.hpp`.
@@ -88,31 +94,13 @@ This may be done in one of the following ways:
     final-state data for analysis or further processing.
   - See `src/kernel/tests/yask_kernel_api_test.cpp` for an example kernel usage in C++.
   - See `bin/yask_kernel_api_test.py` for an example kernel usage in Python.
-  - See \ref yk for documentation on the kernel API.
+  - See \ref sec_yk for documentation on the kernel API.
 
-@note Anytime you want to change the name or compile-time properties of the kernel, be sure to run
+@note Anytime you want to change the name or any compile-time properties of the kernel, be sure to run
 `make clean` to force the removal of all kernel-specific intermediate code.
 Otherwise, you will likely see some unexpected errors when building the new kernel.
 
-@subsection examples Example Tests
-
-The following examples illustrate possible combinations of compilers and kernels.
-- You can substitute `snb` for one of the other architectures listed in the `Makefile` if desired.
-- Run `make clean` before all of the example commands to ensure consistent builds.
-
-Stencil Compiler    | Stencil Application | Test Command
---------------------|---------------------|-------------
-YASK-provided       | YASK-provided       | `make -j stencil=iso3dfd arch=snb yc-and-yk-test`
-YASK-provided       | C++ test example    | `make -j stencil=iso3dfd arch=snb yc-and-cxx-yk-api-test`
-YASK-provided       | Python test example | `make -j stencil=iso3dfd arch=snb yc-and-py-yk-api-test`
-C++ test example    | YASK-provided       | `make -j stencil=test arch=snb cxx-yc-api-and-yk-test`
-C++ test example    | C++ test example    | `make -j stencil=test arch=snb cxx-yc-api-and-cxx-yk-api-test`
-C++ test example    | Python test example | `make -j stencil=test arch=snb cxx-yc-api-and-py-yk-api-test`
-Python test example | YASK-provided       | `make -j stencil=test arch=snb py-yc-api-and-yk-test`
-Python test example | C++ test example    | `make -j stencil=test arch=snb py-yc-api-and-cxx-yk-api-test`
-Python test example | Python test example | `make -j stencil=test arch=snb py-yc-api-and-py-yk-api-test`
-
-@section yc YASK Stencil Compiler API
+@section sec_yc YASK Stencil Compiler API
 
 @subsection yc_oview Compiler Overview
 This section provides usage information for the YASK stencil compiler
@@ -120,6 +108,8 @@ API (application-programmer interface).\n
 The API is available for C++ and for Python via SWIG.
 Type names are prefixed with 'yc_' to indicate "YASK compiler";
 this distinguishes them from the 'yk_'-prefixed types used in the "YASK kernel" API.
+
+The types, classes, and functions are listed in \ref yc.
 
 @subsection yc_usage Typical Program Flow using the Compiler API
 - Create a yc_factory. This is the "bootstrap" object that will be used to create others.
@@ -149,7 +139,7 @@ this distinguishes them from the 'yk_'-prefixed types used in the "YASK kernel" 
   yc_solution::set_fold_len() and/or yc_solution::set_cluster_mult().
 - Format the equations for additional processing via yc_solution::format().
 
-@section yk YASK Stencil Kernel API
+@section sec_yk YASK Stencil Kernel API
 
 @subsection yk_oview Kernel Overview
 This section provides usage information for the YASK stencil kernel
@@ -157,6 +147,8 @@ API (application-programmer interface).\n
 The API is available for C++ and for Python via SWIG.
 Type names are prefixed with 'yk_' to indicate "YASK kernel";
 this distinguishes them from the 'yc_'-prefixed types used in the "YASK compiler" API.
+
+The types, classes, and functions are listed in \ref yk.
 
 @subsection yk_usage Typical Program Flow using the Kernel API
 - Create a \ref yk_factory. This is the "bootstrap" object that will be used to create others.
@@ -177,6 +169,25 @@ this distinguishes them from the 'yc_'-prefixed types used in the "YASK compiler
 - Apply the stencil(s) to the grids via yk_solution::run_solution().
   There are versions for advancing one or more steps.
 - Retrieve the final results via yk_grid::get_element().
-*/
 
+@section sec_tests Example Tests
+
+The following examples illustrate possible combinations of compilers and kernels.
+- You can add `stencil=`_stencil-name_ to use a specific stencil for testing.
+- You can add `arch=`_arch-name_ to target one of the architectures listed in the `Makefile` if desired.
+- Run `make clean` before all of the example commands to ensure consistent builds.
+
+Stencil Compiler    | Stencil Application | Test Command
+--------------------|---------------------|-------------
+YASK-provided       | YASK-provided       | `make -j yc-and-yk-test`
+YASK-provided       | C++ test example    | `make -j yc-and-cxx-yk-api-test`
+YASK-provided       | Python test example | `make -j yc-and-py-yk-api-test`
+C++ test example    | YASK-provided       | `make -j cxx-yc-api-and-yk-test`
+C++ test example    | C++ test example    | `make -j cxx-yc-api-and-cxx-yk-api-test`
+C++ test example    | Python test example | `make -j cxx-yc-api-and-py-yk-api-test`
+Python test example | YASK-provided       | `make -j py-yc-api-and-yk-test`
+Python test example | C++ test example    | `make -j py-yc-api-and-cxx-yk-api-test`
+Python test example | Python test example | `make -j py-yc-api-and-py-yk-api-test`
+
+*/
 }

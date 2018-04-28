@@ -118,10 +118,6 @@ if __name__ == "__main__":
         print ("Exception Test: Catch exception correctly.")
         num_exception = num_exception + 1
 
-    print("Equation after formatting: " + soln.get_equation(0).format_simple())
-
-    print("Debug output captured:\n" + do.get_string())
-
     # Check whether program handles exceptions or not.
     if num_exception != 3:
         print("There is a problem in exception test.")

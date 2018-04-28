@@ -56,15 +56,22 @@ namespace yask {
         
     yc_equation_node_ptr
     yc_node_factory::new_equation_node(yc_grid_point_node_ptr lhs,
-                                       yc_number_node_ptr rhs) {
+                                       yc_number_node_ptr rhs,
+                                       yc_bool_node_ptr cond) {
         auto lp = dynamic_pointer_cast<GridPoint>(lhs);
         assert(lp);
         auto rp = dynamic_pointer_cast<NumExpr>(rhs);
         assert(rp);
-        return operator EQUALS_OPER(lp, rp);
+        auto ep = operator EQUALS_OPER(lp, rp);
+        ep->set_cond(cond);
+        return ep;
     }
     yc_const_number_node_ptr
     yc_node_factory::new_const_number_node(double val) {
+        return make_shared<ConstExpr>(val);
+    }
+    yc_const_number_node_ptr
+    yc_node_factory::new_const_number_node(idx_t val) {
         return make_shared<ConstExpr>(val);
     }
     yc_negate_node_ptr
@@ -109,6 +116,155 @@ namespace yask {
         assert(rp);
         return make_shared<DivExpr>(lp, rp);
     }
+    yc_not_node_ptr
+    yc_node_factory::new_not_node(yc_bool_node_ptr rhs) {
+        auto p = dynamic_pointer_cast<BoolExpr>(rhs);
+        assert(p);
+        return make_shared<NotExpr>(p);
+    }
+    yc_and_node_ptr
+    yc_node_factory::new_and_node(yc_bool_node_ptr lhs,
+                                      yc_bool_node_ptr rhs) {
+        auto lp = dynamic_pointer_cast<BoolExpr>(lhs);
+        assert(lp);
+        auto rp = dynamic_pointer_cast<BoolExpr>(rhs);
+        assert(rp);
+        return make_shared<AndExpr>(lp, rp);
+    }
+    yc_or_node_ptr
+    yc_node_factory::new_or_node(yc_bool_node_ptr lhs,
+                                      yc_bool_node_ptr rhs) {
+        auto lp = dynamic_pointer_cast<BoolExpr>(lhs);
+        assert(lp);
+        auto rp = dynamic_pointer_cast<BoolExpr>(rhs);
+        assert(rp);
+        return make_shared<OrExpr>(lp, rp);
+    }
+    yc_equals_node_ptr
+    yc_node_factory::new_equals_node(yc_number_node_ptr lhs,
+                                      yc_number_node_ptr rhs) {
+        auto lp = dynamic_pointer_cast<NumExpr>(lhs);
+        assert(lp);
+        auto rp = dynamic_pointer_cast<NumExpr>(rhs);
+        assert(rp);
+        return make_shared<IsEqualExpr>(lp, rp);
+    }
+    yc_not_equals_node_ptr
+    yc_node_factory::new_not_equals_node(yc_number_node_ptr lhs,
+                                      yc_number_node_ptr rhs) {
+        auto lp = dynamic_pointer_cast<NumExpr>(lhs);
+        assert(lp);
+        auto rp = dynamic_pointer_cast<NumExpr>(rhs);
+        assert(rp);
+        return make_shared<NotEqualExpr>(lp, rp);
+    }
+    yc_less_than_node_ptr
+    yc_node_factory::new_less_than_node(yc_number_node_ptr lhs,
+                                      yc_number_node_ptr rhs) {
+        auto lp = dynamic_pointer_cast<NumExpr>(lhs);
+        assert(lp);
+        auto rp = dynamic_pointer_cast<NumExpr>(rhs);
+        assert(rp);
+        return make_shared<IsLessExpr>(lp, rp);
+    }
+    yc_greater_than_node_ptr
+    yc_node_factory::new_greater_than_node(yc_number_node_ptr lhs,
+                                      yc_number_node_ptr rhs) {
+        auto lp = dynamic_pointer_cast<NumExpr>(lhs);
+        assert(lp);
+        auto rp = dynamic_pointer_cast<NumExpr>(rhs);
+        assert(rp);
+        return make_shared<IsGreaterExpr>(lp, rp);
+    }
+    yc_not_less_than_node_ptr
+    yc_node_factory::new_not_less_than_node(yc_number_node_ptr lhs,
+                                      yc_number_node_ptr rhs) {
+        auto lp = dynamic_pointer_cast<NumExpr>(lhs);
+        assert(lp);
+        auto rp = dynamic_pointer_cast<NumExpr>(rhs);
+        assert(rp);
+        return make_shared<NotLessExpr>(lp, rp);
+    }
+    yc_not_greater_than_node_ptr
+    yc_node_factory::new_not_greater_than_node(yc_number_node_ptr lhs,
+                                               yc_number_node_ptr rhs) {
+        auto lp = dynamic_pointer_cast<NumExpr>(lhs);
+        assert(lp);
+        auto rp = dynamic_pointer_cast<NumExpr>(rhs);
+        assert(rp);
+        return make_shared<NotGreaterExpr>(lp, rp);
+    }
+    yc_number_node_ptr
+    yc_node_factory::new_first_domain_index(yc_index_node_ptr idx) {
+        auto p = dynamic_pointer_cast<IndexExpr>(idx);
+        if (!p)
+            THROW_YASK_EXCEPTION("Error: new_first_domain_index() called without index-node argument");
+        return first_index(p);
+    }    
+    yc_number_node_ptr
+    yc_node_factory::new_last_domain_index(yc_index_node_ptr idx) {
+        auto p = dynamic_pointer_cast<IndexExpr>(idx);
+        if (!p)
+            THROW_YASK_EXCEPTION("Error: new_last_domain_index() called without index-node argument");
+        return last_index(p);
+    }
+    yc_negate_node_ptr operator-(yc_number_node_ptr rhs) {
+        auto p = dynamic_pointer_cast<NumExpr>(rhs);
+        assert(p);
+        return make_shared<NegExpr>(p);
+    }
+    yc_add_node_ptr operator+(yc_number_node_ptr lhs, yc_number_node_ptr rhs) {
+        auto lp = dynamic_pointer_cast<NumExpr>(lhs);
+        assert(lp);
+        auto rp = dynamic_pointer_cast<NumExpr>(rhs);
+        assert(rp);
+        return make_shared<AddExpr>(lp, rp);
+    }
+    yc_add_node_ptr operator+(double lhs, yc_number_node_ptr rhs) {
+        return operator+(constNum(lhs), rhs);
+    }
+    yc_add_node_ptr operator+(yc_number_node_ptr lhs, double rhs) {
+        return operator+(lhs, constNum(rhs));
+    }
+    yc_divide_node_ptr operator/(yc_number_node_ptr lhs, yc_number_node_ptr rhs) {
+        auto lp = dynamic_pointer_cast<NumExpr>(lhs);
+        assert(lp);
+        auto rp = dynamic_pointer_cast<NumExpr>(rhs);
+        assert(rp);
+        return make_shared<DivExpr>(lp, rp);
+    }
+    yc_divide_node_ptr operator/(double lhs, yc_number_node_ptr rhs) {
+        return operator/(constNum(lhs), rhs);
+    }
+    yc_divide_node_ptr operator/(yc_number_node_ptr lhs, double rhs) {
+        return operator/(lhs, constNum(rhs));
+    }
+    yc_multiply_node_ptr operator*(yc_number_node_ptr lhs, yc_number_node_ptr rhs) {
+        auto lp = dynamic_pointer_cast<NumExpr>(lhs);
+        assert(lp);
+        auto rp = dynamic_pointer_cast<NumExpr>(rhs);
+        assert(rp);
+        return make_shared<MultExpr>(lp, rp);
+    }
+    yc_multiply_node_ptr operator*(double lhs, yc_number_node_ptr rhs) {
+        return operator*(constNum(lhs), rhs);
+    }
+    yc_multiply_node_ptr operator*(yc_number_node_ptr lhs, double rhs) {
+        return operator*(lhs, constNum(rhs));
+    }
+    yc_subtract_node_ptr operator-(yc_number_node_ptr lhs, yc_number_node_ptr rhs) {
+        auto lp = dynamic_pointer_cast<NumExpr>(lhs);
+        assert(lp);
+        auto rp = dynamic_pointer_cast<NumExpr>(rhs);
+        assert(rp);
+        return make_shared<SubExpr>(lp, rp);
+    }
+    yc_subtract_node_ptr operator-(double lhs, yc_number_node_ptr rhs) {
+        return operator-(constNum(lhs), rhs);
+    }
+    yc_subtract_node_ptr operator-(yc_number_node_ptr lhs, double rhs) {
+        return operator-(lhs, constNum(rhs));
+    }
 
     // Compare 2 expr pointers and return whether the expressions are
     // equivalent.
@@ -144,7 +300,7 @@ namespace yask {
         assert(dim->getType() == DOMAIN_INDEX);
         return make_shared<IndexExpr>(dim->getName(), LAST_INDEX);
     }
-    
+
     // Commutative.
     // If one side is nothing, just return other side;
     // This allows us to start with an uninitialized GridValue
@@ -239,24 +395,13 @@ namespace yask {
     }
 
     // Define a conditional.
-    IfExprPtr operator IF_OPER(EqualsExprPtr expr, const BoolExprPtr cond) {
+    EqualsExprPtr operator IF_OPER(EqualsExprPtr expr, const BoolExprPtr cond) {
 
-        // Get to list of equations.
-        auto gpp = expr->getLhs();
-        assert(gpp);
-        Grid* gp = gpp->getGrid();
-        assert(gp);
-        auto* soln = gp->getSoln();
-        assert(soln);
-        auto& eqs = soln->getEqs();
-    
-        // Make if-expression node.
-        auto ifp = make_shared<IfExpr>(expr, cond);
+        // Add cond to expr.
+        assert(expr);
+        expr->setCond(cond);
 
-        // Save expr and if-cond.
-        eqs.addCondEq(expr, cond);
-
-        return ifp;
+        return expr;
     }
 
     // Define the value of a grid point.
@@ -328,9 +473,6 @@ namespace yask {
     void EqualsExpr::accept(ExprVisitor* ev) {
         ev->visit(this);
     }
-    void IfExpr::accept(ExprVisitor* ev) {
-        ev->visit(this);
-    }
     void IndexExpr::accept(ExprVisitor* ev) {
         ev->visit(this);
     }
@@ -338,17 +480,10 @@ namespace yask {
     // EqualsExpr methods.
     bool EqualsExpr::isSame(const Expr* other) const {
         auto p = dynamic_cast<const EqualsExpr*>(other);
-        return p && _opStr == p->_opStr &&
+        return p && 
             _lhs->isSame(p->_lhs.get()) &&
-            _rhs->isSame(p->_rhs.get());
-    }
-
-    // IfExpr methods.
-    bool IfExpr::isSame(const Expr* other) const {
-        auto p = dynamic_cast<const IfExpr*>(other);
-        return p &&
-            areExprsSame(_expr, p->_expr) &&
-            areExprsSame(_rhs, p->_rhs);
+            _rhs->isSame(p->_rhs.get()) &&
+            areExprsSame(_cond, p->_cond); // might be null.
     }
 
     // Commutative methods.

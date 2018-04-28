@@ -68,13 +68,6 @@ namespace yask {
             be->getRhs()->accept(this);
         }
 
-        // By default, a conditional visitor just visits its operands.
-        virtual void visit(IfExpr* be) {
-            be->getExpr()->accept(this);
-            if (be->getCond())
-                be->getCond()->accept(this);
-        }
-
         // By default, a commutative visitor just visits its operands.
         virtual void visit(CommutativeExpr* ce) {
             auto& ops = ce->getOps();
@@ -83,10 +76,13 @@ namespace yask {
             }
         }
 
-        // By default, an equality visitor just visits its operands.
+        // By default, an equality visitor just visits its operands
+        // and the conditional if it exists.
         virtual void visit(EqualsExpr* ee) {
             ee->getLhs()->accept(this);
             ee->getRhs()->accept(this);
+            if (ee->getCond())
+                ee->getCond()->accept(this);
         }
     };
 

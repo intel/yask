@@ -53,10 +53,10 @@ namespace yask {
 
         // Debug output.
         yask_output_ptr _debug_output;
-        ostream* _dos = &std::cout;
+        ostream* _dos = &std::cout; // just a handy pointer to an ostream.
     
         // All vars accessible by the kernel.
-        Grids _grids;       // keep track of all registered grids.
+        Grids _grids;
 
         // All equations defined in this solution.
         Eqs _eqs;
@@ -72,8 +72,8 @@ namespace yask {
 
         // Intermediate data needed to format output.
         Dimensions _dims;       // various dimensions.
-        EqGroups _eqGroups;     // eq-groups for scalar and vector.
-        EqGroups _clusterEqGroups; // eq-groups for scalar and vector.
+        EqBundles _eqBundles;     // eq-bundles for scalar and vector.
+        EqBundles _clusterEqBundles; // eq-bundles for scalar and vector.
 
         // Create the intermediate data.
         void analyze_solution(int vlen,
@@ -164,24 +164,36 @@ namespace yask {
         virtual int get_num_equations() const {
             return _eqs.getNumEqs();
         }
-        virtual yc_equation_node_ptr get_equation(int n) {
-            assert(n >= 0 && n < get_num_equations());
-            return _eqs.getEqs().at(n);
+        virtual std::vector<yc_equation_node_ptr> get_equations() {
+            std::vector<yc_equation_node_ptr> ev;
+            for (int i = 0; i < get_num_equations(); i++)
+                ev.push_back(_eqs.getEqs().at(i));
+            return ev;
         }
-        virtual void set_fold(const std::string& dim, int len) {
-            auto& fold = _settings._foldOptions;
-            auto* p = fold.lookup(dim);
-            if (p)
-                *p = len;
-            else
-                fold.addDimBack(dim, len);
+        virtual void add_flow_dependency(yc_equation_node_ptr from,
+                                         yc_equation_node_ptr to) {
+            auto fp = dynamic_pointer_cast<EqualsExpr>(from);
+            assert(fp);
+            auto tp = dynamic_pointer_cast<EqualsExpr>(to);
+            assert(tp);
+            _eqs.getDeps().at(cur_step_dep).set_imm_dep_on(fp, tp);
         }
+        virtual void clear_dependencies() {
+            for (DepType dt = DepType(0); dt < num_deps; dt = DepType(dt+1))
+                _eqs.getDeps().at(dt).clear_deps();
+        }
+
         virtual void set_fold_len(const yc_index_node_ptr, int len);
         virtual void clear_folding() { _settings._foldOptions.clear(); }
         virtual void set_cluster_mult(const yc_index_node_ptr, int mult);
         virtual void clear_clustering() { _settings._clusterOptions.clear(); }
+
         virtual void set_element_bytes(int nbytes) { _settings._elem_bytes = nbytes; }
         virtual int get_element_bytes() const { return _settings._elem_bytes; }
+
+        virtual bool is_dependency_checker_enabled() const { return _settings._findDeps; }
+        virtual void set_dependency_checker_enabled(bool enable) { _settings._findDeps = enable; }
+
         virtual void format(const std::string& format_type,
                             yask_output_ptr output);
     };

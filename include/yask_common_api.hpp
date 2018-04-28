@@ -39,12 +39,26 @@ IN THE SOFTWARE.
 
 namespace yask {
 
+    /**
+     * \defgroup yask YASK Commmon Utilities
+     * Types, clases, and functions used in both the \ref sec_yc and \ref sec_yk.
+     * @{
+     */
+
     /// Version information.
     /**
        @returns String describing the current version.
     */
     std::string yask_get_version_string();
     
+    /// Type to use for indexing grids.
+    /** Index types are signed to allow negative indices in padding/halos. */
+#ifdef SWIG
+    typedef long int idx_t;     // SWIG doesn't seem to understand int64_t.
+#else
+    typedef std::int64_t idx_t;
+#endif
+
     // Forward declarations of class-pointers.
 
     class yask_output;
@@ -180,6 +194,8 @@ namespace yask {
     public:
         virtual ~yask_null_output() {}
     };
+
+    /** @}*/
 
 } // namespace yask.
 

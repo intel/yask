@@ -341,7 +341,7 @@ namespace yask {
         
         // Get 1D index using layout.
         virtual idx_t get_index(const Indices& idxs, bool check=true) const final {
-#ifdef DEBUG
+#ifdef CHECK
             if (check) {
                 for (int i = 0; i < this->_dims.size(); i++) {
                     idx_t j = idxs[i];
@@ -351,7 +351,7 @@ namespace yask {
             }
 #endif
             idx_t ai = _layout.layout(idxs);
-#ifdef DEBUG
+#ifdef CHECK
             if (check)
                 assert(ai < this->get_num_elems());
 #endif

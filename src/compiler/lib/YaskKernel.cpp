@@ -41,7 +41,7 @@ namespace yask {
     }
 
     // Print an expression as a one-line C++ comment.
-    void YASKCppPrinter::addComment(ostream& os, EqGroup& eq) {
+    void YASKCppPrinter::addComment(ostream& os, EqBundle& eq) {
         
         // Use a simple human-readable visitor to create a comment.
         PrintHelper ph(_dims, NULL, "temp", "", " // ", ".\n");
@@ -68,8 +68,8 @@ namespace yask {
         // First, create a class to hold the data (grids).
         printData(os);
         
-        // A struct for each equation group.
-        printEqGroups(os);
+        // A struct for each equation bundle.
+        printEqBundles(os);
 
         // Finish the context.
         printContext(os);
@@ -92,7 +92,15 @@ namespace yask {
 
         os << "\n// Number of stencil dimensions (step and domain):\n"
             "#define NUM_STENCIL_DIMS " << _dims->_stencilDims.size() << endl;
-        
+
+        int gdims = 0;
+        for (auto gp : _grids) {
+            int ndims = gp->get_num_dims();
+            gdims = max(gdims, ndims);
+        }
+        os << "\n// Max number of grid dimensions:\n"
+            "#define NUM_GRID_DIMS " << gdims << endl;
+
         // Vec/cluster lengths.
         auto nvec = _dims->_foldGT1.getNumDims();
         os << "\n// One vector fold: " << _dims->_fold.makeDimValStr(" * ") << endl;
@@ -153,7 +161,7 @@ namespace yask {
 
         // get stats.
         CounterVisitor cve;
-        _eqGroups.visitEqs(&cve);
+        _eqBundles.visitEqs(&cve);
 
         os << endl << " ////// Stencil-specific data //////" << endl <<
             "class " << _context_base << " : public StencilContext {\n"
@@ -185,7 +193,7 @@ namespace yask {
             os << " '" << grid << "', which is ";
             if (gp->isScratch())
                 os << " a scratch variable.\n";
-            else if (_eqGroups.getOutputGrids().count(gp))
+            else if (_eqBundles.getOutputGrids().count(gp))
                 os << "updated by one or more equations.\n";
             else
                 os << "not updated by any equation (read-only).\n";
@@ -361,7 +369,7 @@ namespace yask {
                 ctorCode += initCode;
                 ctorCode += " " + grid + " = " + grid + "_ptr.get();\n";
                 ctorCode += " addGrid(" + grid + "_ptr, ";
-                if (_eqGroups.getOutputGrids().count(gp))
+                if (_eqBundles.getOutputGrids().count(gp))
                     ctorCode += "true /* is an output grid */";
                 else
                     ctorCode += "false /* is not an output grid */";
@@ -431,25 +439,25 @@ namespace yask {
         os << "}; // " << _context_base << endl;
     }
 
-    // Print YASK equation groups.
-    void YASKCppPrinter::printEqGroups(ostream& os) {
+    // Print YASK equation bundles.
+    void YASKCppPrinter::printEqBundles(ostream& os) {
         
-        for (size_t ei = 0; ei < _eqGroups.size(); ei++) {
+        for (size_t ei = 0; ei < _eqBundles.size(); ei++) {
 
-            // Scalar eqGroup.
-            auto& eq = _eqGroups.at(ei);
+            // Scalar eqBundle.
+            auto& eq = _eqBundles.at(ei);
             string egName = eq.getName();
             string egDesc = eq.getDescription();
-            string egsName = "StencilGroup_" + egName;
+            string egsName = "StencilBundle_" + egName;
 
             os << endl << " ////// Stencil " << egDesc << " //////\n" <<
-                "\n class " << egsName << " : public StencilGroupBase {\n"
+                "\n class " << egsName << " : public StencilBundleBase {\n"
                 " protected:\n"
                 " typedef " << _context_base << " _context_type;\n"
                 " _context_type* _context = 0;\n"
                 " public:\n";
 
-            // Stats for this eqGroup.
+            // Stats for this eqBundle.
             CounterVisitor stats;
             eq.visitEqs(&stats);
             
@@ -457,10 +465,10 @@ namespace yask {
             os << endl << " // " << stats.getNumOps() << " FP operation(s) per point:" << endl;
             addComment(os, eq);
 
-            // Stencil-group ctor.
+            // Stencil-bundle ctor.
             {
                 os << " " << egsName << "(" << _context_base << "* context) :\n"
-                    " StencilGroupBase(context),\n"
+                    " StencilBundleBase(context),\n"
                     " _context(context) {\n"
                     " _name = \"" << egName << "\";\n"
                     " _scalar_fp_ops = " << stats.getNumOps() << ";\n"
@@ -529,13 +537,13 @@ namespace yask {
             // Vector/Cluster code.
             for (int do_cluster = 0; do_cluster <= 1; do_cluster++) {
 
-                // Cluster eqGroup at same 'ei' index.
-                // This should be the same eq-group because it was copied from the
+                // Cluster eqBundle at same 'ei' index.
+                // This should be the same eq-bundle because it was copied from the
                 // scalar one.
-                auto& vceq = do_cluster ? _clusterEqGroups.at(ei) : _eqGroups.at(ei);
+                auto& vceq = do_cluster ? _clusterEqBundles.at(ei) : _eqBundles.at(ei);
                 assert(egDesc == vceq.getDescription());
 
-                // Create vector info for this eqGroup.
+                // Create vector info for this eqBundle.
                 // The visitor is accepted at all nodes in the cluster AST;
                 // for each grid access node in the AST, the vectors
                 // needed are determined and saved in the visitor.
@@ -638,7 +646,7 @@ namespace yask {
 
             os << "}; // " << egsName << ".\n"; // end of class.
             
-        } // stencil eqGroups.
+        } // stencil eqBundles.
     }
 
     // Print final YASK context.
@@ -647,36 +655,36 @@ namespace yask {
         os << endl << " ////// Overall stencil-specific context //////" << endl <<
             "struct " << _context << " : public " << _context_base << " {" << endl;
 
-        // Stencil eqGroup objects.
-        os << endl << " // Stencil equation-groups." << endl;
-        for (auto& eg : _eqGroups) {
+        // Stencil eqBundle objects.
+        os << endl << " // Stencil equation-bundles." << endl;
+        for (auto& eg : _eqBundles) {
             string egName = eg.getName();
-            string sgName = "stencilGroup_" + egName;
-            os << " StencilGroup_" << egName << " " << sgName << ";" << endl;
+            string sgName = "stencilBundle_" + egName;
+            os << " StencilBundle_" << egName << " " << sgName << ";" << endl;
         }
 
         // Ctor.
         os << "\n // Constructor.\n" <<
             " " << _context << "(KernelEnvPtr env, KernelSettingsPtr settings) : " <<
             _context_base << "(env, settings)";
-        for (auto& eg : _eqGroups) {
+        for (auto& eg : _eqBundles) {
             string egName = eg.getName();
-            string sgName = "stencilGroup_" + egName;
+            string sgName = "stencilBundle_" + egName;
             os << ",\n  " << sgName << "(this)";
         }
         os << " {\n";
         
-        // Push eq-group pointers to list.
-        os << "\n // Stencil groups.\n";
-        for (auto& eg : _eqGroups) {
+        // Push eq-bundle pointers to list.
+        os << "\n // Stencil bundles.\n";
+        for (auto& eg : _eqBundles) {
             string egName = eg.getName();
-            string sgName = "stencilGroup_" + egName;
-            os << "  stGroups.push_back(&" << sgName << ");\n";
+            string sgName = "stencilBundle_" + egName;
+            os << "  stBundles.push_back(&" << sgName << ");\n";
 
-            // Add other-group deps.
+            // Add other-bundle deps.
             for (DepType dt = DepType(0); dt < num_deps; dt = DepType(dt+1)) {
                 for (auto& dep : eg.getDeps(dt)) {
-                    string depName = "stencilGroup_" + dep;
+                    string depName = "stencilBundle_" + dep;
                     string dtName = (dt == cur_step_dep) ? "cur_step_dep" :
                         (dt == prev_step_dep) ? "prev_step_dep" :
                         "internal_error";
@@ -686,17 +694,17 @@ namespace yask {
                 }
             }
 
-            // Add scratch-group deps in proper order.
+            // Add scratch-bundle deps in proper order.
             auto& sdeps = eg.getScratchDeps();
-            for (auto& eg2 : _eqGroups) {
+            for (auto& eg2 : _eqBundles) {
                 string eg2Name = eg2.getName();
-                string sg2Name = "stencilGroup_" + eg2Name;
+                string sg2Name = "stencilBundle_" + eg2Name;
                 if (sdeps.count(eg2Name))
                     os << "  " << sgName <<
                         ".add_scratch_dep(&" << sg2Name << ");\n";
             }
             
-        } // eq-groups.
+        } // eq-bundles.
         os << " } // Ctor.\n";
 
         // Dims creator.

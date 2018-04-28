@@ -140,26 +140,6 @@ namespace yask {
         _numCommon += _ph.getNumCommon(ce);
     }
 
-    // A conditional operator.
-    void PrintVisitorTopDown::visit(IfExpr* ie) {
-
-        // Null ptr => no condition.
-        if (ie->getCond()) {
-            ie->getCond()->accept(this); // sets _exprStr;
-            string cond = getExprStrAndClear();
-
-            // pseudo-code format.
-            _os << _ph.getLinePrefix() << "IF (" << cond << ") THEN" << endl;
-        }
-    
-        // Get assignment expr and clear expr.
-        ie->getExpr()->accept(this); // writes to _exprStr;
-        string vexpr = getExprStrAndClear();
-
-        // note: _exprStr is now empty.
-        // note: no need to update num-common.
-    }
-
     // An equals operator.
     void PrintVisitorTopDown::visit(EqualsExpr* ee) {
 
@@ -169,7 +149,17 @@ namespace yask {
 
         // Write statement with embedded rhs.
         GridPointPtr gpp = ee->getLhs();
-        _os << _ph.getLinePrefix() << _ph.writeToPoint(_os, *gpp, rhs) << _ph.getLineSuffix();
+        _os << _ph.getLinePrefix() << _ph.writeToPoint(_os, *gpp, rhs);
+
+        // Null ptr => no condition.
+        if (ee->getCond()) {
+            ee->getCond()->accept(this); // sets _exprStr;
+            string cond = getExprStrAndClear();
+
+            // pseudo-code format.
+            _os << " IF (" << cond << ")";
+        }
+        _os << _ph.getLineSuffix();
 
         // note: _exprStr is now empty.
         // note: no need to update num-common.
@@ -368,12 +358,6 @@ namespace yask {
         // note: _exprStr contains result of last operation.
     }
 
-    // Conditional.
-    void PrintVisitorBottomUp::visit(IfExpr* ie) {
-        trySimplePrint(ie, true);
-        // note: _exprStr is now empty.
-    }
-
     // An equality.
     void PrintVisitorBottomUp::visit(EqualsExpr* ee) {
 
@@ -390,9 +374,22 @@ namespace yask {
         makeNextTempVar(rp) << rhs << _ph.getLineSuffix(); // sets _exprStr.
         string tmp = getExprStrAndClear();
 
-        // Write temp var to grid.
+        // Comment about update.
         GridPointPtr gpp = ee->getLhs();
-        _os << "\n // Update value at " << gpp->makeStr() << ".\n";
+        _os << "\n // Update value at " << gpp->makeStr();
+
+        // Comment about condition.
+        // Null ptr => no condition.
+        if (ee->getCond()) {
+            ee->getCond()->accept(this); // sets _exprStr;
+            string cond = getExprStrAndClear();
+
+            // pseudo-code format.
+            _os << " IF (" << cond << ")";
+        }
+        _os << ".\n";
+        
+        // Write temp var to grid.
         _os << _ph.getLinePrefix() << _ph.writeToPoint(_os, *gpp, tmp) << _ph.getLineSuffix();
 
         // note: _exprStr is now empty.
@@ -483,6 +480,12 @@ namespace yask {
                 getLabel(ee, false) << " -> " << getLabel(ee->getRhs(), false) << ";" << endl;
             ee->getLhs()->accept(this);
             ee->getRhs()->accept(this);
+
+            // Null ptr => no condition.
+            if (ee->getCond()) {
+                _os << getLabel(ee, false) << " -> " << getLabel(ee->getCond(), false)  << ";" << endl;
+                ee->getCond()->accept(this);
+            }
         }
     }
 
@@ -527,6 +530,8 @@ namespace yask {
         for (auto g : _gridsSeen)
             _os << label << " -> " << g  << ";" << endl;
         _gridsSeen.clear();
+
+        // Ignoring condition.
     }
 
     ////////////// Printers ///////////////
@@ -538,11 +543,11 @@ namespace yask {
 
         os << "Stencil '" << _stencil.getName() << "' pseudo-code:" << endl;
 
-        // Loop through all eqGroups.
-        for (auto& eq : _eqGroups) {
+        // Loop through all eqBundles.
+        for (auto& eq : _eqBundles) {
 
             string egName = eq.getName();
-            os << endl << " ////// Equation group '" << egName <<
+            os << endl << " ////// Equation bundle '" << egName <<
                 "' //////" << endl;
 
             CounterVisitor cv;
@@ -579,9 +584,9 @@ namespace yask {
         os << "digraph \"Stencil " << _stencil.getName() << "\" {\n"
             "rankdir=LR; ranksep=1.5;\n";
 
-        // Loop through all eqGroups.
-        for (auto& eq : _eqGroups) {
-            os << "subgraph \"Equation-group " << eq.getName() << "\" {" << endl;
+        // Loop through all eqBundles.
+        for (auto& eq : _eqBundles) {
+            os << "subgraph \"Equation-bundle " << eq.getName() << "\" {" << endl;
             eq.visitEqs(pv);
             os << "}" << endl;
         }
@@ -602,8 +607,8 @@ namespace yask {
             "  look_at <0, 0, 0>" << endl <<
             "}" << endl;
 
-        // Loop through all eqGroups.
-        for (auto& eq : _eqGroups) {
+        // Loop through all eqBundles.
+        for (auto& eq : _eqBundles) {
 
             // TODO: separate mutiple grids.
             POVRayPrintVisitor pv(os);

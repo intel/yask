@@ -23,7 +23,7 @@ IN THE SOFTWARE.
 
 *****************************************************************************/
 
-///////// Methods for equations and equation groups ////////////
+///////// Methods for equations and equation bundles ////////////
 
 #include "Print.hpp"
 #include "ExprUtils.hpp"
@@ -180,24 +180,25 @@ namespace yask {
                     });
         _done = true;
     }
-    
-    // Find dependencies based on all eqs.
-    // If 'eq_deps' is set, save dependencies between eqs.
-    // Side effect: sets _stepDir in dims.
+
+    // Analyze group of equations.
+    // Sets _stepDir in dims.
+    // Finds dependencies based on all eqs if 'settings._findDeps', setting
+    // _imm_dep_on and _dep_on.
     // Throws exceptions on illegal dependencies.
     // TODO: split this into smaller functions.
     // BIG-TODO: replace dependency algorithms with integration of a polyhedral
     // library.
-    void Eqs::findDeps(Dimensions& dims,
-                       EqDepMap* eq_deps,
-                       ostream& os) {
+    void Eqs::analyzeEqs(CompilerSettings& settings,
+                         Dimensions& dims,
+                         ostream& os) {
         auto& stepDim = dims._stepDim;
         
         // Gather points from all eqs in all grids.
         PointVisitor pt_vis;
 
         // Gather initial stats from all eqs.
-        os << "Scanning " << getEqs().size() << " equation(s) for dependencies...\n";
+        os << "Scanning " << getEqs().size() << " stencil equation(s) for dependencies...\n";
         for (auto eq1 : getEqs())
             eq1->accept(&pt_vis);
         auto& outGrids = pt_vis.getOutputGrids();
@@ -215,7 +216,7 @@ namespace yask {
             auto* op1 = outPts.at(eq1p);
             //auto& ig1 = inGrids.at(eq1p);
             auto& ip1 = inPts.at(eq1p);
-            auto cond1 = getCond(eq1p);
+            auto cond1 = eq1p->getCond();
 
 #ifdef DEBUG_DEP
             cout << " Checking internal consistency of equation " <<
@@ -317,6 +318,9 @@ namespace yask {
                                              "' on LHS");
                     }
                 }
+
+                // TODO: check that domain indices are simple offsets and
+                // misc indices are consts.
             }
 
             // TODO: check to make sure cond1 depends only on indices.
@@ -334,7 +338,7 @@ namespace yask {
                 auto& op2 = outPts.at(eq2p);
                 auto& ig2 = inGrids.at(eq2p);
                 auto& ip2 = inPts.at(eq2p);
-                auto cond2 = getCond(eq2p);
+                auto cond2 = eq2p->getCond();
 
                 bool same_eq = eq1 == eq2;
                 bool same_cond = areExprsSame(cond1, cond2);
@@ -365,6 +369,7 @@ namespace yask {
                 // dependencies by looking for exact matches.
                 // We do this check first because it's quicker than the
                 // detailed scan done later if this one doesn't find a dep.
+                // Also, this is always illegal, even if not finding deps.
                 //
                 // Example:
                 //  eq1: a(t+1, x, ...) EQUALS ...
@@ -380,21 +385,20 @@ namespace yask {
                     }
 
                     // Save dependency.
-                    if (eq_deps) {
 #ifdef DEBUG_DEP
-                        cout << "  Exact match found to " << op1->makeQuotedStr() << ".\n";
-#endif                        
-                        (*eq_deps)[cur_step_dep].set_imm_dep_on(eq2, eq1);
-                    }
+                    cout << "  Exact match found to " << op1->makeQuotedStr() << ".\n";
+#endif
+                    if (settings._findDeps)
+                        _eq_deps[cur_step_dep].set_imm_dep_on(eq2, eq1);
                         
                     // Move along to next eq2.
                     continue;
                 }
 
-                // Check more only if saving dependencies.
-                if (!eq_deps)
+                // Don't do more conservative checks if not looking for deps.
+                if (!settings._findDeps)
                     continue;
-
+                
                 // Next dep check: inexact matches on LHS of eq1 to RHS of eq2.
                 // Does eq1 define *any* point in a grid that eq2 inputs
                 // at the same step index?  If so, they *might* have a
@@ -443,12 +447,10 @@ namespace yask {
                             }
 
                             // Save dependency.
-                            if (eq_deps) {
 #ifdef DEBUG_DEP
-                                cout << "  Likely match found to " << op1->makeQuotedStr() << ".\n";
+                            cout << "  Likely match found to " << op1->makeQuotedStr() << ".\n";
 #endif                        
-                                (*eq_deps)[cur_step_dep].set_imm_dep_on(eq2, eq1);
-                            }
+                            _eq_deps[cur_step_dep].set_imm_dep_on(eq2, eq1);
 
                             // Move along to next equation.
                             break;
@@ -463,11 +465,11 @@ namespace yask {
         } // for all eqs (eq1).
 
         // Resolve indirect dependencies.
-        if (eq_deps) {
-            os << " Resolving indirect dependencies...\n";
-            for (DepType dt = DepType(0); dt < num_deps; dt = DepType(dt+1))
-                (*eq_deps)[dt].find_all_deps();
-        }
+        // Do this even if not finding deps because we want to
+        // resolve deps provided by the user.
+        os << " Resolving indirect dependencies...\n";
+        for (DepType dt = DepType(0); dt < num_deps; dt = DepType(dt+1))
+            _eq_deps[dt].find_all_deps();
         os << " Done with dependency analysis.\n";
     }
 
@@ -605,9 +607,9 @@ namespace yask {
         visitEqs(&slv);
     }
 
-    // Update access stats for the grids.
+    // Update access stats for the grids, i.e., halos and const indices.
     // Also finds scratch-grid eqs needed for each non-scratch eq.
-    void Eqs::updateGridStats(EqDepMap& eq_deps) {
+    void Eqs::updateGridStats() {
 
         // Find all LHS and RHS points and grids for all eqs.
         PointVisitor pv;
@@ -634,27 +636,26 @@ namespace yask {
                 g->updateConstIndices(ap->getArgConsts());
             }
 
+            // We want to start with non-scratch eqs and walk the dep
+            // tree to find all dependent scratch eqs.
             // If 'eq1' has a non-scratch output, visit all dependencies of
             // 'eq1'.  It's important to visit the eqs in dep order to
             // properly propagate halos sizes thru chains of scratch grids.
             if (!og1->isScratch()) {
-                eq_deps[cur_step_dep].visitDeps
+                _eq_deps[cur_step_dep].visitDeps
 
                     // 'eq1' is 'b' or depends on 'b', immediately or indirectly.
                     (eq1, [&](EqualsExprPtr b, EqDeps::EqVecSet& path) {
 
-                        // Only check if conditions are same.
-                        auto cond1 = getCond(eq1);
-                        auto cond2 = getCond(b);
-                        bool same_cond = areExprsSame(cond1, cond2);
-                        
                         // Does 'b' have a scratch-grid output?
+                        // NB: scratch eqs don't have their own conditions, so
+                        // we don't need to check them.
                         auto* og2 = pv.getOutputGrids().at(b.get());
-                        if (same_cond && og2->isScratch()) {
+                        if (og2->isScratch()) {
 
                             // Get halos from the output scratch grid.
                             // These are the points that are read from
-                            // in dependent eq(s).
+                            // the dependent eq(s).
                             // For scratch grids, the halo areas must also be written to.
                             auto _left_ohalo = og2->getHaloSizes(true);
                             auto _right_ohalo = og2->getHaloSizes(false);
@@ -678,12 +679,6 @@ namespace yask {
                         // needed for 'eq1'. Walk dep path from 'eq1' to 'b'.
                         EqualsExprPtr prev;
                         for (auto eq2 : path) {
-
-                            // Only continue if conditions are same.
-                            auto cond1 = getCond(eq1);
-                            auto cond2 = getCond(eq2);
-                            if (!areExprsSame(cond1, cond2))
-                                break;
 
                             // Look for scratch-grid dep from 'prev' to 'eq2'.
                             if (prev) {
@@ -719,9 +714,9 @@ namespace yask {
     }
    
    
-    // Get the full name of an eq-group.
+    // Get the full name of an eq-bundle.
     // Must be unique.
-    string EqGroup::getName() const {
+    string EqBundle::getName() const {
 
         // Add index to base name.
         ostringstream oss;
@@ -729,11 +724,11 @@ namespace yask {
         return oss.str();
     }
 
-    // Make a human-readable description of this eq group.
-    string EqGroup::getDescription(bool show_cond,
+    // Make a human-readable description of this eq bundle.
+    string EqBundle::getDescription(bool show_cond,
                                    string quote) const
     {
-        string des = "equation-group " + quote + getName() + quote;
+        string des = "equation-bundle " + quote + getName() + quote;
         if (show_cond) {
             if (cond.get())
                 des += " w/condition " + cond->makeQuotedStr(quote);
@@ -743,11 +738,11 @@ namespace yask {
         return des;
     }
 
-    // Add an equation to an EqGroup.
-    void EqGroup::addEq(EqualsExprPtr ee)
+    // Add an equation to an EqBundle.
+    void EqBundle::addEq(EqualsExprPtr ee)
     {
-#ifdef DEBUG_EQ_GROUP
-        cout << "EqGroup: adding " << ee->makeQuotedStr() << endl;
+#ifdef DEBUG_EQ_BUNDLE
+        cout << "EqBundle: adding " << ee->makeQuotedStr() << endl;
 #endif
         _eqs.insert(ee);
 
@@ -755,7 +750,7 @@ namespace yask {
         PointVisitor pv;
         ee->accept(&pv);
         
-        // update list of input and output grids for this group.
+        // update list of input and output grids for this bundle.
         auto* outGrid = pv.getOutputGrids().at(ee.get());
         _outGrids.insert(outGrid);
         auto& inGrids = pv.getInputGrids().at(ee.get());
@@ -764,8 +759,10 @@ namespace yask {
     }
 
     // Check for and set dependencies on eg2.
-    void EqGroup::checkDeps(Eqs& allEqs, EqDepMap& eq_deps, const EqGroup& eg2)
+    void EqBundle::checkDeps(Eqs& allEqs, const EqBundle& eg2)
     {
+        auto& eq_deps = allEqs.getDeps();
+        
         // Eqs in this.
         for (auto& eq1 : getEqs()) {
             auto& sdeps1 = allEqs.getScratchDeps(eq1);
@@ -776,13 +773,13 @@ namespace yask {
                 for (DepType dt = DepType(0); dt < num_deps; dt = DepType(dt+1)) {
 
                     // Immediate dep.
-                    if (eq_deps[dt].is_imm_dep_on(eq1, eq2)) {
+                    if (eq_deps.at(dt).is_imm_dep_on(eq1, eq2)) {
                         _imm_dep_on[dt].insert(eg2.getName());
                         _dep_on[dt].insert(eg2.getName());
                     }
 
                     // Indirect dep.
-                    else if (eq_deps[dt].is_dep_on(eq1, eq2)) {
+                    else if (eq_deps.at(dt).is_dep_on(eq1, eq2)) {
                         _dep_on[dt].insert(eg2.getName());
                     }
                 }
@@ -795,8 +792,8 @@ namespace yask {
     }
 
 
-    // Print stats from eqGroup.
-    void EqGroup::printStats(ostream& os, const string& msg)
+    // Print stats from eqBundle.
+    void EqBundle::printStats(ostream& os, const string& msg)
     {
         CounterVisitor cv;
         visitEqs(&cv);
@@ -823,10 +820,10 @@ namespace yask {
 
     // Replicate each equation at the non-zero offsets for
     // each vector in a cluster.
-    void EqGroup::replicateEqsInCluster(Dimensions& dims)
+    void EqBundle::replicateEqsInCluster(Dimensions& dims)
     {
         // Make a copy of the original equations so we can iterate through
-        // them while adding to the group.
+        // them while adding to the bundle.
         EqList eqs(_eqs);
 
         // Loop thru points in cluster.
@@ -847,13 +844,13 @@ namespace yask {
                         assert(eq.get());
             
                         // Make a copy.
-                        auto eq2 = eq->cloneEquals();
+                        auto eq2 = eq->clone();
 
                         // Add offsets to each grid point.
                         OffsetVisitor ov(clusterOffset);
                         eq2->accept(&ov);
 
-                        // Put new equation into group.
+                        // Put new equation into bundle.
                         addEq(eq2);
                     }
                 }
@@ -864,13 +861,13 @@ namespace yask {
         assert(_eqs.size() == eqs.size() * dims._clusterMults.product());
     }
 
-    // Reorder groups based on dependencies.
-    void EqGroups::sort()
+    // Reorder bundles based on dependencies.
+    void EqBundles::sort()
     {
         if (size() < 2)
             return;
 
-        cout << " Sorting " << size() << " eq-group(s)...\n";
+        cout << " Sorting " << size() << " eq-bundle(s)...\n";
 
         // Want to keep original order as much as possible.
         // Only reorder if dependencies are in conflict.
@@ -881,7 +878,7 @@ namespace yask {
             bool done = false;
             while (!done) {
         
-                // Does eq-group[i] depend on any eq-group after it?
+                // Does eq-bundle[i] depend on any eq-bundle after it?
                 auto& egi = at(i);
                 for (size_t j = i+1; j < size(); j++) {
                 
@@ -892,13 +889,13 @@ namespace yask {
 
                         // Error if also back-dep.
                         if (egj.isDepOn(cur_step_dep, egi)) {
-                            THROW_YASK_EXCEPTION("Error: circular dependency between eq-groups " <<
+                            THROW_YASK_EXCEPTION("Error: circular dependency between eq-bundles " <<
                                 egi.getDescription() << " and " <<
                                 egj.getDescription());
                         }
 
                         // Swap them.
-                        EqGroup temp(egi);
+                        EqBundle temp(egi);
                         egi = egj;
                         egj = temp;
 
@@ -912,24 +909,29 @@ namespace yask {
         }
     }
 
-    // Add expression 'eq' with condition 'cond' to eq-group with 'baseName'
+    // Add expression 'eq' from 'eqs' to eq-bundle with 'baseName'
     // unless alread added.  The corresponding index in '_indices' will be
-    // incremented if a new group is created.
+    // incremented if a new bundle is created.
     // 'eq_deps': pre-computed dependencies between equations.
-    // Returns whether a new group was created.
-    bool EqGroups::addExprToGroup(EqualsExprPtr eq,
-                                  BoolExprPtr cond,
-                                  const string& baseName,
-                                  bool is_scratch,
-                                  EqDepMap& eq_deps)
+    // Returns whether a new bundle was created.
+    bool EqBundles::addExprToBundle(Eqs& eqs,
+                                    EqualsExprPtr eq,
+                                    const string& baseName,
+                                    bool is_scratch)
     {
         // Equation already added?
-        if (_eqs_in_groups.count(eq))
+        if (_eqs_in_bundles.count(eq))
             return false;
 
-        // Loop through existing groups, looking for one that
+        // Get condition, if any.
+        auto cond = eq->getCond();
+
+        // Get deps.
+        auto& eq_deps = eqs.getDeps();
+        
+        // Loop through existing bundles, looking for one that
         // 'eq' can be added to.
-        EqGroup* target = 0;
+        EqBundle* target = 0;
         for (auto& eg : *this) {
 
             // Must match name and condition.
@@ -942,7 +944,7 @@ namespace yask {
                 for (auto& eq2 : eg.getEqs()) {
 
                     for (DepType dt = DepType(0); dt < num_deps; dt = DepType(dt+1)) {
-                        if (eq_deps[dt].is_dep(eq, eq2)) {
+                        if (eq_deps.at(dt).is_dep(eq, eq2)) {
 #if DEBUG_ADD_EXPRS
                             cout << "addExprsFromGrid: not adding equation " <<
                                 eq->makeQuotedStr() << " to " << eg.getDescription() <<
@@ -957,7 +959,7 @@ namespace yask {
                         break;
                 }
 
-                // Remember target group if found and no deps.
+                // Remember target bundle if found and no deps.
                 if (!is_dep) {
                     target = &eg;
                     break;
@@ -965,23 +967,23 @@ namespace yask {
             }
         }
         
-        // Make new group if no target group found.
-        bool newGroup = false;
+        // Make new bundle if no target bundle found.
+        bool newBundle = false;
         if (!target) {
-            EqGroup ne(*_dims, is_scratch);
+            EqBundle ne(*_dims, is_scratch);
             push_back(ne);
             target = &back();
             target->baseName = baseName;
             target->index = _indices[baseName]++;
             target->cond = cond;
-            newGroup = true;
+            newBundle = true;
         
 #if DEBUG_ADD_EXPRS
             cout << "Creating new " << target->getDescription() << endl;
 #endif
         }
 
-        // Add eq to target eq-group.
+        // Add eq to target eq-bundle.
         assert(target);
 #if DEBUG_ADD_EXPRS
         cout << "Adding " << eq->makeQuotedStr() <<
@@ -990,27 +992,26 @@ namespace yask {
         target->addEq(eq);
     
         // Remember eq and updated grid.
-        _eqs_in_groups.insert(eq);
+        _eqs_in_bundles.insert(eq);
         _outGrids.insert(eq->getGrid());
 
-        return newGroup;
+        return newBundle;
     }
 
-    // Divide all equations into eqGroups.
+    // Divide all equations into eqBundles.
     // Only process updates to grids in 'gridRegex'.
-    // 'targets': string provided by user to specify grouping.
+    // 'targets': string provided by user to specify bundleing.
     // 'eq_deps': pre-computed dependencies between equations.
-    void EqGroups::makeEqGroups(Eqs& allEqs,
-                                const string& gridRegex,
-                                const string& targets,
-                                EqDepMap& eq_deps,
-                                ostream& os)
+    void EqBundles::makeEqBundles(Eqs& allEqs,
+                                  const string& gridRegex,
+                                  const string& targets,
+                                  ostream& os)
     {
-        os << "Partitioning " << allEqs.getNumEqs() << " equation(s) into groups...\n";
+        os << "Partitioning " << allEqs.getNumEqs() << " equation(s) into bundles...\n";
         //auto& stepDim = _dims->_stepDim;
 
-        // Add each scratch equation to a separate group.
-        // TODO: Allow multiple scratch eqs in a group with same conds & halos.
+        // Add each scratch equation to a separate bundle.
+        // TODO: Allow multiple scratch eqs in a bundle with same conds & halos.
         // TODO: Only add scratch eqs that are needed by grids in 'gridRegex'.
         for (auto eq : allEqs.getEqs()) {
 
@@ -1021,7 +1022,7 @@ namespace yask {
                 string gname = gp->getName();
 
                 // Add equation.
-                addExprToGroup(eq, allEqs.getCond(eq), gname, true, eq_deps);
+                addExprToBundle(allEqs, eq, gname, true);
             }
         }
         
@@ -1029,7 +1030,7 @@ namespace yask {
         regex gridx(gridRegex);
     
         // Handle each key-value pair in 'targets' string.
-        // Key is eq-group name (with possible format strings); value is regex pattern.
+        // Key is eq-bundle name (with possible format strings); value is regex pattern.
         ArgParser ap;
         ap.parseKeyValuePairs
             (targets, [&](const string& egfmt, const string& pattern) {
@@ -1058,7 +1059,7 @@ namespace yask {
                     string egname = mr.format(egfmt);
 
                     // Add equation.
-                    addExprToGroup(eq, allEqs.getCond(eq), egname, false, eq_deps);
+                    addExprToBundle(allEqs, eq, egname, false);
                 }
             });
 
@@ -1075,11 +1076,11 @@ namespace yask {
                 continue;
 
             // Add equation.
-            addExprToGroup(eq, allEqs.getCond(eq), _basename_default, false, eq_deps);
+            addExprToBundle(allEqs, eq, _basename_default, false);
         }
-        os << "Created " << size() << " equation group(s):\n";
+        os << "Created " << size() << " equation bundle(s):\n";
 
-        // Find dependencies between eq-groups based on deps between their eqs.
+        // Find dependencies between eq-bundles based on deps between their eqs.
         for (auto& eg1 : *this) {
             os << " " << eg1.getDescription() << ":\n"
                 "  Contains " << eg1.getNumEqs() << " equation(s).\n"
@@ -1092,25 +1093,25 @@ namespace yask {
             }
             os << ".\n";
 
-            // Check to see if eg1 depends on other eq-groups.
+            // Check to see if eg1 depends on other eq-bundles.
             for (auto& eg2 : *this) {
 
                 // Don't check against self.
                 if (eg1.getName() == eg2.getName())
                     continue;
 
-                eg1.checkDeps(allEqs, eq_deps, eg2);
+                eg1.checkDeps(allEqs, eg2);
                 DepType dt = cur_step_dep;
                 if (eg1.isImmDepOn(dt, eg2))
-                    os << "  Immediately dependent on group " <<
+                    os << "  Immediately dependent on bundle " <<
                         eg2.getName() << ".\n";
                 else if (eg1.isDepOn(dt, eg2))
-                    os << "  Indirectly dependent on group " <<
+                    os << "  Indirectly dependent on bundle " <<
                         eg2.getName() << ".\n";
             }
             auto& sdeps = eg1.getScratchDeps();
             if (sdeps.size()) {
-                os << "  Requires evaluation of the following scratch-grid group(s):";
+                os << "  Requires evaluation of the following scratch-grid bundle(s):";
                 for (auto& sname : sdeps)
                     os << " " << sname;
                 os << ".\n";
@@ -1121,8 +1122,8 @@ namespace yask {
         sort();
     }
 
-    // Print stats from eqGroups.
-    void EqGroups::printStats(ostream& os, const string& msg) {
+    // Print stats from eqBundles.
+    void EqBundles::printStats(ostream& os, const string& msg) {
         CounterVisitor cv;
         for (auto& eq : *this) {
             CounterVisitor ecv;
@@ -1133,15 +1134,15 @@ namespace yask {
     }
 
     // Apply optimizations according to the 'settings'.
-    void EqGroups::optimizeEqGroups(CompilerSettings& settings,
+    void EqBundles::optimizeEqBundles(CompilerSettings& settings,
                                     const string& descr,
                                     bool printSets,
                                     ostream& os) {
         // print stats.
-        string edescr = "for " + descr + " equation-group(s)";
+        string edescr = "for " + descr + " equation-bundle(s)";
         printStats(os, edescr);
     
-        // Make a list of optimizations to apply to eqGroups.
+        // Make a list of optimizations to apply to eqBundles.
         vector<OptVisitor*> opts;
 
         // CSE.
@@ -1164,7 +1165,7 @@ namespace yask {
             visitEqs(optimizer);
             int numChanges = optimizer->getNumChanges();
             string odescr = "after applying " + optimizer->getName() + " to " +
-                descr + " equation-group(s)";
+                descr + " equation-bundle(s)";
 
             // Get new stats.
             if (numChanges)
@@ -1173,9 +1174,9 @@ namespace yask {
                 os << "No changes " << odescr << '.' << endl;
         }
 
-        // Final stats per equation group.
+        // Final stats per equation bundle.
         if (printSets && size() > 1) {
-            os << "Stats per equation-group:\n";
+            os << "Stats per equation-bundle:\n";
             for (auto eg : *this)
                 eg.printStats(os, "for " + eg.getDescription());
         }

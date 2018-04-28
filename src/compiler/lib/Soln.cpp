@@ -70,7 +70,7 @@ namespace yask {
                                            bool is_folding_efficient) {
 
         // Call the stencil 'define' method to create ASTs.
-        // ASTs can also be created via the APIs.
+        // ASTs and grids can also be created via the APIs.
         define();
 
         // Find all the stencil dimensions from the grids.
@@ -85,27 +85,26 @@ namespace yask {
         _eqs.analyzeLoop(_dims);
 
         // Find dependencies between equations.
-        EqDepMap eq_deps;
-        _eqs.findDeps(_dims, &eq_deps, *_dos);
+        _eqs.analyzeEqs(_settings, _dims, *_dos);
 
         // Update access stats for the grids.
-        _eqs.updateGridStats(eq_deps);
+        _eqs.updateGridStats();
         
-        // Create equation groups based on dependencies and/or target strings.
-        _eqGroups.set_basename_default(_settings._eq_group_basename_default);
-        _eqGroups.set_dims(_dims);
-        _eqGroups.makeEqGroups(_eqs, _settings._gridRegex,
-                               _settings._eqGroupTargets, eq_deps, *_dos);
-        _eqGroups.optimizeEqGroups(_settings, "scalar & vector", false, *_dos);
+        // Create equation bundles based on dependencies and/or target strings.
+        _eqBundles.set_basename_default(_settings._eq_bundle_basename_default);
+        _eqBundles.set_dims(_dims);
+        _eqBundles.makeEqBundles(_eqs, _settings._gridRegex,
+                                 _settings._eqBundleTargets, *_dos);
+        _eqBundles.optimizeEqBundles(_settings, "scalar & vector", false, *_dos);
 
         // Make a copy of each equation at each cluster offset.
         // We will use these for inter-cluster optimizations and code generation.
         *_dos << "Constructing cluster of equations containing " <<
             _dims._clusterMults.product() << " vector(s)...\n";
-        _clusterEqGroups = _eqGroups;
-        _clusterEqGroups.replicateEqsInCluster(_dims);
+        _clusterEqBundles = _eqBundles;
+        _clusterEqBundles.replicateEqsInCluster(_dims);
         if (_settings._doOptCluster)
-            _clusterEqGroups.optimizeEqGroups(_settings, "cluster", true, *_dos);
+            _clusterEqBundles.optimizeEqBundles(_settings, "cluster", true, *_dos);
     }
 
     // Format in given format-type.
@@ -117,21 +116,21 @@ namespace yask {
         // Data itself will be created in analyze_solution().
         PrinterBase* printer = 0;
         if (format_type == "cpp")
-            printer = new YASKCppPrinter(*this, _eqGroups, _clusterEqGroups, &_dims);
+            printer = new YASKCppPrinter(*this, _eqBundles, _clusterEqBundles, &_dims);
         else if (format_type == "knc")
-            printer = new YASKKncPrinter(*this, _eqGroups, _clusterEqGroups, &_dims);
+            printer = new YASKKncPrinter(*this, _eqBundles, _clusterEqBundles, &_dims);
         else if (format_type == "avx" || format_type == "avx2")
-            printer = new YASKAvx256Printer(*this, _eqGroups, _clusterEqGroups, &_dims);
+            printer = new YASKAvx256Printer(*this, _eqBundles, _clusterEqBundles, &_dims);
         else if (format_type == "avx512" || format_type == "avx512f")
-            printer = new YASKAvx512Printer(*this, _eqGroups, _clusterEqGroups, &_dims);
+            printer = new YASKAvx512Printer(*this, _eqBundles, _clusterEqBundles, &_dims);
         else if (format_type == "dot")
-            printer = new DOTPrinter(*this, _clusterEqGroups, false);
+            printer = new DOTPrinter(*this, _clusterEqBundles, false);
         else if (format_type == "dot-lite")
-            printer = new DOTPrinter(*this, _clusterEqGroups, true);
+            printer = new DOTPrinter(*this, _clusterEqBundles, true);
         else if (format_type == "pseudo")
-            printer = new PseudoPrinter(*this, _clusterEqGroups);
+            printer = new PseudoPrinter(*this, _clusterEqBundles);
         else if (format_type == "pov-ray") // undocumented.
-            printer = new POVRayPrinter(*this, _clusterEqGroups);
+            printer = new POVRayPrinter(*this, _clusterEqBundles);
         else {
             THROW_YASK_EXCEPTION("Error: format-type '" << format_type <<
                                  "' is not recognized");
@@ -140,7 +139,7 @@ namespace yask {
         int vlen = printer->num_vec_elems();
         bool is_folding_efficient = printer->is_folding_efficient();
 
-        // Set data for equation groups, dims, etc.
+        // Set data for equation bundles, dims, etc.
         analyze_solution(vlen, is_folding_efficient);
 
         // Create the output.

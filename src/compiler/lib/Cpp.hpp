@@ -238,12 +238,12 @@ namespace yask {
     // Print out a stencil in C++ form for YASK.
     class YASKCppPrinter : public PrinterBase {
     protected:
-        EqGroups& _clusterEqGroups;
+        EqBundles& _clusterEqBundles;
         const Dimensions* _dims;
         string _context, _context_base;
 
         // Print an expression as a one-line C++ comment.
-        void addComment(ostream& os, EqGroup& eq);
+        void addComment(ostream& os, EqBundle& eq);
 
         // A factory method to create a new PrintHelper.
         // This can be overridden in derived classes to provide
@@ -260,17 +260,17 @@ namespace yask {
         // Print pieces of YASK output.
         virtual void printMacros(ostream& os);
         virtual void printData(ostream& os);
-        virtual void printEqGroups(ostream& os);
+        virtual void printEqBundles(ostream& os);
         virtual void printContext(ostream& os);
         
         
     public:
         YASKCppPrinter(StencilSolution& stencil,
-                       EqGroups& eqGroups,
-                       EqGroups& clusterEqGroups,
+                       EqBundles& eqBundles,
+                       EqBundles& clusterEqBundles,
                        const Dimensions* dims) :
-            PrinterBase(stencil, eqGroups),
-            _clusterEqGroups(clusterEqGroups),
+            PrinterBase(stencil, eqBundles),
+            _clusterEqBundles(clusterEqBundles),
             _dims(dims)
         {
             // name of C++ struct.

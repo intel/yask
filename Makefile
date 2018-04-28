@@ -138,6 +138,9 @@ compiler-api:
 kernel-api:
 	$(YK_MAKE) api
 
+py-kernel-api:
+	$(YK_MAKE) py-api
+
 api:
 	$(YC_MAKE) $@
 	$(YK_MAKE) $@
@@ -193,39 +196,21 @@ py-yc-api-and-cxx-yk-api-test:
 	$(YK_MAKE) py-yc-api-test
 	$(YK_MAKE) cxx-yk-api-test
 
-# Run C++ compiler API test with exception, then run C++ kernel API test with exception.
-cxx-yc-api-and-cxx-yk-api-test-with-exception:
-	$(YK_MAKE) cxx-yc-api-test-with-exception
-	$(YK_MAKE) cxx-yk-api-test-with-exception
-
-# Run python compiler API test with exception, then run python kernel API test with exception.
-py-yc-api-and-py-yk-api-test-with-exception:
-	$(YK_MAKE) py-yc-api-test-with-exception
-	$(YK_MAKE) py-yk-api-test-with-exception
-
-# Run C++ compiler API test with exception, then run python kernel API test with exception.
-cxx-yc-api-and-py-yk-api-test-with-exception:
-	$(YK_MAKE) cxx-yc-api-test-with-exception
-	$(YK_MAKE) py-yk-api-test-with-exception
-
-# Run python compiler API test with exception, then run C++ kernel API test with exception.
-py-yc-api-and-cxx-yk-api-test-with-exception:
-	$(YK_MAKE) py-yc-api-test-with-exception
-	$(YK_MAKE) cxx-yk-api-test-with-exception
-
-api-tests:
-	$(MAKE) yc-and-cxx-yk-api-test
-	$(MAKE) yc-and-py-yk-api-test
+# Run 8 out of 9 combos of (built-in, C++, Python)^2
+# API tests. The 9th one is built-in with built-in,
+# which is tested more extensively in the kernel tests.
+# When the built-in stencil examples aren't being used,
+# "stencil=test" in the commands below is simply used to
+# create file names.
+combo-api-tests:
+	$(MAKE) stencil=iso3dfd yc-and-cxx-yk-api-test
+	$(MAKE) stencil=iso3dfd yc-and-py-yk-api-test
 	$(MAKE) stencil=test cxx-yc-api-and-yk-test
 	$(MAKE) stencil=test py-yc-api-and-yk-test
 	$(MAKE) stencil=test cxx-yc-api-and-cxx-yk-api-test
 	$(MAKE) stencil=test py-yc-api-and-py-yk-api-test
 	$(MAKE) stencil=test cxx-yc-api-and-py-yk-api-test
 	$(MAKE) stencil=test py-yc-api-and-cxx-yk-api-test
-	$(MAKE) stencil=test cxx-yc-api-and-cxx-yk-api-test-with-exception
-	$(MAKE) stencil=test py-yc-api-and-py-yk-api-test-with-exception
-	$(MAKE) stencil=test cxx-yc-api-and-py-yk-api-test-with-exception
-	$(MAKE) stencil=test py-yc-api-and-cxx-yk-api-test-with-exception
 
 ######## Misc targets
 
@@ -245,10 +230,14 @@ tuple-test: $(TUPLE_TEST_EXEC)
 	@echo '*** Running the C++ YASK tuple test...'
 	$(RUN_PREFIX) $<
 
-all-tests: compiler
-	$(MAKE) tuple-test
+api-tests: compiler-api
+	$(MAKE) combo-api-tests
 	$(YK_MAKE) $@
-	$(MAKE) api-tests
+
+all-tests: compiler-api
+	$(MAKE) tuple-test
+	$(MAKE) combo-api-tests
+	$(YK_MAKE) $@
 
 docs: api-docs
 

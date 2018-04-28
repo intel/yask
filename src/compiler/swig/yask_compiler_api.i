@@ -53,6 +53,15 @@ IN THE SOFTWARE.
 %shared_ptr(yask::yc_subtract_node)
 %shared_ptr(yask::yc_divide_node)
 %shared_ptr(yask::yc_bool_node)
+%shared_ptr(yask::yc_not_node)
+%shared_ptr(yask::yc_equals_node)
+%shared_ptr(yask::yc_not_equals_node)
+%shared_ptr(yask::yc_less_than_node)
+%shared_ptr(yask::yc_greater_than_node)
+%shared_ptr(yask::yc_not_less_than_node)
+%shared_ptr(yask::yc_not_greater_than_node)
+%shared_ptr(yask::yc_and_node)
+%shared_ptr(yask::yc_or_node)
 
 %{
 #define SWIG_FILE_WITH_INIT
@@ -62,9 +71,12 @@ IN THE SOFTWARE.
 // All vector types used in API.
 %template(vector_int) std::vector<int>;
 %template(vector_str) std::vector<std::string>;
-%template(vector_index_ptr) std::vector<std::shared_ptr<yask::yc_index_node>>;
+%template(vector_index) std::vector<std::shared_ptr<yask::yc_index_node>>;
+%template(vector_num) std::vector<std::shared_ptr<yask::yc_number_node>>;
+%template(vector_eq) std::vector<std::shared_ptr<yask::yc_equation_node>>;
 %template(vector_grid) std::vector<yask::yc_grid*>;
 
+// Tell SWIG how to catch a YASK exception and rethrow it in Python.
 %exception {
   try {
     $action
@@ -74,5 +86,66 @@ IN THE SOFTWARE.
   }
 }
 
+// Tell SWIG how to handle non-class overloaded operators in Python.
+%extend yask::yc_number_node {
+    yask::yc_number_node_ptr __neg__() {
+        auto p = $self->clone_ast();
+        return yask::operator-(p);
+    }
+ };
+%extend yask::yc_number_node {
+    yask::yc_number_node_ptr __add__(yask::yc_number_node* rhs) {
+        auto lp = $self->clone_ast();
+        auto rp = rhs->clone_ast();
+        return yask::operator+(lp, rp);
+    }
+ };
+%extend yask::yc_number_node {
+    yask::yc_number_node_ptr __add__(double rhs) {
+        auto lp = $self->clone_ast();
+        return yask::operator+(lp, rhs);
+    }
+ };
+%extend yask::yc_number_node {
+    yask::yc_number_node_ptr __truediv__(yask::yc_number_node* rhs) {
+        auto lp = $self->clone_ast();
+        auto rp = rhs->clone_ast();
+        return yask::operator/(lp, rp);
+    }
+ };
+%extend yask::yc_number_node {
+    yask::yc_number_node_ptr __truediv__(double rhs) {
+        auto lp = $self->clone_ast();
+        return yask::operator/(lp, rhs);
+    }
+ };
+%extend yask::yc_number_node {
+    yask::yc_number_node_ptr __mul__(yask::yc_number_node* rhs) {
+        auto lp = $self->clone_ast();
+        auto rp = rhs->clone_ast();
+        return yask::operator*(lp, rp);
+    }
+ };
+%extend yask::yc_number_node {
+    yask::yc_number_node_ptr __mul__(double rhs) {
+        auto lp = $self->clone_ast();
+        return yask::operator*(lp, rhs);
+    }
+ };
+%extend yask::yc_number_node {
+    yask::yc_number_node_ptr __sub__(yask::yc_number_node* rhs) {
+        auto lp = $self->clone_ast();
+        auto rp = rhs->clone_ast();
+        return yask::operator-(lp, rp);
+    }
+ };
+%extend yask::yc_number_node {
+    yask::yc_number_node_ptr __sub__(double rhs) {
+        auto lp = $self->clone_ast();
+        return yask::operator-(lp, rhs);
+    }
+ };
+
 %include "yask_common_api.hpp"
 %include "yask_compiler_api.hpp"
+%include "yc_node_api.hpp"
