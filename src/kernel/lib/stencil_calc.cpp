@@ -273,11 +273,12 @@ namespace yask {
                         auto vend = round_up_flr(eend, vpts);
                         if (i == _inner_posn) {
 
-                            // Don't do any vectors in plane of inner dim.
-                            // We'll do these with scalars.
-                            // This is unusual because vector folding is
-                            // normally done in a plane perpendicular to
-                            // the inner dim for >= 2D domains.
+                            // Don't do any full and/or partial vectors in
+                            // plane of inner dim.  We'll do these with
+                            // scalars.  This is unusual because vector
+                            // folding is normally done in a plane
+                            // perpendicular to the inner dim for >= 2D
+                            // domains.
                             fvbgn = vbgn = fcbgn;
                             fvend = vend = fcend;
                         }
@@ -397,10 +398,9 @@ namespace yask {
             // Step sizes are based on cluster lengths (in vector units).
             // The step in the inner loop is hard-coded in the generated code.
             for (int i = 0, j = 0; i < nsdims; i++) {
-                if (i != step_posn) {
-                    norm_sub_block_idxs.step[i] = dims->_cluster_mults[j];
-                    j++;
-                }
+                if (i == step_posn) continue;
+                norm_sub_block_idxs.step[i] = dims->_cluster_mults[j]; // N vecs.
+                j++;
             }
 
             // Define the function called from the generated loops
@@ -444,12 +444,7 @@ namespace yask {
 
             // Step sizes are one vector.
             // The step in the inner loop is hard-coded in the generated code.
-            for (int i = 0, j = 0; i < nsdims; i++) {
-                if (i != step_posn) {
-                    norm_sub_block_idxs.step[i] = 1;
-                    j++;
-                }
-            }
+            norm_sub_block_idxs.step.setFromConst(1);
 
             // Also normalize the *full* vector indices to determine if
             // we need a mask at each vector index.
@@ -494,43 +489,50 @@ namespace yask {
         // Use scalar code for anything not done above.
         if (do_scalars) {
 
+            // Use the 'misc' loops. Indices for these loops will be scalar and
+            // global rather than normalized as in the cluster and vector loops.
+            ScanIndices misc_idxs(sub_block_idxs);
+
+            // Step sizes and alignment are one element.
+            misc_idxs.step.setFromConst(1);
+            misc_idxs.align.setFromConst(1);
+
 #ifdef TRACE
             string msg = "calc_sub_block:  using scalar code for ";
             msg += scalar_for_peel_rem ? "peel/remainder of" : "entire";
             msg += " sub-block ";
             msg += bb_is_full ? "without" : "with";
-            msg += " sub-domain checking";
-            TRACE_MSG3(msg);
+            msg += " sub-domain checking for ";
+            TRACE_MSG3(msg << 
+                       misc_idxs.begin.makeValStr(nsdims) <<
+                       " ... (end before) " <<
+                       misc_idxs.end.makeValStr(nsdims));
 #endif
-
-            // Use the 'misc' loops. Indices for these loops will be scalar and
-            // global rather than normalized as in the cluster and vector loops.
-            ScanIndices misc_idxs(sub_block_idxs);
 
             // Define misc-loop function.
             // If point is in sub-domain for this
             // bundle, then evaluate the reference scalar code.
             // If no holes, don't need to check each point in domain.
             // Since step is always 1, we ignore misc_idxs.stop.
-#define misc_fn(misc_idxs)  do {                                        \
-            bool ok = true;                                             \
-            if (scalar_for_peel_rem) {                                  \
-                ok = false;                                             \
-                for (int i = 0, j = 0; i < nsdims; i++) {               \
-                    if (i != step_posn) {                               \
+#define misc_fn(pt_idxs)  do {                                          \
+                TRACE_MSG3("calc_sub_block:   at pt " << pt_idxs.start.makeValStr(nsdims)); \
+                bool ok = true;                                         \
+                if (scalar_for_peel_rem) {                              \
+                    ok = false;                                         \
+                    for (int i = 0, j = 0; i < nsdims; i++) {           \
+                        if (i == step_posn) continue;                   \
                         auto rofs = cp->rank_domain_offsets[j];         \
-                        if (misc_idxs.start[i] < rofs + sub_block_vidxs.begin[i] || \
-                            misc_idxs.start[i] >= rofs + sub_block_vidxs.end[i]) { \
+                        if (pt_idxs.start[i] < rofs + sub_block_vidxs.begin[i] || \
+                            pt_idxs.start[i] >= rofs + sub_block_vidxs.end[i]) { \
                             ok = true; break; }                         \
                         j++;                                            \
                     }                                                   \
                 }                                                       \
-            }                                                           \
-            if (ok && (bb_is_full || is_in_valid_domain(misc_idxs.start))) { \
-                calc_scalar(thread_idx, misc_idxs.start);               \
-            }                                                           \
-        } while(0)
-
+                if (ok && (bb_is_full || is_in_valid_domain(pt_idxs.start))) { \
+                    calc_scalar(thread_idx, pt_idxs.start);             \
+                }                                                       \
+            } while(0)
+            
             // Scan through n-D space.
             // The OMP in the misc loops will be ignored if we're already in
             // the max allowed nested OMP region.
