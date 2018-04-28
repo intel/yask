@@ -117,7 +117,6 @@ namespace yask {
         // Start with halos plus WF exts.
         Indices mp = halos.addElements(wf_exts);
             
-
         // For scratch grids, halo area must be written to.  Halo is sum
         // of dependent's write halo and depender's read halo, but these
         // two components are not stored individually.  Write halo will
@@ -131,9 +130,11 @@ namespace yask {
         for (int i = 0; i < get_num_dims(); i++) {
             if (mp[i] >= 1) {
                 auto& dname = get_dim_name(i);
-                auto* p = _dims->_domain_dims.lookup(dname);
-                if (p)
+                auto* p = _dims->_fold_pts.lookup(dname);
+                if (p) {
+                    assert (p >= 1);
                     mp[i] += *p - 1;
+                }
             }
         }
         return mp;
