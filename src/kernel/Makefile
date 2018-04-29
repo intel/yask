@@ -299,8 +299,6 @@ YK_PY_MOD	:=	$(YASK_DIR)/$(YK_MODULE).py
 YK_API_TEST_EXEC :=	$(BIN_DIR)/$(YK_BASE)_api_test.exe
 YK_GRID_TEST_EXEC :=	$(BIN_DIR)/$(YK_BASE)_grid_test.exe
 YK_API_TEST_EXEC_WITH_EXCEPTION :=	$(BIN_DIR)/$(YK_BASE)_api_exception_test.exe
-YK_STENCIL_DIMS_FILE	:=	num_stencil_dims.$(stencil).txt
-YK_GRID_DIMS_FILE	:=	num_grid_dims.$(stencil).txt
 
 MAKE_REPORT_FILE:=	make-report.$(YK_TAG).txt
 
@@ -481,8 +479,8 @@ endif
 YK_CXXFLAGS	+=	$(YK_CXXOPT) $(OMPFLAGS) $(EXTRA_YK_CXXFLAGS)
 
 # Number of stencil/grid dims extracted from YASK compiler output.
-NSDIMS		:=	`cat $(YK_STENCIL_DIMS_FILE)`
-NGDIMS		:=	`cat $(YK_GRID_DIMS_FILE)`
+NSDIMS		:=	`awk '/NUM_STENCIL_DIMS/ {print $$NF}' $(YK_CODE_FILE)`
+NGDIMS		:=	`awk '/NUM_GRID_DIMS/ {print $$NF}' $(YK_CODE_FILE)`
 
 ######## Loop-compiler configuration:
 # The loop indices range from 0..N-1.
@@ -579,53 +577,43 @@ $(MAKE_REPORT_FILE): $(YK_LIB)
 #$(MAKE) code-stats | tee -a $@
 
 # Generated source files.
-$(YK_GEN_DIR)/yask_rank_loops.hpp: $(GEN_LOOPS) $(YK_STENCIL_DIMS_FILE)
+$(YK_GEN_DIR)/yask_rank_loops.hpp: $(GEN_LOOPS) $(YK_CODE_FILE)
 	$(YK_MK_GEN_DIR)
 	$(PERL) $< -output $@ $(RANK_LOOP_OPTS) $(EXTRA_LOOP_OPTS) $(EXTRA_RANK_LOOP_OPTS) "$(RANK_LOOP_CODE)"
 
-$(YK_GEN_DIR)/yask_region_loops.hpp: $(GEN_LOOPS) $(YK_STENCIL_DIMS_FILE)
+$(YK_GEN_DIR)/yask_region_loops.hpp: $(GEN_LOOPS) $(YK_CODE_FILE)
 	$(YK_MK_GEN_DIR)
 	$(PERL) $< -output $@ $(REGION_LOOP_OPTS) $(EXTRA_LOOP_OPTS) $(EXTRA_REGION_LOOP_OPTS) "$(REGION_LOOP_CODE)"
 
-$(YK_GEN_DIR)/yask_block_loops.hpp: $(GEN_LOOPS) $(YK_STENCIL_DIMS_FILE)
+$(YK_GEN_DIR)/yask_block_loops.hpp: $(GEN_LOOPS) $(YK_CODE_FILE)
 	$(YK_MK_GEN_DIR)
 	$(PERL) $< -output $@ $(BLOCK_LOOP_OPTS) $(EXTRA_LOOP_OPTS) $(EXTRA_BLOCK_LOOP_OPTS) "$(BLOCK_LOOP_CODE)"
 
-$(YK_GEN_DIR)/yask_sub_block_loops.hpp: $(GEN_LOOPS) $(YK_STENCIL_DIMS_FILE)
+$(YK_GEN_DIR)/yask_sub_block_loops.hpp: $(GEN_LOOPS) $(YK_CODE_FILE)
 	$(YK_MK_GEN_DIR)
 	$(PERL) $< -output $@ $(SUB_BLOCK_LOOP_OPTS) $(EXTRA_LOOP_OPTS) $(EXTRA_SUB_BLOCK_LOOP_OPTS) "$(SUB_BLOCK_LOOP_CODE)"
 
-$(YK_GEN_DIR)/yask_misc_loops.hpp: $(GEN_LOOPS) $(YK_STENCIL_DIMS_FILE)
+$(YK_GEN_DIR)/yask_misc_loops.hpp: $(GEN_LOOPS) $(YK_CODE_FILE)
 	$(YK_MK_GEN_DIR)
 	$< -output $@ $(MISC_LOOP_OPTS) $(EXTRA_LOOP_OPTS) $(EXTRA_MISC_LOOP_OPTS) "$(MISC_LOOP_CODE)"
 
-$(YK_GEN_DIR)/yask_layout_macros.hpp: $(GEN_LAYOUTS) $(YK_GRID_DIMS_FILE)
+$(YK_GEN_DIR)/yask_layout_macros.hpp: $(GEN_LAYOUTS) $(YK_CODE_FILE)
 	$(YK_MK_GEN_DIR)
 	$(PERL) $< -m $(NGDIMS) > $@
 	@- gindent -fca $@ || \
 	  indent -fca $@ ||   \
 	  echo "note:" $@ "is not properly indented because indent program failed or was not found."
 
-$(YK_GEN_DIR)/yask_layouts.hpp: $(GEN_LAYOUTS) $(YK_GRID_DIMS_FILE)
+$(YK_GEN_DIR)/yask_layouts.hpp: $(GEN_LAYOUTS) $(YK_CODE_FILE)
 	$(YK_MK_GEN_DIR)
 	$(PERL) $< -d $(NGDIMS) > $@
 	@- gindent -fca $@ || \
 	  indent -fca $@ ||   \
 	  echo "note:" $@ "is not properly indented because indent program failed or was not found."
 
-$(YK_GEN_DIR)/yask_grid_code.hpp: $(GEN_LAYOUTS) $(YK_GRID_DIMS_FILE)
+$(YK_GEN_DIR)/yask_grid_code.hpp: $(GEN_LAYOUTS) $(YK_CODE_FILE)
 	$(YK_MK_GEN_DIR)
 	$(PERL) $< -g $(NGDIMS) > $@
-
-# Extract the number of stencil dims from the compiler output.
-# Use this to create an option to pass to the loop generator script.
-$(YK_STENCIL_DIMS_FILE): $(YK_CODE_FILE)
-	awk '/NUM_STENCIL_DIMS/ {print $$NF}' $< > $@
-
-# Extract the number of grid dims from the compiler output.
-# Use this to create an option to pass to the layout generator script.
-$(YK_GRID_DIMS_FILE): $(YK_CODE_FILE)
-	awk '/NUM_GRID_DIMS/ {print $$NF}' $< > $@
 
 $(YK_CODE_FILE): $(YC_EXEC)
 	$(YK_MK_GEN_DIR)
@@ -786,7 +774,6 @@ all:
 # Make this target before rebuilding YASK with any new parameters.
 clean:
 	rm -fv *.s
-	rm -fv num_*dims.*.txt
 	rm -fr $(YK_SWIG_DIR)/build $(YK_GEN_DIR)
 	rm -fv $(YK_SWIG_DIR)/*_api_wrap.*
 	rm -fv $(YK_OBJS)
