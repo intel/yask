@@ -189,9 +189,17 @@ namespace yask {
         
         // New allocation in each dim.
         IdxTuple new_allocs(old_allocs);
-        for (int i = 0; i < get_num_dims(); i++)
-            new_allocs[i] = ROUND_UP(_left_pads[i] + _domains[i], _vec_lens[i]) +
+        for (int i = 0; i < get_num_dims(); i++) {
+            new_allocs[i] =
+                ROUND_UP(_left_pads[i] + _domains[i], _vec_lens[i]) +
                 ROUND_UP(right_pads2[i], _vec_lens[i]);
+
+            // Make inner dim an odd number of vecs.
+            // This reportedly avoids some uarch aliasing.
+            if (get_dim_name(i) == _dims->_inner_dim &&
+                new_allocs[i] % 2 == 0)
+                new_allocs[i]++;
+        }
 
         // Attempt to change alloc with existing storage?
         if (p && old_allocs != new_allocs) {
