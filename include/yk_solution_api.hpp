@@ -431,8 +431,8 @@ namespace yask {
            sides, i.e., both "before" and "after" the domain.
            
            The *actual* padding size will be the largest of the following values,
-           additionally rounded up based on the vector-folding dimensions
-           and/or cache-line alignment:
+           additionally rounded up based on the vector-folding dimensions,
+           cache-line alignment, and/or extensions needed for wave-front tiles:
            - Halo size.
            - Value provided by any of the pad-size setting functions.
            
@@ -440,9 +440,13 @@ namespace yask {
            has been allocated for a given grid; attempted changes to the pad size for such
            grids will be ignored.
            In addition, once a grid's padding is set, it cannot be reduced, only increased.
-           Call yk_grid::get_pad_size() to determine the actual padding size for a given grid.
+
+           Use yk_grid::set_left_min_pad_size and yk_grid::set_right_min_pad_size()
+           for specific setting of each grid.
+           Call yk_grid::get_left_pad_size() and yk_grid::get_right_pad_size()
+           to determine the actual padding sizes for a given grid.
            See the "Detailed Description" for \ref yk_grid for more information on grid sizes.
-           There is no padding allowed in the solution-step dimension (usually "t").
+           Padding is only allowed in the domain dimensions.
         */
         virtual void
         set_min_pad_size(const std::string& dim

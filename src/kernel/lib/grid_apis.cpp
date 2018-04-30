@@ -30,8 +30,9 @@ using namespace std;
 
 namespace yask {
 
-#define DEPRECATED(api_name) cerr << "\n*** WARNING: deprecated YASK API '" \
-    #api_name "' used that will be removed in a future release ***\n"
+#define DEPRECATED(api_name) \
+    cerr << "\n*** WARNING: call to deprecated YASK API '"              \
+    #api_name "' that will be removed in a future release ***\n"
 
     // APIs to get info from vars.
 #define GET_GRID_API(api_name, expr, step_ok, domain_ok, misc_ok, prep_req) \
@@ -49,34 +50,32 @@ namespace yask {
         return rtn;                                                     \
     }
     GET_GRID_API(get_rank_domain_size, _domains[posn], false, true, false, false)
-    GET_GRID_API(get_left_pad_size, _left_pads[posn], false, true, false, false) // _left_pads is actual size.
-    GET_GRID_API(get_right_pad_size, _allocs[posn] - _left_pads[posn], false, true, false, false) // _right_pads is request only.
+    GET_GRID_API(get_left_pad_size, _actl_left_pads[posn], false, true, false, false)
+    GET_GRID_API(get_right_pad_size, _actl_right_pads[posn], false, true, false, false)
     GET_GRID_API(get_left_halo_size, _left_halos[posn], false, true, false, false)
     GET_GRID_API(get_right_halo_size, _right_halos[posn], false, true, false, false)
     GET_GRID_API(get_first_misc_index, _offsets[posn], false, false, true, false)
     GET_GRID_API(get_last_misc_index, _offsets[posn] + _domains[posn] - 1, false, false, true, false)
-    GET_GRID_API(get_left_extra_pad_size, _left_pads[posn] - _left_halos[posn], false, true, false, false)
-    GET_GRID_API(get_right_extra_pad_size, (_allocs[posn] - _left_pads[posn] - _domains[posn]) -
-                 _right_halos[posn], false, true, false, false)
+    GET_GRID_API(get_left_extra_pad_size, _actl_left_pads[posn] - _left_halos[posn], false, true, false, false)
+    GET_GRID_API(get_right_extra_pad_size, _actl_right_pads[posn] - _right_halos[posn], false, true, false, false)
     GET_GRID_API(get_alloc_size, _allocs[posn], true, true, true, false)
-    GET_GRID_API(get_first_rank_domain_index, _offsets[posn] - _local_offsets[posn], false, true, false, true)
-    GET_GRID_API(get_last_rank_domain_index, _offsets[posn] - _local_offsets[posn] + _domains[posn] - 1;
-                 assert(!_is_scratch), false, true, false, true)
+    GET_GRID_API(get_first_rank_domain_index, _offsets[posn], false, true, false, true)
+    GET_GRID_API(get_last_rank_domain_index, _offsets[posn] + _domains[posn] - 1, false, true, false, true)
     GET_GRID_API(get_first_rank_halo_index, _offsets[posn] - _left_halos[posn], false, false, true, true)
     GET_GRID_API(get_last_rank_halo_index, _offsets[posn] + _domains[posn] + _right_halos[posn] - 1, false, false, true, true)
-    GET_GRID_API(get_first_rank_alloc_index, _offsets[posn] - _left_pads[posn], false, true, false, true)
-    GET_GRID_API(get_last_rank_alloc_index, _offsets[posn] - _left_pads[posn] + _allocs[posn] - 1, false, true, false, true)
+    GET_GRID_API(get_first_rank_alloc_index, _offsets[posn] - _actl_left_pads[posn], false, true, false, true)
+    GET_GRID_API(get_last_rank_alloc_index, _offsets[posn] + _domains[posn] + _actl_right_pads[posn] - 1, false, true, false, true)
     GET_GRID_API(_get_left_wf_ext, _left_wf_exts[posn], true, true, true, false)
     GET_GRID_API(_get_right_wf_ext, _right_wf_exts[posn], true, true, true, false)
     GET_GRID_API(_get_vec_lens, _vec_lens[posn], true, true, true, true)
     GET_GRID_API(_get_offset, _offsets[posn], true, true, true, true)
     GET_GRID_API(_get_local_offset, _local_offsets[posn], true, true, true, false)
-    GET_GRID_API(_get_first_alloc_index, _offsets[posn] - _left_pads[posn], true, true, true, true)
-    GET_GRID_API(_get_last_alloc_index, _offsets[posn] - _left_pads[posn] + _allocs[posn] - 1, true, true, true, true)
+    GET_GRID_API(_get_first_alloc_index, _offsets[posn] - _actl_left_pads[posn], true, true, true, true)
+    GET_GRID_API(_get_last_alloc_index, _offsets[posn] - _actl_left_pads[posn] + _allocs[posn] - 1, true, true, true, true)
 
-    GET_GRID_API(get_pad_size, _left_pads[posn]; DEPRECATED(get_pad_size), false, true, false, false)
+    GET_GRID_API(get_pad_size, _actl_left_pads[posn]; DEPRECATED(get_pad_size), false, true, false, false)
     GET_GRID_API(get_halo_size, _left_halos[posn]; DEPRECATED(get_halo_size), false, true, false, false)
-    GET_GRID_API(get_extra_pad_size, _left_pads[posn] - _left_halos[posn]; DEPRECATED(get_extra_pad_size), false, true, false, false)
+    GET_GRID_API(get_extra_pad_size, _actl_left_pads[posn] - _left_halos[posn]; DEPRECATED(get_extra_pad_size), false, true, false, false)
 #undef GET_GRID_API
     
     // APIs to set vars.
@@ -97,33 +96,23 @@ namespace yask {
     SET_GRID_API(_set_local_offset, _local_offsets[posn] = n;
                  _vec_local_offsets[posn] = n / _vec_lens[posn], true, true, true)
     SET_GRID_API(_set_domain_size, _domains[posn] = n; resize(), true, true, true)
-    SET_GRID_API(_set_left_pad_size, _left_pads[posn] = n; resize(), true, true, true)
-    SET_GRID_API(_set_right_pad_size, _right_pads[posn] = n; resize(), true, true, true)
+    SET_GRID_API(_set_left_pad_size, _actl_left_pads[posn] = n; resize(), true, true, true)
+    SET_GRID_API(_set_right_pad_size, _actl_right_pads[posn] = n; resize(), true, true, true)
     SET_GRID_API(_set_left_wf_ext, _left_wf_exts[posn] = n; resize(), true, true, true)
     SET_GRID_API(_set_right_wf_ext, _right_wf_exts[posn] = n; resize(), true, true, true)
+
     SET_GRID_API(set_left_halo_size, _left_halos[posn] = n; resize(), false, true, false)
     SET_GRID_API(set_right_halo_size, _right_halos[posn] = n; resize(), false, true, false)
     SET_GRID_API(set_halo_size, _left_halos[posn] = _right_halos[posn] = n; resize(), false, true, false)
-
-    SET_GRID_API(set_alloc_size, _set_domain_size(posn, n), true, false, true)
-    SET_GRID_API(set_left_min_pad_size,
-                 if (!get_raw_storage_buffer() && n > _left_pads[posn])
-                     _set_left_pad_size(posn, n),
-                 false, true, false)
-    SET_GRID_API(set_right_min_pad_size,
-                 if (!get_raw_storage_buffer() && n > _right_pads[posn])
-                     _set_right_pad_size(posn, n),
-                 false, true, false)
-    SET_GRID_API(set_min_pad_size,
-                 if (!get_raw_storage_buffer() && n > _left_pads[posn])
-                     _set_left_pad_size(posn, n);
-                 if (!get_raw_storage_buffer() && n > _right_pads[posn])
-                     _set_right_pad_size(posn, n),
+    SET_GRID_API(set_alloc_size, _domains[posn] = n; resize(), true, false, true)
+    SET_GRID_API(set_left_min_pad_size, _req_left_pads[posn] = n; resize(), false, true, false)
+    SET_GRID_API(set_right_min_pad_size, _req_right_pads[posn] = n; resize(), false, true, false)
+    SET_GRID_API(set_min_pad_size, _req_left_pads[posn] = _req_right_pads[posn] = n; resize(),
                  false, true, false)
     SET_GRID_API(set_left_extra_pad_size,
-                 set_left_min_pad_size(posn, _left_halos[posn] + _left_wf_exts[posn] + n), false, true, false)
+                 set_left_min_pad_size(posn, _left_halos[posn] + n), false, true, false)
     SET_GRID_API(set_right_extra_pad_size,
-                 set_right_min_pad_size(posn, _right_halos[posn] + _right_wf_exts[posn] + n), false, true, false)
+                 set_right_min_pad_size(posn, _right_halos[posn] + n), false, true, false)
     SET_GRID_API(set_extra_pad_size, set_left_extra_pad_size(posn, n);
                  set_right_extra_pad_size(posn, n), false, true, false)
     SET_GRID_API(set_first_misc_index, _offsets[posn] = n, false, false, true)
@@ -148,14 +137,12 @@ namespace yask {
             if (dname != op->get_dim_name(i))
                 return false;
 
-            // Same sizes?
-            // NB: not checking right pads because actual values
-            // are determined as function of other 3.
-            if (_allocs[i] != op->_allocs[i])
-                return false;
+            // Same dim sizes?
             if (_domains[i] != op->_domains[i])
                 return false;
-            if (_left_pads[i] != op->_left_pads[i])
+            if (_actl_left_pads[i] != op->_actl_left_pads[i])
+                return false;
+            if (_actl_right_pads[i] != op->_actl_right_pads[i])
                 return false;
         }
         return true;
@@ -226,6 +213,7 @@ namespace yask {
                 spad = sp->get_right_pad_size(i);
                 if (right_pads2[i] > spad) {
                     THROW_YASK_EXCEPTION("Error: attempt to share storage from grid '" << sp->get_name() <<
+
                                          "' of right padding-size " << spad <<
                                          ", which is insufficient for grid '" << get_name() <<
                                          "' requiring " << right_pads2[i] << " in '" << dname << "' dim");
@@ -238,8 +226,8 @@ namespace yask {
             auto dname = get_dim_name(i);
             bool is_domain = _dims->_domain_dims.lookup(dname) != 0;
             if (is_domain) {
-                _left_pads[i] = sp->_left_pads[i];
-                _right_pads[i] = sp->_right_pads[i];
+                _actl_left_pads[i] = sp->_actl_left_pads[i];
+                _actl_right_pads[i] = sp->_actl_right_pads[i];
             }
         }
         

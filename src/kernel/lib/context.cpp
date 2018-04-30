@@ -1013,7 +1013,7 @@ namespace yask {
                         // |        +------+       |
                         // ^        ^
                         // |        |
-                        // |        start of grid/0-idx of block
+                        // |        start of grid-domain/0-idx of block
                         // first rank-domain index
                         
                         // Set offset of grid based on starting point of block.

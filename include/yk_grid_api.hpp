@@ -272,7 +272,7 @@ namespace yask {
            the domain in a given dimension.
            The left padding size includes the left halo size.
            The value may be slightly
-           larger than that provided via set_min_pad_size(), etc. due to rounding.
+           larger than that provided via set_left_min_pad_size(), etc. due to rounding.
            @returns Elements in left padding in given dimension.
         */
         virtual idx_t
@@ -287,7 +287,7 @@ namespace yask {
            the domain in a given dimension.
            The right padding size includes the right halo size.
            The value may be slightly
-           larger than that provided via set_min_pad_size(), etc. due to rounding.
+           larger than that provided via set_right_min_pad_size(), etc. due to rounding.
            @returns Elements in right padding in given dimension.
         */
         virtual idx_t
@@ -320,33 +320,6 @@ namespace yask {
                               Must be one of
                               the names from yk_solution::get_domain_dim_names(). */ ) const =0;
 
-        /// Set the padding in the specified dimension.
-        /**
-           This sets the minimum number of elements in this grid 
-           in both left and right pads.
-           This padding area can be used for required halo regions.
-           
-           The *actual* padding size will be the largest of the following values,
-           additionally rounded up based on the vector-folding dimensions
-           and/or cache-line alignment:
-           - Halo size.
-           - Value provided by any of the pad-size setting functions.
-           
-           The padding size cannot be changed after data storage
-           has been allocated for this grid; attempted changes to the pad size
-           will be ignored.
-           In addition, once a grid's padding is set, it cannot be reduced, only increased.
-           Call get_pad_size() to determine the actual padding size for the grid.
-           See the "Detailed Description" for \ref yk_grid for information on grid sizes.
-        */
-        virtual void
-        set_min_pad_size(const std::string& dim
-                         /**< [in] Name of dimension to set.
-                            Must be one of
-                            the names from yk_solution::get_domain_dim_names(). */,
-                         idx_t size
-                         /**< [in] Minimum number of elements to allocate beyond the domain size. */ ) =0;
-        
         /// Get the storage allocation in the specified dimension.
         /**
            For the step dimension, this is the specified allocation and
@@ -690,6 +663,59 @@ namespace yask {
         virtual int
         get_numa_preferred() const =0;
 
+        /// **[Advanced]** Set the minimum left padding in the specified dimension.
+        /**
+           This sets the minimum number of elements in this grid in the left padding area.
+           This padding area can be used for required halo regions.
+           This function may be useful in the unusual case where the final halo size
+           is unknown when the storage is allocated.
+
+           Call get_left_pad_size() to determine the actual padding size for the grid.
+           See additional behavior related to setting pad size under yk_solution::set_min_pad_size().
+           See the "Detailed Description" for \ref yk_grid for information on grid sizes.
+        */
+        virtual void
+        set_left_min_pad_size(const std::string& dim
+                              /**< [in] Name of dimension to set.
+                                 Must be one of
+                                 the names from yk_solution::get_domain_dim_names(). */,
+                              idx_t size
+                              /**< [in] Minimum number of elements to allocate 
+                                 before the domain size. */ ) =0;
+        
+        /// **[Advanced]** Set the minimum right padding in the specified dimension.
+        /**
+           This sets the minimum number of elements in this grid in the right padding area.
+           This padding area can be used for required halo regions.
+           This function may be useful in the unusual case where the final halo size
+           is unknown when the storage is allocated.
+
+           Call get_right_pad_size() to determine the actual padding size for the grid.
+           See additional behavior related to setting pad size under yk_solution::set_min_pad_size().
+           See the "Detailed Description" for \ref yk_grid for information on grid sizes.
+        */
+        virtual void
+        set_right_min_pad_size(const std::string& dim
+                              /**< [in] Name of dimension to set.
+                                 Must be one of
+                                 the names from yk_solution::get_domain_dim_names(). */,
+                              idx_t size
+                              /**< [in] Minimum number of elements to allocate 
+                                 after the domain size. */ ) =0;
+
+        /// **[Advanced]** Set the minimum padding in the specified dimension.
+        /**
+           Shorthand for calling set_left_min_pad_size() and set_right_min_pad_size().
+        */
+        virtual void
+        set_min_pad_size(const std::string& dim
+                         /**< [in] Name of dimension to set.
+                            Must be one of
+                            the names from yk_solution::get_domain_dim_names(). */,
+                         idx_t size
+                         /**< [in] Minimum number of elements to allocate 
+                            before and after the domain size. */ ) =0;
+        
         /// **[Advanced]** Set the left halo size in the specified dimension.
         /**
            This value is typically set by the stencil compiler, but
