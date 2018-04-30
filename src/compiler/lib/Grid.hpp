@@ -257,7 +257,14 @@ namespace yask {
         }
         virtual std::vector<std::string> get_dim_names() const;
         virtual yc_grid_point_node_ptr
-        new_relative_grid_point(std::vector<int> dim_offsets);
+        new_grid_point(const std::vector<yc_number_node_ptr>& index_exprs);
+        virtual yc_grid_point_node_ptr
+        new_grid_point(const std::initializer_list<yc_number_node_ptr>& index_exprs) {
+            std::vector<yc_number_node_ptr> idx_expr_vec(index_exprs);
+            return new_grid_point(idx_expr_vec);
+        }
+        virtual yc_grid_point_node_ptr
+        new_relative_grid_point(const std::vector<int>& dim_offsets);
         virtual yc_grid_point_node_ptr
         new_relative_grid_point(const std::initializer_list<int>& dim_offsets) {
             std::vector<int> dim_ofs_vec(dim_offsets);
