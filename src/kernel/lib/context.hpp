@@ -635,17 +635,15 @@ namespace yask {
         virtual void share_grid_storage(yk_solution_ptr source);
 
         // APIs that access settings.
-        virtual void set_rank_domain_size(const std::string& dim,
-                                     idx_t size);
-        virtual void set_min_pad_size(const std::string& dim,
-                                      idx_t size);
-        virtual void set_block_size(const std::string& dim,
-                                    idx_t size);
-        virtual void set_num_ranks(const std::string& dim,
-                                   idx_t size);
+        virtual void set_rank_domain_size(const std::string& dim, idx_t size);
+        virtual void set_min_pad_size(const std::string& dim, idx_t size);
+        virtual void set_block_size(const std::string& dim, idx_t size);
+        virtual void set_region_size(const std::string& dim, idx_t size);
+        virtual void set_num_ranks(const std::string& dim, idx_t size);
         virtual idx_t get_rank_domain_size(const std::string& dim) const;
         virtual idx_t get_min_pad_size(const std::string& dim) const;
         virtual idx_t get_block_size(const std::string& dim) const;
+        virtual idx_t get_region_size(const std::string& dim) const;
         virtual idx_t get_num_ranks(const std::string& dim) const;
         virtual idx_t get_rank_index(const std::string& dim) const;
         virtual std::string apply_command_line_options(const std::string& args);

@@ -43,6 +43,7 @@ namespace yask {
         return expr;                                                    \
     }
     GET_SOLN_API(get_rank_domain_size, _opts->_rank_sizes[dim], false, true, false, false)
+    GET_SOLN_API(get_region_size, _opts->_region_sizes[dim], true, true, false, false)
     GET_SOLN_API(get_min_pad_size, _opts->_min_pad_sizes[dim], false, true, false, false)
     GET_SOLN_API(get_block_size, _opts->_block_sizes[dim], false, true, false, false)
     GET_SOLN_API(get_num_ranks, _opts->_num_ranks[dim], false, true, false, false)
@@ -62,6 +63,7 @@ namespace yask {
     }
     SET_SOLN_API(set_min_pad_size, _opts->_min_pad_sizes[dim] = n, false, true, false, false)
     SET_SOLN_API(set_block_size, _opts->_block_sizes[dim] = n, false, true, false, false)
+    SET_SOLN_API(set_region_size, _opts->_region_sizes[dim] = n, true, true, false, true)
     SET_SOLN_API(set_rank_domain_size, _opts->_rank_sizes[dim] = n, false, true, false, true)
     SET_SOLN_API(set_num_ranks, _opts->_num_ranks[dim] = n, false, true, false, true)
 #undef SET_SOLN_API

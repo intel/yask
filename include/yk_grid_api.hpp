@@ -103,7 +103,7 @@ namespace yask {
        The intermediate halos and paddings also exist, but are not shown in the above diagram.
        The halos overlap the domains of adjacent ranks.
        For example, the left halo of rank B in the diagram would overlap the domain of rank A.
-       Data in these overlapped regions is exchanged as needed during stencil application
+       Data in these overlapped areas are exchanged as needed during stencil application
        to maintain a consistent values as if there was only one rank.
 
        In each miscellaneous dimension, there is only an allocation size,
@@ -300,7 +300,7 @@ namespace yask {
         /**
            The *extra* padding size is the left padding size minus the left halo size.
            @returns Elements in padding in given dimension before the
-           left halo region.
+           left halo area.
         */
         virtual idx_t
         get_left_extra_pad_size(const std::string& dim
@@ -312,7 +312,7 @@ namespace yask {
         /**
            The *extra* padding size is the right padding size minus the right halo size.
            @returns Elements in padding in given dimension after the
-           right halo region.
+           right halo area.
         */
         virtual idx_t
         get_right_extra_pad_size(const std::string& dim
@@ -666,7 +666,7 @@ namespace yask {
         /// **[Advanced]** Set the minimum left padding in the specified dimension.
         /**
            This sets the minimum number of elements in this grid in the left padding area.
-           This padding area can be used for required halo regions.
+           This padding area can be used for required halo areas.
            This function may be useful in the unusual case where the final halo size
            is unknown when the storage is allocated.
 
@@ -686,7 +686,7 @@ namespace yask {
         /// **[Advanced]** Set the minimum right padding in the specified dimension.
         /**
            This sets the minimum number of elements in this grid in the right padding area.
-           This padding area can be used for required halo regions.
+           This padding area can be used for required halo areas.
            This function may be useful in the unusual case where the final halo size
            is unknown when the storage is allocated.
 
@@ -959,7 +959,7 @@ namespace yask {
         /**
            Alias for get_extra_left_pad_size(dim).
            @returns Elements in padding in given dimension before the
-           left halo region.
+           left halo area.
         */
         virtual idx_t
         get_extra_pad_size(const std::string& dim
