@@ -98,7 +98,21 @@ namespace yask {
         if (got_sizes) {
             int ndims = dims.size();
             for (int i = 0; i < ndims; i++) {
+                auto& dname = dims[i];
+
+                // Domain size.
                 gp->_set_domain_size(i, sizes->at(i));
+
+                // Pads.
+                // Set via both 'extra' and 'min'; larger result will be used.
+                if (_dims->_domain_dims.lookup(dname)) {
+                    gp->set_extra_pad_size(i, _opts->_extra_pad_sizes[dname]);
+                    gp->set_min_pad_size(i, _opts->_min_pad_sizes[dname]);
+                }
+                
+                // Offsets.
+                gp->_set_offset(i, 0);
+                gp->_set_local_offset(i, 0);
             }
         }
 

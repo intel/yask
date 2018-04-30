@@ -109,7 +109,6 @@ else ifneq ($(findstring awp,$(stencil)),)
   omp_block_schedule		=	dynamic,1
   fold_4byte			=	x=8
   cluster			=	y=2
-  def_pad_args			=	-epx 1 -epy 1 -epz 0
   def_block_args		=	-bx 128 -by 16 -bz 32 
   more_def_args			+=	-sbx 32 -sby 2 -sbz 32
   pfd_l1			=	1
@@ -215,7 +214,6 @@ def_block_threads	?=	2
 real_bytes		?=	4
 def_rank_args		?=	-d 128
 def_block_args		?=	-b 64
-def_pad_args		?=	-ep 1
 cluster			?=	x=1
 pfd_l1			?=	0
 pfd_l2			?=	2

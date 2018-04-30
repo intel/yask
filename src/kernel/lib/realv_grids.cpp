@@ -173,11 +173,17 @@ namespace yask {
         IdxTuple new_allocs(old_allocs);
         for (int i = 0; i < get_num_dims(); i++) {
 
-            // Get max of existing pad, new required pad, and requested pad.
-            new_left_pads[i] = max(_actl_left_pads[i],
-                                   max(new_left_pads[i], _req_left_pads[i]));
-            new_right_pads[i] = max(_actl_right_pads[i],
-                                    max(new_right_pads[i], _req_right_pads[i]));
+            // Get max of existing pad & new required pad.
+            new_left_pads[i] = max(new_left_pads[i], _actl_left_pads[i]);
+            new_right_pads[i] = max(new_right_pads[i], _actl_right_pads[i]);
+
+            // If storage not yet allocated, also increase to requested pad.
+            // This will avoid throwing an exception due to unneeded
+            // extra padding after allocation.
+            if (!p) {
+                new_left_pads[i] = max(new_left_pads[i], _req_left_pads[i]);
+                new_right_pads[i] = max(new_right_pads[i], _req_right_pads[i]);
+            }
 
             // Round left pad up to vec len.
             new_left_pads[i] = ROUND_UP(new_left_pads[i], _vec_lens[i]);
@@ -191,9 +197,12 @@ namespace yask {
 
             // Make inner dim an odd number of vecs.
             // This reportedly helps avoid some uarch aliasing.
-            if (get_dim_name(i) == _dims->_inner_dim &&
-                (new_allocs[i] / _vec_lens[i]) % 2 == 0)
+            if (!p && get_dim_name(i) == _dims->_inner_dim &&
+                (new_allocs[i] / _vec_lens[i]) % 2 == 0) {
+                new_right_pads[i] += _vec_lens[i];
                 new_allocs[i] += _vec_lens[i];
+            }
+            assert(new_allocs[i] == new_left_pads[i] + _domains[i] + new_right_pads[i]);
 
             // Since the left pad and domain + right pad were rounded up,
             // the sum should also be a vec mult.

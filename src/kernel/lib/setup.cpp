@@ -882,6 +882,7 @@ namespace yask {
                     
                     // Offsets.
                     gp->_set_offset(dname, rank_domain_offsets[dname]);
+                    gp->_set_local_offset(dname, 0);
 
                     // Update max halo across grids, used for wavefront angles.
                     max_halos[dname] = max(max_halos[dname], gp->get_left_halo_size(dname));
