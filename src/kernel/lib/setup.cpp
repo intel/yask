@@ -432,8 +432,11 @@ namespace yask {
                             // this grid. We won't do the actual rounding
                             // yet, because we need to see if it's safe
                             // in all dims.
+                            // Need +1 and then -1 trick for last.
                             fidx = round_down_flr(fidx, vlen);
-                            lidx = round_up_flr(lidx, vlen);
+                            lidx = round_up_flr(lidx + 1, vlen) - 1;
+                            TRACE_MSG("*** " << gname << "[" << dname << "] fidx: " << fidx << " vs " << gp->get_first_rank_alloc_index(dname));
+                            TRACE_MSG("*** " << gname << "[" << dname << "] lidx: " << lidx << " vs " << gp->get_last_rank_alloc_index(dname));
                             if (fidx < gp->get_first_rank_alloc_index(dname))
                                 grid_vec_ok = false;
                             if (lidx > gp->get_last_rank_alloc_index(dname))
@@ -509,12 +512,16 @@ namespace yask {
                             if (gp->is_dim_used(dname)) {
                                 auto vlen = gp->_get_vec_lens(dname);
 
-                                // first index rounded down.
-                                first_outer_idx.setVal(dname, round_down_flr(first_outer_idx[dname], vlen));
+                                // First index rounded down.
+                                auto fidx = first_outer_idx[dname];
+                                fidx = round_down_flr(fidx, vlen);
+                                first_outer_idx.setVal(dname, fidx);
 
-                                // last index rounded up.
-                                // need +1 and then -1 trick because it's last, not end.
-                                last_outer_idx.setVal(dname, round_up_flr(last_outer_idx[dname]+1, vlen)-1);
+                                // Last index rounded up.
+                                // Need +1 and then -1 trick because it's last, not end.
+                                auto lidx = last_outer_idx[dname];
+                                lidx = round_up_flr(lidx + 1, vlen) - 1;
+                                last_outer_idx.setVal(dname, lidx);
                                 
                                 // sizes rounded up.
                                 my_halo_sizes.setVal(dname, ROUND_UP(my_halo_sizes[dname], vlen));
