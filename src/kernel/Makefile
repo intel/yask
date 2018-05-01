@@ -744,8 +744,10 @@ api-tests:
 # run the tests from the top-level Makefile.
 stencil-tests:
 	$(MAKE) clean; $(MAKE) yc-and-yk-test real_bytes=8 stencil=test_1d
-	$(MAKE) clean; $(MAKE) yc-and-yk-test real_bytes=8 stencil=3axis fold=x=2,y=2
+	$(MAKE) clean; $(MAKE) yc-and-yk-test real_bytes=8 stencil=test_2d
 	$(MAKE) clean; $(MAKE) yc-and-yk-test real_bytes=8 stencil=9axis fold=x=2,z=2
+	$(MAKE) clean; $(MAKE) yc-and-yk-test real_bytes=8 stencil=3axis fold=x=2,y=2 cluster=x=2
+	$(MAKE) clean; $(MAKE) yc-and-yk-test real_bytes=8 stencil=3axis fold=x=2,y=2 cluster=z=2,y=2
 	$(MAKE) clean; $(MAKE) yc-and-yk-test real_bytes=8 stencil=3plane fold=y=2,z=2
 	$(MAKE) clean; $(MAKE) yc-and-yk-test real_bytes=8 stencil=cube fold=x=2,y=2
 	$(MAKE) clean; $(MAKE) yc-and-yk-test real_bytes=8 stencil=test_4d fold=w=2,x=2
