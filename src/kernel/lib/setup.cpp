@@ -339,6 +339,7 @@ namespace yask {
         map<int, int> num_exchanges; // send/recv => count.
         map<int, idx_t> num_elems; // send/recv => count.
         auto me = _env->my_rank;
+        auto& step_dim = _dims->_step_dim;
         
         // Need to determine the size and shape of all MPI buffers.
         // Visit all neighbors of this rank.
@@ -411,15 +412,17 @@ namespace yask {
                             // are no more ranks in the given direction,
                             // extend the "outer" index to include the halo
                             // in that direction to make sure all data are
-                            // sync'd.  This is critical for WFs.
+                            // sync'd when using WF tiling.
                             idx_t fidx = gp->get_first_rank_domain_index(dname);
                             idx_t lidx = gp->get_last_rank_domain_index(dname);
                             first_inner_idx.addDimBack(dname, fidx);
                             last_inner_idx.addDimBack(dname, lidx);
-                            if (_opts->is_first_rank(dname))
-                                fidx -= lhalo;
-                            if (_opts->is_last_rank(dname))
-                                lidx += rhalo;
+                            if (_opts->is_time_tiling()) {
+                                if (_opts->is_first_rank(dname))
+                                    fidx -= lhalo;
+                                if (_opts->is_last_rank(dname))
+                                    lidx += rhalo;
+                            }
                             first_outer_idx.addDimBack(dname, fidx);
                             last_outer_idx.addDimBack(dname, lidx);
 
@@ -618,7 +621,7 @@ namespace yask {
                             // step dim?
                             // Allowing only one step to be exchanged.
                             // TODO: consider exchanging mutiple steps at once for WFs.
-                            else if (dname == _dims->_step_dim) {
+                            else if (dname == step_dim) {
 
                                 // Use 0..1 as a place-holder range.
                                 // The actual values will be supplied during
