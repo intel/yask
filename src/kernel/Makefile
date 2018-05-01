@@ -34,8 +34,6 @@ mpi		=	1
 numa		=	1
 real_bytes	=	4
 radius		=	2
-ranks		= 	1
-v_args		=	-b 16 -r 32 -rt 2 -dt 2 -d 63
 
 # Defaults based on stencil type (and arch for some stencils).
 ifeq ($(stencil),)
@@ -711,10 +709,6 @@ cxx-yc-api-test:
 
 ######## Misc targets
 
-# Run the default YASK compiler and kernel.
-yc-and-yk-test: $(YK_EXEC)
-	$(BIN_DIR)/yask.sh -stencil $(stencil) -arch $(arch) -ranks $(ranks) -v $(v_args)
-
 # Generate the code file using the built-in compiler.
 code-file: $(YK_CODE_FILE)
 
@@ -725,9 +719,25 @@ NO_YC_MAKE_FLAGS := --new-file=$(YK_CODE_FILE)
 kernel-only:
 	$(MAKE) $(NO_YC_MAKE_FLAGS)
 
+# Validation runs for each binary.
+val1	=	-b 16 -dt 2 -d 64
+val2	=	-b 24 -r 32 -rt 2 -dt 2 -d 63
+ranks	= 	2
+
+# Run the kernel tests.
+yk-tests:
+	$(BIN_DIR)/yask.sh -stencil $(stencil) -arch $(arch) -v $(val1)
+	$(BIN_DIR)/yask.sh -stencil $(stencil) -arch $(arch) -v $(val2)
+	$(BIN_DIR)/yask.sh -stencil $(stencil) -arch $(arch) -ranks $(ranks) -v $(val1)
+	$(BIN_DIR)/yask.sh -stencil $(stencil) -arch $(arch) -ranks $(ranks) -v $(val2)
+
+# Run the default YASK compiler and kernel.
+yc-and-yk-test: $(YK_EXEC)
+	$(MAKE) yk-tests
+
 # Run the YASK kernel test without implicity using the YASK compiler.
 yk-test-no-yc: kernel-only
-	$(BIN_DIR)/yask.sh -stencil $(stencil) -arch $(arch) -ranks $(ranks) -v $(v_args)
+	$(MAKE) yk-tests
 
 # Run the kernel API tests for C++ and Python with and w/o expected exceptions.
 api-tests:
@@ -781,11 +791,13 @@ clean:
 	- find . $(COMM_DIR) $(BIN_DIR) $(LIB_DIR) -name '*.optrpt' -print -delete
 
 # Remove executables, libs, etc.
+# Also remove logs from kernel dir, which are most likely from testing.
 realclean: clean
 	rm -fv $(YK_LIB) $(YK_EXEC) $(YK_API_TEST_EXEC) $(YK_API_TEST_EXEC_WITH_EXCEPTION) $(YK_PY_MOD)* $(YK_PY_LIB)
 	rm -fv make-report.*.txt
 	- find . -name '*.pyc' -print -delete
 	- find . -name '*~' -print -delete
+	rm -rf logs
 
 echo-settings:
 	@echo
