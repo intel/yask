@@ -522,7 +522,8 @@ namespace yask {
         virtual void exchange_halos_all();
 
         // Exchange halo data needed by stencil-bundle 'sg' at the given step(s).
-        virtual void exchange_halos(idx_t start, idx_t stop, StencilBundleBase& sg);
+        // If sg==null, check all bundles.
+        virtual void exchange_halos(idx_t start, idx_t stop, StencilBundleBase* sg);
 
         // Mark grids that have been written to by bundle 'sg'.
         virtual void mark_grids_dirty(idx_t start, idx_t stop, StencilBundleBase& sg);
