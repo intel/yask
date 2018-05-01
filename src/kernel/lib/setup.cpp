@@ -403,7 +403,7 @@ namespace yask {
 
                         // Only consider domain dims that are used in this grid.
                         if (gp->is_dim_used(dname)) {
-                            auto vlen = _dims->_fold_pts[dname];
+                            auto vlen = gp->_get_vec_lens(dname);
                             auto lhalo = gp->get_left_halo_size(dname);
                             auto rhalo = gp->get_right_halo_size(dname);
 
@@ -504,13 +504,14 @@ namespace yask {
                         for (auto& dim : _dims->_domain_dims.getDims()) {
                             auto& dname = dim.getName();
                             if (gp->is_dim_used(dname)) {
-                                auto vlen = _dims->_fold_pts[dname];
+                                auto vlen = gp->_get_vec_lens(dname);
 
                                 // first index rounded down.
                                 first_outer_idx.setVal(dname, round_down_flr(first_outer_idx[dname], vlen));
 
                                 // last index rounded up.
-                                last_outer_idx.setVal(dname, round_up_flr(last_outer_idx[dname], vlen));
+                                // need +1 and then -1 trick because it's last, not end.
+                                last_outer_idx.setVal(dname, round_up_flr(last_outer_idx[dname]+1, vlen)-1);
                                 
                                 // sizes rounded up.
                                 my_halo_sizes.setVal(dname, ROUND_UP(my_halo_sizes[dname], vlen));
@@ -607,7 +608,7 @@ namespace yask {
                                 dsize = copy_end[dname] - copy_begin[dname];
 
                                 // Check whether alignment and size are multiple of vlen.
-                                auto vlen = _dims->_fold_pts[dname];
+                                auto vlen = gp->_get_vec_lens(dname);
                                 if (dsize % vlen != 0)
                                     vlen_mults = false;
                                 if (imod_flr(copy_begin[dname], vlen) != 0)
@@ -680,7 +681,9 @@ namespace yask {
                                   neigh_offsets.subElements(1).makeDimValStr() << " with " <<
                                   buf.num_pts.makeDimValStr(" * ") << " = " << buf.get_size() <<
                                   " element(s) at " << buf.begin_pt.makeDimValStr() <<
-                                  " ... " << buf.last_pt.makeDimValStr());
+                                  " ... " << buf.last_pt.makeDimValStr() <<
+                                  " with vector-copy " <<
+                                  (buf.vec_copy_ok ? "enabled" : "disabled"));
                         num_exchanges[bd]++;
                         num_elems[bd] += buf.get_size();
 
