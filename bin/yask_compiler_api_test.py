@@ -28,6 +28,7 @@
 import yask_compiler
 
 if __name__ == "__main__":
+    print("YASK compiler API test...")
 
     # Compiler 'bootstrap' factories.
     cfac = yask_compiler.yc_factory()
@@ -45,39 +46,49 @@ if __name__ == "__main__":
     y = nfac.new_domain_index("y");
     z = nfac.new_domain_index("z");
 
+    # Example index expression.
+    e0 = x + 3;
+    print("Simple index expression: " + e0.format_simple());
+
     # Create a grid var.
     g1 = soln.new_grid("test_grid", [t, x, y, z])
 
-    # Create a scratch-grid var.
-    sg1 = soln.new_scratch_grid("scratch_grid", [x, y, z]);
+    # Create simple expressions to reference a point in g1.
+    n0r = g1.new_relative_grid_point([0, 0, 0, 0])  # center-point at this timestep.
+    print("Simple grid-access expression: " + n0r.format_simple());
+    n0 = g1.new_grid_point([t, x, y, z])  # center-point at this timestep.
+    print("Simple grid-access expression: " + n0.format_simple());
     
-    # Create an expression for the new value.
+    # Create a more complex expression using points in g1.
     # This will average some of the neighboring points around the
     # current stencil application point in the current timestep.
-    n1 = (g1.new_relative_grid_point([0, 0, 0, 0]) +  # center-point at this timestep.
-          g1.new_relative_grid_point([0, -1,  0,  0]) + # left.
-          g1.new_relative_grid_point([0,  1,  0,  0]) + # right.
-          g1.new_relative_grid_point([0,  0, -1,  0]) + # above.
-          g1.new_relative_grid_point([0,  0,  1,  0]) + # below.
-          g1.new_relative_grid_point([0,  0,  0, -1]) + # in front.
-          g1.new_relative_grid_point([0,  0,  0,  1])) # behind.
+    n1 = (n0 +
+          g1.new_grid_point([t, x-1, y,   z  ]) + # left.
+          g1.new_grid_point([t, x+1, y,   z  ]) + # right.
+          g1.new_grid_point([t, x,   y-1, z  ]) + # above.
+          g1.new_grid_point([t, x,   y+1, z  ]) + # below.
+          g1.new_grid_point([t, x,   y,   z-1]) + # in front.
+          g1.new_grid_point([t, x,   y,   z  ])) # behind.
     n2 = n1 / 7  # ave of the 7 points.
+
+    # Create a scratch-grid var.
+    sg1 = soln.new_scratch_grid("scratch_grid", [x, y, z]);
 
     # Define value in scratch grid to be the above equation, i.e.,
     # this is a temporary 3-D variable that holds the average
     # values of each point.
-    sn0 = sg1.new_relative_grid_point([0, 0, 0]) # LHS of eq is just a point on scratch-grid
+    sn0 = sg1.new_grid_point([x, y, z]) # LHS of eq is a point on scratch-grid
     sn1 = nfac.new_equation_node(sn0, n2) # equate to expr n2.
     print("Scratch-grid equation before formatting: " + sn1.format_simple())
 
     # Use values in scratch grid to make a new eq.
-    sn2 = (sg1.new_relative_grid_point([1, 0, 0]) +
-           sg1.new_relative_grid_point([0, 1, 0]) +
-           sg1.new_relative_grid_point([0, 0, 1]))
+    sn2 = (sg1.new_grid_point([x+1, y,   z  ]) +
+           sg1.new_grid_point([x,   y+1, z  ]) +
+           sg1.new_grid_point([x,   y,   z+1]))
     sn5 = -sn2 * 2.5 - 9
     
     # Create an equation to define the value at the next timestep.
-    n3 = g1.new_relative_grid_point([1, 0, 0, 0]) # center-point at next timestep.
+    n3 = g1.new_grid_point([t+1, x, y, z]) # center-point at next timestep.
     n4 = nfac.new_equation_node(n3, sn5) # equate to expr from scratch grid.
     print("Main-grid equation before formatting: " + n4.format_simple())
     print("Solution '" + soln.get_name() + "' contains " +

@@ -42,8 +42,10 @@ namespace yask {
         // Init indices.
         int n = int(ndims);
         _domains.setFromConst(0, n);
-        _left_pads.setFromConst(0, n);
-        _right_pads.setFromConst(0, n);
+        _req_left_pads.setFromConst(0, n);
+        _req_right_pads.setFromConst(0, n);
+        _actl_left_pads.setFromConst(0, n);
+        _actl_right_pads.setFromConst(0, n);
         _left_halos.setFromConst(0, n);
         _right_halos.setFromConst(0, n);
         _left_wf_exts.setFromConst(0, n);
@@ -159,41 +161,57 @@ namespace yask {
                 THROW_YASK_EXCEPTION("Error: negative left wave-front ext in grid '" << get_name() << "'");
             if (_right_wf_exts[i] < 0)
                 THROW_YASK_EXCEPTION("Error: negative right wave-front ext in grid '" << get_name() << "'");
-            if (_left_pads[i] < 0)
+            if (_req_left_pads[i] < 0)
                 THROW_YASK_EXCEPTION("Error: negative left padding in grid '" << get_name() << "'");
-            if (_right_pads[i] < 0)
+            if (_req_right_pads[i] < 0)
                 THROW_YASK_EXCEPTION("Error: negative right padding in grid '" << get_name() << "'");
         }
         
-        // Increase padding as needed.
-        // _left_pads contains actual padding and is always rounded up to vec len.
-        // _right_pads contains requested min padding; actual padding is calculated on-the-fly.
-        // TODO: maintain requested and actual padding for left and right.
-        Indices left_pads2 = getReqdPad(_left_halos, _left_wf_exts);
-        Indices right_pads2 = getReqdPad(_right_halos, _right_wf_exts);
+        // Increase padding as needed and calculate new allocs.
+        Indices new_left_pads = getReqdPad(_left_halos, _left_wf_exts);
+        Indices new_right_pads = getReqdPad(_right_halos, _right_wf_exts);
+        IdxTuple new_allocs(old_allocs);
         for (int i = 0; i < get_num_dims(); i++) {
 
-            // Get max of existing pad and reqd pad.
-            left_pads2[i] = max(_left_pads[i], left_pads2[i]);
-            right_pads2[i] = max(_right_pads[i], right_pads2[i]);
+            // Get max of existing pad & new required pad.
+            new_left_pads[i] = max(new_left_pads[i], _actl_left_pads[i]);
+            new_right_pads[i] = max(new_right_pads[i], _actl_right_pads[i]);
 
-            // Round left pad up to vec len and store final setting.
-            // Keep final padding for left.
-            left_pads2[i] = ROUND_UP(left_pads2[i], _vec_lens[i]);
-            _left_pads[i] = left_pads2[i];
-            _vec_left_pads[i] = left_pads2[i] / _vec_lens[i];
+            // If storage not yet allocated, also increase to requested pad.
+            // This will avoid throwing an exception due to unneeded
+            // extra padding after allocation.
+            if (!p) {
+                new_left_pads[i] = max(new_left_pads[i], _req_left_pads[i]);
+                new_right_pads[i] = max(new_right_pads[i], _req_right_pads[i]);
+            }
 
-            // For the right pad, we will round it up below when
-            // we calculate alloc.
-        }
+            // Round left pad up to vec len.
+            new_left_pads[i] = ROUND_UP(new_left_pads[i], _vec_lens[i]);
+
+            // Round domain + right pad up to vec len by extending right pad.
+            idx_t dprp = ROUND_UP(_domains[i] + new_right_pads[i], _vec_lens[i]);
+            new_right_pads[i] = dprp - _domains[i];
         
-        // New allocation in each dim.
-        IdxTuple new_allocs(old_allocs);
-        for (int i = 0; i < get_num_dims(); i++)
-            new_allocs[i] = ROUND_UP(_left_pads[i] + _domains[i], _vec_lens[i]) +
-                ROUND_UP(right_pads2[i], _vec_lens[i]);
+            // New allocation in each dim.
+            new_allocs[i] = new_left_pads[i] + _domains[i] + new_right_pads[i];
+
+            // Make inner dim an odd number of vecs.
+            // This reportedly helps avoid some uarch aliasing.
+            if (!p && get_dim_name(i) == _dims->_inner_dim &&
+                (new_allocs[i] / _vec_lens[i]) % 2 == 0) {
+                new_right_pads[i] += _vec_lens[i];
+                new_allocs[i] += _vec_lens[i];
+            }
+            assert(new_allocs[i] == new_left_pads[i] + _domains[i] + new_right_pads[i]);
+
+            // Since the left pad and domain + right pad were rounded up,
+            // the sum should also be a vec mult.
+            assert(new_allocs[i] % _vec_lens[i] == 0);
+        }
 
         // Attempt to change alloc with existing storage?
+        // TODO: restore the values before the API that called
+        // resize() on failure.
         if (p && old_allocs != new_allocs) {
             THROW_YASK_EXCEPTION("Error: attempt to change allocation size of grid '" <<
                 get_name() << "' from " << 
@@ -204,12 +222,19 @@ namespace yask {
 
         // Do the resize and calculate number of dirty bits needed.
         _allocs = new_allocs;
+        _actl_left_pads = new_left_pads;
+        _actl_right_pads = new_right_pads;
         size_t new_dirty = 1;      // default if no step dim.
         for (int i = 0; i < get_num_dims(); i++) {
+
+            // Calc vec-len values.
+            _vec_left_pads[i] = new_left_pads[i] / _vec_lens[i];
             _vec_allocs[i] = _allocs[i] / _vec_lens[i];
+
+            // Actual resize of underlying grid.
             _ggb->set_dim_size(i, _vec_allocs[i]);
 
-            // Steps.
+            // Number of dirty bits is number of steps.
             if (get_dim_name(i) == _dims->_step_dim)
                 new_dirty = _allocs[i];
         }
@@ -221,7 +246,7 @@ namespace yask {
 
         // Report changes in TRACE mode.
         if (old_allocs != new_allocs || old_dirty != new_dirty) {
-            Indices first_allocs = _offsets.subElements(_left_pads);
+            Indices first_allocs = _offsets.subElements(_actl_left_pads);
             Indices last_allocs = first_allocs.addElements(_allocs).subConst(1);
             TRACE_MSG0(get_ostr(), "grid '" << get_name() << "' resized from " <<
                        makeIndexString(old_allocs, " * ") <<

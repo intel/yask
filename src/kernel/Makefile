@@ -34,8 +34,6 @@ mpi		=	1
 numa		=	1
 real_bytes	=	4
 radius		=	2
-ranks		= 	1
-v_args		=	-b 16 -r 32 -rt 2 -dt 2 -d 63
 
 # Defaults based on stencil type (and arch for some stencils).
 ifeq ($(stencil),)
@@ -109,7 +107,6 @@ else ifneq ($(findstring awp,$(stencil)),)
   omp_block_schedule		=	dynamic,1
   fold_4byte			=	x=8
   cluster			=	y=2
-  def_pad_args			=	-epx 1 -epy 1 -epz 0
   def_block_args		=	-bx 128 -by 16 -bz 32 
   more_def_args			+=	-sbx 32 -sby 2 -sbz 32
   pfd_l1			=	1
@@ -215,7 +212,6 @@ def_block_threads	?=	2
 real_bytes		?=	4
 def_rank_args		?=	-d 128
 def_block_args		?=	-b 64
-def_pad_args		?=	-ep 1
 cluster			?=	x=1
 pfd_l1			?=	0
 pfd_l2			?=	2
@@ -299,8 +295,6 @@ YK_PY_MOD	:=	$(YASK_DIR)/$(YK_MODULE).py
 YK_API_TEST_EXEC :=	$(BIN_DIR)/$(YK_BASE)_api_test.exe
 YK_GRID_TEST_EXEC :=	$(BIN_DIR)/$(YK_BASE)_grid_test.exe
 YK_API_TEST_EXEC_WITH_EXCEPTION :=	$(BIN_DIR)/$(YK_BASE)_api_exception_test.exe
-YK_STENCIL_DIMS_FILE	:=	num_stencil_dims.$(stencil).txt
-YK_GRID_DIMS_FILE	:=	num_grid_dims.$(stencil).txt
 
 MAKE_REPORT_FILE:=	make-report.$(YK_TAG).txt
 
@@ -481,8 +475,8 @@ endif
 YK_CXXFLAGS	+=	$(YK_CXXOPT) $(OMPFLAGS) $(EXTRA_YK_CXXFLAGS)
 
 # Number of stencil/grid dims extracted from YASK compiler output.
-NSDIMS		:=	`cat $(YK_STENCIL_DIMS_FILE)`
-NGDIMS		:=	`cat $(YK_GRID_DIMS_FILE)`
+NSDIMS		:=	`awk '/NUM_STENCIL_DIMS/ {print $$NF}' $(YK_CODE_FILE)`
+NGDIMS		:=	`awk '/NUM_GRID_DIMS/ {print $$NF}' $(YK_CODE_FILE)`
 
 ######## Loop-compiler configuration:
 # The loop indices range from 0..N-1.
@@ -579,53 +573,43 @@ $(MAKE_REPORT_FILE): $(YK_LIB)
 #$(MAKE) code-stats | tee -a $@
 
 # Generated source files.
-$(YK_GEN_DIR)/yask_rank_loops.hpp: $(GEN_LOOPS) $(YK_STENCIL_DIMS_FILE)
+$(YK_GEN_DIR)/yask_rank_loops.hpp: $(GEN_LOOPS) $(YK_CODE_FILE)
 	$(YK_MK_GEN_DIR)
 	$(PERL) $< -output $@ $(RANK_LOOP_OPTS) $(EXTRA_LOOP_OPTS) $(EXTRA_RANK_LOOP_OPTS) "$(RANK_LOOP_CODE)"
 
-$(YK_GEN_DIR)/yask_region_loops.hpp: $(GEN_LOOPS) $(YK_STENCIL_DIMS_FILE)
+$(YK_GEN_DIR)/yask_region_loops.hpp: $(GEN_LOOPS) $(YK_CODE_FILE)
 	$(YK_MK_GEN_DIR)
 	$(PERL) $< -output $@ $(REGION_LOOP_OPTS) $(EXTRA_LOOP_OPTS) $(EXTRA_REGION_LOOP_OPTS) "$(REGION_LOOP_CODE)"
 
-$(YK_GEN_DIR)/yask_block_loops.hpp: $(GEN_LOOPS) $(YK_STENCIL_DIMS_FILE)
+$(YK_GEN_DIR)/yask_block_loops.hpp: $(GEN_LOOPS) $(YK_CODE_FILE)
 	$(YK_MK_GEN_DIR)
 	$(PERL) $< -output $@ $(BLOCK_LOOP_OPTS) $(EXTRA_LOOP_OPTS) $(EXTRA_BLOCK_LOOP_OPTS) "$(BLOCK_LOOP_CODE)"
 
-$(YK_GEN_DIR)/yask_sub_block_loops.hpp: $(GEN_LOOPS) $(YK_STENCIL_DIMS_FILE)
+$(YK_GEN_DIR)/yask_sub_block_loops.hpp: $(GEN_LOOPS) $(YK_CODE_FILE)
 	$(YK_MK_GEN_DIR)
 	$(PERL) $< -output $@ $(SUB_BLOCK_LOOP_OPTS) $(EXTRA_LOOP_OPTS) $(EXTRA_SUB_BLOCK_LOOP_OPTS) "$(SUB_BLOCK_LOOP_CODE)"
 
-$(YK_GEN_DIR)/yask_misc_loops.hpp: $(GEN_LOOPS) $(YK_STENCIL_DIMS_FILE)
+$(YK_GEN_DIR)/yask_misc_loops.hpp: $(GEN_LOOPS) $(YK_CODE_FILE)
 	$(YK_MK_GEN_DIR)
 	$< -output $@ $(MISC_LOOP_OPTS) $(EXTRA_LOOP_OPTS) $(EXTRA_MISC_LOOP_OPTS) "$(MISC_LOOP_CODE)"
 
-$(YK_GEN_DIR)/yask_layout_macros.hpp: $(GEN_LAYOUTS) $(YK_GRID_DIMS_FILE)
+$(YK_GEN_DIR)/yask_layout_macros.hpp: $(GEN_LAYOUTS) $(YK_CODE_FILE)
 	$(YK_MK_GEN_DIR)
 	$(PERL) $< -m $(NGDIMS) > $@
 	@- gindent -fca $@ || \
 	  indent -fca $@ ||   \
 	  echo "note:" $@ "is not properly indented because indent program failed or was not found."
 
-$(YK_GEN_DIR)/yask_layouts.hpp: $(GEN_LAYOUTS) $(YK_GRID_DIMS_FILE)
+$(YK_GEN_DIR)/yask_layouts.hpp: $(GEN_LAYOUTS) $(YK_CODE_FILE)
 	$(YK_MK_GEN_DIR)
 	$(PERL) $< -d $(NGDIMS) > $@
 	@- gindent -fca $@ || \
 	  indent -fca $@ ||   \
 	  echo "note:" $@ "is not properly indented because indent program failed or was not found."
 
-$(YK_GEN_DIR)/yask_grid_code.hpp: $(GEN_LAYOUTS) $(YK_GRID_DIMS_FILE)
+$(YK_GEN_DIR)/yask_grid_code.hpp: $(GEN_LAYOUTS) $(YK_CODE_FILE)
 	$(YK_MK_GEN_DIR)
 	$(PERL) $< -g $(NGDIMS) > $@
-
-# Extract the number of stencil dims from the compiler output.
-# Use this to create an option to pass to the loop generator script.
-$(YK_STENCIL_DIMS_FILE): $(YK_CODE_FILE)
-	awk '/NUM_STENCIL_DIMS/ {print $$NF}' $< > $@
-
-# Extract the number of grid dims from the compiler output.
-# Use this to create an option to pass to the layout generator script.
-$(YK_GRID_DIMS_FILE): $(YK_CODE_FILE)
-	awk '/NUM_GRID_DIMS/ {print $$NF}' $< > $@
 
 $(YK_CODE_FILE): $(YC_EXEC)
 	$(YK_MK_GEN_DIR)
@@ -725,10 +709,6 @@ cxx-yc-api-test:
 
 ######## Misc targets
 
-# Run the default YASK compiler and kernel.
-yc-and-yk-test: $(YK_EXEC)
-	$(BIN_DIR)/yask.sh -stencil $(stencil) -arch $(arch) -ranks $(ranks) -v $(v_args)
-
 # Generate the code file using the built-in compiler.
 code-file: $(YK_CODE_FILE)
 
@@ -739,9 +719,25 @@ NO_YC_MAKE_FLAGS := --new-file=$(YK_CODE_FILE)
 kernel-only:
 	$(MAKE) $(NO_YC_MAKE_FLAGS)
 
+# Validation runs for each binary.
+val1	=	-b 16 -dt 2 -d 64
+val2	=	-b 24 -r 32 -rt 2 -dt 2 -d 63
+ranks	= 	2
+
+# Run the kernel tests.
+yk-tests:
+	$(BIN_DIR)/yask.sh -stencil $(stencil) -arch $(arch) -v $(val1)
+	$(BIN_DIR)/yask.sh -stencil $(stencil) -arch $(arch) -v $(val2)
+	$(BIN_DIR)/yask.sh -stencil $(stencil) -arch $(arch) -ranks $(ranks) -v $(val1)
+	$(BIN_DIR)/yask.sh -stencil $(stencil) -arch $(arch) -ranks $(ranks) -v $(val2)
+
+# Run the default YASK compiler and kernel.
+yc-and-yk-test: $(YK_EXEC)
+	$(MAKE) yk-tests
+
 # Run the YASK kernel test without implicity using the YASK compiler.
 yk-test-no-yc: kernel-only
-	$(BIN_DIR)/yask.sh -stencil $(stencil) -arch $(arch) -ranks $(ranks) -v $(v_args)
+	$(MAKE) yk-tests
 
 # Run the kernel API tests for C++ and Python with and w/o expected exceptions.
 api-tests:
@@ -758,18 +754,20 @@ api-tests:
 # run the tests from the top-level Makefile.
 stencil-tests:
 	$(MAKE) clean; $(MAKE) yc-and-yk-test real_bytes=8 stencil=test_1d
-	$(MAKE) clean; $(MAKE) yc-and-yk-test real_bytes=8 stencil=3axis fold=x=2,y=2
+	$(MAKE) clean; $(MAKE) yc-and-yk-test real_bytes=8 stencil=test_2d
 	$(MAKE) clean; $(MAKE) yc-and-yk-test real_bytes=8 stencil=9axis fold=x=2,z=2
+	$(MAKE) clean; $(MAKE) yc-and-yk-test real_bytes=8 stencil=3axis fold=x=2,y=2 cluster=x=2
+	$(MAKE) clean; $(MAKE) yc-and-yk-test real_bytes=8 stencil=3axis fold=x=2,y=2 cluster=z=2,y=2
 	$(MAKE) clean; $(MAKE) yc-and-yk-test real_bytes=8 stencil=3plane fold=y=2,z=2
 	$(MAKE) clean; $(MAKE) yc-and-yk-test real_bytes=8 stencil=cube fold=x=2,y=2
 	$(MAKE) clean; $(MAKE) yc-and-yk-test real_bytes=8 stencil=test_4d fold=w=2,x=2
 	$(MAKE) clean; $(MAKE) yc-and-yk-test real_bytes=8 stencil=test_scratch1 fold=x=4
 	$(MAKE) clean; $(MAKE) yc-and-yk-test real_bytes=8 stencil=test_scratch2 fold=x=2,z=2
 	$(MAKE) clean; $(MAKE) yc-and-yk-test real_bytes=8 stencil=iso3dfd fold=x=2,y=2
-	$(MAKE) clean; $(MAKE) yc-and-yk-test real_bytes=8 stencil=awp_elastic
-	$(MAKE) clean; $(MAKE) yc-and-yk-test real_bytes=8 stencil=ssg
-	$(MAKE) clean; $(MAKE) yc-and-yk-test real_bytes=8 stencil=fsg_abc
-	$(MAKE) clean; $(MAKE) yc-and-yk-test real_bytes=8 stencil=fsg2
+	$(MAKE) clean; $(MAKE) yc-and-yk-test real_bytes=8 stencil=awp_elastic fold=x=2,y=2
+	$(MAKE) clean; $(MAKE) yc-and-yk-test real_bytes=8 stencil=ssg fold=x=2,y=2
+	$(MAKE) clean; $(MAKE) yc-and-yk-test real_bytes=8 stencil=fsg_abc fold=x=2,y=2
+	$(MAKE) clean; $(MAKE) yc-and-yk-test real_bytes=8 stencil=fsg2 fold=x=2,y=2
 
 all-tests:
 	$(MAKE) clean; $(MAKE) cxx-yk-grid-test stencil=test_3d fold=x=4,y=2
@@ -786,7 +784,6 @@ all:
 # Make this target before rebuilding YASK with any new parameters.
 clean:
 	rm -fv *.s
-	rm -fv num_*dims.*.txt
 	rm -fr $(YK_SWIG_DIR)/build $(YK_GEN_DIR)
 	rm -fv $(YK_SWIG_DIR)/*_api_wrap.*
 	rm -fv $(YK_OBJS)
@@ -794,11 +791,13 @@ clean:
 	- find . $(COMM_DIR) $(BIN_DIR) $(LIB_DIR) -name '*.optrpt' -print -delete
 
 # Remove executables, libs, etc.
+# Also remove logs from kernel dir, which are most likely from testing.
 realclean: clean
 	rm -fv $(YK_LIB) $(YK_EXEC) $(YK_API_TEST_EXEC) $(YK_API_TEST_EXEC_WITH_EXCEPTION) $(YK_PY_MOD)* $(YK_PY_LIB)
 	rm -fv make-report.*.txt
 	- find . -name '*.pyc' -print -delete
 	- find . -name '*~' -print -delete
+	rm -rf logs
 
 echo-settings:
 	@echo

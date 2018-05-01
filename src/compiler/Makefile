@@ -137,8 +137,10 @@ $(YC_SWIG_DIR)/yask_compiler_api_wrap.cpp: $(YC_SWIG_DIR)/yask*.i $(INC_DIR)/*.h
 	  -I$(INC_DIR) -I$(COMM_DIR) -I$(COMM_DIR)/swig \
 	  -c++ -python -outdir $(YASK_DIR) -builtin $<
 
+# Turn off asserts to work around known SWIG issue:
+# https://github.com/swig/swig/issues/773
 $(YC_SWIG_DIR)/yask_compiler_api_wrap.o: $(YC_SWIG_DIR)/yask_compiler_api_wrap.cpp
-	$(YC_CXX) $(YC_CXXFLAGS) $(PYINC) -fPIC -c -o $@ $<
+	$(YC_CXX) $(YC_CXXFLAGS) -DNDEBUG $(PYINC) -fPIC -c -o $@ $<
 
 $(YC_PY_LIB): $(YC_OBJS) $(YC_SWIG_DIR)/yask_compiler_api_wrap.o
 	$(YC_CXX) $(YC_CXXFLAGS) -shared -o $@ $^
@@ -189,11 +191,13 @@ cxx-yc-api-test-with-exception: $(YC_TEST_EXEC_WITH_EXCEPTION)
 
 ######## Misc targets
 
-all-tests:
+api-tests:
 	$(MAKE) cxx-yc-api-test
 	$(MAKE) py-yc-api-test
 	$(MAKE) cxx-yc-api-test-with-exception
 	$(MAKE) py-yc-api-test-with-exception
+
+all-tests: api-tests
 
 all:
 	$(MAKE) compiler

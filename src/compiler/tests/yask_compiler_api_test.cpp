@@ -61,7 +61,7 @@ int main() {
         auto n1 = fac.new_const_number_node(3.14);
         cout << n1->format_simple() << endl;
 
-        auto n2 = g1->new_relative_grid_point({0, +1, 0, -2});
+        auto n2 = g1->new_grid_point({t, x+1, y, z-2});
         cout << n2->format_simple() << endl;
 
         auto n3 = n1 + n2;
@@ -70,27 +70,27 @@ int main() {
         auto n4 = n2 * -n3 * 0.9;
         cout << n4->format_simple() << endl;
 
-        auto n5 = g1->new_relative_grid_point({0, +1, -1, 0});
+        auto n5 = g1->new_grid_point({t, x+1, y-1, z});
         cout << n5->format_simple() << endl;
 
         auto n6 = n4 / n5;
         cout << n6->format_simple() << endl;
 
         // Define scratch grid value.
-        auto ns_lhs = sg1->new_relative_grid_point({0, 0, 0});
+        auto ns_lhs = sg1->new_grid_point({x, y, z});
         cout << ns_lhs->format_simple() << endl;
 
         auto ns_eq = fac.new_equation_node(ns_lhs, n6);
         cout << ns_eq->format_simple() << endl;
 
         // Use scratch grid value.
-        auto n7a = sg1->new_relative_grid_point({-1, 0, +2});
-        auto n7b = sg1->new_relative_grid_point({+1, -1, -2});
+        auto n7a = sg1->new_grid_point({x-1, y, z+2});
+        auto n7b = sg1->new_grid_point({x+1, y-1, z-2});
         auto n8 = n7a + n7b;
         cout << n8->format_simple() << endl;
 
         // Define main grid value at t+1.
-        auto n_lhs = g1->new_relative_grid_point({+1, 0, 0, 0});
+        auto n_lhs = g1->new_grid_point({t+1, x, y, z});
         cout << n_lhs->format_simple() << endl;
 
         auto n_eq = fac.new_equation_node(n_lhs, n8);

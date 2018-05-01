@@ -190,6 +190,9 @@ inline void omp_set_nested(int n) { }
 // macro for debug message when _generic_context ptr is defined.
 #define TRACE_MSG3(msg) TRACE_MSG0(_generic_context->get_ostr(), msg)
 
+// breakpoint.
+#define INT3 asm volatile("int $3")
+
 // L1 and L2 hints
 #define L1_HINT _MM_HINT_T0
 #define L2_HINT _MM_HINT_T1

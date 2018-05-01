@@ -48,20 +48,25 @@ namespace yask {
 
         // The following indices have values for all dims in the grid.
         // All values are in units of reals, not underlying elements, if different.
-        // Settings for domain dims | non-domain dims.
-        Indices _domains;   // rank domain sizes copied from the solution | alloc size.
-        Indices _left_pads, _right_pads; // extra space around domains (left: actual, right: requested) | zero.
+        // Should use either _offsets or _local_offsets to adjust an index to
+        // grid-relative depending on whether index is global or rank-relative.
+        // Comments show settings for domain dims | non-domain dims.
+        Indices _domains;   // size of "interior" of grid | alloc size.
+        Indices _req_left_pads, _req_right_pads; // requested extra space around domains | zero.
+        Indices _actl_left_pads, _actl_right_pads; // actual extra space around domains | zero.
         Indices _left_halos, _right_halos; // space within pads for halo exchange | zero.
         Indices _left_wf_exts, _right_wf_exts; // additional halos for wave-fronts | zero.
-        Indices _offsets;   // offsets of this grid in overall domain | first index.
-        Indices _local_offsets; // offsets of this grid in this rank | first index.
+        Indices _offsets;   // offsets of this grid domain in overall problem | first index.
+        Indices _local_offsets; // offsets of this grid domain in this rank | first index.
         Indices _allocs;    // actual grid allocation in reals | as domain dims.
-        Indices _vec_lens;  // num reals in each elem | one.
 
-        // Indices in vectors for sizes that are always vec lens (to avoid division).
-        Indices _vec_left_pads;
-        Indices _vec_allocs;
-        Indices _vec_local_offsets;
+        // Sizes in vectors for sizes that are always vec lens (to avoid division).
+        // Each entry _vec_lens may be same as _dims->_fold_pts or one, depending
+        // on whether grid is fully vectorized.
+        Indices _vec_lens;  // num reals in each elem | one.
+        Indices _vec_left_pads; // same as _actl_left_pads.
+        Indices _vec_allocs; // same as _allocs.
+        Indices _vec_local_offsets; // same as _local_offsets.
 
         // Whether step dim is used.
         // If true, will always be in Indices::step_posn.
@@ -607,7 +612,7 @@ namespace yask {
 
                     // Adjust for offset and padding.
                     // This gives a 0-based local element index.
-                    adj_idxs[i] = idxs[i] - _offsets[i] + _left_pads[i];
+                    adj_idxs[i] = idxs[i] - _offsets[i] + _actl_left_pads[i];
                 }
             }
             
@@ -775,7 +780,7 @@ namespace yask {
 
                     // Adjust for offset and padding.
                     // This gives a positive 0-based local element index.
-                    idx_t ai = idxs[i] - _offsets[i] + _left_pads[i];
+                    idx_t ai = idxs[i] - _offsets[i] + _actl_left_pads[i];
                     assert(ai >= 0);
                     uidx_t adj_idx = uidx_t(ai);
                     

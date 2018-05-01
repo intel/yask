@@ -339,6 +339,7 @@ namespace yask {
         map<int, int> num_exchanges; // send/recv => count.
         map<int, idx_t> num_elems; // send/recv => count.
         auto me = _env->my_rank;
+        auto& step_dim = _dims->_step_dim;
         
         // Need to determine the size and shape of all MPI buffers.
         // Visit all neighbors of this rank.
@@ -403,7 +404,7 @@ namespace yask {
 
                         // Only consider domain dims that are used in this grid.
                         if (gp->is_dim_used(dname)) {
-                            auto vlen = _dims->_fold_pts[dname];
+                            auto vlen = gp->_get_vec_lens(dname);
                             auto lhalo = gp->get_left_halo_size(dname);
                             auto rhalo = gp->get_right_halo_size(dname);
 
@@ -411,15 +412,17 @@ namespace yask {
                             // are no more ranks in the given direction,
                             // extend the "outer" index to include the halo
                             // in that direction to make sure all data are
-                            // sync'd.  This is critical for WFs.
+                            // sync'd when using WF tiling.
                             idx_t fidx = gp->get_first_rank_domain_index(dname);
                             idx_t lidx = gp->get_last_rank_domain_index(dname);
                             first_inner_idx.addDimBack(dname, fidx);
                             last_inner_idx.addDimBack(dname, lidx);
-                            if (_opts->is_first_rank(dname))
-                                fidx -= lhalo;
-                            if (_opts->is_last_rank(dname))
-                                lidx += rhalo;
+                            if (_opts->is_time_tiling()) {
+                                if (_opts->is_first_rank(dname))
+                                    fidx -= lhalo;
+                                if (_opts->is_last_rank(dname))
+                                    lidx += rhalo;
+                            }
                             first_outer_idx.addDimBack(dname, fidx);
                             last_outer_idx.addDimBack(dname, lidx);
 
@@ -429,8 +432,9 @@ namespace yask {
                             // this grid. We won't do the actual rounding
                             // yet, because we need to see if it's safe
                             // in all dims.
+                            // Need +1 and then -1 trick for last.
                             fidx = round_down_flr(fidx, vlen);
-                            lidx = round_up_flr(lidx, vlen);
+                            lidx = round_up_flr(lidx + 1, vlen) - 1;
                             if (fidx < gp->get_first_rank_alloc_index(dname))
                                 grid_vec_ok = false;
                             if (lidx > gp->get_last_rank_alloc_index(dname))
@@ -504,13 +508,18 @@ namespace yask {
                         for (auto& dim : _dims->_domain_dims.getDims()) {
                             auto& dname = dim.getName();
                             if (gp->is_dim_used(dname)) {
-                                auto vlen = _dims->_fold_pts[dname];
+                                auto vlen = gp->_get_vec_lens(dname);
 
-                                // first index rounded down.
-                                first_outer_idx.setVal(dname, round_down_flr(first_outer_idx[dname], vlen));
+                                // First index rounded down.
+                                auto fidx = first_outer_idx[dname];
+                                fidx = round_down_flr(fidx, vlen);
+                                first_outer_idx.setVal(dname, fidx);
 
-                                // last index rounded up.
-                                last_outer_idx.setVal(dname, round_up_flr(last_outer_idx[dname], vlen));
+                                // Last index rounded up.
+                                // Need +1 and then -1 trick because it's last, not end.
+                                auto lidx = last_outer_idx[dname];
+                                lidx = round_up_flr(lidx + 1, vlen) - 1;
+                                last_outer_idx.setVal(dname, lidx);
                                 
                                 // sizes rounded up.
                                 my_halo_sizes.setVal(dname, ROUND_UP(my_halo_sizes[dname], vlen));
@@ -598,7 +607,7 @@ namespace yask {
                         // Sizes of buffer in all dims of this grid.
                         // Also, set begin/end value for non-domain dims.
                         IdxTuple buf_sizes = gp->get_allocs();
-                        bool vlen_mults = true;
+                        bool buf_vec_ok = grid_vec_ok;
                         for (auto& dname : gp->get_dim_names()) {
                             idx_t dsize = 1;
 
@@ -607,17 +616,17 @@ namespace yask {
                                 dsize = copy_end[dname] - copy_begin[dname];
 
                                 // Check whether alignment and size are multiple of vlen.
-                                auto vlen = _dims->_fold_pts[dname];
+                                auto vlen = gp->_get_vec_lens(dname);
                                 if (dsize % vlen != 0)
-                                    vlen_mults = false;
+                                    buf_vec_ok = false;
                                 if (imod_flr(copy_begin[dname], vlen) != 0)
-                                    vlen_mults = false;
+                                    buf_vec_ok = false;
                             }
 
                             // step dim?
                             // Allowing only one step to be exchanged.
                             // TODO: consider exchanging mutiple steps at once for WFs.
-                            else if (dname == _dims->_step_dim) {
+                            else if (dname == step_dim) {
 
                                 // Use 0..1 as a place-holder range.
                                 // The actual values will be supplied during
@@ -673,14 +682,16 @@ namespace yask {
                         buf.last_pt = copy_last;
                         buf.num_pts = buf_sizes;
                         buf.name = bufname;
-                        buf.vec_copy_ok = vlen_mults;
+                        buf.vec_copy_ok = buf_vec_ok;
                         
                         TRACE_MSG("MPI buffer '" << buf.name <<
                                   "' configured for rank at relative offsets " <<
                                   neigh_offsets.subElements(1).makeDimValStr() << " with " <<
                                   buf.num_pts.makeDimValStr(" * ") << " = " << buf.get_size() <<
                                   " element(s) at " << buf.begin_pt.makeDimValStr() <<
-                                  " ... " << buf.last_pt.makeDimValStr());
+                                  " ... " << buf.last_pt.makeDimValStr() <<
+                                  " with vector-copy " <<
+                                  (buf.vec_copy_ok ? "enabled" : "disabled"));
                         num_exchanges[bd]++;
                         num_elems[bd] += buf.get_size();
 
@@ -882,6 +893,7 @@ namespace yask {
                     
                     // Offsets.
                     gp->_set_offset(dname, rank_domain_offsets[dname]);
+                    gp->_set_local_offset(dname, 0);
 
                     // Update max halo across grids, used for wavefront angles.
                     max_halos[dname] = max(max_halos[dname], gp->get_left_halo_size(dname));

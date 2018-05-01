@@ -522,7 +522,8 @@ namespace yask {
         virtual void exchange_halos_all();
 
         // Exchange halo data needed by stencil-bundle 'sg' at the given step(s).
-        virtual void exchange_halos(idx_t start, idx_t stop, StencilBundleBase& sg);
+        // If sg==null, check all bundles.
+        virtual void exchange_halos(idx_t start, idx_t stop, StencilBundleBase* sg);
 
         // Mark grids that have been written to by bundle 'sg'.
         virtual void mark_grids_dirty(idx_t start, idx_t stop, StencilBundleBase& sg);
@@ -635,17 +636,15 @@ namespace yask {
         virtual void share_grid_storage(yk_solution_ptr source);
 
         // APIs that access settings.
-        virtual void set_rank_domain_size(const std::string& dim,
-                                     idx_t size);
-        virtual void set_min_pad_size(const std::string& dim,
-                                      idx_t size);
-        virtual void set_block_size(const std::string& dim,
-                                    idx_t size);
-        virtual void set_num_ranks(const std::string& dim,
-                                   idx_t size);
+        virtual void set_rank_domain_size(const std::string& dim, idx_t size);
+        virtual void set_min_pad_size(const std::string& dim, idx_t size);
+        virtual void set_block_size(const std::string& dim, idx_t size);
+        virtual void set_region_size(const std::string& dim, idx_t size);
+        virtual void set_num_ranks(const std::string& dim, idx_t size);
         virtual idx_t get_rank_domain_size(const std::string& dim) const;
         virtual idx_t get_min_pad_size(const std::string& dim) const;
         virtual idx_t get_block_size(const std::string& dim) const;
+        virtual idx_t get_region_size(const std::string& dim) const;
         virtual idx_t get_num_ranks(const std::string& dim) const;
         virtual idx_t get_rank_index(const std::string& dim) const;
         virtual std::string apply_command_line_options(const std::string& args);

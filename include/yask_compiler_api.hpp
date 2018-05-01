@@ -60,6 +60,14 @@ namespace yask {
     /// Shared pointer to \ref yc_expr_node
     typedef std::shared_ptr<yc_expr_node> yc_expr_node_ptr;
 
+    class yc_bool_node;
+    /// Shared pointer to \ref yc_bool_node
+    typedef std::shared_ptr<yc_bool_node> yc_bool_node_ptr;
+
+    class yc_number_node;
+    /// Shared pointer to \ref yc_number_node
+    typedef std::shared_ptr<yc_number_node> yc_number_node_ptr;
+
     class yc_index_node;
     /// Shared pointer to \ref yc_index_node
     typedef std::shared_ptr<yc_index_node> yc_index_node_ptr;
@@ -71,6 +79,70 @@ namespace yask {
     class yc_grid_point_node;
     /// Shared pointer to \ref yc_grid_point_node
     typedef std::shared_ptr<yc_grid_point_node> yc_grid_point_node_ptr;
+
+    class yc_const_number_node;
+    /// Shared pointer to \ref yc_const_number_node
+    typedef std::shared_ptr<yc_const_number_node> yc_const_number_node_ptr;
+
+    class yc_negate_node;
+    /// Shared pointer to \ref yc_negate_node
+    typedef std::shared_ptr<yc_negate_node> yc_negate_node_ptr;
+
+    class yc_commutative_number_node;
+    /// Shared pointer to \ref yc_commutative_number_node
+    typedef std::shared_ptr<yc_commutative_number_node> yc_commutative_number_node_ptr;
+
+    class yc_add_node;
+    /// Shared pointer to \ref yc_add_node
+    typedef std::shared_ptr<yc_add_node> yc_add_node_ptr;
+
+    class yc_multiply_node;
+    /// Shared pointer to \ref yc_multiply_node
+    typedef std::shared_ptr<yc_multiply_node> yc_multiply_node_ptr;
+
+    class yc_subtract_node;
+    /// Shared pointer to \ref yc_subtract_node
+    typedef std::shared_ptr<yc_subtract_node> yc_subtract_node_ptr;
+
+    class yc_divide_node;
+    /// Shared pointer to \ref yc_divide_node
+    typedef std::shared_ptr<yc_divide_node> yc_divide_node_ptr;
+
+    class yc_not_node;
+    /// Shared pointer to \ref yc_not_node
+    typedef std::shared_ptr<yc_not_node> yc_not_node_ptr;
+
+    class yc_equals_node;
+    /// Shared pointer to \ref yc_equals_node
+    typedef std::shared_ptr<yc_equals_node> yc_equals_node_ptr;
+
+    class yc_not_equals_node;
+    /// Shared pointer to \ref yc_not_equals_node
+    typedef std::shared_ptr<yc_not_equals_node> yc_not_equals_node_ptr;
+
+    class yc_less_than_node;
+    /// Shared pointer to \ref yc_less_than_node
+    typedef std::shared_ptr<yc_less_than_node> yc_less_than_node_ptr;
+
+    class yc_greater_than_node;
+    /// Shared pointer to \ref yc_greater_than_node
+    typedef std::shared_ptr<yc_greater_than_node> yc_greater_than_node_ptr;
+
+    class yc_not_less_than_node;
+    /// Shared pointer to \ref yc_not_less_than_node
+    typedef std::shared_ptr<yc_not_less_than_node> yc_not_less_than_node_ptr;
+
+    class yc_not_greater_than_node;
+    /// Shared pointer to \ref yc_not_greater_than_node
+    typedef std::shared_ptr<yc_not_greater_than_node> yc_not_greater_than_node_ptr;
+
+    class yc_and_node;
+    /// Shared pointer to \ref yc_and_node
+    typedef std::shared_ptr<yc_and_node> yc_and_node_ptr;
+
+    class yc_or_node;
+    /// Shared pointer to \ref yc_or_node
+    typedef std::shared_ptr<yc_or_node> yc_or_node_ptr;
 
     /** @}*/
 }
@@ -172,7 +244,8 @@ namespace yask {
 #ifndef SWIG        
         /// Create an n-dimensional grid variable in the solution.
         /**
-           C++ initializer-list version with same semantics as vector version.
+           C++ initializer-list version with same semantics as
+           new_grid(const std::string& name, const std::vector<yc_index_node_ptr>& dims).
            @note This version is not available (or needed) in SWIG-based APIs, e.g., Python.
            @returns Pointer to the new \ref yc_grid object. 
         */
@@ -212,7 +285,8 @@ namespace yask {
 #ifndef SWIG        
         /// Create an n-dimensional scratch-grid variable in the solution.
         /**
-           C++ initializer-list version with same semantics as vector version.
+           C++ initializer-list version with same semantics as
+           new_scratch_grid(const std::string& name, const std::vector<yc_index_node_ptr>& dims).
            @note This version is not available (or needed) in SWIG-based APIs, e.g., Python.
            @returns Pointer to the new \ref yc_grid object. 
         */
@@ -438,26 +512,62 @@ namespace yask {
         */
         virtual std::vector<std::string>
         get_dim_names() const =0;
-        
-        /// Create a reference to a point in a grid.
-        /** The indices are specified relative to the stencil-evaluation
-            index.  Each offset refers to the dimensions defined when the
-            grid was created via stencil_solution::new_grid(). 
-            Example: if `g = new_grid("heat", {"t", "x", "y"})`, then
-            `g->new_relative_grid_point(1, -1, 0)` refers to `heat(t+1, x-1, y)`
-            for some point `t, x, y` dynamically defined during stencil evaluation.
-            @warning This convenience function can only be used when every
-            dimension of the grid is either the step dimension or a domain dimension.
-            @note Offsets beyond the dimensions in the grid will be ignored.
-            @returns Pointer to AST node used to read from or write to point in grid. */
-        virtual yc_grid_point_node_ptr
-        new_relative_grid_point(std::vector<int> dim_offsets
-                                /**< [in] offset from evaluation index in each dim. */ ) =0;
 
+        /// Create a reference to a point in a grid.
+        /**
+           Each expression in `index_exprs` describes how to access
+           an element in the corresponding dimension of the grid.
+
+           Example: if a grid was created via 
+           `g = new_grid("data", {t, x, y, n})` with step-dimension `t`,
+           domain-dimensions `x` and `y`, and misc-dimension `n`,
+           `g->new_grid_point({t + 1, x - 1, y + 1, 2})` refers to the specified
+           element for the values of `t`, `x`, and `y` set dynamically 
+           during stencil evaluation and the constant value `2` for `n`.
+
+           @returns Pointer to AST node used to read from or write to point in grid. */
+        virtual yc_grid_point_node_ptr
+        new_grid_point(const std::vector<yc_number_node_ptr>& index_exprs
+                       /**< [in] Index expressions.
+                          These must appear in the same order as when the
+                          grid was created. */ ) =0;
+        
 #ifndef SWIG        
         /// Create a reference to a point in a grid.
         /**
-           C++ initializer-list version with same semantics as vector version.
+           C++ initializer-list version with same semantics as 
+           new_grid_point(std::vector<yc_index_node_ptr> index_exprs).
+           @note This version is not available (or needed) in SWIG-based APIs, e.g., Python.
+           @returns Pointer to AST node used to read or write from point in grid. */
+        virtual yc_grid_point_node_ptr
+        new_grid_point(const std::initializer_list<yc_number_node_ptr>& index_exprs) = 0;
+#endif
+
+        /// Create a reference to a point in a grid using relative offsets.
+        /**
+           A shorthand function for calling new_grid_point() when
+           all index expressions are constant offsets.
+           Each offset refers to the dimensions defined when the
+           grid was created via stencil_solution::new_grid().
+
+           Example: if `g = new_grid("data", {t, x, y})` with step-dimension `t`
+           and domain-dimensions `x` and `y`,
+           `g->new_relative_grid_point({1, -1, 0})` refers to the same point as
+           `g->new_grid_point({t + 1, x - 1, y})`.
+
+           @warning This convenience function can only be used when every
+           dimension of the grid is either the step dimension or a domain dimension.
+           If this is not the case, use new_grid_point().
+           @returns Pointer to AST node used to read from or write to point in grid. */
+        virtual yc_grid_point_node_ptr
+        new_relative_grid_point(const std::vector<int>& dim_offsets
+                                /**< [in] offset from evaluation index in each dim. */ ) =0;
+
+#ifndef SWIG        
+        /// Create a reference to a point in a grid using relative offsets.
+        /**
+           C++ initializer-list version with same semantics as 
+           new_relative_grid_point(std::vector<int> dim_offsets).
            @note This version is not available (or needed) in SWIG-based APIs, e.g., Python.
            @returns Pointer to AST node used to read or write from point in grid. */
         virtual yc_grid_point_node_ptr

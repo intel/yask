@@ -203,14 +203,14 @@ py-yc-api-and-cxx-yk-api-test:
 # "stencil=test" in the commands below is simply used to
 # create file names.
 combo-api-tests:
-	$(MAKE) stencil=iso3dfd yc-and-cxx-yk-api-test
-	$(MAKE) stencil=iso3dfd yc-and-py-yk-api-test
-	$(MAKE) stencil=test cxx-yc-api-and-yk-test
-	$(MAKE) stencil=test py-yc-api-and-yk-test
-	$(MAKE) stencil=test cxx-yc-api-and-cxx-yk-api-test
-	$(MAKE) stencil=test py-yc-api-and-py-yk-api-test
-	$(MAKE) stencil=test cxx-yc-api-and-py-yk-api-test
-	$(MAKE) stencil=test py-yc-api-and-cxx-yk-api-test
+	$(MAKE) clean; $(MAKE) stencil=iso3dfd yc-and-cxx-yk-api-test
+	$(MAKE) clean; $(MAKE) stencil=iso3dfd yc-and-py-yk-api-test
+	$(MAKE) clean; $(MAKE) stencil=test cxx-yc-api-and-yk-test
+	$(MAKE) clean; $(MAKE) stencil=test py-yc-api-and-yk-test
+	$(MAKE) clean; $(MAKE) stencil=test cxx-yc-api-and-cxx-yk-api-test
+	$(MAKE) clean; $(MAKE) stencil=test py-yc-api-and-py-yk-api-test
+	$(MAKE) clean; $(MAKE) stencil=test cxx-yc-api-and-py-yk-api-test
+	$(MAKE) clean; $(MAKE) stencil=test py-yc-api-and-cxx-yk-api-test
 
 ######## Misc targets
 
@@ -267,7 +267,8 @@ clean-old:
 	rm -fv stencil*.exe stencil-tuner-summary.csh stencil-tuner.pl gen-layouts.pl gen-loops.pl get-loop-stats.pl
 	rm -fv src/foldBuilder/*pp
 
-# Remove executables, documentation, etc. (not logs).
+# Remove executables, generated documentation, etc. (not logs).
+# Use 'find *' instead of 'find .' to avoid searching in '.git'.
 realclean: clean-old
 	rm -fv TAGS '*~'
 	rm -fr docs/api/html

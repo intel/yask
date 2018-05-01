@@ -37,7 +37,30 @@ namespace yask {
 
     // grid APIs.
     yc_grid_point_node_ptr
-    Grid::new_relative_grid_point(std::vector<int> dim_offsets) {
+    Grid::new_grid_point(const std::vector<yc_number_node_ptr>& index_exprs) {
+
+        // Check for correct number of indices.
+        if (_dims.size() != index_exprs.size()) {
+            THROW_YASK_EXCEPTION("Error: attempt to create a grid point in " <<
+                                 _dims.size() << "D grid '" << _name << "' with " <<
+                                 index_exprs.size() << " index expressions");
+        }
+
+        // Make args.
+        NumExprPtrVec args;
+        for (size_t i = 0; i < _dims.size(); i++) {
+            auto p = dynamic_pointer_cast<NumExpr>(index_exprs.at(i));
+            assert(p);
+            args.push_back(p->clone());
+        }
+        
+        // Create a point from the args.
+        GridPointPtr gpp = make_shared<GridPoint>(this, args);
+        return gpp;
+    }
+
+    yc_grid_point_node_ptr
+    Grid::new_relative_grid_point(const std::vector<int>& dim_offsets) {
 
         // Check for correct number of indices.
         if (_dims.size() != dim_offsets.size()) {
@@ -64,7 +87,8 @@ namespace yask {
         // Create a point from the args.
         GridPointPtr gpp = make_shared<GridPoint>(this, args);
 
-        // Modify the offsets.
+        // Set the offsets, which creates a new
+        // expression for each index.
         for (size_t i = 0; i < _dims.size(); i++) {
             auto dim = _dims.at(i);
             IntScalar ofs(dim->getName(), dim_offsets.at(i));

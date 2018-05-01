@@ -929,8 +929,12 @@ namespace yask {
             _lhs(lhs), _rhs(rhs), _cond(cond) { }
         EqualsExpr(const EqualsExpr& src) :
             _lhs(src._lhs->cloneGridPoint()),
-            _rhs(src._rhs->clone()),
-            _cond(src._cond->clone()) { }
+            _rhs(src._rhs->clone()) {
+            if (src._cond)
+                _cond = src._cond->clone();
+            else
+                _cond = nullptr;
+        }
 
         GridPointPtr& getLhs() { return _lhs; }
         const GridPointPtr& getLhs() const { return _lhs; }

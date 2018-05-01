@@ -43,6 +43,7 @@ namespace yask {
         return expr;                                                    \
     }
     GET_SOLN_API(get_rank_domain_size, _opts->_rank_sizes[dim], false, true, false, false)
+    GET_SOLN_API(get_region_size, _opts->_region_sizes[dim], true, true, false, false)
     GET_SOLN_API(get_min_pad_size, _opts->_min_pad_sizes[dim], false, true, false, false)
     GET_SOLN_API(get_block_size, _opts->_block_sizes[dim], false, true, false, false)
     GET_SOLN_API(get_num_ranks, _opts->_num_ranks[dim], false, true, false, false)
@@ -62,6 +63,7 @@ namespace yask {
     }
     SET_SOLN_API(set_min_pad_size, _opts->_min_pad_sizes[dim] = n, false, true, false, false)
     SET_SOLN_API(set_block_size, _opts->_block_sizes[dim] = n, false, true, false, false)
+    SET_SOLN_API(set_region_size, _opts->_region_sizes[dim] = n, true, true, false, true)
     SET_SOLN_API(set_rank_domain_size, _opts->_rank_sizes[dim] = n, false, true, false, true)
     SET_SOLN_API(set_num_ranks, _opts->_num_ranks[dim] = n, false, true, false, true)
 #undef SET_SOLN_API
@@ -424,7 +426,7 @@ namespace yask {
                         continue;
 
                     // Exchange halo(s) needed for this bundle.
-                    exchange_halos(start_t, stop_t, *sg);
+                    exchange_halos(start_t, stop_t, sg);
 
                     // Eval this bundle in calc_region().
                     StencilBundleSet stBundle_set;
@@ -554,7 +556,7 @@ namespace yask {
                 if (sg->is_scratch())
                     continue;
 
-                // Bundle not selected.
+                // Bundle selected?
                 if (stBundle_set && !stBundle_set->count(sg))
                     continue;
                 
@@ -1013,7 +1015,7 @@ namespace yask {
                         // |        +------+       |
                         // ^        ^
                         // |        |
-                        // |        start of grid/0-idx of block
+                        // |        start of grid-domain/0-idx of block
                         // first rank-domain index
                         
                         // Set offset of grid based on starting point of block.
@@ -1108,7 +1110,6 @@ namespace yask {
 
     // Exchange dirty halo data for all grids and all steps, regardless
     // of their stencil-bundle.
-    // TODO: loop through all grids in exchange_halos() instead.
     void StencilContext::exchange_halos_all() {
 
 #ifdef USE_MPI
@@ -1124,33 +1125,22 @@ namespace yask {
             }
         }
         
-        // Initial halo exchange for each bundle.
-        for (auto* sg : stBundles) {
-
-            // Do exchange over max steps.
-            // Steps that don't exist in a particular grid or
-            // steps that are clean will be skipped.
-            exchange_halos(start, stop, *sg);
-        }
+        exchange_halos(start, stop, 0);
 #endif
     }
     
     // Exchange halo data needed by stencil-bundle 'sg' at the given time.
+    // If sg==null, check all bundles.
     // Data is needed for input grids that have not already been updated.
     // [BIG] TODO: overlap halo exchange with computation.
-    void StencilContext::exchange_halos(idx_t start, idx_t stop, StencilBundleBase& sg)
+    void StencilContext::exchange_halos(idx_t start, idx_t stop, StencilBundleBase* sgp)
     {
 #ifdef USE_MPI
         if (!enable_halo_exchange || _env->num_ranks < 2)
             return;
 
-        // Don't exchange for scratch groups.
-        if (sg.is_scratch())
-            return;
-
         mpi_time.start();
-        TRACE_MSG("exchange_halos: " << start << " ... (end before) " << stop <<
-                  " for stencil-bundle '" << sg.get_name() << "'");
+        TRACE_MSG("exchange_halos: " << start << " ... (end before) " << stop);
         auto opts = get_settings();
         auto& sd = _dims->_step_dim;
 
@@ -1167,41 +1157,56 @@ namespace yask {
             // Use an ordered map to make sure grids are in
             // same order on all ranks.
             GridPtrMap gridsToSwap;
-            
-            // Find the bundles that need to be processed.
-            // This will be the prerequisite scratch-grid
-            // bundles plus this non-scratch bundle.
-            auto sg_list = sg.get_scratch_deps();
-            sg_list.push_back(&sg);
 
-            // Loop through all the needed bundles.
-            for (auto* csg : sg_list) {
+            // Loop thru all stencil bundles.
+            for (auto* sg : stBundles) {
 
-                TRACE_MSG("exchange_halos: checking " << csg->inputGridPtrs.size() <<
-                          " input grid(s) to bundle '" << csg->get_name() <<
-                          "' that is needed for bundle '" << sg.get_name() << "'");
+                // Don't exchange for scratch groups.
+                if (sg->is_scratch())
+                    continue;
 
-                // Loop thru all *input* grids in this bundle.
-                for (auto gp : csg->inputGridPtrs) {
+                // Bundle selected?
+                if (sgp && sgp != sg)
+                    continue;
+                
+                // Find the bundles that need to be processed.
+                // This will be the prerequisite scratch-grid
+                // bundles plus this non-scratch bundle.
+                // We need to loop thru the scratch-grid
+                // bundles so we can consider the inputs
+                // to them for exchanges.
+                auto sg_list = sg->get_scratch_deps();
+                sg_list.push_back(sg);
 
-                    // Don't swap scratch grids.
-                    if (gp->is_scratch())
-                        continue;
+                // Loop through all the needed bundles.
+                for (auto* csg : sg_list) {
+
+                    TRACE_MSG("exchange_halos: checking " << csg->inputGridPtrs.size() <<
+                              " input grid(s) to bundle '" << csg->get_name() <<
+                              "' that is needed for bundle '" << sg->get_name() << "'");
+
+                    // Loop thru all *input* grids in this bundle.
+                    for (auto gp : csg->inputGridPtrs) {
+
+                        // Don't swap scratch grids.
+                        if (gp->is_scratch())
+                            continue;
                     
-                    // Only need to swap grids whose halos are not up-to-date
-                    // for this step.
-                    if (!gp->is_dirty(t))
-                        continue;
+                        // Only need to swap grids whose halos are not up-to-date
+                        // for this step.
+                        if (!gp->is_dirty(t))
+                            continue;
 
-                    // Only need to swap grids that have any MPI buffers.
-                    auto& gname = gp->get_name();
-                    if (mpiData.count(gname) == 0)
-                        continue;
+                        // Only need to swap grids that have any MPI buffers.
+                        auto& gname = gp->get_name();
+                        if (mpiData.count(gname) == 0)
+                            continue;
 
-                    // Swap this grid.
-                    gridsToSwap[gname] = gp;
-                }
-            }
+                        // Swap this grid.
+                        gridsToSwap[gname] = gp;
+                    }
+                } // needed bundles.
+            } // all bundles.
             TRACE_MSG("exchange_halos: need to exchange halos for " <<
                       gridsToSwap.size() << " grid(s)");
 
@@ -1249,16 +1254,6 @@ namespace yask {
                             TRACE_MSG("  with rank " << neighbor_rank << " at relative position " <<
                                       offsets.subElements(1).makeDimValOffsetStr() << "...");
 
-                            // Vectorized exchange allowed based on domain sizes?
-                            // Both my rank and neighbor rank must have all domain sizes
-                            // of vector multiples.
-                            // We will also need to check the sizes of the buffers.
-                            // This is required to guarantee that the vector alignment
-                            // would be identical between buffers.
-                            bool vec_ok = allow_vec_exchange &&
-                                _mpiInfo->has_all_vlen_mults[_mpiInfo->my_neighbor_index] &&
-                                _mpiInfo->has_all_vlen_mults[ni];
-                         
                             // Submit async request to receive data from neighbor.
                             if (halo_step == halo_irecv) {
                                 auto nbytes = recvBuf.get_bytes();
@@ -1281,7 +1276,7 @@ namespace yask {
                                     // Vec ok?
                                     // Domain sizes must be ok, and buffer size must be ok
                                     // as calculated when buffers were created.
-                                    bool send_vec_ok = vec_ok && sendBuf.vec_copy_ok;
+                                    bool send_vec_ok = allow_vec_exchange && sendBuf.vec_copy_ok;
 
                                     // Get first and last ranges.
                                     IdxTuple first = sendBuf.begin_pt;
@@ -1330,7 +1325,7 @@ namespace yask {
                                     MPI_Wait(&grid_recv_reqs[ni], MPI_STATUS_IGNORE);
 
                                     // Vec ok?
-                                    bool recv_vec_ok = vec_ok && recvBuf.vec_copy_ok;
+                                    bool recv_vec_ok = allow_vec_exchange && recvBuf.vec_copy_ok;
 
                                     // Get first and last ranges.
                                     IdxTuple first = recvBuf.begin_pt;

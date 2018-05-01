@@ -76,7 +76,7 @@ IN THE SOFTWARE.
 %template(vector_eq) std::vector<std::shared_ptr<yask::yc_equation_node>>;
 %template(vector_grid) std::vector<yask::yc_grid*>;
 
-// Tell SWIG how to catch a YASK exception and rethrow it in Python.
+ // Tell SWIG how to catch a YASK exception and rethrow it in Python.
 %exception {
   try {
     $action
@@ -107,16 +107,28 @@ IN THE SOFTWARE.
     }
  };
 %extend yask::yc_number_node {
-    yask::yc_number_node_ptr __truediv__(yask::yc_number_node* rhs) {
+    yask::yc_number_node_ptr __add__(idx_t rhs) {
         auto lp = $self->clone_ast();
-        auto rp = rhs->clone_ast();
-        return yask::operator/(lp, rp);
+        return yask::operator+(lp, rhs);
     }
  };
 %extend yask::yc_number_node {
-    yask::yc_number_node_ptr __truediv__(double rhs) {
+    yask::yc_number_node_ptr __sub__(yask::yc_number_node* rhs) {
         auto lp = $self->clone_ast();
-        return yask::operator/(lp, rhs);
+        auto rp = rhs->clone_ast();
+        return yask::operator-(lp, rp);
+    }
+ };
+%extend yask::yc_number_node {
+    yask::yc_number_node_ptr __sub__(double rhs) {
+        auto lp = $self->clone_ast();
+        return yask::operator-(lp, rhs);
+    }
+ };
+%extend yask::yc_number_node {
+    yask::yc_number_node_ptr __sub__(idx_t rhs) {
+        auto lp = $self->clone_ast();
+        return yask::operator-(lp, rhs);
     }
  };
 %extend yask::yc_number_node {
@@ -133,16 +145,28 @@ IN THE SOFTWARE.
     }
  };
 %extend yask::yc_number_node {
-    yask::yc_number_node_ptr __sub__(yask::yc_number_node* rhs) {
+    yask::yc_number_node_ptr __mul__(idx_t rhs) {
         auto lp = $self->clone_ast();
-        auto rp = rhs->clone_ast();
-        return yask::operator-(lp, rp);
+        return yask::operator*(lp, rhs);
     }
  };
 %extend yask::yc_number_node {
-    yask::yc_number_node_ptr __sub__(double rhs) {
+    yask::yc_number_node_ptr __truediv__(yask::yc_number_node* rhs) {
         auto lp = $self->clone_ast();
-        return yask::operator-(lp, rhs);
+        auto rp = rhs->clone_ast();
+        return yask::operator/(lp, rp);
+    }
+ };
+%extend yask::yc_number_node {
+    yask::yc_number_node_ptr __truediv__(double rhs) {
+        auto lp = $self->clone_ast();
+        return yask::operator/(lp, rhs);
+    }
+ };
+%extend yask::yc_number_node {
+    yask::yc_number_node_ptr __truediv__(idx_t rhs) {
+        auto lp = $self->clone_ast();
+        return yask::operator/(lp, rhs);
     }
  };
 
