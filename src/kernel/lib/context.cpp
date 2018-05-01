@@ -1163,7 +1163,7 @@ namespace yask {
 
                 // Don't exchange for scratch groups.
                 if (sg->is_scratch())
-                    return;
+                    continue;
 
                 // Bundle selected?
                 if (sgp && sgp != sg)
@@ -1254,16 +1254,6 @@ namespace yask {
                             TRACE_MSG("  with rank " << neighbor_rank << " at relative position " <<
                                       offsets.subElements(1).makeDimValOffsetStr() << "...");
 
-                            // Vectorized exchange allowed based on domain sizes?
-                            // Both my rank and neighbor rank must have all domain sizes
-                            // of vector multiples.
-                            // We will also need to check the sizes of the buffers.
-                            // This is required to guarantee that the vector alignment
-                            // would be identical between buffers.
-                            bool vec_ok = allow_vec_exchange &&
-                                _mpiInfo->has_all_vlen_mults[_mpiInfo->my_neighbor_index] &&
-                                _mpiInfo->has_all_vlen_mults[ni];
-                         
                             // Submit async request to receive data from neighbor.
                             if (halo_step == halo_irecv) {
                                 auto nbytes = recvBuf.get_bytes();
@@ -1286,7 +1276,7 @@ namespace yask {
                                     // Vec ok?
                                     // Domain sizes must be ok, and buffer size must be ok
                                     // as calculated when buffers were created.
-                                    bool send_vec_ok = vec_ok && sendBuf.vec_copy_ok;
+                                    bool send_vec_ok = allow_vec_exchange && sendBuf.vec_copy_ok;
 
                                     // Get first and last ranges.
                                     IdxTuple first = sendBuf.begin_pt;
@@ -1335,7 +1325,7 @@ namespace yask {
                                     MPI_Wait(&grid_recv_reqs[ni], MPI_STATUS_IGNORE);
 
                                     // Vec ok?
-                                    bool recv_vec_ok = vec_ok && recvBuf.vec_copy_ok;
+                                    bool recv_vec_ok = allow_vec_exchange && recvBuf.vec_copy_ok;
 
                                     // Get first and last ranges.
                                     IdxTuple first = recvBuf.begin_pt;

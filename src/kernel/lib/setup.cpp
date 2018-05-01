@@ -435,8 +435,6 @@ namespace yask {
                             // Need +1 and then -1 trick for last.
                             fidx = round_down_flr(fidx, vlen);
                             lidx = round_up_flr(lidx + 1, vlen) - 1;
-                            TRACE_MSG("*** " << gname << "[" << dname << "] fidx: " << fidx << " vs " << gp->get_first_rank_alloc_index(dname));
-                            TRACE_MSG("*** " << gname << "[" << dname << "] lidx: " << lidx << " vs " << gp->get_last_rank_alloc_index(dname));
                             if (fidx < gp->get_first_rank_alloc_index(dname))
                                 grid_vec_ok = false;
                             if (lidx > gp->get_last_rank_alloc_index(dname))
@@ -609,7 +607,7 @@ namespace yask {
                         // Sizes of buffer in all dims of this grid.
                         // Also, set begin/end value for non-domain dims.
                         IdxTuple buf_sizes = gp->get_allocs();
-                        bool vlen_mults = true;
+                        bool buf_vec_ok = grid_vec_ok;
                         for (auto& dname : gp->get_dim_names()) {
                             idx_t dsize = 1;
 
@@ -620,9 +618,9 @@ namespace yask {
                                 // Check whether alignment and size are multiple of vlen.
                                 auto vlen = gp->_get_vec_lens(dname);
                                 if (dsize % vlen != 0)
-                                    vlen_mults = false;
+                                    buf_vec_ok = false;
                                 if (imod_flr(copy_begin[dname], vlen) != 0)
-                                    vlen_mults = false;
+                                    buf_vec_ok = false;
                             }
 
                             // step dim?
@@ -684,7 +682,7 @@ namespace yask {
                         buf.last_pt = copy_last;
                         buf.num_pts = buf_sizes;
                         buf.name = bufname;
-                        buf.vec_copy_ok = vlen_mults;
+                        buf.vec_copy_ok = buf_vec_ok;
                         
                         TRACE_MSG("MPI buffer '" << buf.name <<
                                   "' configured for rank at relative offsets " <<
