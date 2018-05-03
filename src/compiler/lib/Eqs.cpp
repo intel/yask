@@ -205,8 +205,10 @@ namespace yask {
         auto& inGrids = pt_vis.getInputGrids();
         auto& outPts = pt_vis.getOutputPts();
         auto& inPts = pt_vis.getInputPts();
+
+        int lofs = 0;        // step index offset for LHS.
         
-        // Check each eq.
+        // 1. Check each eq internally.
         for (auto eq1 : getEqs()) {
             auto* eq1p = eq1.get();
             assert(outGrids.count(eq1p));
@@ -222,37 +224,43 @@ namespace yask {
             cout << " Checking internal consistency of equation " <<
                 eq1->makeQuotedStr() << "...\n";
 #endif
-            int lofs = 0;        // step index offset for LHS of eq1.
 
             // Check LHS indices.
+            // Example: For step-index 't', domain indices 'x' and 'y', and misc index 'n',
+            // LHS of non-scratch grid eqs must be of form 'u(t +/- 1, x, y, N)', where
+            // N is a const.
+            // LHS of scratch grid must be of from 'u(x, y, N)'.
             for (int di = 0; di < og1->get_num_dims(); di++) {
                 auto& dn = og1->get_dim_name(di);
                 auto argn = op1->getArgs().at(di);
 
                 // Scratch grid must not have a condition.
                 if (cond1 && og1->isScratch())
-                    THROW_YASK_EXCEPTION("Error: scratch-grid '" << og1->getName() <<
+                    THROW_YASK_EXCEPTION("Error: scratch-grid equation '" << og1->getName() <<
                                          "' cannot have a condition");
                 
                 if (dn == stepDim) {
 
                     // Scratch grid must not use step dim.
                     if (og1->isScratch())
-                        THROW_YASK_EXCEPTION("Error: scratch-grid '" << og1->getName() <<
+                        THROW_YASK_EXCEPTION("Error: scratch-grid equation '" << og1->getName() <<
                                              "' cannot use '" << dn << "' dim");
+
+                    // Validity of step-dim expression in non-scratch grids is checked later.
                 }
 
                 // LHS must have simple indices in domain dims.
                 else if (dims._domainDims.lookup(dn)) {
 
-                    // Make expected arg.
+                    // Make expected arg, e.g., 'x'.
                     auto earg = make_shared<IndexExpr>(dn, DOMAIN_INDEX);
 
                     // Compare to actual.
                     if (!argn->isSame(earg))
                         THROW_YASK_EXCEPTION("Error: LHS of equation " << eq1->makeQuotedStr() <<
                                              " contains expression " << argn->makeQuotedStr() <<
-                                             " where " << earg->makeQuotedStr() <<
+                                             " for dimension '" << dn <<
+                                             "' where " << earg->makeQuotedStr() <<
                                              " is expected");
                 }
 
@@ -262,7 +270,8 @@ namespace yask {
                     if (!argn->isConstVal())
                         THROW_YASK_EXCEPTION("Error: LHS of equation " << eq1->makeQuotedStr() <<
                                              " contains expression " << argn->makeQuotedStr() <<
-                                             " where constant integer is expected");
+                                             " for dimension '" << dn <<
+                                             "' where constant integer is expected");
                     argn->getIntVal(); // throws exception if not an integer.
                 }
             }
@@ -270,7 +279,7 @@ namespace yask {
             // LHS of a non-scratch eq must use step dim w/a simple +/-1 offset.
             if (!og1->isScratch()) {
                 auto& lofss = op1->getArgOffsets();
-                auto* lofsp = lofss.lookup(stepDim);
+                auto* lofsp = lofss.lookup(stepDim); // step dim must be a key in offsets map.
                 if (!lofsp || abs(*lofsp) != 1) {
                     THROW_YASK_EXCEPTION("Error: LHS of equation " << eq1->makeQuotedStr() <<
                                          " does not contain '" << dims.makeStepStr(1) <<
@@ -308,7 +317,9 @@ namespace yask {
                 if (rsi1p) {
                     int rsi1 = *rsi1p;
 
-                    // Must be in proper relation to LHS.
+                    // Must be in proper relation to LHS, i.e.,
+                    // if stepping forward, step offsets must be <= 1;
+                    // if stepping backward, step offsets must be >= 1;
                     if ((lofs > 0 && rsi1 > lofs) ||
                         (lofs < 0 && rsi1 < lofs)) {
                         THROW_YASK_EXCEPTION("Error: RHS of equation " <<
@@ -321,14 +332,22 @@ namespace yask {
 
                 // TODO: check that domain indices are simple offsets and
                 // misc indices are consts.
-            }
+            } // for all RHS points.
 
             // TODO: check to make sure cond1 depends only on indices.
-            
-#ifdef DEBUG_DEP
-            cout << " Checking dependencies on equation " <<
-                eq1->makeQuotedStr() << "...\n";
-#endif
+        } // for all eqs.
+
+        // 2. Check each pair of eqs.
+        for (auto eq1 : getEqs()) {
+            auto* eq1p = eq1.get();
+            assert(outGrids.count(eq1p));
+            assert(inGrids.count(eq1p));
+            auto* og1 = outGrids.at(eq1p);
+            assert(og1 == eq1->getGrid());
+            auto* op1 = outPts.at(eq1p);
+            //auto& ig1 = inGrids.at(eq1p);
+            //auto& ip1 = inPts.at(eq1p);
+            auto cond1 = eq1p->getCond();
 
             // Check each 'eq2' to see if it depends on 'eq1'.
             for (auto eq2 : getEqs()) {
@@ -340,16 +359,17 @@ namespace yask {
                 auto& ip2 = inPts.at(eq2p);
                 auto cond2 = eq2p->getCond();
 
+#ifdef DEBUG_DEP
+                cout << " Checking eq " <<
+                    eq1->makeQuotedStr() << " vs " <<
+                    eq2->makeQuotedStr() << "...\n";
+#endif
+                
                 bool same_eq = eq1 == eq2;
                 bool same_cond = areExprsSame(cond1, cond2);
 
                 // A separate grid is defined by its name and any const indices.
                 bool same_og = op1->isSameLogicalGrid(*op2);
-
-#ifdef DEBUG_DEP
-                if (!same_eq)
-                    cout << "  ...from equation " << eq2->makeQuotedStr() << "...\n";
-#endif
 
                 // If two different eqs have the same condition, they
                 // cannot update the same grid.
@@ -464,7 +484,7 @@ namespace yask {
             } // for all eqs (eq2).
         } // for all eqs (eq1).
 
-        // Resolve indirect dependencies.
+        // 3. Resolve indirect dependencies.
         // Do this even if not finding deps because we want to
         // resolve deps provided by the user.
         os << " Resolving indirect dependencies...\n";
@@ -641,6 +661,7 @@ namespace yask {
             // If 'eq1' has a non-scratch output, visit all dependencies of
             // 'eq1'.  It's important to visit the eqs in dep order to
             // properly propagate halos sizes thru chains of scratch grids.
+            // TODO: clean up this obfuscated, hard-to-follow, and fragile code.
             if (!og1->isScratch()) {
                 _eq_deps[cur_step_dep].visitDeps
 

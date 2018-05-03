@@ -61,18 +61,22 @@ if __name__ == "__main__":
     try:
         n1 = nfac.new_add_node(n0, g1.new_relative_grid_point([0, -1,  0,  0,  1])) # left.
     except RuntimeError as e:
-        print ("YASK throws an exception.")
+        print ("YASK threw an expected exception.")
         print (format(e))
         print ("Exception Test: Catch exception correctly.")
         num_exception = num_exception + 1
 
-    n1 = nfac.new_add_node(n0, g1.new_relative_grid_point([0, -1,  0,  0])) # left.
-    n1 = nfac.new_add_node(n1, g1.new_relative_grid_point([0,  1,  0,  0])) # right.
-    n1 = nfac.new_add_node(n1, g1.new_relative_grid_point([0,  0, -1,  0])) # above.
-    n1 = nfac.new_add_node(n1, g1.new_relative_grid_point([0,  0,  1,  0])) # below.
-    n1 = nfac.new_add_node(n1, g1.new_relative_grid_point([0,  0,  0, -1])) # in front.
-    n1 = nfac.new_add_node(n1, g1.new_relative_grid_point([0,  0,  0,  1])) # behind.
-    n2 = nfac.new_divide_node(n1, nfac.new_const_number_node(7)) # div by 7.
+    # Create an expression using points in g1.
+    # This will average some of the neighboring points around the
+    # current stencil application point in the current timestep.
+    n1 = (g1.new_grid_point([t, x,   y,   z  ]) + # center.
+          g1.new_grid_point([t, x-1, y,   z  ]) + # left.
+          g1.new_grid_point([t, x+1, y,   z  ]) + # right.
+          g1.new_grid_point([t, x,   y-1, z  ]) + # above.
+          g1.new_grid_point([t, x,   y+1, z  ]) + # below.
+          g1.new_grid_point([t, x,   y,   z-1]) + # in front.
+          g1.new_grid_point([t, x,   y,   z  ])) # behind.
+    n2 = n1 / 7  # ave of the 7 points.
 
     # Create an equation to define the value at the next timestep.
     n3 = g1.new_relative_grid_point([1, 0, 0, 0]) # center-point at next timestep.
@@ -90,11 +94,11 @@ if __name__ == "__main__":
     soln.set_element_bytes(4)
 
     # Exception test
-    print("Exception Test: Call 'new_file_output' with read-only file name.")
+    print("Exception Test: Call 'new_file_output' with invalid dir.")
     try:
-        dot_file = ofac.new_file_output("yc-api-test-with-exception-py-readonly")
+        dot_file = ofac.new_file_output("/does-not-exist/foo.dot")
     except RuntimeError as e:
-        print ("YASK throws an exception.")
+        print ("YASK threw an expected exception.")
         print (format(e))
         print ("Exception Test: Catch exception correctly.")
         num_exception = num_exception + 1
@@ -113,7 +117,7 @@ if __name__ == "__main__":
     try:
         soln.format("wrong_format", dot_file)
     except RuntimeError as e:
-        print ("YASK throws an exception.")
+        print ("YASK threw an expected exception.")
         print (format(e))
         print ("Exception Test: Catch exception correctly.")
         num_exception = num_exception + 1

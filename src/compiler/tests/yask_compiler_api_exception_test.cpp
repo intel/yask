@@ -68,7 +68,7 @@ int main() {
     try {
         auto n3 = g1->new_relative_grid_point({0, +1, 0, -2, 1});
     } catch (yask_exception e) {
-        cout << "YASK throws an exception.\n";
+        cout << "YASK threw an expected exception.\n";
         cout << e.get_message() << endl;
         cout << "Exception Test: Catch exception correctly.\n";
         num_exception++;
@@ -101,11 +101,11 @@ int main() {
     soln->set_element_bytes(4);
 
     // Exception test
-    cout << "Exception Test: Call 'new_file_output' with read-only file name.\n";
+    cout << "Exception Test: Call 'new_file_output' with invalid dir.\n";
     try {
-        auto dot_file = ofac.new_file_output("yc-api-test-with-exception-cxx-readonly");
+        auto dot_file = ofac.new_file_output("/does-not-exist/foo.dot");
     } catch (yask_exception e) {
-        cout << "YASK throws an exception.\n";
+        cout << "YASK threw an expected exception.\n";
         cout << e.get_message() << endl;
         cout << "Exception Test: Catch exception correctly.\n";
         num_exception++;
@@ -126,7 +126,7 @@ int main() {
     try {
         soln->format("wrong_format", dot_file);
     } catch (yask_exception e) {
-        cout << "YASK throws an exception.\n";
+        cout << "YASK threw an expected exception.\n";
         cout << e.get_message() << endl;
         cout << "Exception Test: Catch exception correctly.\n";
         num_exception++;

@@ -39,6 +39,85 @@ namespace yask {
      * @{
      */
 
+    // More node types not exposed except via RTTI.
+
+    class yc_const_number_node;
+    /// Shared pointer to \ref yc_const_number_node
+    typedef std::shared_ptr<yc_const_number_node> yc_const_number_node_ptr;
+
+    class yc_negate_node;
+    /// Shared pointer to \ref yc_negate_node
+    typedef std::shared_ptr<yc_negate_node> yc_negate_node_ptr;
+
+    class yc_commutative_number_node;
+    /// Shared pointer to \ref yc_commutative_number_node
+    typedef std::shared_ptr<yc_commutative_number_node> yc_commutative_number_node_ptr;
+
+    class yc_binary_number_node;
+    /// Shared pointer to \ref yc_binary_number_node
+    typedef std::shared_ptr<yc_binary_number_node> yc_binary_number_node_ptr;
+
+    class yc_binary_bool_node;
+    /// Shared pointer to \ref yc_binary_bool_node
+    typedef std::shared_ptr<yc_binary_bool_node> yc_binary_bool_node_ptr;
+
+    class yc_binary_comparison_node;
+    /// Shared pointer to \ref yc_binary_comparison_node
+    typedef std::shared_ptr<yc_binary_comparison_node> yc_binary_comparison_node_ptr;
+
+    class yc_add_node;
+    /// Shared pointer to \ref yc_add_node
+    typedef std::shared_ptr<yc_add_node> yc_add_node_ptr;
+
+    class yc_multiply_node;
+    /// Shared pointer to \ref yc_multiply_node
+    typedef std::shared_ptr<yc_multiply_node> yc_multiply_node_ptr;
+
+    class yc_subtract_node;
+    /// Shared pointer to \ref yc_subtract_node
+    typedef std::shared_ptr<yc_subtract_node> yc_subtract_node_ptr;
+
+    class yc_divide_node;
+    /// Shared pointer to \ref yc_divide_node
+    typedef std::shared_ptr<yc_divide_node> yc_divide_node_ptr;
+
+    class yc_not_node;
+    /// Shared pointer to \ref yc_not_node
+    typedef std::shared_ptr<yc_not_node> yc_not_node_ptr;
+
+    class yc_equals_node;
+    /// Shared pointer to \ref yc_equals_node
+    typedef std::shared_ptr<yc_equals_node> yc_equals_node_ptr;
+
+    class yc_not_equals_node;
+    /// Shared pointer to \ref yc_not_equals_node
+    typedef std::shared_ptr<yc_not_equals_node> yc_not_equals_node_ptr;
+
+    class yc_less_than_node;
+    /// Shared pointer to \ref yc_less_than_node
+    typedef std::shared_ptr<yc_less_than_node> yc_less_than_node_ptr;
+
+    class yc_greater_than_node;
+    /// Shared pointer to \ref yc_greater_than_node
+    typedef std::shared_ptr<yc_greater_than_node> yc_greater_than_node_ptr;
+
+    class yc_not_less_than_node;
+    /// Shared pointer to \ref yc_not_less_than_node
+    typedef std::shared_ptr<yc_not_less_than_node> yc_not_less_than_node_ptr;
+
+    class yc_not_greater_than_node;
+    /// Shared pointer to \ref yc_not_greater_than_node
+    typedef std::shared_ptr<yc_not_greater_than_node> yc_not_greater_than_node_ptr;
+
+    class yc_and_node;
+    /// Shared pointer to \ref yc_and_node
+    typedef std::shared_ptr<yc_and_node> yc_and_node_ptr;
+
+    class yc_or_node;
+    /// Shared pointer to \ref yc_or_node
+    typedef std::shared_ptr<yc_or_node> yc_or_node_ptr;
+
+    
     /// Factory to create AST nodes.
     /** @note Grid-point reference nodes are created from a \ref yc_grid object
         instead of from a \ref yc_node_factory. */
