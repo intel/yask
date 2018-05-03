@@ -76,7 +76,7 @@ namespace yask {
 
             // Indices needed for the generated loops.  Will normally be a
             // copy of def_block_idxs except when updating scratch-grids.
-            ScanIndices block_idxs = sg->adjust_scan(thread_idx, def_block_idxs);
+            ScanIndices block_idxs = sg->adjust_span(thread_idx, def_block_idxs);
 
             TRACE_MSG3("calc_block: " <<
                        " in bundle '" << sg->get_name() << "': " <<
@@ -616,10 +616,18 @@ namespace yask {
     }
 
     // If this bundle is updating scratch grid(s),
-    // expand indices to calculate values in halo.
+    // expand begin & end of 'idxs' by sizes of halos.
     // This will often change vec-len aligned indices to non-aligned.
+    // Step indices may also change.
+    // NB: it is not necessary that the domain of each grid
+    // is the same as the span of 'idxs'. However, it should be
+    // at least that large to ensure that grid is able to hold
+    // calculated results.
+    // In other words, grid can be larger than span of 'idxs', but
+    // its halo sizes are still used to specify how much to
+    // add to 'idxs'.
     // Return adjusted indices.
-    ScanIndices StencilBundleBase::adjust_scan(int thread_idx, const ScanIndices& idxs) const {
+    ScanIndices StencilBundleBase::adjust_span(int thread_idx, const ScanIndices& idxs) const {
 
         ScanIndices adj_idxs(idxs);
         auto* cp = _generic_context;
@@ -638,33 +646,36 @@ namespace yask {
 
             // i: index for stencil dims, j: index for domain dims.
             for (int i = 0, j = 0; i < nsdims; i++) {
-                if (i != step_posn) {
-                    auto& dim = dims->_stencil_dims.getDim(i);
-                    auto& dname = dim.getName();
+                if (i == step_posn) continue;
+                auto& dim = dims->_stencil_dims.getDim(i);
+                auto& dname = dim.getName();
+                
+                // Is this dim used in this grid?
+                int posn = gp->get_dim_posn(dname);
+                if (posn >= 0) {
 
-                    // Is this dim used in this grid?
-                    int posn = gp->get_dim_posn(dname);
-                    if (posn >= 0) {
-
-                        idx_t lh = gp->get_left_halo_size(posn);
-                        idx_t rh = gp->get_right_halo_size(posn);
-                        
-                        // Adjust begin & end scan indices based on halos.
-                        adj_idxs.begin[i] = idxs.begin[i] - lh;
-                        adj_idxs.end[i] = idxs.end[i] + rh;
-
-                        // If existing step is >= whole tile, adjust it also.
-                        idx_t width = idxs.end[i] - idxs.begin[i];
-                        if (idxs.step[i] >= width) {
-                            idx_t adj_width = adj_idxs.end[i] - adj_idxs.begin[i];
-                            adj_idxs.step[i] = adj_width;
-                        }
+                    // Make sure grid domain covers block.
+                    assert(idxs.begin[i] >= gp->get_first_rank_domain_index(posn));
+                    assert(idxs.end[i] <= gp->get_last_rank_domain_index(posn) + 1);
+                    
+                    // Adjust begin & end scan indices based on halos.
+                    idx_t lh = gp->get_left_halo_size(posn);
+                    idx_t rh = gp->get_right_halo_size(posn);
+                    adj_idxs.begin[i] = idxs.begin[i] - lh;
+                    adj_idxs.end[i] = idxs.end[i] + rh;
+                    
+                    // If existing step is >= whole tile, adjust it also.
+                    idx_t width = idxs.end[i] - idxs.begin[i];
+                    if (idxs.step[i] >= width) {
+                        idx_t adj_width = adj_idxs.end[i] - adj_idxs.begin[i];
+                        adj_idxs.step[i] = adj_width;
                     }
-                    j++;
                 }
+                j++;
             }
 
-            // Only need to check one grid.
+            // Only need to get info from one grid.
+            // TODO: check that grids are consistent.
             break;
         }
         return adj_idxs;

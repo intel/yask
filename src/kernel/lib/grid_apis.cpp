@@ -67,7 +67,7 @@ namespace yask {
     GET_GRID_API(get_last_rank_alloc_index, _offsets[posn] + _domains[posn] + _actl_right_pads[posn] - 1, false, true, false, true)
     GET_GRID_API(_get_left_wf_ext, _left_wf_exts[posn], true, true, true, false)
     GET_GRID_API(_get_right_wf_ext, _right_wf_exts[posn], true, true, true, false)
-    GET_GRID_API(_get_vec_lens, _vec_lens[posn], true, true, true, true)
+    GET_GRID_API(_get_vec_len, _vec_lens[posn], true, true, true, true)
     GET_GRID_API(_get_offset, _offsets[posn], true, true, true, true)
     GET_GRID_API(_get_local_offset, _local_offsets[posn], true, true, true, false)
     GET_GRID_API(_get_first_alloc_index, _offsets[posn] - _actl_left_pads[posn], true, true, true, true)

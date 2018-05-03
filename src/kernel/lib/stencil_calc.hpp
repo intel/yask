@@ -139,7 +139,7 @@ namespace yask {
         // expand indices to calculate values in halo.
         // Adjust offsets in grids based on original idxs.
         // Return adjusted indices.
-        virtual ScanIndices adjust_scan(int thread_idx, const ScanIndices& idxs) const;
+        virtual ScanIndices adjust_span(int thread_idx, const ScanIndices& idxs) const;
         
         // Set the bounding-box vars for this bundle in this rank.
         virtual void find_bounding_box();
