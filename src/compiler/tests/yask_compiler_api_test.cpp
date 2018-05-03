@@ -93,8 +93,15 @@ int main() {
         auto n_lhs = g1->new_grid_point({t+1, x, y, z});
         cout << n_lhs->format_simple() << endl;
 
-        auto n_eq = fac.new_equation_node(n_lhs, n8);
-        cout << n_eq->format_simple() << endl;
+        // Define a sub-domain in which to apply this value.
+        auto sd0 = (x >= fac.new_first_domain_index(x) + 5);
+
+        // Set equations to update the main grid using
+        // expression n8 in sub-domain sd0 and -n8 otherwise.
+        auto n_eq0 = fac.new_equation_node(n_lhs, n8, sd0);
+        cout << n_eq0->format_simple() << endl;
+        auto n_eq1 = fac.new_equation_node(n_lhs, -n8, !sd0);
+        cout << n_eq1->format_simple() << endl;
 
         cout << "Solution '" << soln->get_name() << "' contains " <<
             soln->get_num_grids() << " grid(s), and " <<

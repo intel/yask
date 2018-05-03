@@ -253,7 +253,7 @@ namespace yask {
 
                     // Indices needed for the generated misc loops.  Will normally be a
                     // copy of rank_idxs except when updating scratch-grids.
-                    ScanIndices misc_idxs = sg->adjust_scan(scratch_grid_idx, rank_idxs);
+                    ScanIndices misc_idxs = sg->adjust_span(scratch_grid_idx, rank_idxs);
                     misc_idxs.step.setFromConst(1); // ensure unit step.
                 
                     // Define misc-loop function.  Since step is always 1, we
@@ -1008,32 +1008,35 @@ namespace yask {
                     int posn = gp->get_dim_posn(dname);
                     if (posn >= 0) {
 
-                        // |        +------+       |
-                        // |  loc   |      |       | 
-                        // |  ofs   |      |       | 
-                        // |<------>|      |       | 
-                        // |        +------+       |
-                        // ^        ^
-                        // |        |
-                        // |        start of grid-domain/0-idx of block
-                        // first rank-domain index
+                        // | ... |        +------+       |
+                        // |  global ofs  |      |       | 
+                        // |<------------>|grid/ |       | 
+                        // |     |  loc   | blk  |       | 
+                        // |rank |  ofs   |domain|       | 
+                        // | ofs |<------>|      |       | 
+                        // |<--->|        +------+       |
+                        // ^     ^        ^              ^
+                        // |     |        |              last rank-domain index
+                        // |     |        start of grid-domain/0-idx of block
+                        // |     first rank-domain index
+                        // first overall-domain index
                         
-                        // Set offset of grid based on starting point of block.
-                        // This is a global index, so it will include the rank offset.
-                        gp->_set_offset(posn, idxs[i]);
-
                         // Local offset is the offset of this grid
                         // relative to the current rank.
                         // Set local offset to diff between global offset
                         // and rank offset.
+                        // Round down to make sure it's vec-aligned.
                         auto rofs = rank_domain_offsets[j];
-                        auto lofs = idxs[i] - rofs;
+                        auto vlen = gp->_get_vec_len(posn);
+                        auto lofs = round_down_flr(idxs[i] - rofs, vlen);
                         gp->_set_local_offset(posn, lofs);
 
-                        // For a vectorized grid, the local offset must
-                        // be a vector multiple. This is necessary for
-                        // vector and cluster operations to work properly.
-                        assert(imod_flr(lofs, gp->_get_vec_lens(posn)) == 0);
+                        // Set global offset of grid based on starting point of block.
+                        // This is a global index, so it will include the rank offset.
+                        // Thus, it it not necessarily a vec mult.
+                        // Need to use calculated local offset to adjust for any
+                        // rounding that was done above.
+                        gp->_set_offset(posn, rofs + lofs);
                     }
                     j++;
                 }

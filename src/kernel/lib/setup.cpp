@@ -404,7 +404,7 @@ namespace yask {
 
                         // Only consider domain dims that are used in this grid.
                         if (gp->is_dim_used(dname)) {
-                            auto vlen = gp->_get_vec_lens(dname);
+                            auto vlen = gp->_get_vec_len(dname);
                             auto lhalo = gp->get_left_halo_size(dname);
                             auto rhalo = gp->get_right_halo_size(dname);
 
@@ -508,7 +508,7 @@ namespace yask {
                         for (auto& dim : _dims->_domain_dims.getDims()) {
                             auto& dname = dim.getName();
                             if (gp->is_dim_used(dname)) {
-                                auto vlen = gp->_get_vec_lens(dname);
+                                auto vlen = gp->_get_vec_len(dname);
 
                                 // First index rounded down.
                                 auto fidx = first_outer_idx[dname];
@@ -616,7 +616,7 @@ namespace yask {
                                 dsize = copy_end[dname] - copy_begin[dname];
 
                                 // Check whether alignment and size are multiple of vlen.
-                                auto vlen = gp->_get_vec_lens(dname);
+                                auto vlen = gp->_get_vec_len(dname);
                                 if (dsize % vlen != 0)
                                     buf_vec_ok = false;
                                 if (imod_flr(copy_begin[dname], vlen) != 0)
@@ -822,7 +822,10 @@ namespace yask {
                         if (gp->is_dim_used(dname)) {
 
                             // Set domain size of grid to block size.
-                            gp->_set_domain_size(dname, _opts->_block_sizes[dname]);
+                            // Round up to vec-len.
+                            auto sz = round_up_flr(_opts->_block_sizes[dname],
+                                                   gp->_get_vec_len(dname));
+                            gp->_set_domain_size(dname, sz);
                     
                             // Pads.
                             // Set via both 'extra' and 'min'; larger result will be used.

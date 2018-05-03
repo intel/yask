@@ -371,7 +371,7 @@ namespace yask {
         GET_GRID_API(_get_last_alloc_index)
         GET_GRID_API(_get_left_wf_ext)
         GET_GRID_API(_get_right_wf_ext)
-        GET_GRID_API(_get_vec_lens)
+        GET_GRID_API(_get_vec_len)
         SET_GRID_API(_set_domain_size)
         SET_GRID_API(_set_left_pad_size)
         SET_GRID_API(_set_right_pad_size)
