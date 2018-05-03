@@ -85,12 +85,24 @@ if __name__ == "__main__":
     sn2 = (sg1.new_grid_point([x+1, y,   z  ]) +
            sg1.new_grid_point([x,   y+1, z  ]) +
            sg1.new_grid_point([x,   y,   z+1]))
-    sn5 = -sn2 * 2.5 - 9
-    
-    # Create an equation to define the value at the next timestep.
+    sn5 = sn2 * 2.5 - 9
+    sn5n = -sn5
+
+    # Expression for main grid value at t+1.
     n3 = g1.new_grid_point([t+1, x, y, z]) # center-point at next timestep.
-    n4 = nfac.new_equation_node(n3, sn5) # equate to expr from scratch grid.
-    print("Main-grid equation before formatting: " + n4.format_simple())
+    
+    # Define a sub-domain in which to apply this value.
+    sd0 = (x >= nfac.new_first_domain_index(x) + 5)
+    sd0n = sd0.yc_not()         # YASK logical not.
+
+    # Create an equation to define the value at the next timestep
+    # using sn5 in sub-domain sd0 and -sn5 otherwise.
+    n4a = nfac.new_equation_node(n3, sn5, sd0)
+    print("Main-grid interior equation before formatting: " + n4a.format_simple())
+    n4b = nfac.new_equation_node(n3, sn5n, sd0n)
+    print("Main-grid edge equation before formatting: " + n4b.format_simple())
+
+    # Print some info about the solution.
     print("Solution '" + soln.get_name() + "' contains " +
           str(soln.get_num_grids()) + " grid(s), and " +
           str(soln.get_num_equations()) + " equation(s).")
@@ -112,8 +124,9 @@ if __name__ == "__main__":
     soln.format("avx", yask_file)
     print("YASK-format written to '" + yask_file.get_filename() + "'.")
 
+    print("Equations:")
     for eq in soln.get_equations() :
-        print("Equation after formatting: " + eq.format_simple())
+        print("  " + eq.format_simple())
 
     print("Debug output captured:\n" + do.get_string())
     print("End of YASK compiler API test.")

@@ -92,6 +92,18 @@ namespace yask {
     /// Shared pointer to \ref yc_commutative_number_node
     typedef std::shared_ptr<yc_commutative_number_node> yc_commutative_number_node_ptr;
 
+    class yc_binary_number_node;
+    /// Shared pointer to \ref yc_binary_number_node
+    typedef std::shared_ptr<yc_binary_number_node> yc_binary_number_node_ptr;
+
+    class yc_binary_bool_node;
+    /// Shared pointer to \ref yc_binary_bool_node
+    typedef std::shared_ptr<yc_binary_bool_node> yc_binary_bool_node_ptr;
+
+    class yc_binary_comparison_node;
+    /// Shared pointer to \ref yc_binary_comparison_node
+    typedef std::shared_ptr<yc_binary_comparison_node> yc_binary_comparison_node_ptr;
+
     class yc_add_node;
     /// Shared pointer to \ref yc_add_node
     typedef std::shared_ptr<yc_add_node> yc_add_node_ptr;

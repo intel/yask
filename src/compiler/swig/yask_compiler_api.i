@@ -48,6 +48,9 @@ IN THE SOFTWARE.
 %shared_ptr(yask::yc_const_number_node)
 %shared_ptr(yask::yc_negate_node)
 %shared_ptr(yask::yc_commutative_number_node)
+%shared_ptr(yask::yc_binary_number_node)
+%shared_ptr(yask::yc_binary_bool_node)
+%shared_ptr(yask::yc_binary_comparison_node)
 %shared_ptr(yask::yc_add_node)
 %shared_ptr(yask::yc_multiply_node)
 %shared_ptr(yask::yc_subtract_node)
@@ -87,88 +90,109 @@ IN THE SOFTWARE.
 }
 
 // Tell SWIG how to handle non-class overloaded operators in Python.
+// See https://docs.python.org/3/library/operator.html.
+
+// For numerical ops.
 %extend yask::yc_number_node {
     yask::yc_number_node_ptr __neg__() {
         auto p = $self->clone_ast();
         return yask::operator-(p);
     }
  };
+%extend yask::yc_index_node {
+    yask::yc_number_node_ptr __neg__() {
+        auto p = $self->clone_ast();
+        return yask::operator-(p);
+    }
+ };
+
+%define BIN_OP(py_oper, c_oper)
 %extend yask::yc_number_node {
-    yask::yc_number_node_ptr __add__(yask::yc_number_node* rhs) {
+    yask::yc_number_node_ptr py_oper(yask::yc_number_node* rhs) {
         auto lp = $self->clone_ast();
         auto rp = rhs->clone_ast();
-        return yask::operator+(lp, rp);
+        return yask::operator c_oper(lp, rp);
     }
- };
+ }
 %extend yask::yc_number_node {
-    yask::yc_number_node_ptr __add__(double rhs) {
+    yask::yc_number_node_ptr py_oper(double rhs) {
         auto lp = $self->clone_ast();
-        return yask::operator+(lp, rhs);
+        return yask::operator c_oper(lp, rhs);
     }
  };
 %extend yask::yc_number_node {
-    yask::yc_number_node_ptr __add__(idx_t rhs) {
+    yask::yc_number_node_ptr py_oper(idx_t rhs) {
         auto lp = $self->clone_ast();
-        return yask::operator+(lp, rhs);
+        return yask::operator c_oper(lp, rhs);
     }
  };
-%extend yask::yc_number_node {
-    yask::yc_number_node_ptr __sub__(yask::yc_number_node* rhs) {
-        auto lp = $self->clone_ast();
-        auto rp = rhs->clone_ast();
-        return yask::operator-(lp, rp);
+%enddef
+BIN_OP(__add__, +);
+BIN_OP(__sub__, -);
+BIN_OP(__mul__, *);
+BIN_OP(__truediv__, /);
+
+// For boolean ops.
+
+// For 'not', 'and', and 'or', Python only allows returning
+// a bool. So we have to make our own.
+%extend yask::yc_bool_node {
+    yask::yc_bool_node_ptr yc_not() {
+        auto p = $self->clone_ast();
+        return yask::operator!(p);
     }
  };
-%extend yask::yc_number_node {
-    yask::yc_number_node_ptr __sub__(double rhs) {
-        auto lp = $self->clone_ast();
-        return yask::operator-(lp, rhs);
-    }
- };
-%extend yask::yc_number_node {
-    yask::yc_number_node_ptr __sub__(idx_t rhs) {
-        auto lp = $self->clone_ast();
-        return yask::operator-(lp, rhs);
-    }
- };
-%extend yask::yc_number_node {
-    yask::yc_number_node_ptr __mul__(yask::yc_number_node* rhs) {
+%extend yask::yc_bool_node {
+    yask::yc_bool_node_ptr yc_or(yask::yc_bool_node* rhs) {
         auto lp = $self->clone_ast();
         auto rp = rhs->clone_ast();
-        return yask::operator*(lp, rp);
+        return yask::operator||(lp, rp);
     }
  };
-%extend yask::yc_number_node {
-    yask::yc_number_node_ptr __mul__(double rhs) {
-        auto lp = $self->clone_ast();
-        return yask::operator*(lp, rhs);
-    }
- };
-%extend yask::yc_number_node {
-    yask::yc_number_node_ptr __mul__(idx_t rhs) {
-        auto lp = $self->clone_ast();
-        return yask::operator*(lp, rhs);
-    }
- };
-%extend yask::yc_number_node {
-    yask::yc_number_node_ptr __truediv__(yask::yc_number_node* rhs) {
+%extend yask::yc_bool_node {
+    yask::yc_bool_node_ptr yc_and(yask::yc_bool_node* rhs) {
         auto lp = $self->clone_ast();
         auto rp = rhs->clone_ast();
-        return yask::operator/(lp, rp);
+        return yask::operator&&(lp, rp);
     }
  };
+
+%define BOOL_OP(py_oper, c_oper)
 %extend yask::yc_number_node {
-    yask::yc_number_node_ptr __truediv__(double rhs) {
+    yask::yc_bool_node_ptr py_oper(yask::yc_number_node* rhs) {
         auto lp = $self->clone_ast();
-        return yask::operator/(lp, rhs);
+        auto rp = rhs->clone_ast();
+        return yask::operator c_oper(lp, rp);
     }
- };
+};
 %extend yask::yc_number_node {
-    yask::yc_number_node_ptr __truediv__(idx_t rhs) {
+    yask::yc_bool_node_ptr py_oper(yask::yc_index_node* rhs) {
         auto lp = $self->clone_ast();
-        return yask::operator/(lp, rhs);
+        auto rp = rhs->clone_ast();
+        return yask::operator c_oper(lp, rp);
     }
- };
+};
+%extend yask::yc_index_node {
+    yask::yc_bool_node_ptr py_oper(yask::yc_number_node* rhs) {
+        auto lp = $self->clone_ast();
+        auto rp = rhs->clone_ast();
+        return yask::operator c_oper(lp, rp);
+    }
+};
+%extend yask::yc_index_node {
+    yask::yc_bool_node_ptr py_oper(yask::yc_index_node* rhs) {
+        auto lp = $self->clone_ast();
+        auto rp = rhs->clone_ast();
+        return yask::operator c_oper(lp, rp);
+    }
+};
+%enddef
+BOOL_OP(__eq__, ==);
+BOOL_OP(__ne__, !=);
+BOOL_OP(__lt__, <);
+BOOL_OP(__gt__, >);
+BOOL_OP(__ge__, >=);
+BOOL_OP(__le__, <=);
 
 %include "yask_common_api.hpp"
 %include "yask_compiler_api.hpp"

@@ -66,21 +66,21 @@ namespace yask {
         ep->set_cond(cond);
         return ep;
     }
-    yc_const_number_node_ptr
+    yc_number_node_ptr
     yc_node_factory::new_const_number_node(double val) {
         return make_shared<ConstExpr>(val);
     }
-    yc_const_number_node_ptr
+    yc_number_node_ptr
     yc_node_factory::new_const_number_node(idx_t val) {
         return make_shared<ConstExpr>(val);
     }
-    yc_negate_node_ptr
+    yc_number_node_ptr
     yc_node_factory::new_negate_node(yc_number_node_ptr rhs) {
         auto p = dynamic_pointer_cast<NumExpr>(rhs);
         assert(p);
         return make_shared<NegExpr>(p);
     }
-    yc_add_node_ptr
+    yc_number_node_ptr
     yc_node_factory::new_add_node(yc_number_node_ptr lhs,
                                   yc_number_node_ptr rhs) {
         auto lp = dynamic_pointer_cast<NumExpr>(lhs);
@@ -89,7 +89,7 @@ namespace yask {
         assert(rp);
         return make_shared<AddExpr>(lp, rp);
     }
-    yc_multiply_node_ptr
+    yc_number_node_ptr
     yc_node_factory::new_multiply_node(yc_number_node_ptr lhs,
                                        yc_number_node_ptr rhs) {
         auto lp = dynamic_pointer_cast<NumExpr>(lhs);
@@ -98,7 +98,7 @@ namespace yask {
         assert(rp);
         return make_shared<MultExpr>(lp, rp);
     }
-    yc_subtract_node_ptr
+    yc_number_node_ptr
     yc_node_factory::new_subtract_node(yc_number_node_ptr lhs,
                                        yc_number_node_ptr rhs) {
         auto lp = dynamic_pointer_cast<NumExpr>(lhs);
@@ -107,7 +107,7 @@ namespace yask {
         assert(rp);
         return make_shared<SubExpr>(lp, rp);
     }
-    yc_divide_node_ptr
+    yc_number_node_ptr
     yc_node_factory::new_divide_node(yc_number_node_ptr lhs,
                                      yc_number_node_ptr rhs) {
         auto lp = dynamic_pointer_cast<NumExpr>(lhs);
@@ -116,13 +116,13 @@ namespace yask {
         assert(rp);
         return make_shared<DivExpr>(lp, rp);
     }
-    yc_not_node_ptr
+    yc_bool_node_ptr
     yc_node_factory::new_not_node(yc_bool_node_ptr rhs) {
         auto p = dynamic_pointer_cast<BoolExpr>(rhs);
         assert(p);
         return make_shared<NotExpr>(p);
     }
-    yc_and_node_ptr
+    yc_bool_node_ptr
     yc_node_factory::new_and_node(yc_bool_node_ptr lhs,
                                       yc_bool_node_ptr rhs) {
         auto lp = dynamic_pointer_cast<BoolExpr>(lhs);
@@ -131,7 +131,7 @@ namespace yask {
         assert(rp);
         return make_shared<AndExpr>(lp, rp);
     }
-    yc_or_node_ptr
+    yc_bool_node_ptr
     yc_node_factory::new_or_node(yc_bool_node_ptr lhs,
                                       yc_bool_node_ptr rhs) {
         auto lp = dynamic_pointer_cast<BoolExpr>(lhs);
@@ -140,7 +140,7 @@ namespace yask {
         assert(rp);
         return make_shared<OrExpr>(lp, rp);
     }
-    yc_equals_node_ptr
+    yc_bool_node_ptr
     yc_node_factory::new_equals_node(yc_number_node_ptr lhs,
                                       yc_number_node_ptr rhs) {
         auto lp = dynamic_pointer_cast<NumExpr>(lhs);
@@ -149,7 +149,7 @@ namespace yask {
         assert(rp);
         return make_shared<IsEqualExpr>(lp, rp);
     }
-    yc_not_equals_node_ptr
+    yc_bool_node_ptr
     yc_node_factory::new_not_equals_node(yc_number_node_ptr lhs,
                                       yc_number_node_ptr rhs) {
         auto lp = dynamic_pointer_cast<NumExpr>(lhs);
@@ -158,7 +158,7 @@ namespace yask {
         assert(rp);
         return make_shared<NotEqualExpr>(lp, rp);
     }
-    yc_less_than_node_ptr
+    yc_bool_node_ptr
     yc_node_factory::new_less_than_node(yc_number_node_ptr lhs,
                                       yc_number_node_ptr rhs) {
         auto lp = dynamic_pointer_cast<NumExpr>(lhs);
@@ -167,7 +167,7 @@ namespace yask {
         assert(rp);
         return make_shared<IsLessExpr>(lp, rp);
     }
-    yc_greater_than_node_ptr
+    yc_bool_node_ptr
     yc_node_factory::new_greater_than_node(yc_number_node_ptr lhs,
                                       yc_number_node_ptr rhs) {
         auto lp = dynamic_pointer_cast<NumExpr>(lhs);
@@ -176,7 +176,7 @@ namespace yask {
         assert(rp);
         return make_shared<IsGreaterExpr>(lp, rp);
     }
-    yc_not_less_than_node_ptr
+    yc_bool_node_ptr
     yc_node_factory::new_not_less_than_node(yc_number_node_ptr lhs,
                                       yc_number_node_ptr rhs) {
         auto lp = dynamic_pointer_cast<NumExpr>(lhs);
@@ -185,7 +185,7 @@ namespace yask {
         assert(rp);
         return make_shared<NotLessExpr>(lp, rp);
     }
-    yc_not_greater_than_node_ptr
+    yc_bool_node_ptr
     yc_node_factory::new_not_greater_than_node(yc_number_node_ptr lhs,
                                                yc_number_node_ptr rhs) {
         auto lp = dynamic_pointer_cast<NumExpr>(lhs);
@@ -208,64 +208,111 @@ namespace yask {
             THROW_YASK_EXCEPTION("Error: new_last_domain_index() called without index-node argument");
         return last_index(p);
     }
-    yc_negate_node_ptr operator-(yc_number_node_ptr rhs) {
+    yc_number_node_ptr operator-(yc_number_node_ptr rhs) {
         auto p = dynamic_pointer_cast<NumExpr>(rhs);
         assert(p);
         return make_shared<NegExpr>(p);
     }
-    yc_add_node_ptr operator+(yc_number_node_ptr lhs, yc_number_node_ptr rhs) {
+    yc_number_node_ptr operator+(yc_number_node_ptr lhs, yc_number_node_ptr rhs) {
         auto lp = dynamic_pointer_cast<NumExpr>(lhs);
         assert(lp);
         auto rp = dynamic_pointer_cast<NumExpr>(rhs);
         assert(rp);
         return make_shared<AddExpr>(lp, rp);
     }
-    yc_add_node_ptr operator+(double lhs, yc_number_node_ptr rhs) {
+    yc_number_node_ptr operator+(double lhs, yc_number_node_ptr rhs) {
         return operator+(constNum(lhs), rhs);
     }
-    yc_add_node_ptr operator+(yc_number_node_ptr lhs, double rhs) {
+    yc_number_node_ptr operator+(yc_number_node_ptr lhs, double rhs) {
         return operator+(lhs, constNum(rhs));
     }
-    yc_divide_node_ptr operator/(yc_number_node_ptr lhs, yc_number_node_ptr rhs) {
+    yc_number_node_ptr operator/(yc_number_node_ptr lhs, yc_number_node_ptr rhs) {
         auto lp = dynamic_pointer_cast<NumExpr>(lhs);
         assert(lp);
         auto rp = dynamic_pointer_cast<NumExpr>(rhs);
         assert(rp);
         return make_shared<DivExpr>(lp, rp);
     }
-    yc_divide_node_ptr operator/(double lhs, yc_number_node_ptr rhs) {
+    yc_number_node_ptr operator/(double lhs, yc_number_node_ptr rhs) {
         return operator/(constNum(lhs), rhs);
     }
-    yc_divide_node_ptr operator/(yc_number_node_ptr lhs, double rhs) {
+    yc_number_node_ptr operator/(yc_number_node_ptr lhs, double rhs) {
         return operator/(lhs, constNum(rhs));
     }
-    yc_multiply_node_ptr operator*(yc_number_node_ptr lhs, yc_number_node_ptr rhs) {
+    yc_number_node_ptr operator*(yc_number_node_ptr lhs, yc_number_node_ptr rhs) {
         auto lp = dynamic_pointer_cast<NumExpr>(lhs);
         assert(lp);
         auto rp = dynamic_pointer_cast<NumExpr>(rhs);
         assert(rp);
         return make_shared<MultExpr>(lp, rp);
     }
-    yc_multiply_node_ptr operator*(double lhs, yc_number_node_ptr rhs) {
+    yc_number_node_ptr operator*(double lhs, yc_number_node_ptr rhs) {
         return operator*(constNum(lhs), rhs);
     }
-    yc_multiply_node_ptr operator*(yc_number_node_ptr lhs, double rhs) {
+    yc_number_node_ptr operator*(yc_number_node_ptr lhs, double rhs) {
         return operator*(lhs, constNum(rhs));
     }
-    yc_subtract_node_ptr operator-(yc_number_node_ptr lhs, yc_number_node_ptr rhs) {
+    yc_number_node_ptr operator-(yc_number_node_ptr lhs, yc_number_node_ptr rhs) {
         auto lp = dynamic_pointer_cast<NumExpr>(lhs);
         assert(lp);
         auto rp = dynamic_pointer_cast<NumExpr>(rhs);
         assert(rp);
         return make_shared<SubExpr>(lp, rp);
     }
-    yc_subtract_node_ptr operator-(double lhs, yc_number_node_ptr rhs) {
+    yc_number_node_ptr operator-(double lhs, yc_number_node_ptr rhs) {
         return operator-(constNum(lhs), rhs);
     }
-    yc_subtract_node_ptr operator-(yc_number_node_ptr lhs, double rhs) {
+    yc_number_node_ptr operator-(yc_number_node_ptr lhs, double rhs) {
         return operator-(lhs, constNum(rhs));
     }
-
+    yc_bool_node_ptr operator!(yc_bool_node_ptr rhs) {
+        auto p = dynamic_pointer_cast<BoolExpr>(rhs);
+        assert(p);
+        return make_shared<NotExpr>(p);
+    }
+    yc_bool_node_ptr operator||(yc_bool_node_ptr lhs, yc_bool_node_ptr rhs) {
+        auto lp = dynamic_pointer_cast<BoolExpr>(lhs);
+        assert(lp);
+        auto rp = dynamic_pointer_cast<BoolExpr>(rhs);
+        assert(rp);
+        return make_shared<OrExpr>(lp, rp);
+    }
+    yc_bool_node_ptr operator&&(yc_bool_node_ptr lhs, yc_bool_node_ptr rhs) {
+        auto lp = dynamic_pointer_cast<BoolExpr>(lhs);
+        assert(lp);
+        auto rp = dynamic_pointer_cast<BoolExpr>(rhs);
+        assert(rp);
+        return make_shared<AndExpr>(lp, rp);
+    }
+    
+// Boolean binary operators with numerical inputs.
+#define BIN_NUM2BOOL_OP(type, oper)                             \
+    yc_bool_node_ptr operator oper(yc_number_node_ptr lhs,      \
+                                   yc_number_node_ptr rhs) {    \
+        auto lp = dynamic_pointer_cast<NumExpr>(lhs);           \
+        assert(lp);                                             \
+        auto rp = dynamic_pointer_cast<NumExpr>(rhs);           \
+        assert(rp);                                                     \
+        return make_shared<NotLessExpr>(lp, rp);                        \
+    }                                                                   \
+    yc_bool_node_ptr operator oper(yc_index_node_ptr lhs,               \
+                                   yc_number_node_ptr rhs) {            \
+        return operator>=(dynamic_pointer_cast<yc_number_node>(lhs), rhs); \
+    }                                                                   \
+    yc_bool_node_ptr operator oper(yc_number_node_ptr lhs, yc_index_node_ptr rhs) { \
+        return operator>=(lhs, dynamic_pointer_cast<yc_number_node>(rhs)); \
+    }                                                                   \
+    yc_bool_node_ptr operator oper(yc_index_node_ptr lhs, yc_index_node_ptr rhs) { \
+        return operator>=(dynamic_pointer_cast<yc_number_node>(lhs),    \
+                          dynamic_pointer_cast<yc_number_node>(rhs));     \
+    }
+    BIN_NUM2BOOL_OP(IsEqualExpr, ==)
+    BIN_NUM2BOOL_OP(NotEqualExpr, !=)
+    BIN_NUM2BOOL_OP(IsLessExpr, <)
+    BIN_NUM2BOOL_OP(NotLessExpr, >=)
+    BIN_NUM2BOOL_OP(IsGreaterExpr, >)
+    BIN_NUM2BOOL_OP(NotGreaterExpr, <=)
+    
     // Compare 2 expr pointers and return whether the expressions are
     // equivalent.
     // TODO: Be much smarter about matching symbolically-equivalent exprs.

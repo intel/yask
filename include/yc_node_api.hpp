@@ -122,15 +122,15 @@ namespace yask {
             Use new_subtraction_node() for binary `-`.
             @returns Pointer to new \ref yc_const_number_node object. 
         */
-        virtual yc_const_number_node_ptr
+        virtual yc_number_node_ptr
         new_const_number_node(double val /**< [in] Value to store in node. */ );
 
-        ///
+        /// Create a constant numerical value node.
         /**
            Integer version of new_const_number_node(double).
            @returns Pointer to new \ref yc_const_number_node object. 
         */
-        virtual yc_const_number_node_ptr
+        virtual yc_number_node_ptr
         new_const_number_node(idx_t val /**< [in] Value to store in node. */ );
 
         /// Create a numerical negation operator node.
@@ -138,7 +138,7 @@ namespace yask {
             New negation nodes can also be created via the overloaded unary `-` operator.
             @returns Pointer to new \ref yc_negate_node object. 
         */
-        virtual yc_negate_node_ptr
+        virtual yc_number_node_ptr
         new_negate_node(yc_number_node_ptr rhs /**< [in] Expression after `-` sign. */ );
 
         /// Create an addition node.
@@ -149,7 +149,7 @@ namespace yask {
             New addition nodes can also be created via the overloaded `+` operator.
             @returns Pointer to new \ref yc_add_node object. 
         */
-        virtual yc_add_node_ptr
+        virtual yc_number_node_ptr
         new_add_node(yc_number_node_ptr lhs /**< [in] Expression before `+` sign. */,
                      yc_number_node_ptr rhs /**< [in] Expression after `+` sign. */ );
 
@@ -161,7 +161,7 @@ namespace yask {
             New multiplication nodes can also be created via the overloaded `*` operator.
            @returns Pointer to new \ref yc_multiply_node object. 
         */
-        virtual yc_multiply_node_ptr
+        virtual yc_number_node_ptr
         new_multiply_node(yc_number_node_ptr lhs /**< [in] Expression before `*` sign. */,
                           yc_number_node_ptr rhs /**< [in] Expression after `*` sign. */ );
 
@@ -173,7 +173,7 @@ namespace yask {
             New subtraction nodes can also be created via the overloaded `-` operator.
            @returns Pointer to new \ref yc_subtract_node object. 
         */
-        virtual yc_subtract_node_ptr
+        virtual yc_number_node_ptr
         new_subtract_node(yc_number_node_ptr lhs /**< [in] Expression before `-` sign. */,
                           yc_number_node_ptr rhs /**< [in] Expression after `-` sign. */ );
 
@@ -182,7 +182,7 @@ namespace yask {
             New division nodes can also be created via the overloaded `/` operator.
            @returns Pointer to new \ref yc_divide_node object. 
         */
-        virtual yc_divide_node_ptr
+        virtual yc_number_node_ptr
         new_divide_node(yc_number_node_ptr lhs /**< [in] Expression before `/` sign. */,
                         yc_number_node_ptr rhs /**< [in] Expression after `/` sign. */ );
 
@@ -218,6 +218,10 @@ namespace yask {
            `x >= new_first_domain_index(x) && x <= new_last_domain_index(x)`, but
            that is the default condition so does not need to be specified.
 
+           @note Be sure to use an expression like "x < first_x + 10" 
+           instead of merely "x < 10" to avoid the assumption that
+           the first index is always zero (0).
+
            @returns Pointer to new \ref yc_index_node object.
         */
         virtual yc_number_node_ptr
@@ -238,72 +242,84 @@ namespace yask {
         
         /// Create a binary inverse operator node.
         /**
+           New "not" nodes can also be created via the overloaded `!` operator
+           or the `yc_not` function in Python.
            @returns Pointer to new \ref yc_not_node object. 
         */
-        virtual yc_not_node_ptr
+        virtual yc_bool_node_ptr
         new_not_node(yc_bool_node_ptr rhs /**< [in] Expression after `!` sign. */ );
 
         /// Create a boolean 'and' node.
         /**
+           New "and" nodes can also be created via the overloaded `&&` operator
+           or the `yc_and` function in Python.
            @returns Pointer to new \ref yc_and_node object.
         */
-        virtual yc_and_node_ptr
+        virtual yc_bool_node_ptr
         new_and_node(yc_bool_node_ptr lhs /**< [in] Expression before `&&` sign. */,
                      yc_bool_node_ptr rhs /**< [in] Expression after `&&` sign. */ );
 
         /// Create a boolean 'or' node.
         /**
+           New "or" nodes can also be created via the overloaded `||` operator
+           or the `yc_or` function in Python.
            @returns Pointer to new \ref yc_or_node object.
         */
-        virtual yc_or_node_ptr
+        virtual yc_bool_node_ptr
         new_or_node(yc_bool_node_ptr lhs /**< [in] Expression before `||` sign. */,
                     yc_bool_node_ptr rhs /**< [in] Expression after `||` sign. */ );
 
         /// Create a numerical-comparison 'equals' node.
         /**
+           New "equals" nodes can also be created via the overloaded `==` operator.
            @returns Pointer to new \ref yc_equals_node object.
         */
-        virtual yc_equals_node_ptr
+        virtual yc_bool_node_ptr
         new_equals_node(yc_number_node_ptr lhs /**< [in] Expression before `==` sign. */,
                         yc_number_node_ptr rhs /**< [in] Expression after `==` sign. */ );
 
         /// Create a numerical-comparison 'not-equals' node.
         /**
+           New "not-equals" nodes can also be created via the overloaded `!=` operator.
            @returns Pointer to new \ref yc_not_equals_node object.
         */
-        virtual yc_not_equals_node_ptr
+        virtual yc_bool_node_ptr
         new_not_equals_node(yc_number_node_ptr lhs /**< [in] Expression before `!=` sign. */,
                             yc_number_node_ptr rhs /**< [in] Expression after `!=` sign. */ );
 
         /// Create a numerical-comparison 'less-than' node.
         /**
+           New "less-than" nodes can also be created via the overloaded `<` operator.
            @returns Pointer to new \ref yc_less_than_node object.
         */
-        virtual yc_less_than_node_ptr
+        virtual yc_bool_node_ptr
         new_less_than_node(yc_number_node_ptr lhs /**< [in] Expression before `<` sign. */,
                            yc_number_node_ptr rhs /**< [in] Expression after `<` sign. */ );
 
         /// Create a numerical-comparison 'greater-than' node.
         /**
+           New "greater-than" nodes can also be created via the overloaded `>` operator.
            @returns Pointer to new \ref yc_greater_than_node object.
         */
-        virtual yc_greater_than_node_ptr
+        virtual yc_bool_node_ptr
         new_greater_than_node(yc_number_node_ptr lhs /**< [in] Expression before `>` sign. */,
                               yc_number_node_ptr rhs /**< [in] Expression after `>` sign. */ );
 
         /// Create a numerical-comparison 'greater-than or equals' node.
         /**
+           New "greater-than or equals" nodes can also be created via the overloaded `>=` operator.
            @returns Pointer to new \ref yc_not_less_than_node object.
         */
-        virtual yc_not_less_than_node_ptr
+        virtual yc_bool_node_ptr
         new_not_less_than_node(yc_number_node_ptr lhs /**< [in] Expression before `>=` sign. */,
                                yc_number_node_ptr rhs /**< [in] Expression after `>=` sign. */ );
 
         /// Create a numerical-comparison 'less-than or equals' node.
         /**
+           New "less-than or equals" nodes can also be created via the overloaded `<=` operator.
            @returns Pointer to new \ref yc_not_greater_than_node object.
         */
-        virtual yc_not_greater_than_node_ptr
+        virtual yc_bool_node_ptr
         new_not_greater_than_node(yc_number_node_ptr lhs /**< [in] Expression before `<=` sign. */,
                                   yc_number_node_ptr rhs /**< [in] Expression after `<=` sign. */ );
 
@@ -356,6 +372,9 @@ namespace yask {
         virtual void set_cond(yc_bool_node_ptr cond
                               /**< [in] Boolean expression describing the sub-domain
                                  or `nullptr` to remove the condition. */ ) =0;
+        
+        /// Create a deep copy of AST starting with this node.
+        virtual yc_equation_node_ptr clone_ast() const =0;
     };
 
     /// Base class for all numerical AST nodes.
@@ -369,7 +388,12 @@ namespace yask {
 
     /// Base class for all boolean AST nodes.
     /** An object of this abstract type cannot be created. */
-    class yc_bool_node : public virtual yc_expr_node { };
+    class yc_bool_node : public virtual yc_expr_node {
+    public:
+        
+        /// Create a deep copy of AST starting with this node.
+        virtual yc_bool_node_ptr clone_ast() const =0;
+    };
 
     /// A dimension or an index in that dimension.
     /**
@@ -461,44 +485,35 @@ namespace yask {
     };
 
     /// An addition node.
-    /** Created via yc_node_factory::new_negate_node(). */
+    /** Created via yc_node_factory::new_add_node(). */
     class yc_add_node : public virtual yc_commutative_number_node { };
 
     /// A multiplication node.
     /** Created via yc_node_factory::new_multiply_node(). */
     class yc_multiply_node : public virtual yc_commutative_number_node { };
 
-    /// A subtraction node.
-    /** Created via yc_node_factory::new_subtract_node(). */
-    class yc_subtract_node : public virtual yc_number_node {
+    /// Base class for numerical binary operators.
+    /** A \ref yc_commutative_number_node is used instead for 
+        add and multiply. */
+    class yc_binary_number_node : public virtual yc_number_node {
     public:
 
         /// Get the left-hand-side operand.
-        /** @returns Pointer to expression node appearing before the `-` sign. */
         virtual yc_number_node_ptr
         get_lhs() =0;
     
         /// Get the right-hand-side operand.
-        /** @returns Pointer to expression node appearing after the `-` sign. */
         virtual yc_number_node_ptr
         get_rhs() =0;
     };
+    
+    /// A subtraction node.
+    /** Created via yc_node_factory::new_subtract_node(). */
+    class yc_subtract_node : public virtual yc_binary_number_node { };
 
     /// A division node.
     /** Created via yc_node_factory::new_divide_node(). */
-    class yc_divide_node : public virtual yc_number_node {
-    public:
-
-        /// Get the left-hand-side operand.
-        /** @returns Pointer to expression node appearing before the `/` sign. */
-        virtual yc_number_node_ptr
-        get_lhs() =0;
-    
-        /// Get the right-hand-side operand.
-        /** @returns Pointer to expression node appearing after the `/` sign. */
-        virtual yc_number_node_ptr
-        get_rhs() =0;
-    };
+    class yc_divide_node : public virtual yc_binary_number_node { };
 
     /// A boolean inversion operator.
     /** Example: used to implement `!(a || b)`.
@@ -513,188 +528,187 @@ namespace yask {
         get_rhs() =0;
     };
 
+    /// Base class for boolean binary operators that take boolean inputs.
+    class yc_binary_bool_node : public virtual yc_bool_node {
+    public:
+
+        /// Get the left-hand-side operand.
+        virtual yc_bool_node_ptr
+        get_lhs() =0;
+    
+        /// Get the right-hand-side operand.
+        virtual yc_bool_node_ptr
+        get_rhs() =0;
+    };
+    
     /// A boolean 'and' operator.
     /** Example: used to implement `a && b`.
         Created via yc_node_factory::new_and_node().
     */
-    class yc_and_node : public virtual yc_bool_node {
-    public:
-
-        /// Get the left-hand-side operand.
-        /** @returns Expression node on left-hand-side of `&&` sign. */
-        virtual yc_bool_node_ptr
-        get_lhs() =0;
-
-        /// Get the right-hand-size operand.
-        /** @returns Expression node on right-hand-side of `&&` sign. */
-        virtual yc_bool_node_ptr
-        get_rhs() =0;
-    };
+    class yc_and_node : public virtual yc_binary_bool_node { };
 
     /// A boolean 'or' operator.
     /** Example: used to implement `a || b`.
         Created via yc_node_factory::new_or_node().
     */
-    class yc_or_node : public virtual yc_bool_node {
+    class yc_or_node : public virtual yc_binary_bool_node { };
+
+    /// Base class for boolean binary operators that take numerical inputs.
+    class yc_binary_comparison_node : public virtual yc_bool_node {
     public:
 
         /// Get the left-hand-side operand.
-        /** @returns Expression node on left-hand-side of `||` sign. */
-        virtual yc_bool_node_ptr
+        /** @returns Pointer to expression node appearing before the `-` sign. */
+        virtual yc_number_node_ptr
         get_lhs() =0;
-
-        /// Get the right-hand-size operand.
-        /** @returns Expression node on right-hand-side of `||` sign. */
-        virtual yc_bool_node_ptr
+    
+        /// Get the right-hand-side operand.
+        /** @returns Pointer to expression node appearing after the `-` sign. */
+        virtual yc_number_node_ptr
         get_rhs() =0;
     };
-
+    
     /// A numerical-comparison 'equals' operator.
     /** Example: used to implement `a == b`.
         Created via yc_node_factory::new_equals_node().
     */
-    class yc_equals_node : public virtual yc_bool_node {
-    public:
-
-        /// Get the left-hand-side operand.
-        /** @returns Expression node on left-hand-side of `==` sign. */
-        virtual yc_number_node_ptr
-        get_lhs() =0;
-
-        /// Get the right-hand-size operand.
-        /** @returns Expression node on right-hand-side of `==` sign. */
-        virtual yc_number_node_ptr
-        get_rhs() =0;
-    };
+    class yc_equals_node : public virtual yc_binary_comparison_node { };
 
     /// A numerical-comparison 'not_equals' operator.
     /** Example: used to implement `a != b`.
         Created via yc_node_factory::new_not_equals_node().
     */
-    class yc_not_equals_node : public virtual yc_bool_node {
-    public:
-
-        /// Get the left-hand-side operand.
-        /** @returns Expression node on left-hand-side of `!=` sign. */
-        virtual yc_number_node_ptr
-        get_lhs() =0;
-
-        /// Get the right-hand-size operand.
-        /** @returns Expression node on right-hand-side of `!=` sign. */
-        virtual yc_number_node_ptr
-        get_rhs() =0;
-    };
+    class yc_not_equals_node : public virtual yc_binary_comparison_node { };
 
     /// A numerical-comparison 'less_than' operator.
     /** Example: used to implement `a < b`.
         Created via yc_node_factory::new_less_than_node().
     */
-    class yc_less_than_node : public virtual yc_bool_node {
-    public:
-
-        /// Get the left-hand-side operand.
-        /** @returns Expression node on left-hand-side of `<` sign. */
-        virtual yc_number_node_ptr
-        get_lhs() =0;
-
-        /// Get the right-hand-size operand.
-        /** @returns Expression node on right-hand-side of `<` sign. */
-        virtual yc_number_node_ptr
-        get_rhs() =0;
-    };
+    class yc_less_than_node : public virtual yc_binary_comparison_node { };
 
     /// A numerical-comparison 'greater_than' operator.
     /** Example: used to implement `a > b`.
         Created via yc_node_factory::new_greater_than_node().
     */
-    class yc_greater_than_node : public virtual yc_bool_node {
-    public:
-
-        /// Get the left-hand-side operand.
-        /** @returns Expression node on left-hand-side of `>` sign. */
-        virtual yc_number_node_ptr
-        get_lhs() =0;
-
-        /// Get the right-hand-size operand.
-        /** @returns Expression node on right-hand-side of `>` sign. */
-        virtual yc_number_node_ptr
-        get_rhs() =0;
-    };
-
+    class yc_greater_than_node : public virtual yc_binary_comparison_node { };
 
     /// A numerical-comparison 'not_less_than' operator.
     /** Example: used to implement `a >= b`.
         Created via yc_node_factory::new_not_less_than_node().
     */
-    class yc_not_less_than_node : public virtual yc_bool_node {
-    public:
-
-        /// Get the left-hand-side operand.
-        /** @returns Expression node on left-hand-side of `>=` sign. */
-        virtual yc_number_node_ptr
-        get_lhs() =0;
-
-        /// Get the right-hand-size operand.
-        /** @returns Expression node on right-hand-side of `>=` sign. */
-        virtual yc_number_node_ptr
-        get_rhs() =0;
-    };
+    class yc_not_less_than_node : public virtual yc_binary_comparison_node { };
 
     /// A numerical-comparison 'not_greater_than' operator.
     /** Example: used to implement `a <= b`.
         Created via yc_node_factory::new_not_greater_than_node().
     */
-    class yc_not_greater_than_node : public virtual yc_bool_node {
-    public:
-
-        /// Get the left-hand-side operand.
-        /** @returns Expression node on left-hand-side of `<=` sign. */
-        virtual yc_number_node_ptr
-        get_lhs() =0;
-
-        /// Get the right-hand-size operand.
-        /** @returns Expression node on right-hand-side of `<=` sign. */
-        virtual yc_number_node_ptr
-        get_rhs() =0;
-    };
+    class yc_not_greater_than_node : public virtual yc_binary_comparison_node { };
 
     // Non-class operators.
     // These are only defined if the older "internal DSL" is not used.
     // The internal version will eventually be deprecated and
     // perhaps removed in favor of this API.
+    // Also, these are not defined for SWIG because
+    // the Python operators are defined in the ".i" file.
     
-#ifndef USE_INTERNAL_DSL
+#if !defined USE_INTERNAL_DSL && !defined SWIG
 
     /// Operator version of yc_node_factory::new_negation_node().
-    yc_negate_node_ptr operator-(yc_number_node_ptr rhs);
+    yc_number_node_ptr operator-(yc_number_node_ptr rhs);
 
     //@{
     /// Operator version of yc_node_factory::new_addition_node().
-    yc_add_node_ptr operator+(yc_number_node_ptr lhs, yc_number_node_ptr rhs);
-    yc_add_node_ptr operator+(double lhs, yc_number_node_ptr rhs);
-    yc_add_node_ptr operator+(yc_number_node_ptr lhs, double rhs);
+    yc_number_node_ptr operator+(yc_number_node_ptr lhs, yc_number_node_ptr rhs);
+    yc_number_node_ptr operator+(double lhs, yc_number_node_ptr rhs);
+    yc_number_node_ptr operator+(yc_number_node_ptr lhs, double rhs);
     //@}
 
     //@{
     /// Operator version of yc_node_factory::new_division_node().
-    yc_divide_node_ptr operator/(yc_number_node_ptr lhs, yc_number_node_ptr rhs);
-    yc_divide_node_ptr operator/(double lhs, yc_number_node_ptr rhs);
-    yc_divide_node_ptr operator/(yc_number_node_ptr lhs, double rhs);
+    yc_number_node_ptr operator/(yc_number_node_ptr lhs, yc_number_node_ptr rhs);
+    yc_number_node_ptr operator/(double lhs, yc_number_node_ptr rhs);
+    yc_number_node_ptr operator/(yc_number_node_ptr lhs, double rhs);
     //@}
 
     //@{
     /// Operator version of yc_node_factory::new_multiplication_node().
-    yc_multiply_node_ptr operator*(yc_number_node_ptr lhs, yc_number_node_ptr rhs);
-    yc_multiply_node_ptr operator*(double lhs, yc_number_node_ptr rhs);
-    yc_multiply_node_ptr operator*(yc_number_node_ptr lhs, double rhs);
+    yc_number_node_ptr operator*(yc_number_node_ptr lhs, yc_number_node_ptr rhs);
+    yc_number_node_ptr operator*(double lhs, yc_number_node_ptr rhs);
+    yc_number_node_ptr operator*(yc_number_node_ptr lhs, double rhs);
     //@}
 
     //@{
     /// Operator version of yc_node_factory::new_subtraction_node().
-    yc_subtract_node_ptr operator-(yc_number_node_ptr lhs, yc_number_node_ptr rhs);
-    yc_subtract_node_ptr operator-(double lhs, yc_number_node_ptr rhs);
-    yc_subtract_node_ptr operator-(yc_number_node_ptr lhs, double rhs);
+    yc_number_node_ptr operator-(yc_number_node_ptr lhs, yc_number_node_ptr rhs);
+    yc_number_node_ptr operator-(double lhs, yc_number_node_ptr rhs);
+    yc_number_node_ptr operator-(yc_number_node_ptr lhs, double rhs);
     //@}
+
+    /// Operator version of yc_node_factory::new_not_node().
+    /** For Python, use `rhs.yc_not()` */
+    yc_bool_node_ptr operator!(yc_bool_node_ptr rhs);
+
+    /// Operator version of yc_node_factory::new_or_node().
+    /** For Python, use `lhs.yc_or(rhs)` */
+    yc_bool_node_ptr operator||(yc_bool_node_ptr lhs, yc_bool_node_ptr rhs);
+
+    /// Operator version of yc_node_factory::new_and_node().
+    /** For Python, use `lhs.yc_and(rhs)` */
+    yc_bool_node_ptr operator&&(yc_bool_node_ptr lhs, yc_bool_node_ptr rhs);
+
+    // Note that the following operators provide explicit
+    // 'yc_index_node_ptr' versions to avoid the compiler using built-in
+    // pointer comparisons, which would result in bools rather than YASK
+    // nodes in expressions like 'x >= fac.new_first_domain_index(x) + 5'.
+    
+    //@{
+    /// Operator version of yc_node_factory::new_equals_node().
+    yc_bool_node_ptr operator==(yc_number_node_ptr lhs, yc_number_node_ptr rhs);
+    yc_bool_node_ptr operator==(yc_index_node_ptr lhs, yc_number_node_ptr rhs);
+    yc_bool_node_ptr operator==(yc_number_node_ptr lhs, yc_index_node_ptr rhs);
+    yc_bool_node_ptr operator==(yc_index_node_ptr lhs, yc_index_node_ptr rhs);
+    //@}
+
+    //@{
+    /// Operator version of yc_node_factory::new_greater_than_node().
+    yc_bool_node_ptr operator>(yc_number_node_ptr lhs, yc_number_node_ptr rhs);
+    yc_bool_node_ptr operator>(yc_index_node_ptr lhs, yc_number_node_ptr rhs);
+    yc_bool_node_ptr operator>(yc_number_node_ptr lhs, yc_index_node_ptr rhs);
+    yc_bool_node_ptr operator>(yc_index_node_ptr lhs, yc_index_node_ptr rhs);
+    //@}
+
+    //@{
+    /// Operator version of yc_node_factory::new_less_than_node().
+    yc_bool_node_ptr operator<(yc_number_node_ptr lhs, yc_number_node_ptr rhs);
+    yc_bool_node_ptr operator<(yc_index_node_ptr lhs, yc_number_node_ptr rhs);
+    yc_bool_node_ptr operator<(yc_number_node_ptr lhs, yc_index_node_ptr rhs);
+    yc_bool_node_ptr operator<(yc_index_node_ptr lhs, yc_index_node_ptr rhs);
+    //@}
+
+    //@{
+    /// Operator version of yc_node_factory::new_not_equals_node().
+    yc_bool_node_ptr operator!=(yc_number_node_ptr lhs, yc_number_node_ptr rhs);
+    yc_bool_node_ptr operator!=(yc_index_node_ptr lhs, yc_number_node_ptr rhs);
+    yc_bool_node_ptr operator!=(yc_number_node_ptr lhs, yc_index_node_ptr rhs);
+    yc_bool_node_ptr operator!=(yc_index_node_ptr lhs, yc_index_node_ptr rhs);
+    //@}
+
+    //@{
+    /// Operator version of yc_node_factory::new_not_greater_than_node().
+    yc_bool_node_ptr operator<=(yc_number_node_ptr lhs, yc_number_node_ptr rhs);
+    yc_bool_node_ptr operator<=(yc_index_node_ptr lhs, yc_number_node_ptr rhs);
+    yc_bool_node_ptr operator<=(yc_number_node_ptr lhs, yc_index_node_ptr rhs);
+    yc_bool_node_ptr operator<=(yc_index_node_ptr lhs, yc_index_node_ptr rhs);
+    //@}
+
+    //@{
+    /// Operator version of yc_node_factory::new_not_less_than_node().
+    yc_bool_node_ptr operator>=(const yc_number_node_ptr lhs, const yc_number_node_ptr rhs);
+    yc_bool_node_ptr operator>=(yc_index_node_ptr lhs, yc_number_node_ptr rhs);
+    yc_bool_node_ptr operator>=(yc_number_node_ptr lhs, yc_index_node_ptr rhs);
+    yc_bool_node_ptr operator>=(yc_index_node_ptr lhs, yc_index_node_ptr rhs);
+    //@}
+
 #endif
     
     /** @}*/

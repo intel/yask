@@ -136,7 +136,8 @@ namespace yask {
 
     // The base class for all expression nodes.
     // NB: there is no clone() method defined here; they
-    // are defined on immediate derived types.
+    // are defined on immediate derived types:
+    // NumExpr, BoolExpr, and EqualsExpr.
     class Expr : public virtual yc_expr_node {
 
     public:
@@ -355,6 +356,9 @@ namespace yask {
         // For this to work properly, each derived type
         // should also implement a copy ctor.
         virtual BoolExprPtr clone() const =0;
+        virtual yc_bool_node_ptr clone_ast() const {
+            return clone();
+        }
     };
 
     // A simple constant value.
@@ -423,8 +427,10 @@ namespace yask {
     };
 
     // Base class for any generic unary operator.
+    // Also extended for binary operators by adding a LHS.
     // Still pure virtual because clone() not implemented.
-    template <typename BaseT, typename ArgT>
+    template <typename BaseT,
+              typename ArgT, typename ArgApiT>
     class UnaryExpr : public BaseT {
     protected:
         ArgT _rhs;
@@ -453,9 +459,9 @@ namespace yask {
     };
 
     // Various types of unary operators depending on input and output types.
-    typedef UnaryExpr<NumExpr, NumExprPtr> UnaryNumExpr;
-    typedef UnaryExpr<BoolExpr, BoolExprPtr> UnaryBoolExpr;
-    typedef UnaryExpr<BoolExpr, NumExprPtr> UnaryNum2BoolExpr;
+    typedef UnaryExpr<NumExpr, NumExprPtr, yc_number_node_ptr> UnaryNumExpr;
+    typedef UnaryExpr<BoolExpr, NumExprPtr, yc_number_node_ptr> UnaryNum2BoolExpr;
+    typedef UnaryExpr<BoolExpr, BoolExprPtr, yc_bool_node_ptr> UnaryBoolExpr;
 
     // Negate operator.
     class NegExpr : public UnaryNumExpr,
@@ -508,8 +514,10 @@ namespace yask {
 
     // Base class for any generic binary operator.
     // Still pure virtual because clone() not implemented.
-    template <typename BaseT, typename ArgT>
-    class BinaryExpr : public BaseT {
+    template <typename BaseT, typename BaseApiT,
+              typename ArgT, typename ArgApiT>
+    class BinaryExpr : public BaseT,
+                       public virtual BaseApiT {
     protected:
         ArgT _lhs;              // RHS in BaseT which must be a UnaryExpr.
 
@@ -532,12 +540,23 @@ namespace yask {
                 _lhs->isSame(p->_lhs.get()) &&
                 BaseT::_rhs->isSame(p->_rhs.get());
         }
+
+        // APIs.
+        virtual ArgApiT get_lhs() {
+            return getLhs();
+        }
+        virtual ArgApiT get_rhs() {
+            return BaseT::getRhs();
+        }
     };
 
     // Various types of binary operators depending on input and output types.
-    typedef BinaryExpr<UnaryNumExpr, NumExprPtr> BinaryNumExpr; // fn(num, num) -> num.
-    typedef BinaryExpr<UnaryNum2BoolExpr, NumExprPtr> BinaryNum2BoolExpr; // fn(num, num) -> bool.
-    typedef BinaryExpr<UnaryBoolExpr, BoolExprPtr> BinaryBoolExpr; // fn(bool, bool) -> bool.
+    typedef BinaryExpr<UnaryNumExpr, yc_binary_number_node,
+                       NumExprPtr, yc_number_node_ptr> BinaryNumExpr; // fn(num, num) -> num.
+    typedef BinaryExpr<UnaryBoolExpr, yc_binary_bool_node,
+                       BoolExprPtr, yc_bool_node_ptr> BinaryBoolExpr; // fn(bool, bool) -> bool.
+    typedef BinaryExpr<UnaryNum2BoolExpr, yc_binary_comparison_node,
+                       NumExprPtr, yc_number_node_ptr> BinaryNum2BoolExpr; // fn(num, num) -> bool.
 
     // Numerical binary operators.
     // TODO: redo this with a template.
@@ -562,12 +581,6 @@ namespace yask {
         }                                               \
         virtual NumExprPtr clone() const {              \
             return make_shared<type>(*this);            \
-        }                                               \
-        virtual yc_number_node_ptr get_lhs() {          \
-            return getLhs();                            \
-        }                                               \
-        virtual yc_number_node_ptr get_rhs() {          \
-            return getRhs();                            \
         }                                               \
     }
     BIN_NUM_EXPR(SubExpr, yc_subtract_node, "-", lhs - rhs);
@@ -959,6 +972,9 @@ namespace yask {
 
         // Create a deep copy of this expression.
         virtual EqualsExprPtr clone() const { return make_shared<EqualsExpr>(*this); }
+        virtual yc_equation_node_ptr clone_ast() const {
+            return clone();
+        }
 
         // APIs.
         virtual yc_grid_point_node_ptr get_lhs() { return _lhs; }
