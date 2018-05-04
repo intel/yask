@@ -192,8 +192,7 @@ namespace yask {
         }
 
         else {
-            cerr << "Error: on point " << gp.makeStr() << endl;
-            assert(false && "point type unknown");
+            THROW_YASK_EXCEPTION("Internal error: type unknown for point " << gp.makeStr());
         }
 
         // Remember this point and return it.

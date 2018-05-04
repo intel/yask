@@ -45,8 +45,8 @@ namespace yask {
         typedef vector_set<EqualsExprPtr> EqVecSet;
 
     protected:
-        DepMap _imm_deps;       // immediate (direct) dependencies only.
-        DepMap _full_deps;      // immediate and indirect dependencies.
+        DepMap _imm_deps;       // immediate deps, i.e., transitive reduction.
+        DepMap _full_deps;      // transitive closure of _imm_deps.
         EqSet _all;             // all expressions.
         bool _done;             // indirect dependencies added?
     
@@ -388,7 +388,7 @@ namespace yask {
         }
 
         // Reorder bundles based on dependencies.
-        virtual void sort();
+        virtual void sort(ostream& os);
     
         // Print a list of eqBundles.
         virtual void printInfo(ostream& os) const {

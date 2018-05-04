@@ -883,12 +883,12 @@ namespace yask {
     }
 
     // Reorder bundles based on dependencies.
-    void EqBundles::sort()
+    void EqBundles::sort(ostream& os)
     {
         if (size() < 2)
             return;
 
-        cout << " Sorting " << size() << " eq-bundle(s)...\n";
+        os << " Topologically ordering " << size() << " eq-bundle(s)...\n";
 
         // Want to keep original order as much as possible.
         // Only reorder if dependencies are in conflict.
@@ -1140,7 +1140,7 @@ namespace yask {
         }
 
         // Resort them based on dependencies.
-        sort();
+        sort(os);
     }
 
     // Print stats from eqBundles.
