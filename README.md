@@ -16,14 +16,12 @@ Supported Platforms and Processors:
 * Intel(R) Xeon Phi(TM) coprocessor supporting the Knights-Corner instruction set (no longer tested).
 
 Pre-requisites:
-* Intel(R) C++ compiler (17.0.2 or later recommended),
-  https://software.intel.com/en-us/intel-parallel-studio-xe.
+* Intel(R) Parallel Studio XE Cluster Edition for Linux
+  for multi-socket and multi-node operation or
+  Intel(R) Parallel Studio XE Composer Edition for C++ Linux
+  for single-socket only
+  (2016 or later, 2018 update 2 recommended).
 * Gnu C++ compiler, g++ (4.9.0 or later; 6.1.0 or later recommended).
-* Intel(R) Software Development Emulator,
-  https://software.intel.com/en-us/articles/intel-software-development-emulator
-  (optional: for functional testing if you don't have native ISA support).
-* Intel(R) MPI Library, https://software.intel.com/en-us/intel-mpi-library,
-  or equivalent (optional: for multi-core and multi-node operation).
 * Linux libraries 'librt' and 'libnuma'.
 * Perl (5.010 or later).
 * Awk.
@@ -38,6 +36,9 @@ Pre-requisites:
   http://doxygen.org (optional: for creating API documentation).
 * Graphviz (2.30.1 or later),
   http://www.graphviz.org (optional: for rendering stencil diagrams).
+* Intel(R) Software Development Emulator,
+  https://software.intel.com/en-us/articles/intel-software-development-emulator
+  (optional: for functional testing if you don't have native ISA support).
 * Install all these pre-requisites and ensure that all
   tool and library paths are included in the proper environment variables.
 * The YASK source code via 'git clone https://github.com/intel/yask'.

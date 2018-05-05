@@ -685,7 +685,7 @@ namespace yask {
             // Template vec lengths.
             const int nvls = sizeof...(_templ_vec_lens);
             const idx_t vls[nvls] { _templ_vec_lens... };
-            assert(nvls == dimNames.size());
+            assert((size_t)nvls == dimNames.size());
             
             // Init vec sizes.
             // For each dim in the grid, use the number of vector
