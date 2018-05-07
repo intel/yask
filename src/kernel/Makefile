@@ -120,7 +120,7 @@ else ifneq ($(findstring ssg,$(stencil)),)
  ifneq ($(filter $(arch),skx skl),)
   def_rank_args		=	-d 640 -dx 320
   fold_4byte		=	x=4,y=4
-  def_block_args	=	-bx 96 -by=16 -bz=80
+  def_block_args	=	-bx 96 -by 16 -bz 80
   def_block_threads	=	2
  endif
 
