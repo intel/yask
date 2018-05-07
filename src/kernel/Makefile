@@ -55,10 +55,6 @@ else ifeq ($(stencil),cube)
  MACROS		+=	MAX_EXCH_DIST=3
  radius		=	2
 
-else ifeq ($(stencil),tti)
- MACROS		+=	MAX_EXCH_DIST=3
- radius		=	2
-
 else ifneq ($(findstring iso3dfd,$(stencil)),)
  MACROS				+=	MAX_EXCH_DIST=1
  radius				=	8
@@ -83,7 +79,7 @@ else ifneq ($(findstring iso3dfd,$(stencil)),)
   fold_4byte			=	x=4,y=4
   def_thread_divisor		=	1
   def_block_threads		=	2
-  def_block_args		=	-bx 104  -by 28 -bz 132
+  def_block_args		=	-bx 108  -by 28 -bz 132
   cluster			=	x=1
   pfd_l1			=	0
   pfd_l2			=	2
@@ -119,10 +115,18 @@ else ifneq ($(findstring awp,$(stencil)),)
  endif
 
 else ifneq ($(findstring ssg,$(stencil)),)
- time_alloc	=	1
+ time_alloc		=	1
+ def_rank_args		=	-d 512
+ ifneq ($(filter $(arch),skx skl),)
+  def_rank_args		=	-d 640 -dx 320
+  fold_4byte		=	x=4,y=4
+  def_block_args	=	-bx 96 -by=16 -bz=80
+  def_block_threads	=	2
+ endif
 
 else ifneq ($(findstring fsg,$(stencil)),)
- time_alloc	=	1
+ time_alloc		=	1
+ def_rank_args		=	-d 256
  ifeq ($(arch),knl)
   omp_region_schedule  	=	guided
   def_block_args  	=	-b 16
@@ -130,6 +134,22 @@ else ifneq ($(findstring fsg,$(stencil)),)
   def_block_threads	=	2
   pfd_l1		=	0
   pfd_l2		=	2
+ else ifneq ($(filter $(arch),skx skl),)
+  def_rank_args		=	-d 384 -dx 192
+  fold_4byte		=	x=4,y=4
+  def_block_args	=	-bx 188 -by 12 -bz=24
+  def_block_threads	=	1
+ endif
+
+else ifeq ($(stencil),tti)
+ MACROS			+=	MAX_EXCH_DIST=3
+ radius			=	2
+ def_rank_args		=	-d 512
+ ifneq ($(filter $(arch),skx skl),)
+  def_rank_args		=	-d 640 -dx 320
+  fold_4byte		=	x=4,y=4
+  def_block_args	=	-bx 80 -by 16 -bz 40
+  def_block_threads	=	1
  endif
 
 else ifeq ($(stencil),stream)
@@ -720,8 +740,8 @@ kernel-only:
 	$(MAKE) $(NO_YC_MAKE_FLAGS)
 
 # Validation runs for each binary.
-val1	=	-b 16 -dt 2 -d 64
-val2	=	-b 24 -r 32 -rt 2 -dt 2 -d 63
+val1	=	-dt 2 -b 16 -d 48
+val2	=	-dt 2 -b 24 -r 32 -rt 2 -dx 63 -dy 49 -dz 47
 ranks	= 	2
 
 # Run the kernel tests.
@@ -754,15 +774,17 @@ api-tests:
 # run the tests from the top-level Makefile.
 stencil-tests:
 	$(MAKE) clean; $(MAKE) yc-and-yk-test real_bytes=8 stencil=test_1d
-	$(MAKE) clean; $(MAKE) yc-and-yk-test real_bytes=8 stencil=test_2d
+	$(MAKE) clean; $(MAKE) yc-and-yk-test real_bytes=8 stencil=test_2d fold=x=2,y=2
+	$(MAKE) clean; $(MAKE) yc-and-yk-test real_bytes=8 stencil=test_3d fold=x=2,z=2
+	$(MAKE) clean; $(MAKE) yc-and-yk-test real_bytes=8 stencil=test_4d fold=w=2,x=2
+	$(MAKE) clean; $(MAKE) yc-and-yk-test real_bytes=8 stencil=test_scratch1 fold=x=4
+	$(MAKE) clean; $(MAKE) yc-and-yk-test real_bytes=8 stencil=test_scratch2 fold=x=2,z=2
 	$(MAKE) clean; $(MAKE) yc-and-yk-test real_bytes=8 stencil=9axis fold=x=2,z=2
 	$(MAKE) clean; $(MAKE) yc-and-yk-test real_bytes=8 stencil=3axis fold=x=2,y=2 cluster=x=2
 	$(MAKE) clean; $(MAKE) yc-and-yk-test real_bytes=8 stencil=3axis fold=x=2,y=2 cluster=z=2,y=2
 	$(MAKE) clean; $(MAKE) yc-and-yk-test real_bytes=8 stencil=3plane fold=y=2,z=2
 	$(MAKE) clean; $(MAKE) yc-and-yk-test real_bytes=8 stencil=cube fold=x=2,y=2
-	$(MAKE) clean; $(MAKE) yc-and-yk-test real_bytes=8 stencil=test_4d fold=w=2,x=2
-	$(MAKE) clean; $(MAKE) yc-and-yk-test real_bytes=8 stencil=test_scratch1 fold=x=4
-	$(MAKE) clean; $(MAKE) yc-and-yk-test real_bytes=8 stencil=test_scratch2 fold=x=2,z=2
+	$(MAKE) clean; $(MAKE) yc-and-yk-test real_bytes=8 stencil=tti fold=x=2,y=2
 	$(MAKE) clean; $(MAKE) yc-and-yk-test real_bytes=8 stencil=iso3dfd fold=x=2,y=2
 	$(MAKE) clean; $(MAKE) yc-and-yk-test real_bytes=8 stencil=awp_elastic fold=x=2,y=2
 	$(MAKE) clean; $(MAKE) yc-and-yk-test real_bytes=8 stencil=ssg fold=x=2,y=2
@@ -805,13 +827,6 @@ echo-settings:
 	@echo host=`hostname`
 	@echo stencil=$(stencil)
 	@echo arch=$(arch)
-	@echo def_thread_divisor=$(def_thread_divisor)
-	@echo def_block_threads=$(def_block_threads)
-	@echo def_rank_args=$(def_rank_args)
-	@echo def_block_args=$(def_block_args)
-	@echo def_pad_args=$(def_pad_args)
-	@echo more_def_args=$(more_def_args)
-	@echo EXTRA_DEF_ARGS=$(EXTRA_DEF_ARGS)
 	@echo fold=$(fold)
 	@echo cluster=$(cluster)
 	@echo radius=$(radius)
@@ -822,6 +837,13 @@ echo-settings:
 	@echo omp_region_schedule=$(omp_region_schedule)
 	@echo omp_block_schedule=$(omp_block_schedule)
 	@echo omp_misc_schedule=$(omp_misc_schedule)
+	@echo def_thread_divisor=$(def_thread_divisor)
+	@echo def_block_threads=$(def_block_threads)
+	@echo def_rank_args=$(def_rank_args)
+	@echo def_block_args=$(def_block_args)
+	@echo def_pad_args=$(def_pad_args)
+	@echo more_def_args=$(more_def_args)
+	@echo EXTRA_DEF_ARGS=$(EXTRA_DEF_ARGS)
 	@echo YC_TARGET="\"$(YC_TARGET)\""
 	@echo YC_FLAGS="\"$(YC_FLAGS)\""
 	@echo EXTRA_YC_FLAGS="\"$(EXTRA_YC_FLAGS)\""
@@ -866,12 +888,13 @@ echo-settings:
 	@echo MISC_LOOP_INNER_MODS="\"$(MISC_LOOP_INNER_MODS)\""
 	@echo MISC_LOOP_CODE="\"$(MISC_LOOP_CODE)\""
 
-# To get code stats, compiler with EXTRA_YK_CXXFLAGS=-Fa
+# Print stats on inner SIMD loops from asm file.
 code-stats:
 	@echo
 	@echo "Code stats for stencil computation:"
 	$(PERL) $(GET_LOOP_STATS) -t=$(YK_CODE_FILE) factory.s
 
+# Print some usage info.
 help:
 	@echo "Example performance builds of kernel cmd-line tool:"
 	@echo " $(MAKE) clean; $(MAKE) -j arch=knl stencil=iso3dfd"
