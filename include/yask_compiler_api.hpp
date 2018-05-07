@@ -358,8 +358,8 @@ namespace yask {
 
         /// **[Advanced]** Add a dependency between two equations.
         /**
-           This function adds an arc in the data dependency graph `from` one
-           equation `to` another one,
+           This function adds an arc in the data-dependency graph `from` one
+           equation (node) `to` another one,
            indicating that the `from` equation depends on the `to` equation.
            In other words, the `to` expression must be evaluated _before_
            the `from` equation.
@@ -367,12 +367,27 @@ namespace yask {
            known as a _true_ or _read-after-write_ (RAW) dependency.
            (Strictly speaking, however, equations in the YASK compiler
            are declarative instead of imperative, so they describe
-           equalities rather than assignments with reads and writes.)
+           equalities rather than assignments with reads and writes.
+           On the other hand, a C++ function created to implement
+           one or more equations will perform analogous reads and writes.)
 
            Additional considerations:
+
+           - It is not necessary to connect all the equations into a single
+           graph.  For example, if **A** depends on **B** and **C** depends
+           on **D**, there will be two disconnected subgraphs.  In this
+           example, the YASK kernel is free to 1) schedule the functions created for
+           **B** and **D** to run together in parallel followed by those for
+           **A** and **C** together in parallel, 2) run a single 
+           function that implements both **B** and **D** simultaneously
+           followed by a single
+           function that implements both **A** and **C** simultaneously, 
+           or 3) a combination of the implementations.
+
            - Only _immediate_ dependencies should be added.
+           In other words, each subgraph created should be a transitive reduction.
            For example, if **A** depends on **B** and **B** depends on **C**,
-           it is not necessary to add a derived dependence from **A** to **C**.
+           it is not necessary to add the transitive dependence from **A** to **C**.
 
            - Only dependencies at a given step-index value should
            be added.
@@ -380,10 +395,14 @@ namespace yask {
            equation **A**: `A(t+1, x) EQUALS B(t+1, x) + 5` and
            equation **B**: `B(t+1, x) EQUALS A(t, x) / 2`,
            **A** depends on **B** at some value of the step-index `t`.
-           It is true that `B(t+2)` depends on `A(t+1)`, but that
-           inter-step dependency should not be added with this function.
+           That dependency should be added if the automatic checker is disabled.
+           (It is true that the next value of `B(t+2)` depends on `A(t+1)`, 
+           but such inter-step -- analgous to loop-carried --
+           dependencies should _not_ be added with this function.)
 
-           - If a cycle of dependencies is created, the YASK compiler
+           - The dependencies should create one or more directed
+           acyclic graphs (DAGs).
+           If a cycle is created, the YASK compiler
            will throw an exception containing an error message
            about a circular dependency. This exception may not be
            thrown until format() is called.

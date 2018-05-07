@@ -451,6 +451,8 @@ namespace yask {
 
                             // Neighbor is to the left in this dim.
                             if (neigh_offsets[dname] == MPIInfo::rank_prev) {
+
+                                // Number of points to be added for WFs.
                                 auto ext = wf_shifts[dname];
 
                                 // My halo on my left.
@@ -466,6 +468,8 @@ namespace yask {
 
                             // Neighbor is to the right in this dim.
                             else if (neigh_offsets[dname] == MPIInfo::rank_next) {
+
+                                // Number of points to be added for WFs.
                                 auto ext = wf_shifts[dname];
 
                                 // My halo on my right.
@@ -911,10 +915,22 @@ namespace yask {
         auto& step_dim = _dims->_step_dim;
         auto wf_steps = _opts->_region_sizes[step_dim];
         num_wf_shifts = 0;
-        if (wf_steps > 1)
+        if (wf_steps > 1) {
 
-            // TODO: don't shift for scratch grids.
-            num_wf_shifts = max((idx_t(stBundles.size()) * wf_steps) - 1, idx_t(0));
+            // Need to shift for each non-scratch bundle.
+            for (auto* asg : stBundles) {
+
+                // Don't do scratch updates here.
+                if (asg->is_scratch())
+                    continue;
+
+                // Each bundle is shifted 'wf_steps' times.
+                num_wf_shifts += wf_steps;
+            }
+
+            // Don't need to shift first one.
+            num_wf_shifts--;
+        }
         for (auto& dim : _dims->_domain_dims.getDims()) {
             auto& dname = dim.getName();
             auto rksize = _opts->_rank_sizes[dname];
@@ -924,11 +940,11 @@ namespace yask {
             // wave-fronts based on the max halos.  We only need non-zero
             // angles if the region size is less than the rank size and
             // there are no other ranks in this dim, i.e., if the region
-            // covers the global domain in a given dim, no wave-front is
+            // covers the *global* domain in a given dim, no wave-front is
             // needed in that dim.  TODO: make rounding-up an option.
             idx_t angle = 0;
             if (_opts->_region_sizes[dname] < rksize || nranks > 0)
-                angle = ROUND_UP(max_halos[dname], _dims->_cluster_pts[dname]);
+                angle = ROUND_UP(max_halos[dname], _dims->_fold_pts[dname]);
             wf_angles[dname] = angle;
 
             // Determine the total WF shift to be added in each dim.

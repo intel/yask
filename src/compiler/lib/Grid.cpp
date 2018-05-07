@@ -140,10 +140,8 @@ namespace yask {
         // Name already used?
         auto& grids = soln->getGrids();
         for (auto gp : grids) {
-            if (gp->getName() == _name) {
-                cerr << "Error: grid name '" << _name << "' already used.\n";
-                exit(1);
-            }
+            if (gp->getName() == _name)
+                THROW_YASK_EXCEPTION("Error: grid name '" << _name << "' already used");
         }
         
         // Register in soln.
