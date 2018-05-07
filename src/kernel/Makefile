@@ -137,7 +137,7 @@ else ifneq ($(findstring fsg,$(stencil)),)
  else ifneq ($(filter $(arch),skx skl),)
   def_rank_args		=	-d 384 -dx 192
   fold_4byte		=	x=4,y=4
-  def_block_args	=	-bx 188 -by 12 -bz=24
+  def_block_args	=	-bx 188 -by 12 -bz 24
   def_block_threads	=	1
  endif
 
