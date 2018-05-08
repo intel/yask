@@ -154,12 +154,12 @@ namespace yask {
         // If WFs are not used, this is the same as rank_bb;
         BoundingBox ext_bb;
         
-        // List of all stencil bundles in the order in which
+        // List of all non-scratch stencil bundles in the order in which
         // they should be evaluated within a step.
         // TODO: use dependency info, allowing more parallelism.
         StencilBundleList stBundles;
 
-        // All grids.
+        // All non-scratch grids.
         GridPtrs gridPtrs;
         GridPtrMap gridMap;
 
@@ -167,7 +167,8 @@ namespace yask {
         GridPtrs outputGridPtrs;
         GridPtrMap outputGridMap;
 
-        // Scratch grids.
+        // Scratch-grid vectors.
+        // Each vector contains a grid for each thread.
         ScratchVecs scratchVecs;
 
         // Some calculated domain sizes.

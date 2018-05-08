@@ -231,10 +231,6 @@ namespace yask {
             // Loop thru bundles.
             for (auto* asg : stBundles) {
 
-                // Don't do scratch updates here.
-                if (asg->is_scratch())
-                    continue;
-
                 // Scan through n-D space.
                 TRACE_MSG("calc_rank_ref: step " << start_t <<
                           " in non-scratch group '" << asg->get_name());
@@ -245,8 +241,7 @@ namespace yask {
                 // Find the groups that need to be processed.
                 // This will be the prerequisite scratch-grid
                 // groups plus this non-scratch group.
-                auto sg_list = asg->get_scratch_deps();
-                sg_list.push_back(asg);
+                auto sg_list = asg->get_reqd_bundles();
 
                 // Loop through all the needed bundles.
                 for (auto* sg : sg_list) {
@@ -421,10 +416,6 @@ namespace yask {
 
                 for (auto* sg : stBundles) {
 
-                    // Don't do scratch updates here.
-                    if (sg->is_scratch())
-                        continue;
-
                     // Exchange halo(s) needed for this bundle.
                     exchange_halos(start_t, stop_t, sg);
 
@@ -551,10 +542,6 @@ namespace yask {
             
             // Stencil bundles to evaluate at this time step.
             for (auto* sg : stBundles) {
-
-                // Don't do scratch updates here.
-                if (sg->is_scratch())
-                    continue;
 
                 // Bundle selected?
                 if (stBundle_set && !stBundle_set->count(sg))
@@ -1060,21 +1047,21 @@ namespace yask {
             domain_pts_ps = writes_ps = flops = 0.;
         if (steps_done > 0) {
             os <<
-                "num-points-per-step:                    " << makeNumStr(tot_domain_1t) << endl <<
-                "num-writes-per-step:                    " << makeNumStr(tot_numWrites_1t) << endl <<
-                "num-est-FP-ops-per-step:                " << makeNumStr(tot_numFpOps_1t) << endl <<
-                "num-steps-done:                         " << makeNumStr(steps_done) << endl <<
-                "elapsed-time (sec):                     " << makeNumStr(rtime) << endl;
+                "num-points-per-step:               " << makeNumStr(tot_domain_1t) << endl <<
+                "num-writes-per-step:               " << makeNumStr(tot_numWrites_1t) << endl <<
+                "num-est-FP-ops-per-step:           " << makeNumStr(tot_numFpOps_1t) << endl <<
+                "num-steps-done:                    " << makeNumStr(steps_done) << endl <<
+                "elapsed-time (sec):                " << makeNumStr(rtime) << endl;
 #ifdef USE_MPI
             os <<
-                "time in halo exch (sec):                " << makeNumStr(mtime);
+                "time in halo exch (sec):           " << makeNumStr(mtime);
             float pct = 100. * mtime / rtime;
             os << " (" << pct << "%)" << endl;
 #endif
             os <<
-                "throughput (num-writes/sec):            " << makeNumStr(writes_ps) << endl <<
-                "throughput (est-FLOPS):                 " << makeNumStr(flops) << endl <<
-                "throughput (num-points/sec):            " << makeNumStr(domain_pts_ps) << endl;
+                "throughput (num-writes/sec):       " << makeNumStr(writes_ps) << endl <<
+                "throughput (est-FLOPS):            " << makeNumStr(flops) << endl <<
+                "throughput (num-points/sec):       " << makeNumStr(domain_pts_ps) << endl;
         }
 
         // Fill in return object.
@@ -1164,10 +1151,6 @@ namespace yask {
             // Loop thru all stencil bundles.
             for (auto* sg : stBundles) {
 
-                // Don't exchange for scratch groups.
-                if (sg->is_scratch())
-                    continue;
-
                 // Bundle selected?
                 if (sgp && sgp != sg)
                     continue;
@@ -1178,8 +1161,7 @@ namespace yask {
                 // We need to loop thru the scratch-grid
                 // bundles so we can consider the inputs
                 // to them for exchanges.
-                auto sg_list = sg->get_scratch_deps();
-                sg_list.push_back(sg);
+                auto sg_list = sg->get_reqd_bundles();
 
                 // Loop through all the needed bundles.
                 for (auto* csg : sg_list) {

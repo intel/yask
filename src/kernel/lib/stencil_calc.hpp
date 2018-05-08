@@ -47,7 +47,7 @@ namespace yask {
 
         // List of scratch-grid bundles that need to be evaluated
         // before this bundle. Listed in eval order first-to-last.
-        StencilBundleList _scratch_deps;
+        StencilBundleList _scratch_children;
 
         // Whether this updates scratch grid(s);
         bool _is_scratch = false;
@@ -126,15 +126,22 @@ namespace yask {
         }
 
         // Add needed scratch-bundle.
-        virtual void add_scratch_dep(StencilBundleBase* eg) {
-            _scratch_deps.push_back(eg);
+        virtual void add_scratch_child(StencilBundleBase* eg) {
+            _scratch_children.push_back(eg);
         }
 
         // Get needed scratch-bundle(s).
-        virtual const StencilBundleList& get_scratch_deps() const {
-            return _scratch_deps;
+        virtual const StencilBundleList& get_scratch_children() const {
+            return _scratch_children;
         }
 
+        // Get scratch children plus self.
+        virtual StencilBundleList get_reqd_bundles() {
+            auto sg_list = get_scratch_children();
+            sg_list.push_back(this);
+            return sg_list;
+        }
+        
         // If this bundle is updating scratch grid(s),
         // expand indices to calculate values in halo.
         // Adjust offsets in grids based on original idxs.

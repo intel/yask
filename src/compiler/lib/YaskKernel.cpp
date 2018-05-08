@@ -679,9 +679,32 @@ namespace yask {
         for (auto& eg : _eqBundles) {
             string egName = eg.getName();
             string sgName = "stencilBundle_" + egName;
-            os << "  stBundles.push_back(&" << sgName << ");\n";
 
-            // Add other-bundle deps.
+            // Only want non-scratch bundles in stBundles.
+            // Each scratch bundles will be added to its
+            // parent bundle.
+            if (!eg.isScratch())
+                os << "  stBundles.push_back(&" << sgName << ");\n";
+
+            // Add scratch-bundle deps in proper order.
+            auto& sdeps = eg.getScratchDeps();
+            for (auto& eg2 : _eqBundles) {
+                string eg2Name = eg2.getName();
+                string sg2Name = "stencilBundle_" + eg2Name;
+                if (sdeps.count(eg2Name))
+                    os << "  " << sgName <<
+                        ".add_scratch_child(&" << sg2Name << ");\n";
+            }
+            
+        } // eq-bundles.
+
+        // Deps.
+        os << "\n // Stencil bundle inter-dependencies.\n";
+        for (auto& eg : _eqBundles) {
+            string egName = eg.getName();
+            string sgName = "stencilBundle_" + egName;
+
+            // Add deps between bundles.
             for (DepType dt = DepType(0); dt < num_deps; dt = DepType(dt+1)) {
                 for (auto& dep : eg.getDeps(dt)) {
                     string depName = "stencilBundle_" + dep;
@@ -693,18 +716,8 @@ namespace yask {
                         ", &" << depName << ");\n";
                 }
             }
-
-            // Add scratch-bundle deps in proper order.
-            auto& sdeps = eg.getScratchDeps();
-            for (auto& eg2 : _eqBundles) {
-                string eg2Name = eg2.getName();
-                string sg2Name = "stencilBundle_" + eg2Name;
-                if (sdeps.count(eg2Name))
-                    os << "  " << sgName <<
-                        ".add_scratch_dep(&" << sg2Name << ");\n";
-            }
-            
-        } // eq-bundles.
+        } // bundles.
+        
         os << " } // Ctor.\n";
 
         // Dims creator.

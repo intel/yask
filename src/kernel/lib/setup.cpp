@@ -920,10 +920,6 @@ namespace yask {
             // Need to shift for each non-scratch bundle.
             for (auto* asg : stBundles) {
 
-                // Don't do scratch updates here.
-                if (asg->is_scratch())
-                    continue;
-
                 // Each bundle is shifted 'wf_steps' times.
                 num_wf_shifts += wf_steps;
             }
@@ -1137,16 +1133,29 @@ namespace yask {
         rank_numFpOps_1t = 0;
         os << "Num stencil bundles: " << stBundles.size() << endl;
         for (auto* sg : stBundles) {
-            idx_t updates1 = sg->get_scalar_points_written();
+
+            idx_t updates1 = 0, reads1 = 0, fpops1 = 0;
+            
+            // Loop through all the needed bundles to
+            // count stats for scratch bundles.
+            // Does not count extra ops needed in scratch halos
+            // since this varies depending on block size.
+            auto sg_list = sg->get_reqd_bundles();
+            for (auto* rsg : sg_list) {
+                updates1 += rsg->get_scalar_points_written();
+                reads1 += rsg->get_scalar_points_read();
+                fpops1 += rsg->get_scalar_fp_ops();
+            }
+
             idx_t updates_domain = updates1 * sg->bb_num_points;
             rank_numWrites_1t += updates_domain;
-            idx_t reads1 = sg->get_scalar_points_read();
             idx_t reads_domain = reads1 * sg->bb_num_points;
             rank_reads_1t += reads_domain;
-            idx_t fpops1 = sg->get_scalar_fp_ops();
             idx_t fpops_domain = fpops1 * sg->bb_num_points;
             rank_numFpOps_1t += fpops_domain;
+
             os << "Stats for bundle '" << sg->get_name() << "':\n" <<
+                " scratch bundles:            " << (sg_list.size() - 1) << endl <<
                 " sub-domain:                 " << sg->bb_begin.makeDimValStr() <<
                 " ... " << sg->bb_end.subElements(1).makeDimValStr() << endl <<
                 " sub-domain size:            " << sg->bb_len.makeDimValStr(" * ") << endl <<

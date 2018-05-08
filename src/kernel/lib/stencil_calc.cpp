@@ -63,7 +63,7 @@ namespace yask {
         // Define the bundles that need to be processed in
         // this block. This will be the prerequisite scratch-grid
         // bundles plus this non-scratch bundle.
-        auto sg_list = get_scratch_deps();
+        auto sg_list = get_scratch_children();
         sg_list.push_back(this);
 
         // Set number of threads for a block.
