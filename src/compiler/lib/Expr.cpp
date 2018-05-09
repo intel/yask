@@ -472,7 +472,7 @@ namespace yask {
         auto expr = make_shared<EqualsExpr>(gpp, rhs);
 
         // Save the expression in list of equations.
-        eqs.addEq(expr);
+        eqs.addItem(expr);
 
         return expr;
     }

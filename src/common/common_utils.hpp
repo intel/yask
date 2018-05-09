@@ -34,15 +34,4 @@ IN THE SOFTWARE.
         throw e;                                                    \
     } while(0)
 
-namespace yask {
-
-    // Types of dependencies.
-    enum DepType {
-        cur_step_dep,
-        prev_step_dep,          // not yet used.
-        num_deps
-    };
-
-} // namespace yask.
-
 #endif /* SRC_COMMON_COMMON_UTILS_HPP_ */

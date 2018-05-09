@@ -43,7 +43,7 @@ namespace yask {
         int _inner_posn = 0;
 
         // Other bundles that this one depends on.
-        std::map<DepType, StencilBundleSet> _depends_on;
+        StencilBundleSet _depends_on;
 
         // List of scratch-grid bundles that need to be evaluated
         // before this bundle. Listed in eval order first-to-last.
@@ -73,11 +73,6 @@ namespace yask {
         // ctor, dtor.
         StencilBundleBase(StencilContext* context) :
             _generic_context(context) {
-
-            // Make sure map entries exist.
-            for (DepType dt = DepType(0); dt < num_deps; dt = DepType(dt+1)) {
-                _depends_on[dt];
-            }
 
             // Find index posn of inner loop.
             auto dims = context->get_dims();
@@ -116,13 +111,13 @@ namespace yask {
         virtual void set_scratch(bool is_scratch) { _is_scratch = is_scratch; }
         
         // Add dependency.
-        virtual void add_dep(DepType dt, StencilBundleBase* eg) {
-            _depends_on.at(dt).insert(eg);
+        virtual void add_dep(StencilBundleBase* eg) {
+            _depends_on.insert(eg);
         }
 
         // Get dependencies.
-        virtual const StencilBundleSet& get_deps(DepType dt) const {
-            return _depends_on.at(dt);
+        virtual const StencilBundleSet& get_deps() const {
+            return _depends_on;
         }
 
         // Add needed scratch-bundle.

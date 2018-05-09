@@ -164,6 +164,9 @@ namespace yask {
             oss << quote << makeStr(varMap) << quote;
             return oss.str();
         }
+        virtual string getDescr() const {
+            return makeQuotedStr();
+        }
 
         // Count and return number of nodes at and below this.
         virtual int getNumNodes() const;
