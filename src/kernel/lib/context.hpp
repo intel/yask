@@ -92,11 +92,14 @@ namespace yask {
         get_elapsed_run_secs() { return run_time; }
         
     };
-    
+
     // Collections of things in a context.
     class StencilBundleBase;
+    class BundlePack;
     typedef std::vector<StencilBundleBase*> StencilBundleList;
     typedef std::set<StencilBundleBase*> StencilBundleSet;
+    typedef std::shared_ptr<BundlePack> BundlePackPtr;
+    typedef std::vector<BundlePackPtr> BundlePackList;
     
     // Data and hierarchical sizes.
     // This is a pure-virtual class that must be implemented
@@ -156,8 +159,11 @@ namespace yask {
         
         // List of all non-scratch stencil bundles in the order in which
         // they should be evaluated within a step.
-        // TODO: use dependency info, allowing more parallelism.
         StencilBundleList stBundles;
+
+        // List of all non-scratch stencil-bundle packs in the order in
+        // which they should be evaluated within a step.
+        BundlePackList stPacks;
 
         // All non-scratch grids.
         GridPtrs gridPtrs;

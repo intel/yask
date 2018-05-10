@@ -157,7 +157,7 @@ namespace yask {
         int lofs = 0;        // step index offset for LHS.
         
         // 1. Check each eq internally.
-        os << "\nChecking " << getNum() << " stencil equation(s) for legality...\n";
+        os << "\nProcessing " << getNum() << " stencil equation(s)...\n";
         for (auto eq1 : getAll()) {
             auto* eq1p = eq1.get();
             assert(outGrids.count(eq1p));
@@ -686,9 +686,9 @@ namespace yask {
     }
    
    
-    // Get the full name of an eq-bundle.
+    // Get the full name of an eq-lot.
     // Must be unique.
-    string EqBundle::getName() const {
+    string EqLot::getName() const {
 
         // Add index to base name.
         ostringstream oss;
@@ -708,7 +708,7 @@ namespace yask {
             if (cond.get())
                 des += " w/condition " + cond->makeQuotedStr(quote);
             else
-                des += " w/no condition";
+                des += " w/o condition";
         }
         return des;
     }
@@ -733,11 +733,24 @@ namespace yask {
             _inGrids.insert(g);
     }
 
-    // Print stats from eqBundle.
-    void EqBundle::printStats(ostream& os, const string& msg)
-    {
+    // Print stats from eqs.
+    void EqLot::printStats(ostream& os, const string& msg) {
         CounterVisitor cv;
         visitEqs(&cv);
+        cv.printStats(os, msg);
+    }
+
+    // Print stats from eqs in bundles.
+    void EqBundles::printStats(ostream& os, const string& msg) {
+        CounterVisitor cv;
+
+        // Use separate counter visitor for each bundle
+        // to avoid treating repeated eqs as common sub-exprs.
+        for (auto& eq : _all) {
+            CounterVisitor ecv;
+            eq->visitEqs(&ecv);
+            cv += ecv;
+        }
         cv.printStats(os, msg);
     }
 
@@ -808,9 +821,8 @@ namespace yask {
     // bundle was created.
     bool EqBundles::addEqToBundle(Eqs& allEqs,
                                   EqualsExprPtr eq,
-                                  const string& baseName,
-                                  bool is_scratch)
-    {
+                                  const string& baseName) {
+
         // Equation already added?
         if (_eqs_in_bundles.count(eq))
             return false;
@@ -826,41 +838,54 @@ namespace yask {
         EqBundle* target = 0;
         for (auto& eg : getAll()) {
 
+            // Must be same scratch-ness.
+            if (eg->isScratch() != eq->isScratch())
+                continue;
+
             // Must match name and condition.
-            if (eg->baseName == baseName &&
-                areExprsSame(eg->cond, cond)) {
+            if (eg->baseName != baseName || !areExprsSame(eg->cond, cond))
+                continue;
 
-                // Look for any dependencies that would prevent adding
-                // 'eq' to 'eg'.
-                bool is_dep = false;
-                for (auto& eq2 : eg->getEqs()) {
+            // Look for any condition or dependencies that would prevent
+            // adding 'eq' to 'eg'.
+            bool is_ok = true;
+            for (auto& eq2 : eg->getEqs()) {
 
-                    if (eq_deps.is_dep(eq, eq2)) {
+                // If scratch, 'eq' and 'eq2' must have same halo.
+                // This is because scratch halos are written to.
+                if (eq->isScratch()) {
+                    auto eq2g = eq2->getGrid();
+                    auto eqg = eq->getGrid();
+                    if (!eq2g->isHaloSame(*eqg))
+                        is_ok = false;
+                }
+
+                // Look for any dependency between 'eq' and 'eq2'.
+                if (eq_deps.is_dep(eq, eq2)) {
 #if DEBUG_ADD_EXPRS
-                        cout << "addEqFromGrid: not adding equation " <<
-                            eq->makeQuotedStr() << " to " << eg.getDescr() <<
-                            " because of dependency w/equation " <<
-                            eq2->makeQuotedStr() << endl;
+                    cout << "addEqFromGrid: not adding equation " <<
+                        eq->makeQuotedStr() << " to " << eg.getDescr() <<
+                        " because of dependency w/equation " <<
+                        eq2->makeQuotedStr() << endl;
 #endif
-                        is_dep = true;
-                        break;
-                    }
-                    if (is_dep)
-                        break;
+                    is_ok = false;
                 }
 
-                // Remember target bundle if found and no deps.
-                if (!is_dep) {
-                    target = eg.get();
+                if (!is_ok)
                     break;
-                }
+            }
+            
+            // Remember target bundle if ok and stop looking.
+            if (is_ok) {
+                target = eg.get();
+                break;
             }
         }
         
         // Make new bundle if no target bundle found.
         bool newBundle = false;
         if (!target) {
-            auto ne = make_shared<EqBundle>(*_dims, is_scratch);
+            auto ne = make_shared<EqBundle>(*_dims, eq->isScratch());
             addItem(ne);
             target = ne.get();
             target->baseName = baseName;
@@ -891,7 +916,6 @@ namespace yask {
     // Divide all equations into eqBundles.
     // Only process updates to grids in 'gridRegex'.
     // 'targets': string provided by user to specify bundleing.
-    // 'eq_deps': pre-computed dependencies between equations.
     void EqBundles::makeEqBundles(Eqs& allEqs,
                                   const string& gridRegex,
                                   const string& targets,
@@ -900,22 +924,15 @@ namespace yask {
         os << "\nPartitioning " << allEqs.getNum() << " equation(s) into bundles...\n";
         //auto& stepDim = _dims->_stepDim;
 
-        // Add each scratch equation to a separate bundle.
-        // TODO: Allow multiple scratch eqs in a bundle with same conds & halos.
-        // TODO: Only add scratch eqs that are needed by grids in 'gridRegex'.
+        // Add scratch equations.
         for (auto eq : allEqs.getAll()) {
-
-            // Get updated grid.
-            auto gp = eq->getGrid();
-            assert(gp);
-            if (gp->isScratch()) {
-                string gname = gp->getName();
+            if (eq->isScratch()) {
 
                 // Add equation.
-                addEqToBundle(allEqs, eq, gname, true);
+                addEqToBundle(allEqs, eq, _basename_default);
             }
         }
-        
+
         // Make a regex for the allowed grids.
         regex gridx(gridRegex);
     
@@ -949,7 +966,7 @@ namespace yask {
                     string egname = mr.format(egfmt);
 
                     // Add equation.
-                    addEqToBundle(allEqs, eq, egname, false);
+                    addEqToBundle(allEqs, eq, egname);
                 }
             });
 
@@ -966,9 +983,8 @@ namespace yask {
                 continue;
 
             // Add equation.
-            addEqToBundle(allEqs, eq, _basename_default, false);
+            addEqToBundle(allEqs, eq, _basename_default);
         }
-        os << "Created " << getNum() << " equation bundle(s):\n";
 
         os << "Finding transitive closure...\n";
         inherit_deps_from(allEqs);
@@ -977,6 +993,7 @@ namespace yask {
         topo_sort();
 
         // Dump info.
+        os << "Created " << getNum() << " equation bundle(s):\n";
         for (auto& eg1 : _all) {
             os << " " << eg1->getDescr() << ":\n"
                 "  Contains " << eg1->getNumEqs() << " equation(s).\n"
@@ -998,23 +1015,13 @@ namespace yask {
 
     }
 
-    // Print stats from eqBundles.
-    void EqBundles::printStats(ostream& os, const string& msg) {
-        CounterVisitor cv;
-        for (auto& eq : _all) {
-            CounterVisitor ecv;
-            eq->visitEqs(&ecv);
-            cv += ecv;
-        }
-        cv.printStats(os, msg);
-    }
-
     // Apply optimizations according to the 'settings'.
     void EqBundles::optimizeEqBundles(CompilerSettings& settings,
                                     const string& descr,
                                     bool printSets,
                                     ostream& os) {
         // print stats.
+        os << "Stats across " << getNum() << " equation-bundle(s) before optimization(s):\n";
         string edescr = "for " + descr + " equation-bundle(s)";
         printStats(os, edescr);
     
@@ -1056,6 +1063,141 @@ namespace yask {
             for (auto eg : getAll())
                 eg->printStats(os, "for " + eg->getDescr());
         }
+    }
+
+    // Make a human-readable description of this eq bundle pack.
+    string EqBundlePack::getDescr(string quote) const
+    {
+        string des;
+        if (isScratch())
+            des += "scratch ";
+        des += "equation bundle-pack " + quote + getName() + quote;
+        return des;
+    }
+
+    // Add a bundle to this pack.
+    void EqBundlePack::addBundle(EqBundlePtr bp)
+    {
+        _bundles.insert(bp);
+        _isScratch = bp->isScratch();
+
+        // update list of eqs.
+        for (auto& eq : bp->getEqs())
+            _eqs.insert(eq);
+        
+        // update list of input and output grids for this pack.
+        for (auto& g : bp->getOutputGrids())
+            _outGrids.insert(g);
+        for (auto& g : bp->getInputGrids())
+            _inGrids.insert(g);
+    }
+
+    // Add 'bp' from 'allBundles'. Create new pack if needed.  Returns
+    // whether a new pack was created.
+    bool EqBundlePacks::addBundleToPack(EqBundles& allBundles,
+                                        EqBundlePtr bp)
+    {
+        // Already added?
+        if (_bundles_in_packs.count(bp))
+            return false;
+
+        // Get deps between bundles.
+        auto& deps = allBundles.getDeps();
+        
+        // Loop through existing packs, looking for one that
+        // 'bp' can be added to.
+        EqBundlePack* target = 0;
+        for (auto& ep : getAll()) {
+
+            // Must be same scratch-ness.
+            if (ep->isScratch() != bp->isScratch())
+                continue;
+            
+            // Look for any dependencies that would prevent adding
+            // 'bp' to 'ep'.
+            bool is_ok = true;
+            for (auto& bp2 : ep->getBundles()) {
+
+                // Look for any dependency between 'bp' and 'bp2'.
+                if (deps.is_dep(bp, bp2)) {
+                    is_ok = false;
+                    break;
+                }
+            }
+
+            // Remember target if ok and stop looking.
+            if (is_ok) {
+                target = ep.get();
+                break;
+            }
+        }
+        
+        // Make new pack if no target pack found.
+        bool newPack = false;
+        if (!target) {
+            auto np = make_shared<EqBundlePack>(bp->isScratch());
+            addItem(np);
+            target = np.get();
+            target->baseName = _baseName;
+            target->index = _idx++;
+            newPack = true;
+        }
+
+        // Add bundle to target.
+        assert(target);
+        target->addBundle(bp);
+    
+        // Remember pack and updated grids.
+        _bundles_in_packs.insert(bp);
+        for (auto& g : bp->getOutputGrids())
+            _outGrids.insert(g);
+
+        return newPack;
+    }
+
+    // Divide all bundles into packs.
+    void EqBundlePacks::makePacks(EqBundles& allBundles,
+                                  ostream& os)
+    {
+        os << "\nPartitioning " << allBundles.getNum() << " bundle(s) into packs...\n";
+
+        for (auto bp : allBundles.getAll())
+            addBundleToPack(allBundles, bp);
+
+        os << "Finding transitive closure...\n";
+        inherit_deps_from(allBundles);
+        
+        os << "Topologically ordering...\n";
+        topo_sort();
+
+        // Dump info.
+        os << "Created " << getNum() << " equation bundle pack(s):\n";
+        for (auto& bp1 : _all) {
+            os << " " << bp1->getDescr() << ":\n"
+                "  Contains " << bp1->getBundles().size() << " bundle(s): ";
+            int i = 0;
+            for (auto b : bp1->getBundles()) {
+                if (i++)
+                    os << ", ";
+                os << b->getName();
+            }
+            os << ".\n";
+            os << "  Updates the following grid(s): ";
+            i = 0;
+            for (auto* g : bp1->getOutputGrids()) {
+                if (i++)
+                    os << ", ";
+                os << g->getName();
+            }
+            os << ".\n";
+
+            // Deps.
+            for (auto& bp2 : _deps.get_deps_on(bp1))
+                os << "  Dependent on bundle pack " << bp2->getName() << ".\n";
+            for (auto& sp : _scratches.get_deps_on(bp1))
+                os << "  Requires scratch pack " << sp->getName() << ".\n";
+        }
+
     }
 
 } // namespace yask.

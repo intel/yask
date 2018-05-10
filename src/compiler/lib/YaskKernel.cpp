@@ -662,8 +662,7 @@ namespace yask {
         os << endl << " // Stencil equation-bundles." << endl;
         for (auto& eg : _eqBundles.getAll()) {
             string egName = eg->getName();
-            string sgName = "stencilBundle_" + egName;
-            os << " StencilBundle_" << egName << " " << sgName << ";" << endl;
+            os << " StencilBundle_" << egName << " " << egName << ";" << endl;
         }
 
         // Ctor.
@@ -672,8 +671,7 @@ namespace yask {
             _context_base << "(env, settings)";
         for (auto& eg : _eqBundles.getAll()) {
             string egName = eg->getName();
-            string sgName = "stencilBundle_" + egName;
-            os << ",\n  " << sgName << "(this)";
+            os << ",\n  " << egName << "(this)";
         }
         os << " {\n";
         
@@ -681,22 +679,20 @@ namespace yask {
         os << "\n // Stencil bundles.\n";
         for (auto& eg : _eqBundles.getAll()) {
             string egName = eg->getName();
-            string sgName = "stencilBundle_" + egName;
 
             // Only want non-scratch bundles in stBundles.
             // Each scratch bundles will be added to its
             // parent bundle.
             if (!eg->isScratch())
-                os << "  stBundles.push_back(&" << sgName << ");\n";
+                os << "  stBundles.push_back(&" << egName << ");\n";
 
             // Add scratch-bundle deps in proper order.
             auto& sdeps = _eqBundles.getScratches(eg);
             for (auto& eg2 : _eqBundles.getAll()) {
                 if (sdeps.count(eg2)) {
                     string eg2Name = eg2->getName();
-                    string sg2Name = "stencilBundle_" + eg2Name;
-                    os << "  " << sgName <<
-                        ".add_scratch_child(&" << sg2Name << ");\n";
+                    os << "  " << egName <<
+                        ".add_scratch_child(&" << eg2Name << ");\n";
                 }
             }
             
@@ -706,15 +702,31 @@ namespace yask {
         os << "\n // Stencil bundle inter-dependencies.\n";
         for (auto& eg : _eqBundles.getAll()) {
             string egName = eg->getName();
-            string sgName = "stencilBundle_" + egName;
-
+            
             // Add deps between bundles.
             for (auto& dep : _eqBundles.getDeps(eg)) {
-                string depName = "stencilBundle_" + dep->getName();
-                os << "  " << sgName <<
+                string depName = dep->getName();
+                os << "  " << egName <<
                     ".add_dep(&" << depName << ");\n";
             }
         } // bundles.
+
+        // Packs.
+        os << "\n // Stencil bundle packs.\n";
+        for (auto& bp : _eqBundlePacks.getAll()) {
+            if (bp->isScratch())
+                continue;
+            string bpName = bp->getName();
+            os << "  auto " << bpName << " = std::make_shared<BundlePack>(\"" <<
+                bpName << "\");\n";
+            for (auto& eg : bp->getBundles()) {
+                if (eg->isScratch())
+                    continue;
+                string egName = eg->getName();
+                os << "  " << bpName << "->push_back(&" << egName << ");\n";
+            }
+            os << "  stPacks.push_back(" << bpName << ");\n";
+        }
         
         os << " } // Ctor.\n";
 

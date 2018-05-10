@@ -969,7 +969,10 @@ namespace yask {
                 return _lhs->getGrid();
             return NULL;
         }
-    
+
+        // LHS is scratch grid.
+        virtual bool isScratch();
+        
         // Check for equivalency.
         virtual bool isSame(const Expr* other) const;
 

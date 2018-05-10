@@ -525,6 +525,10 @@ namespace yask {
     }
 
     // EqualsExpr methods.
+    bool EqualsExpr::isScratch() {
+        Grid* gp = getGrid();
+        return gp && gp->isScratch();
+    }
     bool EqualsExpr::isSame(const Expr* other) const {
         auto p = dynamic_cast<const EqualsExpr*>(other);
         return p && 

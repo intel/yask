@@ -203,6 +203,25 @@ namespace yask {
         calc_loop_of_vectors(int thread_idx,
                              const ScanIndices& loop_idxs,
                              idx_t write_mask);
-    };
+
+    };                          // StencilBundleBase.
+
+    // A collection of independent stencil bundles.
+    class BundlePack :
+        public std::vector<StencilBundleBase*> {
+
+    protected:
+        std::string _name;
+        
+    public:
+        BundlePack(const std::string& name) :
+            _name(name) { }
+        virtual ~BundlePack() { }
+
+        const std::string& getName() {
+            return _name;
+        }
+        
+    }; // BundlePack.
 
 } // yask namespace.

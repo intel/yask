@@ -23,7 +23,7 @@ IN THE SOFTWARE.
 
 *****************************************************************************/
 
-///////// Classes for equations and equation bundles ////////////
+///////// Classes for equations, equation bundles, and bundle packs. ////////////
 
 #ifndef EQS_HPP
 #define EQS_HPP
@@ -170,6 +170,8 @@ namespace yask {
 
     // A set of objects that have inter-dependencies.
     // Some depencencies may be flagged as "scratch" objects.
+    // Class 'T' must implement 'clone()' that returns
+    // a 'shared_ptr<T>'.
     template <typename T>
     class DepGroup {
 
@@ -295,6 +297,8 @@ namespace yask {
 
         // Copy dependencies from the 'full' graph to this
         // condensed graph.
+        // Class 'T' must implement 'getItems()', which returns
+        // an iteratable container of 'Tf' types.
         // See https://en.wikipedia.org/wiki/Directed_acyclic_graph.
         template <typename Tf>
         void inherit_deps_from(const DepGroup<Tf>& full) {
@@ -313,10 +317,10 @@ namespace yask {
                     if (oi == oj) continue;
 
                     // All Tf objs in 'oi'.
-                    for (auto& foi : oi->getObjs()) {
+                    for (auto& foi : oi->getItems()) {
 
                         // All Tf objs in 'oj'.
-                        for (auto& foj : oj->getObjs()) {
+                        for (auto& foj : oj->getItems()) {
 
                             // If 'foi' is dep on 'foj',
                             // then 'oi' is dep on 'oj'.
@@ -333,13 +337,10 @@ namespace yask {
 
     };
 
-    // Deps between eqs.
-    typedef Deps<EqualsExpr> EqDeps;
-    
     // A list of unique equation ptrs.
     typedef vector_set<EqualsExprPtr> EqList;
 
-    // A set of equations and related data.
+    // A set of equations and related dependency data.
     class Eqs : public DepGroup<EqualsExpr> {
         
     public:
@@ -366,82 +367,39 @@ namespace yask {
         virtual void updateGridStats();
     };
 
-    // A named equation bundle, which contains one or more grid-update
-    // equations.  All equations in a bundle must have the same condition.
-    // Equations in a bundle mst not have inter-dependencies because they
-    // will be combined into a single expression.
-    class EqBundle {
+    // A collection that holds various independent eqs.
+    class EqLot {
     protected:
-        EqList _eqs;            // equations in this bundle.
-        Grids _outGrids;        // grids updated by this bundle.
-        Grids _inGrids;         // grids read from by this bundle.
-        const Dimensions* _dims = 0;
-        bool _isScratch = false; // true if this bundle updates temp grid(s).
+        EqList _eqs;            // all equations.
+        Grids _outGrids;        // grids updated by _eqs.
+        Grids _inGrids;         // grids read from by _eqs.
+        bool _isScratch = false; // true if _eqs update temp grid(s).
 
     public:
 
+        // Parts of the name.
         // TODO: move these into protected section and make accessors.
         string baseName;            // base name of this bundle.
         int index;                  // index to distinguish repeated names.
-        BoolExprPtr cond;           // condition (default is null).
 
         // Ctor.
-        EqBundle(const Dimensions& dims, bool is_scratch) :
-            _dims(&dims), _isScratch(is_scratch) { }
-        virtual ~EqBundle() {}
-
-        // Create a copy containing clones of the equations.
-        virtual shared_ptr<EqBundle> clone() const {
-            auto p = make_shared<EqBundle>(*_dims, _isScratch);
-
-            // Shallow copy.
-            *p = *this;
-
-            // Delete copied eqs and replace w/clones.
-            p->_eqs.clear();
-            for (auto& i : _eqs)
-                p->_eqs.insert(i->clone());
-
-            return p;
+        EqLot(bool is_scratch) : _isScratch(is_scratch) { }
+        virtual ~EqLot() {}
+        
+        // Get all eqs.
+        virtual const EqList& getEqs() const {
+            return _eqs;
         }
 
-        // Add an equation to this bundle.
-        virtual void addEq(EqualsExprPtr ee);
-    
         // Visit all the equations.
         virtual void visitEqs(ExprVisitor* ev) {
             for (auto& ep : _eqs) {
-#ifdef DEBUG_EQ_BUNDLE
-                cout << "EqBundle: visiting " << ep->makeQuotedStr() << endl;
-#endif
                 ep->accept(ev);
             }
         }
 
-        // Get the list of all equations.
-        virtual const EqList& getEqs() const {
-            return _eqs;
-        }
-        virtual const EqList& getObjs() const {
-            return _eqs;
-        }
-
-        // Visit the condition.
-        // Return true if there was one to visit.
-        virtual bool visitCond(ExprVisitor* ev) {
-            if (cond.get()) {
-                cond->accept(ev);
-                return true;
-            }
-            return false;
-        }
-
         // Get the full name.
         virtual string getName() const;
-
-        // Get a string description.
-        virtual string getDescr(bool show_cond = true,
-                                string quote = "'") const;
 
         // Get number of equations.
         virtual int getNumEqs() const {
@@ -459,12 +417,69 @@ namespace yask {
             return _inGrids;
         }
 
+        // Print stats for the equation(s).
+        virtual void printStats(ostream& os, const string& msg);
+    };
+    
+    // A named equation bundle, which contains one or more grid-update
+    // equations.  All equations in a bundle must have the same condition.
+    // Equations in a bundle must not have inter-dependencies because they
+    // will be combined into a single expression.
+    class EqBundle : public EqLot {
+    protected:
+        const Dimensions* _dims = 0;
+
+    public:
+
+        // Common condition.
+        // TODO: move these into protected section and make accessors.
+        BoolExprPtr cond;           // condition (default is null).
+
+        // Create a copy containing clones of the equations.
+        virtual shared_ptr<EqBundle> clone() const {
+            auto p = make_shared<EqBundle>(*_dims, _isScratch);
+
+            // Shallow copy.
+            *p = *this;
+
+            // Delete copied eqs and replace w/clones.
+            p->_eqs.clear();
+            for (auto& i : _eqs)
+                p->_eqs.insert(i->clone());
+
+            return p;
+        }
+
+        // Ctor.
+        EqBundle(const Dimensions& dims, bool is_scratch) :
+            EqLot(is_scratch), _dims(&dims) { }
+        virtual ~EqBundle() {}
+
+        // Get a string description.
+        virtual string getDescr(bool show_cond = true,
+                                string quote = "'") const;
+
+        // Add an equation to this bundle.
+        virtual void addEq(EqualsExprPtr ee);
+    
+        // Get the list of all equations.
+        virtual const EqList& getItems() const {
+            return _eqs;
+        }
+
+        // Visit the condition.
+        // Return true if there was one to visit.
+        virtual bool visitCond(ExprVisitor* ev) {
+            if (cond.get()) {
+                cond->accept(ev);
+                return true;
+            }
+            return false;
+        }
+
         // Replicate each equation at the non-zero offsets for
         // each vector in a cluster.
         virtual void replicateEqsInCluster(Dimensions& dims);
-        
-        // Print stats for the equation(s) in this bundle.
-        virtual void printStats(ostream& os, const string& msg);
     };
 
     // Container for multiple equation bundles.
@@ -475,7 +490,7 @@ namespace yask {
         string _basename_default;
         Dimensions* _dims = 0;
 
-        // Track grids that are udpated.
+        // Track grids that are updated.
         Grids _outGrids;
 
         // Map to track indices per eq-bundle name.
@@ -490,8 +505,7 @@ namespace yask {
         // Returns whether a new bundle was created.
         virtual bool addEqToBundle(Eqs& eqs,
                                    EqualsExprPtr eq,
-                                   const string& baseName,
-                                   bool is_scratch);
+                                   const string& baseName);
 
     public:
         EqBundles() {}
@@ -545,7 +559,95 @@ namespace yask {
                               bool printSets,
                               ostream& os);
     };
+
+    typedef shared_ptr<EqBundle> EqBundlePtr;
     
+    // A list of unique equation bundles.
+    typedef vector_set<EqBundlePtr> EqBundleList;
+
+    // A named equation bundle pack, which contains one or more equation
+    // bundles.  All equations in a pack do not need to have the same condition.
+    // Equations in a pack must not have inter-dependencies because they
+    // may be run in parallel or in any order on any sub-domain.
+    class EqBundlePack : public EqLot {
+    protected:
+        EqBundleList _bundles;  // bundles in this pack.
+
+    public:
+
+        // Ctor.
+        EqBundlePack(bool is_scratch) :
+            EqLot(is_scratch) { }
+        virtual ~EqBundlePack() { }
+
+        // Create a copy containing clones of the bundles.
+        virtual shared_ptr<EqBundlePack> clone() const {
+            auto p = make_shared<EqBundlePack>(_isScratch);
+
+            // Shallow copy.
+            *p = *this;
+
+            // Delete copied eqs and replace w/clones.
+            p->_eqs.clear();
+            for (auto& i : _bundles)
+                p->_bundles.insert(i->clone());
+
+            return p;
+        }
+
+        // Get a string description.
+        virtual string getDescr(string quote = "'") const;
+
+        // Add a bundle to this pack.
+        virtual void addBundle(EqBundlePtr ee);
+    
+        // Get the list of all bundles
+        virtual const EqBundleList& getBundles() const {
+            return _bundles;
+        }
+        virtual const EqBundleList& getItems() const {
+            return _bundles;
+        }
+
+    };
+
+    // Container for multiple equation bundle packs.
+    class EqBundlePacks : public DepGroup<EqBundlePack> {
+    protected:
+        string _baseName = "stencil_pack";
+
+        // Bundle index.
+        int _idx = 0;
+
+        // Track grids that are updated.
+        Grids _outGrids;
+
+        // Track bundles that have been added already.
+        set<EqBundlePtr> _bundles_in_packs;
+    
+        // Add 'bp' from 'allBundles'. Create new pack if needed.  Returns
+        // whether a new pack was created.
+        bool addBundleToPack(EqBundles& allBundles,
+                             EqBundlePtr bp);
+        
+    public:
+
+        // Separate bundles into packs.
+        void makePacks(EqBundles& bundles,
+                       std::ostream& os);
+
+        // Get all output grids.
+        virtual const Grids& getOutputGrids() const {
+            return _outGrids;
+        }
+
+        // Visit all the equations in all packs.
+        virtual void visitEqs(ExprVisitor* ev) {
+            for (auto& bp : _all)
+                bp->visitEqs(ev);
+        }
+    };
+
 } // namespace yask.
     
 #endif
