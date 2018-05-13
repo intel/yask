@@ -86,7 +86,9 @@ else ifneq ($(findstring iso3dfd,$(stencil)),)
  endif
 
 else ifneq ($(findstring awp,$(stencil)),)
- time_alloc			=	1
+ ifeq ($(stencil),awp)
+  time_alloc			=	1 # only allowed w/o surface conditions.
+ endif
  def_block_args			=	-b 32
  YC_FLAGS			+=	-min-es 1
  def_rank_args			=	-dx 512 -dy 1024 -dz 128 # assume 2 ranks/node in 'x'.
@@ -516,7 +518,7 @@ NGDIMS		:=	`awk '/NUM_GRID_DIMS/ {print $$NF}' $(YK_CODE_FILE)`
 RANK_LOOP_OPTS		?=	-ndims $(NSDIMS) -inVar rank_idxs
 RANK_LOOP_ORDER		?=	1 .. N-1
 RANK_LOOP_CODE		?=	$(RANK_LOOP_OUTER_MODS) loop($(RANK_LOOP_ORDER)) \
-				{ $(RANK_LOOP_INNER_MODS) call(calc_region(stBundle_ptr)); }
+				{ $(RANK_LOOP_INNER_MODS) call(calc_region(bp)); }
 
 # Region loops break up a region using OpenMP threading into blocks.  The
 # 'omp' modifier creates an outer OpenMP loop so that each block is assigned
@@ -524,12 +526,11 @@ RANK_LOOP_CODE		?=	$(RANK_LOOP_OUTER_MODS) loop($(RANK_LOOP_ORDER)) \
 # allow for proper spatial skewing for temporal wavefronts. The time loop
 # may be found in StencilEquations::calc_region().
 REGION_LOOP_OPTS	?=     	-ndims $(NSDIMS) -inVar region_idxs \
-				-ompConstruct '$(omp_par_for) schedule($(omp_region_schedule)) proc_bind(spread)' \
-				-callPrefix 'sg->'
+				-ompConstruct '$(omp_par_for) schedule($(omp_region_schedule)) proc_bind(spread)'
 REGION_LOOP_OUTER_MODS	?=	grouped omp
 REGION_LOOP_ORDER	?=	1 .. N-1
 REGION_LOOP_CODE	?=	$(REGION_LOOP_OUTER_MODS) loop($(REGION_LOOP_ORDER)) { \
-				$(REGION_LOOP_INNER_MODS) call(calc_block); }
+				$(REGION_LOOP_INNER_MODS) call(calc_block(bp)); }
 
 # Block loops break up a block into sub-blocks.  The 'omp' modifier creates
 # a *nested* OpenMP loop so that each sub-block is assigned to a nested OpenMP
@@ -744,7 +745,7 @@ val1	=	-dt 2 -b 16 -d 48
 val2	=	-dt 2 -b 24 -r 32 -rt 2 -dx 63 -dy 49 -dz 47
 ranks	= 	2
 
-# Run the kernel tests.
+# Run the kernel binary using several combos of sizes and ranks.
 yk-tests:
 	$(BIN_DIR)/yask.sh -stencil $(stencil) -arch $(arch) -v $(val1)
 	$(BIN_DIR)/yask.sh -stencil $(stencil) -arch $(arch) -v $(val2)
@@ -773,10 +774,11 @@ api-tests:
 # For testing both the kernel and compiler in various combinations,
 # run the tests from the top-level Makefile.
 stencil-tests:
-	$(MAKE) clean; $(MAKE) yc-and-yk-test real_bytes=8 stencil=test_1d
+	$(MAKE) clean; $(MAKE) yc-and-yk-test real_bytes=8 stencil=test_1d fold=x=4
 	$(MAKE) clean; $(MAKE) yc-and-yk-test real_bytes=8 stencil=test_2d fold=x=2,y=2
 	$(MAKE) clean; $(MAKE) yc-and-yk-test real_bytes=8 stencil=test_3d fold=x=2,z=2
 	$(MAKE) clean; $(MAKE) yc-and-yk-test real_bytes=8 stencil=test_4d fold=w=2,x=2
+	$(MAKE) clean; $(MAKE) yc-and-yk-test real_bytes=8 stencil=test_subdomain1 fold=x=4
 	$(MAKE) clean; $(MAKE) yc-and-yk-test real_bytes=8 stencil=test_scratch1 fold=x=4
 	$(MAKE) clean; $(MAKE) yc-and-yk-test real_bytes=8 stencil=test_scratch2 fold=x=2,z=2
 	$(MAKE) clean; $(MAKE) yc-and-yk-test real_bytes=8 stencil=9axis fold=x=2,z=2
@@ -786,15 +788,15 @@ stencil-tests:
 	$(MAKE) clean; $(MAKE) yc-and-yk-test real_bytes=8 stencil=cube fold=x=2,y=2
 	$(MAKE) clean; $(MAKE) yc-and-yk-test real_bytes=8 stencil=tti fold=x=2,y=2
 	$(MAKE) clean; $(MAKE) yc-and-yk-test real_bytes=8 stencil=iso3dfd fold=x=2,y=2
-	$(MAKE) clean; $(MAKE) yc-and-yk-test real_bytes=8 stencil=awp_elastic fold=x=2,y=2
 	$(MAKE) clean; $(MAKE) yc-and-yk-test real_bytes=8 stencil=ssg fold=x=2,y=2
+	$(MAKE) clean; $(MAKE) yc-and-yk-test real_bytes=8 stencil=awp_elastic fold=x=2,y=2
 	$(MAKE) clean; $(MAKE) yc-and-yk-test real_bytes=8 stencil=fsg_abc fold=x=2,y=2
 	$(MAKE) clean; $(MAKE) yc-and-yk-test real_bytes=8 stencil=fsg2 fold=x=2,y=2
 
 all-tests:
 	$(MAKE) clean; $(MAKE) cxx-yk-grid-test stencil=test_3d fold=x=4,y=2
-	$(MAKE) api-tests
 	$(MAKE) stencil-tests
+	$(MAKE) api-tests
 
 all:
 	$(MAKE) kernel

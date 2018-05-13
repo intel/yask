@@ -414,7 +414,7 @@ namespace yask {
             os << "\n // Create grids (but do not allocate data in them).\n" <<
                 ctorCode <<
                 "\n // Update grids with context info.\n"
-                " update_grids();\n";
+                " update_grid_info();\n";
             
             // end of ctor.
             os << " } // ctor" << endl;

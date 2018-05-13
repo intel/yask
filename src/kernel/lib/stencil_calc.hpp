@@ -27,8 +27,9 @@ IN THE SOFTWARE.
 
 namespace yask {
     
-    /// Classes that support evaluation of one stencil bundle.
-    /// A stencil context contains one or more bundles.
+    // Classes that support evaluation of one stencil bundle
+    // and a 'pack' of bundles.
+    // A stencil context contains one or more packs.
 
     // A pure-virtual class base for a stencil bundle.
     class StencilBundleBase : public BoundingBox {
@@ -155,12 +156,10 @@ namespace yask {
         calc_scalar(int thread_idx, const Indices& idxs) =0;
 
         // Calculate results within a block.
-        // Each block is typically computed in a separate OpenMP thread team.
         virtual void
-        calc_block(const ScanIndices& region_idxs);
+        calc_block(const ScanIndices& def_block_idxs);
 
         // Calculate results within a sub-block.
-        // Each sub-block is typically computed in a separate nested OpenMP thread.
         virtual void
         calc_sub_block(int thread_idx, const ScanIndices& block_idxs);
 
@@ -218,7 +217,7 @@ namespace yask {
             _name(name) { }
         virtual ~BundlePack() { }
 
-        const std::string& getName() {
+        const std::string& get_name() {
             return _name;
         }
         

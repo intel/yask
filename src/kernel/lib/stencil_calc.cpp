@@ -23,16 +23,18 @@ IN THE SOFTWARE.
 
 *****************************************************************************/
 
+// This file contains implementations of StencilBundleBase methods.
+// Also see context_setup.cpp.
+
 #include "yask.hpp"
 using namespace std;
 
 namespace yask {
 
     // Calculate results within a block.
-    // Typically called by a top-level OMP thread.
     // It is here that any required scratch-grid stencils are evaluated
     // first and then the non-scratch stencils in the stencil bundle.
-    void StencilBundleBase::calc_block(const ScanIndices& region_idxs) {
+    void StencilBundleBase::calc_block(const ScanIndices& def_block_idxs) {
 
         auto opts = _generic_context->get_settings();
         auto dims = _generic_context->get_dims();
@@ -40,31 +42,55 @@ namespace yask {
         auto& step_dim = dims->_step_dim;
         auto step_posn = Indices::step_posn;
         int thread_idx = omp_get_thread_num(); // used to index the scratch grids.
-        TRACE_MSG3("calc_block:" <<
-                   " in non-scratch bundle '" << get_name() << "': " <<
-                   region_idxs.start.makeValStr(nsdims) <<
-                   " ... (end before) " << region_idxs.stop.makeValStr(nsdims) <<
+        TRACE_MSG3("calc_block for bundle '" << get_name() << "': " <<
+                   def_block_idxs.begin.makeValStr(nsdims) <<
+                   " ... (end before) " << def_block_idxs.end.makeValStr(nsdims) <<
                    " by thread " << thread_idx);
         assert(!is_scratch());
 
-        // Init default block begin & end from region start & stop indices.
-        ScanIndices def_block_idxs(*dims, true, 0);
-        def_block_idxs.initFromOuter(region_idxs);
+        // Trim the default block indices based on the bounding box
+        // for this bundle.
+        // TODO: loop through list of BBs for this bundle.
+        // TODO: replace string-based lookup w/indices.
+        ScanIndices bb_idxs(def_block_idxs);
+        bool ok = true;
+        for (int i = 0; i < nsdims; i++) {
+            if (i == step_posn) continue;
+            auto& dname = dims->_stencil_dims.getDimName(i);
 
-        // Steps within a block are based on sub-block sizes.
-        def_block_idxs.step = opts->_sub_block_sizes;
+            // Begin point.
+            assert(bb_begin.lookup(dname));
+            auto bbegin = max(bb_idxs.begin[i], bb_begin[dname]);
+            bb_idxs.begin[i] = bbegin;
 
-        // Groups in block loops are based on sub-block-group sizes.
-        def_block_idxs.group_size = opts->_sub_block_group_sizes;
+            // End point.
+            assert(bb_end.lookup(dname));
+            auto bend = min(bb_idxs.end[i], bb_end[dname]);
+            bb_idxs.end[i] = bend;
+
+            // Anything to do?
+            if (bend <= bbegin)
+                ok = false;
+        }
+        TRACE_MSG3("calc_block for bundle '" << get_name() <<
+                   "': after trimming for BB: " <<
+                   bb_idxs.begin.makeValStr(nsdims) <<
+                   " ... (end before) " << bb_idxs.end.makeValStr(nsdims));
+
+        // Leave if nothing to do.
+        if (!ok) {
+            TRACE_MSG3("calc_block for bundle '" << get_name() <<
+                       "': no overlap between bundle BB and block");
+            return;
+        }
 
         // Update offsets of scratch grids based on this bundle's location.
-        _generic_context->update_scratch_grids(thread_idx, def_block_idxs.begin);
-        
-        // Define the bundles that need to be processed in
-        // this block. This will be the prerequisite scratch-grid
+        _generic_context->update_scratch_grid_info(thread_idx, bb_idxs.begin);
+
+        // Get the bundles that need to be processed in
+        // this block. This will be any prerequisite scratch-grid
         // bundles plus this non-scratch bundle.
-        auto sg_list = get_scratch_children();
-        sg_list.push_back(this);
+        auto sg_list = get_reqd_bundles();
 
         // Set number of threads for a block.
         // Each of these threads will work on a sub-block.
@@ -75,11 +101,11 @@ namespace yask {
         for (auto* sg : sg_list) {
 
             // Indices needed for the generated loops.  Will normally be a
-            // copy of def_block_idxs except when updating scratch-grids.
-            ScanIndices block_idxs = sg->adjust_span(thread_idx, def_block_idxs);
+            // copy of 'bb_idxs' except when updating scratch-grids.
+            ScanIndices block_idxs = sg->adjust_span(thread_idx, bb_idxs);
 
-            TRACE_MSG3("calc_block: " <<
-                       " in bundle '" << sg->get_name() << "': " <<
+            TRACE_MSG3("calc_block for bundle '" << get_name() << "': " <<
+                       " in reqd bundle '" << sg->get_name() << "': " <<
                        block_idxs.begin.makeValStr(nsdims) <<
                        " ... (end before) " << block_idxs.end.makeValStr(nsdims) <<
                        " by thread " << thread_idx);
@@ -127,7 +153,7 @@ namespace yask {
     // into full vector-clusters, full vectors, and sub-vectors
     // and finally evaluated by the YASK-compiler-generated loops.
     void StencilBundleBase::calc_sub_block(int thread_idx,
-                                          const ScanIndices& block_idxs) {
+                                           const ScanIndices& block_idxs) {
         auto* cp = _generic_context;
         auto opts = cp->get_settings();
         auto dims = cp->get_dims();
@@ -135,8 +161,7 @@ namespace yask {
         int nsdims = dims->_stencil_dims.size();
         auto& step_dim = dims->_step_dim;
         auto step_posn = Indices::step_posn;
-        TRACE_MSG3("calc_sub_block:" <<
-                   " in bundle '" << get_name() << "': " <<
+        TRACE_MSG3("calc_sub_block for reqd bundle '" << get_name() << "': " <<
                    block_idxs.start.makeValStr(nsdims) <<
                    " ... (end before) " << block_idxs.stop.makeValStr(nsdims));
 
@@ -193,13 +218,15 @@ namespace yask {
         bool do_scalars = false; // any scalars to do? (assume not)
         bool scalar_for_peel_rem = false; // using the scalar code for peel and/or remainder.
 
-        // If BB is not full, do whole block with scalar code.  We should
+        // For scratch grids, always do whole BB. Otherwise,
+        // if BB is not full, do whole block with scalar code.  We should
         // only get here when using sub-domains w/"holes" in them.  TODO: do
         // as much vectorization as possible-- this current code is
         // functionally correct but very poor perf.
-        bool scalar_only = !bb_is_full;
 #ifdef FORCE_SCALAR
-        scalar_only = true;
+        bool scalar_only = true;
+#else
+        bool scalar_only = !is_scratch() && !bb_is_full;
 #endif
         if (scalar_only) {
 
@@ -679,88 +706,6 @@ namespace yask {
             break;
         }
         return adj_idxs;
-    }
-    
-    // Set the bounding-box vars for this bundle in this rank.
-    void StencilBundleBase::find_bounding_box() {
-        StencilContext& context = *_generic_context;
-        ostream& os = context.get_ostr();
-        auto settings = context.get_settings();
-        auto dims = context.get_dims();
-        auto& domain_dims = dims->_domain_dims;
-        auto& step_dim = dims->_step_dim;
-        auto& stencil_dims = dims->_stencil_dims;
-        auto nsdims = stencil_dims.size();
-
-        // Init min vars w/max val and vice-versa.
-        Indices min_pts(idx_max, nsdims);
-        Indices max_pts(idx_min, nsdims);
-        idx_t npts = 0;
-
-        // Begin, end tuples.
-        // Scan across domain in this rank including
-        // any extensions for wave-fronts.
-        IdxTuple begin(stencil_dims);
-        begin.setVals(context.ext_bb.bb_begin, false);
-        begin[step_dim] = 0;
-        IdxTuple end(stencil_dims);
-        end.setVals(context.ext_bb.bb_end, false);
-        end[step_dim] = 1;      // one time-step only.
-
-        // Indices needed for the generated 'misc' loops.
-        ScanIndices misc_idxs(*dims, false, 0);
-        misc_idxs.begin = begin;
-        misc_idxs.end = end;
-
-        // Define misc-loop function.  Since step is always 1, we ignore
-        // misc_stop.  Update only if point is in domain for this bundle.
-#define misc_fn(misc_idxs) do {                                  \
-        if (is_in_valid_domain(misc_idxs.start)) {               \
-            min_pts = min_pts.minElements(misc_idxs.start);      \
-            max_pts = max_pts.maxElements(misc_idxs.start);      \
-            npts++; \
-        } } while(0)
-
-        // Define OMP reductions to be used in generated code.
-#ifdef OMP_PRAGMA_SUFFIX
-#undef OMP_PRAGMA_SUFFIX
-#endif
-#define OMP_PRAGMA_SUFFIX reduction(+:npts)     \
-            reduction(min_idxs:min_pts)         \
-            reduction(max_idxs:max_pts)
-
-        // Scan through n-D space.  This scan sets min_pts & max_pts for all
-        // stencil dims (including step dim) and npts to the number of valid
-        // points.
-#include "yask_misc_loops.hpp"
-#undef misc_fn
-#undef OMP_PRAGMA_SUFFIX
-
-        // Init bb vars to ensure they contain correct dims.
-        bb_begin = domain_dims;
-        bb_end = domain_dims;
-        
-        // If any points, set begin vars to min indices and end vars to one
-        // beyond max indices.
-        if (npts) {
-            IdxTuple tmp(stencil_dims); // create tuple w/stencil dims.
-            min_pts.setTupleVals(tmp);  // convert min_pts to tuple.
-            bb_begin.setVals(tmp, false); // set bb_begin to domain dims of min_pts.
-
-            max_pts.setTupleVals(tmp); // convert min_pts to tuple.
-            bb_end.setVals(tmp, false); // set bb_end to domain dims of max_pts.
-            bb_end = bb_end.addElements(1); // end = last + 1.
-        }
-
-        // No points, just set to zero.
-        else {
-            bb_begin.setValsSame(0);
-            bb_end.setValsSame(0);
-        }
-        bb_num_points = npts;
-        
-        // Finalize BB.
-        update_bb(os, get_name(), context);
     }
     
 } // namespace yask.

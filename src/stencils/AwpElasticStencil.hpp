@@ -34,11 +34,15 @@ IN THE SOFTWARE.
 // Set the following macro to use a sponge grid instead of 3 sponge arrays.
 //#define FULL_SPONGE_GRID
 
+// Set the following macro to define all points, even those above the
+// surface that are never used.
+#define SET_ALL_POINTS
+
 // Set the following macro to calculate free-surface boundary values.
 #define DO_ABOVE_SURFACE
 
 // Set the following macro to use intermediate scratch grids.
-#define USE_SCRATCH_GRIDS
+//#define USE_SCRATCH_GRIDS
 
 #include "Soln.hpp"
 
@@ -241,11 +245,13 @@ public:
         vel_y(t+1, x, y, z) EQUALS plus1_vel_y IF_ONE_ABOVE_SURFACE;
         vel_z(t+1, x, y, z) EQUALS plus1_vel_z IF_ONE_ABOVE_SURFACE;
 
+#ifdef SET_ALL_POINTS
         // Define layer two points above surface for completeness, even
         // though these aren't input to any stencils.
         vel_x(t+1, x, y, z) EQUALS 0.0 IF_TWO_ABOVE_SURFACE;
         vel_y(t+1, x, y, z) EQUALS 0.0 IF_TWO_ABOVE_SURFACE;
         vel_z(t+1, x, y, z) EQUALS 0.0 IF_TWO_ABOVE_SURFACE;
+#endif
     }
 
     // Compute average of 8 neighbors.
@@ -390,11 +396,13 @@ public:
         stress_xz(t+1, x, y, z) EQUALS -get_next_stress_xz(x, y, surf-1) IF_ONE_ABOVE_SURFACE;
         stress_yz(t+1, x, y, z) EQUALS -get_next_stress_yz(x, y, surf-1) IF_ONE_ABOVE_SURFACE;
 
+#ifdef SET_ALL_POINTS
         // Define other 3 stress values for completeness, even
         // though these aren't input to any stencils.
         stress_xx(t+1, x, y, z) EQUALS 0.0 IF_ONE_ABOVE_SURFACE;
         stress_yy(t+1, x, y, z) EQUALS 0.0 IF_ONE_ABOVE_SURFACE;
         stress_xy(t+1, x, y, z) EQUALS 0.0 IF_ONE_ABOVE_SURFACE;
+#endif
         
         // When z == surface + 2, the surface will be at z - 2;
         surf = z - 2;
@@ -403,11 +411,13 @@ public:
         stress_xz(t+1, x, y, z) EQUALS -get_next_stress_xz(x, y, surf-2) IF_TWO_ABOVE_SURFACE;
         stress_yz(t+1, x, y, z) EQUALS -get_next_stress_yz(x, y, surf-2) IF_TWO_ABOVE_SURFACE;
 
+#ifdef SET_ALL_POINTS
         // Define other 3 stress values for completeness, even
         // though these aren't input to any stencils.
         stress_xx(t+1, x, y, z) EQUALS 0.0 IF_TWO_ABOVE_SURFACE;
         stress_yy(t+1, x, y, z) EQUALS 0.0 IF_TWO_ABOVE_SURFACE;
         stress_xy(t+1, x, y, z) EQUALS 0.0 IF_TWO_ABOVE_SURFACE;
+#endif
     }
     
     // Define the t+1 values for all velocity and stress grids.

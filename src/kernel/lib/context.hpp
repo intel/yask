@@ -385,11 +385,11 @@ namespace yask {
 
         // Set grid sizes and offsets.
         // This should be called anytime a setting or offset is changed.
-        virtual void update_grids();
+        virtual void update_grid_info();
         
         // Adjust offsets of scratch grids based
         // on thread and scan indices.
-        virtual void update_scratch_grids(int thread_idx,
+        virtual void update_scratch_grid_info(int thread_idx,
                                           const Indices& idxs);
 
         // Get total memory allocation required by grids.
@@ -516,24 +516,27 @@ namespace yask {
         // Vectorized and blocked stencil calculations.
         virtual void calc_rank_opt();
 
-        // Calculate results within a region.  Boundaries are named start_d*
-        // and stop_d* because region loops are nested inside the
-        // rank-domain loops; the actual begin_r* and end_r* values for the
-        // region are derived from these.  TODO: create a public interface
-        // w/a more logical index ordering.
-        virtual void calc_region(StencilBundleSet* stBundle_set,
+        // Calculate results within a region.
+        virtual void calc_region(BundlePackPtr& sel_bp,
                                  const ScanIndices& rank_idxs);
+
+        // Calculate results within a block.
+        virtual void calc_block(BundlePackPtr& sel_bp,
+                                const ScanIndices& region_idxs);
 
         // Exchange all dirty halo data for all stencil bundles
         // and max number of steps for each grid.
         virtual void exchange_halos_all();
 
-        // Exchange halo data needed by stencil-bundle 'sg' at the given step(s).
-        // If sg==null, check all bundles.
-        virtual void exchange_halos(idx_t start, idx_t stop, StencilBundleBase* sg);
+        // Exchange halo data needed by bundle pack 'sel_bp' at the given step(s).
+        // If sel_bp==null, check all bundles.
+        virtual void exchange_halos(const BundlePackPtr& sel_bp,
+                                    idx_t start, idx_t stop);
 
-        // Mark grids that have been written to by bundle 'sg'.
-        virtual void mark_grids_dirty(idx_t start, idx_t stop, StencilBundleBase& sg);
+        // Mark grids that have been written to by bundle pack 'sel_bp'.
+        // If sel_bp==null, use all bundles.
+        virtual void mark_grids_dirty(const BundlePackPtr& sel_bp,
+                                      idx_t start, idx_t stop);
         
         // Set the bounding-box around all stencil bundles.
         virtual void find_bounding_boxes();

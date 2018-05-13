@@ -23,8 +23,8 @@ IN THE SOFTWARE.
 
 *****************************************************************************/
 
-// This file contains implementations of StencilContext methods
-// specific to the preparation steps.
+// This file contains implementations of StencilContext and
+// StencilBundleBase methods specific to the preparation steps.
 
 #include "yask.hpp"
 using namespace std;
@@ -227,7 +227,7 @@ namespace yask {
 
         // Set offsets in grids and find WF extensions
         // based on the grids' halos.
-        update_grids();
+        update_grid_info();
 
         // Determine bounding-boxes for all bundles.
         // This must be done after finding WF extensions.
@@ -869,7 +869,7 @@ namespace yask {
     // Set non-scratch grid sizes and offsets based on settings.
     // Set wave-front settings.
     // This should be called anytime a setting or rank offset is changed.
-    void StencilContext::update_grids()
+    void StencilContext::update_grid_info()
     {
         assert(_opts);
 
@@ -917,12 +917,8 @@ namespace yask {
         num_wf_shifts = 0;
         if (wf_steps > 1) {
 
-            // Need to shift for each non-scratch bundle.
-            for (auto* asg : stBundles) {
-
-                // Each bundle is shifted 'wf_steps' times.
-                num_wf_shifts += wf_steps;
-            }
+            // Need to shift for each bundle pack.
+            num_wf_shifts = stPacks.size() * wf_steps;
 
             // Don't need to shift first one.
             num_wf_shifts--;
@@ -1131,42 +1127,61 @@ namespace yask {
         rank_numWrites_1t = 0;
         rank_reads_1t = 0;
         rank_numFpOps_1t = 0;
+
+        // Info about packs and bundles.
         os << "Num stencil bundles: " << stBundles.size() << endl;
-        for (auto* sg : stBundles) {
+        os << "Num stencil packs: " << stPacks.size() << endl;
+        for (auto& sp : stPacks) {
+            os << "Bundle(s) in pack '" << sp->get_name() << "':\n";
+            for (auto* sg : *sp) {
 
-            idx_t updates1 = 0, reads1 = 0, fpops1 = 0;
+                idx_t updates1 = 0, reads1 = 0, fpops1 = 0;
             
-            // Loop through all the needed bundles to
-            // count stats for scratch bundles.
-            // Does not count extra ops needed in scratch halos
-            // since this varies depending on block size.
-            auto sg_list = sg->get_reqd_bundles();
-            for (auto* rsg : sg_list) {
-                updates1 += rsg->get_scalar_points_written();
-                reads1 += rsg->get_scalar_points_read();
-                fpops1 += rsg->get_scalar_fp_ops();
-            }
+                // Loop through all the needed bundles to
+                // count stats for scratch bundles.
+                // Does not count extra ops needed in scratch halos
+                // since this varies depending on block size.
+                auto sg_list = sg->get_reqd_bundles();
+                for (auto* rsg : sg_list) {
+                    updates1 += rsg->get_scalar_points_written();
+                    reads1 += rsg->get_scalar_points_read();
+                    fpops1 += rsg->get_scalar_fp_ops();
+                }
 
-            idx_t updates_domain = updates1 * sg->bb_num_points;
-            rank_numWrites_1t += updates_domain;
-            idx_t reads_domain = reads1 * sg->bb_num_points;
-            rank_reads_1t += reads_domain;
-            idx_t fpops_domain = fpops1 * sg->bb_num_points;
-            rank_numFpOps_1t += fpops_domain;
+                idx_t updates_domain = updates1 * sg->bb_num_points;
+                rank_numWrites_1t += updates_domain;
+                idx_t reads_domain = reads1 * sg->bb_num_points;
+                rank_reads_1t += reads_domain;
+                idx_t fpops_domain = fpops1 * sg->bb_num_points;
+                rank_numFpOps_1t += fpops_domain;
 
-            os << "Stats for bundle '" << sg->get_name() << "':\n" <<
-                " scratch bundles:            " << (sg_list.size() - 1) << endl <<
-                " sub-domain:                 " << sg->bb_begin.makeDimValStr() <<
-                " ... " << sg->bb_end.subElements(1).makeDimValStr() << endl <<
-                " sub-domain size:            " << sg->bb_len.makeDimValStr(" * ") << endl <<
-                " valid points in sub domain: " << makeNumStr(sg->bb_num_points) << endl <<
-                " grid-updates per point:     " << updates1 << endl <<
-                " grid-updates in sub-domain: " << makeNumStr(updates_domain) << endl <<
-                " grid-reads per point:       " << reads1 << endl <<
-                " grid-reads in sub-domain:   " << makeNumStr(reads_domain) << endl <<
-                " est FP-ops per point:       " << fpops1 << endl <<
-                " est FP-ops in sub-domain:   " << makeNumStr(fpops_domain) << endl;
-        }
+                os << " Bundle '" << sg->get_name() << "':\n" <<
+                    "  scratch bundles:            " << (sg_list.size() - 1) << endl <<
+                    "  sub-domain:                 " << sg->bb_begin.makeDimValStr() <<
+                    " ... " << sg->bb_end.subElements(1).makeDimValStr() << endl <<
+                    "  sub-domain size:            " << sg->bb_len.makeDimValStr(" * ") << endl <<
+                    "  valid points in sub domain: " << makeNumStr(sg->bb_num_points) << endl <<
+                    "  grid-updates per point:     " << updates1 << endl <<
+                    "  grid-updates in sub-domain: " << makeNumStr(updates_domain) << endl <<
+                    "  grid-reads per point:       " << reads1 << endl <<
+                    "  grid-reads in sub-domain:   " << makeNumStr(reads_domain) << endl <<
+                    "  est FP-ops per point:       " << fpops1 << endl <<
+                    "  est FP-ops in sub-domain:   " << makeNumStr(fpops_domain) << endl;
+                os << "  input-grids:                ";
+                int i = 0;
+                for (auto gp : sg->inputGridPtrs) {
+                    if (i++) os << ", ";
+                    os << gp->get_name();
+                }
+                os << "\n  output-grids:               ";
+                i = 0;
+                for (auto gp : sg->outputGridPtrs) {
+                    if (i++) os << ", ";
+                    os << gp->get_name();
+                }
+                os << endl;
+            } // bundles.
+        } // packs.
 
         // Various metrics for amount of work.
         rank_numWrites_dt = rank_numWrites_1t * dt;
@@ -1275,6 +1290,109 @@ namespace yask {
         }
     }
 
+    // Set the bounding-box for each stencil-bundle and whole domain.
+    void StencilContext::find_bounding_boxes()
+    {
+        ostream& os = get_ostr();
+
+        // Rank BB is based only on rank offsets and rank domain sizes.
+        rank_bb.bb_begin = rank_domain_offsets;
+        rank_bb.bb_end = rank_domain_offsets.addElements(_opts->_rank_sizes, false);
+        rank_bb.update_bb(os, "rank", *this, true);
+
+        // BB may be extended for wave-fronts.
+        ext_bb.bb_begin = rank_bb.bb_begin.subElements(left_wf_exts);
+        ext_bb.bb_end = rank_bb.bb_end.addElements(right_wf_exts);
+        ext_bb.update_bb(os, "extended-rank", *this, true);
+
+        // Find BB for each bundle. Each will be a subset within
+        // 'ext_bb'.
+        for (auto sg : stBundles)
+            sg->find_bounding_box();
+    }
+
+    // Set the bounding-box vars for this bundle in this rank.
+    void StencilBundleBase::find_bounding_box() {
+        StencilContext& context = *_generic_context;
+        ostream& os = context.get_ostr();
+        auto settings = context.get_settings();
+        auto dims = context.get_dims();
+        auto& domain_dims = dims->_domain_dims;
+        auto& step_dim = dims->_step_dim;
+        auto& stencil_dims = dims->_stencil_dims;
+        auto nsdims = stencil_dims.size();
+
+        // Init min vars w/max val and vice-versa.
+        Indices min_pts(idx_max, nsdims);
+        Indices max_pts(idx_min, nsdims);
+        idx_t npts = 0;
+
+        // Begin, end tuples.
+        // Scan across domain in this rank including
+        // any extensions for wave-fronts.
+        IdxTuple begin(stencil_dims);
+        begin.setVals(context.ext_bb.bb_begin, false);
+        begin[step_dim] = 0;
+        IdxTuple end(stencil_dims);
+        end.setVals(context.ext_bb.bb_end, false);
+        end[step_dim] = 1;      // one time-step only.
+
+        // Indices needed for the generated 'misc' loops.
+        ScanIndices misc_idxs(*dims, false, 0);
+        misc_idxs.begin = begin;
+        misc_idxs.end = end;
+
+        // Define misc-loop function.  Since step is always 1, we ignore
+        // misc_stop.  Update only if point is in domain for this bundle.
+#define misc_fn(misc_idxs) do {                                  \
+        if (is_in_valid_domain(misc_idxs.start)) {               \
+            min_pts = min_pts.minElements(misc_idxs.start);      \
+            max_pts = max_pts.maxElements(misc_idxs.start);      \
+            npts++; \
+        } } while(0)
+
+        // Define OMP reductions to be used in generated code.
+#ifdef OMP_PRAGMA_SUFFIX
+#undef OMP_PRAGMA_SUFFIX
+#endif
+#define OMP_PRAGMA_SUFFIX reduction(+:npts)     \
+            reduction(min_idxs:min_pts)         \
+            reduction(max_idxs:max_pts)
+
+        // Scan through n-D space.  This scan sets min_pts & max_pts for all
+        // stencil dims (including step dim) and npts to the number of valid
+        // points.
+#include "yask_misc_loops.hpp"
+#undef misc_fn
+#undef OMP_PRAGMA_SUFFIX
+
+        // Init bb vars to ensure they contain correct dims.
+        bb_begin = domain_dims;
+        bb_end = domain_dims;
+        
+        // If any points, set begin vars to min indices and end vars to one
+        // beyond max indices.
+        if (npts) {
+            IdxTuple tmp(stencil_dims); // create tuple w/stencil dims.
+            min_pts.setTupleVals(tmp);  // convert min_pts to tuple.
+            bb_begin.setVals(tmp, false); // set bb_begin to domain dims of min_pts.
+
+            max_pts.setTupleVals(tmp); // convert min_pts to tuple.
+            bb_end.setVals(tmp, false); // set bb_end to domain dims of max_pts.
+            bb_end = bb_end.addElements(1); // end = last + 1.
+        }
+
+        // No points, just set to zero.
+        else {
+            bb_begin.setValsSame(0);
+            bb_end.setValsSame(0);
+        }
+        bb_num_points = npts;
+        
+        // Finalize BB.
+        update_bb(os, get_name(), context);
+    }
+    
     // Compute convenience values for a bounding-box.
     void BoundingBox::update_bb(ostream& os,
                                 const string& name,
@@ -1331,24 +1449,4 @@ namespace yask {
         bb_valid = true;
     }
     
-    // Set the bounding-box for each stencil-bundle and whole domain.
-    void StencilContext::find_bounding_boxes()
-    {
-        ostream& os = get_ostr();
-
-        // Rank BB is based only on rank offsets and rank domain sizes.
-        rank_bb.bb_begin = rank_domain_offsets;
-        rank_bb.bb_end = rank_domain_offsets.addElements(_opts->_rank_sizes, false);
-        rank_bb.update_bb(os, "rank", *this, true);
-
-        // Overall BB may be extended for wave-fronts.
-        ext_bb.bb_begin = rank_bb.bb_begin.subElements(left_wf_exts);
-        ext_bb.bb_end = rank_bb.bb_end.addElements(right_wf_exts);
-        ext_bb.update_bb(os, "extended-rank", *this, true);
-
-        // Find BB for each bundle.
-        for (auto sg : stBundles)
-            sg->find_bounding_box();
-    }
-
 } // namespace yask.

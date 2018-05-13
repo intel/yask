@@ -326,3 +326,44 @@ public:
 };
 
 REGISTER_STENCIL(TestScratchStencil2);
+
+// Test the use of sub-domains.
+
+class TestSubdomainStencil1 : public StencilRadiusBase {
+
+protected:
+
+    // Indices & dimensions.
+    MAKE_STEP_INDEX(t);           // step in time dim.
+    MAKE_DOMAIN_INDEX(x);         // spatial dim.
+
+    // Vars.
+    MAKE_GRID(data, t, x); // time-varying grid.
+
+public:
+
+    TestSubdomainStencil1(StencilList& stencils, int radius=2) :
+        StencilRadiusBase("test_subdomain1", stencils, radius) { }
+
+    // Define equation to apply to all points in 'data' grid.
+    virtual void define() {
+
+        // Set data w/asymmetrical stencils.
+        
+        GridValue u = data(t, x);
+        for (int r = 1; r <= _radius; r++)
+            u += data(t, x-r);
+        for (int r = 1; r <= _radius + 1; r++)
+            u += data(t, x+r);
+        data(t+1, x) EQUALS u / (_radius * 2 + 2) IF x < first_index(x) + 5;
+
+        GridValue v = data(t, x);
+        for (int r = 1; r <= _radius + 3; r++)
+            v += data(t, x-r);
+        for (int r = 1; r <= _radius + 2; r++)
+            v += data(t, x+r);
+        data(t+1, x) EQUALS u / (_radius * 2 + 6) IF x >= first_index(x) + 5;
+    }
+};
+
+REGISTER_STENCIL(TestSubdomainStencil1);
