@@ -200,17 +200,17 @@ py-yc-api-and-cxx-yk-api-test:
 # API tests. The 9th one is built-in with built-in,
 # which is tested more extensively in the kernel tests.
 # When the built-in stencil examples aren't being used,
-# "stencil=test" in the commands below is simply used to
+# "stencil=api_test" in the commands below is simply used to
 # create file names.
 combo-api-tests:
 	$(MAKE) clean; $(MAKE) stencil=iso3dfd yc-and-cxx-yk-api-test
 	$(MAKE) clean; $(MAKE) stencil=iso3dfd yc-and-py-yk-api-test
-	$(MAKE) clean; $(MAKE) stencil=test cxx-yc-api-and-yk-test
-	$(MAKE) clean; $(MAKE) stencil=test py-yc-api-and-yk-test
-	$(MAKE) clean; $(MAKE) stencil=test cxx-yc-api-and-cxx-yk-api-test
-	$(MAKE) clean; $(MAKE) stencil=test py-yc-api-and-py-yk-api-test
-	$(MAKE) clean; $(MAKE) stencil=test cxx-yc-api-and-py-yk-api-test
-	$(MAKE) clean; $(MAKE) stencil=test py-yc-api-and-cxx-yk-api-test
+	$(MAKE) clean; $(MAKE) stencil=api_test cxx-yc-api-and-yk-test
+	$(MAKE) clean; $(MAKE) stencil=api_test py-yc-api-and-yk-test
+	$(MAKE) clean; $(MAKE) stencil=api_test cxx-yc-api-and-cxx-yk-api-test
+	$(MAKE) clean; $(MAKE) stencil=api_test py-yc-api-and-py-yk-api-test
+	$(MAKE) clean; $(MAKE) stencil=api_test cxx-yc-api-and-py-yk-api-test
+	$(MAKE) clean; $(MAKE) stencil=api_test py-yc-api-and-cxx-yk-api-test
 
 ######## Misc targets
 
@@ -238,8 +238,6 @@ all-tests: compiler-api
 	$(MAKE) tuple-test
 	$(MAKE) combo-api-tests
 	$(YK_MAKE) $@
-
-docs: api-docs
 
 all:
 	$(MAKE) realclean

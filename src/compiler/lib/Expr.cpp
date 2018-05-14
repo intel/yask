@@ -472,7 +472,7 @@ namespace yask {
         auto expr = make_shared<EqualsExpr>(gpp, rhs);
 
         // Save the expression in list of equations.
-        eqs.addEq(expr);
+        eqs.addItem(expr);
 
         return expr;
     }
@@ -525,6 +525,10 @@ namespace yask {
     }
 
     // EqualsExpr methods.
+    bool EqualsExpr::isScratch() {
+        Grid* gp = getGrid();
+        return gp && gp->isScratch();
+    }
     bool EqualsExpr::isSame(const Expr* other) const {
         auto p = dynamic_cast<const EqualsExpr*>(other);
         return p && 

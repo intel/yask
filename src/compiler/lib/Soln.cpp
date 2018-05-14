@@ -97,9 +97,15 @@ namespace yask {
                                  _settings._eqBundleTargets, *_dos);
         _eqBundles.optimizeEqBundles(_settings, "scalar & vector", false, *_dos);
 
+        // Separate bundles into packs.
+        // These are used for tracking bundle inter-dependencies.
+        _eqBundlePacks.makePacks(_eqBundles, *_dos);
+
         // Make a copy of each equation at each cluster offset.
         // We will use these for inter-cluster optimizations and code generation.
-        *_dos << "Constructing cluster of equations containing " <<
+        // NB: these cluster bundles do not maintain dependencies, so cannot be used
+        // for sorting, making packs, etc.
+        *_dos << "\nConstructing cluster of equations containing " <<
             _dims._clusterMults.product() << " vector(s)...\n";
         _clusterEqBundles = _eqBundles;
         _clusterEqBundles.replicateEqsInCluster(_dims);
@@ -116,13 +122,17 @@ namespace yask {
         // Data itself will be created in analyze_solution().
         PrinterBase* printer = 0;
         if (format_type == "cpp")
-            printer = new YASKCppPrinter(*this, _eqBundles, _clusterEqBundles, &_dims);
+            printer = new YASKCppPrinter(*this, _eqBundles, _eqBundlePacks,
+                                         _clusterEqBundles, &_dims);
         else if (format_type == "knc")
-            printer = new YASKKncPrinter(*this, _eqBundles, _clusterEqBundles, &_dims);
+            printer = new YASKKncPrinter(*this, _eqBundles, _eqBundlePacks,
+                                         _clusterEqBundles, &_dims);
         else if (format_type == "avx" || format_type == "avx2")
-            printer = new YASKAvx256Printer(*this, _eqBundles, _clusterEqBundles, &_dims);
+            printer = new YASKAvx256Printer(*this, _eqBundles, _eqBundlePacks,
+                                            _clusterEqBundles, &_dims);
         else if (format_type == "avx512" || format_type == "avx512f")
-            printer = new YASKAvx512Printer(*this, _eqBundles, _clusterEqBundles, &_dims);
+            printer = new YASKAvx512Printer(*this, _eqBundles, _eqBundlePacks,
+                                            _clusterEqBundles, &_dims);
         else if (format_type == "dot")
             printer = new DOTPrinter(*this, _clusterEqBundles, false);
         else if (format_type == "dot-lite")
@@ -143,7 +153,7 @@ namespace yask {
         analyze_solution(vlen, is_folding_efficient);
 
         // Create the output.
-        *_dos << "Generating '" << format_type << "' output...\n";
+        *_dos << "\nGenerating '" << format_type << "' output...\n";
         printer->print(output->get_ostream());
         delete printer;
     }

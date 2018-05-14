@@ -23,7 +23,7 @@ IN THE SOFTWARE.
 
 *****************************************************************************/
 
-///////// Classes for equations and equation bundles ////////////
+///////// Classes for equations, equation bundles, and bundle packs. ////////////
 
 #ifndef EQS_HPP
 #define EQS_HPP
@@ -35,33 +35,64 @@ using namespace std;
 
 namespace yask {
 
-    // Dependencies between equations.
-    class EqDeps {
+    // Dependencies between objects of type T.
+    template <typename T>
+    class Deps {
 
     public:
+        typedef shared_ptr<T> Tp;
+        typedef unordered_set<Tp> TpSet;
+        typedef vector_set<Tp> TpList;
+
         // dep_map[A].count(B) > 0 => A depends on B.
-        typedef unordered_set<EqualsExprPtr> EqSet;
-        typedef unordered_map<EqualsExprPtr, EqSet> DepMap;
-        typedef vector_set<EqualsExprPtr> EqVecSet;
+        typedef unordered_map<Tp, TpSet> DepMap;
 
     protected:
         DepMap _imm_deps;       // immediate deps, i.e., transitive reduction.
         DepMap _full_deps;      // transitive closure of _imm_deps.
-        EqSet _all;             // all expressions.
-        bool _done;             // indirect dependencies added?
+        TpSet _all;             // set of all objs.
+        bool _done = false;     // transitive closure done?
+        TpSet _empty;
     
         // Recursive helper for visitDeps().
-        virtual void _visitDeps(EqualsExprPtr a,
-                               std::function<void (EqualsExprPtr b, EqVecSet& path)> visitor,
-                               EqVecSet* seen) const;
+        virtual void _visitDeps(Tp a,
+                                std::function<void (Tp b, TpList& path)> visitor,
+                                TpList* seen) const {
+
+            // Already visited, i.e., a loop?
+            bool was_seen = (seen && seen->count(a));
+            if (was_seen)
+                return;
+
+            // Add 'a' to copy of path.
+            TpList seen1;
+            if (seen)
+                seen1 = *seen; // copy nodes already seen.
+            seen1.insert(a);   // add this one.
+        
+            // Call lambda fn.
+            visitor(a, seen1);
+                    
+            // any dependencies?
+            if (_imm_deps.count(a)) {
+                auto& adeps = _imm_deps.at(a);
+    
+                // loop thru deps of 'a', i.e., each 'b' deps on 'a'.
+                for (auto b : adeps) {
+
+                    // Recurse to deps of 'b'.
+                    _visitDeps(b, visitor, &seen1);
+                }
+            }
+        }
 
     public:
 
-        EqDeps() : _done(false) {}
-        virtual ~EqDeps() {}
+        Deps() {}
+        virtual ~Deps() {}
     
         // Declare that eq a depends directly on b.
-        virtual void set_imm_dep_on(EqualsExprPtr a, EqualsExprPtr b) {
+        virtual void set_imm_dep_on(Tp a, Tp b) {
             _imm_deps[a].insert(b);
             _all.insert(a);
             _all.insert(b);
@@ -73,113 +104,255 @@ namespace yask {
             _imm_deps.clear();
             _full_deps.clear();
             _all.clear();
-            _done = false;
+            _done = true;
         }
     
         // Check whether eq a directly depends on b.
-        virtual bool is_imm_dep_on(EqualsExprPtr a, EqualsExprPtr b) const {
+        virtual bool is_imm_dep_on(Tp a, Tp b) const {
             return _imm_deps.count(a) && _imm_deps.at(a).count(b) > 0;
         }
     
         // Checks for immediate dependencies in either direction.
-        virtual bool is_imm_dep(EqualsExprPtr a, EqualsExprPtr b) const {
+        virtual bool is_imm_dep(Tp a, Tp b) const {
             return is_imm_dep_on(a, b) || is_imm_dep_on(b, a);
         }
 
-        // Check whether eq a depends on b.
-        virtual bool is_dep_on(EqualsExprPtr a, EqualsExprPtr b) const {
-            assert(_done || _imm_deps.size() == 0);
+        // Check whether eq 'a' depends on 'b'.
+        virtual bool is_dep_on(Tp a, Tp b) const {
+            assert(_done);
             return _full_deps.count(a) && _full_deps.at(a).count(b) > 0;
         }
     
         // Checks for dependencies in either direction.
-        virtual bool is_dep(EqualsExprPtr a, EqualsExprPtr b) const {
+        virtual bool is_dep(Tp a, Tp b) const {
             return is_dep_on(a, b) || is_dep_on(b, a);
         }
 
-        // Visit 'a' and all its immediate dependencies.
-        // At each node 'b', 'visitor(b, path)' is called, where 'path' contains
-        // all nodes from 'a' thru 'b'.
-        virtual void visitDeps(EqualsExprPtr a,
-                               std::function<void (EqualsExprPtr b, EqVecSet& path)> visitor) {
+        // Get all the objects that 'a' depends on.
+        virtual const TpSet& get_imm_deps_on(Tp a) const {
+            if (_imm_deps.count(a) == 0)
+                return _empty;
+            return _imm_deps.at(a);
+        }
+        virtual const TpSet& get_deps_on(Tp a) const {
+            assert(_done);
+            if (_full_deps.count(a) == 0)
+                return _empty;
+            return _full_deps.at(a);
+        }
+
+        // Visit 'a' and all its dependencies.
+        // At each node 'b' in graph, 'visitor(b, path)' is called,
+        // where 'path' contains all nodes from 'a' thru 'b'.
+        virtual void visitDeps(Tp a,
+                               std::function<void (Tp b,
+                                                   TpList& path)> visitor) const {
             _visitDeps(a, visitor, NULL);
         }
         
-        // Does recursive analysis to find indirect dependencies from direct
-        // ones.
-        virtual void find_all_deps();
+        // Does recursive analysis to find transitive closure.
+        virtual void find_all_deps() {
+            if (_done)
+                return;
+            for (auto a : _all)
+                if (_full_deps.count(a) == 0)
+                    visitDeps(a, [&](Tp b, TpList& path) {
+                            
+                            // Walk path from ee to b.
+                            // Every 'eq' in 'path' before 'b' depends on 'b'.
+                            for (auto eq : path)
+                                if (eq != b)
+                                    _full_deps[eq].insert(b);
+                        });
+            _done = true;
+        }
     };
 
-    // A collection of deps by dep type.
-    typedef map<DepType, EqDeps> EqDepMap;
+    // A set of objects that have inter-dependencies.
+    // Some depencencies may be flagged as "scratch" objects.
+    // Class 'T' must implement 'clone()' that returns
+    // a 'shared_ptr<T>'.
+    template <typename T>
+    class DepGroup {
+
+    public:
+        typedef shared_ptr<T> Tp;
+        typedef unordered_set<Tp> TpSet;
+        typedef vector_set<Tp> TpList;
+
+    protected:
+    
+        // Things in this group.
+        TpList _all;
+
+        // Dependencies between objs.
+        Deps<T> _deps;
+
+        // Scratch objects.
+        Deps<T> _scratches;
+
+    public:
+
+        DepGroup() { }
+        virtual ~DepGroup() { }
+
+        // Assigning a DepGroup will clone its items
+        // but drop all deps.
+        // TODO: clone the deps, too.
+        DepGroup& operator=(const DepGroup& src) {
+            for (auto& p : src._all)
+                _all.insert(p->clone());
+            _deps.clear_deps();
+            _scratches.clear_deps();
+            return *this;
+        }
+        
+        // list accessors.
+        virtual void addItem(Tp p) {
+            _all.insert(p);
+        }
+        virtual const TpList& getAll() const {
+            return _all;
+        }
+        virtual int getNum() const {
+            return _all.size();
+        }
+
+        // Get the deps.
+        virtual const Deps<T>& getDeps() const {
+            return _deps;
+        }
+        virtual Deps<T>& getDeps() {
+            return _deps;
+        }
+        virtual const TpSet& getDeps(Tp p) const {
+            return _deps.get_deps_on(p);
+        }
+        
+        // Get the scratch objs.
+        virtual const Deps<T>& getScratches() const {
+            return _scratches;
+        }
+        virtual Deps<T>& getScratches() {
+            return _scratches;
+        }
+        virtual const TpSet& getScratches(Tp p) const {
+            return _scratches.get_deps_on(p);
+        }
+
+        // Find indirect dependencies.
+        virtual void find_all_deps() {
+            _deps.find_all_deps();
+            _scratches.find_all_deps();
+        }
+        
+        // Reorder based on dependencies,
+        // i.e., topological sort.
+        virtual void topo_sort() {
+            find_all_deps();
+
+            // No need to sort less than two things.
+            if (_all.size() <= 1)
+                return;
+
+            // Want to keep original order as much as possible.
+            // Only reorder if dependencies are in conflict.
+
+            // Scan from beginning to end.
+            for (size_t i = 0; i < _all.size(); i++) {
+                auto& oi = _all.at(i);
+
+                // Repeat until no dependent found.
+                bool done = false;
+                while (!done) {
+        
+                    // Does obj[i] depend on any obj after it?
+                    for (size_t j = i+1; j < _all.size(); j++) {
+                        auto& oj = _all.at(j);
+
+                        // Must swap if dependent.
+                        if (_deps.is_dep_on(oi, oj)) {
+
+                            // Error if also back-dep.
+                            if (_deps.is_dep_on(oj, oi)) {
+                                THROW_YASK_EXCEPTION("Error: circular dependency between " <<
+                                                     oi->getDescr() << " and " <<
+                                                     oj->getDescr());
+                            }
+
+                            // Swap them.
+                            auto temp = oi;
+                            oi = oj;
+                            oj = temp;
+
+                            // Start over at index i.
+                            done = false;
+                            break;
+                        }
+                    }
+                    done = true;
+                }
+            }
+        }
+
+        // Copy dependencies from the 'full' graph to this
+        // condensed graph.
+        // Class 'T' must implement 'getItems()', which returns
+        // an iteratable container of 'Tf' types.
+        // See https://en.wikipedia.org/wiki/Directed_acyclic_graph.
+        template <typename Tf>
+        void inherit_deps_from(const DepGroup<Tf>& full) {
+
+            // Deps between Tf objs.
+            auto& fdeps = full.getDeps();
+            auto& fscrs = full.getScratches();
+        
+            // All T objs in this.
+            for (auto& oi : _all) {
+
+                // All other T objs in this.
+                for (auto& oj : _all) {
+
+                    // Don't compare to self.
+                    if (oi == oj) continue;
+
+                    // All Tf objs in 'oi'.
+                    for (auto& foi : oi->getItems()) {
+
+                        // All Tf objs in 'oj'.
+                        for (auto& foj : oj->getItems()) {
+
+                            // If 'foi' is dep on 'foj',
+                            // then 'oi' is dep on 'oj'.
+                            if (fdeps.is_imm_dep_on(foi, foj))
+                                _deps.set_imm_dep_on(oi, oj);
+                            if (fscrs.is_imm_dep_on(foi, foj))
+                                _scratches.set_imm_dep_on(oi, oj);
+                        }
+                    }
+                }
+            }
+            find_all_deps();
+        }
+
+    };
 
     // A list of unique equation ptrs.
     typedef vector_set<EqualsExprPtr> EqList;
 
-    // Map w/key = expr ptr, value = if-condition ptr.
-    // We use this to simplify the process of replacing statements
-    //  when an if-condition is encountered.
-    // Example: key: grid(t,x)==grid(t,x+1); value: x>5;
-    typedef map<EqualsExpr*, BoolExprPtr> CondMap;
-
-    // A set of equations and related data.
-    class Eqs {
-
-    protected:
-    
-        // Equations(s) describing how values in this grid are computed.
-        EqList _eqs;
-
-        // Dependencies between all eqs.
-        EqDepMap _eq_deps;
-
-        // Dependencies through scratch grids.
-        EqDeps::DepMap _scratch_deps;
+    // A set of equations and related dependency data.
+    class Eqs : public DepGroup<EqualsExpr> {
         
     public:
 
-        Eqs() {
-            // Make sure map keys exist.
-            for (DepType dt = DepType(0); dt < num_deps; dt = DepType(dt+1))
-                _eq_deps[dt];
-        }
-        virtual ~Eqs() {}
-
-        // Equation accessors.
-        virtual void addEq(EqualsExprPtr ep) {
-            _eqs.insert(ep);
-            _scratch_deps[ep];
-        }
-        virtual const EqList& getEqs() const {
-            return _eqs;
-        }
-        virtual int getNumEqs() const {
-            return _eqs.size();
-        }
-
-        // Get all the deps.
-        virtual const EqDepMap& getDeps() const {
-            return _eq_deps;
-        }
-        virtual EqDepMap& getDeps() {
-            return _eq_deps;
-        }
-        
-        // Get the scratch-grid eqs that contribute to 'eq'.
-        virtual const EqDeps::EqSet& getScratchDeps(EqualsExprPtr ep) const {
-            return _scratch_deps.at(ep);
-        }
-
         // Visit all equations.
-        // Will NOT visit conditions.
         virtual void visitEqs(ExprVisitor* ev) {
-            for (auto& ep : _eqs) {
+            for (auto& ep : _all) {
                 ep->accept(ev);
             }
         }
 
-        // Find dependencies based on all eqs.  If 'eq_deps' is
-        // set, save dependencies between eqs in referent.
+        // Find dependencies based on all eqs. 
         virtual void analyzeEqs(CompilerSettings& settings,
                                 Dimensions& dims,
                                 std::ostream& os);
@@ -194,79 +367,39 @@ namespace yask {
         virtual void updateGridStats();
     };
 
-    // A named equation bundle, which contains one or more grid-update
-    // equations.  All equations in a bundle must have the same condition.
-    // Equations in a bundle should not have inter-dependencies because they
-    // will be combined into a single expression.
-    class EqBundle {
+    // A collection that holds various independent eqs.
+    class EqLot {
     protected:
-        EqList _eqs; // expressions in this eqBundle (not including conditions).
-        Grids _outGrids;          // grids updated by this eqBundle.
-        Grids _inGrids;          // grids read from by this eqBundle.
-        const Dimensions* _dims = 0;
-        bool _isScratch = false; // true if updating temp grid(s).
-
-        // Other eq-bundles that this bundle depends on. This means that an
-        // equation in this bundle has a grid value on the RHS that appears in
-        // the LHS of the dependency.
-        map<DepType, set<string>> _imm_dep_on; // immediate deps.
-        map<DepType, set<string>> _dep_on;     // immediate and indirect deps.
-        set<string> _scratch_deps;             // scratch bundles needed for this bundle.
+        EqList _eqs;            // all equations.
+        Grids _outGrids;        // grids updated by _eqs.
+        Grids _inGrids;         // grids read from by _eqs.
+        bool _isScratch = false; // true if _eqs update temp grid(s).
 
     public:
 
+        // Parts of the name.
         // TODO: move these into protected section and make accessors.
-        string baseName;            // base name of this eqBundle.
+        string baseName;            // base name of this bundle.
         int index;                  // index to distinguish repeated names.
-        BoolExprPtr cond;           // condition (default is null).
 
         // Ctor.
-        EqBundle(const Dimensions& dims, bool is_scratch) :
-            _dims(&dims), _isScratch(is_scratch) {
-
-            // Create empty map entries.
-            for (DepType dt = DepType(0); dt < num_deps; dt = DepType(dt+1)) {
-                _imm_dep_on[dt];
-                _dep_on[dt];
-            }
-        }
-        virtual ~EqBundle() {}
-
-        // Add an equation to this bundle.
-        virtual void addEq(EqualsExprPtr ee);
-    
-        // Visit all the equations.
-        virtual void visitEqs(ExprVisitor* ev) {
-            for (auto& ep : _eqs) {
-#ifdef DEBUG_EQ_BUNDLE
-                cout << "EqBundle: visiting " << ep->makeQuotedStr() << endl;
-#endif
-                ep->accept(ev);
-            }
-        }
-
-        // Get the list of all equations.
-        // Does NOT return condition.
+        EqLot(bool is_scratch) : _isScratch(is_scratch) { }
+        virtual ~EqLot() {}
+        
+        // Get all eqs.
         virtual const EqList& getEqs() const {
             return _eqs;
         }
 
-        // Visit the condition.
-        // Return true if there was one to visit.
-        virtual bool visitCond(ExprVisitor* ev) {
-            if (cond.get()) {
-                cond->accept(ev);
-                return true;
+        // Visit all the equations.
+        virtual void visitEqs(ExprVisitor* ev) {
+            for (auto& ep : _eqs) {
+                ep->accept(ev);
             }
-            return false;
         }
 
         // Get the full name.
         virtual string getName() const;
-
-        // Get a string description.
-        virtual string getDescription(bool show_cond = true,
-                                      string quote = "'") const;
 
         // Get number of equations.
         virtual int getNumEqs() const {
@@ -284,48 +417,80 @@ namespace yask {
             return _inGrids;
         }
 
-        // Get whether this eq-bundle depends on eg2.
-        // Must have already been set via checkDeps().
-        virtual bool isImmDepOn(DepType dt, const EqBundle& eq2) const {
-            return _imm_dep_on.at(dt).count(eq2.getName()) > 0;
-        }
-        virtual bool isDepOn(DepType dt, const EqBundle& eq2) const {
-            return _dep_on.at(dt).count(eq2.getName()) > 0;
-        }
-
-        // Get dependencies on this eq-bundle.
-        virtual const set<string>& getImmDeps(DepType dt) const {
-            return _imm_dep_on.at(dt);
-        }
-        virtual const set<string>& getDeps(DepType dt) const {
-            return _dep_on.at(dt);
-        }
-
-        // Get scratch-bundle dependencies.
-        virtual const set<string>& getScratchDeps() const {
-            return _scratch_deps;
-        }
+        // Print stats for the equation(s).
+        virtual void printStats(ostream& os, const string& msg);
+    };
     
-        // Check for and set dependencies on eg2.
-        virtual void checkDeps(Eqs& allEqs, const EqBundle& eg2);
+    // A named equation bundle, which contains one or more grid-update
+    // equations.  All equations in a bundle must have the same condition.
+    // Equations in a bundle must not have inter-dependencies because they
+    // will be combined into a single expression.
+    class EqBundle : public EqLot {
+    protected:
+        const Dimensions* _dims = 0;
+
+    public:
+
+        // Common condition.
+        // TODO: move these into protected section and make accessors.
+        BoolExprPtr cond;           // condition (default is null).
+
+        // Create a copy containing clones of the equations.
+        virtual shared_ptr<EqBundle> clone() const {
+            auto p = make_shared<EqBundle>(*_dims, _isScratch);
+
+            // Shallow copy.
+            *p = *this;
+
+            // Delete copied eqs and replace w/clones.
+            p->_eqs.clear();
+            for (auto& i : _eqs)
+                p->_eqs.insert(i->clone());
+
+            return p;
+        }
+
+        // Ctor.
+        EqBundle(const Dimensions& dims, bool is_scratch) :
+            EqLot(is_scratch), _dims(&dims) { }
+        virtual ~EqBundle() {}
+
+        // Get a string description.
+        virtual string getDescr(bool show_cond = true,
+                                string quote = "'") const;
+
+        // Add an equation to this bundle.
+        virtual void addEq(EqualsExprPtr ee);
+    
+        // Get the list of all equations.
+        virtual const EqList& getItems() const {
+            return _eqs;
+        }
+
+        // Visit the condition.
+        // Return true if there was one to visit.
+        virtual bool visitCond(ExprVisitor* ev) {
+            if (cond.get()) {
+                cond->accept(ev);
+                return true;
+            }
+            return false;
+        }
 
         // Replicate each equation at the non-zero offsets for
         // each vector in a cluster.
         virtual void replicateEqsInCluster(Dimensions& dims);
-        
-        // Print stats for the equation(s) in this bundle.
-        virtual void printStats(ostream& os, const string& msg);
     };
 
     // Container for multiple equation bundles.
-    class EqBundles : public vector<EqBundle> {
+    class EqBundles : public DepGroup<EqBundle> {
     protected:
 
         // Copy of some global data.
         string _basename_default;
         Dimensions* _dims = 0;
 
-        // Track grids that are udpated.
+        // Track grids that are updated.
         Grids _outGrids;
 
         // Map to track indices per eq-bundle name.
@@ -334,14 +499,13 @@ namespace yask {
         // Track equations that have been added already.
         set<EqualsExprPtr> _eqs_in_bundles;
     
-        // Add expression 'eq' from 'eqs' to eq-bundle with 'baseName'
-        // unless alread added.  The corresponding index in '_indices' will be
-        // incremented if a new bundle is created.
+        // Add 'eq' from 'eqs' to eq-bundle with 'baseName'
+        // unless already added or illegal.  The corresponding index in
+        // '_indices' will be incremented if a new bundle is created.
         // Returns whether a new bundle was created.
-        virtual bool addExprToBundle(Eqs& eqs,
-                                     EqualsExprPtr eq,
-                                     const string& baseName,
-                                     bool is_scratch);
+        virtual bool addEqToBundle(Eqs& eqs,
+                                   EqualsExprPtr eq,
+                                   const string& baseName);
 
     public:
         EqBundles() {}
@@ -374,32 +538,16 @@ namespace yask {
         }
 
         // Visit all the equations in all eqBundles.
-        // This will not visit the conditions.
         virtual void visitEqs(ExprVisitor* ev) {
-            for (auto& eg : *this)
-                eg.visitEqs(ev);
+            for (auto& eg : _all)
+                eg->visitEqs(ev);
         }
 
         // Replicate each equation at the non-zero offsets for
         // each vector in a cluster.
         virtual void replicateEqsInCluster(Dimensions& dims) {
-            for (auto& eg : *this)
-                eg.replicateEqsInCluster(dims);
-        }
-
-        // Reorder bundles based on dependencies.
-        virtual void sort(ostream& os);
-    
-        // Print a list of eqBundles.
-        virtual void printInfo(ostream& os) const {
-            os << "Identified stencil equation-bundles:" << endl;
-            for (auto& eq : *this) {
-                for (auto gp : eq.getOutputGrids()) {
-                    string eqName = eq.getName();
-                    os << "  Equation bundle '" << eqName << "' updates grid '" <<
-                        gp->getName() << "'." << endl;
-                }
-            }
+            for (auto& eg : _all)
+                eg->replicateEqsInCluster(dims);
         }
 
         // Print stats for the equation(s) in all bundles.
@@ -411,7 +559,95 @@ namespace yask {
                               bool printSets,
                               ostream& os);
     };
+
+    typedef shared_ptr<EqBundle> EqBundlePtr;
     
+    // A list of unique equation bundles.
+    typedef vector_set<EqBundlePtr> EqBundleList;
+
+    // A named equation bundle pack, which contains one or more equation
+    // bundles.  All equations in a pack do not need to have the same condition.
+    // Equations in a pack must not have inter-dependencies because they
+    // may be run in parallel or in any order on any sub-domain.
+    class EqBundlePack : public EqLot {
+    protected:
+        EqBundleList _bundles;  // bundles in this pack.
+
+    public:
+
+        // Ctor.
+        EqBundlePack(bool is_scratch) :
+            EqLot(is_scratch) { }
+        virtual ~EqBundlePack() { }
+
+        // Create a copy containing clones of the bundles.
+        virtual shared_ptr<EqBundlePack> clone() const {
+            auto p = make_shared<EqBundlePack>(_isScratch);
+
+            // Shallow copy.
+            *p = *this;
+
+            // Delete copied eqs and replace w/clones.
+            p->_eqs.clear();
+            for (auto& i : _bundles)
+                p->_bundles.insert(i->clone());
+
+            return p;
+        }
+
+        // Get a string description.
+        virtual string getDescr(string quote = "'") const;
+
+        // Add a bundle to this pack.
+        virtual void addBundle(EqBundlePtr ee);
+    
+        // Get the list of all bundles
+        virtual const EqBundleList& getBundles() const {
+            return _bundles;
+        }
+        virtual const EqBundleList& getItems() const {
+            return _bundles;
+        }
+
+    };
+
+    // Container for multiple equation bundle packs.
+    class EqBundlePacks : public DepGroup<EqBundlePack> {
+    protected:
+        string _baseName = "stencil_pack";
+
+        // Bundle index.
+        int _idx = 0;
+
+        // Track grids that are updated.
+        Grids _outGrids;
+
+        // Track bundles that have been added already.
+        set<EqBundlePtr> _bundles_in_packs;
+    
+        // Add 'bp' from 'allBundles'. Create new pack if needed.  Returns
+        // whether a new pack was created.
+        bool addBundleToPack(EqBundles& allBundles,
+                             EqBundlePtr bp);
+        
+    public:
+
+        // Separate bundles into packs.
+        void makePacks(EqBundles& bundles,
+                       std::ostream& os);
+
+        // Get all output grids.
+        virtual const Grids& getOutputGrids() const {
+            return _outGrids;
+        }
+
+        // Visit all the equations in all packs.
+        virtual void visitEqs(ExprVisitor* ev) {
+            for (auto& bp : _all)
+                bp->visitEqs(ev);
+        }
+    };
+
 } // namespace yask.
     
 #endif

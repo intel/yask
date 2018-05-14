@@ -117,7 +117,7 @@ namespace yask {
         }
 
         else
-            update_grids();
+            update_grid_info();
 
         return gp;
     }

@@ -71,9 +71,10 @@ namespace yask {
     private:
 
         // Intermediate data needed to format output.
-        Dimensions _dims;       // various dimensions.
-        EqBundles _eqBundles;     // eq-bundles for scalar and vector.
-        EqBundles _clusterEqBundles; // eq-bundles for scalar and vector.
+        Dimensions _dims;             // various dimensions.
+        EqBundles _eqBundles;         // eq-bundles for scalar and vector.
+        EqBundlePacks _eqBundlePacks; // packs of bundles w/o inter-dependencies.
+        EqBundles _clusterEqBundles;  // eq-bundles for scalar and vector.
 
         // Create the intermediate data.
         void analyze_solution(int vlen,
@@ -162,12 +163,12 @@ namespace yask {
         }
 
         virtual int get_num_equations() const {
-            return _eqs.getNumEqs();
+            return _eqs.getNum();
         }
         virtual std::vector<yc_equation_node_ptr> get_equations() {
             std::vector<yc_equation_node_ptr> ev;
             for (int i = 0; i < get_num_equations(); i++)
-                ev.push_back(_eqs.getEqs().at(i));
+                ev.push_back(_eqs.getAll().at(i));
             return ev;
         }
         virtual void add_flow_dependency(yc_equation_node_ptr from,
@@ -176,11 +177,10 @@ namespace yask {
             assert(fp);
             auto tp = dynamic_pointer_cast<EqualsExpr>(to);
             assert(tp);
-            _eqs.getDeps().at(cur_step_dep).set_imm_dep_on(fp, tp);
+            _eqs.getDeps().set_imm_dep_on(fp, tp);
         }
         virtual void clear_dependencies() {
-            for (DepType dt = DepType(0); dt < num_deps; dt = DepType(dt+1))
-                _eqs.getDeps().at(dt).clear_deps();
+            _eqs.getDeps().clear_deps();
         }
 
         virtual void set_fold_len(const yc_index_node_ptr, int len);

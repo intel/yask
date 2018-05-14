@@ -142,13 +142,50 @@ namespace yask {
             int h = 0;
             if (_halos.count(left)) {
                 for (auto i : _halos.at(left)) {
-                    auto& right = i.second; // halo at step-val 'i'.
-                    auto* p = right.lookup(dim);
+                    auto& hs = i.second; // halo at step-val 'i'.
+                    auto* p = hs.lookup(dim);
                     if (p)
                         h = std::max(h, *p);
                 }
             }
             return h;
+        }
+
+        // Determine whether dims are same.
+        virtual bool areDimsSame(const Grid& other) const {
+            if (_dims.size() != other._dims.size())
+                return false;
+            size_t i = 0;
+            for (auto& dim : _dims) {
+                auto d2 = other._dims[i].get();
+                if (!dim->isSame(d2))
+                    return false;
+                i++;
+            }
+            return true;
+        }
+        
+        // Determine whether halo sizes are equal.
+        virtual bool isHaloSame(const Grid& other) const {
+
+            // Same dims?
+            if (!areDimsSame(other))
+                return false;
+
+            // Same halos?
+            for (auto& dim : _dims) {
+                auto& dname = dim->getName();
+                auto dtype = dim->getType();
+                if (dtype == DOMAIN_INDEX) {
+                    for (bool left : { false, true }) {
+                        int sz = getHaloSize(dname, left);
+                        int osz = other.getHaloSize(dname, left);
+                        if (sz != osz)
+                            return false;
+                    }
+                }
+            }
+            return true;
         }
 
         // Determine how many values in step-dim are needed.

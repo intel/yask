@@ -544,18 +544,18 @@ namespace yask {
         os << "Stencil '" << _stencil.getName() << "' pseudo-code:" << endl;
 
         // Loop through all eqBundles.
-        for (auto& eq : _eqBundles) {
+        for (auto& eq : _eqBundles.getAll()) {
 
-            string egName = eq.getName();
+            string egName = eq->getName();
             os << endl << " ////// Equation bundle '" << egName <<
                 "' //////" << endl;
 
             CounterVisitor cv;
-            eq.visitEqs(&cv);
+            eq->visitEqs(&cv);
             PrintHelper ph(NULL, &cv, "temp", "real", " ", ".\n");
 
-            if (eq.cond.get()) {
-                string condStr = eq.cond->makeStr();
+            if (eq->cond.get()) {
+                string condStr = eq->cond->makeStr();
                 os << endl << " // Valid under the following condition:" << endl <<
                     ph.getLinePrefix() << "IF " << condStr << ph.getLineSuffix();
             }
@@ -564,11 +564,11 @@ namespace yask {
 
             os << endl << " // Top-down stencil calculation:" << endl;
             PrintVisitorTopDown pv1(os, ph, _settings);
-            eq.visitEqs(&pv1);
+            eq->visitEqs(&pv1);
             
             os << endl << " // Bottom-up stencil calculation:" << endl;
             PrintVisitorBottomUp pv2(os, ph, _settings);
-            eq.visitEqs(&pv2);
+            eq->visitEqs(&pv2);
         }
     }
 
@@ -585,9 +585,9 @@ namespace yask {
             "rankdir=LR; ranksep=1.5;\n";
 
         // Loop through all eqBundles.
-        for (auto& eq : _eqBundles) {
-            os << "subgraph \"Equation-bundle " << eq.getName() << "\" {" << endl;
-            eq.visitEqs(pv);
+        for (auto& eq : _eqBundles.getAll()) {
+            os << "subgraph \"Equation-bundle " << eq->getName() << "\" {" << endl;
+            eq->visitEqs(pv);
             os << "}" << endl;
         }
         os << "}" << endl;
@@ -608,11 +608,11 @@ namespace yask {
             "}" << endl;
 
         // Loop through all eqBundles.
-        for (auto& eq : _eqBundles) {
+        for (auto& eq : _eqBundles.getAll()) {
 
             // TODO: separate mutiple grids.
             POVRayPrintVisitor pv(os);
-            eq.visitEqs(&pv);
+            eq->visitEqs(&pv);
             os << " // " << pv.getNumPoints() << " stencil points" << endl;
         }
     }

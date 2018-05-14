@@ -414,7 +414,7 @@ namespace yask {
             os << "\n // Create grids (but do not allocate data in them).\n" <<
                 ctorCode <<
                 "\n // Update grids with context info.\n"
-                " update_grids();\n";
+                " update_grid_info();\n";
             
             // end of ctor.
             os << " } // ctor" << endl;
@@ -442,12 +442,12 @@ namespace yask {
     // Print YASK equation bundles.
     void YASKCppPrinter::printEqBundles(ostream& os) {
         
-        for (size_t ei = 0; ei < _eqBundles.size(); ei++) {
+        for (int ei = 0; ei < _eqBundles.getNum(); ei++) {
 
             // Scalar eqBundle.
-            auto& eq = _eqBundles.at(ei);
-            string egName = eq.getName();
-            string egDesc = eq.getDescription();
+            auto& eq = _eqBundles.getAll().at(ei);
+            string egName = eq->getName();
+            string egDesc = eq->getDescr();
             string egsName = "StencilBundle_" + egName;
 
             os << endl << " ////// Stencil " << egDesc << " //////\n" <<
@@ -459,11 +459,11 @@ namespace yask {
 
             // Stats for this eqBundle.
             CounterVisitor stats;
-            eq.visitEqs(&stats);
+            eq->visitEqs(&stats);
             
             // Example computation.
             os << endl << " // " << stats.getNumOps() << " FP operation(s) per point:" << endl;
-            addComment(os, eq);
+            addComment(os, *eq);
 
             // Stencil-bundle ctor.
             {
@@ -474,18 +474,18 @@ namespace yask {
                     " _scalar_fp_ops = " << stats.getNumOps() << ";\n"
                     " _scalar_points_read = " << stats.getNumReads() << ";\n"
                     " _scalar_points_written = " << stats.getNumWrites() << ";\n"
-                    " _is_scratch = " << (eq.isScratch() ? "true" : "false") << ";\n";
+                    " _is_scratch = " << (eq->isScratch() ? "true" : "false") << ";\n";
 
                 // I/O grids.
                 os << "\n // The following grids are read by " << egsName << endl;
-                for (auto gp : eq.getInputGrids()) {
+                for (auto gp : eq->getInputGrids()) {
                     if (gp->isScratch())
                         os << "  inputScratchVecs.push_back(&_context->" << gp->getName() << "_list);\n";
                     else
                         os << "  inputGridPtrs.push_back(_context->" << gp->getName() << "_ptr);\n";
                 }
                 os << "\n // The following grids are written by " << egsName << endl;
-                for (auto gp : eq.getOutputGrids()) {
+                for (auto gp : eq->getOutputGrids()) {
                     if (gp->isScratch())
                         os << "  outputScratchVecs.push_back(&_context->" << gp->getName() << "_list);\n";
                     else
@@ -501,8 +501,8 @@ namespace yask {
                     " // Return true if indices are within the valid sub-domain or false otherwise.\n"
                     " virtual bool is_in_valid_domain(const Indices& idxs) {\n";
                 printIndices(os);
-                if (eq.cond.get())
-                    os << " return " << eq.cond->makeStr() << ";" << endl;
+                if (eq->cond.get())
+                    os << " return " << eq->cond->makeStr() << ";" << endl;
                 else
                     os << " return true; // full domain." << endl;
                 os << " }" << endl;
@@ -521,12 +521,12 @@ namespace yask {
 
                 // C++ scalar print assistant.
                 CounterVisitor cv;
-                eq.visitEqs(&cv);
+                eq->visitEqs(&cv);
                 CppPrintHelper* sp = new CppPrintHelper(_dims, &cv, "temp", "real_t", " ", ";\n");
             
                 // Generate the code.
                 PrintVisitorBottomUp pcv(os, *sp, _settings);
-                eq.visitEqs(&pcv);
+                eq->visitEqs(&pcv);
 
                 // End of function.
                 os << "} // calc_scalar." << endl;
@@ -540,24 +540,27 @@ namespace yask {
                 // Cluster eqBundle at same 'ei' index.
                 // This should be the same eq-bundle because it was copied from the
                 // scalar one.
-                auto& vceq = do_cluster ? _clusterEqBundles.at(ei) : _eqBundles.at(ei);
-                assert(egDesc == vceq.getDescription());
+                auto& vceq = do_cluster ?
+                    _clusterEqBundles.getAll().at(ei) : eq;
+                assert(egDesc == vceq->getDescr());
 
                 // Create vector info for this eqBundle.
                 // The visitor is accepted at all nodes in the cluster AST;
                 // for each grid access node in the AST, the vectors
                 // needed are determined and saved in the visitor.
                 VecInfoVisitor vv(*_dims);
-                vceq.visitEqs(&vv);
+                vceq->visitEqs(&vv);
 
                 // Reorder some equations based on vector info.
                 ExprReorderVisitor erv(vv);
-                vceq.visitEqs(&erv);
+                vceq->visitEqs(&erv);
 
                 // Collect stats.
                 CounterVisitor cv;
-                vceq.visitEqs(&cv);
-                int numResults = do_cluster ? _dims->_clusterPts.product() : _dims->_fold.product();
+                vceq->visitEqs(&cv);
+                int numResults = do_cluster ?
+                    _dims->_clusterPts.product() :
+                    _dims->_fold.product();
 
                 // Vector/cluster vars.
                 string idim = _dims->_innerDim;
@@ -613,7 +616,7 @@ namespace yask {
                     
                 // Print loop-invariants.
                 CppLoopVarPrintVisitor lvv(os, *vp, _settings);
-                vceq.visitEqs(&lvv);
+                vceq->visitEqs(&lvv);
 
                 // Print pointers and prefetches.
                 vp->printBasePtrs(os);
@@ -628,7 +631,7 @@ namespace yask {
                 // Generate loop body using vars stored in print helper.
                 // Visit all expressions to cover the whole vector/cluster.
                 PrintVisitorBottomUp pcv(os, *vp, _settings);
-                vceq.visitEqs(&pcv);
+                vceq->visitEqs(&pcv);
 
                 // Insert prefetches using vars stored in print helper for next iteration.
                 vp->printPrefetches(os, true);
@@ -657,54 +660,74 @@ namespace yask {
 
         // Stencil eqBundle objects.
         os << endl << " // Stencil equation-bundles." << endl;
-        for (auto& eg : _eqBundles) {
-            string egName = eg.getName();
-            string sgName = "stencilBundle_" + egName;
-            os << " StencilBundle_" << egName << " " << sgName << ";" << endl;
+        for (auto& eg : _eqBundles.getAll()) {
+            string egName = eg->getName();
+            os << " StencilBundle_" << egName << " " << egName << ";" << endl;
         }
 
         // Ctor.
         os << "\n // Constructor.\n" <<
             " " << _context << "(KernelEnvPtr env, KernelSettingsPtr settings) : " <<
             _context_base << "(env, settings)";
-        for (auto& eg : _eqBundles) {
-            string egName = eg.getName();
-            string sgName = "stencilBundle_" + egName;
-            os << ",\n  " << sgName << "(this)";
+        for (auto& eg : _eqBundles.getAll()) {
+            string egName = eg->getName();
+            os << ",\n  " << egName << "(this)";
         }
         os << " {\n";
         
         // Push eq-bundle pointers to list.
         os << "\n // Stencil bundles.\n";
-        for (auto& eg : _eqBundles) {
-            string egName = eg.getName();
-            string sgName = "stencilBundle_" + egName;
-            os << "  stBundles.push_back(&" << sgName << ");\n";
+        for (auto& eg : _eqBundles.getAll()) {
+            string egName = eg->getName();
 
-            // Add other-bundle deps.
-            for (DepType dt = DepType(0); dt < num_deps; dt = DepType(dt+1)) {
-                for (auto& dep : eg.getDeps(dt)) {
-                    string depName = "stencilBundle_" + dep;
-                    string dtName = (dt == cur_step_dep) ? "cur_step_dep" :
-                        (dt == prev_step_dep) ? "prev_step_dep" :
-                        "internal_error";
-                    os << "  " << sgName <<
-                        ".add_dep(yask::" << dtName <<
-                        ", &" << depName << ");\n";
-                }
-            }
+            // Only want non-scratch bundles in stBundles.
+            // Each scratch bundles will be added to its
+            // parent bundle.
+            if (!eg->isScratch())
+                os << "  stBundles.push_back(&" << egName << ");\n";
 
             // Add scratch-bundle deps in proper order.
-            auto& sdeps = eg.getScratchDeps();
-            for (auto& eg2 : _eqBundles) {
-                string eg2Name = eg2.getName();
-                string sg2Name = "stencilBundle_" + eg2Name;
-                if (sdeps.count(eg2Name))
-                    os << "  " << sgName <<
-                        ".add_scratch_dep(&" << sg2Name << ");\n";
+            auto& sdeps = _eqBundles.getScratches(eg);
+            for (auto& eg2 : _eqBundles.getAll()) {
+                if (sdeps.count(eg2)) {
+                    string eg2Name = eg2->getName();
+                    os << "  " << egName <<
+                        ".add_scratch_child(&" << eg2Name << ");\n";
+                }
             }
             
         } // eq-bundles.
+
+        // Deps.
+        os << "\n // Stencil bundle inter-dependencies.\n";
+        for (auto& eg : _eqBundles.getAll()) {
+            string egName = eg->getName();
+            
+            // Add deps between bundles.
+            for (auto& dep : _eqBundles.getDeps(eg)) {
+                string depName = dep->getName();
+                os << "  " << egName <<
+                    ".add_dep(&" << depName << ");\n";
+            }
+        } // bundles.
+
+        // Packs.
+        os << "\n // Stencil bundle packs.\n";
+        for (auto& bp : _eqBundlePacks.getAll()) {
+            if (bp->isScratch())
+                continue;
+            string bpName = bp->getName();
+            os << "  auto " << bpName << " = std::make_shared<BundlePack>(\"" <<
+                bpName << "\");\n";
+            for (auto& eg : bp->getBundles()) {
+                if (eg->isScratch())
+                    continue;
+                string egName = eg->getName();
+                os << "  " << bpName << "->push_back(&" << egName << ");\n";
+            }
+            os << "  stPacks.push_back(" << bpName << ");\n";
+        }
+        
         os << " } // Ctor.\n";
 
         // Dims creator.

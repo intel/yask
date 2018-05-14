@@ -27,8 +27,9 @@ IN THE SOFTWARE.
 
 namespace yask {
     
-    /// Classes that support evaluation of one stencil bundle.
-    /// A stencil context contains one or more bundles.
+    // Classes that support evaluation of one stencil bundle
+    // and a 'pack' of bundles.
+    // A stencil context contains one or more packs.
 
     // A pure-virtual class base for a stencil bundle.
     class StencilBundleBase : public BoundingBox {
@@ -43,11 +44,11 @@ namespace yask {
         int _inner_posn = 0;
 
         // Other bundles that this one depends on.
-        std::map<DepType, StencilBundleSet> _depends_on;
+        StencilBundleSet _depends_on;
 
         // List of scratch-grid bundles that need to be evaluated
         // before this bundle. Listed in eval order first-to-last.
-        StencilBundleList _scratch_deps;
+        StencilBundleList _scratch_children;
 
         // Whether this updates scratch grid(s);
         bool _is_scratch = false;
@@ -73,11 +74,6 @@ namespace yask {
         // ctor, dtor.
         StencilBundleBase(StencilContext* context) :
             _generic_context(context) {
-
-            // Make sure map entries exist.
-            for (DepType dt = DepType(0); dt < num_deps; dt = DepType(dt+1)) {
-                _depends_on[dt];
-            }
 
             // Find index posn of inner loop.
             auto dims = context->get_dims();
@@ -116,25 +112,32 @@ namespace yask {
         virtual void set_scratch(bool is_scratch) { _is_scratch = is_scratch; }
         
         // Add dependency.
-        virtual void add_dep(DepType dt, StencilBundleBase* eg) {
-            _depends_on.at(dt).insert(eg);
+        virtual void add_dep(StencilBundleBase* eg) {
+            _depends_on.insert(eg);
         }
 
         // Get dependencies.
-        virtual const StencilBundleSet& get_deps(DepType dt) const {
-            return _depends_on.at(dt);
+        virtual const StencilBundleSet& get_deps() const {
+            return _depends_on;
         }
 
         // Add needed scratch-bundle.
-        virtual void add_scratch_dep(StencilBundleBase* eg) {
-            _scratch_deps.push_back(eg);
+        virtual void add_scratch_child(StencilBundleBase* eg) {
+            _scratch_children.push_back(eg);
         }
 
         // Get needed scratch-bundle(s).
-        virtual const StencilBundleList& get_scratch_deps() const {
-            return _scratch_deps;
+        virtual const StencilBundleList& get_scratch_children() const {
+            return _scratch_children;
         }
 
+        // Get scratch children plus self.
+        virtual StencilBundleList get_reqd_bundles() {
+            auto sg_list = get_scratch_children();
+            sg_list.push_back(this);
+            return sg_list;
+        }
+        
         // If this bundle is updating scratch grid(s),
         // expand indices to calculate values in halo.
         // Adjust offsets in grids based on original idxs.
@@ -153,12 +156,10 @@ namespace yask {
         calc_scalar(int thread_idx, const Indices& idxs) =0;
 
         // Calculate results within a block.
-        // Each block is typically computed in a separate OpenMP thread team.
         virtual void
-        calc_block(const ScanIndices& region_idxs);
+        calc_block(const ScanIndices& def_block_idxs);
 
         // Calculate results within a sub-block.
-        // Each sub-block is typically computed in a separate nested OpenMP thread.
         virtual void
         calc_sub_block(int thread_idx, const ScanIndices& block_idxs);
 
@@ -201,6 +202,25 @@ namespace yask {
         calc_loop_of_vectors(int thread_idx,
                              const ScanIndices& loop_idxs,
                              idx_t write_mask);
-    };
+
+    };                          // StencilBundleBase.
+
+    // A collection of independent stencil bundles.
+    class BundlePack :
+        public std::vector<StencilBundleBase*> {
+
+    protected:
+        std::string _name;
+        
+    public:
+        BundlePack(const std::string& name) :
+            _name(name) { }
+        virtual ~BundlePack() { }
+
+        const std::string& get_name() {
+            return _name;
+        }
+        
+    }; // BundlePack.
 
 } // yask namespace.
