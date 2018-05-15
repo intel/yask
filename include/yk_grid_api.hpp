@@ -52,11 +52,13 @@ namespace yask {
        if you need a grid that is not part of the pre-defined solution.
 
        Each dimension of a grid is one of the following:
-       - The *step* dimension, typically time ("t"), as identified via yk_solution::get_step_dim_name().
+       - The *step* dimension, typically time ("t"), 
+       as returned from yk_solution::get_step_dim_name().
        - A *domain* dimension, typically a spatial dimension such as "x" or "y",
-       as identified via yk_solution:get_domain_dim_names().
-       - A *miscellaneous* dimension, which is any dimension that is not a domain or step dimension,
-       as identified via yk_solution:get_misc_dim_names().
+       as returned from yk_solution::get_domain_dim_names().
+       - A *miscellaneous* dimension, which is any dimension that is not a step or domain dimension.
+       These may be returned via yk_solution::get_misc_dim_names() if they were defined 
+       in the YASK compiler, or they may be any other name that is not a step or domain dimension.
        
        In the step dimension, there is no fixed domain size, and no
        specified first or last index.
@@ -64,7 +66,7 @@ namespace yask {
        dimension that are stored in memory.
        Step-dimension indices "wrap-around" within this allocation to reuse memory.
        For example, if the step dimension is "t", and the t-dimension allocation size is 3,
-       then t=-2, t=0, t=3, t=6, ..., t=303, etc. would all alias to the same spatial values in memory.
+       then t=-2, t=0, t=3, t=6, ..., t=303, etc. would all alias to the same addresses in memory.
 
        In each domain dimension,
        grid sizes include the following components:
@@ -122,8 +124,8 @@ namespace yask {
        be allocated.
        This can be done in any of the following ways:
        - Storage for all grids without data storage will be automatically allocated when
-       prepare_solution() is called.
-       - Storage for a specific grid may be allocated before calling prepare_solution()
+       yk_solution::prepare_solution() is called.
+       - Storage for a specific grid may be allocated before calling yk_solution::prepare_solution()
        via yk_grid::alloc_storage().
        - **[Advanced]** Storage for a specific grid may be shared with another grid with
        existing storage via yk_grid::share_storage().
