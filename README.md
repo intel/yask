@@ -1,19 +1,19 @@
-YASK--Yet Another Stencil Kernel: A framework to facilitate exploration of the HPC stencil-performance design space, including optimizations and features such as
+YASK--Yet Another Stencil Kernel: A framework to rapidly create high-performance HPC stencil code including optimizations and features such as
 * Vector folding,
 * Cache blocking,
 * Multi-level OpenMP parallelism,
 * Encapsulated memory layout,
-* Advanced loop construction,
-* Temporal wave-front blocking, and
-* MPI halo exchange.
+* Temporal wave-front blocking,
+* MPI halo exchange, and
+* APIs for C++ and Python: [API documentation](https://rawgit.com/intel/yask/api-docs/html/index.html)
 
 YASK contains a domain-specific compiler to convert scalar C++ stencil code to SIMD-optimized code for Intel(R) Xeon Phi(TM) and Intel(R) Xeon(R) processors.
 
 Supported Platforms and Processors:
 * 64-bit Linux
-* Intel(R) Xeon Phi(TM) processor supporting the MIC_AVX512 instruction set.
-* Intel(R) Xeon(R) processor supporting the AVX, AVX2, or CORE_AVX512 instruction sets.
-* Intel(R) Xeon Phi(TM) coprocessor supporting the Knights-Corner instruction set (no longer tested).
+* Intel(R) Xeon(R) processors supporting the AVX, AVX2, or CORE_AVX512 instruction sets.
+* Intel(R) Xeon Phi(TM) processors supporting the MIC_AVX512 instruction set.
+* Intel(R) Xeon Phi(TM) coprocessors supporting the Knights-Corner instruction set (no longer tested).
 
 Pre-requisites:
 * Intel(R) Parallel Studio XE Cluster Edition for Linux
