@@ -129,7 +129,7 @@ namespace yask {
            * Defined by yc_node_factory::new_misc_index()
            and used in one or more grids, or
            * Created at run-time by adding a new dimension
-           via yk_solution::new_grid() or yk_solution::new_fixed_grid().
+           via yk_solution::new_grid() or yk_solution::new_fixed_size_grid().
         */
         virtual std::vector<std::string>
         get_misc_dim_names() const =0;
@@ -248,7 +248,7 @@ namespace yask {
            Grids may be pre-defined by the stencil compiler
            (e.g., via yc_solution::new_grid())
            or created explicitly via yk_solution::new_grid()
-           or yk_solution::new_fixed_grid().
+           or yk_solution::new_fixed_size_grid().
            @returns Number of grids that have been created.
         */
         virtual int
@@ -573,8 +573,11 @@ namespace yask {
            in order to use it for purposes other than by the
            pre-defined stencils within the current solution.
 
-           Grids created by this function will be treated like a pre-defined grid.
+           Grids created by this function will behave [mostly] like a pre-defined grid.
            For example,
+           - Step and domain dimensions must the same as those defined by
+           yc_node_factory::new_step_index() and yc_node_factory::new_domain_index(),
+           respectively.
            - For each domain dimension of the grid,
            the new grid's domain size will be the same as that returned by
            get_rank_domain_size().
@@ -585,9 +588,22 @@ namespace yask {
            - This grid's initial padding size will be the same as that returned by
            get_min_pad_size().
            - After creating a new grid, you can increase its padding
-           sizes in the domain dimensions via yk_grid::set_min_pad_size(), etc.
-           - For step and misc dimensions, you can change the allocation via
+           sizes in the domain dimensions via yk_grid::set_min_pad_size(),
+           yk_solution::set_min_pad_size(), etc.
+           - For step and misc dimensions, you can change the desired size
            yk_grid::set_alloc_size().
+           - Storage may be allocated via yk_grid::alloc_storage() or
+           yk_solution::prepare_solution().
+
+           Some behaviors are different from pre-defined grids. For example,
+           - You can create new "misc" dimensions during grid creation simply
+           by naming them in the `dims` argument. Any dimension name that is 
+           not a step or domain dimension will become a misc dimension,
+           whether or not it was defined via yc_node_factory::new_misc_index().
+           - Grids created via new_grid() cannot be direct inputs or outputs of
+           stencil equations. However, data in a grid created via new_grid()
+           can be shared with a pre-defined grid via yk_grid::share_storage()
+           if and only if the sizes of all dimensions are compatible.
 
            If you want a grid that is not automatically resized based on the
            solution settings, use new_fixed_size_grid() instead.
@@ -633,9 +649,8 @@ namespace yask {
            in order to use it for purposes other than by the
            pre-defined stencils within the current solution.
 
-           Unlike new_grid(),
-           grids created by this function will *not* be treated like a pre-defined grid.
-           For example,
+           The following behaviors are different from both pre-defined grids
+           and those created via new_grid():
            - For each domain dimension of the grid,
            the new grid's domain size is provided during creation and cannot be changed.
            - Calls to set_rank_domain_size() will *not* resize the corresponding domain 
@@ -643,9 +658,26 @@ namespace yask {
            - This grid's first domain index in this rank will be fixed at zero (0)
            regardless of this rank's position.
            - This grid's padding size will be affected only by calls to 
-           yk_grid::set_min_pad_size(), etc.
-           - For step and misc dimensions, you can still change the allocation via
+           yk_grid::set_min_pad_size(), etc., i.e., *not* via
+           yk_solution::set_min_pad_size().
+
+           The following behaviors are the same as those of a pre-defined grid
+           and those created via new_grid():
+           - For step and misc dimensions, you can change the desired size
            yk_grid::set_alloc_size().
+           - Storage may be allocated via yk_grid::alloc_storage() or
+           yk_solution::prepare_solution().
+
+           The following behaviors are different than a pre-defined grid
+           but the same as those created via new_grid():
+           - You can create new "misc" dimensions during grid creation simply
+           by naming them in the `dims` argument. Any dimension name that is 
+           not a step or domain dimension will become a misc dimension,
+           whether or not it was defined via yc_node_factory::new_misc_index().
+           - Grids created via new_fixed_size_grid() cannot be direct inputs or outputs of
+           stencil equations. However, data in a grid created via new_grid()
+           can be shared with a pre-defined grid via yk_grid::share_storage()
+           if and only if the sizes of all dimensions are compatible.
 
            @note A new grid contains only the meta-data for the grid; data storage
            is not yet allocated.
