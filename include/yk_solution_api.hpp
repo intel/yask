@@ -96,7 +96,9 @@ namespace yask {
         
         /// Get the solution step dimension.
         /**
-           @returns String containing the step-dimension name. 
+           @returns String containing the step-dimension name
+           that was defined by yc_node_factory::new_step_index()
+           and used in one or more grids.
         */
         virtual std::string
         get_step_dim_name() const =0;
@@ -113,15 +115,21 @@ namespace yask {
 
         /// Get all the domain dimension names.
         /**
-           @returns List of all domain-dimension names.
+           @returns List of all domain-dimension names
+           that were defined by yc_node_factory::new_domain_index()
+           and used in one or more grids.
         */
         virtual std::vector<std::string>
         get_domain_dim_names() const =0;
 
         /// Get all the miscellaneous dimension names.
         /**
-           @returns List of all dimension names used in the solution
-           that are not step or domain dimensions.
+           @returns List of all dimension names
+           that were either
+           * Defined by yc_node_factory::new_misc_index()
+           and used in one or more grids, or
+           * Created at run-time by adding a new dimension
+           via yk_solution::new_grid() or yk_solution::new_fixed_grid().
         */
         virtual std::vector<std::string>
         get_misc_dim_names() const =0;
@@ -239,7 +247,8 @@ namespace yask {
         /**
            Grids may be pre-defined by the stencil compiler
            (e.g., via yc_solution::new_grid())
-           or created explicitly via yk_solution::new_grid().
+           or created explicitly via yk_solution::new_grid()
+           or yk_solution::new_fixed_grid().
            @returns Number of grids that have been created.
         */
         virtual int

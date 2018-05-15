@@ -71,6 +71,19 @@ namespace yask {
                                              "' must be first dimension");
                     }
                 }
+
+                // Domain dim?
+                else if (_dims->_domain_dims.lookup(dims[i])) {
+                }
+
+                // Known misc dim?
+                else if (_dims->_misc_dims.lookup(dims[i])) {
+                }
+
+                // New misc dim?
+                else {
+                    _dims->_misc_dims.addDimBack(dims[i], 0);
+                }
             }
             bool do_wrap = step_posn >= 0;
 
