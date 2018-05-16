@@ -675,7 +675,7 @@ namespace yask {
            not a step or domain dimension will become a misc dimension,
            whether or not it was defined via yc_node_factory::new_misc_index().
            - Grids created via new_fixed_size_grid() cannot be direct inputs or outputs of
-           stencil equations. However, data in a grid created via new_grid()
+           stencil equations. However, data in a grid created via new_fixed_size_grid()
            can be shared with a pre-defined grid via yk_grid::share_storage()
            if and only if the sizes of all dimensions are compatible.
 

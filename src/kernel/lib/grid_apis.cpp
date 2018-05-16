@@ -239,7 +239,7 @@ namespace yask {
         }
     }
 
-    // API get, set, setc.
+    // API get, set, etc.
     bool YkGridBase::is_element_allocated(const Indices& indices) const {
         if (!is_storage_allocated())
             return false;
