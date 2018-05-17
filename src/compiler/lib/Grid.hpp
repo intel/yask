@@ -91,6 +91,7 @@ namespace yask {
         // Name accessors.
         const string& getName() const { return _name; }
         void setName(const string& name) { _name = name; }
+        string getDescr() const;
 
         // Access dims.
         virtual const IndexExprPtrVec& getDims() const { return _dims; }
@@ -356,7 +357,7 @@ namespace yask {
         string _stepDim;         // step dimension, usually time.
         IntTuple _domainDims;    // domain dims, usually spatial (with zero value).
         IntTuple _stencilDims;   // both step and domain dims.
-        string _innerDim;        // doman dim that will be used in the inner loop.
+        string _innerDim;        // domain dim that will be used in the inner loop.
         IntTuple _miscDims;      // misc dims that are not the step or domain.
 
         // Following contain only domain dims.

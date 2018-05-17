@@ -332,6 +332,18 @@ namespace yask {
         return sz;
     }
 
+    // Description of this grid.
+    string Grid::getDescr() const {
+        string d = _name + "(";
+        int i = 0;
+        for (auto dn : getDims()) {
+            if (i++) d += ", ";
+            d += dn->getName();
+        }
+        d += ")";
+        return d;
+    }
+    
     // Find the dimensions to be used based on the grids in
     // the solution and the settings from the cmd-line or API.
     void Dimensions::setDims(Grids& grids,
@@ -352,7 +364,8 @@ namespace yask {
         // Get dims from grids.
         for (auto gp : grids) {
             auto& gname = gp->getName();
-                
+            os << "Grid: " << gp->getDescr() << endl;
+            
             // Dimensions in this grid.
             for (auto dim : gp->getDims()) {
                 auto& dname = dim->getName();
@@ -369,11 +382,10 @@ namespace yask {
                     _stencilDims.addDimFront(dname, 0); // must be first!
 
                     // Scratch grids cannot use step dim.
-                    if (gp->isScratch()) {
-                        cerr << "Error: scratch grid '" << gname <<
-                            "' cannot use step dimension '" << dname << "'.\n";
-                        exit(1);
-                    }
+                    if (gp->isScratch())
+                        THROW_YASK_EXCEPTION("Error: scratch grid '" << gname <<
+                                             "' cannot use step dimension '" <<
+                                             dname << "'.\n");
                     break;
 
                 case DOMAIN_INDEX:
@@ -397,7 +409,7 @@ namespace yask {
             THROW_YASK_EXCEPTION("Error: no step dimension defined");
         }
         if (!_domainDims.getNumDims()) {
-            THROW_YASK_EXCEPTION("Error: no domain dimensions defined");
+            THROW_YASK_EXCEPTION("Error: no domain dimension(s) defined");
         }
 
         // Use last domain dim as inner one.
@@ -527,6 +539,8 @@ namespace yask {
             _clusterPts.makeDimValStr(" * ") << endl;
         if (_miscDims.getNumDims())
             os << "Misc dimension(s): " << _miscDims.makeDimStr() << endl;
+        else
+            os << "No misc dimensions used\n";
     }
 
     // Make string like "+(4/VLEN_X)" or "-(2/VLEN_Y)" or "" if ofs==zero.
