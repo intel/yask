@@ -67,8 +67,9 @@ YC_SWIG_DIR	:=	./swig
 YC_LIB_DIR	:=	./lib
 YC_SRC_NAMES	:=	Expr ExprUtils Grid Eqs Print Vec Cpp CppIntrin YaskKernel Soln
 YC_SRC_BASES	:=	$(addprefix $(YC_LIB_DIR)/,$(YC_SRC_NAMES))
+YC_OBJS		:=	$(addsuffix .o,$(YC_SRC_BASES) $(COMM_SRC_BASES))
 YC_STENCIL_BASES:=	$(patsubst %.cpp,%,$(wildcard $(STENCIL_DIR)/*.cpp))
-YC_OBJS		:=	$(addsuffix .o,$(YC_SRC_BASES) $(COMM_SRC_BASES) $(YC_STENCIL_BASES))
+YC_STENCIL_OBJS	:=	$(addsuffix .o,$(YC_STENCIL_BASES))
 YC_INC_DIRS	:=	$(INC_DIR) $(YC_LIB_DIR) $(COMM_DIR)
 YC_INC_GLOB	:=	$(addsuffix /*.hpp,$(YC_INC_DIRS))
 
@@ -118,8 +119,8 @@ $(YC_LIB): $(YC_OBJS)
 	$(CXX_PREFIX) $(YC_CXX) $(YC_CXXFLAGS) -shared -o $@ $^
 	@ls -l $@
 
-$(YC_EXEC): main.cpp $(YC_LIB)
-	$(CXX_PREFIX) $(YC_LD) $(YC_CXXFLAGS) $< $(YC_LFLAGS) -o $@
+$(YC_EXEC): main.cpp $(YC_STENCIL_OBJS) $(YC_LIB)
+	$(CXX_PREFIX) $(YC_LD) $(YC_CXXFLAGS) $^ $(YC_LFLAGS) -o $@
 	@ls -l $@
 	$(MAKE) echo-settings
 
@@ -211,7 +212,7 @@ clean:
 	rm -fv *.s
 	rm -fr $(YC_SWIG_DIR)/build
 	rm -fv $(YC_SWIG_DIR)/*_api_wrap.*
-	rm -fv $(YC_OBJS)
+	rm -fv $(YC_OBJS) $(YC_STENCIL_OBJS)
 	- find . -name '*.o' -print -delete
 	- find . $(BIN_DIR) $(LIB_DIR) -name '*.optrpt' -print -delete
 
