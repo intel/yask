@@ -367,3 +367,25 @@ public:
 };
 
 REGISTER_STENCIL(TestSubdomainStencil1);
+
+// A stencil that has grids, but no stencil equation.
+class TestEmptyStencil1 : public StencilBase {
+
+protected:
+
+    // Indices & dimensions.
+    MAKE_STEP_INDEX(t);           // step in time dim.
+    MAKE_DOMAIN_INDEX(x);         // spatial dim.
+
+    // Vars.
+    MAKE_GRID(data, t, x); // time-varying grid.
+
+public:
+    
+    TestEmptyStencil1(StencilList& stencils) :
+        StencilBase("test_empty1", stencils) { }
+
+    virtual void define() { }
+};
+
+REGISTER_STENCIL(TestEmptyStencil1);

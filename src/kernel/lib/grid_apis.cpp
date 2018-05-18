@@ -40,8 +40,8 @@ namespace yask {
         checkDimType(dim, #api_name, step_ok, domain_ok, misc_ok);      \
         int posn = get_dim_posn(dim, true, #api_name);                  \
         if (prep_req && _offsets[posn] < 0)                             \
-            THROW_YASK_EXCEPTION("Error: '" #api_name "()' called on grid '" << \
-                                 get_name() << "' before calling 'prepare_solution()'"); \
+            THROW_YASK_EXCEPTION("Error: '" #api_name "()' called on grid '" + \
+                                 get_name() + "' before calling 'prepare_solution()'"); \
         auto rtn = expr;                                                \
         return rtn;                                                     \
     }                                                                   \
@@ -168,15 +168,17 @@ namespace yask {
             // Same dims?
             if (sp->get_num_dims() != get_num_dims() ||
                 sp->get_dim_name(i) != dname)
-                THROW_YASK_EXCEPTION("Error: share_storage() called with incompatible grids: " <<
-                                     make_info_string() << " and " << sp->make_info_string());
+                THROW_YASK_EXCEPTION("Error: share_storage() called with incompatible grids: " +
+                                     make_info_string() + " and " + sp->make_info_string());
 
 
             // Check folding.
             if (_vec_lens[i] != sp->_vec_lens[i]) {
-                THROW_YASK_EXCEPTION("Error: attempt to share storage from grid '" << sp->get_name() <<
-                                     "' of fold-length " << sp->_vec_lens[i] << " with grid '" << get_name() <<
-                                     "' of fold-length " << _vec_lens[i] << " in '" << dname << "' dim");
+                FORMAT_AND_THROW_YASK_EXCEPTION("Error: attempt to share storage from grid '" <<
+                                                sp->get_name() << "' of fold-length " <<
+                                                sp->_vec_lens[i] << " with grid '" << get_name() <<
+                                                "' of fold-length " << _vec_lens[i] <<
+                                                " in '" << dname << "' dim");
             }
 
             // Not a domain dim?
@@ -185,9 +187,10 @@ namespace yask {
                 auto tas = get_alloc_size(dname);
                 auto sas = sp->get_alloc_size(dname);
                 if (tas != sas) {
-                    THROW_YASK_EXCEPTION("Error: attempt to share storage from grid '" << sp->get_name() <<
-                                         "' of alloc-size " << sas << " with grid '" << get_name() <<
-                                         "' of alloc-size " << tas << " in '" << dname << "' dim");
+                    FORMAT_AND_THROW_YASK_EXCEPTION("Error: attempt to share storage from grid '" <<
+                                                    sp->get_name() << "' of alloc-size " << sas <<
+                                                    " with grid '" << get_name() << "' of alloc-size " <<
+                                                    tas << " in '" << dname << "' dim");
                 }
             }
 
@@ -196,27 +199,28 @@ namespace yask {
                 auto tdom = get_rank_domain_size(i);
                 auto sdom = sp->get_rank_domain_size(i);
                 if (tdom != sdom) {
-                    THROW_YASK_EXCEPTION("Error: attempt to share storage from grid '" << sp->get_name() <<
-                                         "' of domain-size " << sdom << " with grid '" << get_name() <<
-                                         "' of domain-size " << tdom << " in '" << dname << "' dim");
+                    FORMAT_AND_THROW_YASK_EXCEPTION("Error: attempt to share storage from grid '" <<
+                                                    sp->get_name() << "' of domain-size " << sdom <<
+                                                    " with grid '" << get_name() <<
+                                                    "' of domain-size " << tdom << " in '" << dname << "' dim");
                 }
 
                 // Halo and pad sizes don't have to be the same.
                 // Requirement is that halo (reqd pad) of target fits inside of pad of source.
                 auto spad = sp->get_left_pad_size(i);
                 if (left_pads2[i] > spad) {
-                    THROW_YASK_EXCEPTION("Error: attempt to share storage from grid '" << sp->get_name() <<
-                                         "' of left padding-size " << spad <<
-                                         ", which is insufficient for grid '" << get_name() <<
-                                         "' requiring " << left_pads2[i] << " in '" << dname << "' dim");
+                    FORMAT_AND_THROW_YASK_EXCEPTION("Error: attempt to share storage from grid '" <<
+                                                    sp->get_name() << "' of left padding-size " << spad <<
+                                                    ", which is insufficient for grid '" << get_name() <<
+                                                    "' requiring " << left_pads2[i] << " in '" << dname << "' dim");
                 }
                 spad = sp->get_right_pad_size(i);
                 if (right_pads2[i] > spad) {
-                    THROW_YASK_EXCEPTION("Error: attempt to share storage from grid '" << sp->get_name() <<
-
-                                         "' of right padding-size " << spad <<
-                                         ", which is insufficient for grid '" << get_name() <<
-                                         "' requiring " << right_pads2[i] << " in '" << dname << "' dim");
+                    FORMAT_AND_THROW_YASK_EXCEPTION("Error: attempt to share storage from grid '" <<
+                                                    sp->get_name() <<
+                                                    "' of right padding-size " << spad <<
+                                                    ", which is insufficient for grid '" << get_name() <<
+                                                    "' requiring " << right_pads2[i] << " in '" << dname << "' dim");
                 }
             }
         }
@@ -247,8 +251,8 @@ namespace yask {
     }
     double YkGridBase::get_element(const Indices& indices) const {
         if (!is_storage_allocated()) {
-            THROW_YASK_EXCEPTION("Error: call to 'get_element' with no data allocated for grid '" <<
-                                 get_name() << "'");
+            THROW_YASK_EXCEPTION("Error: call to 'get_element' with no data allocated for grid '" +
+                                 get_name() + "'");
         }
         checkIndices(indices, "get_element", true, false);
         idx_t asi = get_alloc_step_index(indices);
@@ -290,8 +294,8 @@ namespace yask {
                                             const Indices& first_indices,
                                             const Indices& last_indices) const {
         if (!is_storage_allocated()) {
-            THROW_YASK_EXCEPTION("Error: call to 'get_elements_in_slice' with no data allocated for grid '" <<
-                                 get_name() << "'");
+            THROW_YASK_EXCEPTION("Error: call to 'get_elements_in_slice' with no data allocated for grid '" +
+                                 get_name() + "'");
         }
         checkIndices(first_indices, "get_elements_in_slice", true, false);
         checkIndices(last_indices, "get_elements_in_slice", true, false);

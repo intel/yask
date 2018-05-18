@@ -70,8 +70,8 @@ namespace yask {
             _fname = file_name;
             _ofs.open(file_name, ofstream::out | ofstream::trunc);
             if (!_ofs.is_open()) {
-                THROW_YASK_EXCEPTION("Error: cannot open '" << file_name <<
-                    "' for output.\n");
+                THROW_YASK_EXCEPTION("Error: cannot open '" + file_name +
+                                     "' for output.\n");
             }
         }
 

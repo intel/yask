@@ -192,7 +192,7 @@ namespace yask {
         }
 
         else {
-            THROW_YASK_EXCEPTION("Internal error: type unknown for point " << gp.makeStr());
+            THROW_YASK_EXCEPTION("Internal error: type unknown for point " + gp.makeStr());
         }
 
         // Remember this point and return it.

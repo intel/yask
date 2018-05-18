@@ -185,15 +185,15 @@ namespace yask {
 
                 // Scratch grid must not have a condition.
                 if (cond1 && og1->isScratch())
-                    THROW_YASK_EXCEPTION("Error: scratch-grid equation '" << og1->getName() <<
+                    THROW_YASK_EXCEPTION("Error: scratch-grid equation '" + og1->getName() +
                                          "' cannot have a condition");
                 
                 if (dn == stepDim) {
 
                     // Scratch grid must not use step dim.
                     if (og1->isScratch())
-                        THROW_YASK_EXCEPTION("Error: scratch-grid equation '" << og1->getName() <<
-                                             "' cannot use '" << dn << "' dim");
+                        THROW_YASK_EXCEPTION("Error: scratch-grid equation '" + og1->getName() +
+                                             "' cannot use '" + dn + "' dim");
 
                     // Validity of step-dim expression in non-scratch grids is checked later.
                 }
@@ -206,10 +206,10 @@ namespace yask {
 
                     // Compare to actual.
                     if (!argn->isSame(earg))
-                        THROW_YASK_EXCEPTION("Error: LHS of equation " << eq1->makeQuotedStr() <<
-                                             " contains expression " << argn->makeQuotedStr() <<
-                                             " for dimension '" << dn <<
-                                             "' where " << earg->makeQuotedStr() <<
+                        THROW_YASK_EXCEPTION("Error: LHS of equation " + eq1->makeQuotedStr() +
+                                             " contains expression " + argn->makeQuotedStr() +
+                                             " for dimension '" + dn +
+                                             "' where " + earg->makeQuotedStr() +
                                              " is expected");
                 }
 
@@ -217,9 +217,9 @@ namespace yask {
                 else {
 
                     if (!argn->isConstVal())
-                        THROW_YASK_EXCEPTION("Error: LHS of equation " << eq1->makeQuotedStr() <<
-                                             " contains expression " << argn->makeQuotedStr() <<
-                                             " for dimension '" << dn <<
+                        THROW_YASK_EXCEPTION("Error: LHS of equation " + eq1->makeQuotedStr() +
+                                             " contains expression " + argn->makeQuotedStr() +
+                                             " for dimension '" + dn +
                                              "' where constant integer is expected");
                     argn->getIntVal(); // throws exception if not an integer.
                 }
@@ -230,19 +230,19 @@ namespace yask {
                 auto& lofss = op1->getArgOffsets();
                 auto* lofsp = lofss.lookup(stepDim); // step dim must be a key in offsets map.
                 if (!lofsp || abs(*lofsp) != 1) {
-                    THROW_YASK_EXCEPTION("Error: LHS of equation " << eq1->makeQuotedStr() <<
-                                         " does not contain '" << dims.makeStepStr(1) <<
-                                         "' or '" << dims.makeStepStr(-1) << "'");
+                    THROW_YASK_EXCEPTION("Error: LHS of equation " + eq1->makeQuotedStr() +
+                                         " does not contain '" + dims.makeStepStr(1) +
+                                         "' or '" + dims.makeStepStr(-1) + "'");
                 }
                 lofs = *lofsp;
 
                 // Step direction already set?
                 if (dims._stepDir) {
                     if (dims._stepDir != lofs) {
-                        THROW_YASK_EXCEPTION("Error: LHS of equation " << eq1->makeQuotedStr() <<
-                                             " contains '" << dims.makeStepStr(lofs) <<
-                                             "', which is different than a previous equation with '" <<
-                                             dims.makeStepStr(dims._stepDir) << "'");
+                        THROW_YASK_EXCEPTION("Error: LHS of equation " + eq1->makeQuotedStr() +
+                                             " contains '" + dims.makeStepStr(lofs) +
+                                             "', which is different than a previous equation with '" +
+                                             dims.makeStepStr(dims._stepDir) + "'");
                     }
                 } else
                     
@@ -253,7 +253,7 @@ namespace yask {
             // LHS of equation must be vectorizable.
             // TODO: relax this restriction.
             if (op1->getVecType() != GridPoint::VEC_FULL) {
-                THROW_YASK_EXCEPTION("Error: LHS of equation " << eq1->makeQuotedStr() <<
+                THROW_YASK_EXCEPTION("Error: LHS of equation " + eq1->makeQuotedStr() +
                                      " is not fully vectorizable because not all folded"
                                      " dimensions are accessed via simple offsets from their respective indices");
             }
@@ -271,10 +271,11 @@ namespace yask {
                     // if stepping backward, step offsets must be >= 1;
                     if ((lofs > 0 && rsi1 > lofs) ||
                         (lofs < 0 && rsi1 < lofs)) {
-                        THROW_YASK_EXCEPTION("Error: RHS of equation " <<
-                                             eq1->makeQuotedStr() <<
-                                             " contains '" << dims.makeStepStr(rsi1) << 
-                                             "', which is incompatible with '" << dims.makeStepStr(lofs) << 
+                        THROW_YASK_EXCEPTION("Error: RHS of equation " +
+                                             eq1->makeQuotedStr() +
+                                             " contains '" + dims.makeStepStr(rsi1) +
+                                             "', which is incompatible with '" +
+                                             dims.makeStepStr(lofs) +
                                              "' on LHS");
                     }
                 }
@@ -326,10 +327,10 @@ namespace yask {
                 if (!same_eq && same_cond && same_og) {
                     string cdesc = cond1 ? "with condition " + cond1->makeQuotedStr() :
                         "without conditions";
-                    THROW_YASK_EXCEPTION("Error: two equations " << cdesc <<
-                                         " have the same LHS grid '" <<
-                                         op1->makeLogicalGridStr() << "': " <<
-                                         eq1->makeQuotedStr() << " and " <<
+                    THROW_YASK_EXCEPTION("Error: two equations " + cdesc +
+                                         " have the same LHS grid '" +
+                                         op1->makeLogicalGridStr() + "': " +
+                                         eq1->makeQuotedStr() + " and " +
                                          eq2->makeQuotedStr());
                 }
 
@@ -350,8 +351,8 @@ namespace yask {
                     if (same_eq) {
                                     
                         // Exit with error.
-                        THROW_YASK_EXCEPTION("Error: illegal dependency: LHS of equation " <<
-                                             eq1->makeQuotedStr() << " also appears on its RHS");
+                        THROW_YASK_EXCEPTION("Error: illegal dependency: LHS of equation " +
+                                             eq1->makeQuotedStr() + " also appears on its RHS");
                     }
 
                     // Save dependency.
@@ -410,9 +411,9 @@ namespace yask {
                                 
                                 // Exit with error.
                                 string stepmsg = same_step ? " at '" + dims.makeStepStr(lofs) + "'" : "";
-                                THROW_YASK_EXCEPTION("Error: disallowed dependency: grid '" <<
-                                                     op1->makeLogicalGridStr() << "' on LHS of equation " <<
-                                                     eq1->makeQuotedStr() << " also appears on its RHS" <<
+                                THROW_YASK_EXCEPTION("Error: disallowed dependency: grid '" +
+                                                     op1->makeLogicalGridStr() + "' on LHS of equation " +
+                                                     eq1->makeQuotedStr() + " also appears on its RHS" +
                                                      stepmsg);
                             }
 
@@ -434,6 +435,10 @@ namespace yask {
             } // for all eqs (eq2).
         } // for all eqs (eq1).
 
+        // If the step dir wasn't set (no eqs), set it now.
+        if (!dims._stepDir)
+            dims._stepDir = 1;
+        
         // Resolve indirect dependencies.
         // Do this even if not finding deps because we want to
         // resolve deps provided by the user.

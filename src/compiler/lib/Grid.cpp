@@ -41,9 +41,9 @@ namespace yask {
 
         // Check for correct number of indices.
         if (_dims.size() != index_exprs.size()) {
-            THROW_YASK_EXCEPTION("Error: attempt to create a grid point in " <<
-                                 _dims.size() << "D grid '" << _name << "' with " <<
-                                 index_exprs.size() << " index expressions");
+            FORMAT_AND_THROW_YASK_EXCEPTION("Error: attempt to create a grid point in " <<
+                                            _dims.size() << "D grid '" << _name << "' with " <<
+                                            index_exprs.size() << " index expressions");
         }
 
         // Make args.
@@ -64,9 +64,9 @@ namespace yask {
 
         // Check for correct number of indices.
         if (_dims.size() != dim_offsets.size()) {
-            THROW_YASK_EXCEPTION("Error: attempt to create a relative grid point in " <<
-                                 _dims.size() << "D grid '" << _name << "' with " <<
-                                 dim_offsets.size() << " indices");
+            FORMAT_AND_THROW_YASK_EXCEPTION("Error: attempt to create a relative grid point in " <<
+                                            _dims.size() << "D grid '" << _name << "' with " <<
+                                            dim_offsets.size() << " indices");
         }
 
         // Check dim types.
@@ -75,10 +75,10 @@ namespace yask {
         for (size_t i = 0; i < _dims.size(); i++) {
             auto dim = _dims.at(i);
             if (dim->getType() == MISC_INDEX) {
-                THROW_YASK_EXCEPTION("Error: attempt to create a relative grid point in " <<
-                                     _dims.size() << "D grid '" << _name <<
-                                     "' containing non-step or non-domain dim '" <<
-                                     dim->getName() << "'");
+                FORMAT_AND_THROW_YASK_EXCEPTION("Error: attempt to create a relative grid point in " <<
+                                                _dims.size() << "D grid '" << _name <<
+                                                "' containing non-step or non-domain dim '" <<
+                                                dim->getName() << "'");
             }
             auto ie = dim->clone();
             args.push_back(ie);
@@ -141,7 +141,7 @@ namespace yask {
         auto& grids = soln->getGrids();
         for (auto gp : grids) {
             if (gp->getName() == _name)
-                THROW_YASK_EXCEPTION("Error: grid name '" << _name << "' already used");
+                THROW_YASK_EXCEPTION("Error: grid name '" + _name + "' already used");
         }
         
         // Register in soln.
@@ -375,17 +375,17 @@ namespace yask {
 
                 case STEP_INDEX:
                     if (_stepDim.length() && _stepDim != dname) {
-                        THROW_YASK_EXCEPTION("Error: step dimensions '" << _stepDim <<
-                                             "' and '" << dname << "' found; only one allowed");
+                        THROW_YASK_EXCEPTION("Error: step dimensions '" + _stepDim +
+                                             "' and '" + dname + "' found; only one allowed");
                     }
                     _stepDim = dname;
                     _stencilDims.addDimFront(dname, 0); // must be first!
 
                     // Scratch grids cannot use step dim.
                     if (gp->isScratch())
-                        THROW_YASK_EXCEPTION("Error: scratch grid '" << gname <<
-                                             "' cannot use step dimension '" <<
-                                             dname << "'.\n");
+                        THROW_YASK_EXCEPTION("Error: scratch grid '" + gname +
+                                             "' cannot use step dimension '" +
+                                             dname + "'.\n");
                     break;
 
                 case DOMAIN_INDEX:
@@ -401,7 +401,7 @@ namespace yask {
                     break;
 
                 default:
-                    THROW_YASK_EXCEPTION("Error: unexpected dim type " << type);
+                    THROW_YASK_EXCEPTION("Error: unexpected dim type " + type);
                 }
             }
         }
@@ -504,8 +504,10 @@ namespace yask {
         // Checks for unaligned loads.
         if (settings._allowUnalignedLoads) {
             if (_foldGT1.size() > 1) {
-                THROW_YASK_EXCEPTION("Error: attempt to allow unaligned loads when there are " <<
-                    _foldGT1.size() << " dimensions in the vector-fold that are > 1");
+                FORMAT_AND_THROW_YASK_EXCEPTION("Error: attempt to allow "
+                                                "unaligned loads when there are " <<
+                                                _foldGT1.size() <<
+                                                " dimensions in the vector-fold that are > 1");
             }
             else if (_foldGT1.size() > 0)
                 cout << "Notice: memory layout MUST have unit-stride in " <<

@@ -142,7 +142,7 @@ namespace yask {
         else if (format_type == "pov-ray") // undocumented.
             printer = new POVRayPrinter(*this, _clusterEqBundles);
         else {
-            THROW_YASK_EXCEPTION("Error: format-type '" << format_type <<
+            THROW_YASK_EXCEPTION("Error: format-type '" + format_type +
                                  "' is not recognized");
         }
         assert(printer);

@@ -120,9 +120,9 @@ namespace yask {
             auto* sp = dynamic_cast<GT*>(src->_ggb);
             if (!sp) {
                 if (die_on_failure)
-                    THROW_YASK_EXCEPTION("Error in share_data(): source grid " <<
-                                         src->make_info_string() <<
-                                         " not of same type as target grid ";
+                    THROW_YASK_EXCEPTION("Error in share_data(): source grid " +
+                                         src->make_info_string() +
+                                         " not of same type as target grid " +
                                          make_info_string());
                 return false;
             }

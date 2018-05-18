@@ -37,9 +37,9 @@ namespace yask {
         bool got_sizes = sizes != NULL;
         if (got_sizes) {
             if (dims.size() != sizes->size()) {
-                THROW_YASK_EXCEPTION("Error: attempt to create grid '" << name << "' with " <<
-                                     dims.size() << " dimension names but " << sizes->size() <<
-                                     " dimension sizes");
+                FORMAT_AND_THROW_YASK_EXCEPTION("Error: attempt to create grid '" << name << "' with " <<
+                                                dims.size() << " dimension names but " << sizes->size() <<
+                                                " dimension sizes");
             }
         }
 
@@ -58,16 +58,17 @@ namespace yask {
 
                 // Already used?
                 if (seenDims.count(dims[i])) {
-                    THROW_YASK_EXCEPTION("Error: cannot create grid '" << name <<
-                                         "': dimension '" << dims[i] << "' used more than once");
+                    THROW_YASK_EXCEPTION("Error: cannot create grid '" + name +
+                                         "' because dimension '" + dims[i] +
+                                         "' is used more than once");
                 }
             
                 // Step dim?
                 if (dims[i] == _dims->_step_dim) {
                     step_posn = i;
                     if (i > 0) {
-                        THROW_YASK_EXCEPTION("Error: cannot create grid '" << name <<
-                                             "' because step dimension '" << dims[i] <<
+                        THROW_YASK_EXCEPTION("Error: cannot create grid '" + name +
+                                             "' because step dimension '" + dims[i] +
                                              "' must be first dimension");
                     }
                 }
@@ -95,9 +96,9 @@ namespace yask {
 #include "yask_grid_code.hpp"
             
             if (!gp) {
-                THROW_YASK_EXCEPTION("Error in new_grid: cannot create grid '" << name <<
-                                     "' with " << ndims << " dimensions; only up to " << MAX_DIMS <<
-                                     " dimensions supported");
+                FORMAT_AND_THROW_YASK_EXCEPTION("Error in new_grid: cannot create grid '" << name <<
+                                                "' with " << ndims << " dimensions; only up to " << MAX_DIMS <<
+                                                " dimensions supported");
             }
         }
 

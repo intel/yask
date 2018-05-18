@@ -105,8 +105,8 @@ namespace yask {
         auto& dims = _ggb->get_dims();
         int posn = dims.lookup_posn(dim);
         if (posn < 0 && die_on_failure) {
-            THROW_YASK_EXCEPTION("Error: " << die_msg << ": dimension '" <<
-                                 dim << "' not found in " << make_info_string());
+            THROW_YASK_EXCEPTION("Error: " + die_msg + ": dimension '" +
+                                 dim + "' not found in " + make_info_string());
         }
         return posn;
     }
@@ -154,17 +154,17 @@ namespace yask {
         // Check settings.
         for (int i = 0; i < get_num_dims(); i++) {
             if (_left_halos[i] < 0)
-                THROW_YASK_EXCEPTION("Error: negative left halo in grid '" << get_name() << "'");
+                THROW_YASK_EXCEPTION("Error: negative left halo in grid '" + get_name() + "'");
             if (_right_halos[i] < 0)
-                THROW_YASK_EXCEPTION("Error: negative right halo in grid '" << get_name() << "'");
+                THROW_YASK_EXCEPTION("Error: negative right halo in grid '" + get_name() + "'");
             if (_left_wf_exts[i] < 0)
-                THROW_YASK_EXCEPTION("Error: negative left wave-front ext in grid '" << get_name() << "'");
+                THROW_YASK_EXCEPTION("Error: negative left wave-front ext in grid '" + get_name() + "'");
             if (_right_wf_exts[i] < 0)
-                THROW_YASK_EXCEPTION("Error: negative right wave-front ext in grid '" << get_name() << "'");
+                THROW_YASK_EXCEPTION("Error: negative right wave-front ext in grid '" + get_name() + "'");
             if (_req_left_pads[i] < 0)
-                THROW_YASK_EXCEPTION("Error: negative left padding in grid '" << get_name() << "'");
+                THROW_YASK_EXCEPTION("Error: negative left padding in grid '" + get_name() + "'");
             if (_req_right_pads[i] < 0)
-                THROW_YASK_EXCEPTION("Error: negative right padding in grid '" << get_name() << "'");
+                THROW_YASK_EXCEPTION("Error: negative right padding in grid '" + get_name() + "'");
         }
         
         // Increase padding as needed and calculate new allocs.
@@ -213,10 +213,10 @@ namespace yask {
         // TODO: restore the values before the API that called
         // resize() on failure.
         if (p && old_allocs != new_allocs) {
-            THROW_YASK_EXCEPTION("Error: attempt to change allocation size of grid '" <<
-                get_name() << "' from " << 
-                makeIndexString(old_allocs, " * ") << " to " <<
-                makeIndexString(new_allocs, " * ") <<
+            THROW_YASK_EXCEPTION("Error: attempt to change allocation size of grid '" +
+                get_name() + "' from " + 
+                makeIndexString(old_allocs, " * ") + " to " +
+                makeIndexString(new_allocs, " * ") +
                 " after storage has been allocated");
         }
 
@@ -264,8 +264,8 @@ namespace yask {
                                   bool domain_ok,
                                   bool misc_ok) const {
         if (!is_dim_used(dim))
-            THROW_YASK_EXCEPTION("Error in " << fn_name << "(): dimension '" <<
-                                 dim << "' not found in " << make_info_string());
+            THROW_YASK_EXCEPTION("Error in " + fn_name + "(): dimension '" +
+                                 dim + "' not found in " + make_info_string());
         _dims->checkDimType(dim, fn_name, step_ok, domain_ok, misc_ok);
     }
     
@@ -359,8 +359,9 @@ namespace yask {
         bool all_ok = true;
         auto n = get_num_dims();
         if (indices.getNumDims() != n) {
-            THROW_YASK_EXCEPTION("Error: '" << fn << "' called with " << indices.getNumDims() <<
-                                 " indices instead of " << n);
+            FORMAT_AND_THROW_YASK_EXCEPTION("Error: '" << fn << "' called with " <<
+                                            indices.getNumDims() <<
+                                            " indices instead of " << n);
         }
         if (fixed_indices)
             *fixed_indices = indices;
@@ -384,10 +385,10 @@ namespace yask {
                 // Handle outliers.
                 if (!ok) {
                     if (strict_indices) {
-                        THROW_YASK_EXCEPTION("Error: " << fn << ": index in dim '" << dname <<
-                                             "' is " << idx << ", which is not in allocated range [" <<
-                                             first_ok << "..." << last_ok << "] of grid '" <<
-                                             get_name() << "'");
+                        FORMAT_AND_THROW_YASK_EXCEPTION("Error: " + fn + ": index in dim '" + dname +
+                                                        "' is " << idx << ", which is not in allocated range [" <<
+                                                        first_ok << "..." << last_ok << "] of grid '" +
+                                                        get_name() + "'");
                     }
 
                     // Update the output indices.
@@ -486,6 +487,5 @@ namespace yask {
             });
     }
 
-    
 } // namespace.
 

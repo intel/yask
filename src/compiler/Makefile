@@ -37,7 +37,8 @@ YASK_DIR	:=	$(YASK_BASE)/yask
 ifeq ($(shell uname -o),Cygwin)
   SO_SUFFIX	:=	.dll
   RUN_PREFIX	:=	env PATH="${PATH}:$(LIB_DIR):$(YASK_DIR)"
-  PYTHON		:= python3
+  PYTHON	:=	python3
+  CXX_PREFIX	:=
 else
   SO_SUFFIX	:=	.so
   RUN_PREFIX	:=
@@ -57,7 +58,7 @@ YC_PY_MOD	:=	$(YASK_DIR)/$(YC_MODULE).py
 
 # Common source.
 COMM_DIR	:=	../common
-COMM_SRC_NAMES	:=	output common_utils
+COMM_SRC_NAMES	:=	output common_utils tuple
 COMM_SRC_BASES	:=	$(addprefix $(COMM_DIR)/,$(COMM_SRC_NAMES))
 
 # Compiler source files and dirs.
@@ -140,16 +141,16 @@ $(YC_SWIG_DIR)/yask_compiler_api_wrap.cpp: $(YC_SWIG_DIR)/yask*.i $(INC_DIR)/*.h
 # Turn off asserts to work around known SWIG issue:
 # https://github.com/swig/swig/issues/773
 $(YC_SWIG_DIR)/yask_compiler_api_wrap.o: $(YC_SWIG_DIR)/yask_compiler_api_wrap.cpp
-	$(YC_CXX) $(YC_CXXFLAGS) -DNDEBUG $(PYINC) -fPIC -c -o $@ $<
+	$(CXX_PREFIX) $(YC_CXX) $(YC_CXXFLAGS) -DNDEBUG $(PYINC) -fPIC -c -o $@ $<
 
 $(YC_PY_LIB): $(YC_OBJS) $(YC_SWIG_DIR)/yask_compiler_api_wrap.o
-	$(YC_CXX) $(YC_CXXFLAGS) -shared -o $@ $^
+	$(CXX_PREFIX) $(YC_CXX) $(YC_CXXFLAGS) -shared -o $@ $^
 
 #### API tests.
 
 # Build C++ compiler API test.
 $(YC_TEST_EXEC): ./tests/yask_compiler_api_test.cpp $(YC_LIB)
-	$(YC_CXX) $(YC_CXXFLAGS) $< $(YC_LFLAGS) -o $@
+	$(CXX_PREFIX) $(YC_CXX) $(YC_CXXFLAGS) $< $(YC_LFLAGS) -o $@
 
 # Run Python compiler API test to create stencil-code file.
 # Also create .pdf rendering of stencil AST if Graphviz is installed.
@@ -169,25 +170,19 @@ cxx-yc-api-test: $(YC_TEST_EXEC)
 
 # Build C++ compiler API test with exception.
 $(YC_TEST_EXEC_WITH_EXCEPTION): ./tests/yask_compiler_api_exception_test.cpp $(YC_LIB)
-	$(YC_CXX) $(YC_CXXFLAGS) $< $(YC_LFLAGS) -o $@
+	$(CXX_PREFIX) $(YC_CXX) $(YC_CXXFLAGS) $< $(YC_LFLAGS) -o $@
 
 # Run Python compiler API test with exceptions to create stencil-code file.
 # Also create .pdf rendering of stencil AST if Graphviz is installed.
 py-yc-api-test-with-exception: $(BIN_DIR)/yask_compiler_api_exception_test.py $(YC_PY_LIB)
-	chmod 440 yc-api-test-with-exception-py-readonly
 	@echo '*** Running the Python YASK compiler API test with exception...'
 	$(RUN_PYTHON) $<
-	- dot -Tpdf -O yc-api-test-with-exception-py.dot
-	ls -l yc-api-test-with-exception-py.*
 
 # Run C++ compiler API test with exceptions to create stencil-code file.
 # Also create .pdf rendering of stencil AST if Graphviz is installed.
 cxx-yc-api-test-with-exception: $(YC_TEST_EXEC_WITH_EXCEPTION)
-	chmod 440 yc-api-test-with-exception-cxx-readonly
 	@echo '*** Running the C++ YASK compiler API test with exception...'
 	$<
-	- dot -Tpdf -O yc-api-test-with-exception-cxx.dot
-	ls -l yc-api-test-with-exception-cxx.*
 
 ######## Misc targets
 

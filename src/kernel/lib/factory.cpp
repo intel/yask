@@ -26,6 +26,11 @@ IN THE SOFTWARE.
 #include "yask.hpp"
 using namespace std;
 
+// Auto-generated stencil code that extends base types.
+#define DEFINE_CONTEXT
+#include "yask_stencil_code.hpp"
+#undef DEFINE_CONTEXT
+
 namespace yask {
 
     // APIs.

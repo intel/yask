@@ -113,4 +113,57 @@ namespace yask {
         }
     }
 
+    // Template implementations.
+
+    template <typename T>
+    void GenericGridTemplate<T>::set_elems_same(T val) {
+            if (_elems) {
+
+#pragma omp parallel for
+                for (idx_t ai = 0; ai < get_num_elems(); ai++)
+                    ((T*)_elems)[ai] = val;
+            }
+        }
+
+    template <typename T>
+    void GenericGridTemplate<T>::set_elems_in_seq(T seed) {
+            if (_elems) {
+                const idx_t wrap = 71; // TODO: avoid multiple of any dim size.
+
+                auto n = get_num_elems();
+#pragma omp parallel for
+                for (idx_t ai = 0; ai < n; ai++)
+                    ((T*)_elems)[ai] = seed * T(ai % wrap + 1);
+            }
+        }
+    
+    template <typename T>
+    idx_t GenericGridTemplate<T>::count_diffs(const GenericGridBase* ref,
+                                              double epsilon) const {
+
+            if (!ref)
+                return get_num_elems();
+            auto* p = dynamic_cast<const GenericGridTemplate<T>*>(ref);
+            if (!p)
+                return get_num_elems();
+
+            // Dims & sizes same?
+            if (_dims != p->_dims)
+                return get_num_elems();
+
+            // Count abs diffs > epsilon.
+            T ep = epsilon;
+            idx_t errs = 0;
+#pragma omp parallel for reduction(+:errs)
+            for (idx_t ai = 0; ai < get_num_elems(); ai++) {
+                if (!within_tolerance(((T*)_elems)[ai], ((T*)p->_elems)[ai], ep))
+                    errs++;
+            }
+            return errs;
+        }
+
+    // Explicitly allowed instantiations.
+    template class GenericGridTemplate<real_t>;
+    template class GenericGridTemplate<real_vec_t>;
+    
 } // yask namespace.
