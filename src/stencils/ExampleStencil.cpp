@@ -26,6 +26,11 @@ IN THE SOFTWARE.
 // Implement various example symmetric 3D stencil shapes that read and
 // write from only one 3D grid.
 
+// This macro blocks the operator overloads in the API.
+// This is temporary until the "internal DSL" gets completely
+// replaced by the APIs.
+#define USE_INTERNAL_DSL
+
 #include "Soln.hpp"
 
 class ExampleStencil : public StencilRadiusBase {

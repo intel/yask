@@ -372,6 +372,8 @@ namespace yask {
         // Print lots of stats.
         virtual void prepare_solution();
 
+        // Print info about the soln.
+        virtual void print_info();
 
         /// Get statistics associated with preceding calls to run_solution().
         /**

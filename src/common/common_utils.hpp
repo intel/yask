@@ -25,8 +25,14 @@ IN THE SOFTWARE.
 #ifndef COMMON_UTILS_HPP
 #define COMMON_UTILS_HPP
 
-// MACRO for throw yask_exception
+// Macro for throw yask_exception
 #define THROW_YASK_EXCEPTION(message) do {                          \
+        yask_exception e(message);                                  \
+        throw e;                                                    \
+    } while(0)
+
+// Macros that allows string creation via streams.
+#define FORMAT_AND_THROW_YASK_EXCEPTION(message) do {               \
         yask_exception e;                                           \
         std::stringstream err;                                      \
         err << message;                                             \

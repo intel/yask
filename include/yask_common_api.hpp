@@ -86,9 +86,12 @@ namespace yask {
     class yask_exception: public std::exception {
     private:
     	/// Additional message container
-    	std::string msg;
+    	std::string _msg;
 
     public:
+    	yask_exception() {};
+    	yask_exception(const std::string& message) :
+            _msg(message) {};
     	virtual ~yask_exception() {};
 
         /// Get default message.
@@ -97,11 +100,12 @@ namespace yask {
     	virtual const char* what() noexcept;
 
     	/// Add additional message to this exception.
-    	void add_message(std::string message /**< [in] Additional message as string. */ );
+    	void add_message(const std::string& message
+                         /**< [in] Additional message as string. */ );
 
         /// Get additional message.
         /** @returns additional message as string */
-    	const char* get_message();
+    	const char* get_message() const;
     };
 
     /// Factory to create output objects.

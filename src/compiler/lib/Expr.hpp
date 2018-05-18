@@ -199,8 +199,8 @@ namespace yask {
     template<typename T> shared_ptr<T> castExpr(ExprPtr ep, const string& descrip) {
         auto tp = dynamic_pointer_cast<T>(ep);
         if (!tp) {
-            THROW_YASK_EXCEPTION("Error: expression '" << ep->makeStr() <<
-                                 "' is not a " << descrip);
+            THROW_YASK_EXCEPTION("Error: expression '" + ep->makeStr() +
+                                 "' is not a " + descrip);
         }
         return tp;
     }
@@ -231,7 +231,7 @@ namespace yask {
         // Get the current value.
         // Exit with error if not known.
         virtual double getNumVal() const {
-            THROW_YASK_EXCEPTION("Error: cannot evaluate '" << makeStr() <<
+            THROW_YASK_EXCEPTION("Error: cannot evaluate '" + makeStr() +
                 "' for a known numerical value");
         }
 
@@ -241,7 +241,7 @@ namespace yask {
             double val = getNumVal();
             int ival = int(val);
             if (val != double(ival)) {
-                THROW_YASK_EXCEPTION("Error: '" << makeStr() <<
+                THROW_YASK_EXCEPTION("Error: '" + makeStr() +
                     "' does not evaluate to an integer");
             }
             return ival;
@@ -351,7 +351,7 @@ namespace yask {
         // Get the current value.
         // Exit with error if not known.
         virtual bool getBoolVal() const {
-            THROW_YASK_EXCEPTION("Error: cannot evaluate '" << makeStr() <<
+            THROW_YASK_EXCEPTION("Error: cannot evaluate '" + makeStr() +
                                  "' for a known boolean value");
         }
 
@@ -375,7 +375,7 @@ namespace yask {
         ConstExpr(double f) : _f(f) { }
         ConstExpr(idx_t i) : _f(i) {
             if (idx_t(_f) != i)
-                THROW_YASK_EXCEPTION("Error: integer value " << i <<
+                FORMAT_AND_THROW_YASK_EXCEPTION("Error: integer value " << i <<
                                      " cannot be stored accurately as a double");
         }
         ConstExpr(const ConstExpr& src) : _f(src._f) { }

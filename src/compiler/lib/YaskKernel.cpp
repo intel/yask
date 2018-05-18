@@ -101,6 +101,9 @@ namespace yask {
         os << "\n// Max number of grid dimensions:\n"
             "#define NUM_GRID_DIMS " << gdims << endl;
 
+        os << "\n// Number of stencil equations:\n"
+            "#define NUM_STENCIL_EQS " << _stencil.get_num_equations() << endl;
+
         // Vec/cluster lengths.
         auto nvec = _dims->_foldGT1.getNumDims();
         os << "\n// One vector fold: " << _dims->_fold.makeDimValStr(" * ") << endl;
@@ -115,6 +118,7 @@ namespace yask {
         os << "#define NUM_VEC_FOLD_DIMS (" << nvec << ")" << endl;
 
         // Layout for folding.
+        // This contains only the vectorized (len > 1) dims.
         ostringstream oss;
         if (_dims->_foldGT1.isFirstInner())
             for (int i = nvec; i > 0; i--)
@@ -170,7 +174,7 @@ namespace yask {
         // Save data for ctor and new-grid method.
         string ctorCode, ctorList, newGridCode, scratchCode;
         set<string> newGridDims;
-        
+
         // Grids.
         os << "\n ///// Grid(s)." << endl;
         for (auto gp : _grids) {
@@ -221,12 +225,14 @@ namespace yask {
                     bool defer = false; // add dim later.
                         
                     // Step dim?
+                    // If this exists, it will get placed near to the end,
+                    // just before the inner dim.
                     if (dtype == STEP_INDEX) {
                         assert(dname == _dims->_stepDim);
                         if (dn > 0) {
-                            THROW_YASK_EXCEPTION("Error: cannot create grid '" << grid <<
-                                                 "' with dimensions '" << gdims.makeDimStr() <<
-                                                 "' because '" << dname << "' must be first dimension");
+                            THROW_YASK_EXCEPTION("Error: cannot create grid '" + grid +
+                                                 "' with dimensions '" + gdims.makeDimStr() +
+                                                 "' because '" + dname + "' must be first dimension");
                         }
                         if (folded) {
                             step_posn = dn + 1;
@@ -235,6 +241,7 @@ namespace yask {
                     }
 
                     // Inner dim?
+                    // If this exists, it will get placed at the end.
                     else if (dname == _dims->_innerDim) {
                         assert(dtype == DOMAIN_INDEX);
                         if (folded) {

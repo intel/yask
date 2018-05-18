@@ -32,6 +32,9 @@ using namespace std;
 
 namespace yask {
 
+    // A global register of stencils.
+    StencilList stencils;
+
     // Stencil-solution APIs.
     yc_grid_ptr StencilSolution::newGrid(const std::string& name,
                                          bool isScratch,
@@ -142,7 +145,7 @@ namespace yask {
         else if (format_type == "pov-ray") // undocumented.
             printer = new POVRayPrinter(*this, _clusterEqBundles);
         else {
-            THROW_YASK_EXCEPTION("Error: format-type '" << format_type <<
+            THROW_YASK_EXCEPTION("Error: format-type '" + format_type +
                                  "' is not recognized");
         }
         assert(printer);

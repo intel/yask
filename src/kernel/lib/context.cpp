@@ -994,7 +994,7 @@ namespace yask {
         assert(gp);
         auto& gname = gp->get_name();
         if (gridMap.count(gname))
-            THROW_YASK_EXCEPTION("Error: grid '" << gname << "' already exists");
+            THROW_YASK_EXCEPTION("Error: grid '" + gname + "' already exists");
 
         // Add to list and map.
         gridPtrs.push_back(gp);

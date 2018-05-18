@@ -298,6 +298,7 @@ ifeq ($(shell uname -o),Cygwin)
   SO_SUFFIX	:=	.dll
   RUN_PREFIX	:=	env PATH="${PATH}:$(LIB_DIR):$(YASK_DIR)"
   PYTHON		:= python3
+  CXX_PREFIX	:=
 else
   SO_SUFFIX	:=	.so
   RUN_PREFIX	:=
@@ -322,14 +323,14 @@ MAKE_REPORT_FILE:=	make-report.$(YK_TAG).txt
 
 # Common source.
 COMM_DIR	:=	../common
-COMM_SRC_NAMES	:=	output common_utils
+COMM_SRC_NAMES	:=	output common_utils tuple
 COMM_SRC_BASES	:=	$(addprefix $(COMM_DIR)/,$(COMM_SRC_NAMES))
 
 # Kernel source files and dirs.
 YK_SWIG_DIR	:=	./swig
 YK_GEN_DIR	:=	./gen
 YK_LIB_DIR	:=	./lib
-YK_SRC_NAMES	:=	factory context setup realv_grids grid_apis new_grid generic_grids utils settings stencil_calc
+YK_SRC_NAMES	:=	factory grid_apis context setup realv_grids new_grid generic_grids utils settings stencil_calc
 YK_SRC_BASES	:=	$(addprefix $(YK_LIB_DIR)/,$(YK_SRC_NAMES))
 YK_OBJS		:=	$(addsuffix .$(YK_TAG).o,$(YK_SRC_BASES) $(COMM_SRC_BASES))
 YK_MACRO_FILE	:=	$(YK_GEN_DIR)/yask_macros.hpp
@@ -363,9 +364,9 @@ GET_LOOP_STATS	:=	$(BIN_DIR)/get_loop_stats.pl
 
 # Compiler and default flags.
 ifeq ($(mpi),1)
- YK_CXX		:=	mpiicpc
+ YK_CXX		:=	mpiicc
 else
- YK_CXX		:=	icpc
+ YK_CXX		:=	icc
 endif
 YK_CXXFLAGS	:=   	-g -std=c++11 -Wall
 YK_CXXFLAGS	+=	$(addprefix -I,$(YK_INC_DIRS) $(YK_GEN_DIR))
@@ -457,7 +458,7 @@ YK_LIBS		+=	$(VTUNE_DIR)/lib64/libittnotify.a
 endif
 
 # compiler-specific settings
-ifneq ($(findstring icpc,$(notdir $(YK_CXX))),)  # Intel compiler
+ifneq ($(filter %icpc %icc,$(notdir $(YK_CXX))),)  # Intel compiler
 
  YK_CXXFLAGS	+=      $(ISA) -debug extended -restrict -ansi-alias -fno-alias
  YK_CXXFLAGS	+=	-fimf-precision=low -fast-transcendentals -no-prec-sqrt \
@@ -667,21 +668,25 @@ $(YK_SWIG_DIR)/yask_kernel_api_wrap.cpp: $(YK_SWIG_DIR)/yask*.i $(INC_DIR)/*.hpp
 	  -c++ -python -outdir $(YASK_DIR) -builtin $<
 
 $(YK_SWIG_DIR)/yask_kernel_api_wrap.o: $(YK_SWIG_DIR)/yask_kernel_api_wrap.cpp
-	$(YK_CXX) $(YK_CXXFLAGS) $(PYINC) -fPIC -c -o $@ $<
+	$(CXX_PREFIX) $(YK_CXX) $(YK_CXXFLAGS) $(PYINC) -fPIC -c -o $@ $<
+	@ls -l $@
 
 $(YK_PY_LIB): $(YK_OBJS) $(YK_SWIG_DIR)/yask_kernel_api_wrap.o
-	$(YK_CXX) $(YK_CXXFLAGS) -shared -o $@ $^ $(YK_LIBS)
+	$(CXX_PREFIX) $(YK_CXX) $(YK_CXXFLAGS) -shared -o $@ $^ $(YK_LIBS)
+	@ls -l $@
 
 # Simple tests
 
 $(YK_GRID_TEST_EXEC): ./tests/grid_test.cpp $(YK_LIB)
-	$(YK_CXX) $(YK_CXXFLAGS) $< $(YK_LFLAGS) -o $@
+	$(CXX_PREFIX) $(YK_CXX) $(YK_CXXFLAGS) $< $(YK_LFLAGS) -o $@
+	@ls -l $@
 
 #### API tests.
 
 # Build C++ kernel tests.
 $(YK_API_TEST_EXEC): ./tests/yask_kernel_api_test.cpp $(YK_LIB)
-	$(YK_CXX) $(YK_CXXFLAGS) $< $(YK_LFLAGS) -o $@
+	$(CXX_PREFIX) $(YK_CXX) $(YK_CXXFLAGS) $< $(YK_LFLAGS) -o $@
+	@ls -l $@
 
 # Run C++ tests.
 cxx-yk-grid-test: $(YK_GRID_TEST_EXEC)
@@ -699,7 +704,8 @@ py-yk-api-test: $(BIN_DIR)/yask_kernel_api_test.py $(YK_PY_LIB)
 
 # Build C++ kernel tests with exceptions.
 $(YK_API_TEST_EXEC_WITH_EXCEPTION): ./tests/yask_kernel_api_exception_test.cpp $(YK_LIB)
-	$(YK_CXX) $(YK_CXXFLAGS) $< $(YK_LFLAGS) -o $@
+	$(CXX_PREFIX) $(YK_CXX) $(YK_CXXFLAGS) $< $(YK_LFLAGS) -o $@
+	@ls -l $@
 
 # Run C++ tests with exceptions.
 cxx-yk-api-test-with-exception: $(YK_API_TEST_EXEC_WITH_EXCEPTION)
@@ -913,7 +919,7 @@ help:
 	@echo " $(MAKE) clean; $(MAKE) -j arch=intel64 stencil=3axis mpi=0 OMPFLAGS='-qopenmp-stubs' YK_CXXOPT='-O0' EXTRA_MACROS='CHECK TRACE'  # TRACE is a useful debug setting!"
 	@echo " $(MAKE) clean; $(MAKE) -j arch=intel64 stencil=3axis radius=0 fold='x=1,y=1,z=1' mpi=0 YK_CXX=g++ OMPFLAGS='' YK_CXXOPT='-O0' EXTRA_MACROS='CHECK TRACE TRACE_MEM TRACE_INTRINSICS'"
 	@echo " "
-	@echo "Example builds with test runs:"
-	@echo " $(MAKE) -j all # Normal full API and stencil tests"
-	@echo " $(MAKE) -j all YK_CXX=g++ YK_CXXOPT=-O2 mpi=0 ranks=1 # g++ w/o MPI"
-	@echo " $(MAKE) -j all YK_CXXOPT=-O1 ranks=3 EXTRA_MACROS='CHECK' # Run 3 ranks w/checking"
+	@echo "Example builds with test runs using ccache:"
+	@echo " $(MAKE) -j all CXX_PREFIX=ccache # Normal full API and stencil tests"
+	@echo " $(MAKE) -j all CXX_PREFIX=ccache YK_CXXOPT=-O2 YK_CXX=g++ mpi=0 ranks=1 # g++ w/o MPI"
+	@echo " $(MAKE) -j all CXX_PREFIX=ccache YK_CXXOPT=-O1 ranks=3 EXTRA_MACROS='CHECK' # Run 3 ranks w/checking"

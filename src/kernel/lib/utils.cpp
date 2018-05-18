@@ -54,7 +54,7 @@ namespace yask {
 #endif
 
         if (!p)
-            THROW_YASK_EXCEPTION("error: cannot allocate " << makeByteStr(nbytes));
+            THROW_YASK_EXCEPTION("error: cannot allocate " + makeByteStr(nbytes));
         return static_cast<char*>(p);
     }
 
@@ -82,8 +82,8 @@ namespace yask {
             else
                 numa_alloc_local(nbytes);
             if ((size_t)p % CACHELINE_BYTES)
-                THROW_YASK_EXCEPTION("Error: numa_alloc_*(" << makeByteStr(nbytes) <<
-                                     ") returned unaligned addr " << p);
+                THROW_YASK_EXCEPTION("Error: numa_alloc_*(" + makeByteStr(nbytes) +
+                                     ") returned unaligned addr " + p);
         }
         else
             THROW_YASK_EXCEPTION("Error: explicit NUMA policy allocation is not available");
@@ -126,7 +126,7 @@ namespace yask {
                 }
             }
             else
-                THROW_YASK_EXCEPTION("Error: anonymous mmap of " << makeByteStr(nbytes) <<
+                THROW_YASK_EXCEPTION("Error: anonymous mmap of " + makeByteStr(nbytes) +
                                      " failed");
         }
         else
@@ -135,7 +135,7 @@ namespace yask {
 #endif
         // Should not get here w/null p; throw exception.
         if (!p)
-            THROW_YASK_EXCEPTION("Error: cannot allocate " << makeByteStr(nbytes));
+            THROW_YASK_EXCEPTION("Error: cannot allocate " + makeByteStr(nbytes));
 
         // Return as a char* as required for shared_ptr ctor.
         return static_cast<char*>(p);
@@ -224,8 +224,8 @@ namespace yask {
 #endif
 
         if (min_val != rank_val || max_val != rank_val) {
-            THROW_YASK_EXCEPTION("error: " << descr << " values range from " << min_val << " to " <<
-                                 max_val << " across the ranks; they should all be identical");
+            FORMAT_AND_THROW_YASK_EXCEPTION("error: " << descr << " values range from " << min_val << " to " <<
+                                            max_val << " across the ranks; they should all be identical");
         }
     }
 
@@ -291,14 +291,14 @@ namespace yask {
                                                   int& argi)
     {
         if (size_t(argi) >= args.size() || args[argi].length() == 0) {
-            THROW_YASK_EXCEPTION("Error: no argument for option '" << args[argi - 1] << "'");
+            THROW_YASK_EXCEPTION("Error: no argument for option '" + args[argi - 1] + "'");
         }
 
         const char* nptr = args[argi].c_str();
         char* endptr = 0;
         long long int val = strtoll(nptr, &endptr, 0);
         if (val == LLONG_MIN || val == LLONG_MAX || *endptr != '\0') {
-            THROW_YASK_EXCEPTION("Error: argument for option '" << args[argi - 1] << "' is not an integer");
+            THROW_YASK_EXCEPTION("Error: argument for option '" + args[argi - 1] + "' is not an integer");
         }
 
         argi++;

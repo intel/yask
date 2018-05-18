@@ -39,13 +39,14 @@ namespace yask {
         ostream& os = get_ostr();
         auto& step_dim = _dims->_step_dim;
         auto me = _env->my_rank;
+        int num_neighbors = 0;
 
         // Check ranks.
         idx_t req_ranks = _opts->_num_ranks.product();
         if (req_ranks != _env->num_ranks) {
-            THROW_YASK_EXCEPTION("error: " << req_ranks << " rank(s) requested (" <<
-                _opts->_num_ranks.makeDimValStr(" * ") << "), but " <<
-                _env->num_ranks << " rank(s) are active");
+            FORMAT_AND_THROW_YASK_EXCEPTION("error: " << req_ranks << " rank(s) requested (" +
+                                            _opts->_num_ranks.makeDimValStr(" * ") + "), but " <<
+                                            _env->num_ranks << " rank(s) are active");
         }
         assertEqualityOverRanks(_opts->_rank_sizes[step_dim], _env->comm, "num steps");
 
@@ -58,6 +59,10 @@ namespace yask {
         auto num_ddims = _opts->_rank_indices.size(); // domain-dims only!
         idx_t coords[_env->num_ranks][num_ddims];
 
+        // Init offsets and total sizes.
+        rank_domain_offsets.setValsSame(0);
+        overall_domain_sizes.setValsSame(0);
+
         // Init coords for this rank.
         for (int i = 0; i < num_ddims; i++)
             coords[me][i] = _opts->_rank_indices[i];
@@ -68,7 +73,9 @@ namespace yask {
         // Init sizes for this rank.
         for (int di = 0; di < num_ddims; di++) {
             auto& dname = _opts->_rank_indices.getDimName(di);
-            rsizes[me][di] = _opts->_rank_sizes[dname];
+            auto rsz = _opts->_rank_sizes[dname];
+            rsizes[me][di] = rsz;
+            overall_domain_sizes[dname] = rsz;
         }
 
 #ifdef USE_MPI
@@ -80,14 +87,8 @@ namespace yask {
                       rn, _env->comm);
         }
         // Now, the tables are filled in for all ranks.
-#endif
-
-        // Init offsets and total sizes.
-        rank_domain_offsets.setValsSame(0);
-        overall_domain_sizes.setValsSame(0);
 
         // Loop over all ranks, including myself.
-        int num_neighbors = 0;
         for (int rn = 0; rn < _env->num_ranks; rn++) {
 
             // Coord offset of rn from me: prev => negative, self => 0, next => positive.
@@ -110,14 +111,14 @@ namespace yask {
             // Myself.
             if (rn == me) {
                 if (mandist != 0)
-                    THROW_YASK_EXCEPTION("Internal error: distance to own rank == " << mandist);
+                    FORMAT_AND_THROW_YASK_EXCEPTION("Internal error: distance to own rank == " << mandist);
             }
 
             // Someone else.
             else {
                 if (mandist == 0)
-                    THROW_YASK_EXCEPTION("Error: ranks " << me <<
-                                         " and " << rn << " at same coordinates");
+                    FORMAT_AND_THROW_YASK_EXCEPTION("Error: ranks " << me <<
+                                                    " and " << rn << " at same coordinates");
             }
 
             // Loop through domain dims.
@@ -138,8 +139,9 @@ namespace yask {
                 if (is_inline) {
                     
                     // Accumulate total problem size in each dim for ranks that
-                    // intersect with this rank, including myself.
-                    overall_domain_sizes[dname] += rsizes[rn][di];
+                    // intersect with this rank, not including myself.
+                    if (rn != me)
+                        overall_domain_sizes[dname] += rsizes[rn][di];
 
                     // Adjust my offset in the global problem by adding all domain
                     // sizes from prev ranks only.
@@ -155,13 +157,13 @@ namespace yask {
                             auto rnsz = rsizes[rn][dj];
                             if (mysz != rnsz) {
                                 auto& dnamej = _opts->_rank_indices.getDimName(dj);
-                                THROW_YASK_EXCEPTION("Error: rank " << rn << " and " << me <<
-                                    " are both at rank-index " << coords[me][di] <<
-                                    " in the '" << dname <<
-                                    "' dimension , but their rank-domain sizes are " <<
-                                    rnsz << " and " << mysz <<
-                                    " (resp.) in the '" << dj <<
-                                    "' dimension, making them unaligned");
+                                FORMAT_AND_THROW_YASK_EXCEPTION("Error: rank " << rn << " and " << me <<
+                                                                " are both at rank-index " << coords[me][di] <<
+                                                                " in the '" << dname <<
+                                                                "' dimension , but their rank-domain sizes are " <<
+                                                                rnsz << " and " << mysz <<
+                                                                " (resp.) in the '" << dj <<
+                                                                "' dimension, making them unaligned");
                             }
                         }
                     }
@@ -224,6 +226,7 @@ namespace yask {
             } // self or immediate neighbor in any direction.
             
         } // ranks.
+#endif
 
         // Set offsets in grids and find WF extensions
         // based on the grids' halos.
@@ -947,9 +950,9 @@ namespace yask {
             // when there are multiple ranks?
             auto min_size = max_halos[dname] + shifts;
             if (_opts->_num_ranks[dname] > 1 && rksize < min_size) {
-                THROW_YASK_EXCEPTION("Error: rank-domain size of " << rksize << " in '" <<
-                                     dname << "' dim is less than minimum size of " << min_size <<
-                                     ", which is based on stencil halos and temporal wave-front sizes");
+                FORMAT_AND_THROW_YASK_EXCEPTION("Error: rank-domain size of " << rksize << " in '" <<
+                                                dname << "' dim is less than minimum size of " << min_size <<
+                                                ", which is based on stencil halos and temporal wave-front sizes");
             }
 
             // If there is another rank to the left, set wave-front
@@ -1073,6 +1076,13 @@ namespace yask {
         allocScratchData(os);
         allocMpiData(os);
 
+        print_info();
+    }
+    
+    void StencilContext::print_info() {
+        auto& step_dim = _dims->_step_dim;
+        ostream& os = get_ostr();
+
         // Report total allocation.
         rank_nbytes = get_num_bytes();
         os << "Total allocation in this rank: " <<
@@ -1080,7 +1090,7 @@ namespace yask {
         tot_nbytes = sumOverRanks(rank_nbytes, _env->comm);
         os << "Total overall allocation in " << _env->num_ranks << " rank(s): " <<
             makeByteStr(tot_nbytes) << "\n";
-    
+
         // Report some stats.
         idx_t dt = _opts->_rank_sizes[step_dim];
         os << "\nProblem sizes in points (from smallest to largest):\n"
@@ -1092,9 +1102,8 @@ namespace yask {
             " block-group-size:      " << _opts->_block_group_sizes.makeDimValStr(" * ") << endl <<
             " region-size:           " << _opts->_region_sizes.makeDimValStr(" * ") << endl <<
             " rank-domain-size:      " << _opts->_rank_sizes.makeDimValStr(" * ") << endl <<
-            " overall-problem-size:  " << overall_domain_sizes.makeDimValStr(" * ") << endl <<
-            endl <<
-            "Other settings:\n"
+            " overall-problem-size:  " << overall_domain_sizes.makeDimValStr(" * ") << endl;
+        os << "\nOther settings:\n"
             " yask-version:          " << yask_get_version_string() << endl <<
             " stencil-name:          " << get_name() << endl <<
             " element-size:          " << makeByteStr(get_element_bytes()) << endl <<
@@ -1122,15 +1131,19 @@ namespace yask {
                 " ... " << ext_bb.bb_end.subElements(1).makeDimValStr() << endl;
         }
         os << endl;
-        
+
+        // Info about eqs, packs and bundles.
+        os << "Num stencil equations: " << NUM_STENCIL_EQS << endl;
+        os << "Num stencil bundles: " << stBundles.size() << endl;
+        os << "Num stencil packs: " << stPacks.size() << endl;
+
+#if NUM_STENCIL_EQS
+
         // sums across bundles for this rank.
         rank_numWrites_1t = 0;
         rank_reads_1t = 0;
         rank_numFpOps_1t = 0;
 
-        // Info about packs and bundles.
-        os << "Num stencil bundles: " << stBundles.size() << endl;
-        os << "Num stencil packs: " << stPacks.size() << endl;
         for (auto& sp : stPacks) {
             os << "Bundle(s) in pack '" << sp->get_name() << "':\n";
             for (auto* sg : *sp) {
@@ -1256,6 +1269,7 @@ namespace yask {
             " Num-reads-required is based on sum of grid-reads in sub-domain across stencil-bundle(s).\n"
             " Est-FP-ops are based on sum of est-FP-ops in sub-domain across stencil-bundle(s).\n"
             "\n";
+#endif
     }
 
     // Dealloc grids, etc.

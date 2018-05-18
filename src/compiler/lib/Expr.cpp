@@ -458,8 +458,8 @@ namespace yask {
         if (!gpp)
             THROW_YASK_EXCEPTION("Error: empty LHS of equation");
         if (!rhs)
-            THROW_YASK_EXCEPTION("Error: empty RHS of " <<
-                                 gpp->makeQuotedStr() << " equation");
+            THROW_YASK_EXCEPTION("Error: empty RHS of " +
+                                 gpp->makeQuotedStr() + " equation");
         
         // Get to list of equations in soln indirectly thru grid.
         Grid* gp = gpp->getGrid();
@@ -579,7 +579,7 @@ namespace yask {
         // Check for correct number of args.
         size_t nd = grid->getDims().size();
         if (nd != args.size()) {
-            THROW_YASK_EXCEPTION("Error: attempt to create a grid point in " <<
+            FORMAT_AND_THROW_YASK_EXCEPTION("Error: attempt to create a grid point in " <<
                 nd << "-D grid '" << getGridName() << "' with " <<
                 args.size() << " indices");
         }

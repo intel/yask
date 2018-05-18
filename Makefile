@@ -88,11 +88,12 @@ ifeq ($(shell uname -o),Cygwin)
   SO_SUFFIX	:=	.dll
   RUN_PREFIX	:=	env PATH="${PATH}:$(LIB_DIR)"
   PYTHON		:= python3
+  CXX_PREFIX	:=
 else
   SO_SUFFIX	:=	.so
   RUN_PREFIX	:=
   PYTHON		:=	python
-  CXX_PREFIX	:=	time
+  CXX_PREFIX	:=
 endif
 
 # Misc dirs & files.
@@ -104,7 +105,7 @@ TUPLE_TEST_EXEC :=	$(BIN_DIR)/yask_tuple_test.exe
 # For kernel, use YK_CXX*.
 CXX		:=	g++
 CXXFLAGS 	:=	-g -std=c++11 -Wall -O2
-CXXFLAGS	+=	$(addprefix -I,$(COMM_DIR))
+CXXFLAGS	+=	$(addprefix -I,$(INC_DIR) $(COMM_DIR))
 CXXFLAGS	+=	-fopenmp
 
 ######## Primary targets & rules
@@ -223,8 +224,8 @@ yc-and-yk-test:
 code-stats:
 	$(YK_MAKE) $@
 
-$(TUPLE_TEST_EXEC): src/common/tests/tuple_test.cpp src/common/tuple.hpp
-	$(CXX) $(CXXFLAGS) $(LFLAGS) -o $@ $<
+$(TUPLE_TEST_EXEC): src/common/tests/tuple_test.cpp src/common/tuple.*pp
+	$(CXX_PREFIX) $(CXX) $(CXXFLAGS) $(LFLAGS) -o $@ $< src/common/tuple.cpp
 
 tuple-test: $(TUPLE_TEST_EXEC)
 	@echo '*** Running the C++ YASK tuple test...'

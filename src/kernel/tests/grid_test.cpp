@@ -33,6 +33,10 @@ IN THE SOFTWARE.
 using namespace std;
 using namespace yask;
 
+// Auto-generated stencil code that extends base types.
+#define DEFINE_CONTEXT
+#include "yask_stencil_code.hpp"
+
 int main(int argc, char** argv) {
 
     // Bootstrap factory from kernel API.

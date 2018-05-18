@@ -32,12 +32,14 @@ LIB_DIR		:=	$(YASK_BASE)/lib
 INC_DIR		:=	$(YASK_BASE)/include
 BIN_DIR		:=	$(YASK_BASE)/bin
 YASK_DIR	:=	$(YASK_BASE)/yask
+STENCIL_DIR	:= 	$(YASK_BASE)/src/stencils
 
 # OS-specific
 ifeq ($(shell uname -o),Cygwin)
   SO_SUFFIX	:=	.dll
   RUN_PREFIX	:=	env PATH="${PATH}:$(LIB_DIR):$(YASK_DIR)"
-  PYTHON		:= python3
+  PYTHON	:=	python3
+  CXX_PREFIX	:=
 else
   SO_SUFFIX	:=	.so
   RUN_PREFIX	:=
@@ -57,27 +59,25 @@ YC_PY_MOD	:=	$(YASK_DIR)/$(YC_MODULE).py
 
 # Common source.
 COMM_DIR	:=	../common
-COMM_SRC_NAMES	:=	output common_utils
+COMM_SRC_NAMES	:=	output common_utils tuple
 COMM_SRC_BASES	:=	$(addprefix $(COMM_DIR)/,$(COMM_SRC_NAMES))
 
 # Compiler source files and dirs.
 YC_SWIG_DIR	:=	./swig
-YC_GEN_DIR	:=	./gen
 YC_LIB_DIR	:=	./lib
 YC_SRC_NAMES	:=	Expr ExprUtils Grid Eqs Print Vec Cpp CppIntrin YaskKernel Soln
 YC_SRC_BASES	:=	$(addprefix $(YC_LIB_DIR)/,$(YC_SRC_NAMES))
 YC_OBJS		:=	$(addsuffix .o,$(YC_SRC_BASES) $(COMM_SRC_BASES))
+YC_STENCIL_BASES:=	$(patsubst %.cpp,%,$(wildcard $(STENCIL_DIR)/*.cpp))
+YC_STENCIL_OBJS	:=	$(addsuffix .o,$(YC_STENCIL_BASES))
 YC_INC_DIRS	:=	$(INC_DIR) $(YC_LIB_DIR) $(COMM_DIR)
 YC_INC_GLOB	:=	$(addsuffix /*.hpp,$(YC_INC_DIRS))
-YC_STENCIL_DIR	:= 	../stencils
-YC_STENCIL_LIST	:=	$(YC_GEN_DIR)/stencils.hpp
-YC_MK_GEN_DIR	:=	mkdir -p -v $(YC_GEN_DIR)
 
 # Compiler and default flags.
 YC_CXX    	?=	g++  # usually faster than icpc for building the compiler.
 YC_CXXOPT	:= 	-O2
 YC_CXXFLAGS 	:=	-g -std=c++11 -Wall $(YC_CXXOPT)
-YC_CXXFLAGS	+=	$(addprefix -I,$(YC_INC_DIRS) $(YC_GEN_DIR) $(YC_STENCIL_DIR))
+YC_CXXFLAGS	+=	$(addprefix -I,$(YC_INC_DIRS) $(STENCIL_DIR))
 
 # Add user-defined flags.
 YC_CXXFLAGS	+=	$(EXTRA_YC_CXXFLAGS)
@@ -95,32 +95,34 @@ PYINC		:= 	$(addprefix -I,$(shell $(PYTHON) -c 'import distutils.sysconfig; prin
 
 RUN_PYTHON	:= 	env PYTHONPATH=$(LIB_DIR):$(YASK_DIR):$(PYTHONPATH) $(PYTHON)
 
-######## Primary targets & rules
+# Compile rules.
+# Build stencils at O0 to avoid C++ compiler wasting time optimizing them.
+
+$(STENCIL_DIR)/%.o: $(STENCIL_DIR)/%.cpp $(YC_INC_GLOB)
+	$(CXX_PREFIX) $(YC_CXX) $(YC_CXXFLAGS) -O0 -fPIC -c -o $@ $<
+	@ls -l $@
+
+%.o: %.cpp $(YC_INC_GLOB)
+	$(CXX_PREFIX) $(YC_CXX) $(YC_CXXFLAGS) -fPIC -c -o $@ $<
+	@ls -l $@
+
+######## Primary targets.
 
 default: compiler
 
 # Compile the stencil compiler.
 compiler: $(YC_EXEC)
 	@echo "Binary" $(YC_EXEC) "has been built."
-
-%.o: %.cpp $(YC_INC_GLOB)
-	$(CXX_PREFIX) $(YC_CXX) $(YC_CXXFLAGS) -fPIC -c -o $@ $<
+	$(MAKE) old-code-check
 
 $(YC_LIB): $(YC_OBJS)
 	$(CXX_PREFIX) $(YC_CXX) $(YC_CXXFLAGS) -shared -o $@ $^
+	@ls -l $@
 
-$(YC_EXEC): main.cpp $(YC_STENCIL_LIST) $(YC_LIB)
-	$(CXX_PREFIX) $(YC_LD) $(YC_CXXFLAGS) -O0 $< $(YC_LFLAGS) -o $@
+$(YC_EXEC): main.cpp $(YC_STENCIL_OBJS) $(YC_LIB)
+	$(CXX_PREFIX) $(YC_LD) $(YC_CXXFLAGS) $^ $(YC_LFLAGS) -o $@
+	@ls -l $@
 	$(MAKE) echo-settings
-
-# Generated files.
-$(YC_STENCIL_LIST): $(YC_STENCIL_DIR)/*.hpp
-	$(YC_MK_GEN_DIR)
-	echo '// Stencil-definition files.' > $@
-	echo '// Automatically-generated code; do not edit.' >> $@
-	for sfile in $(^F); do \
-	  echo '#include "'$$sfile'"' >> $@; \
-	done
 
 ######## API targets
 
@@ -140,16 +142,19 @@ $(YC_SWIG_DIR)/yask_compiler_api_wrap.cpp: $(YC_SWIG_DIR)/yask*.i $(INC_DIR)/*.h
 # Turn off asserts to work around known SWIG issue:
 # https://github.com/swig/swig/issues/773
 $(YC_SWIG_DIR)/yask_compiler_api_wrap.o: $(YC_SWIG_DIR)/yask_compiler_api_wrap.cpp
-	$(YC_CXX) $(YC_CXXFLAGS) -DNDEBUG $(PYINC) -fPIC -c -o $@ $<
+	$(CXX_PREFIX) $(YC_CXX) $(YC_CXXFLAGS) -DNDEBUG $(PYINC) -fPIC -c -o $@ $<
+	@ls -l $@
 
 $(YC_PY_LIB): $(YC_OBJS) $(YC_SWIG_DIR)/yask_compiler_api_wrap.o
-	$(YC_CXX) $(YC_CXXFLAGS) -shared -o $@ $^
+	$(CXX_PREFIX) $(YC_CXX) $(YC_CXXFLAGS) -shared -o $@ $^
+	@ls -l $@
 
 #### API tests.
 
 # Build C++ compiler API test.
 $(YC_TEST_EXEC): ./tests/yask_compiler_api_test.cpp $(YC_LIB)
-	$(YC_CXX) $(YC_CXXFLAGS) $< $(YC_LFLAGS) -o $@
+	$(CXX_PREFIX) $(YC_CXX) $(YC_CXXFLAGS) $< $(YC_LFLAGS) -o $@
+	@ls -l $@
 
 # Run Python compiler API test to create stencil-code file.
 # Also create .pdf rendering of stencil AST if Graphviz is installed.
@@ -169,25 +174,20 @@ cxx-yc-api-test: $(YC_TEST_EXEC)
 
 # Build C++ compiler API test with exception.
 $(YC_TEST_EXEC_WITH_EXCEPTION): ./tests/yask_compiler_api_exception_test.cpp $(YC_LIB)
-	$(YC_CXX) $(YC_CXXFLAGS) $< $(YC_LFLAGS) -o $@
+	$(CXX_PREFIX) $(YC_CXX) $(YC_CXXFLAGS) $< $(YC_LFLAGS) -o $@
+	@ls -l $@
 
 # Run Python compiler API test with exceptions to create stencil-code file.
 # Also create .pdf rendering of stencil AST if Graphviz is installed.
 py-yc-api-test-with-exception: $(BIN_DIR)/yask_compiler_api_exception_test.py $(YC_PY_LIB)
-	chmod 440 yc-api-test-with-exception-py-readonly
 	@echo '*** Running the Python YASK compiler API test with exception...'
 	$(RUN_PYTHON) $<
-	- dot -Tpdf -O yc-api-test-with-exception-py.dot
-	ls -l yc-api-test-with-exception-py.*
 
 # Run C++ compiler API test with exceptions to create stencil-code file.
 # Also create .pdf rendering of stencil AST if Graphviz is installed.
 cxx-yc-api-test-with-exception: $(YC_TEST_EXEC_WITH_EXCEPTION)
-	chmod 440 yc-api-test-with-exception-cxx-readonly
 	@echo '*** Running the C++ YASK compiler API test with exception...'
 	$<
-	- dot -Tpdf -O yc-api-test-with-exception-cxx.dot
-	ls -l yc-api-test-with-exception-cxx.*
 
 ######## Misc targets
 
@@ -204,12 +204,15 @@ all:
 	$(MAKE) api
 	$(MAKE) all-tests
 
+old-code-check: $(wildcard $(STENCIL_DIR)/*Stencil.hpp)
+	@ for i in $^; do echo "*** WARNING: '$$i' should now be a .cpp file. If unmodified, please delete. If modified or new, please add '#define USE_INTERNAL_DSL' to source and rename to .cpp."; done
+
 # Remove intermediate files.
 clean:
 	rm -fv *.s
-	rm -fr $(YC_SWIG_DIR)/build $(YC_GEN_DIR)
+	rm -fr $(YC_SWIG_DIR)/build
 	rm -fv $(YC_SWIG_DIR)/*_api_wrap.*
-	rm -fv $(YC_OBJS)
+	rm -fv $(YC_OBJS) $(YC_STENCIL_OBJS)
 	- find . -name '*.o' -print -delete
 	- find . $(BIN_DIR) $(LIB_DIR) -name '*.optrpt' -print -delete
 

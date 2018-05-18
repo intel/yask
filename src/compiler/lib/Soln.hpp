@@ -28,7 +28,11 @@ IN THE SOFTWARE.
 #ifndef SOLN_HPP
 #define SOLN_HPP
 
-#include <map>
+// Generation code.
+#include "ExprUtils.hpp"
+#include "Grid.hpp"
+#include "Eqs.hpp"
+
 using namespace std;
 
 namespace yask {
@@ -41,6 +45,9 @@ namespace yask {
     class StencilBase;
     typedef map<string, StencilBase*> StencilList;
 
+    // Global list for registering stencils.
+    extern StencilList stencils;
+    
     // A base class for whole stencil solutions.  This is used by solutions
     // defined in C++ that are inherited from StencilBase as well as those
     // defined via the stencil-compiler API.
@@ -236,6 +243,9 @@ namespace yask {
         StencilBase(const string name, StencilList& stencils) :
             StencilSolution(name)
         {
+            if (stencils.count(name))
+                THROW_YASK_EXCEPTION("Error: stencil '" + name +
+                                     "' already defined");
             stencils[name] = this;
         }
         virtual ~StencilBase() { }

@@ -242,10 +242,3 @@ extern yask::Cache cache_model;
 // Base types for stencil context, etc.
 #include "context.hpp"
 #include "stencil_calc.hpp"
-
-// Auto-generated stencil code that extends base types.
-#define DEFINE_CONTEXT
-#include "yask_stencil_code.hpp"
-#undef DEFINE_CONTEXT
-
-

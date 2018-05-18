@@ -25,24 +25,12 @@ IN THE SOFTWARE.
 
 /////////////// Main vector-folding code-generation code. /////////////
 
-// This macro blocks the operator overloads in the API.
-// This is temporary until the "internal DSL" gets completely
-// replaced by the APIs.
-#define USE_INTERNAL_DSL
-
-// Generation code.
-#include "ExprUtils.hpp"
-#include "Grid.hpp"
+// YASK compiler-solution code.
+#include "Soln.hpp"
 #include "CppIntrin.hpp"
 #include "Parse.hpp"
 
 using namespace yask;
-
-// A register of stencils.
-StencilList stencils;
-
-// Stencils.
-#include "stencils.hpp"
 
 // output streams.
 map<string, string> outfiles;
@@ -61,14 +49,22 @@ void usage(const string& cmd) {
         "     Print this help message.\n"
         "\n"
         " -stencil <name>\n"
-        "     Set stencil solution (required); supported solutions:\n";
-    for (auto si : stencils) {
-        auto name = si.first;
-        auto sp = si.second;
-        cout << "                     " << name;
-        if (sp->usesRadius())
-            cout << " *";
-        cout << endl;
+        "     Select stencil solution (required)\n";
+    for (bool show_test : { false, true }) {
+        if (show_test)
+            cout << "       Built-in test solutions:\n";
+        else
+            cout << "       Built-in example solutions:\n";
+        for (auto si : stencils) {
+            auto name = si.first;
+            if ((name.rfind("test_", 0) == 0) == show_test) {
+                auto sp = si.second;
+                cout << "           " << name;
+                if (sp->usesRadius())
+                    cout << " *";
+                cout << endl;
+            }
+        }
     }
     cout <<
         " -radius <radius>\n"
