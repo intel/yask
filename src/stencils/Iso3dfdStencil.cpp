@@ -26,6 +26,11 @@ IN THE SOFTWARE.
 // Implement isotropic 3D finite-difference (FD) stencil, nth-order accurate in
 // space (where n = 2 * radius) and 2nd-order accurate in time.
 
+// This macro blocks the operator overloads in the API.
+// This is temporary until the "internal DSL" gets completely
+// replaced by the APIs.
+#define USE_INTERNAL_DSL
+
 #include "Soln.hpp"
 
 class Iso3dfdStencil : public StencilRadiusBase {

@@ -32,6 +32,9 @@ using namespace std;
 
 namespace yask {
 
+    // A global register of stencils.
+    StencilList stencils;
+
     // Stencil-solution APIs.
     yc_grid_ptr StencilSolution::newGrid(const std::string& name,
                                          bool isScratch,
