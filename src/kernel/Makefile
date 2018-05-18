@@ -578,7 +578,7 @@ kernel:	$(YK_EXEC) $(MAKE_REPORT_FILE)
 	@echo "Run command:" $(BIN_DIR)"/yask.sh -stencil" $(stencil) "-arch" $(arch) "[options]"
 
 %.$(YK_TAG).o: %.cpp $(YK_GEN_HEADERS) $(YK_INC_GLOB)
-	$(CXX_PREFIX) $(YK_CXX) $(YK_CXXFLAGS) -fPIC -c -o $@ $<
+	$(CXX_PREFIX) $(YK_CXX) $(YK_CXXFLAGS) -x c++ -fPIC -c -o $@ $<
 	@ls -l $@
 
 $(YK_LIB): $(YK_OBJS)
