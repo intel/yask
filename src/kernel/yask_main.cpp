@@ -32,7 +32,6 @@ using namespace yask;
 // Auto-generated stencil code that extends base types.
 #define DEFINE_CONTEXT
 #include "yask_stencil_code.hpp"
-#undef DEFINE_CONTEXT
 
 // Add some command-line options for this application in addition to the
 // default ones provided by YASK.
