@@ -44,11 +44,6 @@ IN THE SOFTWARE.
 // Set the following macro to use intermediate scratch grids.
 //#define USE_SCRATCH_GRIDS
 
-// This macro blocks the operator overloads in the API.
-// This is temporary until the "internal DSL" gets completely
-// replaced by the APIs.
-#define USE_INTERNAL_DSL
-
 #include "Soln.hpp"
 
 class AwpElasticStencil : public StencilBase {
