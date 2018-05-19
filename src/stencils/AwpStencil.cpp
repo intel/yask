@@ -30,11 +30,6 @@ IN THE SOFTWARE.
 // Set the following macro to use a sponge grid instead of 3 sponge arrays.
 //#define FULL_SPONGE_GRID
 
-// This macro blocks the operator overloads in the API.
-// This is temporary until the "internal DSL" gets completely
-// replaced by the APIs.
-#define USE_INTERNAL_DSL
-
 #include "Soln.hpp"
 
 class AwpStencil : public StencilBase {

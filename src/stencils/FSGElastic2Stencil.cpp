@@ -26,11 +26,6 @@ IN THE SOFTWARE.
 // Stencil equations for FSG elastic numerics.
 // Contributed by Albert Farres from the Barcelona Supercomputing Center
 
-// This macro blocks the operator overloads in the API.
-// This is temporary until the "internal DSL" gets completely
-// replaced by the APIs.
-#define USE_INTERNAL_DSL
-
 #include "Soln.hpp"
 #include "ElasticStencil/Elastic2Stencil.hpp"
 

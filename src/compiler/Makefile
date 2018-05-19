@@ -96,10 +96,12 @@ PYINC		:= 	$(addprefix -I,$(shell $(PYTHON) -c 'import distutils.sysconfig; prin
 RUN_PYTHON	:= 	env PYTHONPATH=$(LIB_DIR):$(YASK_DIR):$(PYTHONPATH) $(PYTHON)
 
 # Compile rules.
-# Build stencils at O0 to avoid C++ compiler wasting time optimizing them.
+# For example stencils,
+# - Build at O0 to avoid C++ compiler wasting time optimizing them.
+# - Set macro to use internal DSL instead of conflicting API operators.
 
 $(STENCIL_DIR)/%.o: $(STENCIL_DIR)/%.cpp $(YC_INC_GLOB)
-	$(CXX_PREFIX) $(YC_CXX) $(YC_CXXFLAGS) -O0 -fPIC -c -o $@ $<
+	$(CXX_PREFIX) $(YC_CXX) $(YC_CXXFLAGS) -DUSE_INTERNAL_DSL -O0 -fPIC -c -o $@ $<
 	@ls -l $@
 
 %.o: %.cpp $(YC_INC_GLOB)
@@ -205,7 +207,7 @@ all:
 	$(MAKE) all-tests
 
 old-code-check: $(wildcard $(STENCIL_DIR)/*Stencil.hpp)
-	@ for i in $^; do echo "*** WARNING: '$$i' should now be a .cpp file. If unmodified, please delete. If modified or new, please add '#define USE_INTERNAL_DSL' to source and rename to .cpp."; done
+	@ for i in $^; do echo "*** WARNING: '$$i' detected. Stencils should now be in .cpp files. If this file is unmodified, just delete it. If modified or new, change its suffix to .cpp."; done
 
 # Remove intermediate files.
 clean:

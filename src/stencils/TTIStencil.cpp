@@ -26,11 +26,6 @@ IN THE SOFTWARE.
 // Implement TTI stencil using formulation from Devito project.
 // TODO: provide a more readable TTI formulation.
 
-// This macro blocks the operator overloads in the API.
-// This is temporary until the "internal DSL" gets completely
-// replaced by the APIs.
-#define USE_INTERNAL_DSL
-
 #include "Soln.hpp"
 
 class TTIStencil:public StencilRadiusBase
