@@ -53,7 +53,7 @@ namespace yask {
         TpSet _all;             // set of all objs.
         bool _done = false;     // transitive closure done?
         TpSet _empty;
-    
+
         // Recursive helper for visitDeps().
         virtual void _visitDeps(Tp a,
                                 std::function<void (Tp b, TpList& path)> visitor,
@@ -69,14 +69,14 @@ namespace yask {
             if (seen)
                 seen1 = *seen; // copy nodes already seen.
             seen1.insert(a);   // add this one.
-        
+
             // Call lambda fn.
             visitor(a, seen1);
-                    
+
             // any dependencies?
             if (_imm_deps.count(a)) {
                 auto& adeps = _imm_deps.at(a);
-    
+
                 // loop thru deps of 'a', i.e., each 'b' deps on 'a'.
                 for (auto b : adeps) {
 
@@ -90,7 +90,7 @@ namespace yask {
 
         Deps() {}
         virtual ~Deps() {}
-    
+
         // Declare that eq a depends directly on b.
         virtual void set_imm_dep_on(Tp a, Tp b) {
             _imm_deps[a].insert(b);
@@ -106,12 +106,12 @@ namespace yask {
             _all.clear();
             _done = true;
         }
-    
+
         // Check whether eq a directly depends on b.
         virtual bool is_imm_dep_on(Tp a, Tp b) const {
             return _imm_deps.count(a) && _imm_deps.at(a).count(b) > 0;
         }
-    
+
         // Checks for immediate dependencies in either direction.
         virtual bool is_imm_dep(Tp a, Tp b) const {
             return is_imm_dep_on(a, b) || is_imm_dep_on(b, a);
@@ -122,7 +122,7 @@ namespace yask {
             assert(_done);
             return _full_deps.count(a) && _full_deps.at(a).count(b) > 0;
         }
-    
+
         // Checks for dependencies in either direction.
         virtual bool is_dep(Tp a, Tp b) const {
             return is_dep_on(a, b) || is_dep_on(b, a);
@@ -149,7 +149,7 @@ namespace yask {
                                                    TpList& path)> visitor) const {
             _visitDeps(a, visitor, NULL);
         }
-        
+
         // Does recursive analysis to find transitive closure.
         virtual void find_all_deps() {
             if (_done)
@@ -157,7 +157,7 @@ namespace yask {
             for (auto a : _all)
                 if (_full_deps.count(a) == 0)
                     visitDeps(a, [&](Tp b, TpList& path) {
-                            
+
                             // Walk path from ee to b.
                             // Every 'eq' in 'path' before 'b' depends on 'b'.
                             for (auto eq : path)
@@ -181,7 +181,7 @@ namespace yask {
         typedef vector_set<Tp> TpList;
 
     protected:
-    
+
         // Things in this group.
         TpList _all;
 
@@ -206,7 +206,7 @@ namespace yask {
             _scratches.clear_deps();
             return *this;
         }
-        
+
         // list accessors.
         virtual void addItem(Tp p) {
             _all.insert(p);
@@ -228,7 +228,7 @@ namespace yask {
         virtual const TpSet& getDeps(Tp p) const {
             return _deps.get_deps_on(p);
         }
-        
+
         // Get the scratch objs.
         virtual const Deps<T>& getScratches() const {
             return _scratches;
@@ -245,7 +245,7 @@ namespace yask {
             _deps.find_all_deps();
             _scratches.find_all_deps();
         }
-        
+
         // Reorder based on dependencies,
         // i.e., topological sort.
         virtual void topo_sort() {
@@ -265,7 +265,7 @@ namespace yask {
                 // Repeat until no dependent found.
                 bool done = false;
                 while (!done) {
-        
+
                     // Does obj[i] depend on any obj after it?
                     for (size_t j = i+1; j < _all.size(); j++) {
                         auto& oj = _all.at(j);
@@ -306,7 +306,7 @@ namespace yask {
             // Deps between Tf objs.
             auto& fdeps = full.getDeps();
             auto& fscrs = full.getScratches();
-        
+
             // All T objs in this.
             for (auto& oi : _all) {
 
@@ -342,7 +342,7 @@ namespace yask {
 
     // A set of equations and related dependency data.
     class Eqs : public DepGroup<EqualsExpr> {
-        
+
     public:
 
         // Visit all equations.
@@ -352,7 +352,7 @@ namespace yask {
             }
         }
 
-        // Find dependencies based on all eqs. 
+        // Find dependencies based on all eqs.
         virtual void analyzeEqs(CompilerSettings& settings,
                                 Dimensions& dims,
                                 std::ostream& os);
@@ -385,7 +385,7 @@ namespace yask {
         // Ctor.
         EqLot(bool is_scratch) : _isScratch(is_scratch) { }
         virtual ~EqLot() {}
-        
+
         // Get all eqs.
         virtual const EqList& getEqs() const {
             return _eqs;
@@ -420,7 +420,7 @@ namespace yask {
         // Print stats for the equation(s).
         virtual void printStats(ostream& os, const string& msg);
     };
-    
+
     // A named equation bundle, which contains one or more grid-update
     // equations.  All equations in a bundle must have the same condition.
     // Equations in a bundle must not have inter-dependencies because they
@@ -461,7 +461,7 @@ namespace yask {
 
         // Add an equation to this bundle.
         virtual void addEq(EqualsExprPtr ee);
-    
+
         // Get the list of all equations.
         virtual const EqList& getItems() const {
             return _eqs;
@@ -498,7 +498,7 @@ namespace yask {
 
         // Track equations that have been added already.
         set<EqualsExprPtr> _eqs_in_bundles;
-    
+
         // Add 'eq' from 'eqs' to eq-bundle with 'baseName'
         // unless already added or illegal.  The corresponding index in
         // '_indices' will be incremented if a new bundle is created.
@@ -520,7 +520,7 @@ namespace yask {
         virtual void set_dims(Dimensions& dims) {
             _dims = &dims;
         }
-        
+
         // Separate a set of equations into eqBundles based
         // on the target string.
         // Target string is a comma-separated list of key-value pairs, e.g.,
@@ -532,7 +532,7 @@ namespace yask {
                            const string& gridRegex,
                            const string& targets,
                            std::ostream& os);
-        
+
         virtual const Grids& getOutputGrids() const {
             return _outGrids;
         }
@@ -561,7 +561,7 @@ namespace yask {
     };
 
     typedef shared_ptr<EqBundle> EqBundlePtr;
-    
+
     // A list of unique equation bundles.
     typedef vector_set<EqBundlePtr> EqBundleList;
 
@@ -600,7 +600,7 @@ namespace yask {
 
         // Add a bundle to this pack.
         virtual void addBundle(EqBundlePtr ee);
-    
+
         // Get the list of all bundles
         virtual const EqBundleList& getBundles() const {
             return _bundles;
@@ -624,12 +624,12 @@ namespace yask {
 
         // Track bundles that have been added already.
         set<EqBundlePtr> _bundles_in_packs;
-    
+
         // Add 'bp' from 'allBundles'. Create new pack if needed.  Returns
         // whether a new pack was created.
         bool addBundleToPack(EqBundles& allBundles,
                              EqBundlePtr bp);
-        
+
     public:
 
         // Separate bundles into packs.
@@ -649,5 +649,5 @@ namespace yask {
     };
 
 } // namespace yask.
-    
+
 #endif

@@ -68,9 +68,9 @@ namespace yask {
             npts = nwrites = nfpops = nsteps = 0;
             run_time = mpi_time = 0.;
         }
-        
+
         // APIs.
-        
+
         /// Get the number of points in the overall domain.
         virtual idx_t
         get_num_elements() { return npts; }
@@ -90,7 +90,7 @@ namespace yask {
         /// Get the number of seconds elapsed during calls to run_solution().
         virtual double
         get_elapsed_run_secs() { return run_time; }
-        
+
     };
 
     // Collections of things in a context.
@@ -100,7 +100,7 @@ namespace yask {
     typedef std::set<StencilBundleBase*> StencilBundleSet;
     typedef std::shared_ptr<BundlePack> BundlePackPtr;
     typedef std::vector<BundlePackPtr> BundlePackList;
-    
+
     // Data and hierarchical sizes.
     // This is a pure-virtual class that must be implemented
     // for a specific problem.
@@ -124,7 +124,7 @@ namespace yask {
 
         // MPI info.
         MPIInfoPtr _mpiInfo;
-        
+
         // Bytes between each buffer to help avoid aliasing
         // in the HW.
         size_t _data_buf_pad = (YASK_PAD * CACHELINE_BYTES);
@@ -143,7 +143,7 @@ namespace yask {
                                  const std::map <int, size_t>& ngrids,
                                  std::map <int, std::shared_ptr<char>>& _data_buf,
                                  const std::string& type);
-        
+
     public:
 
         // Name.
@@ -156,7 +156,7 @@ namespace yask {
         // BB with any needed extensions for wave-fronts.
         // If WFs are not used, this is the same as rank_bb;
         BoundingBox ext_bb;
-        
+
         // List of all non-scratch stencil bundles in the order in which
         // they should be evaluated within a step.
         StencilBundleList stBundles;
@@ -213,7 +213,7 @@ namespace yask {
         double domain_pts_ps = 0.; // points-per-sec in domain.
         double writes_ps = 0.;     // writes-per-sec.
         double flops = 0.;      // est. FLOPS.
-        
+
         // MPI settings.
         // TODO: move to settings or MPI info object.
 #ifdef NO_VEC_EXCHANGE
@@ -235,13 +235,13 @@ namespace yask {
         class AT {
         protected:
             StencilContext* _context = 0;
-            
+
             // Null stream to throw away debug info.
             yask_output_ptr nullop;
 
             // Whether to print progress.
             bool verbose = false;
-            
+
             // AT parameters.
             double warmup_steps = 100;
             double warmup_secs = 1.;
@@ -277,7 +277,7 @@ namespace yask {
 
             AT(StencilContext* ctx) :
                 _context(ctx) { }
-            
+
             // Reset all state to beginning.
             void clear(bool mark_done, bool verbose = false);
 
@@ -291,7 +291,7 @@ namespace yask {
             bool is_done() const { return done; }
         };
         AT _at;
-        
+
         // Constructor.
         StencilContext(KernelEnvPtr env,
                        KernelSettingsPtr settings);
@@ -343,7 +343,7 @@ namespace yask {
         virtual void addScratch(GridPtrs& scratch_vec) {
             scratchVecs.push_back(&scratch_vec);
         }
-        
+
         // Set vars related to this rank's role in global problem.
         // Allocate MPI buffers as needed.
         virtual void setupRank();
@@ -388,7 +388,7 @@ namespace yask {
         // Set grid sizes and offsets.
         // This should be called anytime a setting or offset is changed.
         virtual void update_grid_info();
-        
+
         // Adjust offsets of scratch grids based
         // on thread and scan indices.
         virtual void update_scratch_grid_info(int thread_idx,
@@ -436,7 +436,7 @@ namespace yask {
         // Params should not be written to, so they are not compared.
         // Return number of mis-compares.
         virtual idx_t compareData(const StencilContext& ref) const;
-        
+
         // Set number of threads w/o using thread-divisor.
         // Return number of threads.
         // Do nothing and return 0 if not properly initialized.
@@ -446,7 +446,7 @@ namespace yask {
             int mt = _opts->max_threads;
 	    if (!mt)
 	      return 0;
-            
+
             // Reset number of OMP threads to max allowed.
             //TRACE_MSG("set_max_threads: omp_set_num_threads=" << nt);
             omp_set_num_threads(mt);
@@ -464,7 +464,7 @@ namespace yask {
 	      return 0;
             int nt = mt / _opts->thread_divisor;
             nt = std::max(nt, 1);
-            
+
             // Reset number of OMP threads to max allowed.
             //TRACE_MSG("set_all_threads: omp_set_num_threads=" << nt);
             omp_set_num_threads(nt);
@@ -539,13 +539,13 @@ namespace yask {
         // If sel_bp==null, use all bundles.
         virtual void mark_grids_dirty(const BundlePackPtr& sel_bp,
                                       idx_t start, idx_t stop);
-        
+
         // Set the bounding-box around all stencil bundles.
         virtual void find_bounding_boxes();
 
         // Make new scratch grids.
         virtual void makeScratchGrids (int num_threads) =0;
-        
+
         // Make a new grid iff its dims match any in the stencil.
         // Returns pointer to the new grid or nullptr if no match.
         virtual YkGridPtr newStencilGrid (const std::string & name,
@@ -561,7 +561,7 @@ namespace yask {
         virtual yask_output_ptr get_debug_output() const {
             return _debug;
         }
-        
+
         // APIs.
         // See yask_kernel_api.hpp.
         virtual void set_debug_output(yask_output_ptr debug) {

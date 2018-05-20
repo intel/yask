@@ -53,7 +53,7 @@ namespace yask {
             assert(p);
             args.push_back(p->clone());
         }
-        
+
         // Create a point from the args.
         GridPointPtr gpp = make_shared<GridPoint>(this, args);
         return gpp;
@@ -83,7 +83,7 @@ namespace yask {
             auto ie = dim->clone();
             args.push_back(ie);
         }
-        
+
         // Create a point from the args.
         GridPointPtr gpp = make_shared<GridPoint>(this, args);
 
@@ -112,7 +112,7 @@ namespace yask {
     yc_solution_ptr yc_factory::new_solution(const std::string& name) const {
         return make_shared<EmptyStencil>(name);
     }
-    
+
     // Create an expression to a specific point in this grid.
     // Note that this doesn't actually 'read' or 'write' a value;
     // it's just a node in an expression.
@@ -136,14 +136,14 @@ namespace yask {
             _soln(soln)
     {
         assert(soln);
-        
+
         // Name already used?
         auto& grids = soln->getGrids();
         for (auto gp : grids) {
             if (gp->getName() == _name)
                 THROW_YASK_EXCEPTION("Error: grid name '" + _name + "' already used");
         }
-        
+
         // Register in soln.
         if (soln)
             grids.insert(this);
@@ -174,7 +174,7 @@ namespace yask {
     void Grid::setFolding(const Dimensions& dims) {
 
         _numFoldableDims = 0;
-        
+
         // Never fold scalars, even if there is no vectorization.
         if (get_num_dims() == 0) {
             _isFoldable = false;
@@ -208,7 +208,7 @@ namespace yask {
         _isFoldable = (_numFoldableDims > 0 ) && (_numFoldableDims == dims._foldGT1.size());
 #endif
     }
-    
+
     // Update halos based on each value in 'offsets' in some
     // read or write to this grid.
     void Grid::updateHalo(const IntTuple& offsets) {
@@ -235,7 +235,7 @@ namespace yask {
 
             // Store abs value.
             val = abs(val);
-            
+
             // Any existing value?
             auto* p = halos.lookup(dname);
 
@@ -246,7 +246,7 @@ namespace yask {
             // Keep larger value.
             else if (val > *p)
                 *p = val;
-            
+
             // Else, current value is larger than val, so don't update.
         }
     }
@@ -316,11 +316,11 @@ namespace yask {
             if (h2.count(last_ofs))
                 last_max_halo = max(last_max_halo, h2.at(last_ofs).max());
         }
-        
+
         // Default step-dim size is range of offsets.
         assert(last_ofs >= first_ofs);
         int sz = last_ofs - first_ofs + 1;
-    
+
         // If first and last halos are zero, we can further optimize storage by
         // immediately reusing memory location.
         if (sz > 1 && first_max_halo == 0 && last_max_halo == 0)
@@ -343,7 +343,7 @@ namespace yask {
         d += ")";
         return d;
     }
-    
+
     // Find the dimensions to be used based on the grids in
     // the solution and the settings from the cmd-line or API.
     void Dimensions::setDims(Grids& grids,
@@ -365,7 +365,7 @@ namespace yask {
         for (auto gp : grids) {
             auto& gname = gp->getName();
             os << "Grid: " << gp->getDescr() << endl;
-            
+
             // Dimensions in this grid.
             for (auto dim : gp->getDims()) {
                 auto& dname = dim->getName();
@@ -415,14 +415,14 @@ namespace yask {
         // Use last domain dim as inner one.
         // TODO: make this selectable.
         _innerDim = _domainDims.getDimName(_domainDims.getNumDims() - 1);
-        
+
         // Layout of fold.
         _fold.setFirstInner(settings._firstInner);
         _foldGT1.setFirstInner(settings._firstInner);
-        
+
         os << "Step dimension: " << _stepDim << endl;
         os << "Domain dimension(s): " << _domainDims.makeDimStr() << endl;
-    
+
         // Set fold lengths based on cmd-line options.
         for (auto& dim : settings._foldOptions.getDims()) {
             auto& dname = dim.getName();
@@ -534,7 +534,7 @@ namespace yask {
             _clusterMults.addDimBack(dname, mult);
         }
         _clusterPts = _fold.multElements(_clusterMults);
-    
+
         os << " Cluster dimension(s) and multiplier(s): " <<
             _clusterMults.makeDimValStr(" * ") << endl;
         os << " Cluster dimension(s) and point-size(s): " <<
@@ -552,18 +552,18 @@ namespace yask {
 
         if (ofs == 0)
             return "";
-        
+
         if (_fold.lookup(dname)) {
 
             // Positive offset, e.g., '+(4 / VLEN_X)'.
             if (ofs > 0)
                 oss << "+(" << ofs;
-            
+
             // Neg offset, e.g., '-(4 / VLEN_X)'.
             // Put '-' sign outside division to fix truncated division problem.
             else
                 oss << "-(" << (-ofs);
-                    
+
             // add divisor.
             string cap_dname = PrinterBase::allCaps(dname);
             oss << " / VLEN_" << cap_dname << ")";
@@ -575,7 +575,7 @@ namespace yask {
 
         return oss.str();
     }
-    
+
     // Make string like "t+1" or "t-1".
     string Dimensions::makeStepStr(int offset) const {
         IntTuple step;

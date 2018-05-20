@@ -35,7 +35,7 @@ namespace yask {
     // Declare static member.
     template <typename T>
     std::map<std::string, std::string> Scalar<T>::_allNames;
-    
+
     // Implementations.
 
     template <typename T>
@@ -148,7 +148,7 @@ namespace yask {
         }
         return true;
     }
-    
+
     template <typename T>
     bool Tuple<T>::operator==(const Tuple& rhs) const {
 
@@ -178,7 +178,7 @@ namespace yask {
             else if (v > rv)
                 return false;
         }
-            
+
         // compare dims.
         for (size_t i = 0; i < _q.size(); i++) {
             auto* p = _q[i]._getCStr();
@@ -221,7 +221,7 @@ namespace yask {
             idx += (offset * prevSize);
             assert(idx >= 0);
             assert(idx < size_t(product()));
-            
+
             prevSize *= dsize;
             assert(prevSize <= size_t(product()));
         }
@@ -232,7 +232,7 @@ namespace yask {
     Tuple<T> Tuple<T>::unlayout(size_t offset) const {
         Tuple res = *this;
         size_t prevSize = 1;
-            
+
         // Loop thru dims.
         int startDim = _firstInner ? 0 : size()-1;
         int endDim = _firstInner ? size() : -1;
@@ -251,7 +251,7 @@ namespace yask {
 
             // Save in result.
             res[di] = dofs;
-                
+
             prevSize *= dsize;
             assert(prevSize <= size_t(product()));
         }
@@ -311,7 +311,7 @@ namespace yask {
         }
         return newt;
     }
-    
+
     template <typename T>
     Tuple<T> Tuple<T>::mapElements(std::function<T (T lhs, T rhs)> func,
                                 T rhs) const {
@@ -405,7 +405,7 @@ namespace yask {
         }
         return oss.str();
     }
-    
+
     template <typename T>
     void Tuple<T>::visitAllPoints(std::function<bool (const Tuple&,
                                                       size_t idx)> visitor) const {
@@ -417,7 +417,7 @@ namespace yask {
         // 0-D?
         if (!_q.size())
             visitor(tp, 0);
-            
+
         // Call recursive version.
         // Set begin/step dims depending on nesting.
         else if (_firstInner)
@@ -435,7 +435,7 @@ namespace yask {
             Tuple tp(*this);
             visitor(tp, 0);
         }
-            
+
         // Call order-independent version.
         // Set begin/end/step dims depending on nesting.
         // TODO: set this depending on dim sizes.
@@ -480,7 +480,7 @@ namespace yask {
 
                 // Recurse.
                 bool ok = _visitAllPoints(visitor, curDimNum + step, step, tp);
-                        
+
                 // Leave if visitor returns false.
                 if (!ok)
                     return false;
@@ -502,7 +502,7 @@ namespace yask {
             assert(curDimNum == 0);
             auto dsize = getVal(curDimNum);
             Tuple tp(*this);
-                
+
             // Loop through points.
 #pragma omp parallel for firstprivate(tp)
             for (T i = 0; i < dsize; i++) {
@@ -510,7 +510,7 @@ namespace yask {
                 visitor(tp, i);
             }
         }
-            
+
         // If >1 dim, parallelize over outer dims.
         else {
 
@@ -520,7 +520,7 @@ namespace yask {
             // Number of elements in last dim.
             int lastDimNum = (step > 0) ? nd-1 : 0;
             T nel = getVal(lastDimNum);
-                
+
             // Parallel loop over elements, skipping by size of last dim.
 #pragma omp parallel for
             for (T i = 0; i < ne; i += nel) {
@@ -534,7 +534,7 @@ namespace yask {
         }
         return true;
 #else
-                
+
         // Call recursive version to handle all dims.
         Tuple tp(*this);
         return _visitAllPoints(visitor, curDimNum, step, tp);
@@ -544,5 +544,5 @@ namespace yask {
     // Explicitly allowed instantiations.
     template class Tuple<int>;
     template class Tuple<idx_t>;
-    
+
 } // namespace yask.

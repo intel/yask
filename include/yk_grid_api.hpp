@@ -27,7 +27,7 @@ IN THE SOFTWARE.
 
 // This file uses Doxygen 1.8 markup for API documentation-generation.
 // See http://www.stack.nl/~dimitri/doxygen.
-/** @file yk_grid_api.hpp */ 
+/** @file yk_grid_api.hpp */
 
 #ifndef YK_GRID_API
 #define YK_GRID_API
@@ -45,21 +45,21 @@ namespace yask {
     /**
        "Grid" is a generic term for any n-dimensional array.  A 0-dim grid
        is a scalar, a 1-dim grid is an array, etc.  A run-time grid contains
-       data, unlike yc_grid, a compile-time grid variable.  
-       
+       data, unlike yc_grid, a compile-time grid variable.
+
        Typically, access to each grid is obtained via yk_solution::get_grid().
-       You may also use yk_solution::new_grid() or yk_solution::new_fixed_size_grid() 
+       You may also use yk_solution::new_grid() or yk_solution::new_fixed_size_grid()
        if you need a grid that is not part of the pre-defined solution.
 
        Each dimension of a grid is one of the following:
-       - The *step* dimension, typically time ("t"), 
+       - The *step* dimension, typically time ("t"),
        as returned from yk_solution::get_step_dim_name().
        - A *domain* dimension, typically a spatial dimension such as "x" or "y",
        as returned from yk_solution::get_domain_dim_names().
        - A *miscellaneous* dimension, which is any dimension that is not a step or domain dimension.
-       These may be returned via yk_solution::get_misc_dim_names() if they were defined 
+       These may be returned via yk_solution::get_misc_dim_names() if they were defined
        in the YASK compiler, or they may be any other name that is not a step or domain dimension.
-       
+
        In the step dimension, there is no fixed domain size, and no
        specified first or last index.
        However, there is an allocation size, which is the number of values in the step
@@ -82,7 +82,7 @@ namespace yask {
        - The *extra right padding* is the elements after the domain and right halo
        and thus does not include the right halo.
        - The *allocation* includes the left padding, domain, and right padding.
-       
+
        Domain sizes specified via yk_solution::set_rank_domain_size() apply to each MPI rank.
        Visually, in each of the domain dimensions, these sizes are related as follows
        in each rank:
@@ -93,7 +93,7 @@ namespace yask {
        </table>
 
        If MPI is not enabled, a rank's domain is equivalent to the entire problem size.
-       If MPI is enabled, the domains of the ranks are logically abutted to create the 
+       If MPI is enabled, the domains of the ranks are logically abutted to create the
        overall problem domain in each dimension:
        <table>
        <tr><td>extra left padding of rank A <td>halo of rank A <td>domain of rank A <td>domain of rank B
@@ -116,7 +116,7 @@ namespace yask {
        Each element may be a 4-byte (single precision)
        or 8-byte (double precision) floating-point value as returned by
        yk_solution::get_element_bytes().
-       
+
        Initially, a grid is not assigned any allocated storage.
        This is done to allow modification of domain, padding, and other allocation sizes
        before allocation.
@@ -129,16 +129,16 @@ namespace yask {
        via yk_grid::alloc_storage().
        - **[Advanced]** Storage for a specific grid may be shared with another grid with
        existing storage via yk_grid::share_storage().
-       
+
        @note The domain index arguments to the \ref yk_grid functions that require indices
        are *always* relative to the overall problem; they are *not* relative to the current rank.
        The first and last overall-problem index that lies within a rank can be
-       retrieved via yk_solution::get_first_rank_domain_index() and 
+       retrieved via yk_solution::get_first_rank_domain_index() and
        yk_solution::get_last_rank_domain_index(), respectively.
        The first and last accessible index that lies within a rank for a given grid can be
-       retrieved via yk_grid::get_first_rank_alloc_index() and 
+       retrieved via yk_grid::get_first_rank_alloc_index() and
        yk_grid::get_last_rank_alloc_index(), respectively.
-       Also, index arguments are always inclusive. 
+       Also, index arguments are always inclusive.
        Specifically, for functions that return or require a "last" index, that
        index indicates the last one in the relevant range, i.e., *not* one past the last value
        (this is more like Fortran and Perl than Python and Lisp).
@@ -175,7 +175,7 @@ namespace yask {
         */
         virtual std::vector<std::string>
         get_dim_names() const =0;
-        
+
         /// Determine whether specified dimension exists in this grid.
         /**
            @returns `true` if dimension exists (including step-dimension),
@@ -206,7 +206,7 @@ namespace yask {
         get_first_rank_domain_index(const std::string& dim
                                     /**< [in] Name of dimension to get.  Must be one of
                                        the names from yk_solution::get_domain_dim_names(). */ ) const =0;
-        
+
         /// Get the last index of the sub-domain in this rank in the specified dimension.
         /**
            @note This function should be called only *after* calling prepare_solution()
@@ -230,7 +230,7 @@ namespace yask {
                       /**< [in] Name of dimension to get.
                          Must be one of
                          the names from yk_solution::get_domain_dim_names(). */ ) const =0;
-        
+
         /// Get the right halo size in the specified dimension.
         /**
            This value is typically set by the stencil compiler.
@@ -241,7 +241,7 @@ namespace yask {
                       /**< [in] Name of dimension to get.
                          Must be one of
                          the names from yk_solution::get_domain_dim_names(). */ ) const =0;
-        
+
         /// Get the first index of the left halo in this rank in the specified dimension.
         /**
            @note This function should be called only *after* calling prepare_solution()
@@ -342,7 +342,7 @@ namespace yask {
         get_first_misc_index(const std::string& dim
                              /**< [in] Name of dimension to get.  Must be one of
                                 the names from yk_solution::get_misc_dim_names(). */ ) const =0;
-        
+
         /// Get the last index of a specified miscellaneous dimension.
         /**
            @returns the last allowed index in a non-step and non-domain dimension.
@@ -363,7 +363,7 @@ namespace yask {
         virtual bool
         is_element_allocated(const std::vector<idx_t>& indices
                              /**< [in] List of indices, one for each grid dimension. */ ) const =0;
-        
+
 #ifndef SWIG
         /// Determine whether the given indices are allocated in this rank.
         /**
@@ -378,7 +378,7 @@ namespace yask {
         is_element_allocated(const std::initializer_list<idx_t>& indices
                              /**< [in] List of indices, one for each grid dimension. */ ) const =0;
 #endif
-        
+
         /// Get the value of one grid element.
         /**
            Provide indices in a list in the same order returned by get_dim_names().
@@ -401,7 +401,7 @@ namespace yask {
            get_first_rank_alloc_index() and get_last_rank_alloc_index() for
            each dimension.
            @note The return value is a double-precision floating-point value, but
-           it will be converted from a single-precision if 
+           it will be converted from a single-precision if
            yk_solution::get_element_bytes() returns 4.
            @note This version is not available (or needed) in SWIG-based APIs, e.g., Python.
            @returns value in grid at given multi-dimensional location.
@@ -435,7 +435,7 @@ namespace yask {
                               /**< [in] List of initial indices, one for each grid dimension. */,
                               const std::vector<idx_t>& last_indices
                               /**< [in] List of final indices, one for each grid dimension. */ ) const =0;
-        
+
         /// Set the value of one grid element.
         /**
            Provide indices in a list in the same order returned by get_dim_names().
@@ -458,7 +458,7 @@ namespace yask {
                        If false, indices outside of domain and padding result
                        in no change to grid. */ ) =0;
 
-#ifndef SWIG        
+#ifndef SWIG
         /// Set the value of one grid element.
         /**
            Provide the number of indices equal to the number of dimensions in the grid.
@@ -507,7 +507,7 @@ namespace yask {
                           If false, indices outside of domain and padding result
                           in no change to grid. */ ) =0;
 
-#ifndef SWIG        
+#ifndef SWIG
         /// Atomically add to the value of one grid element.
         /**
            Provide the number of indices equal to the number of dimensions in the grid.
@@ -534,7 +534,7 @@ namespace yask {
                           If false, indices outside of domain and padding result
                           in no change to grid. */ ) =0;
 #endif
-        
+
         /// Initialize all grid elements to the same value.
         /**
            Sets all allocated elements, including those in the domain and padding
@@ -577,7 +577,7 @@ namespace yask {
            starting at `buffer_ptr`
            and writes them from `first_indices` to `last_indices` in each dimension.
            Indices in the buffer progress in row-major order.
-           The buffer pointed to must contain either 4 or 8 byte FP values per element in the 
+           The buffer pointed to must contain either 4 or 8 byte FP values per element in the
            subset, depending on the FP precision of the solution.
            The buffer pointed to must contain the number of FP values in the specified slice,
            where each FP value is the size of yk_solution::get_element_bytes().
@@ -598,7 +598,7 @@ namespace yask {
                               /**< [in] List of initial indices, one for each grid dimension. */,
                               const std::vector<idx_t>& last_indices
                               /**< [in] List of final indices, one for each grid dimension. */ ) =0;
-        
+
         /// Format the indices for pretty-printing.
         /**
            Provide indices in a list in the same order returned by get_dim_names().
@@ -607,7 +607,7 @@ namespace yask {
         virtual std::string
         format_indices(const std::vector<idx_t>& indices
                        /**< [in] List of indices, one for each grid dimension. */ ) const =0;
-        
+
 #ifndef SWIG
         /// Format the indices for pretty-printing.
         /**
@@ -619,7 +619,7 @@ namespace yask {
         format_indices(const std::initializer_list<idx_t>& indices
                        /**< [in] List of indices, one for each grid dimension. */ ) const =0;
 #endif
-        
+
         /// Determine whether storage has been allocated.
         /**
            @returns `true` if storage has been allocated,
@@ -682,9 +682,9 @@ namespace yask {
                                  Must be one of
                                  the names from yk_solution::get_domain_dim_names(). */,
                               idx_t size
-                              /**< [in] Minimum number of elements to allocate 
+                              /**< [in] Minimum number of elements to allocate
                                  before the domain size. */ ) =0;
-        
+
         /// **[Advanced]** Set the minimum right padding in the specified dimension.
         /**
            This sets the minimum number of elements in this grid in the right padding area.
@@ -702,7 +702,7 @@ namespace yask {
                                  Must be one of
                                  the names from yk_solution::get_domain_dim_names(). */,
                               idx_t size
-                              /**< [in] Minimum number of elements to allocate 
+                              /**< [in] Minimum number of elements to allocate
                                  after the domain size. */ ) =0;
 
         /// **[Advanced]** Set the minimum padding in the specified dimension.
@@ -715,9 +715,9 @@ namespace yask {
                             Must be one of
                             the names from yk_solution::get_domain_dim_names(). */,
                          idx_t size
-                         /**< [in] Minimum number of elements to allocate 
+                         /**< [in] Minimum number of elements to allocate
                             before and after the domain size. */ ) =0;
-        
+
         /// **[Advanced]** Set the left halo size in the specified dimension.
         /**
            This value is typically set by the stencil compiler, but
@@ -768,7 +768,7 @@ namespace yask {
 
 
         /// **[Advanced]** Set the number of elements to allocate in the specified dimension.
-        /** 
+        /**
            This setting is only allowed in the step dimension.
            Typically, the allocation in the step dimension is determined by the
            stencil compiler, but
@@ -798,7 +798,7 @@ namespace yask {
                                 the names from yk_solution::get_misc_dim_names(). */,
                              idx_t idx /**< [in] New value for first index.
                                         May be negative. */ ) =0;
-        
+
         /// **[Advanced]** Get the first accessible index in this grid in this rank in the specified dimension.
         /**
            This returns the first *overall* index allowed in this grid.
@@ -827,7 +827,7 @@ namespace yask {
 
         /// **[Advanced]** Explicitly allocate data-storage memory for this grid.
         /**
-           Amount of allocation is calculated based on domain, padding, and 
+           Amount of allocation is calculated based on domain, padding, and
            step-dimension allocation sizes.
            Any pre-existing storage will be released before allocation as via release_storage().
            See allocation options in the "Detailed Description" for \ref yk_grid.
@@ -863,10 +863,10 @@ namespace yask {
         */
         virtual bool
         is_storage_layout_identical(const yk_grid_ptr other) const =0;
-        
+
         /// **[Advanced]** Use existing data-storage from specified grid.
         /**
-           This is an alternative to allocating data storage via 
+           This is an alternative to allocating data storage via
            yk_solution::prepare_solution() or alloc_storage().
            In this case, data from a grid in this or another solution will be shared with
            this grid.
@@ -905,7 +905,7 @@ namespace yask {
            - If is_storage_layout_identical() returns `true` between this
            and some other grid, any given element index applied to both grids
            will refer to an element at the same offset into their respective
-           data buffers. 
+           data buffers.
 
            Thus,
            - You can perform element-wise unary mathematical operations on
@@ -934,7 +934,7 @@ namespace yask {
 
         /* Deprecated APIs for yk_grid found below should be avoided.
            Use the more explicit form found in the documentation. */
-        
+
         /// **[Deprecated]** Get the left halo size in the specified dimension.
         /**
            Alias for get_left_halo_size(dim, size).
@@ -945,7 +945,7 @@ namespace yask {
                       /**< [in] Name of dimension to get.
                          Must be one of
                          the names from yk_solution::get_domain_dim_names(). */ ) const =0;
-        
+
         /// **[Deprecated]** Get the left padding in the specified dimension.
         /**
            Alias for get_left_pad_size(dim).

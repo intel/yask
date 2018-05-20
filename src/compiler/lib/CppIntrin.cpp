@@ -31,8 +31,8 @@ IN THE SOFTWARE.
 // per instruction.
 void CppIntrinPrintHelper::tryAlign(ostream& os,
                                     const string& pvName,
-                                    size_t nelemsTarget, 
-                                    const VecElemList& elems, 
+                                    size_t nelemsTarget,
+                                    const VecElemList& elems,
                                     set<size_t>& doneElems,
                                     const GridPointSet& alignedVecs,
                                     bool maskAllowed) {
@@ -52,7 +52,7 @@ void CppIntrinPrintHelper::tryAlign(ostream& os,
             string mv1Name = _vecVars[mv1];
             assert(_vecVars.count(mv2));
             string mv2Name = _vecVars[mv2];
-                
+
             // Try all possible shift amounts.
             for (size_t count = 1;
                  doneElems.size() < nelems && count < nelems; count++) {
@@ -71,7 +71,7 @@ void CppIntrinPrintHelper::tryAlign(ostream& os,
                     // Ignore elements that are already constructed.
                     if (doneElems.count(i))
                         continue;
-                        
+
                     // From 1st vector?
                     if (i >= nelems - count) {
                         p -= nelems;
@@ -127,7 +127,7 @@ void CppIntrinPrintHelper::tryAlign(ostream& os,
                     // If we can't use masking, must stop here.
                     if (needMask && !maskAllowed)
                         return;
-                            
+
                     // 2-var shift.
                     if (nused1 && nused2) {
                         os << " // Get " << nused1 << " element(s) from " << mv1Name <<
@@ -183,12 +183,12 @@ void CppIntrinPrintHelper::tryAlign(ostream& os,
 // per instruction.
 void CppIntrinPrintHelper::tryPerm1(ostream& os,
                                     const string& pvName,
-                                    size_t nelemsTarget, 
-                                    const VecElemList& elems, 
+                                    size_t nelemsTarget,
+                                    const VecElemList& elems,
                                     set<size_t>& doneElems,
                                     const GridPointSet& alignedVecs) {
     size_t nelems = elems.size();
-    
+
     // Try a permute of each aligned vector.
     for (auto mi = alignedVecs.begin(); mi != alignedVecs.end(); mi++) {
         auto mv = *mi;
@@ -214,7 +214,7 @@ void CppIntrinPrintHelper::tryPerm1(ostream& os,
                 nameSS << "_";
                 ctrlSS << ", ";
             }
-                    
+
             // Is i needed (not done) AND does i come from this mem vec?
             // If so, we want to permute it from the correct offset.
             if (doneElems.count(i) == 0 && ve._vec == mv) {
@@ -242,11 +242,11 @@ void CppIntrinPrintHelper::tryPerm1(ostream& os,
 
             string nameStr = nameSS.str();
             string ctrlStr = "{ .ci = { " + ctrlSS.str() + " } }"; // assignment to 'i' array.
-                
+
             // Create NA var if needed (this is just for clarity).
             if (needNA)
                 makeNA(os);
-                
+
             // Create control if needed.
             if (definedCtrls.count(nameStr) == 0) {
                 definedCtrls.insert(nameStr);
@@ -255,7 +255,7 @@ void CppIntrinPrintHelper::tryPerm1(ostream& os,
                 os << _linePrefix << "const " << getVarType() <<
                     " ctrl_" << nameStr << "(ctrl_data_" << nameStr << ")" << _lineSuffix;
             }
-                
+
             // Permute command.
             os << _linePrefix << "real_vec_permute";
             if (needMask)
@@ -278,8 +278,8 @@ void CppIntrinPrintHelper::tryPerm1(ostream& os,
 // per instruction.
 void CppIntrinPrintHelper::tryPerm2(ostream& os,
                                     const string& pvName,
-                                    size_t nelemsTarget, 
-                                    const VecElemList& elems, 
+                                    size_t nelemsTarget,
+                                    const VecElemList& elems,
                                     set<size_t>& doneElems,
                                     const GridPointSet& alignedVecs) {
     size_t nelems = elems.size();
@@ -305,7 +305,7 @@ void CppIntrinPrintHelper::tryPerm2(ostream& os,
             string mv1Name = _vecVars[mv1];
             assert(_vecVars.count(mv2));
             string mv2Name = _vecVars[mv2];
-                
+
             // Create the permute control vars: one for 1,2 order, and one for 2,1.
             ostringstream nameSS12, ctrlSS12;
             ostringstream nameSS21, ctrlSS21;
@@ -325,16 +325,16 @@ void CppIntrinPrintHelper::tryPerm2(ostream& os,
                     nameSS21 << "_";
                     ctrlSS21 << ", ";
                 }
-                    
+
                 // Is i needed (not done) AND does i come from one of the mem vecs?
                 // If so, we want to permute it from the correct offset.
-                if (doneElems.count(i) == 0 && 
+                if (doneElems.count(i) == 0 &&
                     (ve._vec == mv1 || ve._vec == mv2)) {
                     bool useA = (ve._vec == mv1); // first vec?
                     char alignedVec12 = useA ? 'A' : 'B';
                     char alignedVec21 = !useA ? 'A' : 'B';
                     int alignedElem = ve._offset; // get this element.
-                        
+
                     nameSS12 << alignedVec12 << alignedElem;
                     nameSS21 << alignedVec21 << alignedElem;
                     if (!useA)
@@ -345,7 +345,7 @@ void CppIntrinPrintHelper::tryPerm2(ostream& os,
                     ctrlSS21 << alignedElem;
                     foundElems.insert(i); // remember element index.
                 }
-                    
+
                 // Not from either mem vec.
                 else {
                     nameSS12 << "NA";
@@ -374,7 +374,7 @@ void CppIntrinPrintHelper::tryPerm2(ostream& os,
                 bool use12 = definedCtrls.count(nameStr21) == 0;
                 string nameStr = use12 ? nameStr12 : nameStr21;
                 string ctrlStr = use12 ? ctrlStr12 : ctrlStr21;
-                
+
                 // Create control if needed.
                 if (definedCtrls.count(nameStr) == 0) {
                     definedCtrls.insert(nameStr);
@@ -383,7 +383,7 @@ void CppIntrinPrintHelper::tryPerm2(ostream& os,
                     os << _linePrefix << "const " << getVarType() <<
                         " ctrl_" << nameStr << "(ctrl_data_" << nameStr << ")" << _lineSuffix;
                 }
-                
+
                 // Permute command.
                 os << _linePrefix << "real_vec_permute2(" << pvName << ", ctrl_" << nameStr << ", ";
                 if (use12)
@@ -400,14 +400,14 @@ void CppIntrinPrintHelper::tryPerm2(ostream& os,
 
                 // Since there is no mask, we have to quit after one instruction.
                 return;
-                    
+
             } // found.
-                
+
         } // mj.
     } // mi.
 }
-    
-    
+
+
 // Print construction for one unaligned vector pvName at gp.
 void CppIntrinPrintHelper::printUnalignedVecCtor(ostream& os,
                                                  const GridPoint& gp,
@@ -434,7 +434,7 @@ void CppIntrinPrintHelper::printUnalignedVecCtor(ostream& os,
 
     // Loop through decreasing numbers of elements.
     for (size_t nelemsTarget = nelems;
-         doneElems.size() < nelems && nelemsTarget > 0; 
+         doneElems.size() < nelems && nelemsTarget > 0;
          nelemsTarget--) {
 
         tryStrategies(os, pvName,

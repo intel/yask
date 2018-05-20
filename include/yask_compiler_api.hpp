@@ -27,7 +27,7 @@ IN THE SOFTWARE.
 
 // This file uses Doxygen 1.8 markup for API documentation-generation.
 // See http://www.stack.nl/~dimitri/doxygen.
-/** @file yask_compiler_api.hpp */ 
+/** @file yask_compiler_api.hpp */
 
 #ifndef YASK_COMPILER_API
 #define YASK_COMPILER_API
@@ -110,14 +110,14 @@ namespace yask {
            @returns Pointer to new solution object.
         */
         virtual yc_solution_ptr
-        new_solution(const std::string& name /**< [in] Name of the solution; 
+        new_solution(const std::string& name /**< [in] Name of the solution;
                                                 must be a valid C++ identifier. */ ) const;
     };
-            
+
     /// Stencil solution.
     /**
        Objects of this type contain all the grids and equations
-       that comprise a solution. 
+       that comprise a solution.
     */
     class yc_solution {
     public:
@@ -126,7 +126,7 @@ namespace yask {
         /// Set object to receive debug output.
         virtual void
         set_debug_output(yask_output_ptr debug
-                         /**< [out] Pointer to object to receive debug output. 
+                         /**< [out] Pointer to object to receive debug output.
                             See \ref yask_output_factory. */ ) =0;
 
         /// Get the name of the solution.
@@ -138,7 +138,7 @@ namespace yask {
 
         /// Set the name of the solution.
         /**
-           Allows changing the name from what was provided via new_solution(). 
+           Allows changing the name from what was provided via new_solution().
         */
         virtual void
         set_name(std::string name
@@ -167,7 +167,7 @@ namespace yask {
 
            At least one grid must be defined with at least one domain-index node.
 
-           @returns Pointer to the new \ref yc_grid object. 
+           @returns Pointer to the new \ref yc_grid object.
         */
         virtual yc_grid_ptr
         new_grid(const std::string& name
@@ -177,13 +177,13 @@ namespace yask {
                  /**< [in] Dimensions of the grid.
                     Each dimension is identified by an associated index. */ ) =0;
 
-#ifndef SWIG        
+#ifndef SWIG
         /// Create an n-dimensional grid variable in the solution.
         /**
            C++ initializer-list version with same semantics as
            new_grid(const std::string& name, const std::vector<yc_index_node_ptr>& dims).
            @note This version is not available (or needed) in SWIG-based APIs, e.g., Python.
-           @returns Pointer to the new \ref yc_grid object. 
+           @returns Pointer to the new \ref yc_grid object.
         */
         virtual yc_grid_ptr
         new_grid(const std::string& name /**< [in] Unique name of the grid; must be
@@ -193,14 +193,14 @@ namespace yask {
                  /**< [in] Dimensions of the grid.
                     Each dimension is identified by an associated index. */ ) =0;
 #endif
-        
+
         /// Create an n-dimensional scratch-grid variable in the solution.
         /**
            A scratch grid is a temporary variable used in the
            definition of a non-scratch grid.
            - Scratch grids are not accessible via kernel APIs.
            Thus, they cannot be programmatically read from or written to.
-           - Scratch grid values must be defined from equations ultimately 
+           - Scratch grid values must be defined from equations ultimately
            referencing only non-scratch grid values, optionally referencing
            other intermediate scratch-grids.
            - Scratch grids cannot use the step-index as a dimension.
@@ -208,7 +208,7 @@ namespace yask {
            See `TestScratchStencil*` classes in
            `src/stencils/SimpleTestStencils.hpp` for usage examples.
 
-           @returns Pointer to the new \ref yc_grid object. 
+           @returns Pointer to the new \ref yc_grid object.
         */
         virtual yc_grid_ptr
         new_scratch_grid(const std::string& name
@@ -218,13 +218,13 @@ namespace yask {
                          /**< [in] Dimensions of the grid.
                             Each dimension is identified by an associated index. */ ) =0;
 
-#ifndef SWIG        
+#ifndef SWIG
         /// Create an n-dimensional scratch-grid variable in the solution.
         /**
            C++ initializer-list version with same semantics as
            new_scratch_grid(const std::string& name, const std::vector<yc_index_node_ptr>& dims).
            @note This version is not available (or needed) in SWIG-based APIs, e.g., Python.
-           @returns Pointer to the new \ref yc_grid object. 
+           @returns Pointer to the new \ref yc_grid object.
         */
         virtual yc_grid_ptr
         new_scratch_grid(const std::string& name
@@ -235,22 +235,22 @@ namespace yask {
                          /**< [in] Dimensions of the grid.
                             Each dimension is identified by an associated index. */ ) =0;
 #endif
-        
+
         /// Get the number of grids in the solution.
         /** @returns Number of grids that have been created via new_grid(). */
         virtual int
         get_num_grids() const =0;
-        
+
         /// Get all the grids in the solution.
         /** @returns Vector containing pointer to all grids. */
         virtual std::vector<yc_grid_ptr>
         get_grids() =0;
-        
+
         /// Get the specified grid.
         /** @returns Pointer to the specified grid or null pointer if it does not exist. */
         virtual yc_grid_ptr
         get_grid(const std::string& name /**< [in] Name of the grid. */ ) =0;
-        
+
         /// Set the vectorization length in given dimension.
         /** For YASK-code generation, the product of the fold lengths should
             be equal to the number of elements in a HW SIMD register.
@@ -280,10 +280,10 @@ namespace yask {
         /// Set the cluster multiplier (unroll factor) in given dimension.
         /** For YASK kernel-code generation, this will have the effect of creating
             N vectors of output for each equation, where N is the product of
-            the cluster multipliers. 
+            the cluster multipliers.
 
             @note A multiplier >1 cannot be applied to
-            the step dimension. 
+            the step dimension.
             @note Default is one (1) in each dimension. */
         virtual void
         set_cluster_mult(const yc_index_node_ptr dim
@@ -295,7 +295,7 @@ namespace yask {
         /** All cluster multipliers will return to the default of one (1). */
         virtual void
         clear_clustering() =0;
-        
+
         /// Get the number of equations in the solution.
         /** Equations are added when yc_node_factory::new_equation_node() is called.
             @returns Number of equations that have been created. */
@@ -303,7 +303,7 @@ namespace yask {
         get_num_equations() const =0;
 
         /// Get a list of all the defined equations.
-        /** @returns Vector of containing pointers to all 
+        /** @returns Vector of containing pointers to all
             equations that have been created. */
         virtual std::vector<yc_equation_node_ptr>
         get_equations() =0;
@@ -313,10 +313,10 @@ namespace yask {
             Type    | Output
             --------|--------
             cpp     | YASK stencil classes for generic C++.
-            avx     | YASK stencil classes for CORE AVX ISA. 
+            avx     | YASK stencil classes for CORE AVX ISA.
             avx2    | YASK stencil classes for CORE AVX2 ISA.
             avx512  | YASK stencil classes for CORE AVX-512 & MIC AVX-512 ISAs.
-            knc     | YASK stencil classes for Knights Corner ISA. 
+            knc     | YASK stencil classes for Knights Corner ISA.
             dot     | DOT-language description.
             dot-lite| DOT-language description of grid accesses only.
             pseudo  | Human-readable pseudo-code (for debug).
@@ -332,7 +332,7 @@ namespace yask {
         format(const std::string& format_type
                /**< [in] Name of type from above table. */,
                yask_output_ptr output
-               /**< [out] Pointer to object to receive formatted output. 
+               /**< [out] Pointer to object to receive formatted output.
                   See \ref yask_output_factory. */) =0;
 
         /// **[Advanced]** Enable or disable automatic dependency checker.
@@ -363,7 +363,7 @@ namespace yask {
            indicating that the `from` equation depends on the `to` equation.
            In other words, the `to` expression must be evaluated _before_
            the `from` equation.
-           In compiler-theory terms, this is a _flow_ dependency, also 
+           In compiler-theory terms, this is a _flow_ dependency, also
            known as a _true_ or _read-after-write_ (RAW) dependency.
            (Strictly speaking, however, equations in the YASK compiler
            are declarative instead of imperative, so they describe
@@ -378,10 +378,10 @@ namespace yask {
            on **D**, there will be two disconnected subgraphs.  In this
            example, the YASK kernel is free to 1) schedule the functions created for
            **B** and **D** to run together in parallel followed by those for
-           **A** and **C** together in parallel, 2) run a single 
+           **A** and **C** together in parallel, 2) run a single
            function that implements both **B** and **D** simultaneously
            followed by a single
-           function that implements both **A** and **C** simultaneously, 
+           function that implements both **A** and **C** simultaneously,
            or 3) a combination of the implementations.
 
            - Only _immediate_ dependencies should be added.
@@ -391,12 +391,12 @@ namespace yask {
 
            - Only dependencies at a given step-index value should
            be added.
-           For example, given 
+           For example, given
            equation **A**: `A(t+1, x) EQUALS B(t+1, x) + 5` and
            equation **B**: `B(t+1, x) EQUALS A(t, x) / 2`,
            **A** depends on **B** at some value of the step-index `t`.
            That dependency should be added if the automatic checker is disabled.
-           (It is true that the next value of `B(t+2)` depends on `A(t+1)`, 
+           (It is true that the next value of `B(t+2)` depends on `A(t+1)`,
            but such inter-step -- analgous to loop-carried --
            dependencies should _not_ be added with this function.)
 
@@ -473,11 +473,11 @@ namespace yask {
            Each expression in `index_exprs` describes how to access
            an element in the corresponding dimension of the grid.
 
-           Example: if a grid was created via 
+           Example: if a grid was created via
            `g = new_grid("data", {t, x, y, n})` with step-dimension `t`,
            domain-dimensions `x` and `y`, and misc-dimension `n`,
            `g->new_grid_point({t + 1, x - 1, y + 1, 2})` refers to the specified
-           element for the values of `t`, `x`, and `y` set dynamically 
+           element for the values of `t`, `x`, and `y` set dynamically
            during stencil evaluation and the constant value `2` for `n`.
 
            @returns Pointer to AST node used to read from or write to point in grid. */
@@ -486,11 +486,11 @@ namespace yask {
                        /**< [in] Index expressions.
                           These must appear in the same order as when the
                           grid was created. */ ) =0;
-        
-#ifndef SWIG        
+
+#ifndef SWIG
         /// Create a reference to a point in a grid.
         /**
-           C++ initializer-list version with same semantics as 
+           C++ initializer-list version with same semantics as
            new_grid_point(std::vector<yc_index_node_ptr> index_exprs).
            @note This version is not available (or needed) in SWIG-based APIs, e.g., Python.
            @returns Pointer to AST node used to read or write from point in grid. */
@@ -518,10 +518,10 @@ namespace yask {
         new_relative_grid_point(const std::vector<int>& dim_offsets
                                 /**< [in] offset from evaluation index in each dim. */ ) =0;
 
-#ifndef SWIG        
+#ifndef SWIG
         /// Create a reference to a point in a grid using relative offsets.
         /**
-           C++ initializer-list version with same semantics as 
+           C++ initializer-list version with same semantics as
            new_relative_grid_point(std::vector<int> dim_offsets).
            @note This version is not available (or needed) in SWIG-based APIs, e.g., Python.
            @returns Pointer to AST node used to read or write from point in grid. */
@@ -529,7 +529,7 @@ namespace yask {
         new_relative_grid_point(const std::initializer_list<int>& dim_offsets) = 0;
 #endif
     };
-    
+
     /** @}*/
 
 } // namespace yask.

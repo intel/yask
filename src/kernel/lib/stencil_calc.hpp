@@ -26,7 +26,7 @@ IN THE SOFTWARE.
 #pragma once
 
 namespace yask {
-    
+
     // Classes that support evaluation of one stencil bundle
     // and a 'pack' of bundles.
     // A stencil context contains one or more packs.
@@ -57,7 +57,7 @@ namespace yask {
         // Ranks offsets must already be subtracted.
         // Each dim in 'orig' must be a multiple of corresponding vec len.
         void normalize_indices(const Indices& orig, Indices& norm) const;
-        
+
     public:
 
         // Grids that are written to by these stencils.
@@ -70,7 +70,7 @@ namespace yask {
         // Vectors of scratch grids that are written to/read from.
         ScratchVecs outputScratchVecs;
         ScratchVecs inputScratchVecs;
-        
+
         // ctor, dtor.
         StencilBundleBase(StencilContext* context) :
             _generic_context(context) {
@@ -110,7 +110,7 @@ namespace yask {
         // Scratch accessors.
         virtual bool is_scratch() const { return _is_scratch; }
         virtual void set_scratch(bool is_scratch) { _is_scratch = is_scratch; }
-        
+
         // Add dependency.
         virtual void add_dep(StencilBundleBase* eg) {
             _depends_on.insert(eg);
@@ -137,13 +137,13 @@ namespace yask {
             sg_list.push_back(this);
             return sg_list;
         }
-        
+
         // If this bundle is updating scratch grid(s),
         // expand indices to calculate values in halo.
         // Adjust offsets in grids based on original idxs.
         // Return adjusted indices.
         virtual ScanIndices adjust_span(int thread_idx, const ScanIndices& idxs) const;
-        
+
         // Set the bounding-box vars for this bundle in this rank.
         virtual void find_bounding_box();
 
@@ -211,7 +211,7 @@ namespace yask {
 
     protected:
         std::string _name;
-        
+
     public:
         BundlePack(const std::string& name) :
             _name(name) { }
@@ -220,7 +220,7 @@ namespace yask {
         const std::string& get_name() {
             return _name;
         }
-        
+
     }; // BundlePack.
 
 } // yask namespace.

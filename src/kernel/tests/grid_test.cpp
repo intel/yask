@@ -64,7 +64,7 @@ int main(int argc, char** argv) {
     for (auto dname : ksoln->get_domain_dim_names()) {
         ksoln->set_rank_domain_size(dname, 9 + i++);
     }
-    
+
     // 0D test.
     {
         os << "0-D test...\n";
@@ -85,7 +85,7 @@ int main(int argc, char** argv) {
         auto v1 = g1->get_element({});
         assert(v0 == v1);
     }
-    
+
     // 3D test.
     {
         os << "3-D test...\n";
@@ -134,7 +134,7 @@ int main(int argc, char** argv) {
                 return true;
             });
     }
-    
+
     os << "End of YASK grid test.\n";
     return 0;
 }

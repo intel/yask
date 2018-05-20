@@ -50,13 +50,13 @@ class ElasticBoundaryCondition : public StencilPart
 {
 protected:
     StencilSolution& _sol;
-    
+
     // Indices & dimensions.
     MAKE_STEP_INDEX(t);           // step in time dim.
     MAKE_DOMAIN_INDEX(x);         // spatial dim.
     MAKE_DOMAIN_INDEX(y);         // spatial dim.
     MAKE_DOMAIN_INDEX(z);         // spatial dim.
-    
+
     public:
     ElasticBoundaryCondition(StencilSolution& solution) :
         _sol(solution) {}
@@ -81,7 +81,7 @@ protected:
     MAKE_DOMAIN_INDEX(x);         // spatial dim.
     MAKE_DOMAIN_INDEX(y);         // spatial dim.
     MAKE_DOMAIN_INDEX(z);         // spatial dim.
-    
+
     // 3D-spatial coefficients.
     MAKE_GRID(rho, x, y, z);
 
@@ -100,7 +100,7 @@ protected:
     const double dzi = 36.057693;
 
     ElasticBoundaryCondition *bc = NULL;
-    
+
 public:
     ElasticStencilBase(const string& name, StencilList& stencils,
                        ElasticBoundaryCondition *_bc = NULL) :
@@ -108,7 +108,7 @@ public:
     {
         init();
     }
-    
+
     void init() {
         // StencilContex specific code
         REGISTER_STENCIL_CONTEXT_EXTENSION(
@@ -117,12 +117,12 @@ public:
            }
         );
     }
-    
+
     bool hasBoundaryCondition()
     {
         return bc != NULL;
     }
-    
+
     GridValue interp_rho( GridIndex x, GridIndex y, GridIndex z, const TL )
     {
         return ( 2.0/ (rho(x  , y  , z  ) +
@@ -241,7 +241,7 @@ public:
     // appropriately.
 
     template<typename N, typename SZ, typename SX, typename SY>
-    void define_vel(GridIndex t, GridIndex x, GridIndex y, GridIndex z, 
+    void define_vel(GridIndex t, GridIndex x, GridIndex y, GridIndex z,
             Grid &v, Grid &sx, Grid &sy, Grid &sz) {
 
         GridValue lrho   = interp_rho<N>( x, y, z );
@@ -251,7 +251,7 @@ public:
         GridValue stz    = stencil_O8<Z,SZ>( t, x, y, z, sz );
 
         GridValue next_v = v(t, x, y, z) + ((stx + sty + stz) * delta_t * lrho);
-        
+
         // define the value at t+1.
         if ( hasBoundaryCondition() ) {
             Condition not_at_bc = bc->is_not_at_boundary();

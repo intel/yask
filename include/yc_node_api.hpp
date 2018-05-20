@@ -27,7 +27,7 @@ IN THE SOFTWARE.
 
 // This file uses Doxygen 1.8 markup for API documentation-generation.
 // See http://www.stack.nl/~dimitri/doxygen.
-/** @file yc_node_api.hpp */ 
+/** @file yc_node_api.hpp */
 
 #ifndef YC_NODES
 #define YC_NODES
@@ -117,7 +117,7 @@ namespace yask {
     /// Shared pointer to \ref yc_or_node
     typedef std::shared_ptr<yc_or_node> yc_or_node_ptr;
 
-    
+
     /// Factory to create AST nodes.
     /** @note Grid-point reference nodes are created from a \ref yc_grid object
         instead of from a \ref yc_node_factory. */
@@ -129,7 +129,7 @@ namespace yask {
         /**
            Create a variable to be used to index grids in the
            solution-step dimension.
-           The name usually describes time, e.g. "t". 
+           The name usually describes time, e.g. "t".
            @returns Pointer to new \ref yc_index_node object.
         */
         virtual yc_index_node_ptr
@@ -152,7 +152,7 @@ namespace yask {
         virtual yc_index_node_ptr
         new_domain_index(const std::string& name
                          /**< [in] Domain index name. */ );
-        
+
         /// Create a new miscellaneous index.
         /**
            Create an variable to be used to index grids in the
@@ -165,7 +165,7 @@ namespace yask {
         virtual yc_index_node_ptr
         new_misc_index(const std::string& name
                        /**< [in] Index name. */ );
-        
+
         /// Create an equation node.
         /** Indicates grid point on LHS is equivalent to expression on
             RHS. This is NOT a test for equality.  When an equation is
@@ -184,7 +184,7 @@ namespace yask {
             A condition can be added to an equation after its creation
             via yc_equation_node.set_cond().
 
-            @returns Pointer to new \ref yc_equation_node object. 
+            @returns Pointer to new \ref yc_equation_node object.
         */
         virtual yc_equation_node_ptr
         new_equation_node(yc_grid_point_node_ptr lhs
@@ -196,10 +196,10 @@ namespace yask {
                              where `lhs EQUALS rhs` is valid. */ );
 
         /// Create a constant numerical value node.
-        /** 
+        /**
             This is unary negation.
             Use new_subtraction_node() for binary `-`.
-            @returns Pointer to new \ref yc_const_number_node object. 
+            @returns Pointer to new \ref yc_const_number_node object.
         */
         virtual yc_number_node_ptr
         new_const_number_node(double val /**< [in] Value to store in node. */ );
@@ -207,7 +207,7 @@ namespace yask {
         /// Create a constant numerical value node.
         /**
            Integer version of new_const_number_node(double).
-           @returns Pointer to new \ref yc_const_number_node object. 
+           @returns Pointer to new \ref yc_const_number_node object.
         */
         virtual yc_number_node_ptr
         new_const_number_node(idx_t val /**< [in] Value to store in node. */ );
@@ -215,18 +215,18 @@ namespace yask {
         /// Create a numerical negation operator node.
         /**
             New negation nodes can also be created via the overloaded unary `-` operator.
-            @returns Pointer to new \ref yc_negate_node object. 
+            @returns Pointer to new \ref yc_negate_node object.
         */
         virtual yc_number_node_ptr
         new_negate_node(yc_number_node_ptr rhs /**< [in] Expression after `-` sign. */ );
 
         /// Create an addition node.
-        /** 
+        /**
             Nodes must be created with at least two operands, and more can
             be added by calling add_operand() on the returned node.
 
             New addition nodes can also be created via the overloaded `+` operator.
-            @returns Pointer to new \ref yc_add_node object. 
+            @returns Pointer to new \ref yc_add_node object.
         */
         virtual yc_number_node_ptr
         new_add_node(yc_number_node_ptr lhs /**< [in] Expression before `+` sign. */,
@@ -238,7 +238,7 @@ namespace yask {
            be added by calling add_operand() on the returned node.
 
             New multiplication nodes can also be created via the overloaded `*` operator.
-           @returns Pointer to new \ref yc_multiply_node object. 
+           @returns Pointer to new \ref yc_multiply_node object.
         */
         virtual yc_number_node_ptr
         new_multiply_node(yc_number_node_ptr lhs /**< [in] Expression before `*` sign. */,
@@ -250,7 +250,7 @@ namespace yask {
            Use new_negation_node() for unary `-`.
 
             New subtraction nodes can also be created via the overloaded `-` operator.
-           @returns Pointer to new \ref yc_subtract_node object. 
+           @returns Pointer to new \ref yc_subtract_node object.
         */
         virtual yc_number_node_ptr
         new_subtract_node(yc_number_node_ptr lhs /**< [in] Expression before `-` sign. */,
@@ -259,7 +259,7 @@ namespace yask {
         /// Create a division node.
         /**
             New division nodes can also be created via the overloaded `/` operator.
-           @returns Pointer to new \ref yc_divide_node object. 
+           @returns Pointer to new \ref yc_divide_node object.
         */
         virtual yc_number_node_ptr
         new_divide_node(yc_number_node_ptr lhs /**< [in] Expression before `/` sign. */,
@@ -282,7 +282,7 @@ namespace yask {
            auto left_bc_cond = node_fac.new_less_than_node(x, first_x + 10);
 
            // Create a new equation that is valid in this range.
-           auto left_bc_eq = 
+           auto left_bc_eq =
              node_fac.new_equation_node(grid_pt_expr, left_bc_expr, left_bc_cond);
            \endcode
 
@@ -297,7 +297,7 @@ namespace yask {
            `x >= new_first_domain_index(x) && x <= new_last_domain_index(x)`, but
            that is the default condition so does not need to be specified.
 
-           @note Be sure to use an expression like "x < first_x + 10" 
+           @note Be sure to use an expression like "x < first_x + 10"
            instead of merely "x < 10" to avoid the assumption that
            the first index is always zero (0).
 
@@ -306,7 +306,7 @@ namespace yask {
         virtual yc_number_node_ptr
         new_first_domain_index(yc_index_node_ptr idx
                                /**< [in] Domain index. */ );
-        
+
         /// Create a symbol for the last index value in a given dimension.
         /**
            Create an expression that indicates the last value in the overall problem
@@ -318,12 +318,12 @@ namespace yask {
         virtual yc_number_node_ptr
         new_last_domain_index(yc_index_node_ptr idx
                               /**< [in] Domain index. */ );
-        
+
         /// Create a binary inverse operator node.
         /**
            New "not" nodes can also be created via the overloaded `!` operator
            or the `yc_not` function in Python.
-           @returns Pointer to new \ref yc_not_node object. 
+           @returns Pointer to new \ref yc_not_node object.
         */
         virtual yc_bool_node_ptr
         new_not_node(yc_bool_node_ptr rhs /**< [in] Expression after `!` sign. */ );
@@ -420,7 +420,7 @@ namespace yask {
         /// Count the size of the AST.
         /**
            @returns Number of nodes in this tree,
-           including this node and all its descendants. 
+           including this node and all its descendants.
         */
         virtual int get_num_nodes() const =0;
     };
@@ -436,22 +436,22 @@ namespace yask {
         /// Get the left-hand-side operand.
         /** @returns Grid-point node appearing before the EQUALS operator. */
         virtual yc_grid_point_node_ptr get_lhs() =0;
-    
+
         /// Get the right-hand-side operand.
         /** @returns Expression node appearing after the EQUALS operator. */
         virtual yc_number_node_ptr get_rhs() =0;
-    
+
         /// Get the condition describing the sub-domain.
         /** @returns Boolean expression describing sub-domain or
             `nullptr` if not defined. */
         virtual yc_bool_node_ptr get_cond() =0;
-    
+
         /// Set the condition describing the sub-domain.
         /** See yc_node_factory::new_equation_node(). */
         virtual void set_cond(yc_bool_node_ptr cond
                               /**< [in] Boolean expression describing the sub-domain
                                  or `nullptr` to remove the condition. */ ) =0;
-        
+
         /// Create a deep copy of AST starting with this node.
         virtual yc_equation_node_ptr clone_ast() const =0;
     };
@@ -460,7 +460,7 @@ namespace yask {
     /** An object of this abstract type cannot be created. */
     class yc_number_node : public virtual yc_expr_node {
     public:
-        
+
         /// Create a deep copy of AST starting with this node.
         virtual yc_number_node_ptr clone_ast() const =0;
     };
@@ -469,7 +469,7 @@ namespace yask {
     /** An object of this abstract type cannot be created. */
     class yc_bool_node : public virtual yc_expr_node {
     public:
-        
+
         /// Create a deep copy of AST starting with this node.
         virtual yc_bool_node_ptr clone_ast() const =0;
     };
@@ -502,7 +502,7 @@ namespace yask {
         virtual yc_grid_ptr
         get_grid() =0;
     };
-    
+
     /// A constant numerical value.
     /** All values are stored as doubles.
         This is a leaf node in an AST.
@@ -512,7 +512,7 @@ namespace yask {
     public:
 
         /// Set the value.
-        /** The value is considered "constant" only when the 
+        /** The value is considered "constant" only when the
             compiler output is created. It can be changed in the AST. */
         virtual void
         set_value(double val /**< [in] Value to store in node. */ ) =0;
@@ -572,7 +572,7 @@ namespace yask {
     class yc_multiply_node : public virtual yc_commutative_number_node { };
 
     /// Base class for numerical binary operators.
-    /** A \ref yc_commutative_number_node is used instead for 
+    /** A \ref yc_commutative_number_node is used instead for
         add and multiply. */
     class yc_binary_number_node : public virtual yc_number_node {
     public:
@@ -580,12 +580,12 @@ namespace yask {
         /// Get the left-hand-side operand.
         virtual yc_number_node_ptr
         get_lhs() =0;
-    
+
         /// Get the right-hand-side operand.
         virtual yc_number_node_ptr
         get_rhs() =0;
     };
-    
+
     /// A subtraction node.
     /** Created via yc_node_factory::new_subtract_node(). */
     class yc_subtract_node : public virtual yc_binary_number_node { };
@@ -614,12 +614,12 @@ namespace yask {
         /// Get the left-hand-side operand.
         virtual yc_bool_node_ptr
         get_lhs() =0;
-    
+
         /// Get the right-hand-side operand.
         virtual yc_bool_node_ptr
         get_rhs() =0;
     };
-    
+
     /// A boolean 'and' operator.
     /** Example: used to implement `a && b`.
         Created via yc_node_factory::new_and_node().
@@ -640,13 +640,13 @@ namespace yask {
         /** @returns Pointer to expression node appearing before the `-` sign. */
         virtual yc_number_node_ptr
         get_lhs() =0;
-    
+
         /// Get the right-hand-side operand.
         /** @returns Pointer to expression node appearing after the `-` sign. */
         virtual yc_number_node_ptr
         get_rhs() =0;
     };
-    
+
     /// A numerical-comparison 'equals' operator.
     /** Example: used to implement `a == b`.
         Created via yc_node_factory::new_equals_node().
@@ -689,7 +689,7 @@ namespace yask {
     // perhaps removed in favor of this API.
     // Also, these are not defined for SWIG because
     // the Python operators are defined in the ".i" file.
-    
+
 #if !defined USE_INTERNAL_DSL && !defined SWIG
 
     /// Operator version of yc_node_factory::new_negation_node().
@@ -739,7 +739,7 @@ namespace yask {
     // 'yc_index_node_ptr' versions to avoid the compiler using built-in
     // pointer comparisons, which would result in bools rather than YASK
     // nodes in expressions like 'x >= fac.new_first_domain_index(x) + 5'.
-    
+
     //@{
     /// Operator version of yc_node_factory::new_equals_node().
     yc_bool_node_ptr operator==(yc_number_node_ptr lhs, yc_number_node_ptr rhs);
@@ -789,7 +789,7 @@ namespace yask {
     //@}
 
 #endif
-    
+
     /** @}*/
 
 } // namespace yask.

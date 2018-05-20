@@ -36,29 +36,29 @@ using namespace std;
 /*input:coeff=empty coefficient array (or one that can be overwritten)
 	eval_point=point at which the derivative is approximated
 	order=order of the derivative to approximate (e.g. f'' corresponds to order = 2)
-	points=array of points from which to construct the approximation of the derivative. usually an equi-spaced array with points [-radius*h, -(radius-1)*h,...0, ... radius*h] 
-	num_points=number of elements in points[], e.g. the number of points used to approximate the derivative. 
+	points=array of points from which to construct the approximation of the derivative. usually an equi-spaced array with points [-radius*h, -(radius-1)*h,...0, ... radius*h]
+	num_points=number of elements in points[], e.g. the number of points used to approximate the derivative.
 	Note: if num_points < order+1, then the coefficients will all be 0
 
-  
-  output:void, fills the coefficient array such that 
+
+  output:void, fills the coefficient array such that
 f^(m)[eval_point] ~~ sum of coeff[i]*f[point[i]] from i = 0 to num_points-1
 */
-	
+
 void fd_coeff(float *coeff, const float eval_point, const int order, float *points, const int num_points)
 {
     float c1, c2, c3;
     float x_0=eval_point;
     float center=0;
 
-    
+
 
 
 //  float* d = (float*) malloc((order+1)*num_points*num_points*sizeof(float));
     float d[(order+1)*num_points*num_points];
     int m_idx = (order+1)*num_points;
     int n_idx = num_points;
-    
+
     //array initializer 1
     /*
     memset(d, 0.f, sizeof(d));
@@ -67,7 +67,7 @@ void fd_coeff(float *coeff, const float eval_point, const int order, float *poin
     //array initializer 2
     int sizeofd = (order+1)*(num_points)*(num_points)*sizeof(float);
     memset(d, 0.f, sizeofd);
-    
+
 
     //array initializer 3
     /*
@@ -77,7 +77,7 @@ void fd_coeff(float *coeff, const float eval_point, const int order, float *poin
 	    d[m*m_idx+n*n_idx+v]=0.f;
 	    }}}
     */
-    
+
 
     d[0]=1.f;
     c1 = 1.f;

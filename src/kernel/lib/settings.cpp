@@ -71,7 +71,7 @@ namespace yask {
         // MPI init.
         my_rank = 0;
         num_ranks = 1;
-        
+
 #ifdef USE_MPI
         int is_init = false;
         MPI_Initialized(&is_init);
@@ -99,7 +99,7 @@ namespace yask {
         //Enable DAZ
         _MM_SET_DENORMALS_ZERO_MODE(_MM_DENORMALS_ZERO_ON);
 #endif
-        
+
         // Set env vars needed by OMP.
         // TODO: make this visible to the user.
         int ret = setenv("OMP_PLACES", "cores", 0); // default placement for outer loop.
@@ -139,12 +139,12 @@ namespace yask {
 
         // Release any old data if last owner.
         release_storage();
-            
+
         // Share ownership of base.
         // This ensures that last grid to use a shared allocation
         // will trigger dealloc.
         _base = base;
-        
+
         // Set plain pointer to new data.
         if (base.get()) {
             char* p = _base.get() + offset;
@@ -153,7 +153,7 @@ namespace yask {
             _elems = 0;
         }
     }
-    
+
     // Apply a function to each neighbor rank.
     // Does NOT visit self or non-existent neighbors.
     void MPIData::visitNeighbors(std::function<void
@@ -210,7 +210,7 @@ namespace yask {
                            "Shorthand for" + multi_help,
                            multi_vars));
     }
-    
+
     // Add these settigns to a cmd-line parser.
     void KernelSettings::add_options(CommandLineParser& parser)
     {
@@ -254,7 +254,7 @@ namespace yask {
                            _numa_pref));
 #endif
     }
-    
+
     // Print usage message.
     void KernelSettings::print_usage(ostream& os,
                                       CommandLineParser& parser,
@@ -382,7 +382,7 @@ namespace yask {
             idx_t rem = (inner_size <= 0) ? 0 :
                 outer_size % inner_size;                       // size of remainder.
             idx_t nfull = rem ? (ninner - 1) : ninner; // full only.
-            
+
             os << " In '" << dname << "' dimension, " << outer_name << " of size " <<
                 outer_size << " contains " << nfull << " " <<
                     inner_name << "(s) of size " << inner_size;
@@ -399,7 +399,7 @@ namespace yask {
     // Called from prepare_solution(), so it doesn't normally need to be called from user code.
     void KernelSettings::adjustSettings(std::ostream& os, KernelEnvPtr env) {
         auto& step_dim = _dims->_step_dim;
-    
+
         // Determine num regions.
         // Also fix up region sizes as needed.
         // Default region size (if 0) will be size of rank-domain.
@@ -433,7 +433,7 @@ namespace yask {
                 auto& dname = dim.getName();
                 if (_sub_block_sizes[dname] == 0)
                     _sub_block_sizes[dname] = 1; // will be rounded up to min size.
-                
+
                 // Only want to set 1st dim; others will be set to max.
                 // TODO: make sure we're not setting inner dim.
                 break;
@@ -452,7 +452,7 @@ namespace yask {
         // because group sizes are more like 'guidelines' and don't have
         // their own loops.
         os << "\nGroups:" << endl;
-        
+
         // Adjust defaults for groups to be min size.
         // Otherwise, findNumBlockGroupsInRegion() would set default
         // to entire region.

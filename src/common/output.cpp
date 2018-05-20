@@ -44,7 +44,7 @@ namespace yask {
         ostream& _os;
     public:
         OutputBase(ostream& os) : _os(os) {}
-        
+
         virtual ostream& get_ostream() {
             return _os;
         }
@@ -57,15 +57,15 @@ namespace yask {
         string _fname;
     public:
         FileOutput() : OutputBase(_ofs) {}
-        
+
         virtual ~FileOutput() {
             close();
         }
-        
+
         string get_filename() const {
             return _fname;
         }
-        
+
         void open(const string& file_name) {
             _fname = file_name;
             _ofs.open(file_name, ofstream::out | ofstream::trunc);
@@ -87,7 +87,7 @@ namespace yask {
         ostringstream _oss;
     public:
         StringOutput() : OutputBase(_oss) {}
-        
+
         virtual ~StringOutput() {
             discard();
         }
@@ -95,7 +95,7 @@ namespace yask {
         string get_string() const {
             return _oss.str();
         }
-        
+
         void discard() {
             _oss.str("");
         }
@@ -114,7 +114,7 @@ namespace yask {
     public:
         NullOutput() : OutputBase(_ofs) {}
     };
-    
+
     // See yask_common_api.hpp for documentation.
     yask_file_output_ptr
     yask_output_factory::new_file_output(const string& file_name) const {
@@ -141,6 +141,6 @@ namespace yask {
         assert(p.get());
         return p;
     }
-    
+
 }
 

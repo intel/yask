@@ -153,7 +153,7 @@ inline void omp_set_nested(int n) { }
 #ifndef DEF_ARGS
 #define DEF_ARGS ""
 #endif
-    
+
 // Rounding macros for integer types.
 #define CEIL_DIV(numer, denom) (((numer) + (denom) - 1) / (denom))
 #define ROUND_UP(n, mult) (CEIL_DIV(n, mult) * (mult))
@@ -187,10 +187,10 @@ inline void omp_set_nested(int n) { }
 // macro for debug message from a StencilContext method.
 #define TRACE_MSG1(msg) TRACE_MSG0(get_ostr(), msg)
 #define TRACE_MSG(msg) TRACE_MSG1(msg)
- 
+
 // macro for debug message when _context ptr is defined.
 #define TRACE_MSG2(msg) TRACE_MSG0(_context->get_ostr(), msg)
- 
+
 // macro for debug message when _generic_context ptr is defined.
 #define TRACE_MSG3(msg) TRACE_MSG0(_generic_context->get_ostr(), msg)
 

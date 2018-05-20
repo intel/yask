@@ -47,21 +47,21 @@ namespace yask {
 
     // Global list for registering stencils.
     extern StencilList stencils;
-    
+
     // A base class for whole stencil solutions.  This is used by solutions
     // defined in C++ that are inherited from StencilBase as well as those
     // defined via the stencil-compiler API.
     class StencilSolution :
         public virtual yc_solution {
     protected:
-        
+
         // Simple name for the stencil soln.
         string _name;
 
         // Debug output.
         yask_output_ptr _debug_output;
         ostream* _dos = &std::cout; // just a handy pointer to an ostream.
-    
+
         // All vars accessible by the kernel.
         Grids _grids;
 
@@ -97,7 +97,7 @@ namespace yask {
 
         // Identification.
         virtual const string& getName() const { return _name; }
-    
+
         // Simple accessors.
         virtual Grids& getGrids() { return _grids; }
         virtual Eqs& getEqs() { return _eqs; }
@@ -105,7 +105,7 @@ namespace yask {
 
         // Get user-provided code for the given section.
         CodeList * getExtensionCode(YASKSection section)
-        { 
+        {
             auto elem = _extensions.find(section);
             if ( elem != _extensions.end() ) {
                 return &elem->second;
@@ -121,7 +121,7 @@ namespace yask {
         virtual yc_grid_ptr newGrid(const std::string& name,
                                     bool isScratch,
                                     const std::vector<yc_index_node_ptr>& dims);
-        
+
         // stencil_solution APIs.
         // See yask_stencil_api.hpp for documentation.
         virtual void set_debug_output(yask_output_ptr debug) {
@@ -212,7 +212,7 @@ namespace yask {
 
         // Do not define any dims.
         // Do not define any grids.
-        
+
     public:
         EmptyStencil(std::string name) :
             StencilSolution(name) { }
@@ -220,7 +220,7 @@ namespace yask {
         // Do not define any equations.
         virtual void define() { }
     };
-    
+
     // An interface for all objects that participate in stencil definitions.
     // This allows a programmer to use object composition in addition to
     // inheritance from StencilBase to define stencils.
@@ -233,11 +233,11 @@ namespace yask {
         // Return a reference to the main stencil object.
         virtual StencilSolution& get_stencil_solution() =0;
     };
-    
+
     // The class all C++ stencil solutions must implement.
     class StencilBase : public StencilSolution,
                         public StencilPart {
-        
+
     public:
         // Initialize name and register this new object in a list.
         StencilBase(const string name, StencilList& stencils) :
@@ -255,7 +255,7 @@ namespace yask {
         virtual StencilSolution& get_stencil_solution() {
             return *this;
         }
-    
+
         // Radius stub methods.
         virtual bool usesRadius() const { return false; }
         virtual bool setRadius(int radius) { return false; }
@@ -274,7 +274,7 @@ namespace yask {
 
         // Does use radius.
         virtual bool usesRadius() const { return true; }
-    
+
         // Set radius.
         // Return true if successful.
         virtual bool setRadius(int radius) {

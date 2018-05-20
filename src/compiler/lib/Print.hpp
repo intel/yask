@@ -87,7 +87,7 @@ namespace yask {
             int c = _cv->getCount(ep);
             return (c <= 1) ? 0 : c-1;
         }
-    
+
         // Make and return next var name.
         virtual string makeVarName() {
             ostringstream oss;
@@ -112,7 +112,7 @@ namespace yask {
             _localVars[expr] = vName;
             return vName;
         }
-        
+
         // Return any code expression.
         // The 'os' parameter is provided for derived types that
         // need to write intermediate code to a stream.
@@ -160,7 +160,7 @@ namespace yask {
 
         // Make these substitutions to indices in expressions.
         const VarMap* _varMap = 0;
-        
+
         // Map sub-expressions to var names.
         map<Expr*, string> _tempVars;
 
@@ -172,7 +172,7 @@ namespace yask {
         // If 'comment' is set, use it for the comment.
         // Return stream to continue w/RHS.
         virtual ostream& makeNextTempVar(Expr* ex, string comment = "");
-    
+
     public:
         // os is used for printing intermediate results as needed.
         PrintVisitorBase(ostream& os,
@@ -211,13 +211,13 @@ namespace yask {
         // Get the number of shared nodes found after this visitor
         // has been accepted.
         int getNumCommon() const { return _numCommon; }
-    
+
         // A grid access.
         virtual void visit(GridPoint* gp);
 
         // A grid index.
         virtual void visit(IndexExpr* ie);
-    
+
         // A constant.
         virtual void visit(ConstExpr* ce);
 
@@ -320,7 +320,7 @@ namespace yask {
 
         // Equals op.
         virtual void visit(EqualsExpr* ee);
-    
+
         // A point.
         virtual void visit(GridPoint* gp);
     };
@@ -345,7 +345,7 @@ namespace yask {
         virtual string getLabel(ExprPtr ep, bool once = true) {
             return getLabel(ep.get(), once);
         }
-    
+
     public:
         DOTPrintVisitor(ostream& os) : _os(os) { }
 
@@ -375,7 +375,7 @@ namespace yask {
     class SimpleDOTPrintVisitor : public DOTPrintVisitor {
     protected:
         set<string> _gridsSeen;
-    
+
     public:
         SimpleDOTPrintVisitor(ostream& os) :
             DOTPrintVisitor(os) { }
@@ -391,7 +391,7 @@ namespace yask {
 
         // Generic numeric unary operators.
         virtual void visit(UnaryNumExpr* ue);
-    
+
         // Generic numeric binary operators.
         virtual void visit(BinaryNumExpr* be);
 
@@ -412,11 +412,11 @@ namespace yask {
         Grids& _grids;
         EqBundles& _eqBundles;
         CompilerSettings& _settings;
-        
+
     public:
         PrinterBase(StencilSolution& stencil,
                     EqBundles& eqBundles) :
-            _stencil(stencil), 
+            _stencil(stencil),
             _grids(stencil.getGrids()),
             _eqBundles(eqBundles),
             _settings(stencil.getSettings())
@@ -429,7 +429,7 @@ namespace yask {
 
         // Whether multi-dim folding is efficient.
         virtual bool is_folding_efficient() const { return false; }
-        
+
         // Output to 'os'.
         virtual void print(ostream& os) =0;
 
@@ -449,7 +449,7 @@ namespace yask {
 
     // Print out a stencil in human-readable form, for debug or documentation.
     class PseudoPrinter : public PrinterBase {
-        
+
     public:
         PseudoPrinter(StencilSolution& stencil,
                       EqBundles& eqBundles) :
@@ -463,7 +463,7 @@ namespace yask {
     class DOTPrinter : public PrinterBase {
     protected:
         bool _isSimple;
-        
+
     public:
         DOTPrinter(StencilSolution& stencil, EqBundles& eqBundles,
                    bool isSimple) :
@@ -476,7 +476,7 @@ namespace yask {
 
     // Print out a stencil in POVRay form.
     class POVRayPrinter : public PrinterBase {
-        
+
     public:
         POVRayPrinter(StencilSolution& stencil, EqBundles& eqBundles) :
             PrinterBase(stencil, eqBundles) { }

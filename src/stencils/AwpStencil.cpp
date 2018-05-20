@@ -46,7 +46,7 @@ protected:
     MAKE_GRID(vel_x, t, x, y, z);
     MAKE_GRID(vel_y, t, x, y, z);
     MAKE_GRID(vel_z, t, x, y, z);
-        
+
     // Time-varying 3D-spatial Stress grids.
     MAKE_GRID(stress_xx, t, x, y, z);
     MAKE_GRID(stress_yy, t, x, y, z);
@@ -71,7 +71,7 @@ protected:
     MAKE_GRID(anelastic_xy, x, y, z);
     MAKE_GRID(anelastic_xz, x, y, z);
     MAKE_GRID(anelastic_yz, x, y, z);
-  
+
     // 3D-spatial Lame' coefficients.
     MAKE_GRID(lambda, x, y, z);
     MAKE_GRID(rho, x, y, z);
@@ -107,7 +107,7 @@ public:
         val *= sponge(x, y, z);
 #else
         val *= cr_x(x) * cr_y(y) * cr_z(z);
-#endif        
+#endif
     }
 
     // Velocity-grid define functions.  For each D in x, y, z, define vel_D
@@ -189,12 +189,12 @@ public:
             (1.0 / h) * tau1 * weight(x, y, z) *
             (mu_val * anelastic_as_diag(x, y, z) * (d_y_val + d_z_val) -
              (mu_val + 0.5 * lambda_val) * anelastic_ap(x, y, z) * (d_x_val + d_y_val + d_z_val));
-        
+
         GridValue next_stress_xx = stress_xx(t, x, y, z) +
             ((delta_t / h) * ((2. * mu_val * d_x_val) +
                               (lambda_val * (d_x_val + d_y_val + d_z_val)))) +
             delta_t * (next_stress_mem_xx + stress_mem_xx_old);
-        
+
         adjust_for_sponge(next_stress_xx);
 
         // define the value at t+1.
@@ -211,7 +211,7 @@ public:
             (1 / h) * tau1 * weight(x, y, z) *
             (mu_val * anelastic_as_diag(x, y, z) * (d_x_val + d_z_val) -
              (mu_val + 0.5 * lambda_val) * anelastic_ap(x, y, z) * (d_x_val + d_y_val + d_z_val));
-        
+
         GridValue next_stress_yy = stress_yy(t, x, y, z) +
             ((delta_t / h) * ((2. * mu_val * d_y_val) +
                               (lambda_val * (d_x_val + d_y_val + d_z_val)))) +
@@ -263,7 +263,7 @@ public:
         GridValue next_stress_mem_xy = tau2(x, y, z) * stress_mem_xy_old -
             (0.5 / h) * tau1 * weight(x, y, z) *
             (mu_val * anelastic_xy(x, y, z) * (d_xy_val + d_yx_val));
-      
+
         GridValue next_stress_xy = stress_xy(t, x, y, z) +
             ((mu_val * delta_t / h) * (d_xy_val + d_yx_val)) +
             delta_t * (next_stress_mem_xy + stress_mem_xy_old);

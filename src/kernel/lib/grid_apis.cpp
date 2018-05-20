@@ -77,7 +77,7 @@ namespace yask {
     GET_GRID_API(get_halo_size, _left_halos[posn]; DEPRECATED(get_halo_size), false, true, false, false)
     GET_GRID_API(get_extra_pad_size, _actl_left_pads[posn] - _left_halos[posn]; DEPRECATED(get_extra_pad_size), false, true, false, false)
 #undef GET_GRID_API
-    
+
     // APIs to set vars.
 #define COMMA ,
 #define SET_GRID_API(api_name, expr, step_ok, domain_ok, misc_ok)       \
@@ -118,7 +118,7 @@ namespace yask {
     SET_GRID_API(set_first_misc_index, _offsets[posn] = n, false, false, true)
 #undef COMMA
 #undef SET_GRID_API
-    
+
     bool YkGridBase::is_storage_layout_identical(const yk_grid_ptr other) const {
         auto op = dynamic_pointer_cast<YkGridBase>(other);
         assert(op);
@@ -234,7 +234,7 @@ namespace yask {
                 _actl_right_pads[i] = sp->_actl_right_pads[i];
             }
         }
-        
+
         // Copy data.
         release_storage();
         resize();
@@ -289,7 +289,7 @@ namespace yask {
         }
         return nup;
     }
-    
+
     idx_t YkGridBase::get_elements_in_slice(void* buffer_ptr,
                                             const Indices& first_indices,
                                             const Indices& last_indices) const {
@@ -302,7 +302,7 @@ namespace yask {
 
         // Find range.
         IdxTuple numElemsTuple = get_slice_range(first_indices, last_indices);
-        
+
         // Visit points in slice.
         numElemsTuple.visitAllPointsInParallel
             ([&](const IdxTuple& ofs, size_t idx) {
@@ -310,7 +310,7 @@ namespace yask {
 
                 // TODO: move this outside of loop for const step index.
                 idx_t asi = get_alloc_step_index(pt);
-                
+
                 real_t val = readElem(pt, asi, __LINE__);
                 ((real_t*)buffer_ptr)[idx] = val;
                 return true;    // keep going.
@@ -323,7 +323,7 @@ namespace yask {
                                                  bool strict_indices) {
         if (!is_storage_allocated())
             return 0;
-        
+
         // 'Fixed' copy of indices.
         Indices first, last;
         checkIndices(first_indices, "set_elements_in_slice_same",

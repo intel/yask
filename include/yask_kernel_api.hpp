@@ -27,7 +27,7 @@ IN THE SOFTWARE.
 
 // This file uses Doxygen 1.8 markup for API documentation-generation.
 // See http://www.stack.nl/~dimitri/doxygen.
-/** @file yask_kernel_api.hpp */ 
+/** @file yask_kernel_api.hpp */
 
 #ifndef YASK_KERNEL_API
 #define YASK_KERNEL_API
@@ -102,7 +102,7 @@ namespace yask {
         /**
            A stencil solution contains all the grids and equations
            that were created during stencil compilation.
-           @returns Pointer to new solution object. 
+           @returns Pointer to new solution object.
         */
         virtual yk_solution_ptr
         new_solution(yk_env_ptr env /**< [in] Pointer to env info. */) const;
@@ -113,7 +113,7 @@ namespace yask {
            functions in the source solution will be copied to the new solution.
            This does *not* copy any grids, grid settings, or grid data;
            see yk_solution::share_grid_storage().
-           @returns Pointer to new solution object. 
+           @returns Pointer to new solution object.
         */
         virtual yk_solution_ptr
         new_solution(yk_env_ptr env /**< [in] Pointer to env info. */,
@@ -129,7 +129,7 @@ namespace yask {
 
         /// Get number of MPI ranks.
         /**
-           @returns Number of ranks in MPI communicator or one (1) if MPI is not enabled. 
+           @returns Number of ranks in MPI communicator or one (1) if MPI is not enabled.
         */
         virtual int get_num_ranks() const =0;
 

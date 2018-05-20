@@ -99,7 +99,7 @@ namespace yask {
 #undef VEC_ELEMS
 
     // Macro for looping through an aligned real_vec_t.
-#if defined(CHECK) || (VLEN==1) || !defined(__INTEL_COMPILER) 
+#if defined(CHECK) || (VLEN==1) || !defined(__INTEL_COMPILER)
 #define REAL_VEC_LOOP(i)                        \
     for (int i=0; i<VLEN; i++)
 #define REAL_VEC_LOOP_UNALIGNED(i)              \
@@ -119,7 +119,7 @@ namespace yask {
         _mm_mfence();
 #endif
     }
-    
+
     // conditional inlining
 #ifdef CHECK
 #define ALWAYS_INLINE inline
@@ -140,7 +140,7 @@ namespace yask {
         ctrl_t ci[VLEN];
 
 #ifndef NO_INTRINSICS
-    
+
         // Real SIMD-type overlay.
 #if REAL_BYTES == 4 && defined(USE_INTRIN256)
         __m256  mr;
@@ -161,7 +161,7 @@ namespace yask {
 
 #endif
     };
-  
+
 
     // Type for a vector block.
     struct real_vec_t {
@@ -179,7 +179,7 @@ namespace yask {
         ALWAYS_INLINE real_vec_t(const real_vec_t_data& val) {
             operator=(val);
         }
-    
+
         // broadcast scalar.
         ALWAYS_INLINE real_vec_t(float val) {
             operator=(val);
@@ -198,7 +198,7 @@ namespace yask {
         inline int get_num_elems() const {
             return VLEN;
         }
-        
+
         // copy whole vector.
         ALWAYS_INLINE real_vec_t& operator=(const real_vec_t& rhs) {
 #ifdef NO_INTRINSICS
@@ -237,7 +237,7 @@ namespace yask {
             operator=(real_t(val));
         }
 
-    
+
         // access a real_t linearly.
         ALWAYS_INLINE real_t& operator[](idx_t l) {
             assert(l >= 0);
@@ -309,7 +309,7 @@ namespace yask {
             rn = rhs;               // broadcast.
             return (*this) * rn;
         }
-    
+
         // div.
         ALWAYS_INLINE real_vec_t operator/(real_vec_t rhs) const {
             real_vec_t res, rcp;
@@ -353,7 +353,7 @@ namespace yask {
             }
             return false;
         }
-    
+
         // equal-to comparator.
         bool operator==(const real_vec_t& rhs) const {
             for (int j = 0; j < VLEN; j++) {
@@ -362,12 +362,12 @@ namespace yask {
             }
             return true;
         }
-    
+
         // not-equal-to comparator.
         bool operator!=(const real_vec_t& rhs) const {
             return !operator==(rhs);
         }
-    
+
         // aligned load.
         ALWAYS_INLINE void loadFrom(const real_vec_t* __restrict__ from) {
 #if defined(NO_INTRINSICS) || defined(NO_LOAD_INTRINSICS)
@@ -501,7 +501,7 @@ namespace yask {
             res.u.r[i] = tmpb.u.r[i + count];
         for (int i = VLEN-count; i < VLEN; i++)
             res.u.r[i] = tmpa.u.r[i + count - VLEN];
-    
+
 #elif defined(USE_INTRIN256)
         // Not really an intrinsic, but not element-wise, either.
         // Put the 2 parts in a local array, then extract the desired part
@@ -512,7 +512,7 @@ namespace yask {
         *((real_vec_t*)(&r2[VLEN])) = a;
         real_vec_t* p = (real_vec_t*)(&r2[count]); // not usually aligned.
         res.u.mr = INAME(loadu)((imem_t const*)p);
-    
+
 #elif REAL_BYTES == 8 && defined(ARCH_KNC) && defined(USE_INTRIN512)
         // For KNC, for 64-bit align, use the 32-bit op w/2x count.
         res.u.mi = _mm512_alignr_epi32(a.u.mi, b.u.mi, count*2);
@@ -671,7 +671,7 @@ namespace yask {
         _mm_prefetch(p, (enum _mm_hint)level);
 #endif
     }
-    
+
     // default max abs difference in validation.
 #ifndef EPSILON
 #define EPSILON (1e-3)

@@ -69,7 +69,7 @@ namespace yask {
 #ifndef USE_NUMA
         THROW_YASK_EXCEPTION("Error: explicit NUMA policy allocation is not enabled");
 #endif
-        
+
         void *p = 0;
 
 #ifdef USE_NUMA
@@ -202,7 +202,7 @@ namespace yask {
         }
         return res;
     }
-    
+
     // Find sum of rank_vals over all ranks.
     idx_t sumOverRanks(idx_t rank_val, MPI_Comm comm) {
         idx_t sum_val = rank_val;
@@ -230,7 +230,7 @@ namespace yask {
     }
 
     ///////////// Command-line parsing methods. /////////////
-    
+
     // Internal function to print help for one option.
     void CommandLineParser::OptionBase::_print_help(ostream& os,
                                                     const string& str,
@@ -252,7 +252,7 @@ namespace yask {
         }
         if (prev < _help.length())
             words.push_back(_help.substr(prev)); // last word.
-        
+
         // Format help message to fit in width.
         pos = 0;
         for (size_t i = 0; i < words.size(); i++) {
@@ -327,7 +327,7 @@ namespace yask {
         os << _help_leader << _current_value_str <<
             (_val ? "true" : "false") << "." << endl;
     }
-    
+
     // Check for an int option.
     bool CommandLineParser::IntOption::check_arg(std::vector<std::string>& args,
                                                  int& argi) {
@@ -345,7 +345,7 @@ namespace yask {
         os << _help_leader << _current_value_str <<
             _val << "." << endl;
     }
-    
+
     // Check for an idx_t option.
     bool CommandLineParser::IdxOption::check_arg(std::vector<std::string>& args,
                                                  int& argi) {
@@ -363,7 +363,7 @@ namespace yask {
         os << _help_leader << _current_value_str <<
             _val << "." << endl;
     }
-    
+
     // Print help on an multi-idx_t option.
     void CommandLineParser::MultiIdxOption::print_help(ostream& os,
                                                   int width) const {
@@ -376,7 +376,7 @@ namespace yask {
         }
         os << "." << endl;
     }
-    
+
     // Check for an multi-idx_t option.
     bool CommandLineParser::MultiIdxOption::check_arg(std::vector<std::string>& args,
                                                       int& argi) {
@@ -418,7 +418,7 @@ namespace yask {
                     matched = true;
                     break;
                 }
-            }                
+            }
 
             // Save unused args.
             if (!matched) {
@@ -426,7 +426,7 @@ namespace yask {
                 non_args.push_back(opt);
                 argi++;
             }
-        }        
+        }
 
         // Return unused args in args var.
         args.swap(non_args);

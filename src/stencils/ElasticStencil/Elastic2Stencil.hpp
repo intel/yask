@@ -35,7 +35,7 @@ class Elastic2BoundaryCondition : public StencilPart
 {
 protected:
     StencilSolution& _sol;
-    
+
     // Indices & dimensions.
     MAKE_STEP_INDEX(t);           // step in time dim.
     MAKE_DOMAIN_INDEX(x);         // spatial dim.
@@ -47,7 +47,7 @@ protected:
     MAKE_MISC_INDEX(sidx);
     MAKE_MISC_INDEX(cidx);
     MAKE_MISC_INDEX(spidx);
-    
+
     public:
     Elastic2BoundaryCondition(StencilSolution& solution) :
         _sol(solution) {}
@@ -72,12 +72,12 @@ protected:
     MAKE_DOMAIN_INDEX(x);         // spatial dim.
     MAKE_DOMAIN_INDEX(y);         // spatial dim.
     MAKE_DOMAIN_INDEX(z);         // spatial dim.
-    
+
     // Grid selectors.
     MAKE_MISC_INDEX(vidx);
     MAKE_MISC_INDEX(sidx);
     MAKE_MISC_INDEX(cidx);
-    
+
     // 3D-spatial coefficients.
     MAKE_GRID(rho, x, y, z);
 
@@ -96,7 +96,7 @@ protected:
     const double dzi = 36.057693;
 
     Elastic2BoundaryCondition *bc = NULL;
-    
+
 public:
     Elastic2StencilBase(const string& name, StencilList& stencils,
                        Elastic2BoundaryCondition *_bc = NULL) :
@@ -104,7 +104,7 @@ public:
     {
         init();
     }
-    
+
     void init() {
         // StencilContex specific code
         REGISTER_STENCIL_CONTEXT_EXTENSION(
@@ -113,12 +113,12 @@ public:
            }
 );
     }
-    
+
     bool hasBoundaryCondition()
     {
         return bc != NULL;
     }
-    
+
     GridValue interp_rho(GridIndex x, GridIndex y, GridIndex z, const TL)
     {
         return (2.0/ (rho(x  , y  , z) +
@@ -247,7 +247,7 @@ public:
     // appropriately.
 
     template<typename N, typename SZ, typename SX, typename SY>
-    void define_vel(GridIndex t, GridIndex x, GridIndex y, GridIndex z, 
+    void define_vel(GridIndex t, GridIndex x, GridIndex y, GridIndex z,
                     Grid& v, GridIndex vidx,
                     Grid& s, GridIndex sx_idx, GridIndex sy_idx, GridIndex sz_idx) {
 
@@ -258,7 +258,7 @@ public:
         GridValue stz    = stencil_O8<Z,SZ>(t, x, y, z, s, sz_idx);
 
         GridValue next_v = v(t, x, y, z, vidx) + ((stx + sty + stz) * delta_t * lrho);
-        
+
         // define the value at t+1.
         if (hasBoundaryCondition()) {
             Condition not_at_bc = bc->is_not_at_boundary();
@@ -267,7 +267,7 @@ public:
             v(t+1, x, y, z, vidx) EQUALS next_v;
     }
     template<typename N, typename SZ, typename SX, typename SY>
-    void define_vel(GridIndex t, GridIndex x, GridIndex y, GridIndex z, 
+    void define_vel(GridIndex t, GridIndex x, GridIndex y, GridIndex z,
                     Grid& v, int vidx,
                     Grid& s, int sx_idx, int sy_idx, int sz_idx) {
         define_vel<N, SZ, SX, SY>(t, x, y, z,

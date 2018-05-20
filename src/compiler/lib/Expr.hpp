@@ -76,7 +76,7 @@ namespace yask {
         // Copy ctor.
         vector_set(const vector_set& src) :
             vector<T>(src), _posn(src._posn) {}
-    
+
         virtual size_t count(const T& val) const {
             return _posn.count(val);
         }
@@ -105,7 +105,7 @@ namespace yask {
             _posn.clear();
         }
     };
-    
+
     // Forward-decls of expressions.
     class Expr;
     typedef shared_ptr<Expr> ExprPtr;
@@ -129,7 +129,7 @@ namespace yask {
     struct Dimensions;
 
     typedef map<string, string> VarMap; // map used when substituting vars.
-    
+
     //// Classes to implement parts of expressions.
     // The expressions are constructed at run-time when the
     // StencilSolution::define() method is called.
@@ -227,7 +227,7 @@ namespace yask {
         virtual bool isConstVal() const {
             return false;
         }
-        
+
         // Get the current value.
         // Exit with error if not known.
         virtual double getNumVal() const {
@@ -253,7 +253,7 @@ namespace yask {
         virtual bool isOffsetFrom(string dim, int& offset) {
             return false;
         }
-    
+
         // Create a deep copy of this expression.
         // For this to work properly, each derived type
         // should also implement a deep-copy copy ctor.
@@ -304,13 +304,13 @@ namespace yask {
 
         // Simple offset?
         virtual bool isOffsetFrom(string dim, int& offset);
-        
+
         // Check for equivalency.
         virtual bool isSame(const Expr* other) const {
             auto p = dynamic_cast<const IndexExpr*>(other);
             return p && _dimName == p->_dimName && _type == p->_type;
         }
-   
+
         // Create a deep copy of this expression.
         virtual NumExprPtr clone() const { return make_shared<IndexExpr>(*this); }
 
@@ -342,7 +342,7 @@ namespace yask {
         NumExprArg(double f) :
             NumExprPtr(constNum(f)) { }
     };
-    
+
     // Boolean value.
     class BoolExpr : public Expr,
                      public virtual yc_bool_node  {
@@ -391,7 +391,7 @@ namespace yask {
             auto p = dynamic_cast<const ConstExpr*>(other);
             return p && _f == p->_f;
         }
-   
+
         // Create a deep copy of this expression.
         virtual NumExprPtr clone() const { return make_shared<ConstExpr>(*this); }
 
@@ -530,7 +530,7 @@ namespace yask {
             _lhs(lhs) { }
         BinaryExpr(const BinaryExpr& src) :
             BaseT(src._opStr, src._rhs->clone()),
-            _lhs(src._lhs->clone()) { }  
+            _lhs(src._lhs->clone()) { }
 
         ArgT& getLhs() { return _lhs; }
         const ArgT& getLhs() const { return _lhs; }
@@ -809,9 +809,9 @@ namespace yask {
 
         VecType _vecType = VEC_UNSET; // allowed vectorization.
         LoopType _loopType = LOOP_UNSET; // analysis for looping.
-        
+
     public:
-        
+
         // Construct a point given a grid and an arg for each dim.
         GridPoint(Grid* grid, const NumExprPtrVec& args);
 
@@ -846,7 +846,7 @@ namespace yask {
 
         // Set given arg to given offset; ignore if not in step or domain grid dims.
         virtual void setArgOffset(const IntScalar& offset);
-        
+
         // Set given args to be given offsets.
         virtual void setArgOffsets(const IntTuple& offsets) {
             for (auto ofs : offsets.getDims())
@@ -875,7 +875,7 @@ namespace yask {
         virtual bool isSameLogicalGrid(const GridPoint& rhs) const {
             return _grid == rhs._grid && _consts == rhs._consts;
         }
-    
+
         // String w/name and parens around args, e.g., 'u(x, y+2)'.
         // Apply substitutions to indices using 'varMap' if provided.
         virtual string makeStr(const VarMap* varMap = 0) const;
@@ -893,7 +893,7 @@ namespace yask {
         // Apply substitutions to indices using 'varMap' if provided.
         virtual string makeNormArgStr(const Dimensions& dims,
                                       const VarMap* varMap = 0) const;
-            
+
         // Make string like "x+(4/VLEN_X)" from original arg "x+4" in 'dname' dim.
         // This object has numerators; 'fold' object has denominators.
         // Apply substitutions to indices using 'varMap' if provided.
@@ -909,7 +909,7 @@ namespace yask {
         // except pointed-to grid is not copied.
         virtual NumExprPtr clone() const { return make_shared<GridPoint>(*this); }
         virtual GridPointPtr cloneGridPoint() const { return make_shared<GridPoint>(*this); }
-    
+
         // APIs.
         virtual yc_grid* get_grid();
     };
@@ -919,7 +919,7 @@ namespace yask {
 // TODO: make this more efficient.
 namespace std {
     using namespace yask;
-    
+
     template <> struct hash<GridPoint> {
         size_t operator()(const GridPoint& k) const {
             return hash<string>{}(k.makeStr());
@@ -928,7 +928,7 @@ namespace std {
 }
 
 namespace yask {
-    
+
     // Equality operator for a grid point.
     // This defines the LHS as equal to the RHS; it is NOT
     // a comparison operator; it is NOT an assignment operator.
@@ -972,7 +972,7 @@ namespace yask {
 
         // LHS is scratch grid.
         virtual bool isScratch();
-        
+
         // Check for equivalency.
         virtual bool isSame(const Expr* other) const;
 
@@ -1084,7 +1084,7 @@ namespace yask {
 
     // A 'GridValue' is simply a pointer to an expression.
     typedef NumExprPtr GridValue;
- 
+
     // Use SET_VALUE_FROM_EXPR for creating a string to insert any C++ code
     // that evaluates to a real_t.
     // The 1st arg must be the LHS of an assignment statement.
@@ -1111,6 +1111,6 @@ namespace yask {
         oss << "(" << rhs << ")";               \
         lhs  make_shared<CodeExpr>(oss.str());  \
     } while(0)
-    
+
 } // namespace yask.
-    
+

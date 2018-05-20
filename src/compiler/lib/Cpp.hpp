@@ -54,7 +54,7 @@ namespace yask {
 
         // Format a real, preserving precision.
         static string formatReal(double v);
-    
+
         // Return a constant expression.
         // This is overloaded to preserve precision.
         virtual string addConstExpr(ostream& os, double v) {
@@ -67,7 +67,7 @@ namespace yask {
                                      const GridPoint& gp,
                                      const string& fname,
                                      string optArg = "");
-    
+
         // Return a grid-point reference.
         virtual string readFromPoint(ostream& os, const GridPoint& gp);
 
@@ -103,7 +103,7 @@ namespace yask {
         // Element indices.
         string _elemSuffix = "_elem";
         VarMap _vec2elemMap; // maps vector indices to elem indices; filled by printElemIndices.
-        
+
         // A simple constant.
         virtual string addConstExpr(ostream& os, double v) {
             return CppPrintHelper::formatReal(v);
@@ -131,7 +131,7 @@ namespace yask {
                                          const string& firstArg,
                                          const string& lastArg,
                                          bool isNorm);
-    
+
         // Print aligned memory read.
         virtual string printAlignedVecRead(ostream& os, const GridPoint& gp);
 
@@ -142,7 +142,7 @@ namespace yask {
         // Print aligned memory write.
         virtual string printAlignedVecWrite(ostream& os, const GridPoint& gp,
                                             const string& val);
-    
+
         // Print conversion from memory vars to point var gp if needed.
         // This calls printUnalignedVecCtor(), which can be overloaded
         // by derived classes.
@@ -161,14 +161,14 @@ namespace yask {
         // Read from multiple points that are not vectorizable.
         // Return var name.
         virtual string printNonVecRead(ostream& os, const GridPoint& gp);
-        
+
         // Print construction for one point var pvName from elems.
         // This version prints inefficient element-by-element assignment.
         // Override this in derived classes for more efficient implementations.
         virtual void printUnalignedVecCtor(ostream& os, const GridPoint& gp, const string& pvName) {
             printUnalignedVecSimple(os, gp, pvName, _linePrefix);
         }
-        
+
     public:
 
         // Print code to set pointers of aligned reads.
@@ -189,13 +189,13 @@ namespace yask {
         // Print any needed memory reads and/or constructions to 'os'.
         // Return code containing a vector of grid points.
         virtual string readFromPoint(ostream& os, const GridPoint& gp);
-        
+
         // Print any immediate memory writes to 'os'.
         // Return code to update a vector of grid points or null string
         // if all writes were printed.
         virtual string writeToPoint(ostream& os, const GridPoint& gp,
                                     const string& val);
-        
+
         // print init of un-normalized indices.
         virtual void printElemIndices(ostream& os);
 
@@ -206,7 +206,7 @@ namespace yask {
 
         // Print code to set ptrName to gp.
         virtual void printPointPtr(ostream& os, const string& ptrName, const GridPoint& gp);
-        
+
         // Access cached values.
         virtual void savePointPtr(const GridPoint& gp, string var) {
             _vecPtrs[gp] = var;
@@ -222,7 +222,7 @@ namespace yask {
     class CppLoopVarPrintVisitor : public PrintVisitorBase {
     protected:
         CppVecPrintHelper& _cvph;
-        
+
     public:
         CppLoopVarPrintVisitor(ostream& os,
                                CppVecPrintHelper& ph,
@@ -234,7 +234,7 @@ namespace yask {
         // A grid access.
         virtual void visit(GridPoint* gp);
     };
-    
+
     // Print out a stencil in C++ form for YASK.
     class YASKCppPrinter : public PrinterBase {
     protected:
@@ -257,14 +257,14 @@ namespace yask {
 
         // Print extraction of indices.
         virtual void printIndices(ostream& os) const;
-        
+
         // Print pieces of YASK output.
         virtual void printMacros(ostream& os);
         virtual void printData(ostream& os);
         virtual void printEqBundles(ostream& os);
         virtual void printContext(ostream& os);
-        
-        
+
+
     public:
         YASKCppPrinter(StencilSolution& stencil,
                        EqBundles& eqBundles,

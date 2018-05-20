@@ -136,7 +136,7 @@ int main() {
         // Done with fixed-size grids.
         if (grid->is_fixed_size())
             continue;
-        
+
         // Create indices describing a subset of the overall domain.
         vector<idx_t> first_indices, last_indices;
         for (auto dname : grid->get_dim_names()) {
@@ -157,7 +157,7 @@ int main() {
             else if (dname == soln->get_step_dim_name()) {
 
                 // Add indices for timestep zero (0) only.
-                first_indices.push_back(0); 
+                first_indices.push_back(0);
                 last_indices.push_back(0);
 
             }
@@ -171,7 +171,7 @@ int main() {
                 last_indices.push_back(grid->get_last_misc_index(dname));
             }
         }
-        
+
         // Init the values using the indices created above.
         idx_t nset = grid->set_elements_in_slice_same(0.9, first_indices, last_indices);
         cout << "      " << nset << " element(s) set.\n";

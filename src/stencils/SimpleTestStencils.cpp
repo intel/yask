@@ -39,7 +39,7 @@ protected:
 
     // Vars.
     MAKE_GRID(data, t, x); // time-varying grid.
-    
+
 public:
 
     Test1dStencil(StencilList& stencils, int radius=2) :
@@ -72,7 +72,7 @@ protected:
 
     // Vars.
     MAKE_GRID(data, t, x, y); // time-varying grid.
-    
+
 public:
 
     Test2dStencil(StencilList& stencils, int radius=2) :
@@ -110,7 +110,7 @@ protected:
 
     // Vars.
     MAKE_GRID(data, t, x, y, z); // time-varying grid.
-    
+
 public:
 
     Test3dStencil(StencilList& stencils) :
@@ -140,7 +140,7 @@ protected:
 
     // Vars.
     MAKE_GRID(data, t, w, x, y, z); // time-varying grid.
-    
+
 public:
 
     Test4dStencil(StencilList& stencils) :
@@ -176,7 +176,7 @@ protected:
 
     // Vars.
     MAKE_GRID(data, t, x, y, z); // time-varying 3D grid.
-    
+
 public:
 
     StreamStencil(StencilList& stencils, int radius=2) :
@@ -213,7 +213,7 @@ protected:
 
     // Vars.
     MAKE_GRID(data, t, x, y);
-    
+
 public:
 
     TestReverseStencil(StencilList& stencils) :
@@ -244,7 +244,7 @@ protected:
 
     // Temporary storage.
     MAKE_SCRATCH_GRID(t1, x);
-    
+
 public:
 
     TestScratchStencil1(StencilList& stencils, int radius=2) :
@@ -290,7 +290,7 @@ protected:
     MAKE_SCRATCH_GRID(t1, x, y, z);
     MAKE_SCRATCH_GRID(t2, x, y, z);
     MAKE_SCRATCH_GRID(t3, x, y, z);
-    
+
 public:
 
     TestScratchStencil2(StencilList& stencils, int radius=2) :
@@ -349,7 +349,7 @@ public:
     virtual void define() {
 
         // Set data w/asymmetrical stencils.
-        
+
         GridValue u = data(t, x);
         for (int r = 1; r <= _radius; r++)
             u += data(t, x-r);
@@ -381,7 +381,7 @@ protected:
     MAKE_GRID(data, t, x); // time-varying grid.
 
 public:
-    
+
     TestEmptyStencil1(StencilList& stencils) :
         StencilBase("test_empty1", stencils) { }
 

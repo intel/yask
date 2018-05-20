@@ -55,7 +55,7 @@ namespace yask {
         {
             if (argStr.length() == 0)
                 return;
-        
+
             // split by commas.
             vector<string> args;
             string arg;
@@ -70,7 +70,7 @@ namespace yask {
 
             // process each k=v pair.
             for (auto pStr : args) {
-                        
+
                 // split by equal sign.
                 size_t ep = pStr.find("=");
                 if (ep == string::npos) {

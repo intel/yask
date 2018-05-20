@@ -50,7 +50,7 @@ namespace yask {
 
         GridMap _lhs_grids; // outputs of eqs.
         GridSetMap _rhs_grids; // inputs of eqs.
-    
+
         // A type to hold a mapping of equations to a set of points in each.
         typedef unordered_set<GridPoint*> PointSet;
         typedef unordered_map<EqualsExpr*, GridPoint*> PointMap;
@@ -60,9 +60,9 @@ namespace yask {
         PointSetMap _rhs_pts; // inputs of eqs.
 
         EqualsExpr* _eq=0;   // Current equation.
-    
+
     public:
-    
+
         // Ctor.
         // 'pts' contains offsets from each point to create.
         PointVisitor() {}
@@ -91,7 +91,7 @@ namespace yask {
             }
             return false;
         }
-    
+
         // Callback at an equality.
         // Handles LHS grid pt explicitly, then visits RHS.
         virtual void visit(EqualsExpr* ee) {
@@ -145,7 +145,7 @@ namespace yask {
                          Dimensions& dims,
                          ostream& os) {
         auto& stepDim = dims._stepDim;
-        
+
         // Gather initial stats from all eqs.
         PointVisitor pt_vis;
         visitEqs(&pt_vis);
@@ -155,7 +155,7 @@ namespace yask {
         auto& inPts = pt_vis.getInputPts();
 
         int lofs = 0;        // step index offset for LHS.
-        
+
         // 1. Check each eq internally.
         os << "\nProcessing " << getNum() << " stencil equation(s)...\n";
         for (auto eq1 : getAll()) {
@@ -187,7 +187,7 @@ namespace yask {
                 if (cond1 && og1->isScratch())
                     THROW_YASK_EXCEPTION("Error: scratch-grid equation '" + og1->getName() +
                                          "' cannot have a condition");
-                
+
                 if (dn == stepDim) {
 
                     // Scratch grid must not use step dim.
@@ -245,11 +245,11 @@ namespace yask {
                                              dims.makeStepStr(dims._stepDir) + "'");
                     }
                 } else
-                    
+
                     // Side effect: store step direction.
                     dims._stepDir = lofs;
             }
-            
+
             // LHS of equation must be vectorizable.
             // TODO: relax this restriction.
             if (op1->getVecType() != GridPoint::VEC_FULL) {
@@ -315,7 +315,7 @@ namespace yask {
                     eq1->makeQuotedStr() << " vs " <<
                     eq2->makeQuotedStr() << "...\n";
 #endif
-                
+
                 bool same_eq = eq1 == eq2;
                 bool same_cond = areExprsSame(cond1, cond2);
 
@@ -349,7 +349,7 @@ namespace yask {
 
                     // Eq depends on itself?
                     if (same_eq) {
-                                    
+
                         // Exit with error.
                         THROW_YASK_EXCEPTION("Error: illegal dependency: LHS of equation " +
                                              eq1->makeQuotedStr() + " also appears on its RHS");
@@ -361,7 +361,7 @@ namespace yask {
 #endif
                     if (settings._findDeps)
                         _deps.set_imm_dep_on(eq2, eq1);
-                        
+
                     // Move along to next eq2.
                     continue;
                 }
@@ -369,7 +369,7 @@ namespace yask {
                 // Don't do more conservative checks if not looking for deps.
                 if (!settings._findDeps)
                     continue;
-                
+
                 // Next dep check: inexact matches on LHS of eq1 to RHS of eq2.
                 // Does eq1 define *any* point in a grid that eq2 inputs
                 // at the same step index?  If so, they *might* have a
@@ -378,7 +378,7 @@ namespace yask {
                 // may or may not be legal.
                 //
                 // Example:
-                //  eq1: a(t+1, x, ...) EQUALS ... IF ... 
+                //  eq1: a(t+1, x, ...) EQUALS ... IF ...
                 //  eq2: b(t+1, x, ...) EQUALS a(t+1, x+5, ...) ... IF ...
                 //
                 // Example:
@@ -408,7 +408,7 @@ namespace yask {
 
                             // Eq depends on itself?
                             if (same_eq) {
-                                
+
                                 // Exit with error.
                                 string stepmsg = same_step ? " at '" + dims.makeStepStr(lofs) + "'" : "";
                                 THROW_YASK_EXCEPTION("Error: disallowed dependency: grid '" +
@@ -420,7 +420,7 @@ namespace yask {
                             // Save dependency.
 #ifdef DEBUG_DEP
                             cout << "  Likely match found to " << op1->makeQuotedStr() << ".\n";
-#endif                        
+#endif
                             _deps.set_imm_dep_on(eq2, eq1);
 
                             // Move along to next equation.
@@ -430,15 +430,15 @@ namespace yask {
                 }
 #ifdef DEBUG_DEP
                 cout << "  No deps found.\n";
-#endif                        
-                
+#endif
+
             } // for all eqs (eq2).
         } // for all eqs (eq1).
 
         // If the step dir wasn't set (no eqs), set it now.
         if (!dims._stepDir)
             dims._stepDir = 1;
-        
+
         // Resolve indirect dependencies.
         // Do this even if not finding deps because we want to
         // resolve deps provided by the user.
@@ -455,7 +455,7 @@ namespace yask {
     // but also on how the grid is indexed at each point.
     class SetVecVisitor : public ExprVisitor {
         const Dimensions& _dims;
-        
+
     public:
         SetVecVisitor(const Dimensions& dims) :
             _dims(dims) { }
@@ -469,7 +469,7 @@ namespace yask {
                 gp->setVecType(GridPoint::VEC_NONE);
                 return;
             }
-            
+
             // Amount of vectorization allowed primarily depends on number
             // of folded dimensions in the grid accessed at this point.
             int grid_nfd = grid->getNumFoldableDims();
@@ -494,13 +494,13 @@ namespace yask {
             // Some dims are vectorizable?
             else if (fdoffsets > 0)
                 gp->setVecType(GridPoint::VEC_PARTIAL);
-            
+
             // Uses no folded dims, so scalar only.
             else
                 gp->setVecType(GridPoint::VEC_NONE);
         }
     };
-    
+
     // Determine which grid points can be vectorized.
     void Eqs::analyzeVec(const Dimensions& dims) {
 
@@ -521,11 +521,11 @@ namespace yask {
             vars_used.insert(ie->getName());
         }
     };
-    
+
     // Visitor for determining inner-loop accesses of grid points.
     class SetLoopVisitor : public ExprVisitor {
         const Dimensions& _dims;
-        
+
     public:
         SetLoopVisitor(const Dimensions& dims) :
             _dims(dims) { }
@@ -542,7 +542,7 @@ namespace yask {
 
             // Access type.
             GridPoint::LoopType lt = GridPoint::LOOP_INVARIANT;
-            
+
             // Check every point arg.
             auto& args = gp->getArgs();
             for (size_t ai = 0; ai < args.size(); ai++) {
@@ -552,7 +552,7 @@ namespace yask {
                 // Get set of vars used.
                 FindVarsVisitor fvv;
                 arg->accept(&fvv);
-                
+
                 // Does this arg refer to idim?
                 if (fvv.vars_used.count(idim)) {
 
@@ -574,7 +574,7 @@ namespace yask {
             gp->setLoopType(lt);
         }
     };
-    
+
     // Determine loop access behavior of grid points.
     void Eqs::analyzeLoop(const Dimensions& dims) {
 
@@ -672,7 +672,7 @@ namespace yask {
                                 // If there are none, we are done.
                                 if (targets.empty())
                                     break;
-                            
+
                                 // If 'eq2' output-grid is one of the
                                 // scratch-grid targets, add it to the set
                                 // needed for 'eq1'.
@@ -684,13 +684,13 @@ namespace yask {
                             }
                             prev = eq2;
                         }
-                        
+
                     });
             }
         }
     }
-   
-   
+
+
     // Get the full name of an eq-lot.
     // Must be unique.
     string EqLot::getName() const {
@@ -729,7 +729,7 @@ namespace yask {
         // Get I/O point data from eq 'ee'.
         PointVisitor pv;
         ee->accept(&pv);
-        
+
         // update list of input and output grids for this bundle.
         auto* outGrid = pv.getOutputGrids().at(ee.get());
         _outGrids.insert(outGrid);
@@ -762,7 +762,7 @@ namespace yask {
     // Visitor that will shift each grid point by an offset.
     class OffsetVisitor: public ExprVisitor {
         IntTuple _ofs;
-    
+
     public:
         OffsetVisitor(const IntTuple& ofs) :
             _ofs(ofs) {}
@@ -791,7 +791,7 @@ namespace yask {
 
                 // Don't need copy of one at origin.
                 if (clusterIndex.sum() > 0) {
-            
+
                     // Get offset of cluster, which is each cluster index multipled
                     // by corresponding vector size.  Example: for a 4x4 fold in a
                     // 1x2 cluster, the 2nd cluster index will be (0,1) and the
@@ -801,7 +801,7 @@ namespace yask {
                     // Loop thru eqs.
                     for (auto eq : eqs) {
                         assert(eq.get());
-            
+
                         // Make a copy.
                         auto eq2 = eq->clone();
 
@@ -837,7 +837,7 @@ namespace yask {
 
         // Get deps between eqs.
         auto& eq_deps = allEqs.getDeps();
-        
+
         // Loop through existing bundles, looking for one that
         // 'eq' can be added to.
         EqBundle* target = 0;
@@ -879,14 +879,14 @@ namespace yask {
                 if (!is_ok)
                     break;
             }
-            
+
             // Remember target bundle if ok and stop looking.
             if (is_ok) {
                 target = eg.get();
                 break;
             }
         }
-        
+
         // Make new bundle if no target bundle found.
         bool newBundle = false;
         if (!target) {
@@ -897,7 +897,7 @@ namespace yask {
             target->index = _indices[baseName]++;
             target->cond = cond;
             newBundle = true;
-        
+
 #if DEBUG_ADD_EXPRS
             cout << "Creating new " << target->getDescr() << endl;
 #endif
@@ -910,7 +910,7 @@ namespace yask {
             " to " << target->getDescr() << endl;
 #endif
         target->addEq(eq);
-    
+
         // Remember eq and updated grid.
         _eqs_in_bundles.insert(eq);
         _outGrids.insert(eq->getGrid());
@@ -940,7 +940,7 @@ namespace yask {
 
         // Make a regex for the allowed grids.
         regex gridx(gridRegex);
-    
+
         // Handle each key-value pair in 'targets' string.
         // Key is eq-bundle name (with possible format strings); value is regex pattern.
         ArgParser ap;
@@ -993,7 +993,7 @@ namespace yask {
 
         os << "Finding transitive closure...\n";
         inherit_deps_from(allEqs);
-        
+
         os << "Topologically ordering...\n";
         topo_sort();
 
@@ -1029,7 +1029,7 @@ namespace yask {
         os << "Stats across " << getNum() << " equation-bundle(s) before optimization(s):\n";
         string edescr = "for " + descr + " equation-bundle(s)";
         printStats(os, edescr);
-    
+
         // Make a list of optimizations to apply to eqBundles.
         vector<OptVisitor*> opts;
 
@@ -1089,7 +1089,7 @@ namespace yask {
         // update list of eqs.
         for (auto& eq : bp->getEqs())
             _eqs.insert(eq);
-        
+
         // update list of input and output grids for this pack.
         for (auto& g : bp->getOutputGrids())
             _outGrids.insert(g);
@@ -1108,7 +1108,7 @@ namespace yask {
 
         // Get deps between bundles.
         auto& deps = allBundles.getDeps();
-        
+
         // Loop through existing packs, looking for one that
         // 'bp' can be added to.
         EqBundlePack* target = 0;
@@ -1117,7 +1117,7 @@ namespace yask {
             // Must be same scratch-ness.
             if (ep->isScratch() != bp->isScratch())
                 continue;
-            
+
             // Look for any dependencies that would prevent adding
             // 'bp' to 'ep'.
             bool is_ok = true;
@@ -1136,7 +1136,7 @@ namespace yask {
                 break;
             }
         }
-        
+
         // Make new pack if no target pack found.
         bool newPack = false;
         if (!target) {
@@ -1151,7 +1151,7 @@ namespace yask {
         // Add bundle to target.
         assert(target);
         target->addBundle(bp);
-    
+
         // Remember pack and updated grids.
         _bundles_in_packs.insert(bp);
         for (auto& g : bp->getOutputGrids())
@@ -1171,7 +1171,7 @@ namespace yask {
 
         os << "Finding transitive closure...\n";
         inherit_deps_from(allBundles);
-        
+
         os << "Topologically ordering...\n";
         topo_sort();
 

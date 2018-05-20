@@ -60,7 +60,7 @@ protected:
     MAKE_GRID(vel_x, t, x, y, z);
     MAKE_GRID(vel_y, t, x, y, z);
     MAKE_GRID(vel_z, t, x, y, z);
-        
+
     // Time-varying 3D-spatial Stress grids.
     MAKE_GRID(stress_xx, t, x, y, z);
     MAKE_GRID(stress_yy, t, x, y, z);
@@ -97,7 +97,7 @@ protected:
     // will define the surface index to be 2 points before the last domain
     // index. Thus, there will be two layers in the domain above the surface.
 #define SURFACE_IDX (last_index(z) - 2)
-    
+
     // Define some sub-domains related to the surface.
 #define IF_BELOW_SURFACE IF (z < SURFACE_IDX)
 #define IF_AT_SURFACE IF (z == SURFACE_IDX)
@@ -110,7 +110,7 @@ protected:
         MAKE_SCRATCH_GRID(tmp_vel_y, x, y, z);
         MAKE_SCRATCH_GRID(tmp_vel_z, x, y, z);
 #endif
-    
+
 public:
 
     AwpElasticStencil(StencilList& stencils) :
@@ -123,7 +123,7 @@ public:
         val *= sponge(x, y, z);
 #else
         val *= cr_x(x) * cr_y(y) * cr_z(z);
-#endif        
+#endif
     }
 
     // Velocity-grid define functions.  For each D in x, y, z, define vel_D
@@ -223,7 +223,7 @@ public:
             (VEL_Z(x+1, y, surf) - VEL_Z(x, y, surf));
         GridValue d_y_val = VEL_Y(x, y-1, surf) -
             (VEL_Z(x, y, surf) - VEL_Z(x, y-1, surf));
-        
+
         // Following values are valid one layer above the free surface.
         GridValue plus1_vel_x = VEL_X(x, y, surf) -
             (VEL_Z(x, y, surf) - VEL_Z(x-1, y, surf));
@@ -239,7 +239,7 @@ public:
 #undef VEL_X
 #undef VEL_Y
 #undef VEL_Z
-        
+
         // Define layer at one point above surface.
         vel_x(t+1, x, y, z) EQUALS plus1_vel_x IF_ONE_ABOVE_SURFACE;
         vel_y(t+1, x, y, z) EQUALS plus1_vel_y IF_ONE_ABOVE_SURFACE;
@@ -256,7 +256,7 @@ public:
 
     // Compute average of 8 neighbors.
     GridValue ave8(Grid& g, GridIndex x, GridIndex y, GridIndex z) {
-        
+
         return 8.0 /
             (g(x,   y,   z  ) + g(x+1, y,   z  ) +
              g(x,   y-1, z  ) + g(x+1, y-1, z  ) +
@@ -280,7 +280,7 @@ public:
             c1 * (vel_z(t+1, x,   y,   z  ) - vel_z(t+1, x,   y,   z-1)) +
             c2 * (vel_z(t+1, x,   y,   z+1) - vel_z(t+1, x,   y,   z-2));
     }
-    
+
     // Stress-grid define functions.  For each D in xx, yy, zz, xy, xz, yz,
     // define stress_D at t+1 based on stress_D at t and vel grids at t+1.
     // This implies that the velocity-grid define functions must be called
@@ -403,7 +403,7 @@ public:
         stress_yy(t+1, x, y, z) EQUALS 0.0 IF_ONE_ABOVE_SURFACE;
         stress_xy(t+1, x, y, z) EQUALS 0.0 IF_ONE_ABOVE_SURFACE;
 #endif
-        
+
         // When z == surface + 2, the surface will be at z - 2;
         surf = z - 2;
 
@@ -419,7 +419,7 @@ public:
         stress_xy(t+1, x, y, z) EQUALS 0.0 IF_TWO_ABOVE_SURFACE;
 #endif
     }
-    
+
     // Define the t+1 values for all velocity and stress grids.
     virtual void define() {
 

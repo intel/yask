@@ -39,7 +39,7 @@ namespace yask {
     yc_grid* GridPoint::get_grid() {
         return _grid;
     }
-    
+
     //node_factory API methods.
     yc_index_node_ptr
     yc_node_factory::new_step_index(const std::string& name) {
@@ -53,7 +53,7 @@ namespace yask {
     yc_node_factory::new_misc_index(const std::string& name) {
         return make_shared<IndexExpr>(name, MISC_INDEX);
     }
-        
+
     yc_equation_node_ptr
     yc_node_factory::new_equation_node(yc_grid_point_node_ptr lhs,
                                        yc_number_node_ptr rhs,
@@ -200,7 +200,7 @@ namespace yask {
         if (!p)
             THROW_YASK_EXCEPTION("Error: new_first_domain_index() called without index-node argument");
         return first_index(p);
-    }    
+    }
     yc_number_node_ptr
     yc_node_factory::new_last_domain_index(yc_index_node_ptr idx) {
         auto p = dynamic_pointer_cast<IndexExpr>(idx);
@@ -284,7 +284,7 @@ namespace yask {
         assert(rp);
         return make_shared<AndExpr>(lp, rp);
     }
-    
+
 // Boolean binary operators with numerical inputs.
 #define BIN_NUM2BOOL_OP(type, oper)                             \
     yc_bool_node_ptr operator oper(yc_number_node_ptr lhs,      \
@@ -312,7 +312,7 @@ namespace yask {
     BIN_NUM2BOOL_OP(NotLessExpr, >=)
     BIN_NUM2BOOL_OP(IsGreaterExpr, >)
     BIN_NUM2BOOL_OP(NotGreaterExpr, <=)
-    
+
     // Compare 2 expr pointers and return whether the expressions are
     // equivalent.
     // TODO: Be much smarter about matching symbolically-equivalent exprs.
@@ -403,7 +403,7 @@ namespace yask {
         return lhs + nrhs;
 #else
         return make_shared<SubExpr>(lhs, rhs);
-#endif    
+#endif
     }
     NumExprPtr operator-(double lhs, const NumExprPtr rhs) {
         NumExprPtr p = make_shared<ConstExpr>(lhs);
@@ -460,14 +460,14 @@ namespace yask {
         if (!rhs)
             THROW_YASK_EXCEPTION("Error: empty RHS of " +
                                  gpp->makeQuotedStr() + " equation");
-        
+
         // Get to list of equations in soln indirectly thru grid.
         Grid* gp = gpp->getGrid();
         assert(gp);
         auto* soln = gp->getSoln();
         assert(soln);
         auto& eqs = soln->getEqs();
-    
+
         // Make expression node.
         auto expr = make_shared<EqualsExpr>(gpp, rhs);
 
@@ -531,7 +531,7 @@ namespace yask {
     }
     bool EqualsExpr::isSame(const Expr* other) const {
         auto p = dynamic_cast<const EqualsExpr*>(other);
-        return p && 
+        return p &&
             _lhs->isSame(p->_lhs.get()) &&
             _rhs->isSame(p->_rhs.get()) &&
             areExprsSame(_cond, p->_cond); // might be null.
@@ -544,7 +544,7 @@ namespace yask {
             return false;
         if (_ops.size() != p->_ops.size())
             return false;
-        
+
         // Operands must be the same, but not necessarily in same order.  This
         // tracks the indices in 'other' that have already been matched.
         set<size_t> matches;
@@ -692,8 +692,8 @@ namespace yask {
         }
 
         return oss.str();
-    }    
-    
+    }
+
     // Make string like "x+(4/VLEN_X), y, z-(2/VLEN_Z)" from
     // original args "x+4, y, z-2".
     // This object has numerators; norm object has denominators.
@@ -725,7 +725,7 @@ namespace yask {
         }
         return "0";
     }
-    
+
     // Set given arg to given offset; ignore if not in step or domain grid dims.
     void GridPoint::setArgOffset(const IntScalar& offset) {
 
@@ -737,7 +737,7 @@ namespace yask {
             // Must be domain or step dim.
             if (gdim->getType() == MISC_INDEX)
                 continue;
-            
+
             auto dname = gdim->getName();
             if (offset.getName() == dname) {
 
@@ -769,7 +769,7 @@ namespace yask {
             }
         }
     }
-    
+
     // Set given arg to given const;
     void GridPoint::setArgConst(const IntScalar& val) {
 
@@ -798,7 +798,7 @@ namespace yask {
             }
         }
     }
-    
+
     // Is this expr a simple offset?
     bool IndexExpr::isOffsetFrom(string dim, int& offset) {
 
@@ -860,12 +860,12 @@ namespace yask {
         }
         return false;
     }
-    
-    
+
+
     // Make a readable string from an expression.
     string Expr::makeStr(const VarMap* varMap) const {
         ostringstream oss;
-    
+
         // Use a print visitor to make a string.
         PrintHelper ph(NULL, NULL, "temp", "", "", ""); // default helper.
         CompilerSettings settings; // default settings.
