@@ -45,10 +45,29 @@ namespace yask {
 
         // Calc values and set valid to true.
         // If 'force_full', set 'bb_num_points' as well as 'bb_size'.
-        void update_bb(std::ostream& os,
-                       const std::string& name,
+        void update_bb(const std::string& name,
                        StencilContext& context,
-                       bool force_full = false);
+                       bool force_full,
+                       std::ostream* os = NULL);
+
+        // Is point in BB?
+        bool is_in_bb(Indices pt) {
+            assert(pt.getNumDims() == bb_begin.getNumDims());
+            for (int i = 0; i < pt.getNumDims(); i++) {
+                if (pt[i] < bb_begin[i])
+                    return false;
+                if (pt[i] >= bb_end[i])
+                    return false;
+            }
+            return true;
+        }
+    };
+
+    class BBList : public std::vector<BoundingBox> {
+
+    public:
+        BBList() {}
+        virtual ~BBList() {}
     };
 
     // Stats.

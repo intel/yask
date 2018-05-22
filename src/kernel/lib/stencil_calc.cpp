@@ -31,7 +31,7 @@ using namespace std;
 
 namespace yask {
 
-    // Calculate results within a block.
+    // Calculate results within a block defined by 'def_block_idxs'.
     // It is here that any required scratch-grid stencils are evaluated
     // first and then the non-scratch stencils in the stencil bundle.
     void StencilBundleBase::calc_block(const ScanIndices& def_block_idxs) {
@@ -48,41 +48,54 @@ namespace yask {
                    " by thread " << thread_idx);
         assert(!is_scratch());
 
-        // Trim the default block indices based on the bounding box
-        // for this bundle.
-        // TODO: loop through list of BBs for this bundle.
-        // TODO: replace string-based lookup w/indices.
-        ScanIndices bb_idxs(def_block_idxs);
-        bool ok = true;
-        for (int i = 0; i < nsdims; i++) {
-            if (i == step_posn) continue;
-            auto& dname = dims->_stencil_dims.getDimName(i);
+        // TODO: if >1 BB, check outer one first to save time.
+        
+        // Loop through each solid BB.
+        // For each BB, calc intersection between it and 'def_block_idxs'.
+        // If this is non-empty, apply the bundle to all its required sub-blocks.
+        TRACE_MSG3("calc_block for bundle '" << get_name() << "': checking " <<
+                   _bb_list.size() << " BB(s)");
+        int bbn = 0;
+  	for (auto& bb : _bb_list) {
+            bbn++;
+            bool bb_ok = true;
 
-            // Begin point.
-            assert(bb_begin.lookup(dname));
-            auto bbegin = max(bb_idxs.begin[i], bb_begin[dname]);
-            bb_idxs.begin[i] = bbegin;
+            // Trim the default block indices based on the bounding box(es)
+            // for this bundle.
+            // TODO: replace string-based lookup w/indices.
+            ScanIndices bb_idxs(def_block_idxs);
+            for (int i = 0; i < nsdims; i++) {
+                if (i == step_posn) continue;
+                auto& dname = dims->_stencil_dims.getDimName(i);
 
-            // End point.
-            assert(bb_end.lookup(dname));
-            auto bend = min(bb_idxs.end[i], bb_end[dname]);
-            bb_idxs.end[i] = bend;
+                // Begin point.
+                assert(bb.bb_begin.lookup(dname));
+                auto bbegin = max(def_block_idxs.begin[i], bb.bb_begin[dname]);
+                bb_idxs.begin[i] = bbegin;
 
-            // Anything to do?
-            if (bend <= bbegin)
-                ok = false;
-        }
+                // End point.
+                assert(bb.bb_end.lookup(dname));
+                auto bend = min(def_block_idxs.end[i], bb.bb_end[dname]);
+                bb_idxs.end[i] = bend;
+		
+                // Anything to do?
+                if (bend <= bbegin) {
+                    bb_ok = false;
+                    break;
+                }
+            }
+
+            // nothing to do?
+            if (!bb_ok) {
+                TRACE_MSG3("calc_block for bundle '" << get_name() <<
+                           "': no overlap between bundle " << bbn << " and current block");
+                continue; // to next BB.
+            }
+            
         TRACE_MSG3("calc_block for bundle '" << get_name() <<
-                   "': after trimming for BB: " <<
+                   "': after trimming for BB " << bbn << ": " <<
                    bb_idxs.begin.makeValStr(nsdims) <<
                    " ... (end before) " << bb_idxs.end.makeValStr(nsdims));
-
-        // Leave if nothing to do.
-        if (!ok) {
-            TRACE_MSG3("calc_block for bundle '" << get_name() <<
-                       "': no overlap between bundle BB and block");
-            return;
-        }
 
         // Update offsets of scratch grids based on this bundle's location.
         _generic_context->update_scratch_grid_info(thread_idx, bb_idxs.begin);
@@ -115,6 +128,7 @@ namespace yask {
             // code typically contains the nested OpenMP loop(s).
 #include "yask_block_loops.hpp"
         }
+        } // BB list.
     }
 
     // Normalize the indices, i.e., divide by vector len in each dim.
@@ -166,7 +180,7 @@ namespace yask {
                    " ... (end before) " << block_idxs.stop.makeValStr(nsdims));
 
         /*
-          Inidices in each domain dim:
+          Indices in each domain dim:
 
             sub_block_eidxs.begin                      rem_masks used here
             |peel_masks used here                      | sub_block_eidxs.end
@@ -218,36 +232,25 @@ namespace yask {
         bool do_scalars = false; // any scalars to do? (assume not)
         bool scalar_for_peel_rem = false; // using the scalar code for peel and/or remainder.
 
-        // For scratch grids, always do whole BB. Otherwise,
-        // if BB is not full, do whole block with scalar code.  We should
-        // only get here when using sub-domains w/"holes" in them.  TODO: do
-        // as much vectorization as possible-- this current code is
-        // functionally correct but very poor perf.
+        // Do only scalar code--no clusters or vectors--for debug.
 #ifdef FORCE_SCALAR
-        bool scalar_only = true;
-#else
-        bool scalar_only = !is_scratch() && !bb_is_full;
-#endif
-        if (scalar_only) {
-
-            do_clusters = false;
-            do_vectors = false;
-            do_scalars = true;
-            scalar_for_peel_rem = false;
-
-            // None of these will be used.
-            sub_block_fcidxs.begin.setFromConst(0);
-            sub_block_fcidxs.end.setFromConst(0);
-            sub_block_fvidxs.begin.setFromConst(0);
-            sub_block_fvidxs.end.setFromConst(0);
-            sub_block_vidxs.begin.setFromConst(0);
-            sub_block_vidxs.end.setFromConst(0);
-        }
-
+        do_clusters = false;
+        do_vectors = false;
+        do_scalars = true;
+        scalar_for_peel_rem = false;
+        
+        // None of these will be used.
+        sub_block_fcidxs.begin.setFromConst(0);
+        sub_block_fcidxs.end.setFromConst(0);
+        sub_block_fvidxs.begin.setFromConst(0);
+        sub_block_fvidxs.end.setFromConst(0);
+        sub_block_vidxs.begin.setFromConst(0);
+        sub_block_vidxs.end.setFromConst(0);
+    
         // Adjust indices to be rank-relative.
         // Determine the subset of this sub-block that is
         // clusters, vectors, and partial vectors.
-        else {
+#else
             do_clusters = true;
             do_vectors = false;
             do_scalars = false;
@@ -400,8 +403,8 @@ namespace yask {
                     j++;
                 }
             }
-        }
-
+#endif
+            
         // Normalized indices needed for sub-block loop.
         ScanIndices norm_sub_block_idxs(sub_block_eidxs);
 
@@ -543,9 +546,8 @@ namespace yask {
             // Since step is always 1, we ignore misc_idxs.stop.
 #define misc_fn(pt_idxs)  do {                                          \
                 TRACE_MSG3("calc_sub_block:   at pt " << pt_idxs.start.makeValStr(nsdims)); \
-                bool ok = true;                                         \
+                bool ok = false;                                        \
                 if (scalar_for_peel_rem) {                              \
-                    ok = false;                                         \
                     for (int i = 0, j = 0; i < nsdims; i++) {           \
                         if (i == step_posn) continue;                   \
                         auto rofs = cp->rank_domain_offsets[j];         \
@@ -555,9 +557,8 @@ namespace yask {
                         j++;                                            \
                     }                                                   \
                 }                                                       \
-                if (ok && (bb_is_full || is_in_valid_domain(pt_idxs.start))) { \
-                    calc_scalar(thread_idx, pt_idxs.start);             \
-                }                                                       \
+                else ok = is_in_valid_domain(pt_idxs.start);            \
+                if (ok) calc_scalar(thread_idx, pt_idxs.start);         \
             } while(0)
 
             // Scan through n-D space.

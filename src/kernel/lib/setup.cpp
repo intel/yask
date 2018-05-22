@@ -1161,19 +1161,21 @@ namespace yask {
                     fpops1 += rsg->get_scalar_fp_ops();
                 }
 
-                idx_t updates_domain = updates1 * sg->bb_num_points;
+                auto& bb = sg->getBB();
+                idx_t updates_domain = updates1 * bb.bb_num_points;
                 rank_numWrites_1t += updates_domain;
-                idx_t reads_domain = reads1 * sg->bb_num_points;
+                idx_t reads_domain = reads1 * bb.bb_num_points;
                 rank_reads_1t += reads_domain;
-                idx_t fpops_domain = fpops1 * sg->bb_num_points;
+                idx_t fpops_domain = fpops1 * bb.bb_num_points;
                 rank_numFpOps_1t += fpops_domain;
 
                 os << " Bundle '" << sg->get_name() << "':\n" <<
                     "  scratch bundles:            " << (sg_list.size() - 1) << endl <<
-                    "  sub-domain:                 " << sg->bb_begin.makeDimValStr() <<
-                    " ... " << sg->bb_end.subElements(1).makeDimValStr() << endl <<
-                    "  sub-domain size:            " << sg->bb_len.makeDimValStr(" * ") << endl <<
-                    "  valid points in sub domain: " << makeNumStr(sg->bb_num_points) << endl <<
+                    "  sub-domain scope:           " << bb.bb_begin.makeDimValStr() <<
+                    " ... " << bb.bb_end.subElements(1).makeDimValStr() << endl <<
+                    "  sub-domain size:            " << bb.bb_len.makeDimValStr(" * ") << endl <<
+                    "  valid points in sub domain: " << makeNumStr(bb.bb_num_points) << endl <<
+                    "  rectangles in sub domain:   " << sg->getBBs().size() << endl <<
                     "  grid-updates per point:     " << updates1 << endl <<
                     "  grid-updates in sub-domain: " << makeNumStr(updates_domain) << endl <<
                     "  grid-reads per point:       " << reads1 << endl <<
@@ -1312,12 +1314,12 @@ namespace yask {
         // Rank BB is based only on rank offsets and rank domain sizes.
         rank_bb.bb_begin = rank_domain_offsets;
         rank_bb.bb_end = rank_domain_offsets.addElements(_opts->_rank_sizes, false);
-        rank_bb.update_bb(os, "rank", *this, true);
+        rank_bb.update_bb("rank", *this, true, &os);
 
         // BB may be extended for wave-fronts.
         ext_bb.bb_begin = rank_bb.bb_begin.subElements(left_wf_exts);
         ext_bb.bb_end = rank_bb.bb_end.addElements(right_wf_exts);
-        ext_bb.update_bb(os, "extended-rank", *this, true);
+        ext_bb.update_bb("extended-rank", *this, true);
 
         // Find BB for each bundle. Each will be a subset within
         // 'ext_bb'.
@@ -1335,6 +1337,9 @@ namespace yask {
         auto& step_dim = dims->_step_dim;
         auto& stencil_dims = dims->_stencil_dims;
         auto nsdims = stencil_dims.size();
+
+        // First, find an overall BB around all the
+        // valid points in the bundle.
 
         // Init min vars w/max val and vice-versa.
         Indices min_pts(idx_max, nsdims);
@@ -1377,37 +1382,146 @@ namespace yask {
 #undef misc_fn
 
         // Init bb vars to ensure they contain correct dims.
-        bb_begin = domain_dims;
-        bb_end = domain_dims;
+        _bundle_bb.bb_begin = domain_dims;
+        _bundle_bb.bb_end = domain_dims;
 
         // If any points, set begin vars to min indices and end vars to one
         // beyond max indices.
         if (npts) {
             IdxTuple tmp(stencil_dims); // create tuple w/stencil dims.
             min_pts.setTupleVals(tmp);  // convert min_pts to tuple.
-            bb_begin.setVals(tmp, false); // set bb_begin to domain dims of min_pts.
+            _bundle_bb.bb_begin.setVals(tmp, false); // set bb_begin to domain dims of min_pts.
 
             max_pts.setTupleVals(tmp); // convert min_pts to tuple.
-            bb_end.setVals(tmp, false); // set bb_end to domain dims of max_pts.
-            bb_end = bb_end.addElements(1); // end = last + 1.
+            _bundle_bb.bb_end.setVals(tmp, false); // set bb_end to domain dims of max_pts.
+            _bundle_bb.bb_end = _bundle_bb.bb_end.addElements(1); // end = last + 1.
         }
 
         // No points, just set to zero.
         else {
-            bb_begin.setValsSame(0);
-            bb_end.setValsSame(0);
+            _bundle_bb.bb_begin.setValsSame(0);
+            _bundle_bb.bb_end.setValsSame(0);
         }
-        bb_num_points = npts;
+        _bundle_bb.bb_num_points = npts;
 
-        // Finalize BB.
-        update_bb(os, get_name(), context);
+        // Finalize overall BB.
+        _bundle_bb.update_bb(get_name(), context, false);
+
+        // If the BB is full (solid), this BB is the only bb.
+        if (_bundle_bb.bb_is_full || !npts)
+            _bb_list.push_back(_bundle_bb);
+
+        // Create list of full BBs (i.e., with no invalid points) inside overall BB.
+        else {
+
+            // Divide the overall BB into a slice for each thread
+            // across the outer dim.
+            idx_t outer_len = _bundle_bb.bb_len[0];
+            idx_t nthreads = omp_get_num_threads();
+            idx_t len_per_thr = CEIL_DIV(outer_len, nthreads);
+
+            // List of BBs for each thread.
+            BBList bb_lists[nthreads];
+
+            // Run rect-finding code on each thread.
+            // When these are done, we will merge the
+            // rects from all threads.
+#pragma omp parallel for
+            for (int n = 0; n < nthreads; n++) {
+                auto& cur_bb_list = bb_lists[n];
+
+                // Begin and end of this slice.
+                IdxTuple slice_begin(_bundle_bb.bb_begin);
+                slice_begin[0] += n * len_per_thr;
+                IdxTuple slice_end(_bundle_bb.bb_end);
+                slice_end[0] = min(slice_end[0], slice_begin[0] + len_per_thr);
+                if (slice_end[0] <= slice_begin[0])
+                    continue;
+
+                // Construct len of slice in all dims.
+                IdxTuple slice_len = slice_end.subElements(slice_begin);
+                
+                // Visit all points in slice, looking for a new
+                // valid starting point.
+                bool new_valid = false;
+                slice_len.visitAllPoints
+                    ([&](const IdxTuple& ofs, size_t idx) {
+
+                        // Find pt in this slice.
+                        Indices pt = slice_begin.addElements(ofs);
+
+                        // New valid point must be in sub-domain and
+                        // not seen before in this slice.
+                        if (is_in_valid_domain(pt)) {
+                            new_valid = true;
+                            for (auto& bb : cur_bb_list) {
+                                if (!bb.is_in_bb(pt)) {
+                                    new_valid = false;
+                                    break;
+                                }
+                            }
+                        }
+                            
+                        // Find end point of this rect.
+                        if (new_valid) {
+
+                            // Scan from 'pt' to end of this slice.
+                            IdxTuple scan_begin(slice_begin);
+                            pt.setTupleVals(scan_begin);
+                            IdxTuple scan_len = slice_end.subElements(scan_begin);
+                            scan_len.visitAllPoints
+                                ([&](const IdxTuple& eofs, size_t eidx) {
+
+                                    // Find pt in this slice.
+                                    Indices ept = scan_begin.addElements(eofs);
+
+                                    // If this is an invalid point, adjust
+                                    // scan range.
+                                    if (!is_in_valid_domain(ept)) {
+
+                                        // Adjust 1st dim that is beyond starting pt.
+                                        // This will alter the range of the current scan.
+                                        for (int i = 0; i < slice_len.getNumDims(); i++) {
+                                            if (ept[i] > pt[i]) {
+                                                scan_len[i] = ept[i];
+                                                break;
+                                            }
+                                        }
+                                    }
+
+                                    return true;
+                                }); // Looking for end of rect.
+
+                            // 'scan_len' now contains sizes of the new BB.
+                            BoundingBox new_bb;
+                            new_bb.bb_begin = slice_begin;
+                            pt.setTupleVals(new_bb.bb_begin);
+                            new_bb.bb_end = new_bb.bb_begin.addElements(scan_len);
+                            new_bb.update_bb("sub-bb", context, true);
+                            cur_bb_list.push_back(new_bb);
+                        }
+
+                        return true;  // from labmda; keep looking.
+                    }); // Looking for new rects.
+            } // threads.
+
+            // Collect BBs in all slices.
+            for (int n = 0; n < nthreads; n++) {
+                auto& cur_bb_list = bb_lists[n];
+                TRACE_MSG3(cur_bb_list.size() << " sub-BBs in bundle '" << get_name() << "'");
+
+#pragma warning "TODO: merge sub-bbs"
+                for (auto& bb : cur_bb_list)
+                    _bb_list.push_back(bb);
+            }
+        }
     }
 
     // Compute convenience values for a bounding-box.
-    void BoundingBox::update_bb(ostream& os,
-                                const string& name,
+    void BoundingBox::update_bb(const string& name,
                                 StencilContext& context,
-                                bool force_full) {
+                                bool force_full,
+                                ostream* os) {
 
         auto dims = context.get_dims();
         auto& domain_dims = dims->_domain_dims;
@@ -1419,11 +1533,12 @@ namespace yask {
         // Solid rectangle?
         bb_is_full = true;
         if (bb_num_points != bb_size) {
-            os << "Warning: '" << name << "' domain has only " <<
+            if (os)
+            *os << "Note: '" << name << "' domain has only " <<
                 makeNumStr(bb_num_points) <<
                 " valid point(s) inside its bounding-box of " <<
                 makeNumStr(bb_size) <<
-                " point(s); slower scalar calculations will be used.\n";
+                " point(s); multiple sub-boxes will be used.\n";
             bb_is_full = false;
         }
 
@@ -1433,7 +1548,8 @@ namespace yask {
             auto& dname = dim.getName();
             if ((bb_begin[dname] - context.rank_domain_offsets[dname]) %
                 dims->_fold_pts[dname] != 0) {
-                os << "Note: '" << name << "' domain"
+                if (os)
+                *os << "Note: '" << name << "' domain"
                     " has one or more starting edges not on vector boundaries;"
                     " masked calculations will be used in peel and remainder sub-blocks.\n";
                 bb_is_aligned = false;
@@ -1447,7 +1563,8 @@ namespace yask {
             auto& dname = dim.getName();
             if (bb_len[dname] % dims->_cluster_pts[dname] != 0) {
                 if (bb_is_full && bb_is_aligned)
-                    os << "Note: '" << name << "' domain"
+                    if (os && bb_is_aligned)
+                    *os << "Note: '" << name << "' domain"
                         " has one or more sizes that are not vector-cluster multiples;"
                         " masked calculations will be used in peel and remainder sub-blocks.\n";
                 bb_is_cluster_mult = false;
