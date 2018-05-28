@@ -1014,7 +1014,7 @@ namespace yask {
     // and local offsets.
     void StencilContext::update_scratch_grid_info(int thread_idx,
                                                   const Indices& idxs) {
-        auto dims = get_dims();
+        auto& dims = get_dims();
         int nsdims = dims->_stencil_dims.size();
         auto step_posn = Indices::step_posn;
 

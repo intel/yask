@@ -1359,12 +1359,12 @@ namespace yask {
         // Define misc-loop function.  Since step is always 1, we ignore
         // misc_stop.  Update only if point is in domain for this bundle.
 #define misc_fn(misc_idxs) do {                                  \
-        if (is_in_valid_domain(misc_idxs.start)) {               \
-            min_pts = min_pts.minElements(misc_idxs.start);      \
-            max_pts = max_pts.maxElements(misc_idxs.start);      \
-            npts++; \
-        } } while(0)
-
+            if (is_in_valid_domain(misc_idxs.start)) {           \
+                min_pts = min_pts.minElements(misc_idxs.start);  \
+                max_pts = max_pts.maxElements(misc_idxs.start);  \
+                npts++;                                          \
+            } } while(0)
+        
         // Define OMP reductions to be used in generated code.
 #define OMP_PRAGMA_SUFFIX reduction(+:npts)     \
             reduction(min_idxs:min_pts)         \

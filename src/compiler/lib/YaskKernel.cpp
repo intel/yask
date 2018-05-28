@@ -506,7 +506,7 @@ namespace yask {
                 os << endl << " // Determine whether " << egsName << " is valid at the indices " <<
                     _dims->_stencilDims.makeDimStr() << ".\n"
                     " // Return true if indices are within the valid sub-domain or false otherwise.\n"
-                    " virtual bool is_in_valid_domain(const Indices& idxs) {\n";
+                    " virtual bool is_in_valid_domain(const Indices& idxs) const final {\n";
                 printIndices(os);
                 if (eq->cond.get())
                     os << " return " << eq->cond->makeStr() << ";" << endl;

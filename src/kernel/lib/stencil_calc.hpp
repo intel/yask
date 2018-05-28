@@ -76,7 +76,7 @@ namespace yask {
             _generic_context(context) {
 
             // Find index posn of inner loop.
-            auto dims = context->get_dims();
+            auto& dims = context->get_dims();
             int ndims = dims->_stencil_dims.getNumDims();
             for (int i = 0; i < ndims; i++) {
                 auto& dname = dims->_stencil_dims.getDimName(i);
@@ -90,10 +90,10 @@ namespace yask {
         virtual ~StencilBundleBase() { }
 
         // Access to dims and MPI info.
-        virtual DimsPtr get_dims() const {
+        virtual DimsPtr& get_dims() const {
             return _generic_context->get_dims();
         }
-        virtual MPIInfoPtr get_mpi_info() {
+        virtual MPIInfoPtr& get_mpi_info() {
             return _generic_context->get_mpi_info();
         }
 
@@ -149,7 +149,7 @@ namespace yask {
 
         // Determine whether indices are in [sub-]domain.
         virtual bool
-        is_in_valid_domain(const Indices& idxs) =0;
+        is_in_valid_domain(const Indices& idxs) const =0;
 
         // Calculate one scalar result at time t.
         virtual void

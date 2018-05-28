@@ -230,7 +230,7 @@ namespace yask {
 
         // Get grid dims with allocations in number of reals.
         virtual IdxTuple get_allocs() const {
-            IdxTuple allocs = _ggb->get_dims();
+            IdxTuple allocs = _ggb->get_dims(); // make a copy.
             _allocs.setTupleVals(allocs);
             return allocs;
         }

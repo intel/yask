@@ -322,7 +322,7 @@ namespace yask {
         }
 
         // Access to settings.
-        virtual KernelSettingsPtr get_settings() {
+        virtual KernelSettingsPtr& get_settings() {
             assert(_opts);
             return _opts;
         }
@@ -331,10 +331,10 @@ namespace yask {
         }
 
         // Access to dims and MPI info.
-        virtual DimsPtr get_dims() {
+        virtual DimsPtr& get_dims() {
             return _dims;
         }
-        virtual MPIInfoPtr get_mpi_info() {
+        virtual MPIInfoPtr& get_mpi_info() {
             return _mpiInfo;
         }
 

@@ -36,8 +36,8 @@ namespace yask {
     // first and then the non-scratch stencils in the stencil bundle.
     void StencilBundleBase::calc_block(const ScanIndices& def_block_idxs) {
 
-        auto opts = _generic_context->get_settings();
-        auto dims = _generic_context->get_dims();
+        auto& opts = _generic_context->get_settings();
+        auto& dims = _generic_context->get_dims();
         int nsdims = dims->_stencil_dims.size();
         auto& step_dim = dims->_step_dim;
         auto step_posn = Indices::step_posn;
@@ -123,7 +123,7 @@ namespace yask {
     // Each dim in 'orig' must be a multiple of corresponding vec len.
     void StencilBundleBase::normalize_indices(const Indices& orig, Indices& norm) const {
         auto* cp = _generic_context;
-        auto dims = cp->get_dims();
+        auto& dims = cp->get_dims();
         int nsdims = dims->_stencil_dims.size();
         auto step_posn = Indices::step_posn;
         assert(orig.getNumDims() == nsdims);
@@ -155,8 +155,8 @@ namespace yask {
     void StencilBundleBase::calc_sub_block(int thread_idx,
                                            const ScanIndices& block_idxs) {
         auto* cp = _generic_context;
-        auto opts = cp->get_settings();
-        auto dims = cp->get_dims();
+        auto& opts = cp->get_settings();
+        auto& dims = cp->get_dims();
         int nddims = dims->_domain_dims.size();
         int nsdims = dims->_stencil_dims.size();
         auto& step_dim = dims->_step_dim;
@@ -579,7 +579,7 @@ namespace yask {
     void StencilBundleBase::calc_loop_of_clusters(int thread_idx,
                                                  const ScanIndices& loop_idxs) {
         auto* cp = _generic_context;
-        auto dims = cp->get_dims();
+        auto& dims = cp->get_dims();
         int nsdims = dims->_stencil_dims.size();
         auto step_posn = Indices::step_posn;
         TRACE_MSG3("calc_loop_of_clusters: local vector-indices " <<
@@ -616,7 +616,7 @@ namespace yask {
                                                 const ScanIndices& loop_idxs,
                                                 idx_t write_mask) {
         auto* cp = _generic_context;
-        auto dims = cp->get_dims();
+        auto& dims = cp->get_dims();
         int nsdims = dims->_stencil_dims.size();
         auto step_posn = Indices::step_posn;
         TRACE_MSG3("calc_loop_of_vectors: local vector-indices " <<
@@ -658,7 +658,7 @@ namespace yask {
 
         ScanIndices adj_idxs(idxs);
         auto* cp = _generic_context;
-        auto dims = cp->get_dims();
+        auto& dims = cp->get_dims();
         int nsdims = dims->_stencil_dims.size();
         auto step_posn = Indices::step_posn;
 
