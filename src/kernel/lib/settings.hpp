@@ -35,6 +35,7 @@ namespace yask {
     // A class to hold up to a given number of sizes or indices efficiently.
     // Similar to a Tuple, but less overhead and doesn't keep names.
     // Make sure this stays non-virtual.
+    // TODO: make this a template with _ndims as a parameter.
     class Indices {
 
     public:

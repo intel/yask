@@ -32,7 +32,7 @@ namespace yask {
     // A stencil context contains one or more packs.
 
     // A pure-virtual class base for a stencil bundle.
-    class StencilBundleBase : public BoundingBox {
+    class StencilBundleBase {
     protected:
         StencilContext* _generic_context = 0;
         std::string _name;
@@ -53,6 +53,17 @@ namespace yask {
         // Whether this updates scratch grid(s);
         bool _is_scratch = false;
 
+        // Overall bounding box for the bundle.
+        // This may or may not be solid, i.e., it
+        // may contain some invalid points.
+        // This must fit inside the extended BB for this rank.
+        BoundingBox _bundle_bb;
+        
+	// Bounding box(es) that indicate where this bundle is valid.
+	// These must be non-overlapping. These do NOT contain
+        // any invalid points. These will all be inside '_bundle_bb'.
+	BBList _bb_list;
+	
         // Normalize the indices, i.e., divide by vector len in each dim.
         // Ranks offsets must already be subtracted.
         // Each dim in 'orig' must be a multiple of corresponding vec len.
@@ -110,6 +121,10 @@ namespace yask {
         // Scratch accessors.
         virtual bool is_scratch() const { return _is_scratch; }
         virtual void set_scratch(bool is_scratch) { _is_scratch = is_scratch; }
+
+        // Access to BBs.
+        virtual BoundingBox& getBB() { return _bundle_bb; }
+        virtual BBList& getBBs() { return _bb_list; }
 
         // Add dependency.
         virtual void add_dep(StencilBundleBase* eg) {

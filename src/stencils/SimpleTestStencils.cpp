@@ -348,6 +348,9 @@ public:
     // Define equation to apply to all points in 'data' grid.
     virtual void define() {
 
+        // Sub-domain.
+        Condition sd0 = (x >= first_index(x) + 5) && (x <= last_index(x) - 3);
+        
         // Set data w/asymmetrical stencils.
 
         GridValue u = data(t, x);
@@ -355,14 +358,14 @@ public:
             u += data(t, x-r);
         for (int r = 1; r <= _radius + 1; r++)
             u += data(t, x+r);
-        data(t+1, x) EQUALS u / (_radius * 2 + 2) IF x < first_index(x) + 5;
+        data(t+1, x) EQUALS u / (_radius * 2 + 2) IF sd0;
 
         GridValue v = data(t, x);
         for (int r = 1; r <= _radius + 3; r++)
             v += data(t, x-r);
         for (int r = 1; r <= _radius + 2; r++)
             v += data(t, x+r);
-        data(t+1, x) EQUALS u / (_radius * 2 + 6) IF x >= first_index(x) + 5;
+        data(t+1, x) EQUALS u / (_radius * 2 + 6) IF !sd0;
     }
 };
 
