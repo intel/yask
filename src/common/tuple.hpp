@@ -515,11 +515,97 @@ namespace yask {
 
         // Visit elements recursively.
         bool _visitAllPoints(std::function<bool (const Tuple&, size_t idx)> visitor,
-                             int curDimNum, int step, Tuple& tp) const;
+                             int curDimNum, int step, Tuple& tp) const {
+            auto& sc = _q.at(curDimNum);
+            auto& dsize = sc.getVal();
+            int lastDimNum = (step > 0) ? size()-1 : 0;
+
+            // If no more dims, iterate along current dimension and call
+            // visitor.
+            if (curDimNum == lastDimNum) {
+
+                // Get unique index to first position.
+                tp.setVal(curDimNum, 0);
+                size_t idx0 = layout(tp);
+
+                // Loop through points.
+                for (T i = 0; i < dsize; i++) {
+                    tp.setVal(curDimNum, i);
+                    bool ok = visitor(tp, idx0 + i);
+
+                    // Leave if visitor returns false.
+                    if (!ok)
+                        return false;
+                }
+            }
+
+            // Else, iterate along current dimension and recurse to
+            // next/prev dimension.
+            else {
+                for (T i = 0; i < dsize; i++) {
+                    tp.setVal(curDimNum, i);
+
+                    // Recurse.
+                    bool ok = _visitAllPoints(visitor, curDimNum + step, step, tp);
+
+                    // Leave if visitor returns false.
+                    if (!ok)
+                        return false;
+                }
+            }
+            return true;
+        }
 
         // First call from public visitAllPointsInParallel(visitor).
         bool _visitAllPointsInPar(std::function<bool (const Tuple&, size_t idx)> visitor,
-                                  int curDimNum, int step) const;
+                                  int curDimNum, int step) const {
+#ifdef _OPENMP
+            auto nd = getNumDims();
+
+            // If one dim, parallelize across it.
+            if (nd == 1) {
+                assert(curDimNum == 0);
+                auto dsize = getVal(curDimNum);
+                Tuple tp(*this);
+
+                // Loop through points.
+#pragma omp parallel for firstprivate(tp)
+                for (T i = 0; i < dsize; i++) {
+                    tp.setVal(curDimNum, i);
+                    visitor(tp, i);
+                }
+            }
+
+            // If >1 dim, parallelize over outer dims.
+            else {
+
+                // Total number of elements to visit.
+                T ne = product();
+
+                // Number of elements in last dim.
+                int lastDimNum = (step > 0) ? nd-1 : 0;
+                T nel = getVal(lastDimNum);
+
+                // Parallel loop over elements, skipping by size of last dim.
+#pragma omp parallel for
+                for (T i = 0; i < ne; i += nel) {
+
+                    // Get indices at this position.
+                    Tuple tp = unlayout(i);
+
+                    // Visit points in last dim.
+                    _visitAllPoints(visitor, lastDimNum, step, tp);
+                }
+            }
+            return true;
+#else
+
+            // Call recursive version to handle all dims.
+            Tuple tp(*this);
+            return _visitAllPoints(visitor, curDimNum, step, tp);
+#endif
+        }
+            
     };
 
 } // namespace yask.
