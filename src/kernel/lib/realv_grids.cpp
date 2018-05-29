@@ -38,7 +38,7 @@ namespace yask {
 
         assert(ggb);
         assert(dims.get());
-        
+
         // Init indices.
         int n = int(ndims);
         _domains.setFromConst(0, n);
@@ -58,7 +58,7 @@ namespace yask {
         _vec_allocs.setFromConst(1, n);
         _vec_local_offsets.setFromConst(0, n);
     }
-    
+
     // Convenience function to format indices like
     // "x=5, y=3".
     std::string YkGridBase::makeIndexString(const Indices& idxs,
@@ -96,7 +96,7 @@ namespace yask {
         for (auto i : _dirty_steps)
             i = dirty;
     }
-    
+
     // Lookup position by dim name.
     // Return -1 or die if not found, depending on flag.
     int YkGridBase::get_dim_posn(const std::string& dim,
@@ -110,7 +110,7 @@ namespace yask {
         }
         return posn;
     }
-        
+
     // Determine required padding from halos.
     // Does not include user-specified min padding or
     // final rounding for left pad.
@@ -118,7 +118,7 @@ namespace yask {
 
         // Start with halos plus WF exts.
         Indices mp = halos.addElements(wf_exts);
-            
+
         // For scratch grids, halo area must be written to.  Halo is sum
         // of dependent's write halo and depender's read halo, but these
         // two components are not stored individually.  Write halo will
@@ -146,7 +146,7 @@ namespace yask {
     // Modifies _pads and _allocs.
     // Fails if mem different and already alloc'd.
     void YkGridBase::resize() {
-        
+
         // Original size.
         auto p = get_raw_storage_buffer();
         IdxTuple old_allocs = get_allocs();
@@ -166,7 +166,7 @@ namespace yask {
             if (_req_right_pads[i] < 0)
                 THROW_YASK_EXCEPTION("Error: negative right padding in grid '" + get_name() + "'");
         }
-        
+
         // Increase padding as needed and calculate new allocs.
         Indices new_left_pads = getReqdPad(_left_halos, _left_wf_exts);
         Indices new_right_pads = getReqdPad(_right_halos, _right_wf_exts);
@@ -191,7 +191,7 @@ namespace yask {
             // Round domain + right pad up to vec len by extending right pad.
             idx_t dprp = ROUND_UP(_domains[i] + new_right_pads[i], _vec_lens[i]);
             new_right_pads[i] = dprp - _domains[i];
-        
+
             // New allocation in each dim.
             new_allocs[i] = new_left_pads[i] + _domains[i] + new_right_pads[i];
 
@@ -214,7 +214,7 @@ namespace yask {
         // resize() on failure.
         if (p && old_allocs != new_allocs) {
             THROW_YASK_EXCEPTION("Error: attempt to change allocation size of grid '" +
-                get_name() + "' from " + 
+                get_name() + "' from " +
                 makeIndexString(old_allocs, " * ") + " to " +
                 makeIndexString(new_allocs, " * ") +
                 " after storage has been allocated");
@@ -256,7 +256,7 @@ namespace yask {
                        " with " << _dirty_steps.size() << " dirty flag(s)");
         }
     }
-    
+
     // Check whether dim is used and of allowed type.
     void YkGridBase::checkDimType(const std::string& dim,
                                   const std::string& fn_name,
@@ -268,7 +268,7 @@ namespace yask {
                                  dim + "' not found in " + make_info_string());
         _dims->checkDimType(dim, fn_name, step_ok, domain_ok, misc_ok);
     }
-    
+
     // Check for equality.
     // Return number of mismatches greater than epsilon.
     idx_t YkGridBase::compare(const YkGridBase* ref,
@@ -286,14 +286,14 @@ namespace yask {
                 make_info_string() << " and " << ref->make_info_string() << ".\n";
             return get_num_storage_elements();
         }
-        
+
         // Quick check for errors, assuming same layout.
         // TODO: check layout.
         idx_t errs = _ggb->count_diffs(ref->_ggb, epsilon);
         TRACE_MSG0(get_ostr(), "count_diffs() returned " << errs);
         if (!errs)
             return 0;
-        
+
         // Run detailed comparison if any errors found.
         errs = 0;
         auto allocs = get_allocs();
@@ -422,7 +422,7 @@ namespace yask {
         } else
             set_dirty_using_alloc_index(true, 0);
     }
-     
+
     // Make tuple needed for slicing.
     IdxTuple YkGridBase::get_slice_range(const Indices& first_indices,
                                          const Indices& last_indices) const {
@@ -434,7 +434,7 @@ namespace yask {
 
         return numElemsTuple;
     }
-    
+
     // Print one element like
     // "message: mygrid[x=4, y=7] = 3.14 at line 35".
     void YkGridBase::printElem(const std::string& msg,
@@ -474,14 +474,14 @@ namespace yask {
         IdxTuple folds = _dims->_fold_pts;
         folds.visitAllPoints([&](const IdxTuple& fofs,
                                  size_t idx) {
-                
+
                 // Get element from vec val.
                 real_t ev = val[idx];
-                
+
                 // Add fold offsets to elem indices for printing.
                 IdxTuple pt2 = idxs2.addElements(fofs, false);
                 Indices pt3(pt2);
-                
+
                 printElem(msg, pt3, ev, line, newline);
                 return true; // keep visiting.
             });

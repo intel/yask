@@ -56,7 +56,7 @@ int main() {
 
         // Create a scratch-grid var.
         auto sg1 = soln->new_scratch_grid("scratch_grid", {x, y, z});
-    
+
         // Create an equation for the scratch-grid.
         auto n1 = fac.new_const_number_node(3.14);
         cout << n1->format_simple() << endl;

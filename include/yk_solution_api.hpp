@@ -27,7 +27,7 @@ IN THE SOFTWARE.
 
 // This file uses Doxygen 1.8 markup for API documentation-generation.
 // See http://www.stack.nl/~dimitri/doxygen.
-/** @file yk_solution_api.hpp */ 
+/** @file yk_solution_api.hpp */
 
 #ifndef YK_SOLN_API
 #define YK_SOLN_API
@@ -45,7 +45,7 @@ namespace yask {
     /**
        This is used in yk_solution::set_default_numa_preferred
        and yk_grid::set_numa_preferred.
-       In Python, specify as `yask_kernel.cvar.yask_numa_local`. 
+       In Python, specify as `yask_kernel.cvar.yask_numa_local`.
     */
     const int yask_numa_local = -1;
 
@@ -53,7 +53,7 @@ namespace yask {
     /**
        This is used in yk_solution::set_default_numa_preferred
        and yk_grid::set_numa_preferred.
-       In Python, specify as `yask_kernel.cvar.yask_numa_interleave`. 
+       In Python, specify as `yask_kernel.cvar.yask_numa_interleave`.
     */
     const int yask_numa_interleave = -2;
 
@@ -61,7 +61,7 @@ namespace yask {
     /**
        This is used in yk_solution::set_default_numa_preferred
        and yk_grid::set_numa_preferred.
-       In Python, specify as `yask_kernel.cvar.yask_numa_none`. 
+       In Python, specify as `yask_kernel.cvar.yask_numa_none`.
     */
     const int yask_numa_none = -9;
 
@@ -77,7 +77,7 @@ namespace yask {
         /// Set object to receive debug output.
         virtual void
         set_debug_output(yask_output_ptr debug
-                         /**< [out] Pointer to object to receive debug output. 
+                         /**< [out] Pointer to object to receive debug output.
                             See \ref yask_output_factory. */ ) =0;
 
         /// Get the name of the solution.
@@ -91,9 +91,9 @@ namespace yask {
         /**
            @returns Number of bytes in each FP element: 4 or 8.
         */
-        virtual int 
+        virtual int
         get_element_bytes() const =0;
-        
+
         /// Get the solution step dimension.
         /**
            @returns String containing the step-dimension name
@@ -105,7 +105,7 @@ namespace yask {
 
         /// Get the number of domain dimensions used in this solution.
         /**
-           The domain dimensions are those over which the stencil is 
+           The domain dimensions are those over which the stencil is
            applied in each step.
            Does *not* include the step dimension or any miscellaneous dimensions.
            @returns Number of dimensions that define the problem domain.
@@ -136,7 +136,7 @@ namespace yask {
 
         /// Set the size of the solution domain for this rank.
         /**
-           The domain defines the number of elements that will be evaluated with the stencil(s). 
+           The domain defines the number of elements that will be evaluated with the stencil(s).
            If MPI is not enabled, this is the entire problem domain.
            If MPI is enabled, this is the domain for the current rank only,
            and the problem domain consists of the sum of all rank domains
@@ -151,7 +151,7 @@ namespace yask {
            each dimension whenever possible.
            See the "Detailed Description" for \ref yk_grid for more information on grid sizes.
            There is no domain-size setting allowed in the
-           solution-step dimension (usually "t"). 
+           solution-step dimension (usually "t").
         */
         virtual void
         set_rank_domain_size(const std::string& dim
@@ -208,7 +208,7 @@ namespace yask {
         /**
            The *product* of the number of ranks across all dimensions must
            equal yk_env::get_num_ranks().
-           The curent MPI rank will be assigned a unique location 
+           The curent MPI rank will be assigned a unique location
            within the overall problem domain based on its MPI rank index.
            The same number of MPI ranks must be set via this API on each
            constituent MPI rank to ensure a consistent overall configuration.
@@ -253,7 +253,7 @@ namespace yask {
         */
         virtual int
         get_num_grids() const =0;
-        
+
         /// Get the specified grid.
         /**
            This cannot be used to access scratch grids.
@@ -292,7 +292,7 @@ namespace yask {
 
            @note This function should be called only *after* calling prepare_solution()
            because prepare_solution() assigns this rank's position in the problem domain.
-           @returns First domain index in this rank. 
+           @returns First domain index in this rank.
         */
         virtual idx_t
         get_first_rank_domain_index(const std::string& dim
@@ -360,7 +360,7 @@ namespace yask {
              of the region in the step dimension. In that case, tiles will be done in slices of that size.
             - For each step index within each region, the domain indices will be set
             to values across the entire region (not necessarily sequentially).
-            - Ultimately, the stencil(s) will be applied to same the elements in both the step 
+            - Ultimately, the stencil(s) will be applied to same the elements in both the step
             and domain dimensions as when wave-front tiling is not used.
             - MPI halo exchanges will occur before each number of steps in a region.
 
@@ -429,7 +429,7 @@ namespace yask {
         is_auto_tuner_enabled() =0;
 
         /* Advanced APIs for yk_solution found below are not needed for most applications. */
-        
+
         /// **[Advanced]** Set the region size in the given dimension.
         /**
            This sets the approximate number of elements that are evaluated in
@@ -455,7 +455,7 @@ namespace yask {
            In order to get the benefit of regions with multiple steps,
            you must also call run_solution() where the number of steps
            between its `first_step_index` and `last_step_index`
-           arguments is greater than or equal to the step-size of the 
+           arguments is greater than or equal to the step-size of the
            regions.
         */
         virtual void
@@ -485,13 +485,13 @@ namespace yask {
            This padding area can be used for required halo areas.  At
            least the specified number of elements will be added to both
            sides, i.e., both "before" and "after" the domain.
-           
+
            The *actual* padding size will be the largest of the following values,
            additionally rounded up based on the vector-folding dimensions,
            cache-line alignment, and/or extensions needed for wave-front tiles:
            - Halo size.
            - Value provided by any of the pad-size setting functions.
-           
+
            The padding size cannot be changed after data storage
            has been allocated for a given grid; attempted changes to the pad size for such
            grids will be ignored.
@@ -525,7 +525,7 @@ namespace yask {
         /**
            Under normal operation, an auto-tuner is invoked automatically during calls to
            run_solution().
-           Currently, only the block size is set by the auto-tuner, and the search begins from the 
+           Currently, only the block size is set by the auto-tuner, and the search begins from the
            sizes set via set_block_size() or the default size if set_block_size() has
            not been called.
            This function is used to apply the current best-known settings if the tuner has
@@ -564,7 +564,7 @@ namespace yask {
         run_auto_tuner_now(bool verbose = true
                            /**< [in] If _true_, print progress information to the debug object
                               set via set_debug_output(). */ ) =0;
-        
+
         /// **[Advanced]** Add a new grid to the solution.
         /**
            This is typically not needed because grids used by the stencils are pre-defined
@@ -581,7 +581,7 @@ namespace yask {
            - For each domain dimension of the grid,
            the new grid's domain size will be the same as that returned by
            get_rank_domain_size().
-           - Calls to set_rank_domain_size() will resize the corresponding domain 
+           - Calls to set_rank_domain_size() will resize the corresponding domain
            size in this grid.
            - This grid's first domain index in this rank will be determined
            by the position of this rank.
@@ -597,7 +597,7 @@ namespace yask {
 
            Some behaviors are different from pre-defined grids. For example,
            - You can create new "misc" dimensions during grid creation simply
-           by naming them in the `dims` argument. Any dimension name that is 
+           by naming them in the `dims` argument. Any dimension name that is
            not a step or domain dimension will become a misc dimension,
            whether or not it was defined via yc_node_factory::new_misc_index().
            - Grids created via new_grid() cannot be direct inputs or outputs of
@@ -619,8 +619,8 @@ namespace yask {
                  /**< [in] Name of the grid; must be unique
                     within the solution. */,
                  const std::vector<std::string>& dims
-                 /**< [in] List of names of all dimensions. 
-                    Names must be valid C++ identifiers and 
+                 /**< [in] List of names of all dimensions.
+                    Names must be valid C++ identifiers and
                     not repeated within this grid. */ ) =0;
 
 #ifndef SWIG
@@ -636,8 +636,8 @@ namespace yask {
                  /**< [in] Name of the grid; must be unique
                     within the solution. */,
                  const std::initializer_list<std::string>& dims
-                 /**< [in] List of names of all dimensions. 
-                    Names must be valid C++ identifiers and 
+                 /**< [in] List of names of all dimensions.
+                    Names must be valid C++ identifiers and
                     not repeated within this grid. */ ) =0;
 #endif
 
@@ -653,11 +653,11 @@ namespace yask {
            and those created via new_grid():
            - For each domain dimension of the grid,
            the new grid's domain size is provided during creation and cannot be changed.
-           - Calls to set_rank_domain_size() will *not* resize the corresponding domain 
+           - Calls to set_rank_domain_size() will *not* resize the corresponding domain
            size in this grid.
            - This grid's first domain index in this rank will be fixed at zero (0)
            regardless of this rank's position.
-           - This grid's padding size will be affected only by calls to 
+           - This grid's padding size will be affected only by calls to
            yk_grid::set_min_pad_size(), etc., i.e., *not* via
            yk_solution::set_min_pad_size().
 
@@ -671,7 +671,7 @@ namespace yask {
            The following behaviors are different than a pre-defined grid
            but the same as those created via new_grid():
            - You can create new "misc" dimensions during grid creation simply
-           by naming them in the `dims` argument. Any dimension name that is 
+           by naming them in the `dims` argument. Any dimension name that is
            not a step or domain dimension will become a misc dimension,
            whether or not it was defined via yc_node_factory::new_misc_index().
            - Grids created via new_fixed_size_grid() cannot be direct inputs or outputs of
@@ -690,8 +690,8 @@ namespace yask {
                        /**< [in] Name of the grid; must be unique
                           within the solution. */,
                        const std::vector<std::string>& dims
-                       /**< [in] List of names of all dimensions. 
-                          Names must be valid C++ identifiers and 
+                       /**< [in] List of names of all dimensions.
+                          Names must be valid C++ identifiers and
                           not repeated within this grid. */,
                        const std::vector<idx_t>& dim_sizes
                        /**< [in] Initial allocation in each dimension.
@@ -710,8 +710,8 @@ namespace yask {
                        /**< [in] Name of the grid; must be unique
                           within the solution. */,
                        const std::initializer_list<std::string>& dims
-                       /**< [in] List of names of all dimensions. 
-                          Names must be valid C++ identifiers and 
+                       /**< [in] List of names of all dimensions.
+                          Names must be valid C++ identifiers and
                           not repeated within this grid. */,
                        const std::initializer_list<idx_t>& dim_sizes
                        /**< [in] Initial allocation in each dimension.
@@ -739,7 +739,7 @@ namespace yask {
                                       `yask_numa_interleave` for
                                       interleaving pages across all nodes,
                                       or `yask_numa_none` for no explicit NUMA
-                                      policy. These constants are defined in 
+                                      policy. These constants are defined in
                                       the _Variable Documentation_ section of
                                       \ref yk_solution_api.hpp. */) =0;
 
@@ -804,7 +804,7 @@ namespace yask {
         /// Get the estimated number of floating-point operations required for each step.
         /**
            @returns Number of FP ops created by the stencil compiler.
-           It may be slightly more or less than the actual number of FP ops executed 
+           It may be slightly more or less than the actual number of FP ops executed
            by the CPU due to C++ compiler transformations.
         */
         virtual idx_t
@@ -826,7 +826,7 @@ namespace yask {
         virtual double
         get_elapsed_run_secs() =0;
     };
-    
+
     /** @}*/
 } // namespace yask.
 

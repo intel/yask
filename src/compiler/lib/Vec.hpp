@@ -73,7 +73,7 @@ namespace yask {
 
         const Dimensions& _dims;
         int _vlen;                   // size of one vector.
-    
+
     public:
 
         // Data on vectorizable points.
@@ -92,7 +92,7 @@ namespace yask {
         // Data on non-vectorizable points.
         GridPointSet _scalarPoints; // set of points that should be read as scalars and broadcast to vectors.
         GridPointSet _nonVecPoints; // set of points that are not scalars or vectorizable.
-        
+
         VecInfoVisitor(const Dimensions& dims) :
             _dims(dims) {
             _vlen = dims._fold.product();
@@ -101,7 +101,7 @@ namespace yask {
         virtual const IntTuple& getFold() const {
             return _dims._fold;
         }
-    
+
         virtual size_t getNumPoints() const {
             return _vblk2elemLists.size();
         }
@@ -169,7 +169,7 @@ namespace yask {
                 }
                 footprints[dname] = footprint.size();
             }
-            
+
             os << destGrid <<
                 separator << _vlen <<
                 separator << _dims._fold.makeValStr("*") <<
@@ -181,7 +181,7 @@ namespace yask {
             os << endl;
         }
 #endif
-        
+
         // Equality.
         virtual void visit(EqualsExpr* ee) {
 
@@ -192,7 +192,7 @@ namespace yask {
             auto lhs = ee->getLhs();
             _vecWrites.insert(*lhs);
         }
-    
+
         // Called when a grid point is read in a stencil function.
         virtual void visit(GridPoint* gp);
     };
@@ -215,7 +215,7 @@ namespace yask {
         // Assumes this results in same values as printUnalignedVec().
         // Return var name.
         virtual string printUnalignedVecRead(ostream& os, const GridPoint& gp) =0;
-    
+
         // Print write to an aligned vector block.
         // Return expression written.
         virtual string printAlignedVecWrite(ostream& os, const GridPoint& gp,
@@ -237,7 +237,7 @@ namespace yask {
         // Read from multiple points that are not vectorizable.
         // Return var name.
         virtual string printNonVecRead(ostream& os, const GridPoint& gp) =0;
-        
+
     public:
         VecPrintHelper(VecInfoVisitor& vv,
                        bool allowUnalignedLoads,
@@ -270,7 +270,7 @@ namespace yask {
         virtual bool isAligned(const GridPoint& gp) {
             return _vv._alignedVecs.count(gp) > 0;
         }
-        
+
         // Access cached values.
         virtual void savePointVar(const GridPoint& gp, string var) {
             _vecVars[gp] = var;
@@ -280,7 +280,7 @@ namespace yask {
                 return &_vecVars.at(gp);
             return 0;
         }
-    
+
         // Print any needed memory reads and/or constructions to 'os'.
         // Return code containing a vector of grid points.
         virtual string readFromPoint(ostream& os, const GridPoint& gp);
@@ -300,7 +300,7 @@ namespace yask {
         ExprReorderVisitor(VecInfoVisitor& vv) :
             _vv(vv) { }
         virtual ~ExprReorderVisitor() {}
-                       
+
         // Sort a commutative expression.
         virtual void visit(CommutativeExpr* ce);
     };

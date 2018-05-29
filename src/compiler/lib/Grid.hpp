@@ -36,7 +36,7 @@ namespace yask {
 
     // Fwd decl.
     struct Dimensions;
-    
+
     // A class for a Grid.
     // This is a generic container for all variables to be accessed
     // from the kernel. A 0-D grid is a scalar, a 1-D grid is an array, etc.
@@ -53,22 +53,22 @@ namespace yask {
 
         // How many dims are foldable.
         int _numFoldableDims = -1; // -1 => unknown.
-        
+
         // Whether this grid can be vector-folded.
         bool _isFoldable = false;
 
         // Values below are computed based on equations.
-        
+
         // Min and max const indices that are used to access each dim.
         IntTuple _minIndices, _maxIndices;
-        
+
         // Max abs-value of domain-index halos required by all eqs at
         // various step-index values.
         // bool key: true=left, false=right.
         // int key: step-dim offset or 0 if no step-dim.
         // TODO: keep separate halos for each equation bundle.
-        map<bool, map<int, IntTuple>> _halos;  
-    
+        map<bool, map<int, IntTuple>> _halos;
+
     public:
         // Ctors.
         Grid(string name,
@@ -106,7 +106,7 @@ namespace yask {
 
         // Temp grid?
         virtual bool isScratch() const { return _isScratch; }
-        
+
         // Access to solution.
         virtual StencilSolution* getSoln() { return _soln; }
         virtual void setSoln(StencilSolution* soln) { _soln = soln; }
@@ -120,7 +120,7 @@ namespace yask {
             assert(_numFoldableDims >= 0);
             return _isFoldable;
         }
-        
+
         // Get min and max observed indices.
         virtual const IntTuple& getMinIndices() const { return _minIndices; }
         virtual const IntTuple& getMaxIndices() const { return _maxIndices; }
@@ -165,7 +165,7 @@ namespace yask {
             }
             return true;
         }
-        
+
         // Determine whether halo sizes are equal.
         virtual bool isHaloSame(const Grid& other) const {
 
@@ -194,13 +194,13 @@ namespace yask {
 
         // Determine whether grid can be folded.
         virtual void setFolding(const Dimensions& dims);
-        
+
         // Update halos based on each value in 'offsets'.
         virtual void updateHalo(const IntTuple& offsets);
 
         // Update const indices based on 'indices'.
         virtual void updateConstIndices(const IntTuple& indices);
-    
+
         // Create an expression to a specific point in this grid.
         // Note that this doesn't actually 'read' or 'write' a value;
         // it's just a node in an expression.
@@ -314,7 +314,7 @@ namespace yask {
     // class in the order in which they are added via the INIT_GRID_* macros.
     class Grids : public vector_set<Grid*> {
     public:
-    
+
         Grids() {}
         virtual ~Grids() {}
 
@@ -327,7 +327,7 @@ namespace yask {
             for (auto gp : *this)
                 gp->setFolding(dims);
         }
-        
+
     };
 
     // Settings for the compiler.
@@ -351,7 +351,7 @@ namespace yask {
         string _gridRegex;       // grids to update.
         bool _findDeps = true;
     };
-    
+
     // Stencil dimensions.
     struct Dimensions {
         string _stepDim;         // step dimension, usually time.
@@ -369,10 +369,10 @@ namespace yask {
 
         // Direction of stepping.
         int _stepDir = 0;       // 0: undetermined, +1: forward, -1: backward.
-        
+
         Dimensions() {}
         virtual ~Dimensions() {}
-    
+
         // Find the dimensions to be used.
         void setDims(Grids& grids,
                      CompilerSettings& settings,
@@ -389,5 +389,5 @@ namespace yask {
     };
 
 } // namespace yask.
-    
+
 #endif

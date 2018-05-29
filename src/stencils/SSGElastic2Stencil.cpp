@@ -91,7 +91,7 @@ public:
     // appropriately.
 
     template<typename N, typename DA, typename SA, typename DB, typename SB>
-    void define_str(GridIndex t, GridIndex x, GridIndex y, GridIndex z, 
+    void define_str(GridIndex t, GridIndex x, GridIndex y, GridIndex z,
                     GridIndex sidx, GridIndex va_idx, GridIndex vb_idx) {
 
         GridValue lcoeff = interp_mu<N>( x, y, z );
@@ -105,12 +105,12 @@ public:
         s(t+1, x, y, z, sidx) == next_s;
     }
     template<typename N, typename DA, typename SA, typename DB, typename SB>
-    void define_str(GridIndex t, GridIndex x, GridIndex y, GridIndex z, 
+    void define_str(GridIndex t, GridIndex x, GridIndex y, GridIndex z,
                     int sidx, int va_idx, int vb_idx) {
         define_str<N, DA, SA, DB, SB>(t, x, y, z,
                                       constNum(sidx), constNum(va_idx), constNum(vb_idx));
     }
-    
+
     void define_str_TL(GridIndex t, GridIndex x, GridIndex y, GridIndex z )
     {
 

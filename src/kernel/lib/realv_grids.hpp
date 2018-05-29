@@ -71,7 +71,7 @@ namespace yask {
         // Whether step dim is used.
         // If true, will always be in Indices::step_posn.
         bool _has_step_dim = false;
-        
+
         // Data that needs to be copied to neighbor's halos if using MPI.
         // If this grid has the step dim, there is one bit per alloc'd step.
         // Otherwise, only bit 0 is used.
@@ -105,7 +105,7 @@ namespace yask {
                                   bool step_ok,
                                   bool domain_ok,
                                   bool misc_ok) const;
-        
+
         // Share data from source grid of type GT.
         template<typename GT>
         bool _share_data(YkGridBase* src,
@@ -147,7 +147,7 @@ namespace yask {
         // Make tuple needed for slicing.
         IdxTuple get_slice_range(const Indices& first_indices,
                                  const Indices& last_indices) const;
-        
+
     public:
         YkGridBase(GenericGridBase* ggb,
                    size_t ndims,
@@ -183,7 +183,7 @@ namespace yask {
         virtual bool set_numa_preferred(int numa_node) {
             return _ggb->set_numa_pref(numa_node);
         }
-        
+
         // Lookup position by dim name.
         // Return -1 or die if not found, depending on flag.
         virtual int get_dim_posn(const std::string& dim,
@@ -227,14 +227,14 @@ namespace yask {
         inline idx_t get_alloc_step_index(const Indices& indices) const {
             return _has_step_dim ? _wrap_step(indices[Indices::step_posn]) : 0;
         }
-        
+
         // Get grid dims with allocations in number of reals.
         virtual IdxTuple get_allocs() const {
-            IdxTuple allocs = _ggb->get_dims();
+            IdxTuple allocs = _ggb->get_dims(); // make a copy.
             _allocs.setTupleVals(allocs);
             return allocs;
         }
-        
+
         // Get the messsage output stream.
         virtual std::ostream& get_ostr() const {
             return _ggb->get_ostr();
@@ -242,7 +242,7 @@ namespace yask {
 
         // Make a human-readable description.
         virtual std::string make_info_string() const =0;
-  
+
         // Check for equality.
         // Return number of mismatches greater than epsilon.
         virtual idx_t compare(const YkGridBase* ref,
@@ -262,7 +262,7 @@ namespace yask {
         // Set elements to a sequence of values using seed.
         // Cf. set_all_elements_same().
         virtual void set_all_elements_in_seq(double seed) =0;
-        
+
         // Get a pointer to one element.
         // Indices are relative to overall problem domain.
         // 'alloc_step_idx' is the pre-computed step index "wrapped"
@@ -360,7 +360,7 @@ namespace yask {
 #define SET_GRID_API(api_name)                                      \
         virtual void api_name(const std::string& dim, idx_t n);     \
         virtual void api_name(int posn, idx_t n);
-        
+
         // Settings that should never be exposed as APIs because
         // they can break the usage model.
         // They are not protected because they are used from outside
@@ -428,7 +428,7 @@ namespace yask {
             const Indices indices2(indices);
             return format_indices(indices2);
         }
-        
+
         virtual bool is_element_allocated(const Indices& indices) const;
         virtual bool is_element_allocated(const GridIndices& indices) const {
             const Indices indices2(indices);
@@ -548,7 +548,7 @@ namespace yask {
     protected:
         typedef GenericGrid<real_t, LayoutFn> _grid_type;
         _grid_type _data;
-        
+
         // Share data from source grid.
         virtual bool share_data(YkGridBase* src, bool die_on_failure) {
             return _share_data<_grid_type>(src, die_on_failure);
@@ -585,7 +585,7 @@ namespace yask {
             _data.set_elems_in_seq(seed);
             set_dirty_all(true);
         }
-  
+
         // Get a pointer to given element.
         virtual const real_t* getElemPtr(const Indices& idxs,
                                          idx_t alloc_step_idx,
@@ -615,7 +615,7 @@ namespace yask {
                     adj_idxs[i] = idxs[i] - _offsets[i] + _actl_left_pads[i];
                 }
             }
-            
+
 #ifdef TRACE_MEM
             if (checkBounds)
                 _data.get_ostr() << " => " << _data.get_index(adj_idxs);
@@ -650,7 +650,7 @@ namespace yask {
         }
 
     };                          // YkElemGrid.
-    
+
     // YASK grid of real vectors.
     // Used for grids that contain all the folded dims.
     // If '_wrap_step_idx', then index to step dim will wrap around.
@@ -686,7 +686,7 @@ namespace yask {
             const int nvls = sizeof...(_templ_vec_lens);
             const idx_t vls[nvls] { _templ_vec_lens... };
             assert((size_t)nvls == dimNames.size());
-            
+
             // Init vec sizes.
             // For each dim in the grid, use the number of vector
             // fold points or 1 if not set.
@@ -713,7 +713,7 @@ namespace yask {
 
             resize();
         }
-        
+
         // Get num dims from compile-time const.
         virtual int get_num_dims() const final {
             return _data.get_num_dims();
@@ -723,7 +723,7 @@ namespace yask {
         virtual std::string make_info_string() const {
             return _data.make_info_string("SIMD FP");
         }
-        
+
         // Init data.
         virtual void set_all_elements_same(double seed) {
             real_vec_t seedv = seed; // bcast.
@@ -742,7 +742,7 @@ namespace yask {
             _data.set_elems_in_seq(seedv);
             set_dirty_all(true);
         }
-        
+
         // Get a pointer to given element.
         virtual const real_t* getElemPtr(const Indices& idxs,
                                          idx_t alloc_step_idx,
@@ -783,7 +783,7 @@ namespace yask {
                     idx_t ai = idxs[i] - _offsets[i] + _actl_left_pads[i];
                     assert(ai >= 0);
                     uidx_t adj_idx = uidx_t(ai);
-                    
+
                     // Get vector index and offset.
                     // Use unsigned DIV and MOD to avoid compiler having to
                     // emit code for preserving sign when using shifts.
@@ -804,7 +804,7 @@ namespace yask {
                 int j = _vec_fold_posns[i];
                 fold_ofs[i] = elem_ofs[j];
             }
-            
+
             // Get 1D element index into vector.
             auto i = _dims->getElemIndexInVec(fold_ofs);
 
@@ -881,7 +881,7 @@ namespace yask {
                 assert(alloc_step_idx == _wrap_step(vec_idxs[sp]));
                 adj_idxs[sp] = alloc_step_idx;
             }
-            
+
 #pragma unroll
             // All other indices.
             for (int i = 0; i < nvls; i++) {
@@ -1018,7 +1018,7 @@ namespace yask {
                        numVecsTuple.makeDimValStr(" * ") << " vecs at " <<
                        makeIndexString(firstv) << " ... " <<
                        makeIndexString(lastv));
-        
+
             // Visit points in slice.
             numVecsTuple.visitAllPointsInParallel
                 ([&](const IdxTuple& ofs,
@@ -1035,7 +1035,7 @@ namespace yask {
                 });
             return numVecsTuple.product() * VLEN;
         }
-        
+
     };                          // YkVecGrid.
 
 }                               // namespace.

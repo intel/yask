@@ -216,7 +216,7 @@ void parseOpts(int argc, const char* argv[])
                     ap.parseKeyValuePairs
                         (argop, [&](const string& key, const string& value) {
                             int size = atoi(value.c_str());
-                            
+
                             // set dim in tuple.
                             if (opt == "-fold")
                                 settings._foldOptions.addDimBack(key, size);
@@ -237,9 +237,9 @@ void parseOpts(int argc, const char* argv[])
                     string argop2 = argv[++argi];
                     outfiles[argop] = argop2;
                 }
-            
+
                 // add any more options w/a string value above.
-                
+
                 else {
 
                     // options w/an int value.
@@ -291,7 +291,7 @@ void parseOpts(int argc, const char* argv[])
     }
     stencilSoln = stencilIter->second;
     assert(stencilSoln);
-    
+
     cout << "Stencil-solution name: " << solutionName << endl;
     if (stencilSoln->usesRadius()) {
         bool rOk = stencilSoln->setRadius(radius);
@@ -314,7 +314,7 @@ int main(int argc, const char* argv[]) {
         "YASK Stencil Compiler\n"
         "Copyright (c) 2014-2018, Intel Corporation.\n"
         "Version: " << yask_get_version_string() << endl;
-    
+
     try {
 		// Parse options and create the stencil-solution object.
 		parseOpts(argc, argv);

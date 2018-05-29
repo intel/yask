@@ -43,7 +43,7 @@ protected:
     MAKE_GRID(pressure, t, x, y, z); // time-varying 3D pressure grid.
     MAKE_GRID(vel, x, y, z);         // constant 3D vel grid.
     MAKE_ARRAY(coeff, r);            // FD coefficients.
-    
+
 public:
 
     // For this stencil, the 'radius' is the number of FD coefficients on
@@ -71,11 +71,11 @@ public:
                        // x-axis.
                        pressure(t, x-r, y, z) +
                        pressure(t, x+r, y, z) +
-                
+
                        // y-axis.
                        pressure(t, x, y-r, z) +
                        pressure(t, x, y+r, z) +
-                
+
                        // z-axis.
                        pressure(t, x, y, z-r) +
                        pressure(t, x, y, z+r)
@@ -90,7 +90,7 @@ public:
 
         return next_p;
     }
-    
+
     // Define equation for pressure at t+1 based on values from vel and pressure at t.
     virtual void define() {
 
@@ -117,12 +117,12 @@ protected:
     MAKE_ARRAY(cr_x, x);
     MAKE_ARRAY(cr_y, y);
     MAKE_ARRAY(cr_z, z);
-    
+
 public:
     Iso3dfdSpongeStencil(StencilList& stencils, int radius=8) :
         Iso3dfdStencil(stencils, "_sponge", radius) { }
     virtual ~Iso3dfdSpongeStencil() { }
-    
+
     // Define equation for pressure at t+1 based on values from vel and pressure at t.
     virtual void define() {
 
@@ -131,7 +131,7 @@ public:
 
         // Apply sponge absorption.
         next_p *= cr_x(x) * cr_y(y) * cr_z(z);
-        
+
         // Define the value at t+1 to be equal to next_p.
         pressure(t+1, x, y, z) EQUALS next_p;
     }

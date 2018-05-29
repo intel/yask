@@ -88,7 +88,7 @@ namespace yask {
     // Make sure rank_val is same over all ranks.
     extern void assertEqualityOverRanks(idx_t rank_val, MPI_Comm comm,
                                         const std::string& descr);
-    
+
     // Round up val to a multiple of mult.
     // Print a message if rounding is done and do_print is set.
     extern idx_t roundUp(std::ostream& os, idx_t val, idx_t mult,
@@ -106,7 +106,7 @@ namespace yask {
             }
         }
     };
-    
+
     // Helpers for shared and NUMA malloc and free.
     // Use like this:
     // shared_ptr<char> p(numaAlloc(nbytes, numa_pref), NumaDeleter(nbytes));
@@ -189,7 +189,7 @@ namespace yask {
             return double(_elapsed.tv_sec) + double(_elapsed.tv_nsec) * 1e-9;
         }
     };
-    
+
     // A class to parse command-line args.
     class CommandLineParser {
 
@@ -216,7 +216,7 @@ namespace yask {
             // Get one idx_t value from args[argi++].
             // Exit on failure.
             virtual idx_t _idx_val(std::vector<std::string>& args, int& argi);
-            
+
         public:
             OptionBase(const std::string& name,
                        const std::string& help_msg) :
@@ -248,7 +248,7 @@ namespace yask {
         // An allowed boolean option.
         class BoolOption : public OptionBase {
             bool& _val;
-            
+
         public:
             BoolOption(const std::string& name,
                        const std::string& help_msg,
@@ -263,7 +263,7 @@ namespace yask {
         // An allowed int option.
         class IntOption : public OptionBase {
             int& _val;
-            
+
         public:
             IntOption(const std::string& name,
                       const std::string& help_msg,
@@ -278,7 +278,7 @@ namespace yask {
         // An allowed idx_t option.
         class IdxOption : public OptionBase {
             idx_t& _val;
-            
+
         public:
             IdxOption(const std::string& name,
                        const std::string& help_msg,
@@ -293,7 +293,7 @@ namespace yask {
         // An allowed idx_t option that sets multiple vars.
         class MultiIdxOption : public OptionBase {
             std::vector<idx_t*> _vals;
-            
+
         public:
             MultiIdxOption(const std::string& name,
                            const std::string& help_msg,
@@ -329,7 +329,7 @@ namespace yask {
         virtual void set_width(int width) {
             _width = width;
         }
-        
+
         // Add an allowed option.
         // Options will be deleted upon destruction.
         virtual void add_option(OptionBase* opt) {
@@ -338,7 +338,7 @@ namespace yask {
 
         // Print help info on all options.
         virtual void print_help(std::ostream& os) const;
-        
+
         // Parse options from the command-line and set corresponding vars.
         // Recognized strings from args are consumed, and unused ones
         // remain for further processing by the application.

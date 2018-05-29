@@ -46,13 +46,13 @@ namespace yask {
 
     template <typename T>
     class Tuple;
-    
+
     // One named arithmetic value.
     // Class is not virtual for performance.
     template <typename T>
     class Scalar {
         friend Tuple<T>;
-        
+
     protected:
 
         // A shared global pool for names.
@@ -79,7 +79,7 @@ namespace yask {
         const char* _getCStr() const {
             return _namep->c_str();
         }
-        
+
     public:
         Scalar(const std::string& name, const T& val) {
             assert(name.length() > 0);
@@ -156,7 +156,7 @@ namespace yask {
 
         // Return all dim names.
         const std::vector<std::string> getDimNames() const;
-        
+
         // Get iteratable contents.
         const std::vector<Scalar<T>>& getDims() const {
             return _q;
@@ -168,7 +168,7 @@ namespace yask {
         }
 
         ////// Methods to get things by position.
-        
+
         // Return pointer to scalar pair or null if it doesn't exist.
         // Lookup by dim posn.
         // No non-const version because name shouldn't be modified
@@ -184,7 +184,7 @@ namespace yask {
             assert(p);
             return p->getName();
         }
-        
+
         // Return pointer to value or null if it doesn't exist.
         // Lookup by dim posn.
         const T* lookup(int i) const {
@@ -236,7 +236,7 @@ namespace yask {
             assert(i >= 0);
             return _q.at(i);
         }
-        
+
         // Return pointer to value or null if it doesn't exist.
         // Lookup by name.
         const T* lookup(const std::string& dim) const {
@@ -277,14 +277,14 @@ namespace yask {
         void addDimFront(const Scalar<T>& sc) {
             addDimFront(sc.getName(), sc.getVal());
         }
-        
+
         // Set value by dim posn (posn i must exist).
         void setVal(int i, const T& val) {
             T* p = lookup(i);
             assert(p);
             *p = val;
         }
-        
+
         // Set value by dim name (dim must already exist).
         void setVal(const std::string& dim, const T& val) {
             T* p = lookup(dim);
@@ -317,21 +317,21 @@ namespace yask {
             for (auto& i : _q)
                 i.setVal(val);
         }
-    
+
         // Set values from 'src' Tuple, leaving non-matching ones in this
         // unchanged. Add dimensions in 'src' that are not in 'this' iff
         // addMissing==true.
         // Different than the copy operator because this method does
         // not change the order of *this or remove any existing dims.
         void setVals(const Tuple& src, bool addMissing);
-    
+
         // This version is similar to vprintf.
         // 'args' must have been initialized with va_start
         // and must contain values of of type T2.
         template<typename T2>
         void setVals(int numVals, va_list args) {
             assert(size() == numVals);
-        
+
             // process the var args.
             for (int i = 0; i < numVals; i++) {
                 T2 n = va_arg(args, T2);
@@ -340,7 +340,7 @@ namespace yask {
         }
         template<typename T2>
         void setVals(int numVals, ...) {
-        
+
             // pass the var args.
             va_list args;
             va_start(args, numVals);
@@ -353,11 +353,11 @@ namespace yask {
         // Similar to setVals(rhs, true), but does not change existing
         // values and makes a new Tuple.
         Tuple makeUnionWith(const Tuple& rhs) const;
-    
+
         // Check whether dims are the same.
         // Don't have to be in same order unless 'sameOrder' is true.
         bool areDimsSame(const Tuple& rhs, bool sameOrder = false) const;
-    
+
         // Equality is true if all dimensions and values are same.
         // Dimensions must be in same order.
         bool operator==(const Tuple& rhs) const;
@@ -510,16 +510,102 @@ namespace yask {
         // Visitor return value only stops visit on one thread.
         void visitAllPointsInParallel(std::function<bool (const Tuple&,
                                                           size_t idx)> visitor) const;
-    
+
     protected:
 
         // Visit elements recursively.
         bool _visitAllPoints(std::function<bool (const Tuple&, size_t idx)> visitor,
-                             int curDimNum, int step, Tuple& tp) const;
-        
+                             int curDimNum, int step, Tuple& tp) const {
+            auto& sc = _q.at(curDimNum);
+            auto dsize = sc.getVal();
+            int lastDimNum = (step > 0) ? size()-1 : 0;
+
+            // If no more dims, iterate along current dimension and call
+            // visitor.
+            if (curDimNum == lastDimNum) {
+
+                // Get unique index to first position.
+                tp.setVal(curDimNum, 0);
+                size_t idx0 = layout(tp);
+
+                // Loop through points.
+                for (T i = 0; i < dsize; i++) {
+                    tp.setVal(curDimNum, i);
+                    bool ok = visitor(tp, idx0 + i);
+
+                    // Leave if visitor returns false.
+                    if (!ok)
+                        return false;
+                }
+            }
+
+            // Else, iterate along current dimension and recurse to
+            // next/prev dimension.
+            else {
+                for (T i = 0; i < dsize; i++) {
+                    tp.setVal(curDimNum, i);
+
+                    // Recurse.
+                    bool ok = _visitAllPoints(visitor, curDimNum + step, step, tp);
+
+                    // Leave if visitor returns false.
+                    if (!ok)
+                        return false;
+                }
+            }
+            return true;
+        }
+
         // First call from public visitAllPointsInParallel(visitor).
         bool _visitAllPointsInPar(std::function<bool (const Tuple&, size_t idx)> visitor,
-                                  int curDimNum, int step) const;
+                                  int curDimNum, int step) const {
+#ifdef _OPENMP
+            auto nd = getNumDims();
+
+            // If one dim, parallelize across it.
+            if (nd == 1) {
+                assert(curDimNum == 0);
+                auto dsize = getVal(curDimNum);
+                Tuple tp(*this);
+
+                // Loop through points.
+#pragma omp parallel for firstprivate(tp)
+                for (T i = 0; i < dsize; i++) {
+                    tp.setVal(curDimNum, i);
+                    visitor(tp, i);
+                }
+            }
+
+            // If >1 dim, parallelize over outer dims.
+            else {
+
+                // Total number of elements to visit.
+                T ne = product();
+
+                // Number of elements in last dim.
+                int lastDimNum = (step > 0) ? nd-1 : 0;
+                T nel = getVal(lastDimNum);
+
+                // Parallel loop over elements, skipping by size of last dim.
+#pragma omp parallel for
+                for (T i = 0; i < ne; i += nel) {
+
+                    // Get indices at this position.
+                    Tuple tp = unlayout(i);
+
+                    // Visit points in last dim.
+                    _visitAllPoints(visitor, lastDimNum, step, tp);
+                }
+            }
+            return true;
+#else
+
+            // Call recursive version to handle all dims.
+            Tuple tp(*this);
+            return _visitAllPoints(visitor, curDimNum, step, tp);
+#endif
+        }
+            
     };
 
 } // namespace yask.

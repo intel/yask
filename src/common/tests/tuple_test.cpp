@@ -36,9 +36,9 @@ typedef Tuple<int> IntTuple;
 
 
 void ttest(bool firstInner) {
-    
+
     ostream& os = cout;
-    
+
     IntTuple t1;
     t1.setFirstInner(firstInner);
     t1.addDimBack("x", 3);
@@ -69,7 +69,7 @@ void ttest(bool firstInner) {
     t4.addDimBack("x", 3);
     t4.addDimBack("z", 4);
     assert(t4 > t1);
-    
+
     os << "loop test...\n";
     size_t j = 0;
     for (int y = 0; y < t1["y"]; y++) {

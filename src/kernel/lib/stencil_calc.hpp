@@ -26,13 +26,13 @@ IN THE SOFTWARE.
 #pragma once
 
 namespace yask {
-    
+
     // Classes that support evaluation of one stencil bundle
     // and a 'pack' of bundles.
     // A stencil context contains one or more packs.
 
     // A pure-virtual class base for a stencil bundle.
-    class StencilBundleBase : public BoundingBox {
+    class StencilBundleBase {
     protected:
         StencilContext* _generic_context = 0;
         std::string _name;
@@ -53,11 +53,22 @@ namespace yask {
         // Whether this updates scratch grid(s);
         bool _is_scratch = false;
 
+        // Overall bounding box for the bundle.
+        // This may or may not be solid, i.e., it
+        // may contain some invalid points.
+        // This must fit inside the extended BB for this rank.
+        BoundingBox _bundle_bb;
+        
+	// Bounding box(es) that indicate where this bundle is valid.
+	// These must be non-overlapping. These do NOT contain
+        // any invalid points. These will all be inside '_bundle_bb'.
+	BBList _bb_list;
+	
         // Normalize the indices, i.e., divide by vector len in each dim.
         // Ranks offsets must already be subtracted.
         // Each dim in 'orig' must be a multiple of corresponding vec len.
         void normalize_indices(const Indices& orig, Indices& norm) const;
-        
+
     public:
 
         // Grids that are written to by these stencils.
@@ -70,13 +81,13 @@ namespace yask {
         // Vectors of scratch grids that are written to/read from.
         ScratchVecs outputScratchVecs;
         ScratchVecs inputScratchVecs;
-        
+
         // ctor, dtor.
         StencilBundleBase(StencilContext* context) :
             _generic_context(context) {
 
             // Find index posn of inner loop.
-            auto dims = context->get_dims();
+            auto& dims = context->get_dims();
             int ndims = dims->_stencil_dims.getNumDims();
             for (int i = 0; i < ndims; i++) {
                 auto& dname = dims->_stencil_dims.getDimName(i);
@@ -90,10 +101,10 @@ namespace yask {
         virtual ~StencilBundleBase() { }
 
         // Access to dims and MPI info.
-        virtual DimsPtr get_dims() const {
+        virtual DimsPtr& get_dims() const {
             return _generic_context->get_dims();
         }
-        virtual MPIInfoPtr get_mpi_info() {
+        virtual MPIInfoPtr& get_mpi_info() {
             return _generic_context->get_mpi_info();
         }
 
@@ -110,7 +121,11 @@ namespace yask {
         // Scratch accessors.
         virtual bool is_scratch() const { return _is_scratch; }
         virtual void set_scratch(bool is_scratch) { _is_scratch = is_scratch; }
-        
+
+        // Access to BBs.
+        virtual BoundingBox& getBB() { return _bundle_bb; }
+        virtual BBList& getBBs() { return _bb_list; }
+
         // Add dependency.
         virtual void add_dep(StencilBundleBase* eg) {
             _depends_on.insert(eg);
@@ -137,19 +152,19 @@ namespace yask {
             sg_list.push_back(this);
             return sg_list;
         }
-        
+
         // If this bundle is updating scratch grid(s),
         // expand indices to calculate values in halo.
         // Adjust offsets in grids based on original idxs.
         // Return adjusted indices.
         virtual ScanIndices adjust_span(int thread_idx, const ScanIndices& idxs) const;
-        
+
         // Set the bounding-box vars for this bundle in this rank.
         virtual void find_bounding_box();
 
         // Determine whether indices are in [sub-]domain.
         virtual bool
-        is_in_valid_domain(const Indices& idxs) =0;
+        is_in_valid_domain(const Indices& idxs) const =0;
 
         // Calculate one scalar result at time t.
         virtual void
@@ -211,7 +226,7 @@ namespace yask {
 
     protected:
         std::string _name;
-        
+
     public:
         BundlePack(const std::string& name) :
             _name(name) { }
@@ -220,7 +235,7 @@ namespace yask {
         const std::string& get_name() {
             return _name;
         }
-        
+
     }; // BundlePack.
 
 } // yask namespace.

@@ -47,13 +47,13 @@ namespace yask {
     // then provide allocated memory via set_storage().
     void GenericGridBase::default_alloc() {
         auto& os = get_ostr();
-        
+
         // Release any old data if last owner.
         release_storage();
 
         // What node?
         int numa_pref = get_numa_pref();
-            
+
         // Alloc required number of bytes.
         size_t sz = get_num_bytes();
         os << "Allocating " << makeByteStr(sz) <<
@@ -66,7 +66,7 @@ namespace yask {
 #endif
         os << "...\n" << flush;
         _base = shared_numa_alloc<char>(sz, numa_pref);
-        
+
         // No offset.
         _elems = _base.get();
     }
@@ -84,13 +84,13 @@ namespace yask {
             oss << " with data at " << _elems << " containing ";
         else
             oss << " with data not yet allocated for ";
-        oss << makeByteStr(get_num_bytes()) << 
+        oss << makeByteStr(get_num_bytes()) <<
             " (" << makeNumStr(get_num_elems()) << " " <<
             elem_name << " element(s) of " <<
             get_elem_bytes() << " byte(s) each)";
         return oss.str();
     }
-    
+
     // Set pointer to storage.
     // Free old storage.
     // 'base' should provide get_num_bytes() bytes at offset bytes.
@@ -98,12 +98,12 @@ namespace yask {
 
         // Release any old data if last owner.
         release_storage();
-            
+
         // Share ownership of base.
         // This ensures that last grid to use a shared allocation
         // will trigger dealloc.
         _base = base;
-        
+
         // Set plain pointer to new data.
         if (base.get()) {
             char* p = _base.get() + offset;
@@ -136,7 +136,7 @@ namespace yask {
                     ((T*)_elems)[ai] = seed * T(ai % wrap + 1);
             }
         }
-    
+
     template <typename T>
     idx_t GenericGridTemplate<T>::count_diffs(const GenericGridBase* ref,
                                               double epsilon) const {
@@ -165,5 +165,5 @@ namespace yask {
     // Explicitly allowed instantiations.
     template class GenericGridTemplate<real_t>;
     template class GenericGridTemplate<real_vec_t>;
-    
+
 } // yask namespace.

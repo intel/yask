@@ -39,7 +39,7 @@ protected:
 
     // Vars.
     MAKE_GRID(data, t, x); // time-varying grid.
-    
+
 public:
 
     Test1dStencil(StencilList& stencils, int radius=2) :
@@ -72,7 +72,7 @@ protected:
 
     // Vars.
     MAKE_GRID(data, t, x, y); // time-varying grid.
-    
+
 public:
 
     Test2dStencil(StencilList& stencils, int radius=2) :
@@ -110,7 +110,7 @@ protected:
 
     // Vars.
     MAKE_GRID(data, t, x, y, z); // time-varying grid.
-    
+
 public:
 
     Test3dStencil(StencilList& stencils) :
@@ -140,7 +140,7 @@ protected:
 
     // Vars.
     MAKE_GRID(data, t, w, x, y, z); // time-varying grid.
-    
+
 public:
 
     Test4dStencil(StencilList& stencils) :
@@ -176,7 +176,7 @@ protected:
 
     // Vars.
     MAKE_GRID(data, t, x, y, z); // time-varying 3D grid.
-    
+
 public:
 
     StreamStencil(StencilList& stencils, int radius=2) :
@@ -213,7 +213,7 @@ protected:
 
     // Vars.
     MAKE_GRID(data, t, x, y);
-    
+
 public:
 
     TestReverseStencil(StencilList& stencils) :
@@ -244,7 +244,7 @@ protected:
 
     // Temporary storage.
     MAKE_SCRATCH_GRID(t1, x);
-    
+
 public:
 
     TestScratchStencil1(StencilList& stencils, int radius=2) :
@@ -290,7 +290,7 @@ protected:
     MAKE_SCRATCH_GRID(t1, x, y, z);
     MAKE_SCRATCH_GRID(t2, x, y, z);
     MAKE_SCRATCH_GRID(t3, x, y, z);
-    
+
 public:
 
     TestScratchStencil2(StencilList& stencils, int radius=2) :
@@ -343,30 +343,78 @@ protected:
 public:
 
     TestSubdomainStencil1(StencilList& stencils, int radius=2) :
-        StencilRadiusBase("test_subdomain1", stencils, radius) { }
+        StencilRadiusBase("test_subdomain_1d", stencils, radius) { }
 
     // Define equation to apply to all points in 'data' grid.
     virtual void define() {
 
-        // Set data w/asymmetrical stencils.
+        // Sub-domain.
+        Condition sd0 = (x >= first_index(x) + 5) && (x <= last_index(x) - 3);
         
+        // Set data w/different stencils.
+
         GridValue u = data(t, x);
         for (int r = 1; r <= _radius; r++)
             u += data(t, x-r);
         for (int r = 1; r <= _radius + 1; r++)
             u += data(t, x+r);
-        data(t+1, x) EQUALS u / (_radius * 2 + 2) IF x < first_index(x) + 5;
+        data(t+1, x) EQUALS u / (_radius * 2 + 2) IF sd0;
 
         GridValue v = data(t, x);
         for (int r = 1; r <= _radius + 3; r++)
             v += data(t, x-r);
         for (int r = 1; r <= _radius + 2; r++)
             v += data(t, x+r);
-        data(t+1, x) EQUALS u / (_radius * 2 + 6) IF x >= first_index(x) + 5;
+        data(t+1, x) EQUALS u / (_radius * 2 + 6) IF !sd0;
     }
 };
 
 REGISTER_STENCIL(TestSubdomainStencil1);
+
+class TestSubdomainStencil3 : public StencilRadiusBase {
+
+protected:
+
+    // Indices & dimensions.
+    MAKE_STEP_INDEX(t);           // step in time dim.
+    MAKE_DOMAIN_INDEX(x);         // spatial dim.
+    MAKE_DOMAIN_INDEX(y);         // spatial dim.
+    MAKE_DOMAIN_INDEX(z);         // spatial dim.
+
+    // Vars.
+    MAKE_GRID(data, t, x, y, z); // time-varying grid.
+
+public:
+
+    TestSubdomainStencil3(StencilList& stencils, int radius=2) :
+        StencilRadiusBase("test_subdomain_3d", stencils, radius) { }
+
+    // Define equation to apply to all points in 'data' grid.
+    virtual void define() {
+
+        // Sub-domain is rectangle interior.
+        Condition sd0 =
+            (x >= first_index(x) + 5) && (x <= last_index(x) - 3) &&
+            (y >= first_index(y) + 4) && (y <= last_index(y) - 6) &&
+            (z >= first_index(z) + 6) && (z <= last_index(z) - 4);
+        
+        // Set data w/different stencils.
+
+        GridValue u = data(t, x, y, z);
+        for (int r = 1; r <= _radius; r++)
+            u += data(t, x-r, y, z) + data(t, x+r, y, z) +
+                data(t, x, y-r, z) + data(t, x, y+r, z) +
+                data(t, x, y, z-r) + data(t, x, y, z+r);
+        data(t+1, x, y, z) EQUALS u / (_radius * 6 + 1) IF sd0;
+
+        GridValue v = data(t, x, y, z);
+        for (int r = 1; r <= _radius; r++)
+            v += data(t, x-r, y-r, z-r) + data(t, x+r, y+r, z+r);
+        data(t+1, x, y, z) EQUALS u / (_radius * 2 + 1) IF !sd0;
+    }
+};
+
+REGISTER_STENCIL(TestSubdomainStencil3);
 
 // A stencil that has grids, but no stencil equation.
 class TestEmptyStencil1 : public StencilBase {
@@ -381,7 +429,7 @@ protected:
     MAKE_GRID(data, t, x); // time-varying grid.
 
 public:
-    
+
     TestEmptyStencil1(StencilList& stencils) :
         StencilBase("test_empty1", stencils) { }
 

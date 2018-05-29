@@ -27,7 +27,7 @@ IN THE SOFTWARE.
 
 // This file uses Doxygen 1.8 markup for API documentation-generation.
 // See http://www.stack.nl/~dimitri/doxygen.
-/** @file yask_common_api.hpp */ 
+/** @file yask_common_api.hpp */
 
 #ifndef YASK_COMMON_API
 #define YASK_COMMON_API
@@ -50,7 +50,7 @@ namespace yask {
        @returns String describing the current version.
     */
     std::string yask_get_version_string();
-    
+
     /// Type to use for indexing grids.
     /** Index types are signed to allow negative indices in padding/halos. */
 #ifdef SWIG
@@ -116,7 +116,7 @@ namespace yask {
         /// Create a file output object.
         /**
            This object is used to write output to a file.
-           @returns Pointer to new output object or null pointer if 
+           @returns Pointer to new output object or null pointer if
            file cannot be opened.
         */
         virtual yask_file_output_ptr
@@ -167,7 +167,7 @@ namespace yask {
         /// Get the filename.
         /** @returns String containing filename given during creation. */
         virtual std::string get_filename() const =0;
-        
+
         /// Close file.
         virtual void close() =0;
     };

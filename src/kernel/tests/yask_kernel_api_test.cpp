@@ -41,7 +41,7 @@ int main() {
 
     // The factory from which all other kernel objects are made.
     yk_factory kfac;
-    
+
     // Initalize MPI, etc.
     auto env = kfac.new_env();
 
@@ -132,7 +132,7 @@ int main() {
             // Done with fixed-size grids.
             if (grid->is_fixed_size())
                 continue;
-        
+
             // Create indices describing a subset of the overall domain.
             vector<idx_t> first_indices, last_indices;
             for (auto dname : grid->get_dim_names()) {
@@ -153,7 +153,7 @@ int main() {
                 else if (dname == soln->get_step_dim_name()) {
 
                     // Add indices for timestep zero (0) only.
-                    first_indices.push_back(0); 
+                    first_indices.push_back(0);
                     last_indices.push_back(0);
                 }
 
@@ -166,7 +166,7 @@ int main() {
                     last_indices.push_back(grid->get_last_misc_index(dname));
                 }
             }
-        
+
             // Init the values using the indices created above.
             double val = 2.0;
             idx_t nset = grid->set_elements_in_slice_same(val, first_indices, last_indices);
@@ -187,7 +187,7 @@ int main() {
             }
             else
                 os << "      last element NOT in rank.\n";
-        
+
             // Add to a couple of values if they're in this rank.
             nset = grid->add_to_element(1.0, first_indices);
             nset += grid->add_to_element(3.0, last_indices);
@@ -222,7 +222,7 @@ int main() {
         soln->run_solution(1, 10);
 
         soln->end_solution();
-    
+
         os << "End of YASK kernel API test.\n";
         return 0;
     }

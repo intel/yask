@@ -97,7 +97,7 @@ namespace yask {
                     " & vec-offsets @ " << vecOffsets.makeDimValStr() <<
                     " => " << endl;
 #endif
-                    
+
                 // Create aligned vector block that contains this point.
                 GridPoint alignedVec = *gp;  // copy original.
                 alignedVec.setArgOffsets(vecLocation);
@@ -165,7 +165,7 @@ namespace yask {
 #endif
             codeStr = printAlignedVecRead(os, gp);
         }
-        
+
         // Unaligned loads allowed?
         else if (_allowUnalignedLoads) {
 #ifdef DEBUG_GP
@@ -214,7 +214,7 @@ namespace yask {
         return "";
     }
 
-    
+
     // Sort a commutative expression.
     void ExprReorderVisitor::visit(CommutativeExpr* ce) {
 
@@ -259,7 +259,7 @@ namespace yask {
 #ifdef DEBUG_SORT
                             cout << " Vec " << av.makeStr("tmp") << " is new" << endl;
 #endif
-                            cost++; 
+                            cost++;
                         }
                     }
 #ifdef DEBUG_SORT
@@ -310,11 +310,11 @@ namespace yask {
                 for (int ylen = vlenForStats / xlen; ylen > 0; ylen--) {
                     int zlen = vlenForStats / xlen / ylen;
                     if (vlenForStats == xlen * ylen * zlen) {
-                        
+
                         // Create vectors needed to implement RHS.
                         VecInfoVisitor vv(xlen, ylen, zlen);
                         gp->visitExprs(&vv);
-                        
+
                         // Print stats.
                         vv.printStats(cout, gp->getName(), separator);
                     }

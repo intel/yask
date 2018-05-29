@@ -66,8 +66,8 @@ namespace yask {
         // Update doneElems.
         virtual void tryStrategies(ostream& os,
                                    const string& pvName,
-                                   size_t nelemsTarget, 
-                                   const VecElemList& elems, 
+                                   size_t nelemsTarget,
+                                   const VecElemList& elems,
                                    set<size_t>& doneElems,
                                    const GridPointSet& alignedVecs) =0;
 
@@ -75,8 +75,8 @@ namespace yask {
         // per instruction.
         virtual void tryAlign(ostream& os,
                               const string& pvName,
-                              size_t nelemsTarget, 
-                              const VecElemList& elems, 
+                              size_t nelemsTarget,
+                              const VecElemList& elems,
                               set<size_t>& doneElems,
                               const GridPointSet& alignedVecs,
                               bool maskAllowed);
@@ -85,8 +85,8 @@ namespace yask {
         // per instruction.
         virtual void tryPerm1(ostream& os,
                               const string& pvName,
-                              size_t nelemsTarget, 
-                              const VecElemList& elems, 
+                              size_t nelemsTarget,
+                              const VecElemList& elems,
                               set<size_t>& doneElems,
                               const GridPointSet& alignedVecs);
 
@@ -94,8 +94,8 @@ namespace yask {
         // per instruction.
         virtual void tryPerm2(ostream& os,
                               const string& pvName,
-                              size_t nelemsTarget, 
-                              const VecElemList& elems, 
+                              size_t nelemsTarget,
+                              const VecElemList& elems,
                               set<size_t>& doneElems,
                               const GridPointSet& alignedVecs);
 
@@ -114,14 +114,14 @@ namespace yask {
         // Try all applicable strategies.
         virtual void tryStrategies(ostream& os,
                                    const string& pvName,
-                                   size_t nelemsTarget, 
-                                   const VecElemList& elems, 
+                                   size_t nelemsTarget,
+                                   const VecElemList& elems,
                                    set<size_t>& doneElems,
                                    const GridPointSet& alignedVecs) {
             tryAlign(os, pvName, nelemsTarget, elems, doneElems, alignedVecs, true);
             tryPerm1(os, pvName, nelemsTarget, elems, doneElems, alignedVecs);
         }
-    
+
     public:
         CppKncPrintHelper(VecInfoVisitor& vv,
                           bool allowUnalignedLoads,
@@ -142,15 +142,15 @@ namespace yask {
         // Try all applicable strategies.
         virtual void tryStrategies(ostream& os,
                                    const string& pvName,
-                                   size_t nelemsTarget, 
-                                   const VecElemList& elems, 
+                                   size_t nelemsTarget,
+                                   const VecElemList& elems,
                                    set<size_t>& doneElems,
                                    const GridPointSet& alignedVecs) {
             tryAlign(os, pvName, nelemsTarget, elems, doneElems, alignedVecs, true);
             tryPerm2(os, pvName, nelemsTarget, elems, doneElems, alignedVecs);
             tryPerm1(os, pvName, nelemsTarget, elems, doneElems, alignedVecs);
         }
-    
+
     public:
         CppAvx512PrintHelper(VecInfoVisitor& vv,
                              bool allowUnalignedLoads,
@@ -171,13 +171,13 @@ namespace yask {
         // Try all applicable strategies.
         virtual void tryStrategies(ostream& os,
                                    const string& pvName,
-                                   size_t nelemsTarget, 
-                                   const VecElemList& elems, 
+                                   size_t nelemsTarget,
+                                   const VecElemList& elems,
                                    set<size_t>& doneElems,
                                    const GridPointSet& alignedVecs) {
             tryAlign(os, pvName, nelemsTarget, elems, doneElems, alignedVecs, false);
         }
-    
+
     public:
         CppAvx256PrintHelper(VecInfoVisitor& vv,
                              bool allowUnalignedLoads,

@@ -40,7 +40,7 @@ protected:
 
     // Vars.
     MAKE_GRID(data, t, x, y, z); // time-varying 3D grid.
-    
+
     // Return a coefficient.  Note: This returns completely fabricated
     // values only for illustrative purposes; they have no mathematical
     // significance.
@@ -55,7 +55,7 @@ protected:
 
     // Add additional points to expression v.
     virtual void addPoints(GridValue& v) =0;
-    
+
 public:
     ExampleStencil(const string& name, StencilList& stencils, int radius=2) :
         StencilRadiusBase(name, stencils, radius) { }
@@ -86,16 +86,16 @@ protected:
             // On the axes, assume values are isotropic, i.e., the same
             // for all points the same distance from the origin.
             double c = coeff(r, 0, 0);
-            v += c * 
+            v += c *
                 (
                  // x-axis.
                  data(t, x-r, y, z) +
                  data(t, x+r, y, z) +
-                 
+
                  // y-axis.
                  data(t, x, y-r, z) +
                  data(t, x, y+r, z) +
-                 
+
                  // z-axis.
                  data(t, x, y, z-r) +
                  data(t, x, y, z+r)
@@ -157,7 +157,7 @@ REGISTER_STENCIL(DiagStencil);
 // Add points from x-y, x-z, and y-z planes not covered by axes or diagonals.
 class PlaneStencil : public DiagStencil {
 protected:
-    
+
     // Add additional points to v.
     virtual void addPoints(GridValue& v)
     {

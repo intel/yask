@@ -120,7 +120,7 @@ int main() {
     auto yask_file = ofac.new_file_output("yc-api-test-with-exception-cxx.hpp");
     soln->format("avx", yask_file);
     cout << "YASK-format written to '" << yask_file->get_filename() << "'.\n";
-    
+
     // Exception test
     cout << "Exception Test: Call 'format' with wrong format.\n";
     try {

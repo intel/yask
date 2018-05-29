@@ -31,12 +31,13 @@ namespace yask {
     typedef std::vector<idx_t> GridIndices;
     typedef std::vector<idx_t> GridDimSizes;
     typedef std::vector<std::string> GridDimNames;
-    
+
     // A class to hold up to a given number of sizes or indices efficiently.
     // Similar to a Tuple, but less overhead and doesn't keep names.
     // Make sure this stays non-virtual.
+    // TODO: make this a template with _ndims as a parameter.
     class Indices {
-        
+
     public:
 
         // Max number of indices that can be held.
@@ -47,11 +48,11 @@ namespace yask {
 
         // Step dim is always in [0] of an Indices type (if it is used).
         static constexpr int step_posn = 0;
-        
+
     protected:
         idx_t _idxs[max_idxs];
         int _ndims;
-        
+
     public:
         // Ctors.
         Indices() : _ndims(0) { }
@@ -71,7 +72,7 @@ namespace yask {
         Indices(idx_t src, int ndims) {
             setFromConst(src, ndims);
         }
-        
+
         // Default copy ctor, copy operator should be okay.
 
         // Access size.
@@ -81,7 +82,7 @@ namespace yask {
         inline void setNumDims(int n) {
             _ndims = n;
         }
-        
+
         // Access indices.
         inline idx_t& operator[](int i) {
             assert(i >= 0);
@@ -111,7 +112,7 @@ namespace yask {
                 _idxs[i] = src.getVal(i);
             _ndims = n;
         }
-        
+
         // Other inits.
         void setFromVec(const GridIndices& src) {
             assert(src.size() <= +max_idxs);
@@ -147,7 +148,7 @@ namespace yask {
                 _idxs[i] = val;
             _ndims = n;
         }
-        
+
         // Some comparisons.
         // These assume all the indices are valid or
         // initialized to the same value.
@@ -204,7 +205,7 @@ namespace yask {
                 func(res._idxs[i], other._idxs[i]);
             return res;
         }
-        
+
         // Some element-wise operators.
         // These all return a new set of Indices rather
         // than modifying this object.
@@ -290,7 +291,7 @@ namespace yask {
                 res *= _idxs[i];
             return res;
         }
-        
+
         // Make string like "x=4, y=8".
         std::string makeDimValStr(const GridDimNames& names,
                                   std::string separator=", ",
@@ -305,7 +306,7 @@ namespace yask {
                 tmp.addDimBack(names[i], _idxs[i]);
             return tmp.makeDimValStr(separator, infix, prefix, suffix);
         }
-        
+
         // Make string like "4, 3, 2".
         std::string makeValStr(int nvals,
                                std::string separator=", ",
@@ -331,7 +332,7 @@ namespace yask {
 
     // Layout algorithms using Indices.
 #include "yask_layouts.hpp"
-    
+
     // Forward defns.
     struct StencilContext;
     class YkGridBase;
@@ -342,7 +343,7 @@ namespace yask {
     typedef std::vector<YkGridPtr> GridPtrs;
     typedef std::map<std::string, YkGridPtr> GridPtrMap;
     typedef std::vector<GridPtrs*> ScratchVecs;
-    
+
     // Environmental settings.
     struct KernelEnv :
         public virtual yk_env {
@@ -356,7 +357,7 @@ namespace yask {
         int max_threads=0;      // initial value from OMP.
 
         virtual ~KernelEnv() {}
-        
+
         // Init MPI, OMP, etc.
         // This is normally called very early in the program.
         virtual void initEnv(int* argc, char*** argv);
@@ -413,16 +414,16 @@ namespace yask {
 
             // Use compiler-generated fold macro.
             idx_t i = VEC_FOLD_LAYOUT(fold_ofs);
-            
+
 #ifdef DEBUG_LAYOUT
             // Use compiler-generated fold layout class.
             idx_t j = _vec_fold_layout.layout(fold_ofs);
             assert(i == j);
 #endif
-            
+
             return i;
         }
-        
+
         // Get linear index into a vector given 'elem_ofs', which are
         // element offsets that may include other dimensions.
         idx_t getElemIndexInVec(const IdxTuple& elem_ofs) const {
@@ -448,7 +449,7 @@ namespace yask {
         }
     };
     typedef std::shared_ptr<Dims> DimsPtr;
-    
+
     // A group of Indices needed for generated loops.
     // See the help message from gen_loops.pl for the
     // documentation of the indices.
@@ -465,7 +466,7 @@ namespace yask {
 
         // Alignment: when possible, each step will be aligned
         // such that ((start - align_ofs) % align) == 0.
-        
+
         // Values that differ for each sub-range.
         Indices start, stop;    // first and last+1 for this sub-range.
         Indices index;          // 0-based unique index for each sub-range.
@@ -477,7 +478,7 @@ namespace yask {
         // start               stop                            (index = 0)
         //                    start               stop         (index = 1)
         //                                       start   stop  (index = 2)
-        
+
         // Default init.
         ScanIndices(const Dims& dims, bool use_vec_align, IdxTuple* ofs) :
             ndims(dims._stencil_dims.size()),
@@ -506,7 +507,7 @@ namespace yask {
                 }
             }
         }
-        
+
         // Init from outer-loop indices.
         // Start..stop from point in outer loop become begin..end
         // for this loop.
@@ -548,7 +549,7 @@ namespace yask {
         // y +------+------+------+
         //   x-->
         enum NeighborOffset { rank_prev, rank_self, rank_next, num_offsets };
-        
+
         // Max number of immediate neighbors in all domain dimensions.
         // Used to describe the n-D space of neighbors.
         // This object is effectively a constant used to convert between
@@ -562,7 +563,7 @@ namespace yask {
 
         // What getNeighborIndex() returns for myself.
         int my_neighbor_index;
-        
+
         // MPI rank of each neighbor.
         // MPI_PROC_NULL => no neighbor.
         // Vector index is per getNeighborIndex().
@@ -576,7 +577,7 @@ namespace yask {
         // Whether each neighbor has all its rank-domain
         // sizes as a multiple of the vector length.
         std::vector<bool> has_all_vlen_mults;
-        
+
         // Ctor based on pre-set problem dimensions.
         MPIInfo(DimsPtr dims) : _dims(dims) {
 
@@ -620,7 +621,7 @@ namespace yask {
 
         // Name for trace output.
         std::string name;
-        
+
         // Send or receive buffer.
         std::shared_ptr<char> _base;
         real_t* _elems = 0;
@@ -678,14 +679,14 @@ namespace yask {
 
         MPIBuf bufs[nBufDirs];
     };
-    
+
     // MPI data for one grid.
     // Contains a send and receive buffer for each neighbor
     // and some meta-data.
     struct MPIData {
 
         MPIInfoPtr _mpiInfo;
-        
+
         // Buffers for all possible neighbors.
         typedef std::vector<MPIBufs> NeighborBufs;
         NeighborBufs bufs;
@@ -705,7 +706,7 @@ namespace yask {
                                                         int rank,
                                                         int index, // simple counter from 0.
                                                         MPIBufs& bufs)> visitor);
-            
+
         // Access a buffer by direction and neighbor offsets.
         virtual MPIBuf& getBuf(MPIBufs::BufDir bd, const IdxTuple& neighbor_offsets);
     };
@@ -722,7 +723,7 @@ namespace yask {
 
         // problem dimensions.
         DimsPtr _dims;
-        
+
         // Sizes in elements (points).
         IdxTuple _rank_sizes;     // number of steps and this rank's domain sizes.
         IdxTuple _region_sizes;   // region size (used for wave-front tiling).
@@ -753,7 +754,7 @@ namespace yask {
         int _numa_pref = NUMA_PREF;
 
         // Ctor.
-        KernelSettings(DimsPtr dims, KernelEnvPtr env) : 
+        KernelSettings(DimsPtr dims, KernelEnvPtr env) :
             _dims(dims), max_threads(env->max_threads) {
 
             // Use both step and domain dims for all size tuples.
@@ -788,7 +789,7 @@ namespace yask {
             // Use domain dims only for MPI tuples.
             _num_ranks = dims->_domain_dims;
             _num_ranks.setValsSame(1);
-            
+
             _rank_indices = dims->_domain_dims;
             _rank_indices.setValsSame(0);
         }
@@ -816,7 +817,7 @@ namespace yask {
                          const std::string& pgmName,
                          const std::string& appNotes,
                          const std::vector<std::string>& appExamples) const;
-        
+
         // Make sure all user-provided settings are valid by rounding-up
         // values as needed.
         // Called from prepare_solution(), so it doesn't normally need to be called from user code.
@@ -837,5 +838,5 @@ namespace yask {
         }
     };
     typedef std::shared_ptr<KernelSettings> KernelSettingsPtr;
-    
+
 } // yask namespace.

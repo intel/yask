@@ -78,7 +78,7 @@ namespace yask {
                        " max num elements = %lli lines (%.4f MB).\n"
                        " ave num elements = %lli lines (%.4f MB).\n", myLevel,
                        size(), lines2MB(size()),
-                       maxSize, lines2MB(maxSize), 
+                       maxSize, lines2MB(maxSize),
                        sumSizes / numSizes, lines2MB(sumSizes) / numSizes);
             printf(" num reads = %lli.\n", numReads);
             printf("  num reads of missing lines = %lli.%s\n", numReadsNotPFed,
@@ -106,7 +106,7 @@ namespace yask {
 
         void updateSize() {
             size_t s = size();
-            if (s > maxSize) 
+            if (s > maxSize)
                 maxSize = s;
 
             // keep stats for calculating ave.
@@ -117,7 +117,7 @@ namespace yask {
         void evict(const void* p, int hint, int line) {
             if (!enabled) return;
 
-            // eviction from lower caches ignored. 
+            // eviction from lower caches ignored.
             // NB: this code assumes hint corresponds 1:1 to level.
             if (hint < myLevel) return;
             uintptr_t k = (uintptr_t)p / CACHELINE_BYTES;

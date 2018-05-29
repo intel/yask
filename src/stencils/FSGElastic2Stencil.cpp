@@ -44,7 +44,7 @@ namespace fsg {
 
     class FSGElastic2StencilBase : public Elastic2StencilBase {
         friend FSG2_ABC;
-        
+
     protected:
 
         // Velocity and stress grids.
@@ -69,7 +69,7 @@ namespace fsg {
                     C55, C56,
                     C66 };
 
-        
+
     public:
 
         FSGElastic2StencilBase( const string &name, StencilList& stencils,
@@ -162,7 +162,7 @@ namespace fsg {
         }
 
         GridValue stress_update( GridValue c1, GridValue c2, GridValue c3,
-                                 GridValue c4, GridValue c5, GridValue c6, 
+                                 GridValue c4, GridValue c5, GridValue c6,
                                  GridValue u_z, GridValue u_y, GridValue u_x,
                                  GridValue v_z, GridValue v_y, GridValue v_x,
                                  GridValue w_z, GridValue w_y, GridValue w_x)
@@ -274,10 +274,10 @@ namespace fsg {
                        constNum(vyu_idx), constNum(vyv_idx), constNum(vyw_idx),
                        constNum(vzu_idx), constNum(vzv_idx), constNum(vzw_idx));
         }
-        
+
         // Call all the define_* functions.
         virtual void define() {
-        
+
             FSG2BoundaryCondition &fsg_bc = *static_cast<FSG2BoundaryCondition *>(bc);
 
             // Define velocity components.
@@ -293,7 +293,7 @@ namespace fsg {
             define_vel<TR, B, B, F>(t, x, y, z, v, V_TR_V, s, S_TR_YY, S_TL_XY, S_BR_YZ);
             define_vel<BL, F, B, B>(t, x, y, z, v, V_BL_V, s, S_BL_YY, S_BR_XY, S_TL_YZ);
             define_vel<BR, F, F, F>(t, x, y, z, v, V_BR_V, s, S_BR_YY, S_BL_XY, S_TR_YZ);
-        
+
             if(hasBoundaryCondition())
                 fsg_bc.velocity(t,x,y,z);
 
@@ -306,7 +306,7 @@ namespace fsg {
                                     V_TR_U, V_TR_V, V_TR_W, V_TL_U, V_TL_V, V_TL_W, V_BR_U, V_BR_V, V_BR_W);
             define_str<TL, B, B, B>(t, x, y, z, S_TL_XX, S_TL_YY, S_TL_ZZ, S_TL_XY, S_TL_XZ, S_TL_YZ,
                                     V_TL_U, V_TL_V, V_TL_W, V_TR_U, V_TR_V, V_TR_W, V_BL_U, V_BL_V, V_BL_W);
-                               
+
             if(hasBoundaryCondition())
                 fsg_bc.stress(t,x,y,z);
         }
@@ -316,7 +316,7 @@ namespace fsg {
     {
     protected:
         const int abc_width = 20;
-    
+
         // Sponge coefficients.
         MAKE_GRID(sponge, x, y, z, spidx);
         enum SPONGE_IDX { SPONGE_LX, SPONGE_RX, SPONGE_BZ,
@@ -338,16 +338,16 @@ namespace fsg {
             Condition bc =
                 (z < first_index(z)+abc_width || z > last_index(z)-abc_width) ||
                 (y < first_index(y)+abc_width || y > last_index(y)-abc_width) ||
-                (x < first_index(x)+abc_width || x > last_index(x)-abc_width); 
+                (x < first_index(x)+abc_width || x > last_index(x)-abc_width);
             return bc;
         }
         Condition is_not_at_boundary()
-        { 
+        {
             return !is_at_boundary();
         }
 
         template<typename N, typename SZ, typename SX, typename SY>
-        void define_vel_abc(GridIndex t, GridIndex x, GridIndex y, GridIndex z, 
+        void define_vel_abc(GridIndex t, GridIndex x, GridIndex y, GridIndex z,
                             GridIndex vidx,
                             GridIndex sx_idx, GridIndex sy_idx, GridIndex sz_idx,
                             GridIndex abc_x_idx, GridIndex abc_y_idx, GridIndex abc_z_idx,
@@ -370,9 +370,9 @@ namespace fsg {
 
             // define the value at t+1.
             fsg.v(t+1, x, y, z, vidx) EQUALS next_v IF at_abc;
-        }    
+        }
         template<typename N, typename SZ, typename SX, typename SY>
-        void define_vel_abc(GridIndex t, GridIndex x, GridIndex y, GridIndex z, 
+        void define_vel_abc(GridIndex t, GridIndex x, GridIndex y, GridIndex z,
                             int vidx,
                             int sx_idx, int sy_idx, int sz_idx,
                             int abc_x_idx, int abc_y_idx, int abc_z_idx,
@@ -383,7 +383,7 @@ namespace fsg {
                                           constNum(abc_x_idx), constNum(abc_y_idx), constNum(abc_z_idx),
                                           constNum(abc_sq_x_idx), constNum(abc_sq_y_idx), constNum(abc_sq_z_idx));
         }
-        
+
         void velocity (GridIndex t, GridIndex x, GridIndex y, GridIndex z)
         {
             define_vel_abc<TL, B, F, B>(t, x, y, z, fsg.V_TL_W, fsg.S_TL_YZ, fsg.S_TR_XZ, fsg.S_BL_ZZ,
@@ -413,7 +413,7 @@ namespace fsg {
         }
 
         template<typename N, typename SZ, typename SX, typename SY>
-        void define_str_abc(GridIndex t, GridIndex x, GridIndex y, GridIndex z, 
+        void define_str_abc(GridIndex t, GridIndex x, GridIndex y, GridIndex z,
                             GridIndex sxx_idx, GridIndex syy_idx, GridIndex szz_idx,
                             GridIndex sxy_idx, GridIndex sxz_idx, GridIndex syz_idx,
                             GridIndex vxu_idx, GridIndex vxv_idx, GridIndex vxw_idx,
@@ -486,7 +486,7 @@ namespace fsg {
             fsg.s(t+1, x, y, z, sxy_idx) EQUALS next_sxy IF at_abc;
         }
         template<typename N, typename SZ, typename SX, typename SY>
-        void define_str_abc(GridIndex t, GridIndex x, GridIndex y, GridIndex z, 
+        void define_str_abc(GridIndex t, GridIndex x, GridIndex y, GridIndex z,
                             int sxx_idx, int syy_idx, int szz_idx,
                             int sxy_idx, int sxz_idx, int syz_idx,
                             int vxu_idx, int vxv_idx, int vxw_idx,
@@ -503,27 +503,27 @@ namespace fsg {
                                           constNum(abc_x_idx), constNum(abc_y_idx), constNum(abc_z_idx),
                                           constNum(abc_sq_x_idx), constNum(abc_sq_y_idx), constNum(abc_sq_z_idx));
         }
-        
+
         void stress (GridIndex t, GridIndex x, GridIndex y, GridIndex z)
         {
-            define_str_abc<BR, F, B, F>(t, x, y, z, fsg.S_BR_XX, fsg.S_BR_YY, fsg.S_BR_ZZ, fsg.S_BR_XY, fsg.S_BR_XZ, 
-                                        fsg.S_BR_YZ, fsg.V_BR_U,  fsg.V_BR_V,  fsg.V_BR_W,  fsg.V_BL_U, 
-                                        fsg.V_BL_V,  fsg.V_BL_W,  fsg.V_TR_U,  fsg.V_TR_V,  fsg.V_TR_W, 
-                                        SPONGE_RX, SPONGE_BY, SPONGE_BZ, SPONGE_SQ_RX, SPONGE_SQ_BY, SPONGE_SQ_BZ);        
-            define_str_abc<BL, F, F, B>(t, x, y, z, fsg.S_BL_XX, fsg.S_BL_YY, fsg.S_BL_ZZ, fsg.S_BL_XY, fsg.S_BL_XZ, 
-                                        fsg.S_BL_YZ, fsg.V_BL_U,  fsg.V_BL_V,  fsg.V_BL_W,  fsg.V_BR_U, 
-                                        fsg.V_BR_V,  fsg.V_BR_W,  fsg.V_TL_U,  fsg.V_TL_V,  fsg.V_TL_W, 
+            define_str_abc<BR, F, B, F>(t, x, y, z, fsg.S_BR_XX, fsg.S_BR_YY, fsg.S_BR_ZZ, fsg.S_BR_XY, fsg.S_BR_XZ,
+                                        fsg.S_BR_YZ, fsg.V_BR_U,  fsg.V_BR_V,  fsg.V_BR_W,  fsg.V_BL_U,
+                                        fsg.V_BL_V,  fsg.V_BL_W,  fsg.V_TR_U,  fsg.V_TR_V,  fsg.V_TR_W,
+                                        SPONGE_RX, SPONGE_BY, SPONGE_BZ, SPONGE_SQ_RX, SPONGE_SQ_BY, SPONGE_SQ_BZ);
+            define_str_abc<BL, F, F, B>(t, x, y, z, fsg.S_BL_XX, fsg.S_BL_YY, fsg.S_BL_ZZ, fsg.S_BL_XY, fsg.S_BL_XZ,
+                                        fsg.S_BL_YZ, fsg.V_BL_U,  fsg.V_BL_V,  fsg.V_BL_W,  fsg.V_BR_U,
+                                        fsg.V_BR_V,  fsg.V_BR_W,  fsg.V_TL_U,  fsg.V_TL_V,  fsg.V_TL_W,
                                         SPONGE_LX, SPONGE_FY, SPONGE_BZ, SPONGE_SQ_LX, SPONGE_SQ_FY, SPONGE_SQ_BZ);
-            define_str_abc<TR, B, F, F>(t, x, y, z, fsg.S_TR_XX, fsg.S_TR_YY, fsg.S_TR_ZZ, fsg.S_TR_XY, fsg.S_TR_XZ, 
-                                        fsg.S_TR_YZ, fsg.V_TR_U,  fsg.V_TR_V,  fsg.V_TR_W,  fsg.V_TL_U, 
-                                        fsg.V_TL_V,  fsg.V_TL_W,  fsg.V_BR_U,  fsg.V_BR_V,  fsg.V_BR_W, 
+            define_str_abc<TR, B, F, F>(t, x, y, z, fsg.S_TR_XX, fsg.S_TR_YY, fsg.S_TR_ZZ, fsg.S_TR_XY, fsg.S_TR_XZ,
+                                        fsg.S_TR_YZ, fsg.V_TR_U,  fsg.V_TR_V,  fsg.V_TR_W,  fsg.V_TL_U,
+                                        fsg.V_TL_V,  fsg.V_TL_W,  fsg.V_BR_U,  fsg.V_BR_V,  fsg.V_BR_W,
                                         SPONGE_RX, SPONGE_FY, SPONGE_TZ, SPONGE_SQ_RX, SPONGE_SQ_FY, SPONGE_SQ_TZ);
-            define_str_abc<TL, B, B, B>(t, x, y, z, fsg.S_TL_XX, fsg.S_TL_YY, fsg.S_TL_ZZ, fsg.S_TL_XY, fsg.S_TL_XZ, 
-                                        fsg.S_TL_YZ, fsg.V_TL_U,  fsg.V_TL_V,  fsg.V_TL_W,  fsg.V_TR_U, 
-                                        fsg.V_TR_V,  fsg.V_TR_W,  fsg.V_BL_U,  fsg.V_BL_V,  fsg.V_BL_W, 
+            define_str_abc<TL, B, B, B>(t, x, y, z, fsg.S_TL_XX, fsg.S_TL_YY, fsg.S_TL_ZZ, fsg.S_TL_XY, fsg.S_TL_XZ,
+                                        fsg.S_TL_YZ, fsg.V_TL_U,  fsg.V_TL_V,  fsg.V_TL_W,  fsg.V_TR_U,
+                                        fsg.V_TR_V,  fsg.V_TR_W,  fsg.V_BL_U,  fsg.V_BL_V,  fsg.V_BL_W,
                                         SPONGE_LX, SPONGE_BY, SPONGE_TZ, SPONGE_SQ_LX, SPONGE_SQ_BY, SPONGE_SQ_TZ);
         }
-    
+
     };
 
 
@@ -534,7 +534,7 @@ namespace fsg {
 
     struct FSG2ABCElasticStencil : public FSGElastic2StencilBase {
         FSG2_ABC abc; // Absorbing Boundary Condition
-    
+
         FSG2ABCElasticStencil(StencilList& stencils) :
             FSGElastic2StencilBase("fsg2_abc", stencils, &abc),
             abc(*this) { }

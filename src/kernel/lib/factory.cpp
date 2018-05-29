@@ -63,7 +63,7 @@ namespace yask {
         // If no source, init settings from default args.
         if (!source.get())
             sp->apply_command_line_options(DEF_ARGS);
-        
+
         return sp;
     }
     yk_solution_ptr yk_factory::new_solution(yk_env_ptr env) const {

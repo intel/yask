@@ -62,7 +62,7 @@ namespace yask {
                                          "' because dimension '" + dims[i] +
                                          "' is used more than once");
                 }
-            
+
                 // Step dim?
                 if (dims[i] == _dims->_step_dim) {
                     step_posn = i;
@@ -91,10 +91,10 @@ namespace yask {
             // Scalar?
             if (ndims == 0)
                 gp = make_shared<YkElemGrid<Layout_0d, false>>(_dims, name, dims, &_opts, &_ostr);
-            
+
             // Include auto-gen code for all other cases.
 #include "yask_grid_code.hpp"
-            
+
             if (!gp) {
                 FORMAT_AND_THROW_YASK_EXCEPTION("Error in new_grid: cannot create grid '" << name <<
                                                 "' with " << ndims << " dimensions; only up to " << MAX_DIMS <<
@@ -123,7 +123,7 @@ namespace yask {
                     gp->set_extra_pad_size(i, _opts->_extra_pad_sizes[dname]);
                     gp->set_min_pad_size(i, _opts->_min_pad_sizes[dname]);
                 }
-                
+
                 // Offsets.
                 gp->_set_offset(i, 0);
                 gp->_set_local_offset(i, 0);

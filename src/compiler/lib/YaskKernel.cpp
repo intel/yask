@@ -42,7 +42,7 @@ namespace yask {
 
     // Print an expression as a one-line C++ comment.
     void YASKCppPrinter::addComment(ostream& os, EqBundle& eq) {
-        
+
         // Use a simple human-readable visitor to create a comment.
         PrintHelper ph(_dims, NULL, "temp", "", " // ", ".\n");
         PrintVisitorTopDown commenter(os, ph, _settings);
@@ -67,7 +67,7 @@ namespace yask {
 
         // First, create a class to hold the data (grids).
         printData(os);
-        
+
         // A struct for each equation bundle.
         printEqBundles(os);
 
@@ -147,7 +147,7 @@ namespace yask {
 
         os << "#define USING_UNALIGNED_LOADS (" <<
             (_settings._allowUnalignedLoads ? 1 : 0) << ")" << endl;
-        
+
         os << endl;
         os << "// Cluster multipliers of vector folds: " <<
             _dims->_clusterMults.makeDimValStr(" * ") << endl;
@@ -204,7 +204,7 @@ namespace yask {
 
             // Type name for grid.
             string typeName;
-            
+
             // Use vector-folded layout if possible.
             bool folded = gp->isFoldable();
             string gtype = folded ? "YkVecGrid" : "YkElemGrid";
@@ -223,7 +223,7 @@ namespace yask {
                     auto& dname = dim->getName();
                     auto dtype = dim->getType();
                     bool defer = false; // add dim later.
-                        
+
                     // Step dim?
                     // If this exists, it will get placed near to the end,
                     // just before the inner dim.
@@ -286,7 +286,7 @@ namespace yask {
                 for (auto i : vlens)
                     oss << ", " << i;
             }
-            
+
             oss << ">";
             typeName = oss.str();
 
@@ -317,7 +317,7 @@ namespace yask {
                 os << " " << ptrTypeDef << " " << grid << "_ptr;\n" <<
                     " " << typeDef << "* " << grid << ";\n";
             }
-            
+
             // Alloc-setting code.
             for (auto& dim : gp->getDims()) {
                 auto& dname = dim->getName();
@@ -408,7 +408,7 @@ namespace yask {
                 newGridCode += " if (dims == " + grid + "_dim_names) gp = std::make_shared<" +
                     typeDef + ">(_dims, name, dims, &_opts, &_ostr);\n";
             }
-                
+
         } // grids.
 
         // Ctor.
@@ -422,7 +422,7 @@ namespace yask {
                 ctorCode <<
                 "\n // Update grids with context info.\n"
                 " update_grid_info();\n";
-            
+
             // end of ctor.
             os << " } // ctor" << endl;
         }
@@ -436,19 +436,19 @@ namespace yask {
             newGridCode <<
             " return gp;\n"
             " } // newStencilGrid\n";
-       
+
         // Scratch-grids method.
         os << "\n // Make new scratch grids.\n"
             " virtual void makeScratchGrids(int num_threads) {\n" <<
             scratchCode <<
             " } // newScratchGrids\n";
-        
+
         os << "}; // " << _context_base << endl;
     }
 
     // Print YASK equation bundles.
     void YASKCppPrinter::printEqBundles(ostream& os) {
-        
+
         for (int ei = 0; ei < _eqBundles.getNum(); ei++) {
 
             // Scalar eqBundle.
@@ -467,7 +467,7 @@ namespace yask {
             // Stats for this eqBundle.
             CounterVisitor stats;
             eq->visitEqs(&stats);
-            
+
             // Example computation.
             os << endl << " // " << stats.getNumOps() << " FP operation(s) per point:" << endl;
             addComment(os, *eq);
@@ -506,7 +506,7 @@ namespace yask {
                 os << endl << " // Determine whether " << egsName << " is valid at the indices " <<
                     _dims->_stencilDims.makeDimStr() << ".\n"
                     " // Return true if indices are within the valid sub-domain or false otherwise.\n"
-                    " virtual bool is_in_valid_domain(const Indices& idxs) {\n";
+                    " virtual bool is_in_valid_domain(const Indices& idxs) const final {\n";
                 printIndices(os);
                 if (eq->cond.get())
                     os << " return " << eq->cond->makeStr() << ";" << endl;
@@ -514,7 +514,7 @@ namespace yask {
                     os << " return true; // full domain." << endl;
                 os << " }" << endl;
             }
-        
+
             // Scalar code.
             {
                 // Stencil-calculation code.
@@ -530,7 +530,7 @@ namespace yask {
                 CounterVisitor cv;
                 eq->visitEqs(&cv);
                 CppPrintHelper* sp = new CppPrintHelper(_dims, &cv, "temp", "real_t", " ", ";\n");
-            
+
                 // Generate the code.
                 PrintVisitorBottomUp pcv(os, *sp, _settings);
                 eq->visitEqs(&pcv);
@@ -575,7 +575,7 @@ namespace yask {
                 string funcstr = "calc_loop_of_" + vcstr + "s";
                 string nvecs = do_cluster ? "CMULT_" + allCaps(idim) : "1";
                 string nelems = (do_cluster ? nvecs + " * ": "") + "VLEN_" + allCaps(idim);
-                
+
                 // Loop-calculation code.
                 // Function header.
                 string istart = "start_" + idim;
@@ -620,7 +620,7 @@ namespace yask {
                     "#pragma forceinline recursive\n"
                     "#endif\n"
                     " {\n";
-                    
+
                 // Print loop-invariants.
                 CppLoopVarPrintVisitor lvv(os, *vp, _settings);
                 vceq->visitEqs(&lvv);
@@ -648,20 +648,20 @@ namespace yask {
 
                 // End forced-inline code.
                 os << " } // Forced-inline block.\n";
-                    
+
                 // End of function.
                 os << "} // " << funcstr << ".\n";
                 delete vp;
             }
 
             os << "}; // " << egsName << ".\n"; // end of class.
-            
+
         } // stencil eqBundles.
     }
 
     // Print final YASK context.
     void YASKCppPrinter::printContext(ostream& os) {
-        
+
         os << endl << " ////// Overall stencil-specific context //////" << endl <<
             "struct " << _context << " : public " << _context_base << " {" << endl;
 
@@ -681,7 +681,7 @@ namespace yask {
             os << ",\n  " << egName << "(this)";
         }
         os << " {\n";
-        
+
         // Push eq-bundle pointers to list.
         os << "\n // Stencil bundles.\n";
         for (auto& eg : _eqBundles.getAll()) {
@@ -702,14 +702,14 @@ namespace yask {
                         ".add_scratch_child(&" << eg2Name << ");\n";
                 }
             }
-            
+
         } // eq-bundles.
 
         // Deps.
         os << "\n // Stencil bundle inter-dependencies.\n";
         for (auto& eg : _eqBundles.getAll()) {
             string egName = eg->getName();
-            
+
             // Add deps between bundles.
             for (auto& dep : _eqBundles.getDeps(eg)) {
                 string depName = dep->getName();
@@ -734,7 +734,7 @@ namespace yask {
             }
             os << "  stPacks.push_back(" << bpName << ");\n";
         }
-        
+
         os << " } // Ctor.\n";
 
         // Dims creator.
@@ -784,10 +784,10 @@ namespace yask {
             os << "    p->_cluster_mults.addDimBack(\"" << dname << "\", " << dval << ");\n";
         }
         os << "    p->_step_dir = " << _dims->_stepDir << ";\n";
-            
+
         os << "    return p;\n"
             "  }\n";
-        
+
         // Stencil provided code for StencilContext
         CodeList *extraCode;
         if ( (extraCode = _stencil.getExtensionCode(STENCIL_CONTEXT)) != NULL )
@@ -796,7 +796,7 @@ namespace yask {
             for ( auto code : *extraCode )
                 os << code << endl;
         }
-        
+
         os << "}; // " << _context << endl;
     }
 

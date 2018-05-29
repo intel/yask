@@ -37,7 +37,7 @@ namespace yask {
     protected:
         int _numChanges;
         string _name;
-    
+
     public:
         OptVisitor(const string& name) :
             _numChanges(0), _name(name) {}
@@ -67,7 +67,7 @@ namespace yask {
         virtual int getNumChanges() {
             return _numChanges;
         }
-    
+
         virtual void visit(CommutativeExpr* ce);
     };
 
@@ -78,12 +78,12 @@ namespace yask {
     class CseVisitor : public OptVisitor {
     protected:
         set<NumExprPtr> _seen;
-    
+
         // If 'ep' has already been seen, just return true.
         // Else if 'ep' has a match, change pointer to that match, return true.
         // Else, return false.
         virtual bool findMatchTo(NumExprPtr& ep);
-    
+
     public:
         CseVisitor()  :
             OptVisitor("common subexpr elimination") {}
@@ -148,7 +148,7 @@ namespace yask {
         virtual int getNumVisits() const {
             return _visits;
         }
-    
+
         virtual int getCount(Expr* ep) const {
             auto it = _counts.find(ep);
             if (it == _counts.end()) return 0;
@@ -161,7 +161,7 @@ namespace yask {
             _visits += rhs._visits;
             return *this;
         }
-    
+
         virtual void printStats(ostream& os, const string& descr = "") const {
             os << " Expression stats";
             if (descr.length())
@@ -193,15 +193,15 @@ namespace yask {
             _numWrites += rhs._numWrites;
             return *this;
         }
-    
+
         virtual void printStats(ostream& os, const string& descr = "") const {
             TrackingVisitor::printStats(os, descr);
-            os << 
+            os <<
                 "  " << getNumReads() << " grid read(s)." << endl <<
                 "  " << getNumWrites() << " grid write(s)." << endl <<
                 "  " << getNumOps() << " FP math operation(s)." << endl;
         }
-    
+
         int getNumNodes() const { return _numNodes; }
         int getNumReads() const { return _numReads; }
         int getNumWrites() const { return _numWrites; }
@@ -221,7 +221,7 @@ namespace yask {
             _numNodes++;
             _numReads++;
         }
-    
+
         // Unary: Count as one op if num type and visit operand.
         virtual void visit(UnaryNumExpr* ue) {
             if (alreadyVisited(ue)) return;

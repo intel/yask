@@ -142,7 +142,7 @@ struct AppSettings : public KernelSettings {
                            "Run validation iteration(s) after performance trial(s).",
                            validate));
         parser.add_option(new ValOption(*this));
-        
+
         // Tokenize default args.
         vector<string> args;
         parser.set_args(DEF_ARGS, args);
@@ -174,7 +174,7 @@ struct AppSettings : public KernelSettings {
             THROW_YASK_EXCEPTION(err.str());
         }
     }
-    
+
     // Print splash banner and invocation string.
     // Exit with help message if requested.
     void splash(ostream& os, int argc, char** argv)
@@ -195,7 +195,7 @@ struct AppSettings : public KernelSettings {
         for (int argi = 0; argi < argc; argi++)
             os << " " << argv[argi];
         os << endl;
-        
+
         os << "PID: " << getpid() << endl;
         if (debug_sleep) {
             os << "Sleeping " << debug_sleep <<
@@ -274,7 +274,7 @@ int main(int argc, char** argv)
         // Exit if nothing to do.
         if (opts->num_trials < 1)
             THROW_YASK_EXCEPTION("Exiting because no trials are specified");
-        if (context->rank_bb.bb_num_points < 1) 
+        if (context->rank_bb.bb_num_points < 1)
             THROW_YASK_EXCEPTION("Exiting because there are no points in the domain");
 
         // init data in grids and params.
@@ -347,7 +347,7 @@ int main(int argc, char** argv)
                 best_elapsed_time = stats->get_elapsed_run_secs();
             }
         }
-        
+
         os << divLine <<
             "best-elapsed-time (sec):           " << makeNumStr(best_elapsed_time) << endl <<
             "best-throughput (num-writes/sec):  " << makeNumStr(best_apps) << endl <<
@@ -378,7 +378,7 @@ int main(int argc, char** argv)
             // Change some settings.
             ref_context->name += "-reference";
             ref_context->allow_vec_exchange = false;   // exchange scalars in halos.
-            
+
             alloc_steps(ref_soln, *opts);
             ref_soln->prepare_solution();
 
@@ -428,6 +428,6 @@ int main(int argc, char** argv)
         cerr << "YASK Kernel: " << e.get_message() << ".\n";
         exit_yask(1);
     }
-    
+
     return 0;
 }

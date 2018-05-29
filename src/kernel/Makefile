@@ -784,7 +784,8 @@ stencil-tests:
 	$(MAKE) clean; $(MAKE) yc-and-yk-test real_bytes=8 stencil=test_2d fold=x=2,y=2
 	$(MAKE) clean; $(MAKE) yc-and-yk-test real_bytes=8 stencil=test_3d fold=x=2,z=2
 	$(MAKE) clean; $(MAKE) yc-and-yk-test real_bytes=8 stencil=test_4d fold=w=2,x=2
-	$(MAKE) clean; $(MAKE) yc-and-yk-test real_bytes=8 stencil=test_subdomain1 fold=x=4
+	$(MAKE) clean; $(MAKE) yc-and-yk-test real_bytes=8 stencil=test_subdomain_1d fold=x=4
+	$(MAKE) clean; $(MAKE) yc-and-yk-test real_bytes=8 stencil=test_subdomain_3d fold=x=2,y=2
 	$(MAKE) clean; $(MAKE) yc-and-yk-test real_bytes=8 stencil=test_scratch1 fold=x=4
 	$(MAKE) clean; $(MAKE) yc-and-yk-test real_bytes=8 stencil=test_scratch2 fold=x=2,z=2
 	$(MAKE) clean; $(MAKE) yc-and-yk-test real_bytes=8 stencil=9axis fold=x=2,z=2

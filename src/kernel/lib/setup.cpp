@@ -98,7 +98,7 @@ namespace yask {
                 rcoords[di] = coords[rn][di];
                 rdeltas[di] = coords[rn][di] - _opts->_rank_indices[di];
             }
-        
+
             // Manhattan distance from rn (sum of abs deltas in all dims).
             // Max distance in any dim.
             int mandist = 0;
@@ -107,7 +107,7 @@ namespace yask {
                 mandist += abs(rdeltas[di]);
                 maxdist = max(maxdist, abs(int(rdeltas[di])));
             }
-            
+
             // Myself.
             if (rn == me) {
                 if (mandist != 0)
@@ -137,7 +137,7 @@ namespace yask {
 
                 // Process ranks that are in-line in 'dname', including self.
                 if (is_inline) {
-                    
+
                     // Accumulate total problem size in each dim for ranks that
                     // intersect with this rank, not including myself.
                     if (rn != me)
@@ -222,9 +222,9 @@ namespace yask {
 
                 // Save vec-mult flag.
                 _mpiInfo->has_all_vlen_mults.at(rn_ofs) = vlen_mults;
-                
+
             } // self or immediate neighbor in any direction.
-            
+
         } // ranks.
 #endif
 
@@ -274,7 +274,7 @@ namespace yask {
             data_buf[numa_pref] = p;
         }
     }
-    
+
     // Allocate memory for grids that do not already have storage.
     void StencilContext::allocGridData(ostream& os) {
 
@@ -290,10 +290,10 @@ namespace yask {
         for (int pass = 0; pass < 2; pass++) {
             TRACE_MSG("allocGridData pass " << pass << " for " <<
                       gridPtrs.size() << " grid(s)");
-        
+
             // Count bytes needed and number of grids for each NUMA node.
             map <int, size_t> npbytes, ngrids;
-        
+
             // Grids.
             for (auto gp : gridPtrs) {
                 if (!gp)
@@ -330,7 +330,7 @@ namespace yask {
 
         } // grid passes.
     };
-    
+
     // Create MPI buffers and allocate them.
     void StencilContext::allocMpiData(ostream& os) {
 
@@ -343,7 +343,7 @@ namespace yask {
         map<int, idx_t> num_elems; // send/recv => count.
         auto me = _env->my_rank;
         auto& step_dim = _dims->_step_dim;
-        
+
         // Need to determine the size and shape of all MPI buffers.
         // Visit all neighbors of this rank.
         _mpiInfo->visitNeighbors
@@ -365,7 +365,7 @@ namespace yask {
 
                 // Manhattan dist.
                 int mandist = _mpiInfo->man_dists.at(neigh_idx);
-                    
+
                 // Check distance.
                 // TODO: calculate and use exch dist for each grid.
                 if (mandist > maxdist) {
@@ -373,14 +373,14 @@ namespace yask {
                               " because L1-norm = " << mandist);
                     return;     // from lambda fn.
                 }
-        
+
                 // Is vectorized exchange allowed based on domain sizes?
                 // Both my rank and neighbor rank must have *all* domain sizes
                 // of vector multiples.
                 bool vec_ok = allow_vec_exchange &&
                     _mpiInfo->has_all_vlen_mults[_mpiInfo->my_neighbor_index] &&
                     _mpiInfo->has_all_vlen_mults[neigh_idx];
-                
+
                 // Determine size of MPI buffers between neigh_rank and my
                 // rank for each grid and create those that are needed.  It
                 // is critical that the number, size, and shape of my
@@ -442,7 +442,7 @@ namespace yask {
                                 grid_vec_ok = false;
                             if (lidx > gp->get_last_rank_alloc_index(dname))
                                 grid_vec_ok = false;
-                            
+
                             // Determine size of exchange in this dim. This
                             // will be the actual halo size plus any
                             // wave-front shifts. In the current
@@ -527,15 +527,15 @@ namespace yask {
                                 auto lidx = last_outer_idx[dname];
                                 lidx = round_up_flr(lidx + 1, vlen) - 1;
                                 last_outer_idx.setVal(dname, lidx);
-                                
+
                                 // sizes rounded up.
                                 my_halo_sizes.setVal(dname, ROUND_UP(my_halo_sizes[dname], vlen));
                                 neigh_halo_sizes.setVal(dname, ROUND_UP(neigh_halo_sizes[dname], vlen));
-                                    
+
                             } // domain dims in this grid.
                         } // domain dims.
                     }
-                    
+
                     // Make a buffer in both directions (send & receive).
                     for (int bd = 0; bd < MPIBufs::nBufDirs; bd++) {
 
@@ -558,7 +558,7 @@ namespace yask {
 
                                 // Neighbor direction in this dim.
                                 auto neigh_ofs = neigh_offsets[dname];
-                            
+
                                 // Region to read from, i.e., data from inside
                                 // this rank's domain to be put into neighbor's
                                 // halo. So, use neighbor's halo sizes when
@@ -572,19 +572,19 @@ namespace yask {
                                         copy_begin[dname] = first_inner_idx[dname];
                                         copy_end[dname] = first_inner_idx[dname] + neigh_halo_sizes[dname];
                                     }
-                            
+
                                     // Neighbor is to the right.
                                     else if (neigh_ofs == idx_t(MPIInfo::rank_next)) {
-                                    
+
                                         // Only read slice as wide as halo before end.
                                         copy_begin[dname] = last_inner_idx[dname] + 1 - neigh_halo_sizes[dname];
                                         copy_end[dname] = last_inner_idx[dname] + 1;
                                     }
-                            
+
                                     // Else, this neighbor is in same posn as I am in this dim,
                                     // so we leave the default begin/end settings.
                                 }
-                        
+
                                 // Region to write to, i.e., into this rank's halo.
                                 // So, use my halo sizes when calculating buffer sizes.
                                 else if (bd == MPIBufs::bufRecv) {
@@ -596,15 +596,15 @@ namespace yask {
                                         copy_begin[dname] = first_inner_idx[dname] - my_halo_sizes[dname];
                                         copy_end[dname] = first_inner_idx[dname];
                                     }
-                            
+
                                     // Neighbor is to the right.
                                     else if (neigh_ofs == idx_t(MPIInfo::rank_next)) {
-                                    
+
                                         // Only read slice as wide as halo after end.
                                         copy_begin[dname] = last_inner_idx[dname] + 1;
                                         copy_end[dname] = last_inner_idx[dname] + 1 + my_halo_sizes[dname];
                                     }
-                                
+
                                     // Else, this neighbor is in same posn as I am in this dim,
                                     // so we leave the default begin/end settings.
                                 }
@@ -653,7 +653,7 @@ namespace yask {
 
                             // Save computed size.
                             buf_sizes[dname] = dsize;
-                                
+
                         } // all dims in this grid.
 
                         // Unique name for buffer based on grid name, direction, and ranks.
@@ -690,7 +690,7 @@ namespace yask {
                         buf.num_pts = buf_sizes;
                         buf.name = bufname;
                         buf.vec_copy_ok = buf_vec_ok;
-                        
+
                         TRACE_MSG("MPI buffer '" << buf.name <<
                                   "' configured for rank at relative offsets " <<
                                   neigh_offsets.subElements(1).makeDimValStr() << " with " <<
@@ -722,10 +722,10 @@ namespace yask {
         for (int pass = 0; pass < 2; pass++) {
             TRACE_MSG("allocMpiData pass " << pass << " for " <<
                       mpiData.size() << " MPI buffer set(s)");
-        
+
             // Count bytes needed and number of buffers for each NUMA node.
             map <int, size_t> npbytes, nbufs;
-        
+
             // Grids.
             for (auto gp : gridPtrs) {
                 if (!gp)
@@ -749,7 +749,7 @@ namespace yask {
                                 auto& buf = grid_mpi_data.getBuf(MPIBufs::BufDir(bd), roffsets);
                                 if (buf.get_size() == 0)
                                     continue;
-                                
+
                                 // Set storage if buffer has been allocated in pass 0.
                                 if (pass == 1) {
                                     auto p = _mpi_data_buf[numa_pref];
@@ -799,13 +799,13 @@ namespace yask {
         // Delete any existing scratch grids.
         // Create new scratch grids.
         makeScratchGrids(rthreads);
-        
+
         // Pass 0: count required size, allocate chunk of memory at end.
         // Pass 1: distribute parts of already-allocated memory chunk.
         for (int pass = 0; pass < 2; pass++) {
             TRACE_MSG("allocScratchData pass " << pass << " for " <<
                       scratchVecs.size() << " set(s) of scratch grids");
-        
+
             // Count bytes needed and number of grids for each NUMA node.
             map <int, size_t> npbytes, ngrids;
 
@@ -821,7 +821,7 @@ namespace yask {
                     assert(gp);
                     auto& gname = gp->get_name();
                     int numa_pref = gp->get_numa_preferred();
-            
+
                     // Loop through each domain dim.
                     for (auto& dim : _dims->_domain_dims.getDims()) {
                         auto& dname = dim.getName();
@@ -833,14 +833,14 @@ namespace yask {
                             auto sz = round_up_flr(_opts->_block_sizes[dname],
                                                    gp->_get_vec_len(dname));
                             gp->_set_domain_size(dname, sz);
-                    
+
                             // Pads.
                             // Set via both 'extra' and 'min'; larger result will be used.
                             gp->set_extra_pad_size(dname, _opts->_extra_pad_sizes[dname]);
                             gp->set_min_pad_size(dname, _opts->_min_pad_sizes[dname]);
                         }
                     } // dims.
-                
+
                     // Set storage if buffer has been allocated.
                     if (pass == 1) {
                         auto p = _scratch_data_buf[numa_pref];
@@ -895,12 +895,12 @@ namespace yask {
 
                     // Rank domains.
                     gp->_set_domain_size(dname, _opts->_rank_sizes[dname]);
-                    
+
                     // Pads.
                     // Set via both 'extra' and 'min'; larger result will be used.
                     gp->set_extra_pad_size(dname, _opts->_extra_pad_sizes[dname]);
                     gp->set_min_pad_size(dname, _opts->_min_pad_sizes[dname]);
-                    
+
                     // Offsets.
                     gp->_set_offset(dname, rank_domain_offsets[dname]);
                     gp->_set_local_offset(dname, 0);
@@ -962,8 +962,8 @@ namespace yask {
             // If there is another rank to the right, set wave-front
             // extension on the right.
             right_wf_exts[dname] = _opts->is_last_rank(dname) ? 0 : shifts;
-        }            
-            
+        }
+
         // Now that wave-front settings are known, we can push this info
         // back to the grids. It's useful to store this redundant info
         // in the grids, because there it's indexed by grid dims instead
@@ -987,7 +987,7 @@ namespace yask {
             }
         }
     }
-    
+
     // Allocate grids and MPI bufs.
     // Initialize some data structures.
     void StencilContext::prepare_solution() {
@@ -1012,7 +1012,7 @@ namespace yask {
 #ifdef TRACE_INTRINSICS
         os << "*** WARNING: YASK compiled with TRACE_INTRINSICS; ignore performance results.\n";
 #endif
-        
+
         // reset time keepers.
         clear_timers();
 
@@ -1061,7 +1061,7 @@ namespace yask {
         os << endl;
         os << "Num grids: " << gridPtrs.size() << endl;
         os << "Num grids to be updated: " << outputGridPtrs.size() << endl;
-        
+
         // Set up data based on MPI rank, including grid positions.
         // Update all the grid sizes.
         setupRank();
@@ -1078,7 +1078,7 @@ namespace yask {
 
         print_info();
     }
-    
+
     void StencilContext::print_info() {
         auto& step_dim = _dims->_step_dim;
         ostream& os = get_ostr();
@@ -1149,7 +1149,7 @@ namespace yask {
             for (auto* sg : *sp) {
 
                 idx_t updates1 = 0, reads1 = 0, fpops1 = 0;
-            
+
                 // Loop through all the needed bundles to
                 // count stats for scratch bundles.
                 // Does not count extra ops needed in scratch halos
@@ -1161,19 +1161,21 @@ namespace yask {
                     fpops1 += rsg->get_scalar_fp_ops();
                 }
 
-                idx_t updates_domain = updates1 * sg->bb_num_points;
+                auto& bb = sg->getBB();
+                idx_t updates_domain = updates1 * bb.bb_num_points;
                 rank_numWrites_1t += updates_domain;
-                idx_t reads_domain = reads1 * sg->bb_num_points;
+                idx_t reads_domain = reads1 * bb.bb_num_points;
                 rank_reads_1t += reads_domain;
-                idx_t fpops_domain = fpops1 * sg->bb_num_points;
+                idx_t fpops_domain = fpops1 * bb.bb_num_points;
                 rank_numFpOps_1t += fpops_domain;
 
                 os << " Bundle '" << sg->get_name() << "':\n" <<
                     "  scratch bundles:            " << (sg_list.size() - 1) << endl <<
-                    "  sub-domain:                 " << sg->bb_begin.makeDimValStr() <<
-                    " ... " << sg->bb_end.subElements(1).makeDimValStr() << endl <<
-                    "  sub-domain size:            " << sg->bb_len.makeDimValStr(" * ") << endl <<
-                    "  valid points in sub domain: " << makeNumStr(sg->bb_num_points) << endl <<
+                    "  sub-domain scope:           " << bb.bb_begin.makeDimValStr() <<
+                    " ... " << bb.bb_end.subElements(1).makeDimValStr() << endl <<
+                    "  sub-domain size:            " << bb.bb_len.makeDimValStr(" * ") << endl <<
+                    "  valid points in sub domain: " << makeNumStr(bb.bb_num_points) << endl <<
+                    "  rectangles in sub domain:   " << sg->getBBs().size() << endl <<
                     "  grid-updates per point:     " << updates1 << endl <<
                     "  grid-updates in sub-domain: " << makeNumStr(updates_domain) << endl <<
                     "  grid-reads per point:       " << reads1 << endl <<
@@ -1213,7 +1215,7 @@ namespace yask {
         rank_domain_dt = rank_domain_1t * dt; // same as _opts->_rank_sizes.product();
         tot_domain_1t = sumOverRanks(rank_domain_1t, _env->comm);
         tot_domain_dt = tot_domain_1t * dt;
-    
+
         // Print some more stats.
         os << endl <<
             "Amount-of-work stats:\n" <<
@@ -1293,7 +1295,7 @@ namespace yask {
     }
 
     // Init all grids & params by calling initFn.
-    void StencilContext::initValues(function<void (YkGridPtr gp, 
+    void StencilContext::initValues(function<void (YkGridPtr gp,
                                                    real_t seed)> realInitFn) {
         ostream& os = get_ostr();
         real_t v = 0.1;
@@ -1312,12 +1314,12 @@ namespace yask {
         // Rank BB is based only on rank offsets and rank domain sizes.
         rank_bb.bb_begin = rank_domain_offsets;
         rank_bb.bb_end = rank_domain_offsets.addElements(_opts->_rank_sizes, false);
-        rank_bb.update_bb(os, "rank", *this, true);
+        rank_bb.update_bb("rank", *this, true, &os);
 
         // BB may be extended for wave-fronts.
         ext_bb.bb_begin = rank_bb.bb_begin.subElements(left_wf_exts);
         ext_bb.bb_end = rank_bb.bb_end.addElements(right_wf_exts);
-        ext_bb.update_bb(os, "extended-rank", *this, true);
+        ext_bb.update_bb("extended-rank", *this, true);
 
         // Find BB for each bundle. Each will be a subset within
         // 'ext_bb'.
@@ -1325,7 +1327,7 @@ namespace yask {
             sg->find_bounding_box();
     }
 
-    // Set the bounding-box vars for this bundle in this rank.
+    // Find the bounding-boxes for this bundle in this rank.
     void StencilBundleBase::find_bounding_box() {
         StencilContext& context = *_generic_context;
         ostream& os = context.get_ostr();
@@ -1334,7 +1336,12 @@ namespace yask {
         auto& domain_dims = dims->_domain_dims;
         auto& step_dim = dims->_step_dim;
         auto& stencil_dims = dims->_stencil_dims;
+        auto nddims = domain_dims.size();
         auto nsdims = stencil_dims.size();
+        TRACE_MSG3(get_name() << ".find_bounding_box()...");
+
+        // First, find an overall BB around all the
+        // valid points in the bundle.
 
         // Init min vars w/max val and vice-versa.
         Indices min_pts(idx_max, nsdims);
@@ -1359,16 +1366,13 @@ namespace yask {
         // Define misc-loop function.  Since step is always 1, we ignore
         // misc_stop.  Update only if point is in domain for this bundle.
 #define misc_fn(misc_idxs) do {                                  \
-        if (is_in_valid_domain(misc_idxs.start)) {               \
-            min_pts = min_pts.minElements(misc_idxs.start);      \
-            max_pts = max_pts.maxElements(misc_idxs.start);      \
-            npts++; \
-        } } while(0)
-
+            if (is_in_valid_domain(misc_idxs.start)) {           \
+                min_pts = min_pts.minElements(misc_idxs.start);  \
+                max_pts = max_pts.maxElements(misc_idxs.start);  \
+                npts++;                                          \
+            } } while(0)
+        
         // Define OMP reductions to be used in generated code.
-#ifdef OMP_PRAGMA_SUFFIX
-#undef OMP_PRAGMA_SUFFIX
-#endif
 #define OMP_PRAGMA_SUFFIX reduction(+:npts)     \
             reduction(min_idxs:min_pts)         \
             reduction(max_idxs:max_pts)
@@ -1378,40 +1382,239 @@ namespace yask {
         // points.
 #include "yask_misc_loops.hpp"
 #undef misc_fn
-#undef OMP_PRAGMA_SUFFIX
 
         // Init bb vars to ensure they contain correct dims.
-        bb_begin = domain_dims;
-        bb_end = domain_dims;
-        
+        _bundle_bb.bb_begin = domain_dims;
+        _bundle_bb.bb_end = domain_dims;
+
         // If any points, set begin vars to min indices and end vars to one
         // beyond max indices.
         if (npts) {
             IdxTuple tmp(stencil_dims); // create tuple w/stencil dims.
             min_pts.setTupleVals(tmp);  // convert min_pts to tuple.
-            bb_begin.setVals(tmp, false); // set bb_begin to domain dims of min_pts.
+            _bundle_bb.bb_begin.setVals(tmp, false); // set bb_begin to domain dims of min_pts.
 
             max_pts.setTupleVals(tmp); // convert min_pts to tuple.
-            bb_end.setVals(tmp, false); // set bb_end to domain dims of max_pts.
-            bb_end = bb_end.addElements(1); // end = last + 1.
+            _bundle_bb.bb_end.setVals(tmp, false); // set bb_end to domain dims of max_pts.
+            _bundle_bb.bb_end = _bundle_bb.bb_end.addElements(1); // end = last + 1.
         }
 
         // No points, just set to zero.
         else {
-            bb_begin.setValsSame(0);
-            bb_end.setValsSame(0);
+            _bundle_bb.bb_begin.setValsSame(0);
+            _bundle_bb.bb_end.setValsSame(0);
         }
-        bb_num_points = npts;
-        
-        // Finalize BB.
-        update_bb(os, get_name(), context);
+        _bundle_bb.bb_num_points = npts;
+
+        // Finalize overall BB.
+        _bundle_bb.update_bb(get_name(), context, false);
+
+        // If the BB is full (solid), this BB is the only bb.
+        if (_bundle_bb.bb_is_full || !npts) {
+            TRACE_MSG3("adding 1 sub-BB: " << _bundle_bb.bb_begin.makeDimValStr() <<
+                       " ... (end before) " << _bundle_bb.bb_end.makeDimValStr());
+            _bb_list.push_back(_bundle_bb);
+        }
+
+        // Create list of full BBs (non-overlapping & with no invalid
+        // points) inside overall BB.
+        else {
+
+            // Divide the overall BB into a slice for each thread
+            // across the outer dim.
+            const int odim = 0;
+            idx_t outer_len = _bundle_bb.bb_len[odim];
+            idx_t nthreads = omp_get_max_threads();
+            idx_t len_per_thr = CEIL_DIV(outer_len, nthreads);
+
+            // List of BBs for each thread.
+            BBList bb_lists[nthreads];
+
+            // Run rect-finding code on each thread.
+            // When these are done, we will merge the
+            // rects from all threads.
+#pragma omp parallel for
+            for (int n = 0; n < nthreads; n++) {
+                auto& cur_bb_list = bb_lists[n];
+
+                // Begin and end of this slice.
+                IdxTuple slice_begin(_bundle_bb.bb_begin);
+                slice_begin[odim] += n * len_per_thr;
+                IdxTuple slice_end(_bundle_bb.bb_end);
+                slice_end[odim] = min(slice_end[odim], slice_begin[odim] + len_per_thr);
+                if (slice_end[odim] <= slice_begin[odim])
+                    continue;
+
+                // Construct len of slice in all dims.
+                IdxTuple slice_len = slice_end.subElements(slice_begin);
+                
+                // Visit all points in slice, looking for a new
+                // valid starting point, 'pt'.
+                IdxTuple spt(stencil_dims);
+                IdxTuple dpt(domain_dims);
+                slice_len.visitAllPoints
+                    ([&](const IdxTuple& ofs, size_t idx) {
+
+                        // Find global point from 'ofs'.
+                        dpt = slice_begin.addElements(ofs); // domain tuple.
+                        spt.setVals(dpt, false);            // stencil tuple.
+                        Indices pt(spt);                    // stencil indices.
+
+                        // Valid point must be in sub-domain and
+                        // not seen before in this slice.
+                        bool is_valid = is_in_valid_domain(pt);
+                        if (is_valid) {
+                            for (auto& bb : cur_bb_list) {
+                                if (bb.is_in_bb(dpt)) {
+                                    is_valid = false;
+                                    break;
+                                }
+                            }
+                        }
+                        
+                        // Process this new rect starting at 'pt'.
+                        if (is_valid) {
+                            IdxTuple espt(stencil_dims);
+                            IdxTuple edpt(domain_dims);
+
+                            // Scan from 'pt' to end of this slice
+                            // looking for end of rect.
+                            IdxTuple scan_len = slice_end.subElements(dpt);
+
+                            // Repeat scan until no adjustment is made.
+                            bool do_scan = true;
+                            while (do_scan) {
+                                do_scan = false;
+
+                                TRACE_MSG3("scanning " << scan_len.makeDimValStr(" * ") <<
+                                           " starting at " << dpt.makeDimValStr());
+                                scan_len.visitAllPoints
+                                    ([&](const IdxTuple& eofs, size_t eidx) {
+
+                                        // Make sure scan_len range is observed.
+                                        for (int i = 0; i < nddims; i++)
+                                            assert(eofs[i] < scan_len[i]);
+
+                                        // Find global point from 'eofs'.
+                                        edpt = dpt.addElements(eofs); // domain tuple.
+                                        espt.setVals(edpt, false); // stencil tuple.
+                                        Indices ept(espt); // stencil indices.
+
+                                        // Valid point must be in sub-domain and
+                                        // not seen before in this slice.
+                                        bool is_evalid = is_in_valid_domain(ept);
+                                        if (is_evalid) {
+                                            for (auto& bb : cur_bb_list) {
+                                                if (bb.is_in_bb(edpt)) {
+                                                    is_evalid = false;
+                                                    break;
+                                                }
+                                            }
+                                        }
+
+                                        // If this is an invalid point, adjust
+                                        // scan range appropriately.
+                                        if (!is_evalid) {
+
+                                            // Adjust 1st dim that is beyond its starting pt.
+                                            // This will reduce the range of the scan.
+                                            for (int i = 0; i < nddims; i++) {
+
+                                                // Beyond starting point in this dim?
+                                                if (edpt[i] > dpt[i]) {
+                                                    scan_len[i] = edpt[i] - dpt[i];
+
+                                                    // restart scan for
+                                                    // remaining dims.
+                                                    // TODO: be smarter
+                                                    // about where to
+                                                    // restart scan.
+                                                    if (i < nddims - 1)
+                                                        do_scan = true;
+
+                                                    return false; // stop this scan.
+                                                }
+                                            }
+                                        }
+
+                                        return true; // keep looking for invalid point.
+                                    }); // Looking for invalid point.
+                            } // while scan is adjusted.
+                            TRACE_MSG3("found BB " << scan_len.makeDimValStr(" * ") <<
+                                       " starting at " << dpt.makeDimValStr());
+
+                            // 'scan_len' now contains sizes of the new BB.
+                            BoundingBox new_bb;
+                            new_bb.bb_begin = dpt;
+                            new_bb.bb_end = dpt.addElements(scan_len);
+                            new_bb.update_bb("sub-bb", context, true);
+                            cur_bb_list.push_back(new_bb);
+                            
+                        } // new rect found.
+
+                        return true;  // from labmda; keep looking.
+                    }); // Looking for new rects.
+            } // threads/slices.
+
+            // Collect BBs in all slices.
+            // TODO: merge in a binary tree instead of sequentially.
+            for (int n = 0; n < nthreads; n++) {
+                auto& cur_bb_list = bb_lists[n];
+                TRACE_MSG3("processing " << cur_bb_list.size() <<
+                           " sub-BB(s) in bundle '" << get_name() <<
+                           "' from thread " << n);
+
+                // BBs in slice 'n'.
+                for (auto& bbn : cur_bb_list) {
+                    TRACE_MSG3(" sub-BB: " << bbn.bb_begin.makeDimValStr() <<
+                               " ... (end before) " << bbn.bb_end.makeDimValStr());
+
+                    // Scan existing final BBs looking for one to merge with.
+                    bool do_merge = false;
+                    for (auto& bb : _bb_list) {
+
+                        // Can 'bbn' be merged with 'bb'?
+                        do_merge = true;
+                        for (int i = 0; i < nddims && do_merge; i++) {
+
+                            // Must be adjacent in outer dim.
+                            if (i == odim) {
+                                if (bb.bb_end[i] != bbn.bb_begin[i])
+                                    do_merge = false;
+                            }
+
+                            // Must be aligned in other dims.
+                            else {
+                                if (bb.bb_begin[i] != bbn.bb_begin[i] ||
+                                    bb.bb_end[i] != bbn.bb_end[i])
+                                    do_merge = false;
+                            }
+                        }
+                        if (do_merge) {
+
+                            // Merge by just increasing the size of 'bb'.
+                            bb.bb_end[odim] = bbn.bb_end[odim];
+                            TRACE_MSG3("  merging to form " << bb.bb_begin.makeDimValStr() <<
+                                       " ... (end before) " << bb.bb_end.makeDimValStr());
+                            break;
+                        }
+                    }
+
+                    // If not merged, add 'bbn' as new.
+                    if (!do_merge) {
+                        _bb_list.push_back(bbn);
+                        TRACE_MSG3("  adding as final sub-BB #" << _bb_list.size());
+                    }
+                }
+            }
+        }
     }
-    
+
     // Compute convenience values for a bounding-box.
-    void BoundingBox::update_bb(ostream& os,
-                                const string& name,
+    void BoundingBox::update_bb(const string& name,
                                 StencilContext& context,
-                                bool force_full) {
+                                bool force_full,
+                                ostream* os) {
 
         auto dims = context.get_dims();
         auto& domain_dims = dims->_domain_dims;
@@ -1423,11 +1626,12 @@ namespace yask {
         // Solid rectangle?
         bb_is_full = true;
         if (bb_num_points != bb_size) {
-            os << "Warning: '" << name << "' domain has only " <<
+            if (os)
+            *os << "Note: '" << name << "' domain has only " <<
                 makeNumStr(bb_num_points) <<
                 " valid point(s) inside its bounding-box of " <<
                 makeNumStr(bb_size) <<
-                " point(s); slower scalar calculations will be used.\n";
+                " point(s); multiple sub-boxes will be used.\n";
             bb_is_full = false;
         }
 
@@ -1437,7 +1641,8 @@ namespace yask {
             auto& dname = dim.getName();
             if ((bb_begin[dname] - context.rank_domain_offsets[dname]) %
                 dims->_fold_pts[dname] != 0) {
-                os << "Note: '" << name << "' domain"
+                if (os)
+                *os << "Note: '" << name << "' domain"
                     " has one or more starting edges not on vector boundaries;"
                     " masked calculations will be used in peel and remainder sub-blocks.\n";
                 bb_is_aligned = false;
@@ -1451,7 +1656,8 @@ namespace yask {
             auto& dname = dim.getName();
             if (bb_len[dname] % dims->_cluster_pts[dname] != 0) {
                 if (bb_is_full && bb_is_aligned)
-                    os << "Note: '" << name << "' domain"
+                    if (os && bb_is_aligned)
+                    *os << "Note: '" << name << "' domain"
                         " has one or more sizes that are not vector-cluster multiples;"
                         " masked calculations will be used in peel and remainder sub-blocks.\n";
                 bb_is_cluster_mult = false;
@@ -1462,5 +1668,5 @@ namespace yask {
         // All done.
         bb_valid = true;
     }
-    
+
 } // namespace yask.

@@ -70,7 +70,7 @@ namespace yask {
             Indices idxs(_dims);
             _layout_base->set_sizes(idxs);
         }
-        
+
     public:
 
         // Ctor. No allocation is done. See notes on default_alloc().
@@ -105,7 +105,7 @@ namespace yask {
             _numa_pref = yask_numa_none;
             return numa_node == yask_numa_none;
 #endif
-        }        
+        }
 
         // Access dims.
         const IdxTuple& get_dims() const { return _dims; }
@@ -192,7 +192,7 @@ namespace yask {
             _base.reset();
             _elems = 0;
         }
-        
+
         // Set pointer to storage.
         // Free old storage.
         // 'base' should provide get_num_bytes() bytes at offset bytes.
@@ -204,7 +204,7 @@ namespace yask {
                                   double epsilon) const =0;
 
     };
-    
+
     // A base class for a generic n-D grid of elements of arithmetic type T.
     // This class defines the type but does not define the memory layout.
     template <typename T>
@@ -278,7 +278,7 @@ namespace yask {
         public GenericGridTemplate<T> {
     protected:
         LayoutFn _layout;
-    
+
     public:
 
         // Construct an unallocated grid.
@@ -301,7 +301,7 @@ namespace yask {
         virtual const Indices& get_dim_sizes() const final {
             return _layout.get_sizes();
         }
-        
+
         // Get 1D index using layout.
         virtual idx_t get_index(const Indices& idxs, bool check=true) const final {
 #ifdef CHECK
@@ -331,7 +331,7 @@ namespace yask {
             idx_t ai = GenericGrid::get_index(pt, check);
             return &((T*)this->_elems)[ai];
         }
-        
+
     };
 
     // A generic 0-D grid (scalar) of elements of type T.
@@ -343,7 +343,7 @@ namespace yask {
 
         // List of dims is for consistency; should be empty for 0-D.
         const GridDimNames _dimNames;
-    
+
     public:
 
         // Construct an unallocated scalar.

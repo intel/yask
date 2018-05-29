@@ -96,7 +96,7 @@ public:
     // appropriately.
 
     template<typename N, typename DA, typename SA, typename DB, typename SB>
-    void define_str(GridIndex t, GridIndex x, GridIndex y, GridIndex z, 
+    void define_str(GridIndex t, GridIndex x, GridIndex y, GridIndex z,
                     Grid &s, Grid &va, Grid &vb) {
 
         GridValue lcoeff = interp_mu<N>( x, y, z );

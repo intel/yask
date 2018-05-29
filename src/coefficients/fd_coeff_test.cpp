@@ -37,7 +37,7 @@ using namespace std;
 int main()
 {
     //set the order of the derivative to approximate
-    //e.g. we want to approximate d^m/dx^m 
+    //e.g. we want to approximate d^m/dx^m
     const int order = 2;
 
     //set the evaluation point e.g. we want to approximate some derivative f^(m)[eval_point]
@@ -48,13 +48,13 @@ int main()
     const int num_points = 2*radius+1;
     float coeff[num_points];
     memset(coeff, 0.0, sizeof(coeff));
-    
+
     //float* coeff = (float*) malloc(num_points*sizeof(float));
     //memset(coeff, 0.0, num_points*sizeof(float));
 
-    //Construct a set of points (-h*radius, -h*(radius-1), .. 0, h,..., h*radius) 
-    //Could pass any arbitrary array grid_points = {x_0, x_1, ... x_n} 
-    
+    //Construct a set of points (-h*radius, -h*(radius-1), .. 0, h,..., h*radius)
+    //Could pass any arbitrary array grid_points = {x_0, x_1, ... x_n}
+
     //float* grid_points = (float*) malloc(num_points*sizeof(float));
     float grid_points[num_points];
     cout << "Approximating derivative from grid points: " ;
@@ -64,7 +64,7 @@ int main()
     }
 
     cout << endl;
-    
+
     fd_coeff(coeff, eval_point, order, grid_points, num_points);
 
     string suffix = (order == 1) ? "st" : (order == 2) ? "nd" : (order == 3) ? "rd" : "th";
@@ -87,6 +87,6 @@ int main()
     cout << endl;
 
 //free(grid_points);
-//free(coeff);   
+//free(coeff);
 return 0;
 }

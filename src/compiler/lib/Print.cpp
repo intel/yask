@@ -191,7 +191,7 @@ namespace yask {
             _exprStr = p->second;
             exprDone = true;
         }
-        
+
         // Consider top down if forcing or expr <= maxExprSize.
         else if (force || !tooBig) {
 
@@ -207,7 +207,7 @@ namespace yask {
                 _exprStr = topDown->getExprStr();
                 exprDone = true;
             }
-            
+
             // if common subexprs exist, and top-down is forced, use the
             // top-down expression regardless.  If node is big enough for
             // sharing, also assign the result to a temp var so it can be used
@@ -222,7 +222,7 @@ namespace yask {
 
             // otherwise, there are common subexprs, and top-down is not forced,
             // so don't do top-down.
-        
+
             delete topDown;
         }
 
@@ -327,7 +327,7 @@ namespace yask {
         for (auto ep : ops) {
             opNum++;
 
-            // eval the operand; sets _exprStr.            
+            // eval the operand; sets _exprStr.
             ep->accept(this);
             string opStr = getExprStrAndClear();
 
@@ -364,7 +364,7 @@ namespace yask {
         // Note that we don't try top-down here.
         // We always assign the RHS to a temp var and then
         // write the temp var to the grid.
-    
+
         // Eval RHS.
         Expr* rp = ee->getRhs().get();
         rp->accept(this); // sets _exprStr.
@@ -388,7 +388,7 @@ namespace yask {
             _os << " IF (" << cond << ")";
         }
         _os << ".\n";
-        
+
         // Write temp var to grid.
         _os << _ph.getLinePrefix() << _ph.writeToPoint(_os, *gpp, tmp) << _ph.getLineSuffix();
 
@@ -399,9 +399,9 @@ namespace yask {
 
     // Only want to visit the RHS of an equality.
     void POVRayPrintVisitor::visit(EqualsExpr* ee) {
-        ee->getRhs()->accept(this);      
+        ee->getRhs()->accept(this);
     }
-    
+
     // A point: output it.
     void POVRayPrintVisitor::visit(GridPoint* gp) {
         _numPts++;
@@ -409,7 +409,7 @@ namespace yask {
         // Pick a color based on its distance.
         size_t ci = gp->getArgOffsets().max();
         ci %= _colors.size();
-        
+
         _os << "point(" + _colors[ci] + ", " << gp->getArgOffsets().makeValStr() << ")" << endl;
     }
 
@@ -565,7 +565,7 @@ namespace yask {
             os << endl << " // Top-down stencil calculation:" << endl;
             PrintVisitorTopDown pv1(os, ph, _settings);
             eq->visitEqs(&pv1);
-            
+
             os << endl << " // Bottom-up stencil calculation:" << endl;
             PrintVisitorBottomUp pv2(os, ph, _settings);
             eq->visitEqs(&pv2);
