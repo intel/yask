@@ -1327,7 +1327,7 @@ namespace yask {
             sg->find_bounding_box();
     }
 
-    // Set the bounding-box vars for this bundle in this rank.
+    // Find the bounding-boxes for this bundle in this rank.
     void StencilBundleBase::find_bounding_box() {
         StencilContext& context = *_generic_context;
         ostream& os = context.get_ostr();
@@ -1336,7 +1336,9 @@ namespace yask {
         auto& domain_dims = dims->_domain_dims;
         auto& step_dim = dims->_step_dim;
         auto& stencil_dims = dims->_stencil_dims;
+        auto nddims = domain_dims.size();
         auto nsdims = stencil_dims.size();
+        TRACE_MSG3(get_name() << ".find_bounding_box()...");
 
         // First, find an overall BB around all the
         // valid points in the bundle.
@@ -1408,16 +1410,21 @@ namespace yask {
         _bundle_bb.update_bb(get_name(), context, false);
 
         // If the BB is full (solid), this BB is the only bb.
-        if (_bundle_bb.bb_is_full || !npts)
+        if (_bundle_bb.bb_is_full || !npts) {
+            TRACE_MSG3("adding 1 sub-BB: " << _bundle_bb.bb_begin.makeDimValStr() <<
+                       " ... (end before) " << _bundle_bb.bb_end.makeDimValStr());
             _bb_list.push_back(_bundle_bb);
+        }
 
-        // Create list of full BBs (i.e., with no invalid points) inside overall BB.
+        // Create list of full BBs (non-overlapping & with no invalid
+        // points) inside overall BB.
         else {
 
             // Divide the overall BB into a slice for each thread
             // across the outer dim.
-            idx_t outer_len = _bundle_bb.bb_len[0];
-            idx_t nthreads = omp_get_num_threads();
+            const int odim = 0;
+            idx_t outer_len = _bundle_bb.bb_len[odim];
+            idx_t nthreads = omp_get_max_threads();
             idx_t len_per_thr = CEIL_DIV(outer_len, nthreads);
 
             // List of BBs for each thread.
@@ -1432,87 +1439,173 @@ namespace yask {
 
                 // Begin and end of this slice.
                 IdxTuple slice_begin(_bundle_bb.bb_begin);
-                slice_begin[0] += n * len_per_thr;
+                slice_begin[odim] += n * len_per_thr;
                 IdxTuple slice_end(_bundle_bb.bb_end);
-                slice_end[0] = min(slice_end[0], slice_begin[0] + len_per_thr);
-                if (slice_end[0] <= slice_begin[0])
+                slice_end[odim] = min(slice_end[odim], slice_begin[odim] + len_per_thr);
+                if (slice_end[odim] <= slice_begin[odim])
                     continue;
 
                 // Construct len of slice in all dims.
                 IdxTuple slice_len = slice_end.subElements(slice_begin);
                 
                 // Visit all points in slice, looking for a new
-                // valid starting point.
-                bool new_valid = false;
+                // valid starting point, 'pt'.
+                IdxTuple spt(stencil_dims);
+                IdxTuple dpt(domain_dims);
                 slice_len.visitAllPoints
                     ([&](const IdxTuple& ofs, size_t idx) {
 
-                        // Find pt in this slice.
-                        Indices pt = slice_begin.addElements(ofs);
+                        // Find global point from 'ofs'.
+                        dpt = slice_begin.addElements(ofs); // domain tuple.
+                        spt.setVals(dpt, false);            // stencil tuple.
+                        Indices pt(spt);                    // stencil indices.
 
-                        // New valid point must be in sub-domain and
+                        // Valid point must be in sub-domain and
                         // not seen before in this slice.
-                        if (is_in_valid_domain(pt)) {
-                            new_valid = true;
+                        bool is_valid = is_in_valid_domain(pt);
+                        if (is_valid) {
                             for (auto& bb : cur_bb_list) {
-                                if (!bb.is_in_bb(pt)) {
-                                    new_valid = false;
+                                if (bb.is_in_bb(dpt)) {
+                                    is_valid = false;
                                     break;
                                 }
                             }
                         }
-                            
-                        // Find end point of this rect.
-                        if (new_valid) {
+                        
+                        // Process this new rect starting at 'pt'.
+                        if (is_valid) {
+                            IdxTuple espt(stencil_dims);
+                            IdxTuple edpt(domain_dims);
 
-                            // Scan from 'pt' to end of this slice.
-                            IdxTuple scan_begin(slice_begin);
-                            pt.setTupleVals(scan_begin);
-                            IdxTuple scan_len = slice_end.subElements(scan_begin);
-                            scan_len.visitAllPoints
-                                ([&](const IdxTuple& eofs, size_t eidx) {
+                            // Scan from 'pt' to end of this slice
+                            // looking for end of rect.
+                            IdxTuple scan_len = slice_end.subElements(dpt);
 
-                                    // Find pt in this slice.
-                                    Indices ept = scan_begin.addElements(eofs);
+                            // Repeat scan until no adjustment is made.
+                            bool do_scan = true;
+                            while (do_scan) {
+                                do_scan = false;
 
-                                    // If this is an invalid point, adjust
-                                    // scan range.
-                                    if (!is_in_valid_domain(ept)) {
+                                TRACE_MSG3("scanning " << scan_len.makeDimValStr(" * ") <<
+                                           " starting at " << dpt.makeDimValStr());
+                                scan_len.visitAllPoints
+                                    ([&](const IdxTuple& eofs, size_t eidx) {
 
-                                        // Adjust 1st dim that is beyond starting pt.
-                                        // This will alter the range of the current scan.
-                                        for (int i = 0; i < slice_len.getNumDims(); i++) {
-                                            if (ept[i] > pt[i]) {
-                                                scan_len[i] = ept[i];
-                                                break;
+                                        // Make sure scan_len range is observed.
+                                        for (int i = 0; i < nddims; i++)
+                                            assert(eofs[i] < scan_len[i]);
+
+                                        // Find global point from 'eofs'.
+                                        edpt = dpt.addElements(eofs); // domain tuple.
+                                        espt.setVals(edpt, false); // stencil tuple.
+                                        Indices ept(espt); // stencil indices.
+
+                                        // Valid point must be in sub-domain and
+                                        // not seen before in this slice.
+                                        bool is_evalid = is_in_valid_domain(ept);
+                                        if (is_evalid) {
+                                            for (auto& bb : cur_bb_list) {
+                                                if (bb.is_in_bb(edpt)) {
+                                                    is_evalid = false;
+                                                    break;
+                                                }
                                             }
                                         }
-                                    }
 
-                                    return true;
-                                }); // Looking for end of rect.
+                                        // If this is an invalid point, adjust
+                                        // scan range appropriately.
+                                        if (!is_evalid) {
+
+                                            // Adjust 1st dim that is beyond its starting pt.
+                                            // This will reduce the range of the scan.
+                                            for (int i = 0; i < nddims; i++) {
+
+                                                // Beyond starting point in this dim?
+                                                if (edpt[i] > dpt[i]) {
+                                                    scan_len[i] = edpt[i] - dpt[i];
+
+                                                    // restart scan for
+                                                    // remaining dims.
+                                                    // TODO: be smarter
+                                                    // about where to
+                                                    // restart scan.
+                                                    if (i < nddims - 1)
+                                                        do_scan = true;
+
+                                                    return false; // stop this scan.
+                                                }
+                                            }
+                                        }
+
+                                        return true; // keep looking for invalid point.
+                                    }); // Looking for invalid point.
+                            } // while scan is adjusted.
+                            TRACE_MSG3("found BB " << scan_len.makeDimValStr(" * ") <<
+                                       " starting at " << dpt.makeDimValStr());
 
                             // 'scan_len' now contains sizes of the new BB.
                             BoundingBox new_bb;
-                            new_bb.bb_begin = slice_begin;
-                            pt.setTupleVals(new_bb.bb_begin);
-                            new_bb.bb_end = new_bb.bb_begin.addElements(scan_len);
+                            new_bb.bb_begin = dpt;
+                            new_bb.bb_end = dpt.addElements(scan_len);
                             new_bb.update_bb("sub-bb", context, true);
                             cur_bb_list.push_back(new_bb);
-                        }
+                            
+                        } // new rect found.
 
                         return true;  // from labmda; keep looking.
                     }); // Looking for new rects.
-            } // threads.
+            } // threads/slices.
 
             // Collect BBs in all slices.
+            // TODO: merge in a binary tree instead of sequentially.
             for (int n = 0; n < nthreads; n++) {
                 auto& cur_bb_list = bb_lists[n];
-                TRACE_MSG3(cur_bb_list.size() << " sub-BBs in bundle '" << get_name() << "'");
+                TRACE_MSG3("processing " << cur_bb_list.size() <<
+                           " sub-BB(s) in bundle '" << get_name() <<
+                           "' from thread " << n);
 
-#pragma warning "TODO: merge sub-bbs"
-                for (auto& bb : cur_bb_list)
-                    _bb_list.push_back(bb);
+                // BBs in slice 'n'.
+                for (auto& bbn : cur_bb_list) {
+                    TRACE_MSG3(" sub-BB: " << bbn.bb_begin.makeDimValStr() <<
+                               " ... (end before) " << bbn.bb_end.makeDimValStr());
+
+                    // Scan existing final BBs looking for one to merge with.
+                    bool do_merge = false;
+                    for (auto& bb : _bb_list) {
+
+                        // Can 'bbn' be merged with 'bb'?
+                        do_merge = true;
+                        for (int i = 0; i < nddims && do_merge; i++) {
+
+                            // Must be adjacent in outer dim.
+                            if (i == odim) {
+                                if (bb.bb_end[i] != bbn.bb_begin[i])
+                                    do_merge = false;
+                            }
+
+                            // Must be aligned in other dims.
+                            else {
+                                if (bb.bb_begin[i] != bbn.bb_begin[i] ||
+                                    bb.bb_end[i] != bbn.bb_end[i])
+                                    do_merge = false;
+                            }
+                        }
+                        if (do_merge) {
+
+                            // Merge by just increasing the size of 'bb'.
+                            bb.bb_end[odim] = bbn.bb_end[odim];
+                            TRACE_MSG3("  merging to form " << bb.bb_begin.makeDimValStr() <<
+                                       " ... (end before) " << bb.bb_end.makeDimValStr());
+                            break;
+                        }
+                    }
+
+                    // If not merged, add 'bbn' as new.
+                    if (!do_merge) {
+                        _bb_list.push_back(bbn);
+                        TRACE_MSG3("  adding as final sub-BB #" << _bb_list.size());
+                    }
+                }
             }
         }
     }

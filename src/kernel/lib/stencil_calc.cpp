@@ -527,17 +527,11 @@ namespace yask {
             misc_idxs.step.setFromConst(1);
             misc_idxs.align.setFromConst(1);
 
-#ifdef TRACE
-            string msg = "calc_sub_block:  using scalar code for ";
-            msg += scalar_for_peel_rem ? "peel/remainder of" : "entire";
-            msg += " sub-block ";
-            msg += bb_is_full ? "without" : "with";
-            msg += " sub-domain checking for ";
-            TRACE_MSG3(msg <<
+            TRACE_MSG3((scalar_for_peel_rem ? "peel/remainder of" : "entire") <<
+                       " sub-block" <<
                        misc_idxs.begin.makeValStr(nsdims) <<
                        " ... (end before) " <<
                        misc_idxs.end.makeValStr(nsdims));
-#endif
 
             // Define misc-loop function.
             // If point is in sub-domain for this

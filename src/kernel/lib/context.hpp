@@ -51,7 +51,7 @@ namespace yask {
                        std::ostream* os = NULL);
 
         // Is point in BB?
-        bool is_in_bb(Indices pt) {
+        bool is_in_bb(const IdxTuple& pt) const {
             assert(pt.getNumDims() == bb_begin.getNumDims());
             for (int i = 0; i < pt.getNumDims(); i++) {
                 if (pt[i] < bb_begin[i])

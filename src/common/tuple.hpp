@@ -517,7 +517,7 @@ namespace yask {
         bool _visitAllPoints(std::function<bool (const Tuple&, size_t idx)> visitor,
                              int curDimNum, int step, Tuple& tp) const {
             auto& sc = _q.at(curDimNum);
-            auto& dsize = sc.getVal();
+            auto dsize = sc.getVal();
             int lastDimNum = (step > 0) ? size()-1 : 0;
 
             // If no more dims, iterate along current dimension and call

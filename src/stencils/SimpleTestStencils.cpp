@@ -343,7 +343,7 @@ protected:
 public:
 
     TestSubdomainStencil1(StencilList& stencils, int radius=2) :
-        StencilRadiusBase("test_subdomain1", stencils, radius) { }
+        StencilRadiusBase("test_subdomain_1d", stencils, radius) { }
 
     // Define equation to apply to all points in 'data' grid.
     virtual void define() {
@@ -351,7 +351,7 @@ public:
         // Sub-domain.
         Condition sd0 = (x >= first_index(x) + 5) && (x <= last_index(x) - 3);
         
-        // Set data w/asymmetrical stencils.
+        // Set data w/different stencils.
 
         GridValue u = data(t, x);
         for (int r = 1; r <= _radius; r++)
@@ -370,6 +370,51 @@ public:
 };
 
 REGISTER_STENCIL(TestSubdomainStencil1);
+
+class TestSubdomainStencil3 : public StencilRadiusBase {
+
+protected:
+
+    // Indices & dimensions.
+    MAKE_STEP_INDEX(t);           // step in time dim.
+    MAKE_DOMAIN_INDEX(x);         // spatial dim.
+    MAKE_DOMAIN_INDEX(y);         // spatial dim.
+    MAKE_DOMAIN_INDEX(z);         // spatial dim.
+
+    // Vars.
+    MAKE_GRID(data, t, x, y, z); // time-varying grid.
+
+public:
+
+    TestSubdomainStencil3(StencilList& stencils, int radius=2) :
+        StencilRadiusBase("test_subdomain_3d", stencils, radius) { }
+
+    // Define equation to apply to all points in 'data' grid.
+    virtual void define() {
+
+        // Sub-domain is rectangle interior.
+        Condition sd0 =
+            (x >= first_index(x) + 5) && (x <= last_index(x) - 3) &&
+            (y >= first_index(y) + 4) && (y <= last_index(y) - 6) &&
+            (z >= first_index(z) + 6) && (z <= last_index(z) - 4);
+        
+        // Set data w/different stencils.
+
+        GridValue u = data(t, x, y, z);
+        for (int r = 1; r <= _radius; r++)
+            u += data(t, x-r, y, z) + data(t, x+r, y, z) +
+                data(t, x, y-r, z) + data(t, x, y+r, z) +
+                data(t, x, y, z-r) + data(t, x, y, z+r);
+        data(t+1, x, y, z) EQUALS u / (_radius * 6 + 1) IF sd0;
+
+        GridValue v = data(t, x, y, z);
+        for (int r = 1; r <= _radius; r++)
+            v += data(t, x-r, y-r, z-r) + data(t, x+r, y+r, z+r);
+        data(t+1, x, y, z) EQUALS u / (_radius * 2 + 1) IF !sd0;
+    }
+};
+
+REGISTER_STENCIL(TestSubdomainStencil3);
 
 // A stencil that has grids, but no stencil equation.
 class TestEmptyStencil1 : public StencilBase {
