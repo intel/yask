@@ -35,8 +35,7 @@ IN THE SOFTWARE.
 #include <algorithm>
 #include <sstream>
 #include <functional>
-#include <map>
-#include <set>
+#include <unordered_map>
 #include <deque>
 #include <vector>
 #include <cstdarg>
@@ -58,14 +57,16 @@ namespace yask {
         // A shared global pool for names.
         // Use a map instead of a set to have reliable pointers
         // for the string values.
-        static std::map<std::string, std::string> _allNames;
+        static std::unordered_map<std::string, std::string> _allNames;
 
         // Look up names in the pool.
         static const std::string* _getPoolPtr(const std::string& name) {
 
             // Get existing entry or add.
             // Add the value to be the same as the key because
-            // addr of key might change, but addr of value won't.
+            // addr of key might change, but addr of cstr in value
+            // shouldn't change.
+            // TODO: update this with something that is thread-safe!
             auto i = _allNames.emplace(name, name); // returns iterator + bool pair.
             auto& i2 = *i.first; // iterator to element pair.
             auto& i3 = i2.second; // ref to value.

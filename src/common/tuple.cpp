@@ -34,7 +34,7 @@ namespace yask {
 
     // Declare static member.
     template <typename T>
-    std::map<std::string, std::string> Scalar<T>::_allNames;
+    std::unordered_map<std::string, std::string> Scalar<T>::_allNames;
 
     // Implementations.
 
@@ -64,7 +64,8 @@ namespace yask {
         }
 
         // If not found, it could be an indentical string from
-        // another pool.
+        // another pool. This might happen when two dynamic
+        // libs are loaded into the same executable.
         for (size_t i = 0; i < _q.size(); i++) {
             auto& s = _q[i];
             auto* sp = s._getCStr();
