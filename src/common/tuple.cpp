@@ -32,9 +32,9 @@ using namespace std;
 
 namespace yask {
 
-    // Declare static member.
+    // Declare static members.
     template <typename T>
-    std::unordered_map<std::string, std::string> Scalar<T>::_allNames;
+    std::list<std::string> Scalar<T>::_allNames;
 
     // Implementations.
 
@@ -44,37 +44,6 @@ namespace yask {
         for (auto& i : _q)
             names.push_back(i.getName());
         return names;
-    }
-
-    template <typename T>
-    int Tuple<T>::lookup_posn(const std::string& dim) const {
-
-        // Get a pointer from the pool for this dim, adding
-        // it if needed.
-        auto* dp = Scalar<T>::_getPoolPtr(dim)->c_str();
-
-        // First, just check pointers.
-        for (size_t i = 0; i < _q.size(); i++) {
-            auto& s = _q[i];
-            auto* sp = s._getCStr();
-
-            // If pointers match, must the same string.
-            if (sp == dp)
-                return int(i);
-        }
-
-        // If not found, it could be an indentical string from
-        // another pool. This might happen when two dynamic
-        // libs are loaded into the same executable.
-        for (size_t i = 0; i < _q.size(); i++) {
-            auto& s = _q[i];
-            auto* sp = s._getCStr();
-
-            // Check for match of value.
-            if (strcmp(sp, dp) == 0)
-                return int(i);
-        }
-        return -1;
     }
 
     template <typename T>
@@ -132,9 +101,9 @@ namespace yask {
         // Dims must be in same order.
         if (sameOrder) {
             for (size_t i = 0; i < _q.size(); i++) {
-                auto* p = _q[i]._getCStr();
-                auto* rp = rhs._q[i]._getCStr();
-                if (p != rp && strcmp(p, rp) != 0)
+                auto& n = _q[i].getName();
+                auto& rn = rhs._q[i].getName();
+                if (n != rn)
                     return false;
             }
         }
@@ -182,12 +151,11 @@ namespace yask {
 
         // compare dims.
         for (size_t i = 0; i < _q.size(); i++) {
-            auto* p = _q[i]._getCStr();
-            auto* rp = rhs._q[i]._getCStr();
-            auto c = strcmp(p, rp);
-            if (c < 0)
+            auto& n = _q[i].getName();
+            auto& rn = rhs._q[i].getName();
+            if (n < rn)
                 return true;
-            else if (c > 0)
+            else if (n > rn)
                 return false;
         }
         return false;
@@ -261,6 +229,9 @@ namespace yask {
 
     template <typename T>
     Tuple<T> Tuple<T>::removeDim(int posn) const {
+
+        // For some reason, copying *this and erasing
+        // the element in newt._q causes an exception.
         Tuple newt;
         for (int i = 0; i < size(); i++) {
             if (i != posn)

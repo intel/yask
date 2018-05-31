@@ -36,6 +36,7 @@ IN THE SOFTWARE.
 #include <sstream>
 #include <functional>
 #include <unordered_map>
+#include <list>
 #include <deque>
 #include <vector>
 #include <cstdarg>
@@ -55,30 +56,43 @@ namespace yask {
     protected:
 
         // A shared global pool for names.
-        // Use a map instead of a set to have reliable pointers
-        // for the string values.
-        static std::unordered_map<std::string, std::string> _allNames;
+        // Using a list so addrs won't change.
+        static std::list<std::string> _allNames;
 
         // Look up names in the pool.
+        // Should only need to do this when we're adding a new dim.
         static const std::string* _getPoolPtr(const std::string& name) {
+            const std::string* p = 0;
 
-            // Get existing entry or add.
-            // Add the value to be the same as the key because
-            // addr of key might change, but addr of cstr in value
-            // shouldn't change.
-            // TODO: update this with something that is thread-safe!
-            auto i = _allNames.emplace(name, name); // returns iterator + bool pair.
-            auto& i2 = *i.first; // iterator to element pair.
-            auto& i3 = i2.second; // ref to value.
-            return &i3;           // ptr to value.
+#ifdef _OPENMP
+#pragma omp critical
+#endif
+            {
+                // Look for existing entry.
+                for (auto& i : _allNames) {
+                    if (i == name) {
+                        p = &i;
+                        break;
+                    }
+                }
+
+                // If not found, insert.
+                if (!p) {
+                    _allNames.push_back(name);
+                    auto& li = _allNames.back();
+                    p = &li;
+                }
+            }
+            return p;
         }
 
         // Name and value for this object.
         const std::string* _namep = 0; // Ptr from the _allNames pool.
         T _val = 0;
 
-        const char* _getCStr() const {
-            return _namep->c_str();
+        Scalar(const std::string* namep, const T& val) {
+            _namep = namep;
+            _val = val;
         }
 
     public:
@@ -88,13 +102,15 @@ namespace yask {
             _val = val;
         }
         Scalar(const std::string& name) : Scalar(name, 0) { }
-        Scalar() : Scalar("", 0) { }
         ~Scalar() { }
 
         // Access name.
         // (Changing it is not allowed.)
         const std::string& getName() const {
             return *_namep;
+        }
+        const std::string* getNamePtr() const {
+            return _namep;
         }
 
         // Access value.
@@ -130,7 +146,8 @@ namespace yask {
     protected:
 
         // Dimensions and values for this Tuple.
-        // Adding to front is unusual, so using a vector instead of a deque.
+        // Adding to front is unusual, so using a vector instead of a deque,
+        // which is less efficient.
         std::vector<Scalar<T>> _q;
 
         // First-inner vars control ordering. Example: dims x, y, z.
@@ -229,7 +246,16 @@ namespace yask {
 
         // Return dim posn or -1 if it doesn't exist.
         // Lookup by name.
-        int lookup_posn(const std::string& dim) const;
+        int lookup_posn(const std::string& dim) const {
+            for (size_t i = 0; i < _q.size(); i++) {
+                auto& s = _q[i];
+                
+                // Check for match of name.
+                if (s.getName() == dim)
+                    return int(i);
+            }
+            return -1;
+        }
 
         // Return scalar pair by name (must exist).
         const Scalar<T>& getDim(const std::string& dim) const {
