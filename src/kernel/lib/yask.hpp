@@ -237,7 +237,7 @@ extern yask::Cache cache_model;
 // First/last index macros.
 // These are relative to global problem, not rank.
 #define FIRST_INDEX(dim) (0)
-#define LAST_INDEX(dim) (_context->overall_domain_sizes[#dim] - 1)
+#define LAST_INDEX(dim) (_context->overall_domain_sizes[DOMAIN_DIM_IDX_ ## dim] - 1)
 
 // Base types for stencil context, etc.
 #include "context.hpp"

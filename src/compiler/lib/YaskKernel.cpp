@@ -88,10 +88,23 @@ namespace yask {
             "#define YASK_STENCIL_CONTEXT " << _context << endl;
 
         os << "\n// FP precision:\n"
-            "#define REAL_BYTES " << _settings._elem_bytes << endl;
+            "#define REAL_BYTES (" << _settings._elem_bytes << ")\n";
+
+        os << "\n// Number of domain dimensions:\n"
+            "#define NUM_DOMAIN_DIMS " << _dims->_domainDims.size() << "\n";
+        int i = 0;
+        for (auto& dim : _dims->_domainDims.getDims()) {
+            auto& dname = dim.getName();
+            os << "#define DOMAIN_DIM_IDX_" << dname << " (" << (i++) << ")\n";
+        }
 
         os << "\n// Number of stencil dimensions (step and domain):\n"
-            "#define NUM_STENCIL_DIMS " << _dims->_stencilDims.size() << endl;
+            "#define NUM_STENCIL_DIMS " << _dims->_stencilDims.size() << "\n";
+        i = 0;
+        for (auto& dim : _dims->_stencilDims.getDims()) {
+            auto& dname = dim.getName();
+            os << "#define STENCIL_DIM_IDX_" << dname << " (" << (i++) << ")\n";
+        }
 
         int gdims = 0;
         for (auto gp : _grids) {
