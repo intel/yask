@@ -322,6 +322,10 @@ namespace yask {
                         TRACE_MSG(" grid '" << gname << "' needs " << makeByteStr(nbytes) <<
                                   " on NUMA node " << numa_pref);
                 }
+
+                // Otherwise, just print existing grid info.
+                else if (pass == 0)
+                    os << gp->make_info_string() << endl;
             }
 
             // Alloc for each node.
