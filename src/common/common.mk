@@ -24,17 +24,28 @@
 # Common Makefile settings.
 # YASK_BASE should be set before including this.
 
-# YASK dirs.
-LIB_DIR		:=	$(YASK_BASE)/lib
+# Set YASK_OUTPUT_DIR to change where all output files go.
+YASK_OUTPUT_DIR	?=	$(YASK_BASE)
+
+# Top-level input dirs.
 INC_DIR		:=	$(YASK_BASE)/include
-BIN_DIR		:=	$(YASK_BASE)/bin
 YASK_DIR	:=	$(YASK_BASE)/yask
 SRC_DIR		:=	$(YASK_BASE)/src
+UTILS_DIR	:=	$(YASK_BASE)/utils
+UTILS_BIN_DIR	:=	$(UTILS_DIR)/bin
+UTILS_LIB_DIR	:=	$(UTILS_DIR)/lib
+
+# Top-level output dirs.
+YASK_OUT_BASE	:=	$(abspath $(YASK_OUTPUT_DIR))
+LIB_OUT_DIR	:=	$(YASK_OUT_BASE)/lib
+BIN_OUT_DIR	:=	$(YASK_OUT_BASE)/bin
+BUILD_OUT_DIR	:=	$(YASK_OUT_BASE)/build
+YASK_OUT_DIR	:=	$(YASK_OUT_BASE)/yask
 
 # OS-specific
 ifeq ($(shell uname -o),Cygwin)
   SO_SUFFIX	:=	.dll
-  RUN_PREFIX	:=	env PATH="${PATH}:$(LIB_DIR):$(YASK_DIR)"
+  RUN_PREFIX	:=	env PATH="${PATH}:$(LIB_DIR):$(LIB_OUT_DIR):$(YASK_DIR):$(YASK_OUT_DIR)"
   PYTHON	:=	python3
 else
   SO_SUFFIX	:=	.so
@@ -45,21 +56,22 @@ endif
 # Common source.
 COMM_DIR	:=	$(SRC_DIR)/common
 COMM_SRC_NAMES	:=	output common_utils tuple
-COMM_SRC_BASES	:=	$(addprefix $(COMM_DIR)/,$(COMM_SRC_NAMES))
 
 # YASK stencil compiler.
 # This is here because both the compiler and kernel
 # Makefiles need to know about the compiler.
 YC_BASE		:=	yask_compiler
-YC_EXEC		:=	$(BIN_DIR)/$(YC_BASE).exe
+YC_EXEC		:=	$(BIN_OUT_DIR)/$(YC_BASE).exe
+YC_SRC_DIR	:=	$(SRC_DIR)/compiler
 
 # Tools.
 SWIG		:=	swig
 PERL		:=	perl
+MKDIR		:=	mkdir -p -v
 
 # Find include path needed for python interface.
 # NB: constructing string inside print() to work for python 2 or 3.
 PYINC		:= 	$(addprefix -I,$(shell $(PYTHON) -c 'import distutils.sysconfig; print(distutils.sysconfig.get_python_inc() + " " + distutils.sysconfig.get_python_inc(plat_specific=1))'))
 
-RUN_PYTHON	:= 	$(RUN_PREFIX) env PYTHONPATH=$(LIB_DIR):$(YASK_DIR):$(PYTHONPATH) $(PYTHON)
-
+RUN_PYTHON	:= 	$(RUN_PREFIX) \
+	env PYTHONPATH=$(LIB_DIR):$(LIB_OUT_DIR):$(YASK_DIR):$(YASK_OUT_DIR):$(PYTHONPATH) $(PYTHON)

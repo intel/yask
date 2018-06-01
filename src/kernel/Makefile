@@ -268,7 +268,7 @@ fold	=	$(fold_$(real_bytes)byte) # e.g., fold_4byte
 ######## End of vars that control the function and performance of the kernel.
 
 # Common settings.
-YASK_BASE	:=	$(shell cd ../..; pwd)
+YASK_BASE	?=	$(abspath ../..)
 include $(YASK_BASE)/src/common/common.mk
 
 # The remainder of this file specifies how to build and test the kernel.
@@ -290,28 +290,28 @@ ifneq ($(time_alloc),)
  YC_FLAGS	+=	-step-alloc $(time_alloc)
 endif
 
-# Output files and dirs.
+# Kernel dirs.
+YK_SWIG_DIR	:=	./swig
+YK_LIB_SRC_DIR	:=	./lib
+YK_TEST_SRC_DIR	:=	./tests
+YK_TAG		:=	$(stencil).$(arch)
+YK_OUT_BASE	:=	$(BUILD_OUT_DIR)/kernel
+YK_OUT_DIR	:=	$(YK_OUT_BASE)/$(YK_TAG)
+YK_SWIG_OUT_DIR	:=	$(YK_OUT_DIR)/swig
+YK_OBJ_DIR	:=	$(YK_OUT_DIR)/obj
+YK_GEN_DIR	:=	$(YK_OUT_DIR)/gen
+
+# Kernel files.
 YK_BASE		:=	yask_kernel
 YK_MODULE	:=	$(YK_BASE)
-YK_TAG		:=	$(stencil).$(arch)
 YK_BASE2	:=	$(YK_BASE).$(YK_TAG)
-YK_EXEC		:=	$(BIN_DIR)/$(YK_BASE2).exe
-YK_LIB		:=	$(LIB_DIR)/lib$(YK_BASE2)$(SO_SUFFIX)
-YK_PY_LIB	:=	$(YASK_DIR)/_$(YK_MODULE)$(SO_SUFFIX)
-YK_PY_MOD	:=	$(YASK_DIR)/$(YK_MODULE).py
-YK_API_TEST_EXEC :=	$(BIN_DIR)/$(YK_BASE)_api_test.exe
-YK_GRID_TEST_EXEC :=	$(BIN_DIR)/$(YK_BASE)_grid_test.exe
-YK_API_TEST_EXEC_WITH_EXCEPTION :=	$(BIN_DIR)/$(YK_BASE)_api_exception_test.exe
-
-MAKE_REPORT_FILE:=	make-report.$(YK_TAG).txt
-
-# Kernel source files and dirs.
-YK_SWIG_DIR	:=	./swig
-YK_GEN_DIR	:=	./gen
-YK_LIB_DIR	:=	./lib
+YK_EXEC		:=	$(BIN_OUT_DIR)/$(YK_BASE2).exe
+YK_SCRIPT	:=	$(BIN_OUT_DIR)/yask.sh
+YK_LIB		:=	$(LIB_OUT_DIR)/lib$(YK_BASE2)$(SO_SUFFIX)
+YK_PY_LIB	:=	$(YASK_OUT_DIR)/_$(YK_MODULE)$(SO_SUFFIX)
+YK_PY_MOD	:=	$(YASK_OUT_DIR)/$(YK_MODULE).py
 YK_SRC_NAMES	:=	factory grid_apis context setup realv_grids new_grid generic_grids utils settings stencil_calc
-YK_SRC_BASES	:=	$(addprefix $(YK_LIB_DIR)/,$(YK_SRC_NAMES))
-YK_OBJS		:=	$(addsuffix .$(YK_TAG).o,$(YK_SRC_BASES) $(COMM_SRC_BASES))
+YK_OBJS		:=	$(addprefix $(YK_OBJ_DIR)/,$(addsuffix .o,$(YK_SRC_NAMES) $(COMM_SRC_NAMES)))
 YK_MACRO_FILE	:=	$(YK_GEN_DIR)/yask_macros.hpp
 YK_CODE_FILE	:=	$(YK_GEN_DIR)/yask_stencil_code.hpp
 YK_GEN_HEADERS	:=	$(addprefix $(YK_GEN_DIR)/, \
@@ -325,16 +325,19 @@ YK_GEN_HEADERS	:=	$(addprefix $(YK_GEN_DIR)/, \
 				yask_grid_code.hpp) \
 				$(YK_MACRO_FILE) \
 				$(YK_CODE_FILE)
-YK_INC_DIRS	:=	$(INC_DIR) $(YK_LIB_DIR) ../common
+YK_INC_DIRS	:=	$(INC_DIR) $(YK_LIB_SRC_DIR) ../common
 YK_INC_GLOB	:=	$(addsuffix /*.hpp,$(YK_INC_DIRS))
-YK_MK_GEN_DIR	:=	mkdir -p -v $(YK_GEN_DIR)
+YK_API_TEST_EXEC :=	$(BIN_OUT_DIR)/$(YK_BASE)_api_test.exe
+YK_GRID_TEST_EXEC :=	$(BIN_OUT_DIR)/$(YK_BASE)_grid_test.exe
+YK_API_TEST_EXEC_WITH_EXCEPTION :=	$(BIN_OUT_DIR)/$(YK_BASE)_api_exception_test.exe
+MAKE_REPORT_FILE:=	$(YK_OUT_BASE)/make-report.$(YK_TAG).txt
 
 # YASK loop compiler.
-GEN_LOOPS	:=	$(BIN_DIR)/gen_loops.pl
+GEN_LOOPS	:=	$(UTILS_BIN_DIR)/gen_loops.pl
 
-# Other scripts.
-GEN_LAYOUTS	:=	$(BIN_DIR)/gen_layouts.pl
-GET_LOOP_STATS	:=	$(BIN_DIR)/get_loop_stats.pl
+# Other scripts and cmds.
+GEN_LAYOUTS	:=	$(UTILS_BIN_DIR)/gen_layouts.pl
+GET_LOOP_STATS	:=	$(UTILS_BIN_DIR)/get_loop_stats.pl
 
 # Compiler and default flags.
 ifeq ($(mpi),1)
@@ -350,7 +353,7 @@ YK_CXXOPT	?=	-O3
 # Linker.
 YK_LD		:=	$(YK_CXX)
 YK_LIBS		:=	-lrt
-YK_LFLAGS	:=	-Wl,-rpath=$(LIB_DIR) -L$(LIB_DIR) -l$(YK_BASE2)
+YK_LFLAGS	:=	-Wl,-rpath=$(LIB_OUT_DIR) -L$(LIB_OUT_DIR) -l$(YK_BASE2)
 
 # Add options for NUMA.
 ifeq ($(numa),1)
@@ -431,7 +434,7 @@ ifneq ($(filter %icpc %icc,$(notdir $(YK_CXX))),)  # Intel compiler
  YK_CXXFLAGS	+=	-no-diag-message-catalog
  YK_CXXFLAGS	+=	-vec-threshold0
  #YK_CXXFLAGS	+=	-qoverride-limits
- YK_CXXFLAGS	+=	-Fa
+ #YK_CXXFLAGS	+=	-Fa
  #YK_CXXFLAGS	+=	-qopt-report=5
  #YK_CXXFLAGS	+=	-qopt-report-phase=VEC,PAR,OPENMP,IPO,LOOP
  YK_CXX_VER_CMD :=	$(YK_CXX) -V
@@ -532,7 +535,13 @@ MISC_LOOP_CODE		?=	$(MISC_LOOP_OUTER_MODS) loop($(MISC_LOOP_ORDER)) \
 
 # Compile rules.
 
-%.$(YK_TAG).o: %.cpp $(YK_GEN_HEADERS) $(YK_INC_GLOB)
+$(YK_OBJ_DIR)/%.o: $(YK_LIB_SRC_DIR)/%.cpp $(YK_GEN_HEADERS) $(YK_INC_GLOB)
+	$(MKDIR) $(YK_OBJ_DIR)
+	$(CXX_PREFIX) $(YK_CXX) $(YK_CXXFLAGS) -x c++ -fPIC -c -o $@ $<
+	@ls -l $@
+
+$(YK_OBJ_DIR)/%.o: $(COMM_DIR)/%.cpp $(YK_GEN_HEADERS) $(YK_INC_GLOB)
+	$(MKDIR) $(YK_OBJ_DIR)
 	$(CXX_PREFIX) $(YK_CXX) $(YK_CXXFLAGS) -x c++ -fPIC -c -o $@ $<
 	@ls -l $@
 
@@ -542,72 +551,78 @@ MISC_LOOP_CODE		?=	$(MISC_LOOP_OUTER_MODS) loop($(MISC_LOOP_ORDER)) \
 default: kernel
 
 # Compile the kernel.
-kernel: $(YK_EXEC) $(MAKE_REPORT_FILE)
+kernel: $(YK_EXEC) $(YK_SCRIPT) $(MAKE_REPORT_FILE)
 	@echo "Binary" $(YK_EXEC) "has been built."
 	@echo "See" $(MAKE_REPORT_FILE) "for build information."
-	@echo "Run command:" $(BIN_DIR)"/yask.sh -stencil" $(stencil) "-arch" $(arch) "[options]"
+	@echo "Run command:" $(YK_SCRIPT) "-stencil" $(stencil) "-arch" $(arch) "[options]"
 
 $(YK_LIB): $(YK_OBJS)
+	$(MKDIR) $(dir $@)
 	$(CXX_PREFIX) $(YK_CXX) $(YK_CXXFLAGS) -shared -o $@ $^ $(YK_LIBS)
 	@ls -l $@
 
 $(YK_EXEC): yask_main.cpp $(YK_LIB)
+	$(MKDIR) $(dir $@)
 	$(CXX_PREFIX) $(YK_LD) $(YK_CXXFLAGS) $< $(YK_LFLAGS) -o $@ $(YK_LIBS)
+	@ls -l $@
+
+$(YK_SCRIPT): ./yask.sh
+	cp $< $@
+	chmod a+rx $@
 	@ls -l $@
 
 $(MAKE_REPORT_FILE): $(YK_LIB)
 	@echo MAKEFLAGS="\"$(MAKEFLAGS)"\" > $@ 2>&1
 	$(MAKE) echo-settings >> $@ 2>&1
-#$(MAKE) code-stats | tee -a $@
 
 # Generated source files.
 $(YK_GEN_DIR)/yask_rank_loops.hpp: $(GEN_LOOPS) $(YK_CODE_FILE)
-	$(YK_MK_GEN_DIR)
+	$(MKDIR) $(YK_GEN_DIR)
 	$(PERL) $< -output $@ $(RANK_LOOP_OPTS) $(EXTRA_LOOP_OPTS) $(EXTRA_RANK_LOOP_OPTS) "$(RANK_LOOP_CODE)"
 
 $(YK_GEN_DIR)/yask_region_loops.hpp: $(GEN_LOOPS) $(YK_CODE_FILE)
-	$(YK_MK_GEN_DIR)
+	$(MKDIR) $(YK_GEN_DIR)
 	$(PERL) $< -output $@ $(REGION_LOOP_OPTS) $(EXTRA_LOOP_OPTS) $(EXTRA_REGION_LOOP_OPTS) "$(REGION_LOOP_CODE)"
 
 $(YK_GEN_DIR)/yask_block_loops.hpp: $(GEN_LOOPS) $(YK_CODE_FILE)
-	$(YK_MK_GEN_DIR)
+	$(MKDIR) $(YK_GEN_DIR)
 	$(PERL) $< -output $@ $(BLOCK_LOOP_OPTS) $(EXTRA_LOOP_OPTS) $(EXTRA_BLOCK_LOOP_OPTS) "$(BLOCK_LOOP_CODE)"
 
 $(YK_GEN_DIR)/yask_sub_block_loops.hpp: $(GEN_LOOPS) $(YK_CODE_FILE)
-	$(YK_MK_GEN_DIR)
+	$(MKDIR) $(YK_GEN_DIR)
 	$(PERL) $< -output $@ $(SUB_BLOCK_LOOP_OPTS) $(EXTRA_LOOP_OPTS) $(EXTRA_SUB_BLOCK_LOOP_OPTS) "$(SUB_BLOCK_LOOP_CODE)"
 
 $(YK_GEN_DIR)/yask_misc_loops.hpp: $(GEN_LOOPS) $(YK_CODE_FILE)
-	$(YK_MK_GEN_DIR)
+	$(MKDIR) $(YK_GEN_DIR)
 	$< -output $@ $(MISC_LOOP_OPTS) $(EXTRA_LOOP_OPTS) $(EXTRA_MISC_LOOP_OPTS) "$(MISC_LOOP_CODE)"
 
 $(YK_GEN_DIR)/yask_layout_macros.hpp: $(GEN_LAYOUTS) $(YK_CODE_FILE)
-	$(YK_MK_GEN_DIR)
+	$(MKDIR) $(YK_GEN_DIR)
 	$(PERL) $< -m $(NGDIMS) > $@
 	@- gindent -fca $@ || \
 	  indent -fca $@ ||   \
 	  echo "note:" $@ "is not properly indented because indent program failed or was not found."
 
 $(YK_GEN_DIR)/yask_layouts.hpp: $(GEN_LAYOUTS) $(YK_CODE_FILE)
-	$(YK_MK_GEN_DIR)
+	$(MKDIR) $(YK_GEN_DIR)
 	$(PERL) $< -d $(NGDIMS) > $@
 	@- gindent -fca $@ || \
 	  indent -fca $@ ||   \
 	  echo "note:" $@ "is not properly indented because indent program failed or was not found."
 
 $(YK_GEN_DIR)/yask_grid_code.hpp: $(GEN_LAYOUTS) $(YK_CODE_FILE)
-	$(YK_MK_GEN_DIR)
+	$(MKDIR) $(YK_GEN_DIR)
 	$(PERL) $< -g $(NGDIMS) > $@
 
 $(YK_CODE_FILE): $(YC_EXEC)
-	$(YK_MK_GEN_DIR)
+	$(MKDIR) $(YK_GEN_DIR)
 	$(RUN_PREFIX) $< $(YC_FLAGS) $(EXTRA_YC_FLAGS) -p $(YC_TARGET) $@
 	@- gindent -fca $@ || \
 	  indent -fca $@ ||   \
 	  echo "note:" $@ "is not properly indented because no indent program was found."
 
 $(YK_MACRO_FILE):
-	$(YK_MK_GEN_DIR)
+	$(MKDIR) $(YK_GEN_DIR)
 	echo '// Settings from YASK Makefile' > $@
 	echo '// Automatically-generated code; do not edit.' >> $@
 	for macro in $(MACROS) $(EXTRA_MACROS); do \
@@ -627,30 +642,35 @@ py-api: $(YK_PY_LIB)
 
 # Build python kernel API lib.
 # TODO: consider adding $(YK_TAG) to [some of] these targets.
-$(YK_SWIG_DIR)/yask_kernel_api_wrap.cpp: $(YK_SWIG_DIR)/yask*.i $(INC_DIR)/*.hpp
+$(YK_SWIG_OUT_DIR)/yask_kernel_api_wrap.cpp: $(YK_SWIG_DIR)/yask*.i $(INC_DIR)/*.hpp
 	$(SWIG) -version
+	$(MKDIR) $(YK_SWIG_OUT_DIR) $(YASK_OUT_DIR)
 	$(SWIG) -v -DYK_MODULE=$(YK_MODULE) -cppext cpp \
 	  -I$(INC_DIR) -I$(COMM_DIR) -I$(COMM_DIR)/swig \
-	  -c++ -python -outdir $(YASK_DIR) -builtin $<
+	  -c++ -python -o $@ -outdir $(YASK_OUT_DIR) -builtin $<
 
-$(YK_SWIG_DIR)/yask_kernel_api_wrap.o: $(YK_SWIG_DIR)/yask_kernel_api_wrap.cpp
+$(YK_SWIG_OUT_DIR)/yask_kernel_api_wrap.o: $(YK_SWIG_OUT_DIR)/yask_kernel_api_wrap.cpp
+	$(MKDIR) $(dir $@)
 	$(CXX_PREFIX) $(YK_CXX) $(YK_CXXFLAGS) $(PYINC) -fPIC -c -o $@ $<
 	@ls -l $@
 
-$(YK_PY_LIB): $(YK_OBJS) $(YK_SWIG_DIR)/yask_kernel_api_wrap.o
+$(YK_PY_LIB): $(YK_OBJS) $(YK_SWIG_OUT_DIR)/yask_kernel_api_wrap.o
+	$(MKDIR) $(dir $@)
 	$(CXX_PREFIX) $(YK_CXX) $(YK_CXXFLAGS) -shared -o $@ $^ $(YK_LIBS)
 	@ls -l $@
 
-# Simple tests
+# Simple tests.
 
-$(YK_GRID_TEST_EXEC): ./tests/grid_test.cpp $(YK_LIB)
+$(YK_GRID_TEST_EXEC): $(YK_TEST_SRC_DIR)/grid_test.cpp $(YK_LIB)
+	$(MKDIR) $(dir $@)
 	$(CXX_PREFIX) $(YK_CXX) $(YK_CXXFLAGS) $< $(YK_LFLAGS) -o $@
 	@ls -l $@
 
 #### API tests.
 
 # Build C++ kernel tests.
-$(YK_API_TEST_EXEC): ./tests/yask_kernel_api_test.cpp $(YK_LIB)
+$(YK_API_TEST_EXEC): $(YK_TEST_SRC_DIR)/yask_kernel_api_test.cpp $(YK_LIB)
+	$(MKDIR) $(dir $@)
 	$(CXX_PREFIX) $(YK_CXX) $(YK_CXXFLAGS) $< $(YK_LFLAGS) -o $@
 	@ls -l $@
 
@@ -664,12 +684,13 @@ cxx-yk-api-test: $(YK_API_TEST_EXEC)
 	$(RUN_PREFIX) $<
 
 # Run Python kernel API test.
-py-yk-api-test: $(BIN_DIR)/yask_kernel_api_test.py $(YK_PY_LIB)
+py-yk-api-test: $(YK_TEST_SRC_DIR)/yask_kernel_api_test.py $(YK_PY_LIB)
 	@echo '*** Running the Python YASK kernel API test...'
 	$(RUN_PYTHON) $<
 
 # Build C++ kernel tests with exceptions.
-$(YK_API_TEST_EXEC_WITH_EXCEPTION): ./tests/yask_kernel_api_exception_test.cpp $(YK_LIB)
+$(YK_API_TEST_EXEC_WITH_EXCEPTION): $(YK_TEST_SRC_DIR)/yask_kernel_api_exception_test.cpp $(YK_LIB)
+	$(MKDIR) $(dir $@)
 	$(CXX_PREFIX) $(YK_CXX) $(YK_CXXFLAGS) $< $(YK_LFLAGS) -o $@
 	@ls -l $@
 
@@ -679,7 +700,7 @@ cxx-yk-api-test-with-exception: $(YK_API_TEST_EXEC_WITH_EXCEPTION)
 	$(RUN_PREFIX) $<
 
 # Run Python kernel API test with exceptions.
-py-yk-api-test-with-exception: $(BIN_DIR)/yask_kernel_api_exception_test.py $(YK_PY_LIB)
+py-yk-api-test-with-exception: $(YK_TEST_SRC_DIR)/yask_kernel_api_exception_test.py $(YK_PY_LIB)
 	@echo '*** Running the Python YASK kernel API test with exception...'
 	$(RUN_PYTHON) $<
 
@@ -691,13 +712,13 @@ py-yk-api-test-with-exception: $(BIN_DIR)/yask_kernel_api_exception_test.py $(YK
 # Run Python compiler API test to create stencil-code file.
 py-yc-api-test:
 	$(MAKE) -C $(YC_SRC_DIR) $@
-	$(YK_MK_GEN_DIR)
+	$(MKDIR) $(YK_GEN_DIR)
 	mv $(YC_SRC_DIR)/yc-api-test-py.hpp $(YK_CODE_FILE)
 
 # Run C++ compiler API test to create stencil-code file.
 cxx-yc-api-test:
 	$(MAKE) -C $(YC_SRC_DIR) $@
-	$(YK_MK_GEN_DIR)
+	$(MKDIR) $(YK_GEN_DIR)
 	mv $(YC_SRC_DIR)/yc-api-test-cxx.hpp $(YK_CODE_FILE)
 
 ######## Misc targets
@@ -719,17 +740,17 @@ ranks	=	2
 
 # Run the kernel binary using several combos of sizes and ranks.
 yk-tests:
-	$(BIN_DIR)/yask.sh -stencil $(stencil) -arch $(arch) -v $(val1)
-	$(BIN_DIR)/yask.sh -stencil $(stencil) -arch $(arch) -v $(val2)
-	$(BIN_DIR)/yask.sh -stencil $(stencil) -arch $(arch) -ranks $(ranks) -v $(val1)
-	$(BIN_DIR)/yask.sh -stencil $(stencil) -arch $(arch) -ranks $(ranks) -v $(val2)
+	$(YK_SCRIPT) -stencil $(stencil) -arch $(arch) -v $(val1)
+	$(YK_SCRIPT) -stencil $(stencil) -arch $(arch) -v $(val2)
+	$(YK_SCRIPT) -stencil $(stencil) -arch $(arch) -ranks $(ranks) -v $(val1)
+	$(YK_SCRIPT) -stencil $(stencil) -arch $(arch) -ranks $(ranks) -v $(val2)
 
 # Run the default YASK compiler and kernel.
-yc-and-yk-test: $(YK_EXEC)
+yc-and-yk-test: $(YK_EXEC) $(YK_SCRIPT)
 	$(MAKE) yk-tests
 
 # Run the YASK kernel test without implicity using the YASK compiler.
-yk-test-no-yc: kernel-only
+yk-test-no-yc: kernel-only $(YK_SCRIPT)
 	$(MAKE) yk-tests
 
 # Run the kernel API tests for C++ and Python with and w/o expected exceptions.
@@ -780,17 +801,18 @@ all:
 # Should not trigger remake of stencil compiler.
 # Make this target before rebuilding YASK with any new parameters.
 clean:
+	rm -fr $(YK_OUT_DIR)
 	rm -fv *.s
-	rm -fr $(YK_SWIG_DIR)/build $(YK_GEN_DIR)
-	rm -fv $(YK_SWIG_DIR)/*_api_wrap.*
-	rm -fv $(YK_OBJS)
 	- find . $(COMM_DIR) -name '*.*.o' -print -delete
-	- find . $(COMM_DIR) $(BIN_DIR) $(LIB_DIR) -name '*.optrpt' -print -delete
+	- find . $(COMM_DIR) -name '*.optrpt' -print -delete
 
 # Remove executables, libs, etc.
 # Also remove logs from kernel dir, which are most likely from testing.
 realclean: clean
-	rm -fv $(YK_LIB) $(YK_EXEC) $(YK_API_TEST_EXEC) $(YK_API_TEST_EXEC_WITH_EXCEPTION) $(YK_PY_MOD)* $(YK_PY_LIB)
+	rm -fr $(YK_OUT_BASE)
+	rm -fv $(YK_LIB) $(YK_EXEC)
+	rm -fv $(YK_PY_MOD)* $(YK_PY_LIB)
+	rm -fv $(YK_API_TEST_EXEC) $(YK_API_TEST_EXEC_WITH_EXCEPTION)
 	rm -fv make-report.*.txt
 	- find . -name '*.pyc' -print -delete
 	- find . -name '*~' -print -delete
@@ -886,7 +908,7 @@ help:
 	@echo " $(MAKE) clean; $(MAKE) -j arch=intel64 stencil=3axis mpi=0 OMPFLAGS='-qopenmp-stubs' YK_CXXOPT='-O0' EXTRA_MACROS='CHECK TRACE'	 # TRACE is a useful debug setting!"
 	@echo " $(MAKE) clean; $(MAKE) -j arch=intel64 stencil=3axis radius=0 fold='x=1,y=1,z=1' mpi=0 YK_CXX=g++ OMPFLAGS='' YK_CXXOPT='-O0' EXTRA_MACROS='CHECK TRACE TRACE_MEM TRACE_INTRINSICS'"
 	@echo " "
-	@echo "Example builds with test runs using ccache:"
-	@echo " $(MAKE) -j all CXX_PREFIX=ccache # Normal full API and stencil tests"
-	@echo " $(MAKE) -j all CXX_PREFIX=ccache YK_CXXOPT=-O2 YK_CXX=g++ mpi=0 ranks=1 # g++ w/o MPI"
-	@echo " $(MAKE) -j all CXX_PREFIX=ccache YK_CXXOPT=-O1 ranks=3 EXTRA_MACROS='CHECK' # Run 3 ranks w/checking"
+	@echo "Example builds with test runs:"
+	@echo " $(MAKE) -j all # Normal full API and stencil tests"
+	@echo " $(MAKE) -j all YK_CXXOPT=-O2 YK_CXX=g++ mpi=0 ranks=1 # g++ w/o MPI"
+	@echo " $(MAKE) -j all YK_CXXOPT=-O1 ranks=3 EXTRA_MACROS='CHECK' # Run 3 ranks w/checking"
