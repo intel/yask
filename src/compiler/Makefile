@@ -24,45 +24,23 @@
 # Makefile for the YASK stencil compiler.
 # Type 'make help' for usage.
 
+# Common settings.
+YASK_BASE	:=	$(shell cd ../..; pwd)
+include $(YASK_BASE)/src/common/common.mk
+
 # Vars starting with 'YC_' apply to the stencil compiler.
 
-# YASK dirs.
-YASK_BASE	:=	$(shell cd ../..; pwd)
-LIB_DIR		:=	$(YASK_BASE)/lib
-INC_DIR		:=	$(YASK_BASE)/include
-BIN_DIR		:=	$(YASK_BASE)/bin
-YASK_DIR	:=	$(YASK_BASE)/yask
-STENCIL_DIR	:= 	$(YASK_BASE)/src/stencils
-
-# OS-specific
-ifeq ($(shell uname -o),Cygwin)
-  SO_SUFFIX	:=	.dll
-  RUN_PREFIX	:=	env PATH="${PATH}:$(LIB_DIR):$(YASK_DIR)"
-  PYTHON	:=	python3
-  CXX_PREFIX	:=
-else
-  SO_SUFFIX	:=	.so
-  RUN_PREFIX	:=
-  PYTHON	:=	python
-  CXX_PREFIX	:=	
-endif
-
 # Output files and dirs.
-YC_BASE		:=	yask_compiler
+YC_SRC_DIR	:=	../compiler
 YC_MODULE	:=	$(YC_BASE)
-YC_EXEC		:=	$(BIN_DIR)/$(YC_BASE).exe
 YC_TEST_EXEC	:=	$(BIN_DIR)/$(YC_BASE)_api_test.exe
 YC_TEST_EXEC_WITH_EXCEPTION	:=	$(BIN_DIR)/$(YC_BASE)_api_exception_test.exe
 YC_LIB		:=	$(LIB_DIR)/lib$(YC_BASE)$(SO_SUFFIX)
 YC_PY_LIB	:=	$(YASK_DIR)/_$(YC_MODULE)$(SO_SUFFIX)
 YC_PY_MOD	:=	$(YASK_DIR)/$(YC_MODULE).py
 
-# Common source.
-COMM_DIR	:=	../common
-COMM_SRC_NAMES	:=	output common_utils tuple
-COMM_SRC_BASES	:=	$(addprefix $(COMM_DIR)/,$(COMM_SRC_NAMES))
-
 # Compiler source files and dirs.
+STENCIL_DIR	:= 	$(SRC_DIR)/stencils
 YC_SWIG_DIR	:=	./swig
 YC_LIB_DIR	:=	./lib
 YC_SRC_NAMES	:=	Expr ExprUtils Grid Eqs Print Vec Cpp CppIntrin YaskKernel Soln

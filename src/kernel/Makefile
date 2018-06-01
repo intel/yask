@@ -79,7 +79,7 @@ else ifneq ($(findstring iso3dfd,$(stencil)),)
   fold_4byte			=	x=4,y=4
   def_thread_divisor		=	1
   def_block_threads		=	2
-  def_block_args		=	-bx 108  -by 28 -bz 132
+  def_block_args		=	-bx 108	 -by 28 -bz 132
   cluster			=	x=1
   pfd_l1			=	0
   pfd_l2			=	2
@@ -130,8 +130,8 @@ else ifneq ($(findstring fsg,$(stencil)),)
  time_alloc		=	1
  def_rank_args		=	-d 256
  ifeq ($(arch),knl)
-  omp_region_schedule  	=	guided
-  def_block_args  	=	-b 16
+  omp_region_schedule	=	guided
+  def_block_args	=	-b 16
   def_thread_divisor	=	4
   def_block_threads	=	2
   pfd_l1		=	0
@@ -165,9 +165,9 @@ endif # stencil-specific.
 # (Use '?=' to avoid replacing above settings.)
 ifeq ($(arch),knc)
 
- ISA		?= 	-mmic
+ ISA		?=	-mmic
  MACROS		+=	USE_INTRIN512
- YC_TARGET  	?=	knc
+ YC_TARGET	?=	knc
  def_block_threads  ?=	4
  pfd_l1		?=	1
  pfd_l2		?=	2
@@ -177,8 +177,8 @@ else ifeq ($(arch),knl)
  ISA		?=	-xMIC-AVX512
  GCXX_ISA	?=	-march=knl
  MACROS		+=	USE_INTRIN512 USE_RCP28 NUMA_PREF=1
- YC_TARGET  	?=	avx512
- def_block_args	?=	-b 96
+ YC_TARGET	?=	avx512
+ def_block_args ?=	-b 96
  def_block_threads ?=	8
  pfd_l1		?=	1
  pfd_l2		?=	0
@@ -188,33 +188,33 @@ else ifneq ($(filter $(arch),skx skl),)
  ISA		?=	-xCORE-AVX512
  GCXX_ISA	?=	-march=knl -mno-avx512er -mno-avx512pf
  MACROS		+=	USE_INTRIN512
- YC_TARGET  	?=	avx512
+ YC_TARGET	?=	avx512
 
 else ifneq ($(filter $(arch),hsw bdw),)
 
  ISA		?=	-xCORE-AVX2
  GCXX_ISA	?=	-march=haswell
  MACROS		+=	USE_INTRIN256
- YC_TARGET  	?=	avx2
+ YC_TARGET	?=	avx2
 
 else ifeq ($(arch),ivb)
 
  ISA		?=	-xCORE-AVX-I
  GCXX_ISA	?=	-march=ivybridge
  MACROS		+=	USE_INTRIN256
- YC_TARGET  	?=	avx
+ YC_TARGET	?=	avx
 
 else ifeq ($(arch),snb)
 
  ISA		?=	-xAVX
  GCXX_ISA	?=	-march=sandybridge
- MACROS		+= 	USE_INTRIN256
- YC_TARGET  	?=	avx
+ MACROS		+=	USE_INTRIN256
+ YC_TARGET	?=	avx
 
 else ifeq ($(arch),intel64)
 
  ISA		?=	-xHOST
- GCXX_ISA       ?=      -march=native
+ GCXX_ISA	?=	-march=native
  YC_TARGET	?=	cpp
 
 else
@@ -224,7 +224,7 @@ $(error Architecture not recognized; use arch=knl, knc, skl, hsw, bdw, ivb, snb,
 endif # arch-specific.
 
 # general defaults for vars if not set above.
-streaming_stores	?= 	0
+streaming_stores	?=	0
 omp_par_for		?=	omp parallel for
 omp_region_schedule	?=	dynamic,1
 omp_block_schedule	?=	static,1
@@ -247,7 +247,7 @@ ifneq ($(findstring INTRIN512,$(MACROS)),)  # 512 bits.
  # 8 DP floats.
  fold_8byte	?=	x=4,y=2
 
-else ifneq ($(findstring INTRIN256,$(MACROS)),)  # 256 bits.
+else ifneq ($(findstring INTRIN256,$(MACROS)),)	 # 256 bits.
 
  # 8 SP floats.
  fold_4byte	?=	x=8
@@ -263,47 +263,31 @@ else
 endif # not 512 bits.
 
 # Select fold based on size of reals.
-fold	= 	$(fold_$(real_bytes)byte) # e.g., fold_4byte
+fold	=	$(fold_$(real_bytes)byte) # e.g., fold_4byte
 
 ######## End of vars that control the function and performance of the kernel.
+
+# Common settings.
+YASK_BASE	:=	$(shell cd ../..; pwd)
+include $(YASK_BASE)/src/common/common.mk
 
 # The remainder of this file specifies how to build and test the kernel.
 # Vars starting with 'YC_' apply to the stencil compiler.
 # Vars starting with 'YK_' apply to the stencil kernel.
 
 # Flags passed to stencil compiler.
-YC_FLAGS   	+=	-stencil $(stencil) -elem-bytes $(real_bytes) -cluster $(cluster) -fold $(fold)
+YC_FLAGS	+=	-stencil $(stencil) -elem-bytes $(real_bytes) -cluster $(cluster) -fold $(fold)
 ifneq ($(eqs),)
- YC_FLAGS   	+=	-eq-bundles $(eqs)
+ YC_FLAGS	+=	-eq-bundles $(eqs)
 endif
 ifneq ($(radius),)
- YC_FLAGS   	+=	-radius $(radius)
+ YC_FLAGS	+=	-radius $(radius)
 endif
 ifneq ($(halo),)
- YC_FLAGS   	+=	-halo $(halo)
+ YC_FLAGS	+=	-halo $(halo)
 endif
 ifneq ($(time_alloc),)
- YC_FLAGS   	+=	-step-alloc $(time_alloc)
-endif
-
-# YASK dirs.
-YASK_BASE	:=	$(shell cd ../..; pwd)
-LIB_DIR		:=	$(YASK_BASE)/lib
-INC_DIR		:=	$(YASK_BASE)/include
-BIN_DIR		:=	$(YASK_BASE)/bin
-YASK_DIR	:=	$(YASK_BASE)/yask
-
-# OS-specific
-ifeq ($(shell uname -o),Cygwin)
-  SO_SUFFIX	:=	.dll
-  RUN_PREFIX	:=	env PATH="${PATH}:$(LIB_DIR):$(YASK_DIR)"
-  PYTHON		:= python3
-  CXX_PREFIX	:=
-else
-  SO_SUFFIX	:=	.so
-  RUN_PREFIX	:=
-  PYTHON	:=	python
-  CXX_PREFIX	:=
+ YC_FLAGS	+=	-step-alloc $(time_alloc)
 endif
 
 # Output files and dirs.
@@ -320,11 +304,6 @@ YK_GRID_TEST_EXEC :=	$(BIN_DIR)/$(YK_BASE)_grid_test.exe
 YK_API_TEST_EXEC_WITH_EXCEPTION :=	$(BIN_DIR)/$(YK_BASE)_api_exception_test.exe
 
 MAKE_REPORT_FILE:=	make-report.$(YK_TAG).txt
-
-# Common source.
-COMM_DIR	:=	../common
-COMM_SRC_NAMES	:=	output common_utils tuple
-COMM_SRC_BASES	:=	$(addprefix $(COMM_DIR)/,$(COMM_SRC_NAMES))
 
 # Kernel source files and dirs.
 YK_SWIG_DIR	:=	./swig
@@ -350,11 +329,6 @@ YK_INC_DIRS	:=	$(INC_DIR) $(YK_LIB_DIR) ../common
 YK_INC_GLOB	:=	$(addsuffix /*.hpp,$(YK_INC_DIRS))
 YK_MK_GEN_DIR	:=	mkdir -p -v $(YK_GEN_DIR)
 
-# YASK stencil compiler.
-YC_BASE		:=	yask_compiler
-YC_EXEC		:=	$(BIN_DIR)/$(YC_BASE).exe
-YC_SRC_DIR	:=	../compiler
-
 # YASK loop compiler.
 GEN_LOOPS	:=	$(BIN_DIR)/gen_loops.pl
 
@@ -368,7 +342,7 @@ ifeq ($(mpi),1)
 else
  YK_CXX		:=	icc
 endif
-YK_CXXFLAGS	:=   	-g -std=c++11 -Wall
+YK_CXXFLAGS	:=	-g -std=c++11 -Wall
 YK_CXXFLAGS	+=	$(addprefix -I,$(YK_INC_DIRS) $(YK_GEN_DIR))
 OMPFLAGS	+=	-fopenmp
 YK_CXXOPT	?=	-O3
@@ -400,16 +374,6 @@ endif
 
 endif
 
-# Tools.
-SWIG		:=	swig
-PERL		:=	perl
-
-# Find include path needed for python interface.
-# NB: constructing string inside print() to work for python 2 or 3.
-PYINC		:= 	$(addprefix -I,$(shell $(PYTHON) -c 'import distutils.sysconfig; print(distutils.sysconfig.get_python_inc() + " " + distutils.sysconfig.get_python_inc(plat_specific=1))'))
-
-RUN_PYTHON	:= 	$(RUN_PREFIX) env PYTHONPATH=$(LIB_DIR):$(YASK_DIR):$(PYTHONPATH) $(PYTHON)
-
 # Turn off prefetching at O0 or O1.
 ifneq ($(filter -O0 -O1,$(YK_CXXOPT)),)
  pfd_l1		=	0
@@ -436,7 +400,7 @@ MACROS		+=	DEF_ARGS='"$(DEF_ARGS) $(EXTRA_DEF_ARGS)"'
 
 # arch.
 ARCH		:=	$(shell echo $(arch) | tr '[:lower:]' '[:upper:]')
-MACROS		+= 	ARCH_$(ARCH)
+MACROS		+=	ARCH_$(ARCH)
 
 # MPI settings.
 ifeq ($(mpi),1)
@@ -460,7 +424,7 @@ endif
 # compiler-specific settings
 ifneq ($(filter %icpc %icc,$(notdir $(YK_CXX))),)  # Intel compiler
 
- YK_CXXFLAGS	+=      $(ISA) -debug extended -restrict -ansi-alias -fno-alias
+ YK_CXXFLAGS	+=	$(ISA) -debug extended -restrict -ansi-alias -fno-alias
  YK_CXXFLAGS	+=	-fimf-precision=low -fast-transcendentals -no-prec-sqrt \
 			-no-prec-div -fp-model fast=2 -fno-protect-parens -ftz \
 			-fma -fimf-domain-exclusion=none -qopt-assume-safe-padding
@@ -468,9 +432,9 @@ ifneq ($(filter %icpc %icc,$(notdir $(YK_CXX))),)  # Intel compiler
  YK_CXXFLAGS	+=	-vec-threshold0
  #YK_CXXFLAGS	+=	-qoverride-limits
  YK_CXXFLAGS	+=	-Fa
- #YK_CXXFLAGS	+=      -qopt-report=5
+ #YK_CXXFLAGS	+=	-qopt-report=5
  #YK_CXXFLAGS	+=	-qopt-report-phase=VEC,PAR,OPENMP,IPO,LOOP
- YK_CXX_VER_CMD	:=	$(YK_CXX) -V
+ YK_CXX_VER_CMD :=	$(YK_CXX) -V
 
 # Use 512-bit code on SKL.
 # (Commented out because it doesn't help performance, and it breaks Devito.)
@@ -487,10 +451,10 @@ endif # compiler.
 # Turn off OpenMP when modeling a cache.
 # This is currently not operative! TODO: re-enable cache model.
 ifeq ($(model_cache),1)
- MACROS       	+=      MODEL_CACHE=1
+ MACROS		+=	MODEL_CACHE=1
  OMPFLAGS	:=	-qopenmp-stubs
 else ifeq ($(model_cache),2)
- MACROS       	+=      MODEL_CACHE=2
+ MACROS		+=	MODEL_CACHE=2
  OMPFLAGS	:=	-qopenmp-stubs
 endif
 
@@ -523,21 +487,21 @@ RANK_LOOP_CODE		?=	$(RANK_LOOP_OUTER_MODS) loop($(RANK_LOOP_ORDER)) \
 
 # Region loops break up a region using OpenMP threading into blocks.  The
 # 'omp' modifier creates an outer OpenMP loop so that each block is assigned
-# to a top-level OpenMP thread.  The region time loops are not coded here to
+# to a top-level OpenMP thread.	 The region time loops are not coded here to
 # allow for proper spatial skewing for temporal wavefronts. The time loop
 # may be found in StencilEquations::calc_region().
-REGION_LOOP_OPTS	?=     	-ndims $(NSDIMS) -inVar region_idxs \
+REGION_LOOP_OPTS	?=	-ndims $(NSDIMS) -inVar region_idxs \
 				-ompConstruct '$(omp_par_for) schedule($(omp_region_schedule)) proc_bind(spread)'
 REGION_LOOP_OUTER_MODS	?=	grouped omp
 REGION_LOOP_ORDER	?=	1 .. N-1
 REGION_LOOP_CODE	?=	$(REGION_LOOP_OUTER_MODS) loop($(REGION_LOOP_ORDER)) { \
 				$(REGION_LOOP_INNER_MODS) call(calc_block(bp)); }
 
-# Block loops break up a block into sub-blocks.  The 'omp' modifier creates
+# Block loops break up a block into sub-blocks.	 The 'omp' modifier creates
 # a *nested* OpenMP loop so that each sub-block is assigned to a nested OpenMP
 # thread.  There is no time loop because threaded temporal blocking is
 # not yet supported.
-BLOCK_LOOP_OPTS		?=     	-ndims $(NSDIMS) -inVar block_idxs \
+BLOCK_LOOP_OPTS		?=	-ndims $(NSDIMS) -inVar block_idxs \
 				-ompConstruct '$(omp_par_for) schedule($(omp_block_schedule)) proc_bind(close)' \
 				-callPrefix 'sg->'
 BLOCK_LOOP_OUTER_MODS	?=	grouped omp
@@ -550,7 +514,7 @@ BLOCK_LOOP_CODE		?=	$(BLOCK_LOOP_OUTER_MODS) loop($(BLOCK_LOOP_ORDER)) { \
 # stencil compiler.  There is no time loop because threaded temporal
 # blocking is not yet supported.  The indexes in this loop are 'normalized',
 # i.e., vector units and rank-relative.
-SUB_BLOCK_LOOP_OPTS		?=     	-ndims $(NSDIMS) -inVar norm_sub_block_idxs
+SUB_BLOCK_LOOP_OPTS		?=	-ndims $(NSDIMS) -inVar norm_sub_block_idxs
 SUB_BLOCK_LOOP_OUTER_MODS	?=
 SUB_BLOCK_LOOP_ORDER		?=	1 .. N-2
 SUB_BLOCK_LOOP_CODE		?=	$(SUB_BLOCK_LOOP_OUTER_MODS) loop($(SUB_BLOCK_LOOP_ORDER)) { \
@@ -559,27 +523,29 @@ SUB_BLOCK_LOOP_CODE		?=	$(SUB_BLOCK_LOOP_OUTER_MODS) loop($(SUB_BLOCK_LOOP_ORDER
 # General-purpose parallel loop.
 # Nested OpenMP is not used here because there is no sharing between threads.
 # TODO: Consider using nested OpenMP to hide more latency.
-MISC_LOOP_OPTS		?=     	-ndims $(NSDIMS) -inVar misc_idxs \
+MISC_LOOP_OPTS		?=	-ndims $(NSDIMS) -inVar misc_idxs \
 				-ompConstruct '$(omp_par_for) schedule($(omp_misc_schedule)) proc_bind(spread)'
 MISC_LOOP_OUTER_MODS	?=	omp
 MISC_LOOP_ORDER		?=	1 .. N-1
 MISC_LOOP_CODE		?=	$(MISC_LOOP_OUTER_MODS) loop($(MISC_LOOP_ORDER)) \
 				$(MISC_LOOP_INNER_MODS) { call(misc_fn); }
 
-######## Primary targets & rules
+# Compile rules.
+
+%.$(YK_TAG).o: %.cpp $(YK_GEN_HEADERS) $(YK_INC_GLOB)
+	$(CXX_PREFIX) $(YK_CXX) $(YK_CXXFLAGS) -x c++ -fPIC -c -o $@ $<
+	@ls -l $@
+
+######## Primary targets.
 # NB: must set stencil and arch make vars to generate the desired YASK kernel.
 
 default: kernel
 
 # Compile the kernel.
-kernel:	$(YK_EXEC) $(MAKE_REPORT_FILE)
+kernel: $(YK_EXEC) $(MAKE_REPORT_FILE)
 	@echo "Binary" $(YK_EXEC) "has been built."
 	@echo "See" $(MAKE_REPORT_FILE) "for build information."
 	@echo "Run command:" $(BIN_DIR)"/yask.sh -stencil" $(stencil) "-arch" $(arch) "[options]"
-
-%.$(YK_TAG).o: %.cpp $(YK_GEN_HEADERS) $(YK_INC_GLOB)
-	$(CXX_PREFIX) $(YK_CXX) $(YK_CXXFLAGS) -x c++ -fPIC -c -o $@ $<
-	@ls -l $@
 
 $(YK_LIB): $(YK_OBJS)
 	$(CXX_PREFIX) $(YK_CXX) $(YK_CXXFLAGS) -shared -o $@ $^ $(YK_LIBS)
@@ -749,7 +715,7 @@ kernel-only:
 # Validation runs for each binary.
 val1	=	-dt 2 -b 16 -d 48
 val2	=	-dt 2 -b 24 -r 32 -rt 2 -dx 63 -dy 49 -dz 47
-ranks	= 	2
+ranks	=	2
 
 # Run the kernel binary using several combos of sizes and ranks.
 yk-tests:
@@ -917,7 +883,7 @@ help:
 	@echo " "
 	@echo "Example debug builds of kernel cmd-line tool:"
 	@echo " $(MAKE) clean; $(MAKE) -j stencil=iso3dfd mpi=0 OMPFLAGS='-qopenmp-stubs' YK_CXXOPT='-O0' EXTRA_MACROS='CHECK' # No OpenMP or MPI, internal checking"
-	@echo " $(MAKE) clean; $(MAKE) -j arch=intel64 stencil=3axis mpi=0 OMPFLAGS='-qopenmp-stubs' YK_CXXOPT='-O0' EXTRA_MACROS='CHECK TRACE'  # TRACE is a useful debug setting!"
+	@echo " $(MAKE) clean; $(MAKE) -j arch=intel64 stencil=3axis mpi=0 OMPFLAGS='-qopenmp-stubs' YK_CXXOPT='-O0' EXTRA_MACROS='CHECK TRACE'	 # TRACE is a useful debug setting!"
 	@echo " $(MAKE) clean; $(MAKE) -j arch=intel64 stencil=3axis radius=0 fold='x=1,y=1,z=1' mpi=0 YK_CXX=g++ OMPFLAGS='' YK_CXXOPT='-O0' EXTRA_MACROS='CHECK TRACE TRACE_MEM TRACE_INTRINSICS'"
 	@echo " "
 	@echo "Example builds with test runs using ccache:"
