@@ -346,7 +346,7 @@ else
  YK_CXX		:=	icc
 endif
 YK_CXXFLAGS	:=	-g -std=c++11 -Wall
-YK_CXXFLAGS	+=	$(addprefix -I,$(YK_INC_DIRS) $(YK_GEN_DIR))
+YK_CXXFLAGS	+=	$(addprefix -I,$(YK_INC_DIRS) $(YK_GEN_DIR) $(dir $(YK_CODE_FILE)))
 OMPFLAGS	+=	-fopenmp
 YK_CXXOPT	?=	-O3
 
@@ -615,14 +615,14 @@ $(YK_GEN_DIR)/yask_grid_code.hpp: $(GEN_LAYOUTS) $(YK_CODE_FILE)
 	$(PERL) $< -g $(NGDIMS) > $@
 
 $(YK_CODE_FILE): $(YC_EXEC)
-	$(MKDIR) $(YK_GEN_DIR)
+	$(MKDIR) $(dir $@)
 	$(RUN_PREFIX) $< $(YC_FLAGS) $(EXTRA_YC_FLAGS) -p $(YC_TARGET) $@
 	@- gindent -fca $@ || \
 	  indent -fca $@ ||   \
 	  echo "note:" $@ "is not properly indented because no indent program was found."
 
 $(YK_MACRO_FILE):
-	$(MKDIR) $(YK_GEN_DIR)
+	$(MKDIR) $(dir $@)
 	echo '// Settings from YASK Makefile' > $@
 	echo '// Automatically-generated code; do not edit.' >> $@
 	for macro in $(MACROS) $(EXTRA_MACROS); do \
