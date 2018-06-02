@@ -291,9 +291,9 @@ ifneq ($(time_alloc),)
 endif
 
 # Kernel dirs.
-YK_SWIG_DIR	:=	./swig
-YK_LIB_SRC_DIR	:=	./lib
-YK_TEST_SRC_DIR	:=	./tests
+YK_SWIG_DIR	:=	$(abspath ./swig)
+YK_LIB_SRC_DIR	:=	$(abspath ./lib)
+YK_TEST_SRC_DIR	:=	$(abspath ./tests)
 YK_TAG		:=	$(stencil).$(arch)
 YK_OUT_BASE	:=	$(BUILD_OUT_DIR)/kernel
 YK_OUT_DIR	:=	$(YK_OUT_BASE)/$(YK_TAG)
@@ -330,7 +330,10 @@ YK_INC_GLOB	:=	$(addsuffix /*.hpp,$(YK_INC_DIRS))
 YK_API_TEST_EXEC :=	$(BIN_OUT_DIR)/$(YK_BASE)_api_test.exe
 YK_GRID_TEST_EXEC :=	$(BIN_OUT_DIR)/$(YK_BASE)_grid_test.exe
 YK_API_TEST_EXEC_WITH_EXCEPTION :=	$(BIN_OUT_DIR)/$(YK_BASE)_api_exception_test.exe
-MAKE_REPORT_FILE:=	$(YK_OUT_BASE)/make-report.$(YK_TAG).txt
+MAKE_REPORT_FILE:=	$(YK_OUT_BASE).make-report.$(YK_TAG).txt
+
+# File-related macros.
+MACROS		+= 	YK_CODE_FILE=$(YK_CODE_FILE)
 
 # YASK loop compiler.
 GEN_LOOPS	:=	$(UTILS_BIN_DIR)/gen_loops.pl
@@ -346,7 +349,7 @@ else
  YK_CXX		:=	icc
 endif
 YK_CXXFLAGS	:=	-g -std=c++11 -Wall
-YK_CXXFLAGS	+=	$(addprefix -I,$(YK_INC_DIRS) $(YK_GEN_DIR) $(dir $(YK_CODE_FILE)))
+YK_CXXFLAGS	+=	$(addprefix -I,$(YK_INC_DIRS) $(YK_GEN_DIR))
 OMPFLAGS	+=	-fopenmp
 YK_CXXOPT	?=	-O3
 
@@ -801,7 +804,7 @@ all:
 # Should not trigger remake of stencil compiler.
 # Make this target before rebuilding YASK with any new parameters.
 clean:
-	rm -fr $(YK_OUT_DIR)
+	rm -fr $(YK_OUT_BASE)
 	rm -fv *.s
 	- find . $(COMM_DIR) -name '*.*.o' -print -delete
 	- find . $(COMM_DIR) -name '*.optrpt' -print -delete
@@ -809,8 +812,7 @@ clean:
 # Remove executables, libs, etc.
 # Also remove logs from kernel dir, which are most likely from testing.
 realclean: clean
-	rm -fr $(YK_OUT_BASE)
-	rm -fv $(YK_LIB) $(YK_EXEC)
+	rm -fv $(YK_LIB) $(YK_EXEC) $(MAKE_REPORT_FILE)
 	rm -fv $(YK_PY_MOD)* $(YK_PY_LIB)
 	rm -fv $(YK_API_TEST_EXEC) $(YK_API_TEST_EXEC_WITH_EXCEPTION)
 	rm -fv make-report.*.txt

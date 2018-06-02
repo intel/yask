@@ -133,11 +133,15 @@ inline void omp_set_nested(int n) { }
 // Macros for 1D<->nD transforms.
 #include "yask_layout_macros.hpp"
 
+// Stringizing hacks for the C preprocessor.
+#define YSTR1(s) #s
+#define YSTR2(s) YSTR1(s)
+
 // Auto-generated macros from foldBuilder.
 // It's important that this be included before realv.hpp
 // to properly set the vector lengths.
 #define DEFINE_MACROS
-#include "yask_stencil_code.hpp"
+#include YSTR2(YK_CODE_FILE)
 #undef DEFINE_MACROS
 
 // Max number of dims allowed in Indices.

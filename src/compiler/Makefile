@@ -31,9 +31,9 @@ include $(YASK_BASE)/src/common/common.mk
 # Vars starting with 'YC_' apply to the stencil compiler.
 
 # Compiler dirs.
-YC_SWIG_DIR	:=	./swig
-YC_LIB_SRC_DIR	:=	./lib
-YC_TEST_SRC_DIR	:=	./tests
+YC_SWIG_DIR	:=	$(abspath ./swig)
+YC_LIB_SRC_DIR	:=	$(abspath ./lib)
+YC_TEST_SRC_DIR	:=	$(abspath ./tests)
 YC_OUT_BASE	:=	$(BUILD_OUT_DIR)/compiler
 YC_SWIG_OUT_DIR	:=	$(YC_OUT_BASE)/swig
 YC_OBJ_DIR	:=	$(YC_OUT_BASE)/obj
