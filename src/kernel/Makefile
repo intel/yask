@@ -34,6 +34,7 @@ mpi		=	1
 numa		=	1
 real_bytes	=	4
 radius		=	2
+allow_new_grids	=	1
 
 # Defaults based on stencil type (and arch for some stencils).
 ifeq ($(stencil),)
@@ -397,6 +398,7 @@ MACROS		+=	PFD_L1=$(pfd_l1) PFD_L2=$(pfd_l2)
 ifeq ($(streaming_stores),1)
  MACROS		+=	USE_STREAMING_STORE
 endif
+MACROS		+=	ALLOW_NEW_GRIDS=$(allow_new_grid_types)
 
 # Default cmd-line args.
 DEF_ARGS	+=	-thread_divisor $(def_thread_divisor)

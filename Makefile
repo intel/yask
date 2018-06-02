@@ -64,10 +64,8 @@
 # def_*_args: Default cmd-line args for specific settings.
 # more_def_args: Additional default cmd-line args.
 #
-# max_dims: max number of dimensions allowed in a grid.
-#
-# eqs: comma-separated name=substr pairs used to manually group
-#   grid-update equations into sets.
+# allow_new_grid_types: Whether to allow grid types not defined in the stencil
+#   to be created via new_grid() and new_fixed_size_grid().
 
 # Common settings.
 YASK_BASE	:=	$(shell pwd)
