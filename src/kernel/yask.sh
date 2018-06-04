@@ -204,6 +204,8 @@ mkdir -p `dirname $logfile`
 echo $invo > $logfile
 
 # These values must match the ones in Makefile.
+# If the executable is built by overriding YK_TAG, YK_EXT_BASE, and/or
+# YK_EXEC, this will fail.
 tag=$stencil.$arch
 bindir=`dirname $0`
 exe="$bindir/yask_kernel.$tag.exe"
