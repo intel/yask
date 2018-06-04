@@ -207,12 +207,12 @@ echo $invo > $logfile
 tag=$stencil.$arch
 bindir=`dirname $0`
 exe="$bindir/yask_kernel.$tag.exe"
-make_report=build/kernel.make-report.$tag.txt
+make_report="$bindir/../build/yask_kernel.$tag.make-report.txt"
 
 # Try to build exe if needed.
 if [[ ! -x $exe ]]; then
     echo "'$exe' not found or not executable; trying to build with default settings..."
-    make clean; make -j stencil=$stencil arch=$arch 2>&1 | tee -a $logfile
+    make clean; make -j stencil=$stencil arch=$arch $exe 2>&1 | tee -a $logfile
 
 # Or, save most recent make report to log if it exists.
 elif [[ -e $make_report ]]; then

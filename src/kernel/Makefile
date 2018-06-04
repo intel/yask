@@ -291,26 +291,28 @@ ifneq ($(time_alloc),)
  YC_FLAGS	+=	-step-alloc $(time_alloc)
 endif
 
+# Kernel base names.
+YK_BASE		:=	yask_kernel
+YK_PY_MOD_BASE	:=	$(YK_BASE)
+YK_TAG		:=	$(stencil).$(arch)
+YK_EXT_BASE	:=	$(YK_BASE).$(YK_TAG)
+
 # Kernel dirs.
 YK_SWIG_DIR	:=	$(abspath ./swig)
 YK_LIB_SRC_DIR	:=	$(abspath ./lib)
 YK_TEST_SRC_DIR	:=	$(abspath ./tests)
-YK_TAG		:=	$(stencil).$(arch)
-YK_OUT_BASE	:=	$(BUILD_OUT_DIR)/kernel
-YK_OUT_DIR	:=	$(YK_OUT_BASE)/$(YK_TAG)
-YK_SWIG_OUT_DIR	:=	$(YK_OUT_DIR)/swig
-YK_OBJ_DIR	:=	$(YK_OUT_DIR)/obj
-YK_GEN_DIR	:=	$(YK_OUT_DIR)/gen
+YK_OUT_DIR	:=	$(BUILD_OUT_DIR)/kernel
+YK_EXT_OUT_DIR	:=	$(YK_OUT_DIR)/$(YK_EXT_BASE)
+YK_SWIG_OUT_DIR	:=	$(YK_EXT_OUT_DIR)/swig
+YK_OBJ_DIR	:=	$(YK_EXT_OUT_DIR)/obj
+YK_GEN_DIR	:=	$(YK_EXT_OUT_DIR)/gen
 
 # Kernel files.
-YK_BASE		:=	yask_kernel
-YK_MODULE	:=	$(YK_BASE)
-YK_BASE2	:=	$(YK_BASE).$(YK_TAG)
-YK_EXEC		:=	$(BIN_OUT_DIR)/$(YK_BASE2).exe
+YK_EXEC		:=	$(BIN_OUT_DIR)/$(YK_EXT_BASE).exe
 YK_SCRIPT	:=	$(BIN_OUT_DIR)/yask.sh
-YK_LIB		:=	$(LIB_OUT_DIR)/lib$(YK_BASE2)$(SO_SUFFIX)
-YK_PY_LIB	:=	$(PY_OUT_DIR)/_$(YK_MODULE)$(SO_SUFFIX)
-YK_PY_MOD	:=	$(PY_OUT_DIR)/$(YK_MODULE).py
+YK_LIB		:=	$(LIB_OUT_DIR)/lib$(YK_EXT_BASE)$(SO_SUFFIX)
+YK_PY_LIB	:=	$(PY_OUT_DIR)/_$(YK_PY_MOD_BASE)$(SO_SUFFIX)
+YK_PY_MOD	:=	$(PY_OUT_DIR)/$(YK_PY_MOD_BASE).py
 YK_SRC_NAMES	:=	factory grid_apis context setup realv_grids new_grid generic_grids utils settings stencil_calc
 YK_OBJS		:=	$(addprefix $(YK_OBJ_DIR)/,$(addsuffix .o,$(YK_SRC_NAMES) $(COMM_SRC_NAMES)))
 YK_MACRO_FILE	:=	$(YK_GEN_DIR)/yask_macros.hpp
@@ -331,7 +333,7 @@ YK_INC_GLOB	:=	$(addsuffix /*.hpp,$(YK_INC_DIRS))
 YK_API_TEST_EXEC :=	$(BIN_OUT_DIR)/$(YK_BASE)_api_test.exe
 YK_GRID_TEST_EXEC :=	$(BIN_OUT_DIR)/$(YK_BASE)_grid_test.exe
 YK_API_TEST_EXEC_WITH_EXCEPTION :=	$(BIN_OUT_DIR)/$(YK_BASE)_api_exception_test.exe
-MAKE_REPORT_FILE:=	$(YK_OUT_BASE).make-report.$(YK_TAG).txt
+MAKE_REPORT_FILE:=	$(BUILD_OUT_DIR)/$(YK_EXT_BASE).make-report.txt
 
 # File-related macros.
 MACROS		+= 	YK_CODE_FILE=$(YK_CODE_FILE)
@@ -357,7 +359,7 @@ YK_CXXOPT	?=	-O3
 # Linker.
 YK_LD		:=	$(YK_CXX)
 YK_LIBS		:=	-lrt
-YK_LFLAGS	:=	-Wl,-rpath=$(LIB_OUT_DIR) -L$(LIB_OUT_DIR) -l$(YK_BASE2)
+YK_LFLAGS	:=	-Wl,-rpath=$(LIB_OUT_DIR) -L$(LIB_OUT_DIR) -l$(YK_EXT_BASE)
 
 # Add options for NUMA.
 ifeq ($(numa),1)
@@ -650,7 +652,7 @@ py-api: $(YK_PY_LIB)
 $(YK_SWIG_OUT_DIR)/yask_kernel_api_wrap.cpp: $(YK_SWIG_DIR)/yask*.i $(INC_DIR)/*.hpp
 	$(SWIG) -version
 	$(MKDIR) $(YK_SWIG_OUT_DIR) $(PY_OUT_DIR)
-	$(SWIG) -v -DYK_MODULE=$(YK_MODULE) -cppext cpp \
+	$(SWIG) -v -DYK_MODULE=$(YK_PY_MOD_BASE) -cppext cpp \
 	  -I$(INC_DIR) -I$(COMM_DIR) -I$(COMM_DIR)/swig \
 	  -c++ -python -o $@ -outdir $(PY_OUT_DIR) -builtin $<
 
@@ -806,7 +808,7 @@ all:
 # Should not trigger remake of stencil compiler.
 # Make this target before rebuilding YASK with any new parameters.
 clean:
-	rm -fr $(YK_OUT_BASE)
+	rm -fr $(YK_OUT_DIR)
 	rm -fv *.s
 	- find . $(COMM_DIR) -name '*.*.o' -print -delete
 	- find . $(COMM_DIR) -name '*.optrpt' -print -delete
@@ -817,7 +819,7 @@ realclean: clean
 	rm -fv $(YK_LIB) $(YK_EXEC) $(MAKE_REPORT_FILE)
 	rm -fv $(YK_PY_MOD)* $(YK_PY_LIB)
 	rm -fv $(YK_API_TEST_EXEC) $(YK_API_TEST_EXEC_WITH_EXCEPTION)
-	rm -fv make-report.*.txt
+	rm -fv $(BUILD_OUT_DIR)/*make-report.txt
 	- find . -name '*.pyc' -print -delete
 	- find . -name '*~' -print -delete
 	rm -rf logs
@@ -825,69 +827,72 @@ realclean: clean
 echo-settings:
 	@echo
 	@echo "Build environment for" $(YK_EXEC) on `date`
-	@echo host=`hostname`
-	@echo stencil=$(stencil)
-	@echo arch=$(arch)
-	@echo fold=$(fold)
-	@echo cluster=$(cluster)
-	@echo radius=$(radius)
-	@echo real_bytes=$(real_bytes)
-	@echo pfd_l1=$(pfd_l1)
-	@echo pfd_l2=$(pfd_l2)
-	@echo streaming_stores=$(streaming_stores)
-	@echo omp_region_schedule=$(omp_region_schedule)
-	@echo omp_block_schedule=$(omp_block_schedule)
-	@echo omp_misc_schedule=$(omp_misc_schedule)
-	@echo def_thread_divisor=$(def_thread_divisor)
-	@echo def_block_threads=$(def_block_threads)
-	@echo def_rank_args=$(def_rank_args)
-	@echo def_block_args=$(def_block_args)
-	@echo def_pad_args=$(def_pad_args)
-	@echo more_def_args=$(more_def_args)
-	@echo EXTRA_DEF_ARGS=$(EXTRA_DEF_ARGS)
-	@echo YC_TARGET="\"$(YC_TARGET)\""
-	@echo YC_FLAGS="\"$(YC_FLAGS)\""
-	@echo EXTRA_YC_FLAGS="\"$(EXTRA_YC_FLAGS)\""
-	@echo MACROS="\"$(MACROS)\""
-	@echo EXTRA_MACROS="\"$(EXTRA_MACROS)\""
-	@echo ISA=$(ISA)
-	@echo OMPFLAGS="\"$(OMPFLAGS)\""
-	@echo EXTRA_YK_CXXFLAGS="\"$(EXTRA_YK_CXXFLAGS)\""
-	@echo YK_CXX=$(YK_CXX)
 	@$(YK_CXX) --version
-	@echo YK_CXXOPT=$(YK_CXXOPT)
-	@echo YK_CXXFLAGS="\"$(YK_CXXFLAGS)\""
-	@echo RANK_LOOP_OPTS="\"$(RANK_LOOP_OPTS)\""
-	@echo RANK_LOOP_ORDER="\"$(RANK_LOOP_ORDER)\""
-	@echo RANK_LOOP_OUTER_MODS="\"$(RANK_LOOP_OUTER_MODS)\""
-	@echo RANK_LOOP_OUTER_VARS="\"$(RANK_LOOP_OUTER_VARS)\""
-	@echo RANK_LOOP_INNER_MODS="\"$(RANK_LOOP_INNER_MODS)\""
-	@echo RANK_LOOP_CODE="\"$(RANK_LOOP_CODE)\""
-	@echo REGION_LOOP_OPTS="\"$(REGION_LOOP_OPTS)\""
-	@echo REGION_LOOP_ORDER="\"$(REGION_LOOP_ORDER)\""
-	@echo REGION_LOOP_OUTER_MODS="\"$(REGION_LOOP_OUTER_MODS)\""
-	@echo REGION_LOOP_OUTER_VARS="\"$(REGION_LOOP_OUTER_VARS)\""
-	@echo REGION_LOOP_INNER_MODS="\"$(REGION_LOOP_INNER_MODS)\""
-	@echo REGION_LOOP_CODE="\"$(REGION_LOOP_CODE)\""
+	@echo BLOCK_LOOP_CODE="\"$(BLOCK_LOOP_CODE)\""
+	@echo BLOCK_LOOP_INNER_MODS="\"$(BLOCK_LOOP_INNER_MODS)\""
 	@echo BLOCK_LOOP_OPTS="\"$(BLOCK_LOOP_OPTS)\""
 	@echo BLOCK_LOOP_ORDER="\"$(BLOCK_LOOP_ORDER)\""
 	@echo BLOCK_LOOP_OUTER_MODS="\"$(BLOCK_LOOP_OUTER_MODS)\""
 	@echo BLOCK_LOOP_OUTER_VARS="\"$(BLOCK_LOOP_OUTER_VARS)\""
-	@echo BLOCK_LOOP_INNER_MODS="\"$(BLOCK_LOOP_INNER_MODS)\""
-	@echo BLOCK_LOOP_CODE="\"$(BLOCK_LOOP_CODE)\""
-	@echo SUB_BLOCK_LOOP_OPTS="\"$(SUB_BLOCK_LOOP_OPTS)\""
-	@echo SUB_BLOCK_LOOP_ORDER="\"$(SUB_BLOCK_LOOP_ORDER)\""
-	@echo SUB_BLOCK_LOOP_OUTER_MODS="\"$(SUB_BLOCK_LOOP_OUTER_MODS)\""
-	@echo SUB_BLOCK_LOOP_OUTER_VARS="\"$(SUB_BLOCK_LOOP_OUTER_VARS)\""
-	@echo SUB_BLOCK_LOOP_INNER_MODS="\"$(SUB_BLOCK_LOOP_INNER_MODS)\""
-	@echo SUB_BLOCK_LOOP_INNER_VARS="\"$(SUB_BLOCK_LOOP_INNER_VARS)\""
-	@echo SUB_BLOCK_LOOP_CODE="\"$(SUB_BLOCK_LOOP_CODE)\""
+	@echo EXTRA_DEF_ARGS=$(EXTRA_DEF_ARGS)
+	@echo EXTRA_MACROS="\"$(EXTRA_MACROS)\""
+	@echo EXTRA_YC_FLAGS="\"$(EXTRA_YC_FLAGS)\""
+	@echo EXTRA_YK_CXXFLAGS="\"$(EXTRA_YK_CXXFLAGS)\""
+	@echo ISA=$(ISA)
+	@echo MACROS="\"$(MACROS)\""
+	@echo MISC_LOOP_CODE="\"$(MISC_LOOP_CODE)\""
+	@echo MISC_LOOP_INNER_MODS="\"$(MISC_LOOP_INNER_MODS)\""
 	@echo MISC_LOOP_OPTS="\"$(MISC_LOOP_OPTS)\""
 	@echo MISC_LOOP_ORDER="\"$(MISC_LOOP_ORDER)\""
 	@echo MISC_LOOP_OUTER_MODS="\"$(MISC_LOOP_OUTER_MODS)\""
 	@echo MISC_LOOP_OUTER_VARS="\"$(MISC_LOOP_OUTER_VARS)\""
-	@echo MISC_LOOP_INNER_MODS="\"$(MISC_LOOP_INNER_MODS)\""
-	@echo MISC_LOOP_CODE="\"$(MISC_LOOP_CODE)\""
+	@echo OMPFLAGS="\"$(OMPFLAGS)\""
+	@echo RANK_LOOP_CODE="\"$(RANK_LOOP_CODE)\""
+	@echo RANK_LOOP_INNER_MODS="\"$(RANK_LOOP_INNER_MODS)\""
+	@echo RANK_LOOP_OPTS="\"$(RANK_LOOP_OPTS)\""
+	@echo RANK_LOOP_ORDER="\"$(RANK_LOOP_ORDER)\""
+	@echo RANK_LOOP_OUTER_MODS="\"$(RANK_LOOP_OUTER_MODS)\""
+	@echo RANK_LOOP_OUTER_VARS="\"$(RANK_LOOP_OUTER_VARS)\""
+	@echo REGION_LOOP_CODE="\"$(REGION_LOOP_CODE)\""
+	@echo REGION_LOOP_INNER_MODS="\"$(REGION_LOOP_INNER_MODS)\""
+	@echo REGION_LOOP_OPTS="\"$(REGION_LOOP_OPTS)\""
+	@echo REGION_LOOP_ORDER="\"$(REGION_LOOP_ORDER)\""
+	@echo REGION_LOOP_OUTER_MODS="\"$(REGION_LOOP_OUTER_MODS)\""
+	@echo REGION_LOOP_OUTER_VARS="\"$(REGION_LOOP_OUTER_VARS)\""
+	@echo SUB_BLOCK_LOOP_CODE="\"$(SUB_BLOCK_LOOP_CODE)\""
+	@echo SUB_BLOCK_LOOP_INNER_MODS="\"$(SUB_BLOCK_LOOP_INNER_MODS)\""
+	@echo SUB_BLOCK_LOOP_INNER_VARS="\"$(SUB_BLOCK_LOOP_INNER_VARS)\""
+	@echo SUB_BLOCK_LOOP_OPTS="\"$(SUB_BLOCK_LOOP_OPTS)\""
+	@echo SUB_BLOCK_LOOP_ORDER="\"$(SUB_BLOCK_LOOP_ORDER)\""
+	@echo SUB_BLOCK_LOOP_OUTER_MODS="\"$(SUB_BLOCK_LOOP_OUTER_MODS)\""
+	@echo SUB_BLOCK_LOOP_OUTER_VARS="\"$(SUB_BLOCK_LOOP_OUTER_VARS)\""
+	@echo YASK_OUTPUT_BASE=$(YASK_OUTPUT_BASE)
+	@echo YC_FLAGS="\"$(YC_FLAGS)\""
+	@echo YC_TARGET="\"$(YC_TARGET)\""
+	@echo YK_BASE=$(YK_BASE)
+	@echo YK_CXX=$(YK_CXX)
+	@echo YK_CXXFLAGS="\"$(YK_CXXFLAGS)\""
+	@echo YK_CXXOPT=$(YK_CXXOPT)
+	@echo YK_EXT_TAG=$(YK_EXT_TAG)
+	@echo arch=$(arch)
+	@echo cluster=$(cluster)
+	@echo def_block_args=$(def_block_args)
+	@echo def_block_threads=$(def_block_threads)
+	@echo def_pad_args=$(def_pad_args)
+	@echo def_rank_args=$(def_rank_args)
+	@echo def_thread_divisor=$(def_thread_divisor)
+	@echo fold=$(fold)
+	@echo host=`hostname`
+	@echo more_def_args=$(more_def_args)
+	@echo omp_block_schedule=$(omp_block_schedule)
+	@echo omp_misc_schedule=$(omp_misc_schedule)
+	@echo omp_region_schedule=$(omp_region_schedule)
+	@echo pfd_l1=$(pfd_l1)
+	@echo pfd_l2=$(pfd_l2)
+	@echo radius=$(radius)
+	@echo real_bytes=$(real_bytes)
+	@echo stencil=$(stencil)
+	@echo streaming_stores=$(streaming_stores)
 
 # Print stats on inner SIMD loops from asm file.
 code-stats:
