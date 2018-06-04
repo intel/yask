@@ -333,7 +333,7 @@ YK_INC_GLOB	:=	$(addsuffix /*.hpp,$(YK_INC_DIRS))
 YK_API_TEST_EXEC :=	$(BIN_OUT_DIR)/$(YK_BASE)_api_test.exe
 YK_GRID_TEST_EXEC :=	$(BIN_OUT_DIR)/$(YK_BASE)_grid_test.exe
 YK_API_TEST_EXEC_WITH_EXCEPTION :=	$(BIN_OUT_DIR)/$(YK_BASE)_api_exception_test.exe
-MAKE_REPORT_FILE:=	$(BUILD_OUT_DIR)/$(YK_EXT_BASE).make-report.txt
+MAKE_REPORT_FILE :=	$(BUILD_OUT_DIR)/$(YK_EXT_BASE).make-report.txt
 
 # File-related macros.
 MACROS		+= 	YK_CODE_FILE=$(YK_CODE_FILE)
@@ -564,21 +564,25 @@ kernel: $(YK_EXEC) $(YK_SCRIPT) $(MAKE_REPORT_FILE)
 	@echo "Run command:" $(YK_SCRIPT) "-stencil" $(stencil) "-arch" $(arch) "[options]"
 
 $(YK_LIB): $(YK_OBJS)
+	- rm -f $(MAKE_REPORT_FILE)
 	$(MKDIR) $(dir $@)
 	$(CXX_PREFIX) $(YK_CXX) $(YK_CXXFLAGS) -shared -o $@ $^ $(YK_LIBS)
 	@ls -l $@
 
 $(YK_EXEC): yask_main.cpp $(YK_LIB)
+	- rm -f $(MAKE_REPORT_FILE)
 	$(MKDIR) $(dir $@)
 	$(CXX_PREFIX) $(YK_LD) $(YK_CXXFLAGS) $< $(YK_LFLAGS) -o $@ $(YK_LIBS)
 	@ls -l $@
 
 $(YK_SCRIPT): ./yask.sh
+	$(MKDIR) $(dir $@)
 	cp $< $@
 	chmod a+rx $@
 	@ls -l $@
 
 $(MAKE_REPORT_FILE): $(YK_LIB)
+	$(MKDIR) $(dir $@)
 	@echo MAKEFLAGS="\"$(MAKEFLAGS)"\" > $@ 2>&1
 	$(MAKE) echo-settings >> $@ 2>&1
 
@@ -645,10 +649,11 @@ headers: $(YK_GEN_HEADERS)
 # Build C++ and Python kernel API libs.
 api: $(YK_LIB) $(YK_PY_LIB)
 
+# Build python kernel API lib.
 py-api: $(YK_PY_LIB)
 
-# Build python kernel API lib.
-# TODO: consider adding $(YK_TAG) to [some of] these targets.
+# Build C++ SWIG wrapper code.
+# This also creates $(YK_PY_MOD) as a side-effect.
 $(YK_SWIG_OUT_DIR)/yask_kernel_api_wrap.cpp: $(YK_SWIG_DIR)/yask*.i $(INC_DIR)/*.hpp
 	$(SWIG) -version
 	$(MKDIR) $(YK_SWIG_OUT_DIR) $(PY_OUT_DIR)
@@ -733,12 +738,19 @@ cxx-yc-api-test:
 # Generate the code file using the built-in compiler.
 code-file: $(YK_CODE_FILE)
 
-# Special target to avoid running stencil compiler and replacing the stencil-code file.
+# Special targets to avoid running stencil compiler and replacing the stencil-code file.
 # NB: This trick is only needed when using the compiler API to create
-# a stencil to replace the one normally created by the pre-built stencil compiler.
+# a stencil to replace the one normally created by the pre-built stencil compiler
+# AND when the compiler binary doesn't exist or can't be found.
 NO_YC_MAKE_FLAGS := --new-file=$(YK_CODE_FILE)
-kernel-only:
-	$(MAKE) $(NO_YC_MAKE_FLAGS)
+kernel-no-yc:
+	$(MAKE) $(NO_YC_MAKE_FLAGS) kernel
+
+api-no-yc:
+	$(MAKE) $(NO_YC_MAKE_FLAGS) api
+
+py-api-no-yc:
+	$(MAKE) $(NO_YC_MAKE_FLAGS) py-api
 
 # Validation runs for each binary.
 val1	=	-dt 2 -b 16 -d 48
@@ -866,7 +878,7 @@ echo-settings:
 	@echo SUB_BLOCK_LOOP_ORDER="\"$(SUB_BLOCK_LOOP_ORDER)\""
 	@echo SUB_BLOCK_LOOP_OUTER_MODS="\"$(SUB_BLOCK_LOOP_OUTER_MODS)\""
 	@echo SUB_BLOCK_LOOP_OUTER_VARS="\"$(SUB_BLOCK_LOOP_OUTER_VARS)\""
-	@echo YASK_OUTPUT_BASE=$(YASK_OUTPUT_BASE)
+	@echo YASK_OUTPUT_DIR=$(YASK_OUTPUT_DIR)
 	@echo YC_FLAGS="\"$(YC_FLAGS)\""
 	@echo YC_TARGET="\"$(YC_TARGET)\""
 	@echo YK_BASE=$(YK_BASE)
