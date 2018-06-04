@@ -28,13 +28,13 @@
 #   command-line that control kernel configuration and performance.
 
 # Initial defaults.
-stencil		=	iso3dfd
-arch		=	snb
-mpi		=	1
-numa		=	1
-real_bytes	=	4
-radius		=	2
-allow_new_grids	=	1
+stencil			=	iso3dfd
+arch			=	snb
+mpi			=	1
+numa			=	1
+real_bytes		=	4
+radius			=	2
+allow_new_grid_types	=	1
 
 # Defaults based on stencil type (and arch for some stencils).
 ifeq ($(stencil),)
@@ -309,8 +309,8 @@ YK_BASE2	:=	$(YK_BASE).$(YK_TAG)
 YK_EXEC		:=	$(BIN_OUT_DIR)/$(YK_BASE2).exe
 YK_SCRIPT	:=	$(BIN_OUT_DIR)/yask.sh
 YK_LIB		:=	$(LIB_OUT_DIR)/lib$(YK_BASE2)$(SO_SUFFIX)
-YK_PY_LIB	:=	$(YASK_OUT_DIR)/_$(YK_MODULE)$(SO_SUFFIX)
-YK_PY_MOD	:=	$(YASK_OUT_DIR)/$(YK_MODULE).py
+YK_PY_LIB	:=	$(PY_OUT_DIR)/_$(YK_MODULE)$(SO_SUFFIX)
+YK_PY_MOD	:=	$(PY_OUT_DIR)/$(YK_MODULE).py
 YK_SRC_NAMES	:=	factory grid_apis context setup realv_grids new_grid generic_grids utils settings stencil_calc
 YK_OBJS		:=	$(addprefix $(YK_OBJ_DIR)/,$(addsuffix .o,$(YK_SRC_NAMES) $(COMM_SRC_NAMES)))
 YK_MACRO_FILE	:=	$(YK_GEN_DIR)/yask_macros.hpp
@@ -649,10 +649,10 @@ py-api: $(YK_PY_LIB)
 # TODO: consider adding $(YK_TAG) to [some of] these targets.
 $(YK_SWIG_OUT_DIR)/yask_kernel_api_wrap.cpp: $(YK_SWIG_DIR)/yask*.i $(INC_DIR)/*.hpp
 	$(SWIG) -version
-	$(MKDIR) $(YK_SWIG_OUT_DIR) $(YASK_OUT_DIR)
+	$(MKDIR) $(YK_SWIG_OUT_DIR) $(PY_OUT_DIR)
 	$(SWIG) -v -DYK_MODULE=$(YK_MODULE) -cppext cpp \
 	  -I$(INC_DIR) -I$(COMM_DIR) -I$(COMM_DIR)/swig \
-	  -c++ -python -o $@ -outdir $(YASK_OUT_DIR) -builtin $<
+	  -c++ -python -o $@ -outdir $(PY_OUT_DIR) -builtin $<
 
 $(YK_SWIG_OUT_DIR)/yask_kernel_api_wrap.o: $(YK_SWIG_OUT_DIR)/yask_kernel_api_wrap.cpp
 	$(MKDIR) $(dir $@)

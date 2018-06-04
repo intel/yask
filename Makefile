@@ -57,7 +57,7 @@
 #
 # omp_region_schedule: OMP schedule policy for region loop.
 # omp_block_schedule: OMP schedule policy for nested OpenMP block loop.
-# omp_halo_schedule: OMP schedule policy for OpenMP halo loop.
+# omp_misc_schedule: OMP schedule policy for OpenMP misc loop.
 #
 # def_block_threads: Number of threads to use in nested OpenMP block loop by default.
 # def_thread_divisor: Divide number of OpenMP threads by this factor by default.
@@ -68,7 +68,7 @@
 #   to be created via new_grid() and new_fixed_size_grid().
 
 # Common settings.
-YASK_BASE	:=	$(shell pwd)
+YASK_BASE	:=	$(abspath .)
 include $(YASK_BASE)/src/common/common.mk
 
 # This is mostly a wrapper for building several parts of YASK via src/*/Makefile.
@@ -256,8 +256,8 @@ realclean: clean
 	- find * -name __pycache__ -print -delete
 	$(YC_MAKE) $@
 	$(YK_MAKE) $@
-	- find $(YASK_OUT_DIR) -mindepth 1 '!' -name __init__.py -print -delete
-	- rmdir -v --ignore-fail-on-non-empty $(YASK_OUT_DIR)
+	- find $(PY_OUT_DIR) -mindepth 1 '!' -name __init__.py -print -delete
+	- rmdir -v --ignore-fail-on-non-empty $(PY_OUT_DIR)
 	- rmdir -v --ignore-fail-on-non-empty $(YASK_OUT_BASE)
 
 help:

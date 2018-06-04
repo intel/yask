@@ -40,12 +40,12 @@ YASK_OUT_BASE	:=	$(abspath $(YASK_OUTPUT_DIR))
 LIB_OUT_DIR	:=	$(YASK_OUT_BASE)/lib
 BIN_OUT_DIR	:=	$(YASK_OUT_BASE)/bin
 BUILD_OUT_DIR	:=	$(YASK_OUT_BASE)/build
-YASK_OUT_DIR	:=	$(YASK_OUT_BASE)/yask
+PY_OUT_DIR	:=	$(YASK_OUT_BASE)/yask
 
 # OS-specific
 ifeq ($(shell uname -o),Cygwin)
   SO_SUFFIX	:=	.dll
-  RUN_PREFIX	:=	env PATH="${PATH}:$(LIB_DIR):$(LIB_OUT_DIR):$(YASK_DIR):$(YASK_OUT_DIR)"
+  RUN_PREFIX	:=	env PATH="${PATH}:$(LIB_DIR):$(LIB_OUT_DIR):$(YASK_DIR):$(PY_OUT_DIR)"
   PYTHON	:=	python3
 else
   SO_SUFFIX	:=	.so
@@ -74,4 +74,4 @@ MKDIR		:=	mkdir -p -v
 PYINC		:= 	$(addprefix -I,$(shell $(PYTHON) -c 'import distutils.sysconfig; print(distutils.sysconfig.get_python_inc() + " " + distutils.sysconfig.get_python_inc(plat_specific=1))'))
 
 RUN_PYTHON	:= 	$(RUN_PREFIX) \
-	env PYTHONPATH=$(LIB_DIR):$(LIB_OUT_DIR):$(YASK_DIR):$(YASK_OUT_DIR):$(PYTHONPATH) $(PYTHON)
+	env PYTHONPATH=$(LIB_DIR):$(LIB_OUT_DIR):$(YASK_DIR):$(PY_OUT_DIR):$(PYTHONPATH) $(PYTHON)

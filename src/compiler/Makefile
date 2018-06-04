@@ -42,8 +42,8 @@ YC_STENCIL_DIR	:= 	$(SRC_DIR)/stencils
 # Compiler files.
 YC_MODULE	:=	$(YC_BASE)
 YC_LIB		:=	$(LIB_OUT_DIR)/lib$(YC_BASE)$(SO_SUFFIX)
-YC_PY_LIB	:=	$(YASK_OUT_DIR)/_$(YC_MODULE)$(SO_SUFFIX)
-YC_PY_MOD	:=	$(YASK_OUT_DIR)/$(YC_MODULE).py
+YC_PY_LIB	:=	$(PY_OUT_DIR)/_$(YC_MODULE)$(SO_SUFFIX)
+YC_PY_MOD	:=	$(PY_OUT_DIR)/$(YC_MODULE).py
 YC_TEST_EXEC	:=	$(BIN_OUT_DIR)/$(YC_BASE)_api_test.exe
 YC_TEST_EXEC_WITH_EXCEPTION	:=	$(BIN_OUT_DIR)/$(YC_BASE)_api_exception_test.exe
 YC_SRC_NAMES	:=	Expr ExprUtils Grid Eqs Print Vec Cpp CppIntrin YaskKernel Soln
@@ -118,10 +118,10 @@ api: compiler $(YC_PY_LIB)
 # Also builds $(YC_PY_MOD)
 $(YC_SWIG_OUT_DIR)/yask_compiler_api_wrap.cpp: $(YC_SWIG_DIR)/yask*.i $(INC_DIR)/*.hpp
 	$(SWIG) -version
-	$(MKDIR) $(YC_SWIG_OUT_DIR) $(YASK_OUT_DIR)
+	$(MKDIR) $(YC_SWIG_OUT_DIR) $(PY_OUT_DIR)
 	$(SWIG) -v -DYC_MODULE=$(YC_MODULE) -cppext cpp \
 	  -I$(INC_DIR) -I$(COMM_DIR) -I$(COMM_DIR)/swig \
-	  -c++ -python -o $@ -outdir $(YASK_OUT_DIR) -builtin $<
+	  -c++ -python -o $@ -outdir $(PY_OUT_DIR) -builtin $<
 
 # Turn off asserts to work around known SWIG issue:
 # https://github.com/swig/swig/issues/773
