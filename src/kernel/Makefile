@@ -769,7 +769,7 @@ yc-and-yk-test: $(YK_EXEC) $(YK_SCRIPT)
 	$(MAKE) yk-tests
 
 # Run the YASK kernel test without implicity using the YASK compiler.
-yk-test-no-yc: kernel-only $(YK_SCRIPT)
+yk-test-no-yc: kernel-no-yc $(YK_SCRIPT)
 	$(MAKE) yk-tests
 
 # Run the kernel API tests for C++ and Python with and w/o expected exceptions.
