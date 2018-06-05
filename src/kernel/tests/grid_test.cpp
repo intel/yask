@@ -29,7 +29,7 @@ IN THE SOFTWARE.
 // enable assert().
 #define DEBUG
 
-#include "yask.hpp"
+#include "yask_stencil.hpp"
 using namespace std;
 using namespace yask;
 

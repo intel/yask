@@ -305,7 +305,8 @@ YK_OUT_DIR	:=	$(BUILD_OUT_DIR)/kernel
 
 # Dir for output file dependent on arch but
 # not on the stencil.
-YK_OBJ_DIR	:=	$(YK_OUT_DIR)/$(arch).obj
+YK_ARCH_DIR	:=	$(YK_OUT_DIR)/$(arch)
+YK_OBJ_DIR	:=	$(YK_ARCH_DIR)/obj
 
 # Dirs for stencil-specific output files.
 YK_TAG		:=	$(stencil).$(arch)
