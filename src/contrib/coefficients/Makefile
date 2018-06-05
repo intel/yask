@@ -23,16 +23,21 @@
 # Finite-differences coefficients code.
 # Contributed by Jeremy Tillay.
 
+# Common settings.
+YASK_BASE	?=	$(abspath ../../..)
+include $(YASK_BASE)/src/common/common.mk
+
 SOURCES := fd_coeff_test.cpp fd_coeff.cpp 
 CXX := g++
 CFLAGS := -std=c++11 
 INCLUDES := -I.
 LDFLAGS :=
-EXECUTABLE := ../../bin/fd_coeff_test.exe
+EXECUTABLE := $(BIN_OUT_DIR)/fd_coeff_test.exe
 
 all: $(EXECUTABLE)
 
 $(EXECUTABLE):$(SOURCES)
+	$(MKDIR) $(dir $@)
 	$(CXX) $(CFLAGS) -o $(EXECUTABLE) $(SOURCES) $(LDFLAGS) $(LIBS)
 
 clean: 
