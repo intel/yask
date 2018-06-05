@@ -221,12 +221,17 @@ namespace yask {
     };                          // StencilBundleBase.
 
     // A collection of independent stencil bundles.
+    // "Independent" implies that they may be evaluated
+    // in any order.
     class BundlePack :
         public std::vector<StencilBundleBase*> {
 
     protected:
         std::string _name;
 
+        // Union of bounding boxes for all bundles.
+        BoundingBox _pack_bb;
+        
     public:
         BundlePack(const std::string& name) :
             _name(name) { }
@@ -235,6 +240,9 @@ namespace yask {
         const std::string& get_name() {
             return _name;
         }
+
+        // Access to BB.
+        virtual BoundingBox& getBB() { return _pack_bb; }
 
     }; // BundlePack.
 
