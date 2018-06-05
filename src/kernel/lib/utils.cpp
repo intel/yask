@@ -24,6 +24,7 @@ IN THE SOFTWARE.
 *****************************************************************************/
 
 #include "yask.hpp"
+using namespace std;
 
 // Set MODEL_CACHE to 1 or 2 to model that cache level
 // and create a global cache object here.
@@ -31,7 +32,6 @@ IN THE SOFTWARE.
 Cache cache_model(MODEL_CACHE);
 #endif
 
-using namespace std;
 namespace yask {
 
     // Aligned allocation.

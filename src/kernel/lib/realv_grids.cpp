@@ -25,7 +25,7 @@ IN THE SOFTWARE.
 
 // Implement methods for RealVecGridBase.
 
-#include "yask.hpp"
+#include "yask_stencil.hpp"
 using namespace std;
 
 namespace yask {

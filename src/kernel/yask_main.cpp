@@ -25,7 +25,7 @@ IN THE SOFTWARE.
 
 // This code implements the YASK stand-alone performance-measurement tool.
 
-#include "yask.hpp"
+#include "yask_stencil.hpp"
 using namespace std;
 using namespace yask;
 

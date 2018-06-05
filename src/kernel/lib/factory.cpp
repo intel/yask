@@ -23,7 +23,7 @@ IN THE SOFTWARE.
 
 *****************************************************************************/
 
-#include "yask.hpp"
+#include "yask_stencil.hpp"
 using namespace std;
 
 // Auto-generated stencil code that extends base types.

@@ -294,17 +294,25 @@ endif
 # Kernel base names.
 YK_BASE		:=	yask_kernel
 YK_PY_MOD_BASE	:=	$(YK_BASE)
-YK_TAG		:=	$(stencil).$(arch)
-YK_EXT_BASE	:=	$(YK_BASE).$(YK_TAG)
 
-# Kernel dirs.
+# Kernel input dirs.
 YK_SWIG_DIR	:=	$(abspath ./swig)
 YK_LIB_SRC_DIR	:=	$(abspath ./lib)
 YK_TEST_SRC_DIR	:=	$(abspath ./tests)
+
+# Kernel output dir.
 YK_OUT_DIR	:=	$(BUILD_OUT_DIR)/kernel
+
+# Dir for output file dependent on arch but
+# not on the stencil.
+YK_OBJ_DIR	:=	$(YK_OUT_DIR)/$(arch).obj
+
+# Dirs for stencil-specific output files.
+YK_TAG		:=	$(stencil).$(arch)
+YK_EXT_BASE	:=	$(YK_BASE).$(YK_TAG)
 YK_EXT_OUT_DIR	:=	$(YK_OUT_DIR)/$(YK_EXT_BASE)
 YK_SWIG_OUT_DIR	:=	$(YK_EXT_OUT_DIR)/swig
-YK_OBJ_DIR	:=	$(YK_EXT_OUT_DIR)/obj
+YK_EXT_OBJ_DIR	:=	$(YK_EXT_OUT_DIR)/obj
 YK_GEN_DIR	:=	$(YK_EXT_OUT_DIR)/gen
 
 # Kernel files.
@@ -313,9 +321,10 @@ YK_SCRIPT	:=	$(BIN_OUT_DIR)/yask.sh
 YK_LIB		:=	$(LIB_OUT_DIR)/lib$(YK_EXT_BASE)$(SO_SUFFIX)
 YK_PY_LIB	:=	$(PY_OUT_DIR)/_$(YK_PY_MOD_BASE)$(SO_SUFFIX)
 YK_PY_MOD	:=	$(PY_OUT_DIR)/$(YK_PY_MOD_BASE).py
-YK_SRC_NAMES	:=	factory grid_apis context setup realv_grids new_grid generic_grids utils settings stencil_calc
+YK_SRC_NAMES	:=	utils
+YK_EXT_SRC_NAMES :=	factory grid_apis context stencil_calc setup realv_grids new_grid settings generic_grids
 YK_OBJS		:=	$(addprefix $(YK_OBJ_DIR)/,$(addsuffix .o,$(YK_SRC_NAMES) $(COMM_SRC_NAMES)))
-YK_MACRO_FILE	:=	$(YK_GEN_DIR)/yask_macros.hpp
+YK_EXT_OBJS	:=	$(addprefix $(YK_EXT_OBJ_DIR)/,$(addsuffix .o,$(YK_EXT_SRC_NAMES)))
 YK_CODE_FILE	:=	$(YK_GEN_DIR)/yask_stencil_code.hpp
 YK_GEN_HEADERS	:=	$(addprefix $(YK_GEN_DIR)/, \
 				yask_rank_loops.hpp \
@@ -326,9 +335,8 @@ YK_GEN_HEADERS	:=	$(addprefix $(YK_GEN_DIR)/, \
 				yask_layout_macros.hpp \
 				yask_layouts.hpp \
 				yask_grid_code.hpp) \
-				$(YK_MACRO_FILE) \
 				$(YK_CODE_FILE)
-YK_INC_DIRS	:=	$(INC_DIR) $(YK_LIB_SRC_DIR) ../common
+YK_INC_DIRS	:=	$(INC_DIR) $(YK_LIB_SRC_DIR) $(COMM_DIR)
 YK_INC_GLOB	:=	$(addsuffix /*.hpp,$(YK_INC_DIRS))
 YK_API_TEST_EXEC :=	$(BIN_OUT_DIR)/$(YK_BASE)_api_test.exe
 YK_GRID_TEST_EXEC :=	$(BIN_OUT_DIR)/$(YK_BASE)_grid_test.exe
@@ -395,7 +403,6 @@ ifneq ($(filter -O0,$(YK_CXXOPT)),)
 endif
 
 # Set MACROS based on individual makefile vars.
-# MACROS and EXTRA_MACROS will be written to a header file.
 MACROS		+=	PFD_L1=$(pfd_l1) PFD_L2=$(pfd_l2)
 ifeq ($(streaming_stores),1)
  MACROS		+=	USE_STREAMING_STORE
@@ -406,7 +413,7 @@ MACROS		+=	ALLOW_NEW_GRIDS=$(allow_new_grid_types)
 DEF_ARGS	+=	-thread_divisor $(def_thread_divisor)
 DEF_ARGS	+=	-block_threads $(def_block_threads)
 DEF_ARGS	+=	$(def_rank_args) $(def_block_args) $(def_pad_args) $(more_def_args) 
-MACROS		+=	DEF_ARGS='"$(DEF_ARGS) $(EXTRA_DEF_ARGS)"'
+YK_CXXFLAGS	+=	-DDEF_ARGS='"$(DEF_ARGS) $(EXTRA_DEF_ARGS)"'
 
 # arch.
 ARCH		:=	$(shell echo $(arch) | tr '[:lower:]' '[:upper:]')
@@ -469,7 +476,7 @@ else ifeq ($(model_cache),2)
 endif
 
 # Add in final flags and user-added flags.
-YK_CXXFLAGS	+=	$(YK_CXXOPT) $(OMPFLAGS) $(EXTRA_YK_CXXFLAGS)
+YK_CXXFLAGS	+=	$(YK_CXXOPT) $(OMPFLAGS) $(addprefix -D,$(MACROS) $(EXTRA_MACROS)) $(EXTRA_YK_CXXFLAGS)
 
 # Number of stencil/grid dims extracted from YASK compiler output.
 NSDIMS		:=	`awk '/NUM_STENCIL_DIMS/ {print $$NF}' $(YK_CODE_FILE)`
@@ -542,13 +549,18 @@ MISC_LOOP_CODE		?=	$(MISC_LOOP_OUTER_MODS) loop($(MISC_LOOP_ORDER)) \
 
 # Compile rules.
 
-$(YK_OBJ_DIR)/%.o: $(YK_LIB_SRC_DIR)/%.cpp $(YK_GEN_HEADERS) $(YK_INC_GLOB)
-	$(MKDIR) $(YK_OBJ_DIR)
+$(YK_OBJ_DIR)/%.o: $(COMM_DIR)/%.cpp $(YK_INC_GLOB)
+	$(MKDIR) $(dir $@)
 	$(CXX_PREFIX) $(YK_CXX) $(YK_CXXFLAGS) -x c++ -fPIC -c -o $@ $<
 	@ls -l $@
 
-$(YK_OBJ_DIR)/%.o: $(COMM_DIR)/%.cpp $(YK_GEN_HEADERS) $(YK_INC_GLOB)
-	$(MKDIR) $(YK_OBJ_DIR)
+$(YK_OBJ_DIR)/%.o: $(YK_LIB_SRC_DIR)/%.cpp $(YK_INC_GLOB)
+	$(MKDIR) $(dir $@)
+	$(CXX_PREFIX) $(YK_CXX) $(YK_CXXFLAGS) -x c++ -fPIC -c -o $@ $<
+	@ls -l $@
+
+$(YK_EXT_OBJ_DIR)/%.o: $(YK_LIB_SRC_DIR)/%.cpp $(YK_GEN_HEADERS) $(YK_INC_GLOB)
+	$(MKDIR) $(dir $@)
 	$(CXX_PREFIX) $(YK_CXX) $(YK_CXXFLAGS) -x c++ -fPIC -c -o $@ $<
 	@ls -l $@
 
@@ -563,7 +575,7 @@ kernel: $(YK_EXEC) $(YK_SCRIPT) $(MAKE_REPORT_FILE)
 	@echo "See" $(MAKE_REPORT_FILE) "for build information."
 	@echo "Run command:" $(YK_SCRIPT) "-stencil" $(stencil) "-arch" $(arch) "[options]"
 
-$(YK_LIB): $(YK_OBJS)
+$(YK_LIB): $(YK_OBJS) $(YK_EXT_OBJS)
 	- rm -f $(MAKE_REPORT_FILE)
 	$(MKDIR) $(dir $@)
 	$(CXX_PREFIX) $(YK_CXX) $(YK_CXXFLAGS) -shared -o $@ $^ $(YK_LIBS)
@@ -632,14 +644,6 @@ $(YK_CODE_FILE): $(YC_EXEC)
 	  indent -fca $@ ||   \
 	  echo "note:" $@ "is not properly indented because no indent program was found."
 
-$(YK_MACRO_FILE):
-	$(MKDIR) $(dir $@)
-	echo '// Settings from YASK Makefile' > $@
-	echo '// Automatically-generated code; do not edit.' >> $@
-	for macro in $(MACROS) $(EXTRA_MACROS); do \
-	  echo '#define' $$macro | sed 's/=/ /' >> $@; \
-	done
-
 headers: $(YK_GEN_HEADERS)
 	@ echo 'Header files generated.'
 
@@ -666,7 +670,7 @@ $(YK_SWIG_OUT_DIR)/yask_kernel_api_wrap.o: $(YK_SWIG_OUT_DIR)/yask_kernel_api_wr
 	$(CXX_PREFIX) $(YK_CXX) $(YK_CXXFLAGS) $(PYINC) -fPIC -c -o $@ $<
 	@ls -l $@
 
-$(YK_PY_LIB): $(YK_OBJS) $(YK_SWIG_OUT_DIR)/yask_kernel_api_wrap.o
+$(YK_PY_LIB): $(YK_OBJS)  $(YK_EXT_OBJS) $(YK_SWIG_OUT_DIR)/yask_kernel_api_wrap.o
 	$(MKDIR) $(dir $@)
 	$(CXX_PREFIX) $(YK_CXX) $(YK_CXXFLAGS) -shared -o $@ $^ $(YK_LIBS)
 	@ls -l $@
@@ -737,6 +741,9 @@ cxx-yc-api-test:
 
 # Generate the code file using the built-in compiler.
 code-file: $(YK_CODE_FILE)
+
+# Just the common obj files.
+common-objs: $(YK_OBJS)
 
 # Special targets to avoid running stencil compiler and replacing the stencil-code file.
 # NB: This trick is only needed when using the compiler API to create
