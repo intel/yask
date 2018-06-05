@@ -28,13 +28,13 @@
 #   command-line that control kernel configuration and performance.
 
 # Initial defaults.
-stencil			=	iso3dfd
-arch			=	snb
-mpi			=	1
-numa			=	1
-real_bytes		=	4
-radius			=	2
-allow_new_grid_types	=	1
+stencil			:=	iso3dfd
+arch			:=	snb
+mpi			:=	1
+numa			:=	1
+real_bytes		:=	4
+radius			:=	2
+allow_new_grid_types	:=	1
 
 # Defaults based on stencil type (and arch for some stencils).
 ifeq ($(stencil),)
@@ -42,123 +42,123 @@ ifeq ($(stencil),)
 
 else ifeq ($(stencil),3axis)
  MACROS		+=	MAX_EXCH_DIST=1
- radius		=	6
+ radius		:=	6
 
 else ifeq ($(stencil),9axis)
  MACROS		+=	MAX_EXCH_DIST=2
- radius		=	4
+ radius		:=	4
 
 else ifeq ($(stencil),3plane)
  MACROS		+=	MAX_EXCH_DIST=2
- radius		=	3
+ radius		:=	3
 
 else ifeq ($(stencil),cube)
  MACROS		+=	MAX_EXCH_DIST=3
- radius		=	2
+ radius		:=	2
 
 else ifneq ($(findstring iso3dfd,$(stencil)),)
  MACROS				+=	MAX_EXCH_DIST=1
- radius				=	8
- def_rank_args			=	-d 1024 -dx 512 # assume 2 ranks/node in 'x'.
- def_pad_args			=	-ep 1
+ radius				:=	8
+ def_rank_args			:=	-d 1024 -dx 512 # assume 2 ranks/node in 'x'.
+ def_pad_args			:=	-ep 1
  ifeq ($(arch),knl)
-  def_rank_args			=	-d 1024 # assume 1 rank/node.
-  fold_4byte			=	x=2,y=8
-  cluster			=	x=2
-  def_block_args		=	-bx 160 -by 256 -bz 96
-  pfd_l1			=	1
-  pfd_l2			=	0
+  def_rank_args			:=	-d 1024 # assume 1 rank/node.
+  fold_4byte			:=	x=2,y=8
+  cluster			:=	x=2
+  def_block_args		:=	-bx 160 -by 256 -bz 96
+  pfd_l1			:=	1
+  pfd_l2			:=	0
  else ifneq ($(filter $(arch),hsw bdw),)
-  fold_4byte			=	x=8
-  def_thread_divisor		=	2
-  def_block_threads		=	1
-  def_block_args		=	-bx 296 -by 5 -bz 290
-  cluster			=	z=2
-  pfd_l1			=	0
-  pfd_l2			=	0
+  fold_4byte			:=	x=8
+  def_thread_divisor		:=	2
+  def_block_threads		:=	1
+  def_block_args		:=	-bx 296 -by 5 -bz 290
+  cluster			:=	z=2
+  pfd_l1			:=	0
+  pfd_l2			:=	0
  else ifneq ($(filter $(arch),skx skl),)
-  fold_4byte			=	x=4,y=4
-  def_thread_divisor		=	1
-  def_block_threads		=	2
-  def_block_args		=	-bx 108	 -by 28 -bz 132
-  cluster			=	x=1
-  pfd_l1			=	0
-  pfd_l2			=	2
+  fold_4byte			:=	x=4,y=4
+  def_thread_divisor		:=	1
+  def_block_threads		:=	2
+  def_block_args		:=	-bx 108	 -by 28 -bz 132
+  cluster			:=	x=1
+  pfd_l1			:=	0
+  pfd_l2			:=	2
  endif
 
 else ifneq ($(findstring awp,$(stencil)),)
  ifeq ($(stencil),awp)
-  time_alloc			=	1 # only allowed w/o surface conditions.
+  time_alloc			:=	1 # only allowed w/o surface conditions.
  endif
- def_block_args			=	-b 32
+ def_block_args			:=	-b 32
  YC_FLAGS			+=	-min-es 1
- def_rank_args			=	-dx 512 -dy 1024 -dz 128 # assume 2 ranks/node in 'x'.
- def_pad_args			=	-ep 1
+ def_rank_args			:=	-dx 512 -dy 1024 -dz 128 # assume 2 ranks/node in 'x'.
+ def_pad_args			:=	-ep 1
  ifeq ($(arch),knl)
-  def_rank_args			=	-dx 1024 -dy 1024 -dz 128 # assume 1 rank/node.
-  fold_4byte			=	x=4,y=4
-  def_thread_divisor		=	2
-  def_block_threads		=	4
-  def_block_args		=	-b 48 -bx 112
-  pfd_l1			=	1
-  pfd_l2			=	0
+  def_rank_args			:=	-dx 1024 -dy 1024 -dz 128 # assume 1 rank/node.
+  fold_4byte			:=	x=4,y=4
+  def_thread_divisor		:=	2
+  def_block_threads		:=	4
+  def_block_args		:=	-b 48 -bx 112
+  pfd_l1			:=	1
+  pfd_l2			:=	0
  else ifneq ($(filter $(arch),hsw bdw),)
-  omp_block_schedule		=	dynamic,1
-  fold_4byte			=	x=8
-  cluster			=	y=2
-  def_block_args		=	-bx 128 -by 16 -bz 32 
+  omp_block_schedule		:=	dynamic,1
+  fold_4byte			:=	x=8
+  cluster			:=	y=2
+  def_block_args		:=	-bx 128 -by 16 -bz 32 
   more_def_args			+=	-sbx 32 -sby 2 -sbz 32
-  pfd_l1			=	1
-  pfd_l2			=	2
+  pfd_l1			:=	1
+  pfd_l2			:=	2
  else ifneq ($(filter $(arch),skx skl),)
-  fold_4byte			=	x=2,y=8
-  def_block_args		=	-b 32 -bx 96
-  pfd_l1			=	1
-  pfd_l2			=	0
+  fold_4byte			:=	x=2,y=8
+  def_block_args		:=	-b 32 -bx 96
+  pfd_l1			:=	1
+  pfd_l2			:=	0
  endif
 
 else ifneq ($(findstring ssg,$(stencil)),)
- time_alloc		=	1
- def_rank_args		=	-d 512
+ time_alloc		:=	1
+ def_rank_args		:=	-d 512
  ifneq ($(filter $(arch),skx skl),)
-  def_rank_args		=	-d 640 -dx 320
-  fold_4byte		=	x=4,y=4
-  def_block_args	=	-bx 96 -by 16 -bz 80
-  def_block_threads	=	2
+  def_rank_args		:=	-d 640 -dx 320
+  fold_4byte		:=	x=4,y=4
+  def_block_args	:=	-bx 96 -by 16 -bz 80
+  def_block_threads	:=	2
  endif
 
 else ifneq ($(findstring fsg,$(stencil)),)
- time_alloc		=	1
- def_rank_args		=	-d 256
+ time_alloc		:=	1
+ def_rank_args		:=	-d 256
  ifeq ($(arch),knl)
-  omp_region_schedule	=	guided
-  def_block_args	=	-b 16
-  def_thread_divisor	=	4
-  def_block_threads	=	2
-  pfd_l1		=	0
-  pfd_l2		=	2
+  omp_region_schedule	:=	guided
+  def_block_args	:=	-b 16
+  def_thread_divisor	:=	4
+  def_block_threads	:=	2
+  pfd_l1		:=	0
+  pfd_l2		:=	2
  else ifneq ($(filter $(arch),skx skl),)
-  def_rank_args		=	-d 384 -dx 192
-  fold_4byte		=	x=4,y=4
-  def_block_args	=	-bx 188 -by 12 -bz 24
-  def_block_threads	=	1
+  def_rank_args		:=	-d 384 -dx 192
+  fold_4byte		:=	x=4,y=4
+  def_block_args	:=	-bx 188 -by 12 -bz 24
+  def_block_threads	:=	1
  endif
 
 else ifeq ($(stencil),tti)
  MACROS			+=	MAX_EXCH_DIST=3
- radius			=	2
- def_rank_args		=	-d 512
+ radius			:=	2
+ def_rank_args		:=	-d 512
  ifneq ($(filter $(arch),skx skl),)
-  def_rank_args		=	-d 640 -dx 320
-  fold_4byte		=	x=4,y=4
-  def_block_args	=	-bx 80 -by 16 -bz 40
-  def_block_threads	=	1
+  def_rank_args		:=	-d 640 -dx 320
+  fold_4byte		:=	x=4,y=4
+  def_block_args	:=	-bx 80 -by 16 -bz 40
+  def_block_threads	:=	1
  endif
 
 else ifeq ($(stencil),stream)
  MACROS		+=	MAX_EXCH_DIST=0
- radius		=	2
- cluster	=	x=2
+ radius		:=	2
+ cluster	:=	x=2
 
 endif # stencil-specific.
 
@@ -264,7 +264,7 @@ else
 endif # not 512 bits.
 
 # Select fold based on size of reals.
-fold	=	$(fold_$(real_bytes)byte) # e.g., fold_4byte
+fold	:=	$(fold_$(real_bytes)byte) # e.g., fold_4byte
 
 ######## End of vars that control the function and performance of the kernel.
 
@@ -303,7 +303,7 @@ YK_TEST_SRC_DIR	:=	$(abspath ./tests)
 # Kernel output dir.
 YK_OUT_DIR	:=	$(BUILD_OUT_DIR)/kernel
 
-# Dir for output file dependent on arch but
+# Dir for output files dependent on arch but
 # not on the stencil.
 YK_ARCH_DIR	:=	$(YK_OUT_DIR)/$(arch)
 YK_OBJ_DIR	:=	$(YK_ARCH_DIR)/obj
@@ -394,8 +394,8 @@ endif
 
 # Turn off prefetching at O0 or O1.
 ifneq ($(filter -O0 -O1,$(YK_CXXOPT)),)
- pfd_l1		=	0
- pfd_l2		=	0
+ pfd_l1		:=	0
+ pfd_l2		:=	0
 endif
 
 # Turn on checking at O0.
@@ -429,11 +429,11 @@ endif
 ifeq ($(vtune),1)
  MACROS		+=	USE_VTUNE
 ifneq ($(VTUNE_AMPLIFIER_2018_DIR),)
- VTUNE_DIR	=	$(VTUNE_AMPLIFIER_2018_DIR)
+ VTUNE_DIR	:=	$(VTUNE_AMPLIFIER_2018_DIR)
 else ifneq ($(VTUNE_AMPLIFIER_XE_2017_DIR),)
- VTUNE_DIR	=	$(VTUNE_AMPLIFIER_XE_2017_DIR)
+ VTUNE_DIR	:=	$(VTUNE_AMPLIFIER_XE_2017_DIR)
 else
- VTUNE_DIR	=	$(VTUNE_AMPLIFIER_XE_2016_DIR)
+ VTUNE_DIR	:=	$(VTUNE_AMPLIFIER_XE_2016_DIR)
 endif
 YK_CXXFLAGS	+=	-I$(VTUNE_DIR)/include
 YK_LIBS		+=	$(VTUNE_DIR)/lib64/libittnotify.a
@@ -761,9 +761,9 @@ py-api-no-yc:
 	$(MAKE) $(NO_YC_MAKE_FLAGS) py-api
 
 # Validation runs for each binary.
-val1	=	-dt 2 -b 16 -d 48
-val2	=	-dt 2 -b 24 -r 32 -rt 2 -dx 63 -dy 49 -dz 47
-ranks	=	2
+val1	:=	-dt 2 -b 16 -d 48
+val2	:=	-dt 2 -b 24 -r 32 -rt 2 -dx 63 -dy 49 -dz 47
+ranks	:=	2
 
 # Run the kernel binary using several combos of sizes and ranks.
 yk-tests:
