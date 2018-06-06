@@ -25,13 +25,13 @@ IN THE SOFTWARE.
 
 // This code implements the YASK stand-alone performance-measurement tool.
 
-#include "yask.hpp"
+#include "yask_stencil.hpp"
 using namespace std;
 using namespace yask;
 
 // Auto-generated stencil code that extends base types.
 #define DEFINE_CONTEXT
-#include "yask_stencil_code.hpp"
+#include YSTR2(YK_CODE_FILE)
 
 // Add some command-line options for this application in addition to the
 // default ones provided by YASK.

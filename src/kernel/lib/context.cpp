@@ -26,7 +26,7 @@ IN THE SOFTWARE.
 // This file contains implementations of StencilContext methods.
 // Also see context_setup.cpp.
 
-#include "yask.hpp"
+#include "yask_stencil.hpp"
 using namespace std;
 
 namespace yask {

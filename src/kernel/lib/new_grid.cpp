@@ -23,7 +23,7 @@ IN THE SOFTWARE.
 
 *****************************************************************************/
 
-#include "yask.hpp"
+#include "yask_stencil.hpp"
 using namespace std;
 
 namespace yask {
@@ -47,9 +47,17 @@ namespace yask {
         // the stencil.
         YkGridPtr gp = newStencilGrid(name, dims);
 
-        // If there was no match, use default layout.
+        // No match.
         if (!gp) {
 
+            // Tuple of dims.
+            IdxTuple dtup;
+            for (auto& d : dims)
+                dtup.addDimBack(d, 0);
+
+#if ALLOW_NEW_GRIDS
+            // Allow new grid types.
+            
             // Check dims.
             int ndims = dims.size();
             int step_posn = -1;      // -1 => not used.
@@ -95,11 +103,18 @@ namespace yask {
             // Include auto-gen code for all other cases.
 #include "yask_grid_code.hpp"
 
-            if (!gp) {
-                FORMAT_AND_THROW_YASK_EXCEPTION("Error in new_grid: cannot create grid '" << name <<
-                                                "' with " << ndims << " dimensions; only up to " << MAX_DIMS <<
+            // Failed.
+            if (!gp)
+                FORMAT_AND_THROW_YASK_EXCEPTION("Error: cannot create new grid '" << name <<
+                                                "' with dimensions '" << dtup.makeDimStr() <<
+                                                "'; only up to " << MAX_DIMS <<
                                                 " dimensions supported");
-            }
+#else
+            // Don't allow new grid types.
+            FORMAT_AND_THROW_YASK_EXCEPTION("Error: cannot create new grid '" << name <<
+                                            "' with dimensions '" << dtup.makeDimStr() <<
+                                            "'; this list of dimensions is not in any existing grid");
+#endif
         }
 
         // Mark as non-resizable if sizes provided.

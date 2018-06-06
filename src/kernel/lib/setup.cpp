@@ -26,7 +26,7 @@ IN THE SOFTWARE.
 // This file contains implementations of StencilContext and
 // StencilBundleBase methods specific to the preparation steps.
 
-#include "yask.hpp"
+#include "yask_stencil.hpp"
 using namespace std;
 
 namespace yask {
@@ -322,6 +322,10 @@ namespace yask {
                         TRACE_MSG(" grid '" << gname << "' needs " << makeByteStr(nbytes) <<
                                   " on NUMA node " << numa_pref);
                 }
+
+                // Otherwise, just print existing grid info.
+                else if (pass == 0)
+                    os << gp->make_info_string() << endl;
             }
 
             // Alloc for each node.

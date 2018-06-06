@@ -84,10 +84,12 @@ int main() {
         }
 
         // Make a test fixed-size grid.
+        auto fgrid_dims = soln_dims;
+        fgrid_dims.push_back("misc1");
         vector<idx_t> fgrid_sizes;
-        for (auto dim_name : soln_dims)
+        for (auto dim_name : fgrid_dims)
             fgrid_sizes.push_back(5);
-        auto fgrid = soln->new_fixed_size_grid("fgrid", soln_dims, fgrid_sizes);
+        auto fgrid = soln->new_fixed_size_grid("fgrid", fgrid_dims, fgrid_sizes);
 
         // Simple rank configuration in 1st dim only.
         auto ddim1 = soln_dims[0];

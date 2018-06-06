@@ -23,6 +23,7 @@
 
 # Makefile for YASK.
 # Type 'make help' for usage.
+# Set YASK_OUTPUT_DIR to change where all output files go.
 
 # Some of the make vars that are commonly set via the command-line
 #   and passed to src/kernel/Makefile are listed here.
@@ -56,17 +57,19 @@
 #
 # omp_region_schedule: OMP schedule policy for region loop.
 # omp_block_schedule: OMP schedule policy for nested OpenMP block loop.
-# omp_halo_schedule: OMP schedule policy for OpenMP halo loop.
+# omp_misc_schedule: OMP schedule policy for OpenMP misc loop.
 #
 # def_block_threads: Number of threads to use in nested OpenMP block loop by default.
 # def_thread_divisor: Divide number of OpenMP threads by this factor by default.
 # def_*_args: Default cmd-line args for specific settings.
 # more_def_args: Additional default cmd-line args.
 #
-# max_dims: max number of dimensions allowed in a grid.
-#
-# eqs: comma-separated name=substr pairs used to manually group
-#   grid-update equations into sets.
+# allow_new_grid_types: Whether to allow grid types not defined in the stencil
+#   to be created via new_grid() and new_fixed_size_grid().
+
+# Common settings.
+YASK_BASE	:=	$(abspath .)
+include $(YASK_BASE)/src/common/common.mk
 
 # This is mostly a wrapper for building several parts of YASK via src/*/Makefile.
 # See those specific files for many more settings.
@@ -74,31 +77,11 @@
 # - vars starting with 'YK_' apply to the YASK stencil kernel.
 # - vars starting with 'YC_' apply to the YASK stencil compiler.
 
-YK_MAKE	:=	$(MAKE) -C src/kernel
-YC_MAKE	:=	$(MAKE) -C src/compiler
-
-# YASK dirs.
-YASK_BASE	:=	$(shell pwd)
-LIB_DIR		:=	$(YASK_BASE)/lib
-INC_DIR		:=	$(YASK_BASE)/include
-BIN_DIR		:=	$(YASK_BASE)/bin
-
-# OS-specific
-ifeq ($(shell uname -o),Cygwin)
-  SO_SUFFIX	:=	.dll
-  RUN_PREFIX	:=	env PATH="${PATH}:$(LIB_DIR)"
-  PYTHON		:= python3
-  CXX_PREFIX	:=
-else
-  SO_SUFFIX	:=	.so
-  RUN_PREFIX	:=
-  PYTHON		:=	python
-  CXX_PREFIX	:=
-endif
+YK_MAKE		:=	$(MAKE) -C src/kernel YASK_OUTPUT_DIR=$(YASK_OUT_BASE)
+YC_MAKE		:=	$(MAKE) -C src/compiler YASK_OUTPUT_DIR=$(YASK_OUT_BASE)
 
 # Misc dirs & files.
-COMM_DIR	:=	src/common
-TUPLE_TEST_EXEC :=	$(BIN_DIR)/yask_tuple_test.exe
+TUPLE_TEST_EXEC :=	$(BIN_OUT_DIR)/yask_tuple_test.exe
 
 # Compiler and default flags--used only for targets in this Makefile.
 # For compiler, use YC_CXX*.
@@ -224,8 +207,9 @@ yc-and-yk-test:
 code-stats:
 	$(YK_MAKE) $@
 
-$(TUPLE_TEST_EXEC): src/common/tests/tuple_test.cpp src/common/tuple.*pp
-	$(CXX_PREFIX) $(CXX) $(CXXFLAGS) $(LFLAGS) -o $@ $< src/common/tuple.cpp
+$(TUPLE_TEST_EXEC): $(COMM_DIR)/tests/tuple_test.cpp $(COMM_DIR)/tuple.*pp
+	$(MKDIR) $(dir $@)
+	$(CXX_PREFIX) $(CXX) $(CXXFLAGS) $(LFLAGS) -o $@ $< $(COMM_DIR)/tuple.cpp
 
 tuple-test: $(TUPLE_TEST_EXEC)
 	@echo '*** Running the C++ YASK tuple test...'
@@ -260,26 +244,24 @@ tags:
 clean:
 	$(YK_MAKE) $@
 
-# Remove files from old versions.
-# (This will eventually be removed.)
-clean-old:
-	rm -fv stencil*.exe stencil-tuner-summary.csh stencil-tuner.pl gen-layouts.pl gen-loops.pl get-loop-stats.pl
-	rm -fv src/foldBuilder/*pp
-
 # Remove executables, generated documentation, etc. (not logs).
 # Use 'find *' instead of 'find .' to avoid searching in '.git'.
-realclean: clean-old
+realclean: clean
+	rm -rf $(LIB_OUT_DIR) $(BIN_OUT_DIR) $(BUILD_OUT_DIR)
 	rm -fv TAGS '*~'
 	rm -fr docs/api/html
 	rm -fr docs/api/latex
-	rm -rf $(BIN_DIR)/*.exe $(LIB_DIR)/*$(SO_SUFFIX)
 	- find * -name '*~' -print -delete
 	- find * -name '*.optrpt' -print -delete
 	- find * -name __pycache__ -print -delete
-	- find yask -mindepth 1 '!' -name __init__.py -print -delete
 	$(YC_MAKE) $@
 	$(YK_MAKE) $@
+	- find $(PY_OUT_DIR) -mindepth 1 '!' -name __init__.py -print -delete
+	- rmdir -v --ignore-fail-on-non-empty $(PY_OUT_DIR)
+	- rmdir -v --ignore-fail-on-non-empty $(YASK_OUT_BASE)
 
 help:
 	@ $(YC_MAKE) $@
 	@ $(YK_MAKE) $@
+	@ echo " "
+	@ echo "'setenv CXX_PREFIX ccache' or 'export CXX_PREFIX=ccache' to use ccache."

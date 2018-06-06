@@ -23,40 +23,46 @@ IN THE SOFTWARE.
 
 *****************************************************************************/
 
-//////// Methods for output object. //////////
+// This file defines functions, types, and macros needed for the stencil
+// kernel.
 
-#include "yask_common_api.hpp"
-#include <sstream>
-#include <assert.h>
+#pragma once
 
-using namespace std;
+// Stencil-independent definitions.
+#include "yask.hpp"
 
-namespace yask {
+// Auto-generated macros from foldBuilder.  It's important that this be
+// included before the definitions below to properly set the vector lengths,
+// etc.
+#define DEFINE_MACROS
+#include YSTR2(YK_CODE_FILE)
+#undef DEFINE_MACROS
 
-    // Update this version string anytime changes are
-    // committed to a repository, especially when
-    // affecting master or develop branches.
-    // Be sure to keep 2 digits in minor and patch
-    // fields to allow proper alphanumeric sorting
-    // for numbers above 9 (at least up to 99).
+// Max number of dims allowed in Indices.
+// TODO: make Indices a templated class based on
+// number of dims.
+#ifndef MAX_DIMS
+#if NUM_GRID_DIMS >= NUM_STENCIL_DIMS
+#define MAX_DIMS NUM_GRID_DIMS
+#else
+#define MAX_DIMS NUM_STENCIL_DIMS
+#endif
+#endif
 
-    // Format: "major.minor.patch".
-    const string version = "2.10.00";
+// First/last index macros.
+// These are relative to global problem, not rank.
+#define FIRST_INDEX(dim) (0)
+#define LAST_INDEX(dim) (_context->overall_domain_sizes[DOMAIN_DIM_IDX_ ## dim] - 1)
 
-    string yask_get_version_string() {
-        return version;
-    }
+// Macros for 1D<->nD transforms.
+#include "yask_layout_macros.hpp"
 
-    // See yask_common_api.hpp for documentation.
-    const char* yask_exception::what() noexcept {
-        return "yask::yask_exception\n";
-    }
+// Define a folded vector of reals.
+#include "realv.hpp"
 
-    void yask_exception::add_message(const string& arg_msg) {
-        _msg.append(arg_msg);
-    }
-
-    const char* yask_exception::get_message() const {
-        return _msg.c_str();
-    }
-}
+// Base types for stencil context, etc.
+#include "settings.hpp"
+#include "generic_grids.hpp"
+#include "realv_grids.hpp"
+#include "context.hpp"
+#include "stencil_calc.hpp"

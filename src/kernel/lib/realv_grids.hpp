@@ -516,6 +516,7 @@ namespace yask {
 
         virtual void alloc_storage() {
             _ggb->default_alloc();
+            get_ostr() << make_info_string() << std::endl;
         }
         virtual void release_storage() {
             _ggb->release_storage();
