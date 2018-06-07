@@ -513,8 +513,8 @@ namespace yask {
 #undef calc_inner_loop
         }
 
-            // Use scalar code for anything not done above.
-            if (do_scalars) {
+        // Use scalar code for anything not done above.
+        if (do_scalars) {
 
             // Use the 'misc' loops. Indices for these loops will be scalar and
             // global rather than normalized as in the cluster and vector loops.
@@ -525,10 +525,10 @@ namespace yask {
             misc_idxs.align.setFromConst(1);
 
             TRACE_MSG3((scalar_for_peel_rem ? "peel/remainder of" : "entire") <<
-                " sub-block" <<
-                misc_idxs.begin.makeValStr(nsdims) <<
-                " ... (end before) " <<
-                misc_idxs.end.makeValStr(nsdims));
+                       " sub-block" <<
+                       misc_idxs.begin.makeValStr(nsdims) <<
+                       " ... (end before) " <<
+                       misc_idxs.end.makeValStr(nsdims));
 
             // Define misc-loop function.
             // If point is in sub-domain for this
@@ -536,21 +536,21 @@ namespace yask {
             // If no holes, don't need to check each point in domain.
             // Since step is always 1, we ignore misc_idxs.stop.
 #define misc_fn(pt_idxs)  do {                                          \
-            TRACE_MSG3("calc_sub_block:   at pt " << pt_idxs.start.makeValStr(nsdims)); \
-            bool ok = false;                                            \
-            if (scalar_for_peel_rem) {                                  \
-            for (int i = 0, j = 0; i < nsdims; i++) {                   \
-            if (i == step_posn) continue;                               \
-            auto rofs = cp->rank_domain_offsets[j];                     \
-            if (pt_idxs.start[i] < rofs + sub_block_vidxs.begin[i] ||   \
-                                   pt_idxs.start[i] >= rofs + sub_block_vidxs.end[i]) { \
-            ok = true; break; }                                         \
-            j++;                                                        \
-        }                                                               \
-        }                                                               \
-            else ok = is_in_valid_domain(pt_idxs.start);                \
-            if (ok) calc_scalar(thread_idx, pt_idxs.start);             \
-        } while(0)
+                TRACE_MSG3("calc_sub_block:   at pt " << pt_idxs.start.makeValStr(nsdims)); \
+                bool ok = false;                                        \
+                if (scalar_for_peel_rem) {                              \
+                    for (int i = 0, j = 0; i < nsdims; i++) {           \
+                        if (i == step_posn) continue;                   \
+                        auto rofs = cp->rank_domain_offsets[j];         \
+                        if (pt_idxs.start[i] < rofs + sub_block_vidxs.begin[i] || \
+                            pt_idxs.start[i] >= rofs + sub_block_vidxs.end[i]) { \
+                            ok = true; break; }                         \
+                        j++;                                            \
+                    }                                                   \
+                }                                                       \
+                else ok = is_in_valid_domain(pt_idxs.start);            \
+                if (ok) calc_scalar(thread_idx, pt_idxs.start);         \
+            } while(0)
 
             // Scan through n-D space.
             // The OMP in the misc loops will be ignored if we're already in
@@ -559,9 +559,9 @@ namespace yask {
 #undef misc_fn
         }
 
-            // Make sure streaming stores are visible for later loads.
-            make_stores_visible();
-
+        // Make sure streaming stores are visible for later loads.
+        make_stores_visible();
+        
     } // calc_sub_block.
 
     // Calculate a series of cluster results within an inner loop.
@@ -598,106 +598,107 @@ namespace yask {
 
         // Call code from stencil compiler.
         calc_loop_of_clusters(thread_idx, start_idxs, stop_inner);
-                   }
+    }
 
-                   // Calculate a series of vector results within an inner loop.
-                   // The 'loop_idxs' must specify a range only in the inner dim.
-                   // Indices must be rank-relative.
-                   // Indices must be normalized, i.e., already divided by VLEN_*.
-                   void StencilBundleBase::calc_loop_of_vectors(int thread_idx,
-                                                                const ScanIndices& loop_idxs,
-                                                                idx_t write_mask) {
-                       auto* cp = _generic_context;
-                       auto& dims = cp->get_dims();
-                       int nsdims = dims->_stencil_dims.size();
-                       auto step_posn = Indices::step_posn;
-                       TRACE_MSG3("calc_loop_of_vectors: local vector-indices " <<
-                                  loop_idxs.start.makeValStr(nsdims) <<
-                                  " ... (end before) " << loop_idxs.stop.makeValStr(nsdims) <<
-                                  " w/write-mask = 0x" << hex << write_mask << dec);
+    // Calculate a series of vector results within an inner loop.
+    // The 'loop_idxs' must specify a range only in the inner dim.
+    // Indices must be rank-relative.
+    // Indices must be normalized, i.e., already divided by VLEN_*.
+    void StencilBundleBase::calc_loop_of_vectors(int thread_idx,
+                                                 const ScanIndices& loop_idxs,
+                                                 idx_t write_mask) {
+        auto* cp = _generic_context;
+        auto& dims = cp->get_dims();
+        int nsdims = dims->_stencil_dims.size();
+        auto step_posn = Indices::step_posn;
+        TRACE_MSG3("calc_loop_of_vectors: local vector-indices " <<
+                   loop_idxs.start.makeValStr(nsdims) <<
+                   " ... (end before) " << loop_idxs.stop.makeValStr(nsdims) <<
+                   " w/write-mask = 0x" << hex << write_mask << dec);
 
 #ifdef CHECK
-                       // Check that only the inner dim has a range greater than one vector.
-                       for (int i = 0; i < nsdims; i++) {
-                           if (i != step_posn && i != _inner_posn)
-                               assert(loop_idxs.start[i] + 1 >= loop_idxs.stop[i]);
-                       }
+        // Check that only the inner dim has a range greater than one vector.
+        for (int i = 0; i < nsdims; i++) {
+            if (i != step_posn && i != _inner_posn)
+                assert(loop_idxs.start[i] + 1 >= loop_idxs.stop[i]);
+        }
 #endif
 
-                       // Need all starting indices.
-                       const Indices& start_idxs = loop_idxs.start;
+        // Need all starting indices.
+        const Indices& start_idxs = loop_idxs.start;
 
-                       // Need stop for inner loop only.
-                       idx_t stop_inner = loop_idxs.stop[_inner_posn];
+        // Need stop for inner loop only.
+        idx_t stop_inner = loop_idxs.stop[_inner_posn];
 
-                       // Call code from stencil compiler.
-                       calc_loop_of_vectors(thread_idx, start_idxs, stop_inner, write_mask);
-                                  }
+        // Call code from stencil compiler.
+        calc_loop_of_vectors(thread_idx, start_idxs, stop_inner, write_mask);
+    }
 
-                                  // If this bundle is updating scratch grid(s),
-                                  // expand begin & end of 'idxs' by sizes of halos.
-                                  // This will often change vec-len aligned indices to non-aligned.
-                                  // Step indices may also change.
-                                  // NB: it is not necessary that the domain of each grid
-                                  // is the same as the span of 'idxs'. However, it should be
-                                  // at least that large to ensure that grid is able to hold
-                                  // calculated results.
-                                  // In other words, grid can be larger than span of 'idxs', but
-                                  // its halo sizes are still used to specify how much to
-                                  // add to 'idxs'.
-                                  // Return adjusted indices.
-                                  ScanIndices StencilBundleBase::adjust_span(int thread_idx, const ScanIndices& idxs) const {
+    // If this bundle is updating scratch grid(s),
+    // expand begin & end of 'idxs' by sizes of halos.
+    // This will often change vec-len aligned indices to non-aligned.
+    // Step indices may also change.
+    // NB: it is not necessary that the domain of each grid
+    // is the same as the span of 'idxs'. However, it should be
+    // at least that large to ensure that grid is able to hold
+    // calculated results.
+    // In other words, grid can be larger than span of 'idxs', but
+    // its halo sizes are still used to specify how much to
+    // add to 'idxs'.
+    // Return adjusted indices.
+    ScanIndices StencilBundleBase::adjust_span(int thread_idx,
+                                               const ScanIndices& idxs) const {
+        
+        ScanIndices adj_idxs(idxs);
+        auto* cp = _generic_context;
+        auto& dims = cp->get_dims();
+        int nsdims = dims->_stencil_dims.size();
+        auto step_posn = Indices::step_posn;
 
-                                      ScanIndices adj_idxs(idxs);
-                                      auto* cp = _generic_context;
-                                      auto& dims = cp->get_dims();
-                                      int nsdims = dims->_stencil_dims.size();
-                                      auto step_posn = Indices::step_posn;
+        // Loop thru vecs of scratch grids for this bundle.
+        for (auto* sv : outputScratchVecs) {
+            assert(sv);
 
-                                      // Loop thru vecs of scratch grids for this bundle.
-                                      for (auto* sv : outputScratchVecs) {
-                                          assert(sv);
+            // Get the one for this thread.
+            auto gp = sv->at(thread_idx);
+            assert(gp);
+            assert(gp->is_scratch());
 
-                                          // Get the one for this thread.
-                                          auto gp = sv->at(thread_idx);
-                                          assert(gp);
-                                          assert(gp->is_scratch());
+            // i: index for stencil dims, j: index for domain dims.
+            for (int i = 0, j = 0; i < nsdims; i++) {
+                if (i == step_posn) continue;
+                auto& dim = dims->_stencil_dims.getDim(i);
+                auto& dname = dim.getName();
 
-                                          // i: index for stencil dims, j: index for domain dims.
-                                          for (int i = 0, j = 0; i < nsdims; i++) {
-                                              if (i == step_posn) continue;
-                                              auto& dim = dims->_stencil_dims.getDim(i);
-                                              auto& dname = dim.getName();
+                // Is this dim used in this grid?
+                int posn = gp->get_dim_posn(dname);
+                if (posn >= 0) {
 
-                                              // Is this dim used in this grid?
-                                              int posn = gp->get_dim_posn(dname);
-                                              if (posn >= 0) {
+                    // Adjust begin & end scan indices based on halos.
+                    idx_t lh = gp->get_left_halo_size(posn);
+                    idx_t rh = gp->get_right_halo_size(posn);
+                    adj_idxs.begin[i] = idxs.begin[i] - lh;
+                    adj_idxs.end[i] = idxs.end[i] + rh;
 
-                                                  // Make sure grid domain covers block.
-                                                  assert(idxs.begin[i] >= gp->get_first_rank_domain_index(posn));
-                                                  assert(idxs.end[i] <= gp->get_last_rank_domain_index(posn) + 1);
+                    // Make sure grid covers block.
+                    assert(adj_idxs.begin[i] >= gp->get_first_rank_alloc_index(posn));
+                    assert(adj_idxs.end[i] <= gp->get_last_rank_alloc_index(posn) + 1);
 
-                                                  // Adjust begin & end scan indices based on halos.
-                                                  idx_t lh = gp->get_left_halo_size(posn);
-                                                  idx_t rh = gp->get_right_halo_size(posn);
-                                                  adj_idxs.begin[i] = idxs.begin[i] - lh;
-                                                  adj_idxs.end[i] = idxs.end[i] + rh;
+                    // If existing step is >= whole tile, adjust it also.
+                    idx_t width = idxs.end[i] - idxs.begin[i];
+                    if (idxs.step[i] >= width) {
+                        idx_t adj_width = adj_idxs.end[i] - adj_idxs.begin[i];
+                        adj_idxs.step[i] = adj_width;
+                    }
+                }
+                j++;
+            }
 
-                                                  // If existing step is >= whole tile, adjust it also.
-                                                  idx_t width = idxs.end[i] - idxs.begin[i];
-                                                  if (idxs.step[i] >= width) {
-                                                      idx_t adj_width = adj_idxs.end[i] - adj_idxs.begin[i];
-                                                      adj_idxs.step[i] = adj_width;
-                                                  }
-                                              }
-                                              j++;
-                                          }
+            // Only need to get info from one grid.
+            // TODO: check that grids are consistent.
+            break;
+        }
+        return adj_idxs;
+    }
 
-                                          // Only need to get info from one grid.
-                                          // TODO: check that grids are consistent.
-                                          break;
-                                      }
-                                      return adj_idxs;
-                                  }
-
-                                  } // namespace yask.
+} // namespace yask.

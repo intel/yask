@@ -883,6 +883,11 @@ namespace yask {
     {
         assert(_opts);
 
+        // If we haven't finished constructing the context, it's too early
+        // to do this.
+        if (!stPacks.size())
+            return;
+
         // Reset halos to zero.
         max_halos = _dims->_domain_dims;
 
@@ -924,15 +929,19 @@ namespace yask {
         // of angles and extensions.
         auto& step_dim = _dims->_step_dim;
         auto wf_steps = _opts->_region_sizes[step_dim];
+        assert(wf_steps >= 1);
         num_wf_shifts = 0;
         if (wf_steps > 1) {
 
             // Need to shift for each bundle pack.
-            num_wf_shifts = stPacks.size() * wf_steps;
+            assert(stPacks.size() > 0);
+            num_wf_shifts = idx_t(stPacks.size()) * wf_steps;
+            assert(num_wf_shifts > 1);
 
             // Don't need to shift first one.
             num_wf_shifts--;
         }
+        assert(num_wf_shifts >= 0);
         for (auto& dim : _dims->_domain_dims.getDims()) {
             auto& dname = dim.getName();
             auto rksize = _opts->_rank_sizes[dname];
@@ -948,10 +957,12 @@ namespace yask {
             if (_opts->_region_sizes[dname] < rksize || nranks > 0)
                 angle = ROUND_UP(max_halos[dname], _dims->_fold_pts[dname]);
             wf_angles[dname] = angle;
+            assert(angle >= 0);
 
             // Determine the total WF shift to be added in each dim.
             idx_t shifts = angle * num_wf_shifts;
             wf_shifts[dname] = shifts;
+            assert(shifts >= 0);
 
             // Is domain size at least as large as halo + wf_ext in direction
             // when there are multiple ranks?

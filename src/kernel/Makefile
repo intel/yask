@@ -762,7 +762,7 @@ py-api-no-yc:
 
 # Validation runs for each binary.
 val1	:=	-dt 2 -b 16 -d 48
-val2	:=	-dt 2 -b 24 -r 32 -rt 2 -dx 63 -dy 49 -dz 47
+val2	:=	-dt 2 -b 24 -r 32 -rt 2 -d 63
 ranks	:=	2
 
 # Run the kernel binary using several combos of sizes and ranks.
