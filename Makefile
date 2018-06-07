@@ -221,8 +221,8 @@ api-tests: compiler-api
 
 all-tests: compiler-api
 	$(MAKE) tuple-test
-	$(MAKE) combo-api-tests
 	$(YK_MAKE) $@
+	$(MAKE) combo-api-tests
 
 all:
 	$(MAKE) realclean

@@ -738,7 +738,7 @@ namespace yask {
                 continue;
             string bpName = bp->getName();
             os << "  auto " << bpName << " = std::make_shared<BundlePack>(\"" <<
-                bpName << "\");\n";
+                bpName << "\", this);\n";
             for (auto& eg : bp->getBundles()) {
                 if (eg->isScratch())
                     continue;

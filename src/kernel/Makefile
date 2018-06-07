@@ -323,7 +323,8 @@ YK_LIB		:=	$(LIB_OUT_DIR)/lib$(YK_EXT_BASE)$(SO_SUFFIX)
 YK_PY_LIB	:=	$(PY_OUT_DIR)/_$(YK_PY_MOD_BASE)$(SO_SUFFIX)
 YK_PY_MOD	:=	$(PY_OUT_DIR)/$(YK_PY_MOD_BASE).py
 YK_SRC_NAMES	:=	utils
-YK_EXT_SRC_NAMES :=	factory grid_apis context stencil_calc setup realv_grids new_grid settings generic_grids
+YK_EXT_SRC_NAMES :=	factory grid_apis context stencil_calc setup \
+			realv_grids new_grid settings generic_grids auto_tuner
 YK_OBJS		:=	$(addprefix $(YK_OBJ_DIR)/,$(addsuffix .o,$(YK_SRC_NAMES) $(COMM_SRC_NAMES)))
 YK_EXT_OBJS	:=	$(addprefix $(YK_EXT_OBJ_DIR)/,$(addsuffix .o,$(YK_EXT_SRC_NAMES)))
 YK_CODE_FILE	:=	$(YK_GEN_DIR)/yask_stencil_code.hpp
@@ -762,7 +763,7 @@ py-api-no-yc:
 
 # Validation runs for each binary.
 val1	:=	-dt 2 -b 16 -d 48
-val2	:=	-dt 2 -b 24 -r 32 -rt 2 -dx 63 -dy 49 -dz 47
+val2	:=	-dt 2 -b 24 -r 32 -rt 2 -d 63
 ranks	:=	2
 
 # Run the kernel binary using several combos of sizes and ranks.

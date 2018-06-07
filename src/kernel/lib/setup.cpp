@@ -789,6 +789,9 @@ namespace yask {
     // Allocate memory for scratch grids based on number of threads and
     // block sizes.
     void StencilContext::allocScratchData(ostream& os) {
+        auto nddims = _dims->_domain_dims.size();
+        auto nsdims = _dims->_stencil_dims.size();
+        auto step_posn = Indices::step_posn;
 
         // Remove any old scratch data.
         freeScratchData(os);
@@ -807,6 +810,22 @@ namespace yask {
         // Create new scratch grids.
         makeScratchGrids(rthreads);
 
+        // Find the max block size across all packs.  TODO: use the specific
+        // block size for the pack containing a given scratch grid.
+        IdxTuple blksize(_dims->_domain_dims);
+        for (auto& sp : stPacks) {
+            auto& psettings = sp->getSettings();
+            for (int i = 0, j = 0; i < nsdims; i++) {
+                if (i == step_posn) continue;
+                auto sz = round_up_flr(psettings._block_sizes[i],
+                                       _dims->_fold_pts[j]);
+                blksize[j] = max(blksize[j], sz);
+                j++;
+            }
+        }
+        TRACE_MSG("allocScratchData: max block size across pack(s) is " <<
+                  blksize.makeDimValStr(" * "));
+        
         // Pass 0: count required size, allocate chunk of memory at end.
         // Pass 1: distribute parts of already-allocated memory chunk.
         for (int pass = 0; pass < 2; pass++) {
@@ -836,10 +855,7 @@ namespace yask {
                         if (gp->is_dim_used(dname)) {
 
                             // Set domain size of grid to block size.
-                            // Round up to vec-len.
-                            auto sz = round_up_flr(_opts->_block_sizes[dname],
-                                                   gp->_get_vec_len(dname));
-                            gp->_set_domain_size(dname, sz);
+                            gp->_set_domain_size(dname, blksize[dname]);
 
                             // Pads.
                             // Set via both 'extra' and 'min'; larger result will be used.
@@ -1024,12 +1040,18 @@ namespace yask {
         clear_timers();
 
         // Init auto-tuner to run silently during normal operation.
-        _at.clear(false, false);
+        for (auto& sp : stPacks)
+            sp->getAT().clear(false, false);
 
         // Adjust all settings before setting MPI buffers or sizing grids.
         // Prints final settings.
         // TODO: print settings again after auto-tuning.
         _opts->adjustSettings(os, _env);
+
+        // Copy current settings to packs.
+        // This will wipe out any previous auto-tuning.
+        for (auto& sp : stPacks)
+            sp->getSettings() = *_opts;
 
         // Report ranks.
         os << endl;
@@ -1340,10 +1362,12 @@ namespace yask {
 
             // Find BB for each bundle in this pack.
             for (auto sb : *sp) {
+
+                // Find bundle BB.
                 sb->find_bounding_box();
+                auto& sbbb = sb->getBB();
 
                 // Expand pack BB to encompass bundle BB.
-                auto& sbbb = sb->getBB();
                 spbb.bb_begin = spbb.bb_begin.minElements(sbbb.bb_begin);
                 spbb.bb_end = spbb.bb_end.maxElements(sbbb.bb_end);
             }
@@ -1425,17 +1449,19 @@ namespace yask {
         // No points, just set to zero.
         else {
             _bundle_bb.bb_begin.setValsSame(0);
-            _bundle_bb.bb_end.setValsSame(0);
+            _bundle_bb.bb_end.setValsSame(1);
         }
         _bundle_bb.bb_num_points = npts;
 
         // Finalize overall BB.
         _bundle_bb.update_bb(get_name(), context, false);
 
-        // If the BB is full (solid), this BB is the only bb.
+        // If the BB is full (solid) or completely empty, this BB is the only bb.
         if (_bundle_bb.bb_is_full || !npts) {
-            TRACE_MSG3("adding 1 sub-BB: " << _bundle_bb.bb_begin.makeDimValStr() <<
-                       " ... (end before) " << _bundle_bb.bb_end.makeDimValStr());
+            TRACE_MSG3("adding 1 sub-BB: [" << _bundle_bb.bb_begin.makeDimValStr() <<
+                       " ... " << _bundle_bb.bb_end.makeDimValStr() << ")");
+
+            // Add it to the list, and we're done.
             _bb_list.push_back(_bundle_bb);
         }
 
@@ -1589,8 +1615,8 @@ namespace yask {
 
                 // BBs in slice 'n'.
                 for (auto& bbn : cur_bb_list) {
-                    TRACE_MSG3(" sub-BB: " << bbn.bb_begin.makeDimValStr() <<
-                               " ... (end before) " << bbn.bb_end.makeDimValStr());
+                    TRACE_MSG3(" sub-BB: [" << bbn.bb_begin.makeDimValStr() <<
+                               " ... " << bbn.bb_end.makeDimValStr() << ")");
 
                     // Scan existing final BBs looking for one to merge with.
                     bool do_merge = false;
@@ -1617,8 +1643,8 @@ namespace yask {
 
                             // Merge by just increasing the size of 'bb'.
                             bb.bb_end[odim] = bbn.bb_end[odim];
-                            TRACE_MSG3("  merging to form " << bb.bb_begin.makeDimValStr() <<
-                                       " ... (end before) " << bb.bb_end.makeDimValStr());
+                            TRACE_MSG3("  merging to form [" << bb.bb_begin.makeDimValStr() <<
+                                       " ... " << bb.bb_end.makeDimValStr() << ")");
                             break;
                         }
                     }
@@ -1630,7 +1656,7 @@ namespace yask {
                     }
                 }
             }
-        }
+        } // Finding constituent rects.
     }
 
     // Compute convenience values for a bounding-box.

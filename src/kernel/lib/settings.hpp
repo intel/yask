@@ -719,6 +719,9 @@ namespace yask {
         idx_t def_rank = 128;
         idx_t def_block = 32;
 
+        yask_output_factory yof;
+        yask_output_ptr nullop = yof.new_null_output();
+
     public:
 
         // problem dimensions.
@@ -823,6 +826,9 @@ namespace yask {
         // Called from prepare_solution(), so it doesn't normally need to be called from user code.
         // Prints informational info to 'os'.
         virtual void adjustSettings(std::ostream& os, KernelEnvPtr env);
+        virtual void adjustSettings(KernelEnvPtr env) {
+            adjustSettings(nullop->get_ostream(), env);
+        }
 
         // Determine if this is the first or last rank in given dim.
         virtual bool is_first_rank(const std::string dim) {

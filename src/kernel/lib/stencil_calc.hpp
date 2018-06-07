@@ -229,20 +229,32 @@ namespace yask {
     protected:
         std::string _name;
 
-        // Union of bounding boxes for all bundles.
+        // Union of bounding boxes for all bundles in this pack.
         BoundingBox _pack_bb;
+
+        // Local pack settings.
+        // Only some of these will be used.
+        KernelSettings _opts;
+
+        // Auto-tuner for pack settings.
+        AutoTuner _at;
         
     public:
-        BundlePack(const std::string& name) :
-            _name(name) { }
+        BundlePack(const std::string& name,
+                   StencilContext* ctx) :
+            _name(name),
+            _opts(*ctx->get_settings()),
+            _at(ctx, &_opts, name) { }
         virtual ~BundlePack() { }
 
         const std::string& get_name() {
             return _name;
         }
 
-        // Access to BB.
+        // Accessors.
         virtual BoundingBox& getBB() { return _pack_bb; }
+        virtual AutoTuner& getAT() { return _at; }
+        virtual KernelSettings& getSettings() { return _opts; }
 
     }; // BundlePack.
 

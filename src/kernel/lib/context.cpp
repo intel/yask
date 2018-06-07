@@ -24,7 +24,7 @@ IN THE SOFTWARE.
 *****************************************************************************/
 
 // This file contains implementations of StencilContext methods.
-// Also see context_setup.cpp.
+// Also see setup.cpp.
 
 #include "yask_stencil.hpp"
 using namespace std;
@@ -62,7 +62,7 @@ namespace yask {
         if (reset_prep) rank_bb.bb_valid = ext_bb.bb_valid = false;     \
     }
     SET_SOLN_API(set_min_pad_size, _opts->_min_pad_sizes[dim] = n, false, true, false, false)
-    SET_SOLN_API(set_block_size, _opts->_block_sizes[dim] = n, false, true, false, false)
+    SET_SOLN_API(set_block_size, _opts->_block_sizes[dim] = n, false, true, false, true)
     SET_SOLN_API(set_region_size, _opts->_region_sizes[dim] = n, true, true, false, true)
     SET_SOLN_API(set_rank_domain_size, _opts->_rank_sizes[dim] = n, false, true, false, true)
     SET_SOLN_API(set_num_ranks, _opts->_num_ranks[dim] = n, false, true, false, true)
@@ -74,8 +74,7 @@ namespace yask {
     _ostr(&std::cout),
         _env(env),
         _opts(settings),
-        _dims(settings->_dims),
-        _at(this)
+        _dims(settings->_dims)
     {
         // Set debug output object.
         yask_output_factory yof;
@@ -156,6 +155,7 @@ namespace yask {
     {
         run_time.start();
 
+        ostream& os = get_ostr();
         auto& step_dim = _dims->_step_dim;
         auto step_posn = Indices::step_posn;
         int ndims = _dims->_stencil_dims.getNumDims();
@@ -181,14 +181,19 @@ namespace yask {
         end.setVals(rank_bb.bb_end, false);
         end[step_dim] = end_t;
 
-        TRACE_MSG("calc_rank_ref: " << begin.makeDimValStr() << " ... (end before) " <<
-                  end.makeDimValStr());
+        TRACE_MSG("calc_rank_ref: [" << begin.makeDimValStr() << " ... " <<
+                  end.makeDimValStr() << ")");
 
         // Force region & block sizes to whole rank size so that scratch
         // grids will be large enough.
         _opts->_region_sizes.setValsSame(0);
         _opts->_block_sizes.setValsSame(0);
-        _at.apply();
+        _opts->adjustSettings(get_env());
+
+        // Copy these settings to packs and realloc scratch grids.
+        for (auto& sp : stPacks)
+            sp->getSettings() = *_opts;
+        allocScratchData(os);
 
         // Use only one set of scratch grids.
         int scratch_grid_idx = 0;
@@ -263,9 +268,9 @@ namespace yask {
 
                     // Scan through n-D space.
                     TRACE_MSG("calc_rank_ref: step " << start_t <<
-                              " in bundle '" << sg->get_name() << "': " <<
+                              " in bundle '" << sg->get_name() << "': [" <<
                               misc_idxs.begin.makeValStr(ndims) <<
-                              " ... (end before) " << misc_idxs.end.makeValStr(ndims));
+                              " ... " << misc_idxs.end.makeValStr(ndims) << ")");
 #include "yask_misc_loops.hpp"
 #undef misc_fn
                 } // needed bundles.
@@ -341,8 +346,8 @@ namespace yask {
         step.setVals(_opts->_region_sizes, false); // step by region sizes.
         step[step_dim] = step_t;
 
-        TRACE_MSG("run_solution: " << begin.makeDimValStr() << " ... (end before) " <<
-                  end.makeDimValStr() << " by " << step.makeDimValStr());
+        TRACE_MSG("run_solution: [" << begin.makeDimValStr() << " ... " <<
+                  end.makeDimValStr() << ") by " << step.makeDimValStr());
         if (!rank_bb.bb_valid)
             THROW_YASK_EXCEPTION("Error: run_solution() called without calling prepare_solution() first");
         if (ext_bb.bb_size < 1) {
@@ -391,9 +396,9 @@ namespace yask {
                     end[dname] += wf_shifts[dname];
             }
             TRACE_MSG("after adjustment for " << num_wf_shifts <<
-                      " wave-front shift(s): " <<
-                      begin.makeDimValStr() << " ... (end before) " <<
-                      end.makeDimValStr());
+                      " wave-front shift(s): [" <<
+                      begin.makeDimValStr() << " ... " <<
+                      end.makeDimValStr() << ")");
         }
 
         // Indices needed for the 'rank' loops.
@@ -413,9 +418,6 @@ namespace yask {
         const idx_t num_t = CEIL_DIV(abs(end_t - begin_t), abs(step_t));
         for (idx_t index_t = 0; index_t < num_t; index_t++)
         {
-            YaskTimer rtime;   // just for these step_t steps.
-            rtime.start();
-
             // This value of index_t steps from start_t to stop_t-1.
             const idx_t start_t = begin_t + (index_t * step_t);
             const idx_t stop_t = (step_t > 0) ?
@@ -467,17 +469,15 @@ namespace yask {
                 BundlePackPtr bp;
 
                 // Include automatically-generated loop code that calls calc_region() for each region.
-                TRACE_MSG("run_solution: steps " << start_t << " ... (end before) " << stop_t);
+                TRACE_MSG("run_solution: steps [" << start_t << " ... " << stop_t << ")");
 #include "yask_rank_loops.hpp"
             }
 
             steps_done += this_num_t;
-            rtime.stop();   // for these steps.
 
             // Call the auto-tuner to evaluate these steps.
-            // TODO: remove MPI time from consideration by auto-tuner.
-            auto elapsed_time = rtime.get_elapsed_secs();
-            _at.eval(this_num_t, elapsed_time);
+            for (auto& sp : stPacks)
+                sp->getAT().eval(this_num_t);
 
         } // step loop.
 
@@ -504,8 +504,8 @@ namespace yask {
         int ndims = _dims->_stencil_dims.size();
         auto& step_dim = _dims->_step_dim;
         auto step_posn = Indices::step_posn;
-        TRACE_MSG("calc_region: " << rank_idxs.start.makeValStr(ndims) <<
-                  " ... (end before) " << rank_idxs.stop.makeValStr(ndims));
+        TRACE_MSG("calc_region: [" << rank_idxs.start.makeValStr(ndims) <<
+                  " ... " << rank_idxs.stop.makeValStr(ndims) << ")");
 
         // Init region begin & end from rank start & stop indices.
         ScanIndices region_idxs(*_dims, true, &rank_domain_offsets);
@@ -515,16 +515,6 @@ namespace yask {
         // we will be shifting it for temporal wavefronts.
         Indices start(region_idxs.begin);
         Indices stop(region_idxs.end);
-
-        // Not yet supporting temporal tiling at block level.
-        if (_opts->_block_sizes[step_dim] != 1)
-            THROW_YASK_EXCEPTION("Error: temporal tiling in blocks not yet supported");
-
-        // Steps within a region are based on block sizes.
-        region_idxs.step = _opts->_block_sizes;
-
-        // Groups in region loops are based on block-group sizes.
-        region_idxs.group_size = _opts->_block_group_sizes;
 
         // Step (usually time) loop.
         // When doing WF tiling, this loop will step through
@@ -554,9 +544,21 @@ namespace yask {
                 if (sel_bp && sel_bp != bp)
                     continue;
 
-                TRACE_MSG("calc_region: bundle-pack '" << bp->get_name() << "' in step(s) " <<
-                          start_t << " ... (end before) " << stop_t);
+                TRACE_MSG("calc_region: bundle-pack '" << bp->get_name() << "' in step(s) [" <<
+                          start_t << " ... " << stop_t << ")");
 
+                // Start auto-tuner timer for this bundle.
+                bp->getAT().timer.start();
+
+                // Steps within a region are based on block sizes.
+                // These may have been tweaked by the auto-tuner.
+                auto& blksize = bp->getSettings()._block_sizes;
+                region_idxs.step = blksize;
+
+                // Groups in region loops are based on block-group sizes.
+                auto& bgsize = bp->getSettings()._block_group_sizes;
+                region_idxs.group_size = bgsize;
+                
                 // For wavefront adjustments, see conceptual diagram in
                 // run_solution().  In this function, one of the
                 // parallelogram-shaped regions is being evaluated.  These
@@ -593,9 +595,9 @@ namespace yask {
 
                     j++; // next domain index.
                 }
-                TRACE_MSG("calc_region: region span after trimming: " <<
+                TRACE_MSG("calc_region: region span after trimming: [" <<
                           region_idxs.begin.makeValStr(ndims) <<
-                          " ... (end before) " << region_idxs.end.makeValStr(ndims));
+                          " ... " << region_idxs.end.makeValStr(ndims) << ")");
 
                 // Only need to loop through the span of the region if it is
                 // at least partly inside the extended BB. For overlapping
@@ -636,6 +638,9 @@ namespace yask {
                 }
                 shift_num++;
 
+                // Stop auto-tuner timer for this bundle.
+                bp->getAT().timer.stop();
+
             } // stencil bundle packs.
         } // time.
     } // calc_region.
@@ -652,19 +657,22 @@ namespace yask {
         auto step_posn = Indices::step_posn;
         auto* bp = sel_bp.get();
         assert(bp);
-        TRACE_MSG("calc_block for pack '" << bp->get_name() << "': " <<
+        TRACE_MSG("calc_block for pack '" << bp->get_name() << "': [" <<
                   region_idxs.start.makeValStr(nsdims) <<
-                  " ... (end before) " << region_idxs.stop.makeValStr(nsdims));
+                  " ... " << region_idxs.stop.makeValStr(nsdims) << ")");
 
         // Init block begin & end from region start & stop indices.
         ScanIndices block_idxs(*_dims, true, 0);
         block_idxs.initFromOuter(region_idxs);
 
         // Steps within a block are based on sub-block sizes.
-        block_idxs.step = _opts->_sub_block_sizes;
+        // These may have been tweaked by the auto-tuner.
+        auto& sbsize = bp->getSettings()._sub_block_sizes;
+        block_idxs.step = sbsize;
 
         // Groups in block loops are based on sub-block-group sizes.
-        block_idxs.group_size = _opts->_sub_block_group_sizes;
+        auto& sbgsize = bp->getSettings()._sub_block_group_sizes;
+        block_idxs.group_size = sbgsize;
 
         // Loop through bundles in this pack.
         for (auto* sb : *bp) {
@@ -672,273 +680,23 @@ namespace yask {
         }
     }
 
-    // Reset the auto-tuner.
-    void StencilContext::AT::clear(bool mark_done, bool verbose) {
-
-        // Output.
-        ostream& os = _context->get_ostr();
-#ifdef TRACE
-        this->verbose = true;
-#else
-        this->verbose = verbose;
-#endif
-
-        // Null stream to throw away debug info.
-        yask_output_factory yof;
-        nullop = yof.new_null_output();
-
-        // Apply the best known settings from existing data, if any.
-        auto _opts = _context->_opts;
-        if (best_rate > 0.) {
-            _opts->_block_sizes = best_block;
-            apply();
-            os << "auto-tuner: applying block-size "  <<
-                best_block.makeDimValStr(" * ") << endl;
-        }
-
-        // Reset all vars.
-        results.clear();
-        n2big = n2small = 0;
-        best_block = _opts->_block_sizes;
-        best_rate = 0.;
-        center_block = best_block;
-        radius = max_radius;
-        done = mark_done;
-        neigh_idx = 0;
-        better_neigh_found = false;
-        ctime = 0.;
-        csteps = 0;
-        in_warmup = true;
-
-        // Set min blocks to number of region threads.
-        min_blks = _context->set_region_threads();
-
-        // Adjust starting block if needed.
-        for (auto dim : center_block.getDims()) {
-            auto& dname = dim.getName();
-            auto& dval = dim.getVal();
-
-            auto dmax = max(idx_t(1), _opts->_region_sizes[dname] / 2);
-            if (dval > dmax || dval < 1)
-                center_block[dname] = dmax;
-        }
-        if (!done) {
-            os << "auto-tuner: starting block-size: "  <<
-                center_block.makeDimValStr(" * ") << endl;
-            os << "auto-tuner: starting search radius: " << radius << endl;
-        }
-    } // clear.
-
-    // Evaluate the previous run and take next auto-tuner step.
-    void StencilContext::AT::eval(idx_t steps, double etime) {
-        ostream& os = _context->get_ostr();
-
-        // Leave if done.
-        if (done)
-            return;
-
-        // Setup not done?
-        if (!nullop)
-            return;
-
-        // Handy ptrs.
-        auto _opts = _context->_opts;
-        auto _mpiInfo = _context->_mpiInfo;
-        auto _dims = _context->_dims;
-
-        // Cumulative stats.
-        csteps += steps;
-        ctime += etime;
-
-        // Still in warmup?
-        if (in_warmup) {
-
-            // Warmup not done?
-            if (ctime < warmup_secs && csteps < warmup_steps)
-                return;
-
-            // Done.
-            os << "auto-tuner: in warmup for " << ctime << " secs" << endl;
-            in_warmup = false;
-
-            // Measure this step only.
-            csteps = steps;
-            ctime = etime;
-        }
-
-        // Need more steps to get a good measurement?
-        if (ctime < min_secs && csteps < min_steps)
-            return;
-
-        // Calc perf and reset vars for next time.
-        double rate = double(csteps) / ctime;
-        os << "auto-tuner: " << csteps << " steps(s) at " << rate <<
-            " steps/sec with block-size " <<
-            _opts->_block_sizes.makeDimValStr(" * ") << endl;
-        csteps = 0;
-        ctime = 0.;
-
-        // Save result.
-        results[_opts->_block_sizes] = rate;
-        bool is_better = rate > best_rate;
-        if (is_better) {
-            best_block = _opts->_block_sizes;
-            best_rate = rate;
-            better_neigh_found = true;
-        }
-
-        // At this point, we have gathered perf info on the current settings.
-        // Now, we need to determine next unevaluated point in search space.
-        while (true) {
-
-            // Gradient-descent(GD) search:
-            // Use the neighborhood info from MPI to track neighbors.
-            // TODO: move to a more general place.
-            // Valid neighbor index?
-            if (neigh_idx < _mpiInfo->neighborhood_size) {
-
-                // Convert index to offsets in each dim.
-                auto ofs = _mpiInfo->neighborhood_sizes.unlayout(neigh_idx);
-
-                // Next neighbor of center point.
-                neigh_idx++;
-
-                // Determine new block size.
-                IdxTuple bsize(center_block);
-                bool ok = true;
-                for (auto odim : ofs.getDims()) {
-                    auto& dname = odim.getName(); // a domain-dim name.
-                    auto& dofs = odim.getVal(); // always [0..2].
-
-                    // Min and max sizes of this dim.
-                    auto dmin = _dims->_cluster_pts[dname];
-                    auto dmax = _opts->_region_sizes[dname];
-
-                    // Determine distance of GD neighbors.
-                    auto step = dmin; // step by cluster size.
-                    step = max(step, min_step);
-                    step *= radius;
-
-                    auto sz = center_block[dname];
-                    switch (dofs) {
-                    case 0:
-                        sz -= step;
-                        break;
-                    case 1:
-                        break;
-                    case 2:
-                        sz += step;
-                        break;
-                    default:
-                        assert(false && "internal error in tune_settings()");
-                    }
-
-                    // Too small?
-                    if (sz < dmin) {
-                        n2small++;
-                        ok = false;
-                        break;  // out of dim-loop.
-                    }
-
-                    // Adjustments.
-                    sz = min(sz, dmax);
-                    sz = ROUND_UP(sz, dmin);
-
-                    // Save.
-                    bsize[dname] = sz;
-
-                } // domain dims.
-                TRACE_MSG2("auto-tuner: checking block-size "  <<
-                          bsize.makeDimValStr(" * "));
-
-                // Too small?
-                if (ok && bsize.product() < min_pts) {
-                    n2small++;
-                    ok = false;
-                }
-
-                // Too few?
-                else if (ok) {
-                    idx_t nblks = _opts->_region_sizes.product() / bsize.product();
-                    if (nblks < min_blks) {
-                        ok = false;
-                        n2big++;
-                    }
-                }
-
-                // Valid size and not already checked?
-                if (ok && !results.count(bsize)) {
-
-                    // Run next step with this size.
-                    _opts->_block_sizes = bsize;
-                    break;      // out of block-search loop.
-                }
-
-            } // valid neighbor index.
-
-            // Beyond last neighbor of current center?
-            else {
-
-                // Should GD continue?
-                bool stop_gd = !better_neigh_found;
-
-                // Make new center at best block so far.
-                center_block = best_block;
-
-                // Reset search vars.
-                neigh_idx = 0;
-                better_neigh_found = false;
-
-                // No new best point, so this is the end of this
-                // GD search.
-                if (stop_gd) {
-
-                    // Move to next radius.
-                    radius /= 2;
-
-                    // Done?
-                    if (radius < 1) {
-
-                        // Reset AT and disable.
-                        clear(true);
-                        os << "auto-tuner: done" << endl;
-                        return;
-                    }
-                    os << "auto-tuner: new search radius: " << radius << endl;
-                }
-                else {
-                    TRACE_MSG2("auto-tuner: continuing search from block " <<
-                               center_block.makeDimValStr(" * "));
-                }
-            } // beyond next neighbor of center.
-        } // search for new setting to try.
-
-        // Fix settings for next step.
-        apply();
-        TRACE_MSG2("auto-tuner: next block-size "  <<
-                  _opts->_block_sizes.makeDimValStr(" * "));
-    } // eval.
-
-    // Apply auto-tuner settings.
-    void StencilContext::AT::apply() {
-        auto _opts = _context->_opts;
-        auto _env = _context->_env;
-
-        // Change block-related sizes to 0 so adjustSettings()
-        // will set them to the default.
-        // TODO: tune sub-block sizes also.
-        _opts->_sub_block_sizes.setValsSame(0);
-        _opts->_sub_block_group_sizes.setValsSame(0);
-        _opts->_block_group_sizes.setValsSame(0);
-
-        // Make sure everything is resized based on block size.
-        _opts->adjustSettings(nullop->get_ostream(), _env);
-
-        // Reallocate scratch data based on new block size.
-        _context->allocScratchData(nullop->get_ostream());
+    // Reset auto-tuners.
+    void StencilContext::reset_auto_tuner(bool enable, bool verbose) {
+        for (auto& sp : stPacks)
+            sp->getAT().clear(!enable, verbose);
     }
 
-    // Apply auto-tuning to some of the settings.
+    // Determine if any auto tuners are running.
+    bool StencilContext::is_auto_tuner_enabled() const {
+        bool done = true;
+        for (auto& sp : stPacks)
+            if (!sp->getAT().is_done())
+                done = false;
+        return !done;
+    }
+    
+    // Apply auto-tuning immediately, i.e., not as part of normal processing.
+    // Will alter data in grids.
     void StencilContext::run_auto_tuner_now(bool verbose) {
         if (!rank_bb.bb_valid)
             THROW_YASK_EXCEPTION("Error: tune_settings() called without calling prepare_solution() first");
@@ -951,8 +709,9 @@ namespace yask {
         // Temporarily disable halo exchange to tune intra-rank.
         enable_halo_exchange = false;
 
-        // Init tuner.
-        _at.clear(false, verbose);
+        // Init tuners.
+        for (auto& sp : stPacks)
+            sp->getAT().clear(false, verbose);
 
         // Reset stats.
         clear_timers();
@@ -961,17 +720,17 @@ namespace yask {
         // If wave-fronts are enabled, run a max number of these steps.
         // TODO: only run one region during AT.
         idx_t region_steps = _opts->_region_sizes[_dims->_step_dim];
-        idx_t step_t = min(region_steps, _at.max_step_t);
+        idx_t step_t = min(region_steps, AutoTuner::max_step_t) * _dims->_step_dir;
 
         // Run time-steps until AT converges.
-        bool done = false;
-        for (idx_t t = 0; !done; t += step_t) {
+        for (idx_t t = 0; ; t += step_t) {
 
             // Run step_t time-step(s).
-            run_solution(t, t + step_t - 1);
+            run_solution(t, t + step_t - _dims->_step_dir);
 
             // AT done on this rank?
-            done = _at.is_done();
+            if (!is_auto_tuner_enabled())
+                break;
         }
 
         // Wait for all ranks to finish.
@@ -984,8 +743,12 @@ namespace yask {
         at_timer.stop();
         os << "Auto-tuner done after " << steps_done << " step(s) in " <<
             at_timer.get_elapsed_secs() << " secs.\n";
-        os << "best-block-size: " << _opts->_block_sizes.makeDimValStr(" * ") << endl << flush;
-        os << "best-sub-block-size: " << _opts->_sub_block_sizes.makeDimValStr(" * ") << endl << flush;
+        for (auto& sp : stPacks) {
+            auto& settings = sp->getSettings();
+            os << " for bundle '" << sp->get_name() << "':\n" <<
+                "  best-block-size: " << settings._block_sizes.makeDimValStr(" * ") << endl <<
+                "  best-sub-block-size: " << settings._sub_block_sizes.makeDimValStr(" * ") << endl << flush;
+        }
 
         // Reset stats.
         clear_timers();
@@ -1174,7 +937,7 @@ namespace yask {
             return;
 
         mpi_time.start();
-        TRACE_MSG("exchange_halos: " << start << " ... (end before) " << stop);
+        TRACE_MSG("exchange_halos: [" << start << " ... " << stop << ")");
         auto opts = get_settings();
         auto& sd = _dims->_step_dim;
 

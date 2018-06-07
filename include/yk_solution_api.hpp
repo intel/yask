@@ -426,7 +426,7 @@ namespace yask {
            @returns Whether the auto-tuner is still searching.
         */
         virtual bool
-        is_auto_tuner_enabled() =0;
+        is_auto_tuner_enabled() const =0;
 
         /* Advanced APIs for yk_solution found below are not needed for most applications. */
 
