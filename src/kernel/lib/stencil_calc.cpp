@@ -516,7 +516,7 @@ namespace yask {
 
         // Use scalar code for anything not done above.
         if (do_scalars) {
-            
+
             // Use the 'misc' loops. Indices for these loops will be scalar and
             // global rather than normalized as in the cluster and vector loops.
             ScanIndices misc_idxs(sub_block_idxs);
@@ -535,30 +535,30 @@ namespace yask {
             // If no holes, don't need to check each point in domain.
             // Since step is always 1, we ignore misc_idxs.stop.
 #define misc_fn(pt_idxs)  do {                                          \
-            TRACE_MSG3("calc_sub_block:   at pt " << pt_idxs.start.makeValStr(nsdims)); \
-            bool ok = false;                                            \
-            if (scalar_for_peel_rem) {                                  \
-            for (int i = 0, j = 0; i < nsdims; i++) {                   \
-            if (i == step_posn) continue;                               \
-            auto rofs = cp->rank_domain_offsets[j];                     \
-            if (pt_idxs.start[i] < rofs + sub_block_vidxs.begin[i] ||   \
-                                   pt_idxs.start[i] >= rofs + sub_block_vidxs.end[i]) { \
-            ok = true; break; }                                         \
-            j++;                                                        \
-            }                                                           \
-            }                                                           \
-            else ok = is_in_valid_domain(pt_idxs.start);                \
-            if (ok) calc_scalar(thread_idx, pt_idxs.start);             \
+                TRACE_MSG3("calc_sub_block:   at pt " << pt_idxs.start.makeValStr(nsdims)); \
+                bool ok = false;                                        \
+                if (scalar_for_peel_rem) {                              \
+                    for (int i = 0, j = 0; i < nsdims; i++) {           \
+                        if (i == step_posn) continue;                   \
+                        auto rofs = cp->rank_domain_offsets[j];         \
+                        if (pt_idxs.start[i] < rofs + sub_block_vidxs.begin[i] || \
+                            pt_idxs.start[i] >= rofs + sub_block_vidxs.end[i]) { \
+                            ok = true; break; }                         \
+                        j++;                                            \
+                    }                                                   \
+                }                                                       \
+                else ok = is_in_valid_domain(pt_idxs.start);            \
+                if (ok) calc_scalar(thread_idx, pt_idxs.start);         \
             } while(0)
-            
+
             // Scan through n-D space.
             // The OMP in the misc loops will be ignored if we're already in
             // the max allowed nested OMP region.
 #include "yask_misc_loops.hpp"
 #undef misc_fn
         }
-        
-            // Make sure streaming stores are visible for later loads.
+
+        // Make sure streaming stores are visible for later loads.
         make_stores_visible();
         
     } // calc_sub_block.
@@ -647,7 +647,6 @@ namespace yask {
     // Return adjusted indices.
     ScanIndices StencilBundleBase::adjust_span(int thread_idx,
                                                const ScanIndices& idxs) const {
-
         ScanIndices adj_idxs(idxs);
         auto* cp = _generic_context;
         auto& dims = cp->get_dims();
@@ -673,15 +672,15 @@ namespace yask {
                 int posn = gp->get_dim_posn(dname);
                 if (posn >= 0) {
 
-                    // Make sure grid domain covers block.
-                    assert(idxs.begin[i] >= gp->get_first_rank_domain_index(posn));
-                    assert(idxs.end[i] <= gp->get_last_rank_domain_index(posn) + 1);
-
                     // Adjust begin & end scan indices based on halos.
                     idx_t lh = gp->get_left_halo_size(posn);
                     idx_t rh = gp->get_right_halo_size(posn);
                     adj_idxs.begin[i] = idxs.begin[i] - lh;
                     adj_idxs.end[i] = idxs.end[i] + rh;
+
+                    // Make sure grid covers block.
+                    assert(adj_idxs.begin[i] >= gp->get_first_rank_alloc_index(posn));
+                    assert(adj_idxs.end[i] <= gp->get_last_rank_alloc_index(posn) + 1);
 
                     // If existing step is >= whole tile, adjust it also.
                     idx_t width = idxs.end[i] - idxs.begin[i];

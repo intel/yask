@@ -256,13 +256,15 @@ int main(int argc, char** argv)
         auto ksoln = kfac.new_solution(kenv);
         auto context = dynamic_pointer_cast<StencilContext>(ksoln);
         assert(context.get());
+
+        // Replace the default settings with 'opts'.
         context->set_settings(opts);
-        ostream& os = context->set_ostr();
 
         // Make sure any MPI/OMP debug data is dumped from all ranks before continuing.
         kenv->global_barrier();
 
         // Print splash banner and related info.
+        ostream& os = context->set_ostr();
         opts->splash(os, argc, argv);
 
         // Override alloc if requested.
@@ -379,6 +381,7 @@ int main(int argc, char** argv)
             ref_context->name += "-reference";
             ref_context->allow_vec_exchange = false;   // exchange scalars in halos.
 
+            // Override allocations and prep solution as with ref soln.
             alloc_steps(ref_soln, *opts);
             ref_soln->prepare_solution();
 

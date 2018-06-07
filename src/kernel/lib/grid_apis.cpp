@@ -158,7 +158,7 @@ namespace yask {
 
         // Determine required padding from halos.
         Indices left_pads2 = getReqdPad(_left_halos, _left_wf_exts);
-        Indices right_pads2 = getReqdPad(_right_halos, _left_wf_exts);
+        Indices right_pads2 = getReqdPad(_right_halos, _right_wf_exts);
 
         // NB: requirements to successful share_storage() is not as strict as
         // is_storage_layout_identical(). See note on pad & halo below and API docs.
