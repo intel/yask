@@ -173,7 +173,7 @@ namespace yask {
         BoundingBox rank_bb;
 
         // BB with any needed extensions for wave-fronts.
-        // If WFs are not used, this is the same as rank_bb;
+        // If WFs are not used, this is the same as 'rank_bb';
         BoundingBox ext_bb;
 
         // List of all non-scratch stencil bundles in the order in which

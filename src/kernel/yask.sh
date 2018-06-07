@@ -271,6 +271,20 @@ fi
 
 echo "Log saved in '$logfile'."
 
-if [[ `grep -c FAILED $logfile` > 0 ]]; then
+# Checks for issues.
+exe_str="'$mpi_cmd $exe_prefix $exe $opts $@'"
+
+# Return a non-zero exit condition if test failed.
+if [[ `grep -c 'TEST FAILED' $logfile` > 0 ]]; then
+    echo $exe_str did not pass internal validation test.
     exit 1;
 fi
+
+# Return a non-zero exit condition if executable didn't exit cleanly.
+if [[ `grep -c 'YASK DONE' $logfile` == 0 ]]; then
+    echo $exe_str did not exit cleanly.
+    exit 1;
+fi
+
+echo $exe_str ran successfully.
+exit 0;

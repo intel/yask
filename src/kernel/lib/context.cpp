@@ -564,32 +564,34 @@ namespace yask {
                 // time-step, the parallelogram may be trimmed based on the
                 // BB and WF extensions outside of the rank-BB.
 
-                // Actual region boundaries must stay within [extended] rank BB.
+                // Actual region boundaries must stay within [extended] pack BB.
                 // We have to calculate the posn in the extended rank at each
                 // value of 'shift_num' because it is being shifted spatially.
                 bool ok = true;
-                for (int i = 0; i < ndims; i++) {
+                auto& pbb = bp->getBB();
+                for (int i = 0, j = 0; i < ndims; i++) {
                     if (i == step_posn) continue;
-                    auto& dname = _dims->_stencil_dims.getDimName(i);
-                    auto angle = wf_angles[dname];
+                    auto angle = wf_angles[j];
 
                     // Begin point.
-                    idx_t dbegin = rank_bb.bb_begin[dname];
-                    idx_t rbegin = max<idx_t>(start[i], ext_bb.bb_begin[dname]);
+                    idx_t dbegin = rank_bb.bb_begin[j]; // non-extended domain.
+                    idx_t rbegin = max<idx_t>(start[i], pbb.bb_begin[j]);
                     if (rbegin < dbegin) // in left WF ext?
-                        rbegin = max(rbegin, dbegin - left_wf_exts[dname] + shift_num * angle);
+                        rbegin = max(rbegin, dbegin - left_wf_exts[j] + shift_num * angle);
                     region_idxs.begin[i] = rbegin;
 
                     // End point.
-                    idx_t dend = rank_bb.bb_end[dname];
-                    idx_t rend = min<idx_t>(stop[i], ext_bb.bb_end[dname]);
+                    idx_t dend = rank_bb.bb_end[j]; // non-extended domain.
+                    idx_t rend = min<idx_t>(stop[i], pbb.bb_end[j]);
                     if (rend > dend) // in right WF ext?
-                        rend = min(rend, dend + right_wf_exts[dname] - shift_num * angle);
+                        rend = min(rend, dend + right_wf_exts[j] - shift_num * angle);
                     region_idxs.end[i] = rend;
 
                     // Anything to do?
                     if (rend <= rbegin)
                         ok = false;
+
+                    j++; // next domain index.
                 }
                 TRACE_MSG("calc_region: region span after trimming: " <<
                           region_idxs.begin.makeValStr(ndims) <<
@@ -624,13 +626,13 @@ namespace yask {
                 // left, so region loops must strictly increment. They may do
                 // so in any order.  TODO: shift only what is needed by
                 // this pack, not the global max.
-                for (int i = 0; i < ndims; i++) {
+                for (int i = 0, j = 0; i < ndims; i++) {
                     if (i == step_posn) continue;
-                    auto& dname = _dims->_stencil_dims.getDimName(i);
-                    auto angle = wf_angles[dname];
+                    auto angle = wf_angles[j];
 
                     start[i] -= angle;
                     stop[i] -= angle;
+                    j++;
                 }
                 shift_num++;
 

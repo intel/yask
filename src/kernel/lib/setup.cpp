@@ -111,14 +111,16 @@ namespace yask {
             // Myself.
             if (rn == me) {
                 if (mandist != 0)
-                    FORMAT_AND_THROW_YASK_EXCEPTION("Internal error: distance to own rank == " << mandist);
+                    FORMAT_AND_THROW_YASK_EXCEPTION
+                        ("Internal error: distance to own rank == " << mandist);
             }
 
             // Someone else.
             else {
                 if (mandist == 0)
-                    FORMAT_AND_THROW_YASK_EXCEPTION("Error: ranks " << me <<
-                                                    " and " << rn << " at same coordinates");
+                    FORMAT_AND_THROW_YASK_EXCEPTION
+                        ("Error: ranks " << me <<
+                         " and " << rn << " at same coordinates");
             }
 
             // Loop through domain dims.
@@ -157,13 +159,14 @@ namespace yask {
                             auto rnsz = rsizes[rn][dj];
                             if (mysz != rnsz) {
                                 auto& dnamej = _opts->_rank_indices.getDimName(dj);
-                                FORMAT_AND_THROW_YASK_EXCEPTION("Error: rank " << rn << " and " << me <<
-                                                                " are both at rank-index " << coords[me][di] <<
-                                                                " in the '" << dname <<
-                                                                "' dimension , but their rank-domain sizes are " <<
-                                                                rnsz << " and " << mysz <<
-                                                                " (resp.) in the '" << dj <<
-                                                                "' dimension, making them unaligned");
+                                FORMAT_AND_THROW_YASK_EXCEPTION
+                                    ("Error: rank " << rn << " and " << me <<
+                                     " are both at rank-index " << coords[me][di] <<
+                                     " in the '" << dname <<
+                                     "' dimension , but their rank-domain sizes are " <<
+                                     rnsz << " and " << mysz <<
+                                     " (resp.) in the '" << dj <<
+                                     "' dimension, making them unaligned");
                             }
                         }
                     }
@@ -316,7 +319,7 @@ namespace yask {
                     // Determine padded size (also offset to next location).
                     size_t nbytes = gp->get_num_storage_bytes();
                     npbytes[numa_pref] += ROUND_UP(nbytes + _data_buf_pad,
-                                                  CACHELINE_BYTES);
+                                                   CACHELINE_BYTES);
                     ngrids[numa_pref]++;
                     if (pass == 0)
                         TRACE_MSG(" grid '" << gname << "' needs " << makeByteStr(nbytes) <<
@@ -880,6 +883,11 @@ namespace yask {
     {
         assert(_opts);
 
+        // If we haven't finished constructing the context, it's too early
+        // to do this.
+        if (!stPacks.size())
+            return;
+
         // Reset halos to zero.
         max_halos = _dims->_domain_dims;
 
@@ -921,15 +929,19 @@ namespace yask {
         // of angles and extensions.
         auto& step_dim = _dims->_step_dim;
         auto wf_steps = _opts->_region_sizes[step_dim];
+        assert(wf_steps >= 1);
         num_wf_shifts = 0;
         if (wf_steps > 1) {
 
             // Need to shift for each bundle pack.
-            num_wf_shifts = stPacks.size() * wf_steps;
+            assert(stPacks.size() > 0);
+            num_wf_shifts = idx_t(stPacks.size()) * wf_steps;
+            assert(num_wf_shifts > 1);
 
             // Don't need to shift first one.
             num_wf_shifts--;
         }
+        assert(num_wf_shifts >= 0);
         for (auto& dim : _dims->_domain_dims.getDims()) {
             auto& dname = dim.getName();
             auto rksize = _opts->_rank_sizes[dname];
@@ -945,10 +957,12 @@ namespace yask {
             if (_opts->_region_sizes[dname] < rksize || nranks > 0)
                 angle = ROUND_UP(max_halos[dname], _dims->_fold_pts[dname]);
             wf_angles[dname] = angle;
+            assert(angle >= 0);
 
             // Determine the total WF shift to be added in each dim.
             idx_t shifts = angle * num_wf_shifts;
             wf_shifts[dname] = shifts;
+            assert(shifts >= 0);
 
             // Is domain size at least as large as halo + wf_ext in direction
             // when there are multiple ranks?
@@ -1117,7 +1131,7 @@ namespace yask {
             " rank-domain-offsets:   " << rank_domain_offsets.makeDimValOffsetStr() << endl <<
 #endif
             " rank-domain:           " << rank_bb.bb_begin.makeDimValStr() <<
-                " ... " << rank_bb.bb_end.subElements(1).makeDimValStr() << endl <<
+            " ... " << rank_bb.bb_end.subElements(1).makeDimValStr() << endl <<
             " vector-len:            " << VLEN << endl <<
             " extra-padding:         " << _opts->_extra_pad_sizes.makeDimValStr() << endl <<
             " minimum-padding:       " << _opts->_min_pad_sizes.makeDimValStr() << endl <<
@@ -1137,9 +1151,9 @@ namespace yask {
         os << endl;
 
         // Info about eqs, packs and bundles.
-        os << "Num stencil equations: " << NUM_STENCIL_EQS << endl;
-        os << "Num stencil bundles: " << stBundles.size() << endl;
-        os << "Num stencil packs: " << stPacks.size() << endl;
+        os << "Num stencil packs:      " << stPacks.size() << endl;
+        os << "Num stencil bundles:    " << stBundles.size() << endl;
+        os << "Num stencil equations:  " << NUM_STENCIL_EQS << endl;
 
 #if NUM_STENCIL_EQS
 
@@ -1149,9 +1163,13 @@ namespace yask {
         rank_numFpOps_1t = 0;
 
         for (auto& sp : stPacks) {
-            os << "Bundle(s) in pack '" << sp->get_name() << "':\n";
-            for (auto* sg : *sp) {
+            auto& pbb = sp->getBB();
+            os << "Pack '" << sp->get_name() << "':\n" <<
+                " num bundles:                 " << sp->size() << endl <<
+                " sub-domain scope:            " << pbb.bb_begin.makeDimValStr() <<
+                " ... " << pbb.bb_end.subElements(1).makeDimValStr() << endl;
 
+            for (auto* sg : *sp) {
                 idx_t updates1 = 0, reads1 = 0, fpops1 = 0;
 
                 // Loop through all the needed bundles to
@@ -1325,10 +1343,23 @@ namespace yask {
         ext_bb.bb_end = rank_bb.bb_end.addElements(right_wf_exts);
         ext_bb.update_bb("extended-rank", *this, true);
 
-        // Find BB for each bundle. Each will be a subset within
-        // 'ext_bb'.
-        for (auto sg : stBundles)
-            sg->find_bounding_box();
+        // Find BB for each pack.
+        for (auto sp : stPacks) {
+            auto& spbb = sp->getBB();
+            spbb.bb_begin = _dims->_domain_dims;
+            spbb.bb_end = _dims->_domain_dims;
+
+            // Find BB for each bundle in this pack.
+            for (auto sb : *sp) {
+                sb->find_bounding_box();
+
+                // Expand pack BB to encompass bundle BB.
+                auto& sbbb = sb->getBB();
+                spbb.bb_begin = spbb.bb_begin.minElements(sbbb.bb_begin);
+                spbb.bb_end = spbb.bb_end.maxElements(sbbb.bb_end);
+            }
+            spbb.update_bb(sp->get_name(), *this, false);
+        }
     }
 
     // Find the bounding-boxes for this bundle in this rank.
@@ -1352,9 +1383,8 @@ namespace yask {
         Indices max_pts(idx_min, nsdims);
         idx_t npts = 0;
 
-        // Begin, end tuples.
-        // Scan across domain in this rank including
-        // any extensions for wave-fronts.
+        // Begin, end tuples. Use 'ext_bb' to scan across domain in this
+        // rank including any extensions for wave-fronts.
         IdxTuple begin(stencil_dims);
         begin.setVals(context.ext_bb.bb_begin, false);
         begin[step_dim] = 0;
@@ -1369,11 +1399,11 @@ namespace yask {
 
         // Define misc-loop function.  Since step is always 1, we ignore
         // misc_stop.  Update only if point is in domain for this bundle.
-#define misc_fn(misc_idxs) do {                                  \
-            if (is_in_valid_domain(misc_idxs.start)) {           \
-                min_pts = min_pts.minElements(misc_idxs.start);  \
-                max_pts = max_pts.maxElements(misc_idxs.start);  \
-                npts++;                                          \
+#define misc_fn(misc_idxs) do {                                 \
+            if (is_in_valid_domain(misc_idxs.start)) {          \
+                min_pts = min_pts.minElements(misc_idxs.start); \
+                max_pts = max_pts.maxElements(misc_idxs.start); \
+                npts++;                                         \
             } } while(0)
         
         // Define OMP reductions to be used in generated code.
@@ -1631,11 +1661,11 @@ namespace yask {
         bb_is_full = true;
         if (bb_num_points != bb_size) {
             if (os)
-            *os << "Note: '" << name << "' domain has only " <<
-                makeNumStr(bb_num_points) <<
-                " valid point(s) inside its bounding-box of " <<
-                makeNumStr(bb_size) <<
-                " point(s); multiple sub-boxes will be used.\n";
+                *os << "Note: '" << name << "' domain has only " <<
+                    makeNumStr(bb_num_points) <<
+                    " valid point(s) inside its bounding-box of " <<
+                    makeNumStr(bb_size) <<
+                    " point(s); multiple sub-boxes will be used.\n";
             bb_is_full = false;
         }
 
@@ -1646,9 +1676,9 @@ namespace yask {
             if ((bb_begin[dname] - context.rank_domain_offsets[dname]) %
                 dims->_fold_pts[dname] != 0) {
                 if (os)
-                *os << "Note: '" << name << "' domain"
-                    " has one or more starting edges not on vector boundaries;"
-                    " masked calculations will be used in peel and remainder sub-blocks.\n";
+                    *os << "Note: '" << name << "' domain"
+                        " has one or more starting edges not on vector boundaries;"
+                        " masked calculations will be used in peel and remainder sub-blocks.\n";
                 bb_is_aligned = false;
                 break;
             }
@@ -1661,9 +1691,9 @@ namespace yask {
             if (bb_len[dname] % dims->_cluster_pts[dname] != 0) {
                 if (bb_is_full && bb_is_aligned)
                     if (os && bb_is_aligned)
-                    *os << "Note: '" << name << "' domain"
-                        " has one or more sizes that are not vector-cluster multiples;"
-                        " masked calculations will be used in peel and remainder sub-blocks.\n";
+                        *os << "Note: '" << name << "' domain"
+                            " has one or more sizes that are not vector-cluster multiples;"
+                            " masked calculations will be used in peel and remainder sub-blocks.\n";
                 bb_is_cluster_mult = false;
                 break;
             }
