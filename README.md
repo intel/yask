@@ -5,7 +5,7 @@
 ## Overview
 YASK--Yet Another Stencil Kernel: A framework to rapidly create high-performance HPC stencil code including optimizations and features such as
 * Vector folding,
-* Cache blocking,
+* Automatically-tuned cache blocking,
 * Multi-level OpenMP parallelism,
 * Encapsulated memory layout,
 * Temporal wave-front blocking,
