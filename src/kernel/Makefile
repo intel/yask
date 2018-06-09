@@ -573,9 +573,9 @@ default: kernel
 
 # Compile the kernel.
 kernel: $(YK_EXEC) $(YK_SCRIPT) $(MAKE_REPORT_FILE)
-	@echo "Binary" $(YK_EXEC) "has been built."
-	@echo "See" $(MAKE_REPORT_FILE) "for build information."
-	@echo "Run command:" $(YK_SCRIPT) "-stencil" $(stencil) "-arch" $(arch) "[options]"
+	@echo "*** Binary" $(YK_EXEC) "has been built."; \
+	echo "*** See" $(MAKE_REPORT_FILE) "for build information."; \
+	echo "*** Run command:" $(YK_SCRIPT) "-stencil" $(stencil) "-arch" $(arch) "[options]"
 
 $(YK_LIB): $(YK_OBJS) $(YK_EXT_OBJS)
 	- rm -f $(MAKE_REPORT_FILE)
@@ -598,7 +598,7 @@ $(YK_SCRIPT): ./yask.sh
 $(MAKE_REPORT_FILE): $(YK_LIB)
 	$(MKDIR) $(dir $@)
 	@echo MAKEFLAGS="\"$(MAKEFLAGS)"\" > $@ 2>&1
-	$(MAKE) echo-settings >> $@ 2>&1
+	- $(MAKE) echo-settings >> $@ 2>&1
 
 # Generated source files.
 $(YK_GEN_DIR)/yask_rank_loops.hpp: $(GEN_LOOPS) $(YK_CODE_FILE)
@@ -846,99 +846,97 @@ realclean: clean
 	rm -rf logs
 
 echo-settings:
-	@echo
-	@echo "Build environment for" $(YK_EXEC) on `date`
-	@$(YK_CXX) --version
-	@echo BLOCK_LOOP_CODE="\"$(BLOCK_LOOP_CODE)\""
-	@echo BLOCK_LOOP_INNER_MODS="\"$(BLOCK_LOOP_INNER_MODS)\""
-	@echo BLOCK_LOOP_OPTS="\"$(BLOCK_LOOP_OPTS)\""
-	@echo BLOCK_LOOP_ORDER="\"$(BLOCK_LOOP_ORDER)\""
-	@echo BLOCK_LOOP_OUTER_MODS="\"$(BLOCK_LOOP_OUTER_MODS)\""
-	@echo BLOCK_LOOP_OUTER_VARS="\"$(BLOCK_LOOP_OUTER_VARS)\""
-	@echo EXTRA_DEF_ARGS=$(EXTRA_DEF_ARGS)
-	@echo EXTRA_MACROS="\"$(EXTRA_MACROS)\""
-	@echo EXTRA_YC_FLAGS="\"$(EXTRA_YC_FLAGS)\""
-	@echo EXTRA_YK_CXXFLAGS="\"$(EXTRA_YK_CXXFLAGS)\""
-	@echo ISA=$(ISA)
-	@echo MACROS="\"$(MACROS)\""
-	@echo MISC_LOOP_CODE="\"$(MISC_LOOP_CODE)\""
-	@echo MISC_LOOP_INNER_MODS="\"$(MISC_LOOP_INNER_MODS)\""
-	@echo MISC_LOOP_OPTS="\"$(MISC_LOOP_OPTS)\""
-	@echo MISC_LOOP_ORDER="\"$(MISC_LOOP_ORDER)\""
-	@echo MISC_LOOP_OUTER_MODS="\"$(MISC_LOOP_OUTER_MODS)\""
-	@echo MISC_LOOP_OUTER_VARS="\"$(MISC_LOOP_OUTER_VARS)\""
-	@echo OMPFLAGS="\"$(OMPFLAGS)\""
-	@echo RANK_LOOP_CODE="\"$(RANK_LOOP_CODE)\""
-	@echo RANK_LOOP_INNER_MODS="\"$(RANK_LOOP_INNER_MODS)\""
-	@echo RANK_LOOP_OPTS="\"$(RANK_LOOP_OPTS)\""
-	@echo RANK_LOOP_ORDER="\"$(RANK_LOOP_ORDER)\""
-	@echo RANK_LOOP_OUTER_MODS="\"$(RANK_LOOP_OUTER_MODS)\""
-	@echo RANK_LOOP_OUTER_VARS="\"$(RANK_LOOP_OUTER_VARS)\""
-	@echo REGION_LOOP_CODE="\"$(REGION_LOOP_CODE)\""
-	@echo REGION_LOOP_INNER_MODS="\"$(REGION_LOOP_INNER_MODS)\""
-	@echo REGION_LOOP_OPTS="\"$(REGION_LOOP_OPTS)\""
-	@echo REGION_LOOP_ORDER="\"$(REGION_LOOP_ORDER)\""
-	@echo REGION_LOOP_OUTER_MODS="\"$(REGION_LOOP_OUTER_MODS)\""
-	@echo REGION_LOOP_OUTER_VARS="\"$(REGION_LOOP_OUTER_VARS)\""
-	@echo SUB_BLOCK_LOOP_CODE="\"$(SUB_BLOCK_LOOP_CODE)\""
-	@echo SUB_BLOCK_LOOP_INNER_MODS="\"$(SUB_BLOCK_LOOP_INNER_MODS)\""
-	@echo SUB_BLOCK_LOOP_INNER_VARS="\"$(SUB_BLOCK_LOOP_INNER_VARS)\""
-	@echo SUB_BLOCK_LOOP_OPTS="\"$(SUB_BLOCK_LOOP_OPTS)\""
-	@echo SUB_BLOCK_LOOP_ORDER="\"$(SUB_BLOCK_LOOP_ORDER)\""
-	@echo SUB_BLOCK_LOOP_OUTER_MODS="\"$(SUB_BLOCK_LOOP_OUTER_MODS)\""
-	@echo SUB_BLOCK_LOOP_OUTER_VARS="\"$(SUB_BLOCK_LOOP_OUTER_VARS)\""
-	@echo YASK_OUTPUT_DIR=$(YASK_OUTPUT_DIR)
-	@echo YC_FLAGS="\"$(YC_FLAGS)\""
-	@echo YC_TARGET="\"$(YC_TARGET)\""
-	@echo YK_BASE=$(YK_BASE)
-	@echo YK_CXX=$(YK_CXX)
-	@echo YK_CXXFLAGS="\"$(YK_CXXFLAGS)\""
-	@echo YK_CXXOPT=$(YK_CXXOPT)
-	@echo YK_EXT_TAG=$(YK_EXT_TAG)
-	@echo arch=$(arch)
-	@echo cluster=$(cluster)
-	@echo def_block_args=$(def_block_args)
-	@echo def_block_threads=$(def_block_threads)
-	@echo def_pad_args=$(def_pad_args)
-	@echo def_rank_args=$(def_rank_args)
-	@echo def_thread_divisor=$(def_thread_divisor)
-	@echo fold=$(fold)
-	@echo host=`hostname`
-	@echo more_def_args=$(more_def_args)
-	@echo omp_block_schedule=$(omp_block_schedule)
-	@echo omp_misc_schedule=$(omp_misc_schedule)
-	@echo omp_region_schedule=$(omp_region_schedule)
-	@echo pfd_l1=$(pfd_l1)
-	@echo pfd_l2=$(pfd_l2)
-	@echo radius=$(radius)
-	@echo real_bytes=$(real_bytes)
-	@echo stencil=$(stencil)
-	@echo streaming_stores=$(streaming_stores)
+	@echo "Build environment for" $(YK_EXEC) on `date`; \
+	$(YK_CXX) --version; \
+	echo BLOCK_LOOP_CODE="\"$(BLOCK_LOOP_CODE)\""; \
+	echo BLOCK_LOOP_INNER_MODS="\"$(BLOCK_LOOP_INNER_MODS)\""; \
+	echo BLOCK_LOOP_OPTS="\"$(BLOCK_LOOP_OPTS)\""; \
+	echo BLOCK_LOOP_ORDER="\"$(BLOCK_LOOP_ORDER)\""; \
+	echo BLOCK_LOOP_OUTER_MODS="\"$(BLOCK_LOOP_OUTER_MODS)\""; \
+	echo BLOCK_LOOP_OUTER_VARS="\"$(BLOCK_LOOP_OUTER_VARS)\""; \
+	echo EXTRA_DEF_ARGS=$(EXTRA_DEF_ARGS); \
+	echo EXTRA_MACROS="\"$(EXTRA_MACROS)\""; \
+	echo EXTRA_YC_FLAGS="\"$(EXTRA_YC_FLAGS)\""; \
+	echo EXTRA_YK_CXXFLAGS="\"$(EXTRA_YK_CXXFLAGS)\""; \
+	echo ISA=$(ISA); \
+	echo MACROS="\"$(MACROS)\""; \
+	echo MISC_LOOP_CODE="\"$(MISC_LOOP_CODE)\""; \
+	echo MISC_LOOP_INNER_MODS="\"$(MISC_LOOP_INNER_MODS)\""; \
+	echo MISC_LOOP_OPTS="\"$(MISC_LOOP_OPTS)\""; \
+	echo MISC_LOOP_ORDER="\"$(MISC_LOOP_ORDER)\""; \
+	echo MISC_LOOP_OUTER_MODS="\"$(MISC_LOOP_OUTER_MODS)\""; \
+	echo MISC_LOOP_OUTER_VARS="\"$(MISC_LOOP_OUTER_VARS)\""; \
+	echo OMPFLAGS="\"$(OMPFLAGS)\""; \
+	echo RANK_LOOP_CODE="\"$(RANK_LOOP_CODE)\""; \
+	echo RANK_LOOP_INNER_MODS="\"$(RANK_LOOP_INNER_MODS)\""; \
+	echo RANK_LOOP_OPTS="\"$(RANK_LOOP_OPTS)\""; \
+	echo RANK_LOOP_ORDER="\"$(RANK_LOOP_ORDER)\""; \
+	echo RANK_LOOP_OUTER_MODS="\"$(RANK_LOOP_OUTER_MODS)\""; \
+	echo RANK_LOOP_OUTER_VARS="\"$(RANK_LOOP_OUTER_VARS)\""; \
+	echo REGION_LOOP_CODE="\"$(REGION_LOOP_CODE)\""; \
+	echo REGION_LOOP_INNER_MODS="\"$(REGION_LOOP_INNER_MODS)\""; \
+	echo REGION_LOOP_OPTS="\"$(REGION_LOOP_OPTS)\""; \
+	echo REGION_LOOP_ORDER="\"$(REGION_LOOP_ORDER)\""; \
+	echo REGION_LOOP_OUTER_MODS="\"$(REGION_LOOP_OUTER_MODS)\""; \
+	echo REGION_LOOP_OUTER_VARS="\"$(REGION_LOOP_OUTER_VARS)\""; \
+	echo SUB_BLOCK_LOOP_CODE="\"$(SUB_BLOCK_LOOP_CODE)\""; \
+	echo SUB_BLOCK_LOOP_INNER_MODS="\"$(SUB_BLOCK_LOOP_INNER_MODS)\""; \
+	echo SUB_BLOCK_LOOP_INNER_VARS="\"$(SUB_BLOCK_LOOP_INNER_VARS)\""; \
+	echo SUB_BLOCK_LOOP_OPTS="\"$(SUB_BLOCK_LOOP_OPTS)\""; \
+	echo SUB_BLOCK_LOOP_ORDER="\"$(SUB_BLOCK_LOOP_ORDER)\""; \
+	echo SUB_BLOCK_LOOP_OUTER_MODS="\"$(SUB_BLOCK_LOOP_OUTER_MODS)\""; \
+	echo SUB_BLOCK_LOOP_OUTER_VARS="\"$(SUB_BLOCK_LOOP_OUTER_VARS)\""; \
+	echo YASK_OUTPUT_DIR=$(YASK_OUTPUT_DIR); \
+	echo YC_FLAGS="\"$(YC_FLAGS)\""; \
+	echo YC_TARGET="\"$(YC_TARGET)\""; \
+	echo YK_BASE=$(YK_BASE); \
+	echo YK_CXX=$(YK_CXX); \
+	echo YK_CXXFLAGS="\"$(YK_CXXFLAGS)\""; \
+	echo YK_CXXOPT=$(YK_CXXOPT); \
+	echo YK_EXT_TAG=$(YK_EXT_TAG); \
+	echo arch=$(arch); \
+	echo cluster=$(cluster); \
+	echo def_block_args=$(def_block_args); \
+	echo def_block_threads=$(def_block_threads); \
+	echo def_pad_args=$(def_pad_args); \
+	echo def_rank_args=$(def_rank_args); \
+	echo def_thread_divisor=$(def_thread_divisor); \
+	echo fold=$(fold); \
+	echo host=`hostname`; \
+	echo more_def_args=$(more_def_args); \
+	echo omp_block_schedule=$(omp_block_schedule); \
+	echo omp_misc_schedule=$(omp_misc_schedule); \
+	echo omp_region_schedule=$(omp_region_schedule); \
+	echo pfd_l1=$(pfd_l1); \
+	echo pfd_l2=$(pfd_l2); \
+	echo radius=$(radius); \
+	echo real_bytes=$(real_bytes); \
+	echo stencil=$(stencil); \
+	echo streaming_stores=$(streaming_stores)
 
 # Print stats on inner SIMD loops from asm file.
 code-stats:
-	@echo
 	@echo "Code stats for stencil computation:"
 	$(PERL) $(GET_LOOP_STATS) -t=$(YK_CODE_FILE) factory.s
 
 # Print some usage info.
 help:
-	@echo "Example performance builds of kernel cmd-line tool:"
-	@echo " $(MAKE) clean; $(MAKE) -j arch=knl stencil=iso3dfd"
-	@echo " $(MAKE) clean; $(MAKE) -j arch=knl stencil=awp EXTRA_YK_CXXFLAGS=-qopt-report"
-	@echo " $(MAKE) clean; $(MAKE) -j arch=skl stencil=3axis fold='x=1,y=2,z=4' cluster='x=2'"
-	@echo " $(MAKE) clean; $(MAKE) -j arch=hsw stencil=3axis radius=4 real_bytes=8 # DP FP"
-	@echo " "
-	@echo "Example performance builds of kernel API for C++ and Python apps:"
-	@echo " $(MAKE) clean; $(MAKE) -j arch=knl stencil=iso3dfd yk-api"
-	@echo " $(MAKE) clean; $(MAKE) -j arch=skl stencil=awp yk-api"
-	@echo " "
-	@echo "Example debug builds of kernel cmd-line tool:"
-	@echo " $(MAKE) clean; $(MAKE) -j stencil=iso3dfd mpi=0 OMPFLAGS='-qopenmp-stubs' YK_CXXOPT='-O0' EXTRA_MACROS='CHECK' # No OpenMP or MPI, internal checking"
-	@echo " $(MAKE) clean; $(MAKE) -j arch=intel64 stencil=3axis mpi=0 OMPFLAGS='-qopenmp-stubs' YK_CXXOPT='-O0' EXTRA_MACROS='CHECK TRACE'	 # TRACE is a useful debug setting!"
-	@echo " $(MAKE) clean; $(MAKE) -j arch=intel64 stencil=3axis radius=0 fold='x=1,y=1,z=1' mpi=0 YK_CXX=g++ OMPFLAGS='' YK_CXXOPT='-O0' EXTRA_MACROS='CHECK TRACE TRACE_MEM TRACE_INTRINSICS'"
-	@echo " "
-	@echo "Example builds with test runs:"
-	@echo " $(MAKE) -j all # Normal full API and stencil tests"
-	@echo " $(MAKE) -j all YK_CXXOPT=-O2 YK_CXX=g++ mpi=0 ranks=1 # g++ w/o MPI"
-	@echo " $(MAKE) -j all YK_CXXOPT=-O1 ranks=3 EXTRA_MACROS='CHECK' # Run 3 ranks w/checking"
+	@echo "Example performance builds of kernel cmd-line tool:"; \
+	echo " $(MAKE) clean; $(MAKE) -j arch=knl stencil=iso3dfd"; \
+	echo " $(MAKE) clean; $(MAKE) -j arch=knl stencil=awp EXTRA_YK_CXXFLAGS=-qopt-report"; \
+	echo " $(MAKE) clean; $(MAKE) -j arch=skl stencil=3axis fold='x=1,y=2,z=4' cluster='x=2'"; \
+	echo " $(MAKE) clean; $(MAKE) -j arch=hsw stencil=3axis radius=4 real_bytes=8 # DP FP"; \
+	echo " "; \
+	echo "Example performance builds of kernel API for C++ and Python apps:"; \
+	echo " $(MAKE) clean; $(MAKE) -j arch=knl stencil=iso3dfd yk-api"; \
+	echo " $(MAKE) clean; $(MAKE) -j arch=skl stencil=awp yk-api"; \
+	echo " "; \
+	echo "Example debug builds of kernel cmd-line tool:"; \
+	echo " $(MAKE) clean; $(MAKE) -j stencil=iso3dfd mpi=0 OMPFLAGS='-qopenmp-stubs' YK_CXXOPT='-O0' EXTRA_MACROS='CHECK' # No OpenMP or MPI, internal checking"; \
+	echo " $(MAKE) clean; $(MAKE) -j arch=intel64 stencil=test_2d mpi=0 OMPFLAGS='-qopenmp-stubs' YK_CXXOPT='-O0' EXTRA_MACROS='CHECK TRACE'	 # TRACE is a useful debug setting!"; \
+	echo " $(MAKE) clean; $(MAKE) -j arch=intel64 stencil=3axis radius=0 fold='x=1,y=1,z=1' mpi=0 YK_CXX=g++ OMPFLAGS='' YK_CXXOPT='-O0' EXTRA_MACROS='CHECK TRACE TRACE_MEM TRACE_INTRINSICS'"; \
+	echo " "; \
+	echo "Example builds with test runs:"; \
+	echo " $(MAKE) -j all # Normal full API and stencil tests"; \
+	echo " $(MAKE) -j all YK_CXXOPT=-O2 YK_CXX=g++ mpi=0 ranks=1 # g++ w/o MPI"; \
+	echo " $(MAKE) -j all YK_CXXOPT=-O1 ranks=3 EXTRA_MACROS='CHECK' # Run 3 ranks w/checking"
