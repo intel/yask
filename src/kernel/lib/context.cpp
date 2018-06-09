@@ -185,9 +185,11 @@ namespace yask {
                   end.makeDimValStr() << ")");
 
         // Force region & block sizes to whole rank size so that scratch
-        // grids will be large enough.
+        // grids will be large enough. Turn off any temporal blocking.
         _opts->_region_sizes.setValsSame(0);
+        _opts->_region_sizes[_dims->_step_dim] = 1;
         _opts->_block_sizes.setValsSame(0);
+        _opts->_block_sizes[_dims->_step_dim] = 1;
         _opts->adjustSettings(get_env());
 
         // Copy these settings to packs and realloc scratch grids.
@@ -521,7 +523,10 @@ namespace yask {
         // several time-steps in each region.
         idx_t begin_t = region_idxs.begin[step_posn];
         idx_t end_t = region_idxs.end[step_posn];
-        idx_t step_t = region_idxs.step[step_posn];
+        idx_t step_t = _opts->_block_sizes[step_posn];
+        if (step_t != 1)
+            FORMAT_AND_THROW_YASK_EXCEPTION
+                ("Error: temporal block size " << step_t << " not allowed");
         const idx_t num_t = CEIL_DIV(abs(end_t - begin_t), abs(step_t));
         idx_t shift_num = 0;
         for (idx_t index_t = 0; index_t < num_t; index_t++) {
@@ -554,10 +559,12 @@ namespace yask {
                 // These may have been tweaked by the auto-tuner.
                 auto& blksize = bp->getSettings()._block_sizes;
                 region_idxs.step = blksize;
+                region_idxs.step[step_posn] = step_t; // only wanted domain sizes.
 
                 // Groups in region loops are based on block-group sizes.
                 auto& bgsize = bp->getSettings()._block_group_sizes;
                 region_idxs.group_size = bgsize;
+                region_idxs.group_size[step_posn] = step_t; // only wanted domain sizes.
                 
                 // For wavefront adjustments, see conceptual diagram in
                 // run_solution().  In this function, one of the

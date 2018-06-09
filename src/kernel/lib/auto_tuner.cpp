@@ -86,6 +86,9 @@ namespace yask {
     // Evaluate the previous run and take next auto-tuner step.
     void AutoTuner::eval(idx_t steps) {
         ostream& os = _context->get_ostr();
+        auto& mpiInfo = _context->get_mpi_info();
+        auto& dims = _context->get_dims();
+        auto& opts = _context->get_settings();
 
         // Get elapsed time and reset.
         double etime = timer.get_elapsed_secs();
@@ -98,11 +101,6 @@ namespace yask {
         // Setup not done?
         if (!nullop)
             return;
-
-        // Handy ptrs.
-        auto& mpiInfo = _context->get_mpi_info();
-        auto& dims = _context->get_dims();
-        auto& opts = _context->get_settings();
 
         // Cumulative stats.
         csteps += steps;
@@ -280,15 +278,26 @@ namespace yask {
 
     // Apply auto-tuner settings to prepare for a run.
     void AutoTuner::apply() {
+        ostream& os = _context->get_ostr();
+        auto& mpiInfo = _context->get_mpi_info();
+        auto& dims = _context->get_dims();
         auto& opts = _context->get_settings();
         auto& env = _context->get_env();
+        auto step_posn = Indices::step_posn;
 
         // Change block-related sizes to 0 so adjustSettings()
         // will set them to the default.
+        // Save and restore step-dim value.
         // TODO: tune sub-block sizes also.
+        auto step_size = _settings->_sub_block_sizes[step_posn];
         _settings->_sub_block_sizes.setValsSame(0);
+        _settings->_sub_block_sizes[step_posn] = step_size;
+        step_size = _settings->_sub_block_group_sizes[step_posn];
         _settings->_sub_block_group_sizes.setValsSame(0);
+        _settings->_sub_block_group_sizes[step_posn] = step_size;
+        step_size = _settings->_block_group_sizes[step_posn];
         _settings->_block_group_sizes.setValsSame(0);
+        _settings->_block_group_sizes[step_posn] = step_size;
 
         // Make sure everything is resized based on block size.
         _settings->adjustSettings(nullop->get_ostream(), env);
