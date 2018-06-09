@@ -3,9 +3,9 @@
 * Version 2.09.00 changed the location of stencils in the internal DSL from `.hpp` to `.cpp` files. See the notes in https://github.com/intel/yask/releases/tag/v2.09.00 if you have any new or modified code in `src/stencils`.
 
 ## Overview
-YASK--Yet Another Stencil Kernel: A framework to rapidly create high-performance HPC stencil code including optimizations and features such as
+YASK--Yet Another Stencil Kernel: A framework to rapidly create high-performance stencil code including optimizations and features such as
 * Vector folding,
-* Cache blocking,
+* Automatically-tuned cache blocking,
 * Multi-level OpenMP parallelism,
 * Encapsulated memory layout,
 * Temporal wave-front blocking,
