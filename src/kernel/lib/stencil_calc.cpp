@@ -42,10 +42,11 @@ namespace yask {
         auto& step_dim = dims->_step_dim;
         auto step_posn = Indices::step_posn;
         int thread_idx = omp_get_thread_num(); // used to index the scratch grids.
-        TRACE_MSG3("calc_block for bundle '" << get_name() << "': " <<
+        TRACE_MSG3("calc_block for bundle '" << get_name() << "': [" <<
                    def_block_idxs.begin.makeValStr(nsdims) <<
-                   " ... (end before) " << def_block_idxs.end.makeValStr(nsdims) <<
-                   " by thread " << thread_idx);
+                   " ... " << def_block_idxs.end.makeValStr(nsdims) <<
+                   ") by " << def_block_idxs.step.makeValStr(nsdims) <<
+                   " in thread " << thread_idx);
         assert(!is_scratch());
 
         // TODO: if >1 BB, check outer one first to save time.
@@ -90,9 +91,9 @@ namespace yask {
             }
             
             TRACE_MSG3("calc_block for bundle '" << get_name() <<
-                       "': after trimming for BB " << bbn << ": " <<
+                       "': after trimming for BB " << bbn << ": [" <<
                        bb_idxs.begin.makeValStr(nsdims) <<
-                       " ... (end before) " << bb_idxs.end.makeValStr(nsdims));
+                       " ... " << bb_idxs.end.makeValStr(nsdims) << ")");
 
             // Update offsets of scratch grids based on this bundle's location.
             _generic_context->update_scratch_grid_info(thread_idx, bb_idxs.begin);
@@ -115,10 +116,10 @@ namespace yask {
                 ScanIndices block_idxs = sg->adjust_span(thread_idx, bb_idxs);
 
                 TRACE_MSG3("calc_block for bundle '" << get_name() << "': " <<
-                           " in reqd bundle '" << sg->get_name() << "': " <<
+                           " in reqd bundle '" << sg->get_name() << "': [" <<
                            block_idxs.begin.makeValStr(nsdims) <<
-                           " ... (end before) " << block_idxs.end.makeValStr(nsdims) <<
-                           " by thread " << thread_idx);
+                           " ... " << block_idxs.end.makeValStr(nsdims) <<
+                           ") in thread " << thread_idx);
 
                 // Include automatically-generated loop code that calls
                 // calc_sub_block() for each sub-block in this block. This
@@ -172,9 +173,9 @@ namespace yask {
         int nsdims = dims->_stencil_dims.size();
         auto& step_dim = dims->_step_dim;
         auto step_posn = Indices::step_posn;
-        TRACE_MSG3("calc_sub_block for reqd bundle '" << get_name() << "': " <<
+        TRACE_MSG3("calc_sub_block for reqd bundle '" << get_name() << "': [" <<
                    block_idxs.start.makeValStr(nsdims) <<
-                   " ... (end before) " << block_idxs.stop.makeValStr(nsdims));
+                   " ... " << block_idxs.stop.makeValStr(nsdims) << ")");
 
         /*
           Indices in each domain dim:
@@ -418,9 +419,9 @@ namespace yask {
 
         // Full rectilinear polytope of aligned clusters: use optimized code.
         if (do_clusters) {
-            TRACE_MSG3("calc_sub_block:  using cluster code for " <<
+            TRACE_MSG3("calc_sub_block:  using cluster code for [" <<
                        sub_block_fcidxs.begin.makeValStr(nsdims) <<
-                       " ... (end before) " << sub_block_fcidxs.end.makeValStr(nsdims));
+                       " ... " << sub_block_fcidxs.end.makeValStr(nsdims) << ")");
 
             // Step sizes are based on cluster lengths (in vector units).
             // The step in the inner loop is hard-coded in the generated code.
@@ -444,12 +445,12 @@ namespace yask {
 
         // Full and partial peel/remainder vectors.
         if (do_vectors) {
-            TRACE_MSG3("calc_sub_block:  using vector code for " <<
+            TRACE_MSG3("calc_sub_block:  using vector code for [" <<
                        sub_block_vidxs.begin.makeValStr(nsdims) <<
-                       " ... (end before) " << sub_block_vidxs.end.makeValStr(nsdims) <<
-                       " *not* within full vector-clusters at " <<
+                       " ... " << sub_block_vidxs.end.makeValStr(nsdims) <<
+                       ") *not* within full vector-clusters at [" <<
                        sub_block_fcidxs.begin.makeValStr(nsdims) <<
-                       " ... (end before) " << sub_block_fcidxs.end.makeValStr(nsdims));
+                       " ... " << sub_block_fcidxs.end.makeValStr(nsdims) << ")");
 
             // Keep a copy of the normalized cluster indices
             // that were calculated above.
@@ -519,16 +520,14 @@ namespace yask {
             // Use the 'misc' loops. Indices for these loops will be scalar and
             // global rather than normalized as in the cluster and vector loops.
             ScanIndices misc_idxs(sub_block_idxs);
-
+            
             // Step sizes and alignment are one element.
             misc_idxs.step.setFromConst(1);
             misc_idxs.align.setFromConst(1);
 
             TRACE_MSG3((scalar_for_peel_rem ? "peel/remainder of" : "entire") <<
-                       " sub-block" <<
-                       misc_idxs.begin.makeValStr(nsdims) <<
-                       " ... (end before) " <<
-                       misc_idxs.end.makeValStr(nsdims));
+                       " sub-block [" << misc_idxs.begin.makeValStr(nsdims) <<
+                       " ... " << misc_idxs.end.makeValStr(nsdims) << ")");
 
             // Define misc-loop function.
             // If point is in sub-domain for this
@@ -574,9 +573,9 @@ namespace yask {
         auto& dims = cp->get_dims();
         int nsdims = dims->_stencil_dims.size();
         auto step_posn = Indices::step_posn;
-        TRACE_MSG3("calc_loop_of_clusters: local vector-indices " <<
+        TRACE_MSG3("calc_loop_of_clusters: local vector-indices [" <<
                    loop_idxs.start.makeValStr(nsdims) <<
-                   " ... (end before) " << loop_idxs.stop.makeValStr(nsdims));
+                   " ... " << loop_idxs.stop.makeValStr(nsdims) << ")");
 
 #ifdef CHECK
         // Check that only the inner dim has a range greater than one cluster.
@@ -611,10 +610,10 @@ namespace yask {
         auto& dims = cp->get_dims();
         int nsdims = dims->_stencil_dims.size();
         auto step_posn = Indices::step_posn;
-        TRACE_MSG3("calc_loop_of_vectors: local vector-indices " <<
+        TRACE_MSG3("calc_loop_of_vectors: local vector-indices [" <<
                    loop_idxs.start.makeValStr(nsdims) <<
-                   " ... (end before) " << loop_idxs.stop.makeValStr(nsdims) <<
-                   " w/write-mask = 0x" << hex << write_mask << dec);
+                   " ... " << loop_idxs.stop.makeValStr(nsdims) <<
+                   ") w/write-mask = 0x" << hex << write_mask << dec);
 
 #ifdef CHECK
         // Check that only the inner dim has a range greater than one vector.
@@ -648,7 +647,6 @@ namespace yask {
     // Return adjusted indices.
     ScanIndices StencilBundleBase::adjust_span(int thread_idx,
                                                const ScanIndices& idxs) const {
-        
         ScanIndices adj_idxs(idxs);
         auto* cp = _generic_context;
         auto& dims = cp->get_dims();

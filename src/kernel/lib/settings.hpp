@@ -469,7 +469,7 @@ namespace yask {
 
         // Values that differ for each sub-range.
         Indices start, stop;    // first and last+1 for this sub-range.
-        Indices index;          // 0-based unique index for each sub-range.
+        Indices index;          // 0-based unique index for each sub-range in each dim.
 
         // Example w/3 sub-ranges in overall range:
         // begin                                         end
@@ -511,20 +511,27 @@ namespace yask {
         // Init from outer-loop indices.
         // Start..stop from point in outer loop become begin..end
         // for this loop.
+        //
+        // Example:
+        // begin              (outer)                    end
+        //   |--------------------------------------------|
+        //   |------------------|------------------|------|
+        // start      |        stop
+        //            V
+        // begin    (this)     end
+        //   |------------------|
+        // start               stop  (may be sub-dividied later)
         void initFromOuter(const ScanIndices& outer) {
 
             // Begin & end set from start & stop of outer loop.
-            begin = outer.start;
-            end = outer.stop;
+            begin = start = outer.start;
+            end = stop = outer.stop;
 
-            // Pass other values through by default.
-            step = outer.step;
+            // Pass some values through.
             align = outer.align;
             align_ofs = outer.align_ofs;
-            group_size = outer.group_size;
-            start = outer.start;
-            stop = outer.stop;
-            index = outer.index;
+
+            // Leave others alone.
         }
     };
 
@@ -719,6 +726,9 @@ namespace yask {
         idx_t def_rank = 128;
         idx_t def_block = 32;
 
+        yask_output_factory yof;
+        yask_output_ptr nullop = yof.new_null_output();
+
     public:
 
         // problem dimensions.
@@ -786,7 +796,7 @@ namespace yask {
             _extra_pad_sizes = dims->_stencil_dims;
             _extra_pad_sizes.setValsSame(0);
 
-            // Use domain dims only for MPI tuples.
+            // Use only domain dims for MPI tuples.
             _num_ranks = dims->_domain_dims;
             _num_ranks.setValsSame(1);
 
@@ -823,6 +833,9 @@ namespace yask {
         // Called from prepare_solution(), so it doesn't normally need to be called from user code.
         // Prints informational info to 'os'.
         virtual void adjustSettings(std::ostream& os, KernelEnvPtr env);
+        virtual void adjustSettings(KernelEnvPtr env) {
+            adjustSettings(nullop->get_ostream(), env);
+        }
 
         // Determine if this is the first or last rank in given dim.
         virtual bool is_first_rank(const std::string dim) {

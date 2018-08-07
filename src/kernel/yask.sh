@@ -44,17 +44,18 @@ opts=""
 pre_cmd=true
 post_cmd=true
 
-unset arch                      # Don't want to inherit from env.
+unset arch                      # Don't want to inherit this from env.
+
+# Loop thru cmd-line args.
 while true; do
 
     if [[ ! -n ${1+set} ]]; then
         break
 
-    elif [[ "$1" == "-h" || "$1" == "-help" ]]; then
-        opts="$opts -h"
+    elif [[ "$1" == "-h" ]]; then
         shift
         echo "$0 is a wrapper around the YASK executable to set up the proper environment."
-        echo "Usage: $0 -stencil <stencil> -arch <arch> [script-options] [--] [exe-options]"
+        echo "Usage: $0 -stencil <stencil> -arch <arch> [options]"
         echo " "
         echo "Required parameters to specify the executable:"
         echo "  -stencil <stencil>"
@@ -62,10 +63,14 @@ while true; do
         echo "  -arch <arch>"
         echo "     Corresponds to arch=<arch> used during compilation"
         echo " "
-        echo "Script options:"
+        echo "Some options are generic (parsed by the driver script and applied to any stencil),"
+        echo " and some options are parsed by the stencil executable determined by the -stencil."
+        echo " and -arch parameters."
+        echo " "
+        echo "Generic (script) options:"
         echo "  -h"
         echo "     Print this help."
-        echo "     To get YASK executable help, run '$0 -stencil <stencil> -arch <arch> -- -help'"
+        echo "     To see YASK stencil-specific options, run '$0 -stencil <stencil> -arch <arch> -help'"
         echo "  -host <hostname>|-mic <N>"
         echo "     Specify host to run executable on."
         echo "     'ssh <hostname>' will be pre-pended to the sh_prefix command."
@@ -162,12 +167,15 @@ while true; do
     elif [[ "$1" == "--" ]]; then
         shift
 
-        # will pass remaining options to executable.
+        # Pass all remaining options to executable and stop parsing.
+        opts="$opts $@"
         break
 
     else
-        # will pass remaining options to executable.
-        break
+        # Pass this unknown option to executable.
+        opts="$opts $1"
+        shift
+        
     fi
 
 done                            # parsing options.
@@ -258,7 +266,7 @@ else
 fi
 
 # Command sequence to be run in a shell.
-cmds="cd $dir; uname -a; sed '/^$/q' /proc/cpuinfo; lscpu; numactl -H; ldd $exe; date; $pre_cmd; env $envs $mpi_cmd $exe_prefix $exe $opts $@; $post_cmd; date"
+cmds="cd $dir; uname -a; sed '/^$/q' /proc/cpuinfo; lscpu; numactl -H; ldd $exe; date; $pre_cmd; env $envs $mpi_cmd $exe_prefix $exe $opts; $post_cmd; date"
 
 echo "===================" | tee -a $logfile
 
@@ -271,8 +279,8 @@ fi
 
 echo "Log saved in '$logfile'."
 
-# Checks for issues.
-exe_str="'$mpi_cmd $exe_prefix $exe $opts $@'"
+# A summary of the command to print.
+exe_str="'$mpi_cmd $exe_prefix $exe $opts'"
 
 # Return a non-zero exit condition if test failed.
 if [[ `grep -c 'TEST FAILED' $logfile` > 0 ]]; then

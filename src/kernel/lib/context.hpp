@@ -250,67 +250,6 @@ namespace yask {
         // Map key: grid name.
         std::map<std::string, MPIData> mpiData;
 
-        // Auto-tuner state.
-        class AT {
-        protected:
-            StencilContext* _context = 0;
-
-            // Null stream to throw away debug info.
-            yask_output_ptr nullop;
-
-            // Whether to print progress.
-            bool verbose = false;
-
-            // AT parameters.
-            double warmup_steps = 100;
-            double warmup_secs = 1.;
-            idx_t min_steps = 50;
-            double min_secs = 0.1; // eval when either min_steps or min_secs is reached.
-            idx_t min_step = 4;
-            idx_t max_radius = 64;
-            idx_t min_pts = 512; // 8^3.
-            idx_t min_blks = 4;
-
-            // Results.
-            std::map<IdxTuple, double> results;
-            int n2big = 0, n2small = 0;
-
-            // Best so far.
-            IdxTuple best_block;
-            double best_rate = 0.;
-
-            // Current point in search.
-            IdxTuple center_block;
-            idx_t radius = 0;
-            bool done = false;
-            idx_t neigh_idx = 0;
-            bool better_neigh_found = false;
-
-            // Cumulative vars.
-            double ctime = 0.;
-            idx_t csteps = 0;
-            bool in_warmup = true;
-
-        public:
-            const idx_t max_step_t = 4;
-
-            AT(StencilContext* ctx) :
-                _context(ctx) { }
-
-            // Reset all state to beginning.
-            void clear(bool mark_done, bool verbose = false);
-
-            // Evaluate the previous run and take next auto-tuner step.
-            void eval(idx_t steps, double elapsed_time);
-
-            // Apply settings.
-            void apply();
-
-            // Done?
-            bool is_done() const { return done; }
-        };
-        AT _at;
-
         // Constructor.
         StencilContext(KernelEnvPtr env,
                        KernelSettingsPtr settings);
@@ -349,13 +288,10 @@ namespace yask {
             _opts = opts;
         }
 
-        // Access to dims and MPI info.
-        virtual DimsPtr& get_dims() {
-            return _dims;
-        }
-        virtual MPIInfoPtr& get_mpi_info() {
-            return _mpiInfo;
-        }
+        // Access to env, dims and MPI info.
+        virtual KernelEnvPtr& get_env() { return _env; }
+        virtual DimsPtr& get_dims() { return _dims; }
+        virtual MPIInfoPtr& get_mpi_info() { return _mpiInfo; }
 
         // Add a new grid to the containers.
         virtual void addGrid(YkGridPtr gp, bool is_output);
@@ -693,13 +629,9 @@ namespace yask {
         }
 
         // Auto-tuner APIs.
-        virtual void reset_auto_tuner(bool enable, bool verbose = false) {
-            _at.clear(!enable, verbose);
-        }
+        virtual void reset_auto_tuner(bool enable, bool verbose = false);
         virtual void run_auto_tuner_now(bool verbose = true);
-        virtual bool is_auto_tuner_enabled() {
-            return !_at.is_done();
-        }
+        virtual bool is_auto_tuner_enabled() const;
     };
 
 } // yask namespace.

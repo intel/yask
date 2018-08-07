@@ -77,8 +77,10 @@ include $(YASK_BASE)/src/common/common.mk
 # - vars starting with 'YK_' apply to the YASK stencil kernel.
 # - vars starting with 'YC_' apply to the YASK stencil compiler.
 
-YK_MAKE		:=	$(MAKE) -C src/kernel YASK_OUTPUT_DIR=$(YASK_OUT_BASE)
-YC_MAKE		:=	$(MAKE) -C src/compiler YASK_OUTPUT_DIR=$(YASK_OUT_BASE)
+YASK_MFLAGS	:=	--max-load 5
+#YASK_MFLAGS	+=	--output-sync --output-sync=line
+YK_MAKE		:=	$(MAKE) $(YASK_MFLAGS) -C src/kernel YASK_OUTPUT_DIR=$(YASK_OUT_BASE)
+YC_MAKE		:=	$(MAKE) $(YASK_MFLAGS) -C src/compiler YASK_OUTPUT_DIR=$(YASK_OUT_BASE)
 
 # Misc dirs & files.
 TUPLE_TEST_EXEC :=	$(BIN_OUT_DIR)/yask_tuple_test.exe
