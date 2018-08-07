@@ -77,7 +77,8 @@ include $(YASK_BASE)/src/common/common.mk
 # - vars starting with 'YK_' apply to the YASK stencil kernel.
 # - vars starting with 'YC_' apply to the YASK stencil compiler.
 
-#YASK_MFLAGS	:=	--output-sync --output-sync=line --max-load 5
+YASK_MFLAGS	:=	--max-load 5
+#YASK_MFLAGS	+=	--output-sync --output-sync=line
 YK_MAKE		:=	$(MAKE) $(YASK_MFLAGS) -C src/kernel YASK_OUTPUT_DIR=$(YASK_OUT_BASE)
 YC_MAKE		:=	$(MAKE) $(YASK_MFLAGS) -C src/compiler YASK_OUTPUT_DIR=$(YASK_OUT_BASE)
 
