@@ -23,7 +23,7 @@ IN THE SOFTWARE.
 
 *****************************************************************************/
 
-//////// Methods for output object. //////////
+//////// Some common code shared between YASK compiler and kernel. //////////
 
 #include "yask_common_api.hpp"
 #include <sstream>

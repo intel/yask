@@ -25,13 +25,17 @@ IN THE SOFTWARE.
 #ifndef COMMON_UTILS_HPP
 #define COMMON_UTILS_HPP
 
-// Macro for throw yask_exception
+//////// Some common code shared between YASK compiler and kernel. //////////
+
+// Macro for throwing yask_exception with a string.
+// Example: THROW_YASK_EXCEPTION("all your base are belong to us");
 #define THROW_YASK_EXCEPTION(message) do {                          \
         yask_exception e(message);                                  \
         throw e;                                                    \
     } while(0)
 
-// Macros that allows string creation via streams.
+// Macro for creating a string and throwing yask_exception with it.
+// Example: FORMAT_AND_THROW_YASK_EXCEPTION("bad value: x = " << x);
 #define FORMAT_AND_THROW_YASK_EXCEPTION(message) do {               \
         yask_exception e;                                           \
         std::stringstream err;                                      \
