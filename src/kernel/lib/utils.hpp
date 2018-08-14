@@ -172,15 +172,22 @@ namespace yask {
         }
 
         // End a timed region.
-        virtual void stop() {
+        // Return time since previous call to start(); this is *not*
+        // generally the same as the value returned by get_elapsed_secs().
+        virtual double stop() {
             clock_gettime(CLOCK_REALTIME, &_end);
+            struct timespec delta;
 
             // Elapsed time is just end - begin times.
-            _elapsed.tv_sec += _end.tv_sec - _begin.tv_sec;
+            delta.tv_sec = _end.tv_sec - _begin.tv_sec;
+            _elapsed.tv_sec += delta.tv_sec;
 
             // No need to check for sign or to normalize, because tv_nsec is
             // signed and 64-bit.
-            _elapsed.tv_nsec += _end.tv_nsec - _begin.tv_nsec;
+            delta.tv_nsec = _end.tv_nsec - _begin.tv_nsec;
+            _elapsed.tv_nsec += delta.tv_nsec;
+
+            return double(delta.tv_sec) + double(delta.tv_nsec) * 1e-9;
         }
 
         // Get elapsed time in sec.

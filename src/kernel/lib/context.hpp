@@ -51,7 +51,18 @@ namespace yask {
                        std::ostream* os = NULL);
 
         // Is point in BB?
+        // 'pt' must have same dims as BB.
         bool is_in_bb(const IdxTuple& pt) const {
+            assert(pt.getNumDims() == bb_begin.getNumDims());
+            for (int i = 0; i < pt.getNumDims(); i++) {
+                if (pt[i] < bb_begin[i])
+                    return false;
+                if (pt[i] >= bb_end[i])
+                    return false;
+            }
+            return true;
+        }
+        bool is_in_bb(const Indices& pt) const {
             assert(pt.getNumDims() == bb_begin.getNumDims());
             for (int i = 0; i < pt.getNumDims(); i++) {
                 if (pt[i] < bb_begin[i])
@@ -78,14 +89,14 @@ namespace yask {
         idx_t nfpops = 0;
         idx_t nsteps = 0;
         double run_time = 0.;
-        double mpi_time = 0.;
+        double halo_time = 0.;
 
         Stats() {}
         virtual ~Stats() {}
 
         void clear() {
             npts = nwrites = nfpops = nsteps = 0;
-            run_time = mpi_time = 0.;
+            run_time = halo_time = 0.;
         }
 
         // APIs.
@@ -176,6 +187,16 @@ namespace yask {
         // If WFs are not used, this is the same as 'rank_bb';
         BoundingBox ext_bb;
 
+        // BB of the "interior" of this rank.
+        // This is the area that does not include any data
+        // that is needed for any MPI send.
+        BoundingBox mpi_interior;
+
+        // Flags to calculate the interior and/or exterior.
+        // TODO: replace with function parameters.
+        bool do_mpi_interior = true;
+        bool do_mpi_exterior = true;
+        
         // List of all non-scratch stencil bundles in the order in which
         // they should be evaluated within a step.
         StencilBundleList stBundles;
@@ -226,8 +247,11 @@ namespace yask {
         idx_t rank_nbytes=0, tot_nbytes=0;
 
         // Elapsed-time tracking.
-        YaskTimer run_time;     // time in run_solution(), including MPI.
-        YaskTimer mpi_time;     // time spent just doing MPI.
+        YaskTimer run_time;     // time in run_solution(), including halo exchange.
+        YaskTimer ext_time;     // time in exterior stencil calculation.
+        YaskTimer int_time;     // time in exterior stencil calculation.
+        YaskTimer halo_time;     // time spent just doing halo exchange, including MPI waits.
+        YaskTimer wait_time;     // time spent just doing MPI waits.
         idx_t steps_done = 0;   // number of steps that have been run.
         double domain_pts_ps = 0.; // points-per-sec in domain.
         double writes_ps = 0.;     // writes-per-sec.
@@ -275,7 +299,10 @@ namespace yask {
         // Reset elapsed times to zero.
         virtual void clear_timers() {
             run_time.clear();
-            mpi_time.clear();
+            ext_time.clear();
+            int_time.clear();
+            halo_time.clear();
+            wait_time.clear();
             steps_done = 0;
         }
 
@@ -481,14 +508,8 @@ namespace yask {
         virtual void calc_block(BundlePackPtr& sel_bp,
                                 const ScanIndices& region_idxs);
 
-        // Exchange all dirty halo data for all stencil bundles
-        // and max number of steps for each grid.
-        virtual void exchange_halos_all();
-
-        // Exchange halo data needed by bundle pack 'sel_bp' at the given step(s).
-        // If sel_bp==null, check all bundles.
-        virtual void exchange_halos(const BundlePackPtr& sel_bp,
-                                    idx_t start, idx_t stop);
+        // Exchange all dirty halo data for all stencil bundles.
+        virtual void exchange_halos(bool test_only = false);
 
         // Mark grids that have been written to by bundle pack 'sel_bp'.
         // If sel_bp==null, use all bundles.

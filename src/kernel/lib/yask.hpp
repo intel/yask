@@ -110,6 +110,8 @@ typedef std::uint64_t uidx_t;
 #define MPI_Barrier(comm) ((void)0)
 #define MPI_Comm int
 #define MPI_Finalize() ((void)0)
+#define MPI_Request int
+#define MPI_REQUEST_NULL   ((MPI_Request)0x2c000000)
 #endif
 
 // OpenMP or stubs.

@@ -61,51 +61,6 @@ namespace yask {
     typedef Scalar<int> IntScalar;
     typedef Tuple<int> IntTuple;
 
-    // Set that retains order of things added.
-    // Or, vector that allows insertion if element doesn't exist.
-    // Keeps two copies of everything, so don't put large things in it.
-    // TODO: hide vector inside class and provide proper accessor methods.
-    template <typename T>
-    class vector_set : public vector<T> {
-        map<T, size_t> _posn;
-
-    public:
-        vector_set() {}
-        virtual ~vector_set() {}
-
-        // Copy ctor.
-        vector_set(const vector_set& src) :
-            vector<T>(src), _posn(src._posn) {}
-
-        virtual size_t count(const T& val) const {
-            return _posn.count(val);
-        }
-        virtual void insert(const T& val) {
-            if (_posn.count(val) == 0) {
-                vector<T>::push_back(val);
-                _posn[val] = vector<T>::size() - 1;
-            }
-        }
-        virtual void push_back(const T& val) {
-            insert(val);
-        }
-        virtual void erase(const T& val) {
-            if (_posn.count(val) > 0) {
-                size_t op = _posn.at(val);
-                vector<T>::erase(vector<T>::begin() + op);
-                for (auto pi : _posn) {
-                    auto& p = pi.second;
-                    if (p > op)
-                        p--;
-                }
-            }
-        }
-        virtual void clear() {
-            vector<T>::clear();
-            _posn.clear();
-        }
-    };
-
     // Forward-decls of expressions.
     class Expr;
     typedef shared_ptr<Expr> ExprPtr;

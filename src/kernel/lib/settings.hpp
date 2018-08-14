@@ -698,6 +698,11 @@ namespace yask {
         typedef std::vector<MPIBufs> NeighborBufs;
         NeighborBufs bufs;
 
+        // Arrays for request handles.
+        // These are used for async comms.
+        std::vector<MPI_Request> recv_reqs;
+        std::vector<MPI_Request> send_reqs;
+        
         MPIData(MPIInfoPtr mpiInfo) :
             _mpiInfo(mpiInfo) {
 
@@ -705,6 +710,10 @@ namespace yask {
             auto n = _mpiInfo->neighborhood_size;
             MPIBufs emptyBufs;
             bufs.resize(n, emptyBufs);
+
+            // Init handles.
+            recv_reqs.resize(n, MPI_REQUEST_NULL);
+            send_reqs.resize(n, MPI_REQUEST_NULL);
         }
 
         // Apply a function to each neighbor rank.
@@ -749,6 +758,7 @@ namespace yask {
         IdxTuple _rank_indices;    // my rank index in each dim.
         bool find_loc = true;      // whether my rank index needs to be calculated.
         int msg_rank = 0;          // rank that prints informational messages.
+        bool overlap_comms = true; // overlap comms with computation.
 
         // OpenMP settings.
         int max_threads = 0;      // Initial number of threads to use overall; 0=>OMP default.

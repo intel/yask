@@ -27,6 +27,10 @@ IN THE SOFTWARE.
 
 //////// Some common code shared between YASK compiler and kernel. //////////
 
+#include <set>
+#include <vector>
+#include <map>
+
 // Macro for throwing yask_exception with a string.
 // Example: THROW_YASK_EXCEPTION("all your base are belong to us");
 #define THROW_YASK_EXCEPTION(message) do {                          \
@@ -43,5 +47,53 @@ IN THE SOFTWARE.
         e.add_message(err.str());                                   \
         throw e;                                                    \
     } while(0)
+
+namespace yask {
+    
+    // Set that retains order of things added.
+    // Or, vector that allows insertion if element doesn't exist.
+    // TODO: hide vector inside class and provide proper accessor methods.
+    template <typename T>
+    class vector_set : public std::vector<T> {
+        std::map<T, size_t> _posn;
+
+    public:
+        vector_set() {}
+        virtual ~vector_set() {}
+
+        // Copy ctor.
+        vector_set(const vector_set& src) :
+            std::vector<T>(src), _posn(src._posn) {}
+
+        virtual size_t count(const T& val) const {
+            return _posn.count(val);
+        }
+        virtual void insert(const T& val) {
+            if (_posn.count(val) == 0) {
+                std::vector<T>::push_back(val);
+                _posn[val] = std::vector<T>::size() - 1;
+            }
+        }
+        virtual void push_back(const T& val) {
+            insert(val);
+        }
+        virtual void erase(const T& val) {
+            if (_posn.count(val) > 0) {
+                size_t op = _posn.at(val);
+                std::vector<T>::erase(std::vector<T>::begin() + op);
+                for (auto pi : _posn) {
+                    auto& p = pi.second;
+                    if (p > op)
+                        p--;
+                }
+            }
+        }
+        virtual void clear() {
+            std::vector<T>::clear();
+            _posn.clear();
+        }
+    };
+
+} // namespace.
 
 #endif /* SRC_COMMON_COMMON_UTILS_HPP_ */

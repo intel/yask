@@ -224,11 +224,15 @@ namespace yask {
         _add_domain_option(parser, "ep", "Extra grid-padding size (beyond halo)", _extra_pad_sizes);
 #ifdef USE_MPI
         _add_domain_option(parser, "nr", "Num ranks", _num_ranks);
-        _add_domain_option(parser, "ri", "This rank's logical index", _rank_indices);
+        _add_domain_option(parser, "ri", "This rank's logical index (0-based)", _rank_indices);
         parser.add_option(new CommandLineParser::IntOption
                           ("msg_rank",
                            "Index of MPI rank that will print informational messages.",
                            msg_rank));
+        parser.add_option(new CommandLineParser::BoolOption
+                          ("overlap_comms",
+                           "Overlap MPI communication with calculation of grid cells whenever possible.",
+                           overlap_comms));
 #endif
         parser.add_option(new CommandLineParser::IntOption
                           ("max_threads",
