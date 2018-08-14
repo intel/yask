@@ -212,10 +212,9 @@ namespace yask {
         update_scratch_grid_info(scratch_grid_idx, rank_idxs.begin);
 
         // Initial halo exchange.
-        // (Needed in case there are 0 time-steps).
         // TODO: get rid of all halo exchanges in this function,
         // and calculate overall problem in one rank.
-        exchange_halos_all();
+        exchange_halos();
 
         // Number of iterations to get from begin_t, stopping before end_t,
         // stepping by step_t.
@@ -244,7 +243,7 @@ namespace yask {
                           " in non-scratch group '" << asg->get_name());
 
                 // Exchange all dirty halos.
-                exchange_halos_all();
+                exchange_halos();
 
                 // Find the groups that need to be processed.
                 // This will be the prerequisite scratch-grid
@@ -252,6 +251,7 @@ namespace yask {
                 auto sg_list = asg->get_reqd_bundles();
 
                 // Loop through all the needed bundles.
+                ext_time.start();
                 for (auto* sg : sg_list) {
 
                     // Indices needed for the generated misc loops.  Will normally be a
@@ -276,6 +276,7 @@ namespace yask {
 #include "yask_misc_loops.hpp"
 #undef misc_fn
                 } // needed bundles.
+                ext_time.stop();
 
                 // Mark grids that [may] have been written to,
                 // updated at next step (+/- 1).
@@ -290,7 +291,7 @@ namespace yask {
         } // iterations.
 
         // Final halo exchange.
-        exchange_halos_all();
+        exchange_halos();
 
         run_time.stop();
     }
@@ -309,9 +310,6 @@ namespace yask {
         }
 
         run_solution(first_t, last_t);
-
-        // Final halo exchange.
-        exchange_halos_all();
     }
 
     // Eval stencil bundle pack(s) over grid(s) using optimized code.
@@ -413,7 +411,7 @@ namespace yask {
         set_region_threads();
 
         // Initial halo exchange.
-        exchange_halos_all();
+        exchange_halos();
 
         // Number of iterations to get from begin_t to end_t-1,
         // stepping by step_t.
@@ -438,24 +436,52 @@ namespace yask {
             // loop in calc_rank_ref(), but with packs instead of bundles.
             if (step_t == 1) {
 
+                // Loop thru packs.
                 for (auto& bp : stPacks) {
 
-#if 0
-                    // Exchange dirty halo(s) needed for this pack.
-                    // TODO: fix this so that it knows which inputs
-                    // are actually needed instead of assuming all inputs
-                    // are from t in [start_t, stop_t).
-                    exchange_halos(bp, start_t, stop_t);
-#else
-                    // Exchange all dirty halos.
-                    exchange_halos_all();
-#endif
+                    // Make 2 passes. 1: compute data needed for MPI
+                    // send and send that data. 2: compute remaining
+                    // data and unpack received MPI data.
+                    for (int pass = 0; pass < 2; pass++) {
 
-                    // Include automatically-generated loop code that calls
-                    // calc_region() for each region.
-                    TRACE_MSG("run_solution: step " << start_t <<
-                              " in bundle-pack '" << bp->get_name() << "'");
+                        // If there is an MPI interior defined, set
+                        // the proper flags.
+                        if (mpi_interior.bb_valid) {
+                            if (pass == 0) {
+                                do_mpi_exterior = true;
+                                do_mpi_interior = false;
+                            } else {
+                                do_mpi_exterior = false;
+                                do_mpi_interior = true;
+                            }
+                        } else {
+                            do_mpi_exterior = true;
+                            do_mpi_interior = true;
+
+                            // Only 1 pass needed when needed when not
+                            // overlapping comms and compute.
+                            if (pass > 0)
+                                break;
+                        }
+                        
+                        // Include automatically-generated loop code that calls
+                        // calc_region(bp) for each region.
+                        TRACE_MSG("run_solution: step " << start_t <<
+                                  " for bundle-pack '" << bp->get_name() << "'");
+                        if (do_mpi_exterior)
+                            TRACE_MSG(" within MPI exterior");
+                        if (do_mpi_interior)
+                            TRACE_MSG(" within MPI interior");
 #include "yask_rank_loops.hpp"
+
+                        // Do the appropriate steps for halo exchange.
+                        exchange_halos();
+
+                    } // passes.
+
+                    // Set the flags back to default.
+                    do_mpi_exterior = true;
+                    do_mpi_interior = true;
                 }
             }
 
@@ -464,15 +490,18 @@ namespace yask {
             // multiple packs but step_t == 1.
             else {
 
-                // Exchange all dirty halo(s).
-                exchange_halos_all();
-
-                // Null ptr => Eval all stencil bundles.
+                // Null ptr => Eval all stencil bundles each time
+                // calc_region() is called.
                 BundlePackPtr bp;
 
-                // Include automatically-generated loop code that calls calc_region() for each region.
-                TRACE_MSG("run_solution: steps [" << start_t << " ... " << stop_t << ")");
+                // Include automatically-generated loop code that calls
+                // calc_region() for each region.
+                TRACE_MSG("run_solution: steps [" << start_t <<
+                          " ... " << stop_t << ")");
 #include "yask_rank_loops.hpp"
+
+                // Exchange dirty halo(s).
+                exchange_halos();
             }
 
             steps_done += this_num_t;
@@ -508,6 +537,12 @@ namespace yask {
         auto step_posn = Indices::step_posn;
         TRACE_MSG("calc_region: [" << rank_idxs.start.makeValStr(ndims) <<
                   " ... " << rank_idxs.stop.makeValStr(ndims) << ")");
+
+        // Track time (use "else" to avoid double-counting).
+        if (do_mpi_exterior)
+            ext_time.start();
+        else if (do_mpi_interior)
+            int_time.start();
 
         // Init region begin & end from rank start & stop indices.
         ScanIndices region_idxs(*_dims, true, &rank_domain_offsets);
@@ -545,7 +580,7 @@ namespace yask {
             // Stencil bundle packs to evaluate at this time step.
             for (auto& bp : stPacks) {
 
-                // Not selected bundle pack?
+                // Not a selected bundle pack?
                 if (sel_bp && sel_bp != bp)
                     continue;
 
@@ -622,13 +657,17 @@ namespace yask {
                 }
 
                 // Mark grids that [may] have been written to by this pack,
-                // updated at next step (+/- 1).
-                // Mark grids as dirty even if not actually written by this
-                // rank. This is needed because neighbors will not know what
-                // grids are actually dirty, and all ranks must have the same
-                // information about which grids are possibly dirty.
-                // TODO: make this smarter to save unneeded MPI exchanges.
-                mark_grids_dirty(bp, start_t + step_t, stop_t + step_t);
+                // updated at next step (+/- 1).  Only mark for exterior
+                // computation, because we don't care about blocks not
+                // needed for MPI sends.  Mark grids as dirty even if not
+                // actually written by this rank, perhaps due to
+                // sub-domains. This is needed because neighbors will not
+                // know what grids are actually dirty, and all ranks must
+                // have the same information about which grids are possibly
+                // dirty.  TODO: make this smarter to save unneeded MPI
+                // exchanges.
+                if (do_mpi_exterior)
+                    mark_grids_dirty(bp, start_t + step_t, stop_t + step_t);
 
                 // Shift spatial region boundaries for next iteration to
                 // implement temporal wavefront.  Between regions, we only shift
@@ -650,6 +689,16 @@ namespace yask {
 
             } // stencil bundle packs.
         } // time.
+
+        if (do_mpi_exterior) {
+            double ext_delta = ext_time.stop();
+            TRACE_MSG("secs spent in this region for rank-exterior blocks: " << makeNumStr(ext_delta));
+        }
+        else if (do_mpi_interior) {
+            double int_delta = int_time.stop();
+            TRACE_MSG("secs spent in this region for rank-interior blocks: " << makeNumStr(int_delta));
+        }
+
     } // calc_region.
 
     // Calculate results within a block. This function calls
@@ -658,15 +707,68 @@ namespace yask {
     void StencilContext::calc_block(BundlePackPtr& sel_bp,
                                     const ScanIndices& region_idxs) {
 
-
         int nsdims = _dims->_stencil_dims.size();
         auto& step_dim = _dims->_step_dim;
         auto step_posn = Indices::step_posn;
         auto* bp = sel_bp.get();
         assert(bp);
+        int thread_idx = omp_get_thread_num();
         TRACE_MSG("calc_block for pack '" << bp->get_name() << "': [" <<
                   region_idxs.start.makeValStr(nsdims) <<
-                  " ... " << region_idxs.stop.makeValStr(nsdims) << ")");
+                  " ... " << region_idxs.stop.makeValStr(nsdims) <<
+                  ") in thread " << thread_idx);
+
+        // If we are not calculating some of the blocks, determine
+        // whether this block is *completely* inside the interior.
+        // A block even partially in the exterior is not considered
+        // "inside".
+        if (!do_mpi_interior || !do_mpi_exterior) {
+            assert(do_mpi_interior || do_mpi_exterior);
+            assert(mpi_interior.bb_valid);
+
+            // Starting point and ending point must be in BB.
+            bool inside = true;
+            for (int i = 0, j = 0; i < nsdims; i++) {
+                if (i == step_posn) continue;
+
+                // Starting before beginning of interior?
+                if (region_idxs.start[i] < mpi_interior.bb_begin[j]) {
+                    inside = false;
+                    break;
+                }
+
+                // Stopping after ending of interior?
+                if (region_idxs.stop[i] > mpi_interior.bb_end[j]) {
+                    inside = false;
+                    break;
+                }
+
+                j++;
+            }
+            if (do_mpi_interior) {
+                if (inside)
+                    TRACE_MSG(" calculating because block is interior");
+                else {
+                    TRACE_MSG(" *not* calculating because block is exterior");
+                    return;
+                }
+            }
+            if (do_mpi_exterior) {
+                if (!inside)
+                    TRACE_MSG(" calculating because block is exterior");
+                else {
+                    TRACE_MSG(" *not* calculating because block is interior");
+                    return;
+                }
+            }
+        }
+
+        // Hack to promote forward progress in MPI when calc'ing
+        // interior only.
+        // We do this only on thread 0 to avoid stacking up useless
+        // MPI requests by many threads.
+        if (do_mpi_interior && !do_mpi_exterior && thread_idx == 0)
+            exchange_halos(true);
 
         // Init block begin & end from region start & stop indices.
         ScanIndices block_idxs(*_dims, true, 0);
@@ -845,13 +947,25 @@ namespace yask {
         }
     }
 
+    static void print_pct(ostream& os, double ntime, double dtime) {
+        if (dtime > 0.) {
+            float pct = 100. * ntime / dtime;
+            os << " (" << pct << "%)";
+        }
+        os << endl;
+    }
+
     /// Get statistics associated with preceding calls to run_solution().
     yk_stats_ptr StencilContext::get_stats() {
         ostream& os = get_ostr();
 
         // Calc and report perf.
         double rtime = run_time.get_elapsed_secs();
-        double mtime = mpi_time.get_elapsed_secs();
+        double htime = halo_time.get_elapsed_secs();
+        double wtime = wait_time.get_elapsed_secs();
+        double etime = ext_time.get_elapsed_secs();
+        double itime = int_time.get_elapsed_secs();
+        double ctime = etime + itime;
         if (rtime > 0.) {
             domain_pts_ps = double(tot_domain_1t * steps_done) / rtime;
             writes_ps= double(tot_numWrites_1t * steps_done) / rtime;
@@ -865,12 +979,22 @@ namespace yask {
                 "num-writes-per-step:               " << makeNumStr(tot_numWrites_1t) << endl <<
                 "num-est-FP-ops-per-step:           " << makeNumStr(tot_numFpOps_1t) << endl <<
                 "num-steps-done:                    " << makeNumStr(steps_done) << endl <<
-                "elapsed-time (sec):                " << makeNumStr(rtime) << endl;
+                "elapsed-time (sec):                " << makeNumStr(rtime) << endl <<
+                "  time in compute (sec):           " << makeNumStr(ctime);
+            print_pct(os, ctime, rtime);
 #ifdef USE_MPI
             os <<
-                "time in halo exch (sec):           " << makeNumStr(mtime);
-            float pct = 100. * mtime / rtime;
-            os << " (" << pct << "%)" << endl;
+                "  time in exterior compute (sec):  " << makeNumStr(etime);
+            print_pct(os, etime, rtime);
+            os <<
+                "  time in interior compute (sec):  " << makeNumStr(itime);
+            print_pct(os, itime, rtime);
+            os <<
+                "  time in halo exch (sec):         " << makeNumStr(htime);
+            print_pct(os, htime, rtime);
+            os <<
+                "  time in MPI waits (sec):         " << makeNumStr(wtime);
+            print_pct(os, wtime, rtime);
 #endif
             os <<
                 "throughput (num-writes/sec):       " << makeNumStr(writes_ps) << endl <<
@@ -885,7 +1009,7 @@ namespace yask {
         p->nfpops = tot_numFpOps_1t;
         p->nsteps = steps_done;
         p->run_time = rtime;
-        p->mpi_time = mtime;
+        p->halo_time = htime;
 
         // Clear counters.
         clear_timers();
@@ -913,62 +1037,74 @@ namespace yask {
     }
 
     // Exchange dirty halo data for all grids and all steps.
-    void StencilContext::exchange_halos_all() {
+    void StencilContext::exchange_halos(bool test_only) {
 
-#ifdef USE_MPI
-        TRACE_MSG("exchange_halos_all()...");
-
-        // Find max steps stored over all grids.
-        auto& sd = _dims->_step_dim;
-        idx_t start = 0, stop = 1;
-        for (auto gp : gridPtrs) {
-            if (gp->is_dim_used(sd)) {
-                start = min(start, gp->_get_first_alloc_index(sd));
-                stop = max(stop, gp->_get_last_alloc_index(sd) + 1);
-            }
-        }
-
-        exchange_halos(nullptr, start, stop);
-#endif
-    }
-
-    // Exchange halo data needed by bundle pack 'sel_bp' at the given time.
-    // If sg==null, check all packs.
-    // Data is needed for input grids that have not already been updated.
-    // [BIG] TODO: overlap halo exchange with computation.
-    void StencilContext::exchange_halos(const BundlePackPtr& sel_bp,
-                                        idx_t start, idx_t stop)
-    {
 #ifdef USE_MPI
         if (!enable_halo_exchange || _env->num_ranks < 2)
             return;
 
-        mpi_time.start();
-        TRACE_MSG("exchange_halos: [" << start << " ... " << stop << ")");
+        halo_time.start();
+        double wait_delta = 0.;
+        TRACE_MSG("exchange_halos");
+        if (test_only)
+            TRACE_MSG(" testing only");
+        else {
+            if (do_mpi_exterior)
+                TRACE_MSG(" following calc of MPI exterior");
+            if (do_mpi_interior)
+                TRACE_MSG(" following calc of MPI interior");
+        }
         auto opts = get_settings();
         auto& sd = _dims->_step_dim;
 
-        // Loop through steps.  This loop has to be outside halo-step loop
-        // because we only have one buffer per step. Normally, we only
-        // exchange one step; in that case, it doesn't matter. It would be
-        // more efficient to allow packing and unpacking multiple steps,
-        // esp. with WFs.  TODO: this will need to be addressed if/when
-        // comm/compute overlap is added.
-        assert(start != stop);
-        idx_t step = (start < stop) ? 1 : -1;
-        for (idx_t t = start; t != stop; t += step) {
+        // Vars for list of grids that need to be swapped and their step indices.
+        GridPtrMap gridsToSwap;
+        map<string, vector_set<idx_t>> stepsToSwap;
+        int num_swaps = 0;
+        size_t max_steps = 0;
 
-            // Get list of grids that need to be swapped.
-            // Use an ordered map to make sure grids are in
-            // same order on all ranks.
-            GridPtrMap gridsToSwap;
+        // TODO: move this into a separate function.
+        if (test_only) {
+            int num_tests = 0;
+
+            // Call MPI_Test() on all unfinished requests to promote MPI progress.
+            // TODO: replace with more direct and less intrusive techniques.
+            
+            // Loop thru MPI data.
+            for (auto& mdi : mpiData) {
+                auto& gname = mdi.first;
+                auto& grid_mpi_data = mdi.second;
+                MPI_Request* grid_recv_reqs = grid_mpi_data.recv_reqs.data();
+                MPI_Request* grid_send_reqs = grid_mpi_data.send_reqs.data();
+
+                int flag;
+                for (size_t i = 0; i < grid_mpi_data.recv_reqs.size(); i++) {
+                    auto& r = grid_recv_reqs[i];
+                    if (r != MPI_REQUEST_NULL) {
+                        //TRACE_MSG(gname << " recv test &MPI_Request = " << &r);
+                        MPI_Test(&r, &flag, MPI_STATUS_IGNORE);
+                        num_tests++;
+                    }
+                }
+                for (size_t i = 0; i < grid_mpi_data.send_reqs.size(); i++) {
+                    auto& r = grid_send_reqs[i];
+                    if (r != MPI_REQUEST_NULL) {
+                        //TRACE_MSG(gname << " send test &MPI_Request = " << &r);
+                        MPI_Test(&r, &flag, MPI_STATUS_IGNORE);
+                        num_tests++;
+                    }
+                }
+            }
+            TRACE_MSG("exchange_halos: " << num_tests << " MPI test(s) issued");
+        }
+
+        else {
 
             // Loop thru all bundle packs.
+            // TODO: do this only once per step.
+            // TODO: expand this to hold misc indices also.  Use an ordered map
+            // by name to make sure grids are in same order on all ranks.
             for (auto& bp : stPacks) {
-
-                // Not selected bundle pack?
-                if (sel_bp && sel_bp != bp)
-                    continue;
 
                 // Loop thru stencil bundles in this pack.
                 for (auto* sg : *bp) {
@@ -995,59 +1131,100 @@ namespace yask {
                             if (gp->is_scratch())
                                 continue;
 
-                            // Only need to swap grids whose halos are not up-to-date
-                            // for this step.
-                            if (!gp->is_dirty(t))
-                                continue;
-
                             // Only need to swap grids that have any MPI buffers.
                             auto& gname = gp->get_name();
                             if (mpiData.count(gname) == 0)
                                 continue;
 
-                            // Swap this grid.
-                            gridsToSwap[gname] = gp;
-                        }
+                            // Check all allocated step indices.
+                            idx_t start = 0, stop = 1;
+                            if (gp->is_dim_used(sd)) {
+                                start = min(start, gp->_get_first_alloc_index(sd));
+                                stop = max(stop, gp->_get_last_alloc_index(sd) + 1);
+                            }
+                            for (idx_t t = start; t < stop; t++) {
+                            
+                                // Only need to swap grids whose halos are not up-to-date
+                                // for this step.
+                                if (!gp->is_dirty(t))
+                                    continue;
+
+                                // Swap this grid.
+                                gridsToSwap[gname] = gp;
+                                stepsToSwap[gname].insert(t);
+                                num_swaps++;
+                                max_steps = max(max_steps, stepsToSwap[gname].size());
+
+                                // Cannot swap >1 step if overlapping comms/calc
+                                // because we only have one step buffer per grid.
+                                // TODO: fix this.
+                                if (!do_mpi_exterior || !do_mpi_interior)
+                                    assert(stepsToSwap[gname].size() == 1);
+
+                            } // steps.
+                        } // grids.
                     } // needed bundles.
                 } // bundles in pack.
             } // packs.
             TRACE_MSG("exchange_halos: need to exchange halos for " <<
+                      num_swaps << " steps(s) in " <<
                       gridsToSwap.size() << " grid(s)");
+            assert(gridsToSwap.size() == stepsToSwap.size());
+        }
 
-            // 1D array to store send request handles.
-            // We use a 1D array so we can call MPI_Waitall().
-            MPI_Request send_reqs[gridsToSwap.size() * _mpiInfo->neighborhood_size];
+        // Loop thru step-vector indices.
+        // This loop is outside because we only have one buffer
+        // per grid. Thus, we have to complete comms before
+        // transerring another step. TODO: fix this.
+        for (size_t svi = 0; svi < max_steps; svi++) {
 
-            // 2D array for receive request handles.
-            // We use a 2D array to simplify individual indexing.
-            MPI_Request recv_reqs[gridsToSwap.size()][_mpiInfo->neighborhood_size];
+            // Sequence of things to do for each grid's neighbors.
+            enum halo_steps { halo_irecv, halo_pack_isend, halo_unpack, halo_final };
+            vector<halo_steps> steps_to_do;
 
-            // Sequence of things to do for each grid's neighbors
-            // (isend includes packing).
+            // Flags indicate what part of grids were most recently calc'd.
+            if (do_mpi_exterior) {
+                steps_to_do.push_back(halo_irecv);
+                steps_to_do.push_back(halo_pack_isend);
+            }
+            if (do_mpi_interior) {
+                steps_to_do.push_back(halo_unpack);
+                steps_to_do.push_back(halo_final);
+            }
             int num_send_reqs = 0;
             int num_recv_reqs = 0;
-            enum halo_steps { halo_irecv, halo_pack_isend, halo_unpack, halo_nsteps };
-            for (int halo_step = 0; halo_step < halo_nsteps; halo_step++) {
+            for (auto halo_step : steps_to_do) {
 
                 if (halo_step == halo_irecv)
-                    TRACE_MSG("exchange_halos: requesting data for step " << t << "...");
+                    TRACE_MSG("exchange_halos: requesting data phase");
                 else if (halo_step == halo_pack_isend)
-                    TRACE_MSG("exchange_halos: packing and sending data for step " << t << "...");
+                    TRACE_MSG("exchange_halos: packing and sending data phase");
                 else if (halo_step == halo_unpack)
-                    TRACE_MSG("exchange_halos: unpacking data for step " << t << "...");
+                    TRACE_MSG("exchange_halos: waiting for and unpacking data phase");
+                else if (halo_step == halo_final)
+                    TRACE_MSG("exchange_halos: waiting for send to finish phase");
+                else
+                    THROW_YASK_EXCEPTION("internal error: unknown halo-exchange step");
 
                 // Loop thru all grids to swap.
-                // Use 'gi' as a unique MPI index.
-                int gi = -1;
+                // Use 'gi' as an MPI tag.
+                int gi = 0;
                 for (auto gtsi : gridsToSwap) {
+                    gi++;
                     auto& gname = gtsi.first;
                     auto gp = gtsi.second;
-                    gi++;
-                    MPI_Request* grid_recv_reqs = recv_reqs[gi];
-                    TRACE_MSG(" for grid #" << gi << ", '" << gname << "'...");
-
-                    // Visit all this rank's neighbors.
                     auto& grid_mpi_data = mpiData.at(gname);
+                    MPI_Request* grid_recv_reqs = grid_mpi_data.recv_reqs.data();
+                    MPI_Request* grid_send_reqs = grid_mpi_data.send_reqs.data();
+
+                    // Get needed step in this grid.
+                    auto& steps = stepsToSwap[gname];
+                    if (steps.size() <= svi)
+                        continue; // no step at this index.
+                    idx_t si = steps.at(svi);
+                    TRACE_MSG(" for grid '" << gname << "' w/step-index " << si);
+
+                    // Loop thru all this rank's neighbors.
                     grid_mpi_data.visitNeighbors
                         ([&](const IdxTuple& offsets, // NeighborOffset.
                              int neighbor_rank,
@@ -1056,16 +1233,19 @@ namespace yask {
                             auto& sendBuf = bufs.bufs[MPIBufs::bufSend];
                             auto& recvBuf = bufs.bufs[MPIBufs::bufRecv];
                             TRACE_MSG("  with rank " << neighbor_rank << " at relative position " <<
-                                      offsets.subElements(1).makeDimValOffsetStr() << "...");
+                                      offsets.subElements(1).makeDimValOffsetStr());
 
                             // Submit async request to receive data from neighbor.
                             if (halo_step == halo_irecv) {
                                 auto nbytes = recvBuf.get_bytes();
                                 if (nbytes) {
                                     void* buf = (void*)recvBuf._elems;
-                                    TRACE_MSG("   requesting " << makeByteStr(nbytes) << "...");
+                                    TRACE_MSG("   requesting " << makeByteStr(nbytes));
+                                    auto& r = grid_recv_reqs[ni];
+                                    //TRACE_MSG(gname << " Irecv &MPI_Request = " << &r);
                                     MPI_Irecv(buf, nbytes, MPI_BYTE,
-                                              neighbor_rank, int(gi), _env->comm, &grid_recv_reqs[ni]);
+                                              neighbor_rank, int(gi),
+                                              _env->comm, &r);
                                     num_recv_reqs++;
                                 }
                                 else
@@ -1092,14 +1272,14 @@ namespace yask {
                                     // TODO: update this if we expand the buffers to hold
                                     // more than one step.
                                     if (gp->is_dim_used(sd)) {
-                                        first.setVal(sd, t);
-                                        last.setVal(sd, t);
+                                        first.setVal(sd, si);
+                                        last.setVal(sd, si);
                                     }
                                     TRACE_MSG("   packing " << sendBuf.num_pts.makeDimValStr(" * ") <<
-                                              " points from " << first.makeDimValStr() <<
-                                              " ... " << last.makeDimValStr() <<
-                                              (send_vec_ok ? " with" : " without") <<
-                                              " vector copy...");
+                                              " points from [" << first.makeDimValStr() <<
+                                              " ... " << last.makeDimValStr() << ") " <<
+                                              (send_vec_ok ? "with" : "without") <<
+                                              " vector copy");
 
                                     // Copy (pack) data from grid to buffer.
                                     void* buf = (void*)sendBuf._elems;
@@ -1110,10 +1290,12 @@ namespace yask {
 
                                     // Send packed buffer to neighbor.
                                     auto nbytes = sendBuf.get_bytes();
-                                    TRACE_MSG("   sending " << makeByteStr(nbytes) << "...");
+                                    TRACE_MSG("   sending " << makeByteStr(nbytes));
+                                    auto& r = grid_send_reqs[ni];
+                                    //TRACE_MSG(gname << " Isend &MPI_Request = " << &r);
                                     MPI_Isend(buf, nbytes, MPI_BYTE,
-                                              neighbor_rank, int(gi), _env->comm,
-                                              &send_reqs[num_send_reqs++]);
+                                              neighbor_rank, int(gi), _env->comm, &r);
+                                    num_send_reqs++;
                                 }
                                 else
                                     TRACE_MSG("   0B to send");
@@ -1125,8 +1307,14 @@ namespace yask {
                                 if (nbytes) {
 
                                     // Wait for data from neighbor before unpacking it.
-                                    TRACE_MSG("   waiting for " << makeByteStr(nbytes) << "...");
-                                    MPI_Wait(&grid_recv_reqs[ni], MPI_STATUS_IGNORE);
+                                    auto& r = grid_recv_reqs[ni];
+                                    //TRACE_MSG(gname << " recv wait &MPI_Request = " << &r);
+                                    if (r != MPI_REQUEST_NULL) {
+                                        TRACE_MSG("   waiting for receipt of " << makeByteStr(nbytes));
+                                        wait_time.start();
+                                        MPI_Wait(&r, MPI_STATUS_IGNORE);
+                                        wait_delta += wait_time.stop();
+                                    }
 
                                     // Vec ok?
                                     bool recv_vec_ok = allow_vec_exchange && recvBuf.vec_copy_ok;
@@ -1137,14 +1325,14 @@ namespace yask {
 
                                     // Set step val as above.
                                     if (gp->is_dim_used(sd)) {
-                                        first.setVal(sd, t);
-                                        last.setVal(sd, t);
+                                        first.setVal(sd, si);
+                                        last.setVal(sd, si);
                                     }
                                     TRACE_MSG("   got data; unpacking " << recvBuf.num_pts.makeDimValStr(" * ") <<
-                                              " points into " << first.makeDimValStr() <<
-                                              " ... " << last.makeDimValStr() <<
-                                              (recv_vec_ok ? " with" : " without") <<
-                                              " vector copy...");
+                                              " points into [" << first.makeDimValStr() <<
+                                              " ... " << last.makeDimValStr() << ") " <<
+                                              (recv_vec_ok ? "with" : "without") <<
+                                              " vector copy");
 
                                     // Copy data from buffer to grid.
                                     void* buf = (void*)recvBuf._elems;
@@ -1158,36 +1346,49 @@ namespace yask {
                                 else
                                     TRACE_MSG("   0B to wait for");
                             }
+
+                            // Final steps.
+                            else if (halo_step == halo_final) {
+                                auto nbytes = sendBuf.get_bytes();
+                                if (nbytes) {
+
+                                    // Wait for send to finish.
+                                    // TODO: consider using MPI_WaitAll.
+                                    // TODO: strictly, we don't have to wait on the
+                                    // send to finish until we want to reuse this buffer,
+                                    // so we could wait on the *previous* send right before
+                                    // doing another one.
+                                    auto& r = grid_send_reqs[ni];
+                                    //TRACE_MSG(gname << " send wait &MPI_Request = " << &r);
+                                    if (r != MPI_REQUEST_NULL) {
+                                        TRACE_MSG("   waiting to finish send of " << makeByteStr(nbytes));
+                                        wait_time.start();
+                                        MPI_Wait(&grid_send_reqs[ni], MPI_STATUS_IGNORE);
+                                        wait_delta += wait_time.stop();
+                                    }
+                                }
+
+                                // Mark grids as up-to-date when done.
+                                if (gp->is_dirty(si)) {
+                                    gp->set_dirty(false, si);
+                                    TRACE_MSG("grid '" << gname <<
+                                              "' marked as clean at step-index " << si);
+                                }
+                            }
+                            
                         }); // visit neighbors.
 
                 } // grids.
             } // exchange sequence.
 
-            // Mark grids as up-to-date.
-            for (auto gtsi : gridsToSwap) {
-                auto& gname = gtsi.first;
-                auto gp = gtsi.second;
-                if (gp->is_dirty(t)) {
-                    gp->set_dirty(false, t);
-                    TRACE_MSG("grid '" << gname <<
-                              "' marked as clean at step " << t);
-                }
-            }
+            TRACE_MSG("exchange_halos: " << num_recv_reqs << " MPI receive request(s) issued");
+            TRACE_MSG("exchange_halos: " << num_send_reqs << " MPI send request(s) issued");
 
-            // Wait for all send requests to complete.
-            TRACE_MSG("exchange_halos: " << num_recv_reqs <<
-                      " MPI receive request(s) completed");
-            if (num_send_reqs) {
-                TRACE_MSG("exchange_halos: waiting for " << num_send_reqs <<
-                          " MPI send request(s) to complete...");
-                MPI_Waitall(num_send_reqs, send_reqs, MPI_STATUS_IGNORE);
-                TRACE_MSG(" done waiting for MPI send request(s)");
-            }
-            else
-                TRACE_MSG("exchange_halos: no MPI send requests to wait for");
-        } // steps.
+        } // step indices.
 
-        mpi_time.stop();
+        auto mpi_call_time = halo_time.stop();
+        TRACE_MSG("exchange_halos: secs spent in MPI waits: " << makeNumStr(wait_delta));
+        TRACE_MSG("exchange_halos: secs spent in this call: " << makeNumStr(mpi_call_time));
 #endif
     }
 

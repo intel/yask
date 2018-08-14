@@ -338,11 +338,16 @@ namespace yask {
         } // grid passes.
     };
 
-    // Create MPI buffers and allocate them.
+    // Determine the size and shape of all MPI buffers.
+    // Create buffers and allocate them.
     void StencilContext::allocMpiData(ostream& os) {
 
         // Remove any old MPI data.
         freeMpiData(os);
+
+        // Init interior.
+        mpi_interior = ext_bb;
+        mpi_interior.bb_valid = false;
 
 #ifdef USE_MPI
 
@@ -350,9 +355,10 @@ namespace yask {
         map<int, idx_t> num_elems; // send/recv => count.
         auto me = _env->my_rank;
         auto& step_dim = _dims->_step_dim;
+        auto* settings = get_settings().get();
 
         // Need to determine the size and shape of all MPI buffers.
-        // Visit all neighbors of this rank.
+        // Loop thru all neighbors of this rank.
         _mpiInfo->visitNeighbors
             ([&](const IdxTuple& neigh_offsets, int neigh_rank, int neigh_idx) {
                 if (neigh_rank == MPI_PROC_NULL)
@@ -578,6 +584,10 @@ namespace yask {
                                         // Only read slice as wide as halo from beginning.
                                         copy_begin[dname] = first_inner_idx[dname];
                                         copy_end[dname] = first_inner_idx[dname] + neigh_halo_sizes[dname];
+
+                                        // Adjust LHS of interior.
+                                        mpi_interior.bb_begin[dname] =
+                                            max(mpi_interior.bb_begin[dname], copy_end[dname]);
                                     }
 
                                     // Neighbor is to the right.
@@ -586,6 +596,10 @@ namespace yask {
                                         // Only read slice as wide as halo before end.
                                         copy_begin[dname] = last_inner_idx[dname] + 1 - neigh_halo_sizes[dname];
                                         copy_end[dname] = last_inner_idx[dname] + 1;
+
+                                        // Adjust RHS of interior.
+                                        mpi_interior.bb_end[dname] =
+                                            min(mpi_interior.bb_end[dname], copy_begin[dname]);
                                     }
 
                                     // Else, this neighbor is in same posn as I am in this dim,
@@ -681,7 +695,8 @@ namespace yask {
 
                         // At this point, buf_sizes, copy_begin, and copy_end
                         // should be set for each dim in this grid.
-                        // Convert end to last.
+
+                        // Compute last from end.
                         IdxTuple copy_last = copy_end.subElements(1);
 
                         // Make MPI data entry for this grid.
@@ -702,9 +717,9 @@ namespace yask {
                                   "' configured for rank at relative offsets " <<
                                   neigh_offsets.subElements(1).makeDimValStr() << " with " <<
                                   buf.num_pts.makeDimValStr(" * ") << " = " << buf.get_size() <<
-                                  " element(s) at " << buf.begin_pt.makeDimValStr() <<
+                                  " element(s) at [" << buf.begin_pt.makeDimValStr() <<
                                   " ... " << buf.last_pt.makeDimValStr() <<
-                                  " with vector-copy " <<
+                                  "] with vector-copy " <<
                                   (buf.vec_copy_ok ? "enabled" : "disabled"));
                         num_exchanges[bd]++;
                         num_elems[bd] += buf.get_size();
@@ -717,6 +732,13 @@ namespace yask {
         TRACE_MSG("number of MPI recv buffers on this rank: " << num_exchanges[int(MPIBufs::bufRecv)]);
         TRACE_MSG("number of elements in recv buffers: " << makeNumStr(num_elems[int(MPIBufs::bufRecv)]));
 
+        // Finalize interior BB if there are multiple ranks and overlap enabled.
+        if (_env->num_ranks > 1 && settings->overlap_comms) {
+            mpi_interior.update_bb("interior", *this, true);
+            TRACE_MSG("MPI interior BB: [" << mpi_interior.bb_begin.makeDimValStr() <<
+                      " ... " << mpi_interior.bb_end.makeDimValStr() << ")");
+        }
+        
         // Base ptrs for all alloc'd data.
         // These pointers will be shared by the ones in the grid
         // objects, which will take over ownership when these go
@@ -1321,8 +1343,8 @@ namespace yask {
     // Dealloc grids, etc.
     void StencilContext::end_solution() {
 
-        // Final halo exchange.
-        exchange_halos_all();
+        // Final halo exchange (usually not needed).
+        exchange_halos();
 
         // Release any MPI data.
         mpiData.clear();
@@ -1384,6 +1406,9 @@ namespace yask {
             }
             spbb.update_bb(sp->get_name(), *this, false);
         }
+
+        // Init MPI interior to extended BB.
+        mpi_interior = ext_bb;
     }
 
     // Find the bounding-boxes for this bundle in this rank.
