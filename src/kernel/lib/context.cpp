@@ -968,6 +968,7 @@ namespace yask {
         double etime = ext_time.get_elapsed_secs();
         double itime = int_time.get_elapsed_secs();
         double ctime = etime + itime;
+        double otime = max(rtime - ctime - htime, 0.);
         if (rtime > 0.) {
             domain_pts_ps = double(tot_domain_1t * steps_done) / rtime;
             writes_ps= double(tot_numWrites_1t * steps_done) / rtime;
@@ -984,32 +985,50 @@ namespace yask {
                 " num-steps-done:                   " << makeNumStr(steps_done) << endl <<
                 "Performance stats:\n"
                 " elapsed-time (sec):               " << makeNumStr(rtime) << endl <<
-                " Time breakdown by activity type(s):\n"
-                "  compute (sec):                   " << makeNumStr(ctime);
+                " Time breakdown by activity type:\n"
+                "  compute (sec):                    " << makeNumStr(ctime);
             print_pct(os, ctime, rtime);
 #ifdef USE_MPI
             os <<
-                "   rank-exterior compute (sec):    " << makeNumStr(etime);
-            print_pct(os, etime, rtime);
-            os <<
-                "   rank-interior compute (sec):    " << makeNumStr(itime);
-            print_pct(os, itime, rtime);
-            os <<
-                "  halo exch (sec):                 " << makeNumStr(htime);
+                "  halo exchange (sec):              " << makeNumStr(htime);
             print_pct(os, htime, rtime);
-            os <<
-                "   MPI waits (sec):                " << makeNumStr(wtime);
-            print_pct(os, wtime, rtime);
 #endif
-            os << " Time breakdown by stencil pack(s):\n";
+            os <<
+                "  other (sec):                      " << makeNumStr(otime);
+            print_pct(os, otime, rtime);
+            os <<
+                " Compute-time breakdown by stencil pack(s):\n";
+            double potime = ctime;
             for (auto& sp : stPacks) {
                 double ptime = sp->timer.get_elapsed_secs();
                 if (ptime > 0.) {
                     os <<
-                        "  pack '" << sp->get_name() << "' (sec):     " << makeNumStr(ptime);
-                    print_pct(os, ptime, rtime);
+                        "  pack '" << sp->get_name() << "' (sec):      " << makeNumStr(ptime);
+                    print_pct(os, ptime, ctime);
+                    potime -= ptime;
                 }
             }
+            potime = max(potime, 0.);
+            os <<
+                "  other (sec):                      " << makeNumStr(potime);
+            print_pct(os, potime, ctime);
+#ifdef USE_MPI
+            os <<
+                " Compute-time breakdown by halo area:\n"
+                "  rank-exterior compute (sec):      " << makeNumStr(etime);
+            print_pct(os, etime, ctime);
+            os <<
+                "  rank-interior compute (sec):      " << makeNumStr(itime);
+            print_pct(os, itime, ctime);
+            os <<
+                " Halo-time breakdown:\n"
+                "  MPI waits (sec):                  " << makeNumStr(wtime);
+            print_pct(os, wtime, htime);
+            double hotime = max(htime - wtime, 0.);
+            os <<
+                "  packing, unpacking, etc. (sec):   " << makeNumStr(hotime);
+            print_pct(os, hotime, htime);
+#endif
             os <<
                 " throughput (num-writes/sec):      " << makeNumStr(writes_ps) << endl <<
                 " throughput (est-FLOPS):           " << makeNumStr(flops) << endl <<

@@ -187,7 +187,9 @@ namespace yask {
         const double onen = 1e-9;
         const double onep = 1e-12;
         const double onef = 1e-15;
-        if (num > oneE)
+        if (num == 0.)
+            os << num;
+        else if (num > oneE)
             os << (num / oneE) << "E";
         else if (num > oneP)
             os << (num / oneP) << "P";
