@@ -89,7 +89,28 @@ namespace yask {
 
         /// Create an object to hold environment information.
         /**
-           Initializes MPI if MPI is enabled.
+           Performs the following initialization steps:
+           - Initializes MPI if MPI is enabled but not yet initialized.
+           Does not initialize MPI if MPI is not enabled or already initialized.
+           If MPI is enabled, uses `MPI_COMM_WORLD` as the communicator.
+           - Sets flush-to-zero (FTZ) and denormals-are-zero (DAZ)
+           floating-point controls.
+           - Enables "hot teams" mode for Intel OpenMP. 
+           Initializes OpenMP library if it is not already started.
+           If it is already started, note that the "hot teams" mode may
+           not get set correctly. This mode is important for optimal
+           performance of nested OpenMP regions (used when the number
+           of threads per block is greater than one).
+
+           @note If you initialize MPI before calling this function,
+           you should call `MPI_Init_thread(..., MPI_THREAD_SERIALIZED, ...)`
+           or  `MPI_Init_thread(..., MPI_THREAD_MULTIPLE, ...)`.
+
+           @note If you initialize OpenMP (by calling any OpenMP function)
+           before calling this function, set the following environment
+           variables prior to initializing OpenMP: 
+           `KMP_HOT_TEAMS_MODE=` and `KMP_HOT_TEAMS_MAX_LEVEL=2`.
+
            Environment info is kept in a separate object to factilitate
            initializing the environment before creating a solution
            and sharing an environment among multiple solutions.
