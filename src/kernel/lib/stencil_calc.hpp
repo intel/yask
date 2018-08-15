@@ -240,6 +240,9 @@ namespace yask {
         AutoTuner _at;
         
     public:
+        // Timer for this pack.
+        YaskTimer timer;
+        
         BundlePack(const std::string& name,
                    StencilContext* ctx) :
             _name(name),

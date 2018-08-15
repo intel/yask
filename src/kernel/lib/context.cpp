@@ -276,7 +276,6 @@ namespace yask {
 #include "yask_misc_loops.hpp"
 #undef misc_fn
                 } // needed bundles.
-                ext_time.stop();
 
                 // Mark grids that [may] have been written to,
                 // updated at next step (+/- 1).
@@ -286,6 +285,7 @@ namespace yask {
                 // information about which grids are possibly dirty.
                 mark_grids_dirty(nullptr, start_t + step_t, stop_t + step_t);
 
+                ext_time.stop();
             } // all bundles.
 
         } // iterations.
@@ -587,8 +587,9 @@ namespace yask {
                 TRACE_MSG("calc_region: bundle-pack '" << bp->get_name() << "' in step(s) [" <<
                           start_t << " ... " << stop_t << ")");
 
-                // Start auto-tuner timer for this bundle.
+                // Start timers for this bundle.
                 bp->getAT().timer.start();
+                bp->timer.start();
 
                 // Steps within a region are based on block sizes.
                 // These may have been tweaked by the auto-tuner.
@@ -684,8 +685,9 @@ namespace yask {
                 }
                 shift_num++;
 
-                // Stop auto-tuner timer for this bundle.
+                // Stop timers for this bundle.
                 bp->getAT().timer.stop();
+                bp->timer.stop();
 
             } // stencil bundle packs.
         } // time.
@@ -975,31 +977,43 @@ namespace yask {
             domain_pts_ps = writes_ps = flops = 0.;
         if (steps_done > 0) {
             os <<
-                "num-points-per-step:               " << makeNumStr(tot_domain_1t) << endl <<
-                "num-writes-per-step:               " << makeNumStr(tot_numWrites_1t) << endl <<
-                "num-est-FP-ops-per-step:           " << makeNumStr(tot_numFpOps_1t) << endl <<
-                "num-steps-done:                    " << makeNumStr(steps_done) << endl <<
-                "elapsed-time (sec):                " << makeNumStr(rtime) << endl <<
-                "  time in compute (sec):           " << makeNumStr(ctime);
+                "Amount-of-work stats:\n"
+                " num-points-per-step:              " << makeNumStr(tot_domain_1t) << endl <<
+                " num-writes-per-step:              " << makeNumStr(tot_numWrites_1t) << endl <<
+                " num-est-FP-ops-per-step:          " << makeNumStr(tot_numFpOps_1t) << endl <<
+                " num-steps-done:                   " << makeNumStr(steps_done) << endl <<
+                "Performance stats:\n"
+                " elapsed-time (sec):               " << makeNumStr(rtime) << endl <<
+                " Time breakdown by activity type(s):\n"
+                "  compute (sec):                   " << makeNumStr(ctime);
             print_pct(os, ctime, rtime);
 #ifdef USE_MPI
             os <<
-                "  time in exterior compute (sec):  " << makeNumStr(etime);
+                "   rank-exterior compute (sec):    " << makeNumStr(etime);
             print_pct(os, etime, rtime);
             os <<
-                "  time in interior compute (sec):  " << makeNumStr(itime);
+                "   rank-interior compute (sec):    " << makeNumStr(itime);
             print_pct(os, itime, rtime);
             os <<
-                "  time in halo exch (sec):         " << makeNumStr(htime);
+                "  halo exch (sec):                 " << makeNumStr(htime);
             print_pct(os, htime, rtime);
             os <<
-                "  time in MPI waits (sec):         " << makeNumStr(wtime);
+                "   MPI waits (sec):                " << makeNumStr(wtime);
             print_pct(os, wtime, rtime);
 #endif
+            os << " Time breakdown by stencil pack(s):\n";
+            for (auto& sp : stPacks) {
+                double ptime = sp->timer.get_elapsed_secs();
+                if (ptime > 0.) {
+                    os <<
+                        "  pack '" << sp->get_name() << "' (sec):     " << makeNumStr(ptime);
+                    print_pct(os, ptime, rtime);
+                }
+            }
             os <<
-                "throughput (num-writes/sec):       " << makeNumStr(writes_ps) << endl <<
-                "throughput (est-FLOPS):            " << makeNumStr(flops) << endl <<
-                "throughput (num-points/sec):       " << makeNumStr(domain_pts_ps) << endl;
+                " throughput (num-writes/sec):      " << makeNumStr(writes_ps) << endl <<
+                " throughput (est-FLOPS):           " << makeNumStr(flops) << endl <<
+                " throughput (num-points/sec):      " << makeNumStr(domain_pts_ps) << endl;
         }
 
         // Fill in return object.
@@ -1428,4 +1442,17 @@ namespace yask {
         }
     }
 
+    // Reset elapsed times to zero.
+    void StencilContext::clear_timers() {
+        run_time.clear();
+        ext_time.clear();
+        int_time.clear();
+        halo_time.clear();
+        wait_time.clear();
+        steps_done = 0;
+        for (auto& sp : stPacks)
+            sp->timer.clear();
+    }
+
+    
 } // namespace yask.
