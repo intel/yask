@@ -963,10 +963,10 @@ namespace yask {
 
         // Calc and report perf.
         double rtime = run_time.get_elapsed_secs();
-        double htime = halo_time.get_elapsed_secs();
-        double wtime = wait_time.get_elapsed_secs();
-        double etime = ext_time.get_elapsed_secs();
-        double itime = int_time.get_elapsed_secs();
+        double htime = min(halo_time.get_elapsed_secs(), rtime);
+        double wtime = min(wait_time.get_elapsed_secs(), htime);
+        double etime = min(ext_time.get_elapsed_secs(), rtime - htime);
+        double itime = min(int_time.get_elapsed_secs(), rtime - htime - etime);
         double ctime = etime + itime;
         double otime = max(rtime - ctime - htime, 0.);
         if (rtime > 0.) {
@@ -998,20 +998,20 @@ namespace yask {
             print_pct(os, otime, rtime);
             os <<
                 " Compute-time breakdown by stencil pack(s):\n";
-            double potime = ctime;
+            double tptime = 0.;
             for (auto& sp : stPacks) {
-                double ptime = sp->timer.get_elapsed_secs();
+                double ptime = min(sp->timer.get_elapsed_secs(), ctime - tptime);
                 if (ptime > 0.) {
                     os <<
                         "  pack '" << sp->get_name() << "' (sec):      " << makeNumStr(ptime);
                     print_pct(os, ptime, ctime);
-                    potime -= ptime;
+                    tptime += ptime;
                 }
             }
-            potime = max(potime, 0.);
+            double optime = max(ctime - tptime, 0.);
             os <<
-                "  other (sec):                      " << makeNumStr(potime);
-            print_pct(os, potime, ctime);
+                "  other (sec):                      " << makeNumStr(optime);
+            print_pct(os, optime, ctime);
 #ifdef USE_MPI
             os <<
                 " Compute-time breakdown by halo area:\n"
@@ -1024,10 +1024,10 @@ namespace yask {
                 " Halo-time breakdown:\n"
                 "  MPI waits (sec):                  " << makeNumStr(wtime);
             print_pct(os, wtime, htime);
-            double hotime = max(htime - wtime, 0.);
+            double ohtime = max(htime - wtime, 0.);
             os <<
-                "  packing, unpacking, etc. (sec):   " << makeNumStr(hotime);
-            print_pct(os, hotime, htime);
+                "  packing, unpacking, etc. (sec):   " << makeNumStr(ohtime);
+            print_pct(os, ohtime, htime);
 #endif
             os <<
                 " throughput (num-writes/sec):      " << makeNumStr(writes_ps) << endl <<
