@@ -151,7 +151,13 @@ namespace yask {
         const double oneM = oneK * oneK;
         const double oneG = oneK * oneM;
         const double oneT = oneK * oneG;
-        if (num > oneT)
+        const double oneP = oneK * oneT;
+        const double oneE = oneK * oneP;
+        if (num > oneE)
+            os << (num / oneE) << "Ei";
+        else if (num > oneP)
+            os << (num / oneP) << "Pi";
+        else if (num > oneT)
             os << (num / oneT) << "Ti";
         else if (num > oneG)
             os << (num / oneG) << "Gi";
@@ -174,14 +180,37 @@ namespace yask {
         const double oneM = 1e6;
         const double oneG = 1e9;
         const double oneT = 1e12;
-        if (num > oneT)
+        const double oneP = 1e15;
+        const double oneE = 1e18;
+        const double onem = 1e-3;
+        const double oneu = 1e-6;
+        const double onen = 1e-9;
+        const double onep = 1e-12;
+        const double onef = 1e-15;
+        if (num == 0.)
+            os << num;
+        else if (num > oneE)
+            os << (num / oneE) << "E";
+        else if (num > oneP)
+            os << (num / oneP) << "P";
+        else if (num > oneT)
             os << (num / oneT) << "T";
         else if (num > oneG)
             os << (num / oneG) << "G";
         else if (num > oneM)
             os << (num / oneM) << "M";
         else if (num > oneK)
-            os << (num / oneK) << "K";
+            os << (num / oneK) << "K"; // NB: official SI symbol is "k".
+        else if (num < onep)
+            os << (num / onef) << "f";
+        else if (num < onen)
+            os << (num / onep) << "p";
+        else if (num < oneu)
+            os << (num / onen) << "n";
+        else if (num < onem)
+            os << (num / oneu) << "u"; // NB: official SI symbol is Greek mu.
+        else if (num < 1.)
+            os << (num / onem) << "m";
         else
             os << num;
         return os.str();

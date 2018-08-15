@@ -311,7 +311,8 @@ int main(int argc, char** argv)
             "Running " << opts->num_trials << " performance trial(s) of " <<
             dt << " step(s) each...\n" << flush;
         for (idx_t tr = 0; tr < opts->num_trials; tr++) {
-            os << divLine << flush;
+            os << divLine <<
+                "Trial number:                      " << (tr + 1) << endl << flush;
 
             // init data before each trial for comparison if validating.
             if (opts->validate)
@@ -351,10 +352,11 @@ int main(int argc, char** argv)
         }
 
         os << divLine <<
-            "best-elapsed-time (sec):           " << makeNumStr(best_elapsed_time) << endl <<
-            "best-throughput (num-writes/sec):  " << makeNumStr(best_apps) << endl <<
-            "best-throughput (est-FLOPS):       " << makeNumStr(best_flops) << endl <<
-            "best-throughput (num-points/sec):  " << makeNumStr(best_dpps) << endl <<
+            "Performance stats of best trial:\n"
+            " best-elapsed-time (sec):          " << makeNumStr(best_elapsed_time) << endl <<
+            " best-throughput (num-writes/sec): " << makeNumStr(best_apps) << endl <<
+            " best-throughput (est-FLOPS):      " << makeNumStr(best_flops) << endl <<
+            " best-throughput (num-points/sec): " << makeNumStr(best_dpps) << endl <<
             divLine <<
             "Notes:\n"
             " Num-writes/sec and FLOPS are metrics based on certain\n"

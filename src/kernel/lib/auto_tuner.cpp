@@ -62,6 +62,7 @@ namespace yask {
         ctime = 0.;
         csteps = 0;
         in_warmup = true;
+        timer.clear();
 
         // Set min blocks to number of region threads.
         min_blks = _context->set_region_threads();

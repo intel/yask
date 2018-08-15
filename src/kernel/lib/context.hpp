@@ -297,14 +297,7 @@ namespace yask {
         }
 
         // Reset elapsed times to zero.
-        virtual void clear_timers() {
-            run_time.clear();
-            ext_time.clear();
-            int_time.clear();
-            halo_time.clear();
-            wait_time.clear();
-            steps_done = 0;
-        }
+        virtual void clear_timers();
 
         // Access to settings.
         virtual KernelSettingsPtr& get_settings() {

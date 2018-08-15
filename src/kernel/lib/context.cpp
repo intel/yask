@@ -276,7 +276,6 @@ namespace yask {
 #include "yask_misc_loops.hpp"
 #undef misc_fn
                 } // needed bundles.
-                ext_time.stop();
 
                 // Mark grids that [may] have been written to,
                 // updated at next step (+/- 1).
@@ -286,6 +285,7 @@ namespace yask {
                 // information about which grids are possibly dirty.
                 mark_grids_dirty(nullptr, start_t + step_t, stop_t + step_t);
 
+                ext_time.stop();
             } // all bundles.
 
         } // iterations.
@@ -587,8 +587,9 @@ namespace yask {
                 TRACE_MSG("calc_region: bundle-pack '" << bp->get_name() << "' in step(s) [" <<
                           start_t << " ... " << stop_t << ")");
 
-                // Start auto-tuner timer for this bundle.
+                // Start timers for this bundle.
                 bp->getAT().timer.start();
+                bp->timer.start();
 
                 // Steps within a region are based on block sizes.
                 // These may have been tweaked by the auto-tuner.
@@ -684,8 +685,9 @@ namespace yask {
                 }
                 shift_num++;
 
-                // Stop auto-tuner timer for this bundle.
+                // Stop timers for this bundle.
                 bp->getAT().timer.stop();
+                bp->timer.stop();
 
             } // stencil bundle packs.
         } // time.
@@ -961,11 +963,12 @@ namespace yask {
 
         // Calc and report perf.
         double rtime = run_time.get_elapsed_secs();
-        double htime = halo_time.get_elapsed_secs();
-        double wtime = wait_time.get_elapsed_secs();
-        double etime = ext_time.get_elapsed_secs();
-        double itime = int_time.get_elapsed_secs();
+        double htime = min(halo_time.get_elapsed_secs(), rtime);
+        double wtime = min(wait_time.get_elapsed_secs(), htime);
+        double etime = min(ext_time.get_elapsed_secs(), rtime - htime);
+        double itime = min(int_time.get_elapsed_secs(), rtime - htime - etime);
         double ctime = etime + itime;
+        double otime = max(rtime - ctime - htime, 0.);
         if (rtime > 0.) {
             domain_pts_ps = double(tot_domain_1t * steps_done) / rtime;
             writes_ps= double(tot_numWrites_1t * steps_done) / rtime;
@@ -975,31 +978,61 @@ namespace yask {
             domain_pts_ps = writes_ps = flops = 0.;
         if (steps_done > 0) {
             os <<
-                "num-points-per-step:               " << makeNumStr(tot_domain_1t) << endl <<
-                "num-writes-per-step:               " << makeNumStr(tot_numWrites_1t) << endl <<
-                "num-est-FP-ops-per-step:           " << makeNumStr(tot_numFpOps_1t) << endl <<
-                "num-steps-done:                    " << makeNumStr(steps_done) << endl <<
-                "elapsed-time (sec):                " << makeNumStr(rtime) << endl <<
-                "  time in compute (sec):           " << makeNumStr(ctime);
+                "Amount-of-work stats:\n"
+                " num-points-per-step:              " << makeNumStr(tot_domain_1t) << endl <<
+                " num-writes-per-step:              " << makeNumStr(tot_numWrites_1t) << endl <<
+                " num-est-FP-ops-per-step:          " << makeNumStr(tot_numFpOps_1t) << endl <<
+                " num-steps-done:                   " << makeNumStr(steps_done) << endl <<
+                "Performance stats:\n"
+                " elapsed-time (sec):               " << makeNumStr(rtime) << endl <<
+                " Time breakdown by activity type:\n"
+                "  compute (sec):                    " << makeNumStr(ctime);
             print_pct(os, ctime, rtime);
 #ifdef USE_MPI
             os <<
-                "  time in exterior compute (sec):  " << makeNumStr(etime);
-            print_pct(os, etime, rtime);
-            os <<
-                "  time in interior compute (sec):  " << makeNumStr(itime);
-            print_pct(os, itime, rtime);
-            os <<
-                "  time in halo exch (sec):         " << makeNumStr(htime);
+                "  halo exchange (sec):              " << makeNumStr(htime);
             print_pct(os, htime, rtime);
-            os <<
-                "  time in MPI waits (sec):         " << makeNumStr(wtime);
-            print_pct(os, wtime, rtime);
 #endif
             os <<
-                "throughput (num-writes/sec):       " << makeNumStr(writes_ps) << endl <<
-                "throughput (est-FLOPS):            " << makeNumStr(flops) << endl <<
-                "throughput (num-points/sec):       " << makeNumStr(domain_pts_ps) << endl;
+                "  other (sec):                      " << makeNumStr(otime);
+            print_pct(os, otime, rtime);
+            os <<
+                " Compute-time breakdown by stencil pack(s):\n";
+            double tptime = 0.;
+            for (auto& sp : stPacks) {
+                double ptime = min(sp->timer.get_elapsed_secs(), ctime - tptime);
+                if (ptime > 0.) {
+                    os <<
+                        "  pack '" << sp->get_name() << "' (sec):      " << makeNumStr(ptime);
+                    print_pct(os, ptime, ctime);
+                    tptime += ptime;
+                }
+            }
+            double optime = max(ctime - tptime, 0.);
+            os <<
+                "  other (sec):                      " << makeNumStr(optime);
+            print_pct(os, optime, ctime);
+#ifdef USE_MPI
+            os <<
+                " Compute-time breakdown by halo area:\n"
+                "  rank-exterior compute (sec):      " << makeNumStr(etime);
+            print_pct(os, etime, ctime);
+            os <<
+                "  rank-interior compute (sec):      " << makeNumStr(itime);
+            print_pct(os, itime, ctime);
+            os <<
+                " Halo-time breakdown:\n"
+                "  MPI waits (sec):                  " << makeNumStr(wtime);
+            print_pct(os, wtime, htime);
+            double ohtime = max(htime - wtime, 0.);
+            os <<
+                "  packing, unpacking, etc. (sec):   " << makeNumStr(ohtime);
+            print_pct(os, ohtime, htime);
+#endif
+            os <<
+                " throughput (num-writes/sec):      " << makeNumStr(writes_ps) << endl <<
+                " throughput (est-FLOPS):           " << makeNumStr(flops) << endl <<
+                " throughput (num-points/sec):      " << makeNumStr(domain_pts_ps) << endl;
         }
 
         // Fill in return object.
@@ -1428,4 +1461,17 @@ namespace yask {
         }
     }
 
+    // Reset elapsed times to zero.
+    void StencilContext::clear_timers() {
+        run_time.clear();
+        ext_time.clear();
+        int_time.clear();
+        halo_time.clear();
+        wait_time.clear();
+        steps_done = 0;
+        for (auto& sp : stPacks)
+            sp->timer.clear();
+    }
+
+    
 } // namespace yask.
