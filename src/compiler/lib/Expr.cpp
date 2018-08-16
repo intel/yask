@@ -616,6 +616,14 @@ namespace yask {
             }
         }
     }
+    const NumExprPtr GridPoint::getArg(const string& dim) const {
+        for (int di = 0; di < _grid->get_num_dims(); di++) {
+            auto& dn = _grid->get_dim_name(di);  // name of this dim.
+            if (dim == dn)
+                return _args.at(di);
+        }
+        return nullptr;
+    }
     const string& GridPoint::getGridName() const {
         return _grid->getName();
     }

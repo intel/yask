@@ -154,8 +154,6 @@ namespace yask {
         auto& outPts = pt_vis.getOutputPts();
         auto& inPts = pt_vis.getInputPts();
 
-        int lofs = 0;        // step index offset for LHS.
-
         // 1. Check each eq internally.
         os << "\nProcessing " << getNum() << " stencil equation(s)...\n";
         for (auto eq1 : getAll()) {
@@ -168,31 +166,29 @@ namespace yask {
             //auto& ig1 = inGrids.at(eq1p);
             auto& ip1 = inPts.at(eq1p);
             auto cond1 = eq1p->getCond();
+            NumExprPtr step_expr1 = op1->getArg(stepDim); // may be null.
 
 #ifdef DEBUG_DEP
             cout << " Checking internal consistency of equation " <<
                 eq1->makeQuotedStr() << "...\n";
 #endif
 
-            // Check LHS indices.
-            // Example: For step-index 't', domain indices 'x' and 'y', and misc index 'n',
-            // LHS of non-scratch grid eqs must be of form 'u(t +/- 1, x, y, N)', where
-            // N is a const.
-            // LHS of scratch grid must be of from 'u(x, y, N)'.
+            // Scratch grid must not have a condition.
+            if (cond1 && og1->isScratch())
+                THROW_YASK_EXCEPTION("Error: scratch-grid equation '" + eq1->makeQuotedStr() +
+                                     "' cannot have a condition");
+
+            // Check LHS grid dimensions and associated args.
             for (int di = 0; di < og1->get_num_dims(); di++) {
-                auto& dn = og1->get_dim_name(di);
-                auto argn = op1->getArgs().at(di);
+                auto& dn = og1->get_dim_name(di);  // name of this dim.
+                auto argn = op1->getArgs().at(di); // LHS arg for this dim.
 
-                // Scratch grid must not have a condition.
-                if (cond1 && og1->isScratch())
-                    THROW_YASK_EXCEPTION("Error: scratch-grid equation '" + og1->getName() +
-                                         "' cannot have a condition");
-
+                // Check based on dim type.
                 if (dn == stepDim) {
 
                     // Scratch grid must not use step dim.
                     if (og1->isScratch())
-                        THROW_YASK_EXCEPTION("Error: scratch-grid equation '" + og1->getName() +
+                        THROW_YASK_EXCEPTION("Error: scratch-grid '" + og1->getName() +
                                              "' cannot use '" + dn + "' dim");
 
                     // Validity of step-dim expression in non-scratch grids is checked later.
@@ -224,30 +220,55 @@ namespace yask {
                     argn->getIntVal(); // throws exception if not an integer.
                 }
             }
-
-            // LHS of a non-scratch eq must use step dim w/a simple +/-1 offset.
+        
+            // Compare step offsets of LHS and RHS of non-scratch eq.
             if (!og1->isScratch()) {
+
+                if (!step_expr1)
+                    THROW_YASK_EXCEPTION("Error: non-scratch-grid '" + og1->getName() +
+                                         "' does not use '" + stepDim + "' dim");
+                
+                // See if step arg is a simple offset, e.g., 'u(t+1, ...)'.
+                // This is the most common case.
                 auto& lofss = op1->getArgOffsets();
-                auto* lofsp = lofss.lookup(stepDim); // step dim must be a key in offsets map.
-                if (!lofsp || abs(*lofsp) != 1) {
-                    THROW_YASK_EXCEPTION("Error: LHS of equation " + eq1->makeQuotedStr() +
-                                         " does not contain '" + dims.makeStepStr(1) +
-                                         "' or '" + dims.makeStepStr(-1) + "'");
+                auto* lofsp = lofss.lookup(stepDim); // offset at step dim.
+                if (lofsp) {
+                    auto lofs = *lofsp;
+
+                    // Soln step-direction heuristic.
+                    // Assume 'u(t+1, ...) EQUALS ...' implies forward,
+                    // and 'u(t-1, ...) EQUALS ...' implies backward.
+                    // TODO: improve this; at least handle
+                    // 'u(t, ...) EQUALS ... u(t +/- 1, ...) ...',
+                    // but need to look thru scratch vars to get this right.
+                    if (dims._stepDir == 0 && lofs != 0)
+                        dims._stepDir = (lofs > 0) ? 1 : -1;
+
+                    // Scan input (RHS) points.
+                    for (auto i1 : ip1) {
+                        
+                        // Is point a simple offset from step, e.g., 'u(t-2, ...)'?
+                        auto* rsi1p = i1->getArgOffsets().lookup(stepDim);
+                        if (rsi1p) {
+                            int rsi1 = *rsi1p;
+
+                            // Must be in proper relation to LHS, e.g.,
+                            // the following are illegal given the heuristic
+                            // used above.
+                            // forward: 'u(t+1, ...) EQUALS ... u(t+2, ...) ...',
+                            // backward: 'u(t-1, ...) EQUALS ... u(t-2, ...) ...'.
+                            if ((lofs > 0 && rsi1 > lofs) ||
+                                (lofs < 0 && rsi1 < lofs)) {
+                                THROW_YASK_EXCEPTION("Error: RHS of equation " +
+                                                     eq1->makeQuotedStr() +
+                                                     " contains '" + dims.makeStepStr(rsi1) +
+                                                     "', which is incompatible with '" +
+                                                     dims.makeStepStr(lofs) +
+                                                     "' on LHS");
+                            }
+                        }
+                    } // for all RHS points.
                 }
-                lofs = *lofsp;
-
-                // Step direction already set?
-                if (dims._stepDir) {
-                    if (dims._stepDir != lofs) {
-                        THROW_YASK_EXCEPTION("Error: LHS of equation " + eq1->makeQuotedStr() +
-                                             " contains '" + dims.makeStepStr(lofs) +
-                                             "', which is different than a previous equation with '" +
-                                             dims.makeStepStr(dims._stepDir) + "'");
-                    }
-                } else
-
-                    // Side effect: store step direction.
-                    dims._stepDir = lofs;
             }
 
             // LHS of equation must be vectorizable.
@@ -258,31 +279,8 @@ namespace yask {
                                      " dimensions are accessed via simple offsets from their respective indices");
             }
 
-            // Scan input (RHS) points.
-            for (auto i1 : ip1) {
-
-                // Check RHS of an equation that uses step index.
-                auto* rsi1p = i1->getArgOffsets().lookup(stepDim);
-                if (rsi1p) {
-                    int rsi1 = *rsi1p;
-
-                    // Must be in proper relation to LHS, i.e.,
-                    // if stepping forward, step offsets must be <= 1;
-                    // if stepping backward, step offsets must be >= 1;
-                    if ((lofs > 0 && rsi1 > lofs) ||
-                        (lofs < 0 && rsi1 < lofs)) {
-                        THROW_YASK_EXCEPTION("Error: RHS of equation " +
-                                             eq1->makeQuotedStr() +
-                                             " contains '" + dims.makeStepStr(rsi1) +
-                                             "', which is incompatible with '" +
-                                             dims.makeStepStr(lofs) +
-                                             "' on LHS");
-                    }
-                }
-
-                // TODO: check that domain indices are simple offsets and
-                // misc indices are consts.
-            } // for all RHS points.
+            // TODO: check that domain indices are simple offsets and
+            // misc indices are consts on RHS.
 
             // TODO: check to make sure cond1 depends only on indices.
         } // for all eqs.
@@ -299,6 +297,7 @@ namespace yask {
             //auto& ig1 = inGrids.at(eq1p);
             //auto& ip1 = inPts.at(eq1p);
             auto cond1 = eq1p->getCond();
+            NumExprPtr step_expr1 = op1->getArg(stepDim);
 
             // Check each 'eq2' to see if it depends on 'eq1'.
             for (auto eq2 : getAll()) {
@@ -399,18 +398,22 @@ namespace yask {
                         if (!same_grid)
                             continue;
 
+                        // Both points at same step?
+                        bool same_step = false;
+                        NumExprPtr step_expr2 = i2->getArg(stepDim);
+                        if (step_expr1 && step_expr2 &&
+                            areExprsSame(step_expr1, step_expr2))
+                            same_step = true;
+
                         // From same step index, e.g., same time?
                         // Or, passing data thru a temp var?
-                        // TODO: check that constant indices are same.
-                        auto* si2p = i2->getArgOffsets().lookup(stepDim);
-                        bool same_step = si2p && lofs && (*si2p == lofs);
                         if (same_step || og1->isScratch()) {
 
                             // Eq depends on itself?
                             if (same_eq) {
 
                                 // Exit with error.
-                                string stepmsg = same_step ? " at '" + dims.makeStepStr(lofs) + "'" : "";
+                                string stepmsg = same_step ? " at '" + step_expr1->makeQuotedStr() + "'" : "";
                                 THROW_YASK_EXCEPTION("Error: disallowed dependency: grid '" +
                                                      op1->makeLogicalGridStr() + "' on LHS of equation " +
                                                      eq1->makeQuotedStr() + " also appears on its RHS" +

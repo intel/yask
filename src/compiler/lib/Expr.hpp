@@ -799,6 +799,9 @@ namespace yask {
             _loopType = vt;
         }
 
+        // Get arg for 'dim' or return null if none.
+        virtual const NumExprPtr getArg(const string& dim) const;
+        
         // Set given arg to given offset; ignore if not in step or domain grid dims.
         virtual void setArgOffset(const IntScalar& offset);
 

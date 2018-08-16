@@ -320,9 +320,14 @@ namespace yask {
 
         auto& step_dim = _dims->_step_dim;
         auto step_posn = Indices::step_posn;
-        auto step_dir = _dims->_step_dir;
         int ndims = _dims->_stencil_dims.size();
 
+        // Determine step dir from dims or order of first/last.
+        // TODO: make this more reliable.
+        idx_t step_dir = (first_step_index < last_step_index) ? 1 :
+            (first_step_index > last_step_index) ? -1 :
+            _dims->_step_dir;
+        
         // Find begin, step and end in step-dim.
         idx_t begin_t = first_step_index;
 
@@ -667,6 +672,8 @@ namespace yask {
                 // have the same information about which grids are possibly
                 // dirty.  TODO: make this smarter to save unneeded MPI
                 // exchanges.
+                // FIXME: this assumes equations are of the form
+                // 'u(t +/- 1) EQUALS ...'; need to generalize.
                 if (do_mpi_exterior)
                     mark_grids_dirty(bp, start_t + step_t, stop_t + step_t);
 
@@ -831,13 +838,14 @@ namespace yask {
         // If wave-fronts are enabled, run a max number of these steps.
         // TODO: only run one region during AT.
         idx_t region_steps = _opts->_region_sizes[_dims->_step_dim];
-        idx_t step_t = min(region_steps, AutoTuner::max_step_t) * _dims->_step_dir;
+        idx_t step_dir = _dims->_step_dir;
+        idx_t step_t = min(region_steps, AutoTuner::max_step_t) * step_dir;
 
         // Run time-steps until AT converges.
         for (idx_t t = 0; ; t += step_t) {
 
             // Run step_t time-step(s).
-            run_solution(t, t + step_t - _dims->_step_dir);
+            run_solution(t, t + step_t - step_dir);
 
             // AT done on this rank?
             if (!is_auto_tuner_enabled())
