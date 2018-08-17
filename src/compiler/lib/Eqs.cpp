@@ -221,28 +221,22 @@ namespace yask {
                 }
             }
         
-            // Compare step offsets of LHS and RHS of non-scratch eq.
+            // Checks for a non-scratch eq.
             if (!og1->isScratch()) {
 
                 if (!step_expr1)
                     THROW_YASK_EXCEPTION("Error: non-scratch-grid '" + og1->getName() +
                                          "' does not use '" + stepDim + "' dim");
-                
-                // See if step arg is a simple offset, e.g., 'u(t+1, ...)'.
+
+                // Heuristics to set the default step direction.
+                // The accuracy isn't critical, because the default should only be
+                // used in the standalone test utility and the auto-tuner.
+                // First, see if LHS step arg is a simple offset, e.g., 'u(t+1, ...)'.
                 // This is the most common case.
                 auto& lofss = op1->getArgOffsets();
                 auto* lofsp = lofss.lookup(stepDim); // offset at step dim.
                 if (lofsp) {
                     auto lofs = *lofsp;
-
-                    // Soln step-direction heuristic.
-                    // Assume 'u(t+1, ...) EQUALS ...' implies forward,
-                    // and 'u(t-1, ...) EQUALS ...' implies backward.
-                    // TODO: improve this; at least handle
-                    // 'u(t, ...) EQUALS ... u(t +/- 1, ...) ...',
-                    // but need to look thru scratch vars to get this right.
-                    if (dims._stepDir == 0 && lofs != 0)
-                        dims._stepDir = (lofs > 0) ? 1 : -1;
 
                     // Scan input (RHS) points.
                     for (auto i1 : ip1) {
@@ -250,24 +244,28 @@ namespace yask {
                         // Is point a simple offset from step, e.g., 'u(t-2, ...)'?
                         auto* rsi1p = i1->getArgOffsets().lookup(stepDim);
                         if (rsi1p) {
-                            int rsi1 = *rsi1p;
+                            int rofs = *rsi1p;
 
-                            // Must be in proper relation to LHS, e.g.,
-                            // the following are illegal given the heuristic
-                            // used above.
-                            // forward: 'u(t+1, ...) EQUALS ... u(t+2, ...) ...',
-                            // backward: 'u(t-1, ...) EQUALS ... u(t-2, ...) ...'.
-                            if ((lofs > 0 && rsi1 > lofs) ||
-                                (lofs < 0 && rsi1 < lofs)) {
-                                THROW_YASK_EXCEPTION("Error: RHS of equation " +
-                                                     eq1->makeQuotedStr() +
-                                                     " contains '" + dims.makeStepStr(rsi1) +
-                                                     "', which is incompatible with '" +
-                                                     dims.makeStepStr(lofs) +
-                                                     "' on LHS");
+                            // Example:
+                            // forward: 'u(t+1, ...) EQUALS ... u(t, ...) ...',
+                            // backward: 'u(t-1, ...) EQUALS ... u(t, ...) ...'.
+                            if (lofs > rofs) {
+                                dims._stepDir = 1;
+                                break;
+                            }
+                            else if (lofs > rofs) {
+                                dims._stepDir = -1;
+                                break;
                             }
                         }
                     } // for all RHS points.
+                    
+                    // Soln step-direction heuristic used only if not set.
+                    // Assume 'u(t+1, ...) EQUALS ...' implies forward,
+                    // and 'u(t-1, ...) EQUALS ...' implies backward.
+                    if (dims._stepDir == 0 && lofs != 0)
+                        dims._stepDir = (lofs > 0) ? 1 : -1;
+
                 }
             }
 
@@ -830,7 +828,9 @@ namespace yask {
     bool EqBundles::addEqToBundle(Eqs& allEqs,
                                   EqualsExprPtr eq,
                                   const string& baseName) {
-
+        assert(_dims);
+        auto& stepDim = _dims->_stepDim;
+        
         // Equation already added?
         if (_eqs_in_bundles.count(eq))
             return false;
@@ -838,6 +838,9 @@ namespace yask {
         // Get condition, if any.
         auto cond = eq->getCond();
 
+        // Get step expr, if any.
+        auto step_expr = eq->getLhs()->getArg(stepDim);
+        
         // Get deps between eqs.
         auto& eq_deps = allEqs.getDeps();
 
@@ -850,26 +853,36 @@ namespace yask {
             if (eg->isScratch() != eq->isScratch())
                 continue;
 
-            // Must match name and condition.
-            if (eg->baseName != baseName || !areExprsSame(eg->cond, cond))
+            // Names must match.
+            if (eg->baseName != baseName)
+                continue;
+
+            // Conditions must match (both may be null).
+            if (!areExprsSame(eg->cond, cond))
+                continue;
+
+            // LHS step exprs must match (both may be null).
+            if (!areExprsSame(eg->step_expr, step_expr))
                 continue;
 
             // Look for any condition or dependencies that would prevent
             // adding 'eq' to 'eg'.
             bool is_ok = true;
             for (auto& eq2 : eg->getEqs()) {
+                auto eqg = eq->getGrid();
+                auto eq2g = eq2->getGrid();
+                assert (eqg);
+                assert (eq2g);
 
                 // If scratch, 'eq' and 'eq2' must have same halo.
                 // This is because scratch halos are written to.
                 if (eq->isScratch()) {
-                    auto eq2g = eq2->getGrid();
-                    auto eqg = eq->getGrid();
                     if (!eq2g->isHaloSame(*eqg))
                         is_ok = false;
                 }
 
                 // Look for any dependency between 'eq' and 'eq2'.
-                if (eq_deps.is_dep(eq, eq2)) {
+                if (is_ok && eq_deps.is_dep(eq, eq2)) {
 #if DEBUG_ADD_EXPRS
                     cout << "addEqFromGrid: not adding equation " <<
                         eq->makeQuotedStr() << " to " << eg.getDescr() <<
@@ -899,6 +912,7 @@ namespace yask {
             target->baseName = baseName;
             target->index = _indices[baseName]++;
             target->cond = cond;
+            target->step_expr = step_expr;
             newBundle = true;
 
 #if DEBUG_ADD_EXPRS

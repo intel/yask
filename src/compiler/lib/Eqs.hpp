@@ -431,9 +431,13 @@ namespace yask {
 
     public:
 
-        // Common condition.
         // TODO: move these into protected section and make accessors.
-        BoolExprPtr cond;           // condition (default is null).
+
+        // Common condition.
+        BoolExprPtr cond;
+
+        // Common step expr.
+        NumExprPtr step_expr;
 
         // Create a copy containing clones of the equations.
         virtual shared_ptr<EqBundle> clone() const {
