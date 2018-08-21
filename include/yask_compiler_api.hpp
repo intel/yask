@@ -440,7 +440,7 @@ namespace yask {
         clear_dependencies() =0;
     };
 
-    /// A compile-time grid.
+    /// A compile-time data variable.
     /** "Grid" is a generic term for any n-dimensional array.  A 0-dim grid
         is a scalar, a 1-dim grid is an array, etc.
         A compile-time grid is a variable used for constructing equations.

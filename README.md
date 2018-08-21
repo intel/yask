@@ -10,7 +10,7 @@ YASK--Yet Another Stencil Kernel: A framework to rapidly create high-performance
 * Multi-level OpenMP parallelism,
 * Encapsulated memory layout,
 * Temporal wave-front blocking,
-* MPI halo exchange, and
+* MPI halo exchange, overlapping MPI communication and compute, and
 * APIs for C++ and Python: [API documentation](https://rawgit.com/intel/yask/api-docs/html/index.html).
 
 YASK contains a domain-specific compiler to convert scalar stencil code to SIMD-optimized code for Intel(R) Xeon Phi(TM) and Intel(R) Xeon(R) processors.

@@ -497,14 +497,17 @@ namespace yask {
                     " _is_scratch = " << (eq->isScratch() ? "true" : "false") << ";\n";
 
                 // I/O grids.
-                os << "\n // The following grids are read by " << egsName << endl;
+                os << "\n // The following grid(s) are read by " << egsName << endl;
                 for (auto gp : eq->getInputGrids()) {
                     if (gp->isScratch())
                         os << "  inputScratchVecs.push_back(&_context->" << gp->getName() << "_list);\n";
                     else
                         os << "  inputGridPtrs.push_back(_context->" << gp->getName() << "_ptr);\n";
                 }
-                os << "\n // The following grids are written by " << egsName << endl;
+                os << "\n // The following grid(s) are written by " << egsName;
+                if (eq->step_expr)
+                    os << " at " << eq->step_expr->makeQuotedStr();
+                os << ".\n";
                 for (auto gp : eq->getOutputGrids()) {
                     if (gp->isScratch())
                         os << "  outputScratchVecs.push_back(&_context->" << gp->getName() << "_list);\n";
@@ -521,13 +524,35 @@ namespace yask {
                     " // Return true if indices are within the valid sub-domain or false otherwise.\n"
                     " virtual bool is_in_valid_domain(const Indices& idxs) const final {\n";
                 printIndices(os);
-                if (eq->cond.get())
-                    os << " return " << eq->cond->makeStr() << ";" << endl;
+                if (eq->cond)
+                    os << " return " << eq->cond->makeStr() << ";\n";
                 else
-                    os << " return true; // full domain." << endl;
-                os << " }" << endl;
+                    os << " return true; // full domain.\n";
+                os << " }\n";
             }
 
+            // LHS step index.
+            {
+                os << endl;
+                if (eq->step_expr)
+                    os << " // Set 'output_step_index' to the step that an update"
+                    " occurs when calling one of the calc_*() methods with"
+                    " 'input_step_index' and return 'true'.\n";
+                else
+                    os << "// Return 'false' because this bundle does not update"
+                        " grids with the step dimension.\n";
+                os << " virtual bool get_output_step_index(idx_t input_step_index,"
+                    " idx_t& output_step_index) const final {\n";
+                if (eq->step_expr) {
+                    os << " idx_t " << _dims->_stepDim << " = input_step_index;\n"
+                        " output_step_index = " << eq->step_expr->makeStr() << ";\n"
+                        " return true;\n";
+                }
+                else
+                    os << " return false;\n";
+                os << " }\n";
+            }
+            
             // Scalar code.
             {
                 // Stencil-calculation code.

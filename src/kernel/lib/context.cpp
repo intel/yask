@@ -277,13 +277,12 @@ namespace yask {
 #undef misc_fn
                 } // needed bundles.
 
-                // Mark grids that [may] have been written to,
-                // updated at next step (+/- 1).
+                // Mark grids that [may] have been written to.
                 // Mark grids as dirty even if not actually written by this
                 // rank. This is needed because neighbors will not know what
                 // grids are actually dirty, and all ranks must have the same
                 // information about which grids are possibly dirty.
-                mark_grids_dirty(nullptr, start_t + step_t, stop_t + step_t);
+                mark_grids_dirty(nullptr, start_t, stop_t);
 
                 ext_time.stop();
             } // all bundles.
@@ -320,9 +319,11 @@ namespace yask {
 
         auto& step_dim = _dims->_step_dim;
         auto step_posn = Indices::step_posn;
-        auto step_dir = _dims->_step_dir;
         int ndims = _dims->_stencil_dims.size();
 
+        // Determine step dir from order of first/last.
+        idx_t step_dir = (first_step_index > last_step_index) ? -1 : 1;
+        
         // Find begin, step and end in step-dim.
         idx_t begin_t = first_step_index;
 
@@ -668,7 +669,7 @@ namespace yask {
                 // dirty.  TODO: make this smarter to save unneeded MPI
                 // exchanges.
                 if (do_mpi_exterior)
-                    mark_grids_dirty(bp, start_t + step_t, stop_t + step_t);
+                    mark_grids_dirty(bp, start_t, stop_t);
 
                 // Shift spatial region boundaries for next iteration to
                 // implement temporal wavefront.  Between regions, we only shift
@@ -831,13 +832,14 @@ namespace yask {
         // If wave-fronts are enabled, run a max number of these steps.
         // TODO: only run one region during AT.
         idx_t region_steps = _opts->_region_sizes[_dims->_step_dim];
-        idx_t step_t = min(region_steps, AutoTuner::max_step_t) * _dims->_step_dir;
+        idx_t step_dir = _dims->_step_dir;
+        idx_t step_t = min(region_steps, AutoTuner::max_step_t) * step_dir;
 
         // Run time-steps until AT converges.
         for (idx_t t = 0; ; t += step_t) {
 
             // Run step_t time-step(s).
-            run_solution(t, t + step_t - _dims->_step_dir);
+            run_solution(t, t + step_t - step_dir);
 
             // AT done on this rank?
             if (!is_auto_tuner_enabled())
@@ -1431,29 +1433,39 @@ namespace yask {
     // TODO: track sub-domain of grid that is dirty.
     void StencilContext::mark_grids_dirty(const BundlePackPtr& sel_bp,
                                           idx_t start, idx_t stop) {
-        idx_t step = (start < stop) ? 1 : -1;
-        GridPtrSet grids_done;
+        idx_t step = (start > stop) ? -1 : 1;
+        map<YkGridPtr, set<idx_t>> grids_done;
 
         // Stencil bundle packs.
         for (auto& bp : stPacks) {
 
-            // Not selected bundle pack?
+            // Not a selected bundle pack?
             if (sel_bp && sel_bp != bp)
                 continue;
 
-            // Loop through bundles in this pack.
-            for (auto* sb : *bp) {
+            // Each input step.
+            for (idx_t t = start; t != stop; t += step) {
 
-                // Output grids for this bundle.  NB: don't need to mark
-                // scratch grids as dirty because they are never exchanged.
-                for (auto gp : sb->outputGridPtrs) {
+                // Each bundle in this pack.
+                for (auto* sb : *bp) {
 
-                    // Mark this step as dirty if not already done.
-                    for (idx_t t = start; t != stop; t += step) {
-                        if (grids_done.count(gp) == 0) {
-                            gp->set_dirty(true, t);
-                            TRACE_MSG("grid '" << gp->get_name() << "' marked as dirty at step " << t);
-                            grids_done.insert(gp);
+                    // Get output step for this bundle, if any.
+                    // For many stencils, this will be t+1 or
+                    // t-1 if stepping backward.
+                    idx_t t_out = 0;
+                    if (!sb->get_output_step_index(t, t_out))
+                        continue;
+
+                    // Output grids for this bundle.  NB: don't need to mark
+                    // scratch grids as dirty because they are never exchanged.
+                    for (auto gp : sb->outputGridPtrs) {
+
+                        // Mark output step as dirty if not already done.
+                        if (grids_done[gp].count(t_out) == 0) {
+                            gp->set_dirty(true, t_out);
+                            TRACE_MSG("grid '" << gp->get_name() <<
+                                      "' marked as dirty at step " << t_out);
+                            grids_done[gp].insert(t_out);
                         }
                     }
                 }

@@ -397,6 +397,8 @@ namespace yask {
         IdxTuple _cluster_mults; // all domain dims.
 
         // Direction of step.
+        // This is a heuristic value used only for stepping the
+        // perf-measuring utility and the auto-tuner.
         int _step_dir = 0;    // 0: undetermined, +1: forward, -1: backward.
 
         // Check whether dim exists and is of allowed type.

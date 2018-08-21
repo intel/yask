@@ -335,6 +335,7 @@ namespace yask {
         IdxTuple numElemsTuple = get_slice_range(first, last);
 
         // Visit points in slice.
+        // TODO: optimize by setting vectors when possible.
         numElemsTuple.visitAllPointsInParallel([&](const IdxTuple& ofs,
                                                    size_t idx) {
                 Indices pt = first.addElements(ofs);

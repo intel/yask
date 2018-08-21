@@ -166,7 +166,16 @@ namespace yask {
         virtual bool
         is_in_valid_domain(const Indices& idxs) const =0;
 
-        // Calculate one scalar result at time t.
+        // If bundle updates grid(s) with the step index,
+        // set 'output_step_index' to the step that an update
+        // occurs when calling one of the calc_*() methods with
+        // 'input_step_index' and return 'true'.
+        // Else, return 'false';
+        virtual bool
+        get_output_step_index(idx_t input_step_index,
+                              idx_t& output_step_index) const =0;
+
+        // Calculate one scalar result.
         virtual void
         calc_scalar(int thread_idx, const Indices& idxs) =0;
 
