@@ -954,13 +954,6 @@ namespace yask {
         }
     };
 
-    // A conditional evaluation.
-    // We use an otherwise unneeded binary operator that has a low priority.
-    // See http://en.cppreference.com/w/cpp/language/operator_precedence.
-#define IF_OPER ^=
-    EqualsExprPtr operator IF_OPER(EqualsExprPtr expr, const BoolExprPtr cond);
-#define IF IF_OPER
-
     ///// The following are operators and functions used in stencil expressions.
 
     // Various unary operators.
@@ -991,13 +984,31 @@ namespace yask {
     void operator/=(NumExprPtr& lhs, const NumExprPtr rhs);
     void operator/=(NumExprPtr& lhs, double rhs);
 
-    // The '==' operator used for defining a grid value.
-#define EQUALS_OPER ==
+    // A conditional evaluation.
+    // We use an otherwise unneeded binary operator that has a low priority.
+    // See http://en.cppreference.com/w/cpp/language/operator_precedence.
+#define IF_OPER ^=
+    EqualsExprPtr operator IF_OPER(EqualsExprPtr expr, const BoolExprPtr cond);
+#define IF IF_OPER
+
+    // The operator used for defining a grid value.
+    // We use an otherwise unneeded binary operator that has a lower priority
+    // than the math ops and a higher priority than the IF_OPER.
+    // See http://en.cppreference.com/w/cpp/language/operator_precedence.
+    // This should not be an operator that is defined for shared pointers.
+    // See https://en.cppreference.com/w/cpp/memory/shared_ptr.
+#define EQUALS_OPER <<
     EqualsExprPtr operator EQUALS_OPER(GridPointPtr gpp, const NumExprPtr rhs);
+    EqualsExprPtr operator EQUALS_OPER(GridPointPtr gpp, const GridPointPtr rhs);
     EqualsExprPtr operator EQUALS_OPER(GridPointPtr gpp, double rhs);
 #define EQUALS EQUALS_OPER
 #define IS_EQUIV_TO EQUALS_OPER
 #define IS_EQUIVALENT_TO EQUALS_OPER
+
+    // Catch use of the old '==' operator.
+#define BAD_OPER1 ==
+    EqualsExprPtr operator BAD_OPER1(GridPointPtr gpp, const NumExprPtr rhs);
+    EqualsExprPtr operator BAD_OPER1(GridPointPtr gpp, double rhs);
 
     // Binary numerical-to-boolean operators.
     // Must provide explicit IndexExprPtr operands to keep compiler from

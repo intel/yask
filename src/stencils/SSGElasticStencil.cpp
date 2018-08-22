@@ -24,6 +24,7 @@ IN THE SOFTWARE.
 *****************************************************************************/
 
 // Stencil equations for SSG elastic numerics.
+// Contributed by Albert Farres from the Barcelona Supercomputing Center.
 
 #include "ElasticStencil/ElasticStencil.hpp"
 
@@ -107,7 +108,7 @@ public:
         GridValue next_s = s(t, x, y, z) + ((vta + vtb) * lcoeff) * delta_t;
 
         // define the value at t+1.
-        s(t+1, x, y, z) == next_s;
+        s(t+1, x, y, z) EQUALS next_s;
     }
 
     void define_str_TL(GridIndex t, GridIndex x, GridIndex y, GridIndex z )
@@ -131,9 +132,9 @@ public:
             + ilambdamu2 * vtz * delta_t;
 
         // define the value at t+1.
-        s_tl_xx(t+1, x, y, z) == next_xx;
-        s_tl_yy(t+1, x, y, z) == next_yy;
-        s_tl_zz(t+1, x, y, z) == next_zz;
+        s_tl_xx(t+1, x, y, z) EQUALS next_xx;
+        s_tl_yy(t+1, x, y, z) EQUALS next_yy;
+        s_tl_zz(t+1, x, y, z) EQUALS next_zz;
     }
 
     // Call all the define_* functions.

@@ -451,6 +451,16 @@ namespace yask {
         return expr;
     }
 
+    // Unused operators.
+    EqualsExprPtr operator BAD_OPER1(GridPointPtr gpp, const NumExprPtr rhs) {
+        THROW_YASK_EXCEPTION("Error: operator '==' is not allowed on a grid point;"
+                             " use 'EQUALS' to assert equality between a grid point (LHS)"
+                             " and an equation (RHS)");
+    }
+    EqualsExprPtr operator BAD_OPER1(GridPointPtr gpp, double rhs) {
+        return gpp EQUALS_OPER constNum(rhs);
+    }
+    
     // Define the value of a grid point.
     // Add this equation to the list of eqs for this stencil.
     EqualsExprPtr operator EQUALS_OPER(GridPointPtr gpp, const NumExprPtr rhs) {
@@ -478,6 +488,11 @@ namespace yask {
     }
     EqualsExprPtr operator EQUALS_OPER(GridPointPtr gpp, double rhs) {
         return gpp EQUALS_OPER constNum(rhs);
+    }
+    EqualsExprPtr operator EQUALS_OPER(GridPointPtr gpp, GridPointPtr rhs) {
+        auto p = dynamic_pointer_cast<NumExpr>(rhs);
+        assert(p);
+        return gpp EQUALS_OPER p;
     }
 
     // Visitor acceptors.
@@ -593,6 +608,7 @@ namespace yask {
             auto dim = dims.at(i);
             auto dname = dim->getName();
             auto arg = args.at(i);
+            assert(arg);
 #ifdef DEBUG_GP
             cout << " Arg " << arg->makeQuotedStr() <<
                 " at dim '" << dname << "'\n";
