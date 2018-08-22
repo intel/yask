@@ -24,7 +24,9 @@ IN THE SOFTWARE.
 *****************************************************************************/
 
 // Stencil equations for FSG elastic numerics.
-// Contributed by Albert Farres from the Barcelona Supercomputing Center
+// Contributed by Albert Farres from the Barcelona Supercomputing Center.
+// This version varies from the original by grouping related grids into
+// larger grids with an added dimension.
 
 #include "Soln.hpp"
 #include "ElasticStencil/Elastic2Stencil.hpp"

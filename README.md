@@ -1,5 +1,6 @@
-*Backward-compatibility notices:*
-* Version 2.11.01 changed the plain-text format of some of the performance data in the test-utility output. Specifically, some leading spaces were added, SI multipliers for values < 1 were added, and the phrase "time in" no longer appears before each time breakdown. This may affect users who parse the output to collect stats.
+#### Backward-compatibility notices:
+* Version 2.12.00 removed the long-deprecated '==' operator for asserting equality between a grid point and an equation. Use 'EQUALS' instead.
+* Version 2.11.01 changed the plain-text format of some of the performance data in the test-utility output. Specifically, some leading spaces were added, SI multipliers for values < 1 were added, and the phrase "time in" no longer appears before each time breakdown. This may affect some user programs that parse the output to collect stats.
 * Version 2.10.00 changed the location of temporary files created during the build process. This will not affect most users, although you may need to manually remove old `src/compiler/gen` and `src/kernel/gen` directories.
 * Version 2.09.00 changed the location of stencils in the internal DSL from `.hpp` to `.cpp` files. See the notes in https://github.com/intel/yask/releases/tag/v2.09.00 if you have any new or modified code in `src/stencils`.
 
@@ -41,9 +42,11 @@ YASK contains a domain-specific compiler to convert scalar stencil code to SIMD-
     * The `indent` or `gindent` utility, used automatically during the build process
       to make the generated code easier for humans to read.
       You'll get a warning when running `make` if one of these doesn't exist.
+      Everything will still work, but the generated code will be difficult to read.
+      Reading the generated code is only necessary for debug or curiosity.
     * SWIG (3.0.12 or later),
       http://www.swig.org, for creating the Python interface.
-    * Python 2 (2.7.5 or later) or 3 (3.6.1 or later),
+    * Python 2 (2.7.5 or later) or 3 (3.6.1 or later recommended),
       https://www.python.org/downloads, for creating and using the Python interface.
     * Doxygen (1.8.11 or later),
       http://doxygen.org, for creating updated API documentation.
