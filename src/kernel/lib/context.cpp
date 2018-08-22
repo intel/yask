@@ -858,7 +858,7 @@ namespace yask {
             at_timer.get_elapsed_secs() << " secs.\n";
         for (auto& sp : stPacks) {
             auto& settings = sp->getSettings();
-            os << " for bundle '" << sp->get_name() << "':\n" <<
+            os << " for pack '" << sp->get_name() << "':\n" <<
                 "  best-block-size: " << settings._block_sizes.makeDimValStr(" * ") << endl <<
                 "  best-sub-block-size: " << settings._sub_block_sizes.makeDimValStr(" * ") << endl << flush;
         }

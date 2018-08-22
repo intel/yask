@@ -613,16 +613,18 @@ namespace yask {
                 g->updateConstIndices(ap->getArgConsts());
             }
 
-            // We want to start with non-scratch eqs and walk the dep
-            // tree to find all dependent scratch eqs.
-            // If 'eq1' has a non-scratch output, visit all dependencies of
-            // 'eq1'.  It's important to visit the eqs in dep order to
+            // We want to start with each non-scratch eq and walk the dep
+            // tree to find all dependent scratch eqs.  If 'eq1' has a
+            // non-scratch output, visit all dependencies of 'eq1'.  It's
+            // important to visit the eqs in dep order via 'path' to
             // properly propagate halos sizes thru chains of scratch grids.
-            // TODO: clean up this obfuscated, hard-to-follow, and fragile code.
+            // TODO: clean up this obfuscated, hard-to-follow, and fragile
+            // code.
             if (!og1->isScratch()) {
                 getDeps().visitDeps
 
-                    // 'eq1' is 'b' or depends on 'b', immediately or indirectly.
+                    // For each 'b', 'eq1' is 'b' or depends on 'b',
+                    // immediately or indirectly.
                     (eq1, [&](EqualsExprPtr b, EqList& path) {
 
                         // Does 'b' have a scratch-grid output?
@@ -632,13 +634,14 @@ namespace yask {
                         if (og2->isScratch()) {
 
                             // Get halos from the output scratch grid.
-                            // These are the points that are read from
-                            // the dependent eq(s).
-                            // For scratch grids, the halo areas must also be written to.
-                            auto _left_ohalo = og2->getHaloSizes(true);
-                            auto _right_ohalo = og2->getHaloSizes(false);
+                            // These are the points that are read from the
+                            // dependent eq(s).  For scratch grids, the halo
+                            // areas must also be written to.
+                            auto left_ohalo = og2->getHaloSizes(true);
+                            auto right_ohalo = og2->getHaloSizes(false);
 
-                            // Expand halos of all input grids by size of output-grid halo.
+                            // Expand halos of all input grids of 'b' by
+                            // size of output-grid halo.
                             auto& inPts2 = pv.getInputPts().at(b.get());
                             for (auto ip2 : inPts2) {
                                 auto* ig2 = ip2->getGrid();
@@ -646,17 +649,19 @@ namespace yask {
 
                                 // Increase range by subtracing left halos and
                                 // adding right halos.
-                                auto _left_ihalo = ao2.subElements(_left_ohalo, false);
-                                ig2->updateHalo(_left_ihalo);
-                                auto _right_ihalo = ao2.addElements(_right_ohalo, false);
-                                ig2->updateHalo(_right_ihalo);
+                                auto left_ihalo = ao2.subElements(left_ohalo, false);
+                                ig2->updateHalo(left_ihalo);
+                                auto right_ihalo = ao2.addElements(right_ohalo, false);
+                                ig2->updateHalo(right_ihalo);
                             }
                         }
 
                         // Find scratch-grid eqs in this dep path that are
                         // needed for 'eq1'. Walk dep path from 'eq1' to 'b'.
                         EqualsExprPtr prev;
+                        unordered_set<Grid*> scratches_seen;
                         for (auto eq2 : path) {
+                            auto* og2 = pv.getOutputGrids().at(eq2.get());
 
                             // Look for scratch-grid dep from 'prev' to 'eq2'.
                             if (prev) {
@@ -677,13 +682,20 @@ namespace yask {
                                 // If 'eq2' output-grid is one of the
                                 // scratch-grid targets, add it to the set
                                 // needed for 'eq1'.
-                                auto* og2 = pv.getOutputGrids().at(eq2.get());
                                 if (targets.count(og2))
                                     getScratches().set_imm_dep_on(eq1, eq2);
                                 else
                                     break;
                             }
                             prev = eq2;
+
+                            // Check for illegal scratch path.
+                            if (og2->isScratch()) {
+                                if (scratches_seen.count(og2))
+                                    THROW_YASK_EXCEPTION("Error: scratch-grid '" +
+                                                         og2->get_name() + "' depends upon itself");
+                                scratches_seen.insert(og2);
+                            }
                         }
 
                     });
