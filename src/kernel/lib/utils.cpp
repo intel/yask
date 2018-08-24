@@ -61,18 +61,16 @@ namespace yask {
 #ifdef USE_PMEM
     static int pmem_tmpfile(const char *dir, size_t size, int *fd, void **addr)
     {
-        //static char template[] = "/pmem1";
+        static char tmpl[] = "appdirect_memXXXXXX";
         int err = 0;
-        //int oerrno;
 
-        //char fullname[strlen(dir) + sizeof (template)];
-        //(void) strcpy(fullname, dir);
-        //(void) strcat(fullname, template);
+        char fullname[strlen(dir) + sizeof (tmpl)];
+        (void) strcpy(fullname, dir);
+        (void) strcat(fullname, tmpl);
 
-        if ((*fd = mkstemp((char *)dir)) < 0) {
+        if ((*fd = mkstemp(fullname)) < 0) {
             perror("mkstemp()");
             err = MEMKIND_ERROR_RUNTIME;
-            //goto exit;
             THROW_YASK_EXCEPTION("Error: MEMKIND_ERROR_RUNTIME 1\n");
         }
 
@@ -80,14 +78,12 @@ namespace yask {
 
         if (ftruncate(*fd, size) != 0) {
             err = MEMKIND_ERROR_RUNTIME;
-            //goto exit;
             THROW_YASK_EXCEPTION("Error: MEMKIND_ERROR_RUNTIME 2\n");
         }
 
         *addr = mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_SHARED, *fd, 0);
         if (*addr == MAP_FAILED) {
             err = MEMKIND_ERROR_RUNTIME;
-            //goto exit;
             THROW_YASK_EXCEPTION("Error: MEMKIND_ERROR_RUNTIME 3\n");
         }
 
@@ -129,36 +125,15 @@ namespace yask {
         // Hacked to allocate grid into pmem (indicated by numa preferred number = 1000)
         if (numa_pref == 1000) {
 #ifdef USE_PMEM
-            //struct memkind *pmem_kind1;
             int err = 0;
             int fd;
-            //void *addr;
-
-            /* create PMEM partition */
-            //err = memkind_create_pmem(".", nbytes, &pmem_kind1);
-            //if (err) {
-            //    perror("memkind_create_pmem()");
-            //    //fprintf(stderr, "Unable to create pmem partition\n");
-            //    //return errno ? -errno : 1;
-            //    THROW_YASK_EXCEPTION("Error: Unable to create pmem partition\n");
-            //}
-
-            //p = (void *)memkind_malloc(pmem_kind1, nbytes);
-            //if (p == NULL) {
-            //    perror("memkind_malloc()");
-            //    //fprintf(stderr, "Unable to allocate pmem string (pmem_str10)\n");
-            //    //return errno ? -errno : 1;
-            //    THROW_YASK_EXCEPTION("Error: Unable to allocate pmem string\n");
-            //}
             if (numa_pref%1000 == 0)
-                err = pmem_tmpfile("/dev/pmem0", nbytes, &fd, &p);
+                err = pmem_tmpfile("/mnt/pmem0", nbytes, &fd, &p);
             else if (numa_pref%1000 == 1)
-                err = pmem_tmpfile("/dev/pmem1", nbytes, &fd, &p);
+                err = pmem_tmpfile("/mnt/pmem1", nbytes, &fd, &p);
             else
                 THROW_YASK_EXCEPTION("Error: explicit NUMA policy allocation (appdirect) is not available\n");
 			if (err) {
-				//fprintf(stderr, "Unable to create temporary file\n");
-				//return errno ? -errno : 1;
 				THROW_YASK_EXCEPTION("Error: Unable to create temporary file\n");
 			}
 #else
