@@ -32,6 +32,7 @@ stencil			:=	iso3dfd
 arch			:=	snb
 mpi			:=	1
 numa			:=	1
+pmem			:=	0
 real_bytes		:=	4
 radius			:=	2
 allow_new_grid_types	:=	1
@@ -390,6 +391,14 @@ endif
 # THEN enable the macro to use it.
 ifneq ($(shell find /usr/include -name 'numaif.h' | wc -l),0)
  MACROS		+=	USE_NUMAIF_H
+endif
+
+# Add options for PMEM.
+ifeq ($(pmem),1)
+ YK_CXXFLAGS	+=	-I/opt/intel/knl/memkind_build/include
+ YK_CXXFLAGS	+=	-I/opt/intel/knl/memkind_build/include/memkind/internal
+ YK_LIBS		+=	-L/opt/intel/knl/memkind_build/lib -lmemkind
+ MACROS		+=	USE_PMEM
 endif
 
 endif
