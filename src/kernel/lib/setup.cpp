@@ -1126,7 +1126,20 @@ namespace yask {
 
 #ifdef USE_PMEM
         // Hacked to set numa preferred number for AppDirect mode
-        if (YASK_STENCIL_NAME == "iso3dfd")
+        map<string, bool> w_grid;
+        for (auto& sp : stPacks) {
+            for (auto* sg : *sp) {
+                for (auto gp : sg->outputGridPtrs) {
+                    w_grid[gp->get_name()] = true;
+                }
+            }
+        }
+        for (auto& g : gridPtrs) {
+            if (w_grid.find(g->get_name)==w_grid.end())
+                g->set_numa_preferred(1000+_env->my_rank);
+                os << "Set '" << g->get_name() << "' grid to be allocated pmem" << endl;
+        }
+        /*if (YASK_STENCIL_NAME == "iso3dfd")
             for (auto& g : gridPtrs) {
                 if (g->get_name() == "vel" || g->get_name() == "coeff") {
                     if (_env->my_rank%2 == 0)
@@ -1136,7 +1149,7 @@ namespace yask {
 
                     os << "Set '" << g->get_name() << "' grid to be allocated pmem" << endl;
                 }
-            }
+            }*/
 #endif
 
         // Set up data based on MPI rank, including grid positions.

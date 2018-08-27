@@ -61,7 +61,7 @@ namespace yask {
 #ifdef USE_PMEM
     static int pmem_tmpfile(const char *dir, size_t size, int *fd, void **addr)
     {
-        static char tmpl[] = "appdirect_memXXXXXX";
+        static char tmpl[] = "/appdirect_memXXXXXX";
         int err = 0;
 
         char fullname[strlen(dir) + sizeof (tmpl)];
@@ -122,8 +122,8 @@ namespace yask {
             THROW_YASK_EXCEPTION("Error: explicit NUMA policy allocation is not available");
 
 #else
-        // Hacked to allocate grid into pmem (indicated by numa preferred number = 1000)
-        if (numa_pref == 1000) {
+        // Hacked to allocate grid into pmem (indicated by numa preferred number offset = 1000)
+        if (numa_pref >= 1000) {
 #ifdef USE_PMEM
             int err = 0;
             int fd;
@@ -177,8 +177,19 @@ namespace yask {
                 }
             }
             else
+#ifdef USE_PMEM
+            {
+                int err = 0;
+                int fd;
+                err = pmem_tmpfile("/mnt/pmem0", nbytes, &fd, &p);
+                if (err) {
+                    THROW_YASK_EXCEPTION("Error: Unable to create temporary file\n");
+                }
+            }
+#else
                 THROW_YASK_EXCEPTION("Error: anonymous mmap of " + makeByteStr(nbytes) +
                                      " failed");
+#endif
         }
         else
             THROW_YASK_EXCEPTION("Error: explicit NUMA policy allocation is not available");
