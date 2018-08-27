@@ -57,6 +57,11 @@ namespace yask {
     class vector_set : public std::vector<T> {
         std::map<T, size_t> _posn;
 
+    private:
+        virtual void push_front(const T& val) {
+            THROW_YASK_EXCEPTION("push_front() not allowed");
+        }
+
     public:
         vector_set() {}
         virtual ~vector_set() {}

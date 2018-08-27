@@ -208,9 +208,67 @@ namespace yask {
         _isFoldable = (_numFoldableDims > 0 ) && (_numFoldableDims == dims._foldGT1.size());
 #endif
     }
+    
+    // Determine whether halo sizes are equal.
+    bool Grid::isHaloSame(const Grid& other) const {
+
+        // Same dims?
+        if (!areDimsSame(other))
+            return false;
+
+        // Same halos?
+        for (auto& dim : _dims) {
+            auto& dname = dim->getName();
+            auto dtype = dim->getType();
+            if (dtype == DOMAIN_INDEX) {
+                for (bool left : { false, true }) {
+                    int sz = getHaloSize(dname, left);
+                    int osz = other.getHaloSize(dname, left);
+                    if (sz != osz)
+                        return false;
+                }
+            }
+        }
+        return true;
+    }
+
+    // Update halos based on halo in 'other' grid.
+    // This grid's halos can only be increased.
+    void Grid::updateHalo(const Grid& other) {
+        assert(areDimsSame(other));
+
+        // Loop thru other grid's halo values.
+        for (auto& i0 : other._halos) {
+            auto& left = i0.first;
+            auto& m1 = i0.second;
+            for (auto& i1 : m1) {
+                auto& step = i1.first;
+                const IntTuple& ohalos = i1.second;
+                for (auto& dim : ohalos.getDims()) {
+                    auto& dname = dim.getName();
+                    auto& val = dim.getVal();
+
+                    // Any existing value?
+                    auto& halos = _halos[left][step];
+                    auto* p = halos.lookup(dname);
+
+                    // If not, add this one.
+                    if (!p)
+                        halos.addDimBack(dname, val);
+
+                    // Keep larger value.
+                    else if (val > *p)
+                        *p = val;
+
+                    // Else, current value is larger than val, so don't update.
+                }
+            }
+        }
+    }
 
     // Update halos based on each value in 'offsets' in some
     // read or write to this grid.
+    // This grid's halos can only be increased.
     void Grid::updateHalo(const IntTuple& offsets) {
 
         // Find step value or use 0 if none.
@@ -228,7 +286,6 @@ namespace yask {
             int val = dim.getVal();
             bool left = val <= 0;
             auto& halos = _halos[left][stepVal];
-
             // Don't keep halo in step dim.
             if (stepDim && dname == stepDim->getName())
                 continue;

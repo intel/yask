@@ -166,34 +166,17 @@ namespace yask {
             return true;
         }
 
-        // Determine whether halo sizes are equal.
-        virtual bool isHaloSame(const Grid& other) const {
-
-            // Same dims?
-            if (!areDimsSame(other))
-                return false;
-
-            // Same halos?
-            for (auto& dim : _dims) {
-                auto& dname = dim->getName();
-                auto dtype = dim->getType();
-                if (dtype == DOMAIN_INDEX) {
-                    for (bool left : { false, true }) {
-                        int sz = getHaloSize(dname, left);
-                        int osz = other.getHaloSize(dname, left);
-                        if (sz != osz)
-                            return false;
-                    }
-                }
-            }
-            return true;
-        }
-
         // Determine how many values in step-dim are needed.
         virtual int getStepDimSize() const;
 
         // Determine whether grid can be folded.
         virtual void setFolding(const Dimensions& dims);
+
+        // Determine whether halo sizes are equal.
+        virtual bool isHaloSame(const Grid& other) const;
+
+        // Update halos based on halo in 'other' grid.
+        virtual void updateHalo(const Grid& other);
 
         // Update halos based on each value in 'offsets'.
         virtual void updateHalo(const IntTuple& offsets);
@@ -327,7 +310,6 @@ namespace yask {
             for (auto gp : *this)
                 gp->setFolding(dims);
         }
-
     };
 
     // Settings for the compiler.
@@ -340,6 +322,7 @@ namespace yask {
         bool _firstInner = true; // first dimension of fold is unit step.
         string _eq_bundle_basename_default = "stencil_bundle";
         bool _allowUnalignedLoads = false;
+        bool _bundleScratch = true;
         int _haloSize = 0;      // 0 => calculate each halo separately and automatically.
         int _stepAlloc = 0;     // 0 => calculate step allocation automatically.
         int _maxExprSize = 50;
