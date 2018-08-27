@@ -66,6 +66,7 @@ namespace yask {
     SET_SOLN_API(set_region_size, _opts->_region_sizes[dim] = n, true, true, false, true)
     SET_SOLN_API(set_rank_domain_size, _opts->_rank_sizes[dim] = n, false, true, false, true)
     SET_SOLN_API(set_num_ranks, _opts->_num_ranks[dim] = n, false, true, false, true)
+    SET_SOLN_API(set_rank_index, _opts->_rank_indices[dim] = n, false, true, false, true)
 #undef SET_SOLN_API
 
     // Constructor.
