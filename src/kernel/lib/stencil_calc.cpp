@@ -572,7 +572,7 @@ namespace yask {
         auto* cp = _generic_context;
         auto& dims = cp->get_dims();
         int nsdims = dims->_stencil_dims.size();
-        auto step_posn = Indices::step_posn;
+        auto step_posn = +Indices::step_posn;
         TRACE_MSG3("calc_loop_of_clusters: local vector-indices [" <<
                    loop_idxs.start.makeValStr(nsdims) <<
                    " ... " << loop_idxs.stop.makeValStr(nsdims) << ")");
@@ -609,7 +609,7 @@ namespace yask {
         auto* cp = _generic_context;
         auto& dims = cp->get_dims();
         int nsdims = dims->_stencil_dims.size();
-        auto step_posn = Indices::step_posn;
+        auto step_posn = +Indices::step_posn;
         TRACE_MSG3("calc_loop_of_vectors: local vector-indices [" <<
                    loop_idxs.start.makeValStr(nsdims) <<
                    " ... " << loop_idxs.stop.makeValStr(nsdims) <<
@@ -651,7 +651,7 @@ namespace yask {
         auto* cp = _generic_context;
         auto& dims = cp->get_dims();
         int nsdims = dims->_stencil_dims.size();
-        auto step_posn = Indices::step_posn;
+        auto step_posn = +Indices::step_posn;
 
         // Loop thru vecs of scratch grids for this bundle.
         for (auto* sv : outputScratchVecs) {

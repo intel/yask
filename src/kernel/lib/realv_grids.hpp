@@ -218,14 +218,14 @@ namespace yask {
             t += idx_t(0x10000);
             assert(t >= 0);
 
-            idx_t res = t % _domains[Indices::step_posn];
+            idx_t res = t % _domains[+Indices::step_posn];
             return res;
         }
 
         // Convert logical step index to index in allocated range.
         // If this grid doesn't use the step dim, returns 0.
         inline idx_t get_alloc_step_index(const Indices& indices) const {
-            return _has_step_dim ? _wrap_step(indices[Indices::step_posn]) : 0;
+            return _has_step_dim ? _wrap_step(indices[+Indices::step_posn]) : 0;
         }
 
         // Get grid dims with allocations in number of reals.
@@ -600,7 +600,7 @@ namespace yask {
             Indices adj_idxs(n);
 
             // Special handling for step index.
-            auto sp = Indices::step_posn;
+            auto sp = +Indices::step_posn;
             if (_wrap_step_idx) {
                 assert(alloc_step_idx == _wrap_step(idxs[sp]));
                 adj_idxs[sp] = alloc_step_idx;
@@ -764,7 +764,7 @@ namespace yask {
 #endif
 
             // Special handling for step index.
-            auto sp = Indices::step_posn;
+            auto sp = +Indices::step_posn;
             if (_wrap_step_idx) {
                 assert(alloc_step_idx == _wrap_step(idxs[sp]));
                 vec_idxs[sp] = alloc_step_idx;
@@ -877,7 +877,7 @@ namespace yask {
             Indices adj_idxs(nvls);
 
             // Special handling for step index.
-            auto sp = Indices::step_posn;
+            auto sp = +Indices::step_posn;
             if (_wrap_step_idx) {
                 assert(alloc_step_idx == _wrap_step(vec_idxs[sp]));
                 adj_idxs[sp] = alloc_step_idx;

@@ -372,7 +372,7 @@ namespace yask {
 
             // Any step index is ok because it wraps around.
             // TODO: check that it's < magic added value in wrap_index().
-            if (_has_step_dim && i == Indices::step_posn)
+            if (_has_step_dim && i == +Indices::step_posn)
                 ok = true;
 
             // Within first..last indices?
@@ -416,8 +416,8 @@ namespace yask {
     void YkGridBase::set_dirty_in_slice(const Indices& first_indices,
                                         const Indices& last_indices) {
         if (_has_step_dim) {
-            for (idx_t i = first_indices[Indices::step_posn];
-                 i <= last_indices[Indices::step_posn]; i++)
+            for (idx_t i = first_indices[+Indices::step_posn];
+                 i <= last_indices[+Indices::step_posn]; i++)
                 set_dirty(true, i);
         } else
             set_dirty_using_alloc_index(true, 0);

@@ -496,7 +496,7 @@ namespace yask {
 
             // i: index for stencil dims, j: index for domain dims.
             for (int i = 0, j = 0; i < ndims; i++) {
-                if (i == Indices::step_posn) continue;
+                if (i == +Indices::step_posn) continue;
 
                 // Set alignment to vector lengths.
                 if (use_vec_align)
