@@ -281,6 +281,29 @@ namespace yask {
     // Allocate memory for grids that do not already have storage.
     void StencilContext::allocGridData(ostream& os) {
 
+        // Sort gridPtrs for a certain purpose
+#ifdef USE_PMEM
+        // Sort gridPtrs for using pmemX : Give priority to output gird
+        std::vector<YkGridPtr> sortedGridPtrs;
+        std::set<YkGridPtr> gridPtrSet;
+        for (auto op : outputGridPtrs) {
+            gridPtrSet.insert(op);
+            sortedGridPtrs.push_back(op);
+        }
+        for (auto gp : gridPtrs) {
+            if (gridPtrSet.find(gp)==gridPtrSet.end())
+                sortedGridPtrs.push_back(gp);
+        }
+        gridPtrs.clear();
+        for (auto sp : sortedGridPtrs) {
+            gridPtrs.push_back(sp);
+            os << "Grids priority" << endl;
+            os << " '" << sp->get_name();
+            if (gridPtrSet.find(sp)!=gridPtrSet.end())
+                os << "'(out)";
+            os << endl;
+        }
+#endif
         // Base ptrs for all default-alloc'd data.
         // These pointers will be shared by the ones in the grid
         // objects, which will take over ownership when these go
@@ -288,9 +311,14 @@ namespace yask {
         // Key is preferred numa node or -1 for local.
         map <int, shared_ptr<char>> _grid_data_buf;
 
-        // Pass 0: count required size for each NUMA node, allocate chunk of memory at end.
-        // Pass 1: distribute parts of already-allocated memory chunk.
-        for (int pass = 0; pass < 2; pass++) {
+#ifdef USE_PMEM
+        // FIXME: should be brought from setting
+        size_t preferredNUMASize = 96*1024*1024*(size_t)1024;
+#endif
+        // Pass 0: assign alternative NUMA node when preferred NUMA node is not enough
+        // Pass 1: count required size for each NUMA node, allocate chunk of memory at end.
+        // Pass 2: distribute parts of already-allocated memory chunk.
+        for (int pass = 0; pass < 3; pass++) {
             TRACE_MSG("allocGridData pass " << pass << " for " <<
                       gridPtrs.size() << " grid(s)");
 
@@ -308,8 +336,8 @@ namespace yask {
                 if (!gp->is_storage_allocated()) {
                     int numa_pref = gp->get_numa_preferred();
 
-                    // Set storage if buffer has been allocated in pass 0.
-                    if (pass == 1) {
+                    // Set storage if buffer has been allocated in pass 1.
+                    if (pass == 2) {
                         auto p = _grid_data_buf[numa_pref];
                         assert(p);
                         gp->set_storage(p, npbytes[numa_pref]);
@@ -321,18 +349,33 @@ namespace yask {
                     npbytes[numa_pref] += ROUND_UP(nbytes + _data_buf_pad,
                                                    CACHELINE_BYTES);
                     ngrids[numa_pref]++;
-                    if (pass == 0)
+
+                    if (pass == 0) {
+                        if (preferredNUMASize<npbytes[numa_pref])
+#ifdef USE_PMEM
+                            // FIXME: should be set to 1000 + (socket number)
+                            gp->set_numa_preferred(1000);
+#endif
+                    }
+
+                    if (pass == 1)
                         TRACE_MSG(" grid '" << gname << "' needs " << makeByteStr(nbytes) <<
                                   " on NUMA node " << numa_pref);
                 }
 
                 // Otherwise, just print existing grid info.
-                else if (pass == 0)
+                else if (pass == 1)
                     os << gp->make_info_string() << endl;
             }
 
+            // Reset the counters
+            if (pass == 0) {
+                npbytes.clear();
+                ngrids.clear();
+            }
+
             // Alloc for each node.
-            if (pass == 0)
+            if (pass == 1)
                 _alloc_data(npbytes, ngrids, _grid_data_buf, "grid");
 
         } // grid passes.
@@ -1123,34 +1166,6 @@ namespace yask {
         os << endl;
         os << "Num grids: " << gridPtrs.size() << endl;
         os << "Num grids to be updated: " << outputGridPtrs.size() << endl;
-
-#ifdef USE_PMEM
-        // Hacked to set numa preferred number for AppDirect mode
-        map<string, bool> w_grid;
-        for (auto& sp : stPacks) {
-            for (auto* sg : *sp) {
-                for (auto gp : sg->outputGridPtrs) {
-                    w_grid[gp->get_name()] = true;
-                }
-            }
-        }
-        for (auto& g : gridPtrs) {
-            if (w_grid.find(g->get_name)==w_grid.end())
-                g->set_numa_preferred(1000+_env->my_rank);
-                os << "Set '" << g->get_name() << "' grid to be allocated pmem" << endl;
-        }
-        /*if (YASK_STENCIL_NAME == "iso3dfd")
-            for (auto& g : gridPtrs) {
-                if (g->get_name() == "vel" || g->get_name() == "coeff") {
-                    if (_env->my_rank%2 == 0)
-                        g->set_numa_preferred(1000);
-                    else
-                        g->set_numa_preferred(1001);
-
-                    os << "Set '" << g->get_name() << "' grid to be allocated pmem" << endl;
-                }
-            }*/
-#endif
 
         // Set up data based on MPI rank, including grid positions.
         // Update all the grid sizes.

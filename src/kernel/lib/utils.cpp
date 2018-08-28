@@ -127,17 +127,15 @@ namespace yask {
 #ifdef USE_PMEM
             int err = 0;
             int fd;
-            if (numa_pref%1000 == 0)
-                err = pmem_tmpfile("/mnt/pmem0", nbytes, &fd, &p);
-            else if (numa_pref%1000 == 1)
-                err = pmem_tmpfile("/mnt/pmem1", nbytes, &fd, &p);
-            else
-                THROW_YASK_EXCEPTION("Error: explicit NUMA policy allocation (appdirect) is not available\n");
-			if (err) {
-				THROW_YASK_EXCEPTION("Error: Unable to create temporary file\n");
-			}
+            std::stringstream ss;
+            ss << numa_pref%1000;
+            std::string pmem_name("/mnt/pmem");
+            pmem_name.append(ss.str());
+            err = pmem_tmpfile(pmem_name.c_str(), nbytes, &fd, &p);
+            if (err)
+                THROW_YASK_EXCEPTION("Error: Unable to create temporary file\n");
 #else
-		    THROW_YASK_EXCEPTION("Error: set pmem=1 to use PMEM\n");
+            THROW_YASK_EXCEPTION("Error: set pmem=1 to use PMEM\n");
 #endif
         }
         else if (get_mempolicy(NULL, NULL, 0, 0, 0) == 0) {
@@ -177,19 +175,8 @@ namespace yask {
                 }
             }
             else
-#ifdef USE_PMEM
-            {
-                int err = 0;
-                int fd;
-                err = pmem_tmpfile("/mnt/pmem0", nbytes, &fd, &p);
-                if (err) {
-                    THROW_YASK_EXCEPTION("Error: Unable to create temporary file\n");
-                }
-            }
-#else
                 THROW_YASK_EXCEPTION("Error: anonymous mmap of " + makeByteStr(nbytes) +
                                      " failed");
-#endif
         }
         else
             THROW_YASK_EXCEPTION("Error: explicit NUMA policy allocation is not available");
