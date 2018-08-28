@@ -349,9 +349,9 @@ namespace yask {
         public virtual yk_env {
 
         // MPI vars.
-        MPI_Comm comm=0;        // communicator.
-        int num_ranks=1;        // total number of ranks.
-        int my_rank=0;          // MPI-assigned index.
+        MPI_Comm comm = MPI_COMM_NULL; // communicator.
+        int num_ranks = 1;        // total number of ranks.
+        int my_rank = 0;          // MPI-assigned index.
 
         // OMP vars.
         int max_threads=0;      // initial value from OMP.
@@ -360,7 +360,7 @@ namespace yask {
 
         // Init MPI, OMP, etc.
         // This is normally called very early in the program.
-        virtual void initEnv(int* argc, char*** argv);
+        virtual void initEnv(int* argc, char*** argv, MPI_Comm comm);
 
         // APIs.
         virtual int get_num_ranks() const {

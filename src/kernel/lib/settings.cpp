@@ -56,17 +56,20 @@ namespace yask {
 
     // APIs.
     // See yask_kernel_api.hpp.
-    yk_env_ptr yk_factory::new_env() const {
+    yk_env_ptr yk_factory::new_env(MPI_Comm comm) const {
         auto ep = make_shared<KernelEnv>();
         assert(ep);
-        ep->initEnv(0, 0);
+        ep->initEnv(0, 0, comm);
         return ep;
+    }
+    yk_env_ptr yk_factory::new_env() const {
+        return new_env(MPI_COMM_NULL);
     }
 
     ///// KernelEnv functions:
 
     // Init MPI, OMP.
-    void KernelEnv::initEnv(int* argc, char*** argv)
+    void KernelEnv::initEnv(int* argc, char*** argv, MPI_Comm existing_comm)
     {
         // MPI init.
         my_rank = 0;
@@ -76,19 +79,33 @@ namespace yask {
         int is_init = false;
         MPI_Initialized(&is_init);
 
-        if (!is_init) {
-            int provided = 0;
-            MPI_Init_thread(argc, argv, MPI_THREAD_SERIALIZED, &provided);
-            if (provided < MPI_THREAD_SERIALIZED) {
-                THROW_YASK_EXCEPTION("error: MPI_THREAD_SERIALIZED not provided");
+        // No MPI communicator provided.
+        if (existing_comm == MPI_COMM_NULL) {
+            if (!is_init) {
+                int provided = 0;
+                MPI_Init_thread(argc, argv, MPI_THREAD_SERIALIZED, &provided);
+                if (provided < MPI_THREAD_SERIALIZED) {
+                    THROW_YASK_EXCEPTION("error: MPI_THREAD_SERIALIZED not provided");
+                }
+                is_init = true;
             }
-            is_init = true;
+            comm = MPI_COMM_WORLD;
         }
-        comm = MPI_COMM_WORLD;
+
+        // MPI communicator provided.
+        else {
+            if (!is_init)
+                THROW_YASK_EXCEPTION("error: YASK environment created with"
+                                     " an existing MPI communicator, but MPI is not initialized");
+            comm = existing_comm;
+        }
+        
         MPI_Comm_rank(comm, &my_rank);
         MPI_Comm_size(comm, &num_ranks);
+        if (num_ranks < 1)
+            THROW_YASK_EXCEPTION("error: MPI_Comm_size() returns less than one rank");
 #else
-        comm = 0;
+        comm = MPI_COMM_NULL;
 #endif
 
         // Turn off denormals unless the USE_DENORMALS macro is set.

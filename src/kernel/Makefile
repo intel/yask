@@ -665,6 +665,7 @@ $(YK_SWIG_OUT_DIR)/yask_kernel_api_wrap.cpp: $(YK_SWIG_DIR)/yask*.i $(INC_DIR)/*
 	$(SWIG) -version
 	$(MKDIR) $(YK_SWIG_OUT_DIR) $(PY_OUT_DIR)
 	$(SWIG) -v -DYK_MODULE=$(YK_PY_MOD_BASE) -cppext cpp \
+	  -DUSE_MPI -DMPI_VERSION=3 -DMPI_Comm=int \
 	  -I$(INC_DIR) -I$(COMM_DIR) -I$(COMM_DIR)/swig \
 	  -c++ -python -o $@ -outdir $(PY_OUT_DIR) -builtin $<
 
