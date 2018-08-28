@@ -39,8 +39,8 @@ IN THE SOFTWARE.
 #else
 #define MPI_Barrier(comm) ((void)0)
 #define MPI_Finalize()    ((void)0)
-#define MPI_Comm int
-#define MPI_Request int
+typedef int MPI_Comm;
+typedef int MPI_Request;
 #define MPI_PROC_NULL     (-1)
 #define MPI_COMM_NULL     ((MPI_Comm)0x04000000)
 #define MPI_REQUEST_NULL  ((MPI_Request)0x2c000000)
