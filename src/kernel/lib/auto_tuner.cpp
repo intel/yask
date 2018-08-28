@@ -284,7 +284,7 @@ namespace yask {
         auto& dims = _context->get_dims();
         auto& opts = _context->get_settings();
         auto& env = _context->get_env();
-        auto step_posn = Indices::step_posn;
+        auto step_posn = +Indices::step_posn;
 
         // Change block-related sizes to 0 so adjustSettings()
         // will set them to the default.

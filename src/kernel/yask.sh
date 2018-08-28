@@ -218,6 +218,7 @@ tag=$stencil.$arch
 bindir=`dirname $0`
 exe="$bindir/yask_kernel.$tag.exe"
 make_report="$bindir/../build/yask_kernel.$tag.make-report.txt"
+yc_report="$bindir/../build/yask_kernel.$tag.yask_compiler-report.txt"
 
 # Try to build exe if needed.
 if [[ ! -x $exe ]]; then
@@ -226,8 +227,10 @@ if [[ ! -x $exe ]]; then
 
 # Or, save most recent make report to log if it exists.
 elif [[ -e $make_report ]]; then
-    echo "Build log from '$make_report':" >> $logfile
-    cat $make_report >> $logfile
+    head -v -n -0 $make_report >> $logfile
+    if  [[ -e $yc_report ]]; then
+        head -v -n -0 $yc_report >> $logfile
+    fi
 fi
 
 # Double-check that exe exists.

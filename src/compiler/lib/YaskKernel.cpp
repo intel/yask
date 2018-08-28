@@ -732,7 +732,7 @@ namespace yask {
                 os << "  stBundles.push_back(&" << egName << ");\n";
 
             // Add scratch-bundle deps in proper order.
-            auto& sdeps = _eqBundles.getScratches(eg);
+            auto& sdeps = _eqBundles.getScratchDeps(eg);
             for (auto& eg2 : _eqBundles.getAll()) {
                 if (sdeps.count(eg2)) {
                     string eg2Name = eg2->getName();

@@ -31,7 +31,39 @@ IN THE SOFTWARE.
 // Choose features
 #define _POSIX_C_SOURCE 200809L
 
-// Include the API first. This helps to ensure that it will stand alone.
+// MPI or stubs.
+// This must come before including the API header to make sure
+// MPI_VERSION is defined.
+#ifdef USE_MPI
+#include "mpi.h"
+#else
+#define MPI_Barrier(comm) ((void)0)
+#define MPI_Finalize()    ((void)0)
+typedef int MPI_Comm;
+typedef int MPI_Request;
+#define MPI_PROC_NULL     (-1)
+#define MPI_COMM_NULL     ((MPI_Comm)0x04000000)
+#define MPI_REQUEST_NULL  ((MPI_Request)0x2c000000)
+#ifdef MPI_VERSION
+#undef MPI_VERSION
+#endif
+#endif
+
+// OpenMP or stubs.
+// This must come before including the API header to make sure
+// _OPENMP is defined.
+#ifdef _OPENMP
+#include <omp.h>
+#else
+inline int omp_get_num_procs() { return 1; }
+inline int omp_get_num_threads() { return 1; }
+inline int omp_get_max_threads() { return 1; }
+inline int omp_get_thread_num() { return 0; }
+inline void omp_set_num_threads(int n) { }
+inline void omp_set_nested(int n) { }
+#endif
+
+// Include the API as early as possible. This helps to ensure that it will stand alone.
 #include "yask_kernel_api.hpp"
 
 // Control assert() by turning on with CHECK instead of turning off with
@@ -100,30 +132,6 @@ typedef std::uint64_t uidx_t;
 #else
 #define VTUNE_PAUSE ((void)0)
 #define VTUNE_RESUME ((void)0)
-#endif
-
-// MPI or stubs.
-#ifdef USE_MPI
-#include "mpi.h"
-#else
-#define MPI_PROC_NULL (-1)
-#define MPI_Barrier(comm) ((void)0)
-#define MPI_Comm int
-#define MPI_Finalize() ((void)0)
-#define MPI_Request int
-#define MPI_REQUEST_NULL   ((MPI_Request)0x2c000000)
-#endif
-
-// OpenMP or stubs.
-#ifdef _OPENMP
-#include <omp.h>
-#else
-inline int omp_get_num_procs() { return 1; }
-inline int omp_get_num_threads() { return 1; }
-inline int omp_get_max_threads() { return 1; }
-inline int omp_get_thread_num() { return 0; }
-inline void omp_set_num_threads(int n) { }
-inline void omp_set_nested(int n) { }
 #endif
 
 // Stringizing hacks for the C preprocessor.

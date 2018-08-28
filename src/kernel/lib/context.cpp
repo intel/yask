@@ -66,6 +66,7 @@ namespace yask {
     SET_SOLN_API(set_region_size, _opts->_region_sizes[dim] = n, true, true, false, true)
     SET_SOLN_API(set_rank_domain_size, _opts->_rank_sizes[dim] = n, false, true, false, true)
     SET_SOLN_API(set_num_ranks, _opts->_num_ranks[dim] = n, false, true, false, true)
+    SET_SOLN_API(set_rank_index, _opts->_rank_indices[dim] = n, false, true, false, true)
 #undef SET_SOLN_API
 
     // Constructor.
@@ -157,7 +158,7 @@ namespace yask {
 
         ostream& os = get_ostr();
         auto& step_dim = _dims->_step_dim;
-        auto step_posn = Indices::step_posn;
+        auto step_posn = +Indices::step_posn;
         int ndims = _dims->_stencil_dims.getNumDims();
         idx_t begin_t = 0;
         idx_t end_t = _opts->_rank_sizes[step_dim];
@@ -318,7 +319,7 @@ namespace yask {
         run_time.start();
 
         auto& step_dim = _dims->_step_dim;
-        auto step_posn = Indices::step_posn;
+        auto step_posn = +Indices::step_posn;
         int ndims = _dims->_stencil_dims.size();
 
         // Determine step dir from order of first/last.
@@ -535,7 +536,7 @@ namespace yask {
 
         int ndims = _dims->_stencil_dims.size();
         auto& step_dim = _dims->_step_dim;
-        auto step_posn = Indices::step_posn;
+        auto step_posn = +Indices::step_posn;
         TRACE_MSG("calc_region: [" << rank_idxs.start.makeValStr(ndims) <<
                   " ... " << rank_idxs.stop.makeValStr(ndims) << ")");
 
@@ -833,7 +834,7 @@ namespace yask {
         // TODO: only run one region during AT.
         idx_t region_steps = _opts->_region_sizes[_dims->_step_dim];
         idx_t step_dir = _dims->_step_dir;
-        idx_t step_t = min(region_steps, AutoTuner::max_step_t) * step_dir;
+        idx_t step_t = min(region_steps, +AutoTuner::max_step_t) * step_dir;
 
         // Run time-steps until AT converges.
         for (idx_t t = 0; ; t += step_t) {
@@ -858,7 +859,7 @@ namespace yask {
             at_timer.get_elapsed_secs() << " secs.\n";
         for (auto& sp : stPacks) {
             auto& settings = sp->getSettings();
-            os << " for bundle '" << sp->get_name() << "':\n" <<
+            os << " for pack '" << sp->get_name() << "':\n" <<
                 "  best-block-size: " << settings._block_sizes.makeDimValStr(" * ") << endl <<
                 "  best-sub-block-size: " << settings._sub_block_sizes.makeDimValStr(" * ") << endl << flush;
         }

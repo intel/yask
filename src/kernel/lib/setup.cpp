@@ -813,7 +813,7 @@ namespace yask {
     void StencilContext::allocScratchData(ostream& os) {
         auto nddims = _dims->_domain_dims.size();
         auto nsdims = _dims->_stencil_dims.size();
-        auto step_posn = Indices::step_posn;
+        auto step_posn = +Indices::step_posn;
 
         // Remove any old scratch data.
         freeScratchData(os);

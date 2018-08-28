@@ -344,6 +344,7 @@ YK_API_TEST_EXEC :=	$(BIN_OUT_DIR)/$(YK_BASE)_api_test.exe
 YK_GRID_TEST_EXEC :=	$(BIN_OUT_DIR)/$(YK_BASE)_grid_test.exe
 YK_API_TEST_EXEC_WITH_EXCEPTION :=	$(BIN_OUT_DIR)/$(YK_BASE)_api_exception_test.exe
 MAKE_REPORT_FILE :=	$(BUILD_OUT_DIR)/$(YK_EXT_BASE).make-report.txt
+YC_REPORT_FILE :=	$(BUILD_OUT_DIR)/$(YK_EXT_BASE).yask_compiler-report.txt
 
 # File-related macros.
 MACROS		+= 	YK_CODE_FILE=$(YK_CODE_FILE)
@@ -641,7 +642,7 @@ $(YK_GEN_DIR)/yask_grid_code.hpp: $(GEN_LAYOUTS) $(YK_CODE_FILE)
 
 $(YK_CODE_FILE): $(YC_EXEC)
 	$(MKDIR) $(dir $@)
-	$(RUN_PREFIX) $< $(YC_FLAGS) $(EXTRA_YC_FLAGS) -p $(YC_TARGET) $@
+	$(RUN_PREFIX) $< $(YC_FLAGS) $(EXTRA_YC_FLAGS) -p $(YC_TARGET) $@ | tee $(YC_REPORT_FILE) 2>&1
 	@- gindent -fca $@ || \
 	  indent -fca $@ ||   \
 	  echo "note:" $@ "is not properly indented because no indent program was found."
@@ -664,6 +665,7 @@ $(YK_SWIG_OUT_DIR)/yask_kernel_api_wrap.cpp: $(YK_SWIG_DIR)/yask*.i $(INC_DIR)/*
 	$(SWIG) -version
 	$(MKDIR) $(YK_SWIG_OUT_DIR) $(PY_OUT_DIR)
 	$(SWIG) -v -DYK_MODULE=$(YK_PY_MOD_BASE) -cppext cpp \
+	  -DUSE_MPI -DMPI_VERSION=3 -DMPI_Comm=int \
 	  -I$(INC_DIR) -I$(COMM_DIR) -I$(COMM_DIR)/swig \
 	  -c++ -python -o $@ -outdir $(PY_OUT_DIR) -builtin $<
 
@@ -840,7 +842,7 @@ realclean: clean
 	rm -fv $(YK_LIB) $(YK_EXEC) $(MAKE_REPORT_FILE)
 	rm -fv $(YK_PY_MOD)* $(YK_PY_LIB)
 	rm -fv $(YK_API_TEST_EXEC) $(YK_API_TEST_EXEC_WITH_EXCEPTION)
-	rm -fv $(BUILD_OUT_DIR)/*make-report.txt
+	rm -fv $(BUILD_OUT_DIR)/*report.txt
 	- find . -name '*.pyc' -print -delete
 	- find . -name '*~' -print -delete
 	rm -rf logs

@@ -622,6 +622,7 @@ namespace yask {
         virtual void set_block_size(const std::string& dim, idx_t size);
         virtual void set_region_size(const std::string& dim, idx_t size);
         virtual void set_num_ranks(const std::string& dim, idx_t size);
+        virtual void set_rank_index(const std::string& dim, idx_t size);
         virtual idx_t get_rank_domain_size(const std::string& dim) const;
         virtual idx_t get_min_pad_size(const std::string& dim) const;
         virtual idx_t get_block_size(const std::string& dim) const;

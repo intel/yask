@@ -98,6 +98,9 @@ void usage(const string& cmd) {
         "      Example: \"-eq-bundles 'g_$&=b[aeiou]r'\" with grids 'bar_x', 'bar_y', 'ber_x', and 'ber_y'\n"
         "        would create eq-bundle 'g_bar_0' for grids 'bar_x' and 'bar_y' and eq-bundle 'g_ber_0' for\n"
         "        grids 'ber_x' and 'ber_y' because '$&' is substituted by the string that matches the regex.\n"
+        " [-no]-bundle-scratch\n"
+        "    Bundle scratch equations even if the sizes of their scratch grids must be increased\n"
+        "      to do so (default=" << settings._bundleScratch << ").\n"
         " -step-alloc <size>\n"
         "    Specify the size of the step-dimension memory allocation.\n"
         "      By default, allocations are calculated automatically for each grid.\n"
@@ -189,7 +192,11 @@ void parseOpts(int argc, const char* argv[])
                 settings._findDeps = true;
             else if (opt == "-no-find-deps")
                 settings._findDeps = false;
-
+            else if (opt == "-bundle-scratch")
+                settings._bundleScratch = true;
+            else if (opt == "-no-bundle-scratch")
+                settings._bundleScratch = false;
+    
             // add any more options w/o values above.
 
             // options w/a value.

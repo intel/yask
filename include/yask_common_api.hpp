@@ -81,7 +81,7 @@ namespace yask {
     /// Shared pointer to \ref yask_null_output
     typedef std::shared_ptr<yask_null_output> yask_null_output_ptr;
 
-    /// Exception from yask framework
+    /// Exception from YASK framework
     /** Objects of this exception contain additional message from yask framework */
     class yask_exception: public std::exception {
     private:
@@ -89,9 +89,14 @@ namespace yask {
     	std::string _msg;
 
     public:
+
+        /// Construct a YASK exception with no message.
     	yask_exception() {};
+
+        /// Construct a YASK exception with `message`.
     	yask_exception(const std::string& message) :
             _msg(message) {};
+
     	virtual ~yask_exception() {};
 
         /// Get default message.

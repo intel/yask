@@ -36,6 +36,10 @@ IN THE SOFTWARE.
 #include <vector>
 #include <cinttypes>
 
+#ifndef MPI_VERSION
+typedef int MPI_Comm;
+#endif
+
 namespace yask {
 
     /**
@@ -118,6 +122,19 @@ namespace yask {
         */
         virtual yk_env_ptr
         new_env() const;
+
+        /// Create a \ref yk_env object using the provided MPI communicator.
+        /**
+           Behaves like new_env(), but uses the provided MPI communicator 
+           instead of using `MPI_COMM_WORLD`.
+           MPI must be enabled and initialized before calling this function
+           following the usage notes for new_env().
+
+           @note `#include "mpi.h"` should precede `#include "yask_kernel_api.hpp"`
+           to ensure proper MPI type definitions.
+        */
+        virtual yk_env_ptr
+        new_env(MPI_Comm comm) const;
 
         /// Create a stencil solution.
         /**
