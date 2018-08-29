@@ -295,9 +295,9 @@ namespace yask {
                 sortedGridPtrs.push_back(gp);
         }
         gridPtrs.clear();
+        os << "Grids priority" << endl;
         for (auto sp : sortedGridPtrs) {
             gridPtrs.push_back(sp);
-            os << "Grids priority" << endl;
             os << " '" << sp->get_name();
             if (gridPtrSet.find(sp)!=gridPtrSet.end())
                 os << "'(out)";
@@ -313,7 +313,7 @@ namespace yask {
 
 #ifdef USE_PMEM
         // FIXME: should be brought from setting
-        size_t preferredNUMASize = 96*1024*1024*(size_t)1024;
+        size_t preferredNUMASize = 89*1024*1024*(size_t)1024;
 #endif
         // Pass 0: assign alternative NUMA node when preferred NUMA node is not enough
         // Pass 1: count required size for each NUMA node, allocate chunk of memory at end.
@@ -351,8 +351,8 @@ namespace yask {
                     ngrids[numa_pref]++;
 
                     if (pass == 0) {
-                        if (preferredNUMASize<npbytes[numa_pref])
 #ifdef USE_PMEM
+                        if (preferredNUMASize<npbytes[numa_pref])
                             // FIXME: should be set to 1000 + (socket number)
                             gp->set_numa_preferred(1000);
 #endif
