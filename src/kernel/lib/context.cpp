@@ -348,8 +348,10 @@ namespace yask {
         step.setVals(_opts->_region_sizes, false); // step by region sizes.
         step[step_dim] = step_t;
 
-        TRACE_MSG("run_solution: [" << begin.makeDimValStr() << " ... " <<
-                  end.makeDimValStr() << ") by " << step.makeDimValStr());
+        TRACE_MSG("run_solution: [" <<
+                  begin.makeDimValStr() << " ... " <<
+                  end.makeDimValStr() << ") by " <<
+                  step.makeDimValStr());
         if (!rank_bb.bb_valid)
             THROW_YASK_EXCEPTION("Error: run_solution() called without calling prepare_solution() first");
         if (ext_bb.bb_size < 1) {
@@ -392,15 +394,23 @@ namespace yask {
             for (auto& dim : _dims->_domain_dims.getDims()) {
                 auto& dname = dim.getName();
 
-                // The end should be adjusted if there is not
-                // already an extension.
+                // The end should be adjusted if an extension doesn't exist.
+                // Extentions exist between ranks, and adjustments exist at
+                // the end of the right-most rank in each dim.  See "(adj)"
+                // in diagram above.
                 if (right_wf_exts[dname] == 0)
                     end[dname] += wf_shifts[dname];
+
+                // Stretch the region size if the original size was the
+                // whole rank.
+                if (_opts->_region_sizes[dname] >= _opts->_rank_sizes[dname])
+                    step[dname] = end[dname] - begin[dname];
             }
-            TRACE_MSG("after adjustment for " << num_wf_shifts <<
+            TRACE_MSG("run_solution: after adjustment for " << num_wf_shifts <<
                       " wave-front shift(s): [" <<
                       begin.makeDimValStr() << " ... " <<
-                      end.makeDimValStr() << ")");
+                      end.makeDimValStr() << ") by " <<
+                      step.makeDimValStr());
         }
 
         // Indices needed for the 'rank' loops.
