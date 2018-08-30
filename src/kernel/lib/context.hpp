@@ -222,12 +222,17 @@ namespace yask {
         IdxTuple overall_domain_sizes;       // Total of rank domains over all ranks.
 
         // Maximum halos, skewing angles, and work extensions over all grids
-        // used for wave-fronts.
+        // used for wave-front region tiles (wf) and temporal blocking (tb).
         IdxTuple max_halos;  // spatial halos.
-        IdxTuple wf_angles;  // temporal skewing angles for each shift (in points).
-        idx_t num_wf_shifts = 0; // number of shifts required.
-        IdxTuple wf_shifts;    // total shift needed (angles * num-shifts).
-        IdxTuple left_wf_exts;    // WF extension needed on left side of rank.
+        idx_t wf_steps = 1;  // max number of WF steps.
+        idx_t tb_steps = 1;  // max number of TB steps (may be less than requested).
+        IdxTuple wf_angles;  // WF skewing angles for each shift (in points).
+        IdxTuple tb_angles;  // TB skewing angles for each shift (in points).
+        idx_t num_wf_shifts = 0; // number of WF shifts required in wf_steps.
+        idx_t num_tb_shifts = 0; // number of TB shifts required in tb_steps.
+        IdxTuple wf_shifts;    // total shifted pts (wf_angles * num_wf_shifts).
+        IdxTuple tb_shifts;    // total shifted pts (tb_angles * num_tb_shifts).
+        IdxTuple left_wf_exts;    // WF extension needed on left side of rank for halo exch.
         IdxTuple right_wf_exts;    // WF extension needed on right side of rank.
 
         // Various amount-of-work metrics calculated in prepare_solution().
@@ -364,6 +369,10 @@ namespace yask {
         // This should be called anytime a setting or offset is changed.
         virtual void update_grid_info();
 
+        // Set temporal blocking data.
+        // This should be called anytime a block size is changed.
+        virtual void update_block_info();
+
         // Adjust offsets of scratch grids based
         // on thread and scan indices.
         virtual void update_scratch_grid_info(int thread_idx,
@@ -499,6 +508,7 @@ namespace yask {
 
         // Calculate results within a block.
         virtual void calc_block(BundlePackPtr& sel_bp,
+                                idx_t phase,
                                 const ScanIndices& region_idxs);
 
         // Exchange all dirty halo data for all stencil bundles.
@@ -508,6 +518,11 @@ namespace yask {
         // If sel_bp==null, use all bundles.
         virtual void mark_grids_dirty(const BundlePackPtr& sel_bp,
                                       idx_t start, idx_t stop);
+
+        // Set various limits in 'idxs' based on current step.
+        virtual bool trim_to_region(const Indices& start, const Indices& stop,
+                                   BundlePack* bp, idx_t shift_num,
+                                   ScanIndices& idxs);
 
         // Set the bounding-box around all stencil bundles.
         virtual void find_bounding_boxes();

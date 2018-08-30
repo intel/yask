@@ -303,7 +303,7 @@ namespace yask {
             " A 'region' is composed of blocks.\n"
             "  If using temporal wave-front tiling (see region-size guidelines),\n"
             "   then, this is the unit of work for each wave-front tile;\n"
-            "   else, there is typically only one region the sie of the rank-domain.\n"
+            "   else, there is typically only one region the size of the rank-domain.\n"
             " A 'rank-domain' is composed of regions.\n"
             "  This is the unit of work for one MPI rank.\n"
             " The 'overall-problem' is composed of rank-domains.\n"
@@ -321,32 +321,42 @@ namespace yask {
             "   when there is more than one block-thread, the first dimension\n"
             "   will instead be set to a small value to create \"slab\" shapes.\n"
             " Set sub-block-group sizes to control the ordering of sub-blocks within a block.\n"
+            "  This is an advanced setting that is not commonly used.\n"
             "  All sub-blocks that intersect a given sub-block-group are evaluated\n"
             "   before sub-blocks in the next sub-block-group.\n"
             "  A sub-block-group size of 0 in a given dimension =>\n"
             "   sub-block-group size is set to sub-block size in that dimension.\n"
             " Set block sizes to specify a unit of work done by each thread team.\n"
-            "  A block size of 0 in a given dimension =>\n"
+            "  A block size of 0 in a given domain dimension =>\n"
             "   block size is set to region size in that dimension.\n"
-            "  Temporal tiling in blocks is not yet supported, so effectively, bt = 1.\n"
+            "  A block size >1 in the temporal dimension ('-bt') enables temporal blocking.\n"
+            "  The temporal block size may be automatically reduced if needed based on the\n"
+            "   domain block sizes and the stencil halos.\n"
             " Set block-group sizes to control the ordering of blocks within a region.\n"
+            "  This is an advanced setting that is not commonly used.\n"
             "  All blocks that intersect a given block-group are evaluated before blocks\n"
             "   in the next block-group.\n"
-            "  A block-group size of 0 in a given dimension =>\n"
+            "  A block-group size of 0 in a given domain dimension =>\n"
             "   block-group size is set to block size in that dimension.\n"
             " Set region sizes to control temporal wave-front tile sizes.\n"
-            "  The temopral region size should be larger than one, and\n"
+            "  The temporal region size should be larger than one, and\n"
             "   the spatial region sizes should be less than the rank-domain sizes\n"
             "   in at least one dimension to enable temporal wave-front tiling.\n"
             "  The spatial region sizes should be greater than corresponding block sizes\n"
             "   to enable threading withing each wave-front tile.\n"
             "  Control the time-steps in each temporal wave-front with -rt.\n"
             "   Special cases:\n"
-            "    Using '-rt 1' disables wave-front tiling.\n"
+            "    Using '-rt 1' disables wave-front tiling unless temporal\n"
+            "     blocking is used.\n"
+            "    When temporal blocking is used, the number of time-steps in a region\n"
+            "     is increased to the number of time-steps in a block if needed.\n"
             "    Using '-rt 0' => all time-steps done in one wave-front.\n"
             "  A region size of 0 in a given dimension =>\n"
             "   region size is set to rank-domain size in that dimension.\n"
             " Set rank-domain sizes to specify the work done on this rank.\n"
+            "  Set the temporal size with '-dt' to specify the number of time-steps\n"
+            "   to run for each trial.\n"
+            "  Set the domain sizes to specify the problem size for this rank.\n"
             "  This and the number of grids affect the amount of memory used.\n"
             "Controlling OpenMP threading:\n"
             " Using '-max_threads 0' =>\n"
@@ -367,10 +377,10 @@ namespace yask {
             "   and reduce the size of each rank-domain appropriately.\n" <<
 #endif
             appNotes <<
-            "Examples:\n" <<
-            " " << pgmName << " -d 768 -dt 25\n" <<
-            " " << pgmName << " -dx 512 -dy 256 -dz 128\n" <<
-            " " << pgmName << " -d 2048 -dt 20 -r 512 -rt 10  # temporal tiling.\n" <<
+            "Examples for a 3D (x, y, z) over time (t) problem:\n"
+            " " << pgmName << " -d 768 -dt 25\n"
+            " " << pgmName << " -dx 512 -dy 256 -dz 128\n"
+            " " << pgmName << " -d 2048 -dt 20 -r 512 -rt 10  # temporal tiling.\n"
             " " << pgmName << " -d 512 -nrx 2 -nry 1 -nrz 2   # multi-rank.\n";
         for (auto ae : appExamples)
             os << " " << pgmName << " " << ae << endl;
@@ -420,15 +430,19 @@ namespace yask {
     // Called from prepare_solution(), so it doesn't normally need to be called from user code.
     void KernelSettings::adjustSettings(std::ostream& os, KernelEnvPtr env) {
         auto& step_dim = _dims->_step_dim;
+        auto& rt = _region_sizes[step_dim];
+        auto& bt = _block_sizes[step_dim];
 
         // Determine num regions.
         // Also fix up region sizes as needed.
+        // Temporal region size will be increase to
+        // current temporal block size if needed.
         // Default region size (if 0) will be size of rank-domain.
         os << "\nRegions:" << endl;
+        rt = max(rt, bt);
         auto nr = findNumSubsets(os, _region_sizes, "region",
                                  _rank_sizes, "rank-domain",
                                  _dims->_cluster_pts);
-        auto rt = _region_sizes[step_dim];
         os << " num-regions-per-rank-domain: " << nr << endl;
         os << " Since the region size in the '" << step_dim <<
             "' dim is " << rt << ", temporal wave-front tiling is ";
@@ -444,6 +458,10 @@ namespace yask {
                                  _dims->_cluster_pts);
         os << " num-blocks-per-region: " << nb << endl;
         os << " num-blocks-per-rank-domain: " << (nb * nr) << endl;
+        os << " Since the block size in the '" << step_dim <<
+            "' dim is " << bt << ", temporal blocking is ";
+        if (bt <= 1) os << "NOT ";
+        os << "enabled.\n";
 
         // Adjust defaults for sub-blocks to be slab if
         // we are using more than one block thread.

@@ -58,7 +58,7 @@ namespace yask {
     void StencilContext::api_name(const string& dim, idx_t n) {         \
         checkDimType(dim, #api_name, step_ok, domain_ok, misc_ok);      \
         expr;                                                           \
-        update_grid_info();                                                 \
+        update_grid_info();                                             \
         if (reset_prep) rank_bb.bb_valid = ext_bb.bb_valid = false;     \
     }
     SET_SOLN_API(set_min_pad_size, _opts->_min_pad_sizes[dim] = n, false, true, false, false)
@@ -91,6 +91,8 @@ namespace yask {
         max_halos = _dims->_domain_dims;
         wf_angles = _dims->_domain_dims;
         wf_shifts = _dims->_domain_dims;
+        tb_angles = _dims->_domain_dims;
+        tb_shifts = _dims->_domain_dims;
         left_wf_exts = _dims->_domain_dims;
         right_wf_exts = _dims->_domain_dims;
 
@@ -192,6 +194,7 @@ namespace yask {
         _opts->_block_sizes.setValsSame(0);
         _opts->_block_sizes[_dims->_step_dim] = 1;
         _opts->adjustSettings(get_env());
+        update_block_info();
 
         // Copy these settings to packs and realloc scratch grids.
         for (auto& sp : stPacks)
@@ -330,7 +333,7 @@ namespace yask {
 
         // Step-size in step-dim is number of region steps.
         // Then, it is multipled by +/-1 to get proper direction.
-        idx_t step_t = _opts->_region_sizes[step_dim];
+        idx_t step_t = wf_steps;
         step_t *= step_dir;
         assert(step_t);
         idx_t end_t = last_step_index + step_dir; // end is beyond last.
@@ -367,13 +370,13 @@ namespace yask {
             os << "Modeling cache...\n";
 #endif
 
-        // Extend end points for overlapping regions due to wavefront angle.
+        // Adjust end points for overlapping regions due to wavefront angle.
         // For each subsequent time step in a region, the spatial location
         // of each block evaluation is shifted by the angle for each
         // bundle pack. So, the total shift in a region is the angle * num
         // packs * num timesteps. This assumes all bundle packs
         // are inter-dependent to find maximum extension. Actual required
-        // extension may be less, but this will just result in some calls to
+        // size may be less, but this will just result in some calls to
         // calc_region() that do nothing.
         //
         // Conceptually (showing 2 ranks in t and x dims):
@@ -384,13 +387,13 @@ namespace yask {
         //      \|    \     \   | \   \|  .      |/    |\    \     \   | \   \|
         // ------------------------------ t = 0 -------------------------------
         //       |   rank 0     |      |         |     |   rank 1      |      |
-        // x = begin_dx      end_dx end_dx    begin_dx begin_dx     end_dx end_dx
+        // x = begin[x]       end[x] end[x]  begin[x] begin[x]       end[x] end[x]
         //     (rank)        (rank) (ext)     (ext)    (rank)       (rank) (adj)
         //
         //                      |XXXXXX|         |XXXXX|  <- redundant calculations.
         // XXXXXX|  <- areas outside of outer ranks not calculated ->  |XXXXXXX
         //
-        if (abs(step_t) > 1) {
+        if (wf_steps > 1) {
             for (auto& dim : _dims->_domain_dims.getDims()) {
                 auto& dname = dim.getName();
 
@@ -401,7 +404,7 @@ namespace yask {
                 if (right_wf_exts[dname] == 0)
                     end[dname] += wf_shifts[dname];
 
-                // Stretch the region size if the original size was the
+                // Stretch the region size if the original size covered the
                 // whole rank.
                 if (_opts->_region_sizes[dname] >= _opts->_rank_sizes[dname])
                     step[dname] = end[dname] - begin[dname];
@@ -412,6 +415,12 @@ namespace yask {
                       end.makeDimValStr() << ") by " <<
                       step.makeDimValStr());
         }
+        // At this point, 'begin' and 'end' should describe the *max* range
+        // needed in the domain for this rank for the first time step.  At
+        // any subsequent time step, this max may be shifted for temporal
+        // wavefronts or blocking. Also, for each time step, the *actual*
+        // range will be adjusted as needed before any actual stencil
+        // calculations are made.
 
         // Indices needed for the 'rank' loops.
         ScanIndices rank_idxs(*_dims, true, &rank_domain_offsets);
@@ -446,7 +455,7 @@ namespace yask {
             // If no wave-fronts (default), loop through packs here, and do
             // only one pack at a time in calc_region(). This is similar to
             // loop in calc_rank_ref(), but with packs instead of bundles.
-            if (step_t == 1) {
+            if (wf_steps == 1) {
 
                 // Loop thru packs.
                 for (auto& bp : stPacks) {
@@ -500,9 +509,11 @@ namespace yask {
             // If doing wave-fronts, must loop through all packs in
             // calc_region().  TODO: optionally enable this when there are
             // multiple packs but step_t == 1.
+            // TODO: allow overlapped comms when the region covers the
+            // whole rank domain, regardless of how many steps it covers.
             else {
 
-                // Null ptr => Eval all stencil bundles each time
+                // Null ptr => Eval all stencil packs each time
                 // calc_region() is called.
                 BundlePackPtr bp;
 
@@ -536,6 +547,66 @@ namespace yask {
         run_time.stop();
     }
 
+    // Trim boundaries 'start' and 'stop' to actual size in which to compute
+    // in pack 'bp' within region based on 'shift_num', which should start
+    // at 0 and increment for each pack in each time-step. Update 'begin'
+    // and 'end' in 'idxs'.  Return 'true' if resulting area is non-empty,
+    // 'false' if empty.
+    bool StencilContext::trim_to_region(const Indices& start, const Indices& stop,
+                                        BundlePack* bp, idx_t shift_num,
+                                        ScanIndices& idxs) {
+        auto step_posn = +Indices::step_posn;
+        int ndims = _dims->_stencil_dims.size();
+        auto& step_dim = _dims->_step_dim;
+
+        // For wavefront adjustments, see conceptual diagram in
+        // run_solution().  In this function, one of the
+        // parallelogram-shaped regions is being evaluated.  These
+        // shapes may extend beyond actual boundaries. So, at each
+        // time-step, the parallelogram may be trimmed based on the
+        // BB and WF extensions outside of the rank-BB.
+
+        // Actual region boundaries must stay within [extended] pack BB.
+        // We have to calculate the posn in the extended rank at each
+        // value of 'shift_num' because it is being shifted spatially.
+        bool ok = true;
+        assert (bp);
+        auto& pbb = bp->getBB(); // extended BB for this pack.
+        for (int i = 0, j = 0; i < ndims; i++) {
+            if (i == step_posn) continue;
+            auto angle = wf_angles[j];
+
+            // Begin point.
+            idx_t dbegin = rank_bb.bb_begin[j]; // non-extended domain.
+            idx_t rbegin = max<idx_t>(start[i], pbb.bb_begin[j]);
+
+            // In left ext, add 'angle' points for every shift.
+            if (rbegin < dbegin)
+                rbegin = max(rbegin, dbegin - left_wf_exts[j] + shift_num * angle);
+            idxs.begin[i] = rbegin;
+
+            // End point.
+            idx_t dend = rank_bb.bb_end[j]; // non-extended domain.
+            idx_t rend = min<idx_t>(stop[i], pbb.bb_end[j]);
+
+            // In right ext, subtract 'angle' points for every shift.
+            if (rend > dend)
+                rend = min(rend, dend + right_wf_exts[j] - shift_num * angle);
+            idxs.end[i] = rend;
+
+            // Anything to do in the adjusted region?
+            if (rend <= rbegin)
+                ok = false;
+
+            j++; // next domain index.
+        }
+        TRACE_MSG("trim_to_region: updated span: [" <<
+                  idxs.begin.makeValStr(ndims) << " ... " <<
+                  idxs.end.makeValStr(ndims) << ") is " <<
+                  (ok ? "not " : "") << "empty");
+        return ok;
+    }
+    
     // Calculate results within a region.  Each region is typically computed
     // in a separate OpenMP 'for' region.  In this function, we loop over
     // the time steps and bundle packs and evaluate a pack in each of
@@ -568,12 +639,10 @@ namespace yask {
         // Step (usually time) loop.
         // When doing WF tiling, this loop will step through
         // several time-steps in each region.
+        // When doing TB, it will step by the block steps.
         idx_t begin_t = region_idxs.begin[step_posn];
         idx_t end_t = region_idxs.end[step_posn];
-        idx_t step_t = _opts->_block_sizes[step_posn];
-        if (step_t != 1)
-            FORMAT_AND_THROW_YASK_EXCEPTION
-                ("Error: temporal block size " << step_t << " not allowed");
+        idx_t step_t = tb_steps;
         const idx_t num_t = CEIL_DIV(abs(end_t - begin_t), abs(step_t));
         idx_t shift_num = 0;
         for (idx_t index_t = 0; index_t < num_t; index_t++) {
@@ -589,119 +658,137 @@ namespace yask {
             region_idxs.start[step_posn] = start_t;
             region_idxs.stop[step_posn] = stop_t;
 
-            // Stencil bundle packs to evaluate at this time step.
-            for (auto& bp : stPacks) {
+            // If no temporal blocking (default), loop through packs here,
+            // and do only one pack at a time in calc_block(). This is
+            // similar to the code in run_solution() for WF.
+            if (tb_steps == 1) {
 
-                // Not a selected bundle pack?
-                if (sel_bp && sel_bp != bp)
-                    continue;
+                // Stencil bundle packs to evaluate at this time step.
+                for (auto& bp : stPacks) {
 
-                TRACE_MSG("calc_region: bundle-pack '" << bp->get_name() << "' in step(s) [" <<
+                    // Not a selected bundle pack?
+                    if (sel_bp && sel_bp != bp)
+                        continue;
+
+                    TRACE_MSG("calc_region: no TB; bundle-pack '" << bp->get_name() << "' in step(s) [" <<
+                              start_t << " ... " << stop_t << ")");
+
+                    // Start timers for this pack.
+                    bp->getAT().timer.start();
+                    bp->timer.start();
+
+                    // Steps within a region are based on pack block sizes.
+                    auto& settings = bp->getSettings();
+                    region_idxs.step = settings._block_sizes;
+                    region_idxs.step[step_posn] = step_t; // override.
+
+                    // Groups in region loops are based on block-group sizes.
+                    region_idxs.group_size = settings._block_group_sizes;
+                    region_idxs.group_size[step_posn] = step_t;
+
+                    // Trim region based on pack settings.
+                    bool ok = trim_to_region(start, stop,
+                                             bp.get(), shift_num,
+                                             region_idxs);
+
+                    // Only need to loop through the span of the region if it is
+                    // at least partly inside the extended BB. For overlapping
+                    // regions, they may start outside the domain but enter the
+                    // domain as time progresses and their boundaries shift. So,
+                    // we don't want to return if this condition isn't met.
+                    if (ok) {
+                        idx_t phase = 0; // Only 1 phase w/o TB.
+
+                        // Include automatically-generated loop code that
+                        // calls calc_block() for each block in this region.
+                        // Loops through x from begin_rx to end_rx-1;
+                        // similar for y and z.  This code typically
+                        // contains the outer OpenMP loop(s).
+#include "yask_region_loops.hpp"
+                    }
+
+                    // Mark grids that [may] have been written to by this
+                    // pack.  Only mark for exterior computation, because we
+                    // don't care about blocks not needed for MPI sends.
+                    // Mark grids as dirty even if not actually written by
+                    // this rank, perhaps due to sub-domains. This is needed
+                    // because neighbors will not know what grids are
+                    // actually dirty, and all ranks must have the same
+                    // information about which grids are possibly dirty.
+                    // TODO: make this smarter to save unneeded MPI
+                    // exchanges.
+                    if (do_mpi_exterior)
+                        mark_grids_dirty(bp, start_t, stop_t);
+
+                    // Shift spatial region boundaries for next iteration to
+                    // implement temporal wavefront.  Between regions, we only shift
+                    // left, so region loops must strictly increment. They may do
+                    // so in any order.  TODO: shift only what is needed by
+                    // this pack, not the global max.
+                    for (int i = 0, j = 0; i < ndims; i++) {
+                        if (i == step_posn) continue;
+
+                        // Shift by pts in one WF step.
+                        // Always shift left in WFs.
+                        auto angle = wf_angles[j];
+                        start[i] -= angle;
+                        stop[i] -= angle;
+                        j++;
+                    }
+                    shift_num++; // Increment for each pack.
+
+                    // Stop timers for this pack.
+                    bp->getAT().timer.stop();
+                    bp->timer.stop();
+
+                } // stencil bundle packs.
+            } // no temporal blocking.
+
+            // If using temporal blocking, step through packs in calc_block().
+            else {
+
+                TRACE_MSG("calc_region: w/TB in step(s) [" <<
                           start_t << " ... " << stop_t << ")");
 
-                // Start timers for this bundle.
-                bp->getAT().timer.start();
-                bp->timer.start();
+                // Null ptr => Eval all stencil packs each time
+                // calc_block() is called.
+                BundlePackPtr bp;
 
-                // Steps within a region are based on block sizes.
-                // These may have been tweaked by the auto-tuner.
-                auto& blksize = bp->getSettings()._block_sizes;
-                region_idxs.step = blksize;
-                region_idxs.step[step_posn] = step_t; // only wanted domain sizes.
+                // Steps within a region are based on rank block sizes.
+                auto& settings = *_opts;
+                region_idxs.step = settings._block_sizes;
+                region_idxs.step[step_posn] = step_t; // override.
 
                 // Groups in region loops are based on block-group sizes.
-                auto& bgsize = bp->getSettings()._block_group_sizes;
-                region_idxs.group_size = bgsize;
-                region_idxs.group_size[step_posn] = step_t; // only wanted domain sizes.
-                
-                // For wavefront adjustments, see conceptual diagram in
-                // run_solution().  In this function, one of the
-                // parallelogram-shaped regions is being evaluated.  These
-                // shapes may extend beyond actual boundaries. So, at each
-                // time-step, the parallelogram may be trimmed based on the
-                // BB and WF extensions outside of the rank-BB.
+                region_idxs.group_size = settings._block_group_sizes;
+                region_idxs.group_size[step_posn] = step_t;
 
-                // Actual region boundaries must stay within [extended] pack BB.
-                // We have to calculate the posn in the extended rank at each
-                // value of 'shift_num' because it is being shifted spatially.
-                bool ok = true;
-                auto& pbb = bp->getBB();
-                for (int i = 0, j = 0; i < ndims; i++) {
-                    if (i == step_posn) continue;
-                    auto angle = wf_angles[j];
+                // To tesselate n-D space, we use n distinct "phases", where
+                // n includes the time dim.
+                idx_t nphases = ndims;
+                for (idx_t phase = 0; phase < nphases; phase++) {
 
-                    // Begin point.
-                    idx_t dbegin = rank_bb.bb_begin[j]; // non-extended domain.
-                    idx_t rbegin = max<idx_t>(start[i], pbb.bb_begin[j]);
-                    if (rbegin < dbegin) // in left WF ext?
-                        rbegin = max(rbegin, dbegin - left_wf_exts[j] + shift_num * angle);
-                    region_idxs.begin[i] = rbegin;
-
-                    // End point.
-                    idx_t dend = rank_bb.bb_end[j]; // non-extended domain.
-                    idx_t rend = min<idx_t>(stop[i], pbb.bb_end[j]);
-                    if (rend > dend) // in right WF ext?
-                        rend = min(rend, dend + right_wf_exts[j] - shift_num * angle);
-                    region_idxs.end[i] = rend;
-
-                    // Anything to do?
-                    if (rend <= rbegin)
-                        ok = false;
-
-                    j++; // next domain index.
-                }
-                TRACE_MSG("calc_region: region span after trimming: [" <<
-                          region_idxs.begin.makeValStr(ndims) <<
-                          " ... " << region_idxs.end.makeValStr(ndims) << ")");
-
-                // Only need to loop through the span of the region if it is
-                // at least partly inside the extended BB. For overlapping
-                // regions, they may start outside the domain but enter the
-                // domain as time progresses and their boundaries shift. So,
-                // we don't want to return if this condition isn't met.
-                if (ok) {
-
-                    // Include automatically-generated loop code that
-                    // calls calc_block() for each block in this region.
-                    // Loops through x from begin_rx to end_rx-1;
-                    // similar for y and z.  This code typically
-                    // contains the outer OpenMP loop(s).
+                    // Call calc_block() on every block.  Only the shapes
+                    // corresponding to the current 'phase' will be
+                    // calculated.
 #include "yask_region_loops.hpp"
                 }
 
-                // Mark grids that [may] have been written to by this pack,
-                // updated at next step (+/- 1).  Only mark for exterior
-                // computation, because we don't care about blocks not
-                // needed for MPI sends.  Mark grids as dirty even if not
-                // actually written by this rank, perhaps due to
-                // sub-domains. This is needed because neighbors will not
-                // know what grids are actually dirty, and all ranks must
-                // have the same information about which grids are possibly
-                // dirty.  TODO: make this smarter to save unneeded MPI
-                // exchanges.
-                if (do_mpi_exterior)
-                    mark_grids_dirty(bp, start_t, stop_t);
-
                 // Shift spatial region boundaries for next iteration to
-                // implement temporal wavefront.  Between regions, we only shift
-                // left, so region loops must strictly increment. They may do
-                // so in any order.  TODO: shift only what is needed by
-                // this pack, not the global max.
+                // implement temporal wavefront.
+                // This is needed when 'wf_steps' > 'tb_steps'.
                 for (int i = 0, j = 0; i < ndims; i++) {
                     if (i == step_posn) continue;
-                    auto angle = wf_angles[j];
 
+                    // Shift by pts in one WF step per TB step.
+                    auto angle = wf_angles[j] * tb_steps;
                     start[i] -= angle;
                     stop[i] -= angle;
                     j++;
                 }
-                shift_num++;
 
-                // Stop timers for this bundle.
-                bp->getAT().timer.stop();
-                bp->timer.stop();
-
-            } // stencil bundle packs.
+            } // with temporal blocking.
+            
         } // time.
 
         if (do_mpi_exterior) {
@@ -715,22 +802,25 @@ namespace yask {
 
     } // calc_region.
 
-    // Calculate results within a block. This function calls
-    // 'calc_block' for each bundle in the specified pack.
-    // Typically called by a top-level OMP thread from calc_region().
+    // Calculate results within a block. This function calls 'calc_block'
+    // for each bundle in the specified pack or all packs if 'sel_bp' is
+    // null.  When using TB, only the shape(s) needed for the tesselation
+    // 'phase' are computed.  Typically called by a top-level OMP thread
+    // from calc_region().
     void StencilContext::calc_block(BundlePackPtr& sel_bp,
+                                    idx_t phase,
                                     const ScanIndices& region_idxs) {
 
         int nsdims = _dims->_stencil_dims.size();
+        int nddims = _dims->_domain_dims.size();
         auto& step_dim = _dims->_step_dim;
         auto step_posn = Indices::step_posn;
         auto* bp = sel_bp.get();
-        assert(bp);
         int thread_idx = omp_get_thread_num();
-        TRACE_MSG("calc_block for pack '" << bp->get_name() << "': [" <<
-                  region_idxs.start.makeValStr(nsdims) <<
-                  " ... " << region_idxs.stop.makeValStr(nsdims) <<
-                  ") in thread " << thread_idx);
+        TRACE_MSG("calc_block: phase " << phase << " [" <<
+                  region_idxs.start.makeValStr(nsdims) << " ... " <<
+                  region_idxs.stop.makeValStr(nsdims) << 
+                  " in thread " << thread_idx);
 
         // If we are not calculating some of the blocks, determine
         // whether this block is *completely* inside the interior.
@@ -788,20 +878,219 @@ namespace yask {
         ScanIndices block_idxs(*_dims, true, 0);
         block_idxs.initFromOuter(region_idxs);
 
-        // Steps within a block are based on sub-block sizes.
-        // These may have been tweaked by the auto-tuner.
-        auto& sbsize = bp->getSettings()._sub_block_sizes;
-        block_idxs.step = sbsize;
+        // Time range.
+        idx_t begin_t = block_idxs.begin[step_posn];
+        idx_t end_t = block_idxs.end[step_posn];
+        idx_t step_t = 1;       // Always 1 for blocks.
+        const idx_t num_t = abs(end_t - begin_t);
 
-        // Groups in block loops are based on sub-block-group sizes.
-        auto& sbgsize = bp->getSettings()._sub_block_group_sizes;
-        block_idxs.group_size = sbgsize;
+        // If TB is not being used, just process the given pack.
+        if (tb_steps == 1) {
+            assert(bp);
+        
+            // No TB allowed here.
+            assert(num_t == 1);
+        
+            // Steps within a block are based on pack sub-block sizes.
+            auto& settings = bp->getSettings();
+            block_idxs.step = settings._sub_block_sizes;
+            block_idxs.step[step_posn] = 1;
 
-        // Loop through bundles in this pack.
-        for (auto* sb : *bp) {
-            sb->calc_block(block_idxs);
+            // Groups in block loops are based on sub-block-group sizes.
+            block_idxs.group_size = settings._sub_block_group_sizes;
+            block_idxs.group_size[step_posn] = 1;
+
+            // Loop through bundles in this pack to do actual calcs.
+            for (auto* sb : *bp)
+                sb->calc_block(block_idxs);
         }
-    }
+
+        // If TB is active, do all packs across time steps for each required shape.
+        else {
+
+            // Determine whether this block is the first
+            // and/or last in the current region for each dim.
+            bool is_first[nddims];
+            bool is_last[nddims];
+            for (int i = 0, j = 0; i < nsdims; i++) {
+                if (i == step_posn) continue;
+
+                is_first[j] = block_idxs.begin[i] <= region_idxs.begin[i];
+                is_last[j] = block_idxs.end[i] >= region_idxs.end[i];
+                j++;
+            }
+
+            // Determine number of shapes. First and last phase need
+            // one part. Other (bridge) phases need one shape for
+            // each domain dim.
+            idx_t nphases = nsdims;
+            idx_t nshapes = (phase == 0) ? 1 :
+            (phase == nphases - 1) ? 1 :
+            nddims;
+
+            // Make a copy of the original index span
+            // since block_idxs will be modified.
+            ScanIndices orig_block_idxs(block_idxs);
+            
+            // Outer loop thru shapes.
+            for (idx_t shape = 0; shape < nshapes; shape++) {
+
+                // Restore the block_idxs.
+                block_idxs = orig_block_idxs;
+                
+                // Make a copy of the index span that
+                // we can use for shifting.
+                Indices start(block_idxs.begin);
+                Indices stop(block_idxs.end);
+                
+                // Also track the starting point of the *next* block.  This
+                // is used to create bridge shapes between blocks.
+                Indices next_start(block_idxs.end);
+
+                // Step (usually time) loop.
+                idx_t shift_num = 0;
+                for (idx_t index_t = 0; index_t < num_t; index_t++) {
+
+                    // This value of index_t steps from start_t to stop_t-1.
+                    const idx_t start_t = begin_t + (index_t * step_t);
+                    const idx_t stop_t = (step_t > 0) ?
+                        min(start_t + step_t, end_t) :
+                        max(start_t + step_t, end_t);
+
+                    // Set temporal indices that will pass through generated code.
+                    block_idxs.index[step_posn] = index_t;
+                    block_idxs.begin[step_posn] = start_t;
+                    block_idxs.end[step_posn] = stop_t;
+                    block_idxs.start[step_posn] = start_t;
+                    block_idxs.stop[step_posn] = stop_t;
+
+                    // Steps within a block are based on rank sub-block sizes.
+                    auto& settings = *_opts;
+                    block_idxs.step = settings._sub_block_sizes;
+                    block_idxs.step[step_posn] = 1;
+
+                    // Groups in block loops are based on sub-block-group sizes.
+                    block_idxs.group_size = settings._sub_block_group_sizes;
+                    block_idxs.group_size[step_posn] = 1;
+
+                    // Stencil bundle packs to evaluate at this time step.
+                    for (auto& bp : stPacks) {
+
+                        // Not a selected bundle pack?
+                        if (sel_bp && sel_bp != bp)
+                            continue;
+
+                        TRACE_MSG("calc_block: w/TB, shape " << shape <<
+                                  ", bundle-pack '" << bp->get_name() <<
+                                  "' in step(s) [" << start_t << " ... " << stop_t << ")");
+
+                        // Start timers for this pack.
+                        bp->getAT().timer.start();
+                        bp->timer.start();
+
+                        // Adjust start/stop to proper shape.
+                        Indices shape_start(start);
+                        Indices shape_stop(stop);
+                        for (int i = 0, j = 0; i < nsdims; i++) {
+                            if (i == step_posn) continue;
+
+                            // No adjustment needed for phase 0, 1 shape:
+                            // [hyper-]triangle whose base is original
+                            // 'block_idxs'.
+
+                            // Phase 1, bridge between phase 0 shapes.
+                            if (phase >= 1) {
+                                if (shape == j) {
+                                
+                                    // Begin at end of phase 0.
+                                    shape_start[i] = stop[i];
+                                    
+                                    // End at beginning of next block's phase 0.
+                                    shape_stop[i] = next_start[i];
+                                }
+                            }
+
+                            // Phase 2, add bridge in next dim.
+                            if (phase >= 2) {
+                                if (shape == (j + 1) % nshapes) {
+                                
+                                    // Begin at end of phase 0.
+                                    shape_start[i] = stop[i];
+                                    
+                                    // End at beginning of next block's phase 0.
+                                    shape_stop[i] = next_start[i];
+                                }
+                            }
+                            
+                            // Phase 3, add bridge in next dim.
+                            if (phase >= 3) {
+                                if (shape == (j + 2) % nshapes) {
+                                
+                                    // Begin at end of phase 0.
+                                    shape_start[i] = stop[i];
+                                    
+                                    // End at beginning of next block's phase 0.
+                                    shape_stop[i] = next_start[i];
+                                }
+                            }
+                            
+                            j++;
+                        }
+                        
+                        // Trim to region boundaries based on pack settings.
+                        bool ok = trim_to_region(shape_start, shape_stop,
+                                                 bp.get(), shift_num,
+                                                 block_idxs);
+
+                        // Loop through bundles in this pack to do actual calcs.
+                        if (ok) {
+                            for (auto* sb : *bp)
+                                sb->calc_block(block_idxs);
+                        }
+                        
+                        // Mark updated grids as dirty.
+                        // Only need to do this for one shape.
+                        if (shape == 0)
+                            mark_grids_dirty(bp, start_t, stop_t);
+
+                        // Adjust shape for next iteration.
+                        for (int i = 0, j = 0; i < nsdims; i++) {
+                            if (i == step_posn) continue;
+
+                            // Adjust by pts in one TB step.
+                            // But if block is first and/or last,
+                            // shift as for a WF.
+                            // TODO: have different R & L angles.
+                            auto tb_angle = tb_angles[j];
+                            auto wf_angle = wf_angles[j];
+
+                            // Shift start to right unless first.
+                            if (!is_first[j])
+                                start[i] += tb_angle;
+                            else
+                                start[i] -= wf_angle;
+
+                            // Shift stop to left.
+                            if (!is_last[j])
+                                stop[i] -= tb_angle;
+                            else
+                                stop[i] -= wf_angle;
+
+                            // Shift start of next block.
+                            next_start[i] += tb_angle;
+                            j++;
+                        }
+                        shift_num++; // Increment for each pack and time-step.
+
+                        // Stop timers for this pack.
+                        bp->getAT().timer.stop();
+                        bp->timer.stop();
+
+                    } // packs.
+                } // time steps.
+            } // shapes.
+        } // TB.
+    } // calc_block().
 
     // Reset auto-tuners.
     void StencilContext::reset_auto_tuner(bool enable, bool verbose) {
@@ -822,9 +1111,16 @@ namespace yask {
     // Will alter data in grids.
     void StencilContext::run_auto_tuner_now(bool verbose) {
         if (!rank_bb.bb_valid)
-            THROW_YASK_EXCEPTION("Error: tune_settings() called without calling prepare_solution() first");
-
+            THROW_YASK_EXCEPTION("Error: run_auto_tuner_now() called without calling prepare_solution() first");
         ostream& os = get_ostr();
+
+        // Cannot AT if TB used.
+        // TODO: fix this; need to keep block sizes the same and alter rank settings.
+        if (tb_steps > 1) {
+            os << "Cannot auto-tune when temporal blocking is enabled.\n";
+            return;
+        }
+
         os << "Auto-tuning...\n" << flush;
         YaskTimer at_timer;
         at_timer.start();

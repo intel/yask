@@ -303,6 +303,9 @@ namespace yask {
         // Make sure everything is resized based on block size.
         _settings->adjustSettings(nullop->get_ostream(), env);
 
+        // Update temporal blocking info.
+        _context->update_block_info();
+
         // Reallocate scratch data based on new block size.
         _context->allocScratchData(nullop->get_ostream());
     }

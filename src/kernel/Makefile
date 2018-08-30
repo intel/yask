@@ -515,7 +515,7 @@ REGION_LOOP_OPTS	?=	-ndims $(NSDIMS) -inVar region_idxs \
 REGION_LOOP_OUTER_MODS	?=	grouped omp
 REGION_LOOP_ORDER	?=	1 .. N-1
 REGION_LOOP_CODE	?=	$(REGION_LOOP_OUTER_MODS) loop($(REGION_LOOP_ORDER)) { \
-				$(REGION_LOOP_INNER_MODS) call(calc_block(bp)); }
+				$(REGION_LOOP_INNER_MODS) call(calc_block(bp, phase)); }
 
 # Block loops break up a block into sub-blocks.	 The 'omp' modifier creates
 # a *nested* OpenMP loop so that each sub-block is assigned to a nested OpenMP

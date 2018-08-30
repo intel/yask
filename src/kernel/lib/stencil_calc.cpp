@@ -42,19 +42,26 @@ namespace yask {
         auto& step_dim = dims->_step_dim;
         auto step_posn = Indices::step_posn;
         int thread_idx = omp_get_thread_num(); // used to index the scratch grids.
-        TRACE_MSG3("calc_block for bundle '" << get_name() << "': [" <<
-                   def_block_idxs.begin.makeValStr(nsdims) <<
-                   " ... " << def_block_idxs.end.makeValStr(nsdims) <<
-                   ") by " << def_block_idxs.step.makeValStr(nsdims) <<
+        TRACE_MSG3("calc_block('" << get_name() << "'): [" <<
+                   def_block_idxs.begin.makeValStr(nsdims) << " ... " <<
+                   def_block_idxs.end.makeValStr(nsdims) << ") by " <<
+                   def_block_idxs.step.makeValStr(nsdims) <<
                    " in thread " << thread_idx);
         assert(!is_scratch());
 
+        // No TB allowed here.
+#ifdef CHECK
+        idx_t begin_t = def_block_idxs.begin[step_posn];
+        idx_t end_t = def_block_idxs.end[step_posn];
+        assert(abs(end_t - begin_t) == 1);
+#endif
+        
         // TODO: if >1 BB, check outer one first to save time.
         
         // Loop through each solid BB.
         // For each BB, calc intersection between it and 'def_block_idxs'.
         // If this is non-empty, apply the bundle to all its required sub-blocks.
-        TRACE_MSG3("calc_block for bundle '" << get_name() << "': checking " <<
+        TRACE_MSG3("calc_block('" << get_name() << "'): checking " <<
                    _bb_list.size() << " BB(s)");
         int bbn = 0;
   	for (auto& bb : _bb_list) {
@@ -90,8 +97,8 @@ namespace yask {
                 continue; // to next BB.
             }
             
-            TRACE_MSG3("calc_block for bundle '" << get_name() <<
-                       "': after trimming for BB " << bbn << ": [" <<
+            TRACE_MSG3("calc_block('" << get_name() <<
+                       "'): after trimming for BB " << bbn << ": [" <<
                        bb_idxs.begin.makeValStr(nsdims) <<
                        " ... " << bb_idxs.end.makeValStr(nsdims) << ")");
 
@@ -115,7 +122,7 @@ namespace yask {
                 // copy of 'bb_idxs' except when updating scratch-grids.
                 ScanIndices block_idxs = sg->adjust_span(thread_idx, bb_idxs);
 
-                TRACE_MSG3("calc_block for bundle '" << get_name() << "': " <<
+                TRACE_MSG3("calc_block('" << get_name() << "'): " <<
                            " in reqd bundle '" << sg->get_name() << "': [" <<
                            block_idxs.begin.makeValStr(nsdims) <<
                            " ... " << block_idxs.end.makeValStr(nsdims) <<

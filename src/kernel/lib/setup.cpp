@@ -913,13 +913,68 @@ namespace yask {
 
         } // scratch-grid passes.
     }
+    
+    // Set temporal blocking data.
+    // This should be called anytime a block size is changed.
+    // Must be called after update_grid_info() to ensure
+    // angles are properly set.
+    void StencilContext::update_block_info() {
+        auto& step_dim = _dims->_step_dim;
+
+        // Start w/original temporal setting.
+        tb_steps = _opts->_block_sizes[step_dim];
+        assert(tb_steps >= 1);
+
+        // Determine max setting based on block sizes.
+        // When using temporal blocking, all block sizes
+        // across all packs must be the same.
+        if (tb_steps > 1) {
+            TRACE_MSG("update_block_info: original TB steps = " << tb_steps);
+            idx_t max_steps = min(tb_steps, wf_steps);
+            TRACE_MSG("update_block_info: max(TB, WF) steps = " << max_steps);
+
+            // Loop through each domain dim.
+            for (auto& dim : _dims->_domain_dims.getDims()) {
+                auto& dname = dim.getName();
+
+                // Calculate max number of temporal steps in
+                // this dim.
+                auto bsz = _opts->_block_sizes[dname];
+                auto angle = tb_angles[dname];
+                if (angle > 0) {
+                    auto cur_max = bsz / angle / 2 + 1;
+                    TRACE_MSG("update_block_info: max TB steps in dim '" <<
+                              dname << "' = " << cur_max <<
+                              " due to base block size of " << bsz <<
+                              " and TB angle of " << angle);
+                    max_steps = min(max_steps, cur_max);
+                }
+            }
+            tb_steps = min(tb_steps, max_steps);
+            TRACE_MSG("update_block_info: final TB steps = " << tb_steps);
+        }
+
+        // Calc number of shifts based on steps.
+        num_tb_shifts = 0;
+        if (tb_steps > 1) {
+
+            // Need to shift for each bundle pack.
+            assert(stPacks.size() > 0);
+            num_tb_shifts = idx_t(stPacks.size()) * tb_steps;
+            assert(num_tb_shifts > 1);
+
+            // Don't need to shift first one.
+            num_tb_shifts--;
+        }
+        assert(num_tb_shifts >= 0);
+    }
 
     // Set non-scratch grid sizes and offsets based on settings.
     // Set wave-front settings.
     // This should be called anytime a setting or rank offset is changed.
-    void StencilContext::update_grid_info()
-    {
+    void StencilContext::update_grid_info() {
         assert(_opts);
+        auto& step_dim = _dims->_step_dim;
 
         // If we haven't finished constructing the context, it's too early
         // to do this.
@@ -955,18 +1010,20 @@ namespace yask {
                     gp->_set_offset(dname, rank_domain_offsets[dname]);
                     gp->_set_local_offset(dname, 0);
 
-                    // Update max halo across grids, used for wavefront angles.
+                    // Update max halo across grids, used for temporal angles.
                     max_halos[dname] = max(max_halos[dname], gp->get_left_halo_size(dname));
                     max_halos[dname] = max(max_halos[dname], gp->get_right_halo_size(dname));
                 }
             }
         } // grids.
 
-        // Calculate wave-front settings based on max halos.
+        // Calculate wave-front shifts.
         // See the wavefront diagram in run_solution() for description
         // of angles and extensions.
-        auto& step_dim = _dims->_step_dim;
-        auto wf_steps = _opts->_region_sizes[step_dim];
+        tb_steps = _opts->_block_sizes[step_dim]; // use original size; actual may be less.
+        assert(tb_steps >= 1);
+        wf_steps = _opts->_region_sizes[step_dim];
+        wf_steps = max(wf_steps, tb_steps);
         assert(wf_steps >= 1);
         num_wf_shifts = 0;
         if (wf_steps > 1) {
@@ -980,25 +1037,37 @@ namespace yask {
             num_wf_shifts--;
         }
         assert(num_wf_shifts >= 0);
+
+        // Calculate angles and related settings.
         for (auto& dim : _dims->_domain_dims.getDims()) {
             auto& dname = dim.getName();
+            auto rnsize = _opts->_region_sizes[dname];
             auto rksize = _opts->_rank_sizes[dname];
             auto nranks = _opts->_num_ranks[dname];
 
-            // Determine the max spatial skewing angles for temporal
-            // wave-fronts based on the max halos.  We only need non-zero
-            // angles if the region size is less than the rank size and
-            // there are no other ranks in this dim, i.e., if the region
-            // covers the *global* domain in a given dim, no wave-front is
-            // needed in that dim.  TODO: make rounding-up an option.
-            idx_t angle = 0;
-            if (_opts->_region_sizes[dname] < rksize || nranks > 0)
-                angle = ROUND_UP(max_halos[dname], _dims->_fold_pts[dname]);
-            wf_angles[dname] = angle;
+            // Req'd shift in this dim based on max halos.
+            idx_t angle = ROUND_UP(max_halos[dname], _dims->_fold_pts[dname]);
+            
+            // Determine the max spatial skewing angles for TB.
+            // We assume that the block size will always require
+            // non-zero angles.
+            // TODO: adjust TB angle to zero iff block covers whole
+            // rank in given dim. Do this in update_block_info().
+            tb_angles.addDimBack(dname, angle);
+            
+            // Determine the max spatial skewing angles for WF tiling.  We
+            // only need non-zero angles if the region size is less than the
+            // rank size or there are other ranks in this dim, i.e., if
+            // the region covers the *global* domain in a given dim, no
+            // wave-front shifting is needed in that dim.
+            idx_t wf_angle = 0;
+            if (rnsize < rksize || nranks > 0)
+                wf_angle = angle;
+            wf_angles.addDimBack(dname, wf_angle);
             assert(angle >= 0);
 
             // Determine the total WF shift to be added in each dim.
-            idx_t shifts = angle * num_wf_shifts;
+            idx_t shifts = wf_angle * num_wf_shifts;
             wf_shifts[dname] = shifts;
             assert(shifts >= 0);
 
@@ -1020,6 +1089,10 @@ namespace yask {
             right_wf_exts[dname] = _opts->is_last_rank(dname) ? 0 : shifts;
         }
 
+        // Calculate temporal-block shifts.
+        // NB: this will change if/when block sizes change.
+        update_block_info();
+        
         // Now that wave-front settings are known, we can push this info
         // back to the grids. It's useful to store this redundant info
         // in the grids, because there it's indexed by grid dims instead
