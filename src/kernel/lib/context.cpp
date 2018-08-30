@@ -957,12 +957,15 @@ namespace yask {
                         min(start_t + step_t, end_t) :
                         max(start_t + step_t, end_t);
 
-                    // Set temporal indices that will pass through generated code.
+                    // Set temporal indices.
                     block_idxs.index[step_posn] = index_t;
                     block_idxs.begin[step_posn] = start_t;
                     block_idxs.end[step_posn] = stop_t;
                     block_idxs.start[step_posn] = start_t;
                     block_idxs.stop[step_posn] = stop_t;
+                    start[step_posn] = start_t;
+                    stop[step_posn] = stop_t;
+                    next_start[step_posn] = start_t;
 
                     // Steps within a block are based on rank sub-block sizes.
                     auto& settings = *_opts;
@@ -980,10 +983,6 @@ namespace yask {
                         if (sel_bp && sel_bp != bp)
                             continue;
 
-                        TRACE_MSG("calc_block: w/TB, shape " << shape <<
-                                  ", bundle-pack '" << bp->get_name() <<
-                                  "' in step(s) [" << start_t << " ... " << stop_t << ")");
-
                         // Start timers for this pack.
                         bp->getAT().timer.start();
                         bp->timer.start();
@@ -998,44 +997,34 @@ namespace yask {
                             // [hyper-]triangle whose base is original
                             // 'block_idxs'.
 
-                            // Phase 1, bridge between phase 0 shapes.
-                            if (phase >= 1) {
-                                if (shape == j) {
-                                
-                                    // Begin at end of phase 0.
-                                    shape_start[i] = stop[i];
-                                    
-                                    // End at beginning of next block's phase 0.
-                                    shape_stop[i] = next_start[i];
-                                }
-                            }
+                            // After phase 0, bridge one additional dim at a
+                            // time until all dims are bridged at last
+                            // phase. The 'shape' determines what dim to
+                            // start with.
+                            for (idx_t k = 1; k <= phase; k++) {
 
-                            // Phase 2, add bridge in next dim.
-                            if (phase >= 2) {
-                                if (shape == (j + 1) % nshapes) {
+                                // Select another dim based on shape and phase.
+                                if (shape == (j + k - 1) % nshapes) {
                                 
-                                    // Begin at end of phase 0.
+                                    // Begin at end of previous.
                                     shape_start[i] = stop[i];
                                     
-                                    // End at beginning of next block's phase 0.
+                                    // End at beginning of next block.
                                     shape_stop[i] = next_start[i];
                                 }
                             }
-                            
-                            // Phase 3, add bridge in next dim.
-                            if (phase >= 3) {
-                                if (shape == (j + 2) % nshapes) {
-                                
-                                    // Begin at end of phase 0.
-                                    shape_start[i] = stop[i];
-                                    
-                                    // End at beginning of next block's phase 0.
-                                    shape_stop[i] = next_start[i];
-                                }
-                            }
-                            
                             j++;
                         }
+
+                        TRACE_MSG("calc_block: phase " << phase <<
+                                  ", w/TB, shape " << shape <<
+                                  ", bundle-pack '" << bp->get_name() <<
+                                  ", start= " << start.makeValStr(nsdims) <<
+                                  ", stop= " << stop.makeValStr(nsdims) <<
+                                  ", next-start= " << next_start.makeValStr(nsdims) <<
+                                  "), shape-range= [" <<
+                                  shape_start.makeValStr(nsdims) << " ... " <<
+                                  shape_stop.makeValStr(nsdims) << ")");
                         
                         // Trim to region boundaries based on pack settings.
                         bool ok = trim_to_region(shape_start, shape_stop,
