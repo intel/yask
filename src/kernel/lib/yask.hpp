@@ -69,6 +69,7 @@ IN THE SOFTWARE.
 #ifdef USE_PMEM
 #include <memkind.h>
 #include <memkind_pmem.h>
+#include <sys/syscall.h>
 #endif
 
 // Additional type for unsigned indices.

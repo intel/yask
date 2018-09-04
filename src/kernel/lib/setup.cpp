@@ -31,6 +31,18 @@ using namespace std;
 
 namespace yask {
 
+#ifdef USE_PMEM
+    static inline int getnode() {
+        #ifdef SYS_getcpu
+        int node, status;
+       status = syscall(SYS_getcpu, NULL, &node, NULL);
+        return (status == -1) ? status : node;
+        #else
+        return -1; // unavailable
+        #endif
+    }
+#endif
+
     // Init MPI-related vars and other vars related to my rank's place in
     // the global problem: rank index, offset, etc.  Need to call this even
     // if not using MPI to properly init these vars.  Called from
@@ -298,9 +310,9 @@ namespace yask {
         os << "Grids priority" << endl;
         for (auto sp : sortedGridPtrs) {
             gridPtrs.push_back(sp);
-            os << " '" << sp->get_name();
+            os << " '" << sp->get_name() << "'";
             if (gridPtrSet.find(sp)!=gridPtrSet.end())
-                os << "'(out)";
+                os << "(out)";
             os << endl;
         }
 #endif
@@ -312,8 +324,7 @@ namespace yask {
         map <int, shared_ptr<char>> _grid_data_buf;
 
 #ifdef USE_PMEM
-        // FIXME: should be brought from setting
-        size_t preferredNUMASize = 89*1024*1024*(size_t)1024;
+        size_t preferredNUMASize = _opts->_numa_pref_max*1024*1024*(size_t)1024;
 #endif
         // Pass 0: assign alternative NUMA node when preferred NUMA node is not enough
         // Pass 1: count required size for each NUMA node, allocate chunk of memory at end.
@@ -353,8 +364,11 @@ namespace yask {
                     if (pass == 0) {
 #ifdef USE_PMEM
                         if (preferredNUMASize<npbytes[numa_pref])
-                            // FIXME: should be set to 1000 + (socket number)
-                            gp->set_numa_preferred(1000);
+                            if (getnode() == -1) {
+                                os << "cannot get numa_node information, so use default numa_pref" << endl;
+                            }
+                            else
+                                gp->set_numa_preferred(1000 + getnode());
 #endif
                     }
 

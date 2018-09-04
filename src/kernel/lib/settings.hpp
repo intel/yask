@@ -774,6 +774,7 @@ namespace yask {
 
         // NUMA settings.
         int _numa_pref = NUMA_PREF;
+        int _numa_pref_max = 128;
 
         // Ctor.
         KernelSettings(DimsPtr dims, KernelEnvPtr env) :

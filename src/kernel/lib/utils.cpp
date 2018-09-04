@@ -71,20 +71,20 @@ namespace yask {
         if ((*fd = mkstemp(fullname)) < 0) {
             perror("mkstemp()");
             err = MEMKIND_ERROR_RUNTIME;
-            THROW_YASK_EXCEPTION("Error: MEMKIND_ERROR_RUNTIME 1\n");
+            THROW_YASK_EXCEPTION("Error: MEMKIND_ERROR_RUNTIME - mkstemp()\n");
         }
 
         (void) unlink(dir);
 
         if (ftruncate(*fd, size) != 0) {
             err = MEMKIND_ERROR_RUNTIME;
-            THROW_YASK_EXCEPTION("Error: MEMKIND_ERROR_RUNTIME 2\n");
+            THROW_YASK_EXCEPTION("Error: MEMKIND_ERROR_RUNTIME - ftruncate()\n");
         }
 
         *addr = mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_SHARED, *fd, 0);
         if (*addr == MAP_FAILED) {
             err = MEMKIND_ERROR_RUNTIME;
-            THROW_YASK_EXCEPTION("Error: MEMKIND_ERROR_RUNTIME 3\n");
+            THROW_YASK_EXCEPTION("Error: MEMKIND_ERROR_RUNTIME - mmap()\n");
         }
 
         return err;
