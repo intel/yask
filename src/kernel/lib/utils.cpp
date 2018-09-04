@@ -129,6 +129,7 @@ namespace yask {
             int fd;
             std::stringstream ss;
             ss << numa_pref%1000;
+            // 'X' of pmemX should be matched with the NUMA node.
             std::string pmem_name("/mnt/pmem");
             pmem_name.append(ss.str());
             err = pmem_tmpfile(pmem_name.c_str(), nbytes, &fd, &p);
