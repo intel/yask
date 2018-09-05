@@ -31,6 +31,38 @@ using namespace std;
 
 namespace yask {
 
+    // Constructor.
+    StencilContext::StencilContext(KernelEnvPtr env,
+                                   KernelSettingsPtr settings) :
+        _ostr(&std::cout),
+        _env(env),
+        _opts(settings),
+        _dims(settings->_dims),
+        _at(this, _opts.get(), "solution")
+    {
+        // Set debug output object.
+        yask_output_factory yof;
+        set_debug_output(yof.new_stdout_output());
+
+        // Create MPI Info object.
+        _mpiInfo = std::make_shared<MPIInfo>(settings->_dims);
+
+        // Init various tuples to make sure they have the correct dims.
+        rank_domain_offsets = _dims->_domain_dims;
+        rank_domain_offsets.setValsSame(-1); // indicates prepare_solution() not called.
+        overall_domain_sizes = _dims->_domain_dims;
+        max_halos = _dims->_domain_dims;
+        wf_angles = _dims->_domain_dims;
+        wf_shifts = _dims->_domain_dims;
+        tb_angles = _dims->_domain_dims;
+        tb_shifts = _dims->_domain_dims;
+        left_wf_exts = _dims->_domain_dims;
+        right_wf_exts = _dims->_domain_dims;
+
+        // Set output to msg-rank per settings.
+        set_ostr();
+    }
+
     // Init MPI-related vars and other vars related to my rank's place in
     // the global problem: rank index, offset, etc.  Need to call this even
     // if not using MPI to properly init these vars.  Called from
@@ -239,7 +271,7 @@ namespace yask {
         // This must be done after finding WF extensions.
         find_bounding_boxes();
 
-    } // setupRank.
+    } // setupRank().
 
     // Alloc 'nbytes' on each requested NUMA node.
     // Map keys are preferred NUMA nodes or -1 for local.
@@ -967,7 +999,8 @@ namespace yask {
             num_tb_shifts--;
         }
         assert(num_tb_shifts >= 0);
-    }
+
+    } // update_block_info().
 
     // Set non-scratch grid sizes and offsets based on settings.
     // Set wave-front settings.
@@ -1023,7 +1056,7 @@ namespace yask {
         tb_steps = _opts->_block_sizes[step_dim]; // use original size; actual may be less.
         assert(tb_steps >= 1);
         wf_steps = _opts->_region_sizes[step_dim];
-        wf_steps = max(wf_steps, tb_steps);
+        wf_steps = max(wf_steps, tb_steps); // round up WF steps if less than TB steps.
         assert(wf_steps >= 1);
         num_wf_shifts = 0;
         if (wf_steps > 1) {
@@ -1037,6 +1070,9 @@ namespace yask {
             num_wf_shifts--;
         }
         assert(num_wf_shifts >= 0);
+
+        // Determine whether separate tuners can be used.
+        _use_pack_tuners = (tb_steps == 1) && (stPacks.size() > 1);
 
         // Calculate angles and related settings.
         for (auto& dim : _dims->_domain_dims.getDims()) {
@@ -1115,7 +1151,7 @@ namespace yask {
                 }
             }
         }
-    }
+    } // update_grid_info().
 
     // Allocate grids and MPI bufs.
     // Initialize some data structures.
@@ -1145,19 +1181,20 @@ namespace yask {
         // reset time keepers.
         clear_timers();
 
-        // Init auto-tuner to run silently during normal operation.
-        for (auto& sp : stPacks)
-            sp->getAT().clear(false, false);
-
         // Adjust all settings before setting MPI buffers or sizing grids.
-        // Prints final settings.
+        // Prints adjusted settings.
         // TODO: print settings again after auto-tuning.
         _opts->adjustSettings(os, _env);
 
         // Copy current settings to packs.
+        // Needed here because settings may have been changed via APIs
+        // since last call to prepare_solution().
         // This will wipe out any previous auto-tuning.
         for (auto& sp : stPacks)
             sp->getSettings() = *_opts;
+
+        // Init auto-tuner to run silently during normal operation.
+        reset_auto_tuner(true, false);
 
         // Report ranks.
         os << endl;
@@ -1212,7 +1249,8 @@ namespace yask {
         allocMpiData(os);
 
         print_info();
-    }
+
+    } // prepare_solution().
 
     void StencilContext::print_info() {
         auto& step_dim = _dims->_step_dim;

@@ -30,6 +30,14 @@ using namespace std;
 
 namespace yask {
 
+    // Print the best settings.
+    void AutoTuner::print_settings(ostream& os) const {
+        os << _name << ": best-block-size: " <<
+            _settings->_block_sizes.makeDimValStr(" * ") << endl <<
+            _name << ": best-sub-block-size: " <<
+            _settings->_sub_block_sizes.makeDimValStr(" * ") << endl << flush;
+    }
+    
     // Reset the auto-tuner.
     void AutoTuner::clear(bool mark_done, bool verbose) {
 
@@ -78,9 +86,9 @@ namespace yask {
                 center_block[dname] = dmax;
         }
         if (!done) {
-            os << _name << ": starting block-size: "  <<
-                center_block.makeDimValStr(" * ") << endl;
-            os << _name << ": starting search radius: " << radius << endl;
+            TRACE_MSG2(_name << ": starting block-size: "  <<
+                       center_block.makeDimValStr(" * "));
+            TRACE_MSG2(_name << ": starting search radius: " << radius);
         }
     } // clear.
 
@@ -262,7 +270,7 @@ namespace yask {
                         os << _name << ": done" << endl;
                         return;
                     }
-                    os << _name << ": new search radius: " << radius << endl;
+                    os << _name << ": search radius " << radius << endl;
                 }
                 else {
                     TRACE_MSG2(_name << ": continuing search from block " <<

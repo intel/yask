@@ -69,37 +69,6 @@ namespace yask {
     SET_SOLN_API(set_rank_index, _opts->_rank_indices[dim] = n, false, true, false, true)
 #undef SET_SOLN_API
 
-    // Constructor.
-    StencilContext::StencilContext(KernelEnvPtr env,
-                                   KernelSettingsPtr settings) :
-    _ostr(&std::cout),
-        _env(env),
-        _opts(settings),
-        _dims(settings->_dims)
-    {
-        // Set debug output object.
-        yask_output_factory yof;
-        set_debug_output(yof.new_stdout_output());
-
-        // Create MPI Info object.
-        _mpiInfo = std::make_shared<MPIInfo>(settings->_dims);
-
-        // Init various tuples to make sure they have the correct dims.
-        rank_domain_offsets = _dims->_domain_dims;
-        rank_domain_offsets.setValsSame(-1); // indicates prepare_solution() not called.
-        overall_domain_sizes = _dims->_domain_dims;
-        max_halos = _dims->_domain_dims;
-        wf_angles = _dims->_domain_dims;
-        wf_shifts = _dims->_domain_dims;
-        tb_angles = _dims->_domain_dims;
-        tb_shifts = _dims->_domain_dims;
-        left_wf_exts = _dims->_domain_dims;
-        right_wf_exts = _dims->_domain_dims;
-
-        // Set output to msg-rank per settings.
-        set_ostr();
-    }
-
     void StencilContext::share_grid_storage(yk_solution_ptr source) {
         auto sp = dynamic_pointer_cast<StencilContext>(source);
         assert(sp);
@@ -530,8 +499,7 @@ namespace yask {
             steps_done += this_num_t;
 
             // Call the auto-tuner to evaluate these steps.
-            for (auto& sp : stPacks)
-                sp->getAT().eval(this_num_t);
+            eval_auto_tuner(this_num_t);
 
         } // step loop.
 
@@ -545,7 +513,7 @@ namespace yask {
         }
 #endif
         run_time.stop();
-    }
+    } // run_solution().
 
     // Trim boundaries 'start' and 'stop' to actual size in which to compute
     // in pack 'bp' within region based on 'shift_num', which should start
@@ -674,8 +642,7 @@ namespace yask {
                               start_t << " ... " << stop_t << ")");
 
                     // Start timers for this pack.
-                    bp->getAT().timer.start();
-                    bp->timer.start();
+                    start_timers(bp);
 
                     // Steps within a region are based on pack block sizes.
                     auto& settings = bp->getSettings();
@@ -738,8 +705,7 @@ namespace yask {
                     shift_num++; // Increment for each pack.
 
                     // Stop timers for this pack.
-                    bp->getAT().timer.stop();
-                    bp->timer.stop();
+                    stop_timers(bp);
 
                 } // stencil bundle packs.
             } // no temporal blocking.
@@ -984,8 +950,7 @@ namespace yask {
                             continue;
 
                         // Start timers for this pack.
-                        bp->getAT().timer.start();
-                        bp->timer.start();
+                        start_timers(bp);
 
                         // Adjust start/stop to proper shape.
                         Indices shape_start(start);
@@ -1072,8 +1037,7 @@ namespace yask {
                         shift_num++; // Increment for each pack and time-step.
 
                         // Stop timers for this pack.
-                        bp->getAT().timer.stop();
-                        bp->timer.stop();
+                        stop_timers(bp);
 
                     } // packs.
                 } // time steps.
@@ -1081,18 +1045,44 @@ namespace yask {
         } // TB.
     } // calc_block().
 
+    // Timer methods.
+    void StencilContext::start_timers(BundlePackPtr& bp) {
+        bp->timer.start();
+        bp->getAT().timer.start();
+        _at.timer.start();
+    }
+    void StencilContext::stop_timers(BundlePackPtr& bp) {
+        bp->timer.stop();
+        bp->getAT().timer.stop();
+        _at.timer.stop();
+    }
+    
+    // Eval auto-tuner for given number of steps.
+    void StencilContext::eval_auto_tuner(idx_t num_steps) {
+        if (_use_pack_tuners) {
+            for (auto& sp : stPacks)
+                sp->getAT().eval(num_steps);
+        }
+        else
+            _at.eval(num_steps);
+    }
+    
     // Reset auto-tuners.
     void StencilContext::reset_auto_tuner(bool enable, bool verbose) {
         for (auto& sp : stPacks)
             sp->getAT().clear(!enable, verbose);
+        _at.clear(!enable, verbose);
     }
 
     // Determine if any auto tuners are running.
     bool StencilContext::is_auto_tuner_enabled() const {
         bool done = true;
-        for (auto& sp : stPacks)
-            if (!sp->getAT().is_done())
-                done = false;
+        if (_use_pack_tuners) {
+            for (auto& sp : stPacks)
+                if (!sp->getAT().is_done())
+                    done = false;
+        } else
+            done = _at.is_done();
         return !done;
     }
     
@@ -1103,13 +1093,6 @@ namespace yask {
             THROW_YASK_EXCEPTION("Error: run_auto_tuner_now() called without calling prepare_solution() first");
         ostream& os = get_ostr();
 
-        // Cannot AT if TB used.
-        // TODO: fix this; need to keep block sizes the same and alter rank settings.
-        if (tb_steps > 1) {
-            os << "Cannot auto-tune when temporal blocking is enabled.\n";
-            return;
-        }
-
         os << "Auto-tuning...\n" << flush;
         YaskTimer at_timer;
         at_timer.start();
@@ -1118,15 +1101,13 @@ namespace yask {
         enable_halo_exchange = false;
 
         // Init tuners.
-        for (auto& sp : stPacks)
-            sp->getAT().clear(false, verbose);
+        reset_auto_tuner(true, verbose);
 
         // Reset stats.
         clear_timers();
 
         // Determine number of sets to run.
         // If wave-fronts are enabled, run a max number of these steps.
-        // TODO: only run one region during AT.
         idx_t region_steps = _opts->_region_sizes[_dims->_step_dim];
         idx_t step_dir = _dims->_step_dir;
         idx_t step_t = min(region_steps, +AutoTuner::max_step_t) * step_dir;
@@ -1143,6 +1124,7 @@ namespace yask {
         }
 
         // Wait for all ranks to finish.
+        os << "Waiting for auto-tuner to converge on all ranks...\n";
         _env->global_barrier();
 
         // reenable halo exchange.
@@ -1152,12 +1134,11 @@ namespace yask {
         at_timer.stop();
         os << "Auto-tuner done after " << steps_done << " step(s) in " <<
             at_timer.get_elapsed_secs() << " secs.\n";
-        for (auto& sp : stPacks) {
-            auto& settings = sp->getSettings();
-            os << " for pack '" << sp->get_name() << "':\n" <<
-                "  best-block-size: " << settings._block_sizes.makeDimValStr(" * ") << endl <<
-                "  best-sub-block-size: " << settings._sub_block_sizes.makeDimValStr(" * ") << endl << flush;
-        }
+        if (_use_pack_tuners) {
+            for (auto& sp : stPacks)
+                sp->getAT().print_settings(os);
+        } else
+            _at.print_settings(os);
 
         // Reset stats.
         clear_timers();
@@ -1780,6 +1761,5 @@ namespace yask {
         for (auto& sp : stPacks)
             sp->timer.clear();
     }
-
     
 } // namespace yask.

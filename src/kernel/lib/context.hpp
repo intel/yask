@@ -155,6 +155,10 @@ namespace yask {
         // MPI info.
         MPIInfoPtr _mpiInfo;
 
+        // Auto-tuner for global settings.
+        AutoTuner _at;
+        bool _use_pack_tuners = false;
+
         // Bytes between each buffer to help avoid aliasing
         // in the HW.
         size_t _data_buf_pad = (YASK_PAD * CACHELINE_BYTES);
@@ -311,6 +315,7 @@ namespace yask {
         }
         virtual void set_settings(KernelSettingsPtr opts) {
             _opts = opts;
+            _at.set_settings(_opts.get());
         }
 
         // Access to env, dims and MPI info.
@@ -658,10 +663,18 @@ namespace yask {
             return _opts->_numa_pref;
         }
 
+        // Timer methods.
+        virtual void start_timers(BundlePackPtr& bp);
+        virtual void stop_timers(BundlePackPtr& bp);
+
+        // Auto-tuner methods.
+        virtual void eval_auto_tuner(idx_t num_steps);
+        
         // Auto-tuner APIs.
         virtual void reset_auto_tuner(bool enable, bool verbose = false);
         virtual void run_auto_tuner_now(bool verbose = true);
         virtual bool is_auto_tuner_enabled() const;
-    };
+
+    }; // StencilContext.
 
 } // yask namespace.

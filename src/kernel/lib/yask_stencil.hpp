@@ -64,6 +64,6 @@ IN THE SOFTWARE.
 #include "settings.hpp"
 #include "generic_grids.hpp"
 #include "realv_grids.hpp"
-#include "context.hpp"
 #include "auto_tuner.hpp"
+#include "context.hpp"
 #include "stencil_calc.hpp"
