@@ -44,8 +44,8 @@ namespace yask {
         // AT parameters.
         double warmup_steps = 10;
         double warmup_secs = 0.5;
-        idx_t min_steps = 5;
-        double min_secs = 0.1; // eval when either min_steps or min_secs is reached.
+        idx_t min_steps = 10;
+        double min_secs = 0.25; // eval when either min_steps or min_secs is reached.
         idx_t min_step = 4;
         idx_t max_radius = 64;
         idx_t min_pts = 512; // 8^3.
@@ -76,10 +76,12 @@ namespace yask {
 
         AutoTuner(StencilContext* ctx,
                   KernelSettings* settings,
-                  const std::string& name) :
+                  const std::string& name = "") :
             _context(ctx),
             _settings(settings) {
-            _name = "auto-tuner(" + name + ")";
+            _name = "auto-tuner";
+            if (name.length())
+                _name += "(" + name + ")";
         }
 
         // Start & stop this timer to track elapsed time.

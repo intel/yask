@@ -34,6 +34,28 @@ Cache cache_model(MODEL_CACHE);
 
 namespace yask {
 
+    // Timer.
+    double YaskTimer::stop(TimeSpec* ts) {
+        if (ts)
+            _end = *ts;
+        else {
+            auto cts = get_timespec();
+            _end = cts;
+        }
+        struct timespec delta;
+        
+        // Elapsed time is just end - begin times.
+        delta.tv_sec = _end.tv_sec - _begin.tv_sec;
+        _elapsed.tv_sec += delta.tv_sec;
+        
+        // No need to check for sign or to normalize, because tv_nsec is
+        // signed and 64-bit.
+        delta.tv_nsec = _end.tv_nsec - _begin.tv_nsec;
+        _elapsed.tv_nsec += delta.tv_nsec;
+        
+        return double(delta.tv_sec) + double(delta.tv_nsec) * 1e-9;
+    }
+    
     // Aligned allocation.
     char* alignedAlloc(std::size_t nbytes) {
 

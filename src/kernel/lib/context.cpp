@@ -1054,15 +1054,18 @@ namespace yask {
     } // calc_block().
 
     // Timer methods.
+    // Start and stop timers for final stats and auto-tuners.
     void StencilContext::start_timers(BundlePackPtr& bp) {
-        bp->timer.start();
-        bp->getAT().timer.start();
-        _at.timer.start();
+        auto ts = YaskTimer::get_timespec();
+        bp->timer.start(&ts);
+        bp->getAT().timer.start(&ts);
+        _at.timer.start(&ts);
     }
     void StencilContext::stop_timers(BundlePackPtr& bp) {
-        bp->timer.stop();
-        bp->getAT().timer.stop();
-        _at.timer.stop();
+        auto ts = YaskTimer::get_timespec();
+        bp->timer.stop(&ts);
+        bp->getAT().timer.stop(&ts);
+        _at.timer.stop(&ts);
     }
     
     // Eval auto-tuner for given number of steps.

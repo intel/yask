@@ -154,6 +154,9 @@ namespace yask {
         struct timespec _begin, _end, _elapsed;
 
     public:
+
+        typedef struct timespec TimeSpec;
+
         YaskTimer() { clear(); }
         virtual ~YaskTimer() { }
 
@@ -163,32 +166,30 @@ namespace yask {
             _begin.tv_nsec = _end.tv_nsec = _elapsed.tv_nsec = 0;
         }
 
+        // Make a timespec that can be used for mutiple calls.
+        static TimeSpec get_timespec() {
+            TimeSpec ts;
+            clock_gettime(CLOCK_REALTIME, &ts);
+            return ts;
+        }
+        
         // Start a timed region.
         // start() and stop() can be called multiple times in
         // pairs before calling get_elapsed_secs(), which
         // will return the cumulative time over all timed regions.
-        virtual void start() {
-            clock_gettime(CLOCK_REALTIME, &_begin);
+        virtual void start(TimeSpec* ts = NULL) {
+            if (ts)
+                _begin = *ts;
+            else {
+                auto cts = get_timespec();
+                _begin = cts;
+            }
         }
 
         // End a timed region.
         // Return time since previous call to start(); this is *not*
         // generally the same as the value returned by get_elapsed_secs().
-        virtual double stop() {
-            clock_gettime(CLOCK_REALTIME, &_end);
-            struct timespec delta;
-
-            // Elapsed time is just end - begin times.
-            delta.tv_sec = _end.tv_sec - _begin.tv_sec;
-            _elapsed.tv_sec += delta.tv_sec;
-
-            // No need to check for sign or to normalize, because tv_nsec is
-            // signed and 64-bit.
-            delta.tv_nsec = _end.tv_nsec - _begin.tv_nsec;
-            _elapsed.tv_nsec += delta.tv_nsec;
-
-            return double(delta.tv_sec) + double(delta.tv_nsec) * 1e-9;
-        }
+        virtual double stop(TimeSpec* ts = NULL);
 
         // Get elapsed time in sec.
         // Does not reset value, so it may be used for cumulative time.

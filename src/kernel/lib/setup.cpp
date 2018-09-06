@@ -38,7 +38,7 @@ namespace yask {
         _env(env),
         _opts(settings),
         _dims(settings->_dims),
-        _at(this, _opts.get(), "solution")
+        _at(this, _opts.get())
     {
         // Set debug output object.
         yask_output_factory yof;
