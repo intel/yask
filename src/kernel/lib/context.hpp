@@ -235,7 +235,6 @@ namespace yask {
         idx_t num_wf_shifts = 0; // number of WF shifts required in wf_steps.
         idx_t num_tb_shifts = 0; // number of TB shifts required in tb_steps.
         IdxTuple wf_shifts;    // total shifted pts (wf_angles * num_wf_shifts).
-        IdxTuple tb_shifts;    // total shifted pts (tb_angles * num_tb_shifts).
         IdxTuple left_wf_exts;    // WF extension needed on left side of rank for halo exch.
         IdxTuple right_wf_exts;    // WF extension needed on right side of rank.
 
@@ -513,7 +512,7 @@ namespace yask {
 
         // Calculate results within a block.
         virtual void calc_block(BundlePackPtr& sel_bp,
-                                idx_t phase,
+                                idx_t phase, idx_t shift_num,
                                 const ScanIndices& region_idxs);
 
         // Exchange all dirty halo data for all stencil bundles.
@@ -526,8 +525,9 @@ namespace yask {
 
         // Set various limits in 'idxs' based on current step.
         virtual bool trim_to_region(const Indices& start, const Indices& stop,
-                                   BundlePack* bp, idx_t shift_num,
-                                   ScanIndices& idxs);
+                                    const Indices& region_start, const Indices& region_stop,
+                                    BundlePackPtr& bp, idx_t shift_num,
+                                    ScanIndices& idxs);
 
         // Set the bounding-box around all stencil bundles.
         virtual void find_bounding_boxes();

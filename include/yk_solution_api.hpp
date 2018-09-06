@@ -189,7 +189,8 @@ namespace yask {
         virtual void
         set_block_size(const std::string& dim
                        /**< [in] Name of dimension to set.  Must be one of
-                          the names from get_domain_dim_names(). */,
+                          the names from get_step_dim_name() or
+                          get_domain_dim_names(). */,
                        idx_t size
                        /**< [in] Elements in a block in this `dim`. */ ) =0;
 
@@ -202,7 +203,8 @@ namespace yask {
         virtual idx_t
         get_block_size(const std::string& dim
                         /**< [in] Name of dimension to get.  Must be one of
-                           the names from get_domain_dim_names(). */) const =0;
+                           the names from get_step_dim_name() or
+                           get_domain_dim_names(). */) const =0;
 
         /// Set the number of MPI ranks in the given dimension.
         /**

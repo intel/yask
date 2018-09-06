@@ -55,7 +55,6 @@ namespace yask {
         wf_angles = _dims->_domain_dims;
         wf_shifts = _dims->_domain_dims;
         tb_angles = _dims->_domain_dims;
-        tb_shifts = _dims->_domain_dims;
         left_wf_exts = _dims->_domain_dims;
         right_wf_exts = _dims->_domain_dims;
 
@@ -460,17 +459,15 @@ namespace yask {
                             // are no more ranks in the given direction,
                             // extend the "outer" index to include the halo
                             // in that direction to make sure all data are
-                            // sync'd when using WF tiling.
+                            // sync'd. Critical for temporal tiling.
                             idx_t fidx = gp->get_first_rank_domain_index(dname);
                             idx_t lidx = gp->get_last_rank_domain_index(dname);
                             first_inner_idx.addDimBack(dname, fidx);
                             last_inner_idx.addDimBack(dname, lidx);
-                            if (_opts->is_time_tiling()) {
-                                if (_opts->is_first_rank(dname))
-                                    fidx -= lhalo;
-                                if (_opts->is_last_rank(dname))
-                                    lidx += rhalo;
-                            }
+                            if (_opts->is_first_rank(dname))
+                                fidx -= lhalo; // extend into left halo.
+                            if (_opts->is_last_rank(dname))
+                                lidx += rhalo; // extend into right halo.
                             first_outer_idx.addDimBack(dname, fidx);
                             last_outer_idx.addDimBack(dname, lidx);
 
@@ -974,7 +971,8 @@ namespace yask {
                 auto bsz = _opts->_block_sizes[dname];
                 auto angle = tb_angles[dname];
                 if (angle > 0) {
-                    auto cur_max = bsz / angle / 2 + 1;
+                    idx_t sh_pts = angle * 2 * stPacks.size();
+                    idx_t cur_max = (bsz - 1) / sh_pts + 1;
                     TRACE_MSG("update_block_info: max TB steps in dim '" <<
                               dname << "' = " << cur_max <<
                               " due to base block size of " << bsz <<
@@ -1292,15 +1290,23 @@ namespace yask {
             " minimum-padding:       " << _opts->_min_pad_sizes.makeDimValStr() << endl <<
             " L1-prefetch-distance:  " << PFD_L1 << endl <<
             " L2-prefetch-distance:  " << PFD_L2 << endl <<
-            " max-halos:             " << max_halos.makeDimValStr() << endl;
-        if (num_wf_shifts > 0) {
+            " max-halos:             " << max_halos.makeDimValStr() << endl <<
+            " num-temporal-block-steps:  " << tb_steps << endl;
+        if (tb_steps > 1) {
             os <<
-                " wave-front-angles:     " << wf_angles.makeDimValStr() << endl <<
-                " num-wave-front-shifts: " << num_wf_shifts << endl <<
-                " wave-front-shift-lens: " << wf_shifts.makeDimValStr() << endl <<
-                " left-wave-front-exts:  " << left_wf_exts.makeDimValStr() << endl <<
-                " right-wave-front-exts: " << right_wf_exts.makeDimValStr() << endl <<
-                " ext-rank-domain:       " << ext_bb.bb_begin.makeDimValStr() <<
+                " temporal-block-angles:     " << tb_angles.makeDimValStr() << endl <<
+                " num-temporal-block-shifts: " << num_tb_shifts << endl;
+        }
+        os <<
+            " num-wave-front-steps:      " << wf_steps << endl;
+        if (wf_steps > 1) {
+            os <<
+                " wave-front-angles:         " << wf_angles.makeDimValStr() << endl <<
+                " num-wave-front-shifts:     " << num_wf_shifts << endl <<
+                " wave-front-shift-size:     " << wf_shifts.makeDimValStr() << endl <<
+                " left-wave-front-exts:      " << left_wf_exts.makeDimValStr() << endl <<
+                " right-wave-front-exts:     " << right_wf_exts.makeDimValStr() << endl <<
+                " ext-rank-domain:           " << ext_bb.bb_begin.makeDimValStr() <<
                 " ... " << ext_bb.bb_end.subElements(1).makeDimValStr() << endl;
         }
         os << endl;

@@ -45,7 +45,7 @@ namespace yask {
     GET_SOLN_API(get_rank_domain_size, _opts->_rank_sizes[dim], false, true, false, false)
     GET_SOLN_API(get_region_size, _opts->_region_sizes[dim], true, true, false, false)
     GET_SOLN_API(get_min_pad_size, _opts->_min_pad_sizes[dim], false, true, false, false)
-    GET_SOLN_API(get_block_size, _opts->_block_sizes[dim], false, true, false, false)
+    GET_SOLN_API(get_block_size, _opts->_block_sizes[dim], true, true, false, false)
     GET_SOLN_API(get_num_ranks, _opts->_num_ranks[dim], false, true, false, false)
     GET_SOLN_API(get_first_rank_domain_index, rank_bb.bb_begin[dim], false, true, false, true)
     GET_SOLN_API(get_last_rank_domain_index, rank_bb.bb_end[dim] - 1, false, true, false, true)
@@ -62,7 +62,7 @@ namespace yask {
         if (reset_prep) rank_bb.bb_valid = ext_bb.bb_valid = false;     \
     }
     SET_SOLN_API(set_min_pad_size, _opts->_min_pad_sizes[dim] = n, false, true, false, false)
-    SET_SOLN_API(set_block_size, _opts->_block_sizes[dim] = n, false, true, false, true)
+    SET_SOLN_API(set_block_size, _opts->_block_sizes[dim] = n, true, true, false, true)
     SET_SOLN_API(set_region_size, _opts->_region_sizes[dim] = n, true, true, false, true)
     SET_SOLN_API(set_rank_domain_size, _opts->_rank_sizes[dim] = n, false, true, false, true)
     SET_SOLN_API(set_num_ranks, _opts->_num_ranks[dim] = n, false, true, false, true)
@@ -163,7 +163,7 @@ namespace yask {
         _opts->_block_sizes.setValsSame(0);
         _opts->_block_sizes[_dims->_step_dim] = 1;
         _opts->adjustSettings(get_env());
-        update_block_info();
+        update_grid_info();
 
         // Copy these settings to packs and realloc scratch grids.
         for (auto& sp : stPacks)
@@ -516,12 +516,13 @@ namespace yask {
     } // run_solution().
 
     // Trim boundaries 'start' and 'stop' to actual size in which to compute
-    // in pack 'bp' within region based on 'shift_num', which should start
-    // at 0 and increment for each pack in each time-step. Update 'begin'
-    // and 'end' in 'idxs'.  Return 'true' if resulting area is non-empty,
-    // 'false' if empty.
+    // in pack 'bp' within region with base 'region_start' to 'region_stop'
+    // shifted by 'shift_num', which should start at 0 and increment for
+    // each pack in each time-step. Updates 'begin' and 'end' in 'idxs'.
+    // Return 'true' if resulting area is non-empty, 'false' if empty.
     bool StencilContext::trim_to_region(const Indices& start, const Indices& stop,
-                                        BundlePack* bp, idx_t shift_num,
+                                        const Indices& region_start, const Indices& region_stop,
+                                        BundlePackPtr& bp, idx_t shift_num,
                                         ScanIndices& idxs) {
         auto step_posn = +Indices::step_posn;
         int ndims = _dims->_stencil_dims.size();
@@ -538,39 +539,59 @@ namespace yask {
         // We have to calculate the posn in the extended rank at each
         // value of 'shift_num' because it is being shifted spatially.
         bool ok = true;
-        assert (bp);
-        auto& pbb = bp->getBB(); // extended BB for this pack.
         for (int i = 0, j = 0; i < ndims; i++) {
             if (i == step_posn) continue;
             auto angle = wf_angles[j];
 
-            // Begin point.
-            idx_t dbegin = rank_bb.bb_begin[j]; // non-extended domain.
-            idx_t rbegin = max<idx_t>(start[i], pbb.bb_begin[j]);
+            // Shift initial spatial region boundaries for this iteration of
+            // temporal wavefront.  Between regions, we only shift left, so
+            // region loops must strictly increment. They may do so in any
+            // order.  Shift by pts in one WF step.  Always shift left in
+            // WFs.  TODO: shift only what is needed by this pack, not the
+            // global max.
+            idx_t rstart = region_start[i] - angle * shift_num;
+            idx_t rstop = region_stop[i] - angle * shift_num;
 
-            // In left ext, add 'angle' points for every shift.
-            if (rbegin < dbegin)
-                rbegin = max(rbegin, dbegin - left_wf_exts[j] + shift_num * angle);
-            idxs.begin[i] = rbegin;
+            // Clamp to extended BB.
+            if (bp) {
+                auto& pbb = bp->getBB(); // extended BB for this pack.
+                rstart = max(rstart, pbb.bb_begin[j]);
+                rstop = min(rstop, pbb.bb_end[j]);
+            }
 
-            // End point.
-            idx_t dend = rank_bb.bb_end[j]; // non-extended domain.
-            idx_t rend = min<idx_t>(stop[i], pbb.bb_end[j]);
+            // Clamp to provided start & stop.
+            rstart = max(rstart, start[i]);
+            rstop = min(rstop, stop[i]);
+            
+            // Non-extended domain.
+            idx_t dbegin = rank_bb.bb_begin[j];
+            idx_t dend = rank_bb.bb_end[j];
+
+            // In left ext, add 'angle' points for every shift to get
+            // region boundary in ext.
+            if (rstart < dbegin && left_wf_exts[j])
+                rstart = max(rstart, dbegin - left_wf_exts[j] + shift_num * angle);
 
             // In right ext, subtract 'angle' points for every shift.
-            if (rend > dend)
-                rend = min(rend, dend + right_wf_exts[j] - shift_num * angle);
-            idxs.end[i] = rend;
+            if (rstop > dend && right_wf_exts[j])
+                rstop = min(rstop, dend + right_wf_exts[j] - shift_num * angle);
+
+            // Copy into idxs.
+            idxs.begin[i] = rstart;
+            idxs.end[i] = rstop;
 
             // Anything to do in the adjusted region?
-            if (rend <= rbegin)
+            if (rstop <= rstart)
                 ok = false;
 
             j++; // next domain index.
         }
         TRACE_MSG("trim_to_region: updated span: [" <<
                   idxs.begin.makeValStr(ndims) << " ... " <<
-                  idxs.end.makeValStr(ndims) << ") is " <<
+                  idxs.end.makeValStr(ndims) << ") within region base [" <<
+                  region_start.makeValStr(ndims) << " ... " <<
+                  region_stop.makeValStr(ndims) << ") shifted " <<
+                  shift_num << " time(s) is " <<
                   (ok ? "not " : "") << "empty");
         return ok;
     }
@@ -586,8 +607,11 @@ namespace yask {
         int ndims = _dims->_stencil_dims.size();
         auto& step_dim = _dims->_step_dim;
         auto step_posn = +Indices::step_posn;
-        TRACE_MSG("calc_region: [" << rank_idxs.start.makeValStr(ndims) <<
-                  " ... " << rank_idxs.stop.makeValStr(ndims) << ")");
+        TRACE_MSG("calc_region: region [" <<
+                  rank_idxs.start.makeValStr(ndims) << " ... " <<
+                  rank_idxs.stop.makeValStr(ndims) << ") within rank [" <<
+                  rank_idxs.begin.makeValStr(ndims) << " ... " <<
+                  rank_idxs.end.makeValStr(ndims) << ")" );
 
         // Track time (use "else" to avoid double-counting).
         if (do_mpi_exterior)
@@ -598,11 +622,6 @@ namespace yask {
         // Init region begin & end from rank start & stop indices.
         ScanIndices region_idxs(*_dims, true, &rank_domain_offsets);
         region_idxs.initFromOuter(rank_idxs);
-
-        // Make a copy of the original index span because
-        // we will be shifting it for temporal wavefronts.
-        Indices start(region_idxs.begin);
-        Indices stop(region_idxs.end);
 
         // Step (usually time) loop.
         // When doing WF tiling, this loop will step through
@@ -638,7 +657,8 @@ namespace yask {
                     if (sel_bp && sel_bp != bp)
                         continue;
 
-                    TRACE_MSG("calc_region: no TB; bundle-pack '" << bp->get_name() << "' in step(s) [" <<
+                    TRACE_MSG("calc_region: no TB; bundle-pack '" <<
+                              bp->get_name() << "' in step(s) [" <<
                               start_t << " ... " << stop_t << ")");
 
                     // Start timers for this pack.
@@ -653,9 +673,10 @@ namespace yask {
                     region_idxs.group_size = settings._block_group_sizes;
                     region_idxs.group_size[step_posn] = step_t;
 
-                    // Trim region based on pack settings.
-                    bool ok = trim_to_region(start, stop,
-                                             bp.get(), shift_num,
+                    // Set region_idxs based on pack settings and shift.
+                    bool ok = trim_to_region(rank_idxs.begin, rank_idxs.end,
+                                             rank_idxs.start, rank_idxs.stop,
+                                             bp, shift_num,
                                              region_idxs);
 
                     // Only need to loop through the span of the region if it is
@@ -687,22 +708,8 @@ namespace yask {
                     if (do_mpi_exterior)
                         mark_grids_dirty(bp, start_t, stop_t);
 
-                    // Shift spatial region boundaries for next iteration to
-                    // implement temporal wavefront.  Between regions, we only shift
-                    // left, so region loops must strictly increment. They may do
-                    // so in any order.  TODO: shift only what is needed by
-                    // this pack, not the global max.
-                    for (int i = 0, j = 0; i < ndims; i++) {
-                        if (i == step_posn) continue;
-
-                        // Shift by pts in one WF step.
-                        // Always shift left in WFs.
-                        auto angle = wf_angles[j];
-                        start[i] -= angle;
-                        stop[i] -= angle;
-                        j++;
-                    }
-                    shift_num++; // Increment for each pack.
+                    // One shift for each pack.
+                    shift_num++;
 
                     // Stop timers for this pack.
                     stop_timers(bp);
@@ -729,6 +736,13 @@ namespace yask {
                 region_idxs.group_size = settings._block_group_sizes;
                 region_idxs.group_size[step_posn] = step_t;
 
+                // Set region_idxs based on rank settings and shift.
+                // This will be the base region for the TB.
+                trim_to_region(rank_idxs.begin, rank_idxs.end,
+                               rank_idxs.start, rank_idxs.stop,
+                               bp, shift_num,
+                               region_idxs);
+
                 // To tesselate n-D space, we use n distinct "phases", where
                 // n includes the time dim.
                 idx_t nphases = ndims;
@@ -740,18 +754,8 @@ namespace yask {
 #include "yask_region_loops.hpp"
                 }
 
-                // Shift spatial region boundaries for next iteration to
-                // implement temporal wavefront.
-                // This is needed when 'wf_steps' > 'tb_steps'.
-                for (int i = 0, j = 0; i < ndims; i++) {
-                    if (i == step_posn) continue;
-
-                    // Shift by pts in one WF step per TB step.
-                    auto angle = wf_angles[j] * tb_steps;
-                    start[i] -= angle;
-                    stop[i] -= angle;
-                    j++;
-                }
+                // One shift for each pack for each TB step.
+                shift_num += stPacks.size() * tb_steps;
 
             } // with temporal blocking.
             
@@ -774,7 +778,7 @@ namespace yask {
     // 'phase' are computed.  Typically called by a top-level OMP thread
     // from calc_region().
     void StencilContext::calc_block(BundlePackPtr& sel_bp,
-                                    idx_t phase,
+                                    idx_t phase, idx_t shift_num,
                                     const ScanIndices& region_idxs) {
 
         int nsdims = _dims->_stencil_dims.size();
@@ -783,10 +787,13 @@ namespace yask {
         auto step_posn = Indices::step_posn;
         auto* bp = sel_bp.get();
         int thread_idx = omp_get_thread_num();
-        TRACE_MSG("calc_block: phase " << phase << " [" <<
+        TRACE_MSG("calc_block: phase " << phase << ", block [" <<
                   region_idxs.start.makeValStr(nsdims) << " ... " <<
                   region_idxs.stop.makeValStr(nsdims) << 
-                  " in thread " << thread_idx);
+                  ") within region [" <<
+                  region_idxs.begin.makeValStr(nsdims) << " ... " <<
+                  region_idxs.end.makeValStr(nsdims) << 
+                  ") by thread " << thread_idx);
 
         // If we are not calculating some of the blocks, determine
         // whether this block is *completely* inside the interior.
@@ -887,7 +894,7 @@ namespace yask {
             }
 
             // Determine number of shapes. First and last phase need
-            // one part. Other (bridge) phases need one shape for
+            // one shape. Other (bridge) phases need one shape for
             // each domain dim.
             idx_t nphases = nsdims;
             idx_t nshapes = (phase == 0) ? 1 :
@@ -914,7 +921,7 @@ namespace yask {
                 Indices next_start(block_idxs.end);
 
                 // Step (usually time) loop.
-                idx_t shift_num = 0;
+                idx_t cur_shift_num = 0;
                 for (idx_t index_t = 0; index_t < num_t; index_t++) {
 
                     // This value of index_t steps from start_t to stop_t-1.
@@ -987,13 +994,14 @@ namespace yask {
                                   ", start= " << start.makeValStr(nsdims) <<
                                   ", stop= " << stop.makeValStr(nsdims) <<
                                   ", next-start= " << next_start.makeValStr(nsdims) <<
-                                  "), shape-range= [" <<
+                                  ", shape-range= [" <<
                                   shape_start.makeValStr(nsdims) << " ... " <<
                                   shape_stop.makeValStr(nsdims) << ")");
                         
                         // Trim to region boundaries based on pack settings.
                         bool ok = trim_to_region(shape_start, shape_stop,
-                                                 bp.get(), shift_num,
+                                                 region_idxs.begin, region_idxs.end,
+                                                 bp, cur_shift_num,
                                                  block_idxs);
 
                         // Loop through bundles in this pack to do actual calcs.
@@ -1034,7 +1042,7 @@ namespace yask {
                             next_start[i] += tb_angle;
                             j++;
                         }
-                        shift_num++; // Increment for each pack and time-step.
+                        cur_shift_num++; // Increment for each pack and time-step.
 
                         // Stop timers for this pack.
                         stop_timers(bp);

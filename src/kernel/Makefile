@@ -515,7 +515,7 @@ REGION_LOOP_OPTS	?=	-ndims $(NSDIMS) -inVar region_idxs \
 REGION_LOOP_OUTER_MODS	?=	grouped omp
 REGION_LOOP_ORDER	?=	1 .. N-1
 REGION_LOOP_CODE	?=	$(REGION_LOOP_OUTER_MODS) loop($(REGION_LOOP_ORDER)) { \
-				$(REGION_LOOP_INNER_MODS) call(calc_block(bp, phase)); }
+				$(REGION_LOOP_INNER_MODS) call(calc_block(bp, phase, shift_num)); }
 
 # Block loops break up a block into sub-blocks.	 The 'omp' modifier creates
 # a *nested* OpenMP loop so that each sub-block is assigned to a nested OpenMP
@@ -764,14 +764,16 @@ py-api-no-yc:
 	$(MAKE) $(NO_YC_MAKE_FLAGS) py-api
 
 # Validation runs for each binary.
-# Currently, temporal blocking does not work with temporal wavefronts.
-val1	:=	-dt 2 -b 16 -d 48
-val2	:=	-dt 2 -b 24 -r 32 -rt 2 -d 63
-val3	:=	-dt 2 -b 24 -b 16 -bt 2 -d 63
+val1	:=	-d 48 -dt 2 -b 16 -bt 1
+val2	:=	-d 63 -dt 2 -b 24 -bt 1 -r 32 -rt 2
+val3	:=	-d 61 -dt 2 -b 24 -bt 2
+val4	:=	-d 64 -dt 2 -b 32 -bt 2 -r 48 -rt 2
 ranks	:=	2
 
 # Run the kernel binary using several combos of sizes and ranks.
 yk-tests:
+	$(YK_SCRIPT) -stencil $(stencil) -arch $(arch) -v $(val4)
+	$(YK_SCRIPT) -stencil $(stencil) -arch $(arch) -ranks $(ranks) -v $(val4)
 	$(YK_SCRIPT) -stencil $(stencil) -arch $(arch) -v $(val1)
 	$(YK_SCRIPT) -stencil $(stencil) -arch $(arch) -v $(val2)
 	$(YK_SCRIPT) -stencil $(stencil) -arch $(arch) -v $(val3)
@@ -795,7 +797,7 @@ api-tests:
 	$(MAKE) clean; $(MAKE) py-yk-api-test-with-exception stencil=iso3dfd
 
 # Run several stencils using built-in validation.
-# NB: set arch var if applicable.
+# NB: set arch var as applicable.
 # NB: save some time by using YK_CXXOPT=-O2.
 # These tests are focused on the kernel and not the compiler.
 # For testing both the kernel and compiler in various combinations,

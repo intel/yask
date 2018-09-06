@@ -383,6 +383,19 @@ int main(int argc, char** argv)
             ref_context->name += "-reference";
             ref_context->allow_vec_exchange = false;   // exchange scalars in halos.
 
+            // TODO: re-enable the region and block settings below;
+            // requires allowing consistent init of different-sized grids
+            // in kernel code.
+#if 0
+            auto sdim = ref_soln->get_step_dim_name();
+            ref_soln->set_region_size(sdim, 1);
+            ref_soln->set_block_size(sdim, 1);
+            for (auto ddim : ref_soln->get_domain_dim_names()) {
+                ref_soln->set_region_size(ddim, 0);
+                ref_soln->set_block_size(ddim, 0);
+            }
+#endif
+
             // Override allocations and prep solution as with ref soln.
             alloc_steps(ref_soln, *opts);
             ref_soln->prepare_solution();

@@ -856,11 +856,6 @@ namespace yask {
         virtual bool is_last_rank(const std::string dim) {
             return _rank_indices[dim] == _num_ranks[dim] - 1;
         }
-
-        // Is WF tiling being used?
-        virtual bool is_time_tiling() {
-            return _region_sizes[_dims->_step_dim] > 1;
-        }
     };
     typedef std::shared_ptr<KernelSettings> KernelSettingsPtr;
 
