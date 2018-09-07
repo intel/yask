@@ -23,9 +23,10 @@
 ## IN THE SOFTWARE.
 ##############################################################################
 
-# Purpose: Process the output of a log from a binary built with the following options
-# OMPFLAGS='-qopenmp-stubs' arch=intel64 YK_CXXOPT='-O0' EXTRA_MACROS='CHECK TRACE TRACE_MEM FORCE_SCALAR' real_bytes=8
-# and ran with '-v'.
+# Purpose: Process the output of a log from a binary and compare every grid write.
+# Build with the following options:
+# OMPFLAGS='-qopenmp-stubs' YK_CXXOPT='-O0' arch=intel64 EXTRA_MACROS='CHECK TRACE TRACE_MEM FORCE_SCALAR' real_bytes=8
+# Run with '-v'.
 
 use strict;
 use File::Basename;
@@ -37,7 +38,7 @@ my $in_val = 0;
 my $key = undef;
 my %vals;
 my %pts;
-my @pwrites;
+my %writes;
 
 while (<>) {
 
@@ -58,11 +59,15 @@ while (<>) {
     my ($grid, $indices, $val) = ($1, $2, $3);
     if (defined $key) {
       $indices =~ s/\b\d\b/0$&/g;
+
+      # track last value.
       $vals{$key}{$grid}{$indices} = $val;
+
+      # track all pts written.
       $pts{$grid}{$indices} = 1;
 
-      push @pwrites, [ $grid, $indices ]
-        if $key eq 'perf';
+      # track writes in order.
+      push @{$writes{$key}}, [ $grid, $indices ];
     }
   }
 
@@ -103,7 +108,7 @@ print "\n===== Comparisons in perf-write order =====\n".
   "(Will not show missing writes.)\n";
 print "Values are from perf, then validation trial\n";
 my %nwrites;
-for my $pw (@pwrites) {
+for my $pw (@{$writes{perf}}) {
   my ($grid, $indices) = ($pw->[0], $pw->[1]);
   comp($grid, $indices);
   my $nw = ++$nwrites{$grid}{$indices};
@@ -121,7 +126,11 @@ for my $grid (sort keys %pts) {
   }
 }
 
-print "\n$0: $nissues issue(s) flagged.\n";
-print "(Not all issues may be problematic if using temporal tiling and MPI.)\n"
+print "\n$0:\n";
+for my $key (sort keys %writes) {
+  print " ".(scalar @{$writes{$key}})." $key write(s) checked.\n";
+}
+print " $nissues issue(s) flagged.\n";
+print " (Not all issues may be problematic if using temporal tiling and MPI.)\n"
   if $nissues;
 exit $nissues;

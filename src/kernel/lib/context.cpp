@@ -875,7 +875,8 @@ namespace yask {
 
             // Loop through bundles in this pack to do actual calcs.
             for (auto* sb : *bp)
-                sb->calc_block(block_idxs);
+                if (sb->getBB().bb_num_points)
+                    sb->calc_block(block_idxs);
         }
 
         // If TB is active, do all packs across time steps for each required shape.
@@ -1007,7 +1008,8 @@ namespace yask {
                         // Loop through bundles in this pack to do actual calcs.
                         if (ok) {
                             for (auto* sb : *bp)
-                                sb->calc_block(block_idxs);
+                                if (sb->getBB().bb_num_points)
+                                    sb->calc_block(block_idxs);
                         }
                         
                         // Mark updated grids as dirty.

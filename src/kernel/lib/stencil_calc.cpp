@@ -55,8 +55,11 @@ namespace yask {
         idx_t end_t = def_block_idxs.end[step_posn];
         assert(abs(end_t - begin_t) == 1);
 #endif
+
+        if (_bundle_bb.bb_num_points == 0)
+            return;
         
-        // TODO: if >1 BB, check outer one first to save time.
+        // TODO: if >1 BB, check limits of outer one first to save time.
         
         // Loop through each solid BB.
         // For each BB, calc intersection between it and 'def_block_idxs'.
@@ -67,11 +70,13 @@ namespace yask {
   	for (auto& bb : _bb_list) {
             bbn++;
             bool bb_ok = true;
+            if (bb.bb_num_points == 0)
+                bb_ok = false;
 
             // Trim the default block indices based on the bounding box(es)
             // for this bundle.
             ScanIndices bb_idxs(def_block_idxs);
-            for (int i = 0, j = 0; i < nsdims; i++) {
+            for (int i = 0, j = 0; bb_ok && i < nsdims; i++) {
                 if (i == step_posn) continue;
 
                 // Begin point.
@@ -83,10 +88,9 @@ namespace yask {
                 bb_idxs.end[i] = bend;
 		
                 // Anything to do?
-                if (bend <= bbegin) {
+                if (bend <= bbegin)
                     bb_ok = false;
-                    break;
-                }
+
                 j++;            // next domain index.
             }
 

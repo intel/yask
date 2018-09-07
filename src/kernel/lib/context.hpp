@@ -37,7 +37,7 @@ namespace yask {
 
         // Following values are calculated from the above ones.
         IdxTuple bb_len;       // size in each dim.
-        idx_t bb_size=1;       // points in the entire box >= bb_num_points.
+        idx_t bb_size=1;       // points in the entire box; bb_size >= bb_num_points.
         bool bb_is_full=false; // all points in box are valid (bb_size == bb_num_points).
         bool bb_is_aligned=false; // starting points are vector-aligned in all dims.
         bool bb_is_cluster_mult=false; // num points are cluster multiples in all dims.

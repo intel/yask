@@ -119,12 +119,12 @@ namespace yask {
         virtual int get_scalar_points_written() const { return _scalar_points_written; }
 
         // Scratch accessors.
-        virtual bool is_scratch() const { return _is_scratch; }
-        virtual void set_scratch(bool is_scratch) { _is_scratch = is_scratch; }
+        bool is_scratch() const { return _is_scratch; }
+        void set_scratch(bool is_scratch) { _is_scratch = is_scratch; }
 
         // Access to BBs.
-        virtual BoundingBox& getBB() { return _bundle_bb; }
-        virtual BBList& getBBs() { return _bb_list; }
+        BoundingBox& getBB() { return _bundle_bb; }
+        BBList& getBBs() { return _bb_list; }
 
         // Add dependency.
         virtual void add_dep(StencilBundleBase* eg) {

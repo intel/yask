@@ -1353,18 +1353,27 @@ namespace yask {
                 rank_numFpOps_1t += fpops_domain;
 
                 os << " Bundle '" << sg->get_name() << "':\n" <<
-                    "  scratch bundles:            " << (sg_list.size() - 1) << endl <<
-                    "  sub-domain scope:           " << bb.bb_begin.makeDimValStr() <<
-                    " ... " << bb.bb_end.subElements(1).makeDimValStr() << endl <<
-                    "  sub-domain bounding-box:    " << bb.bb_len.makeDimValStr(" * ") << endl <<
-                    "  valid points in sub-domain: " << makeNumStr(bb.bb_num_points) << endl <<
+                    "  reqd scratch bundles:       " << (sg_list.size() - 1) << endl;
+                // TODO: add info on scratch bundles here.
+                os <<
+                    "  points in sub-domain:       " << makeNumStr(bb.bb_size) << endl;
+                if (bb.bb_size) {
+                    os << 
+                        "  valid points in sub-domain: " << makeNumStr(bb.bb_num_points) << endl <<
+                        "  sub-domain scope:           " << bb.bb_begin.makeDimValStr() <<
+                        " ... " << bb.bb_end.subElements(1).makeDimValStr() << endl <<
+                        "  sub-domain bounding-box:    " << bb.bb_len.makeDimValStr(" * ") << endl;
+                }
+                os <<
                     "  rectangles in sub-domain:   " << sg->getBBs().size() << endl;
                 for (size_t ri = 0; ri < sg->getBBs().size(); ri++) {
                     auto& rbb = sg->getBBs()[ri];
-                    os << "   rect " << ri << " scope:               " << rbb.bb_begin.makeDimValStr() <<
-                        " ... " << rbb.bb_end.subElements(1).makeDimValStr() << endl;
-                    os << "   rect " << ri << " size:                " << rbb.bb_len.makeDimValStr(" * ") << endl;
-                    os << "   points in rect " << ri << ":           " << rbb.bb_num_points << endl;
+                    os << "   points in rect " << ri << ":           " << makeNumStr(rbb.bb_num_points) << endl;
+                    if (rbb.bb_num_points) {
+                        os << "   rect " << ri << " scope:               " << rbb.bb_begin.makeDimValStr() <<
+                            " ... " << rbb.bb_end.subElements(1).makeDimValStr() << endl;
+                        os << "   rect " << ri << " size:                " << rbb.bb_len.makeDimValStr(" * ") << endl;
+                    }
                 }
                 os <<
                     "  grid-updates per point:     " << updates1 << endl <<
@@ -1610,15 +1619,20 @@ namespace yask {
         // No points, just set to zero.
         else {
             _bundle_bb.bb_begin.setValsSame(0);
-            _bundle_bb.bb_end.setValsSame(1);
+            _bundle_bb.bb_end.setValsSame(0);
         }
         _bundle_bb.bb_num_points = npts;
 
         // Finalize overall BB.
         _bundle_bb.update_bb(get_name(), context, false);
 
-        // If the BB is full (solid) or completely empty, this BB is the only bb.
-        if (_bundle_bb.bb_is_full || !npts) {
+        // If BB is empty, add nothing.
+        if (!npts) {
+            TRACE_MSG3("BB is empty");
+        }
+        
+        // If the BB is full (solid), this BB is the only bb.
+        else if (_bundle_bb.bb_is_full) {
             TRACE_MSG3("adding 1 sub-BB: [" << _bundle_bb.bb_begin.makeDimValStr() <<
                        " ... " << _bundle_bb.bb_end.makeDimValStr() << ")");
 
@@ -1626,6 +1640,7 @@ namespace yask {
             _bb_list.push_back(_bundle_bb);
         }
 
+        // Otherwise, the overall BB is not full.
         // Create list of full BBs (non-overlapping & with no invalid
         // points) inside overall BB.
         else {
@@ -1779,6 +1794,10 @@ namespace yask {
                     TRACE_MSG3(" sub-BB: [" << bbn.bb_begin.makeDimValStr() <<
                                " ... " << bbn.bb_end.makeDimValStr() << ")");
 
+                    // Don't bother with empty BB.
+                    //if (bbn.bb_size == 0)
+                    //    continue;
+
                     // Scan existing final BBs looking for one to merge with.
                     bool do_merge = false;
                     for (auto& bb : _bb_list) {
@@ -1806,6 +1825,7 @@ namespace yask {
                             bb.bb_end[odim] = bbn.bb_end[odim];
                             TRACE_MSG3("  merging to form [" << bb.bb_begin.makeDimValStr() <<
                                        " ... " << bb.bb_end.makeDimValStr() << ")");
+                            bb.update_bb("sub-bb", context, true);
                             break;
                         }
                     }
