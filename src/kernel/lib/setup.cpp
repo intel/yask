@@ -1356,9 +1356,17 @@ namespace yask {
                     "  scratch bundles:            " << (sg_list.size() - 1) << endl <<
                     "  sub-domain scope:           " << bb.bb_begin.makeDimValStr() <<
                     " ... " << bb.bb_end.subElements(1).makeDimValStr() << endl <<
-                    "  sub-domain size:            " << bb.bb_len.makeDimValStr(" * ") << endl <<
-                    "  valid points in sub domain: " << makeNumStr(bb.bb_num_points) << endl <<
-                    "  rectangles in sub domain:   " << sg->getBBs().size() << endl <<
+                    "  sub-domain bounding-box:    " << bb.bb_len.makeDimValStr(" * ") << endl <<
+                    "  valid points in sub-domain: " << makeNumStr(bb.bb_num_points) << endl <<
+                    "  rectangles in sub-domain:   " << sg->getBBs().size() << endl;
+                for (size_t ri = 0; ri < sg->getBBs().size(); ri++) {
+                    auto& rbb = sg->getBBs()[ri];
+                    os << "   rect " << ri << " scope:               " << rbb.bb_begin.makeDimValStr() <<
+                        " ... " << rbb.bb_end.subElements(1).makeDimValStr() << endl;
+                    os << "   rect " << ri << " size:                " << rbb.bb_len.makeDimValStr(" * ") << endl;
+                    os << "   points in rect " << ri << ":           " << rbb.bb_num_points << endl;
+                }
+                os <<
                     "  grid-updates per point:     " << updates1 << endl <<
                     "  grid-updates in sub-domain: " << makeNumStr(updates_domain) << endl <<
                     "  grid-reads per point:       " << reads1 << endl <<
@@ -1539,7 +1547,7 @@ namespace yask {
         auto& stencil_dims = dims->_stencil_dims;
         auto nddims = domain_dims.size();
         auto nsdims = stencil_dims.size();
-        TRACE_MSG3(get_name() << ".find_bounding_box()...");
+        TRACE_MSG3("find_bounding_box for '" << get_name() << "'...");
 
         // First, find an overall BB around all the
         // valid points in the bundle.
