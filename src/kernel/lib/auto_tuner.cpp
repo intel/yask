@@ -71,6 +71,7 @@ namespace yask {
         csteps = 0;
         in_warmup = true;
         timer.clear();
+        steps_done = 0;
 
         // Set min blocks to number of region threads.
         min_blks = _context->set_region_threads();
@@ -93,7 +94,7 @@ namespace yask {
     } // clear.
 
     // Evaluate the previous run and take next auto-tuner step.
-    void AutoTuner::eval(idx_t steps) {
+    void AutoTuner::eval() {
         ostream& os = _context->get_ostr();
         auto& mpiInfo = _context->get_mpi_info();
         auto& dims = _context->get_dims();
@@ -102,6 +103,8 @@ namespace yask {
         // Get elapsed time and reset.
         double etime = timer.get_elapsed_secs();
         timer.clear();
+        idx_t steps = steps_done;
+        steps_done = 0;
         
         // Leave if done.
         if (done)

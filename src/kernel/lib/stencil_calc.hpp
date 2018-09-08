@@ -166,6 +166,10 @@ namespace yask {
         virtual bool
         is_in_valid_domain(const Indices& idxs) const =0;
 
+        // Determine whether step index is enabled.
+        virtual bool
+        is_in_valid_step(idx_t input_step_index) const =0;
+
         // If bundle updates grid(s) with the step index,
         // set 'output_step_index' to the step that an update
         // occurs when calling one of the calc_*() methods with
@@ -238,6 +242,9 @@ namespace yask {
     protected:
         std::string _name;
 
+        // Parent solution.
+        StencilContext* _context = 0;
+        
         // Union of bounding boxes for all bundles in this pack.
         BoundingBox _pack_bb;
 
@@ -249,12 +256,15 @@ namespace yask {
         AutoTuner _at;
         
     public:
-        // Timer for this pack.
+
+        // Perf stats for this pack.
         YaskTimer timer;
+        idx_t steps_done;
         
         BundlePack(const std::string& name,
                    StencilContext* ctx) :
             _name(name),
+            _context(ctx),
             _opts(*ctx->get_settings()),
             _at(ctx, &_opts, name) { }
         virtual ~BundlePack() { }
@@ -263,10 +273,26 @@ namespace yask {
             return _name;
         }
 
+        // Determine whether step index is enabled.
+        bool
+        is_in_valid_step(idx_t input_step_index) const {
+            if (!size())
+                return false;
+
+            // All step conditions must be the same, so
+            // we call first one.
+            return front()->is_in_valid_step(input_step_index);
+        }
+
         // Accessors.
-        virtual BoundingBox& getBB() { return _pack_bb; }
-        virtual AutoTuner& getAT() { return _at; }
-        virtual KernelSettings& getSettings() { return _opts; }
+        BoundingBox& getBB() { return _pack_bb; }
+        AutoTuner& getAT() { return _at; }
+        KernelSettings& getSettings() { return _opts; }
+
+        // Perf-tracking methods.
+        void start_timers();
+        void stop_timers();
+        void add_steps(idx_t num_steps);
 
     }; // BundlePack.
 

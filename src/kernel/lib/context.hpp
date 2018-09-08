@@ -278,6 +278,9 @@ namespace yask {
         bool enable_halo_exchange = true;
 #endif
 
+        // Clear this to ignore step conditions.
+        bool check_step_conds = true;
+
         // MPI data for each grid.
         // Map key: grid name.
         std::map<std::string, MPIData> mpiData;
@@ -305,7 +308,7 @@ namespace yask {
         }
 
         // Reset elapsed times to zero.
-        virtual void clear_timers();
+        void clear_timers();
 
         // Access to settings.
         virtual KernelSettingsPtr& get_settings() {
@@ -317,10 +320,11 @@ namespace yask {
             _at.set_settings(_opts.get());
         }
 
-        // Access to env, dims and MPI info.
-        virtual KernelEnvPtr& get_env() { return _env; }
-        virtual DimsPtr& get_dims() { return _dims; }
-        virtual MPIInfoPtr& get_mpi_info() { return _mpiInfo; }
+        // Misc accessors.
+        KernelEnvPtr& get_env() { return _env; }
+        DimsPtr& get_dims() { return _dims; }
+        MPIInfoPtr& get_mpi_info() { return _mpiInfo; }
+        AutoTuner& getAT() { return _at; }
 
         // Add a new grid to the containers.
         virtual void addGrid(YkGridPtr gp, bool is_output);
@@ -662,10 +666,6 @@ namespace yask {
         virtual int get_default_numa_preferred() const {
             return _opts->_numa_pref;
         }
-
-        // Timer methods.
-        virtual void start_timers(BundlePackPtr& bp);
-        virtual void stop_timers(BundlePackPtr& bp);
 
         // Auto-tuner methods.
         virtual void eval_auto_tuner(idx_t num_steps);

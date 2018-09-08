@@ -213,8 +213,14 @@ namespace yask {
 
                 // Scan through n-D space.
                 TRACE_MSG("calc_rank_ref: step " << start_t <<
-                          " in non-scratch group '" << asg->get_name());
+                          " in non-scratch bundle '" << asg->get_name());
 
+                // Check step.
+                if (check_step_conds && !asg->is_in_valid_step(start_t)) {
+                    TRACE_MSG("calc_rank_ref: not valid for step " << start_t);
+                    continue;
+                }
+                
                 // Exchange all dirty halos.
                 exchange_halos();
 
@@ -295,7 +301,7 @@ namespace yask {
         int ndims = _dims->_stencil_dims.size();
 
         // Determine step dir from order of first/last.
-        idx_t step_dir = (first_step_index > last_step_index) ? -1 : 1;
+        idx_t step_dir = (last_step_index > first_step_index) ? 1 : -1;
         
         // Find begin, step and end in step-dim.
         idx_t begin_t = first_step_index;
@@ -414,13 +420,11 @@ namespace yask {
                 min(start_t + step_t, end_t) :
                 max(start_t + step_t, end_t);
             idx_t this_num_t = abs(stop_t - start_t);
-
             // Set indices that will pass through generated code.
             rank_idxs.index[step_posn] = index_t;
             rank_idxs.start[step_posn] = start_t;
             rank_idxs.stop[step_posn] = stop_t;
             rank_idxs.step[step_posn] = step_t;
-
             // If no wave-fronts (default), loop through packs here, and do
             // only one pack at a time in calc_region(). This is similar to
             // loop in calc_rank_ref(), but with packs instead of bundles.
@@ -429,6 +433,14 @@ namespace yask {
                 // Loop thru packs.
                 for (auto& bp : stPacks) {
 
+                    // Check step.
+                    if (check_step_conds && !bp->is_in_valid_step(start_t)) {
+                        TRACE_MSG("run_solution: step " << start_t <<
+                                  " not valid for pack '" <<
+                                  bp->get_name() << "'");
+                        continue;
+                    }
+                
                     // Make 2 passes. 1: compute data needed for MPI
                     // send and send that data. 2: compute remaining
                     // data and unpack received MPI data.
@@ -457,7 +469,7 @@ namespace yask {
                         // Include automatically-generated loop code that calls
                         // calc_region(bp) for each region.
                         TRACE_MSG("run_solution: step " << start_t <<
-                                  " for bundle-pack '" << bp->get_name() << "'");
+                                  " for pack '" << bp->get_name() << "'");
                         if (do_mpi_exterior)
                             TRACE_MSG(" within MPI exterior");
                         if (do_mpi_interior)
@@ -477,7 +489,7 @@ namespace yask {
 
             // If doing wave-fronts, must loop through all packs in
             // calc_region().  TODO: optionally enable this when there are
-            // multiple packs but step_t == 1.
+            // multiple packs but wf_steps == 1.
             // TODO: allow overlapped comms when the region covers the
             // whole rank domain, regardless of how many steps it covers.
             else {
@@ -496,7 +508,31 @@ namespace yask {
                 exchange_halos();
             }
 
+            // Overall steps.
             steps_done += this_num_t;
+
+            // Count steps for each pack to properly account for
+            // step conditions.
+            for (auto& bp : stPacks) {
+                idx_t num_pack_steps = 0;
+
+                if (!check_step_conds)
+                    num_pack_steps = this_num_t;
+                else {
+
+                    // Loop through each step.
+                    assert(abs(step_dir) == 1);
+                    for (idx_t t = start_t; t != stop_t; t += step_dir) {
+
+                        // Check step cond for this t.
+                        if (bp->is_in_valid_step(t))
+                            num_pack_steps++;
+                    }
+                }
+
+                // Count steps for this pack.
+                bp->add_steps(num_pack_steps);
+            }
 
             // Call the auto-tuner to evaluate these steps.
             eval_auto_tuner(this_num_t);
@@ -629,7 +665,10 @@ namespace yask {
         // When doing TB, it will step by the block steps.
         idx_t begin_t = region_idxs.begin[step_posn];
         idx_t end_t = region_idxs.end[step_posn];
+        idx_t step_dir = (end_t > begin_t) ? 1 : -1;
         idx_t step_t = tb_steps;
+        step_t *= step_dir;
+        assert(step_t);
         const idx_t num_t = CEIL_DIV(abs(end_t - begin_t), abs(step_t));
         idx_t shift_num = 0;
         for (idx_t index_t = 0; index_t < num_t; index_t++) {
@@ -657,12 +696,16 @@ namespace yask {
                     if (sel_bp && sel_bp != bp)
                         continue;
 
-                    TRACE_MSG("calc_region: no TB; bundle-pack '" <<
+                    TRACE_MSG("calc_region: no TB; pack '" <<
                               bp->get_name() << "' in step(s) [" <<
                               start_t << " ... " << stop_t << ")");
 
-                    // Start timers for this pack.
-                    start_timers(bp);
+                    // Check step.
+                    if (check_step_conds && !bp->is_in_valid_step(start_t)) {
+                        TRACE_MSG("calc_region: step " << start_t <<
+                                  " not valid for pack '" << bp->get_name() << "'");
+                        continue;
+                    }
 
                     // Steps within a region are based on pack block sizes.
                     auto& settings = bp->getSettings();
@@ -710,9 +753,6 @@ namespace yask {
 
                     // One shift for each pack.
                     shift_num++;
-
-                    // Stop timers for this pack.
-                    stop_timers(bp);
 
                 } // stencil bundle packs.
             } // no temporal blocking.
@@ -854,7 +894,8 @@ namespace yask {
         // Time range.
         idx_t begin_t = block_idxs.begin[step_posn];
         idx_t end_t = block_idxs.end[step_posn];
-        idx_t step_t = 1;       // Always 1 for blocks.
+        idx_t step_dir = (end_t > begin_t) ? 1 : -1;
+        idx_t step_t = step_dir;       // Always 1 step for blocks.
         const idx_t num_t = abs(end_t - begin_t);
 
         // If TB is not being used, just process the given pack.
@@ -864,6 +905,9 @@ namespace yask {
             // No TB allowed here.
             assert(num_t == 1);
         
+            // Start timers for this pack.
+            bp->start_timers();
+
             // Steps within a block are based on pack sub-block sizes.
             auto& settings = bp->getSettings();
             block_idxs.step = settings._sub_block_sizes;
@@ -877,6 +921,9 @@ namespace yask {
             for (auto* sb : *bp)
                 if (sb->getBB().bb_num_points)
                     sb->calc_block(block_idxs);
+
+            // Start timers for this pack.
+            bp->stop_timers();
         }
 
         // If TB is active, do all packs across time steps for each required shape.
@@ -931,6 +978,9 @@ namespace yask {
                         min(start_t + step_t, end_t) :
                         max(start_t + step_t, end_t);
 
+                    // For blocks, start and stop should be one diff.
+                    assert(abs(stop_t - start_t) == 1);
+
                     // Set temporal indices.
                     block_idxs.index[step_posn] = index_t;
                     block_idxs.begin[step_posn] = start_t;
@@ -957,8 +1007,16 @@ namespace yask {
                         if (sel_bp && sel_bp != bp)
                             continue;
 
+                        // Check step.
+                        if (check_step_conds && !bp->is_in_valid_step(start_t)) {
+                            TRACE_MSG("calc_block: step " << start_t <<
+                                      " not valid for pack '" <<
+                                      bp->get_name() << "'");
+                            continue;
+                        }
+
                         // Start timers for this pack.
-                        start_timers(bp);
+                        bp->start_timers();
 
                         // Adjust start/stop to proper shape.
                         Indices shape_start(start);
@@ -991,7 +1049,7 @@ namespace yask {
 
                         TRACE_MSG("calc_block: phase " << phase <<
                                   ", w/TB, shape " << shape <<
-                                  ", bundle-pack '" << bp->get_name() <<
+                                  ", pack '" << bp->get_name() <<
                                   ", start= " << start.makeValStr(nsdims) <<
                                   ", stop= " << stop.makeValStr(nsdims) <<
                                   ", next-start= " << next_start.makeValStr(nsdims) <<
@@ -1047,37 +1105,26 @@ namespace yask {
                         cur_shift_num++; // Increment for each pack and time-step.
 
                         // Stop timers for this pack.
-                        stop_timers(bp);
+                        bp->stop_timers();
 
                     } // packs.
                 } // time steps.
             } // shapes.
         } // TB.
     } // calc_block().
-
-    // Timer methods.
-    // Start and stop timers for final stats and auto-tuners.
-    void StencilContext::start_timers(BundlePackPtr& bp) {
-        auto ts = YaskTimer::get_timespec();
-        bp->timer.start(&ts);
-        bp->getAT().timer.start(&ts);
-        _at.timer.start(&ts);
-    }
-    void StencilContext::stop_timers(BundlePackPtr& bp) {
-        auto ts = YaskTimer::get_timespec();
-        bp->timer.stop(&ts);
-        bp->getAT().timer.stop(&ts);
-        _at.timer.stop(&ts);
-    }
     
     // Eval auto-tuner for given number of steps.
     void StencilContext::eval_auto_tuner(idx_t num_steps) {
+        _at.steps_done += num_steps;
+
+        // Steps for pack tuners must be incremented
+        // separately for accurate counting.
         if (_use_pack_tuners) {
             for (auto& sp : stPacks)
-                sp->getAT().eval(num_steps);
+                sp->getAT().eval();
         }
         else
-            _at.eval(num_steps);
+            _at.eval();
     }
     
     // Reset auto-tuners.
@@ -1113,6 +1160,10 @@ namespace yask {
         // Temporarily disable halo exchange to tune intra-rank.
         enable_halo_exchange = false;
 
+        // Temporarily ignore step conditions to force eval
+        // of conditional bundles.
+        check_step_conds = false;
+
         // Init tuners.
         reset_auto_tuner(true, verbose);
 
@@ -1140,8 +1191,11 @@ namespace yask {
         os << "Waiting for auto-tuner to converge on all ranks...\n";
         _env->global_barrier();
 
-        // reenable halo exchange.
+        // reenable normal operation.
+#ifndef NO_HALO_EXCHANGE
         enable_halo_exchange = true;
+#endif
+        check_step_conds = true;
 
         // Report results.
         at_timer.stop();
@@ -1263,6 +1317,8 @@ namespace yask {
         double otime = max(rtime - ctime - htime, 0.);
         if (rtime > 0.) {
             domain_pts_ps = double(tot_domain_1t * steps_done) / rtime;
+
+            // FIXME: these are not correct if there are step conditions.
             writes_ps= double(tot_numWrites_1t * steps_done) / rtime;
             flops = double(tot_numFpOps_1t * steps_done) / rtime;
         }

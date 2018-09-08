@@ -87,6 +87,9 @@ namespace yask {
         // Start & stop this timer to track elapsed time.
         YaskTimer timer;
 
+        // Increment this to track steps.
+        idx_t steps_done = 0;
+
         // Change settings pointer.
         void set_settings(KernelSettings* p) {
             _settings = p;
@@ -96,7 +99,7 @@ namespace yask {
         void clear(bool mark_done, bool verbose = false);
 
         // Evaluate the previous run and take next auto-tuner step.
-        void eval(idx_t steps);
+        void eval();
 
         // Print the best settings.
         void print_settings(std::ostream& os) const;
