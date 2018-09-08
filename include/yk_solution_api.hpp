@@ -447,11 +447,10 @@ namespace yask {
         virtual void
         end_solution() =0;
 
-
         /// Get performance statistics associated with preceding calls to run_solution().
         /**
-           Side effect: resets all statistics, so a subsequent call will
-           measure performance after the current call.
+           @note Side effect: resets all statistics, so each call
+           returns only the elapsed time and counts since the previous call.
            @returns Pointer to statistics object.
         */
         virtual yk_stats_ptr
@@ -826,29 +825,15 @@ namespace yask {
 
         /// Get the number of elements in the overall domain.
         /**
-           @returns Product of all the overal domain sizes across all domain dimensions.
+           @returns Product across all domain dimensions of the domain sizes across all ranks.
+           Multiply this value by get_num_steps_done() to determine the number
+           of points processed.
+           Then, divide by get_elapsed_run_secs() to determine the throughput.
         */
         virtual idx_t
         get_num_elements() =0;
 
-        /// Get the number of elements written in each step.
-        /**
-           @returns Number of elements written to each output grid.
-           This is the same value as get_num_elements() if there is only one output grid.
-        */
-        virtual idx_t
-        get_num_writes() =0;
-
-        /// Get the estimated number of floating-point operations required for each step.
-        /**
-           @returns Number of FP ops created by the stencil compiler.
-           It may be slightly more or less than the actual number of FP ops executed
-           by the CPU due to C++ compiler transformations.
-        */
-        virtual idx_t
-        get_est_fp_ops() =0;
-
-        /// Get the number of steps calculated via run_solution().
+        /// Get the number of steps executed via run_solution().
         /**
            @returns A positive number, regardless of whether run_solution() steps were executed
            forward or backward.
@@ -856,13 +841,31 @@ namespace yask {
         virtual idx_t
         get_num_steps_done() =0;
 
+        /// Get the number of elements written across all steps.
+        /**
+           @returns Number of elements written, summed over all output grids,
+           steps executed, and ranks.
+        */
+        virtual idx_t
+        get_num_writes_done() =0;
+
+        /// Get the estimated number of floating-point operations executed across all steps.
+        /**
+           @returns Number of FP ops created by the stencil compiler, summed over
+           all stencil-bundles, steps executed, and ranks.
+           It may be slightly more or less than the actual number of FP ops executed
+           by the CPU due to C++ compiler transformations.
+        */
+        virtual idx_t
+        get_est_fp_ops_done() =0;
+
         /// Get the number of seconds elapsed during calls to run_solution().
         /**
            @returns Only the time spent in run_solution(), not in any other code in your
            application between calls.
         */
         virtual double
-        get_elapsed_run_secs() =0;
+        get_elapsed_secs() =0;
     };
 
     /** @}*/

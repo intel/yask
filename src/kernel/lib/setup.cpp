@@ -1254,17 +1254,22 @@ namespace yask {
         auto& step_dim = _dims->_step_dim;
         ostream& os = get_ostr();
 
-        // Report total allocation.
+        // Calc and report total allocation and domain sizes.
         rank_nbytes = get_num_bytes();
-        os << "Total allocation in this rank: " <<
-            makeByteStr(rank_nbytes) << "\n";
         tot_nbytes = sumOverRanks(rank_nbytes, _env->comm);
-        os << "Total overall allocation in " << _env->num_ranks << " rank(s): " <<
-            makeByteStr(tot_nbytes) << "\n";
+        rank_domain_pts = rank_bb.bb_num_points;
+        tot_domain_pts = sumOverRanks(rank_domain_pts, _env->comm);
+        os <<
+            "\nDomain size in this rank (points):          " << makeNumStr(rank_domain_pts) <<
+            "\nTotal allocation in this rank:              " << makeByteStr(rank_nbytes) <<
+            "\nOverall problem size in " << _env->num_ranks << " rank(s) (points): " <<
+            makeNumStr(tot_domain_pts) <<
+            "\nTotal overall allocation in " << _env->num_ranks << " rank(s):      " <<
+            makeByteStr(tot_nbytes) <<
+            endl;
 
-        // Report some stats.
-        idx_t dt = _opts->_rank_sizes[step_dim];
-        os << "\nProblem sizes in points (from smallest to largest):\n"
+        // Report some sizes and settings.
+        os << "\nWork-unit sizes in points (from smallest to largest):\n"
             " vector-size:           " << _dims->_fold_pts.makeDimValStr(" * ") << endl <<
             " cluster-size:          " << _dims->_cluster_pts.makeDimValStr(" * ") << endl <<
             " sub-block-size:        " << _opts->_sub_block_sizes.makeDimValStr(" * ") << endl <<
@@ -1316,162 +1321,10 @@ namespace yask {
         os << "Num stencil bundles:    " << stBundles.size() << endl;
         os << "Num stencil equations:  " << NUM_STENCIL_EQS << endl;
 
-#if NUM_STENCIL_EQS
-
-        // sums across bundles for this rank.
-        rank_numWrites_1t = 0;
-        rank_reads_1t = 0;
-        rank_numFpOps_1t = 0;
-
-        for (auto& sp : stPacks) {
-            auto& pbb = sp->getBB();
-            os << "Pack '" << sp->get_name() << "':\n" <<
-                " num bundles:                 " << sp->size() << endl <<
-                " sub-domain scope:            " << pbb.bb_begin.makeDimValStr() <<
-                " ... " << pbb.bb_end.subElements(1).makeDimValStr() << endl;
-
-            for (auto* sg : *sp) {
-                idx_t updates1 = 0, reads1 = 0, fpops1 = 0;
-
-                // Loop through all the needed bundles to
-                // count stats for scratch bundles.
-                // Does not count extra ops needed in scratch halos
-                // since this varies depending on block size.
-                auto sg_list = sg->get_reqd_bundles();
-                for (auto* rsg : sg_list) {
-                    updates1 += rsg->get_scalar_points_written();
-                    reads1 += rsg->get_scalar_points_read();
-                    fpops1 += rsg->get_scalar_fp_ops();
-                }
-
-                auto& bb = sg->getBB();
-                idx_t updates_domain = updates1 * bb.bb_num_points;
-                rank_numWrites_1t += updates_domain;
-                idx_t reads_domain = reads1 * bb.bb_num_points;
-                rank_reads_1t += reads_domain;
-                idx_t fpops_domain = fpops1 * bb.bb_num_points;
-                rank_numFpOps_1t += fpops_domain;
-
-                os << " Bundle '" << sg->get_name() << "':\n" <<
-                    "  reqd scratch bundles:       " << (sg_list.size() - 1) << endl;
-                // TODO: add info on scratch bundles here.
-                os <<
-                    "  points in sub-domain:       " << makeNumStr(bb.bb_size) << endl;
-                if (bb.bb_size) {
-                    os << 
-                        "  valid points in sub-domain: " << makeNumStr(bb.bb_num_points) << endl <<
-                        "  sub-domain scope:           " << bb.bb_begin.makeDimValStr() <<
-                        " ... " << bb.bb_end.subElements(1).makeDimValStr() << endl <<
-                        "  sub-domain bounding-box:    " << bb.bb_len.makeDimValStr(" * ") << endl;
-                }
-                os <<
-                    "  rectangles in sub-domain:   " << sg->getBBs().size() << endl;
-                for (size_t ri = 0; ri < sg->getBBs().size(); ri++) {
-                    auto& rbb = sg->getBBs()[ri];
-                    os << "   points in rect " << ri << ":           " << makeNumStr(rbb.bb_num_points) << endl;
-                    if (rbb.bb_num_points) {
-                        os << "   rect " << ri << " scope:               " << rbb.bb_begin.makeDimValStr() <<
-                            " ... " << rbb.bb_end.subElements(1).makeDimValStr() << endl;
-                        os << "   rect " << ri << " size:                " << rbb.bb_len.makeDimValStr(" * ") << endl;
-                    }
-                }
-                os <<
-                    "  grid-updates per point:     " << updates1 << endl <<
-                    "  grid-updates in sub-domain: " << makeNumStr(updates_domain) << endl <<
-                    "  grid-reads per point:       " << reads1 << endl <<
-                    "  grid-reads in sub-domain:   " << makeNumStr(reads_domain) << endl <<
-                    "  est FP-ops per point:       " << fpops1 << endl <<
-                    "  est FP-ops in sub-domain:   " << makeNumStr(fpops_domain) << endl;
-                os << "  input-grids:                ";
-                int i = 0;
-                for (auto gp : sg->inputGridPtrs) {
-                    if (i++) os << ", ";
-                    os << gp->get_name();
-                }
-                os << "\n  output-grids:               ";
-                i = 0;
-                for (auto gp : sg->outputGridPtrs) {
-                    if (i++) os << ", ";
-                    os << gp->get_name();
-                }
-                os << endl;
-            } // bundles.
-        } // packs.
-
-        // Various metrics for amount of work.
-        rank_numWrites_dt = rank_numWrites_1t * dt;
-        tot_numWrites_1t = sumOverRanks(rank_numWrites_1t, _env->comm);
-        tot_numWrites_dt = tot_numWrites_1t * dt;
-
-        rank_reads_dt = rank_reads_1t * dt;
-        tot_reads_1t = sumOverRanks(rank_reads_1t, _env->comm);
-        tot_reads_dt = tot_reads_1t * dt;
-
-        rank_numFpOps_dt = rank_numFpOps_1t * dt;
-        tot_numFpOps_1t = sumOverRanks(rank_numFpOps_1t, _env->comm);
-        tot_numFpOps_dt = tot_numFpOps_1t * dt;
-
-        rank_domain_1t = rank_bb.bb_num_points;
-        rank_domain_dt = rank_domain_1t * dt; // same as _opts->_rank_sizes.product();
-        tot_domain_1t = sumOverRanks(rank_domain_1t, _env->comm);
-        tot_domain_dt = tot_domain_1t * dt;
-
-        // Print some more stats.
-        os << endl <<
-            "Amount-of-work stats:\n" <<
-            " domain-size in this rank for one time-step: " <<
-            makeNumStr(rank_domain_1t) << endl <<
-            " overall-problem-size in all ranks for one time-step: " <<
-            makeNumStr(tot_domain_1t) << endl <<
-            endl <<
-            " num-writes-required in this rank for one time-step: " <<
-            makeNumStr(rank_numWrites_1t) << endl <<
-            " num-writes-required in all ranks for one time-step: " <<
-            makeNumStr(tot_numWrites_1t) << endl <<
-            endl <<
-            " num-reads-required in this rank for one time-step: " <<
-            makeNumStr(rank_reads_1t) << endl <<
-            " num-reads-required in all ranks for one time-step: " <<
-            makeNumStr(tot_reads_1t) << endl <<
-            endl <<
-            " est-FP-ops in this rank for one time-step: " <<
-            makeNumStr(rank_numFpOps_1t) << endl <<
-            " est-FP-ops in all ranks for one time-step: " <<
-            makeNumStr(tot_numFpOps_1t) << endl <<
-            endl;
-
-        if (dt > 1) {
-            os <<
-                " domain-size in this rank for all time-steps: " <<
-                makeNumStr(rank_domain_dt) << endl <<
-                " overall-problem-size in all ranks for all time-steps: " <<
-                makeNumStr(tot_domain_dt) << endl <<
-                endl <<
-                " num-writes-required in this rank for all time-steps: " <<
-                makeNumStr(rank_numWrites_dt) << endl <<
-                " num-writes-required in all ranks for all time-steps: " <<
-                makeNumStr(tot_numWrites_dt) << endl <<
-                endl <<
-                " num-reads-required in this rank for all time-steps: " <<
-                makeNumStr(rank_reads_dt) << endl <<
-                " num-reads-required in all ranks for all time-steps: " <<
-                makeNumStr(tot_reads_dt) << endl <<
-                endl <<
-                " est-FP-ops in this rank for all time-steps: " <<
-                makeNumStr(rank_numFpOps_dt) << endl <<
-                " est-FP-ops in all ranks for all time-steps: " <<
-                makeNumStr(tot_numFpOps_dt) << endl <<
-                endl;
-        }
-        os <<
-            "Notes:\n"
-            " Domain-sizes and overall-problem-sizes are based on rank-domain sizes\n"
-            "  and number of ranks regardless of number of grids or sub-domains.\n"
-            " Num-writes-required is based on sum of grid-updates in sub-domain across stencil-bundle(s).\n"
-            " Num-reads-required is based on sum of grid-reads in sub-domain across stencil-bundle(s).\n"
-            " Est-FP-ops are based on sum of est-FP-ops in sub-domain across stencil-bundle(s).\n"
-            "\n";
-#endif
+        // Info on work in packs.
+        os << "\nBreakdown of work stats in this rank:\n";
+        for (auto& sp : stPacks)
+            sp->init_work_stats();
     }
 
     // Dealloc grids, etc.

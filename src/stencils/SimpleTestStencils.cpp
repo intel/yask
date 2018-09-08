@@ -452,7 +452,7 @@ public:
             v += data(t, x-r);
         for (int r = 1; r <= _radius + 2; r++)
             v += data(t, x+r);
-        data(t+1, x) EQUALS u / (_radius * 2 + 6) IF_STEP !tc0;
+        data(t+1, x) EQUALS v / (_radius * 2 + 6) IF_STEP !tc0;
     }
 };
 

@@ -259,7 +259,17 @@ namespace yask {
 
         // Perf stats for this pack.
         YaskTimer timer;
-        idx_t steps_done;
+        idx_t steps_done = 0;
+
+        // Work needed across points in this rank.
+        idx_t num_reads_per_step = 0;
+        idx_t num_writes_per_step = 0;
+        idx_t num_fpops_per_step = 0;
+
+        // Work done across all ranks.
+        idx_t tot_reads_per_step = 0;
+        idx_t tot_writes_per_step = 0;
+        idx_t tot_fpops_per_step = 0;
         
         BundlePack(const std::string& name,
                    StencilContext* ctx) :
@@ -272,6 +282,10 @@ namespace yask {
         const std::string& get_name() {
             return _name;
         }
+
+        // Update the amount of work stats.
+        // Print to current debug stream.
+        void init_work_stats();
 
         // Determine whether step index is enabled.
         bool

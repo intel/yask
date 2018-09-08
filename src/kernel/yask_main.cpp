@@ -301,8 +301,8 @@ int main(int argc, char** argv)
         }
         kenv->global_barrier();
 
-        // variables for measuring performance.
-        double best_elapsed_time=0., best_apps=0., best_dpps=0., best_flops=0.;
+        // Track best trial.
+        shared_ptr<Stats> best_trial;
 
         /////// Performance run(s).
         auto& step_dim = opts->_dims->_step_dim;
@@ -340,31 +340,31 @@ int main(int argc, char** argv)
             VTUNE_PAUSE;
 
             // Calc and report perf.
-            auto stats = context->get_stats();
+            auto trial_stats = context->get_stats();
+            auto stats = dynamic_pointer_cast<Stats>(trial_stats);
 
             // Remember best.
-            if (context->domain_pts_ps > best_dpps) {
-                best_dpps = context->domain_pts_ps;
-                best_apps = context->writes_ps;
-                best_flops = context->flops;
-                best_elapsed_time = stats->get_elapsed_run_secs();
-            }
+            if (best_trial == nullptr || stats->run_time < best_trial->run_time)
+                best_trial = stats;
         }
 
-        os << divLine <<
-            "Performance stats of best trial:\n"
-            " best-elapsed-time (sec):          " << makeNumStr(best_elapsed_time) << endl <<
-            " best-throughput (num-writes/sec): " << makeNumStr(best_apps) << endl <<
-            " best-throughput (est-FLOPS):      " << makeNumStr(best_flops) << endl <<
-            " best-throughput (num-points/sec): " << makeNumStr(best_dpps) << endl <<
-            divLine <<
-            "Notes:\n"
-            " Num-writes/sec and FLOPS are metrics based on certain\n"
-            "  types of statements and can vary due to differences in\n"
-            "  implementations and optimizations.\n"
-            " Num-points/sec is based on overall problem size and is\n"
-            "  a more reliable performance metric, esp. when comparing\n"
-            "  across implementations.\n";
+        if (best_trial != nullptr) {
+            os << divLine <<
+                "Performance stats of best trial:\n"
+                " best-elapsed-time (sec):          " << makeNumStr(best_trial->run_time) << endl <<
+                " best-throughput (num-reads/sec):  " << makeNumStr(best_trial->reads_ps) << endl <<
+                " best-throughput (num-writes/sec): " << makeNumStr(best_trial->writes_ps) << endl <<
+                " best-throughput (est-FLOPS):      " << makeNumStr(best_trial->flops) << endl <<
+                " best-throughput (num-points/sec): " << makeNumStr(best_trial->pts_ps) << endl <<
+                divLine <<
+                "Notes:\n"
+                " Num-reads and writes/sec and FLOPS are metrics based on\n"
+                "  stencil specifications and can vary due to differences in\n"
+                "  implementations and optimizations.\n"
+                " Num-points/sec is based on overall problem size and is\n"
+                "  a more reliable performance metric, esp. when comparing\n"
+                "  across implementations.\n";
+        }
 
         /////// Validation run.
         bool ok = true;
@@ -415,10 +415,18 @@ int main(int argc, char** argv)
             os << endl << divLine <<
                 "Running " << dt << " step(s) for validation...\n" << flush;
             ref_context->calc_rank_ref();
+
+            // Discard perf report.
+            yask_output_factory yof;
+            auto dbg_out = ref_context->get_debug_output();
+            ref_context->set_debug_output(yof.new_null_output());
+            auto rstats = ref_context->get_stats();
+            ref_context->set_debug_output(dbg_out);
+            os << "  Done in " << rstats->get_elapsed_secs() << " secs.\n";
 #endif
 
             // check for equality.
-            os << "Checking results..." << endl;
+            os << "\nChecking results..." << endl;
             idx_t errs = context->compareData(*ref_context);
             auto ri = kenv->get_rank_index();
             if( errs == 0 ) {

@@ -85,11 +85,18 @@ namespace yask {
     class Stats : public virtual yk_stats {
     public:
         idx_t npts = 0;
+        idx_t nreads = 0;
         idx_t nwrites = 0;
         idx_t nfpops = 0;
         idx_t nsteps = 0;
+
         double run_time = 0.;
         double halo_time = 0.;
+
+        double pts_ps = 0.; // points-per-sec in overall domain.
+        double reads_ps = 0.;     // reads-per-sec.
+        double writes_ps = 0.;     // writes-per-sec.
+        double flops = 0.;      // est. FLOPS.
 
         Stats() {}
         virtual ~Stats() {}
@@ -105,22 +112,21 @@ namespace yask {
         virtual idx_t
         get_num_elements() { return npts; }
 
-        /// Get the number of points written in each step.
+        /// Get the number of points written.
         virtual idx_t
-        get_num_writes() { return nwrites; }
+        get_num_writes_done() { return nwrites; }
 
-        /// Get the estimated number of floating-point operations required for each step.
+        /// Get the estimated number of floating-point operations performed in each step.
         virtual idx_t
-        get_est_fp_ops() { return nfpops; }
+        get_est_fp_ops_done() { return nfpops; }
 
-        /// Get the number of steps calculated via run_solution().
+        /// Get the number of steps executed via run_solution().
         virtual idx_t
         get_num_steps_done() { return nsteps; }
 
         /// Get the number of seconds elapsed during calls to run_solution().
         virtual double
-        get_elapsed_run_secs() { return run_time; }
-
+        get_elapsed_secs() { return run_time; }
     };
 
     // Collections of things in a context.
@@ -221,9 +227,19 @@ namespace yask {
         // Each vector contains a grid for each thread.
         ScratchVecs scratchVecs;
 
-        // Some calculated domain sizes.
+        // Some calculated sizes for this rank and overall.
         IdxTuple rank_domain_offsets;       // Domain index offsets for this rank.
         IdxTuple overall_domain_sizes;       // Total of rank domains over all ranks.
+        idx_t rank_nbytes=0, tot_nbytes=0;
+        idx_t rank_domain_pts=0, tot_domain_pts=0;
+
+        // Elapsed-time tracking.
+        YaskTimer run_time;     // time in run_solution(), including halo exchange.
+        YaskTimer ext_time;     // time in exterior stencil calculation.
+        YaskTimer int_time;     // time in interior stencil calculation.
+        YaskTimer halo_time;     // time spent just doing halo exchange, including MPI waits.
+        YaskTimer wait_time;     // time spent just doing MPI waits.
+        idx_t steps_done = 0;   // number of steps that have been run.
 
         // Maximum halos, skewing angles, and work extensions over all grids
         // used for wave-front region tiles (wf) and temporal blocking (tb).
@@ -237,33 +253,6 @@ namespace yask {
         IdxTuple wf_shifts;    // total shifted pts (wf_angles * num_wf_shifts).
         IdxTuple left_wf_exts;    // WF extension needed on left side of rank for halo exch.
         IdxTuple right_wf_exts;    // WF extension needed on right side of rank.
-
-        // Various amount-of-work metrics calculated in prepare_solution().
-        // 'rank_' prefix indicates for this rank.
-        // 'tot_' prefix indicates over all ranks.
-        // 'domain' indicates points in domain-size specified on cmd-line.
-        // 'numpts' indicates points actually calculated in sub-domains.
-        // 'reads' indicates points actually read by stencil-bundles.
-        // 'numFpOps' indicates est. number of FP ops.
-        // 'nbytes' indicates number of bytes allocated.
-        // '_1t' suffix indicates work for one time-step.
-        // '_dt' suffix indicates work for all time-steps.
-        idx_t rank_domain_1t=0, rank_domain_dt=0, tot_domain_1t=0, tot_domain_dt=0;
-        idx_t rank_numWrites_1t=0, rank_numWrites_dt=0, tot_numWrites_1t=0, tot_numWrites_dt=0;
-        idx_t rank_reads_1t=0, rank_reads_dt=0, tot_reads_1t=0, tot_reads_dt=0;
-        idx_t rank_numFpOps_1t=0, rank_numFpOps_dt=0, tot_numFpOps_1t=0, tot_numFpOps_dt=0;
-        idx_t rank_nbytes=0, tot_nbytes=0;
-
-        // Elapsed-time tracking.
-        YaskTimer run_time;     // time in run_solution(), including halo exchange.
-        YaskTimer ext_time;     // time in exterior stencil calculation.
-        YaskTimer int_time;     // time in exterior stencil calculation.
-        YaskTimer halo_time;     // time spent just doing halo exchange, including MPI waits.
-        YaskTimer wait_time;     // time spent just doing MPI waits.
-        idx_t steps_done = 0;   // number of steps that have been run.
-        double domain_pts_ps = 0.; // points-per-sec in domain.
-        double writes_ps = 0.;     // writes-per-sec.
-        double flops = 0.;      // est. FLOPS.
 
         // MPI settings.
         // TODO: move to settings or MPI info object.
@@ -364,10 +353,6 @@ namespace yask {
         virtual void print_info();
 
         /// Get statistics associated with preceding calls to run_solution().
-        /**
-           Resets all timers and step counters.
-           @returns Pointer to statistics object.
-        */
         virtual yk_stats_ptr get_stats();
 
         // Dealloc grids, etc.
@@ -391,9 +376,13 @@ namespace yask {
         // TODO: add MPI buffers.
         virtual size_t get_num_bytes() {
             size_t sz = 0;
-            for (auto gp : gridPtrs)
-                if (gp)
-                    sz += gp->get_num_storage_bytes() + _data_buf_pad;
+            for (auto gp : gridPtrs) {
+                if (gp) {
+                    if (sz)
+                        sz += _data_buf_pad;
+                    sz += gp->get_num_storage_bytes();
+                }
+            }
             for (auto gps : scratchVecs)
                 if (gps)
                     for (auto gp : *gps)

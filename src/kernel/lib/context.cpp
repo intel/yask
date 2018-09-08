@@ -301,7 +301,7 @@ namespace yask {
         int ndims = _dims->_stencil_dims.size();
 
         // Determine step dir from order of first/last.
-        idx_t step_dir = (last_step_index > first_step_index) ? 1 : -1;
+        idx_t step_dir = (last_step_index >= first_step_index) ? 1 : -1;
         
         // Find begin, step and end in step-dim.
         idx_t begin_t = first_step_index;
@@ -512,7 +512,7 @@ namespace yask {
             steps_done += this_num_t;
 
             // Count steps for each pack to properly account for
-            // step conditions.
+            // step conditions when using temporal tiling.
             for (auto& bp : stPacks) {
                 idx_t num_pack_steps = 0;
 
@@ -665,7 +665,7 @@ namespace yask {
         // When doing TB, it will step by the block steps.
         idx_t begin_t = region_idxs.begin[step_posn];
         idx_t end_t = region_idxs.end[step_posn];
-        idx_t step_dir = (end_t > begin_t) ? 1 : -1;
+        idx_t step_dir = (end_t >= begin_t) ? 1 : -1;
         idx_t step_t = tb_steps;
         step_t *= step_dir;
         assert(step_t);
@@ -894,7 +894,7 @@ namespace yask {
         // Time range.
         idx_t begin_t = block_idxs.begin[step_posn];
         idx_t end_t = block_idxs.end[step_posn];
-        idx_t step_dir = (end_t > begin_t) ? 1 : -1;
+        idx_t step_dir = (end_t >= begin_t) ? 1 : -1;
         idx_t step_t = step_dir;       // Always 1 step for blocks.
         const idx_t num_t = abs(end_t - begin_t);
 
@@ -1162,7 +1162,10 @@ namespace yask {
 
         // Temporarily ignore step conditions to force eval
         // of conditional bundles.
-        check_step_conds = false;
+        // NB: commented out because it affects perf,
+        // e.g., if packs A and B run in AAABAAAB sequence,
+        // perf may be different if run as ABABAB...
+        // check_step_conds = false;
 
         // Init tuners.
         reset_auto_tuner(true, verbose);
@@ -1173,7 +1176,7 @@ namespace yask {
         // Determine number of sets to run.
         // If wave-fronts are enabled, run a max number of these steps.
         idx_t region_steps = _opts->_region_sizes[_dims->_step_dim];
-        idx_t step_dir = _dims->_step_dir;
+        idx_t step_dir = _dims->_step_dir; // +/- 1.
         idx_t step_t = min(region_steps, +AutoTuner::max_step_t) * step_dir;
 
         // Run time-steps until AT converges.
@@ -1307,7 +1310,7 @@ namespace yask {
     yk_stats_ptr StencilContext::get_stats() {
         ostream& os = get_ostr();
 
-        // Calc and report perf.
+        // Calc times.
         double rtime = run_time.get_elapsed_secs();
         double htime = min(halo_time.get_elapsed_secs(), rtime);
         double wtime = min(wait_time.get_elapsed_secs(), htime);
@@ -1315,82 +1318,119 @@ namespace yask {
         double itime = min(int_time.get_elapsed_secs(), rtime - htime - etime);
         double ctime = etime + itime;
         double otime = max(rtime - ctime - htime, 0.);
-        if (rtime > 0.) {
-            domain_pts_ps = double(tot_domain_1t * steps_done) / rtime;
 
-            // FIXME: these are not correct if there are step conditions.
-            writes_ps= double(tot_numWrites_1t * steps_done) / rtime;
-            flops = double(tot_numFpOps_1t * steps_done) / rtime;
-        }
-        else
-            domain_pts_ps = writes_ps = flops = 0.;
-        if (steps_done > 0) {
-            os <<
-                "Amount-of-work stats:\n"
-                " num-points-per-step:              " << makeNumStr(tot_domain_1t) << endl <<
-                " num-writes-per-step:              " << makeNumStr(tot_numWrites_1t) << endl <<
-                " num-est-FP-ops-per-step:          " << makeNumStr(tot_numFpOps_1t) << endl <<
-                " num-steps-done:                   " << makeNumStr(steps_done) << endl <<
-                "Performance stats:\n"
-                " elapsed-time (sec):               " << makeNumStr(rtime) << endl <<
-                " Time breakdown by activity type:\n"
-                "  compute (sec):                    " << makeNumStr(ctime);
-            print_pct(os, ctime, rtime);
-#ifdef USE_MPI
-            os <<
-                "  halo exchange (sec):              " << makeNumStr(htime);
-            print_pct(os, htime, rtime);
-#endif
-            os <<
-                "  other (sec):                      " << makeNumStr(otime);
-            print_pct(os, otime, rtime);
-            os <<
-                " Compute-time breakdown by stencil pack(s):\n";
-            double tptime = 0.;
-            for (auto& sp : stPacks) {
-                double ptime = min(sp->timer.get_elapsed_secs(), ctime - tptime);
-                if (ptime > 0.) {
-                    os <<
-                        "  pack '" << sp->get_name() << "' (sec):      " << makeNumStr(ptime);
-                    print_pct(os, ptime, ctime);
-                    tptime += ptime;
-                }
-            }
-            double optime = max(ctime - tptime, 0.);
-            os <<
-                "  other (sec):                      " << makeNumStr(optime);
-            print_pct(os, optime, ctime);
-#ifdef USE_MPI
-            os <<
-                " Compute-time breakdown by halo area:\n"
-                "  rank-exterior compute (sec):      " << makeNumStr(etime);
-            print_pct(os, etime, ctime);
-            os <<
-                "  rank-interior compute (sec):      " << makeNumStr(itime);
-            print_pct(os, itime, ctime);
-            os <<
-                " Halo-time breakdown:\n"
-                "  MPI waits (sec):                  " << makeNumStr(wtime);
-            print_pct(os, wtime, htime);
-            double ohtime = max(htime - wtime, 0.);
-            os <<
-                "  packing, unpacking, etc. (sec):   " << makeNumStr(ohtime);
-            print_pct(os, ohtime, htime);
-#endif
-            os <<
-                " throughput (num-writes/sec):      " << makeNumStr(writes_ps) << endl <<
-                " throughput (est-FLOPS):           " << makeNumStr(flops) << endl <<
-                " throughput (num-points/sec):      " << makeNumStr(domain_pts_ps) << endl;
-        }
-
-        // Fill in return object.
+        // Init return object.
         auto p = make_shared<Stats>();
-        p->npts = tot_domain_1t;
-        p->nwrites = tot_numWrites_1t;
-        p->nfpops = tot_numFpOps_1t;
+        p->npts = tot_domain_pts;
         p->nsteps = steps_done;
         p->run_time = rtime;
         p->halo_time = htime;
+        p->nreads = 0;
+        p->nwrites = 0;
+        p->nfpops = 0;
+        p->pts_ps = 0.;
+        p->reads_ps = 0.;
+        p->writes_ps = 0.;
+        p->flops = 0.;
+
+        // Sum work done across packs using per-pack step counters.
+        for (auto& sp : stPacks) {
+            idx_t ns = sp->steps_done;
+            idx_t nreads = sp->tot_reads_per_step * ns;
+            idx_t nwrites = sp->tot_writes_per_step * ns;
+            idx_t nfpops = sp->tot_fpops_per_step * ns;
+            p->nreads += nreads;
+            p->nwrites += nwrites;
+            p->nfpops += nfpops;
+        }
+
+        idx_t npts_done = tot_domain_pts * steps_done;
+        if (rtime > 0.) {
+            p->pts_ps = double(npts_done) / rtime;
+            p->reads_ps= double(p->nreads) / rtime;
+            p->writes_ps= double(p->nwrites) / rtime;
+            p->flops = double(p->nfpops) / rtime;
+        }
+
+        if (steps_done > 0) {
+            os <<
+                "\nWork stats:\n"
+                " num-steps-done:                   " << makeNumStr(steps_done) << endl <<
+                " num-reads-per-step:               " << makeNumStr(double(p->nreads) / steps_done) << endl <<
+                " num-writes-per-step:              " << makeNumStr(double(p->nwrites) / steps_done) << endl <<
+                " num-est-FP-ops-per-step:          " << makeNumStr(double(p->nfpops) / steps_done) << endl <<
+                " num-points-per-step:              " << makeNumStr(tot_domain_pts) << endl;
+            if (stPacks.size() > 1) {
+                os <<
+                    " Work breakdown by stencil pack(s):\n";
+                for (auto& sp : stPacks) {
+                    idx_t ns = sp->steps_done;
+                    idx_t nreads = sp->tot_reads_per_step;
+                    idx_t nwrites = sp->tot_writes_per_step;
+                    idx_t nfpops = sp->tot_fpops_per_step;
+                    os << "  pack '" << sp->get_name() << "':\n"
+                        "   num-steps-done:                   " << makeNumStr(ns) << endl <<
+                        "   num-reads-per-step:               " << makeNumStr(nreads) << endl <<
+                        "   num-writes-per-step:              " << makeNumStr(nwrites) << endl <<
+                        "   num-est-FP-ops-per-step:          " << makeNumStr(nfpops) << endl;
+                }
+            }
+            os << 
+                "\nTime stats:\n"
+                " elapsed-time (sec):               " << makeNumStr(rtime) << endl <<
+                " Time breakdown by activity type:\n"
+                "  compute (sec):                     " << makeNumStr(ctime);
+            print_pct(os, ctime, rtime);
+#ifdef USE_MPI
+            os <<
+                "  halo exchange (sec):               " << makeNumStr(htime);
+            print_pct(os, htime, rtime);
+#endif
+            os <<
+                "  other (sec):                       " << makeNumStr(otime);
+            print_pct(os, otime, rtime);
+            if (stPacks.size() > 1) {
+                os <<
+                    " Compute-time breakdown by stencil pack(s):\n";
+                double tptime = 0.;
+                for (auto& sp : stPacks) {
+                    double ptime = min(sp->timer.get_elapsed_secs(), ctime - tptime);
+                    if (ptime > 0.) {
+                        os <<
+                            "  pack '" << sp->get_name() << "' (sec):       " << makeNumStr(ptime);
+                        print_pct(os, ptime, ctime);
+                        tptime += ptime;
+                    }
+                }
+                double optime = max(ctime - tptime, 0.);
+                os <<
+                    "  other (sec):                       " << makeNumStr(optime);
+                print_pct(os, optime, ctime);
+            }
+#ifdef USE_MPI
+            os <<
+                " Compute-time breakdown by halo area:\n"
+                "  rank-exterior compute (sec):       " << makeNumStr(etime);
+            print_pct(os, etime, ctime);
+            os <<
+                "  rank-interior compute (sec):       " << makeNumStr(itime);
+            print_pct(os, itime, ctime);
+            os <<
+                " Halo-time breakdown:\n"
+                "  MPI waits (sec):                   " << makeNumStr(wtime);
+            print_pct(os, wtime, htime);
+            double ohtime = max(htime - wtime, 0.);
+            os <<
+                "  packing, unpacking, etc. (sec):    " << makeNumStr(ohtime);
+            print_pct(os, ohtime, htime);
+#endif
+            os <<
+                "\nRate stats:\n"
+                " throughput (num-reads/sec):       " << makeNumStr(p->reads_ps) << endl <<
+                " throughput (num-writes/sec):      " << makeNumStr(p->writes_ps) << endl <<
+                " throughput (est-FLOPS):           " << makeNumStr(p->flops) << endl <<
+                " throughput (num-points/sec):      " << makeNumStr(p->pts_ps) << endl;
+        }
 
         // Clear counters.
         clear_timers();
@@ -1827,8 +1867,10 @@ namespace yask {
         halo_time.clear();
         wait_time.clear();
         steps_done = 0;
-        for (auto& sp : stPacks)
+        for (auto& sp : stPacks) {
             sp->timer.clear();
+            sp->steps_done = 0;
+        }
     }
     
 } // namespace yask.
