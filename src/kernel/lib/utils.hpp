@@ -151,7 +151,7 @@ namespace yask {
            long     tv_nsec;       // nanoseconds
            };
         */
-        struct timespec _begin, _end, _elapsed;
+        struct timespec _begin, _elapsed;
 
     public:
 
@@ -161,9 +161,9 @@ namespace yask {
         virtual ~YaskTimer() { }
 
         // Reset elapsed time to zero.
-        virtual void clear() {
-            _begin.tv_sec = _end.tv_sec = _elapsed.tv_sec = 0;
-            _begin.tv_nsec = _end.tv_nsec = _elapsed.tv_nsec = 0;
+        void clear() {
+            _begin.tv_sec = _elapsed.tv_sec = 0;
+            _begin.tv_nsec = _elapsed.tv_nsec = 0;
         }
 
         // Make a timespec that can be used for mutiple calls.
@@ -177,19 +177,12 @@ namespace yask {
         // start() and stop() can be called multiple times in
         // pairs before calling get_elapsed_secs(), which
         // will return the cumulative time over all timed regions.
-        virtual void start(TimeSpec* ts = NULL) {
-            if (ts)
-                _begin = *ts;
-            else {
-                auto cts = get_timespec();
-                _begin = cts;
-            }
-        }
+        void start(TimeSpec* ts = NULL);
 
         // End a timed region.
         // Return time since previous call to start(); this is *not*
         // generally the same as the value returned by get_elapsed_secs().
-        virtual double stop(TimeSpec* ts = NULL);
+        double stop(TimeSpec* ts = NULL);
 
         // Get elapsed time in sec.
         // Does not reset value, so it may be used for cumulative time.

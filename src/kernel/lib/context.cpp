@@ -707,6 +707,9 @@ namespace yask {
                         continue;
                     }
 
+                    // Start timers for this pack.
+                    bp->start_timers();
+
                     // Steps within a region are based on pack block sizes.
                     auto& settings = bp->getSettings();
                     region_idxs.step = settings._block_sizes;
@@ -754,6 +757,9 @@ namespace yask {
                     // One shift for each pack.
                     shift_num++;
 
+                    // Start timers for this pack.
+                    bp->stop_timers();
+                    
                 } // stencil bundle packs.
             } // no temporal blocking.
 
@@ -905,9 +911,6 @@ namespace yask {
             // No TB allowed here.
             assert(num_t == 1);
         
-            // Start timers for this pack.
-            bp->start_timers();
-
             // Steps within a block are based on pack sub-block sizes.
             auto& settings = bp->getSettings();
             block_idxs.step = settings._sub_block_sizes;
@@ -921,9 +924,6 @@ namespace yask {
             for (auto* sb : *bp)
                 if (sb->getBB().bb_num_points)
                     sb->calc_block(block_idxs);
-
-            // Start timers for this pack.
-            bp->stop_timers();
         }
 
         // If TB is active, do all packs across time steps for each required shape.
@@ -1016,7 +1016,10 @@ namespace yask {
                         }
 
                         // Start timers for this pack.
-                        bp->start_timers();
+                        // Tracking only on thread 0. It might be better to track
+                        // all threads and average them. Or something like that.
+                        if (thread_idx == 0)
+                            bp->start_timers();
 
                         // Adjust start/stop to proper shape.
                         Indices shape_start(start);
@@ -1105,7 +1108,8 @@ namespace yask {
                         cur_shift_num++; // Increment for each pack and time-step.
 
                         // Stop timers for this pack.
-                        bp->stop_timers();
+                        if (thread_idx == 0)
+                            bp->stop_timers();
 
                     } // packs.
                 } // time steps.
@@ -1394,13 +1398,12 @@ namespace yask {
                     " Compute-time breakdown by stencil pack(s):\n";
                 double tptime = 0.;
                 for (auto& sp : stPacks) {
-                    double ptime = min(sp->timer.get_elapsed_secs(), ctime - tptime);
-                    if (ptime > 0.) {
-                        os <<
-                            "  pack '" << sp->get_name() << "' (sec):       " << makeNumStr(ptime);
-                        print_pct(os, ptime, ctime);
-                        tptime += ptime;
-                    }
+                    double ptime = sp->timer.get_elapsed_secs();
+                    ptime = min(ptime, ctime - tptime);
+                    os <<
+                        "  pack '" << sp->get_name() << "' (sec):       " << makeNumStr(ptime);
+                    print_pct(os, ptime, ctime);
+                    tptime += ptime;
                 }
                 double optime = max(ctime - tptime, 0.);
                 os <<
