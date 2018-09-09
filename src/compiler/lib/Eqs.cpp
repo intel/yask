@@ -1340,6 +1340,12 @@ namespace yask {
         if (isScratch())
             des += "scratch ";
         des += "equation bundle-pack " + quote + getName() + quote;
+        if (!isScratch()) {
+            if (step_cond.get())
+                des += " w/step condition " + step_cond->makeQuotedStr(quote);
+            else
+                des += " w/o step condition";
+        }
         return des;
     }
 
