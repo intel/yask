@@ -59,7 +59,7 @@ namespace yask {
 
         // Reset all vars.
         results.clear();
-        n2big = n2small = 0;
+        n2big = n2small = n2far = 0;
         best_block = _settings->_block_sizes;
         best_rate = 0.;
         center_block = best_block;
@@ -188,18 +188,28 @@ namespace yask {
                     step = max(step, min_step);
                     step *= radius;
 
+                    int mdist = 0; // manhattan dist from center.
                     auto sz = center_block[dname];
                     switch (dofs) {
-                    case 0:
+                    case 0:     // reduce size in 'odim'.
                         sz -= step;
+                        mdist++;
                         break;
-                    case 1:
+                    case 1:     // keep size in 'odim'.
                         break;
-                    case 2:
+                    case 2:     // increase size in 'odim'.
                         sz += step;
+                        mdist++;
                         break;
                     default:
                         assert(false && "internal error in tune_settings()");
+                    }
+
+                    // Don't look in far corners.
+                    if (mdist > 2) {
+                        n2far++;
+                        ok = false;
+                        break;  // out of dim-loop.
                     }
 
                     // Too small?
@@ -284,6 +294,8 @@ namespace yask {
         } // search for new setting to try.
 
         // Fix settings for next step.
+        // Assumption is that block size in one pack doesn't affect
+        // perf in another pack.
         apply();
         TRACE_MSG2(_name << ": next block-size "  <<
                   _settings->_block_sizes.makeDimValStr(" * "));

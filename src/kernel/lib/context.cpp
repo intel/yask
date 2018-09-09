@@ -1121,8 +1121,6 @@ namespace yask {
     void StencilContext::eval_auto_tuner(idx_t num_steps) {
         _at.steps_done += num_steps;
 
-        // Steps for pack tuners must be incremented
-        // separately for accurate counting.
         if (_use_pack_tuners) {
             for (auto& sp : stPacks)
                 sp->getAT().eval();
@@ -1164,12 +1162,11 @@ namespace yask {
         // Temporarily disable halo exchange to tune intra-rank.
         enable_halo_exchange = false;
 
-        // Temporarily ignore step conditions to force eval
-        // of conditional bundles.
-        // NB: commented out because it affects perf,
-        // e.g., if packs A and B run in AAABAAAB sequence,
-        // perf may be different if run as ABABAB...
-        // check_step_conds = false;
+        // Temporarily ignore step conditions to force eval of conditional
+        // bundles.  NB: may affect perf, e.g., if packs A and B run in
+        // AAABAAAB sequence, perf may be [very] different if run as
+        // ABABAB..., esp. w/temporal tiling.  TODO: work around this.
+        check_step_conds = false;
 
         // Init tuners.
         reset_auto_tuner(true, verbose);

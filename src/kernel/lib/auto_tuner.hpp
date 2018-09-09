@@ -47,13 +47,13 @@ namespace yask {
         idx_t min_steps = 10;
         double min_secs = 0.25; // eval when either min_steps or min_secs is reached.
         idx_t min_step = 4;
-        idx_t max_radius = 64;
+        idx_t max_radius = 16;
         idx_t min_pts = 512; // 8^3.
         idx_t min_blks = 4;
 
         // Results.
         std::map<IdxTuple, double> results; // block-size -> perf.
-        int n2big = 0, n2small = 0;
+        int n2big = 0, n2small = 0, n2far = 0;
 
         // Best so far.
         IdxTuple best_block;
