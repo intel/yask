@@ -39,6 +39,7 @@ IN THE SOFTWARE.
 #include <cstdarg>
 #include <assert.h>
 #include <fstream>
+#include "idiv.hpp"
 
 // Need g++ >= 4.9 for regex.
 #define GCC_VERSION (__GNUC__ * 10000 \
@@ -542,7 +543,13 @@ namespace yask {
         }                                               \
     }
     BIN_NUM_EXPR(SubExpr, yc_subtract_node, "-", lhs - rhs);
-    BIN_NUM_EXPR(DivExpr, yc_divide_node, "/", lhs / rhs); // TODO: add check for div-by-0.
+
+    // TODO: add check for div-by-0.
+    // TODO: handle division properly for integer indices.
+    BIN_NUM_EXPR(DivExpr, yc_divide_node, "/", lhs / rhs);
+
+    // TODO: add check for mod-by-0.
+    BIN_NUM_EXPR(ModExpr, yc_mod_node, "%", imod_flr(idx_t(lhs), idx_t(rhs)));
 #undef BIN_NUM_EXPR
 
 // Boolean binary operators with numerical inputs.
@@ -897,10 +904,13 @@ namespace yask {
         GridPointPtr _lhs;
         NumExprPtr _rhs;
         BoolExprPtr _cond;
+        BoolExprPtr _step_cond;
 
     public:
-        EqualsExpr(GridPointPtr lhs, NumExprPtr rhs, BoolExprPtr cond = nullptr) :
-            _lhs(lhs), _rhs(rhs), _cond(cond) { }
+        EqualsExpr(GridPointPtr lhs, NumExprPtr rhs,
+                   BoolExprPtr cond = nullptr,
+                   BoolExprPtr step_cond = nullptr) :
+            _lhs(lhs), _rhs(rhs), _cond(cond), _step_cond(step_cond) { }
         EqualsExpr(const EqualsExpr& src) :
             _lhs(src._lhs->cloneGridPoint()),
             _rhs(src._rhs->clone()) {
@@ -908,6 +918,10 @@ namespace yask {
                 _cond = src._cond->clone();
             else
                 _cond = nullptr;
+            if (src._step_cond)
+                _step_cond = src._step_cond->clone();
+            else
+                _step_cond = nullptr;
         }
 
         GridPointPtr& getLhs() { return _lhs; }
@@ -917,9 +931,13 @@ namespace yask {
         BoolExprPtr& getCond() { return _cond; }
         const BoolExprPtr& getCond() const { return _cond; }
         void setCond(BoolExprPtr cond) { _cond = cond; }
+        BoolExprPtr& getStepCond() { return _step_cond; }
+        const BoolExprPtr& getStepCond() const { return _step_cond; }
+        void setStepCond(BoolExprPtr step_cond) { _step_cond = step_cond; }
         virtual void accept(ExprVisitor* ev);
         static string exprOpStr() { return "EQUALS"; }
         static string condOpStr() { return "IF"; }
+        static string stepCondOpStr() { return "IF_STEP"; }
 
         // Get pointer to grid on LHS or NULL if not set.
         virtual Grid* getGrid() {
@@ -944,6 +962,7 @@ namespace yask {
         virtual yc_grid_point_node_ptr get_lhs() { return _lhs; }
         virtual yc_number_node_ptr get_rhs() { return _rhs; }
         virtual yc_bool_node_ptr get_cond() { return _cond; }
+        virtual yc_bool_node_ptr get_step_cond() { return _step_cond; }
         virtual void set_cond(yc_bool_node_ptr cond) {
             if (cond) {
                 auto p = dynamic_pointer_cast<BoolExpr>(cond);
@@ -951,6 +970,14 @@ namespace yask {
                 _cond = p;
             } else
                 _cond = nullptr;
+        }
+        virtual void set_step_cond(yc_bool_node_ptr step_cond) {
+            if (step_cond) {
+                auto p = dynamic_pointer_cast<BoolExpr>(step_cond);
+                assert(p);
+                _step_cond = p;
+            } else
+                _step_cond = nullptr;
         }
     };
 
@@ -984,12 +1011,19 @@ namespace yask {
     void operator/=(NumExprPtr& lhs, const NumExprPtr rhs);
     void operator/=(NumExprPtr& lhs, double rhs);
 
+    NumExprPtr operator%(const NumExprPtr lhs, const NumExprPtr rhs);
+    NumExprPtr operator%(double lhs, const NumExprPtr rhs);
+    NumExprPtr operator%(const NumExprPtr lhs, double rhs);
+
     // A conditional evaluation.
     // We use an otherwise unneeded binary operator that has a low priority.
     // See http://en.cppreference.com/w/cpp/language/operator_precedence.
 #define IF_OPER ^=
     EqualsExprPtr operator IF_OPER(EqualsExprPtr expr, const BoolExprPtr cond);
 #define IF IF_OPER
+#define IF_STEP_OPER |=
+    EqualsExprPtr operator IF_STEP_OPER(EqualsExprPtr expr, const BoolExprPtr step_cond);
+#define IF_STEP IF_STEP_OPER
 
     // The operator used for defining a grid value.
     // We use an otherwise unneeded binary operator that has a lower priority
@@ -1021,7 +1055,11 @@ namespace yask {
     inline BoolExprPtr operator oper(const NumExprPtr lhs, const IndexExprPtr rhs) { \
         return make_shared<type>(lhs, rhs); } \
     inline BoolExprPtr operator oper(const IndexExprPtr lhs, const IndexExprPtr rhs) { \
-        return make_shared<type>(lhs, rhs); }
+        return make_shared<type>(lhs, rhs); } \
+    inline BoolExprPtr operator oper(const NumExprPtr lhs, double rhs) { \
+        return make_shared<type>(lhs, constNum(rhs)); }                 \
+    inline BoolExprPtr operator oper(const IndexExprPtr lhs, double rhs) { \
+        return make_shared<type>(lhs, constNum(rhs)); }
 
     BOOL_OPER(==, IsEqualExpr, yc_equals_node)
     BOOL_OPER(!=, NotEqualExpr, yc_not_equals_node)

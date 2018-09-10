@@ -119,12 +119,12 @@ namespace yask {
         virtual int get_scalar_points_written() const { return _scalar_points_written; }
 
         // Scratch accessors.
-        virtual bool is_scratch() const { return _is_scratch; }
-        virtual void set_scratch(bool is_scratch) { _is_scratch = is_scratch; }
+        bool is_scratch() const { return _is_scratch; }
+        void set_scratch(bool is_scratch) { _is_scratch = is_scratch; }
 
         // Access to BBs.
-        virtual BoundingBox& getBB() { return _bundle_bb; }
-        virtual BBList& getBBs() { return _bb_list; }
+        BoundingBox& getBB() { return _bundle_bb; }
+        BBList& getBBs() { return _bb_list; }
 
         // Add dependency.
         virtual void add_dep(StencilBundleBase* eg) {
@@ -165,6 +165,10 @@ namespace yask {
         // Determine whether indices are in [sub-]domain.
         virtual bool
         is_in_valid_domain(const Indices& idxs) const =0;
+
+        // Determine whether step index is enabled.
+        virtual bool
+        is_in_valid_step(idx_t input_step_index) const =0;
 
         // If bundle updates grid(s) with the step index,
         // set 'output_step_index' to the step that an update
@@ -238,6 +242,9 @@ namespace yask {
     protected:
         std::string _name;
 
+        // Parent solution.
+        StencilContext* _context = 0;
+        
         // Union of bounding boxes for all bundles in this pack.
         BoundingBox _pack_bb;
 
@@ -249,12 +256,25 @@ namespace yask {
         AutoTuner _at;
         
     public:
-        // Timer for this pack.
+
+        // Perf stats for this pack.
         YaskTimer timer;
+        idx_t steps_done = 0;
+
+        // Work needed across points in this rank.
+        idx_t num_reads_per_step = 0;
+        idx_t num_writes_per_step = 0;
+        idx_t num_fpops_per_step = 0;
+
+        // Work done across all ranks.
+        idx_t tot_reads_per_step = 0;
+        idx_t tot_writes_per_step = 0;
+        idx_t tot_fpops_per_step = 0;
         
         BundlePack(const std::string& name,
                    StencilContext* ctx) :
             _name(name),
+            _context(ctx),
             _opts(*ctx->get_settings()),
             _at(ctx, &_opts, name) { }
         virtual ~BundlePack() { }
@@ -263,10 +283,30 @@ namespace yask {
             return _name;
         }
 
+        // Update the amount of work stats.
+        // Print to current debug stream.
+        void init_work_stats();
+
+        // Determine whether step index is enabled.
+        bool
+        is_in_valid_step(idx_t input_step_index) const {
+            if (!size())
+                return false;
+
+            // All step conditions must be the same, so
+            // we call first one.
+            return front()->is_in_valid_step(input_step_index);
+        }
+
         // Accessors.
-        virtual BoundingBox& getBB() { return _pack_bb; }
-        virtual AutoTuner& getAT() { return _at; }
-        virtual KernelSettings& getSettings() { return _opts; }
+        BoundingBox& getBB() { return _pack_bb; }
+        AutoTuner& getAT() { return _at; }
+        KernelSettings& getSettings() { return _opts; }
+
+        // Perf-tracking methods.
+        void start_timers();
+        void stop_timers();
+        void add_steps(idx_t num_steps);
 
     }; // BundlePack.
 

@@ -517,9 +517,9 @@ namespace yask {
                 os << " } // Ctor." << endl;
             }
 
-            // Condition.
+            // Domain condition.
             {
-                os << endl << " // Determine whether " << egsName << " is valid at the indices " <<
+                os << endl << " // Determine whether " << egsName << " is valid at the domain indices " <<
                     _dims->_stencilDims.makeDimStr() << ".\n"
                     " // Return true if indices are within the valid sub-domain or false otherwise.\n"
                     " virtual bool is_in_valid_domain(const Indices& idxs) const final {\n";
@@ -528,6 +528,20 @@ namespace yask {
                     os << " return " << eq->cond->makeStr() << ";\n";
                 else
                     os << " return true; // full domain.\n";
+                os << " }\n";
+            }
+
+            // Step condition.
+            {
+                os << endl << " // Determine whether " << egsName << " is valid at the step " <<
+                    _dims->_stencilDims.makeDimStr() << ".\n"
+                    " // Return true if indices are within the valid sub-domain or false otherwise.\n"
+                    " virtual bool is_in_valid_step(idx_t input_step_index) const final {\n";
+                if (eq->step_cond)
+                    os << " idx_t " << _dims->_stepDim << " = input_step_index;\n"
+                        " return " << eq->step_cond->makeStr() << ";\n";
+                else
+                    os << " return true; // any step.\n";
                 os << " }\n";
             }
 

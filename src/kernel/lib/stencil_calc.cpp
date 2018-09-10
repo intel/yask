@@ -42,29 +42,41 @@ namespace yask {
         auto& step_dim = dims->_step_dim;
         auto step_posn = Indices::step_posn;
         int thread_idx = omp_get_thread_num(); // used to index the scratch grids.
-        TRACE_MSG3("calc_block for bundle '" << get_name() << "': [" <<
-                   def_block_idxs.begin.makeValStr(nsdims) <<
-                   " ... " << def_block_idxs.end.makeValStr(nsdims) <<
-                   ") by " << def_block_idxs.step.makeValStr(nsdims) <<
+        TRACE_MSG3("calc_block('" << get_name() << "'): [" <<
+                   def_block_idxs.begin.makeValStr(nsdims) << " ... " <<
+                   def_block_idxs.end.makeValStr(nsdims) << ") by " <<
+                   def_block_idxs.step.makeValStr(nsdims) <<
                    " in thread " << thread_idx);
         assert(!is_scratch());
 
-        // TODO: if >1 BB, check outer one first to save time.
+        // No TB allowed here.
+#ifdef CHECK
+        idx_t begin_t = def_block_idxs.begin[step_posn];
+        idx_t end_t = def_block_idxs.end[step_posn];
+        assert(abs(end_t - begin_t) == 1);
+#endif
+
+        if (_bundle_bb.bb_num_points == 0)
+            return;
+        
+        // TODO: if >1 BB, check limits of outer one first to save time.
         
         // Loop through each solid BB.
         // For each BB, calc intersection between it and 'def_block_idxs'.
         // If this is non-empty, apply the bundle to all its required sub-blocks.
-        TRACE_MSG3("calc_block for bundle '" << get_name() << "': checking " <<
+        TRACE_MSG3("calc_block('" << get_name() << "'): checking " <<
                    _bb_list.size() << " BB(s)");
         int bbn = 0;
   	for (auto& bb : _bb_list) {
             bbn++;
             bool bb_ok = true;
+            if (bb.bb_num_points == 0)
+                bb_ok = false;
 
             // Trim the default block indices based on the bounding box(es)
             // for this bundle.
             ScanIndices bb_idxs(def_block_idxs);
-            for (int i = 0, j = 0; i < nsdims; i++) {
+            for (int i = 0, j = 0; bb_ok && i < nsdims; i++) {
                 if (i == step_posn) continue;
 
                 // Begin point.
@@ -76,10 +88,9 @@ namespace yask {
                 bb_idxs.end[i] = bend;
 		
                 // Anything to do?
-                if (bend <= bbegin) {
+                if (bend <= bbegin)
                     bb_ok = false;
-                    break;
-                }
+
                 j++;            // next domain index.
             }
 
@@ -90,8 +101,8 @@ namespace yask {
                 continue; // to next BB.
             }
             
-            TRACE_MSG3("calc_block for bundle '" << get_name() <<
-                       "': after trimming for BB " << bbn << ": [" <<
+            TRACE_MSG3("calc_block('" << get_name() <<
+                       "'): after trimming for BB " << bbn << ": [" <<
                        bb_idxs.begin.makeValStr(nsdims) <<
                        " ... " << bb_idxs.end.makeValStr(nsdims) << ")");
 
@@ -115,7 +126,7 @@ namespace yask {
                 // copy of 'bb_idxs' except when updating scratch-grids.
                 ScanIndices block_idxs = sg->adjust_span(thread_idx, bb_idxs);
 
-                TRACE_MSG3("calc_block for bundle '" << get_name() << "': " <<
+                TRACE_MSG3("calc_block('" << get_name() << "'): " <<
                            " in reqd bundle '" << sg->get_name() << "': [" <<
                            block_idxs.begin.makeValStr(nsdims) <<
                            " ... " << block_idxs.end.makeValStr(nsdims) <<
@@ -697,6 +708,131 @@ namespace yask {
             break;
         }
         return adj_idxs;
+    } // adjust_span().
+
+    // Timer methods.
+    // Start and stop timers for final stats and auto-tuners.
+    void BundlePack::start_timers() {
+        auto ts = YaskTimer::get_timespec();
+        timer.start(&ts);
+        getAT().timer.start(&ts);
+        _context->getAT().timer.start(&ts);
     }
+    void BundlePack::stop_timers() {
+        auto ts = YaskTimer::get_timespec();
+        timer.stop(&ts);
+        getAT().timer.stop(&ts);
+        _context->getAT().timer.stop(&ts);
+    }
+    void BundlePack::add_steps(idx_t num_steps) {
+        steps_done += num_steps;
+        getAT().steps_done += num_steps;
+
+        // Don't add to context steps to avoid over-counting.
+    }
+
+    // Calc the work stats.
+    // Requires MPI barriers!
+    void BundlePack::init_work_stats() {
+        ostream& os = _context->get_ostr();
+        auto& env = _context->get_env();
+
+        num_reads_per_step = 0;
+        num_writes_per_step = 0;
+        num_fpops_per_step = 0;
+
+        os <<
+            "Pack '" << get_name() << "':\n" <<
+            " num bundles:                 " << size() << endl <<
+            " pack scope:                  " << _pack_bb.bb_begin.makeDimValStr() <<
+            " ... " << _pack_bb.bb_end.subElements(1).makeDimValStr() << endl;
+
+        // Bundles.
+        for (auto* sg : *this) {
+
+            // Stats for this bundle for 1 pt.
+            idx_t writes1 = 0, reads1 = 0, fpops1 = 0;
+            
+            // Loop through all the needed bundles to
+            // count stats for scratch bundles.
+            // Does not count extra ops needed in scratch halos
+            // since this varies depending on block size.
+            auto sg_list = sg->get_reqd_bundles();
+            for (auto* rsg : sg_list) {
+                reads1 += rsg->get_scalar_points_read();
+                writes1 += rsg->get_scalar_points_written();
+                fpops1 += rsg->get_scalar_fp_ops();
+            }
+
+            // Multiply by valid pts in BB for this bundle.
+            auto& bb = sg->getBB();
+            idx_t writes_bb = writes1 * bb.bb_num_points;
+            num_writes_per_step += writes_bb;
+            idx_t reads_bb = reads1 * bb.bb_num_points;
+            num_reads_per_step += reads_bb;
+            idx_t fpops_bb = fpops1 * bb.bb_num_points;
+            num_fpops_per_step += fpops_bb;
+
+            os << " Bundle '" << sg->get_name() << "':\n" <<
+                "  num reqd scratch bundles:   " << (sg_list.size() - 1) << endl;
+            // TODO: add info on scratch bundles here.
+
+            os <<
+                "  bundle size (points):       " << makeNumStr(bb.bb_size) << endl;
+            if (bb.bb_size) {
+                os << 
+                    "  valid points in bundle:     " << makeNumStr(bb.bb_num_points) << endl;
+                if (bb.bb_num_points) {
+                    os <<
+                        "  bundle scope:               " << bb.bb_begin.makeDimValStr() <<
+                        " ... " << bb.bb_end.subElements(1).makeDimValStr() << endl <<
+                        "  bundle bounding-box size:   " << bb.bb_len.makeDimValStr(" * ") << endl;
+                }
+            }
+            os <<
+                "  num full rectangles in box: " << sg->getBBs().size() << endl;
+            if (sg->getBBs().size() > 1) {
+                for (size_t ri = 0; ri < sg->getBBs().size(); ri++) {
+                    auto& rbb = sg->getBBs()[ri];
+                    os <<
+                        "   Rectangle " << ri << ":\n"
+                        "    num points in rect:       " << makeNumStr(rbb.bb_num_points) << endl;
+                    if (rbb.bb_num_points) {
+                        os << "    rect scope:               " << rbb.bb_begin.makeDimValStr() <<
+                            " ... " << rbb.bb_end.subElements(1).makeDimValStr() << endl;
+                        os << "    rect size:                " << rbb.bb_len.makeDimValStr(" * ") << endl;
+                    }
+                }
+            }
+            os <<
+                "  grid-reads per point:       " << reads1 << endl <<
+                "  grid-reads in rank:         " << makeNumStr(reads_bb) << endl <<
+                "  grid-writes per point:      " << writes1 << endl <<
+                "  grid-writes in rank:        " << makeNumStr(writes_bb) << endl <<
+                "  est FP-ops per point:       " << fpops1 << endl <<
+                "  est FP-ops in rank:         " << makeNumStr(fpops_bb) << endl;
+
+            os << "  input-grids:                ";
+            int i = 0;
+            for (auto gp : sg->inputGridPtrs) {
+                if (i++) os << ", ";
+                os << gp->get_name();
+            }
+            os << "\n  output-grids:               ";
+            i = 0;
+            for (auto gp : sg->outputGridPtrs) {
+                if (i++) os << ", ";
+                os << gp->get_name();
+            }
+            os << endl;
+
+        } // bundles.
+
+        // Sum across ranks.
+        tot_reads_per_step = sumOverRanks(num_reads_per_step, env->comm);
+        tot_writes_per_step = sumOverRanks(num_writes_per_step, env->comm);
+        tot_fpops_per_step = sumOverRanks(num_fpops_per_step, env->comm);
+        
+    } // init_work_stats().
 
 } // namespace yask.

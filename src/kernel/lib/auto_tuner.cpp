@@ -30,6 +30,14 @@ using namespace std;
 
 namespace yask {
 
+    // Print the best settings.
+    void AutoTuner::print_settings(ostream& os) const {
+        os << _name << ": best-block-size: " <<
+            _settings->_block_sizes.makeDimValStr(" * ") << endl <<
+            _name << ": best-sub-block-size: " <<
+            _settings->_sub_block_sizes.makeDimValStr(" * ") << endl << flush;
+    }
+    
     // Reset the auto-tuner.
     void AutoTuner::clear(bool mark_done, bool verbose) {
 
@@ -51,7 +59,7 @@ namespace yask {
 
         // Reset all vars.
         results.clear();
-        n2big = n2small = 0;
+        n2big = n2small = n2far = 0;
         best_block = _settings->_block_sizes;
         best_rate = 0.;
         center_block = best_block;
@@ -63,6 +71,7 @@ namespace yask {
         csteps = 0;
         in_warmup = true;
         timer.clear();
+        steps_done = 0;
 
         // Set min blocks to number of region threads.
         min_blks = _context->set_region_threads();
@@ -78,14 +87,14 @@ namespace yask {
                 center_block[dname] = dmax;
         }
         if (!done) {
-            os << _name << ": starting block-size: "  <<
-                center_block.makeDimValStr(" * ") << endl;
-            os << _name << ": starting search radius: " << radius << endl;
+            TRACE_MSG2(_name << ": starting block-size: "  <<
+                       center_block.makeDimValStr(" * "));
+            TRACE_MSG2(_name << ": starting search radius: " << radius);
         }
     } // clear.
 
     // Evaluate the previous run and take next auto-tuner step.
-    void AutoTuner::eval(idx_t steps) {
+    void AutoTuner::eval() {
         ostream& os = _context->get_ostr();
         auto& mpiInfo = _context->get_mpi_info();
         auto& dims = _context->get_dims();
@@ -94,6 +103,8 @@ namespace yask {
         // Get elapsed time and reset.
         double etime = timer.get_elapsed_secs();
         timer.clear();
+        idx_t steps = steps_done;
+        steps_done = 0;
         
         // Leave if done.
         if (done)
@@ -129,8 +140,9 @@ namespace yask {
 
         // Calc perf and reset vars for next time.
         double rate = (ctime > 0.) ? double(csteps) / ctime : 0.;
-        os << _name << ": " << csteps << " steps(s) at " << rate <<
-            " steps/sec with block-size " <<
+        os << _name << ": " << csteps << " steps(s) in " << ctime <<
+            " secs (" << rate <<
+            " steps/sec) with block-size " <<
             _settings->_block_sizes.makeDimValStr(" * ") << endl;
         csteps = 0;
         ctime = 0.;
@@ -176,18 +188,28 @@ namespace yask {
                     step = max(step, min_step);
                     step *= radius;
 
+                    int mdist = 0; // manhattan dist from center.
                     auto sz = center_block[dname];
                     switch (dofs) {
-                    case 0:
+                    case 0:     // reduce size in 'odim'.
                         sz -= step;
+                        mdist++;
                         break;
-                    case 1:
+                    case 1:     // keep size in 'odim'.
                         break;
-                    case 2:
+                    case 2:     // increase size in 'odim'.
                         sz += step;
+                        mdist++;
                         break;
                     default:
                         assert(false && "internal error in tune_settings()");
+                    }
+
+                    // Don't look in far corners.
+                    if (mdist > 2) {
+                        n2far++;
+                        ok = false;
+                        break;  // out of dim-loop.
                     }
 
                     // Too small?
@@ -262,7 +284,7 @@ namespace yask {
                         os << _name << ": done" << endl;
                         return;
                     }
-                    os << _name << ": new search radius: " << radius << endl;
+                    os << _name << ": search radius " << radius << endl;
                 }
                 else {
                     TRACE_MSG2(_name << ": continuing search from block " <<
@@ -272,6 +294,8 @@ namespace yask {
         } // search for new setting to try.
 
         // Fix settings for next step.
+        // Assumption is that block size in one pack doesn't affect
+        // perf in another pack.
         apply();
         TRACE_MSG2(_name << ": next block-size "  <<
                   _settings->_block_sizes.makeDimValStr(" * "));
@@ -302,6 +326,9 @@ namespace yask {
 
         // Make sure everything is resized based on block size.
         _settings->adjustSettings(nullop->get_ostream(), env);
+
+        // Update temporal blocking info.
+        _context->update_block_info();
 
         // Reallocate scratch data based on new block size.
         _context->allocScratchData(nullop->get_ostream());

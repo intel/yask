@@ -31,6 +31,37 @@ using namespace std;
 
 namespace yask {
 
+    // Constructor.
+    StencilContext::StencilContext(KernelEnvPtr env,
+                                   KernelSettingsPtr settings) :
+        _ostr(&std::cout),
+        _env(env),
+        _opts(settings),
+        _dims(settings->_dims),
+        _at(this, _opts.get())
+    {
+        // Set debug output object.
+        yask_output_factory yof;
+        set_debug_output(yof.new_stdout_output());
+
+        // Create MPI Info object.
+        _mpiInfo = std::make_shared<MPIInfo>(settings->_dims);
+
+        // Init various tuples to make sure they have the correct dims.
+        rank_domain_offsets = _dims->_domain_dims;
+        rank_domain_offsets.setValsSame(-1); // indicates prepare_solution() not called.
+        overall_domain_sizes = _dims->_domain_dims;
+        max_halos = _dims->_domain_dims;
+        wf_angles = _dims->_domain_dims;
+        wf_shifts = _dims->_domain_dims;
+        tb_angles = _dims->_domain_dims;
+        left_wf_exts = _dims->_domain_dims;
+        right_wf_exts = _dims->_domain_dims;
+
+        // Set output to msg-rank per settings.
+        set_ostr();
+    }
+
     // Init MPI-related vars and other vars related to my rank's place in
     // the global problem: rank index, offset, etc.  Need to call this even
     // if not using MPI to properly init these vars.  Called from
@@ -239,7 +270,7 @@ namespace yask {
         // This must be done after finding WF extensions.
         find_bounding_boxes();
 
-    } // setupRank.
+    } // setupRank().
 
     // Alloc 'nbytes' on each requested NUMA node.
     // Map keys are preferred NUMA nodes or -1 for local.
@@ -428,17 +459,15 @@ namespace yask {
                             // are no more ranks in the given direction,
                             // extend the "outer" index to include the halo
                             // in that direction to make sure all data are
-                            // sync'd when using WF tiling.
+                            // sync'd. Critical for temporal tiling.
                             idx_t fidx = gp->get_first_rank_domain_index(dname);
                             idx_t lidx = gp->get_last_rank_domain_index(dname);
                             first_inner_idx.addDimBack(dname, fidx);
                             last_inner_idx.addDimBack(dname, lidx);
-                            if (_opts->is_time_tiling()) {
-                                if (_opts->is_first_rank(dname))
-                                    fidx -= lhalo;
-                                if (_opts->is_last_rank(dname))
-                                    lidx += rhalo;
-                            }
+                            if (_opts->is_first_rank(dname))
+                                fidx -= lhalo; // extend into left halo.
+                            if (_opts->is_last_rank(dname))
+                                lidx += rhalo; // extend into right halo.
                             first_outer_idx.addDimBack(dname, fidx);
                             last_outer_idx.addDimBack(dname, lidx);
 
@@ -913,13 +942,70 @@ namespace yask {
 
         } // scratch-grid passes.
     }
+    
+    // Set temporal blocking data.
+    // This should be called anytime a block size is changed.
+    // Must be called after update_grid_info() to ensure
+    // angles are properly set.
+    void StencilContext::update_block_info() {
+        auto& step_dim = _dims->_step_dim;
+
+        // Start w/original temporal setting.
+        tb_steps = _opts->_block_sizes[step_dim];
+        assert(tb_steps >= 1);
+
+        // Determine max setting based on block sizes.
+        // When using temporal blocking, all block sizes
+        // across all packs must be the same.
+        if (tb_steps > 1) {
+            TRACE_MSG("update_block_info: original TB steps = " << tb_steps);
+            idx_t max_steps = min(tb_steps, wf_steps);
+            TRACE_MSG("update_block_info: max(TB, WF) steps = " << max_steps);
+
+            // Loop through each domain dim.
+            for (auto& dim : _dims->_domain_dims.getDims()) {
+                auto& dname = dim.getName();
+
+                // Calculate max number of temporal steps in
+                // this dim.
+                auto bsz = _opts->_block_sizes[dname];
+                auto angle = tb_angles[dname];
+                if (angle > 0) {
+                    idx_t sh_pts = angle * 2 * stPacks.size();
+                    idx_t cur_max = (bsz - 1) / sh_pts + 1;
+                    TRACE_MSG("update_block_info: max TB steps in dim '" <<
+                              dname << "' = " << cur_max <<
+                              " due to base block size of " << bsz <<
+                              " and TB angle of " << angle);
+                    max_steps = min(max_steps, cur_max);
+                }
+            }
+            tb_steps = min(tb_steps, max_steps);
+            TRACE_MSG("update_block_info: final TB steps = " << tb_steps);
+        }
+
+        // Calc number of shifts based on steps.
+        num_tb_shifts = 0;
+        if (tb_steps > 1) {
+
+            // Need to shift for each bundle pack.
+            assert(stPacks.size() > 0);
+            num_tb_shifts = idx_t(stPacks.size()) * tb_steps;
+            assert(num_tb_shifts > 1);
+
+            // Don't need to shift first one.
+            num_tb_shifts--;
+        }
+        assert(num_tb_shifts >= 0);
+
+    } // update_block_info().
 
     // Set non-scratch grid sizes and offsets based on settings.
     // Set wave-front settings.
     // This should be called anytime a setting or rank offset is changed.
-    void StencilContext::update_grid_info()
-    {
+    void StencilContext::update_grid_info() {
         assert(_opts);
+        auto& step_dim = _dims->_step_dim;
 
         // If we haven't finished constructing the context, it's too early
         // to do this.
@@ -955,18 +1041,20 @@ namespace yask {
                     gp->_set_offset(dname, rank_domain_offsets[dname]);
                     gp->_set_local_offset(dname, 0);
 
-                    // Update max halo across grids, used for wavefront angles.
+                    // Update max halo across grids, used for temporal angles.
                     max_halos[dname] = max(max_halos[dname], gp->get_left_halo_size(dname));
                     max_halos[dname] = max(max_halos[dname], gp->get_right_halo_size(dname));
                 }
             }
         } // grids.
 
-        // Calculate wave-front settings based on max halos.
+        // Calculate wave-front shifts.
         // See the wavefront diagram in run_solution() for description
         // of angles and extensions.
-        auto& step_dim = _dims->_step_dim;
-        auto wf_steps = _opts->_region_sizes[step_dim];
+        tb_steps = _opts->_block_sizes[step_dim]; // use original size; actual may be less.
+        assert(tb_steps >= 1);
+        wf_steps = _opts->_region_sizes[step_dim];
+        wf_steps = max(wf_steps, tb_steps); // round up WF steps if less than TB steps.
         assert(wf_steps >= 1);
         num_wf_shifts = 0;
         if (wf_steps > 1) {
@@ -980,25 +1068,40 @@ namespace yask {
             num_wf_shifts--;
         }
         assert(num_wf_shifts >= 0);
+
+        // Determine whether separate tuners can be used.
+        _use_pack_tuners = (tb_steps == 1) && (stPacks.size() > 1);
+
+        // Calculate angles and related settings.
         for (auto& dim : _dims->_domain_dims.getDims()) {
             auto& dname = dim.getName();
+            auto rnsize = _opts->_region_sizes[dname];
             auto rksize = _opts->_rank_sizes[dname];
             auto nranks = _opts->_num_ranks[dname];
 
-            // Determine the max spatial skewing angles for temporal
-            // wave-fronts based on the max halos.  We only need non-zero
-            // angles if the region size is less than the rank size and
-            // there are no other ranks in this dim, i.e., if the region
-            // covers the *global* domain in a given dim, no wave-front is
-            // needed in that dim.  TODO: make rounding-up an option.
-            idx_t angle = 0;
-            if (_opts->_region_sizes[dname] < rksize || nranks > 0)
-                angle = ROUND_UP(max_halos[dname], _dims->_fold_pts[dname]);
-            wf_angles[dname] = angle;
+            // Req'd shift in this dim based on max halos.
+            idx_t angle = ROUND_UP(max_halos[dname], _dims->_fold_pts[dname]);
+            
+            // Determine the max spatial skewing angles for TB.
+            // We assume that the block size will always require
+            // non-zero angles.
+            // TODO: adjust TB angle to zero iff block covers whole
+            // rank in given dim. Do this in update_block_info().
+            tb_angles.addDimBack(dname, angle);
+            
+            // Determine the max spatial skewing angles for WF tiling.  We
+            // only need non-zero angles if the region size is less than the
+            // rank size or there are other ranks in this dim, i.e., if
+            // the region covers the *global* domain in a given dim, no
+            // wave-front shifting is needed in that dim.
+            idx_t wf_angle = 0;
+            if (rnsize < rksize || nranks > 0)
+                wf_angle = angle;
+            wf_angles.addDimBack(dname, wf_angle);
             assert(angle >= 0);
 
             // Determine the total WF shift to be added in each dim.
-            idx_t shifts = angle * num_wf_shifts;
+            idx_t shifts = wf_angle * num_wf_shifts;
             wf_shifts[dname] = shifts;
             assert(shifts >= 0);
 
@@ -1020,6 +1123,10 @@ namespace yask {
             right_wf_exts[dname] = _opts->is_last_rank(dname) ? 0 : shifts;
         }
 
+        // Calculate temporal-block shifts.
+        // NB: this will change if/when block sizes change.
+        update_block_info();
+        
         // Now that wave-front settings are known, we can push this info
         // back to the grids. It's useful to store this redundant info
         // in the grids, because there it's indexed by grid dims instead
@@ -1042,7 +1149,7 @@ namespace yask {
                 }
             }
         }
-    }
+    } // update_grid_info().
 
     // Allocate grids and MPI bufs.
     // Initialize some data structures.
@@ -1072,19 +1179,20 @@ namespace yask {
         // reset time keepers.
         clear_timers();
 
-        // Init auto-tuner to run silently during normal operation.
-        for (auto& sp : stPacks)
-            sp->getAT().clear(false, false);
-
         // Adjust all settings before setting MPI buffers or sizing grids.
-        // Prints final settings.
+        // Prints adjusted settings.
         // TODO: print settings again after auto-tuning.
         _opts->adjustSettings(os, _env);
 
         // Copy current settings to packs.
+        // Needed here because settings may have been changed via APIs
+        // since last call to prepare_solution().
         // This will wipe out any previous auto-tuning.
         for (auto& sp : stPacks)
             sp->getSettings() = *_opts;
+
+        // Init auto-tuner to run silently during normal operation.
+        reset_auto_tuner(true, false);
 
         // Report ranks.
         os << endl;
@@ -1139,23 +1247,29 @@ namespace yask {
         allocMpiData(os);
 
         print_info();
-    }
+
+    } // prepare_solution().
 
     void StencilContext::print_info() {
         auto& step_dim = _dims->_step_dim;
         ostream& os = get_ostr();
 
-        // Report total allocation.
+        // Calc and report total allocation and domain sizes.
         rank_nbytes = get_num_bytes();
-        os << "Total allocation in this rank: " <<
-            makeByteStr(rank_nbytes) << "\n";
         tot_nbytes = sumOverRanks(rank_nbytes, _env->comm);
-        os << "Total overall allocation in " << _env->num_ranks << " rank(s): " <<
-            makeByteStr(tot_nbytes) << "\n";
+        rank_domain_pts = rank_bb.bb_num_points;
+        tot_domain_pts = sumOverRanks(rank_domain_pts, _env->comm);
+        os <<
+            "\nDomain size in this rank (points):          " << makeNumStr(rank_domain_pts) <<
+            "\nTotal allocation in this rank:              " << makeByteStr(rank_nbytes) <<
+            "\nOverall problem size in " << _env->num_ranks << " rank(s) (points): " <<
+            makeNumStr(tot_domain_pts) <<
+            "\nTotal overall allocation in " << _env->num_ranks << " rank(s):      " <<
+            makeByteStr(tot_nbytes) <<
+            endl;
 
-        // Report some stats.
-        idx_t dt = _opts->_rank_sizes[step_dim];
-        os << "\nProblem sizes in points (from smallest to largest):\n"
+        // Report some sizes and settings.
+        os << "\nWork-unit sizes in points (from smallest to largest):\n"
             " vector-size:           " << _dims->_fold_pts.makeDimValStr(" * ") << endl <<
             " cluster-size:          " << _dims->_cluster_pts.makeDimValStr(" * ") << endl <<
             " sub-block-size:        " << _opts->_sub_block_sizes.makeDimValStr(" * ") << endl <<
@@ -1181,15 +1295,23 @@ namespace yask {
             " minimum-padding:       " << _opts->_min_pad_sizes.makeDimValStr() << endl <<
             " L1-prefetch-distance:  " << PFD_L1 << endl <<
             " L2-prefetch-distance:  " << PFD_L2 << endl <<
-            " max-halos:             " << max_halos.makeDimValStr() << endl;
-        if (num_wf_shifts > 0) {
+            " max-halos:             " << max_halos.makeDimValStr() << endl <<
+            " num-temporal-block-steps:  " << tb_steps << endl;
+        if (tb_steps > 1) {
             os <<
-                " wave-front-angles:     " << wf_angles.makeDimValStr() << endl <<
-                " num-wave-front-shifts: " << num_wf_shifts << endl <<
-                " wave-front-shift-lens: " << wf_shifts.makeDimValStr() << endl <<
-                " left-wave-front-exts:  " << left_wf_exts.makeDimValStr() << endl <<
-                " right-wave-front-exts: " << right_wf_exts.makeDimValStr() << endl <<
-                " ext-rank-domain:       " << ext_bb.bb_begin.makeDimValStr() <<
+                " temporal-block-angles:     " << tb_angles.makeDimValStr() << endl <<
+                " num-temporal-block-shifts: " << num_tb_shifts << endl;
+        }
+        os <<
+            " num-wave-front-steps:      " << wf_steps << endl;
+        if (wf_steps > 1) {
+            os <<
+                " wave-front-angles:         " << wf_angles.makeDimValStr() << endl <<
+                " num-wave-front-shifts:     " << num_wf_shifts << endl <<
+                " wave-front-shift-size:     " << wf_shifts.makeDimValStr() << endl <<
+                " left-wave-front-exts:      " << left_wf_exts.makeDimValStr() << endl <<
+                " right-wave-front-exts:     " << right_wf_exts.makeDimValStr() << endl <<
+                " ext-rank-domain:           " << ext_bb.bb_begin.makeDimValStr() <<
                 " ... " << ext_bb.bb_end.subElements(1).makeDimValStr() << endl;
         }
         os << endl;
@@ -1199,145 +1321,10 @@ namespace yask {
         os << "Num stencil bundles:    " << stBundles.size() << endl;
         os << "Num stencil equations:  " << NUM_STENCIL_EQS << endl;
 
-#if NUM_STENCIL_EQS
-
-        // sums across bundles for this rank.
-        rank_numWrites_1t = 0;
-        rank_reads_1t = 0;
-        rank_numFpOps_1t = 0;
-
-        for (auto& sp : stPacks) {
-            auto& pbb = sp->getBB();
-            os << "Pack '" << sp->get_name() << "':\n" <<
-                " num bundles:                 " << sp->size() << endl <<
-                " sub-domain scope:            " << pbb.bb_begin.makeDimValStr() <<
-                " ... " << pbb.bb_end.subElements(1).makeDimValStr() << endl;
-
-            for (auto* sg : *sp) {
-                idx_t updates1 = 0, reads1 = 0, fpops1 = 0;
-
-                // Loop through all the needed bundles to
-                // count stats for scratch bundles.
-                // Does not count extra ops needed in scratch halos
-                // since this varies depending on block size.
-                auto sg_list = sg->get_reqd_bundles();
-                for (auto* rsg : sg_list) {
-                    updates1 += rsg->get_scalar_points_written();
-                    reads1 += rsg->get_scalar_points_read();
-                    fpops1 += rsg->get_scalar_fp_ops();
-                }
-
-                auto& bb = sg->getBB();
-                idx_t updates_domain = updates1 * bb.bb_num_points;
-                rank_numWrites_1t += updates_domain;
-                idx_t reads_domain = reads1 * bb.bb_num_points;
-                rank_reads_1t += reads_domain;
-                idx_t fpops_domain = fpops1 * bb.bb_num_points;
-                rank_numFpOps_1t += fpops_domain;
-
-                os << " Bundle '" << sg->get_name() << "':\n" <<
-                    "  scratch bundles:            " << (sg_list.size() - 1) << endl <<
-                    "  sub-domain scope:           " << bb.bb_begin.makeDimValStr() <<
-                    " ... " << bb.bb_end.subElements(1).makeDimValStr() << endl <<
-                    "  sub-domain size:            " << bb.bb_len.makeDimValStr(" * ") << endl <<
-                    "  valid points in sub domain: " << makeNumStr(bb.bb_num_points) << endl <<
-                    "  rectangles in sub domain:   " << sg->getBBs().size() << endl <<
-                    "  grid-updates per point:     " << updates1 << endl <<
-                    "  grid-updates in sub-domain: " << makeNumStr(updates_domain) << endl <<
-                    "  grid-reads per point:       " << reads1 << endl <<
-                    "  grid-reads in sub-domain:   " << makeNumStr(reads_domain) << endl <<
-                    "  est FP-ops per point:       " << fpops1 << endl <<
-                    "  est FP-ops in sub-domain:   " << makeNumStr(fpops_domain) << endl;
-                os << "  input-grids:                ";
-                int i = 0;
-                for (auto gp : sg->inputGridPtrs) {
-                    if (i++) os << ", ";
-                    os << gp->get_name();
-                }
-                os << "\n  output-grids:               ";
-                i = 0;
-                for (auto gp : sg->outputGridPtrs) {
-                    if (i++) os << ", ";
-                    os << gp->get_name();
-                }
-                os << endl;
-            } // bundles.
-        } // packs.
-
-        // Various metrics for amount of work.
-        rank_numWrites_dt = rank_numWrites_1t * dt;
-        tot_numWrites_1t = sumOverRanks(rank_numWrites_1t, _env->comm);
-        tot_numWrites_dt = tot_numWrites_1t * dt;
-
-        rank_reads_dt = rank_reads_1t * dt;
-        tot_reads_1t = sumOverRanks(rank_reads_1t, _env->comm);
-        tot_reads_dt = tot_reads_1t * dt;
-
-        rank_numFpOps_dt = rank_numFpOps_1t * dt;
-        tot_numFpOps_1t = sumOverRanks(rank_numFpOps_1t, _env->comm);
-        tot_numFpOps_dt = tot_numFpOps_1t * dt;
-
-        rank_domain_1t = rank_bb.bb_num_points;
-        rank_domain_dt = rank_domain_1t * dt; // same as _opts->_rank_sizes.product();
-        tot_domain_1t = sumOverRanks(rank_domain_1t, _env->comm);
-        tot_domain_dt = tot_domain_1t * dt;
-
-        // Print some more stats.
-        os << endl <<
-            "Amount-of-work stats:\n" <<
-            " domain-size in this rank for one time-step: " <<
-            makeNumStr(rank_domain_1t) << endl <<
-            " overall-problem-size in all ranks for one time-step: " <<
-            makeNumStr(tot_domain_1t) << endl <<
-            endl <<
-            " num-writes-required in this rank for one time-step: " <<
-            makeNumStr(rank_numWrites_1t) << endl <<
-            " num-writes-required in all ranks for one time-step: " <<
-            makeNumStr(tot_numWrites_1t) << endl <<
-            endl <<
-            " num-reads-required in this rank for one time-step: " <<
-            makeNumStr(rank_reads_1t) << endl <<
-            " num-reads-required in all ranks for one time-step: " <<
-            makeNumStr(tot_reads_1t) << endl <<
-            endl <<
-            " est-FP-ops in this rank for one time-step: " <<
-            makeNumStr(rank_numFpOps_1t) << endl <<
-            " est-FP-ops in all ranks for one time-step: " <<
-            makeNumStr(tot_numFpOps_1t) << endl <<
-            endl;
-
-        if (dt > 1) {
-            os <<
-                " domain-size in this rank for all time-steps: " <<
-                makeNumStr(rank_domain_dt) << endl <<
-                " overall-problem-size in all ranks for all time-steps: " <<
-                makeNumStr(tot_domain_dt) << endl <<
-                endl <<
-                " num-writes-required in this rank for all time-steps: " <<
-                makeNumStr(rank_numWrites_dt) << endl <<
-                " num-writes-required in all ranks for all time-steps: " <<
-                makeNumStr(tot_numWrites_dt) << endl <<
-                endl <<
-                " num-reads-required in this rank for all time-steps: " <<
-                makeNumStr(rank_reads_dt) << endl <<
-                " num-reads-required in all ranks for all time-steps: " <<
-                makeNumStr(tot_reads_dt) << endl <<
-                endl <<
-                " est-FP-ops in this rank for all time-steps: " <<
-                makeNumStr(rank_numFpOps_dt) << endl <<
-                " est-FP-ops in all ranks for all time-steps: " <<
-                makeNumStr(tot_numFpOps_dt) << endl <<
-                endl;
-        }
-        os <<
-            "Notes:\n"
-            " Domain-sizes and overall-problem-sizes are based on rank-domain sizes\n"
-            "  and number of ranks regardless of number of grids or sub-domains.\n"
-            " Num-writes-required is based on sum of grid-updates in sub-domain across stencil-bundle(s).\n"
-            " Num-reads-required is based on sum of grid-reads in sub-domain across stencil-bundle(s).\n"
-            " Est-FP-ops are based on sum of est-FP-ops in sub-domain across stencil-bundle(s).\n"
-            "\n";
-#endif
+        // Info on work in packs.
+        os << "\nBreakdown of work stats in this rank:\n";
+        for (auto& sp : stPacks)
+            sp->init_work_stats();
     }
 
     // Dealloc grids, etc.
@@ -1422,7 +1409,7 @@ namespace yask {
         auto& stencil_dims = dims->_stencil_dims;
         auto nddims = domain_dims.size();
         auto nsdims = stencil_dims.size();
-        TRACE_MSG3(get_name() << ".find_bounding_box()...");
+        TRACE_MSG3("find_bounding_box for '" << get_name() << "'...");
 
         // First, find an overall BB around all the
         // valid points in the bundle.
@@ -1485,15 +1472,20 @@ namespace yask {
         // No points, just set to zero.
         else {
             _bundle_bb.bb_begin.setValsSame(0);
-            _bundle_bb.bb_end.setValsSame(1);
+            _bundle_bb.bb_end.setValsSame(0);
         }
         _bundle_bb.bb_num_points = npts;
 
         // Finalize overall BB.
         _bundle_bb.update_bb(get_name(), context, false);
 
-        // If the BB is full (solid) or completely empty, this BB is the only bb.
-        if (_bundle_bb.bb_is_full || !npts) {
+        // If BB is empty, add nothing.
+        if (!npts) {
+            TRACE_MSG3("BB is empty");
+        }
+        
+        // If the BB is full (solid), this BB is the only bb.
+        else if (_bundle_bb.bb_is_full) {
             TRACE_MSG3("adding 1 sub-BB: [" << _bundle_bb.bb_begin.makeDimValStr() <<
                        " ... " << _bundle_bb.bb_end.makeDimValStr() << ")");
 
@@ -1501,6 +1493,7 @@ namespace yask {
             _bb_list.push_back(_bundle_bb);
         }
 
+        // Otherwise, the overall BB is not full.
         // Create list of full BBs (non-overlapping & with no invalid
         // points) inside overall BB.
         else {
@@ -1654,6 +1647,10 @@ namespace yask {
                     TRACE_MSG3(" sub-BB: [" << bbn.bb_begin.makeDimValStr() <<
                                " ... " << bbn.bb_end.makeDimValStr() << ")");
 
+                    // Don't bother with empty BB.
+                    //if (bbn.bb_size == 0)
+                    //    continue;
+
                     // Scan existing final BBs looking for one to merge with.
                     bool do_merge = false;
                     for (auto& bb : _bb_list) {
@@ -1681,6 +1678,7 @@ namespace yask {
                             bb.bb_end[odim] = bbn.bb_end[odim];
                             TRACE_MSG3("  merging to form [" << bb.bb_begin.makeDimValStr() <<
                                        " ... " << bb.bb_end.makeDimValStr() << ")");
+                            bb.update_bb("sub-bb", context, true);
                             break;
                         }
                     }

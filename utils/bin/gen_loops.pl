@@ -244,7 +244,7 @@ sub addIndexVars1($$$) {
                     # number of full groups.
                     push @$code, 
                         " // Number of full groups in dimension $dim.",
-                        " const $itype $ntvar = $nvar / $ntivar;";
+                        " const $itype $ntvar = $ntivar ? $nvar / $ntivar : 0;";
                 }
             }
 
@@ -327,7 +327,7 @@ sub addIndexVars2($$$$) {
 
             # Index of this group in this dim.
             my $tivar = groupIndexVar($dim);
-            my $tival = "$prevOvar / $tgvar";
+            my $tival = "$tgvar ? $prevOvar / $tgvar : 0";
             push @$code,
                 " // Index of this group in dimension $dim.",
                 " $itype $tivar = $tival;";

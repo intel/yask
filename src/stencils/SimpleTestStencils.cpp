@@ -416,6 +416,48 @@ public:
 
 REGISTER_STENCIL(TestSubdomainStencil3);
 
+class TestStepCondStencil1 : public StencilRadiusBase {
+
+protected:
+
+    // Indices & dimensions.
+    MAKE_STEP_INDEX(t);           // step in time dim.
+    MAKE_DOMAIN_INDEX(x);         // spatial dim.
+
+    // Vars.
+    MAKE_GRID(data, t, x); // time-varying grid.
+
+public:
+
+    TestStepCondStencil1(StencilList& stencils, int radius=2) :
+        StencilRadiusBase("test_step_cond_1d", stencils, radius) { }
+
+    // Define equation to apply to all points in 'data' grid.
+    virtual void define() {
+
+        // Time condition.
+        Condition tc0 = (t % 2 == 0);
+        
+        // Set data w/different stencils.
+
+        GridValue u = data(t, x);
+        for (int r = 1; r <= _radius; r++)
+            u += data(t, x-r);
+        for (int r = 1; r <= _radius + 1; r++)
+            u += data(t, x+r);
+        data(t+1, x) EQUALS u / (_radius * 2 + 2) IF_STEP tc0;
+
+        GridValue v = data(t, x);
+        for (int r = 1; r <= _radius + 3; r++)
+            v += data(t, x-r);
+        for (int r = 1; r <= _radius + 2; r++)
+            v += data(t, x+r);
+        data(t+1, x) EQUALS v / (_radius * 2 + 6) IF_STEP !tc0;
+    }
+};
+
+REGISTER_STENCIL(TestStepCondStencil1);
+
 // A stencil that has grids, but no stencil equation.
 class TestEmptyStencil1 : public StencilBase {
 
