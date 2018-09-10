@@ -1322,7 +1322,7 @@ namespace yask {
 
         // Init return object.
         auto p = make_shared<Stats>();
-        p->npts = tot_domain_pts;
+        p->npts = tot_domain_pts; // NOT sum over steps.
         p->nsteps = steps_done;
         p->run_time = rtime;
         p->halo_time = htime;
@@ -1335,24 +1335,56 @@ namespace yask {
         p->flops = 0.;
 
         // Sum work done across packs using per-pack step counters.
+        double tptime = 0.;
+        double optime = 0.;
         for (auto& sp : stPacks) {
-            idx_t ns = sp->steps_done;
-            idx_t nreads = sp->tot_reads_per_step * ns;
-            idx_t nwrites = sp->tot_writes_per_step * ns;
-            idx_t nfpops = sp->tot_fpops_per_step * ns;
-            p->nreads += nreads;
-            p->nwrites += nwrites;
-            p->nfpops += nfpops;
-        }
 
+            // steps in this pack.
+            idx_t ns = sp->steps_done;
+
+            auto& ps = sp->stats;
+            ps.nsteps = ns;
+            ps.npts = tot_domain_pts; // NOT sum over steps.
+            ps.nreads = sp->tot_reads_per_step * ns;
+            ps.nwrites = sp->tot_writes_per_step * ns;
+            ps.nfpops = sp->tot_fpops_per_step * ns;
+
+            // Add to total work.
+            p->nreads += ps.nreads;
+            p->nwrites += ps.nwrites;
+            p->nfpops += ps.nfpops;
+
+            // Adjust pack time to make sure total time is <= compute time.
+            double ptime = sp->timer.get_elapsed_secs();
+            ptime = min(ptime, ctime - tptime);
+            tptime += ptime;
+            ps.run_time = ptime;
+            ps.halo_time = 0.;
+
+            // Pack rates.
+            idx_t np = tot_domain_pts * ns; // Sum over steps.
+            ps.reads_ps = 0.;
+            ps.writes_ps = 0.;
+            ps.flops = 0.;
+            ps.pts_ps = 0.;
+            if (ptime > 0.) {
+                ps.reads_ps = ps.nreads / ptime;
+                ps.writes_ps = ps.nwrites / ptime;
+                ps.flops = ps.nfpops / ptime;
+                ps.pts_ps = np / ptime;
+            }
+        }
+        optime = max(ctime - tptime, 0.); // remaining time.
+
+        // Overall rates.
         idx_t npts_done = tot_domain_pts * steps_done;
         if (rtime > 0.) {
-            p->pts_ps = double(npts_done) / rtime;
             p->reads_ps= double(p->nreads) / rtime;
             p->writes_ps= double(p->nwrites) / rtime;
             p->flops = double(p->nfpops) / rtime;
+            p->pts_ps = double(npts_done) / rtime;
         }
-
+      
         if (steps_done > 0) {
             os <<
                 "\nWork stats:\n"
@@ -1369,42 +1401,38 @@ namespace yask {
                     idx_t nreads = sp->tot_reads_per_step;
                     idx_t nwrites = sp->tot_writes_per_step;
                     idx_t nfpops = sp->tot_fpops_per_step;
-                    os << "  pack '" << sp->get_name() << "':\n"
-                        "   num-steps-done:                   " << makeNumStr(ns) << endl <<
-                        "   num-reads-per-step:               " << makeNumStr(nreads) << endl <<
-                        "   num-writes-per-step:              " << makeNumStr(nwrites) << endl <<
-                        "   num-est-FP-ops-per-step:          " << makeNumStr(nfpops) << endl;
+                    string pfx = "  '" + sp->get_name() + "' ";
+                    os << pfx << "num-steps-done:           " << makeNumStr(ns) << endl <<
+                        pfx << "num-reads-per-step:       " << makeNumStr(nreads) << endl <<
+                        pfx << "num-writes-per-step:      " << makeNumStr(nwrites) << endl <<
+                        pfx << "num-est-FP-ops-per-step:  " << makeNumStr(nfpops) << endl;
                 }
             }
             os << 
                 "\nTime stats:\n"
                 " elapsed-time (sec):               " << makeNumStr(rtime) << endl <<
                 " Time breakdown by activity type:\n"
-                "  compute (sec):                     " << makeNumStr(ctime);
+                "  compute time (sec):                " << makeNumStr(ctime);
             print_pct(os, ctime, rtime);
 #ifdef USE_MPI
             os <<
-                "  halo exchange (sec):               " << makeNumStr(htime);
+                "  halo exchange time (sec):          " << makeNumStr(htime);
             print_pct(os, htime, rtime);
 #endif
             os <<
-                "  other (sec):                       " << makeNumStr(otime);
+                "  other time (sec):                  " << makeNumStr(otime);
             print_pct(os, otime, rtime);
             if (stPacks.size() > 1) {
                 os <<
                     " Compute-time breakdown by stencil pack(s):\n";
-                double tptime = 0.;
                 for (auto& sp : stPacks) {
-                    double ptime = sp->timer.get_elapsed_secs();
-                    ptime = min(ptime, ctime - tptime);
-                    os <<
-                        "  pack '" << sp->get_name() << "' (sec):       " << makeNumStr(ptime);
+                    auto& ps = sp->stats;
+                    double ptime = ps.run_time;
+                    string pfx = "  '" + sp->get_name() + "' ";
+                    os << pfx << "time (sec):       " << makeNumStr(ptime);
                     print_pct(os, ptime, ctime);
-                    tptime += ptime;
                 }
-                double optime = max(ctime - tptime, 0.);
-                os <<
-                    "  other (sec):                       " << makeNumStr(optime);
+                os << "  other (sec):                       " << makeNumStr(optime);
                 print_pct(os, optime, ctime);
             }
 #ifdef USE_MPI
@@ -1430,6 +1458,20 @@ namespace yask {
                 " throughput (num-writes/sec):      " << makeNumStr(p->writes_ps) << endl <<
                 " throughput (est-FLOPS):           " << makeNumStr(p->flops) << endl <<
                 " throughput (num-points/sec):      " << makeNumStr(p->pts_ps) << endl;
+            if (stPacks.size() > 1) {
+                os <<
+                    " Rate breakdown by stencil pack(s):\n";
+                for (auto& sp : stPacks) {
+                    auto& ps = sp->stats;
+                    string pfx = "  '" + sp->get_name() + "' ";
+                    os <<
+                        pfx << "throughput (num-reads/sec):   " << makeNumStr(ps.reads_ps) << endl <<
+                        pfx << "throughput (num-writes/sec):  " << makeNumStr(ps.writes_ps) << endl <<
+                        pfx << "throughput (est-FLOPS):       " << makeNumStr(ps.flops) << endl <<
+                        pfx << "throughput (num-points/sec):  " << makeNumStr(ps.pts_ps) << endl;
+                    
+                }
+            }
         }
 
         // Clear counters.

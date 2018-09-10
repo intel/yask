@@ -84,19 +84,26 @@ namespace yask {
     // Stats.
     class Stats : public virtual yk_stats {
     public:
+        // Steps done.
+        idx_t nsteps = 0;
+
+        // Points in domain.
         idx_t npts = 0;
+
+        // Work done.
         idx_t nreads = 0;
         idx_t nwrites = 0;
         idx_t nfpops = 0;
-        idx_t nsteps = 0;
 
-        double run_time = 0.;
-        double halo_time = 0.;
+        // Time elapsed.
+        double run_time = 0.;   // overall.
+        double halo_time = 0.;  // subset in halo.
 
-        double pts_ps = 0.; // points-per-sec in overall domain.
+        // Rates.
         double reads_ps = 0.;     // reads-per-sec.
         double writes_ps = 0.;     // writes-per-sec.
         double flops = 0.;      // est. FLOPS.
+        double pts_ps = 0.; // points-per-sec in overall domain.
 
         Stats() {}
         virtual ~Stats() {}
