@@ -516,9 +516,14 @@ namespace yask {
         auto* soln = gp->getSoln();
         assert(soln);
         auto& eqs = soln->getEqs();
+        auto& settings = soln->getSettings();
 
         // Make expression node.
+        // Conditions may be added later if/when the IF or IF_STEP
+        // operators are processed.
         auto expr = make_shared<EqualsExpr>(gpp, rhs);
+        if (settings._printEqs)
+            soln->get_ostr() << "Equation defined: " << expr->getDescr() << endl;
 
         // Save the expression in list of equations.
         eqs.addItem(expr);

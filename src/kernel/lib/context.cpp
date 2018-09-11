@@ -1174,7 +1174,7 @@ namespace yask {
         // Reset stats.
         clear_timers();
 
-        // Determine number of sets to run.
+        // Determine number of steps to run.
         // If wave-fronts are enabled, run a max number of these steps.
         idx_t region_steps = _opts->_region_sizes[_dims->_step_dim];
         idx_t step_dir = _dims->_step_dir; // +/- 1.
@@ -1337,6 +1337,7 @@ namespace yask {
         // Sum work done across packs using per-pack step counters.
         double tptime = 0.;
         double optime = 0.;
+        idx_t psteps = 0;
         for (auto& sp : stPacks) {
 
             // steps in this pack.
@@ -1350,6 +1351,7 @@ namespace yask {
             ps.nfpops = sp->tot_fpops_per_step * ns;
 
             // Add to total work.
+            psteps += ns;
             p->nreads += ps.nreads;
             p->nwrites += ps.nwrites;
             p->nfpops += ps.nfpops;
@@ -1393,7 +1395,7 @@ namespace yask {
                 " num-writes-per-step:              " << makeNumStr(double(p->nwrites) / steps_done) << endl <<
                 " num-est-FP-ops-per-step:          " << makeNumStr(double(p->nfpops) / steps_done) << endl <<
                 " num-points-per-step:              " << makeNumStr(tot_domain_pts) << endl;
-            if (stPacks.size() > 1) {
+            if (psteps != steps_done) {
                 os <<
                     " Work breakdown by stencil pack(s):\n";
                 for (auto& sp : stPacks) {
@@ -1422,7 +1424,7 @@ namespace yask {
             os <<
                 "  other time (sec):                  " << makeNumStr(otime);
             print_pct(os, otime, rtime);
-            if (stPacks.size() > 1) {
+            if (psteps != steps_done) {
                 os <<
                     " Compute-time breakdown by stencil pack(s):\n";
                 for (auto& sp : stPacks) {
@@ -1458,7 +1460,7 @@ namespace yask {
                 " throughput (num-writes/sec):      " << makeNumStr(p->writes_ps) << endl <<
                 " throughput (est-FLOPS):           " << makeNumStr(p->flops) << endl <<
                 " throughput (num-points/sec):      " << makeNumStr(p->pts_ps) << endl;
-            if (stPacks.size() > 1) {
+            if (psteps != steps_done) {
                 os <<
                     " Rate breakdown by stencil pack(s):\n";
                 for (auto& sp : stPacks) {

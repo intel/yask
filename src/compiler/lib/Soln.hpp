@@ -113,6 +113,12 @@ namespace yask {
             return NULL;
         }
 
+        // Get the messsage output stream.
+        virtual std::ostream& get_ostr() const {
+            assert(_dos);
+            return *_dos;
+        }
+
         // Define grid values relative to current domain indices in each dimension.
         // This must be implemented by each concrete stencil solution.
         virtual void define() = 0;
@@ -127,6 +133,9 @@ namespace yask {
         virtual void set_debug_output(yask_output_ptr debug) {
             _debug_output = debug;     // to share ownership of referent.
             _dos = &_debug_output->get_ostream();
+        }
+        virtual yask_output_ptr get_debug_output() const {
+            return _debug_output;
         }
         virtual void set_name(std::string name) {
             _name = name;
