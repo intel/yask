@@ -52,7 +52,7 @@ namespace yask {
         idx_t min_blks = 4;
 
         // Results.
-        std::map<IdxTuple, double> results; // block-size -> perf.
+        std::unordered_map<IdxTuple, double> results; // block-size -> perf.
         int n2big = 0, n2small = 0, n2far = 0;
 
         // Best so far.

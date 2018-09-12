@@ -326,7 +326,7 @@ namespace yask {
                 bool same_stcond = areExprsSame(stcond1, stcond2);
 
                 // A separate grid is defined by its name and any const indices.
-                bool same_og = op1->isSameLogicalGrid(*op2);
+                //bool same_og = op1->isSameLogicalGrid(*op2);
 
                 // If two different eqs have the same conditions, they
                 // cannot have the same LHS.

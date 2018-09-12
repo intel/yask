@@ -140,7 +140,8 @@ namespace yask {
 
         // Calc perf and reset vars for next time.
         double rate = (ctime > 0.) ? double(csteps) / ctime : 0.;
-        os << _name << ": " << csteps << " steps(s) in " << ctime <<
+        os << _name << ", radius=" << radius << ": " <<
+            csteps << " steps(s) in " << ctime <<
             " secs (" << rate <<
             " steps/sec) with block-size " <<
             _settings->_block_sizes.makeDimValStr(" * ") << endl;
@@ -284,7 +285,7 @@ namespace yask {
                         os << _name << ": done" << endl;
                         return;
                     }
-                    os << _name << ": search radius " << radius << endl;
+                    TRACE_MSG2(_name << ": new search radius=" << radius);
                 }
                 else {
                     TRACE_MSG2(_name << ": continuing search from block " <<

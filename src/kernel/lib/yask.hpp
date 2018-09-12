@@ -84,6 +84,7 @@ inline void omp_set_nested(int n) { }
 #include <limits.h>
 #include <malloc.h>
 #include <map>
+#include <unordered_map>
 #include <math.h>
 #include <set>
 #include <sstream>
