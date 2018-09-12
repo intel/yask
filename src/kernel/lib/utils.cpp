@@ -37,7 +37,7 @@ namespace yask {
     // Timer.
     void YaskTimer::start(TimeSpec* ts) {
 
-        // Should start with no beginning.
+        // Make sure timer was stopped.
         assert(_begin.tv_sec == 0);
         assert(_begin.tv_nsec == 0);
         
@@ -76,6 +76,20 @@ namespace yask {
         _begin.tv_sec = 0;
         _begin.tv_nsec = 0;
         
+        return double(delta.tv_sec) + double(delta.tv_nsec) * 1e-9;
+    }
+    double YaskTimer::get_secs_since_start() const {
+
+        // Make sure timer was started.
+        assert(_begin.tv_sec != 0);
+
+        TimeSpec now, delta;
+        now = get_timespec();
+
+        // Elapsed time is just now - begin times.
+        delta.tv_sec = now.tv_sec - _begin.tv_sec;
+        delta.tv_nsec = now.tv_nsec - _begin.tv_nsec;
+
         return double(delta.tv_sec) + double(delta.tv_nsec) * 1e-9;
     }
     

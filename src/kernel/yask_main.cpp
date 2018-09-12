@@ -43,6 +43,7 @@ struct AppSettings : public KernelSettings {
     int step_alloc = 0;         // if >0, override number of steps to alloc.
     int num_trials = 3;         // number of trials.
     bool validate = false;      // whether to do validation run.
+    int max_trial_time = 10;    // max sec to run each trial.
     int pre_trial_sleep_time = 1; // sec to sleep before each trial.
     int debug_sleep = 0;          // sec to sleep for debug attach.
 
@@ -86,10 +87,10 @@ struct AppSettings : public KernelSettings {
     // Exit with message on error or request for help.
     void parse(int argc, char** argv) {
 
-        // Set default for time-domain size.
+        // Set default max steps.
         auto& step_dim = _dims->_step_dim;
-        _rank_sizes[step_dim] = 50;
-
+        _rank_sizes[step_dim] = 1000;
+ 
         // Create a parser and add base options to it.
         CommandLineParser parser;
         add_options(parser);
@@ -129,6 +130,16 @@ struct AppSettings : public KernelSettings {
                           ("t",
                            "Number of performance trials.",
                            num_trials));
+        parser.add_option(new CommandLineParser::IntOption
+                          ("max_trial_time",
+                           "Maximum number of seconds to run each performance trial. "
+                           "Each trial will stop when this amount of time has expired "
+                           "OR the specified number of domain steps has been run. "
+                           "Set to zero to specify no maximum. "
+                           "If temporal wave-front tiling is used, "
+                           "expired time will only be checked between multiples "
+                           "of wave-front steps.",
+                           max_trial_time));
         parser.add_option(new CommandLineParser::IntOption
                           ("sleep",
                            "Number of seconds to sleep before each performance trial.",
@@ -227,7 +238,7 @@ int main(int argc, char** argv)
 {
     // just a line.
     string divLine;
-    for (int i = 0; i < 60; i++)
+    for (int i = 0; i < 70; i++)
         divLine += "─";
     divLine += "\n";
 
@@ -307,9 +318,11 @@ int main(int argc, char** argv)
         /////// Performance run(s).
         auto& step_dim = opts->_dims->_step_dim;
         idx_t dt = opts->_rank_sizes[step_dim];
+        idx_t steps_done = 0;
         os << endl << divLine <<
-            "Running " << opts->num_trials << " performance trial(s) of " <<
-            dt << " step(s) each...\n" << flush;
+            "Running " << opts->num_trials << " performance trial(s) up to " <<
+            dt << " step(s) or " <<
+            opts->max_trial_time << " sec(s) each...\n" << flush;
         for (idx_t tr = 0; tr < opts->num_trials; tr++) {
             os << divLine <<
                 "Trial number:                      " << (tr + 1) << endl << flush;
@@ -334,7 +347,7 @@ int main(int argc, char** argv)
 
             // Actual work.
             context->clear_timers();
-            context->calc_rank_opt();
+            context->calc_rank_opt(opts->max_trial_time);
 
             // Stop vtune collection.
             VTUNE_PAUSE;
@@ -342,6 +355,7 @@ int main(int argc, char** argv)
             // Calc and report perf.
             auto trial_stats = context->get_stats();
             auto stats = dynamic_pointer_cast<Stats>(trial_stats);
+            steps_done = stats->get_num_steps_done();
 
             // Remember best.
             if (best_trial == nullptr || stats->run_time < best_trial->run_time)
@@ -351,6 +365,7 @@ int main(int argc, char** argv)
         if (best_trial != nullptr) {
             os << divLine <<
                 "Performance stats of best trial:\n"
+                " best-num-steps-done:              " << makeNumStr(best_trial->nsteps) << endl <<
                 " best-elapsed-time (sec):          " << makeNumStr(best_trial->run_time) << endl <<
                 " best-throughput (num-reads/sec):  " << makeNumStr(best_trial->reads_ps) << endl <<
                 " best-throughput (num-writes/sec): " << makeNumStr(best_trial->writes_ps) << endl <<
@@ -412,8 +427,10 @@ int main(int argc, char** argv)
 #else
 
             // Ref trial.
+            // Do same number as last perf run.
+            ref_opts->_rank_sizes[step_dim] = steps_done;
             os << endl << divLine <<
-                "Running " << dt << " step(s) for validation...\n" << flush;
+                "Running " << steps_done << " step(s) for validation...\n" << flush;
             ref_context->calc_rank_ref();
 
             // Discard perf report.

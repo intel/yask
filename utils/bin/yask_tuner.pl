@@ -44,10 +44,19 @@ my $oneKi = 1024;
 my $oneMi = $oneKi * $oneKi;
 my $oneGi = $oneKi * $oneMi;
 my $oneTi = $oneKi * $oneGi;
+my $onePi = $oneKi * $oneTi;
+my $oneEi = $oneKi * $onePi;
 my $oneK = 1e3;
 my $oneM = 1e6;
 my $oneG = 1e9;
 my $oneT = 1e12;
+my $oneP = 1e15;
+my $oneE = 1e18;
+my $onem = 1e-3;
+my $oneu = 1e-6;
+my $onen = 1e-9;
+my $onep = 1e-12;
+my $onef = 1e-15;
 
 # command-line options.
 my $outDir = 'logs';           # dir for output.
@@ -303,14 +312,13 @@ open OUTFILE, ">$outFile" or die "error: cannot write to '$outFile'\n"
 
 # things to get from the run.
 my $fitnessMetric = 'best-throughput (num-points/sec)';
-my $timeMetric = 'best-elapsed-time (sec)';
-my $dimsMetric = 'rank-domain-size';
 my @metrics = ( $fitnessMetric,
-                $timeMetric,
-                $dimsMetric,
                 'best-throughput (num-writes/sec)',
                 'best-throughput (est-FLOPS)',
+                'best-elapsed-time (sec)',
                 'Num OpenMP threads',
+                'overall-domain-size',
+                'rank-domain-size',
                 'region-size',
                 'block-group-size',
                 'block-size',
@@ -318,20 +326,20 @@ my @metrics = ( $fitnessMetric,
                 'sub-block-size',
                 'cluster-size',
                 'vector-size',
-                'best-block-size',
-                'best-sub-block-size',
                 'num-regions',
-                'num-blocks-per-region',
-                'num-block-groups-per-region',
+                'num-blocks-per-region-per-step',
+                'num-block-groups-per-region-per-step',
                 'max-halos',
                 'extra-padding',
                 'minimum-padding',
                 'L1-prefetch-distance',
                 'L2-prefetch-distance',
-                'overall-problem-size in all ranks for one time-step',
-                'num-writes-required in all ranks for one time-step',
-                'num-reads-required in all ranks for one time-step',
+                'num-temporal-block-steps',
+                'num-wave-front-steps',
+                'best-num-steps-done',
+                'best-elapsed-time',
                 'Total overall allocation',
+                'Overall problem size',
               );
 
 # how many individuals to create randomly and then keep at any given time.
@@ -717,10 +725,9 @@ sub getRunCmd() {
   if (defined $mic) {
     $runCmd .= " -mic $mic";
   } else {
-    $exePrefix .= " numactl -p 1" if $arch eq 'knl' && !$sde; # TODO: fix for cache mode.
     $runCmd .= " -host $host" if defined $host;
   }
-  $runCmd .= " -exe_prefix '$exePrefix' -stencil $stencil -arch $arch $runArgs";
+  $runCmd .= " -exe_prefix '$exePrefix' -stencil $stencil -arch $arch -no-pre_auto_tune $runArgs";
   return $runCmd;
 }
 
@@ -843,6 +850,10 @@ sub setResults($$) {
         $val = $1 * $oneGi;
       } elsif ($val =~ /^([0-9.e+-]+)TiB?$/) {
         $val = $1 * $oneTi;
+      } elsif ($val =~ /^([0-9.e+-]+)PiB?$/) {
+        $val = $1 * $onePi;
+      } elsif ($val =~ /^([0-9.e+-]+)EiB?$/) {
+        $val = $1 * $oneEi;
       } elsif ($val =~ /^([0-9.e+-]+)K$/) {
         $val = $1 * $oneK;
       } elsif ($val =~ /^([0-9.e+-]+)M$/) {
@@ -851,6 +862,20 @@ sub setResults($$) {
         $val = $1 * $oneG;
       } elsif ($val =~ /^([0-9.e+-]+)T$/) {
         $val = $1 * $oneT;
+      } elsif ($val =~ /^([0-9.e+-]+)P$/) {
+        $val = $1 * $oneP;
+      } elsif ($val =~ /^([0-9.e+-]+)E$/) {
+        $val = $1 * $oneE;
+      } elsif ($val =~ /^([0-9.e+-]+)f$/) {
+        $val = $1 * $onef;
+      } elsif ($val =~ /^([0-9.e+-]+)p$/) {
+        $val = $1 * $onep;
+      } elsif ($val =~ /^([0-9.e+-]+)n$/) {
+        $val = $1 * $onen;
+      } elsif ($val =~ /^([0-9.e+-]+)u$/) {
+        $val = $1 * $oneu;
+      } elsif ($val =~ /^([0-9.e+-]+)m$/) {
+        $val = $1 * $onem;
       }
       $results->{$m} = $val;
     }
@@ -1342,16 +1367,16 @@ sub fitness {
   $args .= " -sbgx $sbgs[0] -sbgy $sbgs[1] -sbgz $sbgs[2]";
   $args .= " -epx $ps[0] -epy $ps[1] -epz $ps[2]";
 
-  # num of iterations and trials.
-  my $shortIters = 5;
-  my $longIters = 30;
+  # num of secs and trials.
+  my $shortTime = 1;
+  my $longTime = 5;
   my $longTrials = min($gen, 2);
 
   # various commands.
   my $testCmd = "$runCmd -v"; # validation on a small problem size.
   my $simCmd = "$runCmd $args -t 1 -dt 1";  # simulation w/1 trial & 1 step.
-  my $shortRunCmd = "$runCmd $args -t 1 -dt $shortIters"; # fast run for 'upper-bound' time.
-  my $longRunCmd = "$runCmd $args -t $longTrials -dt $longIters";  # normal run w/more trials.
+  my $shortRunCmd = "$runCmd $args -t 1 -max_trial_time $shortTime"; # fast run for 'upper-bound' time.
+  my $longRunCmd = "$runCmd $args -t $longTrials -max_trial_time $longTime";  # normal run w/more trials.
   my $cleanCmd = "make clean";
 
   # add kill command to prevent runaway code.

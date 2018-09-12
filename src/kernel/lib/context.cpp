@@ -275,7 +275,8 @@ namespace yask {
     }
 
     // Apply solution for time-steps specified in _rank_sizes.
-    void StencilContext::calc_rank_opt()
+    // This is used only by the driver utility.
+    void StencilContext::calc_rank_opt(idx_t max_secs)
     {
         auto& step_dim = _dims->_step_dim;
         idx_t first_t = 0;
@@ -287,12 +288,13 @@ namespace yask {
             last_t = 0;
         }
 
-        run_solution(first_t, last_t);
+        run_solution(first_t, last_t, max_secs);
     }
 
     // Eval stencil bundle pack(s) over grid(s) using optimized code.
     void StencilContext::run_solution(idx_t first_step_index,
-                                      idx_t last_step_index)
+                                      idx_t last_step_index,
+                                      idx_t max_secs)
     {
         run_time.start();
 
@@ -329,7 +331,7 @@ namespace yask {
         TRACE_MSG("run_solution: [" <<
                   begin.makeDimValStr() << " ... " <<
                   end.makeDimValStr() << ") by " <<
-                  step.makeDimValStr());
+                  step.makeDimValStr() << " up to " << max_secs << " sec(s)");
         if (!rank_bb.bb_valid)
             THROW_YASK_EXCEPTION("Error: run_solution() called without calling prepare_solution() first");
         if (ext_bb.bb_size < 1) {
@@ -536,6 +538,15 @@ namespace yask {
 
             // Call the auto-tuner to evaluate these steps.
             eval_auto_tuner(this_num_t);
+
+            // Done?
+            if (max_secs) {
+                auto elapsed = run_time.get_secs_since_start();
+                TRACE_MSG("run_solution: " << elapsed << " out of " <<
+                          max_secs << " secs run");
+                if (elapsed > double(max_secs))
+                    break;
+            }
 
         } // step loop.
 

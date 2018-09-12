@@ -827,7 +827,7 @@ namespace yask {
         idx_t findNumSubsets(std::ostream& os,
                              IdxTuple& inner_sizes, const std::string& inner_name,
                              const IdxTuple& outer_sizes, const std::string& outer_name,
-                             const IdxTuple& mults);
+                             const IdxTuple& mults, const std::string& step_dim);
 
     public:
         // Add options to a cmd-line parser to set the settings.
