@@ -1240,11 +1240,15 @@ namespace yask {
         // This is the order in which preferred NUMA nodes (e.g., HBW mem)
         // will be used.
         // We free the scratch and MPI data first to give grids preference.
+        YaskTimer allocTimer;
+        allocTimer.start();
         freeScratchData(os);
         freeMpiData(os);
         allocGridData(os);
         allocScratchData(os);
         allocMpiData(os);
+        allocTimer.stop();
+        os << "Allocation done in " << allocTimer.get_elapsed_secs() << " secs.\n";
 
         print_info();
 
@@ -1363,6 +1367,10 @@ namespace yask {
     void StencilContext::find_bounding_boxes()
     {
         ostream& os = get_ostr();
+        os << "Constructing bounding boxes for " <<
+            stBundles.size() << " stencil-bundles(s)...\n";
+        YaskTimer bbtimer;
+        bbtimer.start();
 
         // Rank BB is based only on rank offsets and rank domain sizes.
         rank_bb.bb_begin = rank_domain_offsets;
@@ -1396,6 +1404,10 @@ namespace yask {
 
         // Init MPI interior to extended BB.
         mpi_interior = ext_bb;
+
+        bbtimer.stop();
+        os << "Bounding-box construction done in " <<
+            bbtimer.get_elapsed_secs() << " secs.\n";
     }
 
     // Find the bounding-boxes for this bundle in this rank.
@@ -1413,6 +1425,8 @@ namespace yask {
 
         // First, find an overall BB around all the
         // valid points in the bundle.
+        YaskTimer bbtimer;
+        bbtimer.start();
 
         // Init min vars w/max val and vice-versa.
         Indices min_pts(idx_max, nsdims);
@@ -1452,6 +1466,9 @@ namespace yask {
         // points.
 #include "yask_misc_loops.hpp"
 #undef misc_fn
+        bbtimer.stop();
+        TRACE_MSG3("Overall bounding-box construction done in " <<
+                   bbtimer.get_elapsed_secs() << " secs.");
 
         // Init bb vars to ensure they contain correct dims.
         _bundle_bb.bb_begin = domain_dims;
@@ -1497,6 +1514,8 @@ namespace yask {
         // Create list of full BBs (non-overlapping & with no invalid
         // points) inside overall BB.
         else {
+            bbtimer.clear();
+            bbtimer.start();
 
             // Divide the overall BB into a slice for each thread
             // across the outer dim.
@@ -1528,8 +1547,8 @@ namespace yask {
                 
                 // Visit all points in slice, looking for a new
                 // valid starting point, 'pt'.
-                IdxTuple spt(stencil_dims);
-                IdxTuple dpt(domain_dims);
+                IdxTuple spt(stencil_dims); // pt using stencil dims.
+                IdxTuple dpt(domain_dims);  // pt using domain dims.
                 slice_len.visitAllPoints
                     ([&](const IdxTuple& ofs, size_t idx) {
 
@@ -1648,8 +1667,8 @@ namespace yask {
                                " ... " << bbn.bb_end.makeDimValStr() << ")");
 
                     // Don't bother with empty BB.
-                    //if (bbn.bb_size == 0)
-                    //    continue;
+                    if (bbn.bb_size == 0)
+                        continue;
 
                     // Scan existing final BBs looking for one to merge with.
                     bool do_merge = false;
@@ -1690,6 +1709,9 @@ namespace yask {
                     }
                 }
             }
+            bbtimer.stop();
+            TRACE_MSG3("Final bounding-box construction done in " <<
+                       bbtimer.get_elapsed_secs() << " secs.");
         } // Finding constituent rects.
     }
 
