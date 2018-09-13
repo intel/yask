@@ -23,7 +23,7 @@
 ## IN THE SOFTWARE.
 ##############################################################################
 
-# Purpose: Use a Genetic Algorithm to explore workload compile options and parameters.
+# Purpose: Use a Genetic Algorithm to explore workload compile and/or run options.
 # Or, sweep through all possible settings if -sweep option is given.
 
 use strict;
@@ -360,6 +360,7 @@ my $maxPfd_l2 = 12;
 my $minDim = 128;        # min dimension on any axis.
 my $maxDim = 2 * $oneKi;  # max dimension on any axis.
 my $maxPad = 3;
+my $maxTimeBlock = 10;          # max temporal blocking.
 my $maxCluster = 4;
 my $minPoints;
 my $maxPoints;
@@ -422,6 +423,7 @@ my @rangesAll =
    [ $minDim, $maxDim, 16, 'dz' ],
 
    # region size.
+   [ 1, $maxTimeBlock, 1, 'rt' ],
    [ 0, $maxDim, 1, 'rx' ],
    [ 0, $maxDim, 1, 'ry' ],
    [ 0, $maxDim, 1, 'rz' ],
@@ -432,6 +434,7 @@ my @rangesAll =
    [ 0, $maxDim, 1, 'bgz' ],
 
    # block size.
+   [ 1, $maxTimeBlock, 1, 'bt' ],
    [ 0, $maxDim, 1, 'bx' ],
    [ 0, $maxDim, 1, 'by' ],
    [ 0, $maxDim, 1, 'bz' ],
@@ -739,6 +742,7 @@ sub calcSize($$$) {
   my $mults = shift;            # ref to array of multiples.
 
   # need to determine how many XYZ grids will be allocated for this stencil.
+  # TODO: get info from compiler report.
   if (!$numSpatialGrids) {
 
     my $makeCmd = getMakeCmd('', 'EXTRA_CXXFLAGS=-O1');
@@ -890,10 +894,6 @@ my %testCache;
 # previous make command.
 my $prevMakeCmd = '';
 
-# remember best runtime normalized by num points.
-# this is similar to throughput, but used for actual runtime estimate.
-my $bestRate;
-
 # run the command and return fitness and various associated data in a hash.
 sub evalIndiv($$$$$$$) {
   my $makeCmd = shift;
@@ -1038,16 +1038,6 @@ sub evalIndiv($$$$$$$) {
           print "stopping after short run due to non-promising fitness\n";
           last;
         } else {
-
-          # keep best rate.
-          if (defined $secs && $secs > 0) {
-            my $rate = $pts / $secs;
-            if (!defined $bestRate || $rate > $bestRate) {
-              print "new best rate is $rate pts/sec.\n";
-              $bestRate = $rate;
-            }
-          }
-
           print "short run looks promising; continuing with long run...\n";
         }
       }
@@ -1182,8 +1172,10 @@ sub fitness {
   # get individual vars from hash or fixed values.
   my $h = makeHash($values);
   my @ds = readHashes($h, 'd', 0);
+  my $rt = readHash($h, 'rt', 1);
   my @rs = readHashes($h, 'r', 0);
   my @bgs = readHashes($h, 'bg', 0);
+  my $bt = readHash($h, 'bt', 1);
   my @bs = readHashes($h, 'b', 0);
   my @sbgs = readHashes($h, 'sbg', 0);
   my @sbs = readHashes($h, 'sb', 0);
@@ -1352,7 +1344,7 @@ sub fitness {
   my $makeCmd = getMakeCmd($macros, $mvars);
 
   # how to run.
-  my $runCmd = getRunCmd();     # shell command plus any extra args.
+  my $runCmd = getRunCmd();     # shell command plus any initial args.
   $runCmd .= " -ranks $nranks" if $nranks > 1;
   my $args = "";             # exe args.
   $args .= " -thread_divisor ".(1 << $thread_divisor_exp);
@@ -1360,8 +1352,8 @@ sub fitness {
 
   # sizes.
   $args .= " -dx $ds[0] -dy $ds[1] -dz $ds[2]";
-  $args .= " -rx $rs[0] -ry $rs[1] -rz $rs[2]";
-  $args .= " -bx $bs[0] -by $bs[1] -bz $bs[2]";
+  $args .= " -rt $rt -rx $rs[0] -ry $rs[1] -rz $rs[2]";
+  $args .= " -bt $bt -bx $bs[0] -by $bs[1] -bz $bs[2]";
   $args .= " -bgx $bgs[0] -bgy $bgs[1] -bgz $bgs[2]";
   $args .= " -sbx $sbs[0] -sby $sbs[1] -sbz $sbs[2]";
   $args .= " -sbgx $sbgs[0] -sbgy $sbgs[1] -sbgz $sbgs[2]";
@@ -1369,13 +1361,14 @@ sub fitness {
 
   # num of secs and trials.
   my $shortTime = 1;
+  my $shortTrials = 1;
   my $longTime = 5;
   my $longTrials = min($gen, 2);
 
   # various commands.
   my $testCmd = "$runCmd -v"; # validation on a small problem size.
   my $simCmd = "$runCmd $args -t 1 -dt 1";  # simulation w/1 trial & 1 step.
-  my $shortRunCmd = "$runCmd $args -t 1 -max_trial_time $shortTime"; # fast run for 'upper-bound' time.
+  my $shortRunCmd = "$runCmd $args -t $shortTrials -max_trial_time $shortTime"; # fast run for 'upper-bound' time.
   my $longRunCmd = "$runCmd $args -t $longTrials -max_trial_time $longTime";  # normal run w/more trials.
   my $cleanCmd = "make clean";
 
@@ -1385,16 +1378,19 @@ sub fitness {
     # for the make command.
     $makeCmd = "$killCmd $makeTimeout $makeCmd";
     
-    # for the short run command.
-    if (!$sde && defined $bestRate) {
+    # for the run commands.
+    if (!$sde) {
 
-      # runtime limit is based on the number of points, the best rate so far, and a decreasing multiplier.
-      my $mult = ($gen < 4) ? 10 : ($gen < 8) ? 7 : 5; # multiplier.
-      my $killTime = int($dPts / $bestRate * $mult) + 10;
+      # Kill time is some overhead plus allocated time multipled by temporal blocking and num runs.
+      my $maxOHead = 60 * 10;
+      my $killTime = $maxOHead + ($shortTime * max($rt, $bt) * $shortTrials);
 
-      print "max runtime is $killTime secs (based on $dPts pts / $bestRate pts/sec * $mult).\n";
-      my $exePrefix = "$killCmd $killTime";
-      $shortRunCmd =~ s/$timeCmd/$timeCmd $exePrefix/;
+      # Inject kill command into '-exe_prefix' part of run commands.
+      $shortRunCmd =~ s/$timeCmd/$timeCmd $killCmd $killTime/;
+
+      # Repeat for long run.
+      $killTime = $maxOHead + ($longTime * max($rt, $bt) * $longTrials);
+      $longRunCmd =~ s/$timeCmd/$timeCmd $killCmd $killTime/;
     }
   }
 
