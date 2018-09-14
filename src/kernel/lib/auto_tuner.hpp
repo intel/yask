@@ -61,6 +61,7 @@ namespace yask {
 
         // Current point in search.
         IdxTuple center_block;
+        idx_t block_steps = 1;
         idx_t radius = 0;
         bool done = false;
         idx_t neigh_idx = 0;

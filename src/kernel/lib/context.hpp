@@ -358,6 +358,7 @@ namespace yask {
 
         // Print info about the soln.
         virtual void print_info();
+        virtual void print_temporal_tiling_info();
 
         /// Get statistics associated with preceding calls to run_solution().
         virtual yk_stats_ptr get_stats();

@@ -1221,6 +1221,7 @@ namespace yask {
                 sp->getAT().print_settings(os);
         } else
             _at.print_settings(os);
+        print_temporal_tiling_info();
 
         // Reset stats.
         clear_timers();

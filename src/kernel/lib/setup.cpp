@@ -943,63 +943,6 @@ namespace yask {
         } // scratch-grid passes.
     }
     
-    // Set temporal blocking data.
-    // This should be called anytime a block size is changed.
-    // Must be called after update_grid_info() to ensure
-    // angles are properly set.
-    void StencilContext::update_block_info() {
-        auto& step_dim = _dims->_step_dim;
-
-        // Start w/original temporal setting.
-        tb_steps = _opts->_block_sizes[step_dim];
-        assert(tb_steps >= 1);
-
-        // Determine max setting based on block sizes.
-        // When using temporal blocking, all block sizes
-        // across all packs must be the same.
-        if (tb_steps > 1) {
-            TRACE_MSG("update_block_info: original TB steps = " << tb_steps);
-            idx_t max_steps = min(tb_steps, wf_steps);
-            TRACE_MSG("update_block_info: max(TB, WF) steps = " << max_steps);
-
-            // Loop through each domain dim.
-            for (auto& dim : _dims->_domain_dims.getDims()) {
-                auto& dname = dim.getName();
-
-                // Calculate max number of temporal steps in
-                // this dim.
-                auto bsz = _opts->_block_sizes[dname];
-                auto angle = tb_angles[dname];
-                if (angle > 0) {
-                    idx_t sh_pts = angle * 2 * stPacks.size();
-                    idx_t cur_max = (bsz - 1) / sh_pts + 1;
-                    TRACE_MSG("update_block_info: max TB steps in dim '" <<
-                              dname << "' = " << cur_max <<
-                              " due to base block size of " << bsz <<
-                              " and TB angle of " << angle);
-                    max_steps = min(max_steps, cur_max);
-                }
-            }
-            tb_steps = min(tb_steps, max_steps);
-            TRACE_MSG("update_block_info: final TB steps = " << tb_steps);
-        }
-
-        // Calc number of shifts based on steps.
-        num_tb_shifts = 0;
-        if (tb_steps > 1) {
-
-            // Need to shift for each bundle pack.
-            assert(stPacks.size() > 0);
-            num_tb_shifts = idx_t(stPacks.size()) * tb_steps;
-            assert(num_tb_shifts > 1);
-
-            // Don't need to shift first one.
-            num_tb_shifts--;
-        }
-        assert(num_tb_shifts >= 0);
-
-    } // update_block_info().
-
     // Set non-scratch grid sizes and offsets based on settings.
     // Set wave-front settings.
     // This should be called anytime a setting or rank offset is changed.
@@ -1051,7 +994,7 @@ namespace yask {
         // Calculate wave-front shifts.
         // See the wavefront diagram in run_solution() for description
         // of angles and extensions.
-        tb_steps = _opts->_block_sizes[step_dim]; // use original size; actual may be less.
+        idx_t tb_steps = _opts->_block_sizes[step_dim]; // use original size; actual may be less.
         assert(tb_steps >= 1);
         wf_steps = _opts->_region_sizes[step_dim];
         wf_steps = max(wf_steps, tb_steps); // round up WF steps if less than TB steps.
@@ -1150,6 +1093,67 @@ namespace yask {
             }
         }
     } // update_grid_info().
+
+    // Set temporal blocking data.
+    // This should be called anytime a block size is changed.
+    // Must be called after update_grid_info() to ensure
+    // angles are properly set.
+    void StencilContext::update_block_info() {
+        auto& step_dim = _dims->_step_dim;
+
+        // Start w/original temporal setting.
+        tb_steps = _opts->_block_sizes[step_dim];
+        assert(tb_steps >= 1);
+
+        // Determine max setting based on block sizes.
+        // When using temporal blocking, all block sizes
+        // across all packs must be the same.
+        if (tb_steps > 1) {
+            TRACE_MSG("update_block_info: original TB steps = " << tb_steps);
+            idx_t max_steps = min(tb_steps, wf_steps);
+            TRACE_MSG("update_block_info: max(TB, WF) steps = " << max_steps);
+
+            // Should not be using separate pack tuners if
+            // TB was requested.
+            assert(_use_pack_tuners == false);
+            
+            // Loop through each domain dim.
+            for (auto& dim : _dims->_domain_dims.getDims()) {
+                auto& dname = dim.getName();
+
+                // Calculate max number of temporal steps in
+                // this dim.
+                auto bsz = _opts->_block_sizes[dname];
+                auto angle = tb_angles[dname];
+                if (angle > 0) {
+                    idx_t sh_pts = angle * 2 * stPacks.size();
+                    idx_t cur_max = (bsz - 1) / sh_pts + 1;
+                    TRACE_MSG("update_block_info: max TB steps in dim '" <<
+                              dname << "' = " << cur_max <<
+                              " due to base block size of " << bsz <<
+                              " and TB angle of " << angle);
+                    max_steps = min(max_steps, cur_max);
+                }
+            }
+            tb_steps = min(tb_steps, max_steps);
+            TRACE_MSG("update_block_info: final TB steps = " << tb_steps);
+        }
+
+        // Calc number of shifts based on steps.
+        num_tb_shifts = 0;
+        if (tb_steps > 1) {
+
+            // Need to shift for each bundle pack.
+            assert(stPacks.size() > 0);
+            num_tb_shifts = idx_t(stPacks.size()) * tb_steps;
+            assert(num_tb_shifts > 1);
+
+            // Don't need to shift first one.
+            num_tb_shifts--;
+        }
+        assert(num_tb_shifts >= 0);
+
+    } // update_block_info().
 
     // Allocate grids and MPI bufs.
     // Initialize some data structures.
@@ -1254,6 +1258,30 @@ namespace yask {
 
     } // prepare_solution().
 
+    void StencilContext::print_temporal_tiling_info() {
+        ostream& os = get_ostr();
+
+        os <<
+            " num-temporal-block-steps:  " << tb_steps << endl;
+        if (tb_steps > 1) {
+            os <<
+                " temporal-block-angles:     " << tb_angles.makeDimValStr() << endl <<
+                " num-temporal-block-shifts: " << num_tb_shifts << endl;
+        }
+        os <<
+            " num-wave-front-steps:      " << wf_steps << endl;
+        if (wf_steps > 1) {
+            os <<
+                " wave-front-angles:         " << wf_angles.makeDimValStr() << endl <<
+                " num-wave-front-shifts:     " << num_wf_shifts << endl <<
+                " wave-front-shift-size:     " << wf_shifts.makeDimValStr() << endl <<
+                " left-wave-front-exts:      " << left_wf_exts.makeDimValStr() << endl <<
+                " right-wave-front-exts:     " << right_wf_exts.makeDimValStr() << endl <<
+                " ext-rank-domain:           " << ext_bb.bb_begin.makeDimValStr() <<
+                " ... " << ext_bb.bb_end.subElements(1).makeDimValStr() << endl;
+        }
+    }
+    
     void StencilContext::print_info() {
         auto& step_dim = _dims->_step_dim;
         ostream& os = get_ostr();
@@ -1299,25 +1327,8 @@ namespace yask {
             " minimum-padding:       " << _opts->_min_pad_sizes.makeDimValStr() << endl <<
             " L1-prefetch-distance:  " << PFD_L1 << endl <<
             " L2-prefetch-distance:  " << PFD_L2 << endl <<
-            " max-halos:             " << max_halos.makeDimValStr() << endl <<
-            " num-temporal-block-steps:  " << tb_steps << endl;
-        if (tb_steps > 1) {
-            os <<
-                " temporal-block-angles:     " << tb_angles.makeDimValStr() << endl <<
-                " num-temporal-block-shifts: " << num_tb_shifts << endl;
-        }
-        os <<
-            " num-wave-front-steps:      " << wf_steps << endl;
-        if (wf_steps > 1) {
-            os <<
-                " wave-front-angles:         " << wf_angles.makeDimValStr() << endl <<
-                " num-wave-front-shifts:     " << num_wf_shifts << endl <<
-                " wave-front-shift-size:     " << wf_shifts.makeDimValStr() << endl <<
-                " left-wave-front-exts:      " << left_wf_exts.makeDimValStr() << endl <<
-                " right-wave-front-exts:     " << right_wf_exts.makeDimValStr() << endl <<
-                " ext-rank-domain:           " << ext_bb.bb_begin.makeDimValStr() <<
-                " ... " << ext_bb.bb_end.subElements(1).makeDimValStr() << endl;
-        }
+            " max-halos:             " << max_halos.makeDimValStr() << endl;
+        print_temporal_tiling_info();
         os << endl;
 
         // Info about eqs, packs and bundles.
