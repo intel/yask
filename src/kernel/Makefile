@@ -28,13 +28,13 @@
 #   command-line that control kernel configuration and performance.
 
 # Initial defaults.
-stencil			:=	iso3dfd
-arch			:=	snb
-mpi			:=	1
-numa			:=	1
-real_bytes		:=	4
-radius			:=	2
-allow_new_grid_types	:=	1
+stencil			?=	iso3dfd
+arch			?=	snb
+mpi			?=	1
+numa			?=	1
+real_bytes		?=	4
+radius			?=	2
+allow_new_grid_types	?=	1
 
 # Defaults based on stencil type (and arch for some stencils).
 ifeq ($(stencil),)
