@@ -184,11 +184,19 @@ namespace yask {
         // generally the same as the value returned by get_elapsed_secs().
         double stop(TimeSpec* ts = NULL);
 
-        // Get elapsed time in sec.
+        // Get elapsed time between preceding start/stop pairs.
         // Does not reset value, so it may be used for cumulative time.
-        virtual double get_elapsed_secs() const {
+        double get_elapsed_secs() const {
+
+            // Make sure timer was stopped.
+            assert(_begin.tv_sec == 0);
+            
             return double(_elapsed.tv_sec) + double(_elapsed.tv_nsec) * 1e-9;
         }
+
+        // Get elapsed time since last start.
+        // Used to check time w/o stopping timer.
+        double get_secs_since_start() const;
     };
 
     // A class to parse command-line args.

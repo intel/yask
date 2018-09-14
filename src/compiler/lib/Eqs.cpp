@@ -321,23 +321,23 @@ namespace yask {
 #endif
 
                 bool same_eq = eq1 == eq2;
+                bool same_op = areExprsSame(op1, op2);
                 bool same_cond = areExprsSame(cond1, cond2);
                 bool same_stcond = areExprsSame(stcond1, stcond2);
 
                 // A separate grid is defined by its name and any const indices.
-                bool same_og = op1->isSameLogicalGrid(*op2);
+                //bool same_og = op1->isSameLogicalGrid(*op2);
 
                 // If two different eqs have the same conditions, they
-                // cannot update the same grid.
-                if (!same_eq && same_cond && same_stcond && same_og) {
+                // cannot have the same LHS.
+                if (!same_eq && same_cond && same_stcond && same_op) {
                     string cdesc = cond1 ? "with domain condition " + cond1->makeQuotedStr() :
                         "without domain conditions";
                     string stcdesc = stcond1 ? "with step condition " + stcond1->makeQuotedStr() :
                         "without step conditions";
                     THROW_YASK_EXCEPTION("Error: two equations " + cdesc +
                                          " and " + stcdesc +
-                                         " have the same LHS grid '" +
-                                         op1->makeLogicalGridStr() + "': " +
+                                         " have the same LHS: " +
                                          eq1->makeQuotedStr() + " and " +
                                          eq2->makeQuotedStr());
                 }

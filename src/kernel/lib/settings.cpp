@@ -391,15 +391,18 @@ namespace yask {
     // make it equal to corresponding one in 'outer_sizes'.
     // Round up each of 'inner_sizes' to be a multiple of corresponding one in 'mults'.
     // Output info to 'os' using '*_name' and dim names.
+    // Does not process 'step_dim'.
     // Return product of number of inner subsets.
     idx_t  KernelSettings::findNumSubsets(ostream& os,
                                           IdxTuple& inner_sizes, const string& inner_name,
                                           const IdxTuple& outer_sizes, const string& outer_name,
-                                          const IdxTuple& mults) {
+                                          const IdxTuple& mults, const std::string& step_dim) {
 
         idx_t prod = 1;
         for (auto& dim : inner_sizes.getDims()) {
             auto& dname = dim.getName();
+            if (dname == step_dim)
+                continue;
             idx_t* dptr = inner_sizes.lookup(dname); // use lookup() to get non-const ptr.
 
             idx_t outer_size = outer_sizes[dname];
@@ -414,12 +417,15 @@ namespace yask {
                 outer_size % inner_size;                       // size of remainder.
             idx_t nfull = rem ? (ninner - 1) : ninner; // full only.
 
-            os << " In '" << dname << "' dimension, " << outer_name << " of size " <<
-                outer_size << " contains " << nfull << " " <<
+            if (outer_size > 0) {
+                os << " In '" << dname << "' dimension, " <<
+                    outer_name << " of size " <<
+                    outer_size << " contains " << nfull << " " <<
                     inner_name << "(s) of size " << inner_size;
-            if (rem)
-                os << " plus 1 remainder " << inner_name << " of size " << rem;
-            os << "." << endl;
+                if (rem)
+                    os << " plus 1 remainder " << inner_name << " of size " << rem;
+                os << "." << endl;
+            }
             prod *= ninner;
         }
         return prod;
@@ -429,9 +435,15 @@ namespace yask {
     // other vars before allocating memory.
     // Called from prepare_solution(), so it doesn't normally need to be called from user code.
     void KernelSettings::adjustSettings(std::ostream& os, KernelEnvPtr env) {
+
+        // Fix up step-dim sizes.
         auto& step_dim = _dims->_step_dim;
+        auto& dt = _rank_sizes[step_dim];
         auto& rt = _region_sizes[step_dim];
         auto& bt = _block_sizes[step_dim];
+        dt = max(dt, idx_t(1));
+        bt = max(bt, idx_t(1));
+        rt = max(rt, bt);       // Round up region steps to block steps.
 
         // Determine num regions.
         // Also fix up region sizes as needed.
@@ -439,11 +451,10 @@ namespace yask {
         // current temporal block size if needed.
         // Default region size (if 0) will be size of rank-domain.
         os << "\nRegions:" << endl;
-        rt = max(rt, bt);
         auto nr = findNumSubsets(os, _region_sizes, "region",
                                  _rank_sizes, "rank-domain",
-                                 _dims->_cluster_pts);
-        os << " num-regions-per-rank-domain: " << nr << endl;
+                                 _dims->_cluster_pts, step_dim);
+        os << " num-regions-per-rank-domain-per-step: " << nr << endl;
         os << " Since the region size in the '" << step_dim <<
             "' dim is " << rt << ", temporal wave-front tiling is ";
         if (rt <= 1) os << "NOT ";
@@ -455,9 +466,9 @@ namespace yask {
         os << "\nBlocks:" << endl;
         auto nb = findNumSubsets(os, _block_sizes, "block",
                                  _region_sizes, "region",
-                                 _dims->_cluster_pts);
-        os << " num-blocks-per-region: " << nb << endl;
-        os << " num-blocks-per-rank-domain: " << (nb * nr) << endl;
+                                 _dims->_cluster_pts, step_dim);
+        os << " num-blocks-per-region-per-step: " << nb << endl;
+        os << " num-blocks-per-rank-domain-per-step: " << (nb * nr) << endl;
         os << " Since the block size in the '" << step_dim <<
             "' dim is " << bt << ", temporal blocking is ";
         if (bt <= 1) os << "NOT ";
@@ -484,8 +495,8 @@ namespace yask {
         os << "\nSub-blocks:" << endl;
         auto nsb = findNumSubsets(os, _sub_block_sizes, "sub-block",
                                  _block_sizes, "block",
-                                 _dims->_cluster_pts);
-        os << " num-sub-blocks-per-block: " << nsb << endl;
+                                 _dims->_cluster_pts, step_dim);
+        os << " num-sub-blocks-per-block-per-step: " << nsb << endl;
 
         // Now, we adjust groups. These are done after all the above sizes
         // because group sizes are more like 'guidelines' and don't have
@@ -508,24 +519,24 @@ namespace yask {
         // TODO: only print this if block-grouping is enabled.
         auto nbg = findNumSubsets(os, _block_group_sizes, "block-group",
                                   _region_sizes, "region",
-                                  _block_sizes);
-        os << " num-block-groups-per-region: " << nbg << endl;
+                                  _block_sizes, step_dim);
+        os << " num-block-groups-per-region-per-step: " << nbg << endl;
         auto nb_g = findNumSubsets(os, _block_sizes, "block",
                                    _block_group_sizes, "block-group",
-                                   _dims->_cluster_pts);
-        os << " num-blocks-per-block-group: " << nb_g << endl;
+                                   _dims->_cluster_pts, step_dim);
+        os << " num-blocks-per-block-group-per-step: " << nb_g << endl;
 
         // Determine num sub-block-groups.
         // Also fix up sub-block-group sizes as needed.
         // TODO: only print this if sub-block-grouping is enabled.
         auto nsbg = findNumSubsets(os, _sub_block_group_sizes, "sub-block-group",
                                    _block_sizes, "block",
-                                   _sub_block_sizes);
-        os << " num-sub-block-groups-per-block: " << nsbg << endl;
+                                   _sub_block_sizes, step_dim);
+        os << " num-sub-block-groups-per-block-per-step: " << nsbg << endl;
         auto nsb_g = findNumSubsets(os, _sub_block_sizes, "block",
                                    _sub_block_group_sizes, "sub-block-group",
-                                   _dims->_cluster_pts);
-        os << " num-sub-blocks-per-sub-block-group: " << nsb_g << endl;
+                                   _dims->_cluster_pts, step_dim);
+        os << " num-sub-blocks-per-sub-block-group-per-step: " << nsb_g << endl;
     }
 
 } // namespace yask.

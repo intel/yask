@@ -260,6 +260,7 @@ namespace yask {
         // Perf stats for this pack.
         YaskTimer timer;
         idx_t steps_done = 0;
+        Stats stats;
 
         // Work needed across points in this rank.
         idx_t num_reads_per_step = 0;
@@ -275,7 +276,7 @@ namespace yask {
                    StencilContext* ctx) :
             _name(name),
             _context(ctx),
-            _opts(*ctx->get_settings()),
+            _opts(*ctx->get_settings()), // make a copy of the context settings.
             _at(ctx, &_opts, name) { }
         virtual ~BundlePack() { }
 

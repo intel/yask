@@ -130,6 +130,8 @@ void usage(const string& cmd) {
         "    Set heuristic for min expression-size for reuse (default=" << settings._minExprSize << ").\n"
         " [-no]-find-deps\n"
         "    Find dependencies between stencil equations (default=" << settings._findDeps << ").\n"
+        " [-no]-print-eqs\n"
+        "    Print each equation when defined (default=" << settings._printEqs << ").\n"
         "\n"
         " -p <format-type> <filename>\n"
         "    Format output per <format-type> and write to <filename>.\n"
@@ -196,6 +198,10 @@ void parseOpts(int argc, const char* argv[])
                 settings._bundleScratch = true;
             else if (opt == "-no-bundle-scratch")
                 settings._bundleScratch = false;
+            else if (opt == "-print-eqs")
+                settings._printEqs = true;
+            else if (opt == "-no-print-eqs")
+                settings._printEqs = false;
     
             // add any more options w/o values above.
 

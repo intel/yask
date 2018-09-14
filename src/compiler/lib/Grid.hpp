@@ -333,6 +333,7 @@ namespace yask {
         string _eqBundleTargets;  // how to bundle equations.
         string _gridRegex;       // grids to update.
         bool _findDeps = true;
+        bool _printEqs = false;
     };
 
     // Stencil dimensions.

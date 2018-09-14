@@ -36,6 +36,7 @@ namespace yask {
     // Similar to a Tuple, but less overhead and doesn't keep names.
     // Make sure this stays non-virtual.
     // TODO: make this a template with _ndims as a parameter.
+    // TODO: ultimately, combine with Tuple w/o loss of efficiency.
     class Indices {
 
     public:
@@ -827,7 +828,7 @@ namespace yask {
         idx_t findNumSubsets(std::ostream& os,
                              IdxTuple& inner_sizes, const std::string& inner_name,
                              const IdxTuple& outer_sizes, const std::string& outer_name,
-                             const IdxTuple& mults);
+                             const IdxTuple& mults, const std::string& step_dim);
 
     public:
         // Add options to a cmd-line parser to set the settings.

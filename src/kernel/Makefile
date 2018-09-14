@@ -28,13 +28,13 @@
 #   command-line that control kernel configuration and performance.
 
 # Initial defaults.
-stencil			:=	iso3dfd
-arch			:=	snb
-mpi			:=	1
-numa			:=	1
-real_bytes		:=	4
-radius			:=	2
-allow_new_grid_types	:=	1
+stencil			?=	iso3dfd
+arch			?=	snb
+mpi			?=	1
+numa			?=	1
+real_bytes		?=	4
+radius			?=	2
+allow_new_grid_types	?=	1
 
 # Defaults based on stencil type (and arch for some stencils).
 ifeq ($(stencil),)
@@ -766,8 +766,8 @@ py-api-no-yc:
 # Validation runs for each binary.
 val1	:=	-d 48 -dt 2 -b 16 -bt 1
 val2	:=	-d 63 -dt 2 -b 24 -bt 1 -r 32 -rt 2
-val3	:=	-d 61 -dt 2 -b 24 -bt 2
-val4	:=	-d 64 -dt 2 -b 32 -bt 2 -r 48 -rt 2
+val3	:=	-d 36 -dt 2 -b 24 -bt 2
+val4	:=	-d 52 -dt 2 -b 32 -bt 2 -r 48 -rt 2
 ranks	:=	2
 
 # Run the kernel binary using several combos of sizes and ranks.

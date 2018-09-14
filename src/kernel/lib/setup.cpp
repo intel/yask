@@ -943,63 +943,6 @@ namespace yask {
         } // scratch-grid passes.
     }
     
-    // Set temporal blocking data.
-    // This should be called anytime a block size is changed.
-    // Must be called after update_grid_info() to ensure
-    // angles are properly set.
-    void StencilContext::update_block_info() {
-        auto& step_dim = _dims->_step_dim;
-
-        // Start w/original temporal setting.
-        tb_steps = _opts->_block_sizes[step_dim];
-        assert(tb_steps >= 1);
-
-        // Determine max setting based on block sizes.
-        // When using temporal blocking, all block sizes
-        // across all packs must be the same.
-        if (tb_steps > 1) {
-            TRACE_MSG("update_block_info: original TB steps = " << tb_steps);
-            idx_t max_steps = min(tb_steps, wf_steps);
-            TRACE_MSG("update_block_info: max(TB, WF) steps = " << max_steps);
-
-            // Loop through each domain dim.
-            for (auto& dim : _dims->_domain_dims.getDims()) {
-                auto& dname = dim.getName();
-
-                // Calculate max number of temporal steps in
-                // this dim.
-                auto bsz = _opts->_block_sizes[dname];
-                auto angle = tb_angles[dname];
-                if (angle > 0) {
-                    idx_t sh_pts = angle * 2 * stPacks.size();
-                    idx_t cur_max = (bsz - 1) / sh_pts + 1;
-                    TRACE_MSG("update_block_info: max TB steps in dim '" <<
-                              dname << "' = " << cur_max <<
-                              " due to base block size of " << bsz <<
-                              " and TB angle of " << angle);
-                    max_steps = min(max_steps, cur_max);
-                }
-            }
-            tb_steps = min(tb_steps, max_steps);
-            TRACE_MSG("update_block_info: final TB steps = " << tb_steps);
-        }
-
-        // Calc number of shifts based on steps.
-        num_tb_shifts = 0;
-        if (tb_steps > 1) {
-
-            // Need to shift for each bundle pack.
-            assert(stPacks.size() > 0);
-            num_tb_shifts = idx_t(stPacks.size()) * tb_steps;
-            assert(num_tb_shifts > 1);
-
-            // Don't need to shift first one.
-            num_tb_shifts--;
-        }
-        assert(num_tb_shifts >= 0);
-
-    } // update_block_info().
-
     // Set non-scratch grid sizes and offsets based on settings.
     // Set wave-front settings.
     // This should be called anytime a setting or rank offset is changed.
@@ -1051,7 +994,7 @@ namespace yask {
         // Calculate wave-front shifts.
         // See the wavefront diagram in run_solution() for description
         // of angles and extensions.
-        tb_steps = _opts->_block_sizes[step_dim]; // use original size; actual may be less.
+        idx_t tb_steps = _opts->_block_sizes[step_dim]; // use original size; actual may be less.
         assert(tb_steps >= 1);
         wf_steps = _opts->_region_sizes[step_dim];
         wf_steps = max(wf_steps, tb_steps); // round up WF steps if less than TB steps.
@@ -1151,6 +1094,67 @@ namespace yask {
         }
     } // update_grid_info().
 
+    // Set temporal blocking data.
+    // This should be called anytime a block size is changed.
+    // Must be called after update_grid_info() to ensure
+    // angles are properly set.
+    void StencilContext::update_block_info() {
+        auto& step_dim = _dims->_step_dim;
+
+        // Start w/original temporal setting.
+        tb_steps = _opts->_block_sizes[step_dim];
+        assert(tb_steps >= 1);
+
+        // Determine max setting based on block sizes.
+        // When using temporal blocking, all block sizes
+        // across all packs must be the same.
+        if (tb_steps > 1) {
+            TRACE_MSG("update_block_info: original TB steps = " << tb_steps);
+            idx_t max_steps = min(tb_steps, wf_steps);
+            TRACE_MSG("update_block_info: max(TB, WF) steps = " << max_steps);
+
+            // Should not be using separate pack tuners if
+            // TB was requested.
+            assert(_use_pack_tuners == false);
+            
+            // Loop through each domain dim.
+            for (auto& dim : _dims->_domain_dims.getDims()) {
+                auto& dname = dim.getName();
+
+                // Calculate max number of temporal steps in
+                // this dim.
+                auto bsz = _opts->_block_sizes[dname];
+                auto angle = tb_angles[dname];
+                if (angle > 0) {
+                    idx_t sh_pts = angle * 2 * stPacks.size();
+                    idx_t cur_max = (bsz - 1) / sh_pts + 1;
+                    TRACE_MSG("update_block_info: max TB steps in dim '" <<
+                              dname << "' = " << cur_max <<
+                              " due to base block size of " << bsz <<
+                              " and TB angle of " << angle);
+                    max_steps = min(max_steps, cur_max);
+                }
+            }
+            tb_steps = min(tb_steps, max_steps);
+            TRACE_MSG("update_block_info: final TB steps = " << tb_steps);
+        }
+
+        // Calc number of shifts based on steps.
+        num_tb_shifts = 0;
+        if (tb_steps > 1) {
+
+            // Need to shift for each bundle pack.
+            assert(stPacks.size() > 0);
+            num_tb_shifts = idx_t(stPacks.size()) * tb_steps;
+            assert(num_tb_shifts > 1);
+
+            // Don't need to shift first one.
+            num_tb_shifts--;
+        }
+        assert(num_tb_shifts >= 0);
+
+    } // update_block_info().
+
     // Allocate grids and MPI bufs.
     // Initialize some data structures.
     void StencilContext::prepare_solution() {
@@ -1240,16 +1244,44 @@ namespace yask {
         // This is the order in which preferred NUMA nodes (e.g., HBW mem)
         // will be used.
         // We free the scratch and MPI data first to give grids preference.
+        YaskTimer allocTimer;
+        allocTimer.start();
         freeScratchData(os);
         freeMpiData(os);
         allocGridData(os);
         allocScratchData(os);
         allocMpiData(os);
+        allocTimer.stop();
+        os << "Allocation done in " << allocTimer.get_elapsed_secs() << " secs.\n";
 
         print_info();
 
     } // prepare_solution().
 
+    void StencilContext::print_temporal_tiling_info() {
+        ostream& os = get_ostr();
+
+        os <<
+            " num-temporal-block-steps:  " << tb_steps << endl;
+        if (tb_steps > 1) {
+            os <<
+                " temporal-block-angles:     " << tb_angles.makeDimValStr() << endl <<
+                " num-temporal-block-shifts: " << num_tb_shifts << endl;
+        }
+        os <<
+            " num-wave-front-steps:      " << wf_steps << endl;
+        if (wf_steps > 1) {
+            os <<
+                " wave-front-angles:         " << wf_angles.makeDimValStr() << endl <<
+                " num-wave-front-shifts:     " << num_wf_shifts << endl <<
+                " wave-front-shift-size:     " << wf_shifts.makeDimValStr() << endl <<
+                " left-wave-front-exts:      " << left_wf_exts.makeDimValStr() << endl <<
+                " right-wave-front-exts:     " << right_wf_exts.makeDimValStr() << endl <<
+                " ext-rank-domain:           " << ext_bb.bb_begin.makeDimValStr() <<
+                " ... " << ext_bb.bb_end.subElements(1).makeDimValStr() << endl;
+        }
+    }
+    
     void StencilContext::print_info() {
         auto& step_dim = _dims->_step_dim;
         ostream& os = get_ostr();
@@ -1295,25 +1327,8 @@ namespace yask {
             " minimum-padding:       " << _opts->_min_pad_sizes.makeDimValStr() << endl <<
             " L1-prefetch-distance:  " << PFD_L1 << endl <<
             " L2-prefetch-distance:  " << PFD_L2 << endl <<
-            " max-halos:             " << max_halos.makeDimValStr() << endl <<
-            " num-temporal-block-steps:  " << tb_steps << endl;
-        if (tb_steps > 1) {
-            os <<
-                " temporal-block-angles:     " << tb_angles.makeDimValStr() << endl <<
-                " num-temporal-block-shifts: " << num_tb_shifts << endl;
-        }
-        os <<
-            " num-wave-front-steps:      " << wf_steps << endl;
-        if (wf_steps > 1) {
-            os <<
-                " wave-front-angles:         " << wf_angles.makeDimValStr() << endl <<
-                " num-wave-front-shifts:     " << num_wf_shifts << endl <<
-                " wave-front-shift-size:     " << wf_shifts.makeDimValStr() << endl <<
-                " left-wave-front-exts:      " << left_wf_exts.makeDimValStr() << endl <<
-                " right-wave-front-exts:     " << right_wf_exts.makeDimValStr() << endl <<
-                " ext-rank-domain:           " << ext_bb.bb_begin.makeDimValStr() <<
-                " ... " << ext_bb.bb_end.subElements(1).makeDimValStr() << endl;
-        }
+            " max-halos:             " << max_halos.makeDimValStr() << endl;
+        print_temporal_tiling_info();
         os << endl;
 
         // Info about eqs, packs and bundles.
@@ -1363,6 +1378,10 @@ namespace yask {
     void StencilContext::find_bounding_boxes()
     {
         ostream& os = get_ostr();
+        os << "Constructing bounding boxes for " <<
+            stBundles.size() << " stencil-bundles(s)...\n";
+        YaskTimer bbtimer;
+        bbtimer.start();
 
         // Rank BB is based only on rank offsets and rank domain sizes.
         rank_bb.bb_begin = rank_domain_offsets;
@@ -1396,9 +1415,16 @@ namespace yask {
 
         // Init MPI interior to extended BB.
         mpi_interior = ext_bb;
+
+        bbtimer.stop();
+        os << "Bounding-box construction done in " <<
+            bbtimer.get_elapsed_secs() << " secs.\n";
     }
 
     // Find the bounding-boxes for this bundle in this rank.
+    // Only tests domain-var values, not step-vars.
+    // Step-vars are tested dynamically for each step
+    // as it is executed.
     void StencilBundleBase::find_bounding_box() {
         StencilContext& context = *_generic_context;
         ostream& os = context.get_ostr();
@@ -1409,10 +1435,13 @@ namespace yask {
         auto& stencil_dims = dims->_stencil_dims;
         auto nddims = domain_dims.size();
         auto nsdims = stencil_dims.size();
+        auto step_posn = +Indices::step_posn;
         TRACE_MSG3("find_bounding_box for '" << get_name() << "'...");
 
         // First, find an overall BB around all the
         // valid points in the bundle.
+        YaskTimer bbtimer;
+        bbtimer.start();
 
         // Init min vars w/max val and vice-versa.
         Indices min_pts(idx_max, nsdims);
@@ -1452,6 +1481,9 @@ namespace yask {
         // points.
 #include "yask_misc_loops.hpp"
 #undef misc_fn
+        bbtimer.stop();
+        TRACE_MSG3("Overall BB construction done in " <<
+                   bbtimer.get_elapsed_secs() << " secs.");
 
         // Init bb vars to ensure they contain correct dims.
         _bundle_bb.bb_begin = domain_dims;
@@ -1494,9 +1526,12 @@ namespace yask {
         }
 
         // Otherwise, the overall BB is not full.
+        // This is a common case for boundary conditions.
         // Create list of full BBs (non-overlapping & with no invalid
         // points) inside overall BB.
         else {
+            bbtimer.clear();
+            bbtimer.start();
 
             // Divide the overall BB into a slice for each thread
             // across the outer dim.
@@ -1516,48 +1551,61 @@ namespace yask {
                 auto& cur_bb_list = bb_lists[n];
 
                 // Begin and end of this slice.
+                // These tuples contain domain dims.
                 IdxTuple slice_begin(_bundle_bb.bb_begin);
                 slice_begin[odim] += n * len_per_thr;
                 IdxTuple slice_end(_bundle_bb.bb_end);
                 slice_end[odim] = min(slice_end[odim], slice_begin[odim] + len_per_thr);
                 if (slice_end[odim] <= slice_begin[odim])
                     continue;
+                Indices islice_begin(slice_begin);
+                Indices islice_end(slice_end);
 
                 // Construct len of slice in all dims.
                 IdxTuple slice_len = slice_end.subElements(slice_begin);
+                Indices islice_len(slice_len);
                 
                 // Visit all points in slice, looking for a new
-                // valid starting point, 'pt'.
-                IdxTuple spt(stencil_dims);
-                IdxTuple dpt(domain_dims);
+                // valid beginning point, 'ib*pt'.
+                Indices ibspt(stencil_dims); // in stencil dims.
+                Indices ibdpt(domain_dims);  // in domain dims.
                 slice_len.visitAllPoints
                     ([&](const IdxTuple& ofs, size_t idx) {
 
-                        // Find global point from 'ofs'.
-                        dpt = slice_begin.addElements(ofs); // domain tuple.
-                        spt.setVals(dpt, false);            // stencil tuple.
-                        Indices pt(spt);                    // stencil indices.
+                        // Find global point from 'ofs' in domain
+                        // and stencil dims.
+                        Indices iofs(ofs);
+                        ibdpt = islice_begin.addElements(iofs); // domain tuple.
+                        for (int i = 0, j = 0; i < nsdims; i++) {
+                            if (i == step_posn) continue;
+                            ibspt[i] = ibdpt[j];            // stencil tuple.
+                            j++;
+                        }
 
                         // Valid point must be in sub-domain and
                         // not seen before in this slice.
-                        bool is_valid = is_in_valid_domain(pt);
+                        bool is_valid = is_in_valid_domain(ibspt);
                         if (is_valid) {
                             for (auto& bb : cur_bb_list) {
-                                if (bb.is_in_bb(dpt)) {
+                                if (bb.is_in_bb(ibdpt)) {
                                     is_valid = false;
                                     break;
                                 }
                             }
                         }
                         
-                        // Process this new rect starting at 'pt'.
+                        // Process this new rect starting at 'ib*pt'.
                         if (is_valid) {
-                            IdxTuple espt(stencil_dims);
-                            IdxTuple edpt(domain_dims);
 
-                            // Scan from 'pt' to end of this slice
+                            // Scan from 'ib*pt' to end of this slice
                             // looking for end of rect.
-                            IdxTuple scan_len = slice_end.subElements(dpt);
+                            IdxTuple bdpt(domain_dims);
+                            ibdpt.setTupleVals(bdpt);
+                            IdxTuple scan_len = slice_end.subElements(bdpt);
+
+                            // End point to be found, 'ie*pt'.
+                            Indices iespt(stencil_dims); // stencil dims.
+                            Indices iedpt(domain_dims);  // domain dims.
 
                             // Repeat scan until no adjustment is made.
                             bool do_scan = true;
@@ -1565,7 +1613,7 @@ namespace yask {
                                 do_scan = false;
 
                                 TRACE_MSG3("scanning " << scan_len.makeDimValStr(" * ") <<
-                                           " starting at " << dpt.makeDimValStr());
+                                           " starting at " << bdpt.makeDimValStr());
                                 scan_len.visitAllPoints
                                     ([&](const IdxTuple& eofs, size_t eidx) {
 
@@ -1574,16 +1622,20 @@ namespace yask {
                                             assert(eofs[i] < scan_len[i]);
 
                                         // Find global point from 'eofs'.
-                                        edpt = dpt.addElements(eofs); // domain tuple.
-                                        espt.setVals(edpt, false); // stencil tuple.
-                                        Indices ept(espt); // stencil indices.
+                                        Indices ieofs(eofs);
+                                        iedpt = ibdpt.addElements(ieofs); // domain tuple.
+                                        for (int i = 0, j = 0; i < nsdims; i++) {
+                                            if (i == step_posn) continue;
+                                            iespt[i] = iedpt[j];            // stencil tuple.
+                                            j++;
+                                        }
 
                                         // Valid point must be in sub-domain and
                                         // not seen before in this slice.
-                                        bool is_evalid = is_in_valid_domain(ept);
+                                        bool is_evalid = is_in_valid_domain(iespt);
                                         if (is_evalid) {
                                             for (auto& bb : cur_bb_list) {
-                                                if (bb.is_in_bb(edpt)) {
+                                                if (bb.is_in_bb(iedpt)) {
                                                     is_evalid = false;
                                                     break;
                                                 }
@@ -1599,8 +1651,8 @@ namespace yask {
                                             for (int i = 0; i < nddims; i++) {
 
                                                 // Beyond starting point in this dim?
-                                                if (edpt[i] > dpt[i]) {
-                                                    scan_len[i] = edpt[i] - dpt[i];
+                                                if (iedpt[i] > ibdpt[i]) {
+                                                    scan_len[i] = iedpt[i] - ibdpt[i];
 
                                                     // restart scan for
                                                     // remaining dims.
@@ -1619,12 +1671,12 @@ namespace yask {
                                     }); // Looking for invalid point.
                             } // while scan is adjusted.
                             TRACE_MSG3("found BB " << scan_len.makeDimValStr(" * ") <<
-                                       " starting at " << dpt.makeDimValStr());
+                                       " starting at " << bdpt.makeDimValStr());
 
                             // 'scan_len' now contains sizes of the new BB.
                             BoundingBox new_bb;
-                            new_bb.bb_begin = dpt;
-                            new_bb.bb_end = dpt.addElements(scan_len);
+                            new_bb.bb_begin = bdpt;
+                            new_bb.bb_end = bdpt.addElements(scan_len);
                             new_bb.update_bb("sub-bb", context, true);
                             cur_bb_list.push_back(new_bb);
                             
@@ -1633,6 +1685,8 @@ namespace yask {
                         return true;  // from labmda; keep looking.
                     }); // Looking for new rects.
             } // threads/slices.
+            TRACE_MSG3("sub-bbs found in " <<
+                       bbtimer.get_secs_since_start() << " secs.");
 
             // Collect BBs in all slices.
             // TODO: merge in a binary tree instead of sequentially.
@@ -1648,8 +1702,8 @@ namespace yask {
                                " ... " << bbn.bb_end.makeDimValStr() << ")");
 
                     // Don't bother with empty BB.
-                    //if (bbn.bb_size == 0)
-                    //    continue;
+                    if (bbn.bb_size == 0)
+                        continue;
 
                     // Scan existing final BBs looking for one to merge with.
                     bool do_merge = false;
@@ -1690,6 +1744,9 @@ namespace yask {
                     }
                 }
             }
+            bbtimer.stop();
+            TRACE_MSG3("Final bounding-box construction done in " <<
+                       bbtimer.get_elapsed_secs() << " secs.");
         } // Finding constituent rects.
     }
 

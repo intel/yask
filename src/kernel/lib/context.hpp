@@ -84,19 +84,26 @@ namespace yask {
     // Stats.
     class Stats : public virtual yk_stats {
     public:
+        // Steps done.
+        idx_t nsteps = 0;
+
+        // Points in domain.
         idx_t npts = 0;
+
+        // Work done.
         idx_t nreads = 0;
         idx_t nwrites = 0;
         idx_t nfpops = 0;
-        idx_t nsteps = 0;
 
-        double run_time = 0.;
-        double halo_time = 0.;
+        // Time elapsed.
+        double run_time = 0.;   // overall.
+        double halo_time = 0.;  // subset in halo.
 
-        double pts_ps = 0.; // points-per-sec in overall domain.
+        // Rates.
         double reads_ps = 0.;     // reads-per-sec.
         double writes_ps = 0.;     // writes-per-sec.
         double flops = 0.;      // est. FLOPS.
+        double pts_ps = 0.; // points-per-sec in overall domain.
 
         Stats() {}
         virtual ~Stats() {}
@@ -351,6 +358,7 @@ namespace yask {
 
         // Print info about the soln.
         virtual void print_info();
+        virtual void print_temporal_tiling_info();
 
         /// Get statistics associated with preceding calls to run_solution().
         virtual yk_stats_ptr get_stats();
@@ -497,7 +505,7 @@ namespace yask {
         virtual void calc_rank_ref();
 
         // Vectorized and blocked stencil calculations.
-        virtual void calc_rank_opt();
+        virtual void calc_rank_opt(idx_t max_secs);
 
         // Calculate results within a region.
         virtual void calc_region(BundlePackPtr& sel_bp,
@@ -623,9 +631,14 @@ namespace yask {
         virtual idx_t get_overall_domain_size(const std::string& dim) const;
 
         virtual void run_solution(idx_t first_step_index,
-                                  idx_t last_step_index);
+                                  idx_t last_step_index,
+                                  idx_t max_secs);
+        virtual void run_solution(idx_t first_step_index,
+                                  idx_t last_step_index) {
+            run_solution(first_step_index, last_step_index, 0);
+        }
         virtual void run_solution(idx_t step_index) {
-            run_solution(step_index, step_index);
+            run_solution(step_index, step_index, 0);
         }
         virtual void share_grid_storage(yk_solution_ptr source);
 

@@ -37,9 +37,7 @@ IN THE SOFTWARE.
 #include <unordered_map>
 #include <vector>
 #include <cstdarg>
-#include <assert.h>
 #include <fstream>
-#include "idiv.hpp"
 
 // Need g++ >= 4.9 for regex.
 #define GCC_VERSION (__GNUC__ * 10000 \
@@ -51,8 +49,10 @@ IN THE SOFTWARE.
 #include <regex>
 
 // Common utilities.
+#define CHECK
 #include "common_utils.hpp"
 #include "tuple.hpp"
+#include "idiv.hpp"
 
 using namespace std;
 

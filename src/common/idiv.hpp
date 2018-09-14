@@ -26,6 +26,8 @@ IN THE SOFTWARE.
 #ifndef IDIV_HPP
 #define IDIV_HPP
 
+#include "yask_assert.hpp"
+
 namespace yask {
 
     // Floored integer modulo and division.

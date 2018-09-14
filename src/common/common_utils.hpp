@@ -22,11 +22,11 @@ FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
 IN THE SOFTWARE.
 
 *****************************************************************************/
-#ifndef COMMON_UTILS_HPP
-#define COMMON_UTILS_HPP
+#pragma once
 
 //////// Some common code shared between YASK compiler and kernel. //////////
 
+#include "yask_assert.hpp"
 #include <set>
 #include <vector>
 #include <map>
@@ -101,4 +101,3 @@ namespace yask {
 
 } // namespace.
 
-#endif /* SRC_COMMON_COMMON_UTILS_HPP_ */
