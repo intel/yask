@@ -27,6 +27,7 @@ IN THE SOFTWARE.
 // (non-stencil-specific) code. This file does not input generated files.
 
 #pragma once
+#include "yask_assert.hpp"
 
 // Choose features
 #define _POSIX_C_SOURCE 200809L
@@ -66,15 +67,8 @@ inline void omp_set_nested(int n) { }
 // Include the API as early as possible. This helps to ensure that it will stand alone.
 #include "yask_kernel_api.hpp"
 
-// Control assert() by turning on with CHECK instead of turning off with
-// NDEBUG. This makes it off by default.
-#ifndef CHECK
-#define NDEBUG
-#endif
-
 // Standard C and C++ headers.
 #include <algorithm>
-#include <assert.h>
 #include <cstdint>
 #include <cstdlib>
 #include <fstream>

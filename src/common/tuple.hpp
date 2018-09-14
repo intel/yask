@@ -27,7 +27,8 @@ IN THE SOFTWARE.
 
 #pragma once
 
-#include <assert.h>
+#include "yask_assert.hpp"
+
 #include <math.h>
 #include <iostream>
 #include <iomanip>
