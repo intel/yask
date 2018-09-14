@@ -1411,6 +1411,9 @@ namespace yask {
     }
 
     // Find the bounding-boxes for this bundle in this rank.
+    // Only tests domain-var values, not step-vars.
+    // Step-vars are tested dynamically for each step
+    // as it is executed.
     void StencilBundleBase::find_bounding_box() {
         StencilContext& context = *_generic_context;
         ostream& os = context.get_ostr();
@@ -1421,6 +1424,7 @@ namespace yask {
         auto& stencil_dims = dims->_stencil_dims;
         auto nddims = domain_dims.size();
         auto nsdims = stencil_dims.size();
+        auto step_posn = +Indices::step_posn;
         TRACE_MSG3("find_bounding_box for '" << get_name() << "'...");
 
         // First, find an overall BB around all the
@@ -1467,7 +1471,7 @@ namespace yask {
 #include "yask_misc_loops.hpp"
 #undef misc_fn
         bbtimer.stop();
-        TRACE_MSG3("Overall bounding-box construction done in " <<
+        TRACE_MSG3("Overall BB construction done in " <<
                    bbtimer.get_elapsed_secs() << " secs.");
 
         // Init bb vars to ensure they contain correct dims.
@@ -1511,6 +1515,7 @@ namespace yask {
         }
 
         // Otherwise, the overall BB is not full.
+        // This is a common case for boundary conditions.
         // Create list of full BBs (non-overlapping & with no invalid
         // points) inside overall BB.
         else {
@@ -1535,48 +1540,61 @@ namespace yask {
                 auto& cur_bb_list = bb_lists[n];
 
                 // Begin and end of this slice.
+                // These tuples contain domain dims.
                 IdxTuple slice_begin(_bundle_bb.bb_begin);
                 slice_begin[odim] += n * len_per_thr;
                 IdxTuple slice_end(_bundle_bb.bb_end);
                 slice_end[odim] = min(slice_end[odim], slice_begin[odim] + len_per_thr);
                 if (slice_end[odim] <= slice_begin[odim])
                     continue;
+                Indices islice_begin(slice_begin);
+                Indices islice_end(slice_end);
 
                 // Construct len of slice in all dims.
                 IdxTuple slice_len = slice_end.subElements(slice_begin);
+                Indices islice_len(slice_len);
                 
                 // Visit all points in slice, looking for a new
-                // valid starting point, 'pt'.
-                IdxTuple spt(stencil_dims); // pt using stencil dims.
-                IdxTuple dpt(domain_dims);  // pt using domain dims.
+                // valid beginning point, 'ib*pt'.
+                Indices ibspt(stencil_dims); // in stencil dims.
+                Indices ibdpt(domain_dims);  // in domain dims.
                 slice_len.visitAllPoints
                     ([&](const IdxTuple& ofs, size_t idx) {
 
-                        // Find global point from 'ofs'.
-                        dpt = slice_begin.addElements(ofs); // domain tuple.
-                        spt.setVals(dpt, false);            // stencil tuple.
-                        Indices pt(spt);                    // stencil indices.
+                        // Find global point from 'ofs' in domain
+                        // and stencil dims.
+                        Indices iofs(ofs);
+                        ibdpt = islice_begin.addElements(iofs); // domain tuple.
+                        for (int i = 0, j = 0; i < nsdims; i++) {
+                            if (i == step_posn) continue;
+                            ibspt[i] = ibdpt[j];            // stencil tuple.
+                            j++;
+                        }
 
                         // Valid point must be in sub-domain and
                         // not seen before in this slice.
-                        bool is_valid = is_in_valid_domain(pt);
+                        bool is_valid = is_in_valid_domain(ibspt);
                         if (is_valid) {
                             for (auto& bb : cur_bb_list) {
-                                if (bb.is_in_bb(dpt)) {
+                                if (bb.is_in_bb(ibdpt)) {
                                     is_valid = false;
                                     break;
                                 }
                             }
                         }
                         
-                        // Process this new rect starting at 'pt'.
+                        // Process this new rect starting at 'ib*pt'.
                         if (is_valid) {
-                            IdxTuple espt(stencil_dims);
-                            IdxTuple edpt(domain_dims);
 
-                            // Scan from 'pt' to end of this slice
+                            // Scan from 'ib*pt' to end of this slice
                             // looking for end of rect.
-                            IdxTuple scan_len = slice_end.subElements(dpt);
+                            IdxTuple bdpt(domain_dims);
+                            ibdpt.setTupleVals(bdpt);
+                            IdxTuple scan_len = slice_end.subElements(bdpt);
+
+                            // End point to be found, 'ie*pt'.
+                            Indices iespt(stencil_dims); // stencil dims.
+                            Indices iedpt(domain_dims);  // domain dims.
 
                             // Repeat scan until no adjustment is made.
                             bool do_scan = true;
@@ -1584,7 +1602,7 @@ namespace yask {
                                 do_scan = false;
 
                                 TRACE_MSG3("scanning " << scan_len.makeDimValStr(" * ") <<
-                                           " starting at " << dpt.makeDimValStr());
+                                           " starting at " << bdpt.makeDimValStr());
                                 scan_len.visitAllPoints
                                     ([&](const IdxTuple& eofs, size_t eidx) {
 
@@ -1593,16 +1611,20 @@ namespace yask {
                                             assert(eofs[i] < scan_len[i]);
 
                                         // Find global point from 'eofs'.
-                                        edpt = dpt.addElements(eofs); // domain tuple.
-                                        espt.setVals(edpt, false); // stencil tuple.
-                                        Indices ept(espt); // stencil indices.
+                                        Indices ieofs(eofs);
+                                        iedpt = ibdpt.addElements(ieofs); // domain tuple.
+                                        for (int i = 0, j = 0; i < nsdims; i++) {
+                                            if (i == step_posn) continue;
+                                            iespt[i] = iedpt[j];            // stencil tuple.
+                                            j++;
+                                        }
 
                                         // Valid point must be in sub-domain and
                                         // not seen before in this slice.
-                                        bool is_evalid = is_in_valid_domain(ept);
+                                        bool is_evalid = is_in_valid_domain(iespt);
                                         if (is_evalid) {
                                             for (auto& bb : cur_bb_list) {
-                                                if (bb.is_in_bb(edpt)) {
+                                                if (bb.is_in_bb(iedpt)) {
                                                     is_evalid = false;
                                                     break;
                                                 }
@@ -1618,8 +1640,8 @@ namespace yask {
                                             for (int i = 0; i < nddims; i++) {
 
                                                 // Beyond starting point in this dim?
-                                                if (edpt[i] > dpt[i]) {
-                                                    scan_len[i] = edpt[i] - dpt[i];
+                                                if (iedpt[i] > ibdpt[i]) {
+                                                    scan_len[i] = iedpt[i] - ibdpt[i];
 
                                                     // restart scan for
                                                     // remaining dims.
@@ -1638,12 +1660,12 @@ namespace yask {
                                     }); // Looking for invalid point.
                             } // while scan is adjusted.
                             TRACE_MSG3("found BB " << scan_len.makeDimValStr(" * ") <<
-                                       " starting at " << dpt.makeDimValStr());
+                                       " starting at " << bdpt.makeDimValStr());
 
                             // 'scan_len' now contains sizes of the new BB.
                             BoundingBox new_bb;
-                            new_bb.bb_begin = dpt;
-                            new_bb.bb_end = dpt.addElements(scan_len);
+                            new_bb.bb_begin = bdpt;
+                            new_bb.bb_end = bdpt.addElements(scan_len);
                             new_bb.update_bb("sub-bb", context, true);
                             cur_bb_list.push_back(new_bb);
                             
@@ -1652,6 +1674,8 @@ namespace yask {
                         return true;  // from labmda; keep looking.
                     }); // Looking for new rects.
             } // threads/slices.
+            TRACE_MSG3("sub-bbs found in " <<
+                       bbtimer.get_secs_since_start() << " secs.");
 
             // Collect BBs in all slices.
             // TODO: merge in a binary tree instead of sequentially.
