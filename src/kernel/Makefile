@@ -59,10 +59,9 @@ else ifeq ($(stencil),cube)
 else ifneq ($(findstring iso3dfd,$(stencil)),)
  MACROS				+=	MAX_EXCH_DIST=1
  radius				:=	8
- def_rank_args			:=	-d 1024 -dx 512 # assume 2 ranks/node in 'x'.
+ def_rank_args			:=	-d 1024
  def_pad_args			:=	-ep 1
  ifeq ($(arch),knl)
-  def_rank_args			:=	-d 1024 # assume 1 rank/node.
   fold_4byte			:=	x=2,y=8
   cluster			:=	x=2
   def_block_args		:=	-bx 160 -by 256 -bz 96
@@ -92,10 +91,9 @@ else ifneq ($(findstring awp,$(stencil)),)
  endif
  def_block_args			:=	-b 32
  YC_FLAGS			+=	-min-es 1
- def_rank_args			:=	-dx 512 -dy 1024 -dz 128 # assume 2 ranks/node in 'x'.
+ def_rank_args			:=	-d 1024 -dz 128
  def_pad_args			:=	-ep 1
  ifeq ($(arch),knl)
-  def_rank_args			:=	-dx 1024 -dy 1024 -dz 128 # assume 1 rank/node.
   fold_4byte			:=	x=4,y=4
   def_thread_divisor		:=	2
   def_block_threads		:=	4
@@ -138,7 +136,6 @@ else ifneq ($(findstring fsg,$(stencil)),)
   pfd_l1		:=	0
   pfd_l2		:=	2
  else ifneq ($(filter $(arch),skx skl),)
-  def_rank_args		:=	-d 384 -dx 192
   fold_4byte		:=	x=4,y=4
   def_block_args	:=	-bx 188 -by 12 -bz 24
   def_block_threads	:=	1
@@ -149,7 +146,6 @@ else ifeq ($(stencil),tti)
  radius			:=	2
  def_rank_args		:=	-d 512
  ifneq ($(filter $(arch),skx skl),)
-  def_rank_args		:=	-d 640 -dx 320
   fold_4byte		:=	x=4,y=4
   def_block_args	:=	-bx 80 -by 16 -bz 40
   def_block_threads	:=	1
