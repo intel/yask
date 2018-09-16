@@ -1,5 +1,5 @@
 #### Backward-compatibility notices:
-* Version 2.13.06 changes the behavior of the performance-test utility (`yask.sh`) to run trials for a given amount of time instead of a given number of steps. Use the `-max_trial_time` options to specify the number of seconds to run. To force a specific number of trials, set the max time to zero and use `-dt` as before.
+* Version 2.13.08 changes the default behavior of the performance-test utility (`yask.sh`) to run trials for a given amount of time instead of a given number of steps. Use the `-trial_time` option to specify the number of seconds to run. To force a specific number of trials, use the '-trial_steps' option.
 * Version 2.13.02 required some changes in perf statistics due to step (temporal) conditions. Both text output and `yk_stats` APIs affected.
 * Version 2.12.00 removed the long-deprecated '==' operator for asserting equality between a grid point and an equation. Use 'EQUALS' instead.
 * Version 2.11.01 changed the plain-text format of some of the performance data in the test-utility output. Specifically, some leading spaces were added, SI multipliers for values < 1 were added, and the phrase "time in" no longer appears before each time breakdown. This may affect some user programs that parse the output to collect stats.

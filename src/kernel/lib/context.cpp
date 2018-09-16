@@ -123,19 +123,22 @@ namespace yask {
     ///// Top-level methods for evaluating reference and optimized stencils.
 
     // Eval stencil bundle(s) over grid(s) using reference scalar code.
-    void StencilContext::calc_rank_ref()
-    {
+    void StencilContext::run_ref(idx_t first_step_index,
+                                 idx_t last_step_index) {
         run_time.start();
-
         ostream& os = get_ostr();
         auto& step_dim = _dims->_step_dim;
         auto step_posn = +Indices::step_posn;
         int ndims = _dims->_stencil_dims.getNumDims();
-        idx_t begin_t = 0;
-        idx_t end_t = _opts->_rank_sizes[step_dim];
-        idx_t step_t = _dims->_step_dir;
-        assert(abs(step_t) == 1);
-        steps_done += abs(end_t - begin_t);
+
+        // Determine step dir from order of first/last.
+        idx_t step_dir = (last_step_index >= first_step_index) ? 1 : -1;
+        
+        // Find begin, step and end in step-dim.
+        idx_t begin_t = first_step_index;
+        idx_t step_t = step_dir; // always +/- 1 for ref run.
+        assert(step_t);
+        idx_t end_t = last_step_index + step_dir; // end is beyond last.
 
         // backward?
         if (step_t < 0) {
@@ -230,7 +233,6 @@ namespace yask {
                 auto sg_list = asg->get_reqd_bundles();
 
                 // Loop through all the needed bundles.
-                ext_time.start();
                 for (auto* sg : sg_list) {
 
                     // Indices needed for the generated misc loops.  Will normally be a
@@ -263,10 +265,10 @@ namespace yask {
                 // information about which grids are possibly dirty.
                 mark_grids_dirty(nullptr, start_t, stop_t);
 
-                ext_time.stop();
             } // all bundles.
 
         } // iterations.
+        steps_done += abs(end_t - begin_t);
 
         // Final halo exchange.
         exchange_halos();
@@ -274,27 +276,9 @@ namespace yask {
         run_time.stop();
     }
 
-    // Apply solution for time-steps specified in _rank_sizes.
-    // This is used only by the driver utility.
-    void StencilContext::calc_rank_opt(idx_t max_secs)
-    {
-        auto& step_dim = _dims->_step_dim;
-        idx_t first_t = 0;
-        idx_t last_t = _opts->_rank_sizes[step_dim] - 1;
-
-        // backward?
-        if (_dims->_step_dir < 0) {
-            first_t = last_t;
-            last_t = 0;
-        }
-
-        run_solution(first_t, last_t, max_secs);
-    }
-
     // Eval stencil bundle pack(s) over grid(s) using optimized code.
     void StencilContext::run_solution(idx_t first_step_index,
-                                      idx_t last_step_index,
-                                      idx_t max_secs)
+                                      idx_t last_step_index)
     {
         run_time.start();
 
@@ -331,7 +315,7 @@ namespace yask {
         TRACE_MSG("run_solution: [" <<
                   begin.makeDimValStr() << " ... " <<
                   end.makeDimValStr() << ") by " <<
-                  step.makeDimValStr() << " up to " << max_secs << " sec(s)");
+                  step.makeDimValStr());
         if (!rank_bb.bb_valid)
             THROW_YASK_EXCEPTION("Error: run_solution() called without calling prepare_solution() first");
         if (ext_bb.bb_size < 1) {
@@ -382,7 +366,7 @@ namespace yask {
                     end[dname] += wf_shifts[dname];
 
                 // Stretch the region size if the original size covered the
-                // whole rank.
+                // whole rank in this dim.
                 if (_opts->_region_sizes[dname] >= _opts->_rank_sizes[dname])
                     step[dname] = end[dname] - begin[dname];
             }
@@ -538,15 +522,6 @@ namespace yask {
 
             // Call the auto-tuner to evaluate these steps.
             eval_auto_tuner(this_num_t);
-
-            // Done?
-            if (max_secs) {
-                auto elapsed = run_time.get_secs_since_start();
-                TRACE_MSG("run_solution: " << elapsed << " out of " <<
-                          max_secs << " secs run");
-                if (elapsed > double(max_secs))
-                    break;
-            }
 
         } // step loop.
 

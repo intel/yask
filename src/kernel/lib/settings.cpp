@@ -199,13 +199,17 @@ namespace yask {
     void KernelSettings::_add_domain_option(CommandLineParser& parser,
                                             const std::string& prefix,
                                             const std::string& descrip,
-                                            IdxTuple& var) {
+                                            IdxTuple& var,
+                                            bool allow_step) {
 
         // Add step + domain vars.
         vector<idx_t*> multi_vars;
         string multi_help;
         for (auto& dim : var.getDims()) {
             auto& dname = dim.getName();
+
+            if (!allow_step && _dims->_step_dim == dname)
+                break;
             idx_t* dp = var.lookup(dname); // use lookup() to get non-const ptr.
 
             // Option for individual dim.
@@ -232,9 +236,9 @@ namespace yask {
     void KernelSettings::add_options(CommandLineParser& parser)
     {
         _add_domain_option(parser, "d", "Rank-domain size", _rank_sizes);
-        _add_domain_option(parser, "r", "Region size", _region_sizes);
+        _add_domain_option(parser, "r", "Region size", _region_sizes, true);
         _add_domain_option(parser, "bg", "Block-group size", _block_group_sizes);
-        _add_domain_option(parser, "b", "Block size", _block_sizes);
+        _add_domain_option(parser, "b", "Block size", _block_sizes, true);
         _add_domain_option(parser, "sbg", "Sub-block-group size", _sub_block_group_sizes);
         _add_domain_option(parser, "sb", "Sub-block size", _sub_block_sizes);
         _add_domain_option(parser, "mp", "Minimum grid-padding size (including halo)", _min_pad_sizes);
@@ -378,9 +382,9 @@ namespace yask {
 #endif
             appNotes <<
             "Examples for a 3D (x, y, z) over time (t) problem:\n"
-            " " << pgmName << " -d 768 -dt 25\n"
+            " " << pgmName << " -d 768\n"
             " " << pgmName << " -dx 512 -dy 256 -dz 128\n"
-            " " << pgmName << " -d 2048 -dt 20 -r 512 -rt 10  # temporal tiling.\n"
+            " " << pgmName << " -d 2048 -r 512 -rt 10  # temporal tiling.\n"
             " " << pgmName << " -d 512 -nrx 2 -nry 1 -nrz 2   # multi-rank.\n";
         for (auto ae : appExamples)
             os << " " << pgmName << " " << ae << endl;

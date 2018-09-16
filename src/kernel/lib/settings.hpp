@@ -823,7 +823,8 @@ namespace yask {
         virtual void _add_domain_option(CommandLineParser& parser,
                                         const std::string& prefix,
                                         const std::string& descrip,
-                                        IdxTuple& var);
+                                        IdxTuple& var,
+                                        bool allow_step = false);
 
         idx_t findNumSubsets(std::ostream& os,
                              IdxTuple& inner_sizes, const std::string& inner_name,
