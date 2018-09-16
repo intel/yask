@@ -207,9 +207,8 @@ namespace yask {
         string multi_help;
         for (auto& dim : var.getDims()) {
             auto& dname = dim.getName();
-
             if (!allow_step && _dims->_step_dim == dname)
-                break;
+                continue;
             idx_t* dp = var.lookup(dname); // use lookup() to get non-const ptr.
 
             // Option for individual dim.

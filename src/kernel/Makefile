@@ -765,10 +765,10 @@ py-api-no-yc:
 	$(MAKE) $(NO_YC_MAKE_FLAGS) py-api
 
 # Validation runs for each binary.
-val1	:=	-d 48 -dt 2 -b 16 -bt 1
-val2	:=	-d 63 -dt 2 -b 24 -bt 1 -r 32 -rt 2
-val3	:=	-d 36 -dt 2 -b 24 -bt 2
-val4	:=	-d 52 -dt 2 -b 32 -bt 2 -r 48 -rt 2
+val1	:=	-trial_steps 2 -d 48 -b 16 -bt 1
+val2	:=	-trial_steps 2 -d 63 -b 24 -bt 1 -r 32 -rt 2
+val3	:=	-trial_steps 2 -d 36 -b 24 -bt 2
+val4	:=	-trial_steps 2 -d 52 -b 32 -bt 2 -r 48 -rt 2
 ranks	:=	2
 
 # Run the kernel binary using several combos of sizes and ranks.
