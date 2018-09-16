@@ -1,7 +1,7 @@
 #### Backward-compatibility notices:
-* Version 2.13.08 changes the default behavior of the performance-test utility (`yask.sh`) to run trials for a given amount of time instead of a given number of steps. Use the `-trial_time` option to specify the number of seconds to run. To force a specific number of trials, use the '-trial_steps' option.
+* Version 2.13.08 changed the default behavior of the performance-test utility (`yask.sh`) to run trials for a given amount of time instead of a given number of steps. Use the `-trial_time` option to specify the number of seconds to run. To force a specific number of trials, use the `-trial_steps` option.
 * Version 2.13.02 required some changes in perf statistics due to step (temporal) conditions. Both text output and `yk_stats` APIs affected.
-* Version 2.12.00 removed the long-deprecated '==' operator for asserting equality between a grid point and an equation. Use 'EQUALS' instead.
+* Version 2.12.00 removed the long-deprecated `==` operator for asserting equality between a grid point and an equation. Use `EQUALS` instead.
 * Version 2.11.01 changed the plain-text format of some of the performance data in the test-utility output. Specifically, some leading spaces were added, SI multipliers for values < 1 were added, and the phrase "time in" no longer appears before each time breakdown. This may affect some user programs that parse the output to collect stats.
 * Version 2.10.00 changed the location of temporary files created during the build process. This will not affect most users, although you may need to manually remove old `src/compiler/gen` and `src/kernel/gen` directories.
 * Version 2.09.00 changed the location of stencils in the internal DSL from `.hpp` to `.cpp` files. See the notes in https://github.com/intel/yask/releases/tag/v2.09.00 if you have any new or modified code in `src/stencils`.
@@ -35,7 +35,7 @@ YASK contains a domain-specific compiler to convert scalar stencil code to SIMD-
   of the kernel built from the Gnu compiler has been observed to be up to 7x lower
   than the same kernel built using the Intel compiler. 
 * Gnu C++ compiler, g++ (4.9.0 or later; 6.1.0 or later recommended).
-* Linux libraries 'librt' and 'libnuma'.
+* Linux libraries `librt` and `libnuma`.
 * Perl (5.010 or later).
 * Awk.
 * Gnu make.
