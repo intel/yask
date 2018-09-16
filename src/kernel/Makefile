@@ -277,7 +277,8 @@ include $(YASK_BASE)/src/common/common.mk
 # Vars starting with 'YK_' apply to the stencil kernel.
 
 # Flags passed to stencil compiler.
-YC_FLAGS	+=	-stencil $(stencil) -elem-bytes $(real_bytes) -cluster $(cluster) -fold $(fold)
+YC_STENCIL	?=	$(stencil)
+YC_FLAGS	+=	-stencil $(YC_STENCIL) -elem-bytes $(real_bytes) -cluster $(cluster) -fold $(fold)
 ifneq ($(eqs),)
  YC_FLAGS	+=	-eq-bundles $(eqs)
 endif
