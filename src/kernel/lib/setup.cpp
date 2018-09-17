@@ -1025,13 +1025,6 @@ namespace yask {
             // Req'd shift in this dim based on max halos.
             idx_t angle = ROUND_UP(max_halos[dname], _dims->_fold_pts[dname]);
             
-            // Determine the max spatial skewing angles for TB.
-            // We assume that the block size will always require
-            // non-zero angles.
-            // TODO: adjust TB angle to zero iff block covers whole
-            // rank in given dim. Do this in update_block_info().
-            tb_angles.addDimBack(dname, angle);
-            
             // Determine the max spatial skewing angles for WF tiling.  We
             // only need non-zero angles if the region size is less than the
             // rank size or there are other ranks in this dim, i.e., if
@@ -1105,34 +1098,54 @@ namespace yask {
         tb_steps = _opts->_block_sizes[step_dim];
         assert(tb_steps >= 1);
 
+        // Default w/o TB.
+        if (tb_steps <= 1) {
+            for (auto& dim : _dims->_domain_dims.getDims()) {
+                auto& dname = dim.getName();
+                tb_angles.addDimBack(dname, 0);
+                tb_steps = 1;
+                num_tb_shifts = 0;
+            }
+        }
+        
         // Determine max setting based on block sizes.
         // When using temporal blocking, all block sizes
         // across all packs must be the same.
-        if (tb_steps > 1) {
+        else {
             TRACE_MSG("update_block_info: original TB steps = " << tb_steps);
             idx_t max_steps = min(tb_steps, wf_steps);
             TRACE_MSG("update_block_info: max(TB, WF) steps = " << max_steps);
 
-            // Should not be using separate pack tuners if
-            // TB was requested.
-            assert(_use_pack_tuners == false);
-            
             // Loop through each domain dim.
             for (auto& dim : _dims->_domain_dims.getDims()) {
                 auto& dname = dim.getName();
+                auto rnsize = _opts->_region_sizes[dname];
 
+                // There is only one block size when using TB.
+                assert(_use_pack_tuners == false);
+                auto blksize = _opts->_block_sizes[dname];
+
+                // Req'd shift in this dim based on max halos.
+                idx_t angle = ROUND_UP(max_halos[dname], _dims->_fold_pts[dname]);
+            
+                // Determine the max spatial skewing angles for TB.
+                // Set TB angle to zero iff block covers whole
+                // region in given dim.
+                idx_t tb_angle = 0;
+                if (blksize < rnsize)
+                    tb_angle = angle;
+                tb_angles.addDimBack(dname, tb_angle);
+            
                 // Calculate max number of temporal steps in
                 // this dim.
-                auto bsz = _opts->_block_sizes[dname];
-                auto angle = tb_angles[dname];
-                if (angle > 0) {
-                    idx_t sh_pts = angle * 2 * stPacks.size();
-                    idx_t cur_max = (bsz - 1) / sh_pts + 1;
+                if (tb_angle > 0) {
+                    idx_t sh_pts = tb_angle * 2 * stPacks.size(); // pts shifted per step.
+                    idx_t dmax = ((blksize - 1) / sh_pts) + 1;
                     TRACE_MSG("update_block_info: max TB steps in dim '" <<
-                              dname << "' = " << cur_max <<
-                              " due to base block size of " << bsz <<
-                              " and TB angle of " << angle);
-                    max_steps = min(max_steps, cur_max);
+                              dname << "' = " << dmax <<
+                              " due to base block size of " << blksize <<
+                              " and TB angle of " << tb_angle);
+                    max_steps = min(max_steps, dmax);
                 }
             }
             tb_steps = min(tb_steps, max_steps);
