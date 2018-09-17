@@ -59,10 +59,9 @@ else ifeq ($(stencil),cube)
 else ifneq ($(findstring iso3dfd,$(stencil)),)
  MACROS				+=	MAX_EXCH_DIST=1
  radius				:=	8
- def_rank_args			:=	-d 1024 -dx 512 # assume 2 ranks/node in 'x'.
+ def_rank_args			:=	-d 1024
  def_pad_args			:=	-ep 1
  ifeq ($(arch),knl)
-  def_rank_args			:=	-d 1024 # assume 1 rank/node.
   fold_4byte			:=	x=2,y=8
   cluster			:=	x=2
   def_block_args		:=	-bx 160 -by 256 -bz 96
@@ -92,10 +91,9 @@ else ifneq ($(findstring awp,$(stencil)),)
  endif
  def_block_args			:=	-b 32
  YC_FLAGS			+=	-min-es 1
- def_rank_args			:=	-dx 512 -dy 1024 -dz 128 # assume 2 ranks/node in 'x'.
+ def_rank_args			:=	-d 1024 -dz 128
  def_pad_args			:=	-ep 1
  ifeq ($(arch),knl)
-  def_rank_args			:=	-dx 1024 -dy 1024 -dz 128 # assume 1 rank/node.
   fold_4byte			:=	x=4,y=4
   def_thread_divisor		:=	2
   def_block_threads		:=	4
@@ -138,7 +136,6 @@ else ifneq ($(findstring fsg,$(stencil)),)
   pfd_l1		:=	0
   pfd_l2		:=	2
  else ifneq ($(filter $(arch),skx skl),)
-  def_rank_args		:=	-d 384 -dx 192
   fold_4byte		:=	x=4,y=4
   def_block_args	:=	-bx 188 -by 12 -bz 24
   def_block_threads	:=	1
@@ -149,7 +146,6 @@ else ifeq ($(stencil),tti)
  radius			:=	2
  def_rank_args		:=	-d 512
  ifneq ($(filter $(arch),skx skl),)
-  def_rank_args		:=	-d 640 -dx 320
   fold_4byte		:=	x=4,y=4
   def_block_args	:=	-bx 80 -by 16 -bz 40
   def_block_threads	:=	1
@@ -277,7 +273,8 @@ include $(YASK_BASE)/src/common/common.mk
 # Vars starting with 'YK_' apply to the stencil kernel.
 
 # Flags passed to stencil compiler.
-YC_FLAGS	+=	-stencil $(stencil) -elem-bytes $(real_bytes) -cluster $(cluster) -fold $(fold)
+YC_STENCIL	?=	$(stencil)
+YC_FLAGS	+=	-stencil $(YC_STENCIL) -elem-bytes $(real_bytes) -cluster $(cluster) -fold $(fold)
 ifneq ($(eqs),)
  YC_FLAGS	+=	-eq-bundles $(eqs)
 endif
@@ -764,10 +761,10 @@ py-api-no-yc:
 	$(MAKE) $(NO_YC_MAKE_FLAGS) py-api
 
 # Validation runs for each binary.
-val1	:=	-d 48 -dt 2 -b 16 -bt 1
-val2	:=	-d 63 -dt 2 -b 24 -bt 1 -r 32 -rt 2
-val3	:=	-d 36 -dt 2 -b 24 -bt 2
-val4	:=	-d 52 -dt 2 -b 32 -bt 2 -r 48 -rt 2
+val1	:=	-trial_steps 2 -d 48 -b 16 -bt 1
+val2	:=	-trial_steps 2 -d 63 -b 24 -bt 1 -r 32 -rt 2
+val3	:=	-trial_steps 2 -d 36 -b 24 -bt 2
+val4	:=	-trial_steps 2 -d 52 -b 32 -bt 2 -r 48 -rt 2
 ranks	:=	2
 
 # Run the kernel binary using several combos of sizes and ranks.

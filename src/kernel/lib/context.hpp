@@ -502,10 +502,8 @@ namespace yask {
         }
 
         // Reference stencil calculations.
-        virtual void calc_rank_ref();
-
-        // Vectorized and blocked stencil calculations.
-        virtual void calc_rank_opt(idx_t max_secs);
+        virtual void run_ref(idx_t first_step_index,
+                             idx_t last_step_index);
 
         // Calculate results within a region.
         virtual void calc_region(BundlePackPtr& sel_bp,
@@ -631,14 +629,9 @@ namespace yask {
         virtual idx_t get_overall_domain_size(const std::string& dim) const;
 
         virtual void run_solution(idx_t first_step_index,
-                                  idx_t last_step_index,
-                                  idx_t max_secs);
-        virtual void run_solution(idx_t first_step_index,
-                                  idx_t last_step_index) {
-            run_solution(first_step_index, last_step_index, 0);
-        }
+                                  idx_t last_step_index);
         virtual void run_solution(idx_t step_index) {
-            run_solution(step_index, step_index, 0);
+            run_solution(step_index, step_index);
         }
         virtual void share_grid_storage(yk_solution_ptr source);
 
