@@ -227,9 +227,9 @@ namespace yask {
                 // Exchange all dirty halos.
                 exchange_halos();
 
-                // Find the groups that need to be processed.
+                // Find the bundles that need to be processed.
                 // This will be the prerequisite scratch-grid
-                // groups plus this non-scratch group.
+                // bundles plus this non-scratch group.
                 auto sg_list = asg->get_reqd_bundles();
 
                 // Loop through all the needed bundles.
@@ -1215,6 +1215,7 @@ namespace yask {
             // Starting point of the *next* block.  This is used to create
             // bridge shapes between blocks.  Initially, the beginning of
             // the next block is the end of this block.
+            // TODO: split these parts more evenly when not full triangles.
             idx_t next_blk_start = blk_stop;
 
             // Adjust these based on current shift.  Adjust by pts in one TB

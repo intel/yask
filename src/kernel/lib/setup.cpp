@@ -1320,13 +1320,16 @@ namespace yask {
             " vector-size:           " << _dims->_fold_pts.makeDimValStr(" * ") << endl <<
             " cluster-size:          " << _dims->_cluster_pts.makeDimValStr(" * ") << endl <<
             " sub-block-size:        " << _opts->_sub_block_sizes.makeDimValStr(" * ") << endl <<
-            //" sub-block-group-size:  " << _opts->_sub_block_group_sizes.makeDimValStr(" * ") << endl <<
             " mini-block-size:       " << _opts->_mini_block_sizes.makeDimValStr(" * ") << endl <<
             " block-size:            " << _opts->_block_sizes.makeDimValStr(" * ") << endl <<
-            //" block-group-size:      " << _opts->_block_group_sizes.makeDimValStr(" * ") << endl <<
             " region-size:           " << _opts->_region_sizes.makeDimValStr(" * ") << endl <<
             " rank-domain-size:      " << _opts->_rank_sizes.makeDimValStr(" * ") << endl <<
             " overall-problem-size:  " << overall_domain_sizes.makeDimValStr(" * ") << endl;
+#ifdef SHOW_GROUPS
+        os << 
+            " sub-block-group-size:  " << _opts->_sub_block_group_sizes.makeDimValStr(" * ") << endl <<
+            " block-group-size:      " << _opts->_block_group_sizes.makeDimValStr(" * ") << endl <<
+#endif
         os << "\nOther settings:\n"
             " yask-version:          " << yask_get_version_string() << endl <<
             " stencil-name:          " << get_name() << endl <<

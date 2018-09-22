@@ -153,6 +153,10 @@ sub usage {
 my %geneRanges;
 my $autoKey = 'auto_';          # prefix for special-case settings.
 
+# control groups.
+# TODO: make an option.
+my $showGroups = 0;
+
 # autoflush.
 $| = 1;
 
@@ -266,7 +270,9 @@ for my $origOpt (@ARGV) {
 
     # special case for problem size: also set other max sizes.
     if ($key =~ /^d[xyz]?$/ && $max > 0) {
-      for my $i (qw(r bg b sbg sb)) {
+      my @szs = qw(r b sb);
+      push @szs, qw(bg sbg) if $showGroups;
+      for my $i (@szs) {
         my $key2 = $key;
         $key2 =~ s/^d/$i/;
         $geneRanges{$autoKey.$key2} = [ 1, $max ];
@@ -320,15 +326,13 @@ my @metrics = ( $fitnessMetric,
                 'overall-domain-size',
                 'rank-domain-size',
                 'region-size',
-                'block-group-size',
                 'block-size',
-                'sub-block-group-size',
+                'mini-block-size',
                 'sub-block-size',
                 'cluster-size',
                 'vector-size',
                 'num-regions',
                 'num-blocks-per-region-per-step',
-                'num-block-groups-per-region-per-step',
                 'max-halos',
                 'extra-padding',
                 'minimum-padding',
@@ -341,6 +345,12 @@ my @metrics = ( $fitnessMetric,
                 'Total overall allocation',
                 'Overall problem size',
               );
+if ($showGroups) {
+  push @metrics,
+    'block-group-size',
+    'mini-block-group-size';
+    'sub-block-group-size';
+}
 
 # how many individuals to create randomly and then keep at any given time.
 my $popSize = 200;
@@ -428,21 +438,16 @@ my @rangesAll =
    [ 0, $maxDim, 1, 'ry' ],
    [ 0, $maxDim, 1, 'rz' ],
 
-   # block-group size.
-   [ 0, $maxDim, 1, 'bgx' ],
-   [ 0, $maxDim, 1, 'bgy' ],
-   [ 0, $maxDim, 1, 'bgz' ],
-
    # block size.
    [ 1, $maxTimeBlock, 1, 'bt' ],
    [ 0, $maxDim, 1, 'bx' ],
    [ 0, $maxDim, 1, 'by' ],
    [ 0, $maxDim, 1, 'bz' ],
 
-   # sub-block-group size.
-   [ 0, $maxDim, 1, 'sbgx' ],
-   [ 0, $maxDim, 1, 'sbgy' ],
-   [ 0, $maxDim, 1, 'sbgz' ],
+   # mini-block size.
+   [ 0, $maxDim, 1, 'mbx' ],
+   [ 0, $maxDim, 1, 'mby' ],
+   [ 0, $maxDim, 1, 'mbz' ],
 
    # sub-block size.
    [ 0, $maxDim, 1, 'sbx' ],
@@ -459,6 +464,21 @@ my @rangesAll =
    [ $minBlockThreadsExp, $maxBlockThreadsExp, 1, 'bthreads_exp' ],
   );
 
+if ($showGroups) {
+  push @rangesAll,
+    (
+     # block-group size.
+     [ 0, $maxDim, 1, 'bgx' ],
+     [ 0, $maxDim, 1, 'bgy' ],
+     [ 0, $maxDim, 1, 'bgz' ],
+     
+     # sub-block-group size.
+     [ 0, $maxDim, 1, 'sbgx' ],
+     [ 0, $maxDim, 1, 'sbgy' ],
+     [ 0, $maxDim, 1, 'sbgz' ],
+    );
+}
+
 # Add compiler genes.
 if ($doBuild) {
   push @rangesAll,
@@ -468,6 +488,8 @@ if ($doBuild) {
      # Each loop consists of index order and path mods.
      [ 0, $#loopOrders, 1, 'subBlockOrder' ],
      [ 0, $#pathNames, 1, 'subBlockPath' ],
+     [ 0, $#loopOrders, 1, 'miniBlockOrder' ],
+     [ 0, $#pathNames, 1, 'miniBlockPath' ],
      [ 0, $#loopOrders, 1, 'blockOrder' ],
      [ 0, $#pathNames, 1, 'blockPath' ],
      [ 0, $#loopOrders, 1, 'regionOrder' ],
@@ -662,7 +684,11 @@ sub readHashes($$$) {
 
   my @vals;
   for my $d (@dirs) {
-    push @vals, readHash($hash, "$key$d", $isBuildVar);
+    if ($key =~ /bg$/ && !$showGroups) {
+      push @vals, 1;
+    } else {
+      push @vals, readHash($hash, "$key$d", $isBuildVar);
+    }
   }
   return @vals;
 }
@@ -846,6 +872,8 @@ sub setResults($$) {
       my $val = $1;
 
       # adjust for suffixes.
+      # TODO: add an option to kernel to suppress suffixes and
+      # remove this code.
       if ($val =~ /^([0-9.e+-]+)KiB?$/) {
         $val = $1 * $oneKi;
       } elsif ($val =~ /^([0-9.e+-]+)MiB?$/) {
@@ -1127,8 +1155,12 @@ sub adjSizes($$) {
   # adjust each dim.
   map {
 
+    # If outer size is zero, do nothing.
+    if ($os->[$_] == 0) {
+    }
+    
     # If size is zero, set to max of outer.
-    if ($is->[$_] == 0) {
+    elsif ($is->[$_] == 0) {
       $is->[$_] = $os->[$_];
     }
 
@@ -1174,11 +1206,12 @@ sub fitness {
   my @ds = readHashes($h, 'd', 0);
   my $rt = readHash($h, 'rt', 1);
   my @rs = readHashes($h, 'r', 0);
-  my @bgs = readHashes($h, 'bg', 0);
   my $bt = readHash($h, 'bt', 1);
   my @bs = readHashes($h, 'b', 0);
-  my @sbgs = readHashes($h, 'sbg', 0);
+  my @mbs = readHashes($h, 'mb', 0);
   my @sbs = readHashes($h, 'sb', 0);
+  my @bgs = readHashes($h, 'bg', 0);
+  my @sbgs = readHashes($h, 'sbg', 0);
   my @cvs = readHashes($h, 'c', 1); # in vectors, not in points!
   my @ps = readHashes($h, 'ep', 0);
   my $fold = readHash($h, 'fold', 1);
@@ -1207,24 +1240,30 @@ sub fitness {
 
   # adjust inner sizes to fit in their enclosing sizes.
   adjSizes(\@rs, \@ds);         # region <= domain.
-  adjSizes(\@bgs, \@rs);        # block-group <= region.
   adjSizes(\@bs, \@rs);         # block <= region.
-  adjSizes(\@sbgs, \@bs);       # sub-block-group <= block.
-  adjSizes(\@sbs, \@bs);        # sub-block <= block.
+  adjSizes(\@mbs, \@bs);        # mini-block <= block.
+  adjSizes(\@sbs, \@mbs);       # sub-block <= mini-block.
+  adjSizes(\@bgs, \@rs);        # block-group <= region.
+  adjSizes(\@sbgs, \@mbs);      # sub-block-group <= mini-block.
 
   # 3d sizes in points.
   my $dPts = mult(@ds);
   my $rPts = mult(@rs);
-  my $bgPts = mult(@bgs);
   my $bPts = mult(@bs);
-  my $sbgPts = mult(@sbgs);
+  my $mbPts = mult(@mbs);
   my $sbPts = mult(@sbs);
   my $cPts = mult(@cs);
   my $fPts = mult(@fs);
+  my $bgPts = mult(@bgs);
+  my $sbgPts = mult(@sbgs);
 
   # Clusters per block.
   my @bcs = map { ceil($bs[$_] / $cs[$_]) } 0..$#dirs;
   my $bCls = mult(@bcs);
+
+  # Mini-blocks per block.
+  my @bmbs = map { ceil($bs[$_] / $mbs[$_]) } 0..$#dirs;
+  my $bMbs = mult(@bmbs);
 
   # Blocks per region.
   my @rbs = map { ceil($rs[$_] / $bs[$_]) } 0..$#dirs;
@@ -1241,16 +1280,19 @@ sub fitness {
     print "Sizes:\n";
     print "  rank size = $dPts\n";
     print "  region size = $rPts\n";
-    print "  block-group size = $bgPts\n";
     print "  block size = $bPts\n";
-    print "  sub-block-group size = $sbgPts\n";
     print "  sub-block size = $sbPts\n";
     print "  cluster size = $cPts\n";
     print "  fold size = $fPts\n";
     print "  regions per rank = $dRegs\n";
     print "  blocks per region = $rBlks\n";
     print "  clusters per block = $bCls\n";
+    print "  mini-blocks per block = $bMbs\n";
     print "  mem estimate = ".($overallSize/$oneGi)." GB\n";
+    if ($showGroups) {
+      print "  block-group size = $bgPts\n";
+      print "  sub-block-group size = $sbgPts\n";
+    }
   }
 
   # check overall size.
@@ -1296,15 +1338,19 @@ sub fitness {
   addStat($ok, 'mem estimate', $overallSize);
   addStat($ok, 'rank size', $dPts);
   addStat($ok, 'region size', $rPts);
-  addStat($ok, 'block-group size', $bgPts);
   addStat($ok, 'block size', $bPts);
-  addStat($ok, 'sub-block-group size', $sbgPts);
+  addStat($ok, 'mini-block size', $mbPts);
   addStat($ok, 'sub-block size', $sbPts);
   addStat($ok, 'cluster size', $cPts);
   addStat($ok, 'regions per rank', $dRegs);
   addStat($ok, 'blocks per region', $rBlks);
   addStat($ok, 'clusters per block', $bCls);
+  addStat($ok, 'mini-blocks per block', $bMbs);
   addStat($ok, 'vectors per cluster', $cvs);
+  if ($showGroups) {
+    addStat($ok, 'block-group size', $bgPts);
+    addStat($ok, 'sub-block-group size', $sbgPts);
+  }
 
   # exit here if just checking.
   return $ok if $justChecking;
@@ -1334,6 +1380,7 @@ sub fitness {
   # gen-loops vars.
   $mvars .= makeLoopVars($h, 'REGION', 'region', 'omp', 3);
   $mvars .= makeLoopVars($h, 'BLOCK', 'block', 'omp', 3);
+  $mvars .= makeLoopVars($h, 'MINI_BLOCK', 'miniBlock', '', 3);
   $mvars .= makeLoopVars($h, 'SUB_BLOCK', 'subBlock', '', 2);
 
   # other vars.
@@ -1354,10 +1401,13 @@ sub fitness {
   $args .= " -dx $ds[0] -dy $ds[1] -dz $ds[2]";
   $args .= " -rt $rt -rx $rs[0] -ry $rs[1] -rz $rs[2]";
   $args .= " -bt $bt -bx $bs[0] -by $bs[1] -bz $bs[2]";
-  $args .= " -bgx $bgs[0] -bgy $bgs[1] -bgz $bgs[2]";
+  $args .= " -mbx $mbs[0] -mby $mbs[1] -mbz $mbs[2]";
   $args .= " -sbx $sbs[0] -sby $sbs[1] -sbz $sbs[2]";
-  $args .= " -sbgx $sbgs[0] -sbgy $sbgs[1] -sbgz $sbgs[2]";
   $args .= " -epx $ps[0] -epy $ps[1] -epz $ps[2]";
+  if ($showGroups) {
+    $args .= " -bgx $bgs[0] -bgy $bgs[1] -bgz $bgs[2]";
+    $args .= " -sbgx $sbgs[0] -sbgy $sbgs[1] -sbgz $sbgs[2]";
+  }
 
   # num of secs and trials.
   my $shortTime = 1;

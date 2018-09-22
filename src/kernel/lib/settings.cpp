@@ -236,12 +236,14 @@ namespace yask {
     {
         _add_domain_option(parser, "d", "Rank-domain size", _rank_sizes);
         _add_domain_option(parser, "r", "Region size", _region_sizes, true);
-        _add_domain_option(parser, "bg", "Block-group size", _block_group_sizes);
         _add_domain_option(parser, "b", "Block size", _block_sizes, true);
-        _add_domain_option(parser, "mbg", "Mini-block-group size", _mini_block_group_sizes);
         _add_domain_option(parser, "mb", "Mini-block size", _mini_block_sizes);
-        _add_domain_option(parser, "sbg", "Sub-block-group size", _sub_block_group_sizes);
         _add_domain_option(parser, "sb", "Sub-block size", _sub_block_sizes);
+#ifdef SHOW_GROUPS
+        _add_domain_option(parser, "bg", "Block-group size", _block_group_sizes);
+        _add_domain_option(parser, "mbg", "Mini-block-group size", _mini_block_group_sizes);
+        _add_domain_option(parser, "sbg", "Sub-block-group size", _sub_block_group_sizes);
+#endif
         _add_domain_option(parser, "mp", "Minimum grid-padding size (including halo)", _min_pad_sizes);
         _add_domain_option(parser, "ep", "Extra grid-padding size (beyond halo)", _extra_pad_sizes);
 #ifdef USE_MPI
@@ -364,8 +366,10 @@ namespace yask {
             " Set rank-domain sizes to specify the work done on this rank.\n"
             "  Set the domain sizes to specify the problem size for this rank.\n"
             "  This and the number of grids affect the amount of memory used.\n"
+#ifdef SHOW_GROUPS
             " Setting 'group' sizes controls only the order of tiles.\n"
             "  These are advanced settings that are not commonly used.\n"
+#endif
             "\nControlling OpenMP threading:\n"
             " Using '-max_threads 0' =>\n"
             "  max_threads is set to OpenMP's default number of threads.\n"
@@ -539,7 +543,6 @@ namespace yask {
         // Now, we adjust groups. These are done after all the above sizes
         // because group sizes are more like 'guidelines' and don't have
         // their own loops.
-        os << "\nGroups (only affect ordering):" << endl;
 
         // Adjust defaults for groups to be min size.
         // Otherwise, findNumBlockGroupsInRegion() would set default
@@ -554,8 +557,10 @@ namespace yask {
                 _sub_block_group_sizes[dname] = 1; // will be rounded up to min size.
         }
 
-        // Determine num block-groups.
-        // Also fix up block-group sizes as needed.
+#ifdef SHOW_GROUPS
+        os << "\nGroups (only affect ordering):" << endl;
+
+        // Show num block-groups.
         // TODO: only print this if block-grouping is enabled.
         auto nbg = findNumSubsets(os, _block_group_sizes, "block-group",
                                   _region_sizes, "region",
@@ -566,8 +571,7 @@ namespace yask {
                                    _dims->_cluster_pts, step_dim);
         os << " num-blocks-per-block-group-per-step: " << nb_g << endl;
 
-        // Determine num mini-block-groups.
-        // Also fix up mini-block-group sizes as needed.
+        // Show num mini-block-groups.
         // TODO: only print this if mini-block-grouping is enabled.
         auto nmbg = findNumSubsets(os, _mini_block_group_sizes, "mini-block-group",
                                    _block_sizes, "block",
@@ -578,8 +582,7 @@ namespace yask {
                                     _dims->_cluster_pts, step_dim);
         os << " num-mini-blocks-per-block-group-per-step: " << nmb_g << endl;
 
-        // Determine num sub-block-groups.
-        // Also fix up sub-block-group sizes as needed.
+        // Show num sub-block-groups.
         // TODO: only print this if sub-block-grouping is enabled.
         auto nsbg = findNumSubsets(os, _sub_block_group_sizes, "sub-block-group",
                                    _mini_block_sizes, "mini-block",
@@ -589,6 +592,7 @@ namespace yask {
                                    _sub_block_group_sizes, "sub-block-group",
                                    _dims->_cluster_pts, step_dim);
         os << " num-sub-blocks-per-sub-block-group-per-step: " << nsb_g << endl;
+#endif
     }
 
 } // namespace yask.
