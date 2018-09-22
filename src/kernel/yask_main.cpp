@@ -196,7 +196,7 @@ struct AppSettings : public KernelSettings {
         os <<
             "┌────────────────────────────────────────────┐\n"
             "│   Y.A.S.K. ── Yet Another Stencil Kernel   │\n"
-            "│             https://01.org/yask            │\n"
+            "│       https://github.com/intel/yask        │\n"
             "│ Copyright (c) 2014-2018, Intel Corporation │\n"
             "└────────────────────────────────────────────┘\n"
             "\n"
@@ -520,6 +520,7 @@ int main(int argc, char** argv)
         ksoln->end_solution();
 
         kenv->global_barrier();
+        os << "Stencil '" << ksoln->get_name() << "'.\n";
         if (!ok)
             exit_yask(1);
 

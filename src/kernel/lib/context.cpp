@@ -42,14 +42,14 @@ namespace yask {
         checkDimType(dim, #api_name, step_ok, domain_ok, misc_ok);      \
         return expr;                                                    \
     }
+    GET_SOLN_API(get_num_ranks, _opts->_num_ranks[dim], false, true, false, false)
+    GET_SOLN_API(get_overall_domain_size, overall_domain_sizes[dim], false, true, false, true)
     GET_SOLN_API(get_rank_domain_size, _opts->_rank_sizes[dim], false, true, false, false)
     GET_SOLN_API(get_region_size, _opts->_region_sizes[dim], true, true, false, false)
-    GET_SOLN_API(get_min_pad_size, _opts->_min_pad_sizes[dim], false, true, false, false)
     GET_SOLN_API(get_block_size, _opts->_block_sizes[dim], true, true, false, false)
-    GET_SOLN_API(get_num_ranks, _opts->_num_ranks[dim], false, true, false, false)
     GET_SOLN_API(get_first_rank_domain_index, rank_bb.bb_begin[dim], false, true, false, true)
     GET_SOLN_API(get_last_rank_domain_index, rank_bb.bb_end[dim] - 1, false, true, false, true)
-    GET_SOLN_API(get_overall_domain_size, overall_domain_sizes[dim], false, true, false, true)
+    GET_SOLN_API(get_min_pad_size, _opts->_min_pad_sizes[dim], false, true, false, false)
     GET_SOLN_API(get_rank_index, _opts->_rank_indices[dim], false, true, false, true)
 #undef GET_SOLN_API
 
@@ -61,12 +61,12 @@ namespace yask {
         update_grid_info();                                             \
         if (reset_prep) rank_bb.bb_valid = ext_bb.bb_valid = false;     \
     }
-    SET_SOLN_API(set_min_pad_size, _opts->_min_pad_sizes[dim] = n, false, true, false, false)
-    SET_SOLN_API(set_block_size, _opts->_block_sizes[dim] = n, true, true, false, true)
-    SET_SOLN_API(set_region_size, _opts->_region_sizes[dim] = n, true, true, false, true)
-    SET_SOLN_API(set_rank_domain_size, _opts->_rank_sizes[dim] = n, false, true, false, true)
-    SET_SOLN_API(set_num_ranks, _opts->_num_ranks[dim] = n, false, true, false, true)
     SET_SOLN_API(set_rank_index, _opts->_rank_indices[dim] = n, false, true, false, true)
+    SET_SOLN_API(set_num_ranks, _opts->_num_ranks[dim] = n, false, true, false, true)
+    SET_SOLN_API(set_rank_domain_size, _opts->_rank_sizes[dim] = n, false, true, false, true)
+    SET_SOLN_API(set_region_size, _opts->_region_sizes[dim] = n, true, true, false, true)
+    SET_SOLN_API(set_block_size, _opts->_block_sizes[dim] = n, true, true, false, true)
+    SET_SOLN_API(set_min_pad_size, _opts->_min_pad_sizes[dim] = n, false, true, false, false)
 #undef SET_SOLN_API
 
     void StencilContext::share_grid_storage(yk_solution_ptr source) {
@@ -156,7 +156,7 @@ namespace yask {
         end.setVals(rank_bb.bb_end, false);
         end[step_dim] = end_t;
 
-        TRACE_MSG("calc_rank_ref: [" << begin.makeDimValStr() << " ... " <<
+        TRACE_MSG("run_ref: [" << begin.makeDimValStr() << " ... " <<
                   end.makeDimValStr() << ")");
 
         // Force region & block sizes to whole rank size so that scratch
@@ -170,7 +170,7 @@ namespace yask {
 
         // Copy these settings to packs and realloc scratch grids.
         for (auto& sp : stPacks)
-            sp->getSettings() = *_opts;
+            sp->getLocalSettings() = *_opts;
         allocScratchData(os);
 
         // Use only one set of scratch grids.
@@ -215,12 +215,12 @@ namespace yask {
             for (auto* asg : stBundles) {
 
                 // Scan through n-D space.
-                TRACE_MSG("calc_rank_ref: step " << start_t <<
+                TRACE_MSG("run_ref: step " << start_t <<
                           " in non-scratch bundle '" << asg->get_name());
 
                 // Check step.
                 if (check_step_conds && !asg->is_in_valid_step(start_t)) {
-                    TRACE_MSG("calc_rank_ref: not valid for step " << start_t);
+                    TRACE_MSG("run_ref: not valid for step " << start_t);
                     continue;
                 }
                 
@@ -250,7 +250,7 @@ namespace yask {
                     } while(0)
 
                     // Scan through n-D space.
-                    TRACE_MSG("calc_rank_ref: step " << start_t <<
+                    TRACE_MSG("run_ref: step " << start_t <<
                               " in bundle '" << sg->get_name() << "': [" <<
                               misc_idxs.begin.makeValStr(ndims) <<
                               " ... " << misc_idxs.end.makeValStr(ndims) << ")");
@@ -358,10 +358,10 @@ namespace yask {
             for (auto& dim : _dims->_domain_dims.getDims()) {
                 auto& dname = dim.getName();
 
-                // The end should be adjusted if an extension doesn't exist.
-                // Extentions exist between ranks, and adjustments exist at
-                // the end of the right-most rank in each dim.  See "(adj)"
-                // in diagram above.
+                // The end should be adjusted only if an extension doesn't
+                // exist.  Extentions exist between ranks, so additional
+                // adjustments are only needed at the end of the right-most
+                // rank in each dim.  See "(adj)" in diagram above.
                 if (right_wf_exts[dname] == 0)
                     end[dname] += wf_shifts[dname];
 
@@ -369,6 +369,7 @@ namespace yask {
                 // whole rank in this dim.
                 if (_opts->_region_sizes[dname] >= _opts->_rank_sizes[dname])
                     step[dname] = end[dname] - begin[dname];
+
             }
             TRACE_MSG("run_solution: after adjustment for " << num_wf_shifts <<
                       " wave-front shift(s): [" <<
@@ -406,11 +407,13 @@ namespace yask {
                 min(start_t + step_t, end_t) :
                 max(start_t + step_t, end_t);
             idx_t this_num_t = abs(stop_t - start_t);
+
             // Set indices that will pass through generated code.
             rank_idxs.index[step_posn] = index_t;
             rank_idxs.start[step_posn] = start_t;
             rank_idxs.stop[step_posn] = stop_t;
             rank_idxs.step[step_posn] = step_t;
+
             // If no wave-fronts (default), loop through packs here, and do
             // only one pack at a time in calc_region(). This is similar to
             // loop in calc_rank_ref(), but with packs instead of bundles.
@@ -537,87 +540,6 @@ namespace yask {
         run_time.stop();
     } // run_solution().
 
-    // Trim boundaries 'start' and 'stop' to actual size in which to compute
-    // in pack 'bp' within region with base 'region_start' to 'region_stop'
-    // shifted by 'shift_num', which should start at 0 and increment for
-    // each pack in each time-step. Updates 'begin' and 'end' in 'idxs'.
-    // Return 'true' if resulting area is non-empty, 'false' if empty.
-    bool StencilContext::trim_to_region(const Indices& start, const Indices& stop,
-                                        const Indices& region_start, const Indices& region_stop,
-                                        BundlePackPtr& bp, idx_t shift_num,
-                                        ScanIndices& idxs) {
-        auto step_posn = +Indices::step_posn;
-        int ndims = _dims->_stencil_dims.size();
-        auto& step_dim = _dims->_step_dim;
-
-        // For wavefront adjustments, see conceptual diagram in
-        // run_solution().  In this function, one of the
-        // parallelogram-shaped regions is being evaluated.  These
-        // shapes may extend beyond actual boundaries. So, at each
-        // time-step, the parallelogram may be trimmed based on the
-        // BB and WF extensions outside of the rank-BB.
-
-        // Actual region boundaries must stay within [extended] pack BB.
-        // We have to calculate the posn in the extended rank at each
-        // value of 'shift_num' because it is being shifted spatially.
-        bool ok = true;
-        for (int i = 0, j = 0; i < ndims; i++) {
-            if (i == step_posn) continue;
-            auto angle = wf_angles[j];
-
-            // Shift initial spatial region boundaries for this iteration of
-            // temporal wavefront.  Between regions, we only shift left, so
-            // region loops must strictly increment. They may do so in any
-            // order.  Shift by pts in one WF step.  Always shift left in
-            // WFs.  TODO: shift only what is needed by this pack, not the
-            // global max.
-            idx_t rstart = region_start[i] - angle * shift_num;
-            idx_t rstop = region_stop[i] - angle * shift_num;
-
-            // Clamp to extended BB.
-            if (bp) {
-                auto& pbb = bp->getBB(); // extended BB for this pack.
-                rstart = max(rstart, pbb.bb_begin[j]);
-                rstop = min(rstop, pbb.bb_end[j]);
-            }
-
-            // Clamp to provided start & stop.
-            rstart = max(rstart, start[i]);
-            rstop = min(rstop, stop[i]);
-            
-            // Non-extended domain.
-            idx_t dbegin = rank_bb.bb_begin[j];
-            idx_t dend = rank_bb.bb_end[j];
-
-            // In left ext, add 'angle' points for every shift to get
-            // region boundary in ext.
-            if (rstart < dbegin && left_wf_exts[j])
-                rstart = max(rstart, dbegin - left_wf_exts[j] + shift_num * angle);
-
-            // In right ext, subtract 'angle' points for every shift.
-            if (rstop > dend && right_wf_exts[j])
-                rstop = min(rstop, dend + right_wf_exts[j] - shift_num * angle);
-
-            // Copy into idxs.
-            idxs.begin[i] = rstart;
-            idxs.end[i] = rstop;
-
-            // Anything to do in the adjusted region?
-            if (rstop <= rstart)
-                ok = false;
-
-            j++; // next domain index.
-        }
-        TRACE_MSG("trim_to_region: updated span: [" <<
-                  idxs.begin.makeValStr(ndims) << " ... " <<
-                  idxs.end.makeValStr(ndims) << ") within region base [" <<
-                  region_start.makeValStr(ndims) << " ... " <<
-                  region_stop.makeValStr(ndims) << ") shifted " <<
-                  shift_num << " time(s) is " <<
-                  (ok ? "not " : "") << "empty");
-        return ok;
-    }
-    
     // Calculate results within a region.  Each region is typically computed
     // in a separate OpenMP 'for' region.  In this function, we loop over
     // the time steps and bundle packs and evaluate a pack in each of
@@ -626,14 +548,15 @@ namespace yask {
     void StencilContext::calc_region(BundlePackPtr& sel_bp,
                                      const ScanIndices& rank_idxs) {
 
-        int ndims = _dims->_stencil_dims.size();
+        int nsdims = _dims->_stencil_dims.size();
+        int nddims = _dims->_domain_dims.size();
         auto& step_dim = _dims->_step_dim;
         auto step_posn = +Indices::step_posn;
         TRACE_MSG("calc_region: region [" <<
-                  rank_idxs.start.makeValStr(ndims) << " ... " <<
-                  rank_idxs.stop.makeValStr(ndims) << ") within rank [" <<
-                  rank_idxs.begin.makeValStr(ndims) << " ... " <<
-                  rank_idxs.end.makeValStr(ndims) << ")" );
+                  rank_idxs.start.makeValStr(nsdims) << " ... " <<
+                  rank_idxs.stop.makeValStr(nsdims) << ") within rank [" <<
+                  rank_idxs.begin.makeValStr(nsdims) << " ... " <<
+                  rank_idxs.end.makeValStr(nsdims) << ")" );
 
         // Track time (use "else" to avoid double-counting).
         if (do_mpi_exterior)
@@ -645,17 +568,18 @@ namespace yask {
         ScanIndices region_idxs(*_dims, true, &rank_domain_offsets);
         region_idxs.initFromOuter(rank_idxs);
 
-        // Step (usually time) loop.
-        // When doing WF tiling, this loop will step through
+        // Time range.
+        // When doing WF rank tiling, this loop will step through
         // several time-steps in each region.
-        // When doing TB, it will step by the block steps.
+        // When also doing TB, it will step by the block steps.
         idx_t begin_t = region_idxs.begin[step_posn];
         idx_t end_t = region_idxs.end[step_posn];
         idx_t step_dir = (end_t >= begin_t) ? 1 : -1;
-        idx_t step_t = tb_steps;
-        step_t *= step_dir;
+        idx_t step_t = tb_steps * step_dir;
         assert(step_t);
         const idx_t num_t = CEIL_DIV(abs(end_t - begin_t), abs(step_t));
+
+        // Time loop.
         idx_t shift_num = 0;
         for (idx_t index_t = 0; index_t < num_t; index_t++) {
 
@@ -665,7 +589,7 @@ namespace yask {
                 min(start_t + step_t, end_t) :
                 max(start_t + step_t, end_t);
 
-            // Set indices that will pass through generated code.
+            // Set step indices that will pass through generated code.
             region_idxs.index[step_posn] = index_t;
             region_idxs.start[step_posn] = start_t;
             region_idxs.stop[step_posn] = stop_t;
@@ -693,22 +617,20 @@ namespace yask {
                         continue;
                     }
 
-                    // Start timers for this pack.
-                    bp->start_timers();
-
                     // Steps within a region are based on pack block sizes.
-                    auto& settings = bp->getSettings();
+                    auto& settings = bp->getActiveSettings();
                     region_idxs.step = settings._block_sizes;
-                    region_idxs.step[step_posn] = step_t; // override.
+                    region_idxs.step[step_posn] = step_t;
 
                     // Groups in region loops are based on block-group sizes.
                     region_idxs.group_size = settings._block_group_sizes;
-                    region_idxs.group_size[step_posn] = step_t;
 
-                    // Set region_idxs based on pack settings and shift.
-                    bool ok = trim_to_region(rank_idxs.begin, rank_idxs.end,
-                                             rank_idxs.start, rank_idxs.stop,
-                                             bp, shift_num,
+                    // Set region_idxs begin & end based on shifted rank
+                    // start & stop (original region begin & end), rank
+                    // boundaries, and pack BB. This will be the base of the
+                    // region loops.
+                    bool ok = shift_region(rank_idxs.start, rank_idxs.stop,
+                                             shift_num, bp,
                                              region_idxs);
 
                     // Only need to loop through the span of the region if it is
@@ -740,16 +662,13 @@ namespace yask {
                     if (do_mpi_exterior)
                         mark_grids_dirty(bp, start_t, stop_t);
 
-                    // One shift for each pack.
+                    // Need to shift for next time.
                     shift_num++;
-
-                    // Start timers for this pack.
-                    bp->stop_timers();
                     
                 } // stencil bundle packs.
             } // no temporal blocking.
 
-            // If using temporal blocking, step through packs in calc_block().
+            // If using TB, iterate thru steps in a WF and packs in calc_block().
             else {
 
                 TRACE_MSG("calc_region: w/TB in step(s) [" <<
@@ -762,33 +681,51 @@ namespace yask {
                 // Steps within a region are based on rank block sizes.
                 auto& settings = *_opts;
                 region_idxs.step = settings._block_sizes;
-                region_idxs.step[step_posn] = step_t; // override.
+                region_idxs.step[step_posn] = step_t;
 
                 // Groups in region loops are based on block-group sizes.
                 region_idxs.group_size = settings._block_group_sizes;
-                region_idxs.group_size[step_posn] = step_t;
 
-                // Set region_idxs based on rank settings and shift.
-                // This will be the base region for the TB.
-                trim_to_region(rank_idxs.begin, rank_idxs.end,
-                               rank_idxs.start, rank_idxs.stop,
-                               bp, shift_num,
-                               region_idxs);
+                // Set region_idxs begin & end based on shifted start & stop
+                // and rank boundaries.  This will be the base of the region
+                // loops.  NB: calc_block() doesn't need to know about the
+                // *original* region begin & end.
+                bool ok = shift_region(rank_idxs.start, rank_idxs.stop,
+                                         shift_num, bp,
+                                         region_idxs);
 
-                // To tesselate n-D space, we use n distinct "phases", where
-                // n includes the time dim.
-                idx_t nphases = ndims;
-                for (idx_t phase = 0; phase < nphases; phase++) {
+                // To tesselate n-D domain space, we use n+1 distinct
+                // "phases".  For example, 1-D TB uses "upward" triangles
+                // and "downward" triangles. Threads must sync after every
+                // phase. Thus, the phase loop is here around the generated
+                // loops.
+                idx_t nphases = nddims + 1; 
+                if (ok) {
+                    for (idx_t phase = 0; phase < nphases; phase++) {
 
-                    // Call calc_block() on every block.  Only the shapes
-                    // corresponding to the current 'phase' will be
-                    // calculated.
+                        // Call calc_block() on every block.  Only the shapes
+                        // corresponding to the current 'phase' will be
+                        // calculated.
 #include "yask_region_loops.hpp"
+                    }
                 }
+            
+                // Loop thru stencil bundle packs evaluated at this time
+                // step to increment shift & mark dirty grids.
+                for (auto& bp : stPacks) {
 
-                // One shift for each pack for each TB step.
-                shift_num += stPacks.size() * tb_steps;
+                    // Check step.
+                    if (check_step_conds && !bp->is_in_valid_step(start_t))
+                        continue;
 
+                    // One shift for each TB step.
+                    shift_num += tb_steps;
+
+                    // Mark grids that [may] have been written to by this
+                    // pack.
+                    mark_grids_dirty(bp, start_t, stop_t);
+
+                } // stencil bundle packs.
             } // with temporal blocking.
             
         } // time.
@@ -803,14 +740,14 @@ namespace yask {
         }
 
     } // calc_region.
-
-    // Calculate results within a block. This function calls 'calc_block'
-    // for each bundle in the specified pack or all packs if 'sel_bp' is
-    // null.  When using TB, only the shape(s) needed for the tesselation
+    
+    // Calculate results within a block. This function calls
+    // 'calc_mini_block()' for the specified pack or all packs if 'sel_bp'
+    // is null.  When using TB, only the shape(s) needed for the tesselation
     // 'phase' are computed.  Typically called by a top-level OMP thread
     // from calc_region().
     void StencilContext::calc_block(BundlePackPtr& sel_bp,
-                                    idx_t phase, idx_t shift_num,
+                                    idx_t phase,
                                     const ScanIndices& region_idxs) {
 
         int nsdims = _dims->_stencil_dims.size();
@@ -837,8 +774,9 @@ namespace yask {
 
             // Starting point and ending point must be in BB.
             bool inside = true;
-            for (int i = 0, j = 0; i < nsdims; i++) {
+            for (int i = 0, j = -1; i < nsdims; i++) {
                 if (i == step_posn) continue;
+                j++;
 
                 // Starting before beginning of interior?
                 if (region_idxs.start[i] < mpi_interior.bb_begin[j]) {
@@ -851,8 +789,6 @@ namespace yask {
                     inside = false;
                     break;
                 }
-
-                j++;
             }
             if (do_mpi_interior) {
                 if (inside)
@@ -884,52 +820,61 @@ namespace yask {
         block_idxs.initFromOuter(region_idxs);
 
         // Time range.
+        // When not doing TB, there is only one step.
+        // When doing TB, we will only do one iteration here
+        // that covers all steps,
+        // and calc_mini_block() will loop over all steps.
         idx_t begin_t = block_idxs.begin[step_posn];
         idx_t end_t = block_idxs.end[step_posn];
         idx_t step_dir = (end_t >= begin_t) ? 1 : -1;
-        idx_t step_t = step_dir;       // Always 1 step for blocks.
-        const idx_t num_t = abs(end_t - begin_t);
+        idx_t step_t = tb_steps * step_dir;
+        assert(step_t);
+        const idx_t num_t = CEIL_DIV(abs(end_t - begin_t), abs(step_t));
 
         // If TB is not being used, just process the given pack.
+        // No need for a time loop.
+        // No need to check bounds, because they were checked in
+        // calc_region() when not using TB.
         if (tb_steps == 1) {
             assert(bp);
-        
-            // No TB allowed here.
+            assert(abs(step_t) == 1);
+            assert(abs(end_t - begin_t) == 1);
             assert(num_t == 1);
         
-            // Steps within a block are based on pack sub-block sizes.
-            auto& settings = bp->getSettings();
-            block_idxs.step = settings._sub_block_sizes;
-            block_idxs.step[step_posn] = 1;
+            // Set step indices that will pass through generated code.
+            block_idxs.index[step_posn] = 0;
+            block_idxs.start[step_posn] = begin_t;
+            block_idxs.stop[step_posn] = end_t;
 
-            // Groups in block loops are based on sub-block-group sizes.
-            block_idxs.group_size = settings._sub_block_group_sizes;
-            block_idxs.group_size[step_posn] = 1;
+            // Steps within a block are based on pack mini-block sizes.
+            auto& settings = bp->getActiveSettings();
+            block_idxs.step = settings._mini_block_sizes;
+            block_idxs.step[step_posn] = step_t;
+        
+            // Groups in block loops are based on mini-block-group sizes.
+            block_idxs.group_size = settings._mini_block_group_sizes;
 
-            // Loop through bundles in this pack to do actual calcs.
-            for (auto* sb : *bp)
-                if (sb->getBB().bb_num_points)
-                    sb->calc_block(block_idxs);
-        }
+            // Default settings for no TB.
+            BundlePackPtr bp = sel_bp;
+            idx_t nphases = 1;
+            assert(phase == 0);
+            idx_t nshapes = 1;
+            idx_t shape = 0;
+            idx_t shift_num = 0;
+            ScanIndices adj_block_idxs = block_idxs;
 
-        // If TB is active, do all packs across time steps for each required shape.
+            // Include automatically-generated loop code that
+            // calls calc_mini_block() for each mini-block in this block.
+#include "yask_block_loops.hpp"
+        } // no TB.
+
+        // If TB is active, loop thru each required shape.
         else {
 
-            // Determine whether this block is the first
-            // and/or last in the current region for each dim.
-            bool is_first[nddims];
-            bool is_last[nddims];
-            for (int i = 0, j = 0; i < nsdims; i++) {
-                if (i == step_posn) continue;
-
-                is_first[j] = block_idxs.begin[i] <= region_idxs.begin[i];
-                is_last[j] = block_idxs.end[i] >= region_idxs.end[i];
-                j++;
-            }
-
-            // Determine number of shapes. First and last phase need
-            // one shape. Other (bridge) phases need one shape for
-            // each domain dim.
+            // Determine number of shapes for this phase. First and last
+            // phase need one shape. Other (bridge) phases need one shape
+            // for each domain dim. Example: need 'x' and 'y' bridges for 2D
+            // problem.
             idx_t nphases = nsdims;
             idx_t nshapes = (phase == 0) ? 1 :
             (phase == nphases - 1) ? 1 :
@@ -937,171 +882,443 @@ namespace yask {
 
             // Make a copy of the original index span
             // since block_idxs will be modified.
+            // TODO: this may no longer be needed; try to lift
+            // block_idxs code out of shape loop.
             ScanIndices orig_block_idxs(block_idxs);
             
             // Outer loop thru shapes.
             for (idx_t shape = 0; shape < nshapes; shape++) {
 
-                // Restore the block_idxs.
+                // Restore the original block_idxs.
                 block_idxs = orig_block_idxs;
-                
-                // Make a copy of the index span that
-                // we can use for shifting.
-                Indices start(block_idxs.begin);
-                Indices stop(block_idxs.end);
-                
-                // Also track the starting point of the *next* block.  This
-                // is used to create bridge shapes between blocks.
-                Indices next_start(block_idxs.end);
 
-                // Step (usually time) loop.
-                idx_t cur_shift_num = 0;
-                for (idx_t index_t = 0; index_t < num_t; index_t++) {
+                // Can only be one time iteration here when doing TB
+                // because mini-block temporal size is always same
+                // as block temporal size.
+                assert(num_t == 1);
+                    
+                // Set temporal indices to full range.
+                block_idxs.index[step_posn] = 0; // only one index.
+                block_idxs.start[step_posn] = begin_t;
+                block_idxs.stop[step_posn] = end_t;
 
-                    // This value of index_t steps from start_t to stop_t-1.
-                    const idx_t start_t = begin_t + (index_t * step_t);
-                    const idx_t stop_t = (step_t > 0) ?
-                        min(start_t + step_t, end_t) :
-                        max(start_t + step_t, end_t);
+                // Steps within a block are based on rank mini-block sizes.
+                auto& settings = *_opts;
+                block_idxs.step = settings._mini_block_sizes;
+                block_idxs.step[step_posn] = step_dir;
 
-                    // For blocks, start and stop should be one diff.
-                    assert(abs(stop_t - start_t) == 1);
+                // Groups in block loops are based on mini-block-group sizes.
+                block_idxs.group_size = settings._mini_block_group_sizes;
 
-                    // Set temporal indices.
-                    block_idxs.index[step_posn] = index_t;
-                    block_idxs.begin[step_posn] = start_t;
-                    block_idxs.end[step_posn] = stop_t;
-                    block_idxs.start[step_posn] = start_t;
-                    block_idxs.stop[step_posn] = stop_t;
-                    start[step_posn] = start_t;
-                    stop[step_posn] = stop_t;
-                    next_start[step_posn] = start_t;
+                // Increase range of block to cover all phases and
+                // shapes.
+                ScanIndices adj_block_idxs = block_idxs;
+                for (int i = 0, j = -1; i < nsdims; i++) {
+                    if (i == step_posn) continue;
+                    j++;
+                    
+                    // TB shapes can extend to the right only.  They can
+                    // cover a range as big as this block's base plus the
+                    // next block in all dims, so we add the width of the
+                    // current block to the end.  This makes the adjusted
+                    // blocks overlap, but the size of each mini-block is
+                    // trimmed at each step to the proper active size.
+                    // TODO: find a way to make this more efficient to avoid
+                    // calling calc_mini_block() many times with nothing to
+                    // do.
+                    auto width = region_idxs.stop[i] - region_idxs.start[i];
+                    adj_block_idxs.end[i] += width;
+                }
+                TRACE_MSG("calc_block: phase " << phase << ", shape " << shape <<
+                          ", adjusted block [" <<
+                          adj_block_idxs.begin.makeValStr(nsdims) << " ... " <<
+                          adj_block_idxs.end.makeValStr(nsdims) << 
+                          ") with mini-block steps " <<
+                          adj_block_idxs.step.makeValStr(nsdims));
+                    
+                // Include automatically-generated loop code that calls
+                // calc_mini_block() for each mini-block in this block.
+                // NB: each starting block will have the *original*
+                // begin & end indices, regardless of 'shift_num'.
+                BundlePackPtr bp; // null.
+#include "yask_block_loops.hpp"
 
-                    // Steps within a block are based on rank sub-block sizes.
-                    auto& settings = *_opts;
-                    block_idxs.step = settings._sub_block_sizes;
-                    block_idxs.step[step_posn] = 1;
-
-                    // Groups in block loops are based on sub-block-group sizes.
-                    block_idxs.group_size = settings._sub_block_group_sizes;
-                    block_idxs.group_size[step_posn] = 1;
-
-                    // Stencil bundle packs to evaluate at this time step.
-                    for (auto& bp : stPacks) {
-
-                        // Not a selected bundle pack?
-                        if (sel_bp && sel_bp != bp)
-                            continue;
-
-                        // Check step.
-                        if (check_step_conds && !bp->is_in_valid_step(start_t)) {
-                            TRACE_MSG("calc_block: step " << start_t <<
-                                      " not valid for pack '" <<
-                                      bp->get_name() << "'");
-                            continue;
-                        }
-
-                        // Start timers for this pack.
-                        // Tracking only on thread 0. It might be better to track
-                        // all threads and average them. Or something like that.
-                        if (thread_idx == 0)
-                            bp->start_timers();
-
-                        // Adjust start/stop to proper shape.
-                        Indices shape_start(start);
-                        Indices shape_stop(stop);
-                        for (int i = 0, j = 0; i < nsdims; i++) {
-                            if (i == step_posn) continue;
-
-                            // No adjustment needed for phase 0, 1 shape:
-                            // [hyper-]triangle whose base is original
-                            // 'block_idxs'.
-
-                            // After phase 0, bridge one additional dim at a
-                            // time until all dims are bridged at last
-                            // phase. The 'shape' determines what dim to
-                            // start with.
-                            for (idx_t k = 1; k <= phase; k++) {
-
-                                // Select another dim based on shape and phase.
-                                if (shape == (j + k - 1) % nshapes) {
-                                
-                                    // Begin at end of previous.
-                                    shape_start[i] = stop[i];
-                                    
-                                    // End at beginning of next block.
-                                    shape_stop[i] = next_start[i];
-                                }
-                            }
-                            j++;
-                        }
-
-                        TRACE_MSG("calc_block: phase " << phase <<
-                                  ", w/TB, shape " << shape <<
-                                  ", pack '" << bp->get_name() <<
-                                  ", start= " << start.makeValStr(nsdims) <<
-                                  ", stop= " << stop.makeValStr(nsdims) <<
-                                  ", next-start= " << next_start.makeValStr(nsdims) <<
-                                  ", shape-range= [" <<
-                                  shape_start.makeValStr(nsdims) << " ... " <<
-                                  shape_stop.makeValStr(nsdims) << ")");
-                        
-                        // Trim to region boundaries based on pack settings.
-                        bool ok = trim_to_region(shape_start, shape_stop,
-                                                 region_idxs.begin, region_idxs.end,
-                                                 bp, cur_shift_num,
-                                                 block_idxs);
-
-                        // Loop through bundles in this pack to do actual calcs.
-                        if (ok) {
-                            for (auto* sb : *bp)
-                                if (sb->getBB().bb_num_points)
-                                    sb->calc_block(block_idxs);
-                        }
-                        
-                        // Mark updated grids as dirty.
-                        // Only need to do this for one shape.
-                        if (shape == 0)
-                            mark_grids_dirty(bp, start_t, stop_t);
-
-                        // Adjust shape for next iteration.
-                        for (int i = 0, j = 0; i < nsdims; i++) {
-                            if (i == step_posn) continue;
-
-                            // Adjust by pts in one TB step.
-                            // But if block is first and/or last,
-                            // shift as for a WF.
-                            // TODO: have different R & L angles.
-                            auto tb_angle = tb_angles[j];
-                            auto wf_angle = wf_angles[j];
-
-                            // Shift start to right unless first.
-                            if (!is_first[j])
-                                start[i] += tb_angle;
-                            else
-                                start[i] -= wf_angle;
-
-                            // Shift stop to left.
-                            if (!is_last[j])
-                                stop[i] -= tb_angle;
-                            else
-                                stop[i] -= wf_angle;
-
-                            // Shift start of next block.
-                            next_start[i] += tb_angle;
-                            j++;
-                        }
-                        cur_shift_num++; // Increment for each pack and time-step.
-
-                        // Stop timers for this pack.
-                        if (thread_idx == 0)
-                            bp->stop_timers();
-
-                    } // packs.
-                } // time steps.
-            } // shapes.
+            } // shape loop.
         } // TB.
     } // calc_block().
+
+    // Calculate results within a mini-block.
+    // This function calls 'StencilBundleBase::calc_mini_block()'
+    // for each bundle in the specified pack or all packs if 'sel_bp' is
+    // null. When using TB, only the 'shape' needed for the tesselation
+    // 'phase' are computed. The starting 'shift_num' is relative
+    // to the bottom of the current region and block.
+    void StencilContext::calc_mini_block(BundlePackPtr& sel_bp,
+                                         idx_t nphases, idx_t phase,
+                                         idx_t nshapes, idx_t shape,
+                                         const ScanIndices& base_region_idxs,
+                                         const ScanIndices& base_block_idxs,
+                                         const ScanIndices& adj_block_idxs) {
+
+        int nsdims = _dims->_stencil_dims.size();
+        int nddims = _dims->_domain_dims.size();
+        auto& step_dim = _dims->_step_dim;
+        auto step_posn = +Indices::step_posn;
+        int thread_idx = omp_get_thread_num();
+        TRACE_MSG("calc_mini_block: phase " << phase <<
+                  ", shape " << shape <<
+                  ", mini-block [" <<
+                  adj_block_idxs.start.makeValStr(nsdims) << " ... " <<
+                  adj_block_idxs.stop.makeValStr(nsdims) << ") within base-block [" <<
+                  base_block_idxs.begin.makeValStr(nsdims) << " ... " <<
+                  base_block_idxs.end.makeValStr(nsdims) << ") within base-region [" <<
+                  base_region_idxs.begin.makeValStr(nsdims) << " ... " <<
+                  base_region_idxs.end.makeValStr(nsdims) << ")");
+
+        // Init mini-block begin & end from blk start & stop indices.
+        ScanIndices mini_block_idxs(*_dims, true, 0);
+        mini_block_idxs.initFromOuter(adj_block_idxs);
+
+        // Time range.
+        // No more temporal blocks below mini-blocks, so we always step
+        // by +/- 1.
+        idx_t begin_t = mini_block_idxs.begin[step_posn];
+        idx_t end_t = mini_block_idxs.end[step_posn];
+        idx_t step_dir = (end_t >= begin_t) ? 1 : -1;
+        idx_t step_t = 1 * step_dir;        // +/- 1.
+        assert(step_t);
+        const idx_t num_t = CEIL_DIV(abs(end_t - begin_t), abs(step_t));
+
+        // Time loop.
+        idx_t shift_num = 0;
+        for (idx_t index_t = 0; index_t < num_t; index_t++) {
+
+            // This value of index_t steps from start_t to stop_t-1.
+            const idx_t start_t = begin_t + (index_t * step_t);
+            const idx_t stop_t = (step_t > 0) ?
+                min(start_t + step_t, end_t) :
+                max(start_t + step_t, end_t);
+            TRACE_MSG("calc_mini_block: phase " << phase <<
+                      ", shape " << shape <<
+                      ", in step(s) [" << start_t << " ... " << stop_t << ")");
+            assert(abs(stop_t - start_t) == 1); // no more TB.
+            
+            // Set step indices that will pass through generated code.
+            mini_block_idxs.index[step_posn] = index_t;
+            mini_block_idxs.begin[step_posn] = start_t;
+            mini_block_idxs.end[step_posn] = stop_t;
+            mini_block_idxs.start[step_posn] = start_t;
+            mini_block_idxs.stop[step_posn] = stop_t;
+
+            // Stencil bundle packs to evaluate at this time step.
+            for (auto& bp : stPacks) {
+            
+                // Not a selected bundle pack?
+                if (sel_bp && sel_bp != bp)
+                    continue;
+            
+                // Check step.
+                if (check_step_conds && !bp->is_in_valid_step(start_t)) {
+                    TRACE_MSG("calc_mini_block: step " << start_t <<
+                              " not valid for pack '" <<
+                              bp->get_name() << "'");
+                    continue;
+                }
+                TRACE_MSG("calc_mini_block: phase " << phase <<
+                          ", shape " << shape <<
+                          ", step " << start_t <<
+                          ", pack '" << bp->get_name() <<
+                          "', shift-num " << shift_num);
+
+                // Start timers for this pack.
+                // Tracking only on thread 0. It might be better to track
+                // all threads and average them. Or something like that.
+                if (thread_idx == 0)
+                    bp->start_timers();
+                
+        // TODO: move MPI poke here.
+
+                // Steps within a mini-blk are based on sub-blk sizes.
+                auto& settings = bp->getActiveSettings();
+                mini_block_idxs.step = settings._sub_block_sizes;
+                mini_block_idxs.step[step_posn] = step_t;
+
+                // Groups in mini-blk loops are based on sub-block-group sizes.
+                mini_block_idxs.group_size = settings._sub_block_group_sizes;
+
+                // Set mini_block_idxs begin & end based on shifted begin &
+                // end of block for given phase & shape.  This will be the
+                // base for the mini-block loops, which have no temporal
+                // tiling.
+                bool ok =
+                    shift_mini_block(adj_block_idxs.start, adj_block_idxs.stop,
+                                     shift_num,
+                                     adj_block_idxs.begin, adj_block_idxs.end,
+                                     base_block_idxs.begin, base_block_idxs.end,
+                                     shift_num,
+                                     nphases, phase,
+                                     nshapes, shape,
+                                     base_region_idxs.begin, base_region_idxs.end,
+                                     shift_num,
+                                     bp,
+                                     mini_block_idxs);
+                
+                // Loop through bundles in this pack to do actual calcs.
+                if (ok) {
+                    for (auto* sb : *bp)
+                        if (sb->getBB().bb_num_points)
+                            sb->calc_mini_block(mini_block_idxs);
+                }
+
+                // Need to shift for next pack and/or time-step.
+                shift_num++;
+
+                // Stop timers for this pack.
+                if (thread_idx == 0)
+                    bp->stop_timers();
+
+            } // packs.
+        } // time.
+    } // calc_mini_block().
+
+    // Find boundaries within region with 'base_start' to 'base_stop'
+    // shifted 'shift_num' times, which should start at 0 and increment for
+    // each pack in each time-step.  Trim to ext-BB of 'bp' if not null.
+    // Write results into 'begin' and 'end' in 'idxs'.  Return 'true' if
+    // resulting area is non-empty, 'false' if empty.
+    bool StencilContext::shift_region(const Indices& base_start, const Indices& base_stop,
+                                        idx_t shift_num,
+                                        BundlePackPtr& bp,
+                                        ScanIndices& idxs) {
+        auto step_posn = +Indices::step_posn;
+        int ndims = _dims->_stencil_dims.size();
+        auto& step_dim = _dims->_step_dim;
+
+        // For wavefront adjustments, see conceptual diagram in
+        // run_solution().  At each pack and time-step, the parallelogram
+        // may be trimmed based on the BB and WF extensions outside of the
+        // rank-BB.
+
+        // Actual region boundaries must stay within [extended] pack BB.
+        // We have to calculate the posn in the extended rank at each
+        // value of 'shift_num' because it is being shifted spatially.
+        bool ok = true;
+        for (int i = 0, j = -1; ok && i < ndims; i++) {
+            if (i == step_posn) continue;
+            j++;
+            
+            auto angle = wf_angles[j];
+
+            // Shift initial spatial region boundaries for this iteration of
+            // temporal wavefront.  Between regions, we only shift left, so
+            // region loops must strictly increment. They may do so in any
+            // order.  Shift by pts in one WF step.  Always shift left in
+            // WFs.  TODO: shift only what is needed by this pack, not the
+            // global max.
+            idx_t rstart = base_start[i] - angle * shift_num;
+            idx_t rstop = base_stop[i] - angle * shift_num;
+
+            // Trim to extended BB of pack if given.
+            // Note that BBs are indexed by 'j' because they don't
+            // contain step indices.
+            if (bp) {
+                auto& pbb = bp->getBB();
+                rstart = max(rstart, pbb.bb_begin[j]);
+                rstop = min(rstop, pbb.bb_end[j]);
+            }
+
+            // Find non-extended domain. We'll use this to determine if
+            // we're in an extension, where special rules apply.
+            idx_t dbegin = rank_bb.bb_begin[j];
+            idx_t dend = rank_bb.bb_end[j];
+
+            // In left ext, add 'angle' points for every shift to get
+            // region boundary in ext.
+            if (rstart < dbegin && left_wf_exts[j])
+                rstart = max(rstart, dbegin - left_wf_exts[j] + shift_num * angle);
+
+            // In right ext, subtract 'angle' points for every shift.
+            if (rstop > dend && right_wf_exts[j])
+                rstop = min(rstop, dend + right_wf_exts[j] - shift_num * angle);
+
+            // Copy result into idxs.
+            idxs.begin[i] = rstart;
+            idxs.end[i] = rstop;
+
+            // Anything to do in the adjusted region?
+            if (rstop <= rstart)
+                ok = false;
+        }
+        TRACE_MSG("shift_region: updated span: [" <<
+                  idxs.begin.makeValStr(ndims) << " ... " <<
+                  idxs.end.makeValStr(ndims) << ") within region base [" <<
+                  base_start.makeValStr(ndims) << " ... " <<
+                  base_stop.makeValStr(ndims) << ") shifted " <<
+                  shift_num << " time(s) is " <<
+                  (ok ? "not " : "") << "empty");
+        return ok;
+    }
+    
+    // For given 'phase' and 'shape', find boundaries within mini-block at
+    // 'mb_base_start' to 'mb_base_stop' shifted by 'mb_shift_num', which
+    // should start at 0 and increment for each pack in each time-step.
+    // 'mb_base' is subset of 'adj_block_base'.
+    // Trim to block at 'block_base_start' to 'block_base_stop' shifted by
+    // 'block_shift_num'.  Trim to region at 'region_base_start' to
+    // 'region_base_stop' shifted by 'region_shift_num'.  Trim to ext-BB of
+    // 'bp' or rank if null.  Write results into 'begin' and 'end' in
+    // 'idxs'.  Return 'true' if resulting area is non-empty, 'false' if
+    // empty.
+    bool StencilContext::shift_mini_block(const Indices& mb_base_start,
+                                       const Indices& mb_base_stop,
+                                       idx_t mb_shift_num,
+                                       const Indices& adj_block_base_start,
+                                       const Indices& adj_block_base_stop,
+                                       const Indices& block_base_start,
+                                       const Indices& block_base_stop,
+                                       idx_t block_shift_num,
+                                       idx_t nphases, idx_t phase,
+                                       idx_t nshapes, idx_t shape,
+                                       const Indices& region_base_start,
+                                       const Indices& region_base_stop,
+                                       idx_t region_shift_num,
+                                       BundlePackPtr& bp,
+                                       ScanIndices& idxs) {
+        auto step_posn = +Indices::step_posn;
+        int ndims = _dims->_stencil_dims.size();
+        auto& step_dim = _dims->_step_dim;
+
+        // Set 'idxs' begin & end to region boundaries for
+        // given shift.
+        bool ok = shift_region(region_base_start, region_base_stop,
+                               region_shift_num,
+                               bp,
+                               idxs);
+
+        // Loop thru dims, breaking out if any dim has no work.
+        for (int i = 0, j = -1; ok && i < ndims; i++) {
+            if (i == step_posn) continue;
+            j++;
+
+            // Determine range of this block for current phase, shape, and
+            // shift. For each dim, we'll first compute the L & R sides of
+            // the base block and the L side of the next block.
+
+            // Is this block first and/or last in region?
+            bool is_first_blk = block_base_start[i] <= region_base_start[i];
+            bool is_last_blk = block_base_stop[i] >= region_base_stop[i];
+            
+            // Initial start and stop point of phase-0 block.
+            idx_t blk_start = block_base_start[i];
+            idx_t blk_stop = block_base_stop[i];
+                
+            // Starting point of the *next* block.  This is used to create
+            // bridge shapes between blocks.  Initially, the beginning of
+            // the next block is the end of this block.
+            idx_t next_blk_start = blk_stop;
+
+            // Adjust these based on current shift.  Adjust by pts in one TB
+            // step, reducing size on R & L sides.  But if block is first
+            // and/or last, clamp to region.  TODO: have different R & L
+            // angles. TODO: have different shifts for each pack.
+            auto tb_angle = tb_angles[j];
+
+            // Shift start to right unless first.  First block will be a
+            // parallelogram or trapezoid clamped to beginning of region.
+            blk_start += tb_angle * block_shift_num;
+            if (is_first_blk)
+                blk_start = idxs.begin[i];
+
+            // Shift stop to left.
+            blk_stop -= tb_angle * block_shift_num;
+
+            // Shift start of next block. Last block will be
+            // clamped to end of region.
+            next_blk_start += tb_angle * block_shift_num;
+            if (is_last_blk)
+                next_blk_start = idxs.end[i];
+
+            // Use these 3 values to determine the beginning and end
+            // of the current shape for the current phase.
+            // For phase 0, limits are simply the base start and stop.
+            idx_t shape_start = blk_start;
+            idx_t shape_stop = blk_stop;
+            
+            // Starting w/phase 1, create a "bridge" in one additional dim
+            // at a time from RHS of base block to the LHS of the next block
+            // until all dims are bridged at last phase. Shape of last phase
+            // will be an "upside-down" version of the first one. The
+            // 'shape' var determines what dim to start with.
+            for (idx_t k = 1; k <= phase; k++) {
+
+                // Select another dim based on shape and phase.
+                if (shape == (j + k - 1) % nshapes) {
+                                
+                    // Start at end of base block.
+                    shape_start = blk_stop;
+                                    
+                    // Stop at beginning of next block.
+                    shape_stop = next_blk_start;
+                }
+            }
+            // We now have bounds of this shape in shape_{start,stop}
+            // for given phase and shift.
+
+            // Is this mini-block first and/or last in block?
+            bool is_first_mb = mb_base_start[i] <= adj_block_base_start[i];
+            bool is_last_mb = mb_base_stop[i] >= adj_block_base_stop[i];
+
+            // Shift mini-block by TB angles.
+            // MB is a wave-front, so only shift left.
+            // Clamp first & last to shape boundaries.
+            auto mb_angle = tb_angles[j];
+            idx_t mb_start = mb_base_start[i];
+            idx_t mb_stop = mb_base_stop[i];
+            mb_start -= mb_angle * mb_shift_num;
+            if (is_first_mb)
+                mb_start = shape_start;
+            mb_stop -= mb_angle * mb_shift_num;
+            if (is_last_mb)
+                mb_stop = shape_stop;
+
+            // Trim mini-block to fit in region.
+            mb_start = max(mb_start, idxs.begin[i]);
+            mb_stop = min(mb_stop, idxs.end[i]);
+            
+            // Trim mini-block range to fit in shape.
+            mb_start = max(mb_start, shape_start);
+            mb_stop = min(mb_stop, shape_stop);
+
+            // Update 'idxs'.
+            idxs.begin[i] = mb_start;
+            idxs.end[i] = mb_stop;
+
+            // No work to do?
+            if (mb_stop <= mb_start)
+                ok = false;
+
+        } // dims.
+
+        TRACE_MSG("shift_mini_block: phase " << phase <<
+                  ", shape " << shape <<
+                  ", pack '" << bp->get_name() <<
+                  ", updated span: [" <<
+                  idxs.begin.makeValStr(ndims) << " ... " <<
+                  idxs.end.makeValStr(ndims) << ") from original mini-block [" <<
+                  mb_base_start.makeValStr(ndims) << " ... " <<
+                  mb_base_stop.makeValStr(ndims) << ") shifted " <<
+                  mb_shift_num << " time(s) within adj-block base [" <<
+                  adj_block_base_start.makeValStr(ndims) << " ... " <<
+                  adj_block_base_stop.makeValStr(ndims) << ") and actual block base [" <<
+                  block_base_start.makeValStr(ndims) << " ... " <<
+                  block_base_stop.makeValStr(ndims) << ") shifted " <<
+                  block_shift_num << " time(s) and region base [" <<
+                  region_base_start.makeValStr(ndims) << " ... " <<
+                  region_base_stop.makeValStr(ndims) << ") shifted " <<
+                  region_shift_num << " time(s) is " <<
+                  (ok ? "not " : "") << "empty");
+        return ok;
+    }
     
     // Eval auto-tuner for given number of steps.
     void StencilContext::eval_auto_tuner(idx_t num_steps) {
@@ -1241,46 +1458,46 @@ namespace yask {
             assert(gp->is_scratch());
 
             // i: index for stencil dims, j: index for domain dims.
-            for (int i = 0, j = 0; i < nsdims; i++) {
-                if (i != step_posn) {
-                    auto& dim = dims->_stencil_dims.getDim(i);
-                    auto& dname = dim.getName();
+            for (int i = 0, j = -1; i < nsdims; i++) {
+                if (i == step_posn) continue;
+                j++;
 
-                    // Is this dim used in this grid?
-                    int posn = gp->get_dim_posn(dname);
-                    if (posn >= 0) {
+                auto& dim = dims->_stencil_dims.getDim(i);
+                auto& dname = dim.getName();
 
-                        // | ... |        +------+       |
-                        // |  global ofs  |      |       |
-                        // |<------------>|grid/ |       |
-                        // |     |  loc   | blk  |       |
-                        // |rank |  ofs   |domain|       |
-                        // | ofs |<------>|      |       |
-                        // |<--->|        +------+       |
-                        // ^     ^        ^              ^
-                        // |     |        |              last rank-domain index
-                        // |     |        start of grid-domain/0-idx of block
-                        // |     first rank-domain index
-                        // first overall-domain index
+                // Is this dim used in this grid?
+                int posn = gp->get_dim_posn(dname);
+                if (posn >= 0) {
 
-                        // Local offset is the offset of this grid
-                        // relative to the current rank.
-                        // Set local offset to diff between global offset
-                        // and rank offset.
-                        // Round down to make sure it's vec-aligned.
-                        auto rofs = rank_domain_offsets[j];
-                        auto vlen = gp->_get_vec_len(posn);
-                        auto lofs = round_down_flr(idxs[i] - rofs, vlen);
-                        gp->_set_local_offset(posn, lofs);
+                    // | ... |        +------+       |
+                    // |  global ofs  |      |       |
+                    // |<------------>|grid/ |       |
+                    // |     |  loc   | blk  |       |
+                    // |rank |  ofs   |domain|       |
+                    // | ofs |<------>|      |       |
+                    // |<--->|        +------+       |
+                    // ^     ^        ^              ^
+                    // |     |        |              last rank-domain index
+                    // |     |        start of grid-domain/0-idx of block
+                    // |     first rank-domain index
+                    // first overall-domain index
 
-                        // Set global offset of grid based on starting point of block.
-                        // This is a global index, so it will include the rank offset.
-                        // Thus, it it not necessarily a vec mult.
-                        // Need to use calculated local offset to adjust for any
-                        // rounding that was done above.
-                        gp->_set_offset(posn, rofs + lofs);
-                    }
-                    j++;
+                    // Local offset is the offset of this grid
+                    // relative to the current rank.
+                    // Set local offset to diff between global offset
+                    // and rank offset.
+                    // Round down to make sure it's vec-aligned.
+                    auto rofs = rank_domain_offsets[j];
+                    auto vlen = gp->_get_vec_len(posn);
+                    auto lofs = round_down_flr(idxs[i] - rofs, vlen);
+                    gp->_set_local_offset(posn, lofs);
+
+                    // Set global offset of grid based on starting point of block.
+                    // This is a global index, so it will include the rank offset.
+                    // Thus, it it not necessarily a vec mult.
+                    // Need to use calculated local offset to adjust for any
+                    // rounding that was done above.
+                    gp->_set_offset(posn, rofs + lofs);
                 }
             }
         }

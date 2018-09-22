@@ -238,6 +238,8 @@ namespace yask {
         _add_domain_option(parser, "r", "Region size", _region_sizes, true);
         _add_domain_option(parser, "bg", "Block-group size", _block_group_sizes);
         _add_domain_option(parser, "b", "Block size", _block_sizes, true);
+        _add_domain_option(parser, "mbg", "Mini-block-group size", _mini_block_group_sizes);
+        _add_domain_option(parser, "mb", "Mini-block size", _mini_block_sizes);
         _add_domain_option(parser, "sbg", "Sub-block-group size", _sub_block_group_sizes);
         _add_domain_option(parser, "sb", "Sub-block size", _sub_block_sizes);
         _add_domain_option(parser, "mp", "Minimum grid-padding size (including halo)", _min_pad_sizes);
@@ -289,7 +291,7 @@ namespace yask {
         os << "Usage: " << pgmName << " [options]\n"
             "Options:\n";
         parser.print_help(os);
-        os << "Terms for the various levels of tiling from smallest to largest:\n"
+        os << "\nTerms for the various levels of tiling from smallest to largest:\n"
             " A 'point' is a single floating-point (FP) element.\n"
             "  This binary uses " << REAL_BYTES << "-byte FP elements.\n"
             " A 'vector' is composed of points.\n"
@@ -298,70 +300,73 @@ namespace yask {
             " A 'vector-cluster' is composed of vectors.\n"
             "  This is the unit of work done in each inner-most loop iteration.\n"
             " A 'sub-block' is composed of vector-clusters.\n"
-            "  If the number of threads-per-block is greater than one,\n"
+            "  If the number of block-threads is greater than one,\n"
             "   then this is the unit of work for one nested OpenMP thread;\n"
-            "   else, sub-blocks are evaluated sequentially within each block.\n"
-            " A 'block' is composed of sub-blocks.\n"
-            "  This is the unit of work for one top-level OpenMP thread.\n"
+            "   else, sub-blocks are evaluated sequentially within each mini-block.\n"
+            " A 'mini-block' is composed of sub-blocks.\n"
+            "  If using temporal wave-front block tiling (see mini-block-size guidelines),\n"
+            "   then this is the unit of work for each wave-front block tile,\n"
+            "   and the number temporal steps in the mini-block is always equal\n"
+            "   to the number temporal steps a temporal block;\n"
+            "   else, there is typically only one mini-block the size of a block.\n"
+            "  Mini-blocks are evaluated sequentially within blocks.\n"
+            " A 'block' is composed of mini-blocks.\n"
+            "  If the number of threads is greater than one (typical),\n"
+            "   then this is the unit of work for one OpenMP thread;\n"
+            "   else, blocks are evaluated sequentially within each region.\n"
             " A 'region' is composed of blocks.\n"
-            "  If using temporal wave-front tiling (see region-size guidelines),\n"
-            "   then, this is the unit of work for each wave-front tile;\n"
+            "  If using temporal wave-front rank tiling (see region-size guidelines),\n"
+            "   then this is the unit of work for each wave-front rank tile;\n"
             "   else, there is typically only one region the size of the rank-domain.\n"
+            "  Regions are evaluated sequentially within ranks.\n"
             " A 'rank-domain' is composed of regions.\n"
             "  This is the unit of work for one MPI rank.\n"
+            "  Ranks are evaluated in parallel in separate MPI processes.\n"
             " The 'overall-problem' is composed of rank-domains.\n"
             "  This is the unit of work across all MPI ranks.\n" <<
 #ifndef USE_MPI
             "   This binary has NOT been compiled with MPI support,\n"
             "   so the overall-problem is equivalent to the single rank-domain.\n" <<
 #endif
-            "Guidelines for setting tiling sizes:\n"
+            "\nGuidelines for setting tiling sizes:\n"
             " The vector and vector-cluster sizes are set at compile-time, so\n"
             "  there are no run-time options to set them.\n"
-            " Set sub-block sizes to specify a unit of work done by each thread.\n"
-            "  A sub-block size of 0 in a given dimension =>\n"
-            "   sub-block size is set to block size in that dimension;\n"
+            " Set sub-block sizes to specify a unit of work done by each nested OpenMP thread.\n"
+            "  Multiple sub-blocks are intended to allow sharing of level-1 caches\n"
+            "   among multiple hyper-threads in a core when there is more than\n"
+            "   one block-thread.\n"
+            "  A sub-block size of 0 in a given domain dimension =>\n"
+            "   sub-block size is set to mini-block size in that dimension;\n"
             "   when there is more than one block-thread, the first dimension\n"
             "   will instead be set to a small value to create \"slab\" shapes.\n"
-            " Set sub-block-group sizes to control the ordering of sub-blocks within a block.\n"
-            "  This is an advanced setting that is not commonly used.\n"
-            "  All sub-blocks that intersect a given sub-block-group are evaluated\n"
-            "   before sub-blocks in the next sub-block-group.\n"
-            "  A sub-block-group size of 0 in a given dimension =>\n"
-            "   sub-block-group size is set to sub-block size in that dimension.\n"
-            " Set block sizes to specify a unit of work done by each thread team.\n"
+            " Set mini-block sizes to control temporal wave-front tile sizes within a block.\n"
+            "  Multiple mini-blocks are intended to increase locality in level-2 caches\n"
+            "   when blocks are larger than L2 capacity.\n"
+            "  A mini-block size of 0 in a given domain dimension =>\n"
+            "   mini-block size is set to block size in that dimension.\n"
+            "  A mini-block size >1 in the step dimension ('-mbt') enables wave-front block tiling.\n"
+            "  A mini-block size of 0 in the step dimension =>\n"
+            "   mini-block size is set to block size in the step dimension.\n"
+            " Set block sizes to specify a unit of work done by each top-level OpenMP thread.\n"
             "  A block size of 0 in a given domain dimension =>\n"
             "   block size is set to region size in that dimension.\n"
-            "  A block size >1 in the temporal dimension ('-bt') enables temporal blocking.\n"
+            "  A block size >1 in the step dimension ('-bt') enables temporal blocking.\n"
             "  The temporal block size may be automatically reduced if needed based on the\n"
             "   domain block sizes and the stencil halos.\n"
-            " Set block-group sizes to control the ordering of blocks within a region.\n"
-            "  This is an advanced setting that is not commonly used.\n"
-            "  All blocks that intersect a given block-group are evaluated before blocks\n"
-            "   in the next block-group.\n"
-            "  A block-group size of 0 in a given domain dimension =>\n"
-            "   block-group size is set to block size in that dimension.\n"
-            " Set region sizes to control temporal wave-front tile sizes.\n"
-            "  The temporal region size should be larger than one, and\n"
-            "   the spatial region sizes should be less than the rank-domain sizes\n"
-            "   in at least one dimension to enable temporal wave-front tiling.\n"
-            "  The spatial region sizes should be greater than corresponding block sizes\n"
-            "   to enable threading withing each wave-front tile.\n"
-            "  Control the time-steps in each temporal wave-front with -rt.\n"
-            "   Special cases:\n"
-            "    Using '-rt 1' disables wave-front tiling unless temporal\n"
-            "     blocking is used.\n"
-            "    When temporal blocking is used, the number of time-steps in a region\n"
-            "     is increased to the number of time-steps in a block if needed.\n"
-            "    Using '-rt 0' => all time-steps done in one wave-front.\n"
-            "  A region size of 0 in a given dimension =>\n"
-            "   region size is set to rank-domain size in that dimension.\n"
+            " Set region sizes to control temporal wave-front tile sizes within a rank.\n"
+            "  Multiple regions are intended to increase locality in level-3 caches\n"
+            "   when ranks are larger than L3 capacity.\n"
+            "  A region size of 0 in a given domain dimension =>\n"
+            "   region size is set to rank size in that dimension.\n"
+            "  A region size >1 in the step dimension ('-rt') enables wave-front rank tiling.\n"
+            "  A region size of 0 in the step dimension =>\n"
+            "   region size is set to block size in the step dimension.\n"
             " Set rank-domain sizes to specify the work done on this rank.\n"
-            "  Set the temporal size with '-dt' to specify the number of time-steps\n"
-            "   to run for each trial.\n"
             "  Set the domain sizes to specify the problem size for this rank.\n"
             "  This and the number of grids affect the amount of memory used.\n"
-            "Controlling OpenMP threading:\n"
+            " Setting 'group' sizes controls only the order of tiles.\n"
+            "  These are advanced settings that are not commonly used.\n"
+            "\nControlling OpenMP threading:\n"
             " Using '-max_threads 0' =>\n"
             "  max_threads is set to OpenMP's default number of threads.\n"
             " The -thread_divisor option is a convenience to control the number of\n"
@@ -373,7 +378,7 @@ namespace yask {
             "  Num threads per sub-block = 1.\n"
             "  Num threads used for halo exchange is same as num per region.\n" <<
 #ifdef USE_MPI
-            "Controlling MPI scaling:\n"
+            "\nControlling MPI scaling:\n"
             "  To 'weak-scale' to a larger overall-problem size, use multiple MPI ranks\n"
             "   and keep the rank-domain sizes constant.\n"
             "  To 'strong-scale' a given overall-problem size, use multiple MPI ranks\n"
@@ -383,7 +388,7 @@ namespace yask {
             "Examples for a 3D (x, y, z) over time (t) problem:\n"
             " " << pgmName << " -d 768\n"
             " " << pgmName << " -dx 512 -dy 256 -dz 128\n"
-            " " << pgmName << " -d 2048 -r 512 -rt 10  # temporal tiling.\n"
+            " " << pgmName << " -d 2048 -r 512 -rt 10  # temporal rank tiling.\n"
             " " << pgmName << " -d 512 -nrx 2 -nry 1 -nrz 2   # multi-rank.\n";
         for (auto ae : appExamples)
             os << " " << pgmName << " " << ae << endl;
@@ -439,14 +444,19 @@ namespace yask {
     // Called from prepare_solution(), so it doesn't normally need to be called from user code.
     void KernelSettings::adjustSettings(std::ostream& os, KernelEnvPtr env) {
 
-        // Fix up step-dim sizes.
         auto& step_dim = _dims->_step_dim;
-        auto& dt = _rank_sizes[step_dim];
         auto& rt = _region_sizes[step_dim];
         auto& bt = _block_sizes[step_dim];
-        dt = max(dt, idx_t(1));
+        auto& mbt = _mini_block_sizes[step_dim];
+        
+        // Fix up step-dim sizes.
         bt = max(bt, idx_t(1));
-        rt = max(rt, bt);       // Round up region steps to block steps.
+        if (rt <= 0)
+            rt = bt;       // Default region steps to block steps.
+        if (mbt <= 0)
+            mbt = bt;       // Default mini-blk steps to block steps.
+        rt = max(rt, idx_t(1));
+        mbt = max(mbt, idx_t(1));
 
         // Determine num regions.
         // Also fix up region sizes as needed.
@@ -459,7 +469,7 @@ namespace yask {
                                  _dims->_cluster_pts, step_dim);
         os << " num-regions-per-rank-domain-per-step: " << nr << endl;
         os << " Since the region size in the '" << step_dim <<
-            "' dim is " << rt << ", temporal wave-front tiling is ";
+            "' dim is " << rt << ", temporal wave-front rank tiling is ";
         if (rt <= 1) os << "NOT ";
         os << "enabled.\n";
 
@@ -477,6 +487,20 @@ namespace yask {
         if (bt <= 1) os << "NOT ";
         os << "enabled.\n";
 
+        // Determine num mini-blocks.
+        // Also fix up mini-block sizes as needed.
+        os << "\nMini-blocks:" << endl;
+        auto nmb = findNumSubsets(os, _mini_block_sizes, "mini-block",
+                                 _block_sizes, "block",
+                                 _dims->_cluster_pts, step_dim);
+        os << " num-mini-blocks-per-block-per-step: " << nmb << endl;
+        os << " num-mini-blocks-per-region-per-step: " << (nmb * nb) << endl;
+        os << " num-mini-blocks-per-rank-domain-per-step: " << (nmb * nb * nr) << endl;
+        os << " Since the mini-block size in the '" << step_dim <<
+            "' dim is " << mbt << ", temporal wave-front block tiling is ";
+        if (mbt <= 1) os << "NOT ";
+        os << "enabled.\n";
+
         // Adjust defaults for sub-blocks to be slab if
         // we are using more than one block thread.
         // Otherwise, findNumSubsets() would set default
@@ -484,8 +508,16 @@ namespace yask {
         if (num_block_threads > 1) {
             for (auto& dim : _dims->_domain_dims.getDims()) {
                 auto& dname = dim.getName();
-                if (_sub_block_sizes[dname] == 0)
-                    _sub_block_sizes[dname] = 1; // will be rounded up to min size.
+                if (_sub_block_sizes[dname] == 0) {
+                    if (_dims->_domain_dims.getNumDims() > 1)
+
+                        // narrow slabs.
+                        _sub_block_sizes[dname] = 1; // will be rounded up to min size.
+                    else
+
+                        // divide in 2 parts.
+                        _sub_block_sizes[dname] = CEIL_DIV(_block_sizes[dname], 2);
+                }                        
 
                 // Only want to set 1st dim; others will be set to max.
                 // TODO: make sure we're not setting inner dim.
@@ -497,14 +529,17 @@ namespace yask {
         // Also fix up sub-block sizes as needed.
         os << "\nSub-blocks:" << endl;
         auto nsb = findNumSubsets(os, _sub_block_sizes, "sub-block",
-                                 _block_sizes, "block",
+                                  _mini_block_sizes, "mini-block",
                                  _dims->_cluster_pts, step_dim);
-        os << " num-sub-blocks-per-block-per-step: " << nsb << endl;
+        os << " num-sub-blocks-per-mini-block-per-step: " << nsb << endl;
+        os << " num-sub-blocks-per-block-per-step: " << (nsb * nmb) << endl;
+        os << " num-sub-blocks-per-region-per-step: " << (nsb * nmb * nb) << endl;
+        os << " num-sub-blocks-per-rank-per-step: " << (nsb * nmb * nb * nr) << endl;
 
         // Now, we adjust groups. These are done after all the above sizes
         // because group sizes are more like 'guidelines' and don't have
         // their own loops.
-        os << "\nGroups:" << endl;
+        os << "\nGroups (only affect ordering):" << endl;
 
         // Adjust defaults for groups to be min size.
         // Otherwise, findNumBlockGroupsInRegion() would set default
@@ -513,6 +548,8 @@ namespace yask {
             auto& dname = dim.getName();
             if (_block_group_sizes[dname] == 0)
                 _block_group_sizes[dname] = 1; // will be rounded up to min size.
+            if (_mini_block_group_sizes[dname] == 0)
+                _mini_block_group_sizes[dname] = 1; // will be rounded up to min size.
             if (_sub_block_group_sizes[dname] == 0)
                 _sub_block_group_sizes[dname] = 1; // will be rounded up to min size.
         }
@@ -529,14 +566,26 @@ namespace yask {
                                    _dims->_cluster_pts, step_dim);
         os << " num-blocks-per-block-group-per-step: " << nb_g << endl;
 
+        // Determine num mini-block-groups.
+        // Also fix up mini-block-group sizes as needed.
+        // TODO: only print this if mini-block-grouping is enabled.
+        auto nmbg = findNumSubsets(os, _mini_block_group_sizes, "mini-block-group",
+                                   _block_sizes, "block",
+                                   _mini_block_sizes, step_dim);
+        os << " num-mini-block-groups-per-block-per-step: " << nmbg << endl;
+        auto nmb_g = findNumSubsets(os, _mini_block_sizes, "mini-block",
+                                    _mini_block_group_sizes, "mini-block-group",
+                                    _dims->_cluster_pts, step_dim);
+        os << " num-mini-blocks-per-block-group-per-step: " << nmb_g << endl;
+
         // Determine num sub-block-groups.
         // Also fix up sub-block-group sizes as needed.
         // TODO: only print this if sub-block-grouping is enabled.
         auto nsbg = findNumSubsets(os, _sub_block_group_sizes, "sub-block-group",
-                                   _block_sizes, "block",
+                                   _mini_block_sizes, "mini-block",
                                    _sub_block_sizes, step_dim);
-        os << " num-sub-block-groups-per-block-per-step: " << nsbg << endl;
-        auto nsb_g = findNumSubsets(os, _sub_block_sizes, "block",
+        os << " num-sub-block-groups-per-mini-block-per-step: " << nsbg << endl;
+        auto nsb_g = findNumSubsets(os, _sub_block_sizes, "sub-block",
                                    _sub_block_group_sizes, "sub-block-group",
                                    _dims->_cluster_pts, step_dim);
         os << " num-sub-blocks-per-sub-block-group-per-step: " << nsb_g << endl;

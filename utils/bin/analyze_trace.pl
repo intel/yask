@@ -26,7 +26,7 @@
 # Purpose: Process the output of a log from a binary and compare every grid write.
 # Build with the following options:
 # OMPFLAGS='-qopenmp-stubs' YK_CXXOPT='-O0' arch=intel64 EXTRA_MACROS='CHECK TRACE TRACE_MEM FORCE_SCALAR' real_bytes=8
-# Run with '-v'.
+# Run kernel with '-v' and pipe output to this script.
 
 use strict;
 use File::Basename;
@@ -36,6 +36,7 @@ use lib dirname($0)."/../lib";
 my $in_perf = 0;
 my $in_val = 0;
 my $key = undef;
+my @key_stack;
 my %vals;
 my %pts;
 my %writes;
@@ -54,11 +55,20 @@ while (<>) {
     undef $key;
   }
 
+  # suspend collection during halo exchange.
+  elsif (/exchange_halos\s*$/) {
+    push @key_stack, $key;
+    undef $key;
+  }  
+  elsif (/exchange_halos: secs spent in this call/) {
+    $key = pop @key_stack;
+  }
+
   # writeElem: pressure[t=0, x=0, y=0, z=0] = 5.7 at line 287
   elsif (/writeElem:\s*(\w+)\[(.*)\]\s*=\s*(\S+)/) {
     my ($grid, $indices, $val) = ($1, $2, $3);
     if (defined $key) {
-      $indices =~ s/\b\d\b/0$&/g;
+      $indices =~ s/\b\d\b/0$&/g; # make indices 2 digits.
 
       # track last value.
       $vals{$key}{$grid}{$indices} = $val;
@@ -67,7 +77,7 @@ while (<>) {
       $pts{$grid}{$indices} = 1;
 
       # track writes in order.
-      push @{$writes{$key}}, [ $grid, $indices ];
+      push @{$writes{$key}}, [ $grid, $indices, $val ];
     }
   }
 
@@ -77,29 +87,32 @@ while (<>) {
 }
 my $nissues = 0;
 
-sub comp($$) {
+sub comp($$$) {
   my $grid = shift;
   my $indices = shift;
-
+  my $pval = shift;
+  
   print "$grid\[$indices\] =";
-  my $pval;
-  for my $key (qw(perf val)) {
-    my $val = $vals{$key}{$grid}{$indices};
-    if (defined $val) {
-      print "\t $val";
-      if (defined $pval && $pval) {
-        my $pctdiff = ($pval - $val) / $pval * 100.0;
-        print "\t diff = $pctdiff %";
-        if (abs($pctdiff) > 5) {
-          print " <<<<";
-          $nissues++;
-        }
+  if (defined $pval) {
+    print "\t $pval";
+  } else {
+    print " NOT written in perf";
+    $nissues++;
+  }
+  my $val = $vals{val}{$grid}{$indices};
+  if (defined $val) {
+    print "\t $val";
+    if (defined $pval && $pval) {
+      my $pctdiff = ($pval - $val) / $val * 100.0;
+      print "\t diff = $pctdiff %";
+      if (abs($pctdiff) > 5) {
+        print " <<<<";
+        $nissues++;
       }
-      $pval = $val;
-    } else {
-      print " NOT written in $key";
-      $nissues++;
     }
+  } else {
+    print " NOT written in val";
+    $nissues++;
   }
   print "\n";
 }
@@ -109,8 +122,8 @@ print "\n===== Comparisons in perf-write order =====\n".
 print "Values are from perf, then validation trial\n";
 my %nwrites;
 for my $pw (@{$writes{perf}}) {
-  my ($grid, $indices) = ($pw->[0], $pw->[1]);
-  comp($grid, $indices);
+  my ($grid, $indices, $pval) = ($pw->[0], $pw->[1], $pw->[2]);
+  comp($grid, $indices, $pval);
   my $nw = ++$nwrites{$grid}{$indices};
   if ($nw > 1) {
     print "^^^^^^^^ $nw writes!!!\n";
@@ -122,7 +135,7 @@ print "\n===== Comparisons in grid & index order =====\n";
 print "Values are from perf, then validation trial\n";
 for my $grid (sort keys %pts) {
   for my $indices (sort keys %{$pts{$grid}}) {
-    comp($grid, $indices);
+    comp($grid, $indices, $vals{perf}{$grid}{$indices});
   }
 }
 
@@ -131,6 +144,6 @@ for my $key (sort keys %writes) {
   print " ".(scalar @{$writes{$key}})." $key write(s) checked.\n";
 }
 print " $nissues issue(s) flagged.\n";
-print " (Not all issues may be problematic if using temporal tiling and MPI.)\n"
+print " (Ignore issues outside of rank domain when using temporal tiling and MPI.)\n"
   if $nissues;
 exit $nissues;

@@ -252,14 +252,14 @@ namespace yask {
         // used for wave-front region tiles (wf) and temporal blocking (tb).
         IdxTuple max_halos;  // spatial halos.
         idx_t wf_steps = 1;  // max number of WF steps.
-        idx_t tb_steps = 1;  // max number of TB steps (may be less than requested).
         IdxTuple wf_angles;  // WF skewing angles for each shift (in points).
-        IdxTuple tb_angles;  // TB skewing angles for each shift (in points).
         idx_t num_wf_shifts = 0; // number of WF shifts required in wf_steps.
-        idx_t num_tb_shifts = 0; // number of TB shifts required in tb_steps.
         IdxTuple wf_shifts;    // total shifted pts (wf_angles * num_wf_shifts).
         IdxTuple left_wf_exts;    // WF extension needed on left side of rank for halo exch.
         IdxTuple right_wf_exts;    // WF extension needed on right side of rank.
+        idx_t tb_steps = 1;  // max number of TB steps (may be less than requested).
+        IdxTuple tb_angles;  // TB skewing angles for each shift (in points).
+        idx_t num_tb_shifts = 0; // number of TB shifts required in tb_steps.
 
         // MPI settings.
         // TODO: move to settings or MPI info object.
@@ -321,6 +321,7 @@ namespace yask {
         DimsPtr& get_dims() { return _dims; }
         MPIInfoPtr& get_mpi_info() { return _mpiInfo; }
         AutoTuner& getAT() { return _at; }
+        bool use_pack_tuners() const { return _use_pack_tuners; }
 
         // Add a new grid to the containers.
         virtual void addGrid(YkGridPtr gp, bool is_output);
@@ -502,34 +503,59 @@ namespace yask {
         }
 
         // Reference stencil calculations.
-        virtual void run_ref(idx_t first_step_index,
+        void run_ref(idx_t first_step_index,
                              idx_t last_step_index);
 
         // Calculate results within a region.
-        virtual void calc_region(BundlePackPtr& sel_bp,
+        void calc_region(BundlePackPtr& sel_bp,
                                  const ScanIndices& rank_idxs);
 
         // Calculate results within a block.
-        virtual void calc_block(BundlePackPtr& sel_bp,
-                                idx_t phase, idx_t shift_num,
+        void calc_block(BundlePackPtr& sel_bp,
+                                idx_t phase,
                                 const ScanIndices& region_idxs);
+
+        // Calculate results within a mini-block.
+        void calc_mini_block(BundlePackPtr& sel_bp,
+                             idx_t nphases, idx_t phase,
+                             idx_t nshapes, idx_t shape,
+                             const ScanIndices& base_region_idxs,
+                             const ScanIndices& base_block_idxs,
+                             const ScanIndices& block_idxs);
 
         // Exchange all dirty halo data for all stencil bundles.
         virtual void exchange_halos(bool test_only = false);
 
         // Mark grids that have been written to by bundle pack 'sel_bp'.
         // If sel_bp==null, use all bundles.
-        virtual void mark_grids_dirty(const BundlePackPtr& sel_bp,
-                                      idx_t start, idx_t stop);
+        void mark_grids_dirty(const BundlePackPtr& sel_bp,
+                              idx_t start, idx_t stop);
 
-        // Set various limits in 'idxs' based on current step.
-        virtual bool trim_to_region(const Indices& start, const Indices& stop,
-                                    const Indices& region_start, const Indices& region_stop,
-                                    BundlePackPtr& bp, idx_t shift_num,
-                                    ScanIndices& idxs);
+        // Set various limits in 'idxs' based on current step in region.
+        bool shift_region(const Indices& base_start, const Indices& base_stop,
+                            idx_t shift_num,
+                            BundlePackPtr& bp,
+                            ScanIndices& idxs);
 
+        // Set various limits in 'idxs' based on current step in block.
+        bool shift_mini_block(const Indices& mb_base_start,
+                              const Indices& mb_base_stop,
+                              idx_t mb_shift_num,
+                              const Indices& adj_block_base_start,
+                              const Indices& adj_block_base_stop,
+                              const Indices& block_base_start,
+                              const Indices& block_base_stop,
+                              idx_t block_shift_num,
+                              idx_t nphases, idx_t phase,
+                              idx_t nshapes, idx_t shape,
+                              const Indices& region_base_start,
+                              const Indices& region_base_stop,
+                              idx_t region_shift_num,
+                              BundlePackPtr& bp,
+                              ScanIndices& idxs);
+        
         // Set the bounding-box around all stencil bundles.
-        virtual void find_bounding_boxes();
+        void find_bounding_boxes();
 
         // Make new scratch grids.
         virtual void makeScratchGrids (int num_threads) =0;
