@@ -325,7 +325,8 @@ int main(int argc, char** argv)
                 // Run steps.
                 // Always run warmup forward, even for reverse stencils.
                 // (The result will be meaningless, but that doesn't matter.)
-                os << "Running " << warmup_steps << " step(s) for warm-up...\n" << flush;
+                os << "Running " << warmup_steps << " step(s) for " <<
+                    (n ? "calibration" : "warm-up") << "...\n" << flush;
                 ksoln->run_solution(0, warmup_steps-1);
                 auto stats = context->get_stats();
                 auto wtime = stats->get_elapsed_secs();
@@ -334,10 +335,6 @@ int main(int argc, char** argv)
 
                 // Done if time est. isn't needed.
                 if (opts->trial_steps > 0)
-                    break;
-
-                // Done if warmup time is less than 10x requested time.
-                if (opts->trial_time < wtime * 10)
                     break;
 
                 // Use time to set number of steps for next trial.
