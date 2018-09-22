@@ -865,13 +865,14 @@ namespace yask {
         // block size for the pack containing a given scratch grid.
         IdxTuple blksize(_dims->_domain_dims);
         for (auto& sp : stPacks) {
-            auto& psettings = sp->getSettings();
-            for (int i = 0, j = 0; i < nsdims; i++) {
+            auto& psettings = sp->getActiveSettings();
+            for (int i = 0, j = -1; i < nsdims; i++) {
                 if (i == step_posn) continue;
+                j++;
+
                 auto sz = round_up_flr(psettings._block_sizes[i],
                                        _dims->_fold_pts[j]);
                 blksize[j] = max(blksize[j], sz);
-                j++;
             }
         }
         TRACE_MSG("allocScratchData: max block size across pack(s) is " <<
@@ -1023,6 +1024,7 @@ namespace yask {
             auto nranks = _opts->_num_ranks[dname];
 
             // Req'd shift in this dim based on max halos.
+            // TODO: use different angle for L & R side of each pack.
             idx_t angle = ROUND_UP(max_halos[dname], _dims->_fold_pts[dname]);
             
             // Determine the max spatial skewing angles for WF tiling.  We
@@ -1031,7 +1033,7 @@ namespace yask {
             // the region covers the *global* domain in a given dim, no
             // wave-front shifting is needed in that dim.
             idx_t wf_angle = 0;
-            if (rnsize < rksize || nranks > 0)
+            if (rnsize < rksize || nranks > 1)
                 wf_angle = angle;
             wf_angles.addDimBack(dname, wf_angle);
             assert(angle >= 0);
@@ -1094,24 +1096,21 @@ namespace yask {
     void StencilContext::update_block_info() {
         auto& step_dim = _dims->_step_dim;
 
-        // Start w/original temporal setting.
-        tb_steps = _opts->_block_sizes[step_dim];
-        assert(tb_steps >= 1);
-
-        // Default w/o TB.
-        if (tb_steps <= 1) {
-            for (auto& dim : _dims->_domain_dims.getDims()) {
-                auto& dname = dim.getName();
-                tb_angles.addDimBack(dname, 0);
-                tb_steps = 1;
-                num_tb_shifts = 0;
-            }
+        // Reset all TB and MB vars.
+        tb_steps = 1;
+        num_tb_shifts = 0;
+        for (auto& dim : _dims->_domain_dims.getDims()) {
+            auto& dname = dim.getName();
+            tb_angles.addDimBack(dname, 0);
         }
         
+        // Start w/original temporal settings or 1 if unset.
+        tb_steps = max(_opts->_block_sizes[step_dim], idx_t(1));
+
         // Determine max setting based on block sizes.
         // When using temporal blocking, all block sizes
         // across all packs must be the same.
-        else {
+        if (tb_steps > 1) {
             TRACE_MSG("update_block_info: original TB steps = " << tb_steps);
             idx_t max_steps = min(tb_steps, wf_steps);
             TRACE_MSG("update_block_info: max(TB, WF) steps = " << max_steps);
@@ -1124,36 +1123,42 @@ namespace yask {
                 // There is only one block size when using TB.
                 assert(_use_pack_tuners == false);
                 auto blksize = _opts->_block_sizes[dname];
+                auto mblksize = _opts->_mini_block_sizes[dname];
 
                 // Req'd shift in this dim based on max halos.
+                // TODO: use different angle for L & R side of each pack.
                 idx_t angle = ROUND_UP(max_halos[dname], _dims->_fold_pts[dname]);
             
                 // Determine the max spatial skewing angles for TB.
-                // Set TB angle to zero iff block covers whole
-                // region in given dim.
-                idx_t tb_angle = 0;
-                if (blksize < rnsize)
-                    tb_angle = angle;
-                tb_angles.addDimBack(dname, tb_angle);
-            
+                // TODO: determine if there are any safe conditions to make
+                // angles zero.
+                idx_t tb_angle = angle;
+                tb_angles[dname] = tb_angle;
+
                 // Calculate max number of temporal steps in
-                // this dim.
+                // allowed this dim.
+                // TODO: calculate this dynamically considering
+                // temporal conditions; this assumes worst-case,
+                // which is all packs always done.
+                // TODO: calculate this using separate angle
+                // for each pack.
                 if (tb_angle > 0) {
                     idx_t sh_pts = tb_angle * 2 * stPacks.size(); // pts shifted per step.
                     idx_t dmax = ((blksize - 1) / sh_pts) + 1;
                     TRACE_MSG("update_block_info: max TB steps in dim '" <<
                               dname << "' = " << dmax <<
                               " due to base block size of " << blksize <<
-                              " and TB angle of " << tb_angle);
+                              ", TB angle of " << tb_angle <<
+                              ", and " << stPacks.size() << " pack(s)");
                     max_steps = min(max_steps, dmax);
                 }
             }
             tb_steps = min(tb_steps, max_steps);
             TRACE_MSG("update_block_info: final TB steps = " << tb_steps);
         }
+        assert(tb_steps >= 1);
 
         // Calc number of shifts based on steps.
-        num_tb_shifts = 0;
         if (tb_steps > 1) {
 
             // Need to shift for each bundle pack.
@@ -1165,6 +1170,7 @@ namespace yask {
             num_tb_shifts--;
         }
         assert(num_tb_shifts >= 0);
+        TRACE_MSG("update_block_info: num TB shifts = " << num_tb_shifts);
 
     } // update_block_info().
 
@@ -1206,7 +1212,7 @@ namespace yask {
         // since last call to prepare_solution().
         // This will wipe out any previous auto-tuning.
         for (auto& sp : stPacks)
-            sp->getSettings() = *_opts;
+            sp->getLocalSettings() = *_opts;
 
         // Init auto-tuner to run silently during normal operation.
         reset_auto_tuner(true, false);
@@ -1275,13 +1281,6 @@ namespace yask {
         ostream& os = get_ostr();
 
         os <<
-            " num-temporal-block-steps:  " << tb_steps << endl;
-        if (tb_steps > 1) {
-            os <<
-                " temporal-block-angles:     " << tb_angles.makeDimValStr() << endl <<
-                " num-temporal-block-shifts: " << num_tb_shifts << endl;
-        }
-        os <<
             " num-wave-front-steps:      " << wf_steps << endl;
         if (wf_steps > 1) {
             os <<
@@ -1291,7 +1290,10 @@ namespace yask {
                 " left-wave-front-exts:      " << left_wf_exts.makeDimValStr() << endl <<
                 " right-wave-front-exts:     " << right_wf_exts.makeDimValStr() << endl <<
                 " ext-rank-domain:           " << ext_bb.bb_begin.makeDimValStr() <<
-                " ... " << ext_bb.bb_end.subElements(1).makeDimValStr() << endl;
+                " ... " << ext_bb.bb_end.subElements(1).makeDimValStr() << endl <<
+                " num-temporal-block-steps:  " << tb_steps << endl <<
+                " temporal-block-angles:     " << tb_angles.makeDimValStr() << endl <<
+                " num-temporal-block-shifts: " << num_tb_shifts << endl;
         }
     }
     
@@ -1318,12 +1320,16 @@ namespace yask {
             " vector-size:           " << _dims->_fold_pts.makeDimValStr(" * ") << endl <<
             " cluster-size:          " << _dims->_cluster_pts.makeDimValStr(" * ") << endl <<
             " sub-block-size:        " << _opts->_sub_block_sizes.makeDimValStr(" * ") << endl <<
-            " sub-block-group-size:  " << _opts->_sub_block_group_sizes.makeDimValStr(" * ") << endl <<
+            " mini-block-size:       " << _opts->_mini_block_sizes.makeDimValStr(" * ") << endl <<
             " block-size:            " << _opts->_block_sizes.makeDimValStr(" * ") << endl <<
-            " block-group-size:      " << _opts->_block_group_sizes.makeDimValStr(" * ") << endl <<
             " region-size:           " << _opts->_region_sizes.makeDimValStr(" * ") << endl <<
             " rank-domain-size:      " << _opts->_rank_sizes.makeDimValStr(" * ") << endl <<
             " overall-problem-size:  " << overall_domain_sizes.makeDimValStr(" * ") << endl;
+#ifdef SHOW_GROUPS
+        os << 
+            " sub-block-group-size:  " << _opts->_sub_block_group_sizes.makeDimValStr(" * ") << endl <<
+            " block-group-size:      " << _opts->_block_group_sizes.makeDimValStr(" * ") << endl <<
+#endif
         os << "\nOther settings:\n"
             " yask-version:          " << yask_get_version_string() << endl <<
             " stencil-name:          " << get_name() << endl <<
@@ -1379,11 +1385,11 @@ namespace yask {
     void StencilContext::initValues(function<void (YkGridPtr gp,
                                                    real_t seed)> realInitFn) {
         ostream& os = get_ostr();
-        real_t v = 0.1;
+        real_t seed = 0.1;
         os << "Initializing grids..." << endl;
         for (auto gp : gridPtrs) {
-            realInitFn(gp, v);
-            v += 0.01;
+            realInitFn(gp, seed);
+            seed += 0.01;
         }
     }
 
@@ -1589,10 +1595,10 @@ namespace yask {
                         // and stencil dims.
                         Indices iofs(ofs);
                         ibdpt = islice_begin.addElements(iofs); // domain tuple.
-                        for (int i = 0, j = 0; i < nsdims; i++) {
+                        for (int i = 0, j = -1; i < nsdims; i++) {
                             if (i == step_posn) continue;
-                            ibspt[i] = ibdpt[j];            // stencil tuple.
                             j++;
+                            ibspt[i] = ibdpt[j];            // stencil tuple.
                         }
 
                         // Valid point must be in sub-domain and
@@ -1637,10 +1643,10 @@ namespace yask {
                                         // Find global point from 'eofs'.
                                         Indices ieofs(eofs);
                                         iedpt = ibdpt.addElements(ieofs); // domain tuple.
-                                        for (int i = 0, j = 0; i < nsdims; i++) {
+                                        for (int i = 0, j = -1; i < nsdims; i++) {
                                             if (i == step_posn) continue;
-                                            iespt[i] = iedpt[j];            // stencil tuple.
                                             j++;
+                                            iespt[i] = iedpt[j];            // stencil tuple.
                                         }
 
                                         // Valid point must be in sub-domain and

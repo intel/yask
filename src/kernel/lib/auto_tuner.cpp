@@ -34,7 +34,9 @@ namespace yask {
     void AutoTuner::print_settings(ostream& os) const {
         os << _name << ": best-block-size: " <<
             _settings->_block_sizes.makeDimValStr(" * ") << endl <<
-            _name << ": best-sub-block-size: " <<
+            _name << ": mini-block-size: " <<
+            _settings->_mini_block_sizes.makeDimValStr(" * ") << endl <<
+            _name << ": sub-block-size: " <<
             _settings->_sub_block_sizes.makeDimValStr(" * ") << endl <<
             flush;
     }
@@ -323,15 +325,14 @@ namespace yask {
         // Restore step-dim value for block.
         _settings->_block_sizes[step_posn] = block_steps;
         
-        // Change block-related sizes to 0 so adjustSettings()
+        // Change block-based sizes to 0 so adjustSettings()
         // will set them to the default.
-        // TODO: tune sub-block sizes also.
+        // TODO: tune mini- and sub-block sizes also.
         _settings->_sub_block_sizes.setValsSame(0);
-        _settings->_sub_block_sizes[step_posn] = 1;
         _settings->_sub_block_group_sizes.setValsSame(0);
-        _settings->_sub_block_group_sizes[step_posn] = 1;
+        _settings->_mini_block_sizes.setValsSame(0);
+        _settings->_mini_block_group_sizes.setValsSame(0);
         _settings->_block_group_sizes.setValsSame(0);
-        _settings->_block_group_sizes[step_posn] = 1;
 
         // Make sure everything is resized based on block size.
         _settings->adjustSettings(nullop->get_ostream(), env);

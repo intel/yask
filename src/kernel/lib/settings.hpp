@@ -734,7 +734,6 @@ namespace yask {
     class KernelSettings {
 
     protected:
-        idx_t def_steps = 1;
         idx_t def_rank = 128;
         idx_t def_block = 32;
 
@@ -751,7 +750,9 @@ namespace yask {
         IdxTuple _region_sizes;   // region size (used for wave-front tiling).
         IdxTuple _block_group_sizes; // block-group size (only used for 'grouped' region loops).
         IdxTuple _block_sizes;       // block size (used for each outer thread).
-        IdxTuple _sub_block_group_sizes; // sub-block-group size (only used for 'grouped' block loops).
+        IdxTuple _mini_block_group_sizes; // mini-block-group size (only used for 'grouped' block loops).
+        IdxTuple _mini_block_sizes;       // mini-block size (used for wave-fronts in blocks).
+        IdxTuple _sub_block_group_sizes; // sub-block-group size (only used for 'grouped' mini-block loops).
         IdxTuple _sub_block_sizes;       // sub-block size (used for each nested thread).
         IdxTuple _min_pad_sizes;         // minimum spatial padding.
         IdxTuple _extra_pad_sizes;       // extra spatial padding.
@@ -777,31 +778,39 @@ namespace yask {
         int _numa_pref = NUMA_PREF;
 
         // Ctor.
+        // TODO: move code to settings.cpp.
         KernelSettings(DimsPtr dims, KernelEnvPtr env) :
             _dims(dims), max_threads(env->max_threads) {
+            auto& step_dim = dims->_step_dim;
 
             // Use both step and domain dims for all size tuples.
             _rank_sizes = dims->_stencil_dims;
             _rank_sizes.setValsSame(def_rank);             // size of rank.
-            _rank_sizes.setVal(dims->_step_dim, def_steps); // num steps.
+            _rank_sizes.setVal(step_dim, 0);        // not used.
 
             _region_sizes = dims->_stencil_dims;
-            _region_sizes.setValsSame(0);          // 0 => full rank.
-            _region_sizes.setVal(dims->_step_dim, 1); // 1 => no wave-front tiling.
+            _region_sizes.setValsSame(0);          // 0 => default settings.
+            _region_sizes.setVal(step_dim, 1); // 1 => no wave-front tiling.
 
             _block_group_sizes = dims->_stencil_dims;
             _block_group_sizes.setValsSame(0); // 0 => min size.
 
             _block_sizes = dims->_stencil_dims;
             _block_sizes.setValsSame(def_block); // size of block.
-            _block_sizes.setVal(dims->_step_dim, 1); // 1 => no temporal blocking.
+            _block_sizes.setVal(step_dim, 1); // 1 => no temporal blocking.
+
+            _mini_block_group_sizes = dims->_stencil_dims;
+            _mini_block_group_sizes.setValsSame(0); // 0 => min size.
+
+            _mini_block_sizes = dims->_stencil_dims;
+            _mini_block_sizes.setValsSame(0);            // 0 => default settings.
 
             _sub_block_group_sizes = dims->_stencil_dims;
             _sub_block_group_sizes.setValsSame(0); // 0 => min size.
 
             _sub_block_sizes = dims->_stencil_dims;
             _sub_block_sizes.setValsSame(0);            // 0 => default settings.
-            _sub_block_sizes.setVal(dims->_step_dim, 1); // 1 => no temporal blocking.
+            _sub_block_sizes.setVal(step_dim, 1); // 1 => no temporal blocking.
 
             _min_pad_sizes = dims->_stencil_dims;
             _min_pad_sizes.setValsSame(0);

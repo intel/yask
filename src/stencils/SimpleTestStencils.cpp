@@ -229,6 +229,47 @@ public:
 
 REGISTER_STENCIL(TestReverseStencil);
 
+// Test dependent equations.
+class TestDepStencil1 : public StencilRadiusBase {
+
+protected:
+
+    // Indices & dimensions.
+    MAKE_STEP_INDEX(t);           // step in time dim.
+    MAKE_DOMAIN_INDEX(x);         // spatial dim.
+
+    // Vars.
+    MAKE_GRID(data1, t, x); // time-varying grid.
+    MAKE_GRID(data2, t, x); // time-varying grid.
+
+public:
+
+    TestDepStencil1(StencilList& stencils, int radius=2) :
+        StencilRadiusBase("test_dep_1d", stencils, radius) { }
+
+    // Define equation to apply to all points in 'data*' grids.
+    virtual void define() {
+
+        // Define data1(t+1) from data1(t) & stencil at data2(t).
+        GridValue u = data1(t, x) - data2(t, x);
+        for (int r = 1; r <= _radius; r++)
+            u += data2(t, x-r);
+        for (int r = 1; r <= _radius + 1; r++)
+            u += data2(t, x+r);
+        data1(t+1, x) EQUALS u / (_radius * 2 + 2);
+
+        // Define data2(t+1) from data2(t) & stencil at data1(t+1).
+        GridValue v = data2(t, x) - data1(t+1, x);
+        for (int r = 1; r <= _radius + 3; r++)
+            v += data1(t+1, x-r) * 2;
+        for (int r = 1; r <= _radius + 2; r++)
+            v += data1(t+1, x+r) * 3;
+        data2(t+1, x) EQUALS v / ((_radius * 2 + 6) * 2.5);
+    }
+};
+
+REGISTER_STENCIL(TestDepStencil1);
+
 // Test the use of scratch-pad grids.
 
 class TestScratchStencil1 : public StencilRadiusBase {
@@ -328,7 +369,6 @@ public:
 REGISTER_STENCIL(TestScratchStencil2);
 
 // Test the use of sub-domains.
-
 class TestSubdomainStencil1 : public StencilRadiusBase {
 
 protected:
@@ -351,8 +391,7 @@ public:
         // Sub-domain.
         Condition sd0 = (x >= first_index(x) + 5) && (x <= last_index(x) - 3);
         
-        // Set data w/different stencils.
-
+        // Define interior points.
         GridValue u = data(t, x);
         for (int r = 1; r <= _radius; r++)
             u += data(t, x-r);
@@ -360,12 +399,13 @@ public:
             u += data(t, x+r);
         data(t+1, x) EQUALS u / (_radius * 2 + 2) IF sd0;
 
+        // Define exterior points.
         GridValue v = data(t, x);
         for (int r = 1; r <= _radius + 3; r++)
-            v += data(t, x-r);
+            v += data(t, x-r) * 2;
         for (int r = 1; r <= _radius + 2; r++)
-            v += data(t, x+r);
-        data(t+1, x) EQUALS u / (_radius * 2 + 6) IF !sd0;
+            v += data(t, x+r) * 3;
+        data(t+1, x) EQUALS u / ((_radius * 2 + 6) * 2.5) IF !sd0;
     }
 };
 

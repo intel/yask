@@ -183,13 +183,13 @@ namespace yask {
         virtual void
         calc_scalar(int thread_idx, const Indices& idxs) =0;
 
-        // Calculate results within a block.
+        // Calculate results within a mini-block.
         virtual void
-        calc_block(const ScanIndices& def_block_idxs);
+        calc_mini_block(const ScanIndices& mini_block_idxs);
 
         // Calculate results within a sub-block.
         virtual void
-        calc_sub_block(int thread_idx, const ScanIndices& block_idxs);
+        calc_sub_block(int thread_idx, const ScanIndices& mini_block_idxs);
 
         // Calculate a series of cluster results within an inner loop.
         // All indices start at 'start_idxs'. Inner loop iterates to
@@ -302,7 +302,13 @@ namespace yask {
         // Accessors.
         BoundingBox& getBB() { return _pack_bb; }
         AutoTuner& getAT() { return _at; }
-        KernelSettings& getSettings() { return _opts; }
+        KernelSettings& getLocalSettings() { return _opts; }
+
+        // If using separate pack tuners, return local settings.
+        // Otherwise, return one in context.
+        KernelSettings& getActiveSettings() {
+            return _context->use_pack_tuners() ? _opts :
+                *_context->get_settings(); }
 
         // Perf-tracking methods.
         void start_timers();
