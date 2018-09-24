@@ -405,7 +405,7 @@ public:
             v += data(t, x-r) * 2;
         for (int r = 1; r <= _radius + 2; r++)
             v += data(t, x+r) * 3;
-        data(t+1, x) EQUALS u / ((_radius * 2 + 6) * 2.5) IF !sd0;
+        data(t+1, x) EQUALS v / ((_radius * 2 + 6) * 2.5) IF !sd0;
     }
 };
 
@@ -450,7 +450,7 @@ public:
         GridValue v = data(t, x, y, z);
         for (int r = 1; r <= _radius; r++)
             v += data(t, x-r, y-r, z-r) + data(t, x+r, y+r, z+r);
-        data(t+1, x, y, z) EQUALS u / (_radius * 2 + 1) IF !sd0;
+        data(t+1, x, y, z) EQUALS v / (_radius * 2 + 1) IF !sd0;
     }
 };
 
