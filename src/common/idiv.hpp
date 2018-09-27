@@ -23,8 +23,7 @@ IN THE SOFTWARE.
 
 *****************************************************************************/
 
-#ifndef IDIV_HPP
-#define IDIV_HPP
+#pragma once
 
 #include "yask_assert.hpp"
 
@@ -89,4 +88,3 @@ namespace yask {
     // thus, (a>>(sizeof(a)*8-1) * b is equiv to (a >= 0) ? 0 : b;
 }
 
-#endif

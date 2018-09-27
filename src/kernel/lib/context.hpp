@@ -519,6 +519,7 @@ namespace yask {
         void calc_mini_block(BundlePackPtr& sel_bp,
                              idx_t nphases, idx_t phase,
                              idx_t nshapes, idx_t shape,
+                             int dims_to_bridge[],
                              const ScanIndices& base_region_idxs,
                              const ScanIndices& base_block_idxs,
                              const ScanIndices& block_idxs);
@@ -548,6 +549,7 @@ namespace yask {
                               idx_t block_shift_num,
                               idx_t nphases, idx_t phase,
                               idx_t nshapes, idx_t shape,
+                              int dims_to_bridge[],
                               const Indices& region_base_start,
                               const Indices& region_base_stop,
                               idx_t region_shift_num,

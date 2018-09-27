@@ -103,6 +103,9 @@ typedef std::uint64_t uidx_t;
 // Floored integer divide and mod.
 #include "idiv.hpp"
 
+// Combinations.
+#include "combo.hpp"
+
 // Simple macros and stubs.
 
 #ifdef WIN32
