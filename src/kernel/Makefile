@@ -531,7 +531,7 @@ BLOCK_LOOP_ORDER	?=	1 .. N-1
 BLOCK_LOOP_CODE		?=	$(BLOCK_LOOP_OUTER_MODS) loop($(BLOCK_LOOP_ORDER)) { \
 				$(BLOCK_LOOP_INNER_MODS) \
 				  call(calc_mini_block(bp, nphases, phase, nshapes, shape, \
-					region_idxs, block_idxs)); }
+					dims_to_bridge, region_idxs, block_idxs)); }
 
 # Mini-Block loops break up a mini-block into sub-blocks. The 'omp' modifier creates
 # a *nested* OpenMP loop so that each sub-block is assigned to a nested OpenMP
