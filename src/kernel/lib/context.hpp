@@ -260,6 +260,7 @@ namespace yask {
         idx_t tb_steps = 1;  // max number of TB steps (may be less than requested).
         IdxTuple tb_angles;  // TB skewing angles for each shift (in points).
         idx_t num_tb_shifts = 0; // number of TB shifts required in tb_steps.
+        IdxTuple mb_angles;  // MB skewing angles for each shift (in points).
 
         // MPI settings.
         // TODO: move to settings or MPI info object.

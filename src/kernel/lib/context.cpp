@@ -633,6 +633,16 @@ namespace yask {
                                              shift_num, bp,
                                              region_idxs);
 
+                    for (int i = 0, j = -1; i < nsdims; i++) {
+                        if (i == step_posn) continue;
+                        j++;
+                        
+                        // If there is only one blk in a region, make sure
+                        // this blk fills this whole region.
+                        if (settings._block_sizes[i] >= settings._region_sizes[i])
+                            region_idxs.step[i] = region_idxs.end[i] - region_idxs.begin[i];
+                    }
+                
                     // Only need to loop through the span of the region if it is
                     // at least partly inside the extended BB. For overlapping
                     // regions, they may start outside the domain but enter the
@@ -694,6 +704,16 @@ namespace yask {
                                          shift_num, bp,
                                          region_idxs);
 
+                for (int i = 0, j = -1; i < nsdims; i++) {
+                    if (i == step_posn) continue;
+                    j++;
+
+                    // If there is only one blk in a region, make sure
+                    // this blk fills this whole region.
+                    if (settings._block_sizes[i] >= settings._region_sizes[i])
+                        region_idxs.step[i] = region_idxs.end[i] - region_idxs.begin[i];
+                }
+                
                 // To tesselate n-D domain space, we use n+1 distinct
                 // "phases".  For example, 1-D TB uses "upward" triangles
                 // and "downward" triangles. Threads must sync after every
@@ -1117,8 +1137,7 @@ namespace yask {
             // temporal wavefront.  Between regions, we only shift left, so
             // region loops must strictly increment. They may do so in any
             // order.  Shift by pts in one WF step.  Always shift left in
-            // WFs.  TODO: shift only what is needed by this pack, not the
-            // global max.
+            // WFs.
             idx_t rstart = base_start[i] - angle * shift_num;
             idx_t rstop = base_stop[i] - angle * shift_num;
 
@@ -1174,21 +1193,21 @@ namespace yask {
     // 'idxs'.  Return 'true' if resulting area is non-empty, 'false' if
     // empty.
     bool StencilContext::shift_mini_block(const Indices& mb_base_start,
-                                       const Indices& mb_base_stop,
-                                       idx_t mb_shift_num,
-                                       const Indices& adj_block_base_start,
-                                       const Indices& adj_block_base_stop,
-                                       const Indices& block_base_start,
-                                       const Indices& block_base_stop,
-                                       idx_t block_shift_num,
-                                       idx_t nphases, idx_t phase,
-                                       idx_t nshapes, idx_t shape,
+                                          const Indices& mb_base_stop,
+                                          idx_t mb_shift_num,
+                                          const Indices& adj_block_base_start,
+                                          const Indices& adj_block_base_stop,
+                                          const Indices& block_base_start,
+                                          const Indices& block_base_stop,
+                                          idx_t block_shift_num,
+                                          idx_t nphases, idx_t phase,
+                                          idx_t nshapes, idx_t shape,
                                           int dims_to_bridge[],
-                                       const Indices& region_base_start,
-                                       const Indices& region_base_stop,
-                                       idx_t region_shift_num,
-                                       BundlePackPtr& bp,
-                                       ScanIndices& idxs) {
+                                          const Indices& region_base_start,
+                                          const Indices& region_base_stop,
+                                          idx_t region_shift_num,
+                                          BundlePackPtr& bp,
+                                          ScanIndices& idxs) {
         auto step_posn = +Indices::step_posn;
         int ndims = _dims->_stencil_dims.size();
         auto& step_dim = _dims->_step_dim;
@@ -1320,10 +1339,10 @@ namespace yask {
             idx_t mb_start = mb_base_start[i];
             idx_t mb_stop = mb_base_stop[i];
 
-            // Shift mini-block by TB angles unless there is only one.
+            // Shift mini-block by MB angles unless there is only one.
             // MB is a wave-front, so only shift left.
             if (!is_one_mb) {
-                auto mb_angle = tb_angles[j];
+                auto mb_angle = mb_angles[j];
                 mb_start -= mb_angle * mb_shift_num;
                 mb_stop -= mb_angle * mb_shift_num;
             }

@@ -55,6 +55,7 @@ namespace yask {
         wf_angles = _dims->_domain_dims;
         wf_shift_pts = _dims->_domain_dims;
         tb_angles = _dims->_domain_dims;
+        mb_angles = _dims->_domain_dims;
         left_wf_exts = _dims->_domain_dims;
         right_wf_exts = _dims->_domain_dims;
 
@@ -1027,7 +1028,7 @@ namespace yask {
             // TODO: use different angle for L & R side of each pack.
             idx_t angle = ROUND_UP(max_halos[dname], _dims->_fold_pts[dname]);
             
-            // Determine the max spatial skewing angles for WF tiling.  We
+            // Determine the spatial skewing angles for WF tiling.  We
             // only need non-zero angles if the region size is less than the
             // rank size or there are other ranks in this dim, i.e., if
             // the region covers the *global* domain in a given dim, no
@@ -1104,6 +1105,7 @@ namespace yask {
         for (auto& dim : _dims->_domain_dims.getDims()) {
             auto& dname = dim.getName();
             tb_angles.addDimBack(dname, 0);
+            mb_angles.addDimBack(dname, 0);
         }
         
         // Start w/original temporal settings or 1 if unset.
@@ -1131,11 +1133,20 @@ namespace yask {
                 // Can't use separate L & R shift because of possible data reuse in grids.
                 // Can't use separate shifts for each pack for same reason.
                 // TODO: make round-up optional.
-                idx_t tb_angle = ROUND_UP(max_halos[dname], _dims->_fold_pts[dname]);
+                idx_t angle = ROUND_UP(max_halos[dname], _dims->_fold_pts[dname]);
             
+                // Determine the spatial skewing angles for MB.
+                // If MB covers whole blk, no shifting is needed in that dim.
+                idx_t mb_angle = 0;
+                if (mblksize < blksize)
+                    mb_angle = angle;
+                mb_angles[dname] = mb_angle;
+
                 // Determine the max spatial skewing angles for TB.
-                // TODO: determine if there are any safe conditions to make
-                // angles zero.
+                // If blk covers whole region, no shifting is needed in that dim.
+                idx_t tb_angle = 0;
+                if (blksize < rnsize)
+                    tb_angle = angle;
                 tb_angles[dname] = tb_angle;
 
                 // Calculate max number of temporal steps in
@@ -1143,7 +1154,7 @@ namespace yask {
                 if (tb_angle > 0) {
                     idx_t sh_pts = tb_angle * 2 * stPacks.size(); // pts shifted per step.
                     idx_t dmax = ((blksize - 1) / sh_pts) + 1;
-                    TRACE_MSG("update_tbblock_info: max TB steps in dim '" <<
+                    TRACE_MSG("update_tb_info: max TB steps in dim '" <<
                               dname << "' = " << dmax <<
                               " due to base block size of " << blksize <<
                               ", TB angle of " << tb_angle <<
@@ -1291,7 +1302,8 @@ namespace yask {
                 " ... " << ext_bb.bb_end.subElements(1).makeDimValStr() << endl <<
                 " num-temporal-block-steps:  " << tb_steps << endl <<
                 " temporal-block-angles:     " << tb_angles.makeDimValStr() << endl <<
-                " num-temporal-block-shifts: " << num_tb_shifts << endl;
+                " num-temporal-block-shifts: " << num_tb_shifts << endl <<
+                " mini-block-angles:         " << mb_angles.makeDimValStr() << endl;
         }
     }
     
