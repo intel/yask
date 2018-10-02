@@ -338,7 +338,7 @@ namespace yask {
         _settings->adjustSettings(nullop->get_ostream(), env);
 
         // Update temporal blocking info.
-        _context->update_block_info();
+        _context->update_tb_info();
 
         // Reallocate scratch data based on new block size.
         // TODO: only do this when blocks have increased or

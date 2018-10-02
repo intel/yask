@@ -363,7 +363,7 @@ namespace yask {
                 // adjustments are only needed at the end of the right-most
                 // rank in each dim.  See "(adj)" in diagram above.
                 if (right_wf_exts[dname] == 0)
-                    end[dname] += wf_shifts[dname];
+                    end[dname] += wf_shift_pts[dname];
 
                 // Stretch the region size if the original size covered the
                 // whole rank in this dim.
@@ -662,7 +662,7 @@ namespace yask {
                     if (do_mpi_exterior)
                         mark_grids_dirty(bp, start_t, stop_t);
 
-                    // Need to shift for next time.
+                    // Need to shift for next pack and/or time.
                     shift_num++;
                     
                 } // stencil bundle packs.
@@ -710,24 +710,24 @@ namespace yask {
                     }
                 }
             
-                // Loop thru stencil bundle packs evaluated at this time
-                // step to increment shift & mark dirty grids.
-                for (auto& bp : stPacks) {
+                // Loop thru stencil bundle packs that were evaluated in
+                // these 'tb_steps' to increment shift & mark dirty grids.
+                for (idx_t t = start_t; t != stop_t; t += step_dir) {
+                    for (auto& bp : stPacks) {
 
-                    // Check step.
-                    if (check_step_conds && !bp->is_in_valid_step(start_t))
-                        continue;
+                        // Check step.
+                        if (check_step_conds && !bp->is_in_valid_step(t))
+                            continue;
 
-                    // One shift for each TB step.
-                    shift_num += tb_steps;
+                        // One shift for each pack in each TB step.
+                        shift_num++;
 
-                    // Mark grids that [may] have been written to by this
-                    // pack.
-                    mark_grids_dirty(bp, start_t, stop_t);
-
-                } // stencil bundle packs.
+                        // Mark grids that [may] have been written to by this
+                        // pack.
+                        mark_grids_dirty(bp, t, t + step_dir);
+                    }
+                }
             } // with temporal blocking.
-            
         } // time.
 
         if (do_mpi_exterior) {
@@ -808,13 +808,6 @@ namespace yask {
             }
         }
 
-        // Hack to promote forward progress in MPI when calc'ing
-        // interior only.
-        // We do this only on thread 0 to avoid stacking up useless
-        // MPI requests by many threads.
-        if (do_mpi_interior && !do_mpi_exterior && thread_idx == 0)
-            exchange_halos(true);
-
         // Init block begin & end from region start & stop indices.
         ScanIndices block_idxs(*_dims, true, 0);
         block_idxs.initFromOuter(region_idxs);
@@ -884,65 +877,61 @@ namespace yask {
             idx_t nshapes = choose(nddims, phase);
             int dims_to_bridge[phase];
 
-            // Make a copy of the original index span
-            // since block_idxs will be modified.
-            // TODO: this may no longer be needed; try to lift
-            // block_idxs code out of shape loop.
-            ScanIndices orig_block_idxs(block_idxs);
-            
-            // Outer loop thru shapes.
+            // Set temporal indices to full range.
+            block_idxs.index[step_posn] = 0; // only one index.
+            block_idxs.start[step_posn] = begin_t;
+            block_idxs.stop[step_posn] = end_t;
+
+            // Steps within a block are based on rank mini-block sizes.
+            auto& settings = *_opts;
+            block_idxs.step = settings._mini_block_sizes;
+            block_idxs.step[step_posn] = step_dir;
+
+            // Groups in block loops are based on mini-block-group sizes.
+            block_idxs.group_size = settings._mini_block_group_sizes;
+
+            // Increase range of block to cover all phases and
+            // shapes.
+            ScanIndices adj_block_idxs = block_idxs;
+            for (int i = 0, j = -1; i < nsdims; i++) {
+                if (i == step_posn) continue;
+                j++;
+                    
+                // TB shapes can extend to the right only.  They can
+                // cover a range as big as this block's base plus the
+                // next block in all dims, so we add the width of the
+                // current block to the end.  This makes the adjusted
+                // blocks overlap, but the size of each mini-block is
+                // trimmed at each step to the proper active size.
+                // TODO: find a way to make this more efficient to avoid
+                // calling calc_mini_block() many times with nothing to
+                // do.
+                auto width = region_idxs.stop[i] - region_idxs.start[i];
+                adj_block_idxs.end[i] += width;
+
+                // If there is only one MB in this dim, stretch it to
+                // fill the whole adjusted block.
+                if (settings._mini_block_sizes[i] >= settings._block_sizes[i])
+                    adj_block_idxs.step[i] = adj_block_idxs.end[i] - adj_block_idxs.begin[i];
+            }
+            TRACE_MSG("calc_block: phase " << phase <<
+                      ", adjusted block [" <<
+                      adj_block_idxs.begin.makeValStr(nsdims) << " ... " <<
+                      adj_block_idxs.end.makeValStr(nsdims) << 
+                      ") with mini-block stride " <<
+                      adj_block_idxs.step.makeValStr(nsdims));
+                    
+            // Loop thru shapes.
             for (idx_t shape = 0; shape < nshapes; shape++) {
 
                 // Get 'shape'th combo of 'phase' things from 'nddims'.
                 // These will be used to create bridge shapes.
                 combination(dims_to_bridge, nddims, phase, shape + 1);
 
-                // Restore the original block_idxs.
-                block_idxs = orig_block_idxs;
-
                 // Can only be one time iteration here when doing TB
                 // because mini-block temporal size is always same
                 // as block temporal size.
                 assert(num_t == 1);
-                    
-                // Set temporal indices to full range.
-                block_idxs.index[step_posn] = 0; // only one index.
-                block_idxs.start[step_posn] = begin_t;
-                block_idxs.stop[step_posn] = end_t;
-
-                // Steps within a block are based on rank mini-block sizes.
-                auto& settings = *_opts;
-                block_idxs.step = settings._mini_block_sizes;
-                block_idxs.step[step_posn] = step_dir;
-
-                // Groups in block loops are based on mini-block-group sizes.
-                block_idxs.group_size = settings._mini_block_group_sizes;
-
-                // Increase range of block to cover all phases and
-                // shapes.
-                ScanIndices adj_block_idxs = block_idxs;
-                for (int i = 0, j = -1; i < nsdims; i++) {
-                    if (i == step_posn) continue;
-                    j++;
-                    
-                    // TB shapes can extend to the right only.  They can
-                    // cover a range as big as this block's base plus the
-                    // next block in all dims, so we add the width of the
-                    // current block to the end.  This makes the adjusted
-                    // blocks overlap, but the size of each mini-block is
-                    // trimmed at each step to the proper active size.
-                    // TODO: find a way to make this more efficient to avoid
-                    // calling calc_mini_block() many times with nothing to
-                    // do.
-                    auto width = region_idxs.stop[i] - region_idxs.start[i];
-                    adj_block_idxs.end[i] += width;
-                }
-                TRACE_MSG("calc_block: phase " << phase << ", shape " << shape <<
-                          ", adjusted block [" <<
-                          adj_block_idxs.begin.makeValStr(nsdims) << " ... " <<
-                          adj_block_idxs.end.makeValStr(nsdims) << 
-                          ") with mini-block steps " <<
-                          adj_block_idxs.step.makeValStr(nsdims));
                     
                 // Include automatically-generated loop code that calls
                 // calc_mini_block() for each mini-block in this block.
@@ -983,6 +972,13 @@ namespace yask {
                   base_block_idxs.end.makeValStr(nsdims) << ") within base-region [" <<
                   base_region_idxs.begin.makeValStr(nsdims) << " ... " <<
                   base_region_idxs.end.makeValStr(nsdims) << ")");
+
+        // Hack to promote forward progress in MPI when calc'ing
+        // interior only.
+        // We do this only on thread 0 to avoid stacking up useless
+        // MPI requests by many threads.
+        if (do_mpi_interior && !do_mpi_exterior && thread_idx == 0)
+            exchange_halos(true);
 
         // Init mini-block begin & end from blk start & stop indices.
         ScanIndices mini_block_idxs(*_dims, true, 0);
@@ -1045,8 +1041,6 @@ namespace yask {
                 if (thread_idx == 0)
                     bp->start_timers();
                 
-        // TODO: move MPI poke here.
-
                 // Steps within a mini-blk are based on sub-blk sizes.
                 auto& settings = bp->getActiveSettings();
                 mini_block_idxs.step = settings._sub_block_sizes;
@@ -1220,6 +1214,9 @@ namespace yask {
             bool is_first_blk = block_base_start[i] <= region_base_start[i];
             bool is_last_blk = block_base_stop[i] >= region_base_stop[i];
 
+            // Is there only one blk in the region in this dim?
+            bool is_one_blk = is_first_blk && is_last_blk;
+
             // Initial start and stop point of phase-0 block.
             idx_t blk_start = block_base_start[i];
             idx_t blk_stop = block_base_stop[i];
@@ -1241,7 +1238,7 @@ namespace yask {
             // one shift distance.  This will make 'up' and 'down'
             // trapezoids approx same size.
             auto tb_angle = tb_angles[j];
-            if (nphases > 1) {
+            if (nphases > 1 && !is_one_blk) {
                 auto sa = (num_tb_shifts+1) * tb_angle;
                 idx_t blk_width = ROUND_UP(CEIL_DIV(blk_stop - blk_start, idx_t(2)) + sa,
                                            fpts[j]);
@@ -1266,9 +1263,10 @@ namespace yask {
             if (is_first_blk)
                 blk_start = idxs.begin[i];
 
-            // Shift stop to left.
+            // Shift stop to left. If there will be no bridges, clamp
+            // last block to end of region.
             blk_stop -= tb_angle * block_shift_num;
-            if (nphases == 1 && is_last_blk)
+            if ((nphases == 1 || is_one_blk) && is_last_blk)
                 blk_stop = idxs.end[i];
 
             // Shift start of next block. Last block will be
@@ -1299,8 +1297,9 @@ namespace yask {
                                   ", shape " << shape <<
                                   ": bridging dim " << j);
                 
-                        // Start at end of base block.
-                        shape_start = blk_stop;
+                        // Start at end of base block, but not
+                        // before start of block.
+                        shape_start = max(blk_stop, blk_start);
                     
                         // Stop at beginning of next block.
                         shape_stop = next_blk_start;
@@ -1314,16 +1313,24 @@ namespace yask {
             bool is_first_mb = mb_base_start[i] <= adj_block_base_start[i];
             bool is_last_mb = mb_base_stop[i] >= adj_block_base_stop[i];
 
-            // Shift mini-block by TB angles.
-            // MB is a wave-front, so only shift left.
-            // Clamp first & last to shape boundaries.
-            auto mb_angle = tb_angles[j];
+            // Is there only one MB?
+            bool is_one_mb = is_first_mb && is_last_mb;
+
+            // Beginning and end of min-block.
             idx_t mb_start = mb_base_start[i];
             idx_t mb_stop = mb_base_stop[i];
-            mb_start -= mb_angle * mb_shift_num;
+
+            // Shift mini-block by TB angles unless there is only one.
+            // MB is a wave-front, so only shift left.
+            if (!is_one_mb) {
+                auto mb_angle = tb_angles[j];
+                mb_start -= mb_angle * mb_shift_num;
+                mb_stop -= mb_angle * mb_shift_num;
+            }
+
+            // Clamp first & last MB to shape boundaries.
             if (is_first_mb)
                 mb_start = shape_start;
-            mb_stop -= mb_angle * mb_shift_num;
             if (is_last_mb)
                 mb_stop = shape_stop;
 

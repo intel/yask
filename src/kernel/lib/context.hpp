@@ -254,7 +254,7 @@ namespace yask {
         idx_t wf_steps = 1;  // max number of WF steps.
         IdxTuple wf_angles;  // WF skewing angles for each shift (in points).
         idx_t num_wf_shifts = 0; // number of WF shifts required in wf_steps.
-        IdxTuple wf_shifts;    // total shifted pts (wf_angles * num_wf_shifts).
+        IdxTuple wf_shift_pts;    // total shifted pts (wf_angles * num_wf_shifts).
         IdxTuple left_wf_exts;    // WF extension needed on left side of rank for halo exch.
         IdxTuple right_wf_exts;    // WF extension needed on right side of rank.
         idx_t tb_steps = 1;  // max number of TB steps (may be less than requested).
@@ -373,7 +373,7 @@ namespace yask {
 
         // Set temporal blocking data.
         // This should be called anytime a block size is changed.
-        virtual void update_block_info();
+        virtual void update_tb_info();
 
         // Adjust offsets of scratch grids based
         // on thread and scan indices.

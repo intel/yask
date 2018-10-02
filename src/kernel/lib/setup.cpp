@@ -53,7 +53,7 @@ namespace yask {
         overall_domain_sizes = _dims->_domain_dims;
         max_halos = _dims->_domain_dims;
         wf_angles = _dims->_domain_dims;
-        wf_shifts = _dims->_domain_dims;
+        wf_shift_pts = _dims->_domain_dims;
         tb_angles = _dims->_domain_dims;
         left_wf_exts = _dims->_domain_dims;
         right_wf_exts = _dims->_domain_dims;
@@ -498,7 +498,7 @@ namespace yask {
                             if (neigh_offsets[dname] == MPIInfo::rank_prev) {
 
                                 // Number of points to be added for WFs.
-                                auto ext = wf_shifts[dname];
+                                auto ext = wf_shift_pts[dname];
 
                                 // My halo on my left.
                                 my_halo_sizes.addDimBack(dname, lhalo + ext);
@@ -515,7 +515,7 @@ namespace yask {
                             else if (neigh_offsets[dname] == MPIInfo::rank_next) {
 
                                 // Number of points to be added for WFs.
-                                auto ext = wf_shifts[dname];
+                                auto ext = wf_shift_pts[dname];
 
                                 // My halo on my right.
                                 my_halo_sizes.addDimBack(dname, rhalo + ext);
@@ -1040,7 +1040,7 @@ namespace yask {
 
             // Determine the total WF shift to be added in each dim.
             idx_t shifts = wf_angle * num_wf_shifts;
-            wf_shifts[dname] = shifts;
+            wf_shift_pts[dname] = shifts;
             assert(shifts >= 0);
 
             // Is domain size at least as large as halo + wf_ext in direction
@@ -1061,10 +1061,6 @@ namespace yask {
             right_wf_exts[dname] = _opts->is_last_rank(dname) ? 0 : shifts;
         }
 
-        // Calculate temporal-block shifts.
-        // NB: this will change if/when block sizes change.
-        update_block_info();
-        
         // Now that wave-front settings are known, we can push this info
         // back to the grids. It's useful to store this redundant info
         // in the grids, because there it's indexed by grid dims instead
@@ -1086,14 +1082,20 @@ namespace yask {
                     gp->_set_right_wf_ext(dname, right_wf_exts[dname]);
                 }
             }
-        }
+        } // grids.
+
+        // Calculate temporal-block shifts.
+        // NB: this will change if/when block sizes change.
+        update_tb_info();
+        
     } // update_grid_info().
 
-    // Set temporal blocking data.
-    // This should be called anytime a block size is changed.
-    // Must be called after update_grid_info() to ensure
-    // angles are properly set.
-    void StencilContext::update_block_info() {
+    // Set temporal blocking data.  This should be called anytime a block
+    // size is changed.  Must be called after update_grid_info() to ensure
+    // angles are properly set.  TODO: calculate 'tb_steps' dynamically
+    // considering temporal conditions; this assumes worst-case, which is
+    // all packs always done.
+    void StencilContext::update_tb_info() {
         auto& step_dim = _dims->_step_dim;
 
         // Reset all TB and MB vars.
@@ -1111,9 +1113,9 @@ namespace yask {
         // When using temporal blocking, all block sizes
         // across all packs must be the same.
         if (tb_steps > 1) {
-            TRACE_MSG("update_block_info: original TB steps = " << tb_steps);
+            TRACE_MSG("update_tb_info: original TB steps = " << tb_steps);
             idx_t max_steps = min(tb_steps, wf_steps);
-            TRACE_MSG("update_block_info: max(TB, WF) steps = " << max_steps);
+            TRACE_MSG("update_tb_info: min(TB, WF) steps = " << max_steps);
 
             // Loop through each domain dim.
             for (auto& dim : _dims->_domain_dims.getDims()) {
@@ -1126,26 +1128,22 @@ namespace yask {
                 auto mblksize = _opts->_mini_block_sizes[dname];
 
                 // Req'd shift in this dim based on max halos.
-                // TODO: use different angle for L & R side of each pack.
-                idx_t angle = ROUND_UP(max_halos[dname], _dims->_fold_pts[dname]);
+                // Can't use separate L & R shift because of possible data reuse in grids.
+                // Can't use separate shifts for each pack for same reason.
+                // TODO: make round-up optional.
+                idx_t tb_angle = ROUND_UP(max_halos[dname], _dims->_fold_pts[dname]);
             
                 // Determine the max spatial skewing angles for TB.
                 // TODO: determine if there are any safe conditions to make
                 // angles zero.
-                idx_t tb_angle = angle;
                 tb_angles[dname] = tb_angle;
 
                 // Calculate max number of temporal steps in
                 // allowed this dim.
-                // TODO: calculate this dynamically considering
-                // temporal conditions; this assumes worst-case,
-                // which is all packs always done.
-                // TODO: calculate this using separate angle
-                // for each pack.
                 if (tb_angle > 0) {
                     idx_t sh_pts = tb_angle * 2 * stPacks.size(); // pts shifted per step.
                     idx_t dmax = ((blksize - 1) / sh_pts) + 1;
-                    TRACE_MSG("update_block_info: max TB steps in dim '" <<
+                    TRACE_MSG("update_tbblock_info: max TB steps in dim '" <<
                               dname << "' = " << dmax <<
                               " due to base block size of " << blksize <<
                               ", TB angle of " << tb_angle <<
@@ -1154,7 +1152,7 @@ namespace yask {
                 }
             }
             tb_steps = min(tb_steps, max_steps);
-            TRACE_MSG("update_block_info: final TB steps = " << tb_steps);
+            TRACE_MSG("update_tb_info: final TB steps = " << tb_steps);
         }
         assert(tb_steps >= 1);
 
@@ -1170,9 +1168,9 @@ namespace yask {
             num_tb_shifts--;
         }
         assert(num_tb_shifts >= 0);
-        TRACE_MSG("update_block_info: num TB shifts = " << num_tb_shifts);
+        TRACE_MSG("update_tb_info: num TB shifts = " << num_tb_shifts);
 
-    } // update_block_info().
+    } // update_tb_info().
 
     // Allocate grids and MPI bufs.
     // Initialize some data structures.
@@ -1286,7 +1284,7 @@ namespace yask {
             os <<
                 " wave-front-angles:         " << wf_angles.makeDimValStr() << endl <<
                 " num-wave-front-shifts:     " << num_wf_shifts << endl <<
-                " wave-front-shift-size:     " << wf_shifts.makeDimValStr() << endl <<
+                " wave-front-shift-size:     " << wf_shift_pts.makeDimValStr() << endl <<
                 " left-wave-front-exts:      " << left_wf_exts.makeDimValStr() << endl <<
                 " right-wave-front-exts:     " << right_wf_exts.makeDimValStr() << endl <<
                 " ext-rank-domain:           " << ext_bb.bb_begin.makeDimValStr() <<
