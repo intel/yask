@@ -38,7 +38,7 @@ protected:
     MAKE_DOMAIN_INDEX(x);         // spatial dim.
 
     // Vars.
-    MAKE_GRID(data, t, x); // time-varying grid.
+    MAKE_GRID(A, t, x); // time-varying grid.
 
 public:
 
@@ -46,16 +46,16 @@ public:
         StencilRadiusBase("test_1d", stencils, radius) { }
     virtual ~Test1dStencil() { }
 
-    // Define equation to apply to all points in 'data' grid.
+    // Define equation to apply to all points in 'A' grid.
     virtual void define() {
 
         // define the value at t+1 using asymmetric stencil.
-        GridValue v = data(t, x) + 1.0;
-        for (int r = 1; r <= _radius; r++)
-            v += data(t, x + r);
-        for (int r = 1; r <= _radius + 2; r++)
-            v += data(t, x - r);
-        data(t+1, x) EQUALS v;
+        GridValue v = A(t, x) + 1.0;       // one center pt.
+        for (int r = 1; r <= _radius; r++) // right side has '_radius' pts.
+            v += A(t, x + r);
+        for (int r = 1; r <= _radius + 2; r++) // left side has '_radius+2' pts.
+            v += A(t, x - r);
+        A(t+1, x) EQUALS v;
     }
 };
 
@@ -71,7 +71,7 @@ protected:
     MAKE_DOMAIN_INDEX(y);         // spatial dim.
 
     // Vars.
-    MAKE_GRID(data, t, x, y); // time-varying grid.
+    MAKE_GRID(A, t, x, y); // time-varying grid.
 
 public:
 
@@ -79,26 +79,26 @@ public:
         StencilRadiusBase("test_2d", stencils, radius) { }
     virtual ~Test2dStencil() { }
 
-    // Define equation to apply to all points in 'data' grid.
+    // Define equation to apply to all points in 'A' grid.
     virtual void define() {
 
         // define the value at t+1 using asymmetric stencil.
-        GridValue v = data(t, x, y) + 1.0;
+        GridValue v = A(t, x, y) + 1.0;
         for (int r = 1; r <= _radius; r++)
-            v += data(t, x + r, y);
+            v += A(t, x + r, y);
         for (int r = 1; r <= _radius + 1; r++)
-            v += data(t, x - r, y);
+            v += A(t, x - r, y);
         for (int r = 1; r <= _radius + 2; r++)
-            v += data(t, x, y + r);
+            v += A(t, x, y + r);
         for (int r = 1; r <= _radius + 3; r++)
-            v += data(t, x, y - r);
-        data(t+1, x, y) EQUALS v;
+            v += A(t, x, y - r);
+        A(t+1, x, y) EQUALS v;
     }
 };
 
 REGISTER_STENCIL(Test2dStencil);
 
-class Test3dStencil : public StencilBase {
+class Test3dStencil : public StencilRadiusBase {
 
 protected:
 
@@ -109,25 +109,38 @@ protected:
     MAKE_DOMAIN_INDEX(z);         // spatial dim.
 
     // Vars.
-    MAKE_GRID(data, t, x, y, z); // time-varying grid.
+    MAKE_GRID(A, t, x, y, z); // time-varying grid.
 
 public:
 
-    Test3dStencil(StencilList& stencils) :
-        StencilBase("test_3d", stencils) { }
+    Test3dStencil(StencilList& stencils, int radius=2) :
+        StencilRadiusBase("test_3d", stencils, radius) { }
     virtual ~Test3dStencil() { }
 
-    // Define equation to apply to all points in 'data' grid.
+    // Define equation to apply to all points in 'A' grid.
     virtual void define() {
 
-        // define the value at t+1.
-        data(t+1, x, y, z) EQUALS data(t, x, y, z) + 1.0;
+        // define the value at t+1 using asymmetric stencil.
+        GridValue v = A(t, x, y, z) + 1.0;
+        for (int r = 1; r <= _radius; r++)
+            v += A(t, x + r, y, z);
+        for (int r = 1; r <= _radius + 1; r++)
+            v += A(t, x - r, y, z);
+        for (int r = 1; r <= _radius + 2; r++)
+            v += A(t, x, y + r, z);
+        for (int r = 1; r <= _radius + 3; r++)
+            v += A(t, x, y - r, z);
+        for (int r = 1; r <= _radius + 1; r++)
+            v += A(t, x, y, z + r);
+        for (int r = 1; r <= _radius + 2; r++)
+            v += A(t, x, y, z - r);
+        A(t+1, x, y, z) EQUALS v;
     }
 };
 
 REGISTER_STENCIL(Test3dStencil);
 
-class Test4dStencil : public StencilBase {
+class Test4dStencil : public StencilRadiusBase {
 
 protected:
 
@@ -139,19 +152,36 @@ protected:
     MAKE_DOMAIN_INDEX(z);         // spatial dim.
 
     // Vars.
-    MAKE_GRID(data, t, w, x, y, z); // time-varying grid.
+    MAKE_GRID(A, t, w, x, y, z); // time-varying grid.
 
 public:
 
-    Test4dStencil(StencilList& stencils) :
-        StencilBase("test_4d", stencils) { }
+    Test4dStencil(StencilList& stencils, int radius=2) :
+        StencilRadiusBase("test_4d", stencils, radius) { }
     virtual ~Test4dStencil() { }
 
-    // Define equation to apply to all points in 'data' grid.
+    // Define equation to apply to all points in 'A' grid.
     virtual void define() {
 
-        // define the value at t+1.
-        data(t+1, w, x, y, z) EQUALS data(t, w, x, y, z) + 1.0;
+        // define the value at t+1 using asymmetric stencil.
+        GridValue v = A(t, w, x, y, z) + 1.0;
+        for (int r = 1; r <= _radius; r++)
+            v += A(t, w + r, x, y, z);
+        for (int r = 1; r <= _radius + 1; r++)
+            v += A(t, w - r, x, y, z);
+        for (int r = 1; r <= _radius + 3; r++)
+            v += A(t, w, x + r, y, z);
+        for (int r = 1; r <= _radius + 2; r++)
+            v += A(t, w, x - r, y, z);
+        for (int r = 1; r <= _radius + 1; r++)
+            v += A(t, w, x, y + r, z);
+        for (int r = 1; r <= _radius + 3; r++)
+            v += A(t, w, x, y - r, z);
+        for (int r = 1; r <= _radius + 1; r++)
+            v += A(t, w, x, y, z + r);
+        for (int r = 1; r <= _radius + 2; r++)
+            v += A(t, w, x, y, z - r);
+        A(t+1, w, x, y, z) EQUALS v;
     }
 };
 
@@ -175,7 +205,7 @@ protected:
     MAKE_DOMAIN_INDEX(z);         // spatial dim.
 
     // Vars.
-    MAKE_GRID(data, t, x, y, z); // time-varying 3D grid.
+    MAKE_GRID(A, t, x, y, z); // time-varying 3D grid.
 
 public:
 
@@ -190,17 +220,17 @@ public:
 
         // Add '_radius' values from past time-steps to ensure no spatial locality.
         for (int r = 0; r < _radius; r++)
-            v += data(t-r, x, y, z);
+            v += A(t-r, x, y, z);
 
         // define the value at t+1 to be equivalent to v.
-        data(t+1, x, y, z) EQUALS v;
+        A(t+1, x, y, z) EQUALS v;
     }
 };
 
 REGISTER_STENCIL(StreamStencil);
 
 // Reverse-time stencil.
-// In this test, data(t-1) depends on data(t).
+// In this test, A(t-1) depends on A(t).
 
 class TestReverseStencil : public StencilBase {
 
@@ -212,7 +242,7 @@ protected:
     MAKE_DOMAIN_INDEX(y);         // spatial dim.
 
     // Vars.
-    MAKE_GRID(data, t, x, y);
+    MAKE_GRID(A, t, x, y);
 
 public:
 
@@ -223,7 +253,7 @@ public:
     // Define equation to do simple test.
     virtual void define() {
 
-        data(t-1, x, y) EQUALS data(t, x, y) + 5.0;
+        A(t-1, x, y) EQUALS A(t, x, y) + 5.0;
     }
 };
 
@@ -239,32 +269,32 @@ protected:
     MAKE_DOMAIN_INDEX(x);         // spatial dim.
 
     // Vars.
-    MAKE_GRID(data1, t, x); // time-varying grid.
-    MAKE_GRID(data2, t, x); // time-varying grid.
+    MAKE_GRID(A, t, x); // time-varying grid.
+    MAKE_GRID(B, t, x); // time-varying grid.
 
 public:
 
     TestDepStencil1(StencilList& stencils, int radius=2) :
         StencilRadiusBase("test_dep_1d", stencils, radius) { }
 
-    // Define equation to apply to all points in 'data*' grids.
+    // Define equation to apply to all points in 'A' and 'B' grids.
     virtual void define() {
 
-        // Define data1(t+1) from data1(t) & stencil at data2(t).
-        GridValue u = data1(t, x) - data2(t, x);
+        // Define A(t+1) from A(t) & stencil at B(t).
+        GridValue u = A(t, x) - B(t, x);
         for (int r = 1; r <= _radius; r++)
-            u += data2(t, x-r);
+            u += B(t, x-r);
         for (int r = 1; r <= _radius + 1; r++)
-            u += data2(t, x+r);
-        data1(t+1, x) EQUALS u / (_radius * 2 + 2);
+            u += B(t, x+r);
+        A(t+1, x) EQUALS u / (_radius * 2 + 2);
 
-        // Define data2(t+1) from data2(t) & stencil at data1(t+1).
-        GridValue v = data2(t, x) - data1(t+1, x);
+        // Define B(t+1) from B(t) & stencil at A(t+1).
+        GridValue v = B(t, x) - A(t+1, x);
         for (int r = 1; r <= _radius + 3; r++)
-            v += data1(t+1, x-r) * 2;
+            v += A(t+1, x-r) * 2;
         for (int r = 1; r <= _radius + 2; r++)
-            v += data1(t+1, x+r) * 3;
-        data2(t+1, x) EQUALS v / ((_radius * 2 + 6) * 2.5);
+            v += A(t+1, x+r) * 3;
+        B(t+1, x) EQUALS v / ((_radius * 2 + 6) * 2.5);
     }
 };
 
@@ -281,7 +311,7 @@ protected:
     MAKE_DOMAIN_INDEX(x);         // spatial dim.
 
     // Vars.
-    MAKE_GRID(data, t, x); // time-varying grid.
+    MAKE_GRID(A, t, x); // time-varying grid.
 
     // Temporary storage.
     MAKE_SCRATCH_GRID(t1, x);
@@ -291,24 +321,24 @@ public:
     TestScratchStencil1(StencilList& stencils, int radius=2) :
         StencilRadiusBase("test_scratch1", stencils, radius) { }
 
-    // Define equation to apply to all points in 'data' grid.
+    // Define equation to apply to all points in 'A' grid.
     virtual void define() {
 
         // Set scratch var w/an asymmetrical stencil.
-        GridValue u = data(t, x);
+        GridValue u = A(t, x);
         for (int r = 1; r <= _radius; r++)
-            u += data(t, x-r);
+            u += A(t, x-r);
         for (int r = 1; r <= _radius + 1; r++)
-            u += data(t, x+r);
+            u += A(t, x+r);
         t1(x) EQUALS u / (_radius * 2 + 2);
 
-        // Set data from scratch vars w/an asymmetrical stencil.
+        // Set A from scratch vars w/an asymmetrical stencil.
         GridValue v = t1(x);
         for (int r = 1; r <= _radius + 2; r++)
             v += t1(x-r);
         for (int r = 1; r <= _radius + 3; r++)
             v += t1(x+r);
-        data(t+1, x) EQUALS v / (_radius * 2 + 6);
+        A(t+1, x) EQUALS v / (_radius * 2 + 6);
     }
 };
 
@@ -325,7 +355,7 @@ protected:
     MAKE_DOMAIN_INDEX(z);         // spatial dim.
 
     // Vars.
-    MAKE_GRID(data, t, x, y, z); // time-varying grid.
+    MAKE_GRID(A, t, x, y, z); // time-varying grid.
 
     // Temporary storage.
     MAKE_SCRATCH_GRID(t1, x, y, z);
@@ -337,7 +367,7 @@ public:
     TestScratchStencil2(StencilList& stencils, int radius=2) :
         StencilRadiusBase("test_scratch2", stencils, radius) { }
 
-    // Define equation to apply to all points in 'data' grid.
+    // Define equation to apply to all points in 'A' grid.
     virtual void define() {
 
         // Set scratch vars.
@@ -345,9 +375,9 @@ public:
         GridValue iy = constNum(2.0);
         GridValue iz = constNum(3.0);
         for (int r = 1; r <= _radius; r++) {
-            ix += data(t, x-r, y, z);
-            iy += data(t, x, y+r, z);
-            iz += data(t, x, y, z-r) + data(t, x, y, z+r);
+            ix += A(t, x-r, y, z);
+            iy += A(t, x, y+r, z);
+            iz += A(t, x, y, z-r) + A(t, x, y, z+r);
         }
         t1(x, y, z) EQUALS ix;
         t2(x, y, z) EQUALS iy - iz;
@@ -355,14 +385,14 @@ public:
         // Set a scratch var from other scratch vars.
         t3(x, y, z) EQUALS t1(x-1, y+1, z) + t2(x, y, z-1);
 
-        // Update data from scratch vars.
+        // Update A from scratch vars.
         GridValue v = constNum(4.0);
         for (int r = 1; r <= _radius; r++) {
             v += t1(x-r, y, z) - t1(x+r, y, z);
             v += t2(x, y, z-r) - t2(x, y, z);
             v += t3(x-r, y-r, z) - t3(x+r, y+r, z);
         }
-        data(t+1, x, y, z) EQUALS data(t, x, y, z) + v;
+        A(t+1, x, y, z) EQUALS A(t, x, y, z) + v;
     }
 };
 
@@ -378,34 +408,34 @@ protected:
     MAKE_DOMAIN_INDEX(x);         // spatial dim.
 
     // Vars.
-    MAKE_GRID(data, t, x); // time-varying grid.
+    MAKE_GRID(A, t, x); // time-varying grid.
 
 public:
 
     TestSubdomainStencil1(StencilList& stencils, int radius=2) :
         StencilRadiusBase("test_subdomain_1d", stencils, radius) { }
 
-    // Define equation to apply to all points in 'data' grid.
+    // Define equation to apply to all points in 'A' grid.
     virtual void define() {
 
         // Sub-domain.
         Condition sd0 = (x >= first_index(x) + 5) && (x <= last_index(x) - 3);
         
         // Define interior points.
-        GridValue u = data(t, x);
+        GridValue u = A(t, x);
         for (int r = 1; r <= _radius; r++)
-            u += data(t, x-r);
+            u += A(t, x-r);
         for (int r = 1; r <= _radius + 1; r++)
-            u += data(t, x+r);
-        data(t+1, x) EQUALS u / (_radius * 2 + 2) IF sd0;
+            u += A(t, x+r);
+        A(t+1, x) EQUALS u / (_radius * 2 + 2) IF sd0;
 
         // Define exterior points.
-        GridValue v = data(t, x);
+        GridValue v = A(t, x);
         for (int r = 1; r <= _radius + 3; r++)
-            v += data(t, x-r) * 2;
+            v += A(t, x-r) * 2;
         for (int r = 1; r <= _radius + 2; r++)
-            v += data(t, x+r) * 3;
-        data(t+1, x) EQUALS v / ((_radius * 2 + 6) * 2.5) IF !sd0;
+            v += A(t, x+r) * 3;
+        A(t+1, x) EQUALS v / ((_radius * 2 + 6) * 2.5) IF !sd0;
     }
 };
 
@@ -422,14 +452,14 @@ protected:
     MAKE_DOMAIN_INDEX(z);         // spatial dim.
 
     // Vars.
-    MAKE_GRID(data, t, x, y, z); // time-varying grid.
+    MAKE_GRID(A, t, x, y, z); // time-varying grid.
 
 public:
 
     TestSubdomainStencil3(StencilList& stencils, int radius=2) :
         StencilRadiusBase("test_subdomain_3d", stencils, radius) { }
 
-    // Define equation to apply to all points in 'data' grid.
+    // Define equation to apply to all points in 'A' grid.
     virtual void define() {
 
         // Sub-domain is rectangle interior.
@@ -438,19 +468,19 @@ public:
             (y >= first_index(y) + 4) && (y <= last_index(y) - 6) &&
             (z >= first_index(z) + 6) && (z <= last_index(z) - 4);
         
-        // Set data w/different stencils.
+        // Set A w/different stencils.
 
-        GridValue u = data(t, x, y, z);
+        GridValue u = A(t, x, y, z);
         for (int r = 1; r <= _radius; r++)
-            u += data(t, x-r, y, z) + data(t, x+r, y, z) +
-                data(t, x, y-r, z) + data(t, x, y+r, z) +
-                data(t, x, y, z-r) + data(t, x, y, z+r);
-        data(t+1, x, y, z) EQUALS u / (_radius * 6 + 1) IF sd0;
+            u += A(t, x-r, y, z) + A(t, x+r, y, z) +
+                A(t, x, y-r, z) + A(t, x, y+r, z) +
+                A(t, x, y, z-r) + A(t, x, y, z+r);
+        A(t+1, x, y, z) EQUALS u / (_radius * 6 + 1) IF sd0;
 
-        GridValue v = data(t, x, y, z);
+        GridValue v = A(t, x, y, z);
         for (int r = 1; r <= _radius; r++)
-            v += data(t, x-r, y-r, z-r) + data(t, x+r, y+r, z+r);
-        data(t+1, x, y, z) EQUALS v / (_radius * 2 + 1) IF !sd0;
+            v += A(t, x-r, y-r, z-r) + A(t, x+r, y+r, z+r);
+        A(t+1, x, y, z) EQUALS v / (_radius * 2 + 1) IF !sd0;
     }
 };
 
@@ -465,34 +495,34 @@ protected:
     MAKE_DOMAIN_INDEX(x);         // spatial dim.
 
     // Vars.
-    MAKE_GRID(data, t, x); // time-varying grid.
+    MAKE_GRID(A, t, x); // time-varying grid.
 
 public:
 
     TestStepCondStencil1(StencilList& stencils, int radius=2) :
         StencilRadiusBase("test_step_cond_1d", stencils, radius) { }
 
-    // Define equation to apply to all points in 'data' grid.
+    // Define equation to apply to all points in 'A' grid.
     virtual void define() {
 
         // Time condition.
         Condition tc0 = (t % 2 == 0);
         
-        // Set data w/different stencils.
+        // Set A w/different stencils.
 
-        GridValue u = data(t, x);
+        GridValue u = A(t, x);
         for (int r = 1; r <= _radius; r++)
-            u += data(t, x-r);
+            u += A(t, x-r);
         for (int r = 1; r <= _radius + 1; r++)
-            u += data(t, x+r);
-        data(t+1, x) EQUALS u / (_radius * 2 + 2) IF_STEP tc0;
+            u += A(t, x+r);
+        A(t+1, x) EQUALS u / (_radius * 2 + 2) IF_STEP tc0;
 
-        GridValue v = data(t, x);
+        GridValue v = A(t, x);
         for (int r = 1; r <= _radius + 3; r++)
-            v += data(t, x-r);
+            v += A(t, x-r);
         for (int r = 1; r <= _radius + 2; r++)
-            v += data(t, x+r);
-        data(t+1, x) EQUALS v / (_radius * 2 + 6) IF_STEP !tc0;
+            v += A(t, x+r);
+        A(t+1, x) EQUALS v / (_radius * 2 + 6) IF_STEP !tc0;
     }
 };
 
@@ -508,7 +538,7 @@ protected:
     MAKE_DOMAIN_INDEX(x);         // spatial dim.
 
     // Vars.
-    MAKE_GRID(data, t, x); // time-varying grid.
+    MAKE_GRID(A, t, x); // time-varying grid.
 
 public:
 
