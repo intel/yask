@@ -320,6 +320,7 @@ int main(int argc, char** argv)
             // Warmup phases.
             double rate = 1.0;
             idx_t warmup_steps = 1;
+            idx_t max_wsteps = 10;
             for (int n = 0; n < 3; n++) {
 
                 // Run steps.
@@ -340,6 +341,8 @@ int main(int argc, char** argv)
                 // Use time to set number of steps for next trial.
                 double warmup_time = 0.5 * (n + 1);
                 warmup_steps = ceil(rate * warmup_time);
+                warmup_steps = min(warmup_steps, max_wsteps);
+                max_wsteps *= max_wsteps;
 
                 // Average across all ranks because it is critical that
                 // all ranks use the same number of steps to avoid deadlock.
