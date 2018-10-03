@@ -80,7 +80,7 @@ while true; do
         echo "  -sh_prefix <command>"
         echo "     Run sub-shell under <command>, e.g., a custom ssh command."
         echo "  -exe_prefix <command>"
-        echo "     Run YASK executable under <command>."
+        echo "     Run YASK executable under <command>, e.g., 'numactl'."
         echo "  -pre_cmd <command(s)>"
         echo "     One or more commands to run before YASK executable."
         echo "  -post_cmd <command(s)>"
