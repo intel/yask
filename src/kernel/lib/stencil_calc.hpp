@@ -166,6 +166,10 @@ namespace yask {
         virtual bool
         is_in_valid_domain(const Indices& idxs) const =0;
 
+        // Return true if there is a non-default sub-domain expression.
+        virtual bool
+        is_sub_domain_expr() const { return false; }
+
         // Determine whether step index is enabled.
         virtual bool
         is_in_valid_step(idx_t input_step_index) const =0;

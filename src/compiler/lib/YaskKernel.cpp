@@ -528,7 +528,10 @@ namespace yask {
                     os << " return " << eq->cond->makeStr() << ";\n";
                 else
                     os << " return true; // full domain.\n";
-                os << " }\n";
+                os << " }\n"
+                    " virtual bool is_sub_domain_expr() const {\n"
+                    "  return " << (eq->cond ? "true" : "false") <<
+                    ";\n }\n";
             }
 
             // Step condition.

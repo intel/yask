@@ -1280,7 +1280,8 @@ namespace yask {
         allocScratchData(os);
         allocMpiData(os);
         allocTimer.stop();
-        os << "Allocation done in " << allocTimer.get_elapsed_secs() << " secs.\n";
+        os << "Allocation done in " <<
+            makeNumStr(allocTimer.get_elapsed_secs()) << " secs.\n" << flush;
 
         print_info();
 
@@ -1396,11 +1397,16 @@ namespace yask {
                                                    real_t seed)> realInitFn) {
         ostream& os = get_ostr();
         real_t seed = 0.1;
-        os << "Initializing grids..." << endl;
+        os << "Initializing grids...\n" << flush;
+        YaskTimer itimer;
+        itimer.start();
         for (auto gp : gridPtrs) {
             realInitFn(gp, seed);
             seed += 0.01;
         }
+        itimer.stop();
+        os << "Grid initialization done in " <<
+            makeNumStr(itimer.get_elapsed_secs()) << " secs.\n" << flush;
     }
 
     // Set the bounding-box for each stencil-bundle and whole domain.
@@ -1408,7 +1414,7 @@ namespace yask {
     {
         ostream& os = get_ostr();
         os << "Constructing bounding boxes for " <<
-            stBundles.size() << " stencil-bundles(s)...\n";
+            stBundles.size() << " stencil-bundles(s)...\n" << flush;
         YaskTimer bbtimer;
         bbtimer.start();
 
@@ -1447,7 +1453,7 @@ namespace yask {
 
         bbtimer.stop();
         os << "Bounding-box construction done in " <<
-            bbtimer.get_elapsed_secs() << " secs.\n";
+            makeNumStr(bbtimer.get_elapsed_secs()) << " secs.\n" << flush;
     }
 
     // Find the bounding-boxes for this bundle in this rank.
@@ -1466,61 +1472,69 @@ namespace yask {
         auto nsdims = stencil_dims.size();
         auto step_posn = +Indices::step_posn;
         TRACE_MSG3("find_bounding_box for '" << get_name() << "'...");
-
-        // First, find an overall BB around all the
-        // valid points in the bundle.
         YaskTimer bbtimer;
-        bbtimer.start();
 
-        // Init min vars w/max val and vice-versa.
-        Indices min_pts(idx_max, nsdims);
-        Indices max_pts(idx_min, nsdims);
-        idx_t npts = 0;
+        // If there is no condition, BB is same as parent.
+        if (!is_sub_domain_expr()) {
+            _bundle_bb = context.ext_bb;
+        }
 
-        // Begin, end tuples. Use 'ext_bb' to scan across domain in this
-        // rank including any extensions for wave-fronts.
-        IdxTuple begin(stencil_dims);
-        begin.setVals(context.ext_bb.bb_begin, false);
-        begin[step_dim] = 0;
-        IdxTuple end(stencil_dims);
-        end.setVals(context.ext_bb.bb_end, false);
-        end[step_dim] = 1;      // one time-step only.
+        // There is a condition.
+        else {
+            
+            // First, find an overall BB around all the
+            // valid points in the bundle.
+            bbtimer.start();
 
-        // Indices needed for the generated 'misc' loops.
-        ScanIndices misc_idxs(*dims, false, 0);
-        misc_idxs.begin = begin;
-        misc_idxs.end = end;
+            // Init min vars w/max val and vice-versa.
+            Indices min_pts(idx_max, nsdims);
+            Indices max_pts(idx_min, nsdims);
+            idx_t npts = 0;
 
-        // Define misc-loop function.  Since step is always 1, we ignore
-        // misc_stop.  Update only if point is in domain for this bundle.
-#define misc_fn(misc_idxs) do {                                 \
-            if (is_in_valid_domain(misc_idxs.start)) {          \
-                min_pts = min_pts.minElements(misc_idxs.start); \
-                max_pts = max_pts.maxElements(misc_idxs.start); \
-                npts++;                                         \
-            } } while(0)
+            // Begin, end tuples. Use 'ext_bb' to scan across domain in this
+            // rank including any extensions for wave-fronts.
+            IdxTuple begin(stencil_dims);
+            begin.setVals(context.ext_bb.bb_begin, false);
+            begin[step_dim] = 0;
+            IdxTuple end(stencil_dims);
+            end.setVals(context.ext_bb.bb_end, false);
+            end[step_dim] = 1;      // one time-step only.
+
+            // Indices needed for the generated 'misc' loops.
+            ScanIndices misc_idxs(*dims, false, 0);
+            misc_idxs.begin = begin;
+            misc_idxs.end = end;
+
+            // Define misc-loop function.  Since step is always 1, we ignore
+            // misc_stop.  Update only if point is in domain for this bundle.
+#define misc_fn(misc_idxs) do {                                         \
+                if (is_in_valid_domain(misc_idxs.start)) {              \
+                    min_pts = min_pts.minElements(misc_idxs.start);     \
+                    max_pts = max_pts.maxElements(misc_idxs.start);     \
+                    npts++;                                             \
+                } } while(0)
         
-        // Define OMP reductions to be used in generated code.
+            // Define OMP reductions to be used in generated code.
 #define OMP_PRAGMA_SUFFIX reduction(+:npts)     \
-            reduction(min_idxs:min_pts)         \
-            reduction(max_idxs:max_pts)
+                reduction(min_idxs:min_pts)     \
+                reduction(max_idxs:max_pts)
 
-        // Scan through n-D space.  This scan sets min_pts & max_pts for all
-        // stencil dims (including step dim) and npts to the number of valid
-        // points.
+            // Scan through n-D space.  This scan sets min_pts & max_pts for all
+            // stencil dims (including step dim) and npts to the number of valid
+            // points.
 #include "yask_misc_loops.hpp"
 #undef misc_fn
-        bbtimer.stop();
-        TRACE_MSG3("Overall BB construction done in " <<
-                   bbtimer.get_elapsed_secs() << " secs.");
+            bbtimer.stop();
+            TRACE_MSG3("Overall BB construction done in " <<
+                bbtimer.get_elapsed_secs() << " secs.");
+        
+            // Init bb vars to ensure they contain correct dims.
+            _bundle_bb.bb_begin = domain_dims;
+            _bundle_bb.bb_end = domain_dims;
 
-        // Init bb vars to ensure they contain correct dims.
-        _bundle_bb.bb_begin = domain_dims;
-        _bundle_bb.bb_end = domain_dims;
-
-        // If any points, set begin vars to min indices and end vars to one
-        // beyond max indices.
-        if (npts) {
+            // If any points, set begin vars to min indices and end vars to one
+            // beyond max indices.
+            if (npts) {
             IdxTuple tmp(stencil_dims); // create tuple w/stencil dims.
             min_pts.setTupleVals(tmp);  // convert min_pts to tuple.
             _bundle_bb.bb_begin.setVals(tmp, false); // set bb_begin to domain dims of min_pts.
@@ -1528,20 +1542,21 @@ namespace yask {
             max_pts.setTupleVals(tmp); // convert min_pts to tuple.
             _bundle_bb.bb_end.setVals(tmp, false); // set bb_end to domain dims of max_pts.
             _bundle_bb.bb_end = _bundle_bb.bb_end.addElements(1); // end = last + 1.
-        }
+            }
 
-        // No points, just set to zero.
-        else {
-            _bundle_bb.bb_begin.setValsSame(0);
-            _bundle_bb.bb_end.setValsSame(0);
-        }
-        _bundle_bb.bb_num_points = npts;
+            // No points, just set to zero.
+            else {
+                _bundle_bb.bb_begin.setValsSame(0);
+                _bundle_bb.bb_end.setValsSame(0);
+            }
+            _bundle_bb.bb_num_points = npts;
 
-        // Finalize overall BB.
-        _bundle_bb.update_bb(get_name(), context, false);
+            // Finalize overall BB.
+            _bundle_bb.update_bb(get_name(), context, false);
+        }
 
         // If BB is empty, add nothing.
-        if (!npts) {
+        if (!_bundle_bb.bb_num_points) {
             TRACE_MSG3("BB is empty");
         }
         
