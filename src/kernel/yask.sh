@@ -46,9 +46,11 @@ post_cmd=true
 
 unset arch                      # Don't want to inherit this from env.
 
+# Display stencils and exit.
+bindir=`dirname $0`
 function show_stencils {
     echo "Available stencil/arch combos:"
-    \ls -1 $bindir/yask_kernel.*.*.exe | sed -e 's/.*yask_kernel./-stencil /' -e 's/\./ -arch /' -e 's/.exe//'
+    find $bindir -name 'yask_kernel.*.*.exe' | sed -e 's/.*yask_kernel\./ -stencil /' -e 's/\./ -arch /' -e 's/.exe//'
     exit 1
 }
 
@@ -225,7 +227,6 @@ echo $invo > $logfile
 # If the executable is built by overriding YK_TAG, YK_EXT_BASE, and/or
 # YK_EXEC, this will fail.
 tag=$stencil.$arch
-bindir=`dirname $0`
 exe="$bindir/yask_kernel.$tag.exe"
 make_report="$bindir/../build/yask_kernel.$tag.make-report.txt"
 yc_report="$bindir/../build/yask_kernel.$tag.yask_compiler-report.txt"
