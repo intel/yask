@@ -46,6 +46,12 @@ post_cmd=true
 
 unset arch                      # Don't want to inherit this from env.
 
+function show_stencils {
+    echo "Available stencil/arch combos:"
+    \ls -1 $bindir/yask_kernel.*.*.exe | sed -e 's/.*yask_kernel./-stencil /' -e 's/\./ -arch /' -e 's/.exe//'
+    exit 1
+}
+
 # Loop thru cmd-line args.
 while true; do
 
@@ -184,14 +190,14 @@ done                            # parsing options.
 if [[ -z ${stencil:+ok} ]]; then
     if [[ -z ${arch:+ok} ]]; then
         echo "error: missing required options: -stencil <stencil> -arch <arch>"
-        exit 1
+        show_stencils
     fi
     echo "error: missing required option: -stencil <stencil>"
-    exit 1
+    show_stencils
 fi
 if [[ -z ${arch:+ok} ]]; then
     echo "error: missing required option: -arch <arch>"
-    exit 1
+    show_stencils
 fi
 
 # Simplified MPI in x-dim only.
@@ -199,11 +205,15 @@ if [[ -n "$nranks" ]]; then
     true ${mpi_cmd="mpirun -np $nranks"}
 fi
 
-# Bail on errors past this point.
+# Bail on errors past this point, but only errors
+# in this script, not in the executed commands.
 set -e
 
 # Actual host.
 exe_host=${host:-`hostname`}
+
+# Command to dump a file to stdout.
+dump="head -v -n -0"
 
 # Init log file.
 true ${logfile=logs/yask.$stencil.$arch.$exe_host.`date +%Y-%m-%d_%H-%M-%S`.log}
@@ -220,23 +230,18 @@ exe="$bindir/yask_kernel.$tag.exe"
 make_report="$bindir/../build/yask_kernel.$tag.make-report.txt"
 yc_report="$bindir/../build/yask_kernel.$tag.yask_compiler-report.txt"
 
-# Try to build exe if needed.
-if [[ ! -x $exe ]]; then
-    echo "'$exe' not found or not executable; trying to build with default settings..."
-    make clean; make -j stencil=$stencil arch=$arch $exe 2>&1 | tee -a $logfile
-
-# Or, save most recent make report to log if it exists.
-elif [[ -e $make_report ]]; then
-    head -v -n -0 $make_report >> $logfile
-    if  [[ -e $yc_report ]]; then
-        head -v -n -0 $yc_report >> $logfile
-    fi
-fi
-
 # Double-check that exe exists.
 if [[ ! -x $exe ]]; then
     echo "error: '$exe' not found or not executable." | tee -a $logfile
-    exit 1
+    show_stencils
+fi
+
+# Save most recent make report to log if it exists.
+if [[ -e $make_report ]]; then
+    $dump $make_report >> $logfile
+    if  [[ -e $yc_report ]]; then
+        $dump $yc_report >> $logfile
+    fi
 fi
 
 # Additional setup for KNC.
@@ -268,8 +273,12 @@ else
     envs="$envs LD_LIBRARY_PATH=./lib:$LD_LIBRARY_PATH$libpath"
 fi
 
+# Commands to capture some important system status and config info for benchmark documentation.
+config_cmds="uname -a; uptime; sed '/^$/q' /proc/cpuinfo; lscpu; $dump /proc/cmdline; $dump /proc/meminfo; free -gt; numactl -H"
+
 # Command sequence to be run in a shell.
-cmds="cd $dir; uname -a; sed '/^$/q' /proc/cpuinfo; lscpu; numactl -H; ldd $exe; date; $pre_cmd; env $envs $mpi_cmd $exe_prefix $exe $opts; $post_cmd; date"
+# Captures
+cmds="cd $dir; $config_cmds; ldd $exe; date; $pre_cmd; env $envs $mpi_cmd $exe_prefix $exe $opts; $post_cmd; date"
 
 echo "===================" | tee -a $logfile
 
@@ -287,15 +296,15 @@ exe_str="'$mpi_cmd $exe_prefix $exe $opts'"
 
 # Return a non-zero exit condition if test failed.
 if [[ `grep -c 'TEST FAILED' $logfile` > 0 ]]; then
-    echo $exe_str did not pass internal validation test.
+    echo $exe_str did not pass internal validation test. | tee -a $logfile
     exit 1;
 fi
 
 # Return a non-zero exit condition if executable didn't exit cleanly.
 if [[ `grep -c 'YASK DONE' $logfile` == 0 ]]; then
-    echo $exe_str did not exit cleanly.
+    echo $exe_str did not exit cleanly. | tee -a $logfile
     exit 1;
 fi
 
-echo $exe_str ran successfully.
+echo $exe_str ran successfully. | tee -a $logfile
 exit 0;
