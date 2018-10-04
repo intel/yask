@@ -303,9 +303,9 @@ $folding = 0 if (defined $mic && $dp);
 # dir name.
 my $searchTypeStr = $sweep ? 'sweep' : 'tuner';
 my $hostStr = defined $host ? $host : hostname();
-my $timeStamp=`date +%Y-%m-%d_%H-%M-%S`;
+my $timeStamp=`date +%Y-%m-%d_%H-%M`;
 chomp $timeStamp;
-my $baseName = "yask_$searchTypeStr.$stencil.$arch.$hostStr.$timeStamp";
+my $baseName = "yask_$searchTypeStr.$stencil.$arch.$hostStr.${timeStamp}_p$$";
 $outDir = '.' if !$outDir;
 $outDir .= "/$baseName";
 print "Output will be saved in '$outDir'.\n";

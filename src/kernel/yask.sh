@@ -218,7 +218,7 @@ exe_host=${host:-`hostname`}
 dump="head -v -n -0"
 
 # Init log file.
-true ${logfile=logs/yask.$stencil.$arch.$exe_host.`date +%Y-%m-%d_%H-%M-%S`.log}
+true ${logfile=logs/yask.$stencil.$arch.$exe_host.`date +%Y-%m-%d_%H-%M`_p$$.log}
 echo "Writing log to '$logfile'."
 mkdir -p `dirname $logfile`
 echo $invo > $logfile
