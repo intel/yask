@@ -779,16 +779,12 @@ namespace yask {
             DOMAIN_VAR_LOOP(i, j) {
 
                 // Starting before beginning of interior?
-                if (region_idxs.start[i] < mpi_interior.bb_begin[j]) {
+                if (region_idxs.start[i] < mpi_interior.bb_begin[j])
                     inside = false;
-                    break;
-                }
 
                 // Stopping after ending of interior?
-                if (region_idxs.stop[i] > mpi_interior.bb_end[j]) {
+                if (region_idxs.stop[i] > mpi_interior.bb_end[j])
                     inside = false;
-                    break;
-                }
             }
             if (do_mpi_interior) {
                 if (inside)
