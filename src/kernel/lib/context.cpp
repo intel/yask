@@ -162,9 +162,7 @@ namespace yask {
         // Force region & block sizes to whole rank size so that scratch
         // grids will be large enough. Turn off any temporal blocking.
         _opts->_region_sizes.setValsSame(0);
-        _opts->_region_sizes[_dims->_step_dim] = 1;
         _opts->_block_sizes.setValsSame(0);
-        _opts->_block_sizes[_dims->_step_dim] = 1;
         _opts->adjustSettings(get_env());
         update_grid_info();
 
@@ -294,8 +292,7 @@ namespace yask {
 
         // Step-size in step-dim is number of region steps.
         // Then, it is multipled by +/-1 to get proper direction.
-        idx_t step_t = wf_steps;
-        step_t *= step_dir;
+        idx_t step_t = max(wf_steps, idx_t(1)) * step_dir;
         assert(step_t);
         idx_t end_t = last_step_index + step_dir; // end is beyond last.
 
@@ -354,7 +351,7 @@ namespace yask {
         //                      |XXXXXX|         |XXXXX|  <- redundant calculations.
         // XXXXXX|  <- areas outside of outer ranks not calculated ->  |XXXXXXX
         //
-        if (wf_steps > 1) {
+        if (wf_steps > 0) {
             for (auto& dim : _dims->_domain_dims.getDims()) {
                 auto& dname = dim.getName();
 
@@ -365,8 +362,8 @@ namespace yask {
                 if (right_wf_exts[dname] == 0)
                     end[dname] += wf_shift_pts[dname];
 
-                // Stretch the region size if the original size covered the
-                // whole rank in this dim.
+                // Ensure only one region in this dim if the original size
+                // covered the whole rank in this dim.
                 if (_opts->_region_sizes[dname] >= _opts->_rank_sizes[dname])
                     step[dname] = end[dname] - begin[dname];
 
@@ -417,7 +414,7 @@ namespace yask {
             // If no wave-fronts (default), loop through packs here, and do
             // only one pack at a time in calc_region(). This is similar to
             // loop in calc_rank_ref(), but with packs instead of bundles.
-            if (wf_steps == 1) {
+            if (wf_steps == 0) {
 
                 // Loop thru packs.
                 for (auto& bp : stPacks) {
@@ -477,8 +474,7 @@ namespace yask {
             }
 
             // If doing wave-fronts, must loop through all packs in
-            // calc_region().  TODO: optionally enable this when there are
-            // multiple packs but wf_steps == 1.
+            // calc_region().
             // TODO: allow overlapped comms when the region covers the
             // whole rank domain, regardless of how many steps it covers.
             else {
@@ -575,7 +571,7 @@ namespace yask {
         idx_t begin_t = region_idxs.begin[step_posn];
         idx_t end_t = region_idxs.end[step_posn];
         idx_t step_dir = (end_t >= begin_t) ? 1 : -1;
-        idx_t step_t = tb_steps * step_dir;
+        idx_t step_t = max(tb_steps, idx_t(1)) * step_dir;
         assert(step_t);
         const idx_t num_t = CEIL_DIV(abs(end_t - begin_t), abs(step_t));
 
@@ -597,7 +593,7 @@ namespace yask {
             // If no temporal blocking (default), loop through packs here,
             // and do only one pack at a time in calc_block(). This is
             // similar to the code in run_solution() for WF.
-            if (tb_steps == 1) {
+            if (tb_steps == 0) {
 
                 // Stencil bundle packs to evaluate at this time step.
                 for (auto& bp : stPacks) {
@@ -840,7 +836,7 @@ namespace yask {
         idx_t begin_t = block_idxs.begin[step_posn];
         idx_t end_t = block_idxs.end[step_posn];
         idx_t step_dir = (end_t >= begin_t) ? 1 : -1;
-        idx_t step_t = tb_steps * step_dir;
+        idx_t step_t = max(tb_steps, idx_t(1)) * step_dir;
         assert(step_t);
         const idx_t num_t = CEIL_DIV(abs(end_t - begin_t), abs(step_t));
 
@@ -848,7 +844,7 @@ namespace yask {
         // No need for a time loop.
         // No need to check bounds, because they were checked in
         // calc_region() when not using TB.
-        if (tb_steps == 1) {
+        if (tb_steps == 0) {
             assert(bp);
             assert(abs(step_t) == 1);
             assert(abs(end_t - begin_t) == 1);
@@ -1025,7 +1021,7 @@ namespace yask {
                 max(start_t + step_t, end_t);
             TRACE_MSG("calc_mini_block: phase " << phase <<
                       ", shape " << shape <<
-                      ", in step(s) [" << start_t << " ... " << stop_t << ")");
+                      ", in step " << start_t);
             assert(abs(stop_t - start_t) == 1); // no more TB.
             
             // Set step indices that will pass through generated code.
@@ -1453,7 +1449,7 @@ namespace yask {
         // If wave-fronts are enabled, run a max number of these steps.
         idx_t region_steps = _opts->_region_sizes[_dims->_step_dim];
         idx_t step_dir = _dims->_step_dir; // +/- 1.
-        idx_t step_t = min(region_steps, +AutoTuner::max_step_t) * step_dir;
+        idx_t step_t = min(max(region_steps, idx_t(1)), +AutoTuner::max_step_t) * step_dir;
 
         // Run time-steps until AT converges.
         for (idx_t t = 0; ; t += step_t) {

@@ -782,16 +782,19 @@ py-api-no-yc:
 	$(MAKE) $(NO_YC_MAKE_FLAGS) py-api
 
 # Validation runs for each binary.
-val1	:=	-trial_steps 2 -d 48 -r 32 -b 24 -mb 16
+val0	:=	-trial_steps 2 -d 48 -r 32 -b 24 -rt 0
+val1	:=	-trial_steps 2 -d 48 -r 32 -b 24 -mb 16 -rt 1
 val2	:=	-trial_steps 2 -d 63 -r 32 -b 24 -mb 16 -rt 2
 val3	:=	-trial_steps 2 -d 63 -r 48 -b 24 -mb 16 -bt 2
 ranks	:=	2
 
 # Run the kernel binary using several combos of sizes and ranks.
 yk-tests:
+	$(YK_SCRIPT) -stencil $(stencil) -arch $(arch) -v $(val0)
 	$(YK_SCRIPT) -stencil $(stencil) -arch $(arch) -v $(val1)
 	$(YK_SCRIPT) -stencil $(stencil) -arch $(arch) -v $(val2)
 	$(YK_SCRIPT) -stencil $(stencil) -arch $(arch) -v $(val3)
+	$(YK_SCRIPT) -stencil $(stencil) -arch $(arch) -ranks $(ranks) -v $(val0)
 	$(YK_SCRIPT) -stencil $(stencil) -arch $(arch) -ranks $(ranks) -v $(val1)
 	$(YK_SCRIPT) -stencil $(stencil) -arch $(arch) -ranks $(ranks) -v $(val2)
 	$(YK_SCRIPT) -stencil $(stencil) -arch $(arch) -ranks $(ranks) -v $(val3)

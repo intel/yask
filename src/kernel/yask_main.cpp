@@ -59,7 +59,7 @@ struct AppSettings : public KernelSettings {
 
         ValOption(AppSettings& as) :
                 OptionBase("v",
-                           "Shortcut for '-validate -no-pre-auto_tune -no-auto_tune"
+                           "Minimal validation: shortcut for '-validate -no-pre-auto_tune -no-auto_tune"
                            " -no-warmup -t 1 -trial_steps 1 -d 63 -b 24'."),
                 _as(as) { }
 
@@ -465,8 +465,8 @@ int main(int argc, char** argv)
             // in kernel code.
 #if 0
             auto sdim = ref_soln->get_step_dim_name();
-            ref_soln->set_region_size(sdim, 1);
-            ref_soln->set_block_size(sdim, 1);
+            ref_soln->set_region_size(sdim, 0);
+            ref_soln->set_block_size(sdim, 0);
             for (auto ddim : ref_soln->get_domain_dim_names()) {
                 ref_soln->set_region_size(ddim, 0);
                 ref_soln->set_block_size(ddim, 0);

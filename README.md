@@ -1,4 +1,5 @@
 #### Backward-compatibility notices:
+* Version 2.14.05 changed the meaning of temporal sizes so that 0 means never do temporal blocking and 1 allows blocking within a single time-step for multi-pack solutions. The behavior of the default settings have not changed.
 * Version 2.13.06 changed the default behavior of the performance-test utility (`yask.sh`) to run trials for a given amount of time instead of a given number of steps. As of version 2.13.08, use the `-trial_time` option to specify the number of seconds to run. To force a specific number of trials as in previous versions, use the `-trial_steps` option.
 * Version 2.13.02 required some changes in perf statistics due to step (temporal) conditions. Both text output and `yk_stats` APIs affected.
 * Version 2.12.00 removed the long-deprecated `==` operator for asserting equality between a grid point and an equation. Use `EQUALS` instead.

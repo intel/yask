@@ -153,8 +153,8 @@ namespace yask {
             " secs (" << rate <<
             " steps/sec) with block-size " <<
             _settings->_block_sizes.makeDimValStr(" * ");
-        if (_context->tb_steps > 1)
-            os << ", " << _context->tb_steps << " TB steps";
+        if (_context->tb_steps > 0)
+            os << ", " << _context->tb_steps << " TB step(s)";
         os << endl;
         csteps = 0;
         ctime = 0.;

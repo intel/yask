@@ -790,14 +790,13 @@ namespace yask {
 
             _region_sizes = dims->_stencil_dims;
             _region_sizes.setValsSame(0);          // 0 => default settings.
-            _region_sizes.setVal(step_dim, 1); // 1 => no wave-front tiling.
 
             _block_group_sizes = dims->_stencil_dims;
             _block_group_sizes.setValsSame(0); // 0 => min size.
 
             _block_sizes = dims->_stencil_dims;
             _block_sizes.setValsSame(def_block); // size of block.
-            _block_sizes.setVal(step_dim, 1); // 1 => no temporal blocking.
+            _block_sizes.setVal(step_dim, 0); // 0 => default.
 
             _mini_block_group_sizes = dims->_stencil_dims;
             _mini_block_group_sizes.setValsSame(0); // 0 => min size.
@@ -810,7 +809,6 @@ namespace yask {
 
             _sub_block_sizes = dims->_stencil_dims;
             _sub_block_sizes.setValsSame(0);            // 0 => default settings.
-            _sub_block_sizes.setVal(step_dim, 1); // 1 => no temporal blocking.
 
             _min_pad_sizes = dims->_stencil_dims;
             _min_pad_sizes.setValsSame(0);

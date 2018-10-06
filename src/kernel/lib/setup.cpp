@@ -405,7 +405,7 @@ namespace yask {
                 // Always use max dist with WF.
                 // TODO: determine if this is overkill.
                 int maxdist = MAX_EXCH_DIST;
-                if (num_wf_shifts > 0)
+                if (wf_steps > 0)
                     maxdist = NUM_STENCIL_DIMS - 1;
 
                 // Manhattan dist.
@@ -996,26 +996,26 @@ namespace yask {
         // Calculate wave-front shifts.
         // See the wavefront diagram in run_solution() for description
         // of angles and extensions.
-        idx_t tb_steps = _opts->_block_sizes[step_dim]; // use original size; actual may be less.
-        assert(tb_steps >= 1);
+        idx_t tb_steps = _opts->_block_sizes[step_dim]; // use requested size; actual may be less.
+        assert(tb_steps >= 0);
         wf_steps = _opts->_region_sizes[step_dim];
         wf_steps = max(wf_steps, tb_steps); // round up WF steps if less than TB steps.
-        assert(wf_steps >= 1);
+        assert(wf_steps >= 0);
         num_wf_shifts = 0;
-        if (wf_steps > 1) {
+        if (wf_steps > 0) {
 
             // Need to shift for each bundle pack.
             assert(stPacks.size() > 0);
             num_wf_shifts = idx_t(stPacks.size()) * wf_steps;
-            assert(num_wf_shifts > 1);
 
             // Don't need to shift first one.
-            num_wf_shifts--;
+            if (num_wf_shifts > 0)
+                num_wf_shifts--;
         }
         assert(num_wf_shifts >= 0);
 
         // Determine whether separate tuners can be used.
-        _use_pack_tuners = (tb_steps == 1) && (stPacks.size() > 1);
+        _use_pack_tuners = (tb_steps == 0) && (stPacks.size() > 1);
 
         // Calculate angles and related settings.
         for (auto& dim : _dims->_domain_dims.getDims()) {
@@ -1100,22 +1100,21 @@ namespace yask {
         auto& step_dim = _dims->_step_dim;
 
         // Reset all TB and MB vars.
-        tb_steps = 1;
+        tb_steps = _opts->_block_sizes[step_dim];
         num_tb_shifts = 0;
         for (auto& dim : _dims->_domain_dims.getDims()) {
             auto& dname = dim.getName();
             tb_angles.addDimBack(dname, 0);
             mb_angles.addDimBack(dname, 0);
         }
-        
-        // Start w/original temporal settings or 1 if unset.
-        tb_steps = max(_opts->_block_sizes[step_dim], idx_t(1));
 
         // Determine max setting based on block sizes.
         // When using temporal blocking, all block sizes
         // across all packs must be the same.
-        if (tb_steps > 1) {
-            TRACE_MSG("update_tb_info: original TB steps = " << tb_steps);
+        TRACE_MSG("update_tb_info: original TB steps = " << tb_steps);
+        if (tb_steps > 0) {
+
+            // TB is inside WF, so can't be larger.
             idx_t max_steps = min(tb_steps, wf_steps);
             TRACE_MSG("update_tb_info: min(TB, WF) steps = " << max_steps);
 
@@ -1124,7 +1123,8 @@ namespace yask {
                 auto& dname = dim.getName();
                 auto rnsize = _opts->_region_sizes[dname];
 
-                // There is only one block size when using TB.
+                // There must be only one block size when using TB, so get
+                // sizes from context settings instead of packs.
                 assert(_use_pack_tuners == false);
                 auto blksize = _opts->_block_sizes[dname];
                 auto mblksize = _opts->_mini_block_sizes[dname];
@@ -1165,18 +1165,18 @@ namespace yask {
             tb_steps = min(tb_steps, max_steps);
             TRACE_MSG("update_tb_info: final TB steps = " << tb_steps);
         }
-        assert(tb_steps >= 1);
+        assert(tb_steps >= 0);
 
         // Calc number of shifts based on steps.
-        if (tb_steps > 1) {
+        if (tb_steps > 0) {
 
             // Need to shift for each bundle pack.
             assert(stPacks.size() > 0);
             num_tb_shifts = idx_t(stPacks.size()) * tb_steps;
-            assert(num_tb_shifts > 1);
 
             // Don't need to shift first one.
-            num_tb_shifts--;
+            if (num_tb_shifts > 0)
+                num_tb_shifts--;
         }
         assert(num_tb_shifts >= 0);
         TRACE_MSG("update_tb_info: num TB shifts = " << num_tb_shifts);
@@ -1292,7 +1292,7 @@ namespace yask {
 
         os <<
             " num-wave-front-steps:      " << wf_steps << endl;
-        if (wf_steps > 1) {
+        if (wf_steps > 0) {
             os <<
                 " wave-front-angles:         " << wf_angles.makeDimValStr() << endl <<
                 " num-wave-front-shifts:     " << num_wf_shifts << endl <<
