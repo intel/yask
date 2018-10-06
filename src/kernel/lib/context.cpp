@@ -278,11 +278,8 @@ namespace yask {
     void StencilContext::run_solution(idx_t first_step_index,
                                       idx_t last_step_index)
     {
+        CONTEXT_VARS(this);
         run_time.start();
-
-        auto& step_dim = _dims->_step_dim;
-        auto step_posn = +Indices::step_posn;
-        int ndims = _dims->_stencil_dims.size();
 
         // Determine step dir from order of first/last.
         idx_t step_dir = (last_step_index >= first_step_index) ? 1 : -1;
@@ -543,11 +540,7 @@ namespace yask {
     // eval only the one pointed to.
     void StencilContext::calc_region(BundlePackPtr& sel_bp,
                                      const ScanIndices& rank_idxs) {
-
-        int nsdims = _dims->_stencil_dims.size();
-        int nddims = _dims->_domain_dims.size();
-        auto& step_dim = _dims->_step_dim;
-        auto step_posn = +Indices::step_posn;
+        CONTEXT_VARS(this);
         TRACE_MSG("calc_region: region [" <<
                   rank_idxs.start.makeValStr(nsdims) << " ... " <<
                   rank_idxs.stop.makeValStr(nsdims) << ") within rank [" <<
@@ -629,9 +622,7 @@ namespace yask {
                                              shift_num, bp,
                                              region_idxs);
 
-                    for (int i = 0, j = -1; i < nsdims; i++) {
-                        if (i == step_posn) continue;
-                        j++;
+                    DOMAIN_VAR_LOOP(i, j) {
                         
                         // If there is only one blk in a region, make sure
                         // this blk fills this whole region.
@@ -700,9 +691,7 @@ namespace yask {
                                          shift_num, bp,
                                          region_idxs);
 
-                for (int i = 0, j = -1; i < nsdims; i++) {
-                    if (i == step_posn) continue;
-                    j++;
+                DOMAIN_VAR_LOOP(i, j) {
 
                     // If there is only one blk in a region, make sure
                     // this blk fills this whole region.
@@ -766,10 +755,7 @@ namespace yask {
                                     idx_t phase,
                                     const ScanIndices& region_idxs) {
 
-        int nsdims = _dims->_stencil_dims.size();
-        int nddims = _dims->_domain_dims.size();
-        auto& step_dim = _dims->_step_dim;
-        auto step_posn = Indices::step_posn;
+        CONTEXT_VARS(this);
         auto* bp = sel_bp.get();
         int thread_idx = omp_get_thread_num();
         TRACE_MSG("calc_block: phase " << phase << ", block [" <<
@@ -790,9 +776,7 @@ namespace yask {
 
             // Starting point and ending point must be in BB.
             bool inside = true;
-            for (int i = 0, j = -1; i < nsdims; i++) {
-                if (i == step_posn) continue;
-                j++;
+            DOMAIN_VAR_LOOP(i, j) {
 
                 // Starting before beginning of interior?
                 if (region_idxs.start[i] < mpi_interior.bb_begin[j]) {
@@ -909,9 +893,7 @@ namespace yask {
             // Increase range of block to cover all phases and
             // shapes.
             ScanIndices adj_block_idxs = block_idxs;
-            for (int i = 0, j = -1; i < nsdims; i++) {
-                if (i == step_posn) continue;
-                j++;
+            DOMAIN_VAR_LOOP(i, j) {
                     
                 // TB shapes can extend to the right only.  They can
                 // cover a range as big as this block's base plus the
@@ -974,10 +956,7 @@ namespace yask {
                                          const ScanIndices& base_block_idxs,
                                          const ScanIndices& adj_block_idxs) {
 
-        int nsdims = _dims->_stencil_dims.size();
-        int nddims = _dims->_domain_dims.size();
-        auto& step_dim = _dims->_step_dim;
-        auto step_posn = +Indices::step_posn;
+        CONTEXT_VARS(this);
         int thread_idx = omp_get_thread_num();
         TRACE_MSG("calc_mini_block: phase " << phase <<
                   ", shape " << shape <<
@@ -1110,9 +1089,7 @@ namespace yask {
                                         idx_t shift_num,
                                         BundlePackPtr& bp,
                                         ScanIndices& idxs) {
-        auto step_posn = +Indices::step_posn;
-        int ndims = _dims->_stencil_dims.size();
-        auto& step_dim = _dims->_step_dim;
+        CONTEXT_VARS(this);
 
         // For wavefront adjustments, see conceptual diagram in
         // run_solution().  At each pack and time-step, the parallelogram
@@ -1123,10 +1100,7 @@ namespace yask {
         // We have to calculate the posn in the extended rank at each
         // value of 'shift_num' because it is being shifted spatially.
         bool ok = true;
-        for (int i = 0, j = -1; ok && i < ndims; i++) {
-            if (i == step_posn) continue;
-            j++;
-            
+        DOMAIN_VAR_LOOP(i, j) {
             auto angle = wf_angles[j];
 
             // Shift initial spatial region boundaries for this iteration of
@@ -1169,10 +1143,10 @@ namespace yask {
                 ok = false;
         }
         TRACE_MSG("shift_region: updated span: [" <<
-                  idxs.begin.makeValStr(ndims) << " ... " <<
-                  idxs.end.makeValStr(ndims) << ") within region base [" <<
-                  base_start.makeValStr(ndims) << " ... " <<
-                  base_stop.makeValStr(ndims) << ") shifted " <<
+                  idxs.begin.makeValStr(nsdims) << " ... " <<
+                  idxs.end.makeValStr(nsdims) << ") within region base [" <<
+                  base_start.makeValStr(nsdims) << " ... " <<
+                  base_stop.makeValStr(nsdims) << ") shifted " <<
                   shift_num << " time(s) is " <<
                   (ok ? "not " : "") << "empty");
         return ok;
@@ -1204,10 +1178,7 @@ namespace yask {
                                           idx_t region_shift_num,
                                           BundlePackPtr& bp,
                                           ScanIndices& idxs) {
-        auto step_posn = +Indices::step_posn;
-        int ndims = _dims->_stencil_dims.size();
-        auto& step_dim = _dims->_step_dim;
-        auto& fpts = _dims->_fold_pts;
+        CONTEXT_VARS(this);
 
         // Set 'idxs' begin & end to region boundaries for
         // given shift.
@@ -1217,9 +1188,7 @@ namespace yask {
                                idxs);
 
         // Loop thru dims, breaking out if any dim has no work.
-        for (int i = 0, j = -1; ok && i < ndims; i++) {
-            if (i == step_posn) continue;
-            j++;
+        DOMAIN_VAR_LOOP(i, j) {
 
             // Determine range of this block for current phase, shape, and
             // shift. For each dim, we'll first compute the L & R sides of
@@ -1252,12 +1221,13 @@ namespace yask {
             // When there is >1 phase, initial width is half of base plus
             // one shift distance.  This will make 'up' and 'down'
             // trapezoids approx same size.
+            // TODO: use actual number of shifts instead of max.
             auto tb_angle = tb_angles[j];
             if (nphases > 1 && !is_one_blk) {
                 auto sa = (num_tb_shifts+1) * tb_angle;
                 idx_t blk_width = ROUND_UP(CEIL_DIV(blk_stop - blk_start, idx_t(2)) + sa,
-                                           fpts[j]);
-                blk_width = max(blk_width, 2 * sa + fpts[j]);
+                                           fold_pts[j]);
+                blk_width = max(blk_width, 2 * sa + fold_pts[j]);
                 blk_stop = min(blk_start + blk_width, block_base_stop[i]);
             }
 
@@ -1323,47 +1293,51 @@ namespace yask {
             }
             // We now have bounds of this shape in shape_{start,stop}
             // for given phase and shift.
-
-            // Is this mini-block first and/or last in block?
-            bool is_first_mb = mb_base_start[i] <= adj_block_base_start[i];
-            bool is_last_mb = mb_base_stop[i] >= adj_block_base_stop[i];
-
-            // Is there only one MB?
-            bool is_one_mb = is_first_mb && is_last_mb;
-
-            // Beginning and end of min-block.
-            idx_t mb_start = mb_base_start[i];
-            idx_t mb_stop = mb_base_stop[i];
-
-            // Shift mini-block by MB angles unless there is only one.
-            // MB is a wave-front, so only shift left.
-            if (!is_one_mb) {
-                auto mb_angle = mb_angles[j];
-                mb_start -= mb_angle * mb_shift_num;
-                mb_stop -= mb_angle * mb_shift_num;
-            }
-
-            // Clamp first & last MB to shape boundaries.
-            if (is_first_mb)
-                mb_start = shape_start;
-            if (is_last_mb)
-                mb_stop = shape_stop;
-
-            // Trim mini-block to fit in region.
-            mb_start = max(mb_start, idxs.begin[i]);
-            mb_stop = min(mb_stop, idxs.end[i]);
-            
-            // Trim mini-block range to fit in shape.
-            mb_start = max(mb_start, shape_start);
-            mb_stop = min(mb_stop, shape_stop);
-
-            // Update 'idxs'.
-            idxs.begin[i] = mb_start;
-            idxs.end[i] = mb_stop;
-
-            // No work to do?
-            if (mb_stop <= mb_start)
+            if (shape_stop <= shape_start)
                 ok = false;
+            if (ok) {
+
+                // Is this mini-block first and/or last in block?
+                bool is_first_mb = mb_base_start[i] <= adj_block_base_start[i];
+                bool is_last_mb = mb_base_stop[i] >= adj_block_base_stop[i];
+
+                // Is there only one MB?
+                bool is_one_mb = is_first_mb && is_last_mb;
+
+                // Beginning and end of min-block.
+                idx_t mb_start = mb_base_start[i];
+                idx_t mb_stop = mb_base_stop[i];
+
+                // Shift mini-block by MB angles unless there is only one.
+                // MB is a wave-front, so only shift left.
+                if (!is_one_mb) {
+                    auto mb_angle = mb_angles[j];
+                    mb_start -= mb_angle * mb_shift_num;
+                    mb_stop -= mb_angle * mb_shift_num;
+                }
+
+                // Clamp first & last MB to shape boundaries.
+                if (is_first_mb)
+                    mb_start = shape_start;
+                if (is_last_mb)
+                    mb_stop = shape_stop;
+
+                // Trim mini-block to fit in region.
+                mb_start = max(mb_start, idxs.begin[i]);
+                mb_stop = min(mb_stop, idxs.end[i]);
+            
+                // Trim mini-block range to fit in shape.
+                mb_start = max(mb_start, shape_start);
+                mb_stop = min(mb_stop, shape_stop);
+
+                // Update 'idxs'.
+                idxs.begin[i] = mb_start;
+                idxs.end[i] = mb_stop;
+
+                // No work to do?
+                if (mb_stop <= mb_start)
+                    ok = false;
+            }
 
         } // dims.
 
@@ -1371,18 +1345,18 @@ namespace yask {
                   ", shape " << shape << "/" << nshapes <<
                   ", pack '" << bp->get_name() <<
                   ", updated span: [" <<
-                  idxs.begin.makeValStr(ndims) << " ... " <<
-                  idxs.end.makeValStr(ndims) << ") from original mini-block [" <<
-                  mb_base_start.makeValStr(ndims) << " ... " <<
-                  mb_base_stop.makeValStr(ndims) << ") shifted " <<
+                  idxs.begin.makeValStr(nsdims) << " ... " <<
+                  idxs.end.makeValStr(nsdims) << ") from original mini-block [" <<
+                  mb_base_start.makeValStr(nsdims) << " ... " <<
+                  mb_base_stop.makeValStr(nsdims) << ") shifted " <<
                   mb_shift_num << " time(s) within adj-block base [" <<
-                  adj_block_base_start.makeValStr(ndims) << " ... " <<
-                  adj_block_base_stop.makeValStr(ndims) << ") and actual block base [" <<
-                  block_base_start.makeValStr(ndims) << " ... " <<
-                  block_base_stop.makeValStr(ndims) << ") shifted " <<
+                  adj_block_base_start.makeValStr(nsdims) << " ... " <<
+                  adj_block_base_stop.makeValStr(nsdims) << ") and actual block base [" <<
+                  block_base_start.makeValStr(nsdims) << " ... " <<
+                  block_base_stop.makeValStr(nsdims) << ") shifted " <<
                   block_shift_num << " time(s) and region base [" <<
-                  region_base_start.makeValStr(ndims) << " ... " <<
-                  region_base_stop.makeValStr(ndims) << ") shifted " <<
+                  region_base_start.makeValStr(nsdims) << " ... " <<
+                  region_base_stop.makeValStr(nsdims) << ") shifted " <<
                   region_shift_num << " time(s) is " <<
                   (ok ? "not " : "") << "empty");
         return ok;
@@ -1526,9 +1500,7 @@ namespace yask {
             assert(gp->is_scratch());
 
             // i: index for stencil dims, j: index for domain dims.
-            for (int i = 0, j = -1; i < nsdims; i++) {
-                if (i == step_posn) continue;
-                j++;
+            DOMAIN_VAR_LOOP(i, j) {
 
                 auto& dim = dims->_stencil_dims.getDim(i);
                 auto& dname = dim.getName();

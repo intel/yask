@@ -298,10 +298,10 @@ namespace yask {
 
         // Set debug output to cout if my_rank == msg_rank
         // or a null stream otherwise.
-        virtual std::ostream& set_ostr();
+        std::ostream& set_ostr();
 
         // Get the messsage output stream.
-        virtual std::ostream& get_ostr() const {
+        std::ostream& get_ostr() const {
             assert(_ostr);
             return *_ostr;
         }
@@ -310,11 +310,11 @@ namespace yask {
         void clear_timers();
 
         // Access to settings.
-        virtual KernelSettingsPtr& get_settings() {
+        KernelSettingsPtr& get_settings() {
             assert(_opts);
             return _opts;
         }
-        virtual void set_settings(KernelSettingsPtr opts) {
+        void set_settings(KernelSettingsPtr opts) {
             _opts = opts;
             _at.set_settings(_opts.get());
         }
@@ -528,7 +528,7 @@ namespace yask {
                              const ScanIndices& block_idxs);
 
         // Exchange all dirty halo data for all stencil bundles.
-        virtual void exchange_halos(bool test_only = false);
+        void exchange_halos(bool test_only = false);
 
         // Mark grids that have been written to by bundle pack 'sel_bp'.
         // If sel_bp==null, use all bundles.
@@ -702,5 +702,18 @@ namespace yask {
         virtual bool is_auto_tuner_enabled() const;
 
     }; // StencilContext.
+
+    // Macros to get common items for stencil calcs efficiently.
+#define CONTEXT_VARS(ctx_p)                                             \
+    auto* cp = ctx_p;                                                   \
+    auto* opts = cp->get_settings().get();                              \
+    auto* dims = cp->get_dims().get();                                  \
+    const int nddims = NUM_DOMAIN_DIMS;                                 \
+    assert(nddims == dims->_domain_dims.size());                        \
+    const int nsdims = NUM_STENCIL_DIMS;                                \
+    assert(nsdims == dims->_stencil_dims.size());                       \
+    const auto& step_dim = dims->_step_dim;                             \
+    const auto step_posn = 0;                                           \
+    assert(step_posn == +Indices::step_posn);                           \
 
 } // yask namespace.

@@ -101,15 +101,15 @@ namespace yask {
         virtual ~StencilBundleBase() { }
 
         // Access to dims and MPI info.
-        virtual DimsPtr& get_dims() const {
+        DimsPtr& get_dims() const {
             return _generic_context->get_dims();
         }
-        virtual MPIInfoPtr& get_mpi_info() {
+        MPIInfoPtr& get_mpi_info() {
             return _generic_context->get_mpi_info();
         }
 
         // Get name of this bundle.
-        virtual const std::string& get_name() const { return _name; }
+        const std::string& get_name() const { return _name; }
 
         // Get estimated number of FP ops done for one scalar eval.
         virtual int get_scalar_fp_ops() const { return _scalar_fp_ops; }
@@ -142,12 +142,12 @@ namespace yask {
         }
 
         // Get needed scratch-bundle(s).
-        virtual const StencilBundleList& get_scratch_children() const {
+        const StencilBundleList& get_scratch_children() const {
             return _scratch_children;
         }
 
         // Get scratch children plus self.
-        virtual StencilBundleList get_reqd_bundles() {
+        StencilBundleList get_reqd_bundles() {
             auto sg_list = get_scratch_children();
             sg_list.push_back(this);
             return sg_list;
@@ -157,10 +157,10 @@ namespace yask {
         // expand indices to calculate values in halo.
         // Adjust offsets in grids based on original idxs.
         // Return adjusted indices.
-        virtual ScanIndices adjust_span(int thread_idx, const ScanIndices& idxs) const;
+        ScanIndices adjust_span(int thread_idx, const ScanIndices& idxs) const;
 
         // Set the bounding-box vars for this bundle in this rank.
-        virtual void find_bounding_box();
+        void find_bounding_box();
 
         // Determine whether indices are in [sub-]domain.
         virtual bool
@@ -188,11 +188,11 @@ namespace yask {
         calc_scalar(int thread_idx, const Indices& idxs) =0;
 
         // Calculate results within a mini-block.
-        virtual void
+        void
         calc_mini_block(const ScanIndices& mini_block_idxs);
 
         // Calculate results within a sub-block.
-        virtual void
+        void
         calc_sub_block(int thread_idx, const ScanIndices& mini_block_idxs);
 
         // Calculate a series of cluster results within an inner loop.
@@ -209,7 +209,7 @@ namespace yask {
         // The 'loop_idxs' must specify a range only in the inner dim.
         // Indices must be rank-relative.
         // Indices must be normalized, i.e., already divided by VLEN_*.
-        virtual void
+        void
         calc_loop_of_clusters(int thread_idx,
                               const ScanIndices& loop_idxs);
 
@@ -230,7 +230,7 @@ namespace yask {
         // Indices must be rank-relative.
         // Indices must be normalized, i.e., already divided by VLEN_*.
         // Each vector write is masked by 'write_mask'.
-        virtual void
+        void
         calc_loop_of_vectors(int thread_idx,
                              const ScanIndices& loop_idxs,
                              idx_t write_mask);
@@ -312,7 +312,7 @@ namespace yask {
         // Otherwise, return one in context.
         KernelSettings& getActiveSettings() {
             return _context->use_pack_tuners() ? _opts :
-                *_context->get_settings(); }
+                *_context->get_settings().get(); }
 
         // Perf-tracking methods.
         void start_timers();

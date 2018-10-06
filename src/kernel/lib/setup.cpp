@@ -242,13 +242,13 @@ namespace yask {
 
                 // Loop through domain dims.
                 bool vlen_mults = true;
-                for (int di = 0; di < num_ddims; di++) {
-                    auto& dname = _opts->_rank_indices.getDimName(di);
+                DOMAIN_VAR_LOOP(i, j) {
 
                     // Does rn have all VLEN-multiple sizes?
-                    auto rnsz = rsizes[rn][di];
-                    auto vlen = _dims->_fold_pts[di];
+                    auto rnsz = rsizes[rn][j];
+                    auto vlen = fold_pts[j];
                     if (rnsz % vlen != 0) {
+                        auto& dname = _opts->_rank_indices.getDimName(j);
                         TRACE_MSG("cannot use vector halo exchange with rank " << rn <<
                                   " because its size in '" << dname << "' is " << rnsz);
                         vlen_mults = false;
@@ -867,12 +867,10 @@ namespace yask {
         IdxTuple blksize(_dims->_domain_dims);
         for (auto& sp : stPacks) {
             auto& psettings = sp->getActiveSettings();
-            for (int i = 0, j = -1; i < nsdims; i++) {
-                if (i == step_posn) continue;
-                j++;
+            DOMAIN_VAR_LOOP(i, j) {
 
                 auto sz = round_up_flr(psettings._block_sizes[i],
-                                       _dims->_fold_pts[j]);
+                                       fold_pts[j]);
                 blksize[j] = max(blksize[j], sz);
             }
         }
@@ -1620,9 +1618,7 @@ namespace yask {
                         // and stencil dims.
                         Indices iofs(ofs);
                         ibdpt = islice_begin.addElements(iofs); // domain tuple.
-                        for (int i = 0, j = -1; i < nsdims; i++) {
-                            if (i == step_posn) continue;
-                            j++;
+                        DOMAIN_VAR_LOOP(i, j) {
                             ibspt[i] = ibdpt[j];            // stencil tuple.
                         }
 
@@ -1668,9 +1664,7 @@ namespace yask {
                                         // Find global point from 'eofs'.
                                         Indices ieofs(eofs);
                                         iedpt = ibdpt.addElements(ieofs); // domain tuple.
-                                        for (int i = 0, j = -1; i < nsdims; i++) {
-                                            if (i == step_posn) continue;
-                                            j++;
+                                        DOMAIN_VAR_LOOP(i, j) {
                                             iespt[i] = iedpt[j];            // stencil tuple.
                                         }
 
