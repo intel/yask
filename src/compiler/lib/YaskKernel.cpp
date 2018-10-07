@@ -92,10 +92,18 @@ namespace yask {
 
         os << "\n// Number of domain dimensions:\n"
             "#define NUM_DOMAIN_DIMS " << _dims->_domainDims.size() << "\n";
-
+        int i = 0;
+        for (auto& dim : _dims->_domainDims.getDims()) {
+            auto& dname = dim.getName();
+            os << "#define DOMAIN_DIM_IDX_" << dname << " (" << (i++) << ")\n";
+        }
         os << "\n// Number of stencil dimensions (step and domain):\n"
             "#define NUM_STENCIL_DIMS " << _dims->_stencilDims.size() << "\n";
-
+        i = 0;
+        for (auto& dim : _dims->_stencilDims.getDims()) {
+            auto& dname = dim.getName();
+            os << "#define STENCIL_DIM_IDX_" << dname << " (" << (i++) << ")\n";
+        }
         int gdims = 0;
         for (auto gp : _grids) {
             int ndims = gp->get_num_dims();

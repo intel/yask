@@ -1131,7 +1131,8 @@ namespace yask {
                 // Can't use separate L & R shift because of possible data reuse in grids.
                 // Can't use separate shifts for each pack for same reason.
                 // TODO: make round-up optional.
-                idx_t angle = ROUND_UP(max_halos[dname], _dims->_fold_pts[dname]);
+                auto fpts = _dims->_fold_pts[dname];
+                idx_t angle = ROUND_UP(max_halos[dname], fpts);
             
                 // Determine the spatial skewing angles for MB.
                 // If MB covers whole blk, no shifting is needed in that dim.
@@ -1150,14 +1151,21 @@ namespace yask {
                 // Calculate max number of temporal steps in
                 // allowed this dim.
                 if (tb_angle > 0) {
+
+                    // blk_sz = top_sz + 2 * angle * (packs * steps - 1).
+                    // bs = ts + 2*a*p*s - 2*a.
+                    // 2*a*p*s = bs - ts + 2*a.
+                    // s = (bs - ts + 2*a) / 2*a*p.
+                    // min top_sz is fold sz.
+                    
                     idx_t sh_pts = tb_angle * 2 * stPacks.size(); // pts shifted per step.
-                    idx_t dmax = ((blksize - 1) / sh_pts) + 1;
+                    idx_t max_steps = (blksize - fpts + tb_angle * 2) / sh_pts; // might be zero.
                     TRACE_MSG("update_tb_info: max TB steps in dim '" <<
-                              dname << "' = " << dmax <<
+                              dname << "' = " << max_steps <<
                               " due to base block size of " << blksize <<
                               ", TB angle of " << tb_angle <<
                               ", and " << stPacks.size() << " pack(s)");
-                    max_steps = min(max_steps, dmax);
+                    max_steps = min(max_steps, max_steps);
                 }
             }
             tb_steps = min(tb_steps, max_steps);
