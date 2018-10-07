@@ -1152,20 +1152,19 @@ namespace yask {
                 // allowed this dim.
                 if (tb_angle > 0) {
 
-                    // blk_sz = top_sz + 2 * angle * (packs * steps - 1).
-                    // bs = ts + 2*a*p*s - 2*a.
-                    // 2*a*p*s = bs - ts + 2*a.
-                    // s = (bs - ts + 2*a) / 2*a*p.
-                    // min top_sz is fold sz.
-                    
+                    // min_blk_sz = min_top_sz + 2 * angle * (npacks * nsteps - 1).
+                    // bs = ts + 2*a*np*ns - 2*a.
+                    // 2*a*np*ns = bs - ts + 2*a.
+                    // s = flr[ (bs - ts + 2*a) / 2*a*np ].
+                    idx_t top_sz = fpts; // min pts on top row.
                     idx_t sh_pts = tb_angle * 2 * stPacks.size(); // pts shifted per step.
-                    idx_t max_steps = (blksize - fpts + tb_angle * 2) / sh_pts; // might be zero.
+                    idx_t nsteps = (blksize - top_sz + tb_angle * 2) / sh_pts; // might be zero.
                     TRACE_MSG("update_tb_info: max TB steps in dim '" <<
-                              dname << "' = " << max_steps <<
+                              dname << "' = " << nsteps <<
                               " due to base block size of " << blksize <<
                               ", TB angle of " << tb_angle <<
                               ", and " << stPacks.size() << " pack(s)");
-                    max_steps = min(max_steps, max_steps);
+                    max_steps = min(max_steps, nsteps);
                 }
             }
             tb_steps = min(tb_steps, max_steps);

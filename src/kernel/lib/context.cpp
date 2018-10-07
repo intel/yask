@@ -1175,7 +1175,8 @@ namespace yask {
                                           BundlePackPtr& bp,
                                           ScanIndices& idxs) {
         CONTEXT_VARS(this);
-
+        auto npacks = stPacks.size();
+        
         // Set 'idxs' begin & end to region boundaries for
         // given shift.
         bool ok = shift_region(region_base_start, region_base_stop,
@@ -1184,7 +1185,7 @@ namespace yask {
                                idxs);
 
         // Loop thru dims, breaking out if any dim has no work.
-        DOMAIN_VAR_LOOP(i, j) {
+        if (ok) DOMAIN_VAR_LOOP(i, j) {
 
             // Determine range of this block for current phase, shape, and
             // shift. For each dim, we'll first compute the L & R sides of
@@ -1208,22 +1209,44 @@ namespace yask {
             //  /            \        /  |
             //  ----------------------   |
             //  ^             ^       ^  |
-            //  |<-blk_width->|    -->|  |<--sa=shifts*angle
+            //  |<-blk_width->|    -->|  |<--sa=nshifts*angle
             //  |             |    next_blk_start
             // blk_start  blk_stop    |
             //  |<-----blk_base------>|
             // blk_width = blk_base/2 + sa.
 
+            // Ex: blk_base=12, angle=4, nshifts=1, fpts=4,
+            // sa=1*4=4, blk_width=rnd_up(12/2+4,4)=12.
+            //     111122222222
+            // 111111111111
+
+            // Ex: blk_base=16, angle=4, nshifts=1, fpts=4,
+            // sa=1*4=4, blk_width=rnd_up(16/2+4,4)=12.
+            //     1111222222222222
+            // 1111111111112222
+
+            // Ex: blk_base=16, angle=2, nshifts=2, fpts=2,
+            // sa=2*2=4, blk_width=rnd_up(16/2+4,2)=12.
+            //     1111222222222222
+            //   1111111122222222
+            // 1111111111112222
+
             // When there is >1 phase, initial width is half of base plus
             // one shift distance.  This will make 'up' and 'down'
             // trapezoids approx same size.
+            // See block-size equation in update_tb_info().
+            // TODO: move this code out of this function and use standard
+            // block size instead of current one.
             // TODO: use actual number of shifts instead of max.
             auto tb_angle = tb_angles[j];
             if (nphases > 1 && !is_one_blk) {
-                auto sa = (num_tb_shifts+1) * tb_angle;
-                idx_t blk_width = ROUND_UP(CEIL_DIV(blk_stop - blk_start, idx_t(2)) + sa,
+                idx_t min_top_sz = fold_pts[j];
+                idx_t min_blk_width = min_top_sz + 2 * tb_angle * num_tb_shifts;
+                idx_t blk_base = blk_stop - blk_start;
+                idx_t sa = num_tb_shifts * tb_angle;
+                idx_t blk_width = ROUND_UP(CEIL_DIV(blk_base, idx_t(2)) + sa,
                                            fold_pts[j]);
-                blk_width = max(blk_width, 2 * sa + fold_pts[j]);
+                blk_width = max(blk_width, min_blk_width);
                 blk_stop = min(blk_start + blk_width, block_base_stop[i]);
             }
 
@@ -1334,6 +1357,8 @@ namespace yask {
                 if (mb_stop <= mb_start)
                     ok = false;
             }
+            if (!ok)
+                break;
 
         } // dims.
 
