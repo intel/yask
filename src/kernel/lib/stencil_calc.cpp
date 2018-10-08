@@ -38,13 +38,8 @@ namespace yask {
     // It is also here that the boundaries of the bounding-box(es) of the bundle
     // are respected. There must not be any temporal blocking at this point.
     void StencilBundleBase::calc_mini_block(const ScanIndices& mini_block_idxs) {
-
-        auto& opts = _generic_context->get_settings();
-        auto& dims = _generic_context->get_dims();
-        int nsdims = dims->_stencil_dims.size();
-        auto& step_dim = dims->_step_dim;
-        auto step_posn = Indices::step_posn;
-        int thread_idx = omp_get_thread_num(); // used to index the scratch grids.
+        CONTEXT_VARS(_generic_context);
+        int thread_idx = omp_get_thread_num();
         TRACE_MSG3("calc_mini_block('" << get_name() << "'): [" <<
                    mini_block_idxs.begin.makeValStr(nsdims) << " ... " <<
                    mini_block_idxs.end.makeValStr(nsdims) << ") by " <<
@@ -80,9 +75,7 @@ namespace yask {
             // Trim the default block indices based on the bounding box(es)
             // for this bundle.
             ScanIndices bb_idxs(mini_block_idxs);
-            for (int i = 0, j = -1; bb_ok && i < nsdims; i++) {
-                if (i == step_posn) continue;
-                j++;
+            DOMAIN_VAR_LOOP(i, j) {
 
                 // Begin point.
                 auto bbegin = max(mini_block_idxs.begin[i], bb.bb_begin[j]);
@@ -148,25 +141,20 @@ namespace yask {
     // are not necessarily vec-multiples.
     // Each dim in 'orig' must be a multiple of corresponding vec len.
     void StencilBundleBase::normalize_indices(const Indices& orig, Indices& norm) const {
-        auto* cp = _generic_context;
-        auto& dims = cp->get_dims();
-        int nsdims = dims->_stencil_dims.size();
-        auto step_posn = Indices::step_posn;
+        CONTEXT_VARS(_generic_context);
         assert(orig.getNumDims() == nsdims);
         assert(norm.getNumDims() == nsdims);
 
         // i: index for stencil dims, j: index for domain dims.
-        for (int i = 0, j = -1; i < nsdims; i++) {
-            if (i == step_posn) continue;
-            j++;
+        DOMAIN_VAR_LOOP(i, j) {
             
             // Divide indices by fold lengths as needed by
             // read/writeVecNorm().  Use idiv_flr() instead of '/'
             // because begin/end vars may be negative (if in halo).
-            norm[i] = idiv_flr<idx_t>(orig[i], dims->_fold_pts[j]);
+            norm[i] = idiv_flr<idx_t>(orig[i], fold_pts[j]);
             
             // Check for no remainder.
-            assert(imod_flr<idx_t>(orig[i], dims->_fold_pts[j]) == 0);
+            assert(imod_flr<idx_t>(orig[i], fold_pts[j]) == 0);
         }
     }
 
@@ -177,13 +165,7 @@ namespace yask {
     // and finally evaluated by the YASK-compiler-generated loops.
     void StencilBundleBase::calc_sub_block(int thread_idx,
                                            const ScanIndices& mini_block_idxs) {
-        auto* cp = _generic_context;
-        auto& opts = cp->get_settings();
-        auto& dims = cp->get_dims();
-        int nddims = dims->_domain_dims.size();
-        int nsdims = dims->_stencil_dims.size();
-        auto& step_dim = dims->_step_dim;
-        auto step_posn = Indices::step_posn;
+        CONTEXT_VARS(_generic_context);
         TRACE_MSG3("calc_sub_block for reqd bundle '" << get_name() << "': [" <<
                    mini_block_idxs.start.makeValStr(nsdims) <<
                    " ... " << mini_block_idxs.stop.makeValStr(nsdims) << ")");
@@ -265,9 +247,7 @@ namespace yask {
         do_scalars = false;
 
         // i: index for stencil dims, j: index for domain dims.
-        for (int i = 0, j = -1; i < nsdims; i++) {
-            if (i == step_posn) continue;
-            j++;
+        DOMAIN_VAR_LOOP(i, j) {
 
             // Rank offset.
             auto rofs = cp->rank_domain_offsets[j];
@@ -304,9 +284,7 @@ namespace yask {
                 // Similar but opposite for begin vars.
                 // We make a vector mask to pick the
                 // right elements.
-                // TODO: use compile-time consts instead
-                // of _fold_pts for more efficiency.
-                auto vpts = dims->_fold_pts[j];
+                auto vpts = fold_pts[j];
                 auto fvbgn = round_up_flr(ebgn, vpts);
                 auto fvend = round_down_flr(eend, vpts);
                 auto vbgn = round_down_flr(ebgn, vpts);
@@ -361,6 +339,7 @@ namespace yask {
                     idx_t mbit = 0x1 << (dims->_fold_pts.product() - 1);
 
                     // Visit points in a vec-fold.
+                    // TODO: make this more efficient.
                     dims->_fold_pts.visitAllPoints
                         ([&](const IdxTuple& pt, size_t idx) {
 
@@ -433,9 +412,7 @@ namespace yask {
 
             // Step sizes are based on cluster lengths (in vector units).
             // The step in the inner loop is hard-coded in the generated code.
-            for (int i = 0, j = -1; i < nsdims; i++) {
-                if (i == step_posn) continue;
-                j++;
+            DOMAIN_VAR_LOOP(i, j) {
                 norm_sub_block_idxs.step[i] = dims->_cluster_mults[j]; // N vecs.
             }
 
@@ -546,9 +523,7 @@ namespace yask {
                 TRACE_MSG3("calc_sub_block:   at pt " << pt_idxs.start.makeValStr(nsdims)); \
                 bool ok = false;                                        \
                 if (scalar_for_peel_rem) {                              \
-                    for (int i = 0, j = -1; i < nsdims; i++) {           \
-                        if (i == step_posn) continue;                   \
-                        j++;                                            \
+                    DOMAIN_VAR_LOOP(i, j) {                             \
                         auto rofs = cp->rank_domain_offsets[j];         \
                         if (pt_idxs.start[i] < rofs + sub_block_vidxs.begin[i] || \
                             pt_idxs.start[i] >= rofs + sub_block_vidxs.end[i]) { \
@@ -577,24 +552,17 @@ namespace yask {
     // Indices must be normalized, i.e., already divided by VLEN_*.
     void StencilBundleBase::calc_loop_of_clusters(int thread_idx,
                                                   const ScanIndices& loop_idxs) {
-        auto* cp = _generic_context;
-        auto& dims = cp->get_dims();
-        int nsdims = dims->_stencil_dims.size();
-        auto step_posn = +Indices::step_posn;
+        CONTEXT_VARS(_generic_context);
         TRACE_MSG3("calc_loop_of_clusters: local vector-indices [" <<
                    loop_idxs.start.makeValStr(nsdims) <<
                    " ... " << loop_idxs.stop.makeValStr(nsdims) << ")");
 
 #ifdef CHECK
         // Check that only the inner dim has a range greater than one cluster.
-        for (int i = 0, j = -1; i < nsdims; i++) {
-            if (i == step_posn) continue;
-            j++;
-            if (i != step_posn) {
-                if (i != _inner_posn)
-                    assert(loop_idxs.start[i] + dims->_cluster_mults[j] >=
-                           loop_idxs.stop[i]);
-            }
+        DOMAIN_VAR_LOOP(i, j) {
+            if (i != _inner_posn)
+                assert(loop_idxs.start[i] + dims->_cluster_mults[j] >=
+                       loop_idxs.stop[i]);
         }
 #endif
 
@@ -615,10 +583,7 @@ namespace yask {
     void StencilBundleBase::calc_loop_of_vectors(int thread_idx,
                                                  const ScanIndices& loop_idxs,
                                                  idx_t write_mask) {
-        auto* cp = _generic_context;
-        auto& dims = cp->get_dims();
-        int nsdims = dims->_stencil_dims.size();
-        auto step_posn = +Indices::step_posn;
+        CONTEXT_VARS(_generic_context);
         TRACE_MSG3("calc_loop_of_vectors: local vector-indices [" <<
                    loop_idxs.start.makeValStr(nsdims) <<
                    " ... " << loop_idxs.stop.makeValStr(nsdims) <<
@@ -656,11 +621,8 @@ namespace yask {
     // Return adjusted indices.
     ScanIndices StencilBundleBase::adjust_span(int thread_idx,
                                                const ScanIndices& idxs) const {
+        CONTEXT_VARS(_generic_context);
         ScanIndices adj_idxs(idxs);
-        auto* cp = _generic_context;
-        auto& dims = cp->get_dims();
-        int nsdims = dims->_stencil_dims.size();
-        auto step_posn = +Indices::step_posn;
 
         // Loop thru vecs of scratch grids for this bundle.
         for (auto* sv : outputScratchVecs) {
@@ -672,9 +634,7 @@ namespace yask {
             assert(gp->is_scratch());
 
             // i: index for stencil dims, j: index for domain dims.
-            for (int i = 0, j = -1; i < nsdims; i++) {
-                if (i == step_posn) continue;
-                j++;
+            DOMAIN_VAR_LOOP(i, j) {
                 auto& dim = dims->_stencil_dims.getDim(i);
                 auto& dname = dim.getName();
 

@@ -329,22 +329,22 @@ int main(int argc, const char* argv[]) {
         "Version: " << yask_get_version_string() << endl;
 
     try {
-		// Parse options and create the stencil-solution object.
-		parseOpts(argc, argv);
+        // Parse options and create the stencil-solution object.
+        parseOpts(argc, argv);
 
-		// Create the requested output...
-		for (auto i : outfiles) {
-			auto& type = i.first;
-			auto& fname = i.second;
+        // Create the requested output...
+        for (auto i : outfiles) {
+            auto& type = i.first;
+            auto& fname = i.second;
 
-			yask_output_factory ofac;
-			yask_output_ptr os;
-			if (fname == "-")
-				os = ofac.new_stdout_output();
-			else
-				os = ofac.new_file_output(fname);
-			stencilSoln->format(type, os);
-		}
+            yask_output_factory ofac;
+            yask_output_ptr os;
+            if (fname == "-")
+                os = ofac.new_stdout_output();
+            else
+                os = ofac.new_file_output(fname);
+            stencilSoln->format(type, os);
+        }
     } catch (yask_exception e) {
         cerr << "YASK Stencil Compiler: " << e.get_message() << ".\n";
         exit(1);

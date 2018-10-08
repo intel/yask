@@ -249,17 +249,20 @@ namespace yask {
         idx_t steps_done = 0;   // number of steps that have been run.
 
         // Maximum halos, skewing angles, and work extensions over all grids
-        // used for wave-front region tiles (wf) and temporal blocking (tb).
+        // used for wave-front rank tiling (wf).
         IdxTuple max_halos;  // spatial halos.
-        idx_t wf_steps = 1;  // max number of WF steps.
+        idx_t wf_steps = 0;  // max number of WF steps.
         IdxTuple wf_angles;  // WF skewing angles for each shift (in points).
         idx_t num_wf_shifts = 0; // number of WF shifts required in wf_steps.
-        IdxTuple wf_shifts;    // total shifted pts (wf_angles * num_wf_shifts).
+        IdxTuple wf_shift_pts;    // total shifted pts (wf_angles * num_wf_shifts).
         IdxTuple left_wf_exts;    // WF extension needed on left side of rank for halo exch.
         IdxTuple right_wf_exts;    // WF extension needed on right side of rank.
-        idx_t tb_steps = 1;  // max number of TB steps (may be less than requested).
+
+        // Settings for temporal blocking and mini-blocks.
+        idx_t tb_steps = 0;  // max number of TB steps (may be less than requested).
         IdxTuple tb_angles;  // TB skewing angles for each shift (in points).
         idx_t num_tb_shifts = 0; // number of TB shifts required in tb_steps.
+        IdxTuple mb_angles;  // MB skewing angles for each shift (in points).
 
         // MPI settings.
         // TODO: move to settings or MPI info object.
@@ -295,10 +298,10 @@ namespace yask {
 
         // Set debug output to cout if my_rank == msg_rank
         // or a null stream otherwise.
-        virtual std::ostream& set_ostr();
+        std::ostream& set_ostr();
 
         // Get the messsage output stream.
-        virtual std::ostream& get_ostr() const {
+        std::ostream& get_ostr() const {
             assert(_ostr);
             return *_ostr;
         }
@@ -307,11 +310,11 @@ namespace yask {
         void clear_timers();
 
         // Access to settings.
-        virtual KernelSettingsPtr& get_settings() {
+        KernelSettingsPtr& get_settings() {
             assert(_opts);
             return _opts;
         }
-        virtual void set_settings(KernelSettingsPtr opts) {
+        void set_settings(KernelSettingsPtr opts) {
             _opts = opts;
             _at.set_settings(_opts.get());
         }
@@ -373,7 +376,7 @@ namespace yask {
 
         // Set temporal blocking data.
         // This should be called anytime a block size is changed.
-        virtual void update_block_info();
+        virtual void update_tb_info();
 
         // Adjust offsets of scratch grids based
         // on thread and scan indices.
@@ -525,7 +528,7 @@ namespace yask {
                              const ScanIndices& block_idxs);
 
         // Exchange all dirty halo data for all stencil bundles.
-        virtual void exchange_halos(bool test_only = false);
+        void exchange_halos(bool test_only = false);
 
         // Mark grids that have been written to by bundle pack 'sel_bp'.
         // If sel_bp==null, use all bundles.
@@ -699,5 +702,18 @@ namespace yask {
         virtual bool is_auto_tuner_enabled() const;
 
     }; // StencilContext.
+
+    // Macros to get common items for stencil calcs efficiently.
+#define CONTEXT_VARS(ctx_p)                                             \
+    auto* cp = ctx_p;                                                   \
+    auto* opts = cp->get_settings().get();                              \
+    auto* dims = cp->get_dims().get();                                  \
+    const int nddims = NUM_DOMAIN_DIMS;                                 \
+    assert(nddims == dims->_domain_dims.size());                        \
+    const int nsdims = NUM_STENCIL_DIMS;                                \
+    assert(nsdims == dims->_stencil_dims.size());                       \
+    const auto& step_dim = dims->_step_dim;                             \
+    const auto step_posn = 0;                                           \
+    assert(step_posn == +Indices::step_posn);                           \
 
 } // yask namespace.

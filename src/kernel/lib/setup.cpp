@@ -53,8 +53,9 @@ namespace yask {
         overall_domain_sizes = _dims->_domain_dims;
         max_halos = _dims->_domain_dims;
         wf_angles = _dims->_domain_dims;
-        wf_shifts = _dims->_domain_dims;
+        wf_shift_pts = _dims->_domain_dims;
         tb_angles = _dims->_domain_dims;
+        mb_angles = _dims->_domain_dims;
         left_wf_exts = _dims->_domain_dims;
         right_wf_exts = _dims->_domain_dims;
 
@@ -241,13 +242,13 @@ namespace yask {
 
                 // Loop through domain dims.
                 bool vlen_mults = true;
-                for (int di = 0; di < num_ddims; di++) {
-                    auto& dname = _opts->_rank_indices.getDimName(di);
+                DOMAIN_VAR_LOOP(i, j) {
 
                     // Does rn have all VLEN-multiple sizes?
-                    auto rnsz = rsizes[rn][di];
-                    auto vlen = _dims->_fold_pts[di];
+                    auto rnsz = rsizes[rn][j];
+                    auto vlen = fold_pts[j];
                     if (rnsz % vlen != 0) {
+                        auto& dname = _opts->_rank_indices.getDimName(j);
                         TRACE_MSG("cannot use vector halo exchange with rank " << rn <<
                                   " because its size in '" << dname << "' is " << rnsz);
                         vlen_mults = false;
@@ -404,7 +405,7 @@ namespace yask {
                 // Always use max dist with WF.
                 // TODO: determine if this is overkill.
                 int maxdist = MAX_EXCH_DIST;
-                if (num_wf_shifts > 0)
+                if (wf_steps > 0)
                     maxdist = NUM_STENCIL_DIMS - 1;
 
                 // Manhattan dist.
@@ -498,7 +499,7 @@ namespace yask {
                             if (neigh_offsets[dname] == MPIInfo::rank_prev) {
 
                                 // Number of points to be added for WFs.
-                                auto ext = wf_shifts[dname];
+                                auto ext = wf_shift_pts[dname];
 
                                 // My halo on my left.
                                 my_halo_sizes.addDimBack(dname, lhalo + ext);
@@ -515,7 +516,7 @@ namespace yask {
                             else if (neigh_offsets[dname] == MPIInfo::rank_next) {
 
                                 // Number of points to be added for WFs.
-                                auto ext = wf_shifts[dname];
+                                auto ext = wf_shift_pts[dname];
 
                                 // My halo on my right.
                                 my_halo_sizes.addDimBack(dname, rhalo + ext);
@@ -866,12 +867,10 @@ namespace yask {
         IdxTuple blksize(_dims->_domain_dims);
         for (auto& sp : stPacks) {
             auto& psettings = sp->getActiveSettings();
-            for (int i = 0, j = -1; i < nsdims; i++) {
-                if (i == step_posn) continue;
-                j++;
+            DOMAIN_VAR_LOOP(i, j) {
 
                 auto sz = round_up_flr(psettings._block_sizes[i],
-                                       _dims->_fold_pts[j]);
+                                       fold_pts[j]);
                 blksize[j] = max(blksize[j], sz);
             }
         }
@@ -995,26 +994,26 @@ namespace yask {
         // Calculate wave-front shifts.
         // See the wavefront diagram in run_solution() for description
         // of angles and extensions.
-        idx_t tb_steps = _opts->_block_sizes[step_dim]; // use original size; actual may be less.
-        assert(tb_steps >= 1);
+        idx_t tb_steps = _opts->_block_sizes[step_dim]; // use requested size; actual may be less.
+        assert(tb_steps >= 0);
         wf_steps = _opts->_region_sizes[step_dim];
         wf_steps = max(wf_steps, tb_steps); // round up WF steps if less than TB steps.
-        assert(wf_steps >= 1);
+        assert(wf_steps >= 0);
         num_wf_shifts = 0;
-        if (wf_steps > 1) {
+        if (wf_steps > 0) {
 
             // Need to shift for each bundle pack.
             assert(stPacks.size() > 0);
             num_wf_shifts = idx_t(stPacks.size()) * wf_steps;
-            assert(num_wf_shifts > 1);
 
             // Don't need to shift first one.
-            num_wf_shifts--;
+            if (num_wf_shifts > 0)
+                num_wf_shifts--;
         }
         assert(num_wf_shifts >= 0);
 
         // Determine whether separate tuners can be used.
-        _use_pack_tuners = (tb_steps == 1) && (stPacks.size() > 1);
+        _use_pack_tuners = (tb_steps == 0) && (stPacks.size() > 1);
 
         // Calculate angles and related settings.
         for (auto& dim : _dims->_domain_dims.getDims()) {
@@ -1027,7 +1026,7 @@ namespace yask {
             // TODO: use different angle for L & R side of each pack.
             idx_t angle = ROUND_UP(max_halos[dname], _dims->_fold_pts[dname]);
             
-            // Determine the max spatial skewing angles for WF tiling.  We
+            // Determine the spatial skewing angles for WF tiling.  We
             // only need non-zero angles if the region size is less than the
             // rank size or there are other ranks in this dim, i.e., if
             // the region covers the *global* domain in a given dim, no
@@ -1040,7 +1039,7 @@ namespace yask {
 
             // Determine the total WF shift to be added in each dim.
             idx_t shifts = wf_angle * num_wf_shifts;
-            wf_shifts[dname] = shifts;
+            wf_shift_pts[dname] = shifts;
             assert(shifts >= 0);
 
             // Is domain size at least as large as halo + wf_ext in direction
@@ -1061,10 +1060,6 @@ namespace yask {
             right_wf_exts[dname] = _opts->is_last_rank(dname) ? 0 : shifts;
         }
 
-        // Calculate temporal-block shifts.
-        // NB: this will change if/when block sizes change.
-        update_block_info();
-        
         // Now that wave-front settings are known, we can push this info
         // back to the grids. It's useful to store this redundant info
         // in the grids, because there it's indexed by grid dims instead
@@ -1086,93 +1081,112 @@ namespace yask {
                     gp->_set_right_wf_ext(dname, right_wf_exts[dname]);
                 }
             }
-        }
+        } // grids.
+
+        // Calculate temporal-block shifts.
+        // NB: this will change if/when block sizes change.
+        update_tb_info();
+        
     } // update_grid_info().
 
-    // Set temporal blocking data.
-    // This should be called anytime a block size is changed.
-    // Must be called after update_grid_info() to ensure
-    // angles are properly set.
-    void StencilContext::update_block_info() {
+    // Set temporal blocking data.  This should be called anytime a block
+    // size is changed.  Must be called after update_grid_info() to ensure
+    // angles are properly set.  TODO: calculate 'tb_steps' dynamically
+    // considering temporal conditions; this assumes worst-case, which is
+    // all packs always done.
+    void StencilContext::update_tb_info() {
         auto& step_dim = _dims->_step_dim;
 
         // Reset all TB and MB vars.
-        tb_steps = 1;
+        tb_steps = _opts->_block_sizes[step_dim];
         num_tb_shifts = 0;
         for (auto& dim : _dims->_domain_dims.getDims()) {
             auto& dname = dim.getName();
             tb_angles.addDimBack(dname, 0);
+            mb_angles.addDimBack(dname, 0);
         }
-        
-        // Start w/original temporal settings or 1 if unset.
-        tb_steps = max(_opts->_block_sizes[step_dim], idx_t(1));
 
         // Determine max setting based on block sizes.
         // When using temporal blocking, all block sizes
         // across all packs must be the same.
-        if (tb_steps > 1) {
-            TRACE_MSG("update_block_info: original TB steps = " << tb_steps);
+        TRACE_MSG("update_tb_info: original TB steps = " << tb_steps);
+        if (tb_steps > 0) {
+
+            // TB is inside WF, so can't be larger.
             idx_t max_steps = min(tb_steps, wf_steps);
-            TRACE_MSG("update_block_info: max(TB, WF) steps = " << max_steps);
+            TRACE_MSG("update_tb_info: min(TB, WF) steps = " << max_steps);
 
             // Loop through each domain dim.
             for (auto& dim : _dims->_domain_dims.getDims()) {
                 auto& dname = dim.getName();
                 auto rnsize = _opts->_region_sizes[dname];
 
-                // There is only one block size when using TB.
+                // There must be only one block size when using TB, so get
+                // sizes from context settings instead of packs.
                 assert(_use_pack_tuners == false);
                 auto blksize = _opts->_block_sizes[dname];
                 auto mblksize = _opts->_mini_block_sizes[dname];
 
                 // Req'd shift in this dim based on max halos.
-                // TODO: use different angle for L & R side of each pack.
-                idx_t angle = ROUND_UP(max_halos[dname], _dims->_fold_pts[dname]);
+                // Can't use separate L & R shift because of possible data reuse in grids.
+                // Can't use separate shifts for each pack for same reason.
+                // TODO: make round-up optional.
+                auto fpts = _dims->_fold_pts[dname];
+                idx_t angle = ROUND_UP(max_halos[dname], fpts);
             
+                // Determine the spatial skewing angles for MB.
+                // If MB covers whole blk, no shifting is needed in that dim.
+                idx_t mb_angle = 0;
+                if (mblksize < blksize)
+                    mb_angle = angle;
+                mb_angles[dname] = mb_angle;
+
                 // Determine the max spatial skewing angles for TB.
-                // TODO: determine if there are any safe conditions to make
-                // angles zero.
-                idx_t tb_angle = angle;
+                // If blk covers whole region, no shifting is needed in that dim.
+                idx_t tb_angle = 0;
+                if (blksize < rnsize)
+                    tb_angle = angle;
                 tb_angles[dname] = tb_angle;
 
                 // Calculate max number of temporal steps in
                 // allowed this dim.
-                // TODO: calculate this dynamically considering
-                // temporal conditions; this assumes worst-case,
-                // which is all packs always done.
-                // TODO: calculate this using separate angle
-                // for each pack.
                 if (tb_angle > 0) {
+
+                    // min_blk_sz = min_top_sz + 2 * angle * (npacks * nsteps - 1).
+                    // bs = ts + 2*a*np*ns - 2*a.
+                    // 2*a*np*ns = bs - ts + 2*a.
+                    // s = flr[ (bs - ts + 2*a) / 2*a*np ].
+                    idx_t top_sz = fpts; // min pts on top row.
                     idx_t sh_pts = tb_angle * 2 * stPacks.size(); // pts shifted per step.
-                    idx_t dmax = ((blksize - 1) / sh_pts) + 1;
-                    TRACE_MSG("update_block_info: max TB steps in dim '" <<
-                              dname << "' = " << dmax <<
+                    idx_t nsteps = (blksize - top_sz + tb_angle * 2) / sh_pts; // might be zero.
+                    TRACE_MSG("update_tb_info: max TB steps in dim '" <<
+                              dname << "' = " << nsteps <<
                               " due to base block size of " << blksize <<
                               ", TB angle of " << tb_angle <<
                               ", and " << stPacks.size() << " pack(s)");
-                    max_steps = min(max_steps, dmax);
+                    max_steps = min(max_steps, nsteps);
                 }
             }
             tb_steps = min(tb_steps, max_steps);
-            TRACE_MSG("update_block_info: final TB steps = " << tb_steps);
+            TRACE_MSG("update_tb_info: final TB steps = " << tb_steps);
         }
-        assert(tb_steps >= 1);
+        assert(tb_steps >= 0);
 
         // Calc number of shifts based on steps.
-        if (tb_steps > 1) {
+        if (tb_steps > 0) {
 
             // Need to shift for each bundle pack.
             assert(stPacks.size() > 0);
             num_tb_shifts = idx_t(stPacks.size()) * tb_steps;
-            assert(num_tb_shifts > 1);
 
             // Don't need to shift first one.
-            num_tb_shifts--;
+            if (num_tb_shifts > 0)
+                num_tb_shifts--;
         }
         assert(num_tb_shifts >= 0);
-        TRACE_MSG("update_block_info: num TB shifts = " << num_tb_shifts);
+        TRACE_MSG("update_tb_info: num TB shifts = " << num_tb_shifts);
 
-    } // update_block_info().
+    } // update_tb_info().
 
     // Allocate grids and MPI bufs.
     // Initialize some data structures.
@@ -1271,7 +1285,8 @@ namespace yask {
         allocScratchData(os);
         allocMpiData(os);
         allocTimer.stop();
-        os << "Allocation done in " << allocTimer.get_elapsed_secs() << " secs.\n";
+        os << "Allocation done in " <<
+            makeNumStr(allocTimer.get_elapsed_secs()) << " secs.\n" << flush;
 
         print_info();
 
@@ -1282,18 +1297,19 @@ namespace yask {
 
         os <<
             " num-wave-front-steps:      " << wf_steps << endl;
-        if (wf_steps > 1) {
+        if (wf_steps > 0) {
             os <<
                 " wave-front-angles:         " << wf_angles.makeDimValStr() << endl <<
                 " num-wave-front-shifts:     " << num_wf_shifts << endl <<
-                " wave-front-shift-size:     " << wf_shifts.makeDimValStr() << endl <<
+                " wave-front-shift-size:     " << wf_shift_pts.makeDimValStr() << endl <<
                 " left-wave-front-exts:      " << left_wf_exts.makeDimValStr() << endl <<
                 " right-wave-front-exts:     " << right_wf_exts.makeDimValStr() << endl <<
                 " ext-rank-domain:           " << ext_bb.bb_begin.makeDimValStr() <<
                 " ... " << ext_bb.bb_end.subElements(1).makeDimValStr() << endl <<
                 " num-temporal-block-steps:  " << tb_steps << endl <<
                 " temporal-block-angles:     " << tb_angles.makeDimValStr() << endl <<
-                " num-temporal-block-shifts: " << num_tb_shifts << endl;
+                " num-temporal-block-shifts: " << num_tb_shifts << endl <<
+                " mini-block-angles:         " << mb_angles.makeDimValStr() << endl;
         }
     }
     
@@ -1386,11 +1402,16 @@ namespace yask {
                                                    real_t seed)> realInitFn) {
         ostream& os = get_ostr();
         real_t seed = 0.1;
-        os << "Initializing grids..." << endl;
+        os << "Initializing grids...\n" << flush;
+        YaskTimer itimer;
+        itimer.start();
         for (auto gp : gridPtrs) {
             realInitFn(gp, seed);
             seed += 0.01;
         }
+        itimer.stop();
+        os << "Grid initialization done in " <<
+            makeNumStr(itimer.get_elapsed_secs()) << " secs.\n" << flush;
     }
 
     // Set the bounding-box for each stencil-bundle and whole domain.
@@ -1398,7 +1419,7 @@ namespace yask {
     {
         ostream& os = get_ostr();
         os << "Constructing bounding boxes for " <<
-            stBundles.size() << " stencil-bundles(s)...\n";
+            stBundles.size() << " stencil-bundles(s)...\n" << flush;
         YaskTimer bbtimer;
         bbtimer.start();
 
@@ -1437,7 +1458,7 @@ namespace yask {
 
         bbtimer.stop();
         os << "Bounding-box construction done in " <<
-            bbtimer.get_elapsed_secs() << " secs.\n";
+            makeNumStr(bbtimer.get_elapsed_secs()) << " secs.\n" << flush;
     }
 
     // Find the bounding-boxes for this bundle in this rank.
@@ -1456,61 +1477,69 @@ namespace yask {
         auto nsdims = stencil_dims.size();
         auto step_posn = +Indices::step_posn;
         TRACE_MSG3("find_bounding_box for '" << get_name() << "'...");
-
-        // First, find an overall BB around all the
-        // valid points in the bundle.
         YaskTimer bbtimer;
-        bbtimer.start();
 
-        // Init min vars w/max val and vice-versa.
-        Indices min_pts(idx_max, nsdims);
-        Indices max_pts(idx_min, nsdims);
-        idx_t npts = 0;
+        // If there is no condition, BB is same as parent.
+        if (!is_sub_domain_expr()) {
+            _bundle_bb = context.ext_bb;
+        }
 
-        // Begin, end tuples. Use 'ext_bb' to scan across domain in this
-        // rank including any extensions for wave-fronts.
-        IdxTuple begin(stencil_dims);
-        begin.setVals(context.ext_bb.bb_begin, false);
-        begin[step_dim] = 0;
-        IdxTuple end(stencil_dims);
-        end.setVals(context.ext_bb.bb_end, false);
-        end[step_dim] = 1;      // one time-step only.
+        // There is a condition.
+        else {
+            
+            // First, find an overall BB around all the
+            // valid points in the bundle.
+            bbtimer.start();
 
-        // Indices needed for the generated 'misc' loops.
-        ScanIndices misc_idxs(*dims, false, 0);
-        misc_idxs.begin = begin;
-        misc_idxs.end = end;
+            // Init min vars w/max val and vice-versa.
+            Indices min_pts(idx_max, nsdims);
+            Indices max_pts(idx_min, nsdims);
+            idx_t npts = 0;
 
-        // Define misc-loop function.  Since step is always 1, we ignore
-        // misc_stop.  Update only if point is in domain for this bundle.
-#define misc_fn(misc_idxs) do {                                 \
-            if (is_in_valid_domain(misc_idxs.start)) {          \
-                min_pts = min_pts.minElements(misc_idxs.start); \
-                max_pts = max_pts.maxElements(misc_idxs.start); \
-                npts++;                                         \
-            } } while(0)
+            // Begin, end tuples. Use 'ext_bb' to scan across domain in this
+            // rank including any extensions for wave-fronts.
+            IdxTuple begin(stencil_dims);
+            begin.setVals(context.ext_bb.bb_begin, false);
+            begin[step_dim] = 0;
+            IdxTuple end(stencil_dims);
+            end.setVals(context.ext_bb.bb_end, false);
+            end[step_dim] = 1;      // one time-step only.
+
+            // Indices needed for the generated 'misc' loops.
+            ScanIndices misc_idxs(*dims, false, 0);
+            misc_idxs.begin = begin;
+            misc_idxs.end = end;
+
+            // Define misc-loop function.  Since step is always 1, we ignore
+            // misc_stop.  Update only if point is in domain for this bundle.
+#define misc_fn(misc_idxs) do {                                         \
+                if (is_in_valid_domain(misc_idxs.start)) {              \
+                    min_pts = min_pts.minElements(misc_idxs.start);     \
+                    max_pts = max_pts.maxElements(misc_idxs.start);     \
+                    npts++;                                             \
+                } } while(0)
         
-        // Define OMP reductions to be used in generated code.
+            // Define OMP reductions to be used in generated code.
 #define OMP_PRAGMA_SUFFIX reduction(+:npts)     \
-            reduction(min_idxs:min_pts)         \
-            reduction(max_idxs:max_pts)
+                reduction(min_idxs:min_pts)     \
+                reduction(max_idxs:max_pts)
 
-        // Scan through n-D space.  This scan sets min_pts & max_pts for all
-        // stencil dims (including step dim) and npts to the number of valid
-        // points.
+            // Scan through n-D space.  This scan sets min_pts & max_pts for all
+            // stencil dims (including step dim) and npts to the number of valid
+            // points.
 #include "yask_misc_loops.hpp"
 #undef misc_fn
-        bbtimer.stop();
-        TRACE_MSG3("Overall BB construction done in " <<
-                   bbtimer.get_elapsed_secs() << " secs.");
+            bbtimer.stop();
+            TRACE_MSG3("Overall BB construction done in " <<
+                bbtimer.get_elapsed_secs() << " secs.");
+        
+            // Init bb vars to ensure they contain correct dims.
+            _bundle_bb.bb_begin = domain_dims;
+            _bundle_bb.bb_end = domain_dims;
 
-        // Init bb vars to ensure they contain correct dims.
-        _bundle_bb.bb_begin = domain_dims;
-        _bundle_bb.bb_end = domain_dims;
-
-        // If any points, set begin vars to min indices and end vars to one
-        // beyond max indices.
-        if (npts) {
+            // If any points, set begin vars to min indices and end vars to one
+            // beyond max indices.
+            if (npts) {
             IdxTuple tmp(stencil_dims); // create tuple w/stencil dims.
             min_pts.setTupleVals(tmp);  // convert min_pts to tuple.
             _bundle_bb.bb_begin.setVals(tmp, false); // set bb_begin to domain dims of min_pts.
@@ -1518,20 +1547,21 @@ namespace yask {
             max_pts.setTupleVals(tmp); // convert min_pts to tuple.
             _bundle_bb.bb_end.setVals(tmp, false); // set bb_end to domain dims of max_pts.
             _bundle_bb.bb_end = _bundle_bb.bb_end.addElements(1); // end = last + 1.
-        }
+            }
 
-        // No points, just set to zero.
-        else {
-            _bundle_bb.bb_begin.setValsSame(0);
-            _bundle_bb.bb_end.setValsSame(0);
-        }
-        _bundle_bb.bb_num_points = npts;
+            // No points, just set to zero.
+            else {
+                _bundle_bb.bb_begin.setValsSame(0);
+                _bundle_bb.bb_end.setValsSame(0);
+            }
+            _bundle_bb.bb_num_points = npts;
 
-        // Finalize overall BB.
-        _bundle_bb.update_bb(get_name(), context, false);
+            // Finalize overall BB.
+            _bundle_bb.update_bb(get_name(), context, false);
+        }
 
         // If BB is empty, add nothing.
-        if (!npts) {
+        if (!_bundle_bb.bb_num_points) {
             TRACE_MSG3("BB is empty");
         }
         
@@ -1595,9 +1625,7 @@ namespace yask {
                         // and stencil dims.
                         Indices iofs(ofs);
                         ibdpt = islice_begin.addElements(iofs); // domain tuple.
-                        for (int i = 0, j = -1; i < nsdims; i++) {
-                            if (i == step_posn) continue;
-                            j++;
+                        DOMAIN_VAR_LOOP(i, j) {
                             ibspt[i] = ibdpt[j];            // stencil tuple.
                         }
 
@@ -1643,9 +1671,7 @@ namespace yask {
                                         // Find global point from 'eofs'.
                                         Indices ieofs(eofs);
                                         iedpt = ibdpt.addElements(ieofs); // domain tuple.
-                                        for (int i = 0, j = -1; i < nsdims; i++) {
-                                            if (i == step_posn) continue;
-                                            j++;
+                                        DOMAIN_VAR_LOOP(i, j) {
                                             iespt[i] = iedpt[j];            // stencil tuple.
                                         }
 

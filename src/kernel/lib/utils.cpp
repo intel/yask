@@ -244,8 +244,10 @@ namespace yask {
         const double onem = 1e-3;
         const double oneu = 1e-6;
         const double onen = 1e-9;
+#ifdef USE_PICO
         const double onep = 1e-12;
         const double onef = 1e-15;
+#endif
         if (num == 0.)
             os << num;
         else if (num > oneE)
@@ -260,10 +262,12 @@ namespace yask {
             os << (num / oneM) << "M";
         else if (num > oneK)
             os << (num / oneK) << "K"; // NB: official SI symbol is "k".
+#ifdef USE_PICO
         else if (num < onep)
             os << (num / onef) << "f";
         else if (num < onen)
             os << (num / onep) << "p";
+#endif
         else if (num < oneu)
             os << (num / onen) << "n";
         else if (num < onem)

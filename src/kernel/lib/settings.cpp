@@ -334,35 +334,39 @@ namespace yask {
             " The vector and vector-cluster sizes are set at compile-time, so\n"
             "  there are no run-time options to set them.\n"
             " Set sub-block sizes to specify a unit of work done by each nested OpenMP thread.\n"
-            "  Multiple sub-blocks are intended to allow sharing of level-1 caches\n"
+            "  Multiple sub-blocks are intended to allow sharing of caches\n"
             "   among multiple hyper-threads in a core when there is more than\n"
-            "   one block-thread.\n"
+            "   one block-thread. It can also be used to share data between caches\n"
+            "   among multiple cores.\n"
             "  A sub-block size of 0 in a given domain dimension =>\n"
             "   sub-block size is set to mini-block size in that dimension;\n"
             "   when there is more than one block-thread, the first dimension\n"
-            "   will instead be set to a small value to create \"slab\" shapes.\n"
+            "   will instead be set to the vector length to create \"slab\" shapes.\n"
             " Set mini-block sizes to control temporal wave-front tile sizes within a block.\n"
             "  Multiple mini-blocks are intended to increase locality in level-2 caches\n"
             "   when blocks are larger than L2 capacity.\n"
             "  A mini-block size of 0 in a given domain dimension =>\n"
             "   mini-block size is set to block size in that dimension.\n"
-            "  A mini-block size >1 in the step dimension ('-mbt') enables wave-front block tiling.\n"
-            "  A mini-block size of 0 in the step dimension =>\n"
-            "   mini-block size is set to block size in the step dimension.\n"
+            "  The size of a mini-block in the step dimension is always implicitly\n"
+            "   the same as that of a block.\n"
             " Set block sizes to specify a unit of work done by each top-level OpenMP thread.\n"
             "  A block size of 0 in a given domain dimension =>\n"
             "   block size is set to region size in that dimension.\n"
-            "  A block size >1 in the step dimension ('-bt') enables temporal blocking.\n"
+            "  A block size of 0 in the step dimension (e.g., '-bt') disables any temporal blocking.\n"
+            "  A block size of 1 in the step dimension enables temporal blocking, but only between\n"
+            "   packs in the same step.\n"
+            "  A block size >1 in the step dimension enables temporal blocking across multiple steps.\n"
             "  The temporal block size may be automatically reduced if needed based on the\n"
             "   domain block sizes and the stencil halos.\n"
             " Set region sizes to control temporal wave-front tile sizes within a rank.\n"
             "  Multiple regions are intended to increase locality in level-3 caches\n"
             "   when ranks are larger than L3 capacity.\n"
-            "  A region size of 0 in a given domain dimension =>\n"
-            "   region size is set to rank size in that dimension.\n"
-            "  A region size >1 in the step dimension ('-rt') enables wave-front rank tiling.\n"
-            "  A region size of 0 in the step dimension =>\n"
-            "   region size is set to block size in the step dimension.\n"
+            "  A region size of 0 in the step dimension (e.g., '-rt') => region size is\n"
+            "   set to block size in the step dimension.\n"
+            "  A region size >1 in the step dimension enables wave-front rank tiling.\n"
+            "  The region size in the step dimension affects how often MPI halo-exchanges occur:\n"
+            "   A region size of 0 in the step dimension => exchange after every pack.\n"
+            "   A region size >0 in the step dimension => exchange after that many steps.\n"
             " Set rank-domain sizes to specify the work done on this rank.\n"
             "  Set the domain sizes to specify the problem size for this rank.\n"
             "  This and the number of grids affect the amount of memory used.\n"
@@ -454,13 +458,13 @@ namespace yask {
         auto& mbt = _mini_block_sizes[step_dim];
         
         // Fix up step-dim sizes.
-        bt = max(bt, idx_t(1));
-        if (rt <= 0)
+        rt = max(rt, idx_t(0));
+        bt = max(bt, idx_t(0));
+        mbt = max(mbt, idx_t(0));
+        if (!rt)
             rt = bt;       // Default region steps to block steps.
-        if (mbt <= 0)
+        if (!mbt)
             mbt = bt;       // Default mini-blk steps to block steps.
-        rt = max(rt, idx_t(1));
-        mbt = max(mbt, idx_t(1));
 
         // Determine num regions.
         // Also fix up region sizes as needed.
@@ -474,7 +478,7 @@ namespace yask {
         os << " num-regions-per-rank-domain-per-step: " << nr << endl;
         os << " Since the region size in the '" << step_dim <<
             "' dim is " << rt << ", temporal wave-front rank tiling is ";
-        if (rt <= 1) os << "NOT ";
+        if (!rt) os << "NOT ";
         os << "enabled.\n";
 
         // Determine num blocks.
@@ -488,7 +492,7 @@ namespace yask {
         os << " num-blocks-per-rank-domain-per-step: " << (nb * nr) << endl;
         os << " Since the block size in the '" << step_dim <<
             "' dim is " << bt << ", temporal blocking is ";
-        if (bt <= 1) os << "NOT ";
+        if (!bt) os << "NOT ";
         os << "enabled.\n";
 
         // Determine num mini-blocks.
@@ -502,7 +506,7 @@ namespace yask {
         os << " num-mini-blocks-per-rank-domain-per-step: " << (nmb * nb * nr) << endl;
         os << " Since the mini-block size in the '" << step_dim <<
             "' dim is " << mbt << ", temporal wave-front block tiling is ";
-        if (mbt <= 1) os << "NOT ";
+        if (!mbt) os << "NOT ";
         os << "enabled.\n";
 
         // Adjust defaults for sub-blocks to be slab if

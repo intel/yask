@@ -484,7 +484,7 @@ namespace yask {
 
         // Default init.
         ScanIndices(const Dims& dims, bool use_vec_align, IdxTuple* ofs) :
-            ndims(dims._stencil_dims.size()),
+            ndims(NUM_STENCIL_DIMS),
             begin(idx_t(0), ndims),
             end(idx_t(0), ndims),
             step(idx_t(1), ndims),
@@ -496,12 +496,11 @@ namespace yask {
             index(idx_t(0), ndims) {
 
             // i: index for stencil dims, j: index for domain dims.
-            for (int i = 0, j = 0; i < ndims; i++) {
-                if (i == +Indices::step_posn) continue;
+            DOMAIN_VAR_LOOP(i, j) {
 
                 // Set alignment to vector lengths.
                 if (use_vec_align)
-                    align[i] = dims._fold_pts[j];
+                    align[i] = fold_pts[j];
 
                 // Set alignment offset.
                 if (ofs) {
@@ -790,14 +789,13 @@ namespace yask {
 
             _region_sizes = dims->_stencil_dims;
             _region_sizes.setValsSame(0);          // 0 => default settings.
-            _region_sizes.setVal(step_dim, 1); // 1 => no wave-front tiling.
 
             _block_group_sizes = dims->_stencil_dims;
             _block_group_sizes.setValsSame(0); // 0 => min size.
 
             _block_sizes = dims->_stencil_dims;
             _block_sizes.setValsSame(def_block); // size of block.
-            _block_sizes.setVal(step_dim, 1); // 1 => no temporal blocking.
+            _block_sizes.setVal(step_dim, 0); // 0 => default.
 
             _mini_block_group_sizes = dims->_stencil_dims;
             _mini_block_group_sizes.setValsSame(0); // 0 => min size.
@@ -810,7 +808,6 @@ namespace yask {
 
             _sub_block_sizes = dims->_stencil_dims;
             _sub_block_sizes.setValsSame(0);            // 0 => default settings.
-            _sub_block_sizes.setVal(step_dim, 1); // 1 => no temporal blocking.
 
             _min_pad_sizes = dims->_stencil_dims;
             _min_pad_sizes.setValsSame(0);

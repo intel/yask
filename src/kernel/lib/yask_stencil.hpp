@@ -38,6 +38,17 @@ IN THE SOFTWARE.
 #include YSTR2(YK_CODE_FILE)
 #undef DEFINE_MACROS
 
+// Macro to loop thru domain dims w/stencil index 'i' and domain index 'j'.
+// Step index must be at index zero.
+#if (defined CHECK) || (defined TRACE)
+#define DOMAIN_VAR_LOOP(i, j)                                   \
+    for (int i = 1, j = 0; j < NUM_DOMAIN_DIMS; i++, j++)
+#else
+#define DOMAIN_VAR_LOOP(i, j)                                   \
+    _Pragma("unroll")                                           \
+    for (int i = 1, j = 0; j < NUM_DOMAIN_DIMS; i++, j++)
+#endif
+    
 // Max number of dims allowed in Indices.
 // TODO: make Indices a templated class based on
 // number of dims.

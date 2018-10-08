@@ -153,8 +153,8 @@ namespace yask {
             " secs (" << rate <<
             " steps/sec) with block-size " <<
             _settings->_block_sizes.makeDimValStr(" * ");
-        if (_context->tb_steps > 1)
-            os << ", " << _context->tb_steps << " TB steps";
+        if (_context->tb_steps > 0)
+            os << ", " << _context->tb_steps << " TB step(s)";
         os << endl;
         csteps = 0;
         ctime = 0.;
@@ -338,7 +338,7 @@ namespace yask {
         _settings->adjustSettings(nullop->get_ostream(), env);
 
         // Update temporal blocking info.
-        _context->update_block_info();
+        _context->update_tb_info();
 
         // Reallocate scratch data based on new block size.
         // TODO: only do this when blocks have increased or
