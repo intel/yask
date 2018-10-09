@@ -287,7 +287,8 @@ namespace yask {
             return get_num_storage_elements();
         }
 
-        // Quick check for errors, assuming same layout.
+        // Quick check for errors, assuming same layout and
+        // same values in extra-padding area.
         // TODO: check layout.
         idx_t errs = _ggb->count_diffs(ref->_ggb, epsilon);
         TRACE_MSG0(get_ostr(), "count_diffs() returned " << errs);

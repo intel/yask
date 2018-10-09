@@ -849,8 +849,8 @@ namespace yask {
             assert(phase == 0);
             idx_t nshapes = 1;
             idx_t shape = 0;
-            int dims_to_bridge[phase];
             idx_t shift_num = 0;
+            BridgeMask bridge_mask;
             ScanIndices adj_block_idxs = block_idxs;
 
             // Include automatically-generated loop code that
@@ -872,6 +872,7 @@ namespace yask {
             // 'y' bridges for 2D problem in phase 1.
             idx_t nshapes = choose(nddims, phase);
             int dims_to_bridge[phase];
+            BridgeMask bridge_mask(nddims, false);
 
             // Set temporal indices to full range.
             block_idxs.index[step_posn] = 0; // only one index.
@@ -922,6 +923,14 @@ namespace yask {
                 // These will be used to create bridge shapes.
                 combination(dims_to_bridge, nddims, phase, shape + 1);
 
+                // Set bits for selected dims.
+                DOMAIN_VAR_LOOP(i, j)
+                    bridge_mask.at(j) = false;
+                for (int i = 0; i < phase; i++) {
+                    auto dim = dims_to_bridge[i] - 1;
+                    bridge_mask.at(dim) = true;
+                }
+                
                 // Can only be one time iteration here when doing TB
                 // because mini-block temporal size is always same
                 // as block temporal size.
@@ -947,7 +956,7 @@ namespace yask {
     void StencilContext::calc_mini_block(BundlePackPtr& sel_bp,
                                          idx_t nphases, idx_t phase,
                                          idx_t nshapes, idx_t shape,
-                                         int dims_to_bridge[],
+                                         const BridgeMask& bridge_mask,
                                          const ScanIndices& base_region_idxs,
                                          const ScanIndices& base_block_idxs,
                                          const ScanIndices& adj_block_idxs) {
@@ -1052,7 +1061,7 @@ namespace yask {
                                      shift_num,
                                      nphases, phase,
                                      nshapes, shape,
-                                     dims_to_bridge,
+                                     bridge_mask,
                                      base_region_idxs.begin, base_region_idxs.end,
                                      shift_num,
                                      bp,
@@ -1168,7 +1177,7 @@ namespace yask {
                                           idx_t block_shift_num,
                                           idx_t nphases, idx_t phase,
                                           idx_t nshapes, idx_t shape,
-                                          int dims_to_bridge[],
+                                          const BridgeMask& bridge_mask,
                                           const Indices& region_base_start,
                                           const Indices& region_base_stop,
                                           idx_t region_shift_num,
@@ -1190,6 +1199,7 @@ namespace yask {
             // Determine range of this block for current phase, shape, and
             // shift. For each dim, we'll first compute the L & R sides of
             // the base block and the L side of the next block.
+            auto tb_angle = tb_angles[j];
 
             // Is this block first and/or last in region?
             bool is_first_blk = block_base_start[i] <= region_base_start[i];
@@ -1202,53 +1212,9 @@ namespace yask {
             idx_t blk_start = block_base_start[i];
             idx_t blk_stop = block_base_stop[i];
 
-            //   x->
-            // ^   ----------------------
-            // |  /        \            /^
-            // t /  phase 0 \ phase 1  / |
-            //  /            \        /  |
-            //  ----------------------   |
-            //  ^             ^       ^  |
-            //  |<-blk_width->|    -->|  |<--sa=nshifts*angle
-            //  |             |    next_blk_start
-            // blk_start  blk_stop    |
-            //  |<-----blk_base------>|
-            // blk_width = blk_base/2 + sa.
-
-            // Ex: blk_base=12, angle=4, nshifts=1, fpts=4,
-            // sa=1*4=4, blk_width=rnd_up(12/2+4,4)=12.
-            //     111122222222
-            // 111111111111
-
-            // Ex: blk_base=16, angle=4, nshifts=1, fpts=4,
-            // sa=1*4=4, blk_width=rnd_up(16/2+4,4)=12.
-            //     1111222222222222
-            // 1111111111112222
-
-            // Ex: blk_base=16, angle=2, nshifts=2, fpts=2,
-            // sa=2*2=4, blk_width=rnd_up(16/2+4,2)=12.
-            //     1111222222222222
-            //   1111111122222222
-            // 1111111111112222
-
-            // When there is >1 phase, initial width is half of base plus
-            // one shift distance.  This will make 'up' and 'down'
-            // trapezoids approx same size.
-            // See block-size equation in update_tb_info().
-            // TODO: move this code out of this function and use standard
-            // block size instead of current one.
-            // TODO: use actual number of shifts instead of max.
-            auto tb_angle = tb_angles[j];
-            if (nphases > 1 && !is_one_blk) {
-                idx_t min_top_sz = fold_pts[j];
-                idx_t min_blk_width = min_top_sz + 2 * tb_angle * num_tb_shifts;
-                idx_t blk_base = blk_stop - blk_start;
-                idx_t sa = num_tb_shifts * tb_angle;
-                idx_t blk_width = ROUND_UP(CEIL_DIV(blk_base, idx_t(2)) + sa,
-                                           fold_pts[j]);
-                blk_width = max(blk_width, min_blk_width);
-                blk_stop = min(blk_start + blk_width, block_base_stop[i]);
-            }
+            // If more than one blk, adjust for base of phase-0 trapezoid.
+            if (nphases > 1 && !is_one_blk)
+                blk_stop = min(blk_start + tb_widths[j], block_base_stop[i]);
 
             // Starting point of the *next* block.  This is used to create
             // bridge shapes between blocks.  Initially, the beginning of
@@ -1273,7 +1239,7 @@ namespace yask {
             if ((nphases == 1 || is_one_blk) && is_last_blk)
                 blk_stop = idxs.end[i];
 
-            // Shift start of next block. Last block will be
+            // Shift start of next block. Last bridge will be
             // clamped to end of region.
             next_blk_start += tb_angle * block_shift_num;
             if (is_last_blk)
@@ -1288,33 +1254,26 @@ namespace yask {
             // Depending on the phase and shape, create a bridge between
             // from RHS of base block to the LHS of the next block
             // until all dims are bridged at last phase.
-            if (phase > 0) {
-
-                // Check list of dims to bridge for this shape,
-                // computed earlier.
-                for (int i = 0; i < phase; i++) {
-                    auto dim = dims_to_bridge[i] - 1;
-
-                    // Bridge this dim?
-                    if (dim == j) {
-                        TRACE_MSG("shift_mini_block: phase " << phase <<
-                                  ", shape " << shape <<
-                                  ": bridging dim " << j);
+            // Use list of dims to bridge for this shape
+            // computed earlier.
+            if (phase > 0 && bridge_mask[j]) {
+                TRACE_MSG("shift_mini_block: phase " << phase <<
+                          ", shape " << shape <<
+                          ": bridging dim " << j);
                 
-                        // Start at end of base block, but not
-                        // before start of block.
-                        shape_start = max(blk_stop, blk_start);
-                    
-                        // Stop at beginning of next block.
-                        shape_stop = next_blk_start;
-                    }
-                }
+                // Start at end of base block, but not
+                // before start of block.
+                shape_start = max(blk_stop, blk_start);
+                
+                // Stop at beginning of next block.
+                shape_stop = next_blk_start;
             }
+            
             // We now have bounds of this shape in shape_{start,stop}
             // for given phase and shift.
             if (shape_stop <= shape_start)
                 ok = false;
-            if (ok) {
+            else {
 
                 // Is this mini-block first and/or last in block?
                 bool is_first_mb = mb_base_start[i] <= adj_block_base_start[i];

@@ -148,8 +148,8 @@ namespace yask {
 
         // Get scratch children plus self.
         StencilBundleList get_reqd_bundles() {
-            auto sg_list = get_scratch_children();
-            sg_list.push_back(this);
+            auto sg_list = get_scratch_children(); // Do children first.
+            sg_list.push_back(this); // Do self last.
             return sg_list;
         }
 

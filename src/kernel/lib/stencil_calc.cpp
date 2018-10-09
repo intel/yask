@@ -86,8 +86,10 @@ namespace yask {
                 bb_idxs.end[i] = bend;
 		
                 // Anything to do?
-                if (bend <= bbegin)
+                if (bend <= bbegin) {
                     bb_ok = false;
+                    break;
+                }
             }
 
             // nothing to do?
@@ -478,9 +480,8 @@ namespace yask {
 #define calc_inner_loop(thread_idx, loop_idxs)                          \
             bool ok = false;                                            \
             idx_t mask = idx_t(-1);                                     \
-            for (int i = 0; i < nsdims; i++) {                          \
-                if (i != step_posn &&                                   \
-                    i != _inner_posn &&                                 \
+            DOMAIN_VAR_LOOP(i, j) {                                     \
+                if (i != _inner_posn &&                                 \
                     (loop_idxs.start[i] < norm_sub_block_fcidxs.begin[i] || \
                      loop_idxs.start[i] >= norm_sub_block_fcidxs.end[i])) { \
                     ok = true;                                          \
@@ -500,6 +501,9 @@ namespace yask {
         }
 
         // Use scalar code for anything not done above.
+        // This may be called if vectorizing on the inner loop, so
+        // this should be avoided.
+        // TODO: handle more efficiently.
         if (do_scalars) {
 
             // Use the 'misc' loops. Indices for these loops will be scalar and
