@@ -756,7 +756,7 @@ sub getRunCmd() {
   } else {
     $runCmd .= " -host $host" if defined $host;
   }
-  $runCmd .= " -exe_prefix '$exePrefix' -stencil $stencil -arch $arch -no-pre_auto_tune $runArgs";
+  $runCmd .= " -exe_prefix '$exePrefix' -stencil $stencil -arch $arch -no-pre_auto_tune";
   return $runCmd;
 }
 
@@ -773,7 +773,7 @@ sub calcSize($$$) {
 
     my $makeCmd = getMakeCmd('', 'EXTRA_CXXFLAGS=-O1');
     my $runCmd = getRunCmd();
-    $runCmd .= ' -t 0 -d 32';
+    $runCmd .= " -t 0 -d 32 $runArgs";
     my $cmd = "$makeCmd 2>&1 && $runCmd";
 
     my $timeDim = 0;
@@ -1416,10 +1416,10 @@ sub fitness {
   my $longTrials = min($gen, 2);
 
   # various commands.
-  my $testCmd = "$runCmd -v"; # validation on a small problem size.
-  my $simCmd = "$runCmd $args -t 1 -dt 1";  # simulation w/1 trial & 1 step.
-  my $shortRunCmd = "$runCmd $args -t $shortTrials -trial_time $shortTime"; # fast run for 'upper-bound' time.
-  my $longRunCmd = "$runCmd $args -t $longTrials -trial_time $longTime";  # normal run w/more trials.
+  my $testCmd = "$runCmd -v $runArgs"; # validation on a small problem size.
+  my $simCmd = "$runCmd $args -t 1 -dt 1 $runArgs";  # simulation w/1 trial & 1 step.
+  my $shortRunCmd = "$runCmd $args -t $shortTrials -trial_time $shortTime $runArgs"; # fast run for 'upper-bound' time.
+  my $longRunCmd = "$runCmd $args -t $longTrials -trial_time $longTime $runArgs";  # normal run w/more trials.
   my $cleanCmd = "make clean";
 
   # add kill command to prevent runaway code.
