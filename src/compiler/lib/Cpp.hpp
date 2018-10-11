@@ -218,7 +218,24 @@ namespace yask {
         }
     };
 
-    // Outputs the variables needed for an inner loop.
+    // Outputs the time-invariant variables.
+    class CppStepVarPrintVisitor : public PrintVisitorBase {
+    protected:
+        CppVecPrintHelper& _cvph;
+
+    public:
+        CppStepVarPrintVisitor(ostream& os,
+                               CppVecPrintHelper& ph,
+                               CompilerSettings& settings,
+                               const VarMap* varMap = 0) :
+            PrintVisitorBase(os, ph, settings, varMap),
+            _cvph(ph) { }
+
+        // A grid access.
+        virtual void visit(GridPoint* gp);
+    };
+
+    // Outputs the loop-invariant variables for an inner loop.
     class CppLoopVarPrintVisitor : public PrintVisitorBase {
     protected:
         CppVecPrintHelper& _cvph;

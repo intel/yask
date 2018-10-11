@@ -513,11 +513,21 @@ namespace yask {
         }
     }
 
-    // Print grid-access vars for a loop.
+    // Print invariant grid-access vars for non-time loop(s).
+    void CppStepVarPrintVisitor::visit(GridPoint* gp) {
+
+        // Pointer to grid.
+        string gridPtr = _cvph.getLocalVar(_os, gp->getGridPtr(), "auto* restrict");
+
+        // Time var.
+        auto* dims = _cvph.getDims();
+        string stepArgVar = _cvph.getLocalVar(_os, gp->makeStepArgStr(gridPtr, *dims), "const auto");
+    }
+
+    // Print invariant grid-access vars for an inner loop.
     void CppLoopVarPrintVisitor::visit(GridPoint* gp) {
 
         // Retrieve prior analysis of this grid point.
-        //auto vecType = gp->getVecType();
         auto loopType = gp->getLoopType();
 
         // If invariant, we can load now.

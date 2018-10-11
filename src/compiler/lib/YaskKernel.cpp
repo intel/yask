@@ -677,7 +677,13 @@ namespace yask {
                     "#endif\n"
                     " {\n";
 
+                // Print time-invariants.
+                os << "\n // Invariants within a step.\n";
+                CppStepVarPrintVisitor svv(os, *vp, _settings);
+                vceq->visitEqs(&svv);
+
                 // Print loop-invariants.
+                os << "\n // Inner-loop invariants.\n";
                 CppLoopVarPrintVisitor lvv(os, *vp, _settings);
                 vceq->visitEqs(&lvv);
 
