@@ -160,6 +160,39 @@ namespace yask {
         }
     }
 
+    // Calculate results for one sub-block using pure scalar code.
+    // Typically called by a single OMP thread.
+    // This is for debug.
+    void StencilBundleBase::calc_sub_block_scalar(int thread_idx,
+                                                  const ScanIndices& mini_block_idxs) {
+        CONTEXT_VARS(_generic_context);
+        TRACE_MSG3("calc_sub_block_scalar for bundle '" << get_name() << "': [" <<
+                   mini_block_idxs.start.makeValStr(nsdims) <<
+                   " ... " << mini_block_idxs.stop.makeValStr(nsdims) << ")");
+
+        // Init sub-block begin & end from block start & stop indices.
+        // Use the 'misc' loops. Indices for these loops will be scalar and
+        // global rather than normalized as in the cluster and vector loops.
+        ScanIndices misc_idxs(*dims, true, 0);
+        misc_idxs.initFromOuter(mini_block_idxs);
+        
+        // Step sizes and alignment are one element.
+        misc_idxs.step.setFromConst(1);
+        misc_idxs.align.setFromConst(1);
+
+        // Define misc-loop function.
+        // Since step is always 1, we ignore misc_idxs.stop.
+#define misc_fn(pt_idxs)  do {                                          \
+            calc_scalar(thread_idx, pt_idxs.start);                     \
+        } while(0)
+
+        // Scan through n-D space.
+        // The OMP in the misc loops will be ignored if we're already in
+        // the max allowed nested OMP region.
+#include "yask_misc_loops.hpp"
+#undef misc_fn
+    }
+
     // Calculate results for one sub-block.
     // Typically called by a single OMP thread.
     // The index ranges in 'mini_block_idxs' are sub-divided
@@ -168,7 +201,10 @@ namespace yask {
     void StencilBundleBase::calc_sub_block(int thread_idx,
                                            const ScanIndices& mini_block_idxs) {
         CONTEXT_VARS(_generic_context);
-        TRACE_MSG3("calc_sub_block for reqd bundle '" << get_name() << "': [" <<
+        if (opts->force_scalar)
+            return calc_sub_block_scalar(thread_idx, mini_block_idxs);
+        
+        TRACE_MSG3("calc_sub_block for bundle '" << get_name() << "': [" <<
                    mini_block_idxs.start.makeValStr(nsdims) <<
                    " ... " << mini_block_idxs.stop.makeValStr(nsdims) << ")");
 
@@ -220,35 +256,13 @@ namespace yask {
         rem_masks.setFromConst(-1);
 
         // Flags that indicate what type of processing needs to be done.
-        bool do_clusters = false; // any clusters to do?
-        bool do_vectors = false; // any vectors to do? (assume not)
-        bool do_scalars = false; // any scalars to do? (assume not)
-        bool scalar_for_peel_rem = false; // using the scalar code for peel and/or remainder.
+        bool do_clusters = true; // any clusters to do?
+        bool do_vectors = false; // any vectors to do?
+        bool do_scalars = false; // any scalars to do?
 
-        // Do only scalar code--no clusters or vectors--for debug.
-#ifdef FORCE_SCALAR
-        do_clusters = false;
-        do_vectors = false;
-        do_scalars = true;
-        scalar_for_peel_rem = false;
-        
-        // None of these will be used.
-        sub_block_fcidxs.begin.setFromConst(0);
-        sub_block_fcidxs.end.setFromConst(0);
-        sub_block_fvidxs.begin.setFromConst(0);
-        sub_block_fvidxs.end.setFromConst(0);
-        sub_block_vidxs.begin.setFromConst(0);
-        sub_block_vidxs.end.setFromConst(0);
-    
         // Adjust indices to be rank-relative.
         // Determine the subset of this sub-block that is
         // clusters, vectors, and partial vectors.
-#else
-        do_clusters = true;
-        do_vectors = false;
-        do_scalars = false;
-
-        // i: index for stencil dims, j: index for domain dims.
         DOMAIN_VAR_LOOP(i, j) {
 
             // Rank offset.
@@ -340,8 +354,9 @@ namespace yask {
                     // Need to set upper bit.
                     idx_t mbit = 0x1 << (dims->_fold_pts.product() - 1);
 
-                    // Visit points in a vec-fold.
-                    // TODO: make this more efficient.
+                    // Visit points in a vec-fold to set bits for this dim's
+                    // masks per the diagram above.  TODO: make this more
+                    // efficient.
                     dims->_fold_pts.visitAllPoints
                         ([&](const IdxTuple& pt, size_t idx) {
 
@@ -373,12 +388,8 @@ namespace yask {
                 // Anything not covered?
                 // This will only be needed in inner dim because we
                 // will do partial vectors in other dims.
-                // Set 'scalar_for_peel_rem' to indicate we only want to
-                // do peel and/or rem in scalar loop.
-                if (i == _inner_posn && (ebgn < vbgn || eend > vend)) {
+                if (i == _inner_posn && (ebgn < vbgn || eend > vend))
                     do_scalars = true;
-                    scalar_for_peel_rem = true;
-                }
             }
 
             // If no peel or rem, just set vec indices to same as
@@ -390,7 +401,6 @@ namespace yask {
                 sub_block_vidxs.end[i] = fcend;
             }
         }
-#endif
             
         // Normalized indices needed for sub-block loop.
         ScanIndices norm_sub_block_idxs(sub_block_eidxs);
@@ -430,7 +440,8 @@ namespace yask {
 #undef calc_inner_loop
         }
 
-        // Full and partial peel/remainder vectors.
+        // Full and partial peel/remainder vectors in all dims except
+        // the inner one.
         if (do_vectors) {
             TRACE_MSG3("calc_sub_block:  using vector code for [" <<
                        sub_block_vidxs.begin.makeValStr(nsdims) <<
@@ -470,13 +481,14 @@ namespace yask {
             norm_sub_block_fvidxs.align.setFromConst(1); // one vector.
 
             // Define the function called from the generated loops to
-            // determine whether a loop of vectors is within the peel
-            // range (before the cluster) and/or remainder
-            // range (after the clusters). If so, call the
-            // loop-of-vectors function w/appropriate mask.
-            // See the mask diagrams above that show how the
-            // masks are ANDed together.
-            // Since step is always 1, we ignore loop_idxs.stop.
+            // determine whether a loop of vectors is within the peel range
+            // (before the cluster) and/or remainder range (after the
+            // clusters)--setting the 'ok' flag. In other words, the vectors
+            // should be used only around the outside of the inner block of
+            // clusters. Then, call the loop-of-vectors function
+            // w/appropriate mask.  See the mask diagrams above that show
+            // how the masks are ANDed together.  Since step is always 1, we
+            // ignore loop_idxs.stop.
 #define calc_inner_loop(thread_idx, loop_idxs)                          \
             bool ok = false;                                            \
             idx_t mask = idx_t(-1);                                     \
@@ -500,10 +512,10 @@ namespace yask {
 #undef calc_inner_loop
         }
 
-        // Use scalar code for anything not done above.
-        // This may be called if vectorizing on the inner loop, so
-        // this should be avoided.
-        // TODO: handle more efficiently.
+        // Use scalar code for anything not done above.  This should only be
+        // called if vectorizing on the inner loop and sub-block size in
+        // that dim is not a multiple of the inner-dim vector len, so that
+        // situation should be avoided.
         if (do_scalars) {
 
             // Use the 'misc' loops. Indices for these loops will be scalar and
@@ -514,28 +526,31 @@ namespace yask {
             misc_idxs.step.setFromConst(1);
             misc_idxs.align.setFromConst(1);
 
-            TRACE_MSG3((scalar_for_peel_rem ? "peel/remainder of" : "entire") <<
-                       " sub-block [" << misc_idxs.begin.makeValStr(nsdims) <<
-                       " ... " << misc_idxs.end.makeValStr(nsdims) << ")");
+            TRACE_MSG3("calc_sub_block:  using scalar code for [" <<
+                       misc_idxs.begin.makeValStr(nsdims) << " ... " <<
+                       misc_idxs.end.makeValStr(nsdims) <<
+                       ") *not* within vectors at [" <<
+                       sub_block_vidxs.begin.makeValStr(nsdims) << " ... " <<
+                       sub_block_vidxs.end.makeValStr(nsdims) << ")");
 
-            // Define misc-loop function.
-            // If point is in sub-domain for this
-            // bundle, then evaluate the reference scalar code.
-            // If no holes, don't need to check each point in domain.
-            // Since step is always 1, we ignore misc_idxs.stop.
+            // Define misc-loop function.  This is called at each point in
+            // the sub-block.  Since step is always 1, we ignore
+            // misc_idxs.stop.  TODO: handle more efficiently: do one slab
+            // for inner-peel and one for outer-peel, calculate masks, and
+            // call vector code.
 #define misc_fn(pt_idxs)  do {                                          \
-                TRACE_MSG3("calc_sub_block:   at pt " << pt_idxs.start.makeValStr(nsdims)); \
                 bool ok = false;                                        \
-                if (scalar_for_peel_rem) {                              \
-                    DOMAIN_VAR_LOOP(i, j) {                             \
-                        auto rofs = cp->rank_domain_offsets[j];         \
-                        if (pt_idxs.start[i] < rofs + sub_block_vidxs.begin[i] || \
-                            pt_idxs.start[i] >= rofs + sub_block_vidxs.end[i]) { \
-                            ok = true; break; }                         \
-                    }                                                   \
+                DOMAIN_VAR_LOOP(i, j) {                                 \
+                    auto rofs = cp->rank_domain_offsets[j];             \
+                    if (pt_idxs.start[i] < rofs + sub_block_vidxs.begin[i] || \
+                        pt_idxs.start[i] >= rofs + sub_block_vidxs.end[i]) { \
+                        ok = true; break; }                             \
                 }                                                       \
-                else ok = is_in_valid_domain(pt_idxs.start);            \
-                if (ok) calc_scalar(thread_idx, pt_idxs.start);         \
+                if (ok) {                                               \
+                    TRACE_MSG3("calc_sub_block:   at pt " <<            \
+                               pt_idxs.start.makeValStr(nsdims));       \
+                    calc_scalar(thread_idx, pt_idxs.start);             \
+                }                                                       \
             } while(0)
 
             // Scan through n-D space.

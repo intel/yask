@@ -194,6 +194,8 @@ namespace yask {
         // Calculate results within a sub-block.
         void
         calc_sub_block(int thread_idx, const ScanIndices& mini_block_idxs);
+        void
+        calc_sub_block_scalar(int thread_idx, const ScanIndices& mini_block_idxs);
 
         // Calculate a series of cluster results within an inner loop.
         // All indices start at 'start_idxs'. Inner loop iterates to

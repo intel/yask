@@ -598,7 +598,7 @@ namespace yask {
             }
 
             // Vector/Cluster code.
-            for (int do_cluster = 0; do_cluster <= 1; do_cluster++) {
+            for (bool do_cluster : { false, true }) {
 
                 // Cluster eqBundle at same 'ei' index.
                 // This should be the same eq-bundle because it was copied from the
@@ -664,7 +664,7 @@ namespace yask {
                 os << " idx_t " << istep << " = " << nvecs << "; // number of vectors per iter.\n";
                 os << " idx_t " << iestep << " = " << nelems << "; // number of elements per iter.\n";
                 if (do_cluster)
-                    os << " idx_t write_mask = idx_t(-1); // no masking for clusters.\n";
+                    os << " constexpr idx_t write_mask = idx_t(-1); // no masking for clusters.\n";
 
                 // C++ vector print assistant.
                 CppVecPrintHelper* vp = newCppVecPrintHelper(vv, cv);

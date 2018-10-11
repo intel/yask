@@ -25,8 +25,8 @@
 
 # Purpose: Process the output of a log from a binary and compare every grid write.
 # Build with the following options:
-# OMPFLAGS='-qopenmp-stubs' YK_CXXOPT='-O0' arch=intel64 EXTRA_MACROS='CHECK TRACE TRACE_MEM FORCE_SCALAR' real_bytes=8
-# Run kernel with '-v' and pipe output to this script.
+# OMPFLAGS='-qopenmp-stubs' YK_CXXOPT='-O0' arch=intel64 EXTRA_MACROS='CHECK TRACE TRACE_MEM' real_bytes=8
+# Run kernel with '-v -force_scalar' and pipe output to this script.
 
 use strict;
 use File::Basename;

@@ -566,6 +566,7 @@ namespace yask {
             auto idim = _dims._innerDim;
 
             // Access type.
+            // Assume invariant, then check below.
             GridPoint::LoopType lt = GridPoint::LOOP_INVARIANT;
 
             // Check every point arg.

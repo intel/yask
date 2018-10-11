@@ -774,6 +774,9 @@ namespace yask {
         int thread_divisor = 1;   // Reduce number of threads by this amount.
         int num_block_threads = 1; // Number of threads to use for a block.
 
+        // Debug.
+        bool force_scalar = false; // Do only scalar ops.
+
         // Prefetch distances.
         // Prefetching must be enabled via YASK_PREFETCH_L[12] macros.
         int _prefetch_L1_dist = 1;

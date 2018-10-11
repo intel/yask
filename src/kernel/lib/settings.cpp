@@ -258,6 +258,10 @@ namespace yask {
                            "Overlap MPI communication with calculation of grid cells whenever possible.",
                            overlap_comms));
 #endif
+        parser.add_option(new CommandLineParser::BoolOption
+                          ("force_scalar",
+                           "Evaluate every grid point with scalar stencil operations.",
+                           force_scalar));
         parser.add_option(new CommandLineParser::IntOption
                           ("max_threads",
                            "Max OpenMP threads to use.",
