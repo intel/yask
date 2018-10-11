@@ -460,7 +460,7 @@ namespace yask {
     struct ScanIndices {
         int ndims = 0;
 
-        // Values that remain the same for each sub-range.
+        // Input values; not modified.
         Indices begin, end;     // first and end (beyond last) range of each index.
         Indices step;           // step value within range.
         Indices align;          // alignment of steps after first one.
@@ -470,9 +470,14 @@ namespace yask {
         // Alignment: when possible, each step will be aligned
         // such that ((start - align_ofs) % align) == 0.
 
-        // Values that differ for each sub-range.
+        // Output values; set once for entire range.
+        Indices num_indices;    // number of indices in each dim.
+        idx_t   linear_indices = 0; // total indices over all dims (product of num_indices).
+
+        // Output values; set for each index by loop code.
         Indices start, stop;    // first and last+1 for this sub-range.
         Indices index;          // 0-based unique index for each sub-range in each dim.
+        idx_t   linear_index = 0;   // 0-based index over all dims.
 
         // Example w/3 sub-ranges in overall range:
         // begin                                         end
@@ -491,6 +496,7 @@ namespace yask {
             align(idx_t(1), ndims),
             align_ofs(idx_t(0), ndims),
             group_size(idx_t(1), ndims),
+            num_indices(idx_t(1), ndims),
             start(idx_t(0), ndims),
             stop(idx_t(0), ndims),
             index(idx_t(0), ndims) {
