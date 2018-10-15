@@ -957,7 +957,7 @@ namespace yask {
         if (!stPacks.size())
             return;
 
-        // Reset halos to zero.
+        // Reset max halos to zero.
         max_halos = _dims->_domain_dims;
 
         // Loop through each non-scratch grid.
@@ -983,7 +983,7 @@ namespace yask {
                     gp->set_min_pad_size(dname, _opts->_min_pad_sizes[dname]);
 
                     // Offsets.
-                    gp->_set_offset(dname, rank_domain_offsets[dname]);
+                    gp->_set_rank_offset(dname, rank_domain_offsets[dname]);
                     gp->_set_local_offset(dname, 0);
 
                     // Update max halo across grids, used for temporal angles.

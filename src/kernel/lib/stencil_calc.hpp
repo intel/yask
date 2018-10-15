@@ -40,7 +40,8 @@ namespace yask {
         int _scalar_points_read = 0;
         int _scalar_points_written = 0;
 
-        // Position of inner dim in stencil-dims tuple.
+        // Position of inner domain dim in stencil-dims tuple.
+        // Misc dims will follow this.
         int _inner_posn = 0;
 
         // Other bundles that this one depends on.
@@ -67,7 +68,24 @@ namespace yask {
         // Normalize the indices, i.e., divide by vector len in each dim.
         // Ranks offsets must already be subtracted.
         // Each dim in 'orig' must be a multiple of corresponding vec len.
-        void normalize_indices(const Indices& orig, Indices& norm) const;
+        void normalize_indices(const Indices& orig, Indices& norm) const {
+            CONTEXT_VARS(_generic_context);
+            assert(orig.getNumDims() == nsdims);
+            assert(norm.getNumDims() == nsdims);
+
+            // i: index for stencil dims, j: index for domain dims.
+#pragma unroll
+            DOMAIN_VAR_LOOP(i, j) {
+            
+                // Divide indices by fold lengths as needed by
+                // read/writeVecNorm().  Use idiv_flr() instead of '/'
+                // because begin/end vars may be negative (if in halo).
+                norm[i] = idiv_flr<idx_t>(orig[i], fold_pts[j]);
+            
+                // Check for no remainder.
+                assert(imod_flr<idx_t>(orig[i], fold_pts[j]) == 0);
+            }
+        }
 
     public:
 

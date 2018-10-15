@@ -331,7 +331,7 @@ int main(int argc, char** argv)
                 ksoln->run_solution(0, warmup_steps-1);
                 auto stats = context->get_stats();
                 auto wtime = stats->get_elapsed_secs();
-                os << "  Done in " << wtime << " secs.\n";
+                os << "  Done in " << makeNumStr(wtime) << " secs.\n";
                 rate = (wtime > 0.) ? double(warmup_steps) / wtime : 0;
 
                 // Done if time est. isn't needed.
@@ -499,7 +499,7 @@ int main(int argc, char** argv)
             ref_context->set_debug_output(yof.new_null_output());
             auto rstats = ref_context->get_stats();
             ref_context->set_debug_output(dbg_out);
-            os << "  Done in " << rstats->get_elapsed_secs() << " secs.\n";
+            os << "  Done in " << makeNumStr(rstats->get_elapsed_secs()) << " secs.\n";
 #endif
             // check for equality.
             os << "\nChecking results..." << endl;

@@ -169,18 +169,16 @@ namespace yask {
             printUnalignedVecSimple(os, gp, pvName, _linePrefix);
         }
 
+        // Get offset from base pointer.
+        virtual string getPtrOffset(const GridPoint& gp);
+
     public:
 
         // Print code to set pointers of aligned reads.
         virtual void printBasePtrs(ostream& os);
 
-        // Make base point (inner-dim index = 0).
-        virtual GridPointPtr makeBasePoint(const GridPoint& gp) {
-            GridPointPtr bgp = gp.cloneGridPoint();
-            IntScalar idi(getDims()->_innerDim, 0); // set inner-dim index to 0.
-            bgp->setArgConst(idi);
-            return bgp;
-        }
+        // Make base point (misc & inner-dim indices = 0).
+        virtual GridPointPtr makeBasePoint(const GridPoint& gp);
 
         // Print prefetches for each base pointer.
         // Print only 'ptrVar' if provided.

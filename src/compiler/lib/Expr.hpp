@@ -786,6 +786,7 @@ namespace yask {
         virtual const string& getGridName() const;
         virtual string getGridPtr() const;
         virtual bool isGridFoldable() const;
+        virtual const IndexExprPtrVec& getDims() const;
 
         // Accessors.
         virtual const NumExprPtrVec& getArgs() const { return _args; }

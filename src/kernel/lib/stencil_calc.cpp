@@ -138,28 +138,6 @@ namespace yask {
         } // BB list.
     }
 
-    // Normalize the indices, i.e., divide by vector len in each dim.
-    // Ranks offsets must already be subtracted because rank offsets
-    // are not necessarily vec-multiples.
-    // Each dim in 'orig' must be a multiple of corresponding vec len.
-    void StencilBundleBase::normalize_indices(const Indices& orig, Indices& norm) const {
-        CONTEXT_VARS(_generic_context);
-        assert(orig.getNumDims() == nsdims);
-        assert(norm.getNumDims() == nsdims);
-
-        // i: index for stencil dims, j: index for domain dims.
-        DOMAIN_VAR_LOOP(i, j) {
-            
-            // Divide indices by fold lengths as needed by
-            // read/writeVecNorm().  Use idiv_flr() instead of '/'
-            // because begin/end vars may be negative (if in halo).
-            norm[i] = idiv_flr<idx_t>(orig[i], fold_pts[j]);
-            
-            // Check for no remainder.
-            assert(imod_flr<idx_t>(orig[i], fold_pts[j]) == 0);
-        }
-    }
-
     // Calculate results for one sub-block using pure scalar code.
     // Typically called by a single OMP thread.
     // This is for debug.
@@ -307,12 +285,11 @@ namespace yask {
                 auto vend = round_up_flr(eend, vpts);
                 if (i == _inner_posn) {
 
-                    // Don't do any full and/or partial vectors in
-                    // plane of inner dim.  We'll do these with
-                    // scalars.  This is unusual because vector
-                    // folding is normally done in a plane
-                    // perpendicular to the inner dim for >= 2D
-                    // domains.
+                    // Don't do any full and/or partial vectors in plane of
+                    // inner domain dim.  We'll do these with scalars.  This
+                    // should be unusual because vector folding is normally
+                    // done in a plane perpendicular to the inner dim for >=
+                    // 2D domains.
                     fvbgn = vbgn = fcbgn;
                     fvend = vend = fcend;
                 }

@@ -229,6 +229,7 @@ namespace yask {
             int step_posn = 0;
             int inner_posn = 0;
             vector<int> vlens;
+            vector<int> misc_posns;
 
             // 1-D or more.
             if (ndims) {
@@ -240,7 +241,7 @@ namespace yask {
 
                     // Step dim?
                     // If this exists, it will get placed near to the end,
-                    // just before the inner dim.
+                    // just before the inner & misc dims.
                     if (dtype == STEP_INDEX) {
                         assert(dname == _dims->_stepDim);
                         if (dn > 0) {
@@ -264,6 +265,14 @@ namespace yask {
                         }
                     }
 
+                    // Misc dims? Also placed at end.
+                    else if (dtype == MISC_INDEX) {
+                        if (folded) {
+                            misc_posns.push_back(dn + 1);
+                            defer = true;
+                        }
+                    }
+
                     // Add index position to layout.
                     if (!defer) {
                         int other_posn = dn + 1;
@@ -278,11 +287,13 @@ namespace yask {
                     }
                 }
 
-                // Add step and inner posns at end.
+                // Add deferred posns at end.
                 if (step_posn)
                     oss << step_posn;
                 if (inner_posn)
                     oss << inner_posn;
+                for (auto mp : misc_posns)
+                    oss << mp;
             }
 
             // Scalar.
@@ -372,12 +383,12 @@ namespace yask {
                     }
                     os << " const idx_t " << avar << " = " << aval <<
                         "; // default allocation in '" << dname << "' dimension.\n";
-                    initCode += " " + grid + "_ptr->set_alloc_size(\"" + dname +
+                    initCode += " " + grid + "_ptr->_set_alloc_size(\"" + dname +
                         "\", " + avar + ");\n";
                     if (oval) {
                         os << " const idx_t " << ovar << " = " << oval <<
                             "; // first index in '" << dname << "' dimension.\n";
-                        initCode += " " + grid + "_ptr->set_first_misc_index(\"" + dname +
+                        initCode += " " + grid + "_ptr->_set_local_offset(\"" + dname +
                             "\", " + ovar + ");\n";
                     }
                 }

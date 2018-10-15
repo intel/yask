@@ -1489,19 +1489,7 @@ namespace yask {
                 int posn = gp->get_dim_posn(dname);
                 if (posn >= 0) {
 
-                    // | ... |        +------+       |
-                    // |  global ofs  |      |       |
-                    // |<------------>|grid/ |       |
-                    // |     |  loc   | blk  |       |
-                    // |rank |  ofs   |domain|       |
-                    // | ofs |<------>|      |       |
-                    // |<--->|        +------+       |
-                    // ^     ^        ^              ^
-                    // |     |        |              last rank-domain index
-                    // |     |        start of grid-domain/0-idx of block
-                    // |     first rank-domain index
-                    // first overall-domain index
-
+                    // See diagram in yk_grid defn.
                     // Local offset is the offset of this grid
                     // relative to the current rank.
                     // Set local offset to diff between global offset
@@ -1512,12 +1500,12 @@ namespace yask {
                     auto lofs = round_down_flr(idxs[i] - rofs, vlen);
                     gp->_set_local_offset(posn, lofs);
 
-                    // Set global offset of grid based on starting point of block.
+                    // Set rank offset of grid based on starting point of block.
                     // This is a global index, so it will include the rank offset.
                     // Thus, it it not necessarily a vec mult.
                     // Need to use calculated local offset to adjust for any
                     // rounding that was done above.
-                    gp->_set_offset(posn, rofs + lofs);
+                    gp->_set_rank_offset(posn, rofs);
                 }
             }
         }
