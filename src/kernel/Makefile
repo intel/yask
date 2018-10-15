@@ -395,9 +395,8 @@ endif
 
 # Add options for PMEM.
 ifeq ($(pmem),1)
- YK_CXXFLAGS	+=	-I/opt/intel/knl/memkind_build/include
- YK_CXXFLAGS	+=	-I/opt/intel/knl/memkind_build/include/memkind/internal
- YK_LIBS		+=	-L/opt/intel/knl/memkind_build/lib -lmemkind
+ YK_CXXFLAGS	+=	-I/opt/intel/memkind/include
+ YK_LIBS		+=	-L/opt/intel/memkind/lib -lmemkind
  MACROS		+=	USE_PMEM
 endif
 

@@ -68,7 +68,6 @@ IN THE SOFTWARE.
 #include <immintrin.h>
 #ifdef USE_PMEM
 #include <memkind.h>
-#include <memkind_pmem.h>
 #include <sys/syscall.h>
 #endif
 
