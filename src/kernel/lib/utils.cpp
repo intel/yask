@@ -34,6 +34,65 @@ Cache cache_model(MODEL_CACHE);
 
 namespace yask {
 
+    // Timer.
+    void YaskTimer::start(TimeSpec* ts) {
+
+        // Make sure timer was stopped.
+        assert(_begin.tv_sec == 0);
+        assert(_begin.tv_nsec == 0);
+        
+        if (ts)
+            _begin = *ts;
+        else {
+            auto cts = get_timespec();
+            _begin = cts;
+        }
+    }
+    double YaskTimer::stop(TimeSpec* ts) {
+        TimeSpec end, delta;
+        if (ts)
+            end = *ts;
+        else {
+            auto cts = get_timespec();
+            end = cts;
+        }
+
+        // Make sure timer was started.
+        assert(_begin.tv_sec != 0);
+
+        // Make sure time is going forward.
+        assert(end.tv_sec >= _begin.tv_sec);
+        
+        // Elapsed time is just end - begin times.
+        delta.tv_sec = end.tv_sec - _begin.tv_sec;
+        _elapsed.tv_sec += delta.tv_sec;
+        
+        // No need to check for sign or to normalize, because tv_nsec is
+        // signed and 64-bit.
+        delta.tv_nsec = end.tv_nsec - _begin.tv_nsec;
+        _elapsed.tv_nsec += delta.tv_nsec;
+
+        // Clear begin to catch misuse.
+        _begin.tv_sec = 0;
+        _begin.tv_nsec = 0;
+        
+        return double(delta.tv_sec) + double(delta.tv_nsec) * 1e-9;
+    }
+    double YaskTimer::get_secs_since_start() const {
+
+        // Make sure timer was started.
+        assert(_begin.tv_sec != 0);
+
+        TimeSpec now, delta;
+        now = get_timespec();
+
+        // Elapsed time is just now - begin times.
+        delta.tv_sec = now.tv_sec - _begin.tv_sec;
+        delta.tv_nsec = now.tv_nsec - _begin.tv_nsec;
+
+        return double(delta.tv_sec) + double(delta.tv_nsec) * 1e-9;
+    }
+    
     // Aligned allocation.
     char* alignedAlloc(std::size_t nbytes) {
 
@@ -235,8 +294,10 @@ namespace yask {
         const double onem = 1e-3;
         const double oneu = 1e-6;
         const double onen = 1e-9;
+#ifdef USE_PICO
         const double onep = 1e-12;
         const double onef = 1e-15;
+#endif
         if (num == 0.)
             os << num;
         else if (num > oneE)
@@ -251,10 +312,12 @@ namespace yask {
             os << (num / oneM) << "M";
         else if (num > oneK)
             os << (num / oneK) << "K"; // NB: official SI symbol is "k".
+#ifdef USE_PICO
         else if (num < onep)
             os << (num / onef) << "f";
         else if (num < onen)
             os << (num / onep) << "p";
+#endif
         else if (num < oneu)
             os << (num / onen) << "n";
         else if (num < onem)

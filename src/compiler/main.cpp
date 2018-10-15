@@ -98,6 +98,9 @@ void usage(const string& cmd) {
         "      Example: \"-eq-bundles 'g_$&=b[aeiou]r'\" with grids 'bar_x', 'bar_y', 'ber_x', and 'ber_y'\n"
         "        would create eq-bundle 'g_bar_0' for grids 'bar_x' and 'bar_y' and eq-bundle 'g_ber_0' for\n"
         "        grids 'ber_x' and 'ber_y' because '$&' is substituted by the string that matches the regex.\n"
+        " [-no]-bundle-scratch\n"
+        "    Bundle scratch equations even if the sizes of their scratch grids must be increased\n"
+        "      to do so (default=" << settings._bundleScratch << ").\n"
         " -step-alloc <size>\n"
         "    Specify the size of the step-dimension memory allocation.\n"
         "      By default, allocations are calculated automatically for each grid.\n"
@@ -127,6 +130,8 @@ void usage(const string& cmd) {
         "    Set heuristic for min expression-size for reuse (default=" << settings._minExprSize << ").\n"
         " [-no]-find-deps\n"
         "    Find dependencies between stencil equations (default=" << settings._findDeps << ").\n"
+        " [-no]-print-eqs\n"
+        "    Print each equation when defined (default=" << settings._printEqs << ").\n"
         "\n"
         " -p <format-type> <filename>\n"
         "    Format output per <format-type> and write to <filename>.\n"
@@ -189,7 +194,15 @@ void parseOpts(int argc, const char* argv[])
                 settings._findDeps = true;
             else if (opt == "-no-find-deps")
                 settings._findDeps = false;
-
+            else if (opt == "-bundle-scratch")
+                settings._bundleScratch = true;
+            else if (opt == "-no-bundle-scratch")
+                settings._bundleScratch = false;
+            else if (opt == "-print-eqs")
+                settings._printEqs = true;
+            else if (opt == "-no-print-eqs")
+                settings._printEqs = false;
+    
             // add any more options w/o values above.
 
             // options w/a value.
@@ -316,22 +329,22 @@ int main(int argc, const char* argv[]) {
         "Version: " << yask_get_version_string() << endl;
 
     try {
-		// Parse options and create the stencil-solution object.
-		parseOpts(argc, argv);
+        // Parse options and create the stencil-solution object.
+        parseOpts(argc, argv);
 
-		// Create the requested output...
-		for (auto i : outfiles) {
-			auto& type = i.first;
-			auto& fname = i.second;
+        // Create the requested output...
+        for (auto i : outfiles) {
+            auto& type = i.first;
+            auto& fname = i.second;
 
-			yask_output_factory ofac;
-			yask_output_ptr os;
-			if (fname == "-")
-				os = ofac.new_stdout_output();
-			else
-				os = ofac.new_file_output(fname);
-			stencilSoln->format(type, os);
-		}
+            yask_output_factory ofac;
+            yask_output_ptr os;
+            if (fname == "-")
+                os = ofac.new_stdout_output();
+            else
+                os = ofac.new_file_output(fname);
+            stencilSoln->format(type, os);
+        }
     } catch (yask_exception e) {
         cerr << "YASK Stencil Compiler: " << e.get_message() << ".\n";
         exit(1);

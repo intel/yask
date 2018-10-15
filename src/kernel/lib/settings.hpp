@@ -36,6 +36,7 @@ namespace yask {
     // Similar to a Tuple, but less overhead and doesn't keep names.
     // Make sure this stays non-virtual.
     // TODO: make this a template with _ndims as a parameter.
+    // TODO: ultimately, combine with Tuple w/o loss of efficiency.
     class Indices {
 
     public:
@@ -349,9 +350,9 @@ namespace yask {
         public virtual yk_env {
 
         // MPI vars.
-        MPI_Comm comm=0;        // communicator.
-        int num_ranks=1;        // total number of ranks.
-        int my_rank=0;          // MPI-assigned index.
+        MPI_Comm comm = MPI_COMM_NULL; // communicator.
+        int num_ranks = 1;        // total number of ranks.
+        int my_rank = 0;          // MPI-assigned index.
 
         // OMP vars.
         int max_threads=0;      // initial value from OMP.
@@ -360,7 +361,7 @@ namespace yask {
 
         // Init MPI, OMP, etc.
         // This is normally called very early in the program.
-        virtual void initEnv(int* argc, char*** argv);
+        virtual void initEnv(int* argc, char*** argv, MPI_Comm comm);
 
         // APIs.
         virtual int get_num_ranks() const {
@@ -483,7 +484,7 @@ namespace yask {
 
         // Default init.
         ScanIndices(const Dims& dims, bool use_vec_align, IdxTuple* ofs) :
-            ndims(dims._stencil_dims.size()),
+            ndims(NUM_STENCIL_DIMS),
             begin(idx_t(0), ndims),
             end(idx_t(0), ndims),
             step(idx_t(1), ndims),
@@ -495,12 +496,11 @@ namespace yask {
             index(idx_t(0), ndims) {
 
             // i: index for stencil dims, j: index for domain dims.
-            for (int i = 0, j = 0; i < ndims; i++) {
-                if (i == Indices::step_posn) continue;
+            DOMAIN_VAR_LOOP(i, j) {
 
                 // Set alignment to vector lengths.
                 if (use_vec_align)
-                    align[i] = dims._fold_pts[j];
+                    align[i] = fold_pts[j];
 
                 // Set alignment offset.
                 if (ofs) {
@@ -733,7 +733,6 @@ namespace yask {
     class KernelSettings {
 
     protected:
-        idx_t def_steps = 1;
         idx_t def_rank = 128;
         idx_t def_block = 32;
 
@@ -750,7 +749,9 @@ namespace yask {
         IdxTuple _region_sizes;   // region size (used for wave-front tiling).
         IdxTuple _block_group_sizes; // block-group size (only used for 'grouped' region loops).
         IdxTuple _block_sizes;       // block size (used for each outer thread).
-        IdxTuple _sub_block_group_sizes; // sub-block-group size (only used for 'grouped' block loops).
+        IdxTuple _mini_block_group_sizes; // mini-block-group size (only used for 'grouped' block loops).
+        IdxTuple _mini_block_sizes;       // mini-block size (used for wave-fronts in blocks).
+        IdxTuple _sub_block_group_sizes; // sub-block-group size (only used for 'grouped' mini-block loops).
         IdxTuple _sub_block_sizes;       // sub-block size (used for each nested thread).
         IdxTuple _min_pad_sizes;         // minimum spatial padding.
         IdxTuple _extra_pad_sizes;       // extra spatial padding.
@@ -777,31 +778,37 @@ namespace yask {
         int _numa_pref_max = 128;
 
         // Ctor.
+        // TODO: move code to settings.cpp.
         KernelSettings(DimsPtr dims, KernelEnvPtr env) :
             _dims(dims), max_threads(env->max_threads) {
+            auto& step_dim = dims->_step_dim;
 
             // Use both step and domain dims for all size tuples.
             _rank_sizes = dims->_stencil_dims;
             _rank_sizes.setValsSame(def_rank);             // size of rank.
-            _rank_sizes.setVal(dims->_step_dim, def_steps); // num steps.
+            _rank_sizes.setVal(step_dim, 0);        // not used.
 
             _region_sizes = dims->_stencil_dims;
-            _region_sizes.setValsSame(0);          // 0 => full rank.
-            _region_sizes.setVal(dims->_step_dim, 1); // 1 => no wave-front tiling.
+            _region_sizes.setValsSame(0);          // 0 => default settings.
 
             _block_group_sizes = dims->_stencil_dims;
             _block_group_sizes.setValsSame(0); // 0 => min size.
 
             _block_sizes = dims->_stencil_dims;
             _block_sizes.setValsSame(def_block); // size of block.
-            _block_sizes.setVal(dims->_step_dim, 1); // 1 => no temporal blocking.
+            _block_sizes.setVal(step_dim, 0); // 0 => default.
+
+            _mini_block_group_sizes = dims->_stencil_dims;
+            _mini_block_group_sizes.setValsSame(0); // 0 => min size.
+
+            _mini_block_sizes = dims->_stencil_dims;
+            _mini_block_sizes.setValsSame(0);            // 0 => default settings.
 
             _sub_block_group_sizes = dims->_stencil_dims;
             _sub_block_group_sizes.setValsSame(0); // 0 => min size.
 
             _sub_block_sizes = dims->_stencil_dims;
             _sub_block_sizes.setValsSame(0);            // 0 => default settings.
-            _sub_block_sizes.setVal(dims->_step_dim, 1); // 1 => no temporal blocking.
 
             _min_pad_sizes = dims->_stencil_dims;
             _min_pad_sizes.setValsSame(0);
@@ -823,12 +830,13 @@ namespace yask {
         virtual void _add_domain_option(CommandLineParser& parser,
                                         const std::string& prefix,
                                         const std::string& descrip,
-                                        IdxTuple& var);
+                                        IdxTuple& var,
+                                        bool allow_step = false);
 
         idx_t findNumSubsets(std::ostream& os,
                              IdxTuple& inner_sizes, const std::string& inner_name,
                              const IdxTuple& outer_sizes, const std::string& outer_name,
-                             const IdxTuple& mults);
+                             const IdxTuple& mults, const std::string& step_dim);
 
     public:
         // Add options to a cmd-line parser to set the settings.
@@ -856,11 +864,6 @@ namespace yask {
         }
         virtual bool is_last_rank(const std::string dim) {
             return _rank_indices[dim] == _num_ranks[dim] - 1;
-        }
-
-        // Is WF tiling being used?
-        virtual bool is_time_tiling() {
-            return _region_sizes[_dims->_step_dim] > 1;
         }
     };
     typedef std::shared_ptr<KernelSettings> KernelSettingsPtr;

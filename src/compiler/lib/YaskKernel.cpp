@@ -97,7 +97,6 @@ namespace yask {
             auto& dname = dim.getName();
             os << "#define DOMAIN_DIM_IDX_" << dname << " (" << (i++) << ")\n";
         }
-
         os << "\n// Number of stencil dimensions (step and domain):\n"
             "#define NUM_STENCIL_DIMS " << _dims->_stencilDims.size() << "\n";
         i = 0;
@@ -105,7 +104,6 @@ namespace yask {
             auto& dname = dim.getName();
             os << "#define STENCIL_DIM_IDX_" << dname << " (" << (i++) << ")\n";
         }
-
         int gdims = 0;
         for (auto gp : _grids) {
             int ndims = gp->get_num_dims();
@@ -125,6 +123,9 @@ namespace yask {
             string ucDim = allCaps(dname);
             os << "#define VLEN_" << ucDim << " (" << dim.getVal() << ")" << endl;
         }
+        os << "namespace yask {\n"
+            " constexpr idx_t fold_pts[]{ " << _dims->_fold.makeValStr() << " };\n"
+            "}\n";
         os << "#define VLEN (" << _dims->_fold.product() << ")" << endl;
         os << "#define FIRST_FOLD_INDEX_IS_UNIT_STRIDE (" <<
             (_dims->_fold.isFirstInner() ? 1 : 0) << ")" << endl;
@@ -517,9 +518,9 @@ namespace yask {
                 os << " } // Ctor." << endl;
             }
 
-            // Condition.
+            // Domain condition.
             {
-                os << endl << " // Determine whether " << egsName << " is valid at the indices " <<
+                os << endl << " // Determine whether " << egsName << " is valid at the domain indices " <<
                     _dims->_stencilDims.makeDimStr() << ".\n"
                     " // Return true if indices are within the valid sub-domain or false otherwise.\n"
                     " virtual bool is_in_valid_domain(const Indices& idxs) const final {\n";
@@ -528,6 +529,23 @@ namespace yask {
                     os << " return " << eq->cond->makeStr() << ";\n";
                 else
                     os << " return true; // full domain.\n";
+                os << " }\n"
+                    " virtual bool is_sub_domain_expr() const {\n"
+                    "  return " << (eq->cond ? "true" : "false") <<
+                    ";\n }\n";
+            }
+
+            // Step condition.
+            {
+                os << endl << " // Determine whether " << egsName << " is valid at the step " <<
+                    _dims->_stencilDims.makeDimStr() << ".\n"
+                    " // Return true if indices are within the valid sub-domain or false otherwise.\n"
+                    " virtual bool is_in_valid_step(idx_t input_step_index) const final {\n";
+                if (eq->step_cond)
+                    os << " idx_t " << _dims->_stepDim << " = input_step_index;\n"
+                        " return " << eq->step_cond->makeStr() << ";\n";
+                else
+                    os << " return true; // any step.\n";
                 os << " }\n";
             }
 
@@ -732,7 +750,7 @@ namespace yask {
                 os << "  stBundles.push_back(&" << egName << ");\n";
 
             // Add scratch-bundle deps in proper order.
-            auto& sdeps = _eqBundles.getScratches(eg);
+            auto& sdeps = _eqBundles.getScratchDeps(eg);
             for (auto& eg2 : _eqBundles.getAll()) {
                 if (sdeps.count(eg2)) {
                     string eg2Name = eg2->getName();

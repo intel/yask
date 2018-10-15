@@ -27,7 +27,8 @@ IN THE SOFTWARE.
 
 #pragma once
 
-#include <assert.h>
+#include "yask_assert.hpp"
+
 #include <math.h>
 #include <iostream>
 #include <iomanip>
@@ -636,3 +637,20 @@ namespace yask {
     };
 
 } // namespace yask.
+
+// Provide a hash operator for a Tuple.
+// Needed for unordered_map.
+// This needs to be in the 'std' namespace.
+namespace std {
+    template <typename T>
+    class hash<yask::Tuple<T>>{
+    public :
+        size_t operator()(const yask::Tuple<T> &x ) const {
+            size_t h = 0;
+            for (size_t i = 0; i < x.getNumDims(); i++) {
+                h ^= i ^ std::hash<T>()(x.getVal(i)) ^ std::hash<std::string>()(x.getDimName(i));
+            }
+            return h;
+        }
+    };
+}

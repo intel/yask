@@ -22,11 +22,11 @@ FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
 IN THE SOFTWARE.
 
 *****************************************************************************/
-#ifndef COMMON_UTILS_HPP
-#define COMMON_UTILS_HPP
+#pragma once
 
 //////// Some common code shared between YASK compiler and kernel. //////////
 
+#include "yask_assert.hpp"
 #include <set>
 #include <vector>
 #include <map>
@@ -56,6 +56,11 @@ namespace yask {
     template <typename T>
     class vector_set : public std::vector<T> {
         std::map<T, size_t> _posn;
+
+    private:
+        virtual void push_front(const T& val) {
+            THROW_YASK_EXCEPTION("push_front() not allowed");
+        }
 
     public:
         vector_set() {}
@@ -96,4 +101,3 @@ namespace yask {
 
 } // namespace.
 
-#endif /* SRC_COMMON_COMMON_UTILS_HPP_ */

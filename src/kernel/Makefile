@@ -28,14 +28,15 @@
 #   command-line that control kernel configuration and performance.
 
 # Initial defaults.
-stencil			:=	iso3dfd
-arch			:=	snb
-mpi			:=	1
-numa			:=	1
-pmem			:=	0
-real_bytes		:=	4
-radius			:=	2
-allow_new_grid_types	:=	1
+stencil			?=	iso3dfd
+arch			?=	snb
+mpi			?=	1
+numa			?=	1
+pmem			?=	0
+real_bytes		?=	4
+radius			?=	2
+allow_new_grid_types	?=	1
+
 
 # Defaults based on stencil type (and arch for some stencils).
 ifeq ($(stencil),)
@@ -43,7 +44,7 @@ ifeq ($(stencil),)
 
 else ifeq ($(stencil),3axis)
  MACROS		+=	MAX_EXCH_DIST=1
- radius		:=	6
+ radius		:=	4
 
 else ifeq ($(stencil),9axis)
  MACROS		+=	MAX_EXCH_DIST=2
@@ -57,13 +58,15 @@ else ifeq ($(stencil),cube)
  MACROS		+=	MAX_EXCH_DIST=3
  radius		:=	2
 
+else ifneq ($(findstring test_dep,$(stencil)),)
+ time_alloc	:=	1
+
 else ifneq ($(findstring iso3dfd,$(stencil)),)
  MACROS				+=	MAX_EXCH_DIST=1
  radius				:=	8
- def_rank_args			:=	-d 1024 -dx 512 # assume 2 ranks/node in 'x'.
+ def_rank_args			:=	-d 1024
  def_pad_args			:=	-ep 1
  ifeq ($(arch),knl)
-  def_rank_args			:=	-d 1024 # assume 1 rank/node.
   fold_4byte			:=	x=2,y=8
   cluster			:=	x=2
   def_block_args		:=	-bx 160 -by 256 -bz 96
@@ -93,10 +96,9 @@ else ifneq ($(findstring awp,$(stencil)),)
  endif
  def_block_args			:=	-b 32
  YC_FLAGS			+=	-min-es 1
- def_rank_args			:=	-dx 512 -dy 1024 -dz 128 # assume 2 ranks/node in 'x'.
+ def_rank_args			:=	-d 1024 -dz 128
  def_pad_args			:=	-ep 1
  ifeq ($(arch),knl)
-  def_rank_args			:=	-dx 1024 -dy 1024 -dz 128 # assume 1 rank/node.
   fold_4byte			:=	x=4,y=4
   def_thread_divisor		:=	2
   def_block_threads		:=	4
@@ -139,7 +141,6 @@ else ifneq ($(findstring fsg,$(stencil)),)
   pfd_l1		:=	0
   pfd_l2		:=	2
  else ifneq ($(filter $(arch),skx skl),)
-  def_rank_args		:=	-d 384 -dx 192
   fold_4byte		:=	x=4,y=4
   def_block_args	:=	-bx 188 -by 12 -bz 24
   def_block_threads	:=	1
@@ -150,7 +151,6 @@ else ifeq ($(stencil),tti)
  radius			:=	2
  def_rank_args		:=	-d 512
  ifneq ($(filter $(arch),skx skl),)
-  def_rank_args		:=	-d 640 -dx 320
   fold_4byte		:=	x=4,y=4
   def_block_args	:=	-bx 80 -by 16 -bz 40
   def_block_threads	:=	1
@@ -278,7 +278,8 @@ include $(YASK_BASE)/src/common/common.mk
 # Vars starting with 'YK_' apply to the stencil kernel.
 
 # Flags passed to stencil compiler.
-YC_FLAGS	+=	-stencil $(stencil) -elem-bytes $(real_bytes) -cluster $(cluster) -fold $(fold)
+YC_STENCIL	?=	$(stencil)
+YC_FLAGS	+=	-stencil $(YC_STENCIL) -elem-bytes $(real_bytes) -cluster $(cluster) -fold $(fold)
 ifneq ($(eqs),)
  YC_FLAGS	+=	-eq-bundles $(eqs)
 endif
@@ -333,6 +334,7 @@ YK_GEN_HEADERS	:=	$(addprefix $(YK_GEN_DIR)/, \
 				yask_rank_loops.hpp \
 				yask_region_loops.hpp \
 				yask_block_loops.hpp \
+				yask_mini_block_loops.hpp \
 				yask_sub_block_loops.hpp \
 				yask_misc_loops.hpp \
 				yask_layout_macros.hpp \
@@ -438,12 +440,16 @@ endif
 # VTUNE settings.
 ifeq ($(vtune),1)
  MACROS		+=	USE_VTUNE
-ifneq ($(VTUNE_AMPLIFIER_2018_DIR),)
+ifneq ($(VTUNE_AMPLIFIER_2019_DIR),)
+ VTUNE_DIR	:=	$(VTUNE_AMPLIFIER_2019_DIR)
+else ifneq ($(VTUNE_AMPLIFIER_2018_DIR),)
  VTUNE_DIR	:=	$(VTUNE_AMPLIFIER_2018_DIR)
 else ifneq ($(VTUNE_AMPLIFIER_XE_2017_DIR),)
  VTUNE_DIR	:=	$(VTUNE_AMPLIFIER_XE_2017_DIR)
-else
+else ifneq ($(VTUNE_AMPLIFIER_XE_2016_DIR),)
  VTUNE_DIR	:=	$(VTUNE_AMPLIFIER_XE_2016_DIR)
+else
+ VTUNE_DIR	:=	/opt/intel/vtune/latest/vtune_amplifier
 endif
 YK_CXXFLAGS	+=	-I$(VTUNE_DIR)/include
 YK_LIBS		+=	$(VTUNE_DIR)/lib64/libittnotify.a
@@ -503,50 +509,59 @@ NGDIMS		:=	`awk '/NUM_GRID_DIMS/ {print $$NF}' $(YK_CODE_FILE)`
 # For best perf, this should be the unit-stride dim in the grids.
 
 # Rank loops break up the whole rank into smaller regions.  In order for
-# temporal wavefronts to operate properly, the order of spatial dimensions
-# may be changed, but the scanning paths must have strictly incrementing
-# indices. Those that do not (e.g., grouped, serpentine, square-wave) may
-# *not* be used here when using temporal wavefronts. The time loop may be
-# found in StencilEquations::run_solution().
+# temporal wavefronts to operate properly, the scanning paths must have
+# strictly incrementing indices in each dim. Those that do not (e.g.,
+# serpentine, square-wave) may *not* be used here when using temporal
+# wavefronts. The time loop may be found in
+# StencilEquations::run_solution().
 RANK_LOOP_OPTS		?=	-ndims $(NSDIMS) -inVar rank_idxs
+RANK_LOOP_OUTER_MODS	?=	grouped
 RANK_LOOP_ORDER		?=	1 .. N-1
 RANK_LOOP_CODE		?=	$(RANK_LOOP_OUTER_MODS) loop($(RANK_LOOP_ORDER)) \
 				{ $(RANK_LOOP_INNER_MODS) call(calc_region(bp)); }
 
 # Region loops break up a region using OpenMP threading into blocks.  The
 # 'omp' modifier creates an outer OpenMP loop so that each block is assigned
-# to a top-level OpenMP thread.	 The region time loops are not coded here to
-# allow for proper spatial skewing for temporal wavefronts. The time loop
-# may be found in StencilEquations::calc_region().
+# to a top-level OpenMP thread.
 REGION_LOOP_OPTS	?=	-ndims $(NSDIMS) -inVar region_idxs \
 				-ompConstruct '$(omp_par_for) schedule($(omp_region_schedule)) proc_bind(spread)'
 REGION_LOOP_OUTER_MODS	?=	grouped omp
 REGION_LOOP_ORDER	?=	1 .. N-1
 REGION_LOOP_CODE	?=	$(REGION_LOOP_OUTER_MODS) loop($(REGION_LOOP_ORDER)) { \
-				$(REGION_LOOP_INNER_MODS) call(calc_block(bp)); }
+				$(REGION_LOOP_INNER_MODS) call(calc_block(bp, phase)); }
 
-# Block loops break up a block into sub-blocks.	 The 'omp' modifier creates
-# a *nested* OpenMP loop so that each sub-block is assigned to a nested OpenMP
-# thread.  There is no time loop because threaded temporal blocking is
-# not yet supported.
-BLOCK_LOOP_OPTS		?=	-ndims $(NSDIMS) -inVar block_idxs \
-				-ompConstruct '$(omp_par_for) schedule($(omp_block_schedule)) proc_bind(close)' \
-				-callPrefix 'sg->'
-BLOCK_LOOP_OUTER_MODS	?=	grouped omp
+# Block loops break up a block into mini-blocks.
+# These are executed sequentially, so no OpenMP.
+# Like with rank loops, in order for temporal wavefronts to operate properly,
+# the scanning paths must have strictly incrementing indices. 
+BLOCK_LOOP_OPTS		?=	-ndims $(NSDIMS) -inVar adj_block_idxs
+BLOCK_LOOP_OUTER_MODS	?=	grouped
 BLOCK_LOOP_ORDER	?=	1 .. N-1
 BLOCK_LOOP_CODE		?=	$(BLOCK_LOOP_OUTER_MODS) loop($(BLOCK_LOOP_ORDER)) { \
-				$(BLOCK_LOOP_INNER_MODS) call(calc_sub_block(thread_idx)); }
+				$(BLOCK_LOOP_INNER_MODS) \
+				  call(calc_mini_block(bp, nphases, phase, nshapes, shape, \
+					dims_to_bridge, region_idxs, block_idxs)); }
 
-# Sub-block loops break up a sub-block into clusters or vectors.  These loops
-# are run by a single OMP thread.  The N-1 (inner) loop is generated by the
-# stencil compiler.  There is no time loop because threaded temporal
-# blocking is not yet supported.  The indexes in this loop are 'normalized',
-# i.e., vector units and rank-relative.
-SUB_BLOCK_LOOP_OPTS		?=	-ndims $(NSDIMS) -inVar norm_sub_block_idxs
-SUB_BLOCK_LOOP_OUTER_MODS	?=
-SUB_BLOCK_LOOP_ORDER		?=	1 .. N-2
-SUB_BLOCK_LOOP_CODE		?=	$(SUB_BLOCK_LOOP_OUTER_MODS) loop($(SUB_BLOCK_LOOP_ORDER)) { \
-					$(SUB_BLOCK_LOOP_INNER_MODS) call(calc_inner_loop(thread_idx)); }
+# Mini-Block loops break up a mini-block into sub-blocks. The 'omp' modifier creates
+# a *nested* OpenMP loop so that each sub-block is assigned to a nested OpenMP
+# thread.
+MINI_BLOCK_LOOP_OPTS	?=	-ndims $(NSDIMS) -inVar adj_mb_idxs \
+				-ompConstruct '$(omp_par_for) schedule($(omp_block_schedule)) proc_bind(close)' \
+				-callPrefix 'sg->'
+MINI_BLOCK_LOOP_OUTER_MODS ?=	grouped omp
+MINI_BLOCK_LOOP_ORDER	?=	1 .. N-1
+MINI_BLOCK_LOOP_CODE	?=	$(MINI_BLOCK_LOOP_OUTER_MODS) loop($(MINI_BLOCK_LOOP_ORDER)) { \
+				$(MINI_BLOCK_LOOP_INNER_MODS) call(calc_sub_block(thread_idx)); }
+
+# Sub-block loops break up a sub-block into clusters or vectors.  These
+# loops are run by a single OMP thread.  The N-1 (inner) loop is generated
+# by the stencil compiler, so these loops stop at N-2.  The indexes in this
+# loop are 'normalized', i.e., vector units and rank-relative.
+SUB_BLOCK_LOOP_OPTS	?=	-ndims $(NSDIMS) -inVar norm_sub_block_idxs
+SUB_BLOCK_LOOP_OUTER_MODS ?=
+SUB_BLOCK_LOOP_ORDER	?=	1 .. N-2
+SUB_BLOCK_LOOP_CODE	?=	$(SUB_BLOCK_LOOP_OUTER_MODS) loop($(SUB_BLOCK_LOOP_ORDER)) { \
+				$(SUB_BLOCK_LOOP_INNER_MODS) call(calc_inner_loop(thread_idx)); }
 
 # General-purpose parallel loop.
 # Nested OpenMP is not used here because there is no sharing between threads.
@@ -622,6 +637,10 @@ $(YK_GEN_DIR)/yask_block_loops.hpp: $(GEN_LOOPS) $(YK_CODE_FILE)
 	$(MKDIR) $(YK_GEN_DIR)
 	$(PERL) $< -output $@ $(BLOCK_LOOP_OPTS) $(EXTRA_LOOP_OPTS) $(EXTRA_BLOCK_LOOP_OPTS) "$(BLOCK_LOOP_CODE)"
 
+$(YK_GEN_DIR)/yask_mini_block_loops.hpp: $(GEN_LOOPS) $(YK_CODE_FILE)
+	$(MKDIR) $(YK_GEN_DIR)
+	$(PERL) $< -output $@ $(MINI_BLOCK_LOOP_OPTS) $(EXTRA_LOOP_OPTS) $(EXTRA_MINI_BLOCK_LOOP_OPTS) "$(MINI_BLOCK_LOOP_CODE)"
+
 $(YK_GEN_DIR)/yask_sub_block_loops.hpp: $(GEN_LOOPS) $(YK_CODE_FILE)
 	$(MKDIR) $(YK_GEN_DIR)
 	$(PERL) $< -output $@ $(SUB_BLOCK_LOOP_OPTS) $(EXTRA_LOOP_OPTS) $(EXTRA_SUB_BLOCK_LOOP_OPTS) "$(SUB_BLOCK_LOOP_CODE)"
@@ -673,6 +692,7 @@ $(YK_SWIG_OUT_DIR)/yask_kernel_api_wrap.cpp: $(YK_SWIG_DIR)/yask*.i $(INC_DIR)/*
 	$(SWIG) -version
 	$(MKDIR) $(YK_SWIG_OUT_DIR) $(PY_OUT_DIR)
 	$(SWIG) -v -DYK_MODULE=$(YK_PY_MOD_BASE) -cppext cpp \
+	  -DUSE_MPI -DMPI_VERSION=3 -DMPI_Comm=int \
 	  -I$(INC_DIR) -I$(COMM_DIR) -I$(COMM_DIR)/swig \
 	  -c++ -python -o $@ -outdir $(PY_OUT_DIR) -builtin $<
 
@@ -771,16 +791,22 @@ py-api-no-yc:
 	$(MAKE) $(NO_YC_MAKE_FLAGS) py-api
 
 # Validation runs for each binary.
-val1	:=	-dt 2 -b 16 -d 48
-val2	:=	-dt 2 -b 24 -r 32 -rt 2 -d 63
+val0	:=	-trial_steps 2 -d 48 -r 32 -b 24 -rt 0
+val1	:=	-trial_steps 2 -d 48 -r 32 -b 24 -mb 16 -rt 1
+val2	:=	-trial_steps 2 -d 63 -r 32 -b 24 -mb 16 -rt 2
+val3	:=	-trial_steps 2 -d 63 -r 48 -b 24 -mb 16 -bt 2
 ranks	:=	2
 
 # Run the kernel binary using several combos of sizes and ranks.
 yk-tests:
+	$(YK_SCRIPT) -stencil $(stencil) -arch $(arch) -v $(val0)
 	$(YK_SCRIPT) -stencil $(stencil) -arch $(arch) -v $(val1)
 	$(YK_SCRIPT) -stencil $(stencil) -arch $(arch) -v $(val2)
+	$(YK_SCRIPT) -stencil $(stencil) -arch $(arch) -v $(val3)
+	$(YK_SCRIPT) -stencil $(stencil) -arch $(arch) -ranks $(ranks) -v $(val0)
 	$(YK_SCRIPT) -stencil $(stencil) -arch $(arch) -ranks $(ranks) -v $(val1)
 	$(YK_SCRIPT) -stencil $(stencil) -arch $(arch) -ranks $(ranks) -v $(val2)
+	$(YK_SCRIPT) -stencil $(stencil) -arch $(arch) -ranks $(ranks) -v $(val3)
 
 # Run the default YASK compiler and kernel.
 yc-and-yk-test: $(YK_EXEC) $(YK_SCRIPT)
@@ -798,31 +824,34 @@ api-tests:
 	$(MAKE) clean; $(MAKE) py-yk-api-test-with-exception stencil=iso3dfd
 
 # Run several stencils using built-in validation.
-# NB: set arch var if applicable.
-# NB: save some time by using YK_CXXOPT=-O2.
+# NB: set arch var as applicable.
+# NB: save some compile time by using YK_CXXOPT=-O2.
 # These tests are focused on the kernel and not the compiler.
 # For testing both the kernel and compiler in various combinations,
 # run the tests from the top-level Makefile.
+STENCIL_TEST_ARGS	:=	yc-and-yk-test real_bytes=8 allow_new_grid_types=0
 stencil-tests:
-	$(MAKE) clean; $(MAKE) yc-and-yk-test real_bytes=8 stencil=test_1d fold=x=4
-	$(MAKE) clean; $(MAKE) yc-and-yk-test real_bytes=8 stencil=test_2d fold=x=2,y=2
-	$(MAKE) clean; $(MAKE) yc-and-yk-test real_bytes=8 stencil=test_3d fold=x=2,z=2
-	$(MAKE) clean; $(MAKE) yc-and-yk-test real_bytes=8 stencil=test_4d fold=w=2,x=2
-	$(MAKE) clean; $(MAKE) yc-and-yk-test real_bytes=8 stencil=test_subdomain_1d fold=x=4
-	$(MAKE) clean; $(MAKE) yc-and-yk-test real_bytes=8 stencil=test_subdomain_3d fold=x=2,y=2
-	$(MAKE) clean; $(MAKE) yc-and-yk-test real_bytes=8 stencil=test_scratch1 fold=x=4
-	$(MAKE) clean; $(MAKE) yc-and-yk-test real_bytes=8 stencil=test_scratch2 fold=x=2,z=2
-	$(MAKE) clean; $(MAKE) yc-and-yk-test real_bytes=8 stencil=9axis fold=x=2,z=2
-	$(MAKE) clean; $(MAKE) yc-and-yk-test real_bytes=8 stencil=3axis fold=x=2,y=2 cluster=x=2
-	$(MAKE) clean; $(MAKE) yc-and-yk-test real_bytes=8 stencil=3axis fold=x=2,y=2 cluster=z=2,y=2
-	$(MAKE) clean; $(MAKE) yc-and-yk-test real_bytes=8 stencil=3plane fold=y=2,z=2
-	$(MAKE) clean; $(MAKE) yc-and-yk-test real_bytes=8 stencil=cube fold=x=2,y=2
-	$(MAKE) clean; $(MAKE) yc-and-yk-test real_bytes=8 stencil=tti fold=x=2,y=2
-	$(MAKE) clean; $(MAKE) yc-and-yk-test real_bytes=8 stencil=iso3dfd fold=x=2,y=2
-	$(MAKE) clean; $(MAKE) yc-and-yk-test real_bytes=8 stencil=ssg fold=x=2,y=2
-	$(MAKE) clean; $(MAKE) yc-and-yk-test real_bytes=8 stencil=awp_elastic fold=x=2,y=2
-	$(MAKE) clean; $(MAKE) yc-and-yk-test real_bytes=8 stencil=fsg_abc fold=x=2,y=2
-	$(MAKE) clean; $(MAKE) yc-and-yk-test real_bytes=8 stencil=fsg2 fold=x=2,y=2
+	$(MAKE) clean; $(MAKE) $(STENCIL_TEST_ARGS) stencil=test_1d fold=x=4
+	$(MAKE) clean; $(MAKE) $(STENCIL_TEST_ARGS) stencil=test_2d fold=x=2,y=2
+	$(MAKE) clean; $(MAKE) $(STENCIL_TEST_ARGS) stencil=test_3d fold=x=2,z=2
+	$(MAKE) clean; $(MAKE) $(STENCIL_TEST_ARGS) stencil=test_4d fold=w=2,x=2
+	$(MAKE) clean; $(MAKE) $(STENCIL_TEST_ARGS) stencil=test_dep_1d fold=x=4
+	$(MAKE) clean; $(MAKE) $(STENCIL_TEST_ARGS) stencil=test_step_cond_1d fold=x=4
+	$(MAKE) clean; $(MAKE) $(STENCIL_TEST_ARGS) stencil=test_subdomain_1d fold=x=4
+	$(MAKE) clean; $(MAKE) $(STENCIL_TEST_ARGS) stencil=test_subdomain_3d fold=x=2,y=2
+	$(MAKE) clean; $(MAKE) $(STENCIL_TEST_ARGS) stencil=test_scratch1 fold=x=4
+	$(MAKE) clean; $(MAKE) $(STENCIL_TEST_ARGS) stencil=test_scratch2 fold=x=2,z=2
+	$(MAKE) clean; $(MAKE) $(STENCIL_TEST_ARGS) stencil=iso3dfd radius=3 fold=x=2,y=2
+	$(MAKE) clean; $(MAKE) $(STENCIL_TEST_ARGS) stencil=9axis fold=x=2,z=2
+	$(MAKE) clean; $(MAKE) $(STENCIL_TEST_ARGS) stencil=3axis fold=x=2,y=2 cluster=x=2
+	$(MAKE) clean; $(MAKE) $(STENCIL_TEST_ARGS) stencil=3axis fold=x=2,y=2 cluster=z=2,y=2
+	$(MAKE) clean; $(MAKE) $(STENCIL_TEST_ARGS) stencil=3plane fold=y=2,z=2
+	$(MAKE) clean; $(MAKE) $(STENCIL_TEST_ARGS) stencil=cube fold=x=2,y=2
+	$(MAKE) clean; $(MAKE) $(STENCIL_TEST_ARGS) stencil=ssg fold=x=2,y=2
+	$(MAKE) clean; $(MAKE) $(STENCIL_TEST_ARGS) stencil=awp_elastic fold=x=2,y=2
+	$(MAKE) clean; $(MAKE) $(STENCIL_TEST_ARGS) stencil=fsg_abc fold=x=2,y=2
+	$(MAKE) clean; $(MAKE) $(STENCIL_TEST_ARGS) stencil=fsg2 fold=x=2,y=2
+	$(MAKE) clean; $(MAKE) $(STENCIL_TEST_ARGS) stencil=tti fold=x=2,y=2
 
 all-tests:
 	$(MAKE) clean; $(MAKE) cxx-yk-grid-test stencil=test_3d fold=x=4,y=2
@@ -869,6 +898,12 @@ echo-settings:
 	echo EXTRA_YK_CXXFLAGS="\"$(EXTRA_YK_CXXFLAGS)\""; \
 	echo ISA=$(ISA); \
 	echo MACROS="\"$(MACROS)\""; \
+	echo MINI_BLOCK_LOOP_CODE="\"$(MINI_BLOCK_LOOP_CODE)\""; \
+	echo MINI_BLOCK_LOOP_INNER_MODS="\"$(MINI_BLOCK_LOOP_INNER_MODS)\""; \
+	echo MINI_BLOCK_LOOP_OPTS="\"$(MINI_BLOCK_LOOP_OPTS)\""; \
+	echo MINI_BLOCK_LOOP_ORDER="\"$(MINI_BLOCK_LOOP_ORDER)\""; \
+	echo MINI_BLOCK_LOOP_OUTER_MODS="\"$(MINI_BLOCK_LOOP_OUTER_MODS)\""; \
+	echo MINI_BLOCK_LOOP_OUTER_VARS="\"$(MINI_BLOCK_LOOP_OUTER_VARS)\""; \
 	echo MISC_LOOP_CODE="\"$(MISC_LOOP_CODE)\""; \
 	echo MISC_LOOP_INNER_MODS="\"$(MISC_LOOP_INNER_MODS)\""; \
 	echo MISC_LOOP_OPTS="\"$(MISC_LOOP_OPTS)\""; \

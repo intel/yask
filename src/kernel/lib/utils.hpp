@@ -151,50 +151,52 @@ namespace yask {
            long     tv_nsec;       // nanoseconds
            };
         */
-        struct timespec _begin, _end, _elapsed;
+        struct timespec _begin, _elapsed;
 
     public:
+
+        typedef struct timespec TimeSpec;
+
         YaskTimer() { clear(); }
         virtual ~YaskTimer() { }
 
         // Reset elapsed time to zero.
-        virtual void clear() {
-            _begin.tv_sec = _end.tv_sec = _elapsed.tv_sec = 0;
-            _begin.tv_nsec = _end.tv_nsec = _elapsed.tv_nsec = 0;
+        void clear() {
+            _begin.tv_sec = _elapsed.tv_sec = 0;
+            _begin.tv_nsec = _elapsed.tv_nsec = 0;
         }
 
+        // Make a timespec that can be used for mutiple calls.
+        static TimeSpec get_timespec() {
+            TimeSpec ts;
+            clock_gettime(CLOCK_REALTIME, &ts);
+            return ts;
+        }
+        
         // Start a timed region.
         // start() and stop() can be called multiple times in
         // pairs before calling get_elapsed_secs(), which
         // will return the cumulative time over all timed regions.
-        virtual void start() {
-            clock_gettime(CLOCK_REALTIME, &_begin);
-        }
+        void start(TimeSpec* ts = NULL);
 
         // End a timed region.
         // Return time since previous call to start(); this is *not*
         // generally the same as the value returned by get_elapsed_secs().
-        virtual double stop() {
-            clock_gettime(CLOCK_REALTIME, &_end);
-            struct timespec delta;
+        double stop(TimeSpec* ts = NULL);
 
-            // Elapsed time is just end - begin times.
-            delta.tv_sec = _end.tv_sec - _begin.tv_sec;
-            _elapsed.tv_sec += delta.tv_sec;
-
-            // No need to check for sign or to normalize, because tv_nsec is
-            // signed and 64-bit.
-            delta.tv_nsec = _end.tv_nsec - _begin.tv_nsec;
-            _elapsed.tv_nsec += delta.tv_nsec;
-
-            return double(delta.tv_sec) + double(delta.tv_nsec) * 1e-9;
-        }
-
-        // Get elapsed time in sec.
+        // Get elapsed time between preceding start/stop pairs.
         // Does not reset value, so it may be used for cumulative time.
-        virtual double get_elapsed_secs() const {
+        double get_elapsed_secs() const {
+
+            // Make sure timer was stopped.
+            assert(_begin.tv_sec == 0);
+            
             return double(_elapsed.tv_sec) + double(_elapsed.tv_nsec) * 1e-9;
         }
+
+        // Get elapsed time since last start.
+        // Used to check time w/o stopping timer.
+        double get_secs_since_start() const;
     };
 
     // A class to parse command-line args.

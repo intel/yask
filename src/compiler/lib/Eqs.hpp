@@ -142,12 +142,27 @@ namespace yask {
         }
 
         // Visit 'a' and all its dependencies.
-        // At each node 'b' in graph, 'visitor(b, path)' is called,
-        // where 'path' contains all nodes from 'a' thru 'b'.
+        // At each dep node 'b' in graph, 'visitor(b, path)' is called,
+        // where 'path' contains all nodes from 'a' thru 'b' in dep order.
         virtual void visitDeps(Tp a,
                                std::function<void (Tp b,
                                                    TpList& path)> visitor) const {
             _visitDeps(a, visitor, NULL);
+        }
+
+        // Print deps. 'T' must implement getDescr().
+        virtual void printDeps(ostream& os) const {
+            os << "Dependencies within " << _all.size() << " objects:\n";
+            for (auto& a : _all) {
+                os << " For " << a->getDescr() << ":\n";
+                visitDeps(a, [&](Tp b, TpList& path) {
+                        if (a == b)
+                            os << "  depends on self";
+                        else
+                            os << "  depends on " << b->getDescr();
+                        os << " w/path of length " << path.size() << endl;
+                    });
+            }
         }
 
         // Does recursive analysis to find transitive closure.
@@ -169,7 +184,6 @@ namespace yask {
     };
 
     // A set of objects that have inter-dependencies.
-    // Some depencencies may be flagged as "scratch" objects.
     // Class 'T' must implement 'clone()' that returns
     // a 'shared_ptr<T>'.
     template <typename T>
@@ -182,13 +196,14 @@ namespace yask {
 
     protected:
 
-        // Things in this group.
+        // Objs in this group.
         TpList _all;
 
-        // Dependencies between objs.
+        // Dependencies between all objs.
         Deps<T> _deps;
 
-        // Scratch objects.
+        // Dependencies from non-scratch objs to/on scratch objs.
+        // NB: just using Deps::_imm_deps as a simple map of sets.
         Deps<T> _scratches;
 
     public:
@@ -229,18 +244,18 @@ namespace yask {
             return _deps.get_deps_on(p);
         }
 
-        // Get the scratch objs.
-        virtual const Deps<T>& getScratches() const {
+        // Get the scratch deps.
+        virtual const Deps<T>& getScratchDeps() const {
             return _scratches;
         }
-        virtual Deps<T>& getScratches() {
+        virtual Deps<T>& getScratchDeps() {
             return _scratches;
         }
-        virtual const TpSet& getScratches(Tp p) const {
+        virtual const TpSet& getScratchDeps(Tp p) const {
             return _scratches.get_deps_on(p);
         }
 
-        // Find indirect dependencies.
+        // Find indirect dependencies based on direct deps.
         virtual void find_all_deps() {
             _deps.find_all_deps();
             _scratches.find_all_deps();
@@ -305,7 +320,7 @@ namespace yask {
 
             // Deps between Tf objs.
             auto& fdeps = full.getDeps();
-            auto& fscrs = full.getScratches();
+            auto& fscrs = full.getScratchDeps();
 
             // All T objs in this.
             for (auto& oi : _all) {
@@ -334,7 +349,6 @@ namespace yask {
             }
             find_all_deps();
         }
-
     };
 
     // A list of unique equation ptrs.
@@ -365,6 +379,9 @@ namespace yask {
 
         // Update grid access stats.
         virtual void updateGridStats();
+
+        // Find scratch-grid eqs needed for each non-scratch eq.
+        virtual void analyzeScratch();
     };
 
     // A collection that holds various independent eqs.
@@ -422,7 +439,7 @@ namespace yask {
     };
 
     // A named equation bundle, which contains one or more grid-update
-    // equations.  All equations in a bundle must have the same condition.
+    // equations.  All equations in a bundle must have the same conditions.
     // Equations in a bundle must not have inter-dependencies because they
     // will be combined into a single expression.
     class EqBundle : public EqLot {
@@ -433,8 +450,9 @@ namespace yask {
 
         // TODO: move these into protected section and make accessors.
 
-        // Common condition.
+        // Common conditions.
         BoolExprPtr cond;
+        BoolExprPtr step_cond;
 
         // Common step expr.
         NumExprPtr step_expr;
@@ -481,6 +499,16 @@ namespace yask {
             return false;
         }
 
+        // Visit the step condition.
+        // Return true if there was one to visit.
+        virtual bool visitStepCond(ExprVisitor* ev) {
+            if (step_cond.get()) {
+                step_cond->accept(ev);
+                return true;
+            }
+            return false;
+        }
+
         // Replicate each equation at the non-zero offsets for
         // each vector in a cluster.
         virtual void replicateEqsInCluster(Dimensions& dims);
@@ -509,7 +537,8 @@ namespace yask {
         // Returns whether a new bundle was created.
         virtual bool addEqToBundle(Eqs& eqs,
                                    EqualsExprPtr eq,
-                                   const string& baseName);
+                                   const string& baseName,
+                                   const CompilerSettings& settings);
 
     public:
         EqBundles() {}
@@ -533,8 +562,7 @@ namespace yask {
         // all eqs updating grid names containing 'bar' go in eqBundle2, and
         // each remaining eq goes into a separate eqBundle.
         void makeEqBundles(Eqs& eqs,
-                           const string& gridRegex,
-                           const string& targets,
+                           const CompilerSettings& settings,
                            std::ostream& os);
 
         virtual const Grids& getOutputGrids() const {
@@ -558,10 +586,13 @@ namespace yask {
         virtual void printStats(ostream& os, const string& msg);
 
         // Apply optimizations requested in settings.
-        void optimizeEqBundles(CompilerSettings& settings,
-                              const string& descr,
-                              bool printSets,
-                              ostream& os);
+        virtual void optimizeEqBundles(CompilerSettings& settings,
+                                       const string& descr,
+                                       bool printSets,
+                                       ostream& os);
+
+        // Adjust scratch-grid halos as needed.
+        virtual void adjustScratchHalos();
     };
 
     typedef shared_ptr<EqBundle> EqBundlePtr;
@@ -570,7 +601,8 @@ namespace yask {
     typedef vector_set<EqBundlePtr> EqBundleList;
 
     // A named equation bundle pack, which contains one or more equation
-    // bundles.  All equations in a pack do not need to have the same condition.
+    // bundles.  All equations in a pack do not need to have the same
+    // domain condition, but they must have the same step condition.
     // Equations in a pack must not have inter-dependencies because they
     // may be run in parallel or in any order on any sub-domain.
     class EqBundlePack : public EqLot {
@@ -578,6 +610,9 @@ namespace yask {
         EqBundleList _bundles;  // bundles in this pack.
 
     public:
+
+        // Common condition.
+        BoolExprPtr step_cond;
 
         // Ctor.
         EqBundlePack(bool is_scratch) :
@@ -611,6 +646,16 @@ namespace yask {
         }
         virtual const EqBundleList& getItems() const {
             return _bundles;
+        }
+
+        // Visit the step condition.
+        // Return true if there was one to visit.
+        virtual bool visitStepCond(ExprVisitor* ev) {
+            if (step_cond.get()) {
+                step_cond->accept(ev);
+                return true;
+            }
+            return false;
         }
 
     };

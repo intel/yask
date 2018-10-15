@@ -116,6 +116,15 @@ namespace yask {
         assert(rp);
         return make_shared<DivExpr>(lp, rp);
     }
+    yc_number_node_ptr
+    yc_node_factory::new_mod_node(yc_number_node_ptr lhs,
+                                  yc_number_node_ptr rhs) {
+        auto lp = dynamic_pointer_cast<NumExpr>(lhs);
+        assert(lp);
+        auto rp = dynamic_pointer_cast<NumExpr>(rhs);
+        assert(rp);
+        return make_shared<ModExpr>(lp, rp);
+    }
     yc_bool_node_ptr
     yc_node_factory::new_not_node(yc_bool_node_ptr rhs) {
         auto p = dynamic_pointer_cast<BoolExpr>(rhs);
@@ -238,6 +247,19 @@ namespace yask {
     }
     yc_number_node_ptr operator/(yc_number_node_ptr lhs, double rhs) {
         return operator/(lhs, constNum(rhs));
+    }
+    yc_number_node_ptr operator%(yc_number_node_ptr lhs, yc_number_node_ptr rhs) {
+        auto lp = dynamic_pointer_cast<NumExpr>(lhs);
+        assert(lp);
+        auto rp = dynamic_pointer_cast<NumExpr>(rhs);
+        assert(rp);
+        return make_shared<ModExpr>(lp, rp);
+    }
+    yc_number_node_ptr operator%(double lhs, yc_number_node_ptr rhs) {
+        return operator%(constNum(lhs), rhs);
+    }
+    yc_number_node_ptr operator%(yc_number_node_ptr lhs, double rhs) {
+        return operator%(lhs, constNum(rhs));
     }
     yc_number_node_ptr operator*(yc_number_node_ptr lhs, yc_number_node_ptr rhs) {
         auto lp = dynamic_pointer_cast<NumExpr>(lhs);
@@ -421,7 +443,6 @@ namespace yask {
         lhs = lhs - rhs;
     }
 
-    // TODO: truncate (or round?) division results for indices.
     NumExprPtr operator/(const NumExprPtr lhs, const NumExprPtr rhs) {
         return make_shared<DivExpr>(lhs, rhs);
     }
@@ -441,13 +462,31 @@ namespace yask {
         lhs = lhs / rhs;
     }
 
+    NumExprPtr operator%(const NumExprPtr lhs, const NumExprPtr rhs) {
+        return make_shared<ModExpr>(lhs, rhs);
+    }
+    NumExprPtr operator%(double lhs, const NumExprPtr rhs) {
+        NumExprPtr p = make_shared<ConstExpr>(lhs);
+        return p % rhs;
+    }
+    NumExprPtr operator%(const NumExprPtr lhs, double rhs) {
+        NumExprPtr p = make_shared<ConstExpr>(rhs);
+        return lhs % p;
+    }
+
     // Define a conditional.
     EqualsExprPtr operator IF_OPER(EqualsExprPtr expr, const BoolExprPtr cond) {
 
         // Add cond to expr.
         assert(expr);
         expr->setCond(cond);
+        return expr;
+    }
+    EqualsExprPtr operator IF_STEP_OPER(EqualsExprPtr expr, const BoolExprPtr step_cond) {
 
+        // Add cond to expr.
+        assert(expr);
+        expr->setStepCond(step_cond);
         return expr;
     }
 
@@ -477,9 +516,14 @@ namespace yask {
         auto* soln = gp->getSoln();
         assert(soln);
         auto& eqs = soln->getEqs();
+        auto& settings = soln->getSettings();
 
         // Make expression node.
+        // Conditions may be added later if/when the IF or IF_STEP
+        // operators are processed.
         auto expr = make_shared<EqualsExpr>(gpp, rhs);
+        if (settings._printEqs)
+            soln->get_ostr() << "Equation defined: " << expr->getDescr() << endl;
 
         // Save the expression in list of equations.
         eqs.addItem(expr);
@@ -837,6 +881,9 @@ namespace yask {
     bool DivExpr::isOffsetFrom(string dim, int& offset) {
 
         // Could allow 'dim / 1', but seems silly.
+        return false;
+    }
+    bool ModExpr::isOffsetFrom(string dim, int& offset) {
         return false;
     }
     bool MultExpr::isOffsetFrom(string dim, int& offset) {

@@ -166,6 +166,7 @@ namespace yask {
             //auto& ig1 = inGrids.at(eq1p);
             auto& ip1 = inPts.at(eq1p);
             auto cond1 = eq1p->getCond();
+            auto stcond1 = eq1p->getStepCond();
             NumExprPtr step_expr1 = op1->getArg(stepDim); // may be null.
 
 #ifdef DEBUG_DEP
@@ -176,7 +177,10 @@ namespace yask {
             // Scratch grid must not have a condition.
             if (cond1 && og1->isScratch())
                 THROW_YASK_EXCEPTION("Error: scratch-grid equation '" + eq1->makeQuotedStr() +
-                                     "' cannot have a condition");
+                                     "' cannot have a domain condition");
+            if (stcond1 && og1->isScratch())
+                THROW_YASK_EXCEPTION("Error: scratch-grid equation '" + eq1->makeQuotedStr() +
+                                     "' cannot have a step condition");
 
             // Check LHS grid dimensions and associated args.
             for (int di = 0; di < og1->get_num_dims(); di++) {
@@ -280,7 +284,8 @@ namespace yask {
             // TODO: check that domain indices are simple offsets and
             // misc indices are consts on RHS.
 
-            // TODO: check to make sure cond1 depends only on indices.
+            // TODO: check to make sure cond1 depends only on domain indices.
+            // TODO: check to make sure stcond1 depends only on step index.
         } // for all eqs.
 
         // 2. Check each pair of eqs.
@@ -295,6 +300,7 @@ namespace yask {
             //auto& ig1 = inGrids.at(eq1p);
             //auto& ip1 = inPts.at(eq1p);
             auto cond1 = eq1p->getCond();
+            auto stcond1 = eq1p->getStepCond();
             NumExprPtr step_expr1 = op1->getArg(stepDim);
 
             // Check each 'eq2' to see if it depends on 'eq1'.
@@ -306,6 +312,7 @@ namespace yask {
                 auto& ig2 = inGrids.at(eq2p);
                 auto& ip2 = inPts.at(eq2p);
                 auto cond2 = eq2p->getCond();
+                auto stcond2 = eq2p->getStepCond();
 
 #ifdef DEBUG_DEP
                 cout << " Checking eq " <<
@@ -314,19 +321,23 @@ namespace yask {
 #endif
 
                 bool same_eq = eq1 == eq2;
+                bool same_op = areExprsSame(op1, op2);
                 bool same_cond = areExprsSame(cond1, cond2);
+                bool same_stcond = areExprsSame(stcond1, stcond2);
 
                 // A separate grid is defined by its name and any const indices.
-                bool same_og = op1->isSameLogicalGrid(*op2);
+                //bool same_og = op1->isSameLogicalGrid(*op2);
 
-                // If two different eqs have the same condition, they
-                // cannot update the same grid.
-                if (!same_eq && same_cond && same_og) {
-                    string cdesc = cond1 ? "with condition " + cond1->makeQuotedStr() :
-                        "without conditions";
+                // If two different eqs have the same conditions, they
+                // cannot have the same LHS.
+                if (!same_eq && same_cond && same_stcond && same_op) {
+                    string cdesc = cond1 ? "with domain condition " + cond1->makeQuotedStr() :
+                        "without domain conditions";
+                    string stcdesc = stcond1 ? "with step condition " + stcond1->makeQuotedStr() :
+                        "without step conditions";
                     THROW_YASK_EXCEPTION("Error: two equations " + cdesc +
-                                         " have the same LHS grid '" +
-                                         op1->makeLogicalGridStr() + "': " +
+                                         " and " + stcdesc +
+                                         " have the same LHS: " +
                                          eq1->makeQuotedStr() + " and " +
                                          eq2->makeQuotedStr());
                 }
@@ -342,7 +353,7 @@ namespace yask {
                 // Example:
                 //  eq1: a(t+1, x, ...) EQUALS ...
                 //  eq2: b(t+1, x, ...) EQUALS a(t+1, x, ...) ...
-                if (same_cond && ip2.count(op1)) {
+                if (same_cond && same_stcond && ip2.count(op1)) {
 
                     // Eq depends on itself?
                     if (same_eq) {
@@ -440,14 +451,27 @@ namespace yask {
         if (!dims._stepDir)
             dims._stepDir = 1;
 
+#ifdef DEBUG_DEP
+        cout << "Dependencies for all eqs:\n";
+        _deps.printDeps(cout);
+#endif
+
+        // Find scratch children.
+        analyzeScratch();
+
+#ifdef DEBUG_DEP
+        cout << "Dependencies from non-scratch to scratch eqs:\n";
+        _scratches.printDeps(cout);
+#endif
+
         // Resolve indirect dependencies.
         // Do this even if not finding deps because we want to
-        // resolve deps provided by the user.
-        os << "Finding transitive closure...\n";
+        // process deps provided by the user.
+        os << "Finding transitive closure of dependencies...\n";
         find_all_deps();
 
         // Sort.
-        os << "Topologically ordering...\n";
+        os << "Topologically ordering equations...\n";
         topo_sort();
     }
 
@@ -586,7 +610,6 @@ namespace yask {
     }
 
     // Update access stats for the grids, i.e., halos and const indices.
-    // Also finds scratch-grid eqs needed for each non-scratch eq.
     void Eqs::updateGridStats() {
 
         // Find all LHS and RHS points and grids for all eqs.
@@ -594,115 +617,110 @@ namespace yask {
         visitEqs(&pv);
 
         // Analyze each eq.
-        for (auto& eq1 : getAll()) {
+        for (auto& eq : getAll()) {
 
             // Get sets of points for this eq.
-            auto* outPt1 = pv.getOutputPts().at(eq1.get());
-            auto& inPts1 = pv.getInputPts().at(eq1.get());
-            auto* og1 = pv.getOutputGrids().at(eq1.get());
+            auto* outPt1 = pv.getOutputPts().at(eq.get());
+            auto& inPts1 = pv.getInputPts().at(eq.get());
 
-            // Union of input and output points.
+            // Union of all input and output points for 'eq'.
             auto allPts1 = inPts1;
             allPts1.insert(outPt1);
 
-            // Update stats based on explicit accesses as
-            // written in original 'eq1'.
+            // Update stats of each grid accessed in 'eq'.
             for (auto ap : allPts1) {
-                auto* g = ap->getGrid(); // grid written to.
+                auto* g = ap->getGrid(); // grid for point 'ap'.
                 g->updateHalo(ap->getArgOffsets());
                 g->updateConstIndices(ap->getArgConsts());
-            }
-
-            // We want to start with each non-scratch eq and walk the dep
-            // tree to find all dependent scratch eqs.  If 'eq1' has a
-            // non-scratch output, visit all dependencies of 'eq1'.  It's
-            // important to visit the eqs in dep order via 'path' to
-            // properly propagate halos sizes thru chains of scratch grids.
-            // TODO: clean up this obfuscated, hard-to-follow, and fragile
-            // code.
-            if (!og1->isScratch()) {
-                getDeps().visitDeps
-
-                    // For each 'b', 'eq1' is 'b' or depends on 'b',
-                    // immediately or indirectly.
-                    (eq1, [&](EqualsExprPtr b, EqList& path) {
-
-                        // Does 'b' have a scratch-grid output?
-                        // NB: scratch eqs don't have their own conditions, so
-                        // we don't need to check them.
-                        auto* og2 = pv.getOutputGrids().at(b.get());
-                        if (og2->isScratch()) {
-
-                            // Get halos from the output scratch grid.
-                            // These are the points that are read from the
-                            // dependent eq(s).  For scratch grids, the halo
-                            // areas must also be written to.
-                            auto left_ohalo = og2->getHaloSizes(true);
-                            auto right_ohalo = og2->getHaloSizes(false);
-
-                            // Expand halos of all input grids of 'b' by
-                            // size of output-grid halo.
-                            auto& inPts2 = pv.getInputPts().at(b.get());
-                            for (auto ip2 : inPts2) {
-                                auto* ig2 = ip2->getGrid();
-                                auto& ao2 = ip2->getArgOffsets();
-
-                                // Increase range by subtracing left halos and
-                                // adding right halos.
-                                auto left_ihalo = ao2.subElements(left_ohalo, false);
-                                ig2->updateHalo(left_ihalo);
-                                auto right_ihalo = ao2.addElements(right_ohalo, false);
-                                ig2->updateHalo(right_ihalo);
-                            }
-                        }
-
-                        // Find scratch-grid eqs in this dep path that are
-                        // needed for 'eq1'. Walk dep path from 'eq1' to 'b'.
-                        EqualsExprPtr prev;
-                        unordered_set<Grid*> scratches_seen;
-                        for (auto eq2 : path) {
-                            auto* og2 = pv.getOutputGrids().at(eq2.get());
-
-                            // Look for scratch-grid dep from 'prev' to 'eq2'.
-                            if (prev) {
-
-                                // Find any scratch-grid inputs of 'prev'.
-                                set<Grid*> targets;
-                                auto& inPts2 = pv.getInputPts().at(prev.get());
-                                for (auto ip2 : inPts2) {
-                                    auto* ig2 = ip2->getGrid();
-                                    if (ig2->isScratch())
-                                        targets.insert(ig2);
-                                }
-
-                                // If there are none, we are done.
-                                if (targets.empty())
-                                    break;
-
-                                // If 'eq2' output-grid is one of the
-                                // scratch-grid targets, add it to the set
-                                // needed for 'eq1'.
-                                if (targets.count(og2))
-                                    getScratches().set_imm_dep_on(eq1, eq2);
-                                else
-                                    break;
-                            }
-                            prev = eq2;
-
-                            // Check for illegal scratch path.
-                            if (og2->isScratch()) {
-                                if (scratches_seen.count(og2))
-                                    THROW_YASK_EXCEPTION("Error: scratch-grid '" +
-                                                         og2->get_name() + "' depends upon itself");
-                                scratches_seen.insert(og2);
-                            }
-                        }
-
-                    });
             }
         }
     }
 
+    // Find scratch-grid eqs needed for each non-scratch eq.  These will
+    // eventually be gathered into bundles and saved as the "scratch
+    // children" for each non-scratch bundles.
+    void Eqs::analyzeScratch() {
+
+        // Example:
+        // eq1: scr(x) EQUALS u(t,x+1);
+        // eq2: u(t+1,x) EQUALS scr(x+2);
+        // Direct deps: eq2 -> eq1(s).
+        // eq1 is scratch child of eq2.
+
+        // Example:
+        // eq1: scr1(x) EQUALS u(t,x+1);
+        // eq2: scr2(x) EQUALS scr1(x+2);
+        // eq3: u(t+1,x) EQUALS scr2(x+4);
+        // Direct deps: eq3 -> eq2(s) -> eq1(s).
+        // eq1 and eq2 are scratch children of eq3.
+        
+        // Find all LHS and RHS points and grids for all eqs.
+        PointVisitor pv;
+        visitEqs(&pv);
+
+        // Analyze each eq.
+        for (auto& eq1 : getAll()) {
+
+            // Output grid for this eq.
+            auto* og1 = pv.getOutputGrids().at(eq1.get());
+
+            // Only need to look at dep paths starting from non-scratch eqs.
+            if (og1->isScratch())
+                continue;
+
+            // We start with each non-scratch eq and walk the dep tree to
+            // find all dependent scratch eqs.  It's important to
+            // then visit the eqs in dep order using 'path' to get only
+            // unbroken chains of scratch grids.
+            // Note that sub-paths may be visited more than once, e.g.,
+            // 'eq3 -> eq2(s)' and 'eq3 -> eq2(s) -> eq1(s)' are 2 paths from
+            // the second example above, but this shouldn't cause any issues,
+            // just some redundant work.
+            getDeps().visitDeps
+
+                // For each 'b', 'eq1' is 'b' or depends on 'b',
+                // immediately or indirectly; 'path' leads from
+                // 'eq1' to 'b'.
+                (eq1, [&](EqualsExprPtr b, EqList& path) {
+                    //auto* ogb = pv.getOutputGrids().at(b.get());
+
+                    // Find scratch-grid eqs in this dep path that are
+                    // needed for 'eq1'. Walk dep path from 'eq1' to 'b'
+                    // until a non-scratch grid is found.
+                    unordered_set<Grid*> scratches_seen;
+                    for (auto eq2 : path) {
+
+                        // Don't process 'eq1', the initial non-scratch eq.
+                        if (eq2 == eq1)
+                            continue;
+                        
+                        // If this isn't a scratch eq, we are done
+                        // w/this path because we only want the eqs
+                        // from 'eq1' through an *unbroken* chain of
+                        // scratch grids.
+                        auto* og2 = pv.getOutputGrids().at(eq2.get());
+                        if (!og2->isScratch())
+                            break;
+
+                        // Add 'eq2' to the set needed for 'eq1'.
+                        // NB: scratch-deps are used as a map of sets.
+                        getScratchDeps().set_imm_dep_on(eq1, eq2);
+
+                        // Check for illegal scratch path.
+                        // TODO: this is only illegal because the scratch
+                        // write area is stored in the grid, so >1 write
+                        // areas can't be shared. Need to store the write
+                        // areas somewhere else, maybe in the equation or
+                        // bundle. Would require changes to kernel as well.
+                        if (scratches_seen.count(og2))
+                            THROW_YASK_EXCEPTION("Error: scratch-grid '" +
+                                                 og2->get_name() + "' depends upon itself");
+                        scratches_seen.insert(og2);
+                    }
+
+                });
+        }
+    }
 
     // Get the full name of an eq-lot.
     // Must be unique.
@@ -724,9 +742,13 @@ namespace yask {
         des += "equation-bundle " + quote + getName() + quote;
         if (!isScratch() && show_cond) {
             if (cond.get())
-                des += " w/condition " + cond->makeQuotedStr(quote);
+                des += " w/domain condition " + cond->makeQuotedStr(quote);
             else
-                des += " w/o condition";
+                des += " w/o domain condition";
+            if (step_cond.get())
+                des += " w/step condition " + step_cond->makeQuotedStr(quote);
+            else
+                des += " w/o step condition";
         }
         return des;
     }
@@ -839,7 +861,8 @@ namespace yask {
     // bundle was created.
     bool EqBundles::addEqToBundle(Eqs& allEqs,
                                   EqualsExprPtr eq,
-                                  const string& baseName) {
+                                  const string& baseName,
+                                  const CompilerSettings& settings) {
         assert(_dims);
         auto& stepDim = _dims->_stepDim;
         
@@ -847,8 +870,9 @@ namespace yask {
         if (_eqs_in_bundles.count(eq))
             return false;
 
-        // Get condition, if any.
+        // Get conditions, if any.
         auto cond = eq->getCond();
+        auto stcond = eq->getStepCond();
 
         // Get step expr, if any.
         auto step_expr = eq->getLhs()->getArg(stepDim);
@@ -859,6 +883,7 @@ namespace yask {
         // Loop through existing bundles, looking for one that
         // 'eq' can be added to.
         EqBundle* target = 0;
+        auto eqg = eq->getGrid();
         for (auto& eg : getAll()) {
 
             // Must be same scratch-ness.
@@ -872,6 +897,8 @@ namespace yask {
             // Conditions must match (both may be null).
             if (!areExprsSame(eg->cond, cond))
                 continue;
+            if (!areExprsSame(eg->step_cond, stcond))
+                continue;
 
             // LHS step exprs must match (both may be null).
             if (!areExprsSame(eg->step_expr, step_expr))
@@ -881,15 +908,17 @@ namespace yask {
             // adding 'eq' to 'eg'.
             bool is_ok = true;
             for (auto& eq2 : eg->getEqs()) {
-                auto eqg = eq->getGrid();
                 auto eq2g = eq2->getGrid();
                 assert (eqg);
                 assert (eq2g);
 
                 // If scratch, 'eq' and 'eq2' must have same halo.
                 // This is because scratch halos are written to.
+                // If dims are same, halos can be adjusted if allowed.
                 if (eq->isScratch()) {
-                    if (!eq2g->isHaloSame(*eqg))
+                    if (!eq2g->areDimsSame(*eqg))
+                        is_ok = false;
+                    else if (!settings._bundleScratch && !eq2g->isHaloSame(*eqg))
                         is_ok = false;
                 }
 
@@ -924,6 +953,7 @@ namespace yask {
             target->baseName = baseName;
             target->index = _indices[baseName]++;
             target->cond = cond;
+            target->step_cond = stcond;
             target->step_expr = step_expr;
             newBundle = true;
 
@@ -947,12 +977,212 @@ namespace yask {
         return newBundle;
     }
 
+    // Adjust scratch-grid halos as needed.
+    void EqBundles::adjustScratchHalos() {
+
+        // Example:
+        // eq1: scr(x) EQUALS u(t,x+1); <-- orig halo of u = 1.
+        // eq2: u(t+1,x) EQUALS scr(x+2); <-- orig halo of scr = 2.
+        // Direct deps: eq2 -> eq1(s).
+        // Halo of u must be increased to 1 + 2 = 3 due to
+        // eq1: u(t,x+1) on rhs and orig halo of scr on lhs.
+
+        // Example:
+        // eq1: scr1(x) EQUALS u(t,x+1); <-- orig halo of u = 1.
+        // eq2: scr2(x) EQUALS scr1(x+2); <-- orig halo of scr1 = 2.
+        // eq3: u(t+1,x) EQUALS scr2(x+4); <-- orig halo of scr2 = 4.
+        // Direct deps: eq3 -> eq2(s) -> eq1(s).
+        // Halo of scr1 must be increased to 2 + 4 = 6 due to
+        // eq2: scr1(x+2) on rhs and orig halo of scr2 on lhs.
+        // Then, halo of u must be increased to 1 + 6 = 7 due to
+        // eq1: u(t,x+1) on rhs and new halo of scr1 on lhs.
+
+        // Example:
+        // eq1: scr1(x) EQUALS u(t,x+1); <-|
+        // eq2: scr2(x) EQUALS u(t,x+2); <-- orig halo of u = max(1,2) = 2.
+        // eq3: u(t+1,x) EQUALS scr1(x+3) + scr2(x+4);
+        // eq1 and eq2 are bundled => scr1 and scr2 halos are max(3,4) = 4.
+        // Direct deps: eq3 -> eq1(s), eq3 -> eq2(s).
+        
+        // Keep a list of maps of shadow grids.
+        // Each map: key=real-grid ptr, val=shadow-grid ptr.
+        // These shadow grids will be used to track
+        // updated halos for each path.
+        // We don't want to update the real halos until
+        // we've walked all the paths using the original
+        // halos.
+        // At the end, the real grids will be updated
+        // from the shadows.
+        vector< map<Grid*, Grid*>> shadows;
+
+        // Find all LHS and RHS points and grids for all eqs.
+        PointVisitor pv;
+        visitEqs(&pv);
+
+#ifdef DEBUG_SCRATCH
+        cout << "* uSH: analyzing " << getAll().size() << " eqs...\n";
+#endif
+        
+        // Bundles.
+        for (auto& b1 : getAll()) {
+
+            // Only need to look at dep paths starting from non-scratch bundles.
+            if (b1->isScratch())
+                continue;
+
+            // We start with each non-scratch bundle and walk the dep
+            // tree to find all dependent scratch bundles.  It's
+            // important to then visit them in dep order using 'path' to
+            // get only unbroken chains of scratch bundles.
+#ifdef DEBUG_SCRATCH
+            cout << "* uSH: visiting deps of " << b1->getDescr() << endl;
+#endif
+            getDeps().visitDeps
+                
+                // For each 'bn', 'b1' is 'bn' or depends on 'bn',
+                // immediately or indirectly; 'path' leads from
+                // 'b1' to 'bn'.
+                (b1, [&](Tp bn, TpList& path) {
+
+                    // Create a new empty map of shadow grids for this path.
+                    shadows.resize(shadows.size() + 1);
+                    auto& shadow_map = shadows.back();
+
+                    // Walk path from 'b1', stopping at end of scratch
+                    // chain.
+                    for (auto b2 : path) {
+
+                        // Don't process 'b1', the initial non-scratch bundle.
+                        if (b2 == b1)
+                            continue;
+                        
+                        // If this isn't a scratch bundle, we are done
+                        // w/this path because we only want the bundles
+                        // from 'b1' through an *unbroken* chain of
+                        // scratch bundles.
+                        if (!b2->isScratch())
+                            break;
+
+                        // Make shadow copies of all grids touched by 'eq2'.
+                        // All changes will be applied to these shadow grids
+                        // for the current 'path'.
+                        for (auto& eq : b2->getEqs()) {
+
+                            // Output grid.
+                            auto* og = pv.getOutputGrids().at(eq.get());
+                            if (shadow_map.count(og) == 0)
+                                shadow_map[og] = new Grid(*og);
+
+                            // Input grids.
+                            auto& inPts = pv.getInputPts().at(eq.get());
+                            for (auto* ip : inPts) {
+                                auto* ig = ip->getGrid();
+                                if (shadow_map.count(ig) == 0)
+                                    shadow_map[ig] = new Grid(*ig);
+                            }
+                        }
+                        
+                        // For each scratch bundle, set the size of all its
+                        // output grids' halos to the max across its
+                        // halos. We need to do this because halos are
+                        // written in a scratch grid.  Since they are
+                        // bundled, all the writes must be over the same
+                        // area.
+
+                        // First, set first eq halo the max of all.
+                        auto& eq1 = b2->getEqs().front();
+                        auto* og1 = shadow_map[eq1->getGrid()];
+                        for (auto& eq2 : b2->getEqs()) {
+                            if (eq1 == eq2)
+                                continue;
+
+                            // Adjust g1 to max(g1, g2).
+                            auto* og2 = shadow_map[eq2->getGrid()];
+                            og1->updateHalo(*og2);
+                        }
+
+                        // Then, update all others based on first.
+                        for (auto& eq2 : b2->getEqs()) {
+                            if (eq1 == eq2)
+                                continue;
+
+                            // Adjust g2 to g1.
+                            auto* og2 = shadow_map[eq2->getGrid()];
+                            og2->updateHalo(*og1);
+                        }
+
+                        // Get updated halos from the scratch bundle.  These
+                        // are the points that are read from the dependent
+                        // eq(s).  For scratch grids, the halo areas must
+                        // also be written to.
+                        auto left_ohalo = og1->getHaloSizes(true);
+                        auto right_ohalo = og1->getHaloSizes(false);
+
+#ifdef DEBUG_SCRATCH
+                        cout << "** uSH: processing " << b2->getDescr() << "...\n" 
+                            "*** uSH: LHS halos: " << left_ohalo.makeDimValStr() <<
+                            " & " << right_ohalo.makeDimValStr() << endl;
+#endif
+                        
+                        // Recalc min halos of all input grids of all
+                        // scratch eqs in this bundle by adding size of
+                        // output-grid halos.
+                        for (auto& eq : b2->getEqs()) {
+                            auto& inPts = pv.getInputPts().at(eq.get());
+
+                            // Input points.
+                            for (auto ip : inPts) {
+                                auto* ig = shadow_map[ip->getGrid()];
+                                auto& ao = ip->getArgOffsets(); // e.g., '2' for 'x+2'.
+
+                                // Increase range by subtracting left halos and
+                                // adding right halos.
+                                auto left_ihalo = ao.subElements(left_ohalo, false);
+                                ig->updateHalo(left_ihalo);
+                                auto right_ihalo = ao.addElements(right_ohalo, false);
+                                ig->updateHalo(right_ihalo);
+#ifdef DEBUG_SCRATCH
+                                cout << "*** uSH: updated min halos of '" << ig->get_name() << "' to " <<
+                                    left_ihalo.makeDimValStr() <<
+                                    " & " << right_ihalo.makeDimValStr() << endl;
+#endif
+                            } // input pts.
+                        } // eqs in bundle.
+                    } // path.
+                }); // lambda fn.
+        } // bundles.
+
+        // Apply the changes from the shadow grids.
+        // This will result in the grids containing the max
+        // of the shadow halos.
+        for (auto& shadow_map : shadows) {
+#ifdef DEBUG_SCRATCH
+            cout << "* uSH: applying changes from a shadow map...\n";
+#endif
+            for (auto& si : shadow_map) {
+                auto* orig_gp = si.first;
+                auto* shadow_gp = si.second;
+                assert(orig_gp);
+                assert(shadow_gp);
+
+                // Update the original.
+                orig_gp->updateHalo(*shadow_gp);
+#ifdef DEBUG_SCRATCH
+                cout << "** uSH: updated '" << orig_gp->get_name() << "'.\n";
+#endif
+
+                // Release the shadow grid.
+                delete shadow_gp;
+                shadow_map.at(orig_gp) = NULL;
+            }
+        }
+    }
+
     // Divide all equations into eqBundles.
     // Only process updates to grids in 'gridRegex'.
     // 'targets': string provided by user to specify bundleing.
     void EqBundles::makeEqBundles(Eqs& allEqs,
-                                  const string& gridRegex,
-                                  const string& targets,
+                                  const CompilerSettings& settings,
                                   ostream& os)
     {
         os << "\nPartitioning " << allEqs.getNum() << " equation(s) into bundles...\n";
@@ -963,18 +1193,19 @@ namespace yask {
             if (eq->isScratch()) {
 
                 // Add equation.
-                addEqToBundle(allEqs, eq, _basename_default);
+                addEqToBundle(allEqs, eq, _basename_default, settings);
             }
         }
 
         // Make a regex for the allowed grids.
-        regex gridx(gridRegex);
+        regex gridx(settings._gridRegex);
 
         // Handle each key-value pair in 'targets' string.
         // Key is eq-bundle name (with possible format strings); value is regex pattern.
         ArgParser ap;
         ap.parseKeyValuePairs
-            (targets, [&](const string& egfmt, const string& pattern) {
+            (settings._eqBundleTargets,
+             [&](const string& egfmt, const string& pattern) {
 
                 // Make a regex for the pattern.
                 regex patx(pattern);
@@ -999,8 +1230,8 @@ namespace yask {
                     // Substitute special tokens with match.
                     string egname = mr.format(egfmt);
 
-                    // Add equation.
-                    addEqToBundle(allEqs, eq, egname);
+                    // Add equation if allowed.
+                    addEqToBundle(allEqs, eq, egname, settings);
                 }
             });
 
@@ -1017,15 +1248,18 @@ namespace yask {
                 continue;
 
             // Add equation.
-            addEqToBundle(allEqs, eq, _basename_default);
+            addEqToBundle(allEqs, eq, _basename_default, settings);
         }
 
-        os << "Finding transitive closure...\n";
+        os << "Collapsing dependencies from equations and finding transitive closure...\n";
         inherit_deps_from(allEqs);
 
-        os << "Topologically ordering...\n";
+        os << "Topologically ordering bundles...\n";
         topo_sort();
 
+        os << "Adjusting scratch halos...\n";
+        adjustScratchHalos();
+        
         // Dump info.
         os << "Created " << getNum() << " equation bundle(s):\n";
         for (auto& eg1 : _all) {
@@ -1106,6 +1340,12 @@ namespace yask {
         if (isScratch())
             des += "scratch ";
         des += "equation bundle-pack " + quote + getName() + quote;
+        if (!isScratch()) {
+            if (step_cond.get())
+                des += " w/step condition " + step_cond->makeQuotedStr(quote);
+            else
+                des += " w/o step condition";
+        }
         return des;
     }
 
@@ -1135,6 +1375,9 @@ namespace yask {
         if (_bundles_in_packs.count(bp))
             return false;
 
+        // Get condition, if any.
+        auto stcond = bp->step_cond;
+        
         // Get deps between bundles.
         auto& deps = allBundles.getDeps();
 
@@ -1145,6 +1388,10 @@ namespace yask {
 
             // Must be same scratch-ness.
             if (ep->isScratch() != bp->isScratch())
+                continue;
+
+            // Step conditions must match (both may be null).
+            if (!areExprsSame(ep->step_cond, stcond))
                 continue;
 
             // Look for any dependencies that would prevent adding
@@ -1174,6 +1421,7 @@ namespace yask {
             target = np.get();
             target->baseName = _baseName;
             target->index = _idx++;
+            target->step_cond = stcond;
             newPack = true;
         }
 
@@ -1198,10 +1446,10 @@ namespace yask {
         for (auto bp : allBundles.getAll())
             addBundleToPack(allBundles, bp);
 
-        os << "Finding transitive closure...\n";
+        os << "Collapsing dependencies from bundles and finding transitive closure...\n";
         inherit_deps_from(allBundles);
 
-        os << "Topologically ordering...\n";
+        os << "Topologically ordering packs...\n";
         topo_sort();
 
         // Dump info.

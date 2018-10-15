@@ -189,7 +189,8 @@ namespace yask {
         virtual void
         set_block_size(const std::string& dim
                        /**< [in] Name of dimension to set.  Must be one of
-                          the names from get_domain_dim_names(). */,
+                          the names from get_step_dim_name() or
+                          get_domain_dim_names(). */,
                        idx_t size
                        /**< [in] Elements in a block in this `dim`. */ ) =0;
 
@@ -202,7 +203,8 @@ namespace yask {
         virtual idx_t
         get_block_size(const std::string& dim
                         /**< [in] Name of dimension to get.  Must be one of
-                           the names from get_domain_dim_names(). */) const =0;
+                           the names from get_step_dim_name() or
+                           get_domain_dim_names(). */) const =0;
 
         /// Set the number of MPI ranks in the given dimension.
         /**
@@ -210,12 +212,19 @@ namespace yask {
            equal yk_env::get_num_ranks().
            The curent MPI rank will be assigned a unique location
            within the overall problem domain based on its MPI rank index.
+           Or, you can set it explicitly via set_rank_index().
+
            The same number of MPI ranks must be set via this API on each
            constituent MPI rank to ensure a consistent overall configuration.
            The number of ranks in each dimension must be properly set
            before calling yk_solution::prepare_solution().
            There is no rank setting allowed in the
-           solution-step dimension (usually "t").
+           solution-step dimension (usually "t") or in a misc dimension.
+
+           In fact, a practical definition of a domain dimension is one
+           that is decomposable across MPI ranks. Specifically, a
+           domain dimension does not have to correspond to a
+           spatial dimension in the physical problem description.
         */
         virtual void
         set_num_ranks(const std::string& dim
@@ -232,9 +241,37 @@ namespace yask {
                       /**< [in] Name of dimension to get.  Must be one of
                          the names from get_domain_dim_names(). */) const =0;
 
+        /// Set the rank index in the specified dimension.
+        /**
+           The overall rank index in the specified dimension must range from
+           zero (0) to get_num_ranks() - 1, inclusive.
+           If you do not call set_rank_index(), a rank index will be assigned
+           when prepare_solution() is called.
+           You should either call set_rank_index() on all ranks or allow
+           YASK to assign on on all ranks, i.e., do not mix-and-match.
+
+           Example using 6 MPI ranks in a 2-by-3 x, y domain:
+
+           <table>
+           <tr><td>MPI rank index = 0, x rank index = 0, y rank index = 0
+               <td>MPI rank index = 1, x rank index = 1, y rank index = 0
+           <tr><td>MPI rank index = 2, x rank index = 0, y rank index = 1
+               <td>MPI rank index = 3, x rank index = 1, y rank index = 1
+           <tr><td>MPI rank index = 4, x rank index = 0, y rank index = 2
+               <td>MPI rank index = 5, x rank index = 1, y rank index = 2
+           </table>
+
+           See yk_env::get_num_ranks() and yk_env::get_rank_index() for MPI rank index.
+        */
+        virtual void
+        set_rank_index(const std::string& dim
+                       /**< [in] Name of dimension to set.  Must be one of
+                          the names from get_domain_dim_names(). */,
+                       idx_t num /**< [in] Rank index in `dim`. */ ) =0;
+
         /// Get the rank index in the specified dimension.
         /**
-           The overall rank indices in the specified dimension will range from
+           The overall rank index in the specified dimension will range from
            zero (0) to get_num_ranks() - 1, inclusive.
            @returns Zero-based index of this rank.
         */
@@ -242,6 +279,7 @@ namespace yask {
         get_rank_index(const std::string& dim
                        /**< [in] Name of dimension to get.  Must be one of
                          the names from get_domain_dim_names(). */ ) const =0;
+
 
         /// Get the number of grids in the solution.
         /**
@@ -409,11 +447,10 @@ namespace yask {
         virtual void
         end_solution() =0;
 
-
         /// Get performance statistics associated with preceding calls to run_solution().
         /**
-           Side effect: resets all statistics, so a subsequent call will
-           measure performance after the current call.
+           @note Side effect: resets all statistics, so each call
+           returns only the elapsed time and counts since the previous call.
            @returns Pointer to statistics object.
         */
         virtual yk_stats_ptr
@@ -788,29 +825,15 @@ namespace yask {
 
         /// Get the number of elements in the overall domain.
         /**
-           @returns Product of all the overal domain sizes across all domain dimensions.
+           @returns Product across all domain dimensions of the domain sizes across all ranks.
+           Multiply this value by get_num_steps_done() to determine the number
+           of points processed.
+           Then, divide by get_elapsed_run_secs() to determine the throughput.
         */
         virtual idx_t
         get_num_elements() =0;
 
-        /// Get the number of elements written in each step.
-        /**
-           @returns Number of elements written to each output grid.
-           This is the same value as get_num_elements() if there is only one output grid.
-        */
-        virtual idx_t
-        get_num_writes() =0;
-
-        /// Get the estimated number of floating-point operations required for each step.
-        /**
-           @returns Number of FP ops created by the stencil compiler.
-           It may be slightly more or less than the actual number of FP ops executed
-           by the CPU due to C++ compiler transformations.
-        */
-        virtual idx_t
-        get_est_fp_ops() =0;
-
-        /// Get the number of steps calculated via run_solution().
+        /// Get the number of steps executed via run_solution().
         /**
            @returns A positive number, regardless of whether run_solution() steps were executed
            forward or backward.
@@ -818,13 +841,31 @@ namespace yask {
         virtual idx_t
         get_num_steps_done() =0;
 
+        /// Get the number of elements written across all steps.
+        /**
+           @returns Number of elements written, summed over all output grids,
+           steps executed, and ranks.
+        */
+        virtual idx_t
+        get_num_writes_done() =0;
+
+        /// Get the estimated number of floating-point operations executed across all steps.
+        /**
+           @returns Number of FP ops created by the stencil compiler, summed over
+           all stencil-bundles, steps executed, and ranks.
+           It may be slightly more or less than the actual number of FP ops executed
+           by the CPU due to C++ compiler transformations.
+        */
+        virtual idx_t
+        get_est_fp_ops_done() =0;
+
         /// Get the number of seconds elapsed during calls to run_solution().
         /**
            @returns Only the time spent in run_solution(), not in any other code in your
            application between calls.
         */
         virtual double
-        get_elapsed_run_secs() =0;
+        get_elapsed_secs() =0;
     };
 
     /** @}*/

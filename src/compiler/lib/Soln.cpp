@@ -94,14 +94,15 @@ namespace yask {
         _eqs.updateGridStats();
 
         // Create equation bundles based on dependencies and/or target strings.
+        // This process may alter the halos in scratch grids.
         _eqBundles.set_basename_default(_settings._eq_bundle_basename_default);
         _eqBundles.set_dims(_dims);
-        _eqBundles.makeEqBundles(_eqs, _settings._gridRegex,
-                                 _settings._eqBundleTargets, *_dos);
-        _eqBundles.optimizeEqBundles(_settings, "scalar & vector", false, *_dos);
+        _eqBundles.makeEqBundles(_eqs, _settings, *_dos);
 
+        // Optimize bundles.
+        _eqBundles.optimizeEqBundles(_settings, "scalar & vector", false, *_dos);
+        
         // Separate bundles into packs.
-        // These are used for tracking bundle inter-dependencies.
         _eqBundlePacks.makePacks(_eqBundles, *_dos);
 
         // Make a copy of each equation at each cluster offset.

@@ -23,39 +23,19 @@ IN THE SOFTWARE.
 
 *****************************************************************************/
 
-//////// Some common code shared between YASK compiler and kernel. //////////
+#pragma once
 
-#include "yask_common_api.hpp"
-#include <sstream>
-
-using namespace std;
+#include "yask_assert.hpp"
 
 namespace yask {
 
-    // Update this version string anytime changes are
-    // committed to a repository, especially when
-    // affecting master or develop branches.
-    // Be sure to keep 2 digits in minor and patch
-    // fields to allow proper alphanumeric sorting
-    // for numbers above 9 (at least up to 99).
+    // Return the number of ways to choose 'k' things from a set of 'n'.
+    int choose(int n, int k);
 
-    // Format: "major.minor.patch".
-    const string version = "2.15.01";
+    // Get the 'x'th lexicographically ordered set of 'p' elements in 'n'.
+    // Returns values in 'c'.
+    // 'x' and values in 'c' are 1-based.
+    void combination(int* c, int n, int p, int x);
 
-    string yask_get_version_string() {
-        return version;
-    }
-
-    // See yask_common_api.hpp for documentation.
-    const char* yask_exception::what() noexcept {
-        return "yask::yask_exception\n";
-    }
-
-    void yask_exception::add_message(const string& arg_msg) {
-        _msg.append(arg_msg);
-    }
-
-    const char* yask_exception::get_message() const {
-        return _msg.c_str();
-    }
+    void test_combo();
 }

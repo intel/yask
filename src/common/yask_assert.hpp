@@ -22,40 +22,14 @@ FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
 IN THE SOFTWARE.
 
 *****************************************************************************/
+#pragma once
 
-//////// Some common code shared between YASK compiler and kernel. //////////
+// Control assert() by turning on with CHECK instead of turning off with
+// NDEBUG. This makes it off by default.
+#ifdef CHECK
+#include <assert.h>
+#else
+#define assert(expr) ((void)0)
+#define NDEBUG
+#endif
 
-#include "yask_common_api.hpp"
-#include <sstream>
-
-using namespace std;
-
-namespace yask {
-
-    // Update this version string anytime changes are
-    // committed to a repository, especially when
-    // affecting master or develop branches.
-    // Be sure to keep 2 digits in minor and patch
-    // fields to allow proper alphanumeric sorting
-    // for numbers above 9 (at least up to 99).
-
-    // Format: "major.minor.patch".
-    const string version = "2.15.01";
-
-    string yask_get_version_string() {
-        return version;
-    }
-
-    // See yask_common_api.hpp for documentation.
-    const char* yask_exception::what() noexcept {
-        return "yask::yask_exception\n";
-    }
-
-    void yask_exception::add_message(const string& arg_msg) {
-        _msg.append(arg_msg);
-    }
-
-    const char* yask_exception::get_message() const {
-        return _msg.c_str();
-    }
-}
