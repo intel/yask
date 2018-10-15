@@ -327,7 +327,7 @@ namespace yask {
 
         // Sort gridPtrs for a certain purpose
 #ifdef USE_PMEM
-        // Sort gridPtrs for using pmemX : Give priority to output gird
+        // Sort gridPtrs for using pmem : Give priority to output grids.
         std::vector<YkGridPtr> sortedGridPtrs;
         std::set<YkGridPtr> gridPtrSet;
         for (auto op : outputGridPtrs) {
@@ -339,14 +339,16 @@ namespace yask {
                 sortedGridPtrs.push_back(gp);
         }
         gridPtrs.clear();
-        os << "Grids priority" << endl;
+        os << "Grid priority:" << endl;
         for (auto sp : sortedGridPtrs) {
             gridPtrs.push_back(sp);
             os << " '" << sp->get_name() << "'";
             if (gridPtrSet.find(sp)!=gridPtrSet.end())
-                os << "(out)";
+                os << " (output)";
             os << endl;
         }
+	sortedGridPtrs.clear();
+	gridPtrSet.clear();
 #endif
         // Base ptrs for all default-alloc'd data.
         // These pointers will be shared by the ones in the grid
