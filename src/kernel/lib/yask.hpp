@@ -93,6 +93,10 @@ inline void omp_set_nested(int n) { }
 #include <unistd.h>
 #include <stdint.h>
 #include <immintrin.h>
+#ifdef USE_PMEM
+#include <memkind.h>
+#include <sys/syscall.h>
+#endif
 
 // Additional type for unsigned indices.
 typedef std::uint64_t uidx_t;
