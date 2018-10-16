@@ -735,6 +735,15 @@ namespace yask {
         virtual MPIBuf& getBuf(MPIBufs::BufDir bd, const IdxTuple& neighbor_offsets);
     };
 
+    // Utility to determine number of points in a "sizes" var.
+    inline idx_t get_num_domain_points(const IdxTuple& sizes) {
+        assert(sizes.getNumDims() == NUM_STENCIL_DIMS);
+        idx_t pts = 1;
+        DOMAIN_VAR_LOOP(i, j)
+            pts *= sizes[i];
+        return pts;
+    }
+
     // Application settings to control size and perf of stencil code.
     class KernelSettings {
 

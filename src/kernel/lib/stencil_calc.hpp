@@ -74,7 +74,6 @@ namespace yask {
             assert(norm.getNumDims() == nsdims);
 
             // i: index for stencil dims, j: index for domain dims.
-#pragma unroll
             DOMAIN_VAR_LOOP(i, j) {
             
                 // Divide indices by fold lengths as needed by

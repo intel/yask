@@ -706,10 +706,12 @@ namespace yask {
 
     }; // StencilContext.
 
-    // Macros to get common items for stencil calcs efficiently.
+    // Macro to get common items for stencil calcs efficiently.
 #define CONTEXT_VARS(ctx_p)                                             \
     auto* cp = ctx_p;                                                   \
+    auto& os = cp->get_ostr();                                          \
     auto* opts = cp->get_settings().get();                              \
+    auto* mpiInfo = cp->get_mpi_info().get();                           \
     auto* dims = cp->get_dims().get();                                  \
     const int nddims = NUM_DOMAIN_DIMS;                                 \
     assert(nddims == dims->_domain_dims.size());                        \
@@ -717,6 +719,6 @@ namespace yask {
     assert(nsdims == dims->_stencil_dims.size());                       \
     const auto& step_dim = dims->_step_dim;                             \
     const auto step_posn = 0;                                           \
-    assert(step_posn == +Indices::step_posn);                           \
+    assert(step_posn == +Indices::step_posn)
 
 } // yask namespace.
