@@ -285,6 +285,12 @@ namespace yask {
                           ("numa_pref", msg.str(),
                            _numa_pref));
 #endif
+#ifdef USE_PMEM
+        parser.add_option(new CommandLineParser::IntOption
+                          ("numa_pref_max",
+                           "Maximum size of preferred NUMA node in GiB.",
+                           _numa_pref_max));
+#endif
     }
 
     // Print usage message.

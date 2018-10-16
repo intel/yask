@@ -117,6 +117,39 @@ namespace yask {
         return static_cast<char*>(p);
     }
 
+#ifdef USE_PMEM
+    static int pmem_tmpfile(const char *dir, size_t size, int *fd, void **addr)
+    {
+        static char tmpl[] = "/appdirect_memXXXXXX";
+        int err = 0;
+
+        char fullname[strlen(dir) + sizeof (tmpl)];
+        (void) strcpy(fullname, dir);
+        (void) strcat(fullname, tmpl);
+
+        if ((*fd = mkstemp(fullname)) < 0) {
+            perror("mkstemp()");
+            err = MEMKIND_ERROR_RUNTIME;
+            THROW_YASK_EXCEPTION("Error: MEMKIND_ERROR_RUNTIME - mkstemp()\n");
+        }
+
+        (void) unlink(dir);
+
+        if (ftruncate(*fd, size) != 0) {
+            err = MEMKIND_ERROR_RUNTIME;
+            THROW_YASK_EXCEPTION("Error: MEMKIND_ERROR_RUNTIME - ftruncate()\n");
+        }
+
+        *addr = mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_SHARED, *fd, 0);
+        if (*addr == MAP_FAILED) {
+            err = MEMKIND_ERROR_RUNTIME;
+            THROW_YASK_EXCEPTION("Error: MEMKIND_ERROR_RUNTIME - mmap()\n");
+        }
+
+        return err;
+    }
+#endif
+
     // NUMA allocation.
     // 'numa_pref' >= 0: preferred NUMA node.
     // 'numa_pref' < 0: use defined policy.
@@ -148,7 +181,24 @@ namespace yask {
             THROW_YASK_EXCEPTION("Error: explicit NUMA policy allocation is not available");
 
 #else
-        if (get_mempolicy(NULL, NULL, 0, 0, 0) == 0) {
+        // Hacked to allocate grid into pmem (indicated by numa preferred number offset = 1000)
+        if (numa_pref >= 1000) {
+#ifdef USE_PMEM
+            int err = 0;
+            int fd;
+            std::stringstream ss;
+            ss << numa_pref%1000;
+            // 'X' of pmemX should be matched with the NUMA node.
+            std::string pmem_name("/mnt/pmem");
+            pmem_name.append(ss.str());
+            err = pmem_tmpfile(pmem_name.c_str(), nbytes, &fd, &p);
+            if (err)
+                THROW_YASK_EXCEPTION("Error: Unable to create temporary file\n");
+#else
+            THROW_YASK_EXCEPTION("Error: set pmem=1 to use PMEM\n");
+#endif
+        }
+        else if (get_mempolicy(NULL, NULL, 0, 0, 0) == 0) {
 
             // Set mmap flags.
             int mmprot = PROT_READ | PROT_WRITE;
