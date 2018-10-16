@@ -258,6 +258,10 @@ namespace yask {
                            "Overlap MPI communication with calculation of grid cells whenever possible.",
                            overlap_comms));
 #endif
+        parser.add_option(new CommandLineParser::BoolOption
+                          ("force_scalar",
+                           "Evaluate every grid point with scalar stencil operations.",
+                           force_scalar));
         parser.add_option(new CommandLineParser::IntOption
                           ("max_threads",
                            "Max OpenMP threads to use.",
@@ -519,23 +523,28 @@ namespace yask {
         // we are using more than one block thread.
         // Otherwise, findNumSubsets() would set default
         // to entire block.
-        if (num_block_threads > 1) {
-            for (auto& dim : _dims->_domain_dims.getDims()) {
-                auto& dname = dim.getName();
-                if (_sub_block_sizes[dname] == 0) {
-                    if (_dims->_domain_dims.getNumDims() > 1)
+        if (num_block_threads > 1 && _sub_block_sizes.sum() == 0) {
+            DOMAIN_VAR_LOOP(i, j) {
+                auto bsz = _block_sizes[i];
+                auto fpts = fold_pts[j];
+                auto vecs_per_blk = bsz / fpts;
 
-                        // narrow slabs.
-                        _sub_block_sizes[dname] = 1; // will be rounded up to min size.
+                // Subdivide this dim if there are enough vectors in
+                // the block for each thread.
+                if (vecs_per_blk >= num_block_threads) {
+
+                    // Use narrow slabs if at least 3D.
+                    // TODO: consider a better heuristic.
+                    if (_dims->_domain_dims.getNumDims() >= 3)
+                        _sub_block_sizes[i] = 1; // will be rounded up to min size.
+
+                    // Divide equally.
                     else
+                        _sub_block_sizes[i] = CEIL_DIV(vecs_per_blk, num_block_threads) * fpts;
 
-                        // divide in 2 parts.
-                        _sub_block_sizes[dname] = CEIL_DIV(_block_sizes[dname], 2);
+                    // Only want to set 1 dim; others will be set to max.
+                    break;
                 }                        
-
-                // Only want to set 1st dim; others will be set to max.
-                // TODO: make sure we're not setting inner dim.
-                break;
             }
         }
 
@@ -557,14 +566,13 @@ namespace yask {
         // Adjust defaults for groups to be min size.
         // Otherwise, findNumBlockGroupsInRegion() would set default
         // to entire region.
-        for (auto& dim : _dims->_domain_dims.getDims()) {
-            auto& dname = dim.getName();
-            if (_block_group_sizes[dname] == 0)
-                _block_group_sizes[dname] = 1; // will be rounded up to min size.
-            if (_mini_block_group_sizes[dname] == 0)
-                _mini_block_group_sizes[dname] = 1; // will be rounded up to min size.
-            if (_sub_block_group_sizes[dname] == 0)
-                _sub_block_group_sizes[dname] = 1; // will be rounded up to min size.
+        DOMAIN_VAR_LOOP(i, j) {
+            if (_block_group_sizes[i] == 0)
+                _block_group_sizes[i] = 1; // will be rounded up to min size.
+            if (_mini_block_group_sizes[i] == 0)
+                _mini_block_group_sizes[i] = 1; // will be rounded up to min size.
+            if (_sub_block_group_sizes[i] == 0)
+                _sub_block_group_sizes[i] = 1; // will be rounded up to min size.
         }
 
 #ifdef SHOW_GROUPS

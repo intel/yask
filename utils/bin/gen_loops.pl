@@ -169,7 +169,11 @@ sub makeArgs {
             " ".locVar("start", $_)." = ".startVar($_).";",
             " ".locVar("stop", $_)." = ".stopVar($_).";",
             " ".locVar("index", $_)." = ".indexVar($_).";",
+            " ".locVar("num_indices", $_)." = ".numItersVar($_).";";
     } @loopDims;
+    push @stmts,
+        " ".locVar("linear_indices")." = ".numItersVar(@loopDims).";",
+        " ".locVar("linear_index")." = ".loopIndexVar(@loopDims).";";
     return @stmts;
 }
 
@@ -988,6 +992,7 @@ sub main() {
             "  'end':         [in] value beyond last index to scan in each dim.\n",
             "  'step':        [in] space between each scan point in each dim.\n",
             "  'align':       [in] alignment of steps after first one.\n",
+            "  'align_ofs':   [in] value to subtract from 'start' before applying alignment.\n",
             "  'group_size':  [in] min size of each group of points visisted first in a multi-dim loop.\n",
             "  'start':       [out] set to first scan point in called function(s) in inner loop(s).\n",
             "  'stop':        [out] set to one past last scan point in called function(s) in inner loop(s).\n",

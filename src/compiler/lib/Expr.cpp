@@ -733,6 +733,9 @@ namespace yask {
             str += "(" + _consts.makeDimValStr() + ")";
         return str;
     }
+    const IndexExprPtrVec& GridPoint::getDims() const {
+        return _grid->getDims();
+    }
 
     // Make string like "x+(4/VLEN_X)" from
     // original arg "x+4" in 'dname' dim.

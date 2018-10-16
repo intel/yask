@@ -79,7 +79,8 @@ protected:
     MAKE_MISC_INDEX(cidx);
 
     // 3D-spatial coefficients.
-    MAKE_GRID(rho, x, y, z);
+    MAKE_GRID(coef, x, y, z, cidx);
+    enum CIDX { C_MU, C_LAMBDA, C_LAMBDA_MU2, C_RHO };
 
     // Spatial FD coefficients.
     const double c0_8 = 1.2;
@@ -111,7 +112,7 @@ public:
            virtual void initData() {
                initDiff();
            }
-);
+                                           );
     }
 
     bool hasBoundaryCondition()
@@ -121,32 +122,32 @@ public:
 
     GridValue interp_rho(GridIndex x, GridIndex y, GridIndex z, const TL)
     {
-        return (2.0/ (rho(x  , y  , z) +
-                       rho(x+1, y  , z)));
+        return (2.0/ (coef(x  , y  , z, C_RHO) +
+                      coef(x+1, y  , z, C_RHO)));
     }
 
     GridValue interp_rho(GridIndex x, GridIndex y, GridIndex z, const TR)
     {
-        return (2.0/ (rho(x  , y  , z) +
-                       rho(x  , y+1, z)));
+        return (2.0/ (coef(x  , y  , z, C_RHO) +
+                      coef(x  , y+1, z, C_RHO)));
     }
 
     GridValue interp_rho(GridIndex x, GridIndex y, GridIndex z, const BL)
     {
-        return (2.0/ (rho(x  , y  , z) +
-                       rho(x  , y  , z+1)));
+        return (2.0/ (coef(x  , y  , z, C_RHO) +
+                       coef(x  , y  , z+1, C_RHO)));
     }
 
     GridValue interp_rho(GridIndex x, GridIndex y, GridIndex z, const BR)
     {
-        return (8.0/ (rho(x  , y  , z) +
-                       rho(x  , y  , z+1) +
-                       rho(x  , y+1, z) +
-                       rho(x+1, y  , z) +
-                       rho(x+1, y+1, z) +
-                       rho(x  , y+1, z+1) +
-                       rho(x+1, y  , z+1) +
-                       rho(x+1, y+1, z+1)));
+        return (8.0/ (coef(x  , y  , z, C_RHO) +
+                       coef(x  , y  , z+1, C_RHO) +
+                       coef(x  , y+1, z, C_RHO) +
+                       coef(x+1, y  , z, C_RHO) +
+                       coef(x+1, y+1, z, C_RHO) +
+                       coef(x  , y+1, z+1, C_RHO) +
+                       coef(x+1, y  , z+1, C_RHO) +
+                       coef(x+1, y+1, z+1, C_RHO)));
     }
 
     template<typename N>

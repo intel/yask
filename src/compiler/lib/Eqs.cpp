@@ -208,7 +208,7 @@ namespace yask {
                     if (!argn->isSame(earg))
                         THROW_YASK_EXCEPTION("Error: LHS of equation " + eq1->makeQuotedStr() +
                                              " contains expression " + argn->makeQuotedStr() +
-                                             " for dimension '" + dn +
+                                             " for domain dimension '" + dn +
                                              "' where " + earg->makeQuotedStr() +
                                              " is expected");
                 }
@@ -219,7 +219,7 @@ namespace yask {
                     if (!argn->isConstVal())
                         THROW_YASK_EXCEPTION("Error: LHS of equation " + eq1->makeQuotedStr() +
                                              " contains expression " + argn->makeQuotedStr() +
-                                             " for dimension '" + dn +
+                                             " for misc dimension '" + dn +
                                              "' where constant integer is expected");
                     argn->getIntVal(); // throws exception if not an integer.
                 }
@@ -281,8 +281,41 @@ namespace yask {
                                      " dimensions are accessed via simple offsets from their respective indices");
             }
 
-            // TODO: check that domain indices are simple offsets and
+            // Check that domain indices are simple offsets and
             // misc indices are consts on RHS.
+            for (auto i1 : ip1) {
+                auto* ig1 = i1->getGrid();
+
+                for (int di = 0; di < ig1->get_num_dims(); di++) {
+                    auto& dn = ig1->get_dim_name(di);  // name of this dim.
+                    auto argn = i1->getArgs().at(di); // arg for this dim.
+
+                    // Check based on dim type.
+                    if (dn == stepDim) {
+                    }
+
+                    // Must have simple indices in domain dims.
+                    else if (dims._domainDims.lookup(dn)) {
+                        auto* rsi1p = i1->getArgOffsets().lookup(dn);
+                        if (!rsi1p)
+                            THROW_YASK_EXCEPTION("Error: RHS of equation " + eq1->makeQuotedStr() +
+                                                 " contains expression " + argn->makeQuotedStr() +
+                                                 " for domain dimension '" + dn +
+                                                 "' where constant-integer offset from '" + dn +
+                                                 "' is expected");
+                    }
+
+                    // Misc dim must be a const.
+                    else {
+                        if (!argn->isConstVal())
+                            THROW_YASK_EXCEPTION("Error: RHS of equation " + eq1->makeQuotedStr() +
+                                                 " contains expression " + argn->makeQuotedStr() +
+                                                 " for misc dimension '" + dn +
+                                                 "' where constant integer is expected");
+                        argn->getIntVal(); // throws exception if not an integer.
+                    }
+                }
+            }
 
             // TODO: check to make sure cond1 depends only on domain indices.
             // TODO: check to make sure stcond1 depends only on step index.
@@ -566,6 +599,7 @@ namespace yask {
             auto idim = _dims._innerDim;
 
             // Access type.
+            // Assume invariant, then check below.
             GridPoint::LoopType lt = GridPoint::LOOP_INVARIANT;
 
             // Check every point arg.

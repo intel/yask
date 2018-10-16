@@ -39,7 +39,7 @@ use List::Util qw(first max maxstr min minstr reduce shuffle sum);
 use POSIX;
 
 # constants.
-my @dirs = qw(x y z);           # not including t and n.
+my @dirs = qw(x y z);           # not including t.
 my $oneKi = 1024;
 my $oneMi = $oneKi * $oneKi;
 my $oneGi = $oneKi * $oneMi;
@@ -77,7 +77,7 @@ my $makeArgs = '';             # extra make arguments.
 my $makePrefix = '';           # prefix for make.
 my $makeTimeout = 60 * 10;     # max secs for make to run.
 my $runArgs = '';              # extra run arguments.
-my $maxGB = 16;                # max mem usage.
+my $maxGB = 32;                # max mem usage.
 my $minGB = 0;                 # min mem usage.
 my $nranks = 1;                # num ranks.
 my $debugCheck = 0;            # print each initial check result.
@@ -117,20 +117,26 @@ sub usage {
       " -dp|-sp            Specify FP precision (default is SP).*\n".
       " -radius=<N>        Specify stencil radius for stencils that use this option (default is 8).*\n".
       "\nsearch-space options:\n".
-      " -<gene_name>=<N>   Force <gene_name> to value <N>.\n".
+      " -<gene_name>=<N>   Force <gene_name> to fixed value <N>.\n".
       "                    Run with -check for list of genes and default ranges.\n".
       "                    Setting rank-domain size (d) also sets upper block and region sizes.\n".
       "                    Leave off 'x', 'y', 'z' suffix to set these 3 vars to same val.\n".
       "                    Examples: '-d=512'      Set problem size to 512^3.\n".
+      "                              '-bx=64'      Set block size to 64 in 'x' dim.\n".
       "                              '-ep=0'       Disable extra padding.\n".
       "                              '-c=1'        Allow only one vector in a cluster.\n".
       "                              '-r=0'        Allow only one OpenMP region (region size=0 => rank size).\n".
-      " -<gene_name>=<N>-<M>   Restrict <gene_name> between <N> and <M>.\n".
-      "                        See the notes above on <gene_name> specification.\n".
+      " -<gene_name>=<N>-<M> Restrict <gene_name> between <N> and <M>, inclusive.\n".
+      "                    Example:  '-bx=8-128'.\n".
+      "                    See the notes above on <gene_name> specification.\n".
+      " -<gene_name>=<N>-<M>:<S>  Restrict <gene_name> between <N> and <M> with stride <S>.\n".
+      "                    Example:  '-bx=8-128:4'.\n".
+      "                    See the notes above on <gene_name> specification.\n".
       " -folds=<list>      Comma separated list of folds to use.*\n".
       "                    Examples: '-folds=4 4 1', '-folds=1 1 16, 4 4 1, 1 4 4'.\n".
       "                    Can only specify 3D folds.\n".
-      " -mem=<N>-<M>           Set allowable est. memory usage between <N> and <M> GiB (default is $minGB-$maxGB).\n".
+      " -mem=<N>-<M>       Set allowable est. memory usage between <N> and <M> GiB (default is $minGB-$maxGB).\n".
+      "                    Ignored if all problem-size vars are set to a fixed value.\n".
       " -maxVecsInCluster=<N>  Maximum vectors allowed in cluster (default is $maxVecsInCluster).*\n".
       " -noPrefetch        Disable any prefetching (shortcut for '-pfd_l1=0 -pfd_l2=0').*\n".
       " -noFolding         Allow only 1D vectorization (in any direction).*\n".
@@ -139,8 +145,8 @@ sub usage {
       "* indicates options that are invalid if -noBuild is used.\n".
       "\n".
       "examples:\n".
-      " $0 -stencil=iso3dfd -arch=knl -d=768 -r=0 -noPrefetch\n".
-      " $0 -stencil=awp -arch=knl -dx=512 -dy=512 -dz=256\n".
+      " $0 -stencil=iso3dfd -arch=skl -d=768 -r=0 -noPrefetch\n".
+      " $0 -stencil=awp -arch=knl -dx=512 -dy=512 -dz=256 -b=4-512:4\n".
       " $0 -stencil=3axis -arch=snb -mem=8-10 -noBuild\n";
 
   exit(defined $msg ? 1 : 0);
@@ -151,7 +157,7 @@ sub usage {
 # or $geneRanges{key}[0]-$geneRanges{key}[1]
 # or $geneRanges{key}[0]-$geneRanges{key}[1] by $geneRanges{key}[2].
 my %geneRanges;
-my $autoKey = 'auto_';          # prefix for special-case settings.
+my $autoKey = 'def_';          # prefix for default setting.
 
 # control groups.
 # TODO: make an option.
@@ -253,7 +259,7 @@ for my $origOpt (@ARGV) {
     $sweep = 1;
     print "Sweeping all values instead of searching with GA.\n";
   }
-  elsif ($opt =~ 'folds=(\s*\d+\s+\d+\s+\d+\s*(,\s*\d+\s+\d+\s+\d+\s*)*)$') {
+  elsif ($opt =~ '^-folds=(\s*\d+\s+\d+\s+\d+\s*(,\s*\d+\s+\d+\s+\d+\s*)*)$') {
     my $val = $1; 
     $val =~ tr/ //s;
     $val =~ s/^\s+|\s+$//g;
@@ -261,17 +267,20 @@ for my $origOpt (@ARGV) {
     $val =~ s/\s+,/,/g;
     @folds = split(',',$val);
   }
-  elsif ($opt =~ /^-?(.+)=(\d+)(-(\d+))?$/) {
-    my ($key, $min, $max) = ($1, $2, $4);
+
+  # Assume a gene name if nothing else matches.
+  elsif ($opt =~ /^-?(.+)=(\d+)(-(\d+))?(:(\d+))?$/) {
+    my ($key, $min, $max, $stride) = ($1, $2, $4, $6);
     $max = $min if !defined $max;
-    $geneRanges{$key} = [ $min, $max ];
+    $stride = 1 if !defined $stride;
+    $geneRanges{$key} = [ $min, $max, $stride ];
     usage("min value $min for '$key' > max value $max.")
       if ($min > $max);
 
-    # special case for problem size: also set other max sizes.
+    # special case for problem size: also set default for other max sizes.
     if ($key =~ /^d[xyz]?$/ && $max > 0) {
-      my @szs = qw(r b sb);
-      push @szs, qw(bg sbg) if $showGroups;
+      my @szs = qw(r b mb sb);
+      push @szs, qw(bg mbg sbg) if $showGroups;
       for my $i (@szs) {
         my $key2 = $key;
         $key2 =~ s/^d/$i/;
@@ -579,6 +588,12 @@ for my $i (0..$#rangesAll) {
   }
 }
 
+# disable memory range if all domain sizes fixed.
+if ((scalar grep { exists $fixedVals{"d$_"} } @dirs) == scalar @dirs) {
+  undef $minGB;
+  undef $maxGB;
+}
+
 # check that all ranges were used.
 for my $key (keys %geneRanges) {
   die "error: gene '$key' not recognized.\n"
@@ -756,7 +771,7 @@ sub getRunCmd() {
   } else {
     $runCmd .= " -host $host" if defined $host;
   }
-  $runCmd .= " -exe_prefix '$exePrefix' -stencil $stencil -arch $arch -no-pre_auto_tune $runArgs";
+  $runCmd .= " -exe_prefix '$exePrefix' -stencil $stencil -arch $arch -no-pre_auto_tune";
   return $runCmd;
 }
 
@@ -773,7 +788,7 @@ sub calcSize($$$) {
 
     my $makeCmd = getMakeCmd('', 'EXTRA_CXXFLAGS=-O1');
     my $runCmd = getRunCmd();
-    $runCmd .= ' -t 0 -d 32';
+    $runCmd .= " -t 0 -d 32 $runArgs";
     my $cmd = "$makeCmd 2>&1 && $runCmd";
 
     my $timeDim = 0;
@@ -1416,10 +1431,10 @@ sub fitness {
   my $longTrials = min($gen, 2);
 
   # various commands.
-  my $testCmd = "$runCmd -v"; # validation on a small problem size.
-  my $simCmd = "$runCmd $args -t 1 -dt 1";  # simulation w/1 trial & 1 step.
-  my $shortRunCmd = "$runCmd $args -t $shortTrials -trial_time $shortTime"; # fast run for 'upper-bound' time.
-  my $longRunCmd = "$runCmd $args -t $longTrials -trial_time $longTime";  # normal run w/more trials.
+  my $testCmd = "$runCmd -v $runArgs"; # validation on a small problem size.
+  my $simCmd = "$runCmd $args -t 1 -dt 1 $runArgs";  # simulation w/1 trial & 1 step.
+  my $shortRunCmd = "$runCmd $args -t $shortTrials -trial_time $shortTime $runArgs"; # fast run for 'upper-bound' time.
+  my $longRunCmd = "$runCmd $args -t $longTrials -trial_time $longTime $runArgs";  # normal run w/more trials.
   my $cleanCmd = "make clean";
 
   # add kill command to prevent runaway code.
@@ -1567,7 +1582,10 @@ for my $i (0..$#ranges) {
   $nt *= $n;
 }
 printNumCombos($nt);
-print "Memory footprint restriction: $minGB-$maxGB GiB.\n";
+print "Memory footprint restriction: >= $minGB GiB.\n"
+  if defined $minGB;
+print "Memory footprint restriction: <= $maxGB GiB.\n"
+  if defined $maxGB;
 
 if ($sweep) {
   $popSize = $nt;  # just so all output shows as 1st gen.
