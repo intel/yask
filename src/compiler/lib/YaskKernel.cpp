@@ -698,7 +698,7 @@ namespace yask {
                 CppLoopVarPrintVisitor lvv(os, *vp, _settings);
                 vceq->visitEqs(&lvv);
 
-                // Print pointers and prefetches.
+                // Print pointers and pre-loop prefetches.
                 vp->printBasePtrs(os);
 
                 // Actual Loop.

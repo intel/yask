@@ -170,7 +170,8 @@ namespace yask {
         }
 
         // Get offset from base pointer.
-        virtual string getPtrOffset(const GridPoint& gp);
+        virtual string getPtrOffset(const GridPoint& gp,
+                                    const string& innerExpr = "");
 
     public:
 

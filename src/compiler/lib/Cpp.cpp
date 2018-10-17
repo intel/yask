@@ -157,7 +157,7 @@ namespace yask {
     }
 
     // Print call for a point.
-    // This is a utility function used for reads, writes, and prefetches.
+    // This is a utility function used for reads & writes.
     string CppVecPrintHelper::printVecPointCall(ostream& os,
                                                 const GridPoint& gp,
                                                 const string& funcName,
@@ -223,9 +223,10 @@ namespace yask {
                 auto& offsets = gp.getArgOffsets();
 
                 // Get offset in inner dim.
+                // E.g., A(t, x+1, y+4) => 4.
                 auto* ofs = offsets.lookup(idim);
 
-                // Remember lowest one.
+                // Remember lowest inner-dim offset from this ptr.
                 if (ofs && (!_ptrOfsLo.count(*p) || _ptrOfsLo[*p] > *ofs))
                     _ptrOfsLo[*p] = *ofs;
 
@@ -293,26 +294,67 @@ namespace yask {
                     string right = _dims->makeNormStr(_ptrOfsHi[ptr], idim);
 
                     // Start loop of prefetches.
-                    os << "#pragma unroll\n" <<
+                    os << "\n // For pointer '" << ptr << "'\n"
+                        "#pragma unroll\n" <<
                         _linePrefix << " for (int ofs = ";
 
                     // First offset.
+                    // If fetching ahead, only need to get those following
+                    // the previous one.
                     if (ahead)
                         os << "(PFD_L" << level << "*" << imult << ")" << right;
+
+                    // If fetching first time, need to fetch across whole range;
+                    // starting at left edge.
                     else
                         os << left;
 
                     // End of offsets.
                     os << "; ofs < ";
+
+                    // If fetching again, stop before next one.
                     if (ahead)
                         os << "((PFD_L" << level << "+1)*" << imult << ")" << right;
+
+                    // If fetching first time, stop where next "ahead" one ends.
                     else
                         os << "(PFD_L" << level << "*" << imult << ")" << right;
 
-                    // Continue loop.
-                    os << "; ofs++)\n" <<
-                        _linePrefix << "  prefetch<L" << level << "_HINT>(&" << ptr <<
-                        "[" << idim << " + ofs])" << _lineSuffix;
+                    // Finish loop header.
+                    os << "; ofs++) {\n";
+
+                    // Need to print prefetch for every unique grid-point read.
+                    set<string> done;
+                    for (auto& gp : _vv._alignedVecs) {
+
+                        // For the current base ptr?
+                        auto bgp = makeBasePoint(gp);
+                        auto* p = lookupPointPtr(*bgp);
+                        if (p && *p == ptr) {
+
+                            // Expression for this offset from inner-dim var.
+                            string innerExpr = idim + " + ofs";
+
+                            // Expression for ptr offset at this point.
+                            string ofsExpr = getPtrOffset(gp, innerExpr);
+                            printPointComment(os, gp, "Prefetch for ");
+
+                            // Already done?
+                            if (done.count(ofsExpr))
+                                os << " // Already accounted for.\n";
+
+                            else {
+                                done.insert(ofsExpr);
+
+                                // Prefetch.
+                                os << _linePrefix << "  prefetch<L" << level << "_HINT>(&" << ptr <<
+                                    "[" << ofsExpr << "])" << _lineSuffix;
+                            }
+                        }
+                    }
+
+                    // End loop;
+                    os << " }\n";
                 }
                 os << _linePrefix << "#endif // L" << level << " prefetch.\n";
         }
@@ -354,8 +396,10 @@ namespace yask {
         os << _linePrefix << getVarType() << "* " << ptrName << " = " << vp << _lineSuffix;
     }
 
-    // Get expression for offset of 'gp' from base pointer.
-    string CppVecPrintHelper::getPtrOffset(const GridPoint& gp) {
+    // Get expression for offset of 'gp' from base pointer.  Base pointer
+    // points to vector with outer-dims == same values as in 'gp', inner-dim
+    // == 0 and misc dims == their min value.
+    string CppVecPrintHelper::getPtrOffset(const GridPoint& gp, const string& innerExpr) {
         auto* grid = gp.getGrid();
 
         // Need to create an expression for inner-dim
@@ -365,7 +409,12 @@ namespace yask {
         // This must the dim that appears before the misc dims
         // in the grid-var layout.
         string idim = _dims->_innerDim;
-        string ofsStr = "(" + gp.makeNormArgStr(idim, *_dims) + ")";
+        string ofsStr = "(";
+        if (innerExpr.length())
+            ofsStr += innerExpr;
+        else
+            ofsStr += gp.makeNormArgStr(idim, *_dims);
+        ofsStr += ")";
 
         // Misc indices.
         for (int i = 0; i < grid->get_num_dims(); i++) {
