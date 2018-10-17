@@ -776,7 +776,9 @@ namespace yask {
 
         /// **[Advanced]** Set the number of elements to allocate in the specified dimension.
         /**
-           This setting is only allowed in the step dimension.
+           This setting is only allowed in the step dimension for any grid
+           or in a misc dimension for a grid created via new_grid() or
+           new_fixed_grid().
            Typically, the allocation in the step dimension is determined by the
            stencil compiler, but
            this function allows you to override that value.
@@ -788,8 +790,8 @@ namespace yask {
         virtual void
         set_alloc_size(const std::string& dim
                        /**< [in] Name of dimension to set.
-                          Must *not* be one of
-                          the names from yk_solution::get_domain_dim_names(). */,
+                          Must be a domain dimension or
+                          a misc dimension for user-created grids. */,
                        idx_t size /**< [in] Number of elements to allocate. */ ) =0;
 
         /// **[Advanced]** Set the first index of a specified miscellaneous dimension.

@@ -169,18 +169,17 @@ namespace yask {
             printUnalignedVecSimple(os, gp, pvName, _linePrefix);
         }
 
+        // Get offset from base pointer.
+        virtual string getPtrOffset(const GridPoint& gp,
+                                    const string& innerExpr = "");
+
     public:
 
         // Print code to set pointers of aligned reads.
         virtual void printBasePtrs(ostream& os);
 
-        // Make base point (inner-dim index = 0).
-        virtual GridPointPtr makeBasePoint(const GridPoint& gp) {
-            GridPointPtr bgp = gp.cloneGridPoint();
-            IntScalar idi(getDims()->_innerDim, 0); // set inner-dim index to 0.
-            bgp->setArgConst(idi);
-            return bgp;
-        }
+        // Make base point (misc & inner-dim indices = 0).
+        virtual GridPointPtr makeBasePoint(const GridPoint& gp);
 
         // Print prefetches for each base pointer.
         // Print only 'ptrVar' if provided.
@@ -218,7 +217,24 @@ namespace yask {
         }
     };
 
-    // Outputs the variables needed for an inner loop.
+    // Outputs the time-invariant variables.
+    class CppStepVarPrintVisitor : public PrintVisitorBase {
+    protected:
+        CppVecPrintHelper& _cvph;
+
+    public:
+        CppStepVarPrintVisitor(ostream& os,
+                               CppVecPrintHelper& ph,
+                               CompilerSettings& settings,
+                               const VarMap* varMap = 0) :
+            PrintVisitorBase(os, ph, settings, varMap),
+            _cvph(ph) { }
+
+        // A grid access.
+        virtual void visit(GridPoint* gp);
+    };
+
+    // Outputs the loop-invariant variables for an inner loop.
     class CppLoopVarPrintVisitor : public PrintVisitorBase {
     protected:
         CppVecPrintHelper& _cvph;

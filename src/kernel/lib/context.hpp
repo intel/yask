@@ -143,6 +143,7 @@ namespace yask {
     typedef std::set<StencilBundleBase*> StencilBundleSet;
     typedef std::shared_ptr<BundlePack> BundlePackPtr;
     typedef std::vector<BundlePackPtr> BundlePackList;
+    typedef std::vector<bool> BridgeMask;
 
     // Data and hierarchical sizes.
     // This is a pure-virtual class that must be implemented
@@ -262,6 +263,8 @@ namespace yask {
         idx_t tb_steps = 0;  // max number of TB steps (may be less than requested).
         IdxTuple tb_angles;  // TB skewing angles for each shift (in points).
         idx_t num_tb_shifts = 0; // number of TB shifts required in tb_steps.
+        IdxTuple tb_widths;      // base of TB trapezoid.
+        IdxTuple tb_tops;      // top of TB trapezoid.
         IdxTuple mb_angles;  // MB skewing angles for each shift (in points).
 
         // MPI settings.
@@ -522,7 +525,7 @@ namespace yask {
         void calc_mini_block(BundlePackPtr& sel_bp,
                              idx_t nphases, idx_t phase,
                              idx_t nshapes, idx_t shape,
-                             int dims_to_bridge[],
+                             const BridgeMask& bridge_mask,
                              const ScanIndices& base_region_idxs,
                              const ScanIndices& base_block_idxs,
                              const ScanIndices& block_idxs);
@@ -552,7 +555,7 @@ namespace yask {
                               idx_t block_shift_num,
                               idx_t nphases, idx_t phase,
                               idx_t nshapes, idx_t shape,
-                              int dims_to_bridge[],
+                              const BridgeMask& bridge_mask,
                               const Indices& region_base_start,
                               const Indices& region_base_stop,
                               idx_t region_shift_num,
@@ -703,10 +706,12 @@ namespace yask {
 
     }; // StencilContext.
 
-    // Macros to get common items for stencil calcs efficiently.
+    // Macro to get common items for stencil calcs efficiently.
 #define CONTEXT_VARS(ctx_p)                                             \
     auto* cp = ctx_p;                                                   \
+    auto& os = cp->get_ostr();                                          \
     auto* opts = cp->get_settings().get();                              \
+    auto* mpiInfo = cp->get_mpi_info().get();                           \
     auto* dims = cp->get_dims().get();                                  \
     const int nddims = NUM_DOMAIN_DIMS;                                 \
     assert(nddims == dims->_domain_dims.size());                        \
@@ -714,6 +719,6 @@ namespace yask {
     assert(nsdims == dims->_stencil_dims.size());                       \
     const auto& step_dim = dims->_step_dim;                             \
     const auto step_posn = 0;                                           \
-    assert(step_posn == +Indices::step_posn);                           \
+    assert(step_posn == +Indices::step_posn)
 
 } // yask namespace.

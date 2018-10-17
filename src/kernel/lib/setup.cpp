@@ -67,6 +67,8 @@ namespace yask {
         wf_angles = _dims->_domain_dims;
         wf_shift_pts = _dims->_domain_dims;
         tb_angles = _dims->_domain_dims;
+        tb_widths = _dims->_domain_dims;
+        tb_tops = _dims->_domain_dims;
         mb_angles = _dims->_domain_dims;
         left_wf_exts = _dims->_domain_dims;
         right_wf_exts = _dims->_domain_dims;
@@ -1014,7 +1016,7 @@ namespace yask {
         if (!stPacks.size())
             return;
 
-        // Reset halos to zero.
+        // Reset max halos to zero.
         max_halos = _dims->_domain_dims;
 
         // Loop through each non-scratch grid.
@@ -1040,7 +1042,7 @@ namespace yask {
                     gp->set_min_pad_size(dname, _opts->_min_pad_sizes[dname]);
 
                     // Offsets.
-                    gp->_set_offset(dname, rank_domain_offsets[dname]);
+                    gp->_set_rank_offset(dname, rank_domain_offsets[dname]);
                     gp->_set_local_offset(dname, 0);
 
                     // Update max halo across grids, used for temporal angles.
@@ -1156,16 +1158,19 @@ namespace yask {
     void StencilContext::update_tb_info() {
         auto& step_dim = _dims->_step_dim;
 
-        // Reset all TB and MB vars.
+        // Get requested size.
         tb_steps = _opts->_block_sizes[step_dim];
-        num_tb_shifts = 0;
-        for (auto& dim : _dims->_domain_dims.getDims()) {
-            auto& dname = dim.getName();
-            tb_angles.addDimBack(dname, 0);
-            mb_angles.addDimBack(dname, 0);
-        }
 
-        // Determine max setting based on block sizes.
+        // Reset all TB and MB vars.
+        num_tb_shifts = 0;
+        tb_angles.setValsSame(0);
+        tb_widths.setValsSame(0);
+        tb_tops.setValsSame(0);
+        mb_angles.setValsSame(0);
+
+        // Set angles.
+        // Determine max temporal depth based on block sizes
+        // and requested temporal depth.
         // When using temporal blocking, all block sizes
         // across all packs must be the same.
         TRACE_MSG("update_tb_info: original TB steps = " << tb_steps);
@@ -1176,36 +1181,37 @@ namespace yask {
             TRACE_MSG("update_tb_info: min(TB, WF) steps = " << max_steps);
 
             // Loop through each domain dim.
-            for (auto& dim : _dims->_domain_dims.getDims()) {
+            DOMAIN_VAR_LOOP(i, j) {
+                auto& dim = _dims->_domain_dims.getDim(j);
                 auto& dname = dim.getName();
-                auto rnsize = _opts->_region_sizes[dname];
+                auto rnsize = _opts->_region_sizes[i];
 
                 // There must be only one block size when using TB, so get
                 // sizes from context settings instead of packs.
                 assert(_use_pack_tuners == false);
-                auto blksize = _opts->_block_sizes[dname];
-                auto mblksize = _opts->_mini_block_sizes[dname];
+                auto blksize = _opts->_block_sizes[i];
+                auto mblksize = _opts->_mini_block_sizes[i];
 
                 // Req'd shift in this dim based on max halos.
                 // Can't use separate L & R shift because of possible data reuse in grids.
                 // Can't use separate shifts for each pack for same reason.
                 // TODO: make round-up optional.
-                auto fpts = _dims->_fold_pts[dname];
-                idx_t angle = ROUND_UP(max_halos[dname], fpts);
+                auto fpts = _dims->_fold_pts[j];
+                idx_t angle = ROUND_UP(max_halos[j], fpts);
             
                 // Determine the spatial skewing angles for MB.
                 // If MB covers whole blk, no shifting is needed in that dim.
                 idx_t mb_angle = 0;
                 if (mblksize < blksize)
                     mb_angle = angle;
-                mb_angles[dname] = mb_angle;
+                mb_angles[j] = mb_angle;
 
                 // Determine the max spatial skewing angles for TB.
                 // If blk covers whole region, no shifting is needed in that dim.
                 idx_t tb_angle = 0;
                 if (blksize < rnsize)
                     tb_angle = angle;
-                tb_angles[dname] = tb_angle;
+                tb_angles[j] = tb_angle;
 
                 // Calculate max number of temporal steps in
                 // allowed this dim.
@@ -1215,7 +1221,7 @@ namespace yask {
                     // bs = ts + 2*a*np*ns - 2*a.
                     // 2*a*np*ns = bs - ts + 2*a.
                     // s = flr[ (bs - ts + 2*a) / 2*a*np ].
-                    idx_t top_sz = fpts; // min pts on top row.
+                    idx_t top_sz = fpts; // min pts on top row. TODO: is zero ok?
                     idx_t sh_pts = tb_angle * 2 * stPacks.size(); // pts shifted per step.
                     idx_t nsteps = (blksize - top_sz + tb_angle * 2) / sh_pts; // might be zero.
                     TRACE_MSG("update_tb_info: max TB steps in dim '" <<
@@ -1245,6 +1251,66 @@ namespace yask {
         assert(num_tb_shifts >= 0);
         TRACE_MSG("update_tb_info: num TB shifts = " << num_tb_shifts);
 
+        // Calc size of base of phase 0 trapezoid.
+        // Initial width is half of base plus one shift distance.  This will
+        // make 'up' and 'down' trapezoids approx same size.
+
+        //   x->
+        // ^   ----------------------
+        // |  /        \            /^
+        // t /  phase 0 \ phase 1  / |
+        //  /            \        /  |
+        //  ----------------------   |
+        //  ^             ^       ^  |
+        //  |<-blk_width->|    -->|  |<--sa=nshifts*angle
+        //  |             |       |
+        // blk_start  blk_stop  next_blk_start
+        //  |                     |
+        //  |<-----blk_sz-------->|
+        // blk_width = blk_sz/2 + sa.
+
+        // Ex: blk_sz=12, angle=4, nshifts=1, fpts=4,
+        // sa=1*4=4, blk_width=rnd_up(12/2+4,4)=12.
+        //     111122222222
+        // 111111111111
+
+        // Ex: blk_sz=16, angle=4, nshifts=1, fpts=4,
+        // sa=1*4=4, blk_width=rnd_up(16/2+4,4)=12.
+        //     1111222222222222
+        // 1111111111112222
+
+        // Ex: blk_sz=16, angle=2, nshifts=2, fpts=2,
+        // sa=2*2=4, blk_width=rnd_up(16/2+4,2)=12.
+        //     1111222222222222
+        //   1111111122222222
+        // 1111111111112222
+
+        // TODO: use actual number of shifts dynamically instead of this
+        // max.
+        DOMAIN_VAR_LOOP(i, j) {
+            auto blk_sz = _opts->_block_sizes[i];
+            auto tb_angle = tb_angles[j];
+            tb_widths[j] = blk_sz;
+            tb_tops[j] = blk_sz;
+
+            // If no shift or angle in this dim, we don't need
+            // bridges at all, so base is entire block.
+            if (num_tb_shifts > 0 && tb_angle > 0) {
+                
+                // See equations above for block size.
+                auto fpts = _dims->_fold_pts[j];
+                idx_t min_top_sz = fpts;
+                idx_t sa = num_tb_shifts * tb_angle;
+                idx_t min_blk_width = min_top_sz + 2 * sa;
+                idx_t blk_width = ROUND_UP(CEIL_DIV(blk_sz, idx_t(2)) + sa, fpts);
+                blk_width = max(blk_width, min_blk_width);
+                idx_t top_sz = max(blk_width - 2 * sa, idx_t(0));
+                tb_widths[j] = blk_width;
+                tb_tops[j] = top_sz;
+            }
+        }
+        TRACE_MSG("update_tb_info: trapezoid bases = " << tb_widths.makeDimValStr() <<
+                  ", tops = " << tb_tops.makeDimValStr());
     } // update_tb_info().
 
     // Allocate grids and MPI bufs.
@@ -1360,7 +1426,7 @@ namespace yask {
             os <<
                 " wave-front-angles:         " << wf_angles.makeDimValStr() << endl <<
                 " num-wave-front-shifts:     " << num_wf_shifts << endl <<
-                " wave-front-shift-size:     " << wf_shift_pts.makeDimValStr() << endl <<
+                " wave-front-shift-amounts:  " << wf_shift_pts.makeDimValStr() << endl <<
                 " left-wave-front-exts:      " << left_wf_exts.makeDimValStr() << endl <<
                 " right-wave-front-exts:     " << right_wf_exts.makeDimValStr() << endl <<
                 " ext-rank-domain:           " << ext_bb.bb_begin.makeDimValStr() <<
@@ -1368,6 +1434,8 @@ namespace yask {
                 " num-temporal-block-steps:  " << tb_steps << endl <<
                 " temporal-block-angles:     " << tb_angles.makeDimValStr() << endl <<
                 " num-temporal-block-shifts: " << num_tb_shifts << endl <<
+                " temporal-block-long-base:  " << tb_widths.makeDimValStr(" * ") << endl <<
+                " temporal-block-short-base: " << tb_tops.makeDimValStr(" * ") << endl <<
                 " mini-block-angles:         " << mb_angles.makeDimValStr() << endl;
         }
     }

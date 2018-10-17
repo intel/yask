@@ -103,10 +103,7 @@ namespace yask {
 
     // Evaluate the previous run and take next auto-tuner step.
     void AutoTuner::eval() {
-        ostream& os = _context->get_ostr();
-        auto& mpiInfo = _context->get_mpi_info();
-        auto& dims = _context->get_dims();
-        auto& opts = _context->get_settings();
+        CONTEXT_VARS(_context);
 
         // Get elapsed time and reset.
         double etime = timer.get_elapsed_secs();
@@ -187,6 +184,7 @@ namespace yask {
                 // Determine new block size.
                 IdxTuple bsize(center_block);
                 bool ok = true;
+                int mdist = 0; // manhattan dist from center.
                 for (auto odim : ofs.getDims()) {
                     auto& dname = odim.getName(); // a domain-dim name.
                     auto& dofs = odim.getVal(); // always [0..2].
@@ -200,7 +198,6 @@ namespace yask {
                     step = max(step, min_step);
                     step *= radius;
 
-                    int mdist = 0; // manhattan dist from center.
                     auto sz = center_block[dname];
                     switch (dofs) {
                     case 0:     // reduce size in 'odim'.
@@ -243,7 +240,7 @@ namespace yask {
                           bsize.makeDimValStr(" * "));
 
                 // Too small?
-                if (ok && bsize.product() < min_pts) {
+                if (ok && get_num_domain_points(bsize) < min_pts) {
                     n2small++;
                     ok = false;
                 }
@@ -251,7 +248,8 @@ namespace yask {
                 // Too few?
                 else if (ok) {
                     auto& opts = _context->get_settings();
-                    idx_t nblks = opts->_region_sizes.product() / bsize.product();
+                    idx_t nblks = get_num_domain_points(opts->_region_sizes) /
+                        get_num_domain_points(bsize);
                     if (nblks < min_blks) {
                         ok = false;
                         n2big++;

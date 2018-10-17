@@ -27,7 +27,7 @@ IN THE SOFTWARE.
 
 #include "Soln.hpp"
 
-// Simple tests to increment values in N spatial dims.
+// Simple tests for various YASK DSL features.
 
 class Test1dStencil : public StencilRadiusBase {
 
@@ -187,6 +187,48 @@ public:
 
 REGISTER_STENCIL(Test4dStencil);
 
+// Test misc indicse
+class TestMisc2dStencil : public StencilRadiusBase {
+
+protected:
+
+    // Indices & dimensions.
+    MAKE_STEP_INDEX(t);           // step in time dim.
+    MAKE_DOMAIN_INDEX(x);         // spatial dim.
+    MAKE_DOMAIN_INDEX(y);         // spatial dim.
+    MAKE_MISC_INDEX(a);
+    MAKE_MISC_INDEX(b);
+    MAKE_MISC_INDEX(c);
+    
+    // Time-varying grid. Intermix last domain dim with misc dims to make
+    // sure compiler creates correct layout.
+    MAKE_GRID(A, t, x, a, y, b, c); 
+
+public:
+
+    TestMisc2dStencil(StencilList& stencils, int radius=2) :
+        StencilRadiusBase("test_misc_2d", stencils, radius) { }
+
+    // Define equation to apply to all points in 'A' grid.
+    virtual void define() {
+
+        // Define the value at t+1 using asymmetric stencil
+        // with various pos & neg indices in misc dims.
+        GridValue v = A(t, x, 0, y, -1, 2) + 1.0;
+        for (int r = 1; r <= _radius; r++)
+            v += A(t, x + r, 3, y, 0, 1);
+        for (int r = 1; r <= _radius + 1; r++)
+            v += A(t, x - r, 4, y, 2, 1);
+        for (int r = 1; r <= _radius + 2; r++)
+            v += A(t, x, -2, y + r, 2, 0);
+        for (int r = 1; r <= _radius + 3; r++)
+            v += A(t, x, 0, y - r, 0, -1);
+        A(t+1, x, 1, y, 2, 3) EQUALS v;
+    }
+};
+
+REGISTER_STENCIL(TestMisc2dStencil);
+
 
 // A "stream-like" stencil that just reads and writes
 // with no spatial offsets.
@@ -319,7 +361,7 @@ protected:
 public:
 
     TestScratchStencil1(StencilList& stencils, int radius=2) :
-        StencilRadiusBase("test_scratch1", stencils, radius) { }
+        StencilRadiusBase("test_scratch_1d", stencils, radius) { }
 
     // Define equation to apply to all points in 'A' grid.
     virtual void define() {
@@ -365,7 +407,7 @@ protected:
 public:
 
     TestScratchStencil2(StencilList& stencils, int radius=2) :
-        StencilRadiusBase("test_scratch2", stencils, radius) { }
+        StencilRadiusBase("test_scratch_3d", stencils, radius) { }
 
     // Define equation to apply to all points in 'A' grid.
     virtual void define() {

@@ -36,6 +36,24 @@ namespace yask {
     class YkGridBase :
         public virtual yk_grid {
 
+        // Rank and local offsets in domain dim:
+
+        // | ... |        +------+       |
+        // |  global ofs  |      |       |
+        // |<------------>|grid  |       |
+        // |     |  loc   |domain|       |
+        // |rank |  ofs   |      |       |
+        // | ofs |<------>|      |       |
+        // |<--->|        +------+       |
+        // ^     ^        ^              ^
+        // |     |        |              last rank-domain index
+        // |     |        0 index in underlying storage.
+        // |     first rank-domain index
+        // first overall-domain index
+
+        // Rank offset is not necessarily a vector multiple.
+        // Local offset must be a vector multiple.
+
     protected:
         // Underlying storage.  A GenericGrid is similar to a YkGrid, but it
         // doesn't have stencil features like padding, halos, offsets, etc.
@@ -46,19 +64,23 @@ namespace yask {
         // Problem dimensions. (NOT grid dims.)
         DimsPtr _dims;
 
-        // The following indices have values for all dims in the grid.
+        // The following masks have one bit for each dim in the grid.
+        idx_t _step_dim_mask = 0;
+        idx_t _domain_dim_mask = 0;
+        idx_t _misc_dim_mask = 0;
+
+        // The following indices have one value for each dim in the grid.
         // All values are in units of reals, not underlying elements, if different.
-        // Should use either _offsets or _local_offsets to adjust an index to
-        // grid-relative depending on whether index is global or rank-relative.
+        // See diagram above for '_rank_offsets' and '_local_offsets'.
         // Comments show settings for domain dims | non-domain dims.
         Indices _domains;   // size of "interior" of grid | alloc size.
         Indices _req_left_pads, _req_right_pads; // requested extra space around domains | zero.
         Indices _actl_left_pads, _actl_right_pads; // actual extra space around domains | zero.
         Indices _left_halos, _right_halos; // space within pads for halo exchange | zero.
         Indices _left_wf_exts, _right_wf_exts; // additional halos for wave-fronts | zero.
-        Indices _offsets;   // offsets of this grid domain in overall problem | first index.
-        Indices _local_offsets; // offsets of this grid domain in this rank | first index.
-        Indices _allocs;    // actual grid allocation in reals | as domain dims.
+        Indices _rank_offsets;   // offsets of this grid domain in overall problem | zero.
+        Indices _local_offsets; // offsets of this grid domain in this rank | first index for misc.
+        Indices _allocs;    // actual grid alloc in reals | same.
 
         // Sizes in vectors for sizes that are always vec lens (to avoid division).
         // Each entry _vec_lens may be same as _dims->_fold_pts or one, depending
@@ -83,8 +105,11 @@ namespace yask {
         // Whether to resize this grid based on solution parameters.
         bool _fixed_size = false;
 
-        // Whether this is a scratch grid;
+        // Whether this is a scratch grid.
         bool _is_scratch = false;
+
+        // Whether this was created via an API.
+        bool _is_new_grid = false;
 
         // Convenience function to format indices like
         // "x=5, y=3".
@@ -150,7 +175,7 @@ namespace yask {
 
     public:
         YkGridBase(GenericGridBase* ggb,
-                   size_t ndims,
+                   const GridDimNames& dimNames,
                    DimsPtr dims);
         virtual ~YkGridBase() { }
 
@@ -167,7 +192,7 @@ namespace yask {
         virtual void set_fixed_size(bool is_fixed) {
             _fixed_size = is_fixed;
             if (is_fixed)
-                _offsets.setFromConst(0);
+                _rank_offsets.setFromConst(0);
         }
 
         // Scratch accessors.
@@ -175,8 +200,14 @@ namespace yask {
         virtual void set_scratch(bool is_scratch) {
             _is_scratch = is_scratch;
             if (is_scratch)
-                _offsets.setFromConst(0);
+                _rank_offsets.setFromConst(0);
         }
+
+        // New-grid accessors.
+        virtual bool is_new_grid() const { return _is_new_grid; }
+        virtual void set_new_grid(bool is_new_grid) {
+            _is_new_grid = is_new_grid;
+        }        
 
         // NUMA accessors.
         virtual int get_numa_preferred() const { return _ggb->get_numa_pref(); }
@@ -365,20 +396,22 @@ namespace yask {
         // they can break the usage model.
         // They are not protected because they are used from outside
         // this class hierarchy.
-        GET_GRID_API(_get_offset)
-        GET_GRID_API(_get_local_offset)
         GET_GRID_API(_get_first_alloc_index)
         GET_GRID_API(_get_last_alloc_index)
         GET_GRID_API(_get_left_wf_ext)
+        GET_GRID_API(_get_local_offset)
+        GET_GRID_API(_get_rank_offset)
         GET_GRID_API(_get_right_wf_ext)
         GET_GRID_API(_get_vec_len)
+
+        SET_GRID_API(_set_alloc_size)
         SET_GRID_API(_set_domain_size)
         SET_GRID_API(_set_left_pad_size)
-        SET_GRID_API(_set_right_pad_size)
         SET_GRID_API(_set_left_wf_ext)
-        SET_GRID_API(_set_right_wf_ext)
-        SET_GRID_API(_set_offset)
         SET_GRID_API(_set_local_offset)
+        SET_GRID_API(_set_rank_offset)
+        SET_GRID_API(_set_right_pad_size)
+        SET_GRID_API(_set_right_wf_ext)
 
         // Exposed APIs.
         GET_GRID_API(get_rank_domain_size)
@@ -542,8 +575,8 @@ namespace yask {
 
     // YASK grid of real elements.
     // Used for grids that do not contain folded vectors.
-    // If '_wrap_step_idx', then index to step dim will wrap around.
-    template <typename LayoutFn, bool _wrap_step_idx>
+    // If '_use_step_idx', then index to step dim will wrap around.
+    template <typename LayoutFn, bool _use_step_idx>
     class YkElemGrid : public YkGridBase {
 
     protected:
@@ -561,9 +594,9 @@ namespace yask {
                    const GridDimNames& dimNames,
                    KernelSettingsPtr* settings,
                    std::ostream** ostr) :
-            YkGridBase(&_data, dimNames.size(), dims),
+            YkGridBase(&_data, dimNames, dims),
             _data(name, dimNames, settings, ostr) {
-            _has_step_dim = _wrap_step_idx;
+            _has_step_dim = _use_step_idx;
             resize();
         }
 
@@ -601,7 +634,7 @@ namespace yask {
 
             // Special handling for step index.
             auto sp = +Indices::step_posn;
-            if (_wrap_step_idx) {
+            if (_use_step_idx) {
                 assert(alloc_step_idx == _wrap_step(idxs[sp]));
                 adj_idxs[sp] = alloc_step_idx;
             }
@@ -609,11 +642,14 @@ namespace yask {
 #pragma unroll
             // All other indices.
             for (int i = 0; i < n; i++) {
-                if (!(_wrap_step_idx && i == sp)) {
+                if (!(_use_step_idx && i == sp)) {
 
-                    // Adjust for offset and padding.
-                    // This gives a 0-based local element index.
-                    adj_idxs[i] = idxs[i] - _offsets[i] + _actl_left_pads[i];
+                    // Adjust for offsets and padding.
+                    // This gives a positive 0-based local element index.
+                    idx_t ai = idxs[i] + _actl_left_pads[i] -
+                        (_rank_offsets[i] + _local_offsets[i]);
+                    assert(ai >= 0);
+                    adj_idxs[i] = uidx_t(ai);
                 }
             }
 
@@ -654,10 +690,10 @@ namespace yask {
 
     // YASK grid of real vectors.
     // Used for grids that contain all the folded dims.
-    // If '_wrap_step_idx', then index to step dim will wrap around.
+    // If '_use_step_idx', then index to step dim will wrap around.
     // The '_templ_vec_lens' arguments must contain a list of vector lengths
     // corresponding to each dim in the grid.
-    template <typename LayoutFn, bool _wrap_step_idx, idx_t... _templ_vec_lens>
+    template <typename LayoutFn, bool _use_step_idx, idx_t... _templ_vec_lens>
     class YkVecGrid : public YkGridBase {
 
     protected:
@@ -678,10 +714,10 @@ namespace yask {
                   const GridDimNames& dimNames,
                   KernelSettingsPtr* settings,
                   std::ostream** ostr) :
-            YkGridBase(&_data, dimNames.size(), dims),
+            YkGridBase(&_data, dimNames, dims),
             _data(name, dimNames, settings, ostr),
             _vec_fold_posns(idx_t(0), int(dimNames.size())) {
-            _has_step_dim = _wrap_step_idx;
+            _has_step_dim = _use_step_idx;
 
             // Template vec lengths.
             const int nvls = sizeof...(_templ_vec_lens);
@@ -765,7 +801,7 @@ namespace yask {
 
             // Special handling for step index.
             auto sp = +Indices::step_posn;
-            if (_wrap_step_idx) {
+            if (_use_step_idx) {
                 assert(alloc_step_idx == _wrap_step(idxs[sp]));
                 vec_idxs[sp] = alloc_step_idx;
                 elem_ofs[sp] = 0;
@@ -777,11 +813,12 @@ namespace yask {
 #pragma novector
             // All other indices.
             for (int i = 0; i < nvls; i++) {
-                if (!(_wrap_step_idx && i == sp)) {
+                if (!(_use_step_idx && i == sp)) {
 
                     // Adjust for offset and padding.
                     // This gives a positive 0-based local element index.
-                    idx_t ai = idxs[i] - _offsets[i] + _actl_left_pads[i];
+                    idx_t ai = idxs[i] + _actl_left_pads[i] -
+                        (_rank_offsets[i] + _local_offsets[i]);
                     assert(ai >= 0);
                     uidx_t adj_idx = uidx_t(ai);
 
@@ -807,7 +844,7 @@ namespace yask {
             }
 
             // Get 1D element index into vector.
-            auto i = _dims->getElemIndexInVec(fold_ofs);
+            auto i = _dims.get()->getElemIndexInVec(fold_ofs);
 
 #ifdef DEBUG_LAYOUT
             // Compare to more explicit offset extraction.
@@ -878,26 +915,27 @@ namespace yask {
 
             // Special handling for step index.
             auto sp = +Indices::step_posn;
-            if (_wrap_step_idx) {
+            if (_use_step_idx) {
                 assert(alloc_step_idx == _wrap_step(vec_idxs[sp]));
                 adj_idxs[sp] = alloc_step_idx;
             }
 
 #pragma unroll
-            // All other indices.
+            // Domain indices.
             for (int i = 0; i < nvls; i++) {
-                if (!(_wrap_step_idx && i == sp)) {
+                if (!(_use_step_idx && i == sp)) {
 
                     // Adjust for padding.
+                    // Since the indices are rank-relative, subtract only
+                    // the local offsets. (Compare to getElemPtr().)
                     // This gives a 0-based local *vector* index.
-                    adj_idxs[i] = vec_idxs[i] - _vec_local_offsets[i] + _vec_left_pads[i];
+                    adj_idxs[i] = vec_idxs[i] + _vec_left_pads[i] - _vec_local_offsets[i];
                 }
             }
 
 #ifdef TRACE_MEM
-            if (checkBounds)
-                _data.get_ostr() << " => " << _data.get_index(adj_idxs);
-            _data.get_ostr() << std::endl << std::flush;
+            _data.get_ostr() << " => " << _data.get_index(adj_idxs, checkBounds) <<
+                std::endl << std::flush;
 #endif
 
             // Get ptr via layout in _data.
