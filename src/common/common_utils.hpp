@@ -33,6 +33,7 @@ IN THE SOFTWARE.
 #include <set>
 #include <vector>
 #include <map>
+#include <functional>
 
 // TODO: move the following to a common header file.
 // OpenMP or stubs.
