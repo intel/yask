@@ -50,20 +50,6 @@ typedef int MPI_Request;
 #endif
 #endif
 
-// OpenMP or stubs.
-// This must come before including the API header to make sure
-// _OPENMP is defined.
-#ifdef _OPENMP
-#include <omp.h>
-#else
-inline int omp_get_num_procs() { return 1; }
-inline int omp_get_num_threads() { return 1; }
-inline int omp_get_max_threads() { return 1; }
-inline int omp_get_thread_num() { return 0; }
-inline void omp_set_num_threads(int n) { }
-inline void omp_set_nested(int n) { }
-#endif
-
 // Include the API as early as possible. This helps to ensure that it will stand alone.
 #include "yask_kernel_api.hpp"
 
@@ -139,11 +125,6 @@ typedef std::uint64_t uidx_t;
 // Stringizing hacks for the C preprocessor.
 #define YSTR1(s) #s
 #define YSTR2(s) YSTR1(s)
-
-// Rounding macros for integer types.
-#define CEIL_DIV(numer, denom) (((numer) + (denom) - 1) / (denom))
-#define ROUND_UP(n, mult) (CEIL_DIV(n, mult) * (mult))
-#define ROUND_DOWN(n, mult) (((n) / (mult)) * (mult))
 
 // Default alloc settings.
 #define CACHELINE_BYTES  (64)

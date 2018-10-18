@@ -485,10 +485,17 @@ namespace yask {
             // block loop.
             nt /= _opts->num_block_threads;
             nt = std::max(nt, 1);
-            if (_opts->num_block_threads > 1)
+            yask_num_threads[0] = nt;
+
+            if (_opts->num_block_threads > 1) {
                 omp_set_nested(1);
-            else
+                omp_set_max_active_levels(2);
+                yask_num_threads[1] = _opts->num_block_threads;
+            }
+            else {
                 omp_set_nested(0);
+                omp_set_max_active_levels(1);
+            }
 
             //TRACE_MSG("set_region_threads: omp_set_num_threads=" << nt);
             omp_set_num_threads(nt);
@@ -504,7 +511,8 @@ namespace yask {
             int nt = _opts->num_block_threads;
             nt = std::max(nt, 1);
             //TRACE_MSG("set_block_threads: omp_set_num_threads=" << nt);
-            omp_set_num_threads(nt);
+            if (omp_get_max_active_levels() > 1)
+                omp_set_num_threads(nt);
             return nt;
         }
 
@@ -713,10 +721,12 @@ namespace yask {
     auto* opts = cp->get_settings().get();                              \
     auto* mpiInfo = cp->get_mpi_info().get();                           \
     auto* dims = cp->get_dims().get();                                  \
+    auto& domain_dims = dims->_domain_dims;                             \
+    auto& stencil_dims = dims->_stencil_dims;                           \
     const int nddims = NUM_DOMAIN_DIMS;                                 \
-    assert(nddims == dims->_domain_dims.size());                        \
+    assert(nddims == domain_dims.size());                               \
     const int nsdims = NUM_STENCIL_DIMS;                                \
-    assert(nsdims == dims->_stencil_dims.size());                       \
+    assert(nsdims == stencil_dims.size());                              \
     const auto& step_dim = dims->_step_dim;                             \
     const auto step_posn = 0;                                           \
     assert(step_posn == +Indices::step_posn)

@@ -1376,18 +1376,8 @@ namespace yask {
 
         // Run a dummy nested OMP loop to make sure nested threading is
         // initialized.
-#ifdef _OPENMP
-#pragma omp parallel for
-        for (int i = 0; i < rthreads * 100; i++) {
-
-            idx_t dummy = 0;
-            set_block_threads();
-#pragma omp parallel for reduction(+:dummy)
-            for (int j = 0; j < i * 100; j++) {
-                dummy += j;
-            }
-        }
-#endif
+        yask_for(0, rthreads * 100, 1,
+                 [&](idx_t start, idx_t stop, idx_t thread_num) { });
 
         // Some grid stats.
         os << endl;
@@ -1593,147 +1583,59 @@ namespace yask {
     // Step-vars are tested dynamically for each step
     // as it is executed.
     void StencilBundleBase::find_bounding_box() {
-        StencilContext& context = *_generic_context;
-        ostream& os = context.get_ostr();
-        auto settings = context.get_settings();
-        auto dims = context.get_dims();
-        auto& domain_dims = dims->_domain_dims;
-        auto& step_dim = dims->_step_dim;
-        auto& stencil_dims = dims->_stencil_dims;
-        auto nddims = domain_dims.size();
-        auto nsdims = stencil_dims.size();
-        auto step_posn = +Indices::step_posn;
+        CONTEXT_VARS(_generic_context);
         TRACE_MSG3("find_bounding_box for '" << get_name() << "'...");
-        YaskTimer bbtimer;
 
-        // If there is no condition, BB is same as parent.
+        // Init overall bundle BB to that of parent and clear list.
+        _bundle_bb = cp->ext_bb;
+        assert(_bundle_bb.bb_valid);
+        _bb_list.clear();
+        
+        // If BB is empty, we are done.
+        if (!_bundle_bb.bb_size)
+            return;
+
+        // If there is no condition, just add full BB to list.
         if (!is_sub_domain_expr()) {
-            _bundle_bb = context.ext_bb;
-        }
-
-        // There is a condition.
-        else {
-            
-            // First, find an overall BB around all the
-            // valid points in the bundle.
-            bbtimer.start();
-
-            // Init min vars w/max val and vice-versa.
-            Indices min_pts(idx_max, nsdims);
-            Indices max_pts(idx_min, nsdims);
-            idx_t npts = 0;
-
-            // Begin, end tuples. Use 'ext_bb' to scan across domain in this
-            // rank including any extensions for wave-fronts.
-            IdxTuple begin(stencil_dims);
-            begin.setVals(context.ext_bb.bb_begin, false);
-            begin[step_dim] = 0;
-            IdxTuple end(stencil_dims);
-            end.setVals(context.ext_bb.bb_end, false);
-            end[step_dim] = 1;      // one time-step only.
-
-            // Indices needed for the generated 'misc' loops.
-            ScanIndices misc_idxs(*dims, false, 0);
-            misc_idxs.begin = begin;
-            misc_idxs.end = end;
-
-            // Define misc-loop function.  Since step is always 1, we ignore
-            // misc_stop.  Update only if point is in domain for this bundle.
-#define misc_fn(misc_idxs) do {                                         \
-                if (is_in_valid_domain(misc_idxs.start)) {              \
-                    min_pts = min_pts.minElements(misc_idxs.start);     \
-                    max_pts = max_pts.maxElements(misc_idxs.start);     \
-                    npts++;                                             \
-                } } while(0)
-        
-            // Define OMP reductions to be used in generated code.
-#define OMP_PRAGMA_SUFFIX reduction(+:npts)     \
-                reduction(min_idxs:min_pts)     \
-                reduction(max_idxs:max_pts)
-
-            // Scan through n-D space.  This scan sets min_pts & max_pts for all
-            // stencil dims (including step dim) and npts to the number of valid
-            // points.
-#include "yask_misc_loops.hpp"
-#undef misc_fn
-            bbtimer.stop();
-            TRACE_MSG3("Overall BB construction done in " <<
-                bbtimer.get_elapsed_secs() << " secs.");
-        
-            // Init bb vars to ensure they contain correct dims.
-            _bundle_bb.bb_begin = domain_dims;
-            _bundle_bb.bb_end = domain_dims;
-
-            // If any points, set begin vars to min indices and end vars to one
-            // beyond max indices.
-            if (npts) {
-            IdxTuple tmp(stencil_dims); // create tuple w/stencil dims.
-            min_pts.setTupleVals(tmp);  // convert min_pts to tuple.
-            _bundle_bb.bb_begin.setVals(tmp, false); // set bb_begin to domain dims of min_pts.
-
-            max_pts.setTupleVals(tmp); // convert min_pts to tuple.
-            _bundle_bb.bb_end.setVals(tmp, false); // set bb_end to domain dims of max_pts.
-            _bundle_bb.bb_end = _bundle_bb.bb_end.addElements(1); // end = last + 1.
-            }
-
-            // No points, just set to zero.
-            else {
-                _bundle_bb.bb_begin.setValsSame(0);
-                _bundle_bb.bb_end.setValsSame(0);
-            }
-            _bundle_bb.bb_num_points = npts;
-
-            // Finalize overall BB.
-            _bundle_bb.update_bb(get_name(), context, false);
-        }
-
-        // If BB is empty, add nothing.
-        if (!_bundle_bb.bb_num_points) {
-            TRACE_MSG3("BB is empty");
-        }
-        
-        // If the BB is full (solid), this BB is the only bb.
-        else if (_bundle_bb.bb_is_full) {
             TRACE_MSG3("adding 1 sub-BB: [" << _bundle_bb.bb_begin.makeDimValStr() <<
                        " ... " << _bundle_bb.bb_end.makeDimValStr() << ")");
-
-            // Add it to the list, and we're done.
             _bb_list.push_back(_bundle_bb);
+            return;
         }
 
-        // Otherwise, the overall BB is not full.
-        // This is a common case for boundary conditions.
-        // Create list of full BBs (non-overlapping & with no invalid
+        // Goal: Create list of full BBs (non-overlapping & with no invalid
         // points) inside overall BB.
-        else {
-            bbtimer.clear();
-            bbtimer.start();
+        YaskTimer bbtimer;
+        bbtimer.start();
 
-            // Divide the overall BB into a slice for each thread
-            // across the outer dim.
-            const int odim = 0;
-            idx_t outer_len = _bundle_bb.bb_len[odim];
-            idx_t nthreads = omp_get_max_threads();
-            idx_t len_per_thr = CEIL_DIV(outer_len, nthreads);
+        // Divide the overall BB into a slice for each thread
+        // across the outer dim.
+        const int odim = 0;
+        idx_t outer_len = _bundle_bb.bb_len[odim];
+        idx_t nthreads = yask_get_num_threads();
+        idx_t len_per_thr = CEIL_DIV(outer_len, nthreads);
+        TRACE_MSG3("find_bounding_box: running " << nthreads << " thread(s) over " <<
+                   outer_len << " point(s) in outer dim");
 
-            // List of BBs for each thread.
-            BBList bb_lists[nthreads];
+        // List of full BBs for each thread.
+        BBList bb_lists[nthreads];
 
-            // Run rect-finding code on each thread.
-            // When these are done, we will merge the
-            // rects from all threads.
-#pragma omp parallel for
-            for (int n = 0; n < nthreads; n++) {
-                auto& cur_bb_list = bb_lists[n];
+        // Run rect-finding code on each thread.
+        // When these are done, we will merge the
+        // rects from all threads.
+        yask_for
+            (0, nthreads, 1,
+             [&](idx_t start, idx_t stop, idx_t thread_num) {
+                auto& cur_bb_list = bb_lists[start];
 
                 // Begin and end of this slice.
                 // These tuples contain domain dims.
                 IdxTuple slice_begin(_bundle_bb.bb_begin);
-                slice_begin[odim] += n * len_per_thr;
+                slice_begin[odim] += start * len_per_thr;
                 IdxTuple slice_end(_bundle_bb.bb_end);
                 slice_end[odim] = min(slice_end[odim], slice_begin[odim] + len_per_thr);
                 if (slice_end[odim] <= slice_begin[odim])
-                    continue;
+                    return; // from lambda.
                 Indices islice_begin(slice_begin);
                 Indices islice_end(slice_end);
 
@@ -1849,77 +1751,93 @@ namespace yask {
                             BoundingBox new_bb;
                             new_bb.bb_begin = bdpt;
                             new_bb.bb_end = bdpt.addElements(scan_len);
-                            new_bb.update_bb("sub-bb", context, true);
+                            new_bb.update_bb("sub-bb", *cp, true);
                             cur_bb_list.push_back(new_bb);
                             
                         } // new rect found.
 
                         return true;  // from labmda; keep looking.
                     }); // Looking for new rects.
-            } // threads/slices.
-            TRACE_MSG3("sub-bbs found in " <<
-                       bbtimer.get_secs_since_start() << " secs.");
+            }); // threads/slices.
+        TRACE_MSG3("sub-bbs found in " <<
+                   bbtimer.get_secs_since_start() << " secs.");
+        // At this point, we have a set of full BBs.
 
-            // Collect BBs in all slices.
-            // TODO: merge in a binary tree instead of sequentially.
-            for (int n = 0; n < nthreads; n++) {
-                auto& cur_bb_list = bb_lists[n];
-                TRACE_MSG3("processing " << cur_bb_list.size() <<
-                           " sub-BB(s) in bundle '" << get_name() <<
-                           "' from thread " << n);
+        // Reset overall BB.
+        _bundle_bb.bb_num_points = 0;
+            
+        // Collect BBs in all slices.
+        // TODO: merge in a parallel binary tree instead of sequentially.
+        for (int n = 0; n < nthreads; n++) {
+            auto& cur_bb_list = bb_lists[n];
+            TRACE_MSG3("processing " << cur_bb_list.size() <<
+                       " sub-BB(s) in bundle '" << get_name() <<
+                       "' from thread " << n);
 
-                // BBs in slice 'n'.
-                for (auto& bbn : cur_bb_list) {
-                    TRACE_MSG3(" sub-BB: [" << bbn.bb_begin.makeDimValStr() <<
-                               " ... " << bbn.bb_end.makeDimValStr() << ")");
+            // BBs in slice 'n'.
+            for (auto& bbn : cur_bb_list) {
+                TRACE_MSG3(" sub-BB: [" << bbn.bb_begin.makeDimValStr() <<
+                           " ... " << bbn.bb_end.makeDimValStr() << ")");
 
-                    // Don't bother with empty BB.
-                    if (bbn.bb_size == 0)
-                        continue;
+                // Don't bother with empty BB.
+                if (bbn.bb_size == 0)
+                    continue;
 
-                    // Scan existing final BBs looking for one to merge with.
-                    bool do_merge = false;
-                    for (auto& bb : _bb_list) {
+                // Init or update overall BB.
+                if (!_bundle_bb.bb_num_points) {
+                    _bundle_bb.bb_begin = bbn.bb_begin;
+                    _bundle_bb.bb_end = bbn.bb_end;
+                } else {
+                    _bundle_bb.bb_begin = _bundle_bb.bb_begin.minElements(bbn.bb_begin);
+                    _bundle_bb.bb_end = _bundle_bb.bb_end.maxElements(bbn.bb_end);
+                }
+                _bundle_bb.bb_num_points += bbn.bb_size;
 
-                        // Can 'bbn' be merged with 'bb'?
-                        do_merge = true;
-                        for (int i = 0; i < nddims && do_merge; i++) {
+                // Scan existing final BBs looking for one to merge with.
+                bool do_merge = false;
+                for (auto& bb : _bb_list) {
 
-                            // Must be adjacent in outer dim.
-                            if (i == odim) {
-                                if (bb.bb_end[i] != bbn.bb_begin[i])
-                                    do_merge = false;
-                            }
+                    // Can 'bbn' be merged with 'bb'?
+                    do_merge = true;
+                    for (int i = 0; i < nddims && do_merge; i++) {
 
-                            // Must be aligned in other dims.
-                            else {
-                                if (bb.bb_begin[i] != bbn.bb_begin[i] ||
-                                    bb.bb_end[i] != bbn.bb_end[i])
-                                    do_merge = false;
-                            }
+                        // Must be adjacent in outer dim.
+                        if (i == odim) {
+                            if (bb.bb_end[i] != bbn.bb_begin[i])
+                                do_merge = false;
                         }
-                        if (do_merge) {
 
-                            // Merge by just increasing the size of 'bb'.
-                            bb.bb_end[odim] = bbn.bb_end[odim];
-                            TRACE_MSG3("  merging to form [" << bb.bb_begin.makeDimValStr() <<
-                                       " ... " << bb.bb_end.makeDimValStr() << ")");
-                            bb.update_bb("sub-bb", context, true);
-                            break;
+                        // Must be aligned in other dims.
+                        else {
+                            if (bb.bb_begin[i] != bbn.bb_begin[i] ||
+                                bb.bb_end[i] != bbn.bb_end[i])
+                                do_merge = false;
                         }
                     }
+                    if (do_merge) {
 
-                    // If not merged, add 'bbn' as new.
-                    if (!do_merge) {
-                        _bb_list.push_back(bbn);
-                        TRACE_MSG3("  adding as final sub-BB #" << _bb_list.size());
+                        // Merge by just increasing the size of 'bb'.
+                        bb.bb_end[odim] = bbn.bb_end[odim];
+                        TRACE_MSG3("  merging to form [" << bb.bb_begin.makeDimValStr() <<
+                                   " ... " << bb.bb_end.makeDimValStr() << ")");
+                        bb.update_bb("sub-bb", *cp, true);
+                        break;
                     }
                 }
+
+                // If not merged, add 'bbn' as new.
+                if (!do_merge) {
+                    _bb_list.push_back(bbn);
+                    TRACE_MSG3("  adding as final sub-BB #" << _bb_list.size());
+                }
             }
-            bbtimer.stop();
-            TRACE_MSG3("Final bounding-box construction done in " <<
-                       bbtimer.get_elapsed_secs() << " secs.");
-        } // Finding constituent rects.
+        }
+
+        // Finalize overall BB.
+        _bundle_bb.update_bb(get_name(), *cp, false);
+        bbtimer.stop();
+        TRACE_MSG3("find-bounding-box: done in " <<
+                   bbtimer.get_elapsed_secs() << " secs.");
     }
 
     // Compute convenience values for a bounding-box.

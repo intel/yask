@@ -55,8 +55,10 @@ namespace yask {
 #endif
 
         // Nothing to do if outer BB is empty.
-        if (_bundle_bb.bb_num_points == 0)
+        if (_bundle_bb.bb_num_points == 0) {
+            TRACE_MSG3("calc_mini_block: empty BB");
             return;
+        }
         
         // TODO: if >1 BB, check limits of outer one first to save time.
         
