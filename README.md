@@ -57,6 +57,8 @@ YASK contains a domain-specific compiler to convert scalar stencil code to SIMD-
 To continue with building and running, see YASK-intro.pdf in the docs directory.
 
 ### Backward-compatibility notices:
+* Version 2.15.04 required a call to `yc_grid::set_dynamic_step_alloc(true)` to allow changing the
+allocation in the step (time) dimension for grid variables created at YASK compile-time.
 * Version 2.15.02 required all "misc" indices to be yask-compiler-time constants.
 * Version 2.14.05 changed the meaning of temporal sizes so that 0 means never do temporal blocking and 1 allows blocking within a single time-step for multi-pack solutions. The behavior of the default settings have not changed.
 * Version 2.13.06 changed the default behavior of the performance-test utility (`yask.sh`) to run trials for a given amount of time instead of a given number of steps. As of version 2.13.08, use the `-trial_time` option to specify the number of seconds to run. To force a specific number of trials as in previous versions, use the `-trial_steps` option.

@@ -564,8 +564,6 @@ SUB_BLOCK_LOOP_CODE	?=	$(SUB_BLOCK_LOOP_OUTER_MODS) loop($(SUB_BLOCK_LOOP_ORDER)
 				$(SUB_BLOCK_LOOP_INNER_MODS) call(calc_inner_loop(thread_idx)); }
 
 # General-purpose parallel loop.
-# Nested OpenMP is not used here because there is no sharing between threads.
-# TODO: Consider using nested OpenMP to hide more latency.
 MISC_LOOP_OPTS		?=	-ndims $(NSDIMS) -inVar misc_idxs \
 				-ompConstruct '$(omp_par_for) schedule($(omp_misc_schedule)) proc_bind(spread)'
 MISC_LOOP_OUTER_MODS	?=	omp

@@ -618,7 +618,7 @@ namespace yask {
            - For each domain dimension of the grid,
            the new grid's domain size will be the same as that returned by
            get_rank_domain_size().
-           - Calls to set_rank_domain_size() will resize the corresponding domain
+           - Calls to set_rank_domain_size() will automatically resize the corresponding domain
            size in this grid.
            - This grid's first domain index in this rank will be determined
            by the position of this rank.
@@ -688,10 +688,11 @@ namespace yask {
 
            The following behaviors are different from both pre-defined grids
            and those created via new_grid():
-           - For each domain dimension of the grid,
-           the new grid's domain size is provided during creation and cannot be changed.
-           - Calls to set_rank_domain_size() will *not* resize the corresponding domain
-           size in this grid.
+           - Calls to set_rank_domain_size() will *not* automatically resize
+           the corresponding domain size in this grid--this is where the term "fixed" originates.
+           - In contrast, for each domain dimension of the grid,
+           the new grid's domain size can be changed independently of the domain
+           size of the application.
            - This grid's first domain index in this rank will be fixed at zero (0)
            regardless of this rank's position.
            - This grid's padding size will be affected only by calls to
@@ -704,6 +705,8 @@ namespace yask {
            yk_grid::set_alloc_size().
            - Storage may be allocated via yk_grid::alloc_storage() or
            yk_solution::prepare_solution().
+
+           See yk_grid::set_alloc_size().
 
            The following behaviors are different than a pre-defined grid
            but the same as those created via new_grid():

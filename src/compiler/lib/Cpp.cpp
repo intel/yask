@@ -50,8 +50,8 @@ namespace yask {
                                          string optArg) {
 
         // Get/set local vars.
-        string gridPtr = getLocalVar(os, gp.getGridPtr(), "auto* restrict");
-        string stepArgVar = getLocalVar(os, gp.makeStepArgStr(gridPtr, *_dims), "const auto");
+        string gridPtr = getLocalVar(os, gp.getGridPtr(), _grid_ptr_type);
+        string stepArgVar = getLocalVar(os, gp.makeStepArgStr(gridPtr, *_dims), _step_val_type);
 
         ostringstream oss;
         oss << gridPtr << "->" << fname << "(";
@@ -88,8 +88,9 @@ namespace yask {
         string gtype = folded ? "YkVecGrid" : "YkElemGrid";
 
         // Get/set local vars.
-        string gridPtr = getLocalVar(os, gp.getGridPtr(), "auto");
-        string stepArgVar = getLocalVar(os, gp.makeStepArgStr(gridPtr, *_dims), "auto");
+        string gridPtr = getLocalVar(os, gp.getGridPtr(), CppPrintHelper::_grid_ptr_type);
+        string stepArgVar = getLocalVar(os, gp.makeStepArgStr(gridPtr, *_dims),
+                                        CppPrintHelper::_step_val_type);
 
         // Assume that broadcast will be handled automatically by
         // operator overloading in kernel code.
@@ -166,8 +167,9 @@ namespace yask {
                                                 bool isNorm) {
 
         // Get/set local vars.
-        string gridPtr = getLocalVar(os, gp.getGridPtr(), "auto");
-        string stepArgVar = getLocalVar(os, gp.makeStepArgStr(gridPtr, *_dims), "auto");
+        string gridPtr = getLocalVar(os, gp.getGridPtr(), CppPrintHelper::_grid_ptr_type);
+        string stepArgVar = getLocalVar(os, gp.makeStepArgStr(gridPtr, *_dims),
+                                        CppPrintHelper::_step_val_type);
 
         ostringstream oss;
         oss << gridPtr << "->" << funcName << "(";
@@ -393,7 +395,20 @@ namespace yask {
         // Ignore out-of-range errors because we might get a base pointer to an
         // element before the allocated range.
         auto vp = printVecPointCall(os, gp, "getVecPtrNorm", "", "false", true);
-        os << _linePrefix << getVarType() << "* " << ptrName << " = " << vp << _lineSuffix;
+
+        // Ptr will be unique if:
+        // - Grid doesn't have step dim, or
+        // - Grid doesn't allow dynamic step allocs and the alloc size is one (TODO), or
+        // - Grid doesn't allow dynamic step allocs and all accesses are via
+        //   offsets from the step dim w/compatible offsets (TODO).
+        // TODO: must also share pointers during code gen in last 2 cases.
+        auto* grid = gp.getGrid();
+        bool is_unique = (grid->getStepDim() == nullptr);
+        // || (!grid->is_dynamic_step_alloc() && grid->get_step_alloc_size() == 1);
+        string type = is_unique ? "auto* restrict " : "auto* ";
+
+        // Print type and value.
+        os << _linePrefix << type << ptrName << " = " << vp << _lineSuffix;
     }
 
     // Get expression for offset of 'gp' from base pointer.  Base pointer
@@ -631,11 +646,12 @@ namespace yask {
     void CppStepVarPrintVisitor::visit(GridPoint* gp) {
 
         // Pointer to grid.
-        string gridPtr = _cvph.getLocalVar(_os, gp->getGridPtr(), "auto* restrict");
+        string gridPtr = _cvph.getLocalVar(_os, gp->getGridPtr(), CppPrintHelper::_grid_ptr_type);
 
         // Time var.
         auto* dims = _cvph.getDims();
-        string stepArgVar = _cvph.getLocalVar(_os, gp->makeStepArgStr(gridPtr, *dims), "const auto");
+        string stepArgVar = _cvph.getLocalVar(_os, gp->makeStepArgStr(gridPtr, *dims),
+                                              CppPrintHelper::_step_val_type);
     }
 
     // Print invariant grid-access vars for an inner loop.

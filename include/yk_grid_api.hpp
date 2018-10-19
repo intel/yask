@@ -652,6 +652,13 @@ namespace yask {
 
         /* Advanced APIs for yk_grid found below are not needed for most applications. */
 
+        /// **[Advanced]** Get whether the allocation of the step dimension of this grid can be modified at run-time.
+        /**
+           See set_alloc_size().
+         */
+        virtual bool
+        is_dynamic_step_alloc() const =0;
+
         /// **[Advanced]** Set the default preferred NUMA node on which to allocate data.
         /**
            This value is used when allocating data for this grid.
@@ -776,14 +783,25 @@ namespace yask {
 
         /// **[Advanced]** Set the number of elements to allocate in the specified dimension.
         /**
-           This setting is only allowed in the step dimension for any grid
-           or in a misc dimension for a grid created via new_grid() or
-           new_fixed_grid().
-           Typically, the allocation in the step dimension is determined by the
-           stencil compiler, but
-           this function allows you to override that value.
-           Allocations in other dimensions should be set indirectly
-           via the domain and padding sizes.
+           Setting an allocation is only allowed in the following cases.
+           Grids created via yc_solution::new_grid() are defined at YASK
+           compile time, and grids created via \ref yk_solution methods
+           are defined at YASK kernel run time.
+           
+           Grid creation time | Grid creation method | Step dim | Domain dim | Misc dim |
+           -------------------|----------------------|----------|------------|----------|
+           Compile-time | yc_solution::new_grid() + yc_grid::set_dynamic_step_alloc (false) | No | No | No |
+           Compile-time | yc_solution::new_grid() + yc_grid::set_dynamic_step_alloc (true) | Yes | No | No |
+           Run-time | yk_solution::new_grid() | Yes | No | Yes |
+           Run-time | yk_solution::new_fixed_size_grid() | Yes | Yes | Yes |
+
+           @note By default, grid variables created via yc_solution::new_grid()
+           do _not_ allow dynamic step allocation.
+           @note The term "fixed" in yk_solution::new_fixed_size_grid() means that the
+           domain size will not change automatically when its solution domain
+           size changes. It does not mean that the sizes cannot be changed
+           via the APIs--quite the opposite.
+
            The allocation size cannot be changed after data storage
            has been allocated for this grid.
         */
