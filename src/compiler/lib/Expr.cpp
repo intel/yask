@@ -785,14 +785,25 @@ namespace yask {
 
     // Make string like "g->_wrap_step(t+1)" from original arg "t+1"
     // if grid uses step dim, "0" otherwise.
+    // If grid doesn't allow dynamic alloc, set to fixed value.
     string GridPoint::makeStepArgStr(const string& gridPtr, const Dimensions& dims) const {
         ostringstream oss;
         auto& gd = _grid->getDims();
         for (size_t i = 0; i < gd.size(); i++) {
             auto dname = gd[i]->getName();
             auto& arg = _args.at(i);
-            if (dname == dims._stepDim)
-                return gridPtr + "->_wrap_step(" + arg->makeStr() + ")";
+            if (dname == dims._stepDim) {
+                if (_grid->is_dynamic_step_alloc())
+                    return gridPtr + "->_wrap_step(" + arg->makeStr() + ")";
+                else {
+                    auto step_alloc = _grid->get_step_alloc_size();
+                    if (step_alloc == 1)
+                        return "0"; // 1 alloc => always index 0.
+                    else 
+                        return "imod_flr<idx_t>(" + arg->makeStr() + ", " +
+                            to_string(step_alloc) + ")";
+                }
+            }
         }
         return "0";
     }

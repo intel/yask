@@ -27,6 +27,7 @@ IN THE SOFTWARE.
 
 #pragma once
 
+// Include this first to assure NDEBUG is set properly.
 #include "yask_assert.hpp"
 
 #include <math.h>
@@ -42,6 +43,8 @@ IN THE SOFTWARE.
 #include <vector>
 #include <cstdarg>
 #include <string.h>
+
+#include "common_utils.hpp"
 
 namespace yask {
 
@@ -597,6 +600,9 @@ namespace yask {
                 Tuple tp(*this);
 
                 // Loop through points.
+                // Each thread gets its own copy of 'tp', which
+                // gets updated with the loop index.
+                // TODO: convert to yask_for().
 #pragma omp parallel for firstprivate(tp)
                 for (T i = 0; i < dsize; i++) {
                     tp.setVal(curDimNum, i);
@@ -604,7 +610,9 @@ namespace yask {
                 }
             }
 
-            // If >1 dim, parallelize over outer dims.
+            // If >1 dim, parallelize over outer dims only,
+            // streaming across inner dim in each thread.
+            // This is to maximize HW prefetch benefit.
             else {
 
                 // Total number of elements to visit.
@@ -614,16 +622,17 @@ namespace yask {
                 int lastDimNum = (step > 0) ? nd-1 : 0;
                 T nel = getVal(lastDimNum);
 
-                // Parallel loop over elements, skipping by size of last dim.
-#pragma omp parallel for
-                for (T i = 0; i < ne; i += nel) {
+                // Parallel loop over elements w/stride = size of
+                // last dim.
+                yask_for(0, ne, nel,
+                         [&](idx_t start, idx_t stop, idx_t thread_num) {
 
-                    // Get indices at this position.
-                    Tuple tp = unlayout(i);
-
-                    // Visit points in last dim.
-                    _visitAllPoints(visitor, lastDimNum, step, tp);
-                }
+                             // Convert linear index to n-dimensional tuple.
+                             Tuple tp = unlayout(start);
+                             
+                             // Visit points in last dim.
+                             _visitAllPoints(visitor, lastDimNum, step, tp);
+                         });
             }
             return true;
 #else

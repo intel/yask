@@ -94,6 +94,9 @@ namespace yask {
         // If true, will always be in Indices::step_posn.
         bool _has_step_dim = false;
 
+        // Whether step alloc can be changed.
+        bool _is_dynamic_step_alloc = false;
+
         // Data that needs to be copied to neighbor's halos if using MPI.
         // If this grid has the step dim, there is one bit per alloc'd step.
         // Otherwise, only bit 0 is used.
@@ -191,10 +194,18 @@ namespace yask {
         virtual bool is_fixed_size() const { return _fixed_size; }
         virtual void set_fixed_size(bool is_fixed) {
             _fixed_size = is_fixed;
-            if (is_fixed)
+            if (is_fixed) {
                 _rank_offsets.setFromConst(0);
+                _is_dynamic_step_alloc = true;
+            }
         }
-
+        virtual bool is_dynamic_step_alloc() const {
+            return _is_dynamic_step_alloc;
+        }
+        virtual void _set_dynamic_step_alloc(bool is_dynamic) {
+            _is_dynamic_step_alloc = is_dynamic;
+        }
+        
         // Scratch accessors.
         virtual bool is_scratch() const { return _is_scratch; }
         virtual void set_scratch(bool is_scratch) {
@@ -207,6 +218,8 @@ namespace yask {
         virtual bool is_new_grid() const { return _is_new_grid; }
         virtual void set_new_grid(bool is_new_grid) {
             _is_new_grid = is_new_grid;
+            if (_is_new_grid)
+                _is_dynamic_step_alloc = true;
         }        
 
         // NUMA accessors.
@@ -243,13 +256,8 @@ namespace yask {
             //  2 => 0.
 
             // Avoid discontinuity caused by dividing negative numbers by
-            // adding a large offset to the t index.  So, t can be negative,
-            // but not so much that it would still be negative after adding
-            // the offset.  This should not be a practical restriction.
-            t += idx_t(0x10000);
-            assert(t >= 0);
-
-            idx_t res = t % _domains[+Indices::step_posn];
+            // using floored-mod.
+            idx_t res = imod_flr(t, _domains[+Indices::step_posn]);
             return res;
         }
 

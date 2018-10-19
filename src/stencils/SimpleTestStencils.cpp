@@ -460,7 +460,7 @@ public:
     // Define equation to apply to all points in 'A' grid.
     virtual void define() {
 
-        // Sub-domain.
+        // Define interior sub-domain.
         Condition sd0 = (x >= first_index(x) + 5) && (x <= last_index(x) - 3);
         
         // Define interior points.

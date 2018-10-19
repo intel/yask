@@ -114,7 +114,8 @@ namespace yask {
     SET_GRID_API(set_left_halo_size, _left_halos[posn] = n; resize(), false, true, false)
     SET_GRID_API(set_right_halo_size, _right_halos[posn] = n; resize(), false, true, false)
     SET_GRID_API(set_halo_size, _left_halos[posn] = _right_halos[posn] = n; resize(), false, true, false)
-    SET_GRID_API(set_alloc_size, _domains[posn] = n; resize(), true, false, _is_new_grid)
+    SET_GRID_API(set_alloc_size, _domains[posn] = n; resize(),
+                 _is_new_grid || _is_dynamic_step_alloc, _fixed_size, _is_new_grid)
     SET_GRID_API(set_left_min_pad_size, _req_left_pads[posn] = n; resize(), false, true, false)
     SET_GRID_API(set_right_min_pad_size, _req_right_pads[posn] = n; resize(), false, true, false)
     SET_GRID_API(set_min_pad_size, _req_left_pads[posn] = _req_right_pads[posn] = n; resize(),

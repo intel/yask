@@ -25,6 +25,7 @@ IN THE SOFTWARE.
 
 #pragma once
 
+// Include this first to assure NDEBUG is set properly.
 #include "yask_assert.hpp"
 
 namespace yask {

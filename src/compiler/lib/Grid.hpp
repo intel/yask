@@ -47,6 +47,8 @@ namespace yask {
         string _name;           // name of this grid.
         IndexExprPtrVec _dims;  // dimensions of this grid.
         bool _isScratch = false; // true if a temp grid.
+        bool _isStepAllocFixed = true; // step alloc cannot be changed at run-time.
+        idx_t _stepAlloc = 0;         // step-alloc override (0 => calculate).
 
         // Ptr to solution that this grid belongs to (its parent).
         StencilSolution* _soln = 0;
@@ -277,6 +279,22 @@ namespace yask {
             return dp->getName();
         }
         virtual std::vector<std::string> get_dim_names() const;
+        virtual bool
+        is_dynamic_step_alloc() const {
+            return !_isStepAllocFixed;
+        }
+        virtual void
+        set_dynamic_step_alloc(bool enable) {
+            _isStepAllocFixed = !enable;
+        }
+        virtual idx_t
+        get_step_alloc_size() const {
+            return getStepDimSize();
+        }
+        virtual void
+        set_step_alloc_size(idx_t size) {
+            _stepAlloc = size;
+        }
         virtual yc_grid_point_node_ptr
         new_grid_point(const std::vector<yc_number_node_ptr>& index_exprs);
         virtual yc_grid_point_node_ptr
@@ -323,8 +341,8 @@ namespace yask {
         string _eq_bundle_basename_default = "stencil_bundle";
         bool _allowUnalignedLoads = false;
         bool _bundleScratch = true;
-        int _haloSize = 0;      // 0 => calculate each halo separately and automatically.
-        int _stepAlloc = 0;     // 0 => calculate step allocation automatically.
+        int _haloSize = 0;      // 0 => calculate each halo automatically.
+        int _stepAlloc = 0;     // 0 => calculate each step allocation automatically.
         int _maxExprSize = 50;
         int _minExprSize = 2;
         bool _doCse = true;      // do common-subexpr elim.

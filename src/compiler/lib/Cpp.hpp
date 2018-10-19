@@ -42,6 +42,9 @@ namespace yask {
     class CppPrintHelper : public PrintHelper {
 
     public:
+        static constexpr const char* _grid_ptr_type = "auto*";
+        static constexpr const char* _step_val_type = "const auto";
+
         CppPrintHelper(const Dimensions* dims,
                        const CounterVisitor* cv,
                        const string& varPrefix,
@@ -92,7 +95,7 @@ namespace yask {
                           const string& lineSuffix) :
             VecPrintHelper(vv, allowUnalignedLoads, dims, cv,
                            varPrefix, varType, linePrefix, lineSuffix) { }
-
+        
     protected:
 
         // Vars for tracking pointers to grid values.

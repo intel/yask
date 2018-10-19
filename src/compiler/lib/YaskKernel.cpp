@@ -300,7 +300,7 @@ namespace yask {
             else
                 oss << "0d"; // Trivial scalar layout.
 
-            // Add wrapping flag.
+            // Add step-dim flag.
             if (step_posn)
                 oss << ", true";
             else
@@ -371,8 +371,10 @@ namespace yask {
                     int aval = 1;
                     int oval = 0;
                     if (dtype == STEP_INDEX) {
-                        aval = _settings._stepAlloc > 0 ?
-                            _settings._stepAlloc : gp->getStepDimSize();
+                        aval = gp->getStepDimSize();
+                        initCode += " " + grid + "_ptr->_set_dynamic_step_alloc(" +
+                            (gp->is_dynamic_step_alloc() ? "true" : "false") +
+                            ");\n";
                     } else {
                         auto* minp = gp->getMinIndices().lookup(dname);
                         auto* maxp = gp->getMaxIndices().lookup(dname);
