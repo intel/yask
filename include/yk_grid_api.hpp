@@ -790,8 +790,8 @@ namespace yask {
            
            Grid creation time | Grid creation method | Step dim | Domain dim | Misc dim |
            -------------------|----------------------|----------|------------|----------|
-           Compile-time | yc_solution::new_grid() + yc_grid::set_dynamic_step_alloc (false) | No | No | No |
-           Compile-time | yc_solution::new_grid() + yc_grid::set_dynamic_step_alloc (true) | Yes | No | No |
+           Compile-time | yc_solution::new_grid() + yc_grid::set_dynamic_step_alloc (false) | No | No | Yes |
+           Compile-time | yc_solution::new_grid() + yc_grid::set_dynamic_step_alloc (true) | Yes | No | Yes |
            Run-time | yk_solution::new_grid() | Yes | No | Yes |
            Run-time | yk_solution::new_fixed_size_grid() | Yes | Yes | Yes |
 

@@ -167,7 +167,7 @@ namespace yask {
         }
 
         // Unaligned loads allowed?
-        else if (_allowUnalignedLoads) {
+        else if (_settings._allowUnalignedLoads) {
 #ifdef DEBUG_GP
             cout << " //** reading from point " << gp.makeStr() << " as fully vectorized and unaligned.\n";
 #endif

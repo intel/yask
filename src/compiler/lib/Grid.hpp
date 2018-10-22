@@ -47,6 +47,8 @@ namespace yask {
         string _name;           // name of this grid.
         IndexExprPtrVec _dims;  // dimensions of this grid.
         bool _isScratch = false; // true if a temp grid.
+
+        // Step-dim info.
         bool _isStepAllocFixed = true; // step alloc cannot be changed at run-time.
         idx_t _stepAlloc = 0;         // step-alloc override (0 => calculate).
 
@@ -59,7 +61,7 @@ namespace yask {
         // Whether this grid can be vector-folded.
         bool _isFoldable = false;
 
-        // Values below are computed based on equations.
+        ///// Values below are computed based on GridPoint accesses in equations.
 
         // Min and max const indices that are used to access each dim.
         IntTuple _minIndices, _maxIndices;
@@ -343,6 +345,7 @@ namespace yask {
         bool _bundleScratch = true;
         int _haloSize = 0;      // 0 => calculate each halo automatically.
         int _stepAlloc = 0;     // 0 => calculate each step allocation automatically.
+        bool _innerMisc = false;
         int _maxExprSize = 50;
         int _minExprSize = 2;
         bool _doCse = true;      // do common-subexpr elim.

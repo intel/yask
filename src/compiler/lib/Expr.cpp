@@ -946,15 +946,16 @@ namespace yask {
         return false;
     }
 
-
     // Make a readable string from an expression.
     string Expr::makeStr(const VarMap* varMap) const {
         ostringstream oss;
 
         // Use a print visitor to make a string.
-        PrintHelper ph(NULL, NULL, "temp", "", "", ""); // default helper.
+        CompilerSettings _dummySettings;
+        Dimensions _dummyDims;
+        PrintHelper ph(_dummySettings, _dummyDims, NULL, "temp", "", "", ""); // default helper.
         CompilerSettings settings; // default settings.
-        PrintVisitorTopDown pv(oss, ph, settings, varMap);
+        PrintVisitorTopDown pv(oss, ph, varMap);
         accept(&pv);
 
         // Return anything written to the stream

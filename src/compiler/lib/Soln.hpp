@@ -101,7 +101,11 @@ namespace yask {
         // Simple accessors.
         virtual Grids& getGrids() { return _grids; }
         virtual Eqs& getEqs() { return _eqs; }
-        virtual CompilerSettings& getSettings() { return _settings; }
+        virtual const CompilerSettings& getSettings() { return _settings; }
+        virtual void setSettings(const CompilerSettings& settings) {
+            _settings = settings;
+        }
+        virtual const Dimensions& getDims() { return _dims; }
 
         // Get user-provided code for the given section.
         CodeList * getExtensionCode(YASKSection section)
