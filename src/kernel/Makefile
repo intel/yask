@@ -834,6 +834,7 @@ stencil-tests:
 	$(MAKE) clean; $(MAKE) $(STENCIL_TEST_ARGS) stencil=test_3d fold=x=2,z=2
 	$(MAKE) clean; $(MAKE) $(STENCIL_TEST_ARGS) stencil=test_dep_1d fold=x=4
 	$(MAKE) clean; $(MAKE) $(STENCIL_TEST_ARGS) stencil=test_misc_2d fold=x=2,y=2
+	$(MAKE) clean; $(MAKE) $(STENCIL_TEST_ARGS) stencil=test_misc_2d fold=x=2,y=2 EXTRA_YC_FLAGS=-interleave-misc
 	$(MAKE) clean; $(MAKE) $(STENCIL_TEST_ARGS) stencil=test_step_cond_1d fold=x=4
 	$(MAKE) clean; $(MAKE) $(STENCIL_TEST_ARGS) stencil=test_subdomain_1d fold=x=4
 	$(MAKE) clean; $(MAKE) $(STENCIL_TEST_ARGS) stencil=test_subdomain_3d fold=x=2,y=2

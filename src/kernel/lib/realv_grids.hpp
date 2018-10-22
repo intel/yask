@@ -94,8 +94,9 @@ namespace yask {
         // If true, will always be in Indices::step_posn.
         bool _has_step_dim = false;
 
-        // Whether step alloc can be changed.
+        // Whether certain dims can be changed.
         bool _is_dynamic_step_alloc = false;
+        bool _is_dynamic_misc_alloc = false;
 
         // Data that needs to be copied to neighbor's halos if using MPI.
         // If this grid has the step dim, there is one bit per alloc'd step.
@@ -197,6 +198,7 @@ namespace yask {
             if (is_fixed) {
                 _rank_offsets.setFromConst(0);
                 _is_dynamic_step_alloc = true;
+                _is_dynamic_misc_alloc = true;
             }
         }
         virtual bool is_dynamic_step_alloc() const {
@@ -204,6 +206,12 @@ namespace yask {
         }
         virtual void _set_dynamic_step_alloc(bool is_dynamic) {
             _is_dynamic_step_alloc = is_dynamic;
+        }
+        virtual bool is_dynamic_misc_alloc() const {
+            return _is_dynamic_misc_alloc;
+        }
+        virtual void _set_dynamic_misc_alloc(bool is_dynamic) {
+            _is_dynamic_misc_alloc = is_dynamic;
         }
         
         // Scratch accessors.
@@ -220,6 +228,7 @@ namespace yask {
             _is_new_grid = is_new_grid;
             if (_is_new_grid)
                 _is_dynamic_step_alloc = true;
+                _is_dynamic_misc_alloc = true;
         }        
 
         // NUMA accessors.

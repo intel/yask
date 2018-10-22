@@ -179,8 +179,8 @@ namespace yask {
 
         // How many nodes in ex?
         int exprSize = ex->getNumNodes();
-        bool tooBig = exprSize > _settings._maxExprSize;
-        bool tooSmall = exprSize < _settings._minExprSize;
+        bool tooBig = exprSize > getSettings()._maxExprSize;
+        bool tooSmall = exprSize < getSettings()._minExprSize;
 
         // Determine whether this expr has already been evaluated
         // and a variable holds its result.
@@ -552,7 +552,7 @@ namespace yask {
 
             CounterVisitor cv;
             eq->visitEqs(&cv);
-            PrintHelper ph(NULL, &cv, "temp", "real", " ", ".\n");
+            PrintHelper ph(_settings, _dims, &cv, "temp", "real", " ", ".\n");
 
             if (eq->cond.get()) {
                 string condStr = eq->cond->makeStr();
@@ -563,11 +563,11 @@ namespace yask {
                 os << endl << " // Valid under the default condition." << endl;
 
             os << endl << " // Top-down stencil calculation:" << endl;
-            PrintVisitorTopDown pv1(os, ph, _settings);
+            PrintVisitorTopDown pv1(os, ph);
             eq->visitEqs(&pv1);
 
             os << endl << " // Bottom-up stencil calculation:" << endl;
-            PrintVisitorBottomUp pv2(os, ph, _settings);
+            PrintVisitorBottomUp pv2(os, ph);
             eq->visitEqs(&pv2);
         }
     }

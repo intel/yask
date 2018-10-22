@@ -51,7 +51,7 @@ namespace yask {
 
         // Get/set local vars.
         string gridPtr = getLocalVar(os, gp.getGridPtr(), _grid_ptr_type);
-        string stepArgVar = getLocalVar(os, gp.makeStepArgStr(gridPtr, *_dims), _step_val_type);
+        string stepArgVar = getLocalVar(os, gp.makeStepArgStr(gridPtr, _dims), _step_val_type);
 
         ostringstream oss;
         oss << gridPtr << "->" << fname << "(";
@@ -89,7 +89,7 @@ namespace yask {
 
         // Get/set local vars.
         string gridPtr = getLocalVar(os, gp.getGridPtr(), CppPrintHelper::_grid_ptr_type);
-        string stepArgVar = getLocalVar(os, gp.makeStepArgStr(gridPtr, *_dims),
+        string stepArgVar = getLocalVar(os, gp.makeStepArgStr(gridPtr, _dims),
                                         CppPrintHelper::_step_val_type);
 
         // Assume that broadcast will be handled automatically by
@@ -168,14 +168,14 @@ namespace yask {
 
         // Get/set local vars.
         string gridPtr = getLocalVar(os, gp.getGridPtr(), CppPrintHelper::_grid_ptr_type);
-        string stepArgVar = getLocalVar(os, gp.makeStepArgStr(gridPtr, *_dims),
+        string stepArgVar = getLocalVar(os, gp.makeStepArgStr(gridPtr, _dims),
                                         CppPrintHelper::_step_val_type);
 
         ostringstream oss;
         oss << gridPtr << "->" << funcName << "(";
         if (firstArg.length())
             oss << firstArg << ", ";
-        string args = isNorm ? gp.makeNormArgStr(*_dims) : gp.makeArgStr();
+        string args = isNorm ? gp.makeNormArgStr(_dims) : gp.makeArgStr();
         oss << "{" << args << "} ," << stepArgVar;
         if (lastArg.length())
             oss << ", " << lastArg;
@@ -185,7 +185,7 @@ namespace yask {
 
     // Print code to set pointers of aligned reads.
     void CppVecPrintHelper::printBasePtrs(ostream& os) {
-        const string& idim = _dims->_innerDim;
+        const string& idim = _dims._innerDim;
 
         // A set for the aligned reads & writes.
         GridPointSet gps;
@@ -273,7 +273,7 @@ namespace yask {
                                             bool ahead, string ptrVar) {
 
         // cluster mult in inner dim.
-        const string& idim = _dims->_innerDim;
+        const string& idim = _dims._innerDim;
         string imult = "CMULT_" + PrinterBase::allCaps(idim);
 
         for (int level = 1; level <= 2; level++) {
@@ -291,9 +291,9 @@ namespace yask {
 
                     // _ptrOfs{Lo,Hi} contain first and last offsets in idim,
                     // NOT normalized to vector len.
-                    string left = _dims->makeNormStr(_ptrOfsLo[ptr], idim);
+                    string left = _dims.makeNormStr(_ptrOfsLo[ptr], idim);
                     if (left.length() == 0) left = "0";
-                    string right = _dims->makeNormStr(_ptrOfsHi[ptr], idim);
+                    string right = _dims.makeNormStr(_ptrOfsHi[ptr], idim);
 
                     // Start loop of prefetches.
                     os << "\n // For pointer '" << ptr << "'\n"
@@ -370,13 +370,14 @@ namespace yask {
             auto type = dim->getType();
 
             // Set inner domain index to 0.
-            if (dname == getDims()->_innerDim) {
+            if (dname == getDims()._innerDim) {
                 IntScalar idi(dname, 0);
                 bgp->setArgConst(idi);
             }
 
-            // Set misc indices to their min value.
-            else if (type == MISC_INDEX) {
+            // Set misc indices to their min value if they are inside
+            // inner domain dim.
+            else if (_settings._innerMisc && type == MISC_INDEX) {
                 auto* grid = gp.getGrid();
                 auto min_val = grid->getMinIndices()[dname];
                 IntScalar idi(dname, min_val);
@@ -423,39 +424,41 @@ namespace yask {
         // Start with offset in inner-dim direction.
         // This must the dim that appears before the misc dims
         // in the grid-var layout.
-        string idim = _dims->_innerDim;
+        string idim = _dims._innerDim;
         string ofsStr = "(";
         if (innerExpr.length())
             ofsStr += innerExpr;
         else
-            ofsStr += gp.makeNormArgStr(idim, *_dims);
+            ofsStr += gp.makeNormArgStr(idim, _dims);
         ofsStr += ")";
 
-        // Misc indices.
-        for (int i = 0; i < grid->get_num_dims(); i++) {
-            auto& dimi = gp.getDims().at(i);
-            auto& dni = dimi->getName();
-            auto typei = dimi->getType();
-            if (typei == MISC_INDEX) {
+        // Misc indices if they are inside inner-dim.
+        if (_settings._innerMisc) {
+            for (int i = 0; i < grid->get_num_dims(); i++) {
+                auto& dimi = gp.getDims().at(i);
+                auto& dni = dimi->getName();
+                auto typei = dimi->getType();
+                if (typei == MISC_INDEX) {
 
-                // Mult by size of remaining misc dims.
-                for (int j = i; j < grid->get_num_dims(); j++) {
-                    auto& dimj = gp.getDims().at(j);
-                    auto& dnj = dimj->getName();
-                    auto typej = dimj->getType();
-                    if (typej == MISC_INDEX) {
-                        auto min_idx = grid->getMinIndices()[dnj];
-                        auto max_idx = grid->getMaxIndices()[dnj];
-                        ofsStr += " * (" + to_string(max_idx) +
-                            " - " + to_string(min_idx) + " + 1)";
+                    // Mult by size of remaining misc dims.
+                    for (int j = i; j < grid->get_num_dims(); j++) {
+                        auto& dimj = gp.getDims().at(j);
+                        auto& dnj = dimj->getName();
+                        auto typej = dimj->getType();
+                        if (typej == MISC_INDEX) {
+                            auto min_idx = grid->getMinIndices()[dnj];
+                            auto max_idx = grid->getMaxIndices()[dnj];
+                            ofsStr += " * (" + to_string(max_idx) +
+                                " - " + to_string(min_idx) + " + 1)";
+                        }
                     }
-                }
                         
-                // Add offset of this misc value, which must be const.
-                auto min_val = grid->getMinIndices()[dni];
-                auto val = gp.getArgConsts()[dni];
-                ofsStr += " + (" + to_string(val) + " - " +
-                    to_string(min_val) + ")";
+                    // Add offset of this misc value, which must be const.
+                    auto min_val = grid->getMinIndices()[dni];
+                    auto val = gp.getArgConsts()[dni];
+                    ofsStr += " + (" + to_string(val) + " - " +
+                        to_string(min_val) + ")";
+                }
             }
         }
         return ofsStr;
@@ -649,8 +652,8 @@ namespace yask {
         string gridPtr = _cvph.getLocalVar(_os, gp->getGridPtr(), CppPrintHelper::_grid_ptr_type);
 
         // Time var.
-        auto* dims = _cvph.getDims();
-        string stepArgVar = _cvph.getLocalVar(_os, gp->makeStepArgStr(gridPtr, *dims),
+        auto& dims = _cvph.getDims();
+        string stepArgVar = _cvph.getLocalVar(_os, gp->makeStepArgStr(gridPtr, dims),
                                               CppPrintHelper::_step_val_type);
     }
 

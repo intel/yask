@@ -33,7 +33,7 @@ namespace yask {
     void YASKCppPrinter::printIndices(ostream& os) const {
         os << endl << " // Extract individual indices.\n";
         int i = 0;
-        for (auto& dim : _dims->_stencilDims.getDims()) {
+        for (auto& dim : _dims._stencilDims.getDims()) {
             auto& dname = dim.getName();
             os << " idx_t " << dname << " = idxs[" << i << "];\n";
             i++;
@@ -44,8 +44,8 @@ namespace yask {
     void YASKCppPrinter::addComment(ostream& os, EqBundle& eq) {
 
         // Use a simple human-readable visitor to create a comment.
-        PrintHelper ph(_dims, NULL, "temp", "", " // ", ".\n");
-        PrintVisitorTopDown commenter(os, ph, _settings);
+        PrintHelper ph(_settings, _dims, NULL, "temp", "", " // ", ".\n");
+        PrintVisitorTopDown commenter(os, ph);
         eq.visitEqs(&commenter);
     }
 
@@ -91,16 +91,16 @@ namespace yask {
             "#define REAL_BYTES (" << _settings._elem_bytes << ")\n";
 
         os << "\n// Number of domain dimensions:\n"
-            "#define NUM_DOMAIN_DIMS " << _dims->_domainDims.size() << "\n";
+            "#define NUM_DOMAIN_DIMS " << _dims._domainDims.size() << "\n";
         int i = 0;
-        for (auto& dim : _dims->_domainDims.getDims()) {
+        for (auto& dim : _dims._domainDims.getDims()) {
             auto& dname = dim.getName();
             os << "#define DOMAIN_DIM_IDX_" << dname << " (" << (i++) << ")\n";
         }
         os << "\n// Number of stencil dimensions (step and domain):\n"
-            "#define NUM_STENCIL_DIMS " << _dims->_stencilDims.size() << "\n";
+            "#define NUM_STENCIL_DIMS " << _dims._stencilDims.size() << "\n";
         i = 0;
-        for (auto& dim : _dims->_stencilDims.getDims()) {
+        for (auto& dim : _dims._stencilDims.getDims()) {
             auto& dname = dim.getName();
             os << "#define STENCIL_DIM_IDX_" << dname << " (" << (i++) << ")\n";
         }
@@ -116,25 +116,25 @@ namespace yask {
             "#define NUM_STENCIL_EQS " << _stencil.get_num_equations() << endl;
 
         // Vec/cluster lengths.
-        auto nvec = _dims->_foldGT1.getNumDims();
-        os << "\n// One vector fold: " << _dims->_fold.makeDimValStr(" * ") << endl;
-        for (auto& dim : _dims->_fold.getDims()) {
+        auto nvec = _dims._foldGT1.getNumDims();
+        os << "\n// One vector fold: " << _dims._fold.makeDimValStr(" * ") << endl;
+        for (auto& dim : _dims._fold.getDims()) {
             auto& dname = dim.getName();
             string ucDim = allCaps(dname);
             os << "#define VLEN_" << ucDim << " (" << dim.getVal() << ")" << endl;
         }
         os << "namespace yask {\n"
-            " constexpr idx_t fold_pts[]{ " << _dims->_fold.makeValStr() << " };\n"
+            " constexpr idx_t fold_pts[]{ " << _dims._fold.makeValStr() << " };\n"
             "}\n";
-        os << "#define VLEN (" << _dims->_fold.product() << ")" << endl;
+        os << "#define VLEN (" << _dims._fold.product() << ")" << endl;
         os << "#define FIRST_FOLD_INDEX_IS_UNIT_STRIDE (" <<
-            (_dims->_fold.isFirstInner() ? 1 : 0) << ")" << endl;
+            (_dims._fold.isFirstInner() ? 1 : 0) << ")" << endl;
         os << "#define NUM_VEC_FOLD_DIMS (" << nvec << ")" << endl;
 
         // Layout for folding.
         // This contains only the vectorized (len > 1) dims.
         ostringstream oss;
-        if (_dims->_foldGT1.isFirstInner())
+        if (_dims._foldGT1.isFirstInner())
             for (int i = nvec; i > 0; i--)
                 oss << i;       // e.g., 321
         else
@@ -154,7 +154,7 @@ namespace yask {
                 os << "idxs[" << i << "]";
             }
             for (int i = 0; i < nvec; i++)
-                os << ", " << _dims->_foldGT1[i]; // fold lengths.
+                os << ", " << _dims._foldGT1[i]; // fold lengths.
             os << ")\n";
         } else
             os << "(0)\n";
@@ -164,14 +164,14 @@ namespace yask {
 
         os << endl;
         os << "// Cluster multipliers of vector folds: " <<
-            _dims->_clusterMults.makeDimValStr(" * ") << endl;
-        for (auto& dim : _dims->_clusterMults.getDims()) {
+            _dims._clusterMults.makeDimValStr(" * ") << endl;
+        for (auto& dim : _dims._clusterMults.getDims()) {
             auto& dname = dim.getName();
             string ucDim = allCaps(dname);
             os << "#define CMULT_" << ucDim << " (" <<
                 dim.getVal() << ")" << endl;
         }
-        os << "#define CMULT (" << _dims->_clusterMults.product() << ")" << endl;
+        os << "#define CMULT (" << _dims._clusterMults.product() << ")" << endl;
     }
 
     // Print YASK data class.
@@ -205,7 +205,7 @@ namespace yask {
 
             os << "\n // The ";
             if (ndims)
-                os << ndims << "-D grid";
+                os << ndims << "-D grid var";
             else
                 os << "scalar value";
             os << " '" << grid << "', which is ";
@@ -215,6 +215,16 @@ namespace yask {
                 os << "updated by one or more equations.\n";
             else
                 os << "not updated by any equation (read-only).\n";
+            if (ndims) {
+                os << " // Dimensions: ";
+                for (int dn = 0; dn < ndims; dn++) {
+                    if (dn) os << ", ";
+                    auto& dim = gp->getDims()[dn];
+                    auto& dname = dim->getName();
+                    os << "'" << dname << "'(#" << (dn+1) << ")";
+                }
+                os << ".\n";
+            }
 
             // Type name for grid.
             string typeName;
@@ -243,7 +253,7 @@ namespace yask {
                     // If this exists, it will get placed near to the end,
                     // just before the inner & misc dims.
                     if (dtype == STEP_INDEX) {
-                        assert(dname == _dims->_stepDim);
+                        assert(dname == _dims._stepDim);
                         if (dn > 0) {
                             THROW_YASK_EXCEPTION("Error: cannot create grid '" + grid +
                                                  "' with dimensions '" + gdims.makeDimStr() +
@@ -255,9 +265,9 @@ namespace yask {
                         }
                     }
 
-                    // Inner dim?
-                    // If this exists, it will get placed at the end.
-                    else if (dname == _dims->_innerDim) {
+                    // Inner domain dim?
+                    // If this exists, it will get placed at or near the end.
+                    else if (dname == _dims._innerDim) {
                         assert(dtype == DOMAIN_INDEX);
                         if (folded) {
                             inner_posn = dn + 1;
@@ -265,9 +275,9 @@ namespace yask {
                         }
                     }
 
-                    // Misc dims? Also placed at end.
+                    // Misc dims? Placed after the inner domain dim if requested.
                     else if (dtype == MISC_INDEX) {
-                        if (folded) {
+                        if (folded && _settings._innerMisc) {
                             misc_posns.push_back(dn + 1);
                             defer = true;
                         }
@@ -281,7 +291,7 @@ namespace yask {
 
                     // Add vector len to list.
                     if (folded) {
-                        auto* p = _dims->_fold.lookup(dname);
+                        auto* p = _dims._fold.lookup(dname);
                         int dval = p ? *p : 1;
                         vlens.push_back(dval);
                     }
@@ -395,6 +405,11 @@ namespace yask {
                     }
                 }
             } // dims.
+
+            // Allow dynamic misc alloc setting if not interleaved.
+            initCode += " " + grid + "_ptr->_set_dynamic_misc_alloc(" +
+                (_settings._innerMisc ? "false" : "true") +
+                ");\n";
 
             // If not scratch, init grids in ctor.
             if (!gp->isScratch()) {
@@ -534,7 +549,7 @@ namespace yask {
             // Domain condition.
             {
                 os << endl << " // Determine whether " << egsName << " is valid at the domain indices " <<
-                    _dims->_stencilDims.makeDimStr() << ".\n"
+                    _dims._stencilDims.makeDimStr() << ".\n"
                     " // Return true if indices are within the valid sub-domain or false otherwise.\n"
                     " virtual bool is_in_valid_domain(const Indices& idxs) const final {\n";
                 printIndices(os);
@@ -551,11 +566,11 @@ namespace yask {
             // Step condition.
             {
                 os << endl << " // Determine whether " << egsName << " is valid at the step " <<
-                    _dims->_stencilDims.makeDimStr() << ".\n"
+                    _dims._stencilDims.makeDimStr() << ".\n"
                     " // Return true if indices are within the valid sub-domain or false otherwise.\n"
                     " virtual bool is_in_valid_step(idx_t input_step_index) const final {\n";
                 if (eq->step_cond)
-                    os << " idx_t " << _dims->_stepDim << " = input_step_index;\n"
+                    os << " idx_t " << _dims._stepDim << " = input_step_index;\n"
                         " return " << eq->step_cond->makeStr() << ";\n";
                 else
                     os << " return true; // any step.\n";
@@ -575,7 +590,7 @@ namespace yask {
                 os << " virtual bool get_output_step_index(idx_t input_step_index,"
                     " idx_t& output_step_index) const final {\n";
                 if (eq->step_expr) {
-                    os << " idx_t " << _dims->_stepDim << " = input_step_index;\n"
+                    os << " idx_t " << _dims._stepDim << " = input_step_index;\n"
                         " output_step_index = " << eq->step_expr->makeStr() << ";\n"
                         " return true;\n";
                 }
@@ -589,19 +604,19 @@ namespace yask {
                 // Stencil-calculation code.
                 // Function header.
                 os << endl << " // Calculate one scalar result relative to indices " <<
-                    _dims->_stencilDims.makeDimStr() << ".\n"
+                    _dims._stencilDims.makeDimStr() << ".\n"
                     " // There are approximately " << stats.getNumOps() <<
                     " FP operation(s) per invocation.\n"
                     " virtual void calc_scalar(int thread_idx, const Indices& idxs) {\n";
-                printIndices(os);
+                    printIndices(os);
 
                 // C++ scalar print assistant.
                 CounterVisitor cv;
-                eq->visitEqs(&cv);
-                CppPrintHelper* sp = new CppPrintHelper(_dims, &cv, "temp", "real_t", " ", ";\n");
+                    eq->visitEqs(&cv);
+                    CppPrintHelper* sp = new CppPrintHelper(_settings, _dims, &cv, "temp", "real_t", " ", ";\n");
 
                 // Generate the code.
-                PrintVisitorBottomUp pcv(os, *sp, _settings);
+                PrintVisitorBottomUp pcv(os, *sp);
                 eq->visitEqs(&pcv);
 
                 // End of function.
@@ -624,7 +639,7 @@ namespace yask {
                 // The visitor is accepted at all nodes in the cluster AST;
                 // for each grid access node in the AST, the vectors
                 // needed are determined and saved in the visitor.
-                VecInfoVisitor vv(*_dims);
+                VecInfoVisitor vv(_dims);
                 vceq->visitEqs(&vv);
 
                 // Reorder some equations based on vector info.
@@ -635,11 +650,11 @@ namespace yask {
                 CounterVisitor cv;
                 vceq->visitEqs(&cv);
                 int numResults = do_cluster ?
-                    _dims->_clusterPts.product() :
-                    _dims->_fold.product();
+                    _dims._clusterPts.product() :
+                    _dims._fold.product();
 
                 // Vector/cluster vars.
-                string idim = _dims->_innerDim;
+                string idim = _dims._innerDim;
                 string vcstr = do_cluster ? "cluster" : "vector";
                 string funcstr = "calc_loop_of_" + vcstr + "s";
                 string nvecs = do_cluster ? "CMULT_" + allCaps(idim) : "1";
@@ -652,14 +667,14 @@ namespace yask {
                 string istep = "step_" + idim;
                 string iestep = "step_" + idim + "_elem";
                 os << endl << " // Calculate a series of " << vcstr << "s iterating in +'" << idim <<
-                    "' direction from " << _dims->_stencilDims.makeDimStr() <<
+                    "' direction from " << _dims._stencilDims.makeDimStr() <<
                     " indices in 'idxs' to '" << istop << "'.\n";
                 if (do_cluster)
-                    os << " // Each cluster calculates '" << _dims->_clusterPts.makeDimValStr(" * ") <<
-                        "' point(s) containing " << _dims->_clusterMults.product() << " '" <<
-                        _dims->_fold.makeDimValStr(" * ") << "' vector(s).\n";
+                    os << " // Each cluster calculates '" << _dims._clusterPts.makeDimValStr(" * ") <<
+                        "' point(s) containing " << _dims._clusterMults.product() << " '" <<
+                        _dims._fold.makeDimValStr(" * ") << "' vector(s).\n";
                 else
-                    os << " // Each vector calculates '" << _dims->_fold.makeDimValStr(" * ") <<
+                    os << " // Each vector calculates '" << _dims._fold.makeDimValStr(" * ") <<
                         "' point(s).\n";
                 os << " // Indices must be rank-relative (not global).\n"
                     " // Indices must be normalized, i.e., already divided by VLEN_*.\n"
@@ -692,12 +707,12 @@ namespace yask {
 
                 // Print time-invariants.
                 os << "\n // Invariants within a step.\n";
-                CppStepVarPrintVisitor svv(os, *vp, _settings);
+                CppStepVarPrintVisitor svv(os, *vp);
                 vceq->visitEqs(&svv);
 
                 // Print loop-invariants.
                 os << "\n // Inner-loop invariants.\n";
-                CppLoopVarPrintVisitor lvv(os, *vp, _settings);
+                CppLoopVarPrintVisitor lvv(os, *vp);
                 vceq->visitEqs(&lvv);
 
                 // Print pointers and pre-loop prefetches.
@@ -712,7 +727,7 @@ namespace yask {
 
                 // Generate loop body using vars stored in print helper.
                 // Visit all expressions to cover the whole vector/cluster.
-                PrintVisitorBottomUp pcv(os, *vp, _settings);
+                PrintVisitorBottomUp pcv(os, *vp);
                 vceq->visitEqs(&pcv);
 
                 // Insert prefetches using vars stored in print helper for next iteration.
@@ -816,49 +831,49 @@ namespace yask {
         os << "\n  // Create Dims object.\n"
             "  static DimsPtr new_dims() {\n"
             "    auto p = std::make_shared<Dims>();\n";
-        for (int i = 0; i < _dims->_foldGT1.getNumDims(); i++)
+        for (int i = 0; i < _dims._foldGT1.getNumDims(); i++)
             os << "    p->_vec_fold_layout.set_size(" << i << ", " <<
-                _dims->_foldGT1[i] << "); // '" <<
-                _dims->_foldGT1.getDimName(i) << "'\n";
+                _dims._foldGT1[i] << "); // '" <<
+                _dims._foldGT1.getDimName(i) << "'\n";
         os <<
-            "    p->_step_dim = \"" << _dims->_stepDim << "\";\n"
-            "    p->_inner_dim = \"" << _dims->_innerDim << "\";\n";
-        for (auto& dim : _dims->_domainDims.getDims()) {
+            "    p->_step_dim = \"" << _dims._stepDim << "\";\n"
+            "    p->_inner_dim = \"" << _dims._innerDim << "\";\n";
+        for (auto& dim : _dims._domainDims.getDims()) {
             auto& dname = dim.getName();
             os << "    p->_domain_dims.addDimBack(\"" << dname << "\", 0);\n";
         }
-        for (auto& dim : _dims->_stencilDims.getDims()) {
+        for (auto& dim : _dims._stencilDims.getDims()) {
             auto& dname = dim.getName();
             os << "    p->_stencil_dims.addDimBack(\"" << dname << "\", 0);\n";
         }
-        for (auto& dim : _dims->_miscDims.getDims()) {
+        for (auto& dim : _dims._miscDims.getDims()) {
             auto& dname = dim.getName();
             os << "    p->_misc_dims.addDimBack(\"" << dname << "\", 0);\n";
         }
-        for (auto& dim : _dims->_fold.getDims()) {
+        for (auto& dim : _dims._fold.getDims()) {
             auto& dname = dim.getName();
             auto& dval = dim.getVal();
             os << "    p->_fold_pts.addDimBack(\"" << dname << "\", " << dval << ");\n";
         }
-        for (auto& dim : _dims->_foldGT1.getDims()) {
+        for (auto& dim : _dims._foldGT1.getDims()) {
             auto& dname = dim.getName();
             auto& dval = dim.getVal();
             os << "    p->_vec_fold_pts.addDimBack(\"" << dname << "\", " << dval << ");\n";
         }
-        string ffi = (_dims->_fold.isFirstInner()) ? "true" : "false";
+        string ffi = (_dims._fold.isFirstInner()) ? "true" : "false";
         os << "    p->_fold_pts.setFirstInner(" << ffi << ");\n"
             "    p->_vec_fold_pts.setFirstInner(" << ffi << ");\n";
-        for (auto& dim : _dims->_clusterPts.getDims()) {
+        for (auto& dim : _dims._clusterPts.getDims()) {
             auto& dname = dim.getName();
             auto& dval = dim.getVal();
             os << "    p->_cluster_pts.addDimBack(\"" << dname << "\", " << dval << ");\n";
         }
-        for (auto& dim : _dims->_clusterMults.getDims()) {
+        for (auto& dim : _dims._clusterMults.getDims()) {
             auto& dname = dim.getName();
             auto& dval = dim.getVal();
             os << "    p->_cluster_mults.addDimBack(\"" << dname << "\", " << dval << ");\n";
         }
-        os << "    p->_step_dir = " << _dims->_stepDir << ";\n";
+        os << "    p->_step_dir = " << _dims._stepDir << ";\n";
 
         os << "    return p;\n"
             "  }\n";

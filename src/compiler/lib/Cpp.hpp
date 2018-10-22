@@ -45,13 +45,14 @@ namespace yask {
         static constexpr const char* _grid_ptr_type = "auto*";
         static constexpr const char* _step_val_type = "const auto";
 
-        CppPrintHelper(const Dimensions* dims,
+        CppPrintHelper(const CompilerSettings& settings,
+                       const Dimensions& dims,
                        const CounterVisitor* cv,
                        const string& varPrefix,
                        const string& varType,
                        const string& linePrefix,
                        const string& lineSuffix) :
-            PrintHelper(dims, cv, varPrefix, varType,
+            PrintHelper(settings, dims, cv, varPrefix, varType,
                         linePrefix, lineSuffix) { }
         virtual ~CppPrintHelper() { }
 
@@ -86,14 +87,14 @@ namespace yask {
 
     public:
         CppVecPrintHelper(VecInfoVisitor& vv,
-                          bool allowUnalignedLoads,
-                          const Dimensions* dims,
+                          const CompilerSettings& settings,
+                          const Dimensions& dims,
                           const CounterVisitor* cv,
                           const string& varPrefix,
                           const string& varType,
                           const string& linePrefix,
                           const string& lineSuffix) :
-            VecPrintHelper(vv, allowUnalignedLoads, dims, cv,
+            VecPrintHelper(vv, settings, dims, cv,
                            varPrefix, varType, linePrefix, lineSuffix) { }
         
     protected:
@@ -228,9 +229,8 @@ namespace yask {
     public:
         CppStepVarPrintVisitor(ostream& os,
                                CppVecPrintHelper& ph,
-                               CompilerSettings& settings,
                                const VarMap* varMap = 0) :
-            PrintVisitorBase(os, ph, settings, varMap),
+            PrintVisitorBase(os, ph, varMap),
             _cvph(ph) { }
 
         // A grid access.
@@ -245,9 +245,8 @@ namespace yask {
     public:
         CppLoopVarPrintVisitor(ostream& os,
                                CppVecPrintHelper& ph,
-                               CompilerSettings& settings,
                                const VarMap* varMap = 0) :
-            PrintVisitorBase(os, ph, settings, varMap),
+            PrintVisitorBase(os, ph, varMap),
             _cvph(ph) { }
 
         // A grid access.
@@ -259,7 +258,6 @@ namespace yask {
     protected:
         EqBundlePacks& _eqBundlePacks; // packs of bundles w/o inter-dependencies.
         EqBundles& _clusterEqBundles;  // eq-bundles for scalar and vector.
-        const Dimensions* _dims;
         string _context, _context_base;
 
         // Print an expression as a one-line C++ comment.
@@ -270,7 +268,7 @@ namespace yask {
         // alternative PrintHelpers.
         virtual CppVecPrintHelper* newCppVecPrintHelper(VecInfoVisitor& vv,
                                                         CounterVisitor& cv) {
-            return new CppVecPrintHelper(vv, _settings._allowUnalignedLoads, _dims, &cv,
+            return new CppVecPrintHelper(vv, _settings, _dims, &cv,
                                          "temp", "real_vec_t", " ", ";\n");
         }
 
@@ -288,12 +286,10 @@ namespace yask {
         YASKCppPrinter(StencilSolution& stencil,
                        EqBundles& eqBundles,
                        EqBundlePacks& eqBundlePacks,
-                       EqBundles& clusterEqBundles,
-                       const Dimensions* dims) :
+                       EqBundles& clusterEqBundles) :
             PrinterBase(stencil, eqBundles),
             _eqBundlePacks(eqBundlePacks),
-            _clusterEqBundles(clusterEqBundles),
-            _dims(dims)
+            _clusterEqBundles(clusterEqBundles)
         {
             // name of C++ struct.
             _context = "StencilContext_" + _stencil.getName();

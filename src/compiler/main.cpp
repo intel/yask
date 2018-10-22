@@ -107,6 +107,9 @@ void usage(const string& cmd) {
         " -halo <size>\n"
         "    Specify the sizes of the halos.\n"
         "      By default, halos are calculated automatically for each grid.\n"
+        " [-no]-interleave-misc\n"
+        "    Allocate grid vars with the 'misc' dims as the inner-most dims (default=" << settings._innerMisc << ").\n"
+        "      This disallows dynamcally changing the 'misc' dim sizes during run-time.\n"
         " -fus\n"
         "    Make first dimension of fold unit stride (default=" << settings._firstInner << ").\n"
         "      This controls the intra-vector memory layout.\n"
@@ -202,6 +205,10 @@ void parseOpts(int argc, const char* argv[])
                 settings._printEqs = true;
             else if (opt == "-no-print-eqs")
                 settings._printEqs = false;
+            else if (opt == "-interleave-misc")
+                settings._innerMisc = true;
+            else if (opt == "-no-interleave-misc")
+                settings._innerMisc = false;
     
             // add any more options w/o values above.
 
@@ -317,7 +324,7 @@ void parseOpts(int argc, const char* argv[])
     }
 
     // Copy cmd-line settings into solution.
-    stencilSoln->getSettings() = settings;
+    stencilSoln->setSettings(settings);
 }
 
 // Main program.

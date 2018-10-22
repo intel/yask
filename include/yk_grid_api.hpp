@@ -790,14 +790,16 @@ namespace yask {
            
            Grid creation time | Grid creation method | Step dim | Domain dim | Misc dim |
            -------------------|----------------------|----------|------------|----------|
-           Compile-time | yc_solution::new_grid() + yc_grid::set_dynamic_step_alloc (false) | No | No | No |
-           Compile-time | yc_solution::new_grid() + yc_grid::set_dynamic_step_alloc (true) | Yes | No | No |
+           Compile-time | yc_solution::new_grid() + yc_grid::set_dynamic_step_alloc (false) [1] | No | No | Yes [2] |
+           Compile-time | yc_solution::new_grid() + yc_grid::set_dynamic_step_alloc (true) [1] | Yes | No | Yes [2] |
            Run-time | yk_solution::new_grid() | Yes | No | Yes |
-           Run-time | yk_solution::new_fixed_size_grid() | Yes | Yes | Yes |
+           Run-time | yk_solution::new_fixed_size_grid() [3] | Yes | Yes | Yes |
 
-           @note By default, grid variables created via yc_solution::new_grid()
+           @note [1] By default, grid variables created via yc_solution::new_grid()
            do _not_ allow dynamic step allocation.
-           @note The term "fixed" in yk_solution::new_fixed_size_grid() means that the
+           @note [2] Misc dim allocations cannot be changed for compile-time grids if the YASK
+           compiler was run with the "-interleave-misc" option.
+           @note [3] The term "fixed" in yk_solution::new_fixed_size_grid() means that the
            domain size will not change automatically when its solution domain
            size changes. It does not mean that the sizes cannot be changed
            via the APIs--quite the opposite.
