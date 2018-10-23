@@ -62,7 +62,7 @@ namespace yask {
         
         // TODO: if >1 BB, check limits of outer one first to save time.
         
-        // Loop through each solid BB.
+        // Loop through each solid BB for this bundle.
         // For each BB, calc intersection between it and 'mini_block_idxs'.
         // If this is non-empty, apply the bundle to all its required sub-blocks.
         TRACE_MSG3("calc_mini_block('" << get_name() << "'): checking " <<
@@ -107,7 +107,7 @@ namespace yask {
                        " ... " << bb_idxs.end.makeValStr(nsdims) << ")");
 
             // Update offsets of scratch grids based on this bundle's location.
-            _generic_context->update_scratch_grid_info(thread_idx, bb_idxs.begin);
+            cp->update_scratch_grid_info(thread_idx, bb_idxs.begin);
 
             // Get the bundles that need to be processed in
             // this block. This will be any prerequisite scratch-grid
@@ -117,7 +117,7 @@ namespace yask {
             // Set number of threads for a block.
             // Each of these threads will work on a sub-block.
             // This should be nested within a top-level OpenMP task.
-            _generic_context->set_block_threads();
+            cp->set_block_threads();
 
             // Loop through all the needed bundles.
             for (auto* sg : sg_list) {

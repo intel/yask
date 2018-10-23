@@ -60,18 +60,19 @@ namespace yask {
         _mpiInfo = std::make_shared<MPIInfo>(settings->_dims);
 
         // Init various tuples to make sure they have the correct dims.
-        rank_domain_offsets = _dims->_domain_dims;
+        auto& domain_dims = _dims->_domain_dims;
+        rank_domain_offsets = domain_dims;
         rank_domain_offsets.setValsSame(-1); // indicates prepare_solution() not called.
-        overall_domain_sizes = _dims->_domain_dims;
-        max_halos = _dims->_domain_dims;
-        wf_angles = _dims->_domain_dims;
-        wf_shift_pts = _dims->_domain_dims;
-        tb_angles = _dims->_domain_dims;
-        tb_widths = _dims->_domain_dims;
-        tb_tops = _dims->_domain_dims;
-        mb_angles = _dims->_domain_dims;
-        left_wf_exts = _dims->_domain_dims;
-        right_wf_exts = _dims->_domain_dims;
+        overall_domain_sizes = domain_dims;
+        max_halos = domain_dims;
+        wf_angles = domain_dims;
+        wf_shift_pts = domain_dims;
+        tb_angles = domain_dims;
+        tb_widths = domain_dims;
+        tb_tops = domain_dims;
+        mb_angles = domain_dims;
+        left_wf_exts = domain_dims;
+        right_wf_exts = domain_dims;
 
         // Set output to msg-rank per settings.
         set_ostr();
@@ -327,31 +328,29 @@ namespace yask {
     // Allocate memory for grids that do not already have storage.
     void StencilContext::allocGridData(ostream& os) {
 
-        // Sort gridPtrs for a certain purpose
-#ifdef USE_PMEM
-        // Sort gridPtrs for using pmem : Give priority to output grids.
-        std::vector<YkGridPtr> sortedGridPtrs;
-        std::set<YkGridPtr> gridPtrSet;
+        // Allocate I/O grids before read-only grids.
+        GridPtrs sortedGridPtrs;
+        GridPtrSet done;
         for (auto op : outputGridPtrs) {
-            gridPtrSet.insert(op);
             sortedGridPtrs.push_back(op);
+            done.insert(op);
         }
         for (auto gp : gridPtrs) {
-            if (gridPtrSet.find(gp)==gridPtrSet.end())
+            if (!done.count(gp))
                 sortedGridPtrs.push_back(gp);
         }
-        gridPtrs.clear();
-        os << "Grid priority:" << endl;
+	done.clear();
+
+#ifdef USE_PMEM
+        os << "Grid-allocation priority:" << endl;
         for (auto sp : sortedGridPtrs) {
-            gridPtrs.push_back(sp);
             os << " '" << sp->get_name() << "'";
             if (gridPtrSet.find(sp)!=gridPtrSet.end())
                 os << " (output)";
             os << endl;
         }
-	sortedGridPtrs.clear();
-	gridPtrSet.clear();
 #endif
+        
         // Base ptrs for all default-alloc'd data.
         // These pointers will be shared by the ones in the grid
         // objects, which will take over ownership when these go
@@ -360,9 +359,9 @@ namespace yask {
         map <int, shared_ptr<char>> _grid_data_buf;
 
 #ifdef USE_PMEM
-        size_t preferredNUMASize = _opts->_numa_pref_max*1024*1024*(size_t)1024;
+        size_t preferredNUMASize = opts->_numa_pref_max*1024*1024*(size_t)1024;
 #endif
-        // Pass 0: assign alternative NUMA node when preferred NUMA node is not enough
+        // Pass 0: assign alternative NUMA node when preferred NUMA node is not enough.
         // Pass 1: count required size for each NUMA node, allocate chunk of memory at end.
         // Pass 2: distribute parts of already-allocated memory chunk.
         for (int pass = 0; pass < 3; pass++) {
@@ -373,7 +372,7 @@ namespace yask {
             map <int, size_t> npbytes, ngrids;
 
             // Grids.
-            for (auto gp : gridPtrs) {
+            for (auto gp : sortedGridPtrs) {
                 if (!gp)
                     continue;
                 auto& gname = gp->get_name();
@@ -399,11 +398,14 @@ namespace yask {
 
                     if (pass == 0) {
 #ifdef USE_PMEM
-                        if (preferredNUMASize<npbytes[numa_pref])
+                        if (preferredNUMASize < npbytes[numa_pref])
                             if (getnode() == -1) {
                                 os << "cannot get numa_node information, so use default numa_pref" << endl;
                             }
                             else
+
+                                // TODO: change this behavior so that it doesn't actually
+                                // modify the NUMA pref of the grid.
                                 gp->set_numa_preferred(1000 + getnode());
 #endif
                     }
@@ -463,17 +465,18 @@ namespace yask {
 #ifndef MAX_EXCH_DIST
 #define MAX_EXCH_DIST (NUM_STENCIL_DIMS - 1)
 #endif
-                // Always use max dist with WF.
-                // TODO: determine if this is overkill.
+                // Always use max dist with WF. Do this because edge
+                // and/or corner values may be needed in WF extensions
+                // even it not needed w/o WFs.
+                // TODO: determine if max is always needed.
                 int maxdist = MAX_EXCH_DIST;
                 if (wf_steps > 0)
                     maxdist = NUM_STENCIL_DIMS - 1;
 
-                // Manhattan dist.
+                // Manhattan dist. of current neighbor.
                 int mandist = _mpiInfo->man_dists.at(neigh_idx);
 
                 // Check distance.
-                // TODO: calculate and use exch dist for each grid.
                 if (mandist > maxdist) {
                     TRACE_MSG("no halo exchange needed with rank " << neigh_rank <<
                               " because L1-norm = " << mandist);
@@ -743,15 +746,16 @@ namespace yask {
                             }
 
                             // step dim?
-                            // Allowing only one step to be exchanged.
-                            // TODO: consider exchanging mutiple steps at once for WFs.
+                            // Enable copy over entire allocated range.
+                            // May only copy one step when not using WFs.
                             else if (dname == step_dim) {
 
-                                // Use 0..1 as a place-holder range.
+                                // Use 0..N as a place-holder range.
                                 // The actual values will be supplied during
                                 // halo exchange.
+                                dsize = gp->get_alloc_size(dname);
                                 copy_begin[dname] = 0;
-                                copy_end[dname] = 1;
+                                copy_end[dname] = dsize;
                             }
 
                             // misc?
@@ -761,6 +765,7 @@ namespace yask {
                                 dsize = gp->get_alloc_size(dname);
                                 copy_begin[dname] = gp->get_first_misc_index(dname);
                                 copy_end[dname] = gp->get_last_misc_index(dname) + 1;
+                                assert(copy_end[dname] - copy_begin[dname] == dsize);
                             }
 
                             // Save computed size.

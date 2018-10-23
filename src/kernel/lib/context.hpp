@@ -247,6 +247,7 @@ namespace yask {
         YaskTimer int_time;     // time in interior stencil calculation.
         YaskTimer halo_time;     // time spent just doing halo exchange, including MPI waits.
         YaskTimer wait_time;     // time spent just doing MPI waits.
+        YaskTimer test_time;     // time spent just doing MPI tests.
         idx_t steps_done = 0;   // number of steps that have been run.
 
         // Maximum halos, skewing angles, and work extensions over all grids
@@ -317,6 +318,10 @@ namespace yask {
             assert(_opts);
             return _opts;
         }
+        const KernelSettingsPtr& get_settings() const {
+            assert(_opts);
+            return _opts;
+        }
         void set_settings(KernelSettingsPtr opts) {
             _opts = opts;
             _at.set_settings(_opts.get());
@@ -324,8 +329,11 @@ namespace yask {
 
         // Misc accessors.
         KernelEnvPtr& get_env() { return _env; }
+        const KernelEnvPtr& get_env() const { return _env; }
         DimsPtr& get_dims() { return _dims; }
+        const DimsPtr& get_dims() const { return _dims; }
         MPIInfoPtr& get_mpi_info() { return _mpiInfo; }
+        const MPIInfoPtr& get_mpi_info() const { return _mpiInfo; }
         AutoTuner& getAT() { return _at; }
         bool use_pack_tuners() const { return _use_pack_tuners; }
 
@@ -539,7 +547,10 @@ namespace yask {
                              const ScanIndices& block_idxs);
 
         // Exchange all dirty halo data for all stencil bundles.
-        void exchange_halos(bool test_only = false);
+        void exchange_halos();
+
+        // Call MPI_Test() on all unfinished requests to promote MPI progress.
+        void test_halo_exchange();
 
         // Mark grids that have been written to by bundle pack 'sel_bp'.
         // If sel_bp==null, use all bundles.
@@ -714,21 +725,24 @@ namespace yask {
 
     }; // StencilContext.
 
-    // Macro to get common items for stencil calcs efficiently.
-#define CONTEXT_VARS(ctx_p)                                             \
-    auto* cp = ctx_p;                                                   \
+    // Macro to get commonly-needed vars for stencil calcs efficiently.
+#define CONTEXT_VARS0(ctx_p, pfx)                                       \
+    pfx auto* cp = ctx_p;                                               \
     auto& os = cp->get_ostr();                                          \
-    auto* opts = cp->get_settings().get();                              \
-    auto* mpiInfo = cp->get_mpi_info().get();                           \
-    auto* dims = cp->get_dims().get();                                  \
-    auto& domain_dims = dims->_domain_dims;                             \
-    auto& stencil_dims = dims->_stencil_dims;                           \
+    pfx auto* opts = cp->get_settings().get();                          \
+    pfx auto* mpiInfo = cp->get_mpi_info().get();                       \
+    pfx auto* dims = cp->get_dims().get();                              \
+    pfx auto* env = cp->get_env().get();                                \
+    const auto& step_dim = dims->_step_dim;                             \
+    const auto& domain_dims = dims->_domain_dims;                       \
+    const auto& stencil_dims = dims->_stencil_dims;                     \
+    constexpr idx_t step_posn = 0;                                      \
+    assert(step_posn == +Indices::step_posn);                           \
     const int nddims = NUM_DOMAIN_DIMS;                                 \
     assert(nddims == domain_dims.size());                               \
     const int nsdims = NUM_STENCIL_DIMS;                                \
-    assert(nsdims == stencil_dims.size());                              \
-    const auto& step_dim = dims->_step_dim;                             \
-    const auto step_posn = 0;                                           \
-    assert(step_posn == +Indices::step_posn)
+    assert(nsdims == stencil_dims.size())
+#define CONTEXT_VARS(ctx_p) CONTEXT_VARS0(ctx_p,)
+#define CONTEXT_VARS_CONST(ctx_p) CONTEXT_VARS0(ctx_p, const)
 
 } // yask namespace.
