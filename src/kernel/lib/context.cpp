@@ -1525,15 +1525,42 @@ namespace yask {
     yk_stats_ptr StencilContext::get_stats() {
         CONTEXT_VARS(this);
 
-        // Calc times.
+        // Numbers of threads.
+        int rthr, bthr;
+        int athr = get_num_comp_threads(rthr, bthr);
+
+        // 'run_time' covers all of 'run_solution()' and subsumes
+        // all other timers. Measured outside parallel region.
         double rtime = run_time.get_elapsed_secs();
-        double htime = min(halo_time.get_elapsed_secs(), rtime);
-        double wtime = min(wait_time.get_elapsed_secs(), htime);
-        double ttime = min(test_time.get_elapsed_secs(), htime - wtime);
-        double etime = min(ext_time.get_elapsed_secs(), rtime - htime);
-        double itime = min(int_time.get_elapsed_secs(), rtime - htime - etime);
+
+        // 'halo_time' covers calls to 'exchange_halos()'.
+        // Measured outside parallel region.
+        double hetime = min(halo_time.get_elapsed_secs(), rtime);
+
+        // 'wait_time' is part of 'halo_time'.
+        double wtime = min(wait_time.get_elapsed_secs(), hetime);
+
+        // Exterior and interior parts. Measured outside parallel region.
+        // Does not include 'halo_time'.
+        double etime = min(ext_time.get_elapsed_secs(), rtime - hetime);
+        double itime = int_time.get_elapsed_secs();
+
+        // 'test_time' is part of 'int_time', but only on region thread 0.
+        // It's not part of 'halo_time'.
+        double ttime = test_time.get_elapsed_secs() / rthr; // ave.
+
+        // Remove average test time from interior time.
+        itime -= ttime;
+        itime = min(itime, rtime - hetime - etime);
+
+        // Compute time.
         double ctime = etime + itime;
-        double otime = max(rtime - ctime - htime, 0.);
+
+        // All halo time.
+        double htime = hetime + ttime;
+
+        // Other.
+        double otime = max(rtime - ctime - htime, 0.0);
 
         // Init return object.
         auto p = make_shared<Stats>();
@@ -1728,12 +1755,11 @@ namespace yask {
         if (!enable_halo_exchange || _env->num_ranks < 2)
             return;
 
-        halo_time.start();
-        double test_delta = 0.;
+        test_time.start();
         TRACE_MSG("test_halo_exchange");
-        int num_tests = 0;
 
         // Loop thru MPI data.
+        int num_tests = 0;
         for (auto& mdi : mpiData) {
             auto& gname = mdi.first;
             auto& grid_mpi_data = mdi.second;
@@ -1745,9 +1771,7 @@ namespace yask {
                 auto& r = grid_recv_reqs[i];
                 if (r != MPI_REQUEST_NULL) {
                     //TRACE_MSG(gname << " recv test &MPI_Request = " << &r);
-                    test_time.start();
                     MPI_Test(&r, &flag, MPI_STATUS_IGNORE);
-                    test_delta += test_time.stop();
                     num_tests++;
                     if (flag)
                         r = MPI_REQUEST_NULL;
@@ -1757,9 +1781,7 @@ namespace yask {
                 auto& r = grid_send_reqs[i];
                 if (r != MPI_REQUEST_NULL) {
                     //TRACE_MSG(gname << " send test &MPI_Request = " << &r);
-                    test_time.start();
                     MPI_Test(&r, &flag, MPI_STATUS_IGNORE);
-                    test_delta += test_time.stop();
                     num_tests++;
                     if (flag)
                         r = MPI_REQUEST_NULL;
@@ -1767,10 +1789,9 @@ namespace yask {
             }
         }
 
-        auto mpi_call_time = halo_time.stop();
+        auto ttime = test_time.stop();
         TRACE_MSG("test_halo_exchange: secs spent in " << num_tests <<
-                  " MPI test(s): " << makeNumStr(test_delta));
-        TRACE_MSG("test_halo_exchange: secs spent in this call: " << makeNumStr(mpi_call_time));
+                  " MPI test(s): " << makeNumStr(ttime));
 #endif
     }
 
