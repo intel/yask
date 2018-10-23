@@ -247,6 +247,7 @@ namespace yask {
         YaskTimer int_time;     // time in interior stencil calculation.
         YaskTimer halo_time;     // time spent just doing halo exchange, including MPI waits.
         YaskTimer wait_time;     // time spent just doing MPI waits.
+        YaskTimer test_time;     // time spent just doing MPI tests.
         idx_t steps_done = 0;   // number of steps that have been run.
 
         // Maximum halos, skewing angles, and work extensions over all grids
@@ -317,6 +318,10 @@ namespace yask {
             assert(_opts);
             return _opts;
         }
+        const KernelSettingsPtr& get_settings() const {
+            assert(_opts);
+            return _opts;
+        }
         void set_settings(KernelSettingsPtr opts) {
             _opts = opts;
             _at.set_settings(_opts.get());
@@ -324,8 +329,11 @@ namespace yask {
 
         // Misc accessors.
         KernelEnvPtr& get_env() { return _env; }
+        const KernelEnvPtr& get_env() const { return _env; }
         DimsPtr& get_dims() { return _dims; }
+        const DimsPtr& get_dims() const { return _dims; }
         MPIInfoPtr& get_mpi_info() { return _mpiInfo; }
+        const MPIInfoPtr& get_mpi_info() const { return _mpiInfo; }
         AutoTuner& getAT() { return _at; }
         bool use_pack_tuners() const { return _use_pack_tuners; }
 
@@ -436,35 +444,47 @@ namespace yask {
         // Set number of threads w/o using thread-divisor.
         // Return number of threads.
         // Do nothing and return 0 if not properly initialized.
-        virtual int set_max_threads() {
+        int set_max_threads() {
 
             // Get max number of threads.
-            int mt = _opts->max_threads;
-	    if (!mt)
-	      return 0;
+            int mt = std::max(_opts->max_threads, 1);
 
             // Reset number of OMP threads to max allowed.
-            //TRACE_MSG("set_max_threads: omp_set_num_threads=" << nt);
             omp_set_num_threads(mt);
             return mt;
         }
 
+        // Get total number of computation threads to use.
+        int get_num_comp_threads(int& region_threads, int& blk_threads) const {
+
+            // Max threads / divisor.
+            int mt = std::max(_opts->max_threads, 1);
+            int td = std::max(_opts->thread_divisor, 1);
+            int at = mt / td;
+            at = std::max(at, 1);
+
+            // Blk threads per region thread.
+            int bt = std::max(_opts->num_block_threads, 1);
+            bt = std::min(bt, at); // Cannot be > 'at'.
+            blk_threads = bt;
+
+            // Region threads.
+            int rt = at / bt;
+            rt = std::max(rt, 1);
+            region_threads = rt;
+
+            // Total number of block threads.
+            return bt * rt;
+        }
+        
         // Set number of threads to use for something other than a region.
         // Return number of threads.
         // Do nothing and return 0 if not properly initialized.
-        virtual int set_all_threads() {
-
-            // Get max number of threads.
-            int mt = _opts->max_threads;
-	    if (!mt)
-	      return 0;
-            int nt = mt / _opts->thread_divisor;
-            nt = std::max(nt, 1);
-
-            // Reset number of OMP threads to max allowed.
-            //TRACE_MSG("set_all_threads: omp_set_num_threads=" << nt);
-            omp_set_num_threads(nt);
-            return nt;
+        int set_all_threads() {
+            int rt, bt;
+            int at = get_num_comp_threads(rt, bt);
+            omp_set_num_threads(at);
+            return at;
         }
 
         // Set number of threads to use for a region.
@@ -472,48 +492,39 @@ namespace yask {
         // disable otherwise.
         // Return number of threads.
         // Do nothing and return 0 if not properly initialized.
-        virtual int set_region_threads() {
-
-            // Start with max allowed threads.
-            int mt = _opts->max_threads;
-	    if (!mt)
-	      return 0;
-            int nt = mt / _opts->thread_divisor;
-            nt = std::max(nt, 1);
+        int set_region_threads() {
+            int rt, bt;
+            int at = get_num_comp_threads(rt, bt);
 
             // Limit outer nesting to allow num_block_threads per nested
             // block loop.
-            nt /= _opts->num_block_threads;
-            nt = std::max(nt, 1);
-            yask_num_threads[0] = nt;
+            yask_num_threads[0] = rt;
 
-            if (_opts->num_block_threads > 1) {
+            if (bt > 1) {
                 omp_set_nested(1);
                 omp_set_max_active_levels(2);
-                yask_num_threads[1] = _opts->num_block_threads;
+                yask_num_threads[1] = bt;
             }
             else {
                 omp_set_nested(0);
                 omp_set_max_active_levels(1);
+                yask_num_threads[1] = 0;
             }
 
-            //TRACE_MSG("set_region_threads: omp_set_num_threads=" << nt);
-            omp_set_num_threads(nt);
-            return nt;
+            omp_set_num_threads(rt);
+            return rt;
         }
 
         // Set number of threads for a block.
         // Return number of threads.
         // Do nothing and return 0 if not properly initialized.
-        virtual int set_block_threads() {
+        int set_block_threads() {
+            int rt, bt;
+            int at = get_num_comp_threads(rt, bt);
 
-            // This should be a nested OMP region.
-            int nt = _opts->num_block_threads;
-            nt = std::max(nt, 1);
-            //TRACE_MSG("set_block_threads: omp_set_num_threads=" << nt);
             if (omp_get_max_active_levels() > 1)
-                omp_set_num_threads(nt);
-            return nt;
+                omp_set_num_threads(bt);
+            return bt;
         }
 
         // Reference stencil calculations.
@@ -539,7 +550,10 @@ namespace yask {
                              const ScanIndices& block_idxs);
 
         // Exchange all dirty halo data for all stencil bundles.
-        void exchange_halos(bool test_only = false);
+        void exchange_halos();
+
+        // Call MPI_Test() on all unfinished requests to promote MPI progress.
+        void test_halo_exchange();
 
         // Mark grids that have been written to by bundle pack 'sel_bp'.
         // If sel_bp==null, use all bundles.
@@ -714,21 +728,24 @@ namespace yask {
 
     }; // StencilContext.
 
-    // Macro to get common items for stencil calcs efficiently.
-#define CONTEXT_VARS(ctx_p)                                             \
-    auto* cp = ctx_p;                                                   \
+    // Macro to get commonly-needed vars for stencil calcs efficiently.
+#define CONTEXT_VARS0(ctx_p, pfx)                                       \
+    pfx auto* cp = ctx_p;                                               \
     auto& os = cp->get_ostr();                                          \
-    auto* opts = cp->get_settings().get();                              \
-    auto* mpiInfo = cp->get_mpi_info().get();                           \
-    auto* dims = cp->get_dims().get();                                  \
-    auto& domain_dims = dims->_domain_dims;                             \
-    auto& stencil_dims = dims->_stencil_dims;                           \
+    pfx auto* opts = cp->get_settings().get();                          \
+    pfx auto* mpiInfo = cp->get_mpi_info().get();                       \
+    pfx auto* dims = cp->get_dims().get();                              \
+    pfx auto* env = cp->get_env().get();                                \
+    const auto& step_dim = dims->_step_dim;                             \
+    const auto& domain_dims = dims->_domain_dims;                       \
+    const auto& stencil_dims = dims->_stencil_dims;                     \
+    constexpr idx_t step_posn = 0;                                      \
+    assert(step_posn == +Indices::step_posn);                           \
     const int nddims = NUM_DOMAIN_DIMS;                                 \
     assert(nddims == domain_dims.size());                               \
     const int nsdims = NUM_STENCIL_DIMS;                                \
-    assert(nsdims == stencil_dims.size());                              \
-    const auto& step_dim = dims->_step_dim;                             \
-    const auto step_posn = 0;                                           \
-    assert(step_posn == +Indices::step_posn)
+    assert(nsdims == stencil_dims.size())
+#define CONTEXT_VARS(ctx_p) CONTEXT_VARS0(ctx_p,)
+#define CONTEXT_VARS_CONST(ctx_p) CONTEXT_VARS0(ctx_p, const)
 
 } // yask namespace.
