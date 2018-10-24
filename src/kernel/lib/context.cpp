@@ -422,57 +422,89 @@ namespace yask {
                                   bp->get_name() << "'");
                         continue;
                     }
-                
-                    // Make 2 passes. 1: compute data needed for MPI
-                    // send and send that data. 2: compute remaining
-                    // data and unpack received MPI data.
-                    for (int pass = 0; pass < 2; pass++) {
 
-                        // If there is an MPI interior defined, set
-                        // the proper flags.
-                        if (mpi_interior.bb_valid) {
-                            if (pass == 0) {
-                                do_mpi_exterior = true;
-                                do_mpi_interior = false;
-                            } else {
-                                do_mpi_exterior = false;
-                                do_mpi_interior = true;
-                            }
-                        } else {
-                            do_mpi_exterior = true;
-                            do_mpi_interior = true;
-
-                            // Only 1 pass needed when needed when not
-                            // overlapping comms and compute.
-                            if (pass > 0)
-                                break;
-                        }
+                    // Do MPI-external passes?
+                    if (mpi_interior.bb_valid) {
+                        do_mpi_interior = false;
                         
+                        // Old overlap method calculates full blocks in exterior
+                        // and then in interior. Only works without WF tiling.
+                        // Keeping code for perf comparison.
+#ifdef OVERLAP_WITH_BLOCKS
+                        mpi_exterior_dim = -1; // indicate block method.
+
+                        // Overlap comms and computation at a block granularity.
+                        // Set both left and right exterior flags.
+                        do_mpi_left = do_mpi_right = true;
+
                         // Include automatically-generated loop code that calls
                         // calc_region(bp) for each region.
                         TRACE_MSG("run_solution: step " << start_t <<
-                                  " for pack '" << bp->get_name() << "'");
-                        if (do_mpi_exterior)
-                            TRACE_MSG(" within MPI exterior");
-                        if (do_mpi_interior)
-                            TRACE_MSG(" within MPI interior");
+                                  " for pack '" << bp->get_name() << "' in MPI exterior");
 #include "yask_rank_loops.hpp"
 
-                        // Do the appropriate steps for halo exchange.
+#else
+                        mpi_exterior_dim = 0;
+
+                        // Overlap comms and computation by restricting
+                        // region boundaries.  Make an external pass for
+                        // each side of each domain dim, e.g., 'left x',
+                        // 'right x', 'left y', ...
+                        DOMAIN_VAR_LOOP(i, j) {
+                            for (bool is_left : { true, false }) {
+
+                                // Set the proper flags to indicate what
+                                // section we're working on.
+                                do_mpi_left = is_left;
+                                do_mpi_right = !is_left;
+                                mpi_exterior_dim = j;
+
+                                // Skip if no halo to calculate in this
+                                // section.
+                                if (!does_exterior_exist())
+                                    continue;
+                        
+                                // Include automatically-generated loop
+                                // code that calls calc_region(bp) for
+                                // each region. The region will be trimmed
+                                // to the active MPI exterior section.
+                                TRACE_MSG("run_solution: step " << start_t <<
+                                          " for pack '" << bp->get_name() <<
+                                          "' in MPI exterior dim " << j <<
+                                          " on the " << (is_left ? "left" : "right"));
+#include "yask_rank_loops.hpp"
+                            } // left/right.
+                        } // domain dims.
+#endif
+                        // Do the appropriate steps for halo exchange of exterior.
+                        // TODO: exchange halo for each dim as soon as it's done.
+                        do_mpi_left = do_mpi_right = true;
                         exchange_halos();
+                        
+                        // Do interior only in next pass.
+                        do_mpi_left = do_mpi_right = false;
+                        do_mpi_interior = true;
+                    } // Overlapping.
 
-                    } // passes.
+                    // Include automatically-generated loop code that calls
+                    // calc_region(bp) for each region. If overlapping
+                    // comms, this will be just the interior.  If not, it
+                    // will cover the whole rank.
+                    TRACE_MSG("run_solution: step " << start_t <<
+                              " for pack '" << bp->get_name() << "'");
+#include "yask_rank_loops.hpp"
 
-                    // Set the flags back to default.
-                    do_mpi_exterior = true;
-                    do_mpi_interior = true;
+                    // Do the appropriate steps for halo exchange depending
+                    // on 'do_mpi_*' flags.
+                    exchange_halos();
+
+                    // Set the overlap flags back to default.
+                    do_mpi_interior = do_mpi_left = do_mpi_right = true;
                 }
-            }
+            } // No WF tiling.
 
             // If doing wave-fronts, must loop through all packs in
             // calc_region().
-            // TODO: allow overlapped comms when the region covers the
-            // whole rank domain, regardless of how many steps it covers.
             else {
 
                 // Null ptr => Eval all stencil packs each time
@@ -487,7 +519,7 @@ namespace yask {
 
                 // Exchange dirty halo(s).
                 exchange_halos();
-            }
+            } // With WF tiling.
 
             // Overall steps.
             steps_done += this_num_t;
@@ -547,9 +579,9 @@ namespace yask {
                   rank_idxs.end.makeValStr(nsdims) << ")" );
 
         // Track time (use "else" to avoid double-counting).
-        if (do_mpi_exterior)
+        if (!do_mpi_interior && (do_mpi_left || do_mpi_right))
             ext_time.start();
-        else if (do_mpi_interior)
+        else
             int_time.start();
 
         // Init region begin & end from rank start & stop indices.
@@ -568,7 +600,7 @@ namespace yask {
         const idx_t num_t = CEIL_DIV(abs(end_t - begin_t), abs(step_t));
 
         // Time loop.
-        idx_t shift_num = 0;
+        idx_t region_shift_num = 0;
         for (idx_t index_t = 0; index_t < num_t; index_t++) {
 
             // This value of index_t steps from start_t to stop_t-1.
@@ -585,7 +617,7 @@ namespace yask {
             // If no temporal blocking (default), loop through packs here,
             // and do only one pack at a time in calc_block(). If there is
             // no WF blocking either, the pack loop body will only execute
-            // with one active pack, and 'shift_num' will never be > 0.
+            // with one active pack, and 'region_shift_num' will never be > 0.
             if (tb_steps == 0) {
 
                 // Stencil bundle packs to evaluate at this time step.
@@ -619,7 +651,7 @@ namespace yask {
                     // boundaries, and pack BB. This will be the base of the
                     // region loops.
                     bool ok = shift_region(rank_idxs.start, rank_idxs.stop,
-                                           shift_num, bp,
+                                           region_shift_num, bp,
                                            region_idxs);
 
                     DOMAIN_VAR_LOOP(i, j) {
@@ -636,7 +668,8 @@ namespace yask {
                     // domain as time progresses and their boundaries shift. So,
                     // we don't want to return if this condition isn't met.
                     if (ok) {
-                        idx_t phase = 0; // Only 1 phase w/o TB.
+                        idx_t nphases = 1; // Only 1 phase w/o TB.
+                        idx_t phase = 0;
 
                         // Include automatically-generated loop code that
                         // calls calc_block() for each block in this region.
@@ -656,11 +689,11 @@ namespace yask {
                     // information about which grids are possibly dirty.
                     // TODO: make this smarter to save unneeded MPI
                     // exchanges.
-                    if (do_mpi_exterior)
+                    if (do_mpi_left || do_mpi_right)
                         mark_grids_dirty(bp, start_t, stop_t);
 
                     // Need to shift for next pack and/or time.
-                    shift_num++;
+                    region_shift_num++;
                     
                 } // stencil bundle packs.
             } // no temporal blocking.
@@ -685,11 +718,10 @@ namespace yask {
 
                 // Set region_idxs begin & end based on shifted start & stop
                 // and rank boundaries.  This will be the base of the region
-                // loops.  NB: calc_block() doesn't need to know about the
-                // *original* region begin & end.
+                // loops.
                 bool ok = shift_region(rank_idxs.start, rank_idxs.stop,
-                                         shift_num, bp,
-                                         region_idxs);
+                                       region_shift_num, bp,
+                                       region_idxs);
 
                 DOMAIN_VAR_LOOP(i, j) {
 
@@ -725,7 +757,7 @@ namespace yask {
                             continue;
 
                         // One shift for each pack in each TB step.
-                        shift_num++;
+                        region_shift_num++;
 
                         // Mark grids that [may] have been written to by this
                         // pack.
@@ -735,11 +767,11 @@ namespace yask {
             } // with temporal blocking.
         } // time.
 
-        if (do_mpi_exterior) {
+        if (!do_mpi_interior && (do_mpi_left || do_mpi_right)) {
             double ext_delta = ext_time.stop();
             TRACE_MSG("secs spent in this region for rank-exterior blocks: " << makeNumStr(ext_delta));
         }
-        else if (do_mpi_interior) {
+        else {
             double int_delta = int_time.stop();
             TRACE_MSG("secs spent in this region for rank-interior blocks: " << makeNumStr(int_delta));
         }
@@ -752,7 +784,9 @@ namespace yask {
     // 'phase' are computed.  Typically called by a top-level OMP thread
     // from calc_region().
     void StencilContext::calc_block(BundlePackPtr& sel_bp,
-                                    idx_t phase,
+                                    idx_t region_shift_num,
+                                    idx_t nphases, idx_t phase,
+                                    const ScanIndices& rank_idxs,
                                     const ScanIndices& region_idxs) {
 
         CONTEXT_VARS(this);
@@ -766,13 +800,12 @@ namespace yask {
                   region_idxs.end.makeValStr(nsdims) << 
                   ") by thread " << thread_idx);
 
+#ifdef OVERLAP_WITH_BLOCKS
         // If we are not calculating some of the blocks, determine
         // whether this block is *completely* inside the interior.
         // A block even partially in the exterior is not considered
         // "inside".
-        if (!do_mpi_interior || !do_mpi_exterior) {
-            assert(do_mpi_interior || do_mpi_exterior);
-            assert(mpi_interior.bb_valid);
+        if (is_overlap_active()) {
 
             // Starting point and ending point must be in BB.
             bool inside = true;
@@ -794,7 +827,7 @@ namespace yask {
                     return;
                 }
             }
-            if (do_mpi_exterior) {
+            if (do_mpi_left || do_mpi_right) {
                 if (!inside)
                     TRACE_MSG(" calculating because block is exterior");
                 else {
@@ -803,7 +836,8 @@ namespace yask {
                 }
             }
         }
-
+#endif
+        
         // Init block begin & end from region start & stop indices.
         ScanIndices block_idxs(*_dims, true, 0);
         block_idxs.initFromOuter(region_idxs);
@@ -845,7 +879,6 @@ namespace yask {
 
             // Default settings for no TB.
             BundlePackPtr bp = sel_bp;
-            idx_t nphases = 1;
             assert(phase == 0);
             idx_t nshapes = 1;
             idx_t shape = 0;
@@ -860,9 +893,6 @@ namespace yask {
 
         // If TB is active, loop thru each required shape.
         else {
-
-            // Recalc number of phases.
-            idx_t nphases = nddims + 1; // E.g., nphases = 3 for 2D.
             assert(phase >= 0);
             assert(phase < nphases); // E.g., phase = 0..2 for 2D.
             
@@ -954,9 +984,11 @@ namespace yask {
     // 'phase' are computed. The starting 'shift_num' is relative
     // to the bottom of the current region and block.
     void StencilContext::calc_mini_block(BundlePackPtr& sel_bp,
+                                         idx_t region_shift_num,
                                          idx_t nphases, idx_t phase,
                                          idx_t nshapes, idx_t shape,
                                          const BridgeMask& bridge_mask,
+                                         const ScanIndices& rank_idxs,
                                          const ScanIndices& base_region_idxs,
                                          const ScanIndices& base_block_idxs,
                                          const ScanIndices& adj_block_idxs) {
@@ -977,7 +1009,7 @@ namespace yask {
         // interior only.
         // We do this only on thread 0 to avoid stacking up useless
         // MPI requests by many threads.
-        if (do_mpi_interior && !do_mpi_exterior && thread_idx == 0)
+        if (is_overlap_active() && do_mpi_interior && thread_idx == 0)
             test_halo_exchange();
 
         // Init mini-block begin & end from blk start & stop indices.
@@ -1049,23 +1081,29 @@ namespace yask {
                 // Groups in mini-blk loops are based on sub-block-group sizes.
                 mini_block_idxs.group_size = settings._sub_block_group_sizes;
 
+                // Set mini_block_idxs begin & end based on shifted rank
+                // start & stop (original region begin & end), rank
+                // boundaries, and pack BB. There may be several TB layers
+                // within a region WF, so we need to add the region and
+                // local mini-block shift counts.
+                bool ok = shift_region(rank_idxs.start, rank_idxs.stop,
+                                       region_shift_num + shift_num, bp,
+                                       mini_block_idxs);
+
                 // Set mini_block_idxs begin & end based on shifted begin &
                 // end of block for given phase & shape.  This will be the
                 // base for the mini-block loops, which have no temporal
                 // tiling.
-                bool ok =
-                    shift_mini_block(adj_block_idxs.start, adj_block_idxs.stop,
-                                     shift_num,
-                                     adj_block_idxs.begin, adj_block_idxs.end,
-                                     base_block_idxs.begin, base_block_idxs.end,
-                                     shift_num,
-                                     nphases, phase,
-                                     nshapes, shape,
-                                     bridge_mask,
-                                     base_region_idxs.begin, base_region_idxs.end,
-                                     shift_num,
-                                     bp,
-                                     mini_block_idxs);
+                if (ok)
+                    ok = shift_mini_block(adj_block_idxs.start, adj_block_idxs.stop,
+                                          adj_block_idxs.begin, adj_block_idxs.end,
+                                          base_block_idxs.begin, base_block_idxs.end,
+                                          base_region_idxs.begin, base_region_idxs.end,
+                                          shift_num,
+                                          nphases, phase,
+                                          nshapes, shape,
+                                          bridge_mask,
+                                          mini_block_idxs);
                 
                 // Loop through bundles in this pack to do actual calcs.
                 if (ok) {
@@ -1110,10 +1148,9 @@ namespace yask {
             idx_t shift_amt = angle * shift_num;
 
             // Shift initial spatial region boundaries for this iteration of
-            // temporal wavefront.  Between regions, we only shift left, so
-            // region loops must strictly increment. They may do so in any
-            // order.  Shift by pts in one WF step.  Always shift left in
-            // WFs.
+            // temporal wavefront.  Regions only shift left, so region loops
+            // must strictly increment. They may do so in any order.  Shift
+            // by pts in one WF step.  Always shift left in WFs.
             idx_t rstart = base_start[i] - shift_amt;
             idx_t rstop = base_stop[i] - shift_amt;
 
@@ -1140,15 +1177,71 @@ namespace yask {
             if (rstop > dend && right_wf_exts[j])
                 rstop = min(rstop, dend + right_wf_exts[j] - shift_amt);
 
+            // Trim region based on current MPI section if
+            // using overlapping but not whole-block method.
+            if (is_overlap_active() && mpi_exterior_dim >= 0) {
+
+                // In interior.
+                if (do_mpi_interior) {
+                    rstart = max(rstart, mpi_interior.bb_begin[j]);
+                    rstop = min(rstop, mpi_interior.bb_end[j]);
+                }
+
+                // In one of the exterior sections.
+                else {
+                    assert(do_mpi_left != do_mpi_right);
+                    if (!does_exterior_exist())
+                        ok = false;
+
+                    // Example in 2D:
+                    // +------+------------+------+
+                    // |      | ext left y |      |
+                    // | ext  +------------+ ext  | <-- mpi_interior.bb_begin[y]
+                    // | left |  interior  | right|
+                    // | x    |            | x    |
+                    // |      +------------+      | <-- mpi_interior.bb_end[y]
+                    // |      | ext right y|      |
+                    // +------+------------+------+
+                    //        ^            ^
+                    //        |            |
+                    //        |          mpi_interior.bb_end[x]
+                    //      mpi_interior.bb_begin[x]
+
+                    // Trim left or right for current dim.
+                    if (j == mpi_exterior_dim) {
+                        if (do_mpi_left)
+                            rstop = min(rstop, mpi_interior.bb_begin[j]);
+
+                        else {
+                            rstart = max(rstart, mpi_interior.bb_end[j]);
+
+                            // For right, also need to trim to avoid overlap
+                            // with left. This implies left always needs to
+                            // be done before right.
+                            rstart = max(rstart, mpi_interior.bb_begin[j]);
+                        }
+                    }
+
+                    // Trim across all dims up to current one, e.g.,
+                    // trim overlap between 'x' and 'y' from 'y'.
+                    // See above diagram. This implies dims need
+                    // to be done in ascending numerical order.
+                    if (j < mpi_exterior_dim) {
+                        rstart = max(rstart, mpi_interior.bb_begin[j]);
+                        rstop = min(rstop, mpi_interior.bb_end[j]);
+                    }
+                } // exterior.
+            } // overlapping.
+
+            // Anything to do in the adjusted region?
+            if (rstop <= rstart) {
+                ok = false;
+                break;
+            }
+            
             // Copy result into idxs.
             idxs.begin[i] = rstart;
             idxs.end[i] = rstop;
-
-            // Anything to do in the adjusted region?
-            if (rstop <= rstart)
-                ok = false;
-            if (!ok)
-                break;
         }
         TRACE_MSG("shift_region: updated span: [" <<
                   idxs.begin.makeValStr(nsdims) << " ... " <<
@@ -1163,41 +1256,30 @@ namespace yask {
     // For given 'phase' and 'shape', find boundaries within mini-block at
     // 'mb_base_start' to 'mb_base_stop' shifted by 'mb_shift_num', which
     // should start at 0 and increment for each pack in each time-step.
-    // 'mb_base' is subset of 'adj_block_base'.
-    // Trim to block at 'block_base_start' to 'block_base_stop' shifted by
-    // 'block_shift_num'.  Trim to region at 'region_base_start' to
-    // 'region_base_stop' shifted by 'region_shift_num'.  Trim to ext-BB of
-    // 'bp' or rank if null.  Write results into 'begin' and 'end' in
-    // 'idxs'.  Return 'true' if resulting area is non-empty, 'false' if
-    // empty.
+    // 'mb_base' is subset of 'adj_block_base'.  Also trim to block at
+    // 'block_base_start' to 'block_base_stop' shifted by 'mb_shift_num'.
+    // Input 'begin' and 'end' of 'idxs' should be trimmed to region.  Writes
+    // results back into 'begin' and 'end' of 'idxs'.  Returns 'true' if
+    // resulting area is non-empty, 'false' if empty.
     bool StencilContext::shift_mini_block(const Indices& mb_base_start,
                                           const Indices& mb_base_stop,
-                                          idx_t mb_shift_num,
                                           const Indices& adj_block_base_start,
                                           const Indices& adj_block_base_stop,
                                           const Indices& block_base_start,
                                           const Indices& block_base_stop,
-                                          idx_t block_shift_num,
+                                          const Indices& region_base_start,
+                                          const Indices& region_base_stop,
+                                          idx_t mb_shift_num,
                                           idx_t nphases, idx_t phase,
                                           idx_t nshapes, idx_t shape,
                                           const BridgeMask& bridge_mask,
-                                          const Indices& region_base_start,
-                                          const Indices& region_base_stop,
-                                          idx_t region_shift_num,
-                                          BundlePackPtr& bp,
                                           ScanIndices& idxs) {
         CONTEXT_VARS(this);
         auto npacks = stPacks.size();
+        bool ok = true;
         
-        // Set 'idxs' begin & end to region boundaries for
-        // given shift.
-        bool ok = shift_region(region_base_start, region_base_stop,
-                               region_shift_num,
-                               bp,
-                               idxs);
-
         // Loop thru dims, breaking out if any dim has no work.
-        if (ok) DOMAIN_VAR_LOOP(i, j) {
+        DOMAIN_VAR_LOOP(i, j) {
 
             // Determine range of this block for current phase, shape, and
             // shift. For each dim, we'll first compute the L & R sides of
@@ -1232,19 +1314,19 @@ namespace yask {
 
             // Shift start to right unless first.  First block will be a
             // parallelogram or trapezoid clamped to beginning of region.
-            blk_start += tb_angle * block_shift_num;
+            blk_start += tb_angle * mb_shift_num;
             if (is_first_blk)
                 blk_start = idxs.begin[i];
 
             // Shift stop to left. If there will be no bridges, clamp
             // last block to end of region.
-            blk_stop -= tb_angle * block_shift_num;
+            blk_stop -= tb_angle * mb_shift_num;
             if ((nphases == 1 || is_one_blk) && is_last_blk)
                 blk_stop = idxs.end[i];
 
             // Shift start of next block. Last bridge will be
             // clamped to end of region.
-            next_blk_start += tb_angle * block_shift_num;
+            next_blk_start += tb_angle * mb_shift_num;
             if (is_last_blk)
                 next_blk_start = idxs.end[i];
 
@@ -1326,7 +1408,6 @@ namespace yask {
 
         TRACE_MSG("shift_mini_block: phase " << phase << "/" << nphases <<
                   ", shape " << shape << "/" << nshapes <<
-                  ", pack '" << bp->get_name() <<
                   ", updated span: [" <<
                   idxs.begin.makeValStr(nsdims) << " ... " <<
                   idxs.end.makeValStr(nsdims) << ") from original mini-block [" <<
@@ -1336,11 +1417,9 @@ namespace yask {
                   adj_block_base_start.makeValStr(nsdims) << " ... " <<
                   adj_block_base_stop.makeValStr(nsdims) << ") and actual block base [" <<
                   block_base_start.makeValStr(nsdims) << " ... " <<
-                  block_base_stop.makeValStr(nsdims) << ") shifted " <<
-                  block_shift_num << " time(s) and region base [" <<
+                  block_base_stop.makeValStr(nsdims) << ") and region base [" <<
                   region_base_start.makeValStr(nsdims) << " ... " <<
-                  region_base_stop.makeValStr(nsdims) << ") shifted " <<
-                  region_shift_num << " time(s) is " <<
+                  region_base_stop.makeValStr(nsdims) << ") is " <<
                   (ok ? "not " : "") << "empty");
         return ok;
     }
@@ -1807,9 +1886,11 @@ namespace yask {
         halo_time.start();
         double wait_delta = 0.;
         TRACE_MSG("exchange_halos");
-        if (!do_mpi_exterior || !do_mpi_interior) {
-            if (do_mpi_exterior)
-                TRACE_MSG(" following calc of MPI exterior");
+        if (is_overlap_active()) {
+            if (do_mpi_left)
+                TRACE_MSG(" following calc of MPI left exterior");
+            if (do_mpi_right)
+                TRACE_MSG(" following calc of MPI right exterior");
             if (do_mpi_interior)
                 TRACE_MSG(" following calc of MPI interior");
         }
@@ -1893,7 +1974,7 @@ namespace yask {
 
         // Flags indicate what part of grids were most recently calc'd.
         // These determine what exchange steps need to be done.
-        if (do_mpi_exterior) {
+        if (do_mpi_left || do_mpi_right) {
             steps_to_do.push_back(halo_irecv);
             steps_to_do.push_back(halo_pack_isend);
         }

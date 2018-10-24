@@ -528,7 +528,9 @@ REGION_LOOP_OPTS	?=	-ndims $(NSDIMS) -inVar region_idxs \
 REGION_LOOP_OUTER_MODS	?=	grouped omp
 REGION_LOOP_ORDER	?=	1 .. N-1
 REGION_LOOP_CODE	?=	$(REGION_LOOP_OUTER_MODS) loop($(REGION_LOOP_ORDER)) { \
-				$(REGION_LOOP_INNER_MODS) call(calc_block(bp, phase)); }
+				$(REGION_LOOP_INNER_MODS) \
+				  call(calc_block(bp, region_shift_num, \
+					nphases, phase, rank_idxs)); }
 
 # Block loops break up a block into mini-blocks.
 # These are executed sequentially, so no OpenMP.
@@ -539,8 +541,9 @@ BLOCK_LOOP_OUTER_MODS	?=	grouped
 BLOCK_LOOP_ORDER	?=	1 .. N-1
 BLOCK_LOOP_CODE		?=	$(BLOCK_LOOP_OUTER_MODS) loop($(BLOCK_LOOP_ORDER)) { \
 				$(BLOCK_LOOP_INNER_MODS) \
-				  call(calc_mini_block(bp, nphases, phase, nshapes, shape, \
-					bridge_mask, region_idxs, block_idxs)); }
+				  call(calc_mini_block(bp, region_shift_num, \
+					nphases, phase, nshapes, shape, \
+					bridge_mask, rank_idxs, region_idxs, block_idxs)); }
 
 # Mini-Block loops break up a mini-block into sub-blocks. The 'omp' modifier creates
 # a *nested* OpenMP loop so that each sub-block is assigned to a nested OpenMP

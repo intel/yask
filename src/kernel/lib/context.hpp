@@ -205,15 +205,38 @@ namespace yask {
         // If WFs are not used, this is the same as 'rank_bb';
         BoundingBox ext_bb;
 
-        // BB of the "interior" of this rank.
-        // This is the area that does not include any data
-        // that is needed for any MPI send.
+        // BB of the "interior" of this rank.  This is the area that does
+        // not include any data that is needed for any MPI send.  The size
+        // is valid for the layer that needs to be exchanged, and doesn't
+        // include any extensions needed for WF.
         BoundingBox mpi_interior;
 
         // Flags to calculate the interior and/or exterior.
-        // TODO: replace with function parameters.
         bool do_mpi_interior = true;
-        bool do_mpi_exterior = true;
+        bool do_mpi_left = true;        // left exterior in given dim.
+        bool do_mpi_right = true;        // right exterior in given dim.
+        idx_t mpi_exterior_dim = -1;      // which domain dim in left/right.
+
+        // Is overlap currently enabled?
+        inline bool is_overlap_active() const {
+            bool active = !do_mpi_interior || !do_mpi_left || !do_mpi_right;
+            if (active) {
+                assert(do_mpi_interior || do_mpi_left || do_mpi_right);
+                assert(mpi_interior.bb_valid);
+            }
+            return active;
+        }
+
+        // Is there a non-zero exterior in the currently active section?
+        inline bool does_exterior_exist() const {
+            assert(is_overlap_active());
+            auto j = mpi_exterior_dim;
+            if (do_mpi_left)
+                return mpi_interior.bb_begin[j] > ext_bb.bb_begin[j];
+            if (do_mpi_right)
+                return mpi_interior.bb_end[j] < ext_bb.bb_end[j];
+            return false;
+        }
         
         // List of all non-scratch stencil bundles in the order in which
         // they should be evaluated within a step.
@@ -529,25 +552,29 @@ namespace yask {
 
         // Reference stencil calculations.
         void run_ref(idx_t first_step_index,
-                             idx_t last_step_index);
+                     idx_t last_step_index);
 
         // Calculate results within a region.
         void calc_region(BundlePackPtr& sel_bp,
-                                 const ScanIndices& rank_idxs);
+                         const ScanIndices& rank_idxs);
 
         // Calculate results within a block.
         void calc_block(BundlePackPtr& sel_bp,
-                                idx_t phase,
-                                const ScanIndices& region_idxs);
+                        idx_t region_shift_num,
+                        idx_t nphases, idx_t phase,
+                        const ScanIndices& rank_idxs,
+                        const ScanIndices& region_idxs);
 
         // Calculate results within a mini-block.
         void calc_mini_block(BundlePackPtr& sel_bp,
+                             idx_t region_shift_num,
                              idx_t nphases, idx_t phase,
                              idx_t nshapes, idx_t shape,
                              const BridgeMask& bridge_mask,
+                             const ScanIndices& rank_idxs,
                              const ScanIndices& base_region_idxs,
                              const ScanIndices& base_block_idxs,
-                             const ScanIndices& block_idxs);
+                             const ScanIndices& adj_block_idxs);
 
         // Exchange all dirty halo data for all stencil bundles.
         void exchange_halos();
@@ -569,19 +596,16 @@ namespace yask {
         // Set various limits in 'idxs' based on current step in block.
         bool shift_mini_block(const Indices& mb_base_start,
                               const Indices& mb_base_stop,
-                              idx_t mb_shift_num,
                               const Indices& adj_block_base_start,
                               const Indices& adj_block_base_stop,
                               const Indices& block_base_start,
                               const Indices& block_base_stop,
-                              idx_t block_shift_num,
+                              const Indices& region_base_start,
+                              const Indices& region_base_stop,
+                              idx_t mb_shift_num,
                               idx_t nphases, idx_t phase,
                               idx_t nshapes, idx_t shape,
                               const BridgeMask& bridge_mask,
-                              const Indices& region_base_start,
-                              const Indices& region_base_stop,
-                              idx_t region_shift_num,
-                              BundlePackPtr& bp,
                               ScanIndices& idxs);
         
         // Set the bounding-box around all stencil bundles.
