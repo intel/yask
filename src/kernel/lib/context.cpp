@@ -794,7 +794,8 @@ namespace yask {
                 // "phases".  For example, 1-D TB uses "upward" triangles
                 // and "downward" triangles. Threads must sync after every
                 // phase. Thus, the phase loop is here around the generated
-                // loops.
+                // loops.  TODO: schedule phases and their shapes via task
+                // dependencies.
                 idx_t nphases = nddims + 1; 
                 for (idx_t phase = 0; phase < nphases; phase++) {
                     
@@ -1065,9 +1066,7 @@ namespace yask {
 
         // Hack to promote forward progress in MPI when calc'ing
         // interior only.
-        // We do this only on thread 0 to avoid stacking up useless
-        // MPI requests by many threads.
-        if (is_overlap_active() && do_mpi_interior && thread_idx == 0)
+        if (is_overlap_active() && do_mpi_interior)
             test_halo_exchange();
 
         // Init mini-block begin & end from blk start & stop indices.
@@ -1125,9 +1124,8 @@ namespace yask {
                           ", pack '" << bp->get_name() <<
                           "', shift-num " << shift_num);
 
-                // Start timers for this pack.
-                // Tracking only on thread 0. It might be better to track
-                // all threads and average them. Or something like that.
+                // Start timers for this pack.  Tracking only on thread
+                // 0. TODO: track all threads and report cross-thread stats.
                 if (thread_idx == 0)
                     bp->start_timers();
                 
@@ -1589,9 +1587,8 @@ namespace yask {
 
         // Determine number of steps to run.
         // If wave-fronts are enabled, run a max number of these steps.
-        idx_t region_steps = _opts->_region_sizes[_dims->_step_dim];
         idx_t step_dir = _dims->_step_dir; // +/- 1.
-        idx_t step_t = min(max(region_steps, idx_t(1)), +AutoTuner::max_step_t) * step_dir;
+        idx_t step_t = min(max(wf_steps, idx_t(1)), +AutoTuner::max_step_t) * step_dir;
 
         // Run time-steps until AT converges.
         for (idx_t t = 0; ; t += step_t) {
@@ -1940,6 +1937,11 @@ namespace yask {
         if (!enable_halo_exchange || _env->num_ranks < 2)
             return;
 
+        // Only use thread 0.
+        int thread_idx = omp_get_thread_num();
+        if (thread_idx != 0)
+            return;
+
         test_time.start();
         TRACE_MSG("test_halo_exchange");
 
@@ -1952,6 +1954,15 @@ namespace yask {
             MPI_Request* grid_send_reqs = grid_mpi_data.send_reqs.data();
 
             int flag;
+#if 1
+            int indices[max(grid_mpi_data.recv_reqs.size(), grid_mpi_data.send_reqs.size())];
+            MPI_Testsome(int(grid_mpi_data.recv_reqs.size()), grid_recv_reqs, &flag, indices, MPI_STATUS_IGNORE);
+            MPI_Testsome(int(grid_mpi_data.send_reqs.size()), grid_send_reqs, &flag, indices, MPI_STATUS_IGNORE);
+#elif 0
+            int index;
+            MPI_Testany(int(grid_mpi_data.recv_reqs.size()), grid_recv_reqs, &index, &flag, MPI_STATUS_IGNORE);
+            MPI_Testany(int(grid_mpi_data.send_reqs.size()), grid_send_reqs, &index, &flag, MPI_STATUS_IGNORE);
+#else
             for (size_t i = 0; i < grid_mpi_data.recv_reqs.size(); i++) {
                 auto& r = grid_recv_reqs[i];
                 if (r != MPI_REQUEST_NULL) {
@@ -1972,8 +1983,8 @@ namespace yask {
                         r = MPI_REQUEST_NULL;
                 }
             }
+#endif
         }
-
         auto ttime = test_time.stop();
         TRACE_MSG("test_halo_exchange: secs spent in " << num_tests <<
                   " MPI test(s): " << makeNumStr(ttime));

@@ -272,7 +272,7 @@ namespace yask {
         // Maximum halos, skewing angles, and work extensions over all grids
         // used for wave-front rank tiling (wf).
         IdxTuple max_halos;  // spatial halos.
-        idx_t wf_steps = 0;  // max number of WF steps.
+        idx_t wf_steps = 0;  // max number of steps in a WF. 0 => no WF.
         IdxTuple wf_angles;  // WF skewing angles for each shift (in points).
         idx_t num_wf_shifts = 0; // number of WF shifts required in wf_steps.
         IdxTuple wf_shift_pts;    // total shifted pts (wf_angles * num_wf_shifts).
@@ -280,7 +280,7 @@ namespace yask {
         IdxTuple right_wf_exts;    // WF extension needed on right side of rank.
 
         // Settings for temporal blocking and mini-blocks.
-        idx_t tb_steps = 0;  // max number of TB steps (may be less than requested).
+        idx_t tb_steps = 0;  // max number of steps in a TB. 0 => no TB.
         IdxTuple tb_angles;  // TB skewing angles for each shift (in points).
         idx_t num_tb_shifts = 0; // number of TB shifts required in tb_steps.
         IdxTuple tb_widths;      // base of TB trapezoid.
