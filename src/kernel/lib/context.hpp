@@ -227,15 +227,11 @@ namespace yask {
             return active;
         }
 
-        // Is there a non-zero exterior in the currently active section?
-        inline bool does_exterior_exist() const {
-            assert(is_overlap_active());
-            auto j = mpi_exterior_dim;
-            if (do_mpi_left)
-                return mpi_interior.bb_begin[j] > ext_bb.bb_begin[j];
-            if (do_mpi_right)
-                return mpi_interior.bb_end[j] < ext_bb.bb_end[j];
-            return false;
+        // Is there a non-zero exterior in the given section?
+        inline bool does_exterior_exist(idx_t ddim, bool is_left) const {
+            return is_left ?
+                mpi_interior.bb_begin[ddim] > ext_bb.bb_begin[ddim] :
+                mpi_interior.bb_end[ddim] < ext_bb.bb_end[ddim];
         }
         
         // List of all non-scratch stencil bundles in the order in which

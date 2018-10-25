@@ -429,7 +429,8 @@ namespace yask {
                         
                         // Old overlap method calculates full blocks in exterior
                         // and then in interior. Only works without WF tiling.
-                        // Keeping code for perf comparison.
+                        // Also, if blocks are too big, then the interior is
+                        // too small. For now, keeping code for perf comparison.
 #ifdef OVERLAP_WITH_BLOCKS
                         mpi_exterior_dim = -1; // indicate block method.
 
@@ -453,17 +454,17 @@ namespace yask {
                         DOMAIN_VAR_LOOP(i, j) {
                             for (bool is_left : { true, false }) {
 
+                                // Skip if no halo to calculate in this
+                                // section.
+                                if (!does_exterior_exist(j, is_left))
+                                    continue;
+                        
                                 // Set the proper flags to indicate what
                                 // section we're working on.
                                 do_mpi_left = is_left;
                                 do_mpi_right = !is_left;
                                 mpi_exterior_dim = j;
 
-                                // Skip if no halo to calculate in this
-                                // section.
-                                if (!does_exterior_exist())
-                                    continue;
-                        
                                 // Include automatically-generated loop
                                 // code that calls calc_region(bp) for
                                 // each region. The region will be trimmed
@@ -500,7 +501,8 @@ namespace yask {
 
                     // Set the overlap flags back to default.
                     do_mpi_interior = do_mpi_left = do_mpi_right = true;
-                }
+
+                } // packs.
             } // No WF tiling.
 
             // If doing wave-fronts, must loop through all packs in
@@ -511,14 +513,66 @@ namespace yask {
                 // calc_region() is called.
                 BundlePackPtr bp;
 
+                // Do MPI-external passes?
+                if (mpi_interior.bb_valid) {
+                    do_mpi_interior = false;
+                    mpi_exterior_dim = 0;
+
+                    // Overlap comms and computation by restricting
+                    // region boundaries.  Make an external pass for
+                    // each side of each domain dim, e.g., 'left x',
+                    // 'right x', 'left y', ...
+                    DOMAIN_VAR_LOOP(i, j) {
+                        for (bool is_left : { true, false }) {
+
+                            // Skip if no halo to calculate in this
+                            // section.
+                            if (!does_exterior_exist(j, is_left))
+                                continue;
+                        
+                            // Set the proper flags to indicate what
+                            // section we're working on.
+                            do_mpi_left = is_left;
+                            do_mpi_right = !is_left;
+                            mpi_exterior_dim = j;
+
+                            // Include automatically-generated loop
+                            // code that calls calc_region(bp) for
+                            // each region. The region will be trimmed
+                            // to the active MPI exterior section.
+                            TRACE_MSG("run_solution: steps [" << start_t <<
+                                      " ... " << stop_t <<
+                                      ") in MPI exterior dim " << j <<
+                                      " on the " << (is_left ? "left" : "right"));
+#include "yask_rank_loops.hpp"
+                        } // left/right.
+                    } // domain dims.
+
+                    // Do the appropriate steps for halo exchange of exterior.
+                    // TODO: exchange halo for each dim as soon as it's done.
+                    do_mpi_left = do_mpi_right = true;
+                    exchange_halos();
+                        
+                    // Do interior only in next pass.
+                    do_mpi_left = do_mpi_right = false;
+                    do_mpi_interior = true;
+                } // Overlapping.
+
                 // Include automatically-generated loop code that calls
-                // calc_region() for each region.
+                // calc_region(bp) for each region. If overlapping
+                // comms, this will be just the interior.  If not, it
+                // will cover the whole rank.
                 TRACE_MSG("run_solution: steps [" << start_t <<
                           " ... " << stop_t << ")");
 #include "yask_rank_loops.hpp"
 
-                // Exchange dirty halo(s).
+                // Do the appropriate steps for halo exchange depending
+                // on 'do_mpi_*' flags.
                 exchange_halos();
+
+                // Set the overlap flags back to default.
+                do_mpi_interior = do_mpi_left = do_mpi_right = true;
+
             } // With WF tiling.
 
             // Overall steps.
@@ -718,10 +772,15 @@ namespace yask {
 
                 // Set region_idxs begin & end based on shifted start & stop
                 // and rank boundaries.  This will be the base of the region
-                // loops.
+                // loops. The bounds in region_idxs may be outside the
+                // actual rank because we're starting with the expanded rank.
                 bool ok = shift_region(rank_idxs.start, rank_idxs.stop,
                                        region_shift_num, bp,
                                        region_idxs);
+
+                // Should always be valid because we just shifted (no trim).
+                // Trimming will be done at the mini-block level.
+                assert(ok);
 
                 DOMAIN_VAR_LOOP(i, j) {
 
@@ -737,18 +796,17 @@ namespace yask {
                 // phase. Thus, the phase loop is here around the generated
                 // loops.
                 idx_t nphases = nddims + 1; 
-                if (ok) {
-                    for (idx_t phase = 0; phase < nphases; phase++) {
-
-                        // Call calc_block() on every block.  Only the shapes
-                        // corresponding to the current 'phase' will be
-                        // calculated.
+                for (idx_t phase = 0; phase < nphases; phase++) {
+                    
+                    // Call calc_block() on every block.  Only the shapes
+                    // corresponding to the current 'phase' will be
+                    // calculated.
 #include "yask_region_loops.hpp"
-                    }
                 }
             
                 // Loop thru stencil bundle packs that were evaluated in
                 // these 'tb_steps' to increment shift & mark dirty grids.
+                // TODO: consider moving this inside calc_block().
                 for (idx_t t = start_t; t != stop_t; t += step_dir) {
                     for (auto& bp : stPacks) {
 
@@ -1125,9 +1183,9 @@ namespace yask {
 
     // Find boundaries within region with 'base_start' to 'base_stop'
     // shifted 'shift_num' times, which should start at 0 and increment for
-    // each pack in each time-step.  Trim to ext-BB of 'bp' if not null.
-    // Write results into 'begin' and 'end' in 'idxs'.  Return 'true' if
-    // resulting area is non-empty, 'false' if empty.
+    // each pack in each time-step.  Trim to ext-BB and MPI section if 'bp' if
+    // not null.  Write results into 'begin' and 'end' in 'idxs'.  Return
+    // 'true' if resulting area is non-empty, 'false' if empty.
     bool StencilContext::shift_region(const Indices& base_start, const Indices& base_stop,
                                       idx_t shift_num,
                                       BundlePackPtr& bp,
@@ -1154,90 +1212,138 @@ namespace yask {
             idx_t rstart = base_start[i] - shift_amt;
             idx_t rstop = base_stop[i] - shift_amt;
 
-            // Trim to extended BB of pack if given.
-            // Note that BBs are indexed by 'j' because they don't
-            // contain step indices.
-            if (bp) {
-                auto& pbb = bp->getBB();
+            // Trim only if pack is specified.
+            if (bp.get()) {
+
+                // Trim to extended BB of pack. This will also trim
+                // to the extended BB of the rank.
+                auto& pbb = bp.get()->getBB();
                 rstart = max(rstart, pbb.bb_begin[j]);
                 rstop = min(rstop, pbb.bb_end[j]);
-            }
 
-            // Find non-extended domain. We'll use this to determine if
-            // we're in an extension, where special rules apply.
-            idx_t dbegin = rank_bb.bb_begin[j];
-            idx_t dend = rank_bb.bb_end[j];
+                // Find non-extended domain. We'll use this to determine if
+                // we're in an extension, where special rules apply.
+                idx_t dbegin = rank_bb.bb_begin[j];
+                idx_t dend = rank_bb.bb_end[j];
 
-            // In left ext, add 'angle' points for every shift to get
-            // region boundary in ext.
-            if (rstart < dbegin && left_wf_exts[j])
-                rstart = max(rstart, dbegin - left_wf_exts[j] + shift_amt);
+                // In left ext, add 'angle' points for every shift to get
+                // region boundary in ext.
+                if (rstart < dbegin && left_wf_exts[j])
+                    rstart = max(rstart, dbegin - left_wf_exts[j] + shift_amt);
 
-            // In right ext, subtract 'angle' points for every shift.
-            if (rstop > dend && right_wf_exts[j])
-                rstop = min(rstop, dend + right_wf_exts[j] - shift_amt);
+                // In right ext, subtract 'angle' points for every shift.
+                if (rstop > dend && right_wf_exts[j])
+                    rstop = min(rstop, dend + right_wf_exts[j] - shift_amt);
 
-            // Trim region based on current MPI section if
-            // using overlapping but not whole-block method.
-            if (is_overlap_active() && mpi_exterior_dim >= 0) {
+                // Trim region based on current MPI section if
+                // using overlapping but not whole-block method.
+                if (is_overlap_active() && mpi_exterior_dim >= 0) {
 
-                // In interior.
-                if (do_mpi_interior) {
-                    rstart = max(rstart, mpi_interior.bb_begin[j]);
-                    rstop = min(rstop, mpi_interior.bb_end[j]);
-                }
+                    // Interior boundaries.
+                    idx_t int_begin = mpi_interior.bb_begin[j];
+                    idx_t int_end = mpi_interior.bb_end[j];
+                    
+                    if (wf_steps > 0) {
 
-                // In one of the exterior sections.
-                else {
-                    assert(do_mpi_left != do_mpi_right);
-                    if (!does_exterior_exist())
-                        ok = false;
-
-                    // Example in 2D:
-                    // +------+------------+------+
-                    // |      | ext left y |      |
-                    // | ext  +------------+ ext  | <-- mpi_interior.bb_begin[y]
-                    // | left |  interior  | right|
-                    // | x    |            | x    |
-                    // |      +------------+      | <-- mpi_interior.bb_end[y]
-                    // |      | ext right y|      |
-                    // +------+------------+------+
-                    //        ^            ^
-                    //        |            |
-                    //        |          mpi_interior.bb_end[x]
-                    //      mpi_interior.bb_begin[x]
-
-                    // Trim left or right for current dim.
-                    if (j == mpi_exterior_dim) {
-                        if (do_mpi_left)
-                            rstop = min(rstop, mpi_interior.bb_begin[j]);
-
-                        else {
-                            rstart = max(rstart, mpi_interior.bb_end[j]);
-
-                            // For right, also need to trim to avoid overlap
-                            // with left. This implies left always needs to
-                            // be done before right.
-                            rstart = max(rstart, mpi_interior.bb_begin[j]);
+                        // If doing WF tiling, each exterior shape is a
+                        // trapezoid with its height in the time dim.  Each
+                        // shift reduces the width of the trapezoid until it is
+                        // the minimum width at the top.  Thus, the interior is
+                        // an inverted trapezoid between the exterior ones.
+                        
+                        //       +----+---------------+----+
+                        // t    / ext  \  interior   / ext  \
+                        // ^   /  left  \           /  right \
+                        // |  +----------+---------+----------+
+                        // +--->x        ^          ^
+                        //               |          |
+                        //             int_begin  int_end
+                        
+                        // Modify interior if there is an external MPI
+                        // section on either side.  Reduce interior by
+                        // 'wf_shift_pts' to get size at base of region,
+                        // then expand by current shift amount to get size
+                        // at current shift number.
+                        if (does_exterior_exist(j, true)) { // left.
+                            int_begin += wf_shift_pts[j];
+                            int_begin -= shift_amt;
+                        }
+                        if (does_exterior_exist(j, false)) { // right.
+                            int_end -= wf_shift_pts[j];
+                            int_end += shift_amt;
                         }
                     }
 
-                    // Trim across all dims up to current one, e.g.,
-                    // trim overlap between 'x' and 'y' from 'y'.
-                    // See above diagram. This implies dims need
-                    // to be done in ascending numerical order.
-                    if (j < mpi_exterior_dim) {
-                        rstart = max(rstart, mpi_interior.bb_begin[j]);
-                        rstop = min(rstop, mpi_interior.bb_end[j]);
+                    // In interior.
+                    if (do_mpi_interior) {
+                        rstart = max(rstart, int_begin);
+                        rstop = min(rstop, int_end);
                     }
-                } // exterior.
-            } // overlapping.
 
-            // Anything to do in the adjusted region?
-            if (rstop <= rstart) {
-                ok = false;
-                break;
-            }
+                    // In one of the exterior sections.
+                    else {
+
+                        // Should be doing either left or right, not both.
+                        assert(do_mpi_left != do_mpi_right);
+
+                        // Nothing to do if specified exterior section
+                        // doesn't exist.
+                        if (!does_exterior_exist(mpi_exterior_dim, do_mpi_left)) {
+                            ok = false;
+                            break;
+                        }
+
+                        // Example in 2D:
+                        // +------+------------+------+
+                        // |      | ext left y |      |
+                        // |      |            |      |
+                        // | ext  +------------+ ext  | <-- mpi_interior.bb_begin[y]
+                        // | left |  interior  | right|
+                        // | x    |            | x    |
+                        // |      +------------+      |
+                        // |      | ext right y|      | <-- mpi_interior.bb_end[y]
+                        // |      |            |      |
+                        // +------+------------+------+
+                        //        ^             ^
+                        //        |             |
+                        //        |           mpi_interior.bb_end[x]
+                        //      mpi_interior.bb_begin[x]
+
+                        // Trim left or right for current dim.
+                        if (j == mpi_exterior_dim) {
+                            if (do_mpi_left)
+                                rstop = min(rstop, int_begin);
+
+                            else {
+                                rstart = max(rstart, int_end);
+
+                                // For right, also need to trim to avoid
+                                // overlap with left. This could happen
+                                // when the width of the rank is less
+                                // than twice the amount of temporal
+                                // shifting. This implies left always
+                                // needs to be done before right.
+                                rstart = max(rstart, int_begin);
+                            }
+                        }
+
+                        // Trim across all dims up to current one, e.g.,
+                        // trim overlap between 'x' and 'y' from 'y'.
+                        // See above diagram. This implies dims need
+                        // to be done in ascending numerical order.
+                        if (j < mpi_exterior_dim) {
+                            rstart = max(rstart, int_begin);
+                            rstop = min(rstop, int_end);
+                        }
+                    } // exterior.
+                } // overlapping.
+
+                // Anything to do in the adjusted region?
+                if (rstop <= rstart) {
+                    ok = false;
+                    break;
+                }
+            } // Trimming.
             
             // Copy result into idxs.
             idxs.begin[i] = rstart;
@@ -1896,73 +2002,49 @@ namespace yask {
         }
         
         // Vars for list of grids that need to be swapped and their step
-        // indices.  Use an ordered map by *name* to make sure grids are in
-        // same order on all ranks. (If we ordered grids by pointer, pointer
-        // values will not generally be the same on each rank.)
+        // indices.  Use an ordered map by *name* to make sure grids are
+        // swapped in same order on all ranks. (If we order grids by
+        // pointer, pointer values will not generally be the same on each
+        // rank.)
         GridPtrMap gridsToSwap;
         map<YkGridPtr, idx_t> firstStepsToSwap;
         map<YkGridPtr, idx_t> lastStepsToSwap;
 
-        // Loop thru all bundle packs.
-        // TODO: expand this to hold misc indices also.
-        for (auto& bp : stPacks) {
+        // Loop thru all grids.
+        for (auto& gp : gridPtrs) {
 
-            // Loop thru stencil bundles in this pack.
-            for (auto* sg : *bp) {
+            // Don't swap scratch grids.
+            if (gp->is_scratch())
+                continue;
 
-                // Find the bundles that need to be processed.
-                // This will be any prerequisite scratch-grid
-                // bundles plus this non-scratch bundle.
-                // We need to loop thru the scratch-grid
-                // bundles so we can consider the inputs
-                // to them for exchanges.
-                auto sg_list = sg->get_reqd_bundles();
+            // Only need to swap grids that have any MPI buffers.
+            auto& gname = gp->get_name();
+            if (mpiData.count(gname) == 0)
+                continue;
 
-                // Loop through all the needed bundles.
-                for (auto* csg : sg_list) {
-
-                    TRACE_MSG("exchange_halos: checking " << csg->inputGridPtrs.size() <<
-                              " input grid(s) to bundle '" << csg->get_name() <<
-                              "' that is needed for bundle '" << sg->get_name() << "'");
-
-                    // Loop thru all *input* grids in this bundle.
-                    for (auto gp : csg->inputGridPtrs) {
-
-                        // Don't swap scratch grids.
-                        if (gp->is_scratch())
-                            continue;
-
-                        // Only need to swap grids that have any MPI buffers.
-                        auto& gname = gp->get_name();
-                        if (mpiData.count(gname) == 0)
-                            continue;
-
-                        // Check all allocated step indices.
-                        idx_t stop_t = 1;
-                        if (gp->is_dim_used(step_dim))
-                            stop_t = gp->get_alloc_size(step_dim);
-                        for (idx_t t = 0; t < stop_t; t++) {
+            // Check all allocated step indices.
+            idx_t stop_t = 1;
+            if (gp->is_dim_used(step_dim))
+                stop_t = gp->get_alloc_size(step_dim);
+            for (idx_t t = 0; t < stop_t; t++) {
                             
-                            // Only need to swap grids whose halos are not up-to-date
-                            // for this step.
-                            if (!gp->is_dirty(t))
-                                continue;
+                // Only need to swap grids whose halos are not up-to-date
+                // for this step.
+                if (!gp->is_dirty(t))
+                    continue;
 
-                            // Swap this grid.
-                            gridsToSwap[gname] = gp;
+                // Swap this grid.
+                gridsToSwap[gname] = gp;
 
-                            // Update last step.
-                            lastStepsToSwap[gp] = t;
+                // Update last step.
+                lastStepsToSwap[gp] = t;
 
-                            // First?
-                            if (firstStepsToSwap.count(gp) == 0)
-                                firstStepsToSwap[gp] = t;
+                // First?
+                if (firstStepsToSwap.count(gp) == 0)
+                    firstStepsToSwap[gp] = t;
 
-                        } // steps.
-                    } // grids.
-                } // needed bundles.
-            } // bundles in pack.
-        } // packs.
+            } // steps.
+        } // grids.
         TRACE_MSG("exchange_halos: need to exchange halos for " <<
                   gridsToSwap.size() << " grid(s)");
         assert(gridsToSwap.size() == firstStepsToSwap.size());
@@ -2058,7 +2140,7 @@ namespace yask {
                                     last.setVal(step_dim, lastStepsToSwap[gp]);
                                 }
                                 TRACE_MSG("   packing [" << first.makeDimValStr() <<
-                                          " ... " << last.makeDimValStr() << ") " <<
+                                          " ... " << last.makeDimValStr() << "] " <<
                                           (send_vec_ok ? "with" : "without") <<
                                           " vector copy");
 
@@ -2113,7 +2195,7 @@ namespace yask {
                                     last.setVal(step_dim, lastStepsToSwap[gp]);
                                 }
                                 TRACE_MSG("   got data; unpacking into [" << first.makeDimValStr() <<
-                                          " ... " << last.makeDimValStr() << ") " <<
+                                          " ... " << last.makeDimValStr() << "] " <<
                                           (recv_vec_ok ? "with" : "without") <<
                                           " vector copy");
 
