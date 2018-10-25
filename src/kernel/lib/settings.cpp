@@ -83,9 +83,9 @@ namespace yask {
         if (existing_comm == MPI_COMM_NULL) {
             if (!is_init) {
                 int provided = 0;
-                MPI_Init_thread(argc, argv, MPI_THREAD_SERIALIZED, &provided);
+                MPI_Init_thread(argc, argv, MPI_THREAD_MULTIPLE, &provided);
                 if (provided < MPI_THREAD_SERIALIZED) {
-                    THROW_YASK_EXCEPTION("error: MPI_THREAD_SERIALIZED not provided");
+                    THROW_YASK_EXCEPTION("error: MPI_THREAD_SERIALIZED or MPI_THREAD_MULTIPLE not provided");
                 }
                 is_init = true;
             }
