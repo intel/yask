@@ -37,14 +37,14 @@ namespace yask {
     // first and then the non-scratch stencils in the stencil bundle.
     // It is also here that the boundaries of the bounding-box(es) of the bundle
     // are respected. There must not be any temporal blocking at this point.
-    void StencilBundleBase::calc_mini_block(const ScanIndices& mini_block_idxs) {
+    void StencilBundleBase::calc_mini_block(int region_thread_idx,
+                                            const ScanIndices& mini_block_idxs) {
         CONTEXT_VARS(_generic_context);
-        int thread_idx = omp_get_thread_num();
         TRACE_MSG3("calc_mini_block('" << get_name() << "'): [" <<
                    mini_block_idxs.begin.makeValStr(nsdims) << " ... " <<
                    mini_block_idxs.end.makeValStr(nsdims) << ") by " <<
                    mini_block_idxs.step.makeValStr(nsdims) <<
-                   " in thread " << thread_idx);
+                   " by region thread " << region_thread_idx);
         assert(!is_scratch());
 
         // No TB allowed here.
@@ -74,7 +74,7 @@ namespace yask {
             if (bb.bb_num_points == 0)
                 bb_ok = false;
 
-            // Trim the default block indices based on the bounding box(es)
+            // Trim the mini-block indices based on the bounding box(es)
             // for this bundle.
             ScanIndices bb_idxs(mini_block_idxs);
             DOMAIN_VAR_LOOP(i, j) {
@@ -106,49 +106,52 @@ namespace yask {
                        bb_idxs.begin.makeValStr(nsdims) <<
                        " ... " << bb_idxs.end.makeValStr(nsdims) << ")");
 
-            // Update offsets of scratch grids based on this bundle's location.
-            cp->update_scratch_grid_info(thread_idx, bb_idxs.begin);
-
             // Get the bundles that need to be processed in
             // this block. This will be any prerequisite scratch-grid
             // bundles plus this non-scratch bundle.
             auto sg_list = get_reqd_bundles();
 
-            // Set number of threads for a block.
-            // Each of these threads will work on a sub-block.
-            // This should be nested within a top-level OpenMP task.
-            cp->set_block_threads();
-
             // Loop through all the needed bundles.
             for (auto* sg : sg_list) {
 
-                // Indices needed for the generated loops.  Will normally be a
-                // copy of 'bb_idxs' except when updating scratch-grids.
-                ScanIndices adj_mb_idxs = sg->adjust_span(thread_idx, bb_idxs);
+                // Start threads within a block.  Each of these threads will
+                // eventually work on a separate sub-block.  This is nested within
+                // the OMP region threads.
+                cp->set_block_threads();
+                _Pragma("omp parallel proc_bind(spread)") {
+                    int block_thread_idx = omp_get_thread_num();
+                    
+                    // Indices needed for the generated loops.  Will normally be a
+                    // copy of 'bb_idxs' except when updating scratch-grids.
+                    ScanIndices adj_mb_idxs = sg->adjust_span(region_thread_idx, bb_idxs);
 
-                TRACE_MSG3("calc_mini_block('" << get_name() << "'): " <<
-                           " in reqd bundle '" << sg->get_name() << "': [" <<
-                           adj_mb_idxs.begin.makeValStr(nsdims) <<
-                           " ... " << adj_mb_idxs.end.makeValStr(nsdims) <<
-                           ") in thread " << thread_idx);
+                    TRACE_MSG3("calc_mini_block('" << get_name() << "'): " <<
+                               " in reqd bundle '" << sg->get_name() << "': [" <<
+                               adj_mb_idxs.begin.makeValStr(nsdims) <<
+                               " ... " << adj_mb_idxs.end.makeValStr(nsdims) <<
+                               ") in region thread " << region_thread_idx <<
+                               " and block thread " << block_thread_idx);
 
-                // Include automatically-generated loop code that calls
-                // calc_sub_block() for each sub-block in this block. This
-                // code typically contains nested OpenMP loop(s).
+                    // Include automatically-generated loop code that calls
+                    // calc_sub_block() for each sub-block in this block. This
+                    // code typically contains nested OpenMP loop(s).
 #include "yask_mini_block_loops.hpp"
+                } // OMP parallel.
             }
+
         } // BB list.
     }
 
     // Calculate results for one sub-block using pure scalar code.
     // Typically called by a single OMP thread.
     // This is for debug.
-    void StencilBundleBase::calc_sub_block_scalar(int thread_idx,
+    void StencilBundleBase::calc_sub_block_scalar(int region_thread_idx,
                                                   const ScanIndices& mini_block_idxs) {
         CONTEXT_VARS(_generic_context);
         TRACE_MSG3("calc_sub_block_scalar for bundle '" << get_name() << "': [" <<
                    mini_block_idxs.start.makeValStr(nsdims) <<
-                   " ... " << mini_block_idxs.stop.makeValStr(nsdims) << ")");
+                   " ... " << mini_block_idxs.stop.makeValStr(nsdims) <<
+                   ") by region thread " << region_thread_idx);
 
         // Init sub-block begin & end from block start & stop indices.
         // Use the 'misc' loops. Indices for these loops will be scalar and
@@ -163,7 +166,7 @@ namespace yask {
         // Define misc-loop function.
         // Since step is always 1, we ignore misc_idxs.stop.
 #define misc_fn(pt_idxs)  do {                                          \
-            calc_scalar(thread_idx, pt_idxs.start);                     \
+            calc_scalar(region_thread_idx, pt_idxs.start);              \
         } while(0)
 
         // Scan through n-D space.
@@ -178,15 +181,16 @@ namespace yask {
     // The index ranges in 'mini_block_idxs' are sub-divided
     // into full vector-clusters, full vectors, and sub-vectors
     // and finally evaluated by the YASK-compiler-generated loops.
-    void StencilBundleBase::calc_sub_block(int thread_idx,
+    void StencilBundleBase::calc_sub_block(int region_thread_idx,
                                            const ScanIndices& mini_block_idxs) {
         CONTEXT_VARS(_generic_context);
         if (opts->force_scalar)
-            return calc_sub_block_scalar(thread_idx, mini_block_idxs);
+            return calc_sub_block_scalar(region_thread_idx, mini_block_idxs);
         
         TRACE_MSG3("calc_sub_block for bundle '" << get_name() << "': [" <<
                    mini_block_idxs.start.makeValStr(nsdims) <<
-                   " ... " << mini_block_idxs.stop.makeValStr(nsdims) << ")");
+                   " ... " << mini_block_idxs.stop.makeValStr(nsdims) <<
+                   ") by region thread " << region_thread_idx);
 
         /*
           Indices in each domain dim:
@@ -195,7 +199,7 @@ namespace yask {
           |peel_masks used here                      | sub_block_eidxs.end
           ||                                         | |
           vv                                         v v
-          |---|-------|---------------------------|---|---|  <- "|" on vec boundaries.
+          |---+-------+---------------------------+---+---|   "+" => vec boundaries.
           ^   ^       ^                            ^   ^   ^
           |   |       |                            |   |   |
           |   |       sub_block_fcidxs.begin       |   |   sub_block_vidxs.end
@@ -409,8 +413,8 @@ namespace yask {
 
             // Define the function called from the generated loops
             // to simply call the loop-of-clusters functions.
-#define calc_inner_loop(thread_idx, loop_idxs)                  \
-            calc_loop_of_clusters(thread_idx, loop_idxs)
+#define calc_inner_loop(region_thread_idx, loop_idxs)                  \
+            calc_loop_of_clusters(region_thread_idx, loop_idxs)
 
             // Include automatically-generated loop code that calls
             // calc_inner_loop(). This is different from the higher-level
@@ -468,7 +472,7 @@ namespace yask {
             // w/appropriate mask.  See the mask diagrams above that show
             // how the masks are ANDed together.  Since step is always 1, we
             // ignore loop_idxs.stop.
-#define calc_inner_loop(thread_idx, loop_idxs)                          \
+#define calc_inner_loop(region_thread_idx, loop_idxs)                          \
             bool ok = false;                                            \
             idx_t mask = idx_t(-1);                                     \
             DOMAIN_VAR_LOOP(i, j) {                                     \
@@ -482,7 +486,7 @@ namespace yask {
                         mask &= rem_masks[i];                           \
                 }                                                       \
             }                                                           \
-            if (ok) calc_loop_of_vectors(thread_idx, loop_idxs, mask);
+            if (ok) calc_loop_of_vectors(region_thread_idx, loop_idxs, mask);
 
             // Include automatically-generated loop code that calls
             // calc_inner_loop(). This is different from the higher-level
@@ -528,7 +532,7 @@ namespace yask {
                 if (ok) {                                               \
                     TRACE_MSG3("calc_sub_block:   at pt " <<            \
                                pt_idxs.start.makeValStr(nsdims));       \
-                    calc_scalar(thread_idx, pt_idxs.start);             \
+                    calc_scalar(region_thread_idx, pt_idxs.start);      \
                 }                                                       \
             } while(0)
 
@@ -548,7 +552,7 @@ namespace yask {
     // The 'loop_idxs' must specify a range only in the inner dim.
     // Indices must be rank-relative.
     // Indices must be normalized, i.e., already divided by VLEN_*.
-    void StencilBundleBase::calc_loop_of_clusters(int thread_idx,
+    void StencilBundleBase::calc_loop_of_clusters(int region_thread_idx,
                                                   const ScanIndices& loop_idxs) {
         CONTEXT_VARS(_generic_context);
         TRACE_MSG3("calc_loop_of_clusters: local vector-indices [" <<
@@ -571,14 +575,14 @@ namespace yask {
         idx_t stop_inner = loop_idxs.stop[_inner_posn];
 
         // Call code from stencil compiler.
-        calc_loop_of_clusters(thread_idx, start_idxs, stop_inner);
+        calc_loop_of_clusters(region_thread_idx, start_idxs, stop_inner);
     }
 
     // Calculate a series of vector results within an inner loop.
     // The 'loop_idxs' must specify a range only in the inner dim.
     // Indices must be rank-relative.
     // Indices must be normalized, i.e., already divided by VLEN_*.
-    void StencilBundleBase::calc_loop_of_vectors(int thread_idx,
+    void StencilBundleBase::calc_loop_of_vectors(int region_thread_idx,
                                                  const ScanIndices& loop_idxs,
                                                  idx_t write_mask) {
         CONTEXT_VARS(_generic_context);
@@ -602,7 +606,7 @@ namespace yask {
         idx_t stop_inner = loop_idxs.stop[_inner_posn];
 
         // Call code from stencil compiler.
-        calc_loop_of_vectors(thread_idx, start_idxs, stop_inner, write_mask);
+        calc_loop_of_vectors(region_thread_idx, start_idxs, stop_inner, write_mask);
     }
 
     // If this bundle is updating scratch grid(s),
@@ -617,7 +621,7 @@ namespace yask {
     // its halo sizes are still used to specify how much to
     // add to 'idxs'.
     // Return adjusted indices.
-    ScanIndices StencilBundleBase::adjust_span(int thread_idx,
+    ScanIndices StencilBundleBase::adjust_span(int region_thread_idx,
                                                const ScanIndices& idxs) const {
         CONTEXT_VARS(_generic_context);
         ScanIndices adj_idxs(idxs);
@@ -627,7 +631,7 @@ namespace yask {
             assert(sv);
 
             // Get the one for this thread.
-            auto gp = sv->at(thread_idx);
+            auto gp = sv->at(region_thread_idx);
             assert(gp);
             assert(gp->is_scratch());
 

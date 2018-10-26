@@ -703,9 +703,6 @@ sub processCode($) {
     # Lines of code to output.
     my @code;
 
-    # Other.
-    my @scanVars;               # scan-index vars.
-    
     # Front matter.
     push @code,
         "#ifndef OMP_PRAGMA_PREFIX",
@@ -715,10 +712,7 @@ sub processCode($) {
         "#define OMP_PRAGMA_SUFFIX",
         "#endif",
         "// 'ScanIndices $inputVar' must be set before the following code.",
-        "{",
-        " // Indices for function calls.",
-        " ScanIndices ".locVar()."($inputVar);";
-    push @scanVars, locVar();
+        "{";
     
     # loop thru all the tokens ni the input.
     for (my $ti = 0; $ti <= $#toks; ) {
@@ -727,12 +721,9 @@ sub processCode($) {
         # use OpenMP on next loop.
         if (lc $tok eq 'omp') {
 
-            # make local copies of scan index vars.
-            my $priv = "firstprivate(".join(',',@scanVars).")";
-            
             push @loopPrefix,
                 " // Distribute iterations among OpenMP threads.", 
-                "#pragma OMP_PRAGMA_PREFIX $priv OMP_PRAGMA_SUFFIX";
+                "#pragma OMP_PRAGMA_PREFIX OMP_PRAGMA_SUFFIX";
             print "info: using OpenMP on following loop.\n";
         }
 
@@ -866,6 +857,11 @@ sub processCode($) {
                 push @code, $OPT{innerMod};
                 beginLoop(\@code, \@loopDims, \@loopPrefix, 
                           $beginVal, $endVal, $features, \@loopStack);
+
+                # Indices to pass to call.
+                push @code, 
+                    " // Local copy of indices for function calls.",
+                    " ScanIndices ".locVar()."($inputVar);";
 
                 # loop body.
                 push @code, @callStmts;

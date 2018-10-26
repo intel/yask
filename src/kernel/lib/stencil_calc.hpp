@@ -206,13 +206,16 @@ namespace yask {
 
         // Calculate results within a mini-block.
         void
-        calc_mini_block(const ScanIndices& mini_block_idxs);
+        calc_mini_block(int region_thread_idx,
+                        const ScanIndices& mini_block_idxs);
 
         // Calculate results within a sub-block.
         void
-        calc_sub_block(int thread_idx, const ScanIndices& mini_block_idxs);
+        calc_sub_block(int region_thread_idx,
+                       const ScanIndices& mini_block_idxs);
         void
-        calc_sub_block_scalar(int thread_idx, const ScanIndices& mini_block_idxs);
+        calc_sub_block_scalar(int region_thread_idx,
+                              const ScanIndices& mini_block_idxs);
 
         // Calculate a series of cluster results within an inner loop.
         // All indices start at 'start_idxs'. Inner loop iterates to
@@ -220,7 +223,7 @@ namespace yask {
         // Indices must be rank-relative.
         // Indices must be normalized, i.e., already divided by VLEN_*.
         virtual void
-        calc_loop_of_clusters(int thread_idx,
+        calc_loop_of_clusters(int region_thread_idx,
                               const Indices& start_idxs,
                               idx_t stop_inner) =0;
 
@@ -229,7 +232,7 @@ namespace yask {
         // Indices must be rank-relative.
         // Indices must be normalized, i.e., already divided by VLEN_*.
         void
-        calc_loop_of_clusters(int thread_idx,
+        calc_loop_of_clusters(int region_thread_idx,
                               const ScanIndices& loop_idxs);
 
         // Calculate a series of vector results within an inner loop.
@@ -239,7 +242,7 @@ namespace yask {
         // Indices must be normalized, i.e., already divided by VLEN_*.
         // Each vector write is masked by 'write_mask'.
         virtual void
-        calc_loop_of_vectors(int thread_idx,
+        calc_loop_of_vectors(int region_thread_idx,
                              const Indices& start_idxs,
                              idx_t stop_inner,
                              idx_t write_mask) =0;
@@ -250,7 +253,7 @@ namespace yask {
         // Indices must be normalized, i.e., already divided by VLEN_*.
         // Each vector write is masked by 'write_mask'.
         void
-        calc_loop_of_vectors(int thread_idx,
+        calc_loop_of_vectors(int region_thread_idx,
                              const ScanIndices& loop_idxs,
                              idx_t write_mask);
 

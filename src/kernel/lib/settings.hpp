@@ -777,6 +777,7 @@ namespace yask {
         bool find_loc = true;      // whether my rank index needs to be calculated.
         int msg_rank = 0;          // rank that prints informational messages.
         bool overlap_comms = true; // overlap comms with computation.
+        idx_t _min_exterior = 0;   // minimum size of MPI exterior to calculate.
 
         // OpenMP settings.
         int max_threads = 0;      // Initial number of threads to use overall; 0=>OMP default.

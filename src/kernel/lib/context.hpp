@@ -177,6 +177,9 @@ namespace yask {
         // in the HW.
         size_t _data_buf_pad = (YASK_PAD * CACHELINE_BYTES);
 
+        // An OpenMP lock to use for async MPI progress.
+        omp_lock_t _test_halo_lock;
+
         // Check whether dim is appropriate type.
         virtual void checkDimType(const std::string& dim,
                                   const std::string& fn_name,
@@ -317,6 +320,9 @@ namespace yask {
             // Dump stats if get_stats() hasn't been called yet.
             if (steps_done)
                 get_stats();
+
+            // Destroy lock.
+            omp_destroy_lock(&_test_halo_lock);
         }
 
         // Set debug output to cout if my_rank == msg_rank
@@ -368,19 +374,19 @@ namespace yask {
 
         // Allocate grid memory for any grids that do not
         // already have storage.
-        virtual void allocGridData(std::ostream& os);
+        virtual void allocGridData();
 
         // Determine sizes of MPI buffers and allocate MPI buffer memory.
         // Dealloc any existing MPI buffers first.
-        virtual void allocMpiData(std::ostream& os);
-        virtual void freeMpiData(std::ostream& os) {
+        virtual void allocMpiData();
+        virtual void freeMpiData() {
             mpiData.clear();
         }
 
         // Alloc scratch-grid memory.
         // Dealloc any existing scratch-grids first.
-        virtual void allocScratchData(std::ostream& os);
-        virtual void freeScratchData(std::ostream& os) {
+        virtual void allocScratchData();
+        virtual void freeScratchData() {
             makeScratchGrids(0);
         }
 
@@ -410,8 +416,8 @@ namespace yask {
 
         // Adjust offsets of scratch grids based
         // on thread and scan indices.
-        virtual void update_scratch_grid_info(int thread_idx,
-                                          const Indices& idxs);
+        virtual void update_scratch_grid_info(int region_thread_idx,
+                                              const Indices& idxs);
 
         // Get total memory allocation required by grids.
         // Does not include MPI buffers.
@@ -562,7 +568,8 @@ namespace yask {
                         const ScanIndices& region_idxs);
 
         // Calculate results within a mini-block.
-        void calc_mini_block(BundlePackPtr& sel_bp,
+        void calc_mini_block(int region_thread_idx,
+                             BundlePackPtr& sel_bp,
                              idx_t region_shift_num,
                              idx_t nphases, idx_t phase,
                              idx_t nshapes, idx_t shape,

@@ -125,11 +125,9 @@ namespace yask {
     // Eval stencil bundle(s) over grid(s) using reference scalar code.
     void StencilContext::run_ref(idx_t first_step_index,
                                  idx_t last_step_index) {
+        CONTEXT_VARS(this);
+        
         run_time.start();
-        ostream& os = get_ostr();
-        auto& step_dim = _dims->_step_dim;
-        auto step_posn = +Indices::step_posn;
-        int ndims = _dims->_stencil_dims.getNumDims();
 
         // Determine step dir from order of first/last.
         idx_t step_dir = (last_step_index >= first_step_index) ? 1 : -1;
@@ -169,7 +167,7 @@ namespace yask {
         // Copy these settings to packs and realloc scratch grids.
         for (auto& sp : stPacks)
             sp->getLocalSettings() = *_opts;
-        allocScratchData(os);
+        allocScratchData();
 
         // Use only one set of scratch grids.
         int scratch_grid_idx = 0;
@@ -250,8 +248,8 @@ namespace yask {
                     // Scan through n-D space.
                     TRACE_MSG("run_ref: step " << start_t <<
                               " in bundle '" << sg->get_name() << "': [" <<
-                              misc_idxs.begin.makeValStr(ndims) <<
-                              " ... " << misc_idxs.end.makeValStr(ndims) << ")");
+                              misc_idxs.begin.makeValStr(nsdims) <<
+                              " ... " << misc_idxs.end.makeValStr(nsdims) << ")");
 #include "yask_misc_loops.hpp"
 #undef misc_fn
                 } // needed bundles.
@@ -792,16 +790,16 @@ namespace yask {
                 
                 // To tesselate n-D domain space, we use n+1 distinct
                 // "phases".  For example, 1-D TB uses "upward" triangles
-                // and "downward" triangles. Threads must sync after every
+                // and "downward" triangles. Region threads sync after every
                 // phase. Thus, the phase loop is here around the generated
-                // loops.  TODO: schedule phases and their shapes via task
+                // OMP loops.  TODO: schedule phases and their shapes via task
                 // dependencies.
                 idx_t nphases = nddims + 1; 
                 for (idx_t phase = 0; phase < nphases; phase++) {
                     
-                    // Call calc_block() on every block.  Only the shapes
-                    // corresponding to the current 'phase' will be
-                    // calculated.
+                    // Call calc_block() on every block concurrently.  Only
+                    // the shapes corresponding to the current 'phase' will
+                    // be calculated.
 #include "yask_region_loops.hpp"
                 }
             
@@ -850,14 +848,14 @@ namespace yask {
 
         CONTEXT_VARS(this);
         auto* bp = sel_bp.get();
-        int thread_idx = omp_get_thread_num();
+        int region_thread_idx = omp_get_thread_num();
         TRACE_MSG("calc_block: phase " << phase << ", block [" <<
                   region_idxs.start.makeValStr(nsdims) << " ... " <<
                   region_idxs.stop.makeValStr(nsdims) << 
                   ") within region [" <<
                   region_idxs.begin.makeValStr(nsdims) << " ... " <<
                   region_idxs.end.makeValStr(nsdims) << 
-                  ") by thread " << thread_idx);
+                  ") by region thread " << region_thread_idx);
 
 #ifdef OVERLAP_WITH_BLOCKS
         // If we are not calculating some of the blocks, determine
@@ -1027,8 +1025,6 @@ namespace yask {
                     
                 // Include automatically-generated loop code that calls
                 // calc_mini_block() for each mini-block in this block.
-                // NB: each starting block will have the *original*
-                // begin & end indices, regardless of 'shift_num'.
                 BundlePackPtr bp; // null.
 #include "yask_block_loops.hpp"
 
@@ -1042,7 +1038,8 @@ namespace yask {
     // null. When using TB, only the 'shape' needed for the tesselation
     // 'phase' are computed. The starting 'shift_num' is relative
     // to the bottom of the current region and block.
-    void StencilContext::calc_mini_block(BundlePackPtr& sel_bp,
+    void StencilContext::calc_mini_block(int region_thread_idx,
+                                         BundlePackPtr& sel_bp,
                                          idx_t region_shift_num,
                                          idx_t nphases, idx_t phase,
                                          idx_t nshapes, idx_t shape,
@@ -1053,7 +1050,6 @@ namespace yask {
                                          const ScanIndices& adj_block_idxs) {
 
         CONTEXT_VARS(this);
-        int thread_idx = omp_get_thread_num();
         TRACE_MSG("calc_mini_block: phase " << phase <<
                   ", shape " << shape <<
                   ", mini-block [" <<
@@ -1062,12 +1058,16 @@ namespace yask {
                   base_block_idxs.begin.makeValStr(nsdims) << " ... " <<
                   base_block_idxs.end.makeValStr(nsdims) << ") within base-region [" <<
                   base_region_idxs.begin.makeValStr(nsdims) << " ... " <<
-                  base_region_idxs.end.makeValStr(nsdims) << ")");
+                  base_region_idxs.end.makeValStr(nsdims) <<
+                  ") by region thread " << region_thread_idx);
 
-        // Hack to promote forward progress in MPI when calc'ing
-        // interior only.
-        if (is_overlap_active() && do_mpi_interior)
-            test_halo_exchange();
+        // Promote forward progress in MPI when calc'ing interior
+        // only. Call from one thread only.
+        // Let all other threads continue.
+        if (is_overlap_active() && do_mpi_interior) {
+            if (region_thread_idx == 0)
+                test_halo_exchange();
+        }
 
         // Init mini-block begin & end from blk start & stop indices.
         ScanIndices mini_block_idxs(*_dims, true, 0);
@@ -1126,7 +1126,7 @@ namespace yask {
 
                 // Start timers for this pack.  Tracking only on thread
                 // 0. TODO: track all threads and report cross-thread stats.
-                if (thread_idx == 0)
+                if (region_thread_idx == 0)
                     bp->start_timers();
                 
                 // Steps within a mini-blk are based on sub-blk sizes.
@@ -1160,23 +1160,29 @@ namespace yask {
                                           nshapes, shape,
                                           bridge_mask,
                                           mini_block_idxs);
-                
-                // Loop through bundles in this pack to do actual calcs.
+
                 if (ok) {
+
+                    // Update offsets of scratch grids based on the current
+                    // mini-block location.
+                    if (scratchVecs.size())
+                        cp->update_scratch_grid_info(region_thread_idx, mini_block_idxs.begin);
+
                     for (auto* sb : *bp)
                         if (sb->getBB().bb_num_points)
-                            sb->calc_mini_block(mini_block_idxs);
+                            sb->calc_mini_block(region_thread_idx, mini_block_idxs);
                 }
 
                 // Need to shift for next pack and/or time-step.
                 shift_num++;
 
                 // Stop timers for this pack.
-                if (thread_idx == 0)
+                if (region_thread_idx == 0)
                     bp->stop_timers();
 
             } // packs.
-        } // time.
+        } // time-steps.
+
     } // calc_mini_block().
 
     // Find boundaries within region with 'base_start' to 'base_stop'
@@ -1673,23 +1679,24 @@ namespace yask {
                 int posn = gp->get_dim_posn(dname);
                 if (posn >= 0) {
 
-                    // See diagram in yk_grid defn.
-                    // Local offset is the offset of this grid
-                    // relative to the current rank.
-                    // Set local offset to diff between global offset
-                    // and rank offset.
-                    // Round down to make sure it's vec-aligned.
-                    auto rofs = rank_domain_offsets[j];
-                    auto vlen = gp->_get_vec_len(posn);
-                    auto lofs = round_down_flr(idxs[i] - rofs, vlen);
-                    gp->_set_local_offset(posn, lofs);
-
                     // Set rank offset of grid based on starting point of block.
                     // This is a global index, so it will include the rank offset.
                     // Thus, it it not necessarily a vec mult.
-                    // Need to use calculated local offset to adjust for any
-                    // rounding that was done above.
+                    auto rofs = rank_domain_offsets[j];
                     gp->_set_rank_offset(posn, rofs);
+
+                    // Must use the vector len in this grid, which may
+                    // not be the same as vec_lens[posn] because grid
+                    // may not be vectorized.
+                    auto vlen = gp->_get_vec_len(posn);
+                    
+                    // See diagram in yk_grid defn.  Local offset is the
+                    // offset of this grid relative to the current rank.
+                    // Set local offset to diff between global offset and
+                    // rank offset.  Round down to make sure it's
+                    // vec-aligned.
+                    auto lofs = round_down_flr(idxs[i] - rofs, vlen);
+                    gp->_set_local_offset(posn, lofs);
                 }
             }
         }
@@ -1935,11 +1942,6 @@ namespace yask {
 
 #ifdef USE_MPI
         if (!enable_halo_exchange || _env->num_ranks < 2)
-            return;
-
-        // Only use thread 0.
-        int thread_idx = omp_get_thread_num();
-        if (thread_idx != 0)
             return;
 
         test_time.start();

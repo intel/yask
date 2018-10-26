@@ -227,7 +227,9 @@ endif # arch-specific.
 
 # general defaults for vars if not set above.
 streaming_stores	?=	0
+omp_par			?=	omp parallel
 omp_par_for		?=	omp parallel for
+omp_for			?=	omp for
 omp_region_schedule	?=	dynamic,1
 omp_block_schedule	?=	static,1
 omp_misc_schedule	?=	guided
@@ -541,7 +543,7 @@ BLOCK_LOOP_OUTER_MODS	?=	grouped
 BLOCK_LOOP_ORDER	?=	1 .. N-1
 BLOCK_LOOP_CODE		?=	$(BLOCK_LOOP_OUTER_MODS) loop($(BLOCK_LOOP_ORDER)) { \
 				$(BLOCK_LOOP_INNER_MODS) \
-				  call(calc_mini_block(bp, region_shift_num, \
+				  call(calc_mini_block(region_thread_idx, bp, region_shift_num, \
 					nphases, phase, nshapes, shape, \
 					bridge_mask, rank_idxs, region_idxs, block_idxs)); }
 
@@ -549,12 +551,12 @@ BLOCK_LOOP_CODE		?=	$(BLOCK_LOOP_OUTER_MODS) loop($(BLOCK_LOOP_ORDER)) { \
 # a *nested* OpenMP loop so that each sub-block is assigned to a nested OpenMP
 # thread.
 MINI_BLOCK_LOOP_OPTS	?=	-ndims $(NSDIMS) -inVar adj_mb_idxs \
-				-ompConstruct '$(omp_par_for) schedule($(omp_block_schedule)) proc_bind(close)' \
+				-ompConstruct '$(omp_for) schedule($(omp_block_schedule)) nowait' \
 				-callPrefix 'sg->'
-MINI_BLOCK_LOOP_OUTER_MODS ?=	grouped omp
+MINI_BLOCK_LOOP_OUTER_MODS ?=	omp
 MINI_BLOCK_LOOP_ORDER	?=	1 .. N-1
 MINI_BLOCK_LOOP_CODE	?=	$(MINI_BLOCK_LOOP_OUTER_MODS) loop($(MINI_BLOCK_LOOP_ORDER)) { \
-				$(MINI_BLOCK_LOOP_INNER_MODS) call(calc_sub_block(thread_idx)); }
+				$(MINI_BLOCK_LOOP_INNER_MODS) call(calc_sub_block(region_thread_idx)); }
 
 # Sub-block loops break up a sub-block into clusters or vectors.  These
 # loops are run by a single OMP thread.  The N-1 (inner) loop is generated
@@ -564,7 +566,7 @@ SUB_BLOCK_LOOP_OPTS	?=	-ndims $(NSDIMS) -inVar norm_sub_block_idxs
 SUB_BLOCK_LOOP_OUTER_MODS ?=
 SUB_BLOCK_LOOP_ORDER	?=	1 .. N-2
 SUB_BLOCK_LOOP_CODE	?=	$(SUB_BLOCK_LOOP_OUTER_MODS) loop($(SUB_BLOCK_LOOP_ORDER)) { \
-				$(SUB_BLOCK_LOOP_INNER_MODS) call(calc_inner_loop(thread_idx)); }
+				$(SUB_BLOCK_LOOP_INNER_MODS) call(calc_inner_loop(region_thread_idx)); }
 
 # General-purpose parallel loop.
 MISC_LOOP_OPTS		?=	-ndims $(NSDIMS) -inVar misc_idxs \

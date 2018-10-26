@@ -313,12 +313,7 @@ namespace yask {
 
     // Apply auto-tuner settings to prepare for a run.
     void AutoTuner::apply() {
-        ostream& os = _context->get_ostr();
-        auto& mpiInfo = _context->get_mpi_info();
-        auto& dims = _context->get_dims();
-        auto& opts = _context->get_settings();
-        auto& env = _context->get_env();
-        auto step_posn = +Indices::step_posn;
+        CONTEXT_VARS(_context);
 
         // Restore step-dim value for block.
         _settings->_block_sizes[step_posn] = block_steps;
@@ -333,15 +328,18 @@ namespace yask {
         _settings->_block_group_sizes.setValsSame(0);
 
         // Make sure everything is resized based on block size.
-        _settings->adjustSettings(nullop->get_ostream(), env);
+        auto saved_op = cp->get_debug_output();
+        cp->set_debug_output(nullop);
+        _settings->adjustSettings(cp->get_env());
 
         // Update temporal blocking info.
-        _context->update_tb_info();
+        cp->update_tb_info();
 
         // Reallocate scratch data based on new block size.
         // TODO: only do this when blocks have increased or
         // decreased by a certain percentage.
-        _context->allocScratchData(nullop->get_ostream());
+        _context->allocScratchData();
+        cp->set_debug_output(saved_op);
     }
 
 } // namespace yask.

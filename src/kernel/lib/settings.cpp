@@ -257,6 +257,10 @@ namespace yask {
                           ("overlap_comms",
                            "Overlap MPI communication with calculation of grid cells whenever possible.",
                            overlap_comms));
+        parser.add_option(new CommandLineParser::IdxOption
+                          ("min_exterior",
+                           "Minimum width of MPI exterior section to compute before sending halo.",
+                           _min_exterior));
 #endif
         parser.add_option(new CommandLineParser::BoolOption
                           ("force_scalar",

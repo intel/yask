@@ -76,6 +76,9 @@ namespace yask {
 
         // Set output to msg-rank per settings.
         set_ostr();
+
+        // Init lock.
+        omp_init_lock(&_test_halo_lock);
     }
 
     // Init MPI-related vars and other vars related to my rank's place in
@@ -296,7 +299,7 @@ namespace yask {
                                      const map <int, size_t>& ngrids,
                                      map <int, shared_ptr<char>>& data_buf,
                                      const std::string& type) {
-        ostream& os = get_ostr();
+        CONTEXT_VARS(this);
 
         for (const auto& i : nbytes) {
             int numa_pref = i.first;
@@ -326,7 +329,8 @@ namespace yask {
     }
 
     // Allocate memory for grids that do not already have storage.
-    void StencilContext::allocGridData(ostream& os) {
+    void StencilContext::allocGridData() {
+        CONTEXT_VARS(this);
 
         // Allocate I/O grids before read-only grids.
         GridPtrs sortedGridPtrs;
@@ -435,10 +439,11 @@ namespace yask {
 
     // Determine the size and shape of all MPI buffers.
     // Create buffers and allocate them.
-    void StencilContext::allocMpiData(ostream& os) {
+    void StencilContext::allocMpiData() {
+        CONTEXT_VARS(this);
 
         // Remove any old MPI data.
-        freeMpiData(os);
+        freeMpiData();
 
         // Init interior.
         mpi_interior = ext_bb;
@@ -449,8 +454,6 @@ namespace yask {
         map<int, int> num_exchanges; // send/recv => count.
         map<int, idx_t> num_elems; // send/recv => count.
         auto me = _env->my_rank;
-        auto& step_dim = _dims->_step_dim;
-        auto* settings = get_settings().get();
 
         // Need to determine the size and shape of all MPI buffers.
         // Loop thru all neighbors of this rank.
@@ -666,6 +669,9 @@ namespace yask {
                                 // Neighbor direction in this dim.
                                 auto neigh_ofs = neigh_offsets[dname];
 
+                                // Min MPI exterior options.
+                                idx_t min_ext = opts->_min_exterior;
+
                                 // Region to read from, i.e., data from inside
                                 // this rank's domain to be put into neighbor's
                                 // halo. So, use neighbor's halo sizes when
@@ -680,8 +686,11 @@ namespace yask {
                                         copy_end[dname] = first_inner_idx[dname] + neigh_halo_sizes[dname];
 
                                         // Adjust LHS of interior.
+                                        idx_t ext_end = ROUND_UP(first_inner_idx[dname] +
+                                                                 max(min_ext, neigh_halo_sizes[dname]),
+                                                                 _dims->_fold_pts[dname]);
                                         mpi_interior.bb_begin[dname] =
-                                            max(mpi_interior.bb_begin[dname], copy_end[dname]);
+                                            max(mpi_interior.bb_begin[dname], ext_end);
                                     }
 
                                     // Neighbor is to the right.
@@ -692,8 +701,11 @@ namespace yask {
                                         copy_end[dname] = last_inner_idx[dname] + 1;
 
                                         // Adjust RHS of interior.
+                                        idx_t ext_begin = ROUND_DOWN(last_inner_idx[dname] + 1 -
+                                                                     max(min_ext, neigh_halo_sizes[dname]),
+                                                                     _dims->_fold_pts[dname]);
                                         mpi_interior.bb_end[dname] =
-                                            min(mpi_interior.bb_end[dname], copy_begin[dname]);
+                                            min(mpi_interior.bb_end[dname], ext_begin);
                                     }
 
                                     // Else, this neighbor is in same posn as I am in this dim,
@@ -829,7 +841,7 @@ namespace yask {
         TRACE_MSG("number of elements in recv buffers: " << makeNumStr(num_elems[int(MPIBufs::bufRecv)]));
 
         // Finalize interior BB if there are multiple ranks and overlap enabled.
-        if (_env->num_ranks > 1 && settings->overlap_comms) {
+        if (env->num_ranks > 1 && opts->overlap_comms) {
             mpi_interior.update_bb("interior", *this, true);
             TRACE_MSG("MPI interior BB: [" << mpi_interior.bb_begin.makeDimValStr() <<
                       " ... " << mpi_interior.bb_end.makeDimValStr() << ")");
@@ -906,13 +918,11 @@ namespace yask {
 
     // Allocate memory for scratch grids based on number of threads and
     // block sizes.
-    void StencilContext::allocScratchData(ostream& os) {
-        auto nddims = _dims->_domain_dims.size();
-        auto nsdims = _dims->_stencil_dims.size();
-        auto step_posn = +Indices::step_posn;
+    void StencilContext::allocScratchData() {
+        CONTEXT_VARS(this);
 
         // Remove any old scratch data.
-        freeScratchData(os);
+        freeScratchData();
 
         // Base ptrs for all alloc'd data.
         // This pointer will be shared by the ones in the grid
@@ -1013,8 +1023,7 @@ namespace yask {
     // Set wave-front settings.
     // This should be called anytime a setting or rank offset is changed.
     void StencilContext::update_grid_info() {
-        assert(_opts);
-        auto& step_dim = _dims->_step_dim;
+        CONTEXT_VARS(this);
 
         // If we haven't finished constructing the context, it's too early
         // to do this.
@@ -1022,7 +1031,7 @@ namespace yask {
             return;
 
         // Reset max halos to zero.
-        max_halos = _dims->_domain_dims;
+        max_halos = dims->_domain_dims;
 
         // Loop through each non-scratch grid.
         for (auto gp : gridPtrs) {
@@ -1161,10 +1170,10 @@ namespace yask {
     // considering temporal conditions; this assumes worst-case, which is
     // all packs always done.
     void StencilContext::update_tb_info() {
-        auto& step_dim = _dims->_step_dim;
+        CONTEXT_VARS(this);
 
         // Get requested size.
-        tb_steps = _opts->_block_sizes[step_dim];
+        tb_steps = opts->_block_sizes[step_dim];
 
         // Reset all TB and MB vars.
         num_tb_shifts = 0;
@@ -1321,12 +1330,11 @@ namespace yask {
     // Allocate grids and MPI bufs.
     // Initialize some data structures.
     void StencilContext::prepare_solution() {
-        auto& step_dim = _dims->_step_dim;
+        CONTEXT_VARS(this);
 
         // Don't continue until all ranks are this far.
-        _env->global_barrier();
+        env->global_barrier();
 
-        ostream& os = get_ostr();
 #ifdef CHECK
         os << "*** WARNING: YASK compiled with CHECK; ignore performance results.\n";
 #endif
@@ -1399,11 +1407,11 @@ namespace yask {
         // We free the scratch and MPI data first to give grids preference.
         YaskTimer allocTimer;
         allocTimer.start();
-        freeScratchData(os);
-        freeMpiData(os);
-        allocGridData(os);
-        allocScratchData(os);
-        allocMpiData(os);
+        freeScratchData();
+        freeMpiData();
+        allocGridData();
+        allocScratchData();
+        allocMpiData();
         allocTimer.stop();
         os << "Allocation done in " <<
             makeNumStr(allocTimer.get_elapsed_secs()) << " secs.\n" << flush;
@@ -1436,8 +1444,7 @@ namespace yask {
     }
     
     void StencilContext::print_info() {
-        auto& step_dim = _dims->_step_dim;
-        ostream& os = get_ostr();
+        CONTEXT_VARS(this);
 
         // Calc and report total allocation and domain sizes.
         rank_nbytes = get_num_bytes();
@@ -1472,13 +1479,18 @@ namespace yask {
             " yask-version:          " << yask_get_version_string() << endl <<
             " stencil-name:          " << get_name() << endl <<
             " element-size:          " << makeByteStr(get_element_bytes()) << endl <<
+            " rank-domain:           " << rank_bb.bb_begin.makeDimValStr() <<
+            " ... " << rank_bb.bb_end.subElements(1).makeDimValStr() << endl <<
 #ifdef USE_MPI
             " num-ranks:             " << _opts->_num_ranks.makeDimValStr(" * ") << endl <<
             " rank-indices:          " << _opts->_rank_indices.makeDimValStr() << endl <<
-            " rank-domain-offsets:   " << rank_domain_offsets.makeDimValOffsetStr() << endl <<
+            " rank-domain-offsets:   " << rank_domain_offsets.makeDimValOffsetStr() << endl;
+        if (opts->overlap_comms)
+            os <<
+                " mpi-interior:          " << mpi_interior.bb_begin.makeDimValStr() <<
+                " ... " << mpi_interior.bb_end.subElements(1).makeDimValStr() << endl;
 #endif
-            " rank-domain:           " << rank_bb.bb_begin.makeDimValStr() <<
-            " ... " << rank_bb.bb_end.subElements(1).makeDimValStr() << endl <<
+        os <<
             " vector-len:            " << VLEN << endl <<
             " extra-padding:         " << _opts->_extra_pad_sizes.makeDimValStr() << endl <<
             " minimum-padding:       " << _opts->_min_pad_sizes.makeDimValStr() << endl <<
@@ -1501,6 +1513,7 @@ namespace yask {
 
     // Dealloc grids, etc.
     void StencilContext::end_solution() {
+        CONTEXT_VARS(this);
 
         // Final halo exchange (usually not needed).
         exchange_halos();
@@ -1522,7 +1535,8 @@ namespace yask {
     // Init all grids & params by calling initFn.
     void StencilContext::initValues(function<void (YkGridPtr gp,
                                                    real_t seed)> realInitFn) {
-        ostream& os = get_ostr();
+        CONTEXT_VARS(this);
+
         real_t seed = 0.1;
         os << "Initializing grids...\n" << flush;
         YaskTimer itimer;
