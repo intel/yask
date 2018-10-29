@@ -346,8 +346,14 @@ namespace yask {
     typedef std::vector<GridPtrs*> ScratchVecs;
 
     // Environmental settings.
-    struct KernelEnv :
+    class KernelEnv :
         public virtual yk_env {
+
+        // An OpenMP lock to use for debug.
+        static omp_lock_t _debug_lock;
+        static bool _debug_lock_init_done;
+
+    public:
 
         // MPI vars.
         MPI_Comm comm = MPI_COMM_NULL; // communicator.
@@ -357,12 +363,26 @@ namespace yask {
         // OMP vars.
         int max_threads=0;      // initial value from OMP.
 
-        virtual ~KernelEnv() {}
+        KernelEnv() { }
+        virtual ~KernelEnv() { }
 
         // Init MPI, OMP, etc.
         // This is normally called very early in the program.
         virtual void initEnv(int* argc, char*** argv, MPI_Comm comm);
 
+        // Lock.
+        static void set_debug_lock() {
+            if (!_debug_lock_init_done) {
+                omp_init_lock(&_debug_lock);
+                _debug_lock_init_done = true;
+            }
+            omp_set_lock(&_debug_lock);
+        }
+        static void unset_debug_lock() {
+            assert(_debug_lock_init_done);
+            omp_unset_lock(&_debug_lock);
+        }
+        
         // APIs.
         virtual int get_num_ranks() const {
             return num_ranks;
@@ -783,6 +803,7 @@ namespace yask {
         int max_threads = 0;      // Initial number of threads to use overall; 0=>OMP default.
         int thread_divisor = 1;   // Reduce number of threads by this amount.
         int num_block_threads = 1; // Number of threads to use for a block.
+        bool bind_block_threads = false; // Bind block threads to indices.
 
         // Debug.
         bool force_scalar = false; // Do only scalar ops.

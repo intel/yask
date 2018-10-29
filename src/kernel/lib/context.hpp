@@ -177,9 +177,6 @@ namespace yask {
         // in the HW.
         size_t _data_buf_pad = (YASK_PAD * CACHELINE_BYTES);
 
-        // An OpenMP lock to use for async MPI progress.
-        omp_lock_t _test_halo_lock;
-
         // Check whether dim is appropriate type.
         virtual void checkDimType(const std::string& dim,
                                   const std::string& fn_name,
@@ -320,9 +317,6 @@ namespace yask {
             // Dump stats if get_stats() hasn't been called yet.
             if (steps_done)
                 get_stats();
-
-            // Destroy lock.
-            omp_destroy_lock(&_test_halo_lock);
         }
 
         // Set debug output to cout if my_rank == msg_rank

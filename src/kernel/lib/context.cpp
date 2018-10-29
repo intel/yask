@@ -355,19 +355,21 @@ namespace yask {
                 // rank in each dim.  See "(adj)" in diagram above.
                 if (right_wf_exts[j] == 0)
                     end[i] += wf_shift_pts[j];
-
-                // Ensure only one region in this dim if the original size
-                // covered the whole rank in this dim.
-                if (opts->_region_sizes[i] >= opts->_rank_sizes[i])
-                    step[i] = end[i] - begin[i];
-
             }
-            TRACE_MSG("run_solution: after adjustment for " << num_wf_shifts <<
-                      " wave-front shift(s): [" <<
-                      begin.makeDimValStr() << " ... " <<
-                      end.makeDimValStr() << ") by " <<
-                      step.makeDimValStr());
         }
+
+        // If original region covered entire rank in a dim, set
+        // step size to ensure only one step is taken.
+        DOMAIN_VAR_LOOP(i, j) {
+            if (opts->_region_sizes[i] >= opts->_rank_sizes[i])
+                step[i] = end[i] - begin[i];
+        }
+        TRACE_MSG("run_solution: after adjustment for " << num_wf_shifts <<
+                  " wave-front shift(s): [" <<
+                  begin.makeDimValStr() << " ... " <<
+                  end.makeDimValStr() << ") by " <<
+                  step.makeDimValStr());
+
         // At this point, 'begin' and 'end' should describe the *max* range
         // needed in the domain for this rank for the first time step.  At
         // any subsequent time step, this max may be shifted for temporal
@@ -782,8 +784,7 @@ namespace yask {
 
                 DOMAIN_VAR_LOOP(i, j) {
 
-                    // If there is only one blk in a region, make sure
-                    // this blk fills this whole region.
+                    // If original blk covered entire region, reset step.
                     if (settings._block_sizes[i] >= settings._region_sizes[i])
                         region_idxs.step[i] = region_idxs.end[i] - region_idxs.begin[i];
                 }
@@ -991,8 +992,7 @@ namespace yask {
                 auto width = region_idxs.stop[i] - region_idxs.start[i];
                 adj_block_idxs.end[i] += width;
 
-                // If there is only one MB in this dim, stretch it to
-                // fill the whole adjusted block.
+                // If original MB covers a whole block, reset step.
                 if (settings._mini_block_sizes[i] >= settings._block_sizes[i])
                     adj_block_idxs.step[i] = adj_block_idxs.end[i] - adj_block_idxs.begin[i];
             }
@@ -1168,9 +1168,13 @@ namespace yask {
                     if (scratchVecs.size())
                         cp->update_scratch_grid_info(region_thread_idx, mini_block_idxs.begin);
 
+                    // Call calc_mini_block() for each non-scratch bundle.
                     for (auto* sb : *bp)
                         if (sb->getBB().bb_num_points)
-                            sb->calc_mini_block(region_thread_idx, mini_block_idxs);
+                            sb->calc_mini_block(region_thread_idx, settings, mini_block_idxs);
+
+                    // Make sure streaming stores are visible for later loads.
+                    make_stores_visible();
                 }
 
                 // Need to shift for next pack and/or time-step.

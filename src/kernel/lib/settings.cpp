@@ -68,6 +68,9 @@ namespace yask {
 
     ///// KernelEnv functions:
 
+    omp_lock_t KernelEnv::_debug_lock;
+    bool KernelEnv::_debug_lock_init_done = false;
+    
     // Init MPI, OMP.
     void KernelEnv::initEnv(int* argc, char*** argv, MPI_Comm existing_comm)
     {
@@ -255,34 +258,55 @@ namespace yask {
                            msg_rank));
         parser.add_option(new CommandLineParser::BoolOption
                           ("overlap_comms",
-                           "Overlap MPI communication with calculation of grid cells whenever possible.",
+                           "Overlap MPI communication with calculation of interior elements whenever possible.",
                            overlap_comms));
         parser.add_option(new CommandLineParser::IdxOption
                           ("min_exterior",
-                           "Minimum width of MPI exterior section to compute before sending halo.",
+                           "Minimum width of MPI exterior section to compute before starting MPI communication.",
                            _min_exterior));
 #endif
         parser.add_option(new CommandLineParser::BoolOption
                           ("force_scalar",
-                           "Evaluate every grid point with scalar stencil operations.",
+                           "Evaluate every grid point with scalar stencil operations (for debug).",
                            force_scalar));
         parser.add_option(new CommandLineParser::IntOption
                           ("max_threads",
-                           "Max OpenMP threads to use.",
+                           "Max OpenMP threads to use. Overrides default number of OpenMP threads "
+                           "or the value set by OMP_NUM_THREADS.",
                            max_threads));
         parser.add_option(new CommandLineParser::IntOption
                           ("thread_divisor",
-                           "Divide max OpenMP threads by <integer>.",
+                           "Divide the number of OpenMP threads by the argument value. "
+                           "If -max_threads is also used, divide the argument to that option by the "
+                           "argument to this one. If -max_threads is not used, "
+                           "divide the default number of OpenMP threads. "
+                           "In either case, use the resulting truncated value as the "
+                           "maximum number of OpenMP threads to use.",
                            thread_divisor));
         parser.add_option(new CommandLineParser::IntOption
                           ("block_threads",
-                           "Number of threads to use within each block.",
+                           "Number of threads to use in a nested OpenMP region for each block. "
+                           "Will be restricted to a value less than or equal to "
+                           "the maximum number of OpenMP threads specified by -max_threads "
+                           "and/or -thread_divisor. "
+                           "Each thread is used to execute stencils within a sub-block, and "
+                           "sub-blocks are executed in parallel within mini-blocks.",
                            num_block_threads));
+        parser.add_option(new CommandLineParser::BoolOption
+                          ("bind_block_threads",
+                           "Execute stencils at each vector-cluster index on a fixed thread-id "
+                           "based on sub-block and mini-block sizes. "
+                           "Applies only to domain dimensions not including the inner-most "
+                           "one, effectively disabling parallelism across sub-blocks in the "
+                           "inner-most domain dimension. "
+                           "May increase cache locality when using multiple "
+                           "block-threads when temporal blocking is active.",
+                           bind_block_threads));
 #ifdef USE_NUMA
         stringstream msg;
         msg << "Preferred NUMA node on which to allocate data for "
-            "grids and MPI buffers. "
-            "Alternatively, use " << yask_numa_local << " for explicit local-node allocation, " <<
+            "grids and MPI buffers. Alternatively, use special values " <<
+            yask_numa_local << " for explicit local-node allocation, " <<
             yask_numa_interleave << " for interleaving pages across all nodes, or " <<
             yask_numa_none << " for no NUMA policy.";
         parser.add_option(new CommandLineParser::IntOption
@@ -292,7 +316,7 @@ namespace yask {
 #ifdef USE_PMEM
         parser.add_option(new CommandLineParser::IntOption
                           ("numa_pref_max",
-                           "Maximum size of preferred NUMA node in GiB.",
+                           "Maximum GiB to allocate on preferred NUMA node before allocating on pmem device.",
                            _numa_pref_max));
 #endif
     }

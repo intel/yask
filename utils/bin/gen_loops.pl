@@ -705,11 +705,8 @@ sub processCode($) {
 
     # Front matter.
     push @code,
-        "#ifndef OMP_PRAGMA_PREFIX",
-        "#define OMP_PRAGMA_PREFIX $OPT{ompConstruct}",
-        "#endif",
-        "#ifndef OMP_PRAGMA_SUFFIX",
-        "#define OMP_PRAGMA_SUFFIX",
+        "#ifndef OMP_PRAGMA",
+        "#define OMP_PRAGMA _Pragma(\"$OPT{ompConstruct}\")",
         "#endif",
         "// 'ScanIndices $inputVar' must be set before the following code.",
         "{";
@@ -723,7 +720,7 @@ sub processCode($) {
 
             push @loopPrefix,
                 " // Distribute iterations among OpenMP threads.", 
-                "#pragma OMP_PRAGMA_PREFIX OMP_PRAGMA_SUFFIX";
+                " OMP_PRAGMA";
             print "info: using OpenMP on following loop.\n";
         }
 
@@ -906,8 +903,7 @@ sub processCode($) {
     # Back matter.
     push @code,
         "}",
-        "#undef OMP_PRAGMA_PREFIX",
-        "#undef OMP_PRAGMA_SUFFIX",
+        "#undef OMP_PRAGMA",
         "// End of generated code.";
     
     # indent program avail?

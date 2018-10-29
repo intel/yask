@@ -683,7 +683,8 @@ namespace yask {
                     " aligned vector-block(s).\n"
                     " // There are approximately " << (stats.getNumOps() * numResults) <<
                     " FP operation(s) per iteration.\n" <<
-                    " void " << funcstr << "(int thread_idx, const Indices& idxs, idx_t " << istop;
+                    " void " << funcstr << "(int region_thread_idx, int block_thread_idx,"
+                    " const Indices& idxs, idx_t " << istop;
                 if (!do_cluster)
                     os << ", idx_t write_mask";
                 os << ") {\n";

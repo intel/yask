@@ -76,9 +76,6 @@ namespace yask {
 
         // Set output to msg-rank per settings.
         set_ostr();
-
-        // Init lock.
-        omp_init_lock(&_test_halo_lock);
     }
 
     // Init MPI-related vars and other vars related to my rank's place in
