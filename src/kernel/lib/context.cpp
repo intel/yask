@@ -439,7 +439,7 @@ namespace yask {
                         do_mpi_left = do_mpi_right = true;
 
                         // Include automatically-generated loop code that calls
-                        // calc_region(bp) for each region.
+                        // calc_region(bp) for each region sequentially.
                         TRACE_MSG("run_solution: step " << start_t <<
                                   " for pack '" << bp->get_name() << "' in MPI exterior");
 #include "yask_rank_loops.hpp"
@@ -618,11 +618,11 @@ namespace yask {
         run_time.stop();
     } // run_solution().
 
-    // Calculate results within a region.  Each region is typically computed
-    // in a separate OpenMP 'for' region.  In this function, we loop over
-    // the time steps and bundle packs and evaluate a pack in each of
-    // the blocks in the region.  If 'sel_bp' is null, eval all packs; else
-    // eval only the one pointed to.
+    // Calculate results within a region.  Regions are computed
+    // sequentially.  In this function, we loop over the time steps and
+    // bundle packs and evaluate a pack in each of the blocks in the region.
+    // If 'sel_bp' is null, eval all packs; else eval only the one pointed
+    // to.
     void StencilContext::calc_region(BundlePackPtr& sel_bp,
                                      const ScanIndices& rank_idxs) {
         CONTEXT_VARS(this);
@@ -630,7 +630,8 @@ namespace yask {
                   rank_idxs.start.makeValStr(nsdims) << " ... " <<
                   rank_idxs.stop.makeValStr(nsdims) << ") within rank [" <<
                   rank_idxs.begin.makeValStr(nsdims) << " ... " <<
-                  rank_idxs.end.makeValStr(nsdims) << ")" );
+                  rank_idxs.end.makeValStr(nsdims) << ") on " <<
+                  (sel_bp ? sel_bp->get_name() : "all") << " pack(s)");
 
         // Track time (use "else" to avoid double-counting).
         if (!do_mpi_interior && (do_mpi_left || do_mpi_right))
@@ -725,12 +726,19 @@ namespace yask {
                         idx_t nphases = 1; // Only 1 phase w/o TB.
                         idx_t phase = 0;
 
-                        // Include automatically-generated loop code that
-                        // calls calc_block() for each block in this region.
-                        // Loops through x from begin_rx to end_rx-1;
-                        // similar for y and z.  This code typically
-                        // contains the outer OpenMP loop(s).
+                        // Create a parallel region in which to calculate blocks.
+                        // OMP tasks will be created dynamically.
+#pragma omp parallel proc_bind(spread)
+#pragma omp single
+                        {
+                                
+                            // Include automatically-generated loop code that
+                            // calls calc_block() for each block in this region.
+                            // Loops through x from begin_rx to end_rx-1;
+                            // similar for y and z.  This code typically
+                            // contains the outer OpenMP loop(s).
 #include "yask_region_loops.hpp"
+                        } // OMP parallel.
                     }
 
                     // Mark grids that [may] have been written to by this
@@ -790,18 +798,25 @@ namespace yask {
                 }
                 
                 // To tesselate n-D domain space, we use n+1 distinct
-                // "phases".  For example, 1-D TB uses "upward" triangles
-                // and "downward" triangles. Region threads sync after every
-                // phase. Thus, the phase loop is here around the generated
-                // OMP loops.  TODO: schedule phases and their shapes via task
-                // dependencies.
-                idx_t nphases = nddims + 1; 
+                // "phases".  For example, 1-D TB uses "upward"
+                // trapezoids and then "downward" trapezoids, 2-D TB
+                // uses upward truncated pyramids, bridges between the
+                // upward pyramids, and then downward pyramids, etc.
+                idx_t nphases = nddims + 1;
                 for (idx_t phase = 0; phase < nphases; phase++) {
-                    
-                    // Call calc_block() on every block concurrently.  Only
-                    // the shapes corresponding to the current 'phase' will
-                    // be calculated.
+
+                    // Create a parallel region in which to calculate blocks.
+                    // OMP tasks will be created dynamically.
+                    // TODO: add task dependencies and move parallel region around phase loop.
+#pragma omp parallel proc_bind(spread)
+#pragma omp single
+                    {
+                                
+                        // Call calc_block() on every block.  Only the
+                        // shapes corresponding to the current 'phase'
+                        // will be calculated.
 #include "yask_region_loops.hpp"
+                    } // OMP parallel.
                 }
             
                 // Loop thru stencil bundle packs that were evaluated in
@@ -809,14 +824,14 @@ namespace yask {
                 // TODO: consider moving this inside calc_block().
                 for (idx_t t = start_t; t != stop_t; t += step_dir) {
                     for (auto& bp : stPacks) {
-
+                        
                         // Check step.
                         if (check_step_conds && !bp->is_in_valid_step(t))
                             continue;
-
+                        
                         // One shift for each pack in each TB step.
                         region_shift_num++;
-
+                        
                         // Mark grids that [may] have been written to by this
                         // pack.
                         mark_grids_dirty(bp, t, t + step_dir);
@@ -839,8 +854,8 @@ namespace yask {
     // Calculate results within a block. This function calls
     // 'calc_mini_block()' for the specified pack or all packs if 'sel_bp'
     // is null.  When using TB, only the shape(s) needed for the tesselation
-    // 'phase' are computed.  Typically called by a top-level OMP thread
-    // from calc_region().
+    // 'phase' are computed.  Called from an OMP parallel section from
+    // calc_region().
     void StencilContext::calc_block(BundlePackPtr& sel_bp,
                                     idx_t region_shift_num,
                                     idx_t nphases, idx_t phase,
@@ -849,14 +864,14 @@ namespace yask {
 
         CONTEXT_VARS(this);
         auto* bp = sel_bp.get();
-        int region_thread_idx = omp_get_thread_num();
         TRACE_MSG("calc_block: phase " << phase << ", block [" <<
                   region_idxs.start.makeValStr(nsdims) << " ... " <<
                   region_idxs.stop.makeValStr(nsdims) << 
                   ") within region [" <<
                   region_idxs.begin.makeValStr(nsdims) << " ... " <<
-                  region_idxs.end.makeValStr(nsdims) << 
-                  ") by region thread " << region_thread_idx);
+                  region_idxs.end.makeValStr(nsdims) << ") on " <<
+                  (sel_bp ? sel_bp->get_name() : "all") <<
+                  " pack(s) by thread " << omp_get_thread_num());
 
 #ifdef OVERLAP_WITH_BLOCKS
         // If we are not calculating some of the blocks, determine
@@ -897,7 +912,7 @@ namespace yask {
 #endif
         
         // Init block begin & end from region start & stop indices.
-        ScanIndices block_idxs(*_dims, true, 0);
+        ScanIndices block_idxs(*dims, true, 0);
         block_idxs.initFromOuter(region_idxs);
 
         // Time range.
@@ -934,19 +949,30 @@ namespace yask {
         
             // Groups in block loops are based on mini-block-group sizes.
             block_idxs.group_size = settings._mini_block_group_sizes;
+            
+            // Execute this block in a task.  Be sure to privatize all vars
+            // that need to exist for the task because calc_block() may
+            // exist before task completes or even starts.
+#pragma omp task firstprivate(bp, region_shift_num,                     \
+                              nphases, phase,                           \
+                              rank_idxs, region_idxs, block_idxs)
+            {
+                int region_thread_idx = omp_get_thread_num();
 
-            // Default settings for no TB.
-            BundlePackPtr bp = sel_bp;
-            assert(phase == 0);
-            idx_t nshapes = 1;
-            idx_t shape = 0;
-            idx_t shift_num = 0;
-            BridgeMask bridge_mask;
-            ScanIndices adj_block_idxs = block_idxs;
+                // Default settings for no TB.
+                BundlePackPtr bp = sel_bp;
+                assert(phase == 0);
+                idx_t nshapes = 1;
+                idx_t shape = 0;
+                idx_t shift_num = 0;
+                BridgeMask bridge_mask = 0;
+                ScanIndices adj_block_idxs = block_idxs;
 
-            // Include automatically-generated loop code that
-            // calls calc_mini_block() for each mini-block in this block.
+                // Include automatically-generated loop code that calls
+                // calc_mini_block() sequentially for each mini-block in
+                // this block.
 #include "yask_block_loops.hpp"
+            }
         } // no TB.
 
         // If TB is active, loop thru each required shape.
@@ -954,13 +980,16 @@ namespace yask {
             assert(phase >= 0);
             assert(phase < nphases); // E.g., phase = 0..2 for 2D.
             
+            // Can only be one time iteration here when doing TB
+            // because mini-block temporal size is always same
+            // as block temporal size.
+            assert(num_t == 1);
+
             // Determine number of shapes for this 'phase'. First and last
             // phase need one shape. Other (bridge) phases need one shape
             // for each combination of domain dims. E.g., need 'x' and
             // 'y' bridges for 2D problem in phase 1.
             idx_t nshapes = choose(nddims, phase);
-            int dims_to_bridge[phase];
-            BridgeMask bridge_mask(nddims, false);
 
             // Set temporal indices to full range.
             block_idxs.index[step_posn] = 0; // only one index.
@@ -1006,30 +1035,40 @@ namespace yask {
             // Loop thru shapes.
             for (idx_t shape = 0; shape < nshapes; shape++) {
 
-                // Get 'shape'th combo of 'phase' things from 'nddims'.
-                // These will be used to create bridge shapes.
-                combination(dims_to_bridge, nddims, phase, shape + 1);
+                // Execute this shape in a task.  Be sure to privatize all vars
+                // that need to exist for the task because calc_block() may
+                // exist before task completes or even starts.
+#pragma omp task firstprivate(bp, region_shift_num,                     \
+                              nphases, phase, nshapes, shape,           \
+                              rank_idxs, region_idxs, block_idxs, adj_block_idxs)
+                {
+                    int region_thread_idx = omp_get_thread_num();
 
-                // Set bits for selected dims.
-                DOMAIN_VAR_LOOP(i, j)
-                    bridge_mask.at(j) = false;
-                for (int i = 0; i < phase; i++) {
-                    auto dim = dims_to_bridge[i] - 1;
-                    bridge_mask.at(dim) = true;
-                }
+                    // Get 'shape'th combo of 'phase' things from 'nddims'.
+                    // These will be used to create bridge shapes.
+                    int dims_to_bridge[phase];
+                    combination(dims_to_bridge, nddims, phase, shape + 1);
+
+                    // Set bits for selected dims.
+                    BridgeMask bridge_mask = 0;
+                    for (int i = 0; i < phase; i++) {
+                        auto dim = dims_to_bridge[i] - 1;
+                        bridge_mask |= 1LL << dim;
+                    }
                 
-                // Can only be one time iteration here when doing TB
-                // because mini-block temporal size is always same
-                // as block temporal size.
-                assert(num_t == 1);
-                    
-                // Include automatically-generated loop code that calls
-                // calc_mini_block() for each mini-block in this block.
-                BundlePackPtr bp; // null.
-#include "yask_block_loops.hpp"
+                    BundlePackPtr bp; // null to indicate all packs.
 
+                    // Include automatically-generated loop code that calls
+                    // calc_mini_block() for each mini-block in this block.
+#include "yask_block_loops.hpp"
+                } // OMP task
             } // shape loop.
         } // TB.
+
+        TRACE_MSG("calc_block: phase " << phase << ", block [" <<
+                  region_idxs.start.makeValStr(nsdims) << " ... " <<
+                  region_idxs.stop.makeValStr(nsdims) << 
+                  ") exiting");
     } // calc_block().
 
     // Calculate results within a mini-block.
@@ -1058,8 +1097,9 @@ namespace yask {
                   base_block_idxs.begin.makeValStr(nsdims) << " ... " <<
                   base_block_idxs.end.makeValStr(nsdims) << ") within base-region [" <<
                   base_region_idxs.begin.makeValStr(nsdims) << " ... " <<
-                  base_region_idxs.end.makeValStr(nsdims) <<
-                  ") by region thread " << region_thread_idx);
+                  base_region_idxs.end.makeValStr(nsdims) << ") on " <<
+                  (sel_bp ? sel_bp->get_name() : "all") <<
+                  " pack(s) by region thread " << region_thread_idx);
 
         // Promote forward progress in MPI when calc'ing interior
         // only. Call from one thread only.
@@ -1455,7 +1495,7 @@ namespace yask {
             // until all dims are bridged at last phase.
             // Use list of dims to bridge for this shape
             // computed earlier.
-            if (phase > 0 && bridge_mask[j]) {
+            if (phase > 0 && (bridge_mask & (1LL << j))) {
                 TRACE_MSG("shift_mini_block: phase " << phase <<
                           ", shape " << shape <<
                           ": bridging dim " << j);

@@ -691,7 +691,7 @@ namespace yask {
         string gname = _grid->getName();
         string expr = "static_cast<_context_type::" + gname + "_type*>(_context->" + gname;
         if (_grid->isScratch())
-            expr += "_list[thread_idx].get()";
+            expr += "_list[region_thread_idx].get()";
         expr += ")";
         return expr;
     }

@@ -522,12 +522,9 @@ RANK_LOOP_ORDER		?=	1 .. N-1
 RANK_LOOP_CODE		?=	$(RANK_LOOP_OUTER_MODS) loop($(RANK_LOOP_ORDER)) \
 				{ $(RANK_LOOP_INNER_MODS) call(calc_region(bp)); }
 
-# Region loops break up a region using OpenMP threading into blocks.  The
-# 'omp' modifier creates an outer OpenMP loop so that each block is assigned
-# to a top-level OpenMP thread.
-REGION_LOOP_OPTS	?=	-ndims $(NSDIMS) -inVar region_idxs \
-				-ompConstruct '$(omp_par_for) schedule($(omp_region_schedule)) proc_bind(spread)'
-REGION_LOOP_OUTER_MODS	?=	grouped omp
+# Region loops break up a region into blocks.
+REGION_LOOP_OPTS	?=	-ndims $(NSDIMS) -inVar region_idxs
+REGION_LOOP_OUTER_MODS	?=	grouped
 REGION_LOOP_ORDER	?=	1 .. N-1
 REGION_LOOP_CODE	?=	$(REGION_LOOP_OUTER_MODS) loop($(REGION_LOOP_ORDER)) { \
 				$(REGION_LOOP_INNER_MODS) \
@@ -544,8 +541,8 @@ BLOCK_LOOP_ORDER	?=	1 .. N-1
 BLOCK_LOOP_CODE		?=	$(BLOCK_LOOP_OUTER_MODS) loop($(BLOCK_LOOP_ORDER)) { \
 				$(BLOCK_LOOP_INNER_MODS) \
 				  call(calc_mini_block(region_thread_idx, bp, region_shift_num, \
-					nphases, phase, nshapes, shape, \
-					bridge_mask, rank_idxs, region_idxs, block_idxs)); }
+					nphases, phase, nshapes, shape, bridge_mask, \
+					rank_idxs, region_idxs, block_idxs)); }
 
 # Mini-Block loops break up a mini-block into sub-blocks. The 'omp' modifier creates
 # a *nested* OpenMP loop so that each sub-block is assigned to a nested OpenMP
@@ -810,6 +807,8 @@ yk-tests:
 	$(YK_SCRIPT) -stencil $(stencil) -arch $(arch) -v $(val2)
 	$(YK_SCRIPT) -stencil $(stencil) -arch $(arch) -v $(val3)
 	$(YK_SCRIPT) -stencil $(stencil) -arch $(arch) -v $(val4)
+
+yk-mp-tests:
 	$(YK_SCRIPT) -stencil $(stencil) -arch $(arch) -ranks $(ranks) -v $(val0)
 	$(YK_SCRIPT) -stencil $(stencil) -arch $(arch) -ranks $(ranks) -v $(val1)
 	$(YK_SCRIPT) -stencil $(stencil) -arch $(arch) -ranks $(ranks) -v $(val2)
@@ -819,10 +818,12 @@ yk-tests:
 # Run the default YASK compiler and kernel.
 yc-and-yk-test: $(YK_EXEC) $(YK_SCRIPT)
 	$(MAKE) yk-tests
+	if $$(( $(ranks) > 1 )); then $(MAKE) yk-mp-tests; fi
 
 # Run the YASK kernel test without implicity using the YASK compiler.
 yk-test-no-yc: kernel-no-yc $(YK_SCRIPT)
 	$(MAKE) yk-tests
+	if $$(( $(ranks) > 1 )); then $(MAKE) yk-mp-tests; fi
 
 # Run the kernel API tests for C++ and Python with and w/o expected exceptions.
 api-tests:

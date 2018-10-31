@@ -143,7 +143,7 @@ namespace yask {
     typedef std::set<StencilBundleBase*> StencilBundleSet;
     typedef std::shared_ptr<BundlePack> BundlePackPtr;
     typedef std::vector<BundlePackPtr> BundlePackList;
-    typedef std::vector<bool> BridgeMask;
+    typedef idx_t BridgeMask;
 
     // Data and hierarchical sizes.
     // This is a pure-virtual class that must be implemented
