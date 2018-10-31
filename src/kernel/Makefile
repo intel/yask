@@ -810,6 +810,8 @@ yk-tests:
 	$(YK_SCRIPT) -stencil $(stencil) -arch $(arch) -v $(val2)
 	$(YK_SCRIPT) -stencil $(stencil) -arch $(arch) -v $(val3)
 	$(YK_SCRIPT) -stencil $(stencil) -arch $(arch) -v $(val4)
+
+yk-mp-tests:
 	$(YK_SCRIPT) -stencil $(stencil) -arch $(arch) -ranks $(ranks) -v $(val0)
 	$(YK_SCRIPT) -stencil $(stencil) -arch $(arch) -ranks $(ranks) -v $(val1)
 	$(YK_SCRIPT) -stencil $(stencil) -arch $(arch) -ranks $(ranks) -v $(val2)
@@ -819,10 +821,12 @@ yk-tests:
 # Run the default YASK compiler and kernel.
 yc-and-yk-test: $(YK_EXEC) $(YK_SCRIPT)
 	$(MAKE) yk-tests
+	if (( $(ranks) > 1 )); then $(MAKE) yk-mp-tests; fi
 
 # Run the YASK kernel test without implicity using the YASK compiler.
 yk-test-no-yc: kernel-no-yc $(YK_SCRIPT)
 	$(MAKE) yk-tests
+	if (( $(ranks) > 1 )); then $(MAKE) yk-mp-tests; fi
 
 # Run the kernel API tests for C++ and Python with and w/o expected exceptions.
 api-tests:

@@ -607,7 +607,7 @@ namespace yask {
                     _dims._stencilDims.makeDimStr() << ".\n"
                     " // There are approximately " << stats.getNumOps() <<
                     " FP operation(s) per invocation.\n"
-                    " virtual void calc_scalar(int thread_idx, const Indices& idxs) {\n";
+                    " virtual void calc_scalar(int region_thread_idx, const Indices& idxs) {\n";
                     printIndices(os);
 
                 // C++ scalar print assistant.

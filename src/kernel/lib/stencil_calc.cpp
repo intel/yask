@@ -478,7 +478,7 @@ namespace yask {
                         idx_t clus_idx = loop_idxs.start[i];            \
                         idx_t elem_idx = clus_idx * dims->_cluster_pts[j]; \
                         sub_blk_idxs[j] = (i == _inner_posn) ? 0 :      \
-                            idiv_flr(elem_idx, settings._sub_block_sizes[i]) % \
+                            abs(idiv_flr(elem_idx, settings._sub_block_sizes[i])) % \
                             sub_blks_per_mini_blk[j]; }                 \
                     idx_t sub_blk_idx = sub_blks_per_mini_blk.layout(sub_blk_idxs); \
                     idx_t thr = sub_blk_idx % num_thr;                  \
