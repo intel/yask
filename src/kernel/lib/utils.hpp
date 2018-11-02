@@ -94,9 +94,7 @@ namespace yask {
     extern idx_t roundUp(std::ostream& os, idx_t val, idx_t mult,
                          const std::string& name, bool do_print);
 
-    // Helpers for shared and aligned malloc and free.
-    // Use like this:
-    // shared_ptr<char> p(alignedAlloc(nbytes), AlignedDeleter());
+    // Helpers for aligned malloc and free.
     extern char* alignedAlloc(std::size_t nbytes);
     struct AlignedDeleter {
         void operator()(char* p) {
@@ -107,39 +105,87 @@ namespace yask {
         }
     };
 
-    // Helpers for shared and NUMA malloc and free.
-    // Use like this:
-    // shared_ptr<char> p(numaAlloc(nbytes, numa_pref), NumaDeleter(nbytes));
+    // Alloc aligned data as a shared ptr.
+    template<typename T>
+    std::shared_ptr<T> shared_aligned_alloc(size_t sz) {
+        auto _base = std::shared_ptr<T>(alignedAlloc(sz), AlignedDeleter(sz));
+        return _base;
+    }
+
+    // Helpers for NUMA malloc and free.
     extern char* numaAlloc(std::size_t nbytes, int numa_pref);
     struct NumaDeleter {
         std::size_t _nbytes;
-        NumaDeleter(std::size_t nbytes): _nbytes(nbytes) {}
-        void operator()(char* p) {
+        int _numa_pref;
 
-#ifdef USE_NUMA
-#ifdef USE_NUMA_POLICY_LIB
-            if (p && numa_available() != -1) {
-                numa_free(p, _nbytes);
-                p = NULL;
-            }
-#else
-            if (p && get_mempolicy(NULL, NULL, 0, 0, 0) == 0) {
-                munmap(p, _nbytes);
-                p = NULL;
-            }
-#endif
-#endif
-            if (p) {
-                free(p);
-                p = NULL;
-            }
-        }
+        // Ctor saves data needed for freeing.
+        NumaDeleter(std::size_t nbytes, int numa_pref) :
+            _nbytes(nbytes),
+            _numa_pref(numa_pref)
+        { }
+
+        // Free p.
+        void operator()(char* p);
     };
 
     // Allocate NUMA memory from preferred node.
     template<typename T>
     std::shared_ptr<T> shared_numa_alloc(size_t sz, int numa_pref) {
-        auto _base = std::shared_ptr<T>(numaAlloc(sz, numa_pref), NumaDeleter(sz));
+        auto _base = std::shared_ptr<T>(numaAlloc(sz, numa_pref),
+                                        NumaDeleter(sz, numa_pref));
+        return _base;
+    }
+
+    // Helpers for PMEM malloc and free.
+    extern char* pmemAlloc(std::size_t nbytes, int dev_num);
+    struct PmemDeleter {
+        std::size_t _nbytes;
+        int _dev_num;
+
+        // Ctor saves data needed for freeing.
+        PmemDeleter(std::size_t nbytes, int dev_num) :
+            _nbytes(nbytes),
+            _dev_num(dev_num)
+        { }
+
+        // Free p.
+        void operator()(char* p);
+    };
+
+    // Allocate PMEM memory from given device.
+    template<typename T>
+    std::shared_ptr<T> shared_pmem_alloc(size_t sz, int dev_num) {
+        auto _base = std::shared_ptr<T>(pmemAlloc(sz, dev_num),
+                                        PmemDeleter(sz, dev_num));
+        return _base;
+    }
+
+    // Helpers for MPI shm malloc and free.
+    extern char* shmAlloc(std::size_t nbytes,
+                          const MPI_Comm* shm_comm, MPI_Win* shm_win);
+    struct ShmDeleter {
+        std::size_t _nbytes;
+        const MPI_Comm* _shm_comm;
+        MPI_Win* _shm_win;
+
+        // Ctor saves data needed for freeing.
+        ShmDeleter(std::size_t nbytes,
+                   const MPI_Comm* shm_comm, MPI_Win* shm_win):
+            _nbytes(nbytes),
+            _shm_comm(shm_comm),
+            _shm_win(shm_win)
+        { }
+
+        // Free p.
+        void operator()(char* p);
+    };
+
+    // Allocate MPI shm memory.
+    template<typename T>
+    std::shared_ptr<T> shared_shm_alloc(size_t sz,
+                                        const MPI_Comm* shm_comm, MPI_Win* shm_win) {
+        auto _base = std::shared_ptr<T>(shmAlloc(sz, shm_comm, shm_win),
+                                        ShmDeleter(sz, shm_comm, shm_win));
         return _base;
     }
 

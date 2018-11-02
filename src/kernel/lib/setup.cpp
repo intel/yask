@@ -83,74 +83,74 @@ namespace yask {
     // if not using MPI to properly init these vars.  Called from
     // prepare_solution(), so it doesn't normally need to be called from user code.
     void StencilContext::setupRank() {
-        ostream& os = get_ostr();
-        auto& step_dim = _dims->_step_dim;
-        auto me = _env->my_rank;
+        CONTEXT_VARS(this);
+
+        auto me = env->my_rank;
         int num_neighbors = 0;
 
         // Check ranks.
-        idx_t req_ranks = _opts->_num_ranks.product();
-        if (req_ranks != _env->num_ranks) {
+        idx_t req_ranks = opts->_num_ranks.product();
+        if (req_ranks != env->num_ranks) {
             FORMAT_AND_THROW_YASK_EXCEPTION("error: " << req_ranks << " rank(s) requested (" +
-                                            _opts->_num_ranks.makeDimValStr(" * ") + "), but " <<
-                                            _env->num_ranks << " rank(s) are active");
+                                            opts->_num_ranks.makeDimValStr(" * ") + "), but " <<
+                                            env->num_ranks << " rank(s) are active");
         }
-        assertEqualityOverRanks(_opts->_rank_sizes[step_dim], _env->comm, "num steps");
+
+        // All ranks should have the same settings for using shm.
+        assertEqualityOverRanks(idx_t(opts->use_shm), env->comm, "use_shm");
 
         // Determine my coordinates if not provided already.
         // TODO: do this more intelligently based on proximity.
-        if (_opts->find_loc)
-            _opts->_rank_indices = _opts->_num_ranks.unlayout(me);
+        if (opts->find_loc)
+            opts->_rank_indices = opts->_num_ranks.unlayout(me);
 
         // A table of rank-coordinates for everyone.
-        auto num_ddims = _opts->_rank_indices.size(); // domain-dims only!
-        idx_t coords[_env->num_ranks][num_ddims];
+        idx_t coords[env->num_ranks][nddims];
 
         // Init offsets and total sizes.
         rank_domain_offsets.setValsSame(0);
         overall_domain_sizes.setValsSame(0);
 
         // Init coords for this rank.
-        for (int i = 0; i < num_ddims; i++)
-            coords[me][i] = _opts->_rank_indices[i];
+        for (int i = 0; i < nddims; i++)
+            coords[me][i] = opts->_rank_indices[i];
 
         // A table of rank-domain sizes for everyone.
-        idx_t rsizes[_env->num_ranks][num_ddims];
+        idx_t rsizes[env->num_ranks][nddims];
 
         // Init sizes for this rank.
-        for (int di = 0; di < num_ddims; di++) {
-            auto& dname = _opts->_rank_indices.getDimName(di);
-            auto rsz = _opts->_rank_sizes[dname];
-            rsizes[me][di] = rsz;
-            overall_domain_sizes[dname] = rsz;
+        DOMAIN_VAR_LOOP(i, j) {
+            auto rsz = opts->_rank_sizes[i];
+            rsizes[me][j] = rsz;
+            overall_domain_sizes[j] = rsz;
         }
 
 #ifdef USE_MPI
         // Exchange coord and size info between all ranks.
-        for (int rn = 0; rn < _env->num_ranks; rn++) {
-            MPI_Bcast(&coords[rn][0], num_ddims, MPI_INTEGER8,
+        for (int rn = 0; rn < env->num_ranks; rn++) {
+            MPI_Bcast(&coords[rn][0], nddims, MPI_INTEGER8,
                       rn, _env->comm);
-            MPI_Bcast(&rsizes[rn][0], num_ddims, MPI_INTEGER8,
+            MPI_Bcast(&rsizes[rn][0], nddims, MPI_INTEGER8,
                       rn, _env->comm);
         }
         // Now, the tables are filled in for all ranks.
 
         // Loop over all ranks, including myself.
-        for (int rn = 0; rn < _env->num_ranks; rn++) {
+        for (int rn = 0; rn < env->num_ranks; rn++) {
 
             // Coord offset of rn from me: prev => negative, self => 0, next => positive.
-            IdxTuple rcoords(_dims->_domain_dims);
-            IdxTuple rdeltas(_dims->_domain_dims);
-            for (int di = 0; di < num_ddims; di++) {
+            IdxTuple rcoords(domain_dims);
+            IdxTuple rdeltas(domain_dims);
+            for (int di = 0; di < nddims; di++) {
                 rcoords[di] = coords[rn][di];
-                rdeltas[di] = coords[rn][di] - _opts->_rank_indices[di];
+                rdeltas[di] = coords[rn][di] - opts->_rank_indices[di];
             }
 
             // Manhattan distance from rn (sum of abs deltas in all dims).
             // Max distance in any dim.
             int mandist = 0;
             int maxdist = 0;
-            for (int di = 0; di < num_ddims; di++) {
+            for (int di = 0; di < nddims; di++) {
                 mandist += abs(rdeltas[di]);
                 maxdist = max(maxdist, abs(int(rdeltas[di])));
             }
@@ -171,13 +171,13 @@ namespace yask {
             }
 
             // Loop through domain dims.
-            for (int di = 0; di < num_ddims; di++) {
-                auto& dname = _opts->_rank_indices.getDimName(di);
+            for (int di = 0; di < nddims; di++) {
+                auto& dname = opts->_rank_indices.getDimName(di);
 
                 // Is rank 'rn' in-line with my rank in 'dname' dim?
                 // True when deltas in other dims are zero.
                 bool is_inline = true;
-                for (int dj = 0; dj < num_ddims; dj++) {
+                for (int dj = 0; dj < nddims; dj++) {
                     if (di != dj && rdeltas[dj] != 0) {
                         is_inline = false;
                         break;
@@ -200,7 +200,7 @@ namespace yask {
                     // Make sure all the other dims are the same size.
                     // This ensures that all the ranks' domains line up
                     // properly along their edges and at their corners.
-                    for (int dj = 0; dj < num_ddims; dj++) {
+                    for (int dj = 0; dj < nddims; dj++) {
                         if (di != dj) {
                             auto mysz = rsizes[me][dj];
                             auto rnsz = rsizes[rn][dj];
@@ -217,12 +217,12 @@ namespace yask {
                             }
                         }
                     }
-                }
-            }
+                } // is inline w/me.
+            } // dims.
 
             // Rank rn is myself or my immediate neighbor if its distance <= 1 in
             // every dim.  Assume we do not need to exchange halos except
-            // with immediate neighbor. We validate this assumption below by
+            // with immediate neighbor. We enforce this assumption below by
             // making sure that the rank domain size is at least as big as the
             // largest halo.
             if (maxdist <= 1) {
@@ -243,17 +243,37 @@ namespace yask {
                 assert(idx_t(rn_ofs) < _mpiInfo->neighborhood_size);
 
                 // Save rank of this neighbor into the MPI info object.
-                _mpiInfo->my_neighbors.at(rn_ofs) = rn;
-                if (rn != me) {
+                mpiInfo->my_neighbors.at(rn_ofs) = rn;
+                if (rn == me) {
+                    assert(mpiInfo->my_neighbor_index == rn_ofs);
+                    mpiInfo->shm_ranks.at(rn_ofs) = env->my_shm_rank;
+                }
+                else {
                     num_neighbors++;
-                    os << "Neighbor #" << num_neighbors << " is rank " << rn <<
+                    os << "Neighbor #" << num_neighbors << " is MPI rank " << rn <<
                         " at absolute rank indices " << rcoords.makeDimValStr() <<
                         " (" << rdeltas.makeDimValOffsetStr() << " relative to rank " <<
-                        me << ")\n";
+                        me << ")";
+
+                    // Determine whether neighbor is in my shm group.
+                    // If so, record rank number in shmcomm.
+                    if (opts->use_shm && env->shm_comm != MPI_COMM_NULL) {
+                        int g_rank = rn;
+                        int s_rank = MPI_PROC_NULL;
+                        MPI_Group_translate_ranks(env->group, 1, &g_rank,
+                                                  env->shm_group, &s_rank);
+                        if (s_rank != MPI_UNDEFINED) {
+                            mpiInfo->shm_ranks.at(rn_ofs) = s_rank;
+                            os << " and is MPI shared-memory rank " << s_rank;
+                        } else {
+                            os << " and will not use shared-memory";
+                        }
+                    }
+                    os << ".\n";
                 }
 
                 // Save manhattan dist.
-                _mpiInfo->man_dists.at(rn_ofs) = mandist;
+                mpiInfo->man_dists.at(rn_ofs) = mandist;
 
                 // Loop through domain dims.
                 bool vlen_mults = true;
@@ -288,8 +308,12 @@ namespace yask {
 
     } // setupRank().
 
-    // Alloc 'nbytes' on each requested NUMA node.
-    // Map keys are preferred NUMA nodes or -1 for local.
+    // Magic numbers for memory types in addition to those for NUMA.
+    // TODO: get rid of magic-number scheme.
+    constexpr int _shmem_key = 1000;
+    constexpr int _pmem_key = 2000; // leave space after this for pmem devices.
+
+    // Alloc 'nbytes' for each requested mem type.
     // Pointers are returned in '_data_buf'.
     // 'ngrids' and 'type' are only used for debug msg.
     void StencilContext::_alloc_data(const map <int, size_t>& nbytes,
@@ -298,30 +322,64 @@ namespace yask {
                                      const std::string& type) {
         CONTEXT_VARS(this);
 
+        // Loop through each mem type.
         for (const auto& i : nbytes) {
-            int numa_pref = i.first;
+            int mem_key = i.first;
             size_t nb = i.second;
-            size_t ng = ngrids.at(numa_pref);
+            size_t ng = ngrids.at(mem_key);
 
             // Don't need pad after last one.
             if (nb >= _data_buf_pad)
                 nb -= _data_buf_pad;
 
-            // Allocate data.
+            // Alloc data depending on magic key.
+            shared_ptr<char> p;
             os << "Allocating " << makeByteStr(nb) <<
-                " for " << ng << " " << type << "(s)";
-#ifdef USE_NUMA
-            if (numa_pref >= 0)
-                os << " preferring NUMA node " << numa_pref;
-            else
-                os << " using NUMA policy " << numa_pref;
+                " for " << ng << " " << type << "(s) ";
+            if (mem_key == _shmem_key) {
+                os << "using MPI shm...\n" << flush;
+                p = shared_shm_alloc<char>(nb, &env->shm_comm, &mpiInfo->halo_win);
+
+                // Get pointer for each neighbor rank.
+#ifdef USE_MPI
+                int ns = int(mpiInfo->neighborhood_size);
+                for (int ni = 0; ni < ns; ni++) {
+                    int nr = mpiInfo->my_neighbors.at(ni);
+                    if (nr == MPI_PROC_NULL)
+                        continue;
+                    int sr = mpiInfo->shm_ranks.at(ni);
+                    MPI_Aint sz;
+                    int dispunit;
+                    MPI_Win_shared_query(mpiInfo->halo_win, sr, &sz,
+                                         &dispunit, &mpiInfo->halo_ptrs.at(ni));
+                    TRACE_MSG("MPI shm halo buffer for rank " << nr << " is at " <<
+                              mpiInfo->halo_ptrs.at(ni));
+                }
 #endif
-            os << "...\n" << flush;
-            auto p = shared_numa_alloc<char>(nb, numa_pref);
-            TRACE_MSG("Got memory at " << static_cast<void*>(p.get()));
+            }
+            else if (mem_key >= _pmem_key) {
+                auto dev_num = mem_key - _pmem_key;
+                os << "on PMEM device " << dev_num << "...\n" << flush;
+                p = shared_pmem_alloc<char>(nb, dev_num);
+            }
+            else {
+                if (mem_key == yask_numa_none)
+                    os << "using default allocator";
+                else if (mem_key == yask_numa_local)
+                    os << "preferring local NUMA node";
+                else if (mem_key == yask_numa_interleave)
+                    os << "interleaved across all NUMA nodes";
+                else if (mem_key >= 0)
+                    os << "preferring NUMA node " << mem_key;
+                else
+                    os << "using mem policy " << mem_key;
+                os << "...\n" << flush;
+                p = shared_numa_alloc<char>(nb, mem_key);
+            }
 
             // Save using original key.
-            data_buf[numa_pref] = p;
+            data_buf[mem_key] = p;
+            TRACE_MSG("Got memory at " << static_cast<void*>(p.get()));
         }
     }
 
@@ -343,7 +401,7 @@ namespace yask {
 	done.clear();
 
 #ifdef USE_PMEM
-        os << "Grid-allocation priority:" << endl;
+        os << "PMEM grid-allocation priority:" << endl;
         for (auto sp : sortedGridPtrs) {
             os << " '" << sp->get_name() << "'";
             if (gridPtrSet.find(sp)!=gridPtrSet.end())
@@ -360,9 +418,10 @@ namespace yask {
         map <int, shared_ptr<char>> _grid_data_buf;
 
 #ifdef USE_PMEM
-        size_t preferredNUMASize = opts->_numa_pref_max*1024*1024*(size_t)1024;
+        auto preferredNUMASize = opts->_numa_pref_max * 1024*1024*1024;
 #endif
-        // Pass 0: assign alternative NUMA node when preferred NUMA node is not enough.
+        
+        // Pass 0: assign PMEM node when preferred NUMA node is not enough.
         // Pass 1: count required size for each NUMA node, allocate chunk of memory at end.
         // Pass 2: distribute parts of already-allocated memory chunk.
         for (int pass = 0; pass < 3; pass++) {
@@ -401,13 +460,14 @@ namespace yask {
 #ifdef USE_PMEM
                         if (preferredNUMASize < npbytes[numa_pref])
                             if (getnode() == -1) {
-                                os << "cannot get numa_node information, so use default numa_pref" << endl;
+                                os << "Warning: cannot get numa_node information for PMEM allocation;"
+                                    " using default numa_pref " << endl;
                             }
                             else
 
                                 // TODO: change this behavior so that it doesn't actually
                                 // modify the NUMA pref of the grid.
-                                gp->set_numa_preferred(1000 + getnode());
+                                gp->set_numa_preferred(_pmem_key + getnode());
 #endif
                     }
 
@@ -843,55 +903,114 @@ namespace yask {
             TRACE_MSG("MPI interior BB: [" << mpi_interior.bb_begin.makeDimValStr() <<
                       " ... " << mpi_interior.bb_end.makeDimValStr() << ")");
         }
+
+        // At this point, we have all the buffers configured.
+        // Now we need to allocate space for them.
         
         // Base ptrs for all alloc'd data.
         // These pointers will be shared by the ones in the grid
         // objects, which will take over ownership when these go
-        // out of scope.
+        // out of scope. Key is memory type.
         map <int, shared_ptr<char>> _mpi_data_buf;
 
+        // A table for send-buffer offsets for all rank pairs for every grid:
+        // [grid-name][sending-rank][receiving-rank]
+        map<string, vector<vector<int>>> sb_ofs;
+        bool do_shm = false;
+        auto my_shm_rank = env->my_shm_rank;
+        assert(my_shm_rank == mpiInfo->shm_ranks.at(mpiInfo->my_neighbor_index));
+ 
         // Allocate MPI buffers.
         // Pass 0: count required size, allocate chunk of memory at end.
         // Pass 1: distribute parts of already-allocated memory chunk.
-        for (int pass = 0; pass < 2; pass++) {
+        // Pass 2: set pointers to shm of other ranks.
+        for (int pass = 0; pass < 3; pass++) {
             TRACE_MSG("allocMpiData pass " << pass << " for " <<
                       mpiData.size() << " MPI buffer set(s)");
 
             // Count bytes needed and number of buffers for each NUMA node.
             map <int, size_t> npbytes, nbufs;
 
-            // Grids.
-            for (auto gp : gridPtrs) {
-                if (!gp)
+            // Grids. Use the map to ensure same order in all ranks.
+            for (auto gi : gridMap) {
+                auto& gname = gi.first;
+                auto& gp = gi.second;
+
+                // Are there MPI bufs for this grid?
+                if (mpiData.count(gname) == 0)
                     continue;
-                auto& gname = gp->get_name();
-                int numa_pref = gp->get_numa_preferred();
+                auto& grid_mpi_data = mpiData.at(gname);
 
-                // MPI bufs for this grid.
-                if (mpiData.count(gname)) {
-                    auto& grid_mpi_data = mpiData.at(gname);
+                // Resize table.
+                if (pass == 0) {
+                    assert(env->num_shm_ranks > 0);
+                    sb_ofs[gname].resize(env->num_shm_ranks);
+                    for (auto& gtab : sb_ofs[gname])
+                        gtab.resize(env->num_shm_ranks, 0);
+                }
+                
+                // Visit buffers for each neighbor for this grid.
+                grid_mpi_data.visitNeighbors
+                    ([&](const IdxTuple& roffsets,
+                         int nrank,
+                         int nidx,
+                         MPIBufs& bufs) {
 
-                    // Visit buffers for each neighbor for this grid.
-                    grid_mpi_data.visitNeighbors
-                        ([&](const IdxTuple& roffsets,
-                             int rank,
-                             int idx,
-                             MPIBufs& bufs) {
+                        // Default is global numa pref setting for MPI
+                        // buffer, not possible override for this grid.
+                        int numa_pref = opts->_numa_pref;
 
-                            // Send and recv.
-                            for (int bd = 0; bd < MPIBufs::nBufDirs; bd++) {
-                                auto& buf = grid_mpi_data.getBuf(MPIBufs::BufDir(bd), roffsets);
-                                if (buf.get_size() == 0)
-                                    continue;
+                        // If neighbor can use MPI shm, set key, etc.
+                        auto nshm_rank = mpiInfo->shm_ranks.at(nidx);
+                        if (nshm_rank != MPI_PROC_NULL) {
+                            do_shm = true;
+                            numa_pref = _shmem_key;
+                            assert(nshm_rank < env->num_shm_ranks);
+                        }
+                            
+                        // Send and recv.
+                        for (int bd = 0; bd < MPIBufs::nBufDirs; bd++) {
+                            auto& buf = grid_mpi_data.getBuf(MPIBufs::BufDir(bd), roffsets);
+                            if (buf.get_size() == 0)
+                                continue;
 
-                                // Set storage if buffer has been allocated in pass 0.
-                                if (pass == 1) {
-                                    auto p = _mpi_data_buf[numa_pref];
-                                    assert(p);
-                                    buf.set_storage(p, npbytes[numa_pref]);
-                                }
+                            // Don't use my mem for the recv buf if using shm.
+                            bool use_mine = !(bd == MPIBufs::bufRecv && nshm_rank != MPI_PROC_NULL);
 
-                                // Determine padded size (also offset to next location).
+                            // Set storage if buffer has been allocated in pass 0.
+                            if (pass == 1 && use_mine) {
+                                auto base = _mpi_data_buf[numa_pref];
+                                auto ofs = npbytes[numa_pref];
+                                assert(base);
+                                auto* rp = buf.set_storage(base, ofs);
+                                TRACE_MSG("  MPI buf '" << buf.name << "' at " << rp <<
+                                          " for " << makeByteStr(buf.get_bytes()));
+
+                                // Test access.
+                                *((char*)rp) = '\0';
+                                *((char*)(rp + buf.get_bytes() - 1)) = '\0';
+
+                                // Save offset.
+                                if (nshm_rank != MPI_PROC_NULL && bd == MPIBufs::bufSend)
+                                    sb_ofs[gname].at(my_shm_rank).at(nshm_rank) = ofs;
+                            }
+
+                            // Using shm from another rank.
+                            else if (pass == 2 && !use_mine) {
+                                char* base = (char*)mpiInfo->halo_ptrs[nidx];
+                                size_t ofs = sb_ofs[gname].at(nshm_rank).at(my_shm_rank);
+                                auto* rp = buf.set_storage(base, ofs);
+                                TRACE_MSG("  MPI shm buf '" << buf.name << "' at " << rp <<
+                                          " for " << makeByteStr(buf.get_bytes()));
+
+                                // Test access.
+                                *((char*)rp) = '\0';
+                                *((char*)(rp + buf.get_bytes() - 1)) = '\0';
+                            }
+
+                            // Determine padded size (also offset to next location)
+                            // in my mem.
+                            if (use_mine) {
                                 auto sbytes = buf.get_bytes();
                                 npbytes[numa_pref] += ROUND_UP(sbytes + _data_buf_pad,
                                                                CACHELINE_BYTES);
@@ -899,13 +1018,24 @@ namespace yask {
                                 if (pass == 0)
                                     TRACE_MSG("  MPI buf '" << buf.name << "' needs " <<
                                               makeByteStr(sbytes) <<
-                                              " on NUMA node " << numa_pref);
+                                              " using mem-key " << numa_pref);
                             }
-                        } );
-                }
-            }
+                        } // snd/rcv.
+                    } );  // neighbors.
 
-            // Alloc for each node.
+                // Share offsets between ranks.
+                if (pass == 1 && do_shm) {
+
+                    for (int rn = 0; rn < env->num_shm_ranks; rn++) {
+                        TRACE_MSG("Sharing MPI shm offsets with shm-rank " << rn);
+                        MPI_Bcast(sb_ofs[gname][rn].data(), env->num_shm_ranks, MPI_INTEGER8,
+                                  rn, env->shm_comm);
+                    }
+                }
+
+            } // grids.
+
+            // Alloc for each mem type.
             if (pass == 0)
                 _alloc_data(npbytes, nbufs, _mpi_data_buf, "MPI buffer");
 

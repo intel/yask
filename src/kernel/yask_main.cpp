@@ -454,11 +454,14 @@ int main(int argc, char** argv)
             auto ref_soln = kfac.new_solution(kenv, ksoln);
             auto ref_context = dynamic_pointer_cast<StencilContext>(ref_soln);
             assert(ref_context.get());
-            auto ref_opts = ref_context->get_settings();
+            auto& ref_opts = ref_context->get_settings();
 
             // Change some settings.
             ref_context->name += "-reference";
             ref_context->allow_vec_exchange = false;   // exchange scalars in halos.
+            ref_opts->overlap_comms = false;
+            ref_opts->use_shm = false;
+            ref_opts->_numa_pref = yask_numa_none;
 
             // TODO: re-enable the region and block settings below;
             // requires allowing consistent init of different-sized grids

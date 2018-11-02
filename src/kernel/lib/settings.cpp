@@ -102,11 +102,20 @@ namespace yask {
                                      " an existing MPI communicator, but MPI is not initialized");
             comm = existing_comm;
         }
-        
+
+        // Get some info on this communicator.
         MPI_Comm_rank(comm, &my_rank);
+        MPI_Comm_group(comm, &group);
         MPI_Comm_size(comm, &num_ranks);
         if (num_ranks < 1)
             THROW_YASK_EXCEPTION("error: MPI_Comm_size() returns less than one rank");
+
+        // Create a shm communicator.
+        MPI_Comm_split_type(comm, MPI_COMM_TYPE_SHARED, 0, MPI_INFO_NULL, &shm_comm);
+        MPI_Comm_rank(shm_comm, &my_shm_rank);
+        MPI_Comm_group(shm_comm, &shm_group);
+        MPI_Comm_size(shm_comm, &num_shm_ranks);
+        
 #else
         comm = MPI_COMM_NULL;
 #endif
@@ -155,25 +164,34 @@ namespace yask {
     // Set pointer to storage.
     // Free old storage.
     // 'base' should provide get_num_bytes() bytes at offset bytes.
-    void MPIBuf::set_storage(std::shared_ptr<char>& base, size_t offset) {
+    void* MPIBuf::set_storage(std::shared_ptr<char>& base, size_t offset) {
 
-        // Release any old data if last owner.
-        release_storage();
-
+        void* p = set_storage(base.get(), offset);
+        
         // Share ownership of base.
-        // This ensures that last grid to use a shared allocation
+        // This ensures that last MPI buffer to use a shared allocation
         // will trigger dealloc.
         _base = base;
 
+        return p;
+    }
+
+    // Set internal pointer, but does not share ownership.
+    void* MPIBuf::set_storage(char* base, size_t offset) {
+
+        // Release any old data.
+        release_storage();
+
         // Set plain pointer to new data.
-        if (base.get()) {
-            char* p = _base.get() + offset;
+        if (base) {
+            char* p = base + offset;
             _elems = (real_t*)p;
         } else {
             _elems = 0;
         }
+        return (void*)_elems;
     }
-
+    
     // Apply a function to each neighbor rank.
     // Does NOT visit self or non-existent neighbors.
     void MPIData::visitNeighbors(std::function<void
@@ -260,6 +278,10 @@ namespace yask {
                           ("overlap_comms",
                            "Overlap MPI communication with calculation of interior elements whenever possible.",
                            overlap_comms));
+        parser.add_option(new CommandLineParser::BoolOption
+                          ("use_shm",
+                           "Use shared memory for MPI buffers when possible.",
+                           use_shm));
         parser.add_option(new CommandLineParser::IdxOption
                           ("min_exterior",
                            "Minimum width of MPI exterior section to compute before starting MPI communication.",

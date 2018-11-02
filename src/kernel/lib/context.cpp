@@ -2067,20 +2067,23 @@ namespace yask {
         assert(gridsToSwap.size() == firstStepsToSwap.size());
         assert(gridsToSwap.size() == lastStepsToSwap.size());
 
-        // Sequence of things to do for each grid's neighbors.
+        // Sequence of things to do for each neighbor.
         enum halo_steps { halo_irecv, halo_pack_isend, halo_unpack, halo_final };
         vector<halo_steps> steps_to_do;
 
         // Flags indicate what part of grids were most recently calc'd.
-        // These determine what exchange steps need to be done.
-        if (do_mpi_left || do_mpi_right) {
-            steps_to_do.push_back(halo_irecv);
-            steps_to_do.push_back(halo_pack_isend);
+        // These determine what exchange steps need to be done now.
+        if (gridsToSwap.size()) {
+            if (do_mpi_left || do_mpi_right) {
+                steps_to_do.push_back(halo_irecv);
+                steps_to_do.push_back(halo_pack_isend);
+            }
+            if (do_mpi_interior) {
+                steps_to_do.push_back(halo_unpack);
+                steps_to_do.push_back(halo_final);
+            }
         }
-        if (do_mpi_interior) {
-            steps_to_do.push_back(halo_unpack);
-            steps_to_do.push_back(halo_final);
-        }
+
         int num_send_reqs = 0;
         int num_recv_reqs = 0;
         for (auto halo_step : steps_to_do) {
@@ -2115,24 +2118,30 @@ namespace yask {
                          MPIBufs& bufs) {
                         auto& sendBuf = bufs.bufs[MPIBufs::bufSend];
                         auto& recvBuf = bufs.bufs[MPIBufs::bufRecv];
-                        TRACE_MSG("  with rank " << neighbor_rank << " at relative position " <<
+                        TRACE_MSG("exchange_halos:   with rank " << neighbor_rank << " at relative position " <<
                                   offsets.subElements(1).makeDimValOffsetStr());
+
+                        // Are we using MPI shm w/this neighbor?
+                        bool using_shm = opts->use_shm && mpiInfo->shm_ranks.at(ni) != MPI_PROC_NULL;
 
                         // Submit async request to receive data from neighbor.
                         if (halo_step == halo_irecv) {
                             auto nbytes = recvBuf.get_bytes();
                             if (nbytes) {
-                                void* buf = (void*)recvBuf._elems;
-                                TRACE_MSG("   requesting up to " << makeByteStr(nbytes));
-                                auto& r = grid_recv_reqs[ni];
-                                //TRACE_MSG(gname << " Irecv &MPI_Request = " << &r);
-                                MPI_Irecv(buf, nbytes, MPI_BYTE,
-                                          neighbor_rank, int(gi),
-                                          _env->comm, &r);
-                                num_recv_reqs++;
+                                if (using_shm)
+                                    TRACE_MSG("exchange_halos:    no receive req due to shm");
+                                else {
+                                    void* buf = (void*)recvBuf._elems;
+                                    TRACE_MSG("exchange_halos:    requesting up to " << makeByteStr(nbytes));
+                                    auto& r = grid_recv_reqs[ni];
+                                    MPI_Irecv(buf, nbytes, MPI_BYTE,
+                                              neighbor_rank, int(gi),
+                                              _env->comm, &r);
+                                    num_recv_reqs++;
+                                }
                             }
                             else
-                                TRACE_MSG("   0B to request");
+                                TRACE_MSG("exchange_halos:    0B to request");
                         }
 
                         // Pack data into send buffer, then send to neighbor.
@@ -2156,28 +2165,32 @@ namespace yask {
                                     first.setVal(step_dim, firstStepsToSwap[gp]);
                                     last.setVal(step_dim, lastStepsToSwap[gp]);
                                 }
-                                TRACE_MSG("   packing [" << first.makeDimValStr() <<
-                                          " ... " << last.makeDimValStr() << "] " <<
-                                          (send_vec_ok ? "with" : "without") <<
-                                          " vector copy");
 
                                 // Copy (pack) data from grid to buffer.
                                 void* buf = (void*)sendBuf._elems;
                                 idx_t nelems = 0;
+                                TRACE_MSG("exchange_halos:    packing [" << first.makeDimValStr() <<
+                                          " ... " << last.makeDimValStr() << "] " <<
+                                          (send_vec_ok ? "with" : "without") <<
+                                          " vector copy into " << buf);
                                 if (send_vec_ok)
                                     nelems = gp->get_vecs_in_slice(buf, first, last);
                                 else
                                     nelems = gp->get_elements_in_slice(buf, first, last);
                                 idx_t nbytes = nelems * cp->get_element_bytes();
 
-                                // Send packed buffer to neighbor.
-                                assert(nbytes <= sendBuf.get_bytes());
-                                TRACE_MSG("   sending " << makeByteStr(nbytes));
-                                auto& r = grid_send_reqs[ni];
-                                //TRACE_MSG(gname << " Isend &MPI_Request = " << &r);
-                                MPI_Isend(buf, nbytes, MPI_BYTE,
-                                          neighbor_rank, int(gi), _env->comm, &r);
-                                num_send_reqs++;
+                                if (using_shm)
+                                    TRACE_MSG("exchange_halos:    no send req due to shm");
+                                else {
+
+                                    // Send packed buffer to neighbor.
+                                    assert(nbytes <= sendBuf.get_bytes());
+                                    TRACE_MSG("exchange_halos:    sending " << makeByteStr(nbytes));
+                                    auto& r = grid_send_reqs[ni];
+                                    MPI_Isend(buf, nbytes, MPI_BYTE,
+                                              neighbor_rank, int(gi), _env->comm, &r);
+                                    num_send_reqs++;
+                                }
                             }
                             else
                                 TRACE_MSG("   0B to send");
@@ -2188,16 +2201,20 @@ namespace yask {
                             auto nbytes = recvBuf.get_bytes();
                             if (nbytes) {
 
-                                // Wait for data from neighbor before unpacking it.
-                                auto& r = grid_recv_reqs[ni];
-                                //TRACE_MSG(gname << " recv wait &MPI_Request = " << &r);
-                                if (r != MPI_REQUEST_NULL) {
-                                    TRACE_MSG("   waiting for receipt of " << makeByteStr(nbytes));
-                                    wait_time.start();
-                                    MPI_Wait(&r, MPI_STATUS_IGNORE);
-                                    wait_delta += wait_time.stop();
+                                if (using_shm)
+                                    TRACE_MSG("exchange_halos:    no receive wait due to shm");
+                                else {
+
+                                    // Wait for data from neighbor before unpacking it.
+                                    auto& r = grid_recv_reqs[ni];
+                                    if (r != MPI_REQUEST_NULL) {
+                                        TRACE_MSG("   waiting for receipt of " << makeByteStr(nbytes));
+                                        wait_time.start();
+                                        MPI_Wait(&r, MPI_STATUS_IGNORE);
+                                        wait_delta += wait_time.stop();
+                                    }
+                                    r = MPI_REQUEST_NULL;
                                 }
-                                r = MPI_REQUEST_NULL;
 
                                 // Vec ok?
                                 bool recv_vec_ok = allow_vec_exchange && recvBuf.vec_copy_ok;
@@ -2211,14 +2228,14 @@ namespace yask {
                                     first.setVal(step_dim, firstStepsToSwap[gp]);
                                     last.setVal(step_dim, lastStepsToSwap[gp]);
                                 }
-                                TRACE_MSG("   got data; unpacking into [" << first.makeDimValStr() <<
-                                          " ... " << last.makeDimValStr() << "] " <<
-                                          (recv_vec_ok ? "with" : "without") <<
-                                          " vector copy");
 
                                 // Copy data from buffer to grid.
                                 void* buf = (void*)recvBuf._elems;
                                 idx_t nelems = 0;
+                                TRACE_MSG("exchange_halos:    got data; unpacking into [" << first.makeDimValStr() <<
+                                          " ... " << last.makeDimValStr() << "] " <<
+                                          (recv_vec_ok ? "with" : "without") <<
+                                          " vector copy from " << buf);
                                 if (recv_vec_ok)
                                     nelems = gp->set_vecs_in_slice(buf, first, last);
                                 else
@@ -2226,7 +2243,7 @@ namespace yask {
                                 assert(nelems <= recvBuf.get_size());
                             }
                             else
-                                TRACE_MSG("   0B to wait for");
+                                TRACE_MSG("exchange_halos:    0B to wait for");
                         }
 
                         // Final steps.
@@ -2234,28 +2251,32 @@ namespace yask {
                             auto nbytes = sendBuf.get_bytes();
                             if (nbytes) {
 
-                                // Wait for send to finish.
-                                // TODO: consider using MPI_WaitAll.
-                                // TODO: strictly, we don't have to wait on the
-                                // send to finish until we want to reuse this buffer,
-                                // so we could wait on the *previous* send right before
-                                // doing another one.
-                                auto& r = grid_send_reqs[ni];
-                                //TRACE_MSG(gname << " send wait &MPI_Request = " << &r);
-                                if (r != MPI_REQUEST_NULL) {
-                                    TRACE_MSG("   waiting to finish send of " << makeByteStr(nbytes));
-                                    wait_time.start();
-                                    MPI_Wait(&grid_send_reqs[ni], MPI_STATUS_IGNORE);
-                                    wait_delta += wait_time.stop();
+                                if (using_shm)
+                                    TRACE_MSG("exchange_halos:    no send wait due to shm");
+                                else {
+
+                                    // Wait for send to finish.
+                                    // TODO: consider using MPI_WaitAll.
+                                    // TODO: strictly, we don't have to wait on the
+                                    // send to finish until we want to reuse this buffer,
+                                    // so we could wait on the *previous* send right before
+                                    // doing another one.
+                                    auto& r = grid_send_reqs[ni];
+                                    if (r != MPI_REQUEST_NULL) {
+                                        TRACE_MSG("   waiting to finish send of " << makeByteStr(nbytes));
+                                        wait_time.start();
+                                        MPI_Wait(&grid_send_reqs[ni], MPI_STATUS_IGNORE);
+                                        wait_delta += wait_time.stop();
+                                    }
+                                    r = MPI_REQUEST_NULL;
                                 }
-                                r = MPI_REQUEST_NULL;
                             }
 
                             // Mark grids as up-to-date when done.
                             for (idx_t si = firstStepsToSwap[gp]; si <= lastStepsToSwap[gp]; si++) {
                                 if (gp->is_dirty(si)) {
                                     gp->set_dirty(false, si);
-                                    TRACE_MSG("grid '" << gname <<
+                                    TRACE_MSG("exchange_halos: grid '" << gname <<
                                               "' marked as clean at step-index " << si);
                                 }
                             }
@@ -2264,6 +2285,18 @@ namespace yask {
                     }); // visit neighbors.
 
             } // grids.
+
+            // Barrier ensures that all ranks in the shm group
+            // have finished previous step.
+            if (halo_step == halo_pack_isend || halo_step == halo_unpack) {
+                if (opts->use_shm && env->num_shm_ranks > 1) {
+                    TRACE_MSG("exchange_halos: barrier for shm updates");
+                    wait_time.start();
+                    MPI_Barrier(env->shm_comm);
+                    wait_delta += wait_time.stop();
+                }
+            }
+
         } // exchange sequence.
 
         TRACE_MSG("exchange_halos: " << num_recv_reqs << " MPI receive request(s) issued");

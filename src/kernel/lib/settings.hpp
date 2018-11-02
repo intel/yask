@@ -356,9 +356,16 @@ namespace yask {
     public:
 
         // MPI vars.
-        MPI_Comm comm = MPI_COMM_NULL; // communicator.
+        MPI_Comm comm = MPI_COMM_NULL; // global communicator.
+        MPI_Group group = MPI_GROUP_NULL;
         int num_ranks = 1;        // total number of ranks.
         int my_rank = 0;          // MPI-assigned index.
+
+        // Vars for shared-mem ranks.
+        MPI_Comm shm_comm = MPI_COMM_NULL; // shm communicator.
+        MPI_Group shm_group = MPI_GROUP_NULL;
+        int num_shm_ranks = 1;  // ranks in shm_comm.
+        int my_shm_rank = 0;    // my index in shm_comm.
 
         // OMP vars.
         int max_threads=0;      // initial value from OMP.
@@ -593,10 +600,12 @@ namespace yask {
 
         // Neighborhood size includes self.
         // Number of points in n-D space of neighbors.
+        // Example: size = 3^3 = 27 for 3D problem.
         // NB: this is the *max* number of neighbors, not necessarily the actual number.
         idx_t neighborhood_size = 0;
 
         // What getNeighborIndex() returns for myself.
+        // Example: trunc(3^3 / 2) = 13 for 3D problem.
         int my_neighbor_index;
 
         // MPI rank of each neighbor.
@@ -613,6 +622,16 @@ namespace yask {
         // sizes as a multiple of the vector length.
         std::vector<bool> has_all_vlen_mults;
 
+        // Rank number in KernelEnv::shmcomm if this neighbor
+        // can communicate with shm. MPI_PROC_NULL otherwise.
+        std::vector<int> shm_ranks;
+
+        // Window for halo buffers.
+        MPI_Win halo_win;
+
+        // Pointers to shm halo buffers for each neighbor.
+        std::vector<void*> halo_ptrs;
+        
         // Ctor based on pre-set problem dimensions.
         MPIInfo(DimsPtr dims) : _dims(dims) {
 
@@ -630,6 +649,8 @@ namespace yask {
             my_neighbors.resize(neighborhood_size, MPI_PROC_NULL);
             man_dists.resize(neighborhood_size, 0);
             has_all_vlen_mults.resize(neighborhood_size, false);
+            shm_ranks.resize(neighborhood_size, MPI_PROC_NULL);
+            halo_ptrs.resize(neighborhood_size, 0);
         }
 
         // Get a 1D index for a neighbor.
@@ -685,7 +706,11 @@ namespace yask {
         // Set pointer to storage.
         // Free old storage.
         // 'base' should provide get_num_bytes() bytes at offset bytes.
-        void set_storage(std::shared_ptr<char>& base, size_t offset);
+        // Returns raw pointer.
+        void* set_storage(std::shared_ptr<char>& base, size_t offset);
+
+        // Same as above, but does not maintain shared storage.
+        void* set_storage(char* base, size_t offset);
 
         // Release storage.
         void release_storage() {
@@ -768,19 +793,22 @@ namespace yask {
     class KernelSettings {
 
     protected:
+
+        // Default sizes.
         idx_t def_rank = 128;
         idx_t def_block = 32;
 
+        // Make a null output stream.
         yask_output_factory yof;
         yask_output_ptr nullop = yof.new_null_output();
 
     public:
 
-        // problem dimensions.
+        // Problem dimensions (not sizes).
         DimsPtr _dims;
 
         // Sizes in elements (points).
-        IdxTuple _rank_sizes;     // number of steps and this rank's domain sizes.
+        IdxTuple _rank_sizes;     // This rank's domain sizes.
         IdxTuple _region_sizes;   // region size (used for wave-front tiling).
         IdxTuple _block_group_sizes; // block-group size (only used for 'grouped' region loops).
         IdxTuple _block_sizes;       // block size (used for each outer thread).
@@ -797,6 +825,7 @@ namespace yask {
         bool find_loc = true;      // whether my rank index needs to be calculated.
         int msg_rank = 0;          // rank that prints informational messages.
         bool overlap_comms = true; // overlap comms with computation.
+        bool use_shm = true;       // use shared memory if possible.
         idx_t _min_exterior = 0;   // minimum size of MPI exterior to calculate.
 
         // OpenMP settings.
@@ -815,7 +844,7 @@ namespace yask {
 
         // NUMA settings.
         int _numa_pref = NUMA_PREF;
-        int _numa_pref_max = 128;
+        int _numa_pref_max = 128; // GiB to alloc before using PMEM.
 
         // Ctor.
         // TODO: move code to settings.cpp.
