@@ -328,10 +328,6 @@ namespace yask {
             size_t nb = i.second;
             size_t ng = ngrids.at(mem_key);
 
-            // Don't need pad after last one.
-            if (nb >= _data_buf_pad)
-                nb -= _data_buf_pad;
-
             // Alloc data depending on magic key.
             shared_ptr<char> p;
             os << "Allocating " << makeByteStr(nb) <<
@@ -350,10 +346,13 @@ namespace yask {
                     int sr = mpiInfo->shm_ranks.at(ni);
                     MPI_Aint sz;
                     int dispunit;
+                    void* baseptr;
                     MPI_Win_shared_query(mpiInfo->halo_win, sr, &sz,
-                                         &dispunit, &mpiInfo->halo_ptrs.at(ni));
+                                         &dispunit, &baseptr);
+                    mpiInfo->halo_buf_ptrs.at(ni) = baseptr;
+                    mpiInfo->halo_buf_sizes.at(ni) = sz;
                     TRACE_MSG("MPI shm halo buffer for rank " << nr << " is at " <<
-                              mpiInfo->halo_ptrs.at(ni));
+                              baseptr << " for " << makeByteStr(sz));
                 }
 #endif
             }
@@ -915,10 +914,13 @@ namespace yask {
 
         // A table for send-buffer offsets for all rank pairs for every grid:
         // [grid-name][sending-rank][receiving-rank]
-        map<string, vector<vector<int>>> sb_ofs;
+        map<string, vector<vector<size_t>>> sb_ofs;
         bool do_shm = false;
         auto my_shm_rank = env->my_shm_rank;
         assert(my_shm_rank == mpiInfo->shm_ranks.at(mpiInfo->my_neighbor_index));
+
+        // Make sure pad is big enough for shm locks.
+        assert(_data_buf_pad >= sizeof(SimpleLock));
  
         // Allocate MPI buffers.
         // Pass 0: count required size, allocate chunk of memory at end.
@@ -986,9 +988,10 @@ namespace yask {
                                 TRACE_MSG("  MPI buf '" << buf.name << "' at " << rp <<
                                           " for " << makeByteStr(buf.get_bytes()));
 
-                                // Test access.
-                                *((char*)rp) = '\0';
-                                *((char*)(rp + buf.get_bytes() - 1)) = '\0';
+                                // Write test values & init lock.
+                                *((int*)rp) = me;
+                                *((char*)rp + buf.get_bytes() - 1) = 'Z';
+                                buf.shm_lock_init();
 
                                 // Save offset.
                                 if (nshm_rank != MPI_PROC_NULL && bd == MPIBufs::bufSend)
@@ -997,15 +1000,18 @@ namespace yask {
 
                             // Using shm from another rank.
                             else if (pass == 2 && !use_mine) {
-                                char* base = (char*)mpiInfo->halo_ptrs[nidx];
-                                size_t ofs = sb_ofs[gname].at(nshm_rank).at(my_shm_rank);
+                                char* base = (char*)mpiInfo->halo_buf_ptrs[nidx];
+                                auto sz = mpiInfo->halo_buf_sizes[nidx];
+                                auto ofs = sb_ofs[gname].at(nshm_rank).at(my_shm_rank);
+                                assert(sz >= ofs + buf.get_bytes() + YASK_PAD_BYTES);
                                 auto* rp = buf.set_storage(base, ofs);
                                 TRACE_MSG("  MPI shm buf '" << buf.name << "' at " << rp <<
                                           " for " << makeByteStr(buf.get_bytes()));
 
-                                // Test access.
-                                *((char*)rp) = '\0';
-                                *((char*)(rp + buf.get_bytes() - 1)) = '\0';
+                                // Check values written by owner rank.
+                                assert(*((int*)rp) == nrank);
+                                assert(*((char*)rp + buf.get_bytes() - 1) == 'Z');
+                                assert(!buf.is_ok_to_read());
                             }
 
                             // Determine padded size (also offset to next location)
@@ -1027,9 +1033,12 @@ namespace yask {
                 if (pass == 1 && do_shm) {
 
                     for (int rn = 0; rn < env->num_shm_ranks; rn++) {
-                        TRACE_MSG("Sharing MPI shm offsets with shm-rank " << rn);
+                        TRACE_MSG("Sharing MPI shm offsets from shm-rank " << rn);
                         MPI_Bcast(sb_ofs[gname][rn].data(), env->num_shm_ranks, MPI_INTEGER8,
                                   rn, env->shm_comm);
+                        for (int rn2 = 0; rn2 < env->num_shm_ranks; rn2++)
+                            TRACE_MSG("  offset on rank " << rn << " for rank " << rn2 <<
+                                      " is " << sb_ofs[gname][rn][rn2]);
                     }
                 }
 
@@ -1040,6 +1049,7 @@ namespace yask {
                 _alloc_data(npbytes, nbufs, _mpi_data_buf, "MPI buffer");
 
         } // MPI passes.
+
 #endif
     }
 
@@ -1547,6 +1557,16 @@ namespace yask {
 
     } // prepare_solution().
 
+    // Reset any locks, etc.
+    void StencilContext::reset_locks() {
+
+        // MPI buffer locks.
+        for (auto& mdi : mpiData) {
+            auto& md = mdi.second;
+            md.reset_locks();
+        }
+    }
+
     void StencilContext::print_temporal_tiling_info() {
         ostream& os = get_ostr();
 
@@ -1643,6 +1663,7 @@ namespace yask {
         CONTEXT_VARS(this);
 
         // Final halo exchange (usually not needed).
+        reset_locks();
         exchange_halos();
 
         // Release any MPI data.

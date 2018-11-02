@@ -163,20 +163,20 @@ namespace yask {
 
     // Set pointer to storage.
     // Free old storage.
-    // 'base' should provide get_num_bytes() bytes at offset bytes.
+    // 'base' should provide get_bytes() + YASK_PAD_BYTES bytes at offset bytes.
     void* MPIBuf::set_storage(std::shared_ptr<char>& base, size_t offset) {
 
         void* p = set_storage(base.get(), offset);
         
-        // Share ownership of base.
-        // This ensures that last MPI buffer to use a shared allocation
-        // will trigger dealloc.
+        // Share ownership of base.  This ensures that [only] last MPI
+        // buffer to use a shared allocation will trigger dealloc.
         _base = base;
 
         return p;
     }
 
     // Set internal pointer, but does not share ownership.
+    // Use when shm buffer is owned by another rank.
     void* MPIBuf::set_storage(char* base, size_t offset) {
 
         // Release any old data.
@@ -186,9 +186,14 @@ namespace yask {
         if (base) {
             char* p = base + offset;
             _elems = (real_t*)p;
+
+            // Shm lock lives at end of data in buffer.
+            _shm_lock = (SimpleLock*)(p + get_bytes());
         } else {
             _elems = 0;
+            _shm_lock = 0;
         }
+
         return (void*)_elems;
     }
     

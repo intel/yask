@@ -129,6 +129,7 @@ typedef std::uint64_t uidx_t;
 // Default alloc settings.
 #define CACHELINE_BYTES  (64)
 #define YASK_PAD (3) // cache-lines between data buffers.
+#define YASK_PAD_BYTES (CACHELINE_BYTES * YASK_PAD)
 #define YASK_HUGE_ALIGNMENT (2 * 1024 * 1024) // 2MiB-page for large allocs.
 #define CACHE_ALIGNED __attribute__ ((aligned (CACHELINE_BYTES)))
 #ifndef USE_NUMA

@@ -126,8 +126,8 @@ namespace yask {
     void StencilContext::run_ref(idx_t first_step_index,
                                  idx_t last_step_index) {
         CONTEXT_VARS(this);
-        
         run_time.start();
+        reset_locks();
 
         // Determine step dir from order of first/last.
         idx_t step_dir = (last_step_index >= first_step_index) ? 1 : -1;
@@ -278,6 +278,7 @@ namespace yask {
     {
         CONTEXT_VARS(this);
         run_time.start();
+        reset_locks();
 
         // Determine step dir from order of first/last.
         idx_t step_dir = (last_step_index >= first_step_index) ? 1 : -1;
@@ -1997,7 +1998,6 @@ namespace yask {
 #endif
     }
 
-
     // Exchange dirty halo data for all grids and all steps.
     void StencilContext::exchange_halos() {
 
@@ -2166,6 +2166,14 @@ namespace yask {
                                     last.setVal(step_dim, lastStepsToSwap[gp]);
                                 }
 
+                                // Wait until buffer is avail.
+                                if (using_shm) {
+                                    TRACE_MSG("exchange_halos:    waiting to write to shm buffer");
+                                    wait_time.start();
+                                    sendBuf.wait_for_ok_to_write();
+                                    wait_delta += wait_time.stop();
+                                }
+                                
                                 // Copy (pack) data from grid to buffer.
                                 void* buf = (void*)sendBuf._elems;
                                 idx_t nelems = 0;
@@ -2179,8 +2187,10 @@ namespace yask {
                                     nelems = gp->get_elements_in_slice(buf, first, last);
                                 idx_t nbytes = nelems * cp->get_element_bytes();
 
-                                if (using_shm)
+                                if (using_shm) {
                                     TRACE_MSG("exchange_halos:    no send req due to shm");
+                                    sendBuf.mark_write_done();
+                                }
                                 else {
 
                                     // Send packed buffer to neighbor.
@@ -2201,8 +2211,13 @@ namespace yask {
                             auto nbytes = recvBuf.get_bytes();
                             if (nbytes) {
 
-                                if (using_shm)
-                                    TRACE_MSG("exchange_halos:    no receive wait due to shm");
+                                // Wait until buffer is avail.
+                                if (using_shm) {
+                                    TRACE_MSG("exchange_halos:    waiting to read from shm buffer");
+                                    wait_time.start();
+                                    recvBuf.wait_for_ok_to_read();
+                                    wait_delta += wait_time.stop();
+                                }
                                 else {
 
                                     // Wait for data from neighbor before unpacking it.
@@ -2241,6 +2256,9 @@ namespace yask {
                                 else
                                     nelems = gp->set_elements_in_slice(buf, first, last);
                                 assert(nelems <= recvBuf.get_size());
+
+                                if (using_shm)
+                                    recvBuf.mark_read_done();
                             }
                             else
                                 TRACE_MSG("exchange_halos:    0B to wait for");
@@ -2285,17 +2303,6 @@ namespace yask {
                     }); // visit neighbors.
 
             } // grids.
-
-            // Barrier ensures that all ranks in the shm group
-            // have finished previous step.
-            if (halo_step == halo_pack_isend || halo_step == halo_unpack) {
-                if (opts->use_shm && env->num_shm_ranks > 1) {
-                    TRACE_MSG("exchange_halos: barrier for shm updates");
-                    wait_time.start();
-                    MPI_Barrier(env->shm_comm);
-                    wait_delta += wait_time.stop();
-                }
-            }
 
         } // exchange sequence.
 

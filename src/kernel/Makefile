@@ -800,7 +800,8 @@ val0	:=	-trial_steps 2 -d 48 -r 32 -b 24 -rt 0 $(EXTRA_TEST_ARGS)
 val1	:=	-trial_steps 2 -d 48 -r 32 -b 24 -mb 16 -rt 1 $(EXTRA_TEST_ARGS)
 val2	:=	-trial_steps 2 -d 63 -r 32 -b 24 -mb 16 -rt 2 $(EXTRA_TEST_ARGS)
 val3	:=	-trial_steps 2 -d 63 -r 48 -b 24 -mb 16 -bt 2 $(EXTRA_TEST_ARGS)
-val4	:=	-trial_steps 2 -d 63 -r 48 -b 24 -mb 16 -bt 2 -bind_block_threads $(EXTRA_TEST_ARGS)
+val4a	:=	-trial_steps 2 -d 48 -b 24 -mb 16 -bt 2 -bind_block_threads $(EXTRA_TEST_ARGS)
+val4b	:=	-trial_steps 2 -d 48 -b 24 -mb 16 -bt 2 -no-use_shm $(EXTRA_TEST_ARGS)
 ranks	:=	2
 
 # Run the kernel binary using several combos of sizes and ranks.
@@ -809,14 +810,14 @@ yk-tests:
 	$(YK_SCRIPT) -stencil $(stencil) -arch $(arch) -v $(val1)
 	$(YK_SCRIPT) -stencil $(stencil) -arch $(arch) -v $(val2)
 	$(YK_SCRIPT) -stencil $(stencil) -arch $(arch) -v $(val3)
-	$(YK_SCRIPT) -stencil $(stencil) -arch $(arch) -v $(val4)
+	$(YK_SCRIPT) -stencil $(stencil) -arch $(arch) -v $(val4a)
 
 yk-mp-tests:
 	$(YK_SCRIPT) -stencil $(stencil) -arch $(arch) -ranks $(ranks) -v $(val0)
 	$(YK_SCRIPT) -stencil $(stencil) -arch $(arch) -ranks $(ranks) -v $(val1)
 	$(YK_SCRIPT) -stencil $(stencil) -arch $(arch) -ranks $(ranks) -v $(val2)
 	$(YK_SCRIPT) -stencil $(stencil) -arch $(arch) -ranks $(ranks) -v $(val3)
-	$(YK_SCRIPT) -stencil $(stencil) -arch $(arch) -ranks $(ranks) -v $(val4)
+	$(YK_SCRIPT) -stencil $(stencil) -arch $(arch) -ranks $(ranks) -v $(val4b)
 
 # Run the default YASK compiler and kernel.
 yc-and-yk-test: $(YK_EXEC) $(YK_SCRIPT)
@@ -867,7 +868,7 @@ stencil-tests:
 	$(MAKE) clean; $(MAKE) $(STENCIL_TEST_ARGS) stencil=fsg_abc fold=x=2,y=2
 	$(MAKE) clean; $(MAKE) $(STENCIL_TEST_ARGS) stencil=fsg2 fold=x=2,y=2
 	$(MAKE) clean; $(MAKE) $(STENCIL_TEST_ARGS) stencil=tti fold=x=2,y=2
-	$(MAKE) clean; $(MAKE) $(STENCIL_TEST_ARGS) stencil=test_4d fold=w=2,x=2
+	$(MAKE) clean; $(MAKE) $(STENCIL_TEST_ARGS) stencil=test_4d fold=w=2,x=2 -d 24
 
 all-tests:
 	$(MAKE) clean; $(MAKE) cxx-yk-grid-test stencil=test_3d fold=x=4,y=2

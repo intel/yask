@@ -189,6 +189,69 @@ namespace yask {
         return _base;
     }
 
+    // A class for a simple producer-consumer memory lock on one item.
+    class SimpleLock {
+
+        // Put each value in a separate cache-line to
+        // avoid false sharing.
+        union LockVal {
+            volatile idx_t v;
+            char pad[CACHELINE_BYTES];
+        };
+
+        LockVal _write_count, _read_count;
+
+    public:
+        SimpleLock() {
+            init();
+        }
+        
+        // Allow write and block read.
+        void init() {
+            _write_count.v = _read_count.v = 0;
+        }
+
+        // Check whether ok to read,
+        // i.e., whether write ahead of read.
+        bool is_ok_to_read() const {
+            assert(_write_count.v >= _read_count.v);
+            return _write_count.v > _read_count.v;
+        }
+
+        // Wait until ok to read.
+        void wait_for_ok_to_read() const {
+            while (!is_ok_to_read())
+                _mm_pause();
+        }
+
+        // Mark that read is done.
+        void mark_read_done() {
+            assert(_write_count.v >= _read_count.v);
+            _read_count.v++;
+            assert(_write_count.v >= _read_count.v);
+        }
+
+        // Check whether ok to write,
+        // i.e., whether read is done for previous write.
+        bool is_ok_to_write() const {
+            assert(_write_count.v >= _read_count.v);
+            return _write_count.v == _read_count.v;
+        }
+
+        // Wait until ok to write.
+        void wait_for_ok_to_write() const {
+            while (!is_ok_to_write())
+                _mm_pause();
+        }
+
+        // Mark that write is done.
+        void mark_write_done() {
+            assert(_write_count.v >= _read_count.v);
+            _write_count.v++;
+            assert(_write_count.v >= _read_count.v);
+        }
+    };
+    
     // A class for maintaining elapsed time.
     class YaskTimer {
 

@@ -629,8 +629,9 @@ namespace yask {
         // Window for halo buffers.
         MPI_Win halo_win;
 
-        // Pointers to shm halo buffers for each neighbor.
-        std::vector<void*> halo_ptrs;
+        // Shm halo buffers for each neighbor.
+        std::vector<void*> halo_buf_ptrs;
+        std::vector<size_t> halo_buf_sizes;
         
         // Ctor based on pre-set problem dimensions.
         MPIInfo(DimsPtr dims) : _dims(dims) {
@@ -650,7 +651,8 @@ namespace yask {
             man_dists.resize(neighborhood_size, 0);
             has_all_vlen_mults.resize(neighborhood_size, false);
             shm_ranks.resize(neighborhood_size, MPI_PROC_NULL);
-            halo_ptrs.resize(neighborhood_size, 0);
+            halo_buf_ptrs.resize(neighborhood_size, 0);
+            halo_buf_sizes.resize(neighborhood_size, 0);
         }
 
         // Get a 1D index for a neighbor.
@@ -673,9 +675,14 @@ namespace yask {
     typedef std::shared_ptr<MPIInfo> MPIInfoPtr;
 
     // MPI data for one buffer for one neighbor of one grid.
-    struct MPIBuf {
+    class MPIBuf {
+        
+        // Ptr to read/write lock when buffer is in shared mem.
+        SimpleLock* _shm_lock = 0;
 
-        // Name for trace output.
+    public:
+
+        // Descriptive name.
         std::string name;
 
         // Send or receive buffer.
@@ -693,6 +700,38 @@ namespace yask {
         // vector length in all dims and buffer is aligned.
         bool vec_copy_ok = false;
 
+        // Safe access to lock.
+        void shm_lock_init() {
+            if (_shm_lock)
+                _shm_lock->init();
+        }
+        bool is_ok_to_read() const {
+            if (_shm_lock)
+                return _shm_lock->is_ok_to_read();
+            return true;
+        }
+        void wait_for_ok_to_read() const {
+            if (_shm_lock)
+                _shm_lock->wait_for_ok_to_read();
+        }
+        void mark_read_done() {
+            if (_shm_lock)
+                _shm_lock->mark_read_done();
+        }
+        bool is_ok_to_write() const {
+            if (_shm_lock)
+                return _shm_lock->is_ok_to_write();
+            return true;
+        }
+        void wait_for_ok_to_write() const {
+            if (_shm_lock)
+                _shm_lock->wait_for_ok_to_write();
+        }
+        void mark_write_done() {
+            if (_shm_lock)
+                _shm_lock->mark_write_done();
+        }
+        
         // Number of points overall.
         idx_t get_size() const {
             if (num_pts.size() == 0)
@@ -716,6 +755,7 @@ namespace yask {
         void release_storage() {
             _base.reset();
             _elems = 0;
+            _shm_lock = 0;
         }
 
         // Reset.
@@ -738,6 +778,12 @@ namespace yask {
         enum BufDir { bufSend, bufRecv, nBufDirs };
 
         MPIBuf bufs[nBufDirs];
+
+        // Reset lock for send buffer.
+        // Another rank owns recv buffer.
+        void reset_locks() {
+            bufs[bufSend].shm_lock_init();
+        }
     };
 
     // MPI data for one grid.
@@ -769,6 +815,11 @@ namespace yask {
             send_reqs.resize(n, MPI_REQUEST_NULL);
         }
 
+        void reset_locks() {
+            for (auto& mb : bufs)
+                mb.reset_locks();
+        }
+        
         // Apply a function to each neighbor rank.
         // Called visitor function will contain the rank index of the neighbor.
         virtual void visitNeighbors(std::function<void (const IdxTuple& neighbor_offsets, // NeighborOffset.

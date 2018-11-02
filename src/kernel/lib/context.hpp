@@ -175,7 +175,7 @@ namespace yask {
 
         // Bytes between each buffer to help avoid aliasing
         // in the HW.
-        size_t _data_buf_pad = (YASK_PAD * CACHELINE_BYTES);
+        static constexpr size_t _data_buf_pad = YASK_PAD_BYTES;
 
         // Check whether dim is appropriate type.
         virtual void checkDimType(const std::string& dim,
@@ -303,7 +303,7 @@ namespace yask {
         // Clear this to ignore step conditions.
         bool check_step_conds = true;
 
-        // MPI data for each grid.
+        // MPI buffers for each grid.
         // Map key: grid name.
         std::map<std::string, MPIData> mpiData;
 
@@ -390,6 +390,9 @@ namespace yask {
         // Print lots of stats.
         virtual void prepare_solution();
 
+        // Reset any locks, etc.
+        virtual void reset_locks();
+
         // Print info about the soln.
         virtual void print_info();
         virtual void print_temporal_tiling_info();
@@ -419,11 +422,8 @@ namespace yask {
         virtual size_t get_num_bytes() {
             size_t sz = 0;
             for (auto gp : gridPtrs) {
-                if (gp) {
-                    if (sz)
-                        sz += _data_buf_pad;
-                    sz += gp->get_num_storage_bytes();
-                }
+                if (gp)
+                    sz += gp->get_num_storage_bytes() + _data_buf_pad;
             }
             for (auto gps : scratchVecs)
                 if (gps)
