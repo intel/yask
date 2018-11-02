@@ -801,7 +801,7 @@ val1	:=	-trial_steps 2 -d 48 -r 32 -b 24 -mb 16 -rt 1 $(EXTRA_TEST_ARGS)
 val2	:=	-trial_steps 2 -d 63 -r 32 -b 24 -mb 16 -rt 2 $(EXTRA_TEST_ARGS)
 val3	:=	-trial_steps 2 -d 63 -r 48 -b 24 -mb 16 -bt 2 $(EXTRA_TEST_ARGS)
 val4a	:=	-trial_steps 2 -d 48 -b 24 -mb 16 -bt 2 -bind_block_threads $(EXTRA_TEST_ARGS)
-val4b	:=	-trial_steps 2 -d 48 -b 24 -mb 16 -bt 2 -no-use_shm $(EXTRA_TEST_ARGS)
+val4b	:=	-trial_steps 2 -d 48 -b 24 -mb 16 -bt 2 -use_shm $(EXTRA_TEST_ARGS)
 ranks	:=	2
 
 # Run the kernel binary using several combos of sizes and ranks.
