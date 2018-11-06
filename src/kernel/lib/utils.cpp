@@ -99,7 +99,6 @@ namespace yask {
         // Alignment to use based on size.
         const size_t _def_alignment = CACHELINE_BYTES;
         const size_t _def_big_alignment = YASK_HUGE_ALIGNMENT;
-
         size_t align = (nbytes >= _def_big_alignment) ?
             _def_big_alignment : _def_alignment;
         void *p = 0;
@@ -151,53 +150,35 @@ namespace yask {
 #endif
 
     // NUMA allocation.
+    // 'numa_pref' == yask_numa_none: use default aligned alloc.
     // 'numa_pref' >= 0: preferred NUMA node.
-    // 'numa_pref' < 0: use defined policy.
+    // 'numa_pref' < 0: use NUMA policy corresponding to value.
+    // TODO: get rid of magic-number scheme.
     char* numaAlloc(std::size_t nbytes, int numa_pref) {
+
+        void *p = 0;
 
         if (numa_pref == yask_numa_none)
             return alignedAlloc(nbytes);
 
-#ifndef USE_NUMA
-        THROW_YASK_EXCEPTION("Error: explicit NUMA policy allocation is not enabled");
-#endif
-
-        void *p = 0;
-
 #ifdef USE_NUMA
+
+        // Should we use the numa policy library?
 #ifdef USE_NUMA_POLICY_LIB
 #pragma omp single
-        if (numa_available() != -1) {
+        else if (numa_available() != -1) {
             numa_set_bind_policy(0);
             if (numa_pref >= 0 && numa_pref <= numa_max_node())
                 numa_alloc_onnode(nbytes, numa_pref);
             else
                 numa_alloc_local(nbytes);
-            if ((size_t)p % CACHELINE_BYTES)
-                THROW_YASK_EXCEPTION("Error: numa_alloc_*(" + makeByteStr(nbytes) +
-                                     ") returned unaligned addr " + p);
+            // Interleaved not available.
         }
         else
             THROW_YASK_EXCEPTION("Error: explicit NUMA policy allocation is not available");
 
+        // Use mmap/mbind explicitly.
 #else
-        // Hacked to allocate grid into pmem (indicated by numa preferred number offset = 1000)
-        if (numa_pref >= 1000) {
-#ifdef USE_PMEM
-            int err = 0;
-            int fd;
-            std::stringstream ss;
-            ss << numa_pref%1000;
-            // 'X' of pmemX should be matched with the NUMA node.
-            std::string pmem_name("/mnt/pmem");
-            pmem_name.append(ss.str());
-            err = pmem_tmpfile(pmem_name.c_str(), nbytes, &fd, &p);
-            if (err)
-                THROW_YASK_EXCEPTION("Error: Unable to create temporary file\n");
-#else
-            THROW_YASK_EXCEPTION("Error: set pmem=1 to use PMEM\n");
-#endif
-        }
         else if (get_mempolicy(NULL, NULL, 0, 0, 0) == 0) {
 
             // Set mmap flags.
@@ -240,16 +221,131 @@ namespace yask {
         }
         else
             THROW_YASK_EXCEPTION("Error: explicit NUMA policy allocation is not available");
-#endif
-#endif
+
+#endif // not USE_NUMA_POLICY_LIB.
+
+#else
+        THROW_YASK_EXCEPTION("Error: NUMA allocation is not enabled; build with numa=1");
+#endif // USE_NUMA.
+        
         // Should not get here w/null p; throw exception.
         if (!p)
             THROW_YASK_EXCEPTION("Error: cannot allocate " + makeByteStr(nbytes));
+
+        // Check alignment.
+        if ((size_t(p) & (CACHELINE_BYTES - 1)) != 0)
+            FORMAT_AND_THROW_YASK_EXCEPTION("Error: NUMA-allocated " << p << " is not " <<
+                                            CACHELINE_BYTES << "-byte aligned");
 
         // Return as a char* as required for shared_ptr ctor.
         return static_cast<char*>(p);
     }
 
+    // Reverse numaAlloc().
+    void NumaDeleter::operator()(char* p) {
+
+        if (p && _numa_pref == yask_numa_none) {
+            free(p);
+            p = NULL;
+        }
+
+#ifdef USE_NUMA
+#ifdef USE_NUMA_POLICY_LIB
+        if (p && numa_available() != -1) {
+            numa_free(p, _nbytes);
+            p = NULL;
+        }
+#else
+        if (p && get_mempolicy(NULL, NULL, 0, 0, 0) == 0) {
+            munmap(p, _nbytes);
+            p = NULL;
+        }
+#endif
+#endif
+        if (p) {
+            free(p);
+            p = NULL;
+        }
+    }
+        
+    // PMEM allocation.
+    char* pmemAlloc(std::size_t nbytes, int dev_num) {
+
+        void *p = 0;
+
+        // Allocate into pmem.
+#ifdef USE_PMEM
+        int err = 0;
+        int fd;
+        // 'X' of pmemX should be matched with the NUMA node.
+        string pmem_name("/mnt/pmem") + to_string(dev_num);
+        err = pmem_tmpfile(pmem_name.c_str(), nbytes, &fd, &p);
+        if (err)
+            THROW_YASK_EXCEPTION("Error: Unable to create temporary file for PMEM");
+#else
+        THROW_YASK_EXCEPTION("Error: PMEM allocation is not enabled; build with pmem=1");
+#endif
+
+        // Check alignment.
+        if ((size_t(p) & (CACHELINE_BYTES - 1)) != 0)
+            FORMAT_AND_THROW_YASK_EXCEPTION("Error: PMEM-allocated " << p << " is not " <<
+                                            CACHELINE_BYTES << "-byte aligned");
+
+        // Return as a char* as required for shared_ptr ctor.
+        return static_cast<char*>(p);
+    }
+
+    // Reverse pmemAlloc().
+    void PmemDeleter::operator()(char* p) {
+        if (p) {
+            munmap(p, _nbytes);
+            p = NULL;
+        }
+    }
+        
+    // MPI shm allocation.
+    char* shmAlloc(std::size_t nbytes,
+                   const MPI_Comm* shm_comm, MPI_Win* shm_win) {
+
+        void *p = 0;
+
+        // Allocate using MPI shm.
+#ifdef USE_MPI
+        assert(shm_comm);
+        assert(shm_win);
+        MPI_Info win_info;
+        MPI_Info_create(&win_info);
+        MPI_Info_set(win_info, "alloc_shared_noncontig", "true");
+        MPI_Win_allocate_shared(nbytes, 1, win_info, *shm_comm, &p, shm_win);
+        MPI_Info_free(&win_info);
+        MPI_Win_lock_all(0, *shm_win);
+#else
+        THROW_YASK_EXCEPTION("Error: MPI shm allocation is not enabled; build with mpi=1");
+#endif
+
+        // Check alignment.
+        if ((size_t(p) & (CACHELINE_BYTES - 1)) != 0)
+            FORMAT_AND_THROW_YASK_EXCEPTION("Error: MPI shm-allocated " << p << " is not " <<
+                                            CACHELINE_BYTES << "-byte aligned");
+
+        // Return as a char* as required for shared_ptr ctor.
+        return static_cast<char*>(p);
+    }
+
+    // Reverse shmAlloc().
+    void ShmDeleter::operator()(char* p) {
+
+#ifdef USE_MPI
+        assert(_shm_comm);
+        assert(_shm_win);
+        MPI_Win_unlock_all(*_shm_win);
+        MPI_Win_free(_shm_win);
+        p = NULL;
+#else
+        THROW_YASK_EXCEPTION("Error: MPI shm deallocation is not enabled; build with mpi=1");
+#endif
+    }
+        
     // Return num with SI multiplier and "iB" suffix,
     // e.g., 412KiB.
     string makeByteStr(size_t nbytes)

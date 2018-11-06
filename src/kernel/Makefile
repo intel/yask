@@ -227,7 +227,9 @@ endif # arch-specific.
 
 # general defaults for vars if not set above.
 streaming_stores	?=	0
+omp_par			?=	omp parallel
 omp_par_for		?=	omp parallel for
+omp_for			?=	omp for
 omp_region_schedule	?=	dynamic,1
 omp_block_schedule	?=	static,1
 omp_misc_schedule	?=	guided
@@ -528,7 +530,9 @@ REGION_LOOP_OPTS	?=	-ndims $(NSDIMS) -inVar region_idxs \
 REGION_LOOP_OUTER_MODS	?=	grouped omp
 REGION_LOOP_ORDER	?=	1 .. N-1
 REGION_LOOP_CODE	?=	$(REGION_LOOP_OUTER_MODS) loop($(REGION_LOOP_ORDER)) { \
-				$(REGION_LOOP_INNER_MODS) call(calc_block(bp, phase)); }
+				$(REGION_LOOP_INNER_MODS) \
+				  call(calc_block(bp, region_shift_num, \
+					nphases, phase, rank_idxs)); }
 
 # Block loops break up a block into mini-blocks.
 # These are executed sequentially, so no OpenMP.
@@ -539,19 +543,21 @@ BLOCK_LOOP_OUTER_MODS	?=	grouped
 BLOCK_LOOP_ORDER	?=	1 .. N-1
 BLOCK_LOOP_CODE		?=	$(BLOCK_LOOP_OUTER_MODS) loop($(BLOCK_LOOP_ORDER)) { \
 				$(BLOCK_LOOP_INNER_MODS) \
-				  call(calc_mini_block(bp, nphases, phase, nshapes, shape, \
-					bridge_mask, region_idxs, block_idxs)); }
+				  call(calc_mini_block(region_thread_idx, bp, region_shift_num, \
+					nphases, phase, nshapes, shape, \
+					bridge_mask, rank_idxs, region_idxs, block_idxs)); }
 
 # Mini-Block loops break up a mini-block into sub-blocks. The 'omp' modifier creates
 # a *nested* OpenMP loop so that each sub-block is assigned to a nested OpenMP
 # thread.
 MINI_BLOCK_LOOP_OPTS	?=	-ndims $(NSDIMS) -inVar adj_mb_idxs \
-				-ompConstruct '$(omp_par_for) schedule($(omp_block_schedule)) proc_bind(close)' \
+				-ompConstruct '$(omp_for) schedule($(omp_block_schedule)) nowait' \
 				-callPrefix 'sg->'
-MINI_BLOCK_LOOP_OUTER_MODS ?=	grouped omp
+MINI_BLOCK_LOOP_OUTER_MODS ?=	omp
 MINI_BLOCK_LOOP_ORDER	?=	1 .. N-1
 MINI_BLOCK_LOOP_CODE	?=	$(MINI_BLOCK_LOOP_OUTER_MODS) loop($(MINI_BLOCK_LOOP_ORDER)) { \
-				$(MINI_BLOCK_LOOP_INNER_MODS) call(calc_sub_block(thread_idx)); }
+				$(MINI_BLOCK_LOOP_INNER_MODS) \
+				call(calc_sub_block(region_thread_idx, block_thread_idx, settings)); }
 
 # Sub-block loops break up a sub-block into clusters or vectors.  These
 # loops are run by a single OMP thread.  The N-1 (inner) loop is generated
@@ -561,7 +567,8 @@ SUB_BLOCK_LOOP_OPTS	?=	-ndims $(NSDIMS) -inVar norm_sub_block_idxs
 SUB_BLOCK_LOOP_OUTER_MODS ?=
 SUB_BLOCK_LOOP_ORDER	?=	1 .. N-2
 SUB_BLOCK_LOOP_CODE	?=	$(SUB_BLOCK_LOOP_OUTER_MODS) loop($(SUB_BLOCK_LOOP_ORDER)) { \
-				$(SUB_BLOCK_LOOP_INNER_MODS) call(calc_inner_loop(thread_idx)); }
+				$(SUB_BLOCK_LOOP_INNER_MODS) \
+				call(calc_inner_loop(region_thread_idx, block_thread_idx)); }
 
 # General-purpose parallel loop.
 MISC_LOOP_OPTS		?=	-ndims $(NSDIMS) -inVar misc_idxs \
@@ -789,10 +796,12 @@ py-api-no-yc:
 	$(MAKE) $(NO_YC_MAKE_FLAGS) py-api
 
 # Validation runs for each binary.
-val0	:=	-trial_steps 2 -d 48 -r 32 -b 24 -rt 0
-val1	:=	-trial_steps 2 -d 48 -r 32 -b 24 -mb 16 -rt 1
-val2	:=	-trial_steps 2 -d 63 -r 32 -b 24 -mb 16 -rt 2
-val3	:=	-trial_steps 2 -d 63 -r 48 -b 24 -mb 16 -bt 2
+val0	:=	-trial_steps 2 -d 48 -r 32 -b 24 -rt 0 $(EXTRA_TEST_ARGS)
+val1	:=	-trial_steps 2 -d 48 -r 32 -b 24 -mb 16 -rt 1 $(EXTRA_TEST_ARGS)
+val2	:=	-trial_steps 2 -d 63 -r 32 -b 24 -mb 16 -rt 2 $(EXTRA_TEST_ARGS)
+val3	:=	-trial_steps 2 -d 63 -r 48 -b 24 -mb 16 -bt 2 $(EXTRA_TEST_ARGS)
+val4a	:=	-trial_steps 2 -d 48 -b 24 -mb 16 -bt 2 -bind_block_threads $(EXTRA_TEST_ARGS)
+val4b	:=	-trial_steps 2 -d 48 -b 24 -mb 16 -bt 2 -use_shm $(EXTRA_TEST_ARGS)
 ranks	:=	2
 
 # Run the kernel binary using several combos of sizes and ranks.
@@ -801,18 +810,24 @@ yk-tests:
 	$(YK_SCRIPT) -stencil $(stencil) -arch $(arch) -v $(val1)
 	$(YK_SCRIPT) -stencil $(stencil) -arch $(arch) -v $(val2)
 	$(YK_SCRIPT) -stencil $(stencil) -arch $(arch) -v $(val3)
+	$(YK_SCRIPT) -stencil $(stencil) -arch $(arch) -v $(val4a)
+
+yk-mp-tests:
 	$(YK_SCRIPT) -stencil $(stencil) -arch $(arch) -ranks $(ranks) -v $(val0)
 	$(YK_SCRIPT) -stencil $(stencil) -arch $(arch) -ranks $(ranks) -v $(val1)
 	$(YK_SCRIPT) -stencil $(stencil) -arch $(arch) -ranks $(ranks) -v $(val2)
 	$(YK_SCRIPT) -stencil $(stencil) -arch $(arch) -ranks $(ranks) -v $(val3)
+	$(YK_SCRIPT) -stencil $(stencil) -arch $(arch) -ranks $(ranks) -v $(val4b)
 
 # Run the default YASK compiler and kernel.
 yc-and-yk-test: $(YK_EXEC) $(YK_SCRIPT)
 	$(MAKE) yk-tests
+	if (( $(ranks) > 1 )); then $(MAKE) yk-mp-tests; fi
 
 # Run the YASK kernel test without implicity using the YASK compiler.
 yk-test-no-yc: kernel-no-yc $(YK_SCRIPT)
 	$(MAKE) yk-tests
+	if (( $(ranks) > 1 )); then $(MAKE) yk-mp-tests; fi
 
 # Run the kernel API tests for C++ and Python with and w/o expected exceptions.
 api-tests:
@@ -827,7 +842,7 @@ api-tests:
 # These tests are focused on the kernel and not the compiler.
 # For testing both the kernel and compiler in various combinations,
 # run the tests from the top-level Makefile.
-STENCIL_TEST_ARGS	:=	yc-and-yk-test real_bytes=8 allow_new_grid_types=0
+STENCIL_TEST_ARGS := yc-and-yk-test real_bytes=8 allow_new_grid_types=0
 stencil-tests:
 	$(MAKE) clean; $(MAKE) $(STENCIL_TEST_ARGS) stencil=test_1d fold=x=4
 	$(MAKE) clean; $(MAKE) $(STENCIL_TEST_ARGS) stencil=test_2d fold=x=2,y=2

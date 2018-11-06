@@ -68,6 +68,9 @@ namespace yask {
 
     ///// KernelEnv functions:
 
+    omp_lock_t KernelEnv::_debug_lock;
+    bool KernelEnv::_debug_lock_init_done = false;
+    
     // Init MPI, OMP.
     void KernelEnv::initEnv(int* argc, char*** argv, MPI_Comm existing_comm)
     {
@@ -83,9 +86,9 @@ namespace yask {
         if (existing_comm == MPI_COMM_NULL) {
             if (!is_init) {
                 int provided = 0;
-                MPI_Init_thread(argc, argv, MPI_THREAD_SERIALIZED, &provided);
+                MPI_Init_thread(argc, argv, MPI_THREAD_MULTIPLE, &provided);
                 if (provided < MPI_THREAD_SERIALIZED) {
-                    THROW_YASK_EXCEPTION("error: MPI_THREAD_SERIALIZED not provided");
+                    THROW_YASK_EXCEPTION("error: MPI_THREAD_SERIALIZED or MPI_THREAD_MULTIPLE not provided");
                 }
                 is_init = true;
             }
@@ -99,11 +102,20 @@ namespace yask {
                                      " an existing MPI communicator, but MPI is not initialized");
             comm = existing_comm;
         }
-        
+
+        // Get some info on this communicator.
         MPI_Comm_rank(comm, &my_rank);
+        MPI_Comm_group(comm, &group);
         MPI_Comm_size(comm, &num_ranks);
         if (num_ranks < 1)
             THROW_YASK_EXCEPTION("error: MPI_Comm_size() returns less than one rank");
+
+        // Create a shm communicator.
+        MPI_Comm_split_type(comm, MPI_COMM_TYPE_SHARED, 0, MPI_INFO_NULL, &shm_comm);
+        MPI_Comm_rank(shm_comm, &my_shm_rank);
+        MPI_Comm_group(shm_comm, &shm_group);
+        MPI_Comm_size(shm_comm, &num_shm_ranks);
+        
 #else
         comm = MPI_COMM_NULL;
 #endif
@@ -151,26 +163,40 @@ namespace yask {
 
     // Set pointer to storage.
     // Free old storage.
-    // 'base' should provide get_num_bytes() bytes at offset bytes.
-    void MPIBuf::set_storage(std::shared_ptr<char>& base, size_t offset) {
+    // 'base' should provide get_bytes() + YASK_PAD_BYTES bytes at offset bytes.
+    void* MPIBuf::set_storage(std::shared_ptr<char>& base, size_t offset) {
 
-        // Release any old data if last owner.
-        release_storage();
-
-        // Share ownership of base.
-        // This ensures that last grid to use a shared allocation
-        // will trigger dealloc.
+        void* p = set_storage(base.get(), offset);
+        
+        // Share ownership of base.  This ensures that [only] last MPI
+        // buffer to use a shared allocation will trigger dealloc.
         _base = base;
 
-        // Set plain pointer to new data.
-        if (base.get()) {
-            char* p = _base.get() + offset;
-            _elems = (real_t*)p;
-        } else {
-            _elems = 0;
-        }
+        return p;
     }
 
+    // Set internal pointer, but does not share ownership.
+    // Use when shm buffer is owned by another rank.
+    void* MPIBuf::set_storage(char* base, size_t offset) {
+
+        // Release any old data.
+        release_storage();
+
+        // Set plain pointer to new data.
+        if (base) {
+            char* p = base + offset;
+            _elems = (real_t*)p;
+
+            // Shm lock lives at end of data in buffer.
+            _shm_lock = (SimpleLock*)(p + get_bytes());
+        } else {
+            _elems = 0;
+            _shm_lock = 0;
+        }
+
+        return (void*)_elems;
+    }
+    
     // Apply a function to each neighbor rank.
     // Does NOT visit self or non-existent neighbors.
     void MPIData::visitNeighbors(std::function<void
@@ -255,30 +281,59 @@ namespace yask {
                            msg_rank));
         parser.add_option(new CommandLineParser::BoolOption
                           ("overlap_comms",
-                           "Overlap MPI communication with calculation of grid cells whenever possible.",
+                           "Overlap MPI communication with calculation of interior elements whenever possible.",
                            overlap_comms));
+        parser.add_option(new CommandLineParser::BoolOption
+                          ("use_shm",
+                           "Use shared memory for MPI halo-exchange buffers between ranks on the same node when possible.",
+                           use_shm));
+        parser.add_option(new CommandLineParser::IdxOption
+                          ("min_exterior",
+                           "Minimum width of MPI exterior section to compute before starting MPI communication.",
+                           _min_exterior));
 #endif
         parser.add_option(new CommandLineParser::BoolOption
                           ("force_scalar",
-                           "Evaluate every grid point with scalar stencil operations.",
+                           "Evaluate every grid point with scalar stencil operations (for debug).",
                            force_scalar));
         parser.add_option(new CommandLineParser::IntOption
                           ("max_threads",
-                           "Max OpenMP threads to use.",
+                           "Max OpenMP threads to use. Overrides default number of OpenMP threads "
+                           "or the value set by OMP_NUM_THREADS.",
                            max_threads));
         parser.add_option(new CommandLineParser::IntOption
                           ("thread_divisor",
-                           "Divide max OpenMP threads by <integer>.",
+                           "Divide the number of OpenMP threads by the argument value. "
+                           "If -max_threads is also used, divide the argument to that option by the "
+                           "argument to this one. If -max_threads is not used, "
+                           "divide the default number of OpenMP threads. "
+                           "In either case, use the resulting truncated value as the "
+                           "maximum number of OpenMP threads to use.",
                            thread_divisor));
         parser.add_option(new CommandLineParser::IntOption
                           ("block_threads",
-                           "Number of threads to use within each block.",
+                           "Number of threads to use in a nested OpenMP region for each block. "
+                           "Will be restricted to a value less than or equal to "
+                           "the maximum number of OpenMP threads specified by -max_threads "
+                           "and/or -thread_divisor. "
+                           "Each thread is used to execute stencils within a sub-block, and "
+                           "sub-blocks are executed in parallel within mini-blocks.",
                            num_block_threads));
+        parser.add_option(new CommandLineParser::BoolOption
+                          ("bind_block_threads",
+                           "Execute stencils at each vector-cluster index on a fixed thread-id "
+                           "based on sub-block and mini-block sizes. "
+                           "Applies only to domain dimensions not including the inner-most "
+                           "one, effectively disabling parallelism across sub-blocks in the "
+                           "inner-most domain dimension. "
+                           "May increase cache locality when using multiple "
+                           "block-threads when temporal blocking is active.",
+                           bind_block_threads));
 #ifdef USE_NUMA
         stringstream msg;
         msg << "Preferred NUMA node on which to allocate data for "
-            "grids and MPI buffers. "
-            "Alternatively, use " << yask_numa_local << " for explicit local-node allocation, " <<
+            "grids and MPI buffers. Alternatively, use special values " <<
+            yask_numa_local << " for explicit local-node allocation, " <<
             yask_numa_interleave << " for interleaving pages across all nodes, or " <<
             yask_numa_none << " for no NUMA policy.";
         parser.add_option(new CommandLineParser::IntOption
@@ -288,7 +343,7 @@ namespace yask {
 #ifdef USE_PMEM
         parser.add_option(new CommandLineParser::IntOption
                           ("numa_pref_max",
-                           "Maximum size of preferred NUMA node in GiB.",
+                           "Maximum GiB to allocate on preferred NUMA node before allocating on pmem device.",
                            _numa_pref_max));
 #endif
     }

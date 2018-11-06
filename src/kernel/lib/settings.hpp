@@ -346,23 +346,50 @@ namespace yask {
     typedef std::vector<GridPtrs*> ScratchVecs;
 
     // Environmental settings.
-    struct KernelEnv :
+    class KernelEnv :
         public virtual yk_env {
 
+        // An OpenMP lock to use for debug.
+        static omp_lock_t _debug_lock;
+        static bool _debug_lock_init_done;
+
+    public:
+
         // MPI vars.
-        MPI_Comm comm = MPI_COMM_NULL; // communicator.
+        MPI_Comm comm = MPI_COMM_NULL; // global communicator.
+        MPI_Group group = MPI_GROUP_NULL;
         int num_ranks = 1;        // total number of ranks.
         int my_rank = 0;          // MPI-assigned index.
+
+        // Vars for shared-mem ranks.
+        MPI_Comm shm_comm = MPI_COMM_NULL; // shm communicator.
+        MPI_Group shm_group = MPI_GROUP_NULL;
+        int num_shm_ranks = 1;  // ranks in shm_comm.
+        int my_shm_rank = 0;    // my index in shm_comm.
 
         // OMP vars.
         int max_threads=0;      // initial value from OMP.
 
-        virtual ~KernelEnv() {}
+        KernelEnv() { }
+        virtual ~KernelEnv() { }
 
         // Init MPI, OMP, etc.
         // This is normally called very early in the program.
         virtual void initEnv(int* argc, char*** argv, MPI_Comm comm);
 
+        // Lock.
+        static void set_debug_lock() {
+            if (!_debug_lock_init_done) {
+                omp_init_lock(&_debug_lock);
+                _debug_lock_init_done = true;
+            }
+            omp_set_lock(&_debug_lock);
+        }
+        static void unset_debug_lock() {
+            assert(_debug_lock_init_done);
+            omp_unset_lock(&_debug_lock);
+        }
+        
         // APIs.
         virtual int get_num_ranks() const {
             return num_ranks;
@@ -573,10 +600,12 @@ namespace yask {
 
         // Neighborhood size includes self.
         // Number of points in n-D space of neighbors.
+        // Example: size = 3^3 = 27 for 3D problem.
         // NB: this is the *max* number of neighbors, not necessarily the actual number.
         idx_t neighborhood_size = 0;
 
         // What getNeighborIndex() returns for myself.
+        // Example: trunc(3^3 / 2) = 13 for 3D problem.
         int my_neighbor_index;
 
         // MPI rank of each neighbor.
@@ -593,6 +622,17 @@ namespace yask {
         // sizes as a multiple of the vector length.
         std::vector<bool> has_all_vlen_mults;
 
+        // Rank number in KernelEnv::shmcomm if this neighbor
+        // can communicate with shm. MPI_PROC_NULL otherwise.
+        std::vector<int> shm_ranks;
+
+        // Window for halo buffers.
+        MPI_Win halo_win;
+
+        // Shm halo buffers for each neighbor.
+        std::vector<void*> halo_buf_ptrs;
+        std::vector<size_t> halo_buf_sizes;
+        
         // Ctor based on pre-set problem dimensions.
         MPIInfo(DimsPtr dims) : _dims(dims) {
 
@@ -610,6 +650,9 @@ namespace yask {
             my_neighbors.resize(neighborhood_size, MPI_PROC_NULL);
             man_dists.resize(neighborhood_size, 0);
             has_all_vlen_mults.resize(neighborhood_size, false);
+            shm_ranks.resize(neighborhood_size, MPI_PROC_NULL);
+            halo_buf_ptrs.resize(neighborhood_size, 0);
+            halo_buf_sizes.resize(neighborhood_size, 0);
         }
 
         // Get a 1D index for a neighbor.
@@ -632,9 +675,14 @@ namespace yask {
     typedef std::shared_ptr<MPIInfo> MPIInfoPtr;
 
     // MPI data for one buffer for one neighbor of one grid.
-    struct MPIBuf {
+    class MPIBuf {
+        
+        // Ptr to read/write lock when buffer is in shared mem.
+        SimpleLock* _shm_lock = 0;
 
-        // Name for trace output.
+    public:
+
+        // Descriptive name.
         std::string name;
 
         // Send or receive buffer.
@@ -652,6 +700,38 @@ namespace yask {
         // vector length in all dims and buffer is aligned.
         bool vec_copy_ok = false;
 
+        // Safe access to lock.
+        void shm_lock_init() {
+            if (_shm_lock)
+                _shm_lock->init();
+        }
+        bool is_ok_to_read() const {
+            if (_shm_lock)
+                return _shm_lock->is_ok_to_read();
+            return true;
+        }
+        void wait_for_ok_to_read() const {
+            if (_shm_lock)
+                _shm_lock->wait_for_ok_to_read();
+        }
+        void mark_read_done() {
+            if (_shm_lock)
+                _shm_lock->mark_read_done();
+        }
+        bool is_ok_to_write() const {
+            if (_shm_lock)
+                return _shm_lock->is_ok_to_write();
+            return true;
+        }
+        void wait_for_ok_to_write() const {
+            if (_shm_lock)
+                _shm_lock->wait_for_ok_to_write();
+        }
+        void mark_write_done() {
+            if (_shm_lock)
+                _shm_lock->mark_write_done();
+        }
+        
         // Number of points overall.
         idx_t get_size() const {
             if (num_pts.size() == 0)
@@ -665,12 +745,17 @@ namespace yask {
         // Set pointer to storage.
         // Free old storage.
         // 'base' should provide get_num_bytes() bytes at offset bytes.
-        void set_storage(std::shared_ptr<char>& base, size_t offset);
+        // Returns raw pointer.
+        void* set_storage(std::shared_ptr<char>& base, size_t offset);
+
+        // Same as above, but does not maintain shared storage.
+        void* set_storage(char* base, size_t offset);
 
         // Release storage.
         void release_storage() {
             _base.reset();
             _elems = 0;
+            _shm_lock = 0;
         }
 
         // Reset.
@@ -693,6 +778,12 @@ namespace yask {
         enum BufDir { bufSend, bufRecv, nBufDirs };
 
         MPIBuf bufs[nBufDirs];
+
+        // Reset lock for send buffer.
+        // Another rank owns recv buffer.
+        void reset_locks() {
+            bufs[bufSend].shm_lock_init();
+        }
     };
 
     // MPI data for one grid.
@@ -724,6 +815,11 @@ namespace yask {
             send_reqs.resize(n, MPI_REQUEST_NULL);
         }
 
+        void reset_locks() {
+            for (auto& mb : bufs)
+                mb.reset_locks();
+        }
+        
         // Apply a function to each neighbor rank.
         // Called visitor function will contain the rank index of the neighbor.
         virtual void visitNeighbors(std::function<void (const IdxTuple& neighbor_offsets, // NeighborOffset.
@@ -748,19 +844,22 @@ namespace yask {
     class KernelSettings {
 
     protected:
+
+        // Default sizes.
         idx_t def_rank = 128;
         idx_t def_block = 32;
 
+        // Make a null output stream.
         yask_output_factory yof;
         yask_output_ptr nullop = yof.new_null_output();
 
     public:
 
-        // problem dimensions.
+        // Problem dimensions (not sizes).
         DimsPtr _dims;
 
         // Sizes in elements (points).
-        IdxTuple _rank_sizes;     // number of steps and this rank's domain sizes.
+        IdxTuple _rank_sizes;     // This rank's domain sizes.
         IdxTuple _region_sizes;   // region size (used for wave-front tiling).
         IdxTuple _block_group_sizes; // block-group size (only used for 'grouped' region loops).
         IdxTuple _block_sizes;       // block size (used for each outer thread).
@@ -777,11 +876,14 @@ namespace yask {
         bool find_loc = true;      // whether my rank index needs to be calculated.
         int msg_rank = 0;          // rank that prints informational messages.
         bool overlap_comms = true; // overlap comms with computation.
+        bool use_shm = false;      // use shared memory if possible.
+        idx_t _min_exterior = 0;   // minimum size of MPI exterior to calculate.
 
         // OpenMP settings.
         int max_threads = 0;      // Initial number of threads to use overall; 0=>OMP default.
         int thread_divisor = 1;   // Reduce number of threads by this amount.
         int num_block_threads = 1; // Number of threads to use for a block.
+        bool bind_block_threads = false; // Bind block threads to indices.
 
         // Debug.
         bool force_scalar = false; // Do only scalar ops.
@@ -793,7 +895,7 @@ namespace yask {
 
         // NUMA settings.
         int _numa_pref = NUMA_PREF;
-        int _numa_pref_max = 128;
+        int _numa_pref_max = 128; // GiB to alloc before using PMEM.
 
         // Ctor.
         // TODO: move code to settings.cpp.

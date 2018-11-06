@@ -703,22 +703,13 @@ sub processCode($) {
     # Lines of code to output.
     my @code;
 
-    # Other.
-    my @scanVars;               # scan-index vars.
-    
     # Front matter.
     push @code,
-        "#ifndef OMP_PRAGMA_PREFIX",
-        "#define OMP_PRAGMA_PREFIX $OPT{ompConstruct}",
-        "#endif",
-        "#ifndef OMP_PRAGMA_SUFFIX",
-        "#define OMP_PRAGMA_SUFFIX",
+        "#ifndef OMP_PRAGMA",
+        "#define OMP_PRAGMA _Pragma(\"$OPT{ompConstruct}\")",
         "#endif",
         "// 'ScanIndices $inputVar' must be set before the following code.",
-        "{",
-        " // Indices for function calls.",
-        " ScanIndices ".locVar()."($inputVar);";
-    push @scanVars, locVar();
+        "{";
     
     # loop thru all the tokens ni the input.
     for (my $ti = 0; $ti <= $#toks; ) {
@@ -727,12 +718,9 @@ sub processCode($) {
         # use OpenMP on next loop.
         if (lc $tok eq 'omp') {
 
-            # make local copies of scan index vars.
-            my $priv = "firstprivate(".join(',',@scanVars).")";
-            
             push @loopPrefix,
                 " // Distribute iterations among OpenMP threads.", 
-                "#pragma OMP_PRAGMA_PREFIX $priv OMP_PRAGMA_SUFFIX";
+                " OMP_PRAGMA";
             print "info: using OpenMP on following loop.\n";
         }
 
@@ -867,6 +855,11 @@ sub processCode($) {
                 beginLoop(\@code, \@loopDims, \@loopPrefix, 
                           $beginVal, $endVal, $features, \@loopStack);
 
+                # Indices to pass to call.
+                push @code, 
+                    " // Local copy of indices for function calls.",
+                    " ScanIndices ".locVar()."($inputVar);";
+
                 # loop body.
                 push @code, @callStmts;
 
@@ -910,8 +903,7 @@ sub processCode($) {
     # Back matter.
     push @code,
         "}",
-        "#undef OMP_PRAGMA_PREFIX",
-        "#undef OMP_PRAGMA_SUFFIX",
+        "#undef OMP_PRAGMA",
         "// End of generated code.";
     
     # indent program avail?

@@ -175,7 +175,7 @@ namespace yask {
 
         // Bytes between each buffer to help avoid aliasing
         // in the HW.
-        size_t _data_buf_pad = (YASK_PAD * CACHELINE_BYTES);
+        static constexpr size_t _data_buf_pad = YASK_PAD_BYTES;
 
         // Check whether dim is appropriate type.
         virtual void checkDimType(const std::string& dim,
@@ -205,15 +205,34 @@ namespace yask {
         // If WFs are not used, this is the same as 'rank_bb';
         BoundingBox ext_bb;
 
-        // BB of the "interior" of this rank.
-        // This is the area that does not include any data
-        // that is needed for any MPI send.
+        // BB of the "interior" of this rank.  This is the area that does
+        // not include any data that is needed for any MPI send.  The size
+        // is valid for the layer that needs to be exchanged, and doesn't
+        // include any extensions needed for WF.
         BoundingBox mpi_interior;
 
         // Flags to calculate the interior and/or exterior.
-        // TODO: replace with function parameters.
         bool do_mpi_interior = true;
-        bool do_mpi_exterior = true;
+        bool do_mpi_left = true;        // left exterior in given dim.
+        bool do_mpi_right = true;        // right exterior in given dim.
+        idx_t mpi_exterior_dim = -1;      // which domain dim in left/right.
+
+        // Is overlap currently enabled?
+        inline bool is_overlap_active() const {
+            bool active = !do_mpi_interior || !do_mpi_left || !do_mpi_right;
+            if (active) {
+                assert(do_mpi_interior || do_mpi_left || do_mpi_right);
+                assert(mpi_interior.bb_valid);
+            }
+            return active;
+        }
+
+        // Is there a non-zero exterior in the given section?
+        inline bool does_exterior_exist(idx_t ddim, bool is_left) const {
+            return is_left ?
+                mpi_interior.bb_begin[ddim] > ext_bb.bb_begin[ddim] :
+                mpi_interior.bb_end[ddim] < ext_bb.bb_end[ddim];
+        }
         
         // List of all non-scratch stencil bundles in the order in which
         // they should be evaluated within a step.
@@ -253,7 +272,7 @@ namespace yask {
         // Maximum halos, skewing angles, and work extensions over all grids
         // used for wave-front rank tiling (wf).
         IdxTuple max_halos;  // spatial halos.
-        idx_t wf_steps = 0;  // max number of WF steps.
+        idx_t wf_steps = 0;  // max number of steps in a WF. 0 => no WF.
         IdxTuple wf_angles;  // WF skewing angles for each shift (in points).
         idx_t num_wf_shifts = 0; // number of WF shifts required in wf_steps.
         IdxTuple wf_shift_pts;    // total shifted pts (wf_angles * num_wf_shifts).
@@ -261,7 +280,7 @@ namespace yask {
         IdxTuple right_wf_exts;    // WF extension needed on right side of rank.
 
         // Settings for temporal blocking and mini-blocks.
-        idx_t tb_steps = 0;  // max number of TB steps (may be less than requested).
+        idx_t tb_steps = 0;  // max number of steps in a TB. 0 => no TB.
         IdxTuple tb_angles;  // TB skewing angles for each shift (in points).
         idx_t num_tb_shifts = 0; // number of TB shifts required in tb_steps.
         IdxTuple tb_widths;      // base of TB trapezoid.
@@ -284,7 +303,7 @@ namespace yask {
         // Clear this to ignore step conditions.
         bool check_step_conds = true;
 
-        // MPI data for each grid.
+        // MPI buffers for each grid.
         // Map key: grid name.
         std::map<std::string, MPIData> mpiData;
 
@@ -349,19 +368,19 @@ namespace yask {
 
         // Allocate grid memory for any grids that do not
         // already have storage.
-        virtual void allocGridData(std::ostream& os);
+        virtual void allocGridData();
 
         // Determine sizes of MPI buffers and allocate MPI buffer memory.
         // Dealloc any existing MPI buffers first.
-        virtual void allocMpiData(std::ostream& os);
-        virtual void freeMpiData(std::ostream& os) {
+        virtual void allocMpiData();
+        virtual void freeMpiData() {
             mpiData.clear();
         }
 
         // Alloc scratch-grid memory.
         // Dealloc any existing scratch-grids first.
-        virtual void allocScratchData(std::ostream& os);
-        virtual void freeScratchData(std::ostream& os) {
+        virtual void allocScratchData();
+        virtual void freeScratchData() {
             makeScratchGrids(0);
         }
 
@@ -370,6 +389,9 @@ namespace yask {
         // Initialize some other data structures.
         // Print lots of stats.
         virtual void prepare_solution();
+
+        // Reset any locks, etc.
+        virtual void reset_locks();
 
         // Print info about the soln.
         virtual void print_info();
@@ -391,8 +413,8 @@ namespace yask {
 
         // Adjust offsets of scratch grids based
         // on thread and scan indices.
-        virtual void update_scratch_grid_info(int thread_idx,
-                                          const Indices& idxs);
+        virtual void update_scratch_grid_info(int region_thread_idx,
+                                              const Indices& idxs);
 
         // Get total memory allocation required by grids.
         // Does not include MPI buffers.
@@ -400,11 +422,8 @@ namespace yask {
         virtual size_t get_num_bytes() {
             size_t sz = 0;
             for (auto gp : gridPtrs) {
-                if (gp) {
-                    if (sz)
-                        sz += _data_buf_pad;
-                    sz += gp->get_num_storage_bytes();
-                }
+                if (gp)
+                    sz += gp->get_num_storage_bytes() + _data_buf_pad;
             }
             for (auto gps : scratchVecs)
                 if (gps)
@@ -529,25 +548,30 @@ namespace yask {
 
         // Reference stencil calculations.
         void run_ref(idx_t first_step_index,
-                             idx_t last_step_index);
+                     idx_t last_step_index);
 
         // Calculate results within a region.
         void calc_region(BundlePackPtr& sel_bp,
-                                 const ScanIndices& rank_idxs);
+                         const ScanIndices& rank_idxs);
 
         // Calculate results within a block.
         void calc_block(BundlePackPtr& sel_bp,
-                                idx_t phase,
-                                const ScanIndices& region_idxs);
+                        idx_t region_shift_num,
+                        idx_t nphases, idx_t phase,
+                        const ScanIndices& rank_idxs,
+                        const ScanIndices& region_idxs);
 
         // Calculate results within a mini-block.
-        void calc_mini_block(BundlePackPtr& sel_bp,
+        void calc_mini_block(int region_thread_idx,
+                             BundlePackPtr& sel_bp,
+                             idx_t region_shift_num,
                              idx_t nphases, idx_t phase,
                              idx_t nshapes, idx_t shape,
                              const BridgeMask& bridge_mask,
+                             const ScanIndices& rank_idxs,
                              const ScanIndices& base_region_idxs,
                              const ScanIndices& base_block_idxs,
-                             const ScanIndices& block_idxs);
+                             const ScanIndices& adj_block_idxs);
 
         // Exchange all dirty halo data for all stencil bundles.
         void exchange_halos();
@@ -569,19 +593,16 @@ namespace yask {
         // Set various limits in 'idxs' based on current step in block.
         bool shift_mini_block(const Indices& mb_base_start,
                               const Indices& mb_base_stop,
-                              idx_t mb_shift_num,
                               const Indices& adj_block_base_start,
                               const Indices& adj_block_base_stop,
                               const Indices& block_base_start,
                               const Indices& block_base_stop,
-                              idx_t block_shift_num,
+                              const Indices& region_base_start,
+                              const Indices& region_base_stop,
+                              idx_t mb_shift_num,
                               idx_t nphases, idx_t phase,
                               idx_t nshapes, idx_t shape,
                               const BridgeMask& bridge_mask,
-                              const Indices& region_base_start,
-                              const Indices& region_base_stop,
-                              idx_t region_shift_num,
-                              BundlePackPtr& bp,
                               ScanIndices& idxs);
         
         // Set the bounding-box around all stencil bundles.

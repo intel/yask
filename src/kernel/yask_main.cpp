@@ -328,7 +328,9 @@ int main(int argc, char** argv)
                 // (The result will be meaningless, but that doesn't matter.)
                 os << "Running " << warmup_steps << " step(s) for " <<
                     (n ? "calibration" : "warm-up") << "...\n" << flush;
+                kenv->global_barrier();
                 ksoln->run_solution(0, warmup_steps-1);
+                kenv->global_barrier();
                 auto stats = context->get_stats();
                 auto wtime = stats->get_elapsed_secs();
                 os << "  Done in " << makeNumStr(wtime) << " secs.\n";
@@ -411,6 +413,7 @@ int main(int argc, char** argv)
             // Actual work.
             context->clear_timers();
             ksoln->run_solution(first_t, last_t);
+            kenv->global_barrier();
 
             // Stop vtune collection.
             VTUNE_PAUSE;
@@ -454,11 +457,14 @@ int main(int argc, char** argv)
             auto ref_soln = kfac.new_solution(kenv, ksoln);
             auto ref_context = dynamic_pointer_cast<StencilContext>(ref_soln);
             assert(ref_context.get());
-            auto ref_opts = ref_context->get_settings();
+            auto& ref_opts = ref_context->get_settings();
 
             // Change some settings.
             ref_context->name += "-reference";
             ref_context->allow_vec_exchange = false;   // exchange scalars in halos.
+            ref_opts->overlap_comms = false;
+            ref_opts->use_shm = false;
+            ref_opts->_numa_pref = yask_numa_none;
 
             // TODO: re-enable the region and block settings below;
             // requires allowing consistent init of different-sized grids
@@ -519,7 +525,6 @@ int main(int argc, char** argv)
             os << "\nRESULTS NOT VERIFIED.\n";
         ksoln->end_solution();
 
-        kenv->global_barrier();
         os << "Stencil '" << ksoln->get_name() << "'.\n";
         if (!ok)
             exit_yask(1);

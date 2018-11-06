@@ -128,7 +128,8 @@ typedef std::uint64_t uidx_t;
 
 // Default alloc settings.
 #define CACHELINE_BYTES  (64)
-#define YASK_PAD (7) // cache-lines between data buffers.
+#define YASK_PAD (3) // cache-lines between data buffers.
+#define YASK_PAD_BYTES (CACHELINE_BYTES * YASK_PAD)
 #define YASK_HUGE_ALIGNMENT (2 * 1024 * 1024) // 2MiB-page for large allocs.
 #define CACHE_ALIGNED __attribute__ ((aligned (CACHELINE_BYTES)))
 #ifndef USE_NUMA
@@ -140,7 +141,11 @@ typedef std::uint64_t uidx_t;
 
 // macro for debug message.
 #ifdef TRACE
-#define TRACE_MSG0(os, msg) ((os) << "YASK: " << msg << std::endl << std::flush)
+#define TRACE_MSG0(os, msg) do { \
+        KernelEnv::set_debug_lock();                        \
+        (os) << "YASK: " << msg << std::endl << std::flush; \
+        KernelEnv::unset_debug_lock();                      \
+    } while(0)
 #else
 #define TRACE_MSG0(os, msg) ((void)0)
 #endif

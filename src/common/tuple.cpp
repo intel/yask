@@ -174,16 +174,22 @@ namespace yask {
         int stepDim = _firstInner ? 1 : -1;
         for (int di = startDim; di != endDim; di += stepDim) {
             auto& i = _q.at(di);
-            auto& dim = i.getName();
+            assert(i.getVal() >= 0);
             size_t dsize = size_t(i.getVal());
-            assert (dsize >= 0);
 
             // offset into this dim.
-            auto op = strictRhs ? offsets.lookup(di) : offsets.lookup(dim);
-            if (strictRhs)
-                assert(op);
-            size_t offset = op ? size_t(*op) : 0; // 0 offset default.
-            assert(offset >= 0);
+            size_t offset = 0;
+            if (strictRhs) {
+                assert(offsets[di] >= 0);
+                offset = size_t(offsets[di]);
+            } else {
+                auto& dim = i.getName();
+                auto* op = offsets.lookup(dim);
+                if (op) {
+                    assert(*op >= 0);
+                    offset = size_t(*op);
+                }
+            }
             assert(offset < dsize);
 
             // mult offset by product of previous dims.
