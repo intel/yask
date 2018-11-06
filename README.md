@@ -42,7 +42,7 @@ YASK contains a domain-specific compiler to convert scalar stencil code to SIMD-
       Reading the generated code is only necessary for debug or curiosity.
     * SWIG (3.0.12 or later),
       http://www.swig.org, for creating the Python interface.
-    * Python 2 (2.7.5 or later) or 3 (3.6.1 or later recommended),
+    * Python 2 (2.7.5 or later) or 3 (3.6.1 or later, recommended),
       https://www.python.org/downloads, for creating and using the Python interface.
     * Doxygen (1.8.11 or later),
       http://doxygen.org, for creating updated API documentation.
@@ -54,7 +54,7 @@ YASK contains a domain-specific compiler to convert scalar stencil code to SIMD-
       https://software.intel.com/en-us/articles/intel-software-development-emulator,
       for functional testing if you don't have native support for any given instruction set.
 
-To continue with building and running, see YASK-intro.pdf in the docs directory.
+To continue with building and running, see the [YASK tutorial](https://www.ixpug.org/components/com_solutionlibrary/assets/documents/1538169451-IXPUG_Fall_Conf_2018_paper_2%20-%20Rev3%20-%20Charles%20Yount.pdf).
 
 ### Backward-compatibility notices:
 * Version 2.15.04 required a call to `yc_grid::set_dynamic_step_alloc(true)` to allow changing the
