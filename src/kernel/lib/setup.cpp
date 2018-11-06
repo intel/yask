@@ -499,6 +499,7 @@ namespace yask {
         CONTEXT_VARS(this);
 
         // Remove any old MPI data.
+        env->global_barrier();
         freeMpiData();
 
         // Init interior.
@@ -1048,6 +1049,7 @@ namespace yask {
             if (pass == 0)
                 _alloc_data(npbytes, nbufs, _mpi_data_buf, "MPI buffer");
 
+            MPI_Barrier(env->shm_comm);
         } // MPI passes.
 
 #endif
@@ -1663,10 +1665,10 @@ namespace yask {
         CONTEXT_VARS(this);
 
         // Final halo exchange (usually not needed).
-        reset_locks();
         exchange_halos();
 
         // Release any MPI data.
+        env->global_barrier();
         mpiData.clear();
 
         // Release grid data.

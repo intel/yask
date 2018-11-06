@@ -328,7 +328,9 @@ int main(int argc, char** argv)
                 // (The result will be meaningless, but that doesn't matter.)
                 os << "Running " << warmup_steps << " step(s) for " <<
                     (n ? "calibration" : "warm-up") << "...\n" << flush;
+                kenv->global_barrier();
                 ksoln->run_solution(0, warmup_steps-1);
+                kenv->global_barrier();
                 auto stats = context->get_stats();
                 auto wtime = stats->get_elapsed_secs();
                 os << "  Done in " << makeNumStr(wtime) << " secs.\n";
@@ -411,6 +413,7 @@ int main(int argc, char** argv)
             // Actual work.
             context->clear_timers();
             ksoln->run_solution(first_t, last_t);
+            kenv->global_barrier();
 
             // Stop vtune collection.
             VTUNE_PAUSE;
@@ -522,7 +525,6 @@ int main(int argc, char** argv)
             os << "\nRESULTS NOT VERIFIED.\n";
         ksoln->end_solution();
 
-        kenv->global_barrier();
         os << "Stencil '" << ksoln->get_name() << "'.\n";
         if (!ok)
             exit_yask(1);

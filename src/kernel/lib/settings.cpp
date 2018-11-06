@@ -285,7 +285,7 @@ namespace yask {
                            overlap_comms));
         parser.add_option(new CommandLineParser::BoolOption
                           ("use_shm",
-                           "Use shared memory for MPI buffers when possible.",
+                           "Use shared memory for MPI halo-exchange buffers between ranks on the same node when possible.",
                            use_shm));
         parser.add_option(new CommandLineParser::IdxOption
                           ("min_exterior",

@@ -195,11 +195,34 @@ namespace yask {
         // Put each value in a separate cache-line to
         // avoid false sharing.
         union LockVal {
-            volatile idx_t v;
+            struct {
+                volatile idx_t chk; // check for mem corruption.
+                volatile idx_t val; // actual counter.
+            };
             char pad[CACHELINE_BYTES];
         };
 
         LockVal _write_count, _read_count;
+
+        static constexpr idx_t _ival = 1000;
+
+#ifdef CHECK
+        inline void _check(const std::string& fn) const {
+            idx_t wcnt = _write_count.val;
+            idx_t rcnt = _read_count.val;
+            idx_t wchk = _write_count.chk;
+            idx_t rchk = _read_count.chk;
+            if (wcnt < _ival || rcnt < _ival ||
+                wcnt < rcnt || wcnt - rcnt > 1 ||
+                wchk != _ival || rchk != _ival)
+                FORMAT_AND_THROW_YASK_EXCEPTION
+                     ("Internal error: " << fn << "() w/lock @ " << (void*)this <<
+                      " writes=" << wcnt << ", reads=" << rcnt <<
+                      ", w-chk=" << wchk << ", r-chk=" << rchk);
+        }
+#else
+        inline void _check(const char* fn) const { }
+#endif
 
     public:
         SimpleLock() {
@@ -208,14 +231,16 @@ namespace yask {
         
         // Allow write and block read.
         void init() {
-            _write_count.v = _read_count.v = 0;
+            _write_count.val = _read_count.val = _ival;
+            _write_count.chk = _read_count.chk = _ival;
+            _check("init");
         }
 
         // Check whether ok to read,
-        // i.e., whether write ahead of read.
+        // i.e., whether write is done.
         bool is_ok_to_read() const {
-            assert(_write_count.v >= _read_count.v);
-            return _write_count.v > _read_count.v;
+            _check("is_ok_to_read");
+            return _write_count.val != _read_count.val;
         }
 
         // Wait until ok to read.
@@ -226,16 +251,16 @@ namespace yask {
 
         // Mark that read is done.
         void mark_read_done() {
-            assert(_write_count.v >= _read_count.v);
-            _read_count.v++;
-            assert(_write_count.v >= _read_count.v);
+            assert(is_ok_to_read());
+            _read_count.val++;
+            _check("mark_read_done");
         }
 
         // Check whether ok to write,
         // i.e., whether read is done for previous write.
         bool is_ok_to_write() const {
-            assert(_write_count.v >= _read_count.v);
-            return _write_count.v == _read_count.v;
+            _check("is_ok_to_write");
+            return _write_count.val == _read_count.val;
         }
 
         // Wait until ok to write.
@@ -246,9 +271,9 @@ namespace yask {
 
         // Mark that write is done.
         void mark_write_done() {
-            assert(_write_count.v >= _read_count.v);
-            _write_count.v++;
-            assert(_write_count.v >= _read_count.v);
+            assert(is_ok_to_write());
+            _write_count.val++;
+            _check("mark_write_done");
         }
     };
     

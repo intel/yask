@@ -127,7 +127,6 @@ namespace yask {
                                  idx_t last_step_index) {
         CONTEXT_VARS(this);
         run_time.start();
-        reset_locks();
 
         // Determine step dir from order of first/last.
         idx_t step_dir = (last_step_index >= first_step_index) ? 1 : -1;
@@ -278,7 +277,6 @@ namespace yask {
     {
         CONTEXT_VARS(this);
         run_time.start();
-        reset_locks();
 
         // Determine step dir from order of first/last.
         idx_t step_dir = (last_step_index >= first_step_index) ? 1 : -1;
