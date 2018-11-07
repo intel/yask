@@ -41,10 +41,13 @@ IN THE SOFTWARE.
 #define MPI_Barrier(comm) ((void)0)
 #define MPI_Finalize()    ((void)0)
 typedef int MPI_Comm;
+typedef int MPI_Win;
+typedef int MPI_Group;
 typedef int MPI_Request;
 #define MPI_PROC_NULL     (-1)
 #define MPI_COMM_NULL     ((MPI_Comm)0x04000000)
 #define MPI_REQUEST_NULL  ((MPI_Request)0x2c000000)
+#define MPI_GROUP_NULL    ((MPI_Group)0x08000000)
 #ifdef MPI_VERSION
 #undef MPI_VERSION
 #endif
