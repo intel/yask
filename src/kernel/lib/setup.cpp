@@ -1629,8 +1629,9 @@ namespace yask {
             " stencil-name:          " << get_name() << endl <<
             " element-size:          " << makeByteStr(get_element_bytes()) << endl <<
             " rank-domain:           " << rank_bb.bb_begin.makeDimValStr() <<
-            " ... " << rank_bb.bb_end.subElements(1).makeDimValStr() << endl <<
+            " ... " << rank_bb.bb_end.subElements(1).makeDimValStr() << endl;
 #ifdef USE_MPI
+        os <<
             " num-ranks:             " << _opts->_num_ranks.makeDimValStr(" * ") << endl <<
             " rank-indices:          " << _opts->_rank_indices.makeDimValStr() << endl <<
             " rank-domain-offsets:   " << rank_domain_offsets.makeDimValOffsetStr() << endl;
