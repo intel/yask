@@ -516,7 +516,7 @@ int main(int argc, char** argv)
             } else {
                 cerr << "TEST FAILED on rank " << ri << ": >= " << errs << " mismatch(es).\n" << flush;
                 if (REAL_BYTES < 8)
-                    cerr << "This is not uncommon for low-precision FP; try with 8-byte reals." << endl;
+                    cerr << "Small differences are not uncommon for low-precision FP; try with 8-byte reals." << endl;
                 ok = false;
             }
             ref_soln->end_solution();

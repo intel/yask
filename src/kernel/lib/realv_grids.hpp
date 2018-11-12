@@ -1033,6 +1033,7 @@ namespace yask {
                        makeIndexString(lastv));
 
             // Visit points in slice.
+            // TODO: visit points in all but last dim and write a simple loop for last dim.
             numVecsTuple.visitAllPointsInParallel
                 ([&](const IdxTuple& ofs,
                      size_t idx) {

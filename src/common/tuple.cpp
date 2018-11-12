@@ -247,73 +247,6 @@ namespace yask {
     }
 
     template <typename T>
-    T Tuple<T>::reduce(std::function<T (T lhs, T rhs)> reducer) const {
-        T result = 0;
-        int n = 0;
-        for (auto i : _q) {
-            //auto& tdim = i.getName();
-            auto& tval = i.getVal();
-            if (n == 0)
-                result = tval;
-            else
-                result = reducer(result, tval);
-            n++;
-        }
-        return result;
-    }
-
-    template <typename T>
-    Tuple<T> Tuple<T>::combineElements(std::function<T (T lhs, T rhs)> combiner,
-                                    const Tuple& rhs,
-                                    bool strictRhs) const {
-        Tuple newt = *this;
-        if (strictRhs) {
-            assert(areDimsSame(rhs, true));
-            for (size_t i = 0; i < _q.size(); i++) {
-                auto& tval = _q[i].getVal();
-                auto& rval = rhs[i];
-                T newv = combiner(tval, rval);
-                newt[i] = newv;
-            }
-        }
-        else {
-            for (auto& i : _q) {
-                auto& tdim = i.getName();
-                auto& tval = i.getVal();
-                auto* rp = rhs.lookup(tdim);
-                if (rp) {
-                    T newv = combiner(tval, *rp);
-                    newt.setVal(tdim, newv);
-                }
-            }
-        }
-        return newt;
-    }
-
-    template <typename T>
-    Tuple<T> Tuple<T>::mapElements(std::function<T (T lhs, T rhs)> func,
-                                T rhs) const {
-        Tuple newt = *this;
-        for (size_t i = 0; i < _q.size(); i++) {
-            auto& tval = _q[i].getVal();
-            T newv = func(tval, rhs);
-            newt[i] = newv;
-        }
-        return newt;
-    }
-
-    template <typename T>
-    Tuple<T> Tuple<T>::mapElements(std::function<T (T in)> func) const {
-        Tuple newt = *this;
-        for (size_t i = 0; i < _q.size(); i++) {
-            auto& tval = _q[i].getVal();
-            T newv = func(tval);
-            newt[i] = newv;
-        }
-        return newt;
-    }
-
-    template <typename T>
     std::string Tuple<T>::makeValStr(std::string separator,
                                      std::string prefix,
                                      std::string suffix) const {
@@ -382,45 +315,6 @@ namespace yask {
             n++;
         }
         return oss.str();
-    }
-
-    template <typename T>
-    void Tuple<T>::visitAllPoints(std::function<bool (const Tuple&,
-                                                      size_t idx)> visitor) const {
-
-        // Init lambda fn arg with *this to get dim names.
-        // Values will get set during scan.
-        Tuple tp(*this);
-
-        // 0-D?
-        if (!_q.size())
-            visitor(tp, 0);
-
-        // Call recursive version.
-        // Set begin/step dims depending on nesting.
-        else if (_firstInner)
-            _visitAllPoints(visitor, size()-1, -1, tp);
-        else
-            _visitAllPoints(visitor, 0, 1, tp);
-    }
-
-    template <typename T>
-    void Tuple<T>::visitAllPointsInParallel(std::function<bool (const Tuple&,
-                                                                size_t idx)> visitor) const {
-
-        // 0-D?
-        if (!_q.size()) {
-            Tuple tp(*this);
-            visitor(tp, 0);
-        }
-
-        // Call order-independent version.
-        // Set begin/end/step dims depending on nesting.
-        // TODO: set this depending on dim sizes.
-        else if (_firstInner)
-            _visitAllPointsInPar(visitor, size()-1, -1);
-        else
-            _visitAllPointsInPar(visitor, 0, 1);
     }
 
     // Explicitly allowed instantiations.
