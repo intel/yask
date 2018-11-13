@@ -178,6 +178,9 @@ namespace yask {
         // Set the bounding-box vars for this bundle in this rank.
         void find_bounding_box();
 
+        // Copy BB vars from another.
+        void copy_bounding_box(const StencilBundleBase* src);
+        
         // Determine whether indices are in [sub-]domain.
         virtual bool
         is_in_valid_domain(const Indices& idxs) const =0;
@@ -186,6 +189,10 @@ namespace yask {
         virtual bool
         is_sub_domain_expr() const { return false; }
 
+        // Return human-readable description of sub-domain.
+        virtual std::string
+        get_domain_description() const =0;
+        
         // Determine whether step index is enabled.
         virtual bool
         is_in_valid_step(idx_t input_step_index) const =0;

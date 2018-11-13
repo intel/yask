@@ -548,7 +548,7 @@ namespace yask {
 
             // Domain condition.
             {
-                os << endl << " // Determine whether " << egsName << " is valid at the domain indices " <<
+                os << "\n // Determine whether " << egsName << " is valid at the domain indices " <<
                     _dims._stencilDims.makeDimStr() << ".\n"
                     " // Return true if indices are within the valid sub-domain or false otherwise.\n"
                     " virtual bool is_in_valid_domain(const Indices& idxs) const final {\n";
@@ -561,6 +561,14 @@ namespace yask {
                     " virtual bool is_sub_domain_expr() const {\n"
                     "  return " << (eq->cond ? "true" : "false") <<
                     ";\n }\n";
+
+                os << "\n // Return human-readable description of sub-domain.\n"
+                    " virtual std::string get_domain_description() const {\n";
+                if (eq->cond)
+                    os << " return \"" << eq->cond->makeStr() << "\";\n";
+                else
+                    os << " return \"true\"; // full domain.\n";
+                os << " }\n";
             }
 
             // Step condition.

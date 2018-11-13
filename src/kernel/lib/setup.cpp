@@ -641,6 +641,9 @@ namespace yask {
         ext_bb.bb_end = rank_bb.bb_end.addElements(right_wf_exts);
         ext_bb.update_bb("extended-rank", *this, true);
 
+        // Remember sub-domain for each bundle.
+        map<string, StencilBundleBase*> bb_descrs;
+
         // Find BB for each pack.
         for (auto sp : stPacks) {
             auto& spbb = sp->getBB();
@@ -650,8 +653,21 @@ namespace yask {
             // Find BB for each bundle in this pack.
             for (auto sb : *sp) {
 
+                // Already done?
+                auto bb_descr = sb->get_domain_description();
+                if (bb_descrs.count(bb_descr)) {
+
+                    // Copy existing.
+                    auto* src = bb_descrs.at(bb_descr);
+                    sb->copy_bounding_box(src);
+                }
+                
                 // Find bundle BB.
-                sb->find_bounding_box();
+                else {
+                    sb->find_bounding_box();
+                    bb_descrs[bb_descr] = sb;
+                }
+
                 auto& sbbb = sb->getBB();
 
                 // Expand pack BB to encompass bundle BB.
@@ -669,6 +685,17 @@ namespace yask {
             makeNumStr(bbtimer.get_elapsed_secs()) << " secs.\n" << flush;
     }
 
+    // Copy BB vars from another.
+    void StencilBundleBase::copy_bounding_box(const StencilBundleBase* src) {
+        CONTEXT_VARS(_generic_context);
+        TRACE_MSG3("copy_bounding_box for '" << get_name() << "' from '" <<
+                   src->get_name() << "'...");
+
+        _bundle_bb = src->_bundle_bb;
+        assert(_bundle_bb.bb_valid);
+        _bb_list = src->_bb_list;
+    }
+    
     // Find the bounding-boxes for this bundle in this rank.
     // Only tests domain-var values, not step-vars.
     // Step-vars are tested dynamically for each step
