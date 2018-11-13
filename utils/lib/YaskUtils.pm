@@ -111,17 +111,17 @@ sub removeSuf($) {
   return $val if $val !~ /^[0-9]/;
 
   # Look for suffix.
-  if ($val =~ /^([0-9.e+-]+)\s*(KiB|kB)?$/) {
+  if ($val =~ /^([0-9.e+-]+)\s*(KiB|kB)$/) {
     $val = $1 * $oneKi;
-  } elsif ($val =~ /^([0-9.e+-]+)\s*(MiB|MB)?$/) {
+  } elsif ($val =~ /^([0-9.e+-]+)\s*(MiB|MB)$/) {
     $val = $1 * $oneMi;
-  } elsif ($val =~ /^([0-9.e+-]+)\s*(GiB|GB)?$/) {
+  } elsif ($val =~ /^([0-9.e+-]+)\s*(GiB|GB)$/) {
     $val = $1 * $oneGi;
-  } elsif ($val =~ /^([0-9.e+-]+)\s*(TiB|TB)?$/) {
+  } elsif ($val =~ /^([0-9.e+-]+)\s*(TiB|TB)$/) {
     $val = $1 * $oneTi;
-  } elsif ($val =~ /^([0-9.e+-]+)\s*(PiB|PB)?$/) {
+  } elsif ($val =~ /^([0-9.e+-]+)\s*(PiB|PB)$/) {
     $val = $1 * $onePi;
-  } elsif ($val =~ /^([0-9.e+-]+)\s*(EiB|EB)?$/) {
+  } elsif ($val =~ /^([0-9.e+-]+)\s*(EiB|EB)$/) {
     $val = $1 * $oneEi;
   } elsif ($val =~ /^([0-9.e+-]+)K$/) {
     $val = $1 * $oneK;
