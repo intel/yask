@@ -1771,7 +1771,9 @@ namespace yask {
                                           (send_vec_ok ? "with" : "without") <<
                                           " vector copy into " << buf);
                                 if (send_vec_ok)
-                                    nelems = gp->get_vecs_in_slice(buf, first, last);
+                                    nelems = gp->get_vecs_in_slice(buf,
+                                                                   first, firstStepsToSwap[gp],
+                                                                   last, lastStepsToSwap[gp]);
                                 else
                                     nelems = gp->get_elements_in_slice(buf, first, last);
                                 idx_t nbytes = nelems * cp->get_element_bytes();
@@ -1841,7 +1843,9 @@ namespace yask {
                                           (recv_vec_ok ? "with" : "without") <<
                                           " vector copy from " << buf);
                                 if (recv_vec_ok)
-                                    nelems = gp->set_vecs_in_slice(buf, first, last);
+                                    nelems = gp->set_vecs_in_slice(buf,
+                                                                   first, firstStepsToSwap[gp],
+                                                                   last, lastStepsToSwap[gp]);
                                 else
                                     nelems = gp->set_elements_in_slice(buf, first, last);
                                 assert(nelems <= recvBuf.get_size());

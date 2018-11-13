@@ -393,12 +393,16 @@ namespace yask {
         // Possibly vectorized version of set/get_elements_in_slice().
         virtual idx_t set_vecs_in_slice(const void* buffer_ptr,
                                         const Indices& first_indices,
-                                        const Indices& last_indices) {
+                                        idx_t first_alloc_step_idx,
+                                        const Indices& last_indices,
+                                        idx_t last_alloc_step_idx) {
             return set_elements_in_slice(buffer_ptr, first_indices, last_indices);
         }
         virtual idx_t get_vecs_in_slice(void* buffer_ptr,
                                         const Indices& first_indices,
-                                        const Indices& last_indices) const {
+                                        idx_t first_alloc_step_idx,
+                                        const Indices& last_indices,
+                                        idx_t last_alloc_step_idx) const {
             return get_elements_in_slice(buffer_ptr, first_indices, last_indices);
         }
 
@@ -972,6 +976,7 @@ namespace yask {
 
         // Read one vector.
         // Indices must be normalized and rank-relative.
+        // 'alloc_step_idx' is pre-calculated or 0 if not used.
         inline real_vec_t readVecNorm(const Indices& vec_idxs,
                                       idx_t alloc_step_idx,
                                       int line) const {
@@ -985,6 +990,7 @@ namespace yask {
 
         // Write one vector.
         // Indices must be normalized and rank-relative.
+        // 'alloc_step_idx' is pre-calculated or 0 if not used.
         inline void writeVecNorm(real_vec_t val,
                                  const Indices& vec_idxs,
                                  idx_t alloc_step_idx,
@@ -998,6 +1004,7 @@ namespace yask {
 
         // Prefetch one vector.
         // Indices must be normalized and rank-relative.
+        // 'alloc_step_idx' is pre-calculated or 0 if not used.
         template <int level>
         ALWAYS_INLINE
         void prefetchVecNorm(const Indices& vec_idxs,
@@ -1016,9 +1023,12 @@ namespace yask {
         }
 
         // Vectorized version of set/get_elements_in_slice().
+        // Indices must be vec-normalized and rank-relative.
         virtual idx_t set_vecs_in_slice(const void* buffer_ptr,
                                         const Indices& first_indices,
-                                        const Indices& last_indices) {
+                                        idx_t first_alloc_step_idx,
+                                        const Indices& last_indices,
+                                        idx_t last_alloc_step_idx) {
             if (!is_storage_allocated())
                 return 0;
             Indices firstv, lastv;
@@ -1028,34 +1038,51 @@ namespace yask {
             // Find range.
             IdxTuple numVecsTuple = get_slice_range(firstv, lastv);
             TRACE_MSG0(get_ostr(), "set_vecs_in_slice: setting " <<
-                       numVecsTuple.makeDimValStr(" * ") << " vecs at " <<
+                       numVecsTuple.makeDimValStr(" * ") << " vecs at [" <<
                        makeIndexString(firstv) << " ... " <<
-                       makeIndexString(lastv));
+                       makeIndexString(lastv) << "]");
 
-            // Visit points in slice.
-            // TODO: visit points in all but last dim and write a simple loop for last dim.
-            numVecsTuple.visitAllPointsInParallel
-                ([&](const IdxTuple& ofs,
-                     size_t idx) {
-                    Indices pt = firstv.addElements(ofs);
-                    real_vec_t val = ((real_vec_t*)buffer_ptr)[idx];
+            // Do step loop explicitly.
+            auto sp = +Indices::step_posn;
+            if (_has_step_dim) {
+                assert(last_alloc_step_idx >= first_alloc_step_idx);
+                assert(first_alloc_step_idx == _wrap_step(firstv[sp]));
+                assert(last_alloc_step_idx == _wrap_step(lastv[sp]));
+                numVecsTuple[sp] = 1; // Do one at a time.
+            }
+            idx_t iofs = 0;
+            for (idx_t t = first_alloc_step_idx; t <= last_alloc_step_idx; t++) {
 
-                    // TODO: move this outside of parallel loop when
-                    // step index is const.
-                    idx_t asi = get_alloc_step_index(pt);
+                // Do only this one step.
+                if (_has_step_dim) {
+                    firstv[sp] = t;
+                    lastv[sp] = t;
+                }
 
-                    writeVecNorm(val, pt, asi, __LINE__);
-                    return true;    // keep going.
-                });
+                // Visit points in slice.
+                numVecsTuple.visitAllPointsInParallel
+                    ([&](const IdxTuple& ofs,
+                         size_t idx) {
+                        Indices pt = firstv.addElements(ofs);
+                        real_vec_t val = ((real_vec_t*)buffer_ptr)[idx + iofs];
+                        
+                        writeVecNorm(val, pt, t, __LINE__);
+                        return true;    // keep going.
+                    });
+                iofs += numVecsTuple.product();
+            }
 
             // Set appropriate dirty flag(s).
             set_dirty_in_slice(first_indices, last_indices);
 
             return numVecsTuple.product() * VLEN;
         }
+
         virtual idx_t get_vecs_in_slice(void* buffer_ptr,
                                         const Indices& first_indices,
-                                        const Indices& last_indices) const {
+                                        idx_t first_alloc_step_idx,
+                                        const Indices& last_indices,
+                                        idx_t last_alloc_step_idx) const {
             if (!is_storage_allocated()) {
                 yask_exception e;
                 std::stringstream err;
@@ -1075,22 +1102,41 @@ namespace yask {
                        numVecsTuple.makeDimValStr(" * ") << " vecs at " <<
                        makeIndexString(firstv) << " ... " <<
                        makeIndexString(lastv));
+            auto n = numVecsTuple.product() * VLEN;
 
-            // Visit points in slice.
-            numVecsTuple.visitAllPointsInParallel
-                ([&](const IdxTuple& ofs,
-                     size_t idx) {
-                    Indices pt = firstv.addElements(ofs);
+            // Do step loop explicitly.
+            auto sp = +Indices::step_posn;
+            if (_has_step_dim) {
+                assert(last_alloc_step_idx >= first_alloc_step_idx);
+                assert(first_alloc_step_idx == _wrap_step(firstv[sp]));
+                assert(last_alloc_step_idx == _wrap_step(lastv[sp]));
+                numVecsTuple[sp] = 1; // Do one at a time.
+            }
+            idx_t iofs = 0;
+            for (idx_t t = first_alloc_step_idx; t <= last_alloc_step_idx; t++) {
 
-                    // TODO: move this outside of parallel loop when
-                    // step index is const.
-                    idx_t asi = get_alloc_step_index(pt);
+                // Do only this one step.
+                if (_has_step_dim) {
+                    firstv[sp] = t;
+                    lastv[sp] = t;
+                }
 
-                    real_vec_t val = readVecNorm(pt, asi, __LINE__);
-                    ((real_vec_t*)buffer_ptr)[idx] = val;
-                    return true;    // keep going.
-                });
-            return numVecsTuple.product() * VLEN;
+                // Visit points in slice.
+                numVecsTuple.visitAllPointsInParallel
+                    ([&](const IdxTuple& ofs,
+                         size_t idx) {
+                        Indices pt = firstv.addElements(ofs);
+                        
+                        real_vec_t val = readVecNorm(pt, t, __LINE__);
+                        ((real_vec_t*)buffer_ptr)[idx + iofs] = val;
+                        return true;    // keep going.
+                    });
+                iofs += numVecsTuple.product();
+            }
+            assert(iofs * VLEN == n);
+
+            // Return number of writes.
+            return n;
         }
 
     };                          // YkVecGrid.
