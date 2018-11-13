@@ -29,13 +29,50 @@ IN THE SOFTWARE.
 
 // Simple tests for various YASK DSL features.
 
-class Test1dStencil : public StencilRadiusBase {
-
+// A base class for 1-D stencils.
+class Test1dBase : public StencilRadiusBase {
+    
 protected:
 
     // Indices & dimensions.
     MAKE_STEP_INDEX(t);           // step in time dim.
     MAKE_DOMAIN_INDEX(x);         // spatial dim.
+
+    // Define simple stencil from var 'V' at 't0' centered around 'x0'.
+    // Extend given radius left and/or right w/'*_ext'.
+    virtual GridValue def_1d(Grid& V, const GridIndex& t0, const GridIndex& x0,
+                             int left_ext = 0, int right_ext = 0) {
+        GridValue v = V(t0, x0) + 1.0;
+        int n = 1;
+        for (int r = 1; r <= _radius + left_ext; r++, n++)
+            v += V(t0, x0-r);
+        for (int r = 1; r <= _radius + right_ext; r++, n++)
+            v += V(t0, x0+r);
+        return v / n;
+    }
+
+    // Define simple stencil from scratch var 'V' centered around 'x0'.
+    // Similar to 'def_1d()', but doesn't use time var.
+    virtual GridValue def_scratch_1d(Grid& V, const GridIndex& x0,
+                                     int left_ext = 0, int right_ext = 0) {
+        GridValue v = V(x0) - 2.0;
+        int n = 1;
+        for (int r = 1; r <= _radius + left_ext; r++, n++)
+            v -= V(x0-r);
+        for (int r = 1; r <= _radius + right_ext; r++, n++)
+            v -= V(x0+r);
+        return v / n;
+    }
+
+public:
+
+    Test1dBase(const string& name, StencilList& stencils, int radius) :
+        StencilRadiusBase(name, stencils, radius) { }
+};
+
+class Test1dStencil : public Test1dBase {
+
+protected:
 
     // Vars.
     MAKE_GRID(A, t, x); // time-varying grid.
@@ -43,19 +80,13 @@ protected:
 public:
 
     Test1dStencil(StencilList& stencils, int radius=2) :
-        StencilRadiusBase("test_1d", stencils, radius) { }
-    virtual ~Test1dStencil() { }
+        Test1dBase("test_1d", stencils, radius) { }
 
     // Define equation to apply to all points in 'A' grid.
     virtual void define() {
 
         // define the value at t+1 using asymmetric stencil.
-        GridValue v = A(t, x) + 1.0;       // one center pt.
-        for (int r = 1; r <= _radius; r++) // right side has '_radius' pts.
-            v += A(t, x + r);
-        for (int r = 1; r <= _radius + 2; r++) // left side has '_radius+2' pts.
-            v += A(t, x - r);
-        A(t+1, x) EQUALS v;
+        A(t+1, x) EQUALS def_1d(A, t, x, 0, 2);
     }
 };
 
@@ -187,7 +218,7 @@ public:
 
 REGISTER_STENCIL(Test4dStencil);
 
-// Test misc indicse
+// Test misc indices.
 class TestMisc2dStencil : public StencilRadiusBase {
 
 protected:
@@ -302,13 +333,9 @@ public:
 REGISTER_STENCIL(TestReverseStencil);
 
 // Test dependent equations.
-class TestDepStencil1 : public StencilRadiusBase {
+class TestDepStencil1 : public Test1dBase {
 
 protected:
-
-    // Indices & dimensions.
-    MAKE_STEP_INDEX(t);           // step in time dim.
-    MAKE_DOMAIN_INDEX(x);         // spatial dim.
 
     // Vars.
     MAKE_GRID(A, t, x); // time-varying grid.
@@ -317,26 +344,16 @@ protected:
 public:
 
     TestDepStencil1(StencilList& stencils, int radius=2) :
-        StencilRadiusBase("test_dep_1d", stencils, radius) { }
+        Test1dBase("test_dep_1d", stencils, radius) { }
 
     // Define equation to apply to all points in 'A' and 'B' grids.
     virtual void define() {
 
         // Define A(t+1) from A(t) & stencil at B(t).
-        GridValue u = A(t, x) - B(t, x);
-        for (int r = 1; r <= _radius; r++)
-            u += B(t, x-r);
-        for (int r = 1; r <= _radius + 1; r++)
-            u += B(t, x+r);
-        A(t+1, x) EQUALS u / (_radius * 2 + 2);
+        A(t+1, x) EQUALS A(t, x) - def_1d(B, t, x, 0, 1);
 
         // Define B(t+1) from B(t) & stencil at A(t+1).
-        GridValue v = B(t, x) - A(t+1, x);
-        for (int r = 1; r <= _radius + 3; r++)
-            v += A(t+1, x-r) * 2;
-        for (int r = 1; r <= _radius + 2; r++)
-            v += A(t+1, x+r) * 3;
-        B(t+1, x) EQUALS v / ((_radius * 2 + 6) * 2.5);
+        B(t+1, x) EQUALS B(t, x) - def_1d(A, t+1, x, 3, 2);
     }
 };
 
@@ -344,49 +361,35 @@ REGISTER_STENCIL(TestDepStencil1);
 
 // Test the use of scratch-pad grids.
 
-class TestScratchStencil1 : public StencilRadiusBase {
+class TestScratchStencil1 : public Test1dBase {
 
 protected:
-
-    // Indices & dimensions.
-    MAKE_STEP_INDEX(t);           // step in time dim.
-    MAKE_DOMAIN_INDEX(x);         // spatial dim.
 
     // Vars.
     MAKE_GRID(A, t, x); // time-varying grid.
 
     // Temporary storage.
-    MAKE_SCRATCH_GRID(t1, x);
+    MAKE_SCRATCH_GRID(B, x);
 
 public:
 
     TestScratchStencil1(StencilList& stencils, int radius=2) :
-        StencilRadiusBase("test_scratch_1d", stencils, radius) { }
+        Test1dBase("test_scratch_1d", stencils, radius) { }
 
     // Define equation to apply to all points in 'A' grid.
     virtual void define() {
 
-        // Set scratch var w/an asymmetrical stencil.
-        GridValue u = A(t, x);
-        for (int r = 1; r <= _radius; r++)
-            u += A(t, x-r);
-        for (int r = 1; r <= _radius + 1; r++)
-            u += A(t, x+r);
-        t1(x) EQUALS u / (_radius * 2 + 2);
+        // Define values in scratch var 'B'.
+        B(x) EQUALS def_1d(A, t, x, 1, 0);
 
-        // Set A from scratch vars w/an asymmetrical stencil.
-        GridValue v = t1(x);
-        for (int r = 1; r <= _radius + 2; r++)
-            v += t1(x-r);
-        for (int r = 1; r <= _radius + 3; r++)
-            v += t1(x+r);
-        A(t+1, x) EQUALS v / (_radius * 2 + 6);
+        // Set 'A' from scratch var values.
+        A(t+1, x) EQUALS def_scratch_1d(B, x-4, 2, 3) + def_scratch_1d(B, x+6, 0, 1);
     }
 };
 
 REGISTER_STENCIL(TestScratchStencil1);
 
-class TestScratchStencil2 : public StencilRadiusBase {
+class TestScratchStencil3 : public StencilRadiusBase {
 
 protected:
 
@@ -406,7 +409,7 @@ protected:
 
 public:
 
-    TestScratchStencil2(StencilList& stencils, int radius=2) :
+    TestScratchStencil3(StencilList& stencils, int radius=2) :
         StencilRadiusBase("test_scratch_3d", stencils, radius) { }
 
     // Define equation to apply to all points in 'A' grid.
@@ -438,16 +441,12 @@ public:
     }
 };
 
-REGISTER_STENCIL(TestScratchStencil2);
+REGISTER_STENCIL(TestScratchStencil3);
 
 // Test the use of sub-domains.
-class TestSubdomainStencil1 : public StencilRadiusBase {
+class TestSubdomainStencil1 : public Test1dBase {
 
 protected:
-
-    // Indices & dimensions.
-    MAKE_STEP_INDEX(t);           // step in time dim.
-    MAKE_DOMAIN_INDEX(x);         // spatial dim.
 
     // Vars.
     MAKE_GRID(A, t, x); // time-varying grid.
@@ -455,7 +454,7 @@ protected:
 public:
 
     TestSubdomainStencil1(StencilList& stencils, int radius=2) :
-        StencilRadiusBase("test_subdomain_1d", stencils, radius) { }
+        Test1dBase("test_subdomain_1d", stencils, radius) { }
 
     // Define equation to apply to all points in 'A' grid.
     virtual void define() {
@@ -464,20 +463,11 @@ public:
         Condition sd0 = (x >= first_index(x) + 5) && (x <= last_index(x) - 3);
         
         // Define interior points.
-        GridValue u = A(t, x);
-        for (int r = 1; r <= _radius; r++)
-            u += A(t, x-r);
-        for (int r = 1; r <= _radius + 1; r++)
-            u += A(t, x+r);
-        A(t+1, x) EQUALS u / (_radius * 2 + 2) IF sd0;
+        GridValue u = def_1d(A, t, x, 0, 1);
+        A(t+1, x) EQUALS u IF sd0;
 
         // Define exterior points.
-        GridValue v = A(t, x);
-        for (int r = 1; r <= _radius + 3; r++)
-            v += A(t, x-r) * 2;
-        for (int r = 1; r <= _radius + 2; r++)
-            v += A(t, x+r) * 3;
-        A(t+1, x) EQUALS v / ((_radius * 2 + 6) * 2.5) IF !sd0;
+        A(t+1, x) EQUALS -u IF !sd0;
     }
 };
 
@@ -569,6 +559,41 @@ public:
 };
 
 REGISTER_STENCIL(TestStepCondStencil1);
+
+// Test the use of conditional updates with scratch-pad grids.
+
+class TestScratchSubdomainStencil1 : public Test1dBase {
+
+protected:
+
+    // Vars.
+    MAKE_GRID(A, t, x); // time-varying grid.
+
+    // Temporary storage.
+    MAKE_SCRATCH_GRID(B, x);
+
+public:
+
+    TestScratchSubdomainStencil1(StencilList& stencils, int radius=2) :
+        Test1dBase("test_scratch_subdomain_1d", stencils, radius) { }
+
+    // Define equation to apply to all points in 'A' grid.
+    virtual void define() {
+
+        // Define values in scratch var 'B' using current values from 'A'.
+        B(x) EQUALS def_1d(A, t, x, 1, 0);
+
+        // Define sub-domain.
+        Condition sd0 = (x >= first_index(x) + 5) && (x <= last_index(x) - 3);
+        
+        // Define next values for 'A' from scratch var values.
+        auto v = def_scratch_1d(B, x-6, 2, 3) - def_scratch_1d(B, x+7, 0, 2);
+        A(t+1, x) EQUALS v IF sd0;
+        A(t+1, x) EQUALS -v IF !sd0;
+    }
+};
+
+REGISTER_STENCIL(TestScratchSubdomainStencil1);
 
 // A stencil that has grids, but no stencil equation.
 class TestEmptyStencil1 : public StencilBase {
