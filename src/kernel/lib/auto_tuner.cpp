@@ -23,12 +23,111 @@ IN THE SOFTWARE.
 
 *****************************************************************************/
 
-// This file contains implementations of AutoTuner methods.
+// This file contains implementations of AutoTuner methods and
+// use of the tuner from StencilContext.
 
 #include "yask_stencil.hpp"
 using namespace std;
 
 namespace yask {
+
+    // Eval auto-tuner for given number of steps.
+    void StencilContext::eval_auto_tuner(idx_t num_steps) {
+        _at.steps_done += num_steps;
+
+        if (_use_pack_tuners) {
+            for (auto& sp : stPacks)
+                sp->getAT().eval();
+        }
+        else
+            _at.eval();
+    }
+    
+    // Reset auto-tuners.
+    void StencilContext::reset_auto_tuner(bool enable, bool verbose) {
+        for (auto& sp : stPacks)
+            sp->getAT().clear(!enable, verbose);
+        _at.clear(!enable, verbose);
+    }
+
+    // Determine if any auto tuners are running.
+    bool StencilContext::is_auto_tuner_enabled() const {
+        bool done = true;
+        if (_use_pack_tuners) {
+            for (auto& sp : stPacks)
+                if (!sp->getAT().is_done())
+                    done = false;
+        } else
+            done = _at.is_done();
+        return !done;
+    }
+    
+    // Apply auto-tuning immediately, i.e., not as part of normal processing.
+    // Will alter data in grids.
+    void StencilContext::run_auto_tuner_now(bool verbose) {
+        CONTEXT_VARS(this);
+        if (!rank_bb.bb_valid)
+            THROW_YASK_EXCEPTION("Error: run_auto_tuner_now() called without calling prepare_solution() first");
+
+        os << "Auto-tuning...\n" << flush;
+        YaskTimer at_timer;
+        at_timer.start();
+
+        // Temporarily disable halo exchange to tune intra-rank.
+        enable_halo_exchange = false;
+
+        // Temporarily ignore step conditions to force eval of conditional
+        // bundles.  NB: may affect perf, e.g., if packs A and B run in
+        // AAABAAAB sequence, perf may be [very] different if run as
+        // ABABAB..., esp. w/temporal tiling.  TODO: work around this.
+        check_step_conds = false;
+
+        // Init tuners.
+        reset_auto_tuner(true, verbose);
+
+        // Reset stats.
+        clear_timers();
+
+        // Determine number of steps to run.
+        // If wave-fronts are enabled, run a max number of these steps.
+        idx_t step_dir = _dims->_step_dir; // +/- 1.
+        idx_t step_t = min(max(wf_steps, idx_t(1)), +AutoTuner::max_step_t) * step_dir;
+
+        // Run time-steps until AT converges.
+        for (idx_t t = 0; ; t += step_t) {
+
+            // Run step_t time-step(s).
+            run_solution(t, t + step_t - step_dir);
+
+            // AT done on this rank?
+            if (!is_auto_tuner_enabled())
+                break;
+        }
+
+        // Wait for all ranks to finish.
+        os << "Waiting for auto-tuner to converge on all ranks...\n";
+        _env->global_barrier();
+
+        // reenable normal operation.
+#ifndef NO_HALO_EXCHANGE
+        enable_halo_exchange = true;
+#endif
+        check_step_conds = true;
+
+        // Report results.
+        at_timer.stop();
+        os << "Auto-tuner done after " << steps_done << " step(s) in " <<
+            at_timer.get_elapsed_secs() << " secs.\n";
+        if (_use_pack_tuners) {
+            for (auto& sp : stPacks)
+                sp->getAT().print_settings(os);
+        } else
+            _at.print_settings(os);
+        print_temporal_tiling_info();
+
+        // Reset stats.
+        clear_timers();
+    }
 
     // Print the best settings.
     void AutoTuner::print_settings(ostream& os) const {
