@@ -476,6 +476,18 @@ namespace yask {
                             } // left/right.
                         } // domain dims.
 #endif
+
+                        // Mark grids that [may] have been written to by
+                        // this pack. Mark grids as dirty even if not
+                        // actually written by this rank, perhaps due to
+                        // sub-domains or asymmetrical stencils. This is
+                        // needed because neighbors will not know what grids
+                        // are actually dirty, and all ranks must have the
+                        // same information about which grids are possibly
+                        // dirty.  TODO: make this smarter to save unneeded
+                        // MPI exchanges.
+                        mark_grids_dirty(bp, start_t, stop_t);
+                        
                         // Do the appropriate steps for halo exchange of exterior.
                         // TODO: exchange halo for each dim as soon as it's done.
                         do_mpi_left = do_mpi_right = true;
@@ -547,6 +559,9 @@ namespace yask {
                         } // left/right.
                     } // domain dims.
 
+                    // Mark grids dirty for all packs.
+                    mark_grids_dirty(bp, start_t, stop_t);
+                    
                     // Do the appropriate steps for halo exchange of exterior.
                     // TODO: exchange halo for each dim as soon as it's done.
                     do_mpi_left = do_mpi_right = true;
@@ -732,19 +747,6 @@ namespace yask {
 #include "yask_region_loops.hpp"
                     }
 
-                    // Mark grids that [may] have been written to by this
-                    // pack.  Only mark for exterior computation, because we
-                    // don't care about blocks not needed for MPI sends.
-                    // Mark grids as dirty even if not actually written by
-                    // this rank, perhaps due to sub-domains. This is needed
-                    // because neighbors will not know what grids are
-                    // actually dirty, and all ranks must have the same
-                    // information about which grids are possibly dirty.
-                    // TODO: make this smarter to save unneeded MPI
-                    // exchanges.
-                    if (do_mpi_left || do_mpi_right)
-                        mark_grids_dirty(bp, start_t, stop_t);
-
                     // Need to shift for next pack and/or time.
                     region_shift_num++;
                     
@@ -804,8 +806,10 @@ namespace yask {
                 }
             
                 // Loop thru stencil bundle packs that were evaluated in
-                // these 'tb_steps' to increment shift & mark dirty grids.
-                // TODO: consider moving this inside calc_block().
+                // these 'tb_steps' to increment shift for next region
+                // "layer", if any. This is needed when there are more WF
+                // steps than TB steps.  TODO: consider moving this inside
+                // calc_block().
                 for (idx_t t = start_t; t != stop_t; t += step_dir) {
                     for (auto& bp : stPacks) {
 
@@ -815,10 +819,6 @@ namespace yask {
 
                         // One shift for each pack in each TB step.
                         region_shift_num++;
-
-                        // Mark grids that [may] have been written to by this
-                        // pack.
-                        mark_grids_dirty(bp, t, t + step_dir);
                     }
                 }
             } // with temporal blocking.
@@ -1065,7 +1065,7 @@ namespace yask {
         // Let all other threads continue.
         if (is_overlap_active() && do_mpi_interior) {
             if (region_thread_idx == 0)
-                test_halo_exchange();
+                poke_halo_exchange();
         }
 
         // Init mini-block begin & end from blk start & stop indices.
@@ -1682,8 +1682,7 @@ namespace yask {
                 int posn = gp->get_dim_posn(dname);
                 if (posn >= 0) {
 
-                    // Set rank offset of grid based on starting point of block.
-                    // This is a global index, so it will include the rank offset.
+                    // Set rank offset of grid based on starting point of rank.
                     // Thus, it it not necessarily a vec mult.
                     auto rofs = rank_domain_offsets[j];
                     gp->_set_rank_offset(posn, rofs);
@@ -1694,10 +1693,10 @@ namespace yask {
                     auto vlen = gp->_get_vec_len(posn);
                     
                     // See diagram in yk_grid defn.  Local offset is the
-                    // offset of this grid relative to the current rank.
-                    // Set local offset to diff between global offset and
-                    // rank offset.  Round down to make sure it's
-                    // vec-aligned.
+                    // offset of this grid relative to the beginning of the
+                    // current rank.  Set local offset to diff between
+                    // global offset and rank offset.  Round down to make
+                    // sure it's vec-aligned.
                     auto lofs = round_down_flr(idxs[i] - rofs, vlen);
                     gp->_set_local_offset(posn, lofs);
                 }
@@ -1940,7 +1939,7 @@ namespace yask {
 
     // Call MPI_Test() on all unfinished requests to promote MPI progress.
     // TODO: replace with more direct and less intrusive techniques.
-    void StencilContext::test_halo_exchange() {
+    void StencilContext::poke_halo_exchange() {
         CONTEXT_VARS(this);
 
 #ifdef USE_MPI
@@ -1948,7 +1947,7 @@ namespace yask {
             return;
 
         test_time.start();
-        TRACE_MSG("test_halo_exchange");
+        TRACE_MSG("poke_halo_exchange");
 
         // Loop thru MPI data.
         int num_tests = 0;
@@ -1991,7 +1990,7 @@ namespace yask {
 #endif
         }
         auto ttime = test_time.stop();
-        TRACE_MSG("test_halo_exchange: secs spent in " << num_tests <<
+        TRACE_MSG("poke_halo_exchange: secs spent in " << num_tests <<
                   " MPI test(s): " << makeNumStr(ttime));
 #endif
     }
