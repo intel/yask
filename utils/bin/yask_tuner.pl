@@ -33,30 +33,15 @@ use lib dirname($0)."/lib";
 use lib dirname($0)."/../lib";
 use AI::Genetic;
 use English;
+use FileHandle;
 use Text::ParseWords;
 use Sys::Hostname;
 use List::Util qw(first max maxstr min minstr reduce shuffle sum);
+use YaskUtils;
 use POSIX;
 
 # constants.
 my @dirs = qw(x y z);           # not including t.
-my $oneKi = 1024;
-my $oneMi = $oneKi * $oneKi;
-my $oneGi = $oneKi * $oneMi;
-my $oneTi = $oneKi * $oneGi;
-my $onePi = $oneKi * $oneTi;
-my $oneEi = $oneKi * $onePi;
-my $oneK = 1e3;
-my $oneM = 1e6;
-my $oneG = 1e9;
-my $oneT = 1e12;
-my $oneP = 1e15;
-my $oneE = 1e18;
-my $onem = 1e-3;
-my $oneu = 1e-6;
-my $onen = 1e-9;
-my $onep = 1e-12;
-my $onef = 1e-15;
 
 # command-line options.
 my $outDir = 'logs';           # dir for output.
@@ -322,40 +307,14 @@ print "Output will be saved in '$outDir'.\n";
 # open output.
 mkpath($outDir,1);
 my $outFile = "$outDir/$baseName.csv";
-open OUTFILE, ">$outFile" or die "error: cannot write to '$outFile'\n"
+my $outFH = new FileHandle;
+$outFH->open(">$outFile") or die "error: cannot write to '$outFile'\n"
   unless $checking;
 
 # things to get from the run.
 my $fitnessMetric = 'best-throughput (num-points/sec)';
-my @metrics = ( $fitnessMetric,
-                'best-throughput (num-writes/sec)',
-                'best-throughput (est-FLOPS)',
-                'best-elapsed-time (sec)',
-                'Num OpenMP threads',
-                'overall-domain-size',
-                'rank-domain-size',
-                'region-size',
-                'block-size',
-                'mini-block-size',
-                'sub-block-size',
-                'cluster-size',
-                'vector-size',
-                'num-regions',
-                'num-blocks-per-region-per-step',
-                'max-halos',
-                'extra-padding',
-                'minimum-padding',
-                'L1-prefetch-distance',
-                'L2-prefetch-distance',
-                'num-temporal-block-steps',
-                'num-wave-front-steps',
-                'best-num-steps-done',
-                'best-elapsed-time',
-                'Total overall allocation',
-                'Overall problem size',
-              );
 if ($showGroups) {
-  push @metrics,
+  push @YaskUtils::log_keys,
     'block-group-size',
     'mini-block-group-size';
     'sub-block-group-size';
@@ -377,7 +336,7 @@ my $maxPfd_l2 = 12;
 
 # dimension-related vars.
 my $minDim = 128;        # min dimension on any axis.
-my $maxDim = 2 * $oneKi;  # max dimension on any axis.
+my $maxDim = 2 * $YaskUtils::oneKi;  # max dimension on any axis.
 my $maxPad = 3;
 my $maxTimeBlock = 10;          # max temporal blocking.
 my $maxCluster = 4;
@@ -870,64 +829,6 @@ sub setPassed($$) {
   $$passed = 1 if (/TEST PASSED/);
 }
 
-# set one or more results from one line of output.
-sub setResults($$) {
-  my $results = shift;          # ref to hash.
-  my $line = shift;             # 1 line of output.
-
-  # look for expected metrics.
-  for my $m (@metrics) {
-
-    my $mre = $m;
-    $mre =~ s/\(/\\(/g;
-    $mre =~ s/\)/\\)/g;
-
-    # look for metric at beginning of line followed by ':' or '='.
-    if ($line =~ /^\s*$mre[^:=]*[:=]\s*(.+)/i) {
-      my $val = $1;
-
-      # adjust for suffixes.
-      # TODO: add an option to kernel to suppress suffixes and
-      # remove this code.
-      if ($val =~ /^([0-9.e+-]+)KiB?$/) {
-        $val = $1 * $oneKi;
-      } elsif ($val =~ /^([0-9.e+-]+)MiB?$/) {
-        $val = $1 * $oneMi;
-      } elsif ($val =~ /^([0-9.e+-]+)GiB?$/) {
-        $val = $1 * $oneGi;
-      } elsif ($val =~ /^([0-9.e+-]+)TiB?$/) {
-        $val = $1 * $oneTi;
-      } elsif ($val =~ /^([0-9.e+-]+)PiB?$/) {
-        $val = $1 * $onePi;
-      } elsif ($val =~ /^([0-9.e+-]+)EiB?$/) {
-        $val = $1 * $oneEi;
-      } elsif ($val =~ /^([0-9.e+-]+)K$/) {
-        $val = $1 * $oneK;
-      } elsif ($val =~ /^([0-9.e+-]+)M$/) {
-        $val = $1 * $oneM;
-      } elsif ($val =~ /^([0-9.e+-]+)G$/) {
-        $val = $1 * $oneG;
-      } elsif ($val =~ /^([0-9.e+-]+)T$/) {
-        $val = $1 * $oneT;
-      } elsif ($val =~ /^([0-9.e+-]+)P$/) {
-        $val = $1 * $oneP;
-      } elsif ($val =~ /^([0-9.e+-]+)E$/) {
-        $val = $1 * $oneE;
-      } elsif ($val =~ /^([0-9.e+-]+)f$/) {
-        $val = $1 * $onef;
-      } elsif ($val =~ /^([0-9.e+-]+)p$/) {
-        $val = $1 * $onep;
-      } elsif ($val =~ /^([0-9.e+-]+)n$/) {
-        $val = $1 * $onen;
-      } elsif ($val =~ /^([0-9.e+-]+)u$/) {
-        $val = $1 * $oneu;
-      } elsif ($val =~ /^([0-9.e+-]+)m$/) {
-        $val = $1 * $onem;
-      }
-      $results->{$m} = $val;
-    }
-  }
-}
 
 # hash of previous results, keyed by command to run.
 my %resultsCache;
@@ -1056,7 +957,7 @@ sub evalIndiv($$$$$$$) {
           }
 
           # look for expected metrics in output.
-          setResults($results, $_);
+          YaskUtils::getResultsFromLine($results, $_);
         }
       }
       close CMD;
@@ -1303,7 +1204,7 @@ sub fitness {
     print "  blocks per region = $rBlks\n";
     print "  clusters per block = $bCls\n";
     print "  mini-blocks per block = $bMbs\n";
-    print "  mem estimate = ".($overallSize/$oneGi)." GB\n";
+    print "  mem estimate = ".($overallSize/$YaskUtils::oneGi)." GB\n";
     if ($showGroups) {
       print "  block-group size = $bgPts\n";
       print "  sub-block-group size = $sbgPts\n";
@@ -1311,11 +1212,11 @@ sub fitness {
   }
 
   # check overall size.
-  if (defined $minGB && $overallSize / $oneGi < $minGB) {
+  if (defined $minGB && $overallSize / $YaskUtils::oneGi < $minGB) {
     print "  overall size of $overallSize bytes < $minGB GiB\n" if $debugCheck;
     $checkStats{'mem too low'}++;
     $ok = 0;
-  } elsif (defined $maxGB && $overallSize / $oneGi > $maxGB) {
+  } elsif (defined $maxGB && $overallSize / $YaskUtils::oneGi > $maxGB) {
     print "  overall size of $overallSize bytes > $maxGB GiB\n" if $debugCheck;
     $checkStats{'mem too high'}++;
     $ok = 0;
@@ -1494,13 +1395,10 @@ sub fitness {
     push @cols, $fixedVals{$fk};
   }
   push @cols, @$values, '"'.$makeCmd.'"', '"'.$longRunCmd.'"';
-  for my $m (@metrics) {
-    my $r = $results->{$m};
-    $r = '' if !defined $r;
-    push @cols, ($r =~ /,/) ? '"'.$r.'"' : $r; # add quotes if there is a comma.
-  }
-  push @cols, $fitness, $bestGen, $bestFit, $isBest ? 'TRUE':'FALSE';
-  print OUTFILE join(',', @cols), "\n";
+  print $outFH join(',', @cols);
+  YaskUtils::printCsvValues($results, $outFH);
+  @cols = ( $fitness, $bestGen, $bestFit, $isBest ? 'TRUE':'FALSE' );
+  print $outFH join(',', @cols), "\n";
 
   print "final fitness = $fitness\n".
     "=====================================\n";
@@ -1567,10 +1465,10 @@ sub printNumCombos($) {
 
 # header
 my @names = map { $_->[$nameI] } @ranges;
-print OUTFILE join(',', "run", "generation", "individual",
+print $outFH join(',', "run", "generation", "individual",
                    sort(keys %fixedVals), @names,
                    "make command", "run command",
-                   @metrics, "fitness",
+                   @YaskUtils::log_keys, "fitness",
                    "best generation so far", "best fitness so far", "is this best so far"), "\n"
  unless $checking;
 print "\nSize of search space:\n";
@@ -1647,5 +1545,5 @@ if ($sweep) {
     print "Best score = ", $ga->getFittest->score(), "\n";
   }
 }
-close OUTFILE;
+close $outFH;
 print "Done; output in '$outDir'.\n";

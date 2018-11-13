@@ -205,7 +205,7 @@ struct AppSettings : public KernelSettings {
 
         // Echo invocation parameters for record-keeping.
         os << "Default arguments: " DEF_ARGS << endl;
-        os << "Invocation:";
+        os << "Binary invocation:";
         for (int argi = 0; argi < argc; argi++)
             os << " " << argv[argi];
         os << endl;
