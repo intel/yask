@@ -113,8 +113,8 @@ namespace yask {
 
         // Report ranks.
         os << endl;
-        os << "Num ranks: " << _env->get_num_ranks() << endl;
-        os << "This rank index: " << _env->get_rank_index() << endl;
+        os << "Num MPI ranks: " << _env->get_num_ranks() << endl;
+        os << "This MPI rank index: " << _env->get_rank_index() << endl;
 
         // report threads.
         os << "Num OpenMP procs: " << omp_get_num_procs() << endl;

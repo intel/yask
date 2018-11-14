@@ -31,9 +31,11 @@ use Carp;
 
 # Special keys.
 my $linux_key = "Linux kernel";
+my $nodes_key = "MPI node(s)";
 our @special_log_keys =
   (
    $linux_key,
+   $nodes_key,
    );
 
 # Values to get from log file.
@@ -53,6 +55,7 @@ our @log_keys =
    'stencil name',
    'invocation',
    'binary invocation',
+   'num MPI ranks',
    'num ranks',
    'num OpenMP threads',
    'num threads per region',
@@ -195,7 +198,14 @@ sub getResultsFromLine($$) {
     $results->{$linux_key} = $1;
   }
 
-  # parse other keys with standard regex.
+  # [0] MPI startup(): 0       97842    epb333     {0,1,2,3,4,...
+  elsif ($line =~ /MPI startup\(\):\s*\d+\s+\d+\s+(\w+)/) {
+    my $nname = $1;
+    $results->{$nodes_key} .= ' ' if defined $results->{$nodes_key};
+    $results->{$nodes_key} .= $nname;
+  }
+  
+  # look for matches to all other keys.
   else {
     my ($key, $val) = split /:/,$line,2;
     if (defined $val) {
