@@ -205,7 +205,7 @@ struct AppSettings : public KernelSettings {
 
         // Echo invocation parameters for record-keeping.
         os << "Default arguments: " DEF_ARGS << endl;
-        os << "Invocation:";
+        os << "Binary invocation:";
         for (int argi = 0; argi < argc; argi++)
             os << " " << argv[argi];
         os << endl;
@@ -516,7 +516,7 @@ int main(int argc, char** argv)
             } else {
                 cerr << "TEST FAILED on rank " << ri << ": >= " << errs << " mismatch(es).\n" << flush;
                 if (REAL_BYTES < 8)
-                    cerr << "This is not uncommon for low-precision FP; try with 8-byte reals." << endl;
+                    cerr << "Small differences are not uncommon for low-precision FP; try with 8-byte reals." << endl;
                 ok = false;
             }
             ref_soln->end_solution();

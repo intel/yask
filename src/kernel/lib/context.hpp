@@ -577,7 +577,7 @@ namespace yask {
         void exchange_halos();
 
         // Call MPI_Test() on all unfinished requests to promote MPI progress.
-        void test_halo_exchange();
+        void poke_halo_exchange();
 
         // Mark grids that have been written to by bundle pack 'sel_bp'.
         // If sel_bp==null, use all bundles.

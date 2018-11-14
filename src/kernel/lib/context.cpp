@@ -24,89 +24,12 @@ IN THE SOFTWARE.
 *****************************************************************************/
 
 // This file contains implementations of StencilContext methods.
-// Also see setup.cpp.
+// Also see setup.cpp and soln_apis.cpp.
 
 #include "yask_stencil.hpp"
 using namespace std;
 
 namespace yask {
-
-    // APIs.
-    // See yask_kernel_api.hpp.
-
-#define GET_SOLN_API(api_name, expr, step_ok, domain_ok, misc_ok, prep_req) \
-    idx_t StencilContext::api_name(const string& dim) const {           \
-        if (prep_req && !rank_bb.bb_valid)                              \
-            THROW_YASK_EXCEPTION("Error: '" #api_name \
-                                 "()' called before calling 'prepare_solution()'"); \
-        checkDimType(dim, #api_name, step_ok, domain_ok, misc_ok);      \
-        return expr;                                                    \
-    }
-    GET_SOLN_API(get_num_ranks, _opts->_num_ranks[dim], false, true, false, false)
-    GET_SOLN_API(get_overall_domain_size, overall_domain_sizes[dim], false, true, false, true)
-    GET_SOLN_API(get_rank_domain_size, _opts->_rank_sizes[dim], false, true, false, false)
-    GET_SOLN_API(get_region_size, _opts->_region_sizes[dim], true, true, false, false)
-    GET_SOLN_API(get_block_size, _opts->_block_sizes[dim], true, true, false, false)
-    GET_SOLN_API(get_first_rank_domain_index, rank_bb.bb_begin[dim], false, true, false, true)
-    GET_SOLN_API(get_last_rank_domain_index, rank_bb.bb_end[dim] - 1, false, true, false, true)
-    GET_SOLN_API(get_min_pad_size, _opts->_min_pad_sizes[dim], false, true, false, false)
-    GET_SOLN_API(get_rank_index, _opts->_rank_indices[dim], false, true, false, true)
-#undef GET_SOLN_API
-
-    // The grid sizes updated any time these settings are changed.
-#define SET_SOLN_API(api_name, expr, step_ok, domain_ok, misc_ok, reset_prep) \
-    void StencilContext::api_name(const string& dim, idx_t n) {         \
-        checkDimType(dim, #api_name, step_ok, domain_ok, misc_ok);      \
-        expr;                                                           \
-        update_grid_info();                                             \
-        if (reset_prep) rank_bb.bb_valid = ext_bb.bb_valid = false;     \
-    }
-    SET_SOLN_API(set_rank_index, _opts->_rank_indices[dim] = n, false, true, false, true)
-    SET_SOLN_API(set_num_ranks, _opts->_num_ranks[dim] = n, false, true, false, true)
-    SET_SOLN_API(set_rank_domain_size, _opts->_rank_sizes[dim] = n, false, true, false, true)
-    SET_SOLN_API(set_region_size, _opts->_region_sizes[dim] = n, true, true, false, true)
-    SET_SOLN_API(set_block_size, _opts->_block_sizes[dim] = n, true, true, false, true)
-    SET_SOLN_API(set_min_pad_size, _opts->_min_pad_sizes[dim] = n, false, true, false, false)
-#undef SET_SOLN_API
-
-    void StencilContext::share_grid_storage(yk_solution_ptr source) {
-        auto sp = dynamic_pointer_cast<StencilContext>(source);
-        assert(sp);
-
-        for (auto gp : gridPtrs) {
-            auto gname = gp->get_name();
-            auto si = sp->gridMap.find(gname);
-            if (si != sp->gridMap.end()) {
-                auto sgp = si->second;
-                gp->share_storage(sgp);
-            }
-        }
-    }
-
-    string StencilContext::apply_command_line_options(const string& args) {
-
-        // Create a parser and add base options to it.
-        CommandLineParser parser;
-        _opts->add_options(parser);
-
-        // Tokenize default args.
-        vector<string> argsv;
-        parser.set_args(args, argsv);
-
-        // Parse cmd-line options, which sets values in settings.
-        parser.parse_args("YASK", argsv);
-
-        // Return any left-over strings.
-        string rem;
-        for (auto r : argsv) {
-            if (rem.length())
-                rem += " ";
-            rem += r;
-        }
-        return rem;
-    }
-
-    ///// StencilContext functions:
 
     // Set debug output to cout if my_rank == msg_rank
     // or a null stream otherwise.
@@ -476,6 +399,18 @@ namespace yask {
                             } // left/right.
                         } // domain dims.
 #endif
+
+                        // Mark grids that [may] have been written to by
+                        // this pack. Mark grids as dirty even if not
+                        // actually written by this rank, perhaps due to
+                        // sub-domains or asymmetrical stencils. This is
+                        // needed because neighbors will not know what grids
+                        // are actually dirty, and all ranks must have the
+                        // same information about which grids are possibly
+                        // dirty.  TODO: make this smarter to save unneeded
+                        // MPI exchanges.
+                        mark_grids_dirty(bp, start_t, stop_t);
+                        
                         // Do the appropriate steps for halo exchange of exterior.
                         // TODO: exchange halo for each dim as soon as it's done.
                         do_mpi_left = do_mpi_right = true;
@@ -493,6 +428,10 @@ namespace yask {
                     TRACE_MSG("run_solution: step " << start_t <<
                               " for pack '" << bp->get_name() << "'");
 #include "yask_rank_loops.hpp"
+
+                    // Mark as dirty only if we did exterior.
+                    if (do_mpi_left || do_mpi_right)
+                        mark_grids_dirty(bp, start_t, stop_t);
 
                     // Do the appropriate steps for halo exchange depending
                     // on 'do_mpi_*' flags.
@@ -547,6 +486,9 @@ namespace yask {
                         } // left/right.
                     } // domain dims.
 
+                    // Mark grids dirty for all packs.
+                    mark_grids_dirty(bp, start_t, stop_t);
+                    
                     // Do the appropriate steps for halo exchange of exterior.
                     // TODO: exchange halo for each dim as soon as it's done.
                     do_mpi_left = do_mpi_right = true;
@@ -564,6 +506,10 @@ namespace yask {
                 TRACE_MSG("run_solution: steps [" << start_t <<
                           " ... " << stop_t << ")");
 #include "yask_rank_loops.hpp"
+
+                // Mark as dirty only if we did exterior.
+                if (do_mpi_left || do_mpi_right)
+                    mark_grids_dirty(bp, start_t, stop_t);
 
                 // Do the appropriate steps for halo exchange depending
                 // on 'do_mpi_*' flags.
@@ -732,19 +678,6 @@ namespace yask {
 #include "yask_region_loops.hpp"
                     }
 
-                    // Mark grids that [may] have been written to by this
-                    // pack.  Only mark for exterior computation, because we
-                    // don't care about blocks not needed for MPI sends.
-                    // Mark grids as dirty even if not actually written by
-                    // this rank, perhaps due to sub-domains. This is needed
-                    // because neighbors will not know what grids are
-                    // actually dirty, and all ranks must have the same
-                    // information about which grids are possibly dirty.
-                    // TODO: make this smarter to save unneeded MPI
-                    // exchanges.
-                    if (do_mpi_left || do_mpi_right)
-                        mark_grids_dirty(bp, start_t, stop_t);
-
                     // Need to shift for next pack and/or time.
                     region_shift_num++;
                     
@@ -804,8 +737,10 @@ namespace yask {
                 }
             
                 // Loop thru stencil bundle packs that were evaluated in
-                // these 'tb_steps' to increment shift & mark dirty grids.
-                // TODO: consider moving this inside calc_block().
+                // these 'tb_steps' to increment shift for next region
+                // "layer", if any. This is needed when there are more WF
+                // steps than TB steps.  TODO: consider moving this inside
+                // calc_block().
                 for (idx_t t = start_t; t != stop_t; t += step_dir) {
                     for (auto& bp : stPacks) {
 
@@ -815,10 +750,6 @@ namespace yask {
 
                         // One shift for each pack in each TB step.
                         region_shift_num++;
-
-                        // Mark grids that [may] have been written to by this
-                        // pack.
-                        mark_grids_dirty(bp, t, t + step_dir);
                     }
                 }
             } // with temporal blocking.
@@ -1065,7 +996,7 @@ namespace yask {
         // Let all other threads continue.
         if (is_overlap_active() && do_mpi_interior) {
             if (region_thread_idx == 0)
-                test_halo_exchange();
+                poke_halo_exchange();
         }
 
         // Init mini-block begin & end from blk start & stop indices.
@@ -1537,123 +1468,6 @@ namespace yask {
         return ok;
     }
     
-    // Eval auto-tuner for given number of steps.
-    void StencilContext::eval_auto_tuner(idx_t num_steps) {
-        _at.steps_done += num_steps;
-
-        if (_use_pack_tuners) {
-            for (auto& sp : stPacks)
-                sp->getAT().eval();
-        }
-        else
-            _at.eval();
-    }
-    
-    // Reset auto-tuners.
-    void StencilContext::reset_auto_tuner(bool enable, bool verbose) {
-        for (auto& sp : stPacks)
-            sp->getAT().clear(!enable, verbose);
-        _at.clear(!enable, verbose);
-    }
-
-    // Determine if any auto tuners are running.
-    bool StencilContext::is_auto_tuner_enabled() const {
-        bool done = true;
-        if (_use_pack_tuners) {
-            for (auto& sp : stPacks)
-                if (!sp->getAT().is_done())
-                    done = false;
-        } else
-            done = _at.is_done();
-        return !done;
-    }
-    
-    // Apply auto-tuning immediately, i.e., not as part of normal processing.
-    // Will alter data in grids.
-    void StencilContext::run_auto_tuner_now(bool verbose) {
-        CONTEXT_VARS(this);
-        if (!rank_bb.bb_valid)
-            THROW_YASK_EXCEPTION("Error: run_auto_tuner_now() called without calling prepare_solution() first");
-
-        os << "Auto-tuning...\n" << flush;
-        YaskTimer at_timer;
-        at_timer.start();
-
-        // Temporarily disable halo exchange to tune intra-rank.
-        enable_halo_exchange = false;
-
-        // Temporarily ignore step conditions to force eval of conditional
-        // bundles.  NB: may affect perf, e.g., if packs A and B run in
-        // AAABAAAB sequence, perf may be [very] different if run as
-        // ABABAB..., esp. w/temporal tiling.  TODO: work around this.
-        check_step_conds = false;
-
-        // Init tuners.
-        reset_auto_tuner(true, verbose);
-
-        // Reset stats.
-        clear_timers();
-
-        // Determine number of steps to run.
-        // If wave-fronts are enabled, run a max number of these steps.
-        idx_t step_dir = _dims->_step_dir; // +/- 1.
-        idx_t step_t = min(max(wf_steps, idx_t(1)), +AutoTuner::max_step_t) * step_dir;
-
-        // Run time-steps until AT converges.
-        for (idx_t t = 0; ; t += step_t) {
-
-            // Run step_t time-step(s).
-            run_solution(t, t + step_t - step_dir);
-
-            // AT done on this rank?
-            if (!is_auto_tuner_enabled())
-                break;
-        }
-
-        // Wait for all ranks to finish.
-        os << "Waiting for auto-tuner to converge on all ranks...\n";
-        _env->global_barrier();
-
-        // reenable normal operation.
-#ifndef NO_HALO_EXCHANGE
-        enable_halo_exchange = true;
-#endif
-        check_step_conds = true;
-
-        // Report results.
-        at_timer.stop();
-        os << "Auto-tuner done after " << steps_done << " step(s) in " <<
-            at_timer.get_elapsed_secs() << " secs.\n";
-        if (_use_pack_tuners) {
-            for (auto& sp : stPacks)
-                sp->getAT().print_settings(os);
-        } else
-            _at.print_settings(os);
-        print_temporal_tiling_info();
-
-        // Reset stats.
-        clear_timers();
-    }
-
-    // Add a new grid to the containers.
-    void StencilContext::addGrid(YkGridPtr gp, bool is_output) {
-        CONTEXT_VARS(this);
-        assert(gp);
-        auto& gname = gp->get_name();
-        if (gridMap.count(gname))
-            THROW_YASK_EXCEPTION("Error: grid '" + gname + "' already exists");
-
-        // Add to list and map.
-        gridPtrs.push_back(gp);
-        gridMap[gname] = gp;
-
-        // Add to output list and map if 'is_output'.
-        if (is_output) {
-            outputGridPtrs.push_back(gp);
-            outputGridMap[gname] = gp;
-        }
-    }
-
     // Adjust offsets of scratch grids based on thread number 'thread_idx'
     // and beginning point of block 'idxs'.  Each scratch-grid is assigned
     // to a thread, so it must "move around" as the thread is assigned to
@@ -1682,8 +1496,7 @@ namespace yask {
                 int posn = gp->get_dim_posn(dname);
                 if (posn >= 0) {
 
-                    // Set rank offset of grid based on starting point of block.
-                    // This is a global index, so it will include the rank offset.
+                    // Set rank offset of grid based on starting point of rank.
                     // Thus, it it not necessarily a vec mult.
                     auto rofs = rank_domain_offsets[j];
                     gp->_set_rank_offset(posn, rofs);
@@ -1694,229 +1507,15 @@ namespace yask {
                     auto vlen = gp->_get_vec_len(posn);
                     
                     // See diagram in yk_grid defn.  Local offset is the
-                    // offset of this grid relative to the current rank.
-                    // Set local offset to diff between global offset and
-                    // rank offset.  Round down to make sure it's
-                    // vec-aligned.
+                    // offset of this grid relative to the beginning of the
+                    // current rank.  Set local offset to diff between
+                    // global offset and rank offset.  Round down to make
+                    // sure it's vec-aligned.
                     auto lofs = round_down_flr(idxs[i] - rofs, vlen);
                     gp->_set_local_offset(posn, lofs);
                 }
             }
         }
-    }
-
-    static void print_pct(ostream& os, double ntime, double dtime) {
-        if (dtime > 0.) {
-            float pct = 100. * ntime / dtime;
-            os << " (" << pct << "%)";
-        }
-        os << endl;
-    }
-
-    /// Get statistics associated with preceding calls to run_solution().
-    yk_stats_ptr StencilContext::get_stats() {
-        CONTEXT_VARS(this);
-
-        // Numbers of threads.
-        int rthr, bthr;
-        int athr = get_num_comp_threads(rthr, bthr);
-
-        // 'run_time' covers all of 'run_solution()' and subsumes
-        // all other timers. Measured outside parallel region.
-        double rtime = run_time.get_elapsed_secs();
-
-        // 'halo_time' covers calls to 'exchange_halos()'.
-        // Measured outside parallel region.
-        double hetime = min(halo_time.get_elapsed_secs(), rtime);
-
-        // 'wait_time' is part of 'halo_time'.
-        double wtime = min(wait_time.get_elapsed_secs(), hetime);
-
-        // Exterior and interior parts. Measured outside parallel region.
-        // Does not include 'halo_time'.
-        double etime = min(ext_time.get_elapsed_secs(), rtime - hetime);
-        double itime = int_time.get_elapsed_secs();
-
-        // 'test_time' is part of 'int_time', but only on region thread 0.
-        // It's not part of 'halo_time'.
-        double ttime = test_time.get_elapsed_secs() / rthr; // ave.
-
-        // Remove average test time from interior time.
-        itime -= ttime;
-        itime = min(itime, rtime - hetime - etime);
-
-        // Compute time.
-        double ctime = etime + itime;
-
-        // All halo time.
-        double htime = hetime + ttime;
-
-        // Other.
-        double otime = max(rtime - ctime - htime, 0.0);
-
-        // Init return object.
-        auto p = make_shared<Stats>();
-        p->npts = tot_domain_pts; // NOT sum over steps.
-        p->nsteps = steps_done;
-        p->run_time = rtime;
-        p->halo_time = htime;
-        p->nreads = 0;
-        p->nwrites = 0;
-        p->nfpops = 0;
-        p->pts_ps = 0.;
-        p->reads_ps = 0.;
-        p->writes_ps = 0.;
-        p->flops = 0.;
-
-        // Sum work done across packs using per-pack step counters.
-        double tptime = 0.;
-        double optime = 0.;
-        idx_t psteps = 0;
-        for (auto& sp : stPacks) {
-
-            // steps in this pack.
-            idx_t ns = sp->steps_done;
-
-            auto& ps = sp->stats;
-            ps.nsteps = ns;
-            ps.npts = tot_domain_pts; // NOT sum over steps.
-            ps.nreads = sp->tot_reads_per_step * ns;
-            ps.nwrites = sp->tot_writes_per_step * ns;
-            ps.nfpops = sp->tot_fpops_per_step * ns;
-
-            // Add to total work.
-            psteps += ns;
-            p->nreads += ps.nreads;
-            p->nwrites += ps.nwrites;
-            p->nfpops += ps.nfpops;
-
-            // Adjust pack time to make sure total time is <= compute time.
-            double ptime = sp->timer.get_elapsed_secs();
-            ptime = min(ptime, ctime - tptime);
-            tptime += ptime;
-            ps.run_time = ptime;
-            ps.halo_time = 0.;
-
-            // Pack rates.
-            idx_t np = tot_domain_pts * ns; // Sum over steps.
-            ps.reads_ps = 0.;
-            ps.writes_ps = 0.;
-            ps.flops = 0.;
-            ps.pts_ps = 0.;
-            if (ptime > 0.) {
-                ps.reads_ps = ps.nreads / ptime;
-                ps.writes_ps = ps.nwrites / ptime;
-                ps.flops = ps.nfpops / ptime;
-                ps.pts_ps = np / ptime;
-            }
-        }
-        optime = max(ctime - tptime, 0.); // remaining time.
-
-        // Overall rates.
-        idx_t npts_done = tot_domain_pts * steps_done;
-        if (rtime > 0.) {
-            p->reads_ps= double(p->nreads) / rtime;
-            p->writes_ps= double(p->nwrites) / rtime;
-            p->flops = double(p->nfpops) / rtime;
-            p->pts_ps = double(npts_done) / rtime;
-        }
-      
-        if (steps_done > 0) {
-            os <<
-                "\nWork stats:\n"
-                " num-steps-done:                   " << makeNumStr(steps_done) << endl <<
-                " num-reads-per-step:               " << makeNumStr(double(p->nreads) / steps_done) << endl <<
-                " num-writes-per-step:              " << makeNumStr(double(p->nwrites) / steps_done) << endl <<
-                " num-est-FP-ops-per-step:          " << makeNumStr(double(p->nfpops) / steps_done) << endl <<
-                " num-points-per-step:              " << makeNumStr(tot_domain_pts) << endl;
-            if (psteps != steps_done) {
-                os <<
-                    " Work breakdown by stencil pack(s):\n";
-                for (auto& sp : stPacks) {
-                    idx_t ns = sp->steps_done;
-                    idx_t nreads = sp->tot_reads_per_step;
-                    idx_t nwrites = sp->tot_writes_per_step;
-                    idx_t nfpops = sp->tot_fpops_per_step;
-                    string pfx = "  '" + sp->get_name() + "' ";
-                    os << pfx << "num-steps-done:           " << makeNumStr(ns) << endl <<
-                        pfx << "num-reads-per-step:       " << makeNumStr(nreads) << endl <<
-                        pfx << "num-writes-per-step:      " << makeNumStr(nwrites) << endl <<
-                        pfx << "num-est-FP-ops-per-step:  " << makeNumStr(nfpops) << endl;
-                }
-            }
-            os << 
-                "\nTime stats:\n"
-                " elapsed-time (sec):               " << makeNumStr(rtime) << endl <<
-                " Time breakdown by activity type:\n"
-                "  compute time (sec):                " << makeNumStr(ctime);
-            print_pct(os, ctime, rtime);
-#ifdef USE_MPI
-            os <<
-                "  halo exchange time (sec):          " << makeNumStr(htime);
-            print_pct(os, htime, rtime);
-#endif
-            os <<
-                "  other time (sec):                  " << makeNumStr(otime);
-            print_pct(os, otime, rtime);
-            if (psteps != steps_done) {
-                os <<
-                    " Compute-time breakdown by stencil pack(s):\n";
-                for (auto& sp : stPacks) {
-                    auto& ps = sp->stats;
-                    double ptime = ps.run_time;
-                    string pfx = "  '" + sp->get_name() + "' ";
-                    os << pfx << "time (sec):       " << makeNumStr(ptime);
-                    print_pct(os, ptime, ctime);
-                }
-                os << "  other (sec):                       " << makeNumStr(optime);
-                print_pct(os, optime, ctime);
-            }
-#ifdef USE_MPI
-            os <<
-                " Compute-time breakdown by halo area:\n"
-                "  rank-exterior compute (sec):       " << makeNumStr(etime);
-            print_pct(os, etime, ctime);
-            os <<
-                "  rank-interior compute (sec):       " << makeNumStr(itime);
-            print_pct(os, itime, ctime);
-            os <<
-                " Halo-time breakdown:\n"
-                "  MPI waits (sec):                   " << makeNumStr(wtime);
-            print_pct(os, wtime, htime);
-            os <<
-                "  MPI tests (sec):                   " << makeNumStr(ttime);
-            print_pct(os, ttime, htime);
-            double ohtime = max(htime - wtime - ttime, 0.);
-            os <<
-                "  packing, unpacking, etc. (sec):    " << makeNumStr(ohtime);
-            print_pct(os, ohtime, htime);
-#endif
-            os <<
-                "\nRate stats:\n"
-                " throughput (num-reads/sec):       " << makeNumStr(p->reads_ps) << endl <<
-                " throughput (num-writes/sec):      " << makeNumStr(p->writes_ps) << endl <<
-                " throughput (est-FLOPS):           " << makeNumStr(p->flops) << endl <<
-                " throughput (num-points/sec):      " << makeNumStr(p->pts_ps) << endl;
-            if (psteps != steps_done) {
-                os <<
-                    " Rate breakdown by stencil pack(s):\n";
-                for (auto& sp : stPacks) {
-                    auto& ps = sp->stats;
-                    string pfx = "  '" + sp->get_name() + "' ";
-                    os <<
-                        pfx << "throughput (num-reads/sec):   " << makeNumStr(ps.reads_ps) << endl <<
-                        pfx << "throughput (num-writes/sec):  " << makeNumStr(ps.writes_ps) << endl <<
-                        pfx << "throughput (est-FLOPS):       " << makeNumStr(ps.flops) << endl <<
-                        pfx << "throughput (num-points/sec):  " << makeNumStr(ps.pts_ps) << endl;
-                    
-                }
-            }
-        }
-
-        // Clear counters.
-        clear_timers();
-
-        return p;
     }
 
     // Compare grids in contexts.
@@ -1940,7 +1539,7 @@ namespace yask {
 
     // Call MPI_Test() on all unfinished requests to promote MPI progress.
     // TODO: replace with more direct and less intrusive techniques.
-    void StencilContext::test_halo_exchange() {
+    void StencilContext::poke_halo_exchange() {
         CONTEXT_VARS(this);
 
 #ifdef USE_MPI
@@ -1948,7 +1547,7 @@ namespace yask {
             return;
 
         test_time.start();
-        TRACE_MSG("test_halo_exchange");
+        TRACE_MSG("poke_halo_exchange");
 
         // Loop thru MPI data.
         int num_tests = 0;
@@ -1991,7 +1590,7 @@ namespace yask {
 #endif
         }
         auto ttime = test_time.stop();
-        TRACE_MSG("test_halo_exchange: secs spent in " << num_tests <<
+        TRACE_MSG("poke_halo_exchange: secs spent in " << num_tests <<
                   " MPI test(s): " << makeNumStr(ttime));
 #endif
     }
@@ -2180,7 +1779,9 @@ namespace yask {
                                           (send_vec_ok ? "with" : "without") <<
                                           " vector copy into " << buf);
                                 if (send_vec_ok)
-                                    nelems = gp->get_vecs_in_slice(buf, first, last);
+                                    nelems = gp->get_vecs_in_slice(buf,
+                                                                   first, firstStepsToSwap[gp],
+                                                                   last, lastStepsToSwap[gp]);
                                 else
                                     nelems = gp->get_elements_in_slice(buf, first, last);
                                 idx_t nbytes = nelems * cp->get_element_bytes();
@@ -2250,7 +1851,9 @@ namespace yask {
                                           (recv_vec_ok ? "with" : "without") <<
                                           " vector copy from " << buf);
                                 if (recv_vec_ok)
-                                    nelems = gp->set_vecs_in_slice(buf, first, last);
+                                    nelems = gp->set_vecs_in_slice(buf,
+                                                                   first, firstStepsToSwap[gp],
+                                                                   last, lastStepsToSwap[gp]);
                                 else
                                     nelems = gp->set_elements_in_slice(buf, first, last);
                                 assert(nelems <= recvBuf.get_size());
@@ -2354,24 +1957,19 @@ namespace yask {
                             grids_done[gp].insert(t_out);
                         }
                     }
-                }
-            }
+                } // bundles.
+            } // steps.
+        } // packs.
+    } // mark_grids_dirty().
+
+    // Reset any locks, etc.
+    void StencilContext::reset_locks() {
+
+        // MPI buffer locks.
+        for (auto& mdi : mpiData) {
+            auto& md = mdi.second;
+            md.reset_locks();
         }
     }
 
-    // Reset elapsed times to zero.
-    void StencilContext::clear_timers() {
-        run_time.clear();
-        ext_time.clear();
-        int_time.clear();
-        halo_time.clear();
-        wait_time.clear();
-        test_time.clear();
-        steps_done = 0;
-        for (auto& sp : stPacks) {
-            sp->timer.clear();
-            sp->steps_done = 0;
-        }
-    }
-    
 } // namespace yask.
