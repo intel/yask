@@ -1467,9 +1467,10 @@ sub printNumCombos($) {
 my @names = map { $_->[$nameI] } @ranges;
 print $outFH join(',', "run", "generation", "individual",
                    sort(keys %fixedVals), @names,
-                   "make command", "run command",
-                   @YaskUtils::log_keys, "fitness",
-                   "best generation so far", "best fitness so far", "is this best so far"), "\n"
+                  "make command", "run command", '');
+YaskUtils::printCsvHeader($outFH);
+print $outFH join(',', '', "fitness", "best generation so far",
+                  "best fitness so far", "is this best so far"), "\n"
  unless $checking;
 print "\nSize of search space:\n";
 my $nt = 1;

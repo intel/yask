@@ -29,6 +29,13 @@ use strict;
 use FileHandle;
 use Carp;
 
+# Special keys.
+my $linux_key = "Linux kernel";
+our @special_log_keys =
+  (
+   $linux_key,
+   );
+
 # Values to get from log file.
 # Key must start with the following string.
 # Case ignored.
@@ -80,6 +87,8 @@ our @log_keys =
    'mem free',
   );
 
+our @all_log_keys = ( @log_keys, @special_log_keys );
+
 
 our $oneKi = 1024;
 our $oneMi = $oneKi * $oneKi;
@@ -111,17 +120,17 @@ sub removeSuf($) {
   return $val if $val !~ /^[0-9]/;
 
   # Look for suffix.
-  if ($val =~ /^([0-9.e+-]+)\s*(KiB|kB)$/) {
+  if ($val =~ /^([0-9.e+-]+)\s*Ki?B$/i) {
     $val = $1 * $oneKi;
-  } elsif ($val =~ /^([0-9.e+-]+)\s*(MiB|MB)$/) {
+  } elsif ($val =~ /^([0-9.e+-]+)\s*Mi?B$/i) {
     $val = $1 * $oneMi;
-  } elsif ($val =~ /^([0-9.e+-]+)\s*(GiB|GB)$/) {
+  } elsif ($val =~ /^([0-9.e+-]+)\s*Gi?B$/i) {
     $val = $1 * $oneGi;
-  } elsif ($val =~ /^([0-9.e+-]+)\s*(TiB|TB)$/) {
+  } elsif ($val =~ /^([0-9.e+-]+)\s*Ti?B$/i) {
     $val = $1 * $oneTi;
-  } elsif ($val =~ /^([0-9.e+-]+)\s*(PiB|PB)$/) {
+  } elsif ($val =~ /^([0-9.e+-]+)\s*Pi?B$/i) {
     $val = $1 * $onePi;
-  } elsif ($val =~ /^([0-9.e+-]+)\s*(EiB|EB)$/) {
+  } elsif ($val =~ /^([0-9.e+-]+)\s*Ei?B$/i) {
     $val = $1 * $oneEi;
   } elsif ($val =~ /^([0-9.e+-]+)K$/) {
     $val = $1 * $oneK;
@@ -150,29 +159,71 @@ sub removeSuf($) {
 }
 
 # set one or more results from one line of output.
+my %proc_keys;
+my $klen = 3;
 sub getResultsFromLine($$) {
   my $results = shift;          # ref to hash.
   my $line = shift;             # 1 line of output.
 
-  return unless $line =~ /[:=]/;
+  chomp($line);
 
-  # look for expected metrics.
-  for my $m (@log_keys) {
+  # pre-process keys.
+  if (scalar keys %proc_keys == 0) {
+    undef %proc_keys;
+    for my $m (@log_keys) {
 
-    # escape regex chars.
-    my $mre = $m;
-    $mre =~ s/\(/\\(/g;
-    $mre =~ s/\)/\\)/g;
+      my $pm = lc $m;
+      $pm =~ s/^\s+//;
+      $pm =~ s/\s+$//;
 
-    # hyphen or space can match either or none.
-    $mre =~ s/[- ]/\[- \]?/g;
+      # relax hyphen and space match.
+      $pm =~ s/[- ]+/-/g;
 
-    # look for metric at beginning of line followed by ':' or '='.
-    if ($line =~ /^\s*$mre[^:=]*[:=]\s*(.+)/i) {
-      my $val = $1;
+      # short key.
+      my $sk = substr $pm,0,$klen;
+      
+      # escape regex chars.
+      $pm =~ s/\(/\\(/g;
+      $pm =~ s/\)/\\)/g;
 
-      # Save value w/converted suffix.
-      $results->{$m} = removeSuf($val);
+      $proc_keys{$sk}{$pm} = $m;
+    }
+  }
+  
+  # special cases for manual parsing.
+  if ($line =~ /^\s*Linux\s+\w+\s+(\S+)/) {
+    $results->{$linux_key} = $1;
+  }
+
+  # parse other keys with standard regex.
+  else {
+    my ($key, $val) = split /:/,$line,2;
+    if (defined $val) {
+      $key = lc $key;
+      $key =~ s/^\s+//;
+      $key =~ s/[- ]+/-/g; # relax hyphen and space match.
+
+      # short key.
+      my $sk = substr $key,0,$klen;
+
+      # quick match?
+      return if !exists $proc_keys{$sk};
+      
+      # look for exact key.
+      for my $m (keys %{$proc_keys{$sk}}) {
+
+        # match?
+        if ($key =~ /^$m/) {
+          $val =~ s/^\s+//;
+          $val =~ s/\s+$//;
+          $val = removeSuf($val);
+
+          # Save value w/converted suffix.
+          my $k = $proc_keys{$sk}{$m};
+          $results->{$k} = $val;
+          last;
+        }
+      }
     }
   }
 }
@@ -199,7 +250,7 @@ sub getResultsFromFile($$) {
 sub printCsvHeader($) {
   my $fh = shift;               # file handle.
 
-  print $fh join(',', @log_keys);
+  print $fh join(',', @all_log_keys);
 }
 
 # Print hash values to given file.
@@ -209,7 +260,7 @@ sub printCsvValues($$) {
   my $fh = shift;
 
   my @cols;
-  for my $m (@log_keys) {
+  for my $m (@all_log_keys) {
     my $r = $results->{$m};
     $r = '' if !defined $r;
     $r = '"'.$r.'"' if $r !~ /^[0-9.e+-]+$/;  # add quotes if not a number.
