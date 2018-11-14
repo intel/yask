@@ -429,6 +429,10 @@ namespace yask {
                               " for pack '" << bp->get_name() << "'");
 #include "yask_rank_loops.hpp"
 
+                    // Mark as dirty only if we did exterior.
+                    if (do_mpi_left || do_mpi_right)
+                        mark_grids_dirty(bp, start_t, stop_t);
+
                     // Do the appropriate steps for halo exchange depending
                     // on 'do_mpi_*' flags.
                     exchange_halos();
@@ -502,6 +506,10 @@ namespace yask {
                 TRACE_MSG("run_solution: steps [" << start_t <<
                           " ... " << stop_t << ")");
 #include "yask_rank_loops.hpp"
+
+                // Mark as dirty only if we did exterior.
+                if (do_mpi_left || do_mpi_right)
+                    mark_grids_dirty(bp, start_t, stop_t);
 
                 // Do the appropriate steps for halo exchange depending
                 // on 'do_mpi_*' flags.

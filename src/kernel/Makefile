@@ -796,12 +796,15 @@ py-api-no-yc:
 	$(MAKE) $(NO_YC_MAKE_FLAGS) py-api
 
 # Validation runs for each binary.
-DEF_TEST_ARGS	:=	-stencil $(stencil) -arch $(arch) -v -trial_steps 2 -max_threads 6 -block_threads 2
+DEF_TEST_ARGS := -stencil $(stencil) -arch $(arch) -v \
+	-trial_steps 2 -max_threads 6 -block_threads 2 -no-use_shm -overlap_comms
+
 val0	:=	$(DEF_TEST_ARGS) -d 48 -r 32 -b 24 -rt 0 $(EXTRA_TEST_ARGS)
 val1	:=	$(DEF_TEST_ARGS) -d 48 -r 32 -b 24 -mb 16 -rt 1 $(EXTRA_TEST_ARGS)
 val2	:=	$(DEF_TEST_ARGS) -d 63 -r 32 -b 24 -mb 16 -rt 2 $(EXTRA_TEST_ARGS)
 val3	:=	$(DEF_TEST_ARGS) -d 63 -r 48 -b 24 -mb 16 -bt 2 $(EXTRA_TEST_ARGS)
 val4a	:=	$(DEF_TEST_ARGS) -d 48 -b 24 -mb 16 -bt 2 -bind_block_threads $(EXTRA_TEST_ARGS)
+val4c	:=	$(DEF_TEST_ARGS) -d 48 -b 24 -mb 16 -bt 2 -use_shm -no-overlap_comms $(EXTRA_TEST_ARGS)
 val4b	:=	$(DEF_TEST_ARGS) -d 48 -b 24 -mb 16 -bt 2 -use_shm $(EXTRA_TEST_ARGS)
 ranks	:=	2
 
@@ -819,6 +822,7 @@ yk-mp-tests:
 	$(YK_SCRIPT) -ranks $(ranks) $(val2)
 	$(YK_SCRIPT) -ranks $(ranks) $(val3)
 	$(YK_SCRIPT) -ranks $(ranks) $(val4b)
+	$(YK_SCRIPT) -ranks $(ranks) $(val4c)
 
 # Run the default YASK compiler and kernel.
 yc-and-yk-test: $(YK_EXEC) $(YK_SCRIPT)
