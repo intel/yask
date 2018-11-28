@@ -57,7 +57,7 @@ our @log_keys =
    'binary invocation',
    'num MPI ranks',
    'num ranks',
-   'num OpenMP threads',
+   'num OpenMP threads', # also matches 'Num OpenMP threads used'.
    'num threads per region',
    'num threads per block',
    'total overall allocation',
@@ -193,7 +193,10 @@ sub getResultsFromLine($$) {
     }
   }
   
-  # special cases for manual parsing.
+  # special cases for manual parsing...
+  # TODO: catch output of auto-tuner and update relevant results.
+
+  # Output of 'uname -a'
   if ($line =~ /^\s*Linux\s+\w+\s+(\S+)/) {
     $results->{$linux_key} = $1;
   }
@@ -216,13 +219,14 @@ sub getResultsFromLine($$) {
       # short key.
       my $sk = substr $key,0,$klen;
 
-      # quick match?
+      # match to short key?
       return if !exists $proc_keys{$sk};
       
       # look for exact key.
       for my $m (keys %{$proc_keys{$sk}}) {
 
         # match?
+        # only check that beginning of key matches.
         if ($key =~ /^$m/) {
           $val =~ s/^\s+//;
           $val =~ s/\s+$//;
