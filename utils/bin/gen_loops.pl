@@ -169,7 +169,11 @@ sub makeArgs {
             " ".locVar("start", $_)." = ".startVar($_).";",
             " ".locVar("stop", $_)." = ".stopVar($_).";",
             " ".locVar("index", $_)." = ".indexVar($_).";",
+            " ".locVar("num_indices", $_)." = ".numItersVar($_).";";
     } @loopDims;
+    push @stmts,
+        " ".locVar("linear_indices")." = ".numItersVar(@loopDims).";",
+        " ".locVar("linear_index")." = ".loopIndexVar(@loopDims).";";
     return @stmts;
 }
 
@@ -244,7 +248,7 @@ sub addIndexVars1($$$) {
                     # number of full groups.
                     push @$code, 
                         " // Number of full groups in dimension $dim.",
-                        " const $itype $ntvar = $nvar / $ntivar;";
+                        " const $itype $ntvar = $ntivar ? $nvar / $ntivar : 0;";
                 }
             }
 
@@ -327,7 +331,7 @@ sub addIndexVars2($$$$) {
 
             # Index of this group in this dim.
             my $tivar = groupIndexVar($dim);
-            my $tival = "$prevOvar / $tgvar";
+            my $tival = "$tgvar ? $prevOvar / $tgvar : 0";
             push @$code,
                 " // Index of this group in dimension $dim.",
                 " $itype $tivar = $tival;";
@@ -699,22 +703,13 @@ sub processCode($) {
     # Lines of code to output.
     my @code;
 
-    # Other.
-    my @scanVars;               # scan-index vars.
-    
     # Front matter.
     push @code,
-        "#ifndef OMP_PRAGMA_PREFIX",
-        "#define OMP_PRAGMA_PREFIX $OPT{ompConstruct}",
-        "#endif",
-        "#ifndef OMP_PRAGMA_SUFFIX",
-        "#define OMP_PRAGMA_SUFFIX",
+        "#ifndef OMP_PRAGMA",
+        "#define OMP_PRAGMA _Pragma(\"$OPT{ompConstruct}\")",
         "#endif",
         "// 'ScanIndices $inputVar' must be set before the following code.",
-        "{",
-        " // Indices for function calls.",
-        " ScanIndices ".locVar()."($inputVar);";
-    push @scanVars, locVar();
+        "{";
     
     # loop thru all the tokens ni the input.
     for (my $ti = 0; $ti <= $#toks; ) {
@@ -723,12 +718,9 @@ sub processCode($) {
         # use OpenMP on next loop.
         if (lc $tok eq 'omp') {
 
-            # make local copies of scan index vars.
-            my $priv = "firstprivate(".join(',',@scanVars).")";
-            
             push @loopPrefix,
                 " // Distribute iterations among OpenMP threads.", 
-                "#pragma OMP_PRAGMA_PREFIX $priv OMP_PRAGMA_SUFFIX";
+                " OMP_PRAGMA";
             print "info: using OpenMP on following loop.\n";
         }
 
@@ -863,6 +855,11 @@ sub processCode($) {
                 beginLoop(\@code, \@loopDims, \@loopPrefix, 
                           $beginVal, $endVal, $features, \@loopStack);
 
+                # Indices to pass to call.
+                push @code, 
+                    " // Local copy of indices for function calls.",
+                    " ScanIndices ".locVar()."($inputVar);";
+
                 # loop body.
                 push @code, @callStmts;
 
@@ -906,8 +903,7 @@ sub processCode($) {
     # Back matter.
     push @code,
         "}",
-        "#undef OMP_PRAGMA_PREFIX",
-        "#undef OMP_PRAGMA_SUFFIX",
+        "#undef OMP_PRAGMA",
         "// End of generated code.";
     
     # indent program avail?
@@ -988,6 +984,7 @@ sub main() {
             "  'end':         [in] value beyond last index to scan in each dim.\n",
             "  'step':        [in] space between each scan point in each dim.\n",
             "  'align':       [in] alignment of steps after first one.\n",
+            "  'align_ofs':   [in] value to subtract from 'start' before applying alignment.\n",
             "  'group_size':  [in] min size of each group of points visisted first in a multi-dim loop.\n",
             "  'start':       [out] set to first scan point in called function(s) in inner loop(s).\n",
             "  'stop':        [out] set to one past last scan point in called function(s) in inner loop(s).\n",

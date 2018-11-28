@@ -27,6 +27,7 @@ IN THE SOFTWARE.
 // (non-stencil-specific) code. This file does not input generated files.
 
 #pragma once
+#include "yask_assert.hpp"
 
 // Choose features
 #define _POSIX_C_SOURCE 200809L
@@ -40,41 +41,23 @@ IN THE SOFTWARE.
 #define MPI_Barrier(comm) ((void)0)
 #define MPI_Finalize()    ((void)0)
 typedef int MPI_Comm;
+typedef int MPI_Win;
+typedef int MPI_Group;
 typedef int MPI_Request;
 #define MPI_PROC_NULL     (-1)
 #define MPI_COMM_NULL     ((MPI_Comm)0x04000000)
 #define MPI_REQUEST_NULL  ((MPI_Request)0x2c000000)
+#define MPI_GROUP_NULL    ((MPI_Group)0x08000000)
 #ifdef MPI_VERSION
 #undef MPI_VERSION
 #endif
 #endif
 
-// OpenMP or stubs.
-// This must come before including the API header to make sure
-// _OPENMP is defined.
-#ifdef _OPENMP
-#include <omp.h>
-#else
-inline int omp_get_num_procs() { return 1; }
-inline int omp_get_num_threads() { return 1; }
-inline int omp_get_max_threads() { return 1; }
-inline int omp_get_thread_num() { return 0; }
-inline void omp_set_num_threads(int n) { }
-inline void omp_set_nested(int n) { }
-#endif
-
 // Include the API as early as possible. This helps to ensure that it will stand alone.
 #include "yask_kernel_api.hpp"
 
-// Control assert() by turning on with CHECK instead of turning off with
-// NDEBUG. This makes it off by default.
-#ifndef CHECK
-#define NDEBUG
-#endif
-
 // Standard C and C++ headers.
 #include <algorithm>
-#include <assert.h>
 #include <cstdint>
 #include <cstdlib>
 #include <fstream>
@@ -84,6 +67,7 @@ inline void omp_set_nested(int n) { }
 #include <limits.h>
 #include <malloc.h>
 #include <map>
+#include <unordered_map>
 #include <math.h>
 #include <set>
 #include <sstream>
@@ -98,6 +82,10 @@ inline void omp_set_nested(int n) { }
 #include <unistd.h>
 #include <stdint.h>
 #include <immintrin.h>
+#ifdef USE_PMEM
+#include <memkind.h>
+#include <sys/syscall.h>
+#endif
 
 // Additional type for unsigned indices.
 typedef std::uint64_t uidx_t;
@@ -107,6 +95,9 @@ typedef std::uint64_t uidx_t;
 
 // Floored integer divide and mod.
 #include "idiv.hpp"
+
+// Combinations.
+#include "combo.hpp"
 
 // Simple macros and stubs.
 
@@ -138,14 +129,10 @@ typedef std::uint64_t uidx_t;
 #define YSTR1(s) #s
 #define YSTR2(s) YSTR1(s)
 
-// Rounding macros for integer types.
-#define CEIL_DIV(numer, denom) (((numer) + (denom) - 1) / (denom))
-#define ROUND_UP(n, mult) (CEIL_DIV(n, mult) * (mult))
-#define ROUND_DOWN(n, mult) (((n) / (mult)) * (mult))
-
 // Default alloc settings.
 #define CACHELINE_BYTES  (64)
-#define YASK_PAD (7) // cache-lines between data buffers.
+#define YASK_PAD (3) // cache-lines between data buffers.
+#define YASK_PAD_BYTES (CACHELINE_BYTES * YASK_PAD)
 #define YASK_HUGE_ALIGNMENT (2 * 1024 * 1024) // 2MiB-page for large allocs.
 #define CACHE_ALIGNED __attribute__ ((aligned (CACHELINE_BYTES)))
 #ifndef USE_NUMA
@@ -157,7 +144,11 @@ typedef std::uint64_t uidx_t;
 
 // macro for debug message.
 #ifdef TRACE
-#define TRACE_MSG0(os, msg) ((os) << "YASK: " << msg << std::endl << std::flush)
+#define TRACE_MSG0(os, msg) do { \
+        KernelEnv::set_debug_lock();                        \
+        (os) << "YASK: " << msg << std::endl << std::flush; \
+        KernelEnv::unset_debug_lock();                      \
+    } while(0)
 #else
 #define TRACE_MSG0(os, msg) ((void)0)
 #endif

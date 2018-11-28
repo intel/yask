@@ -36,6 +36,7 @@ namespace yask {
     // Similar to a Tuple, but less overhead and doesn't keep names.
     // Make sure this stays non-virtual.
     // TODO: make this a template with _ndims as a parameter.
+    // TODO: ultimately, combine with Tuple w/o loss of efficiency.
     class Indices {
 
     public:
@@ -345,23 +346,50 @@ namespace yask {
     typedef std::vector<GridPtrs*> ScratchVecs;
 
     // Environmental settings.
-    struct KernelEnv :
+    class KernelEnv :
         public virtual yk_env {
 
+        // An OpenMP lock to use for debug.
+        static omp_lock_t _debug_lock;
+        static bool _debug_lock_init_done;
+
+    public:
+
         // MPI vars.
-        MPI_Comm comm = MPI_COMM_NULL; // communicator.
+        MPI_Comm comm = MPI_COMM_NULL; // global communicator.
+        MPI_Group group = MPI_GROUP_NULL;
         int num_ranks = 1;        // total number of ranks.
         int my_rank = 0;          // MPI-assigned index.
+
+        // Vars for shared-mem ranks.
+        MPI_Comm shm_comm = MPI_COMM_NULL; // shm communicator.
+        MPI_Group shm_group = MPI_GROUP_NULL;
+        int num_shm_ranks = 1;  // ranks in shm_comm.
+        int my_shm_rank = 0;    // my index in shm_comm.
 
         // OMP vars.
         int max_threads=0;      // initial value from OMP.
 
-        virtual ~KernelEnv() {}
+        KernelEnv() { }
+        virtual ~KernelEnv() { }
 
         // Init MPI, OMP, etc.
         // This is normally called very early in the program.
         virtual void initEnv(int* argc, char*** argv, MPI_Comm comm);
 
+        // Lock.
+        static void set_debug_lock() {
+            if (!_debug_lock_init_done) {
+                omp_init_lock(&_debug_lock);
+                _debug_lock_init_done = true;
+            }
+            omp_set_lock(&_debug_lock);
+        }
+        static void unset_debug_lock() {
+            assert(_debug_lock_init_done);
+            omp_unset_lock(&_debug_lock);
+        }
+        
         // APIs.
         virtual int get_num_ranks() const {
             return num_ranks;
@@ -459,7 +487,7 @@ namespace yask {
     struct ScanIndices {
         int ndims = 0;
 
-        // Values that remain the same for each sub-range.
+        // Input values; not modified.
         Indices begin, end;     // first and end (beyond last) range of each index.
         Indices step;           // step value within range.
         Indices align;          // alignment of steps after first one.
@@ -469,9 +497,14 @@ namespace yask {
         // Alignment: when possible, each step will be aligned
         // such that ((start - align_ofs) % align) == 0.
 
-        // Values that differ for each sub-range.
+        // Output values; set once for entire range.
+        Indices num_indices;    // number of indices in each dim.
+        idx_t   linear_indices = 0; // total indices over all dims (product of num_indices).
+
+        // Output values; set for each index by loop code.
         Indices start, stop;    // first and last+1 for this sub-range.
         Indices index;          // 0-based unique index for each sub-range in each dim.
+        idx_t   linear_index = 0;   // 0-based index over all dims.
 
         // Example w/3 sub-ranges in overall range:
         // begin                                         end
@@ -483,24 +516,24 @@ namespace yask {
 
         // Default init.
         ScanIndices(const Dims& dims, bool use_vec_align, IdxTuple* ofs) :
-            ndims(dims._stencil_dims.size()),
+            ndims(NUM_STENCIL_DIMS),
             begin(idx_t(0), ndims),
             end(idx_t(0), ndims),
             step(idx_t(1), ndims),
             align(idx_t(1), ndims),
             align_ofs(idx_t(0), ndims),
             group_size(idx_t(1), ndims),
+            num_indices(idx_t(1), ndims),
             start(idx_t(0), ndims),
             stop(idx_t(0), ndims),
             index(idx_t(0), ndims) {
 
             // i: index for stencil dims, j: index for domain dims.
-            for (int i = 0, j = 0; i < ndims; i++) {
-                if (i == +Indices::step_posn) continue;
+            DOMAIN_VAR_LOOP(i, j) {
 
                 // Set alignment to vector lengths.
                 if (use_vec_align)
-                    align[i] = dims._fold_pts[j];
+                    align[i] = fold_pts[j];
 
                 // Set alignment offset.
                 if (ofs) {
@@ -567,10 +600,12 @@ namespace yask {
 
         // Neighborhood size includes self.
         // Number of points in n-D space of neighbors.
+        // Example: size = 3^3 = 27 for 3D problem.
         // NB: this is the *max* number of neighbors, not necessarily the actual number.
         idx_t neighborhood_size = 0;
 
         // What getNeighborIndex() returns for myself.
+        // Example: trunc(3^3 / 2) = 13 for 3D problem.
         int my_neighbor_index;
 
         // MPI rank of each neighbor.
@@ -587,6 +622,17 @@ namespace yask {
         // sizes as a multiple of the vector length.
         std::vector<bool> has_all_vlen_mults;
 
+        // Rank number in KernelEnv::shmcomm if this neighbor
+        // can communicate with shm. MPI_PROC_NULL otherwise.
+        std::vector<int> shm_ranks;
+
+        // Window for halo buffers.
+        MPI_Win halo_win;
+
+        // Shm halo buffers for each neighbor.
+        std::vector<void*> halo_buf_ptrs;
+        std::vector<size_t> halo_buf_sizes;
+        
         // Ctor based on pre-set problem dimensions.
         MPIInfo(DimsPtr dims) : _dims(dims) {
 
@@ -604,6 +650,9 @@ namespace yask {
             my_neighbors.resize(neighborhood_size, MPI_PROC_NULL);
             man_dists.resize(neighborhood_size, 0);
             has_all_vlen_mults.resize(neighborhood_size, false);
+            shm_ranks.resize(neighborhood_size, MPI_PROC_NULL);
+            halo_buf_ptrs.resize(neighborhood_size, 0);
+            halo_buf_sizes.resize(neighborhood_size, 0);
         }
 
         // Get a 1D index for a neighbor.
@@ -626,9 +675,14 @@ namespace yask {
     typedef std::shared_ptr<MPIInfo> MPIInfoPtr;
 
     // MPI data for one buffer for one neighbor of one grid.
-    struct MPIBuf {
+    class MPIBuf {
+        
+        // Ptr to read/write lock when buffer is in shared mem.
+        SimpleLock* _shm_lock = 0;
 
-        // Name for trace output.
+    public:
+
+        // Descriptive name.
         std::string name;
 
         // Send or receive buffer.
@@ -646,6 +700,38 @@ namespace yask {
         // vector length in all dims and buffer is aligned.
         bool vec_copy_ok = false;
 
+        // Safe access to lock.
+        void shm_lock_init() {
+            if (_shm_lock)
+                _shm_lock->init();
+        }
+        bool is_ok_to_read() const {
+            if (_shm_lock)
+                return _shm_lock->is_ok_to_read();
+            return true;
+        }
+        void wait_for_ok_to_read() const {
+            if (_shm_lock)
+                _shm_lock->wait_for_ok_to_read();
+        }
+        void mark_read_done() {
+            if (_shm_lock)
+                _shm_lock->mark_read_done();
+        }
+        bool is_ok_to_write() const {
+            if (_shm_lock)
+                return _shm_lock->is_ok_to_write();
+            return true;
+        }
+        void wait_for_ok_to_write() const {
+            if (_shm_lock)
+                _shm_lock->wait_for_ok_to_write();
+        }
+        void mark_write_done() {
+            if (_shm_lock)
+                _shm_lock->mark_write_done();
+        }
+        
         // Number of points overall.
         idx_t get_size() const {
             if (num_pts.size() == 0)
@@ -659,12 +745,17 @@ namespace yask {
         // Set pointer to storage.
         // Free old storage.
         // 'base' should provide get_num_bytes() bytes at offset bytes.
-        void set_storage(std::shared_ptr<char>& base, size_t offset);
+        // Returns raw pointer.
+        void* set_storage(std::shared_ptr<char>& base, size_t offset);
+
+        // Same as above, but does not maintain shared storage.
+        void* set_storage(char* base, size_t offset);
 
         // Release storage.
         void release_storage() {
             _base.reset();
             _elems = 0;
+            _shm_lock = 0;
         }
 
         // Reset.
@@ -687,6 +778,12 @@ namespace yask {
         enum BufDir { bufSend, bufRecv, nBufDirs };
 
         MPIBuf bufs[nBufDirs];
+
+        // Reset lock for send buffer.
+        // Another rank owns recv buffer.
+        void reset_locks() {
+            bufs[bufSend].shm_lock_init();
+        }
     };
 
     // MPI data for one grid.
@@ -718,6 +815,11 @@ namespace yask {
             send_reqs.resize(n, MPI_REQUEST_NULL);
         }
 
+        void reset_locks() {
+            for (auto& mb : bufs)
+                mb.reset_locks();
+        }
+        
         // Apply a function to each neighbor rank.
         // Called visitor function will contain the rank index of the neighbor.
         virtual void visitNeighbors(std::function<void (const IdxTuple& neighbor_offsets, // NeighborOffset.
@@ -729,28 +831,41 @@ namespace yask {
         virtual MPIBuf& getBuf(MPIBufs::BufDir bd, const IdxTuple& neighbor_offsets);
     };
 
+    // Utility to determine number of points in a "sizes" var.
+    inline idx_t get_num_domain_points(const IdxTuple& sizes) {
+        assert(sizes.getNumDims() == NUM_STENCIL_DIMS);
+        idx_t pts = 1;
+        DOMAIN_VAR_LOOP(i, j)
+            pts *= sizes[i];
+        return pts;
+    }
+
     // Application settings to control size and perf of stencil code.
     class KernelSettings {
 
     protected:
-        idx_t def_steps = 1;
+
+        // Default sizes.
         idx_t def_rank = 128;
         idx_t def_block = 32;
 
+        // Make a null output stream.
         yask_output_factory yof;
         yask_output_ptr nullop = yof.new_null_output();
 
     public:
 
-        // problem dimensions.
+        // Problem dimensions (not sizes).
         DimsPtr _dims;
 
         // Sizes in elements (points).
-        IdxTuple _rank_sizes;     // number of steps and this rank's domain sizes.
+        IdxTuple _rank_sizes;     // This rank's domain sizes.
         IdxTuple _region_sizes;   // region size (used for wave-front tiling).
         IdxTuple _block_group_sizes; // block-group size (only used for 'grouped' region loops).
         IdxTuple _block_sizes;       // block size (used for each outer thread).
-        IdxTuple _sub_block_group_sizes; // sub-block-group size (only used for 'grouped' block loops).
+        IdxTuple _mini_block_group_sizes; // mini-block-group size (only used for 'grouped' block loops).
+        IdxTuple _mini_block_sizes;       // mini-block size (used for wave-fronts in blocks).
+        IdxTuple _sub_block_group_sizes; // sub-block-group size (only used for 'grouped' mini-block loops).
         IdxTuple _sub_block_sizes;       // sub-block size (used for each nested thread).
         IdxTuple _min_pad_sizes;         // minimum spatial padding.
         IdxTuple _extra_pad_sizes;       // extra spatial padding.
@@ -761,11 +876,17 @@ namespace yask {
         bool find_loc = true;      // whether my rank index needs to be calculated.
         int msg_rank = 0;          // rank that prints informational messages.
         bool overlap_comms = true; // overlap comms with computation.
+        bool use_shm = false;      // use shared memory if possible.
+        idx_t _min_exterior = 0;   // minimum size of MPI exterior to calculate.
 
         // OpenMP settings.
         int max_threads = 0;      // Initial number of threads to use overall; 0=>OMP default.
         int thread_divisor = 1;   // Reduce number of threads by this amount.
         int num_block_threads = 1; // Number of threads to use for a block.
+        bool bind_block_threads = false; // Bind block threads to indices.
+
+        // Debug.
+        bool force_scalar = false; // Do only scalar ops.
 
         // Prefetch distances.
         // Prefetching must be enabled via YASK_PREFETCH_L[12] macros.
@@ -774,33 +895,40 @@ namespace yask {
 
         // NUMA settings.
         int _numa_pref = NUMA_PREF;
+        int _numa_pref_max = 128; // GiB to alloc before using PMEM.
 
         // Ctor.
+        // TODO: move code to settings.cpp.
         KernelSettings(DimsPtr dims, KernelEnvPtr env) :
             _dims(dims), max_threads(env->max_threads) {
+            auto& step_dim = dims->_step_dim;
 
             // Use both step and domain dims for all size tuples.
             _rank_sizes = dims->_stencil_dims;
             _rank_sizes.setValsSame(def_rank);             // size of rank.
-            _rank_sizes.setVal(dims->_step_dim, def_steps); // num steps.
+            _rank_sizes.setVal(step_dim, 0);        // not used.
 
             _region_sizes = dims->_stencil_dims;
-            _region_sizes.setValsSame(0);          // 0 => full rank.
-            _region_sizes.setVal(dims->_step_dim, 1); // 1 => no wave-front tiling.
+            _region_sizes.setValsSame(0);          // 0 => default settings.
 
             _block_group_sizes = dims->_stencil_dims;
             _block_group_sizes.setValsSame(0); // 0 => min size.
 
             _block_sizes = dims->_stencil_dims;
             _block_sizes.setValsSame(def_block); // size of block.
-            _block_sizes.setVal(dims->_step_dim, 1); // 1 => no temporal blocking.
+            _block_sizes.setVal(step_dim, 0); // 0 => default.
+
+            _mini_block_group_sizes = dims->_stencil_dims;
+            _mini_block_group_sizes.setValsSame(0); // 0 => min size.
+
+            _mini_block_sizes = dims->_stencil_dims;
+            _mini_block_sizes.setValsSame(0);            // 0 => default settings.
 
             _sub_block_group_sizes = dims->_stencil_dims;
             _sub_block_group_sizes.setValsSame(0); // 0 => min size.
 
             _sub_block_sizes = dims->_stencil_dims;
             _sub_block_sizes.setValsSame(0);            // 0 => default settings.
-            _sub_block_sizes.setVal(dims->_step_dim, 1); // 1 => no temporal blocking.
 
             _min_pad_sizes = dims->_stencil_dims;
             _min_pad_sizes.setValsSame(0);
@@ -822,12 +950,13 @@ namespace yask {
         virtual void _add_domain_option(CommandLineParser& parser,
                                         const std::string& prefix,
                                         const std::string& descrip,
-                                        IdxTuple& var);
+                                        IdxTuple& var,
+                                        bool allow_step = false);
 
         idx_t findNumSubsets(std::ostream& os,
                              IdxTuple& inner_sizes, const std::string& inner_name,
                              const IdxTuple& outer_sizes, const std::string& outer_name,
-                             const IdxTuple& mults);
+                             const IdxTuple& mults, const std::string& step_dim);
 
     public:
         // Add options to a cmd-line parser to set the settings.
@@ -855,11 +984,6 @@ namespace yask {
         }
         virtual bool is_last_rank(const std::string dim) {
             return _rank_indices[dim] == _num_ranks[dim] - 1;
-        }
-
-        // Is WF tiling being used?
-        virtual bool is_time_tiling() {
-            return _region_sizes[_dims->_step_dim] > 1;
         }
     };
     typedef std::shared_ptr<KernelSettings> KernelSettingsPtr;

@@ -201,7 +201,6 @@ namespace yask {
     class VecPrintHelper : public PrintHelper {
     protected:
         VecInfoVisitor& _vv;
-        bool _allowUnalignedLoads;
         bool _reuseVars; // if true, load to a local var; else, reload on every access.
         bool _definedNA;           // NA var defined.
         map<GridPoint, string> _vecVars; // vecs that are already constructed.
@@ -240,17 +239,16 @@ namespace yask {
 
     public:
         VecPrintHelper(VecInfoVisitor& vv,
-                       bool allowUnalignedLoads,
-                       const Dimensions* dims,
+                       const CompilerSettings& settings,
+                       const Dimensions& dims,
                        const CounterVisitor* cv,
                        const string& varPrefix,
                        const string& varType,
                        const string& linePrefix,
                        const string& lineSuffix,
                        bool reuseVars = true) :
-            PrintHelper(dims, cv, varPrefix, varType, linePrefix, lineSuffix),
-            _vv(vv), _allowUnalignedLoads(allowUnalignedLoads),
-            _reuseVars(reuseVars), _definedNA(false) { }
+            PrintHelper(settings, dims, cv, varPrefix, varType, linePrefix, lineSuffix),
+            _vv(vv), _reuseVars(reuseVars), _definedNA(false) { }
         virtual ~VecPrintHelper() {}
 
         // get fold info.
