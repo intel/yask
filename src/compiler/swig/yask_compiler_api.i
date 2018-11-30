@@ -55,7 +55,6 @@ IN THE SOFTWARE.
 %shared_ptr(yask::yc_multiply_node)
 %shared_ptr(yask::yc_subtract_node)
 %shared_ptr(yask::yc_divide_node)
-%shared_ptr(yask::yc_mod_node)
 %shared_ptr(yask::yc_bool_node)
 %shared_ptr(yask::yc_not_node)
 %shared_ptr(yask::yc_equals_node)
@@ -132,7 +131,6 @@ BIN_OP(__add__, +);
 BIN_OP(__sub__, -);
 BIN_OP(__mul__, *);
 BIN_OP(__truediv__, /);
-BIN_OP(__mod__, %);
 
 // For boolean ops.
 

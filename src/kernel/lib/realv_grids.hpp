@@ -36,24 +36,6 @@ namespace yask {
     class YkGridBase :
         public virtual yk_grid {
 
-        // Rank and local offsets in domain dim:
-
-        // | ... |        +------+       |
-        // |  global ofs  |      |       |
-        // |<------------>|grid  |       |
-        // |     |  loc   |domain|       |
-        // |rank |  ofs   |      |       |
-        // | ofs |<------>|      |       |
-        // |<--->|        +------+       |
-        // ^     ^        ^              ^
-        // |     |        |              last rank-domain index
-        // |     |        0 index in underlying storage.
-        // |     first rank-domain index
-        // first overall-domain index
-
-        // Rank offset is not necessarily a vector multiple.
-        // Local offset must be a vector multiple.
-
     protected:
         // Underlying storage.  A GenericGrid is similar to a YkGrid, but it
         // doesn't have stencil features like padding, halos, offsets, etc.
@@ -64,23 +46,19 @@ namespace yask {
         // Problem dimensions. (NOT grid dims.)
         DimsPtr _dims;
 
-        // The following masks have one bit for each dim in the grid.
-        idx_t _step_dim_mask = 0;
-        idx_t _domain_dim_mask = 0;
-        idx_t _misc_dim_mask = 0;
-
-        // The following indices have one value for each dim in the grid.
+        // The following indices have values for all dims in the grid.
         // All values are in units of reals, not underlying elements, if different.
-        // See diagram above for '_rank_offsets' and '_local_offsets'.
+        // Should use either _offsets or _local_offsets to adjust an index to
+        // grid-relative depending on whether index is global or rank-relative.
         // Comments show settings for domain dims | non-domain dims.
         Indices _domains;   // size of "interior" of grid | alloc size.
         Indices _req_left_pads, _req_right_pads; // requested extra space around domains | zero.
         Indices _actl_left_pads, _actl_right_pads; // actual extra space around domains | zero.
         Indices _left_halos, _right_halos; // space within pads for halo exchange | zero.
         Indices _left_wf_exts, _right_wf_exts; // additional halos for wave-fronts | zero.
-        Indices _rank_offsets;   // offsets of this grid domain in overall problem | zero.
-        Indices _local_offsets; // offsets of this grid domain in this rank | first index for misc.
-        Indices _allocs;    // actual grid alloc in reals | same.
+        Indices _offsets;   // offsets of this grid domain in overall problem | first index.
+        Indices _local_offsets; // offsets of this grid domain in this rank | first index.
+        Indices _allocs;    // actual grid allocation in reals | as domain dims.
 
         // Sizes in vectors for sizes that are always vec lens (to avoid division).
         // Each entry _vec_lens may be same as _dims->_fold_pts or one, depending
@@ -94,10 +72,6 @@ namespace yask {
         // If true, will always be in Indices::step_posn.
         bool _has_step_dim = false;
 
-        // Whether certain dims can be changed.
-        bool _is_dynamic_step_alloc = false;
-        bool _is_dynamic_misc_alloc = false;
-
         // Data that needs to be copied to neighbor's halos if using MPI.
         // If this grid has the step dim, there is one bit per alloc'd step.
         // Otherwise, only bit 0 is used.
@@ -109,11 +83,8 @@ namespace yask {
         // Whether to resize this grid based on solution parameters.
         bool _fixed_size = false;
 
-        // Whether this is a scratch grid.
+        // Whether this is a scratch grid;
         bool _is_scratch = false;
-
-        // Whether this was created via an API.
-        bool _is_new_grid = false;
 
         // Convenience function to format indices like
         // "x=5, y=3".
@@ -179,7 +150,7 @@ namespace yask {
 
     public:
         YkGridBase(GenericGridBase* ggb,
-                   const GridDimNames& dimNames,
+                   size_t ndims,
                    DimsPtr dims);
         virtual ~YkGridBase() { }
 
@@ -195,41 +166,17 @@ namespace yask {
         virtual bool is_fixed_size() const { return _fixed_size; }
         virtual void set_fixed_size(bool is_fixed) {
             _fixed_size = is_fixed;
-            if (is_fixed) {
-                _rank_offsets.setFromConst(0);
-                _is_dynamic_step_alloc = true;
-                _is_dynamic_misc_alloc = true;
-            }
+            if (is_fixed)
+                _offsets.setFromConst(0);
         }
-        virtual bool is_dynamic_step_alloc() const {
-            return _is_dynamic_step_alloc;
-        }
-        virtual void _set_dynamic_step_alloc(bool is_dynamic) {
-            _is_dynamic_step_alloc = is_dynamic;
-        }
-        virtual bool is_dynamic_misc_alloc() const {
-            return _is_dynamic_misc_alloc;
-        }
-        virtual void _set_dynamic_misc_alloc(bool is_dynamic) {
-            _is_dynamic_misc_alloc = is_dynamic;
-        }
-        
+
         // Scratch accessors.
         virtual bool is_scratch() const { return _is_scratch; }
         virtual void set_scratch(bool is_scratch) {
             _is_scratch = is_scratch;
             if (is_scratch)
-                _rank_offsets.setFromConst(0);
+                _offsets.setFromConst(0);
         }
-
-        // New-grid accessors.
-        virtual bool is_new_grid() const { return _is_new_grid; }
-        virtual void set_new_grid(bool is_new_grid) {
-            _is_new_grid = is_new_grid;
-            if (_is_new_grid)
-                _is_dynamic_step_alloc = true;
-                _is_dynamic_misc_alloc = true;
-        }        
 
         // NUMA accessors.
         virtual int get_numa_preferred() const { return _ggb->get_numa_pref(); }
@@ -265,8 +212,13 @@ namespace yask {
             //  2 => 0.
 
             // Avoid discontinuity caused by dividing negative numbers by
-            // using floored-mod.
-            idx_t res = imod_flr(t, _domains[+Indices::step_posn]);
+            // adding a large offset to the t index.  So, t can be negative,
+            // but not so much that it would still be negative after adding
+            // the offset.  This should not be a practical restriction.
+            t += idx_t(0x10000);
+            assert(t >= 0);
+
+            idx_t res = t % _domains[+Indices::step_posn];
             return res;
         }
 
@@ -393,16 +345,12 @@ namespace yask {
         // Possibly vectorized version of set/get_elements_in_slice().
         virtual idx_t set_vecs_in_slice(const void* buffer_ptr,
                                         const Indices& first_indices,
-                                        idx_t first_alloc_step_idx,
-                                        const Indices& last_indices,
-                                        idx_t last_alloc_step_idx) {
+                                        const Indices& last_indices) {
             return set_elements_in_slice(buffer_ptr, first_indices, last_indices);
         }
         virtual idx_t get_vecs_in_slice(void* buffer_ptr,
                                         const Indices& first_indices,
-                                        idx_t first_alloc_step_idx,
-                                        const Indices& last_indices,
-                                        idx_t last_alloc_step_idx) const {
+                                        const Indices& last_indices) const {
             return get_elements_in_slice(buffer_ptr, first_indices, last_indices);
         }
 
@@ -417,22 +365,20 @@ namespace yask {
         // they can break the usage model.
         // They are not protected because they are used from outside
         // this class hierarchy.
+        GET_GRID_API(_get_offset)
+        GET_GRID_API(_get_local_offset)
         GET_GRID_API(_get_first_alloc_index)
         GET_GRID_API(_get_last_alloc_index)
         GET_GRID_API(_get_left_wf_ext)
-        GET_GRID_API(_get_local_offset)
-        GET_GRID_API(_get_rank_offset)
         GET_GRID_API(_get_right_wf_ext)
         GET_GRID_API(_get_vec_len)
-
-        SET_GRID_API(_set_alloc_size)
         SET_GRID_API(_set_domain_size)
         SET_GRID_API(_set_left_pad_size)
-        SET_GRID_API(_set_left_wf_ext)
-        SET_GRID_API(_set_local_offset)
-        SET_GRID_API(_set_rank_offset)
         SET_GRID_API(_set_right_pad_size)
+        SET_GRID_API(_set_left_wf_ext)
         SET_GRID_API(_set_right_wf_ext)
+        SET_GRID_API(_set_offset)
+        SET_GRID_API(_set_local_offset)
 
         // Exposed APIs.
         GET_GRID_API(get_rank_domain_size)
@@ -596,8 +542,8 @@ namespace yask {
 
     // YASK grid of real elements.
     // Used for grids that do not contain folded vectors.
-    // If '_use_step_idx', then index to step dim will wrap around.
-    template <typename LayoutFn, bool _use_step_idx>
+    // If '_wrap_step_idx', then index to step dim will wrap around.
+    template <typename LayoutFn, bool _wrap_step_idx>
     class YkElemGrid : public YkGridBase {
 
     protected:
@@ -615,9 +561,9 @@ namespace yask {
                    const GridDimNames& dimNames,
                    KernelSettingsPtr* settings,
                    std::ostream** ostr) :
-            YkGridBase(&_data, dimNames, dims),
+            YkGridBase(&_data, dimNames.size(), dims),
             _data(name, dimNames, settings, ostr) {
-            _has_step_dim = _use_step_idx;
+            _has_step_dim = _wrap_step_idx;
             resize();
         }
 
@@ -655,7 +601,7 @@ namespace yask {
 
             // Special handling for step index.
             auto sp = +Indices::step_posn;
-            if (_use_step_idx) {
+            if (_wrap_step_idx) {
                 assert(alloc_step_idx == _wrap_step(idxs[sp]));
                 adj_idxs[sp] = alloc_step_idx;
             }
@@ -663,14 +609,11 @@ namespace yask {
 #pragma unroll
             // All other indices.
             for (int i = 0; i < n; i++) {
-                if (!(_use_step_idx && i == sp)) {
+                if (!(_wrap_step_idx && i == sp)) {
 
-                    // Adjust for offsets and padding.
-                    // This gives a positive 0-based local element index.
-                    idx_t ai = idxs[i] + _actl_left_pads[i] -
-                        (_rank_offsets[i] + _local_offsets[i]);
-                    assert(ai >= 0);
-                    adj_idxs[i] = uidx_t(ai);
+                    // Adjust for offset and padding.
+                    // This gives a 0-based local element index.
+                    adj_idxs[i] = idxs[i] - _offsets[i] + _actl_left_pads[i];
                 }
             }
 
@@ -711,10 +654,10 @@ namespace yask {
 
     // YASK grid of real vectors.
     // Used for grids that contain all the folded dims.
-    // If '_use_step_idx', then index to step dim will wrap around.
+    // If '_wrap_step_idx', then index to step dim will wrap around.
     // The '_templ_vec_lens' arguments must contain a list of vector lengths
     // corresponding to each dim in the grid.
-    template <typename LayoutFn, bool _use_step_idx, idx_t... _templ_vec_lens>
+    template <typename LayoutFn, bool _wrap_step_idx, idx_t... _templ_vec_lens>
     class YkVecGrid : public YkGridBase {
 
     protected:
@@ -735,10 +678,10 @@ namespace yask {
                   const GridDimNames& dimNames,
                   KernelSettingsPtr* settings,
                   std::ostream** ostr) :
-            YkGridBase(&_data, dimNames, dims),
+            YkGridBase(&_data, dimNames.size(), dims),
             _data(name, dimNames, settings, ostr),
             _vec_fold_posns(idx_t(0), int(dimNames.size())) {
-            _has_step_dim = _use_step_idx;
+            _has_step_dim = _wrap_step_idx;
 
             // Template vec lengths.
             const int nvls = sizeof...(_templ_vec_lens);
@@ -822,7 +765,7 @@ namespace yask {
 
             // Special handling for step index.
             auto sp = +Indices::step_posn;
-            if (_use_step_idx) {
+            if (_wrap_step_idx) {
                 assert(alloc_step_idx == _wrap_step(idxs[sp]));
                 vec_idxs[sp] = alloc_step_idx;
                 elem_ofs[sp] = 0;
@@ -834,12 +777,11 @@ namespace yask {
 #pragma novector
             // All other indices.
             for (int i = 0; i < nvls; i++) {
-                if (!(_use_step_idx && i == sp)) {
+                if (!(_wrap_step_idx && i == sp)) {
 
                     // Adjust for offset and padding.
                     // This gives a positive 0-based local element index.
-                    idx_t ai = idxs[i] + _actl_left_pads[i] -
-                        (_rank_offsets[i] + _local_offsets[i]);
+                    idx_t ai = idxs[i] - _offsets[i] + _actl_left_pads[i];
                     assert(ai >= 0);
                     uidx_t adj_idx = uidx_t(ai);
 
@@ -865,7 +807,7 @@ namespace yask {
             }
 
             // Get 1D element index into vector.
-            auto i = _dims.get()->getElemIndexInVec(fold_ofs);
+            auto i = _dims->getElemIndexInVec(fold_ofs);
 
 #ifdef DEBUG_LAYOUT
             // Compare to more explicit offset extraction.
@@ -936,27 +878,26 @@ namespace yask {
 
             // Special handling for step index.
             auto sp = +Indices::step_posn;
-            if (_use_step_idx) {
+            if (_wrap_step_idx) {
                 assert(alloc_step_idx == _wrap_step(vec_idxs[sp]));
                 adj_idxs[sp] = alloc_step_idx;
             }
 
 #pragma unroll
-            // Domain indices.
+            // All other indices.
             for (int i = 0; i < nvls; i++) {
-                if (!(_use_step_idx && i == sp)) {
+                if (!(_wrap_step_idx && i == sp)) {
 
                     // Adjust for padding.
-                    // Since the indices are rank-relative, subtract only
-                    // the local offsets. (Compare to getElemPtr().)
                     // This gives a 0-based local *vector* index.
-                    adj_idxs[i] = vec_idxs[i] + _vec_left_pads[i] - _vec_local_offsets[i];
+                    adj_idxs[i] = vec_idxs[i] - _vec_local_offsets[i] + _vec_left_pads[i];
                 }
             }
 
 #ifdef TRACE_MEM
-            _data.get_ostr() << " => " << _data.get_index(adj_idxs, checkBounds) <<
-                std::endl << std::flush;
+            if (checkBounds)
+                _data.get_ostr() << " => " << _data.get_index(adj_idxs);
+            _data.get_ostr() << std::endl << std::flush;
 #endif
 
             // Get ptr via layout in _data.
@@ -976,7 +917,6 @@ namespace yask {
 
         // Read one vector.
         // Indices must be normalized and rank-relative.
-        // 'alloc_step_idx' is pre-calculated or 0 if not used.
         inline real_vec_t readVecNorm(const Indices& vec_idxs,
                                       idx_t alloc_step_idx,
                                       int line) const {
@@ -990,7 +930,6 @@ namespace yask {
 
         // Write one vector.
         // Indices must be normalized and rank-relative.
-        // 'alloc_step_idx' is pre-calculated or 0 if not used.
         inline void writeVecNorm(real_vec_t val,
                                  const Indices& vec_idxs,
                                  idx_t alloc_step_idx,
@@ -1004,7 +943,6 @@ namespace yask {
 
         // Prefetch one vector.
         // Indices must be normalized and rank-relative.
-        // 'alloc_step_idx' is pre-calculated or 0 if not used.
         template <int level>
         ALWAYS_INLINE
         void prefetchVecNorm(const Indices& vec_idxs,
@@ -1023,12 +961,9 @@ namespace yask {
         }
 
         // Vectorized version of set/get_elements_in_slice().
-        // Indices must be vec-normalized and rank-relative.
         virtual idx_t set_vecs_in_slice(const void* buffer_ptr,
                                         const Indices& first_indices,
-                                        idx_t first_alloc_step_idx,
-                                        const Indices& last_indices,
-                                        idx_t last_alloc_step_idx) {
+                                        const Indices& last_indices) {
             if (!is_storage_allocated())
                 return 0;
             Indices firstv, lastv;
@@ -1038,51 +973,33 @@ namespace yask {
             // Find range.
             IdxTuple numVecsTuple = get_slice_range(firstv, lastv);
             TRACE_MSG0(get_ostr(), "set_vecs_in_slice: setting " <<
-                       numVecsTuple.makeDimValStr(" * ") << " vecs at [" <<
+                       numVecsTuple.makeDimValStr(" * ") << " vecs at " <<
                        makeIndexString(firstv) << " ... " <<
-                       makeIndexString(lastv) << "]");
+                       makeIndexString(lastv));
 
-            // Do step loop explicitly.
-            auto sp = +Indices::step_posn;
-            if (_has_step_dim) {
-                assert(last_alloc_step_idx >= first_alloc_step_idx);
-                assert(first_alloc_step_idx == _wrap_step(firstv[sp]));
-                assert(last_alloc_step_idx == _wrap_step(lastv[sp]));
-                numVecsTuple[sp] = 1; // Do one at a time.
-            }
-            idx_t iofs = 0;
-            for (idx_t t = first_alloc_step_idx; t <= last_alloc_step_idx; t++) {
+            // Visit points in slice.
+            numVecsTuple.visitAllPointsInParallel
+                ([&](const IdxTuple& ofs,
+                     size_t idx) {
+                    Indices pt = firstv.addElements(ofs);
+                    real_vec_t val = ((real_vec_t*)buffer_ptr)[idx];
 
-                // Do only this one step.
-                if (_has_step_dim) {
-                    firstv[sp] = t;
-                    lastv[sp] = t;
-                }
+                    // TODO: move this outside of parallel loop when
+                    // step index is const.
+                    idx_t asi = get_alloc_step_index(pt);
 
-                // Visit points in slice.
-                numVecsTuple.visitAllPointsInParallel
-                    ([&](const IdxTuple& ofs,
-                         size_t idx) {
-                        Indices pt = firstv.addElements(ofs);
-                        real_vec_t val = ((real_vec_t*)buffer_ptr)[idx + iofs];
-                        
-                        writeVecNorm(val, pt, t, __LINE__);
-                        return true;    // keep going.
-                    });
-                iofs += numVecsTuple.product();
-            }
+                    writeVecNorm(val, pt, asi, __LINE__);
+                    return true;    // keep going.
+                });
 
             // Set appropriate dirty flag(s).
             set_dirty_in_slice(first_indices, last_indices);
 
             return numVecsTuple.product() * VLEN;
         }
-
         virtual idx_t get_vecs_in_slice(void* buffer_ptr,
                                         const Indices& first_indices,
-                                        idx_t first_alloc_step_idx,
-                                        const Indices& last_indices,
-                                        idx_t last_alloc_step_idx) const {
+                                        const Indices& last_indices) const {
             if (!is_storage_allocated()) {
                 yask_exception e;
                 std::stringstream err;
@@ -1102,41 +1019,22 @@ namespace yask {
                        numVecsTuple.makeDimValStr(" * ") << " vecs at " <<
                        makeIndexString(firstv) << " ... " <<
                        makeIndexString(lastv));
-            auto n = numVecsTuple.product() * VLEN;
 
-            // Do step loop explicitly.
-            auto sp = +Indices::step_posn;
-            if (_has_step_dim) {
-                assert(last_alloc_step_idx >= first_alloc_step_idx);
-                assert(first_alloc_step_idx == _wrap_step(firstv[sp]));
-                assert(last_alloc_step_idx == _wrap_step(lastv[sp]));
-                numVecsTuple[sp] = 1; // Do one at a time.
-            }
-            idx_t iofs = 0;
-            for (idx_t t = first_alloc_step_idx; t <= last_alloc_step_idx; t++) {
+            // Visit points in slice.
+            numVecsTuple.visitAllPointsInParallel
+                ([&](const IdxTuple& ofs,
+                     size_t idx) {
+                    Indices pt = firstv.addElements(ofs);
 
-                // Do only this one step.
-                if (_has_step_dim) {
-                    firstv[sp] = t;
-                    lastv[sp] = t;
-                }
+                    // TODO: move this outside of parallel loop when
+                    // step index is const.
+                    idx_t asi = get_alloc_step_index(pt);
 
-                // Visit points in slice.
-                numVecsTuple.visitAllPointsInParallel
-                    ([&](const IdxTuple& ofs,
-                         size_t idx) {
-                        Indices pt = firstv.addElements(ofs);
-                        
-                        real_vec_t val = readVecNorm(pt, t, __LINE__);
-                        ((real_vec_t*)buffer_ptr)[idx + iofs] = val;
-                        return true;    // keep going.
-                    });
-                iofs += numVecsTuple.product();
-            }
-            assert(iofs * VLEN == n);
-
-            // Return number of writes.
-            return n;
+                    real_vec_t val = readVecNorm(pt, asi, __LINE__);
+                    ((real_vec_t*)buffer_ptr)[idx] = val;
+                    return true;    // keep going.
+                });
+            return numVecsTuple.product() * VLEN;
         }
 
     };                          // YkVecGrid.

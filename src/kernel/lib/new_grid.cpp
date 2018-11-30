@@ -140,7 +140,7 @@ namespace yask {
                 }
 
                 // Offsets.
-                gp->_set_rank_offset(i, 0);
+                gp->_set_offset(i, 0);
                 gp->_set_local_offset(i, 0);
             }
         }
@@ -148,7 +148,6 @@ namespace yask {
         else
             update_grid_info();
 
-        gp->set_new_grid(true);
         return gp;
     }
 } // namespace yask.

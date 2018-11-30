@@ -42,14 +42,14 @@ namespace yask {
 
         // Ctor.
         CppIntrinPrintHelper(VecInfoVisitor& vv,
-                             const CompilerSettings& settings,
-                             const Dimensions& dims,
+                             bool allowUnalignedLoads,
+                             const Dimensions* dims,
                              const CounterVisitor* cv,
                              const string& varPrefix,
                              const string& varType,
                              const string& linePrefix,
                              const string& lineSuffix) :
-            CppVecPrintHelper(vv, settings, dims, cv,
+            CppVecPrintHelper(vv, allowUnalignedLoads, dims, cv,
                               varPrefix, varType, linePrefix, lineSuffix) { }
 
         // Dtor.
@@ -124,14 +124,14 @@ namespace yask {
 
     public:
         CppKncPrintHelper(VecInfoVisitor& vv,
-                          const CompilerSettings& settings,
-                          const Dimensions& dims,
+                          bool allowUnalignedLoads,
+                          const Dimensions* dims,
                           const CounterVisitor* cv,
                           const string& varPrefix,
                           const string& varType,
                           const string& linePrefix,
                           const string& lineSuffix) :
-            CppIntrinPrintHelper(vv, settings, dims, cv,
+            CppIntrinPrintHelper(vv, allowUnalignedLoads, dims, cv,
                                  varPrefix, varType, linePrefix, lineSuffix) { }
     };
 
@@ -153,14 +153,14 @@ namespace yask {
 
     public:
         CppAvx512PrintHelper(VecInfoVisitor& vv,
-                             const CompilerSettings& settings,
-                             const Dimensions& dims,
+                             bool allowUnalignedLoads,
+                             const Dimensions* dims,
                              const CounterVisitor* cv,
                              const string& varPrefix,
                              const string& varType,
                              const string& linePrefix,
                              const string& lineSuffix) :
-            CppIntrinPrintHelper(vv, settings, dims, cv,
+            CppIntrinPrintHelper(vv, allowUnalignedLoads, dims, cv,
                                  varPrefix, varType, linePrefix, lineSuffix) { }
     };
 
@@ -180,14 +180,14 @@ namespace yask {
 
     public:
         CppAvx256PrintHelper(VecInfoVisitor& vv,
-                             const CompilerSettings& settings,
-                             const Dimensions& dims,
+                             bool allowUnalignedLoads,
+                             const Dimensions* dims,
                              const CounterVisitor* cv,
                              const string& varPrefix,
                              const string& varType,
                              const string& linePrefix,
                              const string& lineSuffix) :
-            CppIntrinPrintHelper(vv, settings, dims, cv,
+            CppIntrinPrintHelper(vv, allowUnalignedLoads, dims, cv,
                                  varPrefix, varType, linePrefix, lineSuffix) { }
     };
 
@@ -196,7 +196,7 @@ namespace yask {
     protected:
         virtual CppVecPrintHelper* newCppVecPrintHelper(VecInfoVisitor& vv,
                                                         CounterVisitor& cv) {
-            return new CppKncPrintHelper(vv, _settings, _dims, &cv,
+            return new CppKncPrintHelper(vv, _settings._allowUnalignedLoads, _dims, &cv,
                                          "temp", "real_vec_t", " ", ";\n");
         }
 
@@ -204,8 +204,10 @@ namespace yask {
         YASKKncPrinter(StencilSolution& stencil,
                        EqBundles& eqBundles,
                        EqBundlePacks& eqBundlePacks,
-                       EqBundles& clusterEqBundles) :
-            YASKCppPrinter(stencil, eqBundles, eqBundlePacks, clusterEqBundles) { }
+                       EqBundles& clusterEqBundles,
+                       const Dimensions* dims) :
+            YASKCppPrinter(stencil, eqBundles, eqBundlePacks, clusterEqBundles,
+                           dims) { }
 
         virtual int num_vec_elems() const { return 64 / _settings._elem_bytes; }
 
@@ -218,7 +220,7 @@ namespace yask {
     protected:
         virtual CppVecPrintHelper* newCppVecPrintHelper(VecInfoVisitor& vv,
                                                         CounterVisitor& cv) {
-            return new CppAvx256PrintHelper(vv, _settings, _dims, &cv,
+            return new CppAvx256PrintHelper(vv, _settings._allowUnalignedLoads, _dims, &cv,
                                             "temp", "real_vec_t", " ", ";\n");
         }
 
@@ -226,8 +228,9 @@ namespace yask {
         YASKAvx256Printer(StencilSolution& stencil,
                           EqBundles& eqBundles,
                           EqBundlePacks& eqBundlePacks,
-                          EqBundles& clusterEqBundles) :
-            YASKCppPrinter(stencil, eqBundles, eqBundlePacks, clusterEqBundles) { }
+                          EqBundles& clusterEqBundles,
+                          const Dimensions* dims) :
+            YASKCppPrinter(stencil, eqBundles, eqBundlePacks, clusterEqBundles, dims) { }
 
         virtual int num_vec_elems() const { return 32 / _settings._elem_bytes; }
     };
@@ -237,7 +240,7 @@ namespace yask {
     protected:
         virtual CppVecPrintHelper* newCppVecPrintHelper(VecInfoVisitor& vv,
                                                         CounterVisitor& cv) {
-            return new CppAvx512PrintHelper(vv, _settings, _dims, &cv,
+            return new CppAvx512PrintHelper(vv, _settings._allowUnalignedLoads, _dims, &cv,
                                             "temp", "real_vec_t", " ", ";\n");
         }
 
@@ -245,8 +248,10 @@ namespace yask {
         YASKAvx512Printer(StencilSolution& stencil,
                           EqBundles& eqBundles,
                           EqBundlePacks& eqBundlePacks,
-                          EqBundles& clusterEqBundles) :
-            YASKCppPrinter(stencil, eqBundles, eqBundlePacks, clusterEqBundles) { }
+                          EqBundles& clusterEqBundles,
+                          const Dimensions* dims) :
+            YASKCppPrinter(stencil, eqBundles, eqBundlePacks, clusterEqBundles,
+                           dims) { }
 
         virtual int num_vec_elems() const { return 64 / _settings._elem_bytes; }
 

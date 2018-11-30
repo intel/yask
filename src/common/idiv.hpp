@@ -23,9 +23,8 @@ IN THE SOFTWARE.
 
 *****************************************************************************/
 
-#pragma once
-
-#include "yask_assert.hpp"
+#ifndef IDIV_HPP
+#define IDIV_HPP
 
 namespace yask {
 
@@ -51,7 +50,6 @@ namespace yask {
 
     template<typename T>
     inline T idiv_flr(T a, T b) {
-        assert(b);
         //return (a<0 ? a-(b-1) : a) / b;
         //return (a - (a<0 ? b-1 : 0)) / b;
         return (a + (a>>(sizeof(a)*8-1)) * (b-1)) / b;
@@ -59,25 +57,21 @@ namespace yask {
 
     template<typename T>
     inline T ceil_idiv_flr(T a, T b) {
-        assert(b);
         return idiv_flr(a + b - 1, b);
     }
 
     template<typename T>
     inline T round_up_flr(T a, T b) {
-        assert(b);
         return (idiv_flr(a + b - 1, b) * b);
     }
 
     template<typename T>
     inline T round_down_flr(T a, T b) {
-        assert(b);
         return (idiv_flr(a, b) * b);
     }
 
     template<typename T>
     inline T imod_flr(T a, T b) {
-        assert(b);
         //return ((a % b) + b) % b;
         //return ((a < 0) ? ((a % b) + b) : a) % b;
         //T c = a % b; return (c < 0) ? c + b : c;
@@ -88,3 +82,4 @@ namespace yask {
     // thus, (a>>(sizeof(a)*8-1) * b is equiv to (a >= 0) ? 0 : b;
 }
 
+#endif

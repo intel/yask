@@ -101,11 +101,7 @@ namespace yask {
         // Simple accessors.
         virtual Grids& getGrids() { return _grids; }
         virtual Eqs& getEqs() { return _eqs; }
-        virtual const CompilerSettings& getSettings() { return _settings; }
-        virtual void setSettings(const CompilerSettings& settings) {
-            _settings = settings;
-        }
-        virtual const Dimensions& getDims() { return _dims; }
+        virtual CompilerSettings& getSettings() { return _settings; }
 
         // Get user-provided code for the given section.
         CodeList * getExtensionCode(YASKSection section)
@@ -115,12 +111,6 @@ namespace yask {
                 return &elem->second;
             }
             return NULL;
-        }
-
-        // Get the messsage output stream.
-        virtual std::ostream& get_ostr() const {
-            assert(_dos);
-            return *_dos;
         }
 
         // Define grid values relative to current domain indices in each dimension.
@@ -137,9 +127,6 @@ namespace yask {
         virtual void set_debug_output(yask_output_ptr debug) {
             _debug_output = debug;     // to share ownership of referent.
             _dos = &_debug_output->get_ostream();
-        }
-        virtual yask_output_ptr get_debug_output() const {
-            return _debug_output;
         }
         virtual void set_name(std::string name) {
             _name = name;

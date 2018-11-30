@@ -40,7 +40,7 @@ IN THE SOFTWARE.
 namespace yask {
 
     /**
-     * \defgroup yask YASK Common Utilities
+     * \defgroup yask YASK Commmon Utilities
      * Types, clases, and functions used in both the \ref sec_yc and \ref sec_yk.
      * @{
      */

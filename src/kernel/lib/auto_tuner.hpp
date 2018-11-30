@@ -44,16 +44,16 @@ namespace yask {
         // AT parameters.
         double warmup_steps = 10;
         double warmup_secs = 0.5;
-        idx_t min_steps = 10;
-        double min_secs = 0.25; // eval when either min_steps or min_secs is reached.
+        idx_t min_steps = 5;
+        double min_secs = 0.1; // eval when either min_steps or min_secs is reached.
         idx_t min_step = 4;
-        idx_t max_radius = 16;
+        idx_t max_radius = 64;
         idx_t min_pts = 512; // 8^3.
         idx_t min_blks = 4;
 
         // Results.
-        std::unordered_map<IdxTuple, double> results; // block-size -> perf.
-        int n2big = 0, n2small = 0, n2far = 0;
+        std::map<IdxTuple, double> results; // block-size -> perf.
+        int n2big = 0, n2small = 0;
 
         // Best so far.
         IdxTuple best_block;
@@ -61,7 +61,6 @@ namespace yask {
 
         // Current point in search.
         IdxTuple center_block;
-        idx_t block_steps = 0;
         idx_t radius = 0;
         bool done = false;
         idx_t neigh_idx = 0;
@@ -77,33 +76,20 @@ namespace yask {
 
         AutoTuner(StencilContext* ctx,
                   KernelSettings* settings,
-                  const std::string& name = "") :
+                  const std::string& name) :
             _context(ctx),
             _settings(settings) {
-            _name = "auto-tuner";
-            if (name.length())
-                _name += "(" + name + ")";
+            _name = "auto-tuner(" + name + ")";
         }
 
         // Start & stop this timer to track elapsed time.
         YaskTimer timer;
-
-        // Increment this to track steps.
-        idx_t steps_done = 0;
-
-        // Change settings pointer.
-        void set_settings(KernelSettings* p) {
-            _settings = p;
-        }
         
         // Reset all state to beginning.
         void clear(bool mark_done, bool verbose = false);
 
         // Evaluate the previous run and take next auto-tuner step.
-        void eval();
-
-        // Print the best settings.
-        void print_settings(std::ostream& os) const;
+        void eval(idx_t steps);
 
         // Apply settings.
         void apply();

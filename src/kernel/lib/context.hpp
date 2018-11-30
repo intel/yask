@@ -37,7 +37,7 @@ namespace yask {
 
         // Following values are calculated from the above ones.
         IdxTuple bb_len;       // size in each dim.
-        idx_t bb_size=1;       // points in the entire box; bb_size >= bb_num_points.
+        idx_t bb_size=1;       // points in the entire box >= bb_num_points.
         bool bb_is_full=false; // all points in box are valid (bb_size == bb_num_points).
         bool bb_is_aligned=false; // starting points are vector-aligned in all dims.
         bool bb_is_cluster_mult=false; // num points are cluster multiples in all dims.
@@ -84,26 +84,12 @@ namespace yask {
     // Stats.
     class Stats : public virtual yk_stats {
     public:
-        // Steps done.
-        idx_t nsteps = 0;
-
-        // Points in domain.
         idx_t npts = 0;
-
-        // Work done.
-        idx_t nreads = 0;
         idx_t nwrites = 0;
         idx_t nfpops = 0;
-
-        // Time elapsed.
-        double run_time = 0.;   // overall.
-        double halo_time = 0.;  // subset in halo.
-
-        // Rates.
-        double reads_ps = 0.;     // reads-per-sec.
-        double writes_ps = 0.;     // writes-per-sec.
-        double flops = 0.;      // est. FLOPS.
-        double pts_ps = 0.; // points-per-sec in overall domain.
+        idx_t nsteps = 0;
+        double run_time = 0.;
+        double halo_time = 0.;
 
         Stats() {}
         virtual ~Stats() {}
@@ -119,21 +105,22 @@ namespace yask {
         virtual idx_t
         get_num_elements() { return npts; }
 
-        /// Get the number of points written.
+        /// Get the number of points written in each step.
         virtual idx_t
-        get_num_writes_done() { return nwrites; }
+        get_num_writes() { return nwrites; }
 
-        /// Get the estimated number of floating-point operations performed in each step.
+        /// Get the estimated number of floating-point operations required for each step.
         virtual idx_t
-        get_est_fp_ops_done() { return nfpops; }
+        get_est_fp_ops() { return nfpops; }
 
-        /// Get the number of steps executed via run_solution().
+        /// Get the number of steps calculated via run_solution().
         virtual idx_t
         get_num_steps_done() { return nsteps; }
 
         /// Get the number of seconds elapsed during calls to run_solution().
         virtual double
-        get_elapsed_secs() { return run_time; }
+        get_elapsed_run_secs() { return run_time; }
+
     };
 
     // Collections of things in a context.
@@ -143,7 +130,6 @@ namespace yask {
     typedef std::set<StencilBundleBase*> StencilBundleSet;
     typedef std::shared_ptr<BundlePack> BundlePackPtr;
     typedef std::vector<BundlePackPtr> BundlePackList;
-    typedef std::vector<bool> BridgeMask;
 
     // Data and hierarchical sizes.
     // This is a pure-virtual class that must be implemented
@@ -169,13 +155,9 @@ namespace yask {
         // MPI info.
         MPIInfoPtr _mpiInfo;
 
-        // Auto-tuner for global settings.
-        AutoTuner _at;
-        bool _use_pack_tuners = false;
-
         // Bytes between each buffer to help avoid aliasing
         // in the HW.
-        static constexpr size_t _data_buf_pad = YASK_PAD_BYTES;
+        size_t _data_buf_pad = (YASK_PAD * CACHELINE_BYTES);
 
         // Check whether dim is appropriate type.
         virtual void checkDimType(const std::string& dim,
@@ -205,34 +187,15 @@ namespace yask {
         // If WFs are not used, this is the same as 'rank_bb';
         BoundingBox ext_bb;
 
-        // BB of the "interior" of this rank.  This is the area that does
-        // not include any data that is needed for any MPI send.  The size
-        // is valid for the layer that needs to be exchanged, and doesn't
-        // include any extensions needed for WF.
+        // BB of the "interior" of this rank.
+        // This is the area that does not include any data
+        // that is needed for any MPI send.
         BoundingBox mpi_interior;
 
         // Flags to calculate the interior and/or exterior.
+        // TODO: replace with function parameters.
         bool do_mpi_interior = true;
-        bool do_mpi_left = true;        // left exterior in given dim.
-        bool do_mpi_right = true;        // right exterior in given dim.
-        idx_t mpi_exterior_dim = -1;      // which domain dim in left/right.
-
-        // Is overlap currently enabled?
-        inline bool is_overlap_active() const {
-            bool active = !do_mpi_interior || !do_mpi_left || !do_mpi_right;
-            if (active) {
-                assert(do_mpi_interior || do_mpi_left || do_mpi_right);
-                assert(mpi_interior.bb_valid);
-            }
-            return active;
-        }
-
-        // Is there a non-zero exterior in the given section?
-        inline bool does_exterior_exist(idx_t ddim, bool is_left) const {
-            return is_left ?
-                mpi_interior.bb_begin[ddim] > ext_bb.bb_begin[ddim] :
-                mpi_interior.bb_end[ddim] < ext_bb.bb_end[ddim];
-        }
+        bool do_mpi_exterior = true;
         
         // List of all non-scratch stencil bundles in the order in which
         // they should be evaluated within a step.
@@ -254,38 +217,45 @@ namespace yask {
         // Each vector contains a grid for each thread.
         ScratchVecs scratchVecs;
 
-        // Some calculated sizes for this rank and overall.
+        // Some calculated domain sizes.
         IdxTuple rank_domain_offsets;       // Domain index offsets for this rank.
         IdxTuple overall_domain_sizes;       // Total of rank domains over all ranks.
+
+        // Maximum halos, skewing angles, and work extensions over all grids
+        // used for wave-fronts.
+        IdxTuple max_halos;  // spatial halos.
+        IdxTuple wf_angles;  // temporal skewing angles for each shift (in points).
+        idx_t num_wf_shifts = 0; // number of shifts required.
+        IdxTuple wf_shifts;    // total shift needed (angles * num-shifts).
+        IdxTuple left_wf_exts;    // WF extension needed on left side of rank.
+        IdxTuple right_wf_exts;    // WF extension needed on right side of rank.
+
+        // Various amount-of-work metrics calculated in prepare_solution().
+        // 'rank_' prefix indicates for this rank.
+        // 'tot_' prefix indicates over all ranks.
+        // 'domain' indicates points in domain-size specified on cmd-line.
+        // 'numpts' indicates points actually calculated in sub-domains.
+        // 'reads' indicates points actually read by stencil-bundles.
+        // 'numFpOps' indicates est. number of FP ops.
+        // 'nbytes' indicates number of bytes allocated.
+        // '_1t' suffix indicates work for one time-step.
+        // '_dt' suffix indicates work for all time-steps.
+        idx_t rank_domain_1t=0, rank_domain_dt=0, tot_domain_1t=0, tot_domain_dt=0;
+        idx_t rank_numWrites_1t=0, rank_numWrites_dt=0, tot_numWrites_1t=0, tot_numWrites_dt=0;
+        idx_t rank_reads_1t=0, rank_reads_dt=0, tot_reads_1t=0, tot_reads_dt=0;
+        idx_t rank_numFpOps_1t=0, rank_numFpOps_dt=0, tot_numFpOps_1t=0, tot_numFpOps_dt=0;
         idx_t rank_nbytes=0, tot_nbytes=0;
-        idx_t rank_domain_pts=0, tot_domain_pts=0;
 
         // Elapsed-time tracking.
         YaskTimer run_time;     // time in run_solution(), including halo exchange.
         YaskTimer ext_time;     // time in exterior stencil calculation.
-        YaskTimer int_time;     // time in interior stencil calculation.
+        YaskTimer int_time;     // time in exterior stencil calculation.
         YaskTimer halo_time;     // time spent just doing halo exchange, including MPI waits.
         YaskTimer wait_time;     // time spent just doing MPI waits.
-        YaskTimer test_time;     // time spent just doing MPI tests.
         idx_t steps_done = 0;   // number of steps that have been run.
-
-        // Maximum halos, skewing angles, and work extensions over all grids
-        // used for wave-front rank tiling (wf).
-        IdxTuple max_halos;  // spatial halos.
-        idx_t wf_steps = 0;  // max number of steps in a WF. 0 => no WF.
-        IdxTuple wf_angles;  // WF skewing angles for each shift (in points).
-        idx_t num_wf_shifts = 0; // number of WF shifts required in wf_steps.
-        IdxTuple wf_shift_pts;    // total shifted pts (wf_angles * num_wf_shifts).
-        IdxTuple left_wf_exts;    // WF extension needed on left side of rank for halo exch.
-        IdxTuple right_wf_exts;    // WF extension needed on right side of rank.
-
-        // Settings for temporal blocking and mini-blocks.
-        idx_t tb_steps = 0;  // max number of steps in a TB. 0 => no TB.
-        IdxTuple tb_angles;  // TB skewing angles for each shift (in points).
-        idx_t num_tb_shifts = 0; // number of TB shifts required in tb_steps.
-        IdxTuple tb_widths;      // base of TB trapezoid.
-        IdxTuple tb_tops;      // top of TB trapezoid.
-        IdxTuple mb_angles;  // MB skewing angles for each shift (in points).
+        double domain_pts_ps = 0.; // points-per-sec in domain.
+        double writes_ps = 0.;     // writes-per-sec.
+        double flops = 0.;      // est. FLOPS.
 
         // MPI settings.
         // TODO: move to settings or MPI info object.
@@ -300,10 +270,7 @@ namespace yask {
         bool enable_halo_exchange = true;
 #endif
 
-        // Clear this to ignore step conditions.
-        bool check_step_conds = true;
-
-        // MPI buffers for each grid.
+        // MPI data for each grid.
         // Map key: grid name.
         std::map<std::string, MPIData> mpiData;
 
@@ -321,40 +288,30 @@ namespace yask {
 
         // Set debug output to cout if my_rank == msg_rank
         // or a null stream otherwise.
-        std::ostream& set_ostr();
+        virtual std::ostream& set_ostr();
 
         // Get the messsage output stream.
-        std::ostream& get_ostr() const {
+        virtual std::ostream& get_ostr() const {
             assert(_ostr);
             return *_ostr;
         }
 
         // Reset elapsed times to zero.
-        void clear_timers();
+        virtual void clear_timers();
 
         // Access to settings.
-        KernelSettingsPtr& get_settings() {
+        virtual KernelSettingsPtr& get_settings() {
             assert(_opts);
             return _opts;
         }
-        const KernelSettingsPtr& get_settings() const {
-            assert(_opts);
-            return _opts;
-        }
-        void set_settings(KernelSettingsPtr opts) {
+        virtual void set_settings(KernelSettingsPtr opts) {
             _opts = opts;
-            _at.set_settings(_opts.get());
         }
 
-        // Misc accessors.
-        KernelEnvPtr& get_env() { return _env; }
-        const KernelEnvPtr& get_env() const { return _env; }
-        DimsPtr& get_dims() { return _dims; }
-        const DimsPtr& get_dims() const { return _dims; }
-        MPIInfoPtr& get_mpi_info() { return _mpiInfo; }
-        const MPIInfoPtr& get_mpi_info() const { return _mpiInfo; }
-        AutoTuner& getAT() { return _at; }
-        bool use_pack_tuners() const { return _use_pack_tuners; }
+        // Access to env, dims and MPI info.
+        virtual KernelEnvPtr& get_env() { return _env; }
+        virtual DimsPtr& get_dims() { return _dims; }
+        virtual MPIInfoPtr& get_mpi_info() { return _mpiInfo; }
 
         // Add a new grid to the containers.
         virtual void addGrid(YkGridPtr gp, bool is_output);
@@ -368,19 +325,19 @@ namespace yask {
 
         // Allocate grid memory for any grids that do not
         // already have storage.
-        virtual void allocGridData();
+        virtual void allocGridData(std::ostream& os);
 
         // Determine sizes of MPI buffers and allocate MPI buffer memory.
         // Dealloc any existing MPI buffers first.
-        virtual void allocMpiData();
-        virtual void freeMpiData() {
+        virtual void allocMpiData(std::ostream& os);
+        virtual void freeMpiData(std::ostream& os) {
             mpiData.clear();
         }
 
         // Alloc scratch-grid memory.
         // Dealloc any existing scratch-grids first.
-        virtual void allocScratchData();
-        virtual void freeScratchData() {
+        virtual void allocScratchData(std::ostream& os);
+        virtual void freeScratchData(std::ostream& os) {
             makeScratchGrids(0);
         }
 
@@ -390,14 +347,14 @@ namespace yask {
         // Print lots of stats.
         virtual void prepare_solution();
 
-        // Reset any locks, etc.
-        virtual void reset_locks();
-
         // Print info about the soln.
         virtual void print_info();
-        virtual void print_temporal_tiling_info();
 
         /// Get statistics associated with preceding calls to run_solution().
+        /**
+           Resets all timers and step counters.
+           @returns Pointer to statistics object.
+        */
         virtual yk_stats_ptr get_stats();
 
         // Dealloc grids, etc.
@@ -407,24 +364,19 @@ namespace yask {
         // This should be called anytime a setting or offset is changed.
         virtual void update_grid_info();
 
-        // Set temporal blocking data.
-        // This should be called anytime a block size is changed.
-        virtual void update_tb_info();
-
         // Adjust offsets of scratch grids based
         // on thread and scan indices.
-        virtual void update_scratch_grid_info(int region_thread_idx,
-                                              const Indices& idxs);
+        virtual void update_scratch_grid_info(int thread_idx,
+                                          const Indices& idxs);
 
         // Get total memory allocation required by grids.
         // Does not include MPI buffers.
         // TODO: add MPI buffers.
         virtual size_t get_num_bytes() {
             size_t sz = 0;
-            for (auto gp : gridPtrs) {
+            for (auto gp : gridPtrs)
                 if (gp)
                     sz += gp->get_num_storage_bytes() + _data_buf_pad;
-            }
             for (auto gps : scratchVecs)
                 if (gps)
                     for (auto gp : *gps)
@@ -463,47 +415,35 @@ namespace yask {
         // Set number of threads w/o using thread-divisor.
         // Return number of threads.
         // Do nothing and return 0 if not properly initialized.
-        int set_max_threads() {
+        virtual int set_max_threads() {
 
             // Get max number of threads.
-            int mt = std::max(_opts->max_threads, 1);
+            int mt = _opts->max_threads;
+	    if (!mt)
+	      return 0;
 
             // Reset number of OMP threads to max allowed.
+            //TRACE_MSG("set_max_threads: omp_set_num_threads=" << nt);
             omp_set_num_threads(mt);
             return mt;
         }
 
-        // Get total number of computation threads to use.
-        int get_num_comp_threads(int& region_threads, int& blk_threads) const {
-
-            // Max threads / divisor.
-            int mt = std::max(_opts->max_threads, 1);
-            int td = std::max(_opts->thread_divisor, 1);
-            int at = mt / td;
-            at = std::max(at, 1);
-
-            // Blk threads per region thread.
-            int bt = std::max(_opts->num_block_threads, 1);
-            bt = std::min(bt, at); // Cannot be > 'at'.
-            blk_threads = bt;
-
-            // Region threads.
-            int rt = at / bt;
-            rt = std::max(rt, 1);
-            region_threads = rt;
-
-            // Total number of block threads.
-            return bt * rt;
-        }
-        
         // Set number of threads to use for something other than a region.
         // Return number of threads.
         // Do nothing and return 0 if not properly initialized.
-        int set_all_threads() {
-            int rt, bt;
-            int at = get_num_comp_threads(rt, bt);
-            omp_set_num_threads(at);
-            return at;
+        virtual int set_all_threads() {
+
+            // Get max number of threads.
+            int mt = _opts->max_threads;
+	    if (!mt)
+	      return 0;
+            int nt = mt / _opts->thread_divisor;
+            nt = std::max(nt, 1);
+
+            // Reset number of OMP threads to max allowed.
+            //TRACE_MSG("set_all_threads: omp_set_num_threads=" << nt);
+            omp_set_num_threads(nt);
+            return nt;
         }
 
         // Set number of threads to use for a region.
@@ -511,102 +451,66 @@ namespace yask {
         // disable otherwise.
         // Return number of threads.
         // Do nothing and return 0 if not properly initialized.
-        int set_region_threads() {
-            int rt, bt;
-            int at = get_num_comp_threads(rt, bt);
+        virtual int set_region_threads() {
+
+            // Start with max allowed threads.
+            int mt = _opts->max_threads;
+	    if (!mt)
+	      return 0;
+            int nt = mt / _opts->thread_divisor;
+            nt = std::max(nt, 1);
 
             // Limit outer nesting to allow num_block_threads per nested
             // block loop.
-            yask_num_threads[0] = rt;
-
-            if (bt > 1) {
+            nt /= _opts->num_block_threads;
+            nt = std::max(nt, 1);
+            if (_opts->num_block_threads > 1)
                 omp_set_nested(1);
-                omp_set_max_active_levels(2);
-                yask_num_threads[1] = bt;
-            }
-            else {
+            else
                 omp_set_nested(0);
-                omp_set_max_active_levels(1);
-                yask_num_threads[1] = 0;
-            }
 
-            omp_set_num_threads(rt);
-            return rt;
+            //TRACE_MSG("set_region_threads: omp_set_num_threads=" << nt);
+            omp_set_num_threads(nt);
+            return nt;
         }
 
         // Set number of threads for a block.
         // Return number of threads.
         // Do nothing and return 0 if not properly initialized.
-        int set_block_threads() {
-            int rt, bt;
-            int at = get_num_comp_threads(rt, bt);
+        virtual int set_block_threads() {
 
-            if (omp_get_max_active_levels() > 1)
-                omp_set_num_threads(bt);
-            return bt;
+            // This should be a nested OMP region.
+            int nt = _opts->num_block_threads;
+            nt = std::max(nt, 1);
+            //TRACE_MSG("set_block_threads: omp_set_num_threads=" << nt);
+            omp_set_num_threads(nt);
+            return nt;
         }
 
         // Reference stencil calculations.
-        void run_ref(idx_t first_step_index,
-                     idx_t last_step_index);
+        virtual void calc_rank_ref();
+
+        // Vectorized and blocked stencil calculations.
+        virtual void calc_rank_opt();
 
         // Calculate results within a region.
-        void calc_region(BundlePackPtr& sel_bp,
-                         const ScanIndices& rank_idxs);
+        virtual void calc_region(BundlePackPtr& sel_bp,
+                                 const ScanIndices& rank_idxs);
 
         // Calculate results within a block.
-        void calc_block(BundlePackPtr& sel_bp,
-                        idx_t region_shift_num,
-                        idx_t nphases, idx_t phase,
-                        const ScanIndices& rank_idxs,
-                        const ScanIndices& region_idxs);
-
-        // Calculate results within a mini-block.
-        void calc_mini_block(int region_thread_idx,
-                             BundlePackPtr& sel_bp,
-                             idx_t region_shift_num,
-                             idx_t nphases, idx_t phase,
-                             idx_t nshapes, idx_t shape,
-                             const BridgeMask& bridge_mask,
-                             const ScanIndices& rank_idxs,
-                             const ScanIndices& base_region_idxs,
-                             const ScanIndices& base_block_idxs,
-                             const ScanIndices& adj_block_idxs);
+        virtual void calc_block(BundlePackPtr& sel_bp,
+                                const ScanIndices& region_idxs);
 
         // Exchange all dirty halo data for all stencil bundles.
-        void exchange_halos();
-
-        // Call MPI_Test() on all unfinished requests to promote MPI progress.
-        void poke_halo_exchange();
+        virtual void exchange_halos(bool test_only = false);
 
         // Mark grids that have been written to by bundle pack 'sel_bp'.
         // If sel_bp==null, use all bundles.
-        void mark_grids_dirty(const BundlePackPtr& sel_bp,
-                              idx_t start, idx_t stop);
+        virtual void mark_grids_dirty(const BundlePackPtr& sel_bp,
+                                      idx_t start, idx_t stop);
 
-        // Set various limits in 'idxs' based on current step in region.
-        bool shift_region(const Indices& base_start, const Indices& base_stop,
-                            idx_t shift_num,
-                            BundlePackPtr& bp,
-                            ScanIndices& idxs);
-
-        // Set various limits in 'idxs' based on current step in block.
-        bool shift_mini_block(const Indices& mb_base_start,
-                              const Indices& mb_base_stop,
-                              const Indices& adj_block_base_start,
-                              const Indices& adj_block_base_stop,
-                              const Indices& block_base_start,
-                              const Indices& block_base_stop,
-                              const Indices& region_base_start,
-                              const Indices& region_base_stop,
-                              idx_t mb_shift_num,
-                              idx_t nphases, idx_t phase,
-                              idx_t nshapes, idx_t shape,
-                              const BridgeMask& bridge_mask,
-                              ScanIndices& idxs);
-        
         // Set the bounding-box around all stencil bundles.
-        void find_bounding_boxes();
+        virtual void find_bounding_boxes();
 
         // Make new scratch grids.
         virtual void makeScratchGrids (int num_threads) =0;
@@ -739,34 +643,10 @@ namespace yask {
             return _opts->_numa_pref;
         }
 
-        // Auto-tuner methods.
-        virtual void eval_auto_tuner(idx_t num_steps);
-        
         // Auto-tuner APIs.
         virtual void reset_auto_tuner(bool enable, bool verbose = false);
         virtual void run_auto_tuner_now(bool verbose = true);
         virtual bool is_auto_tuner_enabled() const;
-
-    }; // StencilContext.
-
-    // Macro to get commonly-needed vars for stencil calcs efficiently.
-#define CONTEXT_VARS0(ctx_p, pfx)                                       \
-    pfx auto* cp = ctx_p;                                               \
-    auto& os = cp->get_ostr();                                          \
-    pfx auto* opts = cp->get_settings().get();                          \
-    pfx auto* mpiInfo = cp->get_mpi_info().get();                       \
-    pfx auto* dims = cp->get_dims().get();                              \
-    pfx auto* env = cp->get_env().get();                                \
-    const auto& step_dim = dims->_step_dim;                             \
-    const auto& domain_dims = dims->_domain_dims;                       \
-    const auto& stencil_dims = dims->_stencil_dims;                     \
-    constexpr idx_t step_posn = 0;                                      \
-    assert(step_posn == +Indices::step_posn);                           \
-    const int nddims = NUM_DOMAIN_DIMS;                                 \
-    assert(nddims == domain_dims.size());                               \
-    const int nsdims = NUM_STENCIL_DIMS;                                \
-    assert(nsdims == stencil_dims.size())
-#define CONTEXT_VARS(ctx_p) CONTEXT_VARS0(ctx_p,)
-#define CONTEXT_VARS_CONST(ctx_p) CONTEXT_VARS0(ctx_p, const)
+    };
 
 } // yask namespace.

@@ -332,23 +332,13 @@ namespace yask {
     }
 
     // Determine how many values in step-dim are needed.
-    // TODO: fix this for staggered grids; it currently does not
-    // understand the per-pack reuse.
     int Grid::getStepDimSize() const
     {
-        // Specified by API.
-        if (_stepAlloc > 0)
-            return _stepAlloc;
-
-        // No step-dim index used.
+        // Only need one value if no step-dim index used.
         auto stepDim = getStepDim();
         if (!stepDim)
             return 1;
 
-        // Specified on cmd line.
-        if (_soln->getSettings()._stepAlloc > 0)
-            return _soln->getSettings()._stepAlloc;
-        
         // No info stored?
         if (_halos.size() == 0)
             return 1;
@@ -390,10 +380,11 @@ namespace yask {
 
         // If first and last halos are zero, we can further optimize storage by
         // immediately reusing memory location.
-        // TODO: recognize that reading in one pack and then writing in
-        // another can also reuse storage.
         if (sz > 1 && first_max_halo == 0 && last_max_halo == 0)
             sz--;
+
+        // TODO: recognize that reading in one eq-bundle and then writing in
+        // another can also reuse storage.
 
         return sz;
     }

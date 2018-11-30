@@ -116,15 +116,6 @@ namespace yask {
         assert(rp);
         return make_shared<DivExpr>(lp, rp);
     }
-    yc_number_node_ptr
-    yc_node_factory::new_mod_node(yc_number_node_ptr lhs,
-                                  yc_number_node_ptr rhs) {
-        auto lp = dynamic_pointer_cast<NumExpr>(lhs);
-        assert(lp);
-        auto rp = dynamic_pointer_cast<NumExpr>(rhs);
-        assert(rp);
-        return make_shared<ModExpr>(lp, rp);
-    }
     yc_bool_node_ptr
     yc_node_factory::new_not_node(yc_bool_node_ptr rhs) {
         auto p = dynamic_pointer_cast<BoolExpr>(rhs);
@@ -247,19 +238,6 @@ namespace yask {
     }
     yc_number_node_ptr operator/(yc_number_node_ptr lhs, double rhs) {
         return operator/(lhs, constNum(rhs));
-    }
-    yc_number_node_ptr operator%(yc_number_node_ptr lhs, yc_number_node_ptr rhs) {
-        auto lp = dynamic_pointer_cast<NumExpr>(lhs);
-        assert(lp);
-        auto rp = dynamic_pointer_cast<NumExpr>(rhs);
-        assert(rp);
-        return make_shared<ModExpr>(lp, rp);
-    }
-    yc_number_node_ptr operator%(double lhs, yc_number_node_ptr rhs) {
-        return operator%(constNum(lhs), rhs);
-    }
-    yc_number_node_ptr operator%(yc_number_node_ptr lhs, double rhs) {
-        return operator%(lhs, constNum(rhs));
     }
     yc_number_node_ptr operator*(yc_number_node_ptr lhs, yc_number_node_ptr rhs) {
         auto lp = dynamic_pointer_cast<NumExpr>(lhs);
@@ -443,6 +421,7 @@ namespace yask {
         lhs = lhs - rhs;
     }
 
+    // TODO: truncate (or round?) division results for indices.
     NumExprPtr operator/(const NumExprPtr lhs, const NumExprPtr rhs) {
         return make_shared<DivExpr>(lhs, rhs);
     }
@@ -462,31 +441,13 @@ namespace yask {
         lhs = lhs / rhs;
     }
 
-    NumExprPtr operator%(const NumExprPtr lhs, const NumExprPtr rhs) {
-        return make_shared<ModExpr>(lhs, rhs);
-    }
-    NumExprPtr operator%(double lhs, const NumExprPtr rhs) {
-        NumExprPtr p = make_shared<ConstExpr>(lhs);
-        return p % rhs;
-    }
-    NumExprPtr operator%(const NumExprPtr lhs, double rhs) {
-        NumExprPtr p = make_shared<ConstExpr>(rhs);
-        return lhs % p;
-    }
-
     // Define a conditional.
     EqualsExprPtr operator IF_OPER(EqualsExprPtr expr, const BoolExprPtr cond) {
 
         // Add cond to expr.
         assert(expr);
         expr->setCond(cond);
-        return expr;
-    }
-    EqualsExprPtr operator IF_STEP_OPER(EqualsExprPtr expr, const BoolExprPtr step_cond) {
 
-        // Add cond to expr.
-        assert(expr);
-        expr->setStepCond(step_cond);
         return expr;
     }
 
@@ -516,14 +477,9 @@ namespace yask {
         auto* soln = gp->getSoln();
         assert(soln);
         auto& eqs = soln->getEqs();
-        auto& settings = soln->getSettings();
 
         // Make expression node.
-        // Conditions may be added later if/when the IF or IF_STEP
-        // operators are processed.
         auto expr = make_shared<EqualsExpr>(gpp, rhs);
-        if (settings._printEqs)
-            soln->get_ostr() << "Equation defined: " << expr->getDescr() << endl;
 
         // Save the expression in list of equations.
         eqs.addItem(expr);
@@ -691,7 +647,7 @@ namespace yask {
         string gname = _grid->getName();
         string expr = "static_cast<_context_type::" + gname + "_type*>(_context->" + gname;
         if (_grid->isScratch())
-            expr += "_list[region_thread_idx].get()";
+            expr += "_list[thread_idx].get()";
         expr += ")";
         return expr;
     }
@@ -732,9 +688,6 @@ namespace yask {
         if (_consts.size())
             str += "(" + _consts.makeDimValStr() + ")";
         return str;
-    }
-    const IndexExprPtrVec& GridPoint::getDims() const {
-        return _grid->getDims();
     }
 
     // Make string like "x+(4/VLEN_X)" from
@@ -785,25 +738,14 @@ namespace yask {
 
     // Make string like "g->_wrap_step(t+1)" from original arg "t+1"
     // if grid uses step dim, "0" otherwise.
-    // If grid doesn't allow dynamic alloc, set to fixed value.
     string GridPoint::makeStepArgStr(const string& gridPtr, const Dimensions& dims) const {
         ostringstream oss;
         auto& gd = _grid->getDims();
         for (size_t i = 0; i < gd.size(); i++) {
             auto dname = gd[i]->getName();
             auto& arg = _args.at(i);
-            if (dname == dims._stepDim) {
-                if (_grid->is_dynamic_step_alloc())
-                    return gridPtr + "->_wrap_step(" + arg->makeStr() + ")";
-                else {
-                    auto step_alloc = _grid->get_step_alloc_size();
-                    if (step_alloc == 1)
-                        return "0"; // 1 alloc => always index 0.
-                    else 
-                        return "imod_flr<idx_t>(" + arg->makeStr() + ", " +
-                            to_string(step_alloc) + ")";
-                }
-            }
+            if (dname == dims._stepDim)
+                return gridPtr + "->_wrap_step(" + arg->makeStr() + ")";
         }
         return "0";
     }
@@ -897,9 +839,6 @@ namespace yask {
         // Could allow 'dim / 1', but seems silly.
         return false;
     }
-    bool ModExpr::isOffsetFrom(string dim, int& offset) {
-        return false;
-    }
     bool MultExpr::isOffsetFrom(string dim, int& offset) {
 
         // Could allow 'dim * 1', but seems silly.
@@ -946,16 +885,15 @@ namespace yask {
         return false;
     }
 
+
     // Make a readable string from an expression.
     string Expr::makeStr(const VarMap* varMap) const {
         ostringstream oss;
 
         // Use a print visitor to make a string.
-        CompilerSettings _dummySettings;
-        Dimensions _dummyDims;
-        PrintHelper ph(_dummySettings, _dummyDims, NULL, "temp", "", "", ""); // default helper.
+        PrintHelper ph(NULL, NULL, "temp", "", "", ""); // default helper.
         CompilerSettings settings; // default settings.
-        PrintVisitorTopDown pv(oss, ph, varMap);
+        PrintVisitorTopDown pv(oss, ph, settings, varMap);
         accept(&pv);
 
         // Return anything written to the stream

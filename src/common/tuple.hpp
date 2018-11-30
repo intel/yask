@@ -27,9 +27,7 @@ IN THE SOFTWARE.
 
 #pragma once
 
-// Include this first to assure NDEBUG is set properly.
-#include "yask_assert.hpp"
-
+#include <assert.h>
 #include <math.h>
 #include <iostream>
 #include <iomanip>
@@ -43,8 +41,6 @@ IN THE SOFTWARE.
 #include <vector>
 #include <cstdarg>
 #include <string.h>
-
-#include "common_utils.hpp"
 
 namespace yask {
 
@@ -434,17 +430,7 @@ namespace yask {
         Tuple removeDim(int posn) const;
 
         // reductions.
-        // Apply function over all elements, returning one value.
-        T reduce(std::function<T (T lhs, T rhs)> reducer) const {
-            T result = 0;
-            int n = 0;
-            for (auto i : _q) {
-                auto& tval = i.getVal();
-                result = (n == 0) ? tval : reducer(result, tval);
-                n++;
-            }
-            return result;
-        }
+        T reduce(std::function<T (T lhs, T rhs)> reducer) const;
         T sum() const {
             return reduce([&](T lhs, T rhs){ return lhs + rhs; });
         }
@@ -464,31 +450,8 @@ namespace yask {
         // if strictRhs==true, RHS elements must be same as this;
         // else, only matching ones are considered.
         Tuple combineElements(std::function<T (T lhs, T rhs)> combiner,
-                              const Tuple& rhs,
-                              bool strictRhs=true) const {
-            Tuple newt = *this;
-            if (strictRhs) {
-                assert(areDimsSame(rhs, true));
-                for (size_t i = 0; i < _q.size(); i++) {
-                    auto& tval = _q[i].getVal();
-                    auto& rval = rhs[i];
-                    T newv = combiner(tval, rval);
-                    newt[i] = newv;
-                }
-            }
-            else {
-                for (auto& i : _q) {
-                    auto& tdim = i.getName();
-                    auto& tval = i.getVal();
-                    auto* rp = rhs.lookup(tdim);
-                    if (rp) {
-                        T newv = combiner(tval, *rp);
-                        newt.setVal(tdim, newv);
-                    }
-                }
-            }
-            return newt;
-        }
+                                      const Tuple& rhs,
+                                     bool strictRhs=true) const;
         Tuple addElements(const Tuple& rhs, bool strictRhs=true) const {
             return combineElements([&](T lhs, T rhs){ return lhs + rhs; },
                                    rhs, strictRhs);
@@ -512,24 +475,8 @@ namespace yask {
 
         // Apply func to each element, creating a new Tuple.
         Tuple mapElements(std::function<T (T lhs, T rhs)> func,
-                                 T rhs) const {
-            Tuple newt = *this;
-            for (size_t i = 0; i < _q.size(); i++) {
-                auto& tval = _q[i].getVal();
-                T newv = func(tval, rhs);
-                newt[i] = newv;
-            }
-            return newt;
-        }
-        Tuple mapElements(std::function<T (T in)> func) const {
-            Tuple newt = *this;
-            for (size_t i = 0; i < _q.size(); i++) {
-                auto& tval = _q[i].getVal();
-                T newv = func(tval);
-                newt[i] = newv;
-            }
-            return newt;
-        }
+                                 T rhs) const;
+        Tuple mapElements(std::function<T (T in)> func) const;
         Tuple addElements(T rhs) const {
             return mapElements([&](T lhs, T rhs){ return lhs + rhs; },
                                rhs);
@@ -582,45 +529,14 @@ namespace yask {
         // through first dimension. If '_firstInner' is false, it is done the opposite way.
         // Visitor should return 'true' to keep going or 'false' to stop.
         void visitAllPoints(std::function<bool (const Tuple&,
-                                                size_t idx)> visitor) const {
-
-            // Init lambda fn arg with *this to get dim names.
-            // Values will get set during scan.
-            Tuple tp(*this);
-
-            // 0-D?
-            if (!_q.size())
-                visitor(tp, 0);
-
-            // Call recursive version.
-            // Set begin/step dims depending on nesting.
-            else if (_firstInner)
-                _visitAllPoints(visitor, size()-1, -1, tp);
-            else
-                _visitAllPoints(visitor, 0, 1, tp);
-        }
+                                                size_t idx)> visitor) const;
 
         // Call the 'visitor' lambda function at every point in the space defined by 'this'.
         // 'idx' parameter contains sequentially-numbered index.
         // Visitation order is not predictable.
         // Visitor return value only stops visit on one thread.
         void visitAllPointsInParallel(std::function<bool (const Tuple&,
-                                                          size_t idx)> visitor) const {
-
-            // 0-D?
-            if (!_q.size()) {
-                Tuple tp(*this);
-                visitor(tp, 0);
-            }
-
-            // Call order-independent version.
-            // Set begin/end/step dims depending on nesting.
-            // TODO: set this depending on dim sizes.
-            else if (_firstInner)
-                _visitAllPointsInPar(visitor, size()-1, -1);
-            else
-                _visitAllPointsInPar(visitor, 0, 1);
-        }
+                                                          size_t idx)> visitor) const;
 
     protected:
 
@@ -680,9 +596,6 @@ namespace yask {
                 Tuple tp(*this);
 
                 // Loop through points.
-                // Each thread gets its own copy of 'tp', which
-                // gets updated with the loop index.
-                // TODO: convert to yask_for().
 #pragma omp parallel for firstprivate(tp)
                 for (T i = 0; i < dsize; i++) {
                     tp.setVal(curDimNum, i);
@@ -690,9 +603,7 @@ namespace yask {
                 }
             }
 
-            // If >1 dim, parallelize over outer dims only,
-            // streaming across inner dim in each thread.
-            // This is to maximize HW prefetch benefit.
+            // If >1 dim, parallelize over outer dims.
             else {
 
                 // Total number of elements to visit.
@@ -702,17 +613,16 @@ namespace yask {
                 int lastDimNum = (step > 0) ? nd-1 : 0;
                 T nel = getVal(lastDimNum);
 
-                // Parallel loop over elements w/stride = size of
-                // last dim.
-                yask_for(0, ne, nel,
-                         [&](idx_t start, idx_t stop, idx_t thread_num) {
+                // Parallel loop over elements, skipping by size of last dim.
+#pragma omp parallel for
+                for (T i = 0; i < ne; i += nel) {
 
-                             // Convert linear index to n-dimensional tuple.
-                             Tuple tp = unlayout(start);
-                             
-                             // Visit points in last dim.
-                             _visitAllPoints(visitor, lastDimNum, step, tp);
-                         });
+                    // Get indices at this position.
+                    Tuple tp = unlayout(i);
+
+                    // Visit points in last dim.
+                    _visitAllPoints(visitor, lastDimNum, step, tp);
+                }
             }
             return true;
 #else
@@ -726,20 +636,3 @@ namespace yask {
     };
 
 } // namespace yask.
-
-// Provide a hash operator for a Tuple.
-// Needed for unordered_map.
-// This needs to be in the 'std' namespace.
-namespace std {
-    template <typename T>
-    class hash<yask::Tuple<T>>{
-    public :
-        size_t operator()(const yask::Tuple<T> &x ) const {
-            size_t h = 0;
-            for (size_t i = 0; i < x.getNumDims(); i++) {
-                h ^= i ^ std::hash<T>()(x.getVal(i)) ^ std::hash<std::string>()(x.getDimName(i));
-            }
-            return h;
-        }
-    };
-}

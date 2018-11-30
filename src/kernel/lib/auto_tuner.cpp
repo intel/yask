@@ -23,123 +23,13 @@ IN THE SOFTWARE.
 
 *****************************************************************************/
 
-// This file contains implementations of AutoTuner methods and
-// use of the tuner from StencilContext.
+// This file contains implementations of AutoTuner methods.
 
 #include "yask_stencil.hpp"
 using namespace std;
 
 namespace yask {
 
-    // Eval auto-tuner for given number of steps.
-    void StencilContext::eval_auto_tuner(idx_t num_steps) {
-        _at.steps_done += num_steps;
-
-        if (_use_pack_tuners) {
-            for (auto& sp : stPacks)
-                sp->getAT().eval();
-        }
-        else
-            _at.eval();
-    }
-    
-    // Reset auto-tuners.
-    void StencilContext::reset_auto_tuner(bool enable, bool verbose) {
-        for (auto& sp : stPacks)
-            sp->getAT().clear(!enable, verbose);
-        _at.clear(!enable, verbose);
-    }
-
-    // Determine if any auto tuners are running.
-    bool StencilContext::is_auto_tuner_enabled() const {
-        bool done = true;
-        if (_use_pack_tuners) {
-            for (auto& sp : stPacks)
-                if (!sp->getAT().is_done())
-                    done = false;
-        } else
-            done = _at.is_done();
-        return !done;
-    }
-    
-    // Apply auto-tuning immediately, i.e., not as part of normal processing.
-    // Will alter data in grids.
-    void StencilContext::run_auto_tuner_now(bool verbose) {
-        CONTEXT_VARS(this);
-        if (!rank_bb.bb_valid)
-            THROW_YASK_EXCEPTION("Error: run_auto_tuner_now() called without calling prepare_solution() first");
-
-        os << "Auto-tuning...\n" << flush;
-        YaskTimer at_timer;
-        at_timer.start();
-
-        // Temporarily disable halo exchange to tune intra-rank.
-        enable_halo_exchange = false;
-
-        // Temporarily ignore step conditions to force eval of conditional
-        // bundles.  NB: may affect perf, e.g., if packs A and B run in
-        // AAABAAAB sequence, perf may be [very] different if run as
-        // ABABAB..., esp. w/temporal tiling.  TODO: work around this.
-        check_step_conds = false;
-
-        // Init tuners.
-        reset_auto_tuner(true, verbose);
-
-        // Reset stats.
-        clear_timers();
-
-        // Determine number of steps to run.
-        // If wave-fronts are enabled, run a max number of these steps.
-        idx_t step_dir = _dims->_step_dir; // +/- 1.
-        idx_t step_t = min(max(wf_steps, idx_t(1)), +AutoTuner::max_step_t) * step_dir;
-
-        // Run time-steps until AT converges.
-        for (idx_t t = 0; ; t += step_t) {
-
-            // Run step_t time-step(s).
-            run_solution(t, t + step_t - step_dir);
-
-            // AT done on this rank?
-            if (!is_auto_tuner_enabled())
-                break;
-        }
-
-        // Wait for all ranks to finish.
-        os << "Waiting for auto-tuner to converge on all ranks...\n";
-        _env->global_barrier();
-
-        // reenable normal operation.
-#ifndef NO_HALO_EXCHANGE
-        enable_halo_exchange = true;
-#endif
-        check_step_conds = true;
-
-        // Report results.
-        at_timer.stop();
-        os << "Auto-tuner done after " << steps_done << " step(s) in " <<
-            at_timer.get_elapsed_secs() << " secs.\n";
-        if (_use_pack_tuners) {
-            for (auto& sp : stPacks)
-                sp->getAT().print_settings(os);
-        } else
-            _at.print_settings(os);
-        print_temporal_tiling_info();
-
-        // Reset stats.
-        clear_timers();
-    }
-
-    // Print the best settings.
-    void AutoTuner::print_settings(ostream& os) const {
-        os << _name << ": best-block-size: " <<
-            _settings->_block_sizes.makeDimValStr(" * ") << endl <<
-            _name << ": mini-block-size: " <<
-            _settings->_mini_block_sizes.makeDimValStr(" * ") << endl <<
-            _name << ": sub-block-size: " <<
-            _settings->_sub_block_sizes.makeDimValStr(" * ") << endl <<
-            flush;
-    }
-    
     // Reset the auto-tuner.
     void AutoTuner::clear(bool mark_done, bool verbose) {
 
@@ -161,7 +51,7 @@ namespace yask {
 
         // Reset all vars.
         results.clear();
-        n2big = n2small = n2far = 0;
+        n2big = n2small = 0;
         best_block = _settings->_block_sizes;
         best_rate = 0.;
         center_block = best_block;
@@ -173,42 +63,37 @@ namespace yask {
         csteps = 0;
         in_warmup = true;
         timer.clear();
-        steps_done = 0;
 
         // Set min blocks to number of region threads.
         min_blks = _context->set_region_threads();
 
         // Adjust starting block if needed.
-        auto& opts = _context->get_settings();
         for (auto dim : center_block.getDims()) {
             auto& dname = dim.getName();
             auto& dval = dim.getVal();
 
-            if (dname == opts->_dims->_step_dim) {
-                block_steps = opts->_block_sizes[dname];
-                center_block[dname] = block_steps;
-            } else {
-                auto dmax = max(idx_t(1), opts->_region_sizes[dname] / 2);
-                if (dval > dmax || dval < 1)
-                    center_block[dname] = dmax;
-            }
+            auto& opts = _context->get_settings();
+            auto dmax = max(idx_t(1), opts->_region_sizes[dname] / 2);
+            if (dval > dmax || dval < 1)
+                center_block[dname] = dmax;
         }
         if (!done) {
-            TRACE_MSG2(_name << ": starting block-size: "  <<
-                       center_block.makeDimValStr(" * "));
-            TRACE_MSG2(_name << ": starting search radius: " << radius);
+            os << _name << ": starting block-size: "  <<
+                center_block.makeDimValStr(" * ") << endl;
+            os << _name << ": starting search radius: " << radius << endl;
         }
     } // clear.
 
     // Evaluate the previous run and take next auto-tuner step.
-    void AutoTuner::eval() {
-        CONTEXT_VARS(_context);
+    void AutoTuner::eval(idx_t steps) {
+        ostream& os = _context->get_ostr();
+        auto& mpiInfo = _context->get_mpi_info();
+        auto& dims = _context->get_dims();
+        auto& opts = _context->get_settings();
 
         // Get elapsed time and reset.
         double etime = timer.get_elapsed_secs();
         timer.clear();
-        idx_t steps = steps_done;
-        steps_done = 0;
         
         // Leave if done.
         if (done)
@@ -244,14 +129,9 @@ namespace yask {
 
         // Calc perf and reset vars for next time.
         double rate = (ctime > 0.) ? double(csteps) / ctime : 0.;
-        os << _name << ": radius=" << radius << ": " <<
-            csteps << " steps(s) in " << ctime <<
-            " secs (" << rate <<
-            " steps/sec) with block-size " <<
-            _settings->_block_sizes.makeDimValStr(" * ");
-        if (_context->tb_steps > 0)
-            os << ", " << _context->tb_steps << " TB step(s)";
-        os << endl;
+        os << _name << ": " << csteps << " steps(s) at " << rate <<
+            " steps/sec with block-size " <<
+            _settings->_block_sizes.makeDimValStr(" * ") << endl;
         csteps = 0;
         ctime = 0.;
 
@@ -274,7 +154,7 @@ namespace yask {
             // Valid neighbor index?
             if (neigh_idx < mpiInfo->neighborhood_size) {
 
-                // Convert index to offsets in each domain dim.
+                // Convert index to offsets in each dim.
                 auto ofs = mpiInfo->neighborhood_sizes.unlayout(neigh_idx);
 
                 // Next neighbor of center point.
@@ -283,7 +163,6 @@ namespace yask {
                 // Determine new block size.
                 IdxTuple bsize(center_block);
                 bool ok = true;
-                int mdist = 0; // manhattan dist from center.
                 for (auto odim : ofs.getDims()) {
                     auto& dname = odim.getName(); // a domain-dim name.
                     auto& dofs = odim.getVal(); // always [0..2].
@@ -299,25 +178,16 @@ namespace yask {
 
                     auto sz = center_block[dname];
                     switch (dofs) {
-                    case 0:     // reduce size in 'odim'.
+                    case 0:
                         sz -= step;
-                        mdist++;
                         break;
-                    case 1:     // keep size in 'odim'.
+                    case 1:
                         break;
-                    case 2:     // increase size in 'odim'.
+                    case 2:
                         sz += step;
-                        mdist++;
                         break;
                     default:
                         assert(false && "internal error in tune_settings()");
-                    }
-
-                    // Don't look in far corners.
-                    if (mdist > 2) {
-                        n2far++;
-                        ok = false;
-                        break;  // out of dim-loop.
                     }
 
                     // Too small?
@@ -339,7 +209,7 @@ namespace yask {
                           bsize.makeDimValStr(" * "));
 
                 // Too small?
-                if (ok && get_num_domain_points(bsize) < min_pts) {
+                if (ok && bsize.product() < min_pts) {
                     n2small++;
                     ok = false;
                 }
@@ -347,8 +217,7 @@ namespace yask {
                 // Too few?
                 else if (ok) {
                     auto& opts = _context->get_settings();
-                    idx_t nblks = get_num_domain_points(opts->_region_sizes) /
-                        get_num_domain_points(bsize);
+                    idx_t nblks = opts->_region_sizes.product() / bsize.product();
                     if (nblks < min_blks) {
                         ok = false;
                         n2big++;
@@ -393,7 +262,7 @@ namespace yask {
                         os << _name << ": done" << endl;
                         return;
                     }
-                    TRACE_MSG2(_name << ": new search radius=" << radius);
+                    os << _name << ": new search radius: " << radius << endl;
                 }
                 else {
                     TRACE_MSG2(_name << ": continuing search from block " <<
@@ -403,8 +272,6 @@ namespace yask {
         } // search for new setting to try.
 
         // Fix settings for next step.
-        // Assumption is that block size in one pack doesn't affect
-        // perf in another pack.
         apply();
         TRACE_MSG2(_name << ": next block-size "  <<
                   _settings->_block_sizes.makeDimValStr(" * "));
@@ -412,33 +279,32 @@ namespace yask {
 
     // Apply auto-tuner settings to prepare for a run.
     void AutoTuner::apply() {
-        CONTEXT_VARS(_context);
+        ostream& os = _context->get_ostr();
+        auto& mpiInfo = _context->get_mpi_info();
+        auto& dims = _context->get_dims();
+        auto& opts = _context->get_settings();
+        auto& env = _context->get_env();
+        auto step_posn = +Indices::step_posn;
 
-        // Restore step-dim value for block.
-        _settings->_block_sizes[step_posn] = block_steps;
-        
-        // Change block-based sizes to 0 so adjustSettings()
+        // Change block-related sizes to 0 so adjustSettings()
         // will set them to the default.
-        // TODO: tune mini- and sub-block sizes also.
+        // Save and restore step-dim value.
+        // TODO: tune sub-block sizes also.
+        auto step_size = _settings->_sub_block_sizes[step_posn];
         _settings->_sub_block_sizes.setValsSame(0);
+        _settings->_sub_block_sizes[step_posn] = step_size;
+        step_size = _settings->_sub_block_group_sizes[step_posn];
         _settings->_sub_block_group_sizes.setValsSame(0);
-        _settings->_mini_block_sizes.setValsSame(0);
-        _settings->_mini_block_group_sizes.setValsSame(0);
+        _settings->_sub_block_group_sizes[step_posn] = step_size;
+        step_size = _settings->_block_group_sizes[step_posn];
         _settings->_block_group_sizes.setValsSame(0);
+        _settings->_block_group_sizes[step_posn] = step_size;
 
         // Make sure everything is resized based on block size.
-        auto saved_op = cp->get_debug_output();
-        cp->set_debug_output(nullop);
-        _settings->adjustSettings(cp->get_env());
-
-        // Update temporal blocking info.
-        cp->update_tb_info();
+        _settings->adjustSettings(nullop->get_ostream(), env);
 
         // Reallocate scratch data based on new block size.
-        // TODO: only do this when blocks have increased or
-        // decreased by a certain percentage.
-        _context->allocScratchData();
-        cp->set_debug_output(saved_op);
+        _context->allocScratchData(nullop->get_ostream());
     }
 
 } // namespace yask.

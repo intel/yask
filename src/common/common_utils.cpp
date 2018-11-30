@@ -25,18 +25,13 @@ IN THE SOFTWARE.
 
 //////// Some common code shared between YASK compiler and kernel. //////////
 
-// Include this first to assure NDEBUG is set properly.
-#include "yask_assert.hpp"
-
+#include "yask_common_api.hpp"
 #include <sstream>
-#include "common_utils.hpp"
+#include <assert.h>
 
 using namespace std;
 
 namespace yask {
-
-    // A var that behaves like OMP_NUM_THREADS.
-    int yask_num_threads[yask_max_levels] = { 0 };
 
     // Update this version string anytime changes are
     // committed to a repository, especially when
@@ -46,7 +41,7 @@ namespace yask {
     // for numbers above 9 (at least up to 99).
 
     // Format: "major.minor.patch".
-    const string version = "2.15.10";
+    const string version = "2.12.04";
 
     string yask_get_version_string() {
         return version;

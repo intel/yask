@@ -29,7 +29,7 @@ if ( "-$1" == "-" ) then
     if ( `echo logs/yask_*/*.csv | wc -l` > 0 ) then
         $0 logs/yask_*/*.csv
     else
-        echo "usage: $0 [csv-file(s) from yask_tuner.pl]"
+        echo "usage: $0 <csv-file(s) from yask_tuner.pl>"
     endif
     exit
 endif

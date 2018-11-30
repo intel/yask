@@ -77,7 +77,7 @@ include $(YASK_BASE)/src/common/common.mk
 # - vars starting with 'YK_' apply to the YASK stencil kernel.
 # - vars starting with 'YC_' apply to the YASK stencil compiler.
 
-YASK_MFLAGS	:=	--max-load 16
+YASK_MFLAGS	:=	--max-load 5
 #YASK_MFLAGS	+=	--output-sync --output-sync=line
 YK_MAKE		:=	$(MAKE) $(YASK_MFLAGS) -C src/kernel YASK_OUTPUT_DIR=$(YASK_OUT_BASE)
 YC_MAKE		:=	$(MAKE) $(YASK_MFLAGS) -C src/compiler YASK_OUTPUT_DIR=$(YASK_OUT_BASE)
@@ -209,9 +209,9 @@ yc-and-yk-test:
 code-stats:
 	$(YK_MAKE) $@
 
-$(TUPLE_TEST_EXEC): $(COMM_DIR)/tests/tuple_test.cpp $(COMM_DIR)/*.*pp
+$(TUPLE_TEST_EXEC): $(COMM_DIR)/tests/tuple_test.cpp $(COMM_DIR)/tuple.*pp
 	$(MKDIR) $(dir $@)
-	$(CXX_PREFIX) $(CXX) $(CXXFLAGS) $(LFLAGS) -o $@ $< $(COMM_DIR)/tuple.cpp $(COMM_DIR)/common_utils.cpp
+	$(CXX_PREFIX) $(CXX) $(CXXFLAGS) $(LFLAGS) -o $@ $< $(COMM_DIR)/tuple.cpp
 
 tuple-test: $(TUPLE_TEST_EXEC)
 	@echo '*** Running the C++ YASK tuple test...'

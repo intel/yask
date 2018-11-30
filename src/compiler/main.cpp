@@ -107,9 +107,6 @@ void usage(const string& cmd) {
         " -halo <size>\n"
         "    Specify the sizes of the halos.\n"
         "      By default, halos are calculated automatically for each grid.\n"
-        " [-no]-interleave-misc\n"
-        "    Allocate grid vars with the 'misc' dims as the inner-most dims (default=" << settings._innerMisc << ").\n"
-        "      This disallows dynamcally changing the 'misc' dim sizes during run-time.\n"
         " -fus\n"
         "    Make first dimension of fold unit stride (default=" << settings._firstInner << ").\n"
         "      This controls the intra-vector memory layout.\n"
@@ -133,8 +130,6 @@ void usage(const string& cmd) {
         "    Set heuristic for min expression-size for reuse (default=" << settings._minExprSize << ").\n"
         " [-no]-find-deps\n"
         "    Find dependencies between stencil equations (default=" << settings._findDeps << ").\n"
-        " [-no]-print-eqs\n"
-        "    Print each equation when defined (default=" << settings._printEqs << ").\n"
         "\n"
         " -p <format-type> <filename>\n"
         "    Format output per <format-type> and write to <filename>.\n"
@@ -201,14 +196,6 @@ void parseOpts(int argc, const char* argv[])
                 settings._bundleScratch = true;
             else if (opt == "-no-bundle-scratch")
                 settings._bundleScratch = false;
-            else if (opt == "-print-eqs")
-                settings._printEqs = true;
-            else if (opt == "-no-print-eqs")
-                settings._printEqs = false;
-            else if (opt == "-interleave-misc")
-                settings._innerMisc = true;
-            else if (opt == "-no-interleave-misc")
-                settings._innerMisc = false;
     
             // add any more options w/o values above.
 
@@ -324,7 +311,7 @@ void parseOpts(int argc, const char* argv[])
     }
 
     // Copy cmd-line settings into solution.
-    stencilSoln->setSettings(settings);
+    stencilSoln->getSettings() = settings;
 }
 
 // Main program.
@@ -336,22 +323,22 @@ int main(int argc, const char* argv[]) {
         "Version: " << yask_get_version_string() << endl;
 
     try {
-        // Parse options and create the stencil-solution object.
-        parseOpts(argc, argv);
+		// Parse options and create the stencil-solution object.
+		parseOpts(argc, argv);
 
-        // Create the requested output...
-        for (auto i : outfiles) {
-            auto& type = i.first;
-            auto& fname = i.second;
+		// Create the requested output...
+		for (auto i : outfiles) {
+			auto& type = i.first;
+			auto& fname = i.second;
 
-            yask_output_factory ofac;
-            yask_output_ptr os;
-            if (fname == "-")
-                os = ofac.new_stdout_output();
-            else
-                os = ofac.new_file_output(fname);
-            stencilSoln->format(type, os);
-        }
+			yask_output_factory ofac;
+			yask_output_ptr os;
+			if (fname == "-")
+				os = ofac.new_stdout_output();
+			else
+				os = ofac.new_file_output(fname);
+			stencilSoln->format(type, os);
+		}
     } catch (yask_exception e) {
         cerr << "YASK Stencil Compiler: " << e.get_message() << ".\n";
         exit(1);

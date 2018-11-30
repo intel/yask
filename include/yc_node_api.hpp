@@ -81,10 +81,6 @@ namespace yask {
     /// Shared pointer to \ref yc_divide_node
     typedef std::shared_ptr<yc_divide_node> yc_divide_node_ptr;
 
-    class yc_mod_node;
-    /// Shared pointer to \ref yc_mod_node
-    typedef std::shared_ptr<yc_mod_node> yc_mod_node_ptr;
-
     class yc_not_node;
     /// Shared pointer to \ref yc_not_node
     typedef std::shared_ptr<yc_not_node> yc_not_node_ptr;
@@ -177,7 +173,7 @@ namespace yask {
             the yc_solution that contains the grid that is on the
             LHS.
 
-            An optional domain condition may be provided to define the sub-domain
+            An optional condition may be provided to define the sub-domain
             to which this equation applies. See new_first_domain_index()
             for more information and an example.
             Conditions are always evaluated with respect to the overall
@@ -185,13 +181,8 @@ namespace yask {
             MPI domain decomposition that might occur at run-time.
             If a condition is not provided, the equation applies to the
             entire problem domain.
-            A domain condition can be added to an equation after its creation
+            A condition can be added to an equation after its creation
             via yc_equation_node.set_cond().
-
-            A step-index condition is similar to a domain condition, but
-            applies to the current step (usually time).
-            A step-index condition can be added to an equation after its creation
-            via yc_equation_node.set_step_cond().
 
             @returns Pointer to new \ref yc_equation_node object.
         */
@@ -273,17 +264,6 @@ namespace yask {
         virtual yc_number_node_ptr
         new_divide_node(yc_number_node_ptr lhs /**< [in] Expression before `/` sign. */,
                         yc_number_node_ptr rhs /**< [in] Expression after `/` sign. */ );
-
-        /// Create a modulo node.
-        /**
-            New modulo nodes can also be created via the overloaded `%` operator.
-            The modulo operator converts both operands to integers before performing
-            the operation.
-           @returns Pointer to new \ref yc_mod_node object.
-        */
-        virtual yc_number_node_ptr
-        new_mod_node(yc_number_node_ptr lhs /**< [in] Expression before `%` sign. */,
-                     yc_number_node_ptr rhs /**< [in] Expression after `%` sign. */ );
 
         /// Create a symbol for the first index value in a given dimension.
         /**
@@ -472,11 +452,6 @@ namespace yask {
                               /**< [in] Boolean expression describing the sub-domain
                                  or `nullptr` to remove the condition. */ ) =0;
 
-        /// Set the condition describing the valid step indices.
-        virtual void set_step_cond(yc_bool_node_ptr step_cond
-                                   /**< [in] Boolean expression describing a valid step
-                                      or `nullptr` to remove the condition. */ ) =0;
-
         /// Create a deep copy of AST starting with this node.
         virtual yc_equation_node_ptr clone_ast() const =0;
     };
@@ -619,10 +594,6 @@ namespace yask {
     /** Created via yc_node_factory::new_divide_node(). */
     class yc_divide_node : public virtual yc_binary_number_node { };
 
-    /// A modulo node.
-    /** Created via yc_node_factory::new_mod_node(). */
-    class yc_mod_node : public virtual yc_binary_number_node { };
-
     /// A boolean inversion operator.
     /** Example: used to implement `!(a || b)`.
         Created via yc_node_factory::new_not_node().
@@ -736,13 +707,6 @@ namespace yask {
     yc_number_node_ptr operator/(yc_number_node_ptr lhs, yc_number_node_ptr rhs);
     yc_number_node_ptr operator/(double lhs, yc_number_node_ptr rhs);
     yc_number_node_ptr operator/(yc_number_node_ptr lhs, double rhs);
-    //@}
-
-    //@{
-    /// Operator version of yc_node_factory::new_mod_node().
-    yc_number_node_ptr operator%(yc_number_node_ptr lhs, yc_number_node_ptr rhs);
-    yc_number_node_ptr operator%(double lhs, yc_number_node_ptr rhs);
-    yc_number_node_ptr operator%(yc_number_node_ptr lhs, double rhs);
     //@}
 
     //@{

@@ -42,17 +42,13 @@ namespace yask {
     class CppPrintHelper : public PrintHelper {
 
     public:
-        static constexpr const char* _grid_ptr_type = "auto*";
-        static constexpr const char* _step_val_type = "const auto";
-
-        CppPrintHelper(const CompilerSettings& settings,
-                       const Dimensions& dims,
+        CppPrintHelper(const Dimensions* dims,
                        const CounterVisitor* cv,
                        const string& varPrefix,
                        const string& varType,
                        const string& linePrefix,
                        const string& lineSuffix) :
-            PrintHelper(settings, dims, cv, varPrefix, varType,
+            PrintHelper(dims, cv, varPrefix, varType,
                         linePrefix, lineSuffix) { }
         virtual ~CppPrintHelper() { }
 
@@ -87,16 +83,16 @@ namespace yask {
 
     public:
         CppVecPrintHelper(VecInfoVisitor& vv,
-                          const CompilerSettings& settings,
-                          const Dimensions& dims,
+                          bool allowUnalignedLoads,
+                          const Dimensions* dims,
                           const CounterVisitor* cv,
                           const string& varPrefix,
                           const string& varType,
                           const string& linePrefix,
                           const string& lineSuffix) :
-            VecPrintHelper(vv, settings, dims, cv,
+            VecPrintHelper(vv, allowUnalignedLoads, dims, cv,
                            varPrefix, varType, linePrefix, lineSuffix) { }
-        
+
     protected:
 
         // Vars for tracking pointers to grid values.
@@ -173,17 +169,18 @@ namespace yask {
             printUnalignedVecSimple(os, gp, pvName, _linePrefix);
         }
 
-        // Get offset from base pointer.
-        virtual string getPtrOffset(const GridPoint& gp,
-                                    const string& innerExpr = "");
-
     public:
 
         // Print code to set pointers of aligned reads.
         virtual void printBasePtrs(ostream& os);
 
-        // Make base point (misc & inner-dim indices = 0).
-        virtual GridPointPtr makeBasePoint(const GridPoint& gp);
+        // Make base point (inner-dim index = 0).
+        virtual GridPointPtr makeBasePoint(const GridPoint& gp) {
+            GridPointPtr bgp = gp.cloneGridPoint();
+            IntScalar idi(getDims()->_innerDim, 0); // set inner-dim index to 0.
+            bgp->setArgConst(idi);
+            return bgp;
+        }
 
         // Print prefetches for each base pointer.
         // Print only 'ptrVar' if provided.
@@ -221,23 +218,7 @@ namespace yask {
         }
     };
 
-    // Outputs the time-invariant variables.
-    class CppStepVarPrintVisitor : public PrintVisitorBase {
-    protected:
-        CppVecPrintHelper& _cvph;
-
-    public:
-        CppStepVarPrintVisitor(ostream& os,
-                               CppVecPrintHelper& ph,
-                               const VarMap* varMap = 0) :
-            PrintVisitorBase(os, ph, varMap),
-            _cvph(ph) { }
-
-        // A grid access.
-        virtual void visit(GridPoint* gp);
-    };
-
-    // Outputs the loop-invariant variables for an inner loop.
+    // Outputs the variables needed for an inner loop.
     class CppLoopVarPrintVisitor : public PrintVisitorBase {
     protected:
         CppVecPrintHelper& _cvph;
@@ -245,8 +226,9 @@ namespace yask {
     public:
         CppLoopVarPrintVisitor(ostream& os,
                                CppVecPrintHelper& ph,
+                               CompilerSettings& settings,
                                const VarMap* varMap = 0) :
-            PrintVisitorBase(os, ph, varMap),
+            PrintVisitorBase(os, ph, settings, varMap),
             _cvph(ph) { }
 
         // A grid access.
@@ -258,6 +240,7 @@ namespace yask {
     protected:
         EqBundlePacks& _eqBundlePacks; // packs of bundles w/o inter-dependencies.
         EqBundles& _clusterEqBundles;  // eq-bundles for scalar and vector.
+        const Dimensions* _dims;
         string _context, _context_base;
 
         // Print an expression as a one-line C++ comment.
@@ -268,7 +251,7 @@ namespace yask {
         // alternative PrintHelpers.
         virtual CppVecPrintHelper* newCppVecPrintHelper(VecInfoVisitor& vv,
                                                         CounterVisitor& cv) {
-            return new CppVecPrintHelper(vv, _settings, _dims, &cv,
+            return new CppVecPrintHelper(vv, _settings._allowUnalignedLoads, _dims, &cv,
                                          "temp", "real_vec_t", " ", ";\n");
         }
 
@@ -286,10 +269,12 @@ namespace yask {
         YASKCppPrinter(StencilSolution& stencil,
                        EqBundles& eqBundles,
                        EqBundlePacks& eqBundlePacks,
-                       EqBundles& clusterEqBundles) :
+                       EqBundles& clusterEqBundles,
+                       const Dimensions* dims) :
             PrinterBase(stencil, eqBundles),
             _eqBundlePacks(eqBundlePacks),
-            _clusterEqBundles(clusterEqBundles)
+            _clusterEqBundles(clusterEqBundles),
+            _dims(dims)
         {
             // name of C++ struct.
             _context = "StencilContext_" + _stencil.getName();

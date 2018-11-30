@@ -468,13 +468,13 @@ namespace yask {
         virtual std::vector<std::string>
         get_dim_names() const =0;
 
-        /// Create a reference to a point in this grid.
+        /// Create a reference to a point in a grid.
         /**
            Each expression in `index_exprs` describes how to access
            an element in the corresponding dimension of the grid.
 
            Example: if a grid was created via
-           `g = new_grid("A", {t, x, y, n})` with step-dimension `t`,
+           `g = new_grid("data", {t, x, y, n})` with step-dimension `t`,
            domain-dimensions `x` and `y`, and misc-dimension `n`,
            `g->new_grid_point({t + 1, x - 1, y + 1, 2})` refers to the specified
            element for the values of `t`, `x`, and `y` set dynamically
@@ -488,7 +488,7 @@ namespace yask {
                           grid was created. */ ) =0;
 
 #ifndef SWIG
-        /// Create a reference to a point in this grid.
+        /// Create a reference to a point in a grid.
         /**
            C++ initializer-list version with same semantics as
            new_grid_point(std::vector<yc_index_node_ptr> index_exprs).
@@ -498,7 +498,7 @@ namespace yask {
         new_grid_point(const std::initializer_list<yc_number_node_ptr>& index_exprs) = 0;
 #endif
 
-        /// Create a reference to a point in this grid using relative offsets.
+        /// Create a reference to a point in a grid using relative offsets.
         /**
            A shorthand function for calling new_grid_point() when
            all index expressions are constant offsets.
@@ -519,7 +519,7 @@ namespace yask {
                                 /**< [in] offset from evaluation index in each dim. */ ) =0;
 
 #ifndef SWIG
-        /// Create a reference to a point in this grid using relative offsets.
+        /// Create a reference to a point in a grid using relative offsets.
         /**
            C++ initializer-list version with same semantics as
            new_relative_grid_point(std::vector<int> dim_offsets).
@@ -528,40 +528,6 @@ namespace yask {
         virtual yc_grid_point_node_ptr
         new_relative_grid_point(const std::initializer_list<int>& dim_offsets) = 0;
 #endif
-
-        /// **[Advanced]** Get whether the allocation of the step dimension of this grid can be modified at run-time.
-        /**
-           See yk_grid::set_alloc_size().
-         */
-        virtual bool
-        is_dynamic_step_alloc() const =0;
-
-        /// **[Advanced]** Set whether the allocation of the step dimension of this grid can be modified at run-time.
-        /**
-           See yk_grid::set_alloc_size().
-         */
-        virtual void
-        set_dynamic_step_alloc(bool is_dynamic
-                               /**< [in] `true` to enable or `false` to disable. */) =0;
-
-        /// **[Advanced]** Get the current allocation in the step dimension of this grid.
-        /**
-           If set_step_alloc_size() has been called, that setting will be returned.
-           If set_step_alloc_size() has not been called, the default setting determined
-           by the YASK compiler will be returned.
-           @returns Allocation in the step dimension.
-        */
-        virtual idx_t
-        get_step_alloc_size() const =0;
-
-        /// **[Advanced]** Set the current allocation in the step dimension of this grid.
-        /**
-           Override the default setting determined
-           by the YASK compiler for allocation in the step dimension.
-        */
-        virtual void
-        set_step_alloc_size(idx_t size
-                            /**< [in] Number of elements to allocate in the step dimension. */) =0;
     };
 
     /** @}*/
