@@ -113,23 +113,20 @@ namespace yask {
 
         // Report ranks.
         os << endl;
-        os << "Num MPI ranks:            " << _env->get_num_ranks() << endl;
-        os << "This MPI rank index:      " << _env->get_rank_index() << endl;
+        os << "Num MPI ranks: " << _env->get_num_ranks() << endl;
+        os << "This MPI rank index: " << _env->get_rank_index() << endl;
 
         // report threads.
-        {
-            os << "Num OpenMP procs:         " << omp_get_num_procs() << endl;
-            int rt, bt;
-            int at = get_num_comp_threads(rt, bt);
-            os << "Num OpenMP threads avail: " << opts->max_threads <<
-                "\nNum OpenMP threads used:  " << at <<
-                "\n  Num threads per region: " << rt <<
-                "\n  Num threads per block:  " << bt << endl;
-        }
+        os << "Num OpenMP procs: " << omp_get_num_procs() << endl;
+        set_all_threads();
+        os << "Num OpenMP threads: " << omp_get_max_threads() << endl;
+        set_region_threads(); // Temporary; just for reporting.
+        os << "  Num threads per region: " << omp_get_max_threads() << endl;
+        set_block_threads(); // Temporary; just for reporting.
+        os << "  Num threads per block: " << omp_get_max_threads() << endl;
 
-        // Set the number of threads for a region. The number of threads
-        // used in top-level OpenMP parallel sections should not change
-        // during execution.
+        // Set the number of threads for a region. It should stay this
+        // way for top-level OpenMP parallel sections.
         int rthreads = set_region_threads();
 
         // Run a dummy nested OMP loop to make sure nested threading is
