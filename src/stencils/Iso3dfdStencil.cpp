@@ -25,7 +25,6 @@ IN THE SOFTWARE.
 
 // Implement isotropic 3D finite-difference (FD) stencil, nth-order accurate in
 // space (where n = 2 * radius) and 2nd-order accurate in time.
-// See https://software.intel.com/en-us/articles/eight-optimizations-for-3-dimensional-finite-difference-3dfd-code-with-an-isotropic-iso.
 
 #include "Soln.hpp"
 
@@ -42,7 +41,7 @@ protected:
 
     // Grids.
     MAKE_GRID(pressure, t, x, y, z); // time-varying 3D pressure grid.
-    MAKE_GRID(vel, x, y, z);         // constant 3D vel grid (c(x,y,z)^2 * delta_t^2).
+    MAKE_GRID(vel, x, y, z);         // constant 3D vel grid.
     MAKE_ARRAY(coeff, r);            // FD coefficients.
 
 public:

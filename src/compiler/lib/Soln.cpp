@@ -126,13 +126,17 @@ namespace yask {
         // Data itself will be created in analyze_solution().
         PrinterBase* printer = 0;
         if (format_type == "cpp")
-            printer = new YASKCppPrinter(*this, _eqBundles, _eqBundlePacks, _clusterEqBundles);
+            printer = new YASKCppPrinter(*this, _eqBundles, _eqBundlePacks,
+                                         _clusterEqBundles, &_dims);
         else if (format_type == "knc")
-            printer = new YASKKncPrinter(*this, _eqBundles, _eqBundlePacks, _clusterEqBundles);
+            printer = new YASKKncPrinter(*this, _eqBundles, _eqBundlePacks,
+                                         _clusterEqBundles, &_dims);
         else if (format_type == "avx" || format_type == "avx2")
-            printer = new YASKAvx256Printer(*this, _eqBundles, _eqBundlePacks, _clusterEqBundles);
+            printer = new YASKAvx256Printer(*this, _eqBundles, _eqBundlePacks,
+                                            _clusterEqBundles, &_dims);
         else if (format_type == "avx512" || format_type == "avx512f")
-            printer = new YASKAvx512Printer(*this, _eqBundles, _eqBundlePacks, _clusterEqBundles);
+            printer = new YASKAvx512Printer(*this, _eqBundles, _eqBundlePacks,
+                                            _clusterEqBundles, &_dims);
         else if (format_type == "dot")
             printer = new DOTPrinter(*this, _clusterEqBundles, false);
         else if (format_type == "dot-lite")

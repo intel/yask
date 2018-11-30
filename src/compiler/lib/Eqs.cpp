@@ -166,7 +166,6 @@ namespace yask {
             //auto& ig1 = inGrids.at(eq1p);
             auto& ip1 = inPts.at(eq1p);
             auto cond1 = eq1p->getCond();
-            auto stcond1 = eq1p->getStepCond();
             NumExprPtr step_expr1 = op1->getArg(stepDim); // may be null.
 
 #ifdef DEBUG_DEP
@@ -177,10 +176,7 @@ namespace yask {
             // Scratch grid must not have a condition.
             if (cond1 && og1->isScratch())
                 THROW_YASK_EXCEPTION("Error: scratch-grid equation '" + eq1->makeQuotedStr() +
-                                     "' cannot have a domain condition");
-            if (stcond1 && og1->isScratch())
-                THROW_YASK_EXCEPTION("Error: scratch-grid equation '" + eq1->makeQuotedStr() +
-                                     "' cannot have a step condition");
+                                     "' cannot have a condition");
 
             // Check LHS grid dimensions and associated args.
             for (int di = 0; di < og1->get_num_dims(); di++) {
@@ -208,7 +204,7 @@ namespace yask {
                     if (!argn->isSame(earg))
                         THROW_YASK_EXCEPTION("Error: LHS of equation " + eq1->makeQuotedStr() +
                                              " contains expression " + argn->makeQuotedStr() +
-                                             " for domain dimension '" + dn +
+                                             " for dimension '" + dn +
                                              "' where " + earg->makeQuotedStr() +
                                              " is expected");
                 }
@@ -219,7 +215,7 @@ namespace yask {
                     if (!argn->isConstVal())
                         THROW_YASK_EXCEPTION("Error: LHS of equation " + eq1->makeQuotedStr() +
                                              " contains expression " + argn->makeQuotedStr() +
-                                             " for misc dimension '" + dn +
+                                             " for dimension '" + dn +
                                              "' where constant integer is expected");
                     argn->getIntVal(); // throws exception if not an integer.
                 }
@@ -281,44 +277,10 @@ namespace yask {
                                      " dimensions are accessed via simple offsets from their respective indices");
             }
 
-            // Check that domain indices are simple offsets and
+            // TODO: check that domain indices are simple offsets and
             // misc indices are consts on RHS.
-            for (auto i1 : ip1) {
-                auto* ig1 = i1->getGrid();
 
-                for (int di = 0; di < ig1->get_num_dims(); di++) {
-                    auto& dn = ig1->get_dim_name(di);  // name of this dim.
-                    auto argn = i1->getArgs().at(di); // arg for this dim.
-
-                    // Check based on dim type.
-                    if (dn == stepDim) {
-                    }
-
-                    // Must have simple indices in domain dims.
-                    else if (dims._domainDims.lookup(dn)) {
-                        auto* rsi1p = i1->getArgOffsets().lookup(dn);
-                        if (!rsi1p)
-                            THROW_YASK_EXCEPTION("Error: RHS of equation " + eq1->makeQuotedStr() +
-                                                 " contains expression " + argn->makeQuotedStr() +
-                                                 " for domain dimension '" + dn +
-                                                 "' where constant-integer offset from '" + dn +
-                                                 "' is expected");
-                    }
-
-                    // Misc dim must be a const.
-                    else {
-                        if (!argn->isConstVal())
-                            THROW_YASK_EXCEPTION("Error: RHS of equation " + eq1->makeQuotedStr() +
-                                                 " contains expression " + argn->makeQuotedStr() +
-                                                 " for misc dimension '" + dn +
-                                                 "' where constant integer is expected");
-                        argn->getIntVal(); // throws exception if not an integer.
-                    }
-                }
-            }
-
-            // TODO: check to make sure cond1 depends only on domain indices.
-            // TODO: check to make sure stcond1 depends only on step index.
+            // TODO: check to make sure cond1 depends only on indices.
         } // for all eqs.
 
         // 2. Check each pair of eqs.
@@ -333,7 +295,6 @@ namespace yask {
             //auto& ig1 = inGrids.at(eq1p);
             //auto& ip1 = inPts.at(eq1p);
             auto cond1 = eq1p->getCond();
-            auto stcond1 = eq1p->getStepCond();
             NumExprPtr step_expr1 = op1->getArg(stepDim);
 
             // Check each 'eq2' to see if it depends on 'eq1'.
@@ -345,7 +306,6 @@ namespace yask {
                 auto& ig2 = inGrids.at(eq2p);
                 auto& ip2 = inPts.at(eq2p);
                 auto cond2 = eq2p->getCond();
-                auto stcond2 = eq2p->getStepCond();
 
 #ifdef DEBUG_DEP
                 cout << " Checking eq " <<
@@ -354,23 +314,19 @@ namespace yask {
 #endif
 
                 bool same_eq = eq1 == eq2;
-                bool same_op = areExprsSame(op1, op2);
                 bool same_cond = areExprsSame(cond1, cond2);
-                bool same_stcond = areExprsSame(stcond1, stcond2);
 
                 // A separate grid is defined by its name and any const indices.
-                //bool same_og = op1->isSameLogicalGrid(*op2);
+                bool same_og = op1->isSameLogicalGrid(*op2);
 
-                // If two different eqs have the same conditions, they
-                // cannot have the same LHS.
-                if (!same_eq && same_cond && same_stcond && same_op) {
-                    string cdesc = cond1 ? "with domain condition " + cond1->makeQuotedStr() :
-                        "without domain conditions";
-                    string stcdesc = stcond1 ? "with step condition " + stcond1->makeQuotedStr() :
-                        "without step conditions";
+                // If two different eqs have the same condition, they
+                // cannot update the same grid.
+                if (!same_eq && same_cond && same_og) {
+                    string cdesc = cond1 ? "with condition " + cond1->makeQuotedStr() :
+                        "without conditions";
                     THROW_YASK_EXCEPTION("Error: two equations " + cdesc +
-                                         " and " + stcdesc +
-                                         " have the same LHS: " +
+                                         " have the same LHS grid '" +
+                                         op1->makeLogicalGridStr() + "': " +
                                          eq1->makeQuotedStr() + " and " +
                                          eq2->makeQuotedStr());
                 }
@@ -386,7 +342,7 @@ namespace yask {
                 // Example:
                 //  eq1: a(t+1, x, ...) EQUALS ...
                 //  eq2: b(t+1, x, ...) EQUALS a(t+1, x, ...) ...
-                if (same_cond && same_stcond && ip2.count(op1)) {
+                if (same_cond && ip2.count(op1)) {
 
                     // Eq depends on itself?
                     if (same_eq) {
@@ -599,7 +555,6 @@ namespace yask {
             auto idim = _dims._innerDim;
 
             // Access type.
-            // Assume invariant, then check below.
             GridPoint::LoopType lt = GridPoint::LOOP_INVARIANT;
 
             // Check every point arg.
@@ -776,13 +731,9 @@ namespace yask {
         des += "equation-bundle " + quote + getName() + quote;
         if (!isScratch() && show_cond) {
             if (cond.get())
-                des += " w/domain condition " + cond->makeQuotedStr(quote);
+                des += " w/condition " + cond->makeQuotedStr(quote);
             else
-                des += " w/o domain condition";
-            if (step_cond.get())
-                des += " w/step condition " + step_cond->makeQuotedStr(quote);
-            else
-                des += " w/o step condition";
+                des += " w/o condition";
         }
         return des;
     }
@@ -904,9 +855,8 @@ namespace yask {
         if (_eqs_in_bundles.count(eq))
             return false;
 
-        // Get conditions, if any.
+        // Get condition, if any.
         auto cond = eq->getCond();
-        auto stcond = eq->getStepCond();
 
         // Get step expr, if any.
         auto step_expr = eq->getLhs()->getArg(stepDim);
@@ -930,8 +880,6 @@ namespace yask {
 
             // Conditions must match (both may be null).
             if (!areExprsSame(eg->cond, cond))
-                continue;
-            if (!areExprsSame(eg->step_cond, stcond))
                 continue;
 
             // LHS step exprs must match (both may be null).
@@ -987,7 +935,6 @@ namespace yask {
             target->baseName = baseName;
             target->index = _indices[baseName]++;
             target->cond = cond;
-            target->step_cond = stcond;
             target->step_expr = step_expr;
             newBundle = true;
 
@@ -1374,12 +1321,6 @@ namespace yask {
         if (isScratch())
             des += "scratch ";
         des += "equation bundle-pack " + quote + getName() + quote;
-        if (!isScratch()) {
-            if (step_cond.get())
-                des += " w/step condition " + step_cond->makeQuotedStr(quote);
-            else
-                des += " w/o step condition";
-        }
         return des;
     }
 
@@ -1409,9 +1350,6 @@ namespace yask {
         if (_bundles_in_packs.count(bp))
             return false;
 
-        // Get condition, if any.
-        auto stcond = bp->step_cond;
-        
         // Get deps between bundles.
         auto& deps = allBundles.getDeps();
 
@@ -1422,10 +1360,6 @@ namespace yask {
 
             // Must be same scratch-ness.
             if (ep->isScratch() != bp->isScratch())
-                continue;
-
-            // Step conditions must match (both may be null).
-            if (!areExprsSame(ep->step_cond, stcond))
                 continue;
 
             // Look for any dependencies that would prevent adding
@@ -1455,7 +1389,6 @@ namespace yask {
             target = np.get();
             target->baseName = _baseName;
             target->index = _idx++;
-            target->step_cond = stcond;
             newPack = true;
         }
 

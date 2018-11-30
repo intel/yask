@@ -33,6 +33,7 @@ IN THE SOFTWARE.
 #include <sstream>
 #include <iostream>
 #include <fstream>
+#include <assert.h>
 
 using namespace std;
 

@@ -40,8 +40,7 @@ namespace yask {
         int _varNum;                // current temp-var number.
 
     protected:
-        const CompilerSettings& _settings; // compiler settings.
-        const Dimensions& _dims;    // problem dims.
+        const Dimensions* _dims;    // problem dims.
         const CounterVisitor* _cv;  // counter info.
         string _varPrefix;          // first part of var name.
         string _varType;            // type, if any, of var.
@@ -50,14 +49,13 @@ namespace yask {
         VarMap _localVars;          // map from expression strings to local var names.
 
     public:
-        PrintHelper(const CompilerSettings& settings,
-                    const Dimensions& dims,
+        PrintHelper(const Dimensions* dims,
                     const CounterVisitor* cv,
                     const string& varPrefix,
                     const string& varType,
                     const string& linePrefix,
                     const string& lineSuffix) :
-            _varNum(1), _settings(settings), _dims(dims), _cv(cv),
+            _varNum(1), _dims(dims), _cv(cv),
             _varPrefix(varPrefix), _varType(varType),
             _linePrefix(linePrefix), _lineSuffix(lineSuffix) { }
 
@@ -70,12 +68,9 @@ namespace yask {
         const CounterVisitor* getCounters() const { return _cv; }
         virtual void forgetLocalVars() { _localVars.clear(); }
 
-        // get dims & settings.
-        const Dimensions& getDims() const {
+        // get dims.
+        virtual const Dimensions* getDims() const {
             return _dims;
-        }
-        const CompilerSettings& getSettings() const {
-            return _settings;
         }
 
         // Return count from counter visitor.
@@ -156,6 +151,9 @@ namespace yask {
         ostream& _os;               // used for printing intermediate results as needed.
         PrintHelper& _ph;           // used to format items for printing.
 
+        // Ref to compiler settings.
+        CompilerSettings& _settings;
+
         // After visiting an expression, the part of the result not written to _os
         // is stored in _exprStr.
         string _exprStr;
@@ -179,18 +177,11 @@ namespace yask {
         // os is used for printing intermediate results as needed.
         PrintVisitorBase(ostream& os,
                          PrintHelper& ph,
+                         CompilerSettings& settings,
                          const VarMap* varMap = 0) :
-            _os(os), _ph(ph), _varMap(varMap) { }
+            _os(os), _ph(ph), _settings(settings), _varMap(varMap) { }
 
         virtual ~PrintVisitorBase() { }
-
-        // get dims & settings.
-        const Dimensions& getDims() const {
-            return _ph.getDims();
-        }
-        const CompilerSettings& getSettings() const {
-            return _ph.getSettings();
-        }
 
         // Get unwritten result expression, if any.
         virtual string getExprStr() const {
@@ -213,8 +204,9 @@ namespace yask {
 
     public:
         PrintVisitorTopDown(ostream& os, PrintHelper& ph,
+                            CompilerSettings& settings,
                             const VarMap* varMap = 0) :
-            PrintVisitorBase(os, ph, varMap), _numCommon(0) { }
+            PrintVisitorBase(os, ph, settings, varMap), _numCommon(0) { }
 
         // Get the number of shared nodes found after this visitor
         // has been accepted.
@@ -258,12 +250,13 @@ namespace yask {
     public:
         // os is used for printing intermediate results as needed.
         PrintVisitorBottomUp(ostream& os, PrintHelper& ph,
+                             CompilerSettings& settings,
                              const VarMap* varMap = 0) :
-            PrintVisitorBase(os, ph, varMap) {}
+            PrintVisitorBase(os, ph, settings, varMap) {}
 
         // make a new top-down visitor with the same print helper.
         virtual PrintVisitorTopDown* newPrintVisitorTopDown() {
-            return new PrintVisitorTopDown(_os, _ph);
+            return new PrintVisitorTopDown(_os, _ph, _settings);
         }
 
         // Try some simple printing techniques.
@@ -416,19 +409,17 @@ namespace yask {
 
     protected:
         StencilSolution& _stencil;
-        const CompilerSettings& _settings;
-        const Dimensions& _dims;
         Grids& _grids;
         EqBundles& _eqBundles;
+        CompilerSettings& _settings;
 
     public:
         PrinterBase(StencilSolution& stencil,
                     EqBundles& eqBundles) :
             _stencil(stencil),
-            _settings(stencil.getSettings()),
-            _dims(stencil.getDims()),
             _grids(stencil.getGrids()),
-            _eqBundles(eqBundles)
+            _eqBundles(eqBundles),
+            _settings(stencil.getSettings())
         { }
         virtual ~PrinterBase() { }
 

@@ -40,8 +40,7 @@ namespace yask {
         int _scalar_points_read = 0;
         int _scalar_points_written = 0;
 
-        // Position of inner domain dim in stencil-dims tuple.
-        // Misc dims will follow this.
+        // Position of inner dim in stencil-dims tuple.
         int _inner_posn = 0;
 
         // Other bundles that this one depends on.
@@ -68,23 +67,7 @@ namespace yask {
         // Normalize the indices, i.e., divide by vector len in each dim.
         // Ranks offsets must already be subtracted.
         // Each dim in 'orig' must be a multiple of corresponding vec len.
-        void normalize_indices(const Indices& orig, Indices& norm) const {
-            CONTEXT_VARS(_generic_context);
-            assert(orig.getNumDims() == nsdims);
-            assert(norm.getNumDims() == nsdims);
-
-            // i: index for stencil dims, j: index for domain dims.
-            DOMAIN_VAR_LOOP(i, j) {
-            
-                // Divide indices by fold lengths as needed by
-                // read/writeVecNorm().  Use idiv_flr() instead of '/'
-                // because begin/end vars may be negative (if in halo).
-                norm[i] = idiv_flr<idx_t>(orig[i], fold_pts[j]);
-            
-                // Check for no remainder.
-                assert(imod_flr<idx_t>(orig[i], fold_pts[j]) == 0);
-            }
-        }
+        void normalize_indices(const Indices& orig, Indices& norm) const;
 
     public:
 
@@ -102,11 +85,12 @@ namespace yask {
         // ctor, dtor.
         StencilBundleBase(StencilContext* context) :
             _generic_context(context) {
-            CONTEXT_VARS(context);
 
-            // Find index posn of inner loop in stencil dims.
-            for (int i = 0; i < nsdims; i++) {
-                auto& dname = stencil_dims.getDimName(i);
+            // Find index posn of inner loop.
+            auto& dims = context->get_dims();
+            int ndims = dims->_stencil_dims.getNumDims();
+            for (int i = 0; i < ndims; i++) {
+                auto& dname = dims->_stencil_dims.getDimName(i);
                 if (dname == dims->_inner_dim) {
                     _inner_posn = i;
                     break;
@@ -117,15 +101,15 @@ namespace yask {
         virtual ~StencilBundleBase() { }
 
         // Access to dims and MPI info.
-        DimsPtr& get_dims() const {
+        virtual DimsPtr& get_dims() const {
             return _generic_context->get_dims();
         }
-        MPIInfoPtr& get_mpi_info() {
+        virtual MPIInfoPtr& get_mpi_info() {
             return _generic_context->get_mpi_info();
         }
 
         // Get name of this bundle.
-        const std::string& get_name() const { return _name; }
+        virtual const std::string& get_name() const { return _name; }
 
         // Get estimated number of FP ops done for one scalar eval.
         virtual int get_scalar_fp_ops() const { return _scalar_fp_ops; }
@@ -135,12 +119,12 @@ namespace yask {
         virtual int get_scalar_points_written() const { return _scalar_points_written; }
 
         // Scratch accessors.
-        bool is_scratch() const { return _is_scratch; }
-        void set_scratch(bool is_scratch) { _is_scratch = is_scratch; }
+        virtual bool is_scratch() const { return _is_scratch; }
+        virtual void set_scratch(bool is_scratch) { _is_scratch = is_scratch; }
 
         // Access to BBs.
-        BoundingBox& getBB() { return _bundle_bb; }
-        BBList& getBBs() { return _bb_list; }
+        virtual BoundingBox& getBB() { return _bundle_bb; }
+        virtual BBList& getBBs() { return _bb_list; }
 
         // Add dependency.
         virtual void add_dep(StencilBundleBase* eg) {
@@ -158,14 +142,14 @@ namespace yask {
         }
 
         // Get needed scratch-bundle(s).
-        const StencilBundleList& get_scratch_children() const {
+        virtual const StencilBundleList& get_scratch_children() const {
             return _scratch_children;
         }
 
         // Get scratch children plus self.
-        StencilBundleList get_reqd_bundles() {
-            auto sg_list = get_scratch_children(); // Do children first.
-            sg_list.push_back(this); // Do self last.
+        virtual StencilBundleList get_reqd_bundles() {
+            auto sg_list = get_scratch_children();
+            sg_list.push_back(this);
             return sg_list;
         }
 
@@ -173,29 +157,14 @@ namespace yask {
         // expand indices to calculate values in halo.
         // Adjust offsets in grids based on original idxs.
         // Return adjusted indices.
-        ScanIndices adjust_span(int thread_idx, const ScanIndices& idxs) const;
+        virtual ScanIndices adjust_span(int thread_idx, const ScanIndices& idxs) const;
 
         // Set the bounding-box vars for this bundle in this rank.
-        void find_bounding_box();
+        virtual void find_bounding_box();
 
-        // Copy BB vars from another.
-        void copy_bounding_box(const StencilBundleBase* src);
-        
         // Determine whether indices are in [sub-]domain.
         virtual bool
         is_in_valid_domain(const Indices& idxs) const =0;
-
-        // Return true if there is a non-default sub-domain expression.
-        virtual bool
-        is_sub_domain_expr() const { return false; }
-
-        // Return human-readable description of sub-domain.
-        virtual std::string
-        get_domain_description() const =0;
-        
-        // Determine whether step index is enabled.
-        virtual bool
-        is_in_valid_step(idx_t input_step_index) const =0;
 
         // If bundle updates grid(s) with the step index,
         // set 'output_step_index' to the step that an update
@@ -210,23 +179,13 @@ namespace yask {
         virtual void
         calc_scalar(int thread_idx, const Indices& idxs) =0;
 
-        // Calculate results within a mini-block.
-        void
-        calc_mini_block(int region_thread_idx,
-                        KernelSettings& settings,
-                        const ScanIndices& mini_block_idxs);
+        // Calculate results within a block.
+        virtual void
+        calc_block(const ScanIndices& def_block_idxs);
 
         // Calculate results within a sub-block.
-        void
-        calc_sub_block(int region_thread_idx,
-                       int block_thread_idx,
-                       KernelSettings& settings,
-                       const ScanIndices& mini_block_idxs);
-        void
-        calc_sub_block_scalar(int region_thread_idx,
-                              int block_thread_idx,
-                              KernelSettings& settings,
-                              const ScanIndices& mini_block_idxs);
+        virtual void
+        calc_sub_block(int thread_idx, const ScanIndices& block_idxs);
 
         // Calculate a series of cluster results within an inner loop.
         // All indices start at 'start_idxs'. Inner loop iterates to
@@ -234,8 +193,7 @@ namespace yask {
         // Indices must be rank-relative.
         // Indices must be normalized, i.e., already divided by VLEN_*.
         virtual void
-        calc_loop_of_clusters(int region_thread_idx,
-                              int block_thread_idx,
+        calc_loop_of_clusters(int thread_idx,
                               const Indices& start_idxs,
                               idx_t stop_inner) =0;
 
@@ -243,9 +201,8 @@ namespace yask {
         // The 'loop_idxs' must specify a range only in the inner dim.
         // Indices must be rank-relative.
         // Indices must be normalized, i.e., already divided by VLEN_*.
-        void
-        calc_loop_of_clusters(int region_thread_idx,
-                              int block_thread_idx,
+        virtual void
+        calc_loop_of_clusters(int thread_idx,
                               const ScanIndices& loop_idxs);
 
         // Calculate a series of vector results within an inner loop.
@@ -255,8 +212,7 @@ namespace yask {
         // Indices must be normalized, i.e., already divided by VLEN_*.
         // Each vector write is masked by 'write_mask'.
         virtual void
-        calc_loop_of_vectors(int region_thread_idx,
-                             int block_thread_idx,
+        calc_loop_of_vectors(int thread_idx,
                              const Indices& start_idxs,
                              idx_t stop_inner,
                              idx_t write_mask) =0;
@@ -266,9 +222,8 @@ namespace yask {
         // Indices must be rank-relative.
         // Indices must be normalized, i.e., already divided by VLEN_*.
         // Each vector write is masked by 'write_mask'.
-        void
-        calc_loop_of_vectors(int region_thread_idx,
-                             int block_thread_idx,
+        virtual void
+        calc_loop_of_vectors(int thread_idx,
                              const ScanIndices& loop_idxs,
                              idx_t write_mask);
 
@@ -283,9 +238,6 @@ namespace yask {
     protected:
         std::string _name;
 
-        // Parent solution.
-        StencilContext* _context = 0;
-        
         // Union of bounding boxes for all bundles in this pack.
         BoundingBox _pack_bb;
 
@@ -297,27 +249,13 @@ namespace yask {
         AutoTuner _at;
         
     public:
-
-        // Perf stats for this pack.
+        // Timer for this pack.
         YaskTimer timer;
-        idx_t steps_done = 0;
-        Stats stats;
-
-        // Work needed across points in this rank.
-        idx_t num_reads_per_step = 0;
-        idx_t num_writes_per_step = 0;
-        idx_t num_fpops_per_step = 0;
-
-        // Work done across all ranks.
-        idx_t tot_reads_per_step = 0;
-        idx_t tot_writes_per_step = 0;
-        idx_t tot_fpops_per_step = 0;
         
         BundlePack(const std::string& name,
                    StencilContext* ctx) :
             _name(name),
-            _context(ctx),
-            _opts(*ctx->get_settings()), // make a copy of the context settings.
+            _opts(*ctx->get_settings()),
             _at(ctx, &_opts, name) { }
         virtual ~BundlePack() { }
 
@@ -325,36 +263,10 @@ namespace yask {
             return _name;
         }
 
-        // Update the amount of work stats.
-        // Print to current debug stream.
-        void init_work_stats();
-
-        // Determine whether step index is enabled.
-        bool
-        is_in_valid_step(idx_t input_step_index) const {
-            if (!size())
-                return false;
-
-            // All step conditions must be the same, so
-            // we call first one.
-            return front()->is_in_valid_step(input_step_index);
-        }
-
         // Accessors.
-        BoundingBox& getBB() { return _pack_bb; }
-        AutoTuner& getAT() { return _at; }
-        KernelSettings& getLocalSettings() { return _opts; }
-
-        // If using separate pack tuners, return local settings.
-        // Otherwise, return one in context.
-        KernelSettings& getActiveSettings() {
-            return _context->use_pack_tuners() ? _opts :
-                *_context->get_settings().get(); }
-
-        // Perf-tracking methods.
-        void start_timers();
-        void stop_timers();
-        void add_steps(idx_t num_steps);
+        virtual BoundingBox& getBB() { return _pack_bb; }
+        virtual AutoTuner& getAT() { return _at; }
+        virtual KernelSettings& getSettings() { return _opts; }
 
     }; // BundlePack.
 

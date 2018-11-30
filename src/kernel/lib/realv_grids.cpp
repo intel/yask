@@ -32,7 +32,7 @@ namespace yask {
 
     // Ctor.
     YkGridBase::YkGridBase(GenericGridBase* ggb,
-                           const GridDimNames& dimNames,
+                           size_t ndims,
                            DimsPtr dims) :
     _ggb(ggb), _dims(dims) {
 
@@ -40,7 +40,7 @@ namespace yask {
         assert(dims.get());
 
         // Init indices.
-        int n = int(dimNames.size());
+        int n = int(ndims);
         _domains.setFromConst(0, n);
         _req_left_pads.setFromConst(0, n);
         _req_right_pads.setFromConst(0, n);
@@ -50,25 +50,13 @@ namespace yask {
         _right_halos.setFromConst(0, n);
         _left_wf_exts.setFromConst(0, n);
         _right_wf_exts.setFromConst(0, n);
-        _rank_offsets.setFromConst(0, n);
+        _offsets.setFromConst(0, n);
         _local_offsets.setFromConst(0, n);
         _vec_lens.setFromConst(1, n);
         _allocs.setFromConst(1, n);
         _vec_left_pads.setFromConst(1, n);
         _vec_allocs.setFromConst(1, n);
         _vec_local_offsets.setFromConst(0, n);
-
-        // Set masks.
-        for (int i = 0; i < dimNames.size(); i++) {
-            idx_t mbit = 1LL << i;
-            auto& dname = dimNames[i];
-            if (dname == _dims->_step_dim)
-                _step_dim_mask |= mbit;
-            else if (_dims->_domain_dims.lookup(dname))
-                _domain_dim_mask |= mbit;
-            else
-                _misc_dim_mask |= mbit;
-        }
     }
 
     // Convenience function to format indices like
@@ -184,49 +172,41 @@ namespace yask {
         Indices new_right_pads = getReqdPad(_right_halos, _right_wf_exts);
         IdxTuple new_allocs(old_allocs);
         for (int i = 0; i < get_num_dims(); i++) {
-            idx_t mbit = 1LL << i;
+
+            // Get max of existing pad & new required pad.
+            new_left_pads[i] = max(new_left_pads[i], _actl_left_pads[i]);
+            new_right_pads[i] = max(new_right_pads[i], _actl_right_pads[i]);
+
+            // If storage not yet allocated, also increase to requested pad.
+            // This will avoid throwing an exception due to unneeded
+            // extra padding after allocation.
+            if (!p) {
+                new_left_pads[i] = max(new_left_pads[i], _req_left_pads[i]);
+                new_right_pads[i] = max(new_right_pads[i], _req_right_pads[i]);
+            }
+
+            // Round left pad up to vec len.
+            new_left_pads[i] = ROUND_UP(new_left_pads[i], _vec_lens[i]);
+
+            // Round domain + right pad up to vec len by extending right pad.
+            idx_t dprp = ROUND_UP(_domains[i] + new_right_pads[i], _vec_lens[i]);
+            new_right_pads[i] = dprp - _domains[i];
 
             // New allocation in each dim.
-            new_allocs[i] = _domains[i];
+            new_allocs[i] = new_left_pads[i] + _domains[i] + new_right_pads[i];
 
-            // Adjust padding only for domain dims.
-            if (_domain_dim_mask & mbit) {
-
-                // Get max of existing pad & new required pad.
-                new_left_pads[i] = max(new_left_pads[i], _actl_left_pads[i]);
-                new_right_pads[i] = max(new_right_pads[i], _actl_right_pads[i]);
-
-                // If storage not yet allocated, also increase to requested pad.
-                // This will avoid throwing an exception due to unneeded
-                // extra padding after allocation.
-                if (!p) {
-                    new_left_pads[i] = max(new_left_pads[i], _req_left_pads[i]);
-                    new_right_pads[i] = max(new_right_pads[i], _req_right_pads[i]);
-                }
-
-                // Round left pad up to vec len.
-                new_left_pads[i] = ROUND_UP(new_left_pads[i], _vec_lens[i]);
-
-                // Round domain + right pad up to vec len by extending right pad.
-                idx_t dprp = ROUND_UP(_domains[i] + new_right_pads[i], _vec_lens[i]);
-                new_right_pads[i] = dprp - _domains[i];
-
-                // New allocation in each dim.
-                new_allocs[i] += new_left_pads[i] + new_right_pads[i];
-
-                // Make inner dim an odd number of vecs.
-                // This reportedly helps avoid some uarch aliasing.
-                if (!p && get_dim_name(i) == _dims->_inner_dim &&
-                    (new_allocs[i] / _vec_lens[i]) % 2 == 0) {
-                    new_right_pads[i] += _vec_lens[i];
-                    new_allocs[i] += _vec_lens[i];
-                }
-                assert(new_allocs[i] == new_left_pads[i] + _domains[i] + new_right_pads[i]);
-
-                // Since the left pad and domain + right pad were rounded up,
-                // the sum should also be a vec mult.
-                assert(new_allocs[i] % _vec_lens[i] == 0);
+            // Make inner dim an odd number of vecs.
+            // This reportedly helps avoid some uarch aliasing.
+            if (!p && get_dim_name(i) == _dims->_inner_dim &&
+                (new_allocs[i] / _vec_lens[i]) % 2 == 0) {
+                new_right_pads[i] += _vec_lens[i];
+                new_allocs[i] += _vec_lens[i];
             }
+            assert(new_allocs[i] == new_left_pads[i] + _domains[i] + new_right_pads[i]);
+
+            // Since the left pad and domain + right pad were rounded up,
+            // the sum should also be a vec mult.
+            assert(new_allocs[i] % _vec_lens[i] == 0);
         }
 
         // Attempt to change alloc with existing storage?
@@ -246,7 +226,6 @@ namespace yask {
         _actl_right_pads = new_right_pads;
         size_t new_dirty = 1;      // default if no step dim.
         for (int i = 0; i < get_num_dims(); i++) {
-            idx_t mbit = 1LL << i;
 
             // Calc vec-len values.
             _vec_left_pads[i] = new_left_pads[i] / _vec_lens[i];
@@ -256,7 +235,7 @@ namespace yask {
             _ggb->set_dim_size(i, _vec_allocs[i]);
 
             // Number of dirty bits is number of steps.
-            if (_step_dim_mask & mbit)
+            if (get_dim_name(i) == _dims->_step_dim)
                 new_dirty = _allocs[i];
         }
 
@@ -267,7 +246,7 @@ namespace yask {
 
         // Report changes in TRACE mode.
         if (old_allocs != new_allocs || old_dirty != new_dirty) {
-            Indices first_allocs = _rank_offsets.subElements(_actl_left_pads);
+            Indices first_allocs = _offsets.subElements(_actl_left_pads);
             Indices last_allocs = first_allocs.addElements(_allocs).subConst(1);
             TRACE_MSG0(get_ostr(), "grid '" << get_name() << "' resized from " <<
                        makeIndexString(old_allocs, " * ") <<
@@ -308,8 +287,7 @@ namespace yask {
             return get_num_storage_elements();
         }
 
-        // Quick check for errors, assuming same layout and
-        // same values in extra-padding area.
+        // Quick check for errors, assuming same layout.
         // TODO: check layout.
         idx_t errs = _ggb->count_diffs(ref->_ggb, epsilon);
         TRACE_MSG0(get_ostr(), "count_diffs() returned " << errs);
@@ -331,12 +309,9 @@ namespace yask {
                 bool ok = true;
                 for (int i = 0; ok && i < pt.getNumDims(); i++) {
                     auto val = pt.getVal(i);
-                    idx_t mbit = 1LL << i;
 
-                    // Convert to API index.
-                    opt[i] = val;
-                    if (!(_step_dim_mask & mbit))
-                        opt[i] += _rank_offsets[i] + _local_offsets[i];
+                    // Convert to global index.
+                    opt[i] = _offsets[i] + val;
 
                     // Don't compare points outside the domain.
                     // TODO: check points in halo.
@@ -375,12 +350,12 @@ namespace yask {
     }
 
     // Make sure indices are in range.
-    // Side-effect: If clipped_indices is not NULL, set them to in-range if out-of-range.
+    // Side-effect: If fixed_indices is not NULL, set them to in-range if out-of-range.
     bool YkGridBase::checkIndices(const Indices& indices,
                                   const string& fn,
                                   bool strict_indices, // die if out-of-range.
                                   bool normalize,      // div by vec lens.
-                                  Indices* clipped_indices) const {
+                                  Indices* fixed_indices) const {
         bool all_ok = true;
         auto n = get_num_dims();
         if (indices.getNumDims() != n) {
@@ -388,17 +363,16 @@ namespace yask {
                                             indices.getNumDims() <<
                                             " indices instead of " << n);
         }
-        if (clipped_indices)
-            *clipped_indices = indices;
+        if (fixed_indices)
+            *fixed_indices = indices;
         for (int i = 0; i < n; i++) {
-            idx_t mbit = 1LL << i;
             idx_t idx = indices[i];
             bool ok = false;
             auto& dname = get_dim_name(i);
 
             // Any step index is ok because it wraps around.
             // TODO: check that it's < magic added value in wrap_index().
-            if (_step_dim_mask & mbit)
+            if (_has_step_dim && i == +Indices::step_posn)
                 ok = true;
 
             // Within first..last indices?
@@ -418,11 +392,11 @@ namespace yask {
                     }
 
                     // Update the output indices.
-                    if (clipped_indices) {
+                    if (fixed_indices) {
                         if (idx < first_ok)
-                            (*clipped_indices)[i] = first_ok;
+                            (*fixed_indices)[i] = first_ok;
                         if (idx > last_ok)
-                            (*clipped_indices)[i] = last_ok;
+                            (*fixed_indices)[i] = last_ok;
                     }
                 }
             }
@@ -430,13 +404,11 @@ namespace yask {
                 all_ok = false;
 
             // Normalize?
-            if (clipped_indices && normalize) {
-                if (_domain_dim_mask & mbit) {
-                    (*clipped_indices)[i] -= _rank_offsets[i]; // rank-local.
-                    (*clipped_indices)[i] = idiv_flr((*clipped_indices)[i], _vec_lens[i]);
-                }
+            if (fixed_indices && normalize) {
+                (*fixed_indices)[i] -= _offsets[i];
+                (*fixed_indices)[i] = idiv_flr((*fixed_indices)[i], _vec_lens[i]);
             }
-        } // grid dims.
+        }
         return all_ok;
     }
 
@@ -493,7 +465,7 @@ namespace yask {
         Indices eidxs = idxs.mulElements(_vec_lens);
 
         // Add offsets, i.e., convert to overall indices.
-        eidxs = eidxs.addElements(_rank_offsets);
+        eidxs = eidxs.addElements(_offsets);
 
         IdxTuple idxs2 = get_allocs(); // get dims.
         eidxs.setTupleVals(idxs2);      // set vals from eidxs.

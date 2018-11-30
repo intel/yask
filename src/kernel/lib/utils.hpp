@@ -94,7 +94,9 @@ namespace yask {
     extern idx_t roundUp(std::ostream& os, idx_t val, idx_t mult,
                          const std::string& name, bool do_print);
 
-    // Helpers for aligned malloc and free.
+    // Helpers for shared and aligned malloc and free.
+    // Use like this:
+    // shared_ptr<char> p(alignedAlloc(nbytes), AlignedDeleter());
     extern char* alignedAlloc(std::size_t nbytes);
     struct AlignedDeleter {
         void operator()(char* p) {
@@ -105,178 +107,42 @@ namespace yask {
         }
     };
 
-    // Alloc aligned data as a shared ptr.
-    template<typename T>
-    std::shared_ptr<T> shared_aligned_alloc(size_t sz) {
-        auto _base = std::shared_ptr<T>(alignedAlloc(sz), AlignedDeleter(sz));
-        return _base;
-    }
-
-    // Helpers for NUMA malloc and free.
+    // Helpers for shared and NUMA malloc and free.
+    // Use like this:
+    // shared_ptr<char> p(numaAlloc(nbytes, numa_pref), NumaDeleter(nbytes));
     extern char* numaAlloc(std::size_t nbytes, int numa_pref);
     struct NumaDeleter {
         std::size_t _nbytes;
-        int _numa_pref;
+        NumaDeleter(std::size_t nbytes): _nbytes(nbytes) {}
+        void operator()(char* p) {
 
-        // Ctor saves data needed for freeing.
-        NumaDeleter(std::size_t nbytes, int numa_pref) :
-            _nbytes(nbytes),
-            _numa_pref(numa_pref)
-        { }
-
-        // Free p.
-        void operator()(char* p);
+#ifdef USE_NUMA
+#ifdef USE_NUMA_POLICY_LIB
+            if (p && numa_available() != -1) {
+                numa_free(p, _nbytes);
+                p = NULL;
+            }
+#else
+            if (p && get_mempolicy(NULL, NULL, 0, 0, 0) == 0) {
+                munmap(p, _nbytes);
+                p = NULL;
+            }
+#endif
+#endif
+            if (p) {
+                free(p);
+                p = NULL;
+            }
+        }
     };
 
     // Allocate NUMA memory from preferred node.
     template<typename T>
     std::shared_ptr<T> shared_numa_alloc(size_t sz, int numa_pref) {
-        auto _base = std::shared_ptr<T>(numaAlloc(sz, numa_pref),
-                                        NumaDeleter(sz, numa_pref));
+        auto _base = std::shared_ptr<T>(numaAlloc(sz, numa_pref), NumaDeleter(sz));
         return _base;
     }
 
-    // Helpers for PMEM malloc and free.
-    extern char* pmemAlloc(std::size_t nbytes, int dev_num);
-    struct PmemDeleter {
-        std::size_t _nbytes;
-        int _dev_num;
-
-        // Ctor saves data needed for freeing.
-        PmemDeleter(std::size_t nbytes, int dev_num) :
-            _nbytes(nbytes),
-            _dev_num(dev_num)
-        { }
-
-        // Free p.
-        void operator()(char* p);
-    };
-
-    // Allocate PMEM memory from given device.
-    template<typename T>
-    std::shared_ptr<T> shared_pmem_alloc(size_t sz, int dev_num) {
-        auto _base = std::shared_ptr<T>(pmemAlloc(sz, dev_num),
-                                        PmemDeleter(sz, dev_num));
-        return _base;
-    }
-
-    // Helpers for MPI shm malloc and free.
-    extern char* shmAlloc(std::size_t nbytes,
-                          const MPI_Comm* shm_comm, MPI_Win* shm_win);
-    struct ShmDeleter {
-        std::size_t _nbytes;
-        const MPI_Comm* _shm_comm;
-        MPI_Win* _shm_win;
-
-        // Ctor saves data needed for freeing.
-        ShmDeleter(std::size_t nbytes,
-                   const MPI_Comm* shm_comm, MPI_Win* shm_win):
-            _nbytes(nbytes),
-            _shm_comm(shm_comm),
-            _shm_win(shm_win)
-        { }
-
-        // Free p.
-        void operator()(char* p);
-    };
-
-    // Allocate MPI shm memory.
-    template<typename T>
-    std::shared_ptr<T> shared_shm_alloc(size_t sz,
-                                        const MPI_Comm* shm_comm, MPI_Win* shm_win) {
-        auto _base = std::shared_ptr<T>(shmAlloc(sz, shm_comm, shm_win),
-                                        ShmDeleter(sz, shm_comm, shm_win));
-        return _base;
-    }
-
-    // A class for a simple producer-consumer memory lock on one item.
-    class SimpleLock {
-
-        // Put each value in a separate cache-line to
-        // avoid false sharing.
-        union LockVal {
-            struct {
-                volatile idx_t chk; // check for mem corruption.
-                volatile idx_t val; // actual counter.
-            };
-            char pad[CACHELINE_BYTES];
-        };
-
-        LockVal _write_count, _read_count;
-
-        static constexpr idx_t _ival = 1000;
-
-#ifdef CHECK
-        inline void _check(const std::string& fn) const {
-            idx_t wcnt = _write_count.val;
-            idx_t rcnt = _read_count.val;
-            idx_t wchk = _write_count.chk;
-            idx_t rchk = _read_count.chk;
-            if (wcnt < _ival || rcnt < _ival ||
-                wcnt < rcnt || wcnt - rcnt > 1 ||
-                wchk != _ival || rchk != _ival)
-                FORMAT_AND_THROW_YASK_EXCEPTION
-                     ("Internal error: " << fn << "() w/lock @ " << (void*)this <<
-                      " writes=" << wcnt << ", reads=" << rcnt <<
-                      ", w-chk=" << wchk << ", r-chk=" << rchk);
-        }
-#else
-        inline void _check(const char* fn) const { }
-#endif
-
-    public:
-        SimpleLock() {
-            init();
-        }
-        
-        // Allow write and block read.
-        void init() {
-            _write_count.val = _read_count.val = _ival;
-            _write_count.chk = _read_count.chk = _ival;
-            _check("init");
-        }
-
-        // Check whether ok to read,
-        // i.e., whether write is done.
-        bool is_ok_to_read() const {
-            _check("is_ok_to_read");
-            return _write_count.val != _read_count.val;
-        }
-
-        // Wait until ok to read.
-        void wait_for_ok_to_read() const {
-            while (!is_ok_to_read())
-                _mm_pause();
-        }
-
-        // Mark that read is done.
-        void mark_read_done() {
-            assert(is_ok_to_read());
-            _read_count.val++;
-            _check("mark_read_done");
-        }
-
-        // Check whether ok to write,
-        // i.e., whether read is done for previous write.
-        bool is_ok_to_write() const {
-            _check("is_ok_to_write");
-            return _write_count.val == _read_count.val;
-        }
-
-        // Wait until ok to write.
-        void wait_for_ok_to_write() const {
-            while (!is_ok_to_write())
-                _mm_pause();
-        }
-
-        // Mark that write is done.
-        void mark_write_done() {
-            assert(is_ok_to_write());
-            _write_count.val++;
-            _check("mark_write_done");
-        }
-    };
-    
     // A class for maintaining elapsed time.
     class YaskTimer {
 
@@ -285,52 +151,50 @@ namespace yask {
            long     tv_nsec;       // nanoseconds
            };
         */
-        struct timespec _begin, _elapsed;
+        struct timespec _begin, _end, _elapsed;
 
     public:
-
-        typedef struct timespec TimeSpec;
-
         YaskTimer() { clear(); }
         virtual ~YaskTimer() { }
 
         // Reset elapsed time to zero.
-        void clear() {
-            _begin.tv_sec = _elapsed.tv_sec = 0;
-            _begin.tv_nsec = _elapsed.tv_nsec = 0;
+        virtual void clear() {
+            _begin.tv_sec = _end.tv_sec = _elapsed.tv_sec = 0;
+            _begin.tv_nsec = _end.tv_nsec = _elapsed.tv_nsec = 0;
         }
 
-        // Make a timespec that can be used for mutiple calls.
-        static TimeSpec get_timespec() {
-            TimeSpec ts;
-            clock_gettime(CLOCK_REALTIME, &ts);
-            return ts;
-        }
-        
         // Start a timed region.
         // start() and stop() can be called multiple times in
         // pairs before calling get_elapsed_secs(), which
         // will return the cumulative time over all timed regions.
-        void start(TimeSpec* ts = NULL);
+        virtual void start() {
+            clock_gettime(CLOCK_REALTIME, &_begin);
+        }
 
         // End a timed region.
         // Return time since previous call to start(); this is *not*
         // generally the same as the value returned by get_elapsed_secs().
-        double stop(TimeSpec* ts = NULL);
+        virtual double stop() {
+            clock_gettime(CLOCK_REALTIME, &_end);
+            struct timespec delta;
 
-        // Get elapsed time between preceding start/stop pairs.
-        // Does not reset value, so it may be used for cumulative time.
-        double get_elapsed_secs() const {
+            // Elapsed time is just end - begin times.
+            delta.tv_sec = _end.tv_sec - _begin.tv_sec;
+            _elapsed.tv_sec += delta.tv_sec;
 
-            // Make sure timer was stopped.
-            assert(_begin.tv_sec == 0);
-            
-            return double(_elapsed.tv_sec) + double(_elapsed.tv_nsec) * 1e-9;
+            // No need to check for sign or to normalize, because tv_nsec is
+            // signed and 64-bit.
+            delta.tv_nsec = _end.tv_nsec - _begin.tv_nsec;
+            _elapsed.tv_nsec += delta.tv_nsec;
+
+            return double(delta.tv_sec) + double(delta.tv_nsec) * 1e-9;
         }
 
-        // Get elapsed time since last start.
-        // Used to check time w/o stopping timer.
-        double get_secs_since_start() const;
+        // Get elapsed time in sec.
+        // Does not reset value, so it may be used for cumulative time.
+        virtual double get_elapsed_secs() const {
+            return double(_elapsed.tv_sec) + double(_elapsed.tv_nsec) * 1e-9;
+        }
     };
 
     // A class to parse command-line args.

@@ -174,22 +174,16 @@ namespace yask {
         int stepDim = _firstInner ? 1 : -1;
         for (int di = startDim; di != endDim; di += stepDim) {
             auto& i = _q.at(di);
-            assert(i.getVal() >= 0);
+            auto& dim = i.getName();
             size_t dsize = size_t(i.getVal());
+            assert (dsize >= 0);
 
             // offset into this dim.
-            size_t offset = 0;
-            if (strictRhs) {
-                assert(offsets[di] >= 0);
-                offset = size_t(offsets[di]);
-            } else {
-                auto& dim = i.getName();
-                auto* op = offsets.lookup(dim);
-                if (op) {
-                    assert(*op >= 0);
-                    offset = size_t(*op);
-                }
-            }
+            auto op = strictRhs ? offsets.lookup(di) : offsets.lookup(dim);
+            if (strictRhs)
+                assert(op);
+            size_t offset = op ? size_t(*op) : 0; // 0 offset default.
+            assert(offset >= 0);
             assert(offset < dsize);
 
             // mult offset by product of previous dims.
@@ -242,6 +236,73 @@ namespace yask {
         for (int i = 0; i < size(); i++) {
             if (i != posn)
                 newt.addDimBack(getDimName(i), getVal(i));
+        }
+        return newt;
+    }
+
+    template <typename T>
+    T Tuple<T>::reduce(std::function<T (T lhs, T rhs)> reducer) const {
+        T result = 0;
+        int n = 0;
+        for (auto i : _q) {
+            //auto& tdim = i.getName();
+            auto& tval = i.getVal();
+            if (n == 0)
+                result = tval;
+            else
+                result = reducer(result, tval);
+            n++;
+        }
+        return result;
+    }
+
+    template <typename T>
+    Tuple<T> Tuple<T>::combineElements(std::function<T (T lhs, T rhs)> combiner,
+                                    const Tuple& rhs,
+                                    bool strictRhs) const {
+        Tuple newt = *this;
+        if (strictRhs) {
+            assert(areDimsSame(rhs, true));
+            for (size_t i = 0; i < _q.size(); i++) {
+                auto& tval = _q[i].getVal();
+                auto& rval = rhs[i];
+                T newv = combiner(tval, rval);
+                newt[i] = newv;
+            }
+        }
+        else {
+            for (auto& i : _q) {
+                auto& tdim = i.getName();
+                auto& tval = i.getVal();
+                auto* rp = rhs.lookup(tdim);
+                if (rp) {
+                    T newv = combiner(tval, *rp);
+                    newt.setVal(tdim, newv);
+                }
+            }
+        }
+        return newt;
+    }
+
+    template <typename T>
+    Tuple<T> Tuple<T>::mapElements(std::function<T (T lhs, T rhs)> func,
+                                T rhs) const {
+        Tuple newt = *this;
+        for (size_t i = 0; i < _q.size(); i++) {
+            auto& tval = _q[i].getVal();
+            T newv = func(tval, rhs);
+            newt[i] = newv;
+        }
+        return newt;
+    }
+
+    template <typename T>
+    Tuple<T> Tuple<T>::mapElements(std::function<T (T in)> func) const {
+        Tuple newt = *this;
+        for (size_t i = 0; i < _q.size(); i++) {
+            auto& tval = _q[i].getVal();
+            T newv = func(tval);
+            newt[i] = newv;
         }
         return newt;
     }
@@ -315,6 +376,45 @@ namespace yask {
             n++;
         }
         return oss.str();
+    }
+
+    template <typename T>
+    void Tuple<T>::visitAllPoints(std::function<bool (const Tuple&,
+                                                      size_t idx)> visitor) const {
+
+        // Init lambda fn arg with *this to get dim names.
+        // Values will get set during scan.
+        Tuple tp(*this);
+
+        // 0-D?
+        if (!_q.size())
+            visitor(tp, 0);
+
+        // Call recursive version.
+        // Set begin/step dims depending on nesting.
+        else if (_firstInner)
+            _visitAllPoints(visitor, size()-1, -1, tp);
+        else
+            _visitAllPoints(visitor, 0, 1, tp);
+    }
+
+    template <typename T>
+    void Tuple<T>::visitAllPointsInParallel(std::function<bool (const Tuple&,
+                                                                size_t idx)> visitor) const {
+
+        // 0-D?
+        if (!_q.size()) {
+            Tuple tp(*this);
+            visitor(tp, 0);
+        }
+
+        // Call order-independent version.
+        // Set begin/end/step dims depending on nesting.
+        // TODO: set this depending on dim sizes.
+        else if (_firstInner)
+            _visitAllPointsInPar(visitor, size()-1, -1);
+        else
+            _visitAllPointsInPar(visitor, 0, 1);
     }
 
     // Explicitly allowed instantiations.

@@ -26,7 +26,7 @@ IN THE SOFTWARE.
 // Test the YASK tuples.
 
 // enable assert().
-#define CHECK
+#define DEBUG
 
 #include "tuple.hpp"
 using namespace std;
@@ -115,10 +115,6 @@ void ttest(bool firstInner) {
         assert(int(j) == t2.product());
 
         os << d << "-d parallel visit test...\n";
-        omp_set_nested(1);
-        omp_set_max_active_levels(2);
-        yask_num_threads[0] = 4;
-        yask_num_threads[1] = 2;
         j = 0;
         t2.visitAllPointsInParallel
             ([&](const IntTuple& ofs, size_t k) {

@@ -189,8 +189,7 @@ namespace yask {
         virtual void
         set_block_size(const std::string& dim
                        /**< [in] Name of dimension to set.  Must be one of
-                          the names from get_step_dim_name() or
-                          get_domain_dim_names(). */,
+                          the names from get_domain_dim_names(). */,
                        idx_t size
                        /**< [in] Elements in a block in this `dim`. */ ) =0;
 
@@ -203,8 +202,7 @@ namespace yask {
         virtual idx_t
         get_block_size(const std::string& dim
                         /**< [in] Name of dimension to get.  Must be one of
-                           the names from get_step_dim_name() or
-                           get_domain_dim_names(). */) const =0;
+                           the names from get_domain_dim_names(). */) const =0;
 
         /// Set the number of MPI ranks in the given dimension.
         /**
@@ -447,10 +445,11 @@ namespace yask {
         virtual void
         end_solution() =0;
 
+
         /// Get performance statistics associated with preceding calls to run_solution().
         /**
-           @note Side effect: resets all statistics, so each call
-           returns only the elapsed time and counts since the previous call.
+           Side effect: resets all statistics, so a subsequent call will
+           measure performance after the current call.
            @returns Pointer to statistics object.
         */
         virtual yk_stats_ptr
@@ -618,7 +617,7 @@ namespace yask {
            - For each domain dimension of the grid,
            the new grid's domain size will be the same as that returned by
            get_rank_domain_size().
-           - Calls to set_rank_domain_size() will automatically resize the corresponding domain
+           - Calls to set_rank_domain_size() will resize the corresponding domain
            size in this grid.
            - This grid's first domain index in this rank will be determined
            by the position of this rank.
@@ -688,11 +687,10 @@ namespace yask {
 
            The following behaviors are different from both pre-defined grids
            and those created via new_grid():
-           - Calls to set_rank_domain_size() will *not* automatically resize
-           the corresponding domain size in this grid--this is where the term "fixed" originates.
-           - In contrast, for each domain dimension of the grid,
-           the new grid's domain size can be changed independently of the domain
-           size of the application.
+           - For each domain dimension of the grid,
+           the new grid's domain size is provided during creation and cannot be changed.
+           - Calls to set_rank_domain_size() will *not* resize the corresponding domain
+           size in this grid.
            - This grid's first domain index in this rank will be fixed at zero (0)
            regardless of this rank's position.
            - This grid's padding size will be affected only by calls to
@@ -705,8 +703,6 @@ namespace yask {
            yk_grid::set_alloc_size().
            - Storage may be allocated via yk_grid::alloc_storage() or
            yk_solution::prepare_solution().
-
-           See yk_grid::set_alloc_size().
 
            The following behaviors are different than a pre-defined grid
            but the same as those created via new_grid():
@@ -828,15 +824,29 @@ namespace yask {
 
         /// Get the number of elements in the overall domain.
         /**
-           @returns Product across all domain dimensions of the domain sizes across all ranks.
-           Multiply this value by get_num_steps_done() to determine the number
-           of points processed.
-           Then, divide by get_elapsed_run_secs() to determine the throughput.
+           @returns Product of all the overal domain sizes across all domain dimensions.
         */
         virtual idx_t
         get_num_elements() =0;
 
-        /// Get the number of steps executed via run_solution().
+        /// Get the number of elements written in each step.
+        /**
+           @returns Number of elements written to each output grid.
+           This is the same value as get_num_elements() if there is only one output grid.
+        */
+        virtual idx_t
+        get_num_writes() =0;
+
+        /// Get the estimated number of floating-point operations required for each step.
+        /**
+           @returns Number of FP ops created by the stencil compiler.
+           It may be slightly more or less than the actual number of FP ops executed
+           by the CPU due to C++ compiler transformations.
+        */
+        virtual idx_t
+        get_est_fp_ops() =0;
+
+        /// Get the number of steps calculated via run_solution().
         /**
            @returns A positive number, regardless of whether run_solution() steps were executed
            forward or backward.
@@ -844,31 +854,13 @@ namespace yask {
         virtual idx_t
         get_num_steps_done() =0;
 
-        /// Get the number of elements written across all steps.
-        /**
-           @returns Number of elements written, summed over all output grids,
-           steps executed, and ranks.
-        */
-        virtual idx_t
-        get_num_writes_done() =0;
-
-        /// Get the estimated number of floating-point operations executed across all steps.
-        /**
-           @returns Number of FP ops created by the stencil compiler, summed over
-           all stencil-bundles, steps executed, and ranks.
-           It may be slightly more or less than the actual number of FP ops executed
-           by the CPU due to C++ compiler transformations.
-        */
-        virtual idx_t
-        get_est_fp_ops_done() =0;
-
         /// Get the number of seconds elapsed during calls to run_solution().
         /**
            @returns Only the time spent in run_solution(), not in any other code in your
            application between calls.
         */
         virtual double
-        get_elapsed_secs() =0;
+        get_elapsed_run_secs() =0;
     };
 
     /** @}*/
