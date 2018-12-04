@@ -233,6 +233,7 @@ namespace yask {
         virtual void visit(CodeExpr* ce);
 
         // Generic unary operators.
+        virtual void visit(FuncExpr* ue);
         virtual void visit(UnaryNumExpr* ue);
         virtual void visit(UnaryBoolExpr* ue);
         virtual void visit(UnaryNum2BoolExpr* ue);
@@ -284,6 +285,9 @@ namespace yask {
         virtual void visit(CodeExpr* ce);
 
         // Unary operators.
+        virtual void visit(FuncExpr* ue) {
+            visit(dynamic_cast<UnaryNumExpr*>(ue));
+        }
         virtual void visit(UnaryNumExpr* ue);
         virtual void visit(UnaryBoolExpr* ue);
 
@@ -366,6 +370,9 @@ namespace yask {
         virtual void visit(CodeExpr* ce);
 
         // Generic numeric unary operators.
+        virtual void visit(FuncExpr* ue) {
+            visit(dynamic_cast<UnaryNumExpr*>(ue));
+        }            
         virtual void visit(UnaryNumExpr* ue);
 
         // Generic numeric binary operators.
@@ -397,6 +404,9 @@ namespace yask {
         virtual void visit(CodeExpr* ce) {}
 
         // Generic numeric unary operators.
+        virtual void visit(FuncExpr* ue) {
+            visit(dynamic_cast<UnaryNumExpr*>(ue));
+        }            
         virtual void visit(UnaryNumExpr* ue);
 
         // Generic numeric binary operators.

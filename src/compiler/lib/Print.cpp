@@ -81,6 +81,14 @@ namespace yask {
         _numCommon += _ph.getNumCommon(ce);
     }
 
+    // Function call.
+    void PrintVisitorTopDown::visit(FuncExpr* ue) {
+        _exprStr += ue->getOpStr() + "(";
+        ue->getRhs()->accept(this);
+        _exprStr += ")";
+        _numCommon += _ph.getNumCommon(ue);
+    }
+    
     // Generic unary operators.
     // Assumes unary operators have highest precedence, so no ()'s added.
     void PrintVisitorTopDown::visit(UnaryNumExpr* ue) {

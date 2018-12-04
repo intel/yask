@@ -44,6 +44,9 @@ namespace yask {
         virtual void visit(GridPoint* gp) { } // does NOT visit arg exprs by default.
 
         // By default, a unary visitor just visits its operand.
+        virtual void visit(FuncExpr* ue) {
+            ue->getRhs()->accept(this);
+        }
         virtual void visit(UnaryNumExpr* ue) {
             ue->getRhs()->accept(this);
         }

@@ -1,13 +1,15 @@
-Previous YASK users may want to jump to the [compatibility notices](#backward-compatibility-notices).
+# YASK--Yet Another Stencil Kernel
+
+* New YASK users may want to start with the [YASK tutorial](https://www.ixpug.org/components/com_solutionlibrary/assets/documents/1538169451-IXPUG_Fall_Conf_2018_paper_2%20-%20Rev3%20-%20Charles%20Yount.pdf).
+* Existing YASK users may want to jump to the [backward-compatibility notices](#backward-compatibility-notices).
 
 ## Overview
-YASK--Yet Another Stencil Kernel: A framework to rapidly create high-performance stencil code including optimizations and features such as
-* Vector folding,
-* Automatically-tuned cache blocking,
-* Multi-level OpenMP parallelism,
-* Encapsulated memory layout,
-* Temporal wave-front blocking,
-* MPI halo exchange, overlapping MPI communication and compute, and
+YASK is a framework to rapidly create high-performance stencil code including optimizations and features such as
+* Vector-folding to increase data reuse via non-traditional data layout,
+* Multi-level OpenMP parallelism to exploit multiple cores and threads,
+* Scaling to multiple sockets and nodes via MPI with overlapped communication and compute, and
+* Spatial tiling with automatically-tuned block sizes,
+* Temporal tiling to further increase cache locality,
 * APIs for C++ and Python: [API documentation](https://rawgit.com/intel/yask/api-docs/html/index.html).
 
 YASK contains a domain-specific compiler to convert scalar stencil code to SIMD-optimized code for Intel(R) Xeon Phi(TM) and Intel(R) Xeon(R) processors.
@@ -53,8 +55,6 @@ YASK contains a domain-specific compiler to convert scalar stencil code to SIMD-
     * Intel(R) Software Development Emulator,
       https://software.intel.com/en-us/articles/intel-software-development-emulator,
       for functional testing if you don't have native support for any given instruction set.
-
-To continue with building and running, see the [YASK tutorial](https://www.ixpug.org/components/com_solutionlibrary/assets/documents/1538169451-IXPUG_Fall_Conf_2018_paper_2%20-%20Rev3%20-%20Charles%20Yount.pdf).
 
 ### Backward-compatibility notices:
 * Version 2.15.04 required a call to `yc_grid::set_dynamic_step_alloc(true)` to allow changing the

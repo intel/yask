@@ -471,6 +471,30 @@ namespace yask {
         }
     };
 
+    // Math functions.
+    // TODO: create API access.
+    class FuncExpr : public UnaryNumExpr {
+    public:
+        FuncExpr(const string& opStr, NumExprPtr rhs) :
+            UnaryNumExpr(opStr, rhs) { }
+        FuncExpr(const FuncExpr& src) :
+            UnaryExpr(src) { }
+        virtual bool isConstVal() const {
+            return _rhs->isConstVal();
+        }
+        virtual void accept(ExprVisitor* ev);
+        virtual NumExprPtr clone() const {
+            return make_shared<FuncExpr>(*this);
+        }
+        virtual yc_number_node_ptr get_rhs() {
+            return _rhs;
+        }
+    };
+#define MATH_FUNC(fn_name) NumExprPtr fn_name(const NumExprPtr rhs);
+    MATH_FUNC(yc_sqrt);
+    MATH_FUNC(yc_cbrt);
+#undef MATH_FUNC
+
     // Base class for any generic binary operator.
     // Still pure virtual because clone() not implemented.
     template <typename BaseT, typename BaseApiT,

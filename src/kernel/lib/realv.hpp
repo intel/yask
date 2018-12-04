@@ -478,7 +478,38 @@ namespace yask {
     }
 
     // wrappers around some intrinsics w/non-intrinsic equivalents.
-    // TODO: make these methods in the real_vec_t union.
+
+    // SVML library.
+#if REAL_BYTES == 4
+#define SVML_UNARY_SCALAR(func, libm_dpfn, libm_spfn)     \
+    ALWAYS_INLINE real_t func(const real_t& a) {          \
+        return libm_spfn(a);                              \
+    }
+#else
+#define SVML_UNARY_SCALAR(func, libm_dpfn, libm_spfn)     \
+    ALWAYS_INLINE real_t func(const real_t& a) {          \
+        return libm_dpfn(a);                             \
+    }
+#endif
+#if defined(NO_INTRINSICS)
+#define SVML_UNARY(func, svml_fn, libm_dpfn, libm_spfn)         \
+    SVML_UNARY_SCALAR(func, libm_dpfn, libm_spfn)                 \
+    ALWAYS_INLINE real_vec_t func(const real_vec_t& a) {          \
+        real_vec_t res;                                                 \
+        REAL_VEC_LOOP(i) res[i] = func(a.u.r[i]);                       \
+        return res;                                                     \
+    }
+#else
+#define SVML_UNARY(func, svml_fn, libm_dpfn, libm_spfn)         \
+    SVML_UNARY_SCALAR(func, libm_dpfn, libm_spfn)                 \
+    ALWAYS_INLINE real_vec_t func(const real_vec_t& a) {       \
+        real_vec_t res;                                                 \
+        res.u.mr = INAME(svml_fn)(a.u.mr);                              \
+        return res;                                                     \
+    }
+#endif
+    SVML_UNARY(yc_sqrt, sqrt, sqrt, sqrtf) // square root.
+    SVML_UNARY(yc_cbrt, cbrt, cbrt, cbrtf) // cube root.
 
     // Get consecutive elements from two vectors.
     // Concat a and b, shift right by count elements, keep _right_most elements.
