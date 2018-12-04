@@ -23,7 +23,7 @@
 ## IN THE SOFTWARE.
 ##############################################################################
 
-# Purpose: Use a Genetic Algorithm to explore workload compile options and parameters.
+# Purpose: Use a Genetic Algorithm to explore workload compile and/or run options.
 # Or, sweep through all possible settings if -sweep option is given.
 
 use strict;
@@ -33,21 +33,15 @@ use lib dirname($0)."/lib";
 use lib dirname($0)."/../lib";
 use AI::Genetic;
 use English;
+use FileHandle;
 use Text::ParseWords;
 use Sys::Hostname;
 use List::Util qw(first max maxstr min minstr reduce shuffle sum);
+use YaskUtils;
 use POSIX;
 
 # constants.
-my @dirs = qw(x y z);           # not including t and n.
-my $oneKi = 1024;
-my $oneMi = $oneKi * $oneKi;
-my $oneGi = $oneKi * $oneMi;
-my $oneTi = $oneKi * $oneGi;
-my $oneK = 1e3;
-my $oneM = 1e6;
-my $oneG = 1e9;
-my $oneT = 1e12;
+my @dirs = qw(x y z);           # not including t.
 
 # command-line options.
 my $outDir = 'logs';           # dir for output.
@@ -68,7 +62,7 @@ my $makeArgs = '';             # extra make arguments.
 my $makePrefix = '';           # prefix for make.
 my $makeTimeout = 60 * 10;     # max secs for make to run.
 my $runArgs = '';              # extra run arguments.
-my $maxGB = 16;                # max mem usage.
+my $maxGB = 32;                # max mem usage.
 my $minGB = 0;                 # min mem usage.
 my $nranks = 1;                # num ranks.
 my $debugCheck = 0;            # print each initial check result.
@@ -108,20 +102,26 @@ sub usage {
       " -dp|-sp            Specify FP precision (default is SP).*\n".
       " -radius=<N>        Specify stencil radius for stencils that use this option (default is 8).*\n".
       "\nsearch-space options:\n".
-      " -<gene_name>=<N>   Force <gene_name> to value <N>.\n".
+      " -<gene_name>=<N>   Force <gene_name> to fixed value <N>.\n".
       "                    Run with -check for list of genes and default ranges.\n".
       "                    Setting rank-domain size (d) also sets upper block and region sizes.\n".
       "                    Leave off 'x', 'y', 'z' suffix to set these 3 vars to same val.\n".
       "                    Examples: '-d=512'      Set problem size to 512^3.\n".
+      "                              '-bx=64'      Set block size to 64 in 'x' dim.\n".
       "                              '-ep=0'       Disable extra padding.\n".
       "                              '-c=1'        Allow only one vector in a cluster.\n".
       "                              '-r=0'        Allow only one OpenMP region (region size=0 => rank size).\n".
-      " -<gene_name>=<N>-<M>   Restrict <gene_name> between <N> and <M>.\n".
-      "                        See the notes above on <gene_name> specification.\n".
+      " -<gene_name>=<N>-<M> Restrict <gene_name> between <N> and <M>, inclusive.\n".
+      "                    Example:  '-bx=8-128'.\n".
+      "                    See the notes above on <gene_name> specification.\n".
+      " -<gene_name>=<N>-<M>:<S>  Restrict <gene_name> between <N> and <M> with stride <S>.\n".
+      "                    Example:  '-bx=8-128:4'.\n".
+      "                    See the notes above on <gene_name> specification.\n".
       " -folds=<list>      Comma separated list of folds to use.*\n".
       "                    Examples: '-folds=4 4 1', '-folds=1 1 16, 4 4 1, 1 4 4'.\n".
       "                    Can only specify 3D folds.\n".
-      " -mem=<N>-<M>           Set allowable est. memory usage between <N> and <M> GiB (default is $minGB-$maxGB).\n".
+      " -mem=<N>-<M>       Set allowable est. memory usage between <N> and <M> GiB (default is $minGB-$maxGB).\n".
+      "                    Ignored if all problem-size vars are set to a fixed value.\n".
       " -maxVecsInCluster=<N>  Maximum vectors allowed in cluster (default is $maxVecsInCluster).*\n".
       " -noPrefetch        Disable any prefetching (shortcut for '-pfd_l1=0 -pfd_l2=0').*\n".
       " -noFolding         Allow only 1D vectorization (in any direction).*\n".
@@ -130,8 +130,8 @@ sub usage {
       "* indicates options that are invalid if -noBuild is used.\n".
       "\n".
       "examples:\n".
-      " $0 -stencil=iso3dfd -arch=knl -d=768 -r=0 -noPrefetch\n".
-      " $0 -stencil=awp -arch=knl -dx=512 -dy=512 -dz=256\n".
+      " $0 -stencil=iso3dfd -arch=skl -d=768 -r=0 -noPrefetch\n".
+      " $0 -stencil=awp -arch=knl -dx=512 -dy=512 -dz=256 -b=4-512:4\n".
       " $0 -stencil=3axis -arch=snb -mem=8-10 -noBuild\n";
 
   exit(defined $msg ? 1 : 0);
@@ -142,7 +142,11 @@ sub usage {
 # or $geneRanges{key}[0]-$geneRanges{key}[1]
 # or $geneRanges{key}[0]-$geneRanges{key}[1] by $geneRanges{key}[2].
 my %geneRanges;
-my $autoKey = 'auto_';          # prefix for special-case settings.
+my $autoKey = 'def_';          # prefix for default setting.
+
+# control groups.
+# TODO: make an option.
+my $showGroups = 0;
 
 # autoflush.
 $| = 1;
@@ -240,7 +244,7 @@ for my $origOpt (@ARGV) {
     $sweep = 1;
     print "Sweeping all values instead of searching with GA.\n";
   }
-  elsif ($opt =~ 'folds=(\s*\d+\s+\d+\s+\d+\s*(,\s*\d+\s+\d+\s+\d+\s*)*)$') {
+  elsif ($opt =~ '^-folds=(\s*\d+\s+\d+\s+\d+\s*(,\s*\d+\s+\d+\s+\d+\s*)*)$') {
     my $val = $1; 
     $val =~ tr/ //s;
     $val =~ s/^\s+|\s+$//g;
@@ -248,16 +252,21 @@ for my $origOpt (@ARGV) {
     $val =~ s/\s+,/,/g;
     @folds = split(',',$val);
   }
-  elsif ($opt =~ /^-?(.+)=(\d+)(-(\d+))?$/) {
-    my ($key, $min, $max) = ($1, $2, $4);
+
+  # Assume a gene name if nothing else matches.
+  elsif ($opt =~ /^-?(.+)=(\d+)(-(\d+))?(:(\d+))?$/) {
+    my ($key, $min, $max, $stride) = ($1, $2, $4, $6);
     $max = $min if !defined $max;
-    $geneRanges{$key} = [ $min, $max ];
+    $stride = 1 if !defined $stride;
+    $geneRanges{$key} = [ $min, $max, $stride ];
     usage("min value $min for '$key' > max value $max.")
       if ($min > $max);
 
-    # special case for problem size: also set other max sizes.
+    # special case for problem size: also set default for other max sizes.
     if ($key =~ /^d[xyz]?$/ && $max > 0) {
-      for my $i (qw(r bg b sbg sb)) {
+      my @szs = qw(r b mb sb);
+      push @szs, qw(bg mbg sbg) if $showGroups;
+      for my $i (@szs) {
         my $key2 = $key;
         $key2 =~ s/^d/$i/;
         $geneRanges{$autoKey.$key2} = [ 1, $max ];
@@ -288,9 +297,9 @@ $folding = 0 if (defined $mic && $dp);
 # dir name.
 my $searchTypeStr = $sweep ? 'sweep' : 'tuner';
 my $hostStr = defined $host ? $host : hostname();
-my $timeStamp=`date +%Y-%m-%d_%H-%M-%S`;
+my $timeStamp=`date +%Y-%m-%d_%H-%M`;
 chomp $timeStamp;
-my $baseName = "yask_$searchTypeStr.$stencil.$arch.$hostStr.$timeStamp";
+my $baseName = "yask_$searchTypeStr.$stencil.$arch.$hostStr.${timeStamp}_p$$";
 $outDir = '.' if !$outDir;
 $outDir .= "/$baseName";
 print "Output will be saved in '$outDir'.\n";
@@ -298,41 +307,18 @@ print "Output will be saved in '$outDir'.\n";
 # open output.
 mkpath($outDir,1);
 my $outFile = "$outDir/$baseName.csv";
-open OUTFILE, ">$outFile" or die "error: cannot write to '$outFile'\n"
+my $outFH = new FileHandle;
+$outFH->open(">$outFile") or die "error: cannot write to '$outFile'\n"
   unless $checking;
 
 # things to get from the run.
 my $fitnessMetric = 'best-throughput (num-points/sec)';
-my $timeMetric = 'best-elapsed-time (sec)';
-my $dimsMetric = 'rank-domain-size';
-my @metrics = ( $fitnessMetric,
-                $timeMetric,
-                $dimsMetric,
-                'best-throughput (num-writes/sec)',
-                'best-throughput (est-FLOPS)',
-                'Num OpenMP threads',
-                'region-size',
-                'block-group-size',
-                'block-size',
-                'sub-block-group-size',
-                'sub-block-size',
-                'cluster-size',
-                'vector-size',
-                'best-block-size',
-                'best-sub-block-size',
-                'num-regions',
-                'num-blocks-per-region',
-                'num-block-groups-per-region',
-                'max-halos',
-                'extra-padding',
-                'minimum-padding',
-                'L1-prefetch-distance',
-                'L2-prefetch-distance',
-                'overall-problem-size in all ranks for one time-step',
-                'num-writes-required in all ranks for one time-step',
-                'num-reads-required in all ranks for one time-step',
-                'Total overall allocation',
-              );
+if ($showGroups) {
+  push @YaskUtils::log_keys,
+    'block-group-size',
+    'mini-block-group-size';
+    'sub-block-group-size';
+}
 
 # how many individuals to create randomly and then keep at any given time.
 my $popSize = 200;
@@ -350,8 +336,9 @@ my $maxPfd_l2 = 12;
 
 # dimension-related vars.
 my $minDim = 128;        # min dimension on any axis.
-my $maxDim = 2 * $oneKi;  # max dimension on any axis.
+my $maxDim = 2 * $YaskUtils::oneKi;  # max dimension on any axis.
 my $maxPad = 3;
+my $maxTimeBlock = 10;          # max temporal blocking.
 my $maxCluster = 4;
 my $minPoints;
 my $maxPoints;
@@ -414,24 +401,21 @@ my @rangesAll =
    [ $minDim, $maxDim, 16, 'dz' ],
 
    # region size.
+   [ 1, $maxTimeBlock, 1, 'rt' ],
    [ 0, $maxDim, 1, 'rx' ],
    [ 0, $maxDim, 1, 'ry' ],
    [ 0, $maxDim, 1, 'rz' ],
 
-   # block-group size.
-   [ 0, $maxDim, 1, 'bgx' ],
-   [ 0, $maxDim, 1, 'bgy' ],
-   [ 0, $maxDim, 1, 'bgz' ],
-
    # block size.
+   [ 1, $maxTimeBlock, 1, 'bt' ],
    [ 0, $maxDim, 1, 'bx' ],
    [ 0, $maxDim, 1, 'by' ],
    [ 0, $maxDim, 1, 'bz' ],
 
-   # sub-block-group size.
-   [ 0, $maxDim, 1, 'sbgx' ],
-   [ 0, $maxDim, 1, 'sbgy' ],
-   [ 0, $maxDim, 1, 'sbgz' ],
+   # mini-block size.
+   [ 0, $maxDim, 1, 'mbx' ],
+   [ 0, $maxDim, 1, 'mby' ],
+   [ 0, $maxDim, 1, 'mbz' ],
 
    # sub-block size.
    [ 0, $maxDim, 1, 'sbx' ],
@@ -448,6 +432,21 @@ my @rangesAll =
    [ $minBlockThreadsExp, $maxBlockThreadsExp, 1, 'bthreads_exp' ],
   );
 
+if ($showGroups) {
+  push @rangesAll,
+    (
+     # block-group size.
+     [ 0, $maxDim, 1, 'bgx' ],
+     [ 0, $maxDim, 1, 'bgy' ],
+     [ 0, $maxDim, 1, 'bgz' ],
+     
+     # sub-block-group size.
+     [ 0, $maxDim, 1, 'sbgx' ],
+     [ 0, $maxDim, 1, 'sbgy' ],
+     [ 0, $maxDim, 1, 'sbgz' ],
+    );
+}
+
 # Add compiler genes.
 if ($doBuild) {
   push @rangesAll,
@@ -457,6 +456,8 @@ if ($doBuild) {
      # Each loop consists of index order and path mods.
      [ 0, $#loopOrders, 1, 'subBlockOrder' ],
      [ 0, $#pathNames, 1, 'subBlockPath' ],
+     [ 0, $#loopOrders, 1, 'miniBlockOrder' ],
+     [ 0, $#pathNames, 1, 'miniBlockPath' ],
      [ 0, $#loopOrders, 1, 'blockOrder' ],
      [ 0, $#pathNames, 1, 'blockPath' ],
      [ 0, $#loopOrders, 1, 'regionOrder' ],
@@ -544,6 +545,12 @@ for my $i (0..$#rangesAll) {
     $fixedVals{$key} = $r->[$minI];
     print "Gene '$key' set to $fixedVals{$key}.\n";
   }
+}
+
+# disable memory range if all domain sizes fixed.
+if ((scalar grep { exists $fixedVals{"d$_"} } @dirs) == scalar @dirs) {
+  undef $minGB;
+  undef $maxGB;
 }
 
 # check that all ranges were used.
@@ -651,7 +658,11 @@ sub readHashes($$$) {
 
   my @vals;
   for my $d (@dirs) {
-    push @vals, readHash($hash, "$key$d", $isBuildVar);
+    if ($key =~ /bg$/ && !$showGroups) {
+      push @vals, 1;
+    } else {
+      push @vals, readHash($hash, "$key$d", $isBuildVar);
+    }
   }
   return @vals;
 }
@@ -717,10 +728,9 @@ sub getRunCmd() {
   if (defined $mic) {
     $runCmd .= " -mic $mic";
   } else {
-    $exePrefix .= " numactl -p 1" if $arch eq 'knl' && !$sde; # TODO: fix for cache mode.
     $runCmd .= " -host $host" if defined $host;
   }
-  $runCmd .= " -exe_prefix '$exePrefix' -stencil $stencil -arch $arch $runArgs";
+  $runCmd .= " -exe_prefix '$exePrefix' -stencil $stencil -arch $arch -no-pre_auto_tune";
   return $runCmd;
 }
 
@@ -732,11 +742,12 @@ sub calcSize($$$) {
   my $mults = shift;            # ref to array of multiples.
 
   # need to determine how many XYZ grids will be allocated for this stencil.
+  # TODO: get info from compiler report.
   if (!$numSpatialGrids) {
 
     my $makeCmd = getMakeCmd('', 'EXTRA_CXXFLAGS=-O1');
     my $runCmd = getRunCmd();
-    $runCmd .= ' -t 0 -d 32';
+    $runCmd .= " -t 0 -d 32 $runArgs";
     my $cmd = "$makeCmd 2>&1 && $runCmd";
 
     my $timeDim = 0;
@@ -818,44 +829,6 @@ sub setPassed($$) {
   $$passed = 1 if (/TEST PASSED/);
 }
 
-# set one or more results from one line of output.
-sub setResults($$) {
-  my $results = shift;          # ref to hash.
-  my $line = shift;             # 1 line of output.
-
-  # look for expected metrics.
-  for my $m (@metrics) {
-
-    my $mre = $m;
-    $mre =~ s/\(/\\(/g;
-    $mre =~ s/\)/\\)/g;
-
-    # look for metric at beginning of line followed by ':' or '='.
-    if ($line =~ /^\s*$mre[^:=]*[:=]\s*(.+)/i) {
-      my $val = $1;
-
-      # adjust for suffixes.
-      if ($val =~ /^([0-9.e+-]+)KiB?$/) {
-        $val = $1 * $oneKi;
-      } elsif ($val =~ /^([0-9.e+-]+)MiB?$/) {
-        $val = $1 * $oneMi;
-      } elsif ($val =~ /^([0-9.e+-]+)GiB?$/) {
-        $val = $1 * $oneGi;
-      } elsif ($val =~ /^([0-9.e+-]+)TiB?$/) {
-        $val = $1 * $oneTi;
-      } elsif ($val =~ /^([0-9.e+-]+)K$/) {
-        $val = $1 * $oneK;
-      } elsif ($val =~ /^([0-9.e+-]+)M$/) {
-        $val = $1 * $oneM;
-      } elsif ($val =~ /^([0-9.e+-]+)G$/) {
-        $val = $1 * $oneG;
-      } elsif ($val =~ /^([0-9.e+-]+)T$/) {
-        $val = $1 * $oneT;
-      }
-      $results->{$m} = $val;
-    }
-  }
-}
 
 # hash of previous results, keyed by command to run.
 my %resultsCache;
@@ -864,10 +837,6 @@ my %testCache;
 
 # previous make command.
 my $prevMakeCmd = '';
-
-# remember best runtime normalized by num points.
-# this is similar to throughput, but used for actual runtime estimate.
-my $bestRate;
 
 # run the command and return fitness and various associated data in a hash.
 sub evalIndiv($$$$$$$) {
@@ -988,7 +957,7 @@ sub evalIndiv($$$$$$$) {
           }
 
           # look for expected metrics in output.
-          setResults($results, $_);
+          YaskUtils::getResultsFromLine($results, $_);
         }
       }
       close CMD;
@@ -1013,16 +982,6 @@ sub evalIndiv($$$$$$$) {
           print "stopping after short run due to non-promising fitness\n";
           last;
         } else {
-
-          # keep best rate.
-          if (defined $secs && $secs > 0) {
-            my $rate = $pts / $secs;
-            if (!defined $bestRate || $rate > $bestRate) {
-              print "new best rate is $rate pts/sec.\n";
-              $bestRate = $rate;
-            }
-          }
-
           print "short run looks promising; continuing with long run...\n";
         }
       }
@@ -1112,8 +1071,12 @@ sub adjSizes($$) {
   # adjust each dim.
   map {
 
+    # If outer size is zero, do nothing.
+    if ($os->[$_] == 0) {
+    }
+    
     # If size is zero, set to max of outer.
-    if ($is->[$_] == 0) {
+    elsif ($is->[$_] == 0) {
       $is->[$_] = $os->[$_];
     }
 
@@ -1157,11 +1120,14 @@ sub fitness {
   # get individual vars from hash or fixed values.
   my $h = makeHash($values);
   my @ds = readHashes($h, 'd', 0);
+  my $rt = readHash($h, 'rt', 1);
   my @rs = readHashes($h, 'r', 0);
-  my @bgs = readHashes($h, 'bg', 0);
+  my $bt = readHash($h, 'bt', 1);
   my @bs = readHashes($h, 'b', 0);
-  my @sbgs = readHashes($h, 'sbg', 0);
+  my @mbs = readHashes($h, 'mb', 0);
   my @sbs = readHashes($h, 'sb', 0);
+  my @bgs = readHashes($h, 'bg', 0);
+  my @sbgs = readHashes($h, 'sbg', 0);
   my @cvs = readHashes($h, 'c', 1); # in vectors, not in points!
   my @ps = readHashes($h, 'ep', 0);
   my $fold = readHash($h, 'fold', 1);
@@ -1190,24 +1156,30 @@ sub fitness {
 
   # adjust inner sizes to fit in their enclosing sizes.
   adjSizes(\@rs, \@ds);         # region <= domain.
-  adjSizes(\@bgs, \@rs);        # block-group <= region.
   adjSizes(\@bs, \@rs);         # block <= region.
-  adjSizes(\@sbgs, \@bs);       # sub-block-group <= block.
-  adjSizes(\@sbs, \@bs);        # sub-block <= block.
+  adjSizes(\@mbs, \@bs);        # mini-block <= block.
+  adjSizes(\@sbs, \@mbs);       # sub-block <= mini-block.
+  adjSizes(\@bgs, \@rs);        # block-group <= region.
+  adjSizes(\@sbgs, \@mbs);      # sub-block-group <= mini-block.
 
   # 3d sizes in points.
   my $dPts = mult(@ds);
   my $rPts = mult(@rs);
-  my $bgPts = mult(@bgs);
   my $bPts = mult(@bs);
-  my $sbgPts = mult(@sbgs);
+  my $mbPts = mult(@mbs);
   my $sbPts = mult(@sbs);
   my $cPts = mult(@cs);
   my $fPts = mult(@fs);
+  my $bgPts = mult(@bgs);
+  my $sbgPts = mult(@sbgs);
 
   # Clusters per block.
   my @bcs = map { ceil($bs[$_] / $cs[$_]) } 0..$#dirs;
   my $bCls = mult(@bcs);
+
+  # Mini-blocks per block.
+  my @bmbs = map { ceil($bs[$_] / $mbs[$_]) } 0..$#dirs;
+  my $bMbs = mult(@bmbs);
 
   # Blocks per region.
   my @rbs = map { ceil($rs[$_] / $bs[$_]) } 0..$#dirs;
@@ -1224,24 +1196,27 @@ sub fitness {
     print "Sizes:\n";
     print "  rank size = $dPts\n";
     print "  region size = $rPts\n";
-    print "  block-group size = $bgPts\n";
     print "  block size = $bPts\n";
-    print "  sub-block-group size = $sbgPts\n";
     print "  sub-block size = $sbPts\n";
     print "  cluster size = $cPts\n";
     print "  fold size = $fPts\n";
     print "  regions per rank = $dRegs\n";
     print "  blocks per region = $rBlks\n";
     print "  clusters per block = $bCls\n";
-    print "  mem estimate = ".($overallSize/$oneGi)." GB\n";
+    print "  mini-blocks per block = $bMbs\n";
+    print "  mem estimate = ".($overallSize/$YaskUtils::oneGi)." GB\n";
+    if ($showGroups) {
+      print "  block-group size = $bgPts\n";
+      print "  sub-block-group size = $sbgPts\n";
+    }
   }
 
   # check overall size.
-  if (defined $minGB && $overallSize / $oneGi < $minGB) {
+  if (defined $minGB && $overallSize / $YaskUtils::oneGi < $minGB) {
     print "  overall size of $overallSize bytes < $minGB GiB\n" if $debugCheck;
     $checkStats{'mem too low'}++;
     $ok = 0;
-  } elsif (defined $maxGB && $overallSize / $oneGi > $maxGB) {
+  } elsif (defined $maxGB && $overallSize / $YaskUtils::oneGi > $maxGB) {
     print "  overall size of $overallSize bytes > $maxGB GiB\n" if $debugCheck;
     $checkStats{'mem too high'}++;
     $ok = 0;
@@ -1279,15 +1254,19 @@ sub fitness {
   addStat($ok, 'mem estimate', $overallSize);
   addStat($ok, 'rank size', $dPts);
   addStat($ok, 'region size', $rPts);
-  addStat($ok, 'block-group size', $bgPts);
   addStat($ok, 'block size', $bPts);
-  addStat($ok, 'sub-block-group size', $sbgPts);
+  addStat($ok, 'mini-block size', $mbPts);
   addStat($ok, 'sub-block size', $sbPts);
   addStat($ok, 'cluster size', $cPts);
   addStat($ok, 'regions per rank', $dRegs);
   addStat($ok, 'blocks per region', $rBlks);
   addStat($ok, 'clusters per block', $bCls);
+  addStat($ok, 'mini-blocks per block', $bMbs);
   addStat($ok, 'vectors per cluster', $cvs);
+  if ($showGroups) {
+    addStat($ok, 'block-group size', $bgPts);
+    addStat($ok, 'sub-block-group size', $sbgPts);
+  }
 
   # exit here if just checking.
   return $ok if $justChecking;
@@ -1317,6 +1296,7 @@ sub fitness {
   # gen-loops vars.
   $mvars .= makeLoopVars($h, 'REGION', 'region', 'omp', 3);
   $mvars .= makeLoopVars($h, 'BLOCK', 'block', 'omp', 3);
+  $mvars .= makeLoopVars($h, 'MINI_BLOCK', 'miniBlock', '', 3);
   $mvars .= makeLoopVars($h, 'SUB_BLOCK', 'subBlock', '', 2);
 
   # other vars.
@@ -1327,7 +1307,7 @@ sub fitness {
   my $makeCmd = getMakeCmd($macros, $mvars);
 
   # how to run.
-  my $runCmd = getRunCmd();     # shell command plus any extra args.
+  my $runCmd = getRunCmd();     # shell command plus any initial args.
   $runCmd .= " -ranks $nranks" if $nranks > 1;
   my $args = "";             # exe args.
   $args .= " -thread_divisor ".(1 << $thread_divisor_exp);
@@ -1335,23 +1315,27 @@ sub fitness {
 
   # sizes.
   $args .= " -dx $ds[0] -dy $ds[1] -dz $ds[2]";
-  $args .= " -rx $rs[0] -ry $rs[1] -rz $rs[2]";
-  $args .= " -bx $bs[0] -by $bs[1] -bz $bs[2]";
-  $args .= " -bgx $bgs[0] -bgy $bgs[1] -bgz $bgs[2]";
+  $args .= " -rt $rt -rx $rs[0] -ry $rs[1] -rz $rs[2]";
+  $args .= " -bt $bt -bx $bs[0] -by $bs[1] -bz $bs[2]";
+  $args .= " -mbx $mbs[0] -mby $mbs[1] -mbz $mbs[2]";
   $args .= " -sbx $sbs[0] -sby $sbs[1] -sbz $sbs[2]";
-  $args .= " -sbgx $sbgs[0] -sbgy $sbgs[1] -sbgz $sbgs[2]";
   $args .= " -epx $ps[0] -epy $ps[1] -epz $ps[2]";
+  if ($showGroups) {
+    $args .= " -bgx $bgs[0] -bgy $bgs[1] -bgz $bgs[2]";
+    $args .= " -sbgx $sbgs[0] -sbgy $sbgs[1] -sbgz $sbgs[2]";
+  }
 
-  # num of iterations and trials.
-  my $shortIters = 5;
-  my $longIters = 30;
+  # num of secs and trials.
+  my $shortTime = 1;
+  my $shortTrials = 1;
+  my $longTime = 5;
   my $longTrials = min($gen, 2);
 
   # various commands.
-  my $testCmd = "$runCmd -v"; # validation on a small problem size.
-  my $simCmd = "$runCmd $args -t 1 -dt 1";  # simulation w/1 trial & 1 step.
-  my $shortRunCmd = "$runCmd $args -t 1 -dt $shortIters"; # fast run for 'upper-bound' time.
-  my $longRunCmd = "$runCmd $args -t $longTrials -dt $longIters";  # normal run w/more trials.
+  my $testCmd = "$runCmd -v $runArgs"; # validation on a small problem size.
+  my $simCmd = "$runCmd $args -t 1 -dt 1 $runArgs";  # simulation w/1 trial & 1 step.
+  my $shortRunCmd = "$runCmd $args -t $shortTrials -trial_time $shortTime $runArgs"; # fast run for 'upper-bound' time.
+  my $longRunCmd = "$runCmd $args -t $longTrials -trial_time $longTime $runArgs";  # normal run w/more trials.
   my $cleanCmd = "make clean";
 
   # add kill command to prevent runaway code.
@@ -1360,16 +1344,19 @@ sub fitness {
     # for the make command.
     $makeCmd = "$killCmd $makeTimeout $makeCmd";
     
-    # for the short run command.
-    if (!$sde && defined $bestRate) {
+    # for the run commands.
+    if (!$sde) {
 
-      # runtime limit is based on the number of points, the best rate so far, and a decreasing multiplier.
-      my $mult = ($gen < 4) ? 10 : ($gen < 8) ? 7 : 5; # multiplier.
-      my $killTime = int($dPts / $bestRate * $mult) + 10;
+      # Kill time is some overhead plus allocated time multipled by temporal blocking and num runs.
+      my $maxOHead = 60 * 10;
+      my $killTime = $maxOHead + ($shortTime * max($rt, $bt) * $shortTrials);
 
-      print "max runtime is $killTime secs (based on $dPts pts / $bestRate pts/sec * $mult).\n";
-      my $exePrefix = "$killCmd $killTime";
-      $shortRunCmd =~ s/$timeCmd/$timeCmd $exePrefix/;
+      # Inject kill command into '-exe_prefix' part of run commands.
+      $shortRunCmd =~ s/$timeCmd/$timeCmd $killCmd $killTime/;
+
+      # Repeat for long run.
+      $killTime = $maxOHead + ($longTime * max($rt, $bt) * $longTrials);
+      $longRunCmd =~ s/$timeCmd/$timeCmd $killCmd $killTime/;
     }
   }
 
@@ -1408,13 +1395,10 @@ sub fitness {
     push @cols, $fixedVals{$fk};
   }
   push @cols, @$values, '"'.$makeCmd.'"', '"'.$longRunCmd.'"';
-  for my $m (@metrics) {
-    my $r = $results->{$m};
-    $r = '' if !defined $r;
-    push @cols, ($r =~ /,/) ? '"'.$r.'"' : $r; # add quotes if there is a comma.
-  }
-  push @cols, $fitness, $bestGen, $bestFit, $isBest ? 'TRUE':'FALSE';
-  print OUTFILE join(',', @cols), "\n";
+  print $outFH join(',', @cols);
+  YaskUtils::printCsvValues($results, $outFH);
+  @cols = ( $fitness, $bestGen, $bestFit, $isBest ? 'TRUE':'FALSE' );
+  print $outFH join(',', @cols), "\n";
 
   print "final fitness = $fitness\n".
     "=====================================\n";
@@ -1481,11 +1465,12 @@ sub printNumCombos($) {
 
 # header
 my @names = map { $_->[$nameI] } @ranges;
-print OUTFILE join(',', "run", "generation", "individual",
+print $outFH join(',', "run", "generation", "individual",
                    sort(keys %fixedVals), @names,
-                   "make command", "run command",
-                   @metrics, "fitness",
-                   "best generation so far", "best fitness so far", "is this best so far"), "\n"
+                  "make command", "run command", '');
+YaskUtils::printCsvHeader($outFH);
+print $outFH join(',', '', "fitness", "best generation so far",
+                  "best fitness so far", "is this best so far"), "\n"
  unless $checking;
 print "\nSize of search space:\n";
 my $nt = 1;
@@ -1496,7 +1481,10 @@ for my $i (0..$#ranges) {
   $nt *= $n;
 }
 printNumCombos($nt);
-print "Memory footprint restriction: $minGB-$maxGB GiB.\n";
+print "Memory footprint restriction: >= $minGB GiB.\n"
+  if defined $minGB;
+print "Memory footprint restriction: <= $maxGB GiB.\n"
+  if defined $maxGB;
 
 if ($sweep) {
   $popSize = $nt;  # just so all output shows as 1st gen.
@@ -1558,5 +1546,5 @@ if ($sweep) {
     print "Best score = ", $ga->getFittest->score(), "\n";
   }
 }
-close OUTFILE;
+close $outFH;
 print "Done; output in '$outDir'.\n";

@@ -42,11 +42,6 @@ protected:
     MAKE_GRID(s, t, x, y, z, sidx);
     enum SIDX { S_BL_YZ, S_BR_XZ, S_TL_XX, S_TL_YY, S_TL_ZZ, S_TR_XY };
 
-    // 3D-spatial coefficients.
-    MAKE_GRID(mu, x, y, z);
-    MAKE_GRID(lambda, x, y, z);
-    MAKE_GRID(lambdamu2, x, y, z);
-
 public:
 
     SSGElastic2Stencil( StencilList& stencils) :
@@ -54,32 +49,32 @@ public:
     {
     }
 
-    GridValue interp_mu( GridIndex x, GridIndex y, GridIndex z, const BR )
+    GridValue interp_mu( GridIndex x, GridIndex y, GridIndex z, const BR)
     {
-        return ( 2.0/ (mu(x  , y  , z  ) +
-                       mu(x  , y+1, z  ) +
-                       mu(x  , y  , z+1) +
-                       mu(x  , y+1, z+1)) );
+        return ( 2.0/ (coef(x  , y  , z  , C_MU) +
+                       coef(x  , y+1, z  , C_MU) +
+                       coef(x  , y  , z+1, C_MU) +
+                       coef(x  , y+1, z+1, C_MU)) );
     }
 
-    GridValue interp_mu( GridIndex x, GridIndex y, GridIndex z, const BL )
+    GridValue interp_mu( GridIndex x, GridIndex y, GridIndex z, const BL)
     {
-        return ( 2.0/ (mu(x  , y  , z  ) +
-                       mu(x+1, y  , z  ) +
-                       mu(x  , y  , z+1) +
-                       mu(x+1, y  , z+1)) );
+        return ( 2.0/ (coef(x  , y  , z  , C_MU) +
+                       coef(x+1, y  , z  , C_MU) +
+                       coef(x  , y  , z+1, C_MU) +
+                       coef(x+1, y  , z+1, C_MU)) );
     }
 
-    GridValue interp_mu( GridIndex x, GridIndex y, GridIndex z, const TR )
+    GridValue interp_mu( GridIndex x, GridIndex y, GridIndex z, const TR)
     {
-        return ( 2.0/ (mu(x  , y  , z  ) +
-                       mu(x+1, y  , z  ) +
-                       mu(x  , y+1, z  ) +
-                       mu(x+1, y+1, z  )) );
+        return ( 2.0/ (coef(x  , y  , z  , C_MU) +
+                       coef(x+1, y  , z  , C_MU) +
+                       coef(x  , y+1, z  , C_MU) +
+                       coef(x+1, y+1, z  , C_MU)) );
     }
 
     template<typename N>
-    GridValue interp_mu( GridIndex x, GridIndex y, GridIndex z )
+    GridValue interp_mu( GridIndex x, GridIndex y, GridIndex z)
     {
         return interp_mu( x, y, z, N() );
     }
@@ -117,8 +112,8 @@ public:
     void define_str_TL(GridIndex t, GridIndex x, GridIndex y, GridIndex z )
     {
 
-        GridValue ilambdamu2 = 1.0 / lambdamu2(x,y,z);
-        GridValue ilambda    = 1.0 / lambda   (x,y,z);
+        GridValue ilambdamu2 = 1.0 / coef(x,y,z, C_LAMBDA_MU2);
+        GridValue ilambda    = 1.0 / coef(x,y,z, C_LAMBDA);
 
         GridValue vtx    = stencil_O8<X,F>( t+1, x, y, z, v, constNum(V_TR_U) );
         GridValue vty    = stencil_O8<Y,B>( t+1, x, y, z, v, constNum(V_TL_V) );

@@ -39,7 +39,7 @@ protected:
     MAKE_DOMAIN_INDEX(z);         // spatial dim.
 
     // Vars.
-    MAKE_GRID(data, t, x, y, z); // time-varying 3D grid.
+    MAKE_GRID(A, t, x, y, z); // time-varying 3D grid.
 
     // Return a coefficient.  Note: This returns completely fabricated
     // values only for illustrative purposes; they have no mathematical
@@ -64,13 +64,13 @@ public:
     virtual void define() {
 
         // start with center point.
-        GridValue v = coeff(0, 0, 0) * data(t, x, y, z);
+        GridValue v = coeff(0, 0, 0) * A(t, x, y, z);
 
         // Add additional points from derived class.
         addPoints(v);
 
         // define the value at t+1 to be equivalent to v.
-        data(t+1, x, y, z) EQUALS v;
+        A(t+1, x, y, z) EQUALS v;
     }
 };
 
@@ -89,16 +89,16 @@ protected:
             v += c *
                 (
                  // x-axis.
-                 data(t, x-r, y, z) +
-                 data(t, x+r, y, z) +
+                 A(t, x-r, y, z) +
+                 A(t, x+r, y, z) +
 
                  // y-axis.
-                 data(t, x, y-r, z) +
-                 data(t, x, y+r, z) +
+                 A(t, x, y-r, z) +
+                 A(t, x, y+r, z) +
 
                  // z-axis.
-                 data(t, x, y, z-r) +
-                 data(t, x, y, z+r)
+                 A(t, x, y, z-r) +
+                 A(t, x, y, z+r)
                  );
         }
     }
@@ -126,22 +126,22 @@ protected:
         for (int r = 1; r <= _radius; r++) {
 
             // x-y diagonal.
-            v += coeff(-r, -r, 0) * data(t, x-r, y-r, z);
-            v += coeff(+r, -r, 0) * data(t, x+r, y-r, z);
-            v -= coeff(-r, +r, 0) * data(t, x-r, y+r, z);
-            v -= coeff(+r, +r, 0) * data(t, x+r, y+r, z);
+            v += coeff(-r, -r, 0) * A(t, x-r, y-r, z);
+            v += coeff(+r, -r, 0) * A(t, x+r, y-r, z);
+            v -= coeff(-r, +r, 0) * A(t, x-r, y+r, z);
+            v -= coeff(+r, +r, 0) * A(t, x+r, y+r, z);
 
             // x-z diagonal.
-            v += coeff(-r, 0, -r) * data(t, x-r, y, z-r);
-            v += coeff(+r, 0, +r) * data(t, x+r, y, z+r);
-            v -= coeff(-r, 0, +r) * data(t, x-r, y, z+r);
-            v -= coeff(+r, 0, -r) * data(t, x+r, y, z-r);
+            v += coeff(-r, 0, -r) * A(t, x-r, y, z-r);
+            v += coeff(+r, 0, +r) * A(t, x+r, y, z+r);
+            v -= coeff(-r, 0, +r) * A(t, x-r, y, z+r);
+            v -= coeff(+r, 0, -r) * A(t, x+r, y, z-r);
 
             // y-z diagonal.
-            v += coeff(0, -r, -r) * data(t, x, y-r, z-r);
-            v += coeff(0, +r, +r) * data(t, x, y+r, z+r);
-            v -= coeff(0, -r, +r) * data(t, x, y-r, z+r);
-            v -= coeff(0, +r, -r) * data(t, x, y+r, z-r);
+            v += coeff(0, -r, -r) * A(t, x, y-r, z-r);
+            v += coeff(0, +r, +r) * A(t, x, y+r, z+r);
+            v -= coeff(0, -r, +r) * A(t, x, y-r, z+r);
+            v -= coeff(0, +r, -r) * A(t, x, y+r, z-r);
         }
     }
 
@@ -169,34 +169,34 @@ protected:
             for (int m = r+1; m <= _radius; m++) {
 
                 // x-y plane.
-                v += coeff(-r, -m, 0) * data(t, x-r, y-m, z);
-                v += coeff(-m, -r, 0) * data(t, x-m, y-r, z);
-                v += coeff(+r, +m, 0) * data(t, x+r, y+m, z);
-                v += coeff(+m, +r, 0) * data(t, x+m, y+r, z);
-                v -= coeff(-r, +m, 0) * data(t, x-r, y+m, z);
-                v -= coeff(-m, +r, 0) * data(t, x-m, y+r, z);
-                v -= coeff(+r, -m, 0) * data(t, x+r, y-m, z);
-                v -= coeff(+m, -r, 0) * data(t, x+m, y-r, z);
+                v += coeff(-r, -m, 0) * A(t, x-r, y-m, z);
+                v += coeff(-m, -r, 0) * A(t, x-m, y-r, z);
+                v += coeff(+r, +m, 0) * A(t, x+r, y+m, z);
+                v += coeff(+m, +r, 0) * A(t, x+m, y+r, z);
+                v -= coeff(-r, +m, 0) * A(t, x-r, y+m, z);
+                v -= coeff(-m, +r, 0) * A(t, x-m, y+r, z);
+                v -= coeff(+r, -m, 0) * A(t, x+r, y-m, z);
+                v -= coeff(+m, -r, 0) * A(t, x+m, y-r, z);
 
                 // x-z plane.
-                v += coeff(-r, 0, -m) * data(t, x-r, y, z-m);
-                v += coeff(-m, 0, -r) * data(t, x-m, y, z-r);
-                v += coeff(+r, 0, +m) * data(t, x+r, y, z+m);
-                v += coeff(+m, 0, +r) * data(t, x+m, y, z+r);
-                v -= coeff(-r, 0, +m) * data(t, x-r, y, z+m);
-                v -= coeff(-m, 0, +r) * data(t, x-m, y, z+r);
-                v -= coeff(+r, 0, -m) * data(t, x+r, y, z-m);
-                v -= coeff(+m, 0, -r) * data(t, x+m, y, z-r);
+                v += coeff(-r, 0, -m) * A(t, x-r, y, z-m);
+                v += coeff(-m, 0, -r) * A(t, x-m, y, z-r);
+                v += coeff(+r, 0, +m) * A(t, x+r, y, z+m);
+                v += coeff(+m, 0, +r) * A(t, x+m, y, z+r);
+                v -= coeff(-r, 0, +m) * A(t, x-r, y, z+m);
+                v -= coeff(-m, 0, +r) * A(t, x-m, y, z+r);
+                v -= coeff(+r, 0, -m) * A(t, x+r, y, z-m);
+                v -= coeff(+m, 0, -r) * A(t, x+m, y, z-r);
 
                 // y-z plane.
-                v += coeff(0, -r, -m) * data(t, x, y-r, z-m);
-                v += coeff(0, -m, -r) * data(t, x, y-m, z-r);
-                v += coeff(0, +r, +m) * data(t, x, y+r, z+m);
-                v += coeff(0, +m, +r) * data(t, x, y+m, z+r);
-                v -= coeff(0, -r, +m) * data(t, x, y-r, z+m);
-                v -= coeff(0, -m, +r) * data(t, x, y-m, z+r);
-                v -= coeff(0, +r, -m) * data(t, x, y+r, z-m);
-                v -= coeff(0, +m, -r) * data(t, x, y+m, z-r);
+                v += coeff(0, -r, -m) * A(t, x, y-r, z-m);
+                v += coeff(0, -m, -r) * A(t, x, y-m, z-r);
+                v += coeff(0, +r, +m) * A(t, x, y+r, z+m);
+                v += coeff(0, +m, +r) * A(t, x, y+m, z+r);
+                v -= coeff(0, -r, +m) * A(t, x, y-r, z+m);
+                v -= coeff(0, -m, +r) * A(t, x, y-m, z+r);
+                v -= coeff(0, +r, -m) * A(t, x, y+r, z-m);
+                v -= coeff(0, +m, -r) * A(t, x, y+m, z-r);
             }
         }
     }
@@ -226,14 +226,14 @@ protected:
                 for (int rz = 1; rz <= _radius; rz++) {
 
                     // Each quadrant.
-                    v += coeff(rx, ry, rz) * data(t, x+rx, y+ry, z+rz);
-                    v += coeff(rx, -ry, -rz) * data(t, x+rx, y-ry, z-rz);
-                    v -= coeff(rx, ry, -rz) * data(t, x+rx, y+ry, z-rz);
-                    v -= coeff(rx, -ry, rz) * data(t, x+rx, y-ry, z+rz);
-                    v += coeff(-rx, ry, rz) * data(t, x-rx, y+ry, z+rz);
-                    v += coeff(-rx, -ry, -rz) * data(t, x-rx, y-ry, z-rz);
-                    v -= coeff(-rx, ry, -rz) * data(t, x-rx, y+ry, z-rz);
-                    v -= coeff(-rx, -ry, rz) * data(t, x-rx, y-ry, z+rz);
+                    v += coeff(rx, ry, rz) * A(t, x+rx, y+ry, z+rz);
+                    v += coeff(rx, -ry, -rz) * A(t, x+rx, y-ry, z-rz);
+                    v -= coeff(rx, ry, -rz) * A(t, x+rx, y+ry, z-rz);
+                    v -= coeff(rx, -ry, rz) * A(t, x+rx, y-ry, z+rz);
+                    v += coeff(-rx, ry, rz) * A(t, x-rx, y+ry, z+rz);
+                    v += coeff(-rx, -ry, -rz) * A(t, x-rx, y-ry, z-rz);
+                    v -= coeff(-rx, ry, -rz) * A(t, x-rx, y+ry, z-rz);
+                    v -= coeff(-rx, -ry, rz) * A(t, x-rx, y-ry, z+rz);
                 }
     }
 
