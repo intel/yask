@@ -19,11 +19,9 @@ class Install(install):
 
 setup(
     name='yask',
-    version='v2-alpha',
-    description='YASK--Yet Another Stencil Kernel: '
-    'A framework to facilitate exploration of the HPC '
-    'stencil-performance design space',
-    url='https://01.org/yask',
+    version='v2.15.11',
+    description='YASK--Yet Another Stencil Kernel',
+    url='https://github.com/intel/yask',
     author='Intel Corporation',
     license='MIT',
     packages = ['yask'],
